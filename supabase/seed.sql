@@ -1,0 +1,2 @@
+-- Seed data intentionally excludes production users and organizations.
+-- Create the first platform owner through a secure administrative process.
