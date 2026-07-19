@@ -1,8 +1,8 @@
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
-import { AlertTriangle, BadgeCheck, CalendarClock, Clock, Mail, UserX } from "lucide-react";
+import { AlertTriangle, BadgeCheck, CalendarClock, ClipboardCheck, Clock, Mail, UserX } from "lucide-react";
 import { cn } from "@carelik/ui";
-import { getCredentialStatus } from "@carelik/shared";
+import { getCredentialStatus, getUtilizationStatus, isAuthorizationActive } from "@carelik/shared";
 import { useOrganization } from "@/providers/organization-provider";
 import { supabase } from "@/lib/supabase";
 import { getWeekEnd, getWeekStart } from "@/lib/week";
@@ -30,6 +30,14 @@ interface ClientForSignals {
 interface CredentialForSignals {
   id: string;
   expires_at: string | null;
+}
+
+interface AuthorizationForSignals {
+  id: string;
+  authorized_hours: number;
+  scheduled_hours: number;
+  period_start: string;
+  period_end: string;
 }
 
 type Tone = "healthy" | "info" | "attention" | "critical";
@@ -69,6 +77,7 @@ export function ActionCenter() {
   const canSeeClients = hasPermission("clients.read");
   const canSeeAllShifts = hasPermission("shifts.read");
   const canSeeMembers = hasPermission("membership.read");
+  const canSeeAuthorizations = hasPermission("authorizations.read");
 
   const now = new Date();
   const windowStart = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
@@ -141,6 +150,18 @@ export function ActionCenter() {
       return (data ?? []) as CredentialForSignals[];
     },
     enabled: !!activeOrganizationId
+  });
+
+  const authorizationsQuery = useQuery({
+    queryKey: ["action-center-authorizations", activeOrganizationId],
+    queryFn: async () => {
+      const { data, error } = await supabase.rpc("list_client_authorizations", {
+        target_organization_id: activeOrganizationId!
+      });
+      if (error) throw error;
+      return (data ?? []) as AuthorizationForSignals[];
+    },
+    enabled: !!activeOrganizationId && canSeeAuthorizations
   });
 
   if (!activeOrganizationId) return null;
@@ -246,6 +267,23 @@ export function ActionCenter() {
       icon: BadgeCheck,
       to: "/credentials",
       statusText: expiringOrExpiredCount > 0 ? "Review" : "All current"
+    });
+  }
+
+  if (canSeeAuthorizations && authorizationsQuery.data) {
+    const overAuthorizedCount = authorizationsQuery.data.filter(
+      (row) =>
+        isAuthorizationActive(row.period_start, row.period_end) &&
+        getUtilizationStatus(row.authorized_hours, row.scheduled_hours) === "over"
+    ).length;
+    signals.push({
+      key: "over-authorized",
+      label: "Clients scheduled over their authorized hours",
+      count: overAuthorizedCount,
+      tone: overAuthorizedCount > 0 ? "critical" : "healthy",
+      icon: ClipboardCheck,
+      to: "/authorizations",
+      statusText: overAuthorizedCount > 0 ? "Review" : "Everyone within authorization"
     });
   }
 

@@ -4,6 +4,7 @@ import {
   BadgeCheck,
   Building2,
   CalendarClock,
+  ClipboardCheck,
   ClipboardList,
   LayoutDashboard,
   LogOut,
@@ -28,6 +29,12 @@ const navItems: Array<{
   { to: "/clients", label: "Clients", icon: Users, permission: "clients.read" },
   { to: "/schedule", label: "Schedule", icon: CalendarClock },
   { to: "/credentials", label: "Credentials", icon: BadgeCheck },
+  {
+    to: "/authorizations",
+    label: "Authorizations",
+    icon: ClipboardCheck,
+    permission: "authorizations.read"
+  },
   { to: "/audit", label: "Audit", icon: ClipboardList, permission: "audit.read" },
   { to: "/settings", label: "Settings", icon: Settings, permission: "settings.read" }
 ];

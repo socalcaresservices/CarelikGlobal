@@ -10,6 +10,7 @@ import { AuditPage } from "@/pages/audit-page";
 import { ClientsPage } from "@/pages/clients-page";
 import { SchedulePage } from "@/pages/schedule-page";
 import { CredentialsPage } from "@/pages/credentials-page";
+import { AuthorizationsPage } from "@/pages/authorizations-page";
 import { SettingsPage } from "@/pages/settings-page";
 
 export function App() {
@@ -29,6 +30,7 @@ export function App() {
                   <Route path="/clients" element={<ClientsPage />} />
                   <Route path="/schedule" element={<SchedulePage />} />
                   <Route path="/credentials" element={<CredentialsPage />} />
+                  <Route path="/authorizations" element={<AuthorizationsPage />} />
                   <Route path="/audit" element={<AuditPage />} />
                   <Route path="/settings" element={<SettingsPage />} />
                   <Route path="*" element={<Navigate to="/" replace />} />

@@ -1,3 +1,4 @@
+export * from "./authorizations";
 export * from "./care";
 export * from "./credentials";
 export * from "./membership";

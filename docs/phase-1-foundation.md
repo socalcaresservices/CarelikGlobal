@@ -622,3 +622,43 @@ Shipped:
 65 web tests pass (5 new: 4 for `CredentialsPage`, 1 new Action Center
 signal test; plus 7 new schema/status tests in `packages/shared`). Full
 pipeline verified clean; `get_advisors` confirmed no anon-execute gap.
+
+Also fixed in this increment: a stray Git-for-Windows install folder had
+ended up inside the project directory (`/Git`), which was silently making
+every `git`/`rsync`/`cp` operation over the mounted drive crawl or hang.
+Added to `.gitignore`. Doesn't affect anything in git history since it
+was always untracked - just local clutter that's safe to delete by hand.
+
+## Increment 19 — Client authorizations
+
+Third of the four features picked from Increment 15's open list.
+
+A client can carry multiple authorization rows over time (one per
+payer/period), rather than a single current value - that doubles as a
+history. `payer` is free text for the same reason `credential_type` is:
+naming varies too much by agency to guess a fixed list. Utilization
+status (under / on track / over) is computed by comparing authorized
+hours against scheduled+completed shift hours within that authorization's
+own period, with a small tolerance to avoid flagging rounding noise.
+
+Shipped:
+
+- `supabase/migrations/20260719260000_client_authorizations.sql`: new
+  `client_authorizations` table, `authorizations.read`/
+  `authorizations.update` permissions, straight permission-gated RLS
+  (no own-row carve-out - an authorization isn't tied to a specific
+  staff member the way a shift or credential is). `list_client_authorizations()`
+  joins the client name and computes each row's scheduled hours
+  server-side, same overlap-aware math as `get_caregiver_hours()`.
+- `apps/web/src/pages/authorizations-page.tsx`: new `/authorizations`
+  page - add/edit/remove for `authorizations.update`, read-only list for
+  `authorizations.read`. Gated behind a "Not available" screen without
+  the permission, same as Clients (no own-row fallback makes sense here).
+- `apps/web/src/components/action-center.tsx`: new critical-toned
+  signal, "Clients scheduled over their authorized hours," scoped to
+  authorization periods that cover today.
+
+70 web tests pass (8 new: 4 for `AuthorizationsPage`, 1 new Action
+Center signal test, plus 10 new schema/status tests in
+`packages/shared`). Full pipeline verified clean; `get_advisors`
+confirmed no anon-execute gap.

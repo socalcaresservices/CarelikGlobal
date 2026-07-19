@@ -159,6 +159,41 @@ describe("ActionCenter", () => {
     expect(within(card as HTMLElement).getByText("Review")).toBeInTheDocument();
   });
 
+  it("flags a client scheduled over their authorized hours as critical", async () => {
+    mockedUseOrganization.mockReturnValue(baseOrganization());
+    const now = new Date();
+    const periodStart = new Date(now.getTime() - 5 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+    const periodEnd = new Date(now.getTime() + 5 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+    mockedRpc.mockImplementation((fn: string) => {
+      if (fn === "list_client_authorizations") {
+        return Promise.resolve({
+          data: [
+            {
+              id: "authorization-1",
+              authorized_hours: 10,
+              scheduled_hours: 20,
+              period_start: periodStart,
+              period_end: periodEnd
+            }
+          ],
+          error: null
+        }) as never;
+      }
+      return Promise.resolve({ data: [], error: null }) as never;
+    });
+    mockedFrom.mockReturnValue({ select: mockClientsCount([]) } as never);
+
+    renderCenter();
+
+    await waitFor(() =>
+      expect(screen.getByText("Clients scheduled over their authorized hours")).toBeInTheDocument()
+    );
+    const card = screen.getByText("Clients scheduled over their authorized hours").closest("a");
+    expect(card).not.toBeNull();
+    expect(within(card as HTMLElement).getByText("1")).toBeInTheDocument();
+    expect(within(card as HTMLElement).getByText("Review")).toBeInTheDocument();
+  });
+
   it("only shows signals the current permissions allow", async () => {
     mockedUseOrganization.mockReturnValue({
       ...baseOrganization(),

@@ -173,10 +173,20 @@ it stays honest rather than aspirational.
   and as a critical-toned Action Center signal, "Credentials expiring or
   expired."
 
+**Built (Increment 19):**
+
+- Client authorizations. A client can have multiple authorization
+  periods over time (payer, authorized hours, period start/end - payer
+  is free text for the same reason credential type is). Utilization
+  (scheduled + completed shift hours against the authorized amount for
+  that period) is computed server-side and shown per row with an
+  under/on-track/over status. Surfaced on a new `/authorizations` page
+  and as a critical-toned Action Center signal, "Clients scheduled over
+  their authorized hours," scoped to periods covering today.
+
 **Not yet built** (needs a data model before it can be real, not
 faked):
 
-- Authorization tracking and utilization (no `authorizations` table)
 - Incident tracking
 - CareScore / GeoScore / any scoring model
 - Record-level header pattern (KPI header + tabs) on Clients/Schedule
