@@ -194,5 +194,42 @@ Not in this increment (still open):
   components (`AccessPage`, `OrganizationsPage`, `LoginPage`) — these
   need heavier Supabase-client mocking (chained `.from().select()...`
   calls) and were left for a follow-up rather than rushed.
-- Server-side audit writer
-- Event publisher worker
+
+## Increment 8 — Audit writer and event publisher worker
+
+Shipped:
+
+- `write_audit_log()` trigger (security definer, no INSERT policy exists
+  on `audit_logs` on purpose) attached to `organizations`,
+  `organization_memberships`, `feature_flags`, and `files`. Every
+  insert/update/delete on those tables is now logged automatically —
+  nothing in application code has to remember to call an audit function.
+  `organization_settings` and `role_permissions` were left out: they use
+  composite primary keys and this trigger assumes a single uuid `id`
+  column.
+- `claim_domain_events` / `complete_domain_event` / `fail_domain_event`:
+  outbox-processing primitives, granted to `service_role` only (matches
+  "Event and notification writes are reserved for trusted server-side
+  execution"). Claiming uses `FOR UPDATE SKIP LOCKED` so concurrent
+  worker runs can't double-process a row. Failures get exponential
+  backoff (capped at 60 minutes) and move to `dead_letter` after 5
+  attempts rather than retrying forever.
+- `supabase/functions/process-events`: calls those three functions to
+  actually drain the outbox. See README "Event processing" for the
+  `pg_cron` scheduling example.
+
+Honest gap: **`dispatchEvent()` in `process-events` is a stub.** There is
+no webhook target, email provider, or any other downstream integration
+defined anywhere in this codebase yet, and nothing currently writes rows
+into `domain_events` either — the table has existed since Phase 1 with
+no producer. Building a worker that "delivers" events to a nonexistent
+destination would be fiction, so it logs and marks every event published
+instead. The valuable, non-fictional part shipped here is the outbox
+mechanics (atomic claiming, retry/backoff, dead-lettering) — real
+dispatch logic and event producers are follow-up work once an actual
+integration target is chosen.
+
+Not in this increment (still open):
+
+- Nothing writes to `domain_events` yet (no event producers)
+- `dispatchEvent()` has no real handlers (no downstream integrations exist)

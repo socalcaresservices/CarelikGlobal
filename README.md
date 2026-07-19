@@ -88,3 +88,62 @@ first time they authenticate — via the invite email link or by signing in
 with GitHub using the same address — `OrganizationProvider` calls the
 `accept_organization_invitation` database function to flip their
 membership to `active`.
+
+## Audit trail
+
+`audit_logs` has no INSERT policy — the only writer is a database trigger
+(`write_audit_log`, `supabase/migrations/20260719150000_audit_writer.sql`)
+attached to `organizations`, `organization_memberships`, `feature_flags`,
+and `files`. Every insert/update/delete on those tables is logged
+automatically; nothing in application code needs to remember to audit
+anything. Read access is still gated by `audit.read` per the existing RLS
+policy.
+
+## Event processing
+
+`domain_events` is a transactional outbox. Rows get inserted by
+application code (not yet wired up anywhere — no table currently writes
+to it) and need a worker to actually process them; nothing does that on
+its own.
+
+`supabase/functions/process-events` is that worker: it calls
+`claim_domain_events` (atomic, `FOR UPDATE SKIP LOCKED` so concurrent runs
+can't double-process the same row), attempts to dispatch each event, then
+calls `complete_domain_event` or `fail_domain_event` (exponential backoff,
+capped at 60 minutes, moving to `dead_letter` after 5 attempts).
+
+**`dispatchEvent()` is currently a stub** — there is no webhook target,
+email provider, or other downstream integration defined anywhere in this
+codebase yet, so it just logs and reports success. Replace the switch
+statement in `supabase/functions/process-events/index.ts` with real
+handlers per `event_type` once a concrete integration exists.
+
+Deploy and schedule it:
+
+```bash
+supabase functions deploy process-events
+supabase secrets set PROCESS_EVENTS_SECRET=$(openssl rand -hex 32)
+```
+
+`PROCESS_EVENTS_SECRET` is optional but recommended — if set, the function
+requires it as an `x-cron-secret` header, since (unlike `invite-member`)
+there is no per-user permission check to fall back on here. Schedule
+periodic invocation with
+[Supabase Cron](https://supabase.com/docs/guides/functions/schedule-functions)
+(built on `pg_cron` + `pg_net`), for example every minute:
+
+```sql
+select cron.schedule(
+  'process-domain-events',
+  '* * * * *',
+  $$
+  select net.http_post(
+    url := 'https://<project-ref>.supabase.co/functions/v1/process-events',
+    headers := jsonb_build_object(
+      'Content-Type', 'application/json',
+      'x-cron-secret', '<same value as PROCESS_EVENTS_SECRET>'
+    )
+  );
+  $$
+);
+```
