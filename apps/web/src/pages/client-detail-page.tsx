@@ -1,11 +1,18 @@
-import { useState } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import { Link, useParams } from "react-router-dom";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowLeft } from "lucide-react";
 import { Card, cn } from "@carelik/ui";
 import { getUtilizationStatus, isAuthorizationActive } from "@carelik/shared";
 import { useOrganization } from "@/providers/organization-provider";
 import { supabase } from "@/lib/supabase";
+
+function parseTags(value: string) {
+  return value
+    .split(",")
+    .map((tag) => tag.trim())
+    .filter(Boolean);
+}
 
 // Record layout per docs/design-system.md: header with every headline
 // metric visible at once, a KPI row for the thing that matters most for
@@ -25,6 +32,11 @@ interface ClientDetail {
   address: string | null;
   care_notes: string | null;
   status: "active" | "inactive" | "discharged";
+  address_city: string | null;
+  address_state: string | null;
+  address_zip: string | null;
+  language_needs: string[];
+  care_needs: string[];
 }
 
 interface ShiftRow {
@@ -79,10 +91,12 @@ function formatHours(hours: number) {
 export function ClientDetailPage() {
   const { id } = useParams<{ id: string }>();
   const { activeOrganizationId, hasPermission } = useOrganization();
+  const queryClient = useQueryClient();
   const [tab, setTab] = useState<Tab>("overview");
 
   const canSeeAuthorizations = hasPermission("authorizations.read");
   const canReadAudit = hasPermission("audit.read");
+  const canManage = hasPermission("clients.update");
 
   const clientQuery = useQuery({
     queryKey: ["client-detail", id],
@@ -93,6 +107,48 @@ export function ClientDetailPage() {
     },
     enabled: !!id
   });
+
+  const [profileForm, setProfileForm] = useState({ city: "", state: "", zip: "", languageNeeds: "", careNeeds: "" });
+  const [profileSaving, setProfileSaving] = useState(false);
+  const [profileError, setProfileError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (clientQuery.data) {
+      setProfileForm({
+        city: clientQuery.data.address_city ?? "",
+        state: clientQuery.data.address_state ?? "",
+        zip: clientQuery.data.address_zip ?? "",
+        languageNeeds: (clientQuery.data.language_needs ?? []).join(", "),
+        careNeeds: (clientQuery.data.care_needs ?? []).join(", ")
+      });
+    }
+  }, [clientQuery.data]);
+
+  async function handleSaveProfile(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!id) return;
+
+    setProfileError(null);
+    setProfileSaving(true);
+    try {
+      const { error } = await supabase
+        .from("clients")
+        .update({
+          address_city: profileForm.city || null,
+          address_state: profileForm.state || null,
+          address_zip: profileForm.zip || null,
+          language_needs: parseTags(profileForm.languageNeeds),
+          care_needs: parseTags(profileForm.careNeeds)
+        })
+        .eq("id", id);
+      if (error) throw error;
+      void queryClient.invalidateQueries({ queryKey: ["client-detail", id] });
+    } catch (cause) {
+      setProfileError(cause instanceof Error ? cause.message : "Could not save profile.");
+    } finally {
+      setProfileSaving(false);
+    }
+  }
 
   const shiftsQuery = useQuery({
     queryKey: ["client-detail-shifts", activeOrganizationId, id],
@@ -282,6 +338,103 @@ export function ClientDetailPage() {
               <dd className="mt-1 text-sm text-slate-700">{client.address ?? "—"}</dd>
             </div>
           </dl>
+
+          <div className="mt-6 border-t border-slate-100 pt-6">
+            <h4 className="text-sm font-semibold text-slate-950">Location &amp; care needs</h4>
+            <p className="mt-1 text-xs text-slate-500">
+              Used for CareScore - the client/caregiver match score shown when scheduling.
+            </p>
+            {canManage ? (
+              <form onSubmit={handleSaveProfile} className="mt-4 grid gap-3 sm:grid-cols-2">
+                <div>
+                  <label htmlFor="client-city" className="block text-xs font-medium text-slate-600">
+                    City
+                  </label>
+                  <input
+                    id="client-city"
+                    value={profileForm.city}
+                    onChange={(event) => setProfileForm({ ...profileForm, city: event.target.value })}
+                    className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900"
+                  />
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label htmlFor="client-state" className="block text-xs font-medium text-slate-600">
+                      State
+                    </label>
+                    <input
+                      id="client-state"
+                      value={profileForm.state}
+                      onChange={(event) => setProfileForm({ ...profileForm, state: event.target.value })}
+                      className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900"
+                    />
+                  </div>
+                  <div>
+                    <label htmlFor="client-zip" className="block text-xs font-medium text-slate-600">
+                      ZIP
+                    </label>
+                    <input
+                      id="client-zip"
+                      value={profileForm.zip}
+                      onChange={(event) => setProfileForm({ ...profileForm, zip: event.target.value })}
+                      className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900"
+                    />
+                  </div>
+                </div>
+                <div>
+                  <label htmlFor="client-language-needs" className="block text-xs font-medium text-slate-600">
+                    Language needs (comma-separated)
+                  </label>
+                  <input
+                    id="client-language-needs"
+                    placeholder="Spanish"
+                    value={profileForm.languageNeeds}
+                    onChange={(event) => setProfileForm({ ...profileForm, languageNeeds: event.target.value })}
+                    className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900"
+                  />
+                </div>
+                <div>
+                  <label htmlFor="client-care-needs" className="block text-xs font-medium text-slate-600">
+                    Care needs (comma-separated)
+                  </label>
+                  <input
+                    id="client-care-needs"
+                    placeholder="Hoyer lift, Dementia care"
+                    value={profileForm.careNeeds}
+                    onChange={(event) => setProfileForm({ ...profileForm, careNeeds: event.target.value })}
+                    className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900"
+                  />
+                </div>
+                <div className="sm:col-span-2">
+                  <button
+                    type="submit"
+                    disabled={profileSaving}
+                    className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    {profileSaving ? "Saving…" : "Save"}
+                  </button>
+                </div>
+                {profileError ? <p className="text-sm text-red-700 sm:col-span-2">{profileError}</p> : null}
+              </form>
+            ) : (
+              <dl className="mt-4 grid gap-4 sm:grid-cols-2">
+                <div>
+                  <dt className="text-xs font-medium uppercase tracking-wide text-slate-500">Location</dt>
+                  <dd className="mt-1 text-sm text-slate-700">
+                    {[client.address_city, client.address_state].filter(Boolean).join(", ") || "—"}
+                  </dd>
+                </div>
+                <div>
+                  <dt className="text-xs font-medium uppercase tracking-wide text-slate-500">Language needs</dt>
+                  <dd className="mt-1 text-sm text-slate-700">{(client.language_needs ?? []).join(", ") || "—"}</dd>
+                </div>
+                <div className="sm:col-span-2">
+                  <dt className="text-xs font-medium uppercase tracking-wide text-slate-500">Care needs</dt>
+                  <dd className="mt-1 text-sm text-slate-700">{(client.care_needs ?? []).join(", ") || "—"}</dd>
+                </div>
+              </dl>
+            )}
+          </div>
         </Card>
       ) : null}
 

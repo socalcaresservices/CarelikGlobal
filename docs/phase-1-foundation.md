@@ -739,3 +739,61 @@ incidents, and the record-level layout. Remaining open items in
 `docs/design-system.md` (CareScore/GeoScore, resizable columns, global
 search, distance/geo data) still need real business decisions or data
 sources the user hasn't provided yet.
+
+## Increment 22 — CareScore caregiver/client matching
+
+CareScore is a per-pair match score between one caregiver and one
+client, not a general caregiver rating - confirmed with the user
+directly ("caerescore is the match score to a client and caregiver").
+Weighted by proximity and language and availability as most important,
+plus skills and shift/incident history, per the user's picks. No real
+geocoding or availability-calendar feature exists yet, so proximity and
+availability are both text-match/proxy scores rather than true
+distance or free-time calculations - documented in the migration
+comments so a future increment can swap in real geocoding without
+changing the scoring shape.
+
+Shipped:
+
+- `supabase/migrations/20260719280000_caregiver_client_matching.sql`:
+  adds `address_city`/`address_state`/`address_zip`/`languages`/`skills`
+  to `user_profiles`, and `address_city`/`address_state`/`address_zip`/
+  `language_needs`/`care_needs` to `clients`. `set_caregiver_profile()`
+  lets a caregiver edit their own location/languages/skills, or lets
+  `membership.update` edit anyone's. `list_caregiver_matches()` scores
+  every active member of the org against one client: proximity 30
+  (zip match, else city+state match, else state-only match, else 0),
+  language 25 (language_needs covered by the caregiver's languages,
+  fraction-based), availability 20 (proxy from weekly-hour-target minus
+  hours already scheduled this week), skills 10 (care_needs covered by
+  the caregiver's skills, fraction-based), history 15 (bonus for
+  completed shifts together, capped, minus a penalty for any unresolved
+  incident together). Total is computed from the same per-component
+  values it returns, so it can never drift out of sync with them.
+- `supabase/migrations/20260719281000_get_caregiver_location.sql`:
+  read-only `get_caregiver_location()`, gated on self or
+  `membership.read`.
+- `packages/shared/src/matching.ts`: `caregiverLocationSchema`,
+  `clientLocationNeedsSchema`, `caregiverMatchSchema`.
+- `apps/web/src/pages/caregiver-detail-page.tsx` and
+  `client-detail-page.tsx`: new "Location, languages & skills" /
+  "Location & care needs" section on the Overview tab, editable
+  (comma-separated tags for languages/skills/care needs) when the
+  viewer has edit rights, read-only otherwise.
+- `apps/web/src/pages/schedule-page.tsx`: once a client is selected in
+  the "Schedule a shift" form, the Caregiver dropdown switches from a
+  plain alphabetical list to `list_caregiver_matches()` results, each
+  option labelled `"{name} — CareScore {score}"` and already sorted
+  best match first, with a small status line ("Ranking caregivers for
+  this client…" while loading, "Ranked by CareScore, best match first."
+  once loaded).
+
+84 web tests pass (3 new: 1 for each detail page's profile-save flow,
+1 for the ranked match list on Schedule) plus 59 in `packages/shared`
+(6 new for the matching schemas). Full pipeline (typecheck, lint,
+build, test) verified clean for both packages; both new migrations
+applied live with `get_advisors` confirming no anon-execute gap.
+
+Remaining open items: resizable list columns, global search, and real
+geocoding/distance data (CareScore's proximity and availability scores
+are still text-match proxies, not true distance/calendar data).

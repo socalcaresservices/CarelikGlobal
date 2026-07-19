@@ -2,10 +2,12 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { useAuth } from "@carelik/auth";
 import { useOrganization } from "@/providers/organization-provider";
 import { supabase } from "@/lib/supabase";
 import { CaregiverDetailPage } from "./caregiver-detail-page";
 
+vi.mock("@carelik/auth", () => ({ useAuth: vi.fn() }));
 vi.mock("@/providers/organization-provider", () => ({ useOrganization: vi.fn() }));
 vi.mock("@/lib/supabase", () => ({
   supabase: {
@@ -13,6 +15,7 @@ vi.mock("@/lib/supabase", () => ({
   }
 }));
 
+const mockedUseAuth = vi.mocked(useAuth);
 const mockedUseOrganization = vi.mocked(useOrganization);
 const mockedRpc = vi.mocked(supabase.rpc);
 
@@ -58,6 +61,7 @@ describe("CaregiverDetailPage", () => {
   });
 
   it("shows a not-available message without membership.read", () => {
+    mockedUseAuth.mockReturnValue({ user: { id: "other-user" } } as never);
     mockedUseOrganization.mockReturnValue({ ...baseOrganization(), hasPermission: vi.fn(() => false) });
 
     renderPage();
@@ -65,6 +69,7 @@ describe("CaregiverDetailPage", () => {
   });
 
   it("shows the member's name, role, and weekly hours", async () => {
+    mockedUseAuth.mockReturnValue({ user: { id: "other-user" } } as never);
     mockedUseOrganization.mockReturnValue(baseOrganization());
     mockedRpc.mockImplementation((fn: string) => {
       if (fn === "list_organization_members") {
@@ -89,6 +94,7 @@ describe("CaregiverDetailPage", () => {
   });
 
   it("switches to the Credentials tab", async () => {
+    mockedUseAuth.mockReturnValue({ user: { id: "other-user" } } as never);
     mockedUseOrganization.mockReturnValue(baseOrganization());
     mockedRpc.mockImplementation((fn: string) => {
       if (fn === "list_organization_members") {
@@ -112,5 +118,41 @@ describe("CaregiverDetailPage", () => {
     fireEvent.click(screen.getByRole("button", { name: "Credentials" }));
 
     await waitFor(() => expect(screen.getByText("CPR")).toBeInTheDocument());
+  });
+
+  it("saves caregiver location and skills", async () => {
+    mockedUseAuth.mockReturnValue({ user: { id: CAREGIVER_ID } } as never);
+    mockedUseOrganization.mockReturnValue(baseOrganization());
+    mockedRpc.mockImplementation((fn: string) => {
+      if (fn === "list_organization_members") {
+        return Promise.resolve({
+          data: [{ user_id: CAREGIVER_ID, display_name: "Sam Caregiver", role: "staff", status: "active" }],
+          error: null
+        }) as never;
+      }
+      if (fn === "set_caregiver_profile") {
+        return Promise.resolve({ data: null, error: null }) as never;
+      }
+      return Promise.resolve({ data: [], error: null }) as never;
+    });
+
+    renderPage();
+    await waitFor(() => expect(screen.getByLabelText("City")).toBeInTheDocument());
+
+    fireEvent.change(screen.getByLabelText("City"), { target: { value: "San Diego" } });
+    fireEvent.change(screen.getByLabelText("Languages (comma-separated)"), { target: { value: "English, Spanish" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+
+    await waitFor(() =>
+      expect(mockedRpc).toHaveBeenCalledWith(
+        "set_caregiver_profile",
+        expect.objectContaining({
+          target_organization_id: ORG_ID,
+          target_user_id: CAREGIVER_ID,
+          new_address_city: "San Diego",
+          new_languages: ["English", "Spanish"]
+        })
+      )
+    );
   });
 });

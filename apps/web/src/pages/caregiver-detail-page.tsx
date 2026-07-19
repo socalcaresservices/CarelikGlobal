@@ -1,12 +1,20 @@
-import { useState } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import { Link, useParams } from "react-router-dom";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowLeft } from "lucide-react";
 import { Card, cn } from "@carelik/ui";
 import { getCredentialStatus } from "@carelik/shared";
+import { useAuth } from "@carelik/auth";
 import { useOrganization } from "@/providers/organization-provider";
 import { supabase } from "@/lib/supabase";
 import { getWeekEnd, getWeekStart } from "@/lib/week";
+
+function parseTags(value: string) {
+  return value
+    .split(",")
+    .map((tag) => tag.trim())
+    .filter(Boolean);
+}
 
 // Same record layout pattern as client-detail-page.tsx: header with
 // headline metrics, a KPI row for weekly hours (target/scheduled/gap),
@@ -60,6 +68,14 @@ interface AuditRow {
   entity_type: string;
 }
 
+interface CaregiverLocationRow {
+  address_city: string | null;
+  address_state: string | null;
+  address_zip: string | null;
+  languages: string[];
+  skills: string[];
+}
+
 type Tab = "overview" | "schedule" | "credentials" | "incidents" | "history";
 
 function formatHours(hours: number) {
@@ -69,10 +85,13 @@ function formatHours(hours: number) {
 export function CaregiverDetailPage() {
   const { id } = useParams<{ id: string }>();
   const { activeOrganizationId, hasPermission } = useOrganization();
+  const { user } = useAuth();
+  const queryClient = useQueryClient();
   const [tab, setTab] = useState<Tab>("overview");
 
   const canSeeMembers = hasPermission("membership.read");
   const canReadAudit = hasPermission("audit.read");
+  const canEditProfile = id === user?.id || hasPermission("membership.update");
 
   const weekStart = getWeekStart(new Date());
   const weekEnd = getWeekEnd(weekStart);
@@ -152,6 +171,60 @@ export function CaregiverDetailPage() {
     },
     enabled: !!activeOrganizationId && !!id && canReadAudit
   });
+
+  const locationQuery = useQuery({
+    queryKey: ["caregiver-detail-location", activeOrganizationId, id],
+    queryFn: async () => {
+      const { data, error } = await supabase.rpc("get_caregiver_location", {
+        target_organization_id: activeOrganizationId!,
+        target_user_id: id!
+      });
+      if (error) throw error;
+      return ((data ?? [])[0] as CaregiverLocationRow | undefined) ?? null;
+    },
+    enabled: !!activeOrganizationId && !!id
+  });
+
+  const [profileForm, setProfileForm] = useState({ city: "", state: "", zip: "", languages: "", skills: "" });
+  const [profileSaving, setProfileSaving] = useState(false);
+  const [profileError, setProfileError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (locationQuery.data) {
+      setProfileForm({
+        city: locationQuery.data.address_city ?? "",
+        state: locationQuery.data.address_state ?? "",
+        zip: locationQuery.data.address_zip ?? "",
+        languages: (locationQuery.data.languages ?? []).join(", "),
+        skills: (locationQuery.data.skills ?? []).join(", ")
+      });
+    }
+  }, [locationQuery.data]);
+
+  async function handleSaveProfile(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!activeOrganizationId || !id) return;
+
+    setProfileError(null);
+    setProfileSaving(true);
+    try {
+      const { error } = await supabase.rpc("set_caregiver_profile", {
+        target_organization_id: activeOrganizationId,
+        target_user_id: id,
+        new_address_city: profileForm.city || null,
+        new_address_state: profileForm.state || null,
+        new_address_zip: profileForm.zip || null,
+        new_languages: parseTags(profileForm.languages),
+        new_skills: parseTags(profileForm.skills)
+      });
+      if (error) throw error;
+      void queryClient.invalidateQueries({ queryKey: ["caregiver-detail-location", activeOrganizationId, id] });
+    } catch (cause) {
+      setProfileError(cause instanceof Error ? cause.message : "Could not save profile.");
+    } finally {
+      setProfileSaving(false);
+    }
+  }
 
   if (!canSeeMembers) {
     return (
@@ -281,6 +354,113 @@ export function CaregiverDetailPage() {
               <dd className="mt-1 text-sm text-slate-700">{member.status}</dd>
             </div>
           </dl>
+
+          <div className="mt-6 border-t border-slate-100 pt-6">
+            <h4 className="text-sm font-semibold text-slate-950">Location, languages &amp; skills</h4>
+            <p className="mt-1 text-xs text-slate-500">
+              Used for CareScore - the client/caregiver match score shown when scheduling. See{" "}
+              <Link to="/schedule" className="underline">
+                Schedule
+              </Link>
+              .
+            </p>
+            {canEditProfile ? (
+              <form onSubmit={handleSaveProfile} className="mt-4 grid gap-3 sm:grid-cols-2">
+                <div>
+                  <label htmlFor="caregiver-city" className="block text-xs font-medium text-slate-600">
+                    City
+                  </label>
+                  <input
+                    id="caregiver-city"
+                    value={profileForm.city}
+                    onChange={(event) => setProfileForm({ ...profileForm, city: event.target.value })}
+                    className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900"
+                  />
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label htmlFor="caregiver-state" className="block text-xs font-medium text-slate-600">
+                      State
+                    </label>
+                    <input
+                      id="caregiver-state"
+                      value={profileForm.state}
+                      onChange={(event) => setProfileForm({ ...profileForm, state: event.target.value })}
+                      className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900"
+                    />
+                  </div>
+                  <div>
+                    <label htmlFor="caregiver-zip" className="block text-xs font-medium text-slate-600">
+                      ZIP
+                    </label>
+                    <input
+                      id="caregiver-zip"
+                      value={profileForm.zip}
+                      onChange={(event) => setProfileForm({ ...profileForm, zip: event.target.value })}
+                      className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900"
+                    />
+                  </div>
+                </div>
+                <div>
+                  <label htmlFor="caregiver-languages" className="block text-xs font-medium text-slate-600">
+                    Languages (comma-separated)
+                  </label>
+                  <input
+                    id="caregiver-languages"
+                    placeholder="English, Spanish"
+                    value={profileForm.languages}
+                    onChange={(event) => setProfileForm({ ...profileForm, languages: event.target.value })}
+                    className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900"
+                  />
+                </div>
+                <div>
+                  <label htmlFor="caregiver-skills" className="block text-xs font-medium text-slate-600">
+                    Skills (comma-separated)
+                  </label>
+                  <input
+                    id="caregiver-skills"
+                    placeholder="Dementia care, Hoyer lift"
+                    value={profileForm.skills}
+                    onChange={(event) => setProfileForm({ ...profileForm, skills: event.target.value })}
+                    className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900"
+                  />
+                </div>
+                <div className="sm:col-span-2">
+                  <button
+                    type="submit"
+                    disabled={profileSaving}
+                    className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    {profileSaving ? "Saving…" : "Save"}
+                  </button>
+                </div>
+                {profileError ? <p className="text-sm text-red-700 sm:col-span-2">{profileError}</p> : null}
+              </form>
+            ) : (
+              <dl className="mt-4 grid gap-4 sm:grid-cols-2">
+                <div>
+                  <dt className="text-xs font-medium uppercase tracking-wide text-slate-500">Location</dt>
+                  <dd className="mt-1 text-sm text-slate-700">
+                    {[locationQuery.data?.address_city, locationQuery.data?.address_state]
+                      .filter(Boolean)
+                      .join(", ") || "—"}
+                  </dd>
+                </div>
+                <div>
+                  <dt className="text-xs font-medium uppercase tracking-wide text-slate-500">Languages</dt>
+                  <dd className="mt-1 text-sm text-slate-700">
+                    {(locationQuery.data?.languages ?? []).join(", ") || "—"}
+                  </dd>
+                </div>
+                <div className="sm:col-span-2">
+                  <dt className="text-xs font-medium uppercase tracking-wide text-slate-500">Skills</dt>
+                  <dd className="mt-1 text-sm text-slate-700">
+                    {(locationQuery.data?.skills ?? []).join(", ") || "—"}
+                  </dd>
+                </div>
+              </dl>
+            )}
+          </div>
         </Card>
       ) : null}
 

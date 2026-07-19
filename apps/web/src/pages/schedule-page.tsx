@@ -37,6 +37,16 @@ interface MemberOption {
   display_name: string;
 }
 
+// Backed by list_caregiver_matches() - see
+// supabase/migrations/20260719280000_caregiver_client_matching.sql for
+// the full CareScore weighting. Already sorted best-match-first by the
+// RPC itself.
+interface CaregiverMatchRow {
+  caregiver_user_id: string;
+  caregiver_name: string;
+  match_score: number;
+}
+
 const statusStyles: Record<ShiftRow["status"], string> = {
   scheduled: "bg-sky-50 text-sky-700",
   completed: "bg-emerald-50 text-emerald-700",
@@ -102,6 +112,21 @@ export function SchedulePage() {
     void queryClient.invalidateQueries({ queryKey: ["shifts", activeOrganizationId] });
   }
 
+  const [clientId, setClientId] = useState("");
+
+  const matchesQuery = useQuery({
+    queryKey: ["caregiver-matches", activeOrganizationId, clientId],
+    queryFn: async () => {
+      const { data, error } = await supabase.rpc("list_caregiver_matches", {
+        target_organization_id: activeOrganizationId!,
+        target_client_id: clientId
+      });
+      if (error) throw error;
+      return (data ?? []) as CaregiverMatchRow[];
+    },
+    enabled: !!activeOrganizationId && !!clientId && canManage
+  });
+
   const table = useTableControls<ShiftRow, "when" | "client" | "caregiver" | "status">(
     shiftsQuery.data,
     {
@@ -121,7 +146,6 @@ export function SchedulePage() {
   const inOneHour = new Date(now.getTime() + 60 * 60 * 1000);
   const inTwoHours = new Date(now.getTime() + 2 * 60 * 60 * 1000);
 
-  const [clientId, setClientId] = useState("");
   const [caregiverId, setCaregiverId] = useState("");
   const [startsAt, setStartsAt] = useState(toLocalInputValue(inOneHour));
   const [endsAt, setEndsAt] = useState(toLocalInputValue(inTwoHours));
@@ -235,12 +259,25 @@ export function SchedulePage() {
                 <option value="" disabled>
                   Select a caregiver
                 </option>
-                {(membersQuery.data ?? []).map((member) => (
-                  <option key={member.user_id} value={member.user_id}>
-                    {member.display_name}
-                  </option>
-                ))}
+                {matchesQuery.data
+                  ? matchesQuery.data.map((match) => (
+                      <option key={match.caregiver_user_id} value={match.caregiver_user_id}>
+                        {match.caregiver_name} — CareScore {match.match_score}
+                      </option>
+                    ))
+                  : (membersQuery.data ?? []).map((member) => (
+                      <option key={member.user_id} value={member.user_id}>
+                        {member.display_name}
+                      </option>
+                    ))}
               </select>
+              {clientId ? (
+                <p className="mt-1 text-xs text-slate-500">
+                  {matchesQuery.isLoading
+                    ? "Ranking caregivers for this client…"
+                    : "Ranked by CareScore, best match first."}
+                </p>
+              ) : null}
             </div>
             <div>
               <label htmlFor="shift-starts" className="block text-xs font-medium text-slate-600">

@@ -214,15 +214,23 @@ it stays honest rather than aspirational.
   record - no new migrations needed. Client and member names on the
   Clients and Access pages now link to these.
 
+**Built since:** CareScore - a per-pair caregiver/client match score
+(proximity, language, availability, skills, history), surfaced as a
+ranked, labelled caregiver dropdown when scheduling a shift for a
+client. See `docs/phase-1-foundation.md`'s Increment 22 write-up for
+the full weighting model and its known proxies (text-match proximity,
+no real geocoding; hour-target-based availability, no true
+availability calendar).
+
 **Not yet built** (needs a data model before it can be real, not
 faked):
 
-- CareScore / GeoScore / any scoring model
 - Resizable list columns (sortable/filterable are done; resizable
   isn't)
 - Global search (per-page search exists; nothing searches everything
   at once yet)
-- Distance/geo data
+- Real distance/geo data (CareScore's proximity score today is a
+  zip/city/state text match, not an actual distance calculation)
 
 Building any of these into the Action Center or record layouts before
 the underlying table exists would mean showing fabricated numbers -

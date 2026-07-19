@@ -99,6 +99,45 @@ describe("ClientDetailPage", () => {
     await waitFor(() => expect(screen.getByText("Not found")).toBeInTheDocument());
   });
 
+  it("saves client location and care needs", async () => {
+    mockedUseOrganization.mockReturnValue(baseOrganization());
+    const eqUpdateMock = vi.fn().mockResolvedValue({ error: null });
+    const updateMock = vi.fn(() => ({ eq: eqUpdateMock }));
+    mockedFrom.mockReturnValue({
+      select: mockClientRecord({
+        id: CLIENT_ID,
+        first_name: "Jordan",
+        last_name: "Rivera",
+        phone: null,
+        email: null,
+        address: null,
+        care_notes: null,
+        status: "active"
+      }),
+      update: updateMock
+    } as never);
+    mockedRpc.mockResolvedValue({ data: [], error: null } as never);
+
+    renderPage();
+    await waitFor(() => expect(screen.getByLabelText("City")).toBeInTheDocument());
+
+    fireEvent.change(screen.getByLabelText("City"), { target: { value: "San Diego" } });
+    fireEvent.change(screen.getByLabelText("Care needs (comma-separated)"), {
+      target: { value: "Hoyer lift, Dementia care" }
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+
+    await waitFor(() =>
+      expect(updateMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          address_city: "San Diego",
+          care_needs: ["Hoyer lift", "Dementia care"]
+        })
+      )
+    );
+    expect(eqUpdateMock).toHaveBeenCalledWith("id", CLIENT_ID);
+  });
+
   it("switches to the Notes tab", async () => {
     mockedUseOrganization.mockReturnValue(baseOrganization());
     mockedFrom.mockReturnValue({
