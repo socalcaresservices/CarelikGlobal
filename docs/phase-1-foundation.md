@@ -476,3 +476,45 @@ Not in this increment (still open):
 - No calendar/week view - shifts render as a flat list.
 - No recurring shifts - every shift is a one-off entry.
 - No conflict detection (double-booking a caregiver is allowed).
+
+## Increment 15 — Design system and Action Center
+
+The user set a non-negotiable design direction for every future screen:
+Apple-level visual simplicity combined with Epic-level information
+density, with an "Action Center" - what needs attention, before
+anything else - as the single biggest UX improvement over typical home
+care software. See `docs/design-system.md` for the full philosophy;
+that file is the permanent reference every future screen should be
+checked against.
+
+Shipped:
+
+- `docs/design-system.md`: the design system itself, plus an honest
+  "current implementation status" section tracking what's real versus
+  what still needs a data model before it can be built without faking
+  numbers.
+- `apps/web/src/components/action-center.tsx`: the dashboard's lead
+  section. Four signals, each computed from data that actually exists
+  today - shifts that ended without a status update, shifts happening
+  today, active clients with no upcoming visit, and pending
+  invitations. Each signal is permission-scoped (a caregiver without
+  `shifts.read` still sees their own overdue/today counts via the same
+  RLS carve-out `list_shifts()` already has; clients/invitations
+  signals only appear if the viewer can see that data at all). A
+  healthy state (green, "All caught up") is shown rather than hiding
+  the card when the count is zero - always visible, never absent.
+- `apps/web/src/pages/overview-page.tsx`: rewritten to lead with the
+  Action Center, then a small "this week" KPI row. The previous
+  content (an internal list of architecture concepts - authentication,
+  multi-tenancy, RBAC, etc.) was removed from the page real users see;
+  that's implementation detail belonging in this document, not
+  something an agency owner needs on their dashboard.
+
+Deliberately not attempted: CareScore/GeoScore or any scoring model,
+credential/authorization/incident tracking, the record-level
+KPI-header-plus-tabs layout, sortable/filterable/resizable lists, and
+global search. Every one of those needs its own data model or is a
+larger structural change - building them now would mean either
+fabricating numbers or reworking every existing page without a clear
+enough spec yet. `docs/design-system.md` tracks all of them as open so
+they aren't lost.

@@ -1,35 +1,102 @@
+import { useQuery } from "@tanstack/react-query";
 import { Card } from "@carelik/ui";
+import { useOrganization } from "@/providers/organization-provider";
+import { supabase } from "@/lib/supabase";
+import { ActionCenter } from "@/components/action-center";
 
-const foundationItems = [
-  ["Authentication", "Supabase session lifecycle and protected routes"],
-  ["Multi-tenancy", "Organization membership and tenant isolation"],
-  ["RBAC", "Role and permission primitives with RLS enforcement"],
-  ["Audit", "Immutable operational audit trail"],
-  ["Events", "Transactional outbox for asynchronous workflows"],
-  ["Storage", "Tenant-scoped document metadata and storage policies"]
-];
+// Overview leads with the Action Center - "what needs my attention" -
+// per docs/design-system.md, not architecture talk. See that doc for
+// why deeper signals (compliance, authorizations, incidents) aren't
+// here yet: no data model exists for them, and a fabricated number is
+// worse than no number.
 
 export function OverviewPage() {
+  const { activeOrganization, activeOrganizationId, hasPermission } = useOrganization();
+
+  const canSeeClients = hasPermission("clients.read");
+  const canSeeMembers = hasPermission("membership.read");
+
+  const clientsCountQuery = useQuery({
+    queryKey: ["overview-clients-count", activeOrganizationId],
+    queryFn: async () => {
+      const { count, error } = await supabase
+        .from("clients")
+        .select("id", { count: "exact", head: true })
+        .eq("organization_id", activeOrganizationId!)
+        .eq("status", "active");
+      if (error) throw error;
+      return count ?? 0;
+    },
+    enabled: !!activeOrganizationId && canSeeClients
+  });
+
+  const membersCountQuery = useQuery({
+    queryKey: ["overview-members-count", activeOrganizationId],
+    queryFn: async () => {
+      const { data, error } = await supabase.rpc("list_organization_members", {
+        target_organization_id: activeOrganizationId!
+      });
+      if (error) throw error;
+      return ((data ?? []) as Array<{ status: string }>).filter((member) => member.status === "active")
+        .length;
+    },
+    enabled: !!activeOrganizationId && canSeeMembers
+  });
+
+  const upcomingShiftsQuery = useQuery({
+    queryKey: ["overview-upcoming-shifts", activeOrganizationId],
+    queryFn: async () => {
+      const now = new Date();
+      const weekOut = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
+      const { data, error } = await supabase.rpc("list_shifts", {
+        target_organization_id: activeOrganizationId!,
+        from_time: now.toISOString(),
+        to_time: weekOut.toISOString()
+      });
+      if (error) throw error;
+      return ((data ?? []) as Array<{ status: string }>).filter((shift) => shift.status === "scheduled")
+        .length;
+    },
+    enabled: !!activeOrganizationId
+  });
+
   return (
-    <section className="mx-auto max-w-6xl space-y-6">
+    <section className="mx-auto max-w-6xl space-y-8">
       <div>
-        <p className="text-sm font-medium text-slate-500">Platform status</p>
+        <p className="text-sm font-medium text-slate-500">Overview</p>
         <h2 className="mt-1 text-3xl font-semibold tracking-tight text-slate-950">
-          Foundation control plane
+          {activeOrganization?.displayName ?? "CareLik Global"}
         </h2>
-        <p className="mt-2 max-w-3xl text-slate-600">
-          The first build establishes the security, tenancy, configuration, and event
-          infrastructure required by every operational module.
-        </p>
       </div>
 
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-        {foundationItems.map(([title, description]) => (
-          <Card key={title}>
-            <h3 className="font-semibold text-slate-950">{title}</h3>
-            <p className="mt-2 text-sm leading-6 text-slate-600">{description}</p>
+      <ActionCenter />
+
+      <div>
+        <p className="text-sm font-medium text-slate-500">This week</p>
+        <div className="mt-3 grid gap-3 sm:grid-cols-3">
+          <Card>
+            <p className="text-3xl font-semibold tracking-tight text-slate-950">
+              {upcomingShiftsQuery.data ?? "—"}
+            </p>
+            <p className="mt-1 text-sm text-slate-600">Shifts in the next 7 days</p>
           </Card>
-        ))}
+          {canSeeClients ? (
+            <Card>
+              <p className="text-3xl font-semibold tracking-tight text-slate-950">
+                {clientsCountQuery.data ?? "—"}
+              </p>
+              <p className="mt-1 text-sm text-slate-600">Active clients</p>
+            </Card>
+          ) : null}
+          {canSeeMembers ? (
+            <Card>
+              <p className="text-3xl font-semibold tracking-tight text-slate-950">
+                {membersCountQuery.data ?? "—"}
+              </p>
+              <p className="mt-1 text-sm text-slate-600">Active team members</p>
+            </Card>
+          ) : null}
+        </div>
       </div>
     </section>
   );
