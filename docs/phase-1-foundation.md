@@ -423,3 +423,56 @@ Shipped:
 
 58 tests pass across all three packages with tests (`packages/shared`:
 22, `packages/auth`: 7, `apps/web`: 34). Full pipeline verified clean.
+
+## Increment 14 — Caregiver scheduling: clients and shifts
+
+The first real product feature beyond the platform foundation. Two new
+tables, following the same shape as everything else: `clients` (the
+people receiving care) and `shifts` (a caregiver assigned to a client
+for a time window).
+
+Shipped:
+
+- `20260719230000_clients_and_shifts.sql`: `clients` and `shifts`
+  tables, RLS, `set_updated_at`/`write_audit_log` triggers (both tables
+  fit the generic audit trigger's assumptions - single uuid `id`, a real
+  `organization_id`), and four new permissions (`clients.read`,
+  `clients.update`, `shifts.read`, `shifts.update`). `shifts` RLS is
+  deliberately not purely permission-gated: `caregiver_user_id =
+  auth.uid()` is OR'd in, so a caregiver can always see their own
+  assigned shifts even without the org-wide `shifts.read` permission -
+  seeded that way for `staff`, who get `clients.read` but not
+  `shifts.read`/`shifts.update`.
+- `20260719231000_list_shifts.sql`: security-definer RPC resolving
+  client and caregiver names (same reasoning as
+  `list_organization_members`/`list_audit_logs` - RLS on `user_profiles`
+  blocks a plain join), with the exact same access logic as the RLS
+  policy so the "see your own shifts" carve-out works through the
+  function too.
+- `20260719232000_lock_down_new_rpc_grants.sql`: `get_advisors` caught
+  both new RPCs (`list_audit_logs` and `list_shifts`) as callable by
+  unauthenticated `anon` requests - the same grant gap fixed in
+  Increment 10, reintroduced by not repeating the explicit
+  `revoke ... from anon` when adding them. Fixed and reverified clean.
+- `apps/web/src/pages/clients-page.tsx`: list/add/edit/soft-delete
+  client records, gated on `clients.read`/`clients.update`.
+- `apps/web/src/pages/schedule-page.tsx`: list of shifts plus a
+  scheduling form (client + caregiver + time window), gated on
+  `shifts.update`. The page itself has no permission gate on viewing -
+  `list_shifts()` and RLS both already handle who can see what, so
+  there's always something valid to render (a caregiver with no
+  `shifts.read` still sees their own schedule).
+- New "Clients" and "Schedule" nav items.
+- Verified against the live project: inserted a real client and shift,
+  confirmed `list_shifts()` resolves both names correctly, and confirmed
+  both `clients_audit` and `shifts_audit` triggers fired, then cleaned
+  up.
+
+68 tests pass across all three packages with tests (`packages/shared`:
+30, `packages/auth`: 7, `apps/web`: 42). Full pipeline verified clean.
+
+Not in this increment (still open):
+
+- No calendar/week view - shifts render as a flat list.
+- No recurring shifts - every shift is a one-off entry.
+- No conflict detection (double-booking a caregiver is allowed).

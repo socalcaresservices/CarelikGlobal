@@ -1,6 +1,15 @@
 import type { PropsWithChildren } from "react";
 import { NavLink } from "react-router-dom";
-import { Building2, ClipboardList, LayoutDashboard, LogOut, Settings, ShieldCheck } from "lucide-react";
+import {
+  Building2,
+  CalendarClock,
+  ClipboardList,
+  LayoutDashboard,
+  LogOut,
+  Settings,
+  ShieldCheck,
+  Users
+} from "lucide-react";
 import type { Permission } from "@carelik/shared";
 import { useAuth } from "@carelik/auth";
 import { cn } from "@carelik/ui";
@@ -15,6 +24,8 @@ const navItems: Array<{
   { to: "/", label: "Overview", icon: LayoutDashboard },
   { to: "/organizations", label: "Organizations", icon: Building2, permission: "organization.read" },
   { to: "/access", label: "Access", icon: ShieldCheck, permission: "membership.read" },
+  { to: "/clients", label: "Clients", icon: Users, permission: "clients.read" },
+  { to: "/schedule", label: "Schedule", icon: CalendarClock },
   { to: "/audit", label: "Audit", icon: ClipboardList, permission: "audit.read" },
   { to: "/settings", label: "Settings", icon: Settings, permission: "settings.read" }
 ];

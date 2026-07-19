@@ -12,7 +12,11 @@ export const permissionSchema = z.enum([
   "audit.read",
   "files.read",
   "files.create",
-  "files.delete"
+  "files.delete",
+  "clients.read",
+  "clients.update",
+  "shifts.read",
+  "shifts.update"
 ]);
 
 export type Permission = z.infer<typeof permissionSchema>;

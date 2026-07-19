@@ -7,6 +7,8 @@ import { OverviewPage } from "@/pages/overview-page";
 import { AccessPage } from "@/pages/access-page";
 import { OrganizationsPage } from "@/pages/organizations-page";
 import { AuditPage } from "@/pages/audit-page";
+import { ClientsPage } from "@/pages/clients-page";
+import { SchedulePage } from "@/pages/schedule-page";
 import { SettingsPage } from "@/pages/settings-page";
 
 export function App() {
@@ -23,6 +25,8 @@ export function App() {
                   <Route path="/" element={<OverviewPage />} />
                   <Route path="/organizations" element={<OrganizationsPage />} />
                   <Route path="/access" element={<AccessPage />} />
+                  <Route path="/clients" element={<ClientsPage />} />
+                  <Route path="/schedule" element={<SchedulePage />} />
                   <Route path="/audit" element={<AuditPage />} />
                   <Route path="/settings" element={<SettingsPage />} />
                   <Route path="*" element={<Navigate to="/" replace />} />
