@@ -360,3 +360,36 @@ Not in this increment (still open):
 - Nothing writes to `domain_events` yet (no event producers) and
   `dispatchEvent()` is still a stub — same gap noted since Increment 8.
 - No end-to-end tests.
+
+`20260719210000_add_creator_as_organization_owner.sql` (applied right
+after, once the app was actually used for the first time): creating an
+organization only ever inserted the `organizations` row — the creator
+had no membership in the org they'd just made, so the Access page
+showed zero members. Found by creating a real organization through the
+live app. Fixed going forward, plus a one-time backfill for the
+organization created before the fix.
+
+## Increment 12 — Settings screen
+
+`/settings` was a placeholder since Increment 1, even though
+`public.organization_settings` (a generic per-organization key/value
+store, RLS-gated by `settings.read`/`settings.update`) has existed the
+whole time with nothing reading or writing it.
+
+Shipped:
+
+- `packages/shared/src/organization-settings.ts`: schema for a stored
+  setting. Deliberately doesn't constrain `key` or `value` beyond basic
+  shape, since the table's purpose is holding settings nobody's given a
+  dedicated column yet.
+- `apps/web/src/pages/settings-page.tsx`: lists every setting stored
+  for the active organization, and — gated on `settings.update` — a
+  form to add or edit one (key + a JSON value, since values are jsonb)
+  and delete existing ones. Version is incremented client-side on every
+  save (there's no DB-side trigger for it, unlike `updated_at`
+  elsewhere).
+- Removed `not-implemented-page.tsx`, now unused — it was only ever
+  rendered at `/settings`.
+
+53 tests pass across all three packages with tests (`packages/shared`:
+22, `packages/auth`: 7, `apps/web`: 30). Full pipeline verified clean.

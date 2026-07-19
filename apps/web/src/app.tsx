@@ -6,7 +6,7 @@ import { LoginPage } from "@/pages/login-page";
 import { OverviewPage } from "@/pages/overview-page";
 import { AccessPage } from "@/pages/access-page";
 import { OrganizationsPage } from "@/pages/organizations-page";
-import { NotImplementedPage } from "@/pages/not-implemented-page";
+import { SettingsPage } from "@/pages/settings-page";
 
 export function App() {
   return (
@@ -22,7 +22,7 @@ export function App() {
                   <Route path="/" element={<OverviewPage />} />
                   <Route path="/organizations" element={<OrganizationsPage />} />
                   <Route path="/access" element={<AccessPage />} />
-                  <Route path="/settings" element={<NotImplementedPage title="Settings" />} />
+                  <Route path="/settings" element={<SettingsPage />} />
                   <Route path="*" element={<Navigate to="/" replace />} />
                 </Routes>
               </AppShell>
