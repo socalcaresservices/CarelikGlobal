@@ -6,7 +6,9 @@ import type { IncidentSeverity, IncidentStatus } from "@carelik/shared";
 import { useOrganization } from "@/providers/organization-provider";
 import { supabase } from "@/lib/supabase";
 import { useTableControls } from "@/lib/use-table-controls";
+import { useColumnWidths } from "@/lib/use-column-widths";
 import { SortableHeader } from "@/components/sortable-header";
+import { PlainHeader } from "@/components/resizable-th";
 
 // Backed by list_incidents(), a security-definer RPC (see
 // supabase/migrations/20260719270000_incidents.sql) that joins client/
@@ -132,6 +134,14 @@ export function IncidentsPage() {
       status: (a, b) => a.status.localeCompare(b.status)
     },
     defaultSort: "when"
+  });
+
+  const columns = useColumnWidths("carelik:column-widths:incidents", {
+    when: 190,
+    category: 160,
+    client: 150,
+    severity: 130,
+    status: 150
   });
 
   const [form, setForm] = useState(emptyForm);
@@ -329,7 +339,8 @@ export function IncidentsPage() {
         ) : incidentsQuery.isError ? (
           <p className="mt-3 text-sm text-red-700">Could not load incidents.</p>
         ) : (
-          <table className="mt-4 w-full text-left text-sm">
+          <div className="overflow-x-auto">
+          <table className="mt-4 w-full table-fixed text-left text-sm">
             <thead>
               <tr className="border-b border-slate-200">
                 <SortableHeader
@@ -337,25 +348,37 @@ export function IncidentsPage() {
                   active={table.sortKey === "when"}
                   direction={table.direction}
                   onClick={() => table.toggleSort("when")}
+                  width={columns.widths.when}
+                  onResizeStart={columns.startResize("when")}
                 />
                 <SortableHeader
                   label="Category"
                   active={table.sortKey === "category"}
                   direction={table.direction}
                   onClick={() => table.toggleSort("category")}
+                  width={columns.widths.category}
+                  onResizeStart={columns.startResize("category")}
                 />
-                <th className="pb-2 text-xs font-medium uppercase tracking-wide text-slate-500">Client</th>
+                <PlainHeader
+                  label="Client"
+                  width={columns.widths.client}
+                  onResizeStart={columns.startResize("client")}
+                />
                 <SortableHeader
                   label="Severity"
                   active={table.sortKey === "severity"}
                   direction={table.direction}
                   onClick={() => table.toggleSort("severity")}
+                  width={columns.widths.severity}
+                  onResizeStart={columns.startResize("severity")}
                 />
                 <SortableHeader
                   label="Status"
                   active={table.sortKey === "status"}
                   direction={table.direction}
                   onClick={() => table.toggleSort("status")}
+                  width={columns.widths.status}
+                  onResizeStart={columns.startResize("status")}
                 />
               </tr>
             </thead>
@@ -406,6 +429,7 @@ export function IncidentsPage() {
               ) : null}
             </tbody>
           </table>
+          </div>
         )}
       </Card>
     </section>

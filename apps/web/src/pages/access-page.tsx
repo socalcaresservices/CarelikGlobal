@@ -8,6 +8,7 @@ import { useOrganization } from "@/providers/organization-provider";
 import { supabase } from "@/lib/supabase";
 import { inviteMember, type InvitableRole } from "@/lib/invitations";
 import { useTableControls } from "@/lib/use-table-controls";
+import { useColumnWidths } from "@/lib/use-column-widths";
 import { SortableHeader } from "@/components/sortable-header";
 
 interface MemberRow {
@@ -73,6 +74,12 @@ export function AccessPage() {
       role: (a, b) => a.role.localeCompare(b.role),
       status: (a, b) => a.status.localeCompare(b.status)
     }
+  });
+
+  const columns = useColumnWidths("carelik:column-widths:access", {
+    name: 220,
+    role: 160,
+    status: 130
   });
 
   async function handleRoleChange(membershipId: string, nextRole: string) {
@@ -225,7 +232,8 @@ export function AccessPage() {
         ) : membersQuery.isError ? (
           <p className="mt-3 text-sm text-red-700">Could not load members.</p>
         ) : (
-          <table className="mt-4 w-full text-left text-sm">
+          <div className="overflow-x-auto">
+          <table className="mt-4 w-full table-fixed text-left text-sm">
             <thead>
               <tr className="border-b border-slate-200">
                 <SortableHeader
@@ -233,18 +241,24 @@ export function AccessPage() {
                   active={table.sortKey === "name"}
                   direction={table.direction}
                   onClick={() => table.toggleSort("name")}
+                  width={columns.widths.name}
+                  onResizeStart={columns.startResize("name")}
                 />
                 <SortableHeader
                   label="Role"
                   active={table.sortKey === "role"}
                   direction={table.direction}
                   onClick={() => table.toggleSort("role")}
+                  width={columns.widths.role}
+                  onResizeStart={columns.startResize("role")}
                 />
                 <SortableHeader
                   label="Status"
                   active={table.sortKey === "status"}
                   direction={table.direction}
                   onClick={() => table.toggleSort("status")}
+                  width={columns.widths.status}
+                  onResizeStart={columns.startResize("status")}
                 />
                 {canManage ? <th className="pb-2 font-medium" /> : null}
               </tr>
@@ -314,6 +328,7 @@ export function AccessPage() {
               ) : null}
             </tbody>
           </table>
+          </div>
         )}
       </Card>
     </section>

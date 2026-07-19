@@ -6,7 +6,9 @@ import { clientStatusSchema } from "@carelik/shared";
 import { useOrganization } from "@/providers/organization-provider";
 import { supabase } from "@/lib/supabase";
 import { useTableControls } from "@/lib/use-table-controls";
+import { useColumnWidths } from "@/lib/use-column-widths";
 import { SortableHeader } from "@/components/sortable-header";
+import { PlainHeader } from "@/components/resizable-th";
 
 interface ClientRow {
   id: string;
@@ -69,6 +71,12 @@ export function ClientsPage() {
       name: (a, b) => `${a.last_name} ${a.first_name}`.localeCompare(`${b.last_name} ${b.first_name}`),
       status: (a, b) => a.status.localeCompare(b.status)
     }
+  });
+
+  const columns = useColumnWidths("carelik:column-widths:clients", {
+    name: 220,
+    phone: 140,
+    status: 130
   });
 
   const [form, setForm] = useState(emptyForm);
@@ -309,7 +317,8 @@ export function ClientsPage() {
         ) : clientsQuery.isError ? (
           <p className="mt-3 text-sm text-red-700">Could not load clients.</p>
         ) : (
-          <table className="mt-4 w-full text-left text-sm">
+          <div className="overflow-x-auto">
+          <table className="mt-4 w-full table-fixed text-left text-sm">
             <thead>
               <tr className="border-b border-slate-200">
                 <SortableHeader
@@ -317,13 +326,21 @@ export function ClientsPage() {
                   active={table.sortKey === "name"}
                   direction={table.direction}
                   onClick={() => table.toggleSort("name")}
+                  width={columns.widths.name}
+                  onResizeStart={columns.startResize("name")}
                 />
-                <th className="pb-2 text-xs font-medium uppercase tracking-wide text-slate-500">Phone</th>
+                <PlainHeader
+                  label="Phone"
+                  width={columns.widths.phone}
+                  onResizeStart={columns.startResize("phone")}
+                />
                 <SortableHeader
                   label="Status"
                   active={table.sortKey === "status"}
                   direction={table.direction}
                   onClick={() => table.toggleSort("status")}
+                  width={columns.widths.status}
+                  onResizeStart={columns.startResize("status")}
                 />
                 {canManage ? <th className="pb-2 font-medium" /> : null}
               </tr>
@@ -374,6 +391,7 @@ export function ClientsPage() {
               ) : null}
             </tbody>
           </table>
+          </div>
         )}
       </Card>
     </section>

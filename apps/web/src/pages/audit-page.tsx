@@ -3,6 +3,7 @@ import { Card } from "@carelik/ui";
 import { useOrganization } from "@/providers/organization-provider";
 import { supabase } from "@/lib/supabase";
 import { useTableControls } from "@/lib/use-table-controls";
+import { useColumnWidths } from "@/lib/use-column-widths";
 import { SortableHeader } from "@/components/sortable-header";
 
 // Backed by list_audit_logs(), a security-definer RPC (see
@@ -61,6 +62,13 @@ export function AuditPage() {
     }
   );
 
+  const columns = useColumnWidths("carelik:column-widths:audit", {
+    when: 190,
+    who: 160,
+    action: 200,
+    record: 200
+  });
+
   if (!canRead) {
     return (
       <section className="mx-auto max-w-4xl">
@@ -106,7 +114,8 @@ export function AuditPage() {
         ) : auditQuery.isError ? (
           <p className="mt-3 text-sm text-red-700">Could not load the audit trail.</p>
         ) : (
-          <table className="mt-4 w-full text-left text-sm">
+          <div className="overflow-x-auto">
+          <table className="mt-4 w-full table-fixed text-left text-sm">
             <thead>
               <tr className="border-b border-slate-200">
                 <SortableHeader
@@ -114,24 +123,32 @@ export function AuditPage() {
                   active={table.sortKey === "when"}
                   direction={table.direction}
                   onClick={() => table.toggleSort("when")}
+                  width={columns.widths.when}
+                  onResizeStart={columns.startResize("when")}
                 />
                 <SortableHeader
                   label="Who"
                   active={table.sortKey === "who"}
                   direction={table.direction}
                   onClick={() => table.toggleSort("who")}
+                  width={columns.widths.who}
+                  onResizeStart={columns.startResize("who")}
                 />
                 <SortableHeader
                   label="Action"
                   active={table.sortKey === "action"}
                   direction={table.direction}
                   onClick={() => table.toggleSort("action")}
+                  width={columns.widths.action}
+                  onResizeStart={columns.startResize("action")}
                 />
                 <SortableHeader
                   label="Record"
                   active={table.sortKey === "record"}
                   direction={table.direction}
                   onClick={() => table.toggleSort("record")}
+                  width={columns.widths.record}
+                  onResizeStart={columns.startResize("record")}
                 />
               </tr>
             </thead>
@@ -158,6 +175,7 @@ export function AuditPage() {
               ) : null}
             </tbody>
           </table>
+          </div>
         )}
       </Card>
     </section>

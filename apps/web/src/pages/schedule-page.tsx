@@ -5,6 +5,7 @@ import { shiftStatusSchema } from "@carelik/shared";
 import { useOrganization } from "@/providers/organization-provider";
 import { supabase } from "@/lib/supabase";
 import { useTableControls } from "@/lib/use-table-controls";
+import { useColumnWidths } from "@/lib/use-column-widths";
 import { SortableHeader } from "@/components/sortable-header";
 import { CaregiverHoursCard } from "@/components/caregiver-hours";
 
@@ -141,6 +142,13 @@ export function SchedulePage() {
       defaultSort: "when"
     }
   );
+
+  const columns = useColumnWidths("carelik:column-widths:schedule", {
+    when: 190,
+    client: 160,
+    caregiver: 160,
+    status: 150
+  });
 
   const now = new Date();
   const inOneHour = new Date(now.getTime() + 60 * 60 * 1000);
@@ -348,7 +356,8 @@ export function SchedulePage() {
         ) : shiftsQuery.isError ? (
           <p className="mt-3 text-sm text-red-700">Could not load the schedule.</p>
         ) : (
-          <table className="mt-4 w-full text-left text-sm">
+          <div className="overflow-x-auto">
+          <table className="mt-4 w-full table-fixed text-left text-sm">
             <thead>
               <tr className="border-b border-slate-200">
                 <SortableHeader
@@ -356,24 +365,32 @@ export function SchedulePage() {
                   active={table.sortKey === "when"}
                   direction={table.direction}
                   onClick={() => table.toggleSort("when")}
+                  width={columns.widths.when}
+                  onResizeStart={columns.startResize("when")}
                 />
                 <SortableHeader
                   label="Client"
                   active={table.sortKey === "client"}
                   direction={table.direction}
                   onClick={() => table.toggleSort("client")}
+                  width={columns.widths.client}
+                  onResizeStart={columns.startResize("client")}
                 />
                 <SortableHeader
                   label="Caregiver"
                   active={table.sortKey === "caregiver"}
                   direction={table.direction}
                   onClick={() => table.toggleSort("caregiver")}
+                  width={columns.widths.caregiver}
+                  onResizeStart={columns.startResize("caregiver")}
                 />
                 <SortableHeader
                   label="Status"
                   active={table.sortKey === "status"}
                   direction={table.direction}
                   onClick={() => table.toggleSort("status")}
+                  width={columns.widths.status}
+                  onResizeStart={columns.startResize("status")}
                 />
               </tr>
             </thead>
@@ -424,6 +441,7 @@ export function SchedulePage() {
               ) : null}
             </tbody>
           </table>
+          </div>
         )}
       </Card>
 

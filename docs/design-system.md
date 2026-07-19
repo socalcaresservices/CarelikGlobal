@@ -229,11 +229,15 @@ right record. See `docs/phase-1-foundation.md`'s Increment 23
 write-up. Invoices, documents, and visits/diagnoses aren't included -
 none of those have a table yet.
 
+**Built since:** Resizable list columns - every table that's already
+sortable/filterable (Clients, Schedule, Access, Audit, Incidents,
+Authorizations, Credentials) now lets you drag a column narrower or
+wider, remembered per browser. See `docs/phase-1-foundation.md`'s
+Increment 24 write-up.
+
 **Not yet built** (needs a data model before it can be real, not
 faked):
 
-- Resizable list columns (sortable/filterable are done; resizable
-  isn't)
 - Real distance/geo data (CareScore's proximity score today is a
   zip/city/state text match, not an actual distance calculation)
 

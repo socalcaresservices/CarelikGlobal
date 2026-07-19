@@ -5,7 +5,9 @@ import { getUtilizationStatus, isAuthorizationActive, type UtilizationStatus } f
 import { useOrganization } from "@/providers/organization-provider";
 import { supabase } from "@/lib/supabase";
 import { useTableControls } from "@/lib/use-table-controls";
+import { useColumnWidths } from "@/lib/use-column-widths";
 import { SortableHeader } from "@/components/sortable-header";
+import { PlainHeader } from "@/components/resizable-th";
 
 // Backed by list_client_authorizations(), a security-definer RPC (see
 // supabase/migrations/20260719260000_client_authorizations.sql) that
@@ -105,6 +107,15 @@ export function AuthorizationsPage() {
         )
     },
     defaultSort: "period"
+  });
+
+  const columns = useColumnWidths("carelik:column-widths:authorizations", {
+    client: 160,
+    payer: 150,
+    period: 200,
+    authorized: 110,
+    scheduled: 110,
+    status: 170
   });
 
   const [form, setForm] = useState(emptyForm);
@@ -356,7 +367,8 @@ export function AuthorizationsPage() {
         ) : authorizationsQuery.isError ? (
           <p className="mt-3 text-sm text-red-700">Could not load authorizations.</p>
         ) : (
-          <table className="mt-4 w-full text-left text-sm">
+          <div className="overflow-x-auto">
+          <table className="mt-4 w-full table-fixed text-left text-sm">
             <thead>
               <tr className="border-b border-slate-200">
                 <SortableHeader
@@ -364,21 +376,39 @@ export function AuthorizationsPage() {
                   active={table.sortKey === "client"}
                   direction={table.direction}
                   onClick={() => table.toggleSort("client")}
+                  width={columns.widths.client}
+                  onResizeStart={columns.startResize("client")}
                 />
-                <th className="pb-2 text-xs font-medium uppercase tracking-wide text-slate-500">Payer</th>
+                <PlainHeader
+                  label="Payer"
+                  width={columns.widths.payer}
+                  onResizeStart={columns.startResize("payer")}
+                />
                 <SortableHeader
                   label="Period"
                   active={table.sortKey === "period"}
                   direction={table.direction}
                   onClick={() => table.toggleSort("period")}
+                  width={columns.widths.period}
+                  onResizeStart={columns.startResize("period")}
                 />
-                <th className="pb-2 text-xs font-medium uppercase tracking-wide text-slate-500">Authorized</th>
-                <th className="pb-2 text-xs font-medium uppercase tracking-wide text-slate-500">Scheduled</th>
+                <PlainHeader
+                  label="Authorized"
+                  width={columns.widths.authorized}
+                  onResizeStart={columns.startResize("authorized")}
+                />
+                <PlainHeader
+                  label="Scheduled"
+                  width={columns.widths.scheduled}
+                  onResizeStart={columns.startResize("scheduled")}
+                />
                 <SortableHeader
                   label="Status"
                   active={table.sortKey === "status"}
                   direction={table.direction}
                   onClick={() => table.toggleSort("status")}
+                  width={columns.widths.status}
+                  onResizeStart={columns.startResize("status")}
                 />
                 {canManage ? <th className="pb-2 font-medium" /> : null}
               </tr>
@@ -436,6 +466,7 @@ export function AuthorizationsPage() {
               ) : null}
             </tbody>
           </table>
+          </div>
         )}
       </Card>
     </section>

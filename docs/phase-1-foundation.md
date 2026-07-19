@@ -843,3 +843,43 @@ anon-execute gap.
 This closes every item from the CareScore-era open list except
 resizable list columns and real geocoding/distance data, both of which
 still need data sources the user hasn't provided.
+
+## Increment 24 — Resizable list columns
+
+The last item from the design system's original "sortable, filterable,
+and resizable" list. Purely a display preference - drag a column
+narrower or wider, and it's remembered per browser (via localStorage)
+the next time that table loads. No data model needed; this is
+client-side only.
+
+Shipped:
+
+- `apps/web/src/lib/use-column-widths.ts`: `useColumnWidths(storageKey,
+  defaults)` tracks a `{ [columnKey]: pixelWidth }` map, persisted to
+  localStorage under the given key, with a `startResize(columnKey)`
+  handler that drives a mousedown/mousemove/mouseup drag and clamps to
+  a 60px minimum. Each table uses its own storage key
+  (`carelik:column-widths:<page>`) so widths don't collide across
+  pages.
+- `apps/web/src/components/resizable-th.tsx`: `ColumnResizeHandle` (the
+  drag strip) and `PlainHeader` (a resizable, non-sortable header cell)
+  for the handful of columns - Phone, Client, Payer, Authorized,
+  Scheduled, Status - that don't sort but should still resize.
+- `apps/web/src/components/sortable-header.tsx`: now accepts optional
+  `width`/`onResizeStart` props and renders the same drag handle when
+  given.
+- Wired into all seven tables that already had sortable headers:
+  Clients, Schedule, Access, Audit, Incidents, Authorizations,
+  Credentials. Each table's `<table>` switched to `table-fixed` (so a
+  `<th>` width actually holds) inside a new `overflow-x-auto` wrapper
+  (so a heavily widened table scrolls instead of squeezing other
+  columns to nothing).
+
+99 web tests pass (11 new: 6 for `useColumnWidths`, 5 for the header
+components' width/handle rendering). Full pipeline (typecheck, lint,
+build, test) verified clean. No migration needed - nothing here touches
+the database.
+
+This closes every item from the design system's original open list
+except real geocoding/distance data, which still needs a data source
+the user hasn't provided.

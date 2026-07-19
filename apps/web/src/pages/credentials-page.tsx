@@ -5,7 +5,9 @@ import { getCredentialStatus, type CredentialStatus } from "@carelik/shared";
 import { useOrganization } from "@/providers/organization-provider";
 import { supabase } from "@/lib/supabase";
 import { useTableControls } from "@/lib/use-table-controls";
+import { useColumnWidths } from "@/lib/use-column-widths";
 import { SortableHeader } from "@/components/sortable-header";
+import { PlainHeader } from "@/components/resizable-th";
 
 // Backed by list_caregiver_credentials(), a security-definer RPC (see
 // supabase/migrations/20260719250000_caregiver_credentials.sql) that
@@ -100,6 +102,13 @@ export function CredentialsPage() {
       }
     },
     defaultSort: "expires"
+  });
+
+  const columns = useColumnWidths("carelik:column-widths:credentials", {
+    caregiver: 180,
+    type: 180,
+    expires: 130,
+    status: 150
   });
 
   const [form, setForm] = useState(emptyForm);
@@ -306,7 +315,8 @@ export function CredentialsPage() {
         ) : credentialsQuery.isError ? (
           <p className="mt-3 text-sm text-red-700">Could not load credentials.</p>
         ) : (
-          <table className="mt-4 w-full text-left text-sm">
+          <div className="overflow-x-auto">
+          <table className="mt-4 w-full table-fixed text-left text-sm">
             <thead>
               <tr className="border-b border-slate-200">
                 <SortableHeader
@@ -314,20 +324,30 @@ export function CredentialsPage() {
                   active={table.sortKey === "caregiver"}
                   direction={table.direction}
                   onClick={() => table.toggleSort("caregiver")}
+                  width={columns.widths.caregiver}
+                  onResizeStart={columns.startResize("caregiver")}
                 />
                 <SortableHeader
                   label="Credential"
                   active={table.sortKey === "type"}
                   direction={table.direction}
                   onClick={() => table.toggleSort("type")}
+                  width={columns.widths.type}
+                  onResizeStart={columns.startResize("type")}
                 />
                 <SortableHeader
                   label="Expires"
                   active={table.sortKey === "expires"}
                   direction={table.direction}
                   onClick={() => table.toggleSort("expires")}
+                  width={columns.widths.expires}
+                  onResizeStart={columns.startResize("expires")}
                 />
-                <th className="pb-2 text-xs font-medium uppercase tracking-wide text-slate-500">Status</th>
+                <PlainHeader
+                  label="Status"
+                  width={columns.widths.status}
+                  onResizeStart={columns.startResize("status")}
+                />
                 {canManage ? <th className="pb-2 font-medium" /> : null}
               </tr>
             </thead>
@@ -379,6 +399,7 @@ export function CredentialsPage() {
               ) : null}
             </tbody>
           </table>
+          </div>
         )}
       </Card>
     </section>
