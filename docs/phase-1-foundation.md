@@ -153,3 +153,46 @@ Shipped:
   a comment explaining why rather than restructured).
 - `packages/*` still lint via `tsc --noEmit` rather than ESLint — that
   was the existing convention and wasn't changed.
+
+## Increment 7 — Test coverage
+
+There was zero test coverage anywhere before this. `pnpm test` passed
+across every package only because each `test` script tolerated finding
+no test files.
+
+Shipped:
+
+- `packages/shared`: schema tests for `permissions.ts`, `tenant.ts`, and
+  `membership.ts` — no new dependencies needed, pure zod validation.
+- `packages/auth` and `apps/web` gained jsdom + `@testing-library/react`
+  + `@testing-library/jest-dom`, since testing components/hooks needs a
+  DOM. Added `vitest.config.ts` (packages/auth) / a `test` block in
+  `vite.config.ts` (apps/web) with `environment: "jsdom"`, plus a shared
+  setup file per package that calls `cleanup()` after every test — with
+  `globals: false`, `@testing-library/react`'s automatic cleanup never
+  self-registers, so DOM was leaking between tests until this was added.
+- `packages/auth/src/auth-provider.test.tsx`: session loading from
+  `getSession`, updates from `onAuthStateChange`, unsubscribe on
+  unmount, `signOut`, `signInWithGithub`, and `useAuth` throwing outside
+  `AuthProvider`. `AuthProvider` takes its Supabase client as a prop, so
+  these use a hand-rolled fake client rather than mocking the SDK.
+- `apps/web/src/routes/protected-route.test.tsx`: loading state,
+  redirect to `/login` when signed out, renders children when signed in.
+- `apps/web/src/lib/invitations.test.ts`: `inviteMember` success, edge
+  function error, and no-data-no-error paths.
+- Root `package.json` gained a `pnpm.overrides` pinning `vite` to one
+  version — without it, pnpm resolved two separate copies of vite
+  (5.4.21 and 6.4.3) across the workspace once `vitest`'s dependency
+  graph and `@vitejs/plugin-react`'s peer resolution disagreed, which
+  broke `defineConfig`/`plugins` typechecking with duplicate,
+  structurally-incompatible `Plugin` types.
+
+Not in this increment (still open):
+
+- No tests yet for `OrganizationProvider` (the accept-invitation-on-login
+  effect, active-org persistence, permission resolution) or the page
+  components (`AccessPage`, `OrganizationsPage`, `LoginPage`) — these
+  need heavier Supabase-client mocking (chained `.from().select()...`
+  calls) and were left for a follow-up rather than rushed.
+- Server-side audit writer
+- Event publisher worker
