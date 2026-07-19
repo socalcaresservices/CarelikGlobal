@@ -2,6 +2,7 @@ import { useState, type FormEvent } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Card } from "@carelik/ui";
 import { systemRoleSchema } from "@carelik/shared";
+import { useAuth } from "@carelik/auth";
 import { useOrganization } from "@/providers/organization-provider";
 import { supabase } from "@/lib/supabase";
 import { inviteMember, type InvitableRole } from "@/lib/invitations";
@@ -34,10 +35,12 @@ function formatRole(role: string) {
 
 export function AccessPage() {
   const { activeOrganizationId, activeOrganization, hasPermission } = useOrganization();
+  const { user } = useAuth();
   const queryClient = useQueryClient();
 
   const canRead = hasPermission("membership.read");
   const canInvite = hasPermission("membership.invite");
+  const canManage = hasPermission("membership.update");
 
   const membersQuery = useQuery({
     queryKey: ["organization-members", activeOrganizationId],
@@ -50,6 +53,49 @@ export function AccessPage() {
     },
     enabled: !!activeOrganizationId && canRead
   });
+
+  const [actionError, setActionError] = useState<string | null>(null);
+  const [pendingMembershipId, setPendingMembershipId] = useState<string | null>(null);
+
+  function refreshMembers() {
+    void queryClient.invalidateQueries({
+      queryKey: ["organization-members", activeOrganizationId]
+    });
+  }
+
+  async function handleRoleChange(membershipId: string, nextRole: string) {
+    setActionError(null);
+    setPendingMembershipId(membershipId);
+    try {
+      const { error } = await supabase
+        .from("organization_memberships")
+        .update({ role: nextRole })
+        .eq("id", membershipId);
+      if (error) throw error;
+      refreshMembers();
+    } catch (cause) {
+      setActionError(cause instanceof Error ? cause.message : "Could not update role.");
+    } finally {
+      setPendingMembershipId(null);
+    }
+  }
+
+  async function handleRevoke(membershipId: string) {
+    setActionError(null);
+    setPendingMembershipId(membershipId);
+    try {
+      const { error } = await supabase
+        .from("organization_memberships")
+        .update({ status: "revoked" })
+        .eq("id", membershipId);
+      if (error) throw error;
+      refreshMembers();
+    } catch (cause) {
+      setActionError(cause instanceof Error ? cause.message : "Could not revoke access.");
+    } finally {
+      setPendingMembershipId(null);
+    }
+  }
 
   const [email, setEmail] = useState("");
   const [role, setRole] = useState<InvitableRole>("staff");
@@ -151,6 +197,7 @@ export function AccessPage() {
 
       <Card>
         <h3 className="font-semibold text-slate-950">Members</h3>
+        {actionError ? <p className="mt-2 text-sm text-red-700">{actionError}</p> : null}
         {membersQuery.isLoading ? (
           <p className="mt-3 text-sm text-slate-500">Loading…</p>
         ) : membersQuery.isError ? (
@@ -162,25 +209,66 @@ export function AccessPage() {
                 <th className="pb-2 font-medium">Name</th>
                 <th className="pb-2 font-medium">Role</th>
                 <th className="pb-2 font-medium">Status</th>
+                {canManage ? <th className="pb-2 font-medium" /> : null}
               </tr>
             </thead>
             <tbody>
-              {(membersQuery.data ?? []).map((member) => (
-                <tr key={member.membership_id} className="border-b border-slate-100 last:border-0">
-                  <td className="py-2.5 text-slate-800">{member.display_name}</td>
-                  <td className="py-2.5 text-slate-600">{formatRole(member.role)}</td>
-                  <td className="py-2.5">
-                    <span
-                      className={`rounded-full px-2 py-0.5 text-xs font-medium ${statusStyles[member.status]}`}
-                    >
-                      {member.status}
-                    </span>
-                  </td>
-                </tr>
-              ))}
+              {(membersQuery.data ?? []).map((member) => {
+                const isSelf = member.user_id === user?.id;
+                const isPending = pendingMembershipId === member.membership_id;
+                const canModifyRow = canManage && !isSelf && member.status !== "revoked";
+
+                return (
+                  <tr key={member.membership_id} className="border-b border-slate-100 last:border-0">
+                    <td className="py-2.5 text-slate-800">
+                      {member.display_name}
+                      {isSelf ? <span className="ml-1 text-xs text-slate-400">(you)</span> : null}
+                    </td>
+                    <td className="py-2.5 text-slate-600">
+                      {canModifyRow ? (
+                        <select
+                          value={member.role}
+                          disabled={isPending}
+                          onChange={(event) => handleRoleChange(member.membership_id, event.target.value)}
+                          className="rounded-lg border border-slate-200 px-2 py-1 text-xs text-slate-900"
+                        >
+                          {invitableRoles.map((option) => (
+                            <option key={option} value={option}>
+                              {formatRole(option)}
+                            </option>
+                          ))}
+                        </select>
+                      ) : (
+                        formatRole(member.role)
+                      )}
+                    </td>
+                    <td className="py-2.5">
+                      <span
+                        className={`rounded-full px-2 py-0.5 text-xs font-medium ${statusStyles[member.status]}`}
+                      >
+                        {member.status}
+                      </span>
+                    </td>
+                    {canManage ? (
+                      <td className="py-2.5 text-right">
+                        {canModifyRow ? (
+                          <button
+                            type="button"
+                            disabled={isPending}
+                            onClick={() => handleRevoke(member.membership_id)}
+                            className="text-xs font-medium text-red-700 underline-offset-2 hover:underline disabled:cursor-not-allowed disabled:opacity-60"
+                          >
+                            Revoke
+                          </button>
+                        ) : null}
+                      </td>
+                    ) : null}
+                  </tr>
+                );
+              })}
               {(membersQuery.data ?? []).length === 0 ? (
                 <tr>
-                  <td colSpan={3} className="py-4 text-center text-slate-400">
+                  <td colSpan={canManage ? 4 : 3} className="py-4 text-center text-slate-400">
                     No members yet.
                   </td>
                 </tr>

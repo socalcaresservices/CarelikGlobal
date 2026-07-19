@@ -103,3 +103,33 @@ Not in this increment (still open):
   screen, no way to change a member's role or remove them once invited.
 - Server-side audit writer
 - Event publisher worker
+
+## Increment 5 — Organization admin
+
+Shipped:
+
+- `create_organization` database function: platform-owner-only (the
+  `organizations` table has no INSERT RLS policy on purpose — tenant
+  creation is a platform-level action, not an org-scoped one).
+- `/organizations` now lists every organization the user can see, lets a
+  platform owner create new ones, and lets anyone with
+  `organization.update` edit the active organization's legal name,
+  display name, and timezone (a plain RLS-backed update — no new
+  function needed there).
+- `/access` members table now supports changing a member's role and
+  revoking access (sets `status = 'revoked'`, not a hard delete — kept
+  consistent with the soft-delete pattern used elsewhere, e.g. `files`).
+  Both actions are gated on `membership.update` and disabled for your own
+  row so you can't accidentally revoke or demote yourself.
+
+Note: the `membership.remove` permission key exists in the `permissions`
+table (and is granted to organization_owner/organization_admin) but no
+RLS policy actually checks it — `authorized_manage_memberships` gates all
+of insert/update/delete on `membership.update` alone. This predates this
+increment; the UI is gated to match what RLS actually enforces rather
+than the unused permission key.
+
+Not in this increment (still open):
+
+- Server-side audit writer
+- Event publisher worker
