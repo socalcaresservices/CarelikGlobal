@@ -17,6 +17,7 @@ import type { Permission } from "@carelik/shared";
 import { useAuth } from "@carelik/auth";
 import { cn } from "@carelik/ui";
 import { useOrganization } from "@/providers/organization-provider";
+import { GlobalSearch } from "@/components/global-search";
 
 const navItems: Array<{
   to: string;
@@ -92,8 +93,11 @@ export function AppShell({ children }: PropsWithChildren) {
         </div>
       </aside>
       <main className="lg:pl-64">
-        <header className="flex items-center justify-between border-b border-slate-200 bg-white px-6 py-4">
-          <p className="text-sm text-slate-600">Phase 1 · Platform Foundation</p>
+        <header className="flex flex-wrap items-center gap-4 border-b border-slate-200 bg-white px-6 py-4">
+          <p className="shrink-0 text-sm text-slate-600">Phase 1 · Platform Foundation</p>
+          <div className="order-last w-full sm:order-none sm:flex-1">
+            {activeOrganizationId ? <GlobalSearch /> : null}
+          </div>
           {organizations.length > 0 ? (
             <select
               value={activeOrganizationId ?? ""}

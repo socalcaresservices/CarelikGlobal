@@ -797,3 +797,49 @@ applied live with `get_advisors` confirming no anon-execute gap.
 Remaining open items: resizable list columns, global search, and real
 geocoding/distance data (CareScore's proximity and availability scores
 are still text-match proxies, not true distance/calendar data).
+
+## Increment 23 — Global search
+
+One search box in the header that finds a client, caregiver,
+credential, authorization, or incident by name/category and jumps to
+the right record. Deliberately excludes the more ambitious examples in
+`docs/design-system.md`'s "Search everywhere" section (invoices,
+documents, visits/diagnoses) - none of those have a table yet, and a
+search result pointing at data that doesn't exist would be exactly the
+kind of fabrication this project avoids. Shifts also aren't a separate
+result type: a shift's only searchable identity is its client and
+caregiver, both already covered.
+
+Shipped:
+
+- `supabase/migrations/20260719290000_global_search.sql`:
+  `global_search(target_organization_id, search_query)` unions
+  ILIKE-matched rows across `clients`, `organization_memberships` (with
+  `user_profiles` for the name), `caregiver_credentials`,
+  `client_authorizations`, and `incidents`. Each branch reuses that
+  table's own permission check and own-row carve-out (credentials and
+  incidents still show your own even without the org-wide read
+  permission) - global_search can never surface a row the caller
+  couldn't already see on that table's own page. Results are capped at
+  8 per type.
+- `packages/shared/src/search.ts`: `globalSearchResultTypeSchema`,
+  `globalSearchResultSchema`.
+- `apps/web/src/components/global-search.tsx`: debounced (250ms) search
+  box, minimum 2 characters, dropdown grouped by result type with a
+  label per row, closes on outside click. Clients and caregivers link
+  to their detail page; credentials, authorizations, and incidents link
+  to their list page (no per-record deep link exists yet for those).
+- `apps/web/src/layout/app-shell.tsx`: wired into the header, visible
+  whenever an organization is active.
+
+88 web tests pass (4 new for `GlobalSearch`) plus 65 in
+`packages/shared` (6 new for the search schemas). Full pipeline
+verified clean; migration applied live with `get_advisors` showing only
+the same baseline "authenticated can call this SECURITY DEFINER
+function" notices every other RPC in this project already has (each is
+intentional and gated internally by `has_permission`) - no new
+anon-execute gap.
+
+This closes every item from the CareScore-era open list except
+resizable list columns and real geocoding/distance data, both of which
+still need data sources the user hasn't provided.

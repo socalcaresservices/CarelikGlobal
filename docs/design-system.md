@@ -222,13 +222,18 @@ the full weighting model and its known proxies (text-match proximity,
 no real geocoding; hour-target-based availability, no true
 availability calendar).
 
+**Built since:** Global search - one box in the header searches
+clients, caregivers, credentials, authorizations, and incidents by
+name/category, permission-filtered per result type, and jumps to the
+right record. See `docs/phase-1-foundation.md`'s Increment 23
+write-up. Invoices, documents, and visits/diagnoses aren't included -
+none of those have a table yet.
+
 **Not yet built** (needs a data model before it can be real, not
 faked):
 
 - Resizable list columns (sortable/filterable are done; resizable
   isn't)
-- Global search (per-page search exists; nothing searches everything
-  at once yet)
 - Real distance/geo data (CareScore's proximity score today is a
   zip/city/state text match, not an actual distance calculation)
 
