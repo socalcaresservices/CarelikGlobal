@@ -332,3 +332,31 @@ Not in this increment (still open):
 - The `invite-member` and `process-events` edge functions have not been
   deployed to the new project yet (migrations were applied directly;
   function deployment is a separate step).
+
+## Increment 11 — GitHub OAuth, edge functions, and advisor cleanup on the new project
+
+Closed every remaining gap from Increment 10:
+
+- `apps/web/.env` (gitignored, local-only) points at the new project's
+  URL and anon key.
+- `invite-member` and `process-events` are deployed and `ACTIVE`
+  (`invite-member` requires a caller JWT; `process-events` uses its own
+  `x-cron-secret` check, so it's deployed with JWT verification off).
+- GitHub OAuth is configured on the new project via a dedicated OAuth
+  App with callback `https://cdxxpdyobsqvqveabsda.supabase.co/auth/v1/callback`.
+- `20260719200000_fix_advisor_findings.sql` closed every remaining
+  `get_advisors` finding: moved the `citext` extension out of `public`,
+  indexed every previously-unindexed foreign key, rewrote RLS policies
+  that called `auth.uid()` directly so it only evaluates once per
+  statement instead of once per row, and split three tables'
+  `ALL`-scoped policies into per-command policies so `SELECT` no longer
+  evaluates two overlapping permissive policies. Re-ran `get_advisors`
+  afterward — clean except expected `unused_index` notices (the project
+  has no real traffic yet) and the intentional `authenticated`-callable
+  `SECURITY DEFINER` RPCs noted in Increment 10.
+
+Not in this increment (still open):
+
+- Nothing writes to `domain_events` yet (no event producers) and
+  `dispatchEvent()` is still a stub — same gap noted since Increment 8.
+- No end-to-end tests.
