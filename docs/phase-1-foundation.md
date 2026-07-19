@@ -40,3 +40,22 @@
 - Permission-aware navigation
 - Server-side audit writer
 - Event publisher worker
+
+## Increment 2 — Authentication & tenancy shell
+
+Shipped:
+
+- GitHub OAuth sign-in (invite-only; `enable_signup` stays `false`)
+- Protected route boundary redirecting unauthenticated users to `/login`
+- Active-organization selection, persisted per browser, backed by RLS-filtered
+  reads of `organizations`
+- Permission-aware navigation driven by `role_permissions` for the active
+  organization's membership role
+
+Not in this increment (still open):
+
+- Membership invitation API — requires a service-role edge function; the
+  browser client intentionally has no path to `auth.admin.inviteUserByEmail`
+- Organization administration UI (create/edit organization, manage members)
+- Server-side audit writer
+- Event publisher worker

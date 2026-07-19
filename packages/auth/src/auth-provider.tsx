@@ -12,6 +12,7 @@ interface AuthContextValue {
   user: User | null;
   session: Session | null;
   loading: boolean;
+  signInWithGithub: (options?: { redirectTo?: string }) => Promise<void>;
   signOut: () => Promise<void>;
 }
 
@@ -52,6 +53,13 @@ export function AuthProvider({
       user: session?.user ?? null,
       session,
       loading,
+      signInWithGithub: async (options) => {
+        const { error } = await client.auth.signInWithOAuth({
+          provider: "github",
+          options: { redirectTo: options?.redirectTo ?? window.location.origin }
+        });
+        if (error) throw error;
+      },
       signOut: async () => {
         const { error } = await client.auth.signOut();
         if (error) throw error;
