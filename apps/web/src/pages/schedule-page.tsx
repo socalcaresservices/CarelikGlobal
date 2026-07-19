@@ -4,6 +4,8 @@ import { Card } from "@carelik/ui";
 import { shiftStatusSchema } from "@carelik/shared";
 import { useOrganization } from "@/providers/organization-provider";
 import { supabase } from "@/lib/supabase";
+import { useTableControls } from "@/lib/use-table-controls";
+import { SortableHeader } from "@/components/sortable-header";
 
 // Backed by list_shifts(), a security-definer RPC (see
 // supabase/migrations/20260719231000_list_shifts.sql) that resolves
@@ -98,6 +100,21 @@ export function SchedulePage() {
   function refreshShifts() {
     void queryClient.invalidateQueries({ queryKey: ["shifts", activeOrganizationId] });
   }
+
+  const table = useTableControls<ShiftRow, "when" | "client" | "caregiver" | "status">(
+    shiftsQuery.data,
+    {
+      matchesSearch: (row, query) =>
+        row.client_name.toLowerCase().includes(query) || row.caregiver_name.toLowerCase().includes(query),
+      sorters: {
+        when: (a, b) => new Date(a.starts_at).getTime() - new Date(b.starts_at).getTime(),
+        client: (a, b) => a.client_name.localeCompare(b.client_name),
+        caregiver: (a, b) => a.caregiver_name.localeCompare(b.caregiver_name),
+        status: (a, b) => a.status.localeCompare(b.status)
+      },
+      defaultSort: "when"
+    }
+  );
 
   const now = new Date();
   const inOneHour = new Date(now.getTime() + 60 * 60 * 1000);
@@ -276,7 +293,17 @@ export function SchedulePage() {
       ) : null}
 
       <Card>
-        <h3 className="font-semibold text-slate-950">Upcoming and recent shifts</h3>
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <h3 className="font-semibold text-slate-950">Upcoming and recent shifts</h3>
+          <input
+            type="search"
+            value={table.search}
+            onChange={(event) => table.setSearch(event.target.value)}
+            placeholder="Search client or caregiver"
+            aria-label="Search shifts"
+            className="w-full max-w-xs rounded-lg border border-slate-200 px-3 py-1.5 text-sm text-slate-900"
+          />
+        </div>
         {rowError ? <p className="mt-2 text-sm text-red-700">{rowError}</p> : null}
         {shiftsQuery.isLoading ? (
           <p className="mt-3 text-sm text-slate-500">Loading…</p>
@@ -285,15 +312,35 @@ export function SchedulePage() {
         ) : (
           <table className="mt-4 w-full text-left text-sm">
             <thead>
-              <tr className="border-b border-slate-200 text-xs uppercase tracking-wide text-slate-500">
-                <th className="pb-2 font-medium">When</th>
-                <th className="pb-2 font-medium">Client</th>
-                <th className="pb-2 font-medium">Caregiver</th>
-                <th className="pb-2 font-medium">Status</th>
+              <tr className="border-b border-slate-200">
+                <SortableHeader
+                  label="When"
+                  active={table.sortKey === "when"}
+                  direction={table.direction}
+                  onClick={() => table.toggleSort("when")}
+                />
+                <SortableHeader
+                  label="Client"
+                  active={table.sortKey === "client"}
+                  direction={table.direction}
+                  onClick={() => table.toggleSort("client")}
+                />
+                <SortableHeader
+                  label="Caregiver"
+                  active={table.sortKey === "caregiver"}
+                  direction={table.direction}
+                  onClick={() => table.toggleSort("caregiver")}
+                />
+                <SortableHeader
+                  label="Status"
+                  active={table.sortKey === "status"}
+                  direction={table.direction}
+                  onClick={() => table.toggleSort("status")}
+                />
               </tr>
             </thead>
             <tbody>
-              {(shiftsQuery.data ?? []).map((shift) => {
+              {table.rows.map((shift) => {
                 const isPending = pendingId === shift.id;
                 return (
                   <tr key={shift.id} className="border-b border-slate-100 last:border-0">
@@ -330,10 +377,10 @@ export function SchedulePage() {
                   </tr>
                 );
               })}
-              {(shiftsQuery.data ?? []).length === 0 ? (
+              {table.rows.length === 0 ? (
                 <tr>
                   <td colSpan={4} className="py-4 text-center text-slate-400">
-                    No shifts scheduled.
+                    {table.search ? "No shifts match your search." : "No shifts scheduled."}
                   </td>
                 </tr>
               ) : null}

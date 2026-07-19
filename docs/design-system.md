@@ -137,6 +137,16 @@ it stays honest rather than aspirational.
   appear.
 - Overview leads with the Action Center, not architecture talk.
 
+**Built (Increment 16):**
+
+- Sortable, filterable lists on Clients, Schedule, Access, and Audit -
+  click a column header to sort (toggles ascending/descending), a
+  search box filters by the fields relevant to that list (name/phone/
+  email for clients, client/caregiver for shifts, name for members,
+  who/action/record for audit entries). Client-side only - see
+  `apps/web/src/lib/use-table-controls.ts` for why that's the right
+  call at this data volume.
+
 **Not yet built** (needs a data model before it can be real, not
 faked):
 
@@ -146,9 +156,10 @@ faked):
 - Caregiver hour targets / over-target detection
 - CareScore / GeoScore / any scoring model
 - Record-level header pattern (KPI header + tabs) on Clients/Schedule
-- Sortable/filterable/resizable list controls (current lists are plain
-  tables)
-- Global search
+- Resizable list columns (sortable/filterable are done; resizable
+  isn't)
+- Global search (per-page search exists; nothing searches everything
+  at once yet)
 - Distance/geo data
 
 Building any of these into the Action Center or record layouts before

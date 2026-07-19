@@ -6,6 +6,8 @@ import { useAuth } from "@carelik/auth";
 import { useOrganization } from "@/providers/organization-provider";
 import { supabase } from "@/lib/supabase";
 import { inviteMember, type InvitableRole } from "@/lib/invitations";
+import { useTableControls } from "@/lib/use-table-controls";
+import { SortableHeader } from "@/components/sortable-header";
 
 interface MemberRow {
   membership_id: string;
@@ -62,6 +64,15 @@ export function AccessPage() {
       queryKey: ["organization-members", activeOrganizationId]
     });
   }
+
+  const table = useTableControls<MemberRow, "name" | "role" | "status">(membersQuery.data, {
+    matchesSearch: (row, query) => row.display_name.toLowerCase().includes(query),
+    sorters: {
+      name: (a, b) => a.display_name.localeCompare(b.display_name),
+      role: (a, b) => a.role.localeCompare(b.role),
+      status: (a, b) => a.status.localeCompare(b.status)
+    }
+  });
 
   async function handleRoleChange(membershipId: string, nextRole: string) {
     setActionError(null);
@@ -196,7 +207,17 @@ export function AccessPage() {
       ) : null}
 
       <Card>
-        <h3 className="font-semibold text-slate-950">Members</h3>
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <h3 className="font-semibold text-slate-950">Members</h3>
+          <input
+            type="search"
+            value={table.search}
+            onChange={(event) => table.setSearch(event.target.value)}
+            placeholder="Search by name"
+            aria-label="Search members"
+            className="w-full max-w-xs rounded-lg border border-slate-200 px-3 py-1.5 text-sm text-slate-900"
+          />
+        </div>
         {actionError ? <p className="mt-2 text-sm text-red-700">{actionError}</p> : null}
         {membersQuery.isLoading ? (
           <p className="mt-3 text-sm text-slate-500">Loading…</p>
@@ -205,15 +226,30 @@ export function AccessPage() {
         ) : (
           <table className="mt-4 w-full text-left text-sm">
             <thead>
-              <tr className="border-b border-slate-200 text-xs uppercase tracking-wide text-slate-500">
-                <th className="pb-2 font-medium">Name</th>
-                <th className="pb-2 font-medium">Role</th>
-                <th className="pb-2 font-medium">Status</th>
+              <tr className="border-b border-slate-200">
+                <SortableHeader
+                  label="Name"
+                  active={table.sortKey === "name"}
+                  direction={table.direction}
+                  onClick={() => table.toggleSort("name")}
+                />
+                <SortableHeader
+                  label="Role"
+                  active={table.sortKey === "role"}
+                  direction={table.direction}
+                  onClick={() => table.toggleSort("role")}
+                />
+                <SortableHeader
+                  label="Status"
+                  active={table.sortKey === "status"}
+                  direction={table.direction}
+                  onClick={() => table.toggleSort("status")}
+                />
                 {canManage ? <th className="pb-2 font-medium" /> : null}
               </tr>
             </thead>
             <tbody>
-              {(membersQuery.data ?? []).map((member) => {
+              {table.rows.map((member) => {
                 const isSelf = member.user_id === user?.id;
                 const isPending = pendingMembershipId === member.membership_id;
                 const canModifyRow = canManage && !isSelf && member.status !== "revoked";
@@ -266,10 +302,10 @@ export function AccessPage() {
                   </tr>
                 );
               })}
-              {(membersQuery.data ?? []).length === 0 ? (
+              {table.rows.length === 0 ? (
                 <tr>
                   <td colSpan={canManage ? 4 : 3} className="py-4 text-center text-slate-400">
-                    No members yet.
+                    {table.search ? "No members match your search." : "No members yet."}
                   </td>
                 </tr>
               ) : null}

@@ -518,3 +518,26 @@ larger structural change - building them now would mean either
 fabricating numbers or reworking every existing page without a clear
 enough spec yet. `docs/design-system.md` tracks all of them as open so
 they aren't lost.
+
+## Increment 16 — Sortable, filterable lists
+
+Closes one item from Increment 15's open list: every list in the app
+(Clients, Schedule, Access, Audit) now has a search box and clickable,
+sortable column headers.
+
+- `apps/web/src/lib/use-table-controls.ts`: shared client-side search +
+  sort hook, with unit tests covering filtering, sort-direction
+  toggling, switching sort keys, and combining both. Client-side
+  because every list in this app is scoped to a single organization's
+  data, small enough that fetching everything and filtering in memory
+  beats a server round-trip per keystroke - documented in the file
+  itself as a call to revisit if that stops being true.
+- `apps/web/src/components/sortable-header.tsx`: the clickable column
+  header with a chevron indicating sort state.
+- Wired into all four existing lists, each with search scoped to what
+  makes sense for that list (name/phone/email for clients, client/
+  caregiver for shifts, name for members, who/action/record for audit
+  entries). Empty states now distinguish "nothing here at all" from
+  "nothing matches your search."
+
+50 web tests pass (5 new for the hook). Full pipeline verified clean.

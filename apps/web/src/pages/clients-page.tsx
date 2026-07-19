@@ -4,6 +4,8 @@ import { Card } from "@carelik/ui";
 import { clientStatusSchema } from "@carelik/shared";
 import { useOrganization } from "@/providers/organization-provider";
 import { supabase } from "@/lib/supabase";
+import { useTableControls } from "@/lib/use-table-controls";
+import { SortableHeader } from "@/components/sortable-header";
 
 interface ClientRow {
   id: string;
@@ -56,6 +58,17 @@ export function ClientsPage() {
   function refreshClients() {
     void queryClient.invalidateQueries({ queryKey: ["clients", activeOrganizationId] });
   }
+
+  const table = useTableControls<ClientRow, "name" | "status">(clientsQuery.data, {
+    matchesSearch: (row, query) =>
+      `${row.first_name} ${row.last_name}`.toLowerCase().includes(query) ||
+      (row.phone ?? "").toLowerCase().includes(query) ||
+      (row.email ?? "").toLowerCase().includes(query),
+    sorters: {
+      name: (a, b) => `${a.last_name} ${a.first_name}`.localeCompare(`${b.last_name} ${b.first_name}`),
+      status: (a, b) => a.status.localeCompare(b.status)
+    }
+  });
 
   const [form, setForm] = useState(emptyForm);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -278,7 +291,17 @@ export function ClientsPage() {
       ) : null}
 
       <Card>
-        <h3 className="font-semibold text-slate-950">All clients</h3>
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <h3 className="font-semibold text-slate-950">All clients</h3>
+          <input
+            type="search"
+            value={table.search}
+            onChange={(event) => table.setSearch(event.target.value)}
+            placeholder="Search name, phone, or email"
+            aria-label="Search clients"
+            className="w-full max-w-xs rounded-lg border border-slate-200 px-3 py-1.5 text-sm text-slate-900"
+          />
+        </div>
         {rowError ? <p className="mt-2 text-sm text-red-700">{rowError}</p> : null}
         {clientsQuery.isLoading ? (
           <p className="mt-3 text-sm text-slate-500">Loading…</p>
@@ -287,15 +310,25 @@ export function ClientsPage() {
         ) : (
           <table className="mt-4 w-full text-left text-sm">
             <thead>
-              <tr className="border-b border-slate-200 text-xs uppercase tracking-wide text-slate-500">
-                <th className="pb-2 font-medium">Name</th>
-                <th className="pb-2 font-medium">Phone</th>
-                <th className="pb-2 font-medium">Status</th>
+              <tr className="border-b border-slate-200">
+                <SortableHeader
+                  label="Name"
+                  active={table.sortKey === "name"}
+                  direction={table.direction}
+                  onClick={() => table.toggleSort("name")}
+                />
+                <th className="pb-2 text-xs font-medium uppercase tracking-wide text-slate-500">Phone</th>
+                <SortableHeader
+                  label="Status"
+                  active={table.sortKey === "status"}
+                  direction={table.direction}
+                  onClick={() => table.toggleSort("status")}
+                />
                 {canManage ? <th className="pb-2 font-medium" /> : null}
               </tr>
             </thead>
             <tbody>
-              {(clientsQuery.data ?? []).map((row) => (
+              {table.rows.map((row) => (
                 <tr key={row.id} className="border-b border-slate-100 last:border-0">
                   <td className="py-2.5 text-slate-800">
                     {row.first_name} {row.last_name}
@@ -329,10 +362,10 @@ export function ClientsPage() {
                   ) : null}
                 </tr>
               ))}
-              {(clientsQuery.data ?? []).length === 0 ? (
+              {table.rows.length === 0 ? (
                 <tr>
                   <td colSpan={canManage ? 4 : 3} className="py-4 text-center text-slate-400">
-                    No clients yet.
+                    {table.search ? "No clients match your search." : "No clients yet."}
                   </td>
                 </tr>
               ) : null}
