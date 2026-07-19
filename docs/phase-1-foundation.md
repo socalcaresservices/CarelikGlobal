@@ -393,3 +393,33 @@ Shipped:
 
 53 tests pass across all three packages with tests (`packages/shared`:
 22, `packages/auth`: 7, `apps/web`: 30). Full pipeline verified clean.
+
+## Increment 13 — Audit trail viewer
+
+`audit_logs` has had schema, RLS (`authorized_read_audit`, gated by
+`audit.read`), and a trigger writing to it since Increments 1 and 8 -
+same situation Settings was in before Increment 12: nothing ever
+surfaced it.
+
+Shipped:
+
+- `list_audit_logs(target_organization_id, result_limit)`
+  (`20260719220000_list_audit_logs.sql`): security-definer RPC, same
+  reasoning as `list_organization_members` - RLS on `user_profiles`
+  won't let a non-platform-owner join in another actor's display name
+  directly, so this does the join server-side, gated inline by the same
+  `has_permission(org, 'audit.read')` check the RLS policy itself uses.
+  Left join, not inner: `actor_user_id` is nullable (service-role/system
+  changes have no acting user), and a left join means those rows still
+  show up, labeled "System", instead of silently vanishing.
+- `apps/web/src/pages/audit-page.tsx`: read-only table of who did what
+  and when, newest first. New "Audit" nav item, gated on `audit.read`
+  like every other permission-gated nav item.
+- Verified against the live project: real audit rows from actually
+  using the app (creating and updating the "carelik" organization
+  through the browser) came back with the correct actor name, and the
+  one row inserted directly via SQL (the organization-owner membership
+  backfill from Increment 11.5) correctly shows as "System".
+
+58 tests pass across all three packages with tests (`packages/shared`:
+22, `packages/auth`: 7, `apps/web`: 34). Full pipeline verified clean.
