@@ -267,3 +267,68 @@ Not in this increment (still open):
   message).
 - No end-to-end tests (Playwright/Cypress) anywhere — everything so far
   is unit/component-level with mocked Supabase calls.
+
+## Increment 10 — Verified against a real Supabase project
+
+Everything up to Increment 9 had only ever been checked with `tsc`,
+ESLint, and Vitest — there is no Postgres or Deno runtime in this
+sandbox, so the SQL migrations and edge functions had never actually
+run. This increment created a fresh Supabase project and applied every
+migration to it, which surfaced three real bugs no amount of static
+review would have caught:
+
+- **`20260715000100_platform_foundation.sql`**: the role/permission seed
+  query selected `permission_key` from `public.permissions`, but that
+  table's column is `key`. Fixed in place (this migration had not yet
+  been applied anywhere, including here, so no corrective migration was
+  needed — the source file itself was wrong and is now correct).
+- **Function grants** (`20260719170000_lock_down_function_grants.sql`,
+  `20260719175000_lock_down_trigger_function_grants.sql`): every
+  function in `public`, including the service-role-only outbox functions
+  (`claim_domain_events` etc., which have no internal auth check),
+  turned out to be callable by unauthenticated `anon` requests.
+  `revoke all on function ... from public` — used throughout the schema
+  — only revokes the implicit PUBLIC grant; it does not touch privileges
+  Supabase's default-privilege setup grants directly to `anon` /
+  `authenticated` / `service_role` at creation time, and functions that
+  never had any revoke statement at all (`handle_new_user`,
+  `set_updated_at`, `write_audit_log`) still carried their original
+  PUBLIC grant, which flows through to every role regardless of later
+  per-role revokes. Both layers are now closed and verified with direct
+  `has_function_privilege()` checks.
+- **`write_audit_log()` on the `organizations` table**
+  (`20260719180000_fix_audit_writer_organizations_table.sql`,
+  `20260719190000_fix_organizations_audit_delete_trigger_timing.sql`):
+  the generic audit trigger assumed every audited table has an
+  `organization_id` column, which is true for
+  `organization_memberships` / `feature_flags` / `files` but not for
+  `organizations` itself (it only has `id`). Fixed by special-casing
+  `TG_TABLE_NAME = 'organizations'` to use the row's own `id`. That
+  then surfaced a second issue on delete: `audit_logs.organization_id`
+  foreign-keys to `organizations.id`, and an `AFTER DELETE` trigger
+  fires once the row is already gone, so the audit insert violated the
+  FK. Fixed by moving the delete-audit trigger to `BEFORE DELETE` for
+  `organizations` specifically (insert/update stay `AFTER`); every other
+  audited table is unaffected since their `organization_id` points at a
+  parent row that a child delete never removes.
+
+Verified end-to-end with live insert/update/delete smoke tests: the
+`organizations` audit trail and `updated_at` trigger both now work
+correctly, and a `get_advisors` pass afterward shows no unresolved
+security findings (remaining `INFO`/`WARN` items — unindexed non-hot-path
+foreign keys, RLS policies re-evaluating `auth.*()` per row, a couple of
+overlapping permissive policies, and `SECURITY DEFINER` functions being
+callable by `authenticated` — are pre-existing, intentional-by-design
+characteristics from Phase 1, not new issues).
+
+Not in this increment (still open):
+
+- GitHub OAuth provider credentials (client ID/secret) still need to be
+  configured on the new hosted project via the dashboard — `config.toml`
+  only covers local CLI development.
+- `apps/web`'s environment configuration still points at whatever
+  Supabase project was previously configured; it needs the new project's
+  URL and anon key.
+- The `invite-member` and `process-events` edge functions have not been
+  deployed to the new project yet (migrations were applied directly;
+  function deployment is a separate step).

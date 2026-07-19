@@ -442,7 +442,7 @@ insert into public.permissions (key, description) values
   ('files.delete', 'Delete organization files');
 
 insert into public.role_permissions (role, permission_key)
-select role_value, permission_key
+select role_value, permissions.key
 from (
   values
     ('organization_owner'::public.system_role),
