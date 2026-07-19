@@ -19,6 +19,11 @@ import { supabase } from "@/lib/supabase";
 
 const ACTIVE_ORGANIZATION_STORAGE_KEY = "carelik.activeOrganizationId";
 
+// A stable reference for the "no data yet" case: `data ?? []` would create
+// a new array every render, which defeats the point of the dependency
+// arrays below (they'd see a "new" organizations value on every render).
+const EMPTY_ORGANIZATIONS: Organization[] = [];
+
 interface OrganizationContextValue {
   organizations: Organization[];
   activeOrganization: Organization | null;
@@ -115,7 +120,7 @@ export function OrganizationProvider({ children }: PropsWithChildren) {
     enabled: !!user
   });
 
-  const organizations = organizationsQuery.data ?? [];
+  const organizations = organizationsQuery.data ?? EMPTY_ORGANIZATIONS;
 
   useEffect(() => {
     const [firstOrganization] = organizations;
@@ -194,6 +199,9 @@ export function OrganizationProvider({ children }: PropsWithChildren) {
   return <OrganizationContext.Provider value={value}>{children}</OrganizationContext.Provider>;
 }
 
+// Provider and its consumer hook are intentionally co-located, same as
+// useAuth in packages/auth/src/auth-provider.tsx.
+// eslint-disable-next-line react-refresh/only-export-components
 export function useOrganization() {
   const value = useContext(OrganizationContext);
   if (!value) throw new Error("useOrganization must be used within OrganizationProvider");

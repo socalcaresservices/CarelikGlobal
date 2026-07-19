@@ -133,3 +133,23 @@ Not in this increment (still open):
 
 - Server-side audit writer
 - Event publisher worker
+
+## Increment 6 — Lint
+
+Shipped:
+
+- `apps/web/eslint.config.js` was missing entirely, even though the
+  ESLint 9 flat-config dependencies (`@eslint/js`, `typescript-eslint`,
+  `eslint-plugin-react-hooks`, `eslint-plugin-react-refresh`, `globals`)
+  were already in `package.json` — `pnpm lint` has been failing outright
+  since Phase 1, it was just never caught because CI doesn't run it.
+  Added the config matching those already-declared dependencies (the
+  standard Vite React+TS template shape).
+- Fixed the two real warnings it surfaced: `organization-provider.tsx`'s
+  `organizations` fallback (`data ?? []`) created a new array every
+  render, and the co-located `OrganizationProvider`/`useOrganization`
+  export trips `react-refresh/only-export-components` (same shape as
+  `useAuth` in `packages/auth/src/auth-provider.tsx`, so suppressed with
+  a comment explaining why rather than restructured).
+- `packages/*` still lint via `tsc --noEmit` rather than ESLint — that
+  was the existing convention and wasn't changed.
