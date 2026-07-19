@@ -11,6 +11,7 @@ import { ClientsPage } from "@/pages/clients-page";
 import { SchedulePage } from "@/pages/schedule-page";
 import { CredentialsPage } from "@/pages/credentials-page";
 import { AuthorizationsPage } from "@/pages/authorizations-page";
+import { IncidentsPage } from "@/pages/incidents-page";
 import { SettingsPage } from "@/pages/settings-page";
 
 export function App() {
@@ -31,6 +32,7 @@ export function App() {
                   <Route path="/schedule" element={<SchedulePage />} />
                   <Route path="/credentials" element={<CredentialsPage />} />
                   <Route path="/authorizations" element={<AuthorizationsPage />} />
+                  <Route path="/incidents" element={<IncidentsPage />} />
                   <Route path="/audit" element={<AuditPage />} />
                   <Route path="/settings" element={<SettingsPage />} />
                   <Route path="*" element={<Navigate to="/" replace />} />

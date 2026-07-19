@@ -1,8 +1,18 @@
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
-import { AlertTriangle, BadgeCheck, CalendarClock, ClipboardCheck, Clock, Mail, UserX } from "lucide-react";
+import {
+  AlertOctagon,
+  AlertTriangle,
+  BadgeCheck,
+  CalendarClock,
+  ClipboardCheck,
+  Clock,
+  Mail,
+  UserX
+} from "lucide-react";
 import { cn } from "@carelik/ui";
 import { getCredentialStatus, getUtilizationStatus, isAuthorizationActive } from "@carelik/shared";
+import type { IncidentStatus } from "@carelik/shared";
 import { useOrganization } from "@/providers/organization-provider";
 import { supabase } from "@/lib/supabase";
 import { getWeekEnd, getWeekStart } from "@/lib/week";
@@ -38,6 +48,11 @@ interface AuthorizationForSignals {
   scheduled_hours: number;
   period_start: string;
   period_end: string;
+}
+
+interface IncidentForSignals {
+  id: string;
+  status: IncidentStatus;
 }
 
 type Tone = "healthy" | "info" | "attention" | "critical";
@@ -164,6 +179,18 @@ export function ActionCenter() {
     enabled: !!activeOrganizationId && canSeeAuthorizations
   });
 
+  const incidentsQuery = useQuery({
+    queryKey: ["action-center-incidents", activeOrganizationId],
+    queryFn: async () => {
+      const { data, error } = await supabase.rpc("list_incidents", {
+        target_organization_id: activeOrganizationId!
+      });
+      if (error) throw error;
+      return (data ?? []) as IncidentForSignals[];
+    },
+    enabled: !!activeOrganizationId
+  });
+
   if (!activeOrganizationId) return null;
 
   const shifts = shiftsQuery.data ?? [];
@@ -284,6 +311,19 @@ export function ActionCenter() {
       icon: ClipboardCheck,
       to: "/authorizations",
       statusText: overAuthorizedCount > 0 ? "Review" : "Everyone within authorization"
+    });
+  }
+
+  if (incidentsQuery.data) {
+    const awaitingReviewCount = incidentsQuery.data.filter((row) => row.status !== "resolved").length;
+    signals.push({
+      key: "incidents-awaiting-review",
+      label: "Incidents awaiting review",
+      count: awaitingReviewCount,
+      tone: awaitingReviewCount > 0 ? "critical" : "healthy",
+      icon: AlertOctagon,
+      to: "/incidents",
+      statusText: awaitingReviewCount > 0 ? "Review" : "Nothing open"
     });
   }
 

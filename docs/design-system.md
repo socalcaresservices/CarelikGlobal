@@ -184,10 +184,21 @@ it stays honest rather than aspirational.
   and as a critical-toned Action Center signal, "Clients scheduled over
   their authorized hours," scoped to periods covering today.
 
+**Built (Increment 20):**
+
+- Incident tracking. Free-text category (agencies categorize
+  differently), severity (low/medium/high) and status (open/under
+  review/resolved) as workflow enums. Any staff member can file an
+  incident about themselves or what they witnessed (`incidents.create`);
+  managing/resolving needs `incidents.update`. A caregiver sees their
+  own filed incidents even without org-wide `incidents.read`, same
+  carve-out pattern as shifts/credentials. Surfaced on a new
+  `/incidents` page and as a critical-toned Action Center signal,
+  "Incidents awaiting review" (anything not yet resolved).
+
 **Not yet built** (needs a data model before it can be real, not
 faked):
 
-- Incident tracking
 - CareScore / GeoScore / any scoring model
 - Record-level header pattern (KPI header + tabs) on Clients/Schedule
 - Resizable list columns (sortable/filterable are done; resizable

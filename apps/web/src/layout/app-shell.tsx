@@ -1,6 +1,7 @@
 import type { PropsWithChildren } from "react";
 import { NavLink } from "react-router-dom";
 import {
+  AlertOctagon,
   BadgeCheck,
   Building2,
   CalendarClock,
@@ -35,6 +36,7 @@ const navItems: Array<{
     icon: ClipboardCheck,
     permission: "authorizations.read"
   },
+  { to: "/incidents", label: "Incidents", icon: AlertOctagon },
   { to: "/audit", label: "Audit", icon: ClipboardList, permission: "audit.read" },
   { to: "/settings", label: "Settings", icon: Settings, permission: "settings.read" }
 ];

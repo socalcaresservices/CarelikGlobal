@@ -662,3 +662,41 @@ Shipped:
 Center signal test, plus 10 new schema/status tests in
 `packages/shared`). Full pipeline verified clean; `get_advisors`
 confirmed no anon-execute gap.
+
+## Increment 20 — Incident tracking
+
+Last of the four features picked from Increment 15's open list.
+
+`category` is free text, same reasoning as `credential_type`/`payer`.
+`severity` (low/medium/high) and `status` (open/under_review/resolved)
+are workflow enums, not business content, so those stayed structured.
+The permission split is new for this one: `incidents.create` lets any
+authorized staff member file a report (about themselves or something
+they witnessed), while `incidents.update` is the higher bar needed to
+edit, resolve, or delete any incident - a caregiver can report something
+without being able to manage the whole organization's incident log.
+
+Shipped:
+
+- `supabase/migrations/20260719270000_incidents.sql`: new `incidents`
+  table, `incidents.read`/`incidents.create`/`incidents.update`
+  permissions, RLS with an own-row carve-out on select (reporter always
+  sees their own) and a two-tier insert policy (`incidents.create` +
+  `reported_by = auth.uid()`, or `incidents.update` for filing on
+  someone else's behalf). `list_incidents()` joins client/caregiver/
+  reporter names, same shape as `list_shifts()`.
+- `apps/web/src/pages/incidents-page.tsx`: new `/incidents` page - file
+  a report (`incidents.create` or better), change status
+  (`incidents.update`), read-only list otherwise (own reports without
+  `incidents.read`).
+- `apps/web/src/components/action-center.tsx`: new critical-toned
+  signal, "Incidents awaiting review" (anything not `resolved`).
+
+75 web tests pass (9 new: 4 for `IncidentsPage`, 1 new Action Center
+signal test, plus 6 new schema tests in `packages/shared`). Full
+pipeline verified clean; `get_advisors` confirmed no anon-execute gap.
+
+This closes every item the user picked from Increment 15's open list
+(credentials, authorizations, incidents, and next the record-page
+layout). `docs/design-system.md`'s "Not yet built" section now only
+lists CareScore/GeoScore and the record-level layout pattern.

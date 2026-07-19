@@ -194,6 +194,28 @@ describe("ActionCenter", () => {
     expect(within(card as HTMLElement).getByText("Review")).toBeInTheDocument();
   });
 
+  it("flags an open incident as critical", async () => {
+    mockedUseOrganization.mockReturnValue(baseOrganization());
+    mockedRpc.mockImplementation((fn: string) => {
+      if (fn === "list_incidents") {
+        return Promise.resolve({
+          data: [{ id: "incident-1", status: "open" }],
+          error: null
+        }) as never;
+      }
+      return Promise.resolve({ data: [], error: null }) as never;
+    });
+    mockedFrom.mockReturnValue({ select: mockClientsCount([]) } as never);
+
+    renderCenter();
+
+    await waitFor(() => expect(screen.getByText("Incidents awaiting review")).toBeInTheDocument());
+    const card = screen.getByText("Incidents awaiting review").closest("a");
+    expect(card).not.toBeNull();
+    expect(within(card as HTMLElement).getByText("1")).toBeInTheDocument();
+    expect(within(card as HTMLElement).getByText("Review")).toBeInTheDocument();
+  });
+
   it("only shows signals the current permissions allow", async () => {
     mockedUseOrganization.mockReturnValue({
       ...baseOrganization(),
