@@ -6,6 +6,7 @@ import { useOrganization } from "@/providers/organization-provider";
 import { supabase } from "@/lib/supabase";
 import { useTableControls } from "@/lib/use-table-controls";
 import { SortableHeader } from "@/components/sortable-header";
+import { CaregiverHoursCard } from "@/components/caregiver-hours";
 
 // Backed by list_shifts(), a security-definer RPC (see
 // supabase/migrations/20260719231000_list_shifts.sql) that resolves
@@ -388,6 +389,8 @@ export function SchedulePage() {
           </table>
         )}
       </Card>
+
+      <CaregiverHoursCard />
     </section>
   );
 }

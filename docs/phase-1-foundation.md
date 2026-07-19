@@ -541,3 +541,50 @@ sortable column headers.
   "nothing matches your search."
 
 50 web tests pass (5 new for the hook). Full pipeline verified clean.
+
+## Increment 17 — Caregiver weekly hour targets
+
+Closes the priority item the user picked from Increment 15's open
+list. Decisions confirmed with the user before building: weekly
+period, target set per caregiver (not per-org default), "scheduled +
+completed" shift hours count toward the target, and going over target
+surfaces as an Action Center alert rather than blocking scheduling.
+
+Shipped:
+
+- `supabase/migrations/20260719240000_caregiver_hour_targets.sql`:
+  adds `target_hours_per_week` (numeric, 0-168, nullable) to
+  `organization_memberships`. `set_caregiver_weekly_target()` (requires
+  `shifts.update`) sets it; `get_caregiver_hours()` returns every
+  active member's target alongside scheduled + completed shift hours
+  for a given week window, computed directly from `shifts` (overlap-
+  aware, so a shift spanning a week boundary is only counted for the
+  hours that actually fall in that week). Both functions explicitly
+  revoke `EXECUTE` from `anon` at creation time - the anon-grant gap
+  that bit this project twice before (Increments 13 and 14) didn't
+  happen a third time.
+- `apps/web/src/lib/week.ts`: Monday-start week boundary helpers,
+  shared between the Schedule page widget and the Action Center so
+  both agree on what "this week" means.
+- `apps/web/src/components/caregiver-hours.tsx`: "Caregiver hours this
+  week" table on the Schedule page - target, scheduled, gap, and a
+  status pill (no target set / over target / on track) per caregiver.
+  Anyone with `shifts.update` can edit a target inline; everyone else
+  sees it read-only. Hidden entirely if there's no caregiver data
+  rather than showing an empty table.
+- `apps/web/src/components/action-center.tsx`: new critical-toned
+  signal, "Caregivers over their weekly hour target," using the same
+  week boundaries. Zero caregivers over target shows the healthy state
+  ("Everyone on track"), same pattern as every other signal.
+
+Live-smoke-tested against the real Supabase project before shipping:
+set a target, inserted a test shift, confirmed `get_caregiver_hours()`
+computed hours correctly against real pre-existing shift data the user
+had created earlier in the session (verified it was real data, not a
+leftover test artifact, before concluding the function was correct
+rather than deleting it), then cleaned up only the test-created rows.
+
+60 web tests pass (10 new: 5 for `CaregiverHoursCard`, 1 for
+`week.ts`'s helpers covering 4 cases, 1 new Action Center signal test).
+Full pipeline (typecheck, lint, build, test) verified clean; `get_advisors`
+confirmed no anon-execute gap on the new functions.

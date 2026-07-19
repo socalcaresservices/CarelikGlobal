@@ -1,9 +1,11 @@
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
-import { AlertTriangle, CalendarClock, Mail, UserX } from "lucide-react";
+import { AlertTriangle, CalendarClock, Clock, Mail, UserX } from "lucide-react";
 import { cn } from "@carelik/ui";
 import { useOrganization } from "@/providers/organization-provider";
 import { supabase } from "@/lib/supabase";
+import { getWeekEnd, getWeekStart } from "@/lib/week";
+import type { CaregiverHoursRow } from "@/components/caregiver-hours";
 
 // The Action Center: "what needs my attention" comes before anything
 // else on the dashboard, per docs/design-system.md. Every signal here
@@ -24,12 +26,13 @@ interface ClientForSignals {
   id: string;
 }
 
-type Tone = "healthy" | "info" | "attention";
+type Tone = "healthy" | "info" | "attention" | "critical";
 
 const toneStyles: Record<Tone, { dot: string; text: string }> = {
   healthy: { dot: "bg-emerald-500", text: "text-emerald-700" },
   info: { dot: "bg-sky-500", text: "text-sky-700" },
-  attention: { dot: "bg-amber-500", text: "text-amber-700" }
+  attention: { dot: "bg-amber-500", text: "text-amber-700" },
+  critical: { dot: "bg-red-500", text: "text-red-700" }
 };
 
 interface Signal {
@@ -105,6 +108,23 @@ export function ActionCenter() {
     enabled: !!activeOrganizationId && canSeeMembers
   });
 
+  const weekStart = getWeekStart(now);
+  const weekEnd = getWeekEnd(weekStart);
+
+  const caregiverHoursQuery = useQuery({
+    queryKey: ["action-center-caregiver-hours", activeOrganizationId, weekStart.toISOString()],
+    queryFn: async () => {
+      const { data, error } = await supabase.rpc("get_caregiver_hours", {
+        target_organization_id: activeOrganizationId!,
+        week_start: weekStart.toISOString(),
+        week_end: weekEnd.toISOString()
+      });
+      if (error) throw error;
+      return (data ?? []) as CaregiverHoursRow[];
+    },
+    enabled: !!activeOrganizationId
+  });
+
   if (!activeOrganizationId) return null;
 
   const shifts = shiftsQuery.data ?? [];
@@ -177,6 +197,21 @@ export function ActionCenter() {
       icon: Mail,
       to: "/access",
       statusText: pendingCount > 0 ? "Review" : "None pending"
+    });
+  }
+
+  if (caregiverHoursQuery.data) {
+    const overTargetCount = caregiverHoursQuery.data.filter(
+      (row) => row.target_hours_per_week !== null && row.scheduled_hours > row.target_hours_per_week
+    ).length;
+    signals.push({
+      key: "over-target",
+      label: "Caregivers over their weekly hour target",
+      count: overTargetCount,
+      tone: overTargetCount > 0 ? "critical" : "healthy",
+      icon: Clock,
+      to: "/schedule",
+      statusText: overTargetCount > 0 ? "Review" : "Everyone on track"
     });
   }
 

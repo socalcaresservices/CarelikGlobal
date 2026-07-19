@@ -147,13 +147,26 @@ it stays honest rather than aspirational.
   `apps/web/src/lib/use-table-controls.ts` for why that's the right
   call at this data volume.
 
+**Built (Increment 17):**
+
+- Caregiver weekly hour targets. Each active member can have a
+  `target_hours_per_week` set (0-168, optional) via
+  `set_caregiver_weekly_target()`. `get_caregiver_hours()` returns
+  scheduled + completed shift hours per caregiver for a given week,
+  computed from real shift data (not estimated). Surfaced two places:
+  a "Caregiver hours this week" table on the Schedule page (shows
+  target/scheduled/gap per caregiver, editable inline for anyone with
+  `shifts.update`), and a new critical-toned Action Center signal
+  ("Caregivers over their weekly hour target") that links back to the
+  Schedule page. Week boundaries are Monday-start, local time (see
+  `apps/web/src/lib/week.ts`).
+
 **Not yet built** (needs a data model before it can be real, not
 faked):
 
 - Credential/compliance tracking (no `credentials` table exists yet)
 - Authorization tracking and utilization (no `authorizations` table)
 - Incident tracking
-- Caregiver hour targets / over-target detection
 - CareScore / GeoScore / any scoring model
 - Record-level header pattern (KPI header + tabs) on Clients/Schedule
 - Resizable list columns (sortable/filterable are done; resizable

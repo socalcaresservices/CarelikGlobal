@@ -108,6 +108,35 @@ describe("ActionCenter", () => {
     await waitFor(() => expect(screen.getByText("All caught up")).toBeInTheDocument());
   });
 
+  it("flags a caregiver over their weekly hour target as critical", async () => {
+    mockedUseOrganization.mockReturnValue(baseOrganization());
+    mockedRpc.mockImplementation((fn: string) => {
+      if (fn === "get_caregiver_hours") {
+        return Promise.resolve({
+          data: [
+            {
+              caregiver_user_id: "caregiver-1",
+              caregiver_name: "Sam Caregiver",
+              target_hours_per_week: 20,
+              scheduled_hours: 25
+            }
+          ],
+          error: null
+        }) as never;
+      }
+      return Promise.resolve({ data: [], error: null }) as never;
+    });
+    mockedFrom.mockReturnValue({ select: mockClientsCount([]) } as never);
+
+    renderCenter();
+
+    await waitFor(() => expect(screen.getByText("Caregivers over their weekly hour target")).toBeInTheDocument());
+    const card = screen.getByText("Caregivers over their weekly hour target").closest("a");
+    expect(card).not.toBeNull();
+    expect(within(card as HTMLElement).getByText("1")).toBeInTheDocument();
+    expect(within(card as HTMLElement).getByText("Review")).toBeInTheDocument();
+  });
+
   it("only shows signals the current permissions allow", async () => {
     mockedUseOrganization.mockReturnValue({
       ...baseOrganization(),
