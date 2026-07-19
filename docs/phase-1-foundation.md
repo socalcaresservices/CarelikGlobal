@@ -588,3 +588,37 @@ rather than deleting it), then cleaned up only the test-created rows.
 `week.ts`'s helpers covering 4 cases, 1 new Action Center signal test).
 Full pipeline (typecheck, lint, build, test) verified clean; `get_advisors`
 confirmed no anon-execute gap on the new functions.
+
+## Increment 18 — Caregiver credentials
+
+Second of four features picked from Increment 15's open list (the user
+chose all four at once: credentials, authorizations, incidents, and the
+record-page layout - each is being shipped as its own increment rather
+than one giant change).
+
+`credential_type` is deliberately free text, not an enum - compliance
+requirements vary by state and agency, and a fixed list would mean
+guessing at business rules nobody has confirmed. `expires_at` is
+nullable since not every credential expires. Status (no expiration /
+active / expiring soon - within 30 days / expired) is computed at read
+time in `packages/shared/src/credentials.ts`, never stored.
+
+Shipped:
+
+- `supabase/migrations/20260719250000_caregiver_credentials.sql`: new
+  `caregiver_credentials` table, `credentials.read`/`credentials.update`
+  permissions, RLS with the same own-row carve-out as shifts (a
+  caregiver sees their own credentials even without `credentials.read`),
+  and `list_caregiver_credentials()` to join caregiver names the same
+  way `list_shifts()` does.
+- `apps/web/src/pages/credentials-page.tsx`: new `/credentials` page -
+  add/edit/remove for `credentials.update`, read-only list (own rows
+  only, or everyone's with `credentials.read`) for everyone else.
+- `apps/web/src/components/action-center.tsx`: new critical-toned
+  signal, "Credentials expiring or expired."
+- Nav item added with no permission gate, same reasoning as Schedule:
+  there's always something valid to show via the own-row carve-out.
+
+65 web tests pass (5 new: 4 for `CredentialsPage`, 1 new Action Center
+signal test; plus 7 new schema/status tests in `packages/shared`). Full
+pipeline verified clean; `get_advisors` confirmed no anon-execute gap.

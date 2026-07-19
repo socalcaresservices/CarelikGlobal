@@ -12,3 +12,8 @@ coverage
 supabase/.temp
 .turbo
 *.tsbuildinfo
+
+# Stray Git-for-Windows install folder that ended up inside the project
+# directory (not part of the project - see chat for context). Ignored
+# rather than deleted from here since it's large and outside git's remit.
+/Git/

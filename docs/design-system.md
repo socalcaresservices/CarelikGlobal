@@ -161,10 +161,21 @@ it stays honest rather than aspirational.
   Schedule page. Week boundaries are Monday-start, local time (see
   `apps/web/src/lib/week.ts`).
 
+**Built (Increment 18):**
+
+- Caregiver credentials. Free-text `credential_type` (CPR, background
+  check, TB test, license - whatever an agency tracks) with optional
+  issued/expiry dates per caregiver. Status (no expiration / active /
+  expiring soon / expired) is derived at read time, never stored, so it
+  can't drift stale. Surfaced on a new `/credentials` page (add, edit,
+  remove for those with `credentials.update`; everyone can see their own
+  regardless of permission, same carve-out pattern as shifts and hours)
+  and as a critical-toned Action Center signal, "Credentials expiring or
+  expired."
+
 **Not yet built** (needs a data model before it can be real, not
 faked):
 
-- Credential/compliance tracking (no `credentials` table exists yet)
 - Authorization tracking and utilization (no `authorizations` table)
 - Incident tracking
 - CareScore / GeoScore / any scoring model

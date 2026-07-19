@@ -1,7 +1,8 @@
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
-import { AlertTriangle, CalendarClock, Clock, Mail, UserX } from "lucide-react";
+import { AlertTriangle, BadgeCheck, CalendarClock, Clock, Mail, UserX } from "lucide-react";
 import { cn } from "@carelik/ui";
+import { getCredentialStatus } from "@carelik/shared";
 import { useOrganization } from "@/providers/organization-provider";
 import { supabase } from "@/lib/supabase";
 import { getWeekEnd, getWeekStart } from "@/lib/week";
@@ -24,6 +25,11 @@ interface ShiftForSignals {
 
 interface ClientForSignals {
   id: string;
+}
+
+interface CredentialForSignals {
+  id: string;
+  expires_at: string | null;
 }
 
 type Tone = "healthy" | "info" | "attention" | "critical";
@@ -125,6 +131,18 @@ export function ActionCenter() {
     enabled: !!activeOrganizationId
   });
 
+  const credentialsQuery = useQuery({
+    queryKey: ["action-center-credentials", activeOrganizationId],
+    queryFn: async () => {
+      const { data, error } = await supabase.rpc("list_caregiver_credentials", {
+        target_organization_id: activeOrganizationId!
+      });
+      if (error) throw error;
+      return (data ?? []) as CredentialForSignals[];
+    },
+    enabled: !!activeOrganizationId
+  });
+
   if (!activeOrganizationId) return null;
 
   const shifts = shiftsQuery.data ?? [];
@@ -212,6 +230,22 @@ export function ActionCenter() {
       icon: Clock,
       to: "/schedule",
       statusText: overTargetCount > 0 ? "Review" : "Everyone on track"
+    });
+  }
+
+  if (credentialsQuery.data) {
+    const expiringOrExpiredCount = credentialsQuery.data.filter((row) => {
+      const status = getCredentialStatus(row.expires_at);
+      return status === "expiring_soon" || status === "expired";
+    }).length;
+    signals.push({
+      key: "credentials-expiring",
+      label: "Credentials expiring or expired",
+      count: expiringOrExpiredCount,
+      tone: expiringOrExpiredCount > 0 ? "critical" : "healthy",
+      icon: BadgeCheck,
+      to: "/credentials",
+      statusText: expiringOrExpiredCount > 0 ? "Review" : "All current"
     });
   }
 
