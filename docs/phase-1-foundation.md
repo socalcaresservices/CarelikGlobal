@@ -82,3 +82,24 @@ Not in this increment (still open):
   via `supabase functions invoke invite-member` or a direct fetch call.
 - Server-side audit writer
 - Event publisher worker
+
+## Increment 4 — Access control screen
+
+Shipped:
+
+- `list_organization_members` database function: security-definer, gated
+  by `has_permission(org, 'membership.read')`. Needed because
+  `users_read_own_profile` RLS only lets someone read their own
+  `user_profiles` row (or a platform owner read any row), so an
+  organization_admin couldn't otherwise join member display names from
+  the browser.
+- `/access` now renders a real page: an invite form (visible only with
+  `membership.invite`) wired to `inviteMember()`, and a members table
+  (visible with `membership.read`) showing name, role, and status.
+
+Not in this increment (still open):
+
+- `/organizations` is still a placeholder — no create/edit organization
+  screen, no way to change a member's role or remove them once invited.
+- Server-side audit writer
+- Event publisher worker

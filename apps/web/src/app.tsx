@@ -4,6 +4,7 @@ import { OrganizationProvider } from "@/providers/organization-provider";
 import { ProtectedRoute } from "@/routes/protected-route";
 import { LoginPage } from "@/pages/login-page";
 import { OverviewPage } from "@/pages/overview-page";
+import { AccessPage } from "@/pages/access-page";
 import { NotImplementedPage } from "@/pages/not-implemented-page";
 
 export function App() {
@@ -22,7 +23,7 @@ export function App() {
                     path="/organizations"
                     element={<NotImplementedPage title="Organizations" />}
                   />
-                  <Route path="/access" element={<NotImplementedPage title="Access control" />} />
+                  <Route path="/access" element={<AccessPage />} />
                   <Route path="/settings" element={<NotImplementedPage title="Settings" />} />
                   <Route path="*" element={<Navigate to="/" replace />} />
                 </Routes>
