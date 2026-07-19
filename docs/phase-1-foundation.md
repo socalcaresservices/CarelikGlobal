@@ -883,3 +883,30 @@ the database.
 This closes every item from the design system's original open list
 except real geocoding/distance data, which still needs a data source
 the user hasn't provided.
+
+## Increment 25 — Team page
+
+User feedback while trying the app live: caregivers only had a bare
+link from Access (which is about roles/invites/permissions) and no
+roster of their own the way Clients has. Requested directly: "a
+caregiver section just like the client [page]."
+
+Shipped:
+
+- `apps/web/src/pages/team-page.tsx`: new `/team` page, same shape as
+  Clients - search box, sortable/resizable columns (Name, Role,
+  Status), plus a non-sortable "This week" column. Backed by the same
+  `list_organization_members()` RPC Access already uses for the roster,
+  merged client-side with `get_caregiver_hours()` (the same RPC the
+  Schedule page's hours widget uses) for target/scheduled hours - a row
+  shows "-" rather than a fabricated number if the caller can't see
+  that caregiver's hours (no shifts.read and it isn't their own row).
+  Name links to the existing `/team/:id` detail page.
+- `apps/web/src/layout/app-shell.tsx`: new "Team" nav item next to
+  Clients, gated on `membership.read` (same as Access and the detail
+  page it links to).
+- No new migration - reuses two existing RPCs. Access still owns
+  role/invite/permission management; Team is just the roster view.
+
+104 web tests pass (5 new). Full pipeline (typecheck, lint, build,
+test) verified clean.

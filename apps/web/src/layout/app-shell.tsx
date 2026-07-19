@@ -7,6 +7,7 @@ import {
   CalendarClock,
   ClipboardCheck,
   ClipboardList,
+  HeartHandshake,
   LayoutDashboard,
   LogOut,
   Settings,
@@ -29,6 +30,7 @@ const navItems: Array<{
   { to: "/organizations", label: "Organizations", icon: Building2, permission: "organization.read" },
   { to: "/access", label: "Access", icon: ShieldCheck, permission: "membership.read" },
   { to: "/clients", label: "Clients", icon: Users, permission: "clients.read" },
+  { to: "/team", label: "Team", icon: HeartHandshake, permission: "membership.read" },
   { to: "/schedule", label: "Schedule", icon: CalendarClock },
   { to: "/credentials", label: "Credentials", icon: BadgeCheck },
   {
