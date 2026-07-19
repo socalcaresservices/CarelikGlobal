@@ -1,5 +1,6 @@
 import { useState, type FormEvent } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { Link } from "react-router-dom";
 import { Card } from "@carelik/ui";
 import { systemRoleSchema } from "@carelik/shared";
 import { useAuth } from "@carelik/auth";
@@ -257,7 +258,9 @@ export function AccessPage() {
                 return (
                   <tr key={member.membership_id} className="border-b border-slate-100 last:border-0">
                     <td className="py-2.5 text-slate-800">
-                      {member.display_name}
+                      <Link to={`/team/${member.user_id}`} className="hover:underline">
+                        {member.display_name}
+                      </Link>
                       {isSelf ? <span className="ml-1 text-xs text-slate-400">(you)</span> : null}
                     </td>
                     <td className="py-2.5 text-slate-600">

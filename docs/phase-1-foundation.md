@@ -700,3 +700,42 @@ This closes every item the user picked from Increment 15's open list
 (credentials, authorizations, incidents, and next the record-page
 layout). `docs/design-system.md`'s "Not yet built" section now only
 lists CareScore/GeoScore and the record-level layout pattern.
+
+## Increment 21 — Record-level layout for Clients and Team
+
+The last of the four features, and the biggest structural one: applies
+the design system's header-plus-KPI-plus-tabs record pattern for real,
+rather than describing it. No new data model was needed - every tab
+reuses an existing list RPC filtered client-side to one record's id.
+
+Shipped:
+
+- `apps/web/src/pages/client-detail-page.tsx`: new `/clients/:id`.
+  Header shows name and status; the KPI row shows upcoming shifts and
+  open incidents always, and authorized/scheduled/gap hours only when
+  there's an authorization whose period covers today (an explicit "no
+  active authorization" state otherwise, never a fabricated zero). Tabs:
+  Overview, Schedule, Authorizations (hidden without
+  `authorizations.read`), Incidents, Notes, History (hidden without
+  `audit.read`, filtered to `entity_type = 'clients'` and this client's
+  id).
+- `apps/web/src/pages/caregiver-detail-page.tsx`: new `/team/:id`,
+  gated on `membership.read` (matches the Access page it's linked from).
+  KPI row: upcoming shifts, credentials expiring, weekly target,
+  scheduled hours this week. Tabs: Overview, Schedule, Credentials,
+  Incidents (both what the caregiver was involved in and what they
+  reported), History (this member's own actions, filtered by
+  `actor_user_id` rather than by record - a different, equally useful
+  cut of the same audit log).
+- Client names on `/clients` and member names on `/access` now link to
+  these pages.
+
+81 web tests pass (6 new: 3 for each detail page). Full pipeline
+verified clean.
+
+With this, every feature the user asked for from Increment 15's open
+list is shipped: caregiver hour targets, credentials, authorizations,
+incidents, and the record-level layout. Remaining open items in
+`docs/design-system.md` (CareScore/GeoScore, resizable columns, global
+search, distance/geo data) still need real business decisions or data
+sources the user hasn't provided yet.

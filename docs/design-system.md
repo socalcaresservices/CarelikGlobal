@@ -196,11 +196,28 @@ it stays honest rather than aspirational.
   `/incidents` page and as a critical-toned Action Center signal,
   "Incidents awaiting review" (anything not yet resolved).
 
+**Built (Increment 21):**
+
+- Record-level layout on Clients and Team members - the header +
+  KPI row + tabs pattern from this doc, applied for real for the first
+  time. `/clients/:id`: header (name, status), a KPI row (upcoming
+  shifts, open incidents, and - only if there's an active authorization
+  for today - authorized/scheduled/gap hours), tabs for Overview,
+  Schedule, Authorizations, Incidents, Notes, and History (audit trail
+  filtered to that record). `/team/:id`: header (name, role, status), a
+  KPI row (upcoming shifts, credentials expiring, weekly target,
+  scheduled this week), tabs for Overview, Schedule, Credentials,
+  Incidents, and History (this member's own actions in the audit
+  trail). Both reuse the existing list RPCs (`list_shifts`,
+  `list_client_authorizations`, `list_caregiver_credentials`,
+  `list_incidents`, `list_audit_logs`) filtered client-side to one
+  record - no new migrations needed. Client and member names on the
+  Clients and Access pages now link to these.
+
 **Not yet built** (needs a data model before it can be real, not
 faked):
 
 - CareScore / GeoScore / any scoring model
-- Record-level header pattern (KPI header + tabs) on Clients/Schedule
 - Resizable list columns (sortable/filterable are done; resizable
   isn't)
 - Global search (per-page search exists; nothing searches everything

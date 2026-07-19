@@ -1,5 +1,6 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { Link } from "react-router-dom";
 import { Card } from "@carelik/ui";
 import { clientStatusSchema } from "@carelik/shared";
 import { useOrganization } from "@/providers/organization-provider";
@@ -331,7 +332,9 @@ export function ClientsPage() {
               {table.rows.map((row) => (
                 <tr key={row.id} className="border-b border-slate-100 last:border-0">
                   <td className="py-2.5 text-slate-800">
-                    {row.first_name} {row.last_name}
+                    <Link to={`/clients/${row.id}`} className="hover:underline">
+                      {row.first_name} {row.last_name}
+                    </Link>
                   </td>
                   <td className="py-2.5 text-slate-500">{row.phone ?? "—"}</td>
                   <td className="py-2.5">
