@@ -187,13 +187,7 @@ Shipped:
   broke `defineConfig`/`plugins` typechecking with duplicate,
   structurally-incompatible `Plugin` types.
 
-Not in this increment (still open):
-
-- No tests yet for `OrganizationProvider` (the accept-invitation-on-login
-  effect, active-org persistence, permission resolution) or the page
-  components (`AccessPage`, `OrganizationsPage`, `LoginPage`) — these
-  need heavier Supabase-client mocking (chained `.from().select()...`
-  calls) and were left for a follow-up rather than rushed.
+This gap is closed in Increment 9 below.
 
 ## Increment 8 — Audit writer and event publisher worker
 
@@ -233,3 +227,43 @@ Not in this increment (still open):
 
 - Nothing writes to `domain_events` yet (no event producers)
 - `dispatchEvent()` has no real handlers (no downstream integrations exist)
+
+## Increment 9 — Remaining test coverage
+
+Shipped, closing the gap left in Increment 7:
+
+- `apps/web/src/providers/organization-provider.test.tsx`: a platform
+  owner gets every permission without a `role_permissions` query at all;
+  a regular member's role and permissions resolve correctly from
+  `role_permissions`; a pending `'invited'` membership triggers
+  `accept_organization_invitation` on login. Uses a small generic
+  Supabase query-builder mock (records every `.select()/.eq()/.order()`
+  call so the resolver can tell two different queries against the same
+  table apart, e.g. the "any status" pending-invite check vs. the
+  "status = active" role check on `organization_memberships`).
+- `apps/web/src/pages/login-page.test.tsx`: sign-in button, calling
+  `signInWithGithub`, surfacing both a thrown error and an
+  `?error_description=` query-string error, and redirecting away when
+  already signed in.
+- `apps/web/src/pages/access-page.test.tsx`: the permission-gated
+  not-available state, invite form visibility and submission, and
+  role-change/revoke controls (including that they never appear on your
+  own row).
+- `apps/web/src/pages/organizations-page.test.tsx`: create-organization
+  form visibility (platform owner only), client-side slug validation
+  before `create_organization` is ever called, the organization list's
+  switch-active control, and the edit-active-org form's visibility and
+  submission.
+
+48 tests pass across all three packages with tests
+(`packages/shared`: 16, `packages/auth`: 7, `apps/web`: 25). Full
+pipeline — typecheck, lint, build, test — verified clean.
+
+Not in this increment (still open):
+
+- Server-side audit writer and event publisher worker have no tests of
+  their own (SQL functions and a Deno edge function; no live Postgres or
+  Deno runtime was available to test against — see Increment 8's commit
+  message).
+- No end-to-end tests (Playwright/Cypress) anywhere — everything so far
+  is unit/component-level with mocked Supabase calls.
