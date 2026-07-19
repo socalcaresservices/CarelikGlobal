@@ -54,8 +54,31 @@ Shipped:
 
 Not in this increment (still open):
 
-- Membership invitation API — requires a service-role edge function; the
-  browser client intentionally has no path to `auth.admin.inviteUserByEmail`
 - Organization administration UI (create/edit organization, manage members)
+- Server-side audit writer
+- Event publisher worker
+
+## Increment 3 — Membership invitations
+
+Shipped:
+
+- `invite-member` edge function (`supabase/functions/invite-member`): the
+  only place the service-role key is used. Verifies the caller holds
+  `membership.invite` for the target organization (via `has_permission`,
+  RLS-scoped to the caller's own JWT) before calling
+  `auth.admin.inviteUserByEmail` and creating an `organization_memberships`
+  row with `status = 'invited'`.
+- `accept_organization_invitation` database function: lets a user activate
+  their own invited membership once authenticated. Called automatically by
+  `OrganizationProvider` after login.
+- `apps/web/src/lib/invitations.ts`: client helper (`inviteMember`) that
+  calls the edge function. Not yet wired to any screen — see "Organization
+  administration UI" above.
+
+Not in this increment (still open):
+
+- Organization administration UI is still the only missing piece needed to
+  actually use `inviteMember` from the app; today it can only be exercised
+  via `supabase functions invoke invite-member` or a direct fetch call.
 - Server-side audit writer
 - Event publisher worker

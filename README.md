@@ -57,3 +57,34 @@ administrator and users sign in with GitHub OAuth.
    This file is read by `supabase start`, not by the web app.
 3. For a hosted project, set the same two values under
    Authentication → Providers → GitHub in the Supabase dashboard.
+
+## Inviting members
+
+New members are provisioned by email through the `invite-member` edge
+function (`supabase/functions/invite-member`), never from the browser
+directly — that keeps the service-role key off the client.
+
+```bash
+supabase functions deploy invite-member
+supabase secrets set SITE_URL=https://your-app-domain.example
+```
+
+`SUPABASE_URL`, `SUPABASE_ANON_KEY`, and `SUPABASE_SERVICE_ROLE_KEY` are
+provided automatically to edge functions by the Supabase platform (and by
+`supabase functions serve` locally) — no need to set them manually.
+
+The function checks that the caller already holds `membership.invite` for
+the target organization (via the `has_permission` database function)
+before it will send an invite. Call it from the client with:
+
+```ts
+import { inviteMember } from "@/lib/invitations";
+
+await inviteMember({ email, organizationId, role });
+```
+
+The invited person is created with membership `status = 'invited'`. The
+first time they authenticate — via the invite email link or by signing in
+with GitHub using the same address — `OrganizationProvider` calls the
+`accept_organization_invitation` database function to flip their
+membership to `active`.

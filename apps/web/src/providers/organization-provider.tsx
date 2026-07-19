@@ -6,7 +6,7 @@ import {
   useMemo,
   useState
 } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@carelik/auth";
 import {
   organizationSchema,
@@ -34,9 +34,48 @@ const OrganizationContext = createContext<OrganizationContextValue | null>(null)
 
 export function OrganizationProvider({ children }: PropsWithChildren) {
   const { user } = useAuth();
+  const queryClient = useQueryClient();
   const [activeOrganizationId, setActiveOrganizationIdState] = useState<string | null>(
     () => window.localStorage.getItem(ACTIVE_ORGANIZATION_STORAGE_KEY)
   );
+
+  // A user can always read their own membership rows regardless of status
+  // (see the "members_read_memberships" RLS policy), so once they've
+  // authenticated we look for any pending invitations and activate them.
+  // Until a membership is 'active', RLS hides the organization itself.
+  useEffect(() => {
+    if (!user) return;
+    const currentUser = user;
+    let cancelled = false;
+
+    async function acceptPendingInvitations() {
+      const { data: pending, error } = await supabase
+        .from("organization_memberships")
+        .select("organization_id")
+        .eq("user_id", currentUser.id)
+        .eq("status", "invited");
+
+      if (error || cancelled || !pending || pending.length === 0) return;
+
+      await Promise.all(
+        pending.map((row) =>
+          supabase.rpc("accept_organization_invitation", {
+            target_organization_id: row.organization_id
+          })
+        )
+      );
+
+      if (!cancelled) {
+        void queryClient.invalidateQueries({ queryKey: ["organizations", currentUser.id] });
+      }
+    }
+
+    void acceptPendingInvitations();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [user, queryClient]);
 
   const profileQuery = useQuery({
     queryKey: ["user-profile", user?.id],
