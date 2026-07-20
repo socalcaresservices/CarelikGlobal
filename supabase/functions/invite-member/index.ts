@@ -1,11 +1,26 @@
 // Supabase Edge Function: invite-member
 //
-// Invites a user by email into an organization. This must run server-side
-// because it needs the Supabase service-role key to call
-// `auth.admin.inviteUserByEmail` — the browser application is only ever
-// given the anonymous key (see README "Authentication").
+// Adds someone to an organization. This must run server-side because it
+// needs the Supabase service-role key to create/invite auth users — the
+// browser application is only ever given the anonymous key (see README
+// "Authentication").
 //
-// Request: POST { email: string, organizationId: string, role: string }
+// Two modes, chosen by whether firstName/lastName are included:
+//
+//   - Profile details given (Team page "Add a caregiver" form): creates
+//     the auth user directly via `auth.admin.createUser`, no email sent,
+//     membership status is set to "active" immediately. This is for
+//     caregivers who are a roster record first — they don't need to sign
+//     in to be scheduled. Their name/phone are written straight into
+//     user_profiles via the metadata the `handle_new_user` trigger reads.
+//
+//   - No profile details (Access page "Invite" form, for office/admin
+//     roles who need to actually log in and use the app): falls back to
+//     the original `auth.admin.inviteUserByEmail` flow, which emails a
+//     sign-in link and leaves membership status as "invited" until they
+//     accept.
+//
+// Request: POST { email, organizationId, role, firstName?, lastName?, phone? }
 // Auth:    Authorization: Bearer <caller's access token>
 //          (supabase-js `functions.invoke` attaches this automatically
 //          for an authenticated session)
@@ -26,6 +41,9 @@ interface InviteRequestBody {
   email?: unknown;
   organizationId?: unknown;
   role?: unknown;
+  firstName?: unknown;
+  lastName?: unknown;
+  phone?: unknown;
 }
 
 function jsonResponse(body: unknown, status: number) {
@@ -37,14 +55,25 @@ function jsonResponse(body: unknown, status: number) {
 
 function isValidRequestBody(
   body: InviteRequestBody
-): body is { email: string; organizationId: string; role: string } {
+): body is {
+  email: string;
+  organizationId: string;
+  role: string;
+  firstName?: string;
+  lastName?: string;
+  phone?: string;
+} {
+  const optionalStringOk = (value: unknown) => value === undefined || typeof value === "string";
   return (
     typeof body.email === "string" &&
     body.email.includes("@") &&
     typeof body.organizationId === "string" &&
     body.organizationId.length > 0 &&
     typeof body.role === "string" &&
-    body.role.length > 0
+    body.role.length > 0 &&
+    optionalStringOk(body.firstName) &&
+    optionalStringOk(body.lastName) &&
+    optionalStringOk(body.phone)
   );
 }
 
@@ -77,6 +106,10 @@ Deno.serve(async (req) => {
   }
 
   const { email, organizationId, role } = body;
+  const firstName = body.firstName?.trim();
+  const lastName = body.lastName?.trim();
+  const phone = body.phone?.trim();
+  const hasProfileDetails = Boolean(firstName) && Boolean(lastName);
 
   if (role === "platform_owner") {
     return jsonResponse(
@@ -128,13 +161,46 @@ Deno.serve(async (req) => {
     auth: { persistSession: false }
   });
 
-  const siteUrl = Deno.env.get("SITE_URL") ?? "http://localhost:5173";
-  const { data: invited, error: inviteError } = await adminClient.auth.admin.inviteUserByEmail(
-    email,
-    { redirectTo: siteUrl }
-  );
-  if (inviteError || !invited?.user) {
-    return jsonResponse({ error: inviteError?.message ?? "Invite failed" }, 400);
+  let userId: string;
+  let membershipStatus: "active" | "invited";
+
+  if (hasProfileDetails) {
+    const displayName = `${firstName} ${lastName}`.trim();
+    const { data: created, error: createError } = await adminClient.auth.admin.createUser({
+      email,
+      email_confirm: true,
+      user_metadata: { display_name: displayName, first_name: firstName, last_name: lastName }
+    });
+    if (createError || !created?.user) {
+      const message = createError?.message ?? "";
+      if (/already.*registered|already.*exists/i.test(message)) {
+        return jsonResponse({ error: "That email is already on your team." }, 409);
+      }
+      return jsonResponse({ error: message || "Could not add caregiver" }, 400);
+    }
+    userId = created.user.id;
+    membershipStatus = "active";
+
+    if (phone) {
+      const { error: phoneError } = await adminClient
+        .from("user_profiles")
+        .update({ phone })
+        .eq("id", userId);
+      if (phoneError) {
+        return jsonResponse({ error: phoneError.message }, 500);
+      }
+    }
+  } else {
+    const siteUrl = Deno.env.get("SITE_URL") ?? "http://localhost:5173";
+    const { data: invited, error: inviteError } = await adminClient.auth.admin.inviteUserByEmail(
+      email,
+      { redirectTo: siteUrl }
+    );
+    if (inviteError || !invited?.user) {
+      return jsonResponse({ error: inviteError?.message ?? "Invite failed" }, 400);
+    }
+    userId = invited.user.id;
+    membershipStatus = "invited";
   }
 
   const { error: membershipError } = await adminClient
@@ -142,10 +208,11 @@ Deno.serve(async (req) => {
     .upsert(
       {
         organization_id: organizationId,
-        user_id: invited.user.id,
+        user_id: userId,
         role,
-        status: "invited",
-        invited_by: callerData.user.id
+        status: membershipStatus,
+        invited_by: callerData.user.id,
+        ...(membershipStatus === "active" ? { joined_at: new Date().toISOString() } : {})
       },
       { onConflict: "organization_id,user_id" }
     );
@@ -154,7 +221,7 @@ Deno.serve(async (req) => {
   }
 
   return jsonResponse(
-    { userId: invited.user.id, email, organizationId, role, status: "invited" },
+    { userId, email, organizationId, role, status: membershipStatus },
     200
   );
 });

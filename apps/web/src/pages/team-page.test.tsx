@@ -114,7 +114,7 @@ describe("TeamPage", () => {
     expect(screen.getByText("staff")).toBeInTheDocument();
     expect(screen.getByText("15h / 20h")).toBeInTheDocument();
     expect(screen.getByText("active")).toBeInTheDocument();
-    expect(screen.queryByText("Invite a caregiver")).not.toBeInTheDocument();
+    expect(screen.queryByText("Add a caregiver")).not.toBeInTheDocument();
 
     const link = screen.getByText("Sam Caregiver").closest("a");
     expect(link).toHaveAttribute("href", `/team/${CAREGIVER_ID}`);
@@ -171,7 +171,7 @@ describe("TeamPage", () => {
     await waitFor(() => expect(screen.getByText("No team members yet.")).toBeInTheDocument());
   });
 
-  it("submits an invite and shows a success message", async () => {
+  it("adds a caregiver as a roster record and shows a success message", async () => {
     mockedUseAuth.mockReturnValue(authUser("user-1"));
     mockedUseOrganization.mockReturnValue({ ...baseOrganization(), hasPermission: vi.fn(() => true) });
     mockRpc({ members: [], hours: [] });
@@ -180,23 +180,28 @@ describe("TeamPage", () => {
       email: "new@example.com",
       organizationId: ORG_ID,
       role: "staff",
-      status: "invited"
+      status: "active"
     });
 
     renderPage();
-    await waitFor(() => expect(screen.getByText("Invite a caregiver")).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText("Add a caregiver")).toBeInTheDocument());
 
+    fireEvent.change(screen.getByLabelText("First name"), { target: { value: "Sam" } });
+    fireEvent.change(screen.getByLabelText("Last name"), { target: { value: "Newhire" } });
     fireEvent.change(screen.getByLabelText("Email"), { target: { value: "new@example.com" } });
-    fireEvent.click(screen.getByText("Send invite"));
+    fireEvent.click(screen.getByText("Add caregiver"));
 
     await waitFor(() =>
       expect(mockedInviteMember).toHaveBeenCalledWith({
         email: "new@example.com",
         organizationId: ORG_ID,
-        role: "staff"
+        role: "staff",
+        firstName: "Sam",
+        lastName: "Newhire",
+        phone: undefined
       })
     );
-    await waitFor(() => expect(screen.getByText("Invited new@example.com.")).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText("Added Sam Newhire.")).toBeInTheDocument());
   });
 
   it("changes a caregiver's role when membership.update is held", async () => {

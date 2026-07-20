@@ -122,6 +122,9 @@ export function TeamPage() {
     actions: 90
   });
 
+  const [firstName, setFirstName] = useState("");
+  const [lastName, setLastName] = useState("");
+  const [phone, setPhone] = useState("");
   const [email, setEmail] = useState("");
   const [role, setRole] = useState<InvitableRole>("staff");
   const [inviting, setInviting] = useState(false);
@@ -136,12 +139,26 @@ export function TeamPage() {
     setFormError(null);
     setFormSuccess(null);
     try {
-      await inviteMember({ email, organizationId: activeOrganizationId, role });
-      setFormSuccess(`Invited ${email}.`);
+      const result = await inviteMember({
+        email,
+        organizationId: activeOrganizationId,
+        role,
+        firstName,
+        lastName,
+        phone: phone || undefined
+      });
+      setFormSuccess(
+        result.status === "active"
+          ? `Added ${firstName} ${lastName}.`
+          : `Invited ${email}.`
+      );
+      setFirstName("");
+      setLastName("");
+      setPhone("");
       setEmail("");
       refreshMembers();
     } catch (cause) {
-      setFormError(cause instanceof Error ? cause.message : "Invite failed. Try again.");
+      setFormError(cause instanceof Error ? cause.message : "Could not add caregiver. Try again.");
     } finally {
       setInviting(false);
     }
@@ -209,8 +226,52 @@ export function TeamPage() {
 
       {canInvite ? (
         <Card>
-          <h3 className="font-semibold text-slate-950">Invite a caregiver</h3>
+          <h3 className="font-semibold text-slate-950">Add a caregiver</h3>
+          <p className="mt-1 text-sm text-slate-500">
+            Type in their info and they&apos;ll show up in the roster right away — no sign-in required.
+          </p>
           <form onSubmit={handleInvite} className="mt-4 flex flex-wrap items-end gap-3">
+            <div className="min-w-[160px]">
+              <label htmlFor="team-invite-first-name" className="block text-xs font-medium text-slate-600">
+                First name
+              </label>
+              <input
+                id="team-invite-first-name"
+                type="text"
+                required
+                value={firstName}
+                onChange={(event) => setFirstName(event.target.value)}
+                placeholder="Sam"
+                className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900"
+              />
+            </div>
+            <div className="min-w-[160px]">
+              <label htmlFor="team-invite-last-name" className="block text-xs font-medium text-slate-600">
+                Last name
+              </label>
+              <input
+                id="team-invite-last-name"
+                type="text"
+                required
+                value={lastName}
+                onChange={(event) => setLastName(event.target.value)}
+                placeholder="Caregiver"
+                className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900"
+              />
+            </div>
+            <div className="min-w-[160px]">
+              <label htmlFor="team-invite-phone" className="block text-xs font-medium text-slate-600">
+                Phone
+              </label>
+              <input
+                id="team-invite-phone"
+                type="tel"
+                value={phone}
+                onChange={(event) => setPhone(event.target.value)}
+                placeholder="(555) 555-0100"
+                className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900"
+              />
+            </div>
             <div className="min-w-[220px] flex-1">
               <label htmlFor="team-invite-email" className="block text-xs font-medium text-slate-600">
                 Email
@@ -247,7 +308,7 @@ export function TeamPage() {
               disabled={inviting}
               className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
             >
-              {inviting ? "Sending…" : "Send invite"}
+              {inviting ? "Adding…" : "Add caregiver"}
             </button>
           </form>
           {formError ? <p className="mt-3 text-sm text-red-700">{formError}</p> : null}

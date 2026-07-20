@@ -7,6 +7,15 @@ export interface InviteMemberInput {
   email: string;
   organizationId: string;
   role: InvitableRole;
+  /**
+   * When firstName/lastName are given, the edge function creates the
+   * caregiver as a roster record right away (no email sent, membership
+   * status "active") instead of emailing a sign-in invite. See
+   * supabase/functions/invite-member/index.ts for the branch logic.
+   */
+  firstName?: string;
+  lastName?: string;
+  phone?: string;
 }
 
 export interface InviteMemberResult {
@@ -14,14 +23,13 @@ export interface InviteMemberResult {
   email: string;
   organizationId: string;
   role: InvitableRole;
-  status: "invited";
+  status: "invited" | "active";
 }
 
 /**
- * Invites a user into an organization by email. Backed by the
- * `invite-member` edge function, which is the only place the
- * Supabase service-role key is used — see
- * supabase/functions/invite-member/index.ts.
+ * Adds someone to an organization. Backed by the `invite-member` edge
+ * function, which is the only place the Supabase service-role key is
+ * used — see supabase/functions/invite-member/index.ts.
  *
  * Requires the caller to hold `membership.invite` for the target
  * organization; the edge function re-checks this server-side, so this

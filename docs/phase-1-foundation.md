@@ -947,3 +947,36 @@ Shipped:
 111 web tests pass (7 new: 4 for Team's invite/edit/revoke, 1 for the
 `?clientId=` preselection, 2 for the Schedule-tab link). Full pipeline
 (typecheck, lint, build, test) verified clean.
+
+## Increment 27: Add a caregiver without requiring login
+
+The Team page's "Invite a caregiver" form only collected an email and
+sent a sign-in link - the caregiver had to accept a GitHub OAuth invite
+before they appeared in the roster with a real name, which didn't match
+how the Clients page works (type in the info, saved immediately).
+
+- `supabase/functions/invite-member/index.ts`: now branches on whether
+  `firstName`/`lastName` are in the request body.
+  - Given (Team page): creates the auth user directly via
+    `auth.admin.createUser` with `email_confirm: true` - no email is
+    sent. Name/phone are written into `user_profiles` via the metadata
+    the existing `handle_new_user` trigger already reads, and the
+    membership is inserted with `status: "active"` right away, so the
+    caregiver is schedulable immediately.
+  - Not given (Access page, for office/admin roles who actually need to
+    log in and use the app): unchanged - still
+    `auth.admin.inviteUserByEmail`, still `status: "invited"` until
+    accepted. This keeps Access's existing invite flow untouched.
+  - A duplicate email now returns a clear 409 ("That email is already
+    on your team.") instead of a raw Supabase error.
+- `apps/web/src/lib/invitations.ts`: `inviteMember` takes optional
+  `firstName`/`lastName`/`phone`; result `status` is now
+  `"invited" | "active"`.
+- `apps/web/src/pages/team-page.tsx`: form renamed "Add a caregiver",
+  now collects First name / Last name / Phone / Email / Role, button
+  reads "Add caregiver", success message is "Added {name}." for the
+  no-login path.
+- Deployed `invite-member` (version 2) to the live project.
+
+111 web tests pass (1 rewritten for the new form fields). Full pipeline
+verified clean.
