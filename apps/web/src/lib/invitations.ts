@@ -27,6 +27,32 @@ export interface InviteMemberResult {
 }
 
 /**
+ * supabase-js's `functions.invoke` throws a generic FunctionsHttpError
+ * ("Edge Function returned a non-2xx status code") whenever the edge
+ * function responds with a non-2xx status - it does NOT read the JSON
+ * body of the response into the error message. Our edge function always
+ * responds with `{ error: "<specific reason>" }` on failure (see
+ * supabase/functions/invite-member/index.ts), so this pulls that real
+ * message back out of `error.context`, the raw Response object the
+ * client library hands back. Without this, every failure - wrong
+ * permission, duplicate email, bad input - looks identical to the user.
+ */
+async function extractErrorMessage(error: unknown): Promise<string> {
+  const context = (error as { context?: unknown } | null)?.context;
+  if (context instanceof Response) {
+    try {
+      const body = (await context.clone().json()) as { error?: unknown };
+      if (typeof body.error === "string" && body.error.length > 0) {
+        return body.error;
+      }
+    } catch {
+      // Response body wasn't JSON - fall through to the generic message.
+    }
+  }
+  return error instanceof Error ? error.message : "Could not add caregiver. Try again.";
+}
+
+/**
  * Adds someone to an organization. Backed by the `invite-member` edge
  * function, which is the only place the Supabase service-role key is
  * used — see supabase/functions/invite-member/index.ts.
@@ -41,7 +67,7 @@ export async function inviteMember(input: InviteMemberInput): Promise<InviteMemb
   });
 
   if (error) {
-    throw error;
+    throw new Error(await extractErrorMessage(error));
   }
   if (!data) {
     throw new Error("Invite failed: no response from server.");

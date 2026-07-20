@@ -1021,3 +1021,27 @@ aggregation of what's already on file.
 114 web tests pass (3 new for `OverviewPage`, which had no test file
 before this). Full pipeline (typecheck, lint, build, test) verified
 clean.
+
+## Increment 29: Surface the real edge function error message
+
+User kept seeing "Edge Function returned a non-2xx status code" when
+adding a caregiver, even after Increment 27 made the edge function
+return specific messages ("That email is already on your team.", etc).
+Root cause: supabase-js's `functions.invoke` throws a generic
+`FunctionsHttpError` whose `.message` is always that same generic
+string - it never reads the JSON body of the response. The actual
+`{ error: "..." }` body only exists on `error.context` (the raw
+`Response` object), which nothing in this codebase was reading. Every
+edge function failure - permission denied, duplicate email, bad input -
+looked identical to the user, all the way back to Increment 11.
+
+- `apps/web/src/lib/invitations.ts`: `inviteMember` now awaits
+  `error.context.json()` and throws the real `error` field from the
+  body when present, falling back to `error.message` (and then a
+  generic string) if the context isn't there or isn't JSON.
+- `apps/web/src/lib/invitations.test.ts`: new test constructs a
+  `FunctionsHttpError`-shaped object with a real `Response` context and
+  confirms the specific message makes it through instead of the generic
+  one.
+
+115 web tests pass. Full pipeline verified clean.

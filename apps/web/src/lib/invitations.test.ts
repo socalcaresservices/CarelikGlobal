@@ -47,6 +47,29 @@ describe("inviteMember", () => {
     ).rejects.toThrow(error.message);
   });
 
+  it("reads the real reason out of the response body instead of the generic FunctionsHttpError message", async () => {
+    // supabase-js's FunctionsHttpError.message is always the generic
+    // "Edge Function returned a non-2xx status code" - the actual reason
+    // our edge function sent back only lives in error.context (the raw
+    // Response). This is what previously made every failure look the
+    // same in the UI.
+    const context = new Response(JSON.stringify({ error: "That email is already on your team." }), {
+      status: 409
+    });
+    const error = Object.assign(new Error("Edge Function returned a non-2xx status code"), { context });
+    mockedInvoke.mockResolvedValue({ data: null, error } as never);
+
+    await expect(
+      inviteMember({
+        email: "person@example.com",
+        organizationId: "org-1",
+        role: "staff",
+        firstName: "Sam",
+        lastName: "Caregiver"
+      })
+    ).rejects.toThrow("That email is already on your team.");
+  });
+
   it("throws when there is no data and no error", async () => {
     mockedInvoke.mockResolvedValue({ data: null, error: null } as never);
 
