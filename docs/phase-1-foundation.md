@@ -980,3 +980,44 @@ how the Clients page works (type in the info, saved immediately).
 
 111 web tests pass (1 rewritten for the new form fields). Full pipeline
 verified clean.
+
+## Increment 28: Agency dashboard (fill rate, compliance, capacity)
+
+carelik.com's marketing page advertises an agency-health dashboard
+(fill rate, compliance score, available capacity hours). Compared what
+it shows against what's built - matching, scheduling, credentials,
+authorizations, RBAC, and audit logging already exist; applicant
+tracking, a family/client portal, coverage-gap alerts, visit logging,
+and MFA don't. User had no preference on which to build next, so
+started with the dashboard - it needed no new data entry, only
+aggregation of what's already on file.
+
+- `supabase/migrations/20260719300000_agency_dashboard.sql`: new
+  `get_agency_dashboard(target_organization_id)` RPC, gated by
+  `membership.read` like the other roster-adjacent RPCs. Same "no
+  fabricated numbers" rule as the rest of the schema - each metric
+  returns null when there's nothing on file to measure it against,
+  rather than a misleading 0% or 100%:
+  - `fill_rate_pct`: this week's scheduled hours against this week's
+    authorized hours (each `client_authorizations` row's
+    `authorized_hours` is spread evenly across its period and
+    converted to a weekly equivalent - documented simplification, not
+    real daily granularity). Null with no live authorization on file.
+  - `compliance_score_pct`: share of caregivers with at least one
+    credential on file who have none expired. Caregivers with zero
+    credential rows are excluded from both sides of the ratio. Null
+    with no credentials on file anywhere in the org.
+  - `available_capacity_hours`: sum of (weekly target − scheduled
+    hours this week) across caregivers with a weekly target set,
+    floored at 0 per caregiver. Null with no targets set.
+- `apps/web/src/pages/overview-page.tsx`: new "Agency health" section
+  below "This week", three cards matching the above, each showing "—"
+  with a short reason (e.g. "no authorizations on file") instead of a
+  fabricated number when the underlying data doesn't exist yet.
+- Applied the migration to the live project; `get_advisors` shows only
+  the same pre-existing SECURITY DEFINER info/warning pattern every
+  other RPC in this schema already has - no new findings.
+
+114 web tests pass (3 new for `OverviewPage`, which had no test file
+before this). Full pipeline (typecheck, lint, build, test) verified
+clean.

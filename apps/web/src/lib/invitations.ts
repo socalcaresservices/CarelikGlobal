@@ -13,9 +13,9 @@ export interface InviteMemberInput {
    * status "active") instead of emailing a sign-in invite. See
    * supabase/functions/invite-member/index.ts for the branch logic.
    */
-  firstName?: string;
-  lastName?: string;
-  phone?: string;
+  firstName?: string | undefined;
+  lastName?: string | undefined;
+  phone?: string | undefined;
 }
 
 export interface InviteMemberResult {
