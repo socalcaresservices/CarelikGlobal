@@ -11,16 +11,37 @@ vi.mock("@carelik/auth", () => ({ useAuth: vi.fn() }));
 vi.mock("@/providers/organization-provider", () => ({ useOrganization: vi.fn() }));
 vi.mock("@/lib/supabase", () => ({
   supabase: {
-    rpc: vi.fn()
+    rpc: vi.fn(),
+    from: vi.fn()
   }
 }));
 
 const mockedUseAuth = vi.mocked(useAuth);
 const mockedUseOrganization = vi.mocked(useOrganization);
 const mockedRpc = vi.mocked(supabase.rpc);
+const mockedFrom = vi.mocked(supabase.from);
 
 const ORG_ID = "11111111-1111-4111-8111-111111111111";
 const CAREGIVER_ID = "44444444-4444-4444-8444-444444444444";
+
+// caregiver_availability reads via .select().eq().eq(), writes via
+// .delete().eq().eq() and .insert(). Everything else in this test file
+// only touches supabase.rpc, so this is the one table that needs a
+// .from() mock at all.
+function mockAvailabilityFrom(rows: unknown[] = []) {
+  const selectEq2 = vi.fn().mockResolvedValue({ data: rows, error: null });
+  const selectEq1 = vi.fn(() => ({ eq: selectEq2 }));
+  const selectMock = vi.fn(() => ({ eq: selectEq1 }));
+
+  const deleteEq2 = vi.fn().mockResolvedValue({ error: null });
+  const deleteEq1 = vi.fn(() => ({ eq: deleteEq2 }));
+  const deleteMock = vi.fn(() => ({ eq: deleteEq1 }));
+
+  const insertMock = vi.fn().mockResolvedValue({ error: null });
+
+  mockedFrom.mockReturnValue({ select: selectMock, delete: deleteMock, insert: insertMock } as never);
+  return { insertMock, deleteMock };
+}
 
 function baseOrganization() {
   return {
@@ -63,6 +84,7 @@ describe("CaregiverDetailPage", () => {
   it("shows a not-available message without membership.read", () => {
     mockedUseAuth.mockReturnValue({ user: { id: "other-user" } } as never);
     mockedUseOrganization.mockReturnValue({ ...baseOrganization(), hasPermission: vi.fn(() => false) });
+    mockAvailabilityFrom();
 
     renderPage();
     expect(screen.getByText("Not available")).toBeInTheDocument();
@@ -86,6 +108,7 @@ describe("CaregiverDetailPage", () => {
       }
       return Promise.resolve({ data: [], error: null }) as never;
     });
+    mockAvailabilityFrom();
 
     renderPage();
 
@@ -111,6 +134,7 @@ describe("CaregiverDetailPage", () => {
       }
       return Promise.resolve({ data: [], error: null }) as never;
     });
+    mockAvailabilityFrom();
 
     renderPage();
     await waitFor(() => expect(screen.getByText("Sam Caregiver")).toBeInTheDocument());
@@ -135,6 +159,7 @@ describe("CaregiverDetailPage", () => {
       }
       return Promise.resolve({ data: [], error: null }) as never;
     });
+    mockAvailabilityFrom();
 
     renderPage();
     await waitFor(() => expect(screen.getByLabelText("City")).toBeInTheDocument());
@@ -154,5 +179,91 @@ describe("CaregiverDetailPage", () => {
         })
       )
     );
+  });
+
+  it("shows saved weekly availability", async () => {
+    mockedUseAuth.mockReturnValue({ user: { id: "other-user" } } as never);
+    mockedUseOrganization.mockReturnValue(baseOrganization());
+    mockedRpc.mockImplementation((fn: string) => {
+      if (fn === "list_organization_members") {
+        return Promise.resolve({
+          data: [{ user_id: CAREGIVER_ID, display_name: "Sam Caregiver", role: "caregiver", status: "active" }],
+          error: null
+        }) as never;
+      }
+      return Promise.resolve({ data: [], error: null }) as never;
+    });
+    mockAvailabilityFrom([{ day_of_week: "monday", start_time: "08:00:00", end_time: "12:00:00" }]);
+
+    renderPage();
+    await waitFor(() => expect(screen.getByText("Sam Caregiver")).toBeInTheDocument());
+
+    expect(screen.getByLabelText("Monday start time")).toHaveValue("08:00");
+    expect(screen.getByLabelText("Monday end time")).toHaveValue("12:00");
+  });
+
+  it("saves updated weekly availability", async () => {
+    mockedUseAuth.mockReturnValue({ user: { id: CAREGIVER_ID } } as never);
+    mockedUseOrganization.mockReturnValue(baseOrganization());
+    mockedRpc.mockImplementation((fn: string) => {
+      if (fn === "list_organization_members") {
+        return Promise.resolve({
+          data: [{ user_id: CAREGIVER_ID, display_name: "Sam Caregiver", role: "caregiver", status: "active" }],
+          error: null
+        }) as never;
+      }
+      return Promise.resolve({ data: [], error: null }) as never;
+    });
+    const { insertMock, deleteMock } = mockAvailabilityFrom([]);
+
+    renderPage();
+    await waitFor(() => expect(screen.getByLabelText("Tuesday start time")).toBeInTheDocument());
+
+    const tuesdayCheckbox = screen.getByLabelText("Tuesday") as HTMLInputElement;
+    fireEvent.click(tuesdayCheckbox);
+    fireEvent.change(screen.getByLabelText("Tuesday start time"), { target: { value: "08:00" } });
+    fireEvent.change(screen.getByLabelText("Tuesday end time"), { target: { value: "14:00" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save availability" }));
+
+    await waitFor(() => expect(deleteMock).toHaveBeenCalled());
+    await waitFor(() =>
+      expect(insertMock).toHaveBeenCalledWith([
+        {
+          organization_id: ORG_ID,
+          caregiver_user_id: CAREGIVER_ID,
+          day_of_week: "tuesday",
+          start_time: "08:00",
+          end_time: "14:00"
+        }
+      ])
+    );
+  });
+
+  it("rejects an end time that isn't after the start time", async () => {
+    mockedUseAuth.mockReturnValue({ user: { id: CAREGIVER_ID } } as never);
+    mockedUseOrganization.mockReturnValue(baseOrganization());
+    mockedRpc.mockImplementation((fn: string) => {
+      if (fn === "list_organization_members") {
+        return Promise.resolve({
+          data: [{ user_id: CAREGIVER_ID, display_name: "Sam Caregiver", role: "caregiver", status: "active" }],
+          error: null
+        }) as never;
+      }
+      return Promise.resolve({ data: [], error: null }) as never;
+    });
+    const { insertMock } = mockAvailabilityFrom([]);
+
+    renderPage();
+    await waitFor(() => expect(screen.getByLabelText("Monday start time")).toBeInTheDocument());
+
+    fireEvent.click(screen.getByLabelText("Monday"));
+    fireEvent.change(screen.getByLabelText("Monday start time"), { target: { value: "14:00" } });
+    fireEvent.change(screen.getByLabelText("Monday end time"), { target: { value: "08:00" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save availability" }));
+
+    await waitFor(() =>
+      expect(screen.getByText("Monday's end time must be after its start time.")).toBeInTheDocument()
+    );
+    expect(insertMock).not.toHaveBeenCalled();
   });
 });

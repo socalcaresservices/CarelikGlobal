@@ -35,6 +35,7 @@ export const systemRoleSchema = z.enum([
   "manager",
   "coordinator",
   "staff",
+  "caregiver",
   "read_only"
 ]);
 

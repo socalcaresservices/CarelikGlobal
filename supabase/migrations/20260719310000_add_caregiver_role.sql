@@ -1,0 +1,14 @@
+-- Adds a "caregiver" role, distinct from "staff", so the Team page's
+-- role dropdown can offer it directly (it appears right after "staff"
+-- since that's the order this enum lists roles in and packages/shared's
+-- systemRoleSchema mirrors it). This does not change who can be
+-- scheduled - list_caregiver_matches() already ranks every active
+-- member regardless of role - it's purely so caregivers can be labeled
+-- as what they are instead of overloading "staff" for both office
+-- helpers and field caregivers.
+--
+-- No begin/commit wrapper: PostgreSQL will not let a newly added enum
+-- value be referenced (e.g. in an insert) within the same transaction
+-- that added it, so this has to be its own committed migration before
+-- 20260719320000_caregiver_role_permissions.sql can use the value.
+alter type public.system_role add value if not exists 'caregiver' after 'staff';

@@ -101,7 +101,7 @@ describe("TeamPage", () => {
           membership_id: "m1",
           user_id: CAREGIVER_ID,
           display_name: "Sam Caregiver",
-          role: "staff",
+          role: "caregiver",
           status: "active"
         }
       ],
@@ -111,7 +111,7 @@ describe("TeamPage", () => {
     renderPage();
 
     await waitFor(() => expect(screen.getByText("Sam Caregiver")).toBeInTheDocument());
-    expect(screen.getByText("staff")).toBeInTheDocument();
+    expect(screen.getByText("caregiver")).toBeInTheDocument();
     expect(screen.getByText("15h / 20h")).toBeInTheDocument();
     expect(screen.getByText("active")).toBeInTheDocument();
     expect(screen.queryByText("Add a caregiver")).not.toBeInTheDocument();
@@ -129,7 +129,7 @@ describe("TeamPage", () => {
           membership_id: "m1",
           user_id: CAREGIVER_ID,
           display_name: "Sam Caregiver",
-          role: "staff",
+          role: "caregiver",
           status: "active"
         }
       ],
@@ -179,7 +179,7 @@ describe("TeamPage", () => {
       userId: "user-9",
       email: "new@example.com",
       organizationId: ORG_ID,
-      role: "staff",
+      role: "caregiver",
       status: "active"
     });
 
@@ -195,7 +195,7 @@ describe("TeamPage", () => {
       expect(mockedInviteMember).toHaveBeenCalledWith({
         email: "new@example.com",
         organizationId: ORG_ID,
-        role: "staff",
+        role: "caregiver",
         firstName: "Sam",
         lastName: "Newhire",
         phone: undefined

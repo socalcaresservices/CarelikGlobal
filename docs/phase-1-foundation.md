@@ -1045,3 +1045,54 @@ looked identical to the user, all the way back to Increment 11.
   one.
 
 115 web tests pass. Full pipeline verified clean.
+
+## Increment 30: Caregiver role + weekly availability
+
+User asked to add "caregiver" as a role option after "staff", and to
+put weekly availability (which days, what hours) on the caregiver
+profile.
+
+- `supabase/migrations/20260719310000_add_caregiver_role.sql`: adds
+  `'caregiver'` to the `system_role` enum, positioned after `'staff'`.
+  No `begin`/`commit` wrapper - Postgres won't let a newly added enum
+  value be referenced within the transaction that added it, so this has
+  to be its own committed migration before the next one can use it.
+- `supabase/migrations/20260719320000_caregiver_role_permissions.sql`:
+  seeds `role_permissions` for `'caregiver'` with the same permission
+  set `'staff'` already has (`organization.read`, `files.read`,
+  `files.create`, `incidents.create`, `clients.read`) - that's what
+  people invited as "staff" from the Team page have actually been used
+  for, so this keeps behavior identical with the more accurate label.
+  Doesn't change who can be scheduled - `list_caregiver_matches()`
+  already ranks every active member regardless of role.
+- `packages/shared/src/permissions.ts`: added `'caregiver'` to
+  `systemRoleSchema`, same position, so every role dropdown (Team,
+  Access) picks it up automatically.
+- `apps/web/src/pages/team-page.tsx`: "Add a caregiver" now defaults
+  the role dropdown to Caregiver instead of Staff. Access page's invite
+  form is untouched (still defaults to Staff, for office/admin
+  invites).
+- `supabase/migrations/20260719330000_caregiver_availability.sql`: new
+  `caregiver_availability` table (`day_of_week` weekday enum,
+  `start_time`, `end_time`) - one row per available window, so a
+  caregiver with two windows the same day just gets two rows. RLS lets
+  a caregiver manage their own rows directly, or an org member with
+  `membership.update` manage anyone's - same self-or-manager shape as
+  `set_caregiver_profile()`, but as real table policies instead of an
+  RPC since there's no `user_profiles`-style single-row restriction to
+  work around here.
+- `apps/web/src/pages/caregiver-detail-page.tsx`: new "Weekly
+  availability" section on the Overview tab, below location/languages/
+  skills - a checkbox + start/end time per weekday, save re-writes the
+  caregiver's full set of rows (delete then insert). Read-only list for
+  viewers who can't edit. Not wired into CareScore's availability score
+  yet (still the weekly-hours-target proxy) - a real next step if
+  wanted, but out of scope for what was asked here.
+- Applied all three migrations to the live project; `get_advisors`
+  shows no new findings - the availability table's RLS is properly
+  recognized.
+
+118 web tests pass (4 new: shows saved availability, saves updated
+availability, rejects an invalid time range, plus the existing Team
+test updated for the new default role). Full pipeline (typecheck,
+lint, build, test) verified clean.

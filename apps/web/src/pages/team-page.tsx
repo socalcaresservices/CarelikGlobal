@@ -126,7 +126,7 @@ export function TeamPage() {
   const [lastName, setLastName] = useState("");
   const [phone, setPhone] = useState("");
   const [email, setEmail] = useState("");
-  const [role, setRole] = useState<InvitableRole>("staff");
+  const [role, setRole] = useState<InvitableRole>("caregiver");
   const [inviting, setInviting] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
   const [formSuccess, setFormSuccess] = useState<string | null>(null);
