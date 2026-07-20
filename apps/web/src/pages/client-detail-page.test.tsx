@@ -161,4 +161,56 @@ describe("ClientDetailPage", () => {
 
     await waitFor(() => expect(screen.getByText("Prefers morning visits.")).toBeInTheDocument());
   });
+
+  it("links to the CareScore-ranked Schedule page from the Schedule tab when shifts.update is held", async () => {
+    mockedUseOrganization.mockReturnValue(baseOrganization());
+    mockedFrom.mockReturnValue({
+      select: mockClientRecord({
+        id: CLIENT_ID,
+        first_name: "Jordan",
+        last_name: "Rivera",
+        phone: null,
+        email: null,
+        address: null,
+        care_notes: null,
+        status: "active"
+      })
+    } as never);
+    mockedRpc.mockResolvedValue({ data: [], error: null } as never);
+
+    renderPage();
+    await waitFor(() => expect(screen.getByText("Jordan Rivera")).toBeInTheDocument());
+
+    fireEvent.click(screen.getByRole("button", { name: "Schedule" }));
+
+    const link = await screen.findByText("Assign a caregiver (ranked by CareScore)");
+    expect(link.closest("a")).toHaveAttribute("href", `/schedule?clientId=${CLIENT_ID}`);
+  });
+
+  it("hides the assign-a-caregiver link without shifts.update", async () => {
+    mockedUseOrganization.mockReturnValue({
+      ...baseOrganization(),
+      hasPermission: vi.fn((permission: string) => permission !== "shifts.update")
+    });
+    mockedFrom.mockReturnValue({
+      select: mockClientRecord({
+        id: CLIENT_ID,
+        first_name: "Jordan",
+        last_name: "Rivera",
+        phone: null,
+        email: null,
+        address: null,
+        care_notes: null,
+        status: "active"
+      })
+    } as never);
+    mockedRpc.mockResolvedValue({ data: [], error: null } as never);
+
+    renderPage();
+    await waitFor(() => expect(screen.getByText("Jordan Rivera")).toBeInTheDocument());
+
+    fireEvent.click(screen.getByRole("button", { name: "Schedule" }));
+
+    expect(screen.queryByText("Assign a caregiver (ranked by CareScore)")).not.toBeInTheDocument();
+  });
 });

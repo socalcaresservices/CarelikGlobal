@@ -1,8 +1,12 @@
-import { useQuery } from "@tanstack/react-query";
+import { useState, type FormEvent } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
 import { Card } from "@carelik/ui";
+import { systemRoleSchema } from "@carelik/shared";
+import { useAuth } from "@carelik/auth";
 import { useOrganization } from "@/providers/organization-provider";
 import { supabase } from "@/lib/supabase";
+import { inviteMember, type InvitableRole } from "@/lib/invitations";
 import { useTableControls } from "@/lib/use-table-controls";
 import { useColumnWidths } from "@/lib/use-column-widths";
 import { SortableHeader } from "@/components/sortable-header";
@@ -10,10 +14,12 @@ import { PlainHeader } from "@/components/resizable-th";
 import { getWeekEnd, getWeekStart } from "@/lib/week";
 
 // Member roster, same source as AccessPage (list_organization_members) -
-// but framed as "who's on the team" rather than "who can do what", so it
-// lives on its own page instead of being folded into Access, which is
-// about roles/invites/permissions. Name links to the same /team/:id
-// detail page Access already links to.
+// but framed as "who's on the team" rather than "who can do what". The
+// user asked for invite/edit-role/revoke to live here directly, same as
+// Clients has its own add/edit/remove - so this duplicates that part of
+// Access's mutation logic deliberately (Access stays the permissions-
+// focused view; Team is the caregiver-focused one). Name links to the
+// same /team/:id detail page Access already links to.
 interface MemberRow {
   membership_id: string;
   user_id: string;
@@ -34,6 +40,10 @@ interface CaregiverHoursRow {
   scheduled_hours: number;
 }
 
+const invitableRoles = systemRoleSchema.options.filter(
+  (role): role is InvitableRole => role !== "platform_owner"
+);
+
 const statusStyles: Record<MemberRow["status"], string> = {
   active: "bg-emerald-50 text-emerald-700",
   invited: "bg-amber-50 text-amber-700",
@@ -51,8 +61,12 @@ function formatHours(hours: number) {
 
 export function TeamPage() {
   const { activeOrganizationId, activeOrganization, hasPermission } = useOrganization();
+  const { user } = useAuth();
+  const queryClient = useQueryClient();
 
   const canRead = hasPermission("membership.read");
+  const canInvite = hasPermission("membership.invite");
+  const canManage = hasPermission("membership.update");
 
   const membersQuery = useQuery({
     queryKey: ["team-members", activeOrganizationId],
@@ -65,6 +79,10 @@ export function TeamPage() {
     },
     enabled: !!activeOrganizationId && canRead
   });
+
+  function refreshMembers() {
+    void queryClient.invalidateQueries({ queryKey: ["team-members", activeOrganizationId] });
+  }
 
   const weekStart = getWeekStart(new Date());
   const weekEnd = getWeekEnd(weekStart);
@@ -100,8 +118,71 @@ export function TeamPage() {
     name: 220,
     role: 150,
     hours: 150,
-    status: 130
+    status: 130,
+    actions: 90
   });
+
+  const [email, setEmail] = useState("");
+  const [role, setRole] = useState<InvitableRole>("staff");
+  const [inviting, setInviting] = useState(false);
+  const [formError, setFormError] = useState<string | null>(null);
+  const [formSuccess, setFormSuccess] = useState<string | null>(null);
+
+  async function handleInvite(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!activeOrganizationId) return;
+
+    setInviting(true);
+    setFormError(null);
+    setFormSuccess(null);
+    try {
+      await inviteMember({ email, organizationId: activeOrganizationId, role });
+      setFormSuccess(`Invited ${email}.`);
+      setEmail("");
+      refreshMembers();
+    } catch (cause) {
+      setFormError(cause instanceof Error ? cause.message : "Invite failed. Try again.");
+    } finally {
+      setInviting(false);
+    }
+  }
+
+  const [actionError, setActionError] = useState<string | null>(null);
+  const [pendingMembershipId, setPendingMembershipId] = useState<string | null>(null);
+
+  async function handleRoleChange(membershipId: string, nextRole: string) {
+    setActionError(null);
+    setPendingMembershipId(membershipId);
+    try {
+      const { error } = await supabase
+        .from("organization_memberships")
+        .update({ role: nextRole })
+        .eq("id", membershipId);
+      if (error) throw error;
+      refreshMembers();
+    } catch (cause) {
+      setActionError(cause instanceof Error ? cause.message : "Could not update role.");
+    } finally {
+      setPendingMembershipId(null);
+    }
+  }
+
+  async function handleRevoke(membershipId: string) {
+    setActionError(null);
+    setPendingMembershipId(membershipId);
+    try {
+      const { error } = await supabase
+        .from("organization_memberships")
+        .update({ status: "revoked" })
+        .eq("id", membershipId);
+      if (error) throw error;
+      refreshMembers();
+    } catch (cause) {
+      setActionError(cause instanceof Error ? cause.message : "Could not revoke access.");
+    } finally {
+      setPendingMembershipId(null);
+    }
+  }
 
   if (!canRead) {
     return (
@@ -126,6 +207,54 @@ export function TeamPage() {
         </h2>
       </div>
 
+      {canInvite ? (
+        <Card>
+          <h3 className="font-semibold text-slate-950">Invite a caregiver</h3>
+          <form onSubmit={handleInvite} className="mt-4 flex flex-wrap items-end gap-3">
+            <div className="min-w-[220px] flex-1">
+              <label htmlFor="team-invite-email" className="block text-xs font-medium text-slate-600">
+                Email
+              </label>
+              <input
+                id="team-invite-email"
+                type="email"
+                required
+                value={email}
+                onChange={(event) => setEmail(event.target.value)}
+                placeholder="name@example.com"
+                className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900"
+              />
+            </div>
+            <div>
+              <label htmlFor="team-invite-role" className="block text-xs font-medium text-slate-600">
+                Role
+              </label>
+              <select
+                id="team-invite-role"
+                value={role}
+                onChange={(event) => setRole(event.target.value as InvitableRole)}
+                className="mt-1 rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900"
+              >
+                {invitableRoles.map((option) => (
+                  <option key={option} value={option}>
+                    {formatRole(option)}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <button
+              type="submit"
+              disabled={inviting}
+              className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {inviting ? "Sending…" : "Send invite"}
+            </button>
+          </form>
+          {formError ? <p className="mt-3 text-sm text-red-700">{formError}</p> : null}
+          {formSuccess ? <p className="mt-3 text-sm text-emerald-700">{formSuccess}</p> : null}
+        </Card>
+      ) : null}
+
       <Card>
         <div className="flex flex-wrap items-center justify-between gap-3">
           <h3 className="font-semibold text-slate-950">All caregivers</h3>
@@ -138,6 +267,7 @@ export function TeamPage() {
             className="w-full max-w-xs rounded-lg border border-slate-200 px-3 py-1.5 text-sm text-slate-900"
           />
         </div>
+        {actionError ? <p className="mt-2 text-sm text-red-700">{actionError}</p> : null}
         {membersQuery.isLoading ? (
           <p className="mt-3 text-sm text-slate-500">Loading…</p>
         ) : membersQuery.isError ? (
@@ -176,19 +306,43 @@ export function TeamPage() {
                   width={columns.widths.status}
                   onResizeStart={columns.startResize("status")}
                 />
+                {canManage ? (
+                  <PlainHeader label="" width={columns.widths.actions} onResizeStart={columns.startResize("actions")} />
+                ) : null}
               </tr>
             </thead>
             <tbody>
               {table.rows.map((member) => {
                 const hours = hoursByUserId.get(member.user_id);
+                const isSelf = member.user_id === user?.id;
+                const isPending = pendingMembershipId === member.membership_id;
+                const canModifyRow = canManage && !isSelf && member.status !== "revoked";
                 return (
                   <tr key={member.membership_id} className="border-b border-slate-100 last:border-0">
                     <td className="py-2.5 text-slate-800">
                       <Link to={`/team/${member.user_id}`} className="hover:underline">
                         {member.display_name}
                       </Link>
+                      {isSelf ? <span className="ml-1 text-xs text-slate-400">(you)</span> : null}
                     </td>
-                    <td className="py-2.5 text-slate-600">{formatRole(member.role)}</td>
+                    <td className="py-2.5 text-slate-600">
+                      {canModifyRow ? (
+                        <select
+                          value={member.role}
+                          disabled={isPending}
+                          onChange={(event) => handleRoleChange(member.membership_id, event.target.value)}
+                          className="rounded-lg border border-slate-200 px-2 py-1 text-xs text-slate-900"
+                        >
+                          {invitableRoles.map((option) => (
+                            <option key={option} value={option}>
+                              {formatRole(option)}
+                            </option>
+                          ))}
+                        </select>
+                      ) : (
+                        formatRole(member.role)
+                      )}
+                    </td>
                     <td className="py-2.5 text-slate-600">
                       {hours
                         ? `${formatHours(hours.scheduled_hours)}h${
@@ -205,12 +359,26 @@ export function TeamPage() {
                         {member.status}
                       </span>
                     </td>
+                    {canManage ? (
+                      <td className="py-2.5 text-right">
+                        {canModifyRow ? (
+                          <button
+                            type="button"
+                            disabled={isPending}
+                            onClick={() => handleRevoke(member.membership_id)}
+                            className="text-xs font-medium text-red-700 underline-offset-2 hover:underline disabled:cursor-not-allowed disabled:opacity-60"
+                          >
+                            Revoke
+                          </button>
+                        ) : null}
+                      </td>
+                    ) : null}
                   </tr>
                 );
               })}
               {table.rows.length === 0 ? (
                 <tr>
-                  <td colSpan={4} className="py-4 text-center text-slate-400">
+                  <td colSpan={canManage ? 5 : 4} className="py-4 text-center text-slate-400">
                     {table.search ? "No caregivers match your search." : "No team members yet."}
                   </td>
                 </tr>

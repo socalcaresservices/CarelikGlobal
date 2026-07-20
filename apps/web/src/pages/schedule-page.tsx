@@ -1,4 +1,5 @@
 import { useState, type FormEvent } from "react";
+import { useSearchParams } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Card } from "@carelik/ui";
 import { shiftStatusSchema } from "@carelik/shared";
@@ -113,7 +114,12 @@ export function SchedulePage() {
     void queryClient.invalidateQueries({ queryKey: ["shifts", activeOrganizationId] });
   }
 
-  const [clientId, setClientId] = useState("");
+  // A client can arrive with ?clientId= already set (see the "Assign a
+  // caregiver" link on the Client detail page's Schedule tab), so the
+  // CareScore-ranked caregiver list is ready immediately instead of
+  // making the person re-pick the client they just came from.
+  const [searchParams] = useSearchParams();
+  const [clientId, setClientId] = useState(() => searchParams.get("clientId") ?? "");
 
   const matchesQuery = useQuery({
     queryKey: ["caregiver-matches", activeOrganizationId, clientId],

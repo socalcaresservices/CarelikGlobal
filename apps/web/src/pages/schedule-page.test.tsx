@@ -1,4 +1,5 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { MemoryRouter } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { useOrganization } from "@/providers/organization-provider";
@@ -77,12 +78,14 @@ function mockReadableClients(rows: unknown[]) {
   return selectMock;
 }
 
-function renderPage() {
+function renderPage(initialEntries: string[] = ["/schedule"]) {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
-    <QueryClientProvider client={queryClient}>
-      <SchedulePage />
-    </QueryClientProvider>
+    <MemoryRouter initialEntries={initialEntries}>
+      <QueryClientProvider client={queryClient}>
+        <SchedulePage />
+      </QueryClientProvider>
+    </MemoryRouter>
   );
 }
 
@@ -165,6 +168,28 @@ describe("SchedulePage", () => {
     );
     expect(screen.getByRole("option", { name: "Alex Aide — CareScore 40" })).toBeInTheDocument();
     expect(screen.getByText("Ranked by CareScore, best match first.")).toBeInTheDocument();
+    expect(mockedRpc).toHaveBeenCalledWith("list_caregiver_matches", {
+      target_organization_id: ORG_ID,
+      target_client_id: CLIENT_ID
+    });
+  });
+
+  it("preselects the client and ranks caregivers when arriving with ?clientId=", async () => {
+    mockedUseOrganization.mockReturnValue({ ...baseOrganization(), hasPermission: vi.fn(() => true) });
+    mockRpc({
+      shifts: [],
+      members: [{ user_id: CAREGIVER_ID, display_name: "Sam Caregiver", status: "active" }],
+      matches: [{ caregiver_user_id: CAREGIVER_ID, caregiver_name: "Sam Caregiver", match_score: 77 }]
+    });
+    const selectMock = mockReadableClients([{ id: CLIENT_ID, first_name: "Jordan", last_name: "Rivera" }]);
+    mockedFrom.mockReturnValue({ select: selectMock } as never);
+
+    renderPage([`/schedule?clientId=${CLIENT_ID}`]);
+
+    await waitFor(() => expect(screen.getByLabelText("Client")).toHaveValue(CLIENT_ID));
+    await waitFor(() =>
+      expect(screen.getByRole("option", { name: "Sam Caregiver — CareScore 77" })).toBeInTheDocument()
+    );
     expect(mockedRpc).toHaveBeenCalledWith("list_caregiver_matches", {
       target_organization_id: ORG_ID,
       target_client_id: CLIENT_ID

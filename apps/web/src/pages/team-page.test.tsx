@@ -1,20 +1,28 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { useAuth } from "@carelik/auth";
 import { useOrganization } from "@/providers/organization-provider";
 import { supabase } from "@/lib/supabase";
+import { inviteMember } from "@/lib/invitations";
 import { TeamPage } from "./team-page";
 
+vi.mock("@carelik/auth", () => ({ useAuth: vi.fn() }));
 vi.mock("@/providers/organization-provider", () => ({ useOrganization: vi.fn() }));
+vi.mock("@/lib/invitations", () => ({ inviteMember: vi.fn() }));
 vi.mock("@/lib/supabase", () => ({
   supabase: {
-    rpc: vi.fn()
+    rpc: vi.fn(),
+    from: vi.fn()
   }
 }));
 
+const mockedUseAuth = vi.mocked(useAuth);
 const mockedUseOrganization = vi.mocked(useOrganization);
+const mockedInviteMember = vi.mocked(inviteMember);
 const mockedRpc = vi.mocked(supabase.rpc);
+const mockedFrom = vi.mocked(supabase.from);
 
 const ORG_ID = "11111111-1111-4111-8111-111111111111";
 const CAREGIVER_ID = "44444444-4444-4444-8444-444444444444";
@@ -36,6 +44,16 @@ function baseOrganization() {
     isPlatformOwner: false,
     hasPermission: vi.fn(),
     loading: false
+  };
+}
+
+function authUser(id: string) {
+  return {
+    user: { id } as never,
+    session: {} as never,
+    loading: false,
+    signInWithGithub: vi.fn(),
+    signOut: vi.fn()
   };
 }
 
@@ -64,14 +82,19 @@ describe("TeamPage", () => {
   });
 
   it("shows a not-available message without membership.read", () => {
+    mockedUseAuth.mockReturnValue(authUser("user-1"));
     mockedUseOrganization.mockReturnValue({ ...baseOrganization(), hasPermission: vi.fn(() => false) });
 
     renderPage();
     expect(screen.getByText("Not available")).toBeInTheDocument();
   });
 
-  it("lists caregivers with their role, hours, and status", async () => {
-    mockedUseOrganization.mockReturnValue({ ...baseOrganization(), hasPermission: vi.fn(() => true) });
+  it("lists caregivers with their role, hours, and status, and hides the invite form without membership.invite", async () => {
+    mockedUseAuth.mockReturnValue(authUser("user-1"));
+    mockedUseOrganization.mockReturnValue({
+      ...baseOrganization(),
+      hasPermission: vi.fn((permission: string) => permission === "membership.read")
+    });
     mockRpc({
       members: [
         {
@@ -91,12 +114,14 @@ describe("TeamPage", () => {
     expect(screen.getByText("staff")).toBeInTheDocument();
     expect(screen.getByText("15h / 20h")).toBeInTheDocument();
     expect(screen.getByText("active")).toBeInTheDocument();
+    expect(screen.queryByText("Invite a caregiver")).not.toBeInTheDocument();
 
     const link = screen.getByText("Sam Caregiver").closest("a");
     expect(link).toHaveAttribute("href", `/team/${CAREGIVER_ID}`);
   });
 
   it("shows a dash for hours when there's no matching hours row", async () => {
+    mockedUseAuth.mockReturnValue(authUser("user-1"));
     mockedUseOrganization.mockReturnValue({ ...baseOrganization(), hasPermission: vi.fn(() => true) });
     mockRpc({
       members: [
@@ -118,6 +143,7 @@ describe("TeamPage", () => {
   });
 
   it("filters by search", async () => {
+    mockedUseAuth.mockReturnValue(authUser("user-1"));
     mockedUseOrganization.mockReturnValue({ ...baseOrganization(), hasPermission: vi.fn(() => true) });
     mockRpc({
       members: [
@@ -137,10 +163,101 @@ describe("TeamPage", () => {
   });
 
   it("shows an empty state when there are no caregivers", async () => {
+    mockedUseAuth.mockReturnValue(authUser("user-1"));
     mockedUseOrganization.mockReturnValue({ ...baseOrganization(), hasPermission: vi.fn(() => true) });
     mockRpc({ members: [], hours: [] });
 
     renderPage();
     await waitFor(() => expect(screen.getByText("No team members yet.")).toBeInTheDocument());
+  });
+
+  it("submits an invite and shows a success message", async () => {
+    mockedUseAuth.mockReturnValue(authUser("user-1"));
+    mockedUseOrganization.mockReturnValue({ ...baseOrganization(), hasPermission: vi.fn(() => true) });
+    mockRpc({ members: [], hours: [] });
+    mockedInviteMember.mockResolvedValue({
+      userId: "user-9",
+      email: "new@example.com",
+      organizationId: ORG_ID,
+      role: "staff",
+      status: "invited"
+    });
+
+    renderPage();
+    await waitFor(() => expect(screen.getByText("Invite a caregiver")).toBeInTheDocument());
+
+    fireEvent.change(screen.getByLabelText("Email"), { target: { value: "new@example.com" } });
+    fireEvent.click(screen.getByText("Send invite"));
+
+    await waitFor(() =>
+      expect(mockedInviteMember).toHaveBeenCalledWith({
+        email: "new@example.com",
+        organizationId: ORG_ID,
+        role: "staff"
+      })
+    );
+    await waitFor(() => expect(screen.getByText("Invited new@example.com.")).toBeInTheDocument());
+  });
+
+  it("changes a caregiver's role when membership.update is held", async () => {
+    mockedUseAuth.mockReturnValue(authUser("user-1"));
+    mockedUseOrganization.mockReturnValue({ ...baseOrganization(), hasPermission: vi.fn(() => true) });
+    mockRpc({
+      members: [
+        { membership_id: "m1", user_id: CAREGIVER_ID, display_name: "Sam Caregiver", role: "staff", status: "active" }
+      ],
+      hours: []
+    });
+    const eqMock = vi.fn().mockResolvedValue({ error: null });
+    const updateMock = vi.fn(() => ({ eq: eqMock }));
+    mockedFrom.mockReturnValue({ update: updateMock } as never);
+
+    renderPage();
+    await waitFor(() => expect(screen.getByText("Sam Caregiver")).toBeInTheDocument());
+    const row = screen.getByText("Sam Caregiver").closest("tr")!;
+
+    fireEvent.change(within(row).getByDisplayValue("staff"), { target: { value: "coordinator" } });
+
+    await waitFor(() => expect(updateMock).toHaveBeenCalledWith({ role: "coordinator" }));
+    expect(eqMock).toHaveBeenCalledWith("id", "m1");
+  });
+
+  it("revokes a caregiver when membership.update is held", async () => {
+    mockedUseAuth.mockReturnValue(authUser("user-1"));
+    mockedUseOrganization.mockReturnValue({ ...baseOrganization(), hasPermission: vi.fn(() => true) });
+    mockRpc({
+      members: [
+        { membership_id: "m1", user_id: CAREGIVER_ID, display_name: "Sam Caregiver", role: "staff", status: "active" }
+      ],
+      hours: []
+    });
+    const eqMock = vi.fn().mockResolvedValue({ error: null });
+    const updateMock = vi.fn(() => ({ eq: eqMock }));
+    mockedFrom.mockReturnValue({ update: updateMock } as never);
+
+    renderPage();
+    await waitFor(() => expect(screen.getByText("Revoke")).toBeInTheDocument());
+
+    fireEvent.click(screen.getByText("Revoke"));
+
+    await waitFor(() => expect(updateMock).toHaveBeenCalledWith({ status: "revoked" }));
+    expect(eqMock).toHaveBeenCalledWith("id", "m1");
+  });
+
+  it("does not show manage controls for your own row", async () => {
+    mockedUseAuth.mockReturnValue(authUser(CAREGIVER_ID));
+    mockedUseOrganization.mockReturnValue({ ...baseOrganization(), hasPermission: vi.fn(() => true) });
+    mockRpc({
+      members: [
+        { membership_id: "m1", user_id: CAREGIVER_ID, display_name: "Me", role: "staff", status: "active" }
+      ],
+      hours: []
+    });
+
+    renderPage();
+    await waitFor(() => expect(screen.getByText("Me")).toBeInTheDocument());
+    const row = screen.getByText("Me").closest("tr")!;
+    expect(within(row).queryByText("Revoke")).not.toBeInTheDocument();
+    expect(within(row).queryByRole("combobox")).not.toBeInTheDocument();
   });
 });

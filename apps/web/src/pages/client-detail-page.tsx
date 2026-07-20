@@ -97,6 +97,7 @@ export function ClientDetailPage() {
   const canSeeAuthorizations = hasPermission("authorizations.read");
   const canReadAudit = hasPermission("audit.read");
   const canManage = hasPermission("clients.update");
+  const canSchedule = hasPermission("shifts.update");
 
   const clientQuery = useQuery({
     queryKey: ["client-detail", id],
@@ -440,7 +441,17 @@ export function ClientDetailPage() {
 
       {tab === "schedule" ? (
         <Card>
-          <h3 className="font-semibold text-slate-950">Shifts</h3>
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <h3 className="font-semibold text-slate-950">Shifts</h3>
+            {canSchedule ? (
+              <Link
+                to={`/schedule?clientId=${id}`}
+                className="text-sm font-medium text-slate-700 underline-offset-2 hover:underline"
+              >
+                Assign a caregiver (ranked by CareScore)
+              </Link>
+            ) : null}
+          </div>
           {shiftsQuery.isLoading ? (
             <p className="mt-3 text-sm text-slate-500">Loading…</p>
           ) : (shiftsQuery.data ?? []).length === 0 ? (

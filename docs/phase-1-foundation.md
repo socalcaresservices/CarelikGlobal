@@ -910,3 +910,40 @@ Shipped:
 
 104 web tests pass (5 new). Full pipeline (typecheck, lint, build,
 test) verified clean.
+
+## Increment 26 — Team CRUD and CareScore-based assignment
+
+Two more requests from the user while trying the app live: "i need a
+caregiver section just like the client" (they meant create/edit/
+delete, not just viewing - Team was read-only after Increment 25) and
+"assign based on match/CareScore" (a clear way to actually use
+CareScore to pick a caregiver for a client, not just see the score on
+Schedule).
+
+Shipped:
+
+- `apps/web/src/pages/team-page.tsx`: now has its own invite form
+  (email + role, same `inviteMember()` edge function Access uses),
+  inline role-change dropdown, and Revoke button per row - deliberately
+  duplicating that slice of Access's mutation logic rather than
+  sharing it, since the user asked for it directly on Team and Access
+  stays the permissions-focused view. Same self-row and revoked-row
+  guards as Access (can't edit/revoke yourself or an already-revoked
+  member).
+- `apps/web/src/pages/schedule-page.tsx`: the client dropdown now reads
+  an optional `?clientId=` query param on load and preselects it, so
+  arriving with a client already chosen goes straight to the
+  CareScore-ranked caregiver list instead of making the user re-pick.
+- `apps/web/src/pages/client-detail-page.tsx`: the Schedule tab has a
+  new "Assign a caregiver (ranked by CareScore)" link
+  (`/schedule?clientId={id}`), shown when the viewer holds
+  `shifts.update` - the natural place to start an assignment from,
+  since CareScore is a client/caregiver pair score.
+- No new migration - both features reuse existing RPCs
+  (`list_organization_members`, `get_caregiver_hours`,
+  `list_caregiver_matches`) and the existing `organization_memberships`
+  table.
+
+111 web tests pass (7 new: 4 for Team's invite/edit/revoke, 1 for the
+`?clientId=` preselection, 2 for the Schedule-tab link). Full pipeline
+(typecheck, lint, build, test) verified clean.
