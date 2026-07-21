@@ -170,3 +170,58 @@ for scheduling over the monthly cap. Both extend beyond the data-model
 and authorizations-UI scope of this increment into the Schedule page,
 which the client-form redesign (next increment) and later increments
 will touch.
+
+## Increment 3: Client form redesign (sections + services + authorizations)
+
+Migration: `supabase/migrations/20260721020000_client_requested_services.sql`,
+applied to the live project.
+
+- New `client_requested_services` join table - a lightweight many-to-
+  many between clients and services, distinct from
+  `client_authorizations`: it records "the client has asked for this
+  service" with no hours or payer, versus an authorization which is a
+  payer's approval for a specific number of hours per month. Reuses
+  `clients.read`/`clients.update` for access rather than new
+  permission keys, since this is part of the client record. Rows are
+  pure add/remove (no `updated_at`), but still audited via the same
+  `write_audit_log()` trigger every other table uses.
+- `ClientsPage`'s add/edit form and `ClientDetailPage`'s profile-edit
+  form were both flat, unsectioned grids - both now use `FormSection`
+  (Basic information / Contact information / Care notes on Clients;
+  Location / Needs / Services requested on the detail page's profile
+  form), directly addressing the spec's "compact sectioned layout"
+  requirement.
+- `ClientDetailPage`'s profile form gained a "Services requested"
+  field using `MultiSelectCombobox` against the org's active services
+  - the first real use of that component, which was built in
+    Increment 1 specifically for this ("Services Requested") case.
+  Saving replaces the full set of `client_requested_services` rows for
+  the client (delete-then-insert) rather than diffing, since this
+  changes rarely and isn't a high-write list. The client record is now
+  fetched with the join embedded (`clients.select("*,
+  client_requested_services(service_id, services(id, name))")`)
+  instead of a second round trip.
+- `ClientDetailPage`'s Authorizations tab now links to "Add
+  authorization for this client" (`/authorizations?clientId=`),
+  mirroring the existing `/schedule?clientId=` pattern from the
+  Schedule tab's "Assign a caregiver" link. `AuthorizationsPage` reads
+  that param, pre-fills the client combobox, and disables it while
+  adding (not while editing an existing row) so the person doesn't
+  have to re-pick a client they just came from and can't accidentally
+  change it mid-add.
+- `SearchableCombobox` now hides its clear (×) button when `disabled`
+  - previously a disabled combobox still exposed a clickable clear
+  button, which would have let someone "unlock" the pre-filled client
+  despite the field being disabled.
+
+Full pipeline (typecheck, lint, build, test) verified clean across all
+4 packages - 246 tests passing, including new coverage for the
+requested-services save flow, the disabled-clear-button fix, and the
+`?clientId=` pre-fill/lock behavior on `AuthorizationsPage`.
+
+Not done in this increment (deferred, same reasons as Increment 2):
+applicant tracking, referrals, and document upload remain out of
+scope. The Schedule page's shift-creation form still doesn't collect a
+`service_id`, so newly created shifts still won't be attributed to a
+specific authorization's monthly usage - that's still tracked as
+follow-up work, not yet scheduled into a specific increment.

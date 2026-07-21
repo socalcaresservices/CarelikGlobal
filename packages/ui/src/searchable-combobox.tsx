@@ -146,7 +146,7 @@ export function SearchableCombobox({
           onKeyDown={handleKeyDown}
           className="w-full rounded-lg border border-slate-200 px-3 py-2 pr-8 text-sm text-slate-900 disabled:bg-slate-50 disabled:text-slate-400"
         />
-        {value && !open ? (
+        {value && !open && !disabled ? (
           <button
             type="button"
             aria-label={`Clear ${label}`}

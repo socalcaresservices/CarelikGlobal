@@ -1,7 +1,7 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
-import { Card } from "@carelik/ui";
+import { Card, FormSection } from "@carelik/ui";
 import { clientStatusSchema } from "@carelik/shared";
 import { useOrganization } from "@/providers/organization-provider";
 import { supabase } from "@/lib/supabase";
@@ -186,97 +186,102 @@ export function ClientsPage() {
           <h3 className="font-semibold text-slate-950">
             {editingId ? "Edit client" : "Add a client"}
           </h3>
-          <form onSubmit={handleSave} className="mt-4 grid gap-3 sm:grid-cols-2">
-            <div>
-              <label htmlFor="client-first-name" className="block text-xs font-medium text-slate-600">
-                First name
-              </label>
-              <input
-                id="client-first-name"
-                required
-                value={form.firstName}
-                onChange={(event) => setForm({ ...form, firstName: event.target.value })}
-                className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900"
-              />
-            </div>
-            <div>
-              <label htmlFor="client-last-name" className="block text-xs font-medium text-slate-600">
-                Last name
-              </label>
-              <input
-                id="client-last-name"
-                required
-                value={form.lastName}
-                onChange={(event) => setForm({ ...form, lastName: event.target.value })}
-                className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900"
-              />
-            </div>
-            <div>
-              <label htmlFor="client-phone" className="block text-xs font-medium text-slate-600">
-                Phone
-              </label>
-              <input
-                id="client-phone"
-                value={form.phone}
-                onChange={(event) => setForm({ ...form, phone: event.target.value })}
-                className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900"
-              />
-            </div>
-            <div>
-              <label htmlFor="client-email" className="block text-xs font-medium text-slate-600">
-                Email
-              </label>
-              <input
-                id="client-email"
-                type="email"
-                value={form.email}
-                onChange={(event) => setForm({ ...form, email: event.target.value })}
-                className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900"
-              />
-            </div>
-            <div className="sm:col-span-2">
-              <label htmlFor="client-address" className="block text-xs font-medium text-slate-600">
-                Address
-              </label>
-              <input
-                id="client-address"
-                value={form.address}
-                onChange={(event) => setForm({ ...form, address: event.target.value })}
-                className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900"
-              />
-            </div>
-            <div className="sm:col-span-2">
-              <label htmlFor="client-notes" className="block text-xs font-medium text-slate-600">
-                Care notes
-              </label>
+          <form onSubmit={handleSave} className="mt-4 space-y-5">
+            <FormSection title="Basic information" columns={2}>
+              <div>
+                <label htmlFor="client-first-name" className="block text-xs font-medium text-slate-600">
+                  First name
+                </label>
+                <input
+                  id="client-first-name"
+                  required
+                  value={form.firstName}
+                  onChange={(event) => setForm({ ...form, firstName: event.target.value })}
+                  className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900"
+                />
+              </div>
+              <div>
+                <label htmlFor="client-last-name" className="block text-xs font-medium text-slate-600">
+                  Last name
+                </label>
+                <input
+                  id="client-last-name"
+                  required
+                  value={form.lastName}
+                  onChange={(event) => setForm({ ...form, lastName: event.target.value })}
+                  className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900"
+                />
+              </div>
+              <div>
+                <label htmlFor="client-status" className="block text-xs font-medium text-slate-600">
+                  Status
+                </label>
+                <select
+                  id="client-status"
+                  value={form.status}
+                  onChange={(event) =>
+                    setForm({ ...form, status: event.target.value as ClientRow["status"] })
+                  }
+                  className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900"
+                >
+                  {clientStatusSchema.options.map((option) => (
+                    <option key={option} value={option}>
+                      {option}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </FormSection>
+
+            <FormSection title="Contact information" columns={2}>
+              <div>
+                <label htmlFor="client-phone" className="block text-xs font-medium text-slate-600">
+                  Phone
+                </label>
+                <input
+                  id="client-phone"
+                  value={form.phone}
+                  onChange={(event) => setForm({ ...form, phone: event.target.value })}
+                  className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900"
+                />
+              </div>
+              <div>
+                <label htmlFor="client-email" className="block text-xs font-medium text-slate-600">
+                  Email
+                </label>
+                <input
+                  id="client-email"
+                  type="email"
+                  value={form.email}
+                  onChange={(event) => setForm({ ...form, email: event.target.value })}
+                  className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900"
+                />
+              </div>
+              <div className="sm:col-span-2">
+                <label htmlFor="client-address" className="block text-xs font-medium text-slate-600">
+                  Address
+                </label>
+                <input
+                  id="client-address"
+                  value={form.address}
+                  onChange={(event) => setForm({ ...form, address: event.target.value })}
+                  className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900"
+                />
+              </div>
+            </FormSection>
+
+            <FormSection title="Care notes" columns={1}>
               <textarea
                 id="client-notes"
+                aria-label="Care notes"
                 rows={3}
                 value={form.careNotes}
                 onChange={(event) => setForm({ ...form, careNotes: event.target.value })}
-                className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900"
+                className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900"
               />
-            </div>
-            <div>
-              <label htmlFor="client-status" className="block text-xs font-medium text-slate-600">
-                Status
-              </label>
-              <select
-                id="client-status"
-                value={form.status}
-                onChange={(event) =>
-                  setForm({ ...form, status: event.target.value as ClientRow["status"] })
-                }
-                className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900"
-              >
-                {clientStatusSchema.options.map((option) => (
-                  <option key={option} value={option}>
-                    {option}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div className="flex items-end gap-3 sm:col-span-2">
+            </FormSection>
+
+            <div className="flex items-end gap-3">
               <button
                 type="submit"
                 disabled={saving}

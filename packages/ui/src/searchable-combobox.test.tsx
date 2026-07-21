@@ -44,6 +44,13 @@ describe("SearchableCombobox", () => {
     expect(onChange).toHaveBeenCalledWith(null);
   });
 
+  it("hides the clear button when disabled, even with a value selected", () => {
+    const onChange = vi.fn();
+    render(<SearchableCombobox label="Client" value="2" onChange={onChange} options={OPTIONS} disabled />);
+
+    expect(screen.queryByRole("button", { name: "Clear Client" })).not.toBeInTheDocument();
+  });
+
   it("supports arrow-key navigation and Enter to select", () => {
     const onChange = vi.fn();
     render(<SearchableCombobox label="Client" value={null} onChange={onChange} options={OPTIONS} />);

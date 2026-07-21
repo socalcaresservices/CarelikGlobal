@@ -2,7 +2,7 @@ import { useEffect, useState, type FormEvent } from "react";
 import { Link, useParams } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowLeft } from "lucide-react";
-import { Card, StatusBadge, cn, type StatusTone } from "@carelik/ui";
+import { Card, FormSection, MultiSelectCombobox, StatusBadge, cn, type ComboboxOption, type StatusTone } from "@carelik/ui";
 import {
   getAuthorizationExpiryStatus,
   getAuthorizationUsageStatus,
@@ -43,6 +43,13 @@ interface ClientDetail {
   address_zip: string | null;
   language_needs: string[];
   care_needs: string[];
+  client_requested_services: Array<{ service_id: string; services: { id: string; name: string } | null }>;
+}
+
+interface ServiceRow {
+  id: string;
+  name: string;
+  is_active: boolean;
 }
 
 interface ShiftRow {
@@ -129,6 +136,7 @@ export function ClientDetailPage() {
   const [tab, setTab] = useState<Tab>("overview");
 
   const canSeeAuthorizations = hasPermission("authorizations.read");
+  const canManageAuthorizations = hasPermission("authorizations.update");
   const canReadAudit = hasPermission("audit.read");
   const canManage = hasPermission("clients.update");
   const canSchedule = hasPermission("shifts.update");
@@ -136,14 +144,40 @@ export function ClientDetailPage() {
   const clientQuery = useQuery({
     queryKey: ["client-detail", id],
     queryFn: async () => {
-      const { data, error } = await supabase.from("clients").select("*").eq("id", id!).single();
+      const { data, error } = await supabase
+        .from("clients")
+        .select("*, client_requested_services(service_id, services(id, name))")
+        .eq("id", id!)
+        .single();
       if (error) throw error;
       return data as ClientDetail;
     },
     enabled: !!id
   });
 
-  const [profileForm, setProfileForm] = useState({ city: "", state: "", zip: "", languageNeeds: "", careNeeds: "" });
+  const servicesQuery = useQuery({
+    queryKey: ["services", activeOrganizationId],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("services")
+        .select("id, name, is_active")
+        .eq("organization_id", activeOrganizationId!)
+        .is("deleted_at", null)
+        .order("name");
+      if (error) throw error;
+      return (data ?? []) as ServiceRow[];
+    },
+    enabled: !!activeOrganizationId && canManage
+  });
+
+  const [profileForm, setProfileForm] = useState({
+    city: "",
+    state: "",
+    zip: "",
+    languageNeeds: "",
+    careNeeds: "",
+    requestedServiceIds: [] as string[]
+  });
   const [profileSaving, setProfileSaving] = useState(false);
   const [profileError, setProfileError] = useState<string | null>(null);
 
@@ -154,14 +188,25 @@ export function ClientDetailPage() {
         state: clientQuery.data.address_state ?? "",
         zip: clientQuery.data.address_zip ?? "",
         languageNeeds: (clientQuery.data.language_needs ?? []).join(", "),
-        careNeeds: (clientQuery.data.care_needs ?? []).join(", ")
+        careNeeds: (clientQuery.data.care_needs ?? []).join(", "),
+        requestedServiceIds: (clientQuery.data.client_requested_services ?? []).map((row) => row.service_id)
       });
     }
   }, [clientQuery.data]);
 
+  const requestedServiceOptions: ComboboxOption[] = (servicesQuery.data ?? [])
+    .filter((service) => service.is_active)
+    .map((service) => ({ value: service.id, label: service.name }));
+
+  const requestedServiceLabels: Record<string, string> = Object.fromEntries(
+    (clientQuery.data?.client_requested_services ?? [])
+      .filter((row) => row.services)
+      .map((row) => [row.service_id, row.services!.name])
+  );
+
   async function handleSaveProfile(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!id) return;
+    if (!id || !activeOrganizationId) return;
 
     setProfileError(null);
     setProfileSaving(true);
@@ -177,6 +222,24 @@ export function ClientDetailPage() {
         })
         .eq("id", id);
       if (error) throw error;
+
+      // Requested services are a separate join table (client_requested_services),
+      // not an array column - replace-the-full-set is simplest and matches how
+      // infrequently this changes (a handful of services per client, edited
+      // rarely, not a high-write list).
+      const { error: deleteError } = await supabase.from("client_requested_services").delete().eq("client_id", id);
+      if (deleteError) throw deleteError;
+      if (profileForm.requestedServiceIds.length > 0) {
+        const { error: insertError } = await supabase.from("client_requested_services").insert(
+          profileForm.requestedServiceIds.map((serviceId) => ({
+            organization_id: activeOrganizationId,
+            client_id: id,
+            service_id: serviceId
+          }))
+        );
+        if (insertError) throw insertError;
+      }
+
       void queryClient.invalidateQueries({ queryKey: ["client-detail", id] });
     } catch (cause) {
       setProfileError(cause instanceof Error ? cause.message : "Could not save profile.");
@@ -385,67 +448,88 @@ export function ClientDetailPage() {
               Used for CareScore - the client/caregiver match score shown when scheduling.
             </p>
             {canManage ? (
-              <form onSubmit={handleSaveProfile} className="mt-4 grid gap-3 sm:grid-cols-2">
-                <div>
-                  <label htmlFor="client-city" className="block text-xs font-medium text-slate-600">
-                    City
-                  </label>
-                  <input
-                    id="client-city"
-                    value={profileForm.city}
-                    onChange={(event) => setProfileForm({ ...profileForm, city: event.target.value })}
-                    className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900"
-                  />
-                </div>
-                <div className="grid grid-cols-2 gap-3">
+              <form onSubmit={handleSaveProfile} className="mt-4 space-y-5">
+                <FormSection title="Location" columns={2}>
                   <div>
-                    <label htmlFor="client-state" className="block text-xs font-medium text-slate-600">
-                      State
+                    <label htmlFor="client-city" className="block text-xs font-medium text-slate-600">
+                      City
                     </label>
                     <input
-                      id="client-state"
-                      value={profileForm.state}
-                      onChange={(event) => setProfileForm({ ...profileForm, state: event.target.value })}
+                      id="client-city"
+                      value={profileForm.city}
+                      onChange={(event) => setProfileForm({ ...profileForm, city: event.target.value })}
+                      className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900"
+                    />
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label htmlFor="client-state" className="block text-xs font-medium text-slate-600">
+                        State
+                      </label>
+                      <input
+                        id="client-state"
+                        value={profileForm.state}
+                        onChange={(event) => setProfileForm({ ...profileForm, state: event.target.value })}
+                        className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900"
+                      />
+                    </div>
+                    <div>
+                      <label htmlFor="client-zip" className="block text-xs font-medium text-slate-600">
+                        ZIP
+                      </label>
+                      <input
+                        id="client-zip"
+                        value={profileForm.zip}
+                        onChange={(event) => setProfileForm({ ...profileForm, zip: event.target.value })}
+                        className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900"
+                      />
+                    </div>
+                  </div>
+                </FormSection>
+
+                <FormSection title="Needs" description="Used for CareScore matching." columns={2}>
+                  <div>
+                    <label htmlFor="client-language-needs" className="block text-xs font-medium text-slate-600">
+                      Language needs (comma-separated)
+                    </label>
+                    <input
+                      id="client-language-needs"
+                      placeholder="Spanish"
+                      value={profileForm.languageNeeds}
+                      onChange={(event) => setProfileForm({ ...profileForm, languageNeeds: event.target.value })}
                       className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900"
                     />
                   </div>
                   <div>
-                    <label htmlFor="client-zip" className="block text-xs font-medium text-slate-600">
-                      ZIP
+                    <label htmlFor="client-care-needs" className="block text-xs font-medium text-slate-600">
+                      Care needs (comma-separated)
                     </label>
                     <input
-                      id="client-zip"
-                      value={profileForm.zip}
-                      onChange={(event) => setProfileForm({ ...profileForm, zip: event.target.value })}
+                      id="client-care-needs"
+                      placeholder="Hoyer lift, Dementia care"
+                      value={profileForm.careNeeds}
+                      onChange={(event) => setProfileForm({ ...profileForm, careNeeds: event.target.value })}
                       className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900"
                     />
                   </div>
-                </div>
-                <div>
-                  <label htmlFor="client-language-needs" className="block text-xs font-medium text-slate-600">
-                    Language needs (comma-separated)
-                  </label>
-                  <input
-                    id="client-language-needs"
-                    placeholder="Spanish"
-                    value={profileForm.languageNeeds}
-                    onChange={(event) => setProfileForm({ ...profileForm, languageNeeds: event.target.value })}
-                    className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900"
+                </FormSection>
+
+                <FormSection
+                  title="Services requested"
+                  description="What this client has asked for - separate from a payer authorization's hours."
+                  columns={1}
+                >
+                  <MultiSelectCombobox
+                    label="Services"
+                    values={profileForm.requestedServiceIds}
+                    onChange={(values) => setProfileForm({ ...profileForm, requestedServiceIds: values })}
+                    options={requestedServiceOptions}
+                    selectedLabels={requestedServiceLabels}
+                    placeholder="Search services…"
                   />
-                </div>
+                </FormSection>
+
                 <div>
-                  <label htmlFor="client-care-needs" className="block text-xs font-medium text-slate-600">
-                    Care needs (comma-separated)
-                  </label>
-                  <input
-                    id="client-care-needs"
-                    placeholder="Hoyer lift, Dementia care"
-                    value={profileForm.careNeeds}
-                    onChange={(event) => setProfileForm({ ...profileForm, careNeeds: event.target.value })}
-                    className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900"
-                  />
-                </div>
-                <div className="sm:col-span-2">
                   <button
                     type="submit"
                     disabled={profileSaving}
@@ -454,7 +538,7 @@ export function ClientDetailPage() {
                     {profileSaving ? "Saving…" : "Save"}
                   </button>
                 </div>
-                {profileError ? <p className="text-sm text-red-700 sm:col-span-2">{profileError}</p> : null}
+                {profileError ? <p className="text-sm text-red-700">{profileError}</p> : null}
               </form>
             ) : (
               <dl className="mt-4 grid gap-4 sm:grid-cols-2">
@@ -468,9 +552,18 @@ export function ClientDetailPage() {
                   <dt className="text-xs font-medium uppercase tracking-wide text-slate-500">Language needs</dt>
                   <dd className="mt-1 text-sm text-slate-700">{(client.language_needs ?? []).join(", ") || "—"}</dd>
                 </div>
-                <div className="sm:col-span-2">
+                <div>
                   <dt className="text-xs font-medium uppercase tracking-wide text-slate-500">Care needs</dt>
                   <dd className="mt-1 text-sm text-slate-700">{(client.care_needs ?? []).join(", ") || "—"}</dd>
+                </div>
+                <div>
+                  <dt className="text-xs font-medium uppercase tracking-wide text-slate-500">Services requested</dt>
+                  <dd className="mt-1 text-sm text-slate-700">
+                    {(client.client_requested_services ?? [])
+                      .map((row) => row.services?.name)
+                      .filter(Boolean)
+                      .join(", ") || "—"}
+                  </dd>
                 </div>
               </dl>
             )}
@@ -516,7 +609,17 @@ export function ClientDetailPage() {
 
       {tab === "authorizations" && canSeeAuthorizations ? (
         <Card>
-          <h3 className="font-semibold text-slate-950">Authorizations</h3>
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <h3 className="font-semibold text-slate-950">Authorizations</h3>
+            {canManageAuthorizations ? (
+              <Link
+                to={`/authorizations?clientId=${id}`}
+                className="text-sm font-medium text-slate-700 underline-offset-2 hover:underline"
+              >
+                Add authorization for this client
+              </Link>
+            ) : null}
+          </div>
           {authorizationsQuery.isLoading ? (
             <p className="mt-3 text-sm text-slate-500">Loading…</p>
           ) : (authorizationsQuery.data ?? []).length === 0 ? (

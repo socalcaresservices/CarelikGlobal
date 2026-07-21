@@ -1,4 +1,5 @@
 import { useEffect, useState, type FormEvent } from "react";
+import { useSearchParams } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Card,
@@ -104,6 +105,13 @@ export function AuthorizationsPage() {
   const { activeOrganizationId, activeOrganization, hasPermission } = useOrganization();
   const queryClient = useQueryClient();
 
+  // A client can arrive with ?clientId= already set (see the "Add
+  // authorization" link on the Client detail page's Authorizations
+  // tab), so the client field is pre-filled and locked instead of
+  // making the person re-pick the client they just came from.
+  const [searchParams] = useSearchParams();
+  const lockedClientId = searchParams.get("clientId");
+
   const canRead = hasPermission("authorizations.read");
   const canManage = hasPermission("authorizations.update");
   const canManageServices = hasPermission("services.update");
@@ -185,7 +193,7 @@ export function AuthorizationsPage() {
     expiry: 120
   });
 
-  const [form, setForm] = useState(emptyForm);
+  const [form, setForm] = useState(() => ({ ...emptyForm, clientId: lockedClientId ?? "" }));
   const [editingId, setEditingId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
@@ -197,9 +205,9 @@ export function AuthorizationsPage() {
   const [serviceError, setServiceError] = useState<string | null>(null);
 
   useEffect(() => {
-    setForm(emptyForm);
+    setForm({ ...emptyForm, clientId: lockedClientId ?? "" });
     setEditingId(null);
-  }, [activeOrganizationId]);
+  }, [activeOrganizationId, lockedClientId]);
 
   const clientOptions: ComboboxOption[] = (clientsQuery.data ?? []).map((client) => ({
     value: client.id,
@@ -435,6 +443,7 @@ export function AuthorizationsPage() {
               <SearchableCombobox
                 label="Client"
                 required
+                disabled={!!lockedClientId && !editingId}
                 value={form.clientId || null}
                 onChange={(value) => setForm({ ...form, clientId: value ?? "" })}
                 options={clientOptions}

@@ -1,4 +1,5 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { MemoryRouter } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { useOrganization } from "@/providers/organization-provider";
@@ -41,12 +42,14 @@ function baseOrganization() {
   };
 }
 
-function renderPage() {
+function renderPage(initialPath = "/authorizations") {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
-    <QueryClientProvider client={queryClient}>
-      <AuthorizationsPage />
-    </QueryClientProvider>
+    <MemoryRouter initialEntries={[initialPath]}>
+      <QueryClientProvider client={queryClient}>
+        <AuthorizationsPage />
+      </QueryClientProvider>
+    </MemoryRouter>
   );
 }
 
@@ -169,6 +172,21 @@ describe("AuthorizationsPage", () => {
         })
       )
     );
+  });
+
+  it("pre-fills and locks the client field when arriving with ?clientId=", async () => {
+    mockedUseOrganization.mockReturnValue({ ...baseOrganization(), hasPermission: vi.fn(() => true) });
+    mockedRpc.mockResolvedValue({ data: [], error: null } as never);
+    mockFromByTable({
+      clients: [{ id: CLIENT_ID, first_name: "Jordan", last_name: "Rivera" }],
+      services: [{ id: SERVICE_ID, name: "Personal care", is_active: true }]
+    });
+
+    renderPage(`/authorizations?clientId=${CLIENT_ID}`);
+
+    await waitFor(() => expect(screen.getByLabelText("Client")).toBeDisabled());
+    await waitFor(() => expect(screen.getByLabelText("Client")).toHaveValue("Jordan Rivera"));
+    expect(screen.queryByRole("button", { name: "Clear Client" })).not.toBeInTheDocument();
   });
 
   it("soft-deletes an authorization via Remove", async () => {
