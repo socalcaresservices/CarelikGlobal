@@ -7,4 +7,5 @@ export * from "./membership";
 export * from "./organization-settings";
 export * from "./permissions";
 export * from "./search";
+export * from "./services";
 export * from "./tenant";

@@ -159,7 +159,7 @@ describe("ActionCenter", () => {
     expect(within(card as HTMLElement).getByText("Review")).toBeInTheDocument();
   });
 
-  it("flags a client scheduled over their authorized hours as critical", async () => {
+  it("flags a client over their monthly authorized hours as critical", async () => {
     mockedUseOrganization.mockReturnValue(baseOrganization());
     const now = new Date();
     const periodStart = new Date(now.getTime() - 5 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
@@ -170,8 +170,9 @@ describe("ActionCenter", () => {
           data: [
             {
               id: "authorization-1",
-              authorized_hours: 10,
-              scheduled_hours: 20,
+              max_monthly_hours: 10,
+              hours_used_this_month: 12,
+              hours_scheduled_this_month: 8,
               period_start: periodStart,
               period_end: periodEnd
             }
@@ -186,9 +187,9 @@ describe("ActionCenter", () => {
     renderCenter();
 
     await waitFor(() =>
-      expect(screen.getByText("Clients scheduled over their authorized hours")).toBeInTheDocument()
+      expect(screen.getByText("Clients over their monthly authorized hours")).toBeInTheDocument()
     );
-    const card = screen.getByText("Clients scheduled over their authorized hours").closest("a");
+    const card = screen.getByText("Clients over their monthly authorized hours").closest("a");
     expect(card).not.toBeNull();
     expect(within(card as HTMLElement).getByText("1")).toBeInTheDocument();
     expect(within(card as HTMLElement).getByText("Review")).toBeInTheDocument();

@@ -28,7 +28,7 @@ export interface SearchableComboboxProps {
   /** Shown as the selected value's label when it isn't present in the
    * current `options`/last search results (e.g. selection made before
    * this render, or restored from saved data). */
-  selectedLabel?: string;
+  selectedLabel?: string | undefined;
   placeholder?: string;
   debounceMs?: number;
   disabled?: boolean;

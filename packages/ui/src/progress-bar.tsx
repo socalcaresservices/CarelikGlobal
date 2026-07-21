@@ -44,21 +44,33 @@ export function ProgressBar({ value, max, tone = "info", label, className }: Pro
 /**
  * Shared thresholds for "usage against a limit" bars (authorized hours,
  * caregiver utilization). Kept as one function so the definition of
- * "approaching" vs "over" can't drift between the client authorization
- * view and the caregiver capacity view.
+ * "approaching" vs "at" vs "over" can't drift between the client
+ * authorization view and the caregiver capacity view. Four tiers, not
+ * three - "at limit" (right at the cap) is a distinct, actionable
+ * signal from "over limit" (already past it). A tiny epsilon (not a
+ * business tolerance - just float-equality safety) decides the
+ * boundary at exactly 100%; callers working with real hour totals that
+ * need a larger rounding tolerance should derive their own tone from
+ * business logic (see getAuthorizationUsageStatus in @carelik/shared)
+ * and pass it to StatusBadge directly instead of using this ratio-only
+ * helper.
  */
+const AT_LIMIT_EPSILON = 1e-9;
+
 export function usageTone(value: number, max: number): StatusTone {
-  if (max <= 0) return "neutral";
+  if (max <= 0) return value > 0 ? "danger" : "neutral";
   const pct = value / max;
-  if (pct > 1) return "danger";
+  if (pct > 1 + AT_LIMIT_EPSILON) return "danger";
+  if (pct >= 1 - AT_LIMIT_EPSILON) return "danger";
   if (pct >= 0.9) return "warning";
   return "success";
 }
 
 export function usageLabel(value: number, max: number): string {
-  if (max <= 0) return "No limit set";
+  if (max <= 0) return value > 0 ? "Over limit" : "No limit set";
   const pct = value / max;
-  if (pct > 1) return "Over limit";
+  if (pct > 1 + AT_LIMIT_EPSILON) return "Over limit";
+  if (pct >= 1 - AT_LIMIT_EPSILON) return "At limit";
   if (pct >= 0.9) return "Approaching limit";
   return "Normal usage";
 }

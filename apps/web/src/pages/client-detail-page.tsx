@@ -2,8 +2,14 @@ import { useEffect, useState, type FormEvent } from "react";
 import { Link, useParams } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowLeft } from "lucide-react";
-import { Card, cn } from "@carelik/ui";
-import { getUtilizationStatus, isAuthorizationActive } from "@carelik/shared";
+import { Card, StatusBadge, cn, type StatusTone } from "@carelik/ui";
+import {
+  getAuthorizationExpiryStatus,
+  getAuthorizationUsageStatus,
+  isAuthorizationActive,
+  type AuthorizationExpiryStatus,
+  type AuthorizationUsageStatus
+} from "@carelik/shared";
 import { useOrganization } from "@/providers/organization-provider";
 import { supabase } from "@/lib/supabase";
 
@@ -51,12 +57,40 @@ interface ShiftRow {
 interface AuthorizationRow {
   id: string;
   client_id: string;
+  service_name: string;
   payer: string;
-  authorized_hours: number;
+  max_monthly_hours: number;
   period_start: string;
   period_end: string;
-  scheduled_hours: number;
+  hours_used_this_month: number;
+  hours_scheduled_this_month: number;
 }
+
+const usageTone: Record<AuthorizationUsageStatus, StatusTone> = {
+  normal: "success",
+  approaching_limit: "warning",
+  at_limit: "danger",
+  over_limit: "danger"
+};
+
+const usageLabelText: Record<AuthorizationUsageStatus, string> = {
+  normal: "Normal usage",
+  approaching_limit: "Approaching limit",
+  at_limit: "At limit",
+  over_limit: "Over limit"
+};
+
+const expiryTone: Record<AuthorizationExpiryStatus, StatusTone> = {
+  active: "success",
+  expiring_soon: "warning",
+  expired: "danger"
+};
+
+const expiryLabelText: Record<AuthorizationExpiryStatus, string> = {
+  active: "Active",
+  expiring_soon: "Expiring soon",
+  expired: "Expired"
+};
 
 interface IncidentRow {
   id: string;
@@ -224,6 +258,16 @@ export function ClientDetailPage() {
   const activeAuthorization = (authorizationsQuery.data ?? []).find((row) =>
     isAuthorizationActive(row.period_start, row.period_end)
   );
+  const activeAuthorizationCommittedHours = activeAuthorization
+    ? activeAuthorization.hours_used_this_month + activeAuthorization.hours_scheduled_this_month
+    : 0;
+  const activeAuthorizationUsage = activeAuthorization
+    ? getAuthorizationUsageStatus(
+        activeAuthorization.max_monthly_hours,
+        activeAuthorization.hours_used_this_month,
+        activeAuthorization.hours_scheduled_this_month
+      )
+    : null;
   const upcomingShiftCount = (shiftsQuery.data ?? []).filter(
     (row) => row.status === "scheduled" && new Date(row.starts_at).getTime() >= Date.now()
   ).length;
@@ -273,27 +317,22 @@ export function ClientDetailPage() {
             activeAuthorization ? (
               <>
                 <div>
-                  <p className="text-xs font-medium uppercase tracking-wide text-slate-500">Authorized</p>
+                  <p className="text-xs font-medium uppercase tracking-wide text-slate-500">Cap this month</p>
                   <p className="mt-1 text-xl font-semibold text-slate-950">
-                    {formatHours(activeAuthorization.authorized_hours)}h
+                    {formatHours(activeAuthorization.max_monthly_hours)}h
                   </p>
+                  <p className="text-xs text-slate-500">{activeAuthorization.service_name}</p>
                 </div>
                 <div>
-                  <p className="text-xs font-medium uppercase tracking-wide text-slate-500">Scheduled / Gap</p>
-                  <p className="mt-1 text-xl font-semibold text-slate-950">
-                    {formatHours(activeAuthorization.scheduled_hours)}h
-                    <span
-                      className={cn(
-                        "ml-2 text-sm font-medium",
-                        getUtilizationStatus(activeAuthorization.authorized_hours, activeAuthorization.scheduled_hours) ===
-                          "over"
-                          ? "text-red-600"
-                          : "text-slate-500"
-                      )}
-                    >
-                      ({formatHours(activeAuthorization.authorized_hours - activeAuthorization.scheduled_hours)}h gap)
-                    </span>
-                  </p>
+                  <p className="text-xs font-medium uppercase tracking-wide text-slate-500">Used + scheduled</p>
+                  <p className="mt-1 text-xl font-semibold text-slate-950">{formatHours(activeAuthorizationCommittedHours)}h</p>
+                  {activeAuthorizationUsage ? (
+                    <StatusBadge
+                      className="mt-1"
+                      label={usageLabelText[activeAuthorizationUsage]}
+                      tone={usageTone[activeAuthorizationUsage]}
+                    />
+                  ) : null}
                 </div>
               </>
             ) : (
@@ -484,20 +523,35 @@ export function ClientDetailPage() {
             <p className="mt-3 text-sm text-slate-400">No authorizations on file.</p>
           ) : (
             <ul className="mt-3 divide-y divide-slate-100">
-              {(authorizationsQuery.data ?? []).map((row) => (
-                <li key={row.id} className="py-2.5 text-sm">
-                  <div className="flex items-center justify-between">
-                    <span className="text-slate-700">{row.payer}</span>
-                    <span className="text-slate-500">
-                      {new Date(row.period_start).toLocaleDateString()} –{" "}
-                      {new Date(row.period_end).toLocaleDateString()}
-                    </span>
-                  </div>
-                  <p className="mt-1 text-xs text-slate-500">
-                    {formatHours(row.scheduled_hours)}h scheduled of {formatHours(row.authorized_hours)}h authorized
-                  </p>
-                </li>
-              ))}
+              {(authorizationsQuery.data ?? []).map((row) => {
+                const usage = getAuthorizationUsageStatus(
+                  row.max_monthly_hours,
+                  row.hours_used_this_month,
+                  row.hours_scheduled_this_month
+                );
+                const expiry = getAuthorizationExpiryStatus(row.period_end);
+                return (
+                  <li key={row.id} className="py-2.5 text-sm">
+                    <div className="flex items-center justify-between">
+                      <span className="text-slate-700">
+                        {row.service_name} · {row.payer}
+                      </span>
+                      <span className="text-slate-500">
+                        {new Date(row.period_start).toLocaleDateString()} –{" "}
+                        {new Date(row.period_end).toLocaleDateString()}
+                      </span>
+                    </div>
+                    <div className="mt-1 flex flex-wrap items-center gap-2">
+                      <p className="text-xs text-slate-500">
+                        {formatHours(row.hours_used_this_month)}h used + {formatHours(row.hours_scheduled_this_month)}h
+                        scheduled of {formatHours(row.max_monthly_hours)}h/mo
+                      </p>
+                      <StatusBadge label={usageLabelText[usage]} tone={usageTone[usage]} />
+                      <StatusBadge label={expiryLabelText[expiry]} tone={expiryTone[expiry]} />
+                    </div>
+                  </li>
+                );
+              })}
             </ul>
           )}
         </Card>

@@ -89,6 +89,50 @@ describe("ClientDetailPage", () => {
     expect(screen.getByText("No active authorization for today.")).toBeInTheDocument();
   });
 
+  it("shows the monthly cap and usage status for an active authorization", async () => {
+    mockedUseOrganization.mockReturnValue(baseOrganization());
+    mockedFrom.mockReturnValue({
+      select: mockClientRecord({
+        id: CLIENT_ID,
+        first_name: "Jordan",
+        last_name: "Rivera",
+        phone: "555-0100",
+        email: null,
+        address: null,
+        care_notes: null,
+        status: "active"
+      })
+    } as never);
+    mockedRpc.mockImplementation((fn: string) => {
+      if (fn === "list_client_authorizations") {
+        return Promise.resolve({
+          data: [
+            {
+              id: "99999999-9999-4999-8999-999999999999",
+              client_id: CLIENT_ID,
+              service_name: "Personal care",
+              payer: "Medicaid",
+              max_monthly_hours: 20,
+              period_start: "2026-01-01",
+              period_end: "2030-01-01",
+              hours_used_this_month: 12,
+              hours_scheduled_this_month: 10
+            }
+          ],
+          error: null
+        }) as never;
+      }
+      return Promise.resolve({ data: [], error: null }) as never;
+    });
+
+    renderPage();
+
+    await waitFor(() => expect(screen.getByText("Cap this month")).toBeInTheDocument());
+    expect(screen.getByText("20h")).toBeInTheDocument();
+    expect(screen.getByText("22h")).toBeInTheDocument();
+    expect(screen.getByText("Over limit")).toBeInTheDocument();
+  });
+
   it("shows a not-found state for a missing client", async () => {
     mockedUseOrganization.mockReturnValue(baseOrganization());
     mockedFrom.mockReturnValue({ select: mockClientRecord(null) } as never);

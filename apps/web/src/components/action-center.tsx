@@ -11,7 +11,7 @@ import {
   UserX
 } from "lucide-react";
 import { cn } from "@carelik/ui";
-import { getCredentialStatus, getUtilizationStatus, isAuthorizationActive } from "@carelik/shared";
+import { getAuthorizationUsageStatus, getCredentialStatus, isAuthorizationActive } from "@carelik/shared";
 import type { IncidentStatus } from "@carelik/shared";
 import { useOrganization } from "@/providers/organization-provider";
 import { supabase } from "@/lib/supabase";
@@ -44,8 +44,9 @@ interface CredentialForSignals {
 
 interface AuthorizationForSignals {
   id: string;
-  authorized_hours: number;
-  scheduled_hours: number;
+  max_monthly_hours: number;
+  hours_used_this_month: number;
+  hours_scheduled_this_month: number;
   period_start: string;
   period_end: string;
 }
@@ -301,11 +302,12 @@ export function ActionCenter() {
     const overAuthorizedCount = authorizationsQuery.data.filter(
       (row) =>
         isAuthorizationActive(row.period_start, row.period_end) &&
-        getUtilizationStatus(row.authorized_hours, row.scheduled_hours) === "over"
+        getAuthorizationUsageStatus(row.max_monthly_hours, row.hours_used_this_month, row.hours_scheduled_this_month) ===
+          "over_limit"
     ).length;
     signals.push({
       key: "over-authorized",
-      label: "Clients scheduled over their authorized hours",
+      label: "Clients over their monthly authorized hours",
       count: overAuthorizedCount,
       tone: overAuthorizedCount > 0 ? "critical" : "healthy",
       icon: ClipboardCheck,

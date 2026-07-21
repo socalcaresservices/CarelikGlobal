@@ -26,9 +26,14 @@ describe("usageTone / usageLabel", () => {
     expect(usageLabel(5, 20)).toBe("Normal usage");
   });
 
-  it("is 'warning' / 'Approaching limit' at 90% or more", () => {
+  it("is 'warning' / 'Approaching limit' at 90% or more but under the cap", () => {
     expect(usageTone(18, 20)).toBe("warning");
     expect(usageLabel(18, 20)).toBe("Approaching limit");
+  });
+
+  it("is 'danger' / 'At limit' exactly at the cap", () => {
+    expect(usageTone(20, 20)).toBe("danger");
+    expect(usageLabel(20, 20)).toBe("At limit");
   });
 
   it("is 'danger' / 'Over limit' beyond the max", () => {
@@ -36,9 +41,14 @@ describe("usageTone / usageLabel", () => {
     expect(usageLabel(21, 20)).toBe("Over limit");
   });
 
-  it("is neutral with no limit set", () => {
-    expect(usageTone(5, 0)).toBe("neutral");
-    expect(usageLabel(5, 0)).toBe("No limit set");
+  it("is neutral with no limit set and nothing used", () => {
+    expect(usageTone(0, 0)).toBe("neutral");
+    expect(usageLabel(0, 0)).toBe("No limit set");
+  });
+
+  it("is 'danger' / 'Over limit' when there's usage but no limit set", () => {
+    expect(usageTone(5, 0)).toBe("danger");
+    expect(usageLabel(5, 0)).toBe("Over limit");
   });
 });
 

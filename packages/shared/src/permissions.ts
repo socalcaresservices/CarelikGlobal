@@ -21,6 +21,8 @@ export const permissionSchema = z.enum([
   "credentials.update",
   "authorizations.read",
   "authorizations.update",
+  "services.read",
+  "services.update",
   "incidents.read",
   "incidents.create",
   "incidents.update"
