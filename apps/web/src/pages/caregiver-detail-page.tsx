@@ -2,8 +2,8 @@ import { useEffect, useState, type FormEvent } from "react";
 import { Link, useParams } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowLeft } from "lucide-react";
-import { Card, cn } from "@carelik/ui";
-import { getCredentialStatus } from "@carelik/shared";
+import { Card, StatusBadge, cn, type StatusTone } from "@carelik/ui";
+import { getCredentialStatus, type CredentialStatus } from "@carelik/shared";
 import { useAuth } from "@carelik/auth";
 import { useOrganization } from "@/providers/organization-provider";
 import { supabase } from "@/lib/supabase";
@@ -108,6 +108,20 @@ function formatHours(hours: number) {
   return Number.isInteger(hours) ? String(hours) : hours.toFixed(1);
 }
 
+const credentialStatusTone: Record<CredentialStatus, StatusTone> = {
+  no_expiration: "neutral",
+  active: "success",
+  expiring_soon: "warning",
+  expired: "danger"
+};
+
+const credentialStatusLabel: Record<CredentialStatus, string> = {
+  no_expiration: "No expiration",
+  active: "Active",
+  expiring_soon: "Expiring soon",
+  expired: "Expired"
+};
+
 export function CaregiverDetailPage() {
   const { id } = useParams<{ id: string }>();
   const { activeOrganizationId, hasPermission } = useOrganization();
@@ -118,6 +132,7 @@ export function CaregiverDetailPage() {
   const canSeeMembers = hasPermission("membership.read");
   const canReadAudit = hasPermission("audit.read");
   const canEditProfile = id === user?.id || hasPermission("membership.update");
+  const canManageCredentials = hasPermission("credentials.update");
 
   const weekStart = getWeekStart(new Date());
   const weekEnd = getWeekEnd(weekStart);
@@ -664,21 +679,37 @@ export function CaregiverDetailPage() {
 
       {tab === "credentials" ? (
         <Card>
-          <h3 className="font-semibold text-slate-950">Credentials</h3>
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <h3 className="font-semibold text-slate-950">Credentials</h3>
+            {canManageCredentials ? (
+              <Link
+                to={`/credentials?caregiverId=${id}`}
+                className="text-sm font-medium text-slate-700 underline-offset-2 hover:underline"
+              >
+                Add credential for this caregiver
+              </Link>
+            ) : null}
+          </div>
           {credentialsQuery.isLoading ? (
             <p className="mt-3 text-sm text-slate-500">Loading…</p>
           ) : (credentialsQuery.data ?? []).length === 0 ? (
             <p className="mt-3 text-sm text-slate-400">No credentials tracked yet.</p>
           ) : (
             <ul className="mt-3 divide-y divide-slate-100">
-              {(credentialsQuery.data ?? []).map((row) => (
-                <li key={row.id} className="flex items-center justify-between py-2.5 text-sm">
-                  <span className="text-slate-700">{row.credential_type}</span>
-                  <span className="text-slate-500">
-                    {row.expires_at ? new Date(row.expires_at).toLocaleDateString() : "No expiration"}
-                  </span>
-                </li>
-              ))}
+              {(credentialsQuery.data ?? []).map((row) => {
+                const status = getCredentialStatus(row.expires_at);
+                return (
+                  <li key={row.id} className="flex items-center justify-between py-2.5 text-sm">
+                    <span className="text-slate-700">{row.credential_type}</span>
+                    <span className="flex items-center gap-2">
+                      {row.expires_at ? (
+                        <span className="text-slate-500">{new Date(row.expires_at).toLocaleDateString()}</span>
+                      ) : null}
+                      <StatusBadge label={credentialStatusLabel[status]} tone={credentialStatusTone[status]} />
+                    </span>
+                  </li>
+                );
+              })}
             </ul>
           )}
         </Card>

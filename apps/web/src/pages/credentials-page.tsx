@@ -1,6 +1,7 @@
 import { useEffect, useState, type FormEvent } from "react";
+import { useSearchParams } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Card } from "@carelik/ui";
+import { Card, FormSection, SearchableCombobox, StatusBadge, type ComboboxOption, type StatusTone } from "@carelik/ui";
 import { getCredentialStatus, type CredentialStatus } from "@carelik/shared";
 import { useOrganization } from "@/providers/organization-provider";
 import { supabase } from "@/lib/supabase";
@@ -29,11 +30,11 @@ interface MemberOption {
   display_name: string;
 }
 
-const statusStyles: Record<CredentialStatus, string> = {
-  no_expiration: "bg-slate-100 text-slate-600",
-  active: "bg-emerald-50 text-emerald-700",
-  expiring_soon: "bg-amber-50 text-amber-700",
-  expired: "bg-red-50 text-red-700"
+const statusTone: Record<CredentialStatus, StatusTone> = {
+  no_expiration: "neutral",
+  active: "success",
+  expiring_soon: "warning",
+  expired: "danger"
 };
 
 const statusLabels: Record<CredentialStatus, string> = {
@@ -54,6 +55,13 @@ const emptyForm = {
 export function CredentialsPage() {
   const { activeOrganizationId, activeOrganization, hasPermission } = useOrganization();
   const queryClient = useQueryClient();
+
+  // A caregiver can arrive with ?caregiverId= already set (see the "Add
+  // credential" link on the Caregiver detail page's Credentials tab),
+  // so the caregiver field is pre-filled and locked instead of making
+  // the person re-pick the caregiver they just came from.
+  const [searchParams] = useSearchParams();
+  const lockedCaregiverId = searchParams.get("caregiverId");
 
   const canRead = hasPermission("credentials.read");
   const canManage = hasPermission("credentials.update");
@@ -111,7 +119,7 @@ export function CredentialsPage() {
     status: 150
   });
 
-  const [form, setForm] = useState(emptyForm);
+  const [form, setForm] = useState(() => ({ ...emptyForm, caregiverUserId: lockedCaregiverId ?? "" }));
   const [editingId, setEditingId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
@@ -119,9 +127,16 @@ export function CredentialsPage() {
   const [pendingId, setPendingId] = useState<string | null>(null);
 
   useEffect(() => {
-    setForm(emptyForm);
+    setForm({ ...emptyForm, caregiverUserId: lockedCaregiverId ?? "" });
     setEditingId(null);
-  }, [activeOrganizationId]);
+  }, [activeOrganizationId, lockedCaregiverId]);
+
+  const caregiverOptions: ComboboxOption[] = (membersQuery.data ?? []).map((member) => ({
+    value: member.user_id,
+    label: member.display_name
+  }));
+
+  const editingRow = editingId ? (credentialsQuery.data ?? []).find((row) => row.id === editingId) : undefined;
 
   function startEdit(row: CredentialRow) {
     setEditingId(row.id);
@@ -204,77 +219,71 @@ export function CredentialsPage() {
       {canManage ? (
         <Card>
           <h3 className="font-semibold text-slate-950">{editingId ? "Edit credential" : "Add a credential"}</h3>
-          <form onSubmit={handleSave} className="mt-4 grid gap-3 sm:grid-cols-2">
-            <div>
-              <label htmlFor="credential-caregiver" className="block text-xs font-medium text-slate-600">
-                Caregiver
-              </label>
-              <select
-                id="credential-caregiver"
+          <form onSubmit={handleSave} className="mt-4 space-y-5">
+            <FormSection title="Caregiver & credential" columns={2}>
+              <SearchableCombobox
+                label="Caregiver"
                 required
-                value={form.caregiverUserId}
-                onChange={(event) => setForm({ ...form, caregiverUserId: event.target.value })}
-                className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900"
-              >
-                <option value="" disabled>
-                  Select a caregiver
-                </option>
-                {(membersQuery.data ?? []).map((member) => (
-                  <option key={member.user_id} value={member.user_id}>
-                    {member.display_name}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label htmlFor="credential-type" className="block text-xs font-medium text-slate-600">
-                Credential
-              </label>
-              <input
-                id="credential-type"
-                required
-                placeholder="e.g. CPR Certification"
-                value={form.credentialType}
-                onChange={(event) => setForm({ ...form, credentialType: event.target.value })}
-                className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900"
+                disabled={!!lockedCaregiverId && !editingId}
+                value={form.caregiverUserId || null}
+                onChange={(value) => setForm({ ...form, caregiverUserId: value ?? "" })}
+                options={caregiverOptions}
+                selectedLabel={editingRow?.caregiver_name}
+                placeholder="Search caregivers…"
               />
-            </div>
-            <div>
-              <label htmlFor="credential-issued" className="block text-xs font-medium text-slate-600">
-                Issued date
-              </label>
-              <input
-                id="credential-issued"
-                type="date"
-                value={form.issuedDate}
-                onChange={(event) => setForm({ ...form, issuedDate: event.target.value })}
-                className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900"
-              />
-            </div>
-            <div>
-              <label htmlFor="credential-expires" className="block text-xs font-medium text-slate-600">
-                Expires (leave blank if it doesn&apos;t expire)
-              </label>
-              <input
-                id="credential-expires"
-                type="date"
-                value={form.expiresAt}
-                onChange={(event) => setForm({ ...form, expiresAt: event.target.value })}
-                className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900"
-              />
-            </div>
-            <div className="sm:col-span-2">
-              <label htmlFor="credential-notes" className="block text-xs font-medium text-slate-600">
-                Notes
-              </label>
+              <div>
+                <label htmlFor="credential-type" className="block text-xs font-medium text-slate-600">
+                  Credential
+                </label>
+                <input
+                  id="credential-type"
+                  required
+                  placeholder="e.g. CPR Certification"
+                  value={form.credentialType}
+                  onChange={(event) => setForm({ ...form, credentialType: event.target.value })}
+                  className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900"
+                />
+              </div>
+            </FormSection>
+
+            <FormSection title="Dates" columns={2}>
+              <div>
+                <label htmlFor="credential-issued" className="block text-xs font-medium text-slate-600">
+                  Issued date
+                </label>
+                <input
+                  id="credential-issued"
+                  type="date"
+                  value={form.issuedDate}
+                  onChange={(event) => setForm({ ...form, issuedDate: event.target.value })}
+                  className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900"
+                />
+              </div>
+              <div>
+                <label htmlFor="credential-expires" className="block text-xs font-medium text-slate-600">
+                  Expires (leave blank if it doesn&apos;t expire)
+                </label>
+                <input
+                  id="credential-expires"
+                  type="date"
+                  value={form.expiresAt}
+                  onChange={(event) => setForm({ ...form, expiresAt: event.target.value })}
+                  className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900"
+                />
+              </div>
+            </FormSection>
+
+            <FormSection title="Notes" columns={1}>
               <input
                 id="credential-notes"
+                aria-label="Notes"
                 value={form.notes}
                 onChange={(event) => setForm({ ...form, notes: event.target.value })}
-                className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900"
+                className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900"
               />
-            </div>
-            <div className="flex items-end gap-3 sm:col-span-2">
+            </FormSection>
+
+            <div className="flex items-end gap-3">
               <button
                 type="submit"
                 disabled={saving}
@@ -362,9 +371,7 @@ export function CredentialsPage() {
                       {row.expires_at ? new Date(row.expires_at).toLocaleDateString() : "—"}
                     </td>
                     <td className="py-2.5">
-                      <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${statusStyles[status]}`}>
-                        {statusLabels[status]}
-                      </span>
+                      <StatusBadge label={statusLabels[status]} tone={statusTone[status]} />
                     </td>
                     {canManage ? (
                       <td className="py-2.5 text-right">

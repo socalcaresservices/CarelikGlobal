@@ -1,4 +1,5 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { MemoryRouter } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { useOrganization } from "@/providers/organization-provider";
@@ -40,12 +41,14 @@ function baseOrganization() {
   };
 }
 
-function renderPage() {
+function renderPage(initialPath = "/credentials") {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
-    <QueryClientProvider client={queryClient}>
-      <CredentialsPage />
-    </QueryClientProvider>
+    <MemoryRouter initialEntries={[initialPath]}>
+      <QueryClientProvider client={queryClient}>
+        <CredentialsPage />
+      </QueryClientProvider>
+    </MemoryRouter>
   );
 }
 
@@ -118,11 +121,11 @@ describe("CredentialsPage", () => {
 
     renderPage();
     await waitFor(() => expect(screen.getByText("Add a credential")).toBeInTheDocument());
-    await waitFor(() =>
-      expect(screen.getByRole("option", { name: "Sam Caregiver" })).toBeInTheDocument()
-    );
 
-    fireEvent.change(screen.getByLabelText("Caregiver"), { target: { value: CAREGIVER_ID } });
+    fireEvent.focus(screen.getByLabelText("Caregiver"));
+    await waitFor(() => expect(screen.getByRole("option", { name: "Sam Caregiver" })).toBeInTheDocument());
+    fireEvent.mouseDown(screen.getByRole("option", { name: "Sam Caregiver" }));
+
     fireEvent.change(screen.getByLabelText("Credential"), { target: { value: "TB Test" } });
     fireEvent.click(screen.getByRole("button", { name: "Add credential" }));
 
@@ -135,6 +138,27 @@ describe("CredentialsPage", () => {
         })
       )
     );
+  });
+
+  it("pre-fills and locks the caregiver field when arriving with ?caregiverId=", async () => {
+    mockedUseOrganization.mockReturnValue({
+      ...baseOrganization(),
+      hasPermission: vi.fn(() => true)
+    });
+    mockedRpc.mockImplementation((fn: string) => {
+      if (fn === "list_organization_members") {
+        return Promise.resolve({
+          data: [{ user_id: CAREGIVER_ID, display_name: "Sam Caregiver", status: "active" }],
+          error: null
+        }) as never;
+      }
+      return Promise.resolve({ data: [], error: null }) as never;
+    });
+
+    renderPage(`/credentials?caregiverId=${CAREGIVER_ID}`);
+
+    await waitFor(() => expect(screen.getByLabelText("Caregiver")).toBeDisabled());
+    await waitFor(() => expect(screen.getByLabelText("Caregiver")).toHaveValue("Sam Caregiver"));
   });
 
   it("soft-deletes a credential via Remove", async () => {

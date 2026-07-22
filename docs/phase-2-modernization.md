@@ -225,3 +225,34 @@ scope. The Schedule page's shift-creation form still doesn't collect a
 `service_id`, so newly created shifts still won't be attributed to a
 specific authorization's monthly usage - that's still tracked as
 follow-up work, not yet scheduled into a specific increment.
+
+## Increment 4: Caregiver credentials workflow
+
+No schema changes this increment - `caregiver_credentials` already had
+everything the UI needed (credential_type, issued_date, expires_at,
+notes); this was a UI modernization pass, same treatment
+`AuthorizationsPage` got in Increment 2.
+
+- `CredentialsPage`'s add/edit form: native `<select>` caregiver picker
+  replaced with `SearchableCombobox`; form sectioned with `FormSection`
+  (Caregiver & credential / Dates / Notes); the hand-rolled status pill
+  className map replaced with `StatusBadge`.
+- Added `?caregiverId=` support to `CredentialsPage`, mirroring the
+  `?clientId=`/`?authorizations?clientId=` pattern from Increments 2-3
+  - pre-fills and locks the caregiver combobox while adding (not while
+  editing an existing row).
+- `CaregiverDetailPage`'s Credentials tab previously showed only a raw
+  expiry date with no status signal at all - now shows a `StatusBadge`
+  per row (Active/Expiring soon/Expired/No expiration) and links to
+  "Add credential for this caregiver" (`/credentials?caregiverId=`).
+
+Full pipeline (typecheck, lint, build, test) verified clean across all
+4 packages - 247 tests passing, including new coverage for the
+`?caregiverId=` pre-fill/lock behavior and the Caregiver detail page's
+credential status badges and add-credential link.
+
+Not done in this increment: document upload and a formal verification
+workflow (issuing-authority sign-off, uploaded proof) remain explicitly
+out of scope per the original scope decision - `caregiver_credentials`
+has no document storage or verification-status concept, and none was
+added here.

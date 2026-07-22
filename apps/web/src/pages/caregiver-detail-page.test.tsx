@@ -142,6 +142,9 @@ describe("CaregiverDetailPage", () => {
     fireEvent.click(screen.getByRole("button", { name: "Credentials" }));
 
     await waitFor(() => expect(screen.getByText("CPR")).toBeInTheDocument());
+    expect(screen.getByText("No expiration")).toBeInTheDocument();
+    const link = screen.getByText("Add credential for this caregiver");
+    expect(link.closest("a")).toHaveAttribute("href", `/credentials?caregiverId=${CAREGIVER_ID}`);
   });
 
   it("saves caregiver location and skills", async () => {
