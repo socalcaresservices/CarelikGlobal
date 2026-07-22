@@ -111,9 +111,9 @@ describe("TeamPage", () => {
     renderPage();
 
     await waitFor(() => expect(screen.getByText("Sam Caregiver")).toBeInTheDocument());
-    expect(screen.getByText("caregiver")).toBeInTheDocument();
+    expect(screen.getByRole("cell", { name: "caregiver" })).toBeInTheDocument();
     expect(screen.getByText("15h / 20h")).toBeInTheDocument();
-    expect(screen.getByText("active")).toBeInTheDocument();
+    expect(screen.getByRole("cell", { name: "active" })).toBeInTheDocument();
     expect(screen.queryByText("Add a caregiver")).not.toBeInTheDocument();
 
     const link = screen.getByText("Sam Caregiver").closest("a");
@@ -160,6 +160,37 @@ describe("TeamPage", () => {
 
     expect(screen.queryByText("Sam Caregiver")).not.toBeInTheDocument();
     expect(screen.getByText("Alex Aide")).toBeInTheDocument();
+  });
+
+  it("ANDs the role and status filters together", async () => {
+    mockedUseAuth.mockReturnValue(authUser("user-1"));
+    mockedUseOrganization.mockReturnValue({ ...baseOrganization(), hasPermission: vi.fn(() => true) });
+    mockRpc({
+      members: [
+        { membership_id: "m1", user_id: CAREGIVER_ID, display_name: "Sam Caregiver", role: "caregiver", status: "active" },
+        { membership_id: "m2", user_id: "other-active-staff", display_name: "Alex Staff", role: "staff", status: "active" },
+        { membership_id: "m3", user_id: "other-invited-caregiver", display_name: "Jamie New", role: "caregiver", status: "invited" }
+      ],
+      hours: []
+    });
+
+    renderPage();
+    await waitFor(() => expect(screen.getByText("Sam Caregiver")).toBeInTheDocument());
+
+    fireEvent.change(screen.getByLabelText("Filter by role"), { target: { value: "caregiver" } });
+    expect(screen.getByText("Sam Caregiver")).toBeInTheDocument();
+    expect(screen.getByText("Jamie New")).toBeInTheDocument();
+    expect(screen.queryByText("Alex Staff")).not.toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText("Filter by status"), { target: { value: "active" } });
+    expect(screen.getByText("Sam Caregiver")).toBeInTheDocument();
+    expect(screen.queryByText("Jamie New")).not.toBeInTheDocument();
+    expect(screen.queryByText("Alex Staff")).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByText("Clear all"));
+    expect(screen.getByText("Sam Caregiver")).toBeInTheDocument();
+    expect(screen.getByText("Jamie New")).toBeInTheDocument();
+    expect(screen.getByText("Alex Staff")).toBeInTheDocument();
   });
 
   it("shows an empty state when there are no caregivers", async () => {

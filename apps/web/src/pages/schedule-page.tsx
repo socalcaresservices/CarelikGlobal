@@ -1,11 +1,12 @@
 import { useState, type FormEvent } from "react";
 import { useSearchParams } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Card } from "@carelik/ui";
+import { Card, FilterBar, type ActiveFilter } from "@carelik/ui";
 import { shiftStatusSchema } from "@carelik/shared";
 import { useOrganization } from "@/providers/organization-provider";
 import { supabase } from "@/lib/supabase";
 import { useTableControls } from "@/lib/use-table-controls";
+import { useFilters } from "@/lib/use-filters";
 import { useColumnWidths } from "@/lib/use-column-widths";
 import { SortableHeader } from "@/components/sortable-header";
 import { CaregiverHoursCard } from "@/components/caregiver-hours";
@@ -134,8 +135,12 @@ export function SchedulePage() {
     enabled: !!activeOrganizationId && !!clientId && canManage
   });
 
+  const filters = useFilters<ShiftRow>(shiftsQuery.data, {
+    status: (row, value) => row.status === value
+  });
+
   const table = useTableControls<ShiftRow, "when" | "client" | "caregiver" | "status">(
-    shiftsQuery.data,
+    filters.rows,
     {
       matchesSearch: (row, query) =>
         row.client_name.toLowerCase().includes(query) || row.caregiver_name.toLowerCase().includes(query),
@@ -148,6 +153,16 @@ export function SchedulePage() {
       defaultSort: "when"
     }
   );
+
+  const scheduleActiveFilters: ActiveFilter[] = filters.values.status
+    ? [
+        {
+          key: "status",
+          label: `Status: ${filters.values.status.replace("_", " ")}`,
+          onRemove: () => filters.setFilter("status", "")
+        }
+      ]
+    : [];
 
   const columns = useColumnWidths("carelik:column-widths:schedule", {
     when: 190,
@@ -347,14 +362,38 @@ export function SchedulePage() {
       <Card>
         <div className="flex flex-wrap items-center justify-between gap-3">
           <h3 className="font-semibold text-slate-950">Upcoming and recent shifts</h3>
-          <input
-            type="search"
-            value={table.search}
-            onChange={(event) => table.setSearch(event.target.value)}
-            placeholder="Search client or caregiver"
-            aria-label="Search shifts"
-            className="w-full max-w-xs rounded-lg border border-slate-200 px-3 py-1.5 text-sm text-slate-900"
-          />
+          <FilterBar
+            activeFilters={scheduleActiveFilters}
+            onClearAll={scheduleActiveFilters.length > 0 ? filters.clearAll : undefined}
+            className="w-full sm:w-auto"
+          >
+            <input
+              type="search"
+              value={table.search}
+              onChange={(event) => table.setSearch(event.target.value)}
+              placeholder="Search client or caregiver"
+              aria-label="Search shifts"
+              className="w-full max-w-xs rounded-lg border border-slate-200 px-3 py-1.5 text-sm text-slate-900"
+            />
+            <div>
+              <label htmlFor="schedule-status-filter" className="sr-only">
+                Filter by status
+              </label>
+              <select
+                id="schedule-status-filter"
+                value={filters.values.status ?? ""}
+                onChange={(event) => filters.setFilter("status", event.target.value)}
+                className="rounded-lg border border-slate-200 px-3 py-1.5 text-sm text-slate-900"
+              >
+                <option value="">All statuses</option>
+                {shiftStatusSchema.options.map((option) => (
+                  <option key={option} value={option}>
+                    {option.replace("_", " ")}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </FilterBar>
         </div>
         {rowError ? <p className="mt-2 text-sm text-red-700">{rowError}</p> : null}
         {shiftsQuery.isLoading ? (
@@ -441,7 +480,9 @@ export function SchedulePage() {
               {table.rows.length === 0 ? (
                 <tr>
                   <td colSpan={4} className="py-4 text-center text-slate-400">
-                    {table.search ? "No shifts match your search." : "No shifts scheduled."}
+                    {table.search || scheduleActiveFilters.length > 0
+                      ? "No shifts match your search or filters."
+                      : "No shifts scheduled."}
                   </td>
                 </tr>
               ) : null}

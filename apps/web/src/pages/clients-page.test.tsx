@@ -93,6 +93,52 @@ describe("ClientsPage", () => {
     expect(screen.queryByText("Add a client")).not.toBeInTheDocument();
   });
 
+  it("filters the list by status and clears the filter", async () => {
+    mockedUseOrganization.mockReturnValue({
+      ...baseOrganization(),
+      hasPermission: vi.fn((permission: string) => permission === "clients.read")
+    });
+    const selectMock = mockReadableClients([
+      {
+        id: "22222222-2222-4222-8222-222222222222",
+        first_name: "Jordan",
+        last_name: "Rivera",
+        phone: null,
+        email: null,
+        address: null,
+        care_notes: null,
+        status: "active"
+      },
+      {
+        id: "33333333-3333-4333-8333-333333333333",
+        first_name: "Casey",
+        last_name: "Nolan",
+        phone: null,
+        email: null,
+        address: null,
+        care_notes: null,
+        status: "discharged"
+      }
+    ]);
+    mockedFrom.mockReturnValue({ select: selectMock } as never);
+
+    renderPage();
+    await waitFor(() => expect(screen.getByText("Jordan Rivera")).toBeInTheDocument());
+    expect(screen.getByText("Casey Nolan")).toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText("Filter by status"), { target: { value: "discharged" } });
+
+    expect(screen.queryByText("Jordan Rivera")).not.toBeInTheDocument();
+    expect(screen.getByText("Casey Nolan")).toBeInTheDocument();
+    expect(screen.getByText("Status: discharged")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByText("Clear all"));
+
+    expect(screen.getByText("Jordan Rivera")).toBeInTheDocument();
+    expect(screen.getByText("Casey Nolan")).toBeInTheDocument();
+    expect(screen.queryByText("Status: discharged")).not.toBeInTheDocument();
+  });
+
   it("adds a new client", async () => {
     mockedUseOrganization.mockReturnValue({ ...baseOrganization(), hasPermission: vi.fn(() => true) });
     const selectMock = mockReadableClients([]);

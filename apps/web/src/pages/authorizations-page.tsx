@@ -6,6 +6,8 @@ import {
   FormSection,
   SearchableCombobox,
   StatusBadge,
+  FilterBar,
+  type ActiveFilter,
   type ComboboxOption,
   type StatusTone
 } from "@carelik/ui";
@@ -19,6 +21,7 @@ import {
 import { useOrganization } from "@/providers/organization-provider";
 import { supabase } from "@/lib/supabase";
 import { useTableControls } from "@/lib/use-table-controls";
+import { useFilters } from "@/lib/use-filters";
 import { useColumnWidths } from "@/lib/use-column-widths";
 import { SortableHeader } from "@/components/sortable-header";
 import { PlainHeader } from "@/components/resizable-th";
@@ -165,7 +168,14 @@ export function AuthorizationsPage() {
     void queryClient.invalidateQueries({ queryKey: ["services", activeOrganizationId] });
   }
 
-  const table = useTableControls<AuthorizationRow, "client" | "period" | "usage">(authorizationsQuery.data, {
+  const filters = useFilters<AuthorizationRow>(authorizationsQuery.data, {
+    usage: (row, value) =>
+      getAuthorizationUsageStatus(row.max_monthly_hours, row.hours_used_this_month, row.hours_scheduled_this_month) ===
+      value,
+    expiry: (row, value) => getAuthorizationExpiryStatus(row.period_end) === value
+  });
+
+  const table = useTableControls<AuthorizationRow, "client" | "period" | "usage">(filters.rows, {
     matchesSearch: (row, query) =>
       row.client_name.toLowerCase().includes(query) ||
       row.service_name.toLowerCase().includes(query) ||
@@ -181,6 +191,26 @@ export function AuthorizationsPage() {
     },
     defaultSort: "period"
   });
+
+  const usageStatusOptions = Object.keys(usageLabelText) as AuthorizationUsageStatus[];
+  const expiryStatusOptions = Object.keys(expiryLabelText) as AuthorizationExpiryStatus[];
+
+  const authorizationActiveFilters: ActiveFilter[] = [
+    filters.values.usage
+      ? {
+          key: "usage",
+          label: `Usage: ${usageLabelText[filters.values.usage as AuthorizationUsageStatus]}`,
+          onRemove: () => filters.setFilter("usage", "")
+        }
+      : null,
+    filters.values.expiry
+      ? {
+          key: "expiry",
+          label: `Expiry: ${expiryLabelText[filters.values.expiry as AuthorizationExpiryStatus]}`,
+          onRemove: () => filters.setFilter("expiry", "")
+        }
+      : null
+  ].filter((entry): entry is ActiveFilter => entry !== null);
 
   const columns = useColumnWidths("carelik:column-widths:authorizations", {
     client: 150,
@@ -568,14 +598,56 @@ export function AuthorizationsPage() {
       <Card>
         <div className="flex flex-wrap items-center justify-between gap-3">
           <h3 className="font-semibold text-slate-950">All authorizations</h3>
-          <input
-            type="search"
-            value={table.search}
-            onChange={(event) => table.setSearch(event.target.value)}
-            placeholder="Search client, service, payer, or authorization #"
-            aria-label="Search authorizations"
-            className="w-full max-w-xs rounded-lg border border-slate-200 px-3 py-1.5 text-sm text-slate-900"
-          />
+          <FilterBar
+            activeFilters={authorizationActiveFilters}
+            onClearAll={authorizationActiveFilters.length > 0 ? filters.clearAll : undefined}
+            className="w-full sm:w-auto"
+          >
+            <input
+              type="search"
+              value={table.search}
+              onChange={(event) => table.setSearch(event.target.value)}
+              placeholder="Search client, service, payer, or authorization #"
+              aria-label="Search authorizations"
+              className="w-full max-w-xs rounded-lg border border-slate-200 px-3 py-1.5 text-sm text-slate-900"
+            />
+            <div>
+              <label htmlFor="auth-usage-filter" className="sr-only">
+                Filter by usage
+              </label>
+              <select
+                id="auth-usage-filter"
+                value={filters.values.usage ?? ""}
+                onChange={(event) => filters.setFilter("usage", event.target.value)}
+                className="rounded-lg border border-slate-200 px-3 py-1.5 text-sm text-slate-900"
+              >
+                <option value="">All usage</option>
+                {usageStatusOptions.map((option) => (
+                  <option key={option} value={option}>
+                    {usageLabelText[option]}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label htmlFor="auth-expiry-filter" className="sr-only">
+                Filter by expiry
+              </label>
+              <select
+                id="auth-expiry-filter"
+                value={filters.values.expiry ?? ""}
+                onChange={(event) => filters.setFilter("expiry", event.target.value)}
+                className="rounded-lg border border-slate-200 px-3 py-1.5 text-sm text-slate-900"
+              >
+                <option value="">All expiry</option>
+                {expiryStatusOptions.map((option) => (
+                  <option key={option} value={option}>
+                    {expiryLabelText[option]}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </FilterBar>
         </div>
         {rowError ? <p className="mt-2 text-sm text-red-700">{rowError}</p> : null}
         {authorizationsQuery.isLoading ? (
@@ -703,7 +775,9 @@ export function AuthorizationsPage() {
               {table.rows.length === 0 ? (
                 <tr>
                   <td colSpan={canManage ? 9 : 8} className="py-4 text-center text-slate-400">
-                    {table.search ? "No authorizations match your search." : "No authorizations tracked yet."}
+                    {table.search || authorizationActiveFilters.length > 0
+                      ? "No authorizations match your search or filters."
+                      : "No authorizations tracked yet."}
                   </td>
                 </tr>
               ) : null}

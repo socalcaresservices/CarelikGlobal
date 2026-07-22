@@ -133,7 +133,7 @@ describe("AuthorizationsPage", () => {
 
     await waitFor(() => expect(screen.getByText("Jordan Rivera")).toBeInTheDocument());
     expect(screen.getByText("Personal care")).toBeInTheDocument();
-    expect(screen.getByText("Over limit")).toBeInTheDocument();
+    expect(screen.getByText("Over limit", { selector: "span" })).toBeInTheDocument();
     expect(screen.queryByText("Add an authorization")).not.toBeInTheDocument();
   });
 

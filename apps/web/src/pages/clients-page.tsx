@@ -1,11 +1,12 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
-import { Card, FormSection } from "@carelik/ui";
+import { Card, FormSection, FilterBar, type ActiveFilter } from "@carelik/ui";
 import { clientStatusSchema } from "@carelik/shared";
 import { useOrganization } from "@/providers/organization-provider";
 import { supabase } from "@/lib/supabase";
 import { useTableControls } from "@/lib/use-table-controls";
+import { useFilters } from "@/lib/use-filters";
 import { useColumnWidths } from "@/lib/use-column-widths";
 import { SortableHeader } from "@/components/sortable-header";
 import { PlainHeader } from "@/components/resizable-th";
@@ -62,7 +63,11 @@ export function ClientsPage() {
     void queryClient.invalidateQueries({ queryKey: ["clients", activeOrganizationId] });
   }
 
-  const table = useTableControls<ClientRow, "name" | "status">(clientsQuery.data, {
+  const filters = useFilters<ClientRow>(clientsQuery.data, {
+    status: (row, value) => row.status === value
+  });
+
+  const table = useTableControls<ClientRow, "name" | "status">(filters.rows, {
     matchesSearch: (row, query) =>
       `${row.first_name} ${row.last_name}`.toLowerCase().includes(query) ||
       (row.phone ?? "").toLowerCase().includes(query) ||
@@ -157,6 +162,16 @@ export function ClientsPage() {
       setPendingId(null);
     }
   }
+
+  const clientActiveFilters: ActiveFilter[] = filters.values.status
+    ? [
+        {
+          key: "status",
+          label: `Status: ${filters.values.status}`,
+          onRemove: () => filters.setFilter("status", "")
+        }
+      ]
+    : [];
 
   if (!canRead) {
     return (
@@ -307,14 +322,38 @@ export function ClientsPage() {
       <Card>
         <div className="flex flex-wrap items-center justify-between gap-3">
           <h3 className="font-semibold text-slate-950">All clients</h3>
-          <input
-            type="search"
-            value={table.search}
-            onChange={(event) => table.setSearch(event.target.value)}
-            placeholder="Search name, phone, or email"
-            aria-label="Search clients"
-            className="w-full max-w-xs rounded-lg border border-slate-200 px-3 py-1.5 text-sm text-slate-900"
-          />
+          <FilterBar
+            activeFilters={clientActiveFilters}
+            onClearAll={clientActiveFilters.length > 0 ? filters.clearAll : undefined}
+            className="w-full sm:w-auto"
+          >
+            <input
+              type="search"
+              value={table.search}
+              onChange={(event) => table.setSearch(event.target.value)}
+              placeholder="Search name, phone, or email"
+              aria-label="Search clients"
+              className="w-full max-w-xs rounded-lg border border-slate-200 px-3 py-1.5 text-sm text-slate-900"
+            />
+            <div>
+              <label htmlFor="client-status-filter" className="sr-only">
+                Filter by status
+              </label>
+              <select
+                id="client-status-filter"
+                value={filters.values.status ?? ""}
+                onChange={(event) => filters.setFilter("status", event.target.value)}
+                className="rounded-lg border border-slate-200 px-3 py-1.5 text-sm text-slate-900"
+              >
+                <option value="">All statuses</option>
+                {clientStatusSchema.options.map((option) => (
+                  <option key={option} value={option}>
+                    {option}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </FilterBar>
         </div>
         {rowError ? <p className="mt-2 text-sm text-red-700">{rowError}</p> : null}
         {clientsQuery.isLoading ? (
@@ -390,7 +429,9 @@ export function ClientsPage() {
               {table.rows.length === 0 ? (
                 <tr>
                   <td colSpan={canManage ? 4 : 3} className="py-4 text-center text-slate-400">
-                    {table.search ? "No clients match your search." : "No clients yet."}
+                    {table.search || clientActiveFilters.length > 0
+                      ? "No clients match your search or filters."
+                      : "No clients yet."}
                   </td>
                 </tr>
               ) : null}

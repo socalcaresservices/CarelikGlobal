@@ -1,11 +1,21 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { useSearchParams } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Card, FormSection, SearchableCombobox, StatusBadge, type ComboboxOption, type StatusTone } from "@carelik/ui";
+import {
+  Card,
+  FormSection,
+  SearchableCombobox,
+  StatusBadge,
+  FilterBar,
+  type ActiveFilter,
+  type ComboboxOption,
+  type StatusTone
+} from "@carelik/ui";
 import { getCredentialStatus, type CredentialStatus } from "@carelik/shared";
 import { useOrganization } from "@/providers/organization-provider";
 import { supabase } from "@/lib/supabase";
 import { useTableControls } from "@/lib/use-table-controls";
+import { useFilters } from "@/lib/use-filters";
 import { useColumnWidths } from "@/lib/use-column-widths";
 import { SortableHeader } from "@/components/sortable-header";
 import { PlainHeader } from "@/components/resizable-th";
@@ -96,7 +106,11 @@ export function CredentialsPage() {
     void queryClient.invalidateQueries({ queryKey: ["credentials", activeOrganizationId] });
   }
 
-  const table = useTableControls<CredentialRow, "caregiver" | "type" | "expires">(credentialsQuery.data, {
+  const filters = useFilters<CredentialRow>(credentialsQuery.data, {
+    status: (row, value) => getCredentialStatus(row.expires_at) === value
+  });
+
+  const table = useTableControls<CredentialRow, "caregiver" | "type" | "expires">(filters.rows, {
     matchesSearch: (row, query) =>
       row.caregiver_name.toLowerCase().includes(query) || row.credential_type.toLowerCase().includes(query),
     sorters: {
@@ -111,6 +125,18 @@ export function CredentialsPage() {
     },
     defaultSort: "expires"
   });
+
+  const credentialStatusOptions = Object.keys(statusLabels) as CredentialStatus[];
+
+  const credentialsActiveFilters: ActiveFilter[] = filters.values.status
+    ? [
+        {
+          key: "status",
+          label: `Status: ${statusLabels[filters.values.status as CredentialStatus]}`,
+          onRemove: () => filters.setFilter("status", "")
+        }
+      ]
+    : [];
 
   const columns = useColumnWidths("carelik:column-widths:credentials", {
     caregiver: 180,
@@ -309,14 +335,38 @@ export function CredentialsPage() {
       <Card>
         <div className="flex flex-wrap items-center justify-between gap-3">
           <h3 className="font-semibold text-slate-950">All credentials</h3>
-          <input
-            type="search"
-            value={table.search}
-            onChange={(event) => table.setSearch(event.target.value)}
-            placeholder="Search caregiver or credential"
-            aria-label="Search credentials"
-            className="w-full max-w-xs rounded-lg border border-slate-200 px-3 py-1.5 text-sm text-slate-900"
-          />
+          <FilterBar
+            activeFilters={credentialsActiveFilters}
+            onClearAll={credentialsActiveFilters.length > 0 ? filters.clearAll : undefined}
+            className="w-full sm:w-auto"
+          >
+            <input
+              type="search"
+              value={table.search}
+              onChange={(event) => table.setSearch(event.target.value)}
+              placeholder="Search caregiver or credential"
+              aria-label="Search credentials"
+              className="w-full max-w-xs rounded-lg border border-slate-200 px-3 py-1.5 text-sm text-slate-900"
+            />
+            <div>
+              <label htmlFor="credentials-status-filter" className="sr-only">
+                Filter by status
+              </label>
+              <select
+                id="credentials-status-filter"
+                value={filters.values.status ?? ""}
+                onChange={(event) => filters.setFilter("status", event.target.value)}
+                className="rounded-lg border border-slate-200 px-3 py-1.5 text-sm text-slate-900"
+              >
+                <option value="">All statuses</option>
+                {credentialStatusOptions.map((option) => (
+                  <option key={option} value={option}>
+                    {statusLabels[option]}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </FilterBar>
         </div>
         {rowError ? <p className="mt-2 text-sm text-red-700">{rowError}</p> : null}
         {credentialsQuery.isLoading ? (
@@ -400,7 +450,9 @@ export function CredentialsPage() {
               {table.rows.length === 0 ? (
                 <tr>
                   <td colSpan={canManage ? 5 : 4} className="py-4 text-center text-slate-400">
-                    {table.search ? "No credentials match your search." : "No credentials tracked yet."}
+                    {table.search || credentialsActiveFilters.length > 0
+                      ? "No credentials match your search or filters."
+                      : "No credentials tracked yet."}
                   </td>
                 </tr>
               ) : null}

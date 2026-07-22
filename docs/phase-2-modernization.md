@@ -300,3 +300,60 @@ the compact multi-block card layout would be visually inappropriate
 inside a `<td>` in an already-dense, resizable-column table; the
 existing minimal text there stays consistent with every other list
 page's dense-table convention.
+
+## Increment 6: Universal filter system across list pages
+
+`FilterBar` (built in Increment 1) had a shell but no caller - every
+list page still only had search + sort via `useTableControls`, no way
+to narrow by status/role/severity. This increment wires it into all 8
+list pages and adds the missing piece: a generic client-side filter
+hook.
+
+- New `apps/web/src/lib/use-filters.ts` (`useFilters<T>(rows,
+  matchers)`): the filtering counterpart to `useTableControls`,
+  deliberately kept as a separate hook rather than folded into it, so
+  the existing, already-tested search+sort API doesn't change shape.
+  Each page composes them: `useFilters` narrows the raw query rows
+  first, then `useTableControls` does search+sort on what's left.
+  Filters are AND-ed; a filter is "active" only when its value is a
+  non-empty string.
+- Wired into all 8 list pages, one dropdown per categorical field the
+  page already has, reusing each page's existing zod enum or derived-
+  status function rather than inventing new option lists: Clients
+  (status), Team and Access (role, status - two AND-ed filters),
+  Schedule (shift status), Credentials (derived status via
+  `getCredentialStatus`), Authorizations (derived usage status via
+  `getAuthorizationUsageStatus` and derived expiry status via
+  `getAuthorizationExpiryStatus` - two AND-ed filters), Incidents
+  (severity, status - two AND-ed filters), and Audit (record/entity
+  type - options derived from what's actually in the log, since audit
+  entries can come from any table and there's no fixed enum for "every
+  entity type that could ever appear").
+- Each page's `FilterBar` renders active-filter chips with a "Clear
+  all" button, and each empty-state message now distinguishes "no
+  rows at all" from "no rows match your search or filters."
+- `FilterBarProps.onClearAll`/`activeFilters`/`className` widened to
+  accept `undefined` explicitly - the same `exactOptionalPropertyTypes`
+  fix pattern as `StatusBadgeProps.className` and
+  `SearchableComboboxProps.selectedLabel` from earlier increments.
+
+Fixed an unrelated test-fragility issue this surfaced: several
+existing tests asserted on bare enum text like `screen.getByText("high")`
+or `screen.getByText("active")`, which now also matches the new filter
+`<option>` elements with the same text. Scoped those assertions to
+`{ selector: "span" }` (status badges) or `getByRole("cell", ...)`
+(plain table cells) so they target the actual rendered value instead
+of whichever matching node happens to come first in the DOM.
+
+Full pipeline (typecheck, lint, build, test) verified clean across all
+4 packages - 262 tests passing, including a new `use-filters` unit
+test suite and new filter-interaction tests on `ClientsPage` (single
+filter + clear) and `TeamPage` (two AND-ed filters + clear).
+
+Not done in this increment: filters are client-side only, consistent
+with `useTableControls`'s existing "every list here is small enough to
+filter in memory" design note - revisit both together if any list ever
+needs server-side pagination. No date-range filters were added (e.g.
+Schedule's "When" or Audit's "When" columns) - the existing sort
+already covers ordering by date, and no one asked for a range filter
+specifically; easy to add on top of `useFilters` later if needed.

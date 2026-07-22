@@ -1,11 +1,12 @@
 import { useState, type FormEvent } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Card } from "@carelik/ui";
+import { Card, FilterBar, type ActiveFilter } from "@carelik/ui";
 import { incidentSeveritySchema, incidentStatusSchema } from "@carelik/shared";
 import type { IncidentSeverity, IncidentStatus } from "@carelik/shared";
 import { useOrganization } from "@/providers/organization-provider";
 import { supabase } from "@/lib/supabase";
 import { useTableControls } from "@/lib/use-table-controls";
+import { useFilters } from "@/lib/use-filters";
 import { useColumnWidths } from "@/lib/use-column-widths";
 import { SortableHeader } from "@/components/sortable-header";
 import { PlainHeader } from "@/components/resizable-th";
@@ -122,7 +123,12 @@ export function IncidentsPage() {
     void queryClient.invalidateQueries({ queryKey: ["incidents", activeOrganizationId] });
   }
 
-  const table = useTableControls<IncidentRow, "when" | "category" | "severity" | "status">(incidentsQuery.data, {
+  const filters = useFilters<IncidentRow>(incidentsQuery.data, {
+    severity: (row, value) => row.severity === value,
+    status: (row, value) => row.status === value
+  });
+
+  const table = useTableControls<IncidentRow, "when" | "category" | "severity" | "status">(filters.rows, {
     matchesSearch: (row, query) =>
       row.category.toLowerCase().includes(query) ||
       (row.client_name ?? "").toLowerCase().includes(query) ||
@@ -135,6 +141,19 @@ export function IncidentsPage() {
     },
     defaultSort: "when"
   });
+
+  const incidentActiveFilters: ActiveFilter[] = [
+    filters.values.severity
+      ? { key: "severity", label: `Severity: ${filters.values.severity}`, onRemove: () => filters.setFilter("severity", "") }
+      : null,
+    filters.values.status
+      ? {
+          key: "status",
+          label: `Status: ${filters.values.status.replace("_", " ")}`,
+          onRemove: () => filters.setFilter("status", "")
+        }
+      : null
+  ].filter((entry): entry is ActiveFilter => entry !== null);
 
   const columns = useColumnWidths("carelik:column-widths:incidents", {
     when: 190,
@@ -324,14 +343,56 @@ export function IncidentsPage() {
       <Card>
         <div className="flex flex-wrap items-center justify-between gap-3">
           <h3 className="font-semibold text-slate-950">All incidents</h3>
-          <input
-            type="search"
-            value={table.search}
-            onChange={(event) => table.setSearch(event.target.value)}
-            placeholder="Search category, client, or caregiver"
-            aria-label="Search incidents"
-            className="w-full max-w-xs rounded-lg border border-slate-200 px-3 py-1.5 text-sm text-slate-900"
-          />
+          <FilterBar
+            activeFilters={incidentActiveFilters}
+            onClearAll={incidentActiveFilters.length > 0 ? filters.clearAll : undefined}
+            className="w-full sm:w-auto"
+          >
+            <input
+              type="search"
+              value={table.search}
+              onChange={(event) => table.setSearch(event.target.value)}
+              placeholder="Search category, client, or caregiver"
+              aria-label="Search incidents"
+              className="w-full max-w-xs rounded-lg border border-slate-200 px-3 py-1.5 text-sm text-slate-900"
+            />
+            <div>
+              <label htmlFor="incident-severity-filter" className="sr-only">
+                Filter by severity
+              </label>
+              <select
+                id="incident-severity-filter"
+                value={filters.values.severity ?? ""}
+                onChange={(event) => filters.setFilter("severity", event.target.value)}
+                className="rounded-lg border border-slate-200 px-3 py-1.5 text-sm text-slate-900"
+              >
+                <option value="">All severities</option>
+                {incidentSeveritySchema.options.map((option) => (
+                  <option key={option} value={option}>
+                    {option}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label htmlFor="incident-status-filter" className="sr-only">
+                Filter by status
+              </label>
+              <select
+                id="incident-status-filter"
+                value={filters.values.status ?? ""}
+                onChange={(event) => filters.setFilter("status", event.target.value)}
+                className="rounded-lg border border-slate-200 px-3 py-1.5 text-sm text-slate-900"
+              >
+                <option value="">All statuses</option>
+                {incidentStatusSchema.options.map((option) => (
+                  <option key={option} value={option}>
+                    {option.replace("_", " ")}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </FilterBar>
         </div>
         {rowError ? <p className="mt-2 text-sm text-red-700">{rowError}</p> : null}
         {incidentsQuery.isLoading ? (
@@ -423,7 +484,9 @@ export function IncidentsPage() {
               {table.rows.length === 0 ? (
                 <tr>
                   <td colSpan={5} className="py-4 text-center text-slate-400">
-                    {table.search ? "No incidents match your search." : "No incidents reported."}
+                    {table.search || incidentActiveFilters.length > 0
+                      ? "No incidents match your search or filters."
+                      : "No incidents reported."}
                   </td>
                 </tr>
               ) : null}

@@ -99,7 +99,7 @@ describe("CredentialsPage", () => {
 
     await waitFor(() => expect(screen.getByText("Sam Caregiver")).toBeInTheDocument());
     expect(screen.getByText("CPR Certification")).toBeInTheDocument();
-    expect(screen.getByText("Expired")).toBeInTheDocument();
+    expect(screen.getByText("Expired", { selector: "span" })).toBeInTheDocument();
   });
 
   it("adds a new credential", async () => {

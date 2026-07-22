@@ -98,8 +98,8 @@ describe("IncidentsPage", () => {
     renderPage();
 
     await waitFor(() => expect(screen.getByText("Fall")).toBeInTheDocument());
-    expect(screen.getByText("high")).toBeInTheDocument();
-    expect(screen.getByText("open")).toBeInTheDocument();
+    expect(screen.getByText("high", { selector: "span" })).toBeInTheDocument();
+    expect(screen.getByText("open", { selector: "span" })).toBeInTheDocument();
   });
 
   it("files a new incident", async () => {

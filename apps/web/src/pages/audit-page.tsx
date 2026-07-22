@@ -1,8 +1,9 @@
 import { useQuery } from "@tanstack/react-query";
-import { Card } from "@carelik/ui";
+import { Card, FilterBar, type ActiveFilter } from "@carelik/ui";
 import { useOrganization } from "@/providers/organization-provider";
 import { supabase } from "@/lib/supabase";
 import { useTableControls } from "@/lib/use-table-controls";
+import { useFilters } from "@/lib/use-filters";
 import { useColumnWidths } from "@/lib/use-column-widths";
 import { SortableHeader } from "@/components/sortable-header";
 
@@ -41,8 +42,19 @@ export function AuditPage() {
     enabled: !!activeOrganizationId && canRead
   });
 
+  // Record-type options are derived from what's actually in the log
+  // (clients, shifts, credentials...) rather than a fixed enum, since
+  // the audit trigger runs generically off any table with an
+  // organization_id + id column - there's no single source of truth
+  // for "every entity type that could ever appear here."
+  const entityTypeOptions = Array.from(new Set((auditQuery.data ?? []).map((row) => row.entity_type))).sort();
+
+  const filters = useFilters<AuditLogRow>(auditQuery.data, {
+    entityType: (row, value) => row.entity_type === value
+  });
+
   const table = useTableControls<AuditLogRow, "when" | "who" | "action" | "record">(
-    auditQuery.data,
+    filters.rows,
     {
       matchesSearch: (row, query) =>
         row.actor_display_name.toLowerCase().includes(query) ||
@@ -61,6 +73,16 @@ export function AuditPage() {
       // explicitly clicks a column.
     }
   );
+
+  const auditActiveFilters: ActiveFilter[] = filters.values.entityType
+    ? [
+        {
+          key: "entityType",
+          label: `Record: ${filters.values.entityType}`,
+          onRemove: () => filters.setFilter("entityType", "")
+        }
+      ]
+    : [];
 
   const columns = useColumnWidths("carelik:column-widths:audit", {
     when: 190,
@@ -100,14 +122,40 @@ export function AuditPage() {
       <Card>
         <div className="flex flex-wrap items-center justify-between gap-3">
           <p className="text-xs font-medium uppercase tracking-wide text-slate-400">Activity</p>
-          <input
-            type="search"
-            value={table.search}
-            onChange={(event) => table.setSearch(event.target.value)}
-            placeholder="Search who, action, or record"
-            aria-label="Search audit trail"
-            className="w-full max-w-xs rounded-lg border border-slate-200 px-3 py-1.5 text-sm text-slate-900"
-          />
+          <FilterBar
+            activeFilters={auditActiveFilters}
+            onClearAll={auditActiveFilters.length > 0 ? filters.clearAll : undefined}
+            className="w-full sm:w-auto"
+          >
+            <input
+              type="search"
+              value={table.search}
+              onChange={(event) => table.setSearch(event.target.value)}
+              placeholder="Search who, action, or record"
+              aria-label="Search audit trail"
+              className="w-full max-w-xs rounded-lg border border-slate-200 px-3 py-1.5 text-sm text-slate-900"
+            />
+            {entityTypeOptions.length > 0 ? (
+              <div>
+                <label htmlFor="audit-record-filter" className="sr-only">
+                  Filter by record type
+                </label>
+                <select
+                  id="audit-record-filter"
+                  value={filters.values.entityType ?? ""}
+                  onChange={(event) => filters.setFilter("entityType", event.target.value)}
+                  className="rounded-lg border border-slate-200 px-3 py-1.5 text-sm text-slate-900"
+                >
+                  <option value="">All records</option>
+                  {entityTypeOptions.map((option) => (
+                    <option key={option} value={option}>
+                      {option}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            ) : null}
+          </FilterBar>
         </div>
         {auditQuery.isLoading ? (
           <p className="mt-3 text-sm text-slate-500">Loading…</p>
@@ -169,7 +217,9 @@ export function AuditPage() {
               {table.rows.length === 0 ? (
                 <tr>
                   <td colSpan={4} className="py-4 text-center text-slate-400">
-                    {table.search ? "No activity matches your search." : "No activity recorded yet."}
+                    {table.search || auditActiveFilters.length > 0
+                      ? "No activity matches your search or filters."
+                      : "No activity recorded yet."}
                   </td>
                 </tr>
               ) : null}

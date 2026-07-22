@@ -1,13 +1,14 @@
 import { useState, type FormEvent } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
-import { Card } from "@carelik/ui";
-import { systemRoleSchema } from "@carelik/shared";
+import { Card, FilterBar, type ActiveFilter } from "@carelik/ui";
+import { systemRoleSchema, membershipStatusSchema } from "@carelik/shared";
 import { useAuth } from "@carelik/auth";
 import { useOrganization } from "@/providers/organization-provider";
 import { supabase } from "@/lib/supabase";
 import { inviteMember, type InvitableRole } from "@/lib/invitations";
 import { useTableControls } from "@/lib/use-table-controls";
+import { useFilters } from "@/lib/use-filters";
 import { useColumnWidths } from "@/lib/use-column-widths";
 import { SortableHeader } from "@/components/sortable-header";
 import { PlainHeader } from "@/components/resizable-th";
@@ -105,7 +106,12 @@ export function TeamPage() {
     (hoursQuery.data ?? []).map((row) => [row.caregiver_user_id, row] as const)
   );
 
-  const table = useTableControls<MemberRow, "name" | "role" | "status">(membersQuery.data, {
+  const filters = useFilters<MemberRow>(membersQuery.data, {
+    role: (row, value) => row.role === value,
+    status: (row, value) => row.status === value
+  });
+
+  const table = useTableControls<MemberRow, "name" | "role" | "status">(filters.rows, {
     matchesSearch: (row, query) => row.display_name.toLowerCase().includes(query),
     sorters: {
       name: (a, b) => a.display_name.localeCompare(b.display_name),
@@ -113,6 +119,15 @@ export function TeamPage() {
       status: (a, b) => a.status.localeCompare(b.status)
     }
   });
+
+  const teamActiveFilters: ActiveFilter[] = [
+    filters.values.role
+      ? { key: "role", label: `Role: ${formatRole(filters.values.role)}`, onRemove: () => filters.setFilter("role", "") }
+      : null,
+    filters.values.status
+      ? { key: "status", label: `Status: ${filters.values.status}`, onRemove: () => filters.setFilter("status", "") }
+      : null
+  ].filter((entry): entry is ActiveFilter => entry !== null);
 
   const columns = useColumnWidths("carelik:column-widths:team", {
     name: 220,
@@ -319,14 +334,56 @@ export function TeamPage() {
       <Card>
         <div className="flex flex-wrap items-center justify-between gap-3">
           <h3 className="font-semibold text-slate-950">All caregivers</h3>
-          <input
-            type="search"
-            value={table.search}
-            onChange={(event) => table.setSearch(event.target.value)}
-            placeholder="Search by name"
-            aria-label="Search team"
-            className="w-full max-w-xs rounded-lg border border-slate-200 px-3 py-1.5 text-sm text-slate-900"
-          />
+          <FilterBar
+            activeFilters={teamActiveFilters}
+            onClearAll={teamActiveFilters.length > 0 ? filters.clearAll : undefined}
+            className="w-full sm:w-auto"
+          >
+            <input
+              type="search"
+              value={table.search}
+              onChange={(event) => table.setSearch(event.target.value)}
+              placeholder="Search by name"
+              aria-label="Search team"
+              className="w-full max-w-xs rounded-lg border border-slate-200 px-3 py-1.5 text-sm text-slate-900"
+            />
+            <div>
+              <label htmlFor="team-role-filter" className="sr-only">
+                Filter by role
+              </label>
+              <select
+                id="team-role-filter"
+                value={filters.values.role ?? ""}
+                onChange={(event) => filters.setFilter("role", event.target.value)}
+                className="rounded-lg border border-slate-200 px-3 py-1.5 text-sm text-slate-900"
+              >
+                <option value="">All roles</option>
+                {invitableRoles.map((option) => (
+                  <option key={option} value={option}>
+                    {formatRole(option)}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label htmlFor="team-status-filter" className="sr-only">
+                Filter by status
+              </label>
+              <select
+                id="team-status-filter"
+                value={filters.values.status ?? ""}
+                onChange={(event) => filters.setFilter("status", event.target.value)}
+                className="rounded-lg border border-slate-200 px-3 py-1.5 text-sm text-slate-900"
+              >
+                <option value="">All statuses</option>
+                {membershipStatusSchema.options.map((option) => (
+                  <option key={option} value={option}>
+                    {option}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </FilterBar>
         </div>
         {actionError ? <p className="mt-2 text-sm text-red-700">{actionError}</p> : null}
         {membersQuery.isLoading ? (
@@ -440,7 +497,9 @@ export function TeamPage() {
               {table.rows.length === 0 ? (
                 <tr>
                   <td colSpan={canManage ? 5 : 4} className="py-4 text-center text-slate-400">
-                    {table.search ? "No caregivers match your search." : "No team members yet."}
+                    {table.search || teamActiveFilters.length > 0
+                      ? "No caregivers match your search or filters."
+                      : "No team members yet."}
                   </td>
                 </tr>
               ) : null}

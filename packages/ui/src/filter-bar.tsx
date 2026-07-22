@@ -40,9 +40,9 @@ export interface ActiveFilter {
 // chip row and layout, not any particular filter's logic.
 export interface FilterBarProps {
   children: ReactNode;
-  activeFilters?: ActiveFilter[];
-  onClearAll?: () => void;
-  className?: string;
+  activeFilters?: ActiveFilter[] | undefined;
+  onClearAll?: (() => void) | undefined;
+  className?: string | undefined;
 }
 
 export function FilterBar({ children, activeFilters = [], onClearAll, className }: FilterBarProps) {
