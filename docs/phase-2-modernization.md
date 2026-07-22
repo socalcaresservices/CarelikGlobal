@@ -256,3 +256,47 @@ workflow (issuing-authority sign-off, uploaded proof) remain explicitly
 out of scope per the original scope decision - `caregiver_credentials`
 has no document storage or verification-status concept, and none was
 added here.
+
+## Increment 5: Caregiver capacity calculations + presentation
+
+No schema changes this increment - `get_caregiver_hours` already
+returned everything needed (`target_hours_per_week`,
+`scheduled_hours`); this was purely a presentation pass, finally giving
+`UtilizationCard` (built in Increment 1 "for the caregiver capacity
+summary") its first real caller.
+
+- `CaregiverDetailPage`'s KPI section: the 4-column grid's
+  target/scheduled hand-rolled cells (a raw "Xh" number plus a
+  separate "(over target)" text flag) are replaced with a 2-column
+  grid (Upcoming shifts, Credentials expiring) followed by a "This
+  week's capacity" `UtilizationCard` in `compact` mode - the same
+  available/scheduled/remaining + progress-bar summary already used
+  elsewhere, now wired to a real single-caregiver caller instead of
+  sitting unused.
+- `caregiver-hours.tsx` (the Schedule page's org-wide caregiver hours
+  table) had its own separate 3-state hand-rolled status column
+  ("No target set" / "Over target" / "On track", each a colored dot +
+  text) - replaced with `StatusBadge` driven by the shared
+  `usageTone`/`usageLabel` functions, so the status vocabulary now
+  matches the 4-tier system already used by authorizations and the new
+  `UtilizationCard` (Normal usage / Approaching limit / At limit / Over
+  limit), instead of a third, table-specific 3-state naming scheme.
+  The table's structure, inline target-editing, and Gap column are
+  unchanged - only the Status cell's presentation changed.
+- Removed now-dead code left behind by both swaps: `hasTarget`/
+  `isOverTarget`/`formatHours` (unused after the KPI grid replacement)
+  in `CaregiverDetailPage`, and `isOver`/the `cn` import (unused after
+  the status column replacement) in `caregiver-hours.tsx`.
+
+Full pipeline (typecheck, lint, build, test) verified clean across all
+4 packages - 254 tests passing, including updated assertions for the
+new "125% utilized" `UtilizationCard` label and the new "Over limit"/
+"Normal usage" status badge text.
+
+Not done in this increment: `team-page.tsx`'s dense sortable roster
+table still shows plain "Xh / Yh" scheduled-vs-target text rather than
+`UtilizationCard` or a `StatusBadge` - deliberately left as-is, since
+the compact multi-block card layout would be visually inappropriate
+inside a `<td>` in an already-dense, resizable-column table; the
+existing minimal text there stays consistent with every other list
+page's dense-table convention.

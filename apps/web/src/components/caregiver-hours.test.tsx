@@ -87,11 +87,11 @@ describe("CaregiverHoursCard", () => {
 
     renderCard();
 
-    await waitFor(() => expect(screen.getByText("Over target")).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText("Over limit")).toBeInTheDocument());
     expect(screen.getByText("25h")).toBeInTheDocument();
   });
 
-  it("shows on-track for a caregiver at or under target", async () => {
+  it("shows normal usage for a caregiver well under target", async () => {
     mockedUseOrganization.mockReturnValue(baseOrganization());
     mockedRpc.mockResolvedValue({
       data: [
@@ -107,7 +107,7 @@ describe("CaregiverHoursCard", () => {
 
     renderCard();
 
-    await waitFor(() => expect(screen.getByText("On track")).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText("Normal usage")).toBeInTheDocument());
   });
 
   it("saves a new target via set_caregiver_weekly_target", async () => {

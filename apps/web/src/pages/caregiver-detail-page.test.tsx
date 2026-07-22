@@ -113,7 +113,7 @@ describe("CaregiverDetailPage", () => {
     renderPage();
 
     await waitFor(() => expect(screen.getByText("Sam Caregiver")).toBeInTheDocument());
-    expect(screen.getByText("(over target)")).toBeInTheDocument();
+    expect(screen.getByText("125% utilized")).toBeInTheDocument();
   });
 
   it("switches to the Credentials tab", async () => {

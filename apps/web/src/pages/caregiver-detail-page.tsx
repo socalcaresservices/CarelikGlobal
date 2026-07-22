@@ -2,7 +2,7 @@ import { useEffect, useState, type FormEvent } from "react";
 import { Link, useParams } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowLeft } from "lucide-react";
-import { Card, StatusBadge, cn, type StatusTone } from "@carelik/ui";
+import { Card, StatusBadge, UtilizationCard, cn, type StatusTone } from "@carelik/ui";
 import { getCredentialStatus, type CredentialStatus } from "@carelik/shared";
 import { useAuth } from "@carelik/auth";
 import { useOrganization } from "@/providers/organization-provider";
@@ -102,10 +102,6 @@ function emptyAvailabilityForm(): Record<Weekday, DayAvailabilityForm> {
 
 function capitalize(value: string) {
   return value.charAt(0).toUpperCase() + value.slice(1);
-}
-
-function formatHours(hours: number) {
-  return Number.isInteger(hours) ? String(hours) : hours.toFixed(1);
 }
 
 const credentialStatusTone: Record<CredentialStatus, StatusTone> = {
@@ -380,8 +376,6 @@ export function CaregiverDetailPage() {
 
   const member = membersQuery.data;
   const hours = hoursQuery.data;
-  const hasTarget = hours?.target_hours_per_week != null;
-  const isOverTarget = hasTarget && (hours?.scheduled_hours ?? 0) > hours!.target_hours_per_week!;
   const upcomingShiftCount = (shiftsQuery.data ?? []).filter(
     (row) => row.status === "scheduled" && new Date(row.starts_at).getTime() >= Date.now()
   ).length;
@@ -421,7 +415,7 @@ export function CaregiverDetailPage() {
           </span>
         </div>
 
-        <div className="mt-6 grid grid-cols-2 gap-4 border-t border-slate-100 pt-6 sm:grid-cols-4">
+        <div className="mt-6 grid grid-cols-2 gap-4 border-t border-slate-100 pt-6">
           <div>
             <p className="text-xs font-medium uppercase tracking-wide text-slate-500">Upcoming shifts</p>
             <p className="mt-1 text-xl font-semibold text-slate-950">{upcomingShiftCount}</p>
@@ -430,19 +424,15 @@ export function CaregiverDetailPage() {
             <p className="text-xs font-medium uppercase tracking-wide text-slate-500">Credentials expiring</p>
             <p className="mt-1 text-xl font-semibold text-slate-950">{expiringCredentialCount}</p>
           </div>
-          <div>
-            <p className="text-xs font-medium uppercase tracking-wide text-slate-500">Weekly target</p>
-            <p className="mt-1 text-xl font-semibold text-slate-950">
-              {hasTarget ? `${formatHours(hours!.target_hours_per_week!)}h` : "Not set"}
-            </p>
-          </div>
-          <div>
-            <p className="text-xs font-medium uppercase tracking-wide text-slate-500">Scheduled this week</p>
-            <p className="mt-1 text-xl font-semibold text-slate-950">
-              {formatHours(hours?.scheduled_hours ?? 0)}h
-              {isOverTarget ? <span className="ml-2 text-sm font-medium text-red-600">(over target)</span> : null}
-            </p>
-          </div>
+        </div>
+
+        <div className="mt-4 border-t border-slate-100 pt-4">
+          <p className="text-xs font-medium uppercase tracking-wide text-slate-500">This week&apos;s capacity</p>
+          <UtilizationCard
+            availableHours={hours?.target_hours_per_week ?? null}
+            scheduledHours={hours?.scheduled_hours ?? 0}
+            compact
+          />
         </div>
 
         <div className="mt-6 flex flex-wrap gap-1 border-t border-slate-100 pt-4">

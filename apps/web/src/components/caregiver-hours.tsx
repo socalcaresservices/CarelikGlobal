@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Card, cn } from "@carelik/ui";
+import { Card, StatusBadge, usageLabel, usageTone } from "@carelik/ui";
 import { useOrganization } from "@/providers/organization-provider";
 import { supabase } from "@/lib/supabase";
 import { getWeekEnd, getWeekStart } from "@/lib/week";
@@ -112,7 +112,6 @@ export function CaregiverHoursCard() {
           <tbody>
             {rows.map((row) => {
               const hasTarget = row.target_hours_per_week !== null;
-              const isOver = hasTarget && row.scheduled_hours > row.target_hours_per_week!;
               const gap = hasTarget ? row.target_hours_per_week! - row.scheduled_hours : null;
               return (
                 <tr key={row.caregiver_user_id} className="border-b border-slate-100 last:border-0">
@@ -155,21 +154,13 @@ export function CaregiverHoursCard() {
                     {gap !== null ? `${gap >= 0 ? "" : "+"}${formatHours(Math.abs(gap))}h` : "—"}
                   </td>
                   <td className="py-2.5">
-                    {!hasTarget ? (
-                      <span className="flex items-center gap-1.5 text-xs font-medium text-slate-500">
-                        <span className="h-1.5 w-1.5 rounded-full bg-slate-300" />
-                        No target set
-                      </span>
-                    ) : isOver ? (
-                      <span className="flex items-center gap-1.5 text-xs font-medium text-red-700">
-                        <span className="h-1.5 w-1.5 rounded-full bg-red-500" />
-                        Over target
-                      </span>
+                    {hasTarget ? (
+                      <StatusBadge
+                        label={usageLabel(row.scheduled_hours, row.target_hours_per_week!)}
+                        tone={usageTone(row.scheduled_hours, row.target_hours_per_week!)}
+                      />
                     ) : (
-                      <span className={cn("flex items-center gap-1.5 text-xs font-medium text-emerald-700")}>
-                        <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
-                        On track
-                      </span>
+                      <StatusBadge label="No target set" tone="neutral" />
                     )}
                   </td>
                 </tr>
