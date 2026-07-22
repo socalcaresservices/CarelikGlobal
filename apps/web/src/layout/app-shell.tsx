@@ -7,6 +7,7 @@ import {
   CalendarClock,
   ClipboardCheck,
   ClipboardList,
+  Crown,
   HeartHandshake,
   LayoutDashboard,
   LogOut,
@@ -25,8 +26,10 @@ const navItems: Array<{
   label: string;
   icon: typeof LayoutDashboard;
   permission?: Permission;
+  ownerOnly?: boolean;
 }> = [
   { to: "/", label: "Overview", icon: LayoutDashboard },
+  { to: "/owner-dashboard", label: "Owner Dashboard", icon: Crown, ownerOnly: true },
   { to: "/organizations", label: "Organizations", icon: Building2, permission: "organization.read" },
   { to: "/access", label: "Access", icon: ShieldCheck, permission: "membership.read" },
   { to: "/clients", label: "Clients", icon: Users, permission: "clients.read" },
@@ -46,11 +49,13 @@ const navItems: Array<{
 
 export function AppShell({ children }: PropsWithChildren) {
   const { user, signOut } = useAuth();
-  const { organizations, activeOrganizationId, setActiveOrganizationId, hasPermission, loading } =
+  const { organizations, activeOrganizationId, setActiveOrganizationId, hasPermission, role, loading } =
     useOrganization();
 
+  const isOwner = role === "organization_owner" || role === "platform_owner";
+
   const visibleNavItems = navItems.filter(
-    (item) => !item.permission || hasPermission(item.permission)
+    (item) => (!item.permission || hasPermission(item.permission)) && (!item.ownerOnly || isOwner)
   );
 
   return (

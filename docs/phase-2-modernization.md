@@ -402,3 +402,60 @@ credentials/authorizations/incidents/services still route to their
 list pages since none of them have a detail page yet - unchanged from
 before this increment, and out of scope here (that's a "build detail
 pages" increment, not a "search" one).
+
+## Increment 8: Owner-only operations dashboard
+
+A scope decision first: `organization_owner` isn't actually a distinct
+permission tier today - every `role_permissions` seed grants it the
+identical permission set as `organization_admin`. The only role that's
+genuinely special-cased anywhere in the code is the *platform*-level
+`platform_owner` (`isPlatformOwner`, which bypasses the permission set
+entirely). So "owner-only" here means gating on the `role` string
+itself (`organization_owner` or `platform_owner`) rather than on a
+permission - the one place in the app that does that, and called out
+as such in the new page's own comment so it doesn't read as an
+oversight later.
+
+- New `apps/web/src/pages/owner-dashboard-page.tsx`, routed at
+  `/owner-dashboard`, nav item "Owner Dashboard" (only rendered for
+  `organization_owner`/`platform_owner` - added an `ownerOnly` flag to
+  `AppShell`'s nav item type alongside the existing `permission` flag).
+  The page itself also gates on the same role check independent of the
+  nav link, so a non-owner hitting the URL directly still sees the
+  same "Not available" pattern every other gated page uses.
+- Content is an aggregate rollup - "how many of X are in each state" -
+  deliberately distinct from the two dashboard-ish views that already
+  exist: Action Center (an itemized "what needs my attention right
+  now" list, visible to everyone with the relevant permissions, not
+  owner-restricted) and Overview's "Agency health" cards (three
+  headline metrics, also not owner-restricted). Sections: team by role
+  and by status, credential compliance breakdown, authorizations by
+  usage and by expiry, incidents by status and by severity, and a
+  7-day audit activity count. No new RPC or schema - every count comes
+  from the exact same `list_*` RPCs and derive-at-read-time status
+  functions (`getCredentialStatus`, `getAuthorizationUsageStatus`,
+  `getAuthorizationExpiryStatus`) the source pages already use, tallied
+  client-side. Each section is additionally gated on its own read
+  permission and simply doesn't render without it - defensive, since
+  the page shouldn't assume every owner holds every permission.
+- Fixed an unrelated bug this increment's verify pipeline caught:
+  `main.tsx` imported `"@/app"` (lowercase) but the file is `App.tsx`.
+  This had always resolved fine on the case-insensitive host mount the
+  agent edits through, but fails on the case-sensitive Linux sandbox
+  the verify pipeline actually runs `tsc`/`vite build` on - a real bug
+  that happened to be invisible in every prior increment's local dev
+  loop. Fixed the import casing to match the actual filename.
+
+Full pipeline (typecheck, lint, build, test) verified clean across all
+4 packages - 279 tests passing, including new coverage for the owner
+role gate (organization_owner/platform_owner allowed, organization_admin
+blocked), per-section permission gating, and the nav item's
+owner-only visibility.
+
+Not done in this increment: no revenue/billing metrics (hours not
+billed, dollars at risk) - explicitly out of scope per this doc's
+original scope decision, since no rate/billing table exists and
+fabricating one wasn't asked for. No historical trend charts (e.g.
+incidents over time) - every number here is a current-state count, not
+a time series, consistent with the "dashboard philosophy" in
+`docs/design-system.md` (operational answers over charts).

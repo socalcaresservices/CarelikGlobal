@@ -16,6 +16,7 @@ import { CredentialsPage } from "@/pages/credentials-page";
 import { AuthorizationsPage } from "@/pages/authorizations-page";
 import { IncidentsPage } from "@/pages/incidents-page";
 import { SettingsPage } from "@/pages/settings-page";
+import { OwnerDashboardPage } from "@/pages/owner-dashboard-page";
 
 export function App() {
   return (
@@ -41,6 +42,7 @@ export function App() {
                   <Route path="/incidents" element={<IncidentsPage />} />
                   <Route path="/audit" element={<AuditPage />} />
                   <Route path="/settings" element={<SettingsPage />} />
+                  <Route path="/owner-dashboard" element={<OwnerDashboardPage />} />
                   <Route path="*" element={<Navigate to="/" replace />} />
                 </Routes>
               </AppShell>
