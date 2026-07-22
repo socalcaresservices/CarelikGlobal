@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type KeyboardEvent } from "react";
 import { useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { Search } from "lucide-react";
@@ -12,7 +12,7 @@ import { supabase } from "@/lib/supabase";
 // exists) per row. Field names match the RPC's return columns, same
 // snake_case convention every other RPC result in this app uses.
 interface GlobalSearchResultRow {
-  result_type: "client" | "caregiver" | "credential" | "authorization" | "incident";
+  result_type: "client" | "caregiver" | "credential" | "authorization" | "incident" | "service";
   entity_id: string;
   title: string;
   subtitle: string | null;
@@ -23,11 +23,14 @@ const resultTypeLabels: Record<GlobalSearchResultRow["result_type"], string> = {
   caregiver: "Caregiver",
   credential: "Credential",
   authorization: "Authorization",
-  incident: "Incident"
+  incident: "Incident",
+  service: "Service"
 };
 
 // Only clients and caregivers have their own detail page today; the
 // rest route to their list page rather than a fabricated deep link.
+// Services are managed inline from the Authorizations page (there's no
+// standalone services page), so a service result routes there too.
 function routeFor(result: GlobalSearchResultRow): string {
   switch (result.result_type) {
     case "client":
@@ -37,6 +40,7 @@ function routeFor(result: GlobalSearchResultRow): string {
     case "credential":
       return "/credentials";
     case "authorization":
+    case "service":
       return "/authorizations";
     case "incident":
       return "/incidents";
@@ -51,11 +55,16 @@ export function GlobalSearch() {
   const [query, setQuery] = useState("");
   const [debouncedQuery, setDebouncedQuery] = useState("");
   const [open, setOpen] = useState(false);
+  const [highlightedIndex, setHighlightedIndex] = useState(-1);
 
   useEffect(() => {
     const timeout = setTimeout(() => setDebouncedQuery(query.trim()), 250);
     return () => clearTimeout(timeout);
   }, [query]);
+
+  useEffect(() => {
+    setHighlightedIndex(-1);
+  }, [debouncedQuery]);
 
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
@@ -85,10 +94,33 @@ export function GlobalSearch() {
   function handleSelect(result: GlobalSearchResultRow) {
     setOpen(false);
     setQuery("");
+    setHighlightedIndex(-1);
     navigate(routeFor(result));
   }
 
   const showDropdown = open && debouncedQuery.length >= 2;
+
+  // Arrow keys move a highlighted result up/down (wrapping at the
+  // ends), Enter selects whichever is highlighted (or the first result
+  // if none is yet), Escape closes the dropdown without navigating.
+  function handleKeyDown(event: KeyboardEvent<HTMLInputElement>) {
+    if (!showDropdown || results.length === 0) return;
+
+    if (event.key === "ArrowDown") {
+      event.preventDefault();
+      setHighlightedIndex((current) => (current + 1) % results.length);
+    } else if (event.key === "ArrowUp") {
+      event.preventDefault();
+      setHighlightedIndex((current) => (current <= 0 ? results.length - 1 : current - 1));
+    } else if (event.key === "Enter") {
+      event.preventDefault();
+      const target = results[highlightedIndex] ?? results[0];
+      if (target) handleSelect(target);
+    } else if (event.key === "Escape") {
+      setOpen(false);
+      setHighlightedIndex(-1);
+    }
+  }
 
   return (
     <div ref={containerRef} className="relative w-full max-w-sm">
@@ -104,6 +136,11 @@ export function GlobalSearch() {
             setOpen(true);
           }}
           onFocus={() => setOpen(true)}
+          onKeyDown={handleKeyDown}
+          role="combobox"
+          aria-expanded={showDropdown}
+          aria-controls="global-search-results"
+          aria-autocomplete="list"
           className="w-full rounded-lg border border-slate-200 py-1.5 pl-8 pr-3 text-sm text-slate-900"
         />
       </div>
@@ -116,13 +153,16 @@ export function GlobalSearch() {
           ) : results.length === 0 ? (
             <p className="px-3 py-2 text-sm text-slate-500">No matches for "{debouncedQuery}".</p>
           ) : (
-            <ul className="max-h-80 overflow-y-auto py-1">
-              {results.map((result) => (
-                <li key={`${result.result_type}-${result.entity_id}`}>
+            <ul id="global-search-results" role="listbox" className="max-h-80 overflow-y-auto py-1">
+              {results.map((result, index) => (
+                <li key={`${result.result_type}-${result.entity_id}`} role="option" aria-selected={index === highlightedIndex}>
                   <button
                     type="button"
                     onClick={() => handleSelect(result)}
-                    className="flex w-full flex-col items-start px-3 py-2 text-left hover:bg-slate-50"
+                    onMouseEnter={() => setHighlightedIndex(index)}
+                    className={`flex w-full flex-col items-start px-3 py-2 text-left ${
+                      index === highlightedIndex ? "bg-slate-50" : "hover:bg-slate-50"
+                    }`}
                   >
                     <span className="text-[11px] font-medium uppercase tracking-wide text-slate-400">
                       {resultTypeLabels[result.result_type]}

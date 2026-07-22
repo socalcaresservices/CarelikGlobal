@@ -9,7 +9,8 @@ export const globalSearchResultTypeSchema = z.enum([
   "caregiver",
   "credential",
   "authorization",
-  "incident"
+  "incident",
+  "service"
 ]);
 export type GlobalSearchResultType = z.infer<typeof globalSearchResultTypeSchema>;
 

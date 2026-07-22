@@ -357,3 +357,48 @@ needs server-side pagination. No date-range filters were added (e.g.
 Schedule's "When" or Audit's "When" columns) - the existing sort
 already covers ordering by date, and no one asked for a range filter
 specifically; easy to add on top of `useFilters` later if needed.
+
+## Increment 7: Global search coverage + polish
+
+`global_search()` covered 5 result types (client, caregiver,
+credential, authorization, incident) as of Increment 1's audit -
+written before the `services` table existed. This increment adds
+`service` as a 6th type and polishes the dropdown's keyboard behavior,
+which had none before.
+
+- New migration `20260722010000_global_search_services.sql`
+  (`create or replace function`, same function signature): adds a
+  `service` branch matching `services.name`, gated on `services.read`,
+  same permission-degrades-to-no-rows pattern as every other branch.
+  Applied live; `get_advisors` shows only the pre-existing baseline
+  findings, nothing new.
+- `packages/shared/src/search.ts`'s `globalSearchResultTypeSchema`
+  gained `"service"`.
+- `GlobalSearch` (`apps/web/src/components/global-search.tsx`): added
+  the `service` result type/label; routes to `/authorizations` since
+  services are managed inline there and have no standalone list page
+  (same "route to the list page, not a fabricated deep link" pattern
+  already used for credential/authorization/incident results).
+- Keyboard polish: ArrowDown/ArrowUp move a highlighted result
+  (wrapping at the ends), Enter selects the highlighted result (or the
+  first one if none is highlighted yet), Escape closes the dropdown
+  without navigating. Added `role="combobox"`/`listbox`/`option` and
+  `aria-selected`/`aria-expanded` so the highlighted state is exposed
+  to assistive tech, not just visually. Mouse hover also updates the
+  highlighted index, so keyboard and mouse stay in sync.
+
+Full pipeline (typecheck, lint, build, test) verified clean across all
+4 packages - 266 tests passing, including new coverage for the
+service result type, the loading/error states (neither had a test
+before), and keyboard navigation (arrow keys + Enter + Escape).
+
+Not done in this increment: no global keyboard shortcut (e.g. `/` or
+Cmd+K) to focus the search box from anywhere in the app - nice-to-have
+but not requested, and would need care to avoid conflicting with
+browser/OS shortcuts or the resizable-column drag handles already
+using keyboard-adjacent interactions elsewhere in the app. Result
+navigation still only reaches detail pages for clients and caregivers;
+credentials/authorizations/incidents/services still route to their
+list pages since none of them have a detail page yet - unchanged from
+before this increment, and out of scope here (that's a "build detail
+pages" increment, not a "search" one).

@@ -3,7 +3,7 @@ import { globalSearchResultSchema, globalSearchResultTypeSchema } from "./search
 
 describe("globalSearchResultTypeSchema", () => {
   it("accepts every known result type", () => {
-    for (const value of ["client", "caregiver", "credential", "authorization", "incident"]) {
+    for (const value of ["client", "caregiver", "credential", "authorization", "incident", "service"]) {
       expect(globalSearchResultTypeSchema.parse(value)).toBe(value);
     }
   });

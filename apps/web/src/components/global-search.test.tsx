@@ -112,6 +112,86 @@ describe("GlobalSearch", () => {
     await waitFor(() => expect(screen.getByTestId("location")).toHaveTextContent(`/clients/${CLIENT_ID}`));
   });
 
+  it("shows a service result and navigates to Authorizations on selection", async () => {
+    mockedUseOrganization.mockReturnValue(baseOrganization());
+    const SERVICE_ID = "66666666-6666-4666-8666-666666666666";
+    mockedRpc.mockResolvedValue({
+      data: [{ result_type: "service", entity_id: SERVICE_ID, title: "Personal care", subtitle: "Active service" }],
+      error: null
+    } as never);
+
+    renderSearch();
+    fireEvent.change(screen.getByLabelText("Search everything"), { target: { value: "personal" } });
+
+    await waitFor(() => expect(screen.getByText("Personal care")).toBeInTheDocument());
+    expect(screen.getByText("Service")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByText("Personal care"));
+
+    await waitFor(() => expect(screen.getByTestId("location")).toHaveTextContent("/authorizations"));
+  });
+
+  it("shows a loading state while searching and an error state on failure", async () => {
+    mockedUseOrganization.mockReturnValue(baseOrganization());
+    let resolveRpc: (value: unknown) => void = () => {};
+    mockedRpc.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          resolveRpc = resolve;
+        }) as never
+    );
+
+    renderSearch();
+    fireEvent.change(screen.getByLabelText("Search everything"), { target: { value: "ri" } });
+
+    await waitFor(() => expect(screen.getByText("Searching…")).toBeInTheDocument());
+
+    resolveRpc({ data: null, error: new Error("boom") });
+
+    await waitFor(() => expect(screen.getByText("Could not search.")).toBeInTheDocument());
+  });
+
+  it("navigates the results with arrow keys and selects with Enter", async () => {
+    mockedUseOrganization.mockReturnValue(baseOrganization());
+    mockedRpc.mockResolvedValue({
+      data: [
+        { result_type: "client", entity_id: CLIENT_ID, title: "Jordan Rivera", subtitle: "555-0100" },
+        { result_type: "caregiver", entity_id: CAREGIVER_ID, title: "Sam Caregiver", subtitle: "Staff" }
+      ],
+      error: null
+    } as never);
+
+    renderSearch();
+    const input = screen.getByLabelText("Search everything");
+    fireEvent.change(input, { target: { value: "ri" } });
+
+    await waitFor(() => expect(screen.getByText("Jordan Rivera")).toBeInTheDocument());
+
+    fireEvent.keyDown(input, { key: "ArrowDown" });
+    fireEvent.keyDown(input, { key: "ArrowDown" });
+    fireEvent.keyDown(input, { key: "Enter" });
+
+    await waitFor(() => expect(screen.getByTestId("location")).toHaveTextContent(`/team/${CAREGIVER_ID}`));
+  });
+
+  it("closes the dropdown on Escape without navigating", async () => {
+    mockedUseOrganization.mockReturnValue(baseOrganization());
+    mockedRpc.mockResolvedValue({
+      data: [{ result_type: "client", entity_id: CLIENT_ID, title: "Jordan Rivera", subtitle: null }],
+      error: null
+    } as never);
+
+    renderSearch();
+    const input = screen.getByLabelText("Search everything");
+    fireEvent.change(input, { target: { value: "ri" } });
+    await waitFor(() => expect(screen.getByText("Jordan Rivera")).toBeInTheDocument());
+
+    fireEvent.keyDown(input, { key: "Escape" });
+
+    expect(screen.queryByText("Jordan Rivera")).not.toBeInTheDocument();
+    expect(screen.getByTestId("location")).toHaveTextContent("/");
+  });
+
   it("closes the dropdown when clicking outside", async () => {
     mockedUseOrganization.mockReturnValue(baseOrganization());
     mockedRpc.mockResolvedValue({
