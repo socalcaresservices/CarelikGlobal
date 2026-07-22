@@ -447,7 +447,7 @@ oversight later.
   loop. Fixed the import casing to match the actual filename.
 
 Full pipeline (typecheck, lint, build, test) verified clean across all
-4 packages - 279 tests passing, including new coverage for the owner
+4 packages - 272 tests passing, including new coverage for the owner
 role gate (organization_owner/platform_owner allowed, organization_admin
 blocked), per-section permission gating, and the nav item's
 owner-only visibility.
@@ -459,3 +459,80 @@ fabricating one wasn't asked for. No historical trend charts (e.g.
 incidents over time) - every number here is a current-state count, not
 a time series, consistent with the "dashboard philosophy" in
 `docs/design-system.md` (operational answers over charts).
+
+## Completion report
+
+All 8 planned increments are done, committed to `feature/ops-ui-modernization`
+(8 commits on top of Phase 1's `86804a2`, 75 files changed). Summary:
+
+1. **Reusable UI/search component library** - `FormSection`,
+   `StatusBadge`, `SearchableCombobox`, `MultiSelectCombobox`,
+   `ProgressBar`/`UsageBadge`, `UtilizationCard`, `FilterBar` - built
+   once in `packages/ui`, then actually wired into every page across
+   Increments 2-8 rather than left unused.
+2. **Client services + monthly authorization usage model** - new
+   `services`/`client_authorizations` shape with per-service monthly
+   caps, 4-tier usage status (normal/approaching/at/over limit)
+   derived at read time.
+3. **Client form redesign** - sectioned form, services-requested
+   multi-select, `client_requested_services` join table, `?clientId=`
+   deep-linking into Authorizations.
+4. **Caregiver credentials workflow rebuild** - `SearchableCombobox`
+   picker, sectioned form, `StatusBadge` status, `?caregiverId=`
+   deep-linking, credentials tab on the caregiver detail page.
+5. **Caregiver capacity calculations + presentation** -
+   `UtilizationCard` finally wired into the caregiver detail page;
+   `caregiver-hours.tsx`'s hand-rolled status dots replaced with the
+   shared 4-tier `StatusBadge`/`usageTone` vocabulary.
+6. **Universal filter system** - new `useFilters` hook (the filtering
+   counterpart to the existing `useTableControls` search+sort hook),
+   `FilterBar` wired into all 8 list pages with active-filter chips
+   and "Clear all".
+7. **Global search coverage + polish** - added `service` as a 6th
+   result type; keyboard navigation (arrow keys, Enter, Escape) and
+   ARIA roles added to a dropdown that previously had neither.
+8. **Owner-only operations dashboard** - a new aggregate rollup page
+   (counts by status across team/credentials/authorizations/incidents/
+   audit activity), gated on the `organization_owner`/`platform_owner`
+   role rather than a permission, since no permission distinguishes
+   owner from admin today.
+
+**Engineering rules honored throughout:** every increment worked on
+`feature/ops-ui-modernization` only; no mock data anywhere - every
+number traces to a real Supabase query or an already-tested
+derive-at-read-time function; no duplicate components (existing ones
+were extended and reused, e.g. `StatusBadge`/`UtilizationCard`/
+`FilterBar` built once and consumed everywhere); every schema change
+shipped as a migration and was applied live via the Supabase MCP, with
+`get_advisors` checked after each one (only the same pre-existing
+baseline findings ever appeared - no new security/performance issues
+introduced); RLS and multi-tenancy were preserved on every new table
+and RPC (each reuses the calling table's own permission check and
+own-row carve-outs); every increment added or updated tests before
+being marked done; no feature was silently dropped - every deferred
+item is named explicitly in that increment's "Not done" note above,
+with the reason.
+
+**Pipeline status:** typecheck, lint, build, and test all pass cleanly
+across all 4 packages (`@carelik/auth`, `@carelik/shared`,
+`@carelik/ui`, `@carelik/web`) as of the final commit - 272 tests
+total (7 auth + 75 shared + 50 ui + 140 web). `get_advisors` on the
+live project (`cdxxpdyobsqvqveabsda`) shows the same baseline
+security/performance findings as before this branch started - nothing
+new was introduced by any of the 8 increments' migrations. One
+unrelated latent bug was found and fixed along the way: `App.tsx` was
+tracked in git as lowercase `app.tsx` from a stale case-only rename
+that the case-insensitive host mount never surfaced; fixed via a
+proper `git mv` in Increment 8 so the import and the tracked path
+agree on a case-sensitive checkout.
+
+**Explicitly out of scope, not started** (per the original scope
+decision at the top of this doc, still true): applicant tracking,
+referral pipeline, document upload/verification workflow, revenue/
+billing/service-rate math, and a global keyboard shortcut to focus
+search. None of these have a data model in the current schema; adding
+one wasn't requested for this branch.
+
+**Recommended next step:** the branch is in a clean, fully verified
+state and ready for review/merge into `main`. No further work is
+queued on this branch unless new scope is requested.
