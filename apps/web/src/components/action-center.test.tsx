@@ -201,6 +201,42 @@ describe("ActionCenter", () => {
     expect(within(card as HTMLElement).getByText("Review")).toBeInTheDocument();
   });
 
+  it("flags an authorization expiring soon separately from over-authorized usage", async () => {
+    mockedUseOrganization.mockReturnValue(baseOrganization());
+    const tenDaysAgo = new Date(Date.now() - 10 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+    const tenDaysFromNow = new Date(Date.now() + 10 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+    mockedRpc.mockImplementation((fn: string) => {
+      if (fn === "list_client_authorizations") {
+        return Promise.resolve({
+          data: [
+            {
+              id: "authorization-1",
+              max_monthly_hours: 20,
+              // Well under the cap, so this row must not also trip the
+              // separate over-authorized signal - isolates the assertion
+              // to the expiry signal only.
+              hours_used_this_month: 0,
+              hours_scheduled_this_month: 0,
+              period_start: tenDaysAgo,
+              period_end: tenDaysFromNow
+            }
+          ],
+          error: null
+        }) as never;
+      }
+      return Promise.resolve({ data: [], error: null }) as never;
+    });
+    mockedFrom.mockReturnValue({ select: mockClientsCount([]) } as never);
+
+    renderCenter();
+
+    await waitFor(() => expect(screen.getByText("Authorizations expiring or expired")).toBeInTheDocument());
+    const card = screen.getByText("Authorizations expiring or expired").closest("a");
+    expect(card).not.toBeNull();
+    expect(within(card as HTMLElement).getByText("1")).toBeInTheDocument();
+    expect(screen.queryByText("Clients over their monthly authorized hours")).not.toBeInTheDocument();
+  });
+
   it("flags an open incident as critical", async () => {
     mockedUseOrganization.mockReturnValue(baseOrganization());
     mockedRpc.mockImplementation((fn: string) => {

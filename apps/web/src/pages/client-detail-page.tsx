@@ -324,6 +324,13 @@ export function ClientDetailPage() {
   const activeAuthorizationCommittedHours = activeAuthorization
     ? activeAuthorization.hours_used_this_month + activeAuthorization.hours_scheduled_this_month
     : 0;
+  // Gap/Remaining: the cap minus what's already used or on the schedule
+  // this month - clamped at 0 so an over-limit authorization (the
+  // over-authorized Action Center signal's concern, not this one's)
+  // reads as "0h remaining", not a negative number.
+  const activeAuthorizationRemainingHours = activeAuthorization
+    ? Math.max(0, activeAuthorization.max_monthly_hours - activeAuthorizationCommittedHours)
+    : 0;
   const activeAuthorizationUsage = activeAuthorization
     ? getAuthorizationUsageStatus(
         activeAuthorization.max_monthly_hours,
@@ -389,6 +396,7 @@ export function ClientDetailPage() {
                 <div>
                   <p className="text-xs font-medium uppercase tracking-wide text-slate-500">Used + scheduled</p>
                   <p className="mt-1 text-xl font-semibold text-slate-950">{formatHours(activeAuthorizationCommittedHours)}h</p>
+                  <p className="text-xs text-slate-500">{formatHours(activeAuthorizationRemainingHours)}h remaining</p>
                   {activeAuthorizationUsage ? (
                     <StatusBadge
                       className="mt-1"
@@ -647,7 +655,11 @@ export function ClientDetailPage() {
                     <div className="mt-1 flex flex-wrap items-center gap-2">
                       <p className="text-xs text-slate-500">
                         {formatHours(row.hours_used_this_month)}h used + {formatHours(row.hours_scheduled_this_month)}h
-                        scheduled of {formatHours(row.max_monthly_hours)}h/mo
+                        scheduled of {formatHours(row.max_monthly_hours)}h/mo (
+                        {formatHours(
+                          Math.max(0, row.max_monthly_hours - row.hours_used_this_month - row.hours_scheduled_this_month)
+                        )}
+                        h remaining)
                       </p>
                       <StatusBadge label={usageLabelText[usage]} tone={usageTone[usage]} />
                       <StatusBadge label={expiryLabelText[expiry]} tone={expiryTone[expiry]} />

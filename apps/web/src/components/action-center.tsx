@@ -4,6 +4,7 @@ import {
   AlertOctagon,
   AlertTriangle,
   BadgeCheck,
+  CalendarClock,
   CheckCircle2,
   ClipboardCheck,
   Clock,
@@ -11,7 +12,12 @@ import {
   UserX
 } from "lucide-react";
 import { AlertCard, type StatusTone } from "@carelik/ui";
-import { getAuthorizationUsageStatus, getCredentialStatus, isAuthorizationActive } from "@carelik/shared";
+import {
+  getAuthorizationExpiryStatus,
+  getAuthorizationUsageStatus,
+  getCredentialStatus,
+  isAuthorizationActive
+} from "@carelik/shared";
 import type { IncidentStatus } from "@carelik/shared";
 import { useOrganization } from "@/providers/organization-provider";
 import { supabase } from "@/lib/supabase";
@@ -289,6 +295,31 @@ export function ActionCenter() {
       icon: ClipboardCheck,
       to: "/authorizations",
       statusText: overAuthorizedCount > 0 ? "Review" : "Everyone within authorization"
+    });
+
+    // Same shape as the credentials-expiring signal above - a distinct
+    // concern from "over-authorized" (usage against the monthly hours
+    // cap): a client can be well within their hours cap and still have
+    // an authorization period ending soon or already lapsed, which needs
+    // a renewal, not a scheduling fix. Reuses the authorizations already
+    // fetched for the signal above - no second query. Same "no windowing
+    // beyond deleted_at" precedent as credentials-expiring: an agency
+    // that lets a lapsed authorization sit un-deleted will keep seeing
+    // it here, matching how the Authorizations page and Client detail
+    // page already show it, rather than inventing a new trailing-window
+    // rule this signal alone would follow.
+    const expiringOrExpiredAuthorizationCount = authorizationsQuery.data.filter((row) => {
+      const status = getAuthorizationExpiryStatus(row.period_end);
+      return status === "expiring_soon" || status === "expired";
+    }).length;
+    signals.push({
+      key: "authorizations-expiring",
+      label: "Authorizations expiring or expired",
+      count: expiringOrExpiredAuthorizationCount,
+      tone: expiringOrExpiredAuthorizationCount > 0 ? "danger" : "success",
+      icon: CalendarClock,
+      to: "/authorizations",
+      statusText: expiringOrExpiredAuthorizationCount > 0 ? "Review" : "All current"
     });
   }
 

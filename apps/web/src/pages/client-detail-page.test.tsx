@@ -169,6 +169,50 @@ describe("ClientDetailPage", () => {
     expect(screen.getByText("20h")).toBeInTheDocument();
     expect(screen.getByText("22h")).toBeInTheDocument();
     expect(screen.getByText("Over limit")).toBeInTheDocument();
+    // Committed (22h) already exceeds the cap (20h) - remaining clamps
+    // at 0 rather than going negative.
+    expect(screen.getByText("0h remaining")).toBeInTheDocument();
+  });
+
+  it("shows positive remaining hours when an authorization is under its cap", async () => {
+    mockedUseOrganization.mockReturnValue(baseOrganization());
+    mockFromByTable({
+      id: CLIENT_ID,
+      first_name: "Jordan",
+      last_name: "Rivera",
+      phone: "555-0100",
+      email: null,
+      address: null,
+      care_notes: null,
+      status: "active",
+      client_requested_services: []
+    });
+    mockedRpc.mockImplementation((fn: string) => {
+      if (fn === "list_client_authorizations") {
+        return Promise.resolve({
+          data: [
+            {
+              id: "99999999-9999-4999-8999-999999999999",
+              client_id: CLIENT_ID,
+              service_name: "Personal care",
+              payer: "Medicaid",
+              max_monthly_hours: 20,
+              period_start: "2026-01-01",
+              period_end: "2030-01-01",
+              hours_used_this_month: 5,
+              hours_scheduled_this_month: 3
+            }
+          ],
+          error: null
+        }) as never;
+      }
+      return Promise.resolve({ data: [], error: null }) as never;
+    });
+
+    renderPage();
+
+    // Cap 20h - (5h used + 3h scheduled) = 12h remaining.
+    await waitFor(() => expect(screen.getByText("12h remaining")).toBeInTheDocument());
   });
 
   it("shows a not-found state for a missing client", async () => {
