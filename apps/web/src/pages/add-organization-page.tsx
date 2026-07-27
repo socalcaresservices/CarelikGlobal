@@ -2,10 +2,12 @@ import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
 import { Card } from "@carelik/ui";
+import { systemRoleSchema } from "@carelik/shared";
 import { useAuth } from "@carelik/auth";
 import { useOrganization } from "@/providers/organization-provider";
 import { supabase } from "@/lib/supabase";
 import { inviteMember, type InvitableRole } from "@/lib/invitations";
+import { uploadOrganizationLogo } from "@/lib/organization-branding";
 
 // Platform-owner-only tenant onboarding wizard. create_organization() -
 // extended in place (20260727080000_organization_onboarding.sql), not
@@ -15,22 +17,31 @@ import { inviteMember, type InvitableRole } from "@/lib/invitations";
 // the fields that RPC accepts across a guided multi-step form instead of
 // one long one, same pattern as apply-page.tsx's applicant wizard.
 //
-// The "Administrator" step invites a *separate* person as the agency's
-// owner (via the existing invite-member edge function, reused as-is -
-// same call access-page.tsx's Invite form already makes). The platform
-// owner running this wizard also becomes an organization_owner
-// automatically (that's what create_organization() has always done) -
-// both exist as owners afterward, which is normal for a platform admin
-// who may need support access later, not a bug.
+// The "Administrator" step invites one or more *separate* people into
+// the new org (via the existing invite-member edge function, reused as-is
+// - same call access-page.tsx's Invite form already makes, and the same
+// dynamic invitableRoles list access-page.tsx derives from
+// systemRoleSchema, rather than a hardcoded subset). The platform owner
+// running this wizard also becomes an organization_owner automatically
+// (that's what create_organization() has always done) - they exist as an
+// owner alongside whoever is invited here, which is normal for a
+// platform admin who may need support access later, not a bug.
+//
+// Logo upload: goes to the public 'organization-branding' storage
+// bucket (20260727100000_organization_branding_bucket.sql) *after* the
+// organization is created, not during the Branding step itself - the
+// bucket's RLS policies key off organization.update on the org's id,
+// which doesn't exist yet while still filling out the form. The file is
+// staged locally (see logoFile/logoPreviewUrl state) and only uploaded
+// once handleFinalSubmit has a real organization id to attach it to.
 //
 // Deliberately not built here (each is its own follow-up, not silently
 // dropped): a real custom-domain/subdomain router for the "Organization
 // URL" preview shown in Finish (today it's just the existing `slug`
 // field, displayed as a preview, with no actual carelik.com/<slug>
-// routing behind it yet); a logo *upload* (Branding's Logo field is a
-// URL text input, same reasoning as ApplyPage's deferred file uploads -
-// needs a real storage-bucket subsystem); "document folders" from the
-// original spec (same storage-bucket dependency).
+// routing behind it yet); "document folders" from the original spec
+// (same storage-bucket subsystem the logo now uses, just not wired up
+// for documents yet).
 
 const SLUG_PATTERN = /^[a-z0-9][a-z0-9-]{1,62}$/;
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -46,7 +57,26 @@ const SUGGESTED_SERVICES = [
   "Hospice"
 ];
 
-const ADMIN_ROLES: InvitableRole[] = ["organization_owner", "organization_admin"];
+// Same dynamic role list access-page.tsx's Invite form uses (all
+// invitable roles, not a hardcoded subset) - an onboarding platform owner
+// should be able to invite a coordinator or caregiver alongside the
+// agency's owner, not just owner/admin.
+const invitableRoles = systemRoleSchema.options.filter(
+  (role): role is InvitableRole => role !== "platform_owner"
+);
+
+function formatRole(role: string) {
+  return role.replace(/_/g, " ");
+}
+
+interface AdministratorInvite {
+  email: string;
+  role: InvitableRole;
+}
+
+function emptyAdministratorInvite(): AdministratorInvite {
+  return { email: "", role: "organization_owner" };
+}
 
 const STEP_IDS = ["organization", "address", "contact", "branding", "services", "administrator", "review"] as const;
 type StepId = (typeof STEP_IDS)[number];
@@ -87,9 +117,6 @@ interface WizardForm {
   secondaryColor: string;
   accentColor: string;
   themeMode: "light" | "dark";
-  adminName: string;
-  adminEmail: string;
-  adminRole: InvitableRole;
 }
 
 function emptyForm(): WizardForm {
@@ -118,10 +145,7 @@ function emptyForm(): WizardForm {
     primaryColor: "",
     secondaryColor: "",
     accentColor: "",
-    themeMode: "light",
-    adminName: "",
-    adminEmail: "",
-    adminRole: "organization_owner"
+    themeMode: "light"
   };
 }
 
@@ -149,6 +173,10 @@ export function AddOrganizationPage() {
   const [form, setForm] = useState<WizardForm>(emptyForm);
   const [selectedServices, setSelectedServices] = useState<string[]>(["Respite", "Personal Assistance"]);
   const [customService, setCustomService] = useState("");
+  const [administrators, setAdministrators] = useState<AdministratorInvite[]>([emptyAdministratorInvite()]);
+  const [logoFile, setLogoFile] = useState<File | null>(null);
+  const [logoPreviewUrl, setLogoPreviewUrl] = useState<string | null>(null);
+  const [logoError, setLogoError] = useState<string | null>(null);
   const [stepError, setStepError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
@@ -156,6 +184,39 @@ export function AddOrganizationPage() {
 
   function update<K extends keyof WizardForm>(key: K, value: WizardForm[K]) {
     setForm((current) => ({ ...current, [key]: value }));
+  }
+
+  function updateAdministrator(index: number, patch: Partial<AdministratorInvite>) {
+    setAdministrators((current) => current.map((row, i) => (i === index ? { ...row, ...patch } : row)));
+  }
+
+  function addAdministratorRow() {
+    setAdministrators((current) => [...current, emptyAdministratorInvite()]);
+  }
+
+  function removeAdministratorRow(index: number) {
+    setAdministrators((current) => (current.length > 1 ? current.filter((_, i) => i !== index) : current));
+  }
+
+  function handleLogoFileChange(file: File | null) {
+    setLogoError(null);
+    if (logoPreviewUrl) URL.revokeObjectURL(logoPreviewUrl);
+    if (!file) {
+      setLogoFile(null);
+      setLogoPreviewUrl(null);
+      return;
+    }
+    const allowed = ["image/png", "image/jpeg", "image/svg+xml", "image/webp"];
+    if (!allowed.includes(file.type)) {
+      setLogoError("Logo must be a PNG, JPEG, SVG, or WebP image.");
+      return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      setLogoError("Logo must be 5MB or smaller.");
+      return;
+    }
+    setLogoFile(file);
+    setLogoPreviewUrl(URL.createObjectURL(file));
   }
 
   function toggleService(name: string) {
@@ -182,10 +243,13 @@ export function AddOrganizationPage() {
       case "contact":
         if (form.contactEmail && !EMAIL_PATTERN.test(form.contactEmail)) return "Enter a valid contact email.";
         return null;
-      case "administrator":
-        if (!form.adminEmail.trim()) return "The administrator's email is required to invite them.";
-        if (!EMAIL_PATTERN.test(form.adminEmail)) return "Enter a valid administrator email.";
+      case "administrator": {
+        const filled = administrators.filter((row) => row.email.trim());
+        if (filled.length === 0) return "At least one administrator email is required to invite them.";
+        const invalid = filled.find((row) => !EMAIL_PATTERN.test(row.email.trim()));
+        if (invalid) return `Enter a valid email for "${invalid.email}".`;
         return null;
+      }
       default:
         return null;
     }
@@ -259,25 +323,55 @@ export function AddOrganizationPage() {
       const newOrganization = data as CreatedOrganization;
       void queryClient.invalidateQueries({ queryKey: ["organizations", user?.id] });
 
+      const warnings: string[] = [];
+
+      // Logo upload happens here, not in the Branding step, because the
+      // bucket's RLS policies key off organization.update on this id -
+      // see the comment near the top of this file. A failure here isn't
+      // fatal: the organization still exists and the logo can be added
+      // later, so it's collected as a warning rather than aborting.
+      if (logoFile) {
+        try {
+          const logoUrl = await uploadOrganizationLogo(newOrganization.id, logoFile);
+          const { error: logoUpdateError } = await supabase
+            .from("organizations")
+            .update({ logo_url: logoUrl })
+            .eq("id", newOrganization.id);
+          if (logoUpdateError) throw logoUpdateError;
+        } catch (logoCause) {
+          warnings.push(
+            `the logo upload failed: ${logoCause instanceof Error ? logoCause.message : "unknown error"}.`
+          );
+        }
+      }
+
       // Deliberately omitting firstName/lastName here - passing them
       // switches invite-member's edge function to the "create the user
       // immediately, no email" branch (see apps/web/src/lib/invitations.ts),
       // which is right for adding a caregiver to an existing roster but
-      // wrong here: the agency's administrator needs a real invite email
-      // so they can set up their own account.
-      try {
-        await inviteMember({ email: form.adminEmail, organizationId: newOrganization.id, role: form.adminRole });
-      } catch (inviteCause) {
-        setCreatedOrganization(newOrganization);
-        setSubmitError(
-          `Organization created, but the administrator invite failed: ${
-            inviteCause instanceof Error ? inviteCause.message : "unknown error"
-          }. You can invite them from the Access page instead.`
-        );
-        return;
-      }
+      // wrong here: each administrator needs a real invite email so they
+      // can set up their own account.
+      const invitees = administrators.filter((row) => row.email.trim());
+      const inviteResults = await Promise.allSettled(
+        invitees.map((row) =>
+          inviteMember({ email: row.email.trim(), organizationId: newOrganization.id, role: row.role })
+        )
+      );
+      inviteResults.forEach((result, index) => {
+        if (result.status === "rejected") {
+          const cause = result.reason;
+          warnings.push(
+            `inviting ${invitees[index]!.email} failed: ${cause instanceof Error ? cause.message : "unknown error"}.`
+          );
+        }
+      });
 
       setCreatedOrganization(newOrganization);
+      if (warnings.length > 0) {
+        setSubmitError(
+          `Organization created, but ${warnings.join(" ")} You can retry these from the Access and Settings pages.`
+        );
+      }
     } catch (cause) {
       setSubmitError(cause instanceof Error ? cause.message : "Could not create the organization.");
     } finally {
@@ -324,6 +418,8 @@ export function AddOrganizationPage() {
               onClick={() => {
                 setForm(emptyForm());
                 setSelectedServices(["Respite", "Personal Assistance"]);
+                setAdministrators([emptyAdministratorInvite()]);
+                handleLogoFileChange(null);
                 setStepIndex(0);
                 setCreatedOrganization(null);
                 setSubmitError(null);
@@ -594,10 +690,50 @@ export function AddOrganizationPage() {
             </p>
             <div className="mt-4 grid gap-4 sm:grid-cols-2">
               <div className="sm:col-span-2">
-                <label htmlFor="wiz-logo" className={labelClass()}>
-                  Logo URL
+                <label htmlFor="wiz-logo-file" className={labelClass()}>
+                  Logo
                 </label>
-                <input id="wiz-logo" value={form.logoUrl} onChange={(event) => update("logoUrl", event.target.value)} className={inputClass()} />
+                <div className="mt-1 flex items-center gap-4">
+                  {logoPreviewUrl ? (
+                    <img
+                      src={logoPreviewUrl}
+                      alt="Logo preview"
+                      className="h-16 w-16 rounded-lg border border-slate-200 object-contain"
+                    />
+                  ) : null}
+                  <div className="flex-1">
+                    <input
+                      id="wiz-logo-file"
+                      type="file"
+                      accept="image/png,image/jpeg,image/svg+xml,image/webp"
+                      onChange={(event) => handleLogoFileChange(event.target.files?.[0] ?? null)}
+                      className="block w-full text-sm text-slate-600 file:mr-3 file:rounded-lg file:border-0 file:bg-slate-100 file:px-3 file:py-2 file:text-sm file:font-medium file:text-slate-700 hover:file:bg-slate-200"
+                    />
+                    <p className="mt-1 text-xs text-slate-500">PNG, JPEG, SVG, or WebP - up to 5MB.</p>
+                    {logoFile ? (
+                      <button
+                        type="button"
+                        onClick={() => handleLogoFileChange(null)}
+                        className="mt-1 text-xs font-medium text-slate-500 underline-offset-2 hover:underline"
+                      >
+                        Remove
+                      </button>
+                    ) : null}
+                  </div>
+                </div>
+                {logoError ? <p className="mt-1 text-sm text-red-700">{logoError}</p> : null}
+              </div>
+              <div className="sm:col-span-2">
+                <label htmlFor="wiz-logo" className={labelClass()}>
+                  Or a logo URL
+                </label>
+                <input
+                  id="wiz-logo"
+                  value={form.logoUrl}
+                  onChange={(event) => update("logoUrl", event.target.value)}
+                  placeholder="Used only if no file is uploaded above"
+                  className={inputClass()}
+                />
               </div>
               <div>
                 <label htmlFor="wiz-primary-color" className={labelClass()}>
@@ -710,53 +846,61 @@ export function AddOrganizationPage() {
 
         {currentStep === "administrator" ? (
           <Card>
-            <h3 className="font-semibold text-slate-950">Administrator</h3>
+            <h3 className="font-semibold text-slate-950">Administrators</h3>
             <p className="mt-1 text-xs text-slate-500">
-              Invites the agency's own admin by email - they set up their own account, separate from your platform
-              owner access.
+              Invite one or more people by email - each sets up their own account, separate from your platform owner
+              access.
             </p>
-            <div className="mt-4 grid gap-4 sm:grid-cols-2">
-              <div>
-                <label htmlFor="wiz-admin-name" className={labelClass()}>
-                  Name
-                </label>
-                <input
-                  id="wiz-admin-name"
-                  value={form.adminName}
-                  onChange={(event) => update("adminName", event.target.value)}
-                  className={inputClass()}
-                />
-              </div>
-              <div>
-                <label htmlFor="wiz-admin-email" className={labelClass()}>
-                  Email
-                </label>
-                <input
-                  id="wiz-admin-email"
-                  type="email"
-                  value={form.adminEmail}
-                  onChange={(event) => update("adminEmail", event.target.value)}
-                  className={inputClass()}
-                />
-              </div>
-              <div>
-                <label htmlFor="wiz-admin-role" className={labelClass()}>
-                  Role
-                </label>
-                <select
-                  id="wiz-admin-role"
-                  value={form.adminRole}
-                  onChange={(event) => update("adminRole", event.target.value as InvitableRole)}
-                  className={inputClass()}
-                >
-                  {ADMIN_ROLES.map((roleOption) => (
-                    <option key={roleOption} value={roleOption}>
-                      {roleOption.replace(/_/g, " ")}
-                    </option>
-                  ))}
-                </select>
-              </div>
+            <div className="mt-4 space-y-3">
+              {administrators.map((row, index) => (
+                <div key={index} className="flex items-end gap-3">
+                  <div className="flex-1">
+                    <label htmlFor={`wiz-admin-email-${index}`} className={labelClass()}>
+                      Email
+                    </label>
+                    <input
+                      id={`wiz-admin-email-${index}`}
+                      type="email"
+                      value={row.email}
+                      onChange={(event) => updateAdministrator(index, { email: event.target.value })}
+                      className={inputClass()}
+                    />
+                  </div>
+                  <div className="w-48">
+                    <label htmlFor={`wiz-admin-role-${index}`} className={labelClass()}>
+                      Role
+                    </label>
+                    <select
+                      id={`wiz-admin-role-${index}`}
+                      value={row.role}
+                      onChange={(event) => updateAdministrator(index, { role: event.target.value as InvitableRole })}
+                      className={inputClass()}
+                    >
+                      {invitableRoles.map((roleOption) => (
+                        <option key={roleOption} value={roleOption}>
+                          {formatRole(roleOption)}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => removeAdministratorRow(index)}
+                    disabled={administrators.length === 1}
+                    className="rounded-lg border border-slate-200 px-3 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+                  >
+                    Remove
+                  </button>
+                </div>
+              ))}
             </div>
+            <button
+              type="button"
+              onClick={addAdministratorRow}
+              className="mt-4 rounded-lg border border-slate-200 px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+            >
+              + Add another administrator
+            </button>
           </Card>
         ) : null}
 
@@ -787,9 +931,24 @@ export function AddOrganizationPage() {
                 <dd className="mt-1 text-sm text-slate-700">{selectedServices.join(", ") || "—"}</dd>
               </div>
               <div>
-                <dt className="text-xs font-medium uppercase tracking-wide text-slate-500">Administrator</dt>
+                <dt className="text-xs font-medium uppercase tracking-wide text-slate-500">Administrators</dt>
                 <dd className="mt-1 text-sm text-slate-700">
-                  {form.adminEmail || "—"} ({form.adminRole.replace(/_/g, " ")})
+                  {administrators.filter((row) => row.email.trim()).length > 0
+                    ? administrators
+                        .filter((row) => row.email.trim())
+                        .map((row) => `${row.email} (${formatRole(row.role)})`)
+                        .join(", ")
+                    : "—"}
+                </dd>
+              </div>
+              <div>
+                <dt className="text-xs font-medium uppercase tracking-wide text-slate-500">Logo</dt>
+                <dd className="mt-1 text-sm text-slate-700">
+                  {logoPreviewUrl ? (
+                    <img src={logoPreviewUrl} alt="Logo preview" className="h-10 w-10 rounded border border-slate-200 object-contain" />
+                  ) : (
+                    form.logoUrl || "—"
+                  )}
                 </dd>
               </div>
             </dl>
