@@ -269,4 +269,101 @@ describe("CaregiverDetailPage", () => {
     );
     expect(insertMock).not.toHaveBeenCalled();
   });
+
+  it("shows notes on the Notes tab, with an Edit action for membership.update", async () => {
+    mockedUseAuth.mockReturnValue({ user: { id: "other-user" } } as never);
+    mockedUseOrganization.mockReturnValue(baseOrganization());
+    mockedRpc.mockImplementation((fn: string) => {
+      if (fn === "list_organization_members") {
+        return Promise.resolve({
+          data: [{ user_id: CAREGIVER_ID, display_name: "Sam Caregiver", role: "staff", status: "active" }],
+          error: null
+        }) as never;
+      }
+      if (fn === "get_caregiver_notes") {
+        return Promise.resolve({ data: [{ notes: "Prefers morning shifts." }], error: null }) as never;
+      }
+      return Promise.resolve({ data: [], error: null }) as never;
+    });
+    mockAvailabilityFrom();
+
+    renderPage();
+    await waitFor(() => expect(screen.getByText("Sam Caregiver")).toBeInTheDocument());
+
+    fireEvent.click(screen.getByRole("button", { name: "Notes" }));
+
+    await waitFor(() => expect(screen.getByText("Prefers morning shifts.")).toBeInTheDocument());
+    expect(
+      screen.getByText("Internal notes staff keep about this caregiver - not visible to the caregiver themselves.")
+    ).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Edit" })).toBeInTheDocument();
+  });
+
+  it("hides the Notes edit action without membership.update", async () => {
+    mockedUseAuth.mockReturnValue({ user: { id: "other-user" } } as never);
+    mockedUseOrganization.mockReturnValue({
+      ...baseOrganization(),
+      hasPermission: vi.fn((permission: string) => permission !== "membership.update")
+    });
+    mockedRpc.mockImplementation((fn: string) => {
+      if (fn === "list_organization_members") {
+        return Promise.resolve({
+          data: [{ user_id: CAREGIVER_ID, display_name: "Sam Caregiver", role: "staff", status: "active" }],
+          error: null
+        }) as never;
+      }
+      if (fn === "get_caregiver_notes") {
+        return Promise.resolve({ data: [{ notes: "Prefers morning shifts." }], error: null }) as never;
+      }
+      return Promise.resolve({ data: [], error: null }) as never;
+    });
+    mockAvailabilityFrom();
+
+    renderPage();
+    await waitFor(() => expect(screen.getByText("Sam Caregiver")).toBeInTheDocument());
+
+    fireEvent.click(screen.getByRole("button", { name: "Notes" }));
+
+    await waitFor(() => expect(screen.getByText("Prefers morning shifts.")).toBeInTheDocument());
+    expect(screen.queryByRole("button", { name: "Edit" })).not.toBeInTheDocument();
+  });
+
+  it("saves edited notes", async () => {
+    mockedUseAuth.mockReturnValue({ user: { id: "other-user" } } as never);
+    mockedUseOrganization.mockReturnValue(baseOrganization());
+    mockedRpc.mockImplementation((fn: string) => {
+      if (fn === "list_organization_members") {
+        return Promise.resolve({
+          data: [{ user_id: CAREGIVER_ID, display_name: "Sam Caregiver", role: "staff", status: "active" }],
+          error: null
+        }) as never;
+      }
+      if (fn === "get_caregiver_notes") {
+        return Promise.resolve({ data: [{ notes: null }], error: null }) as never;
+      }
+      if (fn === "set_caregiver_notes") {
+        return Promise.resolve({ data: null, error: null }) as never;
+      }
+      return Promise.resolve({ data: [], error: null }) as never;
+    });
+    mockAvailabilityFrom();
+
+    renderPage();
+    await waitFor(() => expect(screen.getByText("Sam Caregiver")).toBeInTheDocument());
+
+    fireEvent.click(screen.getByRole("button", { name: "Notes" }));
+    await waitFor(() => expect(screen.getByText("No notes on file.")).toBeInTheDocument());
+
+    fireEvent.click(screen.getByRole("button", { name: "Edit" }));
+    fireEvent.change(screen.getByRole("textbox"), { target: { value: "Had a great first shift." } });
+    fireEvent.click(screen.getByRole("button", { name: "Save notes" }));
+
+    await waitFor(() =>
+      expect(mockedRpc).toHaveBeenCalledWith("set_caregiver_notes", {
+        target_organization_id: ORG_ID,
+        target_user_id: CAREGIVER_ID,
+        new_notes: "Had a great first shift."
+      })
+    );
+  });
 });

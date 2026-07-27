@@ -2,7 +2,7 @@ import { useEffect, useState, type FormEvent } from "react";
 import { Link, useParams } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowLeft } from "lucide-react";
-import { Card, ScoreBadge, StatusBadge, UtilizationCard, cn, type StatusTone } from "@carelik/ui";
+import { Button, Card, ScoreBadge, StatusBadge, UtilizationCard, cn, type StatusTone } from "@carelik/ui";
 import { getCredentialStatus, type CredentialStatus } from "@carelik/shared";
 import { useAuth } from "@carelik/auth";
 import { useOrganization } from "@/providers/organization-provider";
@@ -76,7 +76,7 @@ interface CaregiverLocationRow {
   skills: string[];
 }
 
-type Tab = "overview" | "schedule" | "credentials" | "incidents" | "history";
+type Tab = "overview" | "schedule" | "credentials" | "incidents" | "notes" | "history";
 
 type Weekday = "monday" | "tuesday" | "wednesday" | "thursday" | "friday" | "saturday" | "sunday";
 
@@ -141,6 +141,10 @@ export function CaregiverDetailPage() {
   const canReadAudit = hasPermission("audit.read");
   const canEditProfile = id === user?.id || hasPermission("membership.update");
   const canManageCredentials = hasPermission("credentials.update");
+  // Deliberately no self-edit carve-out (unlike canEditProfile) - these
+  // are staff notes about a caregiver, not their own profile. See
+  // get_caregiver_notes/set_caregiver_notes's migration comment.
+  const canManageNotes = hasPermission("membership.update");
 
   const weekStart = getWeekStart(new Date());
   const weekEnd = getWeekEnd(weekStart);
@@ -193,6 +197,24 @@ export function CaregiverDetailPage() {
       return ((data ?? []) as CredentialRow[]).filter((row) => row.caregiver_user_id === id);
     },
     enabled: !!activeOrganizationId && !!id
+  });
+
+  const notesQuery = useQuery({
+    queryKey: ["caregiver-detail-notes", activeOrganizationId, id],
+    queryFn: async () => {
+      const { data, error } = await supabase.rpc("get_caregiver_notes", {
+        target_organization_id: activeOrganizationId!,
+        target_user_id: id!
+      });
+      if (error) throw error;
+      // get_caregiver_notes deliberately has no self-read carve-out (see
+      // its migration comment) - a null/empty result here can mean
+      // either "no notes yet" or "not permitted to see notes", and the
+      // UI doesn't need to distinguish those, so both render the same
+      // "No notes on file." state.
+      return ((data ?? [])[0] as { notes: string | null } | undefined)?.notes ?? null;
+    },
+    enabled: !!activeOrganizationId && !!id && canSeeMembers
   });
 
   const incidentsQuery = useQuery({
@@ -286,6 +308,37 @@ export function CaregiverDetailPage() {
       setProfileError(cause instanceof Error ? cause.message : "Could not save profile.");
     } finally {
       setProfileSaving(false);
+    }
+  }
+
+  const [notesDraft, setNotesDraft] = useState("");
+  const [notesEditing, setNotesEditing] = useState(false);
+  const [notesSaving, setNotesSaving] = useState(false);
+  const [notesError, setNotesError] = useState<string | null>(null);
+
+  function startEditingNotes() {
+    setNotesDraft(notesQuery.data ?? "");
+    setNotesError(null);
+    setNotesEditing(true);
+  }
+
+  async function handleSaveNotes() {
+    if (!activeOrganizationId || !id) return;
+    setNotesError(null);
+    setNotesSaving(true);
+    try {
+      const { error } = await supabase.rpc("set_caregiver_notes", {
+        target_organization_id: activeOrganizationId,
+        target_user_id: id,
+        new_notes: notesDraft.trim() || null
+      });
+      if (error) throw error;
+      void queryClient.invalidateQueries({ queryKey: ["caregiver-detail-notes", activeOrganizationId, id] });
+      setNotesEditing(false);
+    } catch (cause) {
+      setNotesError(cause instanceof Error ? cause.message : "Could not save notes.");
+    } finally {
+      setNotesSaving(false);
     }
   }
 
@@ -401,6 +454,7 @@ export function CaregiverDetailPage() {
     { key: "schedule", label: "Schedule" },
     { key: "credentials", label: "Credentials" },
     { key: "incidents", label: "Incidents" },
+    ...(canSeeMembers ? [{ key: "notes" as Tab, label: "Notes" }] : []),
     ...(canReadAudit ? [{ key: "history" as Tab, label: "History" }] : [])
   ];
 
@@ -734,6 +788,56 @@ export function CaregiverDetailPage() {
                 </li>
               ))}
             </ul>
+          )}
+        </Card>
+      ) : null}
+
+      {tab === "notes" && canSeeMembers ? (
+        <Card>
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <h3 className="font-semibold text-slate-950">Notes</h3>
+            {canManageNotes && !notesEditing ? (
+              <Button variant="secondary" size="sm" onClick={startEditingNotes}>
+                Edit
+              </Button>
+            ) : null}
+          </div>
+          <p className="mt-1 text-xs text-slate-500">
+            Internal notes staff keep about this caregiver - not visible to the caregiver themselves.
+          </p>
+
+          {notesQuery.isLoading ? (
+            <p className="mt-3 text-sm text-slate-500">Loading…</p>
+          ) : notesEditing ? (
+            <div className="mt-3 space-y-3">
+              <textarea
+                rows={6}
+                value={notesDraft}
+                onChange={(event) => setNotesDraft(event.target.value)}
+                className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900"
+              />
+              {notesError ? <p className="text-sm text-red-700">{notesError}</p> : null}
+              <div className="flex items-center gap-3">
+                <Button size="sm" loading={notesSaving} onClick={handleSaveNotes}>
+                  Save notes
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  disabled={notesSaving}
+                  onClick={() => {
+                    setNotesEditing(false);
+                    setNotesError(null);
+                  }}
+                >
+                  Cancel
+                </Button>
+              </div>
+            </div>
+          ) : (
+            <p className="mt-3 whitespace-pre-wrap text-sm text-slate-700">
+              {notesQuery.data ?? "No notes on file."}
+            </p>
           )}
         </Card>
       ) : null}
