@@ -2,6 +2,7 @@ export * from "./applicants";
 export * from "./authorizations";
 export * from "./care";
 export * from "./credentials";
+export * from "./documents";
 export * from "./incidents";
 export * from "./matching";
 export * from "./membership";

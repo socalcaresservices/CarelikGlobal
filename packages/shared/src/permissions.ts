@@ -31,7 +31,9 @@ export const permissionSchema = z.enum([
   "skills.read",
   "skills.update",
   "languages.read",
-  "languages.update"
+  "languages.update",
+  "documents.read",
+  "documents.manage"
 ]);
 
 export type Permission = z.infer<typeof permissionSchema>;

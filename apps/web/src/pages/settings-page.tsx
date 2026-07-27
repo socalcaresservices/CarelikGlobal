@@ -154,6 +154,191 @@ function LookupCatalogCard({
   );
 }
 
+// Document type library (Build 019) - unlike skills/languages, this
+// catalog has two kinds of rows: platform defaults (organization_id is
+// null, seeded once for every organization to use immediately - see
+// 20260728030000) and an organization's own custom additions
+// (organization_id set). Defaults are shown read-only here; only an
+// organization's own rows can be deactivated, since has_permission(null,
+// ...) - and therefore the RLS write policy - never lets a regular
+// admin touch them anyway.
+interface DocumentTypeRow {
+  id: string;
+  organization_id: string | null;
+  name: string;
+  category: string | null;
+  requires_expiration: boolean;
+  is_active: boolean;
+}
+
+function DocumentTypesCard({
+  organizationId,
+  canRead,
+  canManage
+}: {
+  organizationId: string | null | undefined;
+  canRead: boolean;
+  canManage: boolean;
+}) {
+  const queryClient = useQueryClient();
+  const [name, setName] = useState("");
+  const [category, setCategory] = useState("");
+  const [requiresExpiration, setRequiresExpiration] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [pendingId, setPendingId] = useState<string | null>(null);
+
+  const listQuery = useQuery({
+    queryKey: ["document-types", organizationId],
+    queryFn: async () => {
+      const { data, error: queryError } = await supabase
+        .from("document_types")
+        .select("id, organization_id, name, category, requires_expiration, is_active")
+        .or(`organization_id.is.null,organization_id.eq.${organizationId}`)
+        .is("deleted_at", null)
+        .order("name");
+      if (queryError) throw queryError;
+      return (data ?? []) as DocumentTypeRow[];
+    },
+    enabled: !!organizationId && canRead
+  });
+
+  function refresh() {
+    void queryClient.invalidateQueries({ queryKey: ["document-types", organizationId] });
+  }
+
+  async function handleAdd(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!organizationId || !name.trim()) return;
+    setError(null);
+    setSaving(true);
+    try {
+      const { error: insertError } = await supabase.from("document_types").insert({
+        organization_id: organizationId,
+        name: name.trim(),
+        category: category.trim() || null,
+        requires_expiration: requiresExpiration
+      });
+      if (insertError) throw insertError;
+      setName("");
+      setCategory("");
+      setRequiresExpiration(false);
+      refresh();
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Could not add document type.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function toggleActive(row: DocumentTypeRow) {
+    setError(null);
+    setPendingId(row.id);
+    try {
+      const { error: updateError } = await supabase
+        .from("document_types")
+        .update({ is_active: !row.is_active })
+        .eq("id", row.id);
+      if (updateError) throw updateError;
+      refresh();
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Could not update document type.");
+    } finally {
+      setPendingId(null);
+    }
+  }
+
+  if (!canRead) return null;
+
+  const rows = listQuery.data ?? [];
+
+  return (
+    <Card>
+      <h3 className="font-semibold text-slate-950">Document types</h3>
+      <p className="mt-1 text-xs text-slate-500">
+        The documents that can be requested from applicants and employees - platform defaults are available to
+        every organization; add your own below.
+      </p>
+
+      {canManage ? (
+        <form onSubmit={handleAdd} className="mt-4 flex flex-wrap items-end gap-3">
+          <div className="flex-1">
+            <label htmlFor="document-type-new-name" className="block text-xs font-medium text-slate-600">
+              Add document type
+            </label>
+            <input
+              id="document-type-new-name"
+              required
+              value={name}
+              onChange={(event) => setName(event.target.value)}
+              className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900"
+            />
+          </div>
+          <div>
+            <label htmlFor="document-type-new-category" className="block text-xs font-medium text-slate-600">
+              Category
+            </label>
+            <input
+              id="document-type-new-category"
+              value={category}
+              onChange={(event) => setCategory(event.target.value)}
+              className="mt-1 w-40 rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900"
+            />
+          </div>
+          <label htmlFor="document-type-new-expires" className="flex items-center gap-2 pb-2 text-sm text-slate-700">
+            <input
+              id="document-type-new-expires"
+              type="checkbox"
+              checked={requiresExpiration}
+              onChange={(event) => setRequiresExpiration(event.target.checked)}
+              className="h-4 w-4 rounded border-slate-300"
+            />
+            Expires
+          </label>
+          <Button type="submit" size="sm" loading={saving}>
+            Add
+          </Button>
+        </form>
+      ) : null}
+
+      {error ? <p className="mt-3 text-sm text-red-700">{error}</p> : null}
+
+      {listQuery.isLoading ? (
+        <p className="mt-3 text-sm text-slate-500">Loading…</p>
+      ) : rows.length === 0 ? (
+        <p className="mt-3 text-sm text-slate-400">None configured yet.</p>
+      ) : (
+        <ul className="mt-4 divide-y divide-slate-100">
+          {rows.map((row) => (
+            <li key={row.id} className="flex items-center justify-between py-2">
+              <span className={row.is_active ? "text-sm text-slate-800" : "text-sm text-slate-400 line-through"}>
+                {row.name}
+                {row.category ? <span className="ml-2 text-xs text-slate-400">{row.category}</span> : null}
+                {row.organization_id === null ? (
+                  <span className="ml-2 text-xs font-medium uppercase tracking-wide text-slate-400">
+                    Platform default
+                  </span>
+                ) : null}
+              </span>
+              {canManage && row.organization_id !== null ? (
+                <Button
+                  type="button"
+                  variant="secondary"
+                  size="sm"
+                  loading={pendingId === row.id}
+                  onClick={() => toggleActive(row)}
+                >
+                  {row.is_active ? "Deactivate" : "Reactivate"}
+                </Button>
+              ) : null}
+            </li>
+          ))}
+        </ul>
+      )}
+    </Card>
+  );
+}
+
 // public.organization_settings is a generic (organization_id, key) -> jsonb
 // store - there's no fixed list of settings, so this page is a generic
 // editor over whatever keys exist, rather than a form with named fields.
@@ -435,6 +620,12 @@ export function SettingsPage() {
         organizationId={activeOrganizationId}
         canRead={hasPermission("languages.read")}
         canUpdate={hasPermission("languages.update")}
+      />
+
+      <DocumentTypesCard
+        organizationId={activeOrganizationId}
+        canRead={hasPermission("documents.read")}
+        canManage={hasPermission("documents.manage")}
       />
     </section>
   );

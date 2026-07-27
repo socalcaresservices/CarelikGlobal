@@ -1,9 +1,15 @@
 import { useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, Copy } from "lucide-react";
 import { Button, Card, StatusBadge, type StatusTone } from "@carelik/ui";
-import { applicantStatusSchema, type ApplicantStatus, type EmploymentType } from "@carelik/shared";
+import {
+  applicantStatusSchema,
+  type ApplicantStatus,
+  type DocumentRequestStatus,
+  type DocumentRequestSubjectType,
+  type EmploymentType
+} from "@carelik/shared";
 import { useOrganization } from "@/providers/organization-provider";
 import { supabase } from "@/lib/supabase";
 
@@ -97,6 +103,203 @@ const statusTone: Record<ApplicantStatus, StatusTone> = {
   withdrawn: "neutral"
 };
 
+// Document Request Engine (Build 019) - written as a self-contained,
+// subject-agnostic card (organizationId/subjectType/subjectId/
+// subjectName/subjectEmail as props, not applicant-specific internals)
+// so the same component can be dropped onto the caregiver/employee
+// detail page in a later build without duplicating this logic.
+interface DocumentTypeOption {
+  id: string;
+  name: string;
+  is_active: boolean;
+}
+
+interface DocumentRequestRow {
+  id: string;
+  document_type_name: string;
+  status: DocumentRequestStatus;
+  uploaded_at: string | null;
+  expires_at: string | null;
+  batch_token: string;
+  batch_created_at: string;
+}
+
+const documentRequestStatusTone: Record<DocumentRequestStatus, StatusTone> = {
+  requested: "info",
+  uploaded: "warning",
+  pending_review: "warning",
+  verified: "success",
+  rejected: "danger",
+  expired: "danger",
+  missing: "danger",
+  replacement_requested: "warning"
+};
+
+function formatDocumentStatus(status: DocumentRequestStatus) {
+  return status.replace(/_/g, " ");
+}
+
+function DocumentsCard({
+  organizationId,
+  subjectType,
+  subjectId,
+  subjectName,
+  subjectEmail,
+  canRead,
+  canManage
+}: {
+  organizationId: string | null | undefined;
+  subjectType: DocumentRequestSubjectType;
+  subjectId: string;
+  subjectName: string;
+  subjectEmail: string | null;
+  canRead: boolean;
+  canManage: boolean;
+}) {
+  const queryClient = useQueryClient();
+  const [selectedTypeIds, setSelectedTypeIds] = useState<string[]>([]);
+  const [sending, setSending] = useState(false);
+  const [sendError, setSendError] = useState<string | null>(null);
+  const [generatedLink, setGeneratedLink] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
+
+  const typesQuery = useQuery({
+    queryKey: ["document-types", organizationId],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("document_types")
+        .select("id, name, is_active")
+        .or(`organization_id.is.null,organization_id.eq.${organizationId}`)
+        .is("deleted_at", null)
+        .order("name");
+      if (error) throw error;
+      return (data ?? []) as DocumentTypeOption[];
+    },
+    enabled: !!organizationId && canManage
+  });
+
+  const requestsQuery = useQuery({
+    queryKey: ["document-requests-for-subject", organizationId, subjectId],
+    queryFn: async () => {
+      const { data, error } = await supabase.rpc("list_document_requests_for_subject", {
+        target_organization_id: organizationId!,
+        target_subject_id: subjectId
+      });
+      if (error) throw error;
+      return (data ?? []) as DocumentRequestRow[];
+    },
+    enabled: !!organizationId && canRead
+  });
+
+  function toggleType(id: string) {
+    setSelectedTypeIds((current) => (current.includes(id) ? current.filter((t) => t !== id) : [...current, id]));
+  }
+
+  async function handleSend() {
+    if (!organizationId || selectedTypeIds.length === 0) return;
+    setSendError(null);
+    setSending(true);
+    setGeneratedLink(null);
+    setCopied(false);
+    try {
+      const { data, error } = await supabase.rpc("create_document_request_batch", {
+        target_organization_id: organizationId,
+        target_subject_type: subjectType,
+        target_subject_id: subjectId,
+        target_subject_name: subjectName,
+        target_subject_email: subjectEmail,
+        target_document_type_ids: selectedTypeIds
+      });
+      if (error) throw error;
+      const row = Array.isArray(data) ? data[0] : data;
+      if (row?.token) {
+        setGeneratedLink(`${window.location.origin}/upload/${row.token}`);
+      }
+      setSelectedTypeIds([]);
+      void queryClient.invalidateQueries({ queryKey: ["document-requests-for-subject", organizationId, subjectId] });
+    } catch (cause) {
+      setSendError(cause instanceof Error ? cause.message : "Could not send document request.");
+    } finally {
+      setSending(false);
+    }
+  }
+
+  function handleCopyLink() {
+    if (!generatedLink) return;
+    void navigator.clipboard.writeText(generatedLink).then(() => setCopied(true));
+  }
+
+  if (!canRead) return null;
+
+  const activeTypes = (typesQuery.data ?? []).filter((type) => type.is_active);
+  const requests = requestsQuery.data ?? [];
+
+  return (
+    <Card>
+      <h3 className="font-semibold text-slate-950">Documents</h3>
+
+      {canManage ? (
+        <div className="mt-4">
+          <p className="text-xs font-medium text-slate-600">Request documents</p>
+          {typesQuery.isLoading ? (
+            <p className="mt-2 text-sm text-slate-500">Loading document types…</p>
+          ) : (
+            <div className="mt-2 flex flex-wrap gap-x-4 gap-y-2">
+              {activeTypes.map((type) => (
+                <label key={type.id} className="flex items-center gap-2 text-sm text-slate-700">
+                  <input
+                    type="checkbox"
+                    checked={selectedTypeIds.includes(type.id)}
+                    onChange={() => toggleType(type.id)}
+                    className="h-4 w-4 rounded border-slate-300"
+                  />
+                  {type.name}
+                </label>
+              ))}
+            </div>
+          )}
+          <div className="mt-3">
+            <Button disabled={selectedTypeIds.length === 0 || sending} loading={sending} onClick={handleSend}>
+              {sending ? "Sending…" : "Send"}
+            </Button>
+          </div>
+          {sendError ? <p className="mt-2 text-sm text-red-700">{sendError}</p> : null}
+          {generatedLink ? (
+            <div className="mt-3 flex flex-wrap items-center gap-2 rounded-lg border border-emerald-100 bg-emerald-50/60 px-3 py-2">
+              <p className="flex-1 break-all text-xs text-emerald-800">{generatedLink}</p>
+              <button
+                type="button"
+                onClick={handleCopyLink}
+                className="flex items-center gap-1 text-xs font-medium text-emerald-800 hover:underline"
+              >
+                <Copy className="h-3.5 w-3.5" />
+                {copied ? "Copied" : "Copy link"}
+              </button>
+            </div>
+          ) : null}
+        </div>
+      ) : null}
+
+      <div className="mt-4">
+        {requestsQuery.isLoading ? (
+          <p className="text-sm text-slate-500">Loading…</p>
+        ) : requests.length === 0 ? (
+          <p className="text-sm text-slate-400">No documents requested yet.</p>
+        ) : (
+          <ul className="divide-y divide-slate-100">
+            {requests.map((row) => (
+              <li key={row.id} className="flex items-center justify-between py-2 text-sm">
+                <span className="text-slate-800">{row.document_type_name}</span>
+                <StatusBadge label={formatDocumentStatus(row.status)} tone={documentRequestStatusTone[row.status]} />
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+    </Card>
+  );
+}
+
 function formatHours(hours: number) {
   return Number.isInteger(hours) ? String(hours) : hours.toFixed(1);
 }
@@ -121,6 +324,8 @@ export function ApplicantDetailPage() {
 
   const canRead = hasPermission("applicants.read");
   const canManage = hasPermission("applicants.update");
+  const canReadDocuments = hasPermission("documents.read");
+  const canManageDocuments = hasPermission("documents.manage");
 
   const applicantQuery = useQuery({
     queryKey: ["applicant-detail", activeOrganizationId, id],
@@ -329,6 +534,16 @@ export function ApplicantDetailPage() {
           </div>
         )}
       </Card>
+
+      <DocumentsCard
+        organizationId={activeOrganizationId}
+        subjectType="applicant"
+        subjectId={applicant.id}
+        subjectName={`${applicant.first_name} ${applicant.last_name}`}
+        subjectEmail={applicant.email}
+        canRead={canReadDocuments}
+        canManage={canManageDocuments}
+      />
 
       {canManage && applicant.status !== "hired" ? (
         <Card>

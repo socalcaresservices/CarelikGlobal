@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -21,7 +21,7 @@ const mockedFrom = vi.mocked(supabase.from);
 const ORG_ID = "11111111-1111-4111-8111-111111111111";
 const APPLICANT_ID = "22222222-2222-4222-8222-222222222222";
 
-function baseOrganization(hasPermission = () => true) {
+function baseOrganization(hasPermission: (permission: string) => boolean = () => true) {
   return {
     organizations: [],
     activeOrganization: {
@@ -71,7 +71,22 @@ function applicantRecord(overrides: Record<string, unknown> = {}) {
   };
 }
 
-function mockFromByTable(applicant: unknown, availability: unknown[] = [], services: unknown[] = []) {
+// Document types (Build 019) chain .select().or().is().order() - same
+// shape as settings-page.test.tsx's mockReadableDocumentTypes.
+function mockReadableDocumentTypes(rows: unknown[]) {
+  const orderMock = vi.fn().mockResolvedValue({ data: rows, error: null });
+  const isMock = vi.fn(() => ({ order: orderMock }));
+  const orMock = vi.fn(() => ({ is: isMock }));
+  const selectMock = vi.fn(() => ({ or: orMock }));
+  return { selectMock, orMock, isMock, orderMock };
+}
+
+function mockFromByTable(
+  applicant: unknown,
+  availability: unknown[] = [],
+  services: unknown[] = [],
+  documentTypes: unknown[] = []
+) {
   const applicantSingleMock = vi.fn().mockResolvedValue({ data: applicant, error: null });
   const applicantEqMock = vi.fn(() => ({ single: applicantSingleMock }));
   const applicantSelectMock = vi.fn(() => ({ eq: applicantEqMock }));
@@ -84,6 +99,8 @@ function mockFromByTable(applicant: unknown, availability: unknown[] = [], servi
   const servicesEqMock = vi.fn().mockResolvedValue({ data: services, error: null });
   const servicesSelectMock = vi.fn(() => ({ eq: servicesEqMock }));
 
+  const { selectMock: documentTypesSelectMock } = mockReadableDocumentTypes(documentTypes);
+
   mockedFrom.mockImplementation((table: string) => {
     if (table === "job_applicants") {
       return { select: applicantSelectMock, update: applicantUpdateMock } as never;
@@ -93,6 +110,9 @@ function mockFromByTable(applicant: unknown, availability: unknown[] = [], servi
     }
     if (table === "job_applicant_services") {
       return { select: servicesSelectMock } as never;
+    }
+    if (table === "document_types") {
+      return { select: documentTypesSelectMock } as never;
     }
     return {} as never;
   });
@@ -218,5 +238,114 @@ describe("ApplicantDetailPage", () => {
     renderPage();
 
     expect(screen.getByText("Not available")).toBeInTheDocument();
+  });
+
+  it("lists requested documents with status badges", async () => {
+    mockedUseOrganization.mockReturnValue(baseOrganization());
+    mockFromByTable(applicantRecord());
+    mockedRpc.mockImplementation((fn: string) => {
+      if (fn === "list_document_requests_for_subject") {
+        return Promise.resolve({
+          data: [
+            {
+              id: "req-1",
+              document_type_name: "CPR Certification",
+              status: "verified",
+              uploaded_at: "2026-07-20T00:00:00.000Z",
+              expires_at: "2027-07-20",
+              batch_token: "tok-1",
+              batch_created_at: "2026-07-19T00:00:00.000Z"
+            },
+            {
+              id: "req-2",
+              document_type_name: "TB Test",
+              status: "requested",
+              uploaded_at: null,
+              expires_at: null,
+              batch_token: "tok-1",
+              batch_created_at: "2026-07-19T00:00:00.000Z"
+            }
+          ],
+          error: null
+        }) as never;
+      }
+      return Promise.resolve({ data: [], error: null }) as never;
+    });
+
+    renderPage();
+
+    await waitFor(() => expect(screen.getByText("CPR Certification")).toBeInTheDocument());
+    expect(screen.getByText("TB Test")).toBeInTheDocument();
+    expect(screen.getByText("verified")).toBeInTheDocument();
+    expect(screen.getByText("requested")).toBeInTheDocument();
+  });
+
+  it("sends a document request and shows the generated upload link", async () => {
+    mockedUseOrganization.mockReturnValue(baseOrganization());
+    mockFromByTable(applicantRecord(), [], [], [
+      { id: "dt-1", name: "CPR Certification", is_active: true },
+      { id: "dt-2", name: "TB Test", is_active: true }
+    ]);
+    mockedRpc.mockImplementation((fn: string) => {
+      if (fn === "create_document_request_batch") {
+        return Promise.resolve({ data: [{ batch_id: "batch-1", token: "abc123" }], error: null }) as never;
+      }
+      return Promise.resolve({ data: [], error: null }) as never;
+    });
+
+    renderPage();
+
+    await waitFor(() => expect(screen.getByText("CPR Certification")).toBeInTheDocument());
+    fireEvent.click(screen.getByLabelText("CPR Certification"));
+    fireEvent.click(screen.getByRole("button", { name: "Send" }));
+
+    await waitFor(() =>
+      expect(mockedRpc).toHaveBeenCalledWith(
+        "create_document_request_batch",
+        expect.objectContaining({
+          target_organization_id: ORG_ID,
+          target_subject_type: "applicant",
+          target_subject_id: APPLICANT_ID,
+          target_subject_name: "Ashley Rivera",
+          target_subject_email: "ashley@example.com",
+          target_document_type_ids: ["dt-1"]
+        })
+      )
+    );
+    await waitFor(() =>
+      expect(screen.getByText(`${window.location.origin}/upload/abc123`)).toBeInTheDocument()
+    );
+  });
+
+  it("hides the request form without documents.manage but still shows existing requests", async () => {
+    mockedUseOrganization.mockReturnValue(
+      baseOrganization((permission: string) => permission !== "documents.manage")
+    );
+    mockFromByTable(applicantRecord());
+    mockedRpc.mockImplementation((fn: string) => {
+      if (fn === "list_document_requests_for_subject") {
+        return Promise.resolve({
+          data: [
+            {
+              id: "req-1",
+              document_type_name: "CPR Certification",
+              status: "verified",
+              uploaded_at: null,
+              expires_at: null,
+              batch_token: "tok-1",
+              batch_created_at: "2026-07-19T00:00:00.000Z"
+            }
+          ],
+          error: null
+        }) as never;
+      }
+      return Promise.resolve({ data: [], error: null }) as never;
+    });
+
+    renderPage();
+
+    await waitFor(() => expect(screen.getByText("CPR Certification")).toBeInTheDocument());
+    expect(screen.queryByText("Request documents")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Send" })).not.toBeInTheDocument();
   });
 });
