@@ -123,7 +123,28 @@ const statusStyles: Record<ClientDetail["status"], string> = {
   discharged: "bg-amber-50 text-amber-700"
 };
 
-type Tab = "overview" | "schedule" | "authorizations" | "incidents" | "notes" | "history";
+type Tab = "overview" | "schedule" | "matches" | "authorizations" | "incidents" | "notes" | "history";
+
+// CareScore's per-pair caregiver/client match score - see
+// supabase/migrations/20260719280000_caregiver_client_matching.sql for
+// the weighting model. Previously the only place a caregiver could see
+// their real CareScore against a client was compressed into a single
+// <option> label in the Schedule page's assignment dropdown ("Sam
+// Caregiver — CareScore 87") - real numbers, but with no room to explain
+// *why*. This tab gives the same real numbers (list_caregiver_matches(),
+// no new RPC, no new calculation) a proper home with the full
+// proximity/language/availability/skills/history breakdown, which is
+// what makes it an *explainable* recommendation instead of a bare score.
+interface CaregiverMatchDetailRow {
+  caregiver_user_id: string;
+  caregiver_name: string;
+  match_score: number;
+  proximity_score: number;
+  language_score: number;
+  availability_score: number;
+  skills_score: number;
+  history_score: number;
+}
 
 function formatHours(hours: number) {
   return Number.isInteger(hours) ? String(hours) : hours.toFixed(1);
@@ -260,6 +281,20 @@ export function ClientDetailPage() {
     enabled: !!activeOrganizationId && !!id
   });
 
+  const matchesQuery = useQuery({
+    queryKey: ["client-detail-matches", activeOrganizationId, id],
+    queryFn: async () => {
+      const { data, error } = await supabase.rpc("list_caregiver_matches", {
+        target_organization_id: activeOrganizationId!,
+        target_client_id: id!
+      });
+      if (error) throw error;
+      // Already sorted best-match-first by the RPC itself.
+      return (data ?? []) as CaregiverMatchDetailRow[];
+    },
+    enabled: !!activeOrganizationId && !!id && canSchedule
+  });
+
   const authorizationsQuery = useQuery({
     queryKey: ["client-detail-authorizations", activeOrganizationId, id],
     queryFn: async () => {
@@ -346,6 +381,7 @@ export function ClientDetailPage() {
   const tabs: Array<{ key: Tab; label: string }> = [
     { key: "overview", label: "Overview" },
     { key: "schedule", label: "Schedule" },
+    ...(canSchedule ? [{ key: "matches" as Tab, label: "Matches" }] : []),
     ...(canSeeAuthorizations ? [{ key: "authorizations" as Tab, label: "Authorizations" }] : []),
     { key: "incidents", label: "Incidents" },
     { key: "notes", label: "Notes" },
@@ -610,6 +646,44 @@ export function ClientDetailPage() {
                     <span className="text-xs font-medium text-slate-500">{shift.status.replace("_", " ")}</span>
                   </li>
                 ))}
+            </ul>
+          )}
+        </Card>
+      ) : null}
+
+      {tab === "matches" && canSchedule ? (
+        <Card>
+          <h3 className="font-semibold text-slate-950">Caregiver matches</h3>
+          <p className="mt-1 text-xs text-slate-500">
+            CareScore ranks active caregivers against this client on proximity, language, availability, skills, and
+            shared history - the same score shown when assigning a shift, with the breakdown that explains it.
+          </p>
+          {matchesQuery.isLoading ? (
+            <p className="mt-3 text-sm text-slate-500">Loading…</p>
+          ) : (matchesQuery.data ?? []).length === 0 ? (
+            <p className="mt-3 text-sm text-slate-400">No active caregivers to match against.</p>
+          ) : (
+            <ul className="mt-3 divide-y divide-slate-100">
+              {(matchesQuery.data ?? []).map((match) => (
+                <li key={match.caregiver_user_id} className="py-3">
+                  <div className="flex items-center justify-between">
+                    <Link
+                      to={`/team/${match.caregiver_user_id}`}
+                      className="text-sm font-medium text-slate-900 hover:underline"
+                    >
+                      {match.caregiver_name}
+                    </Link>
+                    <span className="text-lg font-semibold tabular-nums text-slate-950">{match.match_score}</span>
+                  </div>
+                  <div className="mt-1.5 flex flex-wrap gap-x-4 gap-y-1 text-xs text-slate-500">
+                    <span>Proximity {match.proximity_score}/30</span>
+                    <span>Language {match.language_score}/25</span>
+                    <span>Availability {match.availability_score}/20</span>
+                    <span>Skills {match.skills_score}/10</span>
+                    <span>History {match.history_score}/15</span>
+                  </div>
+                </li>
+              ))}
             </ul>
           )}
         </Card>

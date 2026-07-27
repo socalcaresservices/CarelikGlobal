@@ -42,13 +42,15 @@ function mockRpc({
   credentials = [],
   authorizations = [],
   incidents = [],
-  audit = []
+  audit = [],
+  applicants = []
 }: {
   members?: unknown[];
   credentials?: unknown[];
   authorizations?: unknown[];
   incidents?: unknown[];
   audit?: unknown[];
+  applicants?: unknown[];
 }) {
   mockedRpc.mockImplementation((fn: string) => {
     if (fn === "list_organization_members") return Promise.resolve({ data: members, error: null }) as never;
@@ -56,6 +58,7 @@ function mockRpc({
     if (fn === "list_client_authorizations") return Promise.resolve({ data: authorizations, error: null }) as never;
     if (fn === "list_incidents") return Promise.resolve({ data: incidents, error: null }) as never;
     if (fn === "list_audit_logs") return Promise.resolve({ data: audit, error: null }) as never;
+    if (fn === "list_applicants") return Promise.resolve({ data: applicants, error: null }) as never;
     return Promise.resolve({ data: [], error: null }) as never;
   });
 }
@@ -101,7 +104,8 @@ describe("OwnerDashboardPage", () => {
         }
       ],
       incidents: [{ severity: "high", status: "open", occurred_at: new Date().toISOString() }],
-      audit: [{ occurred_at: new Date().toISOString() }]
+      audit: [{ occurred_at: new Date().toISOString() }],
+      applicants: [{ status: "new" }, { status: "new" }, { status: "hired" }]
     });
 
     renderPage();
@@ -127,6 +131,11 @@ describe("OwnerDashboardPage", () => {
 
     const activityCard = screen.getByText("Recent activity").closest("div")!;
     expect(within(activityCard).getByText("1")).toBeInTheDocument();
+
+    const applicantsCard = screen.getByText("Applicants by status").closest("div")!;
+    expect(within(applicantsCard).getByText("New")).toBeInTheDocument();
+    expect(within(applicantsCard).getByText("2")).toBeInTheDocument();
+    expect(within(applicantsCard).getByText("Hired")).toBeInTheDocument();
   });
 
   it("allows a platform_owner to view the dashboard", async () => {

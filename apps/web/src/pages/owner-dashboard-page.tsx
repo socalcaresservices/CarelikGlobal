@@ -1,10 +1,12 @@
 import { useQuery } from "@tanstack/react-query";
 import { Card, StatusBadge, type StatusTone } from "@carelik/ui";
 import {
+  applicantStatusSchema,
   getAuthorizationExpiryStatus,
   getAuthorizationUsageStatus,
   getCredentialStatus,
   membershipStatusSchema,
+  type ApplicantStatus,
   type AuthorizationExpiryStatus,
   type AuthorizationUsageStatus,
   type CredentialStatus,
@@ -62,6 +64,10 @@ interface IncidentRow {
 
 interface AuditRow {
   occurred_at: string;
+}
+
+interface ApplicantRow {
+  status: ApplicantStatus;
 }
 
 const credentialStatusTone: Record<CredentialStatus, StatusTone> = {
@@ -129,6 +135,22 @@ const membershipStatusTone: Record<MembershipStatus, StatusTone> = {
   revoked: "danger"
 };
 
+const applicantStatusTone: Record<ApplicantStatus, StatusTone> = {
+  new: "info",
+  reviewing: "warning",
+  hired: "success",
+  rejected: "danger",
+  withdrawn: "neutral"
+};
+
+const applicantStatusLabel: Record<ApplicantStatus, string> = {
+  new: "New",
+  reviewing: "Reviewing",
+  hired: "Hired",
+  rejected: "Rejected",
+  withdrawn: "Withdrawn"
+};
+
 function formatRole(role: string) {
   return role.replace(/_/g, " ");
 }
@@ -159,6 +181,7 @@ export function OwnerDashboardPage() {
   const canSeeCredentials = hasPermission("credentials.read");
   const canSeeAuthorizations = hasPermission("authorizations.read");
   const canSeeIncidents = hasPermission("incidents.read");
+  const canSeeApplicants = hasPermission("applicants.read");
   const canSeeAudit = hasPermission("audit.read");
 
   const membersQuery = useQuery({
@@ -209,6 +232,22 @@ export function OwnerDashboardPage() {
     enabled: !!activeOrganizationId && isOwner && canSeeIncidents
   });
 
+  // Every other section here rolls up an entity that already existed
+  // when this page was first built. Applicants (grown into a full
+  // workflow across Builds 002-008) were never added - the gap this
+  // build closes, found by reading this page rather than assuming.
+  const applicantsQuery = useQuery({
+    queryKey: ["owner-dashboard-applicants", activeOrganizationId],
+    queryFn: async () => {
+      const { data, error } = await supabase.rpc("list_applicants", {
+        target_organization_id: activeOrganizationId!
+      });
+      if (error) throw error;
+      return (data ?? []) as ApplicantRow[];
+    },
+    enabled: !!activeOrganizationId && isOwner && canSeeApplicants
+  });
+
   const auditQuery = useQuery({
     queryKey: ["owner-dashboard-audit", activeOrganizationId],
     queryFn: async () => {
@@ -251,6 +290,8 @@ export function OwnerDashboardPage() {
 
   const incidentStatusCounts = tally((incidentsQuery.data ?? []).map((i) => i.status));
   const incidentSeverityCounts = tally((incidentsQuery.data ?? []).map((i) => i.severity));
+
+  const applicantStatusCounts = tally((applicantsQuery.data ?? []).map((a) => a.status));
 
   const now = new Date();
   const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
@@ -427,6 +468,30 @@ export function OwnerDashboardPage() {
             )}
           </Card>
         </div>
+      ) : null}
+
+      {canSeeApplicants ? (
+        <Card>
+          <h3 className="font-semibold text-slate-950">Applicants by status</h3>
+          {applicantsQuery.isLoading ? (
+            <p className="mt-3 text-sm text-slate-500">Loading…</p>
+          ) : applicantStatusCounts.size === 0 ? (
+            <p className="mt-3 text-sm text-slate-400">No applications yet.</p>
+          ) : (
+            <div className="mt-2 grid gap-x-6 sm:grid-cols-2">
+              {applicantStatusSchema.options
+                .filter((status) => applicantStatusCounts.has(status))
+                .map((status) => (
+                  <BreakdownRow
+                    key={status}
+                    label={applicantStatusLabel[status]}
+                    tone={applicantStatusTone[status]}
+                    count={applicantStatusCounts.get(status) ?? 0}
+                  />
+                ))}
+            </div>
+          )}
+        </Card>
       ) : null}
 
       {canSeeAudit ? (

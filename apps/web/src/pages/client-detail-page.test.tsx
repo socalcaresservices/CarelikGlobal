@@ -326,6 +326,52 @@ describe("ClientDetailPage", () => {
     expect(link.closest("a")).toHaveAttribute("href", `/schedule?clientId=${CLIENT_ID}`);
   });
 
+  it("shows ranked CareScore matches with a breakdown on the Matches tab", async () => {
+    mockedUseOrganization.mockReturnValue(baseOrganization());
+    mockFromByTable({
+      id: CLIENT_ID,
+      first_name: "Jordan",
+      last_name: "Rivera",
+      phone: null,
+      email: null,
+      address: null,
+      care_notes: null,
+      status: "active",
+      client_requested_services: []
+    });
+    mockedRpc.mockImplementation((fn: string) => {
+      if (fn === "list_caregiver_matches") {
+        return Promise.resolve({
+          data: [
+            {
+              caregiver_user_id: "caregiver-1",
+              caregiver_name: "Sam Caregiver",
+              match_score: 87,
+              proximity_score: 30,
+              language_score: 25,
+              availability_score: 17,
+              skills_score: 10,
+              history_score: 5
+            }
+          ],
+          error: null
+        }) as never;
+      }
+      return Promise.resolve({ data: [], error: null }) as never;
+    });
+
+    renderPage();
+    await waitFor(() => expect(screen.getByText("Jordan Rivera")).toBeInTheDocument());
+
+    fireEvent.click(screen.getByRole("button", { name: "Matches" }));
+
+    await waitFor(() => expect(screen.getByText("Sam Caregiver")).toBeInTheDocument());
+    expect(screen.getByText("87")).toBeInTheDocument();
+    expect(screen.getByText("Proximity 30/30")).toBeInTheDocument();
+    expect(screen.getByText("Skills 10/10")).toBeInTheDocument();
+    expect(screen.getByText("Sam Caregiver").closest("a")).toHaveAttribute("href", "/team/caregiver-1");
+  });
+
   it("links to a pre-filled add-authorization flow from the Authorizations tab", async () => {
     mockedUseOrganization.mockReturnValue(baseOrganization());
     mockFromByTable({
