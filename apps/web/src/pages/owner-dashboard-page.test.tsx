@@ -136,6 +136,35 @@ describe("OwnerDashboardPage", () => {
     expect(within(applicantsCard).getByText("New")).toBeInTheDocument();
     expect(within(applicantsCard).getByText("2")).toBeInTheDocument();
     expect(within(applicantsCard).getByText("Hired")).toBeInTheDocument();
+
+    // Build 012: recharts capacity bar (Used/Scheduled/Remaining legend)
+    // and team-composition donut, both fed by data already asserted
+    // above - no new RPC, so this just checks the charts actually mount.
+    // The authorizations query resolves independently of the members
+    // query waited on above, so wait for the chart itself too.
+    await waitFor(() =>
+      expect(
+        screen.getByRole("img", { name: "Monthly authorized hours: used, scheduled, and remaining" })
+      ).toBeInTheDocument()
+    );
+    expect(screen.getByText("Used")).toBeInTheDocument();
+    expect(screen.getByText("Scheduled")).toBeInTheDocument();
+    expect(screen.getByText("Remaining")).toBeInTheDocument();
+    expect(screen.getByRole("img", { name: "Team composition by role" })).toBeInTheDocument();
+  });
+
+  it("shows an empty state for monthly capacity when there are no authorizations", async () => {
+    mockedUseOrganization.mockReturnValue(baseOrganization("organization_owner"));
+    mockRpc({ members: [{ role: "staff", status: "active" }] });
+
+    renderPage();
+
+    await waitFor(() => expect(screen.getByText("Monthly capacity")).toBeInTheDocument());
+    const capacityCard = screen.getByText("Monthly capacity").closest("div")!;
+    await waitFor(() => expect(within(capacityCard).getByText("No authorizations tracked yet.")).toBeInTheDocument());
+    expect(
+      within(capacityCard).queryByRole("img", { name: "Monthly authorized hours: used, scheduled, and remaining" })
+    ).not.toBeInTheDocument();
   });
 
   it("allows a platform_owner to view the dashboard", async () => {

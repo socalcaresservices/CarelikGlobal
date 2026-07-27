@@ -1,4 +1,16 @@
 import { useQuery } from "@tanstack/react-query";
+import {
+  Bar,
+  BarChart,
+  Cell,
+  Legend,
+  Pie,
+  PieChart,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis
+} from "recharts";
 import { Card, StatusBadge, type StatusTone } from "@carelik/ui";
 import {
   applicantStatusSchema,
@@ -155,6 +167,22 @@ function formatRole(role: string) {
   return role.replace(/_/g, " ");
 }
 
+// Hex values, not Tailwind classes - recharts renders raw SVG fill/stroke
+// attributes, so it can't consume the semantic color utility classes
+// packages/ui's StatusBadge/StatusChip use. These are the same swatches
+// tailwind.config.ts's success/warning/danger/info scale points at
+// (emerald/amber/red/sky-500), kept in sync manually since there's no
+// build-time bridge from Tailwind tokens into a JS-consumable palette.
+const CHART_COLORS = {
+  success: "#10b981",
+  warning: "#f59e0b",
+  danger: "#ef4444",
+  info: "#0ea5e9",
+  neutral: "#94a3b8"
+};
+
+const ROLE_CHART_COLORS = ["#0ea5e9", "#10b981", "#f59e0b", "#94a3b8", "#8b5cf6", "#ef4444", "#14b8a6"];
+
 function tally<T extends string>(values: T[]): Map<T, number> {
   const counts = new Map<T, number>();
   for (const value of values) {
@@ -288,6 +316,33 @@ export function OwnerDashboardPage() {
   );
   const expiryCounts = tally((authorizationsQuery.data ?? []).map((a) => getAuthorizationExpiryStatus(a.period_end)));
 
+  // Org-wide monthly capacity: same three numbers each authorization row
+  // already shows on the Client detail page (used/scheduled/remaining),
+  // summed across every authorization instead of shown per-client - the
+  // rollup answers "how much of what we're authorized to bill are we
+  // actually using this month," which is the "Revenue at Risk"/
+  // "Remaining Capacity" question the owner asked for on this page.
+  const totalAuthorizedHours = (authorizationsQuery.data ?? []).reduce((sum, a) => sum + a.max_monthly_hours, 0);
+  const totalUsedHours = (authorizationsQuery.data ?? []).reduce((sum, a) => sum + a.hours_used_this_month, 0);
+  const totalScheduledHours = (authorizationsQuery.data ?? []).reduce(
+    (sum, a) => sum + a.hours_scheduled_this_month,
+    0
+  );
+  const totalRemainingHours = Math.max(0, totalAuthorizedHours - totalUsedHours - totalScheduledHours);
+  const capacityChartData = [
+    {
+      name: "This month",
+      "Used": totalUsedHours,
+      "Scheduled": totalScheduledHours,
+      "Remaining": totalRemainingHours
+    }
+  ];
+
+  const roleChartData = [...roleCounts.entries()].map(([roleKey, count]) => ({
+    name: formatRole(roleKey),
+    value: count
+  }));
+
   const incidentStatusCounts = tally((incidentsQuery.data ?? []).map((i) => i.status));
   const incidentSeverityCounts = tally((incidentsQuery.data ?? []).map((i) => i.severity));
 
@@ -321,11 +376,25 @@ export function OwnerDashboardPage() {
             ) : roleCounts.size === 0 ? (
               <p className="mt-3 text-sm text-slate-400">No team members yet.</p>
             ) : (
-              <div className="mt-2 divide-y divide-slate-100">
-                {[...roleCounts.entries()].map(([roleKey, count]) => (
-                  <BreakdownRow key={roleKey} label={formatRole(roleKey)} tone="neutral" count={count} />
-                ))}
-              </div>
+              <>
+                <div className="mt-2 h-40" role="img" aria-label="Team composition by role">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <PieChart>
+                      <Pie data={roleChartData} dataKey="value" nameKey="name" innerRadius={35} outerRadius={60}>
+                        {roleChartData.map((entry, index) => (
+                          <Cell key={entry.name} fill={ROLE_CHART_COLORS[index % ROLE_CHART_COLORS.length]} />
+                        ))}
+                      </Pie>
+                      <Tooltip />
+                    </PieChart>
+                  </ResponsiveContainer>
+                </div>
+                <div className="mt-2 divide-y divide-slate-100">
+                  {[...roleCounts.entries()].map(([roleKey, count]) => (
+                    <BreakdownRow key={roleKey} label={formatRole(roleKey)} tone="neutral" count={count} />
+                  ))}
+                </div>
+              </>
             )}
           </Card>
           <Card>
@@ -371,6 +440,36 @@ export function OwnerDashboardPage() {
                     count={credentialCounts.get(status) ?? 0}
                   />
                 ))}
+            </div>
+          )}
+        </Card>
+      ) : null}
+
+      {canSeeAuthorizations ? (
+        <Card>
+          <h3 className="font-semibold text-slate-950">Monthly capacity</h3>
+          <p className="mt-1 text-xs text-slate-500">
+            Authorized hours across every active authorization this month, split by how much is already used,
+            scheduled, or still open - answers whether there&apos;s room to take on more hours or a real risk of
+            going over.
+          </p>
+          {authorizationsQuery.isLoading ? (
+            <p className="mt-3 text-sm text-slate-500">Loading…</p>
+          ) : totalAuthorizedHours === 0 ? (
+            <p className="mt-3 text-sm text-slate-400">No authorizations tracked yet.</p>
+          ) : (
+            <div className="mt-3 h-24" role="img" aria-label="Monthly authorized hours: used, scheduled, and remaining">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={capacityChartData} layout="vertical" margin={{ left: 8, right: 24 }}>
+                  <XAxis type="number" hide />
+                  <YAxis type="category" dataKey="name" hide />
+                  <Tooltip />
+                  <Legend />
+                  <Bar dataKey="Used" stackId="hours" fill={CHART_COLORS.danger} />
+                  <Bar dataKey="Scheduled" stackId="hours" fill={CHART_COLORS.warning} />
+                  <Bar dataKey="Remaining" stackId="hours" fill={CHART_COLORS.success} radius={[0, 4, 4, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
             </div>
           )}
         </Card>
