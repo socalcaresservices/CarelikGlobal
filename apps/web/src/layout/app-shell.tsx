@@ -103,7 +103,19 @@ function visibleItems(items: NavItem[], hasPermission: (permission: Permission) 
   );
 }
 
-function NavLinkItem({ to, label, icon: Icon, badgeCount }: NavItem & { badgeCount?: number | null | undefined }) {
+// accentColor is the active organization's primary_color (Build 018) -
+// when an org has branded itself, its active nav item picks up that
+// color instead of the platform default slate-900, so the sidebar reads
+// as "this org's app" rather than "CareLik with a logo pasted on top."
+// Falls back to slate-900 whenever there's no org, no active org, or the
+// org hasn't set a primary_color yet.
+function NavLinkItem({
+  to,
+  label,
+  icon: Icon,
+  badgeCount,
+  accentColor
+}: NavItem & { badgeCount?: number | null | undefined; accentColor?: string | null | undefined }) {
   return (
     <NavLink
       key={to}
@@ -113,10 +125,13 @@ function NavLinkItem({ to, label, icon: Icon, badgeCount }: NavItem & { badgeCou
         cn(
           "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium",
           isActive
-            ? "bg-slate-900 text-white"
+            ? accentColor
+              ? "text-white"
+              : "bg-slate-900 text-white"
             : "text-slate-600 hover:bg-slate-100 hover:text-slate-950"
         )
       }
+      style={({ isActive }) => (isActive && accentColor ? { backgroundColor: accentColor } : undefined)}
     >
       <Icon className="h-4 w-4" />
       <span className="flex-1">{label}</span>
@@ -142,8 +157,21 @@ function getGreeting(now: Date) {
 
 export function AppShell({ children }: PropsWithChildren) {
   const { user, signOut } = useAuth();
-  const { organizations, activeOrganizationId, setActiveOrganizationId, hasPermission, role, isPlatformOwner, loading } =
-    useOrganization();
+  const {
+    organizations,
+    activeOrganization,
+    activeOrganizationId,
+    setActiveOrganizationId,
+    hasPermission,
+    role,
+    isPlatformOwner,
+    loading
+  } = useOrganization();
+  const accentColor = activeOrganization?.primaryColor ?? null;
+  // Defaults to shown - an organization opts OUT of platform attribution
+  // rather than opting in (see the show_powered_by column's comment,
+  // 20260728020000).
+  const showPoweredBy = activeOrganization?.showPoweredBy !== false;
 
   const isOwner = role === "organization_owner" || role === "platform_owner";
 
@@ -185,15 +213,27 @@ export function AppShell({ children }: PropsWithChildren) {
     <div className="min-h-screen bg-slate-50">
       <aside className="fixed inset-y-0 left-0 hidden w-64 border-r border-slate-200 bg-white lg:flex lg:flex-col">
         <div className="border-b border-slate-200 px-6 py-5">
-          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
-            Care operations
-          </p>
-          <h1 className="mt-1 text-xl font-semibold text-slate-950">CareLik Global</h1>
+          {activeOrganization?.logoUrl ? (
+            <img
+              src={activeOrganization.logoUrl}
+              alt={activeOrganization.displayName}
+              className="max-h-9 max-w-full object-contain"
+            />
+          ) : (
+            <>
+              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
+                Care operations
+              </p>
+              <h1 className="mt-1 text-xl font-semibold text-slate-950">
+                {activeOrganization?.displayName ?? "CareLik Global"}
+              </h1>
+            </>
+          )}
         </div>
         <nav className="flex-1 space-y-4 overflow-y-auto p-3">
           <div className="space-y-1">
             {visibleOperationsNav.map((item) => (
-              <NavLinkItem key={item.to} {...item} badgeCount={badgeFor(item)} />
+              <NavLinkItem key={item.to} {...item} badgeCount={badgeFor(item)} accentColor={accentColor} />
             ))}
           </div>
           {visiblePlatformAdministrationNav.length > 0 ? (
@@ -203,7 +243,7 @@ export function AppShell({ children }: PropsWithChildren) {
               </p>
               <div className="space-y-1">
                 {visiblePlatformAdministrationNav.map((item) => (
-                  <NavLinkItem key={item.to} {...item} />
+                  <NavLinkItem key={item.to} {...item} accentColor={accentColor} />
                 ))}
               </div>
             </div>
@@ -215,7 +255,7 @@ export function AppShell({ children }: PropsWithChildren) {
               </p>
               <div className="space-y-1">
                 {visibleAdministrationNav.map((item) => (
-                  <NavLinkItem key={item.to} {...item} badgeCount={badgeFor(item)} />
+                  <NavLinkItem key={item.to} {...item} badgeCount={badgeFor(item)} accentColor={accentColor} />
                 ))}
               </div>
             </div>
@@ -231,6 +271,9 @@ export function AppShell({ children }: PropsWithChildren) {
             <LogOut className="h-4 w-4" />
             Sign out
           </button>
+          {showPoweredBy ? (
+            <p className="mt-3 px-3 text-[11px] text-slate-400">Powered by CareLik</p>
+          ) : null}
         </div>
       </aside>
       <main className="lg:pl-64">

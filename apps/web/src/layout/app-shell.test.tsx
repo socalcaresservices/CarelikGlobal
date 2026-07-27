@@ -40,6 +40,24 @@ function baseOrganization(role: "organization_owner" | "organization_admin" | nu
   };
 }
 
+function brandedOrganization(overrides: Record<string, unknown> = {}) {
+  return {
+    id: ORG_ID,
+    slug: "acme",
+    legalName: "Acme Care LLC",
+    displayName: "Acme Care",
+    status: "active" as const,
+    timezone: "America/Los_Angeles",
+    logoUrl: null,
+    primaryColor: null,
+    secondaryColor: null,
+    accentColor: null,
+    themeMode: "light" as const,
+    showPoweredBy: true,
+    ...overrides
+  };
+}
+
 function renderShell() {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
@@ -185,5 +203,67 @@ describe("AppShell nav", () => {
     await waitFor(() => expect(mockedRpc).toHaveBeenCalled());
     const credentialsLink = (await screen.findByText("Credentials")).closest("a")!;
     expect(within(credentialsLink).queryByText("0")).not.toBeInTheDocument();
+  });
+
+  it("falls back to the CareLik Global mark and 'Powered by CareLik' footer without an active organization", () => {
+    mockedUseAuth.mockReturnValue({ user: { email: "owner@acme.test" } } as never);
+    mockedUseOrganization.mockReturnValue(baseOrganization("organization_owner"));
+
+    renderShell();
+
+    expect(screen.getByText("CareLik Global")).toBeInTheDocument();
+    expect(screen.getByText("Powered by CareLik")).toBeInTheDocument();
+  });
+
+  it("shows the organization's logo instead of the CareLik mark when branded", () => {
+    mockedUseAuth.mockReturnValue({ user: { email: "owner@acme.test" } } as never);
+    mockedUseOrganization.mockReturnValue({
+      ...baseOrganization("organization_owner"),
+      activeOrganization: brandedOrganization({ logoUrl: "https://example.com/acme-logo.png" })
+    });
+
+    renderShell();
+
+    const logo = screen.getByAltText("Acme Care");
+    expect(logo).toHaveAttribute("src", "https://example.com/acme-logo.png");
+    expect(screen.queryByText("CareLik Global")).not.toBeInTheDocument();
+  });
+
+  it("shows the organization's display name (not CareLik Global) when active but unbranded", () => {
+    mockedUseAuth.mockReturnValue({ user: { email: "owner@acme.test" } } as never);
+    mockedUseOrganization.mockReturnValue({
+      ...baseOrganization("organization_owner"),
+      activeOrganization: brandedOrganization()
+    });
+
+    renderShell();
+
+    expect(screen.getByText("Acme Care")).toBeInTheDocument();
+    expect(screen.queryByText("CareLik Global")).not.toBeInTheDocument();
+  });
+
+  it("gives the active nav link the organization's primary color", () => {
+    mockedUseAuth.mockReturnValue({ user: { email: "owner@acme.test" } } as never);
+    mockedUseOrganization.mockReturnValue({
+      ...baseOrganization("organization_owner"),
+      activeOrganization: brandedOrganization({ primaryColor: "#123456" })
+    });
+
+    renderShell();
+
+    const commandCenterLink = screen.getByText("Command Center").closest("a")!;
+    expect(commandCenterLink).toHaveStyle({ backgroundColor: "#123456" });
+  });
+
+  it("hides the 'Powered by CareLik' footer when the organization has turned it off", () => {
+    mockedUseAuth.mockReturnValue({ user: { email: "owner@acme.test" } } as never);
+    mockedUseOrganization.mockReturnValue({
+      ...baseOrganization("organization_owner"),
+      activeOrganization: brandedOrganization({ showPoweredBy: false })
+    });
+
+    renderShell();
+
+    expect(screen.queryByText("Powered by CareLik")).not.toBeInTheDocument();
   });
 });

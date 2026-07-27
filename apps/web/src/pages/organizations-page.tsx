@@ -41,13 +41,14 @@ interface OrganizationProfile {
   secondary_color: string | null;
   accent_color: string | null;
   theme_mode: "light" | "dark";
+  show_powered_by: boolean;
 }
 
 const PROFILE_COLUMNS =
   "legal_name, display_name, timezone, dba, tax_id, business_license, org_type, website, currency, agency_code, " +
   "address_street, address_suite, address_city, address_state, address_zip, address_country, " +
   "primary_contact_name, contact_email, contact_phone, emergency_phone, logo_url, " +
-  "primary_color, secondary_color, accent_color, theme_mode";
+  "primary_color, secondary_color, accent_color, theme_mode, show_powered_by";
 
 function inputClass() {
   return "mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900";
@@ -184,7 +185,8 @@ export function OrganizationsPage() {
           logo_url: nullIfBlank(logoUrl),
           primary_color: nullIfBlank(editForm.primary_color),
           secondary_color: nullIfBlank(editForm.secondary_color),
-          accent_color: nullIfBlank(editForm.accent_color)
+          accent_color: nullIfBlank(editForm.accent_color),
+          show_powered_by: editForm.show_powered_by
         })
         .eq("id", activeOrganization.id);
       if (error) throw error;
@@ -587,6 +589,18 @@ export function OrganizationsPage() {
                       <option value="light">Light</option>
                       <option value="dark">Dark</option>
                     </select>
+                  </div>
+                  <div className="flex items-end pb-2">
+                    <label htmlFor="edit-org-powered-by" className="flex items-center gap-2 text-sm text-slate-700">
+                      <input
+                        id="edit-org-powered-by"
+                        type="checkbox"
+                        checked={editForm.show_powered_by}
+                        onChange={(event) => update("show_powered_by", event.target.checked)}
+                        className="h-4 w-4 rounded border-slate-300"
+                      />
+                      Show "Powered by CareLik"
+                    </label>
                   </div>
                 </div>
               </div>

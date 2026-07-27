@@ -53,7 +53,7 @@ function setResolver(resolve: Resolver) {
 }
 
 function Probe() {
-  const { organizations, activeOrganizationId, role, isPlatformOwner, hasPermission, loading } =
+  const { organizations, activeOrganization, activeOrganizationId, role, isPlatformOwner, hasPermission, loading } =
     useOrganization();
   return (
     <div>
@@ -64,6 +64,8 @@ function Probe() {
       <span data-testid="is-platform-owner">{String(isPlatformOwner)}</span>
       <span data-testid="can-update-org">{String(hasPermission("organization.update"))}</span>
       <span data-testid="can-delete-files">{String(hasPermission("files.delete"))}</span>
+      <span data-testid="active-org-logo">{activeOrganization?.logoUrl ?? "none"}</span>
+      <span data-testid="active-org-powered-by">{String(activeOrganization?.showPoweredBy)}</span>
     </div>
   );
 }
@@ -90,7 +92,13 @@ const orgRow = {
   legal_name: "Acme Care LLC",
   display_name: "Acme Care",
   status: "active",
-  timezone: "America/Los_Angeles"
+  timezone: "America/Los_Angeles",
+  logo_url: "https://example.com/acme-logo.png",
+  primary_color: "#0f172a",
+  secondary_color: null,
+  accent_color: null,
+  theme_mode: "light",
+  show_powered_by: false
 };
 
 describe("OrganizationProvider", () => {
@@ -129,6 +137,10 @@ describe("OrganizationProvider", () => {
     expect(screen.getByTestId("role")).toHaveTextContent("platform_owner");
     expect(screen.getByTestId("can-update-org")).toHaveTextContent("true");
     expect(screen.getByTestId("can-delete-files")).toHaveTextContent("true");
+    // Branding columns (Build 018) flow through from the organizations
+    // query into activeOrganization, not just the core five fields.
+    expect(screen.getByTestId("active-org-logo")).toHaveTextContent("https://example.com/acme-logo.png");
+    expect(screen.getByTestId("active-org-powered-by")).toHaveTextContent("false");
 
     // role_permissions is only queried for non-platform-owners.
     expect(mockedFrom).not.toHaveBeenCalledWith("role_permissions");

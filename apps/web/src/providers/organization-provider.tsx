@@ -103,7 +103,9 @@ export function OrganizationProvider({ children }: PropsWithChildren) {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("organizations")
-        .select("id, slug, legal_name, display_name, status, timezone")
+        .select(
+          "id, slug, legal_name, display_name, status, timezone, logo_url, primary_color, secondary_color, accent_color, theme_mode, show_powered_by"
+        )
         .order("display_name");
       if (error) throw error;
       return data.map((row) =>
@@ -113,7 +115,13 @@ export function OrganizationProvider({ children }: PropsWithChildren) {
           legalName: row.legal_name,
           displayName: row.display_name,
           status: row.status,
-          timezone: row.timezone
+          timezone: row.timezone,
+          logoUrl: row.logo_url,
+          primaryColor: row.primary_color,
+          secondaryColor: row.secondary_color,
+          accentColor: row.accent_color,
+          themeMode: row.theme_mode,
+          showPoweredBy: row.show_powered_by
         })
       );
     },

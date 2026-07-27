@@ -122,7 +122,8 @@ describe("OrganizationsPage", () => {
     primary_color: null,
     secondary_color: null,
     accent_color: null,
-    theme_mode: "light" as const
+    theme_mode: "light" as const,
+    show_powered_by: true
   };
 
   function mockProfileAndUpdate(profileOverrides: Partial<typeof fullProfileRow> = {}) {
@@ -193,5 +194,23 @@ describe("OrganizationsPage", () => {
 
     expect(await screen.findByText("Enter a valid contact email.")).toBeInTheDocument();
     expect(updateMock).not.toHaveBeenCalled();
+  });
+
+  it("saves show_powered_by when the 'Powered by CareLik' toggle is unchecked", async () => {
+    mockedUseOrganization.mockReturnValue({
+      ...baseOrganization(),
+      hasPermission: vi.fn((permission: string) => permission === "organization.update")
+    });
+    const { updateMock } = mockProfileAndUpdate();
+
+    renderPage();
+    await waitFor(() => expect(screen.getByLabelText('Show "Powered by CareLik"')).toBeInTheDocument());
+
+    fireEvent.click(screen.getByLabelText('Show "Powered by CareLik"'));
+    fireEvent.click(screen.getByText("Save changes"));
+
+    await waitFor(() =>
+      expect(updateMock).toHaveBeenCalledWith(expect.objectContaining({ show_powered_by: false }))
+    );
   });
 });

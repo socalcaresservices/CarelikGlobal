@@ -40,4 +40,32 @@ describe("organizationSchema", () => {
       organizationSchema.parse({ ...validOrganization, legalName: "A" })
     ).toThrow();
   });
+
+  // Branding fields (Build 018) are optional so every existing caller
+  // that constructs an Organization without them keeps working - the
+  // fixture above still parses unchanged.
+  it("accepts branding fields when present", () => {
+    const branded = {
+      ...validOrganization,
+      logoUrl: "https://example.com/logo.png",
+      primaryColor: "#0f172a",
+      secondaryColor: "#64748b",
+      accentColor: "#0ea5e9",
+      themeMode: "dark" as const,
+      showPoweredBy: false
+    };
+    expect(organizationSchema.parse(branded)).toEqual(branded);
+  });
+
+  it("accepts null branding color/logo values", () => {
+    const parsed = organizationSchema.parse({
+      ...validOrganization,
+      logoUrl: null,
+      primaryColor: null,
+      secondaryColor: null,
+      accentColor: null
+    });
+    expect(parsed.logoUrl).toBeNull();
+    expect(parsed.primaryColor).toBeNull();
+  });
 });
