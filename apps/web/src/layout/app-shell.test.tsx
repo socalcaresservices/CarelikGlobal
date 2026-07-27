@@ -91,4 +91,22 @@ describe("AppShell nav", () => {
     renderShell();
     expect(screen.queryByText("Applicants")).not.toBeInTheDocument();
   });
+
+  it("shows a separate Platform Administration heading for a platform owner, with Organizations listed once", () => {
+    mockedUseAuth.mockReturnValue({ user: { email: "owner@carelik.test" } } as never);
+    mockedUseOrganization.mockReturnValue({ ...baseOrganization("organization_owner"), isPlatformOwner: true });
+
+    renderShell();
+    expect(screen.getByText("Platform Administration")).toBeInTheDocument();
+    expect(screen.getAllByText("Organizations")).toHaveLength(1);
+  });
+
+  it("hides the Platform Administration heading for a non-platform-owner", () => {
+    mockedUseAuth.mockReturnValue({ user: { email: "owner@acme.test" } } as never);
+    mockedUseOrganization.mockReturnValue(baseOrganization("organization_owner"));
+
+    renderShell();
+    expect(screen.queryByText("Platform Administration")).not.toBeInTheDocument();
+    expect(screen.getAllByText("Organizations")).toHaveLength(1);
+  });
 });

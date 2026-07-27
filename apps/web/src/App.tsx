@@ -9,6 +9,7 @@ import { AccessPage } from "@/pages/access-page";
 import { TeamPage } from "@/pages/team-page";
 import { CaregiverDetailPage } from "@/pages/caregiver-detail-page";
 import { OrganizationsPage } from "@/pages/organizations-page";
+import { AddOrganizationPage } from "@/pages/add-organization-page";
 import { AuditPage } from "@/pages/audit-page";
 import { ClientsPage } from "@/pages/clients-page";
 import { ClientDetailPage } from "@/pages/client-detail-page";
@@ -35,6 +36,7 @@ export function App() {
                 <Routes>
                   <Route path="/" element={<CommandCenterPage />} />
                   <Route path="/organizations" element={<OrganizationsPage />} />
+                  <Route path="/organizations/new" element={<AddOrganizationPage />} />
                   <Route path="/access" element={<AccessPage />} />
                   <Route path="/team" element={<TeamPage />} />
                   <Route path="/team/:id" element={<CaregiverDetailPage />} />

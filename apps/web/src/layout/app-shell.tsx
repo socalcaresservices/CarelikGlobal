@@ -61,6 +61,18 @@ const administrationNav: NavItem[] = [
   { to: "/settings", label: "Settings", icon: Settings, permission: "settings.read" }
 ];
 
+// Same "Organizations" route as the regular Administration group above -
+// a platform owner manages every tenant on the platform there, which is
+// a different concern from an organization_owner managing their own
+// org's profile, even though today it's the same page underneath
+// (OrganizationsPage renders more for a platform owner - the create-org
+// entry point, every tenant's row - than it does for a regular owner).
+// Kept out of the plain administrationNav list for platform owners (see
+// visibleAdministrationNav below) so it isn't shown twice.
+const platformAdministrationNav: NavItem[] = [
+  { to: "/organizations", label: "Organizations", icon: Building2 }
+];
+
 function visibleItems(items: NavItem[], hasPermission: (permission: Permission) => boolean, isOwner: boolean) {
   return items.filter(
     (item) => (!item.permission || hasPermission(item.permission)) && (!item.ownerOnly || isOwner)
@@ -101,13 +113,19 @@ function getGreeting(now: Date) {
 
 export function AppShell({ children }: PropsWithChildren) {
   const { user, signOut } = useAuth();
-  const { organizations, activeOrganizationId, setActiveOrganizationId, hasPermission, role, loading } =
+  const { organizations, activeOrganizationId, setActiveOrganizationId, hasPermission, role, isPlatformOwner, loading } =
     useOrganization();
 
   const isOwner = role === "organization_owner" || role === "platform_owner";
 
   const visibleOperationsNav = visibleItems(operationsNav, hasPermission, isOwner);
-  const visibleAdministrationNav = visibleItems(administrationNav, hasPermission, isOwner);
+  // Organizations moves to its own "Platform Administration" group for a
+  // platform owner (see platformAdministrationNav above) - excluded here
+  // so it isn't listed twice.
+  const visibleAdministrationNav = visibleItems(administrationNav, hasPermission, isOwner).filter(
+    (item) => !(isPlatformOwner && item.to === "/organizations")
+  );
+  const visiblePlatformAdministrationNav = isPlatformOwner ? platformAdministrationNav : [];
 
   const greeting = getGreeting(new Date());
 
@@ -126,6 +144,18 @@ export function AppShell({ children }: PropsWithChildren) {
               <NavLinkItem key={item.to} {...item} />
             ))}
           </div>
+          {visiblePlatformAdministrationNav.length > 0 ? (
+            <div>
+              <p className="px-3 pb-1.5 text-[11px] font-semibold uppercase tracking-wider text-slate-400">
+                Platform Administration
+              </p>
+              <div className="space-y-1">
+                {visiblePlatformAdministrationNav.map((item) => (
+                  <NavLinkItem key={item.to} {...item} />
+                ))}
+              </div>
+            </div>
+          ) : null}
           {visibleAdministrationNav.length > 0 ? (
             <div>
               <p className="px-3 pb-1.5 text-[11px] font-semibold uppercase tracking-wider text-slate-400">

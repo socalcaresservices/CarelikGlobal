@@ -1,4 +1,5 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { MemoryRouter } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { useOrganization } from "@/providers/organization-provider";
@@ -14,7 +15,6 @@ vi.mock("@/lib/supabase", () => ({
 }));
 
 const mockedUseOrganization = vi.mocked(useOrganization);
-const mockedRpc = vi.mocked(supabase.rpc);
 const mockedFrom = vi.mocked(supabase.from);
 
 const ORG_ID = "11111111-1111-4111-8111-111111111111";
@@ -54,9 +54,11 @@ function baseOrganization() {
 function renderPage() {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
-    <QueryClientProvider client={queryClient}>
-      <OrganizationsPage />
-    </QueryClientProvider>
+    <MemoryRouter>
+      <QueryClientProvider client={queryClient}>
+        <OrganizationsPage />
+      </QueryClientProvider>
+    </MemoryRouter>
   );
 }
 
@@ -65,50 +67,23 @@ describe("OrganizationsPage", () => {
     vi.clearAllMocks();
   });
 
-  it("shows the create-organization form only for a platform owner", () => {
+  // Org creation itself moved to the Add Organization wizard
+  // (add-organization-page.test.tsx) - this page now only links there.
+  it("shows a + New Organization link only for a platform owner", () => {
     mockedUseOrganization.mockReturnValue({ ...baseOrganization(), isPlatformOwner: true });
 
     renderPage();
-    expect(screen.getByText("Create organization", { selector: "h3" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "+ New Organization" })).toHaveAttribute(
+      "href",
+      "/organizations/new"
+    );
   });
 
-  it("hides the create-organization form for a non-platform-owner", () => {
+  it("hides the + New Organization link for a non-platform-owner", () => {
     mockedUseOrganization.mockReturnValue(baseOrganization());
 
     renderPage();
-    expect(screen.queryByText("Create organization", { selector: "h3" })).not.toBeInTheDocument();
-  });
-
-  it("rejects an invalid slug without calling create_organization", async () => {
-    mockedUseOrganization.mockReturnValue({ ...baseOrganization(), isPlatformOwner: true });
-
-    renderPage();
-    fireEvent.change(screen.getByLabelText("Slug"), { target: { value: "A" } });
-    fireEvent.change(screen.getByLabelText("Legal name"), { target: { value: "Beta Care LLC" } });
-    fireEvent.change(screen.getByLabelText("Display name"), { target: { value: "Beta Care" } });
-    fireEvent.click(screen.getByRole("button", { name: "Create organization" }));
-
-    await waitFor(() => expect(screen.getByText(/Slug must be/)).toBeInTheDocument());
-    expect(mockedRpc).not.toHaveBeenCalled();
-  });
-
-  it("creates an organization with valid input", async () => {
-    mockedUseOrganization.mockReturnValue({ ...baseOrganization(), isPlatformOwner: true });
-    mockedRpc.mockResolvedValue({ data: null, error: null } as never);
-
-    renderPage();
-    fireEvent.change(screen.getByLabelText("Slug"), { target: { value: "beta-care" } });
-    fireEvent.change(screen.getByLabelText("Legal name"), { target: { value: "Beta Care LLC" } });
-    fireEvent.change(screen.getByLabelText("Display name"), { target: { value: "Beta Care" } });
-    fireEvent.click(screen.getByRole("button", { name: "Create organization" }));
-
-    await waitFor(() =>
-      expect(mockedRpc).toHaveBeenCalledWith("create_organization", {
-        slug: "beta-care",
-        legal_name: "Beta Care LLC",
-        display_name: "Beta Care"
-      })
-    );
+    expect(screen.queryByRole("link", { name: "+ New Organization" })).not.toBeInTheDocument();
   });
 
   it("lists organizations and switches the active one", () => {
@@ -136,7 +111,7 @@ describe("OrganizationsPage", () => {
 
     renderPage();
     await waitFor(() => expect(screen.getByText("Edit Acme")).toBeInTheDocument());
-    expect(screen.queryByText("Create organization", { selector: "h3" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "+ New Organization" })).not.toBeInTheDocument();
 
     fireEvent.change(screen.getByLabelText("Legal name"), { target: { value: "Acme Holdings LLC" } });
     fireEvent.click(screen.getByText("Save changes"));
