@@ -339,6 +339,134 @@ function DocumentTypesCard({
   );
 }
 
+// Reminder cadence for outstanding document requests (Build 022) - reads
+// through get_document_reminder_settings() rather than the table
+// directly, since that RPC already applies the "enabled, every 3 days,
+// up to 3 reminders" defaults for an organization that's never touched
+// this setting, so the form doesn't have to duplicate them.
+interface ReminderSettings {
+  enabled: boolean;
+  interval_days: number;
+  max_reminders: number;
+}
+
+function ReminderSettingsCard({
+  organizationId,
+  canRead,
+  canManage
+}: {
+  organizationId: string | null | undefined;
+  canRead: boolean;
+  canManage: boolean;
+}) {
+  const queryClient = useQueryClient();
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [draft, setDraft] = useState<ReminderSettings | null>(null);
+
+  const settingsQuery = useQuery({
+    queryKey: ["document-reminder-settings", organizationId],
+    queryFn: async () => {
+      const { data, error: queryError } = await supabase.rpc("get_document_reminder_settings", {
+        target_organization_id: organizationId!
+      });
+      if (queryError) throw queryError;
+      return ((data ?? [])[0] ?? null) as ReminderSettings | null;
+    },
+    enabled: !!organizationId && canRead
+  });
+
+  const current = draft ?? settingsQuery.data;
+
+  async function handleSave(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!organizationId || !current) return;
+    setError(null);
+    setSaving(true);
+    try {
+      const { error: saveError } = await supabase.rpc("set_document_reminder_settings", {
+        target_organization_id: organizationId,
+        target_enabled: current.enabled,
+        target_interval_days: current.interval_days,
+        target_max_reminders: current.max_reminders
+      });
+      if (saveError) throw saveError;
+      setDraft(null);
+      void queryClient.invalidateQueries({ queryKey: ["document-reminder-settings", organizationId] });
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Could not save reminder settings.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  if (!canRead) return null;
+
+  return (
+    <Card>
+      <h3 className="font-semibold text-slate-950">Document request reminders</h3>
+      <p className="mt-1 text-xs text-slate-500">
+        How often to nudge an applicant or employee about a document request they haven&apos;t finished yet.
+      </p>
+
+      {settingsQuery.isLoading || !current ? (
+        <p className="mt-3 text-sm text-slate-500">Loading…</p>
+      ) : (
+        <form onSubmit={handleSave} className="mt-4 space-y-3">
+          <label className="flex items-center gap-2 text-sm text-slate-800">
+            <input
+              type="checkbox"
+              disabled={!canManage}
+              checked={current.enabled}
+              onChange={(event) => setDraft({ ...current, enabled: event.target.checked })}
+              className="h-4 w-4 rounded border-slate-300"
+            />
+            Send reminders
+          </label>
+          <div className="flex flex-wrap gap-4">
+            <div>
+              <label htmlFor="reminder-interval-days" className="block text-xs font-medium text-slate-600">
+                Every (days)
+              </label>
+              <input
+                id="reminder-interval-days"
+                type="number"
+                min={1}
+                max={90}
+                disabled={!canManage}
+                value={current.interval_days}
+                onChange={(event) => setDraft({ ...current, interval_days: Number(event.target.value) })}
+                className="mt-1 w-24 rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900"
+              />
+            </div>
+            <div>
+              <label htmlFor="reminder-max-count" className="block text-xs font-medium text-slate-600">
+                Up to
+              </label>
+              <input
+                id="reminder-max-count"
+                type="number"
+                min={0}
+                max={20}
+                disabled={!canManage}
+                value={current.max_reminders}
+                onChange={(event) => setDraft({ ...current, max_reminders: Number(event.target.value) })}
+                className="mt-1 w-24 rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900"
+              />
+            </div>
+          </div>
+          {canManage ? (
+            <Button type="submit" size="sm" loading={saving}>
+              Save
+            </Button>
+          ) : null}
+        </form>
+      )}
+      {error ? <p className="mt-2 text-sm text-red-700">{error}</p> : null}
+    </Card>
+  );
+}
+
 // public.organization_settings is a generic (organization_id, key) -> jsonb
 // store - there's no fixed list of settings, so this page is a generic
 // editor over whatever keys exist, rather than a form with named fields.
@@ -623,6 +751,12 @@ export function SettingsPage() {
       />
 
       <DocumentTypesCard
+        organizationId={activeOrganizationId}
+        canRead={hasPermission("documents.read")}
+        canManage={hasPermission("documents.manage")}
+      />
+
+      <ReminderSettingsCard
         organizationId={activeOrganizationId}
         canRead={hasPermission("documents.read")}
         canManage={hasPermission("documents.manage")}

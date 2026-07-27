@@ -1,6 +1,6 @@
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { useAuth } from "@carelik/auth";
 import { useOrganization } from "@/providers/organization-provider";
 import { supabase } from "@/lib/supabase";
@@ -10,13 +10,15 @@ vi.mock("@carelik/auth", () => ({ useAuth: vi.fn() }));
 vi.mock("@/providers/organization-provider", () => ({ useOrganization: vi.fn() }));
 vi.mock("@/lib/supabase", () => ({
   supabase: {
-    from: vi.fn()
+    from: vi.fn(),
+    rpc: vi.fn()
   }
 }));
 
 const mockedUseAuth = vi.mocked(useAuth);
 const mockedUseOrganization = vi.mocked(useOrganization);
 const mockedFrom = vi.mocked(supabase.from);
+const mockedRpc = vi.mocked(supabase.rpc);
 
 const ORG_ID = "11111111-1111-4111-8111-111111111111";
 const USER_ID = "44444444-4444-4444-8444-444444444444";
@@ -111,6 +113,17 @@ function renderPage() {
 }
 
 describe("SettingsPage", () => {
+  beforeEach(() => {
+    // Default reminder settings response so tests that grant every
+    // permission (and therefore render ReminderSettingsCard, Build 022)
+    // but aren't specifically exercising it don't have to mock this RPC
+    // themselves. Reminder-focused tests below override this.
+    mockedRpc.mockResolvedValue({
+      data: [{ enabled: true, interval_days: 3, max_reminders: 3 }],
+      error: null
+    } as never);
+  });
+
   afterEach(() => {
     vi.clearAllMocks();
   });
@@ -342,5 +355,79 @@ describe("SettingsPage", () => {
         requires_expiration: true
       })
     );
+  });
+
+  it("shows the effective reminder settings and saves a change", async () => {
+    mockedUseAuth.mockReturnValue(authUser());
+    mockedUseOrganization.mockReturnValue({ ...baseOrganization(), hasPermission: vi.fn(() => true) });
+
+    const { selectMock: settingsSelect } = mockReadableSettings([]);
+    const { selectMock: skillsSelect } = mockReadableLookup([]);
+    const { selectMock: languagesSelect } = mockReadableLookup([]);
+    const { selectMock: documentTypesSelect } = mockReadableDocumentTypes([]);
+    mockedFrom.mockImplementation((table: string) => {
+      if (table === "skills") return { select: skillsSelect } as never;
+      if (table === "languages") return { select: languagesSelect } as never;
+      if (table === "document_types") return { select: documentTypesSelect } as never;
+      return { select: settingsSelect } as never;
+    });
+    mockedRpc.mockImplementation((fn: string) => {
+      if (fn === "get_document_reminder_settings") {
+        return Promise.resolve({
+          data: [{ enabled: true, interval_days: 3, max_reminders: 3 }],
+          error: null
+        }) as never;
+      }
+      if (fn === "set_document_reminder_settings") {
+        return Promise.resolve({ data: null, error: null }) as never;
+      }
+      return Promise.resolve({ data: [], error: null }) as never;
+    });
+
+    renderPage();
+
+    await waitFor(() => expect(screen.getByText("Document request reminders")).toBeInTheDocument());
+    const reminderCard = screen.getByText("Document request reminders").closest("div")!;
+    await waitFor(() => expect(within(reminderCard).getByLabelText("Every (days)")).toHaveValue(3));
+    expect(within(reminderCard).getByLabelText("Up to")).toHaveValue(3);
+
+    fireEvent.change(within(reminderCard).getByLabelText("Every (days)"), { target: { value: "5" } });
+    fireEvent.click(within(reminderCard).getByRole("button", { name: "Save" }));
+
+    await waitFor(() =>
+      expect(mockedRpc).toHaveBeenCalledWith("set_document_reminder_settings", {
+        target_organization_id: ORG_ID,
+        target_enabled: true,
+        target_interval_days: 5,
+        target_max_reminders: 3
+      })
+    );
+  });
+
+  it("hides Save on reminder settings without documents.manage", async () => {
+    mockedUseAuth.mockReturnValue(authUser());
+    mockedUseOrganization.mockReturnValue({
+      ...baseOrganization(),
+      hasPermission: vi.fn((permission: string) => permission !== "documents.manage")
+    });
+
+    const { selectMock: settingsSelect } = mockReadableSettings([]);
+    const { selectMock: skillsSelect } = mockReadableLookup([]);
+    const { selectMock: languagesSelect } = mockReadableLookup([]);
+    const { selectMock: documentTypesSelect } = mockReadableDocumentTypes([]);
+    mockedFrom.mockImplementation((table: string) => {
+      if (table === "skills") return { select: skillsSelect } as never;
+      if (table === "languages") return { select: languagesSelect } as never;
+      if (table === "document_types") return { select: documentTypesSelect } as never;
+      return { select: settingsSelect } as never;
+    });
+
+    renderPage();
+
+    await waitFor(() => expect(screen.getByText("Document request reminders")).toBeInTheDocument());
+    const reminderCard = screen.getByText("Document request reminders").closest("div")!;
+    await waitFor(() => expect(within(reminderCard).getByLabelText("Every (days)")).toBeInTheDocument());
+    expect(within(reminderCard).queryByRole("button", { name: "Save" })).not.toBeInTheDocument();
+    expect(within(reminderCard).getByLabelText("Every (days)")).toBeDisabled();
   });
 });
