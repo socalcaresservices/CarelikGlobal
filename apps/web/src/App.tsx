@@ -3,6 +3,7 @@ import { AppShell } from "@/layout/app-shell";
 import { OrganizationProvider } from "@/providers/organization-provider";
 import { ProtectedRoute } from "@/routes/protected-route";
 import { LoginPage } from "@/pages/login-page";
+import { ApplyPage } from "@/pages/apply-page";
 import { CommandCenterPage } from "@/pages/command-center-page";
 import { AccessPage } from "@/pages/access-page";
 import { TeamPage } from "@/pages/team-page";
@@ -17,11 +18,14 @@ import { AuthorizationsPage } from "@/pages/authorizations-page";
 import { IncidentsPage } from "@/pages/incidents-page";
 import { SettingsPage } from "@/pages/settings-page";
 import { OwnerDashboardPage } from "@/pages/owner-dashboard-page";
+import { ApplicantsPage } from "@/pages/applicants-page";
+import { ApplicantDetailPage } from "@/pages/applicant-detail-page";
 
 export function App() {
   return (
     <Routes>
       <Route path="/login" element={<LoginPage />} />
+      <Route path="/apply/:orgSlug" element={<ApplyPage />} />
       <Route
         path="/*"
         element={
@@ -43,6 +47,8 @@ export function App() {
                   <Route path="/audit" element={<AuditPage />} />
                   <Route path="/settings" element={<SettingsPage />} />
                   <Route path="/owner-dashboard" element={<OwnerDashboardPage />} />
+                  <Route path="/applicants" element={<ApplicantsPage />} />
+                  <Route path="/applicants/:id" element={<ApplicantDetailPage />} />
                   <Route path="*" element={<Navigate to="/" replace />} />
                 </Routes>
               </AppShell>

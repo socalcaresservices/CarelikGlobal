@@ -72,4 +72,23 @@ describe("AppShell nav", () => {
     renderShell();
     expect(screen.queryByText(/Phase 1/)).not.toBeInTheDocument();
   });
+
+  it("shows Applicants for someone with applicants.read", () => {
+    mockedUseAuth.mockReturnValue({ user: { email: "owner@acme.test" } } as never);
+    mockedUseOrganization.mockReturnValue(baseOrganization("organization_owner"));
+
+    renderShell();
+    expect(screen.getByText("Applicants")).toBeInTheDocument();
+  });
+
+  it("hides Applicants without applicants.read", () => {
+    mockedUseAuth.mockReturnValue({ user: { email: "coordinator@acme.test" } } as never);
+    mockedUseOrganization.mockReturnValue({
+      ...baseOrganization("organization_admin"),
+      hasPermission: vi.fn((permission: string) => permission !== "applicants.read")
+    });
+
+    renderShell();
+    expect(screen.queryByText("Applicants")).not.toBeInTheDocument();
+  });
 });

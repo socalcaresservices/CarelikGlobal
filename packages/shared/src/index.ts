@@ -1,3 +1,4 @@
+export * from "./applicants";
 export * from "./authorizations";
 export * from "./care";
 export * from "./credentials";

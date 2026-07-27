@@ -13,6 +13,7 @@ import {
   LogOut,
   Settings,
   ShieldCheck,
+  UserPlus,
   Users
 } from "lucide-react";
 import type { Permission } from "@carelik/shared";
@@ -39,6 +40,7 @@ interface NavItem {
 const operationsNav: NavItem[] = [
   { to: "/", label: "Command Center", icon: LayoutDashboard },
   { to: "/owner-dashboard", label: "Workforce Insights", icon: Crown, ownerOnly: true },
+  { to: "/applicants", label: "Applicants", icon: UserPlus, permission: "applicants.read" },
   { to: "/clients", label: "Clients", icon: Users, permission: "clients.read" },
   { to: "/team", label: "Team", icon: HeartHandshake, permission: "membership.read" },
   { to: "/schedule", label: "Schedule", icon: CalendarClock },
