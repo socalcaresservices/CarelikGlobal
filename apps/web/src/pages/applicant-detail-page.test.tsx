@@ -66,7 +66,7 @@ function applicantRecord(overrides: Record<string, unknown> = {}) {
   };
 }
 
-function mockFromByTable(applicant: unknown, availability: unknown[] = []) {
+function mockFromByTable(applicant: unknown, availability: unknown[] = [], services: unknown[] = []) {
   const applicantSingleMock = vi.fn().mockResolvedValue({ data: applicant, error: null });
   const applicantEqMock = vi.fn(() => ({ single: applicantSingleMock }));
   const applicantSelectMock = vi.fn(() => ({ eq: applicantEqMock }));
@@ -76,12 +76,18 @@ function mockFromByTable(applicant: unknown, availability: unknown[] = []) {
   const availabilityEqMock = vi.fn().mockResolvedValue({ data: availability, error: null });
   const availabilitySelectMock = vi.fn(() => ({ eq: availabilityEqMock }));
 
+  const servicesEqMock = vi.fn().mockResolvedValue({ data: services, error: null });
+  const servicesSelectMock = vi.fn(() => ({ eq: servicesEqMock }));
+
   mockedFrom.mockImplementation((table: string) => {
     if (table === "job_applicants") {
       return { select: applicantSelectMock, update: applicantUpdateMock } as never;
     }
     if (table === "job_applicant_availability") {
       return { select: availabilitySelectMock } as never;
+    }
+    if (table === "job_applicant_services") {
+      return { select: servicesSelectMock } as never;
     }
     return {} as never;
   });
@@ -107,17 +113,31 @@ describe("ApplicantDetailPage", () => {
     vi.clearAllMocks();
   });
 
-  it("renders the applicant's details and weekly availability", async () => {
+  it("renders the applicant's details, address, services, and weekly availability", async () => {
     mockedUseOrganization.mockReturnValue(baseOrganization());
-    mockFromByTable(applicantRecord(), [
-      { day_of_week: "monday", start_time: "09:00:00", end_time: "17:00:00", preference: "preferred" }
-    ]);
+    mockFromByTable(
+      applicantRecord({
+        preferred_name: "Ash",
+        address_street: "123 Main St",
+        address_city: "Corona",
+        address_state: "CA",
+        address_zip: "92879",
+        reliable_transportation: true,
+        valid_drivers_license: true
+      }),
+      [{ day_of_week: "monday", start_time: "09:00:00", end_time: "17:00:00", preference: "preferred" }],
+      [{ service_id: "svc-1", services: { name: "Companion Care" } }]
+    );
     mockedRpc.mockResolvedValue({ data: [], error: null } as never);
 
     renderPage();
 
-    await waitFor(() => expect(screen.getByText("Ashley Rivera")).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText(/^Ash Rivera/)).toBeInTheDocument());
     expect(screen.getByText("ashley@example.com · 555-0100")).toBeInTheDocument();
+    expect(screen.getByText("123 Main St · Corona, CA 92879")).toBeInTheDocument();
+    expect(screen.getByText("Companion Care")).toBeInTheDocument();
+    expect(screen.getByText("Reliable transportation")).toBeInTheDocument();
+    expect(screen.getByText("Valid driver's license")).toBeInTheDocument();
     expect(screen.getByText("Monday")).toBeInTheDocument();
     expect(screen.getByText("09:00–17:00")).toBeInTheDocument();
     expect(screen.getByText("Preferred")).toBeInTheDocument();

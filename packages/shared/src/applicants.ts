@@ -11,21 +11,53 @@ export const jobApplicantSchema = z.object({
   id: z.string().uuid(),
   organizationId: organizationIdSchema,
   firstName: z.string().min(1),
+  middleName: z.string().nullable(),
   lastName: z.string().min(1),
+  preferredName: z.string().nullable(),
+  dateOfBirth: z.string().nullable(),
   email: z.string(),
   phone: z.string().nullable(),
+  alternatePhone: z.string().nullable(),
+  emergencyContactName: z.string().nullable(),
+  emergencyContactPhone: z.string().nullable(),
   status: applicantStatusSchema,
+  addressStreet: z.string().nullable(),
+  addressLine2: z.string().nullable(),
+  addressCity: z.string().nullable(),
+  addressState: z.string().nullable(),
+  addressZip: z.string().nullable(),
+  addressCountry: z.string(),
   desiredWeeklyHours: z.number().nullable(),
   minWeeklyHours: z.number().nullable(),
   maxWeeklyHours: z.number().nullable(),
+  desiredMonthlyHours: z.number().nullable(),
+  minMonthlyHours: z.number().nullable(),
+  maxMonthlyHours: z.number().nullable(),
   minShiftHours: z.number().nullable(),
   maxShiftHours: z.number().nullable(),
+  // Deprecated, no longer collected by the application form (superseded
+  // by structured address + travel-radius fields below). Kept nullable
+  // for backward read compatibility with rows submitted before this
+  // change, not for new writes.
   preferredCities: z.array(z.string()),
-  maxTravelMinutes: z.number().nullable(),
   transportationMethod: z.string().nullable(),
+  maxTravelMinutes: z.number().nullable(),
+  reliableTransportation: z.boolean().nullable(),
   willingToTransportClients: z.boolean().nullable(),
+  validDriversLicense: z.boolean().nullable(),
+  vehicleAvailable: z.boolean().nullable(),
+  autoInsurance: z.boolean().nullable(),
   languages: z.array(z.string()),
   notes: z.string().nullable()
 });
 
 export type JobApplicant = z.infer<typeof jobApplicantSchema>;
+
+export const jobApplicantServiceSchema = z.object({
+  id: z.string().uuid(),
+  organizationId: organizationIdSchema,
+  applicantId: z.string().uuid(),
+  serviceId: z.string().uuid()
+});
+
+export type JobApplicantService = z.infer<typeof jobApplicantServiceSchema>;

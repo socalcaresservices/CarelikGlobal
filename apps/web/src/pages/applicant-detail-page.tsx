@@ -25,10 +25,21 @@ function capitalize(value: string) {
 interface ApplicantDetail {
   id: string;
   first_name: string;
+  middle_name: string | null;
   last_name: string;
+  preferred_name: string | null;
+  date_of_birth: string | null;
   email: string;
   phone: string | null;
+  alternate_phone: string | null;
+  emergency_contact_name: string | null;
+  emergency_contact_phone: string | null;
   status: ApplicantStatus;
+  address_street: string | null;
+  address_line2: string | null;
+  address_city: string | null;
+  address_state: string | null;
+  address_zip: string | null;
   desired_weekly_hours: number | null;
   min_weekly_hours: number | null;
   max_weekly_hours: number | null;
@@ -37,7 +48,11 @@ interface ApplicantDetail {
   preferred_cities: string[];
   max_travel_minutes: number | null;
   transportation_method: string | null;
+  reliable_transportation: boolean | null;
   willing_to_transport_clients: boolean | null;
+  valid_drivers_license: boolean | null;
+  vehicle_available: boolean | null;
+  auto_insurance: boolean | null;
   languages: string[];
   notes: string | null;
   hired_caregiver_user_id: string | null;
@@ -51,10 +66,22 @@ interface AvailabilityRow {
   preference: "available" | "preferred";
 }
 
+interface ApplicantServiceRow {
+  service_id: string;
+  services: { name: string } | null;
+}
+
 interface MemberOption {
   user_id: string;
   display_name: string;
   status: string;
+}
+
+function formatAddress(applicant: ApplicantDetail): string {
+  const line1 = [applicant.address_street, applicant.address_line2].filter(Boolean).join(", ");
+  const line2 = [applicant.address_city, applicant.address_state].filter(Boolean).join(", ");
+  const cityStateZip = [line2, applicant.address_zip].filter(Boolean).join(" ");
+  return [line1, cityStateZip].filter(Boolean).join(" · ") || "—";
 }
 
 const statusTone: Record<ApplicantStatus, StatusTone> = {
@@ -102,6 +129,24 @@ export function ApplicantDetailPage() {
         .eq("applicant_id", id!);
       if (error) throw error;
       return (data ?? []) as AvailabilityRow[];
+    },
+    enabled: !!activeOrganizationId && !!id && canRead
+  });
+
+  const servicesQuery = useQuery({
+    queryKey: ["applicant-detail-services", activeOrganizationId, id],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("job_applicant_services")
+        .select("service_id, services(name)")
+        .eq("applicant_id", id!);
+      if (error) throw error;
+      // supabase-js can't know service_id -> services is a many-to-one
+      // relation without generated Database types, so it infers
+      // `services` as an array; cast through unknown rather than
+      // widening ApplicantServiceRow to match an inferred type that
+      // doesn't reflect the actual (single-row) PostgREST response.
+      return (data ?? []) as unknown as ApplicantServiceRow[];
     },
     enabled: !!activeOrganizationId && !!id && canRead
   });
@@ -195,7 +240,12 @@ export function ApplicantDetailPage() {
         <div>
           <p className="text-sm font-medium text-slate-500">Applicant</p>
           <h2 className="mt-1 text-2xl font-semibold tracking-tight text-slate-950">
-            {applicant.first_name} {applicant.last_name}
+            {applicant.preferred_name || applicant.first_name} {applicant.last_name}
+            {applicant.preferred_name ? (
+              <span className="ml-2 text-base font-normal text-slate-400">
+                ({applicant.first_name} {applicant.last_name})
+              </span>
+            ) : null}
           </h2>
           <p className="mt-1 text-sm text-slate-500">
             {applicant.email}
@@ -204,6 +254,46 @@ export function ApplicantDetailPage() {
         </div>
         <StatusBadge label={applicant.status} tone={statusTone[applicant.status]} />
       </div>
+
+      <Card>
+        <h3 className="font-semibold text-slate-950">Personal information</h3>
+        <div className="mt-4 grid gap-x-6 gap-y-3 sm:grid-cols-3">
+          <div>
+            <p className="text-xs font-medium uppercase tracking-wide text-slate-500">Date of birth</p>
+            <p className="mt-0.5 font-semibold text-slate-950">{applicant.date_of_birth ?? "—"}</p>
+          </div>
+          <div>
+            <p className="text-xs font-medium uppercase tracking-wide text-slate-500">Alternate phone</p>
+            <p className="mt-0.5 font-semibold text-slate-950">{applicant.alternate_phone ?? "—"}</p>
+          </div>
+          <div>
+            <p className="text-xs font-medium uppercase tracking-wide text-slate-500">Emergency contact</p>
+            <p className="mt-0.5 font-semibold text-slate-950">
+              {applicant.emergency_contact_name ?? "—"}
+              {applicant.emergency_contact_phone ? ` · ${applicant.emergency_contact_phone}` : ""}
+            </p>
+          </div>
+          <div className="sm:col-span-3">
+            <p className="text-xs font-medium uppercase tracking-wide text-slate-500">Home address</p>
+            <p className="mt-0.5 font-semibold text-slate-950">{formatAddress(applicant)}</p>
+          </div>
+        </div>
+      </Card>
+
+      <Card>
+        <h3 className="font-semibold text-slate-950">Services offered</h3>
+        {servicesQuery.isLoading ? (
+          <p className="mt-3 text-sm text-slate-500">Loading…</p>
+        ) : (servicesQuery.data ?? []).length === 0 ? (
+          <p className="mt-3 text-sm text-slate-400">No services selected.</p>
+        ) : (
+          <div className="mt-3 flex flex-wrap gap-2">
+            {(servicesQuery.data ?? []).map((row) => (
+              <StatusBadge key={row.service_id} label={row.services?.name ?? "Unknown service"} tone="neutral" />
+            ))}
+          </div>
+        )}
+      </Card>
 
       {canManage && applicant.status !== "hired" ? (
         <Card>
@@ -255,23 +345,35 @@ export function ApplicantDetailPage() {
             </p>
           </div>
           <div>
-            <p className="text-xs font-medium uppercase tracking-wide text-slate-500">Preferred cities</p>
-            <p className="mt-0.5 font-semibold text-slate-950">
-              {applicant.preferred_cities.length > 0 ? applicant.preferred_cities.join(", ") : "—"}
-            </p>
-          </div>
-          <div>
             <p className="text-xs font-medium uppercase tracking-wide text-slate-500">Max travel time</p>
             <p className="mt-0.5 font-semibold text-slate-950">
               {applicant.max_travel_minutes != null ? `${applicant.max_travel_minutes} min` : "—"}
             </p>
           </div>
-          <div>
-            <p className="text-xs font-medium uppercase tracking-wide text-slate-500">Transportation</p>
-            <p className="mt-0.5 font-semibold text-slate-950">
-              {applicant.transportation_method ?? "—"}
-              {applicant.willing_to_transport_clients ? " · willing to transport clients" : ""}
-            </p>
+          <div className="sm:col-span-3">
+            <p className="text-xs font-medium uppercase tracking-wide text-slate-500">Travel</p>
+            <div className="mt-1 flex flex-wrap gap-1.5">
+              {[
+                applicant.reliable_transportation ? "Reliable transportation" : null,
+                applicant.willing_to_transport_clients ? "Can transport clients" : null,
+                applicant.valid_drivers_license ? "Valid driver's license" : null,
+                applicant.vehicle_available ? "Vehicle available" : null,
+                applicant.auto_insurance ? "Auto insurance" : null
+              ]
+                .filter((label): label is string => Boolean(label))
+                .map((label) => (
+                  <StatusBadge key={label} label={label} tone="neutral" />
+                ))}
+              {![
+                applicant.reliable_transportation,
+                applicant.willing_to_transport_clients,
+                applicant.valid_drivers_license,
+                applicant.vehicle_available,
+                applicant.auto_insurance
+              ].some(Boolean) ? (
+                <span className="text-sm text-slate-400">—</span>
+              ) : null}
+            </div>
           </div>
           <div>
             <p className="text-xs font-medium uppercase tracking-wide text-slate-500">Languages</p>

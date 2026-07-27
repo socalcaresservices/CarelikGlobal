@@ -10,14 +10,29 @@ import { supabase } from "@/lib/supabase";
 // (a narrow, anon-callable RPC - see the job_applicants migration for
 // why this doesn't just open organizations SELECT to anon generally).
 //
-// Availability capture is one window per day (available or preferred),
-// same scope decision the existing caregiver_availability UI already
-// made - the schema supports multiple windows per day, this first pass
-// of the UI doesn't yet expose entering more than one.
+// Field set matches the agency's revised spec: personal info, home
+// address (used for travel-time matching later - never asked as a
+// separate "preferred city" list), the agency's own configured
+// services (pulled live from list_public_organization_services(), no
+// hardcoded list here or in the database), weekly availability, desired
+// hours, and structured yes/no travel questions in place of a free-text
+// "how do you get around" field.
+//
+// Deliberately not on this form (see the migration's comment for why):
+// a photo upload (needs its own storage-bucket subsystem) and more than
+// one shift window per day (schema already supports it, UI doesn't
+// expose it yet). Credentials, skills, and compliance are staff-side
+// concerns that apply after hire, not at application time.
 
 type Weekday = "monday" | "tuesday" | "wednesday" | "thursday" | "friday" | "saturday" | "sunday";
 
 const WEEKDAYS: Weekday[] = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"];
+
+const US_STATES = [
+  "AL", "AK", "AZ", "AR", "CA", "CO", "CT", "DE", "FL", "GA", "HI", "ID", "IL", "IN", "IA", "KS", "KY", "LA",
+  "ME", "MD", "MA", "MI", "MN", "MS", "MO", "MT", "NE", "NV", "NH", "NJ", "NM", "NY", "NC", "ND", "OH", "OK",
+  "OR", "PA", "RI", "SC", "SD", "TN", "TX", "UT", "VT", "VA", "WA", "WV", "WI", "WY", "DC"
+];
 
 function capitalize(value: string) {
   return value.charAt(0).toUpperCase() + value.slice(1);
@@ -36,38 +51,69 @@ function emptyAvailabilityForm(): Record<Weekday, DayAvailabilityForm> {
   ) as Record<Weekday, DayAvailabilityForm>;
 }
 
+interface ServiceOption {
+  id: string;
+  name: string;
+}
+
 interface ApplicationForm {
   firstName: string;
+  middleName: string;
   lastName: string;
+  preferredName: string;
+  dateOfBirth: string;
   email: string;
   phone: string;
+  alternatePhone: string;
+  emergencyContactName: string;
+  emergencyContactPhone: string;
+  addressStreet: string;
+  addressLine2: string;
+  addressCity: string;
+  addressState: string;
+  addressZip: string;
   desiredWeeklyHours: string;
   minWeeklyHours: string;
   maxWeeklyHours: string;
   minShiftHours: string;
   maxShiftHours: string;
-  preferredCities: string;
   maxTravelMinutes: string;
-  transportationMethod: string;
+  reliableTransportation: boolean;
   willingToTransportClients: boolean;
+  validDriversLicense: boolean;
+  vehicleAvailable: boolean;
+  autoInsurance: boolean;
   languages: string;
   notes: string;
 }
 
 const emptyForm: ApplicationForm = {
   firstName: "",
+  middleName: "",
   lastName: "",
+  preferredName: "",
+  dateOfBirth: "",
   email: "",
   phone: "",
+  alternatePhone: "",
+  emergencyContactName: "",
+  emergencyContactPhone: "",
+  addressStreet: "",
+  addressLine2: "",
+  addressCity: "",
+  addressState: "",
+  addressZip: "",
   desiredWeeklyHours: "",
   minWeeklyHours: "",
   maxWeeklyHours: "",
   minShiftHours: "",
   maxShiftHours: "",
-  preferredCities: "",
   maxTravelMinutes: "",
-  transportationMethod: "",
+  reliableTransportation: false,
   willingToTransportClients: false,
+  validDriversLicense: false,
+  vehicleAvailable: false,
+  autoInsurance: false,
   languages: "",
   notes: ""
 };
@@ -98,14 +144,35 @@ export function ApplyPage() {
     enabled: !!orgSlug
   });
 
+  const organizationId = organizationQuery.data?.id;
+
+  const servicesQuery = useQuery({
+    queryKey: ["apply-services", organizationId],
+    queryFn: async () => {
+      const { data, error } = await supabase.rpc("list_public_organization_services", {
+        target_organization_id: organizationId!
+      });
+      if (error) throw error;
+      return (data ?? []) as ServiceOption[];
+    },
+    enabled: !!organizationId
+  });
+
   const [form, setForm] = useState<ApplicationForm>(emptyForm);
   const [availability, setAvailability] = useState<Record<Weekday, DayAvailabilityForm>>(emptyAvailabilityForm());
+  const [selectedServiceIds, setSelectedServiceIds] = useState<string[]>([]);
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [submitted, setSubmitted] = useState(false);
 
   function updateAvailabilityDay(day: Weekday, patch: Partial<DayAvailabilityForm>) {
     setAvailability((current) => ({ ...current, [day]: { ...current[day], ...patch } }));
+  }
+
+  function toggleService(serviceId: string) {
+    setSelectedServiceIds((current) =>
+      current.includes(serviceId) ? current.filter((id) => id !== serviceId) : [...current, serviceId]
+    );
   }
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
@@ -135,18 +202,31 @@ export function ApplyPage() {
         id: applicantId,
         organization_id: organizationQuery.data.id,
         first_name: form.firstName,
+        middle_name: form.middleName || null,
         last_name: form.lastName,
+        preferred_name: form.preferredName || null,
+        date_of_birth: form.dateOfBirth || null,
         email: form.email,
         phone: form.phone || null,
+        alternate_phone: form.alternatePhone || null,
+        emergency_contact_name: form.emergencyContactName || null,
+        emergency_contact_phone: form.emergencyContactPhone || null,
+        address_street: form.addressStreet || null,
+        address_line2: form.addressLine2 || null,
+        address_city: form.addressCity || null,
+        address_state: form.addressState || null,
+        address_zip: form.addressZip || null,
         desired_weekly_hours: parseOptionalNumber(form.desiredWeeklyHours),
         min_weekly_hours: parseOptionalNumber(form.minWeeklyHours),
         max_weekly_hours: parseOptionalNumber(form.maxWeeklyHours),
         min_shift_hours: parseOptionalNumber(form.minShiftHours),
         max_shift_hours: parseOptionalNumber(form.maxShiftHours),
-        preferred_cities: parseList(form.preferredCities),
         max_travel_minutes: parseOptionalNumber(form.maxTravelMinutes),
-        transportation_method: form.transportationMethod || null,
+        reliable_transportation: form.reliableTransportation,
         willing_to_transport_clients: form.willingToTransportClients,
+        valid_drivers_license: form.validDriversLicense,
+        vehicle_available: form.vehicleAvailable,
+        auto_insurance: form.autoInsurance,
         languages: parseList(form.languages),
         notes: form.notes || null
       });
@@ -164,6 +244,17 @@ export function ApplyPage() {
           }))
         );
         if (availabilityError) throw availabilityError;
+      }
+
+      if (selectedServiceIds.length > 0) {
+        const { error: servicesError } = await supabase.from("job_applicant_services").insert(
+          selectedServiceIds.map((serviceId) => ({
+            organization_id: organizationQuery.data!.id,
+            applicant_id: applicantId,
+            service_id: serviceId
+          }))
+        );
+        if (servicesError) throw servicesError;
       }
 
       setSubmitted(true);
@@ -224,7 +315,7 @@ export function ApplyPage() {
 
         <form onSubmit={handleSubmit} className="space-y-6">
           <Card>
-            <h2 className="font-semibold text-slate-950">About you</h2>
+            <h2 className="font-semibold text-slate-950">Personal information</h2>
             <div className="mt-4 grid gap-4 sm:grid-cols-2">
               <div>
                 <label htmlFor="apply-first-name" className="block text-xs font-medium text-slate-600">
@@ -239,6 +330,17 @@ export function ApplyPage() {
                 />
               </div>
               <div>
+                <label htmlFor="apply-middle-name" className="block text-xs font-medium text-slate-600">
+                  Middle name
+                </label>
+                <input
+                  id="apply-middle-name"
+                  value={form.middleName}
+                  onChange={(event) => setForm({ ...form, middleName: event.target.value })}
+                  className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900"
+                />
+              </div>
+              <div>
                 <label htmlFor="apply-last-name" className="block text-xs font-medium text-slate-600">
                   Last name
                 </label>
@@ -247,6 +349,29 @@ export function ApplyPage() {
                   required
                   value={form.lastName}
                   onChange={(event) => setForm({ ...form, lastName: event.target.value })}
+                  className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900"
+                />
+              </div>
+              <div>
+                <label htmlFor="apply-preferred-name" className="block text-xs font-medium text-slate-600">
+                  Preferred name
+                </label>
+                <input
+                  id="apply-preferred-name"
+                  value={form.preferredName}
+                  onChange={(event) => setForm({ ...form, preferredName: event.target.value })}
+                  className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900"
+                />
+              </div>
+              <div>
+                <label htmlFor="apply-dob" className="block text-xs font-medium text-slate-600">
+                  Date of birth
+                </label>
+                <input
+                  id="apply-dob"
+                  type="date"
+                  value={form.dateOfBirth}
+                  onChange={(event) => setForm({ ...form, dateOfBirth: event.target.value })}
                   className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900"
                 />
               </div>
@@ -265,7 +390,7 @@ export function ApplyPage() {
               </div>
               <div>
                 <label htmlFor="apply-phone" className="block text-xs font-medium text-slate-600">
-                  Phone
+                  Mobile phone
                 </label>
                 <input
                   id="apply-phone"
@@ -274,11 +399,187 @@ export function ApplyPage() {
                   className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900"
                 />
               </div>
+              <div>
+                <label htmlFor="apply-alternate-phone" className="block text-xs font-medium text-slate-600">
+                  Alternate phone
+                </label>
+                <input
+                  id="apply-alternate-phone"
+                  value={form.alternatePhone}
+                  onChange={(event) => setForm({ ...form, alternatePhone: event.target.value })}
+                  className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900"
+                />
+              </div>
+              <div>
+                <label htmlFor="apply-emergency-name" className="block text-xs font-medium text-slate-600">
+                  Emergency contact
+                </label>
+                <input
+                  id="apply-emergency-name"
+                  value={form.emergencyContactName}
+                  onChange={(event) => setForm({ ...form, emergencyContactName: event.target.value })}
+                  className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900"
+                />
+              </div>
+              <div>
+                <label htmlFor="apply-emergency-phone" className="block text-xs font-medium text-slate-600">
+                  Emergency contact phone
+                </label>
+                <input
+                  id="apply-emergency-phone"
+                  value={form.emergencyContactPhone}
+                  onChange={(event) => setForm({ ...form, emergencyContactPhone: event.target.value })}
+                  className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900"
+                />
+              </div>
             </div>
           </Card>
 
           <Card>
-            <h2 className="font-semibold text-slate-950">Hours</h2>
+            <h2 className="font-semibold text-slate-950">Home address</h2>
+            <p className="mt-1 text-xs text-slate-500">
+              We use this to calculate travel automatically - no need to tell us which cities you prefer.
+            </p>
+            <div className="mt-4 grid gap-4 sm:grid-cols-2">
+              <div className="sm:col-span-2">
+                <label htmlFor="apply-address-street" className="block text-xs font-medium text-slate-600">
+                  Street address
+                </label>
+                <input
+                  id="apply-address-street"
+                  value={form.addressStreet}
+                  onChange={(event) => setForm({ ...form, addressStreet: event.target.value })}
+                  className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900"
+                />
+              </div>
+              <div>
+                <label htmlFor="apply-address-line2" className="block text-xs font-medium text-slate-600">
+                  Apartment / suite
+                </label>
+                <input
+                  id="apply-address-line2"
+                  value={form.addressLine2}
+                  onChange={(event) => setForm({ ...form, addressLine2: event.target.value })}
+                  className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900"
+                />
+              </div>
+              <div>
+                <label htmlFor="apply-address-city" className="block text-xs font-medium text-slate-600">
+                  City
+                </label>
+                <input
+                  id="apply-address-city"
+                  value={form.addressCity}
+                  onChange={(event) => setForm({ ...form, addressCity: event.target.value })}
+                  className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900"
+                />
+              </div>
+              <div>
+                <label htmlFor="apply-address-state" className="block text-xs font-medium text-slate-600">
+                  State
+                </label>
+                <select
+                  id="apply-address-state"
+                  value={form.addressState}
+                  onChange={(event) => setForm({ ...form, addressState: event.target.value })}
+                  className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900"
+                >
+                  <option value="">Select…</option>
+                  {US_STATES.map((state) => (
+                    <option key={state} value={state}>
+                      {state}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label htmlFor="apply-address-zip" className="block text-xs font-medium text-slate-600">
+                  ZIP code
+                </label>
+                <input
+                  id="apply-address-zip"
+                  value={form.addressZip}
+                  onChange={(event) => setForm({ ...form, addressZip: event.target.value })}
+                  className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900"
+                />
+              </div>
+            </div>
+          </Card>
+
+          <Card>
+            <h2 className="font-semibold text-slate-950">Services you can provide</h2>
+            {servicesQuery.isLoading ? (
+              <p className="mt-3 text-sm text-slate-500">Loading…</p>
+            ) : (servicesQuery.data ?? []).length === 0 ? (
+              <p className="mt-3 text-sm text-slate-400">
+                This agency hasn&apos;t configured any services yet.
+              </p>
+            ) : (
+              <div className="mt-4 grid gap-2 sm:grid-cols-2">
+                {(servicesQuery.data ?? []).map((service) => (
+                  <label key={service.id} className="flex items-center gap-2 text-sm text-slate-800">
+                    <input
+                      type="checkbox"
+                      checked={selectedServiceIds.includes(service.id)}
+                      onChange={() => toggleService(service.id)}
+                    />
+                    {service.name}
+                  </label>
+                ))}
+              </div>
+            )}
+          </Card>
+
+          <Card>
+            <h2 className="font-semibold text-slate-950">Weekly availability</h2>
+            <p className="mt-1 text-xs text-slate-500">Check the days you can work and mark whether a day is a preference.</p>
+            <div className="mt-4 space-y-2">
+              {WEEKDAYS.map((day) => (
+                <div key={day} className="flex flex-wrap items-center gap-3 rounded-lg border border-slate-100 p-2">
+                  <label className="flex w-28 items-center gap-2 text-sm font-medium text-slate-800">
+                    <input
+                      type="checkbox"
+                      checked={availability[day].enabled}
+                      onChange={(event) => updateAvailabilityDay(day, { enabled: event.target.checked })}
+                    />
+                    {capitalize(day)}
+                  </label>
+                  <input
+                    type="time"
+                    aria-label={`${capitalize(day)} start time`}
+                    disabled={!availability[day].enabled}
+                    value={availability[day].start}
+                    onChange={(event) => updateAvailabilityDay(day, { start: event.target.value })}
+                    className="rounded-lg border border-slate-200 px-2 py-1 text-xs text-slate-900 disabled:bg-slate-50"
+                  />
+                  <span className="text-xs text-slate-400">to</span>
+                  <input
+                    type="time"
+                    aria-label={`${capitalize(day)} end time`}
+                    disabled={!availability[day].enabled}
+                    value={availability[day].end}
+                    onChange={(event) => updateAvailabilityDay(day, { end: event.target.value })}
+                    className="rounded-lg border border-slate-200 px-2 py-1 text-xs text-slate-900 disabled:bg-slate-50"
+                  />
+                  <select
+                    aria-label={`${capitalize(day)} preference`}
+                    disabled={!availability[day].enabled}
+                    value={availability[day].preference}
+                    onChange={(event) =>
+                      updateAvailabilityDay(day, { preference: event.target.value as "available" | "preferred" })
+                    }
+                    className="rounded-lg border border-slate-200 px-2 py-1 text-xs text-slate-900 disabled:bg-slate-50"
+                  >
+                    <option value="available">Available</option>
+                    <option value="preferred">Preferred</option>
+                  </select>
+                </div>
+              ))}
+            </div>
+          </Card>
+
+          <Card>
+            <h2 className="font-semibold text-slate-950">Desired hours</h2>
             <div className="mt-4 grid gap-4 sm:grid-cols-2">
               <div>
                 <label htmlFor="apply-desired-hours" className="block text-xs font-medium text-slate-600">
@@ -352,68 +653,8 @@ export function ApplyPage() {
           </Card>
 
           <Card>
-            <h2 className="font-semibold text-slate-950">Weekly availability</h2>
-            <p className="mt-1 text-xs text-slate-500">Check the days you can work and mark whether a day is a preference.</p>
-            <div className="mt-4 space-y-2">
-              {WEEKDAYS.map((day) => (
-                <div key={day} className="flex flex-wrap items-center gap-3 rounded-lg border border-slate-100 p-2">
-                  <label className="flex w-28 items-center gap-2 text-sm font-medium text-slate-800">
-                    <input
-                      type="checkbox"
-                      checked={availability[day].enabled}
-                      onChange={(event) => updateAvailabilityDay(day, { enabled: event.target.checked })}
-                    />
-                    {capitalize(day)}
-                  </label>
-                  <input
-                    type="time"
-                    aria-label={`${capitalize(day)} start time`}
-                    disabled={!availability[day].enabled}
-                    value={availability[day].start}
-                    onChange={(event) => updateAvailabilityDay(day, { start: event.target.value })}
-                    className="rounded-lg border border-slate-200 px-2 py-1 text-xs text-slate-900 disabled:bg-slate-50"
-                  />
-                  <span className="text-xs text-slate-400">to</span>
-                  <input
-                    type="time"
-                    aria-label={`${capitalize(day)} end time`}
-                    disabled={!availability[day].enabled}
-                    value={availability[day].end}
-                    onChange={(event) => updateAvailabilityDay(day, { end: event.target.value })}
-                    className="rounded-lg border border-slate-200 px-2 py-1 text-xs text-slate-900 disabled:bg-slate-50"
-                  />
-                  <select
-                    aria-label={`${capitalize(day)} preference`}
-                    disabled={!availability[day].enabled}
-                    value={availability[day].preference}
-                    onChange={(event) =>
-                      updateAvailabilityDay(day, { preference: event.target.value as "available" | "preferred" })
-                    }
-                    className="rounded-lg border border-slate-200 px-2 py-1 text-xs text-slate-900 disabled:bg-slate-50"
-                  >
-                    <option value="available">Available</option>
-                    <option value="preferred">Preferred</option>
-                  </select>
-                </div>
-              ))}
-            </div>
-          </Card>
-
-          <Card>
-            <h2 className="font-semibold text-slate-950">Travel and preferences</h2>
+            <h2 className="font-semibold text-slate-950">Travel</h2>
             <div className="mt-4 grid gap-4 sm:grid-cols-2">
-              <div>
-                <label htmlFor="apply-preferred-cities" className="block text-xs font-medium text-slate-600">
-                  Preferred cities
-                </label>
-                <input
-                  id="apply-preferred-cities"
-                  placeholder="Comma-separated, e.g. Corona, Riverside"
-                  value={form.preferredCities}
-                  onChange={(event) => setForm({ ...form, preferredCities: event.target.value })}
-                  className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900"
-                />
-              </div>
               <div>
                 <label htmlFor="apply-max-travel" className="block text-xs font-medium text-slate-600">
                   Maximum travel time (minutes)
@@ -424,18 +665,6 @@ export function ApplyPage() {
                   min={0}
                   value={form.maxTravelMinutes}
                   onChange={(event) => setForm({ ...form, maxTravelMinutes: event.target.value })}
-                  className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900"
-                />
-              </div>
-              <div>
-                <label htmlFor="apply-transportation" className="block text-xs font-medium text-slate-600">
-                  Transportation method
-                </label>
-                <input
-                  id="apply-transportation"
-                  placeholder="e.g. own car, public transit"
-                  value={form.transportationMethod}
-                  onChange={(event) => setForm({ ...form, transportationMethod: event.target.value })}
                   className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900"
                 />
               </div>
@@ -451,14 +680,46 @@ export function ApplyPage() {
                   className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900"
                 />
               </div>
-              <div className="sm:col-span-2">
+              <div className="sm:col-span-2 grid gap-2 sm:grid-cols-2">
+                <label className="flex items-center gap-2 text-sm text-slate-800">
+                  <input
+                    type="checkbox"
+                    checked={form.reliableTransportation}
+                    onChange={(event) => setForm({ ...form, reliableTransportation: event.target.checked })}
+                  />
+                  I have reliable transportation
+                </label>
                 <label className="flex items-center gap-2 text-sm text-slate-800">
                   <input
                     type="checkbox"
                     checked={form.willingToTransportClients}
                     onChange={(event) => setForm({ ...form, willingToTransportClients: event.target.checked })}
                   />
-                  I&apos;m willing to transport clients in my vehicle
+                  I can transport clients in my vehicle
+                </label>
+                <label className="flex items-center gap-2 text-sm text-slate-800">
+                  <input
+                    type="checkbox"
+                    checked={form.validDriversLicense}
+                    onChange={(event) => setForm({ ...form, validDriversLicense: event.target.checked })}
+                  />
+                  I have a valid driver&apos;s license
+                </label>
+                <label className="flex items-center gap-2 text-sm text-slate-800">
+                  <input
+                    type="checkbox"
+                    checked={form.vehicleAvailable}
+                    onChange={(event) => setForm({ ...form, vehicleAvailable: event.target.checked })}
+                  />
+                  I have a vehicle available
+                </label>
+                <label className="flex items-center gap-2 text-sm text-slate-800">
+                  <input
+                    type="checkbox"
+                    checked={form.autoInsurance}
+                    onChange={(event) => setForm({ ...form, autoInsurance: event.target.checked })}
+                  />
+                  I have auto insurance
                 </label>
               </div>
               <div className="sm:col-span-2">
