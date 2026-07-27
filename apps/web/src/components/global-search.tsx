@@ -12,7 +12,7 @@ import { supabase } from "@/lib/supabase";
 // exists) per row. Field names match the RPC's return columns, same
 // snake_case convention every other RPC result in this app uses.
 interface GlobalSearchResultRow {
-  result_type: "client" | "caregiver" | "credential" | "authorization" | "incident" | "service";
+  result_type: "client" | "caregiver" | "credential" | "authorization" | "incident" | "service" | "applicant";
   entity_id: string;
   title: string;
   subtitle: string | null;
@@ -24,11 +24,12 @@ const resultTypeLabels: Record<GlobalSearchResultRow["result_type"], string> = {
   credential: "Credential",
   authorization: "Authorization",
   incident: "Incident",
-  service: "Service"
+  service: "Service",
+  applicant: "Applicant"
 };
 
-// Only clients and caregivers have their own detail page today; the
-// rest route to their list page rather than a fabricated deep link.
+// Clients, caregivers, and applicants have their own detail page today;
+// the rest route to their list page rather than a fabricated deep link.
 // Services are managed inline from the Authorizations page (there's no
 // standalone services page), so a service result routes there too.
 function routeFor(result: GlobalSearchResultRow): string {
@@ -37,6 +38,8 @@ function routeFor(result: GlobalSearchResultRow): string {
       return `/clients/${result.entity_id}`;
     case "caregiver":
       return `/team/${result.entity_id}`;
+    case "applicant":
+      return `/applicants/${result.entity_id}`;
     case "credential":
       return "/credentials";
     case "authorization":

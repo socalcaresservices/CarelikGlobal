@@ -131,6 +131,25 @@ describe("GlobalSearch", () => {
     await waitFor(() => expect(screen.getByTestId("location")).toHaveTextContent("/authorizations"));
   });
 
+  it("shows an applicant result and navigates to the applicant detail page on selection", async () => {
+    mockedUseOrganization.mockReturnValue(baseOrganization());
+    const APPLICANT_ID = "77777777-7777-4777-8777-777777777777";
+    mockedRpc.mockResolvedValue({
+      data: [{ result_type: "applicant", entity_id: APPLICANT_ID, title: "Casey Applicant", subtitle: "New" }],
+      error: null
+    } as never);
+
+    renderSearch();
+    fireEvent.change(screen.getByLabelText("Search everything"), { target: { value: "casey" } });
+
+    await waitFor(() => expect(screen.getByText("Casey Applicant")).toBeInTheDocument());
+    expect(screen.getByText("Applicant")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByText("Casey Applicant"));
+
+    await waitFor(() => expect(screen.getByTestId("location")).toHaveTextContent(`/applicants/${APPLICANT_ID}`));
+  });
+
   it("shows a loading state while searching and an error state on failure", async () => {
     mockedUseOrganization.mockReturnValue(baseOrganization());
     let resolveRpc: (value: unknown) => void = () => {};
