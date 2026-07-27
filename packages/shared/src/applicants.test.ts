@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   applicantStatusSchema,
   availabilityPreferenceSchema,
+  employmentTypeSchema,
   jobApplicantSchema,
   jobApplicantServiceSchema
 } from "./applicants";
@@ -20,6 +21,8 @@ const validApplicant = {
   emergencyContactName: null,
   emergencyContactPhone: null,
   status: "new" as const,
+  employmentType: "full_time" as const,
+  availableStartDate: "2026-08-15",
   addressStreet: "123 Main St",
   addressLine2: null,
   addressCity: "Corona",
@@ -74,6 +77,18 @@ describe("applicantStatusSchema", () => {
 describe("availabilityPreferenceSchema", () => {
   it("accepts available and preferred", () => {
     expect(availabilityPreferenceSchema.options).toEqual(["available", "preferred"]);
+  });
+});
+
+describe("employmentTypeSchema", () => {
+  it("accepts every known employment type", () => {
+    for (const value of employmentTypeSchema.options) {
+      expect(employmentTypeSchema.parse(value)).toBe(value);
+    }
+  });
+
+  it("rejects an unknown employment type", () => {
+    expect(() => employmentTypeSchema.parse("seasonal")).toThrow();
   });
 });
 

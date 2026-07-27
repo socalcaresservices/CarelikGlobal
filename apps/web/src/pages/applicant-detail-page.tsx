@@ -3,7 +3,7 @@ import { Link, useParams } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowLeft } from "lucide-react";
 import { Card, StatusBadge, type StatusTone } from "@carelik/ui";
-import { applicantStatusSchema, type ApplicantStatus } from "@carelik/shared";
+import { applicantStatusSchema, type ApplicantStatus, type EmploymentType } from "@carelik/shared";
 import { useOrganization } from "@/providers/organization-provider";
 import { supabase } from "@/lib/supabase";
 
@@ -40,6 +40,8 @@ interface ApplicantDetail {
   address_city: string | null;
   address_state: string | null;
   address_zip: string | null;
+  employment_type: EmploymentType | null;
+  available_start_date: string | null;
   desired_weekly_hours: number | null;
   min_weekly_hours: number | null;
   max_weekly_hours: number | null;
@@ -98,6 +100,13 @@ const statusTone: Record<ApplicantStatus, StatusTone> = {
 function formatHours(hours: number) {
   return Number.isInteger(hours) ? String(hours) : hours.toFixed(1);
 }
+
+const EMPLOYMENT_TYPE_LABELS: Record<EmploymentType, string> = {
+  full_time: "Full-Time",
+  part_time: "Part-Time",
+  per_diem: "Per Diem",
+  contractor: "Contractor"
+};
 
 // "hired" is only ever set via the convert action below, so it's not a
 // choice in this dropdown - picking it manually here would leave
@@ -344,6 +353,16 @@ export function ApplicantDetailPage() {
       <Card>
         <h3 className="font-semibold text-slate-950">Hours and preferences</h3>
         <div className="mt-4 grid gap-x-6 gap-y-3 sm:grid-cols-3">
+          <div>
+            <p className="text-xs font-medium uppercase tracking-wide text-slate-500">Employment type</p>
+            <p className="mt-0.5 font-semibold text-slate-950">
+              {applicant.employment_type ? EMPLOYMENT_TYPE_LABELS[applicant.employment_type] : "—"}
+            </p>
+          </div>
+          <div>
+            <p className="text-xs font-medium uppercase tracking-wide text-slate-500">Available start date</p>
+            <p className="mt-0.5 font-semibold text-slate-950">{applicant.available_start_date ?? "—"}</p>
+          </div>
           <div>
             <p className="text-xs font-medium uppercase tracking-wide text-slate-500">Desired weekly hours</p>
             <p className="mt-0.5 font-semibold text-slate-950">

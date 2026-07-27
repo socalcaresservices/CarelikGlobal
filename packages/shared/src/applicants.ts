@@ -7,6 +7,9 @@ export type ApplicantStatus = z.infer<typeof applicantStatusSchema>;
 export const availabilityPreferenceSchema = z.enum(["available", "preferred"]);
 export type AvailabilityPreference = z.infer<typeof availabilityPreferenceSchema>;
 
+export const employmentTypeSchema = z.enum(["full_time", "part_time", "per_diem", "contractor"]);
+export type EmploymentType = z.infer<typeof employmentTypeSchema>;
+
 export const jobApplicantSchema = z.object({
   id: z.string().uuid(),
   organizationId: organizationIdSchema,
@@ -21,6 +24,8 @@ export const jobApplicantSchema = z.object({
   emergencyContactName: z.string().nullable(),
   emergencyContactPhone: z.string().nullable(),
   status: applicantStatusSchema,
+  employmentType: employmentTypeSchema.nullable(),
+  availableStartDate: z.string().nullable(),
   addressStreet: z.string().nullable(),
   addressLine2: z.string().nullable(),
   addressCity: z.string().nullable(),

@@ -49,6 +49,8 @@ function applicantRecord(overrides: Record<string, unknown> = {}) {
     email: "ashley@example.com",
     phone: "555-0100",
     status: "new",
+    employment_type: null,
+    available_start_date: null,
     desired_weekly_hours: 30,
     min_weekly_hours: 20,
     max_weekly_hours: 40,
@@ -125,6 +127,8 @@ describe("ApplicantDetailPage", () => {
         address_city: "Corona",
         address_state: "CA",
         address_zip: "92879",
+        employment_type: "full_time",
+        available_start_date: "2026-08-15",
         reliable_transportation: true,
         valid_drivers_license: true,
         tb_test_expires_at: "2027-01-01",
@@ -141,6 +145,8 @@ describe("ApplicantDetailPage", () => {
     await waitFor(() => expect(screen.getByText(/^Ash Rivera/)).toBeInTheDocument());
     expect(screen.getByText("ashley@example.com · 555-0100")).toBeInTheDocument();
     expect(screen.getByText("123 Main St · Corona, CA 92879")).toBeInTheDocument();
+    expect(screen.getByText("Full-Time")).toBeInTheDocument();
+    expect(screen.getByText("2026-08-15")).toBeInTheDocument();
     expect(screen.getByText("2027-01-01")).toBeInTheDocument();
     expect(screen.getByText("2026-12-01")).toBeInTheDocument();
     expect(screen.getByText("Consented")).toBeInTheDocument();
