@@ -23,6 +23,7 @@ import { SettingsPage } from "@/pages/settings-page";
 import { OwnerDashboardPage } from "@/pages/owner-dashboard-page";
 import { ApplicantsPage } from "@/pages/applicants-page";
 import { ApplicantDetailPage } from "@/pages/applicant-detail-page";
+import { FeatureFlagsPage } from "@/pages/feature-flags-page";
 
 export function App() {
   return (
@@ -41,6 +42,7 @@ export function App() {
                   <Route path="/" element={<CommandCenterPage />} />
                   <Route path="/organizations" element={<OrganizationsPage />} />
                   <Route path="/organizations/new" element={<AddOrganizationPage />} />
+                  <Route path="/feature-flags" element={<FeatureFlagsPage />} />
                   <Route path="/access" element={<AccessPage />} />
                   <Route path="/team" element={<TeamPage />} />
                   <Route path="/team/:id" element={<CaregiverDetailPage />} />

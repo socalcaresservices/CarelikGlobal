@@ -9,6 +9,7 @@ import {
   ClipboardCheck,
   ClipboardList,
   Crown,
+  Flag,
   HeartHandshake,
   LayoutDashboard,
   LogOut,
@@ -94,7 +95,8 @@ const administrationNav: NavItem[] = [
 // Kept out of the plain administrationNav list for platform owners (see
 // visibleAdministrationNav below) so it isn't shown twice.
 const platformAdministrationNav: NavItem[] = [
-  { to: "/organizations", label: "Organizations", icon: Building2 }
+  { to: "/organizations", label: "Organizations", icon: Building2 },
+  { to: "/feature-flags", label: "Feature Flags", icon: Flag }
 ];
 
 function visibleItems(items: NavItem[], hasPermission: (permission: Permission) => boolean, isOwner: boolean) {
