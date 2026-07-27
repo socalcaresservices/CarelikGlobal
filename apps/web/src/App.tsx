@@ -5,6 +5,7 @@ import { ProtectedRoute } from "@/routes/protected-route";
 import { LoginPage } from "@/pages/login-page";
 import { SetPasswordPage } from "@/pages/set-password-page";
 import { ApplyPage } from "@/pages/apply-page";
+import { UploadPage } from "@/pages/upload-page";
 import { CommandCenterPage } from "@/pages/command-center-page";
 import { AccessPage } from "@/pages/access-page";
 import { TeamPage } from "@/pages/team-page";
@@ -29,6 +30,7 @@ export function App() {
       <Route path="/login" element={<LoginPage />} />
       <Route path="/set-password" element={<SetPasswordPage />} />
       <Route path="/apply/:orgSlug" element={<ApplyPage />} />
+      <Route path="/upload/:token" element={<UploadPage />} />
       <Route
         path="/*"
         element={

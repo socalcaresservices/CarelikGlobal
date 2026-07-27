@@ -10,13 +10,15 @@ vi.mock("@/providers/organization-provider", () => ({ useOrganization: vi.fn() }
 vi.mock("@/lib/supabase", () => ({
   supabase: {
     rpc: vi.fn(),
-    from: vi.fn()
+    from: vi.fn(),
+    storage: { from: vi.fn() }
   }
 }));
 
 const mockedUseOrganization = vi.mocked(useOrganization);
 const mockedRpc = vi.mocked(supabase.rpc);
 const mockedFrom = vi.mocked(supabase.from);
+const mockedStorageFrom = vi.mocked(supabase.storage.from);
 
 const ORG_ID = "11111111-1111-4111-8111-111111111111";
 const APPLICANT_ID = "22222222-2222-4222-8222-222222222222";
@@ -347,5 +349,160 @@ describe("ApplicantDetailPage", () => {
     await waitFor(() => expect(screen.getByText("CPR Certification")).toBeInTheDocument());
     expect(screen.queryByText("Request documents")).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Send" })).not.toBeInTheDocument();
+  });
+
+  it("lets a manager view an uploaded file and shows Verify/Reject only while it's under review", async () => {
+    mockedUseOrganization.mockReturnValue(baseOrganization());
+    mockFromByTable(applicantRecord());
+    mockedRpc.mockImplementation((fn: string) => {
+      if (fn === "list_document_requests_for_subject") {
+        return Promise.resolve({
+          data: [
+            {
+              id: "req-1",
+              document_type_name: "CPR Certification",
+              status: "uploaded",
+              uploaded_at: "2026-07-20T00:00:00.000Z",
+              expires_at: null,
+              rejection_reason: null,
+              batch_token: "tok-1",
+              batch_created_at: "2026-07-19T00:00:00.000Z",
+              file_id: "file-1",
+              bucket_id: "organization-documents",
+              object_path: `${ORG_ID}/document-requests/req-1/resume.pdf`
+            },
+            {
+              id: "req-2",
+              document_type_name: "TB Test",
+              status: "verified",
+              uploaded_at: "2026-07-18T00:00:00.000Z",
+              expires_at: null,
+              rejection_reason: null,
+              batch_token: "tok-1",
+              batch_created_at: "2026-07-19T00:00:00.000Z",
+              file_id: "file-2",
+              bucket_id: "organization-documents",
+              object_path: `${ORG_ID}/document-requests/req-2/tb.pdf`
+            }
+          ],
+          error: null
+        }) as never;
+      }
+      if (fn === "verify_document_request") {
+        return Promise.resolve({ data: null, error: null }) as never;
+      }
+      return Promise.resolve({ data: [], error: null }) as never;
+    });
+    const createSignedUrl = vi.fn().mockResolvedValue({
+      data: { signedUrl: "https://example.com/signed" },
+      error: null
+    });
+    mockedStorageFrom.mockReturnValue({ createSignedUrl } as never);
+    const openSpy = vi.spyOn(window, "open").mockImplementation(() => null);
+
+    renderPage();
+
+    await waitFor(() => expect(screen.getByText("CPR Certification")).toBeInTheDocument());
+
+    // Both rows have a stored file, so both get a View link.
+    expect(screen.getAllByText("View")).toHaveLength(2);
+    // Only the 'uploaded' row is reviewable.
+    expect(screen.getAllByRole("button", { name: "Verify" })).toHaveLength(1);
+    expect(screen.getAllByRole("button", { name: "Reject" })).toHaveLength(1);
+
+    fireEvent.click(screen.getAllByText("View")[0]!);
+    await waitFor(() =>
+      expect(createSignedUrl).toHaveBeenCalledWith(`${ORG_ID}/document-requests/req-1/resume.pdf`, 300)
+    );
+    await waitFor(() => expect(openSpy).toHaveBeenCalledWith("https://example.com/signed", "_blank", "noopener,noreferrer"));
+
+    fireEvent.click(screen.getByRole("button", { name: "Verify" }));
+    await waitFor(() =>
+      expect(mockedRpc).toHaveBeenCalledWith("verify_document_request", {
+        target_organization_id: ORG_ID,
+        target_document_request_id: "req-1"
+      })
+    );
+  });
+
+  it("rejects an uploaded document with a reason and shows it on the row", async () => {
+    mockedUseOrganization.mockReturnValue(baseOrganization());
+    mockFromByTable(applicantRecord());
+    mockedRpc.mockImplementation((fn: string) => {
+      if (fn === "list_document_requests_for_subject") {
+        return Promise.resolve({
+          data: [
+            {
+              id: "req-1",
+              document_type_name: "CPR Certification",
+              status: "uploaded",
+              uploaded_at: "2026-07-20T00:00:00.000Z",
+              expires_at: null,
+              rejection_reason: null,
+              batch_token: "tok-1",
+              batch_created_at: "2026-07-19T00:00:00.000Z",
+              file_id: "file-1",
+              bucket_id: "organization-documents",
+              object_path: `${ORG_ID}/document-requests/req-1/resume.pdf`
+            }
+          ],
+          error: null
+        }) as never;
+      }
+      if (fn === "reject_document_request") {
+        return Promise.resolve({ data: null, error: null }) as never;
+      }
+      return Promise.resolve({ data: [], error: null }) as never;
+    });
+    vi.spyOn(window, "prompt").mockReturnValue("Blurry photo, please retake.");
+
+    renderPage();
+
+    await waitFor(() => expect(screen.getByRole("button", { name: "Reject" })).toBeInTheDocument());
+    fireEvent.click(screen.getByRole("button", { name: "Reject" }));
+
+    await waitFor(() =>
+      expect(mockedRpc).toHaveBeenCalledWith("reject_document_request", {
+        target_organization_id: ORG_ID,
+        target_document_request_id: "req-1",
+        reason: "Blurry photo, please retake."
+      })
+    );
+  });
+
+  it("does not show Verify/Reject controls without documents.manage", async () => {
+    mockedUseOrganization.mockReturnValue(
+      baseOrganization((permission: string) => permission !== "documents.manage")
+    );
+    mockFromByTable(applicantRecord());
+    mockedRpc.mockImplementation((fn: string) => {
+      if (fn === "list_document_requests_for_subject") {
+        return Promise.resolve({
+          data: [
+            {
+              id: "req-1",
+              document_type_name: "CPR Certification",
+              status: "uploaded",
+              uploaded_at: "2026-07-20T00:00:00.000Z",
+              expires_at: null,
+              rejection_reason: null,
+              batch_token: "tok-1",
+              batch_created_at: "2026-07-19T00:00:00.000Z",
+              file_id: "file-1",
+              bucket_id: "organization-documents",
+              object_path: `${ORG_ID}/document-requests/req-1/resume.pdf`
+            }
+          ],
+          error: null
+        }) as never;
+      }
+      return Promise.resolve({ data: [], error: null }) as never;
+    });
+
+    renderPage();
+
+    await waitFor(() => expect(screen.getByText("CPR Certification")).toBeInTheDocument());
+    expect(screen.queryByRole("button", { name: "Verify" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Reject" })).not.toBeInTheDocument();
   });
 });

@@ -120,9 +120,20 @@ interface DocumentRequestRow {
   status: DocumentRequestStatus;
   uploaded_at: string | null;
   expires_at: string | null;
+  rejection_reason: string | null;
   batch_token: string;
   batch_created_at: string;
+  file_id: string | null;
+  bucket_id: string | null;
+  object_path: string | null;
 }
+
+// A staff member can act on an uploaded file once it's landed but hasn't
+// been decided on yet. 'pending_review' is reserved for a future
+// automated pre-check step (see the document_upload_workflow migration)
+// but treated the same as 'uploaded' here since nothing currently
+// produces that status.
+const REVIEWABLE_STATUSES: DocumentRequestStatus[] = ["uploaded", "pending_review"];
 
 const documentRequestStatusTone: Record<DocumentRequestStatus, StatusTone> = {
   requested: "info",
@@ -229,6 +240,67 @@ function DocumentsCard({
     void navigator.clipboard.writeText(generatedLink).then(() => setCopied(true));
   }
 
+  const [viewingId, setViewingId] = useState<string | null>(null);
+  const [viewError, setViewError] = useState<string | null>(null);
+  const [decidingId, setDecidingId] = useState<string | null>(null);
+  const [decisionError, setDecisionError] = useState<string | null>(null);
+
+  async function handleView(row: DocumentRequestRow) {
+    if (!row.bucket_id || !row.object_path) return;
+    setViewError(null);
+    setViewingId(row.id);
+    try {
+      const { data, error } = await supabase.storage.from(row.bucket_id).createSignedUrl(row.object_path, 300);
+      if (error) throw error;
+      if (data?.signedUrl) {
+        window.open(data.signedUrl, "_blank", "noopener,noreferrer");
+      }
+    } catch (cause) {
+      setViewError(cause instanceof Error ? cause.message : "Could not open that file.");
+    } finally {
+      setViewingId(null);
+    }
+  }
+
+  async function handleVerify(row: DocumentRequestRow) {
+    if (!organizationId) return;
+    setDecisionError(null);
+    setDecidingId(row.id);
+    try {
+      const { error } = await supabase.rpc("verify_document_request", {
+        target_organization_id: organizationId,
+        target_document_request_id: row.id
+      });
+      if (error) throw error;
+      void queryClient.invalidateQueries({ queryKey: ["document-requests-for-subject", organizationId, subjectId] });
+    } catch (cause) {
+      setDecisionError(cause instanceof Error ? cause.message : "Could not verify that document.");
+    } finally {
+      setDecidingId(null);
+    }
+  }
+
+  async function handleReject(row: DocumentRequestRow) {
+    if (!organizationId) return;
+    const reason = window.prompt("Why is this document being rejected?");
+    if (!reason || !reason.trim()) return;
+    setDecisionError(null);
+    setDecidingId(row.id);
+    try {
+      const { error } = await supabase.rpc("reject_document_request", {
+        target_organization_id: organizationId,
+        target_document_request_id: row.id,
+        reason: reason.trim()
+      });
+      if (error) throw error;
+      void queryClient.invalidateQueries({ queryKey: ["document-requests-for-subject", organizationId, subjectId] });
+    } catch (cause) {
+      setDecisionError(cause instanceof Error ? cause.message : "Could not reject that document.");
+    } finally {
+      setDecidingId(null);
+    }
+  }
+
   if (!canRead) return null;
 
   const activeTypes = (typesQuery.data ?? []).filter((type) => type.is_active);
@@ -287,14 +359,61 @@ function DocumentsCard({
           <p className="text-sm text-slate-400">No documents requested yet.</p>
         ) : (
           <ul className="divide-y divide-slate-100">
-            {requests.map((row) => (
-              <li key={row.id} className="flex items-center justify-between py-2 text-sm">
-                <span className="text-slate-800">{row.document_type_name}</span>
-                <StatusBadge label={formatDocumentStatus(row.status)} tone={documentRequestStatusTone[row.status]} />
-              </li>
-            ))}
+            {requests.map((row) => {
+              const isReviewable = canManage && REVIEWABLE_STATUSES.includes(row.status);
+              const canView = !!row.bucket_id && !!row.object_path;
+              const isBusy = decidingId === row.id || viewingId === row.id;
+              return (
+                <li key={row.id} className="py-2 text-sm">
+                  <div className="flex items-center justify-between gap-3">
+                    <span className="text-slate-800">{row.document_type_name}</span>
+                    <div className="flex items-center gap-2">
+                      {canView ? (
+                        <button
+                          type="button"
+                          disabled={isBusy}
+                          onClick={() => void handleView(row)}
+                          className="text-xs font-medium text-slate-600 underline-offset-2 hover:underline disabled:opacity-60"
+                        >
+                          {viewingId === row.id ? "Opening…" : "View"}
+                        </button>
+                      ) : null}
+                      {isReviewable ? (
+                        <>
+                          <button
+                            type="button"
+                            disabled={isBusy}
+                            onClick={() => void handleVerify(row)}
+                            className="text-xs font-medium text-emerald-700 underline-offset-2 hover:underline disabled:opacity-60"
+                          >
+                            Verify
+                          </button>
+                          <button
+                            type="button"
+                            disabled={isBusy}
+                            onClick={() => void handleReject(row)}
+                            className="text-xs font-medium text-red-700 underline-offset-2 hover:underline disabled:opacity-60"
+                          >
+                            Reject
+                          </button>
+                        </>
+                      ) : null}
+                      <StatusBadge
+                        label={formatDocumentStatus(row.status)}
+                        tone={documentRequestStatusTone[row.status]}
+                      />
+                    </div>
+                  </div>
+                  {row.status === "rejected" && row.rejection_reason ? (
+                    <p className="mt-1 text-xs text-red-700">{row.rejection_reason}</p>
+                  ) : null}
+                </li>
+              );
+            })}
           </ul>
         )}
+        {viewError ? <p className="mt-2 text-xs text-red-700">{viewError}</p> : null}
+        {decisionError ? <p className="mt-2 text-xs text-red-700">{decisionError}</p> : null}
       </div>
     </Card>
   );
