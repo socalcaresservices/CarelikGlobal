@@ -40,19 +40,36 @@ describe("AppShell nav", () => {
     vi.clearAllMocks();
   });
 
-  it("shows the Owner Dashboard link for an organization_owner", () => {
+  it("shows the Workforce Insights link for an organization_owner", () => {
     mockedUseAuth.mockReturnValue({ user: { email: "owner@acme.test" } } as never);
     mockedUseOrganization.mockReturnValue(baseOrganization("organization_owner"));
 
     renderShell();
-    expect(screen.getByText("Owner Dashboard")).toBeInTheDocument();
+    expect(screen.getByText("Workforce Insights")).toBeInTheDocument();
   });
 
-  it("hides the Owner Dashboard link for an organization_admin", () => {
+  it("hides the Workforce Insights link for an organization_admin", () => {
     mockedUseAuth.mockReturnValue({ user: { email: "admin@acme.test" } } as never);
     mockedUseOrganization.mockReturnValue(baseOrganization("organization_admin"));
 
     renderShell();
-    expect(screen.queryByText("Owner Dashboard")).not.toBeInTheDocument();
+    expect(screen.queryByText("Workforce Insights")).not.toBeInTheDocument();
+  });
+
+  it("groups Organizations, Access, and Audit under a de-emphasized Administration heading", () => {
+    mockedUseAuth.mockReturnValue({ user: { email: "owner@acme.test" } } as never);
+    mockedUseOrganization.mockReturnValue(baseOrganization("organization_owner"));
+
+    renderShell();
+    expect(screen.getByText("Administration")).toBeInTheDocument();
+    expect(screen.getByText("Command Center")).toBeInTheDocument();
+  });
+
+  it("does not show engineering-phase copy in the header", () => {
+    mockedUseAuth.mockReturnValue({ user: { email: "owner@acme.test" } } as never);
+    mockedUseOrganization.mockReturnValue(baseOrganization("organization_owner"));
+
+    renderShell();
+    expect(screen.queryByText(/Phase 1/)).not.toBeInTheDocument();
   });
 });

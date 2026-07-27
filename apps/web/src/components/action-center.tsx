@@ -4,7 +4,7 @@ import {
   AlertOctagon,
   AlertTriangle,
   BadgeCheck,
-  CalendarClock,
+  CheckCircle2,
   ClipboardCheck,
   Clock,
   Mail,
@@ -24,6 +24,11 @@ import type { CaregiverHoursRow } from "@/components/caregiver-hours";
 // number. See that doc's "Not yet built" section for signals (expiring
 // credentials, expiring authorizations, incidents, hour targets) that
 // intentionally aren't here yet, because there's no table backing them.
+//
+// This only holds *issues* - things with a healthy/attention/critical
+// reading. Purely informational counts (e.g. "shifts today") live in
+// <OperationalSnapshot /> instead, so a zero-issue day can genuinely
+// collapse to one line instead of a grid of green tiles.
 
 interface ShiftForSignals {
   id: string;
@@ -56,11 +61,14 @@ interface IncidentForSignals {
   status: IncidentStatus;
 }
 
-type Tone = "healthy" | "info" | "attention" | "critical";
+type Tone = "healthy" | "attention" | "critical";
+
+// Lower number = shown first. Healthy signals never render as cards, so
+// they don't need a rank.
+const toneRank: Record<Tone, number> = { critical: 0, attention: 1, healthy: 2 };
 
 const toneStyles: Record<Tone, { dot: string; text: string }> = {
   healthy: { dot: "bg-emerald-500", text: "text-emerald-700" },
-  info: { dot: "bg-sky-500", text: "text-sky-700" },
   attention: { dot: "bg-amber-500", text: "text-amber-700" },
   critical: { dot: "bg-red-500", text: "text-red-700" }
 };
@@ -73,18 +81,6 @@ interface Signal {
   icon: typeof AlertTriangle;
   to: string;
   statusText: string;
-}
-
-function startOfDay(date: Date) {
-  const copy = new Date(date);
-  copy.setHours(0, 0, 0, 0);
-  return copy;
-}
-
-function endOfDay(date: Date) {
-  const copy = new Date(date);
-  copy.setHours(23, 59, 59, 999);
-  return copy;
 }
 
 export function ActionCenter() {
@@ -200,13 +196,6 @@ export function ActionCenter() {
     (shift) => shift.status === "scheduled" && new Date(shift.ends_at).getTime() < now.getTime()
   ).length;
 
-  const todayStart = startOfDay(now).getTime();
-  const todayEnd = endOfDay(now).getTime();
-  const todayCount = shifts.filter((shift) => {
-    const startsAt = new Date(shift.starts_at).getTime();
-    return shift.status === "scheduled" && startsAt >= todayStart && startsAt <= todayEnd;
-  }).length;
-
   const signals: Signal[] = [
     {
       key: "overdue",
@@ -216,15 +205,6 @@ export function ActionCenter() {
       icon: AlertTriangle,
       to: "/schedule",
       statusText: overdueCount > 0 ? "Review" : "All caught up"
-    },
-    {
-      key: "today",
-      label: "Shifts today",
-      count: todayCount,
-      tone: "info",
-      icon: CalendarClock,
-      to: "/schedule",
-      statusText: "View schedule"
     }
   ];
 
@@ -260,7 +240,7 @@ export function ActionCenter() {
       key: "pending-invites",
       label: "Pending invitations",
       count: pendingCount,
-      tone: pendingCount > 0 ? "info" : "healthy",
+      tone: pendingCount > 0 ? "attention" : "healthy",
       icon: Mail,
       to: "/access",
       statusText: pendingCount > 0 ? "Review" : "None pending"
@@ -329,32 +309,53 @@ export function ActionCenter() {
     });
   }
 
+  const needsAttention = signals
+    .filter((signal) => signal.tone !== "healthy")
+    .sort((a, b) => toneRank[a.tone] - toneRank[b.tone]);
+  const healthyCount = signals.length - needsAttention.length;
+
   return (
     <div>
-      <p className="text-sm font-medium text-slate-500">What needs attention</p>
-      <div className="mt-3 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        {signals.map((signal) => {
-          const Icon = signal.icon;
-          const tone = toneStyles[signal.tone];
-          return (
-            <Link
-              key={signal.key}
-              to={signal.to}
-              className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm transition hover:border-slate-300 hover:shadow-md"
-            >
-              <div className="flex items-center justify-between">
-                <Icon className="h-5 w-5 text-slate-400" />
-                <span className={cn("flex items-center gap-1.5 text-xs font-medium", tone.text)}>
-                  <span className={cn("h-1.5 w-1.5 rounded-full", tone.dot)} />
-                  {signal.statusText}
-                </span>
-              </div>
-              <p className="mt-4 text-3xl font-semibold tracking-tight text-slate-950">{signal.count}</p>
-              <p className="mt-1 text-sm text-slate-600">{signal.label}</p>
-            </Link>
-          );
-        })}
-      </div>
+      <p className="text-sm font-medium text-slate-500">Needs attention</p>
+      {needsAttention.length === 0 ? (
+        <div className="mt-3 flex items-center gap-3 rounded-2xl border border-emerald-100 bg-emerald-50/60 px-5 py-4">
+          <CheckCircle2 className="h-5 w-5 shrink-0 text-emerald-600" />
+          <p className="text-sm font-medium text-emerald-800">
+            All caught up — every tracked signal is within normal range.
+          </p>
+        </div>
+      ) : (
+        <>
+          <div className="mt-3 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+            {needsAttention.map((signal) => {
+              const Icon = signal.icon;
+              const tone = toneStyles[signal.tone];
+              return (
+                <Link
+                  key={signal.key}
+                  to={signal.to}
+                  className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm transition hover:border-slate-300 hover:shadow-md"
+                >
+                  <div className="flex items-center justify-between">
+                    <Icon className="h-5 w-5 text-slate-400" />
+                    <span className={cn("flex items-center gap-1.5 text-xs font-medium", tone.text)}>
+                      <span className={cn("h-1.5 w-1.5 rounded-full", tone.dot)} />
+                      {signal.statusText}
+                    </span>
+                  </div>
+                  <p className="mt-4 text-3xl font-semibold tracking-tight text-slate-950">{signal.count}</p>
+                  <p className="mt-1 text-sm text-slate-600">{signal.label}</p>
+                </Link>
+              );
+            })}
+          </div>
+          {healthyCount > 0 ? (
+            <p className="mt-3 text-xs text-slate-400">
+              {healthyCount} other {healthyCount === 1 ? "check is" : "checks are"} within normal range.
+            </p>
+          ) : null}
+        </>
+      )}
     </div>
   );
 }

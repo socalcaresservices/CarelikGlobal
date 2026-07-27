@@ -3,10 +3,9 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { useOrganization } from "@/providers/organization-provider";
 import { supabase } from "@/lib/supabase";
-import { OverviewPage } from "./overview-page";
+import { OperationalSnapshot } from "./operational-snapshot";
 
 vi.mock("@/providers/organization-provider", () => ({ useOrganization: vi.fn() }));
-vi.mock("@/components/action-center", () => ({ ActionCenter: () => null }));
 vi.mock("@/lib/supabase", () => ({
   supabase: {
     rpc: vi.fn(),
@@ -56,16 +55,16 @@ function mockRpc(dashboard: unknown) {
   });
 }
 
-function renderPage() {
+function renderSnapshot() {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
     <QueryClientProvider client={queryClient}>
-      <OverviewPage />
+      <OperationalSnapshot />
     </QueryClientProvider>
   );
 }
 
-describe("OverviewPage", () => {
+describe("OperationalSnapshot", () => {
   afterEach(() => {
     vi.clearAllMocks();
   });
@@ -83,7 +82,7 @@ describe("OverviewPage", () => {
       }
     ]);
 
-    renderPage();
+    renderSnapshot();
 
     await waitFor(() => expect(screen.getByText("94%")).toBeInTheDocument());
     expect(screen.getByText("85%")).toBeInTheDocument();
@@ -104,16 +103,14 @@ describe("OverviewPage", () => {
       }
     ]);
 
-    renderPage();
+    renderSnapshot();
 
-    await waitFor(() =>
-      expect(screen.getByText("Fill rate this week (no authorizations on file)")).toBeInTheDocument()
-    );
-    expect(screen.getByText("Compliance score (no credentials on file)")).toBeInTheDocument();
-    expect(screen.getByText("Available capacity (no weekly targets set)")).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByText("(no authorizations on file)")).toBeInTheDocument());
+    expect(screen.getByText("(no credentials on file)")).toBeInTheDocument();
+    expect(screen.getByText("(no weekly targets set)")).toBeInTheDocument();
   });
 
-  it("hides the agency health section without membership.read", async () => {
+  it("hides the agency-health metrics without membership.read but keeps shifts today", async () => {
     mockedUseOrganization.mockReturnValue({
       ...baseOrganization(),
       hasPermission: vi.fn((permission: string) => permission !== "membership.read")
@@ -121,9 +118,11 @@ describe("OverviewPage", () => {
     mockedFrom.mockReturnValue({ select: mockClientsCount() } as never);
     mockRpc([]);
 
-    renderPage();
+    renderSnapshot();
 
     await waitFor(() => expect(screen.getByText("Active clients")).toBeInTheDocument());
-    expect(screen.queryByText("Agency health")).not.toBeInTheDocument();
+    expect(screen.getByText("Shifts today")).toBeInTheDocument();
+    expect(screen.queryByText("Fill rate this week")).not.toBeInTheDocument();
+    expect(screen.queryByText("Compliance score")).not.toBeInTheDocument();
   });
 });

@@ -15,10 +15,11 @@ import {
 import { useOrganization } from "@/providers/organization-provider";
 import { supabase } from "@/lib/supabase";
 
-// Owner-only rollup: aggregate counts across every operational entity in
-// one place. Distinct from the two dashboard-ish views that already
-// exist - Action Center (an itemized "what needs my attention right
-// now" list on Overview) and Overview's "Agency health" cards (three
+// Owner-only rollup, surfaced in the sidebar as "Workforce Insights."
+// Aggregate counts across every operational entity in one place.
+// Distinct from the two dashboard-ish views that already exist on the
+// Command Center - the Action Center (an itemized "what needs my
+// attention right now" list) and the Operational Snapshot (a handful of
 // headline metrics visible to anyone with membership.read) - this page
 // answers "how many of X are in each state," which is a strategic
 // rollup rather than a day-to-day task list. Restricted to
@@ -224,7 +225,7 @@ export function OwnerDashboardPage() {
     return (
       <section className="mx-auto max-w-4xl">
         <Card>
-          <p className="text-sm font-medium text-slate-500">Owner dashboard</p>
+          <p className="text-sm font-medium text-slate-500">Workforce Insights</p>
           <h2 className="mt-1 text-2xl font-semibold text-slate-950">Not available</h2>
           <p className="mt-3 text-slate-600">
             Only the organization owner can view this rollup.
@@ -260,13 +261,13 @@ export function OwnerDashboardPage() {
   return (
     <section className="mx-auto max-w-5xl space-y-6">
       <div>
-        <p className="text-sm font-medium text-slate-500">Owner dashboard</p>
+        <p className="text-sm font-medium text-slate-500">Workforce Insights</p>
         <h2 className="mt-1 text-2xl font-semibold text-slate-950">
           {activeOrganization?.displayName ?? "Operations rollup"}
         </h2>
         <p className="mt-1 text-sm text-slate-500">
           Organization-wide counts by status, for a strategic read on where things stand -
-          not a task list (that's Action Center on Overview).
+          not a task list (that's the Action Center on Command Center).
         </p>
       </div>
 

@@ -10,6 +10,23 @@
   background: #f8fafc;
   font-synthesis: none;
   text-rendering: optimizeLegibility;
+
+  /* Design tokens: one accent color, calm neutral surfaces. Seed values
+     for a future dark theme - swap the surface and text tokens under a
+     dark-mode selector once one exists. Not wired to any component yet;
+     introduced here so later builds have one place to redefine the
+     palette instead of hand-picking Tailwind slate/sky shades per
+     component. */
+  --color-accent: #0f172a;
+  --color-accent-foreground: #ffffff;
+  --surface-page: #f8fafc;
+  --surface-card: #ffffff;
+  --surface-muted: #f1f5f9;
+  --text-primary: #0f172a;
+  --text-secondary: #475569;
+  --text-muted: #94a3b8;
+  --border-subtle: #e2e8f0;
+  color-scheme: light;
 }
 
 * {

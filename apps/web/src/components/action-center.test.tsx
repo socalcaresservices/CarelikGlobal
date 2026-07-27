@@ -98,14 +98,20 @@ describe("ActionCenter", () => {
     expect(within(card as HTMLElement).getByText("1")).toBeInTheDocument();
   });
 
-  it("shows a healthy state when nothing needs attention", async () => {
+  it("shows a compact healthy state when nothing needs attention, not a grid of zero cards", async () => {
     mockedUseOrganization.mockReturnValue(baseOrganization());
     mockedRpc.mockResolvedValue({ data: [], error: null } as never);
     mockedFrom.mockReturnValue({ select: mockClientsCount([]) } as never);
 
     renderCenter();
 
-    await waitFor(() => expect(screen.getByText("All caught up")).toBeInTheDocument());
+    await waitFor(() =>
+      expect(screen.getByText(/All caught up/)).toBeInTheDocument()
+    );
+    // None of the individual signal labels should render as cards once
+    // everything is healthy - only the one compact banner.
+    expect(screen.queryByText("Shifts needing a status update")).not.toBeInTheDocument();
+    expect(screen.queryByText("Pending invitations")).not.toBeInTheDocument();
   });
 
   it("flags a caregiver over their weekly hour target as critical", async () => {
@@ -222,11 +228,33 @@ describe("ActionCenter", () => {
       ...baseOrganization(),
       hasPermission: vi.fn((permission: string) => permission === "shifts.read")
     });
-    mockedRpc.mockResolvedValue({ data: [], error: null } as never);
+    // At least one signal needs to be unhealthy, otherwise the component
+    // renders the compact "All caught up" banner instead of any signal
+    // labels - give it an overdue shift so the grid actually renders and
+    // we can assert on which labels appear in it.
+    const fortyEightHoursAgo = new Date(Date.now() - 48 * 60 * 60 * 1000).toISOString();
+    const fortySevenHoursAgo = new Date(Date.now() - 47 * 60 * 60 * 1000).toISOString();
+    mockedRpc.mockImplementation((fn: string) => {
+      if (fn === "list_shifts") {
+        return Promise.resolve({
+          data: [
+            {
+              id: "shift-1",
+              client_id: CLIENT_ID,
+              starts_at: fortyEightHoursAgo,
+              ends_at: fortySevenHoursAgo,
+              status: "scheduled"
+            }
+          ],
+          error: null
+        }) as never;
+      }
+      return Promise.resolve({ data: [], error: null }) as never;
+    });
 
     renderCenter();
 
-    await waitFor(() => expect(screen.getByText("Shifts today")).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText("Shifts needing a status update")).toBeInTheDocument());
     expect(screen.queryByText("Active clients with no upcoming visit")).not.toBeInTheDocument();
     expect(screen.queryByText("Pending invitations")).not.toBeInTheDocument();
   });
