@@ -27,6 +27,28 @@
   --text-muted: #94a3b8;
   --border-subtle: #e2e8f0;
   color-scheme: light;
+
+  /* Semantic status colors (BUILD 001.5 foundation layer). These are the
+     five tones docs/design-system.md's "Color rules" section already
+     names (green=healthy, blue=informational, yellow=needs attention,
+     red=critical, gray=inactive - "orange=action required" folds into
+     warning here rather than adding a sixth tone nothing currently
+     needs). StatusBadge/ProgressBar/StatusChip already hand-pick
+     emerald/amber/red/sky/slate per tone; these tokens don't replace
+     that Tailwind usage (changing every className would be the
+     app-wide refactor this build deliberately isn't doing yet), they
+     just give the *next* component built a named source of truth
+     instead of re-guessing the shade. See tailwind.config.ts's
+     `success`/`warning`/`danger`/`info` color aliases, which point at
+     the same Tailwind families these track. */
+  --color-success: #059669;
+  --color-success-foreground: #047857;
+  --color-warning: #d97706;
+  --color-warning-foreground: #b45309;
+  --color-danger: #dc2626;
+  --color-danger-foreground: #b91c1c;
+  --color-info: #0284c7;
+  --color-info-foreground: #0369a1;
 }
 
 * {

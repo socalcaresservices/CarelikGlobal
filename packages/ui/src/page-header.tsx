@@ -18,7 +18,7 @@ export function PageHeader({ eyebrow, title, description, actions }: PageHeaderP
     <div className="flex flex-wrap items-start justify-between gap-3">
       <div>
         <p className="text-sm font-medium text-slate-500">{eyebrow}</p>
-        <h2 className="mt-1 text-2xl font-semibold tracking-tight text-slate-950">{title}</h2>
+        <h2 className="mt-1 text-page-title text-slate-950">{title}</h2>
         {description ? <p className="mt-1 text-sm text-slate-500">{description}</p> : null}
       </div>
       {actions ? <div className="flex items-center gap-2">{actions}</div> : null}

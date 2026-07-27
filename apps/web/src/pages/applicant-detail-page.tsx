@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowLeft } from "lucide-react";
-import { Card, StatusBadge, type StatusTone } from "@carelik/ui";
+import { Button, Card, StatusBadge, type StatusTone } from "@carelik/ui";
 import { applicantStatusSchema, type ApplicantStatus, type EmploymentType } from "@carelik/shared";
 import { useOrganization } from "@/providers/organization-provider";
 import { supabase } from "@/lib/supabase";
@@ -335,15 +335,15 @@ export function ApplicantDetailPage() {
           <h3 className="font-semibold text-slate-950">Status</h3>
           <div className="mt-3 flex flex-wrap items-center gap-2">
             {manualStatusOptions.map((option) => (
-              <button
+              <Button
                 key={option}
-                type="button"
+                variant="secondary"
+                size="sm"
                 disabled={statusSaving || applicant.status === option}
                 onClick={() => handleStatusChange(option)}
-                className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-medium text-slate-700 transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 Mark {option}
-              </button>
+              </Button>
             ))}
           </div>
           {statusError ? <p className="mt-2 text-sm text-red-700">{statusError}</p> : null}
@@ -500,14 +500,9 @@ export function ApplicantDetailPage() {
                     ))}
                   </select>
                 </div>
-                <button
-                  type="button"
-                  disabled={!selectedMemberId || converting}
-                  onClick={handleConvert}
-                  className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
-                >
+                <Button disabled={!selectedMemberId || converting} loading={converting} onClick={handleConvert}>
                   {converting ? "Converting…" : "Convert to caregiver"}
-                </button>
+                </Button>
               </div>
               {convertError ? <p className="mt-2 text-sm text-red-700">{convertError}</p> : null}
             </>

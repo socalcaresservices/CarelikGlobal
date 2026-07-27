@@ -23,7 +23,7 @@ export function SectionCard({ title, description, actions, children, dense, clas
     <Card className={cn(dense ? "p-4" : undefined, className)}>
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h3 className="font-semibold text-slate-950">{title}</h3>
+          <h3 className="text-card-title text-slate-950">{title}</h3>
           {description ? <p className="mt-0.5 text-xs text-slate-500">{description}</p> : null}
         </div>
         {actions ? <div className="flex items-center gap-2">{actions}</div> : null}

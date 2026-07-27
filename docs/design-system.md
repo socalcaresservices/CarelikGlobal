@@ -235,6 +235,51 @@ Authorizations, Credentials) now lets you drag a column narrower or
 wider, remembered per browser. See `docs/phase-1-foundation.md`'s
 Increment 24 write-up.
 
+**Built (BUILD 001.5 - foundation + highest-value components):**
+
+- Design tokens: a named typography scale (`display`/`page-title`/
+  `section-title`/`card-title`/`metric`/`body`/`caption`, see
+  `tailwind.config.ts`'s `fontSize` extension) and semantic color
+  aliases (`success`/`warning`/`danger`/`info`, pointing at the same
+  emerald/amber/red/sky families StatusBadge already used per-tone) so
+  new components reach for a name instead of re-guessing a shade or
+  size. Spacing already met the 8-point-grid ask via Tailwind's default
+  scale - documented as a convention, not a new system. PageHeader,
+  SectionCard, and MetricCard were retrofitted onto the new fontSize
+  tokens (same rendered sizes, no visual change) so the tokens are
+  wired into real components, not just seeded and unused.
+- New shared components (`@carelik/ui`): `Button` (primary/secondary/
+  ghost/danger, loading/disabled states - the first standardized button
+  in the app, replacing one-off className strings), `StatusChip` (a
+  dot-indicator status line, formalizing the pattern the Action Center
+  was hand-writing per signal), `AlertCard` (icon + tone + value + label
+  tile, replacing the Action Center's inline card markup), `MetricStrip`
+  (one dense KPI band in a single Card, replacing a grid of MetricCards
+  where the record-layout pattern calls for a strip instead), and a
+  `Skeleton`/`SkeletonCard` pair as an alternative to LoadingState's
+  plain text for record-shaped loading states (opt-in - existing
+  LoadingState/ErrorState/EmptyState call sites are unchanged).
+- Applied as proof to two real pages: the Command Center (Action Center
+  now renders `AlertCard`s instead of hand-rolled tiles; Operational
+  Snapshot renders one `MetricStrip` instead of a 6-up card grid) and
+  the Applicant/Caregiver detail pages (`Convert to caregiver` and the
+  status-change buttons now use `Button`; the caregiver header's status
+  pill uses `StatusBadge`). Every other page is untouched - this was
+  deliberately not an app-wide refactor.
+- **`ScoreBadge` (CareScore/GeoScore) - an explicit, user-approved
+  exception to this doc's "no fabricated numbers" rule.** A real
+  per-pair CareScore exists (Increment 22) but only inside the shift-
+  assignment dropdown, and there is no GeoScore at all yet (CareScore's
+  proximity component is a zip/city/state text match, not real
+  distance). The badge component was built anyway, with sample data, at
+  the user's explicit direction - and is designed so that exception
+  can't leak silently: `preview` is a required, literal `true` prop (not
+  a default), so every call site has to say "this number is not real"
+  in its own JSX, and the badge always renders a visible "Preview" tag.
+  Currently used on the caregiver detail page header only. Delete
+  `preview` from the component (a compile error everywhere it's used)
+  when a real scoring model exists to wire in instead.
+
 **Not yet built** (needs a data model before it can be real, not
 faked):
 

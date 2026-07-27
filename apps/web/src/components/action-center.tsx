@@ -10,7 +10,7 @@ import {
   Mail,
   UserX
 } from "lucide-react";
-import { cn } from "@carelik/ui";
+import { AlertCard, type StatusTone } from "@carelik/ui";
 import { getAuthorizationUsageStatus, getCredentialStatus, isAuthorizationActive } from "@carelik/shared";
 import type { IncidentStatus } from "@carelik/shared";
 import { useOrganization } from "@/providers/organization-provider";
@@ -61,23 +61,19 @@ interface IncidentForSignals {
   status: IncidentStatus;
 }
 
-type Tone = "healthy" | "attention" | "critical";
-
-// Lower number = shown first. Healthy signals never render as cards, so
-// they don't need a rank.
-const toneRank: Record<Tone, number> = { critical: 0, attention: 1, healthy: 2 };
-
-const toneStyles: Record<Tone, { dot: string; text: string }> = {
-  healthy: { dot: "bg-emerald-500", text: "text-emerald-700" },
-  attention: { dot: "bg-amber-500", text: "text-amber-700" },
-  critical: { dot: "bg-red-500", text: "text-red-700" }
-};
+// Reuses @carelik/ui's shared StatusTone (healthy -> success, attention
+// -> warning, critical -> danger) instead of a parallel local tone type,
+// so this dashboard's tones and every StatusBadge/StatusChip/ProgressBar
+// tone in the app come from the same five-tone enum (BUILD 001.5).
+// Lower rank = shown first. Healthy (success) signals never render as
+// cards, so they don't need a rank.
+const toneRank: Record<StatusTone, number> = { danger: 0, warning: 1, success: 2, info: 3, neutral: 4 };
 
 interface Signal {
   key: string;
   label: string;
   count: number;
-  tone: Tone;
+  tone: StatusTone;
   icon: typeof AlertTriangle;
   to: string;
   statusText: string;
@@ -201,7 +197,7 @@ export function ActionCenter() {
       key: "overdue",
       label: "Shifts needing a status update",
       count: overdueCount,
-      tone: overdueCount > 0 ? "attention" : "healthy",
+      tone: overdueCount > 0 ? "warning" : "success",
       icon: AlertTriangle,
       to: "/schedule",
       statusText: overdueCount > 0 ? "Review" : "All caught up"
@@ -227,7 +223,7 @@ export function ActionCenter() {
       key: "uncovered-clients",
       label: "Active clients with no upcoming visit",
       count: uncoveredClients,
-      tone: uncoveredClients > 0 ? "attention" : "healthy",
+      tone: uncoveredClients > 0 ? "warning" : "success",
       icon: UserX,
       to: "/clients",
       statusText: uncoveredClients > 0 ? "Review" : "Everyone covered"
@@ -240,7 +236,7 @@ export function ActionCenter() {
       key: "pending-invites",
       label: "Pending invitations",
       count: pendingCount,
-      tone: pendingCount > 0 ? "attention" : "healthy",
+      tone: pendingCount > 0 ? "warning" : "success",
       icon: Mail,
       to: "/access",
       statusText: pendingCount > 0 ? "Review" : "None pending"
@@ -255,7 +251,7 @@ export function ActionCenter() {
       key: "over-target",
       label: "Caregivers over their weekly hour target",
       count: overTargetCount,
-      tone: overTargetCount > 0 ? "critical" : "healthy",
+      tone: overTargetCount > 0 ? "danger" : "success",
       icon: Clock,
       to: "/schedule",
       statusText: overTargetCount > 0 ? "Review" : "Everyone on track"
@@ -271,7 +267,7 @@ export function ActionCenter() {
       key: "credentials-expiring",
       label: "Credentials expiring or expired",
       count: expiringOrExpiredCount,
-      tone: expiringOrExpiredCount > 0 ? "critical" : "healthy",
+      tone: expiringOrExpiredCount > 0 ? "danger" : "success",
       icon: BadgeCheck,
       to: "/credentials",
       statusText: expiringOrExpiredCount > 0 ? "Review" : "All current"
@@ -289,7 +285,7 @@ export function ActionCenter() {
       key: "over-authorized",
       label: "Clients over their monthly authorized hours",
       count: overAuthorizedCount,
-      tone: overAuthorizedCount > 0 ? "critical" : "healthy",
+      tone: overAuthorizedCount > 0 ? "danger" : "success",
       icon: ClipboardCheck,
       to: "/authorizations",
       statusText: overAuthorizedCount > 0 ? "Review" : "Everyone within authorization"
@@ -302,7 +298,7 @@ export function ActionCenter() {
       key: "incidents-awaiting-review",
       label: "Incidents awaiting review",
       count: awaitingReviewCount,
-      tone: awaitingReviewCount > 0 ? "critical" : "healthy",
+      tone: awaitingReviewCount > 0 ? "danger" : "success",
       icon: AlertOctagon,
       to: "/incidents",
       statusText: awaitingReviewCount > 0 ? "Review" : "Nothing open"
@@ -310,7 +306,7 @@ export function ActionCenter() {
   }
 
   const needsAttention = signals
-    .filter((signal) => signal.tone !== "healthy")
+    .filter((signal) => signal.tone !== "success")
     .sort((a, b) => toneRank[a.tone] - toneRank[b.tone]);
   const healthyCount = signals.length - needsAttention.length;
 
@@ -329,22 +325,16 @@ export function ActionCenter() {
           <div className="mt-3 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
             {needsAttention.map((signal) => {
               const Icon = signal.icon;
-              const tone = toneStyles[signal.tone];
               return (
-                <Link
-                  key={signal.key}
-                  to={signal.to}
-                  className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm transition hover:border-slate-300 hover:shadow-md"
-                >
-                  <div className="flex items-center justify-between">
-                    <Icon className="h-5 w-5 text-slate-400" />
-                    <span className={cn("flex items-center gap-1.5 text-xs font-medium", tone.text)}>
-                      <span className={cn("h-1.5 w-1.5 rounded-full", tone.dot)} />
-                      {signal.statusText}
-                    </span>
-                  </div>
-                  <p className="mt-4 text-3xl font-semibold tracking-tight text-slate-950">{signal.count}</p>
-                  <p className="mt-1 text-sm text-slate-600">{signal.label}</p>
+                <Link key={signal.key} to={signal.to} className="block">
+                  <AlertCard
+                    icon={<Icon className="h-5 w-5" />}
+                    value={signal.count}
+                    label={signal.label}
+                    statusText={signal.statusText}
+                    tone={signal.tone}
+                    linkable
+                  />
                 </Link>
               );
             })}

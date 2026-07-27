@@ -23,7 +23,7 @@ export interface MetricCardProps {
 export function MetricCard({ value, label, hint, linkable, className }: MetricCardProps) {
   return (
     <Card className={cn(linkable ? "transition hover:border-slate-300 hover:shadow-md" : undefined, className)}>
-      <p className="text-3xl font-semibold tracking-tight text-slate-950">{value}</p>
+      <p className="text-metric tabular-nums text-slate-950">{value}</p>
       <p className="mt-1 text-sm text-slate-600">
         {label}
         {hint ? <span className="ml-1 text-xs text-slate-400">{hint}</span> : null}

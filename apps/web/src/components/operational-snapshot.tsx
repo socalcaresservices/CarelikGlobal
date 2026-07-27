@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { MetricCard } from "@carelik/ui";
+import { MetricStrip, type MetricStripItem } from "@carelik/ui";
 import { useOrganization } from "@/providers/organization-provider";
 import { supabase } from "@/lib/supabase";
 
@@ -13,6 +13,12 @@ import { supabase } from "@/lib/supabase";
 // (coverage %, revenue at risk, staffing deficit) that intentionally
 // aren't here: there's no data model behind them yet, and a fabricated
 // number is worse than no number.
+//
+// Renders as one MetricStrip band (BUILD 001.5) instead of a grid of
+// separate MetricCards - the same numbers, closer to the Epic-style
+// "record header carries every headline metric at a glance" pattern
+// docs/design-system.md describes, and the six cards' worth of
+// individual borders/shadows collapse into one.
 
 interface AgencyDashboardRow {
   active_clients: number;
@@ -100,62 +106,57 @@ export function OperationalSnapshot() {
     enabled: !!activeOrganizationId && canSeeMembers
   });
 
-  // exactOptionalPropertyTypes rejects `hint={condition ? "..." : undefined}`
-  // directly (an explicit `undefined` isn't the same as an omitted prop),
-  // so each hint is computed first and only spread onto the element when
-  // it's actually a string.
   const fillRateHint = dashboardQuery.data?.fill_rate_pct === null ? "(no authorizations on file)" : undefined;
   const complianceHint =
     dashboardQuery.data?.compliance_score_pct === null ? "(no credentials on file)" : undefined;
   const capacityHint =
     dashboardQuery.data?.available_capacity_hours === null ? "(no weekly targets set)" : undefined;
 
+  const items: MetricStripItem[] = [
+    { key: "shifts-today", label: "Shifts today", value: shiftsTodayQuery.data ?? "—" }
+  ];
+
+  if (canSeeClients) {
+    items.push({ key: "active-clients", label: "Active clients", value: clientsCountQuery.data ?? "—" });
+  }
+
+  if (canSeeMembers) {
+    items.push({ key: "active-team", label: "Active team members", value: membersCountQuery.data ?? "—" });
+    items.push({
+      key: "fill-rate",
+      label: "Fill rate this week",
+      value:
+        dashboardQuery.data?.fill_rate_pct !== null && dashboardQuery.data?.fill_rate_pct !== undefined
+          ? `${dashboardQuery.data.fill_rate_pct}%`
+          : "—",
+      ...(fillRateHint ? { hint: fillRateHint } : {})
+    });
+    items.push({
+      key: "compliance-score",
+      label: "Compliance score",
+      value:
+        dashboardQuery.data?.compliance_score_pct !== null && dashboardQuery.data?.compliance_score_pct !== undefined
+          ? `${dashboardQuery.data.compliance_score_pct}%`
+          : "—",
+      ...(complianceHint ? { hint: complianceHint } : {})
+    });
+    items.push({
+      key: "available-capacity",
+      label: "Available capacity",
+      value:
+        dashboardQuery.data?.available_capacity_hours !== null &&
+        dashboardQuery.data?.available_capacity_hours !== undefined
+          ? `${formatHours(dashboardQuery.data.available_capacity_hours)}h`
+          : "—",
+      ...(capacityHint ? { hint: capacityHint } : {})
+    });
+  }
+
   return (
     <div>
       <p className="text-sm font-medium text-slate-500">Operational snapshot</p>
-      <div className="mt-3 grid gap-3 grid-cols-2 sm:grid-cols-3 xl:grid-cols-6">
-        <MetricCard value={shiftsTodayQuery.data ?? "—"} label="Shifts today" />
-        {canSeeClients ? (
-          <MetricCard value={clientsCountQuery.data ?? "—"} label="Active clients" />
-        ) : null}
-        {canSeeMembers ? (
-          <MetricCard value={membersCountQuery.data ?? "—"} label="Active team members" />
-        ) : null}
-        {canSeeMembers ? (
-          <MetricCard
-            value={
-              dashboardQuery.data?.fill_rate_pct !== null && dashboardQuery.data?.fill_rate_pct !== undefined
-                ? `${dashboardQuery.data.fill_rate_pct}%`
-                : "—"
-            }
-            label="Fill rate this week"
-            {...(fillRateHint ? { hint: fillRateHint } : {})}
-          />
-        ) : null}
-        {canSeeMembers ? (
-          <MetricCard
-            value={
-              dashboardQuery.data?.compliance_score_pct !== null &&
-              dashboardQuery.data?.compliance_score_pct !== undefined
-                ? `${dashboardQuery.data.compliance_score_pct}%`
-                : "—"
-            }
-            label="Compliance score"
-            {...(complianceHint ? { hint: complianceHint } : {})}
-          />
-        ) : null}
-        {canSeeMembers ? (
-          <MetricCard
-            value={
-              dashboardQuery.data?.available_capacity_hours !== null &&
-              dashboardQuery.data?.available_capacity_hours !== undefined
-                ? `${formatHours(dashboardQuery.data.available_capacity_hours)}h`
-                : "—"
-            }
-            label="Available capacity"
-            {...(capacityHint ? { hint: capacityHint } : {})}
-          />
-        ) : null}
+      <div className="mt-3">
+        <MetricStrip items={items} />
       </div>
     </div>
   );

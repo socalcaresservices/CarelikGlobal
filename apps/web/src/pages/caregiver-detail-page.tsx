@@ -2,7 +2,7 @@ import { useEffect, useState, type FormEvent } from "react";
 import { Link, useParams } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowLeft } from "lucide-react";
-import { Card, StatusBadge, UtilizationCard, cn, type StatusTone } from "@carelik/ui";
+import { Card, ScoreBadge, StatusBadge, UtilizationCard, cn, type StatusTone } from "@carelik/ui";
 import { getCredentialStatus, type CredentialStatus } from "@carelik/shared";
 import { useAuth } from "@carelik/auth";
 import { useOrganization } from "@/providers/organization-provider";
@@ -102,6 +102,18 @@ function emptyAvailabilityForm(): Record<Weekday, DayAvailabilityForm> {
 
 function capitalize(value: string) {
   return value.charAt(0).toUpperCase() + value.slice(1);
+}
+
+// Deterministic (not random) placeholder score so the same caregiver
+// shows the same sample number on every render/reload instead of
+// flickering - still entirely sample data, see the ScoreBadge usage
+// below and its component-level comment for why this exists at all.
+function previewScoreFromId(id: string, offset: number): number {
+  let hash = 0;
+  for (let i = 0; i < id.length; i += 1) {
+    hash = (hash * 31 + id.charCodeAt(i)) % 1000;
+  }
+  return 55 + ((hash + offset) % 41);
 }
 
 const credentialStatusTone: Record<CredentialStatus, StatusTone> = {
@@ -405,14 +417,14 @@ export function CaregiverDetailPage() {
             <h2 className="text-2xl font-semibold text-slate-950">{member.display_name}</h2>
             <p className="mt-1 text-sm text-slate-500">{member.role.replace(/_/g, " ")}</p>
           </div>
-          <span
-            className={cn(
-              "rounded-full px-2.5 py-1 text-xs font-medium",
-              member.status === "active" ? "bg-emerald-50 text-emerald-700" : "bg-slate-100 text-slate-600"
-            )}
-          >
-            {member.status}
-          </span>
+          <div className="flex items-center gap-3">
+            {/* CareScore/GeoScore: sample data only, per the BUILD 001.5
+                design-system scope - see ScoreBadge's own comment for why
+                these aren't real numbers yet. */}
+            <ScoreBadge kind="care" value={previewScoreFromId(member.user_id, 0)} preview />
+            <ScoreBadge kind="geo" value={previewScoreFromId(member.user_id, 17)} preview />
+            <StatusBadge label={member.status} tone={member.status === "active" ? "success" : "neutral"} />
+          </div>
         </div>
 
         <div className="mt-6 grid grid-cols-2 gap-4 border-t border-slate-100 pt-6">

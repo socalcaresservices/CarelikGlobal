@@ -16,6 +16,19 @@ const toneClasses: Record<StatusTone, string> = {
   info: "bg-sky-50 text-sky-700"
 };
 
+// Text-only (no background) version of the same five tones, for
+// components that render a tone as colored text/numbers rather than a
+// pill - e.g. MetricStrip's values, or a dot-indicator status like
+// ActionCenter's "Review" / "All caught up" line. Kept alongside
+// `toneClasses` so the two never drift into different reds/greens.
+export const toneTextClasses: Record<StatusTone, string> = {
+  neutral: "text-slate-950",
+  success: "text-emerald-700",
+  warning: "text-amber-700",
+  danger: "text-red-700",
+  info: "text-sky-700"
+};
+
 export interface StatusBadgeProps {
   label: string;
   tone?: StatusTone;
