@@ -31,10 +31,25 @@ function renderAt(path: string) {
   );
 }
 
-function mockRpcByFn(services: Array<{ id: string; name: string }> = []) {
+function mockRpcByFn(
+  services: Array<{ id: string; name: string }> = [],
+  organizationOverrides: Record<string, unknown> = {}
+) {
   mockedRpc.mockImplementation((fn: string) => {
     if (fn === "get_organization_by_slug") {
-      return Promise.resolve({ data: [{ id: ORG_ID, display_name: "Acme Home Care" }], error: null }) as never;
+      return Promise.resolve({
+        data: [
+          {
+            id: ORG_ID,
+            display_name: "Acme Home Care",
+            logo_url: null,
+            primary_color: null,
+            accent_color: null,
+            ...organizationOverrides
+          }
+        ],
+        error: null
+      }) as never;
     }
     if (fn === "list_public_organization_services") {
       return Promise.resolve({ data: services, error: null }) as never;
@@ -255,5 +270,24 @@ describe("ApplyPage", () => {
     fireEvent.click(screen.getByText("Continue application"));
 
     await waitFor(() => expect(screen.getByLabelText("First name")).toHaveValue("Ashley"));
+  });
+
+  it("shows the organization's logo instead of its name when one is set", async () => {
+    mockRpcByFn([], { logo_url: "https://example.com/acme-logo.png" });
+
+    renderAt("/apply/acme");
+
+    await waitFor(() => expect(screen.getByAltText("Acme Home Care")).toBeInTheDocument());
+    expect(screen.getByAltText("Acme Home Care")).toHaveAttribute("src", "https://example.com/acme-logo.png");
+    expect(screen.queryByText("Acme Home Care", { selector: "p" })).not.toBeInTheDocument();
+  });
+
+  it("scopes --color-accent to the organization's accent color when set", async () => {
+    mockRpcByFn([], { accent_color: "#ff6600" });
+
+    const { container } = renderAt("/apply/acme");
+
+    await waitFor(() => expect(screen.getByText("Start Application")).toBeInTheDocument());
+    expect(container.firstChild).toHaveStyle({ "--color-accent": "#ff6600" });
   });
 });

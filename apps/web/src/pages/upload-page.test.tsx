@@ -25,6 +25,7 @@ const BATCH = {
   organization_display_name: "Acme Home Care",
   organization_logo_url: null,
   organization_primary_color: "#0f172a",
+  organization_accent_color: null,
   subject_name: "Jordan Applicant",
   message: "Please upload these before your interview.",
   expires_at: null
@@ -166,5 +167,14 @@ describe("UploadPage", () => {
 
     await waitFor(() => expect(screen.getByText("Image was blurry, please retake.")).toBeInTheDocument());
     expect(screen.getByText("Upload a different file")).toBeInTheDocument();
+  });
+
+  it("prefers the organization's accent color over its primary color for the upload button", async () => {
+    mockRpcByFn({ batch: [{ ...BATCH, organization_accent_color: "#ff6600" }] });
+
+    renderAt("/upload/valid-token");
+
+    await waitFor(() => expect(screen.getByText("Upload file")).toBeInTheDocument());
+    expect(screen.getByText("Upload file")).toHaveStyle({ backgroundColor: "#ff6600" });
   });
 });

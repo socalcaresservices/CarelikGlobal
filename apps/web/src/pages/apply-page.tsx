@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, type CSSProperties } from "react";
 import { useParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { Card } from "@carelik/ui";
@@ -226,6 +226,26 @@ function loadDraft(orgSlug: string | undefined): Draft | null {
   }
 }
 
+interface ApplyOrganization {
+  id: string;
+  display_name: string;
+  logo_url: string | null;
+  primary_color: string | null;
+  accent_color: string | null;
+}
+
+// CSS custom properties aren't part of React's CSSProperties type, so this
+// narrow helper is the one place that needs the cast. Scoping --color-accent
+// here (rather than editing each of the six existing var(--color-accent)
+// call sites) means this organization's brand color flows through the
+// Continue/Start/Submit/Next buttons and the progress bar for free the
+// moment it's set in organizations-page.tsx - see the Build 023 migration
+// comment for why accent_color specifically, not primary_color.
+function brandStyle(accentColor: string | null | undefined): CSSProperties {
+  if (!accentColor) return {};
+  return { "--color-accent": accentColor, "--color-accent-foreground": "#ffffff" } as CSSProperties;
+}
+
 export function ApplyPage() {
   const { orgSlug } = useParams<{ orgSlug: string }>();
 
@@ -234,7 +254,7 @@ export function ApplyPage() {
     queryFn: async () => {
       const { data, error } = await supabase.rpc("get_organization_by_slug", { target_slug: orgSlug! });
       if (error) throw error;
-      return ((data ?? [])[0] ?? null) as { id: string; display_name: string } | null;
+      return ((data ?? [])[0] ?? null) as ApplyOrganization | null;
     },
     enabled: !!orgSlug
   });
@@ -533,7 +553,10 @@ export function ApplyPage() {
 
   if (submitted) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-slate-50 px-4">
+      <div
+        className="flex min-h-screen items-center justify-center bg-slate-50 px-4"
+        style={brandStyle(organizationQuery.data?.accent_color)}
+      >
         <Card className="w-full max-w-sm text-center">
           <h1 className="text-xl font-semibold text-slate-950">Thanks for applying!</h1>
           <p className="mt-2 text-sm text-slate-600">
@@ -547,9 +570,20 @@ export function ApplyPage() {
 
   if (!started) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-slate-50 px-4">
+      <div
+        className="flex min-h-screen items-center justify-center bg-slate-50 px-4"
+        style={brandStyle(organizationQuery.data?.accent_color)}
+      >
         <Card className="w-full max-w-md text-center">
-          <p className="text-sm font-medium text-slate-500">{organizationQuery.data?.display_name}</p>
+          {organizationQuery.data?.logo_url ? (
+            <img
+              src={organizationQuery.data.logo_url}
+              alt={organizationQuery.data.display_name}
+              className="mx-auto max-h-12 max-w-full object-contain"
+            />
+          ) : (
+            <p className="text-sm font-medium text-slate-500">{organizationQuery.data?.display_name}</p>
+          )}
           <h1 className="mt-2 text-3xl font-semibold tracking-tight text-slate-950">Join Our Care Team</h1>
           <p className="mt-3 text-sm text-slate-600">
             Tell us about yourself, your availability, and what you&apos;re looking for - we&apos;ll follow up by
@@ -603,7 +637,7 @@ export function ApplyPage() {
   const selectedServices = (servicesQuery.data ?? []).filter((service) => selectedServiceIds.includes(service.id));
 
   return (
-    <div className="min-h-screen bg-slate-50 pb-28">
+    <div className="min-h-screen bg-slate-50 pb-28" style={brandStyle(organizationQuery.data?.accent_color)}>
       <div className="sticky top-0 z-10 border-b border-slate-200 bg-white/90 px-4 py-3 backdrop-blur">
         <div className="mx-auto max-w-2xl">
           <div className="flex items-center justify-between text-xs font-medium text-slate-500">

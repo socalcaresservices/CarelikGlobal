@@ -31,6 +31,7 @@ interface BatchInfo {
   organization_display_name: string;
   organization_logo_url: string | null;
   organization_primary_color: string | null;
+  organization_accent_color: string | null;
   subject_name: string;
   message: string | null;
   expires_at: string | null;
@@ -183,7 +184,7 @@ export function UploadPage() {
   const batch = batchQuery.data!;
   const documents = documentsQuery.data ?? [];
   const outstandingCount = documents.filter((row) => REUPLOADABLE_STATUSES.includes(row.status)).length;
-  const accentColor = batch.organization_primary_color ?? "#0f172a";
+  const accentColor = batch.organization_accent_color ?? batch.organization_primary_color ?? "#0f172a";
 
   return (
     <div className="min-h-screen bg-slate-50 px-4 py-10">
