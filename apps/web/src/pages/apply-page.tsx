@@ -14,15 +14,21 @@ import { supabase } from "@/lib/supabase";
 // address (used for travel-time matching later - never asked as a
 // separate "preferred city" list), the agency's own configured
 // services (pulled live from list_public_organization_services(), no
-// hardcoded list here or in the database), weekly availability, desired
-// hours, and structured yes/no travel questions in place of a free-text
-// "how do you get around" field.
+// hardcoded list here or in the database), weekly availability
+// (multiple shift blocks per day - e.g. 9-12 and 7-11pm on the same
+// day - since one caregiver can have a split schedule), desired hours,
+// structured yes/no travel questions (optional - an applicant may not
+// have a car yet) in place of a free-text "how do you get around"
+// field, and a light Requirements section (TB/CPR expiration dates,
+// background-check consent) captured at intake so staff don't have to
+// chase it down separately later.
 //
 // Deliberately not on this form (see the migration's comment for why):
-// a photo upload (needs its own storage-bucket subsystem) and more than
-// one shift window per day (schema already supports it, UI doesn't
-// expose it yet). Credentials, skills, and compliance are staff-side
-// concerns that apply after hire, not at application time.
+// a photo upload (needs its own storage-bucket subsystem). Full
+// credential tracking (uploaded documents, verification, every
+// agency-defined credential type) stays a staff-side concern for a
+// later build - Requirements below only captures the two dates and one
+// consent an agency needs before it can even schedule an interview.
 
 type Weekday = "monday" | "tuesday" | "wednesday" | "thursday" | "friday" | "saturday" | "sunday";
 
@@ -38,17 +44,27 @@ function capitalize(value: string) {
   return value.charAt(0).toUpperCase() + value.slice(1);
 }
 
-interface DayAvailabilityForm {
-  enabled: boolean;
+interface ShiftBlock {
+  key: string;
   start: string;
   end: string;
   preference: "available" | "preferred";
 }
 
+interface DayAvailabilityForm {
+  enabled: boolean;
+  shifts: ShiftBlock[];
+}
+
+function emptyShift(): ShiftBlock {
+  return { key: crypto.randomUUID(), start: "09:00", end: "17:00", preference: "available" };
+}
+
 function emptyAvailabilityForm(): Record<Weekday, DayAvailabilityForm> {
-  return Object.fromEntries(
-    WEEKDAYS.map((day) => [day, { enabled: false, start: "09:00", end: "17:00", preference: "available" as const }])
-  ) as Record<Weekday, DayAvailabilityForm>;
+  return Object.fromEntries(WEEKDAYS.map((day) => [day, { enabled: false, shifts: [emptyShift()] }])) as Record<
+    Weekday,
+    DayAvailabilityForm
+  >;
 }
 
 interface ServiceOption {
@@ -83,6 +99,9 @@ interface ApplicationForm {
   validDriversLicense: boolean;
   vehicleAvailable: boolean;
   autoInsurance: boolean;
+  tbTestExpiresAt: string;
+  cprExpiresAt: string;
+  backgroundCheckConsent: boolean;
   languages: string;
   notes: string;
 }
@@ -114,6 +133,9 @@ const emptyForm: ApplicationForm = {
   validDriversLicense: false,
   vehicleAvailable: false,
   autoInsurance: false,
+  tbTestExpiresAt: "",
+  cprExpiresAt: "",
+  backgroundCheckConsent: false,
   languages: "",
   notes: ""
 };
@@ -165,8 +187,32 @@ export function ApplyPage() {
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [submitted, setSubmitted] = useState(false);
 
-  function updateAvailabilityDay(day: Weekday, patch: Partial<DayAvailabilityForm>) {
-    setAvailability((current) => ({ ...current, [day]: { ...current[day], ...patch } }));
+  function setDayEnabled(day: Weekday, enabled: boolean) {
+    setAvailability((current) => ({ ...current, [day]: { ...current[day], enabled } }));
+  }
+
+  function addShift(day: Weekday) {
+    setAvailability((current) => ({
+      ...current,
+      [day]: { ...current[day], shifts: [...current[day].shifts, emptyShift()] }
+    }));
+  }
+
+  function removeShift(day: Weekday, shiftKey: string) {
+    setAvailability((current) => ({
+      ...current,
+      [day]: { ...current[day], shifts: current[day].shifts.filter((shift) => shift.key !== shiftKey) }
+    }));
+  }
+
+  function updateShift(day: Weekday, shiftKey: string, patch: Partial<ShiftBlock>) {
+    setAvailability((current) => ({
+      ...current,
+      [day]: {
+        ...current[day],
+        shifts: current[day].shifts.map((shift) => (shift.key === shiftKey ? { ...shift, ...patch } : shift))
+      }
+    }));
   }
 
   function toggleService(serviceId: string) {
@@ -180,10 +226,16 @@ export function ApplyPage() {
     if (!organizationQuery.data) return;
 
     const enabledDays = WEEKDAYS.filter((day) => availability[day].enabled);
-    const invalidDay = enabledDays.find((day) => availability[day].start >= availability[day].end);
-    if (invalidDay) {
-      setSubmitError(`${capitalize(invalidDay)}'s end time must be after its start time.`);
-      return;
+    for (const day of enabledDays) {
+      if (availability[day].shifts.length === 0) {
+        setSubmitError(`Add at least one shift for ${capitalize(day)}, or uncheck the day.`);
+        return;
+      }
+      const invalidShift = availability[day].shifts.find((shift) => shift.start >= shift.end);
+      if (invalidShift) {
+        setSubmitError(`${capitalize(day)}'s end time must be after its start time for every shift.`);
+        return;
+      }
     }
 
     setSubmitError(null);
@@ -227,22 +279,28 @@ export function ApplyPage() {
         valid_drivers_license: form.validDriversLicense,
         vehicle_available: form.vehicleAvailable,
         auto_insurance: form.autoInsurance,
+        tb_test_expires_at: form.tbTestExpiresAt || null,
+        cpr_expires_at: form.cprExpiresAt || null,
+        background_check_consent: form.backgroundCheckConsent,
         languages: parseList(form.languages),
         notes: form.notes || null
       });
       if (applicantError) throw applicantError;
 
-      if (enabledDays.length > 0) {
-        const { error: availabilityError } = await supabase.from("job_applicant_availability").insert(
-          enabledDays.map((day) => ({
-            organization_id: organizationQuery.data!.id,
-            applicant_id: applicantId,
-            day_of_week: day,
-            start_time: availability[day].start,
-            end_time: availability[day].end,
-            preference: availability[day].preference
-          }))
-        );
+      const availabilityRows = enabledDays.flatMap((day) =>
+        availability[day].shifts.map((shift) => ({
+          organization_id: organizationQuery.data!.id,
+          applicant_id: applicantId,
+          day_of_week: day,
+          start_time: shift.start,
+          end_time: shift.end,
+          preference: shift.preference
+        }))
+      );
+      if (availabilityRows.length > 0) {
+        const { error: availabilityError } = await supabase
+          .from("job_applicant_availability")
+          .insert(availabilityRows);
         if (availabilityError) throw availabilityError;
       }
 
@@ -532,47 +590,73 @@ export function ApplyPage() {
 
           <Card>
             <h2 className="font-semibold text-slate-950">Weekly availability</h2>
-            <p className="mt-1 text-xs text-slate-500">Check the days you can work and mark whether a day is a preference.</p>
+            <p className="mt-1 text-xs text-slate-500">
+              Check the days you can work. Add more than one shift on a day if your schedule is split - e.g. 9am–12pm
+              and 7pm–11pm.
+            </p>
             <div className="mt-4 space-y-2">
               {WEEKDAYS.map((day) => (
-                <div key={day} className="flex flex-wrap items-center gap-3 rounded-lg border border-slate-100 p-2">
-                  <label className="flex w-28 items-center gap-2 text-sm font-medium text-slate-800">
+                <div key={day} className="rounded-lg border border-slate-100 p-2">
+                  <label className="flex items-center gap-2 text-sm font-medium text-slate-800">
                     <input
                       type="checkbox"
                       checked={availability[day].enabled}
-                      onChange={(event) => updateAvailabilityDay(day, { enabled: event.target.checked })}
+                      onChange={(event) => setDayEnabled(day, event.target.checked)}
                     />
                     {capitalize(day)}
                   </label>
-                  <input
-                    type="time"
-                    aria-label={`${capitalize(day)} start time`}
-                    disabled={!availability[day].enabled}
-                    value={availability[day].start}
-                    onChange={(event) => updateAvailabilityDay(day, { start: event.target.value })}
-                    className="rounded-lg border border-slate-200 px-2 py-1 text-xs text-slate-900 disabled:bg-slate-50"
-                  />
-                  <span className="text-xs text-slate-400">to</span>
-                  <input
-                    type="time"
-                    aria-label={`${capitalize(day)} end time`}
-                    disabled={!availability[day].enabled}
-                    value={availability[day].end}
-                    onChange={(event) => updateAvailabilityDay(day, { end: event.target.value })}
-                    className="rounded-lg border border-slate-200 px-2 py-1 text-xs text-slate-900 disabled:bg-slate-50"
-                  />
-                  <select
-                    aria-label={`${capitalize(day)} preference`}
-                    disabled={!availability[day].enabled}
-                    value={availability[day].preference}
-                    onChange={(event) =>
-                      updateAvailabilityDay(day, { preference: event.target.value as "available" | "preferred" })
-                    }
-                    className="rounded-lg border border-slate-200 px-2 py-1 text-xs text-slate-900 disabled:bg-slate-50"
-                  >
-                    <option value="available">Available</option>
-                    <option value="preferred">Preferred</option>
-                  </select>
+                  {availability[day].enabled ? (
+                    <div className="mt-2 space-y-2 pl-6">
+                      {availability[day].shifts.map((shift, index) => (
+                        <div key={shift.key} className="flex flex-wrap items-center gap-3">
+                          <input
+                            type="time"
+                            aria-label={`${capitalize(day)} shift ${index + 1} start time`}
+                            value={shift.start}
+                            onChange={(event) => updateShift(day, shift.key, { start: event.target.value })}
+                            className="rounded-lg border border-slate-200 px-2 py-1 text-xs text-slate-900"
+                          />
+                          <span className="text-xs text-slate-400">to</span>
+                          <input
+                            type="time"
+                            aria-label={`${capitalize(day)} shift ${index + 1} end time`}
+                            value={shift.end}
+                            onChange={(event) => updateShift(day, shift.key, { end: event.target.value })}
+                            className="rounded-lg border border-slate-200 px-2 py-1 text-xs text-slate-900"
+                          />
+                          <select
+                            aria-label={`${capitalize(day)} shift ${index + 1} preference`}
+                            value={shift.preference}
+                            onChange={(event) =>
+                              updateShift(day, shift.key, {
+                                preference: event.target.value as "available" | "preferred"
+                              })
+                            }
+                            className="rounded-lg border border-slate-200 px-2 py-1 text-xs text-slate-900"
+                          >
+                            <option value="available">Available</option>
+                            <option value="preferred">Preferred</option>
+                          </select>
+                          {availability[day].shifts.length > 1 ? (
+                            <button
+                              type="button"
+                              onClick={() => removeShift(day, shift.key)}
+                              className="text-xs font-medium text-red-700 underline-offset-2 hover:underline"
+                            >
+                              Remove shift
+                            </button>
+                          ) : null}
+                        </div>
+                      ))}
+                      <button
+                        type="button"
+                        onClick={() => addShift(day)}
+                        className="text-xs font-medium text-slate-700 underline-offset-2 hover:underline"
+                      >
+                        + Add another shift on {capitalize(day)}
+                      </button>
+                    </div>
+                  ) : null}
                 </div>
               ))}
             </div>
@@ -653,7 +737,10 @@ export function ApplyPage() {
           </Card>
 
           <Card>
-            <h2 className="font-semibold text-slate-950">Travel</h2>
+            <h2 className="font-semibold text-slate-950">Travel <span className="font-normal text-slate-400">(optional)</span></h2>
+            <p className="mt-1 text-xs text-slate-500">
+              Answer what applies to you today - it&apos;s fine to leave any of this unchecked.
+            </p>
             <div className="mt-4 grid gap-4 sm:grid-cols-2">
               <div>
                 <label htmlFor="apply-max-travel" className="block text-xs font-medium text-slate-600">
@@ -733,6 +820,51 @@ export function ApplyPage() {
                   onChange={(event) => setForm({ ...form, notes: event.target.value })}
                   className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900"
                 />
+              </div>
+            </div>
+          </Card>
+
+          <Card>
+            <h2 className="font-semibold text-slate-950">Requirements</h2>
+            <p className="mt-1 text-xs text-slate-500">
+              If you already hold a current TB test or CPR certification, let us know when it expires. It&apos;s okay
+              to leave these blank if you don&apos;t have them yet.
+            </p>
+            <div className="mt-4 grid gap-4 sm:grid-cols-2">
+              <div>
+                <label htmlFor="apply-tb-expires" className="block text-xs font-medium text-slate-600">
+                  TB test expiration date
+                </label>
+                <input
+                  id="apply-tb-expires"
+                  type="date"
+                  value={form.tbTestExpiresAt}
+                  onChange={(event) => setForm({ ...form, tbTestExpiresAt: event.target.value })}
+                  className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900"
+                />
+              </div>
+              <div>
+                <label htmlFor="apply-cpr-expires" className="block text-xs font-medium text-slate-600">
+                  CPR expiration date
+                </label>
+                <input
+                  id="apply-cpr-expires"
+                  type="date"
+                  value={form.cprExpiresAt}
+                  onChange={(event) => setForm({ ...form, cprExpiresAt: event.target.value })}
+                  className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900"
+                />
+              </div>
+              <div className="sm:col-span-2">
+                <label className="flex items-center gap-2 text-sm text-slate-800">
+                  <input
+                    type="checkbox"
+                    required
+                    checked={form.backgroundCheckConsent}
+                    onChange={(event) => setForm({ ...form, backgroundCheckConsent: event.target.checked })}
+                  />
+                  I am willing to undergo a background check
+                </label>
               </div>
             </div>
           </Card>

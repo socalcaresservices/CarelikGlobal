@@ -42,6 +42,9 @@ const validApplicant = {
   validDriversLicense: true,
   vehicleAvailable: true,
   autoInsurance: true,
+  tbTestExpiresAt: "2027-01-01",
+  cprExpiresAt: "2026-12-01",
+  backgroundCheckConsent: true,
   languages: ["English", "Spanish"],
   notes: null
 };

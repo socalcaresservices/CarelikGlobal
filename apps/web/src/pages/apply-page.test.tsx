@@ -95,6 +95,7 @@ describe("ApplyPage", () => {
     fireEvent.change(screen.getByLabelText("Email"), { target: { value: "ashley@example.com" } });
     fireEvent.change(screen.getByLabelText("ZIP code"), { target: { value: "92879" } });
     fireEvent.click(screen.getByLabelText("Companion Care"));
+    fireEvent.click(screen.getByLabelText("I am willing to undergo a background check"));
 
     fireEvent.click(screen.getByText("Submit application"));
 
@@ -105,7 +106,8 @@ describe("ApplyPage", () => {
         organization_id: ORG_ID,
         first_name: "Ashley",
         last_name: "Rivera",
-        address_zip: "92879"
+        address_zip: "92879",
+        background_check_consent: true
       })
     );
     expect(servicesInsertMock).toHaveBeenCalledWith([
@@ -113,5 +115,44 @@ describe("ApplyPage", () => {
     ]);
     // No day was checked, so no availability rows should have been submitted.
     expect(availabilityInsertMock).not.toHaveBeenCalled();
+  });
+
+  it("submits more than one shift on the same day - e.g. a 9-12 and a 7-11pm split shift", async () => {
+    mockRpcByFn();
+
+    const applicantInsertMock = vi.fn().mockResolvedValue({ error: null });
+    const availabilityInsertMock = vi.fn().mockResolvedValue({ error: null });
+
+    mockedFrom.mockImplementation((table: string) => {
+      if (table === "job_applicants") return { insert: applicantInsertMock } as never;
+      if (table === "job_applicant_availability") return { insert: availabilityInsertMock } as never;
+      if (table === "job_applicant_services") return { insert: vi.fn().mockResolvedValue({ error: null }) } as never;
+      return {} as never;
+    });
+
+    renderAt("/apply/acme");
+
+    await waitFor(() => expect(screen.getByLabelText("First name")).toBeInTheDocument());
+
+    fireEvent.change(screen.getByLabelText("First name"), { target: { value: "Ashley" } });
+    fireEvent.change(screen.getByLabelText("Last name"), { target: { value: "Rivera" } });
+    fireEvent.change(screen.getByLabelText("Email"), { target: { value: "ashley@example.com" } });
+    fireEvent.click(screen.getByLabelText("I am willing to undergo a background check"));
+
+    // Check Monday, then add a second shift block for it.
+    fireEvent.click(screen.getByLabelText("Monday"));
+    fireEvent.change(screen.getByLabelText("Monday shift 1 start time"), { target: { value: "09:00" } });
+    fireEvent.change(screen.getByLabelText("Monday shift 1 end time"), { target: { value: "12:00" } });
+    fireEvent.click(screen.getByText("+ Add another shift on Monday"));
+    fireEvent.change(screen.getByLabelText("Monday shift 2 start time"), { target: { value: "19:00" } });
+    fireEvent.change(screen.getByLabelText("Monday shift 2 end time"), { target: { value: "23:00" } });
+
+    fireEvent.click(screen.getByText("Submit application"));
+
+    await waitFor(() => expect(screen.getByText("Thanks for applying!")).toBeInTheDocument());
+    expect(availabilityInsertMock).toHaveBeenCalledWith([
+      expect.objectContaining({ day_of_week: "monday", start_time: "09:00", end_time: "12:00" }),
+      expect.objectContaining({ day_of_week: "monday", start_time: "19:00", end_time: "23:00" })
+    ]);
   });
 });

@@ -58,6 +58,9 @@ function applicantRecord(overrides: Record<string, unknown> = {}) {
     max_travel_minutes: 30,
     transportation_method: "own car",
     willing_to_transport_clients: true,
+    tb_test_expires_at: null,
+    cpr_expires_at: null,
+    background_check_consent: false,
     languages: ["English", "Spanish"],
     notes: null,
     hired_caregiver_user_id: null,
@@ -113,7 +116,7 @@ describe("ApplicantDetailPage", () => {
     vi.clearAllMocks();
   });
 
-  it("renders the applicant's details, address, services, and weekly availability", async () => {
+  it("renders the applicant's details, address, requirements, services, and weekly availability", async () => {
     mockedUseOrganization.mockReturnValue(baseOrganization());
     mockFromByTable(
       applicantRecord({
@@ -123,7 +126,10 @@ describe("ApplicantDetailPage", () => {
         address_state: "CA",
         address_zip: "92879",
         reliable_transportation: true,
-        valid_drivers_license: true
+        valid_drivers_license: true,
+        tb_test_expires_at: "2027-01-01",
+        cpr_expires_at: "2026-12-01",
+        background_check_consent: true
       }),
       [{ day_of_week: "monday", start_time: "09:00:00", end_time: "17:00:00", preference: "preferred" }],
       [{ service_id: "svc-1", services: { name: "Companion Care" } }]
@@ -135,12 +141,35 @@ describe("ApplicantDetailPage", () => {
     await waitFor(() => expect(screen.getByText(/^Ash Rivera/)).toBeInTheDocument());
     expect(screen.getByText("ashley@example.com · 555-0100")).toBeInTheDocument();
     expect(screen.getByText("123 Main St · Corona, CA 92879")).toBeInTheDocument();
+    expect(screen.getByText("2027-01-01")).toBeInTheDocument();
+    expect(screen.getByText("2026-12-01")).toBeInTheDocument();
+    expect(screen.getByText("Consented")).toBeInTheDocument();
     expect(screen.getByText("Companion Care")).toBeInTheDocument();
     expect(screen.getByText("Reliable transportation")).toBeInTheDocument();
     expect(screen.getByText("Valid driver's license")).toBeInTheDocument();
     expect(screen.getByText("Monday")).toBeInTheDocument();
     expect(screen.getByText("09:00–17:00")).toBeInTheDocument();
     expect(screen.getByText("Preferred")).toBeInTheDocument();
+  });
+
+  it("shows every shift when an applicant submitted more than one on the same day", async () => {
+    mockedUseOrganization.mockReturnValue(baseOrganization());
+    mockFromByTable(
+      applicantRecord(),
+      [
+        { day_of_week: "monday", start_time: "09:00:00", end_time: "12:00:00", preference: "available" },
+        { day_of_week: "monday", start_time: "19:00:00", end_time: "23:00:00", preference: "preferred" }
+      ],
+      []
+    );
+    mockedRpc.mockResolvedValue({ data: [], error: null } as never);
+
+    renderPage();
+
+    await waitFor(() => expect(screen.getByText("09:00–12:00")).toBeInTheDocument());
+    expect(screen.getByText("19:00–23:00")).toBeInTheDocument();
+    // "Monday" (the day label) should appear exactly once even though it has two shifts.
+    expect(screen.getAllByText("Monday")).toHaveLength(1);
   });
 
   it("offers the convert action once an applicant is hireable, and hides it once already converted", async () => {

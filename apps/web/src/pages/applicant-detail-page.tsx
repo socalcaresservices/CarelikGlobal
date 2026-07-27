@@ -53,6 +53,9 @@ interface ApplicantDetail {
   valid_drivers_license: boolean | null;
   vehicle_available: boolean | null;
   auto_insurance: boolean | null;
+  tb_test_expires_at: string | null;
+  cpr_expires_at: string | null;
+  background_check_consent: boolean;
   languages: string[];
   notes: string | null;
   hired_caregiver_user_id: string | null;
@@ -281,6 +284,29 @@ export function ApplicantDetailPage() {
       </Card>
 
       <Card>
+        <h3 className="font-semibold text-slate-950">Requirements</h3>
+        <div className="mt-4 grid gap-x-6 gap-y-3 sm:grid-cols-3">
+          <div>
+            <p className="text-xs font-medium uppercase tracking-wide text-slate-500">TB test expires</p>
+            <p className="mt-0.5 font-semibold text-slate-950">{applicant.tb_test_expires_at ?? "—"}</p>
+          </div>
+          <div>
+            <p className="text-xs font-medium uppercase tracking-wide text-slate-500">CPR expires</p>
+            <p className="mt-0.5 font-semibold text-slate-950">{applicant.cpr_expires_at ?? "—"}</p>
+          </div>
+          <div>
+            <p className="text-xs font-medium uppercase tracking-wide text-slate-500">Background check</p>
+            <p className="mt-0.5">
+              <StatusBadge
+                label={applicant.background_check_consent ? "Consented" : "Not consented"}
+                tone={applicant.background_check_consent ? "success" : "neutral"}
+              />
+            </p>
+          </div>
+        </div>
+      </Card>
+
+      <Card>
         <h3 className="font-semibold text-slate-950">Services offered</h3>
         {servicesQuery.isLoading ? (
           <p className="mt-3 text-sm text-slate-500">Loading…</p>
@@ -397,19 +423,23 @@ export function ApplicantDetailPage() {
         ) : (availabilityQuery.data ?? []).length === 0 ? (
           <p className="mt-3 text-sm text-slate-400">No availability submitted.</p>
         ) : (
-          <div className="mt-3 space-y-1.5">
+          <div className="mt-3 space-y-2">
             {WEEKDAYS.filter((day) => (availabilityQuery.data ?? []).some((row) => row.day_of_week === day)).map(
               (day) => {
-                const row = availabilityQuery.data!.find((candidate) => candidate.day_of_week === day)!;
+                const rows = availabilityQuery
+                  .data!.filter((candidate) => candidate.day_of_week === day)
+                  .sort((a, b) => a.start_time.localeCompare(b.start_time));
                 return (
-                  <div key={day} className="flex items-center gap-3 text-sm">
+                  <div key={day} className="flex flex-wrap items-start gap-3 text-sm">
                     <span className="w-24 font-medium text-slate-800">{capitalize(day)}</span>
-                    <span className="text-slate-600">
-                      {row.start_time.slice(0, 5)}–{row.end_time.slice(0, 5)}
-                    </span>
-                    {row.preference === "preferred" ? (
-                      <StatusBadge label="Preferred" tone="info" />
-                    ) : null}
+                    <div className="flex flex-1 flex-wrap gap-x-4 gap-y-1">
+                      {rows.map((row, index) => (
+                        <span key={`${day}-${index}`} className="flex items-center gap-2 text-slate-600">
+                          {row.start_time.slice(0, 5)}–{row.end_time.slice(0, 5)}
+                          {row.preference === "preferred" ? <StatusBadge label="Preferred" tone="info" /> : null}
+                        </span>
+                      ))}
+                    </div>
                   </div>
                 );
               }

@@ -47,6 +47,9 @@ export const jobApplicantSchema = z.object({
   validDriversLicense: z.boolean().nullable(),
   vehicleAvailable: z.boolean().nullable(),
   autoInsurance: z.boolean().nullable(),
+  tbTestExpiresAt: z.string().nullable(),
+  cprExpiresAt: z.string().nullable(),
+  backgroundCheckConsent: z.boolean(),
   languages: z.array(z.string()),
   notes: z.string().nullable()
 });
