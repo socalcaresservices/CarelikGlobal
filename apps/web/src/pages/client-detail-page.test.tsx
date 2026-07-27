@@ -54,10 +54,23 @@ interface ServiceOption {
   is_active: boolean;
 }
 
-// clients, services, and client_requested_services are all queried
-// through supabase.from(), so the mock has to branch on the table name
-// rather than returning one fixed chain for every call.
-function mockFromByTable(client: unknown, services: ServiceOption[] = []) {
+function lookupSelectStub(rows: unknown[]) {
+  return vi.fn(() => ({
+    eq: vi.fn(() => ({
+      is: vi.fn(() => ({ order: vi.fn().mockResolvedValue({ data: rows, error: null }) }))
+    }))
+  }));
+}
+
+// clients, services, skills, languages, and client_requested_services are
+// all queried through supabase.from(), so the mock has to branch on the
+// table name rather than returning one fixed chain for every call.
+function mockFromByTable(
+  client: unknown,
+  services: ServiceOption[] = [],
+  skills: ServiceOption[] = [],
+  languages: ServiceOption[] = []
+) {
   const clientSelectMock = mockClientRecord(client);
   const clientUpdateEqMock = vi.fn().mockResolvedValue({ error: null });
   const clientUpdateMock = vi.fn(() => ({ eq: clientUpdateEqMock }));
@@ -71,13 +84,13 @@ function mockFromByTable(client: unknown, services: ServiceOption[] = []) {
       return { select: clientSelectMock, update: clientUpdateMock } as never;
     }
     if (table === "services") {
-      return {
-        select: vi.fn(() => ({
-          eq: vi.fn(() => ({
-            is: vi.fn(() => ({ order: vi.fn().mockResolvedValue({ data: services, error: null }) }))
-          }))
-        }))
-      } as never;
+      return { select: lookupSelectStub(services) } as never;
+    }
+    if (table === "skills") {
+      return { select: lookupSelectStub(skills) } as never;
+    }
+    if (table === "languages") {
+      return { select: lookupSelectStub(languages) } as never;
     }
     if (table === "client_requested_services") {
       return { delete: requestedServicesDeleteMock, insert: requestedServicesInsertMock } as never;
@@ -240,7 +253,8 @@ describe("ClientDetailPage", () => {
           status: "active",
           client_requested_services: []
         },
-        [{ id: "44444444-4444-4444-8444-444444444444", name: "Personal care", is_active: true }]
+        [{ id: "44444444-4444-4444-8444-444444444444", name: "Personal care", is_active: true }],
+        [{ id: "skill-1", name: "Dementia care", is_active: true }]
       );
     mockedRpc.mockResolvedValue({ data: [], error: null } as never);
 
@@ -248,9 +262,10 @@ describe("ClientDetailPage", () => {
     await waitFor(() => expect(screen.getByLabelText("City")).toBeInTheDocument());
 
     fireEvent.change(screen.getByLabelText("City"), { target: { value: "San Diego" } });
-    fireEvent.change(screen.getByLabelText("Care needs (comma-separated)"), {
-      target: { value: "Hoyer lift, Dementia care" }
-    });
+
+    fireEvent.focus(screen.getByLabelText("Care needs"));
+    await waitFor(() => expect(screen.getByRole("option", { name: "Dementia care" })).toBeInTheDocument());
+    fireEvent.mouseDown(screen.getByRole("option", { name: "Dementia care" }));
 
     fireEvent.focus(screen.getByLabelText("Services"));
     await waitFor(() => expect(screen.getByRole("option", { name: "Personal care" })).toBeInTheDocument());
@@ -262,7 +277,7 @@ describe("ClientDetailPage", () => {
       expect(clientUpdateMock).toHaveBeenCalledWith(
         expect.objectContaining({
           address_city: "San Diego",
-          care_needs: ["Hoyer lift", "Dementia care"]
+          care_needs: ["Dementia care"]
         })
       )
     );

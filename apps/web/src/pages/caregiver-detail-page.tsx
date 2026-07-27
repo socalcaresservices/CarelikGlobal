@@ -2,19 +2,22 @@ import { useEffect, useState, type FormEvent } from "react";
 import { Link, useParams } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowLeft } from "lucide-react";
-import { Button, Card, ScoreBadge, StatusBadge, UtilizationCard, cn, type StatusTone } from "@carelik/ui";
+import {
+  Button,
+  Card,
+  MultiSelectCombobox,
+  ScoreBadge,
+  StatusBadge,
+  UtilizationCard,
+  cn,
+  type ComboboxOption,
+  type StatusTone
+} from "@carelik/ui";
 import { getCredentialStatus, type CredentialStatus } from "@carelik/shared";
 import { useAuth } from "@carelik/auth";
 import { useOrganization } from "@/providers/organization-provider";
 import { supabase } from "@/lib/supabase";
 import { getWeekEnd, getWeekStart } from "@/lib/week";
-
-function parseTags(value: string) {
-  return value
-    .split(",")
-    .map((tag) => tag.trim())
-    .filter(Boolean);
-}
 
 // Same record layout pattern as client-detail-page.tsx: header with
 // headline metrics, a KPI row for weekly hours (target/scheduled/gap),
@@ -74,6 +77,12 @@ interface CaregiverLocationRow {
   address_zip: string | null;
   languages: string[];
   skills: string[];
+}
+
+interface LookupRow {
+  id: string;
+  name: string;
+  is_active: boolean;
 }
 
 type Tab = "overview" | "schedule" | "credentials" | "incidents" | "notes" | "history";
@@ -270,7 +279,53 @@ export function CaregiverDetailPage() {
     enabled: !!activeOrganizationId && !!id
   });
 
-  const [profileForm, setProfileForm] = useState({ city: "", state: "", zip: "", languages: "", skills: "" });
+  // Same picker-over-name-array pattern as client-detail-page.tsx's
+  // language/care needs - see 20260727070000_skills_and_languages_catalog.sql.
+  const skillsQuery = useQuery({
+    queryKey: ["skills", activeOrganizationId],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("skills")
+        .select("id, name, is_active")
+        .eq("organization_id", activeOrganizationId!)
+        .is("deleted_at", null)
+        .order("name");
+      if (error) throw error;
+      return (data ?? []) as LookupRow[];
+    },
+    enabled: !!activeOrganizationId
+  });
+
+  const languagesQuery = useQuery({
+    queryKey: ["languages", activeOrganizationId],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("languages")
+        .select("id, name, is_active")
+        .eq("organization_id", activeOrganizationId!)
+        .is("deleted_at", null)
+        .order("name");
+      if (error) throw error;
+      return (data ?? []) as LookupRow[];
+    },
+    enabled: !!activeOrganizationId
+  });
+
+  const skillOptions: ComboboxOption[] = (skillsQuery.data ?? [])
+    .filter((skill) => skill.is_active)
+    .map((skill) => ({ value: skill.name, label: skill.name }));
+
+  const languageOptions: ComboboxOption[] = (languagesQuery.data ?? [])
+    .filter((language) => language.is_active)
+    .map((language) => ({ value: language.name, label: language.name }));
+
+  const [profileForm, setProfileForm] = useState({
+    city: "",
+    state: "",
+    zip: "",
+    languages: [] as string[],
+    skills: [] as string[]
+  });
   const [profileSaving, setProfileSaving] = useState(false);
   const [profileError, setProfileError] = useState<string | null>(null);
 
@@ -280,8 +335,8 @@ export function CaregiverDetailPage() {
         city: locationQuery.data.address_city ?? "",
         state: locationQuery.data.address_state ?? "",
         zip: locationQuery.data.address_zip ?? "",
-        languages: (locationQuery.data.languages ?? []).join(", "),
-        skills: (locationQuery.data.skills ?? []).join(", ")
+        languages: locationQuery.data.languages ?? [],
+        skills: locationQuery.data.skills ?? []
       });
     }
   }, [locationQuery.data]);
@@ -299,8 +354,8 @@ export function CaregiverDetailPage() {
         new_address_city: profileForm.city || null,
         new_address_state: profileForm.state || null,
         new_address_zip: profileForm.zip || null,
-        new_languages: parseTags(profileForm.languages),
-        new_skills: parseTags(profileForm.skills)
+        new_languages: profileForm.languages,
+        new_skills: profileForm.skills
       });
       if (error) throw error;
       void queryClient.invalidateQueries({ queryKey: ["caregiver-detail-location", activeOrganizationId, id] });
@@ -579,27 +634,21 @@ export function CaregiverDetailPage() {
                   </div>
                 </div>
                 <div>
-                  <label htmlFor="caregiver-languages" className="block text-xs font-medium text-slate-600">
-                    Languages (comma-separated)
-                  </label>
-                  <input
-                    id="caregiver-languages"
-                    placeholder="English, Spanish"
-                    value={profileForm.languages}
-                    onChange={(event) => setProfileForm({ ...profileForm, languages: event.target.value })}
-                    className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900"
+                  <MultiSelectCombobox
+                    label="Languages"
+                    values={profileForm.languages}
+                    onChange={(values) => setProfileForm({ ...profileForm, languages: values })}
+                    options={languageOptions}
+                    placeholder="Search languages…"
                   />
                 </div>
                 <div>
-                  <label htmlFor="caregiver-skills" className="block text-xs font-medium text-slate-600">
-                    Skills (comma-separated)
-                  </label>
-                  <input
-                    id="caregiver-skills"
-                    placeholder="Dementia care, Hoyer lift"
-                    value={profileForm.skills}
-                    onChange={(event) => setProfileForm({ ...profileForm, skills: event.target.value })}
-                    className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900"
+                  <MultiSelectCombobox
+                    label="Skills"
+                    values={profileForm.skills}
+                    onChange={(values) => setProfileForm({ ...profileForm, skills: values })}
+                    options={skillOptions}
+                    placeholder="Search skills…"
                   />
                 </div>
                 <div className="sm:col-span-2">

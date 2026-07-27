@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { useAuth } from "@carelik/auth";
@@ -58,6 +58,30 @@ function mockReadableSettings(rows: unknown[]) {
   return { selectMock, eqMock, orderMock };
 }
 
+// skills/languages queries chain .select().eq().is().order() - one more
+// hop than the settings query above.
+function mockReadableLookup(rows: unknown[]) {
+  const orderMock = vi.fn().mockResolvedValue({ data: rows, error: null });
+  const isMock = vi.fn(() => ({ order: orderMock }));
+  const eqMock = vi.fn(() => ({ is: isMock }));
+  const selectMock = vi.fn(() => ({ eq: eqMock }));
+  return { selectMock, eqMock, isMock, orderMock };
+}
+
+// Every test that grants every permission (hasPermission: () => true) now
+// also renders the Skills/Languages cards, which call
+// supabase.from("skills")/from("languages") - route those to an empty
+// read-only stub so they don't crash the settings-table-focused tests
+// that aren't exercising the lookup cards themselves.
+function mockFromWithSettings(settingsHandlers: Record<string, unknown>) {
+  mockedFrom.mockImplementation((table: string) => {
+    if (table === "skills" || table === "languages") {
+      return mockReadableLookup([]) as never;
+    }
+    return settingsHandlers as never;
+  });
+}
+
 function renderPage() {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
@@ -109,7 +133,7 @@ describe("SettingsPage", () => {
     mockedUseOrganization.mockReturnValue({ ...baseOrganization(), hasPermission: vi.fn(() => true) });
     const { selectMock } = mockReadableSettings([]);
     const upsertMock = vi.fn();
-    mockedFrom.mockReturnValue({ select: selectMock, upsert: upsertMock } as never);
+    mockFromWithSettings({ select: selectMock, upsert: upsertMock });
 
     renderPage();
     await waitFor(() => expect(screen.getByText("Add a setting")).toBeInTheDocument());
@@ -127,7 +151,7 @@ describe("SettingsPage", () => {
     mockedUseOrganization.mockReturnValue({ ...baseOrganization(), hasPermission: vi.fn(() => true) });
     const { selectMock } = mockReadableSettings([]);
     const upsertMock = vi.fn().mockResolvedValue({ error: null });
-    mockedFrom.mockReturnValue({ select: selectMock, upsert: upsertMock } as never);
+    mockFromWithSettings({ select: selectMock, upsert: upsertMock });
 
     renderPage();
     await waitFor(() => expect(screen.getByText("Add a setting")).toBeInTheDocument());
@@ -166,7 +190,7 @@ describe("SettingsPage", () => {
     const secondEqMock = vi.fn().mockResolvedValue({ error: null });
     const firstEqMock = vi.fn(() => ({ eq: secondEqMock }));
     const deleteMock = vi.fn(() => ({ eq: firstEqMock }));
-    mockedFrom.mockReturnValue({ select: selectMock, delete: deleteMock } as never);
+    mockFromWithSettings({ select: selectMock, delete: deleteMock });
 
     renderPage();
     await waitFor(() => expect(screen.getByText("Delete")).toBeInTheDocument());
@@ -175,5 +199,58 @@ describe("SettingsPage", () => {
 
     await waitFor(() => expect(firstEqMock).toHaveBeenCalledWith("organization_id", ORG_ID));
     expect(secondEqMock).toHaveBeenCalledWith("key", "notifications.default_channel");
+  });
+
+  it("lists configured skills and adds a new one when skills.update is held", async () => {
+    mockedUseAuth.mockReturnValue(authUser());
+    mockedUseOrganization.mockReturnValue({ ...baseOrganization(), hasPermission: vi.fn(() => true) });
+
+    const { selectMock: settingsSelect } = mockReadableSettings([]);
+    const { selectMock: skillsSelect } = mockReadableLookup([{ id: "skill-1", name: "Dementia care", is_active: true }]);
+    const { selectMock: languagesSelect } = mockReadableLookup([]);
+    const insertMock = vi.fn().mockResolvedValue({ error: null });
+
+    mockedFrom.mockImplementation((table: string) => {
+      if (table === "skills") return { select: skillsSelect, insert: insertMock } as never;
+      if (table === "languages") return { select: languagesSelect } as never;
+      return { select: settingsSelect } as never;
+    });
+
+    renderPage();
+
+    await waitFor(() => expect(screen.getByText("Dementia care")).toBeInTheDocument());
+
+    const skillsCard = screen.getByText("Skills").closest("div")!;
+    fireEvent.change(within(skillsCard).getByLabelText("Add skill"), { target: { value: "Wound care" } });
+    fireEvent.click(within(skillsCard).getByRole("button", { name: "Add" }));
+
+    await waitFor(() => expect(insertMock).toHaveBeenCalledWith({ organization_id: ORG_ID, name: "Wound care" }));
+  });
+
+  it("deactivates a configured language", async () => {
+    mockedUseAuth.mockReturnValue(authUser());
+    mockedUseOrganization.mockReturnValue({ ...baseOrganization(), hasPermission: vi.fn(() => true) });
+
+    const { selectMock: settingsSelect } = mockReadableSettings([]);
+    const { selectMock: skillsSelect } = mockReadableLookup([]);
+    const { selectMock: languagesSelect } = mockReadableLookup([{ id: "lang-1", name: "Spanish", is_active: true }]);
+    const updateEqMock = vi.fn().mockResolvedValue({ error: null });
+    const updateMock = vi.fn(() => ({ eq: updateEqMock }));
+
+    mockedFrom.mockImplementation((table: string) => {
+      if (table === "skills") return { select: skillsSelect } as never;
+      if (table === "languages") return { select: languagesSelect, update: updateMock } as never;
+      return { select: settingsSelect } as never;
+    });
+
+    renderPage();
+
+    await waitFor(() => expect(screen.getByText("Spanish")).toBeInTheDocument());
+
+    const languagesCard = screen.getByText("Languages").closest("div")!;
+    fireEvent.click(within(languagesCard).getByRole("button", { name: "Deactivate" }));
+
+    await waitFor(() => expect(updateMock).toHaveBeenCalledWith({ is_active: false }));
+    expect(updateEqMock).toHaveBeenCalledWith("id", "lang-1");
   });
 });

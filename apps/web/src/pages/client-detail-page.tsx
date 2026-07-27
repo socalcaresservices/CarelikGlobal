@@ -13,13 +13,6 @@ import {
 import { useOrganization } from "@/providers/organization-provider";
 import { supabase } from "@/lib/supabase";
 
-function parseTags(value: string) {
-  return value
-    .split(",")
-    .map((tag) => tag.trim())
-    .filter(Boolean);
-}
-
 // Record layout per docs/design-system.md: header with every headline
 // metric visible at once, a KPI row for the thing that matters most for
 // this entity (authorized/scheduled/remaining/gap), then tabs for
@@ -191,12 +184,46 @@ export function ClientDetailPage() {
     enabled: !!activeOrganizationId && canManage
   });
 
+  // Skills/languages pickers store the org's configured *names* directly
+  // into care_needs/language_needs (text[]) - see
+  // 20260727070000_skills_and_languages_catalog.sql for why this stays
+  // name-based instead of switching to a foreign key.
+  const skillsQuery = useQuery({
+    queryKey: ["skills", activeOrganizationId],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("skills")
+        .select("id, name, is_active")
+        .eq("organization_id", activeOrganizationId!)
+        .is("deleted_at", null)
+        .order("name");
+      if (error) throw error;
+      return (data ?? []) as ServiceRow[];
+    },
+    enabled: !!activeOrganizationId && canManage
+  });
+
+  const languagesQuery = useQuery({
+    queryKey: ["languages", activeOrganizationId],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("languages")
+        .select("id, name, is_active")
+        .eq("organization_id", activeOrganizationId!)
+        .is("deleted_at", null)
+        .order("name");
+      if (error) throw error;
+      return (data ?? []) as ServiceRow[];
+    },
+    enabled: !!activeOrganizationId && canManage
+  });
+
   const [profileForm, setProfileForm] = useState({
     city: "",
     state: "",
     zip: "",
-    languageNeeds: "",
-    careNeeds: "",
+    languageNeeds: [] as string[],
+    careNeeds: [] as string[],
     requestedServiceIds: [] as string[]
   });
   const [profileSaving, setProfileSaving] = useState(false);
@@ -208,8 +235,8 @@ export function ClientDetailPage() {
         city: clientQuery.data.address_city ?? "",
         state: clientQuery.data.address_state ?? "",
         zip: clientQuery.data.address_zip ?? "",
-        languageNeeds: (clientQuery.data.language_needs ?? []).join(", "),
-        careNeeds: (clientQuery.data.care_needs ?? []).join(", "),
+        languageNeeds: clientQuery.data.language_needs ?? [],
+        careNeeds: clientQuery.data.care_needs ?? [],
         requestedServiceIds: (clientQuery.data.client_requested_services ?? []).map((row) => row.service_id)
       });
     }
@@ -225,6 +252,14 @@ export function ClientDetailPage() {
       .map((row) => [row.service_id, row.services!.name])
   );
 
+  const careNeedOptions: ComboboxOption[] = (skillsQuery.data ?? [])
+    .filter((skill) => skill.is_active)
+    .map((skill) => ({ value: skill.name, label: skill.name }));
+
+  const languageNeedOptions: ComboboxOption[] = (languagesQuery.data ?? [])
+    .filter((language) => language.is_active)
+    .map((language) => ({ value: language.name, label: language.name }));
+
   async function handleSaveProfile(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!id || !activeOrganizationId) return;
@@ -238,8 +273,8 @@ export function ClientDetailPage() {
           address_city: profileForm.city || null,
           address_state: profileForm.state || null,
           address_zip: profileForm.zip || null,
-          language_needs: parseTags(profileForm.languageNeeds),
-          care_needs: parseTags(profileForm.careNeeds)
+          language_needs: profileForm.languageNeeds,
+          care_needs: profileForm.careNeeds
         })
         .eq("id", id);
       if (error) throw error;
@@ -532,30 +567,20 @@ export function ClientDetailPage() {
                 </FormSection>
 
                 <FormSection title="Needs" description="Used for CareScore matching." columns={2}>
-                  <div>
-                    <label htmlFor="client-language-needs" className="block text-xs font-medium text-slate-600">
-                      Language needs (comma-separated)
-                    </label>
-                    <input
-                      id="client-language-needs"
-                      placeholder="Spanish"
-                      value={profileForm.languageNeeds}
-                      onChange={(event) => setProfileForm({ ...profileForm, languageNeeds: event.target.value })}
-                      className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900"
-                    />
-                  </div>
-                  <div>
-                    <label htmlFor="client-care-needs" className="block text-xs font-medium text-slate-600">
-                      Care needs (comma-separated)
-                    </label>
-                    <input
-                      id="client-care-needs"
-                      placeholder="Hoyer lift, Dementia care"
-                      value={profileForm.careNeeds}
-                      onChange={(event) => setProfileForm({ ...profileForm, careNeeds: event.target.value })}
-                      className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900"
-                    />
-                  </div>
+                  <MultiSelectCombobox
+                    label="Language needs"
+                    values={profileForm.languageNeeds}
+                    onChange={(values) => setProfileForm({ ...profileForm, languageNeeds: values })}
+                    options={languageNeedOptions}
+                    placeholder="Search languages…"
+                  />
+                  <MultiSelectCombobox
+                    label="Care needs"
+                    values={profileForm.careNeeds}
+                    onChange={(values) => setProfileForm({ ...profileForm, careNeeds: values })}
+                    options={careNeedOptions}
+                    placeholder="Search skills…"
+                  />
                 </FormSection>
 
                 <FormSection

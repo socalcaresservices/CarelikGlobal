@@ -1,9 +1,158 @@
 import { useState, type FormEvent } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Card } from "@carelik/ui";
+import { Card, Button } from "@carelik/ui";
 import { useOrganization } from "@/providers/organization-provider";
 import { useAuth } from "@carelik/auth";
 import { supabase } from "@/lib/supabase";
+
+// Skills and languages are org-scoped lookup catalogs (same shape as the
+// service catalog, Build 003) that feed the picker on caregiver and
+// client profiles - see 20260727070000_skills_and_languages_catalog.sql
+// for why these exist as real tables instead of staying free text.
+// "Delete" here means deactivate (is_active = false), not a hard
+// delete: a caregiver or client may already have the name recorded on
+// their profile, and hard-deleting the catalog row would silently break
+// showing that history without actually removing the reference.
+interface LookupRow {
+  id: string;
+  name: string;
+  is_active: boolean;
+}
+
+function LookupCatalogCard({
+  table,
+  title,
+  hint,
+  organizationId,
+  canRead,
+  canUpdate
+}: {
+  table: "skills" | "languages";
+  title: string;
+  hint: string;
+  organizationId: string | null | undefined;
+  canRead: boolean;
+  canUpdate: boolean;
+}) {
+  const queryClient = useQueryClient();
+  const [name, setName] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [pendingId, setPendingId] = useState<string | null>(null);
+
+  const listQuery = useQuery({
+    queryKey: [table, organizationId],
+    queryFn: async () => {
+      const { data, error: queryError } = await supabase
+        .from(table)
+        .select("id, name, is_active")
+        .eq("organization_id", organizationId!)
+        .is("deleted_at", null)
+        .order("name");
+      if (queryError) throw queryError;
+      return (data ?? []) as LookupRow[];
+    },
+    enabled: !!organizationId && canRead
+  });
+
+  function refresh() {
+    void queryClient.invalidateQueries({ queryKey: [table, organizationId] });
+  }
+
+  async function handleAdd(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!organizationId || !name.trim()) return;
+    setError(null);
+    setSaving(true);
+    try {
+      const { error: insertError } = await supabase
+        .from(table)
+        .insert({ organization_id: organizationId, name: name.trim() });
+      if (insertError) throw insertError;
+      setName("");
+      refresh();
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : `Could not add ${title.toLowerCase()}.`);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function toggleActive(row: LookupRow) {
+    setError(null);
+    setPendingId(row.id);
+    try {
+      const { error: updateError } = await supabase
+        .from(table)
+        .update({ is_active: !row.is_active })
+        .eq("id", row.id);
+      if (updateError) throw updateError;
+      refresh();
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : `Could not update ${title.toLowerCase()}.`);
+    } finally {
+      setPendingId(null);
+    }
+  }
+
+  if (!canRead) return null;
+
+  return (
+    <Card>
+      <h3 className="font-semibold text-slate-950">{title}</h3>
+      <p className="mt-1 text-xs text-slate-500">{hint}</p>
+
+      {canUpdate ? (
+        <form onSubmit={handleAdd} className="mt-4 flex items-end gap-3">
+          <div className="flex-1">
+            <label htmlFor={`${table}-new-name`} className="block text-xs font-medium text-slate-600">
+              Add {title.toLowerCase().replace(/s$/, "")}
+            </label>
+            <input
+              id={`${table}-new-name`}
+              required
+              value={name}
+              onChange={(event) => setName(event.target.value)}
+              className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900"
+            />
+          </div>
+          <Button type="submit" size="sm" loading={saving}>
+            Add
+          </Button>
+        </form>
+      ) : null}
+
+      {error ? <p className="mt-3 text-sm text-red-700">{error}</p> : null}
+
+      {listQuery.isLoading ? (
+        <p className="mt-3 text-sm text-slate-500">Loading…</p>
+      ) : (listQuery.data ?? []).length === 0 ? (
+        <p className="mt-3 text-sm text-slate-400">None configured yet.</p>
+      ) : (
+        <ul className="mt-4 divide-y divide-slate-100">
+          {(listQuery.data ?? []).map((row) => (
+            <li key={row.id} className="flex items-center justify-between py-2">
+              <span className={row.is_active ? "text-sm text-slate-800" : "text-sm text-slate-400 line-through"}>
+                {row.name}
+              </span>
+              {canUpdate ? (
+                <Button
+                  type="button"
+                  variant="secondary"
+                  size="sm"
+                  loading={pendingId === row.id}
+                  onClick={() => toggleActive(row)}
+                >
+                  {row.is_active ? "Deactivate" : "Reactivate"}
+                </Button>
+              ) : null}
+            </li>
+          ))}
+        </ul>
+      )}
+    </Card>
+  );
+}
 
 // public.organization_settings is a generic (organization_id, key) -> jsonb
 // store - there's no fixed list of settings, so this page is a generic
@@ -269,6 +418,24 @@ export function SettingsPage() {
           </table>
         )}
       </Card>
+
+      <LookupCatalogCard
+        table="skills"
+        title="Skills"
+        hint="The skills caregivers can pick on their profile and clients can pick as care needs - powers CareScore matching, so a shared list here means fewer missed matches from typos."
+        organizationId={activeOrganizationId}
+        canRead={hasPermission("skills.read")}
+        canUpdate={hasPermission("skills.update")}
+      />
+
+      <LookupCatalogCard
+        table="languages"
+        title="Languages"
+        hint="The languages caregivers can pick on their profile and clients can pick as language needs - also powers CareScore matching."
+        organizationId={activeOrganizationId}
+        canRead={hasPermission("languages.read")}
+        canUpdate={hasPermission("languages.update")}
+      />
     </section>
   );
 }

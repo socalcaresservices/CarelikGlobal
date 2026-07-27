@@ -25,10 +25,11 @@ const ORG_ID = "11111111-1111-4111-8111-111111111111";
 const CAREGIVER_ID = "44444444-4444-4444-8444-444444444444";
 
 // caregiver_availability reads via .select().eq().eq(), writes via
-// .delete().eq().eq() and .insert(). Everything else in this test file
-// only touches supabase.rpc, so this is the one table that needs a
-// .from() mock at all.
-function mockAvailabilityFrom(rows: unknown[] = []) {
+// .delete().eq().eq() and .insert(). skills/languages (the Location,
+// languages & skills picker's option source) read via
+// .select().eq().is().order() - branch by table name so both shapes are
+// available; everything else in this file only touches supabase.rpc.
+function mockAvailabilityFrom(rows: unknown[] = [], skills: unknown[] = [], languages: unknown[] = []) {
   const selectEq2 = vi.fn().mockResolvedValue({ data: rows, error: null });
   const selectEq1 = vi.fn(() => ({ eq: selectEq2 }));
   const selectMock = vi.fn(() => ({ eq: selectEq1 }));
@@ -39,7 +40,19 @@ function mockAvailabilityFrom(rows: unknown[] = []) {
 
   const insertMock = vi.fn().mockResolvedValue({ error: null });
 
-  mockedFrom.mockReturnValue({ select: selectMock, delete: deleteMock, insert: insertMock } as never);
+  function lookupSelectStub(lookupRows: unknown[]) {
+    return vi.fn(() => ({
+      eq: vi.fn(() => ({
+        is: vi.fn(() => ({ order: vi.fn().mockResolvedValue({ data: lookupRows, error: null }) }))
+      }))
+    }));
+  }
+
+  mockedFrom.mockImplementation((table: string) => {
+    if (table === "skills") return { select: lookupSelectStub(skills) } as never;
+    if (table === "languages") return { select: lookupSelectStub(languages) } as never;
+    return { select: selectMock, delete: deleteMock, insert: insertMock } as never;
+  });
   return { insertMock, deleteMock };
 }
 
@@ -162,13 +175,17 @@ describe("CaregiverDetailPage", () => {
       }
       return Promise.resolve({ data: [], error: null }) as never;
     });
-    mockAvailabilityFrom();
+    mockAvailabilityFrom([], [], [{ id: "lang-1", name: "Spanish", is_active: true }]);
 
     renderPage();
     await waitFor(() => expect(screen.getByLabelText("City")).toBeInTheDocument());
 
     fireEvent.change(screen.getByLabelText("City"), { target: { value: "San Diego" } });
-    fireEvent.change(screen.getByLabelText("Languages (comma-separated)"), { target: { value: "English, Spanish" } });
+
+    fireEvent.focus(screen.getByLabelText("Languages"));
+    await waitFor(() => expect(screen.getByRole("option", { name: "Spanish" })).toBeInTheDocument());
+    fireEvent.mouseDown(screen.getByRole("option", { name: "Spanish" }));
+
     fireEvent.click(screen.getByRole("button", { name: "Save" }));
 
     await waitFor(() =>
@@ -178,7 +195,7 @@ describe("CaregiverDetailPage", () => {
           target_organization_id: ORG_ID,
           target_user_id: CAREGIVER_ID,
           new_address_city: "San Diego",
-          new_languages: ["English", "Spanish"]
+          new_languages: ["Spanish"]
         })
       )
     );
