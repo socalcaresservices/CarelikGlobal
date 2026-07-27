@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { useAuth } from "@carelik/auth";
@@ -9,6 +9,19 @@ vi.mock("@carelik/auth", () => ({
 }));
 
 const mockedUseAuth = vi.mocked(useAuth);
+
+function baseAuth() {
+  return {
+    user: null,
+    session: null,
+    loading: false,
+    signInWithGithub: vi.fn(),
+    signInWithPassword: vi.fn(),
+    resetPasswordForEmail: vi.fn(),
+    updatePassword: vi.fn(),
+    signOut: vi.fn()
+  };
+}
 
 function renderLoginPage(path = "/login") {
   window.history.pushState(null, "", path);
@@ -27,28 +40,44 @@ describe("LoginPage", () => {
     window.history.pushState(null, "", "/");
   });
 
-  it("shows a sign-in button when signed out", () => {
-    mockedUseAuth.mockReturnValue({
-      user: null,
-      session: null,
-      loading: false,
-      signInWithGithub: vi.fn(),
-      signOut: vi.fn()
-    });
+  it("shows the email/password form and a GitHub option when signed out", () => {
+    mockedUseAuth.mockReturnValue(baseAuth());
 
     renderLoginPage();
+    expect(screen.getByLabelText("Email")).toBeInTheDocument();
+    expect(screen.getByLabelText("Password")).toBeInTheDocument();
     expect(screen.getByText("Sign in with GitHub")).toBeInTheDocument();
   });
 
-  it("calls signInWithGithub when the button is clicked", async () => {
+  it("calls signInWithPassword with the entered credentials", async () => {
+    const signInWithPassword = vi.fn().mockResolvedValue(undefined);
+    mockedUseAuth.mockReturnValue({ ...baseAuth(), signInWithPassword });
+
+    renderLoginPage();
+    fireEvent.change(screen.getByLabelText("Email"), { target: { value: "owner@socalcares.com" } });
+    fireEvent.change(screen.getByLabelText("Password"), { target: { value: "hunter2" } });
+    fireEvent.click(screen.getByText("Sign in"));
+
+    await waitFor(() =>
+      expect(signInWithPassword).toHaveBeenCalledWith("owner@socalcares.com", "hunter2")
+    );
+  });
+
+  it("shows an error message when password sign-in fails", async () => {
+    const signInWithPassword = vi.fn().mockRejectedValue(new Error("Invalid login credentials"));
+    mockedUseAuth.mockReturnValue({ ...baseAuth(), signInWithPassword });
+
+    renderLoginPage();
+    fireEvent.change(screen.getByLabelText("Email"), { target: { value: "owner@socalcares.com" } });
+    fireEvent.change(screen.getByLabelText("Password"), { target: { value: "wrong" } });
+    fireEvent.click(screen.getByText("Sign in"));
+
+    await waitFor(() => expect(screen.getByText("Invalid login credentials")).toBeInTheDocument());
+  });
+
+  it("calls signInWithGithub when the GitHub button is clicked", async () => {
     const signInWithGithub = vi.fn().mockResolvedValue(undefined);
-    mockedUseAuth.mockReturnValue({
-      user: null,
-      session: null,
-      loading: false,
-      signInWithGithub,
-      signOut: vi.fn()
-    });
+    mockedUseAuth.mockReturnValue({ ...baseAuth(), signInWithGithub });
 
     renderLoginPage();
     screen.getByText("Sign in with GitHub").click();
@@ -56,15 +85,9 @@ describe("LoginPage", () => {
     await waitFor(() => expect(signInWithGithub).toHaveBeenCalledTimes(1));
   });
 
-  it("shows an error message when sign-in fails", async () => {
+  it("shows an error message when GitHub sign-in fails", async () => {
     const signInWithGithub = vi.fn().mockRejectedValue(new Error("provider unreachable"));
-    mockedUseAuth.mockReturnValue({
-      user: null,
-      session: null,
-      loading: false,
-      signInWithGithub,
-      signOut: vi.fn()
-    });
+    mockedUseAuth.mockReturnValue({ ...baseAuth(), signInWithGithub });
 
     renderLoginPage();
     screen.getByText("Sign in with GitHub").click();
@@ -72,27 +95,35 @@ describe("LoginPage", () => {
     await waitFor(() => expect(screen.getByText("provider unreachable")).toBeInTheDocument());
   });
 
+  it("switches to the forgot-password form and sends a reset email", async () => {
+    const resetPasswordForEmail = vi.fn().mockResolvedValue(undefined);
+    mockedUseAuth.mockReturnValue({ ...baseAuth(), resetPasswordForEmail });
+
+    renderLoginPage();
+    fireEvent.click(screen.getByText("Forgot password?"));
+    expect(screen.queryByLabelText("Password")).not.toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText("Email"), { target: { value: "owner@socalcares.com" } });
+    fireEvent.click(screen.getByText("Send reset link"));
+
+    await waitFor(() => expect(resetPasswordForEmail).toHaveBeenCalledWith("owner@socalcares.com"));
+    await waitFor(() =>
+      expect(screen.getByText("Check your email for a link to set a new password.")).toBeInTheDocument()
+    );
+
+    fireEvent.click(screen.getByText("Back to sign in"));
+    expect(screen.getByLabelText("Password")).toBeInTheDocument();
+  });
+
   it("surfaces an error passed back in the URL query string", () => {
-    mockedUseAuth.mockReturnValue({
-      user: null,
-      session: null,
-      loading: false,
-      signInWithGithub: vi.fn(),
-      signOut: vi.fn()
-    });
+    mockedUseAuth.mockReturnValue(baseAuth());
 
     renderLoginPage("/login?error_description=Access%20denied");
     expect(screen.getByText("Access denied")).toBeInTheDocument();
   });
 
   it("redirects away from /login when already signed in", async () => {
-    mockedUseAuth.mockReturnValue({
-      user: { id: "user-1" } as never,
-      session: {} as never,
-      loading: false,
-      signInWithGithub: vi.fn(),
-      signOut: vi.fn()
-    });
+    mockedUseAuth.mockReturnValue({ ...baseAuth(), user: { id: "user-1" } as never, session: {} as never });
 
     renderLoginPage();
     await waitFor(() => expect(screen.getByText("overview page")).toBeInTheDocument());

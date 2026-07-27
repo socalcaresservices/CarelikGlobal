@@ -105,6 +105,9 @@ describe("OrganizationProvider", () => {
       session: {} as never,
       loading: false,
       signInWithGithub: vi.fn(),
+      signInWithPassword: vi.fn(),
+      resetPasswordForEmail: vi.fn(),
+      updatePassword: vi.fn(),
       signOut: vi.fn()
     });
     mockedRpc.mockResolvedValue({ data: null, error: null } as never);
@@ -137,6 +140,9 @@ describe("OrganizationProvider", () => {
       session: {} as never,
       loading: false,
       signInWithGithub: vi.fn(),
+      signInWithPassword: vi.fn(),
+      resetPasswordForEmail: vi.fn(),
+      updatePassword: vi.fn(),
       signOut: vi.fn()
     });
     mockedRpc.mockResolvedValue({ data: null, error: null } as never);
@@ -173,6 +179,9 @@ describe("OrganizationProvider", () => {
       session: {} as never,
       loading: false,
       signInWithGithub: vi.fn(),
+      signInWithPassword: vi.fn(),
+      resetPasswordForEmail: vi.fn(),
+      updatePassword: vi.fn(),
       signOut: vi.fn()
     });
     mockedRpc.mockResolvedValue({ data: null, error: null } as never);

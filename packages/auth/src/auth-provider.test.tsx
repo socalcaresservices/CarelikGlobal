@@ -17,7 +17,10 @@ function createFakeClient(initialSession: Session | null = null) {
         return { data: { subscription: { unsubscribe } } };
       }),
       signOut: vi.fn().mockResolvedValue({ error: null }),
-      signInWithOAuth: vi.fn().mockResolvedValue({ data: {}, error: null })
+      signInWithOAuth: vi.fn().mockResolvedValue({ data: {}, error: null }),
+      signInWithPassword: vi.fn().mockResolvedValue({ data: {}, error: null }),
+      resetPasswordForEmail: vi.fn().mockResolvedValue({ data: {}, error: null }),
+      updateUser: vi.fn().mockResolvedValue({ data: {}, error: null })
     }
   } as unknown as SupabaseClient;
 
@@ -137,6 +140,64 @@ describe("AuthProvider / useAuth", () => {
         expect.objectContaining({ provider: "github" })
       )
     );
+  });
+
+  it("signInWithPassword calls client.auth.signInWithPassword with email and password", async () => {
+    const { client } = createFakeClient(null);
+    function Probe2() {
+      const { signInWithPassword } = useAuth();
+      return <button onClick={() => void signInWithPassword("a@example.com", "hunter2")}>pw sign in</button>;
+    }
+    render(
+      <AuthProvider client={client}>
+        <Probe2 />
+      </AuthProvider>
+    );
+
+    screen.getByText("pw sign in").click();
+    await waitFor(() =>
+      expect(client.auth.signInWithPassword).toHaveBeenCalledWith({
+        email: "a@example.com",
+        password: "hunter2"
+      })
+    );
+  });
+
+  it("resetPasswordForEmail calls client.auth.resetPasswordForEmail with a redirectTo", async () => {
+    const { client } = createFakeClient(null);
+    function Probe2() {
+      const { resetPasswordForEmail } = useAuth();
+      return <button onClick={() => void resetPasswordForEmail("a@example.com")}>reset</button>;
+    }
+    render(
+      <AuthProvider client={client}>
+        <Probe2 />
+      </AuthProvider>
+    );
+
+    screen.getByText("reset").click();
+    await waitFor(() =>
+      expect(client.auth.resetPasswordForEmail).toHaveBeenCalledWith(
+        "a@example.com",
+        expect.objectContaining({ redirectTo: expect.stringContaining("/set-password") })
+      )
+    );
+  });
+
+  it("updatePassword calls client.auth.updateUser with the new password", async () => {
+    const { client } = createFakeClient(fakeSession);
+    function Probe2() {
+      const { updatePassword } = useAuth();
+      return <button onClick={() => void updatePassword("new-password")}>update</button>;
+    }
+    render(
+      <AuthProvider client={client}>
+        <Probe2 />
+      </AuthProvider>
+    );
+
+    screen.getByText("update").click();
+    await waitFor(() => expect(client.auth.updateUser).toHaveBeenCalledWith({ password: "new-password" }));
   });
 
   it("useAuth throws when used outside AuthProvider", () => {

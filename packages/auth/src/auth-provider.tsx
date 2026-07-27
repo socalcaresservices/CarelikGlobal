@@ -13,6 +13,25 @@ interface AuthContextValue {
   session: Session | null;
   loading: boolean;
   signInWithGithub: (options?: { redirectTo?: string }) => Promise<void>;
+  /**
+   * Email/password sign-in — the primary path for paying-customer
+   * organizations, who can't be expected to have a GitHub account.
+   * GitHub OAuth stays available alongside this, not replaced by it.
+   */
+  signInWithPassword: (email: string, password: string) => Promise<void>;
+  /**
+   * Sends a password-reset email. Same underlying Supabase mechanism as
+   * invite-member's invite email (a link that creates a temporary
+   * session), so both flows land on the same set-password page.
+   */
+  resetPasswordForEmail: (email: string, redirectTo?: string) => Promise<void>;
+  /**
+   * Sets a new password for whoever the *current* session belongs to -
+   * used by the set-password page, reached either via an invite link or
+   * a password-reset link (both leave the browser holding a temporary
+   * session, not a fresh sign-in).
+   */
+  updatePassword: (password: string) => Promise<void>;
   signOut: () => Promise<void>;
 }
 
@@ -58,6 +77,20 @@ export function AuthProvider({
           provider: "github",
           options: { redirectTo: options?.redirectTo ?? window.location.origin }
         });
+        if (error) throw error;
+      },
+      signInWithPassword: async (email, password) => {
+        const { error } = await client.auth.signInWithPassword({ email, password });
+        if (error) throw error;
+      },
+      resetPasswordForEmail: async (email, redirectTo) => {
+        const { error } = await client.auth.resetPasswordForEmail(email, {
+          redirectTo: redirectTo ?? `${window.location.origin}/set-password`
+        });
+        if (error) throw error;
+      },
+      updatePassword: async (password) => {
+        const { error } = await client.auth.updateUser({ password });
         if (error) throw error;
       },
       signOut: async () => {

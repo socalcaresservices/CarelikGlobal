@@ -3,6 +3,7 @@ import { AppShell } from "@/layout/app-shell";
 import { OrganizationProvider } from "@/providers/organization-provider";
 import { ProtectedRoute } from "@/routes/protected-route";
 import { LoginPage } from "@/pages/login-page";
+import { SetPasswordPage } from "@/pages/set-password-page";
 import { ApplyPage } from "@/pages/apply-page";
 import { CommandCenterPage } from "@/pages/command-center-page";
 import { AccessPage } from "@/pages/access-page";
@@ -26,6 +27,7 @@ export function App() {
   return (
     <Routes>
       <Route path="/login" element={<LoginPage />} />
+      <Route path="/set-password" element={<SetPasswordPage />} />
       <Route path="/apply/:orgSlug" element={<ApplyPage />} />
       <Route
         path="/*"

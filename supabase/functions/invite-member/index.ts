@@ -192,9 +192,15 @@ Deno.serve(async (req) => {
     }
   } else {
     const siteUrl = Deno.env.get("SITE_URL") ?? "http://localhost:5173";
+    // Lands the invited person on the set-password page instead of the
+    // app root - they have a temporary session from the invite link but
+    // no password yet (email/password is the primary sign-in path now;
+    // see login-page.tsx and set-password-page.tsx), so sending them
+    // straight to "/" would drop them into ProtectedRoute's redirect
+    // loop with nothing to sign back in with later.
     const { data: invited, error: inviteError } = await adminClient.auth.admin.inviteUserByEmail(
       email,
-      { redirectTo: siteUrl }
+      { redirectTo: `${siteUrl}/set-password` }
     );
     if (inviteError || !invited?.user) {
       return jsonResponse({ error: inviteError?.message ?? "Invite failed" }, 400);

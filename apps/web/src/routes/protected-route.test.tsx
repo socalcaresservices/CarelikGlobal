@@ -35,6 +35,9 @@ describe("ProtectedRoute", () => {
       session: null,
       loading: true,
       signInWithGithub: vi.fn(),
+      signInWithPassword: vi.fn(),
+      resetPasswordForEmail: vi.fn(),
+      updatePassword: vi.fn(),
       signOut: vi.fn()
     });
 
@@ -48,6 +51,9 @@ describe("ProtectedRoute", () => {
       session: null,
       loading: false,
       signInWithGithub: vi.fn(),
+      signInWithPassword: vi.fn(),
+      resetPasswordForEmail: vi.fn(),
+      updatePassword: vi.fn(),
       signOut: vi.fn()
     });
 
@@ -61,6 +67,9 @@ describe("ProtectedRoute", () => {
       session: {} as never,
       loading: false,
       signInWithGithub: vi.fn(),
+      signInWithPassword: vi.fn(),
+      resetPasswordForEmail: vi.fn(),
+      updatePassword: vi.fn(),
       signOut: vi.fn()
     });
 
