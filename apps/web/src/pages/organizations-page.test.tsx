@@ -97,32 +97,101 @@ describe("OrganizationsPage", () => {
     expect(setActiveOrganizationId).toHaveBeenCalledWith(OTHER_ORG_ID);
   });
 
-  it("shows the edit form only with organization.update, and saves changes", async () => {
-    const setActiveOrganizationId = vi.fn();
+  const fullProfileRow = {
+    legal_name: "Acme LLC",
+    display_name: "Acme",
+    timezone: "America/Los_Angeles",
+    dba: null,
+    tax_id: null,
+    business_license: null,
+    org_type: null,
+    website: null,
+    currency: "USD",
+    agency_code: null,
+    address_street: null,
+    address_suite: null,
+    address_city: null,
+    address_state: null,
+    address_zip: null,
+    address_country: null,
+    primary_contact_name: null,
+    contact_email: null,
+    contact_phone: null,
+    emergency_phone: null,
+    logo_url: null,
+    primary_color: null,
+    secondary_color: null,
+    accent_color: null,
+    theme_mode: "light" as const
+  };
+
+  function mockProfileAndUpdate(profileOverrides: Partial<typeof fullProfileRow> = {}) {
+    const eqUpdateMock = vi.fn().mockResolvedValue({ error: null });
+    const updateMock = vi.fn(() => ({ eq: eqUpdateMock }));
+    const singleMock = vi.fn().mockResolvedValue({ data: { ...fullProfileRow, ...profileOverrides }, error: null });
+    const eqSelectMock = vi.fn(() => ({ single: singleMock }));
+    const selectMock = vi.fn(() => ({ eq: eqSelectMock }));
+    mockedFrom.mockReturnValue({ select: selectMock, update: updateMock } as never);
+    return { updateMock, eqUpdateMock };
+  }
+
+  it("shows the edit form only with organization.update, and saves changes across every profile section", async () => {
     mockedUseOrganization.mockReturnValue({
       ...baseOrganization(),
-      setActiveOrganizationId,
       hasPermission: vi.fn((permission: string) => permission === "organization.update")
     });
-
-    const eqMock = vi.fn().mockResolvedValue({ error: null });
-    const updateMock = vi.fn(() => ({ eq: eqMock }));
-    mockedFrom.mockReturnValue({ update: updateMock } as never);
+    const { updateMock, eqUpdateMock } = mockProfileAndUpdate();
 
     renderPage();
     await waitFor(() => expect(screen.getByText("Edit Acme")).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByLabelText("Legal name")).toBeInTheDocument());
     expect(screen.queryByRole("link", { name: "+ New Organization" })).not.toBeInTheDocument();
 
     fireEvent.change(screen.getByLabelText("Legal name"), { target: { value: "Acme Holdings LLC" } });
+    fireEvent.change(screen.getByLabelText("DBA"), { target: { value: "Acme Care" } });
+    fireEvent.change(screen.getByLabelText("City"), { target: { value: "Murrieta" } });
+    fireEvent.change(screen.getByLabelText("Email"), {
+      target: { value: "hello@acme.test" }
+    });
     fireEvent.click(screen.getByText("Save changes"));
 
     await waitFor(() =>
-      expect(updateMock).toHaveBeenCalledWith({
-        legal_name: "Acme Holdings LLC",
-        display_name: "Acme",
-        timezone: "America/Los_Angeles"
-      })
+      expect(updateMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          legal_name: "Acme Holdings LLC",
+          display_name: "Acme",
+          timezone: "America/Los_Angeles",
+          currency: "USD",
+          theme_mode: "light",
+          dba: "Acme Care",
+          address_city: "Murrieta",
+          contact_email: "hello@acme.test",
+          // cleared/never-filled optional fields go out as null, not ""
+          tax_id: null,
+          website: null
+        })
+      )
     );
-    expect(eqMock).toHaveBeenCalledWith("id", ORG_ID);
+    expect(eqUpdateMock).toHaveBeenCalledWith("id", ORG_ID);
+    await waitFor(() => expect(screen.getByText("Saved.")).toBeInTheDocument());
+  });
+
+  it("rejects an invalid contact email before saving", async () => {
+    mockedUseOrganization.mockReturnValue({
+      ...baseOrganization(),
+      hasPermission: vi.fn((permission: string) => permission === "organization.update")
+    });
+    const { updateMock } = mockProfileAndUpdate();
+
+    renderPage();
+    await waitFor(() => expect(screen.getByLabelText("Legal name")).toBeInTheDocument());
+
+    fireEvent.change(screen.getByLabelText("Email"), {
+      target: { value: "not-an-email" }
+    });
+    fireEvent.click(screen.getByText("Save changes"));
+
+    expect(await screen.findByText("Enter a valid contact email.")).toBeInTheDocument();
+    expect(updateMock).not.toHaveBeenCalled();
   });
 });

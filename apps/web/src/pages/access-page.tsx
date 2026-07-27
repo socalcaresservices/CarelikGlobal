@@ -6,7 +6,7 @@ import { systemRoleSchema, membershipStatusSchema } from "@carelik/shared";
 import { useAuth } from "@carelik/auth";
 import { useOrganization } from "@/providers/organization-provider";
 import { supabase } from "@/lib/supabase";
-import { inviteMember, type InvitableRole } from "@/lib/invitations";
+import { inviteMember, updateMemberEmail, type InvitableRole } from "@/lib/invitations";
 import { useTableControls } from "@/lib/use-table-controls";
 import { useFilters } from "@/lib/use-filters";
 import { useColumnWidths } from "@/lib/use-column-widths";
@@ -16,12 +16,15 @@ interface MemberRow {
   membership_id: string;
   user_id: string;
   display_name: string;
+  email: string;
   role: string;
   status: "invited" | "active" | "suspended" | "revoked";
   invited_by: string | null;
   joined_at: string | null;
   created_at: string;
 }
+
+const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 const invitableRoles = systemRoleSchema.options.filter(
   (role): role is InvitableRole => role !== "platform_owner"
@@ -73,10 +76,12 @@ export function AccessPage() {
     status: (row, value) => row.status === value
   });
 
-  const table = useTableControls<MemberRow, "name" | "role" | "status">(filters.rows, {
-    matchesSearch: (row, query) => row.display_name.toLowerCase().includes(query),
+  const table = useTableControls<MemberRow, "name" | "email" | "role" | "status">(filters.rows, {
+    matchesSearch: (row, query) =>
+      row.display_name.toLowerCase().includes(query) || row.email.toLowerCase().includes(query),
     sorters: {
       name: (a, b) => a.display_name.localeCompare(b.display_name),
+      email: (a, b) => a.email.localeCompare(b.email),
       role: (a, b) => a.role.localeCompare(b.role),
       status: (a, b) => a.status.localeCompare(b.status)
     }
@@ -93,6 +98,7 @@ export function AccessPage() {
 
   const columns = useColumnWidths("carelik:column-widths:access", {
     name: 220,
+    email: 220,
     role: 160,
     status: 130
   });
@@ -126,6 +132,42 @@ export function AccessPage() {
       refreshMembers();
     } catch (cause) {
       setActionError(cause instanceof Error ? cause.message : "Could not revoke access.");
+    } finally {
+      setPendingMembershipId(null);
+    }
+  }
+
+  const [editingEmailUserId, setEditingEmailUserId] = useState<string | null>(null);
+  const [emailDraft, setEmailDraft] = useState("");
+  const [emailError, setEmailError] = useState<string | null>(null);
+
+  function startEditingEmail(member: MemberRow) {
+    setEditingEmailUserId(member.user_id);
+    setEmailDraft(member.email);
+    setEmailError(null);
+  }
+
+  function cancelEditingEmail() {
+    setEditingEmailUserId(null);
+    setEmailDraft("");
+    setEmailError(null);
+  }
+
+  async function handleSaveEmail(member: MemberRow) {
+    if (!activeOrganizationId) return;
+    const trimmed = emailDraft.trim();
+    if (!EMAIL_PATTERN.test(trimmed)) {
+      setEmailError("Enter a valid email.");
+      return;
+    }
+    setEmailError(null);
+    setPendingMembershipId(member.membership_id);
+    try {
+      await updateMemberEmail({ userId: member.user_id, organizationId: activeOrganizationId, email: trimmed });
+      setEditingEmailUserId(null);
+      refreshMembers();
+    } catch (cause) {
+      setEmailError(cause instanceof Error ? cause.message : "Could not update email.");
     } finally {
       setPendingMembershipId(null);
     }
@@ -302,6 +344,14 @@ export function AccessPage() {
                   onResizeStart={columns.startResize("name")}
                 />
                 <SortableHeader
+                  label="Email"
+                  active={table.sortKey === "email"}
+                  direction={table.direction}
+                  onClick={() => table.toggleSort("email")}
+                  width={columns.widths.email}
+                  onResizeStart={columns.startResize("email")}
+                />
+                <SortableHeader
                   label="Role"
                   active={table.sortKey === "role"}
                   direction={table.direction}
@@ -333,6 +383,55 @@ export function AccessPage() {
                         {member.display_name}
                       </Link>
                       {isSelf ? <span className="ml-1 text-xs text-slate-400">(you)</span> : null}
+                    </td>
+                    <td className="py-2.5 text-slate-600">
+                      {editingEmailUserId === member.user_id ? (
+                        <div className="flex flex-col gap-1">
+                          <div className="flex items-center gap-1.5">
+                            <label htmlFor={`edit-email-${member.membership_id}`} className="sr-only">
+                              Email for {member.display_name}
+                            </label>
+                            <input
+                              id={`edit-email-${member.membership_id}`}
+                              type="email"
+                              value={emailDraft}
+                              disabled={isPending}
+                              onChange={(event) => setEmailDraft(event.target.value)}
+                              className="w-full rounded-lg border border-slate-200 px-2 py-1 text-xs text-slate-900"
+                            />
+                            <button
+                              type="button"
+                              disabled={isPending}
+                              onClick={() => handleSaveEmail(member)}
+                              className="text-xs font-medium text-emerald-700 underline-offset-2 hover:underline disabled:cursor-not-allowed disabled:opacity-60"
+                            >
+                              Save
+                            </button>
+                            <button
+                              type="button"
+                              disabled={isPending}
+                              onClick={cancelEditingEmail}
+                              className="text-xs font-medium text-slate-500 underline-offset-2 hover:underline"
+                            >
+                              Cancel
+                            </button>
+                          </div>
+                          {emailError ? <p className="text-xs text-red-700">{emailError}</p> : null}
+                        </div>
+                      ) : (
+                        <div className="flex items-center gap-1.5">
+                          <span className="truncate">{member.email}</span>
+                          {canModifyRow ? (
+                            <button
+                              type="button"
+                              onClick={() => startEditingEmail(member)}
+                              className="text-xs font-medium text-slate-400 underline-offset-2 hover:text-slate-700 hover:underline"
+                            >
+                              Edit
+                            </button>
+                          ) : null}
+                        </div>
+                      )}
                     </td>
                     <td className="py-2.5 text-slate-600">
                       {canModifyRow ? (
@@ -378,7 +477,7 @@ export function AccessPage() {
               })}
               {table.rows.length === 0 ? (
                 <tr>
-                  <td colSpan={canManage ? 4 : 3} className="py-4 text-center text-slate-400">
+                  <td colSpan={canManage ? 5 : 4} className="py-4 text-center text-slate-400">
                     {table.search || accessActiveFilters.length > 0
                       ? "No members match your search or filters."
                       : "No members yet."}

@@ -75,3 +75,36 @@ export async function inviteMember(input: InviteMemberInput): Promise<InviteMemb
 
   return data;
 }
+
+export interface UpdateMemberEmailInput {
+  userId: string;
+  organizationId: string;
+  email: string;
+}
+
+export interface UpdateMemberEmailResult {
+  userId: string;
+  email: string;
+}
+
+/**
+ * Corrects an existing member's login email. Backed by the
+ * `update-member-email` edge function (the only place
+ * auth.admin.updateUserById is called from) - requires membership.update
+ * on `organizationId`, re-checked server-side the same way invite-member
+ * re-checks membership.invite.
+ */
+export async function updateMemberEmail(input: UpdateMemberEmailInput): Promise<UpdateMemberEmailResult> {
+  const { data, error } = await supabase.functions.invoke<UpdateMemberEmailResult>("update-member-email", {
+    body: input
+  });
+
+  if (error) {
+    throw new Error(await extractErrorMessage(error));
+  }
+  if (!data) {
+    throw new Error("Email update failed: no response from server.");
+  }
+
+  return data;
+}

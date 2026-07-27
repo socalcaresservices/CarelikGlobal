@@ -5,12 +5,12 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { useAuth } from "@carelik/auth";
 import { useOrganization } from "@/providers/organization-provider";
 import { supabase } from "@/lib/supabase";
-import { inviteMember } from "@/lib/invitations";
+import { inviteMember, updateMemberEmail } from "@/lib/invitations";
 import { AccessPage } from "./access-page";
 
 vi.mock("@carelik/auth", () => ({ useAuth: vi.fn() }));
 vi.mock("@/providers/organization-provider", () => ({ useOrganization: vi.fn() }));
-vi.mock("@/lib/invitations", () => ({ inviteMember: vi.fn() }));
+vi.mock("@/lib/invitations", () => ({ inviteMember: vi.fn(), updateMemberEmail: vi.fn() }));
 vi.mock("@/lib/supabase", () => ({
   supabase: {
     rpc: vi.fn(),
@@ -21,6 +21,7 @@ vi.mock("@/lib/supabase", () => ({
 const mockedUseAuth = vi.mocked(useAuth);
 const mockedUseOrganization = vi.mocked(useOrganization);
 const mockedInviteMember = vi.mocked(inviteMember);
+const mockedUpdateMemberEmail = vi.mocked(updateMemberEmail);
 const mockedRpc = vi.mocked(supabase.rpc);
 const mockedFrom = vi.mocked(supabase.from);
 
@@ -92,6 +93,7 @@ describe("AccessPage", () => {
           membership_id: "m-1",
           user_id: "user-2",
           display_name: "Jamie",
+          email: "jamie@example.com",
           role: "staff",
           status: "active",
           invited_by: null,
@@ -105,6 +107,7 @@ describe("AccessPage", () => {
     renderPage();
 
     await waitFor(() => expect(screen.getByText("Jamie")).toBeInTheDocument());
+    expect(screen.getByText("jamie@example.com")).toBeInTheDocument();
     expect(screen.queryByText("Invite a member")).not.toBeInTheDocument();
   });
 
@@ -150,6 +153,7 @@ describe("AccessPage", () => {
           membership_id: "m-1",
           user_id: "user-2",
           display_name: "Jamie",
+          email: "jamie@example.com",
           role: "staff",
           status: "active",
           invited_by: null,
@@ -173,6 +177,85 @@ describe("AccessPage", () => {
     expect(eqMock).toHaveBeenCalledWith("id", "m-1");
   });
 
+  it("edits a member's email when membership.update is held", async () => {
+    mockedUseAuth.mockReturnValue(authUser("user-1"));
+    mockedUseOrganization.mockReturnValue({
+      ...baseOrganization(),
+      hasPermission: vi.fn(
+        (permission: string) => permission === "membership.read" || permission === "membership.update"
+      )
+    });
+    mockedRpc.mockResolvedValue({
+      data: [
+        {
+          membership_id: "m-1",
+          user_id: "user-2",
+          display_name: "Jamie",
+          email: "jamie@example.com",
+          role: "staff",
+          status: "active",
+          invited_by: null,
+          joined_at: null,
+          created_at: "2026-01-01"
+        }
+      ],
+      error: null
+    } as never);
+    mockedUpdateMemberEmail.mockResolvedValue({ userId: "user-2", email: "jamie.corrected@example.com" });
+
+    renderPage();
+    await waitFor(() => expect(screen.getByText("jamie@example.com")).toBeInTheDocument());
+
+    fireEvent.click(screen.getByText("Edit"));
+    const emailInput = screen.getByLabelText("Email for Jamie");
+    fireEvent.change(emailInput, { target: { value: "jamie.corrected@example.com" } });
+    fireEvent.click(screen.getByText("Save"));
+
+    await waitFor(() =>
+      expect(mockedUpdateMemberEmail).toHaveBeenCalledWith({
+        userId: "user-2",
+        organizationId: ORG_ID,
+        email: "jamie.corrected@example.com"
+      })
+    );
+  });
+
+  it("shows an error and does not save an invalid email edit", async () => {
+    mockedUseAuth.mockReturnValue(authUser("user-1"));
+    mockedUseOrganization.mockReturnValue({
+      ...baseOrganization(),
+      hasPermission: vi.fn(
+        (permission: string) => permission === "membership.read" || permission === "membership.update"
+      )
+    });
+    mockedRpc.mockResolvedValue({
+      data: [
+        {
+          membership_id: "m-1",
+          user_id: "user-2",
+          display_name: "Jamie",
+          email: "jamie@example.com",
+          role: "staff",
+          status: "active",
+          invited_by: null,
+          joined_at: null,
+          created_at: "2026-01-01"
+        }
+      ],
+      error: null
+    } as never);
+
+    renderPage();
+    await waitFor(() => expect(screen.getByText("jamie@example.com")).toBeInTheDocument());
+
+    fireEvent.click(screen.getByText("Edit"));
+    fireEvent.change(screen.getByLabelText("Email for Jamie"), { target: { value: "not-an-email" } });
+    fireEvent.click(screen.getByText("Save"));
+
+    expect(await screen.findByText("Enter a valid email.")).toBeInTheDocument();
+    expect(mockedUpdateMemberEmail).not.toHaveBeenCalled();
+  });
+
   it("does not show manage controls for your own row", async () => {
     mockedUseAuth.mockReturnValue(authUser("user-2"));
     mockedUseOrganization.mockReturnValue({
@@ -187,6 +270,7 @@ describe("AccessPage", () => {
           membership_id: "m-1",
           user_id: "user-2",
           display_name: "Me",
+          email: "me@example.com",
           role: "staff",
           status: "active",
           invited_by: null,
