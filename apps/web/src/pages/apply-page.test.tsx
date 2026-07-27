@@ -62,9 +62,10 @@ describe("ApplyPage", () => {
       error: null
     } as never);
 
-    const applicantSingleMock = vi.fn().mockResolvedValue({ data: { id: "applicant-1" }, error: null });
-    const applicantSelectMock = vi.fn(() => ({ single: applicantSingleMock }));
-    const applicantInsertMock = vi.fn(() => ({ select: applicantSelectMock }));
+    // No `.select()` chain: the applicant id is generated client-side
+    // (crypto.randomUUID()) rather than read back from the insert, so
+    // the mock only needs to resolve the plain insert call itself.
+    const applicantInsertMock = vi.fn().mockResolvedValue({ error: null });
     const availabilityInsertMock = vi.fn().mockResolvedValue({ error: null });
 
     mockedFrom.mockImplementation((table: string) => {
@@ -85,7 +86,12 @@ describe("ApplyPage", () => {
 
     await waitFor(() => expect(screen.getByText("Thanks for applying!")).toBeInTheDocument());
     expect(applicantInsertMock).toHaveBeenCalledWith(
-      expect.objectContaining({ organization_id: ORG_ID, first_name: "Ashley", last_name: "Rivera" })
+      expect.objectContaining({
+        id: expect.any(String),
+        organization_id: ORG_ID,
+        first_name: "Ashley",
+        last_name: "Rivera"
+      })
     );
     // No day was checked, so no availability rows should have been submitted.
     expect(availabilityInsertMock).not.toHaveBeenCalled();

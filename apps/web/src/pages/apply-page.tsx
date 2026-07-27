@@ -122,35 +122,41 @@ export function ApplyPage() {
     setSubmitError(null);
     setSubmitting(true);
     try {
-      const { data: applicant, error: applicantError } = await supabase
-        .from("job_applicants")
-        .insert({
-          organization_id: organizationQuery.data.id,
-          first_name: form.firstName,
-          last_name: form.lastName,
-          email: form.email,
-          phone: form.phone || null,
-          desired_weekly_hours: parseOptionalNumber(form.desiredWeeklyHours),
-          min_weekly_hours: parseOptionalNumber(form.minWeeklyHours),
-          max_weekly_hours: parseOptionalNumber(form.maxWeeklyHours),
-          min_shift_hours: parseOptionalNumber(form.minShiftHours),
-          max_shift_hours: parseOptionalNumber(form.maxShiftHours),
-          preferred_cities: parseList(form.preferredCities),
-          max_travel_minutes: parseOptionalNumber(form.maxTravelMinutes),
-          transportation_method: form.transportationMethod || null,
-          willing_to_transport_clients: form.willingToTransportClients,
-          languages: parseList(form.languages),
-          notes: form.notes || null
-        })
-        .select("id")
-        .single();
+      // Generated client-side rather than read back via `.select()`:
+      // there's deliberately no public SELECT policy on job_applicants
+      // (only staff with applicants.read can read applicant rows), and
+      // Postgres RLS requires a satisfying SELECT policy for a plain
+      // INSERT...RETURNING too, not just the INSERT policy's WITH
+      // CHECK. Supplying our own id sidesteps needing to read the row
+      // back at all.
+      const applicantId = crypto.randomUUID();
+
+      const { error: applicantError } = await supabase.from("job_applicants").insert({
+        id: applicantId,
+        organization_id: organizationQuery.data.id,
+        first_name: form.firstName,
+        last_name: form.lastName,
+        email: form.email,
+        phone: form.phone || null,
+        desired_weekly_hours: parseOptionalNumber(form.desiredWeeklyHours),
+        min_weekly_hours: parseOptionalNumber(form.minWeeklyHours),
+        max_weekly_hours: parseOptionalNumber(form.maxWeeklyHours),
+        min_shift_hours: parseOptionalNumber(form.minShiftHours),
+        max_shift_hours: parseOptionalNumber(form.maxShiftHours),
+        preferred_cities: parseList(form.preferredCities),
+        max_travel_minutes: parseOptionalNumber(form.maxTravelMinutes),
+        transportation_method: form.transportationMethod || null,
+        willing_to_transport_clients: form.willingToTransportClients,
+        languages: parseList(form.languages),
+        notes: form.notes || null
+      });
       if (applicantError) throw applicantError;
 
       if (enabledDays.length > 0) {
         const { error: availabilityError } = await supabase.from("job_applicant_availability").insert(
           enabledDays.map((day) => ({
             organization_id: organizationQuery.data!.id,
-            applicant_id: applicant.id,
+            applicant_id: applicantId,
             day_of_week: day,
             start_time: availability[day].start,
             end_time: availability[day].end,
