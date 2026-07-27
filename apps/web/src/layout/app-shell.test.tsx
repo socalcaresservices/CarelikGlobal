@@ -1,16 +1,31 @@
-import { render, screen } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { useAuth } from "@carelik/auth";
 import { useOrganization } from "@/providers/organization-provider";
+import { supabase } from "@/lib/supabase";
 import { AppShell } from "./app-shell";
 
 vi.mock("@carelik/auth", () => ({ useAuth: vi.fn() }));
 vi.mock("@/providers/organization-provider", () => ({ useOrganization: vi.fn() }));
 vi.mock("@/components/global-search", () => ({ GlobalSearch: () => null }));
+// ContextBar gets its own dedicated test file (context-bar.test.tsx) -
+// stubbed here so the nav-focused tests below aren't also asserting on
+// (or getting tripped up by) its supabase.rpc("get_agency_dashboard")
+// call.
+vi.mock("@/components/context-bar", () => ({ ContextBar: () => null }));
+vi.mock("@/lib/supabase", () => ({
+  supabase: {
+    rpc: vi.fn()
+  }
+}));
 
 const mockedUseAuth = vi.mocked(useAuth);
 const mockedUseOrganization = vi.mocked(useOrganization);
+const mockedRpc = vi.mocked(supabase.rpc);
+
+const ORG_ID = "11111111-1111-4111-8111-111111111111";
 
 function baseOrganization(role: "organization_owner" | "organization_admin" | null) {
   return {
@@ -26,11 +41,14 @@ function baseOrganization(role: "organization_owner" | "organization_admin" | nu
 }
 
 function renderShell() {
+  const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
     <MemoryRouter>
-      <AppShell>
-        <div />
-      </AppShell>
+      <QueryClientProvider client={queryClient}>
+        <AppShell>
+          <div />
+        </AppShell>
+      </QueryClientProvider>
     </MemoryRouter>
   );
 }
@@ -108,5 +126,64 @@ describe("AppShell nav", () => {
     renderShell();
     expect(screen.queryByText("Platform Administration")).not.toBeInTheDocument();
     expect(screen.getAllByText("Organizations")).toHaveLength(1);
+  });
+
+  it("shows a badge with the actionable count next to Credentials and Incidents", async () => {
+    mockedUseAuth.mockReturnValue({ user: { email: "owner@acme.test" } } as never);
+    mockedUseOrganization.mockReturnValue({
+      ...baseOrganization("organization_owner"),
+      activeOrganizationId: ORG_ID
+    });
+    mockedRpc.mockResolvedValue({
+      data: [
+        {
+          clients_uncovered: 0,
+          schedule_issues: 0,
+          access_pending: 0,
+          credentials_issues: 4,
+          authorizations_issues: 0,
+          incidents_open: 2
+        }
+      ],
+      error: null
+    } as never);
+
+    renderShell();
+
+    await waitFor(() => expect(mockedRpc).toHaveBeenCalledWith("get_actionable_counts", { target_organization_id: ORG_ID }));
+    const credentialsLink = (await screen.findByText("Credentials")).closest("a")!;
+    expect(within(credentialsLink).getByText("4")).toBeInTheDocument();
+    const incidentsLink = screen.getByText("Incidents").closest("a")!;
+    expect(within(incidentsLink).getByText("2")).toBeInTheDocument();
+    // A zero count renders no badge at all, not a "0" pill.
+    const clientsLink = screen.getByText("Clients").closest("a")!;
+    expect(within(clientsLink).queryByText("0")).not.toBeInTheDocument();
+  });
+
+  it("shows no badge when every actionable count is zero", async () => {
+    mockedUseAuth.mockReturnValue({ user: { email: "owner@acme.test" } } as never);
+    mockedUseOrganization.mockReturnValue({
+      ...baseOrganization("organization_owner"),
+      activeOrganizationId: ORG_ID
+    });
+    mockedRpc.mockResolvedValue({
+      data: [
+        {
+          clients_uncovered: 0,
+          schedule_issues: 0,
+          access_pending: 0,
+          credentials_issues: 0,
+          authorizations_issues: 0,
+          incidents_open: 0
+        }
+      ],
+      error: null
+    } as never);
+
+    renderShell();
+
+    await waitFor(() => expect(mockedRpc).toHaveBeenCalled());
+    const credentialsLink = (await screen.findByText("Credentials")).closest("a")!;
+    expect(within(credentialsLink).queryByText("0")).not.toBeInTheDocument();
   });
 });

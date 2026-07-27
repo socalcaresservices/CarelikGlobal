@@ -1,5 +1,6 @@
 import type { PropsWithChildren } from "react";
 import { NavLink } from "react-router-dom";
+import { useQuery } from "@tanstack/react-query";
 import {
   AlertOctagon,
   BadgeCheck,
@@ -21,6 +22,27 @@ import { useAuth } from "@carelik/auth";
 import { cn } from "@carelik/ui";
 import { useOrganization } from "@/providers/organization-provider";
 import { GlobalSearch } from "@/components/global-search";
+import { ContextBar } from "@/components/context-bar";
+import { supabase } from "@/lib/supabase";
+
+// The six counts get_actionable_counts (20260728010000) returns - one
+// per nav destination that has an "issues" concept worth surfacing as a
+// badge. Not every nav item has a badgeKey; ones that don't (Command
+// Center, Team, Organizations, Audit, Settings...) just never render a
+// pill. A null count means the caller lacks permission to know, which
+// looks identical to zero (no badge) - the distinction only matters
+// server-side, for not leaking a number to someone who can't see the
+// underlying page.
+interface ActionableCounts {
+  clients_uncovered: number | null;
+  schedule_issues: number | null;
+  access_pending: number | null;
+  credentials_issues: number | null;
+  authorizations_issues: number | null;
+  incidents_open: number | null;
+}
+
+type BadgeKey = keyof ActionableCounts;
 
 interface NavItem {
   to: string;
@@ -28,6 +50,7 @@ interface NavItem {
   icon: typeof LayoutDashboard;
   permission?: Permission;
   ownerOnly?: boolean;
+  badgeKey?: BadgeKey;
 }
 
 // Two groups instead of one flat list: routine, daily-operations
@@ -41,22 +64,23 @@ const operationsNav: NavItem[] = [
   { to: "/", label: "Command Center", icon: LayoutDashboard },
   { to: "/owner-dashboard", label: "Workforce Insights", icon: Crown, ownerOnly: true },
   { to: "/applicants", label: "Applicants", icon: UserPlus, permission: "applicants.read" },
-  { to: "/clients", label: "Clients", icon: Users, permission: "clients.read" },
+  { to: "/clients", label: "Clients", icon: Users, permission: "clients.read", badgeKey: "clients_uncovered" },
   { to: "/team", label: "Team", icon: HeartHandshake, permission: "membership.read" },
-  { to: "/schedule", label: "Schedule", icon: CalendarClock },
-  { to: "/credentials", label: "Credentials", icon: BadgeCheck },
+  { to: "/schedule", label: "Schedule", icon: CalendarClock, badgeKey: "schedule_issues" },
+  { to: "/credentials", label: "Credentials", icon: BadgeCheck, badgeKey: "credentials_issues" },
   {
     to: "/authorizations",
     label: "Authorizations",
     icon: ClipboardCheck,
-    permission: "authorizations.read"
+    permission: "authorizations.read",
+    badgeKey: "authorizations_issues"
   },
-  { to: "/incidents", label: "Incidents", icon: AlertOctagon }
+  { to: "/incidents", label: "Incidents", icon: AlertOctagon, badgeKey: "incidents_open" }
 ];
 
 const administrationNav: NavItem[] = [
   { to: "/organizations", label: "Organizations", icon: Building2, permission: "organization.read" },
-  { to: "/access", label: "Access", icon: ShieldCheck, permission: "membership.read" },
+  { to: "/access", label: "Access", icon: ShieldCheck, permission: "membership.read", badgeKey: "access_pending" },
   { to: "/audit", label: "Audit", icon: ClipboardList, permission: "audit.read" },
   { to: "/settings", label: "Settings", icon: Settings, permission: "settings.read" }
 ];
@@ -79,7 +103,7 @@ function visibleItems(items: NavItem[], hasPermission: (permission: Permission) 
   );
 }
 
-function NavLinkItem({ to, label, icon: Icon }: NavItem) {
+function NavLinkItem({ to, label, icon: Icon, badgeCount }: NavItem & { badgeCount?: number | null | undefined }) {
   return (
     <NavLink
       key={to}
@@ -95,7 +119,12 @@ function NavLinkItem({ to, label, icon: Icon }: NavItem) {
       }
     >
       <Icon className="h-4 w-4" />
-      {label}
+      <span className="flex-1">{label}</span>
+      {badgeCount ? (
+        <span className="rounded-full bg-red-100 px-2 py-0.5 text-xs font-semibold text-red-700">
+          {badgeCount}
+        </span>
+      ) : null}
     </NavLink>
   );
 }
@@ -129,6 +158,29 @@ export function AppShell({ children }: PropsWithChildren) {
 
   const greeting = getGreeting(new Date());
 
+  // Powers the nav-rail badges - one query per organization/session
+  // covers every badge at once, rather than each destination page
+  // fetching its own count. Gated on membership.read the same way the
+  // RPC itself is, and on having at least one badgeKey nav item visible
+  // so a platform owner with no active organization doesn't fire it.
+  const countsQuery = useQuery({
+    queryKey: ["actionable-counts", activeOrganizationId],
+    queryFn: async () => {
+      const { data, error } = await supabase.rpc("get_actionable_counts", {
+        target_organization_id: activeOrganizationId!
+      });
+      if (error) throw error;
+      return (Array.isArray(data) ? data[0] : data) as ActionableCounts | undefined;
+    },
+    enabled: !!activeOrganizationId && hasPermission("membership.read")
+  });
+  const counts = countsQuery.data;
+
+  function badgeFor(item: NavItem) {
+    if (!item.badgeKey || !counts) return undefined;
+    return counts[item.badgeKey];
+  }
+
   return (
     <div className="min-h-screen bg-slate-50">
       <aside className="fixed inset-y-0 left-0 hidden w-64 border-r border-slate-200 bg-white lg:flex lg:flex-col">
@@ -141,7 +193,7 @@ export function AppShell({ children }: PropsWithChildren) {
         <nav className="flex-1 space-y-4 overflow-y-auto p-3">
           <div className="space-y-1">
             {visibleOperationsNav.map((item) => (
-              <NavLinkItem key={item.to} {...item} />
+              <NavLinkItem key={item.to} {...item} badgeCount={badgeFor(item)} />
             ))}
           </div>
           {visiblePlatformAdministrationNav.length > 0 ? (
@@ -163,7 +215,7 @@ export function AppShell({ children }: PropsWithChildren) {
               </p>
               <div className="space-y-1">
                 {visibleAdministrationNav.map((item) => (
-                  <NavLinkItem key={item.to} {...item} />
+                  <NavLinkItem key={item.to} {...item} badgeCount={badgeFor(item)} />
                 ))}
               </div>
             </div>
@@ -209,6 +261,7 @@ export function AppShell({ children }: PropsWithChildren) {
             <p className="text-sm text-slate-400">No organization access</p>
           )}
         </header>
+        <ContextBar />
         <div className="p-6">{children}</div>
       </main>
     </div>
