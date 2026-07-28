@@ -303,6 +303,7 @@ export function AppShell({ children }: PropsWithChildren) {
           </div>
           {organizations.length > 0 ? (
             <select
+              aria-label="Active organization"
               value={activeOrganizationId ?? ""}
               onChange={(event) => setActiveOrganizationId(event.target.value)}
               disabled={loading || organizations.length === 1}

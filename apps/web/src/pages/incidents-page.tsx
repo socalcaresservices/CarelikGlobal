@@ -476,6 +476,7 @@ export function IncidentsPage() {
                     <td className="py-2.5">
                       {canManage ? (
                         <select
+                          aria-label={`Change status for ${row.category} incident`}
                           value={row.status}
                           disabled={isPending}
                           onChange={(event) => handleStatusChange(row.id, event.target.value as IncidentStatus)}

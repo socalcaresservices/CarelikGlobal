@@ -442,6 +442,7 @@ export function TeamPage() {
                     <td className="py-2.5 text-slate-600">
                       {canModifyRow ? (
                         <select
+                          aria-label={`Change role for ${member.display_name}`}
                           value={member.role}
                           disabled={isPending}
                           onChange={(event) => handleRoleChange(member.membership_id, event.target.value)}

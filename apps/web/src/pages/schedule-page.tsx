@@ -474,6 +474,7 @@ export function SchedulePage() {
                     <td className="py-2.5">
                       {canManage ? (
                         <select
+                          aria-label={`Change status for ${shift.client_name} / ${shift.caregiver_name} shift`}
                           value={shift.status}
                           disabled={isPending}
                           onChange={(event) =>

@@ -278,6 +278,25 @@ describe("AppShell nav", () => {
     expect(container.firstChild).not.toHaveStyle({ "--color-accent": expect.anything() });
   });
 
+  it("gives the organization switcher an accessible name", () => {
+    // This <select> determines which org's data the entire app is scoped
+    // to and renders on every authenticated page - it previously had no
+    // id/label/aria-label at all, so a screen reader user tabbing into it
+    // heard only "combo box" with no indication of what it does.
+    mockedUseAuth.mockReturnValue({ user: { email: "owner@acme.test" } } as never);
+    mockedUseOrganization.mockReturnValue({
+      ...baseOrganization("organization_owner"),
+      organizations: [brandedOrganization(), brandedOrganization({ id: "22222222-2222-4222-8222-222222222222", displayName: "Second Org" })],
+      activeOrganizationId: ORG_ID
+    });
+
+    renderShell();
+
+    const select = screen.getByRole("combobox", { name: "Active organization" });
+    expect(select).toBeInTheDocument();
+    expect(screen.getByText("Second Org")).toBeInTheDocument();
+  });
+
   it("hides the 'Powered by CareLik' footer when the organization has turned it off", () => {
     mockedUseAuth.mockReturnValue({ user: { email: "owner@acme.test" } } as never);
     mockedUseOrganization.mockReturnValue({
