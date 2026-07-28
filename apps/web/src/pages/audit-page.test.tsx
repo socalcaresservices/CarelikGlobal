@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { useOrganization } from "@/providers/organization-provider";
@@ -79,7 +79,12 @@ describe("AuditPage", () => {
 
     await waitFor(() => expect(screen.getByText("Jamie")).toBeInTheDocument());
     expect(screen.getByText("organizations · update")).toBeInTheDocument();
-    expect(mockedRpc).toHaveBeenCalledWith("list_audit_logs", { target_organization_id: ORG_ID });
+    expect(mockedRpc).toHaveBeenCalledWith("list_audit_logs", {
+      target_organization_id: ORG_ID,
+      result_limit: 200,
+      before_id: null
+    });
+    expect(screen.queryByText("Load older activity")).not.toBeInTheDocument();
   });
 
   it("shows a system actor for entries with no actor_user_id", async () => {
@@ -109,5 +114,46 @@ describe("AuditPage", () => {
 
     renderPage();
     await waitFor(() => expect(screen.getByText("No activity recorded yet.")).toBeInTheDocument());
+  });
+
+  function makeRow(id: number) {
+    return {
+      id,
+      occurred_at: "2026-07-19T18:50:03.713Z",
+      actor_user_id: "55a38d4c-375a-475a-9e90-a8b9f0c9acc3",
+      actor_display_name: `Actor ${id}`,
+      action: "organizations.update",
+      entity_type: "organizations",
+      entity_id: "119c0cdb-fb7c-49aa-9dd3-35c04db71b1b"
+    };
+  }
+
+  it("offers to load older activity when a full page comes back, and appends the next page on click", async () => {
+    mockedUseOrganization.mockReturnValue({ ...baseOrganization(), hasPermission: vi.fn(() => true) });
+    // First page is a full 200 rows (ids 200 down to 1), signaling there
+    // may be more - the second page is a single older row.
+    const firstPage = Array.from({ length: 200 }, (_, index) => makeRow(200 - index));
+    const secondPage = [makeRow(0)];
+    mockedRpc.mockImplementation((_fn: string, args: Record<string, unknown>) => {
+      if (args.before_id === null) return Promise.resolve({ data: firstPage, error: null }) as never;
+      return Promise.resolve({ data: secondPage, error: null }) as never;
+    });
+
+    renderPage();
+
+    await waitFor(() => expect(screen.getByText("Actor 200")).toBeInTheDocument());
+    expect(screen.getByText("Load older activity")).toBeInTheDocument();
+    expect(screen.queryByText("Actor 0")).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByText("Load older activity"));
+
+    await waitFor(() => expect(screen.getByText("Actor 0")).toBeInTheDocument());
+    expect(mockedRpc).toHaveBeenCalledWith("list_audit_logs", {
+      target_organization_id: ORG_ID,
+      result_limit: 200,
+      before_id: 1
+    });
+    // Second page has fewer than PAGE_SIZE rows, so there's nothing more.
+    expect(screen.queryByText("Load older activity")).not.toBeInTheDocument();
   });
 });

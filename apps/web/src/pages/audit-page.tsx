@@ -1,5 +1,6 @@
-import { useQuery } from "@tanstack/react-query";
-import { Card, FilterBar, type ActiveFilter } from "@carelik/ui";
+import { useMemo } from "react";
+import { useInfiniteQuery } from "@tanstack/react-query";
+import { Card, FilterBar, Button, type ActiveFilter } from "@carelik/ui";
 import { useOrganization } from "@/providers/organization-provider";
 import { supabase } from "@/lib/supabase";
 import { useTableControls } from "@/lib/use-table-controls";
@@ -8,9 +9,20 @@ import { useColumnWidths } from "@/lib/use-column-widths";
 import { SortableHeader } from "@/components/sortable-header";
 
 // Backed by list_audit_logs(), a security-definer RPC (see
-// supabase/migrations/20260719220000_list_audit_logs.sql) rather than a
-// direct table read - it joins in the actor's display name, which RLS on
+// supabase/migrations/20260719220000_list_audit_logs.sql, extended with
+// a before_id keyset cursor in 20260729010000) rather than a direct
+// table read - it joins in the actor's display name, which RLS on
 // user_profiles wouldn't let this page do on its own.
+//
+// A page is capped at PAGE_SIZE rows (matching the RPC's own default),
+// unlike every other list page in the app, which fetches everything and
+// filters/sorts client-side via useTableControls - audit_logs is the one
+// table expected to genuinely outgrow that. useInfiniteQuery accumulates
+// pages as the user asks for older activity via "Load older activity"
+// below; each page's rows are still filtered/sorted client-side same as
+// before, just over the accumulated set instead of a single fetch.
+const PAGE_SIZE = 200;
+
 interface AuditLogRow {
   id: number;
   occurred_at: string;
@@ -30,26 +42,36 @@ export function AuditPage() {
 
   const canRead = hasPermission("audit.read");
 
-  const auditQuery = useQuery({
+  const auditQuery = useInfiniteQuery({
     queryKey: ["audit-logs", activeOrganizationId],
-    queryFn: async () => {
+    queryFn: async ({ pageParam }) => {
       const { data, error } = await supabase.rpc("list_audit_logs", {
-        target_organization_id: activeOrganizationId!
+        target_organization_id: activeOrganizationId!,
+        result_limit: PAGE_SIZE,
+        before_id: pageParam
       });
       if (error) throw error;
       return (data ?? []) as AuditLogRow[];
     },
+    initialPageParam: null as number | null,
+    getNextPageParam: (lastPage) =>
+      lastPage.length === PAGE_SIZE ? lastPage[lastPage.length - 1]!.id : undefined,
     enabled: !!activeOrganizationId && canRead
   });
+
+  const auditRows = useMemo(
+    () => auditQuery.data?.pages.flat() ?? [],
+    [auditQuery.data]
+  );
 
   // Record-type options are derived from what's actually in the log
   // (clients, shifts, credentials...) rather than a fixed enum, since
   // the audit trigger runs generically off any table with an
   // organization_id + id column - there's no single source of truth
   // for "every entity type that could ever appear here."
-  const entityTypeOptions = Array.from(new Set((auditQuery.data ?? []).map((row) => row.entity_type))).sort();
+  const entityTypeOptions = Array.from(new Set(auditRows.map((row) => row.entity_type))).sort();
 
-  const filters = useFilters<AuditLogRow>(auditQuery.data, {
+  const filters = useFilters<AuditLogRow>(auditRows, {
     entityType: (row, value) => row.entity_type === value
   });
 
@@ -227,6 +249,19 @@ export function AuditPage() {
           </table>
           </div>
         )}
+        {auditQuery.hasNextPage ? (
+          <div className="mt-4 flex justify-center">
+            <Button
+              type="button"
+              variant="secondary"
+              size="sm"
+              loading={auditQuery.isFetchingNextPage}
+              onClick={() => void auditQuery.fetchNextPage()}
+            >
+              Load older activity
+            </Button>
+          </div>
+        ) : null}
       </Card>
     </section>
   );
