@@ -2,6 +2,7 @@ import { useEffect, useState, type FormEvent } from "react";
 import { useSearchParams } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
+  Button,
   Card,
   FormSection,
   SearchableCombobox,
@@ -310,13 +311,9 @@ export function CredentialsPage() {
             </FormSection>
 
             <div className="flex items-end gap-3">
-              <button
-                type="submit"
-                disabled={saving}
-                className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
-              >
+              <Button type="submit" loading={saving}>
                 {saving ? "Saving…" : editingId ? "Save changes" : "Add credential"}
-              </button>
+              </Button>
               {editingId ? (
                 <button
                   type="button"

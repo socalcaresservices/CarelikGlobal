@@ -2,6 +2,7 @@ import { useEffect, useState, type FormEvent } from "react";
 import { useSearchParams } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
+  Button,
   Card,
   FormSection,
   SearchableCombobox,
@@ -429,13 +430,9 @@ export function AuthorizationsPage() {
                 className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900"
               />
             </div>
-            <button
-              type="submit"
-              disabled={serviceSaving}
-              className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
-            >
+            <Button type="submit" loading={serviceSaving}>
               {serviceSaving ? "Adding…" : "Add service"}
-            </button>
+            </Button>
           </form>
           {serviceError ? <p className="mt-2 text-sm text-red-700">{serviceError}</p> : null}
           {(servicesQuery.data ?? []).length > 0 ? (
@@ -573,13 +570,9 @@ export function AuthorizationsPage() {
             </FormSection>
 
             <div className="flex items-end gap-3">
-              <button
-                type="submit"
-                disabled={saving}
-                className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
-              >
+              <Button type="submit" loading={saving}>
                 {saving ? "Saving…" : editingId ? "Save changes" : "Add authorization"}
-              </button>
+              </Button>
               {editingId ? (
                 <button
                   type="button"

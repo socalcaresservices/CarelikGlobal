@@ -2,7 +2,16 @@ import { useEffect, useState, type FormEvent } from "react";
 import { Link, useParams } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowLeft } from "lucide-react";
-import { Card, FormSection, MultiSelectCombobox, StatusBadge, cn, type ComboboxOption, type StatusTone } from "@carelik/ui";
+import {
+  Button,
+  Card,
+  FormSection,
+  MultiSelectCombobox,
+  StatusBadge,
+  cn,
+  type ComboboxOption,
+  type StatusTone
+} from "@carelik/ui";
 import {
   getAuthorizationExpiryStatus,
   getAuthorizationUsageStatus,
@@ -494,7 +503,9 @@ export function ClientDetailPage() {
               onClick={() => setTab(key)}
               className={cn(
                 "rounded-lg px-3 py-1.5 text-sm font-medium",
-                tab === key ? "bg-slate-900 text-white" : "text-slate-600 hover:bg-slate-100"
+                tab === key
+                  ? "bg-[var(--color-accent,#0f172a)] text-[var(--color-accent-foreground,#ffffff)]"
+                  : "text-slate-600 hover:bg-slate-100"
               )}
             >
               {label}
@@ -599,13 +610,9 @@ export function ClientDetailPage() {
                 </FormSection>
 
                 <div>
-                  <button
-                    type="submit"
-                    disabled={profileSaving}
-                    className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
-                  >
+                  <Button type="submit" loading={profileSaving}>
                     {profileSaving ? "Saving…" : "Save"}
-                  </button>
+                  </Button>
                 </div>
                 {profileError ? <p className="text-sm text-red-700">{profileError}</p> : null}
               </form>

@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Card } from "@carelik/ui";
+import { Button, buttonVariants, Card } from "@carelik/ui";
 import { useOrganization } from "@/providers/organization-provider";
 import { supabase } from "@/lib/supabase";
 import { uploadOrganizationLogo } from "@/lib/organization-branding";
@@ -214,10 +214,7 @@ export function OrganizationsPage() {
           </h2>
         </div>
         {isPlatformOwner ? (
-          <Link
-            to="/organizations/new"
-            className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-slate-800"
-          >
+          <Link to="/organizations/new" className={buttonVariants()}>
             + New Organization
           </Link>
         ) : null}
@@ -609,14 +606,9 @@ export function OrganizationsPage() {
               </div>
 
               <div>
-                <button
-                  type="button"
-                  disabled={savingEdit}
-                  onClick={handleSaveEdit}
-                  className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
-                >
+                <Button onClick={handleSaveEdit} loading={savingEdit}>
                   {savingEdit ? "Saving…" : "Save changes"}
-                </button>
+                </Button>
               </div>
               {editError ? <p className="text-sm text-red-700">{editError}</p> : null}
               {editSuccess ? <p className="text-sm text-emerald-700">{editSuccess}</p> : null}

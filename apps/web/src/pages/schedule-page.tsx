@@ -1,7 +1,7 @@
 import { useState, type FormEvent } from "react";
 import { useSearchParams } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Card, FilterBar, type ActiveFilter } from "@carelik/ui";
+import { Button, Card, FilterBar, type ActiveFilter } from "@carelik/ui";
 import { shiftStatusSchema } from "@carelik/shared";
 import { useOrganization } from "@/providers/organization-provider";
 import { supabase } from "@/lib/supabase";
@@ -371,13 +371,9 @@ export function SchedulePage() {
               />
             </div>
             <div className="sm:col-span-2">
-              <button
-                type="submit"
-                disabled={saving}
-                className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
-              >
+              <Button type="submit" loading={saving}>
                 {saving ? "Scheduling…" : "Schedule shift"}
-              </button>
+              </Button>
             </div>
           </form>
           {formError ? <p className="mt-3 text-sm text-red-700">{formError}</p> : null}

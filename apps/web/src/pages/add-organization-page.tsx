@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
-import { Card } from "@carelik/ui";
+import { Button, Card } from "@carelik/ui";
 import { systemRoleSchema } from "@carelik/shared";
 import { useAuth } from "@carelik/auth";
 import { useOrganization } from "@/providers/organization-provider";
@@ -406,16 +406,14 @@ export function AddOrganizationPage() {
           </p>
           {submitError ? <p className="mt-3 text-sm text-red-700">{submitError}</p> : null}
           <div className="mt-6 flex gap-3">
-            <button
-              type="button"
+            <Button
               onClick={() => {
                 setActiveOrganizationId(createdOrganization.id);
                 navigate("/organizations");
               }}
-              className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-slate-800"
             >
               Switch to {createdOrganization.display_name}
-            </button>
+            </Button>
             <Link
               to="/organizations/new"
               onClick={() => {
@@ -457,7 +455,10 @@ export function AddOrganizationPage() {
           <span>{progressPct}%</span>
         </div>
         <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-slate-100">
-          <div className="h-full rounded-full bg-slate-900 transition-all" style={{ width: `${progressPct}%` }} />
+          <div
+            className="h-full rounded-full bg-[var(--color-accent,#0f172a)] transition-all"
+            style={{ width: `${progressPct}%` }}
+          />
         </div>
       </div>
 
@@ -973,22 +974,13 @@ export function AddOrganizationPage() {
             Previous
           </button>
           {currentStep === "review" ? (
-            <button
-              type="button"
-              onClick={handleFinalSubmit}
-              disabled={submitting}
-              className="rounded-lg bg-slate-900 px-6 py-2.5 text-sm font-medium text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
-            >
+            <Button onClick={handleFinalSubmit} loading={submitting} className="px-6 py-2.5">
               {submitting ? "Creating…" : "Create organization"}
-            </button>
+            </Button>
           ) : (
-            <button
-              type="button"
-              onClick={goNext}
-              className="rounded-lg bg-slate-900 px-6 py-2.5 text-sm font-medium text-white transition hover:bg-slate-800"
-            >
+            <Button onClick={goNext} className="px-6 py-2.5">
               Next
-            </button>
+            </Button>
           )}
         </div>
       </div>

@@ -1,7 +1,7 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
-import { Card, FormSection, FilterBar, type ActiveFilter } from "@carelik/ui";
+import { Button, Card, FormSection, FilterBar, type ActiveFilter } from "@carelik/ui";
 import { clientStatusSchema } from "@carelik/shared";
 import { useOrganization } from "@/providers/organization-provider";
 import { supabase } from "@/lib/supabase";
@@ -297,13 +297,9 @@ export function ClientsPage() {
             </FormSection>
 
             <div className="flex items-end gap-3">
-              <button
-                type="submit"
-                disabled={saving}
-                className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
-              >
+              <Button type="submit" loading={saving}>
                 {saving ? "Saving…" : editingId ? "Save changes" : "Add client"}
-              </button>
+              </Button>
               {editingId ? (
                 <button
                   type="button"

@@ -346,13 +346,9 @@ export function IncidentsPage() {
               />
             </div>
             <div className="sm:col-span-2">
-              <button
-                type="submit"
-                disabled={saving}
-                className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
-              >
+              <Button type="submit" loading={saving}>
                 {saving ? "Filing…" : "File incident"}
-              </button>
+              </Button>
             </div>
           </form>
           {formError ? <p className="mt-3 text-sm text-red-700">{formError}</p> : null}

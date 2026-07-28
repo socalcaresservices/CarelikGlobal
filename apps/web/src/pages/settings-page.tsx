@@ -658,13 +658,9 @@ export function SettingsPage() {
               />
             </div>
             <div className="flex items-center gap-3">
-              <button
-                type="submit"
-                disabled={saving}
-                className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
-              >
+              <Button type="submit" loading={saving}>
                 {saving ? "Saving…" : editingVersion !== null ? "Save changes" : "Add setting"}
-              </button>
+              </Button>
               {editingVersion !== null ? (
                 <button
                   type="button"

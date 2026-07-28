@@ -1,7 +1,7 @@
 import { useState, type FormEvent } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
-import { Card, FilterBar, type ActiveFilter } from "@carelik/ui";
+import { Button, Card, FilterBar, type ActiveFilter } from "@carelik/ui";
 import { systemRoleSchema, membershipStatusSchema } from "@carelik/shared";
 import { useAuth } from "@carelik/auth";
 import { useOrganization } from "@/providers/organization-provider";
@@ -318,13 +318,9 @@ export function TeamPage() {
                 ))}
               </select>
             </div>
-            <button
-              type="submit"
-              disabled={inviting}
-              className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
-            >
+            <Button type="submit" loading={inviting}>
               {inviting ? "Adding…" : "Add caregiver"}
-            </button>
+            </Button>
           </form>
           {formError ? <p className="mt-3 text-sm text-red-700">{formError}</p> : null}
           {formSuccess ? <p className="mt-3 text-sm text-emerald-700">{formSuccess}</p> : null}

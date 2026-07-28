@@ -1,7 +1,7 @@
 import { useState, type FormEvent } from "react";
 import { Navigate } from "react-router-dom";
 import { useAuth } from "@carelik/auth";
-import { Card } from "@carelik/ui";
+import { Button, Card } from "@carelik/ui";
 
 const MIN_PASSWORD_LENGTH = 8;
 
@@ -100,13 +100,9 @@ export function SetPasswordPage() {
               className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900"
             />
           </div>
-          <button
-            type="submit"
-            disabled={submitting || loading}
-            className="flex w-full items-center justify-center gap-2 rounded-lg bg-slate-900 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
-          >
+          <Button type="submit" disabled={loading} loading={submitting} className="w-full">
             {submitting ? "Saving…" : "Set password and continue"}
-          </button>
+          </Button>
         </form>
       </Card>
     </div>

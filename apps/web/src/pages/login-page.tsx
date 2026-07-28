@@ -2,7 +2,7 @@ import { useState, type FormEvent } from "react";
 import { Navigate, useLocation } from "react-router-dom";
 import { Github } from "lucide-react";
 import { useAuth } from "@carelik/auth";
-import { Card } from "@carelik/ui";
+import { Button, Card } from "@carelik/ui";
 
 interface LocationState {
   from?: { pathname: string };
@@ -121,13 +121,9 @@ export function LoginPage() {
                 className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900"
               />
             </div>
-            <button
-              type="submit"
-              disabled={submitting}
-              className="flex w-full items-center justify-center gap-2 rounded-lg bg-slate-900 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
-            >
+            <Button type="submit" loading={submitting} className="w-full">
               {submitting ? "Signing in…" : "Sign in"}
-            </button>
+            </Button>
             <button
               type="button"
               onClick={() => switchMode("forgot")}
@@ -151,13 +147,9 @@ export function LoginPage() {
                 className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900"
               />
             </div>
-            <button
-              type="submit"
-              disabled={submitting}
-              className="flex w-full items-center justify-center gap-2 rounded-lg bg-slate-900 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
-            >
+            <Button type="submit" loading={submitting} className="w-full">
               {submitting ? "Sending…" : "Send reset link"}
-            </button>
+            </Button>
             <button
               type="button"
               onClick={() => switchMode("password")}
