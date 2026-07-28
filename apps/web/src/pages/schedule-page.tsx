@@ -17,6 +17,26 @@ import { CaregiverHoursCard } from "@/components/caregiver-hours";
 // let this page join in another user's display name on its own. Access
 // mirrors the shifts RLS policy: org-wide with shifts.read, otherwise
 // just the shifts you're the caregiver on.
+//
+// Bounded to a rolling window (see SHIFT_WINDOW_DAYS below) via
+// list_shifts()'s own from_time/to_time params - the same params
+// action-center.tsx and operational-snapshot.tsx already pass, just
+// never used here before. Shifts are the highest-cardinality entity in
+// the app (an active client can generate several a week, indefinitely),
+// so fetching every shift ever and filtering client-side (this page's
+// prior behavior) doesn't scale the way it does for smaller, naturally
+// bounded lists elsewhere. A page-level date-range picker to browse
+// outside this window is real follow-up work, not built here - this is
+// only a safety net against unbounded growth, matching this heading's
+// own "Upcoming and recent" framing.
+// 60 days back, 60 days forward - generous enough that no organization's
+// current shift volume should ever notice the bound today, while still
+// capping the fetch as shift history accumulates over time. Chosen to
+// comfortably exceed action-center.tsx's tighter 7-day signal window
+// (that's a notifications widget, not the primary schedule view) without
+// re-fetching a table that only ever grows.
+const SHIFT_WINDOW_DAYS = 60;
+
 interface ShiftRow {
   id: string;
   client_id: string;
@@ -71,11 +91,16 @@ export function SchedulePage() {
   const canRead = hasPermission("shifts.read");
   const canManage = hasPermission("shifts.update");
 
+  const shiftWindowStart = new Date(Date.now() - SHIFT_WINDOW_DAYS * 24 * 60 * 60 * 1000);
+  const shiftWindowEnd = new Date(Date.now() + SHIFT_WINDOW_DAYS * 24 * 60 * 60 * 1000);
+
   const shiftsQuery = useQuery({
     queryKey: ["shifts", activeOrganizationId],
     queryFn: async () => {
       const { data, error } = await supabase.rpc("list_shifts", {
-        target_organization_id: activeOrganizationId!
+        target_organization_id: activeOrganizationId!,
+        from_time: shiftWindowStart.toISOString(),
+        to_time: shiftWindowEnd.toISOString()
       });
       if (error) throw error;
       return (data ?? []) as ShiftRow[];

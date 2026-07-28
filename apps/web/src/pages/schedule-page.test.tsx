@@ -103,7 +103,39 @@ describe("SchedulePage", () => {
     await waitFor(() => expect(screen.getByText("Jordan Rivera")).toBeInTheDocument());
     expect(screen.getByText("Showing only shifts assigned to you.")).toBeInTheDocument();
     expect(screen.queryByText("Schedule a shift")).not.toBeInTheDocument();
-    expect(mockedRpc).toHaveBeenCalledWith("list_shifts", { target_organization_id: ORG_ID });
+    expect(mockedRpc).toHaveBeenCalledWith(
+      "list_shifts",
+      expect.objectContaining({
+        target_organization_id: ORG_ID,
+        from_time: expect.any(String),
+        to_time: expect.any(String)
+      })
+    );
+  });
+
+  it("bounds the shift fetch to a rolling window around today, not every shift ever", async () => {
+    mockedUseOrganization.mockReturnValue({ ...baseOrganization(), hasPermission: vi.fn(() => true) });
+    mockRpc({ shifts: [], members: [] });
+    mockedFrom.mockReturnValue({ select: mockReadableClients([]) } as never);
+
+    const before = Date.now();
+    renderPage();
+    await waitFor(() => expect(screen.getByText("No shifts scheduled.")).toBeInTheDocument());
+    const after = Date.now();
+
+    const call = mockedRpc.mock.calls.find(([fn]) => fn === "list_shifts")!;
+    const args = call[1] as { from_time: string; to_time: string };
+    const from = new Date(args.from_time).getTime();
+    const to = new Date(args.to_time).getTime();
+    const sixtyDaysMs = 60 * 24 * 60 * 60 * 1000;
+
+    // from_time is ~60 days before "now" and to_time is ~60 days after -
+    // allow slack either side of the test's own render time rather than
+    // asserting an exact instant.
+    expect(before - from).toBeGreaterThan(sixtyDaysMs - 5000);
+    expect(after - from).toBeLessThan(sixtyDaysMs + 5000);
+    expect(to - before).toBeGreaterThan(sixtyDaysMs - 5000);
+    expect(to - after).toBeLessThan(sixtyDaysMs + 5000);
   });
 
   it("shows the scheduling form and creates a shift when shifts.update is held", async () => {
