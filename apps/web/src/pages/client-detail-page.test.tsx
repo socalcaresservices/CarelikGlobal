@@ -238,6 +238,37 @@ describe("ClientDetailPage", () => {
     await waitFor(() => expect(screen.getByText("Not found")).toBeInTheDocument());
   });
 
+  it("shows an error message on the Authorizations tab when the fetch fails, instead of a false empty state", async () => {
+    mockedUseOrganization.mockReturnValue(baseOrganization());
+    mockFromByTable({
+      id: CLIENT_ID,
+      first_name: "Jordan",
+      last_name: "Rivera",
+      phone: null,
+      email: null,
+      address: null,
+      care_notes: null,
+      status: "active",
+      client_requested_services: []
+    });
+    mockedRpc.mockImplementation((fn: string) => {
+      if (fn === "list_client_authorizations") {
+        return Promise.resolve({ data: null, error: new Error("network error") }) as never;
+      }
+      return Promise.resolve({ data: [], error: null }) as never;
+    });
+
+    renderPage();
+    await waitFor(() => expect(screen.getByText("Jordan Rivera")).toBeInTheDocument());
+
+    fireEvent.click(screen.getByRole("button", { name: "Authorizations" }));
+
+    await waitFor(() =>
+      expect(screen.getByText("Could not load authorizations for this client.")).toBeInTheDocument()
+    );
+    expect(screen.queryByText("No authorizations on file.")).not.toBeInTheDocument();
+  });
+
   it("saves client location, care needs, and requested services", async () => {
     mockedUseOrganization.mockReturnValue(baseOrganization());
     const { clientUpdateMock, clientUpdateEqMock, requestedServicesDeleteMock, requestedServicesInsertMock } =

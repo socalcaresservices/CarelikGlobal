@@ -160,6 +160,32 @@ describe("CaregiverDetailPage", () => {
     expect(link.closest("a")).toHaveAttribute("href", `/credentials?caregiverId=${CAREGIVER_ID}`);
   });
 
+  it("shows an error message on the Schedule tab when the shifts fetch fails, instead of a false empty state", async () => {
+    mockedUseAuth.mockReturnValue({ user: { id: "other-user" } } as never);
+    mockedUseOrganization.mockReturnValue(baseOrganization());
+    mockedRpc.mockImplementation((fn: string) => {
+      if (fn === "list_organization_members") {
+        return Promise.resolve({
+          data: [{ user_id: CAREGIVER_ID, display_name: "Sam Caregiver", role: "staff", status: "active" }],
+          error: null
+        }) as never;
+      }
+      if (fn === "list_shifts") {
+        return Promise.resolve({ data: null, error: new Error("network error") }) as never;
+      }
+      return Promise.resolve({ data: [], error: null }) as never;
+    });
+    mockAvailabilityFrom();
+
+    renderPage();
+    await waitFor(() => expect(screen.getByText("Sam Caregiver")).toBeInTheDocument());
+
+    fireEvent.click(screen.getByRole("button", { name: "Schedule" }));
+
+    await waitFor(() => expect(screen.getByText("Could not load shifts for this caregiver.")).toBeInTheDocument());
+    expect(screen.queryByText("No shifts for this caregiver.")).not.toBeInTheDocument();
+  });
+
   it("saves caregiver location and skills", async () => {
     mockedUseAuth.mockReturnValue({ user: { id: CAREGIVER_ID } } as never);
     mockedUseOrganization.mockReturnValue(baseOrganization());

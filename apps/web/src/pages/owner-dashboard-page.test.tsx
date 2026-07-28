@@ -167,6 +167,22 @@ describe("OwnerDashboardPage", () => {
     ).not.toBeInTheDocument();
   });
 
+  it("shows an error message when a section's fetch fails, instead of a false empty state", async () => {
+    mockedUseOrganization.mockReturnValue(baseOrganization("organization_owner"));
+    mockedRpc.mockImplementation((fn: string) => {
+      if (fn === "list_organization_members") return Promise.resolve({ data: [], error: null }) as never;
+      if (fn === "list_incidents") return Promise.resolve({ data: null, error: new Error("network error") }) as never;
+      return Promise.resolve({ data: [], error: null }) as never;
+    });
+
+    renderPage();
+
+    await waitFor(() => expect(screen.getByText("Team by role")).toBeInTheDocument());
+    const incidentStatusCard = screen.getByText("Incidents by status").closest("div")!;
+    await waitFor(() => expect(within(incidentStatusCard).getByText("Could not load incidents.")).toBeInTheDocument());
+    expect(within(incidentStatusCard).queryByText("No incidents reported.")).not.toBeInTheDocument();
+  });
+
   it("allows a platform_owner to view the dashboard", async () => {
     mockedUseOrganization.mockReturnValue(baseOrganization("platform_owner"));
     mockRpc({ members: [{ role: "staff", status: "active" }] });

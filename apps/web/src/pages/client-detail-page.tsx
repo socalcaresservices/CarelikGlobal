@@ -655,6 +655,8 @@ export function ClientDetailPage() {
           </div>
           {shiftsQuery.isLoading ? (
             <p className="mt-3 text-sm text-slate-500">Loading…</p>
+          ) : shiftsQuery.isError ? (
+            <p className="mt-3 text-sm text-red-700">Could not load shifts for this client.</p>
           ) : (shiftsQuery.data ?? []).length === 0 ? (
             <p className="mt-3 text-sm text-slate-400">No shifts for this client.</p>
           ) : (
@@ -685,6 +687,8 @@ export function ClientDetailPage() {
           </p>
           {matchesQuery.isLoading ? (
             <p className="mt-3 text-sm text-slate-500">Loading…</p>
+          ) : matchesQuery.isError ? (
+            <p className="mt-3 text-sm text-red-700">Could not load caregiver matches.</p>
           ) : (matchesQuery.data ?? []).length === 0 ? (
             <p className="mt-3 text-sm text-slate-400">No active caregivers to match against.</p>
           ) : (
@@ -729,6 +733,8 @@ export function ClientDetailPage() {
           </div>
           {authorizationsQuery.isLoading ? (
             <p className="mt-3 text-sm text-slate-500">Loading…</p>
+          ) : authorizationsQuery.isError ? (
+            <p className="mt-3 text-sm text-red-700">Could not load authorizations for this client.</p>
           ) : (authorizationsQuery.data ?? []).length === 0 ? (
             <p className="mt-3 text-sm text-slate-400">No authorizations on file.</p>
           ) : (
@@ -776,6 +782,8 @@ export function ClientDetailPage() {
           <h3 className="font-semibold text-slate-950">Incidents</h3>
           {incidentsQuery.isLoading ? (
             <p className="mt-3 text-sm text-slate-500">Loading…</p>
+          ) : incidentsQuery.isError ? (
+            <p className="mt-3 text-sm text-red-700">Could not load incidents reported for this client.</p>
           ) : (incidentsQuery.data ?? []).length === 0 ? (
             <p className="mt-3 text-sm text-slate-400">No incidents reported for this client.</p>
           ) : (
@@ -806,6 +814,8 @@ export function ClientDetailPage() {
           <h3 className="font-semibold text-slate-950">History</h3>
           {auditQuery.isLoading ? (
             <p className="mt-3 text-sm text-slate-500">Loading…</p>
+          ) : auditQuery.isError ? (
+            <p className="mt-3 text-sm text-red-700">Could not load history for this client.</p>
           ) : (auditQuery.data ?? []).length === 0 ? (
             <p className="mt-3 text-sm text-slate-400">No recorded changes yet.</p>
           ) : (

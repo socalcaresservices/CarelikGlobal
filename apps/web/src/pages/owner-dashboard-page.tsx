@@ -373,6 +373,8 @@ export function OwnerDashboardPage() {
             <h3 className="font-semibold text-slate-950">Team by role</h3>
             {membersQuery.isLoading ? (
               <p className="mt-3 text-sm text-slate-500">Loading…</p>
+            ) : membersQuery.isError ? (
+              <p className="mt-3 text-sm text-red-700">Could not load team members.</p>
             ) : roleCounts.size === 0 ? (
               <p className="mt-3 text-sm text-slate-400">No team members yet.</p>
             ) : (
@@ -401,6 +403,8 @@ export function OwnerDashboardPage() {
             <h3 className="font-semibold text-slate-950">Team by status</h3>
             {membersQuery.isLoading ? (
               <p className="mt-3 text-sm text-slate-500">Loading…</p>
+            ) : membersQuery.isError ? (
+              <p className="mt-3 text-sm text-red-700">Could not load team members.</p>
             ) : statusCounts.size === 0 ? (
               <p className="mt-3 text-sm text-slate-400">No team members yet.</p>
             ) : (
@@ -426,6 +430,8 @@ export function OwnerDashboardPage() {
           <h3 className="font-semibold text-slate-950">Credential compliance</h3>
           {credentialsQuery.isLoading ? (
             <p className="mt-3 text-sm text-slate-500">Loading…</p>
+          ) : credentialsQuery.isError ? (
+            <p className="mt-3 text-sm text-red-700">Could not load credentials.</p>
           ) : credentialCounts.size === 0 ? (
             <p className="mt-3 text-sm text-slate-400">No credentials tracked yet.</p>
           ) : (
@@ -455,6 +461,8 @@ export function OwnerDashboardPage() {
           </p>
           {authorizationsQuery.isLoading ? (
             <p className="mt-3 text-sm text-slate-500">Loading…</p>
+          ) : authorizationsQuery.isError ? (
+            <p className="mt-3 text-sm text-red-700">Could not load authorizations.</p>
           ) : totalAuthorizedHours === 0 ? (
             <p className="mt-3 text-sm text-slate-400">No authorizations tracked yet.</p>
           ) : (
@@ -481,6 +489,8 @@ export function OwnerDashboardPage() {
             <h3 className="font-semibold text-slate-950">Authorizations by usage</h3>
             {authorizationsQuery.isLoading ? (
               <p className="mt-3 text-sm text-slate-500">Loading…</p>
+            ) : authorizationsQuery.isError ? (
+              <p className="mt-3 text-sm text-red-700">Could not load authorizations.</p>
             ) : usageCounts.size === 0 ? (
               <p className="mt-3 text-sm text-slate-400">No authorizations tracked yet.</p>
             ) : (
@@ -502,6 +512,8 @@ export function OwnerDashboardPage() {
             <h3 className="font-semibold text-slate-950">Authorizations by expiry</h3>
             {authorizationsQuery.isLoading ? (
               <p className="mt-3 text-sm text-slate-500">Loading…</p>
+            ) : authorizationsQuery.isError ? (
+              <p className="mt-3 text-sm text-red-700">Could not load authorizations.</p>
             ) : expiryCounts.size === 0 ? (
               <p className="mt-3 text-sm text-slate-400">No authorizations tracked yet.</p>
             ) : (
@@ -528,6 +540,8 @@ export function OwnerDashboardPage() {
             <h3 className="font-semibold text-slate-950">Incidents by status</h3>
             {incidentsQuery.isLoading ? (
               <p className="mt-3 text-sm text-slate-500">Loading…</p>
+            ) : incidentsQuery.isError ? (
+              <p className="mt-3 text-sm text-red-700">Could not load incidents.</p>
             ) : incidentStatusCounts.size === 0 ? (
               <p className="mt-3 text-sm text-slate-400">No incidents reported.</p>
             ) : (
@@ -549,6 +563,8 @@ export function OwnerDashboardPage() {
             <h3 className="font-semibold text-slate-950">Incidents by severity</h3>
             {incidentsQuery.isLoading ? (
               <p className="mt-3 text-sm text-slate-500">Loading…</p>
+            ) : incidentsQuery.isError ? (
+              <p className="mt-3 text-sm text-red-700">Could not load incidents.</p>
             ) : incidentSeverityCounts.size === 0 ? (
               <p className="mt-3 text-sm text-slate-400">No incidents reported.</p>
             ) : (
@@ -574,6 +590,8 @@ export function OwnerDashboardPage() {
           <h3 className="font-semibold text-slate-950">Applicants by status</h3>
           {applicantsQuery.isLoading ? (
             <p className="mt-3 text-sm text-slate-500">Loading…</p>
+          ) : applicantsQuery.isError ? (
+            <p className="mt-3 text-sm text-red-700">Could not load applicants.</p>
           ) : applicantStatusCounts.size === 0 ? (
             <p className="mt-3 text-sm text-slate-400">No applications yet.</p>
           ) : (
@@ -596,10 +614,16 @@ export function OwnerDashboardPage() {
       {canSeeAudit ? (
         <Card>
           <h3 className="font-semibold text-slate-950">Recent activity</h3>
-          <p className="mt-1 text-3xl font-semibold tracking-tight text-slate-950">
-            {auditQuery.isLoading ? "—" : auditLast7Days}
-          </p>
-          <p className="mt-1 text-sm text-slate-600">Audit log entries in the last 7 days</p>
+          {auditQuery.isError ? (
+            <p className="mt-3 text-sm text-red-700">Could not load recent activity.</p>
+          ) : (
+            <>
+              <p className="mt-1 text-3xl font-semibold tracking-tight text-slate-950">
+                {auditQuery.isLoading ? "—" : auditLast7Days}
+              </p>
+              <p className="mt-1 text-sm text-slate-600">Audit log entries in the last 7 days</p>
+            </>
+          )}
         </Card>
       ) : null}
     </section>

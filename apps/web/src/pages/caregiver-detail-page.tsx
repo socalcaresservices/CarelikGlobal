@@ -761,6 +761,8 @@ export function CaregiverDetailPage() {
           <h3 className="font-semibold text-slate-950">Shifts</h3>
           {shiftsQuery.isLoading ? (
             <p className="mt-3 text-sm text-slate-500">Loading…</p>
+          ) : shiftsQuery.isError ? (
+            <p className="mt-3 text-sm text-red-700">Could not load shifts for this caregiver.</p>
           ) : (shiftsQuery.data ?? []).length === 0 ? (
             <p className="mt-3 text-sm text-slate-400">No shifts for this caregiver.</p>
           ) : (
@@ -797,6 +799,8 @@ export function CaregiverDetailPage() {
           </div>
           {credentialsQuery.isLoading ? (
             <p className="mt-3 text-sm text-slate-500">Loading…</p>
+          ) : credentialsQuery.isError ? (
+            <p className="mt-3 text-sm text-red-700">Could not load credentials for this caregiver.</p>
           ) : (credentialsQuery.data ?? []).length === 0 ? (
             <p className="mt-3 text-sm text-slate-400">No credentials tracked yet.</p>
           ) : (
@@ -825,6 +829,8 @@ export function CaregiverDetailPage() {
           <h3 className="font-semibold text-slate-950">Incidents</h3>
           {incidentsQuery.isLoading ? (
             <p className="mt-3 text-sm text-slate-500">Loading…</p>
+          ) : incidentsQuery.isError ? (
+            <p className="mt-3 text-sm text-red-700">Could not load incidents involving this caregiver.</p>
           ) : (incidentsQuery.data ?? []).length === 0 ? (
             <p className="mt-3 text-sm text-slate-400">No incidents involving this caregiver.</p>
           ) : (
@@ -857,6 +863,8 @@ export function CaregiverDetailPage() {
 
           {notesQuery.isLoading ? (
             <p className="mt-3 text-sm text-slate-500">Loading…</p>
+          ) : notesQuery.isError ? (
+            <p className="mt-3 text-sm text-red-700">Could not load notes for this caregiver.</p>
           ) : notesEditing ? (
             <div className="mt-3 space-y-3">
               <textarea
@@ -897,6 +905,8 @@ export function CaregiverDetailPage() {
           <p className="mt-1 text-xs text-slate-500">Actions this member has taken in the organization.</p>
           {auditQuery.isLoading ? (
             <p className="mt-3 text-sm text-slate-500">Loading…</p>
+          ) : auditQuery.isError ? (
+            <p className="mt-3 text-sm text-red-700">Could not load history for this caregiver.</p>
           ) : (auditQuery.data ?? []).length === 0 ? (
             <p className="mt-3 text-sm text-slate-400">No recorded actions yet.</p>
           ) : (
