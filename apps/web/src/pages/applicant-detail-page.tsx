@@ -255,7 +255,15 @@ function DocumentsCard({
 
   function handleCopyLink() {
     if (!generatedLink) return;
-    void navigator.clipboard.writeText(generatedLink).then(() => setCopied(true));
+    // Unlike handleSend/handleView/handleVerify/handleReject below, this
+    // previously had no failure handling at all - writeText() rejects when
+    // clipboard permission is denied or the tab isn't focused/secure, which
+    // showed up as an unhandled promise rejection and a button that just
+    // silently never flipped to "Copied".
+    void navigator.clipboard
+      .writeText(generatedLink)
+      .then(() => setCopied(true))
+      .catch(() => setSendError("Could not copy the link. Copy it manually instead."));
   }
 
   const [viewingId, setViewingId] = useState<string | null>(null);

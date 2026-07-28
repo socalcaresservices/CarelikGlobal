@@ -381,6 +381,52 @@ describe("ApplicantDetailPage", () => {
     );
   });
 
+  async function sendRequestAndGetLink() {
+    mockedUseOrganization.mockReturnValue(baseOrganization());
+    mockFromByTable(applicantRecord(), [], [], [{ id: "dt-1", name: "CPR Certification", is_active: true }]);
+    mockedRpc.mockImplementation((fn: string) => {
+      if (fn === "create_document_request_batch") {
+        return Promise.resolve({ data: [{ batch_id: "batch-1", token: "abc123" }], error: null }) as never;
+      }
+      return Promise.resolve({ data: [], error: null }) as never;
+    });
+
+    renderPage();
+
+    await waitFor(() => expect(screen.getByText("CPR Certification")).toBeInTheDocument());
+    fireEvent.click(screen.getByLabelText("CPR Certification"));
+    fireEvent.click(screen.getByRole("button", { name: "Send" }));
+    await waitFor(() => expect(screen.getByRole("button", { name: /Copy link/ })).toBeInTheDocument());
+  }
+
+  it("copies the generated link and shows a confirmation", async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, "clipboard", { value: { writeText }, configurable: true });
+
+    await sendRequestAndGetLink();
+    fireEvent.click(screen.getByRole("button", { name: /Copy link/ }));
+
+    await waitFor(() => expect(writeText).toHaveBeenCalledWith(`${window.location.origin}/upload/abc123`));
+    await waitFor(() => expect(screen.getByRole("button", { name: "Copied" })).toBeInTheDocument());
+  });
+
+  it("shows an error instead of failing silently when copying the link is rejected", async () => {
+    // Previously handleCopyLink had no .catch() at all - a denied clipboard
+    // permission (or an unfocused/insecure tab) surfaced as an unhandled
+    // promise rejection, and the button just never changed to "Copied"
+    // with no indication anything went wrong.
+    const writeText = vi.fn().mockRejectedValue(new Error("denied"));
+    Object.defineProperty(navigator, "clipboard", { value: { writeText }, configurable: true });
+
+    await sendRequestAndGetLink();
+    fireEvent.click(screen.getByRole("button", { name: /Copy link/ }));
+
+    await waitFor(() =>
+      expect(screen.getByText("Could not copy the link. Copy it manually instead.")).toBeInTheDocument()
+    );
+    expect(screen.queryByRole("button", { name: "Copied" })).not.toBeInTheDocument();
+  });
+
   it("hides the request form without documents.manage but still shows existing requests", async () => {
     mockedUseOrganization.mockReturnValue(
       baseOrganization((permission: string) => permission !== "documents.manage")
