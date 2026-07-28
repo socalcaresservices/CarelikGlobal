@@ -242,17 +242,40 @@ describe("AppShell nav", () => {
     expect(screen.queryByText("CareLik Global")).not.toBeInTheDocument();
   });
 
-  it("gives the active nav link the organization's primary color", () => {
+  it("sets --color-accent from the organization's primary color, which every branded surface reads", () => {
+    // NavLinkItem's active state (and every packages/ui Button primary
+    // variant rendered inside the shell) reads var(--color-accent) rather
+    // than getting its own inline backgroundColor - this only needs to
+    // confirm AppShell sets the custom property at its root and that the
+    // active link's className is wired to consume it, not recompute the
+    // resolved color (jsdom doesn't load the compiled Tailwind stylesheet,
+    // so getComputedStyle can't resolve var(...) here).
     mockedUseAuth.mockReturnValue({ user: { email: "owner@acme.test" } } as never);
     mockedUseOrganization.mockReturnValue({
       ...baseOrganization("organization_owner"),
       activeOrganization: brandedOrganization({ primaryColor: "#123456" })
     });
 
-    renderShell();
+    const { container } = renderShell();
 
+    expect(container.firstChild).toHaveStyle({
+      "--color-accent": "#123456",
+      "--color-accent-foreground": "#ffffff"
+    });
     const commandCenterLink = screen.getByText("Command Center").closest("a")!;
-    expect(commandCenterLink).toHaveStyle({ backgroundColor: "#123456" });
+    expect(commandCenterLink.className).toContain("bg-[var(--color-accent,#0f172a)]");
+  });
+
+  it("falls back to the default palette when the organization hasn't set a primary color", () => {
+    mockedUseAuth.mockReturnValue({ user: { email: "owner@acme.test" } } as never);
+    mockedUseOrganization.mockReturnValue({
+      ...baseOrganization("organization_owner"),
+      activeOrganization: brandedOrganization({ primaryColor: null })
+    });
+
+    const { container } = renderShell();
+
+    expect(container.firstChild).not.toHaveStyle({ "--color-accent": expect.anything() });
   });
 
   it("hides the 'Powered by CareLik' footer when the organization has turned it off", () => {

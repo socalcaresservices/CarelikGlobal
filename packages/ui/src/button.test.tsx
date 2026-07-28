@@ -40,7 +40,18 @@ describe("buttonVariants", () => {
 
   it("defaults to primary/md", () => {
     const classes = buttonVariants();
-    expect(classes).toContain("bg-slate-900");
     expect(classes).toContain("text-body");
+  });
+
+  it("primary reads --color-accent so an org's branding can override it, falling back to the platform default", () => {
+    // #0f172a is the same color bg-slate-900 resolves to - this is the
+    // fallback baked into the var() call for pages/orgs with no branding
+    // set, not a literal Tailwind slate class anymore. app-shell.tsx sets
+    // --color-accent from the active org's primary_color on an ancestor
+    // element; unbranded pages simply never set it, so this fallback
+    // applies.
+    const classes = buttonVariants();
+    expect(classes).toContain("bg-[var(--color-accent,#0f172a)]");
+    expect(classes).toContain("text-[var(--color-accent-foreground,#ffffff)]");
   });
 });

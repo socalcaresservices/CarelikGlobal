@@ -1,4 +1,4 @@
-import type { PropsWithChildren } from "react";
+import type { CSSProperties, PropsWithChildren } from "react";
 import { NavLink } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import {
@@ -105,19 +105,21 @@ function visibleItems(items: NavItem[], hasPermission: (permission: Permission) 
   );
 }
 
-// accentColor is the active organization's primary_color (Build 018) -
-// when an org has branded itself, its active nav item picks up that
-// color instead of the platform default slate-900, so the sidebar reads
-// as "this org's app" rather than "CareLik with a logo pasted on top."
-// Falls back to slate-900 whenever there's no org, no active org, or the
-// org hasn't set a primary_color yet.
+// The active nav item reads the same --color-accent/--color-accent-
+// foreground custom properties Button's primary variant does (see
+// packages/ui/src/button.tsx) - both fall back to the platform default
+// slate-900/white whenever there's no org, no active org, or the org
+// hasn't set a primary_color yet. brandStyle() below sets those
+// properties once on AppShell's root element from the active org's
+// primary_color, so this component no longer needs its own accentColor
+// prop/inline-style branch - it just uses the var like every other
+// branded surface.
 function NavLinkItem({
   to,
   label,
   icon: Icon,
-  badgeCount,
-  accentColor
-}: NavItem & { badgeCount?: number | null | undefined; accentColor?: string | null | undefined }) {
+  badgeCount
+}: NavItem & { badgeCount?: number | null | undefined }) {
   return (
     <NavLink
       key={to}
@@ -127,13 +129,10 @@ function NavLinkItem({
         cn(
           "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium",
           isActive
-            ? accentColor
-              ? "text-white"
-              : "bg-slate-900 text-white"
+            ? "bg-[var(--color-accent,#0f172a)] text-[var(--color-accent-foreground,#ffffff)]"
             : "text-slate-600 hover:bg-slate-100 hover:text-slate-950"
         )
       }
-      style={({ isActive }) => (isActive && accentColor ? { backgroundColor: accentColor } : undefined)}
     >
       <Icon className="h-4 w-4" />
       <span className="flex-1">{label}</span>
@@ -144,6 +143,22 @@ function NavLinkItem({
       ) : null}
     </NavLink>
   );
+}
+
+// Sets --color-accent/--color-accent-foreground from the active org's
+// primary_color, scoped to AppShell's root element so it cascades to
+// every descendant - the sidebar's active nav item, and every packages/ui
+// Button rendered anywhere inside the app (Save/Submit/Send/Add.../File...
+// buttons across every page, previously always a flat slate-900
+// regardless of which org you were looking at). Mirrors apply-page.tsx's
+// brandStyle() helper, but keyed off primary_color rather than
+// accent_color - see the Build 023 migration comment for why the public-
+// facing pages deliberately use a different organization column than the
+// internal app's chrome does. Returns {} (no override, default palette
+// applies) whenever the org hasn't set a primary_color.
+function brandStyle(primaryColor: string | null | undefined): CSSProperties {
+  if (!primaryColor) return {};
+  return { "--color-accent": primaryColor, "--color-accent-foreground": "#ffffff" } as CSSProperties;
 }
 
 function formatRole(role: string) {
@@ -169,7 +184,6 @@ export function AppShell({ children }: PropsWithChildren) {
     isPlatformOwner,
     loading
   } = useOrganization();
-  const accentColor = activeOrganization?.primaryColor ?? null;
   // Defaults to shown - an organization opts OUT of platform attribution
   // rather than opting in (see the show_powered_by column's comment,
   // 20260728020000).
@@ -212,7 +226,7 @@ export function AppShell({ children }: PropsWithChildren) {
   }
 
   return (
-    <div className="min-h-screen bg-slate-50">
+    <div className="min-h-screen bg-slate-50" style={brandStyle(activeOrganization?.primaryColor)}>
       <aside className="fixed inset-y-0 left-0 hidden w-64 border-r border-slate-200 bg-white lg:flex lg:flex-col">
         <div className="border-b border-slate-200 px-6 py-5">
           {activeOrganization?.logoUrl ? (
@@ -235,7 +249,7 @@ export function AppShell({ children }: PropsWithChildren) {
         <nav className="flex-1 space-y-4 overflow-y-auto p-3">
           <div className="space-y-1">
             {visibleOperationsNav.map((item) => (
-              <NavLinkItem key={item.to} {...item} badgeCount={badgeFor(item)} accentColor={accentColor} />
+              <NavLinkItem key={item.to} {...item} badgeCount={badgeFor(item)} />
             ))}
           </div>
           {visiblePlatformAdministrationNav.length > 0 ? (
@@ -245,7 +259,7 @@ export function AppShell({ children }: PropsWithChildren) {
               </p>
               <div className="space-y-1">
                 {visiblePlatformAdministrationNav.map((item) => (
-                  <NavLinkItem key={item.to} {...item} accentColor={accentColor} />
+                  <NavLinkItem key={item.to} {...item} />
                 ))}
               </div>
             </div>
@@ -257,7 +271,7 @@ export function AppShell({ children }: PropsWithChildren) {
               </p>
               <div className="space-y-1">
                 {visibleAdministrationNav.map((item) => (
-                  <NavLinkItem key={item.to} {...item} badgeCount={badgeFor(item)} accentColor={accentColor} />
+                  <NavLinkItem key={item.to} {...item} badgeCount={badgeFor(item)} />
                 ))}
               </div>
             </div>
