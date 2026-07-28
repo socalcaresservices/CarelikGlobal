@@ -282,6 +282,52 @@ describe("ApplicantDetailPage", () => {
     expect(screen.getByText("requested")).toBeInTheDocument();
   });
 
+  it("shows the reminder count for an outstanding request, but not for a verified one", async () => {
+    mockedUseOrganization.mockReturnValue(baseOrganization());
+    mockFromByTable(applicantRecord());
+    mockedRpc.mockImplementation((fn: string) => {
+      if (fn === "list_document_requests_for_subject") {
+        return Promise.resolve({
+          data: [
+            {
+              id: "req-1",
+              document_type_name: "CPR Certification",
+              status: "verified",
+              uploaded_at: "2026-07-20T00:00:00.000Z",
+              expires_at: "2027-07-20",
+              batch_token: "tok-1",
+              batch_created_at: "2026-07-19T00:00:00.000Z",
+              batch_reminders_sent: 2,
+              batch_last_reminder_sent_at: "2026-07-24T00:00:00.000Z"
+            },
+            {
+              id: "req-2",
+              document_type_name: "TB Test",
+              status: "requested",
+              uploaded_at: null,
+              expires_at: null,
+              batch_token: "tok-1",
+              batch_created_at: "2026-07-19T00:00:00.000Z",
+              batch_reminders_sent: 2,
+              batch_last_reminder_sent_at: "2026-07-24T00:00:00.000Z"
+            }
+          ],
+          error: null
+        }) as never;
+      }
+      return Promise.resolve({ data: [], error: null }) as never;
+    });
+
+    renderPage();
+
+    await waitFor(() => expect(screen.getByText("TB Test")).toBeInTheDocument());
+    expect(screen.getByText(/2 reminders sent · last on/)).toBeInTheDocument();
+    // Only one reminder line should render - the verified CPR row is
+    // excluded even though it belongs to the same batch, since a
+    // verified document is no longer a reminder target.
+    expect(screen.getAllByText(/reminders sent/)).toHaveLength(1);
+  });
+
   it("sends a document request and shows the generated upload link", async () => {
     mockedUseOrganization.mockReturnValue(baseOrganization());
     mockFromByTable(applicantRecord(), [], [], [

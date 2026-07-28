@@ -126,6 +126,8 @@ interface DocumentRequestRow {
   file_id: string | null;
   bucket_id: string | null;
   object_path: string | null;
+  batch_reminders_sent: number;
+  batch_last_reminder_sent_at: string | null;
 }
 
 // A staff member can act on an uploaded file once it's landed but hasn't
@@ -134,6 +136,22 @@ interface DocumentRequestRow {
 // but treated the same as 'uploaded' here since nothing currently
 // produces that status.
 const REVIEWABLE_STATUSES: DocumentRequestStatus[] = ["uploaded", "pending_review"];
+
+// Same statuses queue_document_reminders() (20260728060000) actually
+// sends reminders for - a verified or already-uploaded document isn't
+// waiting on the subject anymore, so showing "2 reminders sent" next to
+// it would be stale noise, not useful context. Reminder counts live on
+// the batch, not the individual request, so every request in the same
+// batch shows the same count - accurate (it's genuinely the batch's
+// cadence), just not deduplicated across a multi-document batch. That's
+// a deliberate simplification for this first pass rather than
+// regrouping the whole list by batch.
+const REMINDER_ELIGIBLE_STATUSES: DocumentRequestStatus[] = [
+  "requested",
+  "rejected",
+  "replacement_requested",
+  "missing"
+];
 
 const documentRequestStatusTone: Record<DocumentRequestStatus, StatusTone> = {
   requested: "info",
@@ -406,6 +424,14 @@ function DocumentsCard({
                   </div>
                   {row.status === "rejected" && row.rejection_reason ? (
                     <p className="mt-1 text-xs text-red-700">{row.rejection_reason}</p>
+                  ) : null}
+                  {REMINDER_ELIGIBLE_STATUSES.includes(row.status) && row.batch_reminders_sent > 0 ? (
+                    <p className="mt-1 text-xs text-slate-400">
+                      {row.batch_reminders_sent} reminder{row.batch_reminders_sent === 1 ? "" : "s"} sent
+                      {row.batch_last_reminder_sent_at
+                        ? ` · last on ${new Date(row.batch_last_reminder_sent_at).toLocaleDateString()}`
+                        : ""}
+                    </p>
                   ) : null}
                 </li>
               );
