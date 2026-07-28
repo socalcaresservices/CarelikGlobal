@@ -26,6 +26,7 @@ const BATCH = {
   organization_logo_url: null,
   organization_primary_color: "#0f172a",
   organization_accent_color: null,
+  organization_show_powered_by: true,
   subject_name: "Jordan Applicant",
   message: "Please upload these before your interview.",
   expires_at: null
@@ -176,5 +177,23 @@ describe("UploadPage", () => {
 
     await waitFor(() => expect(screen.getByText("Upload file")).toBeInTheDocument());
     expect(screen.getByText("Upload file")).toHaveStyle({ backgroundColor: "#ff6600" });
+  });
+
+  it("shows the Secured by CareLik footer by default", async () => {
+    mockRpcByFn();
+
+    renderAt("/upload/valid-token");
+
+    await waitFor(() => expect(screen.getByText("Acme Home Care")).toBeInTheDocument());
+    expect(screen.getByText("Secured by CareLik")).toBeInTheDocument();
+  });
+
+  it("hides the Secured by CareLik footer when the organization has turned it off", async () => {
+    mockRpcByFn({ batch: [{ ...BATCH, organization_show_powered_by: false }] });
+
+    renderAt("/upload/valid-token");
+
+    await waitFor(() => expect(screen.getByText("Acme Home Care")).toBeInTheDocument());
+    expect(screen.queryByText("Secured by CareLik")).not.toBeInTheDocument();
   });
 });

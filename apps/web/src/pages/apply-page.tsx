@@ -232,6 +232,18 @@ interface ApplyOrganization {
   logo_url: string | null;
   primary_color: string | null;
   accent_color: string | null;
+  show_powered_by: boolean;
+}
+
+// Mirrors app-shell.tsx's showPoweredBy check for signed-in users -
+// defaults to shown, since an organization opts OUT of platform
+// attribution rather than opting in (see the show_powered_by column's
+// own comment, 20260728020000). Applied here so the toggle actually
+// works on the two pages a job applicant or client ever sees, which
+// app-shell.tsx alone never covered.
+function PoweredByFooter({ show }: { show: boolean | undefined }) {
+  if (show === false) return null;
+  return <p className="mt-4 text-center text-xs text-slate-400">Powered by CareLik</p>;
 }
 
 // CSS custom properties aren't part of React's CSSProperties type, so this
@@ -564,6 +576,7 @@ export function ApplyPage() {
             next steps.
           </p>
         </Card>
+        <PoweredByFooter show={organizationQuery.data?.show_powered_by} />
       </div>
     );
   }
@@ -624,6 +637,7 @@ export function ApplyPage() {
             Your progress is saved automatically in this browser, so you can pick up where you left off.
           </p>
         </Card>
+        <PoweredByFooter show={organizationQuery.data?.show_powered_by} />
       </div>
     );
   }
@@ -1390,6 +1404,7 @@ export function ApplyPage() {
           ) : null}
           {currentStep === "review" && submitError ? <p className="text-sm text-red-700">{submitError}</p> : null}
         </div>
+        <PoweredByFooter show={organizationQuery.data?.show_powered_by} />
       </div>
 
       <div className="fixed inset-x-0 bottom-0 border-t border-slate-200 bg-white/95 px-4 py-3 backdrop-blur">

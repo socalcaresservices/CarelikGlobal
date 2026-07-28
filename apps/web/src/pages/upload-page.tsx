@@ -32,6 +32,7 @@ interface BatchInfo {
   organization_logo_url: string | null;
   organization_primary_color: string | null;
   organization_accent_color: string | null;
+  organization_show_powered_by: boolean;
   subject_name: string;
   message: string | null;
   expires_at: string | null;
@@ -225,7 +226,9 @@ export function UploadPage() {
           </div>
         </Card>
 
-        <p className="mt-4 text-center text-xs text-slate-400">Secured by CareLik</p>
+        {batch.organization_show_powered_by !== false ? (
+          <p className="mt-4 text-center text-xs text-slate-400">Secured by CareLik</p>
+        ) : null}
       </div>
     </div>
   );
