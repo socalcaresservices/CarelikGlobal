@@ -84,6 +84,16 @@ describe("ContextBar", () => {
     expect(mockedRpc).toHaveBeenCalledWith("get_agency_dashboard", { target_organization_id: ORG_ID });
   });
 
+  it("shows a distinct error message when the dashboard fetch fails, instead of just disappearing", async () => {
+    mockedUseOrganization.mockReturnValue(baseOrganization());
+    const single = vi.fn().mockResolvedValue({ data: null, error: new Error("network error") });
+    mockedRpc.mockReturnValue({ single } as never);
+
+    renderBar();
+
+    await waitFor(() => expect(screen.getByText("Could not load live metrics.")).toBeInTheDocument());
+  });
+
   it("shows a dash for null metrics instead of 0%", async () => {
     mockedUseOrganization.mockReturnValue(baseOrganization());
     const { single } = singleMock({

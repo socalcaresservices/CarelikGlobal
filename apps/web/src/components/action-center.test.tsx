@@ -114,6 +114,22 @@ describe("ActionCenter", () => {
     expect(screen.queryByText("Pending invitations")).not.toBeInTheDocument();
   });
 
+  it("shows an error banner instead of a false 'All caught up' when a signal's fetch fails", async () => {
+    mockedUseOrganization.mockReturnValue(baseOrganization());
+    mockedRpc.mockImplementation((fn: string) => {
+      if (fn === "list_incidents") return Promise.resolve({ data: null, error: new Error("network error") }) as never;
+      return Promise.resolve({ data: [], error: null }) as never;
+    });
+    mockedFrom.mockReturnValue({ select: mockClientsCount([]) } as never);
+
+    renderCenter();
+
+    await waitFor(() =>
+      expect(screen.getByText("Could not load all signals — this list may be incomplete.")).toBeInTheDocument()
+    );
+    expect(screen.queryByText(/All caught up/)).not.toBeInTheDocument();
+  });
+
   it("flags a caregiver over their weekly hour target as critical", async () => {
     mockedUseOrganization.mockReturnValue(baseOrganization());
     mockedRpc.mockImplementation((fn: string) => {

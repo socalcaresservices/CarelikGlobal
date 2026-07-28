@@ -110,6 +110,22 @@ describe("OperationalSnapshot", () => {
     expect(screen.getByText("(no weekly targets set)")).toBeInTheDocument();
   });
 
+  it("shows an error marker instead of a misleading dash when a metric's fetch fails", async () => {
+    mockedUseOrganization.mockReturnValue(baseOrganization());
+    mockedFrom.mockReturnValue({ select: mockClientsCount() } as never);
+    mockedRpc.mockImplementation((fn: string) => {
+      if (fn === "list_organization_members") return Promise.resolve({ data: [], error: null }) as never;
+      if (fn === "list_shifts") return Promise.resolve({ data: null, error: new Error("network error") }) as never;
+      if (fn === "get_agency_dashboard") return Promise.resolve({ data: [], error: null }) as never;
+      return Promise.resolve({ data: [], error: null }) as never;
+    });
+
+    renderSnapshot();
+
+    await waitFor(() => expect(screen.getByText("!")).toBeInTheDocument());
+    expect(screen.getByText("Could not load")).toBeInTheDocument();
+  });
+
   it("hides the agency-health metrics without membership.read but keeps shifts today", async () => {
     mockedUseOrganization.mockReturnValue({
       ...baseOrganization(),

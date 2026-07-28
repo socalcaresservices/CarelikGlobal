@@ -44,6 +44,24 @@ function endOfDay(date: Date) {
   return copy;
 }
 
+// A failed fetch previously fell back to the same "—" a metric with no
+// data yet shows - indistinguishable from "nothing configured" even
+// though the two mean very different things to an owner glancing at
+// this strip. An errored metric now reads "!" in the danger tone with
+// an explanatory hint instead.
+function errorAwareItem(
+  key: string,
+  label: string,
+  isError: boolean,
+  value: MetricStripItem["value"],
+  hint?: string
+): MetricStripItem {
+  if (isError) {
+    return { key, label, value: "!", tone: "danger", hint: "Could not load" };
+  }
+  return { key, label, value, ...(hint ? { hint } : {}) };
+}
+
 export function OperationalSnapshot() {
   const { activeOrganizationId, hasPermission } = useOrganization();
 
@@ -113,43 +131,58 @@ export function OperationalSnapshot() {
     dashboardQuery.data?.available_capacity_hours === null ? "(no weekly targets set)" : undefined;
 
   const items: MetricStripItem[] = [
-    { key: "shifts-today", label: "Shifts today", value: shiftsTodayQuery.data ?? "—" }
+    errorAwareItem("shifts-today", "Shifts today", shiftsTodayQuery.isError, shiftsTodayQuery.data ?? "—")
   ];
 
   if (canSeeClients) {
-    items.push({ key: "active-clients", label: "Active clients", value: clientsCountQuery.data ?? "—" });
+    items.push(
+      errorAwareItem("active-clients", "Active clients", clientsCountQuery.isError, clientsCountQuery.data ?? "—")
+    );
   }
 
   if (canSeeMembers) {
-    items.push({ key: "active-team", label: "Active team members", value: membersCountQuery.data ?? "—" });
-    items.push({
-      key: "fill-rate",
-      label: "Fill rate this week",
-      value:
+    items.push(
+      errorAwareItem(
+        "active-team",
+        "Active team members",
+        membersCountQuery.isError,
+        membersCountQuery.data ?? "—"
+      )
+    );
+    items.push(
+      errorAwareItem(
+        "fill-rate",
+        "Fill rate this week",
+        dashboardQuery.isError,
         dashboardQuery.data?.fill_rate_pct !== null && dashboardQuery.data?.fill_rate_pct !== undefined
           ? `${dashboardQuery.data.fill_rate_pct}%`
           : "—",
-      ...(fillRateHint ? { hint: fillRateHint } : {})
-    });
-    items.push({
-      key: "compliance-score",
-      label: "Compliance score",
-      value:
+        fillRateHint
+      )
+    );
+    items.push(
+      errorAwareItem(
+        "compliance-score",
+        "Compliance score",
+        dashboardQuery.isError,
         dashboardQuery.data?.compliance_score_pct !== null && dashboardQuery.data?.compliance_score_pct !== undefined
           ? `${dashboardQuery.data.compliance_score_pct}%`
           : "—",
-      ...(complianceHint ? { hint: complianceHint } : {})
-    });
-    items.push({
-      key: "available-capacity",
-      label: "Available capacity",
-      value:
+        complianceHint
+      )
+    );
+    items.push(
+      errorAwareItem(
+        "available-capacity",
+        "Available capacity",
+        dashboardQuery.isError,
         dashboardQuery.data?.available_capacity_hours !== null &&
-        dashboardQuery.data?.available_capacity_hours !== undefined
+          dashboardQuery.data?.available_capacity_hours !== undefined
           ? `${formatHours(dashboardQuery.data.available_capacity_hours)}h`
           : "—",
-      ...(capacityHint ? { hint: capacityHint } : {})
-    });
+        capacityHint
+      )
+    );
   }
 
   return (

@@ -69,6 +69,8 @@ export function ContextBar() {
       </span>
       {dashboardQuery.isLoading ? (
         <span className="text-slate-400">Loading live metrics…</span>
+      ) : dashboardQuery.isError ? (
+        <span className="text-red-600">Could not load live metrics.</span>
       ) : dashboard ? (
         <>
           <span className="flex shrink-0 items-center gap-1.5">

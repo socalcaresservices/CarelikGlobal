@@ -192,6 +192,22 @@ export function ActionCenter() {
 
   if (!activeOrganizationId) return null;
 
+  // Every signal below is gated on `if (...Query.data)`, so a failed
+  // fetch just silently drops that signal from the list rather than
+  // throwing - without this check, enough failures could leave
+  // `needsAttention` empty and render the reassuring "All caught up"
+  // banner even though the page couldn't actually confirm that. Only
+  // queries this render is actually using (permission-gated ones only
+  // count when the permission is held) count toward this.
+  const hasError =
+    shiftsQuery.isError ||
+    (canSeeClients && canSeeAllShifts && clientsQuery.isError) ||
+    (canSeeMembers && membersQuery.isError) ||
+    caregiverHoursQuery.isError ||
+    credentialsQuery.isError ||
+    (canSeeAuthorizations && authorizationsQuery.isError) ||
+    incidentsQuery.isError;
+
   const shifts = shiftsQuery.data ?? [];
 
   const overdueCount = shifts.filter(
@@ -344,13 +360,23 @@ export function ActionCenter() {
   return (
     <div>
       <p className="text-sm font-medium text-slate-500">Needs attention</p>
-      {needsAttention.length === 0 ? (
-        <div className="mt-3 flex items-center gap-3 rounded-2xl border border-emerald-100 bg-emerald-50/60 px-5 py-4">
-          <CheckCircle2 className="h-5 w-5 shrink-0 text-emerald-600" />
-          <p className="text-sm font-medium text-emerald-800">
-            All caught up — every tracked signal is within normal range.
+      {hasError ? (
+        <div className="mt-3 flex items-center gap-3 rounded-2xl border border-red-100 bg-red-50/60 px-5 py-4">
+          <AlertOctagon className="h-5 w-5 shrink-0 text-red-600" />
+          <p className="text-sm font-medium text-red-800">
+            Could not load all signals — this list may be incomplete.
           </p>
         </div>
+      ) : null}
+      {needsAttention.length === 0 ? (
+        hasError ? null : (
+          <div className="mt-3 flex items-center gap-3 rounded-2xl border border-emerald-100 bg-emerald-50/60 px-5 py-4">
+            <CheckCircle2 className="h-5 w-5 shrink-0 text-emerald-600" />
+            <p className="text-sm font-medium text-emerald-800">
+              All caught up — every tracked signal is within normal range.
+            </p>
+          </div>
+        )
       ) : (
         <>
           <div className="mt-3 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
