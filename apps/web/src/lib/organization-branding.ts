@@ -1,6 +1,10 @@
 import { supabase } from "@/lib/supabase";
 
-const ALLOWED_LOGO_TYPES = new Set(["image/png", "image/jpeg", "image/svg+xml", "image/webp"]);
+// SVG deliberately excluded (20260729030000) - this bucket is public,
+// and an SVG's public storage URL can be opened directly in a browser
+// tab (not just rendered inside a safe <img> tag), where any embedded
+// <script> would execute in the Supabase project's origin.
+const ALLOWED_LOGO_TYPES = new Set(["image/png", "image/jpeg", "image/webp"]);
 const MAX_LOGO_BYTES = 5 * 1024 * 1024;
 
 /**
@@ -16,7 +20,7 @@ const MAX_LOGO_BYTES = 5 * 1024 * 1024;
  */
 export async function uploadOrganizationLogo(organizationId: string, file: File): Promise<string> {
   if (!ALLOWED_LOGO_TYPES.has(file.type)) {
-    throw new Error("Logo must be a PNG, JPEG, SVG, or WebP image.");
+    throw new Error("Logo must be a PNG, JPEG, or WebP image.");
   }
   if (file.size > MAX_LOGO_BYTES) {
     throw new Error("Logo must be 5MB or smaller.");

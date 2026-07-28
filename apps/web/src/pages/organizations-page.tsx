@@ -119,9 +119,12 @@ export function OrganizationsPage() {
       setLogoPreviewUrl(null);
       return;
     }
-    const allowed = ["image/png", "image/jpeg", "image/svg+xml", "image/webp"];
+    // Keep in sync with organization-branding.ts's ALLOWED_LOGO_TYPES -
+    // SVG is deliberately excluded (20260729030000), see that file's
+    // comment.
+    const allowed = ["image/png", "image/jpeg", "image/webp"];
     if (!allowed.includes(file.type)) {
-      setLogoError("Logo must be a PNG, JPEG, SVG, or WebP image.");
+      setLogoError("Logo must be a PNG, JPEG, or WebP image.");
       return;
     }
     if (file.size > 5 * 1024 * 1024) {
@@ -531,11 +534,11 @@ export function OrganizationsPage() {
                         <input
                           id="edit-org-logo-file"
                           type="file"
-                          accept="image/png,image/jpeg,image/svg+xml,image/webp"
+                          accept="image/png,image/jpeg,image/webp"
                           onChange={(event) => handleLogoFileChange(event.target.files?.[0] ?? null)}
                           className="block w-full text-sm text-slate-600 file:mr-3 file:rounded-lg file:border-0 file:bg-slate-100 file:px-3 file:py-2 file:text-sm file:font-medium file:text-slate-700 hover:file:bg-slate-200"
                         />
-                        <p className="mt-1 text-xs text-slate-500">PNG, JPEG, SVG, or WebP - up to 5MB.</p>
+                        <p className="mt-1 text-xs text-slate-500">PNG, JPEG, or WebP - up to 5MB.</p>
                       </div>
                     </div>
                     {logoError ? <p className="mt-1 text-sm text-red-700">{logoError}</p> : null}

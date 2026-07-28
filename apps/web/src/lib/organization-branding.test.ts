@@ -37,7 +37,17 @@ describe("uploadOrganizationLogo", () => {
     const file = new File(["x"], "logo.gif", { type: "image/gif" });
 
     await expect(uploadOrganizationLogo(ORG_ID, file)).rejects.toThrow(
-      "Logo must be a PNG, JPEG, SVG, or WebP image."
+      "Logo must be a PNG, JPEG, or WebP image."
+    );
+    expect(upload).not.toHaveBeenCalled();
+  });
+
+  it("rejects SVG specifically - a public bucket shouldn't accept a script-capable file type", async () => {
+    const { upload } = mockStorage();
+    const file = new File(["<svg onload='alert(1)'></svg>"], "logo.svg", { type: "image/svg+xml" });
+
+    await expect(uploadOrganizationLogo(ORG_ID, file)).rejects.toThrow(
+      "Logo must be a PNG, JPEG, or WebP image."
     );
     expect(upload).not.toHaveBeenCalled();
   });
@@ -66,7 +76,7 @@ describe("uploadOrganizationLogo", () => {
 
   it("falls back to a png extension when the filename is empty", async () => {
     const { upload } = mockStorage();
-    const file = new File(["x"], "", { type: "image/svg+xml" });
+    const file = new File(["x"], "", { type: "image/webp" });
 
     await uploadOrganizationLogo(ORG_ID, file);
 
@@ -80,7 +90,7 @@ describe("uploadOrganizationLogo", () => {
     // undefined), so the "png" fallback only ever fires for an empty
     // filename - this documents that a dot-less name is a different,
     // unusual case that still produces a valid (if odd) path.
-    const file = new File(["x"], "logo-no-dot", { type: "image/svg+xml" });
+    const file = new File(["x"], "logo-no-dot", { type: "image/webp" });
 
     await uploadOrganizationLogo(ORG_ID, file);
 
