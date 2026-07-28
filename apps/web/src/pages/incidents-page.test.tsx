@@ -172,4 +172,60 @@ describe("IncidentsPage", () => {
     );
     expect(eqMock).toHaveBeenCalledWith("id", "66666666-6666-4666-8666-666666666666");
   });
+
+  function makeIncidentRow(index: number) {
+    // occurred_at strictly decreases with index so the rows arrive in the
+    // same occurred_at-desc order the RPC itself returns them in - the
+    // (occurred_at, id) keyset cursor depends on that ordering.
+    return {
+      id: `66666666-6666-4666-8666-${String(index).padStart(12, "0")}`,
+      client_id: null,
+      client_name: null,
+      caregiver_user_id: null,
+      caregiver_name: null,
+      occurred_at: new Date(Date.UTC(2026, 6, 19, 9, 0, 0) - index * 1000).toISOString(),
+      category: `Category ${index}`,
+      severity: "low" as const,
+      status: "open" as const,
+      description: "desc",
+      reported_by: USER_ID,
+      reported_by_name: "Sam Caregiver",
+      resolution_notes: null,
+      resolved_at: null
+    };
+  }
+
+  it("offers to load older incidents when a full page comes back, and appends the next page on click", async () => {
+    mockedUseOrganization.mockReturnValue({
+      ...baseOrganization(),
+      hasPermission: vi.fn((permission: string) => permission === "incidents.read")
+    });
+    // First page is a full 200 rows, signaling there may be more - the
+    // second page is a single older row.
+    const firstPage = Array.from({ length: 200 }, (_, index) => makeIncidentRow(index));
+    const secondPage = [makeIncidentRow(200)];
+    mockedRpc.mockImplementation((_fn: string, args: Record<string, unknown>) => {
+      if (args.before_occurred_at === null) return Promise.resolve({ data: firstPage, error: null }) as never;
+      return Promise.resolve({ data: secondPage, error: null }) as never;
+    });
+
+    renderPage();
+
+    await waitFor(() => expect(screen.getByText("Category 0")).toBeInTheDocument());
+    expect(screen.getByText("Load older incidents")).toBeInTheDocument();
+    expect(screen.queryByText("Category 200")).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByText("Load older incidents"));
+
+    await waitFor(() => expect(screen.getByText("Category 200")).toBeInTheDocument());
+    const lastFirstPageRow = firstPage[199]!;
+    expect(mockedRpc).toHaveBeenCalledWith("list_incidents", {
+      target_organization_id: ORG_ID,
+      result_limit: 200,
+      before_occurred_at: lastFirstPageRow.occurred_at,
+      before_id: lastFirstPageRow.id
+    });
+    // Second page has fewer than PAGE_SIZE rows, so there's nothing more.
+    expect(screen.queryByText("Load older incidents")).not.toBeInTheDocument();
+  });
 });

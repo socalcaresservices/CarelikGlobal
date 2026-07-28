@@ -1,6 +1,6 @@
-import { useState, type FormEvent } from "react";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Card, FilterBar, type ActiveFilter } from "@carelik/ui";
+import { useMemo, useState, type FormEvent } from "react";
+import { useInfiniteQuery, useQuery, useQueryClient } from "@tanstack/react-query";
+import { Card, FilterBar, Button, type ActiveFilter } from "@carelik/ui";
 import { incidentSeveritySchema, incidentStatusSchema } from "@carelik/shared";
 import type { IncidentSeverity, IncidentStatus } from "@carelik/shared";
 import { useOrganization } from "@/providers/organization-provider";
@@ -12,9 +12,18 @@ import { SortableHeader } from "@/components/sortable-header";
 import { PlainHeader } from "@/components/resizable-th";
 
 // Backed by list_incidents(), a security-definer RPC (see
-// supabase/migrations/20260719270000_incidents.sql) that joins client/
-// caregiver/reporter names. Access mirrors the table RLS: org-wide with
-// incidents.read, or just the incidents you reported yourself.
+// supabase/migrations/20260719270000_incidents.sql, extended with a
+// keyset cursor in 20260729040000) that joins client/caregiver/reporter
+// names. Access mirrors the table RLS: org-wide with incidents.read, or
+// just the incidents you reported yourself.
+//
+// Paginated the same way audit-page.tsx is (useInfiniteQuery, "Load
+// older" button) rather than fetching everything - incidents.id is a
+// random uuid, not a bigserial, so the cursor here is the (occurred_at,
+// id) pair from the last row of the previous page rather than a single
+// before_id, per that migration's own comment.
+const PAGE_SIZE = 200;
+
 interface IncidentRow {
   id: string;
   client_id: string | null;
@@ -79,17 +88,27 @@ export function IncidentsPage() {
   const canCreate = hasPermission("incidents.create");
   const canManage = hasPermission("incidents.update");
 
-  const incidentsQuery = useQuery({
+  const incidentsQuery = useInfiniteQuery({
     queryKey: ["incidents", activeOrganizationId],
-    queryFn: async () => {
+    queryFn: async ({ pageParam }) => {
       const { data, error } = await supabase.rpc("list_incidents", {
-        target_organization_id: activeOrganizationId!
+        target_organization_id: activeOrganizationId!,
+        result_limit: PAGE_SIZE,
+        before_occurred_at: pageParam?.occurred_at ?? null,
+        before_id: pageParam?.id ?? null
       });
       if (error) throw error;
       return (data ?? []) as IncidentRow[];
     },
+    initialPageParam: null as { occurred_at: string; id: string } | null,
+    getNextPageParam: (lastPage) =>
+      lastPage.length === PAGE_SIZE
+        ? { occurred_at: lastPage[lastPage.length - 1]!.occurred_at, id: lastPage[lastPage.length - 1]!.id }
+        : undefined,
     enabled: !!activeOrganizationId
   });
+
+  const incidentRows = useMemo(() => incidentsQuery.data?.pages.flat() ?? [], [incidentsQuery.data]);
 
   const clientsQuery = useQuery({
     queryKey: ["clients-for-incidents", activeOrganizationId],
@@ -123,7 +142,7 @@ export function IncidentsPage() {
     void queryClient.invalidateQueries({ queryKey: ["incidents", activeOrganizationId] });
   }
 
-  const filters = useFilters<IncidentRow>(incidentsQuery.data, {
+  const filters = useFilters<IncidentRow>(incidentRows, {
     severity: (row, value) => row.severity === value,
     status: (row, value) => row.status === value
   });
@@ -494,6 +513,19 @@ export function IncidentsPage() {
           </table>
           </div>
         )}
+        {incidentsQuery.hasNextPage ? (
+          <div className="mt-4 flex justify-center">
+            <Button
+              type="button"
+              variant="secondary"
+              size="sm"
+              loading={incidentsQuery.isFetchingNextPage}
+              onClick={() => void incidentsQuery.fetchNextPage()}
+            >
+              Load older incidents
+            </Button>
+          </div>
+        ) : null}
       </Card>
     </section>
   );
