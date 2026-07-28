@@ -59,6 +59,40 @@ const US_STATES = [
 // nothing for the document-reminder feature to email later).
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
+// Mirrors job_applicants_hours_check / job_applicants_monthly_hours_check
+// (see 20260726190000_job_applicants.sql and
+// 20260727020000_applicant_profile_expansion.sql) client-side, for the
+// same reason EMAIL_PATTERN exists above: these are type="number" inputs
+// with min/max attributes, but this wizard has no wrapping <form
+// onSubmit>, so HTML5 constraint validation never fires. Without this, an
+// applicant could type -5 or 9999 into "Desired weekly hours," click
+// through every remaining step, and only find out something was wrong
+// from a raw Postgres constraint-violation message at final submit, with
+// no indication which field or step was the problem. The database also
+// has no min<=max check at all, so e.g. minWeeklyHours=100/
+// maxWeeklyHours=10 would otherwise silently succeed and sit in the
+// database as nonsense data for staff to find later.
+const WEEKLY_HOURS_MAX = 168;
+const MONTHLY_HOURS_MAX = 744;
+
+function validateHoursRange(value: string, label: string, max?: number): string | null {
+  if (value.trim() === "") return null;
+  const parsed = Number(value);
+  if (Number.isNaN(parsed)) return `Enter a valid number for ${label}.`;
+  if (parsed < 0) return `${label} can't be negative.`;
+  if (max !== undefined && parsed > max) return `${label} must be ${max} or less.`;
+  return null;
+}
+
+function validateMinMax(minValue: string, maxValue: string, label: string): string | null {
+  if (minValue.trim() === "" || maxValue.trim() === "") return null;
+  const min = Number(minValue);
+  const max = Number(maxValue);
+  if (Number.isNaN(min) || Number.isNaN(max)) return null; // already caught by validateHoursRange
+  if (min > max) return `Minimum ${label} can't be more than maximum ${label}.`;
+  return null;
+}
+
 const EMPLOYMENT_TYPES: EmploymentType[] = ["full_time", "part_time", "per_diem", "contractor"];
 const EMPLOYMENT_TYPE_LABELS: Record<EmploymentType, string> = {
   full_time: "Full-Time",
@@ -389,7 +423,20 @@ export function ApplyPage() {
 
   function validateEmployment(): string | null {
     if (!form.employmentType) return "Select the employment type you're looking for.";
-    return null;
+    return (
+      validateHoursRange(form.desiredWeeklyHours, "Desired weekly hours", WEEKLY_HOURS_MAX) ||
+      validateHoursRange(form.minWeeklyHours, "Minimum weekly hours", WEEKLY_HOURS_MAX) ||
+      validateHoursRange(form.maxWeeklyHours, "Maximum weekly hours", WEEKLY_HOURS_MAX) ||
+      validateHoursRange(form.desiredMonthlyHours, "Desired monthly hours", MONTHLY_HOURS_MAX) ||
+      validateHoursRange(form.minMonthlyHours, "Minimum monthly hours", MONTHLY_HOURS_MAX) ||
+      validateHoursRange(form.maxMonthlyHours, "Maximum monthly hours", MONTHLY_HOURS_MAX) ||
+      validateHoursRange(form.minShiftHours, "Minimum shift length") ||
+      validateHoursRange(form.maxShiftHours, "Maximum shift length") ||
+      validateMinMax(form.minWeeklyHours, form.maxWeeklyHours, "weekly hours") ||
+      validateMinMax(form.minMonthlyHours, form.maxMonthlyHours, "monthly hours") ||
+      validateMinMax(form.minShiftHours, form.maxShiftHours, "shift length") ||
+      null
+    );
   }
 
   function validateAvailability(): string | null {

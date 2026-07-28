@@ -64,6 +64,19 @@ async function startApplication() {
   await waitFor(() => expect(screen.getByLabelText("First name")).toBeInTheDocument());
 }
 
+async function reachEmploymentStep() {
+  fireEvent.change(screen.getByLabelText("First name"), { target: { value: "Ashley" } });
+  fireEvent.change(screen.getByLabelText("Last name"), { target: { value: "Rivera" } });
+  fireEvent.change(screen.getByLabelText("Email"), { target: { value: "ashley@example.com" } });
+  fireEvent.click(screen.getByText("Next"));
+
+  await waitFor(() => expect(screen.getByLabelText("ZIP code")).toBeInTheDocument());
+  fireEvent.click(screen.getByText("Next"));
+
+  await waitFor(() => expect(screen.getByLabelText("Employment type")).toBeInTheDocument());
+  fireEvent.change(screen.getByLabelText("Employment type"), { target: { value: "full_time" } });
+}
+
 describe("ApplyPage", () => {
   beforeEach(() => {
     window.localStorage.clear();
@@ -129,6 +142,46 @@ describe("ApplyPage", () => {
 
     expect(await screen.findByRole("alert")).toHaveTextContent("Enter a valid email address.");
     expect(screen.getByLabelText("First name")).toBeInTheDocument();
+  });
+
+  it("blocks advancing past the Employment step with a negative hours value", async () => {
+    mockRpcByFn();
+    renderAt("/apply/acme");
+    await startApplication();
+    await reachEmploymentStep();
+
+    fireEvent.change(screen.getByLabelText("Desired weekly hours"), { target: { value: "-5" } });
+    fireEvent.click(screen.getByText("Next"));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent("Desired weekly hours can't be negative.");
+    expect(screen.getByLabelText("Employment type")).toBeInTheDocument();
+  });
+
+  it("blocks advancing past the Employment step with an out-of-range hours value", async () => {
+    mockRpcByFn();
+    renderAt("/apply/acme");
+    await startApplication();
+    await reachEmploymentStep();
+
+    fireEvent.change(screen.getByLabelText("Desired monthly hours"), { target: { value: "9999" } });
+    fireEvent.click(screen.getByText("Next"));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent("Desired monthly hours must be 744 or less.");
+  });
+
+  it("blocks advancing past the Employment step when minimum weekly hours exceeds maximum", async () => {
+    mockRpcByFn();
+    renderAt("/apply/acme");
+    await startApplication();
+    await reachEmploymentStep();
+
+    fireEvent.change(screen.getByLabelText("Minimum weekly hours"), { target: { value: "40" } });
+    fireEvent.change(screen.getByLabelText("Maximum weekly hours"), { target: { value: "10" } });
+    fireEvent.click(screen.getByText("Next"));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "Minimum weekly hours can't be more than maximum weekly hours."
+    );
   });
 
   it("walks through every step, including a split shift and services, and submits on Review", async () => {
