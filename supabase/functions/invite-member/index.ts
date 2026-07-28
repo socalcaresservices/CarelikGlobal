@@ -46,6 +46,28 @@ interface InviteRequestBody {
   phone?: unknown;
 }
 
+// Mirrors packages/shared/src/permissions.ts's systemRoleSchema (the
+// same set access-page.tsx's own role dropdown offers) and public.
+// system_role's DB enum values (20260715000100_platform_foundation.sql
+// + 20260719310000_add_caregiver_role.sql) - edge functions run in Deno
+// outside the pnpm workspace, so they can't import @carelik/shared
+// directly and this list has to be kept in sync by hand. Without this
+// check, an invalid role slipped past isValidRequestBody's bare
+// non-empty-string test and went straight into the organization_
+// memberships upsert below, where Postgres would reject it with a raw
+// "invalid input value for enum system_role" - every other field in
+// this function gets a clean 400 instead.
+const KNOWN_ROLES = new Set([
+  "platform_owner",
+  "organization_owner",
+  "organization_admin",
+  "manager",
+  "coordinator",
+  "staff",
+  "caregiver",
+  "read_only"
+]);
+
 function jsonResponse(body: unknown, status: number) {
   return new Response(JSON.stringify(body), {
     status,
@@ -110,6 +132,10 @@ Deno.serve(async (req) => {
   const lastName = body.lastName?.trim();
   const phone = body.phone?.trim();
   const hasProfileDetails = Boolean(firstName) && Boolean(lastName);
+
+  if (!KNOWN_ROLES.has(role)) {
+    return jsonResponse({ error: `"${role}" isn't a valid role.` }, 400);
+  }
 
   if (role === "platform_owner") {
     return jsonResponse(

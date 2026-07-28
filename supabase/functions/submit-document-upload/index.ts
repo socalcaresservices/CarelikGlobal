@@ -101,7 +101,14 @@ Deno.serve(async (req) => {
   if (file.size > MAX_FILE_BYTES) {
     return jsonResponse({ error: "Files must be 15MB or smaller" }, 413);
   }
-  if (file.type && !ALLOWED_MIME_TYPES.has(file.type)) {
+  // `file.type &&` here would let a caller bypass the allowlist entirely
+  // by simply omitting the multipart part's content-type - trivial from
+  // a raw HTTP client, not just a browser upload, and there is no other
+  // check on this anonymous, token-authenticated endpoint (no RLS, no
+  // signed-in user) standing between an unlisted file type and the
+  // organization-documents bucket. Missing type is now rejected the same
+  // as an explicitly disallowed one.
+  if (!file.type || !ALLOWED_MIME_TYPES.has(file.type)) {
     return jsonResponse({ error: "That file type isn't accepted here. Try a PDF or image." }, 415);
   }
 
