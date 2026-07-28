@@ -49,6 +49,16 @@ const US_STATES = [
   "OR", "PA", "RI", "SC", "SD", "TN", "TX", "UT", "VT", "VA", "WA", "WV", "WI", "WY", "DC"
 ];
 
+// Same pattern access-page.tsx uses for its own email field. Needed
+// here specifically because this wizard's Next/Submit controls are all
+// type="button" with no wrapping <form onSubmit> (each step validates
+// and advances itself), so the <input type="email"> below never gets
+// native HTML5 constraint validation - without this check, an
+// applicant could submit "asdf" as their email, complete the whole
+// application, and leave the agency with no way to reach them (and
+// nothing for the document-reminder feature to email later).
+const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
 const EMPLOYMENT_TYPES: EmploymentType[] = ["full_time", "part_time", "per_diem", "contractor"];
 const EMPLOYMENT_TYPE_LABELS: Record<EmploymentType, string> = {
   full_time: "Full-Time",
@@ -373,6 +383,7 @@ export function ApplyPage() {
     if (!form.firstName.trim()) return "First name is required.";
     if (!form.lastName.trim()) return "Last name is required.";
     if (!form.email.trim()) return "Email is required.";
+    if (!EMAIL_PATTERN.test(form.email.trim())) return "Enter a valid email address.";
     return null;
   }
 

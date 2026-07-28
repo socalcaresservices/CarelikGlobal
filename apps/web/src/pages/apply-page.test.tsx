@@ -117,6 +117,20 @@ describe("ApplyPage", () => {
     expect(screen.getByLabelText("First name")).toBeInTheDocument();
   });
 
+  it("blocks advancing past the Personal step with a malformed email", async () => {
+    mockRpcByFn();
+    renderAt("/apply/acme");
+    await startApplication();
+
+    fireEvent.change(screen.getByLabelText("First name"), { target: { value: "Ashley" } });
+    fireEvent.change(screen.getByLabelText("Last name"), { target: { value: "Rivera" } });
+    fireEvent.change(screen.getByLabelText("Email"), { target: { value: "not-an-email" } });
+    fireEvent.click(screen.getByText("Next"));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent("Enter a valid email address.");
+    expect(screen.getByLabelText("First name")).toBeInTheDocument();
+  });
+
   it("walks through every step, including a split shift and services, and submits on Review", async () => {
     mockRpcByFn([{ id: SERVICE_ID, name: "Companion Care" }]);
 
