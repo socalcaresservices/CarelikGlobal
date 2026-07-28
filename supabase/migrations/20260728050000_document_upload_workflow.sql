@@ -179,9 +179,17 @@ create policy "document_reviewers_read_storage" on storage.objects
 -- verify_document_request / reject_document_request: set verified_by
 -- from auth.uid() server-side rather than trusting a client-supplied
 -- value, same reasoning as every other set_* function in this schema.
--- Rejecting clears uploaded_at/file_id so the upload page correctly
--- treats the request as awaiting a fresh upload rather than showing a
--- stale "already uploaded" file reference next to the rejection reason.
+-- Rejecting deliberately leaves file_id/uploaded_at in place rather
+-- than clearing them - staff who reject a document can still open it
+-- via DocumentsCard's "View" link to double-check what was wrong with
+-- it, and that history is worth keeping even after a fresh upload
+-- eventually replaces it (see submit-document-upload's own overwrite
+-- behavior for what happens to the old file at that point). The public
+-- upload page is responsible for not presenting the old upload date as
+-- if it were still current next to the rejection reason (see
+-- STALE_UPLOAD_DATE_STATUSES in upload-page.tsx, Build 036) - this
+-- function's own status/rejection_reason update is the one signal of
+-- truth either surface needs.
 create function public.verify_document_request(
   target_organization_id uuid,
   target_document_request_id uuid

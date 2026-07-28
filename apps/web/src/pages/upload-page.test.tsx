@@ -182,6 +182,31 @@ describe("UploadPage", () => {
 
     await waitFor(() => expect(screen.getByText("Image was blurry, please retake.")).toBeInTheDocument());
     expect(screen.getByText("Upload a different file")).toBeInTheDocument();
+    // The old file stays attached server-side (so staff can still view
+    // it), but its upload date shouldn't read as if it were still the
+    // active submission next to a rejection notice.
+    expect(screen.queryByText(/^Uploaded /)).not.toBeInTheDocument();
+  });
+
+  it("still shows the upload date for a document that's genuinely awaiting review", async () => {
+    mockRpcByFn({
+      docs: [
+        {
+          id: "req-4",
+          document_type_name: "Driver's License",
+          category: "identity",
+          requires_expiration: false,
+          status: "uploaded",
+          uploaded_at: "2026-07-01T00:00:00Z",
+          rejection_reason: null
+        }
+      ]
+    });
+
+    renderAt("/upload/valid-token");
+
+    await waitFor(() => expect(screen.getByText("Driver's License")).toBeInTheDocument());
+    expect(screen.getByText(/^Uploaded /)).toBeInTheDocument();
   });
 
   it("prefers the organization's accent color over its primary color for the upload button", async () => {

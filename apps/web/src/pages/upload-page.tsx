@@ -57,6 +57,16 @@ const REUPLOADABLE_STATUSES: DocumentRequestStatus[] = [
   "missing"
 ];
 
+// A rejected/replacement-requested request keeps its old uploaded_at
+// (reject_document_request deliberately leaves the prior file attached
+// - see that function's migration comment - so staff can still review
+// what was submitted). Showing "Uploaded [old date]" here next to the
+// rejection reason and an "Upload a different file" button reads as
+// though the old file might still be the active one; the rejection
+// reason already communicates the current state, so the stale date is
+// dropped for these two statuses specifically.
+const STALE_UPLOAD_DATE_STATUSES: DocumentRequestStatus[] = ["rejected", "replacement_requested"];
+
 const statusTone: Record<DocumentRequestStatus, StatusTone> = {
   requested: "info",
   uploaded: "warning",
@@ -110,7 +120,7 @@ function DocumentUploadRow({
       <div className="flex items-center justify-between gap-3">
         <div>
           <p className="text-sm font-medium text-slate-900">{row.document_type_name}</p>
-          {row.uploaded_at ? (
+          {row.uploaded_at && !STALE_UPLOAD_DATE_STATUSES.includes(row.status) ? (
             <p className="text-xs text-slate-400">Uploaded {new Date(row.uploaded_at).toLocaleDateString()}</p>
           ) : null}
         </div>
