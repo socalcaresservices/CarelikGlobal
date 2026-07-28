@@ -91,6 +91,20 @@ describe("UploadPage", () => {
     await waitFor(() => expect(screen.getByText("Link not found")).toBeInTheDocument());
   });
 
+  it("shows a distinct error state (not 'link not found') when the batch fetch fails", async () => {
+    mockedRpc.mockImplementation((fn: string) => {
+      if (fn === "get_document_request_batch") {
+        return Promise.resolve({ data: null, error: new Error("network error") }) as never;
+      }
+      return Promise.resolve({ data: [], error: null }) as never;
+    });
+
+    renderAt("/upload/valid-token");
+
+    await waitFor(() => expect(screen.getByText("Something went wrong")).toBeInTheDocument());
+    expect(screen.queryByText("Link not found")).not.toBeInTheDocument();
+  });
+
   it("shows the organization name, message, and each requested document with its status", async () => {
     mockRpcByFn();
 

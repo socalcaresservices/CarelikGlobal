@@ -81,6 +81,15 @@ describe("ApplyPage", () => {
     await waitFor(() => expect(screen.getByText("Application not found")).toBeInTheDocument());
   });
 
+  it("shows a distinct error state (not 'not found') when the organization fetch fails", async () => {
+    mockedRpc.mockResolvedValue({ data: null, error: new Error("network error") } as never);
+
+    renderAt("/apply/acme");
+
+    await waitFor(() => expect(screen.getByText("Something went wrong")).toBeInTheDocument());
+    expect(screen.queryByText("Application not found")).not.toBeInTheDocument();
+  });
+
   it("shows the welcome screen, then starts the wizard on the Personal information step", async () => {
     mockRpcByFn([{ id: SERVICE_ID, name: "Companion Care" }]);
 

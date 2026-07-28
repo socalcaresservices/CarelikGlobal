@@ -262,6 +262,34 @@ describe("SettingsPage", () => {
     await waitFor(() => expect(insertMock).toHaveBeenCalledWith({ organization_id: ORG_ID, name: "Wound care" }));
   });
 
+  it("shows an error message when the skills fetch fails, instead of a false empty state", async () => {
+    mockedUseAuth.mockReturnValue(authUser());
+    mockedUseOrganization.mockReturnValue({ ...baseOrganization(), hasPermission: vi.fn(() => true) });
+
+    const { selectMock: settingsSelect } = mockReadableSettings([]);
+    const failingOrderMock = vi.fn().mockResolvedValue({ data: null, error: new Error("network error") });
+    const failingIsMock = vi.fn(() => ({ order: failingOrderMock }));
+    const failingEqMock = vi.fn(() => ({ is: failingIsMock }));
+    const skillsSelect = vi.fn(() => ({ eq: failingEqMock }));
+    const { selectMock: languagesSelect } = mockReadableLookup([]);
+    const { selectMock: documentTypesSelect } = mockReadableDocumentTypes([]);
+
+    mockedFrom.mockImplementation((table: string) => {
+      if (table === "skills") return { select: skillsSelect } as never;
+      if (table === "languages") return { select: languagesSelect } as never;
+      if (table === "document_types") return { select: documentTypesSelect } as never;
+      return { select: settingsSelect } as never;
+    });
+
+    renderPage();
+
+    const skillsCard = await screen.findByText("Skills");
+    await waitFor(() =>
+      expect(within(skillsCard.closest("div")!).getByText("Could not load skills.")).toBeInTheDocument()
+    );
+    expect(within(skillsCard.closest("div")!).queryByText("None configured yet.")).not.toBeInTheDocument();
+  });
+
   it("deactivates a configured language", async () => {
     mockedUseAuth.mockReturnValue(authUser());
     mockedUseOrganization.mockReturnValue({ ...baseOrganization(), hasPermission: vi.fn(() => true) });
@@ -319,6 +347,34 @@ describe("SettingsPage", () => {
 
     const documentTypesCard = screen.getByText("Document types").closest("div")!;
     expect(within(documentTypesCard).getAllByRole("button", { name: "Deactivate" })).toHaveLength(1);
+  });
+
+  it("shows an error message when the document types fetch fails, instead of a false empty state", async () => {
+    mockedUseAuth.mockReturnValue(authUser());
+    mockedUseOrganization.mockReturnValue({ ...baseOrganization(), hasPermission: vi.fn(() => true) });
+
+    const { selectMock: settingsSelect } = mockReadableSettings([]);
+    const { selectMock: skillsSelect } = mockReadableLookup([]);
+    const { selectMock: languagesSelect } = mockReadableLookup([]);
+    const failingOrderMock = vi.fn().mockResolvedValue({ data: null, error: new Error("network error") });
+    const failingIsMock = vi.fn(() => ({ order: failingOrderMock }));
+    const failingOrMock = vi.fn(() => ({ is: failingIsMock }));
+    const documentTypesSelect = vi.fn(() => ({ or: failingOrMock }));
+
+    mockedFrom.mockImplementation((table: string) => {
+      if (table === "skills") return { select: skillsSelect } as never;
+      if (table === "languages") return { select: languagesSelect } as never;
+      if (table === "document_types") return { select: documentTypesSelect } as never;
+      return { select: settingsSelect } as never;
+    });
+
+    renderPage();
+
+    const documentTypesCard = (await screen.findByText("Document types")).closest("div")!;
+    await waitFor(() =>
+      expect(within(documentTypesCard).getByText("Could not load document types.")).toBeInTheDocument()
+    );
+    expect(within(documentTypesCard).queryByText("None configured yet.")).not.toBeInTheDocument();
   });
 
   it("adds a custom document type when documents.manage is held", async () => {
@@ -402,6 +458,37 @@ describe("SettingsPage", () => {
         target_max_reminders: 3
       })
     );
+  });
+
+  it("shows an error message when the reminder settings fetch fails, instead of a stuck loading state", async () => {
+    mockedUseAuth.mockReturnValue(authUser());
+    mockedUseOrganization.mockReturnValue({ ...baseOrganization(), hasPermission: vi.fn(() => true) });
+
+    const { selectMock: settingsSelect } = mockReadableSettings([]);
+    const { selectMock: skillsSelect } = mockReadableLookup([]);
+    const { selectMock: languagesSelect } = mockReadableLookup([]);
+    const { selectMock: documentTypesSelect } = mockReadableDocumentTypes([]);
+    mockedFrom.mockImplementation((table: string) => {
+      if (table === "skills") return { select: skillsSelect } as never;
+      if (table === "languages") return { select: languagesSelect } as never;
+      if (table === "document_types") return { select: documentTypesSelect } as never;
+      return { select: settingsSelect } as never;
+    });
+    mockedRpc.mockImplementation((fn: string) => {
+      if (fn === "get_document_reminder_settings") {
+        return Promise.resolve({ data: null, error: new Error("network error") }) as never;
+      }
+      return Promise.resolve({ data: [], error: null }) as never;
+    });
+
+    renderPage();
+
+    await waitFor(() => expect(screen.getByText("Document request reminders")).toBeInTheDocument());
+    const reminderCard = screen.getByText("Document request reminders").closest("div")!;
+    await waitFor(() =>
+      expect(within(reminderCard).getByText("Could not load reminder settings.")).toBeInTheDocument()
+    );
+    expect(within(reminderCard).queryByLabelText("Every (days)")).not.toBeInTheDocument();
   });
 
   it("hides Save on reminder settings without documents.manage", async () => {

@@ -542,7 +542,7 @@ export function ApplyPage() {
     }
   }
 
-  if (!orgSlug || (!organizationQuery.isLoading && !organizationQuery.data)) {
+  if (!orgSlug) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-slate-50 px-4">
         <Card className="w-full max-w-sm text-center">
@@ -559,6 +559,35 @@ export function ApplyPage() {
     return (
       <div className="flex min-h-screen items-center justify-center bg-slate-50 px-4">
         <p className="text-sm text-slate-500">Loading…</p>
+      </div>
+    );
+  }
+
+  // Distinct from "not found" below: a fetch failure (network blip, the
+  // RPC erroring) shouldn't tell a real applicant their link is invalid -
+  // that's only true once the request actually came back empty.
+  if (organizationQuery.isError) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-slate-50 px-4">
+        <Card className="w-full max-w-sm text-center">
+          <h1 className="text-xl font-semibold text-slate-950">Something went wrong</h1>
+          <p className="mt-2 text-sm text-slate-600">
+            We couldn&apos;t load this application form. Please try refreshing the page.
+          </p>
+        </Card>
+      </div>
+    );
+  }
+
+  if (!organizationQuery.data) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-slate-50 px-4">
+        <Card className="w-full max-w-sm text-center">
+          <h1 className="text-xl font-semibold text-slate-950">Application not found</h1>
+          <p className="mt-2 text-sm text-slate-600">
+            This application link isn&apos;t valid. Double-check the link your recruiter sent you.
+          </p>
+        </Card>
       </div>
     );
   }
@@ -1018,6 +1047,8 @@ export function ApplyPage() {
               <p className="mt-1 text-xs text-slate-500">Select all that apply.</p>
               {servicesQuery.isLoading ? (
                 <p className="mt-3 text-sm text-slate-500">Loading…</p>
+              ) : servicesQuery.isError ? (
+                <p className="mt-3 text-sm text-red-700">Could not load services. Try refreshing the page.</p>
               ) : (servicesQuery.data ?? []).length === 0 ? (
                 <p className="mt-3 text-sm text-slate-400">This agency hasn&apos;t configured any services yet.</p>
               ) : (

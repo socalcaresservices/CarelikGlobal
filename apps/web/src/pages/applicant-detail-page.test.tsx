@@ -328,6 +328,22 @@ describe("ApplicantDetailPage", () => {
     expect(screen.getAllByText(/reminders sent/)).toHaveLength(1);
   });
 
+  it("shows an error message when the document requests fetch fails, instead of a false empty state", async () => {
+    mockedUseOrganization.mockReturnValue(baseOrganization());
+    mockFromByTable(applicantRecord());
+    mockedRpc.mockImplementation((fn: string) => {
+      if (fn === "list_document_requests_for_subject") {
+        return Promise.resolve({ data: null, error: new Error("network error") }) as never;
+      }
+      return Promise.resolve({ data: [], error: null }) as never;
+    });
+
+    renderPage();
+
+    await waitFor(() => expect(screen.getByText("Could not load document requests.")).toBeInTheDocument());
+    expect(screen.queryByText("No documents requested yet.")).not.toBeInTheDocument();
+  });
+
   it("sends a document request and shows the generated upload link", async () => {
     mockedUseOrganization.mockReturnValue(baseOrganization());
     mockFromByTable(applicantRecord(), [], [], [

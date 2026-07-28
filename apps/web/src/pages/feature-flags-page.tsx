@@ -306,6 +306,8 @@ export function FeatureFlagsPage() {
         {rowError ? <p className="mt-2 text-sm text-red-700">{rowError}</p> : null}
         {flagsQuery.isLoading ? (
           <p className="mt-3 text-sm text-slate-500">Loading…</p>
+        ) : flagsQuery.isError ? (
+          <p className="mt-3 text-sm text-red-700">Could not load feature flags.</p>
         ) : rows.length === 0 ? (
           <p className="mt-3 text-sm text-slate-400">No feature flags configured yet.</p>
         ) : (

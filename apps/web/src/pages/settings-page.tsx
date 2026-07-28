@@ -126,6 +126,8 @@ function LookupCatalogCard({
 
       {listQuery.isLoading ? (
         <p className="mt-3 text-sm text-slate-500">Loading…</p>
+      ) : listQuery.isError ? (
+        <p className="mt-3 text-sm text-red-700">Could not load {title.toLowerCase()}.</p>
       ) : (listQuery.data ?? []).length === 0 ? (
         <p className="mt-3 text-sm text-slate-400">None configured yet.</p>
       ) : (
@@ -305,6 +307,8 @@ function DocumentTypesCard({
 
       {listQuery.isLoading ? (
         <p className="mt-3 text-sm text-slate-500">Loading…</p>
+      ) : listQuery.isError ? (
+        <p className="mt-3 text-sm text-red-700">Could not load document types.</p>
       ) : rows.length === 0 ? (
         <p className="mt-3 text-sm text-slate-400">None configured yet.</p>
       ) : (
@@ -409,8 +413,12 @@ function ReminderSettingsCard({
         How often to nudge an applicant or employee about a document request they haven&apos;t finished yet.
       </p>
 
-      {settingsQuery.isLoading || !current ? (
+      {settingsQuery.isLoading ? (
         <p className="mt-3 text-sm text-slate-500">Loading…</p>
+      ) : settingsQuery.isError ? (
+        <p className="mt-3 text-sm text-red-700">Could not load reminder settings.</p>
+      ) : !current ? (
+        <p className="mt-3 text-sm text-slate-400">No reminder settings configured yet.</p>
       ) : (
         <form onSubmit={handleSave} className="mt-4 space-y-3">
           <label className="flex items-center gap-2 text-sm text-slate-800">

@@ -109,6 +109,17 @@ describe("FeatureFlagsPage", () => {
     await waitFor(() => expect(screen.getByText("No feature flags configured yet.")).toBeInTheDocument());
   });
 
+  it("shows an error message when the flags fetch fails, instead of a false empty state", async () => {
+    mockedUseOrganization.mockReturnValue(platformOwnerContext());
+    const orderMock = vi.fn().mockResolvedValue({ data: null, error: new Error("network error") });
+    mockedFrom.mockReturnValue({ select: vi.fn(() => ({ order: orderMock })) } as never);
+
+    renderPage();
+
+    await waitFor(() => expect(screen.getByText("Could not load feature flags.")).toBeInTheDocument());
+    expect(screen.queryByText("No feature flags configured yet.")).not.toBeInTheDocument();
+  });
+
   it("creates a new global flag via the form", async () => {
     mockedUseOrganization.mockReturnValue(platformOwnerContext());
     mockFlagsList([]);

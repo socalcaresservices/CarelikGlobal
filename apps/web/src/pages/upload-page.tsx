@@ -161,7 +161,7 @@ export function UploadPage() {
     enabled: !!token && !!batchQuery.data
   });
 
-  if (!token || (!batchQuery.isLoading && !batchQuery.data)) {
+  if (!token) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-slate-50 px-4">
         <Card className="w-full max-w-sm text-center">
@@ -178,6 +178,35 @@ export function UploadPage() {
     return (
       <div className="flex min-h-screen items-center justify-center bg-slate-50 px-4">
         <p className="text-sm text-slate-500">Loading…</p>
+      </div>
+    );
+  }
+
+  // Distinct from "link not found" below: a fetch failure shouldn't tell
+  // a real contact their link is invalid/expired when it might just be a
+  // network blip.
+  if (batchQuery.isError) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-slate-50 px-4">
+        <Card className="w-full max-w-sm text-center">
+          <h1 className="text-xl font-semibold text-slate-950">Something went wrong</h1>
+          <p className="mt-2 text-sm text-slate-600">
+            We couldn&apos;t load this page. Please try refreshing.
+          </p>
+        </Card>
+      </div>
+    );
+  }
+
+  if (!batchQuery.data) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-slate-50 px-4">
+        <Card className="w-full max-w-sm text-center">
+          <h1 className="text-xl font-semibold text-slate-950">Link not found</h1>
+          <p className="mt-2 text-sm text-slate-600">
+            This upload link isn&apos;t valid or has expired. Ask your contact for a new one.
+          </p>
+        </Card>
       </div>
     );
   }
@@ -214,6 +243,8 @@ export function UploadPage() {
           <div className="mt-4">
             {documentsQuery.isLoading ? (
               <p className="text-sm text-slate-500">Loading…</p>
+            ) : documentsQuery.isError ? (
+              <p className="text-sm text-red-700">Could not load your documents. Try refreshing the page.</p>
             ) : documents.length === 0 ? (
               <p className="text-sm text-slate-400">No documents were requested.</p>
             ) : (

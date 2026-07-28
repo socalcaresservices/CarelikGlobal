@@ -333,6 +333,8 @@ function DocumentsCard({
           <p className="text-xs font-medium text-slate-600">Request documents</p>
           {typesQuery.isLoading ? (
             <p className="mt-2 text-sm text-slate-500">Loading document types…</p>
+          ) : typesQuery.isError ? (
+            <p className="mt-2 text-sm text-red-700">Could not load document types.</p>
           ) : (
             <div className="mt-2 flex flex-wrap gap-x-4 gap-y-2">
               {activeTypes.map((type) => (
@@ -373,6 +375,8 @@ function DocumentsCard({
       <div className="mt-4">
         {requestsQuery.isLoading ? (
           <p className="text-sm text-slate-500">Loading…</p>
+        ) : requestsQuery.isError ? (
+          <p className="text-sm text-red-700">Could not load document requests.</p>
         ) : requests.length === 0 ? (
           <p className="text-sm text-slate-400">No documents requested yet.</p>
         ) : (
@@ -669,6 +673,8 @@ export function ApplicantDetailPage() {
         <h3 className="font-semibold text-slate-950">Services offered</h3>
         {servicesQuery.isLoading ? (
           <p className="mt-3 text-sm text-slate-500">Loading…</p>
+        ) : servicesQuery.isError ? (
+          <p className="mt-3 text-sm text-red-700">Could not load services offered.</p>
         ) : (servicesQuery.data ?? []).length === 0 ? (
           <p className="mt-3 text-sm text-slate-400">No services selected.</p>
         ) : (
@@ -799,6 +805,8 @@ export function ApplicantDetailPage() {
         <h3 className="font-semibold text-slate-950">Weekly availability</h3>
         {availabilityQuery.isLoading ? (
           <p className="mt-3 text-sm text-slate-500">Loading…</p>
+        ) : availabilityQuery.isError ? (
+          <p className="mt-3 text-sm text-red-700">Could not load availability.</p>
         ) : (availabilityQuery.data ?? []).length === 0 ? (
           <p className="mt-3 text-sm text-slate-400">No availability submitted.</p>
         ) : (
@@ -864,6 +872,9 @@ export function ApplicantDetailPage() {
                   {converting ? "Converting…" : "Convert to caregiver"}
                 </Button>
               </div>
+              {membersQuery.isError ? (
+                <p className="mt-2 text-sm text-red-700">Could not load active members.</p>
+              ) : null}
               {convertError ? <p className="mt-2 text-sm text-red-700">{convertError}</p> : null}
             </>
           )}
