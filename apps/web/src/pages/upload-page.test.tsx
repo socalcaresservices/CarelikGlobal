@@ -147,6 +147,40 @@ describe("UploadPage", () => {
     );
   });
 
+  it("rejects an oversized file locally without calling the upload function", async () => {
+    mockRpcByFn();
+
+    renderAt("/upload/valid-token");
+
+    await waitFor(() => expect(screen.getByText("Upload file")).toBeInTheDocument());
+    fireEvent.click(screen.getByText("Upload file"));
+
+    const oversized = new File([new Uint8Array(15 * 1024 * 1024 + 1)], "resume.pdf", { type: "application/pdf" });
+    const input = document.querySelector('input[type="file"]') as HTMLInputElement;
+    fireEvent.change(input, { target: { files: [oversized] } });
+
+    await waitFor(() => expect(screen.getByText("Files must be 15MB or smaller")).toBeInTheDocument());
+    expect(mockedSubmit).not.toHaveBeenCalled();
+  });
+
+  it("rejects a disallowed file type locally without calling the upload function", async () => {
+    mockRpcByFn();
+
+    renderAt("/upload/valid-token");
+
+    await waitFor(() => expect(screen.getByText("Upload file")).toBeInTheDocument());
+    fireEvent.click(screen.getByText("Upload file"));
+
+    const file = new File(["hello"], "notes.txt", { type: "text/plain" });
+    const input = document.querySelector('input[type="file"]') as HTMLInputElement;
+    fireEvent.change(input, { target: { files: [file] } });
+
+    await waitFor(() =>
+      expect(screen.getByText("That file type isn't accepted here. Try a PDF or image.")).toBeInTheDocument()
+    );
+    expect(mockedSubmit).not.toHaveBeenCalled();
+  });
+
   it("shows an error message when the upload fails", async () => {
     mockRpcByFn();
     mockedSubmit.mockRejectedValue(new Error("Files must be 15MB or smaller"));

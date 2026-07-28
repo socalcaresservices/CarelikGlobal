@@ -67,6 +67,27 @@ const REUPLOADABLE_STATUSES: DocumentRequestStatus[] = [
 // dropped for these two statuses specifically.
 const STALE_UPLOAD_DATE_STATUSES: DocumentRequestStatus[] = ["rejected", "replacement_requested"];
 
+// Mirrors submit-document-upload's own MAX_FILE_BYTES/ALLOWED_MIME_TYPES
+// exactly - the edge function is still the authoritative check (this is
+// a public, unauthenticated page, so a raw HTTP client could bypass
+// anything client-side), but checking locally first saves a round trip
+// to a service the applicant is often hitting from a slow mobile
+// connection for an obviously-wrong file (a screenshot taken as HEIC vs.
+// JPEG, a 40MB phone video picked by mistake, etc).
+const MAX_FILE_BYTES = 15 * 1024 * 1024;
+
+const ALLOWED_MIME_TYPES = new Set([
+  "application/pdf",
+  "image/png",
+  "image/jpeg",
+  "image/webp",
+  "image/heic",
+  "application/msword",
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+]);
+
+const ACCEPT_ATTRIBUTE = [...ALLOWED_MIME_TYPES].join(",");
+
 const statusTone: Record<DocumentRequestStatus, StatusTone> = {
   requested: "info",
   uploaded: "warning",
@@ -104,6 +125,16 @@ function DocumentUploadRow({
     if (!file) return;
 
     setError(null);
+
+    if (file.size > MAX_FILE_BYTES) {
+      setError("Files must be 15MB or smaller");
+      return;
+    }
+    if (!file.type || !ALLOWED_MIME_TYPES.has(file.type)) {
+      setError("That file type isn't accepted here. Try a PDF or image.");
+      return;
+    }
+
     setUploading(true);
     try {
       await submitDocumentUpload({ token, documentRequestId: row.id, file });
@@ -131,7 +162,13 @@ function DocumentUploadRow({
       ) : null}
       {canUpload ? (
         <div>
-          <input ref={inputRef} type="file" onChange={(event) => void handleFileChosen(event)} className="hidden" />
+          <input
+            ref={inputRef}
+            type="file"
+            accept={ACCEPT_ATTRIBUTE}
+            onChange={(event) => void handleFileChosen(event)}
+            className="hidden"
+          />
           <button
             type="button"
             disabled={uploading}
