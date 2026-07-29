@@ -71,6 +71,37 @@ export function ClientsPage() {
     document.getElementById("client-first-name")?.focus();
   }
 
+  function downloadClientsAsCSV() {
+    if (!table.rows.length) return;
+    const orgName = activeOrganization?.displayName ?? "clients";
+    const timestamp = new Date().toISOString().split("T")[0];
+    const filename = `${orgName}-clients-${timestamp}.csv`;
+
+    const rows = table.rows.map((client) => [
+      `${client.first_name} ${client.last_name}`,
+      client.phone ?? "",
+      client.email ?? "",
+      client.status
+    ]);
+
+    const csvContent = [
+      ["Name", "Phone", "Email", "Status"],
+      ...rows
+    ]
+      .map((row) => row.map((cell) => `"${String(cell).replace(/"/g, '""')}"`).join(","))
+      .join("\n");
+
+    const blob = new Blob([csvContent], { type: "text/csv" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }
+
   const filters = useFilters<ClientRow>(clientsQuery.data, {
     status: (row, value) => row.status === value
   });
@@ -326,39 +357,50 @@ export function ClientsPage() {
       <Card>
         <div className="flex flex-wrap items-center justify-between gap-3">
           <h3 className="font-semibold text-slate-950">All clients</h3>
-          <FilterBar
-            activeFilters={clientActiveFilters}
-            onClearAll={clientActiveFilters.length > 0 ? filters.clearAll : undefined}
-            className="w-full sm:w-auto"
-          >
-            <input
-              type="search"
-              value={table.search}
-              onChange={(event) => table.setSearch(event.target.value)}
-              placeholder="Search name, phone, or email"
-              aria-label="Search clients"
-              className="w-full max-w-xs rounded-lg border border-slate-200 px-3 py-1.5 text-sm text-slate-900"
-            />
-            <div>
-              <label htmlFor="client-status-filter" className="sr-only">
-                Filter by status
-              </label>
-              <select
-                id="client-status-filter"
-                value={filters.values.status ?? ""}
-                onChange={(event) => filters.setFilter("status", event.target.value)}
-                className="rounded-lg border border-slate-200 px-3 py-1.5 text-sm text-slate-900"
+          <div className="flex flex-wrap items-center gap-2">
+            {table.rows.length > 0 && (
+              <button
+                type="button"
+                onClick={downloadClientsAsCSV}
+                className="text-xs font-medium text-slate-600 hover:text-slate-900"
               >
-                <option value="">All statuses</option>
-                {clientStatusSchema.options.map((option) => (
-                  <option key={option} value={option}>
-                    {option}
-                  </option>
-                ))}
-              </select>
+                Download as CSV
+              </button>
+            )}
+              <FilterBar
+                activeFilters={clientActiveFilters}
+                onClearAll={clientActiveFilters.length > 0 ? filters.clearAll : undefined}
+                className="w-full sm:w-auto"
+              >
+                <input
+                  type="search"
+                  value={table.search}
+                  onChange={(event) => table.setSearch(event.target.value)}
+                  placeholder="Search name, phone, or email"
+                  aria-label="Search clients"
+                  className="w-full max-w-xs rounded-lg border border-slate-200 px-3 py-1.5 text-sm text-slate-900"
+                />
+                <div>
+                  <label htmlFor="client-status-filter" className="sr-only">
+                    Filter by status
+                  </label>
+                  <select
+                    id="client-status-filter"
+                    value={filters.values.status ?? ""}
+                    onChange={(event) => filters.setFilter("status", event.target.value)}
+                    className="rounded-lg border border-slate-200 px-3 py-1.5 text-sm text-slate-900"
+                  >
+                    <option value="">All statuses</option>
+                    {clientStatusSchema.options.map((option) => (
+                      <option key={option} value={option}>
+                        {option}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </FilterBar>
             </div>
-          </FilterBar>
-        </div>
+          </div>
         {rowError ? <p className="mt-2 text-sm text-red-700">{rowError}</p> : null}
         {clientsQuery.isLoading ? (
           <p className="mt-3 text-sm text-slate-500">Loading…</p>

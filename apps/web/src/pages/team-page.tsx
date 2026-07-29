@@ -137,6 +137,41 @@ export function TeamPage() {
     actions: 90
   });
 
+  function downloadTeamAsCSV() {
+    if (!table.rows.length) return;
+    const orgName = activeOrganization?.displayName ?? "team";
+    const timestamp = new Date().toISOString().split("T")[0];
+    const filename = `${orgName}-team-${timestamp}.csv`;
+
+    const rows = table.rows.map((member) => {
+      const hours = hoursByUserId.get(member.user_id);
+      return [
+        member.display_name,
+        formatRole(member.role),
+        hours ? formatHours(hours.scheduled_hours) : "—",
+        hours?.target_hours_per_week ? formatHours(hours.target_hours_per_week) : "—",
+        member.status
+      ];
+    });
+
+    const csvContent = [
+      ["Name", "Role", "Scheduled Hours", "Target Hours", "Status"],
+      ...rows
+    ]
+      .map((row) => row.map((cell) => `"${String(cell).replace(/"/g, '""')}"`).join(","))
+      .join("\n");
+
+    const blob = new Blob([csvContent], { type: "text/csv" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }
+
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
   const [phone, setPhone] = useState("");
@@ -338,57 +373,68 @@ export function TeamPage() {
       <Card>
         <div className="flex flex-wrap items-center justify-between gap-3">
           <h3 className="font-semibold text-slate-950">All caregivers</h3>
-          <FilterBar
-            activeFilters={teamActiveFilters}
-            onClearAll={teamActiveFilters.length > 0 ? filters.clearAll : undefined}
-            className="w-full sm:w-auto"
-          >
-            <input
-              type="search"
-              value={table.search}
-              onChange={(event) => table.setSearch(event.target.value)}
-              placeholder="Search by name"
-              aria-label="Search team"
-              className="w-full max-w-xs rounded-lg border border-slate-200 px-3 py-1.5 text-sm text-slate-900"
-            />
-            <div>
-              <label htmlFor="team-role-filter" className="sr-only">
-                Filter by role
-              </label>
-              <select
-                id="team-role-filter"
-                value={filters.values.role ?? ""}
-                onChange={(event) => filters.setFilter("role", event.target.value)}
-                className="rounded-lg border border-slate-200 px-3 py-1.5 text-sm text-slate-900"
+          <div className="flex flex-wrap items-center gap-2">
+            {table.rows.length > 0 && (
+              <button
+                type="button"
+                onClick={downloadTeamAsCSV}
+                className="text-xs font-medium text-slate-600 hover:text-slate-900"
               >
-                <option value="">All roles</option>
-                {invitableRoles.map((option) => (
-                  <option key={option} value={option}>
-                    {formatRole(option)}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label htmlFor="team-status-filter" className="sr-only">
-                Filter by status
-              </label>
-              <select
-                id="team-status-filter"
-                value={filters.values.status ?? ""}
-                onChange={(event) => filters.setFilter("status", event.target.value)}
-                className="rounded-lg border border-slate-200 px-3 py-1.5 text-sm text-slate-900"
+                Download as CSV
+              </button>
+            )}
+              <FilterBar
+                activeFilters={teamActiveFilters}
+                onClearAll={teamActiveFilters.length > 0 ? filters.clearAll : undefined}
+                className="w-full sm:w-auto"
               >
-                <option value="">All statuses</option>
-                {membershipStatusSchema.options.map((option) => (
-                  <option key={option} value={option}>
-                    {option}
-                  </option>
-                ))}
-              </select>
+                <input
+                  type="search"
+                  value={table.search}
+                  onChange={(event) => table.setSearch(event.target.value)}
+                  placeholder="Search by name"
+                  aria-label="Search team"
+                  className="w-full max-w-xs rounded-lg border border-slate-200 px-3 py-1.5 text-sm text-slate-900"
+                />
+                <div>
+                  <label htmlFor="team-role-filter" className="sr-only">
+                    Filter by role
+                  </label>
+                  <select
+                    id="team-role-filter"
+                    value={filters.values.role ?? ""}
+                    onChange={(event) => filters.setFilter("role", event.target.value)}
+                    className="rounded-lg border border-slate-200 px-3 py-1.5 text-sm text-slate-900"
+                  >
+                    <option value="">All roles</option>
+                    {invitableRoles.map((option) => (
+                      <option key={option} value={option}>
+                        {formatRole(option)}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label htmlFor="team-status-filter" className="sr-only">
+                    Filter by status
+                  </label>
+                  <select
+                    id="team-status-filter"
+                    value={filters.values.status ?? ""}
+                    onChange={(event) => filters.setFilter("status", event.target.value)}
+                    className="rounded-lg border border-slate-200 px-3 py-1.5 text-sm text-slate-900"
+                  >
+                    <option value="">All statuses</option>
+                    {membershipStatusSchema.options.map((option) => (
+                      <option key={option} value={option}>
+                        {option}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </FilterBar>
             </div>
-          </FilterBar>
-        </div>
+          </div>
         {actionError ? <p className="mt-2 text-sm text-red-700">{actionError}</p> : null}
         {membersQuery.isLoading ? (
           <p className="mt-3 text-sm text-slate-500">Loading…</p>
