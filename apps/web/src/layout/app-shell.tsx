@@ -54,20 +54,28 @@ interface NavItem {
   badgeKey?: BadgeKey;
 }
 
-// Two groups instead of one flat list: routine, daily-operations
-// screens up top where they're easy to reach, and system-administration
-// screens (org config, membership access, the audit trail) below a
-// quieter "Administration" label. Same routes, same permission gating -
-// this only changes how prominent each one looks in the sidebar, so a
-// scheduler's eye doesn't land on "Organizations" or "Audit" before it
-// lands on "Clients" or "Schedule".
-const operationsNav: NavItem[] = [
+// Five groups instead of one flat nine-item list, split by what each
+// screen is *for* rather than just "routine vs admin": the screens you
+// check every day (Overview), the people you manage (People), the
+// compliance surfaces that carry expiration risk (Compliance), and
+// system administration (Administration, unchanged from before). Same
+// routes, same permission gating, same badge keys - this only changes
+// how the sidebar groups and labels them, so scanning for "is anything
+// expiring" or "who do I need to follow up with" doesn't require
+// reading all nine labels in one flat list every time.
+const overviewNav: NavItem[] = [
   { to: "/", label: "Command Center", icon: LayoutDashboard },
   { to: "/owner-dashboard", label: "Workforce Insights", icon: Crown, ownerOnly: true },
+  { to: "/schedule", label: "Schedule", icon: CalendarClock, badgeKey: "schedule_issues" }
+];
+
+const peopleNav: NavItem[] = [
   { to: "/applicants", label: "Applicants", icon: UserPlus, permission: "applicants.read" },
   { to: "/clients", label: "Clients", icon: Users, permission: "clients.read", badgeKey: "clients_uncovered" },
-  { to: "/team", label: "Team", icon: HeartHandshake, permission: "membership.read" },
-  { to: "/schedule", label: "Schedule", icon: CalendarClock, badgeKey: "schedule_issues" },
+  { to: "/team", label: "Team", icon: HeartHandshake, permission: "membership.read" }
+];
+
+const complianceNav: NavItem[] = [
   { to: "/credentials", label: "Credentials", icon: BadgeCheck, badgeKey: "credentials_issues" },
   {
     to: "/authorizations",
@@ -191,7 +199,9 @@ export function AppShell({ children }: PropsWithChildren) {
 
   const isOwner = role === "organization_owner" || role === "platform_owner";
 
-  const visibleOperationsNav = visibleItems(operationsNav, hasPermission, isOwner);
+  const visibleOverviewNav = visibleItems(overviewNav, hasPermission, isOwner);
+  const visiblePeopleNav = visibleItems(peopleNav, hasPermission, isOwner);
+  const visibleComplianceNav = visibleItems(complianceNav, hasPermission, isOwner);
   // Organizations moves to its own "Platform Administration" group for a
   // platform owner (see platformAdministrationNav above) - excluded here
   // so it isn't listed twice.
@@ -246,12 +256,36 @@ export function AppShell({ children }: PropsWithChildren) {
             </>
           )}
         </div>
-        <nav className="flex-1 space-y-4 overflow-y-auto p-3">
+        <nav className="flex-1 space-y-5 overflow-y-auto p-3">
           <div className="space-y-1">
-            {visibleOperationsNav.map((item) => (
+            {visibleOverviewNav.map((item) => (
               <NavLinkItem key={item.to} {...item} badgeCount={badgeFor(item)} />
             ))}
           </div>
+          {visiblePeopleNav.length > 0 ? (
+            <div>
+              <p className="px-3 pb-1.5 text-[11px] font-semibold uppercase tracking-wider text-slate-400">
+                People
+              </p>
+              <div className="space-y-1">
+                {visiblePeopleNav.map((item) => (
+                  <NavLinkItem key={item.to} {...item} badgeCount={badgeFor(item)} />
+                ))}
+              </div>
+            </div>
+          ) : null}
+          {visibleComplianceNav.length > 0 ? (
+            <div>
+              <p className="px-3 pb-1.5 text-[11px] font-semibold uppercase tracking-wider text-slate-400">
+                Compliance
+              </p>
+              <div className="space-y-1">
+                {visibleComplianceNav.map((item) => (
+                  <NavLinkItem key={item.to} {...item} badgeCount={badgeFor(item)} />
+                ))}
+              </div>
+            </div>
+          ) : null}
           {visiblePlatformAdministrationNav.length > 0 ? (
             <div>
               <p className="px-3 pb-1.5 text-[11px] font-semibold uppercase tracking-wider text-slate-400">

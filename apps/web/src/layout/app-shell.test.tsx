@@ -101,6 +101,42 @@ describe("AppShell nav", () => {
     expect(screen.getByText("Command Center")).toBeInTheDocument();
   });
 
+  it("groups Applicants, Clients, and Team under a People heading", () => {
+    mockedUseAuth.mockReturnValue({ user: { email: "owner@acme.test" } } as never);
+    mockedUseOrganization.mockReturnValue(baseOrganization("organization_owner"));
+
+    renderShell();
+    expect(screen.getByText("People")).toBeInTheDocument();
+    expect(screen.getByText("Applicants")).toBeInTheDocument();
+    expect(screen.getByText("Clients")).toBeInTheDocument();
+    expect(screen.getByText("Team")).toBeInTheDocument();
+  });
+
+  it("groups Credentials, Authorizations, and Incidents under a Compliance heading", () => {
+    mockedUseAuth.mockReturnValue({ user: { email: "owner@acme.test" } } as never);
+    mockedUseOrganization.mockReturnValue(baseOrganization("organization_owner"));
+
+    renderShell();
+    expect(screen.getByText("Compliance")).toBeInTheDocument();
+    expect(screen.getByText("Credentials")).toBeInTheDocument();
+    expect(screen.getByText("Authorizations")).toBeInTheDocument();
+    expect(screen.getByText("Incidents")).toBeInTheDocument();
+  });
+
+  it("keeps Command Center, Workforce Insights, and Schedule ungrouped at the top of the sidebar", () => {
+    // These three are the "check every day" screens - they intentionally
+    // sit above the first section heading rather than under an "Overview"
+    // label, the same way they did before the People/Compliance split.
+    mockedUseAuth.mockReturnValue({ user: { email: "owner@acme.test" } } as never);
+    mockedUseOrganization.mockReturnValue(baseOrganization("organization_owner"));
+
+    renderShell();
+    expect(screen.queryByText("Overview")).not.toBeInTheDocument();
+    expect(screen.getByText("Command Center")).toBeInTheDocument();
+    expect(screen.getByText("Workforce Insights")).toBeInTheDocument();
+    expect(screen.getByText("Schedule")).toBeInTheDocument();
+  });
+
   it("does not show engineering-phase copy in the header", () => {
     mockedUseAuth.mockReturnValue({ user: { email: "owner@acme.test" } } as never);
     mockedUseOrganization.mockReturnValue(baseOrganization("organization_owner"));
