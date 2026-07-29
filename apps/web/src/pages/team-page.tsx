@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
 import { Button, Card, EmptyState, FilterBar, type ActiveFilter } from "@carelik/ui";
@@ -223,10 +223,20 @@ export function TeamPage() {
   }
 
   const [actionError, setActionError] = useState<string | null>(null);
+  const [actionSuccess, setActionSuccess] = useState<string | null>(null);
   const [pendingMembershipId, setPendingMembershipId] = useState<string | null>(null);
+
+  // Auto-clear success messages after 3 seconds
+  useEffect(() => {
+    if (actionSuccess) {
+      const timeout = setTimeout(() => setActionSuccess(null), 3000);
+      return () => clearTimeout(timeout);
+    }
+  }, [actionSuccess]);
 
   async function handleRoleChange(membershipId: string, nextRole: string) {
     setActionError(null);
+    setActionSuccess(null);
     setPendingMembershipId(membershipId);
     try {
       const { error } = await supabase
@@ -234,6 +244,7 @@ export function TeamPage() {
         .update({ role: nextRole })
         .eq("id", membershipId);
       if (error) throw error;
+      setActionSuccess(`Role updated to ${formatRole(nextRole)}.`);
       refreshMembers();
     } catch (cause) {
       setActionError(cause instanceof Error ? cause.message : "Could not update role.");
@@ -244,6 +255,7 @@ export function TeamPage() {
 
   async function handleRevoke(membershipId: string) {
     setActionError(null);
+    setActionSuccess(null);
     setPendingMembershipId(membershipId);
     try {
       const { error } = await supabase
@@ -251,6 +263,7 @@ export function TeamPage() {
         .update({ status: "revoked" })
         .eq("id", membershipId);
       if (error) throw error;
+      setActionSuccess("Access revoked.");
       refreshMembers();
     } catch (cause) {
       setActionError(cause instanceof Error ? cause.message : "Could not revoke access.");
@@ -436,6 +449,7 @@ export function TeamPage() {
             </div>
           </div>
         {actionError ? <p className="mt-2 text-sm text-red-700">{actionError}</p> : null}
+        {actionSuccess ? <p className="mt-2 text-sm text-emerald-700">{actionSuccess}</p> : null}
         {membersQuery.isLoading ? (
           <p className="mt-3 text-sm text-slate-500">Loading…</p>
         ) : membersQuery.isError ? (

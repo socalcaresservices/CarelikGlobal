@@ -128,12 +128,21 @@ export function ClientsPage() {
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
   const [rowError, setRowError] = useState<string | null>(null);
+  const [rowSuccess, setRowSuccess] = useState<string | null>(null);
   const [pendingId, setPendingId] = useState<string | null>(null);
 
   useEffect(() => {
     setForm(emptyForm);
     setEditingId(null);
   }, [activeOrganizationId]);
+
+  // Auto-clear success messages after 3 seconds
+  useEffect(() => {
+    if (rowSuccess) {
+      const timeout = setTimeout(() => setRowSuccess(null), 3000);
+      return () => clearTimeout(timeout);
+    }
+  }, [rowSuccess]);
 
   function startEdit(row: ClientRow) {
     setEditingId(row.id);
@@ -160,6 +169,7 @@ export function ClientsPage() {
     if (!activeOrganizationId) return;
 
     setFormError(null);
+    setRowSuccess(null);
     setSaving(true);
     try {
       const payload = {
@@ -173,11 +183,13 @@ export function ClientsPage() {
         status: form.status
       };
 
+      const isCreate = !editingId;
       const { error } = editingId
         ? await supabase.from("clients").update(payload).eq("id", editingId)
         : await supabase.from("clients").insert(payload);
       if (error) throw error;
 
+      setRowSuccess(isCreate ? `Added ${form.firstName} ${form.lastName}.` : "Client updated.");
       resetForm();
       refreshClients();
     } catch (cause) {
@@ -189,10 +201,12 @@ export function ClientsPage() {
 
   async function handleRemove(row: ClientRow) {
     setRowError(null);
+    setRowSuccess(null);
     setPendingId(row.id);
     try {
       const { error } = await supabase.from("clients").update({ deleted_at: new Date().toISOString() }).eq("id", row.id);
       if (error) throw error;
+      setRowSuccess(`Removed ${row.first_name} ${row.last_name}.`);
       if (editingId === row.id) resetForm();
       refreshClients();
     } catch (cause) {
@@ -402,6 +416,7 @@ export function ClientsPage() {
             </div>
           </div>
         {rowError ? <p className="mt-2 text-sm text-red-700">{rowError}</p> : null}
+        {rowSuccess ? <p className="mt-2 text-sm text-emerald-700">{rowSuccess}</p> : null}
         {clientsQuery.isLoading ? (
           <p className="mt-3 text-sm text-slate-500">Loading…</p>
         ) : clientsQuery.isError ? (
