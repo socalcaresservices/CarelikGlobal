@@ -520,7 +520,14 @@ export function CaregiverDetailPage() {
         Access
       </Link>
 
-      <Card>
+      {/* Sticky so identity, scores, and the tab bar stay visible while
+          scrolling a long tab (Schedule/Credentials/History can all run
+          well past one screen) - top-0 because AppShell's own header and
+          ContextBar aren't sticky themselves, so this is the first thing
+          that pins once they've scrolled out of view. z-20 keeps it above
+          tab content (which has no z-index of its own) when they overlap
+          during the scroll transition. */}
+      <Card className="sticky top-0 z-20">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
             <h2 className="text-2xl font-semibold text-slate-950">{member.display_name}</h2>

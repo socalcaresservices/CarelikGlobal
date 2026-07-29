@@ -141,6 +141,33 @@ describe("ClientDetailPage", () => {
     expect(screen.getByText("No active authorization for today.")).toBeInTheDocument();
   });
 
+  it("keeps the identity/authorization/tab header sticky so it stays visible while scrolling a long tab", async () => {
+    // Same reasoning as caregiver-detail-page.tsx's equivalent test: the
+    // header Card carries name, status, the authorization KPI row, and the
+    // tab bar - it previously scrolled away with tab content instead of
+    // staying put.
+    mockedUseOrganization.mockReturnValue(baseOrganization());
+    mockFromByTable({
+      id: CLIENT_ID,
+      first_name: "Jordan",
+      last_name: "Rivera",
+      phone: "555-0100",
+      email: null,
+      address: null,
+      care_notes: null,
+      status: "active",
+      client_requested_services: []
+    });
+    mockedRpc.mockResolvedValue({ data: [], error: null } as never);
+
+    renderPage();
+
+    await waitFor(() => expect(screen.getByText("Jordan Rivera")).toBeInTheDocument());
+    const headerCard = screen.getByText("Jordan Rivera").closest("div.sticky");
+    expect(headerCard).not.toBeNull();
+    expect(headerCard).toHaveClass("top-0");
+  });
+
   it("shows the monthly cap and usage status for an active authorization", async () => {
     mockedUseOrganization.mockReturnValue(baseOrganization());
     mockFromByTable({

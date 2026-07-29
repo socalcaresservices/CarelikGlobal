@@ -439,7 +439,11 @@ export function ClientDetailPage() {
         Clients
       </Link>
 
-      <Card>
+      {/* Sticky for the same reason as caregiver-detail-page.tsx's header
+          Card: identity, the authorization KPI row, and the tab bar stay
+          visible while scrolling a long tab instead of scrolling away with
+          it. See that page's comment for the top-0/z-20 reasoning. */}
+      <Card className="sticky top-0 z-20">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
             <h2 className="text-2xl font-semibold text-slate-950">

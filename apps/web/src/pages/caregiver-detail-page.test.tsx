@@ -129,6 +129,32 @@ describe("CaregiverDetailPage", () => {
     expect(screen.getByText("125% utilized")).toBeInTheDocument();
   });
 
+  it("keeps the identity/score/tab header sticky so it stays visible while scrolling a long tab", async () => {
+    // The header Card holds the caregiver's name, CareScore/GeoScore, and
+    // the tab bar itself - previously it scrolled away with tab content,
+    // so a long Schedule/Credentials/History list left the user with no
+    // idea whose record they were even looking at partway down the page.
+    mockedUseAuth.mockReturnValue({ user: { id: "other-user" } } as never);
+    mockedUseOrganization.mockReturnValue(baseOrganization());
+    mockedRpc.mockImplementation((fn: string) => {
+      if (fn === "list_organization_members") {
+        return Promise.resolve({
+          data: [{ user_id: CAREGIVER_ID, display_name: "Sam Caregiver", role: "staff", status: "active" }],
+          error: null
+        }) as never;
+      }
+      return Promise.resolve({ data: [], error: null }) as never;
+    });
+    mockAvailabilityFrom();
+
+    renderPage();
+
+    await waitFor(() => expect(screen.getByText("Sam Caregiver")).toBeInTheDocument());
+    const headerCard = screen.getByText("Sam Caregiver").closest("div.sticky");
+    expect(headerCard).not.toBeNull();
+    expect(headerCard).toHaveClass("top-0");
+  });
+
   it("switches to the Credentials tab", async () => {
     mockedUseAuth.mockReturnValue({ user: { id: "other-user" } } as never);
     mockedUseOrganization.mockReturnValue(baseOrganization());
