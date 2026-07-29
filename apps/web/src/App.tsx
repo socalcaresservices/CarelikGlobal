@@ -1,69 +1,80 @@
 import { Navigate, Route, Routes } from "react-router-dom";
 import { AppShell } from "@/layout/app-shell";
+import { PlatformShell } from "@/layout/platform-shell";
 import { OrganizationProvider } from "@/providers/organization-provider";
+import { PlatformProvider } from "@/providers/platform-provider";
 import { ProtectedRoute } from "@/routes/protected-route";
+import { getTenantRoutes } from "@/routes/tenant-routes";
+import { getPlatformRoutes } from "@/routes/platform-routes";
+import { resolveTenant } from "@/lib/tenant-resolver";
 import { LoginPage } from "@/pages/login-page";
 import { SetPasswordPage } from "@/pages/set-password-page";
 import { ApplyPage } from "@/pages/apply-page";
 import { UploadPage } from "@/pages/upload-page";
-import { CommandCenterPage } from "@/pages/command-center-page";
-import { AccessPage } from "@/pages/access-page";
-import { TeamPage } from "@/pages/team-page";
-import { CaregiverDetailPage } from "@/pages/caregiver-detail-page";
-import { OrganizationsPage } from "@/pages/organizations-page";
 import { AddOrganizationPage } from "@/pages/add-organization-page";
-import { AuditPage } from "@/pages/audit-page";
-import { ClientsPage } from "@/pages/clients-page";
-import { ClientDetailPage } from "@/pages/client-detail-page";
-import { SchedulePage } from "@/pages/schedule-page";
-import { CredentialsPage } from "@/pages/credentials-page";
-import { AuthorizationsPage } from "@/pages/authorizations-page";
-import { IncidentsPage } from "@/pages/incidents-page";
-import { SettingsPage } from "@/pages/settings-page";
-import { OwnerDashboardPage } from "@/pages/owner-dashboard-page";
-import { ApplicantsPage } from "@/pages/applicants-page";
-import { ApplicantDetailPage } from "@/pages/applicant-detail-page";
-import { FeatureFlagsPage } from "@/pages/feature-flags-page";
 
+/**
+ * Build 022: Enterprise Multi-Tenant SaaS Refactor
+ *
+ * Routes are now split into:
+ * - Platform routes (platform.carelik.com)
+ * - Tenant routes ({slug}.carelik.com)
+ * - Public routes (/apply, /upload)
+ * - Auth routes (/login, /set-password)
+ *
+ * The tenant resolution logic determines which application to render
+ */
 export function App() {
+  const tenantContext = resolveTenant(window.location.hostname);
+  const isPlatform = tenantContext.type === "platform";
+
   return (
     <Routes>
+      {/* Public routes - accessible without auth, on any host */}
       <Route path="/login" element={<LoginPage />} />
       <Route path="/set-password" element={<SetPasswordPage />} />
       <Route path="/apply/:orgSlug" element={<ApplyPage />} />
       <Route path="/upload/:token" element={<UploadPage />} />
-      <Route
-        path="/*"
-        element={
-          <ProtectedRoute>
-            <OrganizationProvider>
-              <AppShell>
-                <Routes>
-                  <Route path="/" element={<CommandCenterPage />} />
-                  <Route path="/organizations" element={<OrganizationsPage />} />
-                  <Route path="/organizations/new" element={<AddOrganizationPage />} />
-                  <Route path="/feature-flags" element={<FeatureFlagsPage />} />
-                  <Route path="/access" element={<AccessPage />} />
-                  <Route path="/team" element={<TeamPage />} />
-                  <Route path="/team/:id" element={<CaregiverDetailPage />} />
-                  <Route path="/clients" element={<ClientsPage />} />
-                  <Route path="/clients/:id" element={<ClientDetailPage />} />
-                  <Route path="/schedule" element={<SchedulePage />} />
-                  <Route path="/credentials" element={<CredentialsPage />} />
-                  <Route path="/authorizations" element={<AuthorizationsPage />} />
-                  <Route path="/incidents" element={<IncidentsPage />} />
-                  <Route path="/audit" element={<AuditPage />} />
-                  <Route path="/settings" element={<SettingsPage />} />
-                  <Route path="/owner-dashboard" element={<OwnerDashboardPage />} />
-                  <Route path="/applicants" element={<ApplicantsPage />} />
-                  <Route path="/applicants/:id" element={<ApplicantDetailPage />} />
-                  <Route path="*" element={<Navigate to="/" replace />} />
-                </Routes>
-              </AppShell>
-            </OrganizationProvider>
-          </ProtectedRoute>
-        }
-      />
+
+      {/* Tenant routes (agency workspace) */}
+      {!isPlatform && (
+        <Route
+          path="/*"
+          element={
+            <ProtectedRoute>
+              <OrganizationProvider>
+                <AppShell>
+                  <Routes>
+                    {getTenantRoutes()}
+                    {/* Add-org is allowed on tenant, for org owners inviting others */}
+                    <Route path="/organizations/new" element={<AddOrganizationPage />} />
+                    <Route path="*" element={<Navigate to="/" replace />} />
+                  </Routes>
+                </AppShell>
+              </OrganizationProvider>
+            </ProtectedRoute>
+          }
+        />
+      )}
+
+      {/* Platform routes (carelik management) */}
+      {isPlatform && (
+        <Route
+          path="/*"
+          element={
+            <ProtectedRoute>
+              <PlatformProvider>
+                <PlatformShell>
+                  <Routes>
+                    {getPlatformRoutes()}
+                    <Route path="*" element={<Navigate to="/organizations" replace />} />
+                  </Routes>
+                </PlatformShell>
+              </PlatformProvider>
+            </ProtectedRoute>
+          }
+        />
+      )}
     </Routes>
   );
 }
