@@ -47,4 +47,21 @@ describe("getCredentialStatus", () => {
   it("returns active when well outside the window", () => {
     expect(getCredentialStatus("2027-01-01T00:00:00.000Z", now)).toBe("active");
   });
+
+  // Regression test for the timezone bug: expiresAt is a bare
+  // "YYYY-MM-DD" date-only string (what Postgres/PostgREST actually
+  // sends for the `date`-typed expires_at column), not an ISO instant.
+  // `now` here is built from local date components (not parsed from a
+  // "Z"-suffixed string), so this test is deterministic regardless of
+  // the machine's system timezone - it exercises the same local-calendar
+  // comparison a real viewer's browser would make.
+  it("does not treat a credential as expired on its own expiration date", () => {
+    const lateOnExpirationDay = new Date(2026, 6, 19, 23, 0, 0);
+    expect(getCredentialStatus("2026-07-19", lateOnExpirationDay)).not.toBe("expired");
+  });
+
+  it("treats a credential as expired the day after its expiration date", () => {
+    const justAfterMidnightNextDay = new Date(2026, 6, 20, 0, 0, 1);
+    expect(getCredentialStatus("2026-07-19", justAfterMidnightNextDay)).toBe("expired");
+  });
 });
