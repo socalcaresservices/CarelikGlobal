@@ -196,13 +196,32 @@ describe("TeamPage", () => {
     expect(screen.getByText("Alex Staff")).toBeInTheDocument();
   });
 
-  it("shows an empty state when there are no caregivers", async () => {
+  it("shows a guided empty state when there are no caregivers", async () => {
     mockedUseAuth.mockReturnValue(authUser("user-1"));
     mockedUseOrganization.mockReturnValue({ ...baseOrganization(), hasPermission: vi.fn(() => true) });
     mockRpc({ members: [], hours: [] });
 
     renderPage();
-    await waitFor(() => expect(screen.getByText("No team members yet.")).toBeInTheDocument());
+    await waitFor(() =>
+      expect(screen.getByText(/You're ready to build your workforce/)).toBeInTheDocument()
+    );
+  });
+
+  it("focuses the invite form's first name field when the empty state's call to action is clicked", async () => {
+    // The "Add your first caregiver" button in the empty state doesn't
+    // open a modal or navigate anywhere - the invite form already sits on
+    // this page, so the button just needs to send focus there.
+    mockedUseAuth.mockReturnValue(authUser("user-1"));
+    mockedUseOrganization.mockReturnValue({ ...baseOrganization(), hasPermission: vi.fn(() => true) });
+    mockRpc({ members: [], hours: [] });
+
+    renderPage();
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: "Add your first caregiver" })).toBeInTheDocument()
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Add your first caregiver" }));
+    expect(screen.getByLabelText("First name")).toHaveFocus();
   });
 
   it("adds a caregiver as a roster record and shows a success message", async () => {

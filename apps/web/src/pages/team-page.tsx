@@ -1,7 +1,7 @@
 import { useState, type FormEvent } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
-import { Button, Card, FilterBar, type ActiveFilter } from "@carelik/ui";
+import { Button, Card, EmptyState, FilterBar, type ActiveFilter } from "@carelik/ui";
 import { systemRoleSchema, membershipStatusSchema } from "@carelik/shared";
 import { useAuth } from "@carelik/auth";
 import { useOrganization } from "@/providers/organization-provider";
@@ -145,6 +145,14 @@ export function TeamPage() {
   const [inviting, setInviting] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
   const [formSuccess, setFormSuccess] = useState<string | null>(null);
+
+  // The "Add a caregiver" form already sits on this page (see the Card
+  // just below), always rendered rather than behind a toggle - so the
+  // empty state's call to action doesn't need its own modal or route, it
+  // just needs to get the user's eyes and cursor there.
+  function focusInviteForm() {
+    document.getElementById("team-invite-first-name")?.focus();
+  }
 
   async function handleInvite(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -493,10 +501,21 @@ export function TeamPage() {
               })}
               {table.rows.length === 0 ? (
                 <tr>
-                  <td colSpan={canManage ? 5 : 4} className="py-4 text-center text-slate-400">
-                    {table.search || teamActiveFilters.length > 0
-                      ? "No caregivers match your search or filters."
-                      : "No team members yet."}
+                  <td colSpan={canManage ? 5 : 4}>
+                    {table.search || teamActiveFilters.length > 0 ? (
+                      <EmptyState message="No caregivers match your search or filters." />
+                    ) : (
+                      <EmptyState
+                        message="You're ready to build your workforce. Add your first caregiver above and they'll show up here."
+                        action={
+                          canInvite ? (
+                            <Button variant="secondary" size="sm" onClick={focusInviteForm}>
+                              Add your first caregiver
+                            </Button>
+                          ) : undefined
+                        }
+                      />
+                    )}
                   </td>
                 </tr>
               ) : null}

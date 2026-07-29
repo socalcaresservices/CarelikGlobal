@@ -93,6 +93,29 @@ describe("ClientsPage", () => {
     expect(screen.queryByText("Add a client")).not.toBeInTheDocument();
   });
 
+  it("shows a guided empty state when there are no clients", async () => {
+    mockedUseOrganization.mockReturnValue({ ...baseOrganization(), hasPermission: vi.fn(() => true) });
+    mockedFrom.mockReturnValue({ select: mockReadableClients([]) } as never);
+
+    renderPage();
+    await waitFor(() =>
+      expect(screen.getByText(/You're ready to add your first client/)).toBeInTheDocument()
+    );
+  });
+
+  it("focuses the add-client form's first name field when the empty state's call to action is clicked", async () => {
+    mockedUseOrganization.mockReturnValue({ ...baseOrganization(), hasPermission: vi.fn(() => true) });
+    mockedFrom.mockReturnValue({ select: mockReadableClients([]) } as never);
+
+    renderPage();
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: "Add your first client" })).toBeInTheDocument()
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Add your first client" }));
+    expect(screen.getByLabelText("First name")).toHaveFocus();
+  });
+
   it("filters the list by status and clears the filter", async () => {
     mockedUseOrganization.mockReturnValue({
       ...baseOrganization(),

@@ -1,7 +1,7 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
-import { Button, Card, FormSection, FilterBar, type ActiveFilter } from "@carelik/ui";
+import { Button, Card, EmptyState, FormSection, FilterBar, type ActiveFilter } from "@carelik/ui";
 import { clientStatusSchema } from "@carelik/shared";
 import { useOrganization } from "@/providers/organization-provider";
 import { supabase } from "@/lib/supabase";
@@ -61,6 +61,14 @@ export function ClientsPage() {
 
   function refreshClients() {
     void queryClient.invalidateQueries({ queryKey: ["clients", activeOrganizationId] });
+  }
+
+  // The "Add a client" form already sits on this page (see the Card just
+  // below), always rendered rather than behind a toggle - so the empty
+  // state's call to action doesn't need its own modal or route, it just
+  // needs to get the user's eyes and cursor there.
+  function focusAddClientForm() {
+    document.getElementById("client-first-name")?.focus();
   }
 
   const filters = useFilters<ClientRow>(clientsQuery.data, {
@@ -424,10 +432,21 @@ export function ClientsPage() {
               ))}
               {table.rows.length === 0 ? (
                 <tr>
-                  <td colSpan={canManage ? 4 : 3} className="py-4 text-center text-slate-400">
-                    {table.search || clientActiveFilters.length > 0
-                      ? "No clients match your search or filters."
-                      : "No clients yet."}
+                  <td colSpan={canManage ? 4 : 3}>
+                    {table.search || clientActiveFilters.length > 0 ? (
+                      <EmptyState message="No clients match your search or filters." />
+                    ) : (
+                      <EmptyState
+                        message="You're ready to add your first client. Fill in their details above and they'll show up here."
+                        action={
+                          canManage ? (
+                            <Button variant="secondary" size="sm" onClick={focusAddClientForm}>
+                              Add your first client
+                            </Button>
+                          ) : undefined
+                        }
+                      />
+                    )}
                   </td>
                 </tr>
               ) : null}
