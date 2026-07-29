@@ -87,10 +87,11 @@ const complianceNav: NavItem[] = [
   { to: "/incidents", label: "Incidents", icon: AlertOctagon, badgeKey: "incidents_open" }
 ];
 
+// Tenant Administration (Build 022: Platform/Tenant separation)
+// "Organizations" removed from tenant nav - that's platform-only (see platformAdministrationNav)
+// Tenant admins manage their own org via Settings, not a global organizations registry
 const administrationNav: NavItem[] = [
-  { to: "/organizations", label: "Organizations", icon: Building2, permission: "organization.read" },
   { to: "/access", label: "Access", icon: ShieldCheck, permission: "membership.read", badgeKey: "access_pending" },
-  { to: "/audit", label: "Audit", icon: ClipboardList, permission: "audit.read" },
   { to: "/settings", label: "Settings", icon: Settings, permission: "settings.read" }
 ];
 
@@ -335,24 +336,16 @@ export function AppShell({ children }: PropsWithChildren) {
           <div className="order-last w-full sm:order-none sm:flex-1">
             {activeOrganizationId ? <GlobalSearch /> : null}
           </div>
-          {organizations.length > 0 ? (
-            <select
-              aria-label="Active organization"
-              value={activeOrganizationId ?? ""}
-              onChange={(event) => setActiveOrganizationId(event.target.value)}
-              disabled={loading || organizations.length === 1}
-              className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-700 disabled:bg-slate-50"
-            >
-              {organizations.map((org) => (
-                <option key={org.id} value={org.id}>
-                  {org.displayName}
-                </option>
-              ))}
-            </select>
+          {/* Build 022: Organization switcher hidden in tenant context
+              In a true multi-tenant SaaS, users are scoped to one tenant/subdomain.
+              Switcher will be re-evaluated if we support users with access to multiple
+              organizations (Phase 4+). For now, show only active org name. */}
+          {activeOrganization ? (
+            <p className="text-sm font-medium text-slate-900">{activeOrganization.displayName}</p>
           ) : loading ? (
-            <p className="text-sm text-slate-400">Loading organizations…</p>
+            <p className="text-sm text-slate-400">Loading…</p>
           ) : (
-            <p className="text-sm text-slate-400">No organization access</p>
+            <p className="text-sm text-slate-400">No organization</p>
           )}
         </header>
         <ContextBar />

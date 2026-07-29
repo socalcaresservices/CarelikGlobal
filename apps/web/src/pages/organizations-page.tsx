@@ -5,6 +5,8 @@ import { Button, buttonVariants, Card } from "@carelik/ui";
 import { useOrganization } from "@/providers/organization-provider";
 import { supabase } from "@/lib/supabase";
 import { uploadOrganizationLogo } from "@/lib/organization-branding";
+import { usePlatform } from "@/providers/platform-provider";
+import { Navigate } from "react-router-dom";
 
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -68,6 +70,12 @@ export function OrganizationsPage() {
     hasPermission
   } = useOrganization();
   const queryClient = useQueryClient();
+
+  // Build 022: Tenant users should not access /organizations (platform-only page)
+  // Redirect to /settings if accessed from tenant context
+  if (!isPlatformOwner && activeOrganization) {
+    return <Navigate to="/settings" replace />;
+  }
 
   function refreshOrganizations() {
     void queryClient.invalidateQueries({ queryKey: ["organizations"] });
