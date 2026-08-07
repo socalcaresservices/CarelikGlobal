@@ -7,7 +7,6 @@ import {
   Building2,
   CalendarClock,
   ClipboardCheck,
-  ClipboardList,
   Crown,
   Flag,
   HeartHandshake,
@@ -184,10 +183,8 @@ function getGreeting(now: Date) {
 export function AppShell({ children }: PropsWithChildren) {
   const { user, signOut } = useAuth();
   const {
-    organizations,
     activeOrganization,
     activeOrganizationId,
-    setActiveOrganizationId,
     hasPermission,
     role,
     isPlatformOwner,
