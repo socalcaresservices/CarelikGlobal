@@ -13,17 +13,6 @@ import { ApplyPage } from "@/pages/apply-page";
 import { UploadPage } from "@/pages/upload-page";
 import { AddOrganizationPage } from "@/pages/add-organization-page";
 
-/**
- * Build 022: Enterprise Multi-Tenant SaaS Refactor
- *
- * Routes are now split into:
- * - Platform routes (platform.carelik.com)
- * - Tenant routes ({slug}.carelik.com)
- * - Public routes (/apply, /upload)
- * - Auth routes (/login, /set-password)
- *
- * The tenant resolution logic determines which application to render
- */
 export function App() {
   const tenantContext = resolveTenant(window.location.hostname);
   const isPlatform = tenantContext.type === "platform";
@@ -46,7 +35,6 @@ export function App() {
                 <AppShell>
                   <Routes>
                     {getTenantRoutes()}
-                    {/* Add-org is allowed on tenant, for org owners inviting others */}
                     <Route path="/organizations/new" element={<AddOrganizationPage />} />
                     <Route path="*" element={<Navigate to="/" replace />} />
                   </Routes>
@@ -63,14 +51,16 @@ export function App() {
           path="/*"
           element={
             <ProtectedRoute>
-              <PlatformProvider>
-                <PlatformShell>
-                  <Routes>
-                    {getPlatformRoutes()}
-                    <Route path="*" element={<Navigate to="/organizations" replace />} />
-                  </Routes>
-                </PlatformShell>
-              </PlatformProvider>
+              <OrganizationProvider>
+                <PlatformProvider>
+                  <PlatformShell>
+                    <Routes>
+                      {getPlatformRoutes()}
+                      <Route path="*" element={<Navigate to="/organizations" replace />} />
+                    </Routes>
+                  </PlatformShell>
+                </PlatformProvider>
+              </OrganizationProvider>
             </ProtectedRoute>
           }
         />
