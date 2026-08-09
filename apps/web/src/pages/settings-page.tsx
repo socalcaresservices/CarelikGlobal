@@ -4,6 +4,7 @@ import { Card, Button, StatusBadge, type StatusTone } from "@carelik/ui";
 import { useOrganization } from "@/providers/organization-provider";
 import { useAuth } from "@carelik/auth";
 import { supabase } from "@/lib/supabase";
+import { BillingSummaryCard } from "@/components/billing-summary-card";
 
 // Skills and languages are org-scoped lookup catalogs (same shape as the
 // service catalog, Build 003) that feed the picker on caregiver and
@@ -900,6 +901,8 @@ export function SettingsPage() {
           {activeOrganization?.displayName ?? "Organization settings"}
         </h2>
       </div>
+
+      <BillingSummaryCard organizationId={activeOrganizationId} canRead={canRead} />
 
       <SupportAccessCard organizationId={activeOrganizationId} canRead={canRead} canManage={canUpdate} />
 

@@ -32,6 +32,10 @@ const envSchema = z.object({
     .coerce
     .boolean()
     .default(false),
+
+  VITE_STRIPE_PUBLISHABLE_KEY: z
+    .string()
+    .optional(),
 });
 
 const parsed = envSchema.safeParse(import.meta.env);
@@ -49,3 +53,11 @@ export const env = parsed.data;
 
 export const isSupabaseConfigured =
   env.VITE_SUPABASE_ANON_KEY !== "development-anon-key-not-configured";
+
+// Stripe is not wired into this project yet - Stripe Checkout/Customer
+// Portal/webhooks are all unimplemented (see .env.example). This is a
+// proxy signal, not proof: it tells the platform owner's Billing page
+// whether the *frontend* half of Stripe config is present, since
+// STRIPE_SECRET_KEY/STRIPE_WEBHOOK_SECRET are server-only and never
+// reach this bundle.
+export const isStripeConfigured = Boolean(env.VITE_STRIPE_PUBLISHABLE_KEY);

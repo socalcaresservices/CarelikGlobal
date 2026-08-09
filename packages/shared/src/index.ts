@@ -1,5 +1,6 @@
 export * from "./applicants";
 export * from "./authorizations";
+export * from "./billing";
 export * from "./care";
 export * from "./credentials";
 export * from "./documents";

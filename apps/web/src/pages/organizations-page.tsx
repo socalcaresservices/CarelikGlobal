@@ -4,6 +4,8 @@ import { Card, PageHeader, StatusBadge, ProgressBar, usageTone, Button, type Sta
 import { useAuth } from "@carelik/auth";
 import { useOrganization } from "@/providers/organization-provider";
 import { supabase } from "@/lib/supabase";
+import { PlatformPlanManager } from "@/components/platform-plan-manager";
+import { PlatformSubscriberBillingPanel } from "@/components/platform-subscriber-billing-panel";
 
 // Platform-only registry view, backed by list_platform_organizations()
 // (supabase/migrations/20260807131803_subscriptions_and_registry.sql)
@@ -289,6 +291,8 @@ export function OrganizationsPage() {
         description="Every tenant on CareLik — plan, billing status, storage, seats, and account owner. Read-only: an organization's own profile is edited from within that tenant's Settings."
       />
 
+      <PlatformPlanManager />
+
       <Card>
         {registryQuery.isLoading ? (
           <p className="text-sm text-slate-500">Loading organizations…</p>
@@ -351,13 +355,14 @@ export function OrganizationsPage() {
                             onClick={() => setExpandedOrgId(isExpanded ? null : org.organization_id)}
                             className="text-xs font-medium text-slate-700 underline-offset-2 hover:underline"
                           >
-                            {isExpanded ? "Hide" : "Support access"}
+                            {isExpanded ? "Hide" : "Billing & support"}
                           </button>
                         </td>
                       </tr>
                       {isExpanded && user ? (
                         <tr className="border-b border-slate-100 last:border-0">
-                          <td colSpan={8} className="py-3">
+                          <td colSpan={8} className="space-y-3 py-3">
+                            <PlatformSubscriberBillingPanel organizationId={org.organization_id} />
                             <SupportAccessPanel organizationId={org.organization_id} currentUserId={user.id} />
                           </td>
                         </tr>

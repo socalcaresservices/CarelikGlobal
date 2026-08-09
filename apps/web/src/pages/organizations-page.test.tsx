@@ -150,7 +150,7 @@ describe("OrganizationsPage", () => {
 
     renderPage();
 
-    fireEvent.click(await screen.findByRole("button", { name: "Support access" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Billing & support" }));
     await waitFor(() => expect(screen.getByLabelText(/Reason/)).toBeInTheDocument());
 
     fireEvent.change(screen.getByLabelText(/Reason/), {
@@ -205,7 +205,7 @@ describe("OrganizationsPage", () => {
 
     renderPage();
 
-    fireEvent.click(await screen.findByRole("button", { name: "Support access" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Billing & support" }));
     fireEvent.click(await screen.findByRole("button", { name: "Revoke" }));
 
     await waitFor(() =>
