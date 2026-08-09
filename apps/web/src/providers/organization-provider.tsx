@@ -37,7 +37,29 @@ interface OrganizationContextValue {
 
 const OrganizationContext = createContext<OrganizationContextValue | null>(null);
 
-export function OrganizationProvider({ children }: PropsWithChildren) {
+export function OrganizationProvider({
+  children,
+  tenantSlug
+}: PropsWithChildren<{
+  /**
+   * The slug App.tsx's hostname resolution (resolveTenant()/
+   * useTenantContext()) decided this request belongs to - e.g. the
+   * subdomain, or the organization behind a matched custom domain.
+   * Undefined on platform routes, where there's no single tenant to pin
+   * to and the existing cached/first-org fallback below still applies.
+   *
+   * Without this, a user who belongs to more than one organization
+   * (the common case for anyone testing multiple tenants, or a platform
+   * owner who is also a real member somewhere) would see whichever
+   * organization happened to be cached in *this browser's* localStorage
+   * from a previous visit, regardless of which tenant's hostname they
+   * actually navigated to - the exact bug found live 2026-08-09: the
+   * custom-domain lookup correctly resolved to Socal Care Services llc,
+   * but the app still showed CareLik because that was this browser's
+   * last-active org from unrelated local testing.
+   */
+  tenantSlug?: string | undefined;
+}>) {
   const { user } = useAuth();
   const queryClient = useQueryClient();
   const [activeOrganizationId, setActiveOrganizationIdState] = useState<string | null>(
@@ -133,11 +155,25 @@ export function OrganizationProvider({ children }: PropsWithChildren) {
   useEffect(() => {
     const [firstOrganization] = organizations;
     if (!firstOrganization) return;
+
+    // The hostname decides the tenant here, full stop - not a cached
+    // value from a previous visit to a different tenant on the same
+    // browser. Re-asserted on every organizations change (not just once)
+    // so switching hosts without a hard reload can't leave a stale org
+    // active either.
+    if (tenantSlug) {
+      const matching = organizations.find((org) => org.slug === tenantSlug);
+      if (matching && matching.id !== activeOrganizationId) {
+        setActiveOrganizationIdState(matching.id);
+      }
+      return;
+    }
+
     const stillVisible = organizations.some((org) => org.id === activeOrganizationId);
     if (!stillVisible) {
       setActiveOrganizationIdState(firstOrganization.id);
     }
-  }, [organizations, activeOrganizationId]);
+  }, [organizations, activeOrganizationId, tenantSlug]);
 
   useEffect(() => {
     if (activeOrganizationId) {

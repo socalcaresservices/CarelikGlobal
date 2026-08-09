@@ -70,13 +70,13 @@ function Probe() {
   );
 }
 
-function renderProvider() {
+function renderProvider(tenantSlug?: string | undefined) {
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } }
   });
   return render(
     <QueryClientProvider client={queryClient}>
-      <OrganizationProvider>
+      <OrganizationProvider tenantSlug={tenantSlug}>
         <Probe />
       </OrganizationProvider>
     </QueryClientProvider>
@@ -99,6 +99,14 @@ const orgRow = {
   accent_color: null,
   theme_mode: "light",
   show_powered_by: false
+};
+
+const otherOrgRow = {
+  ...orgRow,
+  id: OTHER_ORG_ID,
+  slug: "other-org",
+  legal_name: "Other Org LLC",
+  display_name: "Other Org"
 };
 
 describe("OrganizationProvider", () => {
@@ -217,5 +225,69 @@ describe("OrganizationProvider", () => {
         target_organization_id: OTHER_ORG_ID
       })
     );
+  });
+
+  // Regression test for a real bug found live 2026-08-09: a user who
+  // belongs to more than one organization visited a tenant whose hostname
+  // resolved (via subdomain or custom domain) to Org B, but the app kept
+  // showing Org A because that was this browser's cached
+  // "carelik.activeOrganizationId" from an earlier, unrelated visit to
+  // Org A. The hostname must always win over a stale local cache.
+  it("scopes to the tenantSlug organization even when a different org is cached from a previous visit", async () => {
+    window.localStorage.setItem("carelik.activeOrganizationId", ORG_ID);
+    mockedUseAuth.mockReturnValue({
+      user: { id: "user-4" } as never,
+      session: {} as never,
+      loading: false,
+      signInWithGithub: vi.fn(),
+      signInWithPassword: vi.fn(),
+      resetPasswordForEmail: vi.fn(),
+      updatePassword: vi.fn(),
+      signOut: vi.fn()
+    });
+    mockedRpc.mockResolvedValue({ data: null, error: null } as never);
+
+    setResolver((table, calls) => {
+      if (table === "user_profiles") return { data: { platform_role: "platform_owner" }, error: null };
+      // A platform owner (or anyone who is a member of both) sees both
+      // organizations here - order matches the real query's
+      // "order by display_name", putting Acme Care before Other Org.
+      if (table === "organizations") return { data: [orgRow, otherOrgRow], error: null };
+      if (table === "organization_memberships" && hasEqCall(calls, "status", "invited")) {
+        return { data: [], error: null };
+      }
+      return { data: null, error: null };
+    });
+
+    renderProvider("other-org");
+
+    await waitFor(() => expect(screen.getByTestId("active-org-id")).toHaveTextContent(OTHER_ORG_ID));
+  });
+
+  it("falls back to the first organization on a platform host, where there's no single tenant to pin to", async () => {
+    mockedUseAuth.mockReturnValue({
+      user: { id: "user-5" } as never,
+      session: {} as never,
+      loading: false,
+      signInWithGithub: vi.fn(),
+      signInWithPassword: vi.fn(),
+      resetPasswordForEmail: vi.fn(),
+      updatePassword: vi.fn(),
+      signOut: vi.fn()
+    });
+    mockedRpc.mockResolvedValue({ data: null, error: null } as never);
+
+    setResolver((table, calls) => {
+      if (table === "user_profiles") return { data: { platform_role: "platform_owner" }, error: null };
+      if (table === "organizations") return { data: [orgRow, otherOrgRow], error: null };
+      if (table === "organization_memberships" && hasEqCall(calls, "status", "invited")) {
+        return { data: [], error: null };
+      }
+      return { data: null, error: null };
+    });
+
+    renderProvider(undefined);
+
+    await waitFor(() => expect(screen.getByTestId("active-org-id")).toHaveTextContent(ORG_ID));
   });
 });

@@ -44,7 +44,7 @@ export function App() {
           path="/*"
           element={
             <ProtectedRoute>
-              <OrganizationProvider>
+              <OrganizationProvider tenantSlug={tenantContext.slug}>
                 <AppShell>
                   <Routes>
                     {getTenantRoutes()}
