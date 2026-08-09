@@ -164,22 +164,28 @@ describe("AppShell nav", () => {
     expect(screen.queryByText("Applicants")).not.toBeInTheDocument();
   });
 
-  it("shows a separate Platform Administration heading for a platform owner, with Organizations listed once", () => {
+  // The tenant workspace never shows platform administration nav, even
+  // for a user who happens to also be a platform owner and a real
+  // member of this organization (its creator, in practice) - platform
+  // tools live exclusively on platform.carelik.com's PlatformShell.
+  // Which host you're on decides whether you see them, not who you are.
+  it("shows no Platform Administration nav for a platform owner viewing a tenant workspace", () => {
     mockedUseAuth.mockReturnValue({ user: { email: "owner@carelik.test" } } as never);
     mockedUseOrganization.mockReturnValue({ ...baseOrganization("organization_owner"), isPlatformOwner: true });
 
     renderShell();
-    expect(screen.getByText("Platform Administration")).toBeInTheDocument();
-    expect(screen.getAllByText("Organizations")).toHaveLength(1);
+    expect(screen.queryByText("Platform Administration")).not.toBeInTheDocument();
+    expect(screen.queryByText("Organizations")).not.toBeInTheDocument();
+    expect(screen.queryByText("Feature Flags")).not.toBeInTheDocument();
   });
 
-  it("hides the Platform Administration heading for a non-platform-owner", () => {
+  it("shows no Platform Administration nav for a non-platform-owner either", () => {
     mockedUseAuth.mockReturnValue({ user: { email: "owner@acme.test" } } as never);
     mockedUseOrganization.mockReturnValue(baseOrganization("organization_owner"));
 
     renderShell();
     expect(screen.queryByText("Platform Administration")).not.toBeInTheDocument();
-    expect(screen.getAllByText("Organizations")).toHaveLength(1);
+    expect(screen.queryByText("Organizations")).not.toBeInTheDocument();
   });
 
   it("shows a badge with the actionable count next to Credentials and Incidents", async () => {
@@ -274,7 +280,11 @@ describe("AppShell nav", () => {
 
     renderShell();
 
-    expect(screen.getByText("Acme Care")).toBeInTheDocument();
+    // Appears twice: the sidebar header (in place of a logo) and the
+    // top header (in place of the removed organization switcher - see
+    // the "Build 022: Organization switcher hidden" comment in
+    // app-shell.tsx).
+    expect(screen.getAllByText("Acme Care")).toHaveLength(2);
     expect(screen.queryByText("CareLik Global")).not.toBeInTheDocument();
   });
 
@@ -314,23 +324,25 @@ describe("AppShell nav", () => {
     expect(container.firstChild).not.toHaveStyle({ "--color-accent": expect.anything() });
   });
 
-  it("gives the organization switcher an accessible name", () => {
-    // This <select> determines which org's data the entire app is scoped
-    // to and renders on every authenticated page - it previously had no
-    // id/label/aria-label at all, so a screen reader user tabbing into it
-    // heard only "combo box" with no indication of what it does.
+  // There is no organization switcher in the tenant workspace by design
+  // (Build 022: a user is scoped to one tenant via subdomain - see the
+  // "Build 022: Organization switcher hidden in tenant context" comment
+  // in app-shell.tsx) - the header shows the active organization's name
+  // as plain text instead, already covered by the display-name and
+  // logo tests above.
+  it("shows no organization switcher, even with more than one organization in context", () => {
     mockedUseAuth.mockReturnValue({ user: { email: "owner@acme.test" } } as never);
     mockedUseOrganization.mockReturnValue({
       ...baseOrganization("organization_owner"),
       organizations: [brandedOrganization(), brandedOrganization({ id: "22222222-2222-4222-8222-222222222222", displayName: "Second Org" })],
+      activeOrganization: brandedOrganization(),
       activeOrganizationId: ORG_ID
     });
 
     renderShell();
 
-    const select = screen.getByRole("combobox", { name: "Active organization" });
-    expect(select).toBeInTheDocument();
-    expect(screen.getByText("Second Org")).toBeInTheDocument();
+    expect(screen.queryByRole("combobox")).not.toBeInTheDocument();
+    expect(screen.queryByText("Second Org")).not.toBeInTheDocument();
   });
 
   it("hides the 'Powered by CareLik' footer when the organization has turned it off", () => {

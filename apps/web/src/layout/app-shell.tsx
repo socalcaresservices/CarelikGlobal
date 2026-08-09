@@ -4,11 +4,9 @@ import { useQuery } from "@tanstack/react-query";
 import {
   AlertOctagon,
   BadgeCheck,
-  Building2,
   CalendarClock,
   ClipboardCheck,
   Crown,
-  Flag,
   HeartHandshake,
   LayoutDashboard,
   LogOut,
@@ -86,25 +84,17 @@ const complianceNav: NavItem[] = [
   { to: "/incidents", label: "Incidents", icon: AlertOctagon, badgeKey: "incidents_open" }
 ];
 
-// Tenant Administration (Build 022: Platform/Tenant separation)
-// "Organizations" removed from tenant nav - that's platform-only (see platformAdministrationNav)
-// Tenant admins manage their own org via Settings, not a global organizations registry
+// Tenant Administration (Build 022: Platform/Tenant separation) - the
+// tenant workspace shows only tenant-scoped administration. Platform
+// administration (organization registry, feature flags, audit) lives
+// exclusively on platform.carelik.com's PlatformShell - never here, even
+// for a user who happens to also be a platform owner and a real member
+// of this tenant (e.g. its creator). A tenant workspace is entirely
+// about the one organization it's scoped to; which host you're on
+// decides whether you see platform tools at all, not who you are.
 const administrationNav: NavItem[] = [
   { to: "/access", label: "Access", icon: ShieldCheck, permission: "membership.read", badgeKey: "access_pending" },
   { to: "/settings", label: "Settings", icon: Settings, permission: "settings.read" }
-];
-
-// Same "Organizations" route as the regular Administration group above -
-// a platform owner manages every tenant on the platform there, which is
-// a different concern from an organization_owner managing their own
-// org's profile, even though today it's the same page underneath
-// (OrganizationsPage renders more for a platform owner - the create-org
-// entry point, every tenant's row - than it does for a regular owner).
-// Kept out of the plain administrationNav list for platform owners (see
-// visibleAdministrationNav below) so it isn't shown twice.
-const platformAdministrationNav: NavItem[] = [
-  { to: "/organizations", label: "Organizations", icon: Building2 },
-  { to: "/feature-flags", label: "Feature Flags", icon: Flag }
 ];
 
 function visibleItems(items: NavItem[], hasPermission: (permission: Permission) => boolean, isOwner: boolean) {
@@ -187,7 +177,6 @@ export function AppShell({ children }: PropsWithChildren) {
     activeOrganizationId,
     hasPermission,
     role,
-    isPlatformOwner,
     loading
   } = useOrganization();
   // Defaults to shown - an organization opts OUT of platform attribution
@@ -200,13 +189,7 @@ export function AppShell({ children }: PropsWithChildren) {
   const visibleOverviewNav = visibleItems(overviewNav, hasPermission, isOwner);
   const visiblePeopleNav = visibleItems(peopleNav, hasPermission, isOwner);
   const visibleComplianceNav = visibleItems(complianceNav, hasPermission, isOwner);
-  // Organizations moves to its own "Platform Administration" group for a
-  // platform owner (see platformAdministrationNav above) - excluded here
-  // so it isn't listed twice.
-  const visibleAdministrationNav = visibleItems(administrationNav, hasPermission, isOwner).filter(
-    (item) => !(isPlatformOwner && item.to === "/organizations")
-  );
-  const visiblePlatformAdministrationNav = isPlatformOwner ? platformAdministrationNav : [];
+  const visibleAdministrationNav = visibleItems(administrationNav, hasPermission, isOwner);
 
   const greeting = getGreeting(new Date());
 
@@ -280,18 +263,6 @@ export function AppShell({ children }: PropsWithChildren) {
               <div className="space-y-1">
                 {visibleComplianceNav.map((item) => (
                   <NavLinkItem key={item.to} {...item} badgeCount={badgeFor(item)} />
-                ))}
-              </div>
-            </div>
-          ) : null}
-          {visiblePlatformAdministrationNav.length > 0 ? (
-            <div>
-              <p className="px-3 pb-1.5 text-[11px] font-semibold uppercase tracking-wider text-slate-400">
-                Platform Administration
-              </p>
-              <div className="space-y-1">
-                {visiblePlatformAdministrationNav.map((item) => (
-                  <NavLinkItem key={item.to} {...item} />
                 ))}
               </div>
             </div>
