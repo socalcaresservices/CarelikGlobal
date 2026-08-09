@@ -7,9 +7,11 @@ import {
   CalendarClock,
   ClipboardCheck,
   Crown,
+  FileText,
   HeartHandshake,
   LayoutDashboard,
   LogOut,
+  PenLine,
   Settings,
   ShieldCheck,
   UserPlus,
@@ -63,7 +65,12 @@ interface NavItem {
 const overviewNav: NavItem[] = [
   { to: "/", label: "Command Center", icon: LayoutDashboard },
   { to: "/owner-dashboard", label: "Workforce Insights", icon: Crown, ownerOnly: true },
-  { to: "/schedule", label: "Schedule", icon: CalendarClock, badgeKey: "schedule_issues" }
+  { to: "/schedule", label: "Schedule", icon: CalendarClock, badgeKey: "schedule_issues" },
+  // No permission gate - every caregiver needs this to record their own
+  // visits, and the RLS/RPC layer already scopes what each caregiver can
+  // see to their own assigned shifts regardless of nav visibility.
+  { to: "/service-verification", label: "Service Verification", icon: PenLine },
+  { to: "/service-verification/reports", label: "Visit Reports", icon: FileText, permission: "visits.read" }
 ];
 
 const peopleNav: NavItem[] = [
@@ -297,6 +304,13 @@ export function AppShell({ children }: PropsWithChildren) {
       </aside>
       <main className="lg:pl-64">
         <header className="flex flex-wrap items-center gap-4 border-b border-slate-200 bg-white px-6 py-4">
+          <NavLink
+            to="/service-verification"
+            className="inline-flex min-h-12 items-center gap-2 rounded-lg bg-[var(--color-accent,#0f172a)] px-3 text-sm font-semibold text-[var(--color-accent-foreground,#ffffff)] lg:hidden"
+          >
+            <PenLine className="h-4 w-4" />
+            Verify visit
+          </NavLink>
           <p className="shrink-0 text-sm text-slate-600">
             {greeting}
             {role ? <span className="text-slate-400"> · {formatRole(role)}</span> : null}

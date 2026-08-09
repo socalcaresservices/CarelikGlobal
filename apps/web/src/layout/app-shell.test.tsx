@@ -164,6 +164,26 @@ describe("AppShell nav", () => {
     expect(screen.queryByText("Applicants")).not.toBeInTheDocument();
   });
 
+  it("always shows Service Verification, but gates Visit Reports on visits.read", () => {
+    mockedUseAuth.mockReturnValue({ user: { email: "caregiver@acme.test" } } as never);
+    mockedUseOrganization.mockReturnValue({
+      ...baseOrganization("organization_admin"),
+      hasPermission: vi.fn((permission: string) => permission !== "visits.read")
+    });
+
+    renderShell();
+    expect(screen.getByText("Service Verification")).toBeInTheDocument();
+    expect(screen.queryByText("Visit Reports")).not.toBeInTheDocument();
+  });
+
+  it("shows Visit Reports for someone with visits.read", () => {
+    mockedUseAuth.mockReturnValue({ user: { email: "owner@acme.test" } } as never);
+    mockedUseOrganization.mockReturnValue(baseOrganization("organization_owner"));
+
+    renderShell();
+    expect(screen.getByText("Visit Reports")).toBeInTheDocument();
+  });
+
   // The tenant workspace never shows platform administration nav, even
   // for a user who happens to also be a platform owner and a real
   // member of this organization (its creator, in practice) - platform

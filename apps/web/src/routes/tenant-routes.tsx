@@ -34,6 +34,8 @@ import { SettingsPage } from "@/pages/settings-page";
 import { OwnerDashboardPage } from "@/pages/owner-dashboard-page";
 import { ApplicantsPage } from "@/pages/applicants-page";
 import { ApplicantDetailPage } from "@/pages/applicant-detail-page";
+import { ServiceVerificationPage } from "@/pages/service-verification-page";
+import { ServiceVerificationReportsPage } from "@/pages/service-verification-reports-page";
 
 /**
  * Tenant route definitions
@@ -48,6 +50,12 @@ export function getTenantRoutes() {
     <Route key="clients" path="/clients" element={<ClientsPage />} />,
     <Route key="client-detail" path="/clients/:id" element={<ClientDetailPage />} />,
     <Route key="schedule" path="/schedule" element={<SchedulePage />} />,
+    <Route key="service-verification" path="/service-verification" element={<ServiceVerificationPage />} />,
+    <Route
+      key="service-verification-reports"
+      path="/service-verification/reports"
+      element={<ServiceVerificationReportsPage />}
+    />,
     <Route key="credentials" path="/credentials" element={<CredentialsPage />} />,
     <Route key="authorizations" path="/authorizations" element={<AuthorizationsPage />} />,
     <Route key="incidents" path="/incidents" element={<IncidentsPage />} />,
