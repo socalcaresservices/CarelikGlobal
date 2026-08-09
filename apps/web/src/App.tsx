@@ -6,7 +6,7 @@ import { PlatformProvider } from "@/providers/platform-provider";
 import { ProtectedRoute } from "@/routes/protected-route";
 import { getTenantRoutes } from "@/routes/tenant-routes";
 import { getPlatformRoutes } from "@/routes/platform-routes";
-import { resolveTenant } from "@/lib/tenant-resolver";
+import { useTenantContext } from "@/lib/use-tenant-context";
 import { LoginPage } from "@/pages/login-page";
 import { SetPasswordPage } from "@/pages/set-password-page";
 import { ApplyPage } from "@/pages/apply-page";
@@ -14,8 +14,21 @@ import { UploadPage } from "@/pages/upload-page";
 import { AddOrganizationPage } from "@/pages/add-organization-page";
 
 export function App() {
-  const tenantContext = resolveTenant(window.location.hostname);
+  const { context: tenantContext, loading } = useTenantContext();
   const isPlatform = tenantContext.type === "platform";
+
+  // Which provider tree/routes to mount depends on tenantContext, so
+  // hold off rendering until it settles. Only pays this cost on a
+  // hostname that isn't one of CareLik's own domains - see
+  // useTenantContext()'s comment for why every other host resolves
+  // synchronously with loading always false.
+  if (loading) {
+    return (
+      <div className="flex min-h-screen items-center justify-center">
+        <p className="text-sm text-slate-500">Loading…</p>
+      </div>
+    );
+  }
 
   return (
     <Routes>

@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Card, Button, StatusBadge, type StatusTone } from "@carelik/ui";
 import { useOrganization } from "@/providers/organization-provider";
@@ -657,6 +657,120 @@ function SupportAccessCard({
   );
 }
 
+// Self-serve custom domain (Build 022 item 4) - a single organization
+// column (organizations.custom_domain), so this reads/writes it
+// directly rather than through organization_settings' generic
+// key/value store. Gated on organization.read/organization.update, the
+// same permission pair the old platform-only org-profile editor used
+// (see organizations-page.tsx's history) - every role can see the
+// domain, only owner/admin can change it.
+function CustomDomainCard({
+  organizationId,
+  canRead,
+  canManage
+}: {
+  organizationId: string | null | undefined;
+  canRead: boolean;
+  canManage: boolean;
+}) {
+  const queryClient = useQueryClient();
+  const [domain, setDomain] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState(false);
+
+  const domainQuery = useQuery({
+    queryKey: ["organization-custom-domain", organizationId],
+    queryFn: async () => {
+      const { data, error: queryError } = await supabase
+        .from("organizations")
+        .select("custom_domain")
+        .eq("id", organizationId!)
+        .single();
+      if (queryError) throw queryError;
+      return (data?.custom_domain as string | null) ?? "";
+    },
+    enabled: !!organizationId && canRead
+  });
+
+  useEffect(() => {
+    if (domainQuery.data === undefined) return;
+    setDomain(domainQuery.data);
+    setError(null);
+    setSuccess(false);
+  }, [domainQuery.data]);
+
+  async function handleSave(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!organizationId) return;
+    setError(null);
+    setSuccess(false);
+    setSaving(true);
+    try {
+      const trimmed = domain.trim().toLowerCase();
+      const { error: saveError } = await supabase
+        .from("organizations")
+        .update({ custom_domain: trimmed || null })
+        .eq("id", organizationId);
+      if (saveError) throw saveError;
+      setSuccess(true);
+      void queryClient.invalidateQueries({ queryKey: ["organization-custom-domain", organizationId] });
+    } catch (cause) {
+      const pgError = cause as { code?: string; message?: string };
+      if (pgError.code === "23505") {
+        setError("That domain is already in use by another organization.");
+      } else if (pgError.code === "23514") {
+        setError("Enter a valid domain (e.g. app.youragency.com).");
+      } else {
+        setError(cause instanceof Error ? cause.message : "Could not save this domain.");
+      }
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  if (!canRead) return null;
+
+  return (
+    <Card>
+      <h3 className="font-semibold text-slate-950">Custom domain</h3>
+      <p className="mt-1 text-xs text-slate-500">
+        Use your own domain instead of a carelik.com subdomain. After saving it here, point the domain's DNS at
+        CareLik and let us know so it can be added to hosting and issued a certificate - it won't work until both
+        steps are done.
+      </p>
+      {domainQuery.isLoading ? (
+        <p className="mt-3 text-sm text-slate-500">Loading…</p>
+      ) : domainQuery.isError ? (
+        <p className="mt-3 text-sm text-red-700">Could not load the current domain.</p>
+      ) : (
+        <form onSubmit={handleSave} className="mt-4 flex flex-wrap items-end gap-3">
+          <div className="min-w-[220px] flex-1">
+            <label htmlFor="custom-domain" className="block text-xs font-medium text-slate-600">
+              Domain
+            </label>
+            <input
+              id="custom-domain"
+              disabled={!canManage}
+              value={domain}
+              onChange={(event) => setDomain(event.target.value)}
+              placeholder="app.youragency.com"
+              className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900 disabled:bg-slate-50 disabled:text-slate-500"
+            />
+          </div>
+          {canManage ? (
+            <Button type="submit" size="sm" loading={saving}>
+              Save
+            </Button>
+          ) : null}
+        </form>
+      )}
+      {error ? <p className="mt-2 text-sm text-red-700">{error}</p> : null}
+      {success ? <p className="mt-2 text-sm text-emerald-700">Saved.</p> : null}
+    </Card>
+  );
+}
+
 export function SettingsPage() {
   const { activeOrganizationId, activeOrganization, hasPermission } = useOrganization();
   const { user } = useAuth();
@@ -788,6 +902,12 @@ export function SettingsPage() {
       </div>
 
       <SupportAccessCard organizationId={activeOrganizationId} canRead={canRead} canManage={canUpdate} />
+
+      <CustomDomainCard
+        organizationId={activeOrganizationId}
+        canRead={hasPermission("organization.read")}
+        canManage={hasPermission("organization.update")}
+      />
 
       {canUpdate ? (
         <Card>
