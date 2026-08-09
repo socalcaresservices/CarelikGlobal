@@ -196,6 +196,45 @@ describe("TeamPage", () => {
     expect(screen.getByText("Alex Staff")).toBeInTheDocument();
   });
 
+  it("shows the share-staff-portal action with a generic, client-free message", async () => {
+    mockedUseAuth.mockReturnValue(authUser("user-1"));
+    mockedUseOrganization.mockReturnValue({ ...baseOrganization(), hasPermission: vi.fn(() => true) });
+    mockRpc({ members: [], hours: [] });
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.assign(navigator, { clipboard: { writeText } });
+
+    renderPage();
+    await waitFor(() => expect(screen.getByText("Share staff portal")).toBeInTheDocument());
+
+    const emailLink = screen.getByText("Email link").closest("a")!;
+    expect(emailLink.getAttribute("href")).toContain("mailto:");
+    expect(emailLink.getAttribute("href")).not.toMatch(/client|Rivera|SCS-C/i);
+
+    const textLink = screen.getByText("Text link").closest("a")!;
+    expect(textLink.getAttribute("href")).toContain("sms:");
+
+    fireEvent.click(screen.getByRole("button", { name: "Copy link" }));
+    await waitFor(() =>
+      expect(writeText).toHaveBeenCalledWith(
+        expect.stringContaining("You have access to the CareLik staff portal")
+      )
+    );
+    expect(screen.getByRole("button", { name: "Copied" })).toBeInTheDocument();
+  });
+
+  it("hides the share-staff-portal action without membership.invite", async () => {
+    mockedUseAuth.mockReturnValue(authUser("user-1"));
+    mockedUseOrganization.mockReturnValue({
+      ...baseOrganization(),
+      hasPermission: vi.fn((permission: string) => permission === "membership.read")
+    });
+    mockRpc({ members: [], hours: [] });
+
+    renderPage();
+    await waitFor(() => expect(screen.getByText(/You're ready to build your workforce/)).toBeInTheDocument());
+    expect(screen.queryByText("Share staff portal")).not.toBeInTheDocument();
+  });
+
   it("shows a guided empty state when there are no caregivers", async () => {
     mockedUseAuth.mockReturnValue(authUser("user-1"));
     mockedUseOrganization.mockReturnValue({ ...baseOrganization(), hasPermission: vi.fn(() => true) });

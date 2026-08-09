@@ -79,6 +79,10 @@ function mockFromByTable(
   const requestedServicesDeleteMock = vi.fn(() => ({ eq: requestedServicesDeleteEqMock }));
   const requestedServicesInsertMock = vi.fn().mockResolvedValue({ error: null });
 
+  const assignmentInsertMock = vi.fn().mockResolvedValue({ error: null });
+  const assignmentUpdateEqMock = vi.fn().mockResolvedValue({ error: null });
+  const assignmentUpdateMock = vi.fn(() => ({ eq: assignmentUpdateEqMock }));
+
   mockedFrom.mockImplementation((table: string) => {
     if (table === "clients") {
       return { select: clientSelectMock, update: clientUpdateMock } as never;
@@ -95,10 +99,21 @@ function mockFromByTable(
     if (table === "client_requested_services") {
       return { delete: requestedServicesDeleteMock, insert: requestedServicesInsertMock } as never;
     }
+    if (table === "caregiver_assignments") {
+      return { insert: assignmentInsertMock, update: assignmentUpdateMock } as never;
+    }
     return {} as never;
   });
 
-  return { clientUpdateMock, clientUpdateEqMock, requestedServicesDeleteMock, requestedServicesInsertMock };
+  return {
+    clientUpdateMock,
+    clientUpdateEqMock,
+    requestedServicesDeleteMock,
+    requestedServicesInsertMock,
+    assignmentInsertMock,
+    assignmentUpdateMock,
+    assignmentUpdateEqMock
+  };
 }
 
 function renderPage() {
@@ -467,6 +482,130 @@ describe("ClientDetailPage", () => {
 
     const link = await screen.findByText("Add authorization for this client");
     expect(link.closest("a")).toHaveAttribute("href", `/authorizations?clientId=${CLIENT_ID}`);
+  });
+
+  it("lists caregiver assignments and assigns a new one on the Caregivers tab", async () => {
+    mockedUseOrganization.mockReturnValue(baseOrganization());
+    const { assignmentInsertMock } = mockFromByTable(
+      {
+        id: CLIENT_ID,
+        first_name: "Jordan",
+        last_name: "Rivera",
+        phone: null,
+        email: null,
+        address: null,
+        care_notes: null,
+        status: "active",
+        client_requested_services: []
+      },
+      [{ id: "44444444-4444-4444-8444-444444444444", code: "862", name: "Personal care", is_active: true } as never]
+    );
+    mockedRpc.mockImplementation((fn: string) => {
+      if (fn === "list_caregiver_assignments") {
+        return Promise.resolve({
+          data: [
+            {
+              id: "assignment-1",
+              caregiver_user_id: "caregiver-1",
+              caregiver_name: "Sam Caregiver",
+              client_id: CLIENT_ID,
+              service_id: "44444444-4444-4444-8444-444444444444",
+              service_name: "Personal care",
+              service_code: "862",
+              effective_start: "2026-01-01",
+              effective_end: null,
+              is_active: true
+            }
+          ],
+          error: null
+        }) as never;
+      }
+      if (fn === "list_organization_members") {
+        return Promise.resolve({
+          data: [{ user_id: "caregiver-2", display_name: "Alex Caregiver", status: "active" }],
+          error: null
+        }) as never;
+      }
+      return Promise.resolve({ data: [], error: null }) as never;
+    });
+
+    renderPage();
+    await waitFor(() => expect(screen.getByText("Jordan Rivera")).toBeInTheDocument());
+
+    fireEvent.click(screen.getByRole("button", { name: "Caregivers" }));
+
+    await waitFor(() => expect(screen.getByText("Sam Caregiver")).toBeInTheDocument());
+    expect(screen.getByText("862 · Personal care")).toBeInTheDocument();
+    expect(screen.getByText("Active", { selector: "span" })).toBeInTheDocument();
+
+    fireEvent.focus(screen.getByLabelText("Caregiver"));
+    await waitFor(() => expect(screen.getByRole("option", { name: "Alex Caregiver" })).toBeInTheDocument());
+    fireEvent.mouseDown(screen.getByRole("option", { name: "Alex Caregiver" }));
+
+    fireEvent.focus(screen.getByLabelText("Service"));
+    await waitFor(() => expect(screen.getByRole("option", { name: "862 · Personal care" })).toBeInTheDocument());
+    fireEvent.mouseDown(screen.getByRole("option", { name: "862 · Personal care" }));
+
+    fireEvent.click(screen.getByRole("button", { name: "Assign" }));
+
+    await waitFor(() =>
+      expect(assignmentInsertMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          organization_id: ORG_ID,
+          client_id: CLIENT_ID,
+          caregiver_user_id: "caregiver-2",
+          service_id: "44444444-4444-4444-8444-444444444444"
+        })
+      )
+    );
+  });
+
+  it("revokes a caregiver assignment", async () => {
+    mockedUseOrganization.mockReturnValue(baseOrganization());
+    const { assignmentUpdateMock, assignmentUpdateEqMock } = mockFromByTable({
+      id: CLIENT_ID,
+      first_name: "Jordan",
+      last_name: "Rivera",
+      phone: null,
+      email: null,
+      address: null,
+      care_notes: null,
+      status: "active",
+      client_requested_services: []
+    });
+    mockedRpc.mockImplementation((fn: string) => {
+      if (fn === "list_caregiver_assignments") {
+        return Promise.resolve({
+          data: [
+            {
+              id: "assignment-1",
+              caregiver_user_id: "caregiver-1",
+              caregiver_name: "Sam Caregiver",
+              client_id: CLIENT_ID,
+              service_id: "44444444-4444-4444-8444-444444444444",
+              service_name: "Personal care",
+              service_code: "862",
+              effective_start: "2026-01-01",
+              effective_end: null,
+              is_active: true
+            }
+          ],
+          error: null
+        }) as never;
+      }
+      return Promise.resolve({ data: [], error: null }) as never;
+    });
+
+    renderPage();
+    await waitFor(() => expect(screen.getByText("Jordan Rivera")).toBeInTheDocument());
+
+    fireEvent.click(screen.getByRole("button", { name: "Caregivers" }));
+    await waitFor(() => expect(screen.getByText("Sam Caregiver")).toBeInTheDocument());
+
+    fireEvent.click(screen.getByRole("button", { name: "Revoke" }));
+
+    await waitFor(() => expect(assignmentUpdateMock).toHaveBeenCalledWith({ is_active: false }));
+    expect(assignmentUpdateEqMock).toHaveBeenCalledWith("id", "assignment-1");
   });
 
   it("hides the assign-a-caregiver link without shifts.update", async () => {

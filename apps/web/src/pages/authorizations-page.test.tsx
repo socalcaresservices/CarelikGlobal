@@ -189,6 +189,55 @@ describe("AuthorizationsPage", () => {
     expect(screen.queryByRole("button", { name: "Clear Client" })).not.toBeInTheDocument();
   });
 
+  it("adds a service with a code and color", async () => {
+    mockedUseOrganization.mockReturnValue({ ...baseOrganization(), hasPermission: vi.fn(() => true) });
+    mockedRpc.mockResolvedValue({ data: [], error: null } as never);
+    const { insertMock } = mockFromByTable();
+
+    renderPage();
+
+    fireEvent.change(screen.getByLabelText("Service name"), { target: { value: "Personal care" } });
+    fireEvent.change(screen.getByLabelText("Code"), { target: { value: "862" } });
+    fireEvent.click(screen.getByRole("button", { name: "Navy" }));
+    fireEvent.click(screen.getByRole("button", { name: "Add service" }));
+
+    await waitFor(() =>
+      expect(insertMock).toHaveBeenCalledWith(
+        expect.objectContaining({ name: "Personal care", code: "862", color: "#0F172A" })
+      )
+    );
+  });
+
+  it("shows a friendly message when a service code is already in use", async () => {
+    mockedUseOrganization.mockReturnValue({ ...baseOrganization(), hasPermission: vi.fn(() => true) });
+    mockedRpc.mockResolvedValue({ data: [], error: null } as never);
+    mockFromByTable();
+    mockedFrom.mockImplementation(
+      () =>
+        ({
+          select: vi.fn(() => ({
+            eq: vi.fn(() => ({
+              is: vi.fn(() => ({ order: vi.fn().mockResolvedValue({ data: [], error: null }) })),
+              order: vi.fn().mockResolvedValue({ data: [], error: null })
+            }))
+          })),
+          insert: vi.fn().mockResolvedValue({
+            error: new Error('duplicate key value violates unique constraint "services_org_active_code_unique"')
+          })
+        }) as never
+    );
+
+    renderPage();
+
+    fireEvent.change(screen.getByLabelText("Service name"), { target: { value: "Personal care" } });
+    fireEvent.change(screen.getByLabelText("Code"), { target: { value: "862" } });
+    fireEvent.click(screen.getByRole("button", { name: "Add service" }));
+
+    await waitFor(() =>
+      expect(screen.getByText('Service code "862" is already in use by another active service.')).toBeInTheDocument()
+    );
+  });
+
   it("soft-deletes an authorization via Remove", async () => {
     mockedUseOrganization.mockReturnValue({ ...baseOrganization(), hasPermission: vi.fn(() => true) });
     mockedRpc.mockResolvedValue({

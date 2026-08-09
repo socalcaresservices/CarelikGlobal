@@ -36,6 +36,7 @@ import { ApplicantsPage } from "@/pages/applicants-page";
 import { ApplicantDetailPage } from "@/pages/applicant-detail-page";
 import { ServiceVerificationPage } from "@/pages/service-verification-page";
 import { ServiceVerificationReportsPage } from "@/pages/service-verification-reports-page";
+import { StaffVisitsPage } from "@/pages/staff-visits-page";
 
 /**
  * Tenant route definitions
@@ -50,10 +51,20 @@ export function getTenantRoutes() {
     <Route key="clients" path="/clients" element={<ClientsPage />} />,
     <Route key="client-detail" path="/clients/:id" element={<ClientDetailPage />} />,
     <Route key="schedule" path="/schedule" element={<SchedulePage />} />,
+    <Route key="staff-visits" path="/staff/visits" element={<StaffVisitsPage />} />,
     <Route key="service-verification" path="/service-verification" element={<ServiceVerificationPage />} />,
     <Route
       key="service-verification-reports"
       path="/service-verification/reports"
+      element={<ServiceVerificationReportsPage />}
+    />,
+    // Same page, alias path - "signed sheets" is the workspace name used
+    // in the Service Routing spec; /reports is the original, still-linked
+    // path from the nav and existing bookmarks, kept working rather than
+    // moved.
+    <Route
+      key="service-verification-signed-sheets"
+      path="/service-verification/signed-sheets"
       element={<ServiceVerificationReportsPage />}
     />,
     <Route key="credentials" path="/credentials" element={<CredentialsPage />} />,

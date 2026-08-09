@@ -21,6 +21,7 @@ const ORG_ID = "11111111-1111-4111-8111-111111111111";
 
 const visitRow = {
   id: "22222222-2222-4222-8222-222222222222",
+  visit_number: "SCS-V-20260801-4F7K",
   client_id: "33333333-3333-4333-8333-333333333333",
   client_code: "CL-ABC123",
   client_legal_name: "Jamie Smith",
@@ -38,7 +39,10 @@ const visitRow = {
   authorization_status: "within_authorization",
   signed_at: "2026-08-01T14:05:00.000Z",
   original_visit_id: null,
-  is_corrected: false
+  is_corrected: false,
+  month_to_date_before_minutes: 600,
+  month_to_date_after_minutes: 660,
+  remaining_minutes: 1740
 };
 
 function renderPage() {
@@ -135,6 +139,124 @@ describe("ServiceVerificationReportsPage", () => {
         })
       )
     );
+  });
+
+  it("shows the visit number and authorization before/after balance", async () => {
+    mockedUseOrganization.mockReturnValue({
+      activeOrganizationId: ORG_ID,
+      activeOrganization: { displayName: "Acme Care" },
+      hasPermission: vi.fn(() => true)
+    } as never);
+    mockOrgLetterhead();
+    mockedRpc.mockResolvedValue({ data: [visitRow], error: null } as never);
+
+    renderPage();
+
+    expect(await screen.findByText("SCS-V-20260801-4F7K")).toBeInTheDocument();
+    expect(screen.getByText("10 → 11 (29 left)")).toBeInTheDocument();
+  });
+
+  it("submits a correction for a signed visit", async () => {
+    mockedUseOrganization.mockReturnValue({
+      activeOrganizationId: ORG_ID,
+      activeOrganization: { displayName: "Acme Care" },
+      hasPermission: vi.fn(() => true)
+    } as never);
+    mockOrgLetterhead();
+    mockedRpc.mockImplementation((fn: string) => {
+      if (fn === "list_service_visits") return Promise.resolve({ data: [visitRow], error: null }) as never;
+      if (fn === "correct_service_visit") return Promise.resolve({ data: "corrected-id", error: null }) as never;
+      return Promise.resolve({ data: [], error: null }) as never;
+    });
+
+    renderPage();
+    await screen.findByText("SCS-V-20260801-4F7K");
+
+    fireEvent.click(screen.getByRole("button", { name: "Correct" }));
+    fireEvent.change(screen.getByLabelText("Reason (required)"), { target: { value: "Forgot to clock out on time" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save correction" }));
+
+    await waitFor(() =>
+      expect(mockedRpc).toHaveBeenCalledWith(
+        "correct_service_visit",
+        expect.objectContaining({
+          target_visit_id: visitRow.id,
+          reason: "Forgot to clock out on time"
+        })
+      )
+    );
+  });
+
+  it("requires a reason before submitting a correction", async () => {
+    mockedUseOrganization.mockReturnValue({
+      activeOrganizationId: ORG_ID,
+      activeOrganization: { displayName: "Acme Care" },
+      hasPermission: vi.fn(() => true)
+    } as never);
+    mockOrgLetterhead();
+    mockedRpc.mockResolvedValue({ data: [visitRow], error: null } as never);
+
+    renderPage();
+    await screen.findByText("SCS-V-20260801-4F7K");
+
+    fireEvent.click(screen.getByRole("button", { name: "Correct" }));
+    fireEvent.click(screen.getByRole("button", { name: "Save correction" }));
+
+    await waitFor(() =>
+      expect(screen.getByText("A reason is required to correct a visit.")).toBeInTheDocument()
+    );
+  });
+
+  it("shows correction history for a visit", async () => {
+    mockedUseOrganization.mockReturnValue({
+      activeOrganizationId: ORG_ID,
+      activeOrganization: { displayName: "Acme Care" },
+      hasPermission: vi.fn(() => true)
+    } as never);
+    mockOrgLetterhead();
+    mockedRpc.mockImplementation((fn: string) => {
+      if (fn === "list_service_visits") return Promise.resolve({ data: [visitRow], error: null }) as never;
+      if (fn === "list_visit_corrections") {
+        return Promise.resolve({
+          data: [
+            {
+              id: "correction-1",
+              corrected_by_name: "Admin User",
+              reason: "Clock-out time was wrong",
+              before_snapshot: { timeIn: "2026-08-01T13:00:00.000Z", timeOut: "2026-08-01T14:00:00.000Z", workedMinutes: 60, billableMinutes: 60 },
+              after_snapshot: { timeIn: "2026-08-01T13:00:00.000Z", timeOut: "2026-08-01T14:30:00.000Z", workedMinutes: 90, billableMinutes: 90 },
+              created_at: "2026-08-02T10:00:00.000Z"
+            }
+          ],
+          error: null
+        }) as never;
+      }
+      return Promise.resolve({ data: [], error: null }) as never;
+    });
+
+    renderPage();
+    await screen.findByText("SCS-V-20260801-4F7K");
+
+    fireEvent.click(screen.getByRole("button", { name: "History" }));
+
+    await waitFor(() => expect(screen.getByText("Admin User", { exact: false })).toBeInTheDocument());
+    expect(screen.getByText(/Clock-out time was wrong/)).toBeInTheDocument();
+  });
+
+  it("hides Correct and History actions without visits.manage", async () => {
+    mockedUseOrganization.mockReturnValue({
+      activeOrganizationId: ORG_ID,
+      activeOrganization: { displayName: "Acme Care" },
+      hasPermission: vi.fn((permission: string) => permission === "visits.read")
+    } as never);
+    mockOrgLetterhead();
+    mockedRpc.mockResolvedValue({ data: [visitRow], error: null } as never);
+
+    renderPage();
+    await screen.findByText("SCS-V-20260801-4F7K");
+
+    expect(screen.queryByRole("button", { name: "Correct" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "History" })).not.toBeInTheDocument();
   });
 
   it("triggers window.print for the Print action", async () => {

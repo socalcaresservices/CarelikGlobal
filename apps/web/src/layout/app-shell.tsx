@@ -5,6 +5,7 @@ import {
   AlertOctagon,
   BadgeCheck,
   CalendarClock,
+  CalendarPlus,
   ClipboardCheck,
   Crown,
   FileText,
@@ -66,6 +67,10 @@ const overviewNav: NavItem[] = [
   { to: "/", label: "Command Center", icon: LayoutDashboard },
   { to: "/owner-dashboard", label: "Workforce Insights", icon: Crown, ownerOnly: true },
   { to: "/schedule", label: "Schedule", icon: CalendarClock, badgeKey: "schedule_issues" },
+  // No permission gate - every caregiver needs to be able to schedule
+  // their own visits; caregiver_assignments (not this nav item) is the
+  // real gate on which clients/services they can pick from.
+  { to: "/staff/visits", label: "Schedule a visit", icon: CalendarPlus },
   // No permission gate - every caregiver needs this to record their own
   // visits, and the RLS/RPC layer already scopes what each caregiver can
   // see to their own assigned shifts regardless of nav visibility.

@@ -1,5 +1,5 @@
-import { useMemo, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { Fragment, useMemo, useState } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { FileText, Printer } from "lucide-react";
 import { Button, Card, PageHeader, StatusBadge, type StatusTone } from "@carelik/ui";
 import { useOrganization } from "@/providers/organization-provider";
@@ -14,6 +14,7 @@ import {
 
 interface VisitReportRow {
   id: string;
+  visit_number: string | null;
   client_id: string;
   client_code: string;
   client_legal_name: string | null;
@@ -32,6 +33,18 @@ interface VisitReportRow {
   signed_at: string | null;
   original_visit_id: string | null;
   is_corrected: boolean;
+  month_to_date_before_minutes: number | null;
+  month_to_date_after_minutes: number | null;
+  remaining_minutes: number | null;
+}
+
+interface VisitCorrectionRow {
+  id: string;
+  corrected_by_name: string;
+  reason: string;
+  before_snapshot: { timeIn: string; timeOut: string; workedMinutes: number; billableMinutes: number };
+  after_snapshot: { timeIn: string; timeOut: string; workedMinutes: number; billableMinutes: number };
+  created_at: string;
 }
 
 interface OrgLetterhead {
@@ -66,9 +79,26 @@ function billableRows(rows: VisitReportRow[]) {
   return rows.filter((row) => row.status === "signed" || row.status === "administrator_review");
 }
 
+// datetime-local inputs need "YYYY-MM-DDTHH:mm" in the browser's local
+// time - toISOString() always renders UTC, so this reformats from the
+// Date object's own local getters instead.
+function toLocalInputValue(value: string) {
+  const date = new Date(value);
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
+}
+
 export function ServiceVerificationReportsPage() {
   const { activeOrganizationId, activeOrganization, hasPermission } = useOrganization();
   const canRead = hasPermission("visits.read");
+  const canManage = hasPermission("visits.manage");
+  const queryClient = useQueryClient();
+
+  const [expandedVisitId, setExpandedVisitId] = useState<string | null>(null);
+  const [expandedMode, setExpandedMode] = useState<"correct" | "history" | null>(null);
+  const [correctionForm, setCorrectionForm] = useState({ timeIn: "", timeOut: "", reason: "" });
+  const [correctionSaving, setCorrectionSaving] = useState(false);
+  const [correctionError, setCorrectionError] = useState<string | null>(null);
 
   const [clientFilter, setClientFilter] = useState("");
   const [caregiverFilter, setCaregiverFilter] = useState("");
@@ -117,6 +147,75 @@ export function ServiceVerificationReportsPage() {
     },
     enabled: !!activeOrganizationId && canRead
   });
+
+  const correctionsQuery = useQuery({
+    queryKey: ["visit-corrections", expandedVisitId],
+    queryFn: async () => {
+      const { data, error } = await supabase.rpc("list_visit_corrections", {
+        target_visit_id: expandedVisitId!
+      });
+      if (error) throw error;
+      return (data ?? []) as VisitCorrectionRow[];
+    },
+    enabled: expandedMode === "history" && !!expandedVisitId
+  });
+
+  function openCorrect(row: VisitReportRow) {
+    setExpandedVisitId(row.id);
+    setExpandedMode("correct");
+    setCorrectionError(null);
+    setCorrectionForm({
+      timeIn: toLocalInputValue(row.time_in),
+      timeOut: row.time_out ? toLocalInputValue(row.time_out) : "",
+      reason: ""
+    });
+  }
+
+  function openHistory(row: VisitReportRow) {
+    setExpandedVisitId(row.id);
+    setExpandedMode("history");
+  }
+
+  function closeExpanded() {
+    setExpandedVisitId(null);
+    setExpandedMode(null);
+    setCorrectionError(null);
+  }
+
+  async function handleSubmitCorrection(visitId: string) {
+    setCorrectionError(null);
+    if (!correctionForm.reason.trim()) {
+      setCorrectionError("A reason is required to correct a visit.");
+      return;
+    }
+    const newTimeIn = new Date(correctionForm.timeIn);
+    const newTimeOut = new Date(correctionForm.timeOut);
+    if (Number.isNaN(newTimeIn.getTime()) || Number.isNaN(newTimeOut.getTime())) {
+      setCorrectionError("Enter valid times.");
+      return;
+    }
+    if (newTimeOut.getTime() <= newTimeIn.getTime()) {
+      setCorrectionError("Time out must be after time in.");
+      return;
+    }
+
+    setCorrectionSaving(true);
+    try {
+      const { error } = await supabase.rpc("correct_service_visit", {
+        target_visit_id: visitId,
+        new_time_in: newTimeIn.toISOString(),
+        new_time_out: newTimeOut.toISOString(),
+        reason: correctionForm.reason.trim()
+      });
+      if (error) throw error;
+      closeExpanded();
+      void queryClient.invalidateQueries({ queryKey: ["service-visit-report"] });
+    } catch (cause) {
+      setCorrectionError(cause instanceof Error ? cause.message : "Could not correct this visit.");
+    } finally {
+      setCorrectionSaving(false);
+    }
+  }
 
   const rows = useMemo(() => visitsQuery.data ?? [], [visitsQuery.data]);
 
@@ -357,6 +456,7 @@ export function ServiceVerificationReportsPage() {
             <table className="w-full text-left text-sm">
               <thead>
                 <tr className="border-b border-slate-200 text-xs uppercase tracking-wide text-slate-500">
+                  <th className="pb-2 pr-3 font-medium">Visit #</th>
                   <th className="pb-2 pr-3 font-medium">Date</th>
                   <th className="pb-2 pr-3 font-medium">Client</th>
                   <th className="pb-2 pr-3 font-medium">Caregiver</th>
@@ -364,46 +464,195 @@ export function ServiceVerificationReportsPage() {
                   <th className="pb-2 pr-3 font-medium">Time</th>
                   <th className="pb-2 pr-3 font-medium">Worked</th>
                   <th className="pb-2 pr-3 font-medium">Billable</th>
-                  <th className="pb-2 font-medium">Status</th>
+                  <th className="pb-2 pr-3 font-medium">Authorization (before → after)</th>
+                  <th className="pb-2 pr-3 font-medium">Status</th>
+                  {canManage ? <th className="pb-2 font-medium print:hidden">Actions</th> : null}
                 </tr>
               </thead>
               <tbody>
                 {rows.map((row) => (
-                  <tr key={row.id} className="border-b border-slate-100 last:border-0">
-                    <td className="py-2 pr-3 whitespace-nowrap text-slate-600">{formatVisitDate(`${row.service_date}T12:00:00-07:00`)}</td>
-                    <td className="py-2 pr-3">
-                      <p className="text-slate-800">{row.client_legal_name ?? row.client_code}</p>
-                      <p className="text-xs text-slate-400">{row.client_code}</p>
-                    </td>
-                    <td className="py-2 pr-3 text-slate-700">{row.caregiver_name}</td>
-                    <td className="py-2 pr-3 text-slate-600">{row.service_name}</td>
-                    <td className="py-2 pr-3 whitespace-nowrap text-slate-500">
-                      {formatDateTime(row.time_in)}
-                      {row.time_out ? ` – ${formatDateTime(row.time_out)}` : ""}
-                    </td>
-                    <td className="py-2 pr-3 text-slate-700">
-                      {row.worked_minutes ? formatHours(row.worked_minutes) : "—"}
-                    </td>
-                    <td className="py-2 pr-3 text-slate-700">
-                      {row.billable_minutes !== null ? formatHours(row.billable_minutes) : "—"}
-                    </td>
-                    <td className="py-2">
-                      <div className="flex flex-wrap items-center gap-1">
-                        {row.is_corrected ? <StatusBadge label="Corrected" tone="neutral" /> : null}
-                        <StatusBadge label={VISIT_STATUS_LABEL[row.status]} tone={STATUS_TONE[row.status]} />
-                      </div>
-                    </td>
-                  </tr>
+                  <Fragment key={row.id}>
+                    <tr className="border-b border-slate-100 last:border-0">
+                      <td className="py-2 pr-3 whitespace-nowrap font-mono text-xs text-slate-500">
+                        {row.visit_number ?? "—"}
+                      </td>
+                      <td className="py-2 pr-3 whitespace-nowrap text-slate-600">{formatVisitDate(`${row.service_date}T12:00:00-07:00`)}</td>
+                      <td className="py-2 pr-3">
+                        <p className="text-slate-800">{row.client_legal_name ?? row.client_code}</p>
+                        <p className="text-xs text-slate-400">{row.client_code}</p>
+                      </td>
+                      <td className="py-2 pr-3 text-slate-700">{row.caregiver_name}</td>
+                      <td className="py-2 pr-3 text-slate-600">{row.service_name}</td>
+                      <td className="py-2 pr-3 whitespace-nowrap text-slate-500">
+                        {formatDateTime(row.time_in)}
+                        {row.time_out ? ` – ${formatDateTime(row.time_out)}` : ""}
+                      </td>
+                      <td className="py-2 pr-3 text-slate-700">
+                        {row.worked_minutes ? formatHours(row.worked_minutes) : "—"}
+                      </td>
+                      <td className="py-2 pr-3 text-slate-700">
+                        {row.billable_minutes !== null ? formatHours(row.billable_minutes) : "—"}
+                      </td>
+                      <td className="py-2 pr-3 whitespace-nowrap text-xs text-slate-500">
+                        {row.month_to_date_before_minutes !== null && row.month_to_date_after_minutes !== null
+                          ? `${formatHours(row.month_to_date_before_minutes)} → ${formatHours(row.month_to_date_after_minutes)} (${formatHours(row.remaining_minutes ?? 0)} left)`
+                          : "—"}
+                      </td>
+                      <td className="py-2 pr-3">
+                        <div className="flex flex-wrap items-center gap-1">
+                          {row.is_corrected ? <StatusBadge label="Corrected" tone="neutral" /> : null}
+                          <StatusBadge label={VISIT_STATUS_LABEL[row.status]} tone={STATUS_TONE[row.status]} />
+                        </div>
+                      </td>
+                      {canManage ? (
+                        <td className="py-2 print:hidden">
+                          <div className="flex gap-2">
+                            {row.status === "signed" || row.status === "administrator_review" ? (
+                              <button
+                                type="button"
+                                onClick={() => openCorrect(row)}
+                                className="text-xs font-medium text-slate-700 underline-offset-2 hover:underline"
+                              >
+                                Correct
+                              </button>
+                            ) : null}
+                            <button
+                              type="button"
+                              onClick={() => openHistory(row)}
+                              className="text-xs font-medium text-slate-700 underline-offset-2 hover:underline"
+                            >
+                              History
+                            </button>
+                          </div>
+                        </td>
+                      ) : null}
+                    </tr>
+                    {expandedVisitId === row.id && expandedMode === "correct" ? (
+                      <tr className="border-b border-slate-100 bg-slate-50 print:hidden">
+                        <td colSpan={canManage ? 10 : 9} className="p-4">
+                          <p className="text-sm font-semibold text-slate-900">Correct this visit</p>
+                          <p className="mt-1 text-xs text-slate-500">
+                            The signed record is never overwritten - this creates a new, linked corrected visit and
+                            marks the original as superseded.
+                          </p>
+                          <div className="mt-3 grid gap-3 sm:grid-cols-3">
+                            <div>
+                              <label htmlFor="correction-time-in" className="block text-xs font-medium text-slate-600">
+                                Time in
+                              </label>
+                              <input
+                                id="correction-time-in"
+                                type="datetime-local"
+                                value={correctionForm.timeIn}
+                                onChange={(event) =>
+                                  setCorrectionForm({ ...correctionForm, timeIn: event.target.value })
+                                }
+                                className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900"
+                              />
+                            </div>
+                            <div>
+                              <label htmlFor="correction-time-out" className="block text-xs font-medium text-slate-600">
+                                Time out
+                              </label>
+                              <input
+                                id="correction-time-out"
+                                type="datetime-local"
+                                value={correctionForm.timeOut}
+                                onChange={(event) =>
+                                  setCorrectionForm({ ...correctionForm, timeOut: event.target.value })
+                                }
+                                className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900"
+                              />
+                            </div>
+                            <div>
+                              <label htmlFor="correction-reason" className="block text-xs font-medium text-slate-600">
+                                Reason (required)
+                              </label>
+                              <input
+                                id="correction-reason"
+                                required
+                                value={correctionForm.reason}
+                                onChange={(event) =>
+                                  setCorrectionForm({ ...correctionForm, reason: event.target.value })
+                                }
+                                className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900"
+                              />
+                            </div>
+                          </div>
+                          {correctionError ? <p className="mt-2 text-sm text-red-700">{correctionError}</p> : null}
+                          <div className="mt-3 flex gap-3">
+                            <Button
+                              type="button"
+                              loading={correctionSaving}
+                              onClick={() => handleSubmitCorrection(row.id)}
+                            >
+                              {correctionSaving ? "Saving…" : "Save correction"}
+                            </Button>
+                            <button
+                              type="button"
+                              onClick={closeExpanded}
+                              className="text-sm font-medium text-slate-600 hover:text-slate-900"
+                            >
+                              Cancel
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ) : null}
+                    {expandedVisitId === row.id && expandedMode === "history" ? (
+                      <tr className="border-b border-slate-100 bg-slate-50 print:hidden">
+                        <td colSpan={canManage ? 10 : 9} className="p-4">
+                          <div className="flex items-center justify-between">
+                            <p className="text-sm font-semibold text-slate-900">Correction history</p>
+                            <button
+                              type="button"
+                              onClick={closeExpanded}
+                              className="text-xs font-medium text-slate-600 hover:text-slate-900"
+                            >
+                              Close
+                            </button>
+                          </div>
+                          {correctionsQuery.isLoading ? (
+                            <p className="mt-2 text-sm text-slate-500">Loading…</p>
+                          ) : (correctionsQuery.data ?? []).length === 0 ? (
+                            <p className="mt-2 text-sm text-slate-400">No corrections recorded for this visit.</p>
+                          ) : (
+                            <ul className="mt-2 space-y-2">
+                              {(correctionsQuery.data ?? []).map((entry) => (
+                                <li key={entry.id} className="rounded-lg border border-slate-200 bg-white p-3 text-sm">
+                                  <p className="text-slate-800">
+                                    <span className="font-medium">{entry.corrected_by_name}</span> ·{" "}
+                                    {formatDateTime(entry.created_at)}
+                                  </p>
+                                  <p className="mt-1 text-slate-600">Reason: {entry.reason}</p>
+                                  <p className="mt-1 text-xs text-slate-500">
+                                    {formatDateTime(entry.before_snapshot.timeIn)} –{" "}
+                                    {formatDateTime(entry.before_snapshot.timeOut)} (
+                                    {formatHours(entry.before_snapshot.billableMinutes)}h) →{" "}
+                                    {formatDateTime(entry.after_snapshot.timeIn)} –{" "}
+                                    {formatDateTime(entry.after_snapshot.timeOut)} (
+                                    {formatHours(entry.after_snapshot.billableMinutes)}h)
+                                  </p>
+                                </li>
+                              ))}
+                            </ul>
+                          )}
+                        </td>
+                      </tr>
+                    ) : null}
+                  </Fragment>
                 ))}
               </tbody>
               <tfoot>
                 <tr className="border-t-2 border-slate-300 font-semibold text-slate-900">
-                  <td className="py-2 pr-3" colSpan={5}>
+                  <td className="py-2 pr-3" colSpan={6}>
                     Total (signed + under review)
                   </td>
                   <td className="py-2 pr-3">{formatHours(totalWorkedMinutes)}</td>
                   <td className="py-2 pr-3">{formatHours(totalBillableMinutes)}</td>
+                  <td className="py-2 pr-3" />
                   <td className="py-2" />
+                  {canManage ? <td className="py-2 print:hidden" /> : null}
                 </tr>
               </tfoot>
             </table>

@@ -7,6 +7,7 @@ import {
   Card,
   FormSection,
   MultiSelectCombobox,
+  SearchableCombobox,
   StatusBadge,
   cn,
   type ComboboxOption,
@@ -110,6 +111,25 @@ interface IncidentRow {
   status: "open" | "under_review" | "resolved";
 }
 
+interface AssignmentRow {
+  id: string;
+  caregiver_user_id: string;
+  caregiver_name: string;
+  client_id: string;
+  service_id: string;
+  service_name: string;
+  service_code: string;
+  effective_start: string;
+  effective_end: string | null;
+  is_active: boolean;
+}
+
+interface MemberOption {
+  user_id: string;
+  display_name: string;
+  status: string;
+}
+
 interface AuditRow {
   id: number;
   occurred_at: string;
@@ -125,7 +145,7 @@ const statusStyles: Record<ClientDetail["status"], string> = {
   discharged: "bg-amber-50 text-amber-700"
 };
 
-type Tab = "overview" | "schedule" | "matches" | "authorizations" | "incidents" | "notes" | "history";
+type Tab = "overview" | "schedule" | "matches" | "authorizations" | "caregivers" | "incidents" | "notes" | "history";
 
 // CareScore's per-pair caregiver/client match score - see
 // supabase/migrations/20260719280000_caregiver_client_matching.sql for
@@ -163,6 +183,8 @@ export function ClientDetailPage() {
   const canReadAudit = hasPermission("audit.read");
   const canManage = hasPermission("clients.update");
   const canSchedule = hasPermission("shifts.update");
+  const canSeeAssignments = hasPermission("assignments.read");
+  const canManageAssignments = hasPermission("assignments.update");
 
   const clientQuery = useQuery({
     queryKey: ["client-detail", id],
@@ -351,6 +373,101 @@ export function ClientDetailPage() {
     enabled: !!activeOrganizationId && !!id && canSeeAuthorizations
   });
 
+  const assignmentsQuery = useQuery({
+    queryKey: ["client-detail-assignments", activeOrganizationId, id],
+    queryFn: async () => {
+      const { data, error } = await supabase.rpc("list_caregiver_assignments", {
+        target_organization_id: activeOrganizationId!
+      });
+      if (error) throw error;
+      return ((data ?? []) as AssignmentRow[]).filter((row) => row.client_id === id);
+    },
+    enabled: !!activeOrganizationId && !!id && canSeeAssignments
+  });
+
+  const assignableServicesQuery = useQuery({
+    queryKey: ["services-for-assignments", activeOrganizationId],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("services")
+        .select("id, code, name, is_active")
+        .eq("organization_id", activeOrganizationId!)
+        .is("deleted_at", null)
+        .order("name");
+      if (error) throw error;
+      return ((data ?? []) as Array<{ id: string; code: string; name: string; is_active: boolean }>).filter(
+        (service) => service.is_active
+      );
+    },
+    enabled: !!activeOrganizationId && canManageAssignments
+  });
+
+  const membersQuery = useQuery({
+    queryKey: ["members-for-assignments", activeOrganizationId],
+    queryFn: async () => {
+      const { data, error } = await supabase.rpc("list_organization_members", {
+        target_organization_id: activeOrganizationId!
+      });
+      if (error) throw error;
+      return ((data ?? []) as MemberOption[]).filter((member) => member.status === "active");
+    },
+    enabled: !!activeOrganizationId && canManageAssignments
+  });
+
+  const [assignmentForm, setAssignmentForm] = useState({ caregiverId: "", serviceId: "" });
+  const [assignmentSaving, setAssignmentSaving] = useState(false);
+  const [assignmentError, setAssignmentError] = useState<string | null>(null);
+  const [assignmentPendingId, setAssignmentPendingId] = useState<string | null>(null);
+
+  async function handleAddAssignment(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!activeOrganizationId || !id) return;
+    if (!assignmentForm.caregiverId || !assignmentForm.serviceId) {
+      setAssignmentError("Select both a caregiver and a service.");
+      return;
+    }
+
+    setAssignmentError(null);
+    setAssignmentSaving(true);
+    try {
+      const { error } = await supabase.from("caregiver_assignments").insert({
+        organization_id: activeOrganizationId,
+        client_id: id,
+        caregiver_user_id: assignmentForm.caregiverId,
+        service_id: assignmentForm.serviceId
+      });
+      if (error) throw error;
+      setAssignmentForm({ caregiverId: "", serviceId: "" });
+      void queryClient.invalidateQueries({ queryKey: ["client-detail-assignments", activeOrganizationId, id] });
+    } catch (cause) {
+      const message = cause instanceof Error ? cause.message : "";
+      setAssignmentError(
+        message.includes("caregiver_assignments_unique_active")
+          ? "This caregiver is already assigned to this client for this service."
+          : message || "Could not add the assignment."
+      );
+    } finally {
+      setAssignmentSaving(false);
+    }
+  }
+
+  async function handleToggleAssignment(row: AssignmentRow) {
+    setAssignmentError(null);
+    setAssignmentPendingId(row.id);
+    try {
+      const { error } = await supabase
+        .from("caregiver_assignments")
+        .update({ is_active: !row.is_active })
+        .eq("id", row.id);
+      if (error) throw error;
+      void queryClient.invalidateQueries({ queryKey: ["client-detail-assignments", activeOrganizationId, id] });
+    } catch (cause) {
+      setAssignmentError(cause instanceof Error ? cause.message : "Could not update the assignment.");
+    } finally {
+      setAssignmentPendingId(null);
+    }
+  }
+
   const incidentsQuery = useQuery({
     queryKey: ["client-detail-incidents", activeOrganizationId, id],
     queryFn: async () => {
@@ -427,6 +544,7 @@ export function ClientDetailPage() {
     { key: "schedule", label: "Schedule" },
     ...(canSchedule ? [{ key: "matches" as Tab, label: "Matches" }] : []),
     ...(canSeeAuthorizations ? [{ key: "authorizations" as Tab, label: "Authorizations" }] : []),
+    ...(canSeeAssignments ? [{ key: "caregivers" as Tab, label: "Caregivers" }] : []),
     { key: "incidents", label: "Incidents" },
     { key: "notes", label: "Notes" },
     ...(canReadAudit ? [{ key: "history" as Tab, label: "History" }] : [])
@@ -783,6 +901,85 @@ export function ClientDetailPage() {
                   </li>
                 );
               })}
+            </ul>
+          )}
+        </Card>
+      ) : null}
+
+      {tab === "caregivers" && canSeeAssignments ? (
+        <Card>
+          <h3 className="font-semibold text-slate-950">Caregiver assignments</h3>
+          <p className="mt-1 text-xs text-slate-500">
+            Only caregivers assigned here can see or schedule visits for this client on their own staff portal - this
+            is the gate, not just a suggestion like CareScore.
+          </p>
+
+          {canManageAssignments ? (
+            <form onSubmit={handleAddAssignment} className="mt-4 flex flex-wrap items-end gap-3">
+              <div className="min-w-[12rem] flex-1">
+                <SearchableCombobox
+                  label="Caregiver"
+                  value={assignmentForm.caregiverId || null}
+                  onChange={(value) => setAssignmentForm({ ...assignmentForm, caregiverId: value ?? "" })}
+                  options={(membersQuery.data ?? []).map((member) => ({
+                    value: member.user_id,
+                    label: member.display_name
+                  }))}
+                  placeholder="Search caregivers…"
+                />
+              </div>
+              <div className="min-w-[12rem] flex-1">
+                <SearchableCombobox
+                  label="Service"
+                  value={assignmentForm.serviceId || null}
+                  onChange={(value) => setAssignmentForm({ ...assignmentForm, serviceId: value ?? "" })}
+                  options={(assignableServicesQuery.data ?? []).map((service) => ({
+                    value: service.id,
+                    label: `${service.code} · ${service.name}`
+                  }))}
+                  placeholder="Search services…"
+                />
+              </div>
+              <Button type="submit" loading={assignmentSaving}>
+                {assignmentSaving ? "Assigning…" : "Assign"}
+              </Button>
+            </form>
+          ) : null}
+          {assignmentError ? <p className="mt-2 text-sm text-red-700">{assignmentError}</p> : null}
+
+          {assignmentsQuery.isLoading ? (
+            <p className="mt-3 text-sm text-slate-500">Loading…</p>
+          ) : assignmentsQuery.isError ? (
+            <p className="mt-3 text-sm text-red-700">Could not load caregiver assignments.</p>
+          ) : (assignmentsQuery.data ?? []).length === 0 ? (
+            <p className="mt-3 text-sm text-slate-400">No caregivers assigned to this client yet.</p>
+          ) : (
+            <ul className="mt-3 divide-y divide-slate-100">
+              {(assignmentsQuery.data ?? []).map((row) => (
+                <li key={row.id} className="flex items-center justify-between py-2.5 text-sm">
+                  <div>
+                    <Link to={`/team/${row.caregiver_user_id}`} className="font-medium text-slate-900 hover:underline">
+                      {row.caregiver_name}
+                    </Link>
+                    <span className="ml-2 text-slate-500">
+                      {row.service_code} · {row.service_name}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <StatusBadge label={row.is_active ? "Active" : "Revoked"} tone={row.is_active ? "success" : "neutral"} />
+                    {canManageAssignments ? (
+                      <button
+                        type="button"
+                        disabled={assignmentPendingId === row.id}
+                        onClick={() => handleToggleAssignment(row)}
+                        className="text-xs font-medium text-slate-700 underline-offset-2 hover:underline disabled:cursor-not-allowed disabled:opacity-60"
+                      >
+                        {row.is_active ? "Revoke" : "Reactivate"}
+                      </button>
+                    ) : null}
+                  </div>
+                </li>
+              ))}
             </ul>
           )}
         </Card>

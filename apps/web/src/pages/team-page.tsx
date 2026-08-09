@@ -1,6 +1,7 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
+import { Share2 } from "lucide-react";
 import { Button, Card, EmptyState, FilterBar, type ActiveFilter } from "@carelik/ui";
 import { systemRoleSchema, membershipStatusSchema } from "@carelik/shared";
 import { useAuth } from "@carelik/auth";
@@ -58,6 +59,77 @@ function formatRole(role: string) {
 
 function formatHours(hours: number) {
   return Number.isInteger(hours) ? String(hours) : hours.toFixed(1);
+}
+
+// Reuses the existing sign-in route, not a new permanent public token -
+// anyone opening this link still has to authenticate as a real CareLik
+// account before seeing any assignment. The message is deliberately
+// generic: no client name, code, or service ever goes in a share
+// message, since email/SMS aren't a secure channel for that.
+const STAFF_PORTAL_SHARE_MESSAGE =
+  "You have access to the CareLik staff portal. Open the secure link and sign in to view your assignments.";
+
+function ShareStaffPortalCard() {
+  const [copied, setCopied] = useState(false);
+  const [copyError, setCopyError] = useState<string | null>(null);
+  const portalLink = `${window.location.origin}/login`;
+  const canNativeShare = typeof navigator !== "undefined" && typeof navigator.share === "function";
+
+  async function handleCopy() {
+    setCopyError(null);
+    try {
+      await navigator.clipboard.writeText(`${STAFF_PORTAL_SHARE_MESSAGE}\n${portalLink}`);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      setCopyError("Could not copy the link. Copy it manually instead.");
+    }
+  }
+
+  async function handleNativeShare() {
+    try {
+      await navigator.share({ text: STAFF_PORTAL_SHARE_MESSAGE, url: portalLink });
+    } catch {
+      // User cancelled the share sheet, or the platform rejected it - not
+      // an error worth surfacing.
+    }
+  }
+
+  return (
+    <Card>
+      <div className="flex items-center gap-2">
+        <Share2 className="h-4 w-4 text-slate-500" />
+        <h3 className="font-semibold text-slate-950">Share staff portal</h3>
+      </div>
+      <p className="mt-1 text-sm text-slate-500">
+        Send a caregiver the sign-in link. The message never includes client names, codes, or schedules - only
+        someone who signs in with their own CareLik account sees their assignments.
+      </p>
+      <div className="mt-3 flex flex-wrap gap-2">
+        <Button type="button" variant="secondary" onClick={handleCopy}>
+          {copied ? "Copied" : "Copy link"}
+        </Button>
+        <a
+          href={`mailto:?subject=${encodeURIComponent("CareLik staff portal access")}&body=${encodeURIComponent(`${STAFF_PORTAL_SHARE_MESSAGE}\n${portalLink}`)}`}
+          className="inline-flex items-center justify-center rounded-lg border border-slate-200 px-3.5 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+        >
+          Email link
+        </a>
+        <a
+          href={`sms:?body=${encodeURIComponent(`${STAFF_PORTAL_SHARE_MESSAGE} ${portalLink}`)}`}
+          className="inline-flex items-center justify-center rounded-lg border border-slate-200 px-3.5 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+        >
+          Text link
+        </a>
+        {canNativeShare ? (
+          <Button type="button" variant="secondary" onClick={handleNativeShare}>
+            Share…
+          </Button>
+        ) : null}
+      </div>
+      {copyError ? <p className="mt-2 text-sm text-red-700">{copyError}</p> : null}
+    </Card>
+  );
 }
 
 export function TeamPage() {
@@ -294,6 +366,8 @@ export function TeamPage() {
           {activeOrganization?.displayName ?? "Caregivers"}
         </h2>
       </div>
+
+      {canInvite ? <ShareStaffPortalCard /> : null}
 
       {canInvite ? (
         <Card>

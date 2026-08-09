@@ -49,6 +49,20 @@
   --color-danger-foreground: #b91c1c;
   --color-info: #0284c7;
   --color-info-foreground: #0369a1;
+
+  /* Service Routing tokens: a distinct teal/navy identity for the
+     caregiver-facing mobile scheduling flow (/staff/visits), so it reads
+     as its own clearly-branded workflow rather than blending into the
+     slate-accent admin screens. Additive only - the org-wide
+     --color-accent above is untouched, so every existing admin page
+     keeps its current (often per-tenant-branded) look. */
+  --routing-teal: #0f8b8d;
+  --routing-teal-foreground: #ffffff;
+  --routing-navy: #0f172a;
+  --routing-surface: #eef6f8;
+  --routing-success: #15803d;
+  --routing-warning: #b45309;
+  --routing-danger: #b91c1c;
 }
 
 * {
