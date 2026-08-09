@@ -114,14 +114,20 @@ function renderPage() {
 
 describe("SettingsPage", () => {
   beforeEach(() => {
-    // Default reminder settings response so tests that grant every
-    // permission (and therefore render ReminderSettingsCard, Build 022)
-    // but aren't specifically exercising it don't have to mock this RPC
-    // themselves. Reminder-focused tests below override this.
-    mockedRpc.mockResolvedValue({
-      data: [{ enabled: true, interval_days: 3, max_reminders: 3 }],
-      error: null
-    } as never);
+    // Default responses so tests that grant every permission (and
+    // therefore render ReminderSettingsCard and SupportAccessCard, both
+    // Build 022) but aren't specifically exercising either one don't have
+    // to mock these RPCs themselves. Reminder/support-access-focused
+    // tests below override this.
+    mockedRpc.mockImplementation((fn: string) => {
+      if (fn === "get_document_reminder_settings") {
+        return Promise.resolve({
+          data: [{ enabled: true, interval_days: 3, max_reminders: 3 }],
+          error: null
+        }) as never;
+      }
+      return Promise.resolve({ data: [], error: null }) as never;
+    });
   });
 
   afterEach(() => {
@@ -516,5 +522,132 @@ describe("SettingsPage", () => {
     await waitFor(() => expect(within(reminderCard).getByLabelText("Every (days)")).toBeInTheDocument());
     expect(within(reminderCard).queryByRole("button", { name: "Save" })).not.toBeInTheDocument();
     expect(within(reminderCard).getByLabelText("Every (days)")).toBeDisabled();
+  });
+
+  const supportAccessGrant = {
+    id: "grant-1",
+    organization_id: ORG_ID,
+    grantee_user_id: "platform-user-1",
+    requested_by: "platform-user-1",
+    reason: "Investigating a billing ticket",
+    status: "requested" as const,
+    requested_minutes: 60,
+    approved_by: null,
+    approved_at: null,
+    expires_at: null,
+    revoked_by: null,
+    revoked_at: null,
+    created_at: "2026-08-01T00:00:00.000Z",
+    updated_at: "2026-08-01T00:00:00.000Z"
+  };
+
+  it("approves and denies a requested support access grant when settings.update is held", async () => {
+    mockedUseAuth.mockReturnValue(authUser());
+    mockedUseOrganization.mockReturnValue({ ...baseOrganization(), hasPermission: vi.fn(() => true) });
+
+    const { selectMock: settingsSelect } = mockReadableSettings([]);
+    const { selectMock: skillsSelect } = mockReadableLookup([]);
+    const { selectMock: languagesSelect } = mockReadableLookup([]);
+    const { selectMock: documentTypesSelect } = mockReadableDocumentTypes([]);
+    mockedFrom.mockImplementation((table: string) => {
+      if (table === "skills") return { select: skillsSelect } as never;
+      if (table === "languages") return { select: languagesSelect } as never;
+      if (table === "document_types") return { select: documentTypesSelect } as never;
+      return { select: settingsSelect } as never;
+    });
+    mockedRpc.mockImplementation((fn: string) => {
+      if (fn === "list_support_access_grants") {
+        return Promise.resolve({ data: [supportAccessGrant], error: null }) as never;
+      }
+      if (fn === "approve_support_access" || fn === "deny_support_access") {
+        return Promise.resolve({ data: null, error: null }) as never;
+      }
+      return Promise.resolve({ data: [], error: null }) as never;
+    });
+
+    renderPage();
+
+    await waitFor(() => expect(screen.getByText("Investigating a billing ticket")).toBeInTheDocument());
+    const supportAccessCard = screen.getByText("Support access").closest("div")!;
+
+    fireEvent.click(within(supportAccessCard).getByRole("button", { name: "Approve" }));
+    await waitFor(() =>
+      expect(mockedRpc).toHaveBeenCalledWith("approve_support_access", { grant_id: "grant-1" })
+    );
+
+    fireEvent.click(within(supportAccessCard).getByRole("button", { name: "Deny" }));
+    await waitFor(() => expect(mockedRpc).toHaveBeenCalledWith("deny_support_access", { grant_id: "grant-1" }));
+  });
+
+  it("revokes an active support access grant", async () => {
+    mockedUseAuth.mockReturnValue(authUser());
+    mockedUseOrganization.mockReturnValue({ ...baseOrganization(), hasPermission: vi.fn(() => true) });
+
+    const { selectMock: settingsSelect } = mockReadableSettings([]);
+    const { selectMock: skillsSelect } = mockReadableLookup([]);
+    const { selectMock: languagesSelect } = mockReadableLookup([]);
+    const { selectMock: documentTypesSelect } = mockReadableDocumentTypes([]);
+    mockedFrom.mockImplementation((table: string) => {
+      if (table === "skills") return { select: skillsSelect } as never;
+      if (table === "languages") return { select: languagesSelect } as never;
+      if (table === "document_types") return { select: documentTypesSelect } as never;
+      return { select: settingsSelect } as never;
+    });
+    const activeGrant = {
+      ...supportAccessGrant,
+      status: "active" as const,
+      expires_at: new Date(Date.now() + 60 * 60 * 1000).toISOString()
+    };
+    mockedRpc.mockImplementation((fn: string) => {
+      if (fn === "list_support_access_grants") {
+        return Promise.resolve({ data: [activeGrant], error: null }) as never;
+      }
+      if (fn === "revoke_support_access") {
+        return Promise.resolve({ data: null, error: null }) as never;
+      }
+      return Promise.resolve({ data: [], error: null }) as never;
+    });
+
+    renderPage();
+
+    await waitFor(() => expect(screen.getByText("Investigating a billing ticket")).toBeInTheDocument());
+    const supportAccessCard = screen.getByText("Support access").closest("div")!;
+
+    fireEvent.click(within(supportAccessCard).getByRole("button", { name: "Revoke" }));
+    await waitFor(() =>
+      expect(mockedRpc).toHaveBeenCalledWith("revoke_support_access", { grant_id: "grant-1" })
+    );
+  });
+
+  it("hides Approve/Deny/Revoke on support access without settings.update", async () => {
+    mockedUseAuth.mockReturnValue(authUser());
+    mockedUseOrganization.mockReturnValue({
+      ...baseOrganization(),
+      hasPermission: vi.fn((permission: string) => permission === "settings.read")
+    });
+
+    const { selectMock: settingsSelect } = mockReadableSettings([]);
+    const { selectMock: skillsSelect } = mockReadableLookup([]);
+    const { selectMock: languagesSelect } = mockReadableLookup([]);
+    const { selectMock: documentTypesSelect } = mockReadableDocumentTypes([]);
+    mockedFrom.mockImplementation((table: string) => {
+      if (table === "skills") return { select: skillsSelect } as never;
+      if (table === "languages") return { select: languagesSelect } as never;
+      if (table === "document_types") return { select: documentTypesSelect } as never;
+      return { select: settingsSelect } as never;
+    });
+    mockedRpc.mockImplementation((fn: string) => {
+      if (fn === "list_support_access_grants") {
+        return Promise.resolve({ data: [supportAccessGrant], error: null }) as never;
+      }
+      return Promise.resolve({ data: [], error: null }) as never;
+    });
+
+    renderPage();
+
+    await waitFor(() => expect(screen.getByText("Investigating a billing ticket")).toBeInTheDocument());
+    const supportAccessCard = screen.getByText("Support access").closest("div")!;
+    expect(within(supportAccessCard).queryByRole("button", { name: "Approve" })).not.toBeInTheDocument();
+    expect(within(supportAccessCard).queryByRole("button", { name: "Deny" })).not.toBeInTheDocument();
   });
 });

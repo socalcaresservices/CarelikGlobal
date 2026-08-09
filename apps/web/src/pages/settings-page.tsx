@@ -1,6 +1,6 @@
 import { useState, type FormEvent } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Card, Button } from "@carelik/ui";
+import { Card, Button, StatusBadge, type StatusTone } from "@carelik/ui";
 import { useOrganization } from "@/providers/organization-provider";
 import { useAuth } from "@carelik/auth";
 import { supabase } from "@/lib/supabase";
@@ -493,6 +493,170 @@ function previewValue(value: unknown) {
   return text.length > 80 ? `${text.slice(0, 80)}…` : text;
 }
 
+// Mirrors public.support_access_status (supabase/migrations/20260807000000_support_access.sql).
+type SupportAccessStatus = "requested" | "active" | "expired" | "revoked" | "denied";
+
+interface SupportAccessGrant {
+  id: string;
+  organization_id: string;
+  grantee_user_id: string;
+  requested_by: string;
+  reason: string;
+  status: SupportAccessStatus;
+  requested_minutes: number;
+  approved_by: string | null;
+  approved_at: string | null;
+  expires_at: string | null;
+  revoked_by: string | null;
+  revoked_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+const SUPPORT_ACCESS_STATUS: Record<SupportAccessStatus, { label: string; tone: StatusTone }> = {
+  requested: { label: "Requested", tone: "info" },
+  active: { label: "Active", tone: "success" },
+  expired: { label: "Expired", tone: "neutral" },
+  revoked: { label: "Revoked", tone: "neutral" },
+  denied: { label: "Denied", tone: "danger" }
+};
+
+// A grant's `status` column never flips to 'expired' on its own - it
+// stays 'active' after expires_at passes until someone revokes it (see
+// has_active_support_access(), which checks both together). Derives the
+// display-only distinction so a lapsed grant doesn't keep reading "Active"
+// with an Approve/Deny/Revoke row that no longer means anything.
+function isEffectivelyExpired(grant: SupportAccessGrant) {
+  return grant.status === "active" && grant.expires_at !== null && new Date(grant.expires_at) <= new Date();
+}
+
+// Approve/deny/revoke for CareLik staff requesting time-boxed access into
+// this organization (see organizations-page.tsx's SupportAccessPanel for
+// the platform-side request UI). Gated on settings.update, same
+// permission approve_support_access/deny_support_access/
+// revoke_support_access check server-side - canManage here is purely
+// about which buttons render, the RPCs re-check permission themselves.
+function SupportAccessCard({
+  organizationId,
+  canRead,
+  canManage
+}: {
+  organizationId: string | null | undefined;
+  canRead: boolean;
+  canManage: boolean;
+}) {
+  const queryClient = useQueryClient();
+  const [pendingId, setPendingId] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
+
+  const grantsQuery = useQuery({
+    queryKey: ["support-access-grants", organizationId],
+    queryFn: async () => {
+      const { data, error } = await supabase.rpc("list_support_access_grants", {
+        target_organization_id: organizationId!
+      });
+      if (error) throw error;
+      return (data ?? []) as SupportAccessGrant[];
+    },
+    enabled: !!organizationId && canRead
+  });
+
+  function refresh() {
+    void queryClient.invalidateQueries({ queryKey: ["support-access-grants", organizationId] });
+  }
+
+  async function runAction(grantId: string, rpc: "approve_support_access" | "deny_support_access" | "revoke_support_access", failureMessage: string) {
+    setActionError(null);
+    setPendingId(grantId);
+    try {
+      const { error } = await supabase.rpc(rpc, { grant_id: grantId });
+      if (error) throw error;
+      refresh();
+    } catch (cause) {
+      setActionError(cause instanceof Error ? cause.message : failureMessage);
+    } finally {
+      setPendingId(null);
+    }
+  }
+
+  if (!canRead) return null;
+
+  const grants = grantsQuery.data ?? [];
+
+  return (
+    <Card>
+      <h3 className="font-semibold text-slate-950">Support access</h3>
+      <p className="mt-1 text-xs text-slate-500">
+        When CareLik staff need to look into an issue for your account, they request time-boxed access here -
+        nothing is granted until you approve it, and you can revoke it early at any time.
+      </p>
+      {actionError ? <p className="mt-2 text-sm text-red-700">{actionError}</p> : null}
+      {grantsQuery.isLoading ? (
+        <p className="mt-3 text-sm text-slate-500">Loading…</p>
+      ) : grantsQuery.isError ? (
+        <p className="mt-3 text-sm text-red-700">Could not load support access requests.</p>
+      ) : grants.length === 0 ? (
+        <p className="mt-3 text-sm text-slate-400">No support access has been requested.</p>
+      ) : (
+        <ul className="mt-4 divide-y divide-slate-100">
+          {grants.map((grant) => {
+            const expired = isEffectivelyExpired(grant);
+            const display = expired ? { label: "Expired", tone: "neutral" as const } : SUPPORT_ACCESS_STATUS[grant.status];
+            return (
+              <li key={grant.id} className="flex flex-wrap items-center justify-between gap-3 py-3">
+                <div>
+                  <p className="text-sm text-slate-800">{grant.reason}</p>
+                  <p className="text-xs text-slate-500">
+                    Requested {new Date(grant.created_at).toLocaleString()}
+                    {grant.expires_at
+                      ? ` · ${expired ? "expired" : "expires"} ${new Date(grant.expires_at).toLocaleString()}`
+                      : ""}
+                  </p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <StatusBadge label={display.label} tone={display.tone} />
+                  {canManage && grant.status === "requested" ? (
+                    <>
+                      <Button
+                        type="button"
+                        size="sm"
+                        loading={pendingId === grant.id}
+                        onClick={() => runAction(grant.id, "approve_support_access", "Could not approve this request.")}
+                      >
+                        Approve
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        loading={pendingId === grant.id}
+                        onClick={() => runAction(grant.id, "deny_support_access", "Could not deny this request.")}
+                      >
+                        Deny
+                      </Button>
+                    </>
+                  ) : null}
+                  {canManage && grant.status === "active" && !expired ? (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      loading={pendingId === grant.id}
+                      onClick={() => runAction(grant.id, "revoke_support_access", "Could not revoke this access.")}
+                    >
+                      Revoke
+                    </Button>
+                  ) : null}
+                </div>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+    </Card>
+  );
+}
+
 export function SettingsPage() {
   const { activeOrganizationId, activeOrganization, hasPermission } = useOrganization();
   const { user } = useAuth();
@@ -622,6 +786,8 @@ export function SettingsPage() {
           {activeOrganization?.displayName ?? "Organization settings"}
         </h2>
       </div>
+
+      <SupportAccessCard organizationId={activeOrganizationId} canRead={canRead} canManage={canUpdate} />
 
       {canUpdate ? (
         <Card>

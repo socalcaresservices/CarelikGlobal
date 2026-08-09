@@ -1,10 +1,12 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { useAuth } from "@carelik/auth";
 import { useOrganization } from "@/providers/organization-provider";
 import { supabase } from "@/lib/supabase";
 import { OrganizationsPage } from "./organizations-page";
 
+vi.mock("@carelik/auth", () => ({ useAuth: vi.fn() }));
 vi.mock("@/providers/organization-provider", () => ({ useOrganization: vi.fn() }));
 vi.mock("@/lib/supabase", () => ({
   supabase: {
@@ -12,8 +14,24 @@ vi.mock("@/lib/supabase", () => ({
   }
 }));
 
+const mockedUseAuth = vi.mocked(useAuth);
 const mockedUseOrganization = vi.mocked(useOrganization);
 const mockedRpc = vi.mocked(supabase.rpc);
+
+const PLATFORM_USER_ID = "33333333-3333-4333-8333-333333333333";
+
+function authUser() {
+  return {
+    user: { id: PLATFORM_USER_ID } as never,
+    session: {} as never,
+    loading: false,
+    signInWithGithub: vi.fn(),
+    signInWithPassword: vi.fn(),
+    resetPasswordForEmail: vi.fn(),
+    updatePassword: vi.fn(),
+    signOut: vi.fn()
+  };
+}
 
 function renderPage() {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
@@ -46,6 +64,7 @@ describe("OrganizationsPage", () => {
   });
 
   it("shows a not-available message for a non-platform-owner", () => {
+    mockedUseAuth.mockReturnValue(authUser());
     mockedUseOrganization.mockReturnValue({ isPlatformOwner: false } as never);
 
     renderPage();
@@ -54,6 +73,7 @@ describe("OrganizationsPage", () => {
   });
 
   it("lists organizations from list_platform_organizations for a platform owner", async () => {
+    mockedUseAuth.mockReturnValue(authUser());
     mockedUseOrganization.mockReturnValue({ isPlatformOwner: true } as never);
     mockedRpc.mockResolvedValue({ data: [registryRow], error: null } as never);
 
@@ -71,6 +91,7 @@ describe("OrganizationsPage", () => {
   });
 
   it("shows an empty state when there are no organizations", async () => {
+    mockedUseAuth.mockReturnValue(authUser());
     mockedUseOrganization.mockReturnValue({ isPlatformOwner: true } as never);
     mockedRpc.mockResolvedValue({ data: [], error: null } as never);
 
@@ -80,6 +101,7 @@ describe("OrganizationsPage", () => {
   });
 
   it("shows an error message when the registry fails to load", async () => {
+    mockedUseAuth.mockReturnValue(authUser());
     mockedUseOrganization.mockReturnValue({ isPlatformOwner: true } as never);
     mockedRpc.mockResolvedValue({ data: null, error: new Error("boom") } as never);
 
@@ -87,6 +109,107 @@ describe("OrganizationsPage", () => {
 
     await waitFor(() =>
       expect(screen.getByText("Could not load the organization registry.")).toBeInTheDocument()
+    );
+  });
+
+  it("requests support access for an organization and hides the form once an open request exists", async () => {
+    mockedUseAuth.mockReturnValue(authUser());
+    mockedUseOrganization.mockReturnValue({ isPlatformOwner: true } as never);
+
+    const openGrant = {
+      id: "grant-1",
+      organization_id: registryRow.organization_id,
+      grantee_user_id: PLATFORM_USER_ID,
+      requested_by: PLATFORM_USER_ID,
+      reason: "Investigating a billing ticket",
+      status: "requested" as const,
+      requested_minutes: 60,
+      approved_by: null,
+      approved_at: null,
+      expires_at: null,
+      revoked_by: null,
+      revoked_at: null,
+      created_at: "2026-08-01T00:00:00.000Z",
+      updated_at: "2026-08-01T00:00:00.000Z"
+    };
+
+    let grantsCall = 0;
+    mockedRpc.mockImplementation((fn: string) => {
+      if (fn === "list_platform_organizations") {
+        return Promise.resolve({ data: [registryRow], error: null }) as never;
+      }
+      if (fn === "list_support_access_grants") {
+        grantsCall += 1;
+        return Promise.resolve({ data: grantsCall === 1 ? [] : [openGrant], error: null }) as never;
+      }
+      if (fn === "request_support_access") {
+        return Promise.resolve({ data: openGrant, error: null }) as never;
+      }
+      return Promise.resolve({ data: [], error: null }) as never;
+    });
+
+    renderPage();
+
+    fireEvent.click(await screen.findByRole("button", { name: "Support access" }));
+    await waitFor(() => expect(screen.getByLabelText(/Reason/)).toBeInTheDocument());
+
+    fireEvent.change(screen.getByLabelText(/Reason/), {
+      target: { value: "Investigating a billing ticket" }
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Request access" }));
+
+    await waitFor(() =>
+      expect(mockedRpc).toHaveBeenCalledWith("request_support_access", {
+        target_organization_id: registryRow.organization_id,
+        access_reason: "Investigating a billing ticket",
+        minutes: 60
+      })
+    );
+    await waitFor(() => expect(screen.getByText("Investigating a billing ticket")).toBeInTheDocument());
+    expect(screen.queryByRole("button", { name: "Request access" })).not.toBeInTheDocument();
+  });
+
+  it("revokes the current user's own open support access grant", async () => {
+    mockedUseAuth.mockReturnValue(authUser());
+    mockedUseOrganization.mockReturnValue({ isPlatformOwner: true } as never);
+
+    const ownGrant = {
+      id: "grant-1",
+      organization_id: registryRow.organization_id,
+      grantee_user_id: PLATFORM_USER_ID,
+      requested_by: PLATFORM_USER_ID,
+      reason: "Investigating a billing ticket",
+      status: "active" as const,
+      requested_minutes: 60,
+      approved_by: "someone-else",
+      approved_at: "2026-08-01T00:05:00.000Z",
+      expires_at: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
+      revoked_by: null,
+      revoked_at: null,
+      created_at: "2026-08-01T00:00:00.000Z",
+      updated_at: "2026-08-01T00:05:00.000Z"
+    };
+
+    mockedRpc.mockImplementation((fn: string) => {
+      if (fn === "list_platform_organizations") {
+        return Promise.resolve({ data: [registryRow], error: null }) as never;
+      }
+      if (fn === "list_support_access_grants") {
+        return Promise.resolve({ data: [ownGrant], error: null }) as never;
+      }
+      if (fn === "revoke_support_access") {
+        return Promise.resolve({ data: { ...ownGrant, status: "revoked" }, error: null }) as never;
+      }
+      return Promise.resolve({ data: [], error: null }) as never;
+    });
+
+    renderPage();
+
+    fireEvent.click(await screen.findByRole("button", { name: "Support access" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Revoke" }));
+
+    await waitFor(() =>
+      expect(mockedRpc).toHaveBeenCalledWith("revoke_support_access", { grant_id: "grant-1" })
     );
   });
 });
