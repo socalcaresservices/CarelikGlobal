@@ -179,7 +179,7 @@ describe("AuthProvider / useAuth", () => {
     await waitFor(() =>
       expect(client.auth.resetPasswordForEmail).toHaveBeenCalledWith(
         "a@example.com",
-        expect.objectContaining({ redirectTo: expect.stringContaining("/set-password") })
+        expect.objectContaining({ redirectTo: expect.stringContaining("/reset-password") })
       )
     );
   });

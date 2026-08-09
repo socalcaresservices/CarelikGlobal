@@ -3,6 +3,7 @@ import { Navigate, useLocation } from "react-router-dom";
 import { Github } from "lucide-react";
 import { useAuth } from "@carelik/auth";
 import { Button, Card } from "@carelik/ui";
+import { getAuthErrorMessage } from "@/lib/auth-errors";
 
 interface LocationState {
   from?: { pathname: string };
@@ -37,7 +38,7 @@ export function LoginPage() {
     try {
       await signInWithGithub();
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Sign-in failed. Try again.");
+      setError(getAuthErrorMessage(cause, "Sign-in failed. Try again."));
       setGithubSubmitting(false);
     }
   }
@@ -49,7 +50,7 @@ export function LoginPage() {
     try {
       await signInWithPassword(email, password);
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Sign-in failed. Check your email and password.");
+      setError(getAuthErrorMessage(cause, "Sign-in failed. Check your email and password."));
     } finally {
       setSubmitting(false);
     }
@@ -63,7 +64,7 @@ export function LoginPage() {
       await resetPasswordForEmail(email);
       setResetSent(true);
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Could not send a reset email. Try again.");
+      setError(getAuthErrorMessage(cause, "Could not send a reset email. Try again."));
     } finally {
       setSubmitting(false);
     }

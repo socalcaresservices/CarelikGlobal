@@ -2,6 +2,7 @@ import { useState, type FormEvent } from "react";
 import { Navigate } from "react-router-dom";
 import { useAuth } from "@carelik/auth";
 import { Button, Card } from "@carelik/ui";
+import { getAuthErrorMessage } from "@/lib/auth-errors";
 
 const MIN_PASSWORD_LENGTH = 8;
 
@@ -58,7 +59,7 @@ export function SetPasswordPage() {
       await updatePassword(password);
       setDone(true);
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Could not set password. Try again.");
+      setError(getAuthErrorMessage(cause, "Could not set password. Try again."));
     } finally {
       setSubmitting(false);
     }

@@ -22,7 +22,8 @@ interface AuthContextValue {
   /**
    * Sends a password-reset email. Same underlying Supabase mechanism as
    * invite-member's invite email (a link that creates a temporary
-   * session), so both flows land on the same set-password page.
+   * session), but lands on /reset-password rather than /set-password -
+   * a reset should sign the user back out afterward, an invite shouldn't.
    */
   resetPasswordForEmail: (email: string, redirectTo?: string) => Promise<void>;
   /**
@@ -85,7 +86,7 @@ export function AuthProvider({
       },
       resetPasswordForEmail: async (email, redirectTo) => {
         const { error } = await client.auth.resetPasswordForEmail(email, {
-          redirectTo: redirectTo ?? `${window.location.origin}/set-password`
+          redirectTo: redirectTo ?? `${window.location.origin}/reset-password`
         });
         if (error) throw error;
       },
