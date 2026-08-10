@@ -5,6 +5,7 @@ import { useOrganization } from "@/providers/organization-provider";
 import { useAuth } from "@carelik/auth";
 import { supabase } from "@/lib/supabase";
 import { BillingSummaryCard } from "@/components/billing-summary-card";
+import { OrganizationBrandingCard } from "@/components/organization-branding-card";
 
 // Skills and languages are org-scoped lookup catalogs (same shape as the
 // service catalog, Build 003) that feed the picker on caregiver and
@@ -901,6 +902,12 @@ export function SettingsPage() {
           {activeOrganization?.displayName ?? "Organization settings"}
         </h2>
       </div>
+
+      <OrganizationBrandingCard
+        organizationId={activeOrganizationId}
+        canRead={hasPermission("organization.read")}
+        canManage={hasPermission("organization.update")}
+      />
 
       <BillingSummaryCard organizationId={activeOrganizationId} canRead={canRead} />
 
