@@ -43,6 +43,17 @@ function availableHours(option: AssignmentOption): number | null {
   return Math.max(0, option.max_monthly_hours - option.hours_used_this_month - option.hours_scheduled_this_month);
 }
 
+// A quick-scan visual anchor on the client list - same idea as the
+// service color dot, just derived from the client's own id (services
+// pick their own color; clients don't have one to reuse) so the same
+// client always lands on the same color across sessions.
+const AVATAR_PALETTE = ["#0F8B8D", "#0F172A", "#B45309", "#15803D", "#7C3AED", "#B91C1C"];
+function avatarColor(id: string): string {
+  let hash = 0;
+  for (let i = 0; i < id.length; i += 1) hash = (hash * 31 + id.charCodeAt(i)) >>> 0;
+  return AVATAR_PALETTE[hash % AVATAR_PALETTE.length]!;
+}
+
 function defaultStart() {
   const date = new Date();
   date.setMinutes(0, 0, 0);
@@ -213,24 +224,32 @@ export function StaffVisitsPage() {
       </div>
 
       <ol className="flex items-center gap-2" aria-label="Scheduling steps">
-        {([1, 2, 3, 4] as Step[]).map((value) => (
-          <li key={value} className="flex flex-1 items-center gap-2">
-            <span
-              className={cn(
-                "flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-sm font-semibold",
-                step === value
-                  ? "bg-[var(--routing-teal)] text-white"
-                  : step > value
-                    ? "bg-[var(--routing-teal)]/20 text-[var(--routing-teal)]"
-                    : "bg-slate-100 text-slate-400"
-              )}
-              aria-current={step === value ? "step" : undefined}
-            >
-              {step > value ? <Check className="h-4 w-4" /> : value}
-            </span>
-            {value < 4 ? <span className="h-0.5 flex-1 bg-slate-100" /> : null}
-          </li>
-        ))}
+        {([1, 2, 3, 4] as Step[]).map((value) => {
+          const canJumpBack = step > value && (value > 1 ? !!selectedClientId : true) && (value > 2 ? !!selectedAssignment : true);
+          return (
+            <li key={value} className="flex flex-1 items-center gap-2">
+              <button
+                type="button"
+                disabled={!canJumpBack}
+                onClick={() => canJumpBack && setStep(value)}
+                aria-label={`Go back to step ${value}: ${stepLabels[value]}`}
+                className={cn(
+                  "flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-sm font-semibold",
+                  step === value
+                    ? "bg-[var(--routing-teal)] text-white"
+                    : step > value
+                      ? "bg-[var(--routing-teal)]/20 text-[var(--routing-teal)]"
+                      : "bg-slate-100 text-slate-400",
+                  canJumpBack ? "cursor-pointer" : "cursor-default"
+                )}
+                aria-current={step === value ? "step" : undefined}
+              >
+                {step > value ? <Check className="h-4 w-4" /> : value}
+              </button>
+              {value < 4 ? <span className="h-0.5 flex-1 bg-slate-100" /> : null}
+            </li>
+          );
+        })}
       </ol>
       <p className="text-sm font-medium text-slate-600">Step {step} of 4 · {stepLabels[step]}</p>
 
@@ -260,13 +279,20 @@ export function StaffVisitsPage() {
                 setSelectedAssignment(null);
                 setStep(2);
               }}
-              className="flex w-full min-h-[44px] items-center justify-between rounded-xl border border-slate-200 bg-white px-4 py-3.5 text-left shadow-sm hover:border-[var(--routing-teal)]"
+              className="flex w-full min-h-[44px] items-center gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3.5 text-left shadow-sm hover:border-[var(--routing-teal)]"
             >
-              <span>
-                <span className="block text-sm font-semibold text-[var(--routing-navy)]">{client.client_name}</span>
+              <span
+                aria-hidden
+                className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-base font-semibold text-white"
+                style={{ backgroundColor: avatarColor(client.client_id) }}
+              >
+                {client.client_name.trim().charAt(0).toUpperCase() || "?"}
+              </span>
+              <span className="min-w-0 flex-1">
+                <span className="block truncate text-sm font-semibold text-[var(--routing-navy)]">{client.client_name}</span>
                 <span className="block text-xs text-slate-500">{client.client_code}</span>
               </span>
-              <ChevronLeft className="h-4 w-4 rotate-180 text-slate-400" />
+              <ChevronLeft className="h-4 w-4 shrink-0 rotate-180 text-slate-400" />
             </button>
           ))}
         </div>
@@ -353,6 +379,33 @@ export function StaffVisitsPage() {
                 className="mt-1 w-full min-h-[44px] rounded-lg border border-slate-200 px-3 py-2 text-base text-slate-900"
               />
             </div>
+            {(() => {
+              const start = new Date(startsAt);
+              const end = new Date(endsAt);
+              if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime()) || end.getTime() <= start.getTime()) {
+                return null;
+              }
+              const duration = (end.getTime() - start.getTime()) / 3_600_000;
+              const available = availableHours(selectedAssignment);
+              const overCap = available !== null && duration > available;
+              return (
+                <div
+                  className={cn(
+                    "rounded-lg px-3 py-2.5 text-sm",
+                    overCap ? "bg-red-50 text-[var(--routing-danger)]" : "bg-[var(--routing-teal)]/10 text-[var(--routing-navy)]"
+                  )}
+                >
+                  <span className="font-semibold">{formatHours(duration)}h</span> this visit
+                  {available !== null ? (
+                    <>
+                      {" "}
+                      · <span className="font-semibold">{formatHours(available)}h</span> available this month
+                      {overCap ? " — this exceeds what's left" : ""}
+                    </>
+                  ) : null}
+                </div>
+              );
+            })()}
             {submitError ? <p className="text-sm text-[var(--routing-danger)]">{submitError}</p> : null}
           </div>
         </Card>

@@ -124,6 +124,45 @@ describe("StaffVisitsPage", () => {
     expect(screen.getByText("verification page")).toBeInTheDocument();
   });
 
+  it("lets a caregiver tap a completed step to jump back", async () => {
+    mockedUseOrganization.mockReturnValue(baseOrganization() as never);
+    mockedRpc.mockResolvedValue({ data: [assignedOption], error: null } as never);
+
+    renderPage();
+
+    await waitFor(() => expect(screen.getByText("Jordan Rivera")).toBeInTheDocument());
+    fireEvent.click(screen.getByText("Jordan Rivera"));
+    await waitFor(() => expect(screen.getByText("862 · Personal care")).toBeInTheDocument());
+    fireEvent.click(screen.getByText("862 · Personal care"));
+    await waitFor(() => expect(screen.getByLabelText("Starts")).toBeInTheDocument());
+
+    fireEvent.click(screen.getByRole("button", { name: "Go back to step 1: Client" }));
+    await waitFor(() => expect(screen.getByText("Jordan Rivera")).toBeInTheDocument());
+  });
+
+  it("shows a live duration and remaining-hours preview while picking a time, flagging when it exceeds what's left", async () => {
+    mockedUseOrganization.mockReturnValue(baseOrganization() as never);
+    mockedRpc.mockResolvedValue({ data: [assignedOption], error: null } as never);
+
+    renderPage();
+
+    await waitFor(() => expect(screen.getByText("Jordan Rivera")).toBeInTheDocument());
+    fireEvent.click(screen.getByText("Jordan Rivera"));
+    await waitFor(() => expect(screen.getByText("862 · Personal care")).toBeInTheDocument());
+    fireEvent.click(screen.getByText("862 · Personal care"));
+    await waitFor(() => expect(screen.getByLabelText("Starts")).toBeInTheDocument());
+
+    // assignedOption: 40h/mo cap, 10h used + 5h scheduled = 25h available.
+    fireEvent.change(screen.getByLabelText("Starts"), { target: { value: "2026-09-01T09:00" } });
+    fireEvent.change(screen.getByLabelText("Ends"), { target: { value: "2026-09-01T11:00" } });
+    await waitFor(() => expect(screen.getByText(/2h/)).toBeInTheDocument());
+    expect(screen.getByText(/25h/)).toBeInTheDocument();
+    expect(screen.queryByText(/exceeds what's left/)).not.toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText("Ends"), { target: { value: "2026-09-02T12:00" } });
+    await waitFor(() => expect(screen.getByText(/exceeds what's left/)).toBeInTheDocument());
+  });
+
   it("disables a service with no active authorization and shows why", async () => {
     mockedUseOrganization.mockReturnValue(baseOrganization() as never);
     mockedRpc.mockImplementation((fn: string) => {
