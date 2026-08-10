@@ -6,7 +6,7 @@ describe("resolveTenant", () => {
     expect(resolveTenant(undefined)).toEqual({ type: "platform" });
   });
 
-  it.each(["carelik.com", "localhost", "platform.carelik.com"])(
+  it.each(["ogevia.com", "carelik.com", "localhost", "platform.ogevia.com", "platform.carelik.com"])(
     "treats %s as platform",
     (hostname) => {
       expect(resolveTenant(hostname)).toEqual({ type: "platform" });
@@ -15,10 +15,16 @@ describe("resolveTenant", () => {
 
   it("strips the port before resolving", () => {
     expect(resolveTenant("localhost:5173")).toEqual({ type: "platform" });
-    expect(resolveTenant("acme.carelik.com:5173")).toEqual({ type: "tenant", slug: "acme" });
+    expect(resolveTenant("acme.ogevia.com:5173")).toEqual({ type: "tenant", slug: "acme" });
   });
 
-  it("resolves a {slug}.carelik.com host to a tenant", () => {
+  it("resolves a {slug}.ogevia.com host to a tenant", () => {
+    expect(resolveTenant("acme.ogevia.com")).toEqual({ type: "tenant", slug: "acme" });
+  });
+
+  // carelik.com stays live alongside ogevia.com during the rebrand - see
+  // the OWN_DOMAIN_SUFFIXES comment in tenant-resolver.ts.
+  it("still resolves a {slug}.carelik.com host to a tenant during the rebrand", () => {
     expect(resolveTenant("acme.carelik.com")).toEqual({ type: "tenant", slug: "acme" });
   });
 
@@ -27,14 +33,14 @@ describe("resolveTenant", () => {
   });
 
   it.each(["platform", "www", "admin", "api"])(
-    "treats the reserved subdomain %s.carelik.com as platform, not a tenant slug",
+    "treats the reserved subdomain %s.ogevia.com as platform, not a tenant slug",
     (subdomain) => {
-      expect(resolveTenant(`${subdomain}.carelik.com`)).toEqual({ type: "platform" });
+      expect(resolveTenant(`${subdomain}.ogevia.com`)).toEqual({ type: "platform" });
     }
   );
 
   it("does not treat a nested subdomain as a valid tenant slug", () => {
-    expect(resolveTenant("a.b.carelik.com")).toEqual({ type: "platform" });
+    expect(resolveTenant("a.b.ogevia.com")).toEqual({ type: "platform" });
   });
 
   // Regression: the original implementation guessed a tenant slug from
@@ -51,13 +57,19 @@ describe("resolveTenant", () => {
 });
 
 describe("isOwnDomain", () => {
-  it("is true for CareLik's own hosts", () => {
+  it("is true for Ogevia's own hosts", () => {
     expect(isOwnDomain(undefined)).toBe(true);
-    expect(isOwnDomain("carelik.com")).toBe(true);
+    expect(isOwnDomain("ogevia.com")).toBe(true);
     expect(isOwnDomain("localhost")).toBe(true);
+    expect(isOwnDomain("platform.ogevia.com")).toBe(true);
+    expect(isOwnDomain("acme.ogevia.com")).toBe(true);
+    expect(isOwnDomain("acme.localhost")).toBe(true);
+  });
+
+  it("is still true for carelik.com hosts during the rebrand", () => {
+    expect(isOwnDomain("carelik.com")).toBe(true);
     expect(isOwnDomain("platform.carelik.com")).toBe(true);
     expect(isOwnDomain("acme.carelik.com")).toBe(true);
-    expect(isOwnDomain("acme.localhost")).toBe(true);
   });
 
   it("is false for a hostname that could be a tenant's custom domain", () => {
@@ -71,10 +83,10 @@ describe("toPlatformUrl / toTenantUrl", () => {
   // build from window.location.protocol/port, so that's what shows up
   // here rather than a hardcoded https with no port.
   it("builds a platform URL from the current protocol and port", () => {
-    expect(toPlatformUrl("/organizations")).toBe("http://platform.carelik.com:3000/organizations");
+    expect(toPlatformUrl("/organizations")).toBe("http://platform.ogevia.com:3000/organizations");
   });
 
   it("builds a tenant URL for a given slug", () => {
-    expect(toTenantUrl("acme", "/settings")).toBe("http://acme.carelik.com:3000/settings");
+    expect(toTenantUrl("acme", "/settings")).toBe("http://acme.ogevia.com:3000/settings");
   });
 });

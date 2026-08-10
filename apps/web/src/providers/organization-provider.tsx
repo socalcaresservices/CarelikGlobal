@@ -55,7 +55,7 @@ export function OrganizationProvider({
    * from a previous visit, regardless of which tenant's hostname they
    * actually navigated to - the exact bug found live 2026-08-09: the
    * custom-domain lookup correctly resolved to Socal Care Services llc,
-   * but the app still showed CareLik because that was this browser's
+   * but the app still showed the wrong org because that was this browser's
    * last-active org from unrelated local testing.
    */
   tenantSlug?: string | undefined;

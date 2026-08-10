@@ -252,21 +252,21 @@ describe("UploadPage", () => {
     expect(screen.getByText("Upload file")).toHaveStyle({ backgroundColor: "#ff6600" });
   });
 
-  it("shows the Secured by CareLik footer by default", async () => {
+  it("shows the Secured by Ogevia footer by default", async () => {
     mockRpcByFn();
 
     renderAt("/upload/valid-token");
 
     await waitFor(() => expect(screen.getByText("Acme Home Care")).toBeInTheDocument());
-    expect(screen.getByText("Secured by CareLik")).toBeInTheDocument();
+    expect(screen.getByText("Secured by Ogevia")).toBeInTheDocument();
   });
 
-  it("hides the Secured by CareLik footer when the organization has turned it off", async () => {
+  it("hides the Secured by Ogevia footer when the organization has turned it off", async () => {
     mockRpcByFn({ batch: [{ ...BATCH, organization_show_powered_by: false }] });
 
     renderAt("/upload/valid-token");
 
     await waitFor(() => expect(screen.getByText("Acme Home Care")).toBeInTheDocument());
-    expect(screen.queryByText("Secured by CareLik")).not.toBeInTheDocument();
+    expect(screen.queryByText("Secured by Ogevia")).not.toBeInTheDocument();
   });
 });

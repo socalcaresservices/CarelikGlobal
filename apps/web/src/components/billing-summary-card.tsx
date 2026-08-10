@@ -194,8 +194,8 @@ export function BillingSummaryCard({
       {readOnly ? (
         <div className="mt-3 rounded-lg bg-red-50 px-3 py-2.5 text-sm text-red-800">
           {summary.effectiveStatus === "trial_expired"
-            ? "Your trial has ended. Existing clients, visits, and signed records remain available to view, print, and export - contact your CareLik platform administrator to upgrade and keep adding new ones."
-            : "This subscription is not active. Existing records remain available to view, print, and export - contact your CareLik platform administrator to reactivate."}
+            ? "Your trial has ended. Existing clients, visits, and signed records remain available to view, print, and export - contact your Ogevia platform administrator to upgrade and keep adding new ones."
+            : "This subscription is not active. Existing records remain available to view, print, and export - contact your Ogevia platform administrator to reactivate."}
         </div>
       ) : null}
 
@@ -261,7 +261,7 @@ export function BillingSummaryCard({
 
       <div className="mt-5 border-t border-slate-100 pt-4">
         <a
-          href="mailto:support@carelik.com?subject=Upgrade%20my%20CareLik%20plan"
+          href="mailto:admin.ogevia@gmail.com?subject=Upgrade%20my%20Ogevia%20plan"
           className="inline-flex min-h-[44px] items-center justify-center rounded-lg bg-[var(--color-accent,#0f172a)] px-4 py-2.5 text-sm font-medium text-[var(--color-accent-foreground,#ffffff)]"
         >
           Contact us to upgrade or manage your subscription

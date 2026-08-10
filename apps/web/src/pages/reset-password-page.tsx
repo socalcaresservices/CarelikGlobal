@@ -121,7 +121,7 @@ export function ResetPasswordPage() {
     return (
       <div className="flex min-h-screen items-center justify-center bg-slate-50 px-4">
         <Card className="w-full max-w-sm">
-          <p className="text-sm font-medium text-slate-500">CareLik Global</p>
+          <p className="text-sm font-medium text-slate-500">Ogevia</p>
           <h1 className="mt-1 text-2xl font-semibold text-slate-950">Link expired</h1>
           <p className="mt-3 text-sm text-slate-600">
             {error ?? "This password reset link is no longer valid."} Request a new one from the sign-in page.
@@ -141,7 +141,7 @@ export function ResetPasswordPage() {
     return (
       <div className="flex min-h-screen items-center justify-center bg-slate-50 px-4">
         <Card className="w-full max-w-sm">
-          <p className="text-sm font-medium text-slate-500">CareLik Global</p>
+          <p className="text-sm font-medium text-slate-500">Ogevia</p>
           <h1 className="mt-1 text-2xl font-semibold text-slate-950">Password updated</h1>
           <p className="mt-3 text-sm text-slate-600">
             Your password has been changed. Sign in with your new password to continue.

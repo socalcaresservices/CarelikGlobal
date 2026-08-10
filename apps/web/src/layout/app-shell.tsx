@@ -244,7 +244,7 @@ export function AppShell({ children }: PropsWithChildren) {
                 Care operations
               </p>
               <h1 className="mt-1 text-xl font-semibold text-slate-950">
-                {activeOrganization?.displayName ?? "CareLik Global"}
+                {activeOrganization?.displayName ?? "Ogevia"}
               </h1>
             </>
           )}
@@ -303,7 +303,7 @@ export function AppShell({ children }: PropsWithChildren) {
             Sign out
           </button>
           {showPoweredBy ? (
-            <p className="mt-3 px-3 text-[11px] text-slate-400">Powered by CareLik</p>
+            <p className="mt-3 px-3 text-[11px] text-slate-400">Powered by Ogevia</p>
           ) : null}
         </div>
       </aside>

@@ -1,7 +1,7 @@
 /**
  * Platform Routes (carelik.com/platform.carelik.com)
  *
- * These routes are ONLY for platform super-admins who manage CareLik itself:
+ * These routes are ONLY for platform super-admins who manage Ogevia itself:
  * - Organization registry
  * - Subscriptions & billing
  * - Platform analytics

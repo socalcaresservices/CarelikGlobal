@@ -1,7 +1,7 @@
 /**
  * Platform App Shell (platform.carelik.com)
  *
- * Minimal shell for CareLik platform operations
+ * Minimal shell for Ogevia platform operations
  * Shows ONLY platform navigation:
  * - Organizations (registry)
  * - Feature Flags (system-wide)
@@ -63,7 +63,7 @@ export function PlatformShell({ children }: PropsWithChildren) {
         {/* Header */}
         <div className="border-b border-slate-200 px-6 py-5">
           <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
-            CareLik Platform
+            Ogevia Platform
           </p>
         </div>
 

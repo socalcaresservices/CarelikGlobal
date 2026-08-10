@@ -531,7 +531,7 @@ function isEffectivelyExpired(grant: SupportAccessGrant) {
   return grant.status === "active" && grant.expires_at !== null && new Date(grant.expires_at) <= new Date();
 }
 
-// Approve/deny/revoke for CareLik staff requesting time-boxed access into
+// Approve/deny/revoke for Ogevia staff requesting time-boxed access into
 // this organization (see organizations-page.tsx's SupportAccessPanel for
 // the platform-side request UI). Gated on settings.update, same
 // permission approve_support_access/deny_support_access/
@@ -588,7 +588,7 @@ function SupportAccessCard({
     <Card>
       <h3 className="font-semibold text-slate-950">Support access</h3>
       <p className="mt-1 text-xs text-slate-500">
-        When CareLik staff need to look into an issue for your account, they request time-boxed access here -
+        When Ogevia staff need to look into an issue for your account, they request time-boxed access here -
         nothing is granted until you approve it, and you can revoke it early at any time.
       </p>
       {actionError ? <p className="mt-2 text-sm text-red-700">{actionError}</p> : null}
@@ -736,8 +736,8 @@ function CustomDomainCard({
     <Card>
       <h3 className="font-semibold text-slate-950">Custom domain</h3>
       <p className="mt-1 text-xs text-slate-500">
-        Use your own domain instead of a carelik.com subdomain. After saving it here, point the domain's DNS at
-        CareLik and let us know so it can be added to hosting and issued a certificate - it won't work until both
+        Use your own domain instead of an ogevia.com subdomain. After saving it here, point the domain's DNS at
+        Ogevia and let us know so it can be added to hosting and issued a certificate - it won't work until both
         steps are done.
       </p>
       {domainQuery.isLoading ? (

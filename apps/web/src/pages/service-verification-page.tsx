@@ -542,7 +542,7 @@ export function ServiceVerificationPage() {
         <Card className="mx-auto max-w-xl space-y-6 p-4 sm:p-6">
           <div className="text-center">
             <p className="text-sm font-semibold uppercase tracking-wider text-sky-700">
-              {activeOrganization?.displayName ?? "CareLik"}
+              {activeOrganization?.displayName ?? "Ogevia"}
             </p>
             <h2 className="mt-2 text-2xl font-semibold">Confirm today&rsquo;s visit</h2>
           </div>

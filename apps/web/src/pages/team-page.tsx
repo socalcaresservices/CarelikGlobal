@@ -62,12 +62,12 @@ function formatHours(hours: number) {
 }
 
 // Reuses the existing sign-in route, not a new permanent public token -
-// anyone opening this link still has to authenticate as a real CareLik
+// anyone opening this link still has to authenticate as a real Ogevia
 // account before seeing any assignment. The message is deliberately
 // generic: no client name, code, or service ever goes in a share
 // message, since email/SMS aren't a secure channel for that.
 const STAFF_PORTAL_SHARE_MESSAGE =
-  "You have access to the CareLik staff portal. Open the secure link and sign in to view your assignments.";
+  "You have access to the Ogevia staff portal. Open the secure link and sign in to view your assignments.";
 
 function ShareStaffPortalCard() {
   const [copied, setCopied] = useState(false);
@@ -103,14 +103,14 @@ function ShareStaffPortalCard() {
       </div>
       <p className="mt-1 text-sm text-slate-500">
         Send a caregiver the sign-in link. The message never includes client names, codes, or schedules - only
-        someone who signs in with their own CareLik account sees their assignments.
+        someone who signs in with their own Ogevia account sees their assignments.
       </p>
       <div className="mt-3 flex flex-wrap gap-2">
         <Button type="button" variant="secondary" onClick={handleCopy}>
           {copied ? "Copied" : "Copy link"}
         </Button>
         <a
-          href={`mailto:?subject=${encodeURIComponent("CareLik staff portal access")}&body=${encodeURIComponent(`${STAFF_PORTAL_SHARE_MESSAGE}\n${portalLink}`)}`}
+          href={`mailto:?subject=${encodeURIComponent("Ogevia staff portal access")}&body=${encodeURIComponent(`${STAFF_PORTAL_SHARE_MESSAGE}\n${portalLink}`)}`}
           className="inline-flex items-center justify-center rounded-lg border border-slate-200 px-3.5 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
         >
           Email link

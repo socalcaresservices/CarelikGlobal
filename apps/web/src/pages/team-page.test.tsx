@@ -216,7 +216,7 @@ describe("TeamPage", () => {
     fireEvent.click(screen.getByRole("button", { name: "Copy link" }));
     await waitFor(() =>
       expect(writeText).toHaveBeenCalledWith(
-        expect.stringContaining("You have access to the CareLik staff portal")
+        expect.stringContaining("You have access to the Ogevia staff portal")
       )
     );
     expect(screen.getByRole("button", { name: "Copied" })).toBeInTheDocument();

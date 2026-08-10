@@ -305,7 +305,7 @@ export function UploadPage() {
         </Card>
 
         {batch.organization_show_powered_by !== false ? (
-          <p className="mt-4 text-center text-xs text-slate-400">Secured by CareLik</p>
+          <p className="mt-4 text-center text-xs text-slate-400">Secured by Ogevia</p>
         ) : null}
       </div>
     </div>

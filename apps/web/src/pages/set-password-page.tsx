@@ -31,7 +31,7 @@ export function SetPasswordPage() {
     return (
       <div className="flex min-h-screen items-center justify-center bg-slate-50 px-4">
         <Card className="w-full max-w-sm">
-          <p className="text-sm font-medium text-slate-500">CareLik Global</p>
+          <p className="text-sm font-medium text-slate-500">Ogevia</p>
           <h1 className="mt-1 text-2xl font-semibold text-slate-950">Link expired</h1>
           <p className="mt-3 text-sm text-slate-600">
             This invite or reset link is no longer valid. Ask your administrator to resend it, or request a new

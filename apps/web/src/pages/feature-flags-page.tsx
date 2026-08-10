@@ -10,7 +10,7 @@ import { supabase } from "@/lib/supabase";
 // write: platform owner only), and its schedule/configuration columns
 // were all pure scaffolding until this build. Write access is
 // platform-owner-only by design (see that migration's RLS policies) -
-// this is a rollout-control tool for CareLik itself (per-org beta
+// this is a rollout-control tool for Ogevia itself (per-org beta
 // access, global kill switches), not a self-service organization
 // setting, the same distinction organizations-page.tsx already draws
 // between "manage your own org's profile" and "manage every tenant."

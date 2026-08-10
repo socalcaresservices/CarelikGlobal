@@ -50,6 +50,6 @@ describe("CommandCenterPage", () => {
 
     render(<CommandCenterPage />);
 
-    expect(screen.getByText("CareLik Global")).toBeInTheDocument();
+    expect(screen.getByText("Ogevia")).toBeInTheDocument();
   });
 });

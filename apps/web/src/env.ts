@@ -17,7 +17,7 @@ const envSchema = z.object({
 
   VITE_APP_NAME: z
     .string()
-    .default("CareLik Global"),
+    .default("Ogevia"),
 
   VITE_APP_VERSION: z
     .string()

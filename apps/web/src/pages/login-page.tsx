@@ -80,7 +80,7 @@ export function LoginPage() {
     <div className="flex min-h-screen items-center justify-center bg-slate-50 px-4">
       <Card className="w-full max-w-sm">
         <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Care operations</p>
-        <h1 className="mt-1 text-2xl font-semibold text-slate-950">CareLik Global</h1>
+        <h1 className="mt-1 text-2xl font-semibold text-slate-950">Ogevia</h1>
         <p className="mt-2 text-sm text-slate-600">
           {mode === "forgot"
             ? "Enter your email and we'll send you a link to set a new password."

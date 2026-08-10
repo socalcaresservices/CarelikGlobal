@@ -18,7 +18,7 @@ export function CommandCenterPage() {
     <section className="mx-auto max-w-6xl space-y-8">
       <PageHeader
         eyebrow="Command Center"
-        title={activeOrganization?.displayName ?? "CareLik Global"}
+        title={activeOrganization?.displayName ?? "Ogevia"}
         description="What needs attention, and how things stand right now."
       />
 

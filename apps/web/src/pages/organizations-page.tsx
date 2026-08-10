@@ -288,7 +288,7 @@ export function OrganizationsPage() {
       <PageHeader
         eyebrow="Platform Administration"
         title={`${rows.length} organization${rows.length === 1 ? "" : "s"}`}
-        description="Every tenant on CareLik — plan, billing status, storage, seats, and account owner. Read-only: an organization's own profile is edited from within that tenant's Settings."
+        description="Every tenant on Ogevia — plan, billing status, storage, seats, and account owner. Read-only: an organization's own profile is edited from within that tenant's Settings."
       />
 
       <PlatformPlanManager />

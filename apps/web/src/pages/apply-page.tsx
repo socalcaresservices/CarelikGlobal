@@ -287,7 +287,7 @@ interface ApplyOrganization {
 // app-shell.tsx alone never covered.
 function PoweredByFooter({ show }: { show: boolean | undefined }) {
   if (show === false) return null;
-  return <p className="mt-4 text-center text-xs text-slate-400">Powered by CareLik</p>;
+  return <p className="mt-4 text-center text-xs text-slate-400">Powered by Ogevia</p>;
 }
 
 // CSS custom properties aren't part of React's CSSProperties type, so this

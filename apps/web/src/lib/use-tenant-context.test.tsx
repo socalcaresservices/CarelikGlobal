@@ -31,8 +31,8 @@ describe("useTenantContext", () => {
     vi.clearAllMocks();
   });
 
-  it("resolves a CareLik subdomain synchronously, without calling the RPC", () => {
-    setHostname("acme.carelik.com");
+  it("resolves an Ogevia subdomain synchronously, without calling the RPC", () => {
+    setHostname("acme.ogevia.com");
 
     const { result } = renderTenantContext();
 
@@ -41,7 +41,7 @@ describe("useTenantContext", () => {
   });
 
   it("resolves the platform host synchronously, without calling the RPC", () => {
-    setHostname("platform.carelik.com");
+    setHostname("platform.ogevia.com");
 
     const { result } = renderTenantContext();
 

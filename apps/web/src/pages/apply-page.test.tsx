@@ -367,21 +367,21 @@ describe("ApplyPage", () => {
     expect(container.firstChild).toHaveStyle({ "--color-accent": "#ff6600" });
   });
 
-  it("shows the Powered by CareLik footer by default on the welcome screen", async () => {
+  it("shows the Powered by Ogevia footer by default on the welcome screen", async () => {
     mockRpcByFn();
 
     renderAt("/apply/acme");
 
     await waitFor(() => expect(screen.getByText("Start Application")).toBeInTheDocument());
-    expect(screen.getByText("Powered by CareLik")).toBeInTheDocument();
+    expect(screen.getByText("Powered by Ogevia")).toBeInTheDocument();
   });
 
-  it("hides the Powered by CareLik footer when the organization has turned it off", async () => {
+  it("hides the Powered by Ogevia footer when the organization has turned it off", async () => {
     mockRpcByFn([], { show_powered_by: false });
 
     renderAt("/apply/acme");
 
     await waitFor(() => expect(screen.getByText("Start Application")).toBeInTheDocument());
-    expect(screen.queryByText("Powered by CareLik")).not.toBeInTheDocument();
+    expect(screen.queryByText("Powered by Ogevia")).not.toBeInTheDocument();
   });
 });

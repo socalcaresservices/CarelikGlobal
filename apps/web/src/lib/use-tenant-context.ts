@@ -10,11 +10,11 @@ interface CustomDomainMatch {
 /**
  * Resolves platform-vs-tenant for the current hostname. Wraps
  * resolveTenant() with an async fallback for a hostname that isn't one
- * of CareLik's own domains, checked against organizations.custom_domain
+ * of Ogevia's own domains, checked against organizations.custom_domain
  * via the public resolve_tenant_domain() RPC (see
  * 20260809022627_custom_domain_tenant_resolution.sql).
  *
- * The common case - CareLik's own domains - never touches the network:
+ * The common case - Ogevia's own domains - never touches the network:
  * resolveTenant() already answers those synchronously, and the RPC-backed
  * query is disabled entirely for them. Only an unrecognized hostname
  * (a candidate custom domain) pays for the round trip, and loading is

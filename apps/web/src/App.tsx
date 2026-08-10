@@ -44,7 +44,7 @@ export function App() {
 
   // Which provider tree/routes to mount depends on tenantContext, so
   // hold off rendering until it settles. Only pays this cost on a
-  // hostname that isn't one of CareLik's own domains - see
+  // hostname that isn't one of Ogevia's own domains - see
   // useTenantContext()'s comment for why every other host resolves
   // synchronously with loading always false.
   if (loading) {

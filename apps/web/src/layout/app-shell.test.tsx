@@ -267,17 +267,17 @@ describe("AppShell nav", () => {
     expect(within(credentialsLink).queryByText("0")).not.toBeInTheDocument();
   });
 
-  it("falls back to the CareLik Global mark and 'Powered by CareLik' footer without an active organization", () => {
+  it("falls back to the Ogevia mark and 'Powered by Ogevia' footer without an active organization", () => {
     mockedUseAuth.mockReturnValue({ user: { email: "owner@acme.test" } } as never);
     mockedUseOrganization.mockReturnValue(baseOrganization("organization_owner"));
 
     renderShell();
 
-    expect(screen.getByText("CareLik Global")).toBeInTheDocument();
-    expect(screen.getByText("Powered by CareLik")).toBeInTheDocument();
+    expect(screen.getByText("Ogevia")).toBeInTheDocument();
+    expect(screen.getByText("Powered by Ogevia")).toBeInTheDocument();
   });
 
-  it("shows the organization's logo instead of the CareLik mark when branded", () => {
+  it("shows the organization's logo instead of the Ogevia mark when branded", () => {
     mockedUseAuth.mockReturnValue({ user: { email: "owner@acme.test" } } as never);
     mockedUseOrganization.mockReturnValue({
       ...baseOrganization("organization_owner"),
@@ -288,10 +288,10 @@ describe("AppShell nav", () => {
 
     const logo = screen.getByAltText("Acme Care");
     expect(logo).toHaveAttribute("src", "https://example.com/acme-logo.png");
-    expect(screen.queryByText("CareLik Global")).not.toBeInTheDocument();
+    expect(screen.queryByText("Ogevia")).not.toBeInTheDocument();
   });
 
-  it("shows the organization's display name (not CareLik Global) when active but unbranded", () => {
+  it("shows the organization's display name (not Ogevia) when active but unbranded", () => {
     mockedUseAuth.mockReturnValue({ user: { email: "owner@acme.test" } } as never);
     mockedUseOrganization.mockReturnValue({
       ...baseOrganization("organization_owner"),
@@ -305,7 +305,7 @@ describe("AppShell nav", () => {
     // the "Build 022: Organization switcher hidden" comment in
     // app-shell.tsx).
     expect(screen.getAllByText("Acme Care")).toHaveLength(2);
-    expect(screen.queryByText("CareLik Global")).not.toBeInTheDocument();
+    expect(screen.queryByText("Ogevia")).not.toBeInTheDocument();
   });
 
   it("sets --color-accent from the organization's primary color, which every branded surface reads", () => {
@@ -365,7 +365,7 @@ describe("AppShell nav", () => {
     expect(screen.queryByText("Second Org")).not.toBeInTheDocument();
   });
 
-  it("hides the 'Powered by CareLik' footer when the organization has turned it off", () => {
+  it("hides the 'Powered by Ogevia' footer when the organization has turned it off", () => {
     mockedUseAuth.mockReturnValue({ user: { email: "owner@acme.test" } } as never);
     mockedUseOrganization.mockReturnValue({
       ...baseOrganization("organization_owner"),
@@ -374,6 +374,6 @@ describe("AppShell nav", () => {
 
     renderShell();
 
-    expect(screen.queryByText("Powered by CareLik")).not.toBeInTheDocument();
+    expect(screen.queryByText("Powered by Ogevia")).not.toBeInTheDocument();
   });
 });
