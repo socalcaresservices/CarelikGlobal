@@ -22,8 +22,10 @@ const mockedStorageFrom = vi.mocked(supabase.storage.from);
 
 const ORG_ID = "11111111-1111-4111-8111-111111111111";
 const USER_ID = "44444444-4444-4444-8444-444444444444";
-const SHIFT_ID = "55555555-5555-4555-8555-555555555555";
+const CLIENT_ID = "77777777-7777-4777-8777-777777777777";
+const SERVICE_ID = "88888888-8888-4888-8888-888888888888";
 const VISIT_ID = "66666666-6666-4666-8666-666666666666";
+const CLIENT_CODE = "CL-ABC123";
 
 function authUser() {
   return {
@@ -47,19 +49,17 @@ function baseOrganization(overrides: Record<string, unknown> = {}) {
   };
 }
 
-const option = {
-  shift_id: SHIFT_ID,
-  client_id: "77777777-7777-4777-8777-777777777777",
-  client_code: "CL-ABC123",
-  caregiver_user_id: USER_ID,
-  caregiver_name: "Jordan Rivera",
-  service_id: "88888888-8888-4888-8888-888888888888",
+const foundClient = { client_id: CLIENT_ID, client_code: CLIENT_CODE };
+
+const authorizedService = {
+  service_id: SERVICE_ID,
+  service_code: "862",
   service_name: "Personal Care",
+  service_color: "#0F8B8D",
   authorization_id: "99999999-9999-4999-8999-999999999999",
   max_monthly_hours: 40,
-  starts_at: "2026-08-09T13:00:00.000Z",
-  ends_at: "2026-08-09T14:00:00.000Z",
-  signed_minutes_this_month: 60
+  hours_used_this_month: 1,
+  hours_scheduled_this_month: 0
 };
 
 function renderPage() {
@@ -75,7 +75,9 @@ function mockRpcImplementation(overrides: Record<string, unknown> = {}) {
   mockedRpc.mockImplementation((fn: string) => {
     if (fn in overrides) return Promise.resolve(overrides[fn]) as never;
     if (fn === "get_active_service_visit") return Promise.resolve({ data: [], error: null }) as never;
-    if (fn === "list_service_verification_options") return Promise.resolve({ data: [option], error: null }) as never;
+    if (fn === "find_client_by_code") return Promise.resolve({ data: [foundClient], error: null }) as never;
+    if (fn === "list_authorized_services_for_client")
+      return Promise.resolve({ data: [authorizedService], error: null }) as never;
     if (fn === "list_service_visits") return Promise.resolve({ data: [], error: null }) as never;
     return Promise.resolve({ data: null, error: null }) as never;
   });
@@ -103,29 +105,68 @@ describe("ServiceVerificationPage", () => {
     vi.useRealTimers();
   });
 
-  it("shows the shift picker and starts a visit", async () => {
+  it("looks up a client by ID, picks a service, and starts a visit", async () => {
     mockRpcImplementation();
     renderPage();
 
-    await waitFor(() => expect(screen.getByLabelText("Assigned shift")).toBeInTheDocument());
-    // Wait for the option itself, not just the <select> - setting a
-    // select's value to an option that doesn't exist yet in the DOM is a
-    // silent no-op, which would leave selectedShiftId (and therefore
-    // selectedOption) stuck at "".
-    await screen.findByRole("option", { name: /CL-ABC123/ });
-    fireEvent.change(screen.getByLabelText("Assigned shift"), { target: { value: SHIFT_ID } });
-    expect(await screen.findByText("CL-ABC123", { selector: "p" })).toBeInTheDocument();
+    const input = await screen.findByLabelText("Client ID");
+    fireEvent.change(input, { target: { value: CLIENT_CODE } });
+    fireEvent.click(screen.getByRole("button", { name: "Find client" }));
 
+    await waitFor(() =>
+      expect(mockedRpc).toHaveBeenCalledWith("find_client_by_code", {
+        target_organization_id: ORG_ID,
+        target_client_code: CLIENT_CODE
+      })
+    );
+    expect(await screen.findByText(CLIENT_CODE, { selector: "p" })).toBeInTheDocument();
+
+    fireEvent.click(await screen.findByRole("button", { name: /862 · Personal Care/ }));
     fireEvent.click(screen.getByRole("button", { name: "Time in: start visit" }));
 
     await waitFor(() =>
-      expect(mockedRpc).toHaveBeenCalledWith("start_service_visit", {
+      expect(mockedRpc).toHaveBeenCalledWith("start_service_visit_by_client_code", {
         target_organization_id: ORG_ID,
-        target_shift_id: SHIFT_ID,
+        target_client_code: CLIENT_CODE,
+        target_service_id: SERVICE_ID,
         visit_task_categories: [],
         visit_service_notes: null
       })
     );
+  });
+
+  it("shows an error when the client ID is not found, without revealing any client list", async () => {
+    mockRpcImplementation({
+      find_client_by_code: {
+        data: null,
+        error: new Error("NOT_FOUND: That client ID was not found or is not active.")
+      }
+    });
+    renderPage();
+
+    const input = await screen.findByLabelText("Client ID");
+    fireEvent.change(input, { target: { value: "BOGUS-CODE" } });
+    fireEvent.click(screen.getByRole("button", { name: "Find client" }));
+
+    await waitFor(() =>
+      expect(screen.getByText("NOT_FOUND: That client ID was not found or is not active.")).toBeInTheDocument()
+    );
+    expect(screen.queryByRole("button", { name: "Change client" })).not.toBeInTheDocument();
+    expect(screen.queryByText(CLIENT_CODE)).not.toBeInTheDocument();
+  });
+
+  it("lets the caregiver change client before starting a visit", async () => {
+    mockRpcImplementation();
+    renderPage();
+
+    fireEvent.change(await screen.findByLabelText("Client ID"), { target: { value: CLIENT_CODE } });
+    fireEvent.click(screen.getByRole("button", { name: "Find client" }));
+    expect(await screen.findByText(CLIENT_CODE, { selector: "p" })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Change client" }));
+
+    await waitFor(() => expect(screen.getByLabelText("Client ID")).toHaveValue(""));
+    expect(screen.queryByText(CLIENT_CODE, { selector: "p" })).not.toBeInTheDocument();
   });
 
   it("shows the live elapsed timer and warns when the visit will exceed the authorization", async () => {

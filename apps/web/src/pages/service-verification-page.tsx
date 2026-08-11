@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState, type PointerEvent } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { AlertTriangle, CheckCircle2, Clock3, PenLine, ShieldCheck } from "lucide-react";
 import { useAuth } from "@carelik/auth";
-import { Button, Card, StatusBadge, type StatusTone } from "@carelik/ui";
+import { Button, Card, StatusBadge, cn, type StatusTone } from "@carelik/ui";
 import { useOrganization } from "@/providers/organization-provider";
 import { supabase } from "@/lib/supabase";
 import {
@@ -16,19 +16,31 @@ import {
   type VisitSignerRole
 } from "@/lib/service-verification";
 
-interface VerificationOption {
-  shift_id: string;
+interface FoundClient {
   client_id: string;
   client_code: string;
-  caregiver_user_id: string;
-  caregiver_name: string;
+}
+
+interface AuthorizedService {
   service_id: string;
+  service_code: string;
   service_name: string;
+  service_color: string | null;
   authorization_id: string;
   max_monthly_hours: number;
-  starts_at: string;
-  ends_at: string;
-  signed_minutes_this_month: number;
+  hours_used_this_month: number;
+  hours_scheduled_this_month: number;
+}
+
+// This RPC returns hours directly (not minutes, unlike the rest of this
+// page) - same shape as list_my_schedulable_assignments on the /staff/visits
+// page, so this formatter and the field names deliberately match it.
+function formatServiceHours(hours: number) {
+  return Number.isInteger(hours) ? String(hours) : hours.toFixed(1);
+}
+
+function availableServiceHours(service: AuthorizedService) {
+  return Math.max(0, service.max_monthly_hours - service.hours_used_this_month - service.hours_scheduled_this_month);
 }
 
 interface ActiveVisit {
@@ -155,7 +167,10 @@ export function ServiceVerificationPage() {
   const queryClient = useQueryClient();
 
   const [phase, setPhase] = useState<Phase>("loading");
-  const [selectedShiftId, setSelectedShiftId] = useState("");
+  const [clientCodeInput, setClientCodeInput] = useState("");
+  const [lookupClient, setLookupClient] = useState<FoundClient | null>(null);
+  const [lookingUp, setLookingUp] = useState(false);
+  const [selectedServiceId, setSelectedServiceId] = useState("");
   const [notes, setNotes] = useState("");
   const [attested, setAttested] = useState(false);
   const [clientConfirmed, setClientConfirmed] = useState(false);
@@ -175,7 +190,6 @@ export function ServiceVerificationPage() {
   } | null>(null);
 
   function invalidateAll() {
-    void queryClient.invalidateQueries({ queryKey: ["service-verification-options", activeOrganizationId] });
     void queryClient.invalidateQueries({ queryKey: ["active-service-visit", activeOrganizationId] });
     void queryClient.invalidateQueries({ queryKey: ["service-visits", activeOrganizationId] });
   }
@@ -192,16 +206,17 @@ export function ServiceVerificationPage() {
     enabled: !!activeOrganizationId
   });
 
-  const optionsQuery = useQuery({
-    queryKey: ["service-verification-options", activeOrganizationId],
+  const servicesQuery = useQuery({
+    queryKey: ["authorized-services", activeOrganizationId, lookupClient?.client_id],
     queryFn: async () => {
-      const { data, error: queryError } = await supabase.rpc("list_service_verification_options", {
-        target_organization_id: activeOrganizationId!
+      const { data, error: queryError } = await supabase.rpc("list_authorized_services_for_client", {
+        target_organization_id: activeOrganizationId!,
+        target_client_id: lookupClient!.client_id
       });
       if (queryError) throw queryError;
-      return (data ?? []) as VerificationOption[];
+      return (data ?? []) as AuthorizedService[];
     },
-    enabled: !!activeOrganizationId && phase === "select"
+    enabled: !!activeOrganizationId && !!lookupClient && phase === "select"
   });
 
   const visitsQuery = useQuery({
@@ -235,9 +250,9 @@ export function ServiceVerificationPage() {
     return () => clearInterval(interval);
   }, [phase]);
 
-  const selectedOption = useMemo(
-    () => (optionsQuery.data ?? []).find((option) => option.shift_id === selectedShiftId),
-    [optionsQuery.data, selectedShiftId]
+  const selectedService = useMemo(
+    () => (servicesQuery.data ?? []).find((service) => service.service_id === selectedServiceId),
+    [servicesQuery.data, selectedServiceId]
   );
 
   const active = activeVisitQuery.data;
@@ -249,14 +264,43 @@ export function ServiceVerificationPage() {
   const remainingMinutes = Math.max(0, authorizedMinutes - usedMinutes);
   const willExceed = active ? projectedMinutes > authorizedMinutes : false;
 
+  async function lookupClientByCode() {
+    if (!activeOrganizationId || !clientCodeInput.trim()) return;
+    setLookingUp(true);
+    setError(null);
+    try {
+      const { data, error: lookupError } = await supabase.rpc("find_client_by_code", {
+        target_organization_id: activeOrganizationId,
+        target_client_code: clientCodeInput.trim()
+      });
+      if (lookupError) throw lookupError;
+      const found = (Array.isArray(data) ? data[0] : data) as FoundClient | undefined;
+      if (!found) throw new Error("That client ID was not found or is not active.");
+      setLookupClient(found);
+      setSelectedServiceId("");
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "That client ID could not be looked up.");
+    } finally {
+      setLookingUp(false);
+    }
+  }
+
+  function changeClient() {
+    setLookupClient(null);
+    setClientCodeInput("");
+    setSelectedServiceId("");
+    setError(null);
+  }
+
   async function startVisit() {
-    if (!activeOrganizationId || !selectedOption) return;
+    if (!activeOrganizationId || !lookupClient || !selectedService) return;
     setSaving(true);
     setError(null);
     try {
-      const { error: startError } = await supabase.rpc("start_service_visit", {
+      const { error: startError } = await supabase.rpc("start_service_visit_by_client_code", {
         target_organization_id: activeOrganizationId,
-        target_shift_id: selectedOption.shift_id,
+        target_client_code: lookupClient.client_code,
+        target_service_id: selectedService.service_id,
         visit_task_categories: [],
         visit_service_notes: notes || null
       });
@@ -369,7 +413,9 @@ export function ServiceVerificationPage() {
 
   function reset() {
     setPhase("select");
-    setSelectedShiftId("");
+    setClientCodeInput("");
+    setLookupClient(null);
+    setSelectedServiceId("");
     setNotes("");
     setAttested(false);
     setClientConfirmed(false);
@@ -408,52 +454,117 @@ export function ServiceVerificationPage() {
             <Clock3 className="h-5 w-5 text-sky-700" />
             <h2 className="text-xl font-semibold">Start a visit</h2>
           </div>
-          <label className="block text-sm font-medium text-slate-700">
-            Assigned shift
-            <select
-              value={selectedShiftId}
-              onChange={(event) => setSelectedShiftId(event.target.value)}
-              className="mt-2 min-h-12 w-full rounded-lg border border-slate-300 bg-white px-3 text-base"
-            >
-              <option value="">Select a shift</option>
-              {(optionsQuery.data ?? []).map((option) => (
-                <option key={option.shift_id} value={option.shift_id}>
-                  {option.client_code} · {option.service_name} · {formatVisitDate(option.starts_at)}
-                </option>
-              ))}
-            </select>
-          </label>
-          {optionsQuery.isSuccess && (optionsQuery.data ?? []).length === 0 ? (
-            <p className="text-sm text-slate-400">No assigned shifts are available to verify right now.</p>
-          ) : null}
-          {selectedOption ? (
-            <div className="rounded-xl bg-slate-50 p-4">
-              <p className="font-semibold">{selectedOption.client_code}</p>
-              <p className="text-sm text-slate-600">{selectedOption.service_name}</p>
-              <p className="mt-2 text-xs text-slate-500">
-                Used this month: {formatHours(selectedOption.signed_minutes_this_month)} of{" "}
-                {formatHours(Math.round(selectedOption.max_monthly_hours * 60))} authorized hours
-              </p>
+
+          {!lookupClient ? (
+            <div className="space-y-3">
+              <label className="block text-sm font-medium text-slate-700">
+                Client ID
+                <input
+                  type="text"
+                  value={clientCodeInput}
+                  onChange={(event) => setClientCodeInput(event.target.value)}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter") {
+                      event.preventDefault();
+                      void lookupClientByCode();
+                    }
+                  }}
+                  placeholder="Enter or scan the client ID"
+                  className="mt-2 min-h-12 w-full rounded-lg border border-slate-300 bg-white px-3 text-base"
+                />
+              </label>
+              <Button
+                type="button"
+                className="min-h-12 w-full sm:w-auto"
+                disabled={!clientCodeInput.trim()}
+                loading={lookingUp}
+                onClick={lookupClientByCode}
+              >
+                Find client
+              </Button>
             </div>
-          ) : null}
-          <label className="block text-sm font-medium text-slate-700">
-            Short service note (optional)
-            <textarea
-              value={notes}
-              maxLength={500}
-              onChange={(event) => setNotes(event.target.value)}
-              className="mt-2 min-h-24 w-full rounded-lg border border-slate-300 p-3 text-base"
-            />
-          </label>
-          <Button
-            type="button"
-            className="min-h-12 w-full sm:w-auto"
-            disabled={!selectedOption}
-            loading={saving}
-            onClick={startVisit}
-          >
-            Time in: start visit
-          </Button>
+          ) : (
+            <>
+              <div className="flex items-center justify-between rounded-xl bg-slate-50 p-4">
+                <div>
+                  <p className="text-sm text-slate-500">Client</p>
+                  <p className="font-semibold">{lookupClient.client_code}</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={changeClient}
+                  className="min-h-12 text-sm font-semibold text-sky-700 underline"
+                >
+                  Change client
+                </button>
+              </div>
+
+              {servicesQuery.isLoading ? (
+                <p className="text-sm text-slate-500">Loading authorized services…</p>
+              ) : null}
+              {servicesQuery.isSuccess && (servicesQuery.data ?? []).length === 0 ? (
+                <p className="text-sm text-slate-400">
+                  No active authorized services for this client - contact your agency administrator.
+                </p>
+              ) : null}
+              {(servicesQuery.data ?? []).length > 0 ? (
+                <div className="space-y-2">
+                  <p className="text-sm font-medium text-slate-700">Service</p>
+                  <div className="grid gap-2">
+                    {servicesQuery.data!.map((service) => {
+                      const available = availableServiceHours(service);
+                      return (
+                        <button
+                          key={service.service_id}
+                          type="button"
+                          onClick={() => setSelectedServiceId(service.service_id)}
+                          className={cn(
+                            "min-h-12 rounded-xl border-2 p-3 text-left transition",
+                            selectedServiceId === service.service_id
+                              ? "border-sky-600 bg-sky-50"
+                              : "border-slate-200 bg-white"
+                          )}
+                        >
+                          <p className="font-semibold">
+                            {service.service_code} · {service.service_name}
+                          </p>
+                          <p className="text-xs text-slate-500">
+                            {formatServiceHours(service.hours_used_this_month)}h used +{" "}
+                            {formatServiceHours(service.hours_scheduled_this_month)}h scheduled of{" "}
+                            {formatServiceHours(service.max_monthly_hours)}h/mo ({formatServiceHours(available)}h
+                            available)
+                          </p>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              ) : null}
+
+              {selectedService ? (
+                <>
+                  <label className="block text-sm font-medium text-slate-700">
+                    Short service note (optional)
+                    <textarea
+                      value={notes}
+                      maxLength={500}
+                      onChange={(event) => setNotes(event.target.value)}
+                      className="mt-2 min-h-24 w-full rounded-lg border border-slate-300 p-3 text-base"
+                    />
+                  </label>
+                  <Button
+                    type="button"
+                    className="min-h-12 w-full sm:w-auto"
+                    disabled={!selectedService}
+                    loading={saving}
+                    onClick={startVisit}
+                  >
+                    Time in: start visit
+                  </Button>
+                </>
+              ) : null}
+            </>
+          )}
         </Card>
       ) : null}
 
