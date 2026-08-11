@@ -15,8 +15,13 @@
 //
 // The only writer of organizations' Stripe columns is
 // record_stripe_subscription_event() - EXECUTE granted only to the
-// service role, which is exactly the role this function authenticates as
-// (SUPABASE_SERVICE_ROLE_KEY). No other code path can make this write.
+// service_role Postgres role, which is exactly what this function
+// authenticates as via SUPABASE_SECRET_KEY (Supabase's current sb_secret_...
+// key type - same service_role privileges as the legacy service_role key
+// it replaces, opaque token instead of a JWT; legacy keys are deprecated
+// by end of 2026, see
+// https://supabase.com/docs/guides/getting-started/migrating-to-new-api-keys).
+// No other code path can make this write.
 
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import Stripe from "stripe";
@@ -127,9 +132,9 @@ export default async (req: Request) => {
   const stripeSecretKey = process.env.STRIPE_SECRET_KEY;
   const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
   const supabaseUrl = process.env.SUPABASE_URL;
-  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  const supabaseSecretKey = process.env.SUPABASE_SECRET_KEY;
 
-  if (!signature || !stripeSecretKey || !webhookSecret || !supabaseUrl || !serviceRoleKey) {
+  if (!signature || !stripeSecretKey || !webhookSecret || !supabaseUrl || !supabaseSecretKey) {
     return jsonResponse({ error: "Function is not configured" }, 500);
   }
 
@@ -143,7 +148,7 @@ export default async (req: Request) => {
     return jsonResponse({ error: `Invalid signature: ${(error as Error).message}` }, 400);
   }
 
-  const adminClient = createClient(supabaseUrl, serviceRoleKey, { auth: { persistSession: false } });
+  const adminClient = createClient(supabaseUrl, supabaseSecretKey, { auth: { persistSession: false } });
 
   // Idempotency: insert before processing. A primary-key conflict means
   // this exact event was already handled - ack and stop, don't reapply.

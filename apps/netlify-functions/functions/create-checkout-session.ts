@@ -50,12 +50,16 @@ export default async (req: Request) => {
   const { organizationId } = body as { organizationId: string };
 
   const supabaseUrl = process.env.SUPABASE_URL;
-  const supabaseAnonKey = process.env.SUPABASE_ANON_KEY;
+  // sb_publishable_... - Supabase's current low-privilege key type,
+  // replacing the legacy anon key (same RLS behavior, opaque token
+  // instead of a JWT). Legacy anon keys are deprecated by end of 2026 -
+  // see https://supabase.com/docs/guides/getting-started/migrating-to-new-api-keys.
+  const supabasePublishableKey = process.env.SUPABASE_PUBLISHABLE_KEY;
   const stripeSecretKey = process.env.STRIPE_SECRET_KEY;
   const starterPriceId = process.env.STRIPE_STARTER_PRICE_ID;
   const appUrl = process.env.APP_URL ?? "https://app.ogevia.com";
 
-  if (!supabaseUrl || !supabaseAnonKey || !stripeSecretKey) {
+  if (!supabaseUrl || !supabasePublishableKey || !stripeSecretKey) {
     return jsonResponse({ error: "Function is not configured" }, 500);
   }
   if (!starterPriceId) {
@@ -66,7 +70,7 @@ export default async (req: Request) => {
   // has_permission RPC below - auth.uid() only resolves correctly inside
   // has_permission() if the same authenticated client (same Authorization
   // header) makes both calls.
-  const callerClient = createClient(supabaseUrl, supabaseAnonKey, {
+  const callerClient = createClient(supabaseUrl, supabasePublishableKey, {
     global: { headers: { Authorization: authHeader } },
     auth: { persistSession: false }
   });
