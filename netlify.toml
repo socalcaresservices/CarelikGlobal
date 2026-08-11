@@ -6,6 +6,10 @@ publish = "apps/web/dist"
 NODE_VERSION = "20"
 PNPM_VERSION = "9.15.4"
 
+[functions]
+directory = "apps/netlify-functions/functions"
+node_bundler = "esbuild"
+
 [[redirects]]
 from = "/*"
 to = "/index.html"

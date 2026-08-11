@@ -65,6 +65,16 @@ export function OrganizationProvider({
   const [activeOrganizationId, setActiveOrganizationIdState] = useState<string | null>(
     () => window.localStorage.getItem(ACTIVE_ORGANIZATION_STORAGE_KEY)
   );
+  // A one-time deep-link preference read from ?org=<slug> - used by the
+  // platform Organizations registry's "Enter organization" link
+  // (toAppUrl() + "?org=" + slug) so picking an org there lands on that
+  // org on app.ogevia.com, rather than whatever was last active in this
+  // browser. Only relevant when tenantSlug is unset (the app/platform
+  // case); cleared once successfully applied so it doesn't keep
+  // overriding a later manual switch.
+  const [preferredOrgSlug, setPreferredOrgSlug] = useState<string | null>(
+    () => new URLSearchParams(window.location.search).get("org")
+  );
 
   // A user can always read their own membership rows regardless of status
   // (see the "members_read_memberships" RLS policy), so once they've
@@ -169,11 +179,22 @@ export function OrganizationProvider({
       return;
     }
 
+    if (preferredOrgSlug) {
+      const preferred = organizations.find((org) => org.slug === preferredOrgSlug);
+      if (preferred) {
+        if (preferred.id !== activeOrganizationId) {
+          setActiveOrganizationIdState(preferred.id);
+        }
+        setPreferredOrgSlug(null);
+        return;
+      }
+    }
+
     const stillVisible = organizations.some((org) => org.id === activeOrganizationId);
     if (!stillVisible) {
       setActiveOrganizationIdState(firstOrganization.id);
     }
-  }, [organizations, activeOrganizationId, tenantSlug]);
+  }, [organizations, activeOrganizationId, tenantSlug, preferredOrgSlug]);
 
   useEffect(() => {
     if (activeOrganizationId) {

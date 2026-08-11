@@ -1,34 +1,39 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { supabase } from "@/lib/supabase";
+import { createCheckoutSession } from "@/lib/billing-checkout";
 import { BillingSummaryCard } from "./billing-summary-card";
 
 vi.mock("@/lib/supabase", () => ({
   supabase: { rpc: vi.fn() }
 }));
+vi.mock("@/lib/billing-checkout", () => ({
+  createCheckoutSession: vi.fn()
+}));
 
 const mockedRpc = vi.mocked(supabase.rpc);
+const mockedCreateCheckoutSession = vi.mocked(createCheckoutSession);
 
 const ORG_ID = "11111111-1111-4111-8111-111111111111";
 
 function baseRow(overrides: Record<string, unknown> = {}) {
   return {
     organization_id: ORG_ID,
-    effective_status: "active",
+    effective_status: "trialing",
     plan_id: "plan-1",
-    plan_key: "start",
-    plan_name: "Start",
+    plan_key: "trial",
+    plan_name: "Trial",
     plan_version: 1,
-    monthly_price_cents: 2900,
-    annual_price_cents: 29000,
+    monthly_price_cents: 0,
+    annual_price_cents: 0,
     custom_monthly_price_cents: null,
     custom_annual_price_cents: null,
     is_complimentary: false,
     billing_cycle: "monthly",
     billing_cycle_anchor: null,
     trial_started_at: null,
-    trial_ends_at: null,
+    trial_ends_at: "2026-09-01T00:00:00Z",
     max_active_clients: 20,
     max_active_caregivers: 15,
     max_administrators: 2,
@@ -52,28 +57,38 @@ function baseRow(overrides: Record<string, unknown> = {}) {
   };
 }
 
-function renderCard() {
+function mockSummary(overrides: Record<string, unknown> = {}) {
+  mockedRpc.mockReturnValue({
+    maybeSingle: vi.fn().mockResolvedValue({ data: baseRow(overrides), error: null })
+  } as never);
+}
+
+function renderCard(canUpdate = false) {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
     <QueryClientProvider client={queryClient}>
-      <BillingSummaryCard organizationId={ORG_ID} canRead={true} />
+      <BillingSummaryCard organizationId={ORG_ID} canRead={true} canUpdate={canUpdate} />
     </QueryClientProvider>
   );
 }
 
 describe("BillingSummaryCard", () => {
+  afterEach(() => {
+    vi.clearAllMocks();
+  });
+
   it("renders nothing when the caller cannot read billing", () => {
     const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     const { container } = render(
       <QueryClientProvider client={queryClient}>
-        <BillingSummaryCard organizationId={ORG_ID} canRead={false} />
+        <BillingSummaryCard organizationId={ORG_ID} canRead={false} canUpdate={false} />
       </QueryClientProvider>
     );
     expect(container).toBeEmptyDOMElement();
   });
 
-  it("shows the plan name, price, status, and usage", async () => {
-    mockedRpc.mockReturnValue({ maybeSingle: vi.fn().mockResolvedValue({ data: baseRow(), error: null }) } as never);
+  it("shows the plan name, status, and usage", async () => {
+    mockSummary({ effective_status: "active", plan_key: "start", plan_name: "Start", monthly_price_cents: 2900 });
 
     renderCard();
 
@@ -84,17 +99,40 @@ describe("BillingSummaryCard", () => {
   });
 
   it("shows the read-only trial-expired message and hides the trial-days field", async () => {
-    mockedRpc.mockReturnValue({
-      maybeSingle: vi.fn().mockResolvedValue({
-        data: baseRow({ effective_status: "trial_expired", trial_ends_at: "2020-01-01T00:00:00Z" }),
-        error: null
-      })
-    } as never);
+    mockSummary({ effective_status: "trial_expired", trial_ends_at: "2020-01-01T00:00:00Z" });
 
     renderCard();
 
     await waitFor(() => expect(screen.getByText("Trial expired")).toBeInTheDocument());
     expect(screen.getByText(/Your trial has ended/)).toBeInTheDocument();
+  });
+
+  it("lets an org admin start real Stripe checkout for Ogevia Starter", async () => {
+    mockSummary();
+    mockedCreateCheckoutSession.mockResolvedValue({ url: "https://checkout.stripe.com/session-123" });
+
+    // jsdom doesn't implement navigation - stub window.location.href as a
+    // plain writable property so the redirect assertion below doesn't
+    // throw "Not implemented: navigation".
+    delete (window as unknown as { location?: unknown }).location;
+    (window as unknown as { location: { href: string } }).location = { href: "" };
+
+    renderCard(true);
+
+    await waitFor(() => expect(screen.getByText("Trial")).toBeInTheDocument());
+    fireEvent.click(screen.getByRole("button", { name: "Subscribe to Ogevia Starter" }));
+
+    await waitFor(() => expect(mockedCreateCheckoutSession).toHaveBeenCalledWith(ORG_ID));
+    await waitFor(() => expect(window.location.href).toBe("https://checkout.stripe.com/session-123"));
+  });
+
+  it("shows a confirmation instead of the Subscribe button once the subscription is active", async () => {
+    mockSummary({ effective_status: "active" });
+
+    renderCard(true);
+
+    await waitFor(() => expect(screen.getByText("You’re subscribed to Ogevia Starter.")).toBeInTheDocument());
+    expect(screen.queryByRole("button", { name: "Subscribe to Ogevia Starter" })).not.toBeInTheDocument();
   });
 
   it("shows a load error state", async () => {

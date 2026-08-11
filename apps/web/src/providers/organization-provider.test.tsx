@@ -264,6 +264,46 @@ describe("OrganizationProvider", () => {
     await waitFor(() => expect(screen.getByTestId("active-org-id")).toHaveTextContent(OTHER_ORG_ID));
   });
 
+  // The platform Organizations registry's "Enter organization" link opens
+  // app.ogevia.com/?org=<slug> - on the app host (tenantSlug undefined),
+  // that query param should pick the matching org instead of falling back
+  // to "first organization", and should only apply once.
+  it("prefers an ?org= deep link over the first-organization fallback on the app host", async () => {
+    const originalLocation = window.location;
+    Object.defineProperty(window, "location", {
+      configurable: true,
+      value: { ...originalLocation, search: "?org=other-org" }
+    });
+
+    mockedUseAuth.mockReturnValue({
+      user: { id: "user-6" } as never,
+      session: {} as never,
+      loading: false,
+      signInWithGithub: vi.fn(),
+      signInWithPassword: vi.fn(),
+      resetPasswordForEmail: vi.fn(),
+      updatePassword: vi.fn(),
+      signOut: vi.fn()
+    });
+    mockedRpc.mockResolvedValue({ data: null, error: null } as never);
+
+    setResolver((table, calls) => {
+      if (table === "user_profiles") return { data: { platform_role: "platform_owner" }, error: null };
+      if (table === "organizations") return { data: [orgRow, otherOrgRow], error: null };
+      if (table === "organization_memberships" && hasEqCall(calls, "status", "invited")) {
+        return { data: [], error: null };
+      }
+      return { data: null, error: null };
+    });
+
+    try {
+      renderProvider(undefined);
+      await waitFor(() => expect(screen.getByTestId("active-org-id")).toHaveTextContent(OTHER_ORG_ID));
+    } finally {
+      Object.defineProperty(window, "location", { configurable: true, value: originalLocation });
+    }
+  });
+
   it("falls back to the first organization on a platform host, where there's no single tenant to pin to", async () => {
     mockedUseAuth.mockReturnValue({
       user: { id: "user-5" } as never,

@@ -1,5 +1,6 @@
+import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Card, ProgressBar, StatusBadge, usageTone, type StatusTone } from "@carelik/ui";
+import { Button, Card, ProgressBar, StatusBadge, usageTone, type StatusTone } from "@carelik/ui";
 import {
   FEATURE_LABELS,
   SUBSCRIPTION_STATUS_LABELS,
@@ -13,6 +14,7 @@ import {
   type SubscriptionEffectiveStatus
 } from "@carelik/shared";
 import { supabase } from "@/lib/supabase";
+import { createCheckoutSession } from "@/lib/billing-checkout";
 
 // Row shape returned by get_organization_billing_summary() - snake_case
 // straight off the RPC, mapped once into the shared camelCase type below
@@ -128,11 +130,22 @@ function UsageRow({ label, used, limit }: { label: string; used: number; limit: 
 
 export function BillingSummaryCard({
   organizationId,
-  canRead
+  canRead,
+  canUpdate
 }: {
   organizationId: string | null | undefined;
   canRead: boolean;
+  canUpdate: boolean;
 }) {
+  const [checkoutError, setCheckoutError] = useState<string | null>(null);
+  const [startingCheckout, setStartingCheckout] = useState(false);
+  // One-time read of ?checkout=success|cancelled - set by
+  // create-checkout-session's success_url/cancel_url after a real Stripe
+  // Checkout redirect. Reaching this page never means an org is paid on
+  // its own; that only ever happens once stripe-webhook.ts processes the
+  // signed event, hence "processing" phrasing rather than "success."
+  const [checkoutParam] = useState(() => new URLSearchParams(window.location.search).get("checkout"));
+
   const summaryQuery = useQuery({
     queryKey: ["organization-billing-summary", organizationId],
     queryFn: async () => {
@@ -144,6 +157,19 @@ export function BillingSummaryCard({
     },
     enabled: !!organizationId && canRead
   });
+
+  async function handleCheckout() {
+    if (!organizationId) return;
+    setStartingCheckout(true);
+    setCheckoutError(null);
+    try {
+      const { url } = await createCheckoutSession(organizationId);
+      window.location.href = url;
+    } catch (cause) {
+      setCheckoutError(cause instanceof Error ? cause.message : "Could not start checkout.");
+      setStartingCheckout(false);
+    }
+  }
 
   if (!canRead) return null;
 
@@ -259,14 +285,29 @@ export function BillingSummaryCard({
         <p className="mt-1 text-sm text-slate-400">No payment history available yet.</p>
       </div>
 
-      <div className="mt-5 border-t border-slate-100 pt-4">
-        <a
-          href="mailto:admin.ogevia@gmail.com?subject=Upgrade%20my%20Ogevia%20plan"
-          className="inline-flex min-h-[44px] items-center justify-center rounded-lg bg-[var(--color-accent,#0f172a)] px-4 py-2.5 text-sm font-medium text-[var(--color-accent-foreground,#ffffff)]"
-        >
-          Contact us to upgrade or manage your subscription
-        </a>
-      </div>
+      {canUpdate ? (
+        <div className="mt-5 space-y-3 border-t border-slate-100 pt-4">
+          {checkoutParam === "success" ? (
+            <p className="rounded-lg bg-emerald-50 px-3 py-2.5 text-sm text-emerald-800">
+              Checkout complete - your subscription is being processed and will show up here within a minute or
+              two.
+            </p>
+          ) : checkoutParam === "cancelled" ? (
+            <p className="rounded-lg bg-slate-50 px-3 py-2.5 text-sm text-slate-600">
+              Checkout was cancelled - no charge was made.
+            </p>
+          ) : null}
+          {checkoutError ? <p className="text-sm text-red-700">{checkoutError}</p> : null}
+
+          {summary.effectiveStatus === "active" ? (
+            <p className="text-sm text-slate-600">You&rsquo;re subscribed to Ogevia Starter.</p>
+          ) : (
+            <Button type="button" loading={startingCheckout} onClick={handleCheckout}>
+              Subscribe to Ogevia Starter
+            </Button>
+          )}
+        </div>
+      ) : null}
     </Card>
   );
 }

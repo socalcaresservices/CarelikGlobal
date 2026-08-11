@@ -8,7 +8,8 @@ interface CustomDomainMatch {
 }
 
 /**
- * Resolves platform-vs-tenant for the current hostname. Wraps
+ * Resolves which fixed area (marketing/app/admin) or legacy tenant slug the
+ * current hostname belongs to. Wraps
  * resolveTenant() with an async fallback for a hostname that isn't one
  * of Ogevia's own domains, checked against organizations.custom_domain
  * via the public resolve_tenant_domain() RPC (see
@@ -47,15 +48,15 @@ export function useTenantContext(): { context: TenantContext; loading: boolean }
   }
 
   if (customDomainQuery.isLoading) {
-    return { context: { type: "platform" }, loading: true };
+    return { context: { type: "marketing" }, loading: true };
   }
 
-  // No match (including on error - fail closed to the platform default
+  // No match (including on error - fail closed to the marketing default
   // rather than guessing) means this genuinely isn't a configured
   // tenant domain.
   const match = customDomainQuery.data;
   return {
-    context: match ? { type: "tenant", slug: match.slug } : { type: "platform" },
+    context: match ? { type: "tenant", slug: match.slug } : { type: "marketing" },
     loading: false
   };
 }

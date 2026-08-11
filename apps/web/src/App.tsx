@@ -21,7 +21,14 @@ import { PricingPage } from "@/pages/pricing-page";
 export function App() {
   const { context: tenantContext, loading } = useTenantContext();
   const navigate = useNavigate();
-  const isPlatform = tenantContext.type === "platform";
+  const isMarketing = tenantContext.type === "marketing";
+  const isAdmin = tenantContext.type === "admin";
+  // "app" (the shared app.ogevia.com host - org resolved from the signed-in
+  // user's own memberships) and the legacy "tenant" ({slug}.ogevia.com,
+  // still works whenever wildcard DNS is available) both mount the same
+  // tenant workspace - see organization-provider.tsx for how tenantSlug
+  // being undefined vs. set changes org resolution.
+  const isTenantWorkspace = tenantContext.type === "app" || tenantContext.type === "tenant";
 
   // Safety net for a stale Supabase redirect-URL allowlist: if
   // resetPasswordForEmail's redirectTo isn't on that allowlist, Supabase
@@ -66,19 +73,23 @@ export function App() {
       <Route path="/apply/:orgSlug" element={<ApplyPage />} />
       <Route path="/upload/:token" element={<UploadPage />} />
 
-      {/* Public marketing site - platform-root hosts only. A tenant
-          subdomain's "/" is untouched below (still CommandCenterPage via
-          getTenantRoutes()), since these only render when isPlatform. */}
-      {isPlatform && <Route path="/" element={<MarketingPage />} />}
-      {isPlatform && <Route path="/pricing" element={<PricingPage />} />}
+      {/* Public marketing site - ogevia.com/carelik.com and any
+          unrecognized host. app.ogevia.com's and admin.ogevia.com's own "/"
+          are handled by their own branches below, never this one. */}
+      {isMarketing && <Route path="/" element={<MarketingPage />} />}
+      {isMarketing && <Route path="/pricing" element={<PricingPage />} />}
+      {isMarketing && <Route path="*" element={<Navigate to="/" replace />} />}
 
-      {/* Tenant routes (agency workspace) */}
-      {!isPlatform && (
+      {/* App workspace - app.ogevia.com (org resolved from membership) and
+          the legacy {slug}.ogevia.com path (org resolved from the slug). */}
+      {isTenantWorkspace && (
         <Route
           path="/*"
           element={
             <ProtectedRoute>
-              <OrganizationProvider tenantSlug={tenantContext.slug}>
+              <OrganizationProvider
+                tenantSlug={tenantContext.type === "tenant" ? tenantContext.slug : undefined}
+              >
                 <AppShell>
                   <Routes>
                     {getTenantRoutes()}
@@ -92,8 +103,9 @@ export function App() {
         />
       )}
 
-      {/* Platform routes (carelik management) */}
-      {isPlatform && (
+      {/* Platform administration - admin.ogevia.com (and legacy
+          platform.ogevia.com/platform.carelik.com). */}
+      {isAdmin && (
         <Route
           path="/*"
           element={

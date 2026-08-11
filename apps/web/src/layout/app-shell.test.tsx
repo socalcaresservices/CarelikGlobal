@@ -1,4 +1,4 @@
-import { render, screen, waitFor, within } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -300,10 +300,9 @@ describe("AppShell nav", () => {
 
     renderShell();
 
-    // Appears twice: the sidebar header (in place of a logo) and the
-    // top header (in place of the removed organization switcher - see
-    // the "Build 022: Organization switcher hidden" comment in
-    // app-shell.tsx).
+    // Appears twice: the sidebar header (in place of a logo) and the top
+    // header (plain text, not a switcher, since this test's mocked
+    // `organizations` array has only one entry).
     expect(screen.getAllByText("Acme Care")).toHaveLength(2);
     expect(screen.queryByText("Ogevia")).not.toBeInTheDocument();
   });
@@ -344,25 +343,30 @@ describe("AppShell nav", () => {
     expect(container.firstChild).not.toHaveStyle({ "--color-accent": expect.anything() });
   });
 
-  // There is no organization switcher in the tenant workspace by design
-  // (Build 022: a user is scoped to one tenant via subdomain - see the
-  // "Build 022: Organization switcher hidden in tenant context" comment
-  // in app-shell.tsx) - the header shows the active organization's name
-  // as plain text instead, already covered by the display-name and
-  // logo tests above.
-  it("shows no organization switcher, even with more than one organization in context", () => {
+  // app.ogevia.com resolves the active org from the signed-in user's own
+  // memberships rather than a subdomain, so a user can genuinely belong to
+  // more than one organization - the header shows a real switcher in that
+  // case (single-org users still just see plain text, covered by the
+  // display-name and logo tests above).
+  it("shows an organization switcher when the user belongs to more than one organization", () => {
     mockedUseAuth.mockReturnValue({ user: { email: "owner@acme.test" } } as never);
+    const setActiveOrganizationId = vi.fn();
     mockedUseOrganization.mockReturnValue({
       ...baseOrganization("organization_owner"),
       organizations: [brandedOrganization(), brandedOrganization({ id: "22222222-2222-4222-8222-222222222222", displayName: "Second Org" })],
       activeOrganization: brandedOrganization(),
-      activeOrganizationId: ORG_ID
+      activeOrganizationId: ORG_ID,
+      setActiveOrganizationId
     });
 
     renderShell();
 
-    expect(screen.queryByRole("combobox")).not.toBeInTheDocument();
-    expect(screen.queryByText("Second Org")).not.toBeInTheDocument();
+    const select = screen.getByRole("combobox", { name: "Active organization" });
+    expect(within(select).getByText("Acme Care")).toBeInTheDocument();
+    expect(within(select).getByText("Second Org")).toBeInTheDocument();
+
+    fireEvent.change(select, { target: { value: "22222222-2222-4222-8222-222222222222" } });
+    expect(setActiveOrganizationId).toHaveBeenCalledWith("22222222-2222-4222-8222-222222222222");
   });
 
   it("hides the 'Powered by Ogevia' footer when the organization has turned it off", () => {

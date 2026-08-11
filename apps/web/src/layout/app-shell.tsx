@@ -185,8 +185,10 @@ function getGreeting(now: Date) {
 export function AppShell({ children }: PropsWithChildren) {
   const { user, signOut } = useAuth();
   const {
+    organizations,
     activeOrganization,
     activeOrganizationId,
+    setActiveOrganizationId,
     hasPermission,
     role,
     loading
@@ -323,11 +325,27 @@ export function AppShell({ children }: PropsWithChildren) {
           <div className="order-last w-full sm:order-none sm:flex-1">
             {activeOrganizationId ? <GlobalSearch /> : null}
           </div>
-          {/* Build 022: Organization switcher hidden in tenant context
-              In a true multi-tenant SaaS, users are scoped to one tenant/subdomain.
-              Switcher will be re-evaluated if we support users with access to multiple
-              organizations (Phase 4+). For now, show only active org name. */}
-          {activeOrganization ? (
+          {/* app.ogevia.com resolves the active org from the signed-in
+              user's own memberships rather than a subdomain, so a user (or
+              a platform owner, who can see every org) can genuinely belong
+              to more than one - a real switcher, not just a name, once
+              there's more than one to switch between. */}
+          {organizations.length > 1 ? (
+            <label className="text-sm">
+              <span className="sr-only">Active organization</span>
+              <select
+                value={activeOrganizationId ?? ""}
+                onChange={(event) => setActiveOrganizationId(event.target.value)}
+                className="rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-sm font-medium text-slate-900"
+              >
+                {organizations.map((org) => (
+                  <option key={org.id} value={org.id}>
+                    {org.displayName}
+                  </option>
+                ))}
+              </select>
+            </label>
+          ) : activeOrganization ? (
             <p className="text-sm font-medium text-slate-900">{activeOrganization.displayName}</p>
           ) : loading ? (
             <p className="text-sm text-slate-400">Loading…</p>

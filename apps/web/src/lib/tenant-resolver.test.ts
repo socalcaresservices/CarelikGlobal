@@ -1,23 +1,36 @@
 import { describe, expect, it } from "vitest";
-import { isOwnDomain, resolveTenant, toPlatformUrl, toTenantUrl } from "./tenant-resolver";
+import { isOwnDomain, resolveTenant, toAdminUrl, toAppUrl, toTenantUrl } from "./tenant-resolver";
 
 describe("resolveTenant", () => {
-  it("treats a missing hostname as platform", () => {
-    expect(resolveTenant(undefined)).toEqual({ type: "platform" });
+  it("treats a missing hostname as marketing", () => {
+    expect(resolveTenant(undefined)).toEqual({ type: "marketing" });
   });
 
-  it.each(["ogevia.com", "carelik.com", "localhost", "platform.ogevia.com", "platform.carelik.com"])(
-    "treats %s as platform",
+  it.each(["ogevia.com", "www.ogevia.com", "carelik.com", "www.carelik.com", "localhost"])(
+    "treats %s as marketing",
     (hostname) => {
-      expect(resolveTenant(hostname)).toEqual({ type: "platform" });
+      expect(resolveTenant(hostname)).toEqual({ type: "marketing" });
+    }
+  );
+
+  it.each(["app.ogevia.com", "app.carelik.com", "app.localhost"])("treats %s as the app workspace", (hostname) => {
+    expect(resolveTenant(hostname)).toEqual({ type: "app" });
+  });
+
+  it.each(["admin.ogevia.com", "admin.localhost", "platform.ogevia.com", "platform.carelik.com"])(
+    "treats %s as admin",
+    (hostname) => {
+      expect(resolveTenant(hostname)).toEqual({ type: "admin" });
     }
   );
 
   it("strips the port before resolving", () => {
-    expect(resolveTenant("localhost:5173")).toEqual({ type: "platform" });
+    expect(resolveTenant("app.ogevia.com:5173")).toEqual({ type: "app" });
     expect(resolveTenant("acme.ogevia.com:5173")).toEqual({ type: "tenant", slug: "acme" });
   });
 
+  // Legacy per-tenant subdomain resolution - not what launch depends on
+  // (needs wildcard DNS), but kept working for whenever that's available.
   it("resolves a {slug}.ogevia.com host to a tenant", () => {
     expect(resolveTenant("acme.ogevia.com")).toEqual({ type: "tenant", slug: "acme" });
   });
@@ -32,15 +45,16 @@ describe("resolveTenant", () => {
     expect(resolveTenant("acme.localhost")).toEqual({ type: "tenant", slug: "acme" });
   });
 
-  it.each(["platform", "www", "admin", "api"])(
-    "treats the reserved subdomain %s.ogevia.com as platform, not a tenant slug",
-    (subdomain) => {
-      expect(resolveTenant(`${subdomain}.ogevia.com`)).toEqual({ type: "platform" });
-    }
-  );
+  // "app"/"platform"/"admin"/"www" are covered by the fixed-host tests
+  // above (they resolve as their own dedicated area before reaching this
+  // fallback at all) - "api" is the one reserved name with no fixed host
+  // of its own, so it's what actually exercises RESERVED_SUBDOMAINS.
+  it("treats the reserved subdomain api.ogevia.com as marketing, not a tenant slug", () => {
+    expect(resolveTenant("api.ogevia.com")).toEqual({ type: "marketing" });
+  });
 
   it("does not treat a nested subdomain as a valid tenant slug", () => {
-    expect(resolveTenant("a.b.ogevia.com")).toEqual({ type: "platform" });
+    expect(resolveTenant("a.b.ogevia.com")).toEqual({ type: "marketing" });
   });
 
   // Regression: the original implementation guessed a tenant slug from
@@ -51,8 +65,8 @@ describe("resolveTenant", () => {
   // use-tenant-context.ts for how those are actually resolved, via a
   // database lookup rather than a guess).
   it("does not guess a tenant slug from an arbitrary external domain", () => {
-    expect(resolveTenant("google.com")).toEqual({ type: "platform" });
-    expect(resolveTenant("app.acme-agency.com")).toEqual({ type: "platform" });
+    expect(resolveTenant("google.com")).toEqual({ type: "marketing" });
+    expect(resolveTenant("app.acme-agency.com")).toEqual({ type: "marketing" });
   });
 });
 
@@ -61,6 +75,8 @@ describe("isOwnDomain", () => {
     expect(isOwnDomain(undefined)).toBe(true);
     expect(isOwnDomain("ogevia.com")).toBe(true);
     expect(isOwnDomain("localhost")).toBe(true);
+    expect(isOwnDomain("app.ogevia.com")).toBe(true);
+    expect(isOwnDomain("admin.ogevia.com")).toBe(true);
     expect(isOwnDomain("platform.ogevia.com")).toBe(true);
     expect(isOwnDomain("acme.ogevia.com")).toBe(true);
     expect(isOwnDomain("acme.localhost")).toBe(true);
@@ -78,15 +94,20 @@ describe("isOwnDomain", () => {
   });
 });
 
-describe("toPlatformUrl / toTenantUrl", () => {
+describe("toAdminUrl / toAppUrl / toTenantUrl", () => {
   // jsdom's default test location is http://localhost:3000/ - these
   // build from window.location.protocol/port, so that's what shows up
   // here rather than a hardcoded https with no port.
-  it("builds a platform URL from the current protocol and port", () => {
-    expect(toPlatformUrl("/organizations")).toBe("http://platform.ogevia.com:3000/organizations");
+  it("builds an admin URL from the current protocol and port", () => {
+    expect(toAdminUrl("/organizations")).toBe("http://admin.ogevia.com:3000/organizations");
   });
 
-  it("builds a tenant URL for a given slug", () => {
+  it("builds an app URL, optionally with an ?org= deep link", () => {
+    expect(toAppUrl()).toBe("http://app.ogevia.com:3000");
+    expect(toAppUrl("/?org=acme")).toBe("http://app.ogevia.com:3000/?org=acme");
+  });
+
+  it("builds a legacy tenant URL for a given slug", () => {
     expect(toTenantUrl("acme", "/settings")).toBe("http://acme.ogevia.com:3000/settings");
   });
 });

@@ -4,7 +4,7 @@ import { Card, PageHeader, StatusBadge, ProgressBar, usageTone, Button, type Sta
 import { useAuth } from "@carelik/auth";
 import { useOrganization } from "@/providers/organization-provider";
 import { supabase } from "@/lib/supabase";
-import { toTenantUrl } from "@/lib/tenant-resolver";
+import { toAppUrl } from "@/lib/tenant-resolver";
 import { PlatformPlanManager } from "@/components/platform-plan-manager";
 import { PlatformSubscriberBillingPanel } from "@/components/platform-subscriber-billing-panel";
 
@@ -353,7 +353,7 @@ export function OrganizationsPage() {
                         <td className="py-2.5 text-right">
                           <div className="flex items-center justify-end gap-3">
                             <a
-                              href={toTenantUrl(org.slug)}
+                              href={toAppUrl(`/?org=${encodeURIComponent(org.slug)}`)}
                               target="_blank"
                               rel="noreferrer"
                               className="text-xs font-medium text-slate-700 underline-offset-2 hover:underline"

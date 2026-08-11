@@ -909,7 +909,7 @@ export function SettingsPage() {
         canManage={hasPermission("organization.update")}
       />
 
-      <BillingSummaryCard organizationId={activeOrganizationId} canRead={canRead} />
+      <BillingSummaryCard organizationId={activeOrganizationId} canRead={canRead} canUpdate={canUpdate} />
 
       <SupportAccessCard organizationId={activeOrganizationId} canRead={canRead} canManage={canUpdate} />
 

@@ -40,12 +40,12 @@ describe("useTenantContext", () => {
     expect(mockedRpc).not.toHaveBeenCalled();
   });
 
-  it("resolves the platform host synchronously, without calling the RPC", () => {
-    setHostname("platform.ogevia.com");
+  it("resolves the admin host synchronously, without calling the RPC", () => {
+    setHostname("admin.ogevia.com");
 
     const { result } = renderTenantContext();
 
-    expect(result.current).toEqual({ context: { type: "platform" }, loading: false });
+    expect(result.current).toEqual({ context: { type: "admin" }, loading: false });
     expect(mockedRpc).not.toHaveBeenCalled();
   });
 
@@ -65,23 +65,23 @@ describe("useTenantContext", () => {
     expect(mockedRpc).toHaveBeenCalledWith("resolve_tenant_domain", { hostname: "app.acme-agency.com" });
   });
 
-  it("falls back to platform for a hostname that matches no custom domain", async () => {
+  it("falls back to marketing for a hostname that matches no custom domain", async () => {
     setHostname("app.unrelated-example.com");
     mockedRpc.mockResolvedValue({ data: [], error: null } as never);
 
     const { result } = renderTenantContext();
 
     await waitFor(() => expect(result.current.loading).toBe(false));
-    expect(result.current.context).toEqual({ type: "platform" });
+    expect(result.current.context).toEqual({ type: "marketing" });
   });
 
-  it("fails closed to platform when the lookup errors", async () => {
+  it("fails closed to marketing when the lookup errors", async () => {
     setHostname("app.broken-example.com");
     mockedRpc.mockResolvedValue({ data: null, error: new Error("network error") } as never);
 
     const { result } = renderTenantContext();
 
     await waitFor(() => expect(result.current.loading).toBe(false));
-    expect(result.current.context).toEqual({ type: "platform" });
+    expect(result.current.context).toEqual({ type: "marketing" });
   });
 });

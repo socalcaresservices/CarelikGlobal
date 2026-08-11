@@ -31,6 +31,8 @@ interface PlanVersionRow {
   is_current: boolean;
   is_introductory: boolean;
   effective_at: string;
+  stripe_monthly_price_id: string | null;
+  stripe_annual_price_id: string | null;
 }
 
 const ALL_FEATURE_KEYS = Object.keys(FEATURE_LABELS);
@@ -54,6 +56,8 @@ type FormState = {
   trialDurationDays: string;
   isPublic: boolean;
   isIntroductory: boolean;
+  stripeMonthlyPriceId: string;
+  stripeAnnualPriceId: string;
   reason: string;
 };
 
@@ -77,6 +81,8 @@ function emptyForm(planKey = ""): FormState {
     trialDurationDays: "",
     isPublic: true,
     isIntroductory: false,
+    stripeMonthlyPriceId: "",
+    stripeAnnualPriceId: "",
     reason: ""
   };
 }
@@ -101,6 +107,8 @@ function toForm(row: PlanVersionRow): FormState {
     trialDurationDays: row.trial_duration_days?.toString() ?? "",
     isPublic: row.is_public,
     isIntroductory: row.is_introductory,
+    stripeMonthlyPriceId: row.stripe_monthly_price_id ?? "",
+    stripeAnnualPriceId: row.stripe_annual_price_id ?? "",
     reason: ""
   };
 }
@@ -179,7 +187,9 @@ export function PlatformPlanManager() {
         new_trial_duration_days: toIntOrNull(editing.trialDurationDays),
         new_is_public: editing.isPublic,
         new_is_introductory: editing.isIntroductory,
-        change_reason: editing.reason.trim()
+        change_reason: editing.reason.trim(),
+        new_stripe_monthly_price_id: editing.stripeMonthlyPriceId.trim() || null,
+        new_stripe_annual_price_id: editing.stripeAnnualPriceId.trim() || null
       });
       if (error) throw error;
       setEditing(null);
@@ -571,6 +581,37 @@ export function PlatformPlanManager() {
               />
               Introductory price
             </label>
+          </FormSection>
+
+          <FormSection
+            title="Stripe"
+            description="Price IDs from the Products/Prices you've already created in the Stripe Dashboard - leave blank if this plan isn't checkout-ready yet."
+            columns={2}
+          >
+            <div>
+              <label htmlFor="plan-stripe-monthly" className="block text-xs font-medium text-slate-600">
+                Monthly Stripe Price ID
+              </label>
+              <input
+                id="plan-stripe-monthly"
+                placeholder="price_..."
+                value={editing.stripeMonthlyPriceId}
+                onChange={(event) => setEditing({ ...editing, stripeMonthlyPriceId: event.target.value })}
+                className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"
+              />
+            </div>
+            <div>
+              <label htmlFor="plan-stripe-annual" className="block text-xs font-medium text-slate-600">
+                Annual Stripe Price ID
+              </label>
+              <input
+                id="plan-stripe-annual"
+                placeholder="price_..."
+                value={editing.stripeAnnualPriceId}
+                onChange={(event) => setEditing({ ...editing, stripeAnnualPriceId: event.target.value })}
+                className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"
+              />
+            </div>
           </FormSection>
 
           <FormSection title="Reason" description="Required - recorded in the audit log with this change." columns={1}>

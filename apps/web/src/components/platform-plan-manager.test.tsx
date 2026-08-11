@@ -35,6 +35,8 @@ function planRow(overrides: Record<string, unknown> = {}) {
     is_current: true,
     is_introductory: false,
     effective_at: "2026-08-09T00:00:00Z",
+    stripe_monthly_price_id: null,
+    stripe_annual_price_id: null,
     ...overrides
   };
 }
@@ -84,6 +86,35 @@ describe("PlatformPlanManager", () => {
 
     await waitFor(() => expect(screen.getByText("A reason is required to save plan changes.")).toBeInTheDocument());
     expect(mockedRpc).not.toHaveBeenCalledWith("upsert_plan_definition", expect.anything());
+  });
+
+  it("saves Stripe Price IDs entered on the plan edit form", async () => {
+    mockedRpc.mockImplementation((fn: string) => {
+      if (fn === "list_all_plan_versions") return Promise.resolve({ data: [planRow()], error: null }) as never;
+      if (fn === "upsert_plan_definition") return Promise.resolve({ data: planRow({ version: 2 }), error: null }) as never;
+      return Promise.resolve({ data: null, error: null }) as never;
+    });
+
+    renderManager();
+
+    await waitFor(() => expect(screen.getByText("Start")).toBeInTheDocument());
+    fireEvent.click(screen.getByText("Edit (new version)"));
+
+    await waitFor(() => expect(screen.getByLabelText("Monthly Stripe Price ID")).toBeInTheDocument());
+    fireEvent.change(screen.getByLabelText("Monthly Stripe Price ID"), { target: { value: "price_monthly_123" } });
+    fireEvent.change(screen.getByLabelText("Annual Stripe Price ID"), { target: { value: "price_annual_456" } });
+    fireEvent.change(screen.getByLabelText("Reason"), { target: { value: "Attach Stripe prices" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save as new version" }));
+
+    await waitFor(() =>
+      expect(mockedRpc).toHaveBeenCalledWith(
+        "upsert_plan_definition",
+        expect.objectContaining({
+          new_stripe_monthly_price_id: "price_monthly_123",
+          new_stripe_annual_price_id: "price_annual_456"
+        })
+      )
+    );
   });
 
   it("submits a plan edit with the entered reason", async () => {
