@@ -17,8 +17,8 @@
  */
 
 import { PropsWithChildren } from "react";
-import { NavLink } from "react-router-dom";
-import { Building2, Flag, ClipboardList, LogOut } from "lucide-react";
+import { Link, NavLink } from "react-router-dom";
+import { Building2, ExternalLink, Flag, ClipboardList, LogOut } from "lucide-react";
 import { useAuth } from "@carelik/auth";
 import { cn } from "@carelik/ui";
 
@@ -83,6 +83,13 @@ export function PlatformShell({ children }: PropsWithChildren) {
               <p className="text-xs text-slate-500">Platform Super Admin</p>
             </div>
           </div>
+          <Link
+            to="/"
+            className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium text-slate-600 hover:bg-slate-100 hover:text-slate-950"
+          >
+            <ExternalLink className="h-4 w-4" />
+            <span>View public website</span>
+          </Link>
           <button
             onClick={() => signOut()}
             className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium text-slate-600 hover:bg-slate-100 hover:text-slate-950"

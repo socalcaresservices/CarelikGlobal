@@ -90,6 +90,18 @@ describe("OrganizationsPage", () => {
     expect(screen.getByText("2.00 GB / 10 GB")).toBeInTheDocument();
   });
 
+  it("links Enter organization to the org's tenant subdomain", async () => {
+    mockedUseAuth.mockReturnValue(authUser());
+    mockedUseOrganization.mockReturnValue({ isPlatformOwner: true } as never);
+    mockedRpc.mockResolvedValue({ data: [registryRow], error: null } as never);
+
+    renderPage();
+
+    const link = await screen.findByRole("link", { name: "Enter organization" });
+    expect(link).toHaveAttribute("href", expect.stringContaining("acme.ogevia.com"));
+    expect(link).toHaveAttribute("target", "_blank");
+  });
+
   it("shows an empty state when there are no organizations", async () => {
     mockedUseAuth.mockReturnValue(authUser());
     mockedUseOrganization.mockReturnValue({ isPlatformOwner: true } as never);

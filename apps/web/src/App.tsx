@@ -15,6 +15,8 @@ import { ResetPasswordPage } from "@/pages/reset-password-page";
 import { ApplyPage } from "@/pages/apply-page";
 import { UploadPage } from "@/pages/upload-page";
 import { AddOrganizationPage } from "@/pages/add-organization-page";
+import { MarketingPage } from "@/pages/marketing-page";
+import { PricingPage } from "@/pages/pricing-page";
 
 export function App() {
   const { context: tenantContext, loading } = useTenantContext();
@@ -63,6 +65,12 @@ export function App() {
       <Route path="/reset-password" element={<ResetPasswordPage />} />
       <Route path="/apply/:orgSlug" element={<ApplyPage />} />
       <Route path="/upload/:token" element={<UploadPage />} />
+
+      {/* Public marketing site - platform-root hosts only. A tenant
+          subdomain's "/" is untouched below (still CommandCenterPage via
+          getTenantRoutes()), since these only render when isPlatform. */}
+      {isPlatform && <Route path="/" element={<MarketingPage />} />}
+      {isPlatform && <Route path="/pricing" element={<PricingPage />} />}
 
       {/* Tenant routes (agency workspace) */}
       {!isPlatform && (

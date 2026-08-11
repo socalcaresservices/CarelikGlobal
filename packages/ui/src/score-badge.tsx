@@ -3,24 +3,21 @@ import { toneTextClasses, type StatusTone } from "./status-badge";
 
 // CareScore/GeoScore badges, per the BUILD 001.5 design-system spec.
 //
-// IMPORTANT - this is a deliberate, explicit exception to
-// docs/design-system.md's "no fabricated numbers" rule, not an oversight.
-// A real per-pair CareScore already exists (see
-// docs/phase-1-foundation.md's Increment 22) but only as a ranking used
-// inside the "assign a caregiver to a shift" dropdown - there's no
-// general-purpose score to show on a caregiver's own record page, and
-// there's no GeoScore at all (CareScore's proximity component today is a
-// zip/city/state text match, not a real distance calculation - see
-// design-system.md's "Not yet built" section). The user explicitly chose
-// to ship these badges anyway with sample data, so the *component* can be
-// built and placed now, deferring the real scoring model to a later build.
+// CareScore is real as of the caregiver-detail-page rebuild: it's the
+// same per-pair match formula from list_caregiver_matches()/
+// list_client_matches_for_caregiver() (see
+// docs/phase-1-foundation.md's Increment 22 and
+// supabase/migrations/20260811041032_list_client_matches_for_caregiver.sql),
+// computed from real columns (address/language/skills overlap,
+// availability, shared shift/incident history) - never fabricated.
 //
-// To keep that exception impossible to use by accident, `preview` is a
-// required, literal `true` prop (not a boolean with a default) - every
-// call site has to explicitly acknowledge "this number is not real" in
-// its own JSX, and the badge always renders a visible "Preview" tag.
-// When a real score model exists, delete `preview` (making it a compile
-// error everywhere this is used) and wire in the real value.
+// GeoScore has no real spec or data yet (no geocoding/distance feature
+// exists - see design-system.md's "Not yet built" section) and is not
+// currently rendered anywhere. "geo" stays in ScoreKind so the component
+// is ready whenever real geocoding is built, but nothing should pass
+// preview data for it in the meantime - see the git history for how the
+// old sample-data version of this component worked if that's needed as
+// a reference.
 export type ScoreKind = "care" | "geo";
 
 const KIND_LABEL: Record<ScoreKind, string> = {
@@ -38,13 +35,12 @@ export interface ScoreBadgeProps {
   kind: ScoreKind;
   /** 0-100. */
   value: number;
-  /** Must be `true` - see the file-level comment above. */
-  preview: true;
+  /** Only for sample/non-real data - shows a visible "Preview" tag. Omit for a real score. */
+  preview?: boolean;
   className?: string;
 }
 
 export function ScoreBadge({ kind, value, preview, className }: ScoreBadgeProps) {
-  if (!preview) return null;
   const tone = bandTone(value);
   return (
     <div
@@ -53,9 +49,11 @@ export function ScoreBadge({ kind, value, preview, className }: ScoreBadgeProps)
         className
       )}
     >
-      <span className="absolute -right-2 -top-2 rounded-full bg-slate-900 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-white">
-        Preview
-      </span>
+      {preview ? (
+        <span className="absolute -right-2 -top-2 rounded-full bg-slate-900 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-white">
+          Preview
+        </span>
+      ) : null}
       <span className={cn("text-metric tabular-nums", toneTextClasses[tone])}>{Math.round(value)}</span>
       <span className="text-caption font-medium text-slate-500">{KIND_LABEL[kind]}</span>
     </div>

@@ -79,6 +79,17 @@ interface CaregiverLocationRow {
   skills: string[];
 }
 
+interface ClientMatchRow {
+  client_id: string;
+  client_name: string;
+  match_score: number;
+  proximity_score: number;
+  language_score: number;
+  availability_score: number;
+  skills_score: number;
+  history_score: number;
+}
+
 interface LookupRow {
   id: string;
   name: string;
@@ -111,18 +122,6 @@ function emptyAvailabilityForm(): Record<Weekday, DayAvailabilityForm> {
 
 function capitalize(value: string) {
   return value.charAt(0).toUpperCase() + value.slice(1);
-}
-
-// Deterministic (not random) placeholder score so the same caregiver
-// shows the same sample number on every render/reload instead of
-// flickering - still entirely sample data, see the ScoreBadge usage
-// below and its component-level comment for why this exists at all.
-function previewScoreFromId(id: string, offset: number): number {
-  let hash = 0;
-  for (let i = 0; i < id.length; i += 1) {
-    hash = (hash * 31 + id.charCodeAt(i)) % 1000;
-  }
-  return 55 + ((hash + offset) % 41);
 }
 
 const credentialStatusTone: Record<CredentialStatus, StatusTone> = {
@@ -206,6 +205,25 @@ export function CaregiverDetailPage() {
       return ((data ?? []) as CredentialRow[]).filter((row) => row.caregiver_user_id === id);
     },
     enabled: !!activeOrganizationId && !!id
+  });
+
+  // Real CareScore - the same per-pair match formula the Schedule page
+  // uses (client-first), just run caregiver-first. Gated the same way
+  // list_client_matches_for_caregiver's RPC gates itself
+  // (shifts.update) - this is manager-facing match data, not the
+  // caregiver's own self-view.
+  const canSeeMatches = hasPermission("shifts.update");
+  const matchesQuery = useQuery({
+    queryKey: ["caregiver-detail-matches", activeOrganizationId, id],
+    queryFn: async () => {
+      const { data, error } = await supabase.rpc("list_client_matches_for_caregiver", {
+        target_organization_id: activeOrganizationId!,
+        target_caregiver_user_id: id!
+      });
+      if (error) throw error;
+      return (data ?? []) as ClientMatchRow[];
+    },
+    enabled: !!activeOrganizationId && !!id && canSeeMatches
   });
 
   const notesQuery = useQuery({
@@ -496,6 +514,8 @@ export function CaregiverDetailPage() {
 
   const member = membersQuery.data;
   const hours = hoursQuery.data;
+  // list_client_matches_for_caregiver already orders by match_score desc.
+  const topMatch = (matchesQuery.data ?? [])[0];
   const upcomingShiftCount = (shiftsQuery.data ?? []).filter(
     (row) => row.status === "scheduled" && new Date(row.starts_at).getTime() >= Date.now()
   ).length;
@@ -534,11 +554,11 @@ export function CaregiverDetailPage() {
             <p className="mt-1 text-sm text-slate-500">{member.role.replace(/_/g, " ")}</p>
           </div>
           <div className="flex items-center gap-3">
-            {/* CareScore/GeoScore: sample data only, per the BUILD 001.5
-                design-system scope - see ScoreBadge's own comment for why
-                these aren't real numbers yet. */}
-            <ScoreBadge kind="care" value={previewScoreFromId(member.user_id, 0)} preview />
-            <ScoreBadge kind="geo" value={previewScoreFromId(member.user_id, 17)} preview />
+            {/* Real CareScore - this caregiver's best current client
+                match, same score shown in the ranked list below. Hidden
+                until the query resolves so an empty header never briefly
+                implies a 0. */}
+            {topMatch ? <ScoreBadge kind="care" value={topMatch.match_score} /> : null}
             <StatusBadge label={member.status} tone={member.status === "active" ? "success" : "neutral"} />
           </div>
         </div>
@@ -599,12 +619,35 @@ export function CaregiverDetailPage() {
           <div className="mt-6 border-t border-slate-100 pt-6">
             <h4 className="text-sm font-semibold text-slate-950">Location, languages &amp; skills</h4>
             <p className="mt-1 text-xs text-slate-500">
-              Used for CareScore - the client/caregiver match score shown when scheduling. See{" "}
+              Used for CareScore - this caregiver&rsquo;s real match score against every active client, the
+              same formula used to rank caregivers on{" "}
               <Link to="/schedule" className="underline">
                 Schedule
               </Link>
-              .
+              , just run from this caregiver&rsquo;s side.
             </p>
+            {canSeeMatches ? (
+              <div className="mt-3">
+                {matchesQuery.isLoading ? (
+                  <p className="text-xs text-slate-400">Loading matches…</p>
+                ) : (matchesQuery.data ?? []).length > 0 ? (
+                  <div className="flex flex-wrap gap-3">
+                    {matchesQuery.data!.slice(0, 5).map((match) => (
+                      <Link
+                        key={match.client_id}
+                        to={`/clients/${match.client_id}`}
+                        className="flex flex-col items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-2 text-center hover:border-slate-300"
+                      >
+                        <ScoreBadge kind="care" value={match.match_score} />
+                        <span className="text-xs font-medium text-slate-700">{match.client_name}</span>
+                      </Link>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-xs text-slate-400">No active clients to match against yet.</p>
+                )}
+              </div>
+            ) : null}
             {canEditProfile ? (
               <form onSubmit={handleSaveProfile} className="mt-4 grid gap-3 sm:grid-cols-2">
                 <div>

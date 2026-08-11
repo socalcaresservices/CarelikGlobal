@@ -4,6 +4,7 @@ import { Card, PageHeader, StatusBadge, ProgressBar, usageTone, Button, type Sta
 import { useAuth } from "@carelik/auth";
 import { useOrganization } from "@/providers/organization-provider";
 import { supabase } from "@/lib/supabase";
+import { toTenantUrl } from "@/lib/tenant-resolver";
 import { PlatformPlanManager } from "@/components/platform-plan-manager";
 import { PlatformSubscriberBillingPanel } from "@/components/platform-subscriber-billing-panel";
 
@@ -350,13 +351,23 @@ export function OrganizationsPage() {
                           <p className="text-xs text-slate-500">{org.primary_owner_email ?? ""}</p>
                         </td>
                         <td className="py-2.5 text-right">
-                          <button
-                            type="button"
-                            onClick={() => setExpandedOrgId(isExpanded ? null : org.organization_id)}
-                            className="text-xs font-medium text-slate-700 underline-offset-2 hover:underline"
-                          >
-                            {isExpanded ? "Hide" : "Billing & support"}
-                          </button>
+                          <div className="flex items-center justify-end gap-3">
+                            <a
+                              href={toTenantUrl(org.slug)}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="text-xs font-medium text-slate-700 underline-offset-2 hover:underline"
+                            >
+                              Enter organization
+                            </a>
+                            <button
+                              type="button"
+                              onClick={() => setExpandedOrgId(isExpanded ? null : org.organization_id)}
+                              className="text-xs font-medium text-slate-700 underline-offset-2 hover:underline"
+                            >
+                              {isExpanded ? "Hide" : "Billing & support"}
+                            </button>
+                          </div>
                         </td>
                       </tr>
                       {isExpanded && user ? (

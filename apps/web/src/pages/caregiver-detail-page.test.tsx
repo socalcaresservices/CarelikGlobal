@@ -130,7 +130,7 @@ describe("CaregiverDetailPage", () => {
   });
 
   it("keeps the identity/score/tab header sticky so it stays visible while scrolling a long tab", async () => {
-    // The header Card holds the caregiver's name, CareScore/GeoScore, and
+    // The header Card holds the caregiver's name, CareScore, and
     // the tab bar itself - previously it scrolled away with tab content,
     // so a long Schedule/Credentials/History list left the user with no
     // idea whose record they were even looking at partway down the page.
@@ -153,6 +153,64 @@ describe("CaregiverDetailPage", () => {
     const headerCard = screen.getByText("Sam Caregiver").closest("div.sticky");
     expect(headerCard).not.toBeNull();
     expect(headerCard).toHaveClass("top-0");
+  });
+
+  it("shows the caregiver's real top CareScore in the header and a ranked match list in Overview", async () => {
+    mockedUseAuth.mockReturnValue({ user: { id: "other-user" } } as never);
+    mockedUseOrganization.mockReturnValue(baseOrganization());
+    mockedRpc.mockImplementation((fn: string) => {
+      if (fn === "list_organization_members") {
+        return Promise.resolve({
+          data: [{ user_id: CAREGIVER_ID, display_name: "Sam Caregiver", role: "staff", status: "active" }],
+          error: null
+        }) as never;
+      }
+      if (fn === "list_client_matches_for_caregiver") {
+        return Promise.resolve({
+          data: [
+            {
+              client_id: "client-1",
+              client_name: "Jordan Rivera",
+              match_score: 82,
+              proximity_score: 30,
+              language_score: 25,
+              availability_score: 15,
+              skills_score: 7,
+              history_score: 5
+            },
+            {
+              client_id: "client-2",
+              client_name: "Casey Nguyen",
+              match_score: 41,
+              proximity_score: 0,
+              language_score: 25,
+              availability_score: 15,
+              skills_score: 1,
+              history_score: 0
+            }
+          ],
+          error: null
+        }) as never;
+      }
+      return Promise.resolve({ data: [], error: null }) as never;
+    });
+    mockAvailabilityFrom();
+
+    renderPage();
+    await waitFor(() => expect(screen.getByText("Sam Caregiver")).toBeInTheDocument());
+
+    expect(mockedRpc).toHaveBeenCalledWith("list_client_matches_for_caregiver", {
+      target_organization_id: ORG_ID,
+      target_caregiver_user_id: CAREGIVER_ID
+    });
+    // Top match (82) shown both in the sticky header and the ranked list
+    // below - no "Preview" tag anywhere since it's real data.
+    expect(screen.getAllByText("82")).toHaveLength(2);
+    expect(screen.queryByText("Preview")).not.toBeInTheDocument();
+    // Full ranked list shown in the Overview tab.
+    expect(screen.getByText("Jordan Rivera")).toBeInTheDocument();
+    expect(screen.getByText("41")).toBeInTheDocument();
+    expect(screen.getByText("Casey Nguyen")).toBeInTheDocument();
   });
 
   it("switches to the Credentials tab", async () => {

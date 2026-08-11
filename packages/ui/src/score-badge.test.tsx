@@ -15,6 +15,12 @@ describe("ScoreBadge", () => {
     expect(screen.getByText("GeoScore")).toBeInTheDocument();
   });
 
+  it("renders a real score with no Preview tag when preview is omitted", () => {
+    render(<ScoreBadge kind="care" value={72} />);
+    expect(screen.getByText("72")).toBeInTheDocument();
+    expect(screen.queryByText("Preview")).not.toBeInTheDocument();
+  });
+
   it("colors a low score as danger", () => {
     render(<ScoreBadge kind="care" value={30} preview />);
     expect(screen.getByText("30")).toHaveClass("text-red-700");
