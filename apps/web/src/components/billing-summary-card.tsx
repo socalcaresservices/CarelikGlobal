@@ -54,6 +54,8 @@ interface BillingSummaryRow {
   administrators: number;
   completed_visits: number;
   stripe_configured: boolean;
+  stripe_current_period_start: string | null;
+  stripe_current_period_end: string | null;
 }
 
 function toSummary(row: BillingSummaryRow): OrganizationBillingSummary {
@@ -91,7 +93,9 @@ function toSummary(row: BillingSummaryRow): OrganizationBillingSummary {
     activeCaregivers: row.active_caregivers,
     administrators: row.administrators,
     completedVisits: row.completed_visits,
-    stripeConfigured: row.stripe_configured
+    stripeConfigured: row.stripe_configured,
+    stripeCurrentPeriodStart: row.stripe_current_period_start,
+    stripeCurrentPeriodEnd: row.stripe_current_period_end
   };
 }
 
@@ -252,7 +256,16 @@ export function BillingSummaryCard({
           <div>
             <dt className="text-xs font-medium uppercase tracking-wide text-slate-500">Renewal date</dt>
             <dd className="mt-1 text-sm text-slate-700">
-              {summary.billingCycleAnchor ? new Date(summary.billingCycleAnchor).toLocaleDateString() : "Not set"}
+              {/* stripeCurrentPeriodEnd (from the real Stripe subscription,
+                  synced by the webhook) is authoritative when present -
+                  billingCycleAnchor is only ever a manually-set fallback
+                  for orgs without a real Stripe subscription (complimentary/
+                  platform-overridden billing). */}
+              {summary.stripeCurrentPeriodEnd
+                ? new Date(summary.stripeCurrentPeriodEnd).toLocaleDateString()
+                : summary.billingCycleAnchor
+                  ? new Date(summary.billingCycleAnchor).toLocaleDateString()
+                  : "Not set"}
             </dd>
           </div>
         )}

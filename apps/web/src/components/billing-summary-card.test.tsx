@@ -53,6 +53,8 @@ function baseRow(overrides: Record<string, unknown> = {}) {
     administrators: 1,
     completed_visits: 0,
     stripe_configured: false,
+    stripe_current_period_start: null,
+    stripe_current_period_end: null,
     ...overrides
   };
 }
@@ -133,6 +135,29 @@ describe("BillingSummaryCard", () => {
 
     await waitFor(() => expect(screen.getByText("You’re subscribed to Ogevia Starter.")).toBeInTheDocument());
     expect(screen.queryByRole("button", { name: "Subscribe to Ogevia Starter" })).not.toBeInTheDocument();
+  });
+
+  it("shows the real Stripe period end as the renewal date, not the manual billing_cycle_anchor", async () => {
+    mockSummary({
+      effective_status: "active",
+      billing_cycle_anchor: "2020-01-01",
+      stripe_current_period_end: "2026-10-15T00:00:00Z"
+    });
+
+    renderCard();
+
+    await waitFor(() => expect(screen.getByText("Active")).toBeInTheDocument());
+    expect(screen.getByText(new Date("2026-10-15T00:00:00Z").toLocaleDateString())).toBeInTheDocument();
+    expect(screen.queryByText(new Date("2020-01-01").toLocaleDateString())).not.toBeInTheDocument();
+  });
+
+  it("falls back to billing_cycle_anchor when there's no real Stripe period end", async () => {
+    mockSummary({ effective_status: "active", billing_cycle_anchor: "2026-03-01" });
+
+    renderCard();
+
+    await waitFor(() => expect(screen.getByText("Active")).toBeInTheDocument());
+    expect(screen.getByText(new Date("2026-03-01").toLocaleDateString())).toBeInTheDocument();
   });
 
   it("shows a load error state", async () => {

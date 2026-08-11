@@ -10,10 +10,20 @@ import { supabase } from "@/lib/supabase";
 // anon-callable RPC that returns only marketing-safe columns from
 // plan_definitions for plans marked is_public/is_active/is_current -
 // never hardcoded copy that could drift from what Settings -> Billing
-// and the platform Plan Manager actually enforce. No live checkout -
-// this app's Stripe fields exist but aren't wired to real payments yet
-// (see billing_plans_and_subscribers.sql), so every CTA here links to
-// /login rather than a purchase flow.
+// and the platform Plan Manager actually enforce.
+//
+// Real Stripe-hosted Checkout now exists (apps/netlify-functions), but
+// it only ever sells Ogevia Starter - see create-checkout-session.ts's
+// own comment for why (server-controlled STRIPE_STARTER_PRICE_ID, no
+// plan picker). list_public_plan_versions() can still return other
+// public plans (Grow/Pro/Scale) if the platform owner publishes them,
+// but this page deliberately only renders the trial plan and Starter -
+// showing a plan here that checkout can't actually sell would be
+// misleading. Checkout itself is initiated from inside Settings ->
+// Billing (an authenticated, permission-checked org context), not from
+// here - an anonymous visitor has no organization for a subscription to
+// attach to, so every CTA below still correctly links to /login.
+const PURCHASABLE_PLAN_KEYS = new Set(["start"]);
 interface PublicPlan {
   plan_key: string;
   name: string;
@@ -40,7 +50,9 @@ export function PricingPage() {
     queryFn: async () => {
       const { data, error } = await supabase.rpc("list_public_plan_versions");
       if (error) throw error;
-      return (data ?? []) as PublicPlan[];
+      return ((data ?? []) as PublicPlan[]).filter(
+        (plan) => plan.is_trial || PURCHASABLE_PLAN_KEYS.has(plan.plan_key)
+      );
     }
   });
 
@@ -58,10 +70,10 @@ export function PricingPage() {
       </header>
 
       <section className="mx-auto max-w-4xl px-6 py-16 text-center">
-        <h1 className="text-4xl font-semibold tracking-tight text-slate-950">Plans for agencies of every size</h1>
+        <h1 className="text-4xl font-semibold tracking-tight text-slate-950">Start with Ogevia Starter</h1>
         <p className="mt-4 text-lg text-slate-600">
-          Every plan includes scheduling, CareScore matching, Service Verification, and compliance tracking.
-          Higher tiers add more seats and support.
+          Scheduling, CareScore matching, Service Verification, and compliance tracking - everything a small
+          agency needs to get started.
         </p>
       </section>
 

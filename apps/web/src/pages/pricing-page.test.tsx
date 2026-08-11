@@ -96,6 +96,17 @@ describe("PricingPage", () => {
     await waitFor(() => expect(screen.getByText("Could not load plans right now.")).toBeInTheDocument());
   });
 
+  it("hides non-Starter, non-trial plans - checkout can't sell what it doesn't list", async () => {
+    const growPlan = { ...startPlan, plan_key: "grow", name: "Grow" };
+    mockedRpc.mockResolvedValue({ data: [startPlan, growPlan, trialPlan], error: null } as never);
+
+    renderPage();
+
+    await waitFor(() => expect(screen.getByText("Start")).toBeInTheDocument());
+    expect(screen.getByText("Free Trial")).toBeInTheDocument();
+    expect(screen.queryByText("Grow")).not.toBeInTheDocument();
+  });
+
   it("shows an empty state when no plans are published", async () => {
     mockedRpc.mockResolvedValue({ data: [], error: null } as never);
 

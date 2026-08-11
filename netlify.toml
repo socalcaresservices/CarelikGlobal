@@ -1,5 +1,10 @@
 [build]
-command = "pnpm --filter @carelik/web build"
+# Full monorepo gate before publishing - previously this only ran
+# @carelik/web's own build step, which happily ships a broken Netlify
+# Function as long as the frontend itself compiled (nothing here checked
+# apps/netlify-functions at all). turbo fans typecheck/lint/test out to
+# every workspace package that declares that script.
+command = "pnpm typecheck && pnpm lint && pnpm test && pnpm --filter @carelik/web build"
 publish = "apps/web/dist"
 
 [build.environment]

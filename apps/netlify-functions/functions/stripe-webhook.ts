@@ -5,13 +5,22 @@
 // STRIPE_WEBHOOK_SECRET (raw body, before touching anything the payload
 // claims).
 //
-// Idempotent: every event's id is inserted into stripe_webhook_events
-// before any processing; a primary-key conflict means Stripe redelivered
-// an event already handled, and the handler returns 200 without
-// reapplying anything. Safe for out-of-order delivery: the actual
-// ordering guard lives in record_stripe_subscription_event() itself
-// (stripe_synced_event_created_at), which silently no-ops a late-arriving
-// older event rather than overwriting newer state.
+// Idempotent, with real failure recovery: claim_stripe_webhook_event()
+// atomically distinguishes "never seen this event" and "previously
+// failed/never finished, safe to retry" (processed_at still null) from
+// "already fully processed" (processed_at set) - only the latter is
+// acknowledged without reprocessing. A naive "insert the id before
+// processing" ledger (this function's first version) would have marked
+// an event as handled the moment it was first *attempted*, so a
+// genuinely failed attempt could never be retried - Stripe's redelivery
+// would just see the row already exists and back off. Every processing
+// path below ends by marking the event processed_at (success) or
+// failed_at (error, so the next Stripe retry reclaims it).
+//
+// Safe for out-of-order delivery: the actual ordering guard lives in
+// record_stripe_subscription_event() itself (stripe_synced_event_created_at),
+// which silently no-ops a late-arriving older event rather than
+// overwriting newer state.
 //
 // The only writer of organizations' Stripe columns is
 // record_stripe_subscription_event() - EXECUTE granted only to the
@@ -150,16 +159,24 @@ export default async (req: Request) => {
 
   const adminClient = createClient(supabaseUrl, supabaseSecretKey, { auth: { persistSession: false } });
 
-  // Idempotency: insert before processing. A primary-key conflict means
-  // this exact event was already handled - ack and stop, don't reapply.
-  const { error: ledgerError } = await adminClient
-    .from("stripe_webhook_events")
-    .insert({ event_id: event.id, event_type: event.type });
-  if (ledgerError) {
-    if (ledgerError.code === "23505") {
-      return jsonResponse({ received: true, duplicate: true }, 200);
-    }
-    return jsonResponse({ error: ledgerError.message }, 500);
+  // Atomically claims this event (organization_id isn't known yet for
+  // every event type at this point - it's resolved per event type below;
+  // the ledger row's organization_id is bookkeeping, not what makes this
+  // idempotent). already_processed=true means a prior attempt already
+  // succeeded - ack without reapplying. false covers both "never seen"
+  // and "previously failed" - both are safe, expected to (re)run.
+  const { data: claimData, error: claimError } = (await adminClient
+    .rpc("claim_stripe_webhook_event", {
+      new_event_id: event.id,
+      new_event_type: event.type,
+      new_organization_id: null
+    })
+    .single()) as { data: { already_processed: boolean } | null; error: { message: string } | null };
+  if (claimError) {
+    return jsonResponse({ error: claimError.message }, 500);
+  }
+  if (claimData?.already_processed) {
+    return jsonResponse({ received: true, duplicate: true }, 200);
   }
 
   const eventCreatedAt = new Date(event.created * 1000).toISOString();
@@ -198,7 +215,19 @@ export default async (req: Request) => {
       event.type === "customer.subscription.updated" ||
       event.type === "customer.subscription.deleted"
     ) {
-      const subscription = event.data.object as Stripe.Subscription;
+      // The raw webhook payload's shape is governed by the Stripe
+      // Dashboard webhook endpoint's own configured API version, which
+      // may not match this function's pinned STRIPE_API_VERSION - so
+      // period dates read directly off event.data.object could be on the
+      // pre-Basil root shape instead of the subscription item, silently
+      // coming back undefined. Re-fetching via our own pinned-version
+      // client (same pattern already used for checkout/invoice events
+      // below) makes every field this function reads version-safe,
+      // regardless of what version the endpoint was created with. Still
+      // retrievable even for .deleted - a canceled subscription doesn't
+      // disappear from the API.
+      const rawSubscription = event.data.object as Stripe.Subscription;
+      const subscription = await stripe.subscriptions.retrieve(rawSubscription.id);
       const organizationId = await resolveOrganizationId(adminClient, subscription);
       if (!organizationId) {
         return jsonResponse({ received: true }, 200);
@@ -252,8 +281,21 @@ export default async (req: Request) => {
       });
     }
   } catch (error) {
+    // Leaves processed_at null so the next Stripe retry of this same
+    // event.id reclaims it (claim_stripe_webhook_event's WHERE clause) -
+    // this is the whole point of tracking failure separately from mere
+    // receipt.
+    await adminClient
+      .from("stripe_webhook_events")
+      .update({ failed_at: new Date().toISOString(), last_error: (error as Error).message })
+      .eq("event_id", event.id);
     return jsonResponse({ error: (error as Error).message }, 500);
   }
+
+  await adminClient
+    .from("stripe_webhook_events")
+    .update({ processed_at: new Date().toISOString() })
+    .eq("event_id", event.id);
 
   return jsonResponse({ received: true }, 200);
 };

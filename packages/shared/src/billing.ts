@@ -53,6 +53,8 @@ export interface OrganizationBillingSummary {
   administrators: number;
   completedVisits: number;
   stripeConfigured: boolean;
+  stripeCurrentPeriodStart: string | null;
+  stripeCurrentPeriodEnd: string | null;
 }
 
 export const SUBSCRIPTION_STATUS_LABELS: Record<SubscriptionEffectiveStatus, string> = {

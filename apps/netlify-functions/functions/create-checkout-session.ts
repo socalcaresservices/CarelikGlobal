@@ -105,8 +105,16 @@ export default async (req: Request) => {
 
   const stripe = new Stripe(stripeSecretKey, { apiVersion: STRIPE_API_VERSION });
 
+  // Non-terminal Stripe/Ogevia statuses that mean "this org already has a
+  // subscription that isn't over" - a past_due/unpaid/paused customer
+  // needs to fix their existing subscription (or its invoice), not buy a
+  // second one. Only canceled (Stripe) / canceled/trial_expired (Ogevia)
+  // are truly terminal and allowed to start fresh.
+  const BLOCKING_OGEVIA_STATUSES = new Set(["active", "trialing", "past_due", "suspended"]);
+  const BLOCKING_STRIPE_STATUSES = new Set(["active", "trialing", "past_due", "unpaid", "paused"]);
+
   // Duplicate prevention, layer 1: our own last-synced state.
-  if (org.stripe_subscription_id && (org.subscription_status === "active" || org.subscription_status === "trialing")) {
+  if (org.stripe_subscription_id && BLOCKING_OGEVIA_STATUSES.has(org.subscription_status)) {
     return jsonResponse({ error: "This organization already has an active Ogevia subscription." }, 409);
   }
 
@@ -114,11 +122,12 @@ export default async (req: Request) => {
   // row hasn't been synced yet (webhook lag) or a concurrent request is
   // already in flight for the same customer.
   if (org.stripe_customer_id) {
-    const [activeSubs, trialingSubs] = await Promise.all([
-      stripe.subscriptions.list({ customer: org.stripe_customer_id, status: "active", limit: 1 }),
-      stripe.subscriptions.list({ customer: org.stripe_customer_id, status: "trialing", limit: 1 })
-    ]);
-    if (activeSubs.data.length > 0 || trialingSubs.data.length > 0) {
+    const existingSubs = await stripe.subscriptions.list({
+      customer: org.stripe_customer_id,
+      status: "all",
+      limit: 10
+    });
+    if (existingSubs.data.some((sub) => BLOCKING_STRIPE_STATUSES.has(sub.status))) {
       return jsonResponse({ error: "This organization already has an active Ogevia subscription in Stripe." }, 409);
     }
   }
