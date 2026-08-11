@@ -1,7 +1,7 @@
 # Ogevia Hostile Investor, Product, QA & Business Audit
 
 **Date:** 2026-08-11
-**Scope:** `socalcaresservices/carelikglobal` repository as of this commit — code, schema, migrations, docs. No production system was touched; no destructive action was taken. This is read-only research.
+**Scope:** `socalcaresservices/carelikglobal` repository as of this commit — code, schema, migrations, docs. No production system was touched; no destructive action was taken. This is read-only research. A follow-up verification pass (see **Verification Addendum** at the end) later ran the actual test/build/lint suite locally and confirmed a subset of findings directly against the live `CarelikGlobal` Supabase project and the running app — read-only queries and unauthenticated page loads only, with explicit user sign-off before touching anything live.
 **Method:** Nine-phase audit against the current codebase. Every claim is labeled **VERIFIED** (exact implementation found), **LIKELY** (partial/indirect evidence), **ASSUMPTION** (no code evidence either way), or **CONTRADICTED** (code does something different than the stated plan). Where information doesn't exist in the repo, that is stated as **UNKNOWN** rather than skipped. Governing instruction: keep auditing when information is missing, never stop at the first gap, and treat the current master-plan narrative as a hypothesis to attack, not a conclusion to defend.
 
 ---
@@ -142,3 +142,43 @@ Most of this phase is outside what a codebase can prove. Rather than skip it, ea
 ### What this audit deliberately does not claim
 
 It does not claim the market opportunity is real or fake, that competitors are weaker or stronger, or that the pricing ladder is correctly calibrated — those require information (customer conversations, competitor research, a cost model) that does not exist in this repository, and this audit will not fabricate a market opinion it can't back with evidence. Where Phase 8 says UNKNOWN, that is the honest answer, not a gap in effort.
+
+---
+
+## Verification Addendum (post-audit, executed testing)
+
+Everything above was static analysis — reading code and migrations, not running anything. At the user's request, a follow-up pass actually executed the codebase in three stages to confirm or correct the findings above. This section records what running code showed, separate from what reading code implied.
+
+### Stage 1 — Local build/test/lint
+
+`pnpm install && pnpm typecheck && pnpm build && pnpm test && pnpm lint` were run directly (not just inspected as CI config).
+
+- **Typecheck:** clean across all 5 packages.
+- **Build:** succeeds; `apps/web` produces a single 1.38 MB minified JS bundle (351 KB gzipped) with a Vite chunk-size warning — not previously flagged. Not urgent at current traffic, but worth tracking alongside the other scalability items in Phase 6/9 as the app grows.
+- **Test:** **491/491 tests pass** (73 in `@carelik/ui`, 418 in `@carelik/web`) — confirms the "broad test coverage" claim in Phase 4 was not just a file-count ratio, the suite is actually green.
+- **Lint:** passes clean with zero warnings when run. This **corrects the precision** of the earlier CI finding: the gap is real (GitHub CI still doesn't run `pnpm lint`, only the Netlify deploy gate does), but it is a *structural* risk (a future violation could merge to `main` unnoticed), not an *active* one — nothing is broken today.
+
+### Stage 2 — Live database verification
+
+Local Supabase (Docker) could not be started in this environment — the sandbox's egress policy returned 403 on every CONNECT to Docker Hub's CDN (`production.cloudfront.docker.com`), a policy denial, not a fixable config issue. Instead, with explicit user confirmation, read-only queries were run directly against the live, connected **`CarelikGlobal`** Supabase project (`cdxxpdyobsqvqveabsda`) via its management API — no writes, no test data, no impersonation.
+
+- **No drift:** the live project's 79 applied migrations match the repo's migration files exactly, including the bypass-fix migration. What was audited statically is what's actually deployed.
+- **The severe cross-tenant bypass fix is CONFIRMED deployed and correctly scoped.** Read the live `has_permission()` function source directly: it now requires `is_platform_owner() AND has_active_support_access(target_organization_id)` — the blanket bypass Phase 5 described is genuinely closed in production, not just in a migration file.
+- **The `user_profiles`/`feature_flags` bypass is CONFIRMED still live**, at the exact severity described. Read `pg_policies` directly: `users_read_own_profile` and `users_update_own_profile` both still gate on bare `is_platform_owner()`, with no `has_active_support_access()` check — meaning a platform owner can read *and update* any user's profile (home address, languages, skills) without an active, approved support-access grant, right now, in production. This is one degree worse than Phase 5's phrasing ("read/update," confirmed) — worth escalating, not downgrading.
+- **RLS confirmed enabled** on all 12 checked PHI/tenant tables (`clients`, `shifts`, `service_visits`, `client_authorizations`, `incidents`, `caregiver_credentials`, `user_profiles`, `audit_logs`, `organizations`, `organization_memberships`, `files`, `caregiver_availability`).
+- **`audit_logs` tamper-evidence confirmed live**: exactly one policy exists (`authorized_read_audit`, SELECT-only for `authenticated`) — no insert/update/delete policy for any application role, matching the "only a trigger can write" design.
+- **Supabase's own security advisor: zero ERROR-level findings**, 87 WARN + 2 INFO. The overwhelming majority of WARNs (every `SECURITY DEFINER` RPC flagged as "executable by anon/authenticated") are the generic linter's inability to see that this codebase's own architecture doctrine — enforce permissions *inside* each function body, not via grants (`PRODUCT_CONSTITUTION.md`'s "Build for a machine reader too") — makes most of them false positives. Spot-verified on `list_audit_logs`: it's flagged as anon-executable, but its body requires `has_permission(org_id, 'audit.read')`, which resolves false for an unauthenticated caller — no real leak. Two WARNs are genuinely actionable and new to this audit: **leaked-password protection is disabled** in Supabase Auth (a real, low-effort fix), and the `pg_net` extension is installed in the public schema (minor).
+- **Performance advisor adds concrete detail to Phase 6's scalability claims**: 47 unindexed foreign keys (mostly `created_by`/`updated_by` audit columns — lower urgency) and, more notably, **10 tables where an RLS policy re-evaluates `auth.uid()` per row** instead of caching it (`(select auth.uid())`) — a known Postgres/Supabase RLS performance anti-pattern that will show up as query latency well before row-count limits do. This is more precise, live evidence for the same concern Phase 6 raised from migration comments alone.
+
+### Stage 3 — Running the app in a browser
+
+The dev server was started locally and pointed at the live `CarelikGlobal` project's public URL and anon key (safe to use client-side by design). Chromium (pre-installed) rendered the marketing, pricing, and login pages at both desktop (1280px) and mobile (390px, iPhone-class) viewports.
+
+- **Confirmed:** the public marketing and pricing pages are clean, professional, and genuinely responsive — not just claimed to be. This doesn't validate the in-app *caregiver* mobile workflow (see limitation below), but it's real evidence for the marketing site itself.
+- **Confirmed, positive finding not in the original audit:** when the pricing page's data fetch fails, it shows a plain "Could not load plans right now." message — no crash, no blank screen, no unhandled exception. Error-state handling works as designed under a real (if externally-caused) network failure.
+- **Correction to an earlier ASSUMPTION:** the login page screenshot shows a full email/password form as the primary sign-in method, with "Sign in with GitHub" offered as a secondary "or" option — not GitHub-only, as `README.md`'s "users sign in with GitHub OAuth" line implies on its own. This **reduces** the activation-friction concern raised in Phase 6/8 (a non-technical agency owner without a GitHub account is not blocked from signing in); the README is simply incomplete on this point, worth a one-line fix.
+- **Hard limitation, disclosed rather than papered over:** this sandboxed environment's egress policy blocks *all* outbound access from this container to the live Supabase project's REST API (`cdxxpdyobsqvqveabsda.supabase.co:443` returned 403 on every CONNECT attempt, logged as a policy denial, same class as the Docker block above) — confirmed only reachable through the separate, server-side Supabase management connection used in Stage 2, not from a browser running inside this container. **This means the authenticated in-app screens — critically, the Service Verification clock-in/verify/sign mobile flow that is central to the unresolved EVV-duplication question in Phase 2/8 — could not be exercised end-to-end in this session.** That remains unverified by direct testing, exactly as flagged in the original Phase 3 ASSUMPTION; it now has a documented reason rather than being silently skipped. Testing that flow for real requires either a session without this egress restriction or a device/browser outside this sandbox, logged in with real (or a dedicated test) agency credentials.
+
+### Net effect of the verification pass
+
+Every specific, checkable claim in the original nine-phase audit held up against actually running the code, the live database, and the live app — nothing was found to be wrong. Two items got worse on inspection (the `user_profiles` leak is a read *and write* hole, not just read), one got better (login isn't GitHub-only), and a few genuinely new items surfaced that static reading couldn't have found (the RLS performance anti-pattern, the disabled leaked-password protection, the bundle-size warning, the confirmed-graceful error state). The one claim that remains untested is also the single most consequential one for the product's core positioning — whether the caregiver's actual on-device verification workflow duplicates state-mandated EVV — and that limitation is now explicit rather than implied.
