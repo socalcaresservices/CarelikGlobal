@@ -1,6 +1,6 @@
 # Ogevia SaaS Structure Cleanup & UX Refactor
 
-**Status:** Increment 2 of N — foundational identity fixes (increment 1) plus a real Subscriptions/Plans platform page (increment 2), both shipped and verified. This is a large, multi-session refactor by design (the spec itself is ~27 sections covering platform/tenant/staff separation, navigation, and a redesign of nearly every operational page). This document is the repository audit (spec §24) plus the honest status report (spec §27) for what has actually shipped so far, updated as later increments land.
+**Status:** Increment 3 of N — foundational identity fixes (1), a real Subscriptions/Plans platform page (2), and a genuinely separate StaffShell for the caregiver role (3), all shipped and verified. This is a large, multi-session refactor by design (the spec itself is ~27 sections covering platform/tenant/staff separation, navigation, and a redesign of nearly every operational page). This document is the repository audit (spec §24) plus the honest status report (spec §27) for what has actually shipped so far, updated as later increments land.
 
 ---
 
@@ -32,7 +32,7 @@
 | `/apply/:orgSlug`, `/upload/:token` | none (public) | Public (any host) | KEEP | |
 | `/` on marketing hosts | none (public) | Marketing | KEEP | |
 | `/pricing` | none (public) | Marketing | KEEP | |
-| *(none yet)* | — | **Staff Portal** | **BUILD** | A dedicated `StaffShell` (Home / My Schedule / Visit-Clock In / Service Verification / Tasks / Messages / Documents / Profile per spec §1C) does not exist. Today, a `caregiver`-role user gets the *same* `AppShell` as an `organization_owner`, just with fewer nav items visible via permission gating - functionally closer than the spec implies (caregivers already can't reach client management, authorization admin, etc., because those routes are permission-gated), but it is literally the same shell/chrome, not a distinct simplified mobile-first one. This is the single largest piece of unbuilt spec (§1C, §20).
+| *(new)* | **StaffShell** | **Staff Portal** | **BUILT (increment 3)** | A genuinely separate shell now exists (`staff-shell.tsx`), rendered instead of `AppShell` for the `caregiver` role via a new `TenantShell` router (`tenant-shell.tsx`) that both shells sit behind. Nav: Home (`/`), My Schedule (`/schedule` - already self-scoping server-side, see below), Schedule a visit (`/staff/visits`), Clock in / Verify visit (`/service-verification`). Desktop sidebar + mobile bottom tab bar, no admin nav groups at all (not permission-hidden - structurally absent). Spec §1C also lists Tasks, Messages, Documents, and a self-service Profile - none of those exist as real features anywhere in this codebase, so they are deliberately **not** in this nav (no stub pages built) rather than faked; see Remaining Risks. |
 
 ## Problems found (this session)
 
@@ -43,7 +43,7 @@
 5. **No `StaffShell` exists** - caregivers use the same shell as owners/admins, differing only by permission-gated nav visibility, not a purpose-built mobile-first experience.
 6. **Platform nav is missing most of its target surface** - Subscriptions/Plans, Analytics, Support, Security, System Health, and Platform Settings are still TODOs in `platform-routes.tsx` itself.
 
-## Architecture before → after (this increment only)
+## Architecture before → after (cumulative, increments 1-3)
 
 | | Before | After |
 |---|---|---|
@@ -52,56 +52,62 @@
 | Org name repetitions on Settings | 3 (sidebar, context bar, page H2) | 2 (sidebar, context bar) - Settings' own H2 is now "Settings," its actual page title |
 | Org name in `ContextBar` | Shown | Removed - sidebar chrome already shows it once |
 | Sidebar top-level grouping | Overview (unlabeled, 5 items) / People / Compliance / Administration | Home (2 items) / **Operations (new label, 4 items)** / People / Compliance / Administration - same routes, same permissions, closer to the spec's HOME/OPERATIONS taxonomy |
+| Platform nav | Organizations / Feature Flags / Audit, with the plan catalog editor embedded inside Organizations | Organizations / **Subscriptions (new page)** / Feature Flags / Audit - plan catalog is its own destination |
+| Caregiver role's shell | Same `AppShell` as every other role, nav items just permission-hidden | **`StaffShell` (new)** - a structurally separate, mobile-first shell (sidebar + bottom tab bar) with only Home/My Schedule/Schedule a visit/Clock in-Verify visit, chosen by a new `TenantShell` router based on `role === "caregiver"` |
 
-Everything else in the spec (Platform Home dashboard, Subscriptions/Analytics/Support/Security/System Health pages, StaffShell, the Visits merge, Client/Workforce/Applicant/Authorizations/Credentials/Incidents redesigns, Settings tabs, Command Center rebuild, CareScore-in-workflow, card-fatigue removal, page-density pass, org-resolution architecture for future custom domains) is **unchanged this increment** - see Recommended Next Build.
+Everything else in the spec (Platform Home dashboard, Analytics/Support/Security/System Health pages, the Visits merge, Client/Workforce/Applicant/Authorizations/Credentials/Incidents redesigns, Settings tabs, Command Center rebuild, CareScore-in-workflow, card-fatigue removal, page-density pass, org-resolution architecture for future custom domains) is **unchanged** - see Recommended Next Build.
 
 ## Routes moved / merged / refactored / removed
 
-- **Moved:** none this increment (labeling/grouping only - see nav regroup above).
-- **Merged:** none this increment.
-- **Refactored:** `app-shell.tsx` (header + nav grouping), `organization-provider.tsx` (added `userDisplayName`), `context-bar.tsx` (dropped redundant org name), `settings-page.tsx` (fixed duplicate heading).
+- **Moved:** `PlatformPlanManager`'s mount point from `/organizations` to a new `/subscriptions` route (increment 2). No page content changed, only which route renders it.
+- **Merged:** none.
+- **New:** `/subscriptions` (`subscriptions-page.tsx`, increment 2). No new *tenant* routes - `StaffShell` (increment 3) reuses the exact same tenant routes (`/`, `/schedule`, `/staff/visits`, `/service-verification`) that already existed, just wrapped in different chrome for the caregiver role.
+- **Refactored:** `app-shell.tsx` (header + nav grouping), `organization-provider.tsx` (added `userDisplayName`), `context-bar.tsx` (dropped redundant org name), `settings-page.tsx` (fixed duplicate heading), `organizations-page.tsx` (plan manager removed), `platform-shell.tsx` (nav item added), `platform-routes.tsx` (route added), `App.tsx` (mounts `TenantShell` instead of `AppShell` directly).
 - **Removed:** nothing.
 
 ## Components reused / refactored / removed
 
-- **Reused as-is:** every page component, every RPC, every permission check. Nothing was rewritten or duplicated.
-- **Refactored:** `AppShell`, `ContextBar`, `SettingsPage` (header section only in each case).
+- **Reused as-is:** every existing page component, every RPC, every permission check, `PlatformPlanManager` (moved but not modified). Nothing was rewritten or duplicated.
+- **New:** `SubscriptionsPage`, `StaffShell`, `TenantShell`.
+- **Refactored:** `AppShell`, `ContextBar`, `SettingsPage`, `OrganizationsPage`, `PlatformShell` (each touched only in the specific section described above).
 - **Removed:** nothing.
 
 ## Database / RLS changes
 
-None. This increment is presentation-layer only. The one data-level fix this session (revoking a cross-org membership) was a **data** change made live by the user through the existing, unmodified Access UI - no schema, RLS, or RPC changes were needed or made.
+None across all three increments. This refactor is presentation-layer only. The one data-level fix this session (revoking a cross-org membership) was a **data** change made live by the user through the existing, unmodified Access UI - no schema, RLS, or RPC changes were needed or made.
 
 ## Navigation changes
 
-Sidebar now groups Command Center + Workforce Insights under an unlabeled "Home" position and Schedule / Schedule a visit / Service Verification / Visit Reports under a new "Operations" label, matching the spec's requested taxonomy at the label level. The deeper restructuring the spec wants - merging Schedule/Visits/Reports into one workspace, adding an Insights group, moving Organization/Services/Users & Access/Settings under one Administration umbrella distinct from today's flatter Access + Settings - is not done.
+Tenant sidebar: Home (2 items) / Operations (4 items, new label) / People / Compliance / Administration - same routes and permissions as before, regrouped. Platform sidebar: Organizations / Subscriptions (new) / Feature Flags / Audit. Staff (caregiver role): an entirely separate, shorter nav in `StaffShell` - Home / My Schedule / Schedule a visit / Clock in-Verify visit, with no admin groups present at all (not hidden - structurally absent from that shell).
 
 ## UX changes
 
-Header identity fix (above) and duplicate-heading fix (above) are the only shipped UX changes. No visual redesign (card-fatigue removal, page-density pass, empty-state/skeleton polish) was attempted this increment - that is a large, cross-cutting effort explicitly scoped to a later build.
+Header identity fix, duplicate-heading fix, the Subscriptions split, and the caregiver-role shell split are the shipped UX changes so far. No visual redesign (card-fatigue removal, page-density pass, empty-state/skeleton polish) has been attempted - that remains a large, cross-cutting effort explicitly scoped to a later build.
 
 ## CareScore integration
 
-Not touched this increment. CareScore already exists as a real per-pair computed score (per `docs/design-system.md`) but is not yet surfaced in the Schedule/matching workflow the spec describes (ranked recommended caregivers with explainable reasoning). Deferred.
+Not touched. CareScore already exists as a real per-pair computed score (per `docs/design-system.md`) but is not yet surfaced in the Schedule/matching workflow the spec describes (ranked recommended caregivers with explainable reasoning). Deferred.
 
 ## Capacity integration
 
-Not touched this increment. Workforce desired/scheduled/remaining hours and client authorized/scheduled/completed/remaining utilization are not yet surfaced in list/table views as the spec describes. Deferred.
+Not touched. Workforce desired/scheduled/remaining hours and client authorized/scheduled/completed/remaining utilization are not yet surfaced in list/table views as the spec describes. Deferred.
 
 ## Tests
 
-`pnpm test`: **418/418 passing** (55 test files). Two tests required updates to match intentional behavior changes (not regressions): `context-bar.test.tsx` no longer asserts the organization name renders in that component (it deliberately doesn't anymore), and `settings-page.test.tsx`'s no-permission test now asserts on the actual message text instead of a heading that no longer exists. All other test mocks across ~13 files needed a `userDisplayName` field added to their `OrganizationContextValue` mocks to satisfy the type - mechanical, no behavior changes.
+`pnpm test`: **425/425 passing** (58 test files), cumulative across all three increments. Notable non-regression changes along the way: `context-bar.test.tsx` no longer asserts the organization name renders there (deliberate); `settings-page.test.tsx`'s no-permission test asserts on the real message text instead of a heading that no longer exists; ~13 files needed a mechanical `userDisplayName` field added to their `OrganizationContextValue` mocks. Two new test files added for the new shells (`staff-shell.test.tsx`, `tenant-shell.test.tsx`) and one for the new page (`subscriptions-page.test.tsx`).
 
 ## Build results
 
 - `pnpm typecheck`: clean, 5/5 packages.
 - `pnpm lint`: clean, 0 warnings (`--max-warnings=0`).
-- `pnpm test`: 418/418 passing.
-- `pnpm build`: succeeds. Bundle unchanged at ~1.37 MB minified / 351 KB gzipped (pre-existing chunk-size warning, not addressed this increment - tracked as a Phase 6 finding in the hostile audit).
+- `pnpm test`: 425/425 passing.
+- `pnpm build`: succeeds. Bundle ~1.38 MB minified / 352 KB gzipped, essentially unchanged (pre-existing chunk-size warning, not addressed - tracked as a Phase 6 finding in the hostile audit).
 
 ## Remaining risks
 
-- **StaffShell doesn't exist yet.** Caregivers today get the full `AppShell` with most items permission-gated away, not a purpose-built mobile-first shell. Functionally adequate, structurally not what the spec (or good practice for a phone-in-the-field user) wants.
+- **StaffShell's nav is intentionally short.** It omits Tasks, Messages, Documents, and a self-service Profile because none of those exist as real features in this codebase - building stub pages for them would be fabricated functionality, not a real refactor. A caregiver today lands on Home/My Schedule/Schedule a visit/Clock in-Verify visit only. If any of the missing four are wanted, they need to be built as real features first (their own follow-up work), then added to this nav - not the other way around.
+- **The role → shell mapping is exact-match only.** `TenantShell` renders `StaffShell` only when `role === "caregiver"` precisely; every other role (including `read_only`, which the spec's own §14 role list includes) gets `AppShell`. Whether `read_only` or other lighter roles should also get a simplified shell wasn't in scope for this increment and isn't decided.
+- **Not yet verified against the live app.** This shell split was built and unit-tested (`staff-shell.test.tsx`, `tenant-shell.test.tsx`) but not walked through in a real browser against the live `CarelikGlobal` Supabase project, the way the marketing/pricing/login pages were in the hostile audit's Stage 3. The caregiver test account discussed earlier in this session (`admin@gmail.com`) was flagged for removal, not confirmed removed - a real end-to-end check needs either that account restored or a new caregiver-role account to sign in as.
 - **Platform nav is still missing most of its target surface** (Platform Home, Analytics, Security, System Health, Platform Settings, and a standalone per-org Billing/Support page) - Subscriptions/Plans shipped this increment; the rest are pre-existing TODOs, not newly introduced.
 - **The `ogethinks` cross-org-ownership question is still open** (flagged in the hostile audit's Stage 5) - same account, same class of vendor/client boundary question, unresolved pending the user's decision.
 - **No code-level guard prevents the account-hygiene bug from recurring.** The fix this session was manual (one Revoke click). Nothing stops another account from ending up with owner rights in Ogevia's own org again.
@@ -112,7 +118,7 @@ Not touched this increment. Workforce desired/scheduled/remaining hours and clie
 In priority order:
 
 1. ~~Platform Home + the missing Platform nav pages~~ **Subscriptions/Plans shipped (increment 2).** Remaining: Platform Home/dashboard, Analytics, Security, System Health, Platform Settings, and a standalone Billing/Support page (needs an org-picker pattern first, since that content is currently embedded per-row in Organizations).
-2. **StaffShell** - a genuinely separate, mobile-first shell for the `caregiver` role (spec §1C), reusing existing pages/RPCs where the underlying data is already correctly scoped (it is - RLS/permission gating doesn't change), just presenting them differently.
+2. ~~StaffShell~~ **Shipped (increment 3).** Remaining: decide whether Tasks/Messages/Documents/Profile get built as real features (then added to the nav), and whether any role besides `caregiver` should also get a simplified shell.
 3. **Visits merge** (spec §6) - Schedule a visit / Service Verification / Visit Reports into one tabbed Visits workspace, preserving the direct caregiver shortcut. This is the module most directly relevant to the hostile audit's still-open EVV-duplication question, since it's the actual clock-in/verify/sign flow.
 4. **Client, Workforce, Authorizations, Credentials, Incidents list-first redesigns** (spec §7, §8, §10, §11, §12) - same shape of change each time (list-first default, creation moved to a drawer/modal), can likely share one new list-page pattern/component rather than four bespoke rebuilds.
 5. **Settings tabs** (spec §13) and **Access role vocabulary expansion** (spec §14).

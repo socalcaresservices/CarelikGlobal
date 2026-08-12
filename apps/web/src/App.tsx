@@ -1,6 +1,6 @@
 import { useEffect } from "react";
 import { Navigate, Route, Routes, useNavigate } from "react-router-dom";
-import { AppShell } from "@/layout/app-shell";
+import { TenantShell } from "@/layout/tenant-shell";
 import { PlatformShell } from "@/layout/platform-shell";
 import { OrganizationProvider } from "@/providers/organization-provider";
 import { PlatformProvider } from "@/providers/platform-provider";
@@ -90,13 +90,13 @@ export function App() {
               <OrganizationProvider
                 tenantSlug={tenantContext.type === "tenant" ? tenantContext.slug : undefined}
               >
-                <AppShell>
+                <TenantShell>
                   <Routes>
                     {getTenantRoutes()}
                     <Route path="/organizations/new" element={<AddOrganizationPage />} />
                     <Route path="*" element={<Navigate to="/" replace />} />
                   </Routes>
-                </AppShell>
+                </TenantShell>
               </OrganizationProvider>
             </ProtectedRoute>
           }
