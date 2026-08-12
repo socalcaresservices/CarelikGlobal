@@ -1,6 +1,9 @@
 import { Link } from "react-router-dom";
+import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "@carelik/auth";
 import { Card, buttonVariants } from "@carelik/ui";
+import { supabase } from "@/lib/supabase";
+import { toAdminUrl, toAppUrl } from "@/lib/tenant-resolver";
 
 // Public, unauthenticated marketing homepage - no AppShell/PlatformShell,
 // no session required. Lives outside <ProtectedRoute> in App.tsx, and is
@@ -56,6 +59,30 @@ const FEATURES = [
 export function MarketingPage() {
   const { user } = useAuth();
 
+  // MarketingPage is mounted standalone on the marketing host (App.tsx's
+  // isMarketing branch), outside OrganizationProvider - so platform-owner
+  // status isn't already available the way it is inside the app/admin
+  // shells, and needs its own small direct read here. This nav link must
+  // never show to a signed-in user who isn't actually a platform owner
+  // (that was the bug: it showed for any authenticated user at all,
+  // platform owner or not) - see admin.ogevia.com's own
+  // RequirePlatformOwner guard for the canonical isPlatformOwner source
+  // this mirrors.
+  const platformRoleQuery = useQuery({
+    queryKey: ["marketing-platform-role", user?.id],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("user_profiles")
+        .select("platform_role")
+        .eq("id", user!.id)
+        .maybeSingle();
+      if (error) throw error;
+      return data?.platform_role ?? null;
+    },
+    enabled: !!user
+  });
+  const isPlatformOwner = platformRoleQuery.data === "platform_owner";
+
   return (
     <div className="min-h-screen bg-white">
       <header className="border-b border-slate-200">
@@ -65,14 +92,22 @@ export function MarketingPage() {
             <Link to="/pricing" className="hover:text-slate-950">
               Pricing
             </Link>
-            {user ? (
-              <Link to="/organizations" className={buttonVariants({ variant: "secondary", size: "sm" })}>
-                Go to platform admin
-              </Link>
-            ) : (
+            {!user ? (
               <Link to="/login" className={buttonVariants({ variant: "secondary", size: "sm" })}>
                 Sign in
               </Link>
+            ) : isPlatformOwner ? (
+              // Cross-host link, not a react-router <Link> - admin.ogevia.com
+              // is a different hostname than this marketing page, so
+              // client-side routing can't reach it; a plain <Link to="/...">
+              // here previously just bounced back to this same page.
+              <a href={toAdminUrl("/organizations")} className={buttonVariants({ variant: "secondary", size: "sm" })}>
+                Go to platform admin
+              </a>
+            ) : (
+              <a href={toAppUrl()} className={buttonVariants({ variant: "secondary", size: "sm" })}>
+                Go to your organization
+              </a>
             )}
           </nav>
         </div>
