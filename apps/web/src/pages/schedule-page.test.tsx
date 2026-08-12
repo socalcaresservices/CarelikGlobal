@@ -2,10 +2,12 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { useAuth } from "@carelik/auth";
 import { useOrganization } from "@/providers/organization-provider";
 import { supabase } from "@/lib/supabase";
 import { SchedulePage } from "./schedule-page";
 
+vi.mock("@carelik/auth", () => ({ useAuth: vi.fn() }));
 vi.mock("@/providers/organization-provider", () => ({ useOrganization: vi.fn() }));
 vi.mock("@/lib/supabase", () => ({
   supabase: {
@@ -14,6 +16,7 @@ vi.mock("@/lib/supabase", () => ({
   }
 }));
 
+const mockedUseAuth = vi.mocked(useAuth);
 const mockedUseOrganization = vi.mocked(useOrganization);
 const mockedRpc = vi.mocked(supabase.rpc);
 const mockedFrom = vi.mocked(supabase.from);
@@ -52,7 +55,9 @@ const sampleShift = {
   starts_at: "2026-07-20T09:00:00.000Z",
   ends_at: "2026-07-20T11:00:00.000Z",
   status: "scheduled" as const,
-  notes: null
+  notes: null,
+  needs_coverage: false,
+  call_out_reason: null
 };
 
 function mockRpc({
@@ -90,12 +95,26 @@ function renderPage(initialEntries: string[] = ["/schedule"]) {
   );
 }
 
+function mockAuthUser(id: string) {
+  mockedUseAuth.mockReturnValue({
+    user: { id } as never,
+    session: {} as never,
+    loading: false,
+    signInWithGithub: vi.fn(),
+    signInWithPassword: vi.fn(),
+    resetPasswordForEmail: vi.fn(),
+    updatePassword: vi.fn(),
+    signOut: vi.fn()
+  });
+}
+
 describe("SchedulePage", () => {
   afterEach(() => {
     vi.clearAllMocks();
   });
 
   it("shows shifts even without shifts.read (own-shift visibility), and hides the scheduling form", async () => {
+    mockAuthUser(CAREGIVER_ID);
     mockedUseOrganization.mockReturnValue({ ...baseOrganization(), hasPermission: vi.fn(() => false) });
     mockRpc({ shifts: [sampleShift] });
 
@@ -115,6 +134,7 @@ describe("SchedulePage", () => {
   });
 
   it("bounds the shift fetch to a rolling window around today, not every shift ever", async () => {
+    mockAuthUser(CAREGIVER_ID);
     mockedUseOrganization.mockReturnValue({ ...baseOrganization(), hasPermission: vi.fn(() => true) });
     mockRpc({ shifts: [], members: [] });
     mockedFrom.mockReturnValue({ select: mockReadableClients([]) } as never);
@@ -140,6 +160,7 @@ describe("SchedulePage", () => {
   });
 
   it("shows the scheduling form and creates a shift when shifts.update is held", async () => {
+    mockAuthUser(CAREGIVER_ID);
     mockedUseOrganization.mockReturnValue({ ...baseOrganization(), hasPermission: vi.fn(() => true) });
     mockRpc({
       shifts: [],
@@ -173,6 +194,7 @@ describe("SchedulePage", () => {
   });
 
   it("ranks caregivers by CareScore once a client is selected", async () => {
+    mockAuthUser(CAREGIVER_ID);
     mockedUseOrganization.mockReturnValue({ ...baseOrganization(), hasPermission: vi.fn(() => true) });
     mockRpc({
       shifts: [],
@@ -208,6 +230,7 @@ describe("SchedulePage", () => {
   });
 
   it("preselects the client and ranks caregivers when arriving with ?clientId=", async () => {
+    mockAuthUser(CAREGIVER_ID);
     mockedUseOrganization.mockReturnValue({ ...baseOrganization(), hasPermission: vi.fn(() => true) });
     mockRpc({
       shifts: [],
@@ -230,6 +253,7 @@ describe("SchedulePage", () => {
   });
 
   it("changes a shift's status when shifts.update is held", async () => {
+    mockAuthUser(CAREGIVER_ID);
     mockedUseOrganization.mockReturnValue({ ...baseOrganization(), hasPermission: vi.fn(() => true) });
     mockRpc({ shifts: [sampleShift], members: [] });
     const selectMock = mockReadableClients([]);
@@ -246,7 +270,86 @@ describe("SchedulePage", () => {
     expect(eqMock).toHaveBeenCalledWith("id", sampleShift.id);
   });
 
+  it("lets the shift's own caregiver call out", async () => {
+    mockAuthUser(CAREGIVER_ID);
+    mockedUseOrganization.mockReturnValue({ ...baseOrganization(), hasPermission: vi.fn(() => false) });
+    mockRpc({ shifts: [sampleShift] });
+    mockedRpc.mockImplementation((fn: string) => {
+      if (fn === "list_shifts") return Promise.resolve({ data: [sampleShift], error: null }) as never;
+      if (fn === "call_out_shift") return Promise.resolve({ data: "event-id", error: null }) as never;
+      return Promise.resolve({ data: [], error: null }) as never;
+    });
+
+    renderPage();
+    await waitFor(() => expect(screen.getByRole("button", { name: "Call out" })).toBeInTheDocument());
+
+    fireEvent.click(screen.getByRole("button", { name: "Call out" }));
+    fireEvent.change(screen.getByLabelText("Reason for calling out"), {
+      target: { value: "Family emergency" }
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Confirm call-out" }));
+
+    await waitFor(() =>
+      expect(mockedRpc).toHaveBeenCalledWith("call_out_shift", {
+        target_shift_id: sampleShift.id,
+        reason: "Family emergency"
+      })
+    );
+  });
+
+  it("does not offer Call out for someone else's shift without shifts.update", async () => {
+    mockAuthUser("99999999-9999-4999-8999-999999999999");
+    mockedUseOrganization.mockReturnValue({ ...baseOrganization(), hasPermission: vi.fn(() => false) });
+    mockRpc({ shifts: [sampleShift] });
+
+    renderPage();
+    await waitFor(() => expect(screen.getByText("Jordan Rivera")).toBeInTheDocument());
+    expect(screen.queryByRole("button", { name: "Call out" })).not.toBeInTheDocument();
+  });
+
+  it("shows a needs-coverage badge and reassigns to a replacement caregiver", async () => {
+    mockAuthUser(CAREGIVER_ID);
+    mockedUseOrganization.mockReturnValue({ ...baseOrganization(), hasPermission: vi.fn(() => true) });
+    const calledOutShift = { ...sampleShift, needs_coverage: true, call_out_reason: "Family emergency" };
+    const REPLACEMENT_ID = "55555555-5555-4555-8555-555555555555";
+    mockedRpc.mockImplementation((fn: string) => {
+      if (fn === "list_shifts") return Promise.resolve({ data: [calledOutShift], error: null }) as never;
+      if (fn === "list_organization_members") {
+        return Promise.resolve({
+          data: [
+            { user_id: CAREGIVER_ID, display_name: "Sam Caregiver", status: "active" },
+            { user_id: REPLACEMENT_ID, display_name: "Alex Aide", status: "active" }
+          ],
+          error: null
+        }) as never;
+      }
+      if (fn === "reassign_shift") return Promise.resolve({ data: null, error: null }) as never;
+      return Promise.resolve({ data: [], error: null }) as never;
+    });
+    mockedFrom.mockReturnValue({ select: mockReadableClients([]) } as never);
+
+    renderPage();
+    await waitFor(() => expect(screen.getByText("Needs coverage")).toBeInTheDocument());
+    expect(screen.getByText("Called out: Family emergency")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Reassign" }));
+    await waitFor(() => expect(screen.getByLabelText("Cover with")).toBeInTheDocument());
+
+    fireEvent.change(screen.getByLabelText("Cover with"), { target: { value: REPLACEMENT_ID } });
+    fireEvent.change(screen.getByLabelText("Reason"), { target: { value: "Covering the call-out" } });
+    fireEvent.click(screen.getByRole("button", { name: "Confirm reassignment" }));
+
+    await waitFor(() =>
+      expect(mockedRpc).toHaveBeenCalledWith("reassign_shift", {
+        target_shift_id: sampleShift.id,
+        new_caregiver_user_id: REPLACEMENT_ID,
+        reason: "Covering the call-out"
+      })
+    );
+  });
+
   it("shows an empty state when there are no shifts", async () => {
+    mockAuthUser(CAREGIVER_ID);
     mockedUseOrganization.mockReturnValue({ ...baseOrganization(), hasPermission: vi.fn(() => true) });
     mockRpc({ shifts: [], members: [] });
     mockedFrom.mockReturnValue({ select: mockReadableClients([]) } as never);

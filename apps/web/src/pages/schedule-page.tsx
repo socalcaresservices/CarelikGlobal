@@ -1,8 +1,9 @@
-import { useState, type FormEvent } from "react";
+import { Fragment, useState, type FormEvent } from "react";
 import { useSearchParams } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Button, Card, FilterBar, type ActiveFilter } from "@carelik/ui";
+import { Button, Card, FilterBar, StatusBadge, type ActiveFilter } from "@carelik/ui";
 import { shiftStatusSchema } from "@carelik/shared";
+import { useAuth } from "@carelik/auth";
 import { useOrganization } from "@/providers/organization-provider";
 import { supabase } from "@/lib/supabase";
 import { useTableControls } from "@/lib/use-table-controls";
@@ -47,6 +48,8 @@ interface ShiftRow {
   ends_at: string;
   status: "scheduled" | "completed" | "cancelled" | "no_show";
   notes: string | null;
+  needs_coverage: boolean;
+  call_out_reason: string | null;
 }
 
 interface ClientOption {
@@ -85,6 +88,7 @@ function toLocalInputValue(date: Date) {
 }
 
 export function SchedulePage() {
+  const { user } = useAuth();
   const { activeOrganizationId, activeOrganization, hasPermission } = useOrganization();
   const queryClient = useQueryClient();
 
@@ -253,6 +257,77 @@ export function SchedulePage() {
       setRowError(cause instanceof Error ? cause.message : "Could not update shift.");
     } finally {
       setPendingId(null);
+    }
+  }
+
+  // Call-out / replacement (20260812230000_shift_coverage.sql). Calling
+  // out never touches the shift row - "needs coverage" is read back from
+  // list_shifts()'s needs_coverage flag, which is derived from the
+  // coverage-event log. Reassigning updates the SAME shift's
+  // caregiver_user_id - same id, same times, same authorization
+  // reservation, no duplicate shift or visit.
+  const [callOutShiftId, setCallOutShiftId] = useState<string | null>(null);
+  const [callOutReason, setCallOutReason] = useState("");
+  const [callOutError, setCallOutError] = useState<string | null>(null);
+  const [callingOut, setCallingOut] = useState(false);
+
+  const [reassignShiftId, setReassignShiftId] = useState<string | null>(null);
+  const [reassignCaregiverId, setReassignCaregiverId] = useState("");
+  const [reassignReason, setReassignReason] = useState("");
+  const [reassignError, setReassignError] = useState<string | null>(null);
+  const [reassigning, setReassigning] = useState(false);
+
+  function startCallOut(shiftId: string) {
+    setCallOutShiftId(shiftId);
+    setCallOutReason("");
+    setCallOutError(null);
+  }
+
+  async function handleCallOut(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!callOutShiftId || !callOutReason.trim()) return;
+    setCallingOut(true);
+    setCallOutError(null);
+    try {
+      const { error } = await supabase.rpc("call_out_shift", {
+        target_shift_id: callOutShiftId,
+        reason: callOutReason.trim()
+      });
+      if (error) throw error;
+      setCallOutShiftId(null);
+      refreshShifts();
+    } catch (cause) {
+      setCallOutError(cause instanceof Error ? cause.message : "Could not call out this shift.");
+    } finally {
+      setCallingOut(false);
+    }
+  }
+
+  function startReassign(shiftId: string) {
+    setReassignShiftId(shiftId);
+    setReassignCaregiverId("");
+    setReassignReason("");
+    setReassignError(null);
+  }
+
+  async function handleReassign(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!reassignShiftId || !reassignCaregiverId || !reassignReason.trim()) return;
+    setReassigning(true);
+    setReassignError(null);
+    try {
+      const { error } = await supabase.rpc("reassign_shift", {
+        target_shift_id: reassignShiftId,
+        new_caregiver_user_id: reassignCaregiverId,
+        reason: reassignReason.trim()
+      });
+      if (error) throw error;
+      setReassignShiftId(null);
+      refreshShifts();
+    } catch (cause) {
+      setReassignError(cause instanceof Error ? cause.message : "Could not reassign this shift.");
+    } finally {
+      setReassigning(false);
     }
   }
 
@@ -458,50 +533,186 @@ export function SchedulePage() {
                   width={columns.widths.status}
                   onResizeStart={columns.startResize("status")}
                 />
+                <th className="pb-2 font-medium">Coverage</th>
               </tr>
             </thead>
             <tbody>
               {table.rows.map((shift) => {
                 const isPending = pendingId === shift.id;
+                const isOwnShift = user?.id === shift.caregiver_user_id;
+                const canCallOut = shift.status === "scheduled" && !shift.needs_coverage && (isOwnShift || canManage);
                 return (
-                  <tr key={shift.id} className="border-b border-slate-100 last:border-0">
-                    <td className="py-2.5 whitespace-nowrap text-slate-600">
-                      {new Date(shift.starts_at).toLocaleString()} –{" "}
-                      {new Date(shift.ends_at).toLocaleTimeString()}
-                    </td>
-                    <td className="py-2.5 text-slate-800">{shift.client_name}</td>
-                    <td className="py-2.5 text-slate-600">{shift.caregiver_name}</td>
-                    <td className="py-2.5">
-                      {canManage ? (
-                        <select
-                          aria-label={`Change status for ${shift.client_name} / ${shift.caregiver_name} shift`}
-                          value={shift.status}
-                          disabled={isPending}
-                          onChange={(event) =>
-                            handleStatusChange(shift.id, event.target.value as ShiftRow["status"])
-                          }
-                          className="rounded-lg border border-slate-200 px-2 py-1 text-xs text-slate-900"
-                        >
-                          {shiftStatusSchema.options.map((option) => (
-                            <option key={option} value={option}>
-                              {option.replace("_", " ")}
-                            </option>
-                          ))}
-                        </select>
-                      ) : (
-                        <span
-                          className={`rounded-full px-2 py-0.5 text-xs font-medium ${statusStyles[shift.status]}`}
-                        >
-                          {shift.status.replace("_", " ")}
-                        </span>
-                      )}
-                    </td>
-                  </tr>
+                  <Fragment key={shift.id}>
+                    <tr className="border-b border-slate-100 last:border-0">
+                      <td className="py-2.5 whitespace-nowrap text-slate-600">
+                        {new Date(shift.starts_at).toLocaleString()} –{" "}
+                        {new Date(shift.ends_at).toLocaleTimeString()}
+                      </td>
+                      <td className="py-2.5 text-slate-800">{shift.client_name}</td>
+                      <td className="py-2.5 text-slate-600">{shift.caregiver_name}</td>
+                      <td className="py-2.5">
+                        {canManage ? (
+                          <select
+                            aria-label={`Change status for ${shift.client_name} / ${shift.caregiver_name} shift`}
+                            value={shift.status}
+                            disabled={isPending}
+                            onChange={(event) =>
+                              handleStatusChange(shift.id, event.target.value as ShiftRow["status"])
+                            }
+                            className="rounded-lg border border-slate-200 px-2 py-1 text-xs text-slate-900"
+                          >
+                            {shiftStatusSchema.options.map((option) => (
+                              <option key={option} value={option}>
+                                {option.replace("_", " ")}
+                              </option>
+                            ))}
+                          </select>
+                        ) : (
+                          <span
+                            className={`rounded-full px-2 py-0.5 text-xs font-medium ${statusStyles[shift.status]}`}
+                          >
+                            {shift.status.replace("_", " ")}
+                          </span>
+                        )}
+                      </td>
+                      <td className="py-2.5">
+                        <div className="flex flex-wrap items-center gap-2">
+                          {shift.needs_coverage ? (
+                            <>
+                              <StatusBadge label="Needs coverage" tone="warning" />
+                              {canManage ? (
+                                <button
+                                  type="button"
+                                  onClick={() => startReassign(shift.id)}
+                                  className="text-xs font-medium text-slate-700 underline-offset-2 hover:underline"
+                                >
+                                  Reassign
+                                </button>
+                              ) : null}
+                            </>
+                          ) : canCallOut ? (
+                            <button
+                              type="button"
+                              onClick={() => startCallOut(shift.id)}
+                              className="text-xs font-medium text-slate-700 underline-offset-2 hover:underline"
+                            >
+                              Call out
+                            </button>
+                          ) : (
+                            <span className="text-xs text-slate-300">—</span>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                    {shift.needs_coverage && shift.call_out_reason ? (
+                      <tr className="border-b border-slate-100 last:border-0 bg-amber-50">
+                        <td colSpan={5} className="px-2 py-2 text-xs text-amber-800">
+                          Called out: {shift.call_out_reason}
+                        </td>
+                      </tr>
+                    ) : null}
+                    {callOutShiftId === shift.id ? (
+                      <tr className="border-b border-slate-100 last:border-0 bg-slate-50">
+                        <td colSpan={5} className="p-3">
+                          <form onSubmit={handleCallOut} className="flex flex-wrap items-end gap-3">
+                            <div className="min-w-[240px] flex-1">
+                              <label
+                                htmlFor={`call-out-reason-${shift.id}`}
+                                className="block text-xs font-medium text-slate-600"
+                              >
+                                Reason for calling out
+                              </label>
+                              <input
+                                id={`call-out-reason-${shift.id}`}
+                                required
+                                value={callOutReason}
+                                onChange={(event) => setCallOutReason(event.target.value)}
+                                placeholder="e.g. Family emergency"
+                                className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900"
+                              />
+                            </div>
+                            <Button type="submit" size="sm" loading={callingOut}>
+                              Confirm call-out
+                            </Button>
+                            <button
+                              type="button"
+                              onClick={() => setCallOutShiftId(null)}
+                              className="text-sm font-medium text-slate-600 hover:text-slate-900"
+                            >
+                              Cancel
+                            </button>
+                          </form>
+                          {callOutError ? <p className="mt-2 text-sm text-red-700">{callOutError}</p> : null}
+                        </td>
+                      </tr>
+                    ) : null}
+                    {reassignShiftId === shift.id ? (
+                      <tr className="border-b border-slate-100 last:border-0 bg-slate-50">
+                        <td colSpan={5} className="p-3">
+                          <form onSubmit={handleReassign} className="flex flex-wrap items-end gap-3">
+                            <div>
+                              <label
+                                htmlFor={`reassign-caregiver-${shift.id}`}
+                                className="block text-xs font-medium text-slate-600"
+                              >
+                                Cover with
+                              </label>
+                              <select
+                                id={`reassign-caregiver-${shift.id}`}
+                                required
+                                value={reassignCaregiverId}
+                                onChange={(event) => setReassignCaregiverId(event.target.value)}
+                                className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900"
+                              >
+                                <option value="" disabled>
+                                  Select a caregiver
+                                </option>
+                                {(membersQuery.data ?? [])
+                                  .filter((member) => member.user_id !== shift.caregiver_user_id)
+                                  .map((member) => (
+                                    <option key={member.user_id} value={member.user_id}>
+                                      {member.display_name}
+                                    </option>
+                                  ))}
+                              </select>
+                            </div>
+                            <div className="min-w-[220px] flex-1">
+                              <label
+                                htmlFor={`reassign-reason-${shift.id}`}
+                                className="block text-xs font-medium text-slate-600"
+                              >
+                                Reason
+                              </label>
+                              <input
+                                id={`reassign-reason-${shift.id}`}
+                                required
+                                value={reassignReason}
+                                onChange={(event) => setReassignReason(event.target.value)}
+                                placeholder="e.g. Covering the call-out"
+                                className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900"
+                              />
+                            </div>
+                            <Button type="submit" size="sm" loading={reassigning}>
+                              Confirm reassignment
+                            </Button>
+                            <button
+                              type="button"
+                              onClick={() => setReassignShiftId(null)}
+                              className="text-sm font-medium text-slate-600 hover:text-slate-900"
+                            >
+                              Cancel
+                            </button>
+                          </form>
+                          {reassignError ? <p className="mt-2 text-sm text-red-700">{reassignError}</p> : null}
+                        </td>
+                      </tr>
+                    ) : null}
+                  </Fragment>
                 );
               })}
               {table.rows.length === 0 ? (
                 <tr>
-                  <td colSpan={4} className="py-4 text-center text-slate-400">
+                  <td colSpan={5} className="py-4 text-center text-slate-400">
                     {table.search || scheduleActiveFilters.length > 0
                       ? "No shifts match your search or filters."
                       : "No shifts scheduled."}
