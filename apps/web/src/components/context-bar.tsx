@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { CalendarDays, Gauge, ShieldCheck, Sparkles, Users } from "lucide-react";
+import { CalendarDays, Gauge, ShieldCheck, Users } from "lucide-react";
 import { useOrganization } from "@/providers/organization-provider";
 import { supabase } from "@/lib/supabase";
 
@@ -16,6 +16,12 @@ import { supabase } from "@/lib/supabase";
 // A null metric (e.g. fill_rate_pct with no active authorizations to
 // measure against) renders as "-" rather than 0%, so an org with
 // nothing configured yet doesn't read as "0% filled."
+//
+// Deliberately does NOT repeat the organization's name - the sidebar
+// header and the AppShell top bar both already show it, and a third
+// repetition directly underneath added visual noise without adding
+// information (OGEVIA SaaS structure spec, "remove duplicate
+// organization titles").
 
 interface AgencyDashboard {
   active_clients: number;
@@ -59,10 +65,6 @@ export function ContextBar() {
 
   return (
     <div className="flex flex-wrap items-center gap-x-6 gap-y-2 border-b border-slate-200 bg-slate-50/80 px-6 py-2 text-sm text-slate-600">
-      <span className="flex shrink-0 items-center gap-1.5 font-medium text-slate-800">
-        <Sparkles className="h-3.5 w-3.5 text-slate-400" />
-        {activeOrganization.displayName}
-      </span>
       <span className="flex shrink-0 items-center gap-1.5">
         <CalendarDays className="h-3.5 w-3.5 text-slate-400" />
         {formatToday(new Date())}

@@ -35,6 +35,7 @@ function baseOrganization(role: "organization_owner" | "organization_admin" | nu
     setActiveOrganizationId: vi.fn(),
     role,
     isPlatformOwner: false,
+    userDisplayName: "Test User",
     hasPermission: vi.fn(() => true),
     loading: false
   };

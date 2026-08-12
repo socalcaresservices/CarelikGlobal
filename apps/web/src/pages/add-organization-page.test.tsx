@@ -37,6 +37,7 @@ function basePlatformOwner() {
     setActiveOrganizationId: vi.fn(),
     role: "platform_owner" as const,
     isPlatformOwner: true,
+    userDisplayName: "Test User",
     hasPermission: vi.fn(() => true),
     loading: false
   };

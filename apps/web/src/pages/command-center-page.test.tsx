@@ -25,6 +25,7 @@ describe("CommandCenterPage", () => {
       setActiveOrganizationId: vi.fn(),
       role: "organization_admin",
       isPlatformOwner: false,
+    userDisplayName: "Test User",
       hasPermission: vi.fn(() => true),
       loading: false
     });
@@ -44,6 +45,7 @@ describe("CommandCenterPage", () => {
       setActiveOrganizationId: vi.fn(),
       role: null,
       isPlatformOwner: false,
+    userDisplayName: "Test User",
       hasPermission: vi.fn(() => true),
       loading: false
     });

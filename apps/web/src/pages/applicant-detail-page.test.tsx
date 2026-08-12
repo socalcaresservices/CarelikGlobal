@@ -38,6 +38,7 @@ function baseOrganization(hasPermission: (permission: string) => boolean = () =>
     setActiveOrganizationId: vi.fn(),
     role: "organization_admin" as const,
     isPlatformOwner: false,
+    userDisplayName: "Test User",
     hasPermission: vi.fn(hasPermission),
     loading: false
   };

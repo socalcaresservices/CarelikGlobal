@@ -774,7 +774,7 @@ function CustomDomainCard({
 }
 
 export function SettingsPage() {
-  const { activeOrganizationId, activeOrganization, hasPermission } = useOrganization();
+  const { activeOrganizationId, hasPermission } = useOrganization();
   const { user } = useAuth();
   const queryClient = useQueryClient();
 
@@ -884,8 +884,7 @@ export function SettingsPage() {
     return (
       <section className="mx-auto max-w-4xl">
         <Card>
-          <p className="text-sm font-medium text-slate-500">Settings</p>
-          <h2 className="mt-1 text-2xl font-semibold text-slate-950">Not available</h2>
+          <h2 className="text-2xl font-semibold text-slate-950">Settings</h2>
           <p className="mt-3 text-slate-600">
             You don&apos;t have permission to view settings for this organization.
           </p>
@@ -896,11 +895,12 @@ export function SettingsPage() {
 
   return (
     <section className="mx-auto max-w-4xl space-y-6">
+      {/* Organization identity already appears in the sidebar and top
+          bar (AppShell) - repeating it a third time here as the page's
+          own heading is the exact duplication the OGEVIA SaaS structure
+          spec calls out. This page's own name is the heading instead. */}
       <div>
-        <p className="text-sm font-medium text-slate-500">Settings</p>
-        <h2 className="mt-1 text-2xl font-semibold text-slate-950">
-          {activeOrganization?.displayName ?? "Organization settings"}
-        </h2>
+        <h2 className="text-2xl font-semibold text-slate-950">Settings</h2>
       </div>
 
       <OrganizationBrandingCard

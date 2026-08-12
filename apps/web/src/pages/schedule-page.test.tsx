@@ -37,6 +37,7 @@ function baseOrganization() {
     setActiveOrganizationId: vi.fn(),
     role: "staff" as const,
     isPlatformOwner: false,
+    userDisplayName: "Test User",
     hasPermission: vi.fn(),
     loading: false
   };

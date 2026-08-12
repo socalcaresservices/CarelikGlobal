@@ -63,9 +63,19 @@ interface NavItem {
 // how the sidebar groups and labels them, so scanning for "is anything
 // expiring" or "who do I need to follow up with" doesn't require
 // reading all nine labels in one flat list every time.
-const overviewNav: NavItem[] = [
+// Split from a single "Overview" group into Home (the daily-landing
+// screens) and Operations (schedule/visit workflows) - same routes, same
+// permission gating, same badge keys as before this split. This is a
+// grouping/labeling change only, matching the OGEVIA SaaS structure
+// spec's requested nav taxonomy; it does not merge Schedule/Service
+// Verification/Visit Reports into one Visits workspace yet (a bigger
+// content refactor tracked separately).
+const homeNav: NavItem[] = [
   { to: "/", label: "Command Center", icon: LayoutDashboard },
-  { to: "/owner-dashboard", label: "Workforce Insights", icon: Crown, ownerOnly: true },
+  { to: "/owner-dashboard", label: "Workforce Insights", icon: Crown, ownerOnly: true }
+];
+
+const operationsNav: NavItem[] = [
   { to: "/schedule", label: "Schedule", icon: CalendarClock, badgeKey: "schedule_issues" },
   // No permission gate - every caregiver needs to be able to schedule
   // their own visits; caregiver_assignments (not this nav item) is the
@@ -191,6 +201,8 @@ export function AppShell({ children }: PropsWithChildren) {
     setActiveOrganizationId,
     hasPermission,
     role,
+    isPlatformOwner,
+    userDisplayName,
     loading
   } = useOrganization();
   // Defaults to shown - an organization opts OUT of platform attribution
@@ -200,7 +212,8 @@ export function AppShell({ children }: PropsWithChildren) {
 
   const isOwner = role === "organization_owner" || role === "platform_owner";
 
-  const visibleOverviewNav = visibleItems(overviewNav, hasPermission, isOwner);
+  const visibleHomeNav = visibleItems(homeNav, hasPermission, isOwner);
+  const visibleOperationsNav = visibleItems(operationsNav, hasPermission, isOwner);
   const visiblePeopleNav = visibleItems(peopleNav, hasPermission, isOwner);
   const visibleComplianceNav = visibleItems(complianceNav, hasPermission, isOwner);
   const visibleAdministrationNav = visibleItems(administrationNav, hasPermission, isOwner);
@@ -253,10 +266,22 @@ export function AppShell({ children }: PropsWithChildren) {
         </div>
         <nav className="flex-1 space-y-5 overflow-y-auto p-3">
           <div className="space-y-1">
-            {visibleOverviewNav.map((item) => (
+            {visibleHomeNav.map((item) => (
               <NavLinkItem key={item.to} {...item} badgeCount={badgeFor(item)} />
             ))}
           </div>
+          {visibleOperationsNav.length > 0 ? (
+            <div>
+              <p className="px-3 pb-1.5 text-[11px] font-semibold uppercase tracking-wider text-slate-400">
+                Operations
+              </p>
+              <div className="space-y-1">
+                {visibleOperationsNav.map((item) => (
+                  <NavLinkItem key={item.to} {...item} badgeCount={badgeFor(item)} />
+                ))}
+              </div>
+            </div>
+          ) : null}
           {visiblePeopleNav.length > 0 ? (
             <div>
               <p className="px-3 pb-1.5 text-[11px] font-semibold uppercase tracking-wider text-slate-400">
@@ -319,8 +344,24 @@ export function AppShell({ children }: PropsWithChildren) {
             Verify visit
           </NavLink>
           <p className="shrink-0 text-sm text-slate-600">
-            {greeting}
-            {role ? <span className="text-slate-400"> · {formatRole(role)}</span> : null}
+            {/* A platform owner has no genuine role *within* this
+                organization - showing the raw "platform_owner" system
+                label here (as this used to) reads as if it were an
+                agency role, which it isn't and shouldn't look like one.
+                Greet them by name only; an ordinary member still gets
+                their real org-scoped role next to their name. */}
+            {isPlatformOwner ? (
+              <>
+                {greeting}
+                {userDisplayName ? `, ${userDisplayName}` : null}
+              </>
+            ) : (
+              <>
+                {greeting}
+                {userDisplayName ? `, ${userDisplayName}` : null}
+                {role ? <span className="text-slate-400"> · {formatRole(role)}</span> : null}
+              </>
+            )}
           </p>
           <div className="order-last w-full sm:order-none sm:flex-1">
             {activeOrganizationId ? <GlobalSearch /> : null}

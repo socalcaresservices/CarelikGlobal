@@ -33,6 +33,14 @@ interface OrganizationContextValue {
   isPlatformOwner: boolean;
   hasPermission: (permission: Permission) => boolean;
   loading: boolean;
+  /**
+   * The signed-in user's own display name (from user_profiles), falling
+   * back to the local part of their email. Used anywhere the UI greets
+   * the person by name instead of by raw system role - see AppShell's
+   * header, which must never surface "platform_owner" as if it were an
+   * agency-facing role label.
+   */
+  userDisplayName: string | null;
 }
 
 const OrganizationContext = createContext<OrganizationContextValue | null>(null);
@@ -119,16 +127,22 @@ export function OrganizationProvider({
     queryFn: async () => {
       const { data, error } = await supabase
         .from("user_profiles")
-        .select("platform_role")
+        .select("platform_role, display_name, first_name")
         .eq("id", user!.id)
         .maybeSingle();
       if (error) throw error;
-      return data?.platform_role as SystemRole | null;
+      return data as { platform_role: SystemRole | null; display_name: string | null; first_name: string | null } | null;
     },
     enabled: !!user
   });
 
-  const isPlatformOwner = profileQuery.data === "platform_owner";
+  const isPlatformOwner = profileQuery.data?.platform_role === "platform_owner";
+
+  const userDisplayName =
+    profileQuery.data?.display_name ||
+    profileQuery.data?.first_name ||
+    user?.email?.split("@")[0] ||
+    null;
 
   const organizationsQuery = useQuery({
     queryKey: ["organizations", user?.id],
@@ -256,9 +270,19 @@ export function OrganizationProvider({
       role,
       isPlatformOwner,
       hasPermission: (permission) => isPlatformOwner || permissions.has(permission),
-      loading
+      loading,
+      userDisplayName
     }),
-    [organizations, activeOrganization, activeOrganizationId, role, isPlatformOwner, permissions, loading]
+    [
+      organizations,
+      activeOrganization,
+      activeOrganizationId,
+      role,
+      isPlatformOwner,
+      permissions,
+      loading,
+      userDisplayName
+    ]
   );
 
   return <OrganizationContext.Provider value={value}>{children}</OrganizationContext.Provider>;

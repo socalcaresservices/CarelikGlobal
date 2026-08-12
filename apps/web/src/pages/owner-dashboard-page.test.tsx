@@ -33,7 +33,8 @@ function baseOrganization(role: "organization_owner" | "organization_admin" | "p
     role,
     isPlatformOwner: role === "platform_owner",
     hasPermission: vi.fn(() => true),
-    loading: false
+    loading: false,
+    userDisplayName: "Test User"
   };
 }
 

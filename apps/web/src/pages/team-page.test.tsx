@@ -43,7 +43,8 @@ function baseOrganization() {
     role: "organization_admin" as const,
     isPlatformOwner: false,
     hasPermission: vi.fn(),
-    loading: false
+    loading: false,
+    userDisplayName: "Acme Admin"
   };
 }
 

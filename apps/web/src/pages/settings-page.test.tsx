@@ -39,7 +39,8 @@ function baseOrganization() {
     role: "organization_admin" as const,
     isPlatformOwner: false,
     hasPermission: vi.fn(),
-    loading: false
+    loading: false,
+    userDisplayName: "Acme Admin"
   };
 }
 
@@ -139,7 +140,7 @@ describe("SettingsPage", () => {
     mockedUseOrganization.mockReturnValue({ ...baseOrganization(), hasPermission: vi.fn(() => false) });
 
     renderPage();
-    expect(screen.getByText("Not available")).toBeInTheDocument();
+    expect(screen.getByText("You don't have permission to view settings for this organization.")).toBeInTheDocument();
   });
 
   it("lists settings but hides the add form without settings.update", async () => {

@@ -32,6 +32,7 @@ function baseOrganization() {
     setActiveOrganizationId: vi.fn(),
     role: "organization_admin" as const,
     isPlatformOwner: false,
+    userDisplayName: "Test User",
     hasPermission: vi.fn(() => true),
     loading: false
   };
@@ -63,7 +64,7 @@ describe("ContextBar", () => {
     expect(container).toBeEmptyDOMElement();
   });
 
-  it("shows the organization name, coverage, compliance, and headcount from get_agency_dashboard", async () => {
+  it("shows coverage, compliance, and headcount from get_agency_dashboard", async () => {
     mockedUseOrganization.mockReturnValue(baseOrganization());
     const { single } = singleMock({
       active_clients: 62,
@@ -76,7 +77,9 @@ describe("ContextBar", () => {
 
     renderBar();
 
-    expect(screen.getByText("Acme Care")).toBeInTheDocument();
+    // Deliberately does NOT assert the organization name renders here -
+    // it no longer does (see context-bar.tsx's comment: shown once in
+    // AppShell's own chrome, not repeated a third time in this bar).
     await waitFor(() => expect(screen.getByText("82%")).toBeInTheDocument());
     expect(screen.getByText("95%")).toBeInTheDocument();
     expect(screen.getByText("62 clients · 18 caregivers")).toBeInTheDocument();
