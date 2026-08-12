@@ -18,7 +18,11 @@
 //     roles who need to actually log in and use the app): falls back to
 //     the original `auth.admin.inviteUserByEmail` flow, which emails a
 //     sign-in link and leaves membership status as "invited" until they
-//     accept.
+//     accept. If that email address already has an auth account
+//     (a stray test user, a public applicant, a prior org's invite),
+//     inviteUserByEmail rejects it with "already registered" - see
+//     findUserIdByEmail() below, which looks that existing account up
+//     and adds it as a member directly instead of failing outright.
 //
 // Request: POST { email, organizationId, role, firstName?, lastName?, phone? }
 // Auth:    Authorization: Bearer <caller's access token>
@@ -73,6 +77,27 @@ function jsonResponse(body: unknown, status: number) {
     status,
     headers: { ...corsHeaders, "Content-Type": "application/json" }
   });
+}
+
+// supabase-js's admin API has no direct "get user by email" call, so an
+// exact match is found by paging through auth.admin.listUsers(). This
+// system's total user count is small (a handful, per its own current
+// scale), so paging is fine as-is; revisit only if that stops being
+// true. Used only on the "already registered" fallback path below - the
+// common case (a genuinely new invite) never calls this.
+async function findUserIdByEmail(
+  adminClient: ReturnType<typeof createClient>,
+  email: string
+): Promise<string | null> {
+  const normalized = email.trim().toLowerCase();
+  for (let page = 1; page <= 20; page++) {
+    const { data, error } = await adminClient.auth.admin.listUsers({ page, perPage: 200 });
+    if (error || !data?.users?.length) return null;
+    const match = data.users.find((candidate) => candidate.email?.toLowerCase() === normalized);
+    if (match) return match.id;
+    if (data.users.length < 200) return null;
+  }
+  return null;
 }
 
 function isValidRequestBody(
@@ -229,9 +254,26 @@ Deno.serve(async (req) => {
       { redirectTo: `${siteUrl}/set-password` }
     );
     if (inviteError || !invited?.user) {
-      return jsonResponse({ error: inviteError?.message ?? "Invite failed" }, 400);
+      // inviteUserByEmail only creates brand-new auth users - it fails
+      // with "already registered" for an email that already has an
+      // account (a stray test user, someone who applied via apply-page
+      // first, a prior organization's invite, etc). Rather than fail
+      // the whole request, add that existing user as a member directly.
+      // No new invite email is needed - they can already sign in with
+      // what they have, and organization-provider.tsx's
+      // acceptPendingInvitations effect already auto-accepts a pending
+      // membership the moment any user (new or pre-existing) next
+      // authenticates, so status "invited" here behaves identically
+      // either way.
+      const alreadyRegistered = /already.*registered|already.*exists/i.test(inviteError?.message ?? "");
+      const existingUserId = alreadyRegistered ? await findUserIdByEmail(adminClient, email) : null;
+      if (!existingUserId) {
+        return jsonResponse({ error: inviteError?.message ?? "Invite failed" }, 400);
+      }
+      userId = existingUserId;
+    } else {
+      userId = invited.user.id;
     }
-    userId = invited.user.id;
     membershipStatus = "invited";
   }
 
