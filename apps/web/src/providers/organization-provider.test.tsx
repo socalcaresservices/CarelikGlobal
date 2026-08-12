@@ -154,6 +154,44 @@ describe("OrganizationProvider", () => {
     expect(mockedFrom).not.toHaveBeenCalledWith("role_permissions");
   });
 
+  // Regression guard for a real production bug: an account was reachable
+  // and authenticated on admin.ogevia.com and *looked* like a platform
+  // owner (the shell said so) purely because of how it was signed in, not
+  // because anything in the database granted it that privilege. This
+  // proves the two accounts below are told apart only by their
+  // user_profiles.platform_role row - never by their email address, which
+  // this hook never even reads for authorization (only for the display-name
+  // fallback) - so renaming/spoofing an email address cannot forge platform
+  // access.
+  it("derives isPlatformOwner from user_profiles.platform_role, never from the user's email", async () => {
+    mockedUseAuth.mockReturnValue({
+      user: { id: "user-7", email: "admin.ogevia@gmail.com" } as never,
+      session: {} as never,
+      loading: false,
+      signInWithGithub: vi.fn(),
+      signInWithPassword: vi.fn(),
+      resetPasswordForEmail: vi.fn(),
+      updatePassword: vi.fn(),
+      signOut: vi.fn()
+    });
+    mockedRpc.mockResolvedValue({ data: null, error: null } as never);
+
+    setResolver((table, calls) => {
+      // Same-looking "admin"-branded email, but no platform_role grant -
+      // must not be treated as a platform owner just because of the name.
+      if (table === "user_profiles") return { data: { platform_role: null }, error: null };
+      if (table === "organizations") return { data: [], error: null };
+      if (table === "organization_memberships" && hasEqCall(calls, "status", "invited")) {
+        return { data: [], error: null };
+      }
+      return { data: null, error: null };
+    });
+
+    renderProvider();
+
+    await waitFor(() => expect(screen.getByTestId("is-platform-owner")).toHaveTextContent("false"));
+  });
+
   it("resolves a regular member's role and permissions from role_permissions", async () => {
     mockedUseAuth.mockReturnValue({
       user: { id: "user-2" } as never,

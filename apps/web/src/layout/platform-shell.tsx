@@ -83,6 +83,10 @@ export function PlatformShell({ children }: PropsWithChildren) {
             <div className="h-8 w-8 rounded-full bg-slate-200" />
             <div className="flex-1">
               <p className="text-xs font-medium text-slate-900">{user?.email}</p>
+              {/* Static, not derived here - safe only because App.tsx never
+                  mounts PlatformShell except inside RequirePlatformOwner,
+                  which already confirmed isPlatformOwner. Don't render this
+                  shell anywhere that guard doesn't wrap. */}
               <p className="text-xs text-slate-500">Platform Super Admin</p>
             </div>
           </div>

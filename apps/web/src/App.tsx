@@ -3,8 +3,8 @@ import { Navigate, Route, Routes, useNavigate } from "react-router-dom";
 import { TenantShell } from "@/layout/tenant-shell";
 import { PlatformShell } from "@/layout/platform-shell";
 import { OrganizationProvider } from "@/providers/organization-provider";
-import { PlatformProvider } from "@/providers/platform-provider";
 import { ProtectedRoute } from "@/routes/protected-route";
+import { RequirePlatformOwner } from "@/routes/require-platform-owner";
 import { getTenantRoutes } from "@/routes/tenant-routes";
 import { getPlatformRoutes } from "@/routes/platform-routes";
 import { useTenantContext } from "@/lib/use-tenant-context";
@@ -111,14 +111,14 @@ export function App() {
           element={
             <ProtectedRoute>
               <OrganizationProvider>
-                <PlatformProvider>
+                <RequirePlatformOwner>
                   <PlatformShell>
                     <Routes>
                       {getPlatformRoutes()}
                       <Route path="*" element={<Navigate to="/organizations" replace />} />
                     </Routes>
                   </PlatformShell>
-                </PlatformProvider>
+                </RequirePlatformOwner>
               </OrganizationProvider>
             </ProtectedRoute>
           }
