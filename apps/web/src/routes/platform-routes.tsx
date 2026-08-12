@@ -19,6 +19,7 @@
 
 import { Route } from "react-router-dom";
 import { OrganizationsPage } from "@/pages/organizations-page";
+import { SubscriptionsPage } from "@/pages/subscriptions-page";
 import { FeatureFlagsPage } from "@/pages/feature-flags-page";
 import { AuditPage } from "@/pages/audit-page";
 
@@ -29,12 +30,14 @@ import { AuditPage } from "@/pages/audit-page";
 export function getPlatformRoutes() {
   return [
     <Route key="organizations" path="/organizations" element={<OrganizationsPage />} />,
+    <Route key="subscriptions" path="/subscriptions" element={<SubscriptionsPage />} />,
     <Route key="feature-flags" path="/feature-flags" element={<FeatureFlagsPage />} />,
     <Route key="audit" path="/audit" element={<AuditPage />} />
     // TODO: Platform dashboard
-    // TODO: Subscriptions page
-    // TODO: Billing page
+    // TODO: Billing page (per-organization billing/support - currently
+    // embedded in OrganizationsPage's row-expand; splitting it into its
+    // own page needs an organization picker, deferred)
     // TODO: System health
-    // TODO: Support access management
+    // TODO: Support access management (same per-org-picker dependency)
   ];
 }

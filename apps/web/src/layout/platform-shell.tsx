@@ -4,21 +4,23 @@
  * Minimal shell for Ogevia platform operations
  * Shows ONLY platform navigation:
  * - Organizations (registry)
+ * - Subscriptions (global plan catalog - see subscriptions-page.tsx)
  * - Feature Flags (system-wide)
  * - Audit (platform events)
  *
  * Future:
- * - Subscriptions & Billing
+ * - Platform Home / dashboard
+ * - Per-organization Billing & Support (needs an org picker - today
+ *   still embedded in the Organizations row-expand)
  * - Analytics
  * - System Health
- * - Support Access
  *
  * No tenant branding, no organization context, no switcher
  */
 
 import { PropsWithChildren } from "react";
 import { Link, NavLink } from "react-router-dom";
-import { Building2, ExternalLink, Flag, ClipboardList, LogOut } from "lucide-react";
+import { Building2, CreditCard, ExternalLink, Flag, ClipboardList, LogOut } from "lucide-react";
 import { useAuth } from "@carelik/auth";
 import { cn } from "@carelik/ui";
 
@@ -30,6 +32,7 @@ interface NavItem {
 
 const platformNav: NavItem[] = [
   { to: "/organizations", label: "Organizations", icon: Building2 },
+  { to: "/subscriptions", label: "Subscriptions", icon: CreditCard },
   { to: "/feature-flags", label: "Feature Flags", icon: Flag },
   { to: "/audit", label: "Audit", icon: ClipboardList }
 ];

@@ -1,6 +1,6 @@
 # Ogevia SaaS Structure Cleanup & UX Refactor
 
-**Status:** Increment 1 of N — foundational identity fixes shipped and verified. This is a large, multi-session refactor by design (the spec itself is ~27 sections covering platform/tenant/staff separation, navigation, and a redesign of nearly every operational page). This document is the repository audit (spec §24) plus the honest status report (spec §27) for what has actually shipped so far, updated as later increments land.
+**Status:** Increment 2 of N — foundational identity fixes (increment 1) plus a real Subscriptions/Plans platform page (increment 2), both shipped and verified. This is a large, multi-session refactor by design (the spec itself is ~27 sections covering platform/tenant/staff separation, navigation, and a redesign of nearly every operational page). This document is the repository audit (spec §24) plus the honest status report (spec §27) for what has actually shipped so far, updated as later increments land.
 
 ---
 
@@ -8,10 +8,11 @@
 
 | Route | Current shell | Target workspace | Action | Notes |
 |---|---|---|---|---|
-| `/organizations` | PlatformShell | Platform | KEEP | Already platform-only, already excludes agency nav. |
+| `/organizations` | PlatformShell | Platform | KEEP (trimmed) | Already platform-only, already excludes agency nav. Increment 2: `PlatformPlanManager` extracted out to its own page (see below) - this page is now the registry list plus per-org billing/support expand only. |
+| `/subscriptions` | PlatformShell | Platform | **BUILT (increment 2)** | New page, new route, new nav item. Hosts `PlatformPlanManager` (already-existing, already-tested component - reused verbatim, not rewritten), which had no per-organization dependency and never belonged embedded in the org registry. |
 | `/feature-flags` | PlatformShell | Platform | KEEP | Same. |
 | `/audit` | PlatformShell | Platform | KEEP | Same. |
-| *(none yet)* | — | Platform | **BUILD** | Platform Home/dashboard, Subscriptions/Plans (distinct from the Organizations registry), Platform Analytics, Support, Security, System Health, Platform Settings are all still `// TODO` comments in `platform-routes.tsx` itself — the codebase already tracks this gap. |
+| *(none yet)* | — | Platform | **BUILD (remaining)** | Platform Home/dashboard, Platform Analytics, Security, System Health, Platform Settings are still `// TODO` comments in `platform-routes.tsx`. Per-organization Billing & Support (currently the row-expand on `/organizations`) still needs an org-picker pattern before it can become its own standalone page - deferred, not done this increment. |
 | `/` (Command Center) | AppShell | Tenant: Home | KEEP | |
 | `/owner-dashboard` | AppShell | Tenant: Home (owner-only) | KEEP | |
 | `/schedule` | AppShell | Tenant: Operations | KEEP (regroup only) | Regrouped under a new "Operations" nav label this increment; content unchanged. |
@@ -101,16 +102,16 @@ Not touched this increment. Workforce desired/scheduled/remaining hours and clie
 ## Remaining risks
 
 - **StaffShell doesn't exist yet.** Caregivers today get the full `AppShell` with most items permission-gated away, not a purpose-built mobile-first shell. Functionally adequate, structurally not what the spec (or good practice for a phone-in-the-field user) wants.
-- **Platform nav is still missing most of its target surface** (Subscriptions/Plans as its own page, Analytics, Support, Security, System Health, Platform Settings) - all pre-existing TODOs, not newly introduced.
+- **Platform nav is still missing most of its target surface** (Platform Home, Analytics, Security, System Health, Platform Settings, and a standalone per-org Billing/Support page) - Subscriptions/Plans shipped this increment; the rest are pre-existing TODOs, not newly introduced.
 - **The `ogethinks` cross-org-ownership question is still open** (flagged in the hostile audit's Stage 5) - same account, same class of vendor/client boundary question, unresolved pending the user's decision.
 - **No code-level guard prevents the account-hygiene bug from recurring.** The fix this session was manual (one Revoke click). Nothing stops another account from ending up with owner rights in Ogevia's own org again.
-- **The large content refactors (§5-16) are unstarted** and are where most of the real user-facing value in this spec lives. Increment 1 deliberately prioritized the mandatory, low-risk, foundational items (§2, §3, part of §4) over these larger ones to ship something real, verified, and low-risk rather than a large unverified change.
+- **The large content refactors (§5-16) are unstarted** and are where most of the real user-facing value in this spec lives. Increments 1-2 deliberately prioritized mandatory, low-risk, foundational items over these larger ones to ship something real, verified, and low-risk rather than a large unverified change.
 
 ## Recommended next build
 
 In priority order:
 
-1. **Platform Home + the missing Platform nav pages** (Subscriptions/Plans, Analytics, Support, Security, System Health, Settings) - closes the platform-side half of spec §1A and turns the existing TODO comments into real pages.
+1. ~~Platform Home + the missing Platform nav pages~~ **Subscriptions/Plans shipped (increment 2).** Remaining: Platform Home/dashboard, Analytics, Security, System Health, Platform Settings, and a standalone Billing/Support page (needs an org-picker pattern first, since that content is currently embedded per-row in Organizations).
 2. **StaffShell** - a genuinely separate, mobile-first shell for the `caregiver` role (spec §1C), reusing existing pages/RPCs where the underlying data is already correctly scoped (it is - RLS/permission gating doesn't change), just presenting them differently.
 3. **Visits merge** (spec §6) - Schedule a visit / Service Verification / Visit Reports into one tabbed Visits workspace, preserving the direct caregiver shortcut. This is the module most directly relevant to the hostile audit's still-open EVV-duplication question, since it's the actual clock-in/verify/sign flow.
 4. **Client, Workforce, Authorizations, Credentials, Incidents list-first redesigns** (spec §7, §8, §10, §11, §12) - same shape of change each time (list-first default, creation moved to a drawer/modal), can likely share one new list-page pattern/component rather than four bespoke rebuilds.

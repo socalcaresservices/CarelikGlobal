@@ -5,7 +5,6 @@ import { useAuth } from "@carelik/auth";
 import { useOrganization } from "@/providers/organization-provider";
 import { supabase } from "@/lib/supabase";
 import { toAppUrl } from "@/lib/tenant-resolver";
-import { PlatformPlanManager } from "@/components/platform-plan-manager";
 import { PlatformSubscriberBillingPanel } from "@/components/platform-subscriber-billing-panel";
 
 // Platform-only registry view, backed by list_platform_organizations()
@@ -289,10 +288,8 @@ export function OrganizationsPage() {
       <PageHeader
         eyebrow="Platform Administration"
         title={`${rows.length} organization${rows.length === 1 ? "" : "s"}`}
-        description="Every tenant on Ogevia — plan, billing status, storage, seats, and account owner. Read-only: an organization's own profile is edited from within that tenant's Settings."
+        description="Every tenant on Ogevia — plan, billing status, storage, seats, and account owner. Read-only: an organization's own profile is edited from within that tenant's Settings. To edit the plan catalog itself, see Subscriptions."
       />
-
-      <PlatformPlanManager />
 
       <Card>
         {registryQuery.isLoading ? (
