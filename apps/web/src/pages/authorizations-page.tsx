@@ -1,4 +1,4 @@
-import { useEffect, useState, type FormEvent } from "react";
+import { Fragment, useEffect, useState, type FormEvent } from "react";
 import { useSearchParams } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
@@ -50,6 +50,46 @@ interface AuthorizationRow {
   notes: string | null;
   hours_used_this_month: number;
   hours_scheduled_this_month: number;
+  version_number: number;
+  received_date: string | null;
+  source_reference: string | null;
+}
+
+// One row per prior version, oldest first - see list_authorization_versions()
+// (20260812210000_client_authorization_versioning.sql). Shown per-row via
+// "Version history" below so an edit's actual effect (what changed, when,
+// why, by whom) stays visible instead of just vanishing into the current row.
+interface AuthorizationVersionRow {
+  id: string;
+  version_number: number;
+  is_current: boolean;
+  payer: string;
+  authorization_number: string | null;
+  max_monthly_hours: number;
+  period_start: string;
+  period_end: string;
+  notes: string | null;
+  received_date: string | null;
+  source_reference: string | null;
+  change_reason: string | null;
+  changed_by_name: string;
+  created_at: string;
+}
+
+// amend_client_authorization()'s impact analysis - visits still linked to
+// the version being superseded, flagged (never modified) so an increase's
+// "this may now be billable" and a decrease's "this is now over the new
+// cap" are both visible to a human right after the edit, not discovered
+// later. impact_kind is only non-null for a visit worth flagging.
+interface AuthorizationAmendmentImpact {
+  affected_visit_id: string;
+  affected_visit_status: string;
+  affected_service_date: string;
+  affected_worked_minutes: number;
+  affected_billable_minutes: number;
+  affected_old_cap_minutes: number;
+  affected_new_cap_minutes: number;
+  impact_kind: "increase_may_allow_more" | "decrease_now_exceeds" | null;
 }
 
 interface ClientOption {
@@ -116,7 +156,17 @@ const emptyForm = {
   maxMonthlyHours: "",
   periodStart: "",
   periodEnd: "",
-  notes: ""
+  notes: "",
+  // Only used when amending an existing authorization (editingId set) -
+  // a brand-new authorization has nothing to give a reason for yet.
+  reason: "",
+  receivedDate: "",
+  sourceReference: ""
+};
+
+const impactLabel: Record<NonNullable<AuthorizationAmendmentImpact["impact_kind"]>, string> = {
+  increase_may_allow_more: "May now be billable under the new cap",
+  decrease_now_exceeds: "Now over the reduced cap - review"
 };
 
 export function AuthorizationsPage() {
@@ -244,6 +294,20 @@ export function AuthorizationsPage() {
   const [formError, setFormError] = useState<string | null>(null);
   const [rowError, setRowError] = useState<string | null>(null);
   const [pendingId, setPendingId] = useState<string | null>(null);
+  const [amendmentImpact, setAmendmentImpact] = useState<AuthorizationAmendmentImpact[] | null>(null);
+  const [historyId, setHistoryId] = useState<string | null>(null);
+
+  const historyQuery = useQuery({
+    queryKey: ["authorization-versions", historyId],
+    queryFn: async () => {
+      const { data, error } = await supabase.rpc("list_authorization_versions", {
+        target_authorization_id: historyId!
+      });
+      if (error) throw error;
+      return (data ?? []) as AuthorizationVersionRow[];
+    },
+    enabled: !!historyId
+  });
 
   const [serviceName, setServiceName] = useState("");
   const [serviceCode, setServiceCode] = useState("");
@@ -275,6 +339,7 @@ export function AuthorizationsPage() {
 
   function startEdit(row: AuthorizationRow) {
     setEditingId(row.id);
+    setAmendmentImpact(null);
     setForm({
       clientId: row.client_id,
       serviceId: row.service_id,
@@ -283,7 +348,10 @@ export function AuthorizationsPage() {
       maxMonthlyHours: String(row.max_monthly_hours),
       periodStart: row.period_start,
       periodEnd: row.period_end,
-      notes: row.notes ?? ""
+      notes: row.notes ?? "",
+      reason: "",
+      receivedDate: "",
+      sourceReference: ""
     });
     setFormError(null);
   }
@@ -317,25 +385,49 @@ export function AuthorizationsPage() {
       setFormError("Period end must be after period start.");
       return;
     }
+    if (editingId && !form.reason.trim()) {
+      setFormError("A reason is required to amend an authorization.");
+      return;
+    }
 
     setSaving(true);
     try {
-      const payload = {
-        organization_id: activeOrganizationId,
-        client_id: form.clientId,
-        service_id: form.serviceId,
-        payer: form.payer,
-        authorization_number: form.authorizationNumber || null,
-        max_monthly_hours: hours,
-        period_start: form.periodStart,
-        period_end: form.periodEnd,
-        notes: form.notes || null
-      };
-
-      const { error } = editingId
-        ? await supabase.from("client_authorizations").update(payload).eq("id", editingId)
-        : await supabase.from("client_authorizations").insert(payload);
-      if (error) throw error;
+      if (editingId) {
+        // Amending never overwrites the existing row - it records a new
+        // version and supersedes this one, so a signed visit's locked-in
+        // authorization stays exactly what it was signed against. See
+        // amend_client_authorization() (20260812210000_client_authorization_versioning.sql).
+        const { data, error } = await supabase.rpc("amend_client_authorization", {
+          target_authorization_id: editingId,
+          new_max_monthly_hours: hours,
+          new_period_start: form.periodStart,
+          new_period_end: form.periodEnd,
+          new_payer: form.payer,
+          new_authorization_number: form.authorizationNumber || null,
+          new_notes: form.notes || null,
+          reason: form.reason.trim(),
+          received_date: form.receivedDate || null,
+          source_reference: form.sourceReference || null
+        });
+        if (error) throw error;
+        const impacted = ((data ?? []) as AuthorizationAmendmentImpact[]).filter(
+          (row) => row.impact_kind !== null
+        );
+        setAmendmentImpact(impacted.length > 0 ? impacted : null);
+      } else {
+        const { error } = await supabase.from("client_authorizations").insert({
+          organization_id: activeOrganizationId,
+          client_id: form.clientId,
+          service_id: form.serviceId,
+          payer: form.payer,
+          authorization_number: form.authorizationNumber || null,
+          max_monthly_hours: hours,
+          period_start: form.periodStart,
+          period_end: form.periodEnd,
+          notes: form.notes || null
+        });
+        if (error) throw error;
+      }
 
       resetForm();
       refreshAuthorizations();
@@ -637,9 +729,51 @@ export function AuthorizationsPage() {
               />
             </FormSection>
 
+            {editingId ? (
+              <FormSection title="Amendment record" columns={2}>
+                <div className="sm:col-span-2">
+                  <label htmlFor="auth-reason" className="block text-xs font-medium text-slate-600">
+                    Reason for this change
+                  </label>
+                  <input
+                    id="auth-reason"
+                    required
+                    placeholder="e.g. Payer approved additional hours per amendment letter"
+                    value={form.reason}
+                    onChange={(event) => setForm({ ...form, reason: event.target.value })}
+                    className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900"
+                  />
+                </div>
+                <div>
+                  <label htmlFor="auth-received-date" className="block text-xs font-medium text-slate-600">
+                    Received date
+                  </label>
+                  <input
+                    id="auth-received-date"
+                    type="date"
+                    value={form.receivedDate}
+                    onChange={(event) => setForm({ ...form, receivedDate: event.target.value })}
+                    className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900"
+                  />
+                </div>
+                <div>
+                  <label htmlFor="auth-source-reference" className="block text-xs font-medium text-slate-600">
+                    Source / POS reference
+                  </label>
+                  <input
+                    id="auth-source-reference"
+                    placeholder="Optional"
+                    value={form.sourceReference}
+                    onChange={(event) => setForm({ ...form, sourceReference: event.target.value })}
+                    className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900"
+                  />
+                </div>
+              </FormSection>
+            ) : null}
+
             <div className="flex items-end gap-3">
               <Button type="submit" loading={saving}>
-                {saving ? "Saving…" : editingId ? "Save changes" : "Add authorization"}
+                {saving ? "Saving…" : editingId ? "Save amendment" : "Add authorization"}
               </Button>
               {editingId ? (
                 <button
@@ -653,6 +787,46 @@ export function AuthorizationsPage() {
             </div>
             {formError ? <p className="text-sm text-red-700">{formError}</p> : null}
           </form>
+        </Card>
+      ) : null}
+
+      {amendmentImpact ? (
+        <Card>
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <h3 className="font-semibold text-slate-950">Visits to review</h3>
+              <p className="mt-1 text-xs text-slate-500">
+                This amendment didn&apos;t change any of these - they&apos;re flagged for a human to review,
+                not auto-updated.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => setAmendmentImpact(null)}
+              className="text-xs font-medium text-slate-600 hover:text-slate-900"
+            >
+              Dismiss
+            </button>
+          </div>
+          <ul className="mt-3 divide-y divide-slate-100">
+            {amendmentImpact.map((row) => (
+              <li key={row.affected_visit_id} className="flex flex-wrap items-center justify-between gap-3 py-2.5 text-sm">
+                <div>
+                  <p className="text-slate-800">{new Date(row.affected_service_date).toLocaleDateString()}</p>
+                  <p className="text-xs text-slate-500">
+                    Worked {formatHours(row.affected_worked_minutes / 60)}h · Billed{" "}
+                    {formatHours(row.affected_billable_minutes / 60)}h · Old cap{" "}
+                    {formatHours(row.affected_old_cap_minutes / 60)}h · New cap{" "}
+                    {formatHours(row.affected_new_cap_minutes / 60)}h
+                  </p>
+                </div>
+                <StatusBadge
+                  label={row.impact_kind ? impactLabel[row.impact_kind] : ""}
+                  tone={row.impact_kind === "decrease_now_exceeds" ? "warning" : "info"}
+                />
+              </li>
+            ))}
+          </ul>
         </Card>
       ) : null}
 
@@ -781,56 +955,116 @@ export function AuthorizationsPage() {
                 );
                 const expiry = getAuthorizationExpiryStatus(row.period_end);
                 const active = isAuthorizationActive(row.period_start, row.period_end);
+                const isHistoryOpen = historyId === row.id;
                 return (
-                  <tr key={row.id} className="border-b border-slate-100 last:border-0">
-                    <td className="py-2.5 text-slate-800">{row.client_name}</td>
-                    <td className="py-2.5 text-slate-600">{row.service_name}</td>
-                    <td className="py-2.5 text-slate-600">
-                      {row.payer}
-                      {row.authorization_number ? (
-                        <span className="block text-xs text-slate-400">#{row.authorization_number}</span>
-                      ) : null}
-                    </td>
-                    <td className="py-2.5 whitespace-nowrap text-slate-600">
-                      {new Date(row.period_start).toLocaleDateString()} –{" "}
-                      {new Date(row.period_end).toLocaleDateString()}
-                      {!active ? <span className="ml-1.5 text-xs text-slate-400">(past/future)</span> : null}
-                    </td>
-                    <td className="py-2.5 text-slate-600">{formatHours(row.max_monthly_hours)}h</td>
-                    <td className="py-2.5 text-slate-600">
-                      {formatHours(row.hours_used_this_month)}h used
-                      <span className="block text-xs text-slate-400">
-                        {formatHours(row.hours_scheduled_this_month)}h scheduled
-                      </span>
-                    </td>
-                    <td className="py-2.5">
-                      <StatusBadge label={usageLabelText[usage]} tone={usageTone[usage]} />
-                    </td>
-                    <td className="py-2.5">
-                      <StatusBadge label={expiryLabelText[expiry]} tone={expiryTone[expiry]} />
-                    </td>
-                    {canManage ? (
-                      <td className="py-2.5 text-right">
-                        <div className="flex justify-end gap-3">
-                          <button
-                            type="button"
-                            onClick={() => startEdit(row)}
-                            className="text-xs font-medium text-slate-700 underline-offset-2 hover:underline"
-                          >
-                            Edit
-                          </button>
-                          <button
-                            type="button"
-                            disabled={pendingId === row.id}
-                            onClick={() => handleRemove(row)}
-                            className="text-xs font-medium text-red-700 underline-offset-2 hover:underline disabled:cursor-not-allowed disabled:opacity-60"
-                          >
-                            Remove
-                          </button>
-                        </div>
+                  <Fragment key={row.id}>
+                    <tr className="border-b border-slate-100 last:border-0">
+                      <td className="py-2.5 text-slate-800">{row.client_name}</td>
+                      <td className="py-2.5 text-slate-600">{row.service_name}</td>
+                      <td className="py-2.5 text-slate-600">
+                        {row.payer}
+                        {row.authorization_number ? (
+                          <span className="block text-xs text-slate-400">#{row.authorization_number}</span>
+                        ) : null}
                       </td>
+                      <td className="py-2.5 whitespace-nowrap text-slate-600">
+                        {new Date(row.period_start).toLocaleDateString()} –{" "}
+                        {new Date(row.period_end).toLocaleDateString()}
+                        {!active ? <span className="ml-1.5 text-xs text-slate-400">(past/future)</span> : null}
+                      </td>
+                      <td className="py-2.5 text-slate-600">
+                        {formatHours(row.max_monthly_hours)}h
+                        {row.version_number > 1 ? (
+                          <span className="block text-xs text-slate-400">v{row.version_number}</span>
+                        ) : null}
+                      </td>
+                      <td className="py-2.5 text-slate-600">
+                        {formatHours(row.hours_used_this_month)}h used
+                        <span className="block text-xs text-slate-400">
+                          {formatHours(row.hours_scheduled_this_month)}h scheduled
+                        </span>
+                      </td>
+                      <td className="py-2.5">
+                        <StatusBadge label={usageLabelText[usage]} tone={usageTone[usage]} />
+                      </td>
+                      <td className="py-2.5">
+                        <StatusBadge label={expiryLabelText[expiry]} tone={expiryTone[expiry]} />
+                      </td>
+                      {canManage ? (
+                        <td className="py-2.5 text-right">
+                          <div className="flex justify-end gap-3">
+                            {row.version_number > 1 ? (
+                              <button
+                                type="button"
+                                onClick={() => setHistoryId(isHistoryOpen ? null : row.id)}
+                                className="text-xs font-medium text-slate-700 underline-offset-2 hover:underline"
+                              >
+                                {isHistoryOpen ? "Hide history" : "Version history"}
+                              </button>
+                            ) : null}
+                            <button
+                              type="button"
+                              onClick={() => startEdit(row)}
+                              className="text-xs font-medium text-slate-700 underline-offset-2 hover:underline"
+                            >
+                              Edit
+                            </button>
+                            <button
+                              type="button"
+                              disabled={pendingId === row.id}
+                              onClick={() => handleRemove(row)}
+                              className="text-xs font-medium text-red-700 underline-offset-2 hover:underline disabled:cursor-not-allowed disabled:opacity-60"
+                            >
+                              Remove
+                            </button>
+                          </div>
+                        </td>
+                      ) : null}
+                    </tr>
+                    {isHistoryOpen ? (
+                      <tr className="border-b border-slate-100 last:border-0 bg-slate-50">
+                        <td colSpan={canManage ? 9 : 8} className="py-3">
+                          {historyQuery.isLoading ? (
+                            <p className="text-sm text-slate-500">Loading version history…</p>
+                          ) : historyQuery.isError ? (
+                            <p className="text-sm text-red-700">Could not load version history.</p>
+                          ) : (
+                            <ul className="space-y-2 px-2">
+                              {(historyQuery.data ?? []).map((version) => (
+                                <li key={version.id} className="rounded-lg bg-white p-3 text-sm">
+                                  <div className="flex flex-wrap items-center justify-between gap-2">
+                                    <p className="font-medium text-slate-900">
+                                      v{version.version_number} — {formatHours(version.max_monthly_hours)}h/mo
+                                      {version.is_current ? (
+                                        <span className="ml-2 text-xs font-normal text-emerald-700">Current</span>
+                                      ) : (
+                                        <span className="ml-2 text-xs font-normal text-slate-400">Superseded</span>
+                                      )}
+                                    </p>
+                                    <p className="text-xs text-slate-500">
+                                      {new Date(version.created_at).toLocaleString()} · {version.changed_by_name}
+                                    </p>
+                                  </div>
+                                  {version.change_reason ? (
+                                    <p className="mt-1 text-xs text-slate-600">{version.change_reason}</p>
+                                  ) : null}
+                                  {version.received_date || version.source_reference ? (
+                                    <p className="mt-1 text-xs text-slate-400">
+                                      {version.received_date
+                                        ? `Received ${new Date(version.received_date).toLocaleDateString()}`
+                                        : null}
+                                      {version.received_date && version.source_reference ? " · " : null}
+                                      {version.source_reference ? `Ref ${version.source_reference}` : null}
+                                    </p>
+                                  ) : null}
+                                </li>
+                              ))}
+                            </ul>
+                          )}
+                        </td>
+                      </tr>
                     ) : null}
-                  </tr>
+                  </Fragment>
                 );
               })}
               {table.rows.length === 0 ? (

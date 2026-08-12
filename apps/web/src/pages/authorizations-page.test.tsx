@@ -239,6 +239,135 @@ describe("AuthorizationsPage", () => {
     );
   });
 
+  it("amends an existing authorization via amend_client_authorization rather than a direct update", async () => {
+    mockedUseOrganization.mockReturnValue({ ...baseOrganization(), hasPermission: vi.fn(() => true) });
+    const AUTH_ID = "33333333-3333-4333-8333-333333333333";
+    mockedRpc.mockImplementation((fn: string) => {
+      if (fn === "list_client_authorizations") {
+        return Promise.resolve({
+          data: [
+            {
+              id: AUTH_ID,
+              client_id: CLIENT_ID,
+              client_name: "Jordan Rivera",
+              service_id: SERVICE_ID,
+              service_name: "Personal care",
+              payer: "Medicaid",
+              authorization_number: "AUTH-1",
+              max_monthly_hours: 30,
+              period_start: "2026-08-01",
+              period_end: "2026-08-31",
+              notes: null,
+              hours_used_this_month: 5,
+              hours_scheduled_this_month: 5,
+              version_number: 1,
+              received_date: null,
+              source_reference: null
+            }
+          ],
+          error: null
+        }) as never;
+      }
+      if (fn === "amend_client_authorization") {
+        return Promise.resolve({
+          data: [
+            {
+              new_authorization_id: "55555555-5555-4555-8555-555555555555",
+              new_version_number: 2,
+              affected_visit_id: "66666666-6666-4666-8666-666666666666",
+              affected_visit_status: "administrator_review",
+              affected_service_date: "2026-08-05",
+              affected_worked_minutes: 360,
+              affected_billable_minutes: 200,
+              affected_old_cap_minutes: 1800,
+              affected_new_cap_minutes: 2880,
+              impact_kind: "increase_may_allow_more"
+            }
+          ],
+          error: null
+        }) as never;
+      }
+      return Promise.resolve({ data: [], error: null }) as never;
+    });
+    mockFromByTable({
+      clients: [{ id: CLIENT_ID, first_name: "Jordan", last_name: "Rivera" }],
+      services: [{ id: SERVICE_ID, name: "Personal care", is_active: true }]
+    });
+
+    renderPage();
+
+    await waitFor(() => expect(screen.getByText("Jordan Rivera")).toBeInTheDocument());
+    fireEvent.click(screen.getByText("Edit"));
+
+    await waitFor(() => expect(screen.getByLabelText("Reason for this change")).toBeInTheDocument());
+    fireEvent.change(screen.getByLabelText("Reason for this change"), {
+      target: { value: "Payer approved additional hours" }
+    });
+    fireEvent.change(screen.getByLabelText("Max hours / month"), { target: { value: "48" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save amendment" }));
+
+    await waitFor(() =>
+      expect(mockedRpc).toHaveBeenCalledWith(
+        "amend_client_authorization",
+        expect.objectContaining({
+          target_authorization_id: AUTH_ID,
+          new_max_monthly_hours: 48,
+          reason: "Payer approved additional hours"
+        })
+      )
+    );
+
+    await waitFor(() => expect(screen.getByText("Visits to review")).toBeInTheDocument());
+    expect(screen.getByText("May now be billable under the new cap")).toBeInTheDocument();
+  });
+
+  it("blocks amending without a reason", async () => {
+    mockedUseOrganization.mockReturnValue({ ...baseOrganization(), hasPermission: vi.fn(() => true) });
+    mockedRpc.mockResolvedValue({
+      data: [
+        {
+          id: "33333333-3333-4333-8333-333333333333",
+          client_id: CLIENT_ID,
+          client_name: "Jordan Rivera",
+          service_id: SERVICE_ID,
+          service_name: "Personal care",
+          payer: "Medicaid",
+          authorization_number: null,
+          max_monthly_hours: 30,
+          period_start: "2026-08-01",
+          period_end: "2026-08-31",
+          notes: null,
+          hours_used_this_month: 5,
+          hours_scheduled_this_month: 5,
+          version_number: 1,
+          received_date: null,
+          source_reference: null
+        }
+      ],
+      error: null
+    } as never);
+    mockFromByTable({
+      clients: [{ id: CLIENT_ID, first_name: "Jordan", last_name: "Rivera" }],
+      services: [{ id: SERVICE_ID, name: "Personal care", is_active: true }]
+    });
+
+    renderPage();
+
+    await waitFor(() => expect(screen.getByText("Jordan Rivera")).toBeInTheDocument());
+    fireEvent.click(screen.getByText("Edit"));
+    await waitFor(() => expect(screen.getByLabelText("Reason for this change")).toBeInTheDocument());
+    // Whitespace passes the input's HTML `required` attribute (which would
+    // otherwise block jsdom's form submission before the handler even
+    // runs) but must still fail the trimmed JS check below.
+    fireEvent.change(screen.getByLabelText("Reason for this change"), { target: { value: "   " } });
+    fireEvent.click(screen.getByRole("button", { name: "Save amendment" }));
+
+    await waitFor(() =>
+      expect(screen.getByText("A reason is required to amend an authorization.")).toBeInTheDocument()
+    );
+    expect(mockedRpc).not.toHaveBeenCalledWith("amend_client_authorization", expect.anything());
+  });
+
   it("soft-deletes an authorization via Remove", async () => {
     mockedUseOrganization.mockReturnValue({ ...baseOrganization(), hasPermission: vi.fn(() => true) });
     mockedRpc.mockResolvedValue({
