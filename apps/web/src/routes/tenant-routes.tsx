@@ -29,6 +29,7 @@ import { ClientDetailPage } from "@/pages/client-detail-page";
 import { SchedulePage } from "@/pages/schedule-page";
 import { CredentialsPage } from "@/pages/credentials-page";
 import { AuthorizationsPage } from "@/pages/authorizations-page";
+import { BillingPage } from "@/pages/billing-page";
 import { IncidentsPage } from "@/pages/incidents-page";
 import { SettingsPage } from "@/pages/settings-page";
 import { OwnerDashboardPage } from "@/pages/owner-dashboard-page";
@@ -69,6 +70,7 @@ export function getTenantRoutes() {
     />,
     <Route key="credentials" path="/credentials" element={<CredentialsPage />} />,
     <Route key="authorizations" path="/authorizations" element={<AuthorizationsPage />} />,
+    <Route key="billing" path="/billing" element={<BillingPage />} />,
     <Route key="incidents" path="/incidents" element={<IncidentsPage />} />,
     <Route key="applicants" path="/applicants" element={<ApplicantsPage />} />,
     <Route key="applicant-detail" path="/applicants/:id" element={<ApplicantDetailPage />} />,

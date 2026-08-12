@@ -13,6 +13,7 @@ import {
   LayoutDashboard,
   LogOut,
   PenLine,
+  Receipt,
   Settings,
   ShieldCheck,
   UserPlus,
@@ -103,7 +104,8 @@ const complianceNav: NavItem[] = [
     permission: "authorizations.read",
     badgeKey: "authorizations_issues"
   },
-  { to: "/incidents", label: "Incidents", icon: AlertOctagon, badgeKey: "incidents_open" }
+  { to: "/incidents", label: "Incidents", icon: AlertOctagon, badgeKey: "incidents_open" },
+  { to: "/billing", label: "Billing", icon: Receipt, permission: "billing.read" }
 ];
 
 // Tenant Administration (Build 022: Platform/Tenant separation) - the
