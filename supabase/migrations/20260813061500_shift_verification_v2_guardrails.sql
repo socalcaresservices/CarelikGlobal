@@ -2,18 +2,16 @@ begin;
 
 -- Ogevia Shift Verification v2
 --
--- Product rules locked by this migration:
---   1. Caregivers cannot create extra/unscheduled shifts.
---   2. Time in and time out remain database-server timestamps only.
---   3. Caregivers cannot void or correct visits; administrators manage corrections.
---   4. A caregiver may start only an administrator-scheduled shift assigned to them.
---   5. Client confirmation supports drawn, typed, verbal, assisted-mark, and
---      unable-to-confirm methods without weakening the immutable audit trail.
+-- Final caregiver rules:
+--   * visits must be scheduled by an agency administrator;
+--   * caregiver Time In / Time Out are database-server NOW values only;
+--   * caregivers cannot void or correct a visit;
+--   * service name + organization service code stay paired;
+--   * client confirmation may be drawn, typed, verbal, assisted-mark, or
+--     documented as unable to obtain, while the submitted visit remains locked.
 
 -- -----------------------------------------------------------------------------
--- Confirmation metadata. Existing drawn signatures remain valid and are
--- backfilled as method=draw. storage_path becomes nullable because typed/verbal
--- confirmations do not create an image object.
+-- 1. Confirmation metadata
 -- -----------------------------------------------------------------------------
 alter table public.visit_signatures
   add column if not exists confirmation_method text not null default 'draw',
@@ -21,6 +19,7 @@ alter table public.visit_signatures
   add column if not exists signer_relationship text,
   add column if not exists confirmation_reason text;
 
+-- Drawn signatures use Storage; typed/verbal/unable confirmations do not.
 alter table public.visit_signatures
   alter column storage_path drop not null;
 
@@ -31,107 +30,39 @@ alter table public.visit_signatures
   add constraint visit_signatures_confirmation_method_check
   check (confirmation_method in ('draw', 'typed', 'verbal', 'assisted_mark', 'unable_to_confirm'));
 
--- -----------------------------------------------------------------------------
--- A caregiver may only see today's unverified scheduled shifts for the client
--- code they already validated. Service name + service code are returned as one
--- paired record so the UI cannot accidentally combine a service with the wrong
--- code. The organization owns the services catalog and may add its own codes.
--- -----------------------------------------------------------------------------
-create or replace function public.list_startable_shifts_for_client(
-  target_organization_id uuid,
-  target_client_id uuid
+-- A failed final-submit after the image upload should not strand a caregiver.
+-- Upsert is permitted only while the visit still belongs to the caregiver and
+-- remains awaiting confirmation; once locked, the object cannot be replaced.
+drop policy if exists "caregivers_update_own_visit_signature" on storage.objects;
+create policy "caregivers_update_own_visit_signature"
+on storage.objects for update to authenticated
+using (
+  bucket_id = 'visit-signatures'
+  and exists (
+    select 1 from public.service_visits v
+    where v.id::text = (storage.foldername(name))[2]
+      and v.organization_id::text = (storage.foldername(name))[1]
+      and v.caregiver_user_id = auth.uid()
+      and v.status = 'awaiting_signature'
+  )
 )
-returns table (
-  shift_id uuid,
-  visit_number text,
-  client_id uuid,
-  client_code text,
-  service_id uuid,
-  service_code text,
-  service_name text,
-  service_color text,
-  authorization_id uuid,
-  max_monthly_hours numeric,
-  hours_used_this_month numeric,
-  hours_scheduled_this_month numeric,
-  starts_at timestamptz,
-  ends_at timestamptz
-)
-language sql
-stable
-security definer
-set search_path = public
-as $$
-  select
-    s.id,
-    s.visit_number,
-    c.id,
-    c.client_code,
-    sv.id,
-    sv.code,
-    sv.name,
-    sv.color,
-    a.id,
-    a.max_monthly_hours,
-    coalesce(usage.hours_used_this_month, 0),
-    coalesce(usage.hours_scheduled_this_month, 0),
-    s.starts_at,
-    s.ends_at
-  from public.shifts s
-  join public.clients c
-    on c.id = s.client_id
-   and c.organization_id = s.organization_id
-   and c.deleted_at is null
-   and c.status = 'active'
-  join public.services sv
-    on sv.id = s.service_id
-   and sv.organization_id = s.organization_id
-   and sv.deleted_at is null
-   and sv.is_active = true
-  join public.client_authorizations a
-    on a.organization_id = s.organization_id
-   and a.client_id = s.client_id
-   and a.service_id = s.service_id
-   and a.deleted_at is null
-   and s.starts_at::date between a.period_start and a.period_end
-  left join lateral (
-    select
-      coalesce(sum(v.billable_minutes) filter (
-        where v.status in ('signed', 'administrator_review')
-          and v.service_date >= date_trunc('month', s.starts_at)::date
-          and v.service_date < (date_trunc('month', s.starts_at) + interval '1 month')::date
-      ), 0)::numeric / 60.0 as hours_used_this_month,
-      coalesce(sum(extract(epoch from (
-        least(s2.ends_at, date_trunc('month', s.starts_at) + interval '1 month')
-        - greatest(s2.starts_at, date_trunc('month', s.starts_at))
-      )) / 3600.0) filter (
-        where s2.status = 'scheduled'
-          and s2.starts_at < date_trunc('month', s.starts_at) + interval '1 month'
-          and s2.ends_at > date_trunc('month', s.starts_at)
-      ), 0) as hours_scheduled_this_month
-    from public.service_visits v
-    full join public.shifts s2
-      on false
-    where (v.service_authorization_id = a.id or v.id is null)
-  ) usage on true
-  where s.organization_id = target_organization_id
-    and s.client_id = target_client_id
-    and s.caregiver_user_id = auth.uid()
-    and s.status = 'scheduled'
-    and s.starts_at::date = current_date
-    and public.is_organization_member(target_organization_id)
-    and not exists (
-      select 1
-      from public.service_visits existing
-      where existing.scheduled_shift_id = s.id
-        and existing.status not in ('voided', 'corrected')
-    )
-  order by s.starts_at, sv.name;
-$$;
+with check (
+  bucket_id = 'visit-signatures'
+  and exists (
+    select 1 from public.service_visits v
+    where v.id::text = (storage.foldername(name))[2]
+      and v.organization_id::text = (storage.foldername(name))[1]
+      and v.caregiver_user_id = auth.uid()
+      and v.status = 'awaiting_signature'
+  )
+);
 
--- The full-join trick above is unnecessarily clever for the two independent
--- aggregates and can be hard for future maintainers to reason about. Replace it
--- immediately with a plpgsql-free SQL definition using two scalar laterals.
+-- -----------------------------------------------------------------------------
+-- 2. Startable shifts
+-- Only today's administrator-created scheduled shifts assigned to the calling
+-- caregiver are returned. Service code/name are one record, never independent
+-- fields a caregiver can mix and match.
+-- -----------------------------------------------------------------------------
 create or replace function public.list_startable_shifts_for_client(
   target_organization_id uuid,
   target_client_id uuid
@@ -141,6 +72,7 @@ returns table (
   visit_number text,
   client_id uuid,
   client_code text,
+  client_name text,
   service_id uuid,
   service_code text,
   service_name text,
@@ -162,6 +94,7 @@ as $$
     s.visit_number,
     c.id,
     c.client_code,
+    trim(c.first_name || ' ' || c.last_name),
     sv.id,
     sv.code,
     sv.name,
@@ -228,11 +161,67 @@ $$;
 revoke all on function public.list_startable_shifts_for_client(uuid, uuid) from public, anon;
 grant execute on function public.list_startable_shifts_for_client(uuid, uuid) to authenticated;
 
+-- Active-visit detail for the four-screen mobile flow. Client name is exposed
+-- here only for the caller's own active assigned visit, not as organization-wide
+-- client read access.
+create or replace function public.get_active_service_visit_v2(target_organization_id uuid)
+returns table (
+  visit_id uuid,
+  visit_number text,
+  client_code text,
+  client_name text,
+  service_code text,
+  service_name text,
+  scheduled_starts_at timestamptz,
+  scheduled_ends_at timestamptz,
+  time_in timestamptz,
+  max_monthly_hours numeric,
+  signed_minutes_this_month bigint
+)
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select
+    v.id,
+    v.visit_number_snapshot,
+    v.client_code_snapshot,
+    trim(c.first_name || ' ' || c.last_name),
+    sv.code,
+    sv.name,
+    s.starts_at,
+    s.ends_at,
+    v.time_in,
+    a.max_monthly_hours,
+    coalesce((
+      select sum(v2.billable_minutes)::bigint
+      from public.service_visits v2
+      where v2.service_authorization_id = a.id
+        and v2.id <> v.id
+        and v2.service_date >= date_trunc('month', v.time_in)::date
+        and v2.service_date < (date_trunc('month', v.time_in) + interval '1 month')::date
+        and v2.status in ('signed', 'administrator_review')
+    ), 0)
+  from public.service_visits v
+  join public.clients c on c.id = v.client_id
+  join public.services sv on sv.id = v.service_id
+  join public.client_authorizations a on a.id = v.service_authorization_id
+  left join public.shifts s on s.id = v.scheduled_shift_id
+  where v.organization_id = target_organization_id
+    and v.caregiver_user_id = auth.uid()
+    and v.status = 'draft'
+  limit 1;
+$$;
+
+revoke all on function public.get_active_service_visit_v2(uuid) from public, anon;
+grant execute on function public.get_active_service_visit_v2(uuid) to authenticated;
+
 -- -----------------------------------------------------------------------------
--- Disable the old caregiver self-scheduling RPC. Administrators schedule shifts
--- from the organization Schedule surface. Keeping the function in place avoids
--- a missing-function failure for a stale client while still enforcing the new
--- rule server-side.
+-- 3. No caregiver self-scheduling
+-- Administrators continue to add normal and extra shifts from the Schedule
+-- module. This compatibility RPC remains so stale clients receive a clear rule
+-- instead of a missing-function error.
 -- -----------------------------------------------------------------------------
 create or replace function public.schedule_caregiver_visit(
   target_organization_id uuid,
@@ -258,12 +247,9 @@ $$;
 revoke all on function public.schedule_caregiver_visit(uuid, uuid, uuid, timestamptz, timestamptz, text) from public, anon;
 grant execute on function public.schedule_caregiver_visit(uuid, uuid, uuid, timestamptz, timestamptz, text) to authenticated;
 
--- -----------------------------------------------------------------------------
--- Backward-compatible hardening of the client-code start RPC. It no longer
--- creates an unscheduled service_visit. It must resolve exactly one scheduled,
--- unverified shift for the calling caregiver, client, service, and today, then
--- delegates to the same server-controlled visit row shape.
--- -----------------------------------------------------------------------------
+-- The older client-code start endpoint is hardened as well: even a stale UI or
+-- direct RPC call must resolve exactly one real scheduled shift before a visit
+-- can start. It then delegates to start_service_visit(), which records DB now().
 create or replace function public.start_service_visit_by_client_code(
   target_organization_id uuid,
   target_client_code text,
@@ -278,12 +264,9 @@ set search_path = public
 as $$
 declare
   target_client public.clients%rowtype;
-  candidate public.shifts%rowtype;
+  candidate_shift_id uuid;
   candidate_count integer;
-  target_auth public.client_authorizations%rowtype;
-  caregiver_name text;
   visit_id uuid;
-  started_at timestamptz := now();
 begin
   if auth.uid() is null then
     raise exception 'Not authenticated';
@@ -303,7 +286,7 @@ begin
     raise exception 'NOT_FOUND: That client ID was not found or is not active.';
   end if;
 
-  select count(*) into candidate_count
+  select count(*), min(s.id) into candidate_count, candidate_shift_id
   from public.shifts s
   where s.organization_id = target_organization_id
     and s.client_id = target_client.id
@@ -321,53 +304,15 @@ begin
     raise exception 'NO_SCHEDULED_VISIT: No administrator-scheduled visit is available for this client and service today.';
   end if;
   if candidate_count > 1 then
-    raise exception 'MULTIPLE_SCHEDULED_VISITS: Select the scheduled visit from your visit list.';
+    raise exception 'MULTIPLE_SCHEDULED_VISITS: Select the specific scheduled visit from your visit list.';
   end if;
 
-  select * into candidate
-  from public.shifts s
-  where s.organization_id = target_organization_id
-    and s.client_id = target_client.id
-    and s.caregiver_user_id = auth.uid()
-    and s.service_id = target_service_id
-    and s.status = 'scheduled'
-    and s.starts_at::date = current_date
-    and not exists (
-      select 1 from public.service_visits existing
-      where existing.scheduled_shift_id = s.id
-        and existing.status not in ('voided', 'corrected')
-    )
-  limit 1;
-
-  select * into target_auth
-  from public.client_authorizations
-  where organization_id = target_organization_id
-    and client_id = target_client.id
-    and service_id = target_service_id
-    and deleted_at is null
-    and started_at::date between period_start and period_end
-  order by period_start desc
-  limit 1;
-
-  if target_auth.id is null then
-    raise exception 'No active authorization covers this scheduled visit - contact your agency administrator';
-  end if;
-
-  select coalesce(display_name, 'Caregiver') into caregiver_name
-  from public.user_profiles where id = auth.uid();
-
-  insert into public.service_visits (
-    organization_id, client_id, client_code_snapshot, caregiver_user_id,
-    caregiver_name_snapshot, scheduled_shift_id, service_authorization_id,
-    service_id, service_date, time_in, task_categories, service_notes,
-    status, created_by, visit_number_snapshot
-  ) values (
-    target_organization_id, target_client.id, target_client.client_code,
-    auth.uid(), coalesce(caregiver_name, 'Caregiver'),
-    candidate.id, target_auth.id, target_service_id, started_at::date,
-    started_at, coalesce(visit_task_categories, '{}'), nullif(trim(visit_service_notes), ''),
-    'draft', auth.uid(), candidate.visit_number
-  ) returning id into visit_id;
+  select public.start_service_visit(
+    target_organization_id,
+    candidate_shift_id,
+    coalesce(visit_task_categories, '{}'),
+    visit_service_notes
+  ) into visit_id;
 
   return visit_id;
 end;
@@ -377,8 +322,7 @@ revoke all on function public.start_service_visit_by_client_code(uuid, text, uui
 grant execute on function public.start_service_visit_by_client_code(uuid, text, uuid, text[], text) to authenticated;
 
 -- -----------------------------------------------------------------------------
--- A caregiver cannot cancel/void a visit. A mistake becomes an administrator
--- action so the original server timestamp and the reason remain reviewable.
+-- 4. Caregiver cannot void/cancel a visit
 -- -----------------------------------------------------------------------------
 create or replace function public.void_service_visit(
   target_visit_id uuid,
@@ -421,9 +365,7 @@ revoke all on function public.void_service_visit(uuid, text) from public, anon;
 grant execute on function public.void_service_visit(uuid, text) to authenticated;
 
 -- -----------------------------------------------------------------------------
--- Flexible confirmation. The visit remains immutable after submission. The
--- caregiver's attestation timestamp is recorded here, at the moment the final
--- confirmation is submitted (not merely when Time Out is pressed).
+-- 5. Flexible client/representative confirmation + caregiver attestation
 -- -----------------------------------------------------------------------------
 create or replace function public.confirm_service_visit(
   target_visit_id uuid,
