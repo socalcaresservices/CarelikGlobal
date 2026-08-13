@@ -326,22 +326,25 @@ describe("SettingsPage", () => {
     expect(updateEqMock).toHaveBeenCalledWith("id", "lang-1");
   });
 
-  it("lists platform-default and custom document types, hiding Deactivate for defaults", async () => {
+  it("lists platform-default and custom document types and lets the agency disable either", async () => {
     mockedUseAuth.mockReturnValue(authUser());
     mockedUseOrganization.mockReturnValue({ ...baseOrganization(), hasPermission: vi.fn(() => true) });
 
     const { selectMock: settingsSelect } = mockReadableSettings([]);
     const { selectMock: skillsSelect } = mockReadableLookup([]);
     const { selectMock: languagesSelect } = mockReadableLookup([]);
-    const { selectMock: documentTypesSelect } = mockReadableDocumentTypes([
-      { id: "dt-1", organization_id: null, name: "CPR Certification", category: "certification", requires_expiration: true, is_active: true },
-      { id: "dt-2", organization_id: ORG_ID, name: "Facility Badge", category: null, requires_expiration: false, is_active: true }
-    ]);
+    mockedRpc.mockImplementation((fn: string) => {
+      if (fn === "list_configurable_document_types") return Promise.resolve({ data: [
+        { id: "dt-1", organization_id: null, name: "CPR Certification", category: "certification", requires_expiration: true, is_active: true, is_platform_default: true },
+        { id: "dt-2", organization_id: ORG_ID, name: "Facility Badge", category: null, requires_expiration: false, is_active: true, is_platform_default: false }
+      ], error: null }) as never;
+      return Promise.resolve({ data: [], error: null }) as never;
+    });
 
     mockedFrom.mockImplementation((table: string) => {
       if (table === "skills") return { select: skillsSelect } as never;
       if (table === "languages") return { select: languagesSelect } as never;
-      if (table === "document_types") return { select: documentTypesSelect } as never;
+      if (table === "document_types") return {} as never;
       return { select: settingsSelect } as never;
     });
 
@@ -352,7 +355,7 @@ describe("SettingsPage", () => {
     expect(screen.getByText("Platform default")).toBeInTheDocument();
 
     const documentTypesCard = screen.getByText("Document types").closest("div")!;
-    expect(within(documentTypesCard).getAllByRole("button", { name: "Deactivate" })).toHaveLength(1);
+    expect(within(documentTypesCard).getAllByRole("button", { name: "Deactivate" })).toHaveLength(2);
   });
 
   it("shows an error message when the document types fetch fails, instead of a false empty state", async () => {
@@ -362,15 +365,17 @@ describe("SettingsPage", () => {
     const { selectMock: settingsSelect } = mockReadableSettings([]);
     const { selectMock: skillsSelect } = mockReadableLookup([]);
     const { selectMock: languagesSelect } = mockReadableLookup([]);
-    const failingOrderMock = vi.fn().mockResolvedValue({ data: null, error: new Error("network error") });
-    const failingIsMock = vi.fn(() => ({ order: failingOrderMock }));
-    const failingOrMock = vi.fn(() => ({ is: failingIsMock }));
-    const documentTypesSelect = vi.fn(() => ({ or: failingOrMock }));
+    mockedRpc.mockImplementation((fn: string) => {
+      if (fn === "list_configurable_document_types") {
+        return Promise.resolve({ data: null, error: new Error("network error") }) as never;
+      }
+      return Promise.resolve({ data: [], error: null }) as never;
+    });
 
     mockedFrom.mockImplementation((table: string) => {
       if (table === "skills") return { select: skillsSelect } as never;
       if (table === "languages") return { select: languagesSelect } as never;
-      if (table === "document_types") return { select: documentTypesSelect } as never;
+      if (table === "document_types") return {} as never;
       return { select: settingsSelect } as never;
     });
 
