@@ -26,16 +26,16 @@ describe("MarketingPage", () => {
     expect(screen.getByText("CareScore matching")).toBeInTheDocument();
     expect(screen.getByText("Service Verification")).toBeInTheDocument();
     expect(screen.getAllByRole("link", { name: "Sign in" }).length).toBeGreaterThan(0);
-    expect(screen.queryByText("Go to platform admin")).not.toBeInTheDocument();
+    expect(screen.queryByText("Go to Ogevia")).not.toBeInTheDocument();
   });
 
-  it("shows a 'Go to platform admin' link when already signed in", () => {
+  it("sends an authenticated user to the application host", () => {
     mockedUseAuth.mockReturnValue({ user: { id: "user-1" } } as never);
 
     renderPage();
 
-    const link = screen.getByRole("link", { name: "Go to platform admin" });
-    expect(link).toHaveAttribute("href", "/organizations");
+    const link = screen.getByRole("link", { name: "Go to Ogevia" });
+    expect(link).toHaveAttribute("href", "http://app.ogevia.com:3000");
   });
 
   it("links to the pricing page", () => {
