@@ -16,7 +16,6 @@ vi.mock("@/lib/supabase", () => ({
 
 const mockedUseOrganization = vi.mocked(useOrganization);
 const mockedRpc = vi.mocked(supabase.rpc);
-
 const ORG_ID = "11111111-1111-4111-8111-111111111111";
 
 function baseOrganization(hasPermission = () => true) {
@@ -50,34 +49,33 @@ function renderPage() {
   );
 }
 
-describe("ApplicantsPage", () => {
-  afterEach(() => {
-    vi.clearAllMocks();
-  });
+describe("Candidates pipeline", () => {
+  afterEach(() => vi.clearAllMocks());
 
   it("shows a not-available message without applicants.read", () => {
     mockedUseOrganization.mockReturnValue(baseOrganization(() => false));
-
     renderPage();
-
     expect(screen.getByText("Not available")).toBeInTheDocument();
   });
 
-  it("lists applicants returned by list_applicants", async () => {
+  it("lists candidates returned by list_candidates_v1", async () => {
     mockedUseOrganization.mockReturnValue(baseOrganization());
     mockedRpc.mockResolvedValue({
       data: [
         {
-          id: "applicant-1",
+          id: "candidate-1",
           first_name: "Ashley",
           last_name: "Rivera",
           email: "ashley@example.com",
           phone: null,
-          status: "new",
+          pipeline_stage: "application_received",
+          source: "indeed",
+          position_applied_for: "Caregiver",
+          applied_at: "2026-08-13T12:00:00.000Z",
           desired_weekly_hours: 30,
-          created_at: new Date().toISOString(),
-          reviewed_by_name: null,
-          hired_caregiver_user_id: null
+          available_start_date: null,
+          imported_at: null,
+          created_at: "2026-08-13T12:00:00.000Z"
         }
       ],
       error: null
@@ -86,15 +84,16 @@ describe("ApplicantsPage", () => {
     renderPage();
 
     await waitFor(() => expect(screen.getByText("Ashley Rivera")).toBeInTheDocument());
+    expect(screen.getByText("Indeed")).toBeInTheDocument();
+    expect(screen.getByText("Caregiver")).toBeInTheDocument();
     expect(screen.getByText("30h/week")).toBeInTheDocument();
+    expect(mockedRpc).toHaveBeenCalledWith("list_candidates_v1", { target_organization_id: ORG_ID });
   });
 
-  it("shows an empty state with no applicants", async () => {
+  it("shows the empty Candidates state", async () => {
     mockedUseOrganization.mockReturnValue(baseOrganization());
     mockedRpc.mockResolvedValue({ data: [], error: null } as never);
-
     renderPage();
-
-    await waitFor(() => expect(screen.getByText("No applicants yet.")).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText("No candidates yet.")).toBeInTheDocument());
   });
 });
