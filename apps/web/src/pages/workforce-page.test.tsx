@@ -83,7 +83,7 @@ describe("WorkforcePage", () => {
     expect(screen.getByText("30/wk")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Ashley Rivera" })).toHaveAttribute(
       "href",
-      "/workforce/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"
+      "/team/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"
     );
     expect(mockedRpc).toHaveBeenCalledWith("list_care_team_records", { target_organization_id: ORG_ID });
   });

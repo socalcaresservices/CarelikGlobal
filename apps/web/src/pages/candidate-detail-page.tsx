@@ -6,6 +6,7 @@ import { Button, Card, StatusBadge } from "@carelik/ui";
 import { useAuth } from "@carelik/auth";
 import { useOrganization } from "@/providers/organization-provider";
 import { supabase } from "@/lib/supabase";
+import { DocumentsCard } from "@/pages/applicant-detail-page";
 
 type Weekday = "monday" | "tuesday" | "wednesday" | "thursday" | "friday" | "saturday" | "sunday";
 type Stage =
@@ -47,6 +48,8 @@ export function CandidateDetailPage() {
   const canRead = hasPermission("applicants.read");
   const canManage = hasPermission("applicants.update");
   const canTransfer = canManage && hasPermission("membership.update");
+  const canReadDocuments = hasPermission("documents.read");
+  const canManageDocuments = hasPermission("documents.manage");
 
   const candidateQuery = useQuery({
     queryKey: ["candidate-detail-v1", activeOrganizationId, id],
@@ -150,7 +153,7 @@ export function CandidateDetailPage() {
       const { data, error } = await supabase.rpc("transfer_candidate_to_care_team", { target_organization_id: activeOrganizationId!, target_applicant_id: id! });
       if (error) throw error;
       return data as string;
-    }, onSuccess: (recordId) => { void queryClient.invalidateQueries({ queryKey: ["care-team-records", activeOrganizationId] }); navigate(`/workforce/${recordId}`); }
+    }, onSuccess: (recordId) => { void queryClient.invalidateQueries({ queryKey: ["care-team-records", activeOrganizationId] }); navigate(`/team/${recordId}`); }
   });
 
   if (!canRead) return <Card><p className="text-sm text-slate-600">You do not have permission to view Candidates.</p></Card>;
@@ -163,7 +166,7 @@ export function CandidateDetailPage() {
 
   return (
     <section className="mx-auto max-w-5xl space-y-6">
-      <Link to="/applicants" className="inline-flex items-center gap-1.5 text-sm text-slate-500 hover:text-slate-900"><ArrowLeft className="h-4 w-4" />Candidates</Link>
+      <Link to="/candidates" className="inline-flex items-center gap-1.5 text-sm text-slate-500 hover:text-slate-900"><ArrowLeft className="h-4 w-4" />Candidates</Link>
       <div className="flex flex-wrap items-start justify-between gap-4"><div><p className="text-sm font-medium text-slate-500">Candidate</p><h1 className="mt-1 text-2xl font-semibold text-slate-950">{candidateName}</h1><p className="mt-1 text-sm text-slate-500">{candidate.email}{candidate.phone ? ` · ${candidate.phone}` : ""}</p></div><StatusBadge label={title(candidate.pipeline_stage)} tone={candidate.pipeline_stage === "care_team" ? "success" : terminal ? "neutral" : "info"}/></div>
 
       <div className="grid gap-5 lg:grid-cols-2">
@@ -179,6 +182,16 @@ export function CandidateDetailPage() {
       <Card><div className="flex flex-wrap items-start justify-between gap-3"><div><h2 className="font-semibold text-slate-950">Credentials & requirements</h2><p className="mt-1 text-sm text-slate-500">Candidate-submitted information is separate from staff verification.</p></div><StatusBadge label={`${missingRequirements.length} required missing`} tone={missingRequirements.length ? "warning" : "success"}/></div>{missingRequirements.length ? <p className="mt-3 rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-900">Missing: {missingRequirements.map((row) => row.name).join(", ")}</p> : null}{credentials.length ? <div className="mt-3 overflow-x-auto"><table className="min-w-full text-sm"><thead><tr className="border-b border-slate-200 text-left text-xs uppercase tracking-wide text-slate-500"><th className="px-2 py-2">Credential</th><th className="px-2 py-2">Expiration</th><th className="px-2 py-2">Verification</th><th className="px-2 py-2"></th></tr></thead><tbody>{credentials.map((row) => <tr key={row.id} className="border-b border-slate-100"><td className="px-2 py-3"><p className="font-medium text-slate-900">{row.credential_type}</p><p className="text-xs text-slate-500">{row.issuing_organization ?? ""}{row.credential_number ? ` · ${row.credential_number}` : ""}</p></td><td className="px-2 py-3">{row.does_not_expire ? "Does not expire" : row.expiration_date ?? "—"}</td><td className="px-2 py-3"><StatusBadge label={title(row.verification_status)} tone={row.verification_status === "verified" ? "success" : row.verification_status === "rejected" ? "danger" : "warning"}/></td><td className="px-2 py-3 text-right">{canManage ? <div className="flex justify-end gap-2"><Button size="sm" variant="secondary" disabled={verifyMutation.isPending || row.verification_status === "verified"} onClick={() => verifyMutation.mutate({credentialId:row.id,verificationStatus:"verified"})}>Verify</Button><Button size="sm" variant="secondary" disabled={verifyMutation.isPending || row.verification_status === "rejected"} onClick={() => verifyMutation.mutate({credentialId:row.id,verificationStatus:"rejected"})}>Reject</Button></div> : null}</td></tr>)}</tbody></table></div> : <p className="mt-3 text-sm text-slate-400">No credentials submitted.</p>}</Card>
 
       <Card><h2 className="font-semibold text-slate-950">Onboarding</h2><div className="mt-4 grid gap-3 sm:grid-cols-2"><label className="text-xs font-medium text-slate-600">Status<select disabled={!canManage} value={onboarding.status} onChange={(e) => setOnboarding({...onboarding,status:e.target.value})} className="mt-1 block w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"><option value="not_scheduled">Not scheduled</option><option value="scheduled">Scheduled</option><option value="in_progress">In progress</option><option value="completed">Completed</option><option value="cancelled">Cancelled</option></select></label><label className="text-xs font-medium text-slate-600">Scheduled date/time<input disabled={!canManage} type="datetime-local" value={onboarding.scheduled_at?.slice(0,16) ?? ""} onChange={(e) => setOnboarding({...onboarding,scheduled_at:e.target.value || null})} className="mt-1 block w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"/></label><label className="text-xs font-medium text-slate-600">Method<input disabled={!canManage} value={onboarding.method ?? ""} onChange={(e) => setOnboarding({...onboarding,method:e.target.value || null})} className="mt-1 block w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"/></label><label className="text-xs font-medium text-slate-600">Location<input disabled={!canManage} value={onboarding.location ?? ""} onChange={(e) => setOnboarding({...onboarding,location:e.target.value || null})} className="mt-1 block w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"/></label><label className="text-xs font-medium text-slate-600">Background check<select disabled={!canManage} value={onboarding.background_check_status} onChange={(e) => setOnboarding({...onboarding,background_check_status:e.target.value})} className="mt-1 block w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"><option value="not_started">Not started</option><option value="requested">Requested</option><option value="submitted">Submitted</option><option value="pending">Pending</option><option value="complete">Complete</option><option value="needs_attention">Needs attention</option></select></label><label className="text-xs font-medium text-slate-600">Compliance<select disabled={!canManage} value={onboarding.compliance_status} onChange={(e) => setOnboarding({...onboarding,compliance_status:e.target.value})} className="mt-1 block w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"><option value="pending">Pending</option><option value="needs_attention">Needs attention</option><option value="complete">Complete</option></select></label><label className="text-xs font-medium text-slate-600 sm:col-span-2">Instructions<textarea disabled={!canManage} value={onboarding.instructions ?? ""} onChange={(e) => setOnboarding({...onboarding,instructions:e.target.value || null})} className="mt-1 min-h-20 block w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"/></label><label className="text-xs font-medium text-slate-600 sm:col-span-2">Internal notes<textarea disabled={!canManage} value={onboarding.notes ?? ""} onChange={(e) => setOnboarding({...onboarding,notes:e.target.value || null})} className="mt-1 min-h-20 block w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"/></label></div>{canManage ? <div className="mt-4"><Button loading={onboardingMutation.isPending} onClick={() => onboardingMutation.mutate()}>Save onboarding</Button></div> : null}</Card>
+
+      <DocumentsCard
+        organizationId={activeOrganizationId}
+        subjectType="applicant"
+        subjectId={candidate.id}
+        subjectName={`${candidate.first_name} ${candidate.last_name}`}
+        subjectEmail={candidate.email}
+        canRead={canReadDocuments}
+        canManage={canManageDocuments}
+      />
 
       <Card><div className="flex flex-wrap items-center justify-between gap-4"><div><h2 className="font-semibold text-slate-950">Create Care Team workforce record</h2><p className="mt-1 text-sm text-slate-500">Authorized staff can copy the existing profile, availability and credentials into a workforce record. A login account is not required.</p></div>{candidate.pipeline_stage === "care_team" ? <StatusBadge label="Workforce record created" tone="success"/> : canTransfer ? <Button loading={transferMutation.isPending} onClick={() => transferMutation.mutate()}>Create workforce record</Button> : null}</div>{transferMutation.isError ? <p className="mt-2 text-sm text-red-700">Could not create the workforce record.</p> : null}</Card>
     </section>

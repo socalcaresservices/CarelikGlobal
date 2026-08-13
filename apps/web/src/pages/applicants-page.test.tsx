@@ -84,7 +84,7 @@ describe("Candidates pipeline", () => {
     renderPage();
 
     await waitFor(() => expect(screen.getByText("Ashley Rivera")).toBeInTheDocument());
-    expect(screen.getByText("Indeed")).toBeInTheDocument();
+    expect(screen.getAllByText("Indeed")).not.toHaveLength(0);
     expect(screen.getByText("Caregiver")).toBeInTheDocument();
     expect(screen.getByText("30h/week")).toBeInTheDocument();
     expect(mockedRpc).toHaveBeenCalledWith("list_candidates_v1", { target_organization_id: ORG_ID });

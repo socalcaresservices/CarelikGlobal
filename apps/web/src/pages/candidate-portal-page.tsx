@@ -110,7 +110,11 @@ export function CandidatePortalPage() {
     if (!source.length) return;
     setAvailability((current) => {
       const withoutWeekdays = current.filter((row) => row.day_of_week === day);
-      return [...withoutWeekdays, ...WEEKDAYS.filter((target) => target !== day).flatMap((target) => source.map((slot) => ({ ...slot, id: undefined, day_of_week: target })))];
+      return [...withoutWeekdays, ...WEEKDAYS.filter((target) => target !== day).flatMap((target) => source.map((slot) => {
+        const copy = { ...slot, day_of_week: target };
+        delete copy.id;
+        return copy;
+      }))];
     });
   }
   function addCredential() { setCredentials((current) => [...current, { credential_type: "", issue_date: null, expiration_date: null, does_not_expire: false, issuing_organization: null, credential_number: null, submission_status: "self_reported", verification_status: "unverified", notes: null }]); }

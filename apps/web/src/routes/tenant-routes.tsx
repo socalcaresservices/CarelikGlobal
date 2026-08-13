@@ -3,11 +3,9 @@
  * Organization-scoped operational screens only.
  */
 
-import { Route } from "react-router-dom";
+import { Navigate, Route } from "react-router-dom";
 import { CommandCenterPage } from "@/pages/command-center-page";
 import { AccessPage } from "@/pages/access-page";
-import { TeamPage } from "@/pages/team-page";
-import { CaregiverDetailPage } from "@/pages/caregiver-detail-page";
 import { WorkforcePage } from "@/pages/workforce-page";
 import { WorkforceDetailPage } from "@/pages/workforce-detail-page";
 import { ClientsPage } from "@/pages/clients-page";
@@ -28,9 +26,9 @@ export function getTenantRoutes() {
   return [
     <Route key="dashboard" path="/" element={<CommandCenterPage />} />,
     <Route key="owner-dashboard" path="/owner-dashboard" element={<OwnerDashboardPage />} />,
-    <Route key="team" path="/team" element={<TeamPage />} />,
-    <Route key="team-detail" path="/team/:id" element={<CaregiverDetailPage />} />,
-    <Route key="workforce" path="/workforce" element={<WorkforcePage />} />,
+    <Route key="team" path="/team" element={<WorkforcePage />} />,
+    <Route key="team-detail" path="/team/:id" element={<WorkforceDetailPage />} />,
+    <Route key="workforce" path="/workforce" element={<Navigate to="/team" replace />} />,
     <Route key="workforce-detail" path="/workforce/:id" element={<WorkforceDetailPage />} />,
     <Route key="clients" path="/clients" element={<ClientsPage />} />,
     <Route key="client-detail" path="/clients/:id" element={<ClientDetailPage />} />,
@@ -42,8 +40,10 @@ export function getTenantRoutes() {
     <Route key="credentials" path="/credentials" element={<CredentialsPage />} />,
     <Route key="authorizations" path="/authorizations" element={<AuthorizationsPage />} />,
     <Route key="incidents" path="/incidents" element={<IncidentsPage />} />,
-    <Route key="applicants" path="/applicants" element={<ApplicantsPage />} />,
-    <Route key="candidate-detail" path="/applicants/:id" element={<CandidateDetailPage />} />,
+    <Route key="candidates" path="/candidates" element={<ApplicantsPage />} />,
+    <Route key="candidate-detail" path="/candidates/:id" element={<CandidateDetailPage />} />,
+    <Route key="applicants" path="/applicants" element={<Navigate to="/candidates" replace />} />,
+    <Route key="applicant-detail" path="/applicants/:id" element={<CandidateDetailPage />} />,
     <Route key="access" path="/access" element={<AccessPage />} />,
     <Route key="settings" path="/settings" element={<SettingsPage />} />
   ];

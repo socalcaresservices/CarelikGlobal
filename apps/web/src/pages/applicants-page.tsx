@@ -138,7 +138,7 @@ function findHeaderIndex(headers: string[], aliases: string[]) {
 function normalizeImportRows(text: string, source: string): ImportCandidate[] {
   const rows = parseCsv(text);
   if (rows.length < 2) return [];
-  const headers = rows[0].map(normalizeHeader);
+  const headers = rows[0]!.map(normalizeHeader);
   const firstIndex = findHeaderIndex(headers, ["first_name", "firstname", "first", "candidate_first_name"]);
   const lastIndex = findHeaderIndex(headers, ["last_name", "lastname", "last", "surname", "candidate_last_name"]);
   const fullIndex = findHeaderIndex(headers, ["name", "candidate_name", "full_name", "applicant_name"]);
@@ -493,7 +493,7 @@ export function ApplicantsPage() {
                 {table.rows.map((row) => (
                   <tr key={row.id} className="border-b border-slate-100 last:border-0">
                     <td className="py-2.5 text-slate-800">
-                      <Link to={`/applicants/${row.id}`} className="font-medium hover:underline">{row.first_name} {row.last_name}</Link>
+                      <Link to={`/candidates/${row.id}`} className="font-medium hover:underline">{row.first_name} {row.last_name}</Link>
                       <p className="truncate text-xs text-slate-500">{row.email}{row.phone ? ` · ${row.phone}` : ""}</p>
                     </td>
                     <td className="py-2.5">

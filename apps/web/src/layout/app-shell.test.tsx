@@ -101,15 +101,15 @@ describe("AppShell nav", () => {
     expect(screen.getByText("Command Center")).toBeInTheDocument();
   });
 
-  it("groups Applicants, Clients, and Team under a People heading", () => {
+  it("groups Candidates, Clients, and Care Team under a People heading", () => {
     mockedUseAuth.mockReturnValue({ user: { email: "owner@acme.test" } } as never);
     mockedUseOrganization.mockReturnValue(baseOrganization("organization_owner"));
 
     renderShell();
     expect(screen.getByText("People")).toBeInTheDocument();
-    expect(screen.getByText("Applicants")).toBeInTheDocument();
+    expect(screen.getByText("Candidates")).toBeInTheDocument();
     expect(screen.getByText("Clients")).toBeInTheDocument();
-    expect(screen.getByText("Team")).toBeInTheDocument();
+    expect(screen.getByText("Care Team")).toBeInTheDocument();
   });
 
   it("groups Credentials, Authorizations, and Incidents under a Compliance heading", () => {
@@ -145,15 +145,15 @@ describe("AppShell nav", () => {
     expect(screen.queryByText(/Phase 1/)).not.toBeInTheDocument();
   });
 
-  it("shows Applicants for someone with applicants.read", () => {
+  it("shows Candidates for someone with applicants.read", () => {
     mockedUseAuth.mockReturnValue({ user: { email: "owner@acme.test" } } as never);
     mockedUseOrganization.mockReturnValue(baseOrganization("organization_owner"));
 
     renderShell();
-    expect(screen.getByText("Applicants")).toBeInTheDocument();
+    expect(screen.getByText("Candidates")).toBeInTheDocument();
   });
 
-  it("hides Applicants without applicants.read", () => {
+  it("hides Candidates without applicants.read", () => {
     mockedUseAuth.mockReturnValue({ user: { email: "coordinator@acme.test" } } as never);
     mockedUseOrganization.mockReturnValue({
       ...baseOrganization("organization_admin"),
@@ -161,7 +161,7 @@ describe("AppShell nav", () => {
     });
 
     renderShell();
-    expect(screen.queryByText("Applicants")).not.toBeInTheDocument();
+    expect(screen.queryByText("Candidates")).not.toBeInTheDocument();
   });
 
   it("always shows Service Verification, but gates Visit Reports on visits.read", () => {

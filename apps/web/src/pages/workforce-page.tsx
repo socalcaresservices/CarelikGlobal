@@ -118,7 +118,7 @@ export function WorkforcePage() {
                 {(recordsQuery.data ?? []).map((row) => (
                   <tr key={row.id} className="border-b border-slate-100">
                     <td className="px-3 py-3">
-                      <Link to={`/workforce/${row.id}`} className="font-semibold text-slate-900 hover:underline">{row.display_name}</Link>
+                      <Link to={`/team/${row.id}`} className="font-semibold text-slate-900 hover:underline">{row.display_name}</Link>
                       <p className="text-xs text-slate-500">{row.email ?? ""}{row.phone ? ` · ${row.phone}` : ""}</p>
                     </td>
                     <td className="px-3 py-3"><StatusBadge label={row.status.replace(/_/g, " ")} tone={row.status === "active" || row.status === "ready" ? "success" : "neutral"} /></td>

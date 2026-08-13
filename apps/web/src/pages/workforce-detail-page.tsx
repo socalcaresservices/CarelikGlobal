@@ -42,6 +42,7 @@ interface MemberRow { user_id: string; display_name: string; status: string; rol
 
 function title(value: string) { return value.replace(/_/g, " ").replace(/\b\w/g, (letter) => letter.toUpperCase()); }
 function time(value: string) { return value.slice(0, 5); }
+function isUuid(value: string): boolean { return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value); }
 
 export function WorkforceDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -54,7 +55,10 @@ export function WorkforceDetailPage() {
   const recordQuery = useQuery({
     queryKey: ["workforce-record", activeOrganizationId, id],
     queryFn: async () => {
-      const { data, error } = await supabase.from("caregiver_records").select("*").eq("organization_id", activeOrganizationId!).eq("id", id!).is("deleted_at", null).single();
+      if (!id || !isUuid(id)) throw new Error("Invalid Care Team record identifier");
+      // Existing schedule/search links use the linked auth user ID, while
+      // the canonical Care Team route uses the workforce record ID.
+      const { data, error } = await supabase.from("caregiver_records").select("*").eq("organization_id", activeOrganizationId!).or(`id.eq.${id!},linked_user_id.eq.${id!}`).is("deleted_at", null).single();
       if (error) throw error;
       return data as WorkforceRecord;
     },
@@ -64,21 +68,21 @@ export function WorkforceDetailPage() {
   const availabilityQuery = useQuery({
     queryKey: ["workforce-availability", activeOrganizationId, id],
     queryFn: async () => {
-      const { data, error } = await supabase.from("caregiver_record_availability").select("id, day_of_week, start_time, end_time, preference").eq("organization_id", activeOrganizationId!).eq("caregiver_record_id", id!);
+      const { data, error } = await supabase.from("caregiver_record_availability").select("id, day_of_week, start_time, end_time, preference").eq("organization_id", activeOrganizationId!).eq("caregiver_record_id", recordQuery.data!.id);
       if (error) throw error;
       return (data ?? []) as AvailabilityRow[];
     },
-    enabled: !!activeOrganizationId && !!id && canRead
+    enabled: !!activeOrganizationId && !!recordQuery.data?.id && canRead
   });
 
   const credentialsQuery = useQuery({
     queryKey: ["workforce-credentials", activeOrganizationId, id],
     queryFn: async () => {
-      const { data, error } = await supabase.from("caregiver_record_credentials").select("id, credential_type, issue_date, expiration_date, does_not_expire, issuing_organization, credential_number, verification_status").eq("organization_id", activeOrganizationId!).eq("caregiver_record_id", id!).is("deleted_at", null).order("credential_type");
+      const { data, error } = await supabase.from("caregiver_record_credentials").select("id, credential_type, issue_date, expiration_date, does_not_expire, issuing_organization, credential_number, verification_status").eq("organization_id", activeOrganizationId!).eq("caregiver_record_id", recordQuery.data!.id).is("deleted_at", null).order("credential_type");
       if (error) throw error;
       return (data ?? []) as CredentialRow[];
     },
-    enabled: !!activeOrganizationId && !!id && canRead
+    enabled: !!activeOrganizationId && !!recordQuery.data?.id && canRead
   });
 
   const membersQuery = useQuery({
@@ -115,7 +119,7 @@ export function WorkforceDetailPage() {
 
   const saveRecordMutation = useMutation({
     mutationFn: async () => {
-      const { error } = await supabase.from("caregiver_records").update({ status, desired_weekly_hours: hours ? Number(hours) : null }).eq("organization_id", activeOrganizationId!).eq("id", id!);
+      const { error } = await supabase.from("caregiver_records").update({ status, desired_weekly_hours: hours ? Number(hours) : null }).eq("organization_id", activeOrganizationId!).eq("id", recordQuery.data!.id);
       if (error) throw error;
     },
     onSuccess: () => { void queryClient.invalidateQueries({ queryKey: ["workforce-record", activeOrganizationId, id] }); void queryClient.invalidateQueries({ queryKey: ["care-team-records", activeOrganizationId] }); }
@@ -123,10 +127,11 @@ export function WorkforceDetailPage() {
 
   const availabilityMutation = useMutation({
     mutationFn: async () => {
-      const del = await supabase.from("caregiver_record_availability").delete().eq("organization_id", activeOrganizationId!).eq("caregiver_record_id", id!);
+      const recordId = recordQuery.data!.id;
+      const del = await supabase.from("caregiver_record_availability").delete().eq("organization_id", activeOrganizationId!).eq("caregiver_record_id", recordId);
       if (del.error) throw del.error;
       if (availability.length) {
-        const ins = await supabase.from("caregiver_record_availability").insert(availability.map((row) => ({ organization_id: activeOrganizationId!, caregiver_record_id: id!, day_of_week: row.day_of_week, start_time: row.start_time, end_time: row.end_time, preference: row.preference })));
+        const ins = await supabase.from("caregiver_record_availability").insert(availability.map((row) => ({ organization_id: activeOrganizationId!, caregiver_record_id: recordId, day_of_week: row.day_of_week, start_time: row.start_time, end_time: row.end_time, preference: row.preference })));
         if (ins.error) throw ins.error;
       }
     },
@@ -136,7 +141,7 @@ export function WorkforceDetailPage() {
   const linkMutation = useMutation({
     mutationFn: async () => {
       if (!selectedUserId) throw new Error("Choose an active account first.");
-      const { error } = await supabase.rpc("link_caregiver_record_to_user", { target_organization_id: activeOrganizationId!, target_caregiver_record_id: id!, target_user_id: selectedUserId });
+      const { error } = await supabase.rpc("link_caregiver_record_to_user", { target_organization_id: activeOrganizationId!, target_caregiver_record_id: recordQuery.data!.id, target_user_id: selectedUserId });
       if (error) throw error;
     },
     onSuccess: () => { void queryClient.invalidateQueries({ queryKey: ["workforce-record", activeOrganizationId, id] }); void queryClient.invalidateQueries({ queryKey: ["care-team-records", activeOrganizationId] }); }
@@ -145,7 +150,7 @@ export function WorkforceDetailPage() {
   const credentialMutation = useMutation({
     mutationFn: async () => {
       const { error } = await supabase.from("caregiver_record_credentials").insert({
-        organization_id: activeOrganizationId!, caregiver_record_id: id!, credential_type: credentialType.trim(), issue_date: credentialIssue || null, expiration_date: credentialExpiration || null, does_not_expire: !credentialExpiration, verification_status: "unverified"
+        organization_id: activeOrganizationId!, caregiver_record_id: recordQuery.data!.id, credential_type: credentialType.trim(), issue_date: credentialIssue || null, expiration_date: credentialExpiration || null, does_not_expire: !credentialExpiration, verification_status: "unverified"
       });
       if (error) throw error;
     },

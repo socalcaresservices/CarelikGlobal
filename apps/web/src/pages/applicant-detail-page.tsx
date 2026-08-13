@@ -168,7 +168,7 @@ function formatDocumentStatus(status: DocumentRequestStatus) {
   return status.replace(/_/g, " ");
 }
 
-function DocumentsCard({
+export function DocumentsCard({
   organizationId,
   subjectType,
   subjectId,
