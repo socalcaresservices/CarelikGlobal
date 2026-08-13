@@ -40,6 +40,7 @@ interface ClientDetail {
   phone: string | null;
   email: string | null;
   address: string | null;
+  address_line2: string | null;
   care_notes: string | null;
   status: "active" | "inactive" | "discharged";
   address_city: string | null;
@@ -47,7 +48,26 @@ interface ClientDetail {
   address_zip: string | null;
   language_needs: string[];
   care_needs: string[];
+  requested_service_notes: string | null;
   client_requested_services: Array<{ service_id: string; services: { id: string; name: string } | null }>;
+}
+
+type Weekday = "monday" | "tuesday" | "wednesday" | "thursday" | "friday" | "saturday" | "sunday";
+
+const WEEKDAYS: Weekday[] = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"];
+
+function capitalize(value: string) {
+  return value.charAt(0).toUpperCase() + value.slice(1);
+}
+
+interface RequestedScheduleRow {
+  id: string;
+  day_of_week: Weekday;
+  start_time: string;
+  end_time: string;
+  service_id: string | null;
+  notes: string | null;
+  services: { name: string } | null;
 }
 
 interface ServiceRow {
@@ -217,6 +237,27 @@ export function ClientDetailPage() {
     enabled: !!activeOrganizationId && canManage
   });
 
+  // What this client says they need, and when - never a shift or an
+  // assignment. A window here documents the need only; someone still has
+  // to schedule an actual visit from the Schedule page (or the caregiver
+  // self-service flow) once a caregiver is assigned. Multiple windows the
+  // same day are normal (e.g. a morning and an evening visit) - this is
+  // one row per window, not one row per day.
+  const requestedScheduleQuery = useQuery({
+    queryKey: ["client-requested-schedule", id],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("client_requested_schedule")
+        .select("id, day_of_week, start_time, end_time, service_id, notes, services(name)")
+        .eq("client_id", id!)
+        .order("day_of_week")
+        .order("start_time");
+      if (error) throw error;
+      return (data ?? []) as unknown as RequestedScheduleRow[];
+    },
+    enabled: !!id
+  });
+
   // Skills/languages pickers store the org's configured *names* directly
   // into care_needs/language_needs (text[]) - see
   // 20260727070000_skills_and_languages_catalog.sql for why this stays
@@ -252,12 +293,15 @@ export function ClientDetailPage() {
   });
 
   const [profileForm, setProfileForm] = useState({
+    addressLine1: "",
+    addressLine2: "",
     city: "",
     state: "",
     zip: "",
     languageNeeds: [] as string[],
     careNeeds: [] as string[],
-    requestedServiceIds: [] as string[]
+    requestedServiceIds: [] as string[],
+    requestedServiceNotes: ""
   });
   const [profileSaving, setProfileSaving] = useState(false);
   const [profileError, setProfileError] = useState<string | null>(null);
@@ -265,25 +309,29 @@ export function ClientDetailPage() {
   useEffect(() => {
     if (clientQuery.data) {
       setProfileForm({
+        addressLine1: clientQuery.data.address ?? "",
+        addressLine2: clientQuery.data.address_line2 ?? "",
         city: clientQuery.data.address_city ?? "",
         state: clientQuery.data.address_state ?? "",
         zip: clientQuery.data.address_zip ?? "",
         languageNeeds: clientQuery.data.language_needs ?? [],
         careNeeds: clientQuery.data.care_needs ?? [],
-        requestedServiceIds: (clientQuery.data.client_requested_services ?? []).map((row) => row.service_id)
+        requestedServiceIds: (clientQuery.data.client_requested_services ?? []).map((row) => row.service_id),
+        requestedServiceNotes: clientQuery.data.requested_service_notes ?? ""
       });
     }
   }, [clientQuery.data]);
 
-  const requestedServiceOptions: ComboboxOption[] = (servicesQuery.data ?? [])
-    .filter((service) => service.is_active)
-    .map((service) => ({ value: service.id, label: service.name }));
+  const activeServiceOptions = (servicesQuery.data ?? []).filter((service) => service.is_active);
 
-  const requestedServiceLabels: Record<string, string> = Object.fromEntries(
-    (clientQuery.data?.client_requested_services ?? [])
-      .filter((row) => row.services)
-      .map((row) => [row.service_id, row.services!.name])
-  );
+  function toggleRequestedService(serviceId: string) {
+    setProfileForm((current) => ({
+      ...current,
+      requestedServiceIds: current.requestedServiceIds.includes(serviceId)
+        ? current.requestedServiceIds.filter((value) => value !== serviceId)
+        : [...current.requestedServiceIds, serviceId]
+    }));
+  }
 
   const careNeedOptions: ComboboxOption[] = (skillsQuery.data ?? [])
     .filter((skill) => skill.is_active)
@@ -303,11 +351,14 @@ export function ClientDetailPage() {
       const { error } = await supabase
         .from("clients")
         .update({
+          address: profileForm.addressLine1 || null,
+          address_line2: profileForm.addressLine2 || null,
           address_city: profileForm.city || null,
           address_state: profileForm.state || null,
           address_zip: profileForm.zip || null,
           language_needs: profileForm.languageNeeds,
-          care_needs: profileForm.careNeeds
+          care_needs: profileForm.careNeeds,
+          requested_service_notes: profileForm.requestedServiceNotes || null
         })
         .eq("id", id);
       if (error) throw error;
@@ -334,6 +385,66 @@ export function ClientDetailPage() {
       setProfileError(cause instanceof Error ? cause.message : "Could not save profile.");
     } finally {
       setProfileSaving(false);
+    }
+  }
+
+  const [scheduleForm, setScheduleForm] = useState({
+    day: "monday" as Weekday,
+    start: "09:00",
+    end: "11:00",
+    serviceId: "",
+    notes: ""
+  });
+  const [scheduleSaving, setScheduleSaving] = useState(false);
+  const [scheduleError, setScheduleError] = useState<string | null>(null);
+  const [schedulePendingId, setSchedulePendingId] = useState<string | null>(null);
+
+  // Pure documentation of need - this never touches shifts or
+  // caregiver_assignments. Someone still has to schedule an actual visit
+  // (Schedule page, or a caregiver's own self-service flow) once a
+  // caregiver is assigned; this just records what the family asked for so
+  // that step has something real to work from.
+  async function handleAddRequestedWindow(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!id || !activeOrganizationId) return;
+    if (scheduleForm.start >= scheduleForm.end) {
+      setScheduleError("End time must be after start time.");
+      return;
+    }
+
+    setScheduleError(null);
+    setScheduleSaving(true);
+    try {
+      const { error } = await supabase.from("client_requested_schedule").insert({
+        organization_id: activeOrganizationId,
+        client_id: id,
+        day_of_week: scheduleForm.day,
+        start_time: scheduleForm.start,
+        end_time: scheduleForm.end,
+        service_id: scheduleForm.serviceId || null,
+        notes: scheduleForm.notes.trim() || null
+      });
+      if (error) throw error;
+      setScheduleForm({ day: "monday", start: "09:00", end: "11:00", serviceId: "", notes: "" });
+      void queryClient.invalidateQueries({ queryKey: ["client-requested-schedule", id] });
+    } catch (cause) {
+      setScheduleError(cause instanceof Error ? cause.message : "Could not add this window.");
+    } finally {
+      setScheduleSaving(false);
+    }
+  }
+
+  async function handleRemoveRequestedWindow(row: RequestedScheduleRow) {
+    setScheduleError(null);
+    setSchedulePendingId(row.id);
+    try {
+      const { error } = await supabase.from("client_requested_schedule").delete().eq("id", row.id);
+      if (error) throw error;
+      void queryClient.invalidateQueries({ queryKey: ["client-requested-schedule", id] });
+    } catch (cause) {
+      setScheduleError(cause instanceof Error ? cause.message : "Could not remove this window.");
+    } finally {
+      setSchedulePendingId(null);
     }
   }
 
@@ -639,31 +750,65 @@ export function ClientDetailPage() {
       </Card>
 
       {tab === "overview" ? (
-        <Card>
-          <h3 className="font-semibold text-slate-950">Overview</h3>
-          <dl className="mt-4 grid gap-4 sm:grid-cols-2">
-            <div>
-              <dt className="text-xs font-medium uppercase tracking-wide text-slate-500">Phone</dt>
-              <dd className="mt-1 text-sm text-slate-700">{client.phone ?? "—"}</dd>
-            </div>
-            <div>
-              <dt className="text-xs font-medium uppercase tracking-wide text-slate-500">Email</dt>
-              <dd className="mt-1 text-sm text-slate-700">{client.email ?? "—"}</dd>
-            </div>
-            <div className="sm:col-span-2">
-              <dt className="text-xs font-medium uppercase tracking-wide text-slate-500">Address</dt>
-              <dd className="mt-1 text-sm text-slate-700">{client.address ?? "—"}</dd>
-            </div>
-          </dl>
+        <div className="grid gap-6 lg:grid-cols-3">
+          <Card className="lg:col-span-1">
+            <h3 className="font-semibold text-slate-950">Contact</h3>
+            <dl className="mt-4 space-y-4">
+              <div>
+                <dt className="text-xs font-medium uppercase tracking-wide text-slate-500">Phone</dt>
+                <dd className="mt-1 text-sm text-slate-700">{client.phone ?? "—"}</dd>
+              </div>
+              <div>
+                <dt className="text-xs font-medium uppercase tracking-wide text-slate-500">Email</dt>
+                <dd className="mt-1 text-sm text-slate-700">{client.email ?? "—"}</dd>
+              </div>
+              <div>
+                <dt className="text-xs font-medium uppercase tracking-wide text-slate-500">Address</dt>
+                <dd className="mt-1 whitespace-pre-line text-sm text-slate-700">
+                  {[
+                    client.address,
+                    client.address_line2,
+                    [client.address_city, client.address_state, client.address_zip].filter(Boolean).join(", ")
+                  ]
+                    .filter(Boolean)
+                    .join("\n") || "—"}
+                </dd>
+              </div>
+            </dl>
+          </Card>
 
-          <div className="mt-6 border-t border-slate-100 pt-6">
-            <h4 className="text-sm font-semibold text-slate-950">Location &amp; care needs</h4>
+          <Card className="lg:col-span-2">
+            <h3 className="font-semibold text-slate-950">Address, needs &amp; services requested</h3>
             <p className="mt-1 text-xs text-slate-500">
-              Used for CareScore - the client/caregiver match score shown when scheduling.
+              Location and needs feed CareScore, the client/caregiver match score shown when scheduling. Services
+              requested is what this client has asked for - separate from a payer authorization's hours.
             </p>
             {canManage ? (
               <form onSubmit={handleSaveProfile} className="mt-4 space-y-5">
-                <FormSection title="Location" columns={2}>
+                <FormSection title="Address" columns={2}>
+                  <div className="sm:col-span-2">
+                    <label htmlFor="client-address-1" className="block text-xs font-medium text-slate-600">
+                      Address line 1
+                    </label>
+                    <input
+                      id="client-address-1"
+                      value={profileForm.addressLine1}
+                      onChange={(event) => setProfileForm({ ...profileForm, addressLine1: event.target.value })}
+                      className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900"
+                    />
+                  </div>
+                  <div className="sm:col-span-2">
+                    <label htmlFor="client-address-2" className="block text-xs font-medium text-slate-600">
+                      Address line 2 <span className="font-normal text-slate-400">(optional)</span>
+                    </label>
+                    <input
+                      id="client-address-2"
+                      placeholder="Apt, suite, unit…"
+                      value={profileForm.addressLine2}
+                      onChange={(event) => setProfileForm({ ...profileForm, addressLine2: event.target.value })}
+                      className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900"
+                    />
+                  </div>
                   <div>
                     <label htmlFor="client-city" className="block text-xs font-medium text-slate-600">
                       City
@@ -720,17 +865,43 @@ export function ClientDetailPage() {
 
                 <FormSection
                   title="Services requested"
-                  description="What this client has asked for - separate from a payer authorization's hours."
+                  description="Check every service type this client has asked for - this is a need, not yet an authorization or a schedule."
                   columns={1}
                 >
-                  <MultiSelectCombobox
-                    label="Services"
-                    values={profileForm.requestedServiceIds}
-                    onChange={(values) => setProfileForm({ ...profileForm, requestedServiceIds: values })}
-                    options={requestedServiceOptions}
-                    selectedLabels={requestedServiceLabels}
-                    placeholder="Search services…"
-                  />
+                  {activeServiceOptions.length === 0 ? (
+                    <p className="text-sm text-slate-400">
+                      No services configured for this organization yet - add some in Settings first.
+                    </p>
+                  ) : (
+                    <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+                      {activeServiceOptions.map((service) => (
+                        <label key={service.id} className="flex items-center gap-2 text-sm text-slate-700">
+                          <input
+                            type="checkbox"
+                            checked={profileForm.requestedServiceIds.includes(service.id)}
+                            onChange={() => toggleRequestedService(service.id)}
+                            className="h-4 w-4 rounded border-slate-300"
+                          />
+                          {service.name}
+                        </label>
+                      ))}
+                    </div>
+                  )}
+                  <div className="sm:col-span-2 lg:col-span-3">
+                    <label htmlFor="client-service-other" className="block text-xs font-medium text-slate-600">
+                      Other <span className="font-normal text-slate-400">(a need not covered by the list above)</span>
+                    </label>
+                    <textarea
+                      id="client-service-other"
+                      rows={2}
+                      value={profileForm.requestedServiceNotes}
+                      onChange={(event) =>
+                        setProfileForm({ ...profileForm, requestedServiceNotes: event.target.value })
+                      }
+                      placeholder="e.g. transportation to dialysis three times a week"
+                      className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900"
+                    />
+                  </div>
                 </FormSection>
 
                 <div>
@@ -743,12 +914,6 @@ export function ClientDetailPage() {
             ) : (
               <dl className="mt-4 grid gap-4 sm:grid-cols-2">
                 <div>
-                  <dt className="text-xs font-medium uppercase tracking-wide text-slate-500">Location</dt>
-                  <dd className="mt-1 text-sm text-slate-700">
-                    {[client.address_city, client.address_state].filter(Boolean).join(", ") || "—"}
-                  </dd>
-                </div>
-                <div>
                   <dt className="text-xs font-medium uppercase tracking-wide text-slate-500">Language needs</dt>
                   <dd className="mt-1 text-sm text-slate-700">{(client.language_needs ?? []).join(", ") || "—"}</dd>
                 </div>
@@ -756,7 +921,7 @@ export function ClientDetailPage() {
                   <dt className="text-xs font-medium uppercase tracking-wide text-slate-500">Care needs</dt>
                   <dd className="mt-1 text-sm text-slate-700">{(client.care_needs ?? []).join(", ") || "—"}</dd>
                 </div>
-                <div>
+                <div className="sm:col-span-2">
                   <dt className="text-xs font-medium uppercase tracking-wide text-slate-500">Services requested</dt>
                   <dd className="mt-1 text-sm text-slate-700">
                     {(client.client_requested_services ?? [])
@@ -765,10 +930,136 @@ export function ClientDetailPage() {
                       .join(", ") || "—"}
                   </dd>
                 </div>
+                {client.requested_service_notes ? (
+                  <div className="sm:col-span-2">
+                    <dt className="text-xs font-medium uppercase tracking-wide text-slate-500">Other</dt>
+                    <dd className="mt-1 text-sm text-slate-700">{client.requested_service_notes}</dd>
+                  </div>
+                ) : null}
               </dl>
             )}
-          </div>
-        </Card>
+          </Card>
+
+          <Card className="lg:col-span-3">
+            <h3 className="font-semibold text-slate-950">Requested schedule</h3>
+            <p className="mt-1 text-xs text-slate-500">
+              When this client needs care - documents the need only. Adding a window here does not schedule a visit
+              or assign a caregiver; a client can have more than one window the same day.
+            </p>
+
+            {canManage ? (
+              <form onSubmit={handleAddRequestedWindow} className="mt-4 flex flex-wrap items-end gap-3">
+                <div>
+                  <label htmlFor="requested-day" className="block text-xs font-medium text-slate-600">
+                    Day
+                  </label>
+                  <select
+                    id="requested-day"
+                    value={scheduleForm.day}
+                    onChange={(event) => setScheduleForm({ ...scheduleForm, day: event.target.value as Weekday })}
+                    className="mt-1 rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900"
+                  >
+                    {WEEKDAYS.map((day) => (
+                      <option key={day} value={day}>
+                        {capitalize(day)}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label htmlFor="requested-start" className="block text-xs font-medium text-slate-600">
+                    Starts
+                  </label>
+                  <input
+                    id="requested-start"
+                    type="time"
+                    value={scheduleForm.start}
+                    onChange={(event) => setScheduleForm({ ...scheduleForm, start: event.target.value })}
+                    className="mt-1 rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900"
+                  />
+                </div>
+                <div>
+                  <label htmlFor="requested-end" className="block text-xs font-medium text-slate-600">
+                    Ends
+                  </label>
+                  <input
+                    id="requested-end"
+                    type="time"
+                    value={scheduleForm.end}
+                    onChange={(event) => setScheduleForm({ ...scheduleForm, end: event.target.value })}
+                    className="mt-1 rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900"
+                  />
+                </div>
+                <div className="min-w-[10rem] flex-1">
+                  <label htmlFor="requested-service" className="block text-xs font-medium text-slate-600">
+                    Service <span className="font-normal text-slate-400">(optional)</span>
+                  </label>
+                  <select
+                    id="requested-service"
+                    value={scheduleForm.serviceId}
+                    onChange={(event) => setScheduleForm({ ...scheduleForm, serviceId: event.target.value })}
+                    className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900"
+                  >
+                    <option value="">Any service</option>
+                    {activeServiceOptions.map((service) => (
+                      <option key={service.id} value={service.id}>
+                        {service.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div className="min-w-[10rem] flex-1">
+                  <label htmlFor="requested-notes" className="block text-xs font-medium text-slate-600">
+                    Notes <span className="font-normal text-slate-400">(optional)</span>
+                  </label>
+                  <input
+                    id="requested-notes"
+                    value={scheduleForm.notes}
+                    onChange={(event) => setScheduleForm({ ...scheduleForm, notes: event.target.value })}
+                    className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900"
+                  />
+                </div>
+                <Button type="submit" loading={scheduleSaving}>
+                  {scheduleSaving ? "Adding…" : "Add window"}
+                </Button>
+              </form>
+            ) : null}
+            {scheduleError ? <p className="mt-2 text-sm text-red-700">{scheduleError}</p> : null}
+
+            {requestedScheduleQuery.isLoading ? (
+              <p className="mt-3 text-sm text-slate-500">Loading…</p>
+            ) : requestedScheduleQuery.isError ? (
+              <p className="mt-3 text-sm text-red-700">Could not load the requested schedule.</p>
+            ) : (requestedScheduleQuery.data ?? []).length === 0 ? (
+              <p className="mt-3 text-sm text-slate-400">No requested windows yet.</p>
+            ) : (
+              <ul className="mt-3 divide-y divide-slate-100">
+                {(requestedScheduleQuery.data ?? []).map((row) => (
+                  <li key={row.id} className="flex items-center justify-between py-2.5 text-sm">
+                    <div>
+                      <span className="font-medium text-slate-900">{capitalize(row.day_of_week)}</span>
+                      <span className="ml-2 text-slate-700">
+                        {row.start_time.slice(0, 5)} – {row.end_time.slice(0, 5)}
+                      </span>
+                      {row.services?.name ? <span className="ml-2 text-slate-500">{row.services.name}</span> : null}
+                      {row.notes ? <span className="ml-2 text-slate-400">· {row.notes}</span> : null}
+                    </div>
+                    {canManage ? (
+                      <button
+                        type="button"
+                        disabled={schedulePendingId === row.id}
+                        onClick={() => handleRemoveRequestedWindow(row)}
+                        className="text-xs font-medium text-red-700 underline-offset-2 hover:underline disabled:cursor-not-allowed disabled:opacity-60"
+                      >
+                        Remove
+                      </button>
+                    ) : null}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </Card>
+        </div>
       ) : null}
 
       {tab === "schedule" ? (

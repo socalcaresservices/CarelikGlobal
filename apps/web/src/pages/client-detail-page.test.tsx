@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -63,14 +63,24 @@ function lookupSelectStub(rows: unknown[]) {
   }));
 }
 
-// clients, services, skills, languages, and client_requested_services are
-// all queried through supabase.from(), so the mock has to branch on the
-// table name rather than returning one fixed chain for every call.
+function requestedScheduleSelectStub(rows: unknown[]) {
+  return vi.fn(() => ({
+    eq: vi.fn(() => ({
+      order: vi.fn(() => ({ order: vi.fn().mockResolvedValue({ data: rows, error: null }) }))
+    }))
+  }));
+}
+
+// clients, services, skills, languages, client_requested_services, and
+// client_requested_schedule are all queried through supabase.from(), so
+// the mock has to branch on the table name rather than returning one
+// fixed chain for every call.
 function mockFromByTable(
   client: unknown,
   services: ServiceOption[] = [],
   skills: ServiceOption[] = [],
-  languages: ServiceOption[] = []
+  languages: ServiceOption[] = [],
+  requestedSchedule: unknown[] = []
 ) {
   const clientSelectMock = mockClientRecord(client);
   const clientUpdateEqMock = vi.fn().mockResolvedValue({ error: null });
@@ -83,6 +93,11 @@ function mockFromByTable(
   const assignmentInsertMock = vi.fn().mockResolvedValue({ error: null });
   const assignmentUpdateEqMock = vi.fn().mockResolvedValue({ error: null });
   const assignmentUpdateMock = vi.fn(() => ({ eq: assignmentUpdateEqMock }));
+
+  const requestedScheduleSelectMock = requestedScheduleSelectStub(requestedSchedule);
+  const requestedScheduleInsertMock = vi.fn().mockResolvedValue({ error: null });
+  const requestedScheduleDeleteEqMock = vi.fn().mockResolvedValue({ error: null });
+  const requestedScheduleDeleteMock = vi.fn(() => ({ eq: requestedScheduleDeleteEqMock }));
 
   mockedFrom.mockImplementation((table: string) => {
     if (table === "clients") {
@@ -100,6 +115,13 @@ function mockFromByTable(
     if (table === "client_requested_services") {
       return { delete: requestedServicesDeleteMock, insert: requestedServicesInsertMock } as never;
     }
+    if (table === "client_requested_schedule") {
+      return {
+        select: requestedScheduleSelectMock,
+        insert: requestedScheduleInsertMock,
+        delete: requestedScheduleDeleteMock
+      } as never;
+    }
     if (table === "caregiver_assignments") {
       return { insert: assignmentInsertMock, update: assignmentUpdateMock } as never;
     }
@@ -113,7 +135,10 @@ function mockFromByTable(
     requestedServicesInsertMock,
     assignmentInsertMock,
     assignmentUpdateMock,
-    assignmentUpdateEqMock
+    assignmentUpdateEqMock,
+    requestedScheduleInsertMock,
+    requestedScheduleDeleteMock,
+    requestedScheduleDeleteEqMock
   };
 }
 
@@ -312,7 +337,7 @@ describe("ClientDetailPage", () => {
     expect(screen.queryByText("No authorizations on file.")).not.toBeInTheDocument();
   });
 
-  it("saves client location, care needs, and requested services", async () => {
+  it("saves client address, care needs, and requested services (checklist + freeform other)", async () => {
     mockedUseOrganization.mockReturnValue(baseOrganization());
     const { clientUpdateMock, clientUpdateEqMock, requestedServicesDeleteMock, requestedServicesInsertMock } =
       mockFromByTable(
@@ -323,8 +348,10 @@ describe("ClientDetailPage", () => {
           phone: null,
           email: null,
           address: null,
+          address_line2: null,
           care_notes: null,
           status: "active",
+          requested_service_notes: null,
           client_requested_services: []
         },
         [{ id: "44444444-4444-4444-8444-444444444444", name: "Personal care", is_active: true }],
@@ -335,23 +362,25 @@ describe("ClientDetailPage", () => {
     renderPage();
     await waitFor(() => expect(screen.getByLabelText("City")).toBeInTheDocument());
 
+    fireEvent.change(screen.getByLabelText("Address line 1"), { target: { value: "123 Main St" } });
     fireEvent.change(screen.getByLabelText("City"), { target: { value: "San Diego" } });
 
     fireEvent.focus(screen.getByLabelText("Care needs"));
     await waitFor(() => expect(screen.getByRole("option", { name: "Dementia care" })).toBeInTheDocument());
     fireEvent.mouseDown(screen.getByRole("option", { name: "Dementia care" }));
 
-    fireEvent.focus(screen.getByLabelText("Services"));
-    await waitFor(() => expect(screen.getByRole("option", { name: "Personal care" })).toBeInTheDocument());
-    fireEvent.mouseDown(screen.getByRole("option", { name: "Personal care" }));
+    fireEvent.click(screen.getByRole("checkbox", { name: "Personal care" }));
+    fireEvent.change(screen.getByLabelText(/Other/), { target: { value: "Transportation to dialysis" } });
 
     fireEvent.click(screen.getByRole("button", { name: "Save" }));
 
     await waitFor(() =>
       expect(clientUpdateMock).toHaveBeenCalledWith(
         expect.objectContaining({
+          address: "123 Main St",
           address_city: "San Diego",
-          care_needs: ["Dementia care"]
+          care_needs: ["Dementia care"],
+          requested_service_notes: "Transportation to dialysis"
         })
       )
     );
@@ -366,6 +395,100 @@ describe("ClientDetailPage", () => {
         })
       ])
     );
+  });
+
+  it("shows a formatted multi-line address, and 'Other' requested-service notes, in the read-only view", async () => {
+    mockedUseOrganization.mockReturnValue({ ...baseOrganization(), hasPermission: vi.fn(() => false) });
+    mockFromByTable({
+      id: CLIENT_ID,
+      first_name: "Jordan",
+      last_name: "Rivera",
+      phone: null,
+      email: null,
+      address: "123 Main St",
+      address_line2: "Apt 4B",
+      address_city: "San Diego",
+      address_state: "CA",
+      address_zip: "92101",
+      care_notes: null,
+      status: "active",
+      requested_service_notes: "Transportation to dialysis",
+      client_requested_services: []
+    });
+    mockedRpc.mockResolvedValue({ data: [], error: null } as never);
+
+    renderPage();
+
+    // Address line1/line2/city-state-zip render as one whitespace-pre-line
+    // text node (one <dd>, newline-joined), so each fragment is matched as
+    // a substring of that combined text rather than as a standalone node.
+    await waitFor(() => expect(screen.getByText(/123 Main St/)).toBeInTheDocument());
+    const addressText = screen.getByText(/123 Main St/).textContent;
+    expect(addressText).toContain("Apt 4B");
+    expect(addressText).toContain("San Diego, CA, 92101");
+    expect(screen.getByText("Transportation to dialysis")).toBeInTheDocument();
+  });
+
+  it("adds and removes a requested-schedule window without creating a shift or assignment", async () => {
+    mockedUseOrganization.mockReturnValue(baseOrganization());
+    const scheduleRow = {
+      id: "sched-1",
+      day_of_week: "monday",
+      start_time: "07:00:00",
+      end_time: "10:00:00",
+      service_id: null,
+      notes: null,
+      services: null
+    };
+    const { requestedScheduleInsertMock, requestedScheduleDeleteEqMock } = mockFromByTable(
+      {
+        id: CLIENT_ID,
+        first_name: "Jordan",
+        last_name: "Rivera",
+        phone: null,
+        email: null,
+        address: null,
+        address_line2: null,
+        care_notes: null,
+        status: "active",
+        requested_service_notes: null,
+        client_requested_services: []
+      },
+      [],
+      [],
+      [],
+      [scheduleRow]
+    );
+    mockedRpc.mockResolvedValue({ data: [], error: null } as never);
+
+    renderPage();
+    const windowRow = (await screen.findByText("07:00 – 10:00")).closest("li")!;
+    expect(within(windowRow).getByText("Monday")).toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText("Day"), { target: { value: "wednesday" } });
+    fireEvent.change(screen.getByLabelText("Starts"), { target: { value: "15:00" } });
+    fireEvent.change(screen.getByLabelText("Ends"), { target: { value: "18:00" } });
+    fireEvent.click(screen.getByRole("button", { name: "Add window" }));
+
+    await waitFor(() =>
+      expect(requestedScheduleInsertMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          organization_id: ORG_ID,
+          client_id: CLIENT_ID,
+          day_of_week: "wednesday",
+          start_time: "15:00",
+          end_time: "18:00",
+          service_id: null
+        })
+      )
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Remove" }));
+    await waitFor(() => expect(requestedScheduleDeleteEqMock).toHaveBeenCalledWith("id", "sched-1"));
+
+    // No shift or assignment RPC/table call happened as a side effect of
+    // documenting the need - only the mutations above.
+    expect(mockedRpc).not.toHaveBeenCalledWith("schedule_caregiver_visit", expect.anything());
   });
 
   it("switches to the Notes tab", async () => {

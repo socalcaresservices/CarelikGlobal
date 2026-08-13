@@ -19,6 +19,10 @@ interface ClientRow {
   phone: string | null;
   email: string | null;
   address: string | null;
+  address_line2: string | null;
+  address_city: string | null;
+  address_state: string | null;
+  address_zip: string | null;
   care_notes: string | null;
   status: "active" | "inactive" | "discharged";
 }
@@ -34,7 +38,11 @@ const emptyForm = {
   lastName: "",
   phone: "",
   email: "",
-  address: "",
+  addressLine1: "",
+  addressLine2: "",
+  city: "",
+  state: "",
+  zip: "",
   careNotes: "",
   status: "active" as ClientRow["status"]
 };
@@ -153,7 +161,11 @@ export function ClientsPage() {
       lastName: row.last_name,
       phone: row.phone ?? "",
       email: row.email ?? "",
-      address: row.address ?? "",
+      addressLine1: row.address ?? "",
+      addressLine2: row.address_line2 ?? "",
+      city: row.address_city ?? "",
+      state: row.address_state ?? "",
+      zip: row.address_zip ?? "",
       careNotes: row.care_notes ?? "",
       status: row.status
     });
@@ -180,7 +192,11 @@ export function ClientsPage() {
         last_name: form.lastName,
         phone: form.phone || null,
         email: form.email || null,
-        address: form.address || null,
+        address: form.addressLine1 || null,
+        address_line2: form.addressLine2 || null,
+        address_city: form.city || null,
+        address_state: form.state || null,
+        address_zip: form.zip || null,
         care_notes: form.careNotes || null,
         status: form.status
       };
@@ -327,16 +343,66 @@ export function ClientsPage() {
                   className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900"
                 />
               </div>
+            </FormSection>
+
+            <FormSection title="Address" columns={2}>
               <div className="sm:col-span-2">
-                <label htmlFor="client-address" className="block text-xs font-medium text-slate-600">
-                  Address
+                <label htmlFor="client-address-1" className="block text-xs font-medium text-slate-600">
+                  Address line 1
                 </label>
                 <input
-                  id="client-address"
-                  value={form.address}
-                  onChange={(event) => setForm({ ...form, address: event.target.value })}
+                  id="client-address-1"
+                  value={form.addressLine1}
+                  onChange={(event) => setForm({ ...form, addressLine1: event.target.value })}
                   className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900"
                 />
+              </div>
+              <div className="sm:col-span-2">
+                <label htmlFor="client-address-2" className="block text-xs font-medium text-slate-600">
+                  Address line 2 <span className="font-normal text-slate-400">(optional)</span>
+                </label>
+                <input
+                  id="client-address-2"
+                  placeholder="Apt, suite, unit…"
+                  value={form.addressLine2}
+                  onChange={(event) => setForm({ ...form, addressLine2: event.target.value })}
+                  className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900"
+                />
+              </div>
+              <div>
+                <label htmlFor="client-city" className="block text-xs font-medium text-slate-600">
+                  City
+                </label>
+                <input
+                  id="client-city"
+                  value={form.city}
+                  onChange={(event) => setForm({ ...form, city: event.target.value })}
+                  className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900"
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label htmlFor="client-state" className="block text-xs font-medium text-slate-600">
+                    State
+                  </label>
+                  <input
+                    id="client-state"
+                    value={form.state}
+                    onChange={(event) => setForm({ ...form, state: event.target.value })}
+                    className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900"
+                  />
+                </div>
+                <div>
+                  <label htmlFor="client-zip" className="block text-xs font-medium text-slate-600">
+                    ZIP
+                  </label>
+                  <input
+                    id="client-zip"
+                    value={form.zip}
+                    onChange={(event) => setForm({ ...form, zip: event.target.value })}
+                    className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900"
+                  />
+                </div>
               </div>
             </FormSection>
 
