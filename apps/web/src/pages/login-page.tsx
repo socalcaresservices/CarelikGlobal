@@ -1,9 +1,11 @@
-import { useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import { Navigate, useLocation } from "react-router-dom";
 import { Github } from "lucide-react";
 import { useAuth } from "@carelik/auth";
 import { Button, Card } from "@carelik/ui";
 import { getAuthErrorMessage } from "@/lib/auth-errors";
+import { replaceBrowserLocation } from "@/lib/browser-navigation";
+import { getCurrentTenantContext, toAppUrl } from "@/lib/tenant-resolver";
 
 interface LocationState {
   from?: { pathname: string };
@@ -27,9 +29,30 @@ export function LoginPage() {
   });
   const [resetSent, setResetSent] = useState(false);
 
+  const state = location.state as LocationState | null;
+  const returnPath = state?.from?.pathname ?? "/";
+  const mustLeaveMarketingHost =
+    !loading && !!user && getCurrentTenantContext().type === "marketing";
+
+  // Authentication is public on every host, including ogevia.com. A
+  // same-origin <Navigate to="/"> from that host only returns the user to
+  // the marketing page, which made a successful sign-in look like a dead
+  // button. Cross the hostname boundary explicitly; app.ogevia.com then
+  // resolves the user's organization from their membership.
+  useEffect(() => {
+    if (!mustLeaveMarketingHost) return;
+    replaceBrowserLocation(toAppUrl(returnPath));
+  }, [mustLeaveMarketingHost, returnPath]);
+
   if (!loading && user) {
-    const state = location.state as LocationState | null;
-    return <Navigate to={state?.from?.pathname ?? "/"} replace />;
+    if (mustLeaveMarketingHost) {
+      return (
+        <div className="flex min-h-screen items-center justify-center bg-slate-50 px-4">
+          <p className="text-sm text-slate-500">Opening Ogevia…</p>
+        </div>
+      );
+    }
+    return <Navigate to={returnPath} replace />;
   }
 
   async function handleGithubSignIn() {

@@ -2,13 +2,26 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { useAuth } from "@carelik/auth";
+import { getCurrentTenantContext } from "@/lib/tenant-resolver";
+import { replaceBrowserLocation } from "@/lib/browser-navigation";
 import { LoginPage } from "./login-page";
 
 vi.mock("@carelik/auth", () => ({
   useAuth: vi.fn()
 }));
 
+vi.mock("@/lib/tenant-resolver", () => ({
+  getCurrentTenantContext: vi.fn(() => ({ type: "app" })),
+  toAppUrl: vi.fn((path = "") => `https://app.ogevia.com${path}`)
+}));
+
+vi.mock("@/lib/browser-navigation", () => ({
+  replaceBrowserLocation: vi.fn()
+}));
+
 const mockedUseAuth = vi.mocked(useAuth);
+const mockedGetCurrentTenantContext = vi.mocked(getCurrentTenantContext);
+const mockedReplaceBrowserLocation = vi.mocked(replaceBrowserLocation);
 
 function baseAuth() {
   return {
@@ -38,6 +51,7 @@ function renderLoginPage(path = "/login") {
 describe("LoginPage", () => {
   afterEach(() => {
     window.history.pushState(null, "", "/");
+    mockedGetCurrentTenantContext.mockReturnValue({ type: "app" });
   });
 
   it("shows the email/password form and a GitHub option when signed out", () => {
@@ -127,5 +141,16 @@ describe("LoginPage", () => {
 
     renderLoginPage();
     await waitFor(() => expect(screen.getByText("overview page")).toBeInTheDocument());
+  });
+
+  it("does not navigate back to the marketing homepage after a successful sign-in", () => {
+    mockedGetCurrentTenantContext.mockReturnValue({ type: "marketing" });
+    mockedUseAuth.mockReturnValue({ ...baseAuth(), user: { id: "user-1" } as never, session: {} as never });
+
+    renderLoginPage();
+
+    expect(screen.getByText("Opening Ogevia…")).toBeInTheDocument();
+    expect(screen.queryByText("overview page")).not.toBeInTheDocument();
+    expect(mockedReplaceBrowserLocation).toHaveBeenCalledWith("https://app.ogevia.com/");
   });
 });
