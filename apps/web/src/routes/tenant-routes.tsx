@@ -1,22 +1,6 @@
 /**
- * Tenant Routes ({tenant}.carelik.com)
- *
- * These routes are for agency staff managing a single organization's operations:
- * - Dashboard
- * - Clients
- * - Caregivers/Team
- * - Applicants
- * - Schedules
- * - Credentials & Authorizations
- * - Documents & Incidents
- * - Organization Settings (tenant-specific)
- *
- * Tenant users should NEVER see:
- * - Organization registry
- * - Platform subscriptions/billing
- * - System administration
- * - Feature flags
- * - Organization switcher
+ * Tenant Routes
+ * Organization-scoped operational screens only.
  */
 
 import { Route } from "react-router-dom";
@@ -33,15 +17,11 @@ import { IncidentsPage } from "@/pages/incidents-page";
 import { SettingsPage } from "@/pages/settings-page";
 import { OwnerDashboardPage } from "@/pages/owner-dashboard-page";
 import { ApplicantsPage } from "@/pages/applicants-page";
-import { ApplicantDetailPage } from "@/pages/applicant-detail-page";
+import { CandidateDetailPage } from "@/pages/candidate-detail-page";
 import { ServiceVerificationPage } from "@/pages/service-verification-page";
 import { ServiceVerificationReportsPage } from "@/pages/service-verification-reports-page";
 import { StaffVisitsPage } from "@/pages/staff-visits-page";
 
-/**
- * Tenant route definitions
- * Wrapped in a function so they can be conditionally rendered in App.tsx
- */
 export function getTenantRoutes() {
   return [
     <Route key="dashboard" path="/" element={<CommandCenterPage />} />,
@@ -53,27 +33,14 @@ export function getTenantRoutes() {
     <Route key="schedule" path="/schedule" element={<SchedulePage />} />,
     <Route key="staff-visits" path="/staff/visits" element={<StaffVisitsPage />} />,
     <Route key="service-verification" path="/service-verification" element={<ServiceVerificationPage />} />,
-    <Route
-      key="service-verification-reports"
-      path="/service-verification/reports"
-      element={<ServiceVerificationReportsPage />}
-    />,
-    // Same page, alias path - "signed sheets" is the workspace name used
-    // in the Service Routing spec; /reports is the original, still-linked
-    // path from the nav and existing bookmarks, kept working rather than
-    // moved.
-    <Route
-      key="service-verification-signed-sheets"
-      path="/service-verification/signed-sheets"
-      element={<ServiceVerificationReportsPage />}
-    />,
+    <Route key="service-verification-reports" path="/service-verification/reports" element={<ServiceVerificationReportsPage />} />,
+    <Route key="service-verification-signed-sheets" path="/service-verification/signed-sheets" element={<ServiceVerificationReportsPage />} />,
     <Route key="credentials" path="/credentials" element={<CredentialsPage />} />,
     <Route key="authorizations" path="/authorizations" element={<AuthorizationsPage />} />,
     <Route key="incidents" path="/incidents" element={<IncidentsPage />} />,
     <Route key="applicants" path="/applicants" element={<ApplicantsPage />} />,
-    <Route key="applicant-detail" path="/applicants/:id" element={<ApplicantDetailPage />} />,
+    <Route key="candidate-detail" path="/applicants/:id" element={<CandidateDetailPage />} />,
     <Route key="access" path="/access" element={<AccessPage />} />,
     <Route key="settings" path="/settings" element={<SettingsPage />} />
-    // TODO: Audit logging (tenant-scoped)
   ];
 }
