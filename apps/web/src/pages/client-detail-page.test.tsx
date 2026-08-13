@@ -120,10 +120,10 @@ function mockFromByTable(
 function renderPage() {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
-    <MemoryRouter initialEntries={[`/clients/${CLIENT_ID}`]}>
+    <MemoryRouter initialEntries={[`/org/acme/clients/${CLIENT_ID}`]}>
       <QueryClientProvider client={queryClient}>
         <Routes>
-          <Route path="/clients/:id" element={<ClientDetailPage />} />
+          <Route path="/org/:orgSlug/clients/:id" element={<ClientDetailPage />} />
         </Routes>
       </QueryClientProvider>
     </MemoryRouter>
@@ -412,7 +412,7 @@ describe("ClientDetailPage", () => {
     fireEvent.click(screen.getByRole("button", { name: "Schedule" }));
 
     const link = await screen.findByText("Assign a caregiver (ranked by CareScore)");
-    expect(link.closest("a")).toHaveAttribute("href", `/schedule?clientId=${CLIENT_ID}`);
+    expect(link.closest("a")).toHaveAttribute("href", `/org/acme/schedule?clientId=${CLIENT_ID}`);
   });
 
   it("shows ranked CareScore matches with a breakdown on the Matches tab", async () => {
@@ -458,7 +458,7 @@ describe("ClientDetailPage", () => {
     expect(screen.getByText("87")).toBeInTheDocument();
     expect(screen.getByText("Proximity 30/30")).toBeInTheDocument();
     expect(screen.getByText("Skills 10/10")).toBeInTheDocument();
-    expect(screen.getByText("Sam Caregiver").closest("a")).toHaveAttribute("href", "/team/caregiver-1");
+    expect(screen.getByText("Sam Caregiver").closest("a")).toHaveAttribute("href", "/org/acme/team/caregiver-1");
   });
 
   it("links to a pre-filled add-authorization flow from the Authorizations tab", async () => {
@@ -482,7 +482,7 @@ describe("ClientDetailPage", () => {
     fireEvent.click(screen.getByRole("button", { name: "Authorizations" }));
 
     const link = await screen.findByText("Add authorization for this client");
-    expect(link.closest("a")).toHaveAttribute("href", `/authorizations?clientId=${CLIENT_ID}`);
+    expect(link.closest("a")).toHaveAttribute("href", `/org/acme/authorizations?clientId=${CLIENT_ID}`);
   });
 
   it("lists caregiver assignments and assigns a new one on the Caregivers tab", async () => {

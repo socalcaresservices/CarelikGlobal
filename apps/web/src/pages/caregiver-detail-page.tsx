@@ -16,6 +16,7 @@ import {
 import { getCredentialStatus, type CredentialStatus } from "@carelik/shared";
 import { useAuth } from "@carelik/auth";
 import { useOrganization } from "@/providers/organization-provider";
+import { useOrgPath } from "@/lib/use-org-path";
 import { supabase } from "@/lib/supabase";
 import { getWeekEnd, getWeekStart } from "@/lib/week";
 
@@ -141,6 +142,7 @@ const credentialStatusLabel: Record<CredentialStatus, string> = {
 export function CaregiverDetailPage() {
   const { id } = useParams<{ id: string }>();
   const { activeOrganizationId, hasPermission } = useOrganization();
+  const orgPath = useOrgPath();
   const { user } = useAuth();
   const queryClient = useQueryClient();
   const [tab, setTab] = useState<Tab>("overview");
@@ -504,7 +506,7 @@ export function CaregiverDetailPage() {
           <p className="text-sm font-medium text-slate-500">Team member</p>
           <h2 className="mt-1 text-2xl font-semibold text-slate-950">Not found</h2>
           <p className="mt-3 text-slate-600">This member doesn&apos;t exist in this organization.</p>
-          <Link to="/access" className="mt-4 inline-block text-sm font-medium text-slate-700 hover:underline">
+          <Link to={orgPath("/access")} className="mt-4 inline-block text-sm font-medium text-slate-700 hover:underline">
             Back to access
           </Link>
         </Card>
@@ -535,7 +537,7 @@ export function CaregiverDetailPage() {
 
   return (
     <section className="mx-auto max-w-4xl space-y-6">
-      <Link to="/access" className="inline-flex items-center gap-1.5 text-sm text-slate-500 hover:text-slate-800">
+      <Link to={orgPath("/access")} className="inline-flex items-center gap-1.5 text-sm text-slate-500 hover:text-slate-800">
         <ArrowLeft className="h-4 w-4" />
         Access
       </Link>
@@ -621,7 +623,7 @@ export function CaregiverDetailPage() {
             <p className="mt-1 text-xs text-slate-500">
               Used for CareScore - this caregiver&rsquo;s real match score against every active client, the
               same formula used to rank caregivers on{" "}
-              <Link to="/schedule" className="underline">
+              <Link to={orgPath("/schedule")} className="underline">
                 Schedule
               </Link>
               , just run from this caregiver&rsquo;s side.
@@ -635,7 +637,7 @@ export function CaregiverDetailPage() {
                     {matchesQuery.data!.slice(0, 5).map((match) => (
                       <Link
                         key={match.client_id}
-                        to={`/clients/${match.client_id}`}
+                        to={orgPath(`/clients/${match.client_id}`)}
                         className="flex flex-col items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-2 text-center hover:border-slate-300"
                       >
                         <ScoreBadge kind="care" value={match.match_score} />
@@ -834,7 +836,7 @@ export function CaregiverDetailPage() {
             <h3 className="font-semibold text-slate-950">Credentials</h3>
             {canManageCredentials ? (
               <Link
-                to={`/credentials?caregiverId=${id}`}
+                to={orgPath(`/credentials?caregiverId=${id}`)}
                 className="text-sm font-medium text-slate-700 underline-offset-2 hover:underline"
               >
                 Add credential for this caregiver

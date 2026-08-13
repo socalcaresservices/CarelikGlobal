@@ -4,6 +4,7 @@ import { CalendarCheck, CalendarPlus, LayoutDashboard, LogOut, PenLine } from "l
 import { useAuth } from "@carelik/auth";
 import { cn } from "@carelik/ui";
 import { useOrganization } from "@/providers/organization-provider";
+import { useOrgPath } from "@/lib/use-org-path";
 
 // A genuinely separate, mobile-first shell for the caregiver role - not
 // AppShell with items hidden by permission checks (the OGEVIA SaaS
@@ -62,6 +63,7 @@ function getGreeting(now: Date) {
 export function StaffShell({ children }: PropsWithChildren) {
   const { user, signOut } = useAuth();
   const { activeOrganization, loading } = useOrganization();
+  const orgPath = useOrgPath();
   const greeting = getGreeting(new Date());
 
   return (
@@ -82,7 +84,7 @@ export function StaffShell({ children }: PropsWithChildren) {
           {staffNav.map((item) => (
             <NavLink
               key={item.to}
-              to={item.to}
+              to={orgPath(item.to)}
               end={item.to === "/"}
               className={({ isActive }) =>
                 cn(
@@ -137,7 +139,7 @@ export function StaffShell({ children }: PropsWithChildren) {
         {staffNav.map((item) => (
           <NavLink
             key={item.to}
-            to={item.to}
+            to={orgPath(item.to)}
             end={item.to === "/"}
             className={({ isActive }) =>
               cn(

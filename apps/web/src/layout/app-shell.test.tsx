@@ -1,5 +1,5 @@
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
-import { MemoryRouter } from "react-router-dom";
+import { MemoryRouter, Route, Routes, useNavigate } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { useAuth } from "@carelik/auth";
@@ -20,26 +20,20 @@ vi.mock("@/lib/supabase", () => ({
     rpc: vi.fn()
   }
 }));
+// Only useNavigate is mocked (for the org switcher's navigate-based
+// switch) - MemoryRouter/NavLink/Link stay real so every other nav
+// assertion below still exercises real route matching.
+vi.mock("react-router-dom", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("react-router-dom")>();
+  return { ...actual, useNavigate: vi.fn() };
+});
 
 const mockedUseAuth = vi.mocked(useAuth);
 const mockedUseOrganization = vi.mocked(useOrganization);
 const mockedRpc = vi.mocked(supabase.rpc);
+const mockedUseNavigate = vi.mocked(useNavigate);
 
 const ORG_ID = "11111111-1111-4111-8111-111111111111";
-
-function baseOrganization(role: "organization_owner" | "organization_admin" | null) {
-  return {
-    organizations: [],
-    activeOrganization: null,
-    activeOrganizationId: null,
-    setActiveOrganizationId: vi.fn(),
-    role,
-    isPlatformOwner: false,
-    userDisplayName: "Test User",
-    hasPermission: vi.fn(() => true),
-    loading: false
-  };
-}
 
 function brandedOrganization(overrides: Record<string, unknown> = {}) {
   return {
@@ -59,14 +53,44 @@ function brandedOrganization(overrides: Record<string, unknown> = {}) {
   };
 }
 
+// AppShell only ever renders once OrganizationProvider has resolved a
+// real, authorized organization for the current :orgSlug (it blocks
+// children otherwise - see organization-provider.tsx) - so activeOrganization
+// is always non-null here, matching that real invariant instead of the
+// old "no active org yet" case this used to also cover.
+function baseOrganization(role: "organization_owner" | "organization_admin" | null) {
+  return {
+    organizations: [brandedOrganization()],
+    activeOrganization: brandedOrganization(),
+    activeOrganizationId: ORG_ID,
+    role,
+    isPlatformOwner: false,
+    userDisplayName: "Test User",
+    hasPermission: vi.fn(() => true),
+    loading: false
+  };
+}
+
+// Wrapped in a real /org/:orgSlug route (not just an initial path) so
+// useOrgPath()'s useParams().orgSlug actually resolves to "acme" - without
+// a matching Route, NavLink's `to` would prefix to "/org/undefined",
+// which no longer matches the current location and breaks active-state
+// assertions.
 function renderShell() {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
-    <MemoryRouter>
+    <MemoryRouter initialEntries={["/org/acme"]}>
       <QueryClientProvider client={queryClient}>
-        <AppShell>
-          <div />
-        </AppShell>
+        <Routes>
+          <Route
+            path="/org/:orgSlug"
+            element={
+              <AppShell>
+                <div />
+              </AppShell>
+            }
+          />
+        </Routes>
       </QueryClientProvider>
     </MemoryRouter>
   );
@@ -93,7 +117,7 @@ describe("AppShell nav", () => {
     expect(screen.queryByText("Workforce Insights")).not.toBeInTheDocument();
   });
 
-  it("groups Organizations, Access, and Audit under a de-emphasized Administration heading", () => {
+  it("groups Access, Audit, and Settings under a de-emphasized Administration heading", () => {
     mockedUseAuth.mockReturnValue({ user: { email: "owner@acme.test" } } as never);
     mockedUseOrganization.mockReturnValue(baseOrganization("organization_owner"));
 
@@ -188,8 +212,8 @@ describe("AppShell nav", () => {
   // The tenant workspace never shows platform administration nav, even
   // for a user who happens to also be a platform owner and a real
   // member of this organization (its creator, in practice) - platform
-  // tools live exclusively on platform.carelik.com's PlatformShell.
-  // Which host you're on decides whether you see them, not who you are.
+  // tools live exclusively under app.ogevia.com/platform's PlatformShell.
+  // Which route tree you're in decides whether you see them, not who you are.
   it("shows no Platform Administration nav for a platform owner viewing a tenant workspace", () => {
     mockedUseAuth.mockReturnValue({ user: { email: "owner@carelik.test" } } as never);
     mockedUseOrganization.mockReturnValue({ ...baseOrganization("organization_owner"), isPlatformOwner: true });
@@ -211,10 +235,7 @@ describe("AppShell nav", () => {
 
   it("shows a badge with the actionable count next to Credentials and Incidents", async () => {
     mockedUseAuth.mockReturnValue({ user: { email: "owner@acme.test" } } as never);
-    mockedUseOrganization.mockReturnValue({
-      ...baseOrganization("organization_owner"),
-      activeOrganizationId: ORG_ID
-    });
+    mockedUseOrganization.mockReturnValue(baseOrganization("organization_owner"));
     mockedRpc.mockResolvedValue({
       data: [
         {
@@ -243,10 +264,7 @@ describe("AppShell nav", () => {
 
   it("shows no badge when every actionable count is zero", async () => {
     mockedUseAuth.mockReturnValue({ user: { email: "owner@acme.test" } } as never);
-    mockedUseOrganization.mockReturnValue({
-      ...baseOrganization("organization_owner"),
-      activeOrganizationId: ORG_ID
-    });
+    mockedUseOrganization.mockReturnValue(baseOrganization("organization_owner"));
     mockedRpc.mockResolvedValue({
       data: [
         {
@@ -266,16 +284,6 @@ describe("AppShell nav", () => {
     await waitFor(() => expect(mockedRpc).toHaveBeenCalled());
     const credentialsLink = (await screen.findByText("Credentials")).closest("a")!;
     expect(within(credentialsLink).queryByText("0")).not.toBeInTheDocument();
-  });
-
-  it("falls back to the Ogevia mark and 'Powered by Ogevia' footer without an active organization", () => {
-    mockedUseAuth.mockReturnValue({ user: { email: "owner@acme.test" } } as never);
-    mockedUseOrganization.mockReturnValue(baseOrganization("organization_owner"));
-
-    renderShell();
-
-    expect(screen.getByText("Ogevia")).toBeInTheDocument();
-    expect(screen.getByText("Powered by Ogevia")).toBeInTheDocument();
   });
 
   it("shows the organization's logo instead of the Ogevia mark when branded", () => {
@@ -348,16 +356,22 @@ describe("AppShell nav", () => {
   // memberships rather than a subdomain, so a user can genuinely belong to
   // more than one organization - the header shows a real switcher in that
   // case (single-org users still just see plain text, covered by the
-  // display-name and logo tests above).
-  it("shows an organization switcher when the user belongs to more than one organization", () => {
+  // display-name and logo tests above). Switching now navigates to
+  // /org/:slug rather than setting local state - see app-shell.tsx.
+  it("navigates to /org/:slug when switching organizations", () => {
+    const navigateMock = vi.fn();
+    mockedUseNavigate.mockReturnValue(navigateMock);
     mockedUseAuth.mockReturnValue({ user: { email: "owner@acme.test" } } as never);
-    const setActiveOrganizationId = vi.fn();
+    const secondOrg = brandedOrganization({
+      id: "22222222-2222-4222-8222-222222222222",
+      slug: "second-org",
+      displayName: "Second Org"
+    });
     mockedUseOrganization.mockReturnValue({
       ...baseOrganization("organization_owner"),
-      organizations: [brandedOrganization(), brandedOrganization({ id: "22222222-2222-4222-8222-222222222222", displayName: "Second Org" })],
+      organizations: [brandedOrganization(), secondOrg],
       activeOrganization: brandedOrganization(),
-      activeOrganizationId: ORG_ID,
-      setActiveOrganizationId
+      activeOrganizationId: ORG_ID
     });
 
     renderShell();
@@ -366,8 +380,8 @@ describe("AppShell nav", () => {
     expect(within(select).getByText("Acme Care")).toBeInTheDocument();
     expect(within(select).getByText("Second Org")).toBeInTheDocument();
 
-    fireEvent.change(select, { target: { value: "22222222-2222-4222-8222-222222222222" } });
-    expect(setActiveOrganizationId).toHaveBeenCalledWith("22222222-2222-4222-8222-222222222222");
+    fireEvent.change(select, { target: { value: "second-org" } });
+    expect(navigateMock).toHaveBeenCalledWith("/org/second-org");
   });
 
   it("hides the 'Powered by Ogevia' footer when the organization has turned it off", () => {

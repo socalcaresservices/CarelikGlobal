@@ -1,10 +1,10 @@
 import { Fragment, useState, type FormEvent } from "react";
+import { Link } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Card, PageHeader, StatusBadge, ProgressBar, usageTone, Button, type StatusTone } from "@carelik/ui";
+import { Card, PageHeader, StatusBadge, ProgressBar, usageTone, Button, buttonVariants, type StatusTone } from "@carelik/ui";
 import { useAuth } from "@carelik/auth";
-import { useOrganization } from "@/providers/organization-provider";
+import { useIsPlatformOwner } from "@/lib/use-platform-owner";
 import { supabase } from "@/lib/supabase";
-import { toAppUrl } from "@/lib/tenant-resolver";
 import { PlatformSubscriberBillingPanel } from "@/components/platform-subscriber-billing-panel";
 
 // Platform-only registry view, backed by list_platform_organizations()
@@ -255,7 +255,7 @@ function SupportAccessPanel({ organizationId, currentUserId }: { organizationId:
 }
 
 export function OrganizationsPage() {
-  const { isPlatformOwner } = useOrganization();
+  const { isPlatformOwner } = useIsPlatformOwner();
   const { user } = useAuth();
   const [expandedOrgId, setExpandedOrgId] = useState<string | null>(null);
 
@@ -289,6 +289,11 @@ export function OrganizationsPage() {
         eyebrow="Platform Administration"
         title={`${rows.length} organization${rows.length === 1 ? "" : "s"}`}
         description="Every tenant on Ogevia — plan, billing status, storage, seats, and account owner. Read-only: an organization's own profile is edited from within that tenant's Settings. To edit the plan catalog itself, see Subscriptions."
+        actions={
+          <Link to="/platform/organizations/new" className={buttonVariants({ variant: "primary", size: "sm" })}>
+            New organization
+          </Link>
+        }
       />
 
       <Card>
@@ -349,14 +354,14 @@ export function OrganizationsPage() {
                         </td>
                         <td className="py-2.5 text-right">
                           <div className="flex items-center justify-end gap-3">
-                            <a
-                              href={toAppUrl(`/?org=${encodeURIComponent(org.slug)}`)}
+                            <Link
+                              to={`/org/${org.slug}`}
                               target="_blank"
                               rel="noreferrer"
                               className="text-xs font-medium text-slate-700 underline-offset-2 hover:underline"
                             >
                               Enter organization
-                            </a>
+                            </Link>
                             <button
                               type="button"
                               onClick={() => setExpandedOrgId(isExpanded ? null : org.organization_id)}

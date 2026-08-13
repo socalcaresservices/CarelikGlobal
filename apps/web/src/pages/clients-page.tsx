@@ -4,6 +4,7 @@ import { Link } from "react-router-dom";
 import { Button, Card, EmptyState, FormSection, FilterBar, type ActiveFilter } from "@carelik/ui";
 import { clientStatusSchema } from "@carelik/shared";
 import { useOrganization } from "@/providers/organization-provider";
+import { useOrgPath } from "@/lib/use-org-path";
 import { supabase } from "@/lib/supabase";
 import { useTableControls } from "@/lib/use-table-controls";
 import { useFilters } from "@/lib/use-filters";
@@ -40,6 +41,7 @@ const emptyForm = {
 
 export function ClientsPage() {
   const { activeOrganizationId, activeOrganization, hasPermission } = useOrganization();
+  const orgPath = useOrgPath();
   const queryClient = useQueryClient();
 
   const canRead = hasPermission("clients.read");
@@ -454,7 +456,7 @@ export function ClientsPage() {
               {table.rows.map((row) => (
                 <tr key={row.id} className="border-b border-slate-100 last:border-0">
                   <td className="py-2.5 text-slate-800">
-                    <Link to={`/clients/${row.id}`} className="hover:underline">
+                    <Link to={orgPath(`/clients/${row.id}`)} className="hover:underline">
                       {row.first_name} {row.last_name}
                     </Link>
                   </td>

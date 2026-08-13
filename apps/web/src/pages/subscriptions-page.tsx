@@ -1,5 +1,5 @@
 import { Card, PageHeader } from "@carelik/ui";
-import { useOrganization } from "@/providers/organization-provider";
+import { useIsPlatformOwner } from "@/lib/use-platform-owner";
 import { PlatformPlanManager } from "@/components/platform-plan-manager";
 
 // Platform-only plan catalog editor. Split out of OrganizationsPage
@@ -10,7 +10,7 @@ import { PlatformPlanManager } from "@/components/platform-plan-manager";
 // place. This is exactly the "Subscriptions / Plans" platform nav
 // destination the spec calls for, distinct from "Organizations".
 export function SubscriptionsPage() {
-  const { isPlatformOwner } = useOrganization();
+  const { isPlatformOwner } = useIsPlatformOwner();
 
   if (!isPlatformOwner) {
     return (

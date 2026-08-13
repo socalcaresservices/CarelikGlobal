@@ -1,5 +1,5 @@
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
-import { MemoryRouter } from "react-router-dom";
+import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { useAuth } from "@carelik/auth";
@@ -72,9 +72,11 @@ function mockRpc({ members = [], hours = [] }: { members?: unknown[]; hours?: un
 function renderPage() {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
-    <MemoryRouter>
+    <MemoryRouter initialEntries={["/org/acme/team"]}>
       <QueryClientProvider client={queryClient}>
-        <TeamPage />
+        <Routes>
+          <Route path="/org/:orgSlug/team" element={<TeamPage />} />
+        </Routes>
       </QueryClientProvider>
     </MemoryRouter>
   );
@@ -121,7 +123,7 @@ describe("TeamPage", () => {
     expect(screen.queryByText("Add a caregiver")).not.toBeInTheDocument();
 
     const link = screen.getByText("Sam Caregiver").closest("a");
-    expect(link).toHaveAttribute("href", `/team/${CAREGIVER_ID}`);
+    expect(link).toHaveAttribute("href", `/org/acme/team/${CAREGIVER_ID}`);
   });
 
   it("shows a dash for hours when there's no matching hours row", async () => {

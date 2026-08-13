@@ -73,7 +73,12 @@ describe("PricingPage", () => {
     renderPage();
 
     expect(await screen.findByText("Free Trial")).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "Start free trial" })).toHaveAttribute("href", "/login");
+    // Cross-host by design - see pricing-page.tsx's comment on why every
+    // sign-in CTA is an <a href={toAppUrl(...)}>, not a same-host <Link>.
+    expect(screen.getByRole("link", { name: "Start free trial" })).toHaveAttribute(
+      "href",
+      expect.stringMatching(/^https?:\/\/app\..*\/login$/)
+    );
   });
 
   it("shows unlimited for a null limit", async () => {

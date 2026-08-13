@@ -80,10 +80,10 @@ function baseOrganization() {
 function renderPage() {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
-    <MemoryRouter initialEntries={[`/team/${CAREGIVER_ID}`]}>
+    <MemoryRouter initialEntries={[`/org/acme/team/${CAREGIVER_ID}`]}>
       <QueryClientProvider client={queryClient}>
         <Routes>
-          <Route path="/team/:id" element={<CaregiverDetailPage />} />
+          <Route path="/org/:orgSlug/team/:id" element={<CaregiverDetailPage />} />
         </Routes>
       </QueryClientProvider>
     </MemoryRouter>
@@ -242,7 +242,7 @@ describe("CaregiverDetailPage", () => {
     await waitFor(() => expect(screen.getByText("CPR")).toBeInTheDocument());
     expect(screen.getByText("No expiration")).toBeInTheDocument();
     const link = screen.getByText("Add credential for this caregiver");
-    expect(link.closest("a")).toHaveAttribute("href", `/credentials?caregiverId=${CAREGIVER_ID}`);
+    expect(link.closest("a")).toHaveAttribute("href", `/org/acme/credentials?caregiverId=${CAREGIVER_ID}`);
   });
 
   it("shows an error message on the Schedule tab when the shifts fetch fails, instead of a false empty state", async () => {

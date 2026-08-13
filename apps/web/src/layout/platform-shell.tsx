@@ -1,12 +1,19 @@
 /**
- * Platform App Shell (platform.carelik.com)
+ * Platform App Shell (app.ogevia.com/platform)
  *
  * Minimal shell for Ogevia platform operations
  * Shows ONLY platform navigation:
  * - Organizations (registry)
  * - Subscriptions (global plan catalog - see subscriptions-page.tsx)
  * - Feature Flags (system-wide)
- * - Audit (platform events)
+ *
+ * Audit logging lives under each organization's own workspace
+ * (/org/:orgSlug/audit), not here - it's a per-tenant activity trail
+ * (list_audit_logs() is scoped by target_organization_id and gated by
+ * that org's own audit.read permission), not a cross-tenant platform
+ * event stream. It was mounted here before the Ogevia Architecture Reset,
+ * which was itself an instance of the platform/tenant mixing this reset
+ * corrects everywhere else.
  *
  * Future:
  * - Platform Home / dashboard
@@ -19,10 +26,11 @@
  */
 
 import { PropsWithChildren } from "react";
-import { Link, NavLink } from "react-router-dom";
-import { Building2, CreditCard, ExternalLink, Flag, ClipboardList, LogOut } from "lucide-react";
+import { NavLink } from "react-router-dom";
+import { Building2, CreditCard, ExternalLink, Flag, LogOut } from "lucide-react";
 import { useAuth } from "@carelik/auth";
 import { cn } from "@carelik/ui";
+import { toMarketingUrl } from "@/lib/tenant-resolver";
 
 interface NavItem {
   to: string;
@@ -30,18 +38,22 @@ interface NavItem {
   icon: typeof Building2;
 }
 
+// Absolute paths, not relative - PlatformShell's NavLinks are react-router
+// <Link>s under the hood, which (unlike a nested <Route path="...">) are
+// always root-absolute regardless of where PlatformShell is mounted. See
+// App.tsx's /platform/* route and use-org-path.ts's comment for the same
+// distinction on the tenant side.
 const platformNav: NavItem[] = [
-  { to: "/organizations", label: "Organizations", icon: Building2 },
-  { to: "/subscriptions", label: "Subscriptions", icon: CreditCard },
-  { to: "/feature-flags", label: "Feature Flags", icon: Flag },
-  { to: "/audit", label: "Audit", icon: ClipboardList }
+  { to: "/platform/organizations", label: "Organizations", icon: Building2 },
+  { to: "/platform/subscriptions", label: "Subscriptions", icon: CreditCard },
+  { to: "/platform/feature-flags", label: "Feature Flags", icon: Flag }
 ];
 
 function NavItem({ to, label, icon: Icon }: NavItem) {
   return (
     <NavLink
       to={to}
-      end={to === "/organizations"}
+      end={to === "/platform/organizations"}
       className={({ isActive }) =>
         cn(
           "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium",
@@ -90,13 +102,13 @@ export function PlatformShell({ children }: PropsWithChildren) {
               <p className="text-xs text-slate-500">Platform Super Admin</p>
             </div>
           </div>
-          <Link
-            to="/"
+          <a
+            href={toMarketingUrl()}
             className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium text-slate-600 hover:bg-slate-100 hover:text-slate-950"
           >
             <ExternalLink className="h-4 w-4" />
             <span>View public website</span>
-          </Link>
+          </a>
           <button
             onClick={() => signOut()}
             className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium text-slate-600 hover:bg-slate-100 hover:text-slate-950"

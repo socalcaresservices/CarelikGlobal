@@ -3,32 +3,19 @@ import {
   type PropsWithChildren,
   useContext,
   useEffect,
-  useMemo,
-  useState
+  useMemo
 } from "react";
+import { Link, useParams } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@carelik/auth";
-import {
-  organizationSchema,
-  permissionSchema,
-  type Organization,
-  type Permission,
-  type SystemRole
-} from "@carelik/shared";
+import { permissionSchema, type Organization, type Permission, type SystemRole } from "@carelik/shared";
 import { supabase } from "@/lib/supabase";
-
-const ACTIVE_ORGANIZATION_STORAGE_KEY = "carelik.activeOrganizationId";
-
-// A stable reference for the "no data yet" case: `data ?? []` would create
-// a new array every render, which defeats the point of the dependency
-// arrays below (they'd see a "new" organizations value on every render).
-const EMPTY_ORGANIZATIONS: Organization[] = [];
+import { useMyOrganizations } from "@/lib/use-my-organizations";
 
 interface OrganizationContextValue {
   organizations: Organization[];
-  activeOrganization: Organization | null;
-  activeOrganizationId: string | null;
-  setActiveOrganizationId: (organizationId: string) => void;
+  activeOrganization: Organization;
+  activeOrganizationId: string;
   role: SystemRole | "platform_owner" | null;
   isPlatformOwner: boolean;
   hasPermission: (permission: Permission) => boolean;
@@ -45,44 +32,24 @@ interface OrganizationContextValue {
 
 const OrganizationContext = createContext<OrganizationContextValue | null>(null);
 
-export function OrganizationProvider({
-  children,
-  tenantSlug
-}: PropsWithChildren<{
-  /**
-   * The slug App.tsx's hostname resolution (resolveTenant()/
-   * useTenantContext()) decided this request belongs to - e.g. the
-   * subdomain, or the organization behind a matched custom domain.
-   * Undefined on platform routes, where there's no single tenant to pin
-   * to and the existing cached/first-org fallback below still applies.
-   *
-   * Without this, a user who belongs to more than one organization
-   * (the common case for anyone testing multiple tenants, or a platform
-   * owner who is also a real member somewhere) would see whichever
-   * organization happened to be cached in *this browser's* localStorage
-   * from a previous visit, regardless of which tenant's hostname they
-   * actually navigated to - the exact bug found live 2026-08-09: the
-   * custom-domain lookup correctly resolved to Socal Care Services llc,
-   * but the app still showed the wrong org because that was this browser's
-   * last-active org from unrelated local testing.
-   */
-  tenantSlug?: string | undefined;
-}>) {
+/**
+ * Resolves the active organization exclusively from the :orgSlug route
+ * param - this only ever mounts under App.tsx's /org/:orgSlug/* route.
+ * Never localStorage, never a ?org= query param, never a cached "last
+ * active" fallback: the URL is the single source of truth for which
+ * organization is active, per the Ogevia Architecture Reset directive -
+ * "Correct flow: URL slug -> DB organization -> authenticated membership
+ * -> organization UUID -> RLS." AppRootRedirect and SelectOrganizationPage
+ * are what get a user to a valid /org/:slug URL in the first place; this
+ * provider's only job once mounted is to confirm that slug is real *and*
+ * this user is actually authorized into it (RLS-backed - the
+ * organizations query below only ever returns rows is_organization_member()
+ * allows) before rendering anything beneath it.
+ */
+export function OrganizationProvider({ children }: PropsWithChildren) {
+  const { orgSlug } = useParams<{ orgSlug: string }>();
   const { user } = useAuth();
   const queryClient = useQueryClient();
-  const [activeOrganizationId, setActiveOrganizationIdState] = useState<string | null>(
-    () => window.localStorage.getItem(ACTIVE_ORGANIZATION_STORAGE_KEY)
-  );
-  // A one-time deep-link preference read from ?org=<slug> - used by the
-  // platform Organizations registry's "Enter organization" link
-  // (toAppUrl() + "?org=" + slug) so picking an org there lands on that
-  // org on app.ogevia.com, rather than whatever was last active in this
-  // browser. Only relevant when tenantSlug is unset (the app/platform
-  // case); cleared once successfully applied so it doesn't keep
-  // overriding a later manual switch.
-  const [preferredOrgSlug, setPreferredOrgSlug] = useState<string | null>(
-    () => new URLSearchParams(window.location.search).get("org")
-  );
 
   // A user can always read their own membership rows regardless of status
   // (see the "members_read_memberships" RLS policy), so once they've
@@ -144,77 +111,13 @@ export function OrganizationProvider({
     user?.email?.split("@")[0] ||
     null;
 
-  const organizationsQuery = useQuery({
-    queryKey: ["organizations", user?.id],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("organizations")
-        .select(
-          "id, slug, legal_name, display_name, status, timezone, logo_url, primary_color, secondary_color, accent_color, theme_mode, show_powered_by"
-        )
-        .order("display_name");
-      if (error) throw error;
-      return data.map((row) =>
-        organizationSchema.parse({
-          id: row.id,
-          slug: row.slug,
-          legalName: row.legal_name,
-          displayName: row.display_name,
-          status: row.status,
-          timezone: row.timezone,
-          logoUrl: row.logo_url,
-          primaryColor: row.primary_color,
-          secondaryColor: row.secondary_color,
-          accentColor: row.accent_color,
-          themeMode: row.theme_mode,
-          showPoweredBy: row.show_powered_by
-        })
-      );
-    },
-    enabled: !!user
-  });
-
-  const organizations = organizationsQuery.data ?? EMPTY_ORGANIZATIONS;
-
-  useEffect(() => {
-    const [firstOrganization] = organizations;
-    if (!firstOrganization) return;
-
-    // The hostname decides the tenant here, full stop - not a cached
-    // value from a previous visit to a different tenant on the same
-    // browser. Re-asserted on every organizations change (not just once)
-    // so switching hosts without a hard reload can't leave a stale org
-    // active either.
-    if (tenantSlug) {
-      const matching = organizations.find((org) => org.slug === tenantSlug);
-      if (matching && matching.id !== activeOrganizationId) {
-        setActiveOrganizationIdState(matching.id);
-      }
-      return;
-    }
-
-    if (preferredOrgSlug) {
-      const preferred = organizations.find((org) => org.slug === preferredOrgSlug);
-      if (preferred) {
-        if (preferred.id !== activeOrganizationId) {
-          setActiveOrganizationIdState(preferred.id);
-        }
-        setPreferredOrgSlug(null);
-        return;
-      }
-    }
-
-    const stillVisible = organizations.some((org) => org.id === activeOrganizationId);
-    if (!stillVisible) {
-      setActiveOrganizationIdState(firstOrganization.id);
-    }
-  }, [organizations, activeOrganizationId, tenantSlug, preferredOrgSlug]);
-
-  useEffect(() => {
-    if (activeOrganizationId) {
-      window.localStorage.setItem(ACTIVE_ORGANIZATION_STORAGE_KEY, activeOrganizationId);
-    }
-  }, [activeOrganizationId]);
+  // Same query useMyOrganizations() feeds AppRootRedirect and
+  // SelectOrganizationPage with (see that hook for the RLS scoping this
+  // relies on) - shared, not duplicated, so React Query serves both from
+  // one cached fetch.
+  const { organizations, loading: organizationsLoading } = useMyOrganizations();
+  const activeOrganization = organizations.find((org) => org.slug === orgSlug) ?? null;
+  const activeOrganizationId = activeOrganization?.id ?? null;
 
   const membershipRoleQuery = useQuery({
     queryKey: ["membership-role", user?.id, activeOrganizationId],
@@ -250,40 +153,69 @@ export function OrganizationProvider({
     [isPlatformOwner, rolePermissionsQuery.data]
   );
 
-  const activeOrganization = organizations.find((org) => org.id === activeOrganizationId) ?? null;
-
   const role: SystemRole | "platform_owner" | null = isPlatformOwner
     ? "platform_owner"
     : membershipRoleQuery.data ?? null;
 
   const loading =
     profileQuery.isLoading ||
-    organizationsQuery.isLoading ||
+    organizationsLoading ||
     (!isPlatformOwner && !!activeOrganizationId && membershipRoleQuery.isLoading);
 
-  const value = useMemo<OrganizationContextValue>(
-    () => ({
+  // All hooks above run unconditionally on every render - the loading/
+  // not-found states below only affect what gets returned, never how many
+  // hooks are called, so this stays rules-of-hooks-safe even though it
+  // branches before rendering children.
+  const value = useMemo<OrganizationContextValue | null>(() => {
+    if (!activeOrganization || !activeOrganizationId) return null;
+    return {
       organizations,
       activeOrganization,
       activeOrganizationId,
-      setActiveOrganizationId: setActiveOrganizationIdState,
       role,
       isPlatformOwner,
       hasPermission: (permission) => isPlatformOwner || permissions.has(permission),
       loading,
       userDisplayName
-    }),
-    [
-      organizations,
-      activeOrganization,
-      activeOrganizationId,
-      role,
-      isPlatformOwner,
-      permissions,
-      loading,
-      userDisplayName
-    ]
-  );
+    };
+  }, [
+    organizations,
+    activeOrganization,
+    activeOrganizationId,
+    role,
+    isPlatformOwner,
+    permissions,
+    loading,
+    userDisplayName
+  ]);
+
+  if (loading) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-slate-50">
+        <p className="text-sm text-slate-500">Loading…</p>
+      </div>
+    );
+  }
+
+  if (!value) {
+    // The same message whether :orgSlug doesn't exist at all or it exists
+    // but this user isn't a member - RLS already hid the difference
+    // (organizationsQuery simply never returned that row), and telling
+    // those two cases apart here would leak which organization slugs
+    // exist to someone with no right to know.
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-slate-50 p-6">
+        <div className="max-w-md rounded-lg border border-slate-200 bg-white p-6 text-center shadow-sm">
+          <p className="text-sm font-medium text-slate-500">Organization</p>
+          <h1 className="mt-1 text-2xl font-semibold text-slate-950">Not available</h1>
+          <p className="mt-3 text-slate-600">This organization doesn't exist, or you don't have access to it.</p>
+          <Link to="/" className="mt-4 inline-block text-sm font-medium underline underline-offset-2">
+            Go to your organizations
+          </Link>
+        </div>
+      </div>
+    );
+  }
 
   return <OrganizationContext.Provider value={value}>{children}</OrganizationContext.Provider>;
 }

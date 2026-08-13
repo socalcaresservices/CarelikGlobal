@@ -21,6 +21,7 @@ import {
   type AuthorizationUsageStatus
 } from "@carelik/shared";
 import { useOrganization } from "@/providers/organization-provider";
+import { useOrgPath } from "@/lib/use-org-path";
 import { supabase } from "@/lib/supabase";
 
 // Record layout per docs/design-system.md: header with every headline
@@ -175,6 +176,7 @@ function formatHours(hours: number) {
 export function ClientDetailPage() {
   const { id } = useParams<{ id: string }>();
   const { activeOrganizationId, hasPermission } = useOrganization();
+  const orgPath = useOrgPath();
   const queryClient = useQueryClient();
   const [tab, setTab] = useState<Tab>("overview");
 
@@ -505,7 +507,7 @@ export function ClientDetailPage() {
           <p className="text-sm font-medium text-slate-500">Client</p>
           <h2 className="mt-1 text-2xl font-semibold text-slate-950">Not found</h2>
           <p className="mt-3 text-slate-600">This client record doesn&apos;t exist or you can&apos;t view it.</p>
-          <Link to="/clients" className="mt-4 inline-block text-sm font-medium text-slate-700 hover:underline">
+          <Link to={orgPath("/clients")} className="mt-4 inline-block text-sm font-medium text-slate-700 hover:underline">
             Back to clients
           </Link>
         </Card>
@@ -552,7 +554,7 @@ export function ClientDetailPage() {
 
   return (
     <section className="mx-auto max-w-4xl space-y-6">
-      <Link to="/clients" className="inline-flex items-center gap-1.5 text-sm text-slate-500 hover:text-slate-800">
+      <Link to={orgPath("/clients")} className="inline-flex items-center gap-1.5 text-sm text-slate-500 hover:text-slate-800">
         <ArrowLeft className="h-4 w-4" />
         Clients
       </Link>
@@ -775,7 +777,7 @@ export function ClientDetailPage() {
             <h3 className="font-semibold text-slate-950">Shifts</h3>
             {canSchedule ? (
               <Link
-                to={`/schedule?clientId=${id}`}
+                to={orgPath(`/schedule?clientId=${id}`)}
                 className="text-sm font-medium text-slate-700 underline-offset-2 hover:underline"
               >
                 Assign a caregiver (ranked by CareScore)
@@ -826,7 +828,7 @@ export function ClientDetailPage() {
                 <li key={match.caregiver_user_id} className="py-3">
                   <div className="flex items-center justify-between">
                     <Link
-                      to={`/team/${match.caregiver_user_id}`}
+                      to={orgPath(`/team/${match.caregiver_user_id}`)}
                       className="text-sm font-medium text-slate-900 hover:underline"
                     >
                       {match.caregiver_name}
@@ -853,7 +855,7 @@ export function ClientDetailPage() {
             <h3 className="font-semibold text-slate-950">Authorizations</h3>
             {canManageAuthorizations ? (
               <Link
-                to={`/authorizations?clientId=${id}`}
+                to={orgPath(`/authorizations?clientId=${id}`)}
                 className="text-sm font-medium text-slate-700 underline-offset-2 hover:underline"
               >
                 Add authorization for this client
@@ -958,7 +960,7 @@ export function ClientDetailPage() {
               {(assignmentsQuery.data ?? []).map((row) => (
                 <li key={row.id} className="flex items-center justify-between py-2.5 text-sm">
                   <div>
-                    <Link to={`/team/${row.caregiver_user_id}`} className="font-medium text-slate-900 hover:underline">
+                    <Link to={orgPath(`/team/${row.caregiver_user_id}`)} className="font-medium text-slate-900 hover:underline">
                       {row.caregiver_name}
                     </Link>
                     <span className="ml-2 text-slate-500">

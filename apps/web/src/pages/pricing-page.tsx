@@ -3,6 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Card, buttonVariants } from "@carelik/ui";
 import { FEATURE_LABELS, formatCents } from "@carelik/shared";
 import { supabase } from "@/lib/supabase";
+import { toAppUrl } from "@/lib/tenant-resolver";
 
 // Public, unauthenticated pricing page - same standalone pattern as
 // marketing-page.tsx. Backed by list_public_plan_versions()
@@ -22,7 +23,17 @@ import { supabase } from "@/lib/supabase";
 // misleading. Checkout itself is initiated from inside Settings ->
 // Billing (an authenticated, permission-checked org context), not from
 // here - an anonymous visitor has no organization for a subscription to
-// attach to, so every CTA below still correctly links to /login.
+// attach to, so every CTA below still correctly links to sign-in.
+//
+// Every "Sign in" CTA is a cross-host <a href={toAppUrl("/login")}>, not
+// a react-router <Link> - this page lives on the marketing host
+// (ogevia.com), and Supabase's session is stored per-origin, so signing
+// in while served from ogevia.com would leave the session sitting in
+// ogevia.com's storage, invisible once the user reaches app.ogevia.com.
+// A same-host <Link to="/login"> would technically still render (both
+// hosts share one SPA bundle), but on the wrong origin for auth state to
+// carry over - same bug class as marketing-page.tsx's platform-admin
+// link.
 const PURCHASABLE_PLAN_KEYS = new Set(["start"]);
 interface PublicPlan {
   plan_key: string;
@@ -63,9 +74,9 @@ export function PricingPage() {
           <Link to="/" className="text-lg font-semibold text-slate-950">
             Ogevia
           </Link>
-          <Link to="/login" className={buttonVariants({ variant: "secondary", size: "sm" })}>
+          <a href={toAppUrl("/login")} className={buttonVariants({ variant: "secondary", size: "sm" })}>
             Sign in
-          </Link>
+          </a>
         </div>
       </header>
 
@@ -123,9 +134,9 @@ export function PricingPage() {
                   </ul>
                 </div>
 
-                <Link to="/login" className={buttonVariants({ variant: "primary", className: "mt-6 w-full" })}>
+                <a href={toAppUrl("/login")} className={buttonVariants({ variant: "primary", className: "mt-6 w-full" })}>
                   {plan.is_trial ? "Start free trial" : "Sign in"}
-                </Link>
+                </a>
               </Card>
             ))}
           </div>

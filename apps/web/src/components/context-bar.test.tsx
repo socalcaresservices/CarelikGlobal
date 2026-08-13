@@ -57,8 +57,17 @@ describe("ContextBar", () => {
     vi.clearAllMocks();
   });
 
+  // activeOrganization/activeOrganizationId can no longer actually be null
+  // in production (OrganizationProvider blocks children until it resolves
+  // a real organization), but ContextBar's defensive early-return is cheap
+  // insurance worth still covering - hence the `as never` cast to force
+  // this now-unreachable shape past the stricter type.
   it("renders nothing without an active organization", () => {
-    mockedUseOrganization.mockReturnValue({ ...baseOrganization(), activeOrganization: null, activeOrganizationId: null });
+    mockedUseOrganization.mockReturnValue({
+      ...baseOrganization(),
+      activeOrganization: null,
+      activeOrganizationId: null
+    } as never);
 
     const { container } = renderBar();
     expect(container).toBeEmptyDOMElement();

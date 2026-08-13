@@ -1,16 +1,16 @@
 import { render, screen, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { useOrganization } from "@/providers/organization-provider";
+import { useIsPlatformOwner } from "@/lib/use-platform-owner";
 import { supabase } from "@/lib/supabase";
 import { SubscriptionsPage } from "./subscriptions-page";
 
-vi.mock("@/providers/organization-provider", () => ({ useOrganization: vi.fn() }));
+vi.mock("@/lib/use-platform-owner", () => ({ useIsPlatformOwner: vi.fn() }));
 vi.mock("@/lib/supabase", () => ({
   supabase: { rpc: vi.fn() }
 }));
 
-const mockedUseOrganization = vi.mocked(useOrganization);
+const mockedUseIsPlatformOwner = vi.mocked(useIsPlatformOwner);
 const mockedRpc = vi.mocked(supabase.rpc);
 
 function renderPage() {
@@ -28,7 +28,7 @@ describe("SubscriptionsPage", () => {
   });
 
   it("shows a not-available message for a non-platform-owner", () => {
-    mockedUseOrganization.mockReturnValue({ isPlatformOwner: false } as never);
+    mockedUseIsPlatformOwner.mockReturnValue({ isPlatformOwner: false, loading: false });
 
     renderPage();
     expect(screen.getByText("Not available")).toBeInTheDocument();
@@ -36,7 +36,7 @@ describe("SubscriptionsPage", () => {
   });
 
   it("renders the plan catalog for a platform owner", async () => {
-    mockedUseOrganization.mockReturnValue({ isPlatformOwner: true } as never);
+    mockedUseIsPlatformOwner.mockReturnValue({ isPlatformOwner: true, loading: false });
     mockedRpc.mockResolvedValue({
       data: [
         {

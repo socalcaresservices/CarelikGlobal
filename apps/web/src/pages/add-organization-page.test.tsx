@@ -1,16 +1,16 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { MemoryRouter } from "react-router-dom";
+import { MemoryRouter, useNavigate } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { useAuth } from "@carelik/auth";
-import { useOrganization } from "@/providers/organization-provider";
+import { useIsPlatformOwner } from "@/lib/use-platform-owner";
 import { supabase } from "@/lib/supabase";
 import { inviteMember } from "@/lib/invitations";
 import { uploadOrganizationLogo } from "@/lib/organization-branding";
 import { AddOrganizationPage } from "./add-organization-page";
 
 vi.mock("@carelik/auth", () => ({ useAuth: vi.fn() }));
-vi.mock("@/providers/organization-provider", () => ({ useOrganization: vi.fn() }));
+vi.mock("@/lib/use-platform-owner", () => ({ useIsPlatformOwner: vi.fn() }));
 vi.mock("@/lib/invitations", () => ({ inviteMember: vi.fn() }));
 vi.mock("@/lib/organization-branding", () => ({ uploadOrganizationLogo: vi.fn() }));
 vi.mock("@/lib/supabase", () => ({
@@ -19,29 +19,20 @@ vi.mock("@/lib/supabase", () => ({
     from: vi.fn()
   }
 }));
+vi.mock("react-router-dom", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("react-router-dom")>();
+  return { ...actual, useNavigate: vi.fn() };
+});
 
 const mockedUseAuth = vi.mocked(useAuth);
-const mockedUseOrganization = vi.mocked(useOrganization);
+const mockedUseIsPlatformOwner = vi.mocked(useIsPlatformOwner);
 const mockedInviteMember = vi.mocked(inviteMember);
 const mockedUploadLogo = vi.mocked(uploadOrganizationLogo);
 const mockedRpc = vi.mocked(supabase.rpc);
 const mockedFrom = vi.mocked(supabase.from);
+const mockedUseNavigate = vi.mocked(useNavigate);
 
 const NEW_ORG_ID = "33333333-3333-4333-8333-333333333333";
-
-function basePlatformOwner() {
-  return {
-    organizations: [],
-    activeOrganization: null,
-    activeOrganizationId: null,
-    setActiveOrganizationId: vi.fn(),
-    role: "platform_owner" as const,
-    isPlatformOwner: true,
-    userDisplayName: "Test User",
-    hasPermission: vi.fn(() => true),
-    loading: false
-  };
-}
 
 function authUser() {
   return {
@@ -74,7 +65,7 @@ describe("AddOrganizationPage", () => {
 
   it("shows a not-available message for a non-platform-owner", () => {
     mockedUseAuth.mockReturnValue(authUser());
-    mockedUseOrganization.mockReturnValue({ ...basePlatformOwner(), isPlatformOwner: false });
+    mockedUseIsPlatformOwner.mockReturnValue({ isPlatformOwner: false, loading: false });
 
     renderPage();
     expect(screen.getByText("Not available")).toBeInTheDocument();
@@ -83,7 +74,7 @@ describe("AddOrganizationPage", () => {
 
   it("blocks moving past step 1 without a legal name and a valid slug", () => {
     mockedUseAuth.mockReturnValue(authUser());
-    mockedUseOrganization.mockReturnValue(basePlatformOwner());
+    mockedUseIsPlatformOwner.mockReturnValue({ isPlatformOwner: true, loading: false });
 
     renderPage();
     fireEvent.click(screen.getByText("Next"));
@@ -118,7 +109,7 @@ describe("AddOrganizationPage", () => {
 
   it("requires at least one valid administrator email before reaching review", () => {
     mockedUseAuth.mockReturnValue(authUser());
-    mockedUseOrganization.mockReturnValue(basePlatformOwner());
+    mockedUseIsPlatformOwner.mockReturnValue({ isPlatformOwner: true, loading: false });
 
     renderPage();
     goToReview();
@@ -138,7 +129,7 @@ describe("AddOrganizationPage", () => {
 
   it("supports adding and removing multiple administrator rows", () => {
     mockedUseAuth.mockReturnValue(authUser());
-    mockedUseOrganization.mockReturnValue(basePlatformOwner());
+    mockedUseIsPlatformOwner.mockReturnValue({ isPlatformOwner: true, loading: false });
 
     renderPage();
     goToReview();
@@ -163,8 +154,9 @@ describe("AddOrganizationPage", () => {
 
   it("creates the organization, invites every administrator (without name), and shows the success state", async () => {
     mockedUseAuth.mockReturnValue(authUser());
-    const setActiveOrganizationId = vi.fn();
-    mockedUseOrganization.mockReturnValue({ ...basePlatformOwner(), setActiveOrganizationId });
+    mockedUseIsPlatformOwner.mockReturnValue({ isPlatformOwner: true, loading: false });
+    const navigateMock = vi.fn();
+    mockedUseNavigate.mockReturnValue(navigateMock);
     mockedRpc.mockResolvedValue({
       data: { id: NEW_ORG_ID, slug: "socal", display_name: "SoCal Care Services" },
       error: null
@@ -203,15 +195,15 @@ describe("AddOrganizationPage", () => {
       role: "organization_owner"
     });
     expect(mockedUploadLogo).not.toHaveBeenCalled();
-    expect(screen.getByText(/carelik.com\/socal/)).toBeInTheDocument();
+    expect(screen.getByText(/app\.ogevia\.com\/org\/socal/)).toBeInTheDocument();
 
-    fireEvent.click(screen.getByText("Switch to SoCal Care Services"));
-    expect(setActiveOrganizationId).toHaveBeenCalledWith(NEW_ORG_ID);
+    fireEvent.click(screen.getByText("Enter SoCal Care Services"));
+    expect(navigateMock).toHaveBeenCalledWith("/org/socal");
   });
 
   it("uploads a staged logo file after creation and saves its URL on the organization", async () => {
     mockedUseAuth.mockReturnValue(authUser());
-    mockedUseOrganization.mockReturnValue(basePlatformOwner());
+    mockedUseIsPlatformOwner.mockReturnValue({ isPlatformOwner: true, loading: false });
     mockedRpc.mockResolvedValue({
       data: { id: NEW_ORG_ID, slug: "socal", display_name: "SoCal Care Services" },
       error: null
@@ -254,7 +246,7 @@ describe("AddOrganizationPage", () => {
 
   it("keeps the organization but surfaces a warning when an administrator invite fails", async () => {
     mockedUseAuth.mockReturnValue(authUser());
-    mockedUseOrganization.mockReturnValue(basePlatformOwner());
+    mockedUseIsPlatformOwner.mockReturnValue({ isPlatformOwner: true, loading: false });
     mockedRpc.mockResolvedValue({
       data: { id: NEW_ORG_ID, slug: "socal", display_name: "SoCal Care Services" },
       error: null

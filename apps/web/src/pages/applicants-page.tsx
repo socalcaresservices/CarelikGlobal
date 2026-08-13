@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { Card, FilterBar, PageHeader, StatusBadge, type ActiveFilter, type StatusTone } from "@carelik/ui";
 import { applicantStatusSchema, type ApplicantStatus } from "@carelik/shared";
 import { useOrganization } from "@/providers/organization-provider";
+import { useOrgPath } from "@/lib/use-org-path";
 import { supabase } from "@/lib/supabase";
 import { useTableControls } from "@/lib/use-table-controls";
 import { useFilters } from "@/lib/use-filters";
@@ -42,6 +43,7 @@ function formatHours(hours: number) {
 
 export function ApplicantsPage() {
   const { activeOrganizationId, activeOrganization, hasPermission } = useOrganization();
+  const orgPath = useOrgPath();
 
   const canRead = hasPermission("applicants.read");
 
@@ -192,7 +194,7 @@ export function ApplicantsPage() {
                 {table.rows.map((row) => (
                   <tr key={row.id} className="border-b border-slate-100 last:border-0">
                     <td className="py-2.5 text-slate-800">
-                      <Link to={`/applicants/${row.id}`} className="hover:underline">
+                      <Link to={orgPath(`/applicants/${row.id}`)} className="hover:underline">
                         {row.first_name} {row.last_name}
                       </Link>
                     </td>

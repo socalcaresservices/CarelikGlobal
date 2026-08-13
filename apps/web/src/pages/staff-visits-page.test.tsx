@@ -48,11 +48,11 @@ const assignedOption = {
 function renderPage() {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
-    <MemoryRouter>
+    <MemoryRouter initialEntries={["/org/acme"]}>
       <QueryClientProvider client={queryClient}>
         <Routes>
-          <Route path="/" element={<StaffVisitsPage />} />
-          <Route path="/service-verification" element={<div>verification page</div>} />
+          <Route path="/org/:orgSlug" element={<StaffVisitsPage />} />
+          <Route path="/org/:orgSlug/service-verification" element={<div>verification page</div>} />
         </Routes>
       </QueryClientProvider>
     </MemoryRouter>

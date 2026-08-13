@@ -22,7 +22,6 @@ describe("CommandCenterPage", () => {
         timezone: "America/Los_Angeles"
       },
       activeOrganizationId: "11111111-1111-4111-8111-111111111111",
-      setActiveOrganizationId: vi.fn(),
       role: "organization_admin",
       isPlatformOwner: false,
     userDisplayName: "Test User",
@@ -37,18 +36,22 @@ describe("CommandCenterPage", () => {
     expect(screen.queryByText(/Phase 1/)).not.toBeInTheDocument();
   });
 
+  // activeOrganization can no longer actually be null when this page
+  // renders (OrganizationProvider blocks children until it resolves a
+  // real one), but the `?? "Ogevia"` fallback is cheap defensive code
+  // worth still covering - hence the `as never` cast to force this
+  // now-unreachable shape past the stricter type.
   it("falls back to the platform name when there is no active organization yet", () => {
     mockedUseOrganization.mockReturnValue({
       organizations: [],
       activeOrganization: null,
       activeOrganizationId: null,
-      setActiveOrganizationId: vi.fn(),
       role: null,
       isPlatformOwner: false,
-    userDisplayName: "Test User",
+      userDisplayName: "Test User",
       hasPermission: vi.fn(() => true),
       loading: false
-    });
+    } as never);
 
     render(<CommandCenterPage />);
 

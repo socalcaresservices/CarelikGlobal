@@ -4,7 +4,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { Button, Card } from "@carelik/ui";
 import { systemRoleSchema } from "@carelik/shared";
 import { useAuth } from "@carelik/auth";
-import { useOrganization } from "@/providers/organization-provider";
+import { useIsPlatformOwner } from "@/lib/use-platform-owner";
 import { supabase } from "@/lib/supabase";
 import { inviteMember, type InvitableRole } from "@/lib/invitations";
 import { uploadOrganizationLogo } from "@/lib/organization-branding";
@@ -35,11 +35,14 @@ import { uploadOrganizationLogo } from "@/lib/organization-branding";
 // staged locally (see logoFile/logoPreviewUrl state) and only uploaded
 // once handleFinalSubmit has a real organization id to attach it to.
 //
-// Deliberately not built here (each is its own follow-up, not silently
-// dropped): a real custom-domain/subdomain router for the "Organization
-// URL" preview shown in Finish (today it's just the existing `slug`
-// field, displayed as a preview, with no actual carelik.com/<slug>
-// routing behind it yet); "document folders" from the original spec
+// The "Organization URL" shown in Finish (app.ogevia.com/org/<slug>) is
+// real routing, not a preview - App.tsx's /org/:orgSlug/* route resolves
+// it the moment the organization exists. Custom domains
+// (organizations.custom_domain) exist in the schema but aren't wired up
+// to routing yet - deliberately deferred, tracked separately, not
+// silently dropped.
+//
+// Deliberately not built here: "document folders" from the original spec
 // (same storage-bucket subsystem the logo now uses, just not wired up
 // for documents yet).
 
@@ -167,7 +170,7 @@ export function AddOrganizationPage() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const { user } = useAuth();
-  const { isPlatformOwner, setActiveOrganizationId } = useOrganization();
+  const { isPlatformOwner } = useIsPlatformOwner();
 
   const [stepIndex, setStepIndex] = useState(0);
   const [form, setForm] = useState<WizardForm>(emptyForm);
@@ -401,21 +404,16 @@ export function AddOrganizationPage() {
           <p className="text-sm font-medium text-slate-500">Platform Administration</p>
           <h2 className="mt-1 text-2xl font-semibold text-slate-950">{createdOrganization.display_name} is live</h2>
           <p className="mt-3 text-sm text-slate-600">
-            Organization URL (preview - not yet a routable subdomain):{" "}
-            <span className="font-mono text-slate-800">carelik.com/{createdOrganization.slug}</span>
+            Organization URL:{" "}
+            <span className="font-mono text-slate-800">app.ogevia.com/org/{createdOrganization.slug}</span>
           </p>
           {submitError ? <p className="mt-3 text-sm text-red-700">{submitError}</p> : null}
           <div className="mt-6 flex gap-3">
-            <Button
-              onClick={() => {
-                setActiveOrganizationId(createdOrganization.id);
-                navigate("/organizations");
-              }}
-            >
-              Switch to {createdOrganization.display_name}
+            <Button onClick={() => navigate(`/org/${createdOrganization.slug}`)}>
+              Enter {createdOrganization.display_name}
             </Button>
             <Link
-              to="/organizations/new"
+              to="/platform/organizations/new"
               onClick={() => {
                 setForm(emptyForm());
                 setSelectedServices(["Respite", "Personal Assistance"]);
@@ -918,7 +916,7 @@ export function AddOrganizationPage() {
               </div>
               <div>
                 <dt className="text-xs font-medium uppercase tracking-wide text-slate-500">URL</dt>
-                <dd className="mt-1 text-sm text-slate-700">carelik.com/{form.slug || "—"}</dd>
+                <dd className="mt-1 text-sm text-slate-700">app.ogevia.com/org/{form.slug || "—"}</dd>
               </div>
               <div>
                 <dt className="text-xs font-medium uppercase tracking-wide text-slate-500">Address</dt>

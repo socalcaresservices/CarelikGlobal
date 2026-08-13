@@ -1,15 +1,18 @@
 import { Link } from "react-router-dom";
-import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "@carelik/auth";
 import { Card, buttonVariants } from "@carelik/ui";
-import { supabase } from "@/lib/supabase";
-import { toAdminUrl, toAppUrl } from "@/lib/tenant-resolver";
+import { useIsPlatformOwner } from "@/lib/use-platform-owner";
+import { toAppUrl } from "@/lib/tenant-resolver";
 
 // Public, unauthenticated marketing homepage - no AppShell/PlatformShell,
-// no session required. Lives outside <ProtectedRoute> in App.tsx, and is
-// only ever mounted on Ogevia's own platform-root hosts (App.tsx gates it
-// on isPlatform) - a tenant subdomain's "/" still resolves to
-// CommandCenterPage exactly as before, unaffected by this route.
+// no session required. Lives on ogevia.com (the marketing host) - App.tsx
+// only mounts it there, never on app.ogevia.com. /pricing is a plain
+// react-router <Link> (same host, same route tree as this page), but
+// every link that leads into the authenticated app is a cross-host
+// <a href={toAppUrl(...)}>: ogevia.com and app.ogevia.com are different
+// hosts, so client-side routing can't reach the other one - a plain
+// <Link to="/..."> here previously just bounced back to this same
+// marketing page.
 //
 // Ogevia-branded (not org-branded) - unlike apply-page.tsx/upload-page.tsx,
 // there's no :orgSlug or :token to resolve branding from, so no RPC call
@@ -58,30 +61,7 @@ const FEATURES = [
 
 export function MarketingPage() {
   const { user } = useAuth();
-
-  // MarketingPage is mounted standalone on the marketing host (App.tsx's
-  // isMarketing branch), outside OrganizationProvider - so platform-owner
-  // status isn't already available the way it is inside the app/admin
-  // shells, and needs its own small direct read here. This nav link must
-  // never show to a signed-in user who isn't actually a platform owner
-  // (that was the bug: it showed for any authenticated user at all,
-  // platform owner or not) - see admin.ogevia.com's own
-  // RequirePlatformOwner guard for the canonical isPlatformOwner source
-  // this mirrors.
-  const platformRoleQuery = useQuery({
-    queryKey: ["marketing-platform-role", user?.id],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("user_profiles")
-        .select("platform_role")
-        .eq("id", user!.id)
-        .maybeSingle();
-      if (error) throw error;
-      return data?.platform_role ?? null;
-    },
-    enabled: !!user
-  });
-  const isPlatformOwner = platformRoleQuery.data === "platform_owner";
+  const { isPlatformOwner } = useIsPlatformOwner();
 
   return (
     <div className="min-h-screen bg-white">
@@ -93,15 +73,14 @@ export function MarketingPage() {
               Pricing
             </Link>
             {!user ? (
-              <Link to="/login" className={buttonVariants({ variant: "secondary", size: "sm" })}>
+              <a href={toAppUrl("/login")} className={buttonVariants({ variant: "secondary", size: "sm" })}>
                 Sign in
-              </Link>
+              </a>
             ) : isPlatformOwner ? (
-              // Cross-host link, not a react-router <Link> - admin.ogevia.com
-              // is a different hostname than this marketing page, so
-              // client-side routing can't reach it; a plain <Link to="/...">
-              // here previously just bounced back to this same page.
-              <a href={toAdminUrl("/organizations")} className={buttonVariants({ variant: "secondary", size: "sm" })}>
+              <a
+                href={toAppUrl("/platform/organizations")}
+                className={buttonVariants({ variant: "secondary", size: "sm" })}
+              >
                 Go to platform admin
               </a>
             ) : (
@@ -123,9 +102,9 @@ export function MarketingPage() {
           all in one place.
         </p>
         <div className="mt-8 flex flex-wrap items-center justify-center gap-3">
-          <Link to="/login" className={buttonVariants({ variant: "primary" })}>
+          <a href={toAppUrl("/login")} className={buttonVariants({ variant: "primary" })}>
             Sign in
-          </Link>
+          </a>
           <Link to="/pricing" className={buttonVariants({ variant: "secondary" })}>
             View plans
           </Link>
@@ -156,9 +135,9 @@ export function MarketingPage() {
           <Link to="/pricing" className={buttonVariants({ variant: "primary" })}>
             View plans
           </Link>
-          <Link to="/login" className={buttonVariants({ variant: "secondary" })}>
+          <a href={toAppUrl("/login")} className={buttonVariants({ variant: "secondary" })}>
             Sign in
-          </Link>
+          </a>
         </div>
       </section>
 

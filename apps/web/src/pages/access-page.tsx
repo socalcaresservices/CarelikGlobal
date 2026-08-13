@@ -5,6 +5,7 @@ import { Button, Card, FilterBar, type ActiveFilter } from "@carelik/ui";
 import { systemRoleSchema, membershipStatusSchema } from "@carelik/shared";
 import { useAuth } from "@carelik/auth";
 import { useOrganization } from "@/providers/organization-provider";
+import { useOrgPath } from "@/lib/use-org-path";
 import { supabase } from "@/lib/supabase";
 import { inviteMember, updateMemberEmail, type InvitableRole } from "@/lib/invitations";
 import { useTableControls } from "@/lib/use-table-controls";
@@ -43,6 +44,7 @@ function formatRole(role: string) {
 
 export function AccessPage() {
   const { activeOrganizationId, activeOrganization, hasPermission } = useOrganization();
+  const orgPath = useOrgPath();
   const { user } = useAuth();
   const queryClient = useQueryClient();
 
@@ -375,7 +377,7 @@ export function AccessPage() {
                 return (
                   <tr key={member.membership_id} className="border-b border-slate-100 last:border-0">
                     <td className="py-2.5 text-slate-800">
-                      <Link to={`/team/${member.user_id}`} className="hover:underline">
+                      <Link to={orgPath(`/team/${member.user_id}`)} className="hover:underline">
                         {member.display_name}
                       </Link>
                       {isSelf ? <span className="ml-1 text-xs text-slate-400">(you)</span> : null}

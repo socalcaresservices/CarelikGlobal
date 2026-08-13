@@ -19,18 +19,20 @@ const mockedFrom = vi.mocked(supabase.from);
 const ORG_ID = "11111111-1111-4111-8111-111111111111";
 const OTHER_ORG_ID = "22222222-2222-4222-8222-222222222222";
 
+// useFeatureFlag only reads activeOrganizationId, never activeOrganization
+// - the `as never` cast lets this stay a minimal, focused mock instead of
+// fabricating a full Organization object this hook never touches.
 function organizationContext(activeOrganizationId: string | null) {
   return {
     organizations: [],
     activeOrganization: null,
     activeOrganizationId,
-    setActiveOrganizationId: vi.fn(),
     role: "organization_admin" as const,
     isPlatformOwner: false,
     userDisplayName: "Test User",
     hasPermission: vi.fn(() => true),
     loading: false
-  };
+  } as never;
 }
 
 function mockRows(rows: Array<{ organization_id: string | null; enabled: boolean; starts_at?: string | null; ends_at?: string | null }>) {

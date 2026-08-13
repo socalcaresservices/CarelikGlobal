@@ -1,13 +1,14 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { MemoryRouter } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { useAuth } from "@carelik/auth";
-import { useOrganization } from "@/providers/organization-provider";
+import { useIsPlatformOwner } from "@/lib/use-platform-owner";
 import { supabase } from "@/lib/supabase";
 import { OrganizationsPage } from "./organizations-page";
 
 vi.mock("@carelik/auth", () => ({ useAuth: vi.fn() }));
-vi.mock("@/providers/organization-provider", () => ({ useOrganization: vi.fn() }));
+vi.mock("@/lib/use-platform-owner", () => ({ useIsPlatformOwner: vi.fn() }));
 vi.mock("@/lib/supabase", () => ({
   supabase: {
     rpc: vi.fn()
@@ -15,7 +16,7 @@ vi.mock("@/lib/supabase", () => ({
 }));
 
 const mockedUseAuth = vi.mocked(useAuth);
-const mockedUseOrganization = vi.mocked(useOrganization);
+const mockedUseIsPlatformOwner = vi.mocked(useIsPlatformOwner);
 const mockedRpc = vi.mocked(supabase.rpc);
 
 const PLATFORM_USER_ID = "33333333-3333-4333-8333-333333333333";
@@ -36,9 +37,11 @@ function authUser() {
 function renderPage() {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
-    <QueryClientProvider client={queryClient}>
-      <OrganizationsPage />
-    </QueryClientProvider>
+    <MemoryRouter>
+      <QueryClientProvider client={queryClient}>
+        <OrganizationsPage />
+      </QueryClientProvider>
+    </MemoryRouter>
   );
 }
 
@@ -65,7 +68,7 @@ describe("OrganizationsPage", () => {
 
   it("shows a not-available message for a non-platform-owner", () => {
     mockedUseAuth.mockReturnValue(authUser());
-    mockedUseOrganization.mockReturnValue({ isPlatformOwner: false } as never);
+    mockedUseIsPlatformOwner.mockReturnValue({ isPlatformOwner: false, loading: false });
 
     renderPage();
     expect(screen.getByText("Not available")).toBeInTheDocument();
@@ -74,7 +77,7 @@ describe("OrganizationsPage", () => {
 
   it("lists organizations from list_platform_organizations for a platform owner", async () => {
     mockedUseAuth.mockReturnValue(authUser());
-    mockedUseOrganization.mockReturnValue({ isPlatformOwner: true } as never);
+    mockedUseIsPlatformOwner.mockReturnValue({ isPlatformOwner: true, loading: false });
     mockedRpc.mockResolvedValue({ data: [registryRow], error: null } as never);
 
     renderPage();
@@ -90,22 +93,32 @@ describe("OrganizationsPage", () => {
     expect(screen.getByText("2.00 GB / 10 GB")).toBeInTheDocument();
   });
 
-  it("links Enter organization to app.ogevia.com with an ?org= deep link", async () => {
+  it("links Enter organization to the org's own workspace, same host", async () => {
     mockedUseAuth.mockReturnValue(authUser());
-    mockedUseOrganization.mockReturnValue({ isPlatformOwner: true } as never);
+    mockedUseIsPlatformOwner.mockReturnValue({ isPlatformOwner: true, loading: false });
     mockedRpc.mockResolvedValue({ data: [registryRow], error: null } as never);
 
     renderPage();
 
     const link = await screen.findByRole("link", { name: "Enter organization" });
-    expect(link).toHaveAttribute("href", expect.stringContaining("app.ogevia.com"));
-    expect(link).toHaveAttribute("href", expect.stringContaining("org=acme"));
+    expect(link).toHaveAttribute("href", "/org/acme");
     expect(link).toHaveAttribute("target", "_blank");
+  });
+
+  it("links New organization to the platform onboarding wizard", async () => {
+    mockedUseAuth.mockReturnValue(authUser());
+    mockedUseIsPlatformOwner.mockReturnValue({ isPlatformOwner: true, loading: false });
+    mockedRpc.mockResolvedValue({ data: [registryRow], error: null } as never);
+
+    renderPage();
+
+    const link = await screen.findByRole("link", { name: "New organization" });
+    expect(link).toHaveAttribute("href", "/platform/organizations/new");
   });
 
   it("shows an empty state when there are no organizations", async () => {
     mockedUseAuth.mockReturnValue(authUser());
-    mockedUseOrganization.mockReturnValue({ isPlatformOwner: true } as never);
+    mockedUseIsPlatformOwner.mockReturnValue({ isPlatformOwner: true, loading: false });
     mockedRpc.mockResolvedValue({ data: [], error: null } as never);
 
     renderPage();
@@ -115,7 +128,7 @@ describe("OrganizationsPage", () => {
 
   it("shows an error message when the registry fails to load", async () => {
     mockedUseAuth.mockReturnValue(authUser());
-    mockedUseOrganization.mockReturnValue({ isPlatformOwner: true } as never);
+    mockedUseIsPlatformOwner.mockReturnValue({ isPlatformOwner: true, loading: false });
     mockedRpc.mockResolvedValue({ data: null, error: new Error("boom") } as never);
 
     renderPage();
@@ -127,7 +140,7 @@ describe("OrganizationsPage", () => {
 
   it("requests support access for an organization and hides the form once an open request exists", async () => {
     mockedUseAuth.mockReturnValue(authUser());
-    mockedUseOrganization.mockReturnValue({ isPlatformOwner: true } as never);
+    mockedUseIsPlatformOwner.mockReturnValue({ isPlatformOwner: true, loading: false });
 
     const openGrant = {
       id: "grant-1",
@@ -184,7 +197,7 @@ describe("OrganizationsPage", () => {
 
   it("revokes the current user's own open support access grant", async () => {
     mockedUseAuth.mockReturnValue(authUser());
-    mockedUseOrganization.mockReturnValue({ isPlatformOwner: true } as never);
+    mockedUseIsPlatformOwner.mockReturnValue({ isPlatformOwner: true, loading: false });
 
     const ownGrant = {
       id: "grant-1",

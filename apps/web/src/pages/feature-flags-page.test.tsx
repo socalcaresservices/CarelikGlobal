@@ -1,46 +1,70 @@
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { useOrganization } from "@/providers/organization-provider";
+import { useIsPlatformOwner } from "@/lib/use-platform-owner";
 import { supabase } from "@/lib/supabase";
 import { FeatureFlagsPage } from "./feature-flags-page";
 
-vi.mock("@/providers/organization-provider", () => ({ useOrganization: vi.fn() }));
+vi.mock("@/lib/use-platform-owner", () => ({ useIsPlatformOwner: vi.fn() }));
 vi.mock("@/lib/supabase", () => ({
   supabase: {
     from: vi.fn()
   }
 }));
 
-const mockedUseOrganization = vi.mocked(useOrganization);
+const mockedUseIsPlatformOwner = vi.mocked(useIsPlatformOwner);
 const mockedFrom = vi.mocked(supabase.from);
 
 const ORG_ID = "11111111-1111-4111-8111-111111111111";
 const OTHER_ORG_ID = "22222222-2222-4222-8222-222222222222";
 const FLAG_ID = "33333333-3333-4333-8333-333333333333";
 
-function platformOwnerContext() {
-  return {
-    organizations: [
-      { id: ORG_ID, slug: "acme", legalName: "Acme LLC", displayName: "Acme", status: "active" as const, timezone: "America/Los_Angeles" },
-      { id: OTHER_ORG_ID, slug: "beta", legalName: "Beta LLC", displayName: "Beta", status: "active" as const, timezone: "America/Los_Angeles" }
-    ],
-    activeOrganization: null,
-    activeOrganizationId: null,
-    setActiveOrganizationId: vi.fn(),
-    role: "platform_owner" as const,
-    isPlatformOwner: true,
-    userDisplayName: "Test User",
-    hasPermission: vi.fn(() => true),
-    loading: false
-  };
+const ORGANIZATION_OPTIONS = [
+  { id: ORG_ID, display_name: "Acme" },
+  { id: OTHER_ORG_ID, display_name: "Beta" }
+];
+
+function platformOwner() {
+  mockedUseIsPlatformOwner.mockReturnValue({ isPlatformOwner: true, loading: false });
 }
 
-function mockFlagsList(rows: unknown[]) {
-  const orderMock = vi.fn().mockResolvedValue({ data: rows, error: null });
-  const selectMock = vi.fn(() => ({ order: orderMock }));
-  mockedFrom.mockReturnValue({ select: selectMock } as never);
-  return { selectMock, orderMock };
+// The org picker queries the "organizations" table directly (platform
+// routes mount no OrganizationProvider - there's no single org to scope
+// to), alongside feature_flags - so every mock here has to discriminate
+// by table name rather than returning one fixed builder for every
+// supabase.from() call. organizationRows defaults to a real two-org list
+// so the "scope a flag to an organization" tests have an <option> to
+// actually select.
+function mockTables(options: {
+  flagRows?: unknown[];
+  flagError?: Error | null;
+  organizationRows?: unknown[];
+  insert?: ReturnType<typeof vi.fn>;
+  update?: ReturnType<typeof vi.fn>;
+  delete?: ReturnType<typeof vi.fn>;
+}) {
+  const {
+    flagRows = [],
+    flagError = null,
+    organizationRows = ORGANIZATION_OPTIONS,
+    insert,
+    update,
+    delete: del
+  } = options;
+
+  mockedFrom.mockImplementation((table: string) => {
+    if (table === "organizations") {
+      return {
+        select: vi.fn(() => ({ order: vi.fn().mockResolvedValue({ data: organizationRows, error: null }) }))
+      } as never;
+    }
+    return {
+      select: vi.fn(() => ({ order: vi.fn().mockResolvedValue({ data: flagRows, error: flagError }) })),
+      ...(insert ? { insert } : {}),
+      ...(update ? { update } : {}),
+      ...(del ? { delete: del } : {})
+    } as never;
+  });
 }
 
 function renderPage() {
@@ -58,7 +82,7 @@ describe("FeatureFlagsPage", () => {
   });
 
   it("shows a not-available message for a non-platform-owner", () => {
-    mockedUseOrganization.mockReturnValue({ ...platformOwnerContext(), isPlatformOwner: false });
+    mockedUseIsPlatformOwner.mockReturnValue({ isPlatformOwner: false, loading: false });
 
     renderPage();
     expect(screen.getByText("Not available")).toBeInTheDocument();
@@ -66,29 +90,31 @@ describe("FeatureFlagsPage", () => {
   });
 
   it("lists existing flags with their scope label", async () => {
-    mockedUseOrganization.mockReturnValue(platformOwnerContext());
-    mockFlagsList([
-      {
-        id: FLAG_ID,
-        key: "new_owner_dashboard",
-        organization_id: null,
-        enabled: true,
-        configuration: {},
-        starts_at: null,
-        ends_at: null,
-        updated_at: "2026-07-01T00:00:00Z"
-      },
-      {
-        id: "44444444-4444-4444-8444-444444444444",
-        key: "beta_scheduling",
-        organization_id: ORG_ID,
-        enabled: false,
-        configuration: {},
-        starts_at: null,
-        ends_at: null,
-        updated_at: "2026-07-01T00:00:00Z"
-      }
-    ]);
+    platformOwner();
+    mockTables({
+      flagRows: [
+        {
+          id: FLAG_ID,
+          key: "new_owner_dashboard",
+          organization_id: null,
+          enabled: true,
+          configuration: {},
+          starts_at: null,
+          ends_at: null,
+          updated_at: "2026-07-01T00:00:00Z"
+        },
+        {
+          id: "44444444-4444-4444-8444-444444444444",
+          key: "beta_scheduling",
+          organization_id: ORG_ID,
+          enabled: false,
+          configuration: {},
+          starts_at: null,
+          ends_at: null,
+          updated_at: "2026-07-01T00:00:00Z"
+        }
+      ]
+    });
 
     renderPage();
 
@@ -102,8 +128,8 @@ describe("FeatureFlagsPage", () => {
   });
 
   it("shows an empty state when there are no flags yet", async () => {
-    mockedUseOrganization.mockReturnValue(platformOwnerContext());
-    mockFlagsList([]);
+    platformOwner();
+    mockTables({ flagRows: [] });
 
     renderPage();
 
@@ -111,9 +137,8 @@ describe("FeatureFlagsPage", () => {
   });
 
   it("shows an error message when the flags fetch fails, instead of a false empty state", async () => {
-    mockedUseOrganization.mockReturnValue(platformOwnerContext());
-    const orderMock = vi.fn().mockResolvedValue({ data: null, error: new Error("network error") });
-    mockedFrom.mockReturnValue({ select: vi.fn(() => ({ order: orderMock })) } as never);
+    platformOwner();
+    mockTables({ flagRows: null as never, flagError: new Error("network error") });
 
     renderPage();
 
@@ -122,16 +147,9 @@ describe("FeatureFlagsPage", () => {
   });
 
   it("creates a new global flag via the form", async () => {
-    mockedUseOrganization.mockReturnValue(platformOwnerContext());
-    mockFlagsList([]);
+    platformOwner();
     const insertMock = vi.fn().mockResolvedValue({ error: null });
-    mockedFrom.mockImplementation(
-      () =>
-        ({
-          select: vi.fn(() => ({ order: vi.fn().mockResolvedValue({ data: [], error: null }) })),
-          insert: insertMock
-        }) as never
-    );
+    mockTables({ flagRows: [], insert: insertMock });
 
     renderPage();
     await waitFor(() => expect(screen.getByText("No feature flags configured yet.")).toBeInTheDocument());
@@ -153,18 +171,13 @@ describe("FeatureFlagsPage", () => {
   });
 
   it("scopes a new flag to the selected organization", async () => {
-    mockedUseOrganization.mockReturnValue(platformOwnerContext());
+    platformOwner();
     const insertMock = vi.fn().mockResolvedValue({ error: null });
-    mockedFrom.mockImplementation(
-      () =>
-        ({
-          select: vi.fn(() => ({ order: vi.fn().mockResolvedValue({ data: [], error: null }) })),
-          insert: insertMock
-        }) as never
-    );
+    mockTables({ flagRows: [], insert: insertMock });
 
     renderPage();
     await waitFor(() => expect(screen.getByText("No feature flags configured yet.")).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText("Acme")).toBeInTheDocument());
 
     fireEvent.change(screen.getByLabelText("Key"), { target: { value: "beta_scheduling" } });
     fireEvent.change(screen.getByLabelText("Organization"), { target: { value: ORG_ID } });
@@ -178,15 +191,9 @@ describe("FeatureFlagsPage", () => {
   });
 
   it("rejects invalid JSON in the configuration field without submitting", async () => {
-    mockedUseOrganization.mockReturnValue(platformOwnerContext());
+    platformOwner();
     const insertMock = vi.fn().mockResolvedValue({ error: null });
-    mockedFrom.mockImplementation(
-      () =>
-        ({
-          select: vi.fn(() => ({ order: vi.fn().mockResolvedValue({ data: [], error: null }) })),
-          insert: insertMock
-        }) as never
-    );
+    mockTables({ flagRows: [], insert: insertMock });
 
     renderPage();
     await waitFor(() => expect(screen.getByText("No feature flags configured yet.")).toBeInTheDocument());
@@ -202,32 +209,24 @@ describe("FeatureFlagsPage", () => {
   });
 
   it("edits an existing flag, pre-filling the form and updating by id", async () => {
-    mockedUseOrganization.mockReturnValue(platformOwnerContext());
+    platformOwner();
     const updateEqMock = vi.fn().mockResolvedValue({ error: null });
     const updateMock = vi.fn(() => ({ eq: updateEqMock }));
-    mockedFrom.mockImplementation(
-      () =>
-        ({
-          select: vi.fn(() => ({
-            order: vi.fn().mockResolvedValue({
-              data: [
-                {
-                  id: FLAG_ID,
-                  key: "new_owner_dashboard",
-                  organization_id: null,
-                  enabled: true,
-                  configuration: {},
-                  starts_at: null,
-                  ends_at: null,
-                  updated_at: "2026-07-01T00:00:00Z"
-                }
-              ],
-              error: null
-            })
-          })),
-          update: updateMock
-        }) as never
-    );
+    mockTables({
+      flagRows: [
+        {
+          id: FLAG_ID,
+          key: "new_owner_dashboard",
+          organization_id: null,
+          enabled: true,
+          configuration: {},
+          starts_at: null,
+          ends_at: null,
+          updated_at: "2026-07-01T00:00:00Z"
+        }
+      ],
+      update: updateMock
+    });
 
     renderPage();
     await waitFor(() => expect(screen.getByText("new_owner_dashboard")).toBeInTheDocument());
@@ -247,32 +246,24 @@ describe("FeatureFlagsPage", () => {
   });
 
   it("toggles a flag's enabled state from the row button", async () => {
-    mockedUseOrganization.mockReturnValue(platformOwnerContext());
+    platformOwner();
     const updateEqMock = vi.fn().mockResolvedValue({ error: null });
     const updateMock = vi.fn(() => ({ eq: updateEqMock }));
-    mockedFrom.mockImplementation(
-      () =>
-        ({
-          select: vi.fn(() => ({
-            order: vi.fn().mockResolvedValue({
-              data: [
-                {
-                  id: FLAG_ID,
-                  key: "new_owner_dashboard",
-                  organization_id: null,
-                  enabled: true,
-                  configuration: {},
-                  starts_at: null,
-                  ends_at: null,
-                  updated_at: "2026-07-01T00:00:00Z"
-                }
-              ],
-              error: null
-            })
-          })),
-          update: updateMock
-        }) as never
-    );
+    mockTables({
+      flagRows: [
+        {
+          id: FLAG_ID,
+          key: "new_owner_dashboard",
+          organization_id: null,
+          enabled: true,
+          configuration: {},
+          starts_at: null,
+          ends_at: null,
+          updated_at: "2026-07-01T00:00:00Z"
+        }
+      ],
+      update: updateMock
+    });
 
     renderPage();
     await waitFor(() => expect(screen.getByText("new_owner_dashboard")).toBeInTheDocument());
@@ -284,32 +275,24 @@ describe("FeatureFlagsPage", () => {
   });
 
   it("deletes a flag from the row button", async () => {
-    mockedUseOrganization.mockReturnValue(platformOwnerContext());
+    platformOwner();
     const deleteEqMock = vi.fn().mockResolvedValue({ error: null });
     const deleteMock = vi.fn(() => ({ eq: deleteEqMock }));
-    mockedFrom.mockImplementation(
-      () =>
-        ({
-          select: vi.fn(() => ({
-            order: vi.fn().mockResolvedValue({
-              data: [
-                {
-                  id: FLAG_ID,
-                  key: "new_owner_dashboard",
-                  organization_id: null,
-                  enabled: true,
-                  configuration: {},
-                  starts_at: null,
-                  ends_at: null,
-                  updated_at: "2026-07-01T00:00:00Z"
-                }
-              ],
-              error: null
-            })
-          })),
-          delete: deleteMock
-        }) as never
-    );
+    mockTables({
+      flagRows: [
+        {
+          id: FLAG_ID,
+          key: "new_owner_dashboard",
+          organization_id: null,
+          enabled: true,
+          configuration: {},
+          starts_at: null,
+          ends_at: null,
+          updated_at: "2026-07-01T00:00:00Z"
+        }
+      ],
+      delete: deleteMock
+    });
 
     renderPage();
     await waitFor(() => expect(screen.getByText("new_owner_dashboard")).toBeInTheDocument());

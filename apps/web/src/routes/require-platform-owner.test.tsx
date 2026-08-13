@@ -1,11 +1,11 @@
 import { render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
-import { useOrganization } from "@/providers/organization-provider";
+import { useIsPlatformOwner } from "@/lib/use-platform-owner";
 import { RequirePlatformOwner } from "./require-platform-owner";
 
-vi.mock("@/providers/organization-provider", () => ({ useOrganization: vi.fn() }));
+vi.mock("@/lib/use-platform-owner", () => ({ useIsPlatformOwner: vi.fn() }));
 
-const mockedUseOrganization = vi.mocked(useOrganization);
+const mockedUseIsPlatformOwner = vi.mocked(useIsPlatformOwner);
 
 function renderGuard() {
   return render(
@@ -16,8 +16,8 @@ function renderGuard() {
 }
 
 describe("RequirePlatformOwner", () => {
-  it("shows a loading state while OrganizationProvider is still resolving", () => {
-    mockedUseOrganization.mockReturnValue({ isPlatformOwner: false, loading: true } as never);
+  it("shows a loading state while platform_role is still resolving", () => {
+    mockedUseIsPlatformOwner.mockReturnValue({ isPlatformOwner: false, loading: true });
 
     renderGuard();
     expect(screen.getByText("Loading…")).toBeInTheDocument();
@@ -25,7 +25,7 @@ describe("RequirePlatformOwner", () => {
   });
 
   it("renders platform content for a platform owner", () => {
-    mockedUseOrganization.mockReturnValue({ isPlatformOwner: true, loading: false } as never);
+    mockedUseIsPlatformOwner.mockReturnValue({ isPlatformOwner: true, loading: false });
 
     renderGuard();
     expect(screen.getByText("platform content")).toBeInTheDocument();
@@ -36,7 +36,7 @@ describe("RequirePlatformOwner", () => {
   // completely different privilege scope from platform administration -
   // this must stay denied no matter how permissive their own org's role is.
   it("denies an organization admin", () => {
-    mockedUseOrganization.mockReturnValue({ isPlatformOwner: false, loading: false, role: "organization_admin" } as never);
+    mockedUseIsPlatformOwner.mockReturnValue({ isPlatformOwner: false, loading: false });
 
     renderGuard();
     expect(screen.getByText("Not available")).toBeInTheDocument();
@@ -44,7 +44,7 @@ describe("RequirePlatformOwner", () => {
   });
 
   it("denies a caregiver/staff member", () => {
-    mockedUseOrganization.mockReturnValue({ isPlatformOwner: false, loading: false, role: "caregiver" } as never);
+    mockedUseIsPlatformOwner.mockReturnValue({ isPlatformOwner: false, loading: false });
 
     renderGuard();
     expect(screen.getByText("Not available")).toBeInTheDocument();

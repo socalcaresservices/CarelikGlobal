@@ -1,34 +1,65 @@
 import { useEffect } from "react";
-import { Navigate, Route, Routes, useNavigate } from "react-router-dom";
+import { Navigate, Route, Routes, useNavigate, useParams } from "react-router-dom";
 import { TenantShell } from "@/layout/tenant-shell";
 import { PlatformShell } from "@/layout/platform-shell";
 import { OrganizationProvider } from "@/providers/organization-provider";
 import { ProtectedRoute } from "@/routes/protected-route";
 import { RequirePlatformOwner } from "@/routes/require-platform-owner";
+import { AppRootRedirect } from "@/routes/app-root-redirect";
 import { getTenantRoutes } from "@/routes/tenant-routes";
 import { getPlatformRoutes } from "@/routes/platform-routes";
-import { useTenantContext } from "@/lib/use-tenant-context";
+import { resolveTenant } from "@/lib/tenant-resolver";
 import { getRecoveryRedirectPath } from "@/lib/recovery-redirect";
 import { LoginPage } from "@/pages/login-page";
 import { SetPasswordPage } from "@/pages/set-password-page";
 import { ResetPasswordPage } from "@/pages/reset-password-page";
 import { ApplyPage } from "@/pages/apply-page";
 import { UploadPage } from "@/pages/upload-page";
-import { AddOrganizationPage } from "@/pages/add-organization-page";
+import { SelectOrganizationPage } from "@/pages/select-organization-page";
 import { MarketingPage } from "@/pages/marketing-page";
 import { PricingPage } from "@/pages/pricing-page";
 
+// A relative <Navigate to="."> here would resolve against the wildcard
+// route's own "*" pattern, not against "/org/:orgSlug" - not reliable
+// enough to lean on. Reading :orgSlug directly and building the absolute
+// path keeps this catch-all landing back inside the *same* organization
+// (its Command Center) instead of bouncing out to AppRootRedirect, which
+// an absolute Navigate to="/" would do.
+function OrgHomeRedirect() {
+  const { orgSlug } = useParams<{ orgSlug: string }>();
+  return <Navigate to={`/org/${orgSlug}`} replace />;
+}
+
+/**
+ * Ogevia Architecture Reset: two hosts, decided purely by hostname
+ * (resolveTenant() - see tenant-resolver.ts) -
+ *
+ *   - ogevia.com (marketing): public, unauthenticated, no shell.
+ *   - app.ogevia.com (app): everything authenticated - platform
+ *     administration and every tenant workspace both live here, split by
+ *     URL PATH, not by another hostname:
+ *       - /platform/*      - RequirePlatformOwner-gated, no organization
+ *                             context (there's no single tenant to scope
+ *                             platform administration to).
+ *       - /org/:orgSlug/*  - OrganizationProvider resolves :orgSlug to an
+ *                             authorized organization (RLS-backed - see
+ *                             that provider). This is the ONLY place an
+ *                             organization is selected; nowhere in this
+ *                             app reads a hostname or localStorage to
+ *                             decide which tenant is active.
+ *       - /                - AppRootRedirect: the one place that decides
+ *                             where a freshly signed-in user lands
+ *                             (platform home, straight into their one
+ *                             organization, a chooser if they have more
+ *                             than one, or a "no organization" message).
+ *
+ * There is no third "admin" or "tenant" host anymore - platform.ogevia.com
+ * and {slug}.ogevia.com both no longer exist; see tenant-resolver.ts's
+ * header comment for the full rationale.
+ */
 export function App() {
-  const { context: tenantContext, loading } = useTenantContext();
   const navigate = useNavigate();
-  const isMarketing = tenantContext.type === "marketing";
-  const isAdmin = tenantContext.type === "admin";
-  // "app" (the shared app.ogevia.com host - org resolved from the signed-in
-  // user's own memberships) and the legacy "tenant" ({slug}.ogevia.com,
-  // still works whenever wildcard DNS is available) both mount the same
-  // tenant workspace - see organization-provider.tsx for how tenantSlug
-  // being undefined vs. set changes org resolution.
-  const isTenantWorkspace = tenantContext.type === "app" || tenantContext.type === "tenant";
+  const isMarketing = resolveTenant(window.location.hostname).type === "marketing";
 
   // Safety net for a stale Supabase redirect-URL allowlist: if
   // resetPasswordForEmail's redirectTo isn't on that allowlist, Supabase
@@ -51,19 +82,6 @@ export function App() {
     }
   }, [navigate]);
 
-  // Which provider tree/routes to mount depends on tenantContext, so
-  // hold off rendering until it settles. Only pays this cost on a
-  // hostname that isn't one of Ogevia's own domains - see
-  // useTenantContext()'s comment for why every other host resolves
-  // synchronously with loading always false.
-  if (loading) {
-    return (
-      <div className="flex min-h-screen items-center justify-center">
-        <p className="text-sm text-slate-500">Loading…</p>
-      </div>
-    );
-  }
-
   return (
     <Routes>
       {/* Public routes - accessible without auth, on any host */}
@@ -73,56 +91,65 @@ export function App() {
       <Route path="/apply/:orgSlug" element={<ApplyPage />} />
       <Route path="/upload/:token" element={<UploadPage />} />
 
-      {/* Public marketing site - ogevia.com/carelik.com and any
-          unrecognized host. app.ogevia.com's and admin.ogevia.com's own "/"
-          are handled by their own branches below, never this one. */}
+      {/* Public marketing site - ogevia.com and any unrecognized host.
+          app.ogevia.com's own "/" is handled by the app branch below,
+          never this one. */}
       {isMarketing && <Route path="/" element={<MarketingPage />} />}
       {isMarketing && <Route path="/pricing" element={<PricingPage />} />}
       {isMarketing && <Route path="*" element={<Navigate to="/" replace />} />}
 
-      {/* App workspace - app.ogevia.com (org resolved from membership) and
-          the legacy {slug}.ogevia.com path (org resolved from the slug). */}
-      {isTenantWorkspace && (
-        <Route
-          path="/*"
-          element={
-            <ProtectedRoute>
-              <OrganizationProvider
-                tenantSlug={tenantContext.type === "tenant" ? tenantContext.slug : undefined}
-              >
-                <TenantShell>
-                  <Routes>
-                    {getTenantRoutes()}
-                    <Route path="/organizations/new" element={<AddOrganizationPage />} />
-                    <Route path="*" element={<Navigate to="/" replace />} />
-                  </Routes>
-                </TenantShell>
-              </OrganizationProvider>
-            </ProtectedRoute>
-          }
-        />
-      )}
-
-      {/* Platform administration - admin.ogevia.com (and legacy
-          platform.ogevia.com/platform.carelik.com). */}
-      {isAdmin && (
-        <Route
-          path="/*"
-          element={
-            <ProtectedRoute>
-              <OrganizationProvider>
+      {/* app.ogevia.com - authenticated app: platform administration and
+          every tenant workspace, split by path. */}
+      {!isMarketing && (
+        <>
+          <Route
+            path="/"
+            element={
+              <ProtectedRoute>
+                <AppRootRedirect />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/select-organization"
+            element={
+              <ProtectedRoute>
+                <SelectOrganizationPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/platform/*"
+            element={
+              <ProtectedRoute>
                 <RequirePlatformOwner>
                   <PlatformShell>
                     <Routes>
                       {getPlatformRoutes()}
-                      <Route path="*" element={<Navigate to="/organizations" replace />} />
+                      <Route path="*" element={<Navigate to="/platform/organizations" replace />} />
                     </Routes>
                   </PlatformShell>
                 </RequirePlatformOwner>
-              </OrganizationProvider>
-            </ProtectedRoute>
-          }
-        />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/org/:orgSlug/*"
+            element={
+              <ProtectedRoute>
+                <OrganizationProvider>
+                  <TenantShell>
+                    <Routes>
+                      {getTenantRoutes()}
+                      <Route path="*" element={<OrgHomeRedirect />} />
+                    </Routes>
+                  </TenantShell>
+                </OrganizationProvider>
+              </ProtectedRoute>
+            }
+          />
+          <Route path="*" element={<Navigate to="/" replace />} />
+        </>
       )}
     </Routes>
   );

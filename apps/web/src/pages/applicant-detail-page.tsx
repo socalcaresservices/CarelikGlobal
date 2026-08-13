@@ -11,6 +11,7 @@ import {
   type EmploymentType
 } from "@carelik/shared";
 import { useOrganization } from "@/providers/organization-provider";
+import { useOrgPath } from "@/lib/use-org-path";
 import { supabase } from "@/lib/supabase";
 
 // Record layout: header (name, status) + a details section + weekly
@@ -477,6 +478,7 @@ const manualStatusOptions = applicantStatusSchema.options.filter((status) => sta
 export function ApplicantDetailPage() {
   const { id } = useParams<{ id: string }>();
   const { activeOrganizationId, hasPermission } = useOrganization();
+  const orgPath = useOrgPath();
   const queryClient = useQueryClient();
 
   const canRead = hasPermission("applicants.read");
@@ -605,7 +607,7 @@ export function ApplicantDetailPage() {
 
   return (
     <section className="mx-auto max-w-4xl space-y-6">
-      <Link to="/applicants" className="inline-flex items-center gap-1.5 text-sm text-slate-500 hover:text-slate-800">
+      <Link to={orgPath("/applicants")} className="inline-flex items-center gap-1.5 text-sm text-slate-500 hover:text-slate-800">
         <ArrowLeft className="h-4 w-4" />
         All applicants
       </Link>

@@ -1,4 +1,5 @@
 import { render, screen, waitFor } from "@testing-library/react";
+import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { useAuth } from "@carelik/auth";
@@ -59,27 +60,42 @@ function Probe() {
     <div>
       <span data-testid="loading">{String(loading)}</span>
       <span data-testid="org-count">{organizations.length}</span>
-      <span data-testid="active-org-id">{activeOrganizationId ?? "none"}</span>
+      <span data-testid="active-org-id">{activeOrganizationId}</span>
       <span data-testid="role">{role ?? "none"}</span>
       <span data-testid="is-platform-owner">{String(isPlatformOwner)}</span>
       <span data-testid="can-update-org">{String(hasPermission("organization.update"))}</span>
       <span data-testid="can-delete-files">{String(hasPermission("files.delete"))}</span>
-      <span data-testid="active-org-logo">{activeOrganization?.logoUrl ?? "none"}</span>
-      <span data-testid="active-org-powered-by">{String(activeOrganization?.showPoweredBy)}</span>
+      <span data-testid="active-org-logo">{activeOrganization.logoUrl ?? "none"}</span>
+      <span data-testid="active-org-powered-by">{String(activeOrganization.showPoweredBy)}</span>
     </div>
   );
 }
 
-function renderProvider(tenantSlug?: string | undefined) {
+// Mounts OrganizationProvider exactly as App.tsx does - under a
+// /org/:orgSlug route, resolving the active organization from that URL
+// param alone. Passing no slug renders at "/org/does-not-matter" so the
+// provider still mounts (RequirePlatformOwner-style routes are covered
+// separately) but resolves to no match, exercising the "not available"
+// state.
+function renderProvider(orgSlug: string = "acme-care") {
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } }
   });
   return render(
-    <QueryClientProvider client={queryClient}>
-      <OrganizationProvider tenantSlug={tenantSlug}>
-        <Probe />
-      </OrganizationProvider>
-    </QueryClientProvider>
+    <MemoryRouter initialEntries={[`/org/${orgSlug}`]}>
+      <QueryClientProvider client={queryClient}>
+        <Routes>
+          <Route
+            path="/org/:orgSlug"
+            element={
+              <OrganizationProvider>
+                <Probe />
+              </OrganizationProvider>
+            }
+          />
+        </Routes>
+      </QueryClientProvider>
+    </MemoryRouter>
   );
 }
 
@@ -109,6 +125,20 @@ const otherOrgRow = {
   display_name: "Other Org"
 };
 
+function authUser(overrides: Record<string, unknown> = {}) {
+  return {
+    user: { id: "user-1" } as never,
+    session: {} as never,
+    loading: false,
+    signInWithGithub: vi.fn(),
+    signInWithPassword: vi.fn(),
+    resetPasswordForEmail: vi.fn(),
+    updatePassword: vi.fn(),
+    signOut: vi.fn(),
+    ...overrides
+  };
+}
+
 describe("OrganizationProvider", () => {
   afterEach(() => {
     window.localStorage.clear();
@@ -116,16 +146,7 @@ describe("OrganizationProvider", () => {
   });
 
   it("grants every permission to a platform owner without querying role_permissions", async () => {
-    mockedUseAuth.mockReturnValue({
-      user: { id: "user-1" } as never,
-      session: {} as never,
-      loading: false,
-      signInWithGithub: vi.fn(),
-      signInWithPassword: vi.fn(),
-      resetPasswordForEmail: vi.fn(),
-      updatePassword: vi.fn(),
-      signOut: vi.fn()
-    });
+    mockedUseAuth.mockReturnValue(authUser());
     mockedRpc.mockResolvedValue({ data: null, error: null } as never);
 
     setResolver((table, calls) => {
@@ -137,7 +158,7 @@ describe("OrganizationProvider", () => {
       return { data: null, error: null };
     });
 
-    renderProvider();
+    renderProvider("acme-care");
 
     await waitFor(() => expect(screen.getByTestId("is-platform-owner")).toHaveTextContent("true"));
     await waitFor(() => expect(screen.getByTestId("org-count")).toHaveTextContent("1"));
@@ -155,54 +176,39 @@ describe("OrganizationProvider", () => {
   });
 
   // Regression guard for a real production bug: an account was reachable
-  // and authenticated on admin.ogevia.com and *looked* like a platform
-  // owner (the shell said so) purely because of how it was signed in, not
-  // because anything in the database granted it that privilege. This
-  // proves the two accounts below are told apart only by their
+  // and authenticated on the app and *looked* like a platform owner (the
+  // shell said so) purely because of how it was signed in, not because
+  // anything in the database granted it that privilege. This proves the
+  // two accounts below are told apart only by their
   // user_profiles.platform_role row - never by their email address, which
   // this hook never even reads for authorization (only for the display-name
   // fallback) - so renaming/spoofing an email address cannot forge platform
   // access.
   it("derives isPlatformOwner from user_profiles.platform_role, never from the user's email", async () => {
-    mockedUseAuth.mockReturnValue({
-      user: { id: "user-7", email: "admin.ogevia@gmail.com" } as never,
-      session: {} as never,
-      loading: false,
-      signInWithGithub: vi.fn(),
-      signInWithPassword: vi.fn(),
-      resetPasswordForEmail: vi.fn(),
-      updatePassword: vi.fn(),
-      signOut: vi.fn()
-    });
+    mockedUseAuth.mockReturnValue(authUser({ user: { id: "user-7", email: "admin.ogevia@gmail.com" } }));
     mockedRpc.mockResolvedValue({ data: null, error: null } as never);
 
     setResolver((table, calls) => {
       // Same-looking "admin"-branded email, but no platform_role grant -
       // must not be treated as a platform owner just because of the name.
       if (table === "user_profiles") return { data: { platform_role: null }, error: null };
-      if (table === "organizations") return { data: [], error: null };
+      if (table === "organizations") return { data: [orgRow], error: null };
       if (table === "organization_memberships" && hasEqCall(calls, "status", "invited")) {
         return { data: [], error: null };
+      }
+      if (table === "organization_memberships" && hasEqCall(calls, "status", "active")) {
+        return { data: { role: "organization_admin" }, error: null };
       }
       return { data: null, error: null };
     });
 
-    renderProvider();
+    renderProvider("acme-care");
 
     await waitFor(() => expect(screen.getByTestId("is-platform-owner")).toHaveTextContent("false"));
   });
 
   it("resolves a regular member's role and permissions from role_permissions", async () => {
-    mockedUseAuth.mockReturnValue({
-      user: { id: "user-2" } as never,
-      session: {} as never,
-      loading: false,
-      signInWithGithub: vi.fn(),
-      signInWithPassword: vi.fn(),
-      resetPasswordForEmail: vi.fn(),
-      updatePassword: vi.fn(),
-      signOut: vi.fn()
-    });
+    mockedUseAuth.mockReturnValue(authUser({ user: { id: "user-2" } }));
     mockedRpc.mockResolvedValue({ data: null, error: null } as never);
 
     setResolver((table, calls) => {
@@ -223,7 +229,7 @@ describe("OrganizationProvider", () => {
       return { data: null, error: null };
     });
 
-    renderProvider();
+    renderProvider("acme-care");
 
     await waitFor(() => expect(screen.getByTestId("role")).toHaveTextContent("organization_admin"));
     expect(screen.getByTestId("is-platform-owner")).toHaveTextContent("false");
@@ -232,16 +238,7 @@ describe("OrganizationProvider", () => {
   });
 
   it("accepts a pending invitation on login", async () => {
-    mockedUseAuth.mockReturnValue({
-      user: { id: "user-3" } as never,
-      session: {} as never,
-      loading: false,
-      signInWithGithub: vi.fn(),
-      signInWithPassword: vi.fn(),
-      resetPasswordForEmail: vi.fn(),
-      updatePassword: vi.fn(),
-      signOut: vi.fn()
-    });
+    mockedUseAuth.mockReturnValue(authUser({ user: { id: "user-3" } }));
     mockedRpc.mockResolvedValue({ data: null, error: null } as never);
 
     setResolver((table, calls) => {
@@ -256,7 +253,7 @@ describe("OrganizationProvider", () => {
       return { data: [], error: null };
     });
 
-    renderProvider();
+    renderProvider("acme-care");
 
     await waitFor(() =>
       expect(mockedRpc).toHaveBeenCalledWith("accept_organization_invitation", {
@@ -265,31 +262,20 @@ describe("OrganizationProvider", () => {
     );
   });
 
-  // Regression test for a real bug found live 2026-08-09: a user who
-  // belongs to more than one organization visited a tenant whose hostname
-  // resolved (via subdomain or custom domain) to Org B, but the app kept
-  // showing Org A because that was this browser's cached
-  // "carelik.activeOrganizationId" from an earlier, unrelated visit to
-  // Org A. The hostname must always win over a stale local cache.
-  it("scopes to the tenantSlug organization even when a different org is cached from a previous visit", async () => {
+  // The core architectural guarantee: the URL slug is the only input to
+  // organization resolution. No localStorage, no ?org= query param, no
+  // "first organization" fallback - those all belonged to the old
+  // hostname-based model. A stale localStorage value must have zero
+  // effect now.
+  it("resolves strictly from the :orgSlug route param, ignoring any stale localStorage value", async () => {
     window.localStorage.setItem("carelik.activeOrganizationId", ORG_ID);
-    mockedUseAuth.mockReturnValue({
-      user: { id: "user-4" } as never,
-      session: {} as never,
-      loading: false,
-      signInWithGithub: vi.fn(),
-      signInWithPassword: vi.fn(),
-      resetPasswordForEmail: vi.fn(),
-      updatePassword: vi.fn(),
-      signOut: vi.fn()
-    });
+    mockedUseAuth.mockReturnValue(authUser({ user: { id: "user-4" } }));
     mockedRpc.mockResolvedValue({ data: null, error: null } as never);
 
     setResolver((table, calls) => {
       if (table === "user_profiles") return { data: { platform_role: "platform_owner" }, error: null };
       // A platform owner (or anyone who is a member of both) sees both
-      // organizations here - order matches the real query's
-      // "order by display_name", putting Acme Care before Other Org.
+      // organizations here.
       if (table === "organizations") return { data: [orgRow, otherOrgRow], error: null };
       if (table === "organization_memberships" && hasEqCall(calls, "status", "invited")) {
         return { data: [], error: null };
@@ -302,70 +288,28 @@ describe("OrganizationProvider", () => {
     await waitFor(() => expect(screen.getByTestId("active-org-id")).toHaveTextContent(OTHER_ORG_ID));
   });
 
-  // The platform Organizations registry's "Enter organization" link opens
-  // app.ogevia.com/?org=<slug> - on the app host (tenantSlug undefined),
-  // that query param should pick the matching org instead of falling back
-  // to "first organization", and should only apply once.
-  it("prefers an ?org= deep link over the first-organization fallback on the app host", async () => {
-    const originalLocation = window.location;
-    Object.defineProperty(window, "location", {
-      configurable: true,
-      value: { ...originalLocation, search: "?org=other-org" }
-    });
-
-    mockedUseAuth.mockReturnValue({
-      user: { id: "user-6" } as never,
-      session: {} as never,
-      loading: false,
-      signInWithGithub: vi.fn(),
-      signInWithPassword: vi.fn(),
-      resetPasswordForEmail: vi.fn(),
-      updatePassword: vi.fn(),
-      signOut: vi.fn()
-    });
+  // organizationsQuery.data ?? [] never includes a slug that doesn't
+  // exist, or one this user isn't RLS-authorized into - both collapse to
+  // the same "not available" state (see the provider's own comment on
+  // why those two cases are deliberately indistinguishable here).
+  it("shows a not-available message for a slug that doesn't resolve to any organization this user can see", async () => {
+    mockedUseAuth.mockReturnValue(authUser({ user: { id: "user-8" } }));
     mockedRpc.mockResolvedValue({ data: null, error: null } as never);
 
     setResolver((table, calls) => {
-      if (table === "user_profiles") return { data: { platform_role: "platform_owner" }, error: null };
-      if (table === "organizations") return { data: [orgRow, otherOrgRow], error: null };
+      if (table === "user_profiles") return { data: { platform_role: null }, error: null };
+      if (table === "organizations") return { data: [orgRow], error: null };
       if (table === "organization_memberships" && hasEqCall(calls, "status", "invited")) {
         return { data: [], error: null };
       }
       return { data: null, error: null };
     });
 
-    try {
-      renderProvider(undefined);
-      await waitFor(() => expect(screen.getByTestId("active-org-id")).toHaveTextContent(OTHER_ORG_ID));
-    } finally {
-      Object.defineProperty(window, "location", { configurable: true, value: originalLocation });
-    }
-  });
+    renderProvider("no-such-org");
 
-  it("falls back to the first organization on a platform host, where there's no single tenant to pin to", async () => {
-    mockedUseAuth.mockReturnValue({
-      user: { id: "user-5" } as never,
-      session: {} as never,
-      loading: false,
-      signInWithGithub: vi.fn(),
-      signInWithPassword: vi.fn(),
-      resetPasswordForEmail: vi.fn(),
-      updatePassword: vi.fn(),
-      signOut: vi.fn()
-    });
-    mockedRpc.mockResolvedValue({ data: null, error: null } as never);
-
-    setResolver((table, calls) => {
-      if (table === "user_profiles") return { data: { platform_role: "platform_owner" }, error: null };
-      if (table === "organizations") return { data: [orgRow, otherOrgRow], error: null };
-      if (table === "organization_memberships" && hasEqCall(calls, "status", "invited")) {
-        return { data: [], error: null };
-      }
-      return { data: null, error: null };
-    });
-
-    renderProvider(undefined);
-
-    await waitFor(() => expect(screen.getByTestId("active-org-id")).toHaveTextContent(ORG_ID));
+    await waitFor(() => expect(screen.getByText("Not available")).toBeInTheDocument());
+    expect(
+      screen.getByText("This organization doesn't exist, or you don't have access to it.")
+    ).toBeInTheDocument();
   });
 });

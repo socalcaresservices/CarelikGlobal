@@ -1,5 +1,5 @@
 import type { CSSProperties, PropsWithChildren } from "react";
-import { NavLink } from "react-router-dom";
+import { NavLink, useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import {
   AlertOctagon,
@@ -7,6 +7,7 @@ import {
   CalendarClock,
   CalendarPlus,
   ClipboardCheck,
+  ClipboardList,
   Crown,
   FileText,
   HeartHandshake,
@@ -23,6 +24,7 @@ import type { Permission } from "@carelik/shared";
 import { useAuth } from "@carelik/auth";
 import { cn } from "@carelik/ui";
 import { useOrganization } from "@/providers/organization-provider";
+import { useOrgPath } from "@/lib/use-org-path";
 import { GlobalSearch } from "@/components/global-search";
 import { ContextBar } from "@/components/context-bar";
 import { supabase } from "@/lib/supabase";
@@ -108,16 +110,18 @@ const complianceNav: NavItem[] = [
   { to: "/billing", label: "Billing", icon: Receipt, permission: "billing.read" }
 ];
 
-// Tenant Administration (Build 022: Platform/Tenant separation) - the
-// tenant workspace shows only tenant-scoped administration. Platform
-// administration (organization registry, feature flags, audit) lives
-// exclusively on platform.carelik.com's PlatformShell - never here, even
-// for a user who happens to also be a platform owner and a real member
-// of this tenant (e.g. its creator). A tenant workspace is entirely
-// about the one organization it's scoped to; which host you're on
-// decides whether you see platform tools at all, not who you are.
+// Tenant Administration - the tenant workspace shows only tenant-scoped
+// administration (Access, this org's own Audit trail, Settings).
+// Platform administration (organization registry, feature flags,
+// subscriptions) lives exclusively under app.ogevia.com/platform's
+// PlatformShell - never here, even for a user who happens to also be a
+// platform owner and a real member of this tenant (e.g. its creator). A
+// tenant workspace is entirely about the one organization it's scoped
+// to; which route tree you're in decides whether you see platform tools
+// at all, not who you are.
 const administrationNav: NavItem[] = [
   { to: "/access", label: "Access", icon: ShieldCheck, permission: "membership.read", badgeKey: "access_pending" },
+  { to: "/audit", label: "Audit", icon: ClipboardList, permission: "audit.read" },
   { to: "/settings", label: "Settings", icon: Settings, permission: "settings.read" }
 ];
 
@@ -142,10 +146,11 @@ function NavLinkItem({
   icon: Icon,
   badgeCount
 }: NavItem & { badgeCount?: number | null | undefined }) {
+  const orgPath = useOrgPath();
   return (
     <NavLink
       key={to}
-      to={to}
+      to={orgPath(to)}
       end={to === "/"}
       className={({ isActive }) =>
         cn(
@@ -196,11 +201,12 @@ function getGreeting(now: Date) {
 
 export function AppShell({ children }: PropsWithChildren) {
   const { user, signOut } = useAuth();
+  const navigate = useNavigate();
+  const orgPath = useOrgPath();
   const {
     organizations,
     activeOrganization,
     activeOrganizationId,
-    setActiveOrganizationId,
     hasPermission,
     role,
     isPlatformOwner,
@@ -339,7 +345,7 @@ export function AppShell({ children }: PropsWithChildren) {
       <main className="lg:pl-64">
         <header className="flex flex-wrap items-center gap-4 border-b border-slate-200 bg-white px-6 py-4">
           <NavLink
-            to="/service-verification"
+            to={orgPath("/service-verification")}
             className="inline-flex min-h-12 items-center gap-2 rounded-lg bg-[var(--color-accent,#0f172a)] px-3 text-sm font-semibold text-[var(--color-accent-foreground,#ffffff)] lg:hidden"
           >
             <PenLine className="h-4 w-4" />
@@ -377,12 +383,12 @@ export function AppShell({ children }: PropsWithChildren) {
             <label className="text-sm">
               <span className="sr-only">Active organization</span>
               <select
-                value={activeOrganizationId ?? ""}
-                onChange={(event) => setActiveOrganizationId(event.target.value)}
+                value={activeOrganization.slug}
+                onChange={(event) => navigate(`/org/${event.target.value}`)}
                 className="rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-sm font-medium text-slate-900"
               >
                 {organizations.map((org) => (
-                  <option key={org.id} value={org.id}>
+                  <option key={org.id} value={org.slug}>
                     {org.displayName}
                   </option>
                 ))}

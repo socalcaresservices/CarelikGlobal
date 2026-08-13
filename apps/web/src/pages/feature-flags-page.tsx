@@ -1,7 +1,7 @@
 import { useState, type FormEvent } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Card, Button, StatusBadge } from "@carelik/ui";
-import { useOrganization } from "@/providers/organization-provider";
+import { useIsPlatformOwner } from "@/lib/use-platform-owner";
 import { supabase } from "@/lib/supabase";
 
 // Feature flags (public.feature_flags, 20260715000100_platform_foundation.sql)
@@ -56,8 +56,13 @@ function toDatetimeLocalValue(iso: string | null): string {
   return iso.slice(0, 16);
 }
 
+interface OrganizationOption {
+  id: string;
+  displayName: string;
+}
+
 export function FeatureFlagsPage() {
-  const { organizations, isPlatformOwner } = useOrganization();
+  const { isPlatformOwner } = useIsPlatformOwner();
   const queryClient = useQueryClient();
 
   const flagsQuery = useQuery({
@@ -72,6 +77,23 @@ export function FeatureFlagsPage() {
     },
     enabled: isPlatformOwner
   });
+
+  // Platform routes mount no OrganizationProvider (no single organization
+  // to scope to - see App.tsx), so the per-org picker below reads
+  // organizations directly rather than through useOrganization(). RLS's
+  // members_read_organizations policy already returns every tenant for a
+  // platform owner (is_organization_member() short-circuits true), so
+  // this is the full registry, same as OrganizationsPage's list.
+  const organizationsQuery = useQuery({
+    queryKey: ["platform-organizations-lite"],
+    queryFn: async () => {
+      const { data, error } = await supabase.from("organizations").select("id, display_name").order("display_name");
+      if (error) throw error;
+      return (data ?? []).map((row): OrganizationOption => ({ id: row.id, displayName: row.display_name }));
+    },
+    enabled: isPlatformOwner
+  });
+  const organizations = organizationsQuery.data ?? [];
 
   function refresh() {
     void queryClient.invalidateQueries({ queryKey: ["feature-flags"] });

@@ -4,6 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Check, ChevronLeft, Clock } from "lucide-react";
 import { Button, Card, cn } from "@carelik/ui";
 import { useOrganization } from "@/providers/organization-provider";
+import { useOrgPath } from "@/lib/use-org-path";
 import { supabase } from "@/lib/supabase";
 
 // Mobile-first self-service scheduling for caregivers. Deliberately
@@ -91,6 +92,7 @@ const stepLabels: Record<Step, string> = {
 
 export function StaffVisitsPage() {
   const { activeOrganizationId } = useOrganization();
+  const orgPath = useOrgPath();
   const [step, setStep] = useState<Step>(1);
   const [selectedClientId, setSelectedClientId] = useState<string | null>(null);
   const [selectedAssignment, setSelectedAssignment] = useState<AssignmentOption | null>(null);
@@ -202,7 +204,7 @@ export function StaffVisitsPage() {
               Add to calendar
             </a>
             <Link
-              to="/service-verification"
+              to={orgPath("/service-verification")}
               className="flex min-h-[44px] items-center justify-center rounded-lg border border-slate-200 px-4 text-sm font-medium text-slate-700 hover:bg-slate-50"
             >
               View visit

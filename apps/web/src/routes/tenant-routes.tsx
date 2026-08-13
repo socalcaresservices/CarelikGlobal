@@ -38,6 +38,7 @@ import { ApplicantDetailPage } from "@/pages/applicant-detail-page";
 import { ServiceVerificationPage } from "@/pages/service-verification-page";
 import { ServiceVerificationReportsPage } from "@/pages/service-verification-reports-page";
 import { StaffVisitsPage } from "@/pages/staff-visits-page";
+import { AuditPage } from "@/pages/audit-page";
 
 /**
  * Tenant route definitions
@@ -75,7 +76,7 @@ export function getTenantRoutes() {
     <Route key="applicants" path="/applicants" element={<ApplicantsPage />} />,
     <Route key="applicant-detail" path="/applicants/:id" element={<ApplicantDetailPage />} />,
     <Route key="access" path="/access" element={<AccessPage />} />,
+    <Route key="audit" path="/audit" element={<AuditPage />} />,
     <Route key="settings" path="/settings" element={<SettingsPage />} />
-    // TODO: Audit logging (tenant-scoped)
   ];
 }
