@@ -49,6 +49,10 @@ const ADMIN_HOSTS = [
 // reservations.
 const RESERVED_SUBDOMAINS = ["app", "platform", "www", "admin", "api"];
 
+function isNetlifyDeployPreview(host: string) {
+  return /^deploy-preview-\d+--[a-z0-9-]+\.netlify\.app$/.test(host);
+}
+
 /**
  * Resolves which fixed area a hostname belongs to. Unrecognized hosts
  * (including bare "localhost") default to "marketing" - the public site is
@@ -71,6 +75,12 @@ export function resolveTenant(hostname: string | undefined): TenantContext {
 
   if (!host || host === "localhost") {
     return { type: "marketing" };
+  }
+  // Pull-request previews use an isolated Supabase project and exist for
+  // authenticated workflow testing, so route their root into the shared app
+  // workspace instead of trapping signed-in users on the marketing page.
+  if (isNetlifyDeployPreview(host)) {
+    return { type: "app" };
   }
   if (MARKETING_HOSTS.includes(host)) {
     return { type: "marketing" };
@@ -114,6 +124,9 @@ export function isOwnDomain(hostname: string | undefined): boolean {
   if (!hostname) return true;
   const host = hostname.split(":")[0];
   if (!host || host === "localhost") {
+    return true;
+  }
+  if (isNetlifyDeployPreview(host)) {
     return true;
   }
   if (MARKETING_HOSTS.includes(host) || APP_HOSTS.includes(host) || ADMIN_HOSTS.includes(host)) {
