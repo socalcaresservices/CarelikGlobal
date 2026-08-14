@@ -88,7 +88,7 @@ declare
 begin
   select * into token_row
   from public.candidate_portal_tokens
-  where token_hash = encode(digest(target_token, 'sha256'), 'hex')
+  where token_hash = encode(extensions.digest(target_token, 'sha256'), 'hex')
     and revoked_at is null
     and expires_at > now();
   if not found then return; end if;

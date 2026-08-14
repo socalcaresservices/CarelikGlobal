@@ -665,7 +665,7 @@ begin
     raise exception 'Candidate not found';
   end if;
 
-  raw_token := encode(gen_random_bytes(32), 'hex');
+  raw_token := encode(extensions.gen_random_bytes(32), 'hex');
   expiry := now() + make_interval(hours => ttl_hours);
 
   insert into public.candidate_portal_tokens (
@@ -673,7 +673,7 @@ begin
   ) values (
     target_organization_id,
     target_applicant_id,
-    encode(digest(raw_token, 'sha256'), 'hex'),
+    encode(extensions.digest(raw_token, 'sha256'), 'hex'),
     expiry,
     auth.uid()
   );
@@ -725,7 +725,7 @@ declare
 begin
   select * into token_row
   from public.candidate_portal_tokens
-  where token_hash = encode(digest(target_token, 'sha256'), 'hex')
+  where token_hash = encode(extensions.digest(target_token, 'sha256'), 'hex')
     and revoked_at is null
     and expires_at > now();
 
@@ -826,7 +826,7 @@ declare
 begin
   select * into token_row
   from public.candidate_portal_tokens
-  where token_hash = encode(digest(target_token, 'sha256'), 'hex')
+  where token_hash = encode(extensions.digest(target_token, 'sha256'), 'hex')
     and revoked_at is null
     and expires_at > now();
   if not found then raise exception 'Candidate link is invalid or expired'; end if;
@@ -879,7 +879,7 @@ declare
 begin
   select * into token_row
   from public.candidate_portal_tokens
-  where token_hash = encode(digest(target_token, 'sha256'), 'hex')
+  where token_hash = encode(extensions.digest(target_token, 'sha256'), 'hex')
     and revoked_at is null
     and expires_at > now();
   if not found then raise exception 'Candidate link is invalid or expired'; end if;
@@ -922,7 +922,7 @@ declare
 begin
   select * into token_row
   from public.candidate_portal_tokens
-  where token_hash = encode(digest(target_token, 'sha256'), 'hex')
+  where token_hash = encode(extensions.digest(target_token, 'sha256'), 'hex')
     and revoked_at is null
     and expires_at > now();
   if not found then raise exception 'Candidate link is invalid or expired'; end if;
