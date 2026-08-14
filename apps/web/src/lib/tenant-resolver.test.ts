@@ -17,6 +17,14 @@ describe("resolveTenant", () => {
     expect(resolveTenant(hostname)).toEqual({ type: "app" });
   });
 
+  it("treats a Netlify deploy preview as the app workspace", () => {
+    expect(resolveTenant("deploy-preview-5--carelikglobal.netlify.app")).toEqual({ type: "app" });
+  });
+
+  it("keeps the production Netlify hostname on the marketing site", () => {
+    expect(resolveTenant("carelikglobal.netlify.app")).toEqual({ type: "marketing" });
+  });
+
   it.each(["admin.ogevia.com", "admin.localhost", "platform.ogevia.com", "platform.carelik.com"])(
     "treats %s as admin",
     (hostname) => {
@@ -80,6 +88,7 @@ describe("isOwnDomain", () => {
     expect(isOwnDomain("platform.ogevia.com")).toBe(true);
     expect(isOwnDomain("acme.ogevia.com")).toBe(true);
     expect(isOwnDomain("acme.localhost")).toBe(true);
+    expect(isOwnDomain("deploy-preview-5--carelikglobal.netlify.app")).toBe(true);
   });
 
   it("is still true for carelik.com hosts during the rebrand", () => {
