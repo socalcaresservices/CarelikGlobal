@@ -129,6 +129,7 @@ export function AuthorizationsPage() {
   // making the person re-pick the client they just came from.
   const [searchParams] = useSearchParams();
   const lockedClientId = searchParams.get("clientId");
+  const lockedServiceId = searchParams.get("serviceId");
 
   const canRead = hasPermission("authorizations.read");
   const canManage = hasPermission("authorizations.update");
@@ -238,7 +239,7 @@ export function AuthorizationsPage() {
     expiry: 120
   });
 
-  const [form, setForm] = useState(() => ({ ...emptyForm, clientId: lockedClientId ?? "" }));
+  const [form, setForm] = useState(() => ({ ...emptyForm, clientId: lockedClientId ?? "", serviceId: lockedServiceId ?? "" }));
   const [editingId, setEditingId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
@@ -252,9 +253,9 @@ export function AuthorizationsPage() {
   const [serviceError, setServiceError] = useState<string | null>(null);
 
   useEffect(() => {
-    setForm({ ...emptyForm, clientId: lockedClientId ?? "" });
+    setForm({ ...emptyForm, clientId: lockedClientId ?? "", serviceId: lockedServiceId ?? "" });
     setEditingId(null);
-  }, [activeOrganizationId, lockedClientId]);
+  }, [activeOrganizationId, lockedClientId, lockedServiceId]);
 
   const clientOptions: ComboboxOption[] = (clientsQuery.data ?? []).map((client) => ({
     value: client.id,
@@ -289,7 +290,7 @@ export function AuthorizationsPage() {
   }
 
   function resetForm() {
-    setForm(emptyForm);
+    setForm({ ...emptyForm, clientId: lockedClientId ?? "", serviceId: lockedServiceId ?? "" });
     setEditingId(null);
     setFormError(null);
   }
@@ -548,6 +549,7 @@ export function AuthorizationsPage() {
               <SearchableCombobox
                 label="Service"
                 required
+                disabled={!!lockedServiceId && !editingId}
                 value={form.serviceId || null}
                 onChange={(value) => setForm({ ...form, serviceId: value ?? "" })}
                 options={serviceOptions}

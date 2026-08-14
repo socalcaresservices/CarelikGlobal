@@ -78,6 +78,22 @@ function mockReadableClients(rows: unknown[]) {
   return selectMock;
 }
 
+function mockSchedulingTables(clients: unknown[], workforce: unknown[], insert = vi.fn().mockResolvedValue({ error: null })) {
+  mockedFrom.mockImplementation((table: string) => {
+    if (table === "clients") return { select: mockReadableClients(clients) } as never;
+    if (table === "caregiver_records") {
+      const order = vi.fn().mockResolvedValue({ data: workforce, error: null });
+      const is = vi.fn(() => ({ order }));
+      const inStatus = vi.fn(() => ({ is }));
+      const eq = vi.fn(() => ({ in: inStatus }));
+      return { select: vi.fn(() => ({ eq })) } as never;
+    }
+    if (table === "shifts") return { insert } as never;
+    return {} as never;
+  });
+  return insert;
+}
+
 function renderPage(initialEntries: string[] = ["/schedule"]) {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
@@ -116,7 +132,7 @@ describe("SchedulePage", () => {
   it("bounds the shift fetch to a rolling window around today, not every shift ever", async () => {
     mockedUseOrganization.mockReturnValue({ ...baseOrganization(), hasPermission: vi.fn(() => true) });
     mockRpc({ shifts: [], members: [] });
-    mockedFrom.mockReturnValue({ select: mockReadableClients([]) } as never);
+    mockSchedulingTables([], []);
 
     const before = Date.now();
     renderPage();
@@ -145,9 +161,8 @@ describe("SchedulePage", () => {
       members: [{ user_id: CAREGIVER_ID, display_name: "Sam Caregiver", status: "active" }],
       matches: [{ caregiver_user_id: CAREGIVER_ID, caregiver_name: "Sam Caregiver", match_score: 82 }]
     });
-    const selectMock = mockReadableClients([{ id: CLIENT_ID, first_name: "Jordan", last_name: "Rivera" }]);
     const insertMock = vi.fn().mockResolvedValue({ error: null });
-    mockedFrom.mockReturnValue({ select: selectMock, insert: insertMock } as never);
+    mockSchedulingTables([{ id: CLIENT_ID, first_name: "Jordan", last_name: "Rivera" }], [{ id: CAREGIVER_ID, linked_user_id: null, first_name: "Sam", last_name: "Caregiver", preferred_name: null }], insertMock);
 
     renderPage();
     await waitFor(() => expect(screen.getByText("Schedule a shift")).toBeInTheDocument());
@@ -155,7 +170,7 @@ describe("SchedulePage", () => {
 
     fireEvent.change(screen.getByLabelText("Client"), { target: { value: CLIENT_ID } });
     await waitFor(() =>
-      expect(screen.getByRole("option", { name: "Sam Caregiver — CareScore 82" })).toBeInTheDocument()
+      expect(screen.getByRole("option", { name: "Sam Caregiver (no login)" })).toBeInTheDocument()
     );
     fireEvent.change(screen.getByLabelText("Caregiver"), { target: { value: CAREGIVER_ID } });
     fireEvent.click(screen.getByRole("button", { name: "Schedule shift" }));
@@ -165,13 +180,14 @@ describe("SchedulePage", () => {
         expect.objectContaining({
           organization_id: ORG_ID,
           client_id: CLIENT_ID,
-          caregiver_user_id: CAREGIVER_ID
+          caregiver_record_id: CAREGIVER_ID,
+          caregiver_user_id: null
         })
       )
     );
   });
 
-  it("ranks caregivers by CareScore once a client is selected", async () => {
+  it("lists Care Team records including caregivers without logins", async () => {
     mockedUseOrganization.mockReturnValue({ ...baseOrganization(), hasPermission: vi.fn(() => true) });
     mockRpc({
       shifts: [],
@@ -184,48 +200,37 @@ describe("SchedulePage", () => {
         { caregiver_user_id: "55555555-5555-4555-8555-555555555555", caregiver_name: "Alex Aide", match_score: 40 }
       ]
     });
-    const selectMock = mockReadableClients([{ id: CLIENT_ID, first_name: "Jordan", last_name: "Rivera" }]);
-    mockedFrom.mockReturnValue({ select: selectMock } as never);
+    mockSchedulingTables([{ id: CLIENT_ID, first_name: "Jordan", last_name: "Rivera" }], [
+      { id: CAREGIVER_ID, linked_user_id: null, first_name: "Sam", last_name: "Caregiver", preferred_name: null },
+      { id: "55555555-5555-4555-8555-555555555555", linked_user_id: "user-2", first_name: "Alex", last_name: "Aide", preferred_name: null }
+    ]);
 
     renderPage();
     await waitFor(() => expect(screen.getByText("Jordan Rivera")).toBeInTheDocument());
 
     expect(screen.getByRole("option", { name: "Select a caregiver" })).toBeInTheDocument();
-    expect(screen.queryByText("Ranked by CareScore, best match first.")).not.toBeInTheDocument();
-
-    fireEvent.change(screen.getByLabelText("Client"), { target: { value: CLIENT_ID } });
-
-    await waitFor(() =>
-      expect(screen.getByRole("option", { name: "Sam Caregiver — CareScore 91" })).toBeInTheDocument()
-    );
-    expect(screen.getByRole("option", { name: "Alex Aide — CareScore 40" })).toBeInTheDocument();
-    expect(screen.getByText("Ranked by CareScore, best match first.")).toBeInTheDocument();
-    expect(mockedRpc).toHaveBeenCalledWith("list_caregiver_matches", {
-      target_organization_id: ORG_ID,
-      target_client_id: CLIENT_ID
-    });
+    expect(await screen.findByRole("option", { name: "Sam Caregiver (no login)" })).toBeInTheDocument();
+    expect(screen.getByRole("option", { name: "Alex Aide" })).toBeInTheDocument();
+    expect(screen.getByText("Care Team records can be scheduled before a login is linked.")).toBeInTheDocument();
   });
 
-  it("preselects the client and ranks caregivers when arriving with ?clientId=", async () => {
+  it("preselects the client and loads Care Team when arriving with ?clientId=", async () => {
     mockedUseOrganization.mockReturnValue({ ...baseOrganization(), hasPermission: vi.fn(() => true) });
     mockRpc({
       shifts: [],
       members: [{ user_id: CAREGIVER_ID, display_name: "Sam Caregiver", status: "active" }],
       matches: [{ caregiver_user_id: CAREGIVER_ID, caregiver_name: "Sam Caregiver", match_score: 77 }]
     });
-    const selectMock = mockReadableClients([{ id: CLIENT_ID, first_name: "Jordan", last_name: "Rivera" }]);
-    mockedFrom.mockReturnValue({ select: selectMock } as never);
+    mockSchedulingTables([{ id: CLIENT_ID, first_name: "Jordan", last_name: "Rivera" }], [
+      { id: CAREGIVER_ID, linked_user_id: null, first_name: "Sam", last_name: "Caregiver", preferred_name: null }
+    ]);
 
     renderPage([`/schedule?clientId=${CLIENT_ID}`]);
 
     await waitFor(() => expect(screen.getByLabelText("Client")).toHaveValue(CLIENT_ID));
     await waitFor(() =>
-      expect(screen.getByRole("option", { name: "Sam Caregiver — CareScore 77" })).toBeInTheDocument()
+      expect(screen.getByRole("option", { name: "Sam Caregiver (no login)" })).toBeInTheDocument()
     );
-    expect(mockedRpc).toHaveBeenCalledWith("list_caregiver_matches", {
-      target_organization_id: ORG_ID,
-      target_client_id: CLIENT_ID
-    });
   });
 
   it("changes a shift's status when shifts.update is held", async () => {

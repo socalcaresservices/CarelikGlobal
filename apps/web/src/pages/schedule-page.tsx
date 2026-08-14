@@ -55,20 +55,7 @@ interface ClientOption {
   last_name: string;
 }
 
-interface MemberOption {
-  user_id: string;
-  display_name: string;
-}
-
-// Backed by list_caregiver_matches() - see
-// supabase/migrations/20260719280000_caregiver_client_matching.sql for
-// the full CareScore weighting. Already sorted best-match-first by the
-// RPC itself.
-interface CaregiverMatchRow {
-  caregiver_user_id: string;
-  caregiver_name: string;
-  match_score: number;
-}
+interface WorkforceOption { id: string; linked_user_id: string | null; first_name: string; last_name: string; preferred_name: string | null; }
 
 const statusStyles: Record<ShiftRow["status"], string> = {
   scheduled: "bg-sky-50 text-sky-700",
@@ -122,16 +109,12 @@ export function SchedulePage() {
     enabled: !!activeOrganizationId && canManage
   });
 
-  const membersQuery = useQuery({
-    queryKey: ["members-for-scheduling", activeOrganizationId],
+  const workforceQuery = useQuery({
+    queryKey: ["workforce-for-scheduling", activeOrganizationId],
     queryFn: async () => {
-      const { data, error } = await supabase.rpc("list_organization_members", {
-        target_organization_id: activeOrganizationId!
-      });
+      const { data, error } = await supabase.from("caregiver_records").select("id, linked_user_id, first_name, last_name, preferred_name").eq("organization_id", activeOrganizationId!).in("status", ["ready", "active"]).is("deleted_at", null).order("last_name");
       if (error) throw error;
-      return ((data ?? []) as Array<{ user_id: string; display_name: string; status: string }>)
-        .filter((member) => member.status === "active")
-        .map((member): MemberOption => ({ user_id: member.user_id, display_name: member.display_name }));
+      return (data ?? []) as WorkforceOption[];
     },
     enabled: !!activeOrganizationId && canManage
   });
@@ -142,23 +125,10 @@ export function SchedulePage() {
 
   // A client can arrive with ?clientId= already set (see the "Assign a
   // caregiver" link on the Client detail page's Schedule tab), so the
-  // CareScore-ranked caregiver list is ready immediately instead of
-  // making the person re-pick the client they just came from.
+  // Care Team list is ready immediately instead of making the person
+  // re-pick the client they just came from.
   const [searchParams] = useSearchParams();
   const [clientId, setClientId] = useState(() => searchParams.get("clientId") ?? "");
-
-  const matchesQuery = useQuery({
-    queryKey: ["caregiver-matches", activeOrganizationId, clientId],
-    queryFn: async () => {
-      const { data, error } = await supabase.rpc("list_caregiver_matches", {
-        target_organization_id: activeOrganizationId!,
-        target_client_id: clientId
-      });
-      if (error) throw error;
-      return (data ?? []) as CaregiverMatchRow[];
-    },
-    enabled: !!activeOrganizationId && !!clientId && canManage
-  });
 
   const filters = useFilters<ShiftRow>(shiftsQuery.data, {
     status: (row, value) => row.status === value
@@ -200,7 +170,7 @@ export function SchedulePage() {
   const inOneHour = new Date(now.getTime() + 60 * 60 * 1000);
   const inTwoHours = new Date(now.getTime() + 2 * 60 * 60 * 1000);
 
-  const [caregiverId, setCaregiverId] = useState("");
+  const [caregiverRecordId, setCaregiverRecordId] = useState("");
   const [startsAt, setStartsAt] = useState(toLocalInputValue(inOneHour));
   const [endsAt, setEndsAt] = useState(toLocalInputValue(inTwoHours));
   const [notes, setNotes] = useState("");
@@ -217,6 +187,11 @@ export function SchedulePage() {
 
     const startDate = new Date(startsAt);
     const endDate = new Date(endsAt);
+    const caregiver = (workforceQuery.data ?? []).find((row: WorkforceOption) => row.id === caregiverRecordId);
+    if (!clientId || !caregiver) {
+      setFormError("Select a client and Care Team member.");
+      return;
+    }
     if (endDate.getTime() <= startDate.getTime()) {
       setFormError("End time must be after start time.");
       return;
@@ -227,7 +202,8 @@ export function SchedulePage() {
       const { error } = await supabase.from("shifts").insert({
         organization_id: activeOrganizationId,
         client_id: clientId,
-        caregiver_user_id: caregiverId,
+        caregiver_record_id: caregiver.id,
+        caregiver_user_id: caregiver.linked_user_id,
         starts_at: startDate.toISOString(),
         ends_at: endDate.toISOString(),
         notes: notes || null
@@ -306,32 +282,21 @@ export function SchedulePage() {
               <select
                 id="shift-caregiver"
                 required
-                value={caregiverId}
-                onChange={(event) => setCaregiverId(event.target.value)}
+                value={caregiverRecordId}
+                onChange={(event) => setCaregiverRecordId(event.target.value)}
                 className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900"
               >
                 <option value="" disabled>
                   Select a caregiver
                 </option>
-                {matchesQuery.data
-                  ? matchesQuery.data.map((match) => (
-                      <option key={match.caregiver_user_id} value={match.caregiver_user_id}>
-                        {match.caregiver_name} — CareScore {match.match_score}
-                      </option>
-                    ))
-                  : (membersQuery.data ?? []).map((member) => (
-                      <option key={member.user_id} value={member.user_id}>
-                        {member.display_name}
-                      </option>
-                    ))}
+                {(workforceQuery.data ?? []).map((caregiver: WorkforceOption) => (
+                  <option key={caregiver.id} value={caregiver.id}>
+                    {caregiver.preferred_name || caregiver.first_name} {caregiver.last_name}
+                    {caregiver.linked_user_id ? "" : " (no login)"}
+                  </option>
+                ))}
               </select>
-              {clientId ? (
-                <p className="mt-1 text-xs text-slate-500">
-                  {matchesQuery.isLoading
-                    ? "Ranking caregivers for this client…"
-                    : "Ranked by CareScore, best match first."}
-                </p>
-              ) : null}
+              <p className="mt-1 text-xs text-slate-500">Care Team records can be scheduled before a login is linked.</p>
             </div>
             <div>
               <label htmlFor="shift-starts" className="block text-xs font-medium text-slate-600">
