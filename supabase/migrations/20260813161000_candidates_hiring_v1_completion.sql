@@ -26,7 +26,7 @@ set search_path = public
 as $$
 declare
   candidate_id uuid;
-  candidate_email citext := nullif(trim(candidate_payload->>'email'), '')::citext;
+  candidate_email extensions.citext := nullif(trim(candidate_payload->>'email'), '')::extensions.citext;
 begin
   if not public.has_permission(target_organization_id, 'applicants.update') then
     raise exception 'You do not have permission to create candidates for this organization';
