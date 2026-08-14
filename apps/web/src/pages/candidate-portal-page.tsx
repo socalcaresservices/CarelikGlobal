@@ -28,6 +28,7 @@ interface PortalData {
   credentials: CredentialRow[];
   onboarding: { status?: string; scheduled_at?: string | null; method?: string | null; location?: string | null; instructions?: string | null } | null;
 }
+interface DocumentBatchRow { batch_id: string; upload_token: string; created_at: string; expires_at: string | null; pending_count: number; uploaded_count: number; completed_count: number; }
 
 function label(value: string) { return value.replace(/_/g, " ").replace(/\b\w/g, (letter) => letter.toUpperCase()); }
 function timeValue(value: string) { return value?.slice(0, 5) || "09:00"; }
@@ -44,6 +45,14 @@ export function CandidatePortalPage() {
     },
     enabled: !!token,
     retry: false
+  });
+  const documentBatchesQuery = useQuery({
+    queryKey: ["candidate-portal-documents", token],
+    queryFn: async () => {
+      const { data, error } = await supabase.rpc("list_candidate_portal_document_batches", { target_token: token! });
+      if (error) throw error;
+      return (data ?? []) as DocumentBatchRow[];
+    }, enabled: !!token && portalQuery.isSuccess, retry: false
   });
 
   const candidate = portalQuery.data?.candidate;
@@ -150,6 +159,8 @@ export function CandidatePortalPage() {
         <Card><div className="flex items-center justify-between"><div><h2 className="font-semibold text-slate-950">Credentials & certifications</h2><p className="mt-1 text-xs text-slate-500">Enter applicable credentials. Organization staff verify them separately.</p></div><Button type="button" variant="secondary" size="sm" onClick={addCredential}>Add credential</Button></div>{credentials.length === 0 ? <p className="mt-3 text-sm text-slate-400">No credentials added.</p> : <div className="mt-4 space-y-3">{credentials.map((row, index) => <div key={row.id ?? index} className="rounded-xl border border-slate-200 p-3"><div className="grid gap-2 sm:grid-cols-2"><input placeholder="Credential type, e.g. CPR" value={row.credential_type} onChange={(e) => setCredentials((current) => current.map((item, i) => i === index ? { ...item, credential_type: e.target.value } : item))} className="rounded-lg border border-slate-200 px-3 py-2 text-sm" /><input placeholder="Issuing organization" value={row.issuing_organization ?? ""} onChange={(e) => setCredentials((current) => current.map((item, i) => i === index ? { ...item, issuing_organization: e.target.value } : item))} className="rounded-lg border border-slate-200 px-3 py-2 text-sm" /><label className="text-xs text-slate-600">Issue date<input type="date" value={row.issue_date ?? ""} onChange={(e) => setCredentials((current) => current.map((item, i) => i === index ? { ...item, issue_date: e.target.value || null } : item))} className="mt-1 block w-full rounded-lg border border-slate-200 px-3 py-2 text-sm" /></label><label className="text-xs text-slate-600">Expiration date<input type="date" disabled={row.does_not_expire} value={row.expiration_date ?? ""} onChange={(e) => setCredentials((current) => current.map((item, i) => i === index ? { ...item, expiration_date: e.target.value || null } : item))} className="mt-1 block w-full rounded-lg border border-slate-200 px-3 py-2 text-sm disabled:bg-slate-50" /></label></div><div className="mt-2 flex flex-wrap items-center gap-3"><label className="flex items-center gap-2 text-xs text-slate-600"><input type="checkbox" checked={row.does_not_expire} onChange={(e) => setCredentials((current) => current.map((item, i) => i === index ? { ...item, does_not_expire: e.target.checked, expiration_date: e.target.checked ? null : item.expiration_date } : item))} />Does not expire</label>{row.verification_status === "verified" ? <StatusBadge label="Verified by organization" tone="success" /> : <StatusBadge label="Not yet verified" tone="neutral" />}</div></div>)}</div>}</Card>
 
         {portalQuery.data.onboarding?.scheduled_at ? <Card><h2 className="font-semibold text-slate-950">Onboarding</h2><p className="mt-2 text-sm text-slate-700">{new Date(portalQuery.data.onboarding.scheduled_at).toLocaleString()}</p>{portalQuery.data.onboarding.method ? <p className="mt-1 text-sm text-slate-600">{label(portalQuery.data.onboarding.method)}</p> : null}{portalQuery.data.onboarding.location ? <p className="mt-1 text-sm text-slate-600">{portalQuery.data.onboarding.location}</p> : null}{portalQuery.data.onboarding.instructions ? <p className="mt-3 rounded-lg bg-slate-50 p-3 text-sm text-slate-700">{portalQuery.data.onboarding.instructions}</p> : null}</Card> : null}
+
+        {(documentBatchesQuery.data ?? []).length ? <Card><h2 className="font-semibold text-slate-950">Requested documents</h2><p className="mt-1 text-sm text-slate-500">Open each request to upload documents or replace a rejected upload.</p><div className="mt-4 space-y-2">{(documentBatchesQuery.data ?? []).map((batch) => <a key={batch.batch_id} href={`/upload/${batch.upload_token}`} className="flex items-center justify-between rounded-lg border border-slate-200 p-3 text-sm hover:bg-slate-50"><span><span className="font-medium text-slate-900">Document request</span><span className="ml-2 text-slate-500">{Number(batch.pending_count)} awaiting upload · {Number(batch.uploaded_count)} in review · {Number(batch.completed_count)} complete</span></span><span className="font-medium text-slate-700">Open →</span></a>)}</div></Card> : null}
 
         {message ? <p className="rounded-lg bg-emerald-50 p-3 text-sm text-emerald-800">{message}</p> : null}{error ? <p className="rounded-lg bg-red-50 p-3 text-sm text-red-800">{error}</p> : null}
         <Button type="submit" loading={saveMutation.isPending} className="w-full">{saveMutation.isPending ? "Saving…" : "Save My Information"}</Button>

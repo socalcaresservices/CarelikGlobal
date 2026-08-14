@@ -6,4 +6,4 @@ The release adds candidate source tracking, CSV import with duplicate preview, a
 
 No automated employment decisioning is included. Ogevia does not rank, score, recommend, select, or reject candidates. Authorized organization staff make and record all recruiting and onboarding decisions.
 
-This release remains a draft until CI passes, Supabase migrations are validated outside production, tenant-isolation tests pass, internal candidate-token helper permissions are tightened, and the workforce workspace is made discoverable from the primary application navigation.
+Repository implementation is complete and checks pass. Staff manual intake, portal-link management, requested-document access, onboarding/document transfer continuity, workforce editing, and filtered CSV export are included. Release remains gated on applying the migrations to a non-production Supabase project, running database-backed end-to-end tests, and verifying two-organization tenant isolation before merge or production deployment.

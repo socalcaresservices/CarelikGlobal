@@ -2,6 +2,8 @@
 
 This branch implements an administrative recruiting/onboarding workflow. Ogevia does not score, rank, recommend, select, or reject candidates automatically. Pipeline changes and credential verification are explicit actions by authorized organization staff.
 
+**Audit result (2026-08-13): repository implementation is PR-ready.** Compilation and tests pass. Database security must still be validated after applying migrations in a non-production environment before merge or deployment.
+
 ## Implemented
 
 - Candidate pipeline list with source/stage filtering and human-controlled stage changes.
@@ -14,16 +16,16 @@ This branch implements an administrative recruiting/onboarding workflow. Ogevia 
 - Workforce availability supports multiple time windows on the same day.
 - Existing caregiver auth memberships are backfilled into workforce records by the migration.
 - Candidate-to-workforce transfer preserves profile, availability, and credentials.
-- Candidate and workforce schema/unit tests.
+- Candidate documents use the existing secure document request/review component.
+- People navigation is Candidates, Clients, and Care Team; `/team/:id` resolves workforce records.
+- Internal candidate portal helper RPCs are not directly executable by `anon` or `authenticated` browser clients.
+- Repository verification passes: `pnpm typecheck`, `pnpm lint`, `pnpm build`, and `pnpm test` (web 420, shared 118, UI 73, auth 10).
 
 ## Required before production deployment
 
-1. Run `pnpm typecheck`, `pnpm build`, and `pnpm test` in CI.
-2. Apply and validate the new Supabase migrations in a non-production environment first.
-3. Verify RLS with two organizations: cross-organization read/write/update/delete attempts must fail.
-4. Tighten direct execution privileges on internal candidate-token helper RPCs before production.
-5. Add a discoverable navigation entry for the new workforce workspace or complete the planned replacement of the legacy Team membership screen.
-6. Add the administrative UI control that creates and shares a candidate self-service token; the public route exists, but this branch currently does not expose that control on Candidate Detail.
-7. Perform end-to-end tests for CSV import, stage history, onboarding save, credential verification, candidate portal expiry/revocation, workforce transfer, and optional auth-account linking.
+1. Run the passing repository checks in CI and retain the results on the PR.
+2. Apply all Candidate/Hiring migrations to a non-production Supabase environment in timestamp order.
+3. Verify RLS with two organizations for cross-organization read/write/update/delete denial.
+4. Perform database-backed end-to-end tests for import, history, onboarding, credentials, documents, portal expiry/revocation, transfer, and account linking.
 
 Do not merge or deploy this branch until the verification items above are complete.

@@ -1,5 +1,17 @@
 # Candidate Hiring V1 — Test Matrix
 
+## Definition of Done status (audited 2026-08-13)
+
+Legend: **Pass** = covered by repository evidence/tests; **Partial** = implementation exists but its complete workflow is not covered; **Open** = required implementation is missing; **Unverified** = requires an applied non-production Supabase environment.
+
+- **Pass:** `pnpm typecheck`, `pnpm lint`, `pnpm build`, and `pnpm test` complete successfully. Test totals: web 420, shared 118, UI 73, auth 10.
+- **Pass:** Candidates, Clients, and Care Team navigation/routes; independent workforce records; legacy route aliases; CSV preview/duplicate classification; explicit stage changes; candidate detail; and workforce list tests.
+- **Partial:** candidate portal, onboarding, credential verification, document request/review, transfer, and account linking exist without complete database-backed end-to-end coverage.
+- **Pass:** manual staff candidate creation, staff token-link management, portal links to requested-document upload, onboarding/document continuity after transfer, filtered CSV export, and workforce profile/availability/credential editing are implemented.
+- **Unverified:** live token expiry/revocation, role denial paths, migration application, and cross-organization read/write/update/delete isolation.
+
+The repository Definition of Done is met. Deployment Definition of Done remains conditional on every Unverified database-backed item passing in a non-production environment.
+
 ## Candidate intake
 
 - Direct organization application creates a Candidate scoped to the correct organization.

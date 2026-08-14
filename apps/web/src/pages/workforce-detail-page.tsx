@@ -5,6 +5,7 @@ import { ArrowLeft } from "lucide-react";
 import { Button, Card, StatusBadge } from "@carelik/ui";
 import { useOrganization } from "@/providers/organization-provider";
 import { supabase } from "@/lib/supabase";
+import { DocumentsCard } from "@/pages/applicant-detail-page";
 
 type Weekday = "monday" | "tuesday" | "wednesday" | "thursday" | "friday" | "saturday" | "sunday";
 type Preference = "available" | "preferred";
@@ -35,6 +36,13 @@ interface WorkforceRecord {
   max_travel_minutes: number | null;
   languages: string[];
   status: "onboarding" | "ready" | "active" | "inactive";
+  onboarding_status: string | null;
+  onboarding_scheduled_at: string | null;
+  onboarding_method: string | null;
+  onboarding_location: string | null;
+  onboarding_instructions: string | null;
+  background_check_status: string | null;
+  compliance_status: string | null;
 }
 interface AvailabilityRow { id?: string; day_of_week: Weekday; start_time: string; end_time: string; preference: Preference; }
 interface CredentialRow { id: string; credential_type: string; issue_date: string | null; expiration_date: string | null; does_not_expire: boolean; issuing_organization: string | null; credential_number: string | null; verification_status: string; }
@@ -51,6 +59,8 @@ export function WorkforceDetailPage() {
   const canRead = hasPermission("membership.read");
   const canManage = hasPermission("membership.update");
   const canManageCredentials = hasPermission("credentials.update");
+  const canReadDocuments = hasPermission("documents.read");
+  const canManageDocuments = hasPermission("documents.manage");
 
   const recordQuery = useQuery({
     queryKey: ["workforce-record", activeOrganizationId, id],
@@ -102,12 +112,14 @@ export function WorkforceDetailPage() {
   const [credentialType, setCredentialType] = useState("");
   const [credentialIssue, setCredentialIssue] = useState("");
   const [credentialExpiration, setCredentialExpiration] = useState("");
+  const [profile, setProfile] = useState({ first_name: "", last_name: "", preferred_name: "", email: "", phone: "", address_street: "", address_city: "", address_state: "", address_zip: "", employment_type: "", available_start_date: "", min_weekly_hours: "", max_weekly_hours: "", min_shift_hours: "", max_shift_hours: "", max_travel_minutes: "", languages: "" });
 
   useEffect(() => {
     if (recordQuery.data) {
       setStatus(recordQuery.data.status);
       setHours(recordQuery.data.desired_weekly_hours?.toString() ?? "");
       setSelectedUserId(recordQuery.data.linked_user_id ?? "");
+      setProfile({ first_name: recordQuery.data.first_name, last_name: recordQuery.data.last_name, preferred_name: recordQuery.data.preferred_name ?? "", email: recordQuery.data.email ?? "", phone: recordQuery.data.phone ?? "", address_street: recordQuery.data.address_street ?? "", address_city: recordQuery.data.address_city ?? "", address_state: recordQuery.data.address_state ?? "", address_zip: recordQuery.data.address_zip ?? "", employment_type: recordQuery.data.employment_type ?? "", available_start_date: recordQuery.data.available_start_date ?? "", min_weekly_hours: recordQuery.data.min_weekly_hours?.toString() ?? "", max_weekly_hours: recordQuery.data.max_weekly_hours?.toString() ?? "", min_shift_hours: recordQuery.data.min_shift_hours?.toString() ?? "", max_shift_hours: recordQuery.data.max_shift_hours?.toString() ?? "", max_travel_minutes: recordQuery.data.max_travel_minutes?.toString() ?? "", languages: recordQuery.data.languages.join(", ") });
     }
   }, [recordQuery.data]);
 
@@ -119,7 +131,7 @@ export function WorkforceDetailPage() {
 
   const saveRecordMutation = useMutation({
     mutationFn: async () => {
-      const { error } = await supabase.from("caregiver_records").update({ status, desired_weekly_hours: hours ? Number(hours) : null }).eq("organization_id", activeOrganizationId!).eq("id", recordQuery.data!.id);
+      const { error } = await supabase.from("caregiver_records").update({ ...profile, preferred_name: profile.preferred_name || null, email: profile.email || null, phone: profile.phone || null, address_street: profile.address_street || null, address_city: profile.address_city || null, address_state: profile.address_state || null, address_zip: profile.address_zip || null, employment_type: profile.employment_type || null, available_start_date: profile.available_start_date || null, desired_weekly_hours: hours ? Number(hours) : null, min_weekly_hours: profile.min_weekly_hours ? Number(profile.min_weekly_hours) : null, max_weekly_hours: profile.max_weekly_hours ? Number(profile.max_weekly_hours) : null, min_shift_hours: profile.min_shift_hours ? Number(profile.min_shift_hours) : null, max_shift_hours: profile.max_shift_hours ? Number(profile.max_shift_hours) : null, max_travel_minutes: profile.max_travel_minutes ? Number(profile.max_travel_minutes) : null, languages: profile.languages.split(",").map((value) => value.trim()).filter(Boolean), status }).eq("organization_id", activeOrganizationId!).eq("id", recordQuery.data!.id);
       if (error) throw error;
     },
     onSuccess: () => { void queryClient.invalidateQueries({ queryKey: ["workforce-record", activeOrganizationId, id] }); void queryClient.invalidateQueries({ queryKey: ["care-team-records", activeOrganizationId] }); }
@@ -183,6 +195,9 @@ export function WorkforceDetailPage() {
       <Card><div className="flex items-start justify-between gap-3"><div><h2 className="font-semibold text-slate-950">Availability</h2><p className="mt-1 text-sm text-slate-500">Multiple time windows can be recorded for the same day.</p></div>{canManage ? <Button variant="secondary" onClick={() => availabilityMutation.mutate()} loading={availabilityMutation.isPending}>Save availability</Button> : null}</div><div className="mt-4 space-y-3">{WEEKDAYS.map((day) => <div key={day} className="rounded-lg border border-slate-200 p-3"><div className="flex justify-between"><p className="text-sm font-semibold text-slate-800">{title(day)}</p>{canManage ? <button type="button" onClick={() => addSlot(day)} className="text-xs font-medium text-slate-700">+ Add time</button> : null}</div>{slotsByDay[day].length === 0 ? <p className="mt-2 text-xs text-slate-400">Not recorded</p> : <div className="mt-2 space-y-2">{slotsByDay[day].map((slot,index) => <div key={`${day}-${index}`} className="grid gap-2 sm:grid-cols-[1fr_1fr_1fr_auto]"><input disabled={!canManage} type="time" value={slot.start_time} onChange={(e) => updateSlot(day,index,{start_time:e.target.value})} className="rounded-lg border border-slate-200 px-2 py-2 text-sm"/><input disabled={!canManage} type="time" value={slot.end_time} onChange={(e) => updateSlot(day,index,{end_time:e.target.value})} className="rounded-lg border border-slate-200 px-2 py-2 text-sm"/><select disabled={!canManage} value={slot.preference} onChange={(e) => updateSlot(day,index,{preference:e.target.value as Preference})} className="rounded-lg border border-slate-200 px-2 py-2 text-sm"><option value="available">Available</option><option value="preferred">Preferred</option></select>{canManage ? <button type="button" onClick={() => removeSlot(day,index)} className="px-2 text-sm text-red-600">Remove</button> : null}</div>)}</div>}</div>)}</div></Card>
 
       <Card><h2 className="font-semibold text-slate-950">Credentials</h2>{(credentialsQuery.data ?? []).length === 0 ? <p className="mt-3 text-sm text-slate-400">No credentials recorded.</p> : <div className="mt-3 overflow-x-auto"><table className="min-w-full text-sm"><thead><tr className="border-b border-slate-200 text-left text-xs uppercase tracking-wide text-slate-500"><th className="px-2 py-2">Credential</th><th className="px-2 py-2">Issue</th><th className="px-2 py-2">Expiration</th><th className="px-2 py-2">Verification</th></tr></thead><tbody>{(credentialsQuery.data ?? []).map((row) => <tr key={row.id} className="border-b border-slate-100"><td className="px-2 py-3 font-medium text-slate-900">{row.credential_type}</td><td className="px-2 py-3">{row.issue_date ?? "—"}</td><td className="px-2 py-3">{row.does_not_expire ? "Does not expire" : row.expiration_date ?? "—"}</td><td className="px-2 py-3"><StatusBadge label={title(row.verification_status)} tone={row.verification_status === "verified" ? "success" : "warning"}/></td></tr>)}</tbody></table></div>}{canManageCredentials ? <div className="mt-4 grid gap-3 border-t border-slate-100 pt-4 sm:grid-cols-3"><input placeholder="Credential type" value={credentialType} onChange={(e) => setCredentialType(e.target.value)} className="rounded-lg border border-slate-200 px-3 py-2 text-sm"/><label className="text-xs font-medium text-slate-600">Issue date<input type="date" value={credentialIssue} onChange={(e) => setCredentialIssue(e.target.value)} className="mt-1 block w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"/></label><label className="text-xs font-medium text-slate-600">Expiration date<input type="date" value={credentialExpiration} onChange={(e) => setCredentialExpiration(e.target.value)} className="mt-1 block w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"/></label><div className="sm:col-span-3"><Button disabled={!credentialType.trim()} loading={credentialMutation.isPending} onClick={() => credentialMutation.mutate()}>Add credential</Button></div></div> : null}</Card>
+      {canManage ? <Card><h2 className="font-semibold text-slate-950">Edit workforce profile</h2><div className="mt-4 grid gap-3 sm:grid-cols-2">{([['first_name','First name'],['last_name','Last name'],['preferred_name','Preferred name'],['email','Email'],['phone','Phone'],['address_street','Street address'],['address_city','City'],['address_state','State'],['address_zip','ZIP'],['employment_type','Employment type'],['available_start_date','Available start date'],['min_weekly_hours','Minimum weekly hours'],['max_weekly_hours','Maximum weekly hours'],['min_shift_hours','Minimum shift hours'],['max_shift_hours','Maximum shift hours'],['max_travel_minutes','Maximum travel minutes'],['languages','Languages (comma separated)']] as const).map(([key,label]) => <label key={key} className="text-xs font-medium text-slate-600">{label}<input type={key === 'available_start_date' ? 'date' : key.includes('hours') || key === 'max_travel_minutes' ? 'number' : key === 'email' ? 'email' : 'text'} value={profile[key]} onChange={(event) => setProfile({ ...profile, [key]: event.target.value })} className="mt-1 block w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"/></label>)}</div><div className="mt-4"><Button loading={saveRecordMutation.isPending} disabled={!profile.first_name.trim() || !profile.last_name.trim()} onClick={() => saveRecordMutation.mutate()}>Save profile</Button></div></Card> : null}
+
+      {record.applicant_id ? <><Card><h2 className="font-semibold text-slate-950">Hiring and onboarding continuity</h2><div className="mt-3 grid gap-3 text-sm sm:grid-cols-2"><p><span className="text-slate-500">Onboarding:</span> {record.onboarding_status ? title(record.onboarding_status) : "—"}</p><p><span className="text-slate-500">Scheduled:</span> {record.onboarding_scheduled_at ? new Date(record.onboarding_scheduled_at).toLocaleString() : "—"}</p><p><span className="text-slate-500">Method:</span> {record.onboarding_method ? title(record.onboarding_method) : "—"}</p><p><span className="text-slate-500">Location:</span> {record.onboarding_location ?? "—"}</p><p><span className="text-slate-500">Background check:</span> {record.background_check_status ? title(record.background_check_status) : "—"}</p><p><span className="text-slate-500">Compliance:</span> {record.compliance_status ? title(record.compliance_status) : "—"}</p>{record.onboarding_instructions ? <p className="sm:col-span-2"><span className="text-slate-500">Instructions:</span> {record.onboarding_instructions}</p> : null}</div></Card><DocumentsCard organizationId={activeOrganizationId} subjectType="applicant" subjectId={record.applicant_id} subjectName={`${record.first_name} ${record.last_name}`} subjectEmail={record.email ?? undefined} canRead={canReadDocuments} canManage={canManageDocuments}/></> : null}
     </section>
   );
 }

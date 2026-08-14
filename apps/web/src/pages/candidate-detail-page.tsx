@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, Clipboard, Link2, X } from "lucide-react";
 import { Button, Card, StatusBadge } from "@carelik/ui";
 import { useAuth } from "@carelik/auth";
 import { useOrganization } from "@/providers/organization-provider";
@@ -31,6 +31,7 @@ interface CredentialRow { id: string; credential_type: string; issue_date: strin
 interface RequirementRow { name: string; is_required: boolean; is_active: boolean; }
 interface StageHistoryRow { id: string; to_stage: string; note: string | null; changed_at: string; }
 interface OnboardingRow { status: string; scheduled_at: string | null; method: string | null; location: string | null; instructions: string | null; notes: string | null; background_check_status: string; compliance_status: string; completed_at: string | null; }
+interface PortalTokenRow { id: string; expires_at: string; created_at: string; revoked_at: string | null; last_used_at: string | null; }
 
 function title(value: string) { return value.replace(/_/g, " ").replace(/\b\w/g, (letter) => letter.toUpperCase()); }
 function formatAddress(candidate: CandidateRow) {
@@ -114,8 +115,19 @@ export function CandidateDetailPage() {
     }, enabled: !!activeOrganizationId && !!id && canRead
   });
 
+  const portalTokensQuery = useQuery({
+    queryKey: ["candidate-portal-links", activeOrganizationId, id],
+    queryFn: async () => {
+      const { data, error } = await supabase.from("candidate_portal_tokens").select("id, expires_at, created_at, revoked_at, last_used_at").eq("organization_id", activeOrganizationId!).eq("applicant_id", id!).order("created_at", { ascending: false });
+      if (error) throw error;
+      return (data ?? []) as PortalTokenRow[];
+    }, enabled: !!activeOrganizationId && !!id && canManage
+  });
+
   const [stageNote, setStageNote] = useState("");
   const [onboarding, setOnboarding] = useState<OnboardingRow>({ status: "not_scheduled", scheduled_at: null, method: null, location: null, instructions: null, notes: null, background_check_status: "not_started", compliance_status: "pending", completed_at: null });
+  const [portalTtlHours, setPortalTtlHours] = useState("168");
+  const [newPortalLink, setNewPortalLink] = useState<string | null>(null);
 
   useEffect(() => {
     if (onboardingQuery.data) setOnboarding(onboardingQuery.data);
@@ -156,6 +168,24 @@ export function CandidateDetailPage() {
     }, onSuccess: (recordId) => { void queryClient.invalidateQueries({ queryKey: ["care-team-records", activeOrganizationId] }); navigate(`/team/${recordId}`); }
   });
 
+  const createPortalLinkMutation = useMutation({
+    mutationFn: async () => {
+      const { data, error } = await supabase.rpc("create_candidate_portal_link", { target_organization_id: activeOrganizationId!, target_applicant_id: id!, ttl_hours: Number(portalTtlHours) });
+      if (error) throw error;
+      const result = (Array.isArray(data) ? data[0] : data) as { token: string; expires_at: string };
+      return `${window.location.origin}/candidate/${result.token}`;
+    },
+    onSuccess: (link) => { setNewPortalLink(link); void navigator.clipboard?.writeText(link); void queryClient.invalidateQueries({ queryKey: ["candidate-portal-links", activeOrganizationId, id] }); }
+  });
+
+  const revokePortalLinkMutation = useMutation({
+    mutationFn: async (tokenId: string) => {
+      const { error } = await supabase.rpc("revoke_candidate_portal_link", { target_organization_id: activeOrganizationId!, target_token_id: tokenId });
+      if (error) throw error;
+    },
+    onSuccess: () => void queryClient.invalidateQueries({ queryKey: ["candidate-portal-links", activeOrganizationId, id] })
+  });
+
   if (!canRead) return <Card><p className="text-sm text-slate-600">You do not have permission to view Candidates.</p></Card>;
   if (candidateQuery.isLoading) return <p className="text-sm text-slate-500">Loading candidate…</p>;
   if (candidateQuery.isError || !candidateQuery.data) return <p className="text-sm text-red-700">Could not load this candidate.</p>;
@@ -194,6 +224,7 @@ export function CandidateDetailPage() {
       />
 
       <Card><div className="flex flex-wrap items-center justify-between gap-4"><div><h2 className="font-semibold text-slate-950">Create Care Team workforce record</h2><p className="mt-1 text-sm text-slate-500">Authorized staff can copy the existing profile, availability and credentials into a workforce record. A login account is not required.</p></div>{candidate.pipeline_stage === "care_team" ? <StatusBadge label="Workforce record created" tone="success"/> : canTransfer ? <Button loading={transferMutation.isPending} onClick={() => transferMutation.mutate()}>Create workforce record</Button> : null}</div>{transferMutation.isError ? <p className="mt-2 text-sm text-red-700">Could not create the workforce record.</p> : null}</Card>
+      {canManage ? <Card><div className="flex flex-wrap items-start justify-between gap-4"><div><h2 className="font-semibold text-slate-950">Candidate self-service link</h2><p className="mt-1 text-sm text-slate-500">Create a secure expiring link. Only a newly generated link can be copied because Ogevia stores its hash.</p></div><div className="flex items-end gap-2"><label className="text-xs font-medium text-slate-600">Expires in<select value={portalTtlHours} onChange={(event) => setPortalTtlHours(event.target.value)} className="mt-1 block rounded-lg border border-slate-200 px-3 py-2 text-sm"><option value="24">24 hours</option><option value="72">3 days</option><option value="168">7 days</option><option value="336">14 days</option><option value="720">30 days</option></select></label><Button loading={createPortalLinkMutation.isPending} onClick={() => createPortalLinkMutation.mutate()}><Link2 className="mr-1.5 h-4 w-4"/>Create link</Button></div></div>{newPortalLink ? <div className="mt-4 flex items-center gap-2 rounded-lg bg-emerald-50 p-3"><p className="min-w-0 flex-1 break-all text-sm text-emerald-900">{newPortalLink}</p><Button size="sm" variant="secondary" onClick={() => void navigator.clipboard.writeText(newPortalLink)}><Clipboard className="mr-1 h-4 w-4"/>Copy</Button></div> : null}{createPortalLinkMutation.isError ? <p className="mt-3 text-sm text-red-700">Could not create the link.</p> : null}<div className="mt-4 space-y-2">{(portalTokensQuery.data ?? []).map((row) => { const active = !row.revoked_at && new Date(row.expires_at) > new Date(); return <div key={row.id} className="flex items-center justify-between rounded-lg border border-slate-200 px-3 py-2 text-sm"><div><StatusBadge label={active ? "Active" : row.revoked_at ? "Revoked" : "Expired"} tone={active ? "success" : "neutral"}/><span className="ml-2 text-slate-500">Expires {new Date(row.expires_at).toLocaleString()}</span>{row.last_used_at ? <span className="ml-2 text-xs text-slate-400">Last used {new Date(row.last_used_at).toLocaleString()}</span> : null}</div>{active ? <Button size="sm" variant="secondary" loading={revokePortalLinkMutation.isPending} onClick={() => revokePortalLinkMutation.mutate(row.id)}><X className="mr-1 h-4 w-4"/>Revoke</Button> : null}</div>; })}</div></Card> : null}
     </section>
   );
 }

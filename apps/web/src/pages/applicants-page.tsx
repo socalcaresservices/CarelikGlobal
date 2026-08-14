@@ -1,7 +1,7 @@
 import { useMemo, useRef, useState, type ChangeEvent } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
-import { Clipboard, FileUp } from "lucide-react";
+import { Clipboard, Download, FileUp, Plus } from "lucide-react";
 import { Button, Card, FilterBar, PageHeader, StatusBadge, type ActiveFilter, type StatusTone } from "@carelik/ui";
 import { useOrganization } from "@/providers/organization-provider";
 import { supabase } from "@/lib/supabase";
@@ -66,7 +66,7 @@ const PIPELINE_STAGES = [
   "withdrawn"
 ] as const;
 
-const IMPORT_SOURCES = ["indeed", "ziprecruiter", "referral", "agency_website", "other"] as const;
+const IMPORT_SOURCES = ["indeed", "ziprecruiter", "referral", "agency_website", "manual", "other"] as const;
 
 const stageTone: Record<string, StatusTone> = {
   imported: "neutral",
@@ -235,6 +235,10 @@ export function ApplicantsPage() {
   const [importMessage, setImportMessage] = useState<string | null>(null);
   const [stageSavingId, setStageSavingId] = useState<string | null>(null);
   const [stageError, setStageError] = useState<string | null>(null);
+  const [showManual, setShowManual] = useState(false);
+  const [manualBusy, setManualBusy] = useState(false);
+  const [manualError, setManualError] = useState<string | null>(null);
+  const [manualCandidate, setManualCandidate] = useState({ first_name: "", last_name: "", email: "", phone: "", position_applied_for: "", notes: "" });
 
   const previewCounts = useMemo(() => ({
     new: previewRows.filter((row) => row.disposition === "new").length,
@@ -326,6 +330,39 @@ export function ApplicantsPage() {
     }
   }
 
+  async function createManualCandidate() {
+    if (!activeOrganizationId) return;
+    setManualBusy(true);
+    setManualError(null);
+    try {
+      const { error } = await supabase.rpc("create_manual_candidate", {
+        target_organization_id: activeOrganizationId,
+        candidate_payload: manualCandidate
+      });
+      if (error) throw error;
+      setManualCandidate({ first_name: "", last_name: "", email: "", phone: "", position_applied_for: "", notes: "" });
+      setShowManual(false);
+      void queryClient.invalidateQueries({ queryKey: ["candidates", activeOrganizationId] });
+    } catch (cause) {
+      setManualError(cause instanceof Error ? cause.message : "Could not create this candidate.");
+    } finally {
+      setManualBusy(false);
+    }
+  }
+
+  function exportFilteredCandidates() {
+    const quote = (value: unknown) => `"${String(value ?? "").replace(/"/g, '""')}"`;
+    const header = ["First name", "Last name", "Email", "Phone", "Stage", "Source", "Position", "Desired weekly hours", "Applied"];
+    const rows = table.rows.map((row) => [row.first_name, row.last_name, row.email, row.phone, row.pipeline_stage, row.source, row.position_applied_for, row.desired_weekly_hours, row.applied_at]);
+    const blob = new Blob([[header, ...rows].map((row) => row.map(quote).join(",")).join("\r\n")], { type: "text/csv;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = `candidates-${new Date().toISOString().slice(0, 10)}.csv`;
+    anchor.click();
+    URL.revokeObjectURL(url);
+  }
+
   if (!canRead) {
     return (
       <section className="mx-auto max-w-4xl">
@@ -354,6 +391,9 @@ export function ApplicantsPage() {
               <p className="mt-1 text-sm text-slate-500">Use the organization application link or import a CSV exported from Indeed, ZipRecruiter, or another recruiting system.</p>
             </div>
             <div className="flex flex-wrap gap-2">
+              <Button type="button" onClick={() => setShowManual((value) => !value)}>
+                <Plus className="mr-1.5 h-4 w-4" /> Add candidate
+              </Button>
               <Button type="button" variant="secondary" onClick={() => void copyApplicationLink()}>
                 <Clipboard className="mr-1.5 h-4 w-4" /> {applicationCopied ? "Copied" : "Copy application link"}
               </Button>
@@ -363,6 +403,22 @@ export function ApplicantsPage() {
             </div>
           </div>
           {applicationCopyError ? <p className="mt-3 break-all rounded-lg bg-slate-50 p-2 text-xs text-slate-600">Copy this link: {applicationCopyError}</p> : null}
+
+          {showManual ? (
+            <div className="mt-5 rounded-xl border border-slate-200 p-4">
+              <h4 className="font-medium text-slate-900">Add a candidate manually</h4>
+              <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                <input aria-label="First name" placeholder="First name" value={manualCandidate.first_name} onChange={(event) => setManualCandidate({ ...manualCandidate, first_name: event.target.value })} className="rounded-lg border border-slate-200 px-3 py-2 text-sm" />
+                <input aria-label="Last name" placeholder="Last name" value={manualCandidate.last_name} onChange={(event) => setManualCandidate({ ...manualCandidate, last_name: event.target.value })} className="rounded-lg border border-slate-200 px-3 py-2 text-sm" />
+                <input aria-label="Email" type="email" placeholder="Email" value={manualCandidate.email} onChange={(event) => setManualCandidate({ ...manualCandidate, email: event.target.value })} className="rounded-lg border border-slate-200 px-3 py-2 text-sm" />
+                <input aria-label="Phone" placeholder="Phone" value={manualCandidate.phone} onChange={(event) => setManualCandidate({ ...manualCandidate, phone: event.target.value })} className="rounded-lg border border-slate-200 px-3 py-2 text-sm" />
+                <input aria-label="Position" placeholder="Position applied for" value={manualCandidate.position_applied_for} onChange={(event) => setManualCandidate({ ...manualCandidate, position_applied_for: event.target.value })} className="rounded-lg border border-slate-200 px-3 py-2 text-sm sm:col-span-2" />
+                <textarea aria-label="Notes" placeholder="Internal notes" value={manualCandidate.notes} onChange={(event) => setManualCandidate({ ...manualCandidate, notes: event.target.value })} className="min-h-20 rounded-lg border border-slate-200 px-3 py-2 text-sm sm:col-span-2" />
+              </div>
+              {manualError ? <p className="mt-3 text-sm text-red-700">{manualError}</p> : null}
+              <div className="mt-3 flex gap-2"><Button disabled={!manualCandidate.first_name.trim() || !manualCandidate.last_name.trim() || !manualCandidate.email.trim()} loading={manualBusy} onClick={() => void createManualCandidate()}>Create candidate</Button><Button variant="secondary" onClick={() => setShowManual(false)}>Cancel</Button></div>
+            </div>
+          ) : null}
 
           {showImport ? (
             <div className="mt-5 rounded-xl border border-slate-200 p-4">
@@ -437,6 +493,9 @@ export function ApplicantsPage() {
             <h3 className="font-semibold text-slate-950">Candidate pipeline</h3>
             <p className="mt-1 text-xs text-slate-500">Imported applicants, direct applications, onboarding, and ready-to-work records in one view.</p>
           </div>
+          <Button type="button" variant="secondary" onClick={exportFilteredCandidates} disabled={table.rows.length === 0}>
+            <Download className="mr-1.5 h-4 w-4" /> Export filtered CSV
+          </Button>
           <FilterBar
             activeFilters={activeFilters}
             onClearAll={activeFilters.length > 0 ? filters.clearAll : undefined}

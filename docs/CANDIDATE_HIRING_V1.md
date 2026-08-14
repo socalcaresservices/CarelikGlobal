@@ -1,5 +1,13 @@
 # Ogevia Candidate Hiring V1
 
+## Implementation status (audited 2026-08-13)
+
+This document is the product requirements document (PRD), not a statement that every requirement is complete. The current branch implements the core candidate pipeline, public application, CSV duplicate preview/import, candidate detail, multi-slot availability, generic credentials, onboarding, workforce records, account linking, and explicit candidate-to-workforce transfer.
+
+Implemented by the completion migration and UI: staff/manual candidate entry; staff controls for candidate self-service links; portal access to requested-document uploads; onboarding and document continuity after transfer; workforce profile/availability/credential editing; and filtered Candidate CSV export.
+
+Repository checks pass. Database-backed end-to-end and two-organization RLS tests still require the migrations to be applied to a non-production Supabase environment. Production release readiness remains conditional on that verification. See `CANDIDATE_HIRING_TEST_MATRIX.md` and `CANDIDATE_HIRING_BUILD_VERIFICATION.md`.
+
 ## Purpose
 
 Build a human-controlled recruiting and onboarding workspace for care organizations. This module manages administrative workflow only. Ogevia must not automatically rank, select, reject, or recommend candidates for employment. Hiring decisions remain with authorized organization staff.
