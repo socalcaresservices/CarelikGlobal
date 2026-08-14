@@ -11,6 +11,12 @@ publish = "apps/web/dist"
 NODE_VERSION = "20"
 PNPM_VERSION = "9.15.4"
 
+# Deploy previews must never inherit the production Supabase project. These
+# values are browser-safe public credentials for the isolated Ogevia demo.
+[context.deploy-preview.environment]
+VITE_SUPABASE_URL = "https://ldwhmuirjbwcpzwrwzgv.supabase.co"
+VITE_SUPABASE_ANON_KEY = "sb_publishable_ChZMVbL6XTaE78wJ2ft6bg_9JCGIRUV"
+
 [functions]
 directory = "apps/netlify-functions/functions"
 node_bundler = "esbuild"
