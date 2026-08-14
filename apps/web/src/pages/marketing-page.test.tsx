@@ -3,6 +3,7 @@ import { MemoryRouter } from "react-router-dom";
 import { describe, expect, it, vi } from "vitest";
 import { useAuth } from "@carelik/auth";
 import { MarketingPage } from "./marketing-page";
+import { toAdminUrl } from "@/lib/tenant-resolver";
 
 vi.mock("@carelik/auth", () => ({ useAuth: vi.fn() }));
 
@@ -35,7 +36,7 @@ describe("MarketingPage", () => {
     renderPage();
 
     const link = screen.getByRole("link", { name: "Go to platform admin" });
-    expect(link).toHaveAttribute("href", "/organizations");
+    expect(link).toHaveAttribute("href", toAdminUrl("/organizations"));
   });
 
   it("links to the pricing page", () => {
