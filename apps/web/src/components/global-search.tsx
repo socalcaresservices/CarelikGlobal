@@ -39,7 +39,7 @@ function routeFor(result: GlobalSearchResultRow): string {
     case "caregiver":
       return `/team/${result.entity_id}`;
     case "applicant":
-      return `/applicants/${result.entity_id}`;
+      return `/candidates/${result.entity_id}`;
     case "credential":
       return "/credentials";
     case "authorization":

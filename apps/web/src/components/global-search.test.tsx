@@ -147,7 +147,7 @@ describe("GlobalSearch", () => {
 
     fireEvent.click(screen.getByText("Casey Applicant"));
 
-    await waitFor(() => expect(screen.getByTestId("location")).toHaveTextContent(`/applicants/${APPLICANT_ID}`));
+    await waitFor(() => expect(screen.getByTestId("location")).toHaveTextContent(`/candidates/${APPLICANT_ID}`));
   });
 
   it("shows a loading state while searching and an error state on failure", async () => {

@@ -79,9 +79,9 @@ const overviewNav: NavItem[] = [
 ];
 
 const peopleNav: NavItem[] = [
-  { to: "/applicants", label: "Applicants", icon: UserPlus, permission: "applicants.read" },
+  { to: "/candidates", label: "Candidates", icon: UserPlus, permission: "applicants.read" },
   { to: "/clients", label: "Clients", icon: Users, permission: "clients.read", badgeKey: "clients_uncovered" },
-  { to: "/team", label: "Team", icon: HeartHandshake, permission: "membership.read" }
+  { to: "/team", label: "Care Team", icon: HeartHandshake, permission: "membership.read" }
 ];
 
 const complianceNav: NavItem[] = [

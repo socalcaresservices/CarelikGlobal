@@ -168,7 +168,7 @@ function formatDocumentStatus(status: DocumentRequestStatus) {
   return status.replace(/_/g, " ");
 }
 
-function DocumentsCard({
+export function DocumentsCard({
   organizationId,
   subjectType,
   subjectId,
@@ -181,7 +181,7 @@ function DocumentsCard({
   subjectType: DocumentRequestSubjectType;
   subjectId: string;
   subjectName: string;
-  subjectEmail: string | null;
+  subjectEmail: string | null | undefined;
   canRead: boolean;
   canManage: boolean;
 }) {

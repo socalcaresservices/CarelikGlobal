@@ -4,7 +4,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { useOrganization } from "@/providers/organization-provider";
 import { supabase } from "@/lib/supabase";
-import { ApplicantsPage } from "./applicants-page";
+import { WorkforcePage } from "./workforce-page";
 
 vi.mock("@/providers/organization-provider", () => ({ useOrganization: vi.fn() }));
 vi.mock("@/lib/supabase", () => ({
@@ -18,7 +18,7 @@ const mockedUseOrganization = vi.mocked(useOrganization);
 const mockedRpc = vi.mocked(supabase.rpc);
 const ORG_ID = "11111111-1111-4111-8111-111111111111";
 
-function baseOrganization(hasPermission = () => true) {
+function organizationContext(hasPermission = () => true) {
   return {
     organizations: [],
     activeOrganization: {
@@ -43,39 +43,34 @@ function renderPage() {
   return render(
     <MemoryRouter>
       <QueryClientProvider client={queryClient}>
-        <ApplicantsPage />
+        <WorkforcePage />
       </QueryClientProvider>
     </MemoryRouter>
   );
 }
 
-describe("Candidates pipeline", () => {
+describe("WorkforcePage", () => {
   afterEach(() => vi.clearAllMocks());
 
-  it("shows a not-available message without applicants.read", () => {
-    mockedUseOrganization.mockReturnValue(baseOrganization(() => false));
+  it("does not expose the roster without membership.read", () => {
+    mockedUseOrganization.mockReturnValue(organizationContext(() => false));
     renderPage();
-    expect(screen.getByText("Not available")).toBeInTheDocument();
+    expect(screen.getByText("You do not have permission to view workforce records.")).toBeInTheDocument();
   });
 
-  it("lists candidates returned by list_candidates_v1", async () => {
-    mockedUseOrganization.mockReturnValue(baseOrganization());
+  it("lists workforce records independently from login access", async () => {
+    mockedUseOrganization.mockReturnValue(organizationContext());
     mockedRpc.mockResolvedValue({
       data: [
         {
-          id: "candidate-1",
-          first_name: "Ashley",
-          last_name: "Rivera",
+          id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+          linked_user_id: null,
+          display_name: "Ashley Rivera",
           email: "ashley@example.com",
-          phone: null,
-          pipeline_stage: "application_received",
-          source: "indeed",
-          position_applied_for: "Caregiver",
-          applied_at: "2026-08-13T12:00:00.000Z",
+          phone: "555-0100",
+          status: "active",
           desired_weekly_hours: 30,
-          available_start_date: null,
-          imported_at: null,
-          created_at: "2026-08-13T12:00:00.000Z"
+          available_start_date: "2026-08-20"
         }
       ],
       error: null
@@ -84,16 +79,12 @@ describe("Candidates pipeline", () => {
     renderPage();
 
     await waitFor(() => expect(screen.getByText("Ashley Rivera")).toBeInTheDocument());
-    expect(screen.getAllByText("Indeed")).not.toHaveLength(0);
-    expect(screen.getByText("Caregiver")).toBeInTheDocument();
-    expect(screen.getByText("30h/week")).toBeInTheDocument();
-    expect(mockedRpc).toHaveBeenCalledWith("list_candidates_v1", { target_organization_id: ORG_ID });
-  });
-
-  it("shows the empty Candidates state", async () => {
-    mockedUseOrganization.mockReturnValue(baseOrganization());
-    mockedRpc.mockResolvedValue({ data: [], error: null } as never);
-    renderPage();
-    await waitFor(() => expect(screen.getByText("No candidates yet.")).toBeInTheDocument());
+    expect(screen.getByText("No login")).toBeInTheDocument();
+    expect(screen.getByText("30/wk")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Ashley Rivera" })).toHaveAttribute(
+      "href",
+      "/team/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"
+    );
+    expect(mockedRpc).toHaveBeenCalledWith("list_care_team_records", { target_organization_id: ORG_ID });
   });
 });
