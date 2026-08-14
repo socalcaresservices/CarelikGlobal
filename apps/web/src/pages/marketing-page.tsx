@@ -1,6 +1,7 @@
 import { Link } from "react-router-dom";
 import { useAuth } from "@carelik/auth";
 import { Card, buttonVariants } from "@carelik/ui";
+import { toAdminUrl } from "@/lib/tenant-resolver";
 
 // Public, unauthenticated marketing homepage - no AppShell/PlatformShell,
 // no session required. Lives outside <ProtectedRoute> in App.tsx, and is
@@ -66,9 +67,12 @@ export function MarketingPage() {
               Pricing
             </Link>
             {user ? (
-              <Link to="/organizations" className={buttonVariants({ variant: "secondary", size: "sm" })}>
+              <a
+                href={toAdminUrl("/organizations")}
+                className={buttonVariants({ variant: "secondary", size: "sm" })}
+              >
                 Go to platform admin
-              </Link>
+              </a>
             ) : (
               <Link to="/login" className={buttonVariants({ variant: "secondary", size: "sm" })}>
                 Sign in
