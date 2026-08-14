@@ -471,7 +471,7 @@ describe("ClientDetailPage", () => {
       address: null,
       care_notes: null,
       status: "active",
-      client_requested_services: []
+      client_requested_services: [{ service_id: "service-1", services: { id: "service-1", name: "Personal care" } }]
     });
     mockedRpc.mockResolvedValue({ data: [], error: null } as never);
 
@@ -480,8 +480,8 @@ describe("ClientDetailPage", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Authorizations" }));
 
-    const link = await screen.findByText("Add authorization for this client");
-    expect(link.closest("a")).toHaveAttribute("href", `/authorizations?clientId=${CLIENT_ID}`);
+    const link = await screen.findByText("Add Personal care authorization");
+    expect(link.closest("a")).toHaveAttribute("href", `/authorizations?clientId=${CLIENT_ID}&serviceId=service-1`);
   });
 
   it("lists caregiver assignments and assigns a new one on the Caregivers tab", async () => {
