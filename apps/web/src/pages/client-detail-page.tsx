@@ -831,7 +831,7 @@ export function ClientDetailPage() {
                 <li key={match.caregiver_user_id} className="py-3">
                   <div className="flex items-center justify-between">
                     <Link
-                      to={`/team/${match.caregiver_user_id}`}
+                      to="/team"
                       className="text-sm font-medium text-slate-900 hover:underline"
                     >
                       {match.caregiver_name}
@@ -956,7 +956,7 @@ export function ClientDetailPage() {
               {(assignmentsQuery.data ?? []).map((row) => (
                 <li key={row.id} className="flex items-center justify-between py-2.5 text-sm">
                   <div>
-                    <Link to={`/team/${row.caregiver_user_id}`} className="font-medium text-slate-900 hover:underline">
+                    <Link to="/team" className="font-medium text-slate-900 hover:underline">
                       {row.caregiver_name}
                     </Link>
                     <span className="ml-2 text-slate-500">

@@ -375,7 +375,7 @@ export function AccessPage() {
                 return (
                   <tr key={member.membership_id} className="border-b border-slate-100 last:border-0">
                     <td className="py-2.5 text-slate-800">
-                      <Link to={`/team/${member.user_id}`} className="hover:underline">
+                      <Link to="/team" className="hover:underline">
                         {member.display_name}
                       </Link>
                       {isSelf ? <span className="ml-1 text-xs text-slate-400">(you)</span> : null}

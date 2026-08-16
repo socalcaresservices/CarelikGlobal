@@ -57,6 +57,14 @@ interface ClientOption {
 
 interface WorkforceOption { id: string; linked_user_id: string | null; first_name: string; last_name: string; preferred_name: string | null; }
 
+interface AuthorizationOption {
+  id: string;
+  service_id: string;
+  period_start: string;
+  period_end: string;
+  services: { code: string; name: string } | null;
+}
+
 const statusStyles: Record<ShiftRow["status"], string> = {
   scheduled: "bg-sky-50 text-sky-700",
   completed: "bg-emerald-50 text-emerald-700",
@@ -74,6 +82,8 @@ function toLocalInputValue(date: Date) {
 export function SchedulePage() {
   const { activeOrganizationId, activeOrganization, hasPermission } = useOrganization();
   const queryClient = useQueryClient();
+  const [searchParams] = useSearchParams();
+  const [clientId, setClientId] = useState(() => searchParams.get("clientId") ?? "");
 
   const canRead = hasPermission("shifts.read");
   const canManage = hasPermission("shifts.update");
@@ -119,6 +129,22 @@ export function SchedulePage() {
     enabled: !!activeOrganizationId && canManage
   });
 
+  const authorizationsQuery = useQuery({
+    queryKey: ["authorizations-for-scheduling", activeOrganizationId, clientId],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("client_authorizations")
+        .select("id, service_id, period_start, period_end, services(code, name)")
+        .eq("organization_id", activeOrganizationId!)
+        .eq("client_id", clientId)
+        .is("deleted_at", null)
+        .order("period_end", { ascending: false });
+      if (error) throw error;
+      return (data ?? []) as unknown as AuthorizationOption[];
+    },
+    enabled: !!activeOrganizationId && !!clientId && canManage
+  });
+
   function refreshShifts() {
     void queryClient.invalidateQueries({ queryKey: ["shifts", activeOrganizationId] });
   }
@@ -127,9 +153,6 @@ export function SchedulePage() {
   // caregiver" link on the Client detail page's Schedule tab), so the
   // Care Team list is ready immediately instead of making the person
   // re-pick the client they just came from.
-  const [searchParams] = useSearchParams();
-  const [clientId, setClientId] = useState(() => searchParams.get("clientId") ?? "");
-
   const filters = useFilters<ShiftRow>(shiftsQuery.data, {
     status: (row, value) => row.status === value
   });
@@ -171,6 +194,7 @@ export function SchedulePage() {
   const inTwoHours = new Date(now.getTime() + 2 * 60 * 60 * 1000);
 
   const [caregiverRecordId, setCaregiverRecordId] = useState("");
+  const [authorizationId, setAuthorizationId] = useState("");
   const [startsAt, setStartsAt] = useState(toLocalInputValue(inOneHour));
   const [endsAt, setEndsAt] = useState(toLocalInputValue(inTwoHours));
   const [notes, setNotes] = useState("");
@@ -178,6 +202,10 @@ export function SchedulePage() {
   const [formError, setFormError] = useState<string | null>(null);
   const [rowError, setRowError] = useState<string | null>(null);
   const [pendingId, setPendingId] = useState<string | null>(null);
+  const shiftDate = startsAt.slice(0, 10);
+  const schedulableAuthorizations = (authorizationsQuery.data ?? []).filter(
+    (authorization) => authorization.period_start <= shiftDate && authorization.period_end >= shiftDate
+  );
 
   async function handleCreate(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -188,8 +216,9 @@ export function SchedulePage() {
     const startDate = new Date(startsAt);
     const endDate = new Date(endsAt);
     const caregiver = (workforceQuery.data ?? []).find((row: WorkforceOption) => row.id === caregiverRecordId);
-    if (!clientId || !caregiver) {
-      setFormError("Select a client and Care Team member.");
+    const authorization = schedulableAuthorizations.find((row) => row.id === authorizationId);
+    if (!clientId || !caregiver || !authorization) {
+      setFormError("Select a client, authorized service, and Care Team member.");
       return;
     }
     if (endDate.getTime() <= startDate.getTime()) {
@@ -204,6 +233,7 @@ export function SchedulePage() {
         client_id: clientId,
         caregiver_record_id: caregiver.id,
         caregiver_user_id: caregiver.linked_user_id,
+        service_id: authorization.service_id,
         starts_at: startDate.toISOString(),
         ends_at: endDate.toISOString(),
         notes: notes || null
@@ -262,7 +292,10 @@ export function SchedulePage() {
                 id="shift-client"
                 required
                 value={clientId}
-                onChange={(event) => setClientId(event.target.value)}
+                onChange={(event) => {
+                  setClientId(event.target.value);
+                  setAuthorizationId("");
+                }}
                 className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900"
               >
                 <option value="" disabled>
@@ -274,6 +307,30 @@ export function SchedulePage() {
                   </option>
                 ))}
               </select>
+            </div>
+            <div>
+              <label htmlFor="shift-authorization" className="block text-xs font-medium text-slate-600">
+                Authorized service
+              </label>
+              <select
+                id="shift-authorization"
+                required
+                value={authorizationId}
+                onChange={(event) => setAuthorizationId(event.target.value)}
+                className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900"
+              >
+                <option value="" disabled>
+                  Select an active authorization
+                </option>
+                {schedulableAuthorizations.map((authorization) => (
+                  <option key={authorization.id} value={authorization.id}>
+                    {authorization.services?.code} — {authorization.services?.name} ({authorization.period_start} to {authorization.period_end})
+                  </option>
+                ))}
+              </select>
+              {clientId && !authorizationsQuery.isLoading && schedulableAuthorizations.length === 0 ? (
+                <p className="mt-1 text-xs text-amber-700">Add an authorization covering this shift date before scheduling.</p>
+              ) : null}
             </div>
             <div>
               <label htmlFor="shift-caregiver" className="block text-xs font-medium text-slate-600">
@@ -307,7 +364,10 @@ export function SchedulePage() {
                 type="datetime-local"
                 required
                 value={startsAt}
-                onChange={(event) => setStartsAt(event.target.value)}
+                onChange={(event) => {
+                  setStartsAt(event.target.value);
+                  setAuthorizationId("");
+                }}
                 className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900"
               />
             </div>

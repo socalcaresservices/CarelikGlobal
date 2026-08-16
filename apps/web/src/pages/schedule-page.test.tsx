@@ -21,6 +21,8 @@ const mockedFrom = vi.mocked(supabase.from);
 const ORG_ID = "11111111-1111-4111-8111-111111111111";
 const CLIENT_ID = "22222222-2222-4222-8222-222222222222";
 const CAREGIVER_ID = "44444444-4444-4444-8444-444444444444";
+const AUTHORIZATION_ID = "55555555-5555-4555-8555-555555555555";
+const SERVICE_ID = "66666666-6666-4666-8666-666666666666";
 
 function baseOrganization() {
   return {
@@ -78,7 +80,18 @@ function mockReadableClients(rows: unknown[]) {
   return selectMock;
 }
 
-function mockSchedulingTables(clients: unknown[], workforce: unknown[], insert = vi.fn().mockResolvedValue({ error: null })) {
+function mockSchedulingTables(
+  clients: unknown[],
+  workforce: unknown[],
+  insert = vi.fn().mockResolvedValue({ error: null }),
+  authorizations: unknown[] = [{
+    id: AUTHORIZATION_ID,
+    service_id: SERVICE_ID,
+    period_start: "2026-01-01",
+    period_end: "2026-12-31",
+    services: { code: "PCS", name: "Personal Care" }
+  }]
+) {
   mockedFrom.mockImplementation((table: string) => {
     if (table === "clients") return { select: mockReadableClients(clients) } as never;
     if (table === "caregiver_records") {
@@ -87,6 +100,13 @@ function mockSchedulingTables(clients: unknown[], workforce: unknown[], insert =
       const inStatus = vi.fn(() => ({ is }));
       const eq = vi.fn(() => ({ in: inStatus }));
       return { select: vi.fn(() => ({ eq })) } as never;
+    }
+    if (table === "client_authorizations") {
+      const order = vi.fn().mockResolvedValue({ data: authorizations, error: null });
+      const isDeleted = vi.fn(() => ({ order }));
+      const eqClient = vi.fn(() => ({ is: isDeleted }));
+      const eqOrganization = vi.fn(() => ({ eq: eqClient }));
+      return { select: vi.fn(() => ({ eq: eqOrganization })) } as never;
     }
     if (table === "shifts") return { insert } as never;
     return {} as never;
@@ -170,6 +190,10 @@ describe("SchedulePage", () => {
 
     fireEvent.change(screen.getByLabelText("Client"), { target: { value: CLIENT_ID } });
     await waitFor(() =>
+      expect(screen.getByRole("option", { name: /PCS — Personal Care/ })).toBeInTheDocument()
+    );
+    fireEvent.change(screen.getByLabelText("Authorized service"), { target: { value: AUTHORIZATION_ID } });
+    await waitFor(() =>
       expect(screen.getByRole("option", { name: "Sam Caregiver (no login)" })).toBeInTheDocument()
     );
     fireEvent.change(screen.getByLabelText("Caregiver"), { target: { value: CAREGIVER_ID } });
@@ -181,7 +205,8 @@ describe("SchedulePage", () => {
           organization_id: ORG_ID,
           client_id: CLIENT_ID,
           caregiver_record_id: CAREGIVER_ID,
-          caregiver_user_id: null
+          caregiver_user_id: null,
+          service_id: SERVICE_ID
         })
       )
     );

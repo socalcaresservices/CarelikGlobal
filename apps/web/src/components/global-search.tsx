@@ -25,10 +25,12 @@ const resultTypeLabels: Record<GlobalSearchResultRow["result_type"], string> = {
   authorization: "Authorization",
   incident: "Incident",
   service: "Service",
-  applicant: "Applicant"
+  applicant: "Candidate"
 };
 
-// Clients, caregivers, and applicants have their own detail page today;
+// Clients and candidates have stable detail identifiers. Legacy caregiver
+// search results still carry a login id, not the Care Team workforce-record id,
+// so they route to the Care Team list instead of a broken detail URL.
 // the rest route to their list page rather than a fabricated deep link.
 // Services are managed inline from the Authorizations page (there's no
 // standalone services page), so a service result routes there too.
@@ -37,7 +39,7 @@ function routeFor(result: GlobalSearchResultRow): string {
     case "client":
       return `/clients/${result.entity_id}`;
     case "caregiver":
-      return `/team/${result.entity_id}`;
+      return "/team";
     case "applicant":
       return `/candidates/${result.entity_id}`;
     case "credential":

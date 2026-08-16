@@ -457,7 +457,7 @@ describe("ClientDetailPage", () => {
     expect(screen.getByText("87")).toBeInTheDocument();
     expect(screen.getByText("Proximity 30/30")).toBeInTheDocument();
     expect(screen.getByText("Skills 10/10")).toBeInTheDocument();
-    expect(screen.getByText("Sam Caregiver").closest("a")).toHaveAttribute("href", "/team/caregiver-1");
+    expect(screen.getByText("Sam Caregiver").closest("a")).toHaveAttribute("href", "/team");
   });
 
   it("links to a pre-filled add-authorization flow from the Authorizations tab", async () => {
