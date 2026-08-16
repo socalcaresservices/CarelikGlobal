@@ -67,6 +67,7 @@ function mockOrgLetterhead() {
 describe("ServiceVerificationReportsPage", () => {
   afterEach(() => {
     vi.clearAllMocks();
+    window.history.replaceState({}, "", "/");
   });
 
   it("shows a not-available message without visits.read", () => {
@@ -139,6 +140,22 @@ describe("ServiceVerificationReportsPage", () => {
         })
       )
     );
+  });
+
+  it("opens a named caregiver folder and preserves it in the report link", async () => {
+    mockedUseOrganization.mockReturnValue({
+      activeOrganizationId: ORG_ID,
+      activeOrganization: { displayName: "Acme Care" },
+      hasPermission: vi.fn(() => true)
+    } as never);
+    mockOrgLetterhead();
+    mockedRpc.mockResolvedValue({ data: [visitRow], error: null } as never);
+
+    renderPage();
+    fireEvent.click(await screen.findByRole("button", { name: /Caregiver Jordan Rivera/ }));
+
+    await waitFor(() => expect(window.location.search).toContain(`caregiver=${visitRow.caregiver_user_id}`));
+    expect(await screen.findByText("Caregiver Jordan Rivera (1)")).toBeInTheDocument();
   });
 
   it("shows the visit number and authorization before/after balance", async () => {

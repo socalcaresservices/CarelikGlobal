@@ -1,6 +1,6 @@
 import { Fragment, useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { FileText, Printer } from "lucide-react";
+import { FileText, Folder, Printer } from "lucide-react";
 import { Button, Card, PageHeader, StatusBadge, type StatusTone } from "@carelik/ui";
 import { useOrganization } from "@/providers/organization-provider";
 import { supabase } from "@/lib/supabase";
@@ -101,7 +101,9 @@ export function ServiceVerificationReportsPage() {
   const [correctionError, setCorrectionError] = useState<string | null>(null);
 
   const [clientFilter, setClientFilter] = useState("");
-  const [caregiverFilter, setCaregiverFilter] = useState("");
+  const [caregiverFilter, setCaregiverFilter] = useState(
+    () => new URLSearchParams(window.location.search).get("caregiver") ?? ""
+  );
   const [serviceFilter, setServiceFilter] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
   const [dateFrom, setDateFrom] = useState("");
@@ -231,6 +233,19 @@ export function ServiceVerificationReportsPage() {
     return Array.from(map.entries());
   }, [rows]);
 
+  const selectedCaregiverName = useMemo(
+    () => caregiverOptions.find(([id]) => id === caregiverFilter)?.[1] ?? null,
+    [caregiverFilter, caregiverOptions]
+  );
+
+  function selectCaregiverFolder(caregiverId: string) {
+    setCaregiverFilter(caregiverId);
+    const url = new URL(window.location.href);
+    if (caregiverId) url.searchParams.set("caregiver", caregiverId);
+    else url.searchParams.delete("caregiver");
+    window.history.replaceState({}, "", url);
+  }
+
   const serviceOptions = useMemo(() => {
     const map = new Map<string, string>();
     rows.forEach((row) => map.set(row.service_id, row.service_name));
@@ -313,6 +328,36 @@ export function ServiceVerificationReportsPage() {
       </div>
 
       <Card className="print:hidden">
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <h3 className="font-semibold text-slate-950">Caregiver folders</h3>
+            <p className="mt-1 text-sm text-slate-500">Open a caregiver folder to view, print, or bookmark only that caregiver&apos;s sheets.</p>
+          </div>
+          {caregiverFilter ? (
+            <button type="button" onClick={() => selectCaregiverFolder("")} className="text-sm font-semibold text-sky-700 underline">
+              All caregivers
+            </button>
+          ) : null}
+        </div>
+        <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          {caregiverOptions.map(([id, name]) => (
+            <button
+              key={id}
+              type="button"
+              onClick={() => selectCaregiverFolder(id)}
+              className="flex items-center gap-3 rounded-xl border border-slate-200 p-4 text-left hover:border-sky-400 hover:bg-sky-50"
+            >
+              <Folder className="h-6 w-6 text-sky-700" />
+              <span>
+                <span className="block text-xs font-semibold uppercase tracking-wide text-slate-500">Caregiver</span>
+                <span className="block font-semibold text-slate-950">{name}</span>
+              </span>
+            </button>
+          ))}
+        </div>
+      </Card>
+
+      <Card className="print:hidden">
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-6">
           <div>
             <label htmlFor="report-client" className="block text-xs font-medium text-slate-600">
@@ -339,7 +384,7 @@ export function ServiceVerificationReportsPage() {
             <select
               id="report-caregiver"
               value={caregiverFilter}
-              onChange={(event) => setCaregiverFilter(event.target.value)}
+              onChange={(event) => selectCaregiverFolder(event.target.value)}
               className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900"
             >
               <option value="">All caregivers</option>
@@ -435,6 +480,7 @@ export function ServiceVerificationReportsPage() {
           </div>
           <div className="text-right text-sm text-slate-600">
             <p className="font-semibold">Service Verification Report</p>
+            {selectedCaregiverName ? <p>Caregiver: {selectedCaregiverName}</p> : null}
             <p>{new Date().toLocaleDateString()}</p>
           </div>
         </div>
@@ -443,7 +489,9 @@ export function ServiceVerificationReportsPage() {
       <Card className="print:border-none print:p-0 print:shadow-none">
         <div className="flex items-center gap-3 print:hidden">
           <FileText className="h-5 w-5 text-sky-700" />
-          <h3 className="font-semibold text-slate-950">Visits ({rows.length})</h3>
+          <h3 className="font-semibold text-slate-950">
+            {selectedCaregiverName ? `Caregiver ${selectedCaregiverName}` : "Visits"} ({rows.length})
+          </h3>
         </div>
         {visitsQuery.isLoading ? (
           <p className="mt-3 text-sm text-slate-500">Loading…</p>
