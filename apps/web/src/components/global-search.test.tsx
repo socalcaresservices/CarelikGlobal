@@ -143,7 +143,7 @@ describe("GlobalSearch", () => {
     fireEvent.change(screen.getByLabelText("Search everything"), { target: { value: "casey" } });
 
     await waitFor(() => expect(screen.getByText("Casey Applicant")).toBeInTheDocument());
-    expect(screen.getByText("Applicant")).toBeInTheDocument();
+    expect(screen.getByText("Candidate")).toBeInTheDocument();
 
     fireEvent.click(screen.getByText("Casey Applicant"));
 
@@ -190,7 +190,7 @@ describe("GlobalSearch", () => {
     fireEvent.keyDown(input, { key: "ArrowDown" });
     fireEvent.keyDown(input, { key: "Enter" });
 
-    await waitFor(() => expect(screen.getByTestId("location")).toHaveTextContent(`/team/${CAREGIVER_ID}`));
+    await waitFor(() => expect(screen.getByTestId("location")).toHaveTextContent("/team"));
   });
 
   it("closes the dropdown on Escape without navigating", async () => {

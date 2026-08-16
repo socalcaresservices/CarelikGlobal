@@ -22,6 +22,7 @@ import {
 } from "@carelik/shared";
 import { useOrganization } from "@/providers/organization-provider";
 import { supabase } from "@/lib/supabase";
+import { ClientRequestedSchedule } from "@/components/client-requested-schedule";
 
 // Record layout per docs/design-system.md: header with every headline
 // metric visible at once, a KPI row for the thing that matters most for
@@ -699,6 +700,10 @@ export function ClientDetailPage() {
                   </div>
                 </FormSection>
 
+                <FormSection title="Requested days and times" description="Add up to two requested shifts per day, including optional free-text timing notes." columns={1}>
+                  <ClientRequestedSchedule organizationId={activeOrganizationId!} clientId={id!} canManage={canManage} />
+                </FormSection>
+
                 <FormSection title="Needs" description="Used for CareScore matching." columns={2}>
                   <MultiSelectCombobox
                     label="Language needs"
@@ -826,7 +831,7 @@ export function ClientDetailPage() {
                 <li key={match.caregiver_user_id} className="py-3">
                   <div className="flex items-center justify-between">
                     <Link
-                      to={`/team/${match.caregiver_user_id}`}
+                      to="/team"
                       className="text-sm font-medium text-slate-900 hover:underline"
                     >
                       {match.caregiver_name}
@@ -851,15 +856,8 @@ export function ClientDetailPage() {
         <Card>
           <div className="flex flex-wrap items-center justify-between gap-3">
             <h3 className="font-semibold text-slate-950">Authorizations</h3>
-            {canManageAuthorizations ? (
-              <Link
-                to={`/authorizations?clientId=${id}`}
-                className="text-sm font-medium text-slate-700 underline-offset-2 hover:underline"
-              >
-                Add authorization for this client
-              </Link>
-            ) : null}
           </div>
+          {canManageAuthorizations ? <div className="mt-3 flex flex-wrap gap-2">{(client.client_requested_services ?? []).map((row) => row.services ? <Link key={row.service_id} to={`/authorizations?clientId=${id}&serviceId=${row.service_id}`} className="rounded-md border border-slate-200 px-2.5 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50">Add {row.services.name} authorization</Link> : null)}{(client.client_requested_services ?? []).length === 0 ? <p className="text-sm text-slate-400">Select requested services on Overview before adding authorizations.</p> : null}</div> : null}
           {authorizationsQuery.isLoading ? (
             <p className="mt-3 text-sm text-slate-500">Loading…</p>
           ) : authorizationsQuery.isError ? (
@@ -958,7 +956,7 @@ export function ClientDetailPage() {
               {(assignmentsQuery.data ?? []).map((row) => (
                 <li key={row.id} className="flex items-center justify-between py-2.5 text-sm">
                   <div>
-                    <Link to={`/team/${row.caregiver_user_id}`} className="font-medium text-slate-900 hover:underline">
+                    <Link to="/team" className="font-medium text-slate-900 hover:underline">
                       {row.caregiver_name}
                     </Link>
                     <span className="ml-2 text-slate-500">

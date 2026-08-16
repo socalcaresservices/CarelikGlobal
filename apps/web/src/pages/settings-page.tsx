@@ -173,6 +173,7 @@ interface DocumentTypeRow {
   category: string | null;
   requires_expiration: boolean;
   is_active: boolean;
+  is_platform_default: boolean;
 }
 
 function DocumentTypesCard({
@@ -195,12 +196,9 @@ function DocumentTypesCard({
   const listQuery = useQuery({
     queryKey: ["document-types", organizationId],
     queryFn: async () => {
-      const { data, error: queryError } = await supabase
-        .from("document_types")
-        .select("id, organization_id, name, category, requires_expiration, is_active")
-        .or(`organization_id.is.null,organization_id.eq.${organizationId}`)
-        .is("deleted_at", null)
-        .order("name");
+      const { data, error: queryError } = await supabase.rpc("list_configurable_document_types", {
+        target_organization_id: organizationId!
+      });
       if (queryError) throw queryError;
       return (data ?? []) as DocumentTypeRow[];
     },
@@ -239,10 +237,11 @@ function DocumentTypesCard({
     setError(null);
     setPendingId(row.id);
     try {
-      const { error: updateError } = await supabase
-        .from("document_types")
-        .update({ is_active: !row.is_active })
-        .eq("id", row.id);
+      const { error: updateError } = await supabase.rpc("set_document_type_enabled", {
+        target_organization_id: organizationId,
+        target_document_type_id: row.id,
+        target_enabled: !row.is_active
+      });
       if (updateError) throw updateError;
       refresh();
     } catch (cause) {
@@ -260,8 +259,8 @@ function DocumentTypesCard({
     <Card>
       <h3 className="font-semibold text-slate-950">Document types</h3>
       <p className="mt-1 text-xs text-slate-500">
-        The documents that can be requested from applicants and employees - platform defaults are available to
-        every organization; add your own below.
+        Choose the documents your agency uses. Ogevia defaults can be enabled or disabled here, and you can add
+        agency-specific types below.
       </p>
 
       {canManage ? (
@@ -320,13 +319,13 @@ function DocumentTypesCard({
               <span className={row.is_active ? "text-sm text-slate-800" : "text-sm text-slate-400 line-through"}>
                 {row.name}
                 {row.category ? <span className="ml-2 text-xs text-slate-400">{row.category}</span> : null}
-                {row.organization_id === null ? (
+                {row.is_platform_default ? (
                   <span className="ml-2 text-xs font-medium uppercase tracking-wide text-slate-400">
                     Platform default
                   </span>
                 ) : null}
               </span>
-              {canManage && row.organization_id !== null ? (
+              {canManage ? (
                 <Button
                   type="button"
                   variant="secondary"
