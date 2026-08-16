@@ -3,7 +3,7 @@ import { MemoryRouter } from "react-router-dom";
 import { describe, expect, it, vi } from "vitest";
 import { useAuth } from "@carelik/auth";
 import { MarketingPage } from "./marketing-page";
-import { toAdminUrl } from "@/lib/tenant-resolver";
+import { toAdminUrl, toAppUrl } from "@/lib/tenant-resolver";
 
 vi.mock("@carelik/auth", () => ({ useAuth: vi.fn() }));
 
@@ -26,7 +26,9 @@ describe("MarketingPage", () => {
     expect(screen.getByText("Care operations software for home care agencies")).toBeInTheDocument();
     expect(screen.getByText("CareScore matching")).toBeInTheDocument();
     expect(screen.getByText("Service Verification")).toBeInTheDocument();
-    expect(screen.getAllByRole("link", { name: "Sign in" }).length).toBeGreaterThan(0);
+    const signInLinks = screen.getAllByRole("link", { name: "Sign in" });
+    expect(signInLinks.length).toBeGreaterThan(0);
+    expect(signInLinks.every((link) => link.getAttribute("href") === toAppUrl("/login"))).toBe(true);
     expect(screen.queryByText("Go to Ogevia")).not.toBeInTheDocument();
   });
 

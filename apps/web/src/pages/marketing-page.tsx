@@ -1,7 +1,7 @@
 import { Link } from "react-router-dom";
 import { useAuth } from "@carelik/auth";
 import { Card, buttonVariants } from "@carelik/ui";
-import { toAdminUrl } from "@/lib/tenant-resolver";
+import { toAdminUrl, toAppUrl } from "@/lib/tenant-resolver";
 
 // Public, unauthenticated marketing homepage - no AppShell/PlatformShell,
 // no session required. Lives outside <ProtectedRoute> in App.tsx, and is
@@ -74,9 +74,9 @@ export function MarketingPage() {
                 Go to platform admin
               </a>
             ) : (
-              <Link to="/login" className={buttonVariants({ variant: "secondary", size: "sm" })}>
+              <a href={toAppUrl("/login")} className={buttonVariants({ variant: "secondary", size: "sm" })}>
                 Sign in
-              </Link>
+              </a>
             )}
           </nav>
         </div>
@@ -92,9 +92,9 @@ export function MarketingPage() {
           all in one place.
         </p>
         <div className="mt-8 flex flex-wrap items-center justify-center gap-3">
-          <Link to="/login" className={buttonVariants({ variant: "primary" })}>
+          <a href={toAppUrl("/login")} className={buttonVariants({ variant: "primary" })}>
             Sign in
-          </Link>
+          </a>
           <Link to="/pricing" className={buttonVariants({ variant: "secondary" })}>
             View plans
           </Link>
@@ -125,9 +125,9 @@ export function MarketingPage() {
           <Link to="/pricing" className={buttonVariants({ variant: "primary" })}>
             View plans
           </Link>
-          <Link to="/login" className={buttonVariants({ variant: "secondary" })}>
+          <a href={toAppUrl("/login")} className={buttonVariants({ variant: "secondary" })}>
             Sign in
-          </Link>
+          </a>
         </div>
       </section>
 
