@@ -30,14 +30,10 @@ import {
 interface FoundClient {
   client_id: string;
   client_code: string;
+  client_name: string;
 }
 
-interface StartableShift {
-  shift_id: string;
-  visit_number: string;
-  client_id: string;
-  client_code: string;
-  client_name: string;
+interface AuthorizedService {
   service_id: string;
   service_code: string;
   service_name: string;
@@ -46,8 +42,6 @@ interface StartableShift {
   max_monthly_hours: number;
   hours_used_this_month: number;
   hours_scheduled_this_month: number;
-  starts_at: string;
-  ends_at: string;
 }
 
 interface ActiveVisit {
@@ -124,8 +118,8 @@ function formatServiceHours(hours: number) {
   return Number.isInteger(hours) ? String(hours) : hours.toFixed(1);
 }
 
-function availableServiceHours(shift: StartableShift) {
-  return Math.max(0, shift.max_monthly_hours - shift.hours_used_this_month - shift.hours_scheduled_this_month);
+function availableServiceHours(service: AuthorizedService) {
+  return Math.max(0, service.max_monthly_hours - service.hours_used_this_month - service.hours_scheduled_this_month);
 }
 
 function normalizeError(cause: unknown, fallback: string) {
@@ -269,7 +263,7 @@ export function ServiceVerificationPage() {
   function invalidateAll() {
     void queryClient.invalidateQueries({ queryKey: ["active-service-visit-v2", activeOrganizationId] });
     void queryClient.invalidateQueries({ queryKey: ["service-visits", activeOrganizationId] });
-    void queryClient.invalidateQueries({ queryKey: ["startable-shifts", activeOrganizationId] });
+    void queryClient.invalidateQueries({ queryKey: ["authorized-visit-services", activeOrganizationId] });
   }
 
   const activeVisitQuery = useQuery({
@@ -284,15 +278,15 @@ export function ServiceVerificationPage() {
     enabled: !!activeOrganizationId
   });
 
-  const shiftsQuery = useQuery({
-    queryKey: ["startable-shifts", activeOrganizationId, lookupClient?.client_id],
+  const servicesQuery = useQuery({
+    queryKey: ["authorized-visit-services", activeOrganizationId, lookupClient?.client_id],
     queryFn: async () => {
-      const { data, error: queryError } = await supabase.rpc("list_startable_shifts_for_client", {
+      const { data, error: queryError } = await supabase.rpc("list_authorized_services_for_client", {
         target_organization_id: activeOrganizationId!,
         target_client_id: lookupClient!.client_id
       });
       if (queryError) throw queryError;
-      return (data ?? []) as StartableShift[];
+      return (data ?? []) as AuthorizedService[];
     },
     enabled: !!activeOrganizationId && !!lookupClient && phase === "start"
   });
@@ -327,14 +321,14 @@ export function ServiceVerificationPage() {
   }, [phase]);
 
   useEffect(() => {
-    if ((shiftsQuery.data ?? []).length === 1 && !selectedShiftId) {
-      setSelectedShiftId(shiftsQuery.data![0]!.shift_id);
+    if ((servicesQuery.data ?? []).length === 1 && !selectedShiftId) {
+      setSelectedShiftId(servicesQuery.data![0]!.service_id);
     }
-  }, [selectedShiftId, shiftsQuery.data]);
+  }, [selectedShiftId, servicesQuery.data]);
 
-  const selectedShift = useMemo(
-    () => (shiftsQuery.data ?? []).find((shift) => shift.shift_id === selectedShiftId),
-    [selectedShiftId, shiftsQuery.data]
+  const selectedService = useMemo(
+    () => (servicesQuery.data ?? []).find((service) => service.service_id === selectedShiftId),
+    [selectedShiftId, servicesQuery.data]
   );
 
   const active = activeVisitQuery.data;
@@ -351,17 +345,17 @@ export function ServiceVerificationPage() {
     setLookingUp(true);
     setError(null);
     try {
-      const { data, error: lookupError } = await supabase.rpc("find_client_by_code", {
+      const { data, error: lookupError } = await supabase.rpc("find_client_for_visit", {
         target_organization_id: activeOrganizationId,
-        target_client_code: clientCodeInput.trim()
+        search_term: clientCodeInput.trim()
       });
       if (lookupError) throw lookupError;
       const found = (Array.isArray(data) ? data[0] : data) as FoundClient | undefined;
-      if (!found) throw new Error("That client ID was not found or is not active.");
+      if (!found) throw new Error("That client name or ID was not found or is not active.");
       setLookupClient(found);
       setSelectedShiftId("");
     } catch (cause) {
-      setError(normalizeError(cause, "That client ID could not be looked up."));
+      setError(normalizeError(cause, "That client could not be looked up."));
     } finally {
       setLookingUp(false);
     }
@@ -375,13 +369,14 @@ export function ServiceVerificationPage() {
   }
 
   async function startVisit() {
-    if (!activeOrganizationId || !selectedShift) return;
+    if (!activeOrganizationId || !lookupClient || !selectedService) return;
     setSaving(true);
     setError(null);
     try {
-      const { data, error: startError } = await supabase.rpc("start_service_visit", {
+      const { data, error: startError } = await supabase.rpc("start_ad_hoc_service_visit", {
         target_organization_id: activeOrganizationId,
-        target_shift_id: selectedShift.shift_id,
+        target_client_id: lookupClient.client_id,
+        target_service_id: selectedService.service_id,
         visit_task_categories: [],
         visit_service_notes: null
       });
@@ -575,12 +570,12 @@ export function ServiceVerificationPage() {
 
       {phase === "start" ? (
         <Card className="space-y-6 rounded-2xl p-4 sm:p-6">
-          <StepHeader step={1} title="Start visit" subtitle="Enter the client code and confirm the scheduled service." />
+          <StepHeader step={1} title="Start visit" subtitle="Enter the client name or ID, then select an authorized service." />
 
           {!lookupClient ? (
             <div className="space-y-3">
               <label className="block text-sm font-medium text-slate-700">
-                Client code
+                Client name or ID
                 <input
                   type="text"
                   value={clientCodeInput}
@@ -591,7 +586,7 @@ export function ServiceVerificationPage() {
                       void lookupClientByCode();
                     }
                   }}
-                  placeholder="Enter or scan client code"
+                  placeholder="Enter client name or ID"
                   autoCapitalize="characters"
                   className="mt-2 min-h-14 w-full rounded-xl border border-slate-300 bg-white px-4 text-base"
                 />
@@ -611,38 +606,39 @@ export function ServiceVerificationPage() {
               <div className="flex items-center justify-between rounded-2xl bg-slate-50 p-4">
                 <div>
                   <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Verified client</p>
-                  <p className="mt-1 font-semibold text-slate-950">{lookupClient.client_code}</p>
+                  <p className="mt-1 font-semibold text-slate-950">{lookupClient.client_name}</p>
+                  <p className="text-xs text-slate-500">{lookupClient.client_code}</p>
                 </div>
                 <button type="button" onClick={changeClient} className="min-h-11 text-sm font-semibold text-slate-600 underline">
                   Change
                 </button>
               </div>
 
-              {shiftsQuery.isLoading ? <p className="text-sm text-slate-500">Loading today&apos;s scheduled visit…</p> : null}
-              {shiftsQuery.isError ? (
+              {servicesQuery.isLoading ? <p className="text-sm text-slate-500">Loading authorized services…</p> : null}
+              {servicesQuery.isError ? (
                 <p className="rounded-xl bg-red-50 p-3 text-sm font-medium text-red-700">
-                  Today&apos;s scheduled visit could not be loaded. Contact your agency administrator.
+                  Authorized services could not be loaded. Contact your agency administrator.
                 </p>
               ) : null}
-              {shiftsQuery.isSuccess && (shiftsQuery.data ?? []).length === 0 ? (
+              {servicesQuery.isSuccess && (servicesQuery.data ?? []).length === 0 ? (
                 <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
-                  <p className="font-semibold">No scheduled visit is available for this client today.</p>
-                  <p className="mt-1">Extra visits must be added by an agency administrator before you can start them.</p>
+                  <p className="font-semibold">No active service authorization is available for this client.</p>
+                  <p className="mt-1">Ask an agency administrator to add or renew the authorization.</p>
                 </div>
               ) : null}
 
-              {(shiftsQuery.data ?? []).length > 0 ? (
+              {(servicesQuery.data ?? []).length > 0 ? (
                 <div className="space-y-3">
-                  <p className="text-sm font-semibold text-slate-700">Scheduled service</p>
-                  {shiftsQuery.data!.map((shift) => {
-                    const selected = shift.shift_id === selectedShiftId;
-                    const available = availableServiceHours(shift);
+                  <p className="text-sm font-semibold text-slate-700">Authorized service</p>
+                  {servicesQuery.data!.map((service) => {
+                    const selected = service.service_id === selectedShiftId;
+                    const available = availableServiceHours(service);
                     return (
                       <button
-                        key={shift.shift_id}
+                        key={service.service_id}
                         type="button"
                         aria-pressed={selected}
-                        onClick={() => setSelectedShiftId(shift.shift_id)}
+                        onClick={() => setSelectedShiftId(service.service_id)}
                         className={cn(
                           "flex w-full gap-3 rounded-2xl border-2 p-4 text-left transition",
                           selected
@@ -661,17 +657,17 @@ export function ServiceVerificationPage() {
                           <Check className="h-4 w-4" />
                         </span>
                         <span className="min-w-0 flex-1">
-                          <span className="block font-semibold text-slate-950">{shift.client_name}</span>
+                          <span className="block font-semibold text-slate-950">{lookupClient.client_name}</span>
                           <span className="mt-1 flex flex-wrap items-center gap-2">
                             <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-bold text-slate-700">
-                              {shift.service_code}
+                              {service.service_code}
                             </span>
                             <span className="text-sm font-semibold text-[var(--color-accent,#4f46e5)]">
-                              {shift.service_name}
+                              {service.service_name}
                             </span>
                           </span>
                           <span className="mt-2 block text-xs text-slate-500">
-                            Scheduled {formatClockTime(shift.starts_at)}–{formatClockTime(shift.ends_at)} · {formatServiceHours(available)}h available after scheduled commitments
+                            {formatServiceHours(available)}h currently available under this authorization
                           </span>
                         </span>
                       </button>
@@ -680,7 +676,7 @@ export function ServiceVerificationPage() {
                 </div>
               ) : null}
 
-              {selectedShift ? (
+              {selectedService ? (
                 <div className="space-y-4">
                   <div className="rounded-2xl border border-slate-200 bg-white p-4">
                     <div className="flex items-center gap-2 text-sm font-semibold text-slate-700">
@@ -966,7 +962,7 @@ export function ServiceVerificationPage() {
           />
 
           <Button className="min-h-12 w-full" onClick={reset}>
-            Done
+            Start next visit
           </Button>
         </Card>
       ) : null}

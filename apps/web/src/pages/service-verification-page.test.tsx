@@ -24,7 +24,6 @@ const ORG_ID = "11111111-1111-4111-8111-111111111111";
 const USER_ID = "44444444-4444-4444-8444-444444444444";
 const CLIENT_ID = "77777777-7777-4777-8777-777777777777";
 const SERVICE_ID = "88888888-8888-4888-8888-888888888888";
-const SHIFT_ID = "22222222-2222-4222-8222-222222222222";
 const VISIT_ID = "66666666-6666-4666-8666-666666666666";
 const CLIENT_CODE = "CL-ABC123";
 
@@ -50,14 +49,9 @@ function baseOrganization(overrides: Record<string, unknown> = {}) {
   };
 }
 
-const foundClient = { client_id: CLIENT_ID, client_code: CLIENT_CODE };
+const foundClient = { client_id: CLIENT_ID, client_code: CLIENT_CODE, client_name: "Darby Crash" };
 
-const startableShift = {
-  shift_id: SHIFT_ID,
-  visit_number: "ACME-V-20260813-AB12",
-  client_id: CLIENT_ID,
-  client_code: CLIENT_CODE,
-  client_name: "Darby Crash",
+const authorizedService = {
   service_id: SERVICE_ID,
   service_code: "862",
   service_name: "Respite Care",
@@ -65,9 +59,7 @@ const startableShift = {
   authorization_id: "99999999-9999-4999-8999-999999999999",
   max_monthly_hours: 80,
   hours_used_this_month: 24.5,
-  hours_scheduled_this_month: 2,
-  starts_at: "2026-08-13T21:30:00.000Z",
-  ends_at: "2026-08-13T23:30:00.000Z"
+  hours_scheduled_this_month: 2
 };
 
 const activeVisit = {
@@ -97,10 +89,10 @@ function mockRpcImplementation(overrides: Record<string, unknown> = {}) {
   mockedRpc.mockImplementation((fn: string) => {
     if (fn in overrides) return Promise.resolve(overrides[fn]) as never;
     if (fn === "get_active_service_visit_v2") return Promise.resolve({ data: [], error: null }) as never;
-    if (fn === "find_client_by_code") return Promise.resolve({ data: [foundClient], error: null }) as never;
-    if (fn === "list_startable_shifts_for_client") return Promise.resolve({ data: [startableShift], error: null }) as never;
+    if (fn === "find_client_for_visit") return Promise.resolve({ data: [foundClient], error: null }) as never;
+    if (fn === "list_authorized_services_for_client") return Promise.resolve({ data: [authorizedService], error: null }) as never;
     if (fn === "list_service_visits") return Promise.resolve({ data: [], error: null }) as never;
-    if (fn === "start_service_visit") return Promise.resolve({ data: VISIT_ID, error: null }) as never;
+    if (fn === "start_ad_hoc_service_visit") return Promise.resolve({ data: VISIT_ID, error: null }) as never;
     return Promise.resolve({ data: null, error: null }) as never;
   });
 }
@@ -120,17 +112,17 @@ describe("ServiceVerificationPage v2", () => {
     vi.unstubAllGlobals();
   });
 
-  it("only starts an administrator-scheduled shift and keeps service code paired with service", async () => {
+  it("starts an authorized ad-hoc visit by client name or ID", async () => {
     mockRpcImplementation();
     renderPage();
 
-    fireEvent.change(await screen.findByLabelText("Client code"), { target: { value: CLIENT_CODE } });
+    fireEvent.change(await screen.findByLabelText("Client name or ID"), { target: { value: "Darby Crash" } });
     fireEvent.click(screen.getByRole("button", { name: "Verify client" }));
 
     await waitFor(() =>
-      expect(mockedRpc).toHaveBeenCalledWith("find_client_by_code", {
+      expect(mockedRpc).toHaveBeenCalledWith("find_client_for_visit", {
         target_organization_id: ORG_ID,
-        target_client_code: CLIENT_CODE
+        search_term: "Darby Crash"
       })
     );
 
@@ -142,24 +134,25 @@ describe("ServiceVerificationPage v2", () => {
     fireEvent.click(screen.getByRole("button", { name: "Start visit now" }));
 
     await waitFor(() =>
-      expect(mockedRpc).toHaveBeenCalledWith("start_service_visit", {
+      expect(mockedRpc).toHaveBeenCalledWith("start_ad_hoc_service_visit", {
         target_organization_id: ORG_ID,
-        target_shift_id: SHIFT_ID,
+        target_client_id: CLIENT_ID,
+        target_service_id: SERVICE_ID,
         visit_task_categories: [],
         visit_service_notes: null
       })
     );
   });
 
-  it("blocks the caregiver when no administrator-scheduled visit exists", async () => {
-    mockRpcImplementation({ list_startable_shifts_for_client: { data: [], error: null } });
+  it("blocks the caregiver when the client has no active authorization", async () => {
+    mockRpcImplementation({ list_authorized_services_for_client: { data: [], error: null } });
     renderPage();
 
-    fireEvent.change(await screen.findByLabelText("Client code"), { target: { value: CLIENT_CODE } });
+    fireEvent.change(await screen.findByLabelText("Client name or ID"), { target: { value: CLIENT_CODE } });
     fireEvent.click(screen.getByRole("button", { name: "Verify client" }));
 
-    expect(await screen.findByText("No scheduled visit is available for this client today.")).toBeInTheDocument();
-    expect(screen.getByText(/Extra visits must be added by an agency administrator/)).toBeInTheDocument();
+    expect(await screen.findByText("No active service authorization is available for this client.")).toBeInTheDocument();
+    expect(screen.getByText(/add or renew the authorization/)).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Start visit now" })).not.toBeInTheDocument();
   });
 
