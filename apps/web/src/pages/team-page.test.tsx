@@ -69,6 +69,38 @@ function mockRpc({ members = [], hours = [] }: { members?: unknown[]; hours?: un
   });
 }
 
+// A chainable, awaitable stand-in for supabase-js's query builder - every
+// chain method returns the same object, and awaiting it at any point
+// (however deep the chain) resolves to the configured result. Good enough
+// for this page, which never inspects the builder itself, only the final
+// { data, error } shape.
+function createBuilder(result: { data?: unknown; error?: unknown } = { data: null, error: null }) {
+  const builder: Record<string, unknown> = {};
+  const chain = () => builder;
+  builder.select = vi.fn(chain);
+  builder.insert = vi.fn(chain);
+  builder.update = vi.fn(chain);
+  builder.eq = vi.fn(chain);
+  builder.is = vi.fn(chain);
+  builder.order = vi.fn(chain);
+  builder.then = (resolve: (value: typeof result) => unknown, reject?: (reason?: unknown) => unknown) =>
+    Promise.resolve(result).then(resolve, reject);
+  return builder;
+}
+
+// Table-discriminating default: any table not explicitly overridden reads
+// as empty rather than throwing, since most tests don't care about the
+// unlinked-caregivers roster query that fires on every mount once
+// membership.update is held.
+function mockFrom(overrides: Record<string, ReturnType<typeof createBuilder>> = {}) {
+  mockedFrom.mockImplementation(
+    (table: string) =>
+      (Object.prototype.hasOwnProperty.call(overrides, table)
+        ? overrides[table]
+        : createBuilder({ data: [], error: null })) as never
+  );
+}
+
 function renderPage() {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
@@ -95,7 +127,7 @@ describe("TeamPage", () => {
     expect(screen.getByText("Not available")).toBeInTheDocument();
   });
 
-  it("lists caregivers with their role, hours, and status, and hides the invite form without membership.invite", async () => {
+  it("lists caregivers with their role, hours, and status, and hides the roster/invite forms without membership.update or membership.invite", async () => {
     mockedUseAuth.mockReturnValue(authUser("user-1"));
     mockedUseOrganization.mockReturnValue({
       ...baseOrganization(),
@@ -121,6 +153,7 @@ describe("TeamPage", () => {
     expect(screen.getByText("15h / 20h")).toBeInTheDocument();
     expect(screen.getByRole("cell", { name: "active" })).toBeInTheDocument();
     expect(screen.queryByText("Add a caregiver")).not.toBeInTheDocument();
+    expect(screen.queryByText("Invite a team member")).not.toBeInTheDocument();
 
     const link = screen.getByText("Sam Caregiver").closest("a");
     expect(link).toHaveAttribute("href", `/org/acme/team/${CAREGIVER_ID}`);
@@ -129,6 +162,7 @@ describe("TeamPage", () => {
   it("shows a dash for hours when there's no matching hours row", async () => {
     mockedUseAuth.mockReturnValue(authUser("user-1"));
     mockedUseOrganization.mockReturnValue({ ...baseOrganization(), hasPermission: vi.fn(() => true) });
+    mockFrom();
     mockRpc({
       members: [
         {
@@ -151,6 +185,7 @@ describe("TeamPage", () => {
   it("filters by search", async () => {
     mockedUseAuth.mockReturnValue(authUser("user-1"));
     mockedUseOrganization.mockReturnValue({ ...baseOrganization(), hasPermission: vi.fn(() => true) });
+    mockFrom();
     mockRpc({
       members: [
         { membership_id: "m1", user_id: CAREGIVER_ID, display_name: "Sam Caregiver", role: "staff", status: "active" },
@@ -171,6 +206,7 @@ describe("TeamPage", () => {
   it("ANDs the role and status filters together", async () => {
     mockedUseAuth.mockReturnValue(authUser("user-1"));
     mockedUseOrganization.mockReturnValue({ ...baseOrganization(), hasPermission: vi.fn(() => true) });
+    mockFrom();
     mockRpc({
       members: [
         { membership_id: "m1", user_id: CAREGIVER_ID, display_name: "Sam Caregiver", role: "caregiver", status: "active" },
@@ -202,6 +238,7 @@ describe("TeamPage", () => {
   it("shows the share-staff-portal action with a generic, client-free message", async () => {
     mockedUseAuth.mockReturnValue(authUser("user-1"));
     mockedUseOrganization.mockReturnValue({ ...baseOrganization(), hasPermission: vi.fn(() => true) });
+    mockFrom();
     mockRpc({ members: [], hours: [] });
     const writeText = vi.fn().mockResolvedValue(undefined);
     Object.assign(navigator, { clipboard: { writeText } });
@@ -241,6 +278,7 @@ describe("TeamPage", () => {
   it("shows a guided empty state when there are no caregivers", async () => {
     mockedUseAuth.mockReturnValue(authUser("user-1"));
     mockedUseOrganization.mockReturnValue({ ...baseOrganization(), hasPermission: vi.fn(() => true) });
+    mockFrom();
     mockRpc({ members: [], hours: [] });
 
     renderPage();
@@ -249,12 +287,13 @@ describe("TeamPage", () => {
     );
   });
 
-  it("focuses the invite form's first name field when the empty state's call to action is clicked", async () => {
+  it("focuses the roster form's first name field when the empty state's call to action is clicked", async () => {
     // The "Add your first caregiver" button in the empty state doesn't
-    // open a modal or navigate anywhere - the invite form already sits on
+    // open a modal or navigate anywhere - the roster form already sits on
     // this page, so the button just needs to send focus there.
     mockedUseAuth.mockReturnValue(authUser("user-1"));
     mockedUseOrganization.mockReturnValue({ ...baseOrganization(), hasPermission: vi.fn(() => true) });
+    mockFrom();
     mockRpc({ members: [], hours: [] });
 
     renderPage();
@@ -266,37 +305,135 @@ describe("TeamPage", () => {
     expect(screen.getByLabelText("First name")).toHaveFocus();
   });
 
-  it("adds a caregiver as a roster record and shows a success message", async () => {
+  it("adds a caregiver as a roster record without inviting them", async () => {
     mockedUseAuth.mockReturnValue(authUser("user-1"));
     mockedUseOrganization.mockReturnValue({ ...baseOrganization(), hasPermission: vi.fn(() => true) });
     mockRpc({ members: [], hours: [] });
-    mockedInviteMember.mockResolvedValue({
-      userId: "user-9",
-      email: "new@example.com",
-      organizationId: ORG_ID,
-      role: "caregiver",
-      status: "active"
-    });
+    const insertMock = vi.fn().mockResolvedValue({ error: null });
+    const caregiverRecordsBuilder = createBuilder({ data: [], error: null });
+    caregiverRecordsBuilder.insert = insertMock;
+    mockFrom({ caregiver_records: caregiverRecordsBuilder });
 
     renderPage();
     await waitFor(() => expect(screen.getByText("Add a caregiver")).toBeInTheDocument());
 
     fireEvent.change(screen.getByLabelText("First name"), { target: { value: "Sam" } });
     fireEvent.change(screen.getByLabelText("Last name"), { target: { value: "Newhire" } });
+    fireEvent.change(screen.getByLabelText(/^Email \(/), { target: { value: "new@example.com" } });
+    fireEvent.click(screen.getByRole("button", { name: "Add caregiver" }));
+
+    await waitFor(() =>
+      expect(insertMock).toHaveBeenCalledWith({
+        organization_id: ORG_ID,
+        first_name: "Sam",
+        last_name: "Newhire",
+        phone: null,
+        email: "new@example.com"
+      })
+    );
+    await waitFor(() => expect(screen.getByText("Added Sam Newhire to the roster.")).toBeInTheDocument());
+    expect(mockedInviteMember).not.toHaveBeenCalled();
+  });
+
+  it("shows caregivers without login yet and invites one to Ogevia", async () => {
+    mockedUseAuth.mockReturnValue(authUser("user-1"));
+    mockedUseOrganization.mockReturnValue({ ...baseOrganization(), hasPermission: vi.fn(() => true) });
+    mockRpc({ members: [], hours: [] });
+    mockFrom({
+      caregiver_records: createBuilder({
+        data: [{ id: "cr-1", first_name: "Robin", last_name: "Roster", phone: null, email: "robin@example.com" }],
+        error: null
+      })
+    });
+    mockedInviteMember.mockResolvedValue({
+      userId: "user-9",
+      email: "robin@example.com",
+      organizationId: ORG_ID,
+      role: "caregiver",
+      status: "invited"
+    });
+
+    renderPage();
+    await waitFor(() => expect(screen.getByText("Caregivers without login yet")).toBeInTheDocument());
+    expect(screen.getByText("Robin Roster")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByText("Invite to Ogevia"));
+
+    await waitFor(() =>
+      expect(mockedInviteMember).toHaveBeenCalledWith({
+        email: "robin@example.com",
+        organizationId: ORG_ID,
+        role: "caregiver",
+        caregiverRecordId: "cr-1"
+      })
+    );
+  });
+
+  it("removes an unlinked caregiver from the roster", async () => {
+    mockedUseAuth.mockReturnValue(authUser("user-1"));
+    mockedUseOrganization.mockReturnValue({ ...baseOrganization(), hasPermission: vi.fn(() => true) });
+    mockRpc({ members: [], hours: [] });
+    const eqMock = vi.fn().mockResolvedValue({ error: null });
+    const updateMock = vi.fn(() => ({ eq: eqMock }));
+    const caregiverRecordsBuilder = createBuilder({
+      data: [{ id: "cr-1", first_name: "Robin", last_name: "Roster", phone: null, email: "robin@example.com" }],
+      error: null
+    });
+    caregiverRecordsBuilder.update = updateMock;
+    mockFrom({ caregiver_records: caregiverRecordsBuilder });
+
+    renderPage();
+    await waitFor(() => expect(screen.getByText("Robin Roster")).toBeInTheDocument());
+
+    fireEvent.click(screen.getByText("Remove"));
+
+    await waitFor(() =>
+      expect(updateMock).toHaveBeenCalledWith(expect.objectContaining({ deleted_at: expect.any(String) }))
+    );
+    expect(eqMock).toHaveBeenCalledWith("id", "cr-1");
+  });
+
+  it("excludes caregiver from the invite-a-team-member role options", async () => {
+    mockedUseAuth.mockReturnValue(authUser("user-1"));
+    mockedUseOrganization.mockReturnValue({ ...baseOrganization(), hasPermission: vi.fn(() => true) });
+    mockFrom();
+    mockRpc({ members: [], hours: [] });
+
+    renderPage();
+    await waitFor(() => expect(screen.getByText("Invite a team member")).toBeInTheDocument());
+
+    const roleSelect = screen.getByLabelText("Role") as HTMLSelectElement;
+    const optionValues = Array.from(roleSelect.options).map((option) => option.value);
+    expect(optionValues).not.toContain("caregiver");
+  });
+
+  it("sends a real invite (no caregiverRecordId) from the invite-a-team-member form", async () => {
+    mockedUseAuth.mockReturnValue(authUser("user-1"));
+    mockedUseOrganization.mockReturnValue({ ...baseOrganization(), hasPermission: vi.fn(() => true) });
+    mockFrom();
+    mockRpc({ members: [], hours: [] });
+    mockedInviteMember.mockResolvedValue({
+      userId: "user-9",
+      email: "new@example.com",
+      organizationId: ORG_ID,
+      role: "staff",
+      status: "invited"
+    });
+
+    renderPage();
+    await waitFor(() => expect(screen.getByText("Invite a team member")).toBeInTheDocument());
+
     fireEvent.change(screen.getByLabelText("Email"), { target: { value: "new@example.com" } });
-    fireEvent.click(screen.getByText("Add caregiver"));
+    fireEvent.change(screen.getByLabelText("Role"), { target: { value: "staff" } });
+    fireEvent.click(screen.getByRole("button", { name: "Send invite" }));
 
     await waitFor(() =>
       expect(mockedInviteMember).toHaveBeenCalledWith({
         email: "new@example.com",
         organizationId: ORG_ID,
-        role: "caregiver",
-        firstName: "Sam",
-        lastName: "Newhire",
-        phone: undefined
+        role: "staff"
       })
     );
-    await waitFor(() => expect(screen.getByText("Added Sam Newhire.")).toBeInTheDocument());
   });
 
   it("changes a caregiver's role when membership.update is held", async () => {
@@ -310,7 +447,7 @@ describe("TeamPage", () => {
     });
     const eqMock = vi.fn().mockResolvedValue({ error: null });
     const updateMock = vi.fn(() => ({ eq: eqMock }));
-    mockedFrom.mockReturnValue({ update: updateMock } as never);
+    mockFrom({ organization_memberships: { update: updateMock } as never });
 
     renderPage();
     await waitFor(() => expect(screen.getByText("Sam Caregiver")).toBeInTheDocument());
@@ -333,7 +470,7 @@ describe("TeamPage", () => {
     });
     const eqMock = vi.fn().mockResolvedValue({ error: null });
     const updateMock = vi.fn(() => ({ eq: eqMock }));
-    mockedFrom.mockReturnValue({ update: updateMock } as never);
+    mockFrom({ organization_memberships: { update: updateMock } as never });
 
     renderPage();
     await waitFor(() => expect(screen.getByText("Revoke")).toBeInTheDocument());
@@ -347,6 +484,7 @@ describe("TeamPage", () => {
   it("does not show manage controls for your own row", async () => {
     mockedUseAuth.mockReturnValue(authUser(CAREGIVER_ID));
     mockedUseOrganization.mockReturnValue({ ...baseOrganization(), hasPermission: vi.fn(() => true) });
+    mockFrom();
     mockRpc({
       members: [
         { membership_id: "m1", user_id: CAREGIVER_ID, display_name: "Me", role: "staff", status: "active" }

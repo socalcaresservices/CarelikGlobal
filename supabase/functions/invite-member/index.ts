@@ -1,30 +1,39 @@
 // Supabase Edge Function: invite-member
 //
-// Adds someone to an organization. This must run server-side because it
-// needs the Supabase service-role key to create/invite auth users — the
+// Sends someone an actual sign-in invitation and adds them to an
+// organization's membership. This must run server-side because it needs
+// the Supabase service-role key to create/invite auth users — the
 // browser application is only ever given the anonymous key (see README
 // "Authentication").
 //
-// Two modes, chosen by whether firstName/lastName are included:
+// This is deliberately ONLY the "grant login access" step now. Adding a
+// caregiver as a workforce roster record (name/phone/email, no login) is
+// a plain insert into caregiver_records straight from the Team page -
+// see team-page.tsx - and never calls this function at all, matching the
+// Ogevia Architecture Reset's item 17: "Adding a caregiver and inviting a
+// user are separate operations." This function used to also have an
+// immediate-account, no-email mode for that same "Add a caregiver" form;
+// that mode required membership.invite just to create a roster record,
+// which was the exact bug reported ("You do not have permission to
+// invite members" for someone who only had membership.update) - removed
+// now that the roster path no longer goes through here.
 //
-//   - Profile details given (Team page "Add a caregiver" form): creates
-//     the auth user directly via `auth.admin.createUser`, no email sent,
-//     membership status is set to "active" immediately. This is for
-//     caregivers who are a roster record first — they don't need to sign
-//     in to be scheduled. Their name/phone are written straight into
-//     user_profiles via the metadata the `handle_new_user` trigger reads.
+// Optional caregiverRecordId links this invite back to an existing,
+// already-created caregiver_records row instead of leaving that person
+// as two disconnected records - item 18: "find existing caregiver,
+// create/send authentication invitation, create organization membership,
+// associate auth user with existing caregiver, NOT create another
+// caregiver record."
 //
-//   - No profile details (Access page "Invite" form, for office/admin
-//     roles who need to actually log in and use the app): falls back to
-//     the original `auth.admin.inviteUserByEmail` flow, which emails a
-//     sign-in link and leaves membership status as "invited" until they
-//     accept. If that email address already has an auth account
-//     (a stray test user, a public applicant, a prior org's invite),
-//     inviteUserByEmail rejects it with "already registered" - see
-//     findUserIdByEmail() below, which looks that existing account up
-//     and adds it as a member directly instead of failing outright.
+// `auth.admin.inviteUserByEmail` emails a sign-in link and leaves
+// membership status as "invited" until they accept. If that email
+// address already has an auth account (a stray test user, a public
+// applicant, a prior org's invite), inviteUserByEmail rejects it with
+// "already registered" - see findUserIdByEmail() below, which looks that
+// existing account up and adds it as a member directly instead of
+// failing outright.
 //
-// Request: POST { email, organizationId, role, firstName?, lastName?, phone? }
+// Request: POST { email, organizationId, role, caregiverRecordId? }
 // Auth:    Authorization: Bearer <caller's access token>
 //          (supabase-js `functions.invoke` attaches this automatically
 //          for an authenticated session)
@@ -45,9 +54,7 @@ interface InviteRequestBody {
   email?: unknown;
   organizationId?: unknown;
   role?: unknown;
-  firstName?: unknown;
-  lastName?: unknown;
-  phone?: unknown;
+  caregiverRecordId?: unknown;
 }
 
 // Mirrors packages/shared/src/permissions.ts's systemRoleSchema (the
@@ -106,9 +113,7 @@ function isValidRequestBody(
   email: string;
   organizationId: string;
   role: string;
-  firstName?: string;
-  lastName?: string;
-  phone?: string;
+  caregiverRecordId?: string;
 } {
   const optionalStringOk = (value: unknown) => value === undefined || typeof value === "string";
   return (
@@ -118,9 +123,7 @@ function isValidRequestBody(
     body.organizationId.length > 0 &&
     typeof body.role === "string" &&
     body.role.length > 0 &&
-    optionalStringOk(body.firstName) &&
-    optionalStringOk(body.lastName) &&
-    optionalStringOk(body.phone)
+    optionalStringOk(body.caregiverRecordId)
   );
 }
 
@@ -153,10 +156,7 @@ Deno.serve(async (req) => {
   }
 
   const { email, organizationId, role } = body;
-  const firstName = body.firstName?.trim();
-  const lastName = body.lastName?.trim();
-  const phone = body.phone?.trim();
-  const hasProfileDetails = Boolean(firstName) && Boolean(lastName);
+  const caregiverRecordId = body.caregiverRecordId?.trim() || null;
 
   if (!KNOWN_ROLES.has(role)) {
     return jsonResponse({ error: `"${role}" isn't a valid role.` }, 400);
@@ -213,69 +213,40 @@ Deno.serve(async (req) => {
   });
 
   let userId: string;
-  let membershipStatus: "active" | "invited";
 
-  if (hasProfileDetails) {
-    const displayName = `${firstName} ${lastName}`.trim();
-    const { data: created, error: createError } = await adminClient.auth.admin.createUser({
-      email,
-      email_confirm: true,
-      user_metadata: { display_name: displayName, first_name: firstName, last_name: lastName }
-    });
-    if (createError || !created?.user) {
-      const message = createError?.message ?? "";
-      if (/already.*registered|already.*exists/i.test(message)) {
-        return jsonResponse({ error: "That email is already on your team." }, 409);
-      }
-      return jsonResponse({ error: message || "Could not add caregiver" }, 400);
+  const siteUrl = Deno.env.get("SITE_URL") ?? "http://localhost:5173";
+  // Lands the invited person on the set-password page instead of the
+  // app root - they have a temporary session from the invite link but
+  // no password yet (email/password is the primary sign-in path now;
+  // see login-page.tsx and set-password-page.tsx), so sending them
+  // straight to "/" would drop them into ProtectedRoute's redirect
+  // loop with nothing to sign back in with later.
+  const { data: invited, error: inviteError } = await adminClient.auth.admin.inviteUserByEmail(
+    email,
+    { redirectTo: `${siteUrl}/set-password` }
+  );
+  if (inviteError || !invited?.user) {
+    // inviteUserByEmail only creates brand-new auth users - it fails
+    // with "already registered" for an email that already has an
+    // account (a stray test user, someone who applied via apply-page
+    // first, a prior organization's invite, etc). Rather than fail
+    // the whole request, add that existing user as a member directly.
+    // No new invite email is needed - they can already sign in with
+    // what they have, and organization-provider.tsx's
+    // acceptPendingInvitations effect already auto-accepts a pending
+    // membership the moment any user (new or pre-existing) next
+    // authenticates, so status "invited" here behaves identically
+    // either way.
+    const alreadyRegistered = /already.*registered|already.*exists/i.test(inviteError?.message ?? "");
+    const existingUserId = alreadyRegistered ? await findUserIdByEmail(adminClient, email) : null;
+    if (!existingUserId) {
+      return jsonResponse({ error: inviteError?.message ?? "Invite failed" }, 400);
     }
-    userId = created.user.id;
-    membershipStatus = "active";
-
-    if (phone) {
-      const { error: phoneError } = await adminClient
-        .from("user_profiles")
-        .update({ phone })
-        .eq("id", userId);
-      if (phoneError) {
-        return jsonResponse({ error: phoneError.message }, 500);
-      }
-    }
+    userId = existingUserId;
   } else {
-    const siteUrl = Deno.env.get("SITE_URL") ?? "http://localhost:5173";
-    // Lands the invited person on the set-password page instead of the
-    // app root - they have a temporary session from the invite link but
-    // no password yet (email/password is the primary sign-in path now;
-    // see login-page.tsx and set-password-page.tsx), so sending them
-    // straight to "/" would drop them into ProtectedRoute's redirect
-    // loop with nothing to sign back in with later.
-    const { data: invited, error: inviteError } = await adminClient.auth.admin.inviteUserByEmail(
-      email,
-      { redirectTo: `${siteUrl}/set-password` }
-    );
-    if (inviteError || !invited?.user) {
-      // inviteUserByEmail only creates brand-new auth users - it fails
-      // with "already registered" for an email that already has an
-      // account (a stray test user, someone who applied via apply-page
-      // first, a prior organization's invite, etc). Rather than fail
-      // the whole request, add that existing user as a member directly.
-      // No new invite email is needed - they can already sign in with
-      // what they have, and organization-provider.tsx's
-      // acceptPendingInvitations effect already auto-accepts a pending
-      // membership the moment any user (new or pre-existing) next
-      // authenticates, so status "invited" here behaves identically
-      // either way.
-      const alreadyRegistered = /already.*registered|already.*exists/i.test(inviteError?.message ?? "");
-      const existingUserId = alreadyRegistered ? await findUserIdByEmail(adminClient, email) : null;
-      if (!existingUserId) {
-        return jsonResponse({ error: inviteError?.message ?? "Invite failed" }, 400);
-      }
-      userId = existingUserId;
-    } else {
-      userId = invited.user.id;
-    }
-    membershipStatus = "invited";
+    userId = invited.user.id;
   }
+  const membershipStatus: "invited" = "invited";
 
   const { error: membershipError } = await adminClient
     .from("organization_memberships")
@@ -285,13 +256,29 @@ Deno.serve(async (req) => {
         user_id: userId,
         role,
         status: membershipStatus,
-        invited_by: callerData.user.id,
-        ...(membershipStatus === "active" ? { joined_at: new Date().toISOString() } : {})
+        invited_by: callerData.user.id
       },
       { onConflict: "organization_id,user_id" }
     );
   if (membershipError) {
     return jsonResponse({ error: membershipError.message }, 500);
+  }
+
+  if (caregiverRecordId) {
+    // Links back to the roster record this invite came from instead of
+    // leaving that person as two disconnected rows - only ever sets
+    // linked_user_id when it's still unset, so re-inviting (or a race
+    // between two admins) can't clobber an existing link with a
+    // different user id.
+    const { error: linkError } = await adminClient
+      .from("caregiver_records")
+      .update({ linked_user_id: userId })
+      .eq("id", caregiverRecordId)
+      .eq("organization_id", organizationId)
+      .is("linked_user_id", null);
+    if (linkError) {
+      return jsonResponse({ error: linkError.message }, 500);
+    }
   }
 
   return jsonResponse(

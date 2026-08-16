@@ -31,6 +31,18 @@ const invitableRoles = systemRoleSchema.options.filter(
   (role): role is InvitableRole => role !== "platform_owner"
 );
 
+// The invite form's own role list - everything invitableRoles offers
+// except caregiver. A brand-new caregiver always starts as a
+// caregiver_records roster row (Team page's "Add a caregiver" - no
+// login), then gets linked to a real account via "Invite to Ogevia" on
+// that row; this form is for roles that need login access from the
+// start (admins, coordinators, ...), so it never creates a bare
+// role=caregiver account with no roster record behind it. The
+// role-change and filter dropdowns below keep the full invitableRoles
+// list - an existing member's role can still legitimately be changed to
+// or from caregiver.
+const inviteRoleOptions = invitableRoles.filter((role) => role !== "caregiver");
+
 const statusStyles: Record<MemberRow["status"], string> = {
   active: "bg-emerald-50 text-emerald-700",
   invited: "bg-amber-50 text-amber-700",
@@ -253,7 +265,7 @@ export function AccessPage() {
                 onChange={(event) => setRole(event.target.value as InvitableRole)}
                 className="mt-1 rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900"
               >
-                {invitableRoles.map((option) => (
+                {inviteRoleOptions.map((option) => (
                   <option key={option} value={option}>
                     {formatRole(option)}
                   </option>

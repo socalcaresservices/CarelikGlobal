@@ -63,9 +63,8 @@ describe("inviteMember", () => {
       inviteMember({
         email: "person@example.com",
         organizationId: "org-1",
-        role: "staff",
-        firstName: "Sam",
-        lastName: "Caregiver"
+        role: "caregiver",
+        caregiverRecordId: "caregiver-record-1"
       })
     ).rejects.toThrow("That email is already on your team.");
   });

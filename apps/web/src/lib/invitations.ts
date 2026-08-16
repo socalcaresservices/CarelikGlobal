@@ -9,14 +9,13 @@ export interface InviteMemberInput {
   organizationId: string;
   role: InvitableRole;
   /**
-   * When firstName/lastName are given, the edge function creates the
-   * caregiver as a roster record right away (no email sent, membership
-   * status "active") instead of emailing a sign-in invite. See
-   * supabase/functions/invite-member/index.ts for the branch logic.
+   * Links this invite back to an existing caregiver_records row (a
+   * workforce roster record added without login access - see
+   * team-page.tsx's "Add a caregiver" form) instead of leaving that
+   * person as two disconnected records. Only ever set from the "Invite
+   * to Ogevia" action on an unlinked caregiver row.
    */
-  firstName?: string | undefined;
-  lastName?: string | undefined;
-  phone?: string | undefined;
+  caregiverRecordId?: string | undefined;
 }
 
 export interface InviteMemberResult {
@@ -24,13 +23,19 @@ export interface InviteMemberResult {
   email: string;
   organizationId: string;
   role: InvitableRole;
-  status: "invited" | "active";
+  status: "invited";
 }
 
 /**
- * Adds someone to an organization. Backed by the `invite-member` edge
+ * Sends someone a real sign-in invitation and adds them to an
+ * organization's membership. Backed by the `invite-member` edge
  * function, which is the only place the Supabase service-role key is
  * used — see supabase/functions/invite-member/index.ts.
+ *
+ * This always emails an invite - there is no "create a roster record
+ * with no login" mode here anymore. That's a plain insert into
+ * caregiver_records instead (team-page.tsx's "Add a caregiver" form),
+ * which never calls this function at all.
  *
  * Requires the caller to hold `membership.invite` for the target
  * organization; the edge function re-checks this server-side, so this
@@ -42,7 +47,7 @@ export async function inviteMember(input: InviteMemberInput): Promise<InviteMemb
   });
 
   if (error) {
-    throw new Error(await extractEdgeFunctionErrorMessage(error, "Could not add caregiver. Try again."));
+    throw new Error(await extractEdgeFunctionErrorMessage(error, "Could not send the invite. Try again."));
   }
   if (!data) {
     throw new Error("Invite failed: no response from server.");
