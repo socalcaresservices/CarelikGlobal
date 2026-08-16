@@ -1,6 +1,6 @@
 begin;
 
-create table public.client_requested_schedule (
+create table if not exists public.client_requested_schedule (
   id uuid primary key default gen_random_uuid(),
   organization_id uuid not null references public.organizations(id) on delete cascade,
   client_id uuid not null references public.clients(id) on delete cascade,
@@ -12,25 +12,35 @@ create table public.client_requested_schedule (
   constraint client_requested_schedule_time_order check (end_time > start_time)
 );
 
-create index client_requested_schedule_client_idx
+create index if not exists client_requested_schedule_client_idx
   on public.client_requested_schedule (client_id, day_of_week, start_time);
 
 alter table public.client_requested_schedule enable row level security;
 
-alter table public.shifts add column caregiver_record_id uuid references public.caregiver_records(id);
+alter table public.shifts add column if not exists caregiver_record_id uuid references public.caregiver_records(id);
 update public.shifts s set caregiver_record_id = cr.id from public.caregiver_records cr
 where cr.organization_id = s.organization_id and cr.linked_user_id = s.caregiver_user_id and cr.deleted_at is null;
 alter table public.shifts alter column caregiver_user_id drop not null;
-alter table public.shifts add constraint shifts_caregiver_required check (caregiver_record_id is not null or caregiver_user_id is not null);
-create index shifts_caregiver_record_starts_at_idx on public.shifts (caregiver_record_id, starts_at);
+do $$
+begin
+  if not exists (
+    select 1 from pg_constraint
+    where conrelid = 'public.shifts'::regclass and conname = 'shifts_caregiver_required'
+  ) then
+    alter table public.shifts add constraint shifts_caregiver_required
+      check (caregiver_record_id is not null or caregiver_user_id is not null);
+  end if;
+end;
+$$;
+create index if not exists shifts_caregiver_record_starts_at_idx on public.shifts (caregiver_record_id, starts_at);
 
-drop policy "members_read_shifts" on public.shifts;
+drop policy if exists "members_read_shifts" on public.shifts;
 create policy "members_read_shifts" on public.shifts for select to authenticated
 using (public.has_permission(organization_id, 'shifts.read') or caregiver_user_id = auth.uid() or exists (
   select 1 from public.caregiver_records cr where cr.id = caregiver_record_id and cr.organization_id = shifts.organization_id and cr.linked_user_id = auth.uid()
 ));
 
-drop policy "authorized_manage_shifts" on public.shifts;
+drop policy if exists "authorized_manage_shifts" on public.shifts;
 create policy "authorized_manage_shifts" on public.shifts for all to authenticated
 using (public.has_permission(organization_id, 'shifts.update'))
 with check (
@@ -59,15 +69,18 @@ revoke all on function public.list_shifts(uuid, timestamptz, timestamptz) from p
 revoke all on function public.list_shifts(uuid, timestamptz, timestamptz) from anon;
 grant execute on function public.list_shifts(uuid, timestamptz, timestamptz) to authenticated;
 
+drop policy if exists "authorized_read_client_requested_schedule" on public.client_requested_schedule;
 create policy "authorized_read_client_requested_schedule"
 on public.client_requested_schedule for select to authenticated
 using (public.has_permission(organization_id, 'clients.read'));
 
+drop policy if exists "authorized_manage_client_requested_schedule" on public.client_requested_schedule;
 create policy "authorized_manage_client_requested_schedule"
 on public.client_requested_schedule for all to authenticated
 using (public.has_permission(organization_id, 'clients.update'))
 with check (public.has_permission(organization_id, 'clients.update'));
 
+drop trigger if exists client_requested_schedule_audit on public.client_requested_schedule;
 create trigger client_requested_schedule_audit
 after insert or update or delete on public.client_requested_schedule
 for each row execute function public.write_audit_log();
