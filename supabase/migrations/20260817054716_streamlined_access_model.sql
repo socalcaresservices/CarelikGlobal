@@ -1,10 +1,3 @@
--- Four-role tenant access model. The enum addition must commit before the
--- new value can be used by later statements in the same migration.
-alter type public.system_role add value if not exists 'scheduler' after 'manager';
-commit;
-
-begin;
-
 insert into public.permissions (key, description) values
   ('billing.read', 'View subscription prices and financial billing details'),
   ('billing.update', 'Manage subscription and billing details')
@@ -377,5 +370,3 @@ end;
 $$;
 revoke all on function public.set_caregiver_weekly_target(uuid, uuid, numeric) from public, anon;
 grant execute on function public.set_caregiver_weekly_target(uuid, uuid, numeric) to authenticated;
-
-commit;
