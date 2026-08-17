@@ -5,12 +5,12 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { useAuth } from "@carelik/auth";
 import { useOrganization } from "@/providers/organization-provider";
 import { supabase } from "@/lib/supabase";
-import { inviteMember } from "@/lib/invitations";
+import { inviteMember, revokeMemberAccess } from "@/lib/invitations";
 import { TeamPage } from "./team-page";
 
 vi.mock("@carelik/auth", () => ({ useAuth: vi.fn() }));
 vi.mock("@/providers/organization-provider", () => ({ useOrganization: vi.fn() }));
-vi.mock("@/lib/invitations", () => ({ inviteMember: vi.fn() }));
+vi.mock("@/lib/invitations", () => ({ inviteMember: vi.fn(), revokeMemberAccess: vi.fn() }));
 vi.mock("@/lib/supabase", () => ({
   supabase: {
     rpc: vi.fn(),
@@ -21,6 +21,7 @@ vi.mock("@/lib/supabase", () => ({
 const mockedUseAuth = vi.mocked(useAuth);
 const mockedUseOrganization = vi.mocked(useOrganization);
 const mockedInviteMember = vi.mocked(inviteMember);
+const mockedRevokeMemberAccess = vi.mocked(revokeMemberAccess);
 const mockedRpc = vi.mocked(supabase.rpc);
 const mockedFrom = vi.mocked(supabase.from);
 
@@ -301,7 +302,7 @@ describe("TeamPage", () => {
     mockedUseOrganization.mockReturnValue({ ...baseOrganization(), hasPermission: vi.fn(() => true) });
     mockRpc({
       members: [
-        { membership_id: "m1", user_id: CAREGIVER_ID, display_name: "Sam Caregiver", role: "staff", status: "active" }
+        { membership_id: "m1", user_id: CAREGIVER_ID, display_name: "Sam Caregiver", role: "caregiver", status: "active" }
       ],
       hours: []
     });
@@ -313,9 +314,9 @@ describe("TeamPage", () => {
     await waitFor(() => expect(screen.getByText("Sam Caregiver")).toBeInTheDocument());
     const row = screen.getByText("Sam Caregiver").closest("tr")!;
 
-    fireEvent.change(within(row).getByDisplayValue("staff"), { target: { value: "coordinator" } });
+    fireEvent.change(within(row).getByDisplayValue("caregiver"), { target: { value: "scheduler" } });
 
-    await waitFor(() => expect(updateMock).toHaveBeenCalledWith({ role: "coordinator" }));
+    await waitFor(() => expect(updateMock).toHaveBeenCalledWith({ role: "scheduler" }));
     expect(eqMock).toHaveBeenCalledWith("id", "m1");
   });
 
@@ -324,21 +325,21 @@ describe("TeamPage", () => {
     mockedUseOrganization.mockReturnValue({ ...baseOrganization(), hasPermission: vi.fn(() => true) });
     mockRpc({
       members: [
-        { membership_id: "m1", user_id: CAREGIVER_ID, display_name: "Sam Caregiver", role: "staff", status: "active" }
+        { membership_id: "m1", user_id: CAREGIVER_ID, display_name: "Sam Caregiver", role: "caregiver", status: "active" }
       ],
       hours: []
     });
-    const eqMock = vi.fn().mockResolvedValue({ error: null });
-    const updateMock = vi.fn(() => ({ eq: eqMock }));
-    mockedFrom.mockReturnValue({ update: updateMock } as never);
+    mockedRevokeMemberAccess.mockResolvedValue({ userId: CAREGIVER_ID, banned: true });
 
     renderPage();
     await waitFor(() => expect(screen.getByText("Revoke")).toBeInTheDocument());
 
     fireEvent.click(screen.getByText("Revoke"));
 
-    await waitFor(() => expect(updateMock).toHaveBeenCalledWith({ status: "revoked" }));
-    expect(eqMock).toHaveBeenCalledWith("id", "m1");
+    await waitFor(() => expect(mockedRevokeMemberAccess).toHaveBeenCalledWith({
+      organizationId: ORG_ID,
+      membershipId: "m1"
+    }));
   });
 
   it("does not show manage controls for your own row", async () => {

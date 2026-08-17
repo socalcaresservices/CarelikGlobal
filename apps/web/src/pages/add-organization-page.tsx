@@ -2,7 +2,6 @@ import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
 import { Button, Card } from "@carelik/ui";
-import { systemRoleSchema } from "@carelik/shared";
 import { useAuth } from "@carelik/auth";
 import { useOrganization } from "@/providers/organization-provider";
 import { supabase } from "@/lib/supabase";
@@ -61,9 +60,7 @@ const SUGGESTED_SERVICES = [
 // invitable roles, not a hardcoded subset) - an onboarding platform owner
 // should be able to invite a coordinator or caregiver alongside the
 // agency's owner, not just owner/admin.
-const invitableRoles = systemRoleSchema.options.filter(
-  (role): role is InvitableRole => role !== "platform_owner"
-);
+const invitableRoles: InvitableRole[] = ["organization_owner", "manager", "scheduler", "caregiver"];
 
 function formatRole(role: string) {
   return role.replace(/_/g, " ");

@@ -147,12 +147,12 @@ describe("AddOrganizationPage", () => {
     expect(screen.getAllByLabelText("Email")).toHaveLength(2);
 
     fireEvent.change(screen.getAllByLabelText("Email")[1]!, { target: { value: "coordinator@socalcares.com" } });
-    fireEvent.change(screen.getAllByLabelText("Role")[1]!, { target: { value: "coordinator" } });
+    fireEvent.change(screen.getAllByLabelText("Role")[1]!, { target: { value: "scheduler" } });
 
     fireEvent.click(screen.getByText("Next"));
     expect(screen.getByText("Step 7 of 7 · Review")).toBeInTheDocument();
     expect(
-      screen.getByText("owner@socalcares.com (organization owner), coordinator@socalcares.com (coordinator)")
+      screen.getByText("owner@socalcares.com (organization owner), coordinator@socalcares.com (scheduler)")
     ).toBeInTheDocument();
 
     fireEvent.click(screen.getByText("Previous"));

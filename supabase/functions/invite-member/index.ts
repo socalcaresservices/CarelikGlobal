@@ -58,14 +58,10 @@ interface InviteRequestBody {
 // "invalid input value for enum system_role" - every other field in
 // this function gets a clean 400 instead.
 const KNOWN_ROLES = new Set([
-  "platform_owner",
   "organization_owner",
-  "organization_admin",
   "manager",
-  "coordinator",
-  "staff",
-  "caregiver",
-  "read_only"
+  "scheduler",
+  "caregiver"
 ]);
 
 function jsonResponse(body: unknown, status: number) {
