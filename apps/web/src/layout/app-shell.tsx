@@ -109,10 +109,12 @@ const administrationNav: NavItem[] = [
   { to: "/settings", label: "Settings", icon: Settings, permission: "settings.read" }
 ];
 
-function visibleItems(items: NavItem[], hasPermission: (permission: Permission) => boolean, isOwner: boolean) {
-  return items.filter(
-    (item) => (!item.permission || hasPermission(item.permission)) && (!item.ownerOnly || isOwner)
-  );
+function visibleItems(items: NavItem[], isOwner: boolean) {
+  // Keep the tenant workspace structurally identical for every organization.
+  // Permissions continue to be enforced inside each page and by RLS/RPCs;
+  // navigation visibility must not make Clients or Care Team appear to be
+  // missing from an otherwise fully provisioned organization.
+  return items.filter((item) => !item.ownerOnly || isOwner);
 }
 
 // The active nav item reads the same --color-accent/--color-accent-
@@ -200,10 +202,10 @@ export function AppShell({ children }: PropsWithChildren) {
 
   const isOwner = role === "organization_owner" || role === "platform_owner";
 
-  const visibleOverviewNav = visibleItems(overviewNav, hasPermission, isOwner);
-  const visiblePeopleNav = visibleItems(peopleNav, hasPermission, isOwner);
-  const visibleComplianceNav = visibleItems(complianceNav, hasPermission, isOwner);
-  const visibleAdministrationNav = visibleItems(administrationNav, hasPermission, isOwner);
+  const visibleOverviewNav = visibleItems(overviewNav, isOwner);
+  const visiblePeopleNav = visibleItems(peopleNav, isOwner);
+  const visibleComplianceNav = visibleItems(complianceNav, isOwner);
+  const visibleAdministrationNav = visibleItems(administrationNav, isOwner);
 
   const greeting = getGreeting(new Date());
 

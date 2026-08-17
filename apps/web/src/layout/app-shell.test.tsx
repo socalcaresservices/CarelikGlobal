@@ -153,7 +153,7 @@ describe("AppShell nav", () => {
     expect(screen.getByText("Candidates")).toBeInTheDocument();
   });
 
-  it("hides Candidates without applicants.read", () => {
+  it("keeps the complete organization menu visible without applicants.read", () => {
     mockedUseAuth.mockReturnValue({ user: { email: "coordinator@acme.test" } } as never);
     mockedUseOrganization.mockReturnValue({
       ...baseOrganization("organization_admin"),
@@ -161,10 +161,10 @@ describe("AppShell nav", () => {
     });
 
     renderShell();
-    expect(screen.queryByText("Candidates")).not.toBeInTheDocument();
+    expect(screen.getByText("Candidates")).toBeInTheDocument();
   });
 
-  it("always shows Service Verification, but gates Visit Reports on visits.read", () => {
+  it("keeps Visit Reports visible while its page enforces visits.read", () => {
     mockedUseAuth.mockReturnValue({ user: { email: "caregiver@acme.test" } } as never);
     mockedUseOrganization.mockReturnValue({
       ...baseOrganization("organization_admin"),
@@ -173,7 +173,7 @@ describe("AppShell nav", () => {
 
     renderShell();
     expect(screen.getByText("Service Verification")).toBeInTheDocument();
-    expect(screen.queryByText("Visit Reports")).not.toBeInTheDocument();
+    expect(screen.getByText("Visit Reports")).toBeInTheDocument();
   });
 
   it("shows Visit Reports for someone with visits.read", () => {
