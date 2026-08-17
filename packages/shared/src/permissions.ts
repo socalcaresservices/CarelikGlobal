@@ -37,7 +37,9 @@ export const permissionSchema = z.enum([
   "visits.read",
   "visits.manage",
   "assignments.read",
-  "assignments.update"
+  "assignments.update",
+  "billing.read",
+  "billing.update"
 ]);
 
 export type Permission = z.infer<typeof permissionSchema>;
@@ -47,6 +49,7 @@ export const systemRoleSchema = z.enum([
   "organization_owner",
   "organization_admin",
   "manager",
+  "scheduler",
   "coordinator",
   "staff",
   "caregiver",

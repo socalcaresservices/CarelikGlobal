@@ -5,12 +5,12 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { useAuth } from "@carelik/auth";
 import { useOrganization } from "@/providers/organization-provider";
 import { supabase } from "@/lib/supabase";
-import { inviteMember, updateMemberEmail } from "@/lib/invitations";
+import { inviteMember, revokeMemberAccess, updateMemberEmail } from "@/lib/invitations";
 import { AccessPage } from "./access-page";
 
 vi.mock("@carelik/auth", () => ({ useAuth: vi.fn() }));
 vi.mock("@/providers/organization-provider", () => ({ useOrganization: vi.fn() }));
-vi.mock("@/lib/invitations", () => ({ inviteMember: vi.fn(), updateMemberEmail: vi.fn() }));
+vi.mock("@/lib/invitations", () => ({ inviteMember: vi.fn(), revokeMemberAccess: vi.fn(), updateMemberEmail: vi.fn() }));
 vi.mock("@/lib/supabase", () => ({
   supabase: {
     rpc: vi.fn(),
@@ -21,9 +21,9 @@ vi.mock("@/lib/supabase", () => ({
 const mockedUseAuth = vi.mocked(useAuth);
 const mockedUseOrganization = vi.mocked(useOrganization);
 const mockedInviteMember = vi.mocked(inviteMember);
+const mockedRevokeMemberAccess = vi.mocked(revokeMemberAccess);
 const mockedUpdateMemberEmail = vi.mocked(updateMemberEmail);
 const mockedRpc = vi.mocked(supabase.rpc);
-const mockedFrom = vi.mocked(supabase.from);
 
 const ORG_ID = "11111111-1111-4111-8111-111111111111";
 
@@ -122,7 +122,7 @@ describe("AccessPage", () => {
       userId: "user-9",
       email: "new@example.com",
       organizationId: ORG_ID,
-      role: "staff",
+      role: "caregiver",
       status: "invited"
     });
 
@@ -136,7 +136,7 @@ describe("AccessPage", () => {
       expect(mockedInviteMember).toHaveBeenCalledWith({
         email: "new@example.com",
         organizationId: ORG_ID,
-        role: "staff"
+        role: "caregiver"
       })
     );
     await waitFor(() => expect(screen.getByText("Invited new@example.com.")).toBeInTheDocument());
@@ -167,17 +167,17 @@ describe("AccessPage", () => {
       error: null
     } as never);
 
-    const eqMock = vi.fn().mockResolvedValue({ error: null });
-    const updateMock = vi.fn(() => ({ eq: eqMock }));
-    mockedFrom.mockReturnValue({ update: updateMock } as never);
+    mockedRevokeMemberAccess.mockResolvedValue({ userId: "user-2", banned: true });
 
     renderPage();
     await waitFor(() => expect(screen.getByText("Revoke")).toBeInTheDocument());
 
     fireEvent.click(screen.getByText("Revoke"));
 
-    await waitFor(() => expect(updateMock).toHaveBeenCalledWith({ status: "revoked" }));
-    expect(eqMock).toHaveBeenCalledWith("id", "m-1");
+    await waitFor(() => expect(mockedRevokeMemberAccess).toHaveBeenCalledWith({
+      organizationId: ORG_ID,
+      membershipId: "m-1"
+    }));
   });
 
   it("edits a member's email when membership.update is held", async () => {

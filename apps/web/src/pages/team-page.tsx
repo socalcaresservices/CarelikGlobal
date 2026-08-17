@@ -3,11 +3,11 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
 import { Share2 } from "lucide-react";
 import { Button, Card, EmptyState, FilterBar, type ActiveFilter } from "@carelik/ui";
-import { systemRoleSchema, membershipStatusSchema } from "@carelik/shared";
+import { membershipStatusSchema } from "@carelik/shared";
 import { useAuth } from "@carelik/auth";
 import { useOrganization } from "@/providers/organization-provider";
 import { supabase } from "@/lib/supabase";
-import { inviteMember, type InvitableRole } from "@/lib/invitations";
+import { inviteMember, revokeMemberAccess, type InvitableRole } from "@/lib/invitations";
 import { useTableControls } from "@/lib/use-table-controls";
 import { useFilters } from "@/lib/use-filters";
 import { useColumnWidths } from "@/lib/use-column-widths";
@@ -42,9 +42,7 @@ interface CaregiverHoursRow {
   scheduled_hours: number;
 }
 
-const invitableRoles = systemRoleSchema.options.filter(
-  (role): role is InvitableRole => role !== "platform_owner"
-);
+const invitableRoles: InvitableRole[] = ["organization_owner", "manager", "scheduler", "caregiver"];
 
 const statusStyles: Record<MemberRow["status"], string> = {
   active: "bg-emerald-50 text-emerald-700",
@@ -330,11 +328,7 @@ export function TeamPage() {
     setActionSuccess(null);
     setPendingMembershipId(membershipId);
     try {
-      const { error } = await supabase
-        .from("organization_memberships")
-        .update({ status: "revoked" })
-        .eq("id", membershipId);
-      if (error) throw error;
+      await revokeMemberAccess({ organizationId: activeOrganizationId!, membershipId });
       setActionSuccess("Access revoked.");
       refreshMembers();
     } catch (cause) {

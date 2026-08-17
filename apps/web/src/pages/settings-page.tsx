@@ -779,6 +779,8 @@ export function SettingsPage() {
 
   const canRead = hasPermission("settings.read");
   const canUpdate = hasPermission("settings.update");
+  const canReadBilling = hasPermission("billing.read");
+  const canUpdateBilling = hasPermission("billing.update");
 
   const settingsQuery = useQuery({
     queryKey: ["organization-settings", activeOrganizationId],
@@ -908,7 +910,7 @@ export function SettingsPage() {
         canManage={hasPermission("organization.update")}
       />
 
-      <BillingSummaryCard organizationId={activeOrganizationId} canRead={canRead} canUpdate={canUpdate} />
+      <BillingSummaryCard organizationId={activeOrganizationId} canRead={canReadBilling} canUpdate={canUpdateBilling} />
 
       <SupportAccessCard organizationId={activeOrganizationId} canRead={canRead} canManage={canUpdate} />
 

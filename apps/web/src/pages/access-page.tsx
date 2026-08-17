@@ -2,11 +2,11 @@ import { useState, type FormEvent } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
 import { Button, Card, FilterBar, type ActiveFilter } from "@carelik/ui";
-import { systemRoleSchema, membershipStatusSchema } from "@carelik/shared";
+import { membershipStatusSchema } from "@carelik/shared";
 import { useAuth } from "@carelik/auth";
 import { useOrganization } from "@/providers/organization-provider";
 import { supabase } from "@/lib/supabase";
-import { inviteMember, updateMemberEmail, type InvitableRole } from "@/lib/invitations";
+import { inviteMember, revokeMemberAccess, updateMemberEmail, type InvitableRole } from "@/lib/invitations";
 import { useTableControls } from "@/lib/use-table-controls";
 import { useFilters } from "@/lib/use-filters";
 import { useColumnWidths } from "@/lib/use-column-widths";
@@ -26,9 +26,7 @@ interface MemberRow {
 
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
-const invitableRoles = systemRoleSchema.options.filter(
-  (role): role is InvitableRole => role !== "platform_owner"
-);
+const invitableRoles: InvitableRole[] = ["organization_owner", "manager", "scheduler", "caregiver"];
 
 const statusStyles: Record<MemberRow["status"], string> = {
   active: "bg-emerald-50 text-emerald-700",
@@ -124,11 +122,7 @@ export function AccessPage() {
     setActionError(null);
     setPendingMembershipId(membershipId);
     try {
-      const { error } = await supabase
-        .from("organization_memberships")
-        .update({ status: "revoked" })
-        .eq("id", membershipId);
-      if (error) throw error;
+      await revokeMemberAccess({ organizationId: activeOrganizationId!, membershipId });
       refreshMembers();
     } catch (cause) {
       setActionError(cause instanceof Error ? cause.message : "Could not revoke access.");
@@ -174,7 +168,7 @@ export function AccessPage() {
   }
 
   const [email, setEmail] = useState("");
-  const [role, setRole] = useState<InvitableRole>("staff");
+  const [role, setRole] = useState<InvitableRole>("caregiver");
   const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
   const [formSuccess, setFormSuccess] = useState<string | null>(null);

@@ -2,7 +2,7 @@ import type { SystemRole } from "@carelik/shared";
 import { supabase } from "@/lib/supabase";
 import { extractEdgeFunctionErrorMessage } from "@/lib/edge-function-errors";
 
-export type InvitableRole = Exclude<SystemRole, "platform_owner">;
+export type InvitableRole = Extract<SystemRole, "organization_owner" | "manager" | "scheduler" | "caregiver">;
 
 export interface InviteMemberInput {
   email: string;
@@ -81,5 +81,12 @@ export async function updateMemberEmail(input: UpdateMemberEmailInput): Promise<
     throw new Error("Email update failed: no response from server.");
   }
 
+  return data;
+}
+
+export async function revokeMemberAccess(input: { organizationId: string; membershipId: string }) {
+  const { data, error } = await supabase.functions.invoke("revoke-member-access", { body: input });
+  if (error) throw new Error(await extractEdgeFunctionErrorMessage(error, "Could not revoke account access."));
+  if (!data) throw new Error("Access revocation failed: no response from server.");
   return data;
 }

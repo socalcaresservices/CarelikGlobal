@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { supabase } from "@/lib/supabase";
-import { inviteMember, updateMemberEmail } from "./invitations";
+import { inviteMember, revokeMemberAccess, updateMemberEmail } from "./invitations";
 
 vi.mock("@/lib/supabase", () => ({
   supabase: {
@@ -22,17 +22,17 @@ describe("inviteMember", () => {
       userId: "user-1",
       email: "person@example.com",
       organizationId: "org-1",
-      role: "staff" as const,
+      role: "caregiver" as const,
       status: "invited" as const
     };
     mockedInvoke.mockResolvedValue({ data: result, error: null } as never);
 
     await expect(
-      inviteMember({ email: "person@example.com", organizationId: "org-1", role: "staff" })
+      inviteMember({ email: "person@example.com", organizationId: "org-1", role: "caregiver" })
     ).resolves.toEqual(result);
 
     expect(mockedInvoke).toHaveBeenCalledWith("invite-member", {
-      body: { email: "person@example.com", organizationId: "org-1", role: "staff" }
+      body: { email: "person@example.com", organizationId: "org-1", role: "caregiver" }
     });
   });
 
@@ -43,7 +43,7 @@ describe("inviteMember", () => {
     mockedInvoke.mockResolvedValue({ data: null, error } as never);
 
     await expect(
-      inviteMember({ email: "person@example.com", organizationId: "org-1", role: "staff" })
+      inviteMember({ email: "person@example.com", organizationId: "org-1", role: "caregiver" })
     ).rejects.toThrow(error.message);
   });
 
@@ -63,7 +63,7 @@ describe("inviteMember", () => {
       inviteMember({
         email: "person@example.com",
         organizationId: "org-1",
-        role: "staff",
+        role: "caregiver",
         firstName: "Sam",
         lastName: "Caregiver"
       })
@@ -74,8 +74,23 @@ describe("inviteMember", () => {
     mockedInvoke.mockResolvedValue({ data: null, error: null } as never);
 
     await expect(
-      inviteMember({ email: "person@example.com", organizationId: "org-1", role: "staff" })
+      inviteMember({ email: "person@example.com", organizationId: "org-1", role: "caregiver" })
     ).rejects.toThrow("no response from server");
+  });
+});
+
+describe("revokeMemberAccess", () => {
+  beforeEach(() => mockedInvoke.mockReset());
+
+  it("uses the server-side revocation function", async () => {
+    const result = { membershipId: "member-1", userId: "user-1", status: "revoked", accountBanned: true };
+    mockedInvoke.mockResolvedValue({ data: result, error: null } as never);
+
+    await expect(revokeMemberAccess({ organizationId: "org-1", membershipId: "member-1" }))
+      .resolves.toEqual(result);
+    expect(mockedInvoke).toHaveBeenCalledWith("revoke-member-access", {
+      body: { organizationId: "org-1", membershipId: "member-1" }
+    });
   });
 });
 
