@@ -24,5 +24,6 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile=false
       - run: pnpm typecheck
+      - run: pnpm lint
       - run: pnpm build
       - run: pnpm test

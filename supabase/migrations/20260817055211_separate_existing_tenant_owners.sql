@@ -1,22 +1,14 @@
--- Align the three existing subscribers with separate tenant identities.
-update public.organization_memberships m
-set status = 'active', joined_at = coalesce(joined_at, now())
-from auth.users u, public.organizations o
-where m.user_id = u.id and m.organization_id = o.id
-  and lower(u.email) = 'ogethinks@gmail.com'
-  and o.display_name = 'Ogethinks'
-  and m.role = 'organization_owner';
-
-update public.organization_memberships m
-set status = 'revoked'
-from auth.users u, public.organizations o
-where m.user_id = u.id and m.organization_id = o.id
-  and lower(u.email) = 'socalcaresservices@gmail.com'
-  and o.display_name = 'Ogethinks';
-
-update public.organization_memberships m
-set status = 'revoked'
-from auth.users u, public.user_profiles p, public.organizations o
-where m.user_id = u.id and p.id = u.id and m.organization_id = o.id
-  and p.platform_role = 'platform_owner'
-  and o.display_name = 'Socal Care Services llc';
+-- Historical record only — already applied to production (project
+-- cdxxpdyobsqvqveabsda) on 2026-08-17. Left in place as a no-op so this
+-- migration's version slot is not missing from `supabase migration list`
+-- against that project. Do not re-add literal customer identifiers here;
+-- do not attempt to replay this against another environment.
+--
+-- The original version of this file hardcoded two real customer email
+-- addresses and two organization display names to reconcile membership
+-- status after a tenant-ownership realignment. That is a one-time,
+-- environment-specific data fix, not a schema change, so it does not
+-- belong in a file that gets replayed against every fresh environment.
+-- A redacted description of what it did lives in docs/ops/README.md;
+-- the literal values live only in the team's private ops runbook.
+select 1;
