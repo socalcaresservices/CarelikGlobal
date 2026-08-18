@@ -328,7 +328,12 @@ describe("CaregiverDetailPage", () => {
     renderPage();
     await waitFor(() => expect(screen.getByText("Sam Caregiver")).toBeInTheDocument());
 
-    expect(screen.getByLabelText("Monday start time")).toHaveValue("08:00");
+    // Availability is a separate async fetch from the member lookup above -
+    // asserting on it right after the name appears races that fetch instead
+    // of waiting for it, so this occasionally read the form's hardcoded
+    // 09:00/17:00 default (set before the fetch resolves) rather than the
+    // seeded 08:00/12:00 row.
+    await waitFor(() => expect(screen.getByLabelText("Monday start time")).toHaveValue("08:00"));
     expect(screen.getByLabelText("Monday end time")).toHaveValue("12:00");
   });
 
