@@ -8,7 +8,10 @@ import {
   CheckCircle2,
   ClipboardCheck,
   Clock,
+  FileSignature,
+  FolderClock,
   Mail,
+  UserPlus,
   UserX
 } from "lucide-react";
 import { AlertCard, type StatusTone } from "@carelik/ui";
@@ -67,6 +70,25 @@ interface IncidentForSignals {
   status: IncidentStatus;
 }
 
+interface VisitForSignals {
+  id: string;
+  status: "draft" | "awaiting_signature" | "signed" | "administrator_review" | "corrected" | "voided";
+}
+
+interface CandidateForSignals {
+  id: string;
+  pipeline_stage: string;
+}
+
+interface DocumentRequestForSignals {
+  id: string;
+}
+
+// Same terminal-stage set candidate-detail-page.tsx uses to decide
+// whether a candidate's pipeline is done - a candidate not yet in one
+// of these needs someone to move them forward.
+const TERMINAL_CANDIDATE_STAGES = ["care_team", "rejected", "withdrawn"];
+
 // Reuses @carelik/ui's shared StatusTone (healthy -> success, attention
 // -> warning, critical -> danger) instead of a parallel local tone type,
 // so this dashboard's tones and every StatusBadge/StatusChip/ProgressBar
@@ -92,6 +114,9 @@ export function ActionCenter() {
   const canSeeAllShifts = hasPermission("shifts.read");
   const canSeeMembers = hasPermission("membership.read");
   const canSeeAuthorizations = hasPermission("authorizations.read");
+  const canSeeVisits = hasPermission("visits.read");
+  const canSeeCandidates = hasPermission("applicants.read");
+  const canSeeDocuments = hasPermission("documents.read");
 
   const now = new Date();
   const windowStart = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
@@ -190,6 +215,43 @@ export function ActionCenter() {
     enabled: !!activeOrganizationId
   });
 
+  const unsignedVisitsQuery = useQuery({
+    queryKey: ["action-center-unsigned-visits", activeOrganizationId],
+    queryFn: async () => {
+      const { data, error } = await supabase.rpc("list_service_visits", {
+        target_organization_id: activeOrganizationId!,
+        filter_status: "awaiting_signature"
+      });
+      if (error) throw error;
+      return (data ?? []) as VisitForSignals[];
+    },
+    enabled: !!activeOrganizationId && canSeeVisits
+  });
+
+  const candidatesQuery = useQuery({
+    queryKey: ["action-center-candidates", activeOrganizationId],
+    queryFn: async () => {
+      const { data, error } = await supabase.rpc("list_candidates_v1", {
+        target_organization_id: activeOrganizationId!
+      });
+      if (error) throw error;
+      return (data ?? []) as CandidateForSignals[];
+    },
+    enabled: !!activeOrganizationId && canSeeCandidates
+  });
+
+  const documentRequestsQuery = useQuery({
+    queryKey: ["action-center-document-requests", activeOrganizationId],
+    queryFn: async () => {
+      const { data, error } = await supabase.rpc("list_document_requests_awaiting_review", {
+        target_organization_id: activeOrganizationId!
+      });
+      if (error) throw error;
+      return (data ?? []) as DocumentRequestForSignals[];
+    },
+    enabled: !!activeOrganizationId && canSeeDocuments
+  });
+
   if (!activeOrganizationId) return null;
 
   // Every signal below is gated on `if (...Query.data)`, so a failed
@@ -206,7 +268,10 @@ export function ActionCenter() {
     caregiverHoursQuery.isError ||
     credentialsQuery.isError ||
     (canSeeAuthorizations && authorizationsQuery.isError) ||
-    incidentsQuery.isError;
+    incidentsQuery.isError ||
+    (canSeeVisits && unsignedVisitsQuery.isError) ||
+    (canSeeCandidates && candidatesQuery.isError) ||
+    (canSeeDocuments && documentRequestsQuery.isError);
 
   const shifts = shiftsQuery.data ?? [];
 
@@ -349,6 +414,47 @@ export function ActionCenter() {
       icon: AlertOctagon,
       to: "/incidents",
       statusText: awaitingReviewCount > 0 ? "Review" : "Nothing open"
+    });
+  }
+
+  if (canSeeVisits && unsignedVisitsQuery.data) {
+    const unsignedCount = unsignedVisitsQuery.data.length;
+    signals.push({
+      key: "unsigned-visits",
+      label: "Visits awaiting signature",
+      count: unsignedCount,
+      tone: unsignedCount > 0 ? "warning" : "success",
+      icon: FileSignature,
+      to: "/service-verification",
+      statusText: unsignedCount > 0 ? "Review" : "All signed"
+    });
+  }
+
+  if (canSeeCandidates && candidatesQuery.data) {
+    const awaitingActionCount = candidatesQuery.data.filter(
+      (candidate) => !TERMINAL_CANDIDATE_STAGES.includes(candidate.pipeline_stage)
+    ).length;
+    signals.push({
+      key: "candidates-awaiting-action",
+      label: "Candidates awaiting action",
+      count: awaitingActionCount,
+      tone: awaitingActionCount > 0 ? "info" : "success",
+      icon: UserPlus,
+      to: "/candidates",
+      statusText: awaitingActionCount > 0 ? "Review" : "Pipeline clear"
+    });
+  }
+
+  if (canSeeDocuments && documentRequestsQuery.data) {
+    const awaitingReviewCount = documentRequestsQuery.data.length;
+    signals.push({
+      key: "document-requests-awaiting-review",
+      label: "Document requests awaiting review",
+      count: awaitingReviewCount,
+      tone: awaitingReviewCount > 0 ? "warning" : "success",
+      icon: FolderClock,
+      to: "/candidates",
+      statusText: awaitingReviewCount > 0 ? "Review" : "Nothing pending"
     });
   }
 

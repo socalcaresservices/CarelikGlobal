@@ -166,7 +166,7 @@ function normalizeImportRows(text: string, source: string): ImportCandidate[] {
   });
 }
 
-export function ApplicantsPage() {
+export function CandidatesPage() {
   const { activeOrganizationId, activeOrganization, hasPermission } = useOrganization();
   const queryClient = useQueryClient();
   const fileInputRef = useRef<HTMLInputElement | null>(null);

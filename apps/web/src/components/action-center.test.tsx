@@ -275,6 +275,73 @@ describe("ActionCenter", () => {
     expect(within(card as HTMLElement).getByText("Review")).toBeInTheDocument();
   });
 
+  it("flags an unsigned visit", async () => {
+    mockedUseOrganization.mockReturnValue(baseOrganization());
+    mockedRpc.mockImplementation((fn: string) => {
+      if (fn === "list_service_visits") {
+        return Promise.resolve({
+          data: [{ id: "visit-1", status: "awaiting_signature" }],
+          error: null
+        }) as never;
+      }
+      return Promise.resolve({ data: [], error: null }) as never;
+    });
+    mockedFrom.mockReturnValue({ select: mockClientsCount([]) } as never);
+
+    renderCenter();
+
+    await waitFor(() => expect(screen.getByText("Visits awaiting signature")).toBeInTheDocument());
+    const card = screen.getByText("Visits awaiting signature").closest("a");
+    expect(card).not.toBeNull();
+    expect(within(card as HTMLElement).getByText("1")).toBeInTheDocument();
+    expect(within(card as HTMLElement).getByText("Review")).toBeInTheDocument();
+  });
+
+  it("flags a candidate not yet in a terminal pipeline stage", async () => {
+    mockedUseOrganization.mockReturnValue(baseOrganization());
+    mockedRpc.mockImplementation((fn: string) => {
+      if (fn === "list_candidates_v1") {
+        return Promise.resolve({
+          data: [
+            { id: "candidate-1", pipeline_stage: "interviewing" },
+            { id: "candidate-2", pipeline_stage: "rejected" }
+          ],
+          error: null
+        }) as never;
+      }
+      return Promise.resolve({ data: [], error: null }) as never;
+    });
+    mockedFrom.mockReturnValue({ select: mockClientsCount([]) } as never);
+
+    renderCenter();
+
+    await waitFor(() => expect(screen.getByText("Candidates awaiting action")).toBeInTheDocument());
+    const card = screen.getByText("Candidates awaiting action").closest("a");
+    expect(card).not.toBeNull();
+    expect(within(card as HTMLElement).getByText("1")).toBeInTheDocument();
+  });
+
+  it("flags a document request awaiting review", async () => {
+    mockedUseOrganization.mockReturnValue(baseOrganization());
+    mockedRpc.mockImplementation((fn: string) => {
+      if (fn === "list_document_requests_awaiting_review") {
+        return Promise.resolve({
+          data: [{ id: "request-1" }],
+          error: null
+        }) as never;
+      }
+      return Promise.resolve({ data: [], error: null }) as never;
+    });
+    mockedFrom.mockReturnValue({ select: mockClientsCount([]) } as never);
+
+    renderCenter();
+
+    await waitFor(() => expect(screen.getByText("Document requests awaiting review")).toBeInTheDocument());
+    const card = screen.getByText("Document requests awaiting review").closest("a");
+    expect(card).not.toBeNull();
+    expect(within(card as HTMLElement).getByText("1")).toBeInTheDocument();
+  });
+
   it("only shows signals the current permissions allow", async () => {
     mockedUseOrganization.mockReturnValue({
       ...baseOrganization(),

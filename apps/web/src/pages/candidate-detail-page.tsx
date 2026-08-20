@@ -6,7 +6,7 @@ import { Button, Card, StatusBadge } from "@carelik/ui";
 import { useAuth } from "@carelik/auth";
 import { useOrganization } from "@/providers/organization-provider";
 import { supabase } from "@/lib/supabase";
-import { DocumentsCard } from "@/pages/applicant-detail-page";
+import { DocumentsCard } from "@/components/documents-card";
 
 type Weekday = "monday" | "tuesday" | "wednesday" | "thursday" | "friday" | "saturday" | "sunday";
 type Stage =
