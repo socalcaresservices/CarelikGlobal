@@ -74,6 +74,13 @@ export const VISIT_STATUS_LABEL: Record<ServiceVisitStatus, string> = {
   voided: "Voided"
 };
 
+export const AUTHORIZATION_STATUS_LABEL: Record<VisitAuthorizationStatus, string> = {
+  within_authorization: "Within authorization",
+  limit_reached: "Limit reached",
+  exceeds_authorization: "Exceeds authorization",
+  administrator_override: "Administrator override"
+};
+
 export const SIGNER_ROLE_LABEL: Record<VisitSignerRole, string> = {
   client: "Client",
   parent: "Parent",

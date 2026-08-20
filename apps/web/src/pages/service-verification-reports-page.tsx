@@ -5,11 +5,13 @@ import { Button, Card, PageHeader, StatusBadge, type StatusTone } from "@carelik
 import { useOrganization } from "@/providers/organization-provider";
 import { supabase } from "@/lib/supabase";
 import {
+  AUTHORIZATION_STATUS_LABEL,
   formatDateTime,
   formatHours,
   formatVisitDate,
   VISIT_STATUS_LABEL,
-  type ServiceVisitStatus
+  type ServiceVisitStatus,
+  type VisitAuthorizationStatus
 } from "@/lib/service-verification";
 
 interface VisitReportRow {
@@ -29,7 +31,7 @@ interface VisitReportRow {
   verified_minutes: number | null;
   billable_minutes: number | null;
   status: ServiceVisitStatus;
-  authorization_status: string | null;
+  authorization_status: VisitAuthorizationStatus | null;
   signed_at: string | null;
   original_visit_id: string | null;
   is_corrected: boolean;
@@ -374,6 +376,26 @@ export function ServiceVerificationReportsPage() {
       })
       .sort((a, b) => b.scheduledMinutes - a.scheduledMinutes);
   }, [scheduledMinutesByCaregiver, billable]);
+
+  // Exception visits: anything that needed a human to intervene, not
+  // just the normal signed-and-done path. administrator_review means
+  // the visit exceeded the client's authorization at signing time (see
+  // 20260809042943's resulting_visit_status logic); a non-
+  // within_authorization authorization_status can independently be true
+  // of a signed visit too; is_corrected means someone already fixed a
+  // mistake on it. Sourced from every visit in the current filter, not
+  // just the billable ones - an exception is worth seeing regardless of
+  // whether it ended up billable.
+  const exceptionVisits = useMemo(
+    () =>
+      rows.filter(
+        (row) =>
+          row.status === "administrator_review" ||
+          row.is_corrected ||
+          (row.authorization_status !== null && row.authorization_status !== "within_authorization")
+      ),
+    [rows]
+  );
 
   const clientScheduledVsDelivered = useMemo(() => {
     const ids = new Set<string>(scheduledMinutesByClient.keys());
@@ -841,6 +863,39 @@ export function ServiceVerificationReportsPage() {
                   {entry.legalName ?? entry.code} <span className="text-slate-400">· {entry.visits} visits</span>
                 </span>
                 <span className="font-medium text-slate-900">{formatHours(entry.billableMinutes)} billable hrs</span>
+              </li>
+            ))}
+          </ul>
+        </Card>
+      ) : null}
+
+      {exceptionVisits.length > 0 ? (
+        <Card>
+          <h3 className="font-semibold text-slate-950">Exception visits</h3>
+          <p className="mt-1 text-xs text-slate-500">
+            Visits that needed a human to look at them: flagged for administrator review, an authorization status
+            other than within-authorization, or already corrected.
+          </p>
+          <ul className="mt-3 divide-y divide-slate-100">
+            {exceptionVisits.map((row) => (
+              <li key={row.id} className="py-2 text-sm">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <span className="text-slate-700">
+                    {row.client_legal_name ?? row.client_code}{" "}
+                    <span className="text-slate-400">
+                      · {row.caregiver_name} · {formatVisitDate(row.service_date)}
+                    </span>
+                  </span>
+                  <span className="flex flex-wrap gap-1.5">
+                    {row.status === "administrator_review" ? (
+                      <StatusBadge label={VISIT_STATUS_LABEL[row.status]} tone="danger" />
+                    ) : null}
+                    {row.is_corrected ? <StatusBadge label="Corrected" tone="neutral" /> : null}
+                    {row.authorization_status && row.authorization_status !== "within_authorization" ? (
+                      <StatusBadge label={AUTHORIZATION_STATUS_LABEL[row.authorization_status]} tone="warning" />
+                    ) : null}
+                  </span>
+                </div>
               </li>
             ))}
           </ul>

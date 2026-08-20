@@ -115,6 +115,37 @@ describe("ServiceVerificationReportsPage", () => {
     expect(screen.getAllByText("Corrected").length).toBeGreaterThan(0);
   });
 
+  it("shows exception visits flagged for review, correction, or over-authorization, but not a plain signed visit", async () => {
+    mockedUseOrganization.mockReturnValue({
+      activeOrganizationId: ORG_ID,
+      activeOrganization: { displayName: "Acme Care" },
+      hasPermission: vi.fn(() => true)
+    } as never);
+    mockOrgLetterhead();
+    mockedRpc.mockResolvedValue({
+      data: [
+        visitRow,
+        { ...visitRow, id: "needs-review", status: "administrator_review" },
+        {
+          ...visitRow,
+          id: "over-authorized",
+          authorization_status: "exceeds_authorization"
+        }
+      ],
+      error: null
+    } as never);
+
+    renderPage();
+
+    await waitFor(() => expect(screen.getByText("Exception visits")).toBeInTheDocument());
+    const exceptionCard = screen.getByText("Exception visits").closest("div")!;
+    expect(within(exceptionCard).getByText("Needs review")).toBeInTheDocument();
+    expect(within(exceptionCard).getByText("Exceeds authorization")).toBeInTheDocument();
+    // Only 2 rows in the card: the plain signed/within-authorization
+    // visitRow itself never appears here.
+    expect(within(exceptionCard).getAllByRole("listitem")).toHaveLength(2);
+  });
+
   it("shows scheduled vs delivered hours, including a caregiver with no delivered visits", async () => {
     mockedUseOrganization.mockReturnValue({
       activeOrganizationId: ORG_ID,
