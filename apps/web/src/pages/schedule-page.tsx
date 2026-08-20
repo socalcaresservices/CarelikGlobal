@@ -47,6 +47,8 @@ interface ShiftRow {
   ends_at: string;
   status: "scheduled" | "completed" | "cancelled" | "no_show";
   notes: string | null;
+  needs_coverage: boolean;
+  call_out_reason: string | null;
 }
 
 interface ClientOption {
@@ -172,6 +174,13 @@ export function SchedulePage() {
     }
   );
 
+  // needs_coverage (list_shifts) is true when a shift's caregiver called
+  // out (call_out_shift) and no one has been reassigned to it yet
+  // (reassign_shift). This is the only place in the app that surfaces
+  // it - filed under the schedule window's own rolling 60-day range, not
+  // a separate date picker, so it stays in sync with the table below it.
+  const uncoveredShifts = (shiftsQuery.data ?? []).filter((shift) => shift.needs_coverage);
+
   const scheduleActiveFilters: ActiveFilter[] = filters.values.status
     ? [
         {
@@ -279,6 +288,32 @@ export function SchedulePage() {
           <p className="mt-1 text-sm text-slate-500">Showing only shifts assigned to you.</p>
         ) : null}
       </div>
+
+      {uncoveredShifts.length > 0 ? (
+        <Card>
+          <h3 className="font-semibold text-slate-950">Needs coverage</h3>
+          <p className="mt-1 text-xs text-slate-500">
+            Shifts whose caregiver called out and haven&apos;t been reassigned yet.
+          </p>
+          <ul className="mt-3 divide-y divide-slate-100">
+            {uncoveredShifts.map((shift) => (
+              <li key={shift.id} className="py-2 text-sm">
+                <div className="flex items-center justify-between">
+                  <span className="text-slate-700">
+                    {shift.client_name} <span className="text-slate-400">· was {shift.caregiver_name}</span>
+                  </span>
+                  <span className="font-medium text-red-700">
+                    {new Date(shift.starts_at).toLocaleString()}
+                  </span>
+                </div>
+                {shift.call_out_reason ? (
+                  <p className="mt-0.5 text-xs text-slate-500">Reason: {shift.call_out_reason}</p>
+                ) : null}
+              </li>
+            ))}
+          </ul>
+        </Card>
+      ) : null}
 
       {canManage ? (
         <Card>

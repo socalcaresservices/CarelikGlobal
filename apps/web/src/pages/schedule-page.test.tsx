@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -147,6 +147,28 @@ describe("SchedulePage", () => {
         to_time: expect.any(String)
       })
     );
+  });
+
+  it("shows a Needs coverage card for shifts whose caregiver called out", async () => {
+    mockedUseOrganization.mockReturnValue({ ...baseOrganization(), hasPermission: vi.fn(() => true) });
+    mockRpc({
+      shifts: [
+        sampleShift,
+        {
+          ...sampleShift,
+          id: "called-out-shift",
+          needs_coverage: true,
+          call_out_reason: "Family emergency"
+        }
+      ]
+    });
+    mockSchedulingTables([], []);
+
+    renderPage();
+
+    await waitFor(() => expect(screen.getByText("Needs coverage")).toBeInTheDocument());
+    const coverageCard = screen.getByText("Needs coverage").closest("div")!;
+    expect(within(coverageCard).getByText("Reason: Family emergency")).toBeInTheDocument();
   });
 
   it("bounds the shift fetch to a rolling window around today, not every shift ever", async () => {
