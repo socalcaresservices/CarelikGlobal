@@ -16,7 +16,6 @@ vi.mock("@/lib/supabase", () => ({
 
 const mockedUseOrganization = vi.mocked(useOrganization);
 const mockedRpc = vi.mocked(supabase.rpc);
-const mockedFrom = vi.mocked(supabase.from);
 
 const ORG_ID = "11111111-1111-4111-8111-111111111111";
 const CAREGIVER_ID = "44444444-4444-4444-8444-444444444444";
@@ -114,10 +113,8 @@ describe("CredentialsPage", () => {
           error: null
         }) as never;
       }
-      return Promise.resolve({ data: [], error: null }) as never;
+      return Promise.resolve({ data: null, error: null }) as never;
     });
-    const insertMock = vi.fn().mockResolvedValue({ error: null });
-    mockedFrom.mockReturnValue({ insert: insertMock } as never);
 
     renderPage();
     await waitFor(() => expect(screen.getByText("Add a credential")).toBeInTheDocument());
@@ -130,11 +127,12 @@ describe("CredentialsPage", () => {
     fireEvent.click(screen.getByRole("button", { name: "Add credential" }));
 
     await waitFor(() =>
-      expect(insertMock).toHaveBeenCalledWith(
+      expect(mockedRpc).toHaveBeenCalledWith(
+        "add_caregiver_credential",
         expect.objectContaining({
-          organization_id: ORG_ID,
-          caregiver_user_id: CAREGIVER_ID,
-          credential_type: "TB Test"
+          target_organization_id: ORG_ID,
+          target_user_id: CAREGIVER_ID,
+          new_credential_type: "TB Test"
         })
       )
     );
@@ -183,11 +181,11 @@ describe("CredentialsPage", () => {
           error: null
         }) as never;
       }
+      if (fn === "delete_caregiver_credential") {
+        return Promise.resolve({ data: null, error: null }) as never;
+      }
       return Promise.resolve({ data: [], error: null }) as never;
     });
-    const eqMock = vi.fn().mockResolvedValue({ error: null });
-    const updateMock = vi.fn(() => ({ eq: eqMock }));
-    mockedFrom.mockReturnValue({ update: updateMock } as never);
 
     renderPage();
     await waitFor(() => expect(screen.getByText("Remove")).toBeInTheDocument());
@@ -195,8 +193,9 @@ describe("CredentialsPage", () => {
     fireEvent.click(screen.getByText("Remove"));
 
     await waitFor(() =>
-      expect(updateMock).toHaveBeenCalledWith(expect.objectContaining({ deleted_at: expect.any(String) }))
+      expect(mockedRpc).toHaveBeenCalledWith("delete_caregiver_credential", {
+        target_credential_id: "55555555-5555-4555-8555-555555555555"
+      })
     );
-    expect(eqMock).toHaveBeenCalledWith("id", "55555555-5555-4555-8555-555555555555");
   });
 });
