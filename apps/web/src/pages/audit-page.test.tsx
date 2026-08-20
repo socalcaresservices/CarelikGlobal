@@ -108,6 +108,33 @@ describe("AuditPage", () => {
     await waitFor(() => expect(screen.getByText("System")).toBeInTheDocument());
   });
 
+  it("exports filtered audit activity as a CSV download", async () => {
+    mockedUseOrganization.mockReturnValue({ ...baseOrganization(), hasPermission: vi.fn(() => true) });
+    mockedRpc.mockResolvedValue({
+      data: [
+        {
+          id: 1,
+          occurred_at: "2026-07-19T18:50:03.713Z",
+          actor_user_id: "55a38d4c-375a-475a-9e90-a8b9f0c9acc3",
+          actor_display_name: "Jamie",
+          action: "organizations.update",
+          entity_type: "organizations",
+          entity_id: "119c0cdb-fb7c-49aa-9dd3-35c04db71b1b"
+        }
+      ],
+      error: null
+    } as never);
+
+    renderPage();
+    await waitFor(() => expect(screen.getByText("Jamie")).toBeInTheDocument());
+
+    const clickSpy = vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => {});
+    fireEvent.click(screen.getByRole("button", { name: "Export filtered CSV" }));
+
+    expect(clickSpy).toHaveBeenCalledTimes(1);
+    clickSpy.mockRestore();
+  });
+
   it("shows an empty state when there is no activity", async () => {
     mockedUseOrganization.mockReturnValue({ ...baseOrganization(), hasPermission: vi.fn(() => true) });
     mockedRpc.mockResolvedValue({ data: [], error: null } as never);
