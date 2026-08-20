@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { useOrganization } from "@/providers/organization-provider";
@@ -113,6 +113,59 @@ describe("ServiceVerificationReportsPage", () => {
     // Two matches for the corrected row: the "Corrected" status badge
     // (status === 'corrected') and the separate is_corrected marker badge.
     expect(screen.getAllByText("Corrected").length).toBeGreaterThan(0);
+  });
+
+  it("shows scheduled vs delivered hours, including a caregiver with no delivered visits", async () => {
+    mockedUseOrganization.mockReturnValue({
+      activeOrganizationId: ORG_ID,
+      activeOrganization: { displayName: "Acme Care" },
+      hasPermission: vi.fn(() => true)
+    } as never);
+    mockOrgLetterhead();
+    mockedRpc.mockImplementation((fn: string) => {
+      if (fn === "list_service_visits") {
+        return Promise.resolve({ data: [visitRow], error: null }) as never;
+      }
+      if (fn === "list_shifts") {
+        return Promise.resolve({
+          data: [
+            {
+              client_id: visitRow.client_id,
+              client_name: "Jamie Smith",
+              caregiver_user_id: visitRow.caregiver_user_id,
+              caregiver_name: "Jordan Rivera",
+              starts_at: "2026-08-01T13:00:00.000Z",
+              ends_at: "2026-08-01T14:30:00.000Z",
+              status: "completed"
+            },
+            {
+              client_id: "unsigned-client",
+              client_name: "Alex Doe",
+              caregiver_user_id: "unsigned-caregiver",
+              caregiver_name: "Sam Caregiver",
+              starts_at: "2026-08-02T13:00:00.000Z",
+              ends_at: "2026-08-02T14:00:00.000Z",
+              status: "scheduled"
+            }
+          ],
+          error: null
+        }) as never;
+      }
+      return Promise.resolve({ data: [], error: null }) as never;
+    });
+
+    renderPage();
+
+    await waitFor(() => expect(screen.getByText("Scheduled vs delivered hours")).toBeInTheDocument());
+    const scheduledCard = screen.getByText("Scheduled vs delivered hours").closest("div")!;
+    // Jordan Rivera was scheduled 90 minutes (1.5h) and delivered the
+    // visitRow's 60 minutes (1h).
+    const jordanRow = within(scheduledCard).getByText("Jordan Rivera").closest("li")!;
+    expect(jordanRow).toHaveTextContent("1.50 scheduled · 1 delivered");
+    // The still-scheduled (never signed off) shift's caregiver/client
+    // still show up with 0 delivered, not silently dropped.
+    expect(within(scheduledCard).getByText("Sam Caregiver")).toBeInTheDocument();
+    expect(within(scheduledCard).getByText("Alex Doe")).toBeInTheDocument();
   });
 
   it("passes filter selections through to list_service_visits", async () => {
