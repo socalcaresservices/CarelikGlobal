@@ -109,13 +109,32 @@ describe("IncidentsPage", () => {
     });
     mockedRpc.mockResolvedValue({ data: [], error: null } as never);
     const insertMock = vi.fn().mockResolvedValue({ error: null });
-    mockedFrom.mockReturnValue({ insert: insertMock } as never);
+    mockedFrom.mockImplementation((table: string) => {
+      if (table === "incident_types") {
+        return {
+          select: vi.fn(() => ({
+            eq: vi.fn(() => ({
+              is: vi.fn(() => ({
+                order: vi.fn().mockResolvedValue({
+                  data: [{ id: "type-1", name: "Fall", is_active: true }],
+                  error: null
+                })
+              }))
+            }))
+          }))
+        } as never;
+      }
+      return { insert: insertMock } as never;
+    });
     mockedGetUser.mockResolvedValue({ data: { user: { id: USER_ID } }, error: null } as never);
 
     renderPage();
     await waitFor(() => expect(screen.getByText("File an incident")).toBeInTheDocument());
 
-    fireEvent.change(screen.getByLabelText("Category"), { target: { value: "Fall" } });
+    fireEvent.focus(screen.getByLabelText("Category"));
+    await waitFor(() => expect(screen.getByRole("option", { name: "Fall" })).toBeInTheDocument());
+    fireEvent.mouseDown(screen.getByRole("option", { name: "Fall" }));
+
     fireEvent.change(screen.getByLabelText("What happened"), {
       target: { value: "Client had a minor fall while getting up." }
     });

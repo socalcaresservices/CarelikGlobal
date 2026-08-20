@@ -29,7 +29,7 @@ function LookupCatalogCard({
   canRead,
   canUpdate
 }: {
-  table: "skills" | "languages";
+  table: "skills" | "languages" | "incident_types";
   title: string;
   hint: string;
   organizationId: string | null | undefined;
@@ -1259,6 +1259,15 @@ export function SettingsPage() {
         organizationId={activeOrganizationId}
         canRead={hasPermission("services.read")}
         canManage={hasPermission("services.update")}
+      />
+
+      <LookupCatalogCard
+        table="incident_types"
+        title="Incident types"
+        hint="The categories staff pick from when filing an incident (Fall, Medication error...) - a shared list keeps reporting consistent instead of every incident's category being freely typed."
+        organizationId={activeOrganizationId}
+        canRead={hasPermission("incidents.read")}
+        canUpdate={hasPermission("incidents.update")}
       />
 
       <DocumentTypesCard

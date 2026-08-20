@@ -326,6 +326,44 @@ describe("SettingsPage", () => {
     expect(updateEqMock).toHaveBeenCalledWith("id", "lang-1");
   });
 
+  it("lists configured incident types and adds a new one when incidents.update is held", async () => {
+    mockedUseAuth.mockReturnValue(authUser());
+    mockedUseOrganization.mockReturnValue({ ...baseOrganization(), hasPermission: vi.fn(() => true) });
+
+    const { selectMock: settingsSelect } = mockReadableSettings([]);
+    const { selectMock: skillsSelect } = mockReadableLookup([]);
+    const { selectMock: languagesSelect } = mockReadableLookup([]);
+    const { selectMock: documentTypesSelect } = mockReadableDocumentTypes([]);
+    const { selectMock: servicesSelect } = mockReadableLookup([]);
+    const { selectMock: incidentTypesSelect } = mockReadableLookup([
+      { id: "type-1", name: "Fall", is_active: true }
+    ]);
+    const insertMock = vi.fn().mockResolvedValue({ error: null });
+
+    mockedFrom.mockImplementation((table: string) => {
+      if (table === "skills") return { select: skillsSelect } as never;
+      if (table === "languages") return { select: languagesSelect } as never;
+      if (table === "document_types") return { select: documentTypesSelect } as never;
+      if (table === "services") return { select: servicesSelect } as never;
+      if (table === "incident_types") return { select: incidentTypesSelect, insert: insertMock } as never;
+      return { select: settingsSelect } as never;
+    });
+
+    renderPage();
+
+    await waitFor(() => expect(screen.getByText("Fall")).toBeInTheDocument());
+
+    const incidentTypesCard = screen.getByText("Incident types").closest("div")!;
+    fireEvent.change(within(incidentTypesCard).getByLabelText("Add incident type"), {
+      target: { value: "Medication error" }
+    });
+    fireEvent.click(within(incidentTypesCard).getByRole("button", { name: "Add" }));
+
+    await waitFor(() =>
+      expect(insertMock).toHaveBeenCalledWith({ organization_id: ORG_ID, name: "Medication error" })
+    );
+  });
+
   it("lists platform-default and custom document types and lets the agency disable either", async () => {
     mockedUseAuth.mockReturnValue(authUser());
     mockedUseOrganization.mockReturnValue({ ...baseOrganization(), hasPermission: vi.fn(() => true) });
