@@ -1,6 +1,6 @@
 import { useMemo, useState, type FormEvent } from "react";
 import { useInfiniteQuery, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Card, FilterBar, Button, type ActiveFilter } from "@carelik/ui";
+import { Card, FilterBar, Button, SearchableCombobox, type ActiveFilter, type ComboboxOption } from "@carelik/ui";
 import { incidentSeveritySchema, incidentStatusSchema } from "@carelik/shared";
 import type { IncidentSeverity, IncidentStatus } from "@carelik/shared";
 import { useOrganization } from "@/providers/organization-provider";
@@ -50,6 +50,12 @@ interface ClientOption {
 interface MemberOption {
   user_id: string;
   display_name: string;
+}
+
+interface IncidentTypeOption {
+  id: string;
+  name: string;
+  is_active: boolean;
 }
 
 const severityStyles: Record<IncidentSeverity, string> = {
@@ -137,6 +143,25 @@ export function IncidentsPage() {
     },
     enabled: !!activeOrganizationId && canManage
   });
+
+  const incidentTypesQuery = useQuery({
+    queryKey: ["incident-types-for-incidents", activeOrganizationId],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("incident_types")
+        .select("id, name, is_active")
+        .eq("organization_id", activeOrganizationId!)
+        .is("deleted_at", null)
+        .order("name");
+      if (error) throw error;
+      return (data ?? []) as IncidentTypeOption[];
+    },
+    enabled: !!activeOrganizationId && (canCreate || canManage)
+  });
+
+  const incidentTypeOptions: ComboboxOption[] = (incidentTypesQuery.data ?? [])
+    .filter((type) => type.is_active)
+    .map((type) => ({ value: type.name, label: type.name }));
 
   function refreshIncidents() {
     void queryClient.invalidateQueries({ queryKey: ["incidents", activeOrganizationId] });
@@ -251,19 +276,14 @@ export function IncidentsPage() {
         <Card>
           <h3 className="font-semibold text-slate-950">File an incident</h3>
           <form onSubmit={handleFile} className="mt-4 grid gap-3 sm:grid-cols-2">
-            <div>
-              <label htmlFor="incident-category" className="block text-xs font-medium text-slate-600">
-                Category
-              </label>
-              <input
-                id="incident-category"
-                required
-                placeholder="e.g. Fall"
-                value={form.category}
-                onChange={(event) => setForm({ ...form, category: event.target.value })}
-                className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900"
-              />
-            </div>
+            <SearchableCombobox
+              label="Category"
+              required
+              value={form.category || null}
+              onChange={(value) => setForm({ ...form, category: value ?? "" })}
+              options={incidentTypeOptions}
+              placeholder="Search incident types…"
+            />
             <div>
               <label htmlFor="incident-occurred" className="block text-xs font-medium text-slate-600">
                 When it happened
