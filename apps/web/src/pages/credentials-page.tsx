@@ -190,18 +190,22 @@ export function CredentialsPage() {
     setFormError(null);
     setSaving(true);
     try {
-      const payload = {
-        organization_id: activeOrganizationId,
-        caregiver_user_id: form.caregiverUserId,
-        credential_type: form.credentialType,
-        issued_date: form.issuedDate || null,
-        expires_at: form.expiresAt || null,
-        notes: form.notes || null
-      };
-
       const { error } = editingId
-        ? await supabase.from("caregiver_credentials").update(payload).eq("id", editingId)
-        : await supabase.from("caregiver_credentials").insert(payload);
+        ? await supabase.rpc("update_caregiver_credential", {
+            target_credential_id: editingId,
+            new_credential_type: form.credentialType,
+            new_issued_date: form.issuedDate || null,
+            new_expires_at: form.expiresAt || null,
+            new_notes: form.notes || null
+          })
+        : await supabase.rpc("add_caregiver_credential", {
+            target_organization_id: activeOrganizationId,
+            target_user_id: form.caregiverUserId,
+            new_credential_type: form.credentialType,
+            new_issued_date: form.issuedDate || null,
+            new_expires_at: form.expiresAt || null,
+            new_notes: form.notes || null
+          });
       if (error) throw error;
 
       resetForm();
@@ -217,10 +221,7 @@ export function CredentialsPage() {
     setRowError(null);
     setPendingId(row.id);
     try {
-      const { error } = await supabase
-        .from("caregiver_credentials")
-        .update({ deleted_at: new Date().toISOString() })
-        .eq("id", row.id);
+      const { error } = await supabase.rpc("delete_caregiver_credential", { target_credential_id: row.id });
       if (error) throw error;
       if (editingId === row.id) resetForm();
       refreshCredentials();
