@@ -47,6 +47,8 @@ interface WorkforceRecord {
 interface AvailabilityRow { id?: string; day_of_week: Weekday; start_time: string; end_time: string; preference: Preference; }
 interface CredentialRow { id: string; credential_type: string; issue_date: string | null; expiration_date: string | null; does_not_expire: boolean; issuing_organization: string | null; credential_number: string | null; verification_status: string; }
 interface MemberRow { user_id: string; display_name: string; status: string; role: string; }
+interface ShiftHistoryRow { id: string; client_name: string; caregiver_record_id: string | null; starts_at: string; ends_at: string; status: string; }
+interface AssignmentHistoryRow { id: string; caregiver_user_id: string; client_name: string; service_name: string; is_active: boolean; effective_start: string; effective_end: string | null; }
 
 function title(value: string) { return value.replace(/_/g, " ").replace(/\b\w/g, (letter) => letter.toUpperCase()); }
 function time(value: string) { return value.slice(0, 5); }
@@ -104,6 +106,40 @@ export function WorkforceDetailPage() {
     },
     enabled: !!activeOrganizationId && canManage
   });
+
+  const canReadShifts = hasPermission("shifts.read");
+  const canReadAssignments = hasPermission("assignments.read");
+
+  // list_shifts() is org-wide and unbounded by default (no from_time/to_time
+  // passed) - same pattern caregiver-detail-page.tsx used for this exact
+  // purpose before that page stopped being routed. Naturally bounded here
+  // by filtering to one caregiver_record_id, not by the query itself.
+  const shiftsQuery = useQuery({
+    queryKey: ["workforce-shifts", activeOrganizationId, recordQuery.data?.id],
+    queryFn: async () => {
+      const { data, error } = await supabase.rpc("list_shifts", { target_organization_id: activeOrganizationId! });
+      if (error) throw error;
+      return ((data ?? []) as ShiftHistoryRow[]).filter((row) => row.caregiver_record_id === recordQuery.data!.id);
+    },
+    enabled: !!activeOrganizationId && !!recordQuery.data?.id && canReadShifts
+  });
+
+  // caregiver_assignments has no caregiver_record_id column yet (still
+  // caregiver_user_id-only), so this can only show assignments for a
+  // workforce record that has a linked login - a real, separate gap for a
+  // workforce-only caregiver, not something this page can work around.
+  const assignmentsQuery = useQuery({
+    queryKey: ["workforce-assignments", activeOrganizationId],
+    queryFn: async () => {
+      const { data, error } = await supabase.rpc("list_caregiver_assignments", { target_organization_id: activeOrganizationId! });
+      if (error) throw error;
+      return (data ?? []) as AssignmentHistoryRow[];
+    },
+    enabled: !!activeOrganizationId && !!recordQuery.data?.linked_user_id && canReadAssignments
+  });
+  const assignmentsForRecord = (assignmentsQuery.data ?? []).filter(
+    (row) => row.caregiver_user_id === recordQuery.data?.linked_user_id
+  );
 
   const [status, setStatus] = useState<WorkforceRecord["status"]>("active");
   const [hours, setHours] = useState("");
@@ -190,6 +226,52 @@ export function WorkforceDetailPage() {
       <Card><div className="flex items-start justify-between gap-3"><div><h2 className="font-semibold text-slate-950">Availability</h2><p className="mt-1 text-sm text-slate-500">Up to two time windows per day.</p></div>{canManage ? <Button variant="secondary" onClick={() => availabilityMutation.mutate()} loading={availabilityMutation.isPending}>Save availability</Button> : null}</div><div className="mt-4 grid gap-2 md:grid-cols-2">{WEEKDAYS.map((day) => <div key={day} className="rounded-lg border border-slate-200 p-2.5"><div className="flex justify-between"><p className="text-sm font-semibold text-slate-800">{title(day)}</p>{canManage && slotsByDay[day].length < 2 ? <button type="button" onClick={() => addSlot(day)} className="text-xs font-medium text-slate-700">+ Add time</button> : null}</div>{slotsByDay[day].length === 0 ? <p className="mt-1 text-xs text-slate-400">Not recorded</p> : <div className="mt-2 space-y-2">{slotsByDay[day].map((slot,index) => <div key={`${day}-${index}`} className="grid gap-1.5 sm:grid-cols-[1fr_1fr_1fr_auto]"><input disabled={!canManage} type="time" value={slot.start_time} onChange={(e) => updateSlot(day,index,{start_time:e.target.value})} className="rounded-lg border border-slate-200 px-2 py-1.5 text-sm"/><input disabled={!canManage} type="time" value={slot.end_time} onChange={(e) => updateSlot(day,index,{end_time:e.target.value})} className="rounded-lg border border-slate-200 px-2 py-1.5 text-sm"/><select disabled={!canManage} value={slot.preference} onChange={(e) => updateSlot(day,index,{preference:e.target.value as Preference})} className="rounded-lg border border-slate-200 px-2 py-1.5 text-sm"><option value="available">Available</option><option value="preferred">Preferred</option></select>{canManage ? <button type="button" onClick={() => removeSlot(day,index)} className="px-1 text-xs text-red-600">Remove</button> : null}</div>)}</div>}</div>)}</div>{availabilityMutation.isError ? <p className="mt-3 text-sm text-red-700">Could not save availability.</p> : null}{availabilityMutation.isSuccess ? <p className="mt-3 text-sm text-emerald-700">Availability saved.</p> : null}</Card>
 
       <Card><h2 className="font-semibold text-slate-950">Credentials</h2>{(credentialsQuery.data ?? []).length === 0 ? <p className="mt-3 text-sm text-slate-400">No credentials recorded.</p> : <div className="mt-3 overflow-x-auto"><table className="min-w-full text-sm"><thead><tr className="border-b border-slate-200 text-left text-xs uppercase tracking-wide text-slate-500"><th className="px-2 py-2">Credential</th><th className="px-2 py-2">Issue</th><th className="px-2 py-2">Expiration</th><th className="px-2 py-2">Verification</th></tr></thead><tbody>{(credentialsQuery.data ?? []).map((row) => <tr key={row.id} className="border-b border-slate-100"><td className="px-2 py-3 font-medium text-slate-900">{row.credential_type}</td><td className="px-2 py-3">{row.issue_date ?? "—"}</td><td className="px-2 py-3">{row.does_not_expire ? "Does not expire" : row.expiration_date ?? "—"}</td><td className="px-2 py-3"><StatusBadge label={title(row.verification_status)} tone={row.verification_status === "verified" ? "success" : "warning"}/></td></tr>)}</tbody></table></div>}{canManageCredentials ? <div className="mt-4 grid gap-3 border-t border-slate-100 pt-4 sm:grid-cols-3"><input placeholder="Credential type" value={credentialType} onChange={(e) => setCredentialType(e.target.value)} className="rounded-lg border border-slate-200 px-3 py-2 text-sm"/><label className="text-xs font-medium text-slate-600">Issue date<input type="date" value={credentialIssue} onChange={(e) => setCredentialIssue(e.target.value)} className="mt-1 block w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"/></label><label className="text-xs font-medium text-slate-600">Expiration date<input type="date" value={credentialExpiration} onChange={(e) => setCredentialExpiration(e.target.value)} className="mt-1 block w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"/></label><div className="sm:col-span-3"><Button disabled={!credentialType.trim()} loading={credentialMutation.isPending} onClick={() => credentialMutation.mutate()}>Add credential</Button></div></div> : null}</Card>
+      <Card>
+        <h2 className="font-semibold text-slate-950">Client assignments</h2>
+        {!record.linked_user_id ? (
+          <p className="mt-3 text-sm text-slate-400">Assignments require a linked login today - link an account above to see them here.</p>
+        ) : !canReadAssignments ? (
+          <p className="mt-3 text-sm text-slate-400">You do not have permission to view assignments.</p>
+        ) : assignmentsForRecord.length === 0 ? (
+          <p className="mt-3 text-sm text-slate-400">No client assignments recorded.</p>
+        ) : (
+          <ul className="mt-3 divide-y divide-slate-100">
+            {assignmentsForRecord.map((row) => (
+              <li key={row.id} className="flex items-center justify-between py-3">
+                <div>
+                  <p className="text-sm font-medium text-slate-900">{row.client_name}</p>
+                  <p className="text-xs text-slate-500">{row.service_name} · since {row.effective_start}{row.effective_end ? ` – ${row.effective_end}` : ""}</p>
+                </div>
+                <StatusBadge label={row.is_active ? "Active" : "Ended"} tone={row.is_active ? "success" : "neutral"} />
+              </li>
+            ))}
+          </ul>
+        )}
+      </Card>
+
+      <Card>
+        <h2 className="font-semibold text-slate-950">Visits</h2>
+        {!canReadShifts ? (
+          <p className="mt-3 text-sm text-slate-400">You do not have permission to view visit history.</p>
+        ) : shiftsQuery.isLoading ? (
+          <p className="mt-3 text-sm text-slate-500">Loading…</p>
+        ) : (shiftsQuery.data ?? []).length === 0 ? (
+          <p className="mt-3 text-sm text-slate-400">No visits recorded.</p>
+        ) : (
+          <ul className="mt-3 divide-y divide-slate-100">
+            {(shiftsQuery.data ?? []).map((row) => (
+              <li key={row.id} className="flex items-center justify-between py-3">
+                <div>
+                  <p className="text-sm font-medium text-slate-900">{row.client_name}</p>
+                  <p className="text-xs text-slate-500">{new Date(row.starts_at).toLocaleString()} – {new Date(row.ends_at).toLocaleTimeString()}</p>
+                </div>
+                <StatusBadge label={title(row.status)} tone={row.status === "completed" ? "success" : row.status === "no_show" ? "danger" : "neutral"} />
+              </li>
+            ))}
+          </ul>
+        )}
+      </Card>
+
       {canManage ? <Card><h2 className="font-semibold text-slate-950">Edit workforce profile</h2><div className="mt-4 grid gap-3 sm:grid-cols-2">{([['first_name','First name'],['last_name','Last name'],['preferred_name','Preferred name'],['email','Email'],['phone','Phone'],['address_street','Street address'],['address_city','City'],['address_state','State'],['address_zip','ZIP'],['employment_type','Employment type'],['available_start_date','Available start date'],['min_weekly_hours','Minimum weekly hours'],['max_weekly_hours','Maximum weekly hours'],['min_shift_hours','Minimum shift hours'],['max_shift_hours','Maximum shift hours'],['max_travel_minutes','Maximum travel minutes'],['languages','Languages (comma separated)']] as const).map(([key,label]) => <label key={key} className="text-xs font-medium text-slate-600">{label}<input type={key === 'available_start_date' ? 'date' : key.includes('hours') || key === 'max_travel_minutes' ? 'number' : key === 'email' ? 'email' : 'text'} value={profile[key]} onChange={(event) => setProfile({ ...profile, [key]: event.target.value })} className="mt-1 block w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"/></label>)}</div><div className="mt-4"><Button loading={saveRecordMutation.isPending} disabled={!profile.first_name.trim() || !profile.last_name.trim()} onClick={() => saveRecordMutation.mutate()}>Save profile</Button></div></Card> : null}
 
       {record.applicant_id ? <><Card><h2 className="font-semibold text-slate-950">Hiring and onboarding continuity</h2><div className="mt-3 grid gap-3 text-sm sm:grid-cols-2"><p><span className="text-slate-500">Onboarding:</span> {record.onboarding_status ? title(record.onboarding_status) : "—"}</p><p><span className="text-slate-500">Scheduled:</span> {record.onboarding_scheduled_at ? new Date(record.onboarding_scheduled_at).toLocaleString() : "—"}</p><p><span className="text-slate-500">Method:</span> {record.onboarding_method ? title(record.onboarding_method) : "—"}</p><p><span className="text-slate-500">Location:</span> {record.onboarding_location ?? "—"}</p><p><span className="text-slate-500">Background check:</span> {record.background_check_status ? title(record.background_check_status) : "—"}</p><p><span className="text-slate-500">Compliance:</span> {record.compliance_status ? title(record.compliance_status) : "—"}</p>{record.onboarding_instructions ? <p className="sm:col-span-2"><span className="text-slate-500">Instructions:</span> {record.onboarding_instructions}</p> : null}</div></Card><DocumentsCard organizationId={activeOrganizationId} subjectType="applicant" subjectId={record.applicant_id} subjectName={`${record.first_name} ${record.last_name}`} subjectEmail={record.email ?? undefined} canRead={canReadDocuments} canManage={canManageDocuments}/></> : null}
