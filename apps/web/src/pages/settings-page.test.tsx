@@ -424,6 +424,104 @@ describe("SettingsPage", () => {
     );
   });
 
+  it("adds a service with a code and color", async () => {
+    mockedUseAuth.mockReturnValue(authUser());
+    mockedUseOrganization.mockReturnValue({ ...baseOrganization(), hasPermission: vi.fn(() => true) });
+
+    const { selectMock: settingsSelect } = mockReadableSettings([]);
+    const { selectMock: skillsSelect } = mockReadableLookup([]);
+    const { selectMock: languagesSelect } = mockReadableLookup([]);
+    const { selectMock: documentTypesSelect } = mockReadableDocumentTypes([]);
+    const { selectMock: servicesSelect } = mockReadableLookup([]);
+    const insertMock = vi.fn().mockResolvedValue({ error: null });
+
+    mockedFrom.mockImplementation((table: string) => {
+      if (table === "skills") return { select: skillsSelect } as never;
+      if (table === "languages") return { select: languagesSelect } as never;
+      if (table === "document_types") return { select: documentTypesSelect } as never;
+      if (table === "services") return { select: servicesSelect, insert: insertMock } as never;
+      return { select: settingsSelect } as never;
+    });
+
+    renderPage();
+    await waitFor(() => expect(screen.getByText("Services")).toBeInTheDocument());
+
+    fireEvent.change(screen.getByLabelText("Service name"), { target: { value: "Personal care" } });
+    fireEvent.change(screen.getByLabelText("Code"), { target: { value: "862" } });
+    fireEvent.click(screen.getByRole("button", { name: "Navy" }));
+    fireEvent.click(screen.getByRole("button", { name: "Add service" }));
+
+    await waitFor(() =>
+      expect(insertMock).toHaveBeenCalledWith(
+        expect.objectContaining({ organization_id: ORG_ID, name: "Personal care", code: "862", color: "#0F172A" })
+      )
+    );
+  });
+
+  it("shows a friendly message when a service code is already in use", async () => {
+    mockedUseAuth.mockReturnValue(authUser());
+    mockedUseOrganization.mockReturnValue({ ...baseOrganization(), hasPermission: vi.fn(() => true) });
+
+    const { selectMock: settingsSelect } = mockReadableSettings([]);
+    const { selectMock: skillsSelect } = mockReadableLookup([]);
+    const { selectMock: languagesSelect } = mockReadableLookup([]);
+    const { selectMock: documentTypesSelect } = mockReadableDocumentTypes([]);
+    const { selectMock: servicesSelect } = mockReadableLookup([]);
+    const insertMock = vi.fn().mockResolvedValue({
+      error: new Error('duplicate key value violates unique constraint "services_org_active_code_unique"')
+    });
+
+    mockedFrom.mockImplementation((table: string) => {
+      if (table === "skills") return { select: skillsSelect } as never;
+      if (table === "languages") return { select: languagesSelect } as never;
+      if (table === "document_types") return { select: documentTypesSelect } as never;
+      if (table === "services") return { select: servicesSelect, insert: insertMock } as never;
+      return { select: settingsSelect } as never;
+    });
+
+    renderPage();
+    await waitFor(() => expect(screen.getByText("Services")).toBeInTheDocument());
+
+    fireEvent.change(screen.getByLabelText("Service name"), { target: { value: "Personal care" } });
+    fireEvent.change(screen.getByLabelText("Code"), { target: { value: "862" } });
+    fireEvent.click(screen.getByRole("button", { name: "Add service" }));
+
+    await waitFor(() =>
+      expect(screen.getByText('Service code "862" is already in use by another active service.')).toBeInTheDocument()
+    );
+  });
+
+  it("deactivates a configured service", async () => {
+    mockedUseAuth.mockReturnValue(authUser());
+    mockedUseOrganization.mockReturnValue({ ...baseOrganization(), hasPermission: vi.fn(() => true) });
+
+    const { selectMock: settingsSelect } = mockReadableSettings([]);
+    const { selectMock: skillsSelect } = mockReadableLookup([]);
+    const { selectMock: languagesSelect } = mockReadableLookup([]);
+    const { selectMock: documentTypesSelect } = mockReadableDocumentTypes([]);
+    const { selectMock: servicesSelect } = mockReadableLookup([
+      { id: "service-1", code: "862", name: "Personal care", color: "#0F172A", is_active: true }
+    ]);
+    const updateEqMock = vi.fn().mockResolvedValue({ error: null });
+    const updateMock = vi.fn(() => ({ eq: updateEqMock }));
+
+    mockedFrom.mockImplementation((table: string) => {
+      if (table === "skills") return { select: skillsSelect } as never;
+      if (table === "languages") return { select: languagesSelect } as never;
+      if (table === "document_types") return { select: documentTypesSelect } as never;
+      if (table === "services") return { select: servicesSelect, update: updateMock } as never;
+      return { select: settingsSelect } as never;
+    });
+
+    renderPage();
+    await waitFor(() => expect(screen.getByText("862 · Personal care")).toBeInTheDocument());
+
+    fireEvent.click(screen.getByText("862 · Personal care"));
+
+    await waitFor(() => expect(updateMock).toHaveBeenCalledWith({ is_active: false }));
+    expect(updateEqMock).toHaveBeenCalledWith("id", "service-1");
+  });
+
   it("shows the effective reminder settings and saves a change", async () => {
     mockedUseAuth.mockReturnValue(authUser());
     mockedUseOrganization.mockReturnValue({ ...baseOrganization(), hasPermission: vi.fn(() => true) });

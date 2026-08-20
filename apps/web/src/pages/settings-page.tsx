@@ -158,6 +158,210 @@ function LookupCatalogCard({
   );
 }
 
+// Services (Build 003's billable service catalog - Personal care,
+// Companionship, etc.) used to live on the Authorizations page, since
+// that's the only place they were consumed. Moved here to match every
+// other org-wide lookup catalog (skills, languages, document types) -
+// Authorizations still reads the same "services" query for its
+// add-authorization dropdown, it just no longer owns the management UI.
+interface ServiceRow {
+  id: string;
+  code: string;
+  name: string;
+  color: string | null;
+  is_active: boolean;
+}
+
+// A small fixed palette rather than a free color picker - keeps every
+// agency's service chips readable and consistent instead of ending up
+// with clashing or illegible custom colors.
+const SERVICE_COLOR_SWATCHES = [
+  { value: "#0F8B8D", label: "Teal" },
+  { value: "#0F172A", label: "Navy" },
+  { value: "#15803D", label: "Green" },
+  { value: "#B45309", label: "Amber" },
+  { value: "#B91C1C", label: "Red" },
+  { value: "#7C3AED", label: "Violet" }
+];
+
+function ServicesCard({
+  organizationId,
+  canRead,
+  canManage
+}: {
+  organizationId: string | null | undefined;
+  canRead: boolean;
+  canManage: boolean;
+}) {
+  const queryClient = useQueryClient();
+  const [name, setName] = useState("");
+  const [code, setCode] = useState("");
+  const [color, setColor] = useState(SERVICE_COLOR_SWATCHES[0]!.value);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const listQuery = useQuery({
+    queryKey: ["services", organizationId],
+    queryFn: async () => {
+      const { data, error: queryError } = await supabase
+        .from("services")
+        .select("id, code, name, color, is_active")
+        .eq("organization_id", organizationId!)
+        .is("deleted_at", null)
+        .order("name");
+      if (queryError) throw queryError;
+      return (data ?? []) as ServiceRow[];
+    },
+    enabled: !!organizationId && canRead
+  });
+
+  function refresh() {
+    void queryClient.invalidateQueries({ queryKey: ["services", organizationId] });
+    void queryClient.invalidateQueries({ queryKey: ["authorizations", organizationId] });
+  }
+
+  async function handleAdd(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!organizationId) return;
+    const trimmedName = name.trim();
+    const trimmedCode = code.trim().toUpperCase();
+    if (!trimmedName || !trimmedCode) return;
+
+    setError(null);
+    setSaving(true);
+    try {
+      const { error: insertError } = await supabase.from("services").insert({
+        organization_id: organizationId,
+        name: trimmedName,
+        code: trimmedCode,
+        color
+      });
+      if (insertError) throw insertError;
+      setName("");
+      setCode("");
+      setColor(SERVICE_COLOR_SWATCHES[0]!.value);
+      refresh();
+    } catch (cause) {
+      // A duplicate active code within the org hits services_org_active_code_unique -
+      // Postgres reports that as a generic "duplicate key" message, so it's
+      // translated into something a non-technical admin can act on.
+      const message = cause instanceof Error ? cause.message : "";
+      setError(
+        message.includes("services_org_active_code_unique")
+          ? `Service code "${trimmedCode}" is already in use by another active service.`
+          : message || "Could not add service."
+      );
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function toggleActive(service: ServiceRow) {
+    setError(null);
+    try {
+      const { error: updateError } = await supabase
+        .from("services")
+        .update({ is_active: !service.is_active })
+        .eq("id", service.id);
+      if (updateError) throw updateError;
+      refresh();
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Could not update service.");
+    }
+  }
+
+  if (!canRead) return null;
+
+  return (
+    <Card>
+      <h3 className="font-semibold text-slate-950">Services</h3>
+      <p className="mt-1 text-xs text-slate-500">
+        The billable service types authorizations are tracked against (Personal care, Companionship...).
+        Deactivating a service keeps its history but hides it from new authorizations.
+      </p>
+      {canManage ? (
+        <form onSubmit={handleAdd} className="mt-4 flex flex-wrap items-end gap-3">
+          <div className="flex-1 basis-48">
+            <label htmlFor="new-service-name" className="block text-xs font-medium text-slate-600">
+              Service name
+            </label>
+            <input
+              id="new-service-name"
+              required
+              placeholder="e.g. Personal care"
+              value={name}
+              onChange={(event) => setName(event.target.value)}
+              className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900"
+            />
+          </div>
+          <div className="basis-28">
+            <label htmlFor="new-service-code" className="block text-xs font-medium text-slate-600">
+              Code
+            </label>
+            <input
+              id="new-service-code"
+              required
+              placeholder="e.g. 862"
+              value={code}
+              onChange={(event) => setCode(event.target.value)}
+              className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm uppercase text-slate-900"
+            />
+          </div>
+          <div>
+            <span className="block text-xs font-medium text-slate-600">Color</span>
+            <div className="mt-1 flex items-center gap-1.5">
+              {SERVICE_COLOR_SWATCHES.map((swatch) => (
+                <button
+                  key={swatch.value}
+                  type="button"
+                  aria-label={swatch.label}
+                  aria-pressed={color === swatch.value}
+                  onClick={() => setColor(swatch.value)}
+                  style={{ backgroundColor: swatch.value }}
+                  className={`h-8 w-8 rounded-full border-2 ${
+                    color === swatch.value ? "border-slate-900" : "border-transparent"
+                  }`}
+                />
+              ))}
+            </div>
+          </div>
+          <Button type="submit" loading={saving}>
+            {saving ? "Adding…" : "Add service"}
+          </Button>
+        </form>
+      ) : null}
+      {error ? <p className="mt-2 text-sm text-red-700">{error}</p> : null}
+      {(listQuery.data ?? []).length > 0 ? (
+        <ul className="mt-4 flex flex-wrap gap-2">
+          {(listQuery.data ?? []).map((service) => (
+            <li key={service.id}>
+              <button
+                type="button"
+                disabled={!canManage}
+                onClick={() => toggleActive(service)}
+                style={service.is_active && service.color ? { borderColor: service.color } : undefined}
+                className={`flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-medium disabled:cursor-default ${
+                  service.is_active
+                    ? "border-transparent bg-emerald-50 text-emerald-700 hover:bg-emerald-100"
+                    : "border-transparent bg-slate-100 text-slate-500 hover:bg-slate-200"
+                }`}
+                title={canManage ? (service.is_active ? "Click to deactivate" : "Click to reactivate") : undefined}
+              >
+                {service.color ? (
+                  <span aria-hidden className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: service.color }} />
+                ) : null}
+                {service.code} · {service.name} {service.is_active ? "" : "(inactive)"}
+              </button>
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <p className="mt-4 text-sm text-slate-400">No services configured yet.</p>
+      )}
+    </Card>
+  );
+}
+
 // Document type library (Build 019) - unlike skills/languages, this
 // catalog has two kinds of rows: platform defaults (organization_id is
 // null, seeded once for every organization to use immediately - see
@@ -1049,6 +1253,12 @@ export function SettingsPage() {
         organizationId={activeOrganizationId}
         canRead={hasPermission("languages.read")}
         canUpdate={hasPermission("languages.update")}
+      />
+
+      <ServicesCard
+        organizationId={activeOrganizationId}
+        canRead={hasPermission("services.read")}
+        canManage={hasPermission("services.update")}
       />
 
       <DocumentTypesCard

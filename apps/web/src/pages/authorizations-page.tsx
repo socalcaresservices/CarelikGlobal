@@ -66,18 +66,6 @@ interface ServiceRow {
   is_active: boolean;
 }
 
-// A small fixed palette rather than a free color picker - keeps every
-// agency's service chips readable and consistent instead of ending up
-// with clashing or illegible custom colors.
-const SERVICE_COLOR_SWATCHES = [
-  { value: "#0F8B8D", label: "Teal" },
-  { value: "#0F172A", label: "Navy" },
-  { value: "#15803D", label: "Green" },
-  { value: "#B45309", label: "Amber" },
-  { value: "#B91C1C", label: "Red" },
-  { value: "#7C3AED", label: "Violet" }
-];
-
 const usageTone: Record<AuthorizationUsageStatus, StatusTone> = {
   normal: "success",
   approaching_limit: "warning",
@@ -133,7 +121,6 @@ export function AuthorizationsPage() {
 
   const canRead = hasPermission("authorizations.read");
   const canManage = hasPermission("authorizations.update");
-  const canManageServices = hasPermission("services.update");
 
   const authorizationsQuery = useQuery({
     queryKey: ["authorizations", activeOrganizationId],
@@ -178,10 +165,6 @@ export function AuthorizationsPage() {
 
   function refreshAuthorizations() {
     void queryClient.invalidateQueries({ queryKey: ["authorizations", activeOrganizationId] });
-  }
-
-  function refreshServices() {
-    void queryClient.invalidateQueries({ queryKey: ["services", activeOrganizationId] });
   }
 
   const filters = useFilters<AuthorizationRow>(authorizationsQuery.data, {
@@ -245,12 +228,6 @@ export function AuthorizationsPage() {
   const [formError, setFormError] = useState<string | null>(null);
   const [rowError, setRowError] = useState<string | null>(null);
   const [pendingId, setPendingId] = useState<string | null>(null);
-
-  const [serviceName, setServiceName] = useState("");
-  const [serviceCode, setServiceCode] = useState("");
-  const [serviceColor, setServiceColor] = useState(SERVICE_COLOR_SWATCHES[0]!.value);
-  const [serviceSaving, setServiceSaving] = useState(false);
-  const [serviceError, setServiceError] = useState<string | null>(null);
 
   useEffect(() => {
     setForm({ ...emptyForm, clientId: lockedClientId ?? "", serviceId: lockedServiceId ?? "" });
@@ -365,57 +342,6 @@ export function AuthorizationsPage() {
     }
   }
 
-  async function handleAddService(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    if (!activeOrganizationId) return;
-    const trimmedName = serviceName.trim();
-    const trimmedCode = serviceCode.trim().toUpperCase();
-    if (!trimmedName || !trimmedCode) return;
-
-    setServiceError(null);
-    setServiceSaving(true);
-    try {
-      const { error } = await supabase.from("services").insert({
-        organization_id: activeOrganizationId,
-        name: trimmedName,
-        code: trimmedCode,
-        color: serviceColor
-      });
-      if (error) throw error;
-      setServiceName("");
-      setServiceCode("");
-      setServiceColor(SERVICE_COLOR_SWATCHES[0]!.value);
-      refreshServices();
-    } catch (cause) {
-      // A duplicate active code within the org hits services_org_active_code_unique -
-      // Postgres reports that as a generic "duplicate key" message, so it's
-      // translated into something a non-technical admin can act on.
-      const message = cause instanceof Error ? cause.message : "";
-      setServiceError(
-        message.includes("services_org_active_code_unique")
-          ? `Service code "${trimmedCode}" is already in use by another active service.`
-          : message || "Could not add service."
-      );
-    } finally {
-      setServiceSaving(false);
-    }
-  }
-
-  async function handleToggleServiceActive(service: ServiceRow) {
-    setServiceError(null);
-    try {
-      const { error } = await supabase
-        .from("services")
-        .update({ is_active: !service.is_active })
-        .eq("id", service.id);
-      if (error) throw error;
-      refreshServices();
-      refreshAuthorizations();
-    } catch (cause) {
-      setServiceError(cause instanceof Error ? cause.message : "Could not update service.");
-    }
-  }
-
   if (!canRead) {
     return (
       <section className="mx-auto max-w-5xl">
@@ -438,96 +364,6 @@ export function AuthorizationsPage() {
           {activeOrganization?.displayName ?? "Client authorizations"}
         </h2>
       </div>
-
-      {canManageServices ? (
-        <Card>
-          <h3 className="font-semibold text-slate-950">Services</h3>
-          <p className="mt-1 text-xs text-slate-500">
-            The billable service types authorizations are tracked against (Personal care, Companionship...).
-            Deactivating a service keeps its history but hides it from new authorizations.
-          </p>
-          <form onSubmit={handleAddService} className="mt-4 flex flex-wrap items-end gap-3">
-            <div className="flex-1 basis-48">
-              <label htmlFor="new-service-name" className="block text-xs font-medium text-slate-600">
-                Service name
-              </label>
-              <input
-                id="new-service-name"
-                required
-                placeholder="e.g. Personal care"
-                value={serviceName}
-                onChange={(event) => setServiceName(event.target.value)}
-                className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900"
-              />
-            </div>
-            <div className="basis-28">
-              <label htmlFor="new-service-code" className="block text-xs font-medium text-slate-600">
-                Code
-              </label>
-              <input
-                id="new-service-code"
-                required
-                placeholder="e.g. 862"
-                value={serviceCode}
-                onChange={(event) => setServiceCode(event.target.value)}
-                className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm uppercase text-slate-900"
-              />
-            </div>
-            <div>
-              <span className="block text-xs font-medium text-slate-600">Color</span>
-              <div className="mt-1 flex items-center gap-1.5">
-                {SERVICE_COLOR_SWATCHES.map((swatch) => (
-                  <button
-                    key={swatch.value}
-                    type="button"
-                    aria-label={swatch.label}
-                    aria-pressed={serviceColor === swatch.value}
-                    onClick={() => setServiceColor(swatch.value)}
-                    style={{ backgroundColor: swatch.value }}
-                    className={`h-8 w-8 rounded-full border-2 ${
-                      serviceColor === swatch.value ? "border-slate-900" : "border-transparent"
-                    }`}
-                  />
-                ))}
-              </div>
-            </div>
-            <Button type="submit" loading={serviceSaving}>
-              {serviceSaving ? "Adding…" : "Add service"}
-            </Button>
-          </form>
-          {serviceError ? <p className="mt-2 text-sm text-red-700">{serviceError}</p> : null}
-          {(servicesQuery.data ?? []).length > 0 ? (
-            <ul className="mt-4 flex flex-wrap gap-2">
-              {(servicesQuery.data ?? []).map((service) => (
-                <li key={service.id}>
-                  <button
-                    type="button"
-                    onClick={() => handleToggleServiceActive(service)}
-                    style={service.is_active && service.color ? { borderColor: service.color } : undefined}
-                    className={`flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-medium ${
-                      service.is_active
-                        ? "border-transparent bg-emerald-50 text-emerald-700 hover:bg-emerald-100"
-                        : "border-transparent bg-slate-100 text-slate-500 hover:bg-slate-200"
-                    }`}
-                    title={service.is_active ? "Click to deactivate" : "Click to reactivate"}
-                  >
-                    {service.color ? (
-                      <span
-                        aria-hidden
-                        className="h-2.5 w-2.5 rounded-full"
-                        style={{ backgroundColor: service.color }}
-                      />
-                    ) : null}
-                    {service.code} · {service.name} {service.is_active ? "" : "(inactive)"}
-                  </button>
-                </li>
-              ))}
-            </ul>
-          ) : (
-            <p className="mt-4 text-sm text-slate-400">No services configured yet.</p>
-          )}
-        </Card>
-      ) : null}
 
       {canManage ? (
         <Card>
