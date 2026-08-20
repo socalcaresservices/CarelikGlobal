@@ -1,6 +1,7 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { useSearchParams } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { Download } from "lucide-react";
 import {
   Button,
   Card,
@@ -192,6 +193,45 @@ export function AuthorizationsPage() {
   });
 
   const usageStatusOptions = Object.keys(usageLabelText) as AuthorizationUsageStatus[];
+
+  function exportFilteredAuthorizations() {
+    const quote = (value: unknown) => `"${String(value ?? "").replace(/"/g, '""')}"`;
+    const header = [
+      "Client",
+      "Service",
+      "Payer",
+      "Authorization number",
+      "Max monthly hours",
+      "Hours used this month",
+      "Hours scheduled this month",
+      "Period start",
+      "Period end",
+      "Usage status",
+      "Expiry status"
+    ];
+    const rows = table.rows.map((row) => [
+      row.client_name,
+      row.service_name,
+      row.payer,
+      row.authorization_number,
+      row.max_monthly_hours,
+      row.hours_used_this_month,
+      row.hours_scheduled_this_month,
+      row.period_start,
+      row.period_end,
+      usageLabelText[getAuthorizationUsageStatus(row.max_monthly_hours, row.hours_used_this_month, row.hours_scheduled_this_month)],
+      expiryLabelText[getAuthorizationExpiryStatus(row.period_end)]
+    ]);
+    const blob = new Blob([[header, ...rows].map((row) => row.map(quote).join(",")).join("\r\n")], {
+      type: "text/csv;charset=utf-8"
+    });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = `authorized-vs-used-${new Date().toISOString().slice(0, 10)}.csv`;
+    anchor.click();
+    URL.revokeObjectURL(url);
+  }
   const expiryStatusOptions = Object.keys(expiryLabelText) as AuthorizationExpiryStatus[];
 
   const authorizationActiveFilters: ActiveFilter[] = [
@@ -497,6 +537,14 @@ export function AuthorizationsPage() {
       <Card>
         <div className="flex flex-wrap items-center justify-between gap-3">
           <h3 className="font-semibold text-slate-950">All authorizations</h3>
+          <Button
+            type="button"
+            variant="secondary"
+            onClick={exportFilteredAuthorizations}
+            disabled={table.rows.length === 0}
+          >
+            <Download className="mr-1.5 h-4 w-4" /> Export filtered CSV
+          </Button>
           <FilterBar
             activeFilters={authorizationActiveFilters}
             onClearAll={authorizationActiveFilters.length > 0 ? filters.clearAll : undefined}

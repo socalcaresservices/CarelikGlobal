@@ -1,6 +1,7 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { useSearchParams } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { Download } from "lucide-react";
 import {
   Button,
   Card,
@@ -128,6 +129,28 @@ export function CredentialsPage() {
   });
 
   const credentialStatusOptions = Object.keys(statusLabels) as CredentialStatus[];
+
+  function exportFilteredCredentials() {
+    const quote = (value: unknown) => `"${String(value ?? "").replace(/"/g, '""')}"`;
+    const header = ["Caregiver", "Credential type", "Issued", "Expires", "Status", "Notes"];
+    const rows = table.rows.map((row) => [
+      row.caregiver_name,
+      row.credential_type,
+      row.issued_date,
+      row.expires_at,
+      statusLabels[getCredentialStatus(row.expires_at)],
+      row.notes
+    ]);
+    const blob = new Blob([[header, ...rows].map((row) => row.map(quote).join(",")).join("\r\n")], {
+      type: "text/csv;charset=utf-8"
+    });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = `credential-expirations-${new Date().toISOString().slice(0, 10)}.csv`;
+    anchor.click();
+    URL.revokeObjectURL(url);
+  }
 
   const credentialsActiveFilters: ActiveFilter[] = filters.values.status
     ? [
@@ -333,6 +356,9 @@ export function CredentialsPage() {
       <Card>
         <div className="flex flex-wrap items-center justify-between gap-3">
           <h3 className="font-semibold text-slate-950">All credentials</h3>
+          <Button type="button" variant="secondary" onClick={exportFilteredCredentials} disabled={table.rows.length === 0}>
+            <Download className="mr-1.5 h-4 w-4" /> Export filtered CSV
+          </Button>
           <FilterBar
             activeFilters={credentialsActiveFilters}
             onClearAll={credentialsActiveFilters.length > 0 ? filters.clearAll : undefined}

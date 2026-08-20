@@ -101,6 +101,41 @@ describe("CredentialsPage", () => {
     expect(screen.getByText("Expired", { selector: "span" })).toBeInTheDocument();
   });
 
+  it("exports filtered credentials as a CSV download", async () => {
+    mockedUseOrganization.mockReturnValue({
+      ...baseOrganization(),
+      hasPermission: vi.fn(() => true)
+    });
+    mockedRpc.mockImplementation((fn: string) => {
+      if (fn === "list_caregiver_credentials") {
+        return Promise.resolve({
+          data: [
+            {
+              id: "55555555-5555-4555-8555-555555555555",
+              caregiver_user_id: CAREGIVER_ID,
+              caregiver_name: "Sam Caregiver",
+              credential_type: "CPR Certification",
+              issued_date: "2026-01-01",
+              expires_at: "2020-01-01",
+              notes: null
+            }
+          ],
+          error: null
+        }) as never;
+      }
+      return Promise.resolve({ data: [], error: null }) as never;
+    });
+
+    renderPage();
+    await waitFor(() => expect(screen.getByText("Sam Caregiver")).toBeInTheDocument());
+
+    const clickSpy = vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => {});
+    fireEvent.click(screen.getByRole("button", { name: "Export filtered CSV" }));
+
+    expect(clickSpy).toHaveBeenCalledTimes(1);
+    clickSpy.mockRestore();
+  });
+
   it("adds a new credential", async () => {
     mockedUseOrganization.mockReturnValue({
       ...baseOrganization(),
