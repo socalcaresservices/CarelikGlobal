@@ -159,7 +159,7 @@ type Tab = "overview" | "schedule" | "matches" | "authorizations" | "caregivers"
 // proximity/language/availability/skills/history breakdown, which is
 // what makes it an *explainable* recommendation instead of a bare score.
 interface CaregiverMatchDetailRow {
-  caregiver_user_id: string;
+  caregiver_record_id: string;
   caregiver_name: string;
   match_score: number;
   proximity_score: number;
@@ -828,7 +828,7 @@ export function ClientDetailPage() {
           ) : (
             <ul className="mt-3 divide-y divide-slate-100">
               {(matchesQuery.data ?? []).map((match) => (
-                <li key={match.caregiver_user_id} className="py-3">
+                <li key={match.caregiver_record_id} className="py-3">
                   <div className="flex items-center justify-between">
                     <Link
                       to="/team"
