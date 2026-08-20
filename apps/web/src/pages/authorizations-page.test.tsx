@@ -137,6 +137,42 @@ describe("AuthorizationsPage", () => {
     expect(screen.queryByText("Add an authorization")).not.toBeInTheDocument();
   });
 
+  it("exports filtered authorizations as a CSV download", async () => {
+    mockedUseOrganization.mockReturnValue({
+      ...baseOrganization(),
+      hasPermission: vi.fn((permission: string) => permission === "authorizations.read")
+    });
+    mockedRpc.mockResolvedValue({
+      data: [
+        {
+          id: "33333333-3333-4333-8333-333333333333",
+          client_id: CLIENT_ID,
+          client_name: "Jordan Rivera",
+          service_id: SERVICE_ID,
+          service_name: "Personal care",
+          payer: "Medicaid",
+          authorization_number: "AUTH-1",
+          max_monthly_hours: 20,
+          period_start: "2026-07-01",
+          period_end: "2027-06-30",
+          notes: null,
+          hours_used_this_month: 15,
+          hours_scheduled_this_month: 10
+        }
+      ],
+      error: null
+    } as never);
+
+    renderPage();
+    await waitFor(() => expect(screen.getByText("Jordan Rivera")).toBeInTheDocument());
+
+    const clickSpy = vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => {});
+    fireEvent.click(screen.getByRole("button", { name: "Export filtered CSV" }));
+
+    expect(clickSpy).toHaveBeenCalledTimes(1);
+    clickSpy.mockRestore();
+  });
+
   it("adds a new authorization", async () => {
     mockedUseOrganization.mockReturnValue({ ...baseOrganization(), hasPermission: vi.fn(() => true) });
     mockedRpc.mockResolvedValue({ data: [], error: null } as never);

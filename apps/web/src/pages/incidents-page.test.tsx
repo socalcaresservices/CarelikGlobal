@@ -151,6 +151,43 @@ describe("IncidentsPage", () => {
     );
   });
 
+  it("exports filtered incidents as a CSV download", async () => {
+    mockedUseOrganization.mockReturnValue({
+      ...baseOrganization(),
+      hasPermission: vi.fn((permission: string) => permission === "incidents.read")
+    });
+    mockedRpc.mockResolvedValue({
+      data: [
+        {
+          id: "66666666-6666-4666-8666-666666666666",
+          client_id: null,
+          client_name: null,
+          caregiver_user_id: null,
+          caregiver_name: null,
+          occurred_at: "2026-07-19T09:00:00.000Z",
+          category: "Fall",
+          severity: "high",
+          status: "open",
+          description: "Client had a fall.",
+          reported_by: USER_ID,
+          reported_by_name: "Sam Caregiver",
+          resolution_notes: null,
+          resolved_at: null
+        }
+      ],
+      error: null
+    } as never);
+
+    renderPage();
+    await waitFor(() => expect(screen.getByText("Fall")).toBeInTheDocument());
+
+    const clickSpy = vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => {});
+    fireEvent.click(screen.getByRole("button", { name: "Export filtered CSV" }));
+
+    expect(clickSpy).toHaveBeenCalledTimes(1);
+    clickSpy.mockRestore();
+  });
+
   it("changes an incident's status when the viewer can manage incidents", async () => {
     mockedUseOrganization.mockReturnValue({
       ...baseOrganization(),

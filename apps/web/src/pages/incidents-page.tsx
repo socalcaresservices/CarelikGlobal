@@ -1,5 +1,6 @@
 import { useMemo, useState, type FormEvent } from "react";
 import { useInfiniteQuery, useQuery, useQueryClient } from "@tanstack/react-query";
+import { Download } from "lucide-react";
 import { Card, FilterBar, Button, SearchableCombobox, type ActiveFilter, type ComboboxOption } from "@carelik/ui";
 import { incidentSeveritySchema, incidentStatusSchema } from "@carelik/shared";
 import type { IncidentSeverity, IncidentStatus } from "@carelik/shared";
@@ -185,6 +186,47 @@ export function IncidentsPage() {
     },
     defaultSort: "when"
   });
+
+  // Exports only what's currently loaded (incidentRows is paginated via
+  // "Load older"), not the org's full incident history - an honest
+  // limitation rather than a silent one, same as this page's own
+  // pagination already is.
+  function exportFilteredIncidents() {
+    const quote = (value: unknown) => `"${String(value ?? "").replace(/"/g, '""')}"`;
+    const header = [
+      "When",
+      "Category",
+      "Client",
+      "Caregiver",
+      "Severity",
+      "Status",
+      "Description",
+      "Reported by",
+      "Resolution notes",
+      "Resolved at"
+    ];
+    const rows = table.rows.map((row) => [
+      row.occurred_at,
+      row.category,
+      row.client_name,
+      row.caregiver_name,
+      row.severity,
+      row.status,
+      row.description,
+      row.reported_by_name,
+      row.resolution_notes,
+      row.resolved_at
+    ]);
+    const blob = new Blob([[header, ...rows].map((row) => row.map(quote).join(",")).join("\r\n")], {
+      type: "text/csv;charset=utf-8"
+    });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = `incidents-${new Date().toISOString().slice(0, 10)}.csv`;
+    anchor.click();
+    URL.revokeObjectURL(url);
+  }
 
   const incidentActiveFilters: ActiveFilter[] = [
     filters.values.severity
@@ -378,6 +420,9 @@ export function IncidentsPage() {
       <Card>
         <div className="flex flex-wrap items-center justify-between gap-3">
           <h3 className="font-semibold text-slate-950">All incidents</h3>
+          <Button type="button" variant="secondary" onClick={exportFilteredIncidents} disabled={table.rows.length === 0}>
+            <Download className="mr-1.5 h-4 w-4" /> Export filtered CSV
+          </Button>
           <FilterBar
             activeFilters={incidentActiveFilters}
             onClearAll={incidentActiveFilters.length > 0 ? filters.clearAll : undefined}
