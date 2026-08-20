@@ -432,7 +432,7 @@ describe("ClientDetailPage", () => {
         return Promise.resolve({
           data: [
             {
-              caregiver_user_id: "caregiver-1",
+              caregiver_record_id: "caregiver-record-1",
               caregiver_name: "Sam Caregiver",
               match_score: 87,
               proximity_score: 30,
