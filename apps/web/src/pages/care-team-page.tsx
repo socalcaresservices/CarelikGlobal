@@ -18,7 +18,7 @@ interface WorkforceRow {
   available_start_date: string | null;
 }
 
-export function WorkforcePage() {
+export function CareTeamPage() {
   const { activeOrganizationId, activeOrganization, hasPermission } = useOrganization();
   const queryClient = useQueryClient();
   const canRead = hasPermission("membership.read");

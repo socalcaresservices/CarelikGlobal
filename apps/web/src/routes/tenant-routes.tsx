@@ -6,8 +6,8 @@
 import { Navigate, Route } from "react-router-dom";
 import { CommandCenterPage } from "@/pages/command-center-page";
 import { AccessPage } from "@/pages/access-page";
-import { WorkforcePage } from "@/pages/workforce-page";
-import { WorkforceDetailPage } from "@/pages/workforce-detail-page";
+import { CareTeamPage } from "@/pages/care-team-page";
+import { CareTeamDetailPage } from "@/pages/care-team-detail-page";
 import { ClientsPage } from "@/pages/clients-page";
 import { ClientDetailPage } from "@/pages/client-detail-page";
 import { SchedulePage } from "@/pages/schedule-page";
@@ -16,7 +16,7 @@ import { AuthorizationsPage } from "@/pages/authorizations-page";
 import { IncidentsPage } from "@/pages/incidents-page";
 import { SettingsPage } from "@/pages/settings-page";
 import { OwnerDashboardPage } from "@/pages/owner-dashboard-page";
-import { ApplicantsPage } from "@/pages/applicants-page";
+import { CandidatesPage } from "@/pages/candidates-page";
 import { CandidateDetailPage } from "@/pages/candidate-detail-page";
 import { ServiceVerificationPage } from "@/pages/service-verification-page";
 import { ServiceVerificationReportsPage } from "@/pages/service-verification-reports-page";
@@ -26,10 +26,10 @@ export function getTenantRoutes() {
   return [
     <Route key="dashboard" path="/" element={<CommandCenterPage />} />,
     <Route key="owner-dashboard" path="/owner-dashboard" element={<OwnerDashboardPage />} />,
-    <Route key="team" path="/team" element={<WorkforcePage />} />,
-    <Route key="team-detail" path="/team/:id" element={<WorkforceDetailPage />} />,
+    <Route key="team" path="/team" element={<CareTeamPage />} />,
+    <Route key="team-detail" path="/team/:id" element={<CareTeamDetailPage />} />,
     <Route key="workforce" path="/workforce" element={<Navigate to="/team" replace />} />,
-    <Route key="workforce-detail" path="/workforce/:id" element={<WorkforceDetailPage />} />,
+    <Route key="workforce-detail" path="/workforce/:id" element={<CareTeamDetailPage />} />,
     <Route key="clients" path="/clients" element={<ClientsPage />} />,
     <Route key="client-detail" path="/clients/:id" element={<ClientDetailPage />} />,
     <Route key="schedule" path="/schedule" element={<SchedulePage />} />,
@@ -40,7 +40,7 @@ export function getTenantRoutes() {
     <Route key="credentials" path="/credentials" element={<CredentialsPage />} />,
     <Route key="authorizations" path="/authorizations" element={<AuthorizationsPage />} />,
     <Route key="incidents" path="/incidents" element={<IncidentsPage />} />,
-    <Route key="candidates" path="/candidates" element={<ApplicantsPage />} />,
+    <Route key="candidates" path="/candidates" element={<CandidatesPage />} />,
     <Route key="candidate-detail" path="/candidates/:id" element={<CandidateDetailPage />} />,
     <Route key="applicants" path="/applicants" element={<Navigate to="/candidates" replace />} />,
     <Route key="applicant-detail" path="/applicants/:id" element={<CandidateDetailPage />} />,

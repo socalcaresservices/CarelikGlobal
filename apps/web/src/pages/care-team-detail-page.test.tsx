@@ -4,7 +4,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { useOrganization } from "@/providers/organization-provider";
 import { supabase } from "@/lib/supabase";
-import { WorkforceDetailPage } from "./workforce-detail-page";
+import { CareTeamDetailPage } from "./care-team-detail-page";
 
 vi.mock("@/providers/organization-provider", () => ({ useOrganization: vi.fn() }));
 vi.mock("@/lib/supabase", () => ({
@@ -14,7 +14,7 @@ vi.mock("@/lib/supabase", () => ({
   }
 }));
 
-vi.mock("./applicant-detail-page", () => ({ DocumentsCard: () => null }));
+vi.mock("@/components/documents-card", () => ({ DocumentsCard: () => null }));
 
 const mockedUseOrganization = vi.mocked(useOrganization);
 const mockedRpc = vi.mocked(supabase.rpc);
@@ -112,7 +112,7 @@ function renderPage() {
     <QueryClientProvider client={queryClient}>
       <MemoryRouter initialEntries={[`/team/${RECORD_ID}`]}>
         <Routes>
-          <Route path="/team/:id" element={<WorkforceDetailPage />} />
+          <Route path="/team/:id" element={<CareTeamDetailPage />} />
         </Routes>
       </MemoryRouter>
     </QueryClientProvider>
@@ -123,7 +123,7 @@ afterEach(() => {
   vi.clearAllMocks();
 });
 
-describe("WorkforceDetailPage visits and assignments", () => {
+describe("CareTeamDetailPage visits and assignments", () => {
   it("shows only this record's visits, filtered from the org-wide shift list", async () => {
     mockedUseOrganization.mockReturnValue(baseOrganization());
     mockFromByTable(baseRecord());

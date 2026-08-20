@@ -5,7 +5,7 @@ import { ArrowLeft } from "lucide-react";
 import { Button, Card, StatusBadge } from "@carelik/ui";
 import { useOrganization } from "@/providers/organization-provider";
 import { supabase } from "@/lib/supabase";
-import { DocumentsCard } from "@/pages/applicant-detail-page";
+import { DocumentsCard } from "@/components/documents-card";
 
 type Weekday = "monday" | "tuesday" | "wednesday" | "thursday" | "friday" | "saturday" | "sunday";
 type Preference = "available" | "preferred";
@@ -54,7 +54,7 @@ function title(value: string) { return value.replace(/_/g, " ").replace(/\b\w/g,
 function time(value: string) { return value.slice(0, 5); }
 function isUuid(value: string): boolean { return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value); }
 
-export function WorkforceDetailPage() {
+export function CareTeamDetailPage() {
   const { id } = useParams<{ id: string }>();
   const { activeOrganizationId, hasPermission } = useOrganization();
   const queryClient = useQueryClient();
@@ -65,7 +65,7 @@ export function WorkforceDetailPage() {
   const canManageDocuments = hasPermission("documents.manage");
 
   const recordQuery = useQuery({
-    queryKey: ["workforce-record", activeOrganizationId, id],
+    queryKey: ["care-team-record", activeOrganizationId, id],
     queryFn: async () => {
       if (!id || !isUuid(id)) throw new Error("Invalid Care Team record identifier");
       // Existing schedule/search links use the linked auth user ID, while
@@ -78,7 +78,7 @@ export function WorkforceDetailPage() {
   });
 
   const availabilityQuery = useQuery({
-    queryKey: ["workforce-availability", activeOrganizationId, id],
+    queryKey: ["care-team-availability", activeOrganizationId, id],
     queryFn: async () => {
       const { data, error } = await supabase.from("caregiver_record_availability").select("id, day_of_week, start_time, end_time, preference").eq("organization_id", activeOrganizationId!).eq("caregiver_record_id", recordQuery.data!.id);
       if (error) throw error;
@@ -88,7 +88,7 @@ export function WorkforceDetailPage() {
   });
 
   const credentialsQuery = useQuery({
-    queryKey: ["workforce-credentials", activeOrganizationId, id],
+    queryKey: ["care-team-credentials", activeOrganizationId, id],
     queryFn: async () => {
       const { data, error } = await supabase.from("caregiver_record_credentials").select("id, credential_type, issue_date, expiration_date, does_not_expire, issuing_organization, credential_number, verification_status").eq("organization_id", activeOrganizationId!).eq("caregiver_record_id", recordQuery.data!.id).is("deleted_at", null).order("credential_type");
       if (error) throw error;
@@ -98,7 +98,7 @@ export function WorkforceDetailPage() {
   });
 
   const membersQuery = useQuery({
-    queryKey: ["workforce-members", activeOrganizationId],
+    queryKey: ["care-team-members", activeOrganizationId],
     queryFn: async () => {
       const { data, error } = await supabase.rpc("list_organization_members", { target_organization_id: activeOrganizationId! });
       if (error) throw error;
@@ -115,7 +115,7 @@ export function WorkforceDetailPage() {
   // purpose before that page stopped being routed. Naturally bounded here
   // by filtering to one caregiver_record_id, not by the query itself.
   const shiftsQuery = useQuery({
-    queryKey: ["workforce-shifts", activeOrganizationId, recordQuery.data?.id],
+    queryKey: ["care-team-shifts", activeOrganizationId, recordQuery.data?.id],
     queryFn: async () => {
       const { data, error } = await supabase.rpc("list_shifts", { target_organization_id: activeOrganizationId! });
       if (error) throw error;
@@ -129,7 +129,7 @@ export function WorkforceDetailPage() {
   // workforce record that has a linked login - a real, separate gap for a
   // workforce-only caregiver, not something this page can work around.
   const assignmentsQuery = useQuery({
-    queryKey: ["workforce-assignments", activeOrganizationId],
+    queryKey: ["care-team-assignments", activeOrganizationId],
     queryFn: async () => {
       const { data, error } = await supabase.rpc("list_caregiver_assignments", { target_organization_id: activeOrganizationId! });
       if (error) throw error;
@@ -170,7 +170,7 @@ export function WorkforceDetailPage() {
       const { error } = await supabase.from("caregiver_records").update({ ...profile, preferred_name: profile.preferred_name || null, email: profile.email || null, phone: profile.phone || null, address_street: profile.address_street || null, address_city: profile.address_city || null, address_state: profile.address_state || null, address_zip: profile.address_zip || null, employment_type: profile.employment_type || null, available_start_date: profile.available_start_date || null, desired_weekly_hours: hours ? Number(hours) : null, min_weekly_hours: profile.min_weekly_hours ? Number(profile.min_weekly_hours) : null, max_weekly_hours: profile.max_weekly_hours ? Number(profile.max_weekly_hours) : null, min_shift_hours: profile.min_shift_hours ? Number(profile.min_shift_hours) : null, max_shift_hours: profile.max_shift_hours ? Number(profile.max_shift_hours) : null, max_travel_minutes: profile.max_travel_minutes ? Number(profile.max_travel_minutes) : null, languages: profile.languages.split(",").map((value) => value.trim()).filter(Boolean), status }).eq("organization_id", activeOrganizationId!).eq("id", recordQuery.data!.id);
       if (error) throw error;
     },
-    onSuccess: () => { void queryClient.invalidateQueries({ queryKey: ["workforce-record", activeOrganizationId, id] }); void queryClient.invalidateQueries({ queryKey: ["care-team-records", activeOrganizationId] }); }
+    onSuccess: () => { void queryClient.invalidateQueries({ queryKey: ["care-team-record", activeOrganizationId, id] }); void queryClient.invalidateQueries({ queryKey: ["care-team-records", activeOrganizationId] }); }
   });
 
   const availabilityMutation = useMutation({
@@ -178,7 +178,7 @@ export function WorkforceDetailPage() {
       const { error } = await supabase.rpc("replace_caregiver_record_availability", { target_organization_id: activeOrganizationId!, target_caregiver_record_id: recordQuery.data!.id, availability_slots: availability.map(({ day_of_week, start_time, end_time, preference }) => ({ day_of_week, start_time, end_time, preference })) });
       if (error) throw error;
     },
-    onSuccess: () => void queryClient.invalidateQueries({ queryKey: ["workforce-availability", activeOrganizationId, id] })
+    onSuccess: () => void queryClient.invalidateQueries({ queryKey: ["care-team-availability", activeOrganizationId, id] })
   });
 
   const linkMutation = useMutation({
@@ -187,7 +187,7 @@ export function WorkforceDetailPage() {
       const { error } = await supabase.rpc("link_caregiver_record_to_user", { target_organization_id: activeOrganizationId!, target_caregiver_record_id: recordQuery.data!.id, target_user_id: selectedUserId });
       if (error) throw error;
     },
-    onSuccess: () => { void queryClient.invalidateQueries({ queryKey: ["workforce-record", activeOrganizationId, id] }); void queryClient.invalidateQueries({ queryKey: ["care-team-records", activeOrganizationId] }); }
+    onSuccess: () => { void queryClient.invalidateQueries({ queryKey: ["care-team-record", activeOrganizationId, id] }); void queryClient.invalidateQueries({ queryKey: ["care-team-records", activeOrganizationId] }); }
   });
 
   const credentialMutation = useMutation({
@@ -197,7 +197,7 @@ export function WorkforceDetailPage() {
       });
       if (error) throw error;
     },
-    onSuccess: () => { setCredentialType(""); setCredentialIssue(""); setCredentialExpiration(""); void queryClient.invalidateQueries({ queryKey: ["workforce-credentials", activeOrganizationId, id] }); }
+    onSuccess: () => { setCredentialType(""); setCredentialIssue(""); setCredentialExpiration(""); void queryClient.invalidateQueries({ queryKey: ["care-team-credentials", activeOrganizationId, id] }); }
   });
 
   function addSlot(day: Weekday) { if (slotsByDay[day].length < 2) setAvailability((rows) => [...rows, { day_of_week: day, start_time: "09:00", end_time: "17:00", preference: "available" }]); }
