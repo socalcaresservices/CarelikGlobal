@@ -2,7 +2,7 @@ import { useMemo, useRef, useState, type ChangeEvent } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
 import { Clipboard, Download, FileUp, Plus } from "lucide-react";
-import { Button, Card, FilterBar, PageHeader, StatusBadge, type ActiveFilter, type StatusTone } from "@carelik/ui";
+import { Button, Card, FilterBar, PageHeader, ProgressBar, StatusBadge, type ActiveFilter, type StatusTone } from "@carelik/ui";
 import { useOrganization } from "@/providers/organization-provider";
 import { supabase } from "@/lib/supabase";
 import { useTableControls } from "@/lib/use-table-controls";
@@ -375,6 +375,20 @@ export function CandidatesPage() {
     );
   }
 
+  // Funnel counts come from the full unfiltered candidate list, not
+  // table.rows - a report of "where is everyone in the pipeline right
+  // now" should stay accurate regardless of whatever search/stage/source
+  // filter someone has active on the table below it.
+  const allCandidates = candidatesQuery.data ?? [];
+  const funnelCounts = PIPELINE_STAGES.reduce<Record<string, number>>((counts, stage) => {
+    counts[stage] = 0;
+    return counts;
+  }, {});
+  for (const candidate of allCandidates) {
+    funnelCounts[candidate.pipeline_stage] = (funnelCounts[candidate.pipeline_stage] ?? 0) + 1;
+  }
+  const largestStageCount = Math.max(1, ...Object.values(funnelCounts));
+
   return (
     <section className="mx-auto max-w-6xl space-y-6">
       <PageHeader
@@ -382,6 +396,22 @@ export function CandidatesPage() {
         title="Candidates"
         description={`Recruiting and onboarding pipeline${activeOrganization?.displayName ? ` for ${activeOrganization.displayName}` : ""}. Candidate stages are changed by authorized staff.`}
       />
+
+      <Card>
+        <h3 className="font-semibold text-slate-950">Pipeline funnel</h3>
+        <p className="mt-1 text-xs text-slate-500">How many candidates are at each stage right now, out of {allCandidates.length} total.</p>
+        <div className="mt-4 space-y-3">
+          {PIPELINE_STAGES.map((stage) => (
+            <div key={stage}>
+              <div className="flex items-center justify-between text-sm">
+                <span className="text-slate-700">{formatLabel(stage)}</span>
+                <span className="text-slate-500">{funnelCounts[stage]}</span>
+              </div>
+              <ProgressBar value={funnelCounts[stage] ?? 0} max={largestStageCount} tone={stageTone[stage] ?? "neutral"} />
+            </div>
+          ))}
+        </div>
+      </Card>
 
       {canManage ? (
         <Card>

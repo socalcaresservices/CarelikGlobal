@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -88,6 +88,52 @@ describe("Candidates pipeline", () => {
     expect(screen.getByText("Caregiver")).toBeInTheDocument();
     expect(screen.getByText("30h/week")).toBeInTheDocument();
     expect(mockedRpc).toHaveBeenCalledWith("list_candidates_v1", { target_organization_id: ORG_ID });
+  });
+
+  it("shows a pipeline funnel count per stage, unaffected by table filters", async () => {
+    mockedUseOrganization.mockReturnValue(baseOrganization());
+    mockedRpc.mockResolvedValue({
+      data: [
+        {
+          id: "candidate-1",
+          first_name: "Ashley",
+          last_name: "Rivera",
+          email: "ashley@example.com",
+          phone: null,
+          pipeline_stage: "screening",
+          source: "indeed",
+          position_applied_for: "Caregiver",
+          applied_at: "2026-08-13T12:00:00.000Z",
+          desired_weekly_hours: 30,
+          available_start_date: null,
+          imported_at: null,
+          created_at: "2026-08-13T12:00:00.000Z"
+        },
+        {
+          id: "candidate-2",
+          first_name: "Jordan",
+          last_name: "Diaz",
+          email: "jordan@example.com",
+          phone: null,
+          pipeline_stage: "screening",
+          source: "referral",
+          position_applied_for: "Caregiver",
+          applied_at: "2026-08-14T12:00:00.000Z",
+          desired_weekly_hours: 20,
+          available_start_date: null,
+          imported_at: null,
+          created_at: "2026-08-14T12:00:00.000Z"
+        }
+      ],
+      error: null
+    } as never);
+
+    renderPage();
+
+    await waitFor(() => expect(screen.getByText("Ashley Rivera")).toBeInTheDocument());
+    const funnelCard = screen.getByText("Pipeline funnel").closest("div")!;
+    const screeningRow = within(funnelCard).getAllByText("Screening")[0]!.closest("div")!;
+    expect(within(screeningRow).getByText("2")).toBeInTheDocument();
   });
 
   it("shows the empty Candidates state", async () => {
