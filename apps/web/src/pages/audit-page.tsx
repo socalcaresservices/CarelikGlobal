@@ -1,5 +1,6 @@
 import { useMemo } from "react";
 import { useInfiniteQuery } from "@tanstack/react-query";
+import { Download } from "lucide-react";
 import { Card, FilterBar, Button, type ActiveFilter } from "@carelik/ui";
 import { useOrganization } from "@/providers/organization-provider";
 import { supabase } from "@/lib/supabase";
@@ -106,6 +107,31 @@ export function AuditPage() {
       ]
     : [];
 
+  // Exports only what's currently loaded (auditRows is paginated via
+  // "Load older activity"), not the org's full audit history - an
+  // honest limitation rather than a silent one, same as the incidents
+  // export already established.
+  function exportFilteredAuditLogs() {
+    const quote = (value: unknown) => `"${String(value ?? "").replace(/"/g, '""')}"`;
+    const header = ["When", "Who", "Action", "Record type", "Record ID"];
+    const rows = table.rows.map((row) => [
+      row.occurred_at,
+      row.actor_display_name,
+      formatAction(row.action),
+      row.entity_type,
+      row.entity_id
+    ]);
+    const blob = new Blob([[header, ...rows].map((row) => row.map(quote).join(",")).join("\r\n")], {
+      type: "text/csv;charset=utf-8"
+    });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = `audit-activity-${new Date().toISOString().slice(0, 10)}.csv`;
+    anchor.click();
+    URL.revokeObjectURL(url);
+  }
+
   const columns = useColumnWidths("carelik:column-widths:audit", {
     when: 190,
     who: 160,
@@ -144,6 +170,9 @@ export function AuditPage() {
       <Card>
         <div className="flex flex-wrap items-center justify-between gap-3">
           <p className="text-xs font-medium uppercase tracking-wide text-slate-400">Activity</p>
+          <Button type="button" variant="secondary" onClick={exportFilteredAuditLogs} disabled={table.rows.length === 0}>
+            <Download className="mr-1.5 h-4 w-4" /> Export filtered CSV
+          </Button>
           <FilterBar
             activeFilters={auditActiveFilters}
             onClearAll={auditActiveFilters.length > 0 ? filters.clearAll : undefined}
