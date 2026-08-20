@@ -136,6 +136,35 @@ export function ServiceVerificationReportsPage() {
     enabled: !!activeOrganizationId && canRead
   });
 
+  // Scheduled hours come from list_shifts over the same date range as the
+  // visit report above, not from the visits themselves - a shift that was
+  // never signed off (or never happened at all) still needs to count as
+  // "scheduled" for this comparison to mean anything. Same
+  // scheduled-or-completed convention get_caregiver_hours already uses
+  // for "counts toward hours": cancelled/no-show shifts were never
+  // actually owed, so they're excluded from the scheduled side too.
+  const shiftsQuery = useQuery({
+    queryKey: ["service-report-shifts", activeOrganizationId, dateFrom, dateTo],
+    queryFn: async () => {
+      const { data, error } = await supabase.rpc("list_shifts", {
+        target_organization_id: activeOrganizationId!,
+        from_time: dateFrom ? new Date(dateFrom).toISOString() : null,
+        to_time: dateTo ? new Date(dateTo).toISOString() : null
+      });
+      if (error) throw error;
+      return (data ?? []) as Array<{
+        client_id: string;
+        client_name: string;
+        caregiver_user_id: string | null;
+        caregiver_name: string;
+        starts_at: string;
+        ends_at: string;
+        status: "scheduled" | "completed" | "cancelled" | "no_show";
+      }>;
+    },
+    enabled: !!activeOrganizationId && canRead
+  });
+
   const letterheadQuery = useQuery({
     queryKey: ["organization-letterhead", activeOrganizationId],
     queryFn: async () => {
@@ -293,6 +322,84 @@ export function ServiceVerificationReportsPage() {
     }
     return Array.from(map.values()).sort((a, b) => b.billableMinutes - a.billableMinutes);
   }, [billable]);
+
+  // Scheduled vs delivered: unions caregivers/clients from both the
+  // shift side (scheduled) and the billable visit side (delivered) -
+  // someone who was scheduled but never actually visited (a no-show, or
+  // a shift that just never got signed off) needs to show up with 0
+  // delivered, not be silently absent from the report.
+  const scheduledMinutesByCaregiver = useMemo(() => {
+    const map = new Map<string, { name: string; minutes: number }>();
+    for (const shift of shiftsQuery.data ?? []) {
+      if (!shift.caregiver_user_id || (shift.status !== "scheduled" && shift.status !== "completed")) continue;
+      const minutes = (new Date(shift.ends_at).getTime() - new Date(shift.starts_at).getTime()) / 60000;
+      const entry = map.get(shift.caregiver_user_id) ?? { name: shift.caregiver_name, minutes: 0 };
+      entry.minutes += minutes;
+      map.set(shift.caregiver_user_id, entry);
+    }
+    return map;
+  }, [shiftsQuery.data]);
+
+  const scheduledMinutesByClient = useMemo(() => {
+    const map = new Map<string, { name: string; minutes: number }>();
+    for (const shift of shiftsQuery.data ?? []) {
+      if (shift.status !== "scheduled" && shift.status !== "completed") continue;
+      const minutes = (new Date(shift.ends_at).getTime() - new Date(shift.starts_at).getTime()) / 60000;
+      const entry = map.get(shift.client_id) ?? { name: shift.client_name, minutes: 0 };
+      entry.minutes += minutes;
+      map.set(shift.client_id, entry);
+    }
+    return map;
+  }, [shiftsQuery.data]);
+
+  const caregiverScheduledVsDelivered = useMemo(() => {
+    const ids = new Set<string>(scheduledMinutesByCaregiver.keys());
+    const deliveredByCaregiverId = new Map<string, { name: string; minutes: number }>();
+    for (const row of billable) {
+      const entry = deliveredByCaregiverId.get(row.caregiver_user_id) ?? { name: row.caregiver_name, minutes: 0 };
+      entry.minutes += row.worked_minutes ?? 0;
+      deliveredByCaregiverId.set(row.caregiver_user_id, entry);
+    }
+    for (const id of deliveredByCaregiverId.keys()) ids.add(id);
+    return Array.from(ids)
+      .map((id) => {
+        const scheduled = scheduledMinutesByCaregiver.get(id);
+        const delivered = deliveredByCaregiverId.get(id);
+        return {
+          id,
+          name: scheduled?.name ?? delivered?.name ?? "Unknown caregiver",
+          scheduledMinutes: scheduled?.minutes ?? 0,
+          deliveredMinutes: delivered?.minutes ?? 0
+        };
+      })
+      .sort((a, b) => b.scheduledMinutes - a.scheduledMinutes);
+  }, [scheduledMinutesByCaregiver, billable]);
+
+  const clientScheduledVsDelivered = useMemo(() => {
+    const ids = new Set<string>(scheduledMinutesByClient.keys());
+    const deliveredByClientId = new Map<string, { name: string; minutes: number }>();
+    for (const row of billable) {
+      const entry = deliveredByClientId.get(row.client_id) ?? {
+        name: row.client_legal_name ?? row.client_code,
+        minutes: 0
+      };
+      entry.minutes += row.worked_minutes ?? 0;
+      deliveredByClientId.set(row.client_id, entry);
+    }
+    for (const id of deliveredByClientId.keys()) ids.add(id);
+    return Array.from(ids)
+      .map((id) => {
+        const scheduled = scheduledMinutesByClient.get(id);
+        const delivered = deliveredByClientId.get(id);
+        return {
+          id,
+          name: scheduled?.name ?? delivered?.name ?? "Unknown client",
+          scheduledMinutes: scheduled?.minutes ?? 0,
+          deliveredMinutes: delivered?.minutes ?? 0
+        };
+      })
+      .sort((a, b) => b.scheduledMinutes - a.scheduledMinutes);
+  }, [scheduledMinutesByClient, billable]);
 
   function handlePrint() {
     window.print();
@@ -737,6 +844,46 @@ export function ServiceVerificationReportsPage() {
               </li>
             ))}
           </ul>
+        </Card>
+      ) : null}
+
+      {caregiverScheduledVsDelivered.length > 0 || clientScheduledVsDelivered.length > 0 ? (
+        <Card>
+          <h3 className="font-semibold text-slate-950">Scheduled vs delivered hours</h3>
+          <p className="mt-1 text-xs text-slate-500">
+            Scheduled comes from the shift calendar for this date range; delivered comes from signed visits above. A
+            caregiver or client scheduled but never signed off shows 0 delivered, not a missing row.
+          </p>
+          {caregiverScheduledVsDelivered.length > 0 ? (
+            <>
+              <p className="mt-4 text-xs font-medium uppercase tracking-wide text-slate-400">By caregiver</p>
+              <ul className="mt-2 divide-y divide-slate-100">
+                {caregiverScheduledVsDelivered.map((entry) => (
+                  <li key={entry.id} className="flex items-center justify-between py-2 text-sm">
+                    <span className="text-slate-700">{entry.name}</span>
+                    <span className="font-medium text-slate-900">
+                      {formatHours(entry.scheduledMinutes)} scheduled · {formatHours(entry.deliveredMinutes)} delivered
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </>
+          ) : null}
+          {clientScheduledVsDelivered.length > 0 ? (
+            <>
+              <p className="mt-4 text-xs font-medium uppercase tracking-wide text-slate-400">By client</p>
+              <ul className="mt-2 divide-y divide-slate-100">
+                {clientScheduledVsDelivered.map((entry) => (
+                  <li key={entry.id} className="flex items-center justify-between py-2 text-sm">
+                    <span className="text-slate-700">{entry.name}</span>
+                    <span className="font-medium text-slate-900">
+                      {formatHours(entry.scheduledMinutes)} scheduled · {formatHours(entry.deliveredMinutes)} delivered
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </>
+          ) : null}
         </Card>
       ) : null}
     </section>
