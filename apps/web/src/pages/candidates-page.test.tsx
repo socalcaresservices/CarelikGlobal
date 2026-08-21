@@ -85,7 +85,7 @@ describe("Candidates pipeline", () => {
 
     await waitFor(() => expect(screen.getByText("Ashley Rivera")).toBeInTheDocument());
     expect(screen.getAllByText("Indeed")).not.toHaveLength(0);
-    expect(screen.getByText("Caregiver")).toBeInTheDocument();
+    expect(screen.getAllByText("Caregiver").length).toBeGreaterThan(0);
     expect(screen.getByText("30h/week")).toBeInTheDocument();
     expect(mockedRpc).toHaveBeenCalledWith("list_candidates_v1", { target_organization_id: ORG_ID });
   });
@@ -141,6 +141,55 @@ describe("Candidates pipeline", () => {
     mockedRpc.mockResolvedValue({ data: [], error: null } as never);
     renderPage();
     await waitFor(() => expect(screen.getByText("No candidates yet.")).toBeInTheDocument());
+  });
+
+  it("filters the pipeline by position", async () => {
+    mockedUseOrganization.mockReturnValue(baseOrganization());
+    mockedRpc.mockResolvedValue({
+      data: [
+        {
+          id: "candidate-1",
+          first_name: "Ashley",
+          last_name: "Rivera",
+          email: "ashley@example.com",
+          phone: null,
+          pipeline_stage: "application_received",
+          source: "indeed",
+          position_applied_for: "Caregiver",
+          applied_at: "2026-08-13T12:00:00.000Z",
+          desired_weekly_hours: 30,
+          available_start_date: null,
+          imported_at: null,
+          created_at: "2026-08-13T12:00:00.000Z"
+        },
+        {
+          id: "candidate-2",
+          first_name: "Jordan",
+          last_name: "Diaz",
+          email: "jordan@example.com",
+          phone: null,
+          pipeline_stage: "application_received",
+          source: "referral",
+          position_applied_for: "Coordinator",
+          applied_at: "2026-08-14T12:00:00.000Z",
+          desired_weekly_hours: 20,
+          available_start_date: null,
+          imported_at: null,
+          created_at: "2026-08-14T12:00:00.000Z"
+        }
+      ],
+      error: null
+    } as never);
+
+    renderPage();
+    await waitFor(() => expect(screen.getByText("Ashley Rivera")).toBeInTheDocument());
+    expect(screen.getByText("Jordan Diaz")).toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText("Filter by position"), { target: { value: "Coordinator" } });
+
+    expect(screen.queryByText("Ashley Rivera")).not.toBeInTheDocument();
+    expect(screen.getByText("Jordan Diaz")).toBeInTheDocument();
+    expect(screen.getByText("Position: Coordinator")).toBeInTheDocument();
   });
 });
 

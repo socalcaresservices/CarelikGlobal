@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -89,11 +89,13 @@ function mockFromByTable(record: unknown) {
   const orMock = vi.fn(() => ({ is: isMock }));
   const recordEqMock = vi.fn(() => ({ or: orMock }));
   const recordSelectMock = vi.fn(() => ({ eq: recordEqMock }));
+  const updateEqMock = vi.fn().mockResolvedValue({ error: null });
+  const updateMock = vi.fn(() => ({ eq: updateEqMock }));
 
   const lookupChain = vi.fn(() => ({ eq: vi.fn(() => ({ eq: vi.fn().mockResolvedValue({ data: [], error: null }) })) }));
 
   mockedFrom.mockImplementation((table: string) => {
-    if (table === "caregiver_records") return { select: recordSelectMock } as never;
+    if (table === "caregiver_records") return { select: recordSelectMock, update: updateMock } as never;
     if (table === "caregiver_record_availability") return { select: lookupChain } as never;
     if (table === "caregiver_record_credentials") {
       return {
@@ -106,6 +108,8 @@ function mockFromByTable(record: unknown) {
     }
     return { select: lookupChain } as never;
   });
+
+  return { updateMock, updateEqMock };
 }
 
 function renderPage() {
@@ -181,7 +185,27 @@ describe("CareTeamDetailPage visits and assignments", () => {
 
     renderPage();
 
-    await waitFor(() => expect(screen.getByText("Coordinator")).toBeInTheDocument());
+    await waitFor(() => expect(screen.getAllByText("Position").length).toBeGreaterThan(0));
+    const positionLabel = screen.getAllByText("Position").find((el) => el.tagName === "DT")!;
+    expect(positionLabel.nextElementSibling?.textContent).toBe("Coordinator");
+  });
+
+  it("edits Position, including a custom Other value, and saves it to caregiver_records", async () => {
+    mockedUseOrganization.mockReturnValue(baseOrganization());
+    const { updateMock } = mockFromByTable(baseRecord({ position: null }));
+    mockedRpc.mockResolvedValue({ data: [], error: null } as never);
+
+    renderPage();
+
+    await waitFor(() => expect(screen.getByText("Edit workforce profile")).toBeInTheDocument());
+    const positionSelect = screen.getByLabelText("Position");
+    fireEvent.change(positionSelect, { target: { value: "Other" } });
+    fireEvent.change(screen.getByLabelText("Specify position"), { target: { value: "Overnight Companion" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save profile" }));
+
+    await waitFor(() =>
+      expect(updateMock).toHaveBeenCalledWith(expect.objectContaining({ position: "Overnight Companion" }))
+    );
   });
 
   it("shows only this record's assignments once linked to a login", async () => {

@@ -35,6 +35,25 @@ export const candidateSourceSchema = z.enum([
 ]);
 export type CandidateSource = z.infer<typeof candidateSourceSchema>;
 
+// The job title a candidate applied for, and (once transferred) a Care
+// Team member's job title - stored as free text on
+// job_applicants.position_applied_for / caregiver_records.position, so
+// "Other" is a real, supported value, not a schema violation. This is
+// shared between the Candidates and Care Team pages so both offer the
+// same starter list. It is a job title only, never an Ogevia software
+// access role (organization_owner/manager/scheduler/caregiver) -
+// selecting "Manager" or "Coordinator" here never grants software access.
+export const POSITION_OPTIONS = [
+  "Caregiver",
+  "Caregiver I",
+  "Administrative Staff",
+  "Caregiver / Administrative Staff",
+  "Coordinator",
+  "Manager",
+  "Other"
+] as const;
+export type PositionOption = (typeof POSITION_OPTIONS)[number];
+
 export const availabilityPreferenceSchema = z.enum(["available", "preferred"]);
 export type AvailabilityPreference = z.infer<typeof availabilityPreferenceSchema>;
 
