@@ -138,6 +138,7 @@ describe("ClientDetailPage", () => {
     mockedUseOrganization.mockReturnValue(baseOrganization());
     mockFromByTable({
       id: CLIENT_ID,
+      client_code: "CL-000042",
       first_name: "Jordan",
       last_name: "Rivera",
       phone: "555-0100",
@@ -154,6 +155,36 @@ describe("ClientDetailPage", () => {
     await waitFor(() => expect(screen.getByText("Jordan Rivera")).toBeInTheDocument());
     expect(screen.getByText("active")).toBeInTheDocument();
     expect(screen.getByText("No active authorization for today.")).toBeInTheDocument();
+  });
+
+  it("shows the Client ID prominently next to the client's name and copies it", async () => {
+    mockedUseOrganization.mockReturnValue(baseOrganization());
+    mockFromByTable({
+      id: CLIENT_ID,
+      client_code: "CL-000042",
+      first_name: "Jordan",
+      last_name: "Rivera",
+      phone: "555-0100",
+      email: null,
+      address: null,
+      care_notes: null,
+      status: "active",
+      client_requested_services: []
+    });
+    mockedRpc.mockResolvedValue({ data: [], error: null } as never);
+
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.assign(navigator, { clipboard: { writeText } });
+
+    renderPage();
+
+    await waitFor(() => expect(screen.getByText("CL-000042")).toBeInTheDocument());
+    // The internal UUID must never be shown as the operational Client ID.
+    expect(screen.queryByText(CLIENT_ID)).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByLabelText("Copy Client ID"));
+    await waitFor(() => expect(writeText).toHaveBeenCalledWith("CL-000042"));
+    expect(screen.getByText("Copied")).toBeInTheDocument();
   });
 
   it("keeps the identity/authorization/tab header sticky so it stays visible while scrolling a long tab", async () => {

@@ -76,6 +76,7 @@ describe("ClientsPage", () => {
     const selectMock = mockReadableClients([
       {
         id: "22222222-2222-4222-8222-222222222222",
+        client_code: "CL-000001",
         first_name: "Jordan",
         last_name: "Rivera",
         phone: "555-0100",
@@ -91,6 +92,54 @@ describe("ClientsPage", () => {
 
     await waitFor(() => expect(screen.getByText("Jordan Rivera")).toBeInTheDocument());
     expect(screen.queryByText("Add a client")).not.toBeInTheDocument();
+    expect(screen.getByText("CL-000001")).toBeInTheDocument();
+  });
+
+  it("shows the Client ID column, copies it, and supports searching by Client ID", async () => {
+    mockedUseOrganization.mockReturnValue({
+      ...baseOrganization(),
+      hasPermission: vi.fn((permission: string) => permission === "clients.read")
+    });
+    const selectMock = mockReadableClients([
+      {
+        id: "22222222-2222-4222-8222-222222222222",
+        client_code: "CL-000001",
+        first_name: "Jordan",
+        last_name: "Rivera",
+        phone: "555-0100",
+        email: null,
+        address: null,
+        care_notes: null,
+        status: "active"
+      },
+      {
+        id: "33333333-3333-4333-8333-333333333333",
+        client_code: "CL-000002",
+        first_name: "Casey",
+        last_name: "Nolan",
+        phone: null,
+        email: null,
+        address: null,
+        care_notes: null,
+        status: "active"
+      }
+    ]);
+    mockedFrom.mockReturnValue({ select: selectMock } as never);
+
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.assign(navigator, { clipboard: { writeText } });
+
+    renderPage();
+    await waitFor(() => expect(screen.getByText("Jordan Rivera")).toBeInTheDocument());
+    expect(screen.getByText("CL-000001")).toBeInTheDocument();
+    expect(screen.getByText("CL-000002")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByLabelText("Copy Client ID for Jordan Rivera"));
+    await waitFor(() => expect(writeText).toHaveBeenCalledWith("CL-000001"));
+
+    fireEvent.change(screen.getByLabelText("Search clients"), { target: { value: "CL-000002" } });
+    expect(screen.queryByText("Jordan Rivera")).not.toBeInTheDocument();
+    expect(screen.getByText("Casey Nolan")).toBeInTheDocument();
   });
 
   it("shows a guided empty state when there are no clients", async () => {

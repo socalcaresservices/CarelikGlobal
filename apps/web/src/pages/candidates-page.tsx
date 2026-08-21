@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState, type ChangeEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type ChangeEvent } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
 import { Clipboard, Download, FileUp, Plus } from "lucide-react";
@@ -18,7 +18,7 @@ interface CandidateRow {
   id: string;
   first_name: string;
   last_name: string;
-  email: string;
+  email: string | null;
   phone: string | null;
   pipeline_stage: string;
   source: string;
@@ -67,6 +67,23 @@ const PIPELINE_STAGES = [
 ] as const;
 
 const IMPORT_SOURCES = ["indeed", "ziprecruiter", "referral", "agency_website", "manual", "other"] as const;
+
+// The job title a candidate applied for - separate from Ogevia software
+// access roles (organization_owner/manager/scheduler/caregiver in
+// role_permissions). Selecting "Manager" or "Coordinator" here never
+// grants software access; it is only descriptive text stored on
+// position_applied_for. Kept as a fixed starter list rather than an
+// org-configurable catalog (like Services/Skills/Languages) since it's a
+// bounded HR taxonomy, not something orgs customize per-client.
+const POSITION_OPTIONS = [
+  "Caregiver",
+  "Caregiver I",
+  "Administrative Staff",
+  "Caregiver / Administrative Staff",
+  "Coordinator",
+  "Manager",
+  "Other"
+] as const;
 
 const stageTone: Record<string, StatusTone> = {
   imported: "neutral",
@@ -193,7 +210,7 @@ export function CandidatesPage() {
   const table = useTableControls<CandidateRow, "name" | "stage" | "applied">(filters.rows, {
     matchesSearch: (row, query) =>
       `${row.first_name} ${row.last_name}`.toLowerCase().includes(query) ||
-      row.email.toLowerCase().includes(query) ||
+      (row.email ?? "").toLowerCase().includes(query) ||
       (row.phone ?? "").toLowerCase().includes(query) ||
       (row.position_applied_for ?? "").toLowerCase().includes(query),
     sorters: {
@@ -238,7 +255,31 @@ export function CandidatesPage() {
   const [showManual, setShowManual] = useState(false);
   const [manualBusy, setManualBusy] = useState(false);
   const [manualError, setManualError] = useState<string | null>(null);
-  const [manualCandidate, setManualCandidate] = useState({ first_name: "", last_name: "", email: "", phone: "", position_applied_for: "", notes: "" });
+  const [manualSuccess, setManualSuccess] = useState<string | null>(null);
+  const [manualCandidate, setManualCandidate] = useState({
+    first_name: "",
+    last_name: "",
+    email: "",
+    phone: "",
+    position: "" as (typeof POSITION_OPTIONS)[number] | "",
+    positionOther: "",
+    source: "manual" as (typeof IMPORT_SOURCES)[number],
+    notes: ""
+  });
+
+  const manualPositionValue = manualCandidate.position === "Other" ? manualCandidate.positionOther.trim() : manualCandidate.position;
+  const manualHasContactMethod = !!manualCandidate.email.trim() || !!manualCandidate.phone.trim();
+  const manualCanSave =
+    !!manualCandidate.first_name.trim() &&
+    !!manualCandidate.last_name.trim() &&
+    !!manualPositionValue &&
+    manualHasContactMethod;
+
+  useEffect(() => {
+    if (!manualSuccess) return;
+    const timer = window.setTimeout(() => setManualSuccess(null), 5000);
+    return () => window.clearTimeout(timer);
+  }, [manualSuccess]);
 
   const previewCounts = useMemo(() => ({
     new: previewRows.filter((row) => row.disposition === "new").length,
@@ -331,16 +372,26 @@ export function CandidatesPage() {
   }
 
   async function createManualCandidate() {
-    if (!activeOrganizationId) return;
+    if (!activeOrganizationId || !manualCanSave || manualBusy) return;
     setManualBusy(true);
     setManualError(null);
+    setManualSuccess(null);
     try {
       const { error } = await supabase.rpc("create_manual_candidate", {
         target_organization_id: activeOrganizationId,
-        candidate_payload: manualCandidate
+        candidate_payload: {
+          first_name: manualCandidate.first_name,
+          last_name: manualCandidate.last_name,
+          email: manualCandidate.email,
+          phone: manualCandidate.phone,
+          position_applied_for: manualPositionValue,
+          source: manualCandidate.source,
+          notes: manualCandidate.notes
+        }
       });
       if (error) throw error;
-      setManualCandidate({ first_name: "", last_name: "", email: "", phone: "", position_applied_for: "", notes: "" });
+      setManualSuccess(`${manualCandidate.first_name.trim()} ${manualCandidate.last_name.trim()} was added to the candidate pipeline.`);
+      setManualCandidate({ first_name: "", last_name: "", email: "", phone: "", position: "", positionOther: "", source: "manual", notes: "" });
       setShowManual(false);
       void queryClient.invalidateQueries({ queryKey: ["candidates", activeOrganizationId] });
     } catch (cause) {
@@ -433,20 +484,66 @@ export function CandidatesPage() {
             </div>
           </div>
           {applicationCopyError ? <p className="mt-3 break-all rounded-lg bg-slate-50 p-2 text-xs text-slate-600">Copy this link: {applicationCopyError}</p> : null}
+          {manualSuccess ? <p className="mt-3 rounded-lg bg-emerald-50 p-2 text-sm font-medium text-emerald-700">{manualSuccess}</p> : null}
 
           {showManual ? (
             <div className="mt-5 rounded-xl border border-slate-200 p-4">
               <h4 className="font-medium text-slate-900">Add a candidate manually</h4>
+              <p className="mt-1 text-xs text-slate-500">First name, last name, and Position are required. Provide at least one of email or phone.</p>
               <div className="mt-3 grid gap-3 sm:grid-cols-2">
                 <input aria-label="First name" placeholder="First name" value={manualCandidate.first_name} onChange={(event) => setManualCandidate({ ...manualCandidate, first_name: event.target.value })} className="rounded-lg border border-slate-200 px-3 py-2 text-sm" />
                 <input aria-label="Last name" placeholder="Last name" value={manualCandidate.last_name} onChange={(event) => setManualCandidate({ ...manualCandidate, last_name: event.target.value })} className="rounded-lg border border-slate-200 px-3 py-2 text-sm" />
-                <input aria-label="Email" type="email" placeholder="Email" value={manualCandidate.email} onChange={(event) => setManualCandidate({ ...manualCandidate, email: event.target.value })} className="rounded-lg border border-slate-200 px-3 py-2 text-sm" />
-                <input aria-label="Phone" placeholder="Phone" value={manualCandidate.phone} onChange={(event) => setManualCandidate({ ...manualCandidate, phone: event.target.value })} className="rounded-lg border border-slate-200 px-3 py-2 text-sm" />
-                <input aria-label="Position" placeholder="Position applied for" value={manualCandidate.position_applied_for} onChange={(event) => setManualCandidate({ ...manualCandidate, position_applied_for: event.target.value })} className="rounded-lg border border-slate-200 px-3 py-2 text-sm sm:col-span-2" />
+                <input aria-label="Email" type="email" placeholder="Email (optional if phone is provided)" value={manualCandidate.email} onChange={(event) => setManualCandidate({ ...manualCandidate, email: event.target.value })} className="rounded-lg border border-slate-200 px-3 py-2 text-sm" />
+                <input aria-label="Phone" placeholder="Phone (optional if email is provided)" value={manualCandidate.phone} onChange={(event) => setManualCandidate({ ...manualCandidate, phone: event.target.value })} className="rounded-lg border border-slate-200 px-3 py-2 text-sm" />
+                <label className="block text-xs font-medium text-slate-600 sm:col-span-2">
+                  Position
+                  <select
+                    aria-label="Position"
+                    value={manualCandidate.position}
+                    onChange={(event) =>
+                      setManualCandidate({ ...manualCandidate, position: event.target.value as (typeof POSITION_OPTIONS)[number] | "" })
+                    }
+                    className="mt-1 block w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900"
+                  >
+                    <option value="">Select a position…</option>
+                    {POSITION_OPTIONS.map((option) => (
+                      <option key={option} value={option}>
+                        {option}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                {manualCandidate.position === "Other" ? (
+                  <input
+                    aria-label="Specify position"
+                    placeholder="Specify position"
+                    value={manualCandidate.positionOther}
+                    onChange={(event) => setManualCandidate({ ...manualCandidate, positionOther: event.target.value })}
+                    className="rounded-lg border border-slate-200 px-3 py-2 text-sm sm:col-span-2"
+                  />
+                ) : null}
+                <label className="block text-xs font-medium text-slate-600 sm:col-span-2">
+                  Source
+                  <select
+                    aria-label="Source"
+                    value={manualCandidate.source}
+                    onChange={(event) =>
+                      setManualCandidate({ ...manualCandidate, source: event.target.value as (typeof IMPORT_SOURCES)[number] })
+                    }
+                    className="mt-1 block w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900"
+                  >
+                    {IMPORT_SOURCES.map((source) => <option key={source} value={source}>{formatLabel(source)}</option>)}
+                  </select>
+                </label>
                 <textarea aria-label="Notes" placeholder="Internal notes" value={manualCandidate.notes} onChange={(event) => setManualCandidate({ ...manualCandidate, notes: event.target.value })} className="min-h-20 rounded-lg border border-slate-200 px-3 py-2 text-sm sm:col-span-2" />
               </div>
               {manualError ? <p className="mt-3 text-sm text-red-700">{manualError}</p> : null}
-              <div className="mt-3 flex gap-2"><Button disabled={!manualCandidate.first_name.trim() || !manualCandidate.last_name.trim() || !manualCandidate.email.trim()} loading={manualBusy} onClick={() => void createManualCandidate()}>Create candidate</Button><Button variant="secondary" onClick={() => setShowManual(false)}>Cancel</Button></div>
+              <div className="mt-3 flex gap-2">
+                <Button disabled={!manualCanSave || manualBusy} loading={manualBusy} onClick={() => void createManualCandidate()}>
+                  Create candidate
+                </Button>
+                <Button variant="secondary" onClick={() => setShowManual(false)}>Cancel</Button>
+              </div>
             </div>
           ) : null}
 
@@ -583,7 +680,7 @@ export function CandidatesPage() {
                   <tr key={row.id} className="border-b border-slate-100 last:border-0">
                     <td className="py-2.5 text-slate-800">
                       <Link to={`/candidates/${row.id}`} className="font-medium hover:underline">{row.first_name} {row.last_name}</Link>
-                      <p className="truncate text-xs text-slate-500">{row.email}{row.phone ? ` · ${row.phone}` : ""}</p>
+                      <p className="truncate text-xs text-slate-500">{row.email ?? "No email"}{row.phone ? ` · ${row.phone}` : ""}</p>
                     </td>
                     <td className="py-2.5">
                       {canManage ? (

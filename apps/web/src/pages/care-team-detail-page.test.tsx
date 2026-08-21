@@ -78,6 +78,7 @@ function baseRecord(overrides: Record<string, unknown> = {}) {
     onboarding_instructions: null,
     background_check_status: null,
     compliance_status: null,
+    position: null,
     ...overrides
   };
 }
@@ -171,6 +172,16 @@ describe("CareTeamDetailPage visits and assignments", () => {
     await waitFor(() =>
       expect(screen.getByText("Assignments require a linked login today - link an account above to see them here.")).toBeInTheDocument()
     );
+  });
+
+  it("shows the Position carried over from a transferred candidate", async () => {
+    mockedUseOrganization.mockReturnValue(baseOrganization());
+    mockFromByTable(baseRecord({ position: "Coordinator" }));
+    mockedRpc.mockResolvedValue({ data: [], error: null } as never);
+
+    renderPage();
+
+    await waitFor(() => expect(screen.getByText("Coordinator")).toBeInTheDocument());
   });
 
   it("shows only this record's assignments once linked to a login", async () => {
