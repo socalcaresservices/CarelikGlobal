@@ -22,6 +22,7 @@ import { PlatformDashboardPage } from "@/pages/platform-dashboard-page";
 import { OrganizationsPage } from "@/pages/organizations-page";
 import { FeatureFlagsPage } from "@/pages/feature-flags-page";
 import { AuditPage } from "@/pages/audit-page";
+import { SystemHealthPage } from "@/pages/system-health-page";
 
 /**
  * Platform route definitions
@@ -32,10 +33,10 @@ export function getPlatformRoutes() {
     <Route key="dashboard" path="/" element={<PlatformDashboardPage />} />,
     <Route key="organizations" path="/organizations" element={<OrganizationsPage />} />,
     <Route key="feature-flags" path="/feature-flags" element={<FeatureFlagsPage />} />,
-    <Route key="audit" path="/audit" element={<AuditPage />} />
+    <Route key="audit" path="/audit" element={<AuditPage />} />,
+    <Route key="system-health" path="/system-health" element={<SystemHealthPage />} />
     // Subscriptions & billing and support access already live inside
     // Organizations (PlatformPlanManager / PlatformSubscriberBillingPanel /
     // SupportAccessPanel), not as separate top-level pages.
-    // TODO: System health
   ];
 }
