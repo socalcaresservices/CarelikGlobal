@@ -1,6 +1,7 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
+import { Clipboard } from "lucide-react";
 import { Button, Card, EmptyState, FormSection, FilterBar, type ActiveFilter } from "@carelik/ui";
 import { clientStatusSchema } from "@carelik/shared";
 import { useOrganization } from "@/providers/organization-provider";
@@ -13,6 +14,7 @@ import { PlainHeader } from "@/components/resizable-th";
 
 interface ClientRow {
   id: string;
+  client_code: string;
   first_name: string;
   last_name: string;
   phone: string | null;
@@ -79,13 +81,14 @@ export function ClientsPage() {
 
     const rows = table.rows.map((client) => [
       `${client.first_name} ${client.last_name}`,
+      client.client_code,
       client.phone ?? "",
       client.email ?? "",
       client.status
     ]);
 
     const csvContent = [
-      ["Name", "Phone", "Email", "Status"],
+      ["Name", "Client ID", "Phone", "Email", "Status"],
       ...rows
     ]
       .map((row) => row.map((cell) => `"${String(cell).replace(/"/g, '""')}"`).join(","))
@@ -109,6 +112,7 @@ export function ClientsPage() {
   const table = useTableControls<ClientRow, "name" | "status">(filters.rows, {
     matchesSearch: (row, query) =>
       `${row.first_name} ${row.last_name}`.toLowerCase().includes(query) ||
+      row.client_code.toLowerCase().includes(query) ||
       (row.phone ?? "").toLowerCase().includes(query) ||
       (row.email ?? "").toLowerCase().includes(query),
     sorters: {
@@ -119,6 +123,7 @@ export function ClientsPage() {
 
   const columns = useColumnWidths("carelik:column-widths:clients", {
     name: 220,
+    clientId: 140,
     phone: 140,
     status: 130
   });
@@ -130,6 +135,17 @@ export function ClientsPage() {
   const [rowError, setRowError] = useState<string | null>(null);
   const [rowSuccess, setRowSuccess] = useState<string | null>(null);
   const [pendingId, setPendingId] = useState<string | null>(null);
+  const [copiedClientId, setCopiedClientId] = useState<string | null>(null);
+
+  async function copyClientId(clientCode: string) {
+    try {
+      await navigator.clipboard.writeText(clientCode);
+      setCopiedClientId(clientCode);
+      window.setTimeout(() => setCopiedClientId((current) => (current === clientCode ? null : current)), 1800);
+    } catch {
+      setRowError(`Could not copy to clipboard. Client ID: ${clientCode}`);
+    }
+  }
 
   useEffect(() => {
     setForm(emptyForm);
@@ -390,7 +406,7 @@ export function ClientsPage() {
                   type="search"
                   value={table.search}
                   onChange={(event) => table.setSearch(event.target.value)}
-                  placeholder="Search name, phone, or email"
+                  placeholder="Search name, Client ID, phone, or email"
                   aria-label="Search clients"
                   className="w-full max-w-xs rounded-lg border border-slate-200 px-3 py-1.5 text-sm text-slate-900"
                 />
@@ -435,6 +451,11 @@ export function ClientsPage() {
                   onResizeStart={columns.startResize("name")}
                 />
                 <PlainHeader
+                  label="Client ID"
+                  width={columns.widths.clientId}
+                  onResizeStart={columns.startResize("clientId")}
+                />
+                <PlainHeader
                   label="Phone"
                   width={columns.widths.phone}
                   onResizeStart={columns.startResize("phone")}
@@ -457,6 +478,20 @@ export function ClientsPage() {
                     <Link to={`/clients/${row.id}`} className="hover:underline">
                       {row.first_name} {row.last_name}
                     </Link>
+                  </td>
+                  <td className="py-2.5">
+                    <div className="flex items-center gap-1.5">
+                      <span className="font-mono text-xs text-slate-600">{row.client_code}</span>
+                      <button
+                        type="button"
+                        onClick={() => void copyClientId(row.client_code)}
+                        aria-label={`Copy Client ID for ${row.first_name} ${row.last_name}`}
+                        className="text-slate-400 hover:text-slate-700"
+                      >
+                        <Clipboard className="h-3.5 w-3.5" />
+                      </button>
+                      {copiedClientId === row.client_code ? <span className="text-xs text-emerald-700">Copied</span> : null}
+                    </div>
                   </td>
                   <td className="py-2.5 text-slate-500">{row.phone ?? "—"}</td>
                   <td className="py-2.5">
@@ -489,7 +524,7 @@ export function ClientsPage() {
               ))}
               {table.rows.length === 0 ? (
                 <tr>
-                  <td colSpan={canManage ? 4 : 3}>
+                  <td colSpan={canManage ? 5 : 4}>
                     {table.search || clientActiveFilters.length > 0 ? (
                       <EmptyState message="No clients match your search or filters." />
                     ) : (

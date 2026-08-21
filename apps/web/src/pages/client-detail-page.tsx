@@ -1,7 +1,7 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { Link, useParams } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, Clipboard } from "lucide-react";
 import {
   Button,
   Card,
@@ -35,6 +35,7 @@ import { ClientRequestedSchedule } from "@/components/client-requested-schedule"
 
 interface ClientDetail {
   id: string;
+  client_code: string;
   first_name: string;
   last_name: string;
   phone: string | null;
@@ -178,6 +179,18 @@ export function ClientDetailPage() {
   const { activeOrganizationId, hasPermission } = useOrganization();
   const queryClient = useQueryClient();
   const [tab, setTab] = useState<Tab>("overview");
+  const [clientIdCopied, setClientIdCopied] = useState(false);
+
+  async function copyClientId(clientCode: string) {
+    try {
+      await navigator.clipboard.writeText(clientCode);
+      setClientIdCopied(true);
+      window.setTimeout(() => setClientIdCopied(false), 1800);
+    } catch {
+      // Clipboard access can be denied by the browser - the code is still
+      // shown on screen, so silently no-op rather than blocking the user.
+    }
+  }
 
   const canSeeAuthorizations = hasPermission("authorizations.read");
   const canManageAuthorizations = hasPermission("authorizations.update");
@@ -568,6 +581,18 @@ export function ClientDetailPage() {
             <h2 className="text-2xl font-semibold text-slate-950">
               {client.first_name} {client.last_name}
             </h2>
+            <div className="mt-1 flex items-center gap-1.5">
+              <span className="font-mono text-sm font-medium text-slate-700">{client.client_code}</span>
+              <button
+                type="button"
+                onClick={() => void copyClientId(client.client_code)}
+                aria-label="Copy Client ID"
+                className="text-slate-400 hover:text-slate-700"
+              >
+                <Clipboard className="h-3.5 w-3.5" />
+              </button>
+              {clientIdCopied ? <span className="text-xs text-emerald-700">Copied</span> : null}
+            </div>
             <p className="mt-1 text-sm text-slate-500">
               {client.phone ?? "No phone"} · {client.email ?? "No email"}
             </p>
