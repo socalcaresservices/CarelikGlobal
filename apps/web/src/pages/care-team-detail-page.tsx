@@ -15,6 +15,7 @@ interface WorkforceRecord {
   id: string;
   applicant_id: string | null;
   linked_user_id: string | null;
+  caregiver_code: string;
   first_name: string;
   last_name: string;
   preferred_name: string | null;
@@ -214,7 +215,7 @@ export function CareTeamDetailPage() {
   return (
     <section className="mx-auto max-w-5xl space-y-6">
       <Link to="/team" className="inline-flex items-center gap-1.5 text-sm text-slate-500 hover:text-slate-900"><ArrowLeft className="h-4 w-4" />Care Team</Link>
-      <div className="flex flex-wrap items-start justify-between gap-3"><div><p className="text-sm font-medium text-slate-500">Care Team record</p><h1 className="mt-1 text-2xl font-semibold text-slate-950">{name}</h1><p className="mt-1 text-sm text-slate-500">{record.email ?? "No email"}{record.phone ? ` · ${record.phone}` : ""}</p></div><div className="flex gap-2"><StatusBadge label={title(record.status)} tone={record.status === "active" || record.status === "ready" ? "success" : "neutral"}/><StatusBadge label={record.linked_user_id ? "Login linked" : "No login"} tone={record.linked_user_id ? "success" : "neutral"}/></div></div>
+      <div className="flex flex-wrap items-start justify-between gap-3"><div><p className="text-sm font-medium text-slate-500">Care Team record</p><h1 className="mt-1 text-2xl font-semibold text-slate-950">{name}</h1><p className="mt-1 font-mono text-xs text-slate-400">{record.caregiver_code}</p><p className="mt-1 text-sm text-slate-500">{record.email ?? "No email"}{record.phone ? ` · ${record.phone}` : ""}</p></div><div className="flex gap-2"><StatusBadge label={title(record.status)} tone={record.status === "active" || record.status === "ready" ? "success" : "neutral"}/><StatusBadge label={record.linked_user_id ? "Login linked" : "No login"} tone={record.linked_user_id ? "success" : "neutral"}/></div></div>
 
       <div className="grid gap-5 lg:grid-cols-2">
         <Card><h2 className="font-semibold text-slate-950">Profile</h2><dl className="mt-4 grid gap-3 text-sm sm:grid-cols-2"><div><dt className="text-xs uppercase tracking-wide text-slate-500">Employment</dt><dd className="mt-1 font-medium text-slate-900">{record.employment_type ? title(record.employment_type) : "—"}</dd></div><div><dt className="text-xs uppercase tracking-wide text-slate-500">Available start</dt><dd className="mt-1 font-medium text-slate-900">{record.available_start_date ?? "—"}</dd></div><div><dt className="text-xs uppercase tracking-wide text-slate-500">Shift range</dt><dd className="mt-1 font-medium text-slate-900">{record.min_shift_hours ?? "?"}–{record.max_shift_hours ?? "?"}h</dd></div><div><dt className="text-xs uppercase tracking-wide text-slate-500">Max travel</dt><dd className="mt-1 font-medium text-slate-900">{record.max_travel_minutes != null ? `${record.max_travel_minutes} min` : "—"}</dd></div><div className="sm:col-span-2"><dt className="text-xs uppercase tracking-wide text-slate-500">Languages</dt><dd className="mt-1 font-medium text-slate-900">{record.languages.length ? record.languages.join(", ") : "—"}</dd></div></dl></Card>
