@@ -15,6 +15,7 @@ import {
 } from "@carelik/shared";
 import { supabase } from "@/lib/supabase";
 import { createCheckoutSession } from "@/lib/billing-checkout";
+import { createBillingPortalSession } from "@/lib/billing-portal";
 
 // Row shape returned by get_organization_billing_summary() - snake_case
 // straight off the RPC, mapped once into the shared camelCase type below
@@ -143,6 +144,8 @@ export function BillingSummaryCard({
 }) {
   const [checkoutError, setCheckoutError] = useState<string | null>(null);
   const [startingCheckout, setStartingCheckout] = useState(false);
+  const [portalError, setPortalError] = useState<string | null>(null);
+  const [openingPortal, setOpeningPortal] = useState(false);
   // One-time read of ?checkout=success|cancelled - set by
   // create-checkout-session's success_url/cancel_url after a real Stripe
   // Checkout redirect. Reaching this page never means an org is paid on
@@ -172,6 +175,19 @@ export function BillingSummaryCard({
     } catch (cause) {
       setCheckoutError(cause instanceof Error ? cause.message : "Could not start checkout.");
       setStartingCheckout(false);
+    }
+  }
+
+  async function handleOpenPortal() {
+    if (!organizationId) return;
+    setOpeningPortal(true);
+    setPortalError(null);
+    try {
+      const { url } = await createBillingPortalSession(organizationId);
+      window.location.href = url;
+    } catch (cause) {
+      setPortalError(cause instanceof Error ? cause.message : "Could not open billing management.");
+      setOpeningPortal(false);
     }
   }
 
@@ -294,8 +310,26 @@ export function BillingSummaryCard({
       ) : null}
 
       <div className="mt-5 border-t border-slate-100 pt-4">
-        <p className="text-xs font-medium uppercase tracking-wide text-slate-500">Payment history</p>
-        <p className="mt-1 text-sm text-slate-400">No payment history available yet.</p>
+        <p className="text-xs font-medium uppercase tracking-wide text-slate-500">Payment method &amp; invoices</p>
+        {summary.stripeConfigured ? (
+          canUpdate ? (
+            <div className="mt-2 space-y-2">
+              {portalError ? <p className="text-sm text-red-700">{portalError}</p> : null}
+              <Button type="button" variant="secondary" loading={openingPortal} onClick={handleOpenPortal}>
+                Manage billing
+              </Button>
+              <p className="text-xs text-slate-400">
+                Opens Stripe&rsquo;s secure billing portal to update your payment method, view invoices, or cancel.
+              </p>
+            </div>
+          ) : (
+            <p className="mt-1 text-sm text-slate-400">
+              Contact an organization admin to update the payment method or view invoices.
+            </p>
+          )
+        ) : (
+          <p className="mt-1 text-sm text-slate-400">No payment history available yet.</p>
+        )}
       </div>
 
       {canUpdate ? (
