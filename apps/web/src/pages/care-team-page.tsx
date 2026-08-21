@@ -10,6 +10,7 @@ import { supabase } from "@/lib/supabase";
 interface WorkforceRow {
   id: string;
   linked_user_id: string | null;
+  caregiver_code: string;
   display_name: string;
   email: string | null;
   phone: string | null;
@@ -109,6 +110,7 @@ export function CareTeamPage() {
               <thead>
                 <tr className="border-b border-slate-200 text-left text-xs uppercase tracking-wide text-slate-500">
                   <th className="px-3 py-2">Name</th>
+                  <th className="px-3 py-2">Code</th>
                   <th className="px-3 py-2">Status</th>
                   <th className="px-3 py-2">Hours</th>
                   <th className="px-3 py-2">Access</th>
@@ -121,6 +123,7 @@ export function CareTeamPage() {
                       <Link to={`/team/${row.id}`} className="font-semibold text-slate-900 hover:underline">{row.display_name}</Link>
                       <p className="text-xs text-slate-500">{row.email ?? ""}{row.phone ? ` · ${row.phone}` : ""}</p>
                     </td>
+                    <td className="px-3 py-3 font-mono text-xs text-slate-500">{row.caregiver_code}</td>
                     <td className="px-3 py-3"><StatusBadge label={row.status.replace(/_/g, " ")} tone={row.status === "active" || row.status === "ready" ? "success" : "neutral"} /></td>
                     <td className="px-3 py-3">{row.desired_weekly_hours != null ? `${row.desired_weekly_hours}/wk` : "—"}</td>
                     <td className="px-3 py-3"><StatusBadge label={row.linked_user_id ? "Linked" : "No login"} tone={row.linked_user_id ? "success" : "neutral"} /></td>

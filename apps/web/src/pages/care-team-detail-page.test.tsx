@@ -49,6 +49,7 @@ function baseRecord(overrides: Record<string, unknown> = {}) {
     id: RECORD_ID,
     applicant_id: null,
     linked_user_id: null,
+    caregiver_code: "CG-222222",
     first_name: "Sam",
     last_name: "Caregiver",
     preferred_name: null,

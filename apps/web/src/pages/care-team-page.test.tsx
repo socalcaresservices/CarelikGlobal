@@ -65,6 +65,7 @@ describe("CareTeamPage", () => {
         {
           id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
           linked_user_id: null,
+          caregiver_code: "CG-AAAAAA",
           display_name: "Ashley Rivera",
           email: "ashley@example.com",
           phone: "555-0100",
@@ -79,6 +80,7 @@ describe("CareTeamPage", () => {
     renderPage();
 
     await waitFor(() => expect(screen.getByText("Ashley Rivera")).toBeInTheDocument());
+    expect(screen.getByText("CG-AAAAAA")).toBeInTheDocument();
     expect(screen.getByText("No login")).toBeInTheDocument();
     expect(screen.getByText("30/wk")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Ashley Rivera" })).toHaveAttribute(
