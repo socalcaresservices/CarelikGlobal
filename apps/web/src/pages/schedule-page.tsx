@@ -83,6 +83,12 @@ interface ClientOption {
 
 interface WorkforceOption { id: string; linked_user_id: string | null; first_name: string; last_name: string; preferred_name: string | null; }
 
+interface MatchRow {
+  caregiver_record_id: string;
+  caregiver_name: string;
+  match_score: number;
+}
+
 interface AuthorizationOption {
   id: string;
   service_id: string;
@@ -171,6 +177,36 @@ export function SchedulePage() {
     },
     enabled: !!activeOrganizationId && !!clientId && canManage
   });
+
+  // CareScore ranking (list_caregiver_matches) already exists and scores
+  // every active Care Team record - including no-login workforce records -
+  // against a client's proximity/language/availability/skills/history, but
+  // was only ever wired into Client Detail's read-only "Matches" tab. The
+  // scheduling form and the reassignment picker below both used a plain
+  // unranked <select> instead. Reusing the same RPC here surfaces the
+  // ranking exactly where a scheduler actually needs it: filling a shift.
+  const matchesQuery = useQuery({
+    queryKey: ["caregiver-matches", activeOrganizationId, clientId],
+    queryFn: async () => {
+      const { data, error } = await supabase.rpc("list_caregiver_matches", {
+        target_organization_id: activeOrganizationId!,
+        target_client_id: clientId
+      });
+      if (error) throw error;
+      return (data ?? []) as MatchRow[];
+    },
+    enabled: !!activeOrganizationId && !!clientId && canManage
+  });
+
+  function rankByMatchScore(candidates: WorkforceOption[], matches: MatchRow[] | undefined) {
+    const scoreById = new Map((matches ?? []).map((match) => [match.caregiver_record_id, match.match_score]));
+    return [...candidates].sort((a, b) => (scoreById.get(b.id) ?? -1) - (scoreById.get(a.id) ?? -1));
+  }
+
+  function matchLabel(candidateId: string, matches: MatchRow[] | undefined) {
+    const score = (matches ?? []).find((match) => match.caregiver_record_id === candidateId)?.match_score;
+    return score === undefined ? "" : ` — ${score}% match`;
+  }
 
   function refreshShifts() {
     void queryClient.invalidateQueries({ queryKey: ["shifts", activeOrganizationId] });
@@ -419,7 +455,22 @@ export function SchedulePage() {
   // so any active/ready Care Team record can be a target - the same
   // pool the "schedule a shift" form already draws from - regardless of
   // whether it has a linked login.
-  const reassignCandidates = workforceQuery.data ?? [];
+  const reassignTargetClientId = (shiftsQuery.data ?? []).find((shift) => shift.id === reassignTargetId)?.client_id;
+
+  const reassignMatchesQuery = useQuery({
+    queryKey: ["caregiver-matches", activeOrganizationId, reassignTargetClientId],
+    queryFn: async () => {
+      const { data, error } = await supabase.rpc("list_caregiver_matches", {
+        target_organization_id: activeOrganizationId!,
+        target_client_id: reassignTargetClientId!
+      });
+      if (error) throw error;
+      return (data ?? []) as MatchRow[];
+    },
+    enabled: !!activeOrganizationId && !!reassignTargetClientId && canManage
+  });
+
+  const reassignCandidates = rankByMatchScore(workforceQuery.data ?? [], reassignMatchesQuery.data);
 
   function candidateHasConflict(candidate: WorkforceOption, targetShift: ShiftRow) {
     const targetStart = new Date(targetShift.starts_at).getTime();
@@ -564,6 +615,7 @@ export function SchedulePage() {
                           {reassignCandidates.map((candidate) => (
                             <option key={candidate.id} value={candidate.id}>
                               {candidate.preferred_name || candidate.first_name} {candidate.last_name}
+                              {matchLabel(candidate.id, reassignMatchesQuery.data)}
                               {!candidate.linked_user_id ? " (no login)" : ""}
                               {candidateHasConflict(candidate, shift) ? " - already scheduled at this time" : ""}
                             </option>
@@ -677,14 +729,19 @@ export function SchedulePage() {
                 <option value="" disabled>
                   Select a caregiver
                 </option>
-                {(workforceQuery.data ?? []).map((caregiver: WorkforceOption) => (
+                {rankByMatchScore(workforceQuery.data ?? [], matchesQuery.data).map((caregiver: WorkforceOption) => (
                   <option key={caregiver.id} value={caregiver.id}>
                     {caregiver.preferred_name || caregiver.first_name} {caregiver.last_name}
+                    {matchLabel(caregiver.id, matchesQuery.data)}
                     {caregiver.linked_user_id ? "" : " (no login)"}
                   </option>
                 ))}
               </select>
-              <p className="mt-1 text-xs text-slate-500">Care Team records can be scheduled before a login is linked.</p>
+              <p className="mt-1 text-xs text-slate-500">
+                {clientId
+                  ? "Ranked by CareScore match for this client - best match listed first."
+                  : "Care Team records can be scheduled before a login is linked."}
+              </p>
             </div>
             <div>
               <label htmlFor="shift-starts" className="block text-xs font-medium text-slate-600">

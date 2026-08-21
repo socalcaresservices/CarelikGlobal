@@ -101,22 +101,42 @@ policy.
 
 ## Event processing
 
-`domain_events` is a transactional outbox. Rows get inserted by
-application code (not yet wired up anywhere — no table currently writes
-to it) and need a worker to actually process them; nothing does that on
-its own.
+`domain_events` is a transactional outbox. A handful of things enqueue to
+it today: document-request reminders, billing usage-threshold alerts, and
+(as of `20260821150000_shift_notification_events.sql`) two shift-coverage
+events — `shift.assigned` (a caregiver, with or without a login, now owns
+a scheduled shift) and `shift.needs_coverage` (a shift lost its caregiver
+to a call-out and has no replacement yet).
 
-`supabase/functions/process-events` is that worker: it calls
+`supabase/functions/process-events` is the worker: it calls
 `claim_domain_events` (atomic, `FOR UPDATE SKIP LOCKED` so concurrent runs
 can't double-process the same row), attempts to dispatch each event, then
 calls `complete_domain_event` or `fail_domain_event` (exponential backoff,
-capped at 60 minutes, moving to `dead_letter` after 5 attempts).
+capped at 60 minutes, moving to `dead_letter` after 5 attempts). A
+`process-domain-events` pg_cron job already runs this every 15 minutes in
+production — tighten that schedule (e.g. every minute) if call-out
+coverage needs faster turnaround than that.
 
-**`dispatchEvent()` is currently a stub** — there is no webhook target,
-email provider, or other downstream integration defined anywhere in this
-codebase yet, so it just logs and reports success. Replace the switch
-statement in `supabase/functions/process-events/index.ts` with real
-handlers per `event_type` once a concrete integration exists.
+**`dispatchEvent()` sends SMS for the two shift-coverage event types via
+Twilio** — the first real downstream integration this stub has had. Every
+other `event_type` still falls through to a log-and-succeed no-op, same as
+before, so nothing dead-letters just because a given event type has no
+handler yet. Set these as Supabase Edge Function secrets to turn SMS on:
+
+```bash
+supabase secrets set TWILIO_ACCOUNT_SID=<from your Twilio console>
+supabase secrets set TWILIO_AUTH_TOKEN=<from your Twilio console>
+supabase secrets set TWILIO_FROM_NUMBER=<a Twilio phone number capable of SMS, e.g. +15551234567>
+```
+
+Without them, `shift.assigned`/`shift.needs_coverage` events are logged
+and marked complete rather than dead-lettered — turning Twilio on later
+doesn't require replaying a backlog, only newly-emitted events get texted.
+Recipients are resolved from data already in the app: the assigned
+caregiver's `user_profiles.phone` (logged-in) or `caregiver_records.phone`
+(no-login) for `shift.assigned`, and every active org member holding
+`shifts.update` with a phone on file for `shift.needs_coverage` — add
+phone numbers to those records for anyone who should actually get texted.
 
 Deploy and schedule it:
 
