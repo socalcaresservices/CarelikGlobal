@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -67,6 +67,7 @@ describe("CareTeamPage", () => {
           linked_user_id: null,
           caregiver_code: "CG-AAAAAA",
           display_name: "Ashley Rivera",
+          position: "Caregiver I",
           email: "ashley@example.com",
           phone: "555-0100",
           status: "active",
@@ -88,5 +89,48 @@ describe("CareTeamPage", () => {
       "/team/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"
     );
     expect(mockedRpc).toHaveBeenCalledWith("list_care_team_records", { target_organization_id: ORG_ID });
+    expect(screen.getAllByText("Caregiver I").length).toBeGreaterThan(0);
+  });
+
+  it("filters the roster by position", async () => {
+    mockedUseOrganization.mockReturnValue(organizationContext());
+    mockedRpc.mockResolvedValue({
+      data: [
+        {
+          id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+          linked_user_id: null,
+          caregiver_code: "CG-AAAAAA",
+          display_name: "Ashley Rivera",
+          position: "Caregiver I",
+          email: null,
+          phone: null,
+          status: "active",
+          desired_weekly_hours: null,
+          available_start_date: null
+        },
+        {
+          id: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+          linked_user_id: null,
+          caregiver_code: "CG-BBBBBB",
+          display_name: "Jordan Coordinator",
+          position: "Coordinator",
+          email: null,
+          phone: null,
+          status: "active",
+          desired_weekly_hours: null,
+          available_start_date: null
+        }
+      ],
+      error: null
+    } as never);
+
+    renderPage();
+    await waitFor(() => expect(screen.getByText("Ashley Rivera")).toBeInTheDocument());
+    expect(screen.getByText("Jordan Coordinator")).toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText("Filter by position"), { target: { value: "Coordinator" } });
+
+    expect(screen.queryByText("Ashley Rivera")).not.toBeInTheDocument();
+    expect(screen.getByText("Jordan Coordinator")).toBeInTheDocument();
   });
 });

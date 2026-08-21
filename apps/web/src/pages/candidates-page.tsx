@@ -3,6 +3,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
 import { Clipboard, Download, FileUp, Plus } from "lucide-react";
 import { Button, Card, FilterBar, PageHeader, ProgressBar, StatusBadge, type ActiveFilter, type StatusTone } from "@carelik/ui";
+import { POSITION_OPTIONS } from "@carelik/shared";
 import { useOrganization } from "@/providers/organization-provider";
 import { supabase } from "@/lib/supabase";
 import { useTableControls } from "@/lib/use-table-controls";
@@ -67,23 +68,6 @@ const PIPELINE_STAGES = [
 ] as const;
 
 const IMPORT_SOURCES = ["indeed", "ziprecruiter", "referral", "agency_website", "manual", "other"] as const;
-
-// The job title a candidate applied for - separate from Ogevia software
-// access roles (organization_owner/manager/scheduler/caregiver in
-// role_permissions). Selecting "Manager" or "Coordinator" here never
-// grants software access; it is only descriptive text stored on
-// position_applied_for. Kept as a fixed starter list rather than an
-// org-configurable catalog (like Services/Skills/Languages) since it's a
-// bounded HR taxonomy, not something orgs customize per-client.
-const POSITION_OPTIONS = [
-  "Caregiver",
-  "Caregiver I",
-  "Administrative Staff",
-  "Caregiver / Administrative Staff",
-  "Coordinator",
-  "Manager",
-  "Other"
-] as const;
 
 const stageTone: Record<string, StatusTone> = {
   imported: "neutral",
@@ -204,7 +188,8 @@ export function CandidatesPage() {
 
   const filters = useFilters<CandidateRow>(candidatesQuery.data, {
     stage: (row, value) => row.pipeline_stage === value,
-    source: (row, value) => row.source === value
+    source: (row, value) => row.source === value,
+    position: (row, value) => (row.position_applied_for ?? "") === value
   });
 
   const table = useTableControls<CandidateRow, "name" | "stage" | "applied">(filters.rows, {
@@ -222,6 +207,12 @@ export function CandidatesPage() {
   });
 
   const sourceOptions = Array.from(new Set((candidatesQuery.data ?? []).map((row) => row.source))).sort();
+  // Distinct positions actually present, not the POSITION_OPTIONS starter
+  // list - a filter should only offer values that can produce results,
+  // including any free-text "Other" position already on real candidates.
+  const positionOptions = Array.from(
+    new Set((candidatesQuery.data ?? []).map((row) => row.position_applied_for).filter((value): value is string => !!value))
+  ).sort();
   const columns = useColumnWidths("carelik:column-widths:candidates", {
     name: 210,
     stage: 190,
@@ -237,6 +228,9 @@ export function CandidatesPage() {
       : null,
     filters.values.source
       ? { key: "source", label: `Source: ${formatLabel(filters.values.source)}`, onRemove: () => filters.setFilter("source", "") }
+      : null,
+    filters.values.position
+      ? { key: "position", label: `Position: ${filters.values.position}`, onRemove: () => filters.setFilter("position", "") }
       : null
   ].filter((entry): entry is ActiveFilter => entry !== null);
 
@@ -653,6 +647,15 @@ export function CandidatesPage() {
             >
               <option value="">All sources</option>
               {sourceOptions.map((source) => <option key={source} value={source}>{formatLabel(source)}</option>)}
+            </select>
+            <select
+              aria-label="Filter by position"
+              value={filters.values.position ?? ""}
+              onChange={(event) => filters.setFilter("position", event.target.value)}
+              className="rounded-lg border border-slate-200 px-3 py-1.5 text-sm text-slate-900"
+            >
+              <option value="">All positions</option>
+              {positionOptions.map((position) => <option key={position} value={position}>{position}</option>)}
             </select>
           </FilterBar>
         </div>

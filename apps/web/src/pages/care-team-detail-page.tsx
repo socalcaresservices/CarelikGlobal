@@ -3,6 +3,7 @@ import { Link, useParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowLeft } from "lucide-react";
 import { Button, Card, StatusBadge } from "@carelik/ui";
+import { POSITION_OPTIONS } from "@carelik/shared";
 import { useOrganization } from "@/providers/organization-provider";
 import { supabase } from "@/lib/supabase";
 import { DocumentsCard } from "@/components/documents-card";
@@ -151,6 +152,8 @@ export function CareTeamDetailPage() {
   const [credentialIssue, setCredentialIssue] = useState("");
   const [credentialExpiration, setCredentialExpiration] = useState("");
   const [profile, setProfile] = useState({ first_name: "", last_name: "", preferred_name: "", email: "", phone: "", address_street: "", address_city: "", address_state: "", address_zip: "", employment_type: "", available_start_date: "", min_weekly_hours: "", max_weekly_hours: "", min_shift_hours: "", max_shift_hours: "", max_travel_minutes: "", languages: "" });
+  const [position, setPosition] = useState<(typeof POSITION_OPTIONS)[number] | "">("");
+  const [positionOther, setPositionOther] = useState("");
 
   useEffect(() => {
     if (recordQuery.data) {
@@ -158,6 +161,17 @@ export function CareTeamDetailPage() {
       setHours(recordQuery.data.desired_weekly_hours?.toString() ?? "");
       setSelectedUserId(recordQuery.data.linked_user_id ?? "");
       setProfile({ first_name: recordQuery.data.first_name, last_name: recordQuery.data.last_name, preferred_name: recordQuery.data.preferred_name ?? "", email: recordQuery.data.email ?? "", phone: recordQuery.data.phone ?? "", address_street: recordQuery.data.address_street ?? "", address_city: recordQuery.data.address_city ?? "", address_state: recordQuery.data.address_state ?? "", address_zip: recordQuery.data.address_zip ?? "", employment_type: recordQuery.data.employment_type ?? "", available_start_date: recordQuery.data.available_start_date ?? "", min_weekly_hours: recordQuery.data.min_weekly_hours?.toString() ?? "", max_weekly_hours: recordQuery.data.max_weekly_hours?.toString() ?? "", min_shift_hours: recordQuery.data.min_shift_hours?.toString() ?? "", max_shift_hours: recordQuery.data.max_shift_hours?.toString() ?? "", max_travel_minutes: recordQuery.data.max_travel_minutes?.toString() ?? "", languages: recordQuery.data.languages.join(", ") });
+      const existingPosition = recordQuery.data.position ?? "";
+      if (existingPosition && (POSITION_OPTIONS as readonly string[]).includes(existingPosition)) {
+        setPosition(existingPosition as (typeof POSITION_OPTIONS)[number]);
+        setPositionOther("");
+      } else if (existingPosition) {
+        setPosition("Other");
+        setPositionOther(existingPosition);
+      } else {
+        setPosition("");
+        setPositionOther("");
+      }
     }
   }, [recordQuery.data]);
 
@@ -169,7 +183,8 @@ export function CareTeamDetailPage() {
 
   const saveRecordMutation = useMutation({
     mutationFn: async () => {
-      const { error } = await supabase.from("caregiver_records").update({ ...profile, preferred_name: profile.preferred_name || null, email: profile.email || null, phone: profile.phone || null, address_street: profile.address_street || null, address_city: profile.address_city || null, address_state: profile.address_state || null, address_zip: profile.address_zip || null, employment_type: profile.employment_type || null, available_start_date: profile.available_start_date || null, desired_weekly_hours: hours ? Number(hours) : null, min_weekly_hours: profile.min_weekly_hours ? Number(profile.min_weekly_hours) : null, max_weekly_hours: profile.max_weekly_hours ? Number(profile.max_weekly_hours) : null, min_shift_hours: profile.min_shift_hours ? Number(profile.min_shift_hours) : null, max_shift_hours: profile.max_shift_hours ? Number(profile.max_shift_hours) : null, max_travel_minutes: profile.max_travel_minutes ? Number(profile.max_travel_minutes) : null, languages: profile.languages.split(",").map((value) => value.trim()).filter(Boolean), status }).eq("organization_id", activeOrganizationId!).eq("id", recordQuery.data!.id);
+      const resolvedPosition = position === "Other" ? positionOther.trim() : position;
+      const { error } = await supabase.from("caregiver_records").update({ ...profile, preferred_name: profile.preferred_name || null, email: profile.email || null, phone: profile.phone || null, address_street: profile.address_street || null, address_city: profile.address_city || null, address_state: profile.address_state || null, address_zip: profile.address_zip || null, employment_type: profile.employment_type || null, available_start_date: profile.available_start_date || null, position: resolvedPosition || null, desired_weekly_hours: hours ? Number(hours) : null, min_weekly_hours: profile.min_weekly_hours ? Number(profile.min_weekly_hours) : null, max_weekly_hours: profile.max_weekly_hours ? Number(profile.max_weekly_hours) : null, min_shift_hours: profile.min_shift_hours ? Number(profile.min_shift_hours) : null, max_shift_hours: profile.max_shift_hours ? Number(profile.max_shift_hours) : null, max_travel_minutes: profile.max_travel_minutes ? Number(profile.max_travel_minutes) : null, languages: profile.languages.split(",").map((value) => value.trim()).filter(Boolean), status }).eq("organization_id", activeOrganizationId!).eq("id", recordQuery.data!.id);
       if (error) throw error;
     },
     onSuccess: () => { void queryClient.invalidateQueries({ queryKey: ["care-team-record", activeOrganizationId, id] }); void queryClient.invalidateQueries({ queryKey: ["care-team-records", activeOrganizationId] }); }
@@ -274,7 +289,10 @@ export function CareTeamDetailPage() {
         )}
       </Card>
 
-      {canManage ? <Card><h2 className="font-semibold text-slate-950">Edit workforce profile</h2><div className="mt-4 grid gap-3 sm:grid-cols-2">{([['first_name','First name'],['last_name','Last name'],['preferred_name','Preferred name'],['email','Email'],['phone','Phone'],['address_street','Street address'],['address_city','City'],['address_state','State'],['address_zip','ZIP'],['employment_type','Employment type'],['available_start_date','Available start date'],['min_weekly_hours','Minimum weekly hours'],['max_weekly_hours','Maximum weekly hours'],['min_shift_hours','Minimum shift hours'],['max_shift_hours','Maximum shift hours'],['max_travel_minutes','Maximum travel minutes'],['languages','Languages (comma separated)']] as const).map(([key,label]) => <label key={key} className="text-xs font-medium text-slate-600">{label}<input type={key === 'available_start_date' ? 'date' : key.includes('hours') || key === 'max_travel_minutes' ? 'number' : key === 'email' ? 'email' : 'text'} value={profile[key]} onChange={(event) => setProfile({ ...profile, [key]: event.target.value })} className="mt-1 block w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"/></label>)}</div><div className="mt-4"><Button loading={saveRecordMutation.isPending} disabled={!profile.first_name.trim() || !profile.last_name.trim()} onClick={() => saveRecordMutation.mutate()}>Save profile</Button></div></Card> : null}
+      {canManage ? <Card><h2 className="font-semibold text-slate-950">Edit workforce profile</h2><div className="mt-4 grid gap-3 sm:grid-cols-2">
+        <label className="text-xs font-medium text-slate-600">Position<select value={position} onChange={(event) => setPosition(event.target.value as (typeof POSITION_OPTIONS)[number] | "")} className="mt-1 block w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"><option value="">Select a position…</option>{POSITION_OPTIONS.map((option) => <option key={option} value={option}>{option}</option>)}</select></label>
+        {position === "Other" ? <label className="text-xs font-medium text-slate-600">Specify position<input value={positionOther} onChange={(event) => setPositionOther(event.target.value)} className="mt-1 block w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"/></label> : null}
+        {([['first_name','First name'],['last_name','Last name'],['preferred_name','Preferred name'],['email','Email'],['phone','Phone'],['address_street','Street address'],['address_city','City'],['address_state','State'],['address_zip','ZIP'],['employment_type','Employment type'],['available_start_date','Available start date'],['min_weekly_hours','Minimum weekly hours'],['max_weekly_hours','Maximum weekly hours'],['min_shift_hours','Minimum shift hours'],['max_shift_hours','Maximum shift hours'],['max_travel_minutes','Maximum travel minutes'],['languages','Languages (comma separated)']] as const).map(([key,label]) => <label key={key} className="text-xs font-medium text-slate-600">{label}<input type={key === 'available_start_date' ? 'date' : key.includes('hours') || key === 'max_travel_minutes' ? 'number' : key === 'email' ? 'email' : 'text'} value={profile[key]} onChange={(event) => setProfile({ ...profile, [key]: event.target.value })} className="mt-1 block w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"/></label>)}</div><div className="mt-4"><Button loading={saveRecordMutation.isPending} disabled={!profile.first_name.trim() || !profile.last_name.trim()} onClick={() => saveRecordMutation.mutate()}>Save profile</Button></div></Card> : null}
 
       {record.applicant_id ? <><Card><h2 className="font-semibold text-slate-950">Hiring and onboarding continuity</h2><div className="mt-3 grid gap-3 text-sm sm:grid-cols-2"><p><span className="text-slate-500">Onboarding:</span> {record.onboarding_status ? title(record.onboarding_status) : "—"}</p><p><span className="text-slate-500">Scheduled:</span> {record.onboarding_scheduled_at ? new Date(record.onboarding_scheduled_at).toLocaleString() : "—"}</p><p><span className="text-slate-500">Method:</span> {record.onboarding_method ? title(record.onboarding_method) : "—"}</p><p><span className="text-slate-500">Location:</span> {record.onboarding_location ?? "—"}</p><p><span className="text-slate-500">Background check:</span> {record.background_check_status ? title(record.background_check_status) : "—"}</p><p><span className="text-slate-500">Compliance:</span> {record.compliance_status ? title(record.compliance_status) : "—"}</p>{record.onboarding_instructions ? <p className="sm:col-span-2"><span className="text-slate-500">Instructions:</span> {record.onboarding_instructions}</p> : null}</div></Card><DocumentsCard organizationId={activeOrganizationId} subjectType="applicant" subjectId={record.applicant_id} subjectName={`${record.first_name} ${record.last_name}`} subjectEmail={record.email ?? undefined} canRead={canReadDocuments} canManage={canManageDocuments}/></> : null}
     </section>

@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from "react";
+import { useMemo, useState, type FormEvent } from "react";
 import { Link } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button, Card, StatusBadge } from "@carelik/ui";
@@ -12,6 +12,7 @@ interface WorkforceRow {
   linked_user_id: string | null;
   caregiver_code: string;
   display_name: string;
+  position: string | null;
   email: string | null;
   phone: string | null;
   status: string;
@@ -41,6 +42,13 @@ export function CareTeamPage() {
     },
     enabled: !!activeOrganizationId && canRead
   });
+
+  const [positionFilter, setPositionFilter] = useState("");
+  const positionOptions = useMemo(
+    () => Array.from(new Set((recordsQuery.data ?? []).map((row) => row.position).filter((value): value is string => !!value))).sort(),
+    [recordsQuery.data]
+  );
+  const filteredRecords = (recordsQuery.data ?? []).filter((row) => !positionFilter || row.position === positionFilter);
 
   const addMutation = useMutation({
     mutationFn: async () => {
@@ -81,7 +89,20 @@ export function CareTeamPage() {
           <h1 className="mt-1 text-2xl font-semibold text-slate-950">{activeOrganization?.displayName ?? "Care Team"}</h1>
           <p className="mt-1 text-sm text-slate-500">A workforce record does not require a login account.</p>
         </div>
-        {canManage ? <Button onClick={() => setShowAdd((value) => !value)}>{showAdd ? "Cancel" : "Add caregiver"}</Button> : null}
+        <div className="flex items-center gap-2">
+          <label className="sr-only" htmlFor="care-team-position-filter">Filter by position</label>
+          <select
+            id="care-team-position-filter"
+            aria-label="Filter by position"
+            value={positionFilter}
+            onChange={(event) => setPositionFilter(event.target.value)}
+            className="rounded-lg border border-slate-200 px-3 py-1.5 text-sm text-slate-900"
+          >
+            <option value="">All positions</option>
+            {positionOptions.map((position) => <option key={position} value={position}>{position}</option>)}
+          </select>
+          {canManage ? <Button onClick={() => setShowAdd((value) => !value)}>{showAdd ? "Cancel" : "Add caregiver"}</Button> : null}
+        </div>
       </div>
 
       {showAdd ? (
@@ -111,19 +132,21 @@ export function CareTeamPage() {
                 <tr className="border-b border-slate-200 text-left text-xs uppercase tracking-wide text-slate-500">
                   <th className="px-3 py-2">Name</th>
                   <th className="px-3 py-2">Code</th>
+                  <th className="px-3 py-2">Position</th>
                   <th className="px-3 py-2">Status</th>
                   <th className="px-3 py-2">Hours</th>
                   <th className="px-3 py-2">Access</th>
                 </tr>
               </thead>
               <tbody>
-                {(recordsQuery.data ?? []).map((row) => (
+                {filteredRecords.map((row) => (
                   <tr key={row.id} className="border-b border-slate-100">
                     <td className="px-3 py-3">
                       <Link to={`/team/${row.id}`} className="font-semibold text-slate-900 hover:underline">{row.display_name}</Link>
                       <p className="text-xs text-slate-500">{row.email ?? ""}{row.phone ? ` · ${row.phone}` : ""}</p>
                     </td>
                     <td className="px-3 py-3 font-mono text-xs text-slate-500">{row.caregiver_code}</td>
+                    <td className="px-3 py-3 text-slate-600">{row.position ?? "—"}</td>
                     <td className="px-3 py-3"><StatusBadge label={row.status.replace(/_/g, " ")} tone={row.status === "active" || row.status === "ready" ? "success" : "neutral"} /></td>
                     <td className="px-3 py-3">{row.desired_weekly_hours != null ? `${row.desired_weekly_hours}/wk` : "—"}</td>
                     <td className="px-3 py-3"><StatusBadge label={row.linked_user_id ? "Linked" : "No login"} tone={row.linked_user_id ? "success" : "neutral"} /></td>
