@@ -527,7 +527,7 @@ describe("SchedulePage", () => {
 
     it("reassigns a shift needing coverage to a selected caregiver with a reason", async () => {
       mockedUseOrganization.mockReturnValue({ ...baseOrganization(), hasPermission: vi.fn(() => true) });
-      const replacementId = "88888888-8888-4888-8888-888888888888";
+      const replacementRecordId = "99999999-9999-4999-8999-999999999999";
       mockedRpc.mockImplementation((fn: string) => {
         if (fn === "list_shifts") return Promise.resolve({ data: [uncoveredShift], error: null }) as never;
         if (fn === "reassign_shift") return Promise.resolve({ data: null, error: null }) as never;
@@ -535,22 +535,55 @@ describe("SchedulePage", () => {
       });
       mockSchedulingTables([], [
         { id: CAREGIVER_ID, linked_user_id: null, first_name: "Sam", last_name: "Caregiver", preferred_name: null },
-        { id: "99999999-9999-4999-8999-999999999999", linked_user_id: replacementId, first_name: "Alex", last_name: "Aide", preferred_name: null }
+        { id: replacementRecordId, linked_user_id: "88888888-8888-4888-8888-888888888888", first_name: "Alex", last_name: "Aide", preferred_name: null }
       ]);
 
       renderPage();
       await waitFor(() => expect(screen.getByText("Needs coverage")).toBeInTheDocument());
 
       fireEvent.click(screen.getByRole("button", { name: "Reassign" }));
-      fireEvent.change(screen.getByLabelText("Replacement caregiver"), { target: { value: replacementId } });
+      fireEvent.change(screen.getByLabelText("Replacement caregiver"), { target: { value: replacementRecordId } });
       fireEvent.change(screen.getByLabelText("Reason"), { target: { value: "Alex is covering" } });
       fireEvent.click(screen.getByRole("button", { name: "Confirm reassignment" }));
 
       await waitFor(() =>
         expect(mockedRpc).toHaveBeenCalledWith("reassign_shift", {
           target_shift_id: uncoveredShift.id,
-          new_caregiver_user_id: replacementId,
+          new_caregiver_record_id: replacementRecordId,
           reason: "Alex is covering"
+        })
+      );
+    });
+
+    it("offers a caregiver with no linked login as a reassignment candidate, labeled as such", async () => {
+      mockedUseOrganization.mockReturnValue({ ...baseOrganization(), hasPermission: vi.fn(() => true) });
+      const noLoginRecordId = "77777777-7777-4777-8777-777777777777";
+      mockedRpc.mockImplementation((fn: string) => {
+        if (fn === "list_shifts") return Promise.resolve({ data: [uncoveredShift], error: null }) as never;
+        if (fn === "reassign_shift") return Promise.resolve({ data: null, error: null }) as never;
+        return Promise.resolve({ data: [], error: null }) as never;
+      });
+      mockSchedulingTables([], [
+        { id: CAREGIVER_ID, linked_user_id: null, first_name: "Sam", last_name: "Caregiver", preferred_name: null },
+        { id: noLoginRecordId, linked_user_id: null, first_name: "Jamie", last_name: "NoLogin", preferred_name: null }
+      ]);
+
+      renderPage();
+      await waitFor(() => expect(screen.getByText("Needs coverage")).toBeInTheDocument());
+
+      fireEvent.click(screen.getByRole("button", { name: "Reassign" }));
+      const replacementSelect = screen.getByLabelText("Replacement caregiver");
+      expect(within(replacementSelect).getByRole("option", { name: /Jamie NoLogin \(no login\)/ })).toBeInTheDocument();
+
+      fireEvent.change(replacementSelect, { target: { value: noLoginRecordId } });
+      fireEvent.change(screen.getByLabelText("Reason"), { target: { value: "Jamie is covering" } });
+      fireEvent.click(screen.getByRole("button", { name: "Confirm reassignment" }));
+
+      await waitFor(() =>
+        expect(mockedRpc).toHaveBeenCalledWith("reassign_shift", {
+          target_shift_id: uncoveredShift.id,
+          new_caregiver_record_id: noLoginRecordId,
+          reason: "Jamie is covering"
         })
       );
     });

@@ -396,7 +396,7 @@ export function SchedulePage() {
   const [callOutError, setCallOutError] = useState<string | null>(null);
 
   const [reassignTargetId, setReassignTargetId] = useState<string | null>(null);
-  const [reassignCaregiverUserId, setReassignCaregiverUserId] = useState("");
+  const [reassignCaregiverRecordId, setReassignCaregiverRecordId] = useState("");
   const [reassignReason, setReassignReason] = useState("");
   const [reassignSaving, setReassignSaving] = useState(false);
   const [reassignError, setReassignError] = useState<string | null>(null);
@@ -415,10 +415,11 @@ export function SchedulePage() {
     enabled: !!historyOpenId
   });
 
-  // Replacement candidates: reassign_shift takes a user id, so only
-  // Care Team records with a linked login can be a target - the same
-  // constraint the RPC itself enforces.
-  const reassignCandidates = (workforceQuery.data ?? []).filter((row) => !!row.linked_user_id);
+  // Replacement candidates: reassign_shift takes a caregiver record id,
+  // so any active/ready Care Team record can be a target - the same
+  // pool the "schedule a shift" form already draws from - regardless of
+  // whether it has a linked login.
+  const reassignCandidates = workforceQuery.data ?? [];
 
   function candidateHasConflict(candidate: WorkforceOption, targetShift: ShiftRow) {
     const targetStart = new Date(targetShift.starts_at).getTime();
@@ -464,13 +465,13 @@ export function SchedulePage() {
 
   function startReassign(shiftId: string) {
     setReassignTargetId(shiftId);
-    setReassignCaregiverUserId("");
+    setReassignCaregiverRecordId("");
     setReassignReason("");
     setReassignError(null);
   }
 
   async function submitReassign(shiftId: string) {
-    if (!reassignCaregiverUserId) {
+    if (!reassignCaregiverRecordId) {
       setReassignError("Select a replacement caregiver.");
       return;
     }
@@ -483,12 +484,12 @@ export function SchedulePage() {
     try {
       const { error } = await supabase.rpc("reassign_shift", {
         target_shift_id: shiftId,
-        new_caregiver_user_id: reassignCaregiverUserId,
+        new_caregiver_record_id: reassignCaregiverRecordId,
         reason: reassignReason.trim()
       });
       if (error) throw error;
       setReassignTargetId(null);
-      setReassignCaregiverUserId("");
+      setReassignCaregiverRecordId("");
       setReassignReason("");
       refreshShifts();
     } catch (cause) {
@@ -553,16 +554,17 @@ export function SchedulePage() {
                         </label>
                         <select
                           id={`reassign-caregiver-${shift.id}`}
-                          value={reassignCaregiverUserId}
-                          onChange={(event) => setReassignCaregiverUserId(event.target.value)}
+                          value={reassignCaregiverRecordId}
+                          onChange={(event) => setReassignCaregiverRecordId(event.target.value)}
                           className="mt-1 w-full rounded-lg border border-slate-200 px-2 py-1.5 text-xs text-slate-900"
                         >
                           <option value="" disabled>
                             Select a caregiver
                           </option>
                           {reassignCandidates.map((candidate) => (
-                            <option key={candidate.id} value={candidate.linked_user_id!}>
+                            <option key={candidate.id} value={candidate.id}>
                               {candidate.preferred_name || candidate.first_name} {candidate.last_name}
+                              {!candidate.linked_user_id ? " (no login)" : ""}
                               {candidateHasConflict(candidate, shift) ? " - already scheduled at this time" : ""}
                             </option>
                           ))}
