@@ -113,9 +113,10 @@ to a call-out and has no replacement yet).
 can't double-process the same row), attempts to dispatch each event, then
 calls `complete_domain_event` or `fail_domain_event` (exponential backoff,
 capped at 60 minutes, moving to `dead_letter` after 5 attempts). A
-`process-domain-events` pg_cron job already runs this every 15 minutes in
-production — tighten that schedule (e.g. every minute) if call-out
-coverage needs faster turnaround than that.
+`process-domain-events` pg_cron job runs this every minute in production
+(`select cron.alter_job(job_id := <id>, schedule := '<cron expr>')` to
+change it — find the id with `select jobid from cron.job where jobname =
+'process-domain-events'`).
 
 **`dispatchEvent()` sends SMS for the two shift-coverage event types via
 Twilio** — the first real downstream integration this stub has had. Every
