@@ -3,10 +3,13 @@ import { Link, useNavigate, useParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowLeft, Clipboard, Link2, X } from "lucide-react";
 import { Button, Card, StatusBadge } from "@carelik/ui";
+import { POSITION_OPTIONS } from "@carelik/shared";
 import { useAuth } from "@carelik/auth";
 import { useOrganization } from "@/providers/organization-provider";
 import { supabase } from "@/lib/supabase";
 import { DocumentsCard } from "@/components/documents-card";
+
+const CANDIDATE_SOURCES = ["indeed", "ziprecruiter", "referral", "agency_website", "manual", "other"] as const;
 
 type Weekday = "monday" | "tuesday" | "wednesday" | "thursday" | "friday" | "saturday" | "sunday";
 type Stage =
@@ -17,7 +20,7 @@ type Stage =
 const WEEKDAYS: Weekday[] = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"];
 
 interface CandidateRow {
-  id: string; first_name: string; last_name: string; preferred_name: string | null; email: string | null; phone: string | null;
+  id: string; candidate_code: string; first_name: string; last_name: string; preferred_name: string | null; email: string | null; phone: string | null;
   address_street: string | null; address_line2: string | null; address_city: string | null; address_state: string | null; address_zip: string | null;
   pipeline_stage: Stage; source: string; position_applied_for: string | null; applied_at: string | null;
   employment_type: string | null; available_start_date: string | null; desired_weekly_hours: number | null;
@@ -124,6 +127,101 @@ export function CandidateDetailPage() {
     }, enabled: !!activeOrganizationId && !!id && canManage
   });
 
+  const [candidateIdCopied, setCandidateIdCopied] = useState(false);
+  async function copyCandidateId(candidateCode: string) {
+    try {
+      await navigator.clipboard.writeText(candidateCode);
+      setCandidateIdCopied(true);
+      window.setTimeout(() => setCandidateIdCopied(false), 1800);
+    } catch {
+      // Clipboard access can be denied by the browser - the code is still shown on screen.
+    }
+  }
+
+  const [editingCandidate, setEditingCandidate] = useState(false);
+  const [candidateForm, setCandidateForm] = useState({
+    first_name: "", last_name: "", preferred_name: "", email: "", phone: "",
+    position: "" as (typeof POSITION_OPTIONS)[number] | "", positionOther: "",
+    source: "manual" as (typeof CANDIDATE_SOURCES)[number],
+    desired_weekly_hours: "", address_street: "", address_city: "", address_state: "", address_zip: "",
+    notes: ""
+  });
+  const [candidateSaving, setCandidateSaving] = useState(false);
+  const [candidateError, setCandidateError] = useState<string | null>(null);
+  const [candidateSuccess, setCandidateSuccess] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!candidateQuery.data) return;
+    const data = candidateQuery.data;
+    const existingPosition = data.position_applied_for ?? "";
+    const knownPosition = existingPosition && (POSITION_OPTIONS as readonly string[]).includes(existingPosition);
+    setCandidateForm({
+      first_name: data.first_name,
+      last_name: data.last_name,
+      preferred_name: data.preferred_name ?? "",
+      email: data.email ?? "",
+      phone: data.phone ?? "",
+      position: knownPosition ? (existingPosition as (typeof POSITION_OPTIONS)[number]) : existingPosition ? "Other" : "",
+      positionOther: knownPosition ? "" : existingPosition,
+      source: (CANDIDATE_SOURCES as readonly string[]).includes(data.source) ? (data.source as (typeof CANDIDATE_SOURCES)[number]) : "other",
+      desired_weekly_hours: data.desired_weekly_hours?.toString() ?? "",
+      address_street: data.address_street ?? "",
+      address_city: data.address_city ?? "",
+      address_state: data.address_state ?? "",
+      address_zip: data.address_zip ?? "",
+      notes: data.notes ?? ""
+    });
+  }, [candidateQuery.data]);
+
+  useEffect(() => {
+    if (!candidateSuccess) return;
+    const timer = window.setTimeout(() => setCandidateSuccess(null), 5000);
+    return () => window.clearTimeout(timer);
+  }, [candidateSuccess]);
+
+  const candidatePositionValue = candidateForm.position === "Other" ? candidateForm.positionOther.trim() : candidateForm.position;
+  const candidateCanSave =
+    !!candidateForm.first_name.trim() &&
+    !!candidateForm.last_name.trim() &&
+    (!!candidateForm.email.trim() || !!candidateForm.phone.trim());
+
+  async function saveCandidate() {
+    if (!activeOrganizationId || !id || !candidateCanSave || candidateSaving) return;
+    setCandidateSaving(true);
+    setCandidateError(null);
+    setCandidateSuccess(null);
+    try {
+      const { error } = await supabase
+        .from("job_applicants")
+        .update({
+          first_name: candidateForm.first_name.trim(),
+          last_name: candidateForm.last_name.trim(),
+          preferred_name: candidateForm.preferred_name.trim() || null,
+          email: candidateForm.email.trim() || null,
+          phone: candidateForm.phone.trim() || null,
+          position_applied_for: candidatePositionValue || null,
+          source: candidateForm.source,
+          desired_weekly_hours: candidateForm.desired_weekly_hours ? Number(candidateForm.desired_weekly_hours) : null,
+          address_street: candidateForm.address_street.trim() || null,
+          address_city: candidateForm.address_city.trim() || null,
+          address_state: candidateForm.address_state.trim() || null,
+          address_zip: candidateForm.address_zip.trim() || null,
+          notes: candidateForm.notes.trim() || null
+        })
+        .eq("organization_id", activeOrganizationId)
+        .eq("id", id);
+      if (error) throw error;
+      setCandidateSuccess("Candidate updated.");
+      setEditingCandidate(false);
+      void queryClient.invalidateQueries({ queryKey: ["candidate-detail-v1", activeOrganizationId, id] });
+      void queryClient.invalidateQueries({ queryKey: ["candidates", activeOrganizationId] });
+    } catch (cause) {
+      setCandidateError(cause instanceof Error ? cause.message : "Could not update this candidate.");
+    } finally {
+      setCandidateSaving(false);
+    }
+  }
+
   const [stageNote, setStageNote] = useState("");
   const [onboarding, setOnboarding] = useState<OnboardingRow>({ status: "not_scheduled", scheduled_at: null, method: null, location: null, instructions: null, notes: null, background_check_status: "not_started", compliance_status: "pending", completed_at: null });
   const [portalTtlHours, setPortalTtlHours] = useState("168");
@@ -133,7 +231,43 @@ export function CandidateDetailPage() {
     if (onboardingQuery.data) setOnboarding(onboardingQuery.data);
   }, [onboardingQuery.data]);
 
-  const groupedAvailability = useMemo(() => WEEKDAYS.map((day) => ({ day, rows: (availabilityQuery.data ?? []).filter((row) => row.day_of_week === day).sort((a,b) => a.start_time.localeCompare(b.start_time)) })).filter((entry) => entry.rows.length), [availabilityQuery.data]);
+  const [availability, setAvailability] = useState<Array<Omit<AvailabilityRow, "id">>>([]);
+  useEffect(() => {
+    if (availabilityQuery.data) {
+      setAvailability(availabilityQuery.data.map(({ day_of_week, start_time, end_time, preference }) => ({ day_of_week, start_time: start_time.slice(0, 5), end_time: end_time.slice(0, 5), preference })));
+    }
+  }, [availabilityQuery.data]);
+  const slotsByDay = useMemo(
+    () => Object.fromEntries(WEEKDAYS.map((day) => [day, availability.filter((row) => row.day_of_week === day)])) as Record<Weekday, Array<Omit<AvailabilityRow, "id">>>,
+    [availability]
+  );
+  function addAvailabilitySlot(day: Weekday) {
+    setAvailability((rows) => [...rows, { day_of_week: day, start_time: "09:00", end_time: "17:00", preference: "available" }]);
+  }
+  function updateAvailabilitySlot(day: Weekday, index: number, patch: Partial<Omit<AvailabilityRow, "id">>) {
+    setAvailability((rows) => { let seen = -1; return rows.map((row) => { if (row.day_of_week !== day) return row; seen += 1; return seen === index ? { ...row, ...patch } : row; }); });
+  }
+  function removeAvailabilitySlot(day: Weekday, index: number) {
+    setAvailability((rows) => { let seen = -1; return rows.filter((row) => { if (row.day_of_week !== day) return true; seen += 1; return seen !== index; }); });
+  }
+  function copyAvailabilityToDay(fromDay: Weekday, toDay: Weekday) {
+    setAvailability((rows) => [
+      ...rows.filter((row) => row.day_of_week !== toDay),
+      ...rows.filter((row) => row.day_of_week === fromDay).map((row) => ({ ...row, day_of_week: toDay }))
+    ]);
+  }
+
+  const availabilityMutation = useMutation({
+    mutationFn: async () => {
+      const { error } = await supabase.rpc("replace_candidate_availability", {
+        target_organization_id: activeOrganizationId!,
+        target_applicant_id: id!,
+        availability_slots: availability.map(({ day_of_week, start_time, end_time, preference }) => ({ day_of_week, start_time, end_time, preference }))
+      });
+      if (error) throw error;
+    },
+    onSuccess: () => void queryClient.invalidateQueries({ queryKey: ["candidate-availability-v1", activeOrganizationId, id] })
+  });
   const credentials = credentialsQuery.data ?? [];
   const credentialNames = new Set(credentials.map((row) => row.credential_type.toLowerCase()));
   const missingRequirements = (requirementsQuery.data ?? []).filter((row) => !credentialNames.has(row.name.toLowerCase()));
@@ -197,15 +331,135 @@ export function CandidateDetailPage() {
   return (
     <section className="mx-auto max-w-5xl space-y-6">
       <Link to="/candidates" className="inline-flex items-center gap-1.5 text-sm text-slate-500 hover:text-slate-900"><ArrowLeft className="h-4 w-4" />Candidates</Link>
-      <div className="flex flex-wrap items-start justify-between gap-4"><div><p className="text-sm font-medium text-slate-500">Candidate</p><h1 className="mt-1 text-2xl font-semibold text-slate-950">{candidateName}</h1><p className="mt-1 text-sm text-slate-500">{candidate.email ?? "No email"}{candidate.phone ? ` · ${candidate.phone}` : ""}</p></div><StatusBadge label={title(candidate.pipeline_stage)} tone={candidate.pipeline_stage === "care_team" ? "success" : terminal ? "neutral" : "info"}/></div>
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div>
+          <p className="text-sm font-medium text-slate-500">Candidate</p>
+          <h1 className="mt-1 text-2xl font-semibold text-slate-950">{candidateName}</h1>
+          <div className="mt-1 flex items-center gap-1.5">
+            <span className="font-mono text-sm font-medium text-slate-700">{candidate.candidate_code}</span>
+            <button
+              type="button"
+              onClick={() => void copyCandidateId(candidate.candidate_code)}
+              aria-label="Copy Candidate ID"
+              className="text-slate-400 hover:text-slate-700"
+            >
+              <Clipboard className="h-3.5 w-3.5" />
+            </button>
+            {candidateIdCopied ? <span className="text-xs text-emerald-700">Copied</span> : null}
+          </div>
+          <p className="mt-1 text-sm text-slate-500">{candidate.email ?? "No email"}{candidate.phone ? ` · ${candidate.phone}` : ""}</p>
+        </div>
+        <div className="flex items-center gap-2">
+          {canManage ? (
+            <Button variant="secondary" onClick={() => setEditingCandidate((value) => !value)}>
+              {editingCandidate ? "Cancel" : "Edit candidate"}
+            </Button>
+          ) : null}
+          <StatusBadge label={title(candidate.pipeline_stage)} tone={candidate.pipeline_stage === "care_team" ? "success" : terminal ? "neutral" : "info"}/>
+        </div>
+      </div>
+
+      {candidateSuccess ? <p className="rounded-lg bg-emerald-50 px-3 py-2 text-sm font-medium text-emerald-700">{candidateSuccess}</p> : null}
+
+      {editingCandidate && canManage ? (
+        <Card>
+          <h2 className="font-semibold text-slate-950">Edit candidate</h2>
+          <p className="mt-1 text-xs text-slate-500">First name, last name, and at least one of email or phone are required.</p>
+          <div className="mt-4 grid gap-3 sm:grid-cols-2">
+            <label className="text-xs font-medium text-slate-600">First name<input value={candidateForm.first_name} onChange={(e) => setCandidateForm({ ...candidateForm, first_name: e.target.value })} className="mt-1 block w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"/></label>
+            <label className="text-xs font-medium text-slate-600">Last name<input value={candidateForm.last_name} onChange={(e) => setCandidateForm({ ...candidateForm, last_name: e.target.value })} className="mt-1 block w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"/></label>
+            <label className="text-xs font-medium text-slate-600">Preferred name<input value={candidateForm.preferred_name} onChange={(e) => setCandidateForm({ ...candidateForm, preferred_name: e.target.value })} className="mt-1 block w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"/></label>
+            <label className="text-xs font-medium text-slate-600">Email<input type="email" value={candidateForm.email} onChange={(e) => setCandidateForm({ ...candidateForm, email: e.target.value })} className="mt-1 block w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"/></label>
+            <label className="text-xs font-medium text-slate-600">Phone<input value={candidateForm.phone} onChange={(e) => setCandidateForm({ ...candidateForm, phone: e.target.value })} className="mt-1 block w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"/></label>
+            <label className="text-xs font-medium text-slate-600">
+              Position
+              <select value={candidateForm.position} onChange={(e) => setCandidateForm({ ...candidateForm, position: e.target.value as (typeof POSITION_OPTIONS)[number] | "" })} className="mt-1 block w-full rounded-lg border border-slate-200 px-3 py-2 text-sm">
+                <option value="">Select a position…</option>
+                {POSITION_OPTIONS.map((option) => <option key={option} value={option}>{option}</option>)}
+              </select>
+            </label>
+            {candidateForm.position === "Other" ? (
+              <label className="text-xs font-medium text-slate-600">Specify position<input value={candidateForm.positionOther} onChange={(e) => setCandidateForm({ ...candidateForm, positionOther: e.target.value })} className="mt-1 block w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"/></label>
+            ) : null}
+            <label className="text-xs font-medium text-slate-600">
+              Source
+              <select value={candidateForm.source} onChange={(e) => setCandidateForm({ ...candidateForm, source: e.target.value as (typeof CANDIDATE_SOURCES)[number] })} className="mt-1 block w-full rounded-lg border border-slate-200 px-3 py-2 text-sm">
+                {CANDIDATE_SOURCES.map((source) => <option key={source} value={source}>{title(source)}</option>)}
+              </select>
+            </label>
+            <label className="text-xs font-medium text-slate-600">Desired weekly hours<input type="number" min="0" max="168" value={candidateForm.desired_weekly_hours} onChange={(e) => setCandidateForm({ ...candidateForm, desired_weekly_hours: e.target.value })} className="mt-1 block w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"/></label>
+            <label className="text-xs font-medium text-slate-600">Street address<input value={candidateForm.address_street} onChange={(e) => setCandidateForm({ ...candidateForm, address_street: e.target.value })} className="mt-1 block w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"/></label>
+            <label className="text-xs font-medium text-slate-600">City<input value={candidateForm.address_city} onChange={(e) => setCandidateForm({ ...candidateForm, address_city: e.target.value })} className="mt-1 block w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"/></label>
+            <label className="text-xs font-medium text-slate-600">State<input value={candidateForm.address_state} onChange={(e) => setCandidateForm({ ...candidateForm, address_state: e.target.value })} className="mt-1 block w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"/></label>
+            <label className="text-xs font-medium text-slate-600">ZIP<input value={candidateForm.address_zip} onChange={(e) => setCandidateForm({ ...candidateForm, address_zip: e.target.value })} className="mt-1 block w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"/></label>
+            <label className="text-xs font-medium text-slate-600 sm:col-span-2">Notes<textarea value={candidateForm.notes} onChange={(e) => setCandidateForm({ ...candidateForm, notes: e.target.value })} className="mt-1 min-h-20 block w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"/></label>
+          </div>
+          {candidateError ? <p className="mt-3 text-sm text-red-700">{candidateError}</p> : null}
+          <div className="mt-4">
+            <Button disabled={!candidateCanSave || candidateSaving} loading={candidateSaving} onClick={() => void saveCandidate()}>Save candidate</Button>
+          </div>
+        </Card>
+      ) : null}
 
       <div className="grid gap-5 lg:grid-cols-2">
-        <Card><h2 className="font-semibold text-slate-950">Recruiting profile</h2><dl className="mt-4 grid gap-3 text-sm sm:grid-cols-2"><div><dt className="text-xs uppercase tracking-wide text-slate-500">Source</dt><dd className="mt-1 font-medium text-slate-900">{title(candidate.source)}</dd></div><div><dt className="text-xs uppercase tracking-wide text-slate-500">Position</dt><dd className="mt-1 font-medium text-slate-900">{candidate.position_applied_for ?? "—"}</dd></div><div><dt className="text-xs uppercase tracking-wide text-slate-500">Applied</dt><dd className="mt-1 font-medium text-slate-900">{candidate.applied_at ? new Date(candidate.applied_at).toLocaleDateString() : "—"}</dd></div><div><dt className="text-xs uppercase tracking-wide text-slate-500">Start date</dt><dd className="mt-1 font-medium text-slate-900">{candidate.available_start_date ?? "—"}</dd></div><div><dt className="text-xs uppercase tracking-wide text-slate-500">Employment</dt><dd className="mt-1 font-medium text-slate-900">{candidate.employment_type ? title(candidate.employment_type) : "—"}</dd></div><div><dt className="text-xs uppercase tracking-wide text-slate-500">Desired hours</dt><dd className="mt-1 font-medium text-slate-900">{candidate.desired_weekly_hours != null ? `${candidate.desired_weekly_hours}/week` : "—"}</dd></div><div className="sm:col-span-2"><dt className="text-xs uppercase tracking-wide text-slate-500">Address</dt><dd className="mt-1 font-medium text-slate-900">{formatAddress(candidate)}</dd></div><div className="sm:col-span-2"><dt className="text-xs uppercase tracking-wide text-slate-500">Languages</dt><dd className="mt-1 font-medium text-slate-900">{candidate.languages.length ? candidate.languages.join(", ") : "—"}</dd></div></dl></Card>
-        <Card><h2 className="font-semibold text-slate-950">Pipeline</h2>{canManage ? <div className="mt-4 space-y-3"><select value={candidate.pipeline_stage} onChange={(e) => stageMutation.mutate(e.target.value as Stage)} disabled={stageMutation.isPending} className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm">{(stagesQuery.data ?? []).map((stage) => <option key={stage.stage_key} value={stage.stage_key}>{stage.display_label}</option>)}</select><textarea value={stageNote} onChange={(e) => setStageNote(e.target.value)} placeholder="Optional note for the next stage change" className="min-h-20 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"/></div> : <p className="mt-3 text-sm text-slate-500">Read-only.</p>}<div className="mt-5 border-t border-slate-100 pt-4"><p className="text-xs uppercase tracking-wide text-slate-500">History</p>{(historyQuery.data ?? []).length ? <ul className="mt-2 space-y-2">{(historyQuery.data ?? []).slice(0,8).map((row) => <li key={row.id} className="rounded-lg bg-slate-50 px-3 py-2 text-sm"><p className="font-medium text-slate-800">{title(row.to_stage)}</p><p className="text-xs text-slate-500">{new Date(row.changed_at).toLocaleString()}{row.note ? ` · ${row.note}` : ""}</p></li>)}</ul> : <p className="mt-2 text-sm text-slate-400">No stage changes yet.</p>}</div></Card>
+        <Card><h2 className="font-semibold text-slate-950">Recruiting profile</h2><dl className="mt-4 grid gap-3 text-sm sm:grid-cols-2"><div><dt className="text-xs uppercase tracking-wide text-slate-500">Source</dt><dd className="mt-1 font-medium text-slate-900">{title(candidate.source)}</dd></div><div><dt className="text-xs uppercase tracking-wide text-slate-500">Position</dt><dd className="mt-1 font-medium text-slate-900">{candidate.position_applied_for ?? "—"}</dd></div><div><dt className="text-xs uppercase tracking-wide text-slate-500">Applied</dt><dd className="mt-1 font-medium text-slate-900">{candidate.applied_at ? new Date(candidate.applied_at).toLocaleDateString() : "—"}</dd></div><div><dt className="text-xs uppercase tracking-wide text-slate-500">Start date</dt><dd className="mt-1 font-medium text-slate-900">{candidate.available_start_date ?? "—"}</dd></div><div><dt className="text-xs uppercase tracking-wide text-slate-500">Employment</dt><dd className="mt-1 font-medium text-slate-900">{candidate.employment_type ? title(candidate.employment_type) : "—"}</dd></div><div><dt className="text-xs uppercase tracking-wide text-slate-500">Desired hours</dt><dd className="mt-1 font-medium text-slate-900">{candidate.desired_weekly_hours != null ? `${candidate.desired_weekly_hours}/week` : "—"}</dd></div><div className="sm:col-span-2"><dt className="text-xs uppercase tracking-wide text-slate-500">Address</dt><dd className="mt-1 font-medium text-slate-900">{formatAddress(candidate)}</dd></div><div className="sm:col-span-2"><dt className="text-xs uppercase tracking-wide text-slate-500">Languages</dt><dd className="mt-1 font-medium text-slate-900">{candidate.languages.length ? candidate.languages.join(", ") : "—"}</dd></div>{candidate.notes ? <div className="sm:col-span-2"><dt className="text-xs uppercase tracking-wide text-slate-500">Notes</dt><dd className="mt-1 whitespace-pre-wrap font-medium text-slate-900">{candidate.notes}</dd></div> : null}</dl></Card>
+        <Card><h2 className="font-semibold text-slate-950">Hiring Stage</h2>{canManage ? <div className="mt-4 space-y-3"><select value={candidate.pipeline_stage} onChange={(e) => stageMutation.mutate(e.target.value as Stage)} disabled={stageMutation.isPending} className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm">{(stagesQuery.data ?? []).map((stage) => <option key={stage.stage_key} value={stage.stage_key}>{stage.display_label}</option>)}</select><textarea value={stageNote} onChange={(e) => setStageNote(e.target.value)} placeholder="Optional note for the next stage change" className="min-h-20 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"/></div> : <p className="mt-3 text-sm text-slate-500">Read-only.</p>}<div className="mt-5 border-t border-slate-100 pt-4"><p className="text-xs uppercase tracking-wide text-slate-500">History</p>{(historyQuery.data ?? []).length ? <ul className="mt-2 space-y-2">{(historyQuery.data ?? []).slice(0,8).map((row) => <li key={row.id} className="rounded-lg bg-slate-50 px-3 py-2 text-sm"><p className="font-medium text-slate-800">{title(row.to_stage)}</p><p className="text-xs text-slate-500">{new Date(row.changed_at).toLocaleString()}{row.note ? ` · ${row.note}` : ""}</p></li>)}</ul> : <p className="mt-2 text-sm text-slate-400">No stage changes yet.</p>}</div></Card>
       </div>
 
       <div className="grid gap-5 lg:grid-cols-2">
-        <Card><h2 className="font-semibold text-slate-950">Weekly availability</h2>{groupedAvailability.length ? <div className="mt-3 space-y-3">{groupedAvailability.map(({day,rows}) => <div key={day} className="grid grid-cols-[100px_1fr] gap-3 text-sm"><p className="font-medium text-slate-800">{title(day)}</p><div>{rows.map((row) => <p key={row.id} className="text-slate-600">{row.start_time.slice(0,5)}–{row.end_time.slice(0,5)}{row.preference === "preferred" ? " · Preferred" : ""}</p>)}</div></div>)}</div> : <p className="mt-3 text-sm text-slate-400">No availability submitted.</p>}</Card>
+        <Card>
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <h2 className="font-semibold text-slate-950">Availability</h2>
+              <p className="mt-1 text-sm text-slate-500">Multiple time windows per day are supported.</p>
+            </div>
+            {canManage ? <Button variant="secondary" loading={availabilityMutation.isPending} onClick={() => availabilityMutation.mutate()}>Save availability</Button> : null}
+          </div>
+          <div className="mt-4 grid gap-2 md:grid-cols-2">
+            {WEEKDAYS.map((day) => (
+              <div key={day} className="rounded-lg border border-slate-200 p-2.5">
+                <div className="flex items-center justify-between gap-2">
+                  <p className="text-sm font-semibold text-slate-800">{title(day)}</p>
+                  {canManage ? (
+                    <div className="flex items-center gap-1.5">
+                      <button type="button" onClick={() => addAvailabilitySlot(day)} className="text-xs font-medium text-slate-700">+ Add time</button>
+                      {slotsByDay[day].length > 0 ? (
+                        <select
+                          aria-label={`Copy ${title(day)} availability to`}
+                          value=""
+                          onChange={(e) => { if (e.target.value) copyAvailabilityToDay(day, e.target.value as Weekday); e.target.value = ""; }}
+                          className="rounded-lg border border-slate-200 px-1.5 py-1 text-xs"
+                        >
+                          <option value="">Copy to…</option>
+                          {WEEKDAYS.filter((other) => other !== day).map((other) => <option key={other} value={other}>{title(other)}</option>)}
+                        </select>
+                      ) : null}
+                    </div>
+                  ) : null}
+                </div>
+                {slotsByDay[day].length === 0 ? (
+                  <p className="mt-1 text-xs text-slate-400">Not recorded</p>
+                ) : (
+                  <div className="mt-2 space-y-2">
+                    {slotsByDay[day].map((slot, index) => (
+                      <div key={`${day}-${index}`} className="grid gap-1.5 sm:grid-cols-[1fr_1fr_1fr_auto]">
+                        <input aria-label={`${title(day)} window ${index + 1} start`} disabled={!canManage} type="time" value={slot.start_time} onChange={(e) => updateAvailabilitySlot(day, index, { start_time: e.target.value })} className="rounded-lg border border-slate-200 px-2 py-1.5 text-sm"/>
+                        <input aria-label={`${title(day)} window ${index + 1} end`} disabled={!canManage} type="time" value={slot.end_time} onChange={(e) => updateAvailabilitySlot(day, index, { end_time: e.target.value })} className="rounded-lg border border-slate-200 px-2 py-1.5 text-sm"/>
+                        <select aria-label={`${title(day)} window ${index + 1} preference`} disabled={!canManage} value={slot.preference} onChange={(e) => updateAvailabilitySlot(day, index, { preference: e.target.value as AvailabilityRow["preference"] })} className="rounded-lg border border-slate-200 px-2 py-1.5 text-sm">
+                          <option value="available">Available</option>
+                          <option value="preferred">Preferred</option>
+                        </select>
+                        {canManage ? <button type="button" onClick={() => removeAvailabilitySlot(day, index)} className="px-1 text-xs text-red-600">Remove</button> : null}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+          {availabilityMutation.isError ? <p className="mt-3 text-sm text-red-700">Could not save availability.</p> : null}
+          {availabilityMutation.isSuccess ? <p className="mt-3 text-sm text-emerald-700">Availability saved.</p> : null}
+        </Card>
         <Card><h2 className="font-semibold text-slate-950">Work preferences</h2><div className="mt-3 grid gap-3 text-sm sm:grid-cols-2"><p><span className="text-slate-500">Shift range:</span> {candidate.min_shift_hours ?? "?"}–{candidate.max_shift_hours ?? "?"}h</p><p><span className="text-slate-500">Max travel:</span> {candidate.max_travel_minutes != null ? `${candidate.max_travel_minutes} min` : "—"}</p><p><span className="text-slate-500">Transportation:</span> {candidate.transportation_method ?? "—"}</p><p><span className="text-slate-500">Reliable transportation:</span> {candidate.reliable_transportation == null ? "—" : candidate.reliable_transportation ? "Yes" : "No"}</p><p><span className="text-slate-500">Driver license:</span> {candidate.valid_drivers_license == null ? "—" : candidate.valid_drivers_license ? "Yes" : "No"}</p><p><span className="text-slate-500">Auto insurance:</span> {candidate.auto_insurance == null ? "—" : candidate.auto_insurance ? "Yes" : "No"}</p></div></Card>
       </div>
 

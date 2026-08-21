@@ -17,6 +17,7 @@ import { PlainHeader } from "@/components/resizable-th";
 // or rejects people automatically.
 interface CandidateRow {
   id: string;
+  candidate_code: string;
   first_name: string;
   last_name: string;
   email: string | null;
@@ -197,6 +198,7 @@ export function CandidatesPage() {
       `${row.first_name} ${row.last_name}`.toLowerCase().includes(query) ||
       (row.email ?? "").toLowerCase().includes(query) ||
       (row.phone ?? "").toLowerCase().includes(query) ||
+      row.candidate_code.toLowerCase().includes(query) ||
       (row.position_applied_for ?? "").toLowerCase().includes(query),
     sorters: {
       name: (a, b) => `${a.last_name} ${a.first_name}`.localeCompare(`${b.last_name} ${b.first_name}`),
@@ -215,6 +217,7 @@ export function CandidatesPage() {
   ).sort();
   const columns = useColumnWidths("carelik:column-widths:candidates", {
     name: 210,
+    candidateId: 130,
     stage: 190,
     source: 120,
     position: 170,
@@ -235,6 +238,17 @@ export function CandidatesPage() {
   ].filter((entry): entry is ActiveFilter => entry !== null);
 
   const [applicationCopied, setApplicationCopied] = useState(false);
+  const [copiedCandidateId, setCopiedCandidateId] = useState<string | null>(null);
+
+  async function copyCandidateId(candidateCode: string) {
+    try {
+      await navigator.clipboard.writeText(candidateCode);
+      setCopiedCandidateId(candidateCode);
+      window.setTimeout(() => setCopiedCandidateId((current) => (current === candidateCode ? null : current)), 1800);
+    } catch {
+      // Clipboard access can be denied by the browser - the code is still visible on screen.
+    }
+  }
   const [applicationCopyError, setApplicationCopyError] = useState<string | null>(null);
   const [showImport, setShowImport] = useState(false);
   const [importSource, setImportSource] = useState("indeed");
@@ -384,7 +398,7 @@ export function CandidatesPage() {
         }
       });
       if (error) throw error;
-      setManualSuccess(`${manualCandidate.first_name.trim()} ${manualCandidate.last_name.trim()} was added to the candidate pipeline.`);
+      setManualSuccess(`${manualCandidate.first_name.trim()} ${manualCandidate.last_name.trim()} was added to the candidates list.`);
       setManualCandidate({ first_name: "", last_name: "", email: "", phone: "", position: "", positionOther: "", source: "manual", notes: "" });
       setShowManual(false);
       void queryClient.invalidateQueries({ queryKey: ["candidates", activeOrganizationId] });
@@ -397,8 +411,8 @@ export function CandidatesPage() {
 
   function exportFilteredCandidates() {
     const quote = (value: unknown) => `"${String(value ?? "").replace(/"/g, '""')}"`;
-    const header = ["First name", "Last name", "Email", "Phone", "Stage", "Source", "Position", "Desired weekly hours", "Applied"];
-    const rows = table.rows.map((row) => [row.first_name, row.last_name, row.email, row.phone, row.pipeline_stage, row.source, row.position_applied_for, row.desired_weekly_hours, row.applied_at]);
+    const header = ["Candidate ID", "First name", "Last name", "Email", "Phone", "Stage", "Source", "Position", "Desired weekly hours", "Applied"];
+    const rows = table.rows.map((row) => [row.candidate_code, row.first_name, row.last_name, row.email, row.phone, row.pipeline_stage, row.source, row.position_applied_for, row.desired_weekly_hours, row.applied_at]);
     const blob = new Blob([[header, ...rows].map((row) => row.map(quote).join(",")).join("\r\n")], { type: "text/csv;charset=utf-8" });
     const url = URL.createObjectURL(blob);
     const anchor = document.createElement("a");
@@ -439,11 +453,11 @@ export function CandidatesPage() {
       <PageHeader
         eyebrow="People"
         title="Candidates"
-        description={`Recruiting and onboarding pipeline${activeOrganization?.displayName ? ` for ${activeOrganization.displayName}` : ""}. Candidate stages are changed by authorized staff.`}
+        description={`Recruiting and onboarding workflow${activeOrganization?.displayName ? ` for ${activeOrganization.displayName}` : ""}. Hiring stages are changed by authorized staff.`}
       />
 
       <Card>
-        <h3 className="font-semibold text-slate-950">Pipeline funnel</h3>
+        <h3 className="font-semibold text-slate-950">Hiring Stage funnel</h3>
         <p className="mt-1 text-xs text-slate-500">How many candidates are at each stage right now, out of {allCandidates.length} total.</p>
         <div className="mt-4 space-y-3">
           {PIPELINE_STAGES.map((stage) => (
@@ -611,7 +625,7 @@ export function CandidatesPage() {
       <Card>
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
-            <h3 className="font-semibold text-slate-950">Candidate pipeline</h3>
+            <h3 className="font-semibold text-slate-950">Candidates</h3>
             <p className="mt-1 text-xs text-slate-500">Imported applicants, direct applications, onboarding, and ready-to-work records in one view.</p>
           </div>
           <Button type="button" variant="secondary" onClick={exportFilteredCandidates} disabled={table.rows.length === 0}>
@@ -626,12 +640,12 @@ export function CandidatesPage() {
               type="search"
               value={table.search}
               onChange={(event) => table.setSearch(event.target.value)}
-              placeholder="Search name, email, phone, or position"
+              placeholder="Search name, email, phone, Candidate ID, or position"
               aria-label="Search candidates"
               className="w-full max-w-xs rounded-lg border border-slate-200 px-3 py-1.5 text-sm text-slate-900"
             />
             <select
-              aria-label="Filter by pipeline stage"
+              aria-label="Filter by hiring stage"
               value={filters.values.stage ?? ""}
               onChange={(event) => filters.setFilter("stage", event.target.value)}
               className="rounded-lg border border-slate-200 px-3 py-1.5 text-sm text-slate-900"
@@ -671,6 +685,7 @@ export function CandidatesPage() {
               <thead>
                 <tr className="border-b border-slate-200">
                   <SortableHeader label="Candidate" active={table.sortKey === "name"} direction={table.direction} onClick={() => table.toggleSort("name")} width={columns.widths.name} onResizeStart={columns.startResize("name")} />
+                  <PlainHeader label="Candidate ID" width={columns.widths.candidateId} onResizeStart={columns.startResize("candidateId")} />
                   <SortableHeader label="Stage" active={table.sortKey === "stage"} direction={table.direction} onClick={() => table.toggleSort("stage")} width={columns.widths.stage} onResizeStart={columns.startResize("stage")} />
                   <PlainHeader label="Source" width={columns.widths.source} onResizeStart={columns.startResize("source")} />
                   <PlainHeader label="Position" width={columns.widths.position} onResizeStart={columns.startResize("position")} />
@@ -684,6 +699,20 @@ export function CandidatesPage() {
                     <td className="py-2.5 text-slate-800">
                       <Link to={`/candidates/${row.id}`} className="font-medium hover:underline">{row.first_name} {row.last_name}</Link>
                       <p className="truncate text-xs text-slate-500">{row.email ?? "No email"}{row.phone ? ` · ${row.phone}` : ""}</p>
+                    </td>
+                    <td className="py-2.5">
+                      <div className="flex items-center gap-1.5">
+                        <span className="font-mono text-xs text-slate-600">{row.candidate_code}</span>
+                        <button
+                          type="button"
+                          onClick={() => void copyCandidateId(row.candidate_code)}
+                          aria-label={`Copy Candidate ID for ${row.first_name} ${row.last_name}`}
+                          className="text-slate-400 hover:text-slate-700"
+                        >
+                          <Clipboard className="h-3.5 w-3.5" />
+                        </button>
+                        {copiedCandidateId === row.candidate_code ? <span className="text-xs text-emerald-700">Copied</span> : null}
+                      </div>
                     </td>
                     <td className="py-2.5">
                       {canManage ? (
@@ -707,7 +736,7 @@ export function CandidatesPage() {
                   </tr>
                 ))}
                 {table.rows.length === 0 ? (
-                  <tr><td colSpan={6} className="py-6 text-center text-slate-400">{table.search || activeFilters.length > 0 ? "No candidates match this view." : "No candidates yet."}</td></tr>
+                  <tr><td colSpan={7} className="py-6 text-center text-slate-400">{table.search || activeFilters.length > 0 ? "No candidates match this view." : "No candidates yet."}</td></tr>
                 ) : null}
               </tbody>
             </table>

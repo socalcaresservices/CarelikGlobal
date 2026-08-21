@@ -72,7 +72,8 @@ function mockFromByTable(
   languages: ServiceOption[] = []
 ) {
   const clientSelectMock = mockClientRecord(client);
-  const clientUpdateEqMock = vi.fn().mockResolvedValue({ error: null });
+  const clientUpdateEqMock2 = vi.fn().mockResolvedValue({ error: null });
+  const clientUpdateEqMock = vi.fn(() => ({ eq: clientUpdateEqMock2 }));
   const clientUpdateMock = vi.fn(() => ({ eq: clientUpdateEqMock }));
 
   const requestedServicesDeleteEqMock = vi.fn().mockResolvedValue({ error: null });
@@ -108,6 +109,7 @@ function mockFromByTable(
   return {
     clientUpdateMock,
     clientUpdateEqMock,
+    clientUpdateEqMock2,
     requestedServicesDeleteMock,
     requestedServicesInsertMock,
     assignmentInsertMock,
@@ -344,7 +346,7 @@ describe("ClientDetailPage", () => {
 
   it("saves client location, care needs, and requested services", async () => {
     mockedUseOrganization.mockReturnValue(baseOrganization());
-    const { clientUpdateMock, clientUpdateEqMock, requestedServicesDeleteMock, requestedServicesInsertMock } =
+    const { clientUpdateMock, clientUpdateEqMock, clientUpdateEqMock2, requestedServicesDeleteMock, requestedServicesInsertMock } =
       mockFromByTable(
         {
           id: CLIENT_ID,
@@ -385,7 +387,8 @@ describe("ClientDetailPage", () => {
         })
       )
     );
-    expect(clientUpdateEqMock).toHaveBeenCalledWith("id", CLIENT_ID);
+    expect(clientUpdateEqMock).toHaveBeenCalledWith("organization_id", ORG_ID);
+    expect(clientUpdateEqMock2).toHaveBeenCalledWith("id", CLIENT_ID);
     await waitFor(() => expect(requestedServicesDeleteMock).toHaveBeenCalled());
     await waitFor(() =>
       expect(requestedServicesInsertMock).toHaveBeenCalledWith([
@@ -398,8 +401,11 @@ describe("ClientDetailPage", () => {
     );
   });
 
-  it("switches to the Notes tab", async () => {
-    mockedUseOrganization.mockReturnValue(baseOrganization());
+  it("switches to the Notes tab and shows a read-only user's care notes as text", async () => {
+    mockedUseOrganization.mockReturnValue({
+      ...baseOrganization(),
+      hasPermission: vi.fn(() => false)
+    });
     mockFromByTable({
       id: CLIENT_ID,
       first_name: "Jordan",
@@ -419,6 +425,79 @@ describe("ClientDetailPage", () => {
     fireEvent.click(screen.getByRole("button", { name: "Notes" }));
 
     await waitFor(() => expect(screen.getByText("Prefers morning visits.")).toBeInTheDocument());
+  });
+
+  it("edits a client's name, contact info, and care notes from Client Detail without leaving the page", async () => {
+    mockedUseOrganization.mockReturnValue(baseOrganization());
+    const { clientUpdateMock, clientUpdateEqMock, clientUpdateEqMock2 } = mockFromByTable({
+      id: CLIENT_ID,
+      client_code: "CL-000042",
+      first_name: "Jordan",
+      last_name: "Rivera",
+      phone: "555-0100",
+      email: "jordan@example.test",
+      address: null,
+      care_notes: "Prefers morning visits.",
+      status: "active",
+      client_requested_services: []
+    });
+    mockedRpc.mockResolvedValue({ data: [], error: null } as never);
+
+    renderPage();
+    await waitFor(() => expect(screen.getByLabelText("First name")).toBeInTheDocument());
+
+    fireEvent.change(screen.getByLabelText("First name"), { target: { value: "Jordana" } });
+    fireEvent.change(screen.getByLabelText("Phone"), { target: { value: "555-0199" } });
+    fireEvent.change(screen.getByLabelText("Email"), { target: { value: "jordana@example.test" } });
+
+    fireEvent.click(screen.getAllByRole("button", { name: "Save" })[0]!);
+
+    await waitFor(() =>
+      expect(clientUpdateMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          first_name: "Jordana",
+          last_name: "Rivera",
+          phone: "555-0199",
+          email: "jordana@example.test"
+        })
+      )
+    );
+    expect(clientUpdateEqMock).toHaveBeenCalledWith("organization_id", ORG_ID);
+    expect(clientUpdateEqMock2).toHaveBeenCalledWith("id", CLIENT_ID);
+    await waitFor(() => expect(screen.getByText("Client profile updated.")).toBeInTheDocument());
+
+    fireEvent.click(screen.getByRole("button", { name: "Notes" }));
+    const notesField = screen.getByLabelText("Care notes") as HTMLTextAreaElement;
+    fireEvent.change(notesField, { target: { value: "Updated note" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+
+    await waitFor(() =>
+      expect(clientUpdateMock).toHaveBeenCalledWith(expect.objectContaining({ care_notes: "Updated note" }))
+    );
+  });
+
+  it("does not show an editable care-notes field to a user without applicants.update-equivalent client permission", async () => {
+    mockedUseOrganization.mockReturnValue({
+      ...baseOrganization(),
+      hasPermission: vi.fn(() => false)
+    });
+    mockFromByTable({
+      id: CLIENT_ID,
+      first_name: "Jordan",
+      last_name: "Rivera",
+      phone: null,
+      email: null,
+      address: null,
+      care_notes: null,
+      status: "active",
+      client_requested_services: []
+    });
+    mockedRpc.mockResolvedValue({ data: [], error: null } as never);
+
+    renderPage();
+    await waitFor(() => expect(screen.getByText("Jordan Rivera")).toBeInTheDocument());
+
+    expect(screen.queryByLabelText("First name")).not.toBeInTheDocument();
   });
 
   it("links to the CareScore-ranked Schedule page from the Schedule tab when shifts.update is held", async () => {
