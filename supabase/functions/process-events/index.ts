@@ -21,11 +21,15 @@
 // event type has no handler yet.
 //
 // Twilio is optional at the infra level: TWILIO_ACCOUNT_SID/
-// TWILIO_AUTH_TOKEN/TWILIO_FROM_NUMBER are read from env (set them as
-// Supabase Edge Function secrets - see README "Event processing"). If
-// they're not set, shift.* events are logged and marked complete rather
-// than dead-lettered, so turning Twilio on later doesn't require
-// replaying a backlog - only newly-emitted events get texted.
+// TWILIO_AUTH_TOKEN/TWILIO_FROM_NUMBER are read from env first (set them
+// as Supabase Edge Function secrets - see README "Event processing"),
+// falling back to the service-role-only public.integration_secrets table
+// (20260821160000_twilio_credentials_table.sql) if the env vars aren't
+// set - a bridge for environments where "supabase secrets set" isn't
+// reachable. If neither is configured, shift.* events are logged and
+// marked complete rather than dead-lettered, so turning Twilio on later
+// doesn't require replaying a backlog - only newly-emitted events get
+// texted.
 
 import { createClient } from "npm:@supabase/supabase-js@2";
 
@@ -85,14 +89,38 @@ function formatShiftWhen(startsAt: string): string {
   });
 }
 
-async function sendSms(to: string, body: string): Promise<void> {
-  const accountSid = Deno.env.get("TWILIO_ACCOUNT_SID");
-  const authToken = Deno.env.get("TWILIO_AUTH_TOKEN");
-  const fromNumber = Deno.env.get("TWILIO_FROM_NUMBER");
-  if (!accountSid || !authToken || !fromNumber) {
+interface TwilioConfig {
+  accountSid: string;
+  authToken: string;
+  fromNumber: string;
+}
+
+async function getTwilioConfig(adminClient: ReturnType<typeof createClient>): Promise<TwilioConfig | null> {
+  const envAccountSid = Deno.env.get("TWILIO_ACCOUNT_SID");
+  const envAuthToken = Deno.env.get("TWILIO_AUTH_TOKEN");
+  const envFromNumber = Deno.env.get("TWILIO_FROM_NUMBER");
+  if (envAccountSid && envAuthToken && envFromNumber) {
+    return { accountSid: envAccountSid, authToken: envAuthToken, fromNumber: envFromNumber };
+  }
+
+  const { data } = await adminClient
+    .from("integration_secrets")
+    .select("config")
+    .eq("provider", "twilio")
+    .maybeSingle();
+  const config = data?.config as { account_sid?: string; auth_token?: string; from_number?: string } | undefined;
+  if (config?.account_sid && config?.auth_token && config?.from_number) {
+    return { accountSid: config.account_sid, authToken: config.auth_token, fromNumber: config.from_number };
+  }
+  return null;
+}
+
+async function sendSms(twilio: TwilioConfig | null, to: string, body: string): Promise<void> {
+  if (!twilio) {
     console.log(`[process-events] Twilio not configured - skipping SMS to ${to}: ${body}`);
     return;
   }
+  const { accountSid, authToken, fromNumber } = twilio;
 
   const response = await fetch(`https://api.twilio.com/2010-04-01/Accounts/${accountSid}/Messages.json`, {
     method: "POST",
@@ -141,7 +169,8 @@ async function dispatchShiftAssigned(adminClient: ReturnType<typeof createClient
     console.log(`[process-events] shift.assigned (${event.id}): no usable phone number on file, skipping SMS`);
     return;
   }
-  await sendSms(to, `You've been scheduled for a shift with ${clientName} on ${when}.`);
+  const twilio = await getTwilioConfig(adminClient);
+  await sendSms(twilio, to, `You've been scheduled for a shift with ${clientName} on ${when}.`);
 }
 
 async function dispatchShiftNeedsCoverage(adminClient: ReturnType<typeof createClient>, event: DomainEvent): Promise<void> {
@@ -189,7 +218,8 @@ async function dispatchShiftNeedsCoverage(adminClient: ReturnType<typeof createC
   }
 
   const message = `Shift needs coverage: ${clientName} on ${when} (call-out reason: ${payload.reason}). Open the app to reassign.`;
-  await Promise.all(phones.map((to) => sendSms(to, message)));
+  const twilio = await getTwilioConfig(adminClient);
+  await Promise.all(phones.map((to) => sendSms(twilio, to, message)));
 }
 
 async function dispatchEvent(adminClient: ReturnType<typeof createClient>, event: DomainEvent): Promise<void> {
