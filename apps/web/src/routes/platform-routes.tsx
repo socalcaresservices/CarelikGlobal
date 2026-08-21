@@ -18,6 +18,7 @@
  */
 
 import { Route } from "react-router-dom";
+import { PlatformDashboardPage } from "@/pages/platform-dashboard-page";
 import { OrganizationsPage } from "@/pages/organizations-page";
 import { FeatureFlagsPage } from "@/pages/feature-flags-page";
 import { AuditPage } from "@/pages/audit-page";
@@ -28,13 +29,13 @@ import { AuditPage } from "@/pages/audit-page";
  */
 export function getPlatformRoutes() {
   return [
+    <Route key="dashboard" path="/" element={<PlatformDashboardPage />} />,
     <Route key="organizations" path="/organizations" element={<OrganizationsPage />} />,
     <Route key="feature-flags" path="/feature-flags" element={<FeatureFlagsPage />} />,
     <Route key="audit" path="/audit" element={<AuditPage />} />
-    // TODO: Platform dashboard
-    // TODO: Subscriptions page
-    // TODO: Billing page
+    // Subscriptions & billing and support access already live inside
+    // Organizations (PlatformPlanManager / PlatformSubscriberBillingPanel /
+    // SupportAccessPanel), not as separate top-level pages.
     // TODO: System health
-    // TODO: Support access management
   ];
 }
