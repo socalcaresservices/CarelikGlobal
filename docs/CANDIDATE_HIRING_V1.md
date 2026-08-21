@@ -1,10 +1,12 @@
 # Ogevia Candidate Hiring V1
 
-## Implementation status (audited 2026-08-13)
+## Implementation status (audited 2026-08-21)
 
 This document is the product requirements document (PRD), not a statement that every requirement is complete. The current branch implements the core candidate pipeline, public application, CSV duplicate preview/import, candidate detail, multi-slot availability, generic credentials, onboarding, workforce records, account linking, and explicit candidate-to-workforce transfer.
 
 Implemented by the completion migration and UI: staff/manual candidate entry; staff controls for candidate self-service links; portal access to requested-document uploads; onboarding and document continuity after transfer; workforce profile/availability/credential editing; and filtered Candidate CSV export.
+
+**2026-08-21 fix**: manual candidate entry (`create_manual_candidate`) previously hard-required an email at both the database and UI layer, silently blocking phone-only/walk-in/referral candidates with no error message. `job_applicants.email` is now nullable; manual entry requires first name, last name, Position, and at least one of email or phone, matching the CSV import path's existing normalized email-or-phone duplicate check. See "Candidate source/import" and "Transfer to Care Team" below for the resulting requirement text.
 
 Repository checks pass. Database-backed end-to-end and two-organization RLS tests still require the migrations to be applied to a non-production Supabase environment. Production release readiness remains conditional on that verification. See `CANDIDATE_HIRING_TEST_MATRIX.md` and `CANDIDATE_HIRING_BUILD_VERIFICATION.md`.
 
@@ -56,7 +58,7 @@ Support universal CSV import from Indeed, ZipRecruiter, an agency website, refer
 1. Ask for source: Indeed, ZipRecruiter, Referral, Agency Website, Manual, Other.
 2. Parse common column names for first name, last name/full name, email, phone, position/job, applied date, and source candidate/application ID.
 3. Show a preview before import.
-4. Validate required fields.
+4. Validate required fields: first name, last name, Position, and at least one contact method (email or phone) — email alone must not be required, so phone-only walk-in/referral candidates can always be entered. Position is a fixed starter list (Caregiver, Caregiver I, Administrative Staff, Caregiver / Administrative Staff, Coordinator, Manager, Other with free-text) — a job title only, never an Ogevia software access role.
 5. Detect likely duplicates using normalized email, phone, and source record ID.
 6. Never silently create duplicates. Show New / Possible duplicate / Invalid counts and let staff skip or review duplicates.
 7. Preserve source, source record ID, original application date, imported date, and position applied for as structured reportable fields.
@@ -199,6 +201,7 @@ On transfer, preserve/copy:
 
 - identity/contact data
 - structured address
+- position/job title applied for
 - availability including multiple slots/day
 - desired work hours and shift preferences
 - languages
