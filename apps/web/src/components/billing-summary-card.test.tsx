@@ -3,6 +3,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { supabase } from "@/lib/supabase";
 import { createCheckoutSession } from "@/lib/billing-checkout";
+import { createBillingPortalSession } from "@/lib/billing-portal";
 import { BillingSummaryCard } from "./billing-summary-card";
 
 vi.mock("@/lib/supabase", () => ({
@@ -11,9 +12,13 @@ vi.mock("@/lib/supabase", () => ({
 vi.mock("@/lib/billing-checkout", () => ({
   createCheckoutSession: vi.fn()
 }));
+vi.mock("@/lib/billing-portal", () => ({
+  createBillingPortalSession: vi.fn()
+}));
 
 const mockedRpc = vi.mocked(supabase.rpc);
 const mockedCreateCheckoutSession = vi.mocked(createCheckoutSession);
+const mockedCreateBillingPortalSession = vi.mocked(createBillingPortalSession);
 
 const ORG_ID = "11111111-1111-4111-8111-111111111111";
 
@@ -158,6 +163,56 @@ describe("BillingSummaryCard", () => {
 
     await waitFor(() => expect(screen.getByText("Active")).toBeInTheDocument());
     expect(screen.getByText(new Date("2026-03-01").toLocaleDateString())).toBeInTheDocument();
+  });
+
+  it("shows a Manage billing button once Stripe is configured, and opens the portal", async () => {
+    mockSummary({ effective_status: "active", stripe_configured: true });
+    mockedCreateBillingPortalSession.mockResolvedValue({ url: "https://billing.stripe.com/session-456" });
+
+    delete (window as unknown as { location?: unknown }).location;
+    (window as unknown as { location: { href: string } }).location = { href: "" };
+
+    renderCard(true);
+
+    await waitFor(() => expect(screen.getByRole("button", { name: "Manage billing" })).toBeInTheDocument());
+    expect(screen.queryByText("No payment history available yet.")).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Manage billing" }));
+
+    await waitFor(() => expect(mockedCreateBillingPortalSession).toHaveBeenCalledWith(ORG_ID));
+    await waitFor(() => expect(window.location.href).toBe("https://billing.stripe.com/session-456"));
+  });
+
+  it("shows a read-only message for a non-admin once Stripe is configured", async () => {
+    mockSummary({ effective_status: "active", stripe_configured: true });
+
+    renderCard(false);
+
+    await waitFor(() =>
+      expect(screen.getByText("Contact an organization admin to update the payment method or view invoices.")).toBeInTheDocument()
+    );
+    expect(screen.queryByRole("button", { name: "Manage billing" })).not.toBeInTheDocument();
+  });
+
+  it("shows the no-history placeholder before Stripe is configured", async () => {
+    mockSummary({ effective_status: "trialing", stripe_configured: false });
+
+    renderCard(true);
+
+    await waitFor(() => expect(screen.getByText("No payment history available yet.")).toBeInTheDocument());
+    expect(screen.queryByRole("button", { name: "Manage billing" })).not.toBeInTheDocument();
+  });
+
+  it("shows a portal error message when opening the portal fails", async () => {
+    mockSummary({ effective_status: "active", stripe_configured: true });
+    mockedCreateBillingPortalSession.mockRejectedValue(new Error("Could not open billing management."));
+
+    renderCard(true);
+
+    await waitFor(() => expect(screen.getByRole("button", { name: "Manage billing" })).toBeInTheDocument());
+    fireEvent.click(screen.getByRole("button", { name: "Manage billing" }));
+
+    await waitFor(() => expect(screen.getByText("Could not open billing management.")).toBeInTheDocument());
   });
 
   it("shows a load error state", async () => {
