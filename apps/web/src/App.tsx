@@ -14,6 +14,7 @@ import { SetPasswordPage } from "@/pages/set-password-page";
 import { ResetPasswordPage } from "@/pages/reset-password-page";
 import { ApplyPage } from "@/pages/apply-page";
 import { CandidatePortalPage } from "@/pages/candidate-portal-page";
+import { ClaimShiftPage } from "@/pages/claim-shift-page";
 import { UploadPage } from "@/pages/upload-page";
 import { AddOrganizationPage } from "@/pages/add-organization-page";
 import { MarketingPage } from "@/pages/marketing-page";
@@ -50,6 +51,7 @@ export function App() {
       <Route path="/reset-password" element={<ResetPasswordPage />} />
       <Route path="/apply/:orgSlug" element={<ApplyPage />} />
       <Route path="/candidate/:token" element={<CandidatePortalPage />} />
+      <Route path="/claim/:token" element={<ClaimShiftPage />} />
       <Route path="/upload/:token" element={<UploadPage />} />
 
       {isMarketing && <Route path="/" element={<MarketingPage />} />}

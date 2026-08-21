@@ -13,23 +13,27 @@
 // function to run on overlapping schedules without double-processing an
 // event.
 //
-// dispatchEvent() sends SMS for the two shift-coverage event types
-// (20260821150000_shift_notification_events.sql) via Twilio - the first
-// real downstream integration this stub has had. Every other event_type
-// still falls through to the original log-and-succeed no-op, same as
-// before, so the outbox never piles up unprocessed just because a given
-// event type has no handler yet.
+// dispatchEvent() sends SMS for shift-coverage event types via Twilio -
+// the first real downstream integration this stub has had:
+//   shift.assigned         - a caregiver now owns a scheduled shift
+//                             (20260821150000_shift_notification_events.sql)
+//   shift.coverage_offer   - a one-tap claim link for a caregiver offered
+//                             an open shift from a call-out
+//                             (20260821170000_shift_claim_via_text.sql)
+// Every other event_type still falls through to the original
+// log-and-succeed no-op, same as before, so the outbox never piles up
+// unprocessed just because a given event type has no handler yet.
 //
-// Twilio is optional at the infra level: TWILIO_ACCOUNT_SID/
-// TWILIO_AUTH_TOKEN/TWILIO_FROM_NUMBER are read from env first (set them
-// as Supabase Edge Function secrets - see README "Event processing"),
-// falling back to the service-role-only public.integration_secrets table
-// (20260821160000_twilio_credentials_table.sql) if the env vars aren't
-// set - a bridge for environments where "supabase secrets set" isn't
-// reachable. If neither is configured, shift.* events are logged and
-// marked complete rather than dead-lettered, so turning Twilio on later
-// doesn't require replaying a backlog - only newly-emitted events get
-// texted.
+// Twilio (TWILIO_ACCOUNT_SID/TWILIO_AUTH_TOKEN/TWILIO_FROM_NUMBER) and the
+// app's own public URL (APP_URL, needed to build claim links) are both
+// read from env first (set as Supabase Edge Function secrets - see
+// README "Event processing"), falling back to the service-role-only
+// public.integration_secrets table (20260821160000_twilio_credentials_table.sql)
+// if the env vars aren't set - a bridge for environments where
+// "supabase secrets set" isn't reachable. If neither is configured,
+// shift.* events are logged and marked complete rather than
+// dead-lettered, so turning either on later doesn't require replaying a
+// backlog - only newly-emitted events get texted.
 
 import { createClient } from "npm:@supabase/supabase-js@2";
 
@@ -53,12 +57,14 @@ interface ShiftAssignedPayload {
   ends_at: string;
 }
 
-interface ShiftNeedsCoveragePayload {
+interface ShiftCoverageOfferPayload {
   shift_id: string;
   client_id: string;
+  caregiver_record_id: string;
   starts_at: string;
   ends_at: string;
   reason: string;
+  claim_token: string;
 }
 
 const MAX_ATTEMPTS = 5;
@@ -113,6 +119,19 @@ async function getTwilioConfig(adminClient: ReturnType<typeof createClient>): Pr
     return { accountSid: config.account_sid, authToken: config.auth_token, fromNumber: config.from_number };
   }
   return null;
+}
+
+// Same env-first, table-fallback pattern as getTwilioConfig() - APP_URL
+// is a documented secret (.env.example) with no reader in this codebase
+// yet, and this sandbox has no way to set it via "supabase secrets set"
+// either.
+async function getAppBaseUrl(adminClient: ReturnType<typeof createClient>): Promise<string | null> {
+  const envUrl = Deno.env.get("APP_URL");
+  if (envUrl) return envUrl.replace(/\/$/, "");
+
+  const { data } = await adminClient.from("integration_secrets").select("config").eq("provider", "app").maybeSingle();
+  const baseUrl = (data?.config as { base_url?: string } | undefined)?.base_url;
+  return baseUrl ? baseUrl.replace(/\/$/, "") : null;
 }
 
 async function sendSms(twilio: TwilioConfig | null, to: string, body: string): Promise<void> {
@@ -173,9 +192,8 @@ async function dispatchShiftAssigned(adminClient: ReturnType<typeof createClient
   await sendSms(twilio, to, `You've been scheduled for a shift with ${clientName} on ${when}.`);
 }
 
-async function dispatchShiftNeedsCoverage(adminClient: ReturnType<typeof createClient>, event: DomainEvent): Promise<void> {
-  const payload = event.payload as ShiftNeedsCoveragePayload;
-  if (!event.organization_id) return;
+async function dispatchShiftCoverageOffer(adminClient: ReturnType<typeof createClient>, event: DomainEvent): Promise<void> {
+  const payload = event.payload as ShiftCoverageOfferPayload;
 
   const { data: client } = await adminClient
     .from("clients")
@@ -185,41 +203,30 @@ async function dispatchShiftNeedsCoverage(adminClient: ReturnType<typeof createC
   const clientName = client ? `${client.first_name} ${client.last_name}` : "a client";
   const when = formatShiftWhen(payload.starts_at);
 
-  // Every active member of the org who holds shifts.update - the people
-  // who'd otherwise only find out by opening the Schedule page. Two
-  // separate queries rather than a PostgREST embed: organization_memberships
-  // .user_id references auth.users, not public.user_profiles, so there's
-  // no FK for an automatic user_profiles(...) embed to follow.
-  const { data: rolePermissions } = await adminClient
-    .from("role_permissions")
-    .select("role")
-    .eq("permission_key", "shifts.update");
-  const eligibleRoles = (rolePermissions ?? []).map((row: { role: string }) => row.role);
-
-  const { data: members } = await adminClient
-    .from("organization_memberships")
-    .select("user_id")
-    .eq("organization_id", event.organization_id)
-    .eq("status", "active")
-    .in("role", eligibleRoles.length > 0 ? eligibleRoles : ["__none__"]);
-  const memberIds = (members ?? []).map((row: { user_id: string }) => row.user_id);
-
-  const { data: profiles } = memberIds.length > 0
-    ? await adminClient.from("user_profiles").select("phone").in("id", memberIds)
-    : { data: [] as Array<{ phone: string | null }> };
-
-  const phones = (profiles ?? [])
-    .map((row: { phone: string | null }) => toE164(row.phone))
-    .filter((phone): phone is string => phone !== null);
-
-  if (phones.length === 0) {
-    console.log(`[process-events] shift.needs_coverage (${event.id}): no staff phone numbers on file, skipping SMS`);
+  const { data: caregiver } = await adminClient
+    .from("caregiver_records")
+    .select("phone")
+    .eq("id", payload.caregiver_record_id)
+    .maybeSingle();
+  const to = toE164(caregiver?.phone ?? null);
+  if (!to) {
+    console.log(`[process-events] shift.coverage_offer (${event.id}): no usable phone number on file, skipping SMS`);
     return;
   }
 
-  const message = `Shift needs coverage: ${clientName} on ${when} (call-out reason: ${payload.reason}). Open the app to reassign.`;
+  const baseUrl = await getAppBaseUrl(adminClient);
+  if (!baseUrl) {
+    console.log(`[process-events] shift.coverage_offer (${event.id}): APP_URL not configured, skipping SMS (link would be broken)`);
+    return;
+  }
+  const claimUrl = `${baseUrl}/claim/${payload.claim_token}`;
+
   const twilio = await getTwilioConfig(adminClient);
-  await Promise.all(phones.map((to) => sendSms(twilio, to, message)));
+  await sendSms(
+    twilio,
+    to,
+    `A shift with ${clientName} on ${when} needs coverage. Tap to claim it, first come first served: ${claimUrl}`
+  );
 }
 
 async function dispatchEvent(adminClient: ReturnType<typeof createClient>, event: DomainEvent): Promise<void> {
@@ -227,8 +234,8 @@ async function dispatchEvent(adminClient: ReturnType<typeof createClient>, event
     case "shift.assigned":
       await dispatchShiftAssigned(adminClient, event);
       break;
-    case "shift.needs_coverage":
-      await dispatchShiftNeedsCoverage(adminClient, event);
+    case "shift.coverage_offer":
+      await dispatchShiftCoverageOffer(adminClient, event);
       break;
     default:
       console.log(`[process-events] dispatching ${event.event_type} (${event.id})`);
