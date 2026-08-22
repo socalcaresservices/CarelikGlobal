@@ -3,7 +3,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { useOrganization } from "@/providers/organization-provider";
 import { supabase } from "@/lib/supabase";
-import { OwnerDashboardPage } from "./owner-dashboard-page";
+import { OwnerInsights } from "./owner-insights";
 
 vi.mock("@/providers/organization-provider", () => ({ useOrganization: vi.fn() }));
 vi.mock("@/lib/supabase", () => ({
@@ -43,7 +43,8 @@ function mockRpc({
   authorizations = [],
   incidents = [],
   audit = [],
-  applicants = []
+  applicants = [],
+  shifts = []
 }: {
   members?: unknown[];
   credentials?: unknown[];
@@ -51,6 +52,7 @@ function mockRpc({
   incidents?: unknown[];
   audit?: unknown[];
   applicants?: unknown[];
+  shifts?: unknown[];
 }) {
   mockedRpc.mockImplementation((fn: string) => {
     if (fn === "list_organization_members") return Promise.resolve({ data: members, error: null }) as never;
@@ -59,34 +61,35 @@ function mockRpc({
     if (fn === "list_incidents") return Promise.resolve({ data: incidents, error: null }) as never;
     if (fn === "list_audit_logs") return Promise.resolve({ data: audit, error: null }) as never;
     if (fn === "list_applicants") return Promise.resolve({ data: applicants, error: null }) as never;
+    if (fn === "list_shifts") return Promise.resolve({ data: shifts, error: null }) as never;
     return Promise.resolve({ data: [], error: null }) as never;
   });
 }
 
-function renderPage() {
+function renderComponent() {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
     <QueryClientProvider client={queryClient}>
-      <OwnerDashboardPage />
+      <OwnerInsights />
     </QueryClientProvider>
   );
 }
 
-describe("OwnerDashboardPage", () => {
+describe("OwnerInsights", () => {
   afterEach(() => {
     vi.clearAllMocks();
   });
 
-  it("shows a not-available message for a non-owner role", () => {
+  it("renders nothing for a non-owner role", () => {
     mockedUseOrganization.mockReturnValue(baseOrganization("organization_admin"));
     mockRpc({});
 
-    renderPage();
-    expect(screen.getByText("Not available")).toBeInTheDocument();
+    const { container } = renderComponent();
+    expect(container).toBeEmptyDOMElement();
     expect(mockedRpc).not.toHaveBeenCalled();
   });
 
-  it("shows breakdown counts for an organization_owner", async () => {
+  it("shows breakdown counts and a coverage chart for an organization_owner", async () => {
     mockedUseOrganization.mockReturnValue(baseOrganization("organization_owner"));
     mockRpc({
       members: [
@@ -105,10 +108,15 @@ describe("OwnerDashboardPage", () => {
       ],
       incidents: [{ severity: "high", status: "open", occurred_at: new Date().toISOString() }],
       audit: [{ occurred_at: new Date().toISOString() }],
-      applicants: [{ status: "new" }, { status: "new" }, { status: "hired" }]
+      applicants: [{ status: "new" }, { status: "new" }, { status: "hired" }],
+      shifts: [
+        { status: "scheduled", needs_coverage: true },
+        { status: "scheduled", needs_coverage: false },
+        { status: "completed", needs_coverage: false }
+      ]
     });
 
-    renderPage();
+    renderComponent();
 
     await waitFor(() => expect(screen.getByText("caregiver")).toBeInTheDocument());
 
@@ -137,11 +145,10 @@ describe("OwnerDashboardPage", () => {
     expect(within(applicantsCard).getByText("2")).toBeInTheDocument();
     expect(within(applicantsCard).getByText("Hired")).toBeInTheDocument();
 
-    // Build 012: recharts capacity bar (Used/Scheduled/Remaining legend)
-    // and team-composition donut, both fed by data already asserted
-    // above - no new RPC, so this just checks the charts actually mount.
-    // The authorizations query resolves independently of the members
-    // query waited on above, so wait for the chart itself too.
+    // Coverage-this-week chart: one scheduled shift still needs coverage.
+    await waitFor(() => expect(screen.getByText("1 shift needs coverage right now.")).toBeInTheDocument());
+    expect(screen.getByRole("img", { name: "Shifts this week by outcome" })).toBeInTheDocument();
+
     await waitFor(() =>
       expect(
         screen.getByRole("img", { name: "Monthly authorized hours: used, scheduled, and remaining" })
@@ -153,11 +160,25 @@ describe("OwnerDashboardPage", () => {
     expect(screen.getByRole("img", { name: "Team composition by role" })).toBeInTheDocument();
   });
 
+  it("shows an all-clear message on the coverage chart when nothing needs coverage", async () => {
+    mockedUseOrganization.mockReturnValue(baseOrganization("organization_owner"));
+    mockRpc({
+      members: [{ role: "staff", status: "active" }],
+      shifts: [{ status: "scheduled", needs_coverage: false }]
+    });
+
+    renderComponent();
+
+    await waitFor(() =>
+      expect(screen.getByText("Every shift this week has a caregiver.")).toBeInTheDocument()
+    );
+  });
+
   it("shows an empty state for monthly capacity when there are no authorizations", async () => {
     mockedUseOrganization.mockReturnValue(baseOrganization("organization_owner"));
     mockRpc({ members: [{ role: "staff", status: "active" }] });
 
-    renderPage();
+    renderComponent();
 
     await waitFor(() => expect(screen.getByText("Monthly capacity")).toBeInTheDocument());
     const capacityCard = screen.getByText("Monthly capacity").closest("div")!;
@@ -175,7 +196,7 @@ describe("OwnerDashboardPage", () => {
       return Promise.resolve({ data: [], error: null }) as never;
     });
 
-    renderPage();
+    renderComponent();
 
     await waitFor(() => expect(screen.getByText("Team by role")).toBeInTheDocument());
     const incidentStatusCard = screen.getByText("Incidents by status").closest("div")!;
@@ -183,11 +204,11 @@ describe("OwnerDashboardPage", () => {
     expect(within(incidentStatusCard).queryByText("No incidents reported.")).not.toBeInTheDocument();
   });
 
-  it("allows a platform_owner to view the dashboard", async () => {
+  it("allows a platform_owner to view the insights", async () => {
     mockedUseOrganization.mockReturnValue(baseOrganization("platform_owner"));
     mockRpc({ members: [{ role: "staff", status: "active" }] });
 
-    renderPage();
+    renderComponent();
 
     await waitFor(() => expect(screen.getByText("Team by role")).toBeInTheDocument());
   });
@@ -199,7 +220,7 @@ describe("OwnerDashboardPage", () => {
     });
     mockRpc({ members: [{ role: "staff", status: "active" }] });
 
-    renderPage();
+    renderComponent();
 
     await waitFor(() => expect(screen.getByText("Team by role")).toBeInTheDocument());
     expect(screen.queryByText("Incidents by status")).not.toBeInTheDocument();

@@ -15,7 +15,6 @@ import { CredentialsPage } from "@/pages/credentials-page";
 import { AuthorizationsPage } from "@/pages/authorizations-page";
 import { IncidentsPage } from "@/pages/incidents-page";
 import { SettingsPage } from "@/pages/settings-page";
-import { OwnerDashboardPage } from "@/pages/owner-dashboard-page";
 import { CandidatesPage } from "@/pages/candidates-page";
 import { CandidateDetailPage } from "@/pages/candidate-detail-page";
 import { ServiceVerificationPage } from "@/pages/service-verification-page";
@@ -25,7 +24,11 @@ import { StaffVisitsPage } from "@/pages/staff-visits-page";
 export function getTenantRoutes() {
   return [
     <Route key="dashboard" path="/" element={<CommandCenterPage />} />,
-    <Route key="owner-dashboard" path="/owner-dashboard" element={<OwnerDashboardPage />} />,
+    // Owner Dashboard's content moved into Command Center
+    // (components/owner-insights.tsx) so an owner isn't navigating
+    // between two dashboard pages for one full picture - redirect
+    // rather than a dead link for anyone with this route bookmarked.
+    <Route key="owner-dashboard" path="/owner-dashboard" element={<Navigate to="/" replace />} />,
     <Route key="team" path="/team" element={<CareTeamPage />} />,
     <Route key="team-detail" path="/team/:id" element={<CareTeamDetailPage />} />,
     <Route key="workforce" path="/workforce" element={<Navigate to="/team" replace />} />,

@@ -76,22 +76,6 @@ describe("AppShell nav", () => {
     vi.clearAllMocks();
   });
 
-  it("shows the Workforce Insights link for an organization_owner", () => {
-    mockedUseAuth.mockReturnValue({ user: { email: "owner@acme.test" } } as never);
-    mockedUseOrganization.mockReturnValue(baseOrganization("organization_owner"));
-
-    renderShell();
-    expect(screen.getByText("Workforce Insights")).toBeInTheDocument();
-  });
-
-  it("hides the Workforce Insights link for an organization_admin", () => {
-    mockedUseAuth.mockReturnValue({ user: { email: "admin@acme.test" } } as never);
-    mockedUseOrganization.mockReturnValue(baseOrganization("organization_admin"));
-
-    renderShell();
-    expect(screen.queryByText("Workforce Insights")).not.toBeInTheDocument();
-  });
-
   it("groups Organizations, Access, and Audit under a de-emphasized Administration heading", () => {
     mockedUseAuth.mockReturnValue({ user: { email: "owner@acme.test" } } as never);
     mockedUseOrganization.mockReturnValue(baseOrganization("organization_owner"));
@@ -123,17 +107,19 @@ describe("AppShell nav", () => {
     expect(screen.getByText("Incidents")).toBeInTheDocument();
   });
 
-  it("keeps Command Center, Workforce Insights, and Schedule ungrouped at the top of the sidebar", () => {
-    // These three are the "check every day" screens - they intentionally
-    // sit above the first section heading rather than under an "Overview"
+  it("keeps Command Center and Schedule ungrouped at the top of the sidebar", () => {
+    // These are the "check every day" screens - they intentionally sit
+    // above the first section heading rather than under an "Overview"
     // label, the same way they did before the People/Compliance split.
+    // Workforce Insights was folded into Command Center itself
+    // (components/owner-insights.tsx) and no longer has its own nav item.
     mockedUseAuth.mockReturnValue({ user: { email: "owner@acme.test" } } as never);
     mockedUseOrganization.mockReturnValue(baseOrganization("organization_owner"));
 
     renderShell();
     expect(screen.queryByText("Overview")).not.toBeInTheDocument();
     expect(screen.getByText("Command Center")).toBeInTheDocument();
-    expect(screen.getByText("Workforce Insights")).toBeInTheDocument();
+    expect(screen.queryByText("Workforce Insights")).not.toBeInTheDocument();
     expect(screen.getByText("Schedule")).toBeInTheDocument();
   });
 
