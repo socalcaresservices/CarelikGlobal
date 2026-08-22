@@ -7,6 +7,7 @@ import {
   CalendarClock,
   CalendarPlus,
   ClipboardCheck,
+  DollarSign,
   FileText,
   HeartHandshake,
   LayoutDashboard,
@@ -73,7 +74,8 @@ const overviewNav: NavItem[] = [
   // visits, and the RLS/RPC layer already scopes what each caregiver can
   // see to their own assigned shifts regardless of nav visibility.
   { to: "/service-verification", label: "Service Verification", icon: PenLine },
-  { to: "/service-verification/reports", label: "Visit Reports", icon: FileText, permission: "visits.read" }
+  { to: "/service-verification/reports", label: "Visit Reports", icon: FileText, permission: "visits.read" },
+  { to: "/billing", label: "Billing", icon: DollarSign, permission: "billing.visits.read" }
 ];
 
 const peopleNav: NavItem[] = [

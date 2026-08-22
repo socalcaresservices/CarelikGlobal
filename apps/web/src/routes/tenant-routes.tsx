@@ -20,6 +20,7 @@ import { CandidateDetailPage } from "@/pages/candidate-detail-page";
 import { ServiceVerificationPage } from "@/pages/service-verification-page";
 import { ServiceVerificationReportsPage } from "@/pages/service-verification-reports-page";
 import { StaffVisitsPage } from "@/pages/staff-visits-page";
+import { BillingPage } from "@/pages/billing-page";
 
 export function getTenantRoutes() {
   return [
@@ -40,6 +41,7 @@ export function getTenantRoutes() {
     <Route key="service-verification" path="/service-verification" element={<ServiceVerificationPage />} />,
     <Route key="service-verification-reports" path="/service-verification/reports" element={<ServiceVerificationReportsPage />} />,
     <Route key="service-verification-signed-sheets" path="/service-verification/signed-sheets" element={<ServiceVerificationReportsPage />} />,
+    <Route key="billing" path="/billing" element={<BillingPage />} />,
     <Route key="credentials" path="/credentials" element={<CredentialsPage />} />,
     <Route key="authorizations" path="/authorizations" element={<AuthorizationsPage />} />,
     <Route key="incidents" path="/incidents" element={<IncidentsPage />} />,

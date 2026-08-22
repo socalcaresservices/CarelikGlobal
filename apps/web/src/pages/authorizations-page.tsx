@@ -51,6 +51,7 @@ interface AuthorizationRow {
   notes: string | null;
   hours_used_this_month: number;
   hours_scheduled_this_month: number;
+  hourly_rate_cents: number | null;
 }
 
 interface ClientOption {
@@ -105,7 +106,9 @@ const emptyForm = {
   maxMonthlyHours: "",
   periodStart: "",
   periodEnd: "",
-  notes: ""
+  notes: "",
+  hourlyRate: "",
+  reason: ""
 };
 
 export function AuthorizationsPage() {
@@ -301,7 +304,9 @@ export function AuthorizationsPage() {
       maxMonthlyHours: String(row.max_monthly_hours),
       periodStart: row.period_start,
       periodEnd: row.period_end,
-      notes: row.notes ?? ""
+      notes: row.notes ?? "",
+      hourlyRate: row.hourly_rate_cents != null ? (row.hourly_rate_cents / 100).toFixed(2) : "",
+      reason: ""
     });
     setFormError(null);
   }
@@ -335,25 +340,50 @@ export function AuthorizationsPage() {
       setFormError("Period end must be after period start.");
       return;
     }
+    let rateCents: number | null = null;
+    if (form.hourlyRate.trim() !== "") {
+      const rate = Number(form.hourlyRate);
+      if (Number.isNaN(rate) || rate < 0) {
+        setFormError("Hourly rate must be a non-negative amount.");
+        return;
+      }
+      rateCents = Math.round(rate * 100);
+    }
+    if (editingId && form.reason.trim() === "") {
+      setFormError("A reason is required to change an existing authorization.");
+      return;
+    }
 
     setSaving(true);
     try {
-      const payload = {
-        organization_id: activeOrganizationId,
-        client_id: form.clientId,
-        service_id: form.serviceId,
-        payer: form.payer,
-        authorization_number: form.authorizationNumber || null,
-        max_monthly_hours: hours,
-        period_start: form.periodStart,
-        period_end: form.periodEnd,
-        notes: form.notes || null
-      };
-
-      const { error } = editingId
-        ? await supabase.from("client_authorizations").update(payload).eq("id", editingId)
-        : await supabase.from("client_authorizations").insert(payload);
-      if (error) throw error;
+      if (editingId) {
+        const { error } = await supabase.rpc("amend_client_authorization", {
+          target_authorization_id: editingId,
+          new_max_monthly_hours: hours,
+          new_period_start: form.periodStart,
+          new_period_end: form.periodEnd,
+          new_payer: form.payer,
+          new_authorization_number: form.authorizationNumber || null,
+          new_notes: form.notes || null,
+          reason: form.reason.trim(),
+          new_hourly_rate_cents: rateCents
+        });
+        if (error) throw error;
+      } else {
+        const { error } = await supabase.from("client_authorizations").insert({
+          organization_id: activeOrganizationId,
+          client_id: form.clientId,
+          service_id: form.serviceId,
+          payer: form.payer,
+          authorization_number: form.authorizationNumber || null,
+          max_monthly_hours: hours,
+          period_start: form.periodStart,
+          period_end: form.periodEnd,
+          notes: form.notes || null,
+          hourly_rate_cents: rateCents
+        });
+        if (error) throw error;
+      }
 
       resetForm();
       refreshAuthorizations();
@@ -475,6 +505,21 @@ export function AuthorizationsPage() {
                   className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900"
                 />
               </div>
+              <div>
+                <label htmlFor="auth-rate" className="block text-xs font-medium text-slate-600">
+                  Billing rate ($/hour)
+                </label>
+                <input
+                  id="auth-rate"
+                  type="number"
+                  min={0}
+                  step={0.01}
+                  placeholder="Optional"
+                  value={form.hourlyRate}
+                  onChange={(event) => setForm({ ...form, hourlyRate: event.target.value })}
+                  className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900"
+                />
+              </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label htmlFor="auth-period-start" className="block text-xs font-medium text-slate-600">
@@ -514,6 +559,20 @@ export function AuthorizationsPage() {
                 className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900"
               />
             </FormSection>
+
+            {editingId ? (
+              <FormSection title="Reason for change" columns={1}>
+                <input
+                  id="auth-reason"
+                  aria-label="Reason for change"
+                  required
+                  placeholder="e.g. Rate update from payer, hours increase approved by case manager"
+                  value={form.reason}
+                  onChange={(event) => setForm({ ...form, reason: event.target.value })}
+                  className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900"
+                />
+              </FormSection>
+            ) : null}
 
             <div className="flex items-end gap-3">
               <Button type="submit" loading={saving}>
