@@ -225,6 +225,63 @@ describe("AuthorizationsPage", () => {
     expect(screen.queryByRole("button", { name: "Clear Client" })).not.toBeInTheDocument();
   });
 
+  it("amends an existing authorization via RPC instead of a direct update", async () => {
+    mockedUseOrganization.mockReturnValue({ ...baseOrganization(), hasPermission: vi.fn(() => true) });
+    mockFromByTable({
+      clients: [{ id: CLIENT_ID, first_name: "Jordan", last_name: "Rivera" }],
+      services: [{ id: SERVICE_ID, name: "Personal care", is_active: true }]
+    });
+    mockedRpc.mockImplementation((fn: string) => {
+      if (fn === "list_client_authorizations") {
+        return Promise.resolve({
+          data: [
+            {
+              id: "33333333-3333-4333-8333-333333333333",
+              client_id: CLIENT_ID,
+              client_name: "Jordan Rivera",
+              service_id: SERVICE_ID,
+              service_name: "Personal care",
+              payer: "Medicaid",
+              authorization_number: "AUTH-1",
+              max_monthly_hours: 20,
+              period_start: "2026-07-01",
+              period_end: "2027-06-30",
+              notes: null,
+              hours_used_this_month: 5,
+              hours_scheduled_this_month: 5,
+              hourly_rate_cents: 4500
+            }
+          ],
+          error: null
+        }) as never;
+      }
+      if (fn === "amend_client_authorization") {
+        return Promise.resolve({ data: [], error: null }) as never;
+      }
+      return Promise.resolve({ data: [], error: null }) as never;
+    });
+
+    renderPage();
+    await waitFor(() => expect(screen.getByText("Edit")).toBeInTheDocument());
+    fireEvent.click(screen.getByText("Edit"));
+
+    await waitFor(() => expect(screen.getByLabelText("Billing rate ($/hour)")).toHaveValue(45));
+    fireEvent.change(screen.getByLabelText("Billing rate ($/hour)"), { target: { value: "50" } });
+    fireEvent.change(screen.getByLabelText("Reason for change"), { target: { value: "Payer rate increase" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save changes" }));
+
+    await waitFor(() =>
+      expect(mockedRpc).toHaveBeenCalledWith(
+        "amend_client_authorization",
+        expect.objectContaining({
+          target_authorization_id: "33333333-3333-4333-8333-333333333333",
+          reason: "Payer rate increase",
+          new_hourly_rate_cents: 5000
+        })
+      )
+    );
+  });
+
   it("soft-deletes an authorization via Remove", async () => {
     mockedUseOrganization.mockReturnValue({ ...baseOrganization(), hasPermission: vi.fn(() => true) });
     mockedRpc.mockResolvedValue({
