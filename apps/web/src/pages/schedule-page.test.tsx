@@ -282,6 +282,71 @@ describe("SchedulePage", () => {
     expect(screen.getByText("Care Team records can be scheduled before a login is linked.")).toBeInTheDocument();
   });
 
+  it("ranks the Caregiver dropdown by CareScore match once a client is selected, best match first", async () => {
+    const ALEX_ID = "55555555-5555-4555-8555-555555555555";
+    mockedUseOrganization.mockReturnValue({ ...baseOrganization(), hasPermission: vi.fn(() => true) });
+    mockRpc({
+      shifts: [],
+      matches: [
+        { caregiver_record_id: ALEX_ID, caregiver_name: "Alex Aide", match_score: 40 },
+        { caregiver_record_id: CAREGIVER_ID, caregiver_name: "Sam Caregiver", match_score: 91 }
+      ]
+    });
+    mockSchedulingTables([{ id: CLIENT_ID, first_name: "Jordan", last_name: "Rivera" }], [
+      { id: ALEX_ID, linked_user_id: "user-2", first_name: "Alex", last_name: "Aide", preferred_name: null },
+      { id: CAREGIVER_ID, linked_user_id: null, first_name: "Sam", last_name: "Caregiver", preferred_name: null }
+    ]);
+
+    renderPage([`/schedule?clientId=${CLIENT_ID}`]);
+
+    await waitFor(() =>
+      expect(screen.getByRole("option", { name: "Sam Caregiver — 91% match (no login)" })).toBeInTheDocument()
+    );
+    expect(screen.getByRole("option", { name: "Alex Aide — 40% match" })).toBeInTheDocument();
+    expect(
+      screen.getByText("Ranked by CareScore match for this client - best match listed first.")
+    ).toBeInTheDocument();
+
+    const options = screen.getByLabelText("Caregiver").querySelectorAll("option");
+    // First real option (after the disabled placeholder) is the higher-scored match.
+    expect(options[1]).toHaveTextContent("Sam Caregiver — 91% match (no login)");
+    expect(options[2]).toHaveTextContent("Alex Aide — 40% match");
+  });
+
+  it("ranks the reassignment picker by CareScore for the shift's client, best match first", async () => {
+    const ALEX_ID = "55555555-5555-4555-8555-555555555555";
+    mockedUseOrganization.mockReturnValue({ ...baseOrganization(), hasPermission: vi.fn(() => true) });
+    mockRpc({
+      shifts: [
+        {
+          ...sampleShift,
+          id: "called-out-shift",
+          needs_coverage: true,
+          call_out_reason: "Family emergency"
+        }
+      ],
+      matches: [
+        { caregiver_record_id: ALEX_ID, caregiver_name: "Alex Aide", match_score: 25 },
+        { caregiver_record_id: CAREGIVER_ID, caregiver_name: "Sam Caregiver", match_score: 88 }
+      ]
+    });
+    mockSchedulingTables([{ id: CLIENT_ID, first_name: "Jordan", last_name: "Rivera" }], [
+      { id: ALEX_ID, linked_user_id: "user-2", first_name: "Alex", last_name: "Aide", preferred_name: null },
+      { id: CAREGIVER_ID, linked_user_id: null, first_name: "Sam", last_name: "Caregiver", preferred_name: null }
+    ]);
+
+    renderPage();
+    await waitFor(() => expect(screen.getByText("Needs coverage")).toBeInTheDocument());
+    fireEvent.click(screen.getByRole("button", { name: "Reassign" }));
+
+    await waitFor(() =>
+      expect(screen.getByRole("option", { name: "Sam Caregiver — 88% match (no login)" })).toBeInTheDocument()
+    );
+    const options = screen.getByLabelText("Replacement caregiver").querySelectorAll("option");
+    expect(options[1]).toHaveTextContent("Sam Caregiver — 88% match (no login)");
+    expect(options[2]).toHaveTextContent("Alex Aide — 25% match");
+  });
+
   it("preselects the client and loads Care Team when arriving with ?clientId=", async () => {
     mockedUseOrganization.mockReturnValue({ ...baseOrganization(), hasPermission: vi.fn(() => true) });
     mockRpc({

@@ -264,6 +264,11 @@ export function ClientDetailPage() {
   });
 
   const [profileForm, setProfileForm] = useState({
+    firstName: "",
+    lastName: "",
+    phone: "",
+    email: "",
+    careNotes: "",
     city: "",
     state: "",
     zip: "",
@@ -273,10 +278,16 @@ export function ClientDetailPage() {
   });
   const [profileSaving, setProfileSaving] = useState(false);
   const [profileError, setProfileError] = useState<string | null>(null);
+  const [profileSuccess, setProfileSuccess] = useState(false);
 
   useEffect(() => {
     if (clientQuery.data) {
       setProfileForm({
+        firstName: clientQuery.data.first_name ?? "",
+        lastName: clientQuery.data.last_name ?? "",
+        phone: clientQuery.data.phone ?? "",
+        email: clientQuery.data.email ?? "",
+        careNotes: clientQuery.data.care_notes ?? "",
         city: clientQuery.data.address_city ?? "",
         state: clientQuery.data.address_state ?? "",
         zip: clientQuery.data.address_zip ?? "",
@@ -286,6 +297,14 @@ export function ClientDetailPage() {
       });
     }
   }, [clientQuery.data]);
+
+  useEffect(() => {
+    if (!profileSuccess) return;
+    const timeout = setTimeout(() => setProfileSuccess(false), 5000);
+    return () => clearTimeout(timeout);
+  }, [profileSuccess]);
+
+  const profileCanSave = profileForm.firstName.trim().length > 0 && profileForm.lastName.trim().length > 0;
 
   const requestedServiceOptions: ComboboxOption[] = (servicesQuery.data ?? [])
     .filter((service) => service.is_active)
@@ -308,19 +327,30 @@ export function ClientDetailPage() {
   async function handleSaveProfile(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!id || !activeOrganizationId) return;
+    if (!profileCanSave) {
+      setProfileError("First name and last name are required.");
+      return;
+    }
 
     setProfileError(null);
+    setProfileSuccess(false);
     setProfileSaving(true);
     try {
       const { error } = await supabase
         .from("clients")
         .update({
+          first_name: profileForm.firstName.trim(),
+          last_name: profileForm.lastName.trim(),
+          phone: profileForm.phone.trim() || null,
+          email: profileForm.email.trim() || null,
+          care_notes: profileForm.careNotes.trim() || null,
           address_city: profileForm.city || null,
           address_state: profileForm.state || null,
           address_zip: profileForm.zip || null,
           language_needs: profileForm.languageNeeds,
           care_needs: profileForm.careNeeds
         })
+        .eq("organization_id", activeOrganizationId)
         .eq("id", id);
       if (error) throw error;
 
@@ -342,6 +372,8 @@ export function ClientDetailPage() {
       }
 
       void queryClient.invalidateQueries({ queryKey: ["client-detail", id] });
+      void queryClient.invalidateQueries({ queryKey: ["clients", activeOrganizationId] });
+      setProfileSuccess(true);
     } catch (cause) {
       setProfileError(cause instanceof Error ? cause.message : "Could not save profile.");
     } finally {
@@ -687,6 +719,54 @@ export function ClientDetailPage() {
             </p>
             {canManage ? (
               <form onSubmit={handleSaveProfile} className="mt-4 space-y-5">
+                <FormSection title="Contact" columns={2}>
+                  <div>
+                    <label htmlFor="client-first-name" className="block text-xs font-medium text-slate-600">
+                      First name
+                    </label>
+                    <input
+                      id="client-first-name"
+                      value={profileForm.firstName}
+                      onChange={(event) => setProfileForm({ ...profileForm, firstName: event.target.value })}
+                      className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900"
+                    />
+                  </div>
+                  <div>
+                    <label htmlFor="client-last-name" className="block text-xs font-medium text-slate-600">
+                      Last name
+                    </label>
+                    <input
+                      id="client-last-name"
+                      value={profileForm.lastName}
+                      onChange={(event) => setProfileForm({ ...profileForm, lastName: event.target.value })}
+                      className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900"
+                    />
+                  </div>
+                  <div>
+                    <label htmlFor="client-phone" className="block text-xs font-medium text-slate-600">
+                      Phone
+                    </label>
+                    <input
+                      id="client-phone"
+                      value={profileForm.phone}
+                      onChange={(event) => setProfileForm({ ...profileForm, phone: event.target.value })}
+                      className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900"
+                    />
+                  </div>
+                  <div>
+                    <label htmlFor="client-email" className="block text-xs font-medium text-slate-600">
+                      Email
+                    </label>
+                    <input
+                      id="client-email"
+                      type="email"
+                      value={profileForm.email}
+                      onChange={(event) => setProfileForm({ ...profileForm, email: event.target.value })}
+                      className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900"
+                    />
+                  </div>
+                </FormSection>
+
                 <FormSection title="Location" columns={2}>
                   <div>
                     <label htmlFor="client-city" className="block text-xs font-medium text-slate-600">
@@ -762,11 +842,12 @@ export function ClientDetailPage() {
                 </FormSection>
 
                 <div>
-                  <Button type="submit" loading={profileSaving}>
+                  <Button type="submit" loading={profileSaving} disabled={!profileCanSave || profileSaving}>
                     {profileSaving ? "Saving…" : "Save"}
                   </Button>
                 </div>
                 {profileError ? <p className="text-sm text-red-700">{profileError}</p> : null}
+                {profileSuccess ? <p className="text-sm text-emerald-700">Client profile updated.</p> : null}
               </form>
             ) : (
               <dl className="mt-4 grid gap-4 sm:grid-cols-2">
@@ -1034,9 +1115,28 @@ export function ClientDetailPage() {
       {tab === "notes" ? (
         <Card>
           <h3 className="font-semibold text-slate-950">Care notes</h3>
-          <p className="mt-3 whitespace-pre-wrap text-sm text-slate-700">
-            {client.care_notes ?? "No notes on file."}
-          </p>
+          {canManage ? (
+            <form onSubmit={handleSaveProfile} className="mt-3 space-y-3">
+              <textarea
+                aria-label="Care notes"
+                rows={6}
+                value={profileForm.careNotes}
+                onChange={(event) => setProfileForm({ ...profileForm, careNotes: event.target.value })}
+                className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900"
+              />
+              <div>
+                <Button type="submit" loading={profileSaving} disabled={!profileCanSave || profileSaving}>
+                  {profileSaving ? "Saving…" : "Save"}
+                </Button>
+              </div>
+              {profileError ? <p className="text-sm text-red-700">{profileError}</p> : null}
+              {profileSuccess ? <p className="text-sm text-emerald-700">Client profile updated.</p> : null}
+            </form>
+          ) : (
+            <p className="mt-3 whitespace-pre-wrap text-sm text-slate-700">
+              {client.care_notes ?? "No notes on file."}
+            </p>
+          )}
         </Card>
       ) : null}
 

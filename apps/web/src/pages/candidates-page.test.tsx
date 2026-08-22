@@ -64,6 +64,7 @@ describe("Candidates pipeline", () => {
       data: [
         {
           id: "candidate-1",
+          candidate_code: "CA-ABC123",
           first_name: "Ashley",
           last_name: "Rivera",
           email: "ashley@example.com",
@@ -87,7 +88,62 @@ describe("Candidates pipeline", () => {
     expect(screen.getAllByText("Indeed")).not.toHaveLength(0);
     expect(screen.getAllByText("Caregiver").length).toBeGreaterThan(0);
     expect(screen.getByText("30h/week")).toBeInTheDocument();
+    expect(screen.getByText("CA-ABC123")).toBeInTheDocument();
     expect(mockedRpc).toHaveBeenCalledWith("list_candidates_v1", { target_organization_id: ORG_ID });
+  });
+
+  it("copies the Candidate ID and supports searching by Candidate ID", async () => {
+    mockedUseOrganization.mockReturnValue(baseOrganization());
+    mockedRpc.mockResolvedValue({
+      data: [
+        {
+          id: "candidate-1",
+          candidate_code: "CA-ABC123",
+          first_name: "Ashley",
+          last_name: "Rivera",
+          email: "ashley@example.com",
+          phone: null,
+          pipeline_stage: "application_received",
+          source: "indeed",
+          position_applied_for: "Caregiver",
+          applied_at: "2026-08-13T12:00:00.000Z",
+          desired_weekly_hours: 30,
+          available_start_date: null,
+          imported_at: null,
+          created_at: "2026-08-13T12:00:00.000Z"
+        },
+        {
+          id: "candidate-2",
+          candidate_code: "CA-XYZ789",
+          first_name: "Jordan",
+          last_name: "Diaz",
+          email: "jordan@example.com",
+          phone: null,
+          pipeline_stage: "application_received",
+          source: "referral",
+          position_applied_for: "Coordinator",
+          applied_at: "2026-08-14T12:00:00.000Z",
+          desired_weekly_hours: 20,
+          available_start_date: null,
+          imported_at: null,
+          created_at: "2026-08-14T12:00:00.000Z"
+        }
+      ],
+      error: null
+    } as never);
+
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.assign(navigator, { clipboard: { writeText } });
+
+    renderPage();
+    await waitFor(() => expect(screen.getByText("Ashley Rivera")).toBeInTheDocument());
+
+    fireEvent.click(screen.getByLabelText("Copy Candidate ID for Ashley Rivera"));
+    await waitFor(() => expect(writeText).toHaveBeenCalledWith("CA-ABC123"));
+
+    fireEvent.change(screen.getByLabelText("Search candidates"), { target: { value: "CA-XYZ789" } });
+    expect(screen.queryByText("Ashley Rivera")).not.toBeInTheDocument();
+    expect(screen.getByText("Jordan Diaz")).toBeInTheDocument();
   });
 
   it("shows a pipeline funnel count per stage, unaffected by table filters", async () => {
@@ -131,7 +187,7 @@ describe("Candidates pipeline", () => {
     renderPage();
 
     await waitFor(() => expect(screen.getByText("Ashley Rivera")).toBeInTheDocument());
-    const funnelCard = screen.getByText("Pipeline funnel").closest("div")!;
+    const funnelCard = screen.getByText("Hiring Stage funnel").closest("div")!;
     const screeningRow = within(funnelCard).getAllByText("Screening")[0]!.closest("div")!;
     expect(within(screeningRow).getByText("2")).toBeInTheDocument();
   });
@@ -271,7 +327,7 @@ describe("Manual candidate creation", () => {
     expect((call[1] as { candidate_payload: object }).candidate_payload).not.toHaveProperty("role");
 
     await waitFor(() =>
-      expect(screen.getByText("Pat WalkIn was added to the candidate pipeline.")).toBeInTheDocument()
+      expect(screen.getByText("Pat WalkIn was added to the candidates list.")).toBeInTheDocument()
     );
   });
 

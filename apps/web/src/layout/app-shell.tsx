@@ -7,7 +7,6 @@ import {
   CalendarClock,
   CalendarPlus,
   ClipboardCheck,
-  Crown,
   FileText,
   HeartHandshake,
   LayoutDashboard,
@@ -65,7 +64,6 @@ interface NavItem {
 // reading all nine labels in one flat list every time.
 const overviewNav: NavItem[] = [
   { to: "/", label: "Command Center", icon: LayoutDashboard },
-  { to: "/owner-dashboard", label: "Workforce Insights", icon: Crown, ownerOnly: true },
   { to: "/schedule", label: "Schedule", icon: CalendarClock, badgeKey: "schedule_issues" },
   // No permission gate - every caregiver needs to be able to schedule
   // their own visits; caregiver_assignments (not this nav item) is the

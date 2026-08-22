@@ -441,7 +441,7 @@ export function ActionCenter() {
       tone: awaitingActionCount > 0 ? "info" : "success",
       icon: UserPlus,
       to: "/candidates",
-      statusText: awaitingActionCount > 0 ? "Review" : "Pipeline clear"
+      statusText: awaitingActionCount > 0 ? "Review" : "All caught up"
     });
   }
 

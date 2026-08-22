@@ -28,29 +28,27 @@ import {
 } from "@carelik/shared";
 import { useOrganization } from "@/providers/organization-provider";
 import { supabase } from "@/lib/supabase";
+import { getWeekEnd, getWeekStart } from "@/lib/week";
 
-// Owner-only rollup, surfaced in the sidebar as "Workforce Insights."
-// Aggregate counts across every operational entity in one place.
-// Distinct from the two dashboard-ish views that already exist on the
-// Command Center - the Action Center (an itemized "what needs my
-// attention right now" list) and the Operational Snapshot (a handful of
-// headline metrics visible to anyone with membership.read) - this page
-// answers "how many of X are in each state," which is a strategic
-// rollup rather than a day-to-day task list. Restricted to
-// organization_owner/platform_owner via `role` (not a permission check -
-// every other org-level role, including organization_admin, has an
-// identical permission set today, so this is the one place in the app
-// that gates on role instead of a granted permission).
+// Formerly its own page at /owner-dashboard ("Workforce Insights"). Folded
+// into Command Center as the strategic-rollup section beneath the Action
+// Center's itemized "what needs attention" list and the Operational
+// Snapshot's one-line strip - the three together were spread across two
+// separate pages an owner had to navigate between to get a full picture,
+// which is exactly the "scattered" gap this closes. Same gate as before
+// (organization_owner/platform_owner only, checked by role rather than a
+// permission - every other org-level role has an identical permission
+// set), same source RPCs, same derive-at-read-time status functions - no
+// new number that isn't already computed identically somewhere else in
+// the app, with one addition: the "Coverage this week" chart, built from
+// list_shifts() data the Action Center already fetches elsewhere in the
+// app but never charted, closing the "coverage risk" gap in the audit
+// that led here (money/coverage/compliance/growth all in one home view).
 //
-// Every section reuses the exact same list_* RPCs and derive-at-read-
-// time status functions the source pages already use (list_organization_
-// members, list_caregiver_credentials, list_client_authorizations,
-// list_incidents, list_audit_logs) - no new RPC, no new schema, no
-// number that isn't already computed identically somewhere else in the
-// app. Each section is additionally gated on its own read permission
-// (defensive - owners typically hold every permission, but the page
-// shouldn't assume that) and simply doesn't render if the caller lacks
-// it, same "degrade gracefully" pattern global_search() uses.
+// Money is still not a real, dollar-denominated metric anywhere in this
+// app - no invoice/claim/billed-vs-paid table exists yet (that's Biller-
+// phase work). "Monthly capacity" is deliberately labeled as an hours
+// proxy, not revenue, rather than presenting an invented dollar figure.
 
 interface MemberRow {
   role: string;
@@ -80,6 +78,11 @@ interface AuditRow {
 
 interface ApplicantRow {
   status: ApplicantStatus;
+}
+
+interface ShiftRow {
+  status: "scheduled" | "completed" | "cancelled" | "no_show";
+  needs_coverage: boolean;
 }
 
 const credentialStatusTone: Record<CredentialStatus, StatusTone> = {
@@ -163,6 +166,13 @@ const applicantStatusLabel: Record<ApplicantStatus, string> = {
   withdrawn: "Withdrawn"
 };
 
+const shiftStatusLabel: Record<ShiftRow["status"], string> = {
+  scheduled: "Scheduled",
+  completed: "Completed",
+  cancelled: "Cancelled",
+  no_show: "No-show"
+};
+
 function formatRole(role: string) {
   return role.replace(/_/g, " ");
 }
@@ -200,8 +210,8 @@ function BreakdownRow({ label, tone, count }: { label: string; tone: StatusTone;
   );
 }
 
-export function OwnerDashboardPage() {
-  const { activeOrganization, activeOrganizationId, role, hasPermission } = useOrganization();
+export function OwnerInsights() {
+  const { activeOrganizationId, role, hasPermission } = useOrganization();
 
   const isOwner = role === "organization_owner" || role === "platform_owner";
 
@@ -211,9 +221,10 @@ export function OwnerDashboardPage() {
   const canSeeIncidents = hasPermission("incidents.read");
   const canSeeApplicants = hasPermission("applicants.read");
   const canSeeAudit = hasPermission("audit.read");
+  const canSeeShifts = hasPermission("shifts.read");
 
   const membersQuery = useQuery({
-    queryKey: ["owner-dashboard-members", activeOrganizationId],
+    queryKey: ["owner-insights-members", activeOrganizationId],
     queryFn: async () => {
       const { data, error } = await supabase.rpc("list_organization_members", {
         target_organization_id: activeOrganizationId!
@@ -225,7 +236,7 @@ export function OwnerDashboardPage() {
   });
 
   const credentialsQuery = useQuery({
-    queryKey: ["owner-dashboard-credentials", activeOrganizationId],
+    queryKey: ["owner-insights-credentials", activeOrganizationId],
     queryFn: async () => {
       const { data, error } = await supabase.rpc("list_caregiver_credentials", {
         target_organization_id: activeOrganizationId!
@@ -237,7 +248,7 @@ export function OwnerDashboardPage() {
   });
 
   const authorizationsQuery = useQuery({
-    queryKey: ["owner-dashboard-authorizations", activeOrganizationId],
+    queryKey: ["owner-insights-authorizations", activeOrganizationId],
     queryFn: async () => {
       const { data, error } = await supabase.rpc("list_client_authorizations", {
         target_organization_id: activeOrganizationId!
@@ -249,7 +260,7 @@ export function OwnerDashboardPage() {
   });
 
   const incidentsQuery = useQuery({
-    queryKey: ["owner-dashboard-incidents", activeOrganizationId],
+    queryKey: ["owner-insights-incidents", activeOrganizationId],
     queryFn: async () => {
       const { data, error } = await supabase.rpc("list_incidents", {
         target_organization_id: activeOrganizationId!
@@ -260,12 +271,8 @@ export function OwnerDashboardPage() {
     enabled: !!activeOrganizationId && isOwner && canSeeIncidents
   });
 
-  // Every other section here rolls up an entity that already existed
-  // when this page was first built. Applicants (grown into a full
-  // workflow across Builds 002-008) were never added - the gap this
-  // build closes, found by reading this page rather than assuming.
   const applicantsQuery = useQuery({
-    queryKey: ["owner-dashboard-applicants", activeOrganizationId],
+    queryKey: ["owner-insights-applicants", activeOrganizationId],
     queryFn: async () => {
       const { data, error } = await supabase.rpc("list_applicants", {
         target_organization_id: activeOrganizationId!
@@ -277,7 +284,7 @@ export function OwnerDashboardPage() {
   });
 
   const auditQuery = useQuery({
-    queryKey: ["owner-dashboard-audit", activeOrganizationId],
+    queryKey: ["owner-insights-audit", activeOrganizationId],
     queryFn: async () => {
       const { data, error } = await supabase.rpc("list_audit_logs", {
         target_organization_id: activeOrganizationId!
@@ -288,19 +295,24 @@ export function OwnerDashboardPage() {
     enabled: !!activeOrganizationId && isOwner && canSeeAudit
   });
 
-  if (!isOwner) {
-    return (
-      <section className="mx-auto max-w-4xl">
-        <Card>
-          <p className="text-sm font-medium text-slate-500">Workforce Insights</p>
-          <h2 className="mt-1 text-2xl font-semibold text-slate-950">Not available</h2>
-          <p className="mt-3 text-slate-600">
-            Only the organization owner can view this rollup.
-          </p>
-        </Card>
-      </section>
-    );
-  }
+  const weekStart = getWeekStart(new Date());
+  const weekEnd = getWeekEnd(weekStart);
+
+  const shiftsQuery = useQuery({
+    queryKey: ["owner-insights-shifts", activeOrganizationId, weekStart.toISOString()],
+    queryFn: async () => {
+      const { data, error } = await supabase.rpc("list_shifts", {
+        target_organization_id: activeOrganizationId!,
+        from_time: weekStart.toISOString(),
+        to_time: weekEnd.toISOString()
+      });
+      if (error) throw error;
+      return (data ?? []) as ShiftRow[];
+    },
+    enabled: !!activeOrganizationId && isOwner && canSeeShifts
+  });
+
+  if (!isOwner) return null;
 
   const roleCounts = tally((membersQuery.data ?? []).map((m) => m.role));
   const statusCounts = tally((membersQuery.data ?? []).map((m) => m.status));
@@ -318,10 +330,10 @@ export function OwnerDashboardPage() {
 
   // Org-wide monthly capacity: same three numbers each authorization row
   // already shows on the Client detail page (used/scheduled/remaining),
-  // summed across every authorization instead of shown per-client - the
-  // rollup answers "how much of what we're authorized to bill are we
-  // actually using this month," which is the "Revenue at Risk"/
-  // "Remaining Capacity" question the owner asked for on this page.
+  // summed across every authorization instead of shown per-client - an
+  // hours-based proxy for "how much of what we're authorized to bill are
+  // we actually using," not a dollar figure (no billing data exists yet
+  // to compute real revenue from).
   const totalAuthorizedHours = (authorizationsQuery.data ?? []).reduce((sum, a) => sum + a.max_monthly_hours, 0);
   const totalUsedHours = (authorizationsQuery.data ?? []).reduce((sum, a) => sum + a.hours_used_this_month, 0);
   const totalScheduledHours = (authorizationsQuery.data ?? []).reduce(
@@ -354,99 +366,72 @@ export function OwnerDashboardPage() {
     (entry) => new Date(entry.occurred_at).getTime() >= sevenDaysAgo.getTime()
   ).length;
 
+  const shifts = shiftsQuery.data ?? [];
+  const shiftStatusCounts = tally(shifts.map((s) => s.status));
+  const needsCoverageCount = shifts.filter((s) => s.status === "scheduled" && s.needs_coverage).length;
+  const coverageChartData = (["scheduled", "completed", "cancelled", "no_show"] as ShiftRow["status"][])
+    .filter((status) => shiftStatusCounts.has(status))
+    .map((status) => ({ name: shiftStatusLabel[status], count: shiftStatusCounts.get(status) ?? 0, status }));
+
   return (
-    <section className="mx-auto max-w-5xl space-y-6">
+    <div className="space-y-6">
       <div>
-        <p className="text-sm font-medium text-slate-500">Workforce Insights</p>
-        <h2 className="mt-1 text-2xl font-semibold text-slate-950">
-          {activeOrganization?.displayName ?? "Operations rollup"}
-        </h2>
+        <p className="text-sm font-medium text-slate-500">Owner insights</p>
         <p className="mt-1 text-sm text-slate-500">
-          Organization-wide counts by status, for a strategic read on where things stand -
-          not a task list (that's the Action Center on Command Center).
+          Money, coverage, compliance, and growth - a strategic read on where things stand, not a task list
+          (that's the Action Center above).
         </p>
       </div>
 
-      {canSeeMembers ? (
-        <div className="grid gap-4 sm:grid-cols-2">
-          <Card>
-            <h3 className="font-semibold text-slate-950">Team by role</h3>
-            {membersQuery.isLoading ? (
-              <p className="mt-3 text-sm text-slate-500">Loading…</p>
-            ) : membersQuery.isError ? (
-              <p className="mt-3 text-sm text-red-700">Could not load team members.</p>
-            ) : roleCounts.size === 0 ? (
-              <p className="mt-3 text-sm text-slate-400">No team members yet.</p>
-            ) : (
-              <>
-                <div className="mt-2 h-40" role="img" aria-label="Team composition by role">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <PieChart>
-                      <Pie data={roleChartData} dataKey="value" nameKey="name" innerRadius={35} outerRadius={60}>
-                        {roleChartData.map((entry, index) => (
-                          <Cell key={entry.name} fill={ROLE_CHART_COLORS[index % ROLE_CHART_COLORS.length]} />
-                        ))}
-                      </Pie>
-                      <Tooltip />
-                    </PieChart>
-                  </ResponsiveContainer>
-                </div>
-                <div className="mt-2 divide-y divide-slate-100">
-                  {[...roleCounts.entries()].map(([roleKey, count]) => (
-                    <BreakdownRow key={roleKey} label={formatRole(roleKey)} tone="neutral" count={count} />
-                  ))}
-                </div>
-              </>
-            )}
-          </Card>
-          <Card>
-            <h3 className="font-semibold text-slate-950">Team by status</h3>
-            {membersQuery.isLoading ? (
-              <p className="mt-3 text-sm text-slate-500">Loading…</p>
-            ) : membersQuery.isError ? (
-              <p className="mt-3 text-sm text-red-700">Could not load team members.</p>
-            ) : statusCounts.size === 0 ? (
-              <p className="mt-3 text-sm text-slate-400">No team members yet.</p>
-            ) : (
-              <div className="mt-2 divide-y divide-slate-100">
-                {membershipStatusSchema.options
-                  .filter((status) => statusCounts.has(status))
-                  .map((status) => (
-                    <BreakdownRow
-                      key={status}
-                      label={status}
-                      tone={membershipStatusTone[status]}
-                      count={statusCounts.get(status) ?? 0}
-                    />
-                  ))}
-              </div>
-            )}
-          </Card>
-        </div>
-      ) : null}
-
-      {canSeeCredentials ? (
+      {canSeeShifts ? (
         <Card>
-          <h3 className="font-semibold text-slate-950">Credential compliance</h3>
-          {credentialsQuery.isLoading ? (
+          <h3 className="font-semibold text-slate-950">Coverage this week</h3>
+          <p className="mt-1 text-xs text-slate-500">
+            {weekStart.toLocaleDateString()} – {new Date(weekEnd.getTime() - 1).toLocaleDateString()} · every shift
+            by outcome, plus how many scheduled shifts currently have no caregiver assigned.
+          </p>
+          {shiftsQuery.isLoading ? (
             <p className="mt-3 text-sm text-slate-500">Loading…</p>
-          ) : credentialsQuery.isError ? (
-            <p className="mt-3 text-sm text-red-700">Could not load credentials.</p>
-          ) : credentialCounts.size === 0 ? (
-            <p className="mt-3 text-sm text-slate-400">No credentials tracked yet.</p>
+          ) : shiftsQuery.isError ? (
+            <p className="mt-3 text-sm text-red-700">Could not load this week's shifts.</p>
+          ) : shifts.length === 0 ? (
+            <p className="mt-3 text-sm text-slate-400">No shifts scheduled this week.</p>
           ) : (
-            <div className="mt-2 grid gap-x-6 sm:grid-cols-2">
-              {(Object.keys(credentialStatusLabel) as CredentialStatus[])
-                .filter((status) => credentialCounts.has(status))
-                .map((status) => (
-                  <BreakdownRow
-                    key={status}
-                    label={credentialStatusLabel[status]}
-                    tone={credentialStatusTone[status]}
-                    count={credentialCounts.get(status) ?? 0}
-                  />
-                ))}
-            </div>
+            <>
+              {needsCoverageCount > 0 ? (
+                <p className="mt-3 text-sm font-medium text-red-700">
+                  {needsCoverageCount} shift{needsCoverageCount === 1 ? "" : "s"} need{needsCoverageCount === 1 ? "s" : ""}{" "}
+                  coverage right now.
+                </p>
+              ) : (
+                <p className="mt-3 text-sm font-medium text-emerald-700">Every shift this week has a caregiver.</p>
+              )}
+              <div className="mt-3 h-40" role="img" aria-label="Shifts this week by outcome">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={coverageChartData}>
+                    <XAxis dataKey="name" tick={{ fontSize: 12 }} />
+                    <YAxis allowDecimals={false} tick={{ fontSize: 12 }} />
+                    <Tooltip />
+                    <Bar dataKey="count" radius={[4, 4, 0, 0]}>
+                      {coverageChartData.map((entry) => (
+                        <Cell
+                          key={entry.status}
+                          fill={
+                            entry.status === "scheduled"
+                              ? CHART_COLORS.info
+                              : entry.status === "completed"
+                                ? CHART_COLORS.success
+                                : entry.status === "no_show"
+                                  ? CHART_COLORS.danger
+                                  : CHART_COLORS.neutral
+                          }
+                        />
+                      ))}
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            </>
           )}
         </Card>
       ) : null}
@@ -456,8 +441,8 @@ export function OwnerDashboardPage() {
           <h3 className="font-semibold text-slate-950">Monthly capacity</h3>
           <p className="mt-1 text-xs text-slate-500">
             Authorized hours across every active authorization this month, split by how much is already used,
-            scheduled, or still open - answers whether there&apos;s room to take on more hours or a real risk of
-            going over.
+            scheduled, or still open - an hours-based proxy for revenue at risk, not a dollar figure (no billing
+            data exists yet to compute real revenue from).
           </p>
           {authorizationsQuery.isLoading ? (
             <p className="mt-3 text-sm text-slate-500">Loading…</p>
@@ -532,6 +517,32 @@ export function OwnerDashboardPage() {
             )}
           </Card>
         </div>
+      ) : null}
+
+      {canSeeCredentials ? (
+        <Card>
+          <h3 className="font-semibold text-slate-950">Credential compliance</h3>
+          {credentialsQuery.isLoading ? (
+            <p className="mt-3 text-sm text-slate-500">Loading…</p>
+          ) : credentialsQuery.isError ? (
+            <p className="mt-3 text-sm text-red-700">Could not load credentials.</p>
+          ) : credentialCounts.size === 0 ? (
+            <p className="mt-3 text-sm text-slate-400">No credentials tracked yet.</p>
+          ) : (
+            <div className="mt-2 grid gap-x-6 sm:grid-cols-2">
+              {(Object.keys(credentialStatusLabel) as CredentialStatus[])
+                .filter((status) => credentialCounts.has(status))
+                .map((status) => (
+                  <BreakdownRow
+                    key={status}
+                    label={credentialStatusLabel[status]}
+                    tone={credentialStatusTone[status]}
+                    count={credentialCounts.get(status) ?? 0}
+                  />
+                ))}
+            </div>
+          )}
+        </Card>
       ) : null}
 
       {canSeeIncidents ? (
@@ -611,6 +622,64 @@ export function OwnerDashboardPage() {
         </Card>
       ) : null}
 
+      {canSeeMembers ? (
+        <div className="grid gap-4 sm:grid-cols-2">
+          <Card>
+            <h3 className="font-semibold text-slate-950">Team by role</h3>
+            {membersQuery.isLoading ? (
+              <p className="mt-3 text-sm text-slate-500">Loading…</p>
+            ) : membersQuery.isError ? (
+              <p className="mt-3 text-sm text-red-700">Could not load team members.</p>
+            ) : roleCounts.size === 0 ? (
+              <p className="mt-3 text-sm text-slate-400">No team members yet.</p>
+            ) : (
+              <>
+                <div className="mt-2 h-40" role="img" aria-label="Team composition by role">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <PieChart>
+                      <Pie data={roleChartData} dataKey="value" nameKey="name" innerRadius={35} outerRadius={60}>
+                        {roleChartData.map((entry, index) => (
+                          <Cell key={entry.name} fill={ROLE_CHART_COLORS[index % ROLE_CHART_COLORS.length]} />
+                        ))}
+                      </Pie>
+                      <Tooltip />
+                    </PieChart>
+                  </ResponsiveContainer>
+                </div>
+                <div className="mt-2 divide-y divide-slate-100">
+                  {[...roleCounts.entries()].map(([roleKey, count]) => (
+                    <BreakdownRow key={roleKey} label={formatRole(roleKey)} tone="neutral" count={count} />
+                  ))}
+                </div>
+              </>
+            )}
+          </Card>
+          <Card>
+            <h3 className="font-semibold text-slate-950">Team by status</h3>
+            {membersQuery.isLoading ? (
+              <p className="mt-3 text-sm text-slate-500">Loading…</p>
+            ) : membersQuery.isError ? (
+              <p className="mt-3 text-sm text-red-700">Could not load team members.</p>
+            ) : statusCounts.size === 0 ? (
+              <p className="mt-3 text-sm text-slate-400">No team members yet.</p>
+            ) : (
+              <div className="mt-2 divide-y divide-slate-100">
+                {membershipStatusSchema.options
+                  .filter((status) => statusCounts.has(status))
+                  .map((status) => (
+                    <BreakdownRow
+                      key={status}
+                      label={status}
+                      tone={membershipStatusTone[status]}
+                      count={statusCounts.get(status) ?? 0}
+                    />
+                  ))}
+              </div>
+            )}
+          </Card>
+        </div>
+      ) : null}
+
       {canSeeAudit ? (
         <Card>
           <h3 className="font-semibold text-slate-950">Recent activity</h3>
@@ -626,6 +695,6 @@ export function OwnerDashboardPage() {
           )}
         </Card>
       ) : null}
-    </section>
+    </div>
   );
 }

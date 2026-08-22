@@ -3,9 +3,9 @@ import { cleanup } from "@testing-library/react";
 import "@testing-library/jest-dom/vitest";
 
 // jsdom has no ResizeObserver, but recharts' <ResponsiveContainer>
-// (owner-dashboard-page.tsx's capacity/team-composition charts,
-// Build 012) requires one to measure its container - without this stub
-// every chart render throws "ResizeObserver is not defined".
+// (owner-insights.tsx's capacity/team-composition charts, Build 012)
+// requires one to measure its container - without this stub every chart
+// render throws "ResizeObserver is not defined".
 class ResizeObserverStub {
   observe() {}
   unobserve() {}

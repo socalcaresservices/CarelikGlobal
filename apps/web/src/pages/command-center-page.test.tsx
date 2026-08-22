@@ -6,6 +6,7 @@ import { CommandCenterPage } from "./command-center-page";
 vi.mock("@/providers/organization-provider", () => ({ useOrganization: vi.fn() }));
 vi.mock("@/components/action-center", () => ({ ActionCenter: () => null }));
 vi.mock("@/components/operational-snapshot", () => ({ OperationalSnapshot: () => null }));
+vi.mock("@/components/owner-insights", () => ({ OwnerInsights: () => null }));
 
 const mockedUseOrganization = vi.mocked(useOrganization);
 
