@@ -20,6 +20,10 @@ interface ClientRow {
   phone: string | null;
   email: string | null;
   address: string | null;
+  address_line2: string | null;
+  address_city: string | null;
+  address_state: string | null;
+  address_zip: string | null;
   care_notes: string | null;
   status: "active" | "inactive" | "discharged";
 }
@@ -36,6 +40,10 @@ const emptyForm = {
   phone: "",
   email: "",
   address: "",
+  addressLine2: "",
+  addressCity: "",
+  addressState: "",
+  addressZip: "",
   careNotes: "",
   status: "active" as ClientRow["status"]
 };
@@ -168,6 +176,10 @@ export function ClientsPage() {
       phone: row.phone ?? "",
       email: row.email ?? "",
       address: row.address ?? "",
+      addressLine2: row.address_line2 ?? "",
+      addressCity: row.address_city ?? "",
+      addressState: row.address_state ?? "",
+      addressZip: row.address_zip ?? "",
       careNotes: row.care_notes ?? "",
       status: row.status
     });
@@ -195,6 +207,10 @@ export function ClientsPage() {
         phone: form.phone || null,
         email: form.email || null,
         address: form.address || null,
+        address_line2: form.addressLine2 || null,
+        address_city: form.addressCity || null,
+        address_state: form.addressState || null,
+        address_zip: form.addressZip || null,
         care_notes: form.careNotes || null,
         status: form.status
       };
@@ -343,12 +359,56 @@ export function ClientsPage() {
               </div>
               <div className="sm:col-span-2">
                 <label htmlFor="client-address" className="block text-xs font-medium text-slate-600">
-                  Address
+                  Street address
                 </label>
                 <input
                   id="client-address"
                   value={form.address}
                   onChange={(event) => setForm({ ...form, address: event.target.value })}
+                  className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900"
+                />
+              </div>
+              <div className="sm:col-span-2">
+                <label htmlFor="client-address-line2" className="block text-xs font-medium text-slate-600">
+                  Address line 2
+                </label>
+                <input
+                  id="client-address-line2"
+                  value={form.addressLine2}
+                  onChange={(event) => setForm({ ...form, addressLine2: event.target.value })}
+                  className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900"
+                />
+              </div>
+              <div>
+                <label htmlFor="client-address-city" className="block text-xs font-medium text-slate-600">
+                  City
+                </label>
+                <input
+                  id="client-address-city"
+                  value={form.addressCity}
+                  onChange={(event) => setForm({ ...form, addressCity: event.target.value })}
+                  className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900"
+                />
+              </div>
+              <div>
+                <label htmlFor="client-address-state" className="block text-xs font-medium text-slate-600">
+                  State
+                </label>
+                <input
+                  id="client-address-state"
+                  value={form.addressState}
+                  onChange={(event) => setForm({ ...form, addressState: event.target.value })}
+                  className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900"
+                />
+              </div>
+              <div>
+                <label htmlFor="client-address-zip" className="block text-xs font-medium text-slate-600">
+                  ZIP code
+                </label>
+                <input
+                  id="client-address-zip"
+                  value={form.addressZip}
+                  onChange={(event) => setForm({ ...form, addressZip: event.target.value })}
                   className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900"
                 />
               </div>

@@ -236,6 +236,37 @@ describe("ClientsPage", () => {
     );
   });
 
+  it("includes the structured address fields when adding a new client", async () => {
+    mockedUseOrganization.mockReturnValue({ ...baseOrganization(), hasPermission: vi.fn(() => true) });
+    const selectMock = mockReadableClients([]);
+    const insertMock = vi.fn().mockResolvedValue({ error: null });
+    mockedFrom.mockReturnValue({ select: selectMock, insert: insertMock } as never);
+
+    renderPage();
+    await waitFor(() => expect(screen.getByText("Add a client")).toBeInTheDocument());
+
+    fireEvent.change(screen.getByLabelText("First name"), { target: { value: "Jordan" } });
+    fireEvent.change(screen.getByLabelText("Last name"), { target: { value: "Rivera" } });
+    fireEvent.change(screen.getByLabelText("Street address"), { target: { value: "123 Main St" } });
+    fireEvent.change(screen.getByLabelText("Address line 2"), { target: { value: "Apt 4B" } });
+    fireEvent.change(screen.getByLabelText("City"), { target: { value: "Anaheim" } });
+    fireEvent.change(screen.getByLabelText("State"), { target: { value: "CA" } });
+    fireEvent.change(screen.getByLabelText("ZIP code"), { target: { value: "92801" } });
+    fireEvent.click(screen.getByRole("button", { name: "Add client" }));
+
+    await waitFor(() =>
+      expect(insertMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          address: "123 Main St",
+          address_line2: "Apt 4B",
+          address_city: "Anaheim",
+          address_state: "CA",
+          address_zip: "92801"
+        })
+      )
+    );
+  });
+
   it("soft-deletes a client via Remove", async () => {
     mockedUseOrganization.mockReturnValue({ ...baseOrganization(), hasPermission: vi.fn(() => true) });
     const selectMock = mockReadableClients([
