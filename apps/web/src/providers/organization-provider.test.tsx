@@ -234,7 +234,7 @@ describe("OrganizationProvider", () => {
   // "carelik.activeOrganizationId" from an earlier, unrelated visit to
   // Org A. The hostname must always win over a stale local cache.
   it("scopes to the tenantSlug organization even when a different org is cached from a previous visit", async () => {
-    window.localStorage.setItem("carelik.activeOrganizationId", ORG_ID);
+    window.localStorage.setItem("carelik.activeOrganizationId.user-4", ORG_ID);
     mockedUseAuth.mockReturnValue({
       user: { id: "user-4" } as never,
       session: {} as never,
@@ -329,5 +329,56 @@ describe("OrganizationProvider", () => {
     renderProvider(undefined);
 
     await waitFor(() => expect(screen.getByTestId("active-org-id")).toHaveTextContent(ORG_ID));
+  });
+
+  // Regression test for the bug reported live: signing out of one account
+  // and into a different one in the same browser (no full page reload)
+  // left the previous account's last-active organization id pointed at
+  // by this provider, because "carelik.activeOrganizationId" used to be
+  // one flat key shared by every account that ever used this browser.
+  // A user with no membership in that cached organization at all would
+  // have every request scoped to an org they can't access, failing RLS
+  // with a generic error that gave no hint the active organization
+  // itself was wrong. The key is now scoped per user id, so a different
+  // account can never inherit it in the first place.
+  it("never inherits a different account's cached organization id in the same browser", async () => {
+    // Org A's owner was active here earlier in this browser session.
+    window.localStorage.setItem("carelik.activeOrganizationId.owner-a", ORG_ID);
+
+    // A different user, B, signs in - a member of Other Org only, not Org A.
+    mockedUseAuth.mockReturnValue({
+      user: { id: "owner-b" } as never,
+      session: {} as never,
+      loading: false,
+      signInWithGithub: vi.fn(),
+      signInWithPassword: vi.fn(),
+      resetPasswordForEmail: vi.fn(),
+      updatePassword: vi.fn(),
+      signOut: vi.fn()
+    });
+    mockedRpc.mockResolvedValue({ data: null, error: null } as never);
+
+    setResolver((table, calls) => {
+      if (table === "user_profiles") return { data: { platform_role: null }, error: null };
+      // RLS on organizations already scopes this to B's own memberships -
+      // Org A never appears here for B.
+      if (table === "organizations") return { data: [otherOrgRow], error: null };
+      if (table === "organization_memberships" && hasEqCall(calls, "status", "invited")) {
+        return { data: [], error: null };
+      }
+      if (table === "organization_memberships" && hasEqCall(calls, "status", "active")) {
+        return { data: { role: "organization_admin" }, error: null };
+      }
+      if (table === "role_permissions") return { data: [], error: null };
+      return { data: null, error: null };
+    });
+
+    renderProvider(undefined);
+
+    // Must land on B's own organization, never A's cached id - and never
+    // transiently persist A's id back into B's own storage key either.
+    await waitFor(() => expect(screen.getByTestId("active-org-id")).toHaveTextContent(OTHER_ORG_ID));
+    expect(window.localStorage.getItem("carelik.activeOrganizationId.owner-b")).toBe(OTHER_ORG_ID);
+    expect(window.localStorage.getItem("carelik.activeOrganizationId.owner-a")).toBe(ORG_ID);
   });
 });
