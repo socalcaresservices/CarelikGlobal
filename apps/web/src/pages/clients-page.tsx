@@ -6,6 +6,7 @@ import { Button, Card, EmptyState, FormSection, FilterBar, type ActiveFilter } f
 import { clientStatusSchema } from "@carelik/shared";
 import { useOrganization } from "@/providers/organization-provider";
 import { supabase } from "@/lib/supabase";
+import { getSaveErrorMessage } from "@/lib/data-errors";
 import { useTableControls } from "@/lib/use-table-controls";
 import { useFilters } from "@/lib/use-filters";
 import { useColumnWidths } from "@/lib/use-column-widths";
@@ -194,7 +195,10 @@ export function ClientsPage() {
 
   async function handleSave(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!activeOrganizationId) return;
+    if (!activeOrganizationId) {
+      setFormError("No organization is selected. Reload the page and confirm you're in the right organization before saving.");
+      return;
+    }
 
     setFormError(null);
     setRowSuccess(null);
@@ -225,7 +229,7 @@ export function ClientsPage() {
       resetForm();
       refreshClients();
     } catch (cause) {
-      setFormError(cause instanceof Error ? cause.message : "Could not save client.");
+      setFormError(getSaveErrorMessage(cause, "Could not save client."));
     } finally {
       setSaving(false);
     }
@@ -242,7 +246,7 @@ export function ClientsPage() {
       if (editingId === row.id) resetForm();
       refreshClients();
     } catch (cause) {
-      setRowError(cause instanceof Error ? cause.message : "Could not remove client.");
+      setRowError(getSaveErrorMessage(cause, "Could not remove client."));
     } finally {
       setPendingId(null);
     }

@@ -19,6 +19,25 @@ import { supabase } from "@/lib/supabase";
 
 const ACTIVE_ORGANIZATION_STORAGE_KEY = "carelik.activeOrganizationId";
 
+// Scoped per user id, not a single flat key. Without this, signing out
+// of one account and into a different one in the same browser (no full
+// page reload - the OrganizationProvider component itself never
+// unmounts) left the *previous* account's last-active organization id
+// sitting in both localStorage and this provider's React state, with
+// nothing forcing a re-read on the identity change. The "still visible"
+// self-correction effect below is supposed to catch a stale id once the
+// new user's own `organizations` list loads, but that still leaves a
+// window - and every request issued before it fires - pointed at an
+// organization the new user has no membership in at all, which is
+// exactly the failure mode reported: RLS silently rejects the insert
+// with a generic "row-level security policy" error that gives no hint
+// the active organization itself was wrong. Scoping the key per user
+// means a different account was simply never in a position to inherit
+// it in the first place.
+function storageKeyForUser(userId: string | undefined) {
+  return userId ? `${ACTIVE_ORGANIZATION_STORAGE_KEY}.${userId}` : null;
+}
+
 // A stable reference for the "no data yet" case: `data ?? []` would create
 // a new array every render, which defeats the point of the dependency
 // arrays below (they'd see a "new" organizations value on every render).
@@ -63,8 +82,23 @@ export function OrganizationProvider({
   const { user } = useAuth();
   const queryClient = useQueryClient();
   const [activeOrganizationId, setActiveOrganizationIdState] = useState<string | null>(
-    () => window.localStorage.getItem(ACTIVE_ORGANIZATION_STORAGE_KEY)
+    () => (typeof window !== "undefined" ? window.localStorage.getItem(storageKeyForUser(user?.id) ?? "") : null)
   );
+
+  // Re-sync to this account's own cached value whenever the signed-in
+  // identity changes - the initial useState above only runs once on
+  // mount, before `useAuth()` may have resolved a user at all, and never
+  // again on a later sign-out/sign-in within the same tab. Without this,
+  // a second account signed into the same browser session would keep
+  // rendering with whichever id happened to be in React state from
+  // before, until the slower "still visible in my own org list"
+  // correction effect below caught up - a window where every request
+  // that account issues is scoped to an organization it was never a
+  // member of.
+  useEffect(() => {
+    const key = storageKeyForUser(user?.id);
+    setActiveOrganizationIdState(key ? window.localStorage.getItem(key) : null);
+  }, [user?.id]);
   // A one-time deep-link preference read from ?org=<slug> - used by the
   // platform Organizations registry's "Enter organization" link
   // (toAppUrl() + "?org=" + slug) so picking an org there lands on that
@@ -197,10 +231,11 @@ export function OrganizationProvider({
   }, [organizations, activeOrganizationId, tenantSlug, preferredOrgSlug]);
 
   useEffect(() => {
-    if (activeOrganizationId) {
-      window.localStorage.setItem(ACTIVE_ORGANIZATION_STORAGE_KEY, activeOrganizationId);
+    const key = storageKeyForUser(user?.id);
+    if (key && activeOrganizationId) {
+      window.localStorage.setItem(key, activeOrganizationId);
     }
-  }, [activeOrganizationId]);
+  }, [activeOrganizationId, user?.id]);
 
   const membershipRoleQuery = useQuery({
     queryKey: ["membership-role", user?.id, activeOrganizationId],

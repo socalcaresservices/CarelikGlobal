@@ -4,6 +4,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button, Card, StatusBadge } from "@carelik/ui";
 import { useOrganization } from "@/providers/organization-provider";
 import { supabase } from "@/lib/supabase";
+import { getSaveErrorMessage } from "@/lib/data-errors";
 
 // Administrative workforce records only. This screen does not rank, score,
 // recommend, select, or remove people. Authorized staff control record changes.
@@ -52,8 +53,11 @@ export function CareTeamPage() {
 
   const addMutation = useMutation({
     mutationFn: async () => {
+      if (!activeOrganizationId) {
+        throw new Error("No organization is selected. Reload the page and confirm you're in the right organization before saving.");
+      }
       const { error } = await supabase.from("caregiver_records").insert({
-        organization_id: activeOrganizationId!,
+        organization_id: activeOrganizationId,
         first_name: firstName.trim(),
         last_name: lastName.trim(),
         email: email.trim() || null,
@@ -114,7 +118,11 @@ export function CareTeamPage() {
             <input placeholder="Phone" value={phone} onChange={(event) => setPhone(event.target.value)} className="rounded-lg border border-slate-200 px-3 py-2 text-sm" />
             <div className="sm:col-span-2">
               <Button type="submit" loading={addMutation.isPending}>Create record</Button>
-              {addMutation.isError ? <p className="mt-2 text-sm text-red-700">Could not create the record.</p> : null}
+              {addMutation.isError ? (
+                <p className="mt-2 text-sm text-red-700">
+                  {getSaveErrorMessage(addMutation.error, "Could not create the record.")}
+                </p>
+              ) : null}
             </div>
           </form>
         </Card>
