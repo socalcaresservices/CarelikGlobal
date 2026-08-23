@@ -162,6 +162,7 @@ export function ServiceVerificationReportsPage() {
         starts_at: string;
         ends_at: string;
         status: "scheduled" | "completed" | "cancelled" | "no_show";
+        needs_coverage: boolean;
       }>;
     },
     enabled: !!activeOrganizationId && canRead
@@ -334,6 +335,13 @@ export function ServiceVerificationReportsPage() {
     const map = new Map<string, { name: string; minutes: number }>();
     for (const shift of shiftsQuery.data ?? []) {
       if (!shift.caregiver_user_id || (shift.status !== "scheduled" && shift.status !== "completed")) continue;
+      // A called-out shift still shows in this window (status stays
+      // "scheduled" until reassigned - call_out_shift never touches
+      // caregiver_user_id/status), but the original caregiver is no
+      // longer the confirmed assignee, so it shouldn't count toward
+      // their hours here either - same rule get_caregiver_hours()
+      // enforces server-side (20260823010000).
+      if (shift.needs_coverage) continue;
       const minutes = (new Date(shift.ends_at).getTime() - new Date(shift.starts_at).getTime()) / 60000;
       const entry = map.get(shift.caregiver_user_id) ?? { name: shift.caregiver_name, minutes: 0 };
       entry.minutes += minutes;

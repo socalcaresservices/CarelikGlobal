@@ -199,6 +199,50 @@ describe("ServiceVerificationReportsPage", () => {
     expect(within(scheduledCard).getByText("Alex Doe")).toBeInTheDocument();
   });
 
+  it("excludes a called-out shift from the caregiver's scheduled hours, but still counts it for the client", async () => {
+    mockedUseOrganization.mockReturnValue({
+      activeOrganizationId: ORG_ID,
+      activeOrganization: { displayName: "Acme Care" },
+      hasPermission: vi.fn(() => true)
+    } as never);
+    mockOrgLetterhead();
+    mockedRpc.mockImplementation((fn: string) => {
+      if (fn === "list_service_visits") {
+        return Promise.resolve({ data: [], error: null }) as never;
+      }
+      if (fn === "list_shifts") {
+        return Promise.resolve({
+          data: [
+            {
+              client_id: "called-out-client",
+              client_name: "Robin Lee",
+              caregiver_user_id: "called-out-caregiver",
+              caregiver_name: "Casey Nguyen",
+              starts_at: "2026-08-03T13:00:00.000Z",
+              ends_at: "2026-08-03T15:00:00.000Z",
+              status: "scheduled",
+              needs_coverage: true
+            }
+          ],
+          error: null
+        }) as never;
+      }
+      return Promise.resolve({ data: [], error: null }) as never;
+    });
+
+    renderPage();
+
+    await waitFor(() => expect(screen.getByText("Scheduled vs delivered hours")).toBeInTheDocument());
+    const scheduledCard = screen.getByText("Scheduled vs delivered hours").closest("div")!;
+    // The called-out caregiver is no longer the confirmed assignee, so
+    // they don't appear in the "by caregiver" list at all.
+    expect(within(scheduledCard).queryByText("Casey Nguyen")).not.toBeInTheDocument();
+    // The client is still scheduled for that time regardless of which
+    // caregiver (if any) currently holds it, so they still show 2h scheduled.
+    const robinRow = within(scheduledCard).getByText("Robin Lee").closest("li")!;
+    expect(robinRow).toHaveTextContent("2 scheduled · 0 delivered");
+  });
+
   it("passes filter selections through to list_service_visits", async () => {
     mockedUseOrganization.mockReturnValue({
       activeOrganizationId: ORG_ID,
