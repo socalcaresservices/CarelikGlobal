@@ -408,6 +408,30 @@ export function SchedulePage() {
   }
 
   async function handleStatusChange(shiftId: string, nextStatus: ShiftRow["status"]) {
+    // Cancelling goes through cancel_shift() rather than a direct
+    // update - it requires a reason (matching call_out_shift/
+    // reassign_shift's house style) and records it in
+    // shift_coverage_events instead of leaving cancellation as the one
+    // status change with no captured explanation. Same window.prompt
+    // pattern documents-card.tsx already uses for a required rejection
+    // reason.
+    if (nextStatus === "cancelled") {
+      const reason = window.prompt("Why is this shift being cancelled?");
+      if (!reason || !reason.trim()) return;
+      setRowError(null);
+      setPendingId(shiftId);
+      try {
+        const { error } = await supabase.rpc("cancel_shift", { target_shift_id: shiftId, reason: reason.trim() });
+        if (error) throw error;
+        refreshShifts();
+      } catch (cause) {
+        setRowError(cause instanceof Error ? cause.message : "Could not cancel shift.");
+      } finally {
+        setPendingId(null);
+      }
+      return;
+    }
+
     setRowError(null);
     setPendingId(shiftId);
     try {

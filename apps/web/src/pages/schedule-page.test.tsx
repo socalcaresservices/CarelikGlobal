@@ -685,4 +685,60 @@ describe("SchedulePage", () => {
       expect(screen.getByText(/Family emergency/)).toBeInTheDocument();
     });
   });
+
+  describe("cancellation", () => {
+    it("cancels a shift via cancel_shift with a prompted reason", async () => {
+      mockedUseOrganization.mockReturnValue({ ...baseOrganization(), hasPermission: vi.fn(() => true) });
+      mockedRpc.mockImplementation((fn: string) => {
+        if (fn === "list_shifts") return Promise.resolve({ data: [sampleShift], error: null }) as never;
+        if (fn === "cancel_shift") return Promise.resolve({ data: null, error: null }) as never;
+        return Promise.resolve({ data: [], error: null }) as never;
+      });
+      const promptSpy = vi.spyOn(window, "prompt").mockReturnValue("Client cancelled the visit");
+
+      renderPage();
+      await waitFor(() => expect(screen.getByText("Jordan Rivera")).toBeInTheDocument());
+
+      fireEvent.change(screen.getByLabelText(/Change status for/), { target: { value: "cancelled" } });
+
+      await waitFor(() =>
+        expect(mockedRpc).toHaveBeenCalledWith("cancel_shift", {
+          target_shift_id: sampleShift.id,
+          reason: "Client cancelled the visit"
+        })
+      );
+      promptSpy.mockRestore();
+    });
+
+    it("does not cancel when the prompt is dismissed", async () => {
+      mockedUseOrganization.mockReturnValue({ ...baseOrganization(), hasPermission: vi.fn(() => true) });
+      mockRpc({ shifts: [sampleShift] });
+      const promptSpy = vi.spyOn(window, "prompt").mockReturnValue(null);
+
+      renderPage();
+      await waitFor(() => expect(screen.getByText("Jordan Rivera")).toBeInTheDocument());
+
+      fireEvent.change(screen.getByLabelText(/Change status for/), { target: { value: "cancelled" } });
+
+      await waitFor(() => expect(promptSpy).toHaveBeenCalled());
+      expect(mockedRpc).not.toHaveBeenCalledWith("cancel_shift", expect.anything());
+      promptSpy.mockRestore();
+    });
+
+    it("updates status directly (no RPC) for a non-cancellation transition", async () => {
+      mockedUseOrganization.mockReturnValue({ ...baseOrganization(), hasPermission: vi.fn(() => true) });
+      mockRpc({ shifts: [sampleShift] });
+      const eqMock = vi.fn().mockResolvedValue({ error: null });
+      const updateMock = vi.fn(() => ({ eq: eqMock }));
+      mockedFrom.mockReturnValue({ update: updateMock } as never);
+
+      renderPage();
+      await waitFor(() => expect(screen.getByText("Jordan Rivera")).toBeInTheDocument());
+
+      fireEvent.change(screen.getByLabelText(/Change status for/), { target: { value: "completed" } });
+
+      await waitFor(() => expect(updateMock).toHaveBeenCalledWith({ status: "completed" }));
+      expect(mockedRpc).not.toHaveBeenCalledWith("cancel_shift", expect.anything());
+    });
+  });
 });
