@@ -32,6 +32,7 @@ function baseOrganization(role: "organization_owner" | "organization_admin" | "p
     setActiveOrganizationId: vi.fn(),
     role,
     isPlatformOwner: role === "platform_owner",
+    hasRealOrganizationAccess: true,
     hasPermission: vi.fn(() => true),
     loading: false
   };

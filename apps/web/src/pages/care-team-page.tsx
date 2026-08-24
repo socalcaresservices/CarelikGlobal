@@ -22,7 +22,8 @@ interface WorkforceRow {
 }
 
 export function CareTeamPage() {
-  const { activeOrganizationId, activeOrganization, hasPermission } = useOrganization();
+  const { activeOrganizationId, activeOrganization, hasPermission, hasRealOrganizationAccess, isPlatformOwner } =
+    useOrganization();
   const queryClient = useQueryClient();
   const canRead = hasPermission("membership.read");
   const canManage = hasPermission("membership.update");
@@ -82,6 +83,28 @@ export function CareTeamPage() {
   }
 
   if (!canRead) {
+    // A platform owner sees every organization for browsing/support
+    // purposes, but that visibility alone doesn't grant access - they
+    // need an active support access grant for this specific
+    // organization. Tell them that and where to get one, rather than the
+    // generic message a regular member without the role would see.
+    if (isPlatformOwner && !hasRealOrganizationAccess) {
+      return (
+        <Card>
+          <p className="text-sm text-slate-600">
+            You're viewing {activeOrganization?.displayName ?? "this organization"} as a platform owner, but you don't
+            have an active support access grant here, so workforce records aren't visible.
+          </p>
+          <p className="mt-2 text-sm text-slate-600">
+            Request or approve support access from the{" "}
+            <Link to="/organizations" className="font-medium text-slate-900 underline">
+              Organizations
+            </Link>{" "}
+            page, then return here.
+          </p>
+        </Card>
+      );
+    }
     return <Card><p className="text-sm text-slate-600">You do not have permission to view workforce records.</p></Card>;
   }
 

@@ -24,6 +24,7 @@ function platformOwnerContext() {
     role: "platform_owner" as const,
     isPlatformOwner: true,
     hasPermission: vi.fn(() => true),
+    hasRealOrganizationAccess: true,
     loading: false
   };
 }

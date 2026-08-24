@@ -33,6 +33,7 @@ function organizationContext(hasPermission = () => true) {
     setActiveOrganizationId: vi.fn(),
     role: "organization_admin" as const,
     isPlatformOwner: false,
+    hasRealOrganizationAccess: true,
     hasPermission: vi.fn(hasPermission),
     loading: false
   };
@@ -56,6 +57,29 @@ describe("CareTeamPage", () => {
     mockedUseOrganization.mockReturnValue(organizationContext(() => false));
     renderPage();
     expect(screen.getByText("You do not have permission to view workforce records.")).toBeInTheDocument();
+  });
+
+  // Regression test for the reported Care Team authorization bug
+  // (2026-08-24): a platform owner viewing an organization they can see
+  // but have no active support access grant for used to have this page's
+  // "Add caregiver" button and RPC calls render as fully usable, then
+  // fail on submit with an RLS error the user couldn't act on. With
+  // hasPermission() now mirroring the backend's two-tier model, canRead
+  // is false here too, and this page should explain why and point to
+  // where to fix it instead of showing the generic no-permission message.
+  it("tells a platform owner without a support access grant why they can't see the roster, and how to get access", () => {
+    mockedUseOrganization.mockReturnValue({
+      ...organizationContext(() => false),
+      isPlatformOwner: true,
+      role: "platform_owner",
+      hasRealOrganizationAccess: false
+    });
+
+    renderPage();
+
+    expect(screen.getByText(/don't have an active support access grant here/)).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Organizations" })).toHaveAttribute("href", "/organizations");
+    expect(screen.queryByText("You do not have permission to view workforce records.")).not.toBeInTheDocument();
   });
 
   it("lists workforce records independently from login access", async () => {

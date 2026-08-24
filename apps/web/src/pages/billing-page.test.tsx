@@ -34,6 +34,7 @@ function baseOrganization(canApprove = true, canSubmit = true) {
     setActiveOrganizationId: vi.fn(),
     role: "manager" as const,
     isPlatformOwner: false,
+    hasRealOrganizationAccess: true,
     hasPermission: vi.fn((permission: string) => {
       if (permission === "billing.visits.read") return true;
       if (permission === "billing.approve") return canApprove;

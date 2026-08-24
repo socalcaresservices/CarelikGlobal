@@ -42,6 +42,7 @@ function storageKeyForUser(userId: string | undefined) {
 // a new array every render, which defeats the point of the dependency
 // arrays below (they'd see a "new" organizations value on every render).
 const EMPTY_ORGANIZATIONS: Organization[] = [];
+const EMPTY_PERMISSIONS: Set<Permission> = new Set();
 
 interface OrganizationContextValue {
   organizations: Organization[];
@@ -51,6 +52,15 @@ interface OrganizationContextValue {
   role: SystemRole | "platform_owner" | null;
   isPlatformOwner: boolean;
   hasPermission: (permission: Permission) => boolean;
+  // False only for a platform owner viewing an organization they have no
+  // real membership in and no active support_access_grant for - visible
+  // to them (platform owners can see every organization's existence for
+  // browsing/support purposes) but not actually actionable. Always true
+  // for a regular member, since their own `organizations` list only ever
+  // contains organizations they really belong to. Pages use this to warn
+  // before a write is attempted, rather than letting a form render as
+  // normal and fail with an RLS error the user can't act on.
+  hasRealOrganizationAccess: boolean;
   loading: boolean;
 }
 
@@ -218,9 +228,54 @@ export function OrganizationProvider({
 
   const organizations = organizationsQuery.data ?? EMPTY_ORGANIZATIONS;
 
+  // A platform owner's `organizations` list (above) includes every
+  // organization in the system, not just ones they can actually act in -
+  // `is_organization_member()` intentionally lets platform owners see
+  // every org for browsing/support purposes (see organizations-page.tsx's
+  // registry), independent of whether they hold real access anywhere.
+  // Without knowing which of those are real, the "first organization"
+  // fallback below has no way to avoid landing them in one they can only
+  // view, not use - which is exactly what happened: "Ogethinks" sorts
+  // alphabetically before every org this account actually belongs to.
+  // Only fetched for platform owners; a regular member's own
+  // `organizations` list already only ever contains real memberships; no
+  // support-access concept applies to them.
+  const myMembershipsQuery = useQuery({
+    queryKey: ["my-memberships", user?.id],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("organization_memberships")
+        .select("organization_id")
+        .eq("user_id", user!.id)
+        .eq("status", "active");
+      if (error) throw error;
+      return data.map((row) => row.organization_id as string);
+    },
+    enabled: isPlatformOwner && !!user
+  });
+
+  const myActiveSupportGrantsQuery = useQuery({
+    queryKey: ["my-active-support-grants", user?.id],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("support_access_grants")
+        .select("organization_id")
+        .eq("grantee_user_id", user!.id)
+        .eq("status", "active")
+        .gt("expires_at", new Date().toISOString());
+      if (error) throw error;
+      return data.map((row) => row.organization_id as string);
+    },
+    enabled: isPlatformOwner && !!user
+  });
+
+  const realAccessOrgIds = useMemo(
+    () => new Set([...(myMembershipsQuery.data ?? []), ...(myActiveSupportGrantsQuery.data ?? [])]),
+    [myMembershipsQuery.data, myActiveSupportGrantsQuery.data]
+  );
+
   useEffect(() => {
-    const [firstOrganization] = organizations;
-    if (!firstOrganization) return;
+    if (organizations.length === 0) return;
 
     // The hostname decides the tenant here, full stop - not a cached
     // value from a previous visit to a different tenant on the same
@@ -247,15 +302,41 @@ export function OrganizationProvider({
     }
 
     const stillVisible = organizations.some((org) => org.id === activeOrganizationId);
-    if (!stillVisible) {
-      applyActiveOrganizationId(firstOrganization.id);
+    if (stillVisible) return;
+
+    if (!isPlatformOwner) {
+      applyActiveOrganizationId(organizations[0]!.id);
+      return;
     }
+
+    // Still waiting on the real-access lists - don't guess yet, the next
+    // run of this effect (once they load) will pick correctly.
+    if (myMembershipsQuery.isLoading || myActiveSupportGrantsQuery.isLoading) return;
+
+    const realOrganization = organizations.find((org) => realAccessOrgIds.has(org.id));
+    if (realOrganization) {
+      applyActiveOrganizationId(realOrganization.id);
+    }
+    // No organization this platform owner has real access to - leave
+    // activeOrganizationId unset rather than defaulting into a
+    // visibility-only one. The Organizations registry (organizations-page.tsx)
+    // is where they request support access; nothing in the regular app
+    // should silently pick a broken default for them.
     // applyActiveOrganizationId is intentionally not a dependency - it's
     // redefined every render (it closes over the current `user`), and
     // this effect's own deps already capture everything that should
     // trigger it to re-run.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [organizations, activeOrganizationId, tenantSlug, preferredOrgSlug]);
+  }, [
+    organizations,
+    activeOrganizationId,
+    tenantSlug,
+    preferredOrgSlug,
+    isPlatformOwner,
+    realAccessOrgIds,
+    myMembershipsQuery.isLoading,
+    myActiveSupportGrantsQuery.isLoading
+  ]);
 
   const membershipRoleQuery = useQuery({
     queryKey: ["membership-role", user?.id, activeOrganizationId],
@@ -270,9 +351,39 @@ export function OrganizationProvider({
       if (error) throw error;
       return (data?.role as SystemRole | undefined) ?? null;
     },
-    enabled: !!user && !!activeOrganizationId && !isPlatformOwner
+    enabled: !!user && !!activeOrganizationId
   });
 
+  // Whether the signed-in platform owner currently holds active,
+  // unexpired support access into `activeOrganizationId` - the same
+  // condition public.has_active_support_access() checks server-side.
+  // Only queried for platform owners; a regular member's access is
+  // entirely determined by membershipRoleQuery above.
+  const supportAccessQuery = useQuery({
+    queryKey: ["support-access", user?.id, activeOrganizationId],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("support_access_grants")
+        .select("id")
+        .eq("organization_id", activeOrganizationId!)
+        .eq("grantee_user_id", user!.id)
+        .eq("status", "active")
+        .gt("expires_at", new Date().toISOString())
+        .maybeSingle();
+      if (error) throw error;
+      return data;
+    },
+    enabled: isPlatformOwner && !!user && !!activeOrganizationId
+  });
+
+  const hasActiveSupportAccess = isPlatformOwner && !!supportAccessQuery.data;
+
+  // Mirrors has_permission()'s own two conditions exactly: a platform
+  // owner only bypasses role checks with an active support grant for
+  // *this* organization; short of that, they fall back to whatever real
+  // membership role they may separately hold here (membershipRoleQuery
+  // above is no longer platform-owner-exempt, so this covers a platform
+  // owner who is also a genuine member of an organization).
   const rolePermissionsQuery = useQuery({
     queryKey: ["role-permissions", membershipRoleQuery.data],
     queryFn: async () => {
@@ -283,13 +394,10 @@ export function OrganizationProvider({
       if (error) throw error;
       return new Set(data.map((row) => permissionSchema.parse(row.permission_key)));
     },
-    enabled: !isPlatformOwner && !!membershipRoleQuery.data
+    enabled: !!membershipRoleQuery.data
   });
 
-  const permissions = useMemo(
-    () => (isPlatformOwner ? new Set(permissionSchema.options) : rolePermissionsQuery.data ?? new Set<Permission>()),
-    [isPlatformOwner, rolePermissionsQuery.data]
-  );
+  const permissions = rolePermissionsQuery.data ?? EMPTY_PERMISSIONS;
 
   const activeOrganization = organizations.find((org) => org.id === activeOrganizationId) ?? null;
 
@@ -297,10 +405,13 @@ export function OrganizationProvider({
     ? "platform_owner"
     : membershipRoleQuery.data ?? null;
 
+  const hasRealOrganizationAccess = !isPlatformOwner || hasActiveSupportAccess || !!membershipRoleQuery.data;
+
   const loading =
     profileQuery.isLoading ||
     organizationsQuery.isLoading ||
-    (!isPlatformOwner && !!activeOrganizationId && membershipRoleQuery.isLoading);
+    (!!activeOrganizationId && membershipRoleQuery.isLoading) ||
+    (isPlatformOwner && !!activeOrganizationId && supportAccessQuery.isLoading);
 
   const value = useMemo<OrganizationContextValue>(
     () => ({
@@ -310,14 +421,32 @@ export function OrganizationProvider({
       setActiveOrganizationId: applyActiveOrganizationId,
       role,
       isPlatformOwner,
-      hasPermission: (permission) => isPlatformOwner || permissions.has(permission),
+      // A platform owner with an active support grant for this
+      // organization bypasses role checks entirely, same as
+      // has_permission() does server-side - not a blanket "platform
+      // owner can do anything" the way this used to read, which is
+      // exactly why the Care Team form rendered as fully usable for an
+      // owner who had never been granted access to the organization
+      // they were viewing.
+      hasPermission: (permission) => hasActiveSupportAccess || permissions.has(permission),
+      hasRealOrganizationAccess,
       loading
     }),
     // applyActiveOrganizationId is intentionally not a dependency - see
     // the comment on its definition; it closes over `user`, which
     // consumers of this context never need to know changed.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [organizations, activeOrganization, activeOrganizationId, role, isPlatformOwner, permissions, loading]
+    [
+      organizations,
+      activeOrganization,
+      activeOrganizationId,
+      role,
+      isPlatformOwner,
+      hasActiveSupportAccess,
+      permissions,
+      hasRealOrganizationAccess,
+      loading
+    ]
   );
 
   return <OrganizationContext.Provider value={value}>{children}</OrganizationContext.Provider>;

@@ -57,6 +57,7 @@ function baseOrganization() {
     role: "staff" as const,
     isPlatformOwner: false,
     hasPermission: vi.fn(),
+    hasRealOrganizationAccess: true,
     loading: false
   };
 }
