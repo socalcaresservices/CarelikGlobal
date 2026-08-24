@@ -207,3 +207,84 @@ export function useSupportAccessAudit(grantId: string | null) {
     enabled: !!grantId,
   });
 }
+
+// Support Staff Hooks
+
+export interface StaffSupportRequest extends SupportRequest {
+  organization_id: string;
+  organization_name: string;
+}
+
+export interface StaffSupportGrant extends SupportAccessGrant {
+  organization_id: string;
+  organization_name: string;
+}
+
+/**
+ * List all open support requests (for support staff)
+ */
+export function useSupportRequestsForStaff() {
+  return useQuery({
+    queryKey: ["support-requests-for-staff"],
+    queryFn: async () => {
+      const { data, error } = await supabase.rpc("list_support_requests_for_staff", {
+        result_limit: 100,
+      });
+
+      if (error) throw error;
+      return (data ?? []) as StaffSupportRequest[];
+    },
+  });
+}
+
+/**
+ * List all active support grants for the current staff member (across all organizations)
+ */
+export function useStaffActiveGrants() {
+  return useQuery({
+    queryKey: ["staff-active-grants"],
+    queryFn: async () => {
+      const { data, error } = await supabase.rpc("list_staff_active_grants", {
+        result_limit: 100,
+      });
+
+      if (error) throw error;
+      return (data ?? []) as StaffSupportGrant[];
+    },
+  });
+}
+
+/**
+ * Request support access to an organization
+ */
+export function useRequestSupportAccess() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({
+      requestId,
+      organizationId,
+      accessLevel,
+      reason,
+    }: {
+      requestId: string;
+      organizationId: string;
+      accessLevel: "read_only" | "edit";
+      reason: string;
+    }) => {
+      const { data, error } = await supabase.rpc("request_support_access_new", {
+        support_request_id: requestId,
+        target_organization_id: organizationId,
+        requested_access_level: accessLevel,
+        access_reason: reason,
+      });
+
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["support-requests-for-staff"] });
+      queryClient.invalidateQueries({ queryKey: ["staff-active-grants"] });
+    },
+  });
+}

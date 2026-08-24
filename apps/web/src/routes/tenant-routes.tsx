@@ -22,6 +22,7 @@ import { ServiceVerificationReportsPage } from "@/pages/service-verification-rep
 import { StaffVisitsPage } from "@/pages/staff-visits-page";
 import { BillingPage } from "@/pages/billing-page";
 import { SupportRequestsPage } from "@/pages/support-requests-page";
+import { SupportStaffDashboardPage } from "@/pages/support-staff-dashboard-page";
 
 export function getTenantRoutes() {
   return [
@@ -52,6 +53,7 @@ export function getTenantRoutes() {
     <Route key="applicant-detail" path="/applicants/:id" element={<CandidateDetailPage />} />,
     <Route key="access" path="/access" element={<AccessPage />} />,
     <Route key="support" path="/support" element={<SupportRequestsPage />} />,
+    <Route key="support-staff-queue" path="/support-staff-queue" element={<SupportStaffDashboardPage />} />,
     <Route key="settings" path="/settings" element={<SettingsPage />} />
   ];
 }
