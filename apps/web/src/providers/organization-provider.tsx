@@ -85,6 +85,27 @@ export function OrganizationProvider({
     () => (typeof window !== "undefined" ? window.localStorage.getItem(storageKeyForUser(user?.id) ?? "") : null)
   );
 
+  // Sets the active organization AND persists it in the same call, using
+  // this render's own `user` - not a separate effect reacting to
+  // `activeOrganizationId` changes on its own. A standalone persist
+  // effect keyed on [activeOrganizationId, user?.id] has a real race on
+  // an in-place account switch (no page reload): on the commit where
+  // user?.id has just changed but activeOrganizationId is still the
+  // *previous* account's cached value (state updates from the resync
+  // effect below don't apply until the next render), that effect would
+  // fire with the new user's id and the old user's still-stale org id,
+  // writing it into the new user's own storage key - poisoning it with
+  // another account's organization. Persisting only at the point a
+  // caller actually chooses an organization (never from a bare "state
+  // changed" reaction) closes that.
+  function applyActiveOrganizationId(nextOrganizationId: string) {
+    setActiveOrganizationIdState(nextOrganizationId);
+    const key = storageKeyForUser(user?.id);
+    if (key) {
+      window.localStorage.setItem(key, nextOrganizationId);
+    }
+  }
+
   // Re-sync to this account's own cached value whenever the signed-in
   // identity changes - the initial useState above only runs once on
   // mount, before `useAuth()` may have resolved a user at all, and never
@@ -94,7 +115,8 @@ export function OrganizationProvider({
   // before, until the slower "still visible in my own org list"
   // correction effect below caught up - a window where every request
   // that account issues is scoped to an organization it was never a
-  // member of.
+  // member of. This only ever reads - it never persists - so it can't
+  // itself write a stale value anywhere.
   useEffect(() => {
     const key = storageKeyForUser(user?.id);
     setActiveOrganizationIdState(key ? window.localStorage.getItem(key) : null);
@@ -208,7 +230,7 @@ export function OrganizationProvider({
     if (tenantSlug) {
       const matching = organizations.find((org) => org.slug === tenantSlug);
       if (matching && matching.id !== activeOrganizationId) {
-        setActiveOrganizationIdState(matching.id);
+        applyActiveOrganizationId(matching.id);
       }
       return;
     }
@@ -217,7 +239,7 @@ export function OrganizationProvider({
       const preferred = organizations.find((org) => org.slug === preferredOrgSlug);
       if (preferred) {
         if (preferred.id !== activeOrganizationId) {
-          setActiveOrganizationIdState(preferred.id);
+          applyActiveOrganizationId(preferred.id);
         }
         setPreferredOrgSlug(null);
         return;
@@ -226,16 +248,14 @@ export function OrganizationProvider({
 
     const stillVisible = organizations.some((org) => org.id === activeOrganizationId);
     if (!stillVisible) {
-      setActiveOrganizationIdState(firstOrganization.id);
+      applyActiveOrganizationId(firstOrganization.id);
     }
+    // applyActiveOrganizationId is intentionally not a dependency - it's
+    // redefined every render (it closes over the current `user`), and
+    // this effect's own deps already capture everything that should
+    // trigger it to re-run.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [organizations, activeOrganizationId, tenantSlug, preferredOrgSlug]);
-
-  useEffect(() => {
-    const key = storageKeyForUser(user?.id);
-    if (key && activeOrganizationId) {
-      window.localStorage.setItem(key, activeOrganizationId);
-    }
-  }, [activeOrganizationId, user?.id]);
 
   const membershipRoleQuery = useQuery({
     queryKey: ["membership-role", user?.id, activeOrganizationId],
@@ -287,12 +307,16 @@ export function OrganizationProvider({
       organizations,
       activeOrganization,
       activeOrganizationId,
-      setActiveOrganizationId: setActiveOrganizationIdState,
+      setActiveOrganizationId: applyActiveOrganizationId,
       role,
       isPlatformOwner,
       hasPermission: (permission) => isPlatformOwner || permissions.has(permission),
       loading
     }),
+    // applyActiveOrganizationId is intentionally not a dependency - see
+    // the comment on its definition; it closes over `user`, which
+    // consumers of this context never need to know changed.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     [organizations, activeOrganization, activeOrganizationId, role, isPlatformOwner, permissions, loading]
   );
 

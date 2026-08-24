@@ -381,4 +381,100 @@ describe("OrganizationProvider", () => {
     expect(window.localStorage.getItem("carelik.activeOrganizationId.owner-b")).toBe(OTHER_ORG_ID);
     expect(window.localStorage.getItem("carelik.activeOrganizationId.owner-a")).toBe(ORG_ID);
   });
+
+  // Regression test for a real but narrower race than the one above: this
+  // provider component itself never unmounts on an in-place account
+  // switch (no page reload), so the switch has to happen through React
+  // re-rendering with a new `user` from useAuth(), not a fresh mount. A
+  // standalone "persist activeOrganizationId to localStorage" effect
+  // keyed on [activeOrganizationId, user?.id] fires on that same
+  // transitional render using that render's still-stale
+  // activeOrganizationId (owner A's org) together with the *new* user id
+  // (B) - writing A's org into B's own storage key before B's own
+  // resync/correction effects have had a chance to settle. Exercised
+  // with a real rerender (not two separate mounts) so it actually goes
+  // through the transitional commit the bug lived in.
+  it("never persists the previous account's organization into the new account's key across an in-place switch", async () => {
+    window.localStorage.setItem("carelik.activeOrganizationId.owner-a", ORG_ID);
+
+    mockedUseAuth.mockReturnValue({
+      user: { id: "owner-a" } as never,
+      session: {} as never,
+      loading: false,
+      signInWithGithub: vi.fn(),
+      signInWithPassword: vi.fn(),
+      resetPasswordForEmail: vi.fn(),
+      updatePassword: vi.fn(),
+      signOut: vi.fn()
+    });
+    mockedRpc.mockResolvedValue({ data: null, error: null } as never);
+    setResolver((table, calls) => {
+      if (table === "user_profiles") return { data: { platform_role: null }, error: null };
+      if (table === "organizations") return { data: [orgRow], error: null };
+      if (table === "organization_memberships" && hasEqCall(calls, "status", "invited")) {
+        return { data: [], error: null };
+      }
+      if (table === "organization_memberships" && hasEqCall(calls, "status", "active")) {
+        return { data: { role: "organization_admin" }, error: null };
+      }
+      if (table === "role_permissions") return { data: [], error: null };
+      return { data: null, error: null };
+    });
+
+    const setItemSpy = vi.spyOn(Storage.prototype, "setItem");
+
+    const queryClient = new QueryClient({
+      defaultOptions: { queries: { retry: false }, mutations: { retry: false } }
+    });
+    const { rerender } = render(
+      <QueryClientProvider client={queryClient}>
+        <OrganizationProvider>
+          <Probe />
+        </OrganizationProvider>
+      </QueryClientProvider>
+    );
+    await waitFor(() => expect(screen.getByTestId("active-org-id")).toHaveTextContent(ORG_ID));
+
+    // User B signs in, in place - same tab, same provider instance, no
+    // remount. B is a member of Other Org only.
+    mockedUseAuth.mockReturnValue({
+      user: { id: "owner-b" } as never,
+      session: {} as never,
+      loading: false,
+      signInWithGithub: vi.fn(),
+      signInWithPassword: vi.fn(),
+      resetPasswordForEmail: vi.fn(),
+      updatePassword: vi.fn(),
+      signOut: vi.fn()
+    });
+    setResolver((table, calls) => {
+      if (table === "user_profiles") return { data: { platform_role: null }, error: null };
+      if (table === "organizations") return { data: [otherOrgRow], error: null };
+      if (table === "organization_memberships" && hasEqCall(calls, "status", "invited")) {
+        return { data: [], error: null };
+      }
+      if (table === "organization_memberships" && hasEqCall(calls, "status", "active")) {
+        return { data: { role: "organization_admin" }, error: null };
+      }
+      if (table === "role_permissions") return { data: [], error: null };
+      return { data: null, error: null };
+    });
+
+    rerender(
+      <QueryClientProvider client={queryClient}>
+        <OrganizationProvider>
+          <Probe />
+        </OrganizationProvider>
+      </QueryClientProvider>
+    );
+
+    await waitFor(() => expect(screen.getByTestId("active-org-id")).toHaveTextContent(OTHER_ORG_ID));
+    expect(window.localStorage.getItem("carelik.activeOrganizationId.owner-b")).toBe(OTHER_ORG_ID);
+    expect(window.localStorage.getItem("carelik.activeOrganizationId.owner-a")).toBe(ORG_ID);
+    // Not just the final value - B's key must never have been written
+    // with A's org id at any point, even transiently, during the switch.
+    expect(setItemSpy).not.toHaveBeenCalledWith("carelik.activeOrganizationId.owner-b", ORG_ID);
+
+    setItemSpy.mockRestore();
+  });
 });
