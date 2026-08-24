@@ -65,17 +65,32 @@ function renderPage() {
 }
 
 function mockOrgLetterhead() {
-  const single = vi.fn().mockResolvedValue({
-    data: {
-      legal_name: "Acme Care LLC",
-      display_name: "Acme Care",
-      logo_url: null,
-    },
-    error: null,
+  mockedFrom.mockImplementation((table: string) => {
+    if (table === "clients") {
+      const is = vi.fn().mockResolvedValue({
+        data: [
+          {
+            id: visitRow.client_id,
+            address_city: "Anaheim",
+            address_state: "CA",
+          },
+        ],
+        error: null,
+      });
+      const eq = vi.fn(() => ({ is }));
+      return { select: vi.fn(() => ({ eq })) } as never;
+    }
+    const single = vi.fn().mockResolvedValue({
+      data: {
+        legal_name: "Acme Care LLC",
+        display_name: "Acme Care",
+        logo_url: null,
+      },
+      error: null,
+    });
+    const eq = vi.fn(() => ({ single }));
+    return { select: vi.fn(() => ({ eq })) } as never;
   });
-  const eq = vi.fn(() => ({ single }));
-  const select = vi.fn(() => ({ eq }));
-  mockedFrom.mockReturnValue({ select } as never);
 }
 
 describe("ServiceVerificationReportsPage", () => {
@@ -125,7 +140,7 @@ describe("ServiceVerificationReportsPage", () => {
     // "Jamie Smith" also appears in the client filter <option> and the
     // per-client subtotal card, so this only checks it appears in the
     // table row, not that it appears exactly once anywhere on the page.
-    const table = screen.getByRole("table");
+    const table = screen.getByRole("table", { name: "Visit details" });
     expect(table).toHaveTextContent("Jamie Smith");
     // Grand total excludes the corrected row (30 min) - only the signed
     // 60-minute visit counts.
@@ -136,6 +151,60 @@ describe("ServiceVerificationReportsPage", () => {
     // Two matches for the corrected row: the "Corrected" status badge
     // (status === 'corrected') and the separate is_corrected marker badge.
     expect(screen.getAllByText("Corrected").length).toBeGreaterThan(0);
+  });
+
+  it("shows manager filters, charts, and a caregiver-hours sheet", async () => {
+    mockedUseOrganization.mockReturnValue({
+      activeOrganizationId: ORG_ID,
+      activeOrganization: { displayName: "Acme Care" },
+      hasPermission: vi.fn(() => true),
+    } as never);
+    mockOrgLetterhead();
+    mockedRpc.mockResolvedValue({ data: [visitRow], error: null } as never);
+
+    renderPage();
+
+    expect(await screen.findByText("Manager dashboard")).toBeInTheDocument();
+    expect(
+      await screen.findByRole("option", { name: "Anaheim, CA" }),
+    ).toBeInTheDocument();
+    expect(screen.getByLabelText("Chart type")).toHaveValue("bar");
+    expect(screen.getByLabelText("Group chart by")).toHaveValue("caregiver");
+    const caregiverSheet = screen.getByRole("table", {
+      name: "Caregiver hours summary",
+    });
+    expect(caregiverSheet).toHaveTextContent("Jordan Rivera");
+    expect(caregiverSheet).toHaveTextContent("1 hrs");
+  });
+
+  it("copies one common staff link and explains assignment protection", async () => {
+    mockedUseOrganization.mockReturnValue({
+      activeOrganizationId: ORG_ID,
+      activeOrganization: { displayName: "Acme Care" },
+      hasPermission: vi.fn(() => true),
+    } as never);
+    mockOrgLetterhead();
+    mockedRpc.mockResolvedValue({ data: [visitRow], error: null } as never);
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, "clipboard", {
+      configurable: true,
+      value: { writeText },
+    });
+
+    renderPage();
+
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Copy staff sign-in link" }),
+    );
+    await waitFor(() =>
+      expect(writeText).toHaveBeenCalledWith(
+        `${window.location.origin}/service-verification`,
+      ),
+    );
+    expect(screen.getByText("Staff link copied")).toBeInTheDocument();
+    expect(
+      screen.getByText(/can only see clients and services assigned to them/i),
+    ).toBeInTheDocument();
   });
 
   it("maps each caregiver's daily worked and billable hours into the monthly calendar", async () => {

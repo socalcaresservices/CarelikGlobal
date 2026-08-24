@@ -4,8 +4,10 @@ import {
   AlertTriangle,
   Check,
   CheckCircle2,
+  CircleUserRound,
   Clock3,
   Hand,
+  HeartPulse,
   LockKeyhole,
   PenLine,
   ShieldCheck,
@@ -256,14 +258,21 @@ function Progress({ phase }: { phase: Phase }) {
       {["Select", "Visit", "Confirm"].map((label, index) => {
         const done = complete || index < current;
         const selected = !complete && index === current;
+        const selectedStyles = [
+          "bg-indigo-600 text-white ring-indigo-100",
+          "bg-emerald-600 text-white ring-emerald-100",
+          "bg-violet-600 text-white ring-violet-100",
+        ];
         return (
           <div key={label} className="text-center">
             <div
               className={cn(
                 "mx-auto flex h-8 w-8 items-center justify-center rounded-full text-xs font-bold",
-                done || selected
-                  ? "bg-[var(--color-accent,#4f46e5)] text-white"
-                  : "bg-slate-100 text-slate-400",
+                done
+                  ? "bg-emerald-600 text-white ring-4 ring-emerald-100"
+                  : selected
+                    ? `${selectedStyles[index]} ring-4`
+                    : "bg-sky-50 text-sky-600 ring-2 ring-sky-100",
               )}
             >
               {done ? <Check className="h-4 w-4" /> : index + 1}
@@ -271,7 +280,11 @@ function Progress({ phase }: { phase: Phase }) {
             <p
               className={cn(
                 "mt-1 text-xs",
-                selected ? "font-semibold text-slate-900" : "text-slate-500",
+                selected
+                  ? "font-bold text-slate-900"
+                  : done
+                    ? "font-semibold text-emerald-700"
+                    : "text-sky-700",
               )}
             >
               {label}
@@ -787,13 +800,13 @@ export function ServiceVerificationPage() {
               ) : null}
 
               {selectedService ? (
-                <div className="rounded-2xl bg-indigo-50 p-4 text-sm text-indigo-950">
+                <div className="rounded-3xl border border-indigo-100 bg-gradient-to-br from-indigo-50 via-white to-sky-50 p-4 text-sm text-indigo-950 shadow-sm">
                   <p className="font-semibold">
                     {selectedService.service_code} ·{" "}
                     {selectedService.service_name}
                   </p>
                   <div className="mt-3 grid grid-cols-3 gap-2 text-center">
-                    <div className="rounded-xl bg-white/80 p-2">
+                    <div className="rounded-2xl border border-indigo-100 bg-indigo-100/70 p-2 text-indigo-950">
                       <p className="text-lg font-bold">
                         {formatHours(
                           Number(selectedService.max_monthly_hours) * 60,
@@ -802,7 +815,7 @@ export function ServiceVerificationPage() {
                       </p>
                       <p className="text-[11px] text-indigo-800">Authorized</p>
                     </div>
-                    <div className="rounded-xl bg-white/80 p-2">
+                    <div className="rounded-2xl border border-sky-100 bg-sky-100/80 p-2 text-sky-950">
                       <p className="text-lg font-bold">
                         {formatHours(
                           Number(selectedService.hours_used_this_month) * 60,
@@ -811,7 +824,7 @@ export function ServiceVerificationPage() {
                       </p>
                       <p className="text-[11px] text-indigo-800">Serviced</p>
                     </div>
-                    <div className="rounded-xl bg-white/80 p-2">
+                    <div className="rounded-2xl border border-emerald-100 bg-emerald-100/80 p-2 text-emerald-950">
                       <p className="text-lg font-bold">
                         {formatHours(
                           Math.max(
@@ -845,7 +858,7 @@ export function ServiceVerificationPage() {
 
               <Button
                 type="button"
-                className="min-h-14 w-full text-base"
+                className="min-h-14 w-full bg-emerald-600 text-base font-bold text-white shadow-lg shadow-emerald-100 hover:bg-emerald-700"
                 disabled={!selectedClient || !selectedService || saving}
                 loading={saving}
                 onClick={startVisit}
@@ -872,39 +885,45 @@ export function ServiceVerificationPage() {
                     Client and service are locked.
                   </p>
                 </div>
-                <span className="flex items-center gap-2 text-xs font-semibold text-emerald-700">
-                  <span className="h-2.5 w-2.5 rounded-full bg-emerald-500" />{" "}
+                <span className="flex items-center gap-2 rounded-full bg-emerald-100 px-3 py-2 text-sm font-extrabold uppercase tracking-wide text-emerald-800 ring-2 ring-emerald-200">
+                  <span className="h-3 w-3 animate-pulse rounded-full bg-emerald-600 ring-4 ring-emerald-200" />{" "}
                   Live
                 </span>
               </div>
 
               <div className="grid grid-cols-2 gap-3">
-                <div className="rounded-2xl bg-slate-50 p-4">
+                <div className="rounded-3xl border border-indigo-100 bg-indigo-50 p-4 text-center shadow-sm">
+                  <span className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-indigo-600 text-white shadow-md shadow-indigo-200">
+                    <CircleUserRound className="h-6 w-6" aria-hidden="true" />
+                  </span>
                   <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
                     Client
                   </p>
-                  <p className="mt-1 font-semibold text-slate-950">
+                  <p className="mt-1 text-lg font-bold text-indigo-950">
                     Client {active.client_code}
                   </p>
                 </div>
-                <div className="rounded-2xl bg-slate-50 p-4">
+                <div className="rounded-3xl border border-violet-100 bg-violet-50 p-4 text-center shadow-sm">
+                  <span className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-violet-600 text-white shadow-md shadow-violet-200">
+                    <HeartPulse className="h-6 w-6" aria-hidden="true" />
+                  </span>
                   <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
                     Service
                   </p>
-                  <p className="mt-1 font-semibold text-slate-950">
+                  <p className="mt-1 font-bold text-violet-950">
                     {active.service_code} · {active.service_name}
                   </p>
                 </div>
               </div>
 
-              <div className="py-4 text-center">
+              <div className="mx-auto flex h-56 w-56 flex-col items-center justify-center rounded-full border-8 border-sky-100 bg-gradient-to-br from-white to-sky-50 text-center shadow-xl shadow-sky-100/70 ring-4 ring-sky-50">
                 <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
                   Signed in at
                 </p>
                 <p className="mt-1 text-3xl font-semibold tabular-nums text-slate-950">
                   {formatClockTime(active.time_in)}
                 </p>
-                <p className="mt-1 font-mono text-sm font-semibold tabular-nums text-[var(--color-accent,#4f46e5)]">
+                <p className="mt-2 rounded-full bg-sky-100 px-3 py-1 font-mono text-sm font-bold tabular-nums text-sky-800">
                   {formatElapsed(elapsedSeconds)} elapsed
                 </p>
               </div>
@@ -918,15 +937,19 @@ export function ServiceVerificationPage() {
                   </p>
                 </div>
               ) : (
-                <p className="text-center text-sm text-slate-500">
-                  {formatHours(remainingMinutes)} authorized hours remain this
-                  month
-                </p>
+                <div className="rounded-3xl border border-emerald-200 bg-emerald-50 p-4 text-center shadow-sm">
+                  <p className="text-3xl font-extrabold tabular-nums text-emerald-800">
+                    {formatHours(remainingMinutes)}h
+                  </p>
+                  <p className="mt-1 text-sm font-semibold text-emerald-900">
+                    Authorized hours remaining this month
+                  </p>
+                </div>
               )}
 
               <Button
                 type="button"
-                className="min-h-14 w-full text-base"
+                className="min-h-14 w-full bg-rose-600 text-base font-bold text-white shadow-lg shadow-rose-100 hover:bg-rose-700"
                 loading={saving}
                 onClick={endVisit}
               >

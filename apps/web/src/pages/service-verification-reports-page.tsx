@@ -1,6 +1,32 @@
 import { Fragment, useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { CalendarDays, FileText, Folder, Printer } from "lucide-react";
+import {
+  BarChart3,
+  CalendarDays,
+  Check,
+  Copy,
+  FileText,
+  Folder,
+  MapPin,
+  Printer,
+  ShieldCheck,
+  Users,
+} from "lucide-react";
+import {
+  Bar,
+  BarChart,
+  CartesianGrid,
+  Cell,
+  Legend,
+  Line,
+  LineChart,
+  Pie,
+  PieChart,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from "recharts";
 import {
   Button,
   Card,
@@ -77,6 +103,26 @@ interface OrgLetterhead {
   contact_email: string | null;
 }
 
+interface ClientLocation {
+  id: string;
+  address_city: string | null;
+  address_state: string | null;
+}
+
+type ChartType = "bar" | "pie" | "line";
+type ChartGroup = "caregiver" | "client" | "service" | "location";
+type DatePreset =
+  "all" | "week" | "biweekly" | "month" | "quarter" | "year" | "custom";
+
+const CHART_COLORS = [
+  "#4f46e5",
+  "#059669",
+  "#0284c7",
+  "#7c3aed",
+  "#e11d48",
+  "#d97706",
+];
+
 const STATUS_TONE: Record<ServiceVisitStatus, StatusTone> = {
   draft: "info",
   awaiting_signature: "warning",
@@ -122,6 +168,31 @@ function currentPacificMonth() {
   return year && month
     ? `${year}-${month}`
     : new Date().toISOString().slice(0, 7);
+}
+
+function toDateValue(date: Date) {
+  const pad = (value: number) => String(value).padStart(2, "0");
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+}
+
+function presetRange(preset: DatePreset) {
+  const today = new Date();
+  const start = new Date(today);
+  if (preset === "week") {
+    const mondayOffset = (today.getDay() + 6) % 7;
+    start.setDate(today.getDate() - mondayOffset);
+  } else if (preset === "biweekly") {
+    start.setDate(today.getDate() - 13);
+  } else if (preset === "month") {
+    start.setDate(1);
+  } else if (preset === "quarter") {
+    start.setMonth(Math.floor(today.getMonth() / 3) * 3, 1);
+  } else if (preset === "year") {
+    start.setMonth(0, 1);
+  } else {
+    return { from: "", to: "" };
+  }
+  return { from: toDateValue(start), to: toDateValue(today) };
 }
 
 interface CalendarEntry {
@@ -208,8 +279,13 @@ export function ServiceVerificationReportsPage() {
   );
   const [serviceFilter, setServiceFilter] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
+  const [locationFilter, setLocationFilter] = useState("");
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
+  const [datePreset, setDatePreset] = useState<DatePreset>("all");
+  const [chartType, setChartType] = useState<ChartType>("bar");
+  const [chartGroup, setChartGroup] = useState<ChartGroup>("caregiver");
+  const [linkCopied, setLinkCopied] = useState(false);
   const [reportMonth, setReportMonth] = useState(currentPacificMonth);
 
   const visitsQuery = useQuery({
@@ -253,6 +329,20 @@ export function ServiceVerificationReportsPage() {
       return data as OrgLetterhead;
     },
     enabled: !!activeOrganizationId && canRead,
+  });
+
+  const clientLocationsQuery = useQuery({
+    queryKey: ["service-report-client-locations", activeOrganizationId],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("clients")
+        .select("id, address_city, address_state")
+        .eq("organization_id", activeOrganizationId!)
+        .is("deleted_at", null);
+      if (error) throw error;
+      return (data ?? []) as ClientLocation[];
+    },
+    enabled: !!activeOrganizationId && canManage,
   });
 
   const correctionsQuery = useQuery({
@@ -333,7 +423,33 @@ export function ServiceVerificationReportsPage() {
     }
   }
 
-  const rows = useMemo(() => visitsQuery.data ?? [], [visitsQuery.data]);
+  const rawRows = useMemo(() => visitsQuery.data ?? [], [visitsQuery.data]);
+
+  const clientLocationMap = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const client of clientLocationsQuery.data ?? []) {
+      const location = [client.address_city, client.address_state]
+        .filter(Boolean)
+        .join(", ");
+      map.set(client.id, location || "Location not set");
+    }
+    return map;
+  }, [clientLocationsQuery.data]);
+
+  const rows = useMemo(
+    () =>
+      locationFilter
+        ? rawRows.filter(
+            (row) => clientLocationMap.get(row.client_id) === locationFilter,
+          )
+        : rawRows,
+    [clientLocationMap, locationFilter, rawRows],
+  );
+
+  const locationOptions = useMemo(
+    () => Array.from(new Set(clientLocationMap.values())).sort(),
+    [clientLocationMap],
+  );
 
   const clientOptions = useMemo(() => {
     const map = new Map<string, string>();
@@ -367,6 +483,15 @@ export function ServiceVerificationReportsPage() {
     rows.forEach((row) => map.set(row.service_id, row.service_name));
     return Array.from(map.entries());
   }, [rows]);
+
+  const selectedClientName = useMemo(
+    () => clientOptions.find(([id]) => id === clientFilter)?.[1] ?? null,
+    [clientFilter, clientOptions],
+  );
+  const selectedServiceName = useMemo(
+    () => serviceOptions.find(([id]) => id === serviceFilter)?.[1] ?? null,
+    [serviceFilter, serviceOptions],
+  );
 
   const billable = useMemo(() => billableRows(rows), [rows]);
   const monthCalendar = useMemo(
@@ -432,6 +557,54 @@ export function ServiceVerificationReportsPage() {
     );
   }, [billable]);
 
+  const chartData = useMemo(() => {
+    const grouped = new Map<
+      string,
+      { name: string; workedHours: number; billableHours: number }
+    >();
+    for (const row of billable) {
+      const name =
+        chartGroup === "caregiver"
+          ? row.caregiver_name
+          : chartGroup === "client"
+            ? (row.client_legal_name ?? row.client_code)
+            : chartGroup === "service"
+              ? row.service_name
+              : (clientLocationMap.get(row.client_id) ?? "Location not set");
+      const entry = grouped.get(name) ?? {
+        name,
+        workedHours: 0,
+        billableHours: 0,
+      };
+      entry.workedHours += (row.worked_minutes ?? 0) / 60;
+      entry.billableHours += (row.billable_minutes ?? 0) / 60;
+      grouped.set(name, entry);
+    }
+    return Array.from(grouped.values()).sort(
+      (a, b) => b.workedHours - a.workedHours,
+    );
+  }, [billable, chartGroup, clientLocationMap]);
+
+  const trendData = useMemo(() => {
+    const grouped = new Map<
+      string,
+      { name: string; workedHours: number; billableHours: number }
+    >();
+    for (const row of billable) {
+      const entry = grouped.get(row.service_date) ?? {
+        name: row.service_date,
+        workedHours: 0,
+        billableHours: 0,
+      };
+      entry.workedHours += (row.worked_minutes ?? 0) / 60;
+      entry.billableHours += (row.billable_minutes ?? 0) / 60;
+      grouped.set(row.service_date, entry);
+    }
+    return Array.from(grouped.values()).sort((a, b) =>
+      a.name.localeCompare(b.name),
+    );
+  }, [billable]);
+
   // Exception visits: anything that needed a human to intervene, not
   // just the normal signed-and-done path. administrator_review means
   // the visit exceeded the client's authorization at signing time (see
@@ -455,6 +628,21 @@ export function ServiceVerificationReportsPage() {
 
   function handlePrint() {
     window.print();
+  }
+
+  function applyDatePreset(preset: DatePreset) {
+    setDatePreset(preset);
+    if (preset === "custom") return;
+    const range = presetRange(preset);
+    setDateFrom(range.from);
+    setDateTo(range.to);
+  }
+
+  async function copyStaffLink() {
+    await navigator.clipboard.writeText(
+      `${window.location.origin}/service-verification`,
+    );
+    setLinkCopied(true);
   }
 
   if (!canRead) {
@@ -482,20 +670,66 @@ export function ServiceVerificationReportsPage() {
       <div className="print:hidden">
         <PageHeader
           eyebrow="Service Verification"
-          title="Reports"
+          title="Manager dashboard"
           description="Filter recorded visits by client, caregiver, service, week, pay period, month, or any custom date range. Corrected and voided records are excluded from every subtotal below."
           actions={
-            <Button
-              type="button"
-              variant="secondary"
-              icon={<Printer className="h-4 w-4" />}
-              onClick={handlePrint}
-            >
-              Print / Save as PDF
-            </Button>
+            <div className="flex flex-wrap gap-2">
+              {canManage ? (
+                <Button
+                  type="button"
+                  variant="secondary"
+                  icon={
+                    linkCopied ? (
+                      <Check className="h-4 w-4" />
+                    ) : (
+                      <Copy className="h-4 w-4" />
+                    )
+                  }
+                  onClick={copyStaffLink}
+                >
+                  {linkCopied ? "Staff link copied" : "Copy staff sign-in link"}
+                </Button>
+              ) : null}
+              <Button
+                type="button"
+                variant="secondary"
+                icon={<Printer className="h-4 w-4" />}
+                onClick={handlePrint}
+              >
+                Print / Save as PDF
+              </Button>
+            </div>
           }
         />
       </div>
+
+      {canManage ? (
+        <Card className="border-emerald-200 bg-gradient-to-r from-emerald-50 via-white to-sky-50 print:hidden">
+          <div className="flex items-start gap-3">
+            <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-emerald-600 text-white">
+              <ShieldCheck className="h-6 w-6" />
+            </span>
+            <div>
+              <h3 className="font-bold text-emerald-950">
+                One secure staff link
+              </h3>
+              <p className="mt-1 text-sm text-emerald-900">
+                Send the same link to every caregiver. Each person signs in with
+                their own account and can only see clients and services assigned
+                to them. For an extra shift, a manager assigns that client and
+                service first; managers can correct a submitted visit when a
+                mistake is made.
+              </p>
+              <a
+                href="/clients"
+                className="mt-3 inline-flex rounded-lg bg-emerald-700 px-3 py-2 text-sm font-bold text-white hover:bg-emerald-800"
+              >
+                Manage client assignments
+              </a>
+            </div>
+          </div>
+        </Card>
+      ) : null}
 
       <Card className="print:hidden">
         <div className="flex items-center justify-between gap-3">
@@ -539,7 +773,7 @@ export function ServiceVerificationReportsPage() {
       </Card>
 
       <Card className="print:hidden">
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-6">
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
           <div>
             <label
               htmlFor="report-client"
@@ -557,6 +791,27 @@ export function ServiceVerificationReportsPage() {
               {clientOptions.map(([id, label]) => (
                 <option key={id} value={id}>
                   {label}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label
+              htmlFor="report-location"
+              className="block text-xs font-medium text-slate-600"
+            >
+              Location
+            </label>
+            <select
+              id="report-location"
+              value={locationFilter}
+              onChange={(event) => setLocationFilter(event.target.value)}
+              className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900"
+            >
+              <option value="">All locations</option>
+              {locationOptions.map((location) => (
+                <option key={location} value={location}>
+                  {location}
                 </option>
               ))}
             </select>
@@ -635,7 +890,10 @@ export function ServiceVerificationReportsPage() {
               id="report-from"
               type="date"
               value={dateFrom}
-              onChange={(event) => setDateFrom(event.target.value)}
+              onChange={(event) => {
+                setDateFrom(event.target.value);
+                setDatePreset("custom");
+              }}
               className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900"
             />
           </div>
@@ -650,16 +908,250 @@ export function ServiceVerificationReportsPage() {
               id="report-to"
               type="date"
               value={dateTo}
-              onChange={(event) => setDateTo(event.target.value)}
+              onChange={(event) => {
+                setDateTo(event.target.value);
+                setDatePreset("custom");
+              }}
               className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900"
             />
           </div>
+        </div>
+        <div className="mt-4 flex flex-wrap gap-2" aria-label="Date range">
+          {(
+            [
+              ["all", "All time"],
+              ["week", "This week"],
+              ["biweekly", "Last 14 days"],
+              ["month", "This month"],
+              ["quarter", "This quarter"],
+              ["year", "This year"],
+              ["custom", "Custom"],
+            ] as Array<[DatePreset, string]>
+          ).map(([value, label]) => (
+            <button
+              key={value}
+              type="button"
+              onClick={() => applyDatePreset(value)}
+              className={
+                datePreset === value
+                  ? "rounded-full bg-indigo-600 px-3 py-1.5 text-xs font-bold text-white"
+                  : "rounded-full bg-slate-100 px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-indigo-50 hover:text-indigo-700"
+              }
+            >
+              {label}
+            </button>
+          ))}
         </div>
         <p className="mt-3 text-xs text-slate-500">
           Use From and To for a week, your agency pay period, a month, or any
           custom range. These reports use actual signed visit time—not a fixed
           schedule.
         </p>
+      </Card>
+
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4 print:hidden">
+        {[
+          {
+            label: "Worked hours",
+            value: formatHours(totalWorkedMinutes),
+            icon: <BarChart3 className="h-5 w-5" />,
+            color: "bg-indigo-50 text-indigo-800 border-indigo-100",
+          },
+          {
+            label: "Billable hours",
+            value: formatHours(totalBillableMinutes),
+            icon: <Check className="h-5 w-5" />,
+            color: "bg-emerald-50 text-emerald-800 border-emerald-100",
+          },
+          {
+            label: "Caregivers",
+            value: String(caregiverSubtotals.length),
+            icon: <Users className="h-5 w-5" />,
+            color: "bg-sky-50 text-sky-800 border-sky-100",
+          },
+          {
+            label: "Clients",
+            value: String(clientSubtotals.length),
+            icon: <MapPin className="h-5 w-5" />,
+            color: "bg-violet-50 text-violet-800 border-violet-100",
+          },
+        ].map((metric) => (
+          <Card key={metric.label} className={`border ${metric.color}`}>
+            <div className="flex items-center justify-between">
+              <span>{metric.icon}</span>
+              <span className="text-3xl font-extrabold tabular-nums">
+                {metric.value}
+              </span>
+            </div>
+            <p className="mt-2 text-sm font-bold">{metric.label}</p>
+          </Card>
+        ))}
+      </div>
+
+      <Card className="print:hidden">
+        <div className="flex flex-wrap items-start justify-between gap-4">
+          <div>
+            <h3 className="font-bold text-slate-950">Hours chart</h3>
+            <p className="mt-1 text-sm text-slate-500">
+              Every chart follows the client, caregiver, service, location, and
+              date filters above.
+            </p>
+          </div>
+          <div className="flex flex-wrap gap-3">
+            <label className="text-xs font-semibold text-slate-600">
+              Chart
+              <select
+                aria-label="Chart type"
+                value={chartType}
+                onChange={(event) =>
+                  setChartType(event.target.value as ChartType)
+                }
+                className="ml-2 rounded-lg border border-slate-200 px-2 py-1.5 text-sm text-slate-900"
+              >
+                <option value="bar">Bar</option>
+                <option value="pie">Pie</option>
+                <option value="line">Daily trend</option>
+              </select>
+            </label>
+            <label className="text-xs font-semibold text-slate-600">
+              Group by
+              <select
+                aria-label="Group chart by"
+                value={chartGroup}
+                disabled={chartType === "line"}
+                onChange={(event) =>
+                  setChartGroup(event.target.value as ChartGroup)
+                }
+                className="ml-2 rounded-lg border border-slate-200 px-2 py-1.5 text-sm text-slate-900 disabled:bg-slate-100"
+              >
+                <option value="caregiver">Caregiver</option>
+                <option value="client">Client</option>
+                <option value="service">Service</option>
+                <option value="location">Location</option>
+              </select>
+            </label>
+          </div>
+        </div>
+        {chartData.length === 0 ? (
+          <p className="mt-6 rounded-2xl bg-slate-50 p-8 text-center text-sm text-slate-500">
+            No signed visit hours match these filters.
+          </p>
+        ) : (
+          <div className="mt-5 h-80" aria-label="Filtered hours chart">
+            <ResponsiveContainer width="100%" height="100%">
+              {chartType === "pie" ? (
+                <PieChart>
+                  <Pie
+                    data={chartData}
+                    dataKey="workedHours"
+                    nameKey="name"
+                    outerRadius={105}
+                    label={({ name, value }) =>
+                      `${name}: ${Number(value).toFixed(1)}h`
+                    }
+                  >
+                    {chartData.map((entry, index) => (
+                      <Cell
+                        key={entry.name}
+                        fill={CHART_COLORS[index % CHART_COLORS.length]}
+                      />
+                    ))}
+                  </Pie>
+                  <Tooltip />
+                  <Legend />
+                </PieChart>
+              ) : chartType === "line" ? (
+                <LineChart data={trendData}>
+                  <CartesianGrid strokeDasharray="3 3" />
+                  <XAxis dataKey="name" tick={{ fontSize: 11 }} />
+                  <YAxis unit="h" />
+                  <Tooltip />
+                  <Legend />
+                  <Line
+                    type="monotone"
+                    dataKey="workedHours"
+                    name="Worked hours"
+                    stroke="#4f46e5"
+                    strokeWidth={3}
+                  />
+                  <Line
+                    type="monotone"
+                    dataKey="billableHours"
+                    name="Billable hours"
+                    stroke="#059669"
+                    strokeWidth={3}
+                  />
+                </LineChart>
+              ) : (
+                <BarChart data={chartData}>
+                  <CartesianGrid strokeDasharray="3 3" />
+                  <XAxis dataKey="name" tick={{ fontSize: 11 }} />
+                  <YAxis unit="h" />
+                  <Tooltip />
+                  <Legend />
+                  <Bar
+                    dataKey="workedHours"
+                    name="Worked hours"
+                    fill="#4f46e5"
+                    radius={[6, 6, 0, 0]}
+                  />
+                  <Bar
+                    dataKey="billableHours"
+                    name="Billable hours"
+                    fill="#059669"
+                    radius={[6, 6, 0, 0]}
+                  />
+                </BarChart>
+              )}
+            </ResponsiveContainer>
+          </div>
+        )}
+      </Card>
+
+      <Card>
+        <h3 className="font-bold text-slate-950">
+          Caregiver hours — {selectedClientName ?? "all clients"}
+        </h3>
+        <p className="mt-1 text-sm text-slate-500">
+          {selectedServiceName ?? "All services combined"} · selected date range
+        </p>
+        {caregiverSubtotals.length === 0 ? (
+          <p className="mt-4 text-sm text-slate-400">
+            No caregiver hours match these filters.
+          </p>
+        ) : (
+          <div className="mt-4 overflow-x-auto">
+            <table
+              aria-label="Caregiver hours summary"
+              className="w-full text-left text-sm"
+            >
+              <thead>
+                <tr className="border-b border-slate-200 text-xs uppercase tracking-wide text-slate-500">
+                  <th className="pb-2 font-medium">Caregiver</th>
+                  <th className="pb-2 font-medium">Worked</th>
+                  <th className="pb-2 font-medium">Billable</th>
+                  <th className="pb-2 font-medium">Visits</th>
+                </tr>
+              </thead>
+              <tbody>
+                {caregiverSubtotals.map((entry) => (
+                  <tr key={entry.name} className="border-b border-slate-100">
+                    <td className="py-2 font-semibold text-slate-900">
+                      {entry.name}
+                    </td>
+                    <td className="py-2 text-indigo-700">
+                      {formatHours(entry.workedMinutes)} hrs
+                    </td>
+                    <td className="py-2 text-emerald-700">
+                      {formatHours(entry.billableMinutes)} hrs
+                    </td>
+                    <td className="py-2 text-slate-600">{entry.visits}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </Card>
 
       <Card className="print:hidden">
@@ -824,7 +1316,10 @@ export function ServiceVerificationReportsPage() {
           </p>
         ) : (
           <div className="mt-4 overflow-x-auto">
-            <table className="w-full text-left text-sm">
+            <table
+              aria-label="Visit details"
+              className="w-full text-left text-sm"
+            >
               <thead>
                 <tr className="border-b border-slate-200 text-xs uppercase tracking-wide text-slate-500">
                   <th className="pb-2 pr-3 font-medium">Visit #</th>
@@ -1119,32 +1614,6 @@ export function ServiceVerificationReportsPage() {
           </div>
         )}
       </Card>
-
-      {caregiverSubtotals.length > 0 ? (
-        <Card>
-          <h3 className="font-semibold text-slate-950">
-            By caregiver (pay-period view)
-          </h3>
-          <ul className="mt-3 divide-y divide-slate-100">
-            {caregiverSubtotals.map((entry) => (
-              <li
-                key={entry.name}
-                className="flex items-center justify-between py-2 text-sm"
-              >
-                <span className="text-slate-700">
-                  {entry.name}{" "}
-                  <span className="text-slate-400">
-                    · {entry.visits} visits
-                  </span>
-                </span>
-                <span className="font-medium text-slate-900">
-                  {formatHours(entry.workedMinutes)} hrs worked
-                </span>
-              </li>
-            ))}
-          </ul>
-        </Card>
-      ) : null}
 
       {clientSubtotals.length > 0 ? (
         <Card>
