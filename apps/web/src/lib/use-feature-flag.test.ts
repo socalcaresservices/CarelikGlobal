@@ -27,6 +27,7 @@ function organizationContext(activeOrganizationId: string | null) {
     setActiveOrganizationId: vi.fn(),
     role: "organization_admin" as const,
     isPlatformOwner: false,
+    hasRealOrganizationAccess: true,
     hasPermission: vi.fn(() => true),
     loading: false
   };

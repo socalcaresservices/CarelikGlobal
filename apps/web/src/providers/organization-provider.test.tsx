@@ -17,7 +17,7 @@ interface QueryCall {
 type Resolver = (table: string, calls: QueryCall[]) => { data: unknown; error: unknown };
 
 function makeBuilder(table: string, calls: QueryCall[], resolve: Resolver): unknown {
-  const chainMethods = ["select", "eq", "order"] as const;
+  const chainMethods = ["select", "eq", "order", "gt"] as const;
   const builder: Record<string, unknown> = {};
 
   for (const method of chainMethods) {
@@ -115,7 +115,15 @@ describe("OrganizationProvider", () => {
     vi.clearAllMocks();
   });
 
-  it("grants every permission to a platform owner without querying role_permissions", async () => {
+  // A platform owner only bypasses role checks with an active, unexpired
+  // support_access_grant for the organization they're viewing - not
+  // unconditionally, the way this test used to assert. See the Care Team
+  // authorization bug (2026-08-24): a platform owner with no real
+  // membership and no support grant anywhere landed in an organization
+  // they could see but not act in, and the old blanket
+  // `isPlatformOwner || ...` bypass in hasPermission() masked that by
+  // letting write-gated UI render as fully usable regardless.
+  it("grants every permission to a platform owner with an active support access grant, without querying role_permissions", async () => {
     mockedUseAuth.mockReturnValue({
       user: { id: "user-1" } as never,
       session: {} as never,
@@ -131,8 +139,17 @@ describe("OrganizationProvider", () => {
     setResolver((table, calls) => {
       if (table === "user_profiles") return { data: { platform_role: "platform_owner" }, error: null };
       if (table === "organizations") return { data: [orgRow], error: null };
-      if (table === "organization_memberships" && hasEqCall(calls, "status", "invited")) {
+      if (table === "organization_memberships") {
+        if (hasEqCall(calls, "status", "invited")) return { data: [], error: null };
+        // No real membership row anywhere - this owner's only access to
+        // ORG_ID is the support grant mocked below.
+        if (hasEqCall(calls, "organization_id", ORG_ID)) return { data: null, error: null };
         return { data: [], error: null };
+      }
+      if (table === "support_access_grants") {
+        const isSingleLookup = calls.some((call) => call.method === "maybeSingle");
+        if (isSingleLookup) return { data: { id: "grant-1" }, error: null };
+        return { data: [{ organization_id: ORG_ID }], error: null };
       }
       return { data: null, error: null };
     });
@@ -143,14 +160,16 @@ describe("OrganizationProvider", () => {
     await waitFor(() => expect(screen.getByTestId("org-count")).toHaveTextContent("1"));
     await waitFor(() => expect(screen.getByTestId("active-org-id")).toHaveTextContent(ORG_ID));
     expect(screen.getByTestId("role")).toHaveTextContent("platform_owner");
-    expect(screen.getByTestId("can-update-org")).toHaveTextContent("true");
+    await waitFor(() => expect(screen.getByTestId("can-update-org")).toHaveTextContent("true"));
     expect(screen.getByTestId("can-delete-files")).toHaveTextContent("true");
     // Branding columns (Build 018) flow through from the organizations
     // query into activeOrganization, not just the core five fields.
     expect(screen.getByTestId("active-org-logo")).toHaveTextContent("https://example.com/acme-logo.png");
     expect(screen.getByTestId("active-org-powered-by")).toHaveTextContent("false");
 
-    // role_permissions is only queried for non-platform-owners.
+    // role_permissions is only queried once a real membership role is
+    // known; this owner has none, and the active support grant bypasses
+    // the check entirely instead.
     expect(mockedFrom).not.toHaveBeenCalledWith("role_permissions");
   });
 
@@ -304,7 +323,17 @@ describe("OrganizationProvider", () => {
     }
   });
 
-  it("falls back to the first organization on a platform host, where there's no single tenant to pin to", async () => {
+  // Regression test for the reported Care Team authorization bug
+  // (2026-08-24): a platform owner with no real membership or support
+  // access anywhere used to fall back to organizations[0] like any other
+  // multi-org user, landing them in an organization they could only view -
+  // "Ogethinks" sorted alphabetically before every org they actually had
+  // access to. Falling back into it silently is exactly what let the
+  // Care Team form render as fully usable for an owner who was
+  // guaranteed to fail on submit. Leaving no organization selected is the
+  // correct outcome; the Organizations registry is where they request
+  // support access instead.
+  it("leaves no organization selected for a platform owner with no real access anywhere, instead of falling back to the first organization", async () => {
     mockedUseAuth.mockReturnValue({
       user: { id: "user-5" } as never,
       session: {} as never,
@@ -323,12 +352,16 @@ describe("OrganizationProvider", () => {
       if (table === "organization_memberships" && hasEqCall(calls, "status", "invited")) {
         return { data: [], error: null };
       }
+      if (table === "organization_memberships") return { data: [], error: null };
+      if (table === "support_access_grants") return { data: [], error: null };
       return { data: null, error: null };
     });
 
     renderProvider(undefined);
 
-    await waitFor(() => expect(screen.getByTestId("active-org-id")).toHaveTextContent(ORG_ID));
+    await waitFor(() => expect(screen.getByTestId("org-count")).toHaveTextContent("2"));
+    await waitFor(() => expect(screen.getByTestId("loading")).toHaveTextContent("false"));
+    expect(screen.getByTestId("active-org-id")).toHaveTextContent("none");
   });
 
   // Regression test for the bug reported live: signing out of one account
