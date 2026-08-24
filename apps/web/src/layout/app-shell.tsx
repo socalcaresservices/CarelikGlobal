@@ -24,6 +24,7 @@ import { cn } from "@carelik/ui";
 import { useOrganization } from "@/providers/organization-provider";
 import { GlobalSearch } from "@/components/global-search";
 import { ContextBar } from "@/components/context-bar";
+import { SupportModeIndicator } from "@/components/support-mode-indicator";
 import { supabase } from "@/lib/supabase";
 
 // The six counts get_actionable_counts (20260728010000) returns - one
@@ -355,6 +356,7 @@ export function AppShell({ children }: PropsWithChildren) {
             <p className="text-sm text-slate-400">No organization</p>
           )}
         </header>
+        <SupportModeIndicator />
         <ContextBar />
         <div className="p-6">{children}</div>
       </main>
