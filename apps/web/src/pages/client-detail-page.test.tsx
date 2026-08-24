@@ -422,6 +422,13 @@ describe("ClientDetailPage", () => {
     await waitFor(() =>
       expect(screen.getByLabelText("City")).toBeInTheDocument(),
     );
+    // The form renders as soon as the query resolves, then a useEffect hydrates
+    // its required first/last-name fields. Wait for that hydration before
+    // editing and submitting so a slower CI worker cannot click a still-
+    // disabled Save button.
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: "Save" })).toBeEnabled(),
+    );
 
     fireEvent.change(screen.getByLabelText("City"), {
       target: { value: "San Diego" },
