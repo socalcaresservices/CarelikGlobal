@@ -6,12 +6,14 @@ import { useOrganization } from "@/providers/organization-provider";
 import { supabase } from "@/lib/supabase";
 import { ClientDetailPage } from "./client-detail-page";
 
-vi.mock("@/providers/organization-provider", () => ({ useOrganization: vi.fn() }));
+vi.mock("@/providers/organization-provider", () => ({
+  useOrganization: vi.fn(),
+}));
 vi.mock("@/lib/supabase", () => ({
   supabase: {
     rpc: vi.fn(),
-    from: vi.fn()
-  }
+    from: vi.fn(),
+  },
 }));
 
 const mockedUseOrganization = vi.mocked(useOrganization);
@@ -30,19 +32,21 @@ function baseOrganization() {
       legalName: "Acme LLC",
       displayName: "Acme",
       status: "active" as const,
-      timezone: "America/Los_Angeles"
+      timezone: "America/Los_Angeles",
     },
     activeOrganizationId: ORG_ID,
     setActiveOrganizationId: vi.fn(),
     role: "organization_admin" as const,
     isPlatformOwner: false,
     hasPermission: vi.fn(() => true),
-    loading: false
+    loading: false,
   };
 }
 
 function mockClientRecord(data: unknown) {
-  const singleMock = vi.fn().mockResolvedValue({ data, error: data ? null : { message: "not found" } });
+  const singleMock = vi
+    .fn()
+    .mockResolvedValue({ data, error: data ? null : { message: "not found" } });
   const eqMock = vi.fn(() => ({ single: singleMock }));
   const selectMock = vi.fn(() => ({ eq: eqMock }));
   return selectMock;
@@ -57,8 +61,10 @@ interface ServiceOption {
 function lookupSelectStub(rows: unknown[]) {
   return vi.fn(() => ({
     eq: vi.fn(() => ({
-      is: vi.fn(() => ({ order: vi.fn().mockResolvedValue({ data: rows, error: null }) }))
-    }))
+      is: vi.fn(() => ({
+        order: vi.fn().mockResolvedValue({ data: rows, error: null }),
+      })),
+    })),
   }));
 }
 
@@ -69,16 +75,22 @@ function mockFromByTable(
   client: unknown,
   services: ServiceOption[] = [],
   skills: ServiceOption[] = [],
-  languages: ServiceOption[] = []
+  languages: ServiceOption[] = [],
 ) {
   const clientSelectMock = mockClientRecord(client);
   const clientUpdateEqMock2 = vi.fn().mockResolvedValue({ error: null });
   const clientUpdateEqMock = vi.fn(() => ({ eq: clientUpdateEqMock2 }));
   const clientUpdateMock = vi.fn(() => ({ eq: clientUpdateEqMock }));
 
-  const requestedServicesDeleteEqMock = vi.fn().mockResolvedValue({ error: null });
-  const requestedServicesDeleteMock = vi.fn(() => ({ eq: requestedServicesDeleteEqMock }));
-  const requestedServicesInsertMock = vi.fn().mockResolvedValue({ error: null });
+  const requestedServicesDeleteEqMock = vi
+    .fn()
+    .mockResolvedValue({ error: null });
+  const requestedServicesDeleteMock = vi.fn(() => ({
+    eq: requestedServicesDeleteEqMock,
+  }));
+  const requestedServicesInsertMock = vi
+    .fn()
+    .mockResolvedValue({ error: null });
 
   const assignmentInsertMock = vi.fn().mockResolvedValue({ error: null });
   const assignmentUpdateEqMock = vi.fn().mockResolvedValue({ error: null });
@@ -98,10 +110,16 @@ function mockFromByTable(
       return { select: lookupSelectStub(languages) } as never;
     }
     if (table === "client_requested_services") {
-      return { delete: requestedServicesDeleteMock, insert: requestedServicesInsertMock } as never;
+      return {
+        delete: requestedServicesDeleteMock,
+        insert: requestedServicesInsertMock,
+      } as never;
     }
     if (table === "caregiver_assignments") {
-      return { insert: assignmentInsertMock, update: assignmentUpdateMock } as never;
+      return {
+        insert: assignmentInsertMock,
+        update: assignmentUpdateMock,
+      } as never;
     }
     return {} as never;
   });
@@ -114,12 +132,14 @@ function mockFromByTable(
     requestedServicesInsertMock,
     assignmentInsertMock,
     assignmentUpdateMock,
-    assignmentUpdateEqMock
+    assignmentUpdateEqMock,
   };
 }
 
 function renderPage() {
-  const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  const queryClient = new QueryClient({
+    defaultOptions: { queries: { retry: false } },
+  });
   return render(
     <MemoryRouter initialEntries={[`/clients/${CLIENT_ID}`]}>
       <QueryClientProvider client={queryClient}>
@@ -127,7 +147,7 @@ function renderPage() {
           <Route path="/clients/:id" element={<ClientDetailPage />} />
         </Routes>
       </QueryClientProvider>
-    </MemoryRouter>
+    </MemoryRouter>,
   );
 }
 
@@ -148,15 +168,19 @@ describe("ClientDetailPage", () => {
       address: null,
       care_notes: null,
       status: "active",
-      client_requested_services: []
+      client_requested_services: [],
     });
     mockedRpc.mockResolvedValue({ data: [], error: null } as never);
 
     renderPage();
 
-    await waitFor(() => expect(screen.getByText("Jordan Rivera")).toBeInTheDocument());
+    await waitFor(() =>
+      expect(screen.getByText("Jordan Rivera")).toBeInTheDocument(),
+    );
     expect(screen.getByText("active")).toBeInTheDocument();
-    expect(screen.getByText("No active authorization for today.")).toBeInTheDocument();
+    expect(
+      screen.getByText("No active authorization for today."),
+    ).toBeInTheDocument();
   });
 
   it("shows the Client ID prominently next to the client's name and copies it", async () => {
@@ -171,7 +195,7 @@ describe("ClientDetailPage", () => {
       address: null,
       care_notes: null,
       status: "active",
-      client_requested_services: []
+      client_requested_services: [],
     });
     mockedRpc.mockResolvedValue({ data: [], error: null } as never);
 
@@ -180,7 +204,9 @@ describe("ClientDetailPage", () => {
 
     renderPage();
 
-    await waitFor(() => expect(screen.getByText("CL-000042")).toBeInTheDocument());
+    await waitFor(() =>
+      expect(screen.getByText("CL-000042")).toBeInTheDocument(),
+    );
     // The internal UUID must never be shown as the operational Client ID.
     expect(screen.queryByText(CLIENT_ID)).not.toBeInTheDocument();
 
@@ -204,13 +230,15 @@ describe("ClientDetailPage", () => {
       address: null,
       care_notes: null,
       status: "active",
-      client_requested_services: []
+      client_requested_services: [],
     });
     mockedRpc.mockResolvedValue({ data: [], error: null } as never);
 
     renderPage();
 
-    await waitFor(() => expect(screen.getByText("Jordan Rivera")).toBeInTheDocument());
+    await waitFor(() =>
+      expect(screen.getByText("Jordan Rivera")).toBeInTheDocument(),
+    );
     const headerCard = screen.getByText("Jordan Rivera").closest("div.sticky");
     expect(headerCard).not.toBeNull();
     expect(headerCard).toHaveClass("top-0");
@@ -227,7 +255,7 @@ describe("ClientDetailPage", () => {
       address: null,
       care_notes: null,
       status: "active",
-      client_requested_services: []
+      client_requested_services: [],
     });
     mockedRpc.mockImplementation((fn: string) => {
       if (fn === "list_client_authorizations") {
@@ -242,10 +270,10 @@ describe("ClientDetailPage", () => {
               period_start: "2026-01-01",
               period_end: "2030-01-01",
               hours_used_this_month: 12,
-              hours_scheduled_this_month: 10
-            }
+              hours_scheduled_this_month: 10,
+            },
           ],
-          error: null
+          error: null,
         }) as never;
       }
       return Promise.resolve({ data: [], error: null }) as never;
@@ -253,7 +281,9 @@ describe("ClientDetailPage", () => {
 
     renderPage();
 
-    await waitFor(() => expect(screen.getByText("Cap this month")).toBeInTheDocument());
+    await waitFor(() =>
+      expect(screen.getByText("Cap this month")).toBeInTheDocument(),
+    );
     expect(screen.getByText("20h")).toBeInTheDocument();
     expect(screen.getByText("22h")).toBeInTheDocument();
     expect(screen.getByText("Over limit")).toBeInTheDocument();
@@ -273,7 +303,7 @@ describe("ClientDetailPage", () => {
       address: null,
       care_notes: null,
       status: "active",
-      client_requested_services: []
+      client_requested_services: [],
     });
     mockedRpc.mockImplementation((fn: string) => {
       if (fn === "list_client_authorizations") {
@@ -288,10 +318,10 @@ describe("ClientDetailPage", () => {
               period_start: "2026-01-01",
               period_end: "2030-01-01",
               hours_used_this_month: 5,
-              hours_scheduled_this_month: 3
-            }
+              hours_scheduled_this_month: 3,
+            },
           ],
-          error: null
+          error: null,
         }) as never;
       }
       return Promise.resolve({ data: [], error: null }) as never;
@@ -300,7 +330,9 @@ describe("ClientDetailPage", () => {
     renderPage();
 
     // Cap 20h - (5h used + 3h scheduled) = 12h remaining.
-    await waitFor(() => expect(screen.getByText("12h remaining")).toBeInTheDocument());
+    await waitFor(() =>
+      expect(screen.getByText("12h remaining")).toBeInTheDocument(),
+    );
   });
 
   it("shows a not-found state for a missing client", async () => {
@@ -310,7 +342,9 @@ describe("ClientDetailPage", () => {
 
     renderPage();
 
-    await waitFor(() => expect(screen.getByText("Not found")).toBeInTheDocument());
+    await waitFor(() =>
+      expect(screen.getByText("Not found")).toBeInTheDocument(),
+    );
   });
 
   it("shows an error message on the Authorizations tab when the fetch fails, instead of a false empty state", async () => {
@@ -324,57 +358,92 @@ describe("ClientDetailPage", () => {
       address: null,
       care_notes: null,
       status: "active",
-      client_requested_services: []
+      client_requested_services: [],
     });
     mockedRpc.mockImplementation((fn: string) => {
       if (fn === "list_client_authorizations") {
-        return Promise.resolve({ data: null, error: new Error("network error") }) as never;
+        return Promise.resolve({
+          data: null,
+          error: new Error("network error"),
+        }) as never;
       }
       return Promise.resolve({ data: [], error: null }) as never;
     });
 
     renderPage();
-    await waitFor(() => expect(screen.getByText("Jordan Rivera")).toBeInTheDocument());
+    await waitFor(() =>
+      expect(screen.getByText("Jordan Rivera")).toBeInTheDocument(),
+    );
 
     fireEvent.click(screen.getByRole("button", { name: "Authorizations" }));
 
     await waitFor(() =>
-      expect(screen.getByText("Could not load authorizations for this client.")).toBeInTheDocument()
+      expect(
+        screen.getByText("Could not load authorizations for this client."),
+      ).toBeInTheDocument(),
     );
-    expect(screen.queryByText("No authorizations on file.")).not.toBeInTheDocument();
+    expect(
+      screen.queryByText("No authorizations on file."),
+    ).not.toBeInTheDocument();
   });
 
   it("saves client location, care needs, and requested services", async () => {
     mockedUseOrganization.mockReturnValue(baseOrganization());
-    const { clientUpdateMock, clientUpdateEqMock, clientUpdateEqMock2, requestedServicesDeleteMock, requestedServicesInsertMock } =
-      mockFromByTable(
+    const {
+      clientUpdateMock,
+      clientUpdateEqMock,
+      clientUpdateEqMock2,
+      requestedServicesDeleteMock,
+      requestedServicesInsertMock,
+    } = mockFromByTable(
+      {
+        id: CLIENT_ID,
+        first_name: "Jordan",
+        last_name: "Rivera",
+        phone: null,
+        email: null,
+        address: null,
+        care_notes: null,
+        status: "active",
+        client_requested_services: [],
+      },
+      [
         {
-          id: CLIENT_ID,
-          first_name: "Jordan",
-          last_name: "Rivera",
-          phone: null,
-          email: null,
-          address: null,
-          care_notes: null,
-          status: "active",
-          client_requested_services: []
+          id: "44444444-4444-4444-8444-444444444444",
+          name: "Personal care",
+          is_active: true,
         },
-        [{ id: "44444444-4444-4444-8444-444444444444", name: "Personal care", is_active: true }],
-        [{ id: "skill-1", name: "Dementia care", is_active: true }]
-      );
+      ],
+      [{ id: "skill-1", name: "Dementia care", is_active: true }],
+    );
     mockedRpc.mockResolvedValue({ data: [], error: null } as never);
 
     renderPage();
-    await waitFor(() => expect(screen.getByLabelText("City")).toBeInTheDocument());
+    await waitFor(() =>
+      expect(screen.getByLabelText("City")).toBeInTheDocument(),
+    );
 
-    fireEvent.change(screen.getByLabelText("City"), { target: { value: "San Diego" } });
+    fireEvent.change(screen.getByLabelText("City"), {
+      target: { value: "San Diego" },
+    });
+    fireEvent.change(screen.getByLabelText("Caregiver-facing client code"), {
+      target: { value: "Bluebird" },
+    });
 
     fireEvent.focus(screen.getByLabelText("Care needs"));
-    await waitFor(() => expect(screen.getByRole("option", { name: "Dementia care" })).toBeInTheDocument());
+    await waitFor(() =>
+      expect(
+        screen.getByRole("option", { name: "Dementia care" }),
+      ).toBeInTheDocument(),
+    );
     fireEvent.mouseDown(screen.getByRole("option", { name: "Dementia care" }));
 
     fireEvent.focus(screen.getByLabelText("Services"));
-    await waitFor(() => expect(screen.getByRole("option", { name: "Personal care" })).toBeInTheDocument());
+    await waitFor(() =>
+      expect(
+        screen.getByRole("option", { name: "Personal care" }),
+      ).toBeInTheDocument(),
+    );
     fireEvent.mouseDown(screen.getByRole("option", { name: "Personal care" }));
 
     fireEvent.click(screen.getByRole("button", { name: "Save" }));
@@ -382,10 +451,11 @@ describe("ClientDetailPage", () => {
     await waitFor(() =>
       expect(clientUpdateMock).toHaveBeenCalledWith(
         expect.objectContaining({
+          caregiver_display_code: "Bluebird",
           address_city: "San Diego",
-          care_needs: ["Dementia care"]
-        })
-      )
+          care_needs: ["Dementia care"],
+        }),
+      ),
     );
     expect(clientUpdateEqMock).toHaveBeenCalledWith("organization_id", ORG_ID);
     expect(clientUpdateEqMock2).toHaveBeenCalledWith("id", CLIENT_ID);
@@ -395,16 +465,16 @@ describe("ClientDetailPage", () => {
         expect.objectContaining({
           organization_id: ORG_ID,
           client_id: CLIENT_ID,
-          service_id: "44444444-4444-4444-8444-444444444444"
-        })
-      ])
+          service_id: "44444444-4444-4444-8444-444444444444",
+        }),
+      ]),
     );
   });
 
   it("switches to the Notes tab and shows a read-only user's care notes as text", async () => {
     mockedUseOrganization.mockReturnValue({
       ...baseOrganization(),
-      hasPermission: vi.fn(() => false)
+      hasPermission: vi.fn(() => false),
     });
     mockFromByTable({
       id: CLIENT_ID,
@@ -415,40 +485,53 @@ describe("ClientDetailPage", () => {
       address: null,
       care_notes: "Prefers morning visits.",
       status: "active",
-      client_requested_services: []
+      client_requested_services: [],
     });
     mockedRpc.mockResolvedValue({ data: [], error: null } as never);
 
     renderPage();
-    await waitFor(() => expect(screen.getByText("Jordan Rivera")).toBeInTheDocument());
+    await waitFor(() =>
+      expect(screen.getByText("Jordan Rivera")).toBeInTheDocument(),
+    );
 
     fireEvent.click(screen.getByRole("button", { name: "Notes" }));
 
-    await waitFor(() => expect(screen.getByText("Prefers morning visits.")).toBeInTheDocument());
+    await waitFor(() =>
+      expect(screen.getByText("Prefers morning visits.")).toBeInTheDocument(),
+    );
   });
 
   it("edits a client's name, contact info, and care notes from Client Detail without leaving the page", async () => {
     mockedUseOrganization.mockReturnValue(baseOrganization());
-    const { clientUpdateMock, clientUpdateEqMock, clientUpdateEqMock2 } = mockFromByTable({
-      id: CLIENT_ID,
-      client_code: "CL-000042",
-      first_name: "Jordan",
-      last_name: "Rivera",
-      phone: "555-0100",
-      email: "jordan@example.test",
-      address: null,
-      care_notes: "Prefers morning visits.",
-      status: "active",
-      client_requested_services: []
-    });
+    const { clientUpdateMock, clientUpdateEqMock, clientUpdateEqMock2 } =
+      mockFromByTable({
+        id: CLIENT_ID,
+        client_code: "CL-000042",
+        first_name: "Jordan",
+        last_name: "Rivera",
+        phone: "555-0100",
+        email: "jordan@example.test",
+        address: null,
+        care_notes: "Prefers morning visits.",
+        status: "active",
+        client_requested_services: [],
+      });
     mockedRpc.mockResolvedValue({ data: [], error: null } as never);
 
     renderPage();
-    await waitFor(() => expect(screen.getByLabelText("First name")).toBeInTheDocument());
+    await waitFor(() =>
+      expect(screen.getByLabelText("First name")).toBeInTheDocument(),
+    );
 
-    fireEvent.change(screen.getByLabelText("First name"), { target: { value: "Jordana" } });
-    fireEvent.change(screen.getByLabelText("Phone"), { target: { value: "555-0199" } });
-    fireEvent.change(screen.getByLabelText("Email"), { target: { value: "jordana@example.test" } });
+    fireEvent.change(screen.getByLabelText("First name"), {
+      target: { value: "Jordana" },
+    });
+    fireEvent.change(screen.getByLabelText("Phone"), {
+      target: { value: "555-0199" },
+    });
+    fireEvent.change(screen.getByLabelText("Email"), {
+      target: { value: "jordana@example.test" },
+    });
 
     fireEvent.click(screen.getAllByRole("button", { name: "Save" })[0]!);
 
@@ -458,28 +541,34 @@ describe("ClientDetailPage", () => {
           first_name: "Jordana",
           last_name: "Rivera",
           phone: "555-0199",
-          email: "jordana@example.test"
-        })
-      )
+          email: "jordana@example.test",
+        }),
+      ),
     );
     expect(clientUpdateEqMock).toHaveBeenCalledWith("organization_id", ORG_ID);
     expect(clientUpdateEqMock2).toHaveBeenCalledWith("id", CLIENT_ID);
-    await waitFor(() => expect(screen.getByText("Client profile updated.")).toBeInTheDocument());
+    await waitFor(() =>
+      expect(screen.getByText("Client profile updated.")).toBeInTheDocument(),
+    );
 
     fireEvent.click(screen.getByRole("button", { name: "Notes" }));
-    const notesField = screen.getByLabelText("Care notes") as HTMLTextAreaElement;
+    const notesField = screen.getByLabelText(
+      "Care notes",
+    ) as HTMLTextAreaElement;
     fireEvent.change(notesField, { target: { value: "Updated note" } });
     fireEvent.click(screen.getByRole("button", { name: "Save" }));
 
     await waitFor(() =>
-      expect(clientUpdateMock).toHaveBeenCalledWith(expect.objectContaining({ care_notes: "Updated note" }))
+      expect(clientUpdateMock).toHaveBeenCalledWith(
+        expect.objectContaining({ care_notes: "Updated note" }),
+      ),
     );
   });
 
   it("does not show an editable care-notes field to a user without applicants.update-equivalent client permission", async () => {
     mockedUseOrganization.mockReturnValue({
       ...baseOrganization(),
-      hasPermission: vi.fn(() => false)
+      hasPermission: vi.fn(() => false),
     });
     mockFromByTable({
       id: CLIENT_ID,
@@ -490,12 +579,14 @@ describe("ClientDetailPage", () => {
       address: null,
       care_notes: null,
       status: "active",
-      client_requested_services: []
+      client_requested_services: [],
     });
     mockedRpc.mockResolvedValue({ data: [], error: null } as never);
 
     renderPage();
-    await waitFor(() => expect(screen.getByText("Jordan Rivera")).toBeInTheDocument());
+    await waitFor(() =>
+      expect(screen.getByText("Jordan Rivera")).toBeInTheDocument(),
+    );
 
     expect(screen.queryByLabelText("First name")).not.toBeInTheDocument();
   });
@@ -511,17 +602,24 @@ describe("ClientDetailPage", () => {
       address: null,
       care_notes: null,
       status: "active",
-      client_requested_services: []
+      client_requested_services: [],
     });
     mockedRpc.mockResolvedValue({ data: [], error: null } as never);
 
     renderPage();
-    await waitFor(() => expect(screen.getByText("Jordan Rivera")).toBeInTheDocument());
+    await waitFor(() =>
+      expect(screen.getByText("Jordan Rivera")).toBeInTheDocument(),
+    );
 
     fireEvent.click(screen.getByRole("button", { name: "Schedule" }));
 
-    const link = await screen.findByText("Assign a caregiver (ranked by CareScore)");
-    expect(link.closest("a")).toHaveAttribute("href", `/schedule?clientId=${CLIENT_ID}`);
+    const link = await screen.findByText(
+      "Assign a caregiver (ranked by CareScore)",
+    );
+    expect(link.closest("a")).toHaveAttribute(
+      "href",
+      `/schedule?clientId=${CLIENT_ID}`,
+    );
   });
 
   it("shows ranked CareScore matches with a breakdown on the Matches tab", async () => {
@@ -535,7 +633,7 @@ describe("ClientDetailPage", () => {
       address: null,
       care_notes: null,
       status: "active",
-      client_requested_services: []
+      client_requested_services: [],
     });
     mockedRpc.mockImplementation((fn: string) => {
       if (fn === "list_caregiver_matches") {
@@ -549,25 +647,32 @@ describe("ClientDetailPage", () => {
               language_score: 25,
               availability_score: 17,
               skills_score: 10,
-              history_score: 5
-            }
+              history_score: 5,
+            },
           ],
-          error: null
+          error: null,
         }) as never;
       }
       return Promise.resolve({ data: [], error: null }) as never;
     });
 
     renderPage();
-    await waitFor(() => expect(screen.getByText("Jordan Rivera")).toBeInTheDocument());
+    await waitFor(() =>
+      expect(screen.getByText("Jordan Rivera")).toBeInTheDocument(),
+    );
 
     fireEvent.click(screen.getByRole("button", { name: "Matches" }));
 
-    await waitFor(() => expect(screen.getByText("Sam Caregiver")).toBeInTheDocument());
+    await waitFor(() =>
+      expect(screen.getByText("Sam Caregiver")).toBeInTheDocument(),
+    );
     expect(screen.getByText("87")).toBeInTheDocument();
     expect(screen.getByText("Proximity 30/30")).toBeInTheDocument();
     expect(screen.getByText("Skills 10/10")).toBeInTheDocument();
-    expect(screen.getByText("Sam Caregiver").closest("a")).toHaveAttribute("href", "/team");
+    expect(screen.getByText("Sam Caregiver").closest("a")).toHaveAttribute(
+      "href",
+      "/team",
+    );
   });
 
   it("links to a pre-filled add-authorization flow from the Authorizations tab", async () => {
@@ -581,17 +686,27 @@ describe("ClientDetailPage", () => {
       address: null,
       care_notes: null,
       status: "active",
-      client_requested_services: [{ service_id: "service-1", services: { id: "service-1", name: "Personal care" } }]
+      client_requested_services: [
+        {
+          service_id: "service-1",
+          services: { id: "service-1", name: "Personal care" },
+        },
+      ],
     });
     mockedRpc.mockResolvedValue({ data: [], error: null } as never);
 
     renderPage();
-    await waitFor(() => expect(screen.getByText("Jordan Rivera")).toBeInTheDocument());
+    await waitFor(() =>
+      expect(screen.getByText("Jordan Rivera")).toBeInTheDocument(),
+    );
 
     fireEvent.click(screen.getByRole("button", { name: "Authorizations" }));
 
     const link = await screen.findByText("Add Personal care authorization");
-    expect(link.closest("a")).toHaveAttribute("href", `/authorizations?clientId=${CLIENT_ID}&serviceId=service-1`);
+    expect(link.closest("a")).toHaveAttribute(
+      "href",
+      `/authorizations?clientId=${CLIENT_ID}&serviceId=service-1`,
+    );
   });
 
   it("lists caregiver assignments and assigns a new one on the Caregivers tab", async () => {
@@ -606,9 +721,16 @@ describe("ClientDetailPage", () => {
         address: null,
         care_notes: null,
         status: "active",
-        client_requested_services: []
+        client_requested_services: [],
       },
-      [{ id: "44444444-4444-4444-8444-444444444444", code: "862", name: "Personal care", is_active: true } as never]
+      [
+        {
+          id: "44444444-4444-4444-8444-444444444444",
+          code: "862",
+          name: "Personal care",
+          is_active: true,
+        } as never,
+      ],
     );
     mockedRpc.mockImplementation((fn: string) => {
       if (fn === "list_caregiver_assignments") {
@@ -624,37 +746,59 @@ describe("ClientDetailPage", () => {
               service_code: "862",
               effective_start: "2026-01-01",
               effective_end: null,
-              is_active: true
-            }
+              is_active: true,
+            },
           ],
-          error: null
+          error: null,
         }) as never;
       }
       if (fn === "list_organization_members") {
         return Promise.resolve({
-          data: [{ user_id: "caregiver-2", display_name: "Alex Caregiver", status: "active" }],
-          error: null
+          data: [
+            {
+              user_id: "caregiver-2",
+              display_name: "Alex Caregiver",
+              status: "active",
+            },
+          ],
+          error: null,
         }) as never;
       }
       return Promise.resolve({ data: [], error: null }) as never;
     });
 
     renderPage();
-    await waitFor(() => expect(screen.getByText("Jordan Rivera")).toBeInTheDocument());
+    await waitFor(() =>
+      expect(screen.getByText("Jordan Rivera")).toBeInTheDocument(),
+    );
 
     fireEvent.click(screen.getByRole("button", { name: "Caregivers" }));
 
-    await waitFor(() => expect(screen.getByText("Sam Caregiver")).toBeInTheDocument());
+    await waitFor(() =>
+      expect(screen.getByText("Sam Caregiver")).toBeInTheDocument(),
+    );
     expect(screen.getByText("862 · Personal care")).toBeInTheDocument();
-    expect(screen.getByText("Active", { selector: "span" })).toBeInTheDocument();
+    expect(
+      screen.getByText("Active", { selector: "span" }),
+    ).toBeInTheDocument();
 
     fireEvent.focus(screen.getByLabelText("Caregiver"));
-    await waitFor(() => expect(screen.getByRole("option", { name: "Alex Caregiver" })).toBeInTheDocument());
+    await waitFor(() =>
+      expect(
+        screen.getByRole("option", { name: "Alex Caregiver" }),
+      ).toBeInTheDocument(),
+    );
     fireEvent.mouseDown(screen.getByRole("option", { name: "Alex Caregiver" }));
 
     fireEvent.focus(screen.getByLabelText("Service"));
-    await waitFor(() => expect(screen.getByRole("option", { name: "862 · Personal care" })).toBeInTheDocument());
-    fireEvent.mouseDown(screen.getByRole("option", { name: "862 · Personal care" }));
+    await waitFor(() =>
+      expect(
+        screen.getByRole("option", { name: "862 · Personal care" }),
+      ).toBeInTheDocument(),
+    );
+    fireEvent.mouseDown(
+      screen.getByRole("option", { name: "862 · Personal care" }),
+    );
 
     fireEvent.click(screen.getByRole("button", { name: "Assign" }));
 
@@ -664,9 +808,9 @@ describe("ClientDetailPage", () => {
           organization_id: ORG_ID,
           client_id: CLIENT_ID,
           caregiver_user_id: "caregiver-2",
-          service_id: "44444444-4444-4444-8444-444444444444"
-        })
-      )
+          service_id: "44444444-4444-4444-8444-444444444444",
+        }),
+      ),
     );
   });
 
@@ -681,7 +825,7 @@ describe("ClientDetailPage", () => {
       address: null,
       care_notes: null,
       status: "active",
-      client_requested_services: []
+      client_requested_services: [],
     });
     mockedRpc.mockImplementation((fn: string) => {
       if (fn === "list_caregiver_assignments") {
@@ -697,31 +841,39 @@ describe("ClientDetailPage", () => {
               service_code: "862",
               effective_start: "2026-01-01",
               effective_end: null,
-              is_active: true
-            }
+              is_active: true,
+            },
           ],
-          error: null
+          error: null,
         }) as never;
       }
       return Promise.resolve({ data: [], error: null }) as never;
     });
 
     renderPage();
-    await waitFor(() => expect(screen.getByText("Jordan Rivera")).toBeInTheDocument());
+    await waitFor(() =>
+      expect(screen.getByText("Jordan Rivera")).toBeInTheDocument(),
+    );
 
     fireEvent.click(screen.getByRole("button", { name: "Caregivers" }));
-    await waitFor(() => expect(screen.getByText("Sam Caregiver")).toBeInTheDocument());
+    await waitFor(() =>
+      expect(screen.getByText("Sam Caregiver")).toBeInTheDocument(),
+    );
 
     fireEvent.click(screen.getByRole("button", { name: "Revoke" }));
 
-    await waitFor(() => expect(assignmentUpdateMock).toHaveBeenCalledWith({ is_active: false }));
+    await waitFor(() =>
+      expect(assignmentUpdateMock).toHaveBeenCalledWith({ is_active: false }),
+    );
     expect(assignmentUpdateEqMock).toHaveBeenCalledWith("id", "assignment-1");
   });
 
   it("hides the assign-a-caregiver link without shifts.update", async () => {
     mockedUseOrganization.mockReturnValue({
       ...baseOrganization(),
-      hasPermission: vi.fn((permission: string) => permission !== "shifts.update")
+      hasPermission: vi.fn(
+        (permission: string) => permission !== "shifts.update",
+      ),
     });
     mockFromByTable({
       id: CLIENT_ID,
@@ -732,15 +884,19 @@ describe("ClientDetailPage", () => {
       address: null,
       care_notes: null,
       status: "active",
-      client_requested_services: []
+      client_requested_services: [],
     });
     mockedRpc.mockResolvedValue({ data: [], error: null } as never);
 
     renderPage();
-    await waitFor(() => expect(screen.getByText("Jordan Rivera")).toBeInTheDocument());
+    await waitFor(() =>
+      expect(screen.getByText("Jordan Rivera")).toBeInTheDocument(),
+    );
 
     fireEvent.click(screen.getByRole("button", { name: "Schedule" }));
 
-    expect(screen.queryByText("Assign a caregiver (ranked by CareScore)")).not.toBeInTheDocument();
+    expect(
+      screen.queryByText("Assign a caregiver (ranked by CareScore)"),
+    ).not.toBeInTheDocument();
   });
 });

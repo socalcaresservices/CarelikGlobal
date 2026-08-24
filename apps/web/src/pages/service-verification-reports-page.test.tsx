@@ -221,7 +221,7 @@ describe("ServiceVerificationReportsPage", () => {
     expect(within(exceptionCard).getAllByRole("listitem")).toHaveLength(2);
   });
 
-  it("shows scheduled vs delivered hours, including a caregiver with no delivered visits", async () => {
+  it("uses actual signed visit time and does not load fixed schedules", async () => {
     mockedUseOrganization.mockReturnValue({
       activeOrganizationId: ORG_ID,
       activeOrganization: { displayName: "Acme Care" },
@@ -263,28 +263,18 @@ describe("ServiceVerificationReportsPage", () => {
     renderPage();
 
     await waitFor(() =>
-      expect(
-        screen.getByText("Scheduled vs delivered hours"),
-      ).toBeInTheDocument(),
+      expect(screen.getByText(/actual signed visit time/i)).toBeInTheDocument(),
     );
-    const scheduledCard = screen
-      .getByText("Scheduled vs delivered hours")
-      .closest("div")!;
-    // Jordan Rivera was scheduled 90 minutes (1.5h) and delivered the
-    // visitRow's 60 minutes (1h).
-    const jordanRow = within(scheduledCard)
-      .getByText("Jordan Rivera")
-      .closest("li")!;
-    expect(jordanRow).toHaveTextContent("1.50 scheduled · 1 delivered");
-    // The still-scheduled (never signed off) shift's caregiver/client
-    // still show up with 0 delivered, not silently dropped.
     expect(
-      within(scheduledCard).getByText("Sam Caregiver"),
-    ).toBeInTheDocument();
-    expect(within(scheduledCard).getByText("Alex Doe")).toBeInTheDocument();
+      screen.queryByText("Scheduled vs delivered hours"),
+    ).not.toBeInTheDocument();
+    expect(mockedRpc).not.toHaveBeenCalledWith(
+      "list_shifts",
+      expect.anything(),
+    );
   });
 
-  it("excludes a called-out shift from the caregiver's scheduled hours, but still counts it for the client", async () => {
+  it("does not create scheduled-hour totals when there are no signed visits", async () => {
     mockedUseOrganization.mockReturnValue({
       activeOrganizationId: ORG_ID,
       activeOrganization: { displayName: "Acme Care" },
@@ -318,24 +308,13 @@ describe("ServiceVerificationReportsPage", () => {
     renderPage();
 
     await waitFor(() =>
-      expect(
-        screen.getByText("Scheduled vs delivered hours"),
-      ).toBeInTheDocument(),
+      expect(screen.getByText(/actual signed visit time/i)).toBeInTheDocument(),
     );
-    const scheduledCard = screen
-      .getByText("Scheduled vs delivered hours")
-      .closest("div")!;
-    // The called-out caregiver is no longer the confirmed assignee, so
-    // they don't appear in the "by caregiver" list at all.
-    expect(
-      within(scheduledCard).queryByText("Casey Nguyen"),
-    ).not.toBeInTheDocument();
-    // The client is still scheduled for that time regardless of which
-    // caregiver (if any) currently holds it, so they still show 2h scheduled.
-    const robinRow = within(scheduledCard)
-      .getByText("Robin Lee")
-      .closest("li")!;
-    expect(robinRow).toHaveTextContent("2 scheduled · 0 delivered");
+    expect(screen.queryByText(/scheduled ·/i)).not.toBeInTheDocument();
+    expect(mockedRpc).not.toHaveBeenCalledWith(
+      "list_shifts",
+      expect.anything(),
+    );
   });
 
   it("passes filter selections through to list_service_visits", async () => {

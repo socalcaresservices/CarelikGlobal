@@ -153,15 +153,16 @@ describe("ServiceVerificationPage v3", () => {
     renderPage();
 
     const picker = await screen.findByLabelText("Assigned client");
-    await screen.findByRole("option", { name: /Client C-104/ });
-    expect(picker).toHaveTextContent("Client C-104");
-    expect(picker).toHaveTextContent("Client C-207");
+    await screen.findByRole("option", { name: /C-104/ });
+    expect(picker).toHaveTextContent("C-104");
+    expect(picker).toHaveTextContent("C-207");
     expect(picker).toHaveTextContent("9 active services");
     expect(screen.queryByText("Darby Crash")).not.toBeInTheDocument();
     expect(
-      screen.getByText("Service verification · Not EVV"),
+      screen.getByText("Sign-in sheet · Hoja de registro"),
     ).toBeInTheDocument();
-    expect(screen.getByText("No GPS")).toBeInTheDocument();
+    expect(screen.getByText("Acme Care")).toBeInTheDocument();
+    expect(screen.queryByText(/EVV|GPS/i)).not.toBeInTheDocument();
 
     expect(mockedRpc).toHaveBeenCalledWith("list_assigned_visit_clients", {
       target_organization_id: ORG_ID,
@@ -172,7 +173,7 @@ describe("ServiceVerificationPage v3", () => {
     mockRpcImplementation();
     renderPage();
 
-    await screen.findByRole("option", { name: /Client C-104/ });
+    await screen.findByRole("option", { name: /C-104/ });
     fireEvent.change(screen.getByLabelText("Assigned client"), {
       target: { value: CLIENT_ID },
     });
@@ -207,7 +208,7 @@ describe("ServiceVerificationPage v3", () => {
     });
     renderPage();
 
-    await screen.findByRole("option", { name: /Client C-207/ });
+    await screen.findByRole("option", { name: /C-207/ });
     fireEvent.change(screen.getByLabelText("Assigned client"), {
       target: { value: SECOND_CLIENT_ID },
     });
@@ -230,7 +231,7 @@ describe("ServiceVerificationPage v3", () => {
     });
     renderPage();
 
-    await screen.findByRole("option", { name: /Client C-104/ });
+    await screen.findByRole("option", { name: /C-104/ });
     fireEvent.change(screen.getByLabelText("Assigned client"), {
       target: { value: CLIENT_ID },
     });
@@ -392,17 +393,15 @@ describe("ServiceVerificationPage v3", () => {
     renderPage();
 
     await openConfirmation();
-    fireEvent.click(
-      screen.getByRole("button", { name: "No client or guardian available" }),
-    );
+    fireEvent.click(screen.getByRole("button", { name: /Signing problem/ }));
     expect(
       screen.getByRole("button", { name: "Submit for manager review" }),
     ).toBeDisabled();
     fireEvent.change(screen.getByLabelText("Why is manager review needed?"), {
-      target: { value: "Client or guardian unavailable" },
+      target: { value: "Technical problem prevented signing" },
     });
     fireEvent.change(screen.getByLabelText("Brief explanation"), {
-      target: { value: "Client was asleep" },
+      target: { value: "The signature pad did not respond" },
     });
     fireEvent.click(
       screen.getByRole("button", { name: "Submit for manager review" }),
@@ -417,7 +416,7 @@ describe("ServiceVerificationPage v3", () => {
         typed_signer_name: null,
         signer_relationship: null,
         confirmation_reason:
-          "Client or guardian unavailable: Client was asleep",
+          "Technical problem prevented signing: The signature pad did not respond",
       }),
     );
     expect(mockedStorageFrom).not.toHaveBeenCalled();
@@ -498,7 +497,7 @@ describe("ServiceVerificationPage v3", () => {
 
     expect(
       await screen.findByText(
-        "Ogevia could not safely check for an open visit.",
+        "The sign-in sheet could not safely check for an open visit.",
       ),
     ).toBeInTheDocument();
     expect(

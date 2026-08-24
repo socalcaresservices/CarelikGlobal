@@ -5,7 +5,9 @@ import {
   Check,
   CheckCircle2,
   Clock3,
+  Hand,
   LockKeyhole,
+  PenLine,
   ShieldCheck,
 } from "lucide-react";
 import { useAuth } from "@carelik/auth";
@@ -78,12 +80,11 @@ interface VisitResult {
 
 type Phase = "loading" | "select" | "active" | "confirm" | "success";
 type ConfirmationMode = "signature" | "exception";
+type SignatureKind = "signature" | "assisted_mark";
 
 const NO_SIGNER_REASONS = [
-  "Client or guardian unavailable",
-  "Client or guardian declined",
-  "Client or guardian unable to sign",
-  "Technical problem",
+  "Technical problem prevented signing",
+  "Signature was accidentally missed before departure",
 ] as const;
 
 function normalizeError(cause: unknown, fallback: string) {
@@ -101,20 +102,9 @@ function normalizeError(cause: unknown, fallback: string) {
     .replace(/^RATE_LIMITED:\s*/i, "");
 }
 
-function serviceSummary(service: AuthorizedService) {
-  const used = Number(service.hours_used_this_month);
-  const scheduled = Number(service.hours_scheduled_this_month);
-  return `${formatHours(used * 60)}h confirmed · ${formatHours(scheduled * 60)}h scheduled · ${formatHours(
-    Number(service.max_monthly_hours) * 60,
-  )}h authorized`;
-}
-
 function clientOptionLabel(client: AssignedClient) {
-  const schedule = client.next_scheduled_starts_at
-    ? ` · Today ${formatClockTime(client.next_scheduled_starts_at)}`
-    : "";
   const services = `${client.active_service_count} active service${client.active_service_count === 1 ? "" : "s"}`;
-  return `Client ${client.client_code}${schedule} · ${services}`;
+  return `${client.client_code} · ${services}`;
 }
 
 function SignaturePad({
@@ -206,11 +196,21 @@ function SignaturePad({
 
 function BrandHeader({
   logoUrl,
+  displayName,
   status,
 }: {
   logoUrl: string | null | undefined;
+  displayName: string | null | undefined;
   status: "Ready" | "Visit in progress" | "Client confirmation" | "Saved";
 }) {
+  const agencyName = displayName || "SoCal Care Services";
+  const initials = agencyName
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((word) => word[0]?.toUpperCase())
+    .join("");
+
   return (
     <header className="flex items-center justify-between gap-3">
       <div className="flex min-w-0 items-center gap-3">
@@ -222,13 +222,13 @@ function BrandHeader({
           />
         ) : (
           <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-[var(--color-accent,#4f46e5)] text-sm font-bold text-white shadow-sm">
-            OV
+            {initials || "SC"}
           </div>
         )}
         <div className="min-w-0">
-          <p className="font-bold tracking-[0.16em] text-slate-950">OGEVIA</p>
+          <p className="truncate font-bold text-slate-950">{agencyName}</p>
           <p className="truncate text-xs text-slate-500">
-            Service verification · Not EVV
+            Sign-in sheet · Hoja de registro
           </p>
         </div>
       </div>
@@ -298,6 +298,8 @@ export function ServiceVerificationPage() {
   const [confirmationMode, setConfirmationMode] =
     useState<ConfirmationMode>("signature");
   const [signerRole, setSignerRole] = useState<VisitSignerRole>("client");
+  const [signatureKind, setSignatureKind] =
+    useState<SignatureKind>("signature");
   const [signature, setSignature] = useState<string | null>(null);
   const [noSignerReason, setNoSignerReason] = useState("");
   const [noSignerNote, setNoSignerNote] = useState("");
@@ -524,6 +526,7 @@ export function ServiceVerificationPage() {
         visitNumber: active.visit_number,
       });
       setConfirmationMode("signature");
+      setSignatureKind("signature");
       invalidateVisitData();
       setPhase("confirm");
     } catch (cause) {
@@ -567,7 +570,11 @@ export function ServiceVerificationPage() {
           target_visit_id: visitId,
           signer_role: signerRole,
           confirmation_method:
-            confirmationMode === "signature" ? "draw" : "unable_to_confirm",
+            confirmationMode === "signature"
+              ? signatureKind === "assisted_mark"
+                ? "assisted_mark"
+                : "draw"
+              : "unable_to_confirm",
           signature_storage_path: storagePath,
           typed_signer_name: null,
           signer_relationship: null,
@@ -595,6 +602,7 @@ export function ServiceVerificationPage() {
     setEndedVisit(null);
     setConfirmationMode("signature");
     setSignerRole("client");
+    setSignatureKind("signature");
     setSignature(null);
     setNoSignerReason("");
     setNoSignerNote("");
@@ -614,13 +622,17 @@ export function ServiceVerificationPage() {
   if (activeVisitQuery.isError) {
     return (
       <Card className="mx-auto max-w-md rounded-3xl p-5">
-        <BrandHeader logoUrl={activeOrganization?.logoUrl} status="Ready" />
+        <BrandHeader
+          logoUrl={activeOrganization?.logoUrl}
+          displayName={activeOrganization?.displayName}
+          status="Ready"
+        />
         <div
           role="alert"
           className="mt-5 rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-800"
         >
           <p className="font-semibold">
-            Ogevia could not safely check for an open visit.
+            The sign-in sheet could not safely check for an open visit.
           </p>
           <p className="mt-1">
             Refresh the page or contact your agency manager. Do not start a
@@ -646,6 +658,7 @@ export function ServiceVerificationPage() {
         <div className="space-y-5">
           <BrandHeader
             logoUrl={activeOrganization?.logoUrl}
+            displayName={activeOrganization?.displayName}
             status={headerStatus}
           />
           <Progress phase={phase} />
@@ -786,9 +799,41 @@ export function ServiceVerificationPage() {
                     {selectedService.service_code} ·{" "}
                     {selectedService.service_name}
                   </p>
-                  <p className="mt-1 text-xs text-indigo-800">
-                    {serviceSummary(selectedService)}
-                  </p>
+                  <div className="mt-3 grid grid-cols-3 gap-2 text-center">
+                    <div className="rounded-xl bg-white/80 p-2">
+                      <p className="text-lg font-bold">
+                        {formatHours(
+                          Number(selectedService.max_monthly_hours) * 60,
+                        )}
+                        h
+                      </p>
+                      <p className="text-[11px] text-indigo-800">Authorized</p>
+                    </div>
+                    <div className="rounded-xl bg-white/80 p-2">
+                      <p className="text-lg font-bold">
+                        {formatHours(
+                          Number(selectedService.hours_used_this_month) * 60,
+                        )}
+                        h
+                      </p>
+                      <p className="text-[11px] text-indigo-800">Serviced</p>
+                    </div>
+                    <div className="rounded-xl bg-white/80 p-2">
+                      <p className="text-lg font-bold">
+                        {formatHours(
+                          Math.max(
+                            0,
+                            Number(
+                              selectedService.max_monthly_hours -
+                                selectedService.hours_used_this_month,
+                            ),
+                          ) * 60,
+                        )}
+                        h
+                      </p>
+                      <p className="text-[11px] text-indigo-800">Remaining</p>
+                    </div>
+                  </div>
                 </div>
               ) : null}
 
@@ -871,13 +916,6 @@ export function ServiceVerificationPage() {
                 </p>
               </div>
 
-              {active.scheduled_starts_at && active.scheduled_ends_at ? (
-                <p className="rounded-xl bg-slate-50 px-3 py-2 text-center text-sm text-slate-600">
-                  Scheduled {formatClockTime(active.scheduled_starts_at)}–
-                  {formatClockTime(active.scheduled_ends_at)}
-                </p>
-              ) : null}
-
               {willExceed ? (
                 <div className="flex gap-3 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
                   <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0" />
@@ -902,8 +940,8 @@ export function ServiceVerificationPage() {
                 Sign out now · Finalizar ahora
               </Button>
               <p className="text-center text-xs text-slate-500">
-                Ogevia records Time Out automatically. A manager can correct a
-                mistake without deleting the original.
+                The sign-in sheet records Time Out automatically. A manager can
+                correct a mistake without deleting the original.
               </p>
             </section>
           ) : null}
@@ -974,13 +1012,69 @@ export function ServiceVerificationPage() {
                   </label>
                   <div>
                     <p className="text-sm font-semibold text-slate-700">
-                      Sign below to confirm these times
+                      Choose the easiest way to confirm
                     </p>
                     <p className="mt-1 text-xs text-slate-500">
-                      Firme abajo para confirmar estas horas.
+                      Elija la forma más fácil de confirmar.
                     </p>
                   </div>
-                  <SignaturePad onChange={setSignature} />
+                  <div className="grid grid-cols-2 gap-3">
+                    <button
+                      type="button"
+                      aria-pressed={signatureKind === "signature"}
+                      onClick={() => {
+                        setSignatureKind("signature");
+                        setSignature(null);
+                      }}
+                      className={cn(
+                        "flex min-h-24 flex-col items-center justify-center rounded-2xl border-2 p-3 text-sm font-semibold",
+                        signatureKind === "signature"
+                          ? "border-indigo-600 bg-indigo-50 text-indigo-950"
+                          : "border-slate-200 bg-white text-slate-700",
+                      )}
+                    >
+                      <PenLine className="mb-2 h-8 w-8" />
+                      Write signature
+                      <span className="text-xs font-normal">Firmar</span>
+                    </button>
+                    <button
+                      type="button"
+                      aria-pressed={signatureKind === "assisted_mark"}
+                      onClick={() => {
+                        setSignatureKind("assisted_mark");
+                        setSignature(null);
+                      }}
+                      className={cn(
+                        "flex min-h-24 flex-col items-center justify-center rounded-2xl border-2 p-3 text-sm font-semibold",
+                        signatureKind === "assisted_mark"
+                          ? "border-indigo-600 bg-indigo-50 text-indigo-950"
+                          : "border-slate-200 bg-white text-slate-700",
+                      )}
+                    >
+                      <Hand className="mb-2 h-8 w-8" />
+                      Make a simple mark
+                      <span className="text-xs font-normal">
+                        Hacer una marca
+                      </span>
+                    </button>
+                  </div>
+                  <div className="rounded-2xl bg-slate-50 p-4 text-center">
+                    <Hand
+                      className="mx-auto h-9 w-9 text-indigo-600"
+                      aria-hidden="true"
+                    />
+                    <p className="mt-2 font-semibold text-slate-900">
+                      {signatureKind === "assisted_mark"
+                        ? "Touch the box and make any mark"
+                        : "Use your finger to sign in the box"}
+                    </p>
+                    <p className="text-sm text-slate-600">
+                      {signatureKind === "assisted_mark"
+                        ? "Toque el cuadro y haga cualquier marca"
+                        : "Use su dedo para firmar en el cuadro"}
+                    </p>
+                  </div>
+                  <SignaturePad key={signatureKind} onChange={setSignature} />
                   <Button
                     type="button"
                     className="min-h-14 w-full text-base"
@@ -999,7 +1093,7 @@ export function ServiceVerificationPage() {
                     }}
                     className="min-h-12 w-full rounded-xl border border-slate-300 bg-white px-4 text-sm font-semibold text-slate-700"
                   >
-                    No client or guardian available
+                    Signing problem · Problema para firmar
                   </button>
                 </div>
               ) : (
@@ -1031,8 +1125,7 @@ export function ServiceVerificationPage() {
                     </select>
                   </label>
                   <label className="block text-sm font-semibold text-amber-950">
-                    Brief explanation{" "}
-                    <span className="font-normal">(optional)</span>
+                    Brief explanation (required)
                     <textarea
                       aria-label="Brief explanation"
                       value={noSignerNote}
@@ -1044,7 +1137,7 @@ export function ServiceVerificationPage() {
                   <Button
                     type="button"
                     className="min-h-14 w-full text-base"
-                    disabled={!noSignerReason || saving}
+                    disabled={!noSignerReason || !noSignerNote.trim() || saving}
                     loading={saving}
                     onClick={submitConfirmation}
                   >
@@ -1136,7 +1229,6 @@ export function ServiceVerificationPage() {
             <span className="flex items-center gap-1.5">
               <ShieldCheck className="h-3.5 w-3.5" /> Audit protected
             </span>
-            <span>No GPS</span>
           </footer>
         </div>
       </Card>
