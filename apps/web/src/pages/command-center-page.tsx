@@ -26,9 +26,9 @@ export function CommandCenterPage() {
   return (
     <section className="mx-auto max-w-6xl space-y-8">
       <PageHeader
-        eyebrow="Command Center"
+        eyebrow="Operations Dashboard"
         title={activeOrganization?.displayName ?? "Ogevia"}
-        description="What needs attention, and how things stand right now."
+        description="Your high-level operational view: what needs attention and how services stand right now."
       />
 
       <ActionCenter />

@@ -1,4 +1,10 @@
-import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import {
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -8,7 +14,9 @@ import { supabase } from "@/lib/supabase";
 import { AppShell } from "./app-shell";
 
 vi.mock("@carelik/auth", () => ({ useAuth: vi.fn() }));
-vi.mock("@/providers/organization-provider", () => ({ useOrganization: vi.fn() }));
+vi.mock("@/providers/organization-provider", () => ({
+  useOrganization: vi.fn(),
+}));
 vi.mock("@/components/global-search", () => ({ GlobalSearch: () => null }));
 // ContextBar gets its own dedicated test file (context-bar.test.tsx) -
 // stubbed here so the nav-focused tests below aren't also asserting on
@@ -17,8 +25,8 @@ vi.mock("@/components/global-search", () => ({ GlobalSearch: () => null }));
 vi.mock("@/components/context-bar", () => ({ ContextBar: () => null }));
 vi.mock("@/lib/supabase", () => ({
   supabase: {
-    rpc: vi.fn()
-  }
+    rpc: vi.fn(),
+  },
 }));
 
 const mockedUseAuth = vi.mocked(useAuth);
@@ -27,7 +35,9 @@ const mockedRpc = vi.mocked(supabase.rpc);
 
 const ORG_ID = "11111111-1111-4111-8111-111111111111";
 
-function baseOrganization(role: "organization_owner" | "organization_admin" | null) {
+function baseOrganization(
+  role: "organization_owner" | "organization_admin" | null,
+) {
   return {
     organizations: [],
     activeOrganization: null,
@@ -36,7 +46,7 @@ function baseOrganization(role: "organization_owner" | "organization_admin" | nu
     role,
     isPlatformOwner: false,
     hasPermission: vi.fn(() => true),
-    loading: false
+    loading: false,
   };
 }
 
@@ -54,12 +64,14 @@ function brandedOrganization(overrides: Record<string, unknown> = {}) {
     accentColor: null,
     themeMode: "light" as const,
     showPoweredBy: true,
-    ...overrides
+    ...overrides,
   };
 }
 
 function renderShell() {
-  const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  const queryClient = new QueryClient({
+    defaultOptions: { queries: { retry: false } },
+  });
   return render(
     <MemoryRouter>
       <QueryClientProvider client={queryClient}>
@@ -67,7 +79,7 @@ function renderShell() {
           <div />
         </AppShell>
       </QueryClientProvider>
-    </MemoryRouter>
+    </MemoryRouter>,
   );
 }
 
@@ -77,17 +89,25 @@ describe("AppShell nav", () => {
   });
 
   it("groups Organizations, Access, and Audit under a de-emphasized Administration heading", () => {
-    mockedUseAuth.mockReturnValue({ user: { email: "owner@acme.test" } } as never);
-    mockedUseOrganization.mockReturnValue(baseOrganization("organization_owner"));
+    mockedUseAuth.mockReturnValue({
+      user: { email: "owner@acme.test" },
+    } as never);
+    mockedUseOrganization.mockReturnValue(
+      baseOrganization("organization_owner"),
+    );
 
     renderShell();
     expect(screen.getByText("Administration")).toBeInTheDocument();
-    expect(screen.getByText("Command Center")).toBeInTheDocument();
+    expect(screen.getByText("Operations Dashboard")).toBeInTheDocument();
   });
 
   it("groups Candidates, Clients, and Care Team under a People heading", () => {
-    mockedUseAuth.mockReturnValue({ user: { email: "owner@acme.test" } } as never);
-    mockedUseOrganization.mockReturnValue(baseOrganization("organization_owner"));
+    mockedUseAuth.mockReturnValue({
+      user: { email: "owner@acme.test" },
+    } as never);
+    mockedUseOrganization.mockReturnValue(
+      baseOrganization("organization_owner"),
+    );
 
     renderShell();
     expect(screen.getByText("People")).toBeInTheDocument();
@@ -97,8 +117,12 @@ describe("AppShell nav", () => {
   });
 
   it("groups Credentials, Authorizations, and Incidents under a Compliance heading", () => {
-    mockedUseAuth.mockReturnValue({ user: { email: "owner@acme.test" } } as never);
-    mockedUseOrganization.mockReturnValue(baseOrganization("organization_owner"));
+    mockedUseAuth.mockReturnValue({
+      user: { email: "owner@acme.test" },
+    } as never);
+    mockedUseOrganization.mockReturnValue(
+      baseOrganization("organization_owner"),
+    );
 
     renderShell();
     expect(screen.getByText("Compliance")).toBeInTheDocument();
@@ -107,67 +131,91 @@ describe("AppShell nav", () => {
     expect(screen.getByText("Incidents")).toBeInTheDocument();
   });
 
-  it("keeps Command Center and Schedule ungrouped at the top of the sidebar", () => {
+  it("keeps Operations Dashboard and Schedule ungrouped at the top of the sidebar", () => {
     // These are the "check every day" screens - they intentionally sit
     // above the first section heading rather than under an "Overview"
     // label, the same way they did before the People/Compliance split.
-    // Workforce Insights was folded into Command Center itself
+    // Workforce Insights was folded into Operations Dashboard itself
     // (components/owner-insights.tsx) and no longer has its own nav item.
-    mockedUseAuth.mockReturnValue({ user: { email: "owner@acme.test" } } as never);
-    mockedUseOrganization.mockReturnValue(baseOrganization("organization_owner"));
+    mockedUseAuth.mockReturnValue({
+      user: { email: "owner@acme.test" },
+    } as never);
+    mockedUseOrganization.mockReturnValue(
+      baseOrganization("organization_owner"),
+    );
 
     renderShell();
     expect(screen.queryByText("Overview")).not.toBeInTheDocument();
-    expect(screen.getByText("Command Center")).toBeInTheDocument();
+    expect(screen.getByText("Operations Dashboard")).toBeInTheDocument();
     expect(screen.queryByText("Workforce Insights")).not.toBeInTheDocument();
     expect(screen.getByText("Schedule")).toBeInTheDocument();
   });
 
   it("does not show engineering-phase copy in the header", () => {
-    mockedUseAuth.mockReturnValue({ user: { email: "owner@acme.test" } } as never);
-    mockedUseOrganization.mockReturnValue(baseOrganization("organization_owner"));
+    mockedUseAuth.mockReturnValue({
+      user: { email: "owner@acme.test" },
+    } as never);
+    mockedUseOrganization.mockReturnValue(
+      baseOrganization("organization_owner"),
+    );
 
     renderShell();
     expect(screen.queryByText(/Phase 1/)).not.toBeInTheDocument();
   });
 
   it("shows Candidates for someone with applicants.read", () => {
-    mockedUseAuth.mockReturnValue({ user: { email: "owner@acme.test" } } as never);
-    mockedUseOrganization.mockReturnValue(baseOrganization("organization_owner"));
+    mockedUseAuth.mockReturnValue({
+      user: { email: "owner@acme.test" },
+    } as never);
+    mockedUseOrganization.mockReturnValue(
+      baseOrganization("organization_owner"),
+    );
 
     renderShell();
     expect(screen.getByText("Candidates")).toBeInTheDocument();
   });
 
   it("keeps the complete organization menu visible without applicants.read", () => {
-    mockedUseAuth.mockReturnValue({ user: { email: "coordinator@acme.test" } } as never);
+    mockedUseAuth.mockReturnValue({
+      user: { email: "coordinator@acme.test" },
+    } as never);
     mockedUseOrganization.mockReturnValue({
       ...baseOrganization("organization_admin"),
-      hasPermission: vi.fn((permission: string) => permission !== "applicants.read")
+      hasPermission: vi.fn(
+        (permission: string) => permission !== "applicants.read",
+      ),
     });
 
     renderShell();
     expect(screen.getByText("Candidates")).toBeInTheDocument();
   });
 
-  it("keeps Visit Reports visible while its page enforces visits.read", () => {
-    mockedUseAuth.mockReturnValue({ user: { email: "caregiver@acme.test" } } as never);
+  it("keeps Report Center visible while its page enforces visits.read", () => {
+    mockedUseAuth.mockReturnValue({
+      user: { email: "caregiver@acme.test" },
+    } as never);
     mockedUseOrganization.mockReturnValue({
       ...baseOrganization("organization_admin"),
-      hasPermission: vi.fn((permission: string) => permission !== "visits.read")
+      hasPermission: vi.fn(
+        (permission: string) => permission !== "visits.read",
+      ),
     });
 
     renderShell();
     expect(screen.getByText("Service Verification")).toBeInTheDocument();
-    expect(screen.getByText("Visit Reports")).toBeInTheDocument();
+    expect(screen.getByText("Report Center")).toBeInTheDocument();
   });
 
-  it("shows Visit Reports for someone with visits.read", () => {
-    mockedUseAuth.mockReturnValue({ user: { email: "owner@acme.test" } } as never);
-    mockedUseOrganization.mockReturnValue(baseOrganization("organization_owner"));
+  it("shows Report Center for someone with visits.read", () => {
+    mockedUseAuth.mockReturnValue({
+      user: { email: "owner@acme.test" },
+    } as never);
+    mockedUseOrganization.mockReturnValue(
+      baseOrganization("organization_owner"),
+    );
 
     renderShell();
-    expect(screen.getByText("Visit Reports")).toBeInTheDocument();
+    expect(screen.getByText("Report Center")).toBeInTheDocument();
   });
 
   // The tenant workspace never shows platform administration nav, even
@@ -176,29 +224,44 @@ describe("AppShell nav", () => {
   // tools live exclusively on platform.carelik.com's PlatformShell.
   // Which host you're on decides whether you see them, not who you are.
   it("shows no Platform Administration nav for a platform owner viewing a tenant workspace", () => {
-    mockedUseAuth.mockReturnValue({ user: { email: "owner@carelik.test" } } as never);
-    mockedUseOrganization.mockReturnValue({ ...baseOrganization("organization_owner"), isPlatformOwner: true });
+    mockedUseAuth.mockReturnValue({
+      user: { email: "owner@carelik.test" },
+    } as never);
+    mockedUseOrganization.mockReturnValue({
+      ...baseOrganization("organization_owner"),
+      isPlatformOwner: true,
+    });
 
     renderShell();
-    expect(screen.queryByText("Platform Administration")).not.toBeInTheDocument();
+    expect(
+      screen.queryByText("Platform Administration"),
+    ).not.toBeInTheDocument();
     expect(screen.queryByText("Organizations")).not.toBeInTheDocument();
     expect(screen.queryByText("Feature Flags")).not.toBeInTheDocument();
   });
 
   it("shows no Platform Administration nav for a non-platform-owner either", () => {
-    mockedUseAuth.mockReturnValue({ user: { email: "owner@acme.test" } } as never);
-    mockedUseOrganization.mockReturnValue(baseOrganization("organization_owner"));
+    mockedUseAuth.mockReturnValue({
+      user: { email: "owner@acme.test" },
+    } as never);
+    mockedUseOrganization.mockReturnValue(
+      baseOrganization("organization_owner"),
+    );
 
     renderShell();
-    expect(screen.queryByText("Platform Administration")).not.toBeInTheDocument();
+    expect(
+      screen.queryByText("Platform Administration"),
+    ).not.toBeInTheDocument();
     expect(screen.queryByText("Organizations")).not.toBeInTheDocument();
   });
 
   it("shows a badge with the actionable count next to Credentials and Incidents", async () => {
-    mockedUseAuth.mockReturnValue({ user: { email: "owner@acme.test" } } as never);
+    mockedUseAuth.mockReturnValue({
+      user: { email: "owner@acme.test" },
+    } as never);
     mockedUseOrganization.mockReturnValue({
       ...baseOrganization("organization_owner"),
-      activeOrganizationId: ORG_ID
+      activeOrganizationId: ORG_ID,
     });
     mockedRpc.mockResolvedValue({
       data: [
@@ -208,16 +271,22 @@ describe("AppShell nav", () => {
           access_pending: 0,
           credentials_issues: 4,
           authorizations_issues: 0,
-          incidents_open: 2
-        }
+          incidents_open: 2,
+        },
       ],
-      error: null
+      error: null,
     } as never);
 
     renderShell();
 
-    await waitFor(() => expect(mockedRpc).toHaveBeenCalledWith("get_actionable_counts", { target_organization_id: ORG_ID }));
-    const credentialsLink = (await screen.findByText("Credentials")).closest("a")!;
+    await waitFor(() =>
+      expect(mockedRpc).toHaveBeenCalledWith("get_actionable_counts", {
+        target_organization_id: ORG_ID,
+      }),
+    );
+    const credentialsLink = (await screen.findByText("Credentials")).closest(
+      "a",
+    )!;
     expect(within(credentialsLink).getByText("4")).toBeInTheDocument();
     const incidentsLink = screen.getByText("Incidents").closest("a")!;
     expect(within(incidentsLink).getByText("2")).toBeInTheDocument();
@@ -227,10 +296,12 @@ describe("AppShell nav", () => {
   });
 
   it("shows no badge when every actionable count is zero", async () => {
-    mockedUseAuth.mockReturnValue({ user: { email: "owner@acme.test" } } as never);
+    mockedUseAuth.mockReturnValue({
+      user: { email: "owner@acme.test" },
+    } as never);
     mockedUseOrganization.mockReturnValue({
       ...baseOrganization("organization_owner"),
-      activeOrganizationId: ORG_ID
+      activeOrganizationId: ORG_ID,
     });
     mockedRpc.mockResolvedValue({
       data: [
@@ -240,22 +311,28 @@ describe("AppShell nav", () => {
           access_pending: 0,
           credentials_issues: 0,
           authorizations_issues: 0,
-          incidents_open: 0
-        }
+          incidents_open: 0,
+        },
       ],
-      error: null
+      error: null,
     } as never);
 
     renderShell();
 
     await waitFor(() => expect(mockedRpc).toHaveBeenCalled());
-    const credentialsLink = (await screen.findByText("Credentials")).closest("a")!;
+    const credentialsLink = (await screen.findByText("Credentials")).closest(
+      "a",
+    )!;
     expect(within(credentialsLink).queryByText("0")).not.toBeInTheDocument();
   });
 
   it("falls back to the Ogevia mark and 'Powered by Ogevia' footer without an active organization", () => {
-    mockedUseAuth.mockReturnValue({ user: { email: "owner@acme.test" } } as never);
-    mockedUseOrganization.mockReturnValue(baseOrganization("organization_owner"));
+    mockedUseAuth.mockReturnValue({
+      user: { email: "owner@acme.test" },
+    } as never);
+    mockedUseOrganization.mockReturnValue(
+      baseOrganization("organization_owner"),
+    );
 
     renderShell();
 
@@ -264,10 +341,14 @@ describe("AppShell nav", () => {
   });
 
   it("shows the organization's logo instead of the Ogevia mark when branded", () => {
-    mockedUseAuth.mockReturnValue({ user: { email: "owner@acme.test" } } as never);
+    mockedUseAuth.mockReturnValue({
+      user: { email: "owner@acme.test" },
+    } as never);
     mockedUseOrganization.mockReturnValue({
       ...baseOrganization("organization_owner"),
-      activeOrganization: brandedOrganization({ logoUrl: "https://example.com/acme-logo.png" })
+      activeOrganization: brandedOrganization({
+        logoUrl: "https://example.com/acme-logo.png",
+      }),
     });
 
     renderShell();
@@ -278,10 +359,12 @@ describe("AppShell nav", () => {
   });
 
   it("shows the organization's display name (not Ogevia) when active but unbranded", () => {
-    mockedUseAuth.mockReturnValue({ user: { email: "owner@acme.test" } } as never);
+    mockedUseAuth.mockReturnValue({
+      user: { email: "owner@acme.test" },
+    } as never);
     mockedUseOrganization.mockReturnValue({
       ...baseOrganization("organization_owner"),
-      activeOrganization: brandedOrganization()
+      activeOrganization: brandedOrganization(),
     });
 
     renderShell();
@@ -301,32 +384,42 @@ describe("AppShell nav", () => {
     // active link's className is wired to consume it, not recompute the
     // resolved color (jsdom doesn't load the compiled Tailwind stylesheet,
     // so getComputedStyle can't resolve var(...) here).
-    mockedUseAuth.mockReturnValue({ user: { email: "owner@acme.test" } } as never);
+    mockedUseAuth.mockReturnValue({
+      user: { email: "owner@acme.test" },
+    } as never);
     mockedUseOrganization.mockReturnValue({
       ...baseOrganization("organization_owner"),
-      activeOrganization: brandedOrganization({ primaryColor: "#123456" })
+      activeOrganization: brandedOrganization({ primaryColor: "#123456" }),
     });
 
     const { container } = renderShell();
 
     expect(container.firstChild).toHaveStyle({
       "--color-accent": "#123456",
-      "--color-accent-foreground": "#ffffff"
+      "--color-accent-foreground": "#ffffff",
     });
-    const commandCenterLink = screen.getByText("Command Center").closest("a")!;
-    expect(commandCenterLink.className).toContain("bg-[var(--color-accent,#0f172a)]");
+    const commandCenterLink = screen
+      .getByText("Operations Dashboard")
+      .closest("a")!;
+    expect(commandCenterLink.className).toContain(
+      "bg-[var(--color-accent,#0f172a)]",
+    );
   });
 
   it("falls back to the default palette when the organization hasn't set a primary color", () => {
-    mockedUseAuth.mockReturnValue({ user: { email: "owner@acme.test" } } as never);
+    mockedUseAuth.mockReturnValue({
+      user: { email: "owner@acme.test" },
+    } as never);
     mockedUseOrganization.mockReturnValue({
       ...baseOrganization("organization_owner"),
-      activeOrganization: brandedOrganization({ primaryColor: null })
+      activeOrganization: brandedOrganization({ primaryColor: null }),
     });
 
     const { container } = renderShell();
 
-    expect(container.firstChild).not.toHaveStyle({ "--color-accent": expect.anything() });
+    expect(container.firstChild).not.toHaveStyle({
+      "--color-accent": expect.anything(),
+    });
   });
 
   // app.ogevia.com resolves the active org from the signed-in user's own
@@ -335,31 +428,47 @@ describe("AppShell nav", () => {
   // case (single-org users still just see plain text, covered by the
   // display-name and logo tests above).
   it("shows an organization switcher when the user belongs to more than one organization", () => {
-    mockedUseAuth.mockReturnValue({ user: { email: "owner@acme.test" } } as never);
+    mockedUseAuth.mockReturnValue({
+      user: { email: "owner@acme.test" },
+    } as never);
     const setActiveOrganizationId = vi.fn();
     mockedUseOrganization.mockReturnValue({
       ...baseOrganization("organization_owner"),
-      organizations: [brandedOrganization(), brandedOrganization({ id: "22222222-2222-4222-8222-222222222222", displayName: "Second Org" })],
+      organizations: [
+        brandedOrganization(),
+        brandedOrganization({
+          id: "22222222-2222-4222-8222-222222222222",
+          displayName: "Second Org",
+        }),
+      ],
       activeOrganization: brandedOrganization(),
       activeOrganizationId: ORG_ID,
-      setActiveOrganizationId
+      setActiveOrganizationId,
     });
 
     renderShell();
 
-    const select = screen.getByRole("combobox", { name: "Active organization" });
+    const select = screen.getByRole("combobox", {
+      name: "Active organization",
+    });
     expect(within(select).getByText("Acme Care")).toBeInTheDocument();
     expect(within(select).getByText("Second Org")).toBeInTheDocument();
 
-    fireEvent.change(select, { target: { value: "22222222-2222-4222-8222-222222222222" } });
-    expect(setActiveOrganizationId).toHaveBeenCalledWith("22222222-2222-4222-8222-222222222222");
+    fireEvent.change(select, {
+      target: { value: "22222222-2222-4222-8222-222222222222" },
+    });
+    expect(setActiveOrganizationId).toHaveBeenCalledWith(
+      "22222222-2222-4222-8222-222222222222",
+    );
   });
 
   it("hides the 'Powered by Ogevia' footer when the organization has turned it off", () => {
-    mockedUseAuth.mockReturnValue({ user: { email: "owner@acme.test" } } as never);
+    mockedUseAuth.mockReturnValue({
+      user: { email: "owner@acme.test" },
+    } as never);
     mockedUseOrganization.mockReturnValue({
       ...baseOrganization("organization_owner"),
-      activeOrganization: brandedOrganization({ showPoweredBy: false })
+      activeOrganization: brandedOrganization({ showPoweredBy: false }),
     });
 
     renderShell();
