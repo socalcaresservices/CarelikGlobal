@@ -161,7 +161,7 @@ describe("ServiceVerificationPage v3", () => {
     expect(
       screen.getByText("Sign-in sheet · Hoja de registro"),
     ).toBeInTheDocument();
-    expect(screen.getByText("Acme Care")).toBeInTheDocument();
+    expect(screen.getByText("SoCal Care Services")).toBeInTheDocument();
     expect(screen.queryByText(/EVV|GPS/i)).not.toBeInTheDocument();
 
     expect(mockedRpc).toHaveBeenCalledWith("list_assigned_visit_clients", {
