@@ -4,6 +4,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { useOrganization } from "@/providers/organization-provider";
 import { supabase } from "@/lib/supabase";
+import { inviteMember } from "@/lib/invitations";
 import { CareTeamDetailPage } from "./care-team-detail-page";
 
 vi.mock("@/providers/organization-provider", () => ({ useOrganization: vi.fn() }));
@@ -13,12 +14,14 @@ vi.mock("@/lib/supabase", () => ({
     from: vi.fn()
   }
 }));
+vi.mock("@/lib/invitations", () => ({ inviteMember: vi.fn() }));
 
 vi.mock("@/components/documents-card", () => ({ DocumentsCard: () => null }));
 
 const mockedUseOrganization = vi.mocked(useOrganization);
 const mockedRpc = vi.mocked(supabase.rpc);
 const mockedFrom = vi.mocked(supabase.from);
+const mockedInviteMember = vi.mocked(inviteMember);
 
 const ORG_ID = "11111111-1111-4111-8111-111111111111";
 const RECORD_ID = "22222222-2222-4222-8222-222222222222";
@@ -174,8 +177,37 @@ describe("CareTeamDetailPage visits and assignments", () => {
     renderPage();
 
     await waitFor(() =>
-      expect(screen.getByText("Assignments require a linked login today - link an account above to see them here.")).toBeInTheDocument()
+      expect(screen.getByText("Send or link this caregiver's login above, then assign each client and service from the client's Caregivers tab.")).toBeInTheDocument()
     );
+  });
+
+  it("invites and links a caregiver login from the Care Team record", async () => {
+    mockedUseOrganization.mockReturnValue(baseOrganization());
+    mockFromByTable(baseRecord({ linked_user_id: null }));
+    mockedInviteMember.mockResolvedValue({
+      userId: USER_ID,
+      email: "sam@example.com",
+      organizationId: ORG_ID,
+      role: "caregiver",
+      status: "invited"
+    });
+    mockedRpc.mockResolvedValue({ data: null, error: null } as never);
+
+    renderPage();
+
+    fireEvent.click(await screen.findByRole("button", { name: "Send login invite & link" }));
+
+    await waitFor(() => expect(mockedInviteMember).toHaveBeenCalledWith({
+      email: "sam@example.com",
+      organizationId: ORG_ID,
+      role: "caregiver"
+    }));
+    expect(mockedRpc).toHaveBeenCalledWith("link_caregiver_record_to_user", {
+      target_organization_id: ORG_ID,
+      target_caregiver_record_id: RECORD_ID,
+      target_user_id: USER_ID
+    });
+    expect(await screen.findByText("Invite sent and caregiver login linked.")).toBeInTheDocument();
   });
 
   it("shows the Position carried over from a transferred candidate", async () => {
@@ -246,3 +278,4 @@ describe("CareTeamDetailPage visits and assignments", () => {
     expect(screen.queryByText("Someone Else's Client")).not.toBeInTheDocument();
   });
 });
+

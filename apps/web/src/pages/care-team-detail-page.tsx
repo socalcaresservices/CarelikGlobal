@@ -6,6 +6,7 @@ import { Button, Card, StatusBadge } from "@carelik/ui";
 import { POSITION_OPTIONS } from "@carelik/shared";
 import { useOrganization } from "@/providers/organization-provider";
 import { supabase } from "@/lib/supabase";
+import { inviteMember } from "@/lib/invitations";
 import { DocumentsCard } from "@/components/documents-card";
 
 type Weekday = "monday" | "tuesday" | "wednesday" | "thursday" | "friday" | "saturday" | "sunday";
@@ -63,6 +64,7 @@ export function CareTeamDetailPage() {
   const queryClient = useQueryClient();
   const canRead = hasPermission("membership.read");
   const canManage = hasPermission("membership.update");
+  const canInvite = hasPermission("membership.invite");
   const canManageCredentials = hasPermission("credentials.update");
   const canReadDocuments = hasPermission("documents.read");
   const canManageDocuments = hasPermission("documents.manage");
@@ -105,7 +107,9 @@ export function CareTeamDetailPage() {
     queryFn: async () => {
       const { data, error } = await supabase.rpc("list_organization_members", { target_organization_id: activeOrganizationId! });
       if (error) throw error;
-      return ((data ?? []) as MemberRow[]).filter((row) => row.status === "active");
+      return ((data ?? []) as MemberRow[]).filter(
+        (row) => row.role === "caregiver" && (row.status === "active" || row.status === "invited")
+      );
     },
     enabled: !!activeOrganizationId && canManage
   });
@@ -200,11 +204,36 @@ export function CareTeamDetailPage() {
 
   const linkMutation = useMutation({
     mutationFn: async () => {
-      if (!selectedUserId) throw new Error("Choose an active account first.");
+      if (!selectedUserId) throw new Error("Choose a caregiver account first.");
       const { error } = await supabase.rpc("link_caregiver_record_to_user", { target_organization_id: activeOrganizationId!, target_caregiver_record_id: recordQuery.data!.id, target_user_id: selectedUserId });
       if (error) throw error;
     },
     onSuccess: () => { void queryClient.invalidateQueries({ queryKey: ["care-team-record", activeOrganizationId, id] }); void queryClient.invalidateQueries({ queryKey: ["care-team-records", activeOrganizationId] }); }
+  });
+
+  const inviteAndLinkMutation = useMutation({
+    mutationFn: async () => {
+      const email = recordQuery.data?.email?.trim();
+      if (!email) throw new Error("Add the caregiver's email to their profile first.");
+      const invitation = await inviteMember({
+        email,
+        organizationId: activeOrganizationId!,
+        role: "caregiver"
+      });
+      const { error } = await supabase.rpc("link_caregiver_record_to_user", {
+        target_organization_id: activeOrganizationId!,
+        target_caregiver_record_id: recordQuery.data!.id,
+        target_user_id: invitation.userId
+      });
+      if (error) throw new Error(`The invite was sent, but the Care Team link needs attention: ${error.message}`);
+      return invitation;
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["care-team-record", activeOrganizationId, id] });
+      void queryClient.invalidateQueries({ queryKey: ["care-team-records", activeOrganizationId] });
+      void queryClient.invalidateQueries({ queryKey: ["care-team-members", activeOrganizationId] });
+      void queryClient.invalidateQueries({ queryKey: ["organization-members", activeOrganizationId] });
+    }
   });
 
   const credentialMutation = useMutation({
@@ -238,7 +267,14 @@ export function CareTeamDetailPage() {
         <Card><h2 className="font-semibold text-slate-950">Workforce settings</h2><div className="mt-4 grid gap-3"><label className="text-xs font-medium text-slate-600">Status<select disabled={!canManage} value={status} onChange={(e) => setStatus(e.target.value as WorkforceRecord["status"])} className="mt-1 block w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"><option value="onboarding">Onboarding</option><option value="ready">Ready</option><option value="active">Active</option><option value="inactive">Inactive</option></select></label><label className="text-xs font-medium text-slate-600">Desired hours / week<input disabled={!canManage} type="number" min="0" max="168" step="0.5" value={hours} onChange={(e) => setHours(e.target.value)} className="mt-1 block w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"/></label>{canManage ? <Button onClick={() => saveRecordMutation.mutate()} loading={saveRecordMutation.isPending}>Save settings</Button> : null}</div></Card>
       </div>
 
-      <Card><h2 className="font-semibold text-slate-950">Ogevia account access</h2><p className="mt-1 text-sm text-slate-500">The workforce record remains valid without a login. To give portal access, first create or activate the person in Access, then link that account here.</p>{canManage ? <div className="mt-4 flex flex-wrap items-end gap-3"><label className="min-w-64 flex-1 text-xs font-medium text-slate-600">Active account<select value={selectedUserId} onChange={(e) => setSelectedUserId(e.target.value)} className="mt-1 block w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"><option value="">Select active account…</option>{(membersQuery.data ?? []).map((member) => <option key={member.user_id} value={member.user_id}>{member.display_name} · {title(member.role)}</option>)}</select></label><Button disabled={!selectedUserId} loading={linkMutation.isPending} onClick={() => linkMutation.mutate()}>{record.linked_user_id ? "Update link" : "Link account"}</Button></div> : null}{linkMutation.isError ? <p className="mt-2 text-sm text-red-700">Could not link that account.</p> : null}</Card>
+      <Card>
+        <h2 className="font-semibold text-slate-950">Staff sign-in access</h2>
+        <p className="mt-1 text-sm text-slate-500">Each caregiver signs in with their own email and sees only the clients and services assigned to that login.</p>
+        {record.linked_user_id ? <div className="mt-4 rounded-xl border border-emerald-200 bg-emerald-50 p-3"><p className="text-sm font-semibold text-emerald-900">Caregiver login linked</p><p className="mt-1 text-xs text-emerald-800">Use the Client assignments section below to confirm what this caregiver can access.</p></div> : canManage ? <div className="mt-4 space-y-4">{canInvite && record.email ? <div className="rounded-xl border border-violet-200 bg-violet-50 p-4"><p className="text-sm font-semibold text-violet-950">Recommended: invite and link in one step</p><p className="mt-1 text-xs text-violet-800">Send the password setup link to {record.email}, then prepare this caregiver&apos;s assignments now.</p><Button className="mt-3" loading={inviteAndLinkMutation.isPending} onClick={() => inviteAndLinkMutation.mutate()}>Send login invite &amp; link</Button></div> : canInvite ? <p className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">Add an email to this caregiver&apos;s profile before sending login access.</p> : null}<div className="flex flex-wrap items-end gap-3"><label className="min-w-64 flex-1 text-xs font-medium text-slate-600">Or link an existing caregiver account<select value={selectedUserId} onChange={(e) => setSelectedUserId(e.target.value)} className="mt-1 block w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"><option value="">Select caregiver account…</option>{(membersQuery.data ?? []).map((member) => <option key={member.user_id} value={member.user_id}>{member.display_name} · {title(member.status)}</option>)}</select></label><Button disabled={!selectedUserId} loading={linkMutation.isPending} onClick={() => linkMutation.mutate()}>Link existing account</Button></div></div> : null}
+        {inviteAndLinkMutation.isSuccess ? <p className="mt-3 text-sm text-emerald-700">Invite sent and caregiver login linked.</p> : null}
+        {inviteAndLinkMutation.isError ? <p className="mt-3 text-sm text-red-700">{inviteAndLinkMutation.error.message}</p> : null}
+        {linkMutation.isError ? <p className="mt-3 text-sm text-red-700">{linkMutation.error.message}</p> : null}
+      </Card>
 
       <Card><div className="flex items-start justify-between gap-3"><div><h2 className="font-semibold text-slate-950">Availability</h2><p className="mt-1 text-sm text-slate-500">Up to two time windows per day.</p></div>{canManage ? <Button variant="secondary" onClick={() => availabilityMutation.mutate()} loading={availabilityMutation.isPending}>Save availability</Button> : null}</div><div className="mt-4 grid gap-2 md:grid-cols-2">{WEEKDAYS.map((day) => <div key={day} className="rounded-lg border border-slate-200 p-2.5"><div className="flex justify-between"><p className="text-sm font-semibold text-slate-800">{title(day)}</p>{canManage && slotsByDay[day].length < 2 ? <button type="button" onClick={() => addSlot(day)} className="text-xs font-medium text-slate-700">+ Add time</button> : null}</div>{slotsByDay[day].length === 0 ? <p className="mt-1 text-xs text-slate-400">Not recorded</p> : <div className="mt-2 space-y-2">{slotsByDay[day].map((slot,index) => <div key={`${day}-${index}`} className="grid gap-1.5 sm:grid-cols-[1fr_1fr_1fr_auto]"><input disabled={!canManage} type="time" value={slot.start_time} onChange={(e) => updateSlot(day,index,{start_time:e.target.value})} className="rounded-lg border border-slate-200 px-2 py-1.5 text-sm"/><input disabled={!canManage} type="time" value={slot.end_time} onChange={(e) => updateSlot(day,index,{end_time:e.target.value})} className="rounded-lg border border-slate-200 px-2 py-1.5 text-sm"/><select disabled={!canManage} value={slot.preference} onChange={(e) => updateSlot(day,index,{preference:e.target.value as Preference})} className="rounded-lg border border-slate-200 px-2 py-1.5 text-sm"><option value="available">Available</option><option value="preferred">Preferred</option></select>{canManage ? <button type="button" onClick={() => removeSlot(day,index)} className="px-1 text-xs text-red-600">Remove</button> : null}</div>)}</div>}</div>)}</div>{availabilityMutation.isError ? <p className="mt-3 text-sm text-red-700">Could not save availability.</p> : null}{availabilityMutation.isSuccess ? <p className="mt-3 text-sm text-emerald-700">Availability saved.</p> : null}</Card>
 
@@ -246,7 +282,7 @@ export function CareTeamDetailPage() {
       <Card>
         <h2 className="font-semibold text-slate-950">Client assignments</h2>
         {!record.linked_user_id ? (
-          <p className="mt-3 text-sm text-slate-400">Assignments require a linked login today - link an account above to see them here.</p>
+          <p className="mt-3 text-sm text-slate-400">Send or link this caregiver's login above, then assign each client and service from the client's Caregivers tab.</p>
         ) : !canReadAssignments ? (
           <p className="mt-3 text-sm text-slate-400">You do not have permission to view assignments.</p>
         ) : assignmentsForRecord.length === 0 ? (
@@ -298,3 +334,4 @@ export function CareTeamDetailPage() {
     </section>
   );
 }
+

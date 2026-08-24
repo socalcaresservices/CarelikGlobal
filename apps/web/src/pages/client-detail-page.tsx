@@ -134,6 +134,7 @@ interface MemberOption {
   user_id: string;
   display_name: string;
   status: string;
+  role: string;
 }
 
 interface AuditRow {
@@ -503,7 +504,7 @@ export function ClientDetailPage() {
       });
       if (error) throw error;
       return ((data ?? []) as MemberOption[]).filter(
-        (member) => member.status === "active",
+        (member) => member.status === "active" && member.role === "caregiver",
       );
     },
     enabled: !!activeOrganizationId && canManageAssignments,
@@ -546,7 +547,9 @@ export function ClientDetailPage() {
       setAssignmentError(
         message.includes("caregiver_assignments_unique_active")
           ? "This caregiver is already assigned to this client for this service."
-          : message || "Could not add the assignment.",
+          : message.includes("active Care Team record")
+            ? "Link an active Care Team record to this caregiver login before assigning the client."
+            : message || "Could not add the assignment.",
       );
     } finally {
       setAssignmentSaving(false);
@@ -1339,7 +1342,8 @@ export function ClientDetailPage() {
           <p className="mt-1 text-xs text-slate-500">
             Only caregivers assigned here can see or schedule visits for this
             client on their own staff portal - this is the gate, not just a
-            suggestion like CareScore.
+            suggestion like CareScore. For an extra shift, add the caregiver and
+            service here; revoke the access when it is no longer needed.
           </p>
 
           {canManageAssignments ? (
@@ -1384,7 +1388,7 @@ export function ClientDetailPage() {
                 />
               </div>
               <Button type="submit" loading={assignmentSaving}>
-                {assignmentSaving ? "Assigning…" : "Assign"}
+                {assignmentSaving ? "Assigning…" : "Give sign-in access"}
               </Button>
             </form>
           ) : null}

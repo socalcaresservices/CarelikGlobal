@@ -766,6 +766,7 @@ describe("ClientDetailPage", () => {
               user_id: "caregiver-2",
               display_name: "Alex Caregiver",
               status: "active",
+              role: "caregiver",
             },
           ],
           error: null,
@@ -807,7 +808,9 @@ describe("ClientDetailPage", () => {
       screen.getByRole("option", { name: "862 · Personal care" }),
     );
 
-    fireEvent.click(screen.getByRole("button", { name: "Assign" }));
+    fireEvent.click(
+      screen.getByRole("button", { name: "Give sign-in access" }),
+    );
 
     await waitFor(() =>
       expect(assignmentInsertMock).toHaveBeenCalledWith(
