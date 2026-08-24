@@ -16,7 +16,7 @@
 
 import { PropsWithChildren } from "react";
 import { Link, NavLink } from "react-router-dom";
-import { Building2, ExternalLink, Flag, ClipboardList, LayoutDashboard, HeartPulse, LogOut } from "lucide-react";
+import { Building2, ExternalLink, Flag, ClipboardList, LayoutDashboard, HeartPulse, LogOut, ShieldAlert } from "lucide-react";
 import { useAuth } from "@carelik/auth";
 import { cn } from "@carelik/ui";
 
@@ -31,6 +31,7 @@ const platformNav: NavItem[] = [
   { to: "/organizations", label: "Organizations", icon: Building2 },
   { to: "/feature-flags", label: "Feature Flags", icon: Flag },
   { to: "/audit", label: "Audit", icon: ClipboardList },
+  { to: "/support-audit", label: "Support Audit", icon: ShieldAlert },
   { to: "/system-health", label: "System Health", icon: HeartPulse }
 ];
 

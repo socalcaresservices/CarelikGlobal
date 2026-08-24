@@ -288,3 +288,43 @@ export function useRequestSupportAccess() {
     },
   });
 }
+
+// Emergency Access Hooks
+
+export interface Organization {
+  id: string;
+  display_name: string;
+  slug: string;
+}
+
+/**
+ * Grant emergency access to an organization (admin only)
+ */
+export function useGrantEmergencyAccess() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({
+      organizationId,
+      userId,
+      reason,
+    }: {
+      organizationId: string;
+      userId: string;
+      reason: string;
+    }) => {
+      const { data, error } = await supabase.rpc("grant_emergency_support_access", {
+        target_organization_id: organizationId,
+        target_user_id: userId,
+        emergency_reason: reason,
+      });
+
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["staff-active-grants"] });
+      queryClient.invalidateQueries({ queryKey: ["support-access-grants"] });
+    },
+  });
+}
