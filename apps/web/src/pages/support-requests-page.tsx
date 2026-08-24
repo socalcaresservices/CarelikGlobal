@@ -12,7 +12,7 @@ import { ApproveAccessModal } from "@/components/approve-access-modal";
 export function SupportRequestsPage() {
   const { activeOrganizationId, activeOrganization } = useOrganization();
   const { data: requests, isLoading: requestsLoading } = useSupportRequests(activeOrganizationId);
-  const { data: grants, isLoading: grantsLoading } = useSupportAccessGrants(activeOrganizationId);
+  const { data: grants } = useSupportAccessGrants(activeOrganizationId);
   const revoke = useRevokeSupportAccess(activeOrganizationId);
 
   const [showReportModal, setShowReportModal] = useState(false);
