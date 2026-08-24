@@ -16,7 +16,7 @@ import {
   Settings,
   ShieldCheck,
   UserPlus,
-  Users
+  Users,
 } from "lucide-react";
 import type { Permission } from "@carelik/shared";
 import { useAuth } from "@carelik/auth";
@@ -64,8 +64,13 @@ interface NavItem {
 // expiring" or "who do I need to follow up with" doesn't require
 // reading all nine labels in one flat list every time.
 const overviewNav: NavItem[] = [
-  { to: "/", label: "Command Center", icon: LayoutDashboard },
-  { to: "/schedule", label: "Schedule", icon: CalendarClock, badgeKey: "schedule_issues" },
+  { to: "/", label: "Operations Dashboard", icon: LayoutDashboard },
+  {
+    to: "/schedule",
+    label: "Schedule",
+    icon: CalendarClock,
+    badgeKey: "schedule_issues",
+  },
   // No permission gate - every caregiver needs to be able to schedule
   // their own visits; caregiver_assignments (not this nav item) is the
   // real gate on which clients/services they can pick from.
@@ -74,26 +79,62 @@ const overviewNav: NavItem[] = [
   // visits, and the RLS/RPC layer already scopes what each caregiver can
   // see to their own assigned shifts regardless of nav visibility.
   { to: "/service-verification", label: "Service Verification", icon: PenLine },
-  { to: "/service-verification/reports", label: "Visit Reports", icon: FileText, permission: "visits.read" },
-  { to: "/billing", label: "Billing", icon: DollarSign, permission: "billing.visits.read" }
+  {
+    to: "/service-verification/reports",
+    label: "Report Center",
+    icon: FileText,
+    permission: "visits.read",
+  },
+  {
+    to: "/billing",
+    label: "Billing",
+    icon: DollarSign,
+    permission: "billing.visits.read",
+  },
 ];
 
 const peopleNav: NavItem[] = [
-  { to: "/candidates", label: "Candidates", icon: UserPlus, permission: "applicants.read" },
-  { to: "/clients", label: "Clients", icon: Users, permission: "clients.read", badgeKey: "clients_uncovered" },
-  { to: "/team", label: "Care Team", icon: HeartHandshake, permission: "membership.read" }
+  {
+    to: "/candidates",
+    label: "Candidates",
+    icon: UserPlus,
+    permission: "applicants.read",
+  },
+  {
+    to: "/clients",
+    label: "Clients",
+    icon: Users,
+    permission: "clients.read",
+    badgeKey: "clients_uncovered",
+  },
+  {
+    to: "/team",
+    label: "Care Team",
+    icon: HeartHandshake,
+    permission: "membership.read",
+  },
 ];
 
 const complianceNav: NavItem[] = [
-  { to: "/credentials", label: "Credentials", icon: BadgeCheck, badgeKey: "credentials_issues" },
+  {
+    to: "/credentials",
+    label: "Credentials",
+    icon: BadgeCheck,
+    badgeKey: "credentials_issues",
+  },
   {
     to: "/authorizations",
     label: "Authorizations",
     icon: ClipboardCheck,
     permission: "authorizations.read",
-    badgeKey: "authorizations_issues"
+    badgeKey: "authorizations_issues",
   },
-  { to: "/incidents", label: "Incidents", icon: AlertOctagon, badgeKey: "incidents_open" }
+  {
+    to: "/incidents",
+    label: "Incidents",
+    icon: AlertOctagon,
+    badgeKey: "incidents_open",
+  },
 ];
 
 // Tenant Administration (Build 022: Platform/Tenant separation) - the
@@ -105,8 +146,19 @@ const complianceNav: NavItem[] = [
 // about the one organization it's scoped to; which host you're on
 // decides whether you see platform tools at all, not who you are.
 const administrationNav: NavItem[] = [
-  { to: "/access", label: "Access", icon: ShieldCheck, permission: "membership.read", badgeKey: "access_pending" },
-  { to: "/settings", label: "Settings", icon: Settings, permission: "settings.read" }
+  {
+    to: "/access",
+    label: "Access",
+    icon: ShieldCheck,
+    permission: "membership.read",
+    badgeKey: "access_pending",
+  },
+  {
+    to: "/settings",
+    label: "Settings",
+    icon: Settings,
+    permission: "settings.read",
+  },
 ];
 
 function visibleItems(items: NavItem[], isOwner: boolean) {
@@ -130,7 +182,7 @@ function NavLinkItem({
   to,
   label,
   icon: Icon,
-  badgeCount
+  badgeCount,
 }: NavItem & { badgeCount?: number | null | undefined }) {
   return (
     <NavLink
@@ -142,7 +194,7 @@ function NavLinkItem({
           "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium",
           isActive
             ? "bg-[var(--color-accent,#0f172a)] text-[var(--color-accent-foreground,#ffffff)]"
-            : "text-slate-600 hover:bg-slate-100 hover:text-slate-950"
+            : "text-slate-600 hover:bg-slate-100 hover:text-slate-950",
         )
       }
     >
@@ -170,7 +222,10 @@ function NavLinkItem({
 // applies) whenever the org hasn't set a primary_color.
 function brandStyle(primaryColor: string | null | undefined): CSSProperties {
   if (!primaryColor) return {};
-  return { "--color-accent": primaryColor, "--color-accent-foreground": "#ffffff" } as CSSProperties;
+  return {
+    "--color-accent": primaryColor,
+    "--color-accent-foreground": "#ffffff",
+  } as CSSProperties;
 }
 
 function formatRole(role: string) {
@@ -193,7 +248,7 @@ export function AppShell({ children }: PropsWithChildren) {
     setActiveOrganizationId,
     hasPermission,
     role,
-    loading
+    loading,
   } = useOrganization();
   // Defaults to shown - an organization opts OUT of platform attribution
   // rather than opting in (see the show_powered_by column's comment,
@@ -218,12 +273,13 @@ export function AppShell({ children }: PropsWithChildren) {
     queryKey: ["actionable-counts", activeOrganizationId],
     queryFn: async () => {
       const { data, error } = await supabase.rpc("get_actionable_counts", {
-        target_organization_id: activeOrganizationId!
+        target_organization_id: activeOrganizationId!,
       });
       if (error) throw error;
-      return (Array.isArray(data) ? data[0] : data) as ActionableCounts | undefined;
+      return (Array.isArray(data) ? data[0] : data) as
+        ActionableCounts | undefined;
     },
-    enabled: !!activeOrganizationId && hasPermission("membership.read")
+    enabled: !!activeOrganizationId && hasPermission("membership.read"),
   });
   const counts = countsQuery.data;
 
@@ -233,7 +289,10 @@ export function AppShell({ children }: PropsWithChildren) {
   }
 
   return (
-    <div className="min-h-screen bg-slate-50" style={brandStyle(activeOrganization?.primaryColor)}>
+    <div
+      className="min-h-screen bg-slate-50"
+      style={brandStyle(activeOrganization?.primaryColor)}
+    >
       <aside className="fixed inset-y-0 left-0 hidden w-64 border-r border-slate-200 bg-white lg:flex lg:flex-col">
         <div className="border-b border-slate-200 px-6 py-5">
           {activeOrganization?.logoUrl ? (
@@ -256,7 +315,11 @@ export function AppShell({ children }: PropsWithChildren) {
         <nav className="flex-1 space-y-5 overflow-y-auto p-3">
           <div className="space-y-1">
             {visibleOverviewNav.map((item) => (
-              <NavLinkItem key={item.to} {...item} badgeCount={badgeFor(item)} />
+              <NavLinkItem
+                key={item.to}
+                {...item}
+                badgeCount={badgeFor(item)}
+              />
             ))}
           </div>
           {visiblePeopleNav.length > 0 ? (
@@ -266,7 +329,11 @@ export function AppShell({ children }: PropsWithChildren) {
               </p>
               <div className="space-y-1">
                 {visiblePeopleNav.map((item) => (
-                  <NavLinkItem key={item.to} {...item} badgeCount={badgeFor(item)} />
+                  <NavLinkItem
+                    key={item.to}
+                    {...item}
+                    badgeCount={badgeFor(item)}
+                  />
                 ))}
               </div>
             </div>
@@ -278,7 +345,11 @@ export function AppShell({ children }: PropsWithChildren) {
               </p>
               <div className="space-y-1">
                 {visibleComplianceNav.map((item) => (
-                  <NavLinkItem key={item.to} {...item} badgeCount={badgeFor(item)} />
+                  <NavLinkItem
+                    key={item.to}
+                    {...item}
+                    badgeCount={badgeFor(item)}
+                  />
                 ))}
               </div>
             </div>
@@ -290,7 +361,11 @@ export function AppShell({ children }: PropsWithChildren) {
               </p>
               <div className="space-y-1">
                 {visibleAdministrationNav.map((item) => (
-                  <NavLinkItem key={item.to} {...item} badgeCount={badgeFor(item)} />
+                  <NavLinkItem
+                    key={item.to}
+                    {...item}
+                    badgeCount={badgeFor(item)}
+                  />
                 ))}
               </div>
             </div>
@@ -307,7 +382,9 @@ export function AppShell({ children }: PropsWithChildren) {
             Sign out
           </button>
           {showPoweredBy ? (
-            <p className="mt-3 px-3 text-[11px] text-slate-400">Powered by Ogevia</p>
+            <p className="mt-3 px-3 text-[11px] text-slate-400">
+              Powered by Ogevia
+            </p>
           ) : null}
         </div>
       </aside>
@@ -322,7 +399,9 @@ export function AppShell({ children }: PropsWithChildren) {
           </NavLink>
           <p className="shrink-0 text-sm text-slate-600">
             {greeting}
-            {role ? <span className="text-slate-400"> · {formatRole(role)}</span> : null}
+            {role ? (
+              <span className="text-slate-400"> · {formatRole(role)}</span>
+            ) : null}
           </p>
           <div className="order-last w-full sm:order-none sm:flex-1">
             {activeOrganizationId ? <GlobalSearch /> : null}
@@ -337,7 +416,9 @@ export function AppShell({ children }: PropsWithChildren) {
               <span className="sr-only">Active organization</span>
               <select
                 value={activeOrganizationId ?? ""}
-                onChange={(event) => setActiveOrganizationId(event.target.value)}
+                onChange={(event) =>
+                  setActiveOrganizationId(event.target.value)
+                }
                 className="rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-sm font-medium text-slate-900"
               >
                 {organizations.map((org) => (
@@ -348,7 +429,9 @@ export function AppShell({ children }: PropsWithChildren) {
               </select>
             </label>
           ) : activeOrganization ? (
-            <p className="text-sm font-medium text-slate-900">{activeOrganization.displayName}</p>
+            <p className="text-sm font-medium text-slate-900">
+              {activeOrganization.displayName}
+            </p>
           ) : loading ? (
             <p className="text-sm text-slate-400">Loading…</p>
           ) : (

@@ -111,6 +111,13 @@ interface ClientLocation {
 
 type ChartType = "bar" | "pie" | "line";
 type ChartGroup = "caregiver" | "client" | "service" | "location";
+type ReportView =
+  | "overview"
+  | "caregiver"
+  | "calendar"
+  | "visits"
+  | "exceptions"
+  | "staff-access";
 type DatePreset =
   "all" | "week" | "biweekly" | "month" | "quarter" | "year" | "custom";
 
@@ -285,6 +292,7 @@ export function ServiceVerificationReportsPage() {
   const [datePreset, setDatePreset] = useState<DatePreset>("all");
   const [chartType, setChartType] = useState<ChartType>("bar");
   const [chartGroup, setChartGroup] = useState<ChartGroup>("caregiver");
+  const [reportView, setReportView] = useState<ReportView>("overview");
   const [linkCopied, setLinkCopied] = useState(false);
   const [reportMonth, setReportMonth] = useState(currentPacificMonth);
 
@@ -670,8 +678,8 @@ export function ServiceVerificationReportsPage() {
       <div className="print:hidden">
         <PageHeader
           eyebrow="Service Verification"
-          title="Manager dashboard"
-          description="Filter recorded visits by client, caregiver, service, week, pay period, month, or any custom date range. Corrected and voided records are excluded from every subtotal below."
+          title="Report Center"
+          description="Choose one report, then use the filters to answer a specific operational question without loading every report at once."
           actions={
             <div className="flex flex-wrap gap-2">
               {canManage ? (
@@ -703,7 +711,88 @@ export function ServiceVerificationReportsPage() {
         />
       </div>
 
-      {canManage ? (
+      <Card className="print:hidden">
+        <h3 className="font-bold text-slate-950">Choose a report</h3>
+        <p className="mt-1 text-sm text-slate-500">
+          Start with the high-level overview, then open only the detail you
+          need.
+        </p>
+        <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          {(
+            [
+              [
+                "overview",
+                "Operations overview",
+                "High-level hours and trends",
+                BarChart3,
+              ],
+              [
+                "caregiver",
+                "Caregiver hours",
+                "Hours by one or all caregivers",
+                Folder,
+              ],
+              [
+                "calendar",
+                "Client calendar",
+                "Daily hours for a selected client",
+                CalendarDays,
+              ],
+              [
+                "visits",
+                "Visit details",
+                "Printable visits and corrections",
+                FileText,
+              ],
+              [
+                "exceptions",
+                "Exceptions",
+                "Visits needing manager attention",
+                ShieldCheck,
+              ],
+              [
+                "staff-access",
+                "Staff access",
+                "Secure link and assignments",
+                Users,
+              ],
+            ] as Array<[ReportView, string, string, typeof BarChart3]>
+          ).map(([value, label, description, Icon]) => (
+            <button
+              key={value}
+              type="button"
+              aria-pressed={reportView === value}
+              onClick={() => {
+                setReportView(value);
+                closeExpanded();
+              }}
+              className={
+                reportView === value
+                  ? "flex items-start gap-3 rounded-2xl border-2 border-indigo-500 bg-indigo-50 p-4 text-left ring-4 ring-indigo-50"
+                  : "flex items-start gap-3 rounded-2xl border border-slate-200 bg-white p-4 text-left hover:border-indigo-300 hover:bg-indigo-50/40"
+              }
+            >
+              <span
+                className={
+                  reportView === value
+                    ? "flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-indigo-600 text-white"
+                    : "flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-slate-100 text-slate-600"
+                }
+              >
+                <Icon className="h-5 w-5" />
+              </span>
+              <span>
+                <span className="block font-bold text-slate-950">{label}</span>
+                <span className="mt-1 block text-xs text-slate-500">
+                  {description}
+                </span>
+              </span>
+            </button>
+          ))}
+        </div>
+      </Card>
+
+      {canManage && reportView === "staff-access" ? (
         <Card className="border-emerald-200 bg-gradient-to-r from-emerald-50 via-white to-sky-50 print:hidden">
           <div className="flex items-start gap-3">
             <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-emerald-600 text-white">
@@ -731,530 +820,547 @@ export function ServiceVerificationReportsPage() {
         </Card>
       ) : null}
 
-      <Card className="print:hidden">
-        <div className="flex items-center justify-between gap-3">
-          <div>
-            <h3 className="font-semibold text-slate-950">Caregiver folders</h3>
-            <p className="mt-1 text-sm text-slate-500">
-              Open a caregiver folder to view, print, or bookmark only that
-              caregiver&apos;s sheets.
-            </p>
-          </div>
-          {caregiverFilter ? (
-            <button
-              type="button"
-              onClick={() => selectCaregiverFolder("")}
-              className="text-sm font-semibold text-sky-700 underline"
-            >
-              All caregivers
-            </button>
-          ) : null}
-        </div>
-        <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          {caregiverOptions.map(([id, name]) => (
-            <button
-              key={id}
-              type="button"
-              onClick={() => selectCaregiverFolder(id)}
-              className="flex items-center gap-3 rounded-xl border border-slate-200 p-4 text-left hover:border-sky-400 hover:bg-sky-50"
-            >
-              <Folder className="h-6 w-6 text-sky-700" />
-              <span>
-                <span className="block text-xs font-semibold uppercase tracking-wide text-slate-500">
-                  Caregiver
-                </span>
-                <span className="block font-semibold text-slate-950">
-                  {name}
-                </span>
-              </span>
-            </button>
-          ))}
-        </div>
-      </Card>
-
-      <Card className="print:hidden">
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-          <div>
-            <label
-              htmlFor="report-client"
-              className="block text-xs font-medium text-slate-600"
-            >
-              Client
-            </label>
-            <select
-              id="report-client"
-              value={clientFilter}
-              onChange={(event) => setClientFilter(event.target.value)}
-              className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900"
-            >
-              <option value="">All clients</option>
-              {clientOptions.map(([id, label]) => (
-                <option key={id} value={id}>
-                  {label}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <label
-              htmlFor="report-location"
-              className="block text-xs font-medium text-slate-600"
-            >
-              Location
-            </label>
-            <select
-              id="report-location"
-              value={locationFilter}
-              onChange={(event) => setLocationFilter(event.target.value)}
-              className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900"
-            >
-              <option value="">All locations</option>
-              {locationOptions.map((location) => (
-                <option key={location} value={location}>
-                  {location}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <label
-              htmlFor="report-caregiver"
-              className="block text-xs font-medium text-slate-600"
-            >
-              Caregiver
-            </label>
-            <select
-              id="report-caregiver"
-              value={caregiverFilter}
-              onChange={(event) => selectCaregiverFolder(event.target.value)}
-              className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900"
-            >
-              <option value="">All caregivers</option>
-              {caregiverOptions.map(([id, label]) => (
-                <option key={id} value={id}>
-                  {label}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <label
-              htmlFor="report-service"
-              className="block text-xs font-medium text-slate-600"
-            >
-              Service
-            </label>
-            <select
-              id="report-service"
-              value={serviceFilter}
-              onChange={(event) => setServiceFilter(event.target.value)}
-              className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900"
-            >
-              <option value="">All services</option>
-              {serviceOptions.map(([id, label]) => (
-                <option key={id} value={id}>
-                  {label}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <label
-              htmlFor="report-status"
-              className="block text-xs font-medium text-slate-600"
-            >
-              Status
-            </label>
-            <select
-              id="report-status"
-              value={statusFilter}
-              onChange={(event) => setStatusFilter(event.target.value)}
-              className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900"
-            >
-              <option value="">All statuses</option>
-              {Object.entries(VISIT_STATUS_LABEL).map(([value, label]) => (
-                <option key={value} value={value}>
-                  {label}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <label
-              htmlFor="report-from"
-              className="block text-xs font-medium text-slate-600"
-            >
-              From
-            </label>
-            <input
-              id="report-from"
-              type="date"
-              value={dateFrom}
-              onChange={(event) => {
-                setDateFrom(event.target.value);
-                setDatePreset("custom");
-              }}
-              className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900"
-            />
-          </div>
-          <div>
-            <label
-              htmlFor="report-to"
-              className="block text-xs font-medium text-slate-600"
-            >
-              To
-            </label>
-            <input
-              id="report-to"
-              type="date"
-              value={dateTo}
-              onChange={(event) => {
-                setDateTo(event.target.value);
-                setDatePreset("custom");
-              }}
-              className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900"
-            />
-          </div>
-        </div>
-        <div className="mt-4 flex flex-wrap gap-2" aria-label="Date range">
-          {(
-            [
-              ["all", "All time"],
-              ["week", "This week"],
-              ["biweekly", "Last 14 days"],
-              ["month", "This month"],
-              ["quarter", "This quarter"],
-              ["year", "This year"],
-              ["custom", "Custom"],
-            ] as Array<[DatePreset, string]>
-          ).map(([value, label]) => (
-            <button
-              key={value}
-              type="button"
-              onClick={() => applyDatePreset(value)}
-              className={
-                datePreset === value
-                  ? "rounded-full bg-indigo-600 px-3 py-1.5 text-xs font-bold text-white"
-                  : "rounded-full bg-slate-100 px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-indigo-50 hover:text-indigo-700"
-              }
-            >
-              {label}
-            </button>
-          ))}
-        </div>
-        <p className="mt-3 text-xs text-slate-500">
-          Use From and To for a week, your agency pay period, a month, or any
-          custom range. These reports use actual signed visit time—not a fixed
-          schedule.
-        </p>
-      </Card>
-
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4 print:hidden">
-        {[
-          {
-            label: "Worked hours",
-            value: formatHours(totalWorkedMinutes),
-            icon: <BarChart3 className="h-5 w-5" />,
-            color: "bg-indigo-50 text-indigo-800 border-indigo-100",
-          },
-          {
-            label: "Billable hours",
-            value: formatHours(totalBillableMinutes),
-            icon: <Check className="h-5 w-5" />,
-            color: "bg-emerald-50 text-emerald-800 border-emerald-100",
-          },
-          {
-            label: "Caregivers",
-            value: String(caregiverSubtotals.length),
-            icon: <Users className="h-5 w-5" />,
-            color: "bg-sky-50 text-sky-800 border-sky-100",
-          },
-          {
-            label: "Clients",
-            value: String(clientSubtotals.length),
-            icon: <MapPin className="h-5 w-5" />,
-            color: "bg-violet-50 text-violet-800 border-violet-100",
-          },
-        ].map((metric) => (
-          <Card key={metric.label} className={`border ${metric.color}`}>
-            <div className="flex items-center justify-between">
-              <span>{metric.icon}</span>
-              <span className="text-3xl font-extrabold tabular-nums">
-                {metric.value}
-              </span>
-            </div>
-            <p className="mt-2 text-sm font-bold">{metric.label}</p>
-          </Card>
-        ))}
-      </div>
-
-      <Card className="print:hidden">
-        <div className="flex flex-wrap items-start justify-between gap-4">
-          <div>
-            <h3 className="font-bold text-slate-950">Hours chart</h3>
-            <p className="mt-1 text-sm text-slate-500">
-              Every chart follows the client, caregiver, service, location, and
-              date filters above.
-            </p>
-          </div>
-          <div className="flex flex-wrap gap-3">
-            <label className="text-xs font-semibold text-slate-600">
-              Chart
-              <select
-                aria-label="Chart type"
-                value={chartType}
-                onChange={(event) =>
-                  setChartType(event.target.value as ChartType)
-                }
-                className="ml-2 rounded-lg border border-slate-200 px-2 py-1.5 text-sm text-slate-900"
-              >
-                <option value="bar">Bar</option>
-                <option value="pie">Pie</option>
-                <option value="line">Daily trend</option>
-              </select>
-            </label>
-            <label className="text-xs font-semibold text-slate-600">
-              Group by
-              <select
-                aria-label="Group chart by"
-                value={chartGroup}
-                disabled={chartType === "line"}
-                onChange={(event) =>
-                  setChartGroup(event.target.value as ChartGroup)
-                }
-                className="ml-2 rounded-lg border border-slate-200 px-2 py-1.5 text-sm text-slate-900 disabled:bg-slate-100"
-              >
-                <option value="caregiver">Caregiver</option>
-                <option value="client">Client</option>
-                <option value="service">Service</option>
-                <option value="location">Location</option>
-              </select>
-            </label>
-          </div>
-        </div>
-        {chartData.length === 0 ? (
-          <p className="mt-6 rounded-2xl bg-slate-50 p-8 text-center text-sm text-slate-500">
-            No signed visit hours match these filters.
-          </p>
-        ) : (
-          <div className="mt-5 h-80" aria-label="Filtered hours chart">
-            <ResponsiveContainer width="100%" height="100%">
-              {chartType === "pie" ? (
-                <PieChart>
-                  <Pie
-                    data={chartData}
-                    dataKey="workedHours"
-                    nameKey="name"
-                    outerRadius={105}
-                    label={({ name, value }) =>
-                      `${name}: ${Number(value).toFixed(1)}h`
-                    }
-                  >
-                    {chartData.map((entry, index) => (
-                      <Cell
-                        key={entry.name}
-                        fill={CHART_COLORS[index % CHART_COLORS.length]}
-                      />
-                    ))}
-                  </Pie>
-                  <Tooltip />
-                  <Legend />
-                </PieChart>
-              ) : chartType === "line" ? (
-                <LineChart data={trendData}>
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="name" tick={{ fontSize: 11 }} />
-                  <YAxis unit="h" />
-                  <Tooltip />
-                  <Legend />
-                  <Line
-                    type="monotone"
-                    dataKey="workedHours"
-                    name="Worked hours"
-                    stroke="#4f46e5"
-                    strokeWidth={3}
-                  />
-                  <Line
-                    type="monotone"
-                    dataKey="billableHours"
-                    name="Billable hours"
-                    stroke="#059669"
-                    strokeWidth={3}
-                  />
-                </LineChart>
-              ) : (
-                <BarChart data={chartData}>
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="name" tick={{ fontSize: 11 }} />
-                  <YAxis unit="h" />
-                  <Tooltip />
-                  <Legend />
-                  <Bar
-                    dataKey="workedHours"
-                    name="Worked hours"
-                    fill="#4f46e5"
-                    radius={[6, 6, 0, 0]}
-                  />
-                  <Bar
-                    dataKey="billableHours"
-                    name="Billable hours"
-                    fill="#059669"
-                    radius={[6, 6, 0, 0]}
-                  />
-                </BarChart>
-              )}
-            </ResponsiveContainer>
-          </div>
-        )}
-      </Card>
-
-      <Card>
-        <h3 className="font-bold text-slate-950">
-          Caregiver hours — {selectedClientName ?? "all clients"}
-        </h3>
-        <p className="mt-1 text-sm text-slate-500">
-          {selectedServiceName ?? "All services combined"} · selected date range
-        </p>
-        {caregiverSubtotals.length === 0 ? (
-          <p className="mt-4 text-sm text-slate-400">
-            No caregiver hours match these filters.
-          </p>
-        ) : (
-          <div className="mt-4 overflow-x-auto">
-            <table
-              aria-label="Caregiver hours summary"
-              className="w-full text-left text-sm"
-            >
-              <thead>
-                <tr className="border-b border-slate-200 text-xs uppercase tracking-wide text-slate-500">
-                  <th className="pb-2 font-medium">Caregiver</th>
-                  <th className="pb-2 font-medium">Worked</th>
-                  <th className="pb-2 font-medium">Billable</th>
-                  <th className="pb-2 font-medium">Visits</th>
-                </tr>
-              </thead>
-              <tbody>
-                {caregiverSubtotals.map((entry) => (
-                  <tr key={entry.name} className="border-b border-slate-100">
-                    <td className="py-2 font-semibold text-slate-900">
-                      {entry.name}
-                    </td>
-                    <td className="py-2 text-indigo-700">
-                      {formatHours(entry.workedMinutes)} hrs
-                    </td>
-                    <td className="py-2 text-emerald-700">
-                      {formatHours(entry.billableMinutes)} hrs
-                    </td>
-                    <td className="py-2 text-slate-600">{entry.visits}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </Card>
-
-      <Card className="print:hidden">
-        <div className="flex flex-wrap items-end justify-between gap-4">
-          <div className="flex items-start gap-3">
-            <CalendarDays className="mt-0.5 h-5 w-5 text-sky-700" />
+      {reportView === "caregiver" ? (
+        <Card className="print:hidden">
+          <div className="flex items-center justify-between gap-3">
             <div>
               <h3 className="font-semibold text-slate-950">
-                Monthly hours calendar
+                Caregiver folders
               </h3>
               <p className="mt-1 text-sm text-slate-500">
-                Select one client above to see every caregiver who served that
-                client and the hours recorded each day. Amber entries need
-                manager review.
+                Open a caregiver folder to view, print, or bookmark only that
+                caregiver&apos;s sheets.
               </p>
             </div>
+            {caregiverFilter ? (
+              <button
+                type="button"
+                onClick={() => selectCaregiverFolder("")}
+                className="text-sm font-semibold text-sky-700 underline"
+              >
+                All caregivers
+              </button>
+            ) : null}
           </div>
-          <label className="text-xs font-medium text-slate-600">
-            Calendar month
-            <input
-              type="month"
-              aria-label="Calendar month"
-              value={reportMonth}
-              onChange={(event) => setReportMonth(event.target.value)}
-              className="mt-1 block rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900"
-            />
-          </label>
-        </div>
+          <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            {caregiverOptions.map(([id, name]) => (
+              <button
+                key={id}
+                type="button"
+                onClick={() => selectCaregiverFolder(id)}
+                className="flex items-center gap-3 rounded-xl border border-slate-200 p-4 text-left hover:border-sky-400 hover:bg-sky-50"
+              >
+                <Folder className="h-6 w-6 text-sky-700" />
+                <span>
+                  <span className="block text-xs font-semibold uppercase tracking-wide text-slate-500">
+                    Caregiver
+                  </span>
+                  <span className="block font-semibold text-slate-950">
+                    {name}
+                  </span>
+                </span>
+              </button>
+            ))}
+          </div>
+        </Card>
+      ) : null}
 
-        <div className="mt-4 overflow-x-auto">
-          <div
-            role="grid"
-            aria-label={`Caregiver hours for ${reportMonth}`}
-            className="min-w-[760px]"
-          >
+      {reportView !== "staff-access" ? (
+        <Card className="print:hidden">
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            <div>
+              <label
+                htmlFor="report-client"
+                className="block text-xs font-medium text-slate-600"
+              >
+                Client
+              </label>
+              <select
+                id="report-client"
+                value={clientFilter}
+                onChange={(event) => setClientFilter(event.target.value)}
+                className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900"
+              >
+                <option value="">All clients</option>
+                {clientOptions.map(([id, label]) => (
+                  <option key={id} value={id}>
+                    {label}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label
+                htmlFor="report-location"
+                className="block text-xs font-medium text-slate-600"
+              >
+                Location
+              </label>
+              <select
+                id="report-location"
+                value={locationFilter}
+                onChange={(event) => setLocationFilter(event.target.value)}
+                className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900"
+              >
+                <option value="">All locations</option>
+                {locationOptions.map((location) => (
+                  <option key={location} value={location}>
+                    {location}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label
+                htmlFor="report-caregiver"
+                className="block text-xs font-medium text-slate-600"
+              >
+                Caregiver
+              </label>
+              <select
+                id="report-caregiver"
+                value={caregiverFilter}
+                onChange={(event) => selectCaregiverFolder(event.target.value)}
+                className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900"
+              >
+                <option value="">All caregivers</option>
+                {caregiverOptions.map(([id, label]) => (
+                  <option key={id} value={id}>
+                    {label}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label
+                htmlFor="report-service"
+                className="block text-xs font-medium text-slate-600"
+              >
+                Service
+              </label>
+              <select
+                id="report-service"
+                value={serviceFilter}
+                onChange={(event) => setServiceFilter(event.target.value)}
+                className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900"
+              >
+                <option value="">All services</option>
+                {serviceOptions.map(([id, label]) => (
+                  <option key={id} value={id}>
+                    {label}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label
+                htmlFor="report-status"
+                className="block text-xs font-medium text-slate-600"
+              >
+                Status
+              </label>
+              <select
+                id="report-status"
+                value={statusFilter}
+                onChange={(event) => setStatusFilter(event.target.value)}
+                className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900"
+              >
+                <option value="">All statuses</option>
+                {Object.entries(VISIT_STATUS_LABEL).map(([value, label]) => (
+                  <option key={value} value={value}>
+                    {label}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label
+                htmlFor="report-from"
+                className="block text-xs font-medium text-slate-600"
+              >
+                From
+              </label>
+              <input
+                id="report-from"
+                type="date"
+                value={dateFrom}
+                onChange={(event) => {
+                  setDateFrom(event.target.value);
+                  setDatePreset("custom");
+                }}
+                className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900"
+              />
+            </div>
+            <div>
+              <label
+                htmlFor="report-to"
+                className="block text-xs font-medium text-slate-600"
+              >
+                To
+              </label>
+              <input
+                id="report-to"
+                type="date"
+                value={dateTo}
+                onChange={(event) => {
+                  setDateTo(event.target.value);
+                  setDatePreset("custom");
+                }}
+                className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900"
+              />
+            </div>
+          </div>
+          <div className="mt-4 flex flex-wrap gap-2" aria-label="Date range">
+            {(
+              [
+                ["all", "All time"],
+                ["week", "This week"],
+                ["biweekly", "Last 14 days"],
+                ["month", "This month"],
+                ["quarter", "This quarter"],
+                ["year", "This year"],
+                ["custom", "Custom"],
+              ] as Array<[DatePreset, string]>
+            ).map(([value, label]) => (
+              <button
+                key={value}
+                type="button"
+                onClick={() => applyDatePreset(value)}
+                className={
+                  datePreset === value
+                    ? "rounded-full bg-indigo-600 px-3 py-1.5 text-xs font-bold text-white"
+                    : "rounded-full bg-slate-100 px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-indigo-50 hover:text-indigo-700"
+                }
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+          <p className="mt-3 text-xs text-slate-500">
+            Use From and To for a week, your agency pay period, a month, or any
+            custom range. These reports use actual signed visit time—not a fixed
+            schedule.
+          </p>
+        </Card>
+      ) : null}
+
+      {reportView === "overview" ? (
+        <>
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            {[
+              {
+                label: "Worked hours",
+                value: formatHours(totalWorkedMinutes),
+                icon: <BarChart3 className="h-5 w-5" />,
+                color: "bg-indigo-50 text-indigo-800 border-indigo-100",
+              },
+              {
+                label: "Billable hours",
+                value: formatHours(totalBillableMinutes),
+                icon: <Check className="h-5 w-5" />,
+                color: "bg-emerald-50 text-emerald-800 border-emerald-100",
+              },
+              {
+                label: "Caregivers",
+                value: String(caregiverSubtotals.length),
+                icon: <Users className="h-5 w-5" />,
+                color: "bg-sky-50 text-sky-800 border-sky-100",
+              },
+              {
+                label: "Clients",
+                value: String(clientSubtotals.length),
+                icon: <MapPin className="h-5 w-5" />,
+                color: "bg-violet-50 text-violet-800 border-violet-100",
+              },
+            ].map((metric) => (
+              <Card key={metric.label} className={`border ${metric.color}`}>
+                <div className="flex items-center justify-between">
+                  <span>{metric.icon}</span>
+                  <span className="text-3xl font-extrabold tabular-nums">
+                    {metric.value}
+                  </span>
+                </div>
+                <p className="mt-2 text-sm font-bold">{metric.label}</p>
+              </Card>
+            ))}
+          </div>
+
+          <Card>
+            <div className="flex flex-wrap items-start justify-between gap-4">
+              <div>
+                <h3 className="font-bold text-slate-950">Hours chart</h3>
+                <p className="mt-1 text-sm text-slate-500">
+                  Every chart follows the client, caregiver, service, location,
+                  and date filters above.
+                </p>
+              </div>
+              <div className="flex flex-wrap gap-3">
+                <label className="text-xs font-semibold text-slate-600">
+                  Chart
+                  <select
+                    aria-label="Chart type"
+                    value={chartType}
+                    onChange={(event) =>
+                      setChartType(event.target.value as ChartType)
+                    }
+                    className="ml-2 rounded-lg border border-slate-200 px-2 py-1.5 text-sm text-slate-900"
+                  >
+                    <option value="bar">Bar</option>
+                    <option value="pie">Pie</option>
+                    <option value="line">Daily trend</option>
+                  </select>
+                </label>
+                <label className="text-xs font-semibold text-slate-600">
+                  Group by
+                  <select
+                    aria-label="Group chart by"
+                    value={chartGroup}
+                    disabled={chartType === "line"}
+                    onChange={(event) =>
+                      setChartGroup(event.target.value as ChartGroup)
+                    }
+                    className="ml-2 rounded-lg border border-slate-200 px-2 py-1.5 text-sm text-slate-900 disabled:bg-slate-100"
+                  >
+                    <option value="caregiver">Caregiver</option>
+                    <option value="client">Client</option>
+                    <option value="service">Service</option>
+                    <option value="location">Location</option>
+                  </select>
+                </label>
+              </div>
+            </div>
+            {chartData.length === 0 ? (
+              <p className="mt-6 rounded-2xl bg-slate-50 p-8 text-center text-sm text-slate-500">
+                No signed visit hours match these filters.
+              </p>
+            ) : (
+              <div className="mt-5 h-80" aria-label="Filtered hours chart">
+                <ResponsiveContainer width="100%" height="100%">
+                  {chartType === "pie" ? (
+                    <PieChart>
+                      <Pie
+                        data={chartData}
+                        dataKey="workedHours"
+                        nameKey="name"
+                        outerRadius={105}
+                        label={({ name, value }) =>
+                          `${name}: ${Number(value).toFixed(1)}h`
+                        }
+                      >
+                        {chartData.map((entry, index) => (
+                          <Cell
+                            key={entry.name}
+                            fill={CHART_COLORS[index % CHART_COLORS.length]}
+                          />
+                        ))}
+                      </Pie>
+                      <Tooltip />
+                      <Legend />
+                    </PieChart>
+                  ) : chartType === "line" ? (
+                    <LineChart data={trendData}>
+                      <CartesianGrid strokeDasharray="3 3" />
+                      <XAxis dataKey="name" tick={{ fontSize: 11 }} />
+                      <YAxis unit="h" />
+                      <Tooltip />
+                      <Legend />
+                      <Line
+                        type="monotone"
+                        dataKey="workedHours"
+                        name="Worked hours"
+                        stroke="#4f46e5"
+                        strokeWidth={3}
+                      />
+                      <Line
+                        type="monotone"
+                        dataKey="billableHours"
+                        name="Billable hours"
+                        stroke="#059669"
+                        strokeWidth={3}
+                      />
+                    </LineChart>
+                  ) : (
+                    <BarChart data={chartData}>
+                      <CartesianGrid strokeDasharray="3 3" />
+                      <XAxis dataKey="name" tick={{ fontSize: 11 }} />
+                      <YAxis unit="h" />
+                      <Tooltip />
+                      <Legend />
+                      <Bar
+                        dataKey="workedHours"
+                        name="Worked hours"
+                        fill="#4f46e5"
+                        radius={[6, 6, 0, 0]}
+                      />
+                      <Bar
+                        dataKey="billableHours"
+                        name="Billable hours"
+                        fill="#059669"
+                        radius={[6, 6, 0, 0]}
+                      />
+                    </BarChart>
+                  )}
+                </ResponsiveContainer>
+              </div>
+            )}
+          </Card>
+        </>
+      ) : null}
+
+      {reportView === "caregiver" ? (
+        <Card>
+          <h3 className="font-bold text-slate-950">
+            Caregiver hours — {selectedClientName ?? "all clients"}
+          </h3>
+          <p className="mt-1 text-sm text-slate-500">
+            {selectedServiceName ?? "All services combined"} · selected date
+            range
+          </p>
+          {caregiverSubtotals.length === 0 ? (
+            <p className="mt-4 text-sm text-slate-400">
+              No caregiver hours match these filters.
+            </p>
+          ) : (
+            <div className="mt-4 overflow-x-auto">
+              <table
+                aria-label="Caregiver hours summary"
+                className="w-full text-left text-sm"
+              >
+                <thead>
+                  <tr className="border-b border-slate-200 text-xs uppercase tracking-wide text-slate-500">
+                    <th className="pb-2 font-medium">Caregiver</th>
+                    <th className="pb-2 font-medium">Worked</th>
+                    <th className="pb-2 font-medium">Billable</th>
+                    <th className="pb-2 font-medium">Visits</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {caregiverSubtotals.map((entry) => (
+                    <tr key={entry.name} className="border-b border-slate-100">
+                      <td className="py-2 font-semibold text-slate-900">
+                        {entry.name}
+                      </td>
+                      <td className="py-2 text-indigo-700">
+                        {formatHours(entry.workedMinutes)} hrs
+                      </td>
+                      <td className="py-2 text-emerald-700">
+                        {formatHours(entry.billableMinutes)} hrs
+                      </td>
+                      <td className="py-2 text-slate-600">{entry.visits}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </Card>
+      ) : null}
+
+      {reportView === "calendar" ? (
+        <Card>
+          <div className="flex flex-wrap items-end justify-between gap-4">
+            <div className="flex items-start gap-3">
+              <CalendarDays className="mt-0.5 h-5 w-5 text-sky-700" />
+              <div>
+                <h3 className="font-semibold text-slate-950">
+                  Monthly hours calendar
+                </h3>
+                <p className="mt-1 text-sm text-slate-500">
+                  Select one client above to see every caregiver who served that
+                  client and the hours recorded each day. Amber entries need
+                  manager review.
+                </p>
+              </div>
+            </div>
+            <label className="text-xs font-medium text-slate-600">
+              Calendar month
+              <input
+                type="month"
+                aria-label="Calendar month"
+                value={reportMonth}
+                onChange={(event) => setReportMonth(event.target.value)}
+                className="mt-1 block rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900"
+              />
+            </label>
+          </div>
+
+          <div className="mt-4 overflow-x-auto">
             <div
-              role="row"
-              className="grid grid-cols-7 border-b border-slate-200 bg-slate-50"
+              role="grid"
+              aria-label={`Caregiver hours for ${reportMonth}`}
+              className="min-w-[760px]"
             >
-              {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((day) => (
-                <div
-                  key={day}
-                  role="columnheader"
-                  className="px-2 py-2 text-center text-xs font-semibold uppercase tracking-wide text-slate-500"
-                >
-                  {day}
+              <div
+                role="row"
+                className="grid grid-cols-7 border-b border-slate-200 bg-slate-50"
+              >
+                {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map(
+                  (day) => (
+                    <div
+                      key={day}
+                      role="columnheader"
+                      className="px-2 py-2 text-center text-xs font-semibold uppercase tracking-wide text-slate-500"
+                    >
+                      {day}
+                    </div>
+                  ),
+                )}
+              </div>
+              {monthCalendar.weeks.map((week, weekIndex) => (
+                <div key={weekIndex} role="row" className="grid grid-cols-7">
+                  {week.map((day, dayIndex) => {
+                    const date = day
+                      ? `${reportMonth}-${String(day).padStart(2, "0")}`
+                      : null;
+                    const entries = date
+                      ? (monthCalendar.entries.get(date) ?? [])
+                      : [];
+                    return (
+                      <div
+                        key={`${weekIndex}-${dayIndex}`}
+                        role="gridcell"
+                        aria-label={date ?? "Outside selected month"}
+                        className="min-h-28 border-b border-r border-slate-100 p-2 last:border-r-0"
+                      >
+                        {day ? (
+                          <p className="text-xs font-semibold text-slate-600">
+                            {day}
+                          </p>
+                        ) : null}
+                        <div className="mt-1 space-y-1.5">
+                          {entries.map((entry) => (
+                            <div
+                              key={entry.key}
+                              className={
+                                entry.needsReview
+                                  ? "rounded-md bg-amber-50 px-1.5 py-1"
+                                  : "rounded-md bg-sky-50 px-1.5 py-1"
+                              }
+                            >
+                              <p
+                                className="truncate text-[11px] font-semibold text-slate-800"
+                                title={entry.caregiverName}
+                              >
+                                {entry.caregiverName}
+                              </p>
+                              <p className="text-[11px] tabular-nums text-slate-600">
+                                {formatHours(entry.workedMinutes)}h worked
+                                {entry.billableMinutes !== entry.workedMinutes
+                                  ? ` · ${formatHours(entry.billableMinutes)}h billable`
+                                  : ""}
+                              </p>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
               ))}
             </div>
-            {monthCalendar.weeks.map((week, weekIndex) => (
-              <div key={weekIndex} role="row" className="grid grid-cols-7">
-                {week.map((day, dayIndex) => {
-                  const date = day
-                    ? `${reportMonth}-${String(day).padStart(2, "0")}`
-                    : null;
-                  const entries = date
-                    ? (monthCalendar.entries.get(date) ?? [])
-                    : [];
-                  return (
-                    <div
-                      key={`${weekIndex}-${dayIndex}`}
-                      role="gridcell"
-                      aria-label={date ?? "Outside selected month"}
-                      className="min-h-28 border-b border-r border-slate-100 p-2 last:border-r-0"
-                    >
-                      {day ? (
-                        <p className="text-xs font-semibold text-slate-600">
-                          {day}
-                        </p>
-                      ) : null}
-                      <div className="mt-1 space-y-1.5">
-                        {entries.map((entry) => (
-                          <div
-                            key={entry.key}
-                            className={
-                              entry.needsReview
-                                ? "rounded-md bg-amber-50 px-1.5 py-1"
-                                : "rounded-md bg-sky-50 px-1.5 py-1"
-                            }
-                          >
-                            <p
-                              className="truncate text-[11px] font-semibold text-slate-800"
-                              title={entry.caregiverName}
-                            >
-                              {entry.caregiverName}
-                            </p>
-                            <p className="text-[11px] tabular-nums text-slate-600">
-                              {formatHours(entry.workedMinutes)}h worked
-                              {entry.billableMinutes !== entry.workedMinutes
-                                ? ` · ${formatHours(entry.billableMinutes)}h billable`
-                                : ""}
-                            </p>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            ))}
           </div>
-        </div>
-      </Card>
+        </Card>
+      ) : null}
 
       {/* Letterhead - shown only when printing, built from this organization's
           own settings so a re-branded/white-labeled tenant prints correctly
@@ -1294,354 +1400,368 @@ export function ServiceVerificationReportsPage() {
         </div>
       </div>
 
-      <Card className="print:border-none print:p-0 print:shadow-none">
-        <div className="flex items-center gap-3 print:hidden">
-          <FileText className="h-5 w-5 text-sky-700" />
-          <h3 className="font-semibold text-slate-950">
-            {selectedCaregiverName
-              ? `Caregiver ${selectedCaregiverName}`
-              : "Visits"}{" "}
-            ({rows.length})
-          </h3>
-        </div>
-        {visitsQuery.isLoading ? (
-          <p className="mt-3 text-sm text-slate-500">Loading…</p>
-        ) : visitsQuery.isError ? (
-          <p className="mt-3 text-sm text-red-700">
-            Could not load service verification records.
-          </p>
-        ) : rows.length === 0 ? (
-          <p className="mt-3 text-sm text-slate-400">
-            No visits match these filters.
-          </p>
-        ) : (
-          <div className="mt-4 overflow-x-auto">
-            <table
-              aria-label="Visit details"
-              className="w-full text-left text-sm"
-            >
-              <thead>
-                <tr className="border-b border-slate-200 text-xs uppercase tracking-wide text-slate-500">
-                  <th className="pb-2 pr-3 font-medium">Visit #</th>
-                  <th className="pb-2 pr-3 font-medium">Date</th>
-                  <th className="pb-2 pr-3 font-medium">Client</th>
-                  <th className="pb-2 pr-3 font-medium">Caregiver</th>
-                  <th className="pb-2 pr-3 font-medium">Service</th>
-                  <th className="pb-2 pr-3 font-medium">Time</th>
-                  <th className="pb-2 pr-3 font-medium">Worked</th>
-                  <th className="pb-2 pr-3 font-medium">Billable</th>
-                  <th className="pb-2 pr-3 font-medium">
-                    Authorization (before → after)
-                  </th>
-                  <th className="pb-2 pr-3 font-medium">Status</th>
-                  {canManage ? (
-                    <th className="pb-2 font-medium print:hidden">Actions</th>
-                  ) : null}
-                </tr>
-              </thead>
-              <tbody>
-                {rows.map((row) => (
-                  <Fragment key={row.id}>
-                    <tr className="border-b border-slate-100 last:border-0">
-                      <td className="py-2 pr-3 whitespace-nowrap font-mono text-xs text-slate-500">
-                        {row.visit_number ?? "—"}
-                      </td>
-                      <td className="py-2 pr-3 whitespace-nowrap text-slate-600">
-                        {formatVisitDate(`${row.service_date}T12:00:00-07:00`)}
-                      </td>
-                      <td className="py-2 pr-3">
-                        <p className="text-slate-800">
-                          {row.client_legal_name ?? row.client_code}
-                        </p>
-                        <p className="text-xs text-slate-400">
-                          {row.client_code}
-                        </p>
-                      </td>
-                      <td className="py-2 pr-3 text-slate-700">
-                        {row.caregiver_name}
-                      </td>
-                      <td className="py-2 pr-3 text-slate-600">
-                        {row.service_name}
-                      </td>
-                      <td className="py-2 pr-3 whitespace-nowrap text-slate-500">
-                        {formatDateTime(row.time_in)}
-                        {row.time_out
-                          ? ` – ${formatDateTime(row.time_out)}`
-                          : ""}
-                      </td>
-                      <td className="py-2 pr-3 text-slate-700">
-                        {row.worked_minutes
-                          ? formatHours(row.worked_minutes)
-                          : "—"}
-                      </td>
-                      <td className="py-2 pr-3 text-slate-700">
-                        {row.billable_minutes !== null
-                          ? formatHours(row.billable_minutes)
-                          : "—"}
-                      </td>
-                      <td className="py-2 pr-3 whitespace-nowrap text-xs text-slate-500">
-                        {row.month_to_date_before_minutes !== null &&
-                        row.month_to_date_after_minutes !== null
-                          ? `${formatHours(row.month_to_date_before_minutes)} → ${formatHours(row.month_to_date_after_minutes)} (${formatHours(row.remaining_minutes ?? 0)} left)`
-                          : "—"}
-                      </td>
-                      <td className="py-2 pr-3">
-                        <div className="flex flex-wrap items-center gap-1">
-                          {row.is_corrected ? (
-                            <StatusBadge label="Corrected" tone="neutral" />
-                          ) : null}
-                          <StatusBadge
-                            label={VISIT_STATUS_LABEL[row.status]}
-                            tone={STATUS_TONE[row.status]}
-                          />
-                        </div>
-                      </td>
+      {reportView === "visits" ? (
+        <>
+          <Card className="print:border-none print:p-0 print:shadow-none">
+            <div className="flex items-center gap-3 print:hidden">
+              <FileText className="h-5 w-5 text-sky-700" />
+              <h3 className="font-semibold text-slate-950">
+                {selectedCaregiverName
+                  ? `Caregiver ${selectedCaregiverName}`
+                  : "Visits"}{" "}
+                ({rows.length})
+              </h3>
+            </div>
+            {visitsQuery.isLoading ? (
+              <p className="mt-3 text-sm text-slate-500">Loading…</p>
+            ) : visitsQuery.isError ? (
+              <p className="mt-3 text-sm text-red-700">
+                Could not load service verification records.
+              </p>
+            ) : rows.length === 0 ? (
+              <p className="mt-3 text-sm text-slate-400">
+                No visits match these filters.
+              </p>
+            ) : (
+              <div className="mt-4 overflow-x-auto">
+                <table
+                  aria-label="Visit details"
+                  className="w-full text-left text-sm"
+                >
+                  <thead>
+                    <tr className="border-b border-slate-200 text-xs uppercase tracking-wide text-slate-500">
+                      <th className="pb-2 pr-3 font-medium">Visit #</th>
+                      <th className="pb-2 pr-3 font-medium">Date</th>
+                      <th className="pb-2 pr-3 font-medium">Client</th>
+                      <th className="pb-2 pr-3 font-medium">Caregiver</th>
+                      <th className="pb-2 pr-3 font-medium">Service</th>
+                      <th className="pb-2 pr-3 font-medium">Time</th>
+                      <th className="pb-2 pr-3 font-medium">Worked</th>
+                      <th className="pb-2 pr-3 font-medium">Billable</th>
+                      <th className="pb-2 pr-3 font-medium">
+                        Authorization (before → after)
+                      </th>
+                      <th className="pb-2 pr-3 font-medium">Status</th>
                       {canManage ? (
-                        <td className="py-2 print:hidden">
-                          <div className="flex gap-2">
-                            {row.status === "signed" ||
-                            row.status === "administrator_review" ? (
-                              <button
-                                type="button"
-                                onClick={() => openCorrect(row)}
-                                className="text-xs font-medium text-slate-700 underline-offset-2 hover:underline"
-                              >
-                                Correct
-                              </button>
-                            ) : null}
-                            <button
-                              type="button"
-                              onClick={() => openHistory(row)}
-                              className="text-xs font-medium text-slate-700 underline-offset-2 hover:underline"
-                            >
-                              History
-                            </button>
-                          </div>
-                        </td>
+                        <th className="pb-2 font-medium print:hidden">
+                          Actions
+                        </th>
                       ) : null}
                     </tr>
-                    {expandedVisitId === row.id &&
-                    expandedMode === "correct" ? (
-                      <tr className="border-b border-slate-100 bg-slate-50 print:hidden">
-                        <td colSpan={canManage ? 10 : 9} className="p-4">
-                          <p className="text-sm font-semibold text-slate-900">
-                            Correct this visit
-                          </p>
-                          <p className="mt-1 text-xs text-slate-500">
-                            The signed record is never overwritten - this
-                            creates a new, linked corrected visit and marks the
-                            original as superseded.
-                          </p>
-                          <div className="mt-3 grid gap-3 sm:grid-cols-3">
-                            <div>
-                              <label
-                                htmlFor="correction-time-in"
-                                className="block text-xs font-medium text-slate-600"
-                              >
-                                Time in
-                              </label>
-                              <input
-                                id="correction-time-in"
-                                type="datetime-local"
-                                value={correctionForm.timeIn}
-                                onChange={(event) =>
-                                  setCorrectionForm({
-                                    ...correctionForm,
-                                    timeIn: event.target.value,
-                                  })
-                                }
-                                className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900"
+                  </thead>
+                  <tbody>
+                    {rows.map((row) => (
+                      <Fragment key={row.id}>
+                        <tr className="border-b border-slate-100 last:border-0">
+                          <td className="py-2 pr-3 whitespace-nowrap font-mono text-xs text-slate-500">
+                            {row.visit_number ?? "—"}
+                          </td>
+                          <td className="py-2 pr-3 whitespace-nowrap text-slate-600">
+                            {formatVisitDate(
+                              `${row.service_date}T12:00:00-07:00`,
+                            )}
+                          </td>
+                          <td className="py-2 pr-3">
+                            <p className="text-slate-800">
+                              {row.client_legal_name ?? row.client_code}
+                            </p>
+                            <p className="text-xs text-slate-400">
+                              {row.client_code}
+                            </p>
+                          </td>
+                          <td className="py-2 pr-3 text-slate-700">
+                            {row.caregiver_name}
+                          </td>
+                          <td className="py-2 pr-3 text-slate-600">
+                            {row.service_name}
+                          </td>
+                          <td className="py-2 pr-3 whitespace-nowrap text-slate-500">
+                            {formatDateTime(row.time_in)}
+                            {row.time_out
+                              ? ` – ${formatDateTime(row.time_out)}`
+                              : ""}
+                          </td>
+                          <td className="py-2 pr-3 text-slate-700">
+                            {row.worked_minutes
+                              ? formatHours(row.worked_minutes)
+                              : "—"}
+                          </td>
+                          <td className="py-2 pr-3 text-slate-700">
+                            {row.billable_minutes !== null
+                              ? formatHours(row.billable_minutes)
+                              : "—"}
+                          </td>
+                          <td className="py-2 pr-3 whitespace-nowrap text-xs text-slate-500">
+                            {row.month_to_date_before_minutes !== null &&
+                            row.month_to_date_after_minutes !== null
+                              ? `${formatHours(row.month_to_date_before_minutes)} → ${formatHours(row.month_to_date_after_minutes)} (${formatHours(row.remaining_minutes ?? 0)} left)`
+                              : "—"}
+                          </td>
+                          <td className="py-2 pr-3">
+                            <div className="flex flex-wrap items-center gap-1">
+                              {row.is_corrected ? (
+                                <StatusBadge label="Corrected" tone="neutral" />
+                              ) : null}
+                              <StatusBadge
+                                label={VISIT_STATUS_LABEL[row.status]}
+                                tone={STATUS_TONE[row.status]}
                               />
                             </div>
-                            <div>
-                              <label
-                                htmlFor="correction-time-out"
-                                className="block text-xs font-medium text-slate-600"
-                              >
-                                Time out
-                              </label>
-                              <input
-                                id="correction-time-out"
-                                type="datetime-local"
-                                value={correctionForm.timeOut}
-                                onChange={(event) =>
-                                  setCorrectionForm({
-                                    ...correctionForm,
-                                    timeOut: event.target.value,
-                                  })
-                                }
-                                className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900"
-                              />
-                            </div>
-                            <div>
-                              <label
-                                htmlFor="correction-reason"
-                                className="block text-xs font-medium text-slate-600"
-                              >
-                                Reason (required)
-                              </label>
-                              <input
-                                id="correction-reason"
-                                required
-                                value={correctionForm.reason}
-                                onChange={(event) =>
-                                  setCorrectionForm({
-                                    ...correctionForm,
-                                    reason: event.target.value,
-                                  })
-                                }
-                                className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900"
-                              />
-                            </div>
-                          </div>
-                          {correctionError ? (
-                            <p className="mt-2 text-sm text-red-700">
-                              {correctionError}
-                            </p>
-                          ) : null}
-                          <div className="mt-3 flex gap-3">
-                            <Button
-                              type="button"
-                              loading={correctionSaving}
-                              onClick={() => handleSubmitCorrection(row.id)}
-                            >
-                              {correctionSaving ? "Saving…" : "Save correction"}
-                            </Button>
-                            <button
-                              type="button"
-                              onClick={closeExpanded}
-                              className="text-sm font-medium text-slate-600 hover:text-slate-900"
-                            >
-                              Cancel
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                    ) : null}
-                    {expandedVisitId === row.id &&
-                    expandedMode === "history" ? (
-                      <tr className="border-b border-slate-100 bg-slate-50 print:hidden">
-                        <td colSpan={canManage ? 10 : 9} className="p-4">
-                          <div className="flex items-center justify-between">
-                            <p className="text-sm font-semibold text-slate-900">
-                              Correction history
-                            </p>
-                            <button
-                              type="button"
-                              onClick={closeExpanded}
-                              className="text-xs font-medium text-slate-600 hover:text-slate-900"
-                            >
-                              Close
-                            </button>
-                          </div>
-                          {correctionsQuery.isLoading ? (
-                            <p className="mt-2 text-sm text-slate-500">
-                              Loading…
-                            </p>
-                          ) : (correctionsQuery.data ?? []).length === 0 ? (
-                            <p className="mt-2 text-sm text-slate-400">
-                              No corrections recorded for this visit.
-                            </p>
-                          ) : (
-                            <ul className="mt-2 space-y-2">
-                              {(correctionsQuery.data ?? []).map((entry) => (
-                                <li
-                                  key={entry.id}
-                                  className="rounded-lg border border-slate-200 bg-white p-3 text-sm"
+                          </td>
+                          {canManage ? (
+                            <td className="py-2 print:hidden">
+                              <div className="flex gap-2">
+                                {row.status === "signed" ||
+                                row.status === "administrator_review" ? (
+                                  <button
+                                    type="button"
+                                    onClick={() => openCorrect(row)}
+                                    className="text-xs font-medium text-slate-700 underline-offset-2 hover:underline"
+                                  >
+                                    Correct
+                                  </button>
+                                ) : null}
+                                <button
+                                  type="button"
+                                  onClick={() => openHistory(row)}
+                                  className="text-xs font-medium text-slate-700 underline-offset-2 hover:underline"
                                 >
-                                  <p className="text-slate-800">
-                                    <span className="font-medium">
-                                      {entry.corrected_by_name}
-                                    </span>{" "}
-                                    · {formatDateTime(entry.created_at)}
-                                  </p>
-                                  <p className="mt-1 text-slate-600">
-                                    Reason: {entry.reason}
-                                  </p>
-                                  <p className="mt-1 text-xs text-slate-500">
-                                    {formatDateTime(
-                                      entry.before_snapshot.timeIn,
-                                    )}{" "}
-                                    –{" "}
-                                    {formatDateTime(
-                                      entry.before_snapshot.timeOut,
-                                    )}{" "}
-                                    (
-                                    {formatHours(
-                                      entry.before_snapshot.billableMinutes,
-                                    )}
-                                    h) →{" "}
-                                    {formatDateTime(
-                                      entry.after_snapshot.timeIn,
-                                    )}{" "}
-                                    –{" "}
-                                    {formatDateTime(
-                                      entry.after_snapshot.timeOut,
-                                    )}{" "}
-                                    (
-                                    {formatHours(
-                                      entry.after_snapshot.billableMinutes,
-                                    )}
-                                    h)
-                                  </p>
-                                </li>
-                              ))}
-                            </ul>
-                          )}
-                        </td>
-                      </tr>
-                    ) : null}
-                  </Fragment>
-                ))}
-              </tbody>
-              <tfoot>
-                <tr className="border-t-2 border-slate-300 font-semibold text-slate-900">
-                  <td className="py-2 pr-3" colSpan={6}>
-                    Total (signed + under review)
-                  </td>
-                  <td className="py-2 pr-3">
-                    {formatHours(totalWorkedMinutes)}
-                  </td>
-                  <td className="py-2 pr-3">
-                    {formatHours(totalBillableMinutes)}
-                  </td>
-                  <td className="py-2 pr-3" />
-                  <td className="py-2" />
-                  {canManage ? <td className="py-2 print:hidden" /> : null}
-                </tr>
-              </tfoot>
-            </table>
-          </div>
-        )}
-      </Card>
+                                  History
+                                </button>
+                              </div>
+                            </td>
+                          ) : null}
+                        </tr>
+                        {expandedVisitId === row.id &&
+                        expandedMode === "correct" ? (
+                          <tr className="border-b border-slate-100 bg-slate-50 print:hidden">
+                            <td colSpan={canManage ? 10 : 9} className="p-4">
+                              <p className="text-sm font-semibold text-slate-900">
+                                Correct this visit
+                              </p>
+                              <p className="mt-1 text-xs text-slate-500">
+                                The signed record is never overwritten - this
+                                creates a new, linked corrected visit and marks
+                                the original as superseded.
+                              </p>
+                              <div className="mt-3 grid gap-3 sm:grid-cols-3">
+                                <div>
+                                  <label
+                                    htmlFor="correction-time-in"
+                                    className="block text-xs font-medium text-slate-600"
+                                  >
+                                    Time in
+                                  </label>
+                                  <input
+                                    id="correction-time-in"
+                                    type="datetime-local"
+                                    value={correctionForm.timeIn}
+                                    onChange={(event) =>
+                                      setCorrectionForm({
+                                        ...correctionForm,
+                                        timeIn: event.target.value,
+                                      })
+                                    }
+                                    className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900"
+                                  />
+                                </div>
+                                <div>
+                                  <label
+                                    htmlFor="correction-time-out"
+                                    className="block text-xs font-medium text-slate-600"
+                                  >
+                                    Time out
+                                  </label>
+                                  <input
+                                    id="correction-time-out"
+                                    type="datetime-local"
+                                    value={correctionForm.timeOut}
+                                    onChange={(event) =>
+                                      setCorrectionForm({
+                                        ...correctionForm,
+                                        timeOut: event.target.value,
+                                      })
+                                    }
+                                    className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900"
+                                  />
+                                </div>
+                                <div>
+                                  <label
+                                    htmlFor="correction-reason"
+                                    className="block text-xs font-medium text-slate-600"
+                                  >
+                                    Reason (required)
+                                  </label>
+                                  <input
+                                    id="correction-reason"
+                                    required
+                                    value={correctionForm.reason}
+                                    onChange={(event) =>
+                                      setCorrectionForm({
+                                        ...correctionForm,
+                                        reason: event.target.value,
+                                      })
+                                    }
+                                    className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900"
+                                  />
+                                </div>
+                              </div>
+                              {correctionError ? (
+                                <p className="mt-2 text-sm text-red-700">
+                                  {correctionError}
+                                </p>
+                              ) : null}
+                              <div className="mt-3 flex gap-3">
+                                <Button
+                                  type="button"
+                                  loading={correctionSaving}
+                                  onClick={() => handleSubmitCorrection(row.id)}
+                                >
+                                  {correctionSaving
+                                    ? "Saving…"
+                                    : "Save correction"}
+                                </Button>
+                                <button
+                                  type="button"
+                                  onClick={closeExpanded}
+                                  className="text-sm font-medium text-slate-600 hover:text-slate-900"
+                                >
+                                  Cancel
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        ) : null}
+                        {expandedVisitId === row.id &&
+                        expandedMode === "history" ? (
+                          <tr className="border-b border-slate-100 bg-slate-50 print:hidden">
+                            <td colSpan={canManage ? 10 : 9} className="p-4">
+                              <div className="flex items-center justify-between">
+                                <p className="text-sm font-semibold text-slate-900">
+                                  Correction history
+                                </p>
+                                <button
+                                  type="button"
+                                  onClick={closeExpanded}
+                                  className="text-xs font-medium text-slate-600 hover:text-slate-900"
+                                >
+                                  Close
+                                </button>
+                              </div>
+                              {correctionsQuery.isLoading ? (
+                                <p className="mt-2 text-sm text-slate-500">
+                                  Loading…
+                                </p>
+                              ) : (correctionsQuery.data ?? []).length === 0 ? (
+                                <p className="mt-2 text-sm text-slate-400">
+                                  No corrections recorded for this visit.
+                                </p>
+                              ) : (
+                                <ul className="mt-2 space-y-2">
+                                  {(correctionsQuery.data ?? []).map(
+                                    (entry) => (
+                                      <li
+                                        key={entry.id}
+                                        className="rounded-lg border border-slate-200 bg-white p-3 text-sm"
+                                      >
+                                        <p className="text-slate-800">
+                                          <span className="font-medium">
+                                            {entry.corrected_by_name}
+                                          </span>{" "}
+                                          · {formatDateTime(entry.created_at)}
+                                        </p>
+                                        <p className="mt-1 text-slate-600">
+                                          Reason: {entry.reason}
+                                        </p>
+                                        <p className="mt-1 text-xs text-slate-500">
+                                          {formatDateTime(
+                                            entry.before_snapshot.timeIn,
+                                          )}{" "}
+                                          –{" "}
+                                          {formatDateTime(
+                                            entry.before_snapshot.timeOut,
+                                          )}{" "}
+                                          (
+                                          {formatHours(
+                                            entry.before_snapshot
+                                              .billableMinutes,
+                                          )}
+                                          h) →{" "}
+                                          {formatDateTime(
+                                            entry.after_snapshot.timeIn,
+                                          )}{" "}
+                                          –{" "}
+                                          {formatDateTime(
+                                            entry.after_snapshot.timeOut,
+                                          )}{" "}
+                                          (
+                                          {formatHours(
+                                            entry.after_snapshot
+                                              .billableMinutes,
+                                          )}
+                                          h)
+                                        </p>
+                                      </li>
+                                    ),
+                                  )}
+                                </ul>
+                              )}
+                            </td>
+                          </tr>
+                        ) : null}
+                      </Fragment>
+                    ))}
+                  </tbody>
+                  <tfoot>
+                    <tr className="border-t-2 border-slate-300 font-semibold text-slate-900">
+                      <td className="py-2 pr-3" colSpan={6}>
+                        Total (signed + under review)
+                      </td>
+                      <td className="py-2 pr-3">
+                        {formatHours(totalWorkedMinutes)}
+                      </td>
+                      <td className="py-2 pr-3">
+                        {formatHours(totalBillableMinutes)}
+                      </td>
+                      <td className="py-2 pr-3" />
+                      <td className="py-2" />
+                      {canManage ? <td className="py-2 print:hidden" /> : null}
+                    </tr>
+                  </tfoot>
+                </table>
+              </div>
+            )}
+          </Card>
 
-      {clientSubtotals.length > 0 ? (
-        <Card>
-          <h3 className="font-semibold text-slate-950">
-            By client (billing view)
-          </h3>
-          <ul className="mt-3 divide-y divide-slate-100">
-            {clientSubtotals.map((entry) => (
-              <li
-                key={entry.code}
-                className="flex items-center justify-between py-2 text-sm"
-              >
-                <span className="text-slate-700">
-                  {entry.legalName ?? entry.code}{" "}
-                  <span className="text-slate-400">
-                    · {entry.visits} visits
-                  </span>
-                </span>
-                <span className="font-medium text-slate-900">
-                  {formatHours(entry.billableMinutes)} billable hrs
-                </span>
-              </li>
-            ))}
-          </ul>
-        </Card>
+          {clientSubtotals.length > 0 ? (
+            <Card>
+              <h3 className="font-semibold text-slate-950">
+                By client (billing view)
+              </h3>
+              <ul className="mt-3 divide-y divide-slate-100">
+                {clientSubtotals.map((entry) => (
+                  <li
+                    key={entry.code}
+                    className="flex items-center justify-between py-2 text-sm"
+                  >
+                    <span className="text-slate-700">
+                      {entry.legalName ?? entry.code}{" "}
+                      <span className="text-slate-400">
+                        · {entry.visits} visits
+                      </span>
+                    </span>
+                    <span className="font-medium text-slate-900">
+                      {formatHours(entry.billableMinutes)} billable hrs
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </Card>
+          ) : null}
+        </>
       ) : null}
 
-      {exceptionVisits.length > 0 ? (
+      {reportView === "exceptions" && exceptionVisits.length > 0 ? (
         <Card>
           <h3 className="font-semibold text-slate-950">Exception visits</h3>
           <p className="mt-1 text-xs text-slate-500">
@@ -1684,6 +1804,13 @@ export function ServiceVerificationReportsPage() {
               </li>
             ))}
           </ul>
+        </Card>
+      ) : reportView === "exceptions" ? (
+        <Card>
+          <h3 className="font-semibold text-slate-950">Exceptions</h3>
+          <p className="mt-3 text-sm text-emerald-700">
+            No visits currently need manager attention for these filters.
+          </p>
         </Card>
       ) : null}
     </section>

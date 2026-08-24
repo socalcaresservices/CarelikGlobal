@@ -64,6 +64,10 @@ function renderPage() {
   );
 }
 
+async function openReport(name: RegExp) {
+  fireEvent.click(await screen.findByRole("button", { name }));
+}
+
 function mockOrgLetterhead() {
   mockedFrom.mockImplementation((table: string) => {
     if (table === "clients") {
@@ -136,6 +140,8 @@ describe("ServiceVerificationReportsPage", () => {
 
     renderPage();
 
+    await openReport(/Visit details/);
+
     expect(await screen.findByText("Visits (2)")).toBeInTheDocument();
     // "Jamie Smith" also appears in the client filter <option> and the
     // per-client subtotal card, so this only checks it appears in the
@@ -164,12 +170,17 @@ describe("ServiceVerificationReportsPage", () => {
 
     renderPage();
 
-    expect(await screen.findByText("Manager dashboard")).toBeInTheDocument();
+    expect(await screen.findByText("Report Center")).toBeInTheDocument();
     expect(
       await screen.findByRole("option", { name: "Anaheim, CA" }),
     ).toBeInTheDocument();
     expect(screen.getByLabelText("Chart type")).toHaveValue("bar");
     expect(screen.getByLabelText("Group chart by")).toHaveValue("caregiver");
+    expect(
+      screen.queryByRole("table", { name: "Caregiver hours summary" }),
+    ).not.toBeInTheDocument();
+
+    await openReport(/Caregiver hours/);
     const caregiverSheet = screen.getByRole("table", {
       name: "Caregiver hours summary",
     });
@@ -192,6 +203,8 @@ describe("ServiceVerificationReportsPage", () => {
     });
 
     renderPage();
+
+    await openReport(/Staff access/);
 
     fireEvent.click(
       await screen.findByRole("button", { name: "Copy staff sign-in link" }),
@@ -241,6 +254,8 @@ describe("ServiceVerificationReportsPage", () => {
 
     renderPage();
 
+    await openReport(/Client calendar/);
+
     const calendar = await screen.findByRole("grid", {
       name: /Caregiver hours for 2026-08/,
     });
@@ -276,6 +291,8 @@ describe("ServiceVerificationReportsPage", () => {
     } as never);
 
     renderPage();
+
+    await openReport(/Exceptions/);
 
     await waitFor(() =>
       expect(screen.getByText("Exception visits")).toBeInTheDocument(),
@@ -429,6 +446,7 @@ describe("ServiceVerificationReportsPage", () => {
     mockedRpc.mockResolvedValue({ data: [visitRow], error: null } as never);
 
     renderPage();
+    await openReport(/Caregiver hours/);
     fireEvent.click(
       await screen.findByRole("button", { name: /Caregiver Jordan Rivera/ }),
     );
@@ -439,7 +457,7 @@ describe("ServiceVerificationReportsPage", () => {
       ),
     );
     expect(
-      await screen.findByText("Caregiver Jordan Rivera (1)"),
+      await screen.findByRole("button", { name: "All caregivers" }),
     ).toBeInTheDocument();
   });
 
@@ -453,6 +471,8 @@ describe("ServiceVerificationReportsPage", () => {
     mockedRpc.mockResolvedValue({ data: [visitRow], error: null } as never);
 
     renderPage();
+
+    await openReport(/Visit details/);
 
     expect(await screen.findByText("SCS-V-20260801-4F7K")).toBeInTheDocument();
     expect(screen.getByText("10 → 11 (29 left)")).toBeInTheDocument();
@@ -474,6 +494,7 @@ describe("ServiceVerificationReportsPage", () => {
     });
 
     renderPage();
+    await openReport(/Visit details/);
     await screen.findByText("SCS-V-20260801-4F7K");
 
     fireEvent.click(screen.getByRole("button", { name: "Correct" }));
@@ -503,6 +524,7 @@ describe("ServiceVerificationReportsPage", () => {
     mockedRpc.mockResolvedValue({ data: [visitRow], error: null } as never);
 
     renderPage();
+    await openReport(/Visit details/);
     await screen.findByText("SCS-V-20260801-4F7K");
 
     fireEvent.click(screen.getByRole("button", { name: "Correct" }));
@@ -554,6 +576,7 @@ describe("ServiceVerificationReportsPage", () => {
     });
 
     renderPage();
+    await openReport(/Visit details/);
     await screen.findByText("SCS-V-20260801-4F7K");
 
     fireEvent.click(screen.getByRole("button", { name: "History" }));
@@ -578,6 +601,7 @@ describe("ServiceVerificationReportsPage", () => {
     mockedRpc.mockResolvedValue({ data: [visitRow], error: null } as never);
 
     renderPage();
+    await openReport(/Visit details/);
     await screen.findByText("SCS-V-20260801-4F7K");
 
     expect(
@@ -599,7 +623,9 @@ describe("ServiceVerificationReportsPage", () => {
     const printSpy = vi.spyOn(window, "print").mockImplementation(() => {});
 
     renderPage();
-    fireEvent.click(await screen.findByRole("button", { name: /Print/ }));
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Print / Save as PDF" }),
+    );
 
     expect(printSpy).toHaveBeenCalled();
   });
