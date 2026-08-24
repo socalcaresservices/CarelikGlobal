@@ -12,6 +12,7 @@ import {
   HeartHandshake,
   LayoutDashboard,
   LogOut,
+  MessageSquare,
   PenLine,
   Settings,
   ShieldCheck,
@@ -107,6 +108,7 @@ const complianceNav: NavItem[] = [
 // decides whether you see platform tools at all, not who you are.
 const administrationNav: NavItem[] = [
   { to: "/access", label: "Access", icon: ShieldCheck, permission: "membership.read", badgeKey: "access_pending" },
+  { to: "/support", label: "Support", icon: MessageSquare },
   { to: "/settings", label: "Settings", icon: Settings, permission: "settings.read" }
 ];
 
