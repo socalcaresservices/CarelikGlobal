@@ -1,16 +1,24 @@
-import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import {
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { useOrganization } from "@/providers/organization-provider";
 import { supabase } from "@/lib/supabase";
 import { ServiceVerificationReportsPage } from "./service-verification-reports-page";
 
-vi.mock("@/providers/organization-provider", () => ({ useOrganization: vi.fn() }));
+vi.mock("@/providers/organization-provider", () => ({
+  useOrganization: vi.fn(),
+}));
 vi.mock("@/lib/supabase", () => ({
   supabase: {
     rpc: vi.fn(),
-    from: vi.fn()
-  }
+    from: vi.fn(),
+  },
 }));
 
 const mockedUseOrganization = vi.mocked(useOrganization);
@@ -42,22 +50,28 @@ const visitRow = {
   is_corrected: false,
   month_to_date_before_minutes: 600,
   month_to_date_after_minutes: 660,
-  remaining_minutes: 1740
+  remaining_minutes: 1740,
 };
 
 function renderPage() {
-  const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  const queryClient = new QueryClient({
+    defaultOptions: { queries: { retry: false } },
+  });
   return render(
     <QueryClientProvider client={queryClient}>
       <ServiceVerificationReportsPage />
-    </QueryClientProvider>
+    </QueryClientProvider>,
   );
 }
 
 function mockOrgLetterhead() {
   const single = vi.fn().mockResolvedValue({
-    data: { legal_name: "Acme Care LLC", display_name: "Acme Care", logo_url: null },
-    error: null
+    data: {
+      legal_name: "Acme Care LLC",
+      display_name: "Acme Care",
+      logo_url: null,
+    },
+    error: null,
   });
   const eq = vi.fn(() => ({ single }));
   const select = vi.fn(() => ({ eq }));
@@ -74,7 +88,7 @@ describe("ServiceVerificationReportsPage", () => {
     mockedUseOrganization.mockReturnValue({
       activeOrganizationId: ORG_ID,
       activeOrganization: { displayName: "Acme Care" },
-      hasPermission: vi.fn(() => false)
+      hasPermission: vi.fn(() => false),
     } as never);
 
     renderPage();
@@ -87,15 +101,22 @@ describe("ServiceVerificationReportsPage", () => {
     mockedUseOrganization.mockReturnValue({
       activeOrganizationId: ORG_ID,
       activeOrganization: { displayName: "Acme Care" },
-      hasPermission: vi.fn(() => true)
+      hasPermission: vi.fn(() => true),
     } as never);
     mockOrgLetterhead();
     mockedRpc.mockResolvedValue({
       data: [
         visitRow,
-        { ...visitRow, id: "corrected-1", status: "corrected", is_corrected: true, worked_minutes: 30, billable_minutes: 30 }
+        {
+          ...visitRow,
+          id: "corrected-1",
+          status: "corrected",
+          is_corrected: true,
+          worked_minutes: 30,
+          billable_minutes: 30,
+        },
       ],
-      error: null
+      error: null,
     } as never);
 
     renderPage();
@@ -108,18 +129,68 @@ describe("ServiceVerificationReportsPage", () => {
     expect(table).toHaveTextContent("Jamie Smith");
     // Grand total excludes the corrected row (30 min) - only the signed
     // 60-minute visit counts.
-    const totalsRow = screen.getByText("Total (signed + under review)").closest("tr")!;
+    const totalsRow = screen
+      .getByText("Total (signed + under review)")
+      .closest("tr")!;
     expect(totalsRow).toHaveTextContent("1");
     // Two matches for the corrected row: the "Corrected" status badge
     // (status === 'corrected') and the separate is_corrected marker badge.
     expect(screen.getAllByText("Corrected").length).toBeGreaterThan(0);
   });
 
+  it("maps each caregiver's daily worked and billable hours into the monthly calendar", async () => {
+    mockedUseOrganization.mockReturnValue({
+      activeOrganizationId: ORG_ID,
+      activeOrganization: { displayName: "Acme Care" },
+      hasPermission: vi.fn(() => true),
+    } as never);
+    mockOrgLetterhead();
+    mockedRpc.mockResolvedValue({
+      data: [
+        visitRow,
+        {
+          ...visitRow,
+          id: "needs-review",
+          caregiver_user_id: "review-caregiver",
+          caregiver_name: "Sam Caregiver",
+          worked_minutes: 45,
+          verified_minutes: 0,
+          billable_minutes: 0,
+          status: "administrator_review",
+        },
+        {
+          ...visitRow,
+          id: "superseded",
+          caregiver_user_id: "old-caregiver",
+          caregiver_name: "Old Record",
+          status: "corrected",
+          is_corrected: true,
+        },
+      ],
+      error: null,
+    } as never);
+
+    renderPage();
+
+    const calendar = await screen.findByRole("grid", {
+      name: /Caregiver hours for 2026-08/,
+    });
+    expect(
+      await within(calendar).findByText("Jordan Rivera"),
+    ).toBeInTheDocument();
+    expect(within(calendar).getByText("1h worked")).toBeInTheDocument();
+    expect(within(calendar).getByText("Sam Caregiver")).toBeInTheDocument();
+    expect(
+      within(calendar).getByText("0.75h worked · 0h billable"),
+    ).toBeInTheDocument();
+    expect(within(calendar).queryByText("Old Record")).not.toBeInTheDocument();
+  });
+
   it("shows exception visits flagged for review, correction, or over-authorization, but not a plain signed visit", async () => {
     mockedUseOrganization.mockReturnValue({
       activeOrganizationId: ORG_ID,
       activeOrganization: { displayName: "Acme Care" },
-      hasPermission: vi.fn(() => true)
+      hasPermission: vi.fn(() => true),
     } as never);
     mockOrgLetterhead();
     mockedRpc.mockResolvedValue({
@@ -129,18 +200,22 @@ describe("ServiceVerificationReportsPage", () => {
         {
           ...visitRow,
           id: "over-authorized",
-          authorization_status: "exceeds_authorization"
-        }
+          authorization_status: "exceeds_authorization",
+        },
       ],
-      error: null
+      error: null,
     } as never);
 
     renderPage();
 
-    await waitFor(() => expect(screen.getByText("Exception visits")).toBeInTheDocument());
+    await waitFor(() =>
+      expect(screen.getByText("Exception visits")).toBeInTheDocument(),
+    );
     const exceptionCard = screen.getByText("Exception visits").closest("div")!;
     expect(within(exceptionCard).getByText("Needs review")).toBeInTheDocument();
-    expect(within(exceptionCard).getByText("Exceeds authorization")).toBeInTheDocument();
+    expect(
+      within(exceptionCard).getByText("Exceeds authorization"),
+    ).toBeInTheDocument();
     // Only 2 rows in the card: the plain signed/within-authorization
     // visitRow itself never appears here.
     expect(within(exceptionCard).getAllByRole("listitem")).toHaveLength(2);
@@ -150,7 +225,7 @@ describe("ServiceVerificationReportsPage", () => {
     mockedUseOrganization.mockReturnValue({
       activeOrganizationId: ORG_ID,
       activeOrganization: { displayName: "Acme Care" },
-      hasPermission: vi.fn(() => true)
+      hasPermission: vi.fn(() => true),
     } as never);
     mockOrgLetterhead();
     mockedRpc.mockImplementation((fn: string) => {
@@ -167,7 +242,7 @@ describe("ServiceVerificationReportsPage", () => {
               caregiver_name: "Jordan Rivera",
               starts_at: "2026-08-01T13:00:00.000Z",
               ends_at: "2026-08-01T14:30:00.000Z",
-              status: "completed"
+              status: "completed",
             },
             {
               client_id: "unsigned-client",
@@ -176,10 +251,10 @@ describe("ServiceVerificationReportsPage", () => {
               caregiver_name: "Sam Caregiver",
               starts_at: "2026-08-02T13:00:00.000Z",
               ends_at: "2026-08-02T14:00:00.000Z",
-              status: "scheduled"
-            }
+              status: "scheduled",
+            },
           ],
-          error: null
+          error: null,
         }) as never;
       }
       return Promise.resolve({ data: [], error: null }) as never;
@@ -187,15 +262,25 @@ describe("ServiceVerificationReportsPage", () => {
 
     renderPage();
 
-    await waitFor(() => expect(screen.getByText("Scheduled vs delivered hours")).toBeInTheDocument());
-    const scheduledCard = screen.getByText("Scheduled vs delivered hours").closest("div")!;
+    await waitFor(() =>
+      expect(
+        screen.getByText("Scheduled vs delivered hours"),
+      ).toBeInTheDocument(),
+    );
+    const scheduledCard = screen
+      .getByText("Scheduled vs delivered hours")
+      .closest("div")!;
     // Jordan Rivera was scheduled 90 minutes (1.5h) and delivered the
     // visitRow's 60 minutes (1h).
-    const jordanRow = within(scheduledCard).getByText("Jordan Rivera").closest("li")!;
+    const jordanRow = within(scheduledCard)
+      .getByText("Jordan Rivera")
+      .closest("li")!;
     expect(jordanRow).toHaveTextContent("1.50 scheduled · 1 delivered");
     // The still-scheduled (never signed off) shift's caregiver/client
     // still show up with 0 delivered, not silently dropped.
-    expect(within(scheduledCard).getByText("Sam Caregiver")).toBeInTheDocument();
+    expect(
+      within(scheduledCard).getByText("Sam Caregiver"),
+    ).toBeInTheDocument();
     expect(within(scheduledCard).getByText("Alex Doe")).toBeInTheDocument();
   });
 
@@ -203,7 +288,7 @@ describe("ServiceVerificationReportsPage", () => {
     mockedUseOrganization.mockReturnValue({
       activeOrganizationId: ORG_ID,
       activeOrganization: { displayName: "Acme Care" },
-      hasPermission: vi.fn(() => true)
+      hasPermission: vi.fn(() => true),
     } as never);
     mockOrgLetterhead();
     mockedRpc.mockImplementation((fn: string) => {
@@ -221,10 +306,10 @@ describe("ServiceVerificationReportsPage", () => {
               starts_at: "2026-08-03T13:00:00.000Z",
               ends_at: "2026-08-03T15:00:00.000Z",
               status: "scheduled",
-              needs_coverage: true
-            }
+              needs_coverage: true,
+            },
           ],
-          error: null
+          error: null,
         }) as never;
       }
       return Promise.resolve({ data: [], error: null }) as never;
@@ -232,14 +317,24 @@ describe("ServiceVerificationReportsPage", () => {
 
     renderPage();
 
-    await waitFor(() => expect(screen.getByText("Scheduled vs delivered hours")).toBeInTheDocument());
-    const scheduledCard = screen.getByText("Scheduled vs delivered hours").closest("div")!;
+    await waitFor(() =>
+      expect(
+        screen.getByText("Scheduled vs delivered hours"),
+      ).toBeInTheDocument(),
+    );
+    const scheduledCard = screen
+      .getByText("Scheduled vs delivered hours")
+      .closest("div")!;
     // The called-out caregiver is no longer the confirmed assignee, so
     // they don't appear in the "by caregiver" list at all.
-    expect(within(scheduledCard).queryByText("Casey Nguyen")).not.toBeInTheDocument();
+    expect(
+      within(scheduledCard).queryByText("Casey Nguyen"),
+    ).not.toBeInTheDocument();
     // The client is still scheduled for that time regardless of which
     // caregiver (if any) currently holds it, so they still show 2h scheduled.
-    const robinRow = within(scheduledCard).getByText("Robin Lee").closest("li")!;
+    const robinRow = within(scheduledCard)
+      .getByText("Robin Lee")
+      .closest("li")!;
     expect(robinRow).toHaveTextContent("2 scheduled · 0 delivered");
   });
 
@@ -247,16 +342,22 @@ describe("ServiceVerificationReportsPage", () => {
     mockedUseOrganization.mockReturnValue({
       activeOrganizationId: ORG_ID,
       activeOrganization: { displayName: "Acme Care" },
-      hasPermission: vi.fn(() => true)
+      hasPermission: vi.fn(() => true),
     } as never);
     mockOrgLetterhead();
     mockedRpc.mockResolvedValue({ data: [visitRow], error: null } as never);
 
     renderPage();
-    await waitFor(() => expect(screen.getByLabelText("Client")).toBeInTheDocument());
+    await waitFor(() =>
+      expect(screen.getByLabelText("Client")).toBeInTheDocument(),
+    );
 
-    fireEvent.change(screen.getByLabelText("From"), { target: { value: "2026-08-01" } });
-    fireEvent.change(screen.getByLabelText("To"), { target: { value: "2026-08-31" } });
+    fireEvent.change(screen.getByLabelText("From"), {
+      target: { value: "2026-08-01" },
+    });
+    fireEvent.change(screen.getByLabelText("To"), {
+      target: { value: "2026-08-31" },
+    });
 
     await waitFor(() =>
       expect(mockedRpc).toHaveBeenCalledWith(
@@ -264,9 +365,9 @@ describe("ServiceVerificationReportsPage", () => {
         expect.objectContaining({
           target_organization_id: ORG_ID,
           filter_date_from: "2026-08-01",
-          filter_date_to: "2026-08-31"
-        })
-      )
+          filter_date_to: "2026-08-31",
+        }),
+      ),
     );
   });
 
@@ -274,23 +375,31 @@ describe("ServiceVerificationReportsPage", () => {
     mockedUseOrganization.mockReturnValue({
       activeOrganizationId: ORG_ID,
       activeOrganization: { displayName: "Acme Care" },
-      hasPermission: vi.fn(() => true)
+      hasPermission: vi.fn(() => true),
     } as never);
     mockOrgLetterhead();
     mockedRpc.mockResolvedValue({ data: [visitRow], error: null } as never);
 
     renderPage();
-    fireEvent.click(await screen.findByRole("button", { name: /Caregiver Jordan Rivera/ }));
+    fireEvent.click(
+      await screen.findByRole("button", { name: /Caregiver Jordan Rivera/ }),
+    );
 
-    await waitFor(() => expect(window.location.search).toContain(`caregiver=${visitRow.caregiver_user_id}`));
-    expect(await screen.findByText("Caregiver Jordan Rivera (1)")).toBeInTheDocument();
+    await waitFor(() =>
+      expect(window.location.search).toContain(
+        `caregiver=${visitRow.caregiver_user_id}`,
+      ),
+    );
+    expect(
+      await screen.findByText("Caregiver Jordan Rivera (1)"),
+    ).toBeInTheDocument();
   });
 
   it("shows the visit number and authorization before/after balance", async () => {
     mockedUseOrganization.mockReturnValue({
       activeOrganizationId: ORG_ID,
       activeOrganization: { displayName: "Acme Care" },
-      hasPermission: vi.fn(() => true)
+      hasPermission: vi.fn(() => true),
     } as never);
     mockOrgLetterhead();
     mockedRpc.mockResolvedValue({ data: [visitRow], error: null } as never);
@@ -305,12 +414,14 @@ describe("ServiceVerificationReportsPage", () => {
     mockedUseOrganization.mockReturnValue({
       activeOrganizationId: ORG_ID,
       activeOrganization: { displayName: "Acme Care" },
-      hasPermission: vi.fn(() => true)
+      hasPermission: vi.fn(() => true),
     } as never);
     mockOrgLetterhead();
     mockedRpc.mockImplementation((fn: string) => {
-      if (fn === "list_service_visits") return Promise.resolve({ data: [visitRow], error: null }) as never;
-      if (fn === "correct_service_visit") return Promise.resolve({ data: "corrected-id", error: null }) as never;
+      if (fn === "list_service_visits")
+        return Promise.resolve({ data: [visitRow], error: null }) as never;
+      if (fn === "correct_service_visit")
+        return Promise.resolve({ data: "corrected-id", error: null }) as never;
       return Promise.resolve({ data: [], error: null }) as never;
     });
 
@@ -318,7 +429,9 @@ describe("ServiceVerificationReportsPage", () => {
     await screen.findByText("SCS-V-20260801-4F7K");
 
     fireEvent.click(screen.getByRole("button", { name: "Correct" }));
-    fireEvent.change(screen.getByLabelText("Reason (required)"), { target: { value: "Forgot to clock out on time" } });
+    fireEvent.change(screen.getByLabelText("Reason (required)"), {
+      target: { value: "Forgot to clock out on time" },
+    });
     fireEvent.click(screen.getByRole("button", { name: "Save correction" }));
 
     await waitFor(() =>
@@ -326,9 +439,9 @@ describe("ServiceVerificationReportsPage", () => {
         "correct_service_visit",
         expect.objectContaining({
           target_visit_id: visitRow.id,
-          reason: "Forgot to clock out on time"
-        })
-      )
+          reason: "Forgot to clock out on time",
+        }),
+      ),
     );
   });
 
@@ -336,7 +449,7 @@ describe("ServiceVerificationReportsPage", () => {
     mockedUseOrganization.mockReturnValue({
       activeOrganizationId: ORG_ID,
       activeOrganization: { displayName: "Acme Care" },
-      hasPermission: vi.fn(() => true)
+      hasPermission: vi.fn(() => true),
     } as never);
     mockOrgLetterhead();
     mockedRpc.mockResolvedValue({ data: [visitRow], error: null } as never);
@@ -348,7 +461,9 @@ describe("ServiceVerificationReportsPage", () => {
     fireEvent.click(screen.getByRole("button", { name: "Save correction" }));
 
     await waitFor(() =>
-      expect(screen.getByText("A reason is required to correct a visit.")).toBeInTheDocument()
+      expect(
+        screen.getByText("A reason is required to correct a visit."),
+      ).toBeInTheDocument(),
     );
   });
 
@@ -356,11 +471,12 @@ describe("ServiceVerificationReportsPage", () => {
     mockedUseOrganization.mockReturnValue({
       activeOrganizationId: ORG_ID,
       activeOrganization: { displayName: "Acme Care" },
-      hasPermission: vi.fn(() => true)
+      hasPermission: vi.fn(() => true),
     } as never);
     mockOrgLetterhead();
     mockedRpc.mockImplementation((fn: string) => {
-      if (fn === "list_service_visits") return Promise.resolve({ data: [visitRow], error: null }) as never;
+      if (fn === "list_service_visits")
+        return Promise.resolve({ data: [visitRow], error: null }) as never;
       if (fn === "list_visit_corrections") {
         return Promise.resolve({
           data: [
@@ -368,12 +484,22 @@ describe("ServiceVerificationReportsPage", () => {
               id: "correction-1",
               corrected_by_name: "Admin User",
               reason: "Clock-out time was wrong",
-              before_snapshot: { timeIn: "2026-08-01T13:00:00.000Z", timeOut: "2026-08-01T14:00:00.000Z", workedMinutes: 60, billableMinutes: 60 },
-              after_snapshot: { timeIn: "2026-08-01T13:00:00.000Z", timeOut: "2026-08-01T14:30:00.000Z", workedMinutes: 90, billableMinutes: 90 },
-              created_at: "2026-08-02T10:00:00.000Z"
-            }
+              before_snapshot: {
+                timeIn: "2026-08-01T13:00:00.000Z",
+                timeOut: "2026-08-01T14:00:00.000Z",
+                workedMinutes: 60,
+                billableMinutes: 60,
+              },
+              after_snapshot: {
+                timeIn: "2026-08-01T13:00:00.000Z",
+                timeOut: "2026-08-01T14:30:00.000Z",
+                workedMinutes: 90,
+                billableMinutes: 90,
+              },
+              created_at: "2026-08-02T10:00:00.000Z",
+            },
           ],
-          error: null
+          error: null,
         }) as never;
       }
       return Promise.resolve({ data: [], error: null }) as never;
@@ -384,7 +510,11 @@ describe("ServiceVerificationReportsPage", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "History" }));
 
-    await waitFor(() => expect(screen.getByText("Admin User", { exact: false })).toBeInTheDocument());
+    await waitFor(() =>
+      expect(
+        screen.getByText("Admin User", { exact: false }),
+      ).toBeInTheDocument(),
+    );
     expect(screen.getByText(/Clock-out time was wrong/)).toBeInTheDocument();
   });
 
@@ -392,7 +522,9 @@ describe("ServiceVerificationReportsPage", () => {
     mockedUseOrganization.mockReturnValue({
       activeOrganizationId: ORG_ID,
       activeOrganization: { displayName: "Acme Care" },
-      hasPermission: vi.fn((permission: string) => permission === "visits.read")
+      hasPermission: vi.fn(
+        (permission: string) => permission === "visits.read",
+      ),
     } as never);
     mockOrgLetterhead();
     mockedRpc.mockResolvedValue({ data: [visitRow], error: null } as never);
@@ -400,15 +532,19 @@ describe("ServiceVerificationReportsPage", () => {
     renderPage();
     await screen.findByText("SCS-V-20260801-4F7K");
 
-    expect(screen.queryByRole("button", { name: "Correct" })).not.toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "History" })).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Correct" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "History" }),
+    ).not.toBeInTheDocument();
   });
 
   it("triggers window.print for the Print action", async () => {
     mockedUseOrganization.mockReturnValue({
       activeOrganizationId: ORG_ID,
       activeOrganization: { displayName: "Acme Care" },
-      hasPermission: vi.fn(() => true)
+      hasPermission: vi.fn(() => true),
     } as never);
     mockOrgLetterhead();
     mockedRpc.mockResolvedValue({ data: [visitRow], error: null } as never);

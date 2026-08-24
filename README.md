@@ -42,6 +42,19 @@ supabase link --project-ref YOUR_PROJECT_REF
 supabase db push
 ```
 
+Netlify does **not** apply Supabase migrations. For any frontend change that
+depends on a migration, use this order:
+
+1. Apply and test the migration in a non-production Supabase environment.
+2. Apply the reviewed migration to production Supabase manually with the
+   Supabase CLI or dashboard.
+3. Run the migration verification queries and confirm they pass.
+4. Only then merge the dependent frontend PR to `main` so Netlify deploys it.
+5. Smoke-test the deployed frontend RPC calls.
+
+Do not merge the frontend first: that can deploy browser code which calls RPCs
+that production does not have yet.
+
 Never place a Supabase service-role key in the browser application.
 
 ## Authentication

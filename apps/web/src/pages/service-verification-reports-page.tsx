@@ -1,7 +1,13 @@
 import { Fragment, useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { FileText, Folder, Printer } from "lucide-react";
-import { Button, Card, PageHeader, StatusBadge, type StatusTone } from "@carelik/ui";
+import { CalendarDays, FileText, Folder, Printer } from "lucide-react";
+import {
+  Button,
+  Card,
+  PageHeader,
+  StatusBadge,
+  type StatusTone,
+} from "@carelik/ui";
 import { useOrganization } from "@/providers/organization-provider";
 import { supabase } from "@/lib/supabase";
 import {
@@ -11,7 +17,7 @@ import {
   formatVisitDate,
   VISIT_STATUS_LABEL,
   type ServiceVisitStatus,
-  type VisitAuthorizationStatus
+  type VisitAuthorizationStatus,
 } from "@/lib/service-verification";
 
 interface VisitReportRow {
@@ -44,8 +50,18 @@ interface VisitCorrectionRow {
   id: string;
   corrected_by_name: string;
   reason: string;
-  before_snapshot: { timeIn: string; timeOut: string; workedMinutes: number; billableMinutes: number };
-  after_snapshot: { timeIn: string; timeOut: string; workedMinutes: number; billableMinutes: number };
+  before_snapshot: {
+    timeIn: string;
+    timeOut: string;
+    workedMinutes: number;
+    billableMinutes: number;
+  };
+  after_snapshot: {
+    timeIn: string;
+    timeOut: string;
+    workedMinutes: number;
+    billableMinutes: number;
+  };
   created_at: string;
 }
 
@@ -67,10 +83,13 @@ const STATUS_TONE: Record<ServiceVisitStatus, StatusTone> = {
   signed: "success",
   administrator_review: "danger",
   corrected: "neutral",
-  voided: "neutral"
+  voided: "neutral",
 };
 
-function sumMinutes(rows: VisitReportRow[], key: "worked_minutes" | "billable_minutes") {
+function sumMinutes(
+  rows: VisitReportRow[],
+  key: "worked_minutes" | "billable_minutes",
+) {
   return rows.reduce((total, row) => total + (row[key] ?? 0), 0);
 }
 
@@ -78,7 +97,9 @@ function sumMinutes(rows: VisitReportRow[], key: "worked_minutes" | "billable_mi
 // a corrected visit's replacement carries the numbers that should count,
 // and a voided visit was never real time to begin with.
 function billableRows(rows: VisitReportRow[]) {
-  return rows.filter((row) => row.status === "signed" || row.status === "administrator_review");
+  return rows.filter(
+    (row) => row.status === "signed" || row.status === "administrator_review",
+  );
 }
 
 // datetime-local inputs need "YYYY-MM-DDTHH:mm" in the browser's local
@@ -90,26 +111,106 @@ function toLocalInputValue(value: string) {
   return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
 }
 
+function currentPacificMonth() {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: "America/Los_Angeles",
+    year: "numeric",
+    month: "2-digit",
+  }).formatToParts(new Date());
+  const year = parts.find((part) => part.type === "year")?.value;
+  const month = parts.find((part) => part.type === "month")?.value;
+  return year && month
+    ? `${year}-${month}`
+    : new Date().toISOString().slice(0, 7);
+}
+
+interface CalendarEntry {
+  key: string;
+  caregiverName: string;
+  workedMinutes: number;
+  billableMinutes: number;
+  needsReview: boolean;
+}
+
+function buildMonthCalendar(rows: VisitReportRow[], monthValue: string) {
+  const [year, month] = monthValue.split("-").map(Number);
+  if (!year || !month)
+    return {
+      weeks: [] as Array<Array<number | null>>,
+      entries: new Map<string, CalendarEntry[]>(),
+    };
+
+  const dayCount = new Date(year, month, 0).getDate();
+  const leadingDays = new Date(year, month - 1, 1).getDay();
+  const cells: Array<number | null> = [
+    ...Array.from({ length: leadingDays }, () => null),
+    ...Array.from({ length: dayCount }, (_, index) => index + 1),
+  ];
+  while (cells.length % 7 !== 0) cells.push(null);
+
+  const entriesByDate = new Map<string, Map<string, CalendarEntry>>();
+  for (const row of billableRows(rows)) {
+    if (!row.service_date.startsWith(`${monthValue}-`)) continue;
+    const caregiverKey = row.caregiver_user_id || row.caregiver_name;
+    const dayEntries =
+      entriesByDate.get(row.service_date) ?? new Map<string, CalendarEntry>();
+    const entry = dayEntries.get(caregiverKey) ?? {
+      key: caregiverKey,
+      caregiverName: row.caregiver_name,
+      workedMinutes: 0,
+      billableMinutes: 0,
+      needsReview: false,
+    };
+    entry.workedMinutes += row.worked_minutes ?? 0;
+    entry.billableMinutes += row.billable_minutes ?? 0;
+    entry.needsReview ||= row.status === "administrator_review";
+    dayEntries.set(caregiverKey, entry);
+    entriesByDate.set(row.service_date, dayEntries);
+  }
+
+  return {
+    weeks: Array.from({ length: cells.length / 7 }, (_, index) =>
+      cells.slice(index * 7, index * 7 + 7),
+    ),
+    entries: new Map(
+      Array.from(entriesByDate.entries()).map(([date, dayEntries]) => [
+        date,
+        Array.from(dayEntries.values()).sort((a, b) =>
+          a.caregiverName.localeCompare(b.caregiverName),
+        ),
+      ]),
+    ),
+  };
+}
+
 export function ServiceVerificationReportsPage() {
-  const { activeOrganizationId, activeOrganization, hasPermission } = useOrganization();
+  const { activeOrganizationId, activeOrganization, hasPermission } =
+    useOrganization();
   const canRead = hasPermission("visits.read");
   const canManage = hasPermission("visits.manage");
   const queryClient = useQueryClient();
 
   const [expandedVisitId, setExpandedVisitId] = useState<string | null>(null);
-  const [expandedMode, setExpandedMode] = useState<"correct" | "history" | null>(null);
-  const [correctionForm, setCorrectionForm] = useState({ timeIn: "", timeOut: "", reason: "" });
+  const [expandedMode, setExpandedMode] = useState<
+    "correct" | "history" | null
+  >(null);
+  const [correctionForm, setCorrectionForm] = useState({
+    timeIn: "",
+    timeOut: "",
+    reason: "",
+  });
   const [correctionSaving, setCorrectionSaving] = useState(false);
   const [correctionError, setCorrectionError] = useState<string | null>(null);
 
   const [clientFilter, setClientFilter] = useState("");
   const [caregiverFilter, setCaregiverFilter] = useState(
-    () => new URLSearchParams(window.location.search).get("caregiver") ?? ""
+    () => new URLSearchParams(window.location.search).get("caregiver") ?? "",
   );
   const [serviceFilter, setServiceFilter] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
+  const [reportMonth, setReportMonth] = useState(currentPacificMonth);
 
   const visitsQuery = useQuery({
     queryKey: [
@@ -120,7 +221,7 @@ export function ServiceVerificationReportsPage() {
       serviceFilter,
       statusFilter,
       dateFrom,
-      dateTo
+      dateTo,
     ],
     queryFn: async () => {
       const { data, error } = await supabase.rpc("list_service_visits", {
@@ -130,12 +231,12 @@ export function ServiceVerificationReportsPage() {
         filter_service_id: serviceFilter || null,
         filter_date_from: dateFrom || null,
         filter_date_to: dateTo || null,
-        filter_status: statusFilter || null
+        filter_status: statusFilter || null,
       });
       if (error) throw error;
       return (data ?? []) as VisitReportRow[];
     },
-    enabled: !!activeOrganizationId && canRead
+    enabled: !!activeOrganizationId && canRead,
   });
 
   // Scheduled hours come from list_shifts over the same date range as the
@@ -151,7 +252,7 @@ export function ServiceVerificationReportsPage() {
       const { data, error } = await supabase.rpc("list_shifts", {
         target_organization_id: activeOrganizationId!,
         from_time: dateFrom ? new Date(dateFrom).toISOString() : null,
-        to_time: dateTo ? new Date(dateTo).toISOString() : null
+        to_time: dateTo ? new Date(dateTo).toISOString() : null,
       });
       if (error) throw error;
       return (data ?? []) as Array<{
@@ -165,7 +266,7 @@ export function ServiceVerificationReportsPage() {
         needs_coverage: boolean;
       }>;
     },
-    enabled: !!activeOrganizationId && canRead
+    enabled: !!activeOrganizationId && canRead,
   });
 
   const letterheadQuery = useQuery({
@@ -173,25 +274,27 @@ export function ServiceVerificationReportsPage() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("organizations")
-        .select("legal_name, display_name, logo_url, address_street, address_city, address_state, address_zip, contact_phone, contact_email")
+        .select(
+          "legal_name, display_name, logo_url, address_street, address_city, address_state, address_zip, contact_phone, contact_email",
+        )
         .eq("id", activeOrganizationId!)
         .single();
       if (error) throw error;
       return data as OrgLetterhead;
     },
-    enabled: !!activeOrganizationId && canRead
+    enabled: !!activeOrganizationId && canRead,
   });
 
   const correctionsQuery = useQuery({
     queryKey: ["visit-corrections", expandedVisitId],
     queryFn: async () => {
       const { data, error } = await supabase.rpc("list_visit_corrections", {
-        target_visit_id: expandedVisitId!
+        target_visit_id: expandedVisitId!,
       });
       if (error) throw error;
       return (data ?? []) as VisitCorrectionRow[];
     },
-    enabled: expandedMode === "history" && !!expandedVisitId
+    enabled: expandedMode === "history" && !!expandedVisitId,
   });
 
   function openCorrect(row: VisitReportRow) {
@@ -201,7 +304,7 @@ export function ServiceVerificationReportsPage() {
     setCorrectionForm({
       timeIn: toLocalInputValue(row.time_in),
       timeOut: row.time_out ? toLocalInputValue(row.time_out) : "",
-      reason: ""
+      reason: "",
     });
   }
 
@@ -224,7 +327,10 @@ export function ServiceVerificationReportsPage() {
     }
     const newTimeIn = new Date(correctionForm.timeIn);
     const newTimeOut = new Date(correctionForm.timeOut);
-    if (Number.isNaN(newTimeIn.getTime()) || Number.isNaN(newTimeOut.getTime())) {
+    if (
+      Number.isNaN(newTimeIn.getTime()) ||
+      Number.isNaN(newTimeOut.getTime())
+    ) {
       setCorrectionError("Enter valid times.");
       return;
     }
@@ -239,13 +345,19 @@ export function ServiceVerificationReportsPage() {
         target_visit_id: visitId,
         new_time_in: newTimeIn.toISOString(),
         new_time_out: newTimeOut.toISOString(),
-        reason: correctionForm.reason.trim()
+        reason: correctionForm.reason.trim(),
       });
       if (error) throw error;
       closeExpanded();
-      void queryClient.invalidateQueries({ queryKey: ["service-visit-report"] });
+      void queryClient.invalidateQueries({
+        queryKey: ["service-visit-report"],
+      });
     } catch (cause) {
-      setCorrectionError(cause instanceof Error ? cause.message : "Could not correct this visit.");
+      setCorrectionError(
+        cause instanceof Error
+          ? cause.message
+          : "Could not correct this visit.",
+      );
     } finally {
       setCorrectionSaving(false);
     }
@@ -255,7 +367,9 @@ export function ServiceVerificationReportsPage() {
 
   const clientOptions = useMemo(() => {
     const map = new Map<string, string>();
-    rows.forEach((row) => map.set(row.client_id, row.client_legal_name ?? row.client_code));
+    rows.forEach((row) =>
+      map.set(row.client_id, row.client_legal_name ?? row.client_code),
+    );
     return Array.from(map.entries());
   }, [rows]);
 
@@ -267,7 +381,7 @@ export function ServiceVerificationReportsPage() {
 
   const selectedCaregiverName = useMemo(
     () => caregiverOptions.find(([id]) => id === caregiverFilter)?.[1] ?? null,
-    [caregiverFilter, caregiverOptions]
+    [caregiverFilter, caregiverOptions],
   );
 
   function selectCaregiverFolder(caregiverId: string) {
@@ -285,30 +399,50 @@ export function ServiceVerificationReportsPage() {
   }, [rows]);
 
   const billable = useMemo(() => billableRows(rows), [rows]);
+  const monthCalendar = useMemo(
+    () => buildMonthCalendar(rows, reportMonth),
+    [reportMonth, rows],
+  );
   const totalWorkedMinutes = sumMinutes(billable, "worked_minutes");
   const totalBillableMinutes = sumMinutes(billable, "billable_minutes");
 
   const caregiverSubtotals = useMemo(() => {
-    const map = new Map<string, { name: string; workedMinutes: number; billableMinutes: number; visits: number }>();
+    const map = new Map<
+      string,
+      {
+        name: string;
+        workedMinutes: number;
+        billableMinutes: number;
+        visits: number;
+      }
+    >();
     for (const row of billable) {
       const entry = map.get(row.caregiver_user_id) ?? {
         name: row.caregiver_name,
         workedMinutes: 0,
         billableMinutes: 0,
-        visits: 0
+        visits: 0,
       };
       entry.workedMinutes += row.worked_minutes ?? 0;
       entry.billableMinutes += row.billable_minutes ?? 0;
       entry.visits += 1;
       map.set(row.caregiver_user_id, entry);
     }
-    return Array.from(map.values()).sort((a, b) => b.workedMinutes - a.workedMinutes);
+    return Array.from(map.values()).sort(
+      (a, b) => b.workedMinutes - a.workedMinutes,
+    );
   }, [billable]);
 
   const clientSubtotals = useMemo(() => {
     const map = new Map<
       string,
-      { code: string; legalName: string | null; workedMinutes: number; billableMinutes: number; visits: number }
+      {
+        code: string;
+        legalName: string | null;
+        workedMinutes: number;
+        billableMinutes: number;
+        visits: number;
+      }
     >();
     for (const row of billable) {
       const entry = map.get(row.client_id) ?? {
@@ -316,14 +450,16 @@ export function ServiceVerificationReportsPage() {
         legalName: row.client_legal_name,
         workedMinutes: 0,
         billableMinutes: 0,
-        visits: 0
+        visits: 0,
       };
       entry.workedMinutes += row.worked_minutes ?? 0;
       entry.billableMinutes += row.billable_minutes ?? 0;
       entry.visits += 1;
       map.set(row.client_id, entry);
     }
-    return Array.from(map.values()).sort((a, b) => b.billableMinutes - a.billableMinutes);
+    return Array.from(map.values()).sort(
+      (a, b) => b.billableMinutes - a.billableMinutes,
+    );
   }, [billable]);
 
   // Scheduled vs delivered: unions caregivers/clients from both the
@@ -334,7 +470,11 @@ export function ServiceVerificationReportsPage() {
   const scheduledMinutesByCaregiver = useMemo(() => {
     const map = new Map<string, { name: string; minutes: number }>();
     for (const shift of shiftsQuery.data ?? []) {
-      if (!shift.caregiver_user_id || (shift.status !== "scheduled" && shift.status !== "completed")) continue;
+      if (
+        !shift.caregiver_user_id ||
+        (shift.status !== "scheduled" && shift.status !== "completed")
+      )
+        continue;
       // A called-out shift still shows in this window (status stays
       // "scheduled" until reassigned - call_out_shift never touches
       // caregiver_user_id/status), but the original caregiver is no
@@ -342,8 +482,14 @@ export function ServiceVerificationReportsPage() {
       // their hours here either - same rule get_caregiver_hours()
       // enforces server-side (20260823010000).
       if (shift.needs_coverage) continue;
-      const minutes = (new Date(shift.ends_at).getTime() - new Date(shift.starts_at).getTime()) / 60000;
-      const entry = map.get(shift.caregiver_user_id) ?? { name: shift.caregiver_name, minutes: 0 };
+      const minutes =
+        (new Date(shift.ends_at).getTime() -
+          new Date(shift.starts_at).getTime()) /
+        60000;
+      const entry = map.get(shift.caregiver_user_id) ?? {
+        name: shift.caregiver_name,
+        minutes: 0,
+      };
       entry.minutes += minutes;
       map.set(shift.caregiver_user_id, entry);
     }
@@ -353,9 +499,16 @@ export function ServiceVerificationReportsPage() {
   const scheduledMinutesByClient = useMemo(() => {
     const map = new Map<string, { name: string; minutes: number }>();
     for (const shift of shiftsQuery.data ?? []) {
-      if (shift.status !== "scheduled" && shift.status !== "completed") continue;
-      const minutes = (new Date(shift.ends_at).getTime() - new Date(shift.starts_at).getTime()) / 60000;
-      const entry = map.get(shift.client_id) ?? { name: shift.client_name, minutes: 0 };
+      if (shift.status !== "scheduled" && shift.status !== "completed")
+        continue;
+      const minutes =
+        (new Date(shift.ends_at).getTime() -
+          new Date(shift.starts_at).getTime()) /
+        60000;
+      const entry = map.get(shift.client_id) ?? {
+        name: shift.client_name,
+        minutes: 0,
+      };
       entry.minutes += minutes;
       map.set(shift.client_id, entry);
     }
@@ -364,9 +517,15 @@ export function ServiceVerificationReportsPage() {
 
   const caregiverScheduledVsDelivered = useMemo(() => {
     const ids = new Set<string>(scheduledMinutesByCaregiver.keys());
-    const deliveredByCaregiverId = new Map<string, { name: string; minutes: number }>();
+    const deliveredByCaregiverId = new Map<
+      string,
+      { name: string; minutes: number }
+    >();
     for (const row of billable) {
-      const entry = deliveredByCaregiverId.get(row.caregiver_user_id) ?? { name: row.caregiver_name, minutes: 0 };
+      const entry = deliveredByCaregiverId.get(row.caregiver_user_id) ?? {
+        name: row.caregiver_name,
+        minutes: 0,
+      };
       entry.minutes += row.worked_minutes ?? 0;
       deliveredByCaregiverId.set(row.caregiver_user_id, entry);
     }
@@ -379,7 +538,7 @@ export function ServiceVerificationReportsPage() {
           id,
           name: scheduled?.name ?? delivered?.name ?? "Unknown caregiver",
           scheduledMinutes: scheduled?.minutes ?? 0,
-          deliveredMinutes: delivered?.minutes ?? 0
+          deliveredMinutes: delivered?.minutes ?? 0,
         };
       })
       .sort((a, b) => b.scheduledMinutes - a.scheduledMinutes);
@@ -400,18 +559,22 @@ export function ServiceVerificationReportsPage() {
         (row) =>
           row.status === "administrator_review" ||
           row.is_corrected ||
-          (row.authorization_status !== null && row.authorization_status !== "within_authorization")
+          (row.authorization_status !== null &&
+            row.authorization_status !== "within_authorization"),
       ),
-    [rows]
+    [rows],
   );
 
   const clientScheduledVsDelivered = useMemo(() => {
     const ids = new Set<string>(scheduledMinutesByClient.keys());
-    const deliveredByClientId = new Map<string, { name: string; minutes: number }>();
+    const deliveredByClientId = new Map<
+      string,
+      { name: string; minutes: number }
+    >();
     for (const row of billable) {
       const entry = deliveredByClientId.get(row.client_id) ?? {
         name: row.client_legal_name ?? row.client_code,
-        minutes: 0
+        minutes: 0,
       };
       entry.minutes += row.worked_minutes ?? 0;
       deliveredByClientId.set(row.client_id, entry);
@@ -425,7 +588,7 @@ export function ServiceVerificationReportsPage() {
           id,
           name: scheduled?.name ?? delivered?.name ?? "Unknown client",
           scheduledMinutes: scheduled?.minutes ?? 0,
-          deliveredMinutes: delivered?.minutes ?? 0
+          deliveredMinutes: delivered?.minutes ?? 0,
         };
       })
       .sort((a, b) => b.scheduledMinutes - a.scheduledMinutes);
@@ -439,9 +602,15 @@ export function ServiceVerificationReportsPage() {
     return (
       <section className="mx-auto max-w-4xl">
         <Card>
-          <p className="text-sm font-medium text-slate-500">Service Verification</p>
-          <h2 className="mt-1 text-2xl font-semibold text-slate-950">Not available</h2>
-          <p className="mt-3 text-slate-600">You don&apos;t have permission to view service verification reports.</p>
+          <p className="text-sm font-medium text-slate-500">
+            Service Verification
+          </p>
+          <h2 className="mt-1 text-2xl font-semibold text-slate-950">
+            Not available
+          </h2>
+          <p className="mt-3 text-slate-600">
+            You don&apos;t have permission to view service verification reports.
+          </p>
         </Card>
       </section>
     );
@@ -457,7 +626,12 @@ export function ServiceVerificationReportsPage() {
           title="Reports"
           description="Filter signed visits for payroll and billing. Corrected and voided records are excluded from every subtotal below."
           actions={
-            <Button type="button" variant="secondary" icon={<Printer className="h-4 w-4" />} onClick={handlePrint}>
+            <Button
+              type="button"
+              variant="secondary"
+              icon={<Printer className="h-4 w-4" />}
+              onClick={handlePrint}
+            >
               Print / Save as PDF
             </Button>
           }
@@ -468,10 +642,17 @@ export function ServiceVerificationReportsPage() {
         <div className="flex items-center justify-between gap-3">
           <div>
             <h3 className="font-semibold text-slate-950">Caregiver folders</h3>
-            <p className="mt-1 text-sm text-slate-500">Open a caregiver folder to view, print, or bookmark only that caregiver&apos;s sheets.</p>
+            <p className="mt-1 text-sm text-slate-500">
+              Open a caregiver folder to view, print, or bookmark only that
+              caregiver&apos;s sheets.
+            </p>
           </div>
           {caregiverFilter ? (
-            <button type="button" onClick={() => selectCaregiverFolder("")} className="text-sm font-semibold text-sky-700 underline">
+            <button
+              type="button"
+              onClick={() => selectCaregiverFolder("")}
+              className="text-sm font-semibold text-sky-700 underline"
+            >
               All caregivers
             </button>
           ) : null}
@@ -486,8 +667,12 @@ export function ServiceVerificationReportsPage() {
             >
               <Folder className="h-6 w-6 text-sky-700" />
               <span>
-                <span className="block text-xs font-semibold uppercase tracking-wide text-slate-500">Caregiver</span>
-                <span className="block font-semibold text-slate-950">{name}</span>
+                <span className="block text-xs font-semibold uppercase tracking-wide text-slate-500">
+                  Caregiver
+                </span>
+                <span className="block font-semibold text-slate-950">
+                  {name}
+                </span>
               </span>
             </button>
           ))}
@@ -497,7 +682,10 @@ export function ServiceVerificationReportsPage() {
       <Card className="print:hidden">
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-6">
           <div>
-            <label htmlFor="report-client" className="block text-xs font-medium text-slate-600">
+            <label
+              htmlFor="report-client"
+              className="block text-xs font-medium text-slate-600"
+            >
               Client
             </label>
             <select
@@ -515,7 +703,10 @@ export function ServiceVerificationReportsPage() {
             </select>
           </div>
           <div>
-            <label htmlFor="report-caregiver" className="block text-xs font-medium text-slate-600">
+            <label
+              htmlFor="report-caregiver"
+              className="block text-xs font-medium text-slate-600"
+            >
               Caregiver
             </label>
             <select
@@ -533,7 +724,10 @@ export function ServiceVerificationReportsPage() {
             </select>
           </div>
           <div>
-            <label htmlFor="report-service" className="block text-xs font-medium text-slate-600">
+            <label
+              htmlFor="report-service"
+              className="block text-xs font-medium text-slate-600"
+            >
               Service
             </label>
             <select
@@ -551,7 +745,10 @@ export function ServiceVerificationReportsPage() {
             </select>
           </div>
           <div>
-            <label htmlFor="report-status" className="block text-xs font-medium text-slate-600">
+            <label
+              htmlFor="report-status"
+              className="block text-xs font-medium text-slate-600"
+            >
               Status
             </label>
             <select
@@ -569,7 +766,10 @@ export function ServiceVerificationReportsPage() {
             </select>
           </div>
           <div>
-            <label htmlFor="report-from" className="block text-xs font-medium text-slate-600">
+            <label
+              htmlFor="report-from"
+              className="block text-xs font-medium text-slate-600"
+            >
               From
             </label>
             <input
@@ -581,7 +781,10 @@ export function ServiceVerificationReportsPage() {
             />
           </div>
           <div>
-            <label htmlFor="report-to" className="block text-xs font-medium text-slate-600">
+            <label
+              htmlFor="report-to"
+              className="block text-xs font-medium text-slate-600"
+            >
               To
             </label>
             <input
@@ -595,6 +798,107 @@ export function ServiceVerificationReportsPage() {
         </div>
       </Card>
 
+      <Card className="print:hidden">
+        <div className="flex flex-wrap items-end justify-between gap-4">
+          <div className="flex items-start gap-3">
+            <CalendarDays className="mt-0.5 h-5 w-5 text-sky-700" />
+            <div>
+              <h3 className="font-semibold text-slate-950">
+                Monthly hours calendar
+              </h3>
+              <p className="mt-1 text-sm text-slate-500">
+                Daily worked time by caregiver. Amber entries need manager
+                review; billable time is shown when it differs.
+              </p>
+            </div>
+          </div>
+          <label className="text-xs font-medium text-slate-600">
+            Calendar month
+            <input
+              type="month"
+              aria-label="Calendar month"
+              value={reportMonth}
+              onChange={(event) => setReportMonth(event.target.value)}
+              className="mt-1 block rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900"
+            />
+          </label>
+        </div>
+
+        <div className="mt-4 overflow-x-auto">
+          <div
+            role="grid"
+            aria-label={`Caregiver hours for ${reportMonth}`}
+            className="min-w-[760px]"
+          >
+            <div
+              role="row"
+              className="grid grid-cols-7 border-b border-slate-200 bg-slate-50"
+            >
+              {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((day) => (
+                <div
+                  key={day}
+                  role="columnheader"
+                  className="px-2 py-2 text-center text-xs font-semibold uppercase tracking-wide text-slate-500"
+                >
+                  {day}
+                </div>
+              ))}
+            </div>
+            {monthCalendar.weeks.map((week, weekIndex) => (
+              <div key={weekIndex} role="row" className="grid grid-cols-7">
+                {week.map((day, dayIndex) => {
+                  const date = day
+                    ? `${reportMonth}-${String(day).padStart(2, "0")}`
+                    : null;
+                  const entries = date
+                    ? (monthCalendar.entries.get(date) ?? [])
+                    : [];
+                  return (
+                    <div
+                      key={`${weekIndex}-${dayIndex}`}
+                      role="gridcell"
+                      aria-label={date ?? "Outside selected month"}
+                      className="min-h-28 border-b border-r border-slate-100 p-2 last:border-r-0"
+                    >
+                      {day ? (
+                        <p className="text-xs font-semibold text-slate-600">
+                          {day}
+                        </p>
+                      ) : null}
+                      <div className="mt-1 space-y-1.5">
+                        {entries.map((entry) => (
+                          <div
+                            key={entry.key}
+                            className={
+                              entry.needsReview
+                                ? "rounded-md bg-amber-50 px-1.5 py-1"
+                                : "rounded-md bg-sky-50 px-1.5 py-1"
+                            }
+                          >
+                            <p
+                              className="truncate text-[11px] font-semibold text-slate-800"
+                              title={entry.caregiverName}
+                            >
+                              {entry.caregiverName}
+                            </p>
+                            <p className="text-[11px] tabular-nums text-slate-600">
+                              {formatHours(entry.workedMinutes)}h worked
+                              {entry.billableMinutes !== entry.workedMinutes
+                                ? ` · ${formatHours(entry.billableMinutes)}h billable`
+                                : ""}
+                            </p>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            ))}
+          </div>
+        </div>
+      </Card>
+
       {/* Letterhead - shown only when printing, built from this organization's
           own settings so a re-branded/white-labeled tenant prints correctly
           instead of hardcoded agency details. */}
@@ -602,22 +906,32 @@ export function ServiceVerificationReportsPage() {
         <div className="flex items-start justify-between border-b border-slate-300 pb-4">
           <div>
             {letterhead?.logo_url ? (
-              <img src={letterhead.logo_url} alt={letterhead.display_name} className="mb-2 max-h-14" />
+              <img
+                src={letterhead.logo_url}
+                alt={letterhead.display_name}
+                className="mb-2 max-h-14"
+              />
             ) : null}
-            <p className="text-lg font-semibold">{letterhead?.legal_name ?? activeOrganization?.displayName}</p>
+            <p className="text-lg font-semibold">
+              {letterhead?.legal_name ?? activeOrganization?.displayName}
+            </p>
             {letterhead?.address_street ? (
               <p className="text-sm">
-                {letterhead.address_street}, {letterhead.address_city}, {letterhead.address_state}{" "}
-                {letterhead.address_zip}
+                {letterhead.address_street}, {letterhead.address_city},{" "}
+                {letterhead.address_state} {letterhead.address_zip}
               </p>
             ) : null}
             <p className="text-sm">
-              {[letterhead?.contact_phone, letterhead?.contact_email].filter(Boolean).join(" · ")}
+              {[letterhead?.contact_phone, letterhead?.contact_email]
+                .filter(Boolean)
+                .join(" · ")}
             </p>
           </div>
           <div className="text-right text-sm text-slate-600">
             <p className="font-semibold">Service Verification Report</p>
-            {selectedCaregiverName ? <p>Caregiver: {selectedCaregiverName}</p> : null}
+            {selectedCaregiverName ? (
+              <p>Caregiver: {selectedCaregiverName}</p>
+            ) : null}
             <p>{new Date().toLocaleDateString()}</p>
           </div>
         </div>
@@ -627,15 +941,22 @@ export function ServiceVerificationReportsPage() {
         <div className="flex items-center gap-3 print:hidden">
           <FileText className="h-5 w-5 text-sky-700" />
           <h3 className="font-semibold text-slate-950">
-            {selectedCaregiverName ? `Caregiver ${selectedCaregiverName}` : "Visits"} ({rows.length})
+            {selectedCaregiverName
+              ? `Caregiver ${selectedCaregiverName}`
+              : "Visits"}{" "}
+            ({rows.length})
           </h3>
         </div>
         {visitsQuery.isLoading ? (
           <p className="mt-3 text-sm text-slate-500">Loading…</p>
         ) : visitsQuery.isError ? (
-          <p className="mt-3 text-sm text-red-700">Could not load service verification records.</p>
+          <p className="mt-3 text-sm text-red-700">
+            Could not load service verification records.
+          </p>
         ) : rows.length === 0 ? (
-          <p className="mt-3 text-sm text-slate-400">No visits match these filters.</p>
+          <p className="mt-3 text-sm text-slate-400">
+            No visits match these filters.
+          </p>
         ) : (
           <div className="mt-4 overflow-x-auto">
             <table className="w-full text-left text-sm">
@@ -649,9 +970,13 @@ export function ServiceVerificationReportsPage() {
                   <th className="pb-2 pr-3 font-medium">Time</th>
                   <th className="pb-2 pr-3 font-medium">Worked</th>
                   <th className="pb-2 pr-3 font-medium">Billable</th>
-                  <th className="pb-2 pr-3 font-medium">Authorization (before → after)</th>
+                  <th className="pb-2 pr-3 font-medium">
+                    Authorization (before → after)
+                  </th>
                   <th className="pb-2 pr-3 font-medium">Status</th>
-                  {canManage ? <th className="pb-2 font-medium print:hidden">Actions</th> : null}
+                  {canManage ? (
+                    <th className="pb-2 font-medium print:hidden">Actions</th>
+                  ) : null}
                 </tr>
               </thead>
               <tbody>
@@ -661,38 +986,61 @@ export function ServiceVerificationReportsPage() {
                       <td className="py-2 pr-3 whitespace-nowrap font-mono text-xs text-slate-500">
                         {row.visit_number ?? "—"}
                       </td>
-                      <td className="py-2 pr-3 whitespace-nowrap text-slate-600">{formatVisitDate(`${row.service_date}T12:00:00-07:00`)}</td>
-                      <td className="py-2 pr-3">
-                        <p className="text-slate-800">{row.client_legal_name ?? row.client_code}</p>
-                        <p className="text-xs text-slate-400">{row.client_code}</p>
+                      <td className="py-2 pr-3 whitespace-nowrap text-slate-600">
+                        {formatVisitDate(`${row.service_date}T12:00:00-07:00`)}
                       </td>
-                      <td className="py-2 pr-3 text-slate-700">{row.caregiver_name}</td>
-                      <td className="py-2 pr-3 text-slate-600">{row.service_name}</td>
+                      <td className="py-2 pr-3">
+                        <p className="text-slate-800">
+                          {row.client_legal_name ?? row.client_code}
+                        </p>
+                        <p className="text-xs text-slate-400">
+                          {row.client_code}
+                        </p>
+                      </td>
+                      <td className="py-2 pr-3 text-slate-700">
+                        {row.caregiver_name}
+                      </td>
+                      <td className="py-2 pr-3 text-slate-600">
+                        {row.service_name}
+                      </td>
                       <td className="py-2 pr-3 whitespace-nowrap text-slate-500">
                         {formatDateTime(row.time_in)}
-                        {row.time_out ? ` – ${formatDateTime(row.time_out)}` : ""}
+                        {row.time_out
+                          ? ` – ${formatDateTime(row.time_out)}`
+                          : ""}
                       </td>
                       <td className="py-2 pr-3 text-slate-700">
-                        {row.worked_minutes ? formatHours(row.worked_minutes) : "—"}
+                        {row.worked_minutes
+                          ? formatHours(row.worked_minutes)
+                          : "—"}
                       </td>
                       <td className="py-2 pr-3 text-slate-700">
-                        {row.billable_minutes !== null ? formatHours(row.billable_minutes) : "—"}
+                        {row.billable_minutes !== null
+                          ? formatHours(row.billable_minutes)
+                          : "—"}
                       </td>
                       <td className="py-2 pr-3 whitespace-nowrap text-xs text-slate-500">
-                        {row.month_to_date_before_minutes !== null && row.month_to_date_after_minutes !== null
+                        {row.month_to_date_before_minutes !== null &&
+                        row.month_to_date_after_minutes !== null
                           ? `${formatHours(row.month_to_date_before_minutes)} → ${formatHours(row.month_to_date_after_minutes)} (${formatHours(row.remaining_minutes ?? 0)} left)`
                           : "—"}
                       </td>
                       <td className="py-2 pr-3">
                         <div className="flex flex-wrap items-center gap-1">
-                          {row.is_corrected ? <StatusBadge label="Corrected" tone="neutral" /> : null}
-                          <StatusBadge label={VISIT_STATUS_LABEL[row.status]} tone={STATUS_TONE[row.status]} />
+                          {row.is_corrected ? (
+                            <StatusBadge label="Corrected" tone="neutral" />
+                          ) : null}
+                          <StatusBadge
+                            label={VISIT_STATUS_LABEL[row.status]}
+                            tone={STATUS_TONE[row.status]}
+                          />
                         </div>
                       </td>
                       {canManage ? (
                         <td className="py-2 print:hidden">
                           <div className="flex gap-2">
-                            {row.status === "signed" || row.status === "administrator_review" ? (
+                            {row.status === "signed" ||
+                            row.status === "administrator_review" ? (
                               <button
                                 type="button"
                                 onClick={() => openCorrect(row)}
@@ -712,17 +1060,24 @@ export function ServiceVerificationReportsPage() {
                         </td>
                       ) : null}
                     </tr>
-                    {expandedVisitId === row.id && expandedMode === "correct" ? (
+                    {expandedVisitId === row.id &&
+                    expandedMode === "correct" ? (
                       <tr className="border-b border-slate-100 bg-slate-50 print:hidden">
                         <td colSpan={canManage ? 10 : 9} className="p-4">
-                          <p className="text-sm font-semibold text-slate-900">Correct this visit</p>
+                          <p className="text-sm font-semibold text-slate-900">
+                            Correct this visit
+                          </p>
                           <p className="mt-1 text-xs text-slate-500">
-                            The signed record is never overwritten - this creates a new, linked corrected visit and
-                            marks the original as superseded.
+                            The signed record is never overwritten - this
+                            creates a new, linked corrected visit and marks the
+                            original as superseded.
                           </p>
                           <div className="mt-3 grid gap-3 sm:grid-cols-3">
                             <div>
-                              <label htmlFor="correction-time-in" className="block text-xs font-medium text-slate-600">
+                              <label
+                                htmlFor="correction-time-in"
+                                className="block text-xs font-medium text-slate-600"
+                              >
                                 Time in
                               </label>
                               <input
@@ -730,13 +1085,19 @@ export function ServiceVerificationReportsPage() {
                                 type="datetime-local"
                                 value={correctionForm.timeIn}
                                 onChange={(event) =>
-                                  setCorrectionForm({ ...correctionForm, timeIn: event.target.value })
+                                  setCorrectionForm({
+                                    ...correctionForm,
+                                    timeIn: event.target.value,
+                                  })
                                 }
                                 className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900"
                               />
                             </div>
                             <div>
-                              <label htmlFor="correction-time-out" className="block text-xs font-medium text-slate-600">
+                              <label
+                                htmlFor="correction-time-out"
+                                className="block text-xs font-medium text-slate-600"
+                              >
                                 Time out
                               </label>
                               <input
@@ -744,13 +1105,19 @@ export function ServiceVerificationReportsPage() {
                                 type="datetime-local"
                                 value={correctionForm.timeOut}
                                 onChange={(event) =>
-                                  setCorrectionForm({ ...correctionForm, timeOut: event.target.value })
+                                  setCorrectionForm({
+                                    ...correctionForm,
+                                    timeOut: event.target.value,
+                                  })
                                 }
                                 className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900"
                               />
                             </div>
                             <div>
-                              <label htmlFor="correction-reason" className="block text-xs font-medium text-slate-600">
+                              <label
+                                htmlFor="correction-reason"
+                                className="block text-xs font-medium text-slate-600"
+                              >
                                 Reason (required)
                               </label>
                               <input
@@ -758,13 +1125,20 @@ export function ServiceVerificationReportsPage() {
                                 required
                                 value={correctionForm.reason}
                                 onChange={(event) =>
-                                  setCorrectionForm({ ...correctionForm, reason: event.target.value })
+                                  setCorrectionForm({
+                                    ...correctionForm,
+                                    reason: event.target.value,
+                                  })
                                 }
                                 className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900"
                               />
                             </div>
                           </div>
-                          {correctionError ? <p className="mt-2 text-sm text-red-700">{correctionError}</p> : null}
+                          {correctionError ? (
+                            <p className="mt-2 text-sm text-red-700">
+                              {correctionError}
+                            </p>
+                          ) : null}
                           <div className="mt-3 flex gap-3">
                             <Button
                               type="button"
@@ -784,11 +1158,14 @@ export function ServiceVerificationReportsPage() {
                         </td>
                       </tr>
                     ) : null}
-                    {expandedVisitId === row.id && expandedMode === "history" ? (
+                    {expandedVisitId === row.id &&
+                    expandedMode === "history" ? (
                       <tr className="border-b border-slate-100 bg-slate-50 print:hidden">
                         <td colSpan={canManage ? 10 : 9} className="p-4">
                           <div className="flex items-center justify-between">
-                            <p className="text-sm font-semibold text-slate-900">Correction history</p>
+                            <p className="text-sm font-semibold text-slate-900">
+                              Correction history
+                            </p>
                             <button
                               type="button"
                               onClick={closeExpanded}
@@ -798,25 +1175,54 @@ export function ServiceVerificationReportsPage() {
                             </button>
                           </div>
                           {correctionsQuery.isLoading ? (
-                            <p className="mt-2 text-sm text-slate-500">Loading…</p>
+                            <p className="mt-2 text-sm text-slate-500">
+                              Loading…
+                            </p>
                           ) : (correctionsQuery.data ?? []).length === 0 ? (
-                            <p className="mt-2 text-sm text-slate-400">No corrections recorded for this visit.</p>
+                            <p className="mt-2 text-sm text-slate-400">
+                              No corrections recorded for this visit.
+                            </p>
                           ) : (
                             <ul className="mt-2 space-y-2">
                               {(correctionsQuery.data ?? []).map((entry) => (
-                                <li key={entry.id} className="rounded-lg border border-slate-200 bg-white p-3 text-sm">
+                                <li
+                                  key={entry.id}
+                                  className="rounded-lg border border-slate-200 bg-white p-3 text-sm"
+                                >
                                   <p className="text-slate-800">
-                                    <span className="font-medium">{entry.corrected_by_name}</span> ·{" "}
-                                    {formatDateTime(entry.created_at)}
+                                    <span className="font-medium">
+                                      {entry.corrected_by_name}
+                                    </span>{" "}
+                                    · {formatDateTime(entry.created_at)}
                                   </p>
-                                  <p className="mt-1 text-slate-600">Reason: {entry.reason}</p>
+                                  <p className="mt-1 text-slate-600">
+                                    Reason: {entry.reason}
+                                  </p>
                                   <p className="mt-1 text-xs text-slate-500">
-                                    {formatDateTime(entry.before_snapshot.timeIn)} –{" "}
-                                    {formatDateTime(entry.before_snapshot.timeOut)} (
-                                    {formatHours(entry.before_snapshot.billableMinutes)}h) →{" "}
-                                    {formatDateTime(entry.after_snapshot.timeIn)} –{" "}
-                                    {formatDateTime(entry.after_snapshot.timeOut)} (
-                                    {formatHours(entry.after_snapshot.billableMinutes)}h)
+                                    {formatDateTime(
+                                      entry.before_snapshot.timeIn,
+                                    )}{" "}
+                                    –{" "}
+                                    {formatDateTime(
+                                      entry.before_snapshot.timeOut,
+                                    )}{" "}
+                                    (
+                                    {formatHours(
+                                      entry.before_snapshot.billableMinutes,
+                                    )}
+                                    h) →{" "}
+                                    {formatDateTime(
+                                      entry.after_snapshot.timeIn,
+                                    )}{" "}
+                                    –{" "}
+                                    {formatDateTime(
+                                      entry.after_snapshot.timeOut,
+                                    )}{" "}
+                                    (
+                                    {formatHours(
+                                      entry.after_snapshot.billableMinutes,
+                                    )}
+                                    h)
                                   </p>
                                 </li>
                               ))}
@@ -833,8 +1239,12 @@ export function ServiceVerificationReportsPage() {
                   <td className="py-2 pr-3" colSpan={6}>
                     Total (signed + under review)
                   </td>
-                  <td className="py-2 pr-3">{formatHours(totalWorkedMinutes)}</td>
-                  <td className="py-2 pr-3">{formatHours(totalBillableMinutes)}</td>
+                  <td className="py-2 pr-3">
+                    {formatHours(totalWorkedMinutes)}
+                  </td>
+                  <td className="py-2 pr-3">
+                    {formatHours(totalBillableMinutes)}
+                  </td>
                   <td className="py-2 pr-3" />
                   <td className="py-2" />
                   {canManage ? <td className="py-2 print:hidden" /> : null}
@@ -847,14 +1257,24 @@ export function ServiceVerificationReportsPage() {
 
       {caregiverSubtotals.length > 0 ? (
         <Card>
-          <h3 className="font-semibold text-slate-950">By caregiver (pay-period view)</h3>
+          <h3 className="font-semibold text-slate-950">
+            By caregiver (pay-period view)
+          </h3>
           <ul className="mt-3 divide-y divide-slate-100">
             {caregiverSubtotals.map((entry) => (
-              <li key={entry.name} className="flex items-center justify-between py-2 text-sm">
+              <li
+                key={entry.name}
+                className="flex items-center justify-between py-2 text-sm"
+              >
                 <span className="text-slate-700">
-                  {entry.name} <span className="text-slate-400">· {entry.visits} visits</span>
+                  {entry.name}{" "}
+                  <span className="text-slate-400">
+                    · {entry.visits} visits
+                  </span>
                 </span>
-                <span className="font-medium text-slate-900">{formatHours(entry.workedMinutes)} hrs worked</span>
+                <span className="font-medium text-slate-900">
+                  {formatHours(entry.workedMinutes)} hrs worked
+                </span>
               </li>
             ))}
           </ul>
@@ -863,14 +1283,24 @@ export function ServiceVerificationReportsPage() {
 
       {clientSubtotals.length > 0 ? (
         <Card>
-          <h3 className="font-semibold text-slate-950">By client (billing view)</h3>
+          <h3 className="font-semibold text-slate-950">
+            By client (billing view)
+          </h3>
           <ul className="mt-3 divide-y divide-slate-100">
             {clientSubtotals.map((entry) => (
-              <li key={entry.code} className="flex items-center justify-between py-2 text-sm">
+              <li
+                key={entry.code}
+                className="flex items-center justify-between py-2 text-sm"
+              >
                 <span className="text-slate-700">
-                  {entry.legalName ?? entry.code} <span className="text-slate-400">· {entry.visits} visits</span>
+                  {entry.legalName ?? entry.code}{" "}
+                  <span className="text-slate-400">
+                    · {entry.visits} visits
+                  </span>
                 </span>
-                <span className="font-medium text-slate-900">{formatHours(entry.billableMinutes)} billable hrs</span>
+                <span className="font-medium text-slate-900">
+                  {formatHours(entry.billableMinutes)} billable hrs
+                </span>
               </li>
             ))}
           </ul>
@@ -881,8 +1311,9 @@ export function ServiceVerificationReportsPage() {
         <Card>
           <h3 className="font-semibold text-slate-950">Exception visits</h3>
           <p className="mt-1 text-xs text-slate-500">
-            Visits that needed a human to look at them: flagged for administrator review, an authorization status
-            other than within-authorization, or already corrected.
+            Visits that needed a human to look at them: flagged for
+            administrator review, an authorization status other than
+            within-authorization, or already corrected.
           </p>
           <ul className="mt-3 divide-y divide-slate-100">
             {exceptionVisits.map((row) => (
@@ -891,16 +1322,28 @@ export function ServiceVerificationReportsPage() {
                   <span className="text-slate-700">
                     {row.client_legal_name ?? row.client_code}{" "}
                     <span className="text-slate-400">
-                      · {row.caregiver_name} · {formatVisitDate(row.service_date)}
+                      · {row.caregiver_name} ·{" "}
+                      {formatVisitDate(row.service_date)}
                     </span>
                   </span>
                   <span className="flex flex-wrap gap-1.5">
                     {row.status === "administrator_review" ? (
-                      <StatusBadge label={VISIT_STATUS_LABEL[row.status]} tone="danger" />
+                      <StatusBadge
+                        label={VISIT_STATUS_LABEL[row.status]}
+                        tone="danger"
+                      />
                     ) : null}
-                    {row.is_corrected ? <StatusBadge label="Corrected" tone="neutral" /> : null}
-                    {row.authorization_status && row.authorization_status !== "within_authorization" ? (
-                      <StatusBadge label={AUTHORIZATION_STATUS_LABEL[row.authorization_status]} tone="warning" />
+                    {row.is_corrected ? (
+                      <StatusBadge label="Corrected" tone="neutral" />
+                    ) : null}
+                    {row.authorization_status &&
+                    row.authorization_status !== "within_authorization" ? (
+                      <StatusBadge
+                        label={
+                          AUTHORIZATION_STATUS_LABEL[row.authorization_status]
+                        }
+                        tone="warning"
+                      />
                     ) : null}
                   </span>
                 </div>
@@ -910,22 +1353,32 @@ export function ServiceVerificationReportsPage() {
         </Card>
       ) : null}
 
-      {caregiverScheduledVsDelivered.length > 0 || clientScheduledVsDelivered.length > 0 ? (
+      {caregiverScheduledVsDelivered.length > 0 ||
+      clientScheduledVsDelivered.length > 0 ? (
         <Card>
-          <h3 className="font-semibold text-slate-950">Scheduled vs delivered hours</h3>
+          <h3 className="font-semibold text-slate-950">
+            Scheduled vs delivered hours
+          </h3>
           <p className="mt-1 text-xs text-slate-500">
-            Scheduled comes from the shift calendar for this date range; delivered comes from signed visits above. A
-            caregiver or client scheduled but never signed off shows 0 delivered, not a missing row.
+            Scheduled comes from the shift calendar for this date range;
+            delivered comes from signed visits above. A caregiver or client
+            scheduled but never signed off shows 0 delivered, not a missing row.
           </p>
           {caregiverScheduledVsDelivered.length > 0 ? (
             <>
-              <p className="mt-4 text-xs font-medium uppercase tracking-wide text-slate-400">By caregiver</p>
+              <p className="mt-4 text-xs font-medium uppercase tracking-wide text-slate-400">
+                By caregiver
+              </p>
               <ul className="mt-2 divide-y divide-slate-100">
                 {caregiverScheduledVsDelivered.map((entry) => (
-                  <li key={entry.id} className="flex items-center justify-between py-2 text-sm">
+                  <li
+                    key={entry.id}
+                    className="flex items-center justify-between py-2 text-sm"
+                  >
                     <span className="text-slate-700">{entry.name}</span>
                     <span className="font-medium text-slate-900">
-                      {formatHours(entry.scheduledMinutes)} scheduled · {formatHours(entry.deliveredMinutes)} delivered
+                      {formatHours(entry.scheduledMinutes)} scheduled ·{" "}
+                      {formatHours(entry.deliveredMinutes)} delivered
                     </span>
                   </li>
                 ))}
@@ -934,13 +1387,19 @@ export function ServiceVerificationReportsPage() {
           ) : null}
           {clientScheduledVsDelivered.length > 0 ? (
             <>
-              <p className="mt-4 text-xs font-medium uppercase tracking-wide text-slate-400">By client</p>
+              <p className="mt-4 text-xs font-medium uppercase tracking-wide text-slate-400">
+                By client
+              </p>
               <ul className="mt-2 divide-y divide-slate-100">
                 {clientScheduledVsDelivered.map((entry) => (
-                  <li key={entry.id} className="flex items-center justify-between py-2 text-sm">
+                  <li
+                    key={entry.id}
+                    className="flex items-center justify-between py-2 text-sm"
+                  >
                     <span className="text-slate-700">{entry.name}</span>
                     <span className="font-medium text-slate-900">
-                      {formatHours(entry.scheduledMinutes)} scheduled · {formatHours(entry.deliveredMinutes)} delivered
+                      {formatHours(entry.scheduledMinutes)} scheduled ·{" "}
+                      {formatHours(entry.deliveredMinutes)} delivered
                     </span>
                   </li>
                 ))}
