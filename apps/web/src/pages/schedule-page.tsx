@@ -112,7 +112,7 @@ function toLocalInputValue(date: Date) {
 }
 
 export function SchedulePage() {
-  const { activeOrganizationId, activeOrganization, hasPermission } = useOrganization();
+  const { activeOrganizationId, hasPermission } = useOrganization();
   const { user } = useAuth();
   const queryClient = useQueryClient();
   const [searchParams] = useSearchParams();
@@ -587,10 +587,13 @@ export function SchedulePage() {
   return (
     <section className="mx-auto max-w-4xl space-y-6">
       <div>
-        <p className="text-sm font-medium text-slate-500">Schedule</p>
+        <p className="text-sm font-medium text-slate-500">Workforce planning</p>
         <h2 className="mt-1 text-2xl font-semibold text-slate-950">
-          {activeOrganization?.displayName ?? "Shifts"}
+          Schedule
         </h2>
+        <p className="mt-1 text-sm text-slate-500">
+          Build recurring caregiver assignments, add one-time shifts, and resolve coverage changes. Visit verification happens after care is delivered.
+        </p>
         {!canRead ? (
           <p className="mt-1 text-sm text-slate-500">Showing only shifts assigned to you.</p>
         ) : null}
@@ -598,9 +601,9 @@ export function SchedulePage() {
 
       {uncoveredShifts.length > 0 ? (
         <Card>
-          <h3 className="font-semibold text-slate-950">Needs coverage</h3>
+          <h3 className="font-semibold text-slate-950">On-call coverage</h3>
           <p className="mt-1 text-xs text-slate-500">
-            Shifts whose caregiver called out and haven&apos;t been reassigned yet.
+            Assigned shifts whose caregiver called out. Offer or manually reassign only this occurrence; the caregiver&apos;s regular weekly assignment stays intact.
           </p>
           <ul className="mt-3 divide-y divide-slate-100">
             {uncoveredShifts.map((shift) => (
@@ -689,7 +692,38 @@ export function SchedulePage() {
 
       {canManage ? (
         <Card>
-          <h3 className="font-semibold text-slate-950">Schedule a shift</h3>
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <h3 className="font-semibold text-slate-950">Create an assignment</h3>
+              <p className="mt-1 text-sm text-slate-500">
+                Choose the client and authorized service first, then the caregiver and time.
+              </p>
+            </div>
+            <div className="inline-flex rounded-xl border border-slate-200 bg-slate-50 p-1" aria-label="Assignment frequency">
+              <button
+                type="button"
+                aria-pressed={repeatEnabled}
+                onClick={() => {
+                  setRepeatEnabled(true);
+                  setBatchResult(null);
+                }}
+                className={repeatEnabled ? "rounded-lg bg-white px-3 py-2 text-sm font-semibold text-indigo-700 shadow-sm" : "rounded-lg px-3 py-2 text-sm font-medium text-slate-600"}
+              >
+                Fixed weekly
+              </button>
+              <button
+                type="button"
+                aria-pressed={!repeatEnabled}
+                onClick={() => {
+                  setRepeatEnabled(false);
+                  setBatchResult(null);
+                }}
+                className={!repeatEnabled ? "rounded-lg bg-white px-3 py-2 text-sm font-semibold text-indigo-700 shadow-sm" : "rounded-lg px-3 py-2 text-sm font-medium text-slate-600"}
+              >
+                One-time
+              </button>
+            </div>
+          </div>
           <form onSubmit={handleCreate} className="mt-4 grid gap-3 sm:grid-cols-2">
             <div>
               <label htmlFor="shift-client" className="block text-xs font-medium text-slate-600">
@@ -808,18 +842,15 @@ export function SchedulePage() {
               />
             </div>
 
-            <div className="sm:col-span-2 rounded-lg border border-slate-200 p-3">
-              <label className="flex items-center gap-2 text-sm font-medium text-slate-700">
-                <input
-                  type="checkbox"
-                  checked={repeatEnabled}
-                  onChange={(event) => {
-                    setRepeatEnabled(event.target.checked);
-                    setBatchResult(null);
-                  }}
-                />
-                Repeats
-              </label>
+            <div className="sm:col-span-2 rounded-xl border border-slate-200 bg-slate-50/60 p-4">
+              <p className="text-sm font-semibold text-slate-900">
+                {repeatEnabled ? "Weekly pattern" : "One-time assignment"}
+              </p>
+              <p className="mt-1 text-xs text-slate-500">
+                {repeatEnabled
+                  ? "The selected caregiver remains the preferred assigned caregiver for every generated week."
+                  : "Use this for a manual change, extra shift, or a single date that should not repeat."}
+              </p>
               {repeatEnabled ? (
                 <div className="mt-3 space-y-3">
                   <div>

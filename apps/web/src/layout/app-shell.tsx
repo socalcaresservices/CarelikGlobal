@@ -5,7 +5,6 @@ import {
   AlertOctagon,
   BadgeCheck,
   CalendarClock,
-  CalendarPlus,
   ClipboardCheck,
   DollarSign,
   FileText,
@@ -73,10 +72,6 @@ const overviewNav: NavItem[] = [
     icon: CalendarClock,
     badgeKey: "schedule_issues",
   },
-  // No permission gate - every caregiver needs to be able to schedule
-  // their own visits; caregiver_assignments (not this nav item) is the
-  // real gate on which clients/services they can pick from.
-  { to: "/staff/visits", label: "Schedule a visit", icon: CalendarPlus },
   // No permission gate - every caregiver needs this to record their own
   // visits, and the RLS/RPC layer already scopes what each caregiver can
   // see to their own assigned shifts regardless of nav visibility.
@@ -172,6 +167,7 @@ function visibleItems(items: NavItem[], isOwner: boolean) {
 }
 
 const caregiverNavPaths = new Set(["/staff/visits", "/service-verification"]);
+const officeOnlyNavPaths = new Set(["/", "/schedule", "/service-verification/reports", "/billing"]);
 
 function OrganizationIdentity({
   displayName,
@@ -313,7 +309,14 @@ export function AppShell({ children }: PropsWithChildren) {
   const isCaregiver = role === "caregiver";
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
-  const visibleOverviewNav = visibleItems(overviewNav, isOwner)
+  const roleAwareOverviewNav: NavItem[] = isCaregiver
+    ? [
+        { to: "/staff/visits", label: "My Visits", icon: CalendarClock },
+        { to: "/service-verification", label: "Verify Visit", icon: PenLine },
+      ]
+    : overviewNav.filter((item) => officeOnlyNavPaths.has(item.to));
+
+  const visibleOverviewNav = visibleItems(roleAwareOverviewNav, isOwner)
     .filter((item) => !isCaregiver || caregiverNavPaths.has(item.to))
     .map((item) =>
       item.to === "/billing" && !isOwner

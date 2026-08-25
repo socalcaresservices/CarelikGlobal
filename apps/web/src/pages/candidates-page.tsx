@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState, type ChangeEvent } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
 import { Clipboard, Download, FileUp, Plus } from "lucide-react";
-import { Button, Card, FilterBar, PageHeader, ProgressBar, StatusBadge, type ActiveFilter, type StatusTone } from "@carelik/ui";
+import { Button, Card, FilterBar, PageHeader, StatusBadge, type ActiveFilter, type StatusTone } from "@carelik/ui";
 import { POSITION_OPTIONS } from "@carelik/shared";
 import { useOrganization } from "@/providers/organization-provider";
 import { supabase } from "@/lib/supabase";
@@ -446,8 +446,6 @@ export function CandidatesPage() {
   for (const candidate of allCandidates) {
     funnelCounts[candidate.pipeline_stage] = (funnelCounts[candidate.pipeline_stage] ?? 0) + 1;
   }
-  const largestStageCount = Math.max(1, ...Object.values(funnelCounts));
-
   return (
     <section className="mx-auto max-w-6xl space-y-6">
       <PageHeader
@@ -456,21 +454,23 @@ export function CandidatesPage() {
         description={`Recruiting and onboarding workflow${activeOrganization?.displayName ? ` for ${activeOrganization.displayName}` : ""}. Hiring stages are changed by authorized staff.`}
       />
 
-      <Card>
-        <h3 className="font-semibold text-slate-950">Hiring Stage funnel</h3>
-        <p className="mt-1 text-xs text-slate-500">How many candidates are at each stage right now, out of {allCandidates.length} total.</p>
-        <div className="mt-4 space-y-3">
+      <details className="rounded-2xl border border-slate-200 bg-white px-5 py-4 shadow-sm">
+        <summary className="cursor-pointer list-none font-semibold text-slate-950">
+          Pipeline summary <span className="ml-2 text-sm font-normal text-slate-500">{allCandidates.length} candidates</span>
+        </summary>
+        <div className="mt-4 flex flex-wrap gap-2">
           {PIPELINE_STAGES.map((stage) => (
-            <div key={stage}>
-              <div className="flex items-center justify-between text-sm">
-                <span className="text-slate-700">{formatLabel(stage)}</span>
-                <span className="text-slate-500">{funnelCounts[stage]}</span>
-              </div>
-              <ProgressBar value={funnelCounts[stage] ?? 0} max={largestStageCount} tone={stageTone[stage] ?? "neutral"} />
-            </div>
+            <button
+              key={stage}
+              type="button"
+              onClick={() => filters.setFilter("stage", stage)}
+              className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs font-medium text-slate-700 hover:border-indigo-300 hover:bg-indigo-50"
+            >
+              {formatLabel(stage)} · {funnelCounts[stage] ?? 0}
+            </button>
           ))}
         </div>
-      </Card>
+      </details>
 
       {canManage ? (
         <Card>

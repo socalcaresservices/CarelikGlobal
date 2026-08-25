@@ -9,7 +9,7 @@ export function StaffVisitsPage() {
         <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[var(--color-accent,#4f46e5)]">
           My visits
         </p>
-        <h1 className="mt-1 text-2xl font-semibold text-slate-950">Scheduled visits</h1>
+        <h1 className="mt-1 text-2xl font-semibold text-slate-950">My visits</h1>
         <p className="mt-2 text-sm leading-6 text-slate-600">
           Your agency manages visit scheduling. Contact an administrator when a visit needs to be added or changed.
         </p>
@@ -23,7 +23,7 @@ export function StaffVisitsPage() {
           <div>
             <h2 className="font-semibold text-slate-950">Ready for your scheduled visit?</h2>
             <p className="mt-1 text-sm leading-6 text-slate-600">
-              Open Shift Verification, enter the client code, and Ogevia will show the scheduled service available to you today.
+              Start only a client and service assigned to you. Your agency controls the schedule and any changes.
             </p>
           </div>
         </div>
@@ -34,7 +34,7 @@ export function StaffVisitsPage() {
         className="flex min-h-14 w-full items-center justify-center gap-2 rounded-xl bg-[var(--color-accent,#4f46e5)] px-4 text-base font-semibold text-white shadow-sm hover:opacity-95"
       >
         <PenLine className="h-5 w-5" />
-        Open Shift Verification
+        Verify a visit
       </Link>
     </section>
   );

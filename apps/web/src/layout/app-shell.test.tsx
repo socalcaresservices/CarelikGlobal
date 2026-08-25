@@ -219,7 +219,7 @@ describe("AppShell nav", () => {
     });
 
     renderShell();
-    expect(screen.getByText("Service Verification")).toBeInTheDocument();
+    expect(screen.queryByText("Service Verification")).not.toBeInTheDocument();
     expect(screen.getByText("Report Center")).toBeInTheDocument();
   });
 
@@ -444,8 +444,10 @@ describe("AppShell nav", () => {
     });
 
     renderShell();
-    expect(screen.getByText("Service Verification")).toBeInTheDocument();
-    expect(screen.getByText("Schedule a visit")).toBeInTheDocument();
+    expect(screen.getByText("Verify Visit")).toBeInTheDocument();
+    expect(screen.getByText("My Visits")).toBeInTheDocument();
+    expect(screen.queryByText("Operations Dashboard")).not.toBeInTheDocument();
+    expect(screen.queryByText("Schedule")).not.toBeInTheDocument();
     expect(screen.queryByText("Clients")).not.toBeInTheDocument();
     expect(screen.queryByText("Care Team")).not.toBeInTheDocument();
     expect(screen.queryByText("Authorizations")).not.toBeInTheDocument();

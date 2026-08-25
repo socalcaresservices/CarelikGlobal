@@ -712,83 +712,31 @@ export function ServiceVerificationReportsPage() {
       </div>
 
       <Card className="print:hidden">
-        <h3 className="font-bold text-slate-950">Choose a report</h3>
-        <p className="mt-1 text-sm text-slate-500">
-          Start with the high-level overview, then open only the detail you
-          need.
-        </p>
-        <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          {(
-            [
-              [
-                "overview",
-                "Operations overview",
-                "High-level hours and trends",
-                BarChart3,
-              ],
-              [
-                "caregiver",
-                "Caregiver hours",
-                "Hours by one or all caregivers",
-                Folder,
-              ],
-              [
-                "calendar",
-                "Client calendar",
-                "Daily hours for a selected client",
-                CalendarDays,
-              ],
-              [
-                "visits",
-                "Visit details",
-                "Printable visits and corrections",
-                FileText,
-              ],
-              [
-                "exceptions",
-                "Exceptions",
-                "Visits needing manager attention",
-                ShieldCheck,
-              ],
-              [
-                "staff-access",
-                "Staff access",
-                "Secure link and assignments",
-                Users,
-              ],
-            ] as Array<[ReportView, string, string, typeof BarChart3]>
-          ).map(([value, label, description, Icon]) => (
-            <button
-              key={value}
-              type="button"
-              aria-pressed={reportView === value}
-              onClick={() => {
-                setReportView(value);
+        <div className="flex flex-wrap items-end gap-4">
+          <div className="min-w-64 flex-1">
+            <label htmlFor="report-view" className="block text-xs font-bold uppercase tracking-wide text-slate-500">
+              Report
+            </label>
+            <select
+              id="report-view"
+              value={reportView}
+              onChange={(event) => {
+                setReportView(event.target.value as ReportView);
                 closeExpanded();
               }}
-              className={
-                reportView === value
-                  ? "flex items-start gap-3 rounded-2xl border-2 border-indigo-500 bg-indigo-50 p-4 text-left ring-4 ring-indigo-50"
-                  : "flex items-start gap-3 rounded-2xl border border-slate-200 bg-white p-4 text-left hover:border-indigo-300 hover:bg-indigo-50/40"
-              }
+              className="mt-1 w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm font-semibold text-slate-950"
             >
-              <span
-                className={
-                  reportView === value
-                    ? "flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-indigo-600 text-white"
-                    : "flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-slate-100 text-slate-600"
-                }
-              >
-                <Icon className="h-5 w-5" />
-              </span>
-              <span>
-                <span className="block font-bold text-slate-950">{label}</span>
-                <span className="mt-1 block text-xs text-slate-500">
-                  {description}
-                </span>
-              </span>
-            </button>
-          ))}
+              <option value="overview">Operations overview</option>
+              <option value="caregiver">Caregiver hours</option>
+              <option value="calendar">Client calendar</option>
+              <option value="visits">Visit details</option>
+              <option value="exceptions">Exceptions needing attention</option>
+              {canManage ? <option value="staff-access">Staff access</option> : null}
+            </select>
+          </div>
+          <p className="max-w-xl pb-2 text-sm text-slate-500">
+            Select one report, then narrow it by client, caregiver, service, location, status, and date below.
+          </p>
         </div>
       </Card>
 
