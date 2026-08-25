@@ -1,4 +1,4 @@
-import type { CSSProperties, PropsWithChildren } from "react";
+import { useState, type CSSProperties, type PropsWithChildren } from "react";
 import { NavLink } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import {
@@ -12,11 +12,13 @@ import {
   HeartHandshake,
   LayoutDashboard,
   LogOut,
+  Menu,
   PenLine,
   Settings,
   ShieldCheck,
   UserPlus,
   Users,
+  X,
 } from "lucide-react";
 import type { Permission } from "@carelik/shared";
 import { useAuth } from "@carelik/auth";
@@ -169,6 +171,58 @@ function visibleItems(items: NavItem[], isOwner: boolean) {
   return items.filter((item) => !item.ownerOnly || isOwner);
 }
 
+const caregiverNavPaths = new Set(["/staff/visits", "/service-verification"]);
+
+function OrganizationIdentity({
+  displayName,
+  logoUrl,
+  compact = false,
+}: {
+  displayName: string;
+  logoUrl: string | null | undefined;
+  compact?: boolean;
+}) {
+  const initials = displayName
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((word) => word[0]?.toUpperCase())
+    .join("");
+
+  return (
+    <div className="flex min-w-0 items-center gap-2.5">
+      {logoUrl ? (
+        <img
+          src={logoUrl}
+          alt={displayName}
+          className={cn(
+            "shrink-0 rounded-xl object-contain",
+            compact ? "h-9 w-9" : "max-h-10 max-w-[11rem]",
+          )}
+        />
+      ) : (
+        <div
+          aria-label={`${displayName} logo`}
+          className={cn(
+            "flex shrink-0 items-center justify-center rounded-xl bg-[var(--color-accent,#4f46e5)] font-bold text-white shadow-sm",
+            compact ? "h-9 w-9 text-xs" : "h-10 w-10 text-sm",
+          )}
+        >
+          {initials || "OG"}
+        </div>
+      )}
+      <span
+        className={cn(
+          "truncate font-semibold text-slate-950",
+          compact ? "text-sm" : "text-base",
+        )}
+      >
+        {displayName}
+      </span>
+    </div>
+  );
+}
+
 // The active nav item reads the same --color-accent/--color-accent-
 // foreground custom properties Button's primary variant does (see
 // packages/ui/src/button.tsx) - both fall back to the platform default
@@ -256,11 +310,19 @@ export function AppShell({ children }: PropsWithChildren) {
   const showPoweredBy = activeOrganization?.showPoweredBy !== false;
 
   const isOwner = role === "organization_owner" || role === "platform_owner";
+  const isCaregiver = role === "caregiver";
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
-  const visibleOverviewNav = visibleItems(overviewNav, isOwner);
-  const visiblePeopleNav = visibleItems(peopleNav, isOwner);
-  const visibleComplianceNav = visibleItems(complianceNav, isOwner);
-  const visibleAdministrationNav = visibleItems(administrationNav, isOwner);
+  const visibleOverviewNav = visibleItems(overviewNav, isOwner).filter(
+    (item) => !isCaregiver || caregiverNavPaths.has(item.to),
+  );
+  const visiblePeopleNav = isCaregiver ? [] : visibleItems(peopleNav, isOwner);
+  const visibleComplianceNav = isCaregiver
+    ? []
+    : visibleItems(complianceNav, isOwner);
+  const visibleAdministrationNav = isCaregiver
+    ? []
+    : visibleItems(administrationNav, isOwner);
 
   const greeting = getGreeting(new Date());
 
@@ -295,22 +357,13 @@ export function AppShell({ children }: PropsWithChildren) {
     >
       <aside className="fixed inset-y-0 left-0 hidden w-64 border-r border-slate-200 bg-white lg:flex lg:flex-col">
         <div className="border-b border-slate-200 px-6 py-5">
-          {activeOrganization?.logoUrl ? (
-            <img
-              src={activeOrganization.logoUrl}
-              alt={activeOrganization.displayName}
-              className="max-h-9 max-w-full object-contain"
-            />
-          ) : (
-            <>
-              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
-                Care operations
-              </p>
-              <h1 className="mt-1 text-xl font-semibold text-slate-950">
-                {activeOrganization?.displayName ?? "Ogevia"}
-              </h1>
-            </>
-          )}
+          <p className="mb-2 text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
+            Care operations
+          </p>
+          <OrganizationIdentity
+            displayName={activeOrganization?.displayName ?? "Ogevia"}
+            logoUrl={activeOrganization?.logoUrl}
+          />
         </div>
         <nav className="flex-1 space-y-5 overflow-y-auto p-3">
           <div className="space-y-1">
@@ -388,22 +441,132 @@ export function AppShell({ children }: PropsWithChildren) {
           ) : null}
         </div>
       </aside>
+      {mobileMenuOpen ? (
+        <div className="fixed inset-0 z-50 lg:hidden">
+          <button
+            type="button"
+            aria-label="Close navigation backdrop"
+            onClick={() => setMobileMenuOpen(false)}
+            className="absolute inset-0 bg-slate-950/35"
+          />
+          <aside className="relative flex h-full w-[min(88vw,22rem)] flex-col bg-white shadow-2xl">
+            <div className="flex items-center justify-between border-b border-slate-200 px-4 py-4">
+              <OrganizationIdentity
+                displayName={activeOrganization?.displayName ?? "Ogevia"}
+                logoUrl={activeOrganization?.logoUrl}
+                compact
+              />
+              <button
+                type="button"
+                aria-label="Close menu"
+                onClick={() => setMobileMenuOpen(false)}
+                className="flex h-11 w-11 items-center justify-center rounded-xl text-slate-600 hover:bg-slate-100"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+            <nav
+              className="flex-1 space-y-5 overflow-y-auto p-3"
+              onClick={() => setMobileMenuOpen(false)}
+            >
+              <div className="space-y-1">
+                {visibleOverviewNav.map((item) => (
+                  <NavLinkItem
+                    key={item.to}
+                    {...item}
+                    badgeCount={badgeFor(item)}
+                  />
+                ))}
+              </div>
+              {visiblePeopleNav.length ? (
+                <div>
+                  <p className="px-3 pb-1.5 text-[11px] font-semibold uppercase tracking-wider text-slate-400">
+                    People
+                  </p>
+                  <div className="space-y-1">
+                    {visiblePeopleNav.map((item) => (
+                      <NavLinkItem
+                        key={item.to}
+                        {...item}
+                        badgeCount={badgeFor(item)}
+                      />
+                    ))}
+                  </div>
+                </div>
+              ) : null}
+              {visibleComplianceNav.length ? (
+                <div>
+                  <p className="px-3 pb-1.5 text-[11px] font-semibold uppercase tracking-wider text-slate-400">
+                    Compliance
+                  </p>
+                  <div className="space-y-1">
+                    {visibleComplianceNav.map((item) => (
+                      <NavLinkItem
+                        key={item.to}
+                        {...item}
+                        badgeCount={badgeFor(item)}
+                      />
+                    ))}
+                  </div>
+                </div>
+              ) : null}
+              {visibleAdministrationNav.length ? (
+                <div>
+                  <p className="px-3 pb-1.5 text-[11px] font-semibold uppercase tracking-wider text-slate-400">
+                    Administration
+                  </p>
+                  <div className="space-y-1">
+                    {visibleAdministrationNav.map((item) => (
+                      <NavLinkItem
+                        key={item.to}
+                        {...item}
+                        badgeCount={badgeFor(item)}
+                      />
+                    ))}
+                  </div>
+                </div>
+              ) : null}
+            </nav>
+            <div className="border-t border-slate-200 p-3">
+              <p className="truncate px-3 text-xs text-slate-500">
+                {user?.email}
+              </p>
+              <button
+                type="button"
+                onClick={() => void signOut()}
+                className="mt-1 flex min-h-11 w-full items-center gap-3 rounded-lg px-3 text-sm font-medium text-slate-600 hover:bg-slate-100"
+              >
+                <LogOut className="h-4 w-4" />
+                Sign out
+              </button>
+            </div>
+          </aside>
+        </div>
+      ) : null}
       <main className="lg:pl-64">
         <header className="flex flex-wrap items-center gap-4 border-b border-slate-200 bg-white px-6 py-4">
-          <NavLink
-            to="/service-verification"
-            className="inline-flex min-h-12 items-center gap-2 rounded-lg bg-[var(--color-accent,#0f172a)] px-3 text-sm font-semibold text-[var(--color-accent-foreground,#ffffff)] lg:hidden"
+          <button
+            type="button"
+            aria-label="Open menu"
+            onClick={() => setMobileMenuOpen(true)}
+            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-slate-200 text-slate-700 lg:hidden"
           >
-            <PenLine className="h-4 w-4" />
-            Verify visit
-          </NavLink>
+            <Menu className="h-5 w-5" />
+          </button>
+          <div className="min-w-0 flex-1 lg:hidden">
+            <OrganizationIdentity
+              displayName={activeOrganization?.displayName ?? "Ogevia"}
+              logoUrl={activeOrganization?.logoUrl}
+              compact
+            />
+          </div>
           <p className="shrink-0 text-sm text-slate-600">
             {greeting}
             {role ? (
               <span className="text-slate-400"> · {formatRole(role)}</span>
             ) : null}
           </p>
-          <div className="order-last w-full sm:order-none sm:flex-1">
+          <div className="order-last w-full sm:order-none sm:flex-1 lg:block">
             {activeOrganizationId ? <GlobalSearch /> : null}
           </div>
           {/* app.ogevia.com resolves the active org from the signed-in
@@ -429,7 +592,7 @@ export function AppShell({ children }: PropsWithChildren) {
               </select>
             </label>
           ) : activeOrganization ? (
-            <p className="text-sm font-medium text-slate-900">
+            <p className="hidden text-sm font-medium text-slate-900 lg:block">
               {activeOrganization.displayName}
             </p>
           ) : loading ? (

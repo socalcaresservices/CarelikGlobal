@@ -1,5 +1,5 @@
 import { useEffect, useState, type FormEvent } from "react";
-import { Navigate, useLocation } from "react-router-dom";
+import { Navigate } from "react-router-dom";
 import { Github } from "lucide-react";
 import { useAuth } from "@carelik/auth";
 import { Button, Card } from "@carelik/ui";
@@ -7,16 +7,17 @@ import { getAuthErrorMessage } from "@/lib/auth-errors";
 import { replaceBrowserLocation } from "@/lib/browser-navigation";
 import { getCurrentTenantContext, toAppUrl } from "@/lib/tenant-resolver";
 
-interface LocationState {
-  from?: { pathname: string };
-}
-
 // Email/password is the primary sign-in path - a paying customer
 // organization can't be expected to have a GitHub account. GitHub OAuth
 // stays available below it as a secondary option, not removed.
 export function LoginPage() {
-  const { user, loading, signInWithGithub, signInWithPassword, resetPasswordForEmail } = useAuth();
-  const location = useLocation();
+  const {
+    user,
+    loading,
+    signInWithGithub,
+    signInWithPassword,
+    resetPasswordForEmail,
+  } = useAuth();
 
   const [mode, setMode] = useState<"password" | "forgot">("password");
   const [email, setEmail] = useState("");
@@ -29,8 +30,12 @@ export function LoginPage() {
   });
   const [resetSent, setResetSent] = useState(false);
 
-  const state = location.state as LocationState | null;
-  const returnPath = state?.from?.pathname ?? "/";
+  // Every authenticated user re-enters through the role-aware root route.
+  // Replaying the protected page that originally sent them to /login made
+  // owners appear to be caregivers when their stale/deep link happened to be
+  // /service-verification. The root route now sends caregivers to Verify Visit
+  // and keeps owners/managers on the operations dashboard.
+  const returnPath = "/";
   const mustLeaveMarketingHost =
     !loading && !!user && getCurrentTenantContext().type === "marketing";
 
@@ -73,7 +78,12 @@ export function LoginPage() {
     try {
       await signInWithPassword(email, password);
     } catch (cause) {
-      setError(getAuthErrorMessage(cause, "Sign-in failed. Check your email and password."));
+      setError(
+        getAuthErrorMessage(
+          cause,
+          "Sign-in failed. Check your email and password.",
+        ),
+      );
     } finally {
       setSubmitting(false);
     }
@@ -87,7 +97,9 @@ export function LoginPage() {
       await resetPasswordForEmail(email);
       setResetSent(true);
     } catch (cause) {
-      setError(getAuthErrorMessage(cause, "Could not send a reset email. Try again."));
+      setError(
+        getAuthErrorMessage(cause, "Could not send a reset email. Try again."),
+      );
     } finally {
       setSubmitting(false);
     }
@@ -102,7 +114,9 @@ export function LoginPage() {
   return (
     <div className="flex min-h-screen items-center justify-center bg-slate-50 px-4">
       <Card className="w-full max-w-sm">
-        <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Care operations</p>
+        <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
+          Care operations
+        </p>
         <h1 className="mt-1 text-2xl font-semibold text-slate-950">Ogevia</h1>
         <p className="mt-2 text-sm text-slate-600">
           {mode === "forgot"
@@ -110,7 +124,11 @@ export function LoginPage() {
             : "Access is by invitation only. Sign in with the email and password your organization administrator set up for you."}
         </p>
 
-        {error ? <p className="mt-4 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p> : null}
+        {error ? (
+          <p className="mt-4 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">
+            {error}
+          </p>
+        ) : null}
         {resetSent ? (
           <p className="mt-4 rounded-lg bg-emerald-50 px-3 py-2 text-sm text-emerald-700">
             Check your email for a link to set a new password.
@@ -120,7 +138,10 @@ export function LoginPage() {
         {mode === "password" ? (
           <form onSubmit={handlePasswordSignIn} className="mt-6 space-y-3">
             <div>
-              <label htmlFor="login-email" className="block text-xs font-medium text-slate-600">
+              <label
+                htmlFor="login-email"
+                className="block text-xs font-medium text-slate-600"
+              >
                 Email
               </label>
               <input
@@ -133,7 +154,10 @@ export function LoginPage() {
               />
             </div>
             <div>
-              <label htmlFor="login-password" className="block text-xs font-medium text-slate-600">
+              <label
+                htmlFor="login-password"
+                className="block text-xs font-medium text-slate-600"
+              >
                 Password
               </label>
               <input
@@ -159,7 +183,10 @@ export function LoginPage() {
         ) : (
           <form onSubmit={handleForgotPassword} className="mt-6 space-y-3">
             <div>
-              <label htmlFor="reset-email" className="block text-xs font-medium text-slate-600">
+              <label
+                htmlFor="reset-email"
+                className="block text-xs font-medium text-slate-600"
+              >
                 Email
               </label>
               <input

@@ -197,13 +197,14 @@ function SignaturePad({
 }
 
 function BrandHeader({
+  agencyName,
   logoUrl,
   status,
 }: {
+  agencyName: string;
   logoUrl: string | null | undefined;
   status: "Ready" | "Visit in progress" | "Client confirmation" | "Saved";
 }) {
-  const agencyName = "SoCal Care Services";
   const initials = agencyName
     .split(/\s+/)
     .filter(Boolean)
@@ -633,7 +634,11 @@ export function ServiceVerificationPage() {
   if (activeVisitQuery.isError) {
     return (
       <Card className="mx-auto max-w-md rounded-3xl p-5">
-        <BrandHeader logoUrl={activeOrganization?.logoUrl} status="Ready" />
+        <BrandHeader
+          agencyName={activeOrganization?.displayName ?? "SoCal Care Services"}
+          logoUrl={activeOrganization?.logoUrl}
+          status="Ready"
+        />
         <div
           role="alert"
           className="mt-5 rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-800"
@@ -664,6 +669,9 @@ export function ServiceVerificationPage() {
       <Card className="overflow-hidden rounded-3xl border-slate-200 p-5 shadow-sm sm:p-6">
         <div className="space-y-5">
           <BrandHeader
+            agencyName={
+              activeOrganization?.displayName ?? "SoCal Care Services"
+            }
             logoUrl={activeOrganization?.logoUrl}
             status={headerStatus}
           />
