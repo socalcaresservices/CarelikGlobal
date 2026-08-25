@@ -313,9 +313,13 @@ export function AppShell({ children }: PropsWithChildren) {
   const isCaregiver = role === "caregiver";
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
-  const visibleOverviewNav = visibleItems(overviewNav, isOwner).filter(
-    (item) => !isCaregiver || caregiverNavPaths.has(item.to),
-  );
+  const visibleOverviewNav = visibleItems(overviewNav, isOwner)
+    .filter((item) => !isCaregiver || caregiverNavPaths.has(item.to))
+    .map((item) =>
+      item.to === "/billing" && !isOwner
+        ? { ...item, label: "Visit Review", icon: ClipboardCheck }
+        : item,
+    );
   const visiblePeopleNav = isCaregiver ? [] : visibleItems(peopleNav, isOwner);
   const visibleComplianceNav = isCaregiver
     ? []

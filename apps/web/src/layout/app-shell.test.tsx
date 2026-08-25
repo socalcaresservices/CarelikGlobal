@@ -156,6 +156,18 @@ describe("AppShell nav", () => {
     expect(screen.getByText("Schedule")).toBeInTheDocument();
   });
 
+  it("labels the financial workflow as Visit Review for a manager", () => {
+    mockedUseAuth.mockReturnValue({
+      user: { email: "manager@acme.test" },
+    } as never);
+    mockedUseOrganization.mockReturnValue(baseOrganization("manager"));
+
+    renderShell();
+
+    expect(screen.getByText("Visit Review")).toBeInTheDocument();
+    expect(screen.queryByText("Billing")).not.toBeInTheDocument();
+  });
+
   it("does not show engineering-phase copy in the header", () => {
     mockedUseAuth.mockReturnValue({
       user: { email: "owner@acme.test" },

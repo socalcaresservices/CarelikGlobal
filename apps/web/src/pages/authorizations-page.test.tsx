@@ -6,12 +6,14 @@ import { useOrganization } from "@/providers/organization-provider";
 import { supabase } from "@/lib/supabase";
 import { AuthorizationsPage } from "./authorizations-page";
 
-vi.mock("@/providers/organization-provider", () => ({ useOrganization: vi.fn() }));
+vi.mock("@/providers/organization-provider", () => ({
+  useOrganization: vi.fn(),
+}));
 vi.mock("@/lib/supabase", () => ({
   supabase: {
     rpc: vi.fn(),
-    from: vi.fn()
-  }
+    from: vi.fn(),
+  },
 }));
 
 const mockedUseOrganization = vi.mocked(useOrganization);
@@ -31,25 +33,27 @@ function baseOrganization() {
       legalName: "Acme LLC",
       displayName: "Acme",
       status: "active" as const,
-      timezone: "America/Los_Angeles"
+      timezone: "America/Los_Angeles",
     },
     activeOrganizationId: ORG_ID,
     setActiveOrganizationId: vi.fn(),
     role: "organization_admin" as const,
     isPlatformOwner: false,
     hasPermission: vi.fn(),
-    loading: false
+    loading: false,
   };
 }
 
 function renderPage(initialPath = "/authorizations") {
-  const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  const queryClient = new QueryClient({
+    defaultOptions: { queries: { retry: false } },
+  });
   return render(
     <MemoryRouter initialEntries={[initialPath]}>
       <QueryClientProvider client={queryClient}>
         <AuthorizationsPage />
       </QueryClientProvider>
-    </MemoryRouter>
+    </MemoryRouter>,
   );
 }
 
@@ -70,19 +74,23 @@ function mockFromByTable({ clients = [], services = [] }: MockLookups = {}) {
     if (table === "clients") {
       return {
         select: vi.fn(() => ({
-          eq: vi.fn(() => ({ order: vi.fn().mockResolvedValue({ data: clients, error: null }) }))
-        }))
+          eq: vi.fn(() => ({
+            order: vi.fn().mockResolvedValue({ data: clients, error: null }),
+          })),
+        })),
       } as never;
     }
     if (table === "services") {
       return {
         select: vi.fn(() => ({
           eq: vi.fn(() => ({
-            is: vi.fn(() => ({ order: vi.fn().mockResolvedValue({ data: services, error: null }) }))
-          }))
+            is: vi.fn(() => ({
+              order: vi.fn().mockResolvedValue({ data: services, error: null }),
+            })),
+          })),
         })),
         insert: insertMock,
-        update: updateMock
+        update: updateMock,
       } as never;
     }
     return { insert: insertMock, update: updateMock } as never;
@@ -97,7 +105,10 @@ describe("AuthorizationsPage", () => {
   });
 
   it("shows a not-available message without authorizations.read", () => {
-    mockedUseOrganization.mockReturnValue({ ...baseOrganization(), hasPermission: vi.fn(() => false) });
+    mockedUseOrganization.mockReturnValue({
+      ...baseOrganization(),
+      hasPermission: vi.fn(() => false),
+    });
 
     renderPage();
     expect(screen.getByText("Not available")).toBeInTheDocument();
@@ -106,7 +117,9 @@ describe("AuthorizationsPage", () => {
   it("lists authorizations with a usage status", async () => {
     mockedUseOrganization.mockReturnValue({
       ...baseOrganization(),
-      hasPermission: vi.fn((permission: string) => permission === "authorizations.read")
+      hasPermission: vi.fn(
+        (permission: string) => permission === "authorizations.read",
+      ),
     });
     mockedRpc.mockResolvedValue({
       data: [
@@ -123,24 +136,30 @@ describe("AuthorizationsPage", () => {
           period_end: "2027-06-30",
           notes: null,
           hours_used_this_month: 15,
-          hours_scheduled_this_month: 10
-        }
+          hours_scheduled_this_month: 10,
+        },
       ],
-      error: null
+      error: null,
     } as never);
 
     renderPage();
 
-    await waitFor(() => expect(screen.getByText("Jordan Rivera")).toBeInTheDocument());
+    await waitFor(() =>
+      expect(screen.getByText("Jordan Rivera")).toBeInTheDocument(),
+    );
     expect(screen.getByText("Personal care")).toBeInTheDocument();
-    expect(screen.getByText("Over limit", { selector: "span" })).toBeInTheDocument();
+    expect(
+      screen.getByText("Over limit", { selector: "span" }),
+    ).toBeInTheDocument();
     expect(screen.queryByText("Add an authorization")).not.toBeInTheDocument();
   });
 
   it("exports filtered authorizations as a CSV download", async () => {
     mockedUseOrganization.mockReturnValue({
       ...baseOrganization(),
-      hasPermission: vi.fn((permission: string) => permission === "authorizations.read")
+      hasPermission: vi.fn(
+        (permission: string) => permission === "authorizations.read",
+      ),
     });
     mockedRpc.mockResolvedValue({
       data: [
@@ -157,44 +176,69 @@ describe("AuthorizationsPage", () => {
           period_end: "2027-06-30",
           notes: null,
           hours_used_this_month: 15,
-          hours_scheduled_this_month: 10
-        }
+          hours_scheduled_this_month: 10,
+        },
       ],
-      error: null
+      error: null,
     } as never);
 
     renderPage();
-    await waitFor(() => expect(screen.getByText("Jordan Rivera")).toBeInTheDocument());
+    await waitFor(() =>
+      expect(screen.getByText("Jordan Rivera")).toBeInTheDocument(),
+    );
 
-    const clickSpy = vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => {});
-    fireEvent.click(screen.getByRole("button", { name: "Export filtered CSV" }));
+    const clickSpy = vi
+      .spyOn(HTMLAnchorElement.prototype, "click")
+      .mockImplementation(() => {});
+    fireEvent.click(
+      screen.getByRole("button", { name: "Export filtered CSV" }),
+    );
 
     expect(clickSpy).toHaveBeenCalledTimes(1);
     clickSpy.mockRestore();
   });
 
   it("adds a new authorization", async () => {
-    mockedUseOrganization.mockReturnValue({ ...baseOrganization(), hasPermission: vi.fn(() => true) });
+    mockedUseOrganization.mockReturnValue({
+      ...baseOrganization(),
+      hasPermission: vi.fn(() => true),
+    });
     mockedRpc.mockResolvedValue({ data: [], error: null } as never);
     const { insertMock } = mockFromByTable({
       clients: [{ id: CLIENT_ID, first_name: "Jordan", last_name: "Rivera" }],
-      services: [{ id: SERVICE_ID, name: "Personal care", is_active: true }]
+      services: [{ id: SERVICE_ID, name: "Personal care", is_active: true }],
     });
 
     renderPage();
 
     fireEvent.focus(screen.getByLabelText("Client"));
-    await waitFor(() => expect(screen.getByRole("option", { name: "Jordan Rivera" })).toBeInTheDocument());
+    await waitFor(() =>
+      expect(
+        screen.getByRole("option", { name: "Jordan Rivera" }),
+      ).toBeInTheDocument(),
+    );
     fireEvent.mouseDown(screen.getByRole("option", { name: "Jordan Rivera" }));
 
     fireEvent.focus(screen.getByLabelText("Service"));
-    await waitFor(() => expect(screen.getByRole("option", { name: "Personal care" })).toBeInTheDocument());
+    await waitFor(() =>
+      expect(
+        screen.getByRole("option", { name: "Personal care" }),
+      ).toBeInTheDocument(),
+    );
     fireEvent.mouseDown(screen.getByRole("option", { name: "Personal care" }));
 
-    fireEvent.change(screen.getByLabelText("Payer"), { target: { value: "Medicaid" } });
-    fireEvent.change(screen.getByLabelText("Max hours / month"), { target: { value: "20" } });
-    fireEvent.change(screen.getByLabelText("Period start"), { target: { value: "2026-07-01" } });
-    fireEvent.change(screen.getByLabelText("Period end"), { target: { value: "2027-06-30" } });
+    fireEvent.change(screen.getByLabelText("Payer"), {
+      target: { value: "Medicaid" },
+    });
+    fireEvent.change(screen.getByLabelText("Max hours / month"), {
+      target: { value: "20" },
+    });
+    fireEvent.change(screen.getByLabelText("Period start"), {
+      target: { value: "2026-07-01" },
+    });
+    fireEvent.change(screen.getByLabelText("Period end"), {
+      target: { value: "2027-06-30" },
+    });
     fireEvent.click(screen.getByRole("button", { name: "Add authorization" }));
 
     await waitFor(() =>
@@ -204,32 +248,42 @@ describe("AuthorizationsPage", () => {
           client_id: CLIENT_ID,
           service_id: SERVICE_ID,
           payer: "Medicaid",
-          max_monthly_hours: 20
-        })
-      )
+          max_monthly_hours: 20,
+        }),
+      ),
     );
   });
 
   it("pre-fills and locks the client field when arriving with ?clientId=", async () => {
-    mockedUseOrganization.mockReturnValue({ ...baseOrganization(), hasPermission: vi.fn(() => true) });
+    mockedUseOrganization.mockReturnValue({
+      ...baseOrganization(),
+      hasPermission: vi.fn(() => true),
+    });
     mockedRpc.mockResolvedValue({ data: [], error: null } as never);
     mockFromByTable({
       clients: [{ id: CLIENT_ID, first_name: "Jordan", last_name: "Rivera" }],
-      services: [{ id: SERVICE_ID, name: "Personal care", is_active: true }]
+      services: [{ id: SERVICE_ID, name: "Personal care", is_active: true }],
     });
 
     renderPage(`/authorizations?clientId=${CLIENT_ID}`);
 
     await waitFor(() => expect(screen.getByLabelText("Client")).toBeDisabled());
-    await waitFor(() => expect(screen.getByLabelText("Client")).toHaveValue("Jordan Rivera"));
-    expect(screen.queryByRole("button", { name: "Clear Client" })).not.toBeInTheDocument();
+    await waitFor(() =>
+      expect(screen.getByLabelText("Client")).toHaveValue("Jordan Rivera"),
+    );
+    expect(
+      screen.queryByRole("button", { name: "Clear Client" }),
+    ).not.toBeInTheDocument();
   });
 
   it("amends an existing authorization via RPC instead of a direct update", async () => {
-    mockedUseOrganization.mockReturnValue({ ...baseOrganization(), hasPermission: vi.fn(() => true) });
+    mockedUseOrganization.mockReturnValue({
+      ...baseOrganization(),
+      hasPermission: vi.fn(() => true),
+    });
     mockFromByTable({
       clients: [{ id: CLIENT_ID, first_name: "Jordan", last_name: "Rivera" }],
-      services: [{ id: SERVICE_ID, name: "Personal care", is_active: true }]
+      services: [{ id: SERVICE_ID, name: "Personal care", is_active: true }],
     });
     mockedRpc.mockImplementation((fn: string) => {
       if (fn === "list_client_authorizations") {
@@ -249,10 +303,10 @@ describe("AuthorizationsPage", () => {
               notes: null,
               hours_used_this_month: 5,
               hours_scheduled_this_month: 5,
-              hourly_rate_cents: 4500
-            }
+              hourly_rate_cents: 4500,
+            },
           ],
-          error: null
+          error: null,
         }) as never;
       }
       if (fn === "amend_client_authorization") {
@@ -265,9 +319,15 @@ describe("AuthorizationsPage", () => {
     await waitFor(() => expect(screen.getByText("Edit")).toBeInTheDocument());
     fireEvent.click(screen.getByText("Edit"));
 
-    await waitFor(() => expect(screen.getByLabelText("Billing rate ($/hour)")).toHaveValue(45));
-    fireEvent.change(screen.getByLabelText("Billing rate ($/hour)"), { target: { value: "50" } });
-    fireEvent.change(screen.getByLabelText("Reason for change"), { target: { value: "Payer rate increase" } });
+    await waitFor(() =>
+      expect(screen.getByLabelText("Billing rate ($/hour)")).toHaveValue(45),
+    );
+    fireEvent.change(screen.getByLabelText("Billing rate ($/hour)"), {
+      target: { value: "50" },
+    });
+    fireEvent.change(screen.getByLabelText("Reason for change"), {
+      target: { value: "Payer rate increase" },
+    });
     fireEvent.click(screen.getByRole("button", { name: "Save changes" }));
 
     await waitFor(() =>
@@ -276,14 +336,80 @@ describe("AuthorizationsPage", () => {
         expect.objectContaining({
           target_authorization_id: "33333333-3333-4333-8333-333333333333",
           reason: "Payer rate increase",
-          new_hourly_rate_cents: 5000
-        })
-      )
+          new_hourly_rate_cents: 5000,
+        }),
+      ),
     );
   });
 
+  it("does not expose or send an authorization rate for a manager", async () => {
+    mockedUseOrganization.mockReturnValue({
+      ...baseOrganization(),
+      role: "manager",
+      hasPermission: vi.fn((permission: string) =>
+        ["authorizations.read", "authorizations.update"].includes(permission),
+      ),
+    });
+    mockFromByTable({
+      clients: [{ id: CLIENT_ID, first_name: "Jordan", last_name: "Rivera" }],
+      services: [{ id: SERVICE_ID, name: "Personal care", is_active: true }],
+    });
+    mockedRpc.mockImplementation((fn: string) => {
+      if (fn === "list_client_authorizations") {
+        return Promise.resolve({
+          data: [
+            {
+              id: "33333333-3333-4333-8333-333333333333",
+              client_id: CLIENT_ID,
+              client_name: "Jordan Rivera",
+              service_id: SERVICE_ID,
+              service_name: "Personal care",
+              payer: "Medicaid",
+              authorization_number: "AUTH-1",
+              max_monthly_hours: 20,
+              period_start: "2026-07-01",
+              period_end: "2027-06-30",
+              notes: null,
+              hours_used_this_month: 5,
+              hours_scheduled_this_month: 5,
+              hourly_rate_cents: 4500,
+            },
+          ],
+          error: null,
+        }) as never;
+      }
+      return Promise.resolve({ data: [], error: null }) as never;
+    });
+
+    renderPage();
+    await waitFor(() => expect(screen.getByText("Edit")).toBeInTheDocument());
+
+    expect(
+      screen.queryByLabelText("Billing rate ($/hour)"),
+    ).not.toBeInTheDocument();
+    fireEvent.click(screen.getByText("Edit"));
+    fireEvent.change(screen.getByLabelText("Reason for change"), {
+      target: { value: "Hours corrected" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Save changes" }));
+
+    await waitFor(() =>
+      expect(mockedRpc).toHaveBeenCalledWith(
+        "amend_client_authorization",
+        expect.objectContaining({ reason: "Hours corrected" }),
+      ),
+    );
+    const amendCall = mockedRpc.mock.calls.find(
+      ([fn]) => fn === "amend_client_authorization",
+    );
+    expect(amendCall?.[1]).not.toHaveProperty("new_hourly_rate_cents");
+  });
+
   it("soft-deletes an authorization via Remove", async () => {
-    mockedUseOrganization.mockReturnValue({ ...baseOrganization(), hasPermission: vi.fn(() => true) });
+    mockedUseOrganization.mockReturnValue({
+      ...baseOrganization(),
+      hasPermission: vi.fn(() => true),
+    });
     mockedRpc.mockResolvedValue({
       data: [
         {
@@ -299,10 +425,10 @@ describe("AuthorizationsPage", () => {
           period_end: "2027-06-30",
           notes: null,
           hours_used_this_month: 5,
-          hours_scheduled_this_month: 5
-        }
+          hours_scheduled_this_month: 5,
+        },
       ],
-      error: null
+      error: null,
     } as never);
     const { updateMock, eqMock } = mockFromByTable();
 
@@ -312,8 +438,13 @@ describe("AuthorizationsPage", () => {
     fireEvent.click(screen.getByText("Remove"));
 
     await waitFor(() =>
-      expect(updateMock).toHaveBeenCalledWith(expect.objectContaining({ deleted_at: expect.any(String) }))
+      expect(updateMock).toHaveBeenCalledWith(
+        expect.objectContaining({ deleted_at: expect.any(String) }),
+      ),
     );
-    expect(eqMock).toHaveBeenCalledWith("id", "33333333-3333-4333-8333-333333333333");
+    expect(eqMock).toHaveBeenCalledWith(
+      "id",
+      "33333333-3333-4333-8333-333333333333",
+    );
   });
 });
