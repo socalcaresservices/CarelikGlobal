@@ -36,7 +36,12 @@ const mockedRpc = vi.mocked(supabase.rpc);
 const ORG_ID = "11111111-1111-4111-8111-111111111111";
 
 function baseOrganization(
-  role: "organization_owner" | "organization_admin" | null,
+  role:
+    | "organization_owner"
+    | "organization_admin"
+    | "manager"
+    | "caregiver"
+    | null,
 ) {
   return {
     organizations: [],
@@ -336,7 +341,7 @@ describe("AppShell nav", () => {
 
     renderShell();
 
-    expect(screen.getByText("Ogevia")).toBeInTheDocument();
+    expect(screen.getAllByText("Ogevia")).toHaveLength(2);
     expect(screen.getByText("Powered by Ogevia")).toBeInTheDocument();
   });
 
@@ -353,8 +358,11 @@ describe("AppShell nav", () => {
 
     renderShell();
 
-    const logo = screen.getByAltText("Acme Care");
-    expect(logo).toHaveAttribute("src", "https://example.com/acme-logo.png");
+    const logos = screen.getAllByAltText("Acme Care");
+    expect(logos).toHaveLength(2);
+    for (const logo of logos) {
+      expect(logo).toHaveAttribute("src", "https://example.com/acme-logo.png");
+    }
     expect(screen.queryByText("Ogevia")).not.toBeInTheDocument();
   });
 
@@ -372,8 +380,63 @@ describe("AppShell nav", () => {
     // Appears twice: the sidebar header (in place of a logo) and the top
     // header (plain text, not a switcher, since this test's mocked
     // `organizations` array has only one entry).
-    expect(screen.getAllByText("Acme Care")).toHaveLength(2);
+    expect(screen.getAllByText("Acme Care")).toHaveLength(3);
     expect(screen.queryByText("Ogevia")).not.toBeInTheDocument();
+  });
+
+  it.each(["organization_owner", "manager", "caregiver"] as const)(
+    "shows the organization logo for the %s account shell",
+    (role) => {
+      mockedUseAuth.mockReturnValue({
+        user: { email: `${role}@acme.test` },
+      } as never);
+      mockedUseOrganization.mockReturnValue({
+        ...baseOrganization(role),
+        activeOrganization: brandedOrganization({
+          logoUrl: "https://example.com/acme-logo.png",
+        }),
+      });
+
+      renderShell();
+      expect(screen.getAllByAltText("Acme Care")).toHaveLength(2);
+    },
+  );
+
+  it("opens the complete manager navigation from the mobile menu button", () => {
+    mockedUseAuth.mockReturnValue({
+      user: { email: "manager@acme.test" },
+    } as never);
+    mockedUseOrganization.mockReturnValue({
+      ...baseOrganization("manager"),
+      activeOrganization: brandedOrganization(),
+    });
+
+    renderShell();
+    fireEvent.click(screen.getByRole("button", { name: "Open menu" }));
+
+    expect(screen.getAllByText("Operations Dashboard")).toHaveLength(2);
+    expect(screen.getAllByText("Clients")).toHaveLength(2);
+    expect(screen.getAllByText("Authorizations")).toHaveLength(2);
+    expect(
+      screen.getByRole("button", { name: "Close menu" }),
+    ).toBeInTheDocument();
+  });
+
+  it("limits caregiver navigation to visit work", () => {
+    mockedUseAuth.mockReturnValue({
+      user: { email: "caregiver@acme.test" },
+    } as never);
+    mockedUseOrganization.mockReturnValue({
+      ...baseOrganization("caregiver"),
+      activeOrganization: brandedOrganization(),
+    });
+
+    renderShell();
+    expect(screen.getByText("Service Verification")).toBeInTheDocument();
+    expect(screen.getByText("Schedule a visit")).toBeInTheDocument();
+    expect(screen.queryByText("Clients")).not.toBeInTheDocument();
+    expect(screen.queryByText("Care Team")).not.toBeInTheDocument();
+    expect(screen.queryByText("Authorizations")).not.toBeInTheDocument();
   });
 
   it("sets --color-accent from the organization's primary color, which every branded surface reads", () => {
