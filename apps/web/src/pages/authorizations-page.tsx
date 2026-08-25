@@ -11,14 +11,14 @@ import {
   FilterBar,
   type ActiveFilter,
   type ComboboxOption,
-  type StatusTone
+  type StatusTone,
 } from "@carelik/ui";
 import {
   getAuthorizationExpiryStatus,
   getAuthorizationUsageStatus,
   isAuthorizationActive,
   type AuthorizationExpiryStatus,
-  type AuthorizationUsageStatus
+  type AuthorizationUsageStatus,
 } from "@carelik/shared";
 import { useOrganization } from "@/providers/organization-provider";
 import { supabase } from "@/lib/supabase";
@@ -72,26 +72,26 @@ const usageTone: Record<AuthorizationUsageStatus, StatusTone> = {
   normal: "success",
   approaching_limit: "warning",
   at_limit: "danger",
-  over_limit: "danger"
+  over_limit: "danger",
 };
 
 const usageLabelText: Record<AuthorizationUsageStatus, string> = {
   normal: "Normal usage",
   approaching_limit: "Approaching limit",
   at_limit: "At limit",
-  over_limit: "Over limit"
+  over_limit: "Over limit",
 };
 
 const expiryTone: Record<AuthorizationExpiryStatus, StatusTone> = {
   active: "success",
   expiring_soon: "warning",
-  expired: "danger"
+  expired: "danger",
 };
 
 const expiryLabelText: Record<AuthorizationExpiryStatus, string> = {
   active: "Active",
   expiring_soon: "Expiring soon",
-  expired: "Expired"
+  expired: "Expired",
 };
 
 function formatHours(hours: number) {
@@ -108,11 +108,12 @@ const emptyForm = {
   periodEnd: "",
   notes: "",
   hourlyRate: "",
-  reason: ""
+  reason: "",
 };
 
 export function AuthorizationsPage() {
-  const { activeOrganizationId, activeOrganization, hasPermission } = useOrganization();
+  const { activeOrganizationId, activeOrganization, hasPermission } =
+    useOrganization();
   const queryClient = useQueryClient();
 
   // A client can arrive with ?clientId= already set (see the "Add
@@ -125,17 +126,19 @@ export function AuthorizationsPage() {
 
   const canRead = hasPermission("authorizations.read");
   const canManage = hasPermission("authorizations.update");
+  const canReadFinancial = hasPermission("billing.read");
+  const canManageFinancial = hasPermission("billing.update");
 
   const authorizationsQuery = useQuery({
     queryKey: ["authorizations", activeOrganizationId],
     queryFn: async () => {
       const { data, error } = await supabase.rpc("list_client_authorizations", {
-        target_organization_id: activeOrganizationId!
+        target_organization_id: activeOrganizationId!,
       });
       if (error) throw error;
       return (data ?? []) as AuthorizationRow[];
     },
-    enabled: !!activeOrganizationId && canRead
+    enabled: !!activeOrganizationId && canRead,
   });
 
   const clientsQuery = useQuery({
@@ -149,7 +152,7 @@ export function AuthorizationsPage() {
       if (error) throw error;
       return (data ?? []) as ClientOption[];
     },
-    enabled: !!activeOrganizationId && canManage
+    enabled: !!activeOrganizationId && canManage,
   });
 
   const servicesQuery = useQuery({
@@ -164,21 +167,30 @@ export function AuthorizationsPage() {
       if (error) throw error;
       return (data ?? []) as ServiceRow[];
     },
-    enabled: !!activeOrganizationId && canManage
+    enabled: !!activeOrganizationId && canManage,
   });
 
   function refreshAuthorizations() {
-    void queryClient.invalidateQueries({ queryKey: ["authorizations", activeOrganizationId] });
+    void queryClient.invalidateQueries({
+      queryKey: ["authorizations", activeOrganizationId],
+    });
   }
 
   const filters = useFilters<AuthorizationRow>(authorizationsQuery.data, {
     usage: (row, value) =>
-      getAuthorizationUsageStatus(row.max_monthly_hours, row.hours_used_this_month, row.hours_scheduled_this_month) ===
-      value,
-    expiry: (row, value) => getAuthorizationExpiryStatus(row.period_end) === value
+      getAuthorizationUsageStatus(
+        row.max_monthly_hours,
+        row.hours_used_this_month,
+        row.hours_scheduled_this_month,
+      ) === value,
+    expiry: (row, value) =>
+      getAuthorizationExpiryStatus(row.period_end) === value,
   });
 
-  const table = useTableControls<AuthorizationRow, "client" | "period" | "usage">(filters.rows, {
+  const table = useTableControls<
+    AuthorizationRow,
+    "client" | "period" | "usage"
+  >(filters.rows, {
     matchesSearch: (row, query) =>
       row.client_name.toLowerCase().includes(query) ||
       row.service_name.toLowerCase().includes(query) ||
@@ -186,19 +198,31 @@ export function AuthorizationsPage() {
       (row.authorization_number ?? "").toLowerCase().includes(query),
     sorters: {
       client: (a, b) => a.client_name.localeCompare(b.client_name),
-      period: (a, b) => new Date(b.period_start).getTime() - new Date(a.period_start).getTime(),
+      period: (a, b) =>
+        new Date(b.period_start).getTime() - new Date(a.period_start).getTime(),
       usage: (a, b) =>
-        getAuthorizationUsageStatus(a.max_monthly_hours, a.hours_used_this_month, a.hours_scheduled_this_month).localeCompare(
-          getAuthorizationUsageStatus(b.max_monthly_hours, b.hours_used_this_month, b.hours_scheduled_this_month)
-        )
+        getAuthorizationUsageStatus(
+          a.max_monthly_hours,
+          a.hours_used_this_month,
+          a.hours_scheduled_this_month,
+        ).localeCompare(
+          getAuthorizationUsageStatus(
+            b.max_monthly_hours,
+            b.hours_used_this_month,
+            b.hours_scheduled_this_month,
+          ),
+        ),
     },
-    defaultSort: "period"
+    defaultSort: "period",
   });
 
-  const usageStatusOptions = Object.keys(usageLabelText) as AuthorizationUsageStatus[];
+  const usageStatusOptions = Object.keys(
+    usageLabelText,
+  ) as AuthorizationUsageStatus[];
 
   function exportFilteredAuthorizations() {
-    const quote = (value: unknown) => `"${String(value ?? "").replace(/"/g, '""')}"`;
+    const quote = (value: unknown) =>
+      `"${String(value ?? "").replace(/"/g, '""')}"`;
     const header = [
       "Client",
       "Service",
@@ -210,7 +234,7 @@ export function AuthorizationsPage() {
       "Period start",
       "Period end",
       "Usage status",
-      "Expiry status"
+      "Expiry status",
     ];
     const rows = table.rows.map((row) => [
       row.client_name,
@@ -222,12 +246,21 @@ export function AuthorizationsPage() {
       row.hours_scheduled_this_month,
       row.period_start,
       row.period_end,
-      usageLabelText[getAuthorizationUsageStatus(row.max_monthly_hours, row.hours_used_this_month, row.hours_scheduled_this_month)],
-      expiryLabelText[getAuthorizationExpiryStatus(row.period_end)]
+      usageLabelText[
+        getAuthorizationUsageStatus(
+          row.max_monthly_hours,
+          row.hours_used_this_month,
+          row.hours_scheduled_this_month,
+        )
+      ],
+      expiryLabelText[getAuthorizationExpiryStatus(row.period_end)],
     ]);
-    const blob = new Blob([[header, ...rows].map((row) => row.map(quote).join(",")).join("\r\n")], {
-      type: "text/csv;charset=utf-8"
-    });
+    const blob = new Blob(
+      [[header, ...rows].map((row) => row.map(quote).join(",")).join("\r\n")],
+      {
+        type: "text/csv;charset=utf-8",
+      },
+    );
     const url = URL.createObjectURL(blob);
     const anchor = document.createElement("a");
     anchor.href = url;
@@ -235,23 +268,25 @@ export function AuthorizationsPage() {
     anchor.click();
     URL.revokeObjectURL(url);
   }
-  const expiryStatusOptions = Object.keys(expiryLabelText) as AuthorizationExpiryStatus[];
+  const expiryStatusOptions = Object.keys(
+    expiryLabelText,
+  ) as AuthorizationExpiryStatus[];
 
   const authorizationActiveFilters: ActiveFilter[] = [
     filters.values.usage
       ? {
           key: "usage",
           label: `Usage: ${usageLabelText[filters.values.usage as AuthorizationUsageStatus]}`,
-          onRemove: () => filters.setFilter("usage", "")
+          onRemove: () => filters.setFilter("usage", ""),
         }
       : null,
     filters.values.expiry
       ? {
           key: "expiry",
           label: `Expiry: ${expiryLabelText[filters.values.expiry as AuthorizationExpiryStatus]}`,
-          onRemove: () => filters.setFilter("expiry", "")
+          onRemove: () => filters.setFilter("expiry", ""),
         }
-      : null
+      : null,
   ].filter((entry): entry is ActiveFilter => entry !== null);
 
   const columns = useColumnWidths("carelik:column-widths:authorizations", {
@@ -262,10 +297,14 @@ export function AuthorizationsPage() {
     capacity: 90,
     thisMonth: 150,
     usage: 140,
-    expiry: 120
+    expiry: 120,
   });
 
-  const [form, setForm] = useState(() => ({ ...emptyForm, clientId: lockedClientId ?? "", serviceId: lockedServiceId ?? "" }));
+  const [form, setForm] = useState(() => ({
+    ...emptyForm,
+    clientId: lockedClientId ?? "",
+    serviceId: lockedServiceId ?? "",
+  }));
   const [editingId, setEditingId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
@@ -273,23 +312,38 @@ export function AuthorizationsPage() {
   const [pendingId, setPendingId] = useState<string | null>(null);
 
   useEffect(() => {
-    setForm({ ...emptyForm, clientId: lockedClientId ?? "", serviceId: lockedServiceId ?? "" });
+    setForm({
+      ...emptyForm,
+      clientId: lockedClientId ?? "",
+      serviceId: lockedServiceId ?? "",
+    });
     setEditingId(null);
   }, [activeOrganizationId, lockedClientId, lockedServiceId]);
 
-  const clientOptions: ComboboxOption[] = (clientsQuery.data ?? []).map((client) => ({
-    value: client.id,
-    label: `${client.first_name} ${client.last_name}`
-  }));
+  const clientOptions: ComboboxOption[] = (clientsQuery.data ?? []).map(
+    (client) => ({
+      value: client.id,
+      label: `${client.first_name} ${client.last_name}`,
+    }),
+  );
 
-  const editingRow = editingId ? (authorizationsQuery.data ?? []).find((row) => row.id === editingId) : undefined;
+  const editingRow = editingId
+    ? (authorizationsQuery.data ?? []).find((row) => row.id === editingId)
+    : undefined;
 
   const serviceOptions: ComboboxOption[] = (() => {
     const active: ComboboxOption[] = (servicesQuery.data ?? [])
       .filter((service) => service.is_active)
       .map((service) => ({ value: service.id, label: service.name }));
-    if (editingRow && !active.some((option) => option.value === editingRow.service_id)) {
-      active.push({ value: editingRow.service_id, label: editingRow.service_name, description: "inactive" });
+    if (
+      editingRow &&
+      !active.some((option) => option.value === editingRow.service_id)
+    ) {
+      active.push({
+        value: editingRow.service_id,
+        label: editingRow.service_name,
+        description: "inactive",
+      });
     }
     return active;
   })();
@@ -305,14 +359,21 @@ export function AuthorizationsPage() {
       periodStart: row.period_start,
       periodEnd: row.period_end,
       notes: row.notes ?? "",
-      hourlyRate: row.hourly_rate_cents != null ? (row.hourly_rate_cents / 100).toFixed(2) : "",
-      reason: ""
+      hourlyRate:
+        canReadFinancial && row.hourly_rate_cents != null
+          ? (row.hourly_rate_cents / 100).toFixed(2)
+          : "",
+      reason: "",
     });
     setFormError(null);
   }
 
   function resetForm() {
-    setForm({ ...emptyForm, clientId: lockedClientId ?? "", serviceId: lockedServiceId ?? "" });
+    setForm({
+      ...emptyForm,
+      clientId: lockedClientId ?? "",
+      serviceId: lockedServiceId ?? "",
+    });
     setEditingId(null);
     setFormError(null);
   }
@@ -336,12 +397,14 @@ export function AuthorizationsPage() {
       setFormError("Max monthly hours must be a non-negative number.");
       return;
     }
-    if (new Date(form.periodEnd).getTime() <= new Date(form.periodStart).getTime()) {
+    if (
+      new Date(form.periodEnd).getTime() <= new Date(form.periodStart).getTime()
+    ) {
       setFormError("Period end must be after period start.");
       return;
     }
     let rateCents: number | null = null;
-    if (form.hourlyRate.trim() !== "") {
+    if (canManageFinancial && form.hourlyRate.trim() !== "") {
       const rate = Number(form.hourlyRate);
       if (Number.isNaN(rate) || rate < 0) {
         setFormError("Hourly rate must be a non-negative amount.");
@@ -366,7 +429,7 @@ export function AuthorizationsPage() {
           new_authorization_number: form.authorizationNumber || null,
           new_notes: form.notes || null,
           reason: form.reason.trim(),
-          new_hourly_rate_cents: rateCents
+          ...(canManageFinancial ? { new_hourly_rate_cents: rateCents } : {}),
         });
         if (error) throw error;
       } else {
@@ -380,7 +443,7 @@ export function AuthorizationsPage() {
           period_start: form.periodStart,
           period_end: form.periodEnd,
           notes: form.notes || null,
-          hourly_rate_cents: rateCents
+          ...(canManageFinancial ? { hourly_rate_cents: rateCents } : {}),
         });
         if (error) throw error;
       }
@@ -388,7 +451,11 @@ export function AuthorizationsPage() {
       resetForm();
       refreshAuthorizations();
     } catch (cause) {
-      setFormError(cause instanceof Error ? cause.message : "Could not save authorization.");
+      setFormError(
+        cause instanceof Error
+          ? cause.message
+          : "Could not save authorization.",
+      );
     } finally {
       setSaving(false);
     }
@@ -406,7 +473,11 @@ export function AuthorizationsPage() {
       if (editingId === row.id) resetForm();
       refreshAuthorizations();
     } catch (cause) {
-      setRowError(cause instanceof Error ? cause.message : "Could not remove authorization.");
+      setRowError(
+        cause instanceof Error
+          ? cause.message
+          : "Could not remove authorization.",
+      );
     } finally {
       setPendingId(null);
     }
@@ -417,9 +488,12 @@ export function AuthorizationsPage() {
       <section className="mx-auto max-w-5xl">
         <Card>
           <p className="text-sm font-medium text-slate-500">Authorizations</p>
-          <h2 className="mt-1 text-2xl font-semibold text-slate-950">Not available</h2>
+          <h2 className="mt-1 text-2xl font-semibold text-slate-950">
+            Not available
+          </h2>
           <p className="mt-3 text-slate-600">
-            You don&apos;t have permission to view client authorizations for this organization.
+            You don&apos;t have permission to view client authorizations for
+            this organization.
           </p>
         </Card>
       </section>
@@ -447,7 +521,9 @@ export function AuthorizationsPage() {
                 required
                 disabled={!!lockedClientId && !editingId}
                 value={form.clientId || null}
-                onChange={(value) => setForm({ ...form, clientId: value ?? "" })}
+                onChange={(value) =>
+                  setForm({ ...form, clientId: value ?? "" })
+                }
                 options={clientOptions}
                 selectedLabel={editingRow?.client_name}
                 placeholder="Search clients…"
@@ -457,7 +533,9 @@ export function AuthorizationsPage() {
                 required
                 disabled={!!lockedServiceId && !editingId}
                 value={form.serviceId || null}
-                onChange={(value) => setForm({ ...form, serviceId: value ?? "" })}
+                onChange={(value) =>
+                  setForm({ ...form, serviceId: value ?? "" })
+                }
                 options={serviceOptions}
                 selectedLabel={editingRow?.service_name}
                 placeholder="Search services…"
@@ -466,7 +544,10 @@ export function AuthorizationsPage() {
 
             <FormSection title="Authorization details" columns={2}>
               <div>
-                <label htmlFor="auth-payer" className="block text-xs font-medium text-slate-600">
+                <label
+                  htmlFor="auth-payer"
+                  className="block text-xs font-medium text-slate-600"
+                >
                   Payer
                 </label>
                 <input
@@ -474,24 +555,37 @@ export function AuthorizationsPage() {
                   required
                   placeholder="e.g. Medicaid"
                   value={form.payer}
-                  onChange={(event) => setForm({ ...form, payer: event.target.value })}
+                  onChange={(event) =>
+                    setForm({ ...form, payer: event.target.value })
+                  }
                   className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900"
                 />
               </div>
               <div>
-                <label htmlFor="auth-number" className="block text-xs font-medium text-slate-600">
+                <label
+                  htmlFor="auth-number"
+                  className="block text-xs font-medium text-slate-600"
+                >
                   Authorization number
                 </label>
                 <input
                   id="auth-number"
                   placeholder="Optional"
                   value={form.authorizationNumber}
-                  onChange={(event) => setForm({ ...form, authorizationNumber: event.target.value })}
+                  onChange={(event) =>
+                    setForm({
+                      ...form,
+                      authorizationNumber: event.target.value,
+                    })
+                  }
                   className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900"
                 />
               </div>
               <div>
-                <label htmlFor="auth-hours" className="block text-xs font-medium text-slate-600">
+                <label
+                  htmlFor="auth-hours"
+                  className="block text-xs font-medium text-slate-600"
+                >
                   Max hours / month
                 </label>
                 <input
@@ -501,28 +595,41 @@ export function AuthorizationsPage() {
                   step={0.5}
                   required
                   value={form.maxMonthlyHours}
-                  onChange={(event) => setForm({ ...form, maxMonthlyHours: event.target.value })}
+                  onChange={(event) =>
+                    setForm({ ...form, maxMonthlyHours: event.target.value })
+                  }
                   className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900"
                 />
               </div>
-              <div>
-                <label htmlFor="auth-rate" className="block text-xs font-medium text-slate-600">
-                  Billing rate ($/hour)
-                </label>
-                <input
-                  id="auth-rate"
-                  type="number"
-                  min={0}
-                  step={0.01}
-                  placeholder="Optional"
-                  value={form.hourlyRate}
-                  onChange={(event) => setForm({ ...form, hourlyRate: event.target.value })}
-                  className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900"
-                />
-              </div>
+              {canReadFinancial ? (
+                <div>
+                  <label
+                    htmlFor="auth-rate"
+                    className="block text-xs font-medium text-slate-600"
+                  >
+                    Billing rate ($/hour)
+                  </label>
+                  <input
+                    id="auth-rate"
+                    type="number"
+                    min={0}
+                    step={0.01}
+                    placeholder="Optional"
+                    disabled={!canManageFinancial}
+                    value={form.hourlyRate}
+                    onChange={(event) =>
+                      setForm({ ...form, hourlyRate: event.target.value })
+                    }
+                    className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900 disabled:bg-slate-50"
+                  />
+                </div>
+              ) : null}
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label htmlFor="auth-period-start" className="block text-xs font-medium text-slate-600">
+                  <label
+                    htmlFor="auth-period-start"
+                    className="block text-xs font-medium text-slate-600"
+                  >
                     Period start
                   </label>
                   <input
@@ -530,12 +637,17 @@ export function AuthorizationsPage() {
                     type="date"
                     required
                     value={form.periodStart}
-                    onChange={(event) => setForm({ ...form, periodStart: event.target.value })}
+                    onChange={(event) =>
+                      setForm({ ...form, periodStart: event.target.value })
+                    }
                     className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900"
                   />
                 </div>
                 <div>
-                  <label htmlFor="auth-period-end" className="block text-xs font-medium text-slate-600">
+                  <label
+                    htmlFor="auth-period-end"
+                    className="block text-xs font-medium text-slate-600"
+                  >
                     Period end
                   </label>
                   <input
@@ -543,7 +655,9 @@ export function AuthorizationsPage() {
                     type="date"
                     required
                     value={form.periodEnd}
-                    onChange={(event) => setForm({ ...form, periodEnd: event.target.value })}
+                    onChange={(event) =>
+                      setForm({ ...form, periodEnd: event.target.value })
+                    }
                     className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900"
                   />
                 </div>
@@ -555,7 +669,9 @@ export function AuthorizationsPage() {
                 id="auth-notes"
                 aria-label="Notes"
                 value={form.notes}
-                onChange={(event) => setForm({ ...form, notes: event.target.value })}
+                onChange={(event) =>
+                  setForm({ ...form, notes: event.target.value })
+                }
                 className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900"
               />
             </FormSection>
@@ -568,7 +684,9 @@ export function AuthorizationsPage() {
                   required
                   placeholder="e.g. Rate update from payer, hours increase approved by case manager"
                   value={form.reason}
-                  onChange={(event) => setForm({ ...form, reason: event.target.value })}
+                  onChange={(event) =>
+                    setForm({ ...form, reason: event.target.value })
+                  }
                   className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900"
                 />
               </FormSection>
@@ -576,7 +694,11 @@ export function AuthorizationsPage() {
 
             <div className="flex items-end gap-3">
               <Button type="submit" loading={saving}>
-                {saving ? "Saving…" : editingId ? "Save changes" : "Add authorization"}
+                {saving
+                  ? "Saving…"
+                  : editingId
+                    ? "Save changes"
+                    : "Add authorization"}
               </Button>
               {editingId ? (
                 <button
@@ -588,7 +710,9 @@ export function AuthorizationsPage() {
                 </button>
               ) : null}
             </div>
-            {formError ? <p className="text-sm text-red-700">{formError}</p> : null}
+            {formError ? (
+              <p className="text-sm text-red-700">{formError}</p>
+            ) : null}
           </form>
         </Card>
       ) : null}
@@ -606,7 +730,11 @@ export function AuthorizationsPage() {
           </Button>
           <FilterBar
             activeFilters={authorizationActiveFilters}
-            onClearAll={authorizationActiveFilters.length > 0 ? filters.clearAll : undefined}
+            onClearAll={
+              authorizationActiveFilters.length > 0
+                ? filters.clearAll
+                : undefined
+            }
             className="w-full sm:w-auto"
           >
             <input
@@ -624,7 +752,9 @@ export function AuthorizationsPage() {
               <select
                 id="auth-usage-filter"
                 value={filters.values.usage ?? ""}
-                onChange={(event) => filters.setFilter("usage", event.target.value)}
+                onChange={(event) =>
+                  filters.setFilter("usage", event.target.value)
+                }
                 className="rounded-lg border border-slate-200 px-3 py-1.5 text-sm text-slate-900"
               >
                 <option value="">All usage</option>
@@ -642,7 +772,9 @@ export function AuthorizationsPage() {
               <select
                 id="auth-expiry-filter"
                 value={filters.values.expiry ?? ""}
-                onChange={(event) => filters.setFilter("expiry", event.target.value)}
+                onChange={(event) =>
+                  filters.setFilter("expiry", event.target.value)
+                }
                 className="rounded-lg border border-slate-200 px-3 py-1.5 text-sm text-slate-900"
               >
                 <option value="">All expiry</option>
@@ -655,140 +787,172 @@ export function AuthorizationsPage() {
             </div>
           </FilterBar>
         </div>
-        {rowError ? <p className="mt-2 text-sm text-red-700">{rowError}</p> : null}
+        {rowError ? (
+          <p className="mt-2 text-sm text-red-700">{rowError}</p>
+        ) : null}
         {authorizationsQuery.isLoading ? (
           <p className="mt-3 text-sm text-slate-500">Loading…</p>
         ) : authorizationsQuery.isError ? (
-          <p className="mt-3 text-sm text-red-700">Could not load authorizations.</p>
+          <p className="mt-3 text-sm text-red-700">
+            Could not load authorizations.
+          </p>
         ) : (
           <div className="overflow-x-auto">
-          <table className="mt-4 w-full table-fixed text-left text-sm">
-            <thead>
-              <tr className="border-b border-slate-200">
-                <SortableHeader
-                  label="Client"
-                  active={table.sortKey === "client"}
-                  direction={table.direction}
-                  onClick={() => table.toggleSort("client")}
-                  width={columns.widths.client}
-                  onResizeStart={columns.startResize("client")}
-                />
-                <PlainHeader
-                  label="Service"
-                  width={columns.widths.service}
-                  onResizeStart={columns.startResize("service")}
-                />
-                <PlainHeader
-                  label="Payer"
-                  width={columns.widths.payer}
-                  onResizeStart={columns.startResize("payer")}
-                />
-                <SortableHeader
-                  label="Period"
-                  active={table.sortKey === "period"}
-                  direction={table.direction}
-                  onClick={() => table.toggleSort("period")}
-                  width={columns.widths.period}
-                  onResizeStart={columns.startResize("period")}
-                />
-                <PlainHeader
-                  label="Cap / mo"
-                  width={columns.widths.capacity}
-                  onResizeStart={columns.startResize("capacity")}
-                />
-                <PlainHeader
-                  label="This month"
-                  width={columns.widths.thisMonth}
-                  onResizeStart={columns.startResize("thisMonth")}
-                />
-                <SortableHeader
-                  label="Usage"
-                  active={table.sortKey === "usage"}
-                  direction={table.direction}
-                  onClick={() => table.toggleSort("usage")}
-                  width={columns.widths.usage}
-                  onResizeStart={columns.startResize("usage")}
-                />
-                <PlainHeader
-                  label="Expiry"
-                  width={columns.widths.expiry}
-                  onResizeStart={columns.startResize("expiry")}
-                />
-                {canManage ? <th className="pb-2 font-medium" /> : null}
-              </tr>
-            </thead>
-            <tbody>
-              {table.rows.map((row) => {
-                const usage = getAuthorizationUsageStatus(
-                  row.max_monthly_hours,
-                  row.hours_used_this_month,
-                  row.hours_scheduled_this_month
-                );
-                const expiry = getAuthorizationExpiryStatus(row.period_end);
-                const active = isAuthorizationActive(row.period_start, row.period_end);
-                return (
-                  <tr key={row.id} className="border-b border-slate-100 last:border-0">
-                    <td className="py-2.5 text-slate-800">{row.client_name}</td>
-                    <td className="py-2.5 text-slate-600">{row.service_name}</td>
-                    <td className="py-2.5 text-slate-600">
-                      {row.payer}
-                      {row.authorization_number ? (
-                        <span className="block text-xs text-slate-400">#{row.authorization_number}</span>
-                      ) : null}
-                    </td>
-                    <td className="py-2.5 whitespace-nowrap text-slate-600">
-                      {new Date(row.period_start).toLocaleDateString()} –{" "}
-                      {new Date(row.period_end).toLocaleDateString()}
-                      {!active ? <span className="ml-1.5 text-xs text-slate-400">(past/future)</span> : null}
-                    </td>
-                    <td className="py-2.5 text-slate-600">{formatHours(row.max_monthly_hours)}h</td>
-                    <td className="py-2.5 text-slate-600">
-                      {formatHours(row.hours_used_this_month)}h used
-                      <span className="block text-xs text-slate-400">
-                        {formatHours(row.hours_scheduled_this_month)}h scheduled
-                      </span>
-                    </td>
-                    <td className="py-2.5">
-                      <StatusBadge label={usageLabelText[usage]} tone={usageTone[usage]} />
-                    </td>
-                    <td className="py-2.5">
-                      <StatusBadge label={expiryLabelText[expiry]} tone={expiryTone[expiry]} />
-                    </td>
-                    {canManage ? (
-                      <td className="py-2.5 text-right">
-                        <div className="flex justify-end gap-3">
-                          <button
-                            type="button"
-                            onClick={() => startEdit(row)}
-                            className="text-xs font-medium text-slate-700 underline-offset-2 hover:underline"
-                          >
-                            Edit
-                          </button>
-                          <button
-                            type="button"
-                            disabled={pendingId === row.id}
-                            onClick={() => handleRemove(row)}
-                            className="text-xs font-medium text-red-700 underline-offset-2 hover:underline disabled:cursor-not-allowed disabled:opacity-60"
-                          >
-                            Remove
-                          </button>
-                        </div>
-                      </td>
-                    ) : null}
-                  </tr>
-                );
-              })}
-              {table.rows.length === 0 ? (
-                <tr>
-                  <td colSpan={canManage ? 9 : 8} className="py-4 text-center text-slate-400">
-                    {table.search || authorizationActiveFilters.length > 0
-                      ? "No authorizations match your search or filters."
-                      : "No authorizations tracked yet."}
-                  </td>
+            <table className="mt-4 w-full table-fixed text-left text-sm">
+              <thead>
+                <tr className="border-b border-slate-200">
+                  <SortableHeader
+                    label="Client"
+                    active={table.sortKey === "client"}
+                    direction={table.direction}
+                    onClick={() => table.toggleSort("client")}
+                    width={columns.widths.client}
+                    onResizeStart={columns.startResize("client")}
+                  />
+                  <PlainHeader
+                    label="Service"
+                    width={columns.widths.service}
+                    onResizeStart={columns.startResize("service")}
+                  />
+                  <PlainHeader
+                    label="Payer"
+                    width={columns.widths.payer}
+                    onResizeStart={columns.startResize("payer")}
+                  />
+                  <SortableHeader
+                    label="Period"
+                    active={table.sortKey === "period"}
+                    direction={table.direction}
+                    onClick={() => table.toggleSort("period")}
+                    width={columns.widths.period}
+                    onResizeStart={columns.startResize("period")}
+                  />
+                  <PlainHeader
+                    label="Cap / mo"
+                    width={columns.widths.capacity}
+                    onResizeStart={columns.startResize("capacity")}
+                  />
+                  <PlainHeader
+                    label="This month"
+                    width={columns.widths.thisMonth}
+                    onResizeStart={columns.startResize("thisMonth")}
+                  />
+                  <SortableHeader
+                    label="Usage"
+                    active={table.sortKey === "usage"}
+                    direction={table.direction}
+                    onClick={() => table.toggleSort("usage")}
+                    width={columns.widths.usage}
+                    onResizeStart={columns.startResize("usage")}
+                  />
+                  <PlainHeader
+                    label="Expiry"
+                    width={columns.widths.expiry}
+                    onResizeStart={columns.startResize("expiry")}
+                  />
+                  {canManage ? <th className="pb-2 font-medium" /> : null}
                 </tr>
-              ) : null}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {table.rows.map((row) => {
+                  const usage = getAuthorizationUsageStatus(
+                    row.max_monthly_hours,
+                    row.hours_used_this_month,
+                    row.hours_scheduled_this_month,
+                  );
+                  const expiry = getAuthorizationExpiryStatus(row.period_end);
+                  const active = isAuthorizationActive(
+                    row.period_start,
+                    row.period_end,
+                  );
+                  return (
+                    <tr
+                      key={row.id}
+                      className="border-b border-slate-100 last:border-0"
+                    >
+                      <td className="py-2.5 text-slate-800">
+                        {row.client_name}
+                      </td>
+                      <td className="py-2.5 text-slate-600">
+                        {row.service_name}
+                      </td>
+                      <td className="py-2.5 text-slate-600">
+                        {row.payer}
+                        {row.authorization_number ? (
+                          <span className="block text-xs text-slate-400">
+                            #{row.authorization_number}
+                          </span>
+                        ) : null}
+                      </td>
+                      <td className="py-2.5 whitespace-nowrap text-slate-600">
+                        {new Date(row.period_start).toLocaleDateString()} –{" "}
+                        {new Date(row.period_end).toLocaleDateString()}
+                        {!active ? (
+                          <span className="ml-1.5 text-xs text-slate-400">
+                            (past/future)
+                          </span>
+                        ) : null}
+                      </td>
+                      <td className="py-2.5 text-slate-600">
+                        {formatHours(row.max_monthly_hours)}h
+                      </td>
+                      <td className="py-2.5 text-slate-600">
+                        {formatHours(row.hours_used_this_month)}h used
+                        <span className="block text-xs text-slate-400">
+                          {formatHours(row.hours_scheduled_this_month)}h
+                          scheduled
+                        </span>
+                      </td>
+                      <td className="py-2.5">
+                        <StatusBadge
+                          label={usageLabelText[usage]}
+                          tone={usageTone[usage]}
+                        />
+                      </td>
+                      <td className="py-2.5">
+                        <StatusBadge
+                          label={expiryLabelText[expiry]}
+                          tone={expiryTone[expiry]}
+                        />
+                      </td>
+                      {canManage ? (
+                        <td className="py-2.5 text-right">
+                          <div className="flex justify-end gap-3">
+                            <button
+                              type="button"
+                              onClick={() => startEdit(row)}
+                              className="text-xs font-medium text-slate-700 underline-offset-2 hover:underline"
+                            >
+                              Edit
+                            </button>
+                            <button
+                              type="button"
+                              disabled={pendingId === row.id}
+                              onClick={() => handleRemove(row)}
+                              className="text-xs font-medium text-red-700 underline-offset-2 hover:underline disabled:cursor-not-allowed disabled:opacity-60"
+                            >
+                              Remove
+                            </button>
+                          </div>
+                        </td>
+                      ) : null}
+                    </tr>
+                  );
+                })}
+                {table.rows.length === 0 ? (
+                  <tr>
+                    <td
+                      colSpan={canManage ? 9 : 8}
+                      className="py-4 text-center text-slate-400"
+                    >
+                      {table.search || authorizationActiveFilters.length > 0
+                        ? "No authorizations match your search or filters."
+                        : "No authorizations tracked yet."}
+                    </td>
+                  </tr>
+                ) : null}
+              </tbody>
+            </table>
           </div>
         )}
       </Card>
