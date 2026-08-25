@@ -18,7 +18,7 @@ describe("StaffVisitsPage", () => {
   it("explains that caregivers cannot add or change visits", () => {
     renderPage();
 
-    expect(screen.getByRole("heading", { name: "Scheduled visits" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "My visits" })).toBeInTheDocument();
     expect(screen.getByText(/Your agency manages visit scheduling/)).toBeInTheDocument();
     expect(screen.getByText(/Contact an administrator when a visit needs to be added or changed/)).toBeInTheDocument();
   });
@@ -35,7 +35,7 @@ describe("StaffVisitsPage", () => {
   it("routes the caregiver to Shift Verification", () => {
     renderPage();
 
-    fireEvent.click(screen.getByRole("link", { name: "Open Shift Verification" }));
+    fireEvent.click(screen.getByRole("link", { name: "Verify a visit" }));
     expect(screen.getByText("verification page")).toBeInTheDocument();
   });
 });

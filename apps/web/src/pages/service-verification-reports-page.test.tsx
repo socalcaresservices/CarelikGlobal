@@ -65,7 +65,8 @@ function renderPage() {
 }
 
 async function openReport(name: RegExp) {
-  fireEvent.click(await screen.findByRole("button", { name }));
+  const option = await screen.findByRole("option", { name });
+  fireEvent.change(screen.getByLabelText("Report"), { target: { value: option.getAttribute("value") } });
 }
 
 function mockOrgLetterhead() {

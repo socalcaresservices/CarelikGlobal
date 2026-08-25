@@ -187,9 +187,8 @@ describe("Candidates pipeline", () => {
     renderPage();
 
     await waitFor(() => expect(screen.getByText("Ashley Rivera")).toBeInTheDocument());
-    const funnelCard = screen.getByText("Hiring Stage funnel").closest("div")!;
-    const screeningRow = within(funnelCard).getAllByText("Screening")[0]!.closest("div")!;
-    expect(within(screeningRow).getByText("2")).toBeInTheDocument();
+    const funnelCard = screen.getByText(/Pipeline summary/).closest("details")!;
+    expect(within(funnelCard).getByRole("button", { name: "Screening · 2" })).toBeInTheDocument();
   });
 
   it("shows the empty Candidates state", async () => {

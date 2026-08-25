@@ -159,7 +159,7 @@ describe("SchedulePage", () => {
 
     await waitFor(() => expect(screen.getByText("Jordan Rivera")).toBeInTheDocument());
     expect(screen.getByText("Showing only shifts assigned to you.")).toBeInTheDocument();
-    expect(screen.queryByText("Schedule a shift")).not.toBeInTheDocument();
+    expect(screen.queryByText("Create an assignment")).not.toBeInTheDocument();
     expect(mockedRpc).toHaveBeenCalledWith(
       "list_shifts",
       expect.objectContaining({
@@ -170,7 +170,7 @@ describe("SchedulePage", () => {
     );
   });
 
-  it("shows a Needs coverage card for shifts whose caregiver called out", async () => {
+  it("shows an On-call coverage card for shifts whose caregiver called out", async () => {
     mockedUseOrganization.mockReturnValue({ ...baseOrganization(), hasPermission: vi.fn(() => true) });
     mockRpc({
       shifts: [
@@ -187,8 +187,8 @@ describe("SchedulePage", () => {
 
     renderPage();
 
-    await waitFor(() => expect(screen.getByText("Needs coverage")).toBeInTheDocument());
-    const coverageCard = screen.getByText("Needs coverage").closest("div")!;
+    await waitFor(() => expect(screen.getByText("On-call coverage")).toBeInTheDocument());
+    const coverageCard = screen.getByText("On-call coverage").closest("div")!;
     expect(within(coverageCard).getByText("Reason: Family emergency")).toBeInTheDocument();
   });
 
@@ -228,7 +228,7 @@ describe("SchedulePage", () => {
     mockSchedulingTables([{ id: CLIENT_ID, first_name: "Jordan", last_name: "Rivera" }], [{ id: CAREGIVER_ID, linked_user_id: null, first_name: "Sam", last_name: "Caregiver", preferred_name: null }], insertMock);
 
     renderPage();
-    await waitFor(() => expect(screen.getByText("Schedule a shift")).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText("Create an assignment")).toBeInTheDocument());
     await waitFor(() => expect(screen.getByText("Jordan Rivera")).toBeInTheDocument());
 
     fireEvent.change(screen.getByLabelText("Client"), { target: { value: CLIENT_ID } });
@@ -336,7 +336,7 @@ describe("SchedulePage", () => {
     ]);
 
     renderPage();
-    await waitFor(() => expect(screen.getByText("Needs coverage")).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText("On-call coverage")).toBeInTheDocument());
     fireEvent.click(screen.getByRole("button", { name: "Reassign" }));
 
     await waitFor(() =>
@@ -419,7 +419,7 @@ describe("SchedulePage", () => {
       await waitFor(() => expect(screen.getByText("Jordan Rivera")).toBeInTheDocument());
       await fillBaseForm();
 
-      fireEvent.click(screen.getByLabelText("Repeats"));
+      fireEvent.click(screen.getByRole("button", { name: "Fixed weekly" }));
       fireEvent.click(screen.getByLabelText("Mon"));
       fireEvent.click(screen.getByLabelText("Wed"));
       fireEvent.click(screen.getByLabelText("Fri"));
@@ -455,7 +455,7 @@ describe("SchedulePage", () => {
       await waitFor(() => expect(screen.getByText("Jordan Rivera")).toBeInTheDocument());
       await fillBaseForm();
 
-      fireEvent.click(screen.getByLabelText("Repeats"));
+      fireEvent.click(screen.getByRole("button", { name: "Fixed weekly" }));
       ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].forEach((label) => fireEvent.click(screen.getByLabelText(label)));
       fireEvent.change(screen.getByLabelText("Until"), { target: { value: "2027-08-24" } });
 
@@ -484,7 +484,7 @@ describe("SchedulePage", () => {
       await waitFor(() => expect(screen.getByText("Jordan Rivera")).toBeInTheDocument());
       await fillBaseForm();
 
-      fireEvent.click(screen.getByLabelText("Repeats"));
+      fireEvent.click(screen.getByRole("button", { name: "Fixed weekly" }));
       fireEvent.click(screen.getByLabelText("Mon"));
       fireEvent.click(screen.getByLabelText("Wed"));
       fireEvent.click(screen.getByLabelText("Fri"));
@@ -604,7 +604,7 @@ describe("SchedulePage", () => {
       ]);
 
       renderPage();
-      await waitFor(() => expect(screen.getByText("Needs coverage")).toBeInTheDocument());
+      await waitFor(() => expect(screen.getByText("On-call coverage")).toBeInTheDocument());
 
       fireEvent.click(screen.getByRole("button", { name: "Reassign" }));
       fireEvent.change(screen.getByLabelText("Replacement caregiver"), { target: { value: replacementRecordId } });
@@ -634,7 +634,7 @@ describe("SchedulePage", () => {
       ]);
 
       renderPage();
-      await waitFor(() => expect(screen.getByText("Needs coverage")).toBeInTheDocument());
+      await waitFor(() => expect(screen.getByText("On-call coverage")).toBeInTheDocument());
 
       fireEvent.click(screen.getByRole("button", { name: "Reassign" }));
       const replacementSelect = screen.getByLabelText("Replacement caregiver");
