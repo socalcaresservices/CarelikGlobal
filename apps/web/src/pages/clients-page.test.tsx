@@ -61,12 +61,6 @@ function renderPage() {
   );
 }
 
-async function openClientRecords() {
-  fireEvent.click(
-    await screen.findByRole("button", { name: "Client Records" }),
-  );
-}
-
 describe("ClientsPage", () => {
   afterEach(() => {
     vi.clearAllMocks();
@@ -80,6 +74,51 @@ describe("ClientsPage", () => {
 
     renderPage();
     expect(screen.getByText("Not available")).toBeInTheDocument();
+  });
+
+  it("keeps operational monitoring out of the Clients page", async () => {
+    mockedUseOrganization.mockReturnValue({
+      ...baseOrganization(),
+      hasPermission: vi.fn(() => true),
+    });
+    mockedFrom.mockReturnValue({ select: mockReadableClients([]) } as never);
+
+    renderPage();
+
+    expect(await screen.findByText("Client directory")).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Operations" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Client Records" }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("presents client entry as one top-to-bottom form", async () => {
+    mockedUseOrganization.mockReturnValue({
+      ...baseOrganization(),
+      hasPermission: vi.fn(() => true),
+    });
+    mockedFrom.mockReturnValue({ select: mockReadableClients([]) } as never);
+
+    renderPage();
+    fireEvent.click(await screen.findByRole("button", { name: "Add client" }));
+
+    const identity = screen.getByText("1. Client identity");
+    const contact = screen.getByText("2. Contact details");
+    const address = screen.getByText("3. Home address");
+    const notes = screen.getByText("4. Care notes");
+
+    expect(identity.compareDocumentPosition(contact)).toBe(
+      Node.DOCUMENT_POSITION_FOLLOWING,
+    );
+    expect(contact.compareDocumentPosition(address)).toBe(
+      Node.DOCUMENT_POSITION_FOLLOWING,
+    );
+    expect(address.compareDocumentPosition(notes)).toBe(
+      Node.DOCUMENT_POSITION_FOLLOWING,
+    );
+    expect(screen.queryByText("Client directory")).not.toBeInTheDocument();
   });
 
   it("lists clients but hides the add form without clients.update", async () => {
@@ -105,12 +144,13 @@ describe("ClientsPage", () => {
     mockedFrom.mockReturnValue({ select: selectMock } as never);
 
     renderPage();
-    await openClientRecords();
 
     await waitFor(() =>
       expect(screen.getByText("Jordan Rivera")).toBeInTheDocument(),
     );
-    expect(screen.queryByText("Add a client")).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Add client" }),
+    ).not.toBeInTheDocument();
     expect(screen.getByText("CL-000001")).toBeInTheDocument();
   });
 
@@ -151,7 +191,6 @@ describe("ClientsPage", () => {
     Object.assign(navigator, { clipboard: { writeText } });
 
     renderPage();
-    await openClientRecords();
     await waitFor(() =>
       expect(screen.getByText("Jordan Rivera")).toBeInTheDocument(),
     );
@@ -176,11 +215,8 @@ describe("ClientsPage", () => {
     mockedFrom.mockReturnValue({ select: mockReadableClients([]) } as never);
 
     renderPage();
-    await openClientRecords();
     await waitFor(() =>
-      expect(
-        screen.getByText(/You're ready to add your first client/),
-      ).toBeInTheDocument(),
+      expect(screen.getByText(/No client records yet/)).toBeInTheDocument(),
     );
   });
 
@@ -192,7 +228,6 @@ describe("ClientsPage", () => {
     mockedFrom.mockReturnValue({ select: mockReadableClients([]) } as never);
 
     renderPage();
-    await openClientRecords();
     await waitFor(() =>
       expect(
         screen.getByRole("button", { name: "Add your first client" }),
@@ -237,7 +272,6 @@ describe("ClientsPage", () => {
     mockedFrom.mockReturnValue({ select: selectMock } as never);
 
     renderPage();
-    await openClientRecords();
     await waitFor(() =>
       expect(screen.getByText("Jordan Rivera")).toBeInTheDocument(),
     );
@@ -271,9 +305,9 @@ describe("ClientsPage", () => {
     } as never);
 
     renderPage();
-    await openClientRecords();
+    fireEvent.click(await screen.findByRole("button", { name: "Add client" }));
     await waitFor(() =>
-      expect(screen.getByText("Add a client")).toBeInTheDocument(),
+      expect(screen.getByText("Create a new client")).toBeInTheDocument(),
     );
 
     fireEvent.change(screen.getByLabelText("First name"), {
@@ -309,9 +343,9 @@ describe("ClientsPage", () => {
     } as never);
 
     renderPage();
-    await openClientRecords();
+    fireEvent.click(await screen.findByRole("button", { name: "Add client" }));
     await waitFor(() =>
-      expect(screen.getByText("Add a client")).toBeInTheDocument(),
+      expect(screen.getByText("Create a new client")).toBeInTheDocument(),
     );
 
     fireEvent.change(screen.getByLabelText("First name"), {
@@ -375,7 +409,6 @@ describe("ClientsPage", () => {
     } as never);
 
     renderPage();
-    await openClientRecords();
     await waitFor(() => expect(screen.getByText("Remove")).toBeInTheDocument());
 
     fireEvent.click(screen.getByText("Remove"));
