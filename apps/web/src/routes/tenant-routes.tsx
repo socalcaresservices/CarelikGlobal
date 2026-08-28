@@ -9,7 +9,7 @@ import { CareTeamPage } from "@/pages/care-team-page";
 import { CareTeamDetailPage } from "@/pages/care-team-detail-page";
 import { ClientsPage } from "@/pages/clients-page";
 import { ClientDetailPage } from "@/pages/client-detail-page";
-import { SchedulePage } from "@/pages/schedule-page";
+import { ScheduleWorkspacePage } from "@/pages/schedule-workspace-page";
 import { CredentialsPage } from "@/pages/credentials-page";
 import { AuthorizationsPage } from "@/pages/authorizations-page";
 import { IncidentsPage } from "@/pages/incidents-page";
@@ -56,7 +56,7 @@ export function getTenantRoutes() {
       path="/clients/:id"
       element={<ClientDetailPage />}
     />,
-    <Route key="schedule" path="/schedule" element={<SchedulePage />} />,
+    <Route key="schedule" path="/schedule" element={<ScheduleWorkspacePage />} />,
     <Route
       key="staff-visits"
       path="/staff/visits"
