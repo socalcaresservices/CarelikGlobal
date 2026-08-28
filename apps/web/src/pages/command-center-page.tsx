@@ -3,6 +3,7 @@ import { useOrganization } from "@/providers/organization-provider";
 import { ActionCenter } from "@/components/action-center";
 import { OperationalSnapshot } from "@/components/operational-snapshot";
 import { OwnerInsights } from "@/components/owner-insights";
+import { VisitVerificationShareCard } from "@/components/visit-verification-share-card";
 
 // The Command Center replaces the old "Overview" page. Same route (/),
 // same data, same permission gating - what changed is the read order
@@ -21,7 +22,7 @@ import { OwnerInsights } from "@/components/owner-insights";
 // platform_owner, same gate the old page used, so this is a no-op for
 // every other role.
 export function CommandCenterPage() {
-  const { activeOrganization } = useOrganization();
+  const { activeOrganization, hasPermission } = useOrganization();
 
   return (
     <section className="mx-auto max-w-6xl space-y-8">
@@ -30,6 +31,8 @@ export function CommandCenterPage() {
         title={activeOrganization?.displayName ?? "Ogevia"}
         description="Your high-level operational view: what needs attention and how services stand right now."
       />
+
+      {hasPermission("visits.manage") ? <VisitVerificationShareCard /> : null}
 
       <OperationalSnapshot />
 
