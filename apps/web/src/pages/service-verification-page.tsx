@@ -4,10 +4,8 @@ import {
   AlertTriangle,
   Check,
   CheckCircle2,
-  CircleUserRound,
   Clock3,
   Hand,
-  HeartPulse,
   LockKeyhole,
   PenLine,
   ShieldCheck,
@@ -21,6 +19,7 @@ import {
   formatElapsed,
   formatHours,
   formatVisitDate,
+  formatScheduledTime,
   type ServiceVisitStatus,
   type VisitAuthorizationStatus,
   type VisitSignerRole,
@@ -43,6 +42,20 @@ interface AuthorizedService {
   max_monthly_hours: number;
   hours_used_this_month: number;
   hours_scheduled_this_month: number;
+}
+
+interface ScheduledShift {
+  shift_id: string;
+  service_id: string;
+  service_code: string;
+  service_name: string;
+  service_color: string | null;
+  authorization_id: string;
+  max_monthly_hours: number;
+  hours_used_this_month: number;
+  hours_scheduled_this_month: number;
+  starts_at: string;
+  ends_at: string;
 }
 
 interface ActiveVisit {
@@ -229,7 +242,7 @@ function BrandHeader({
         <div className="min-w-0">
           <p className="truncate font-bold text-slate-950">{agencyName}</p>
           <p className="truncate text-xs text-slate-500">
-            Sign-in sheet · Hoja de registro
+            Visit Verification · Verificación de Visita
           </p>
         </div>
       </div>
@@ -305,6 +318,7 @@ export function ServiceVerificationPage() {
   const [phase, setPhase] = useState<Phase>("loading");
   const [selectedClientId, setSelectedClientId] = useState("");
   const [selectedServiceId, setSelectedServiceId] = useState("");
+  const [selectedShiftId, setSelectedShiftId] = useState<string | null>(null);
   const [visitId, setVisitId] = useState<string | null>(null);
   const [endedVisit, setEndedVisit] = useState<EndedVisit | null>(null);
   const [confirmationMode, setConfirmationMode] =
@@ -374,6 +388,26 @@ export function ServiceVerificationPage() {
       );
       if (queryError) throw queryError;
       return (data ?? []) as AuthorizedService[];
+    },
+    enabled: !!activeOrganizationId && !!selectedClientId && phase === "select",
+  });
+
+  const shiftsQuery = useQuery({
+    queryKey: [
+      "scheduled-shifts-for-visit",
+      activeOrganizationId,
+      selectedClientId,
+    ],
+    queryFn: async () => {
+      const { data, error: queryError } = await supabase.rpc(
+        "list_scheduled_shifts_for_visit",
+        {
+          target_organization_id: activeOrganizationId!,
+          target_client_id: selectedClientId,
+        },
+      );
+      if (queryError) throw queryError;
+      return (data ?? []) as ScheduledShift[];
     },
     enabled: !!activeOrganizationId && !!selectedClientId && phase === "select",
   });
@@ -456,6 +490,17 @@ export function ServiceVerificationPage() {
     }
   }, [selectedServiceId, servicesQuery.data]);
 
+  useEffect(() => {
+    const shifts = shiftsQuery.data ?? [];
+    if (shifts.length === 1) setSelectedShiftId(shifts[0]!.shift_id);
+    if (
+      shifts.length !== 1 &&
+      !shifts.some((shift) => shift.shift_id === selectedShiftId)
+    ) {
+      setSelectedShiftId(null);
+    }
+  }, [selectedShiftId, shiftsQuery.data]);
+
   function invalidateVisitData() {
     void queryClient.invalidateQueries({
       queryKey: ["active-service-visit-v3", activeOrganizationId],
@@ -489,6 +534,7 @@ export function ServiceVerificationPage() {
           target_organization_id: activeOrganizationId,
           target_client_id: selectedClient.client_id,
           target_service_id: selectedService.service_id,
+          scheduled_shift_id: selectedShiftId ?? null,
           visit_task_categories: [],
           visit_service_notes: null,
         },
@@ -610,6 +656,7 @@ export function ServiceVerificationPage() {
     setPhase("select");
     setSelectedClientId("");
     setSelectedServiceId("");
+    setSelectedShiftId(null);
     setVisitId(null);
     setEndedVisit(null);
     setConfirmationMode("signature");
@@ -807,33 +854,85 @@ export function ServiceVerificationPage() {
                 </div>
               ) : null}
 
-              {selectedService ? (
+              {shiftsQuery.isLoading ? (
+                <p className="text-sm text-slate-500">
+                  Loading scheduled shifts…
+                </p>
+              ) : null}
+              {shiftsQuery.isError ? (
+                <p className="rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-800">
+                  Scheduled shifts could not be loaded. Contact your agency
+                  manager.
+                </p>
+              ) : null}
+
+              {(shiftsQuery.data?.length ?? 0) > 0 ? (
+                <div className="space-y-3">
+                  <label className="block text-sm font-semibold text-slate-700">
+                    Scheduled shift for today
+                    {(shiftsQuery.data?.length ?? 0) > 1 ? (
+                      <span className="mt-1 block text-xs font-normal text-slate-500">
+                        Multiple shifts available. Select the one you are
+                        starting.
+                      </span>
+                    ) : null}
+                  </label>
+                  <div className="space-y-2">
+                    {(shiftsQuery.data ?? []).map((shift) => (
+                      <button
+                        key={shift.shift_id}
+                        type="button"
+                        onClick={() => {
+                          setSelectedShiftId(shift.shift_id);
+                          setSelectedServiceId(shift.service_id);
+                        }}
+                        className={cn(
+                          "w-full rounded-2xl border-2 p-3 text-left transition-colors",
+                          selectedShiftId === shift.shift_id
+                            ? "border-indigo-600 bg-indigo-50"
+                            : "border-slate-200 bg-white hover:border-slate-300",
+                        )}
+                      >
+                        <p className="font-semibold text-slate-950">
+                          {formatScheduledTime(shift.starts_at, shift.ends_at)}
+                        </p>
+                        <p className="mt-1 text-xs text-slate-600">
+                          {shift.service_code} · {shift.service_name}
+                        </p>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              ) : null}
+
+              {selectedService && !shiftsQuery.isLoading ? (
                 <div className="rounded-3xl border border-indigo-100 bg-gradient-to-br from-indigo-50 via-white to-sky-50 p-4 text-sm text-indigo-950 shadow-sm">
                   <p className="font-semibold">
                     {selectedService.service_code} ·{" "}
                     {selectedService.service_name}
                   </p>
-                  <div className="mt-3 grid grid-cols-3 gap-2 text-center">
-                    <div className="rounded-2xl border border-indigo-100 bg-indigo-100/70 p-2 text-indigo-950">
-                      <p className="text-lg font-bold">
+                  <div className="mt-3 space-y-2">
+                    <div className="flex items-center justify-between rounded-2xl border border-indigo-100 bg-indigo-100/70 p-2">
+                      <p className="text-xs text-indigo-800">Authorized</p>
+                      <p className="text-sm font-bold text-indigo-950">
                         {formatHours(
                           Number(selectedService.max_monthly_hours) * 60,
                         )}
                         h
                       </p>
-                      <p className="text-[11px] text-indigo-800">Authorized</p>
                     </div>
-                    <div className="rounded-2xl border border-sky-100 bg-sky-100/80 p-2 text-sky-950">
-                      <p className="text-lg font-bold">
+                    <div className="flex items-center justify-between rounded-2xl border border-sky-100 bg-sky-100/80 p-2">
+                      <p className="text-xs text-sky-800">Used this month</p>
+                      <p className="text-sm font-bold text-sky-950">
                         {formatHours(
                           Number(selectedService.hours_used_this_month) * 60,
                         )}
                         h
                       </p>
-                      <p className="text-[11px] text-indigo-800">Serviced</p>
                     </div>
-                    <div className="rounded-2xl border border-emerald-100 bg-emerald-100/80 p-2 text-emerald-950">
-                      <p className="text-lg font-bold">
+                    <div className="flex items-center justify-between rounded-2xl border border-emerald-100 bg-emerald-100/80 p-2">
+                      <p className="text-xs text-emerald-800">Remaining</p>
+                      <p className="text-sm font-bold text-emerald-950">
                         {formatHours(
                           Math.max(
                             0,
@@ -845,7 +944,6 @@ export function ServiceVerificationPage() {
                         )}
                         h
                       </p>
-                      <p className="text-[11px] text-indigo-800">Remaining</p>
                     </div>
                   </div>
                 </div>
@@ -899,29 +997,36 @@ export function ServiceVerificationPage() {
                 </span>
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
-                <div className="rounded-3xl border border-indigo-100 bg-indigo-50 p-4 text-center shadow-sm">
-                  <span className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-indigo-600 text-white shadow-md shadow-indigo-200">
-                    <CircleUserRound className="h-6 w-6" aria-hidden="true" />
-                  </span>
+              <div className="space-y-3 rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                <div>
                   <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
                     Client
                   </p>
-                  <p className="mt-1 text-lg font-bold text-indigo-950">
-                    Client {active.client_code}
+                  <p className="mt-1 text-lg font-bold text-slate-950">
+                    {active.client_code}
                   </p>
                 </div>
-                <div className="rounded-3xl border border-violet-100 bg-violet-50 p-4 text-center shadow-sm">
-                  <span className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-violet-600 text-white shadow-md shadow-violet-200">
-                    <HeartPulse className="h-6 w-6" aria-hidden="true" />
-                  </span>
+                <div>
                   <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
                     Service
                   </p>
-                  <p className="mt-1 font-bold text-violet-950">
+                  <p className="mt-1 text-lg font-bold text-slate-950">
                     {active.service_code} · {active.service_name}
                   </p>
                 </div>
+                {active.scheduled_starts_at && active.scheduled_ends_at ? (
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                      Scheduled shift
+                    </p>
+                    <p className="mt-1 text-lg font-bold text-slate-950">
+                      {formatScheduledTime(
+                        active.scheduled_starts_at,
+                        active.scheduled_ends_at,
+                      )}
+                    </p>
+                  </div>
+                ) : null}
               </div>
 
               <div className="mx-auto flex h-56 w-56 flex-col items-center justify-center rounded-full border-8 border-sky-100 bg-gradient-to-br from-white to-sky-50 text-center shadow-xl shadow-sky-100/70 ring-4 ring-sky-50">
@@ -980,39 +1085,71 @@ export function ServiceVerificationPage() {
                   id="confirm-visit-heading"
                   className="text-xl font-semibold text-slate-950"
                 >
-                  Client or guardian confirmation
+                  Verify visit details
                 </h1>
                 <p className="mt-1 text-sm text-slate-500">
-                  Review the exact visit before signing.
+                  Review before collecting client or guardian confirmation.
                 </p>
               </div>
 
-              <dl className="divide-y divide-slate-100 rounded-2xl border border-slate-200 bg-white px-4">
-                {[
-                  ["Client", `Client ${endedVisit.clientCode}`],
-                  [
-                    "Service",
-                    `${endedVisit.serviceCode} · ${endedVisit.serviceName}`,
-                  ],
-                  ["Date", formatVisitDate(endedVisit.timeIn)],
-                  ["Time in", formatClockTime(endedVisit.timeIn)],
-                  ["Time out", formatClockTime(endedVisit.timeOut)],
-                  [
-                    "Total time",
-                    `${formatHours(endedVisit.workedMinutes)} hours`,
-                  ],
-                ].map(([label, value]) => (
-                  <div
-                    key={label}
-                    className="flex items-start justify-between gap-4 py-3 text-sm"
-                  >
-                    <dt className="text-slate-500">{label}</dt>
-                    <dd className="text-right font-semibold text-slate-950">
-                      {value}
-                    </dd>
+              <div className="space-y-3 rounded-2xl border border-slate-200 bg-white p-4">
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                    Client
+                  </p>
+                  <p className="mt-1 text-sm font-semibold text-slate-950">
+                    {endedVisit.clientCode}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                    Service
+                  </p>
+                  <p className="mt-1 text-sm font-semibold text-slate-950">
+                    {endedVisit.serviceCode} · {endedVisit.serviceName}
+                  </p>
+                </div>
+                {active?.scheduled_starts_at && active?.scheduled_ends_at ? (
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                      Scheduled shift
+                    </p>
+                    <p className="mt-1 text-sm font-semibold text-slate-950">
+                      {formatScheduledTime(
+                        active.scheduled_starts_at,
+                        active.scheduled_ends_at,
+                      )}
+                    </p>
                   </div>
-                ))}
-              </dl>
+                ) : null}
+              </div>
+
+              <div className="space-y-3 rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-semibold uppercase tracking-wide text-slate-600">
+                    Actual time in
+                  </span>
+                  <span className="text-sm font-semibold text-slate-950">
+                    {formatClockTime(endedVisit.timeIn)}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-semibold uppercase tracking-wide text-slate-600">
+                    Actual time out
+                  </span>
+                  <span className="text-sm font-semibold text-slate-950">
+                    {formatClockTime(endedVisit.timeOut)}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between border-t border-slate-200 pt-3">
+                  <span className="text-xs font-semibold uppercase tracking-wide text-slate-600">
+                    Total worked
+                  </span>
+                  <span className="text-sm font-bold text-slate-950">
+                    {formatHours(endedVisit.workedMinutes)} hours
+                  </span>
+                </div>
+              </div>
 
               {confirmationMode === "signature" ? (
                 <div className="space-y-4">

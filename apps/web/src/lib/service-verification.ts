@@ -44,9 +44,26 @@ export function formatElapsed(totalSeconds: number): string {
   const seconds = Math.max(0, Math.floor(totalSeconds));
   const hours = Math.floor(seconds / 3600);
   const minutes = Math.floor((seconds % 3600) / 60);
-  const secs = seconds % 60;
   const pad = (value: number) => String(value).padStart(2, "0");
-  return hours > 0 ? `${hours}:${pad(minutes)}:${pad(secs)}` : `${minutes}:${pad(secs)}`;
+  return hours > 0 ? `${hours}:${pad(minutes)}:${pad(seconds % 60)}` : `${minutes}:${pad(seconds % 60)}`;
+}
+
+export function formatScheduledTime(startsAt: string | Date, endsAt: string | Date): string {
+  const formatter = new Intl.DateTimeFormat("en-US", {
+    weekday: "short",
+    timeZone: PACIFIC_TIME_ZONE
+  });
+  const dayName = formatter.format(new Date(startsAt));
+
+  const timeFormatter = new Intl.DateTimeFormat("en-US", {
+    hour: "numeric",
+    minute: "2-digit",
+    timeZone: PACIFIC_TIME_ZONE
+  });
+  const startTime = timeFormatter.format(new Date(startsAt));
+  const endTime = timeFormatter.format(new Date(endsAt));
+
+  return `${dayName} · ${startTime} – ${endTime}`;
 }
 
 export type ServiceVisitStatus =
