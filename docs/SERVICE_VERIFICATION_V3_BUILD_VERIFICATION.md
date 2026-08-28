@@ -1,10 +1,8 @@
 # Service Verification v3 — Build Verification
 
-**Repository status (2026-08-24): implemented and locally green; not approved
-for deployment.** The caregiver phone flow, manager correction safeguards, and
-monthly hours calendar are built. The migration has not been executed in any
-environment during this build, so database behavior and tenant isolation remain
-release blockers.
+**Repository status (updated 2026-08-27): production-deployed.** PR #44 completed the required production sequence on 2026-08-24: the Service Verification migrations were applied and verified in production Supabase, the frontend was merged to `main`, and the production Netlify deployment was verified after merge. PRs #48 and #49 subsequently added the reusable authenticated Visit Verification share link and surfaced it on the Operations Dashboard and Schedule. See `docs/OGEVIA_OPERATIONS_PRD.md` for the standing operational requirements.
+
+The sections below preserve the original pre-deployment verification evidence and checklist because they document the controls that had to pass before release.
 
 ## Implemented
 
@@ -41,10 +39,13 @@ release blockers.
   an explicit search path, public/anonymous execution is revoked, and only the
   intended authenticated RPCs are granted.
 
-These checks do not prove that PostgreSQL can execute the migration or that RLS
-behaves correctly with real sessions.
+These checks did not by themselves prove PostgreSQL execution or RLS behavior;
+those deployment blockers were subsequently satisfied during the PR #44 production
+release sequence.
 
-## Still required in non-production Supabase
+## Pre-production Supabase verification checklist
+
+This checklist was required before production release and is retained as the regression baseline for future changes.
 
 1. Apply `20260824010000_service_verification_v3.sql` to an isolated project or
    Supabase development branch.
@@ -136,7 +137,9 @@ Netlify does not run database migrations.
 6. Let Netlify deploy the frontend, then verify the caregiver RPC flow and
    manager calendar against production.
 
-If the production migration or verification fails, stop before merging the
+This sequence was completed for PR #44 and remains the required order for future Service Verification schema changes.
+
+If a future production migration or verification fails, stop before merging the
 frontend. Capture the exact error and use a reviewed forward migration or the
 approved database recovery procedure; do not delete visit or audit records to
 force a retry.
