@@ -1,0 +1,538 @@
+{
+  "project": "Home Care Scheduling and Authorization Management System",
+  "platform": "SharePoint Online",
+  "version": "1.0",
+  "created": "2026-08-30",
+  "lists": [
+    {
+      "name": "Caregivers",
+      "description": "Manage caregiver profiles and employment information",
+      "fields": [
+        {
+          "internalName": "CaregiverID",
+          "displayName": "Caregiver ID",
+          "type": "SingleLineText",
+          "required": true,
+          "description": "Unique identifier for caregiver"
+        },
+        {
+          "internalName": "FirstName",
+          "displayName": "First Name",
+          "type": "SingleLineText",
+          "required": true
+        },
+        {
+          "internalName": "LastName",
+          "displayName": "Last Name",
+          "type": "SingleLineText",
+          "required": true
+        },
+        {
+          "internalName": "PhoneNumber",
+          "displayName": "Phone Number",
+          "type": "SingleLineText",
+          "required": false,
+          "validation": "(XXX) XXX-XXXX"
+        },
+        {
+          "internalName": "Status",
+          "displayName": "Employment Status",
+          "type": "Choice",
+          "required": true,
+          "choices": ["FT", "PT", "PRN"]
+        },
+        {
+          "internalName": "ServiceArea",
+          "displayName": "Service Area",
+          "type": "Choice",
+          "required": true,
+          "choices": ["Home Health", "Elderly Care", "Personal Care", "Rehabilitation"]
+        },
+        {
+          "internalName": "HireDate",
+          "displayName": "Hire Date",
+          "type": "Date",
+          "required": true
+        },
+        {
+          "internalName": "MaxWeeklyHours",
+          "displayName": "Max Weekly Hours",
+          "type": "Number",
+          "required": true,
+          "default": 40
+        },
+        {
+          "internalName": "CurrentScheduledHours",
+          "displayName": "Current Scheduled Hours",
+          "type": "Number",
+          "required": false,
+          "default": 0,
+          "readOnly": true
+        },
+        {
+          "internalName": "RemainingHours",
+          "displayName": "Remaining Hours",
+          "type": "Calculated",
+          "formula": "=MaxWeeklyHours - CurrentScheduledHours",
+          "description": "Auto-calculated remaining capacity"
+        },
+        {
+          "internalName": "Certifications",
+          "displayName": "Certifications",
+          "type": "MultiLineText",
+          "required": false,
+          "description": "Comma-separated list (e.g., CNA, RN, LPN)"
+        },
+        {
+          "internalName": "PreferredClients",
+          "displayName": "Preferred Clients",
+          "type": "MultiLineText",
+          "required": false
+        },
+        {
+          "internalName": "Active",
+          "displayName": "Active",
+          "type": "YesNo",
+          "required": true,
+          "default": true
+        }
+      ]
+    },
+    {
+      "name": "CaregiverAvailability",
+      "description": "Track when each caregiver is available to work",
+      "fields": [
+        {
+          "internalName": "AvailabilityID",
+          "displayName": "Availability ID",
+          "type": "SingleLineText",
+          "required": true,
+          "description": "Auto-generate format: AVAIL-YYYYMMDD-###"
+        },
+        {
+          "internalName": "CaregiverID",
+          "displayName": "Caregiver",
+          "type": "Lookup",
+          "required": true,
+          "lookupList": "Caregivers",
+          "lookupField": "CaregiverID"
+        },
+        {
+          "internalName": "DayOfWeek",
+          "displayName": "Day of Week",
+          "type": "Choice",
+          "required": true,
+          "choices": ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
+        },
+        {
+          "internalName": "AvailableStartTime",
+          "displayName": "Available Start Time",
+          "type": "Time",
+          "required": true
+        },
+        {
+          "internalName": "AvailableEndTime",
+          "displayName": "Available End Time",
+          "type": "Time",
+          "required": true
+        },
+        {
+          "internalName": "AvailableHours",
+          "displayName": "Available Hours",
+          "type": "Calculated",
+          "formula": "=(AvailableEndTime - AvailableStartTime)*24",
+          "description": "Auto-calculated hours available"
+        }
+      ]
+    },
+    {
+      "name": "Clients",
+      "description": "Manage client information and authorization tracking",
+      "fields": [
+        {
+          "internalName": "ClientID",
+          "displayName": "Client ID",
+          "type": "SingleLineText",
+          "required": true
+        },
+        {
+          "internalName": "ClientName",
+          "displayName": "Client Name",
+          "type": "SingleLineText",
+          "required": true
+        },
+        {
+          "internalName": "ProgramType",
+          "displayName": "Program Type",
+          "type": "Choice",
+          "required": true,
+          "choices": ["Home Health", "Personal Care", "Elderly Care", "Rehabilitation"]
+        },
+        {
+          "internalName": "ServiceArea",
+          "displayName": "Service Area",
+          "type": "Choice",
+          "required": true,
+          "choices": ["North", "South", "East", "West", "Central"]
+        },
+        {
+          "internalName": "AuthorizationStartDate",
+          "displayName": "Authorization Start Date",
+          "type": "Date",
+          "required": true
+        },
+        {
+          "internalName": "AuthorizationEndDate",
+          "displayName": "Authorization End Date",
+          "type": "Date",
+          "required": true,
+          "validation": "AuthorizationEndDate > AuthorizationStartDate"
+        },
+        {
+          "internalName": "AuthorizedHours",
+          "displayName": "Authorized Hours",
+          "type": "Number",
+          "required": true,
+          "validation": "AuthorizedHours > 0"
+        },
+        {
+          "internalName": "TotalUsedHours",
+          "displayName": "Total Used Hours",
+          "type": "Number",
+          "required": false,
+          "default": 0,
+          "readOnly": true
+        },
+        {
+          "internalName": "RemainingAuthorizedHours",
+          "displayName": "Remaining Authorized Hours",
+          "type": "Calculated",
+          "formula": "=AuthorizedHours - TotalUsedHours"
+        },
+        {
+          "internalName": "UtilizationPercent",
+          "displayName": "Utilization %",
+          "type": "Calculated",
+          "formula": "=(TotalUsedHours / AuthorizedHours) * 100"
+        },
+        {
+          "internalName": "Status",
+          "displayName": "Status",
+          "type": "Choice",
+          "required": true,
+          "choices": ["Active", "Warning", "Max Reached", "Closed"],
+          "default": "Active"
+        }
+      ]
+    },
+    {
+      "name": "Visits",
+      "description": "Track all client visits (scheduled and on-call)",
+      "fields": [
+        {
+          "internalName": "VisitID",
+          "displayName": "Visit ID",
+          "type": "SingleLineText",
+          "required": true,
+          "description": "Auto-generate format: VISIT-YYYYMMDD-###"
+        },
+        {
+          "internalName": "ClientID",
+          "displayName": "Client",
+          "type": "Lookup",
+          "required": true,
+          "lookupList": "Clients",
+          "lookupField": "ClientID"
+        },
+        {
+          "internalName": "CaregiverID",
+          "displayName": "Caregiver",
+          "type": "Lookup",
+          "required": false,
+          "lookupList": "Caregivers",
+          "lookupField": "CaregiverID",
+          "description": "Leave empty for open shifts"
+        },
+        {
+          "internalName": "VisitDate",
+          "displayName": "Visit Date",
+          "type": "Date",
+          "required": true
+        },
+        {
+          "internalName": "StartTime",
+          "displayName": "Start Time",
+          "type": "Time",
+          "required": true
+        },
+        {
+          "internalName": "EndTime",
+          "displayName": "End Time",
+          "type": "Time",
+          "required": true,
+          "validation": "EndTime > StartTime"
+        },
+        {
+          "internalName": "Hours",
+          "displayName": "Hours",
+          "type": "Calculated",
+          "formula": "=(EndTime - StartTime)*24"
+        },
+        {
+          "internalName": "VisitType",
+          "displayName": "Visit Type",
+          "type": "Choice",
+          "required": true,
+          "choices": ["Scheduled", "OnCall"]
+        }
+      ]
+    },
+    {
+      "name": "CallOuts",
+      "description": "Track caregiver call-outs and replacement tracking",
+      "fields": [
+        {
+          "internalName": "CallOutID",
+          "displayName": "Call-Out ID",
+          "type": "SingleLineText",
+          "required": true,
+          "description": "Auto-generate format: CO-YYYYMMDD-###"
+        },
+        {
+          "internalName": "CallOutDate",
+          "displayName": "Call-Out Date",
+          "type": "Date",
+          "required": true
+        },
+        {
+          "internalName": "CaregiverID",
+          "displayName": "Original Caregiver",
+          "type": "Lookup",
+          "required": true,
+          "lookupList": "Caregivers",
+          "lookupField": "CaregiverID"
+        },
+        {
+          "internalName": "ShiftStart",
+          "displayName": "Shift Start Time",
+          "type": "Time",
+          "required": true
+        },
+        {
+          "internalName": "ShiftEnd",
+          "displayName": "Shift End Time",
+          "type": "Time",
+          "required": true,
+          "validation": "ShiftEnd > ShiftStart"
+        },
+        {
+          "internalName": "Reason",
+          "displayName": "Reason",
+          "type": "Choice",
+          "required": true,
+          "choices": ["Sick", "Emergency", "Personal", "Other"]
+        },
+        {
+          "internalName": "ClientID",
+          "displayName": "Client",
+          "type": "Lookup",
+          "required": true,
+          "lookupList": "Clients",
+          "lookupField": "ClientID"
+        },
+        {
+          "internalName": "ReplacementCaregiverID",
+          "displayName": "Replacement Caregiver",
+          "type": "Lookup",
+          "required": false,
+          "lookupList": "Caregivers",
+          "lookupField": "CaregiverID",
+          "description": "Assigned replacement when filled"
+        },
+        {
+          "internalName": "Status",
+          "displayName": "Status",
+          "type": "Choice",
+          "required": true,
+          "choices": ["Open", "Filled", "Cancelled"],
+          "default": "Open"
+        },
+        {
+          "internalName": "CoverageScore",
+          "displayName": "Coverage Score",
+          "type": "Number",
+          "required": false,
+          "readOnly": true,
+          "description": "Calculated by Power Automate"
+        }
+      ]
+    }
+  ],
+  "relationships": [
+    {
+      "source": "CaregiverAvailability",
+      "field": "CaregiverID",
+      "target": "Caregivers",
+      "targetField": "CaregiverID",
+      "type": "ManyToOne"
+    },
+    {
+      "source": "Visits",
+      "field": "ClientID",
+      "target": "Clients",
+      "targetField": "ClientID",
+      "type": "ManyToOne"
+    },
+    {
+      "source": "Visits",
+      "field": "CaregiverID",
+      "target": "Caregivers",
+      "targetField": "CaregiverID",
+      "type": "ManyToOne"
+    },
+    {
+      "source": "CallOuts",
+      "field": "CaregiverID",
+      "target": "Caregivers",
+      "targetField": "CaregiverID",
+      "type": "ManyToOne"
+    },
+    {
+      "source": "CallOuts",
+      "field": "ClientID",
+      "target": "Clients",
+      "targetField": "ClientID",
+      "type": "ManyToOne"
+    },
+    {
+      "source": "CallOuts",
+      "field": "ReplacementCaregiverID",
+      "target": "Caregivers",
+      "targetField": "CaregiverID",
+      "type": "ManyToOne"
+    }
+  ],
+  "powerAutomateFlows": [
+    {
+      "name": "Authorization Alert Notifications",
+      "trigger": "When an item is modified",
+      "triggerList": "Clients",
+      "purpose": "Alert when client reaches 75%, 90%, or 100% utilization",
+      "actions": [
+        "Check utilization level",
+        "Send email alert to scheduler",
+        "Update client status",
+        "Log notification"
+      ]
+    },
+    {
+      "name": "Caregiver Call-Out Workflow",
+      "trigger": "When an item is created",
+      "triggerList": "CallOuts",
+      "purpose": "Find best replacement using coverage score",
+      "actions": [
+        "Query available caregivers",
+        "Filter by service area and time",
+        "Calculate coverage scores",
+        "Rank replacements",
+        "Send recommendations to scheduler"
+      ]
+    },
+    {
+      "name": "Open Shift Alert",
+      "trigger": "When an item is modified",
+      "triggerList": "Visits",
+      "purpose": "Find available caregivers when visit becomes unassigned",
+      "actions": [
+        "Check for empty CaregiverID",
+        "Find available caregivers",
+        "Calculate coverage scores",
+        "Send recommendations to scheduler"
+      ]
+    },
+    {
+      "name": "Shift Conflict Prevention",
+      "trigger": "Before item creation/modification",
+      "triggerList": "Visits",
+      "purpose": "Prevent double-booking and over-hour scheduling",
+      "validations": [
+        "No caregiver double-booking",
+        "Client authorization remaining",
+        "Caregiver hour limit",
+        "Caregiver availability",
+        "Certification requirements"
+      ]
+    },
+    {
+      "name": "Weekly Utilization Report",
+      "trigger": "Scheduled daily at 6 AM",
+      "purpose": "Generate utilization summaries for management",
+      "actions": [
+        "Calculate caregiver metrics",
+        "Calculate client metrics",
+        "Identify risks",
+        "Send report to management"
+      ]
+    }
+  ],
+  "powerBIDashboards": [
+    {
+      "name": "Executive Overview",
+      "purpose": "High-level KPIs and operational status"
+    },
+    {
+      "name": "Client Authorization Tracking",
+      "purpose": "Monitor client hours and prevent over-authorization"
+    },
+    {
+      "name": "Caregiver Utilization",
+      "purpose": "Monitor caregiver workload and capacity"
+    },
+    {
+      "name": "Call-Out & Coverage Trends",
+      "purpose": "Analyze call-out patterns and coverage success"
+    },
+    {
+      "name": "Open Shifts & Scheduling",
+      "purpose": "Track open shifts and coverage gaps"
+    },
+    {
+      "name": "Service Area Capacity",
+      "purpose": "Monitor staffing levels by service area"
+    },
+    {
+      "name": "Coverage Score Rankings",
+      "purpose": "Rank caregivers by coverage capability"
+    },
+    {
+      "name": "Authorization Expiration Monitor",
+      "purpose": "Track upcoming authorization expirations"
+    }
+  ],
+  "validationRules": [
+    {
+      "list": "Clients",
+      "rule": "AuthorizationEndDate must be after AuthorizationStartDate"
+    },
+    {
+      "list": "Clients",
+      "rule": "AuthorizedHours must be greater than 0"
+    },
+    {
+      "list": "Visits",
+      "rule": "EndTime must be after StartTime"
+    },
+    {
+      "list": "Visits",
+      "rule": "Cannot schedule if RemainingAuthorizedHours <= 0"
+    },
+    {
+      "list": "CallOuts",
+      "rule": "CallOutDate cannot be in the past"
+    },
+    {
+      "list": "CallOuts",
+      "rule": "ShiftEnd must be after ShiftStart"
+    }
+  ]
+}
