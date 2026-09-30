@@ -2,13 +2,15 @@
 
 Ogevia AWS infrastructure (AWS CDK v2, TypeScript). See `CLAUDE.md` and `docs/aws/`.
 
+**PROVISIONAL.** This scaffold is not final until the existing AWS infrastructure has been verified by a live read-only inventory and reconciled against it. It may be changed or discarded to avoid duplicating existing resources.
+
 **Nothing in this package has been deployed.** `cdk bootstrap`, `cdk deploy`, and `cdk import` are YELLOW actions (`CLAUDE.md` §13) and require explicit owner approval.
 
 ## Stacks
 
-| Stack                            | Contents                                                                                                                                   | Status     |
-| -------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ | ---------- |
-| `Ogevia-<stage>-EvidenceStorage` | KMS CMK (rotation on, retained), private SSE-KMS signature bucket (versioned, TLS-only, access-logged, retained), SSE-S3 access-log bucket | Synth only |
+| Stack                            | Contents                                                                                                                                   | Status                  |
+| -------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------- |
+| `Ogevia-<stage>-EvidenceStorage` | KMS CMK (rotation on, retained), private SSE-KMS signature bucket (versioned, TLS-only, access-logged, retained), SSE-S3 access-log bucket | Provisional; synth only |
 
 The manually created foundation (VPC, SGs, VPC endpoints, IAM role, RDS) is **deliberately not referenced**. It stays that way until a live read-only inventory verifies it (`docs/aws/CURRENT_AWS_INVENTORY.md`).
 

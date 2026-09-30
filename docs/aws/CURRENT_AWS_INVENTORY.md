@@ -5,6 +5,18 @@
 **Region in scope:** `us-west-2`
 **AWS changes made during Phase 0:** NONE
 
+> **PHASE 0 STATUS: INCOMPLETE — blocked on live AWS inventory.**
+> The next gate is **AWS INVENTORY, not AWS DEPLOYMENT.** In order:
+>
+> 1. Get controlled **read-only** access to the Ogevia AWS account (no AdministratorAccess, no long-lived admin keys).
+> 2. Verify the live resources in `us-west-2` (§4 command set).
+> 3. Update this file.
+> 4. Reconcile the inventory against the provisional CDK proposal (`infra/aws`).
+> 5. Identify duplicate or unnecessary resources, fixed monthly costs, and what should be imported or referenced rather than recreated.
+> 6. Run a non-mutating `cdk diff` only after account identity and existing infrastructure are verified.
+>
+> **Stop there.** No `cdk bootstrap`, `cdk deploy`, `cdk import`, database migration, or any other AWS mutation is authorized.
+
 Classification legend: **VERIFIED** (observed directly) · **INFERRED** (strongly implied, not observed) · **UNKNOWN** (not established).
 
 ---
