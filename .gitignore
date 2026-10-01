@@ -18,3 +18,4 @@ supabase/.temp
 # rather than deleted from here since it's large and outside git's remit.
 /Git/
 dist-aws
+deploy-bundle/
