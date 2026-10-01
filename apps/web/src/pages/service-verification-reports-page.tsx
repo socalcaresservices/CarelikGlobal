@@ -1,4 +1,4 @@
-import { Fragment, useMemo, useState } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   BarChart3,
@@ -35,7 +35,14 @@ import {
   type StatusTone,
 } from "@carelik/ui";
 import { useOrganization } from "@/providers/organization-provider";
-import { supabase } from "@/lib/supabase";
+import {
+  newIdempotencyKey,
+  type ClientLocation,
+  type OrgLetterhead,
+  type VisitCorrectionRow,
+  type VisitReportRow,
+} from "@/lib/sv-backend";
+import { useServiceVerificationBackend } from "@/lib/sv-backend-supabase";
 import {
   AUTHORIZATION_STATUS_LABEL,
   formatDateTime,
@@ -46,68 +53,9 @@ import {
   type VisitAuthorizationStatus,
 } from "@/lib/service-verification";
 
-interface VisitReportRow {
-  id: string;
-  visit_number: string | null;
-  client_id: string;
-  client_code: string;
-  client_legal_name: string | null;
-  caregiver_user_id: string;
-  caregiver_name: string;
-  service_id: string;
-  service_name: string;
-  service_date: string;
-  time_in: string;
-  time_out: string | null;
-  worked_minutes: number | null;
-  verified_minutes: number | null;
-  billable_minutes: number | null;
-  status: ServiceVisitStatus;
-  authorization_status: VisitAuthorizationStatus | null;
-  signed_at: string | null;
-  original_visit_id: string | null;
-  is_corrected: boolean;
-  month_to_date_before_minutes: number | null;
-  month_to_date_after_minutes: number | null;
-  remaining_minutes: number | null;
-}
 
-interface VisitCorrectionRow {
-  id: string;
-  corrected_by_name: string;
-  reason: string;
-  before_snapshot: {
-    timeIn: string;
-    timeOut: string;
-    workedMinutes: number;
-    billableMinutes: number;
-  };
-  after_snapshot: {
-    timeIn: string;
-    timeOut: string;
-    workedMinutes: number;
-    billableMinutes: number;
-  };
-  created_at: string;
-}
 
-interface OrgLetterhead {
-  legal_name: string;
-  display_name: string;
-  logo_url: string | null;
-  address_street: string | null;
-  address_city: string | null;
-  address_state: string | null;
-  address_zip: string | null;
-  contact_phone: string | null;
-  contact_email: string | null;
-}
 
-interface ClientLocation {
-  id: string;
-  address_city: string | null;
-  address_state: string | null;
-}
 
 type ChartType = "bar" | "pie" | "line";
 type ChartGroup = "caregiver" | "client" | "service" | "location";
@@ -267,6 +215,9 @@ export function ServiceVerificationReportsPage() {
   const canRead = hasPermission("visits.read");
   const canManage = hasPermission("visits.manage");
   const queryClient = useQueryClient();
+  const backend = useServiceVerificationBackend();
+  // Reused for retries of the same correction; renewed when the form changes.
+  const correctionKey = useRef(newIdempotencyKey());
 
   const [expandedVisitId, setExpandedVisitId] = useState<string | null>(null);
   const [expandedMode, setExpandedMode] = useState<
@@ -307,63 +258,42 @@ export function ServiceVerificationReportsPage() {
       dateFrom,
       dateTo,
     ],
-    queryFn: async () => {
-      const { data, error } = await supabase.rpc("list_service_visits", {
-        target_organization_id: activeOrganizationId!,
-        filter_client_id: clientFilter || null,
-        filter_caregiver_user_id: caregiverFilter || null,
-        filter_service_id: serviceFilter || null,
-        filter_date_from: dateFrom || null,
-        filter_date_to: dateTo || null,
-        filter_status: statusFilter || null,
-      });
-      if (error) throw error;
-      return (data ?? []) as VisitReportRow[];
-    },
+    queryFn: (): Promise<VisitReportRow[]> =>
+      backend.listVisits(activeOrganizationId!, {
+        clientId: clientFilter || null,
+        caregiverUserId: caregiverFilter || null,
+        serviceId: serviceFilter || null,
+        dateFrom: dateFrom || null,
+        dateTo: dateTo || null,
+        status: statusFilter || null,
+      }),
     enabled: !!activeOrganizationId && canRead,
   });
 
   const letterheadQuery = useQuery({
     queryKey: ["organization-letterhead", activeOrganizationId],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("organizations")
-        .select(
-          "legal_name, display_name, logo_url, address_street, address_city, address_state, address_zip, contact_phone, contact_email",
-        )
-        .eq("id", activeOrganizationId!)
-        .single();
-      if (error) throw error;
-      return data as OrgLetterhead;
-    },
+    queryFn: (): Promise<OrgLetterhead> =>
+      backend.getLetterhead(activeOrganizationId!),
     enabled: !!activeOrganizationId && canRead,
   });
 
   const clientLocationsQuery = useQuery({
     queryKey: ["service-report-client-locations", activeOrganizationId],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("clients")
-        .select("id, address_city, address_state")
-        .eq("organization_id", activeOrganizationId!)
-        .is("deleted_at", null);
-      if (error) throw error;
-      return (data ?? []) as ClientLocation[];
-    },
+    queryFn: (): Promise<ClientLocation[]> =>
+      backend.listClientLocations(activeOrganizationId!),
     enabled: !!activeOrganizationId && canManage,
   });
 
   const correctionsQuery = useQuery({
     queryKey: ["visit-corrections", expandedVisitId],
-    queryFn: async () => {
-      const { data, error } = await supabase.rpc("list_visit_corrections", {
-        target_visit_id: expandedVisitId!,
-      });
-      if (error) throw error;
-      return (data ?? []) as VisitCorrectionRow[];
-    },
+    queryFn: (): Promise<VisitCorrectionRow[]> =>
+      backend.listCorrections(expandedVisitId!),
     enabled: expandedMode === "history" && !!expandedVisitId,
   });
+
+  useEffect(() => {
+    correctionKey.current = newIdempotencyKey();
+  }, [expandedVisitId, correctionForm]);
 
   function openCorrect(row: VisitReportRow) {
     setExpandedVisitId(row.id);
@@ -409,13 +339,14 @@ export function ServiceVerificationReportsPage() {
 
     setCorrectionSaving(true);
     try {
-      const { error } = await supabase.rpc("correct_service_visit", {
-        target_visit_id: visitId,
-        new_time_in: newTimeIn.toISOString(),
-        new_time_out: newTimeOut.toISOString(),
+      await backend.correctVisit({
+        visitId,
+        timeIn: newTimeIn.toISOString(),
+        timeOut: newTimeOut.toISOString(),
         reason: correctionForm.reason.trim(),
+        idempotencyKey: correctionKey.current,
       });
-      if (error) throw error;
+      correctionKey.current = newIdempotencyKey();
       closeExpanded();
       void queryClient.invalidateQueries({
         queryKey: ["service-visit-report"],

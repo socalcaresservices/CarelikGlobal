@@ -1,0 +1,102 @@
+// AWS build root (VITE_AUTH_PROVIDER=cognito): Cognito managed login (code +
+// PKCE) -> Ogevia AWS API. Nothing in this tree creates a Supabase client.
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { CognitoAuthClient, CognitoAuthProvider, parseCognitoConfig, type CognitoEnv } from "@carelik/auth";
+import { useMemo, type PropsWithChildren } from "react";
+import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
+import { createAwsApiClient, type AwsApiClient } from "@/lib/aws-api";
+import { ServiceVerificationBackendContext } from "@/lib/sv-backend";
+import { createAwsServiceVerificationBackend } from "@/lib/sv-backend-aws";
+import { ServiceVerificationPage } from "@/pages/service-verification-page";
+import { ServiceVerificationReportsPage } from "@/pages/service-verification-reports-page";
+import { useOrganization } from "@/providers/organization-provider";
+import { AuthCallbackPage, AwsLoginPage, AwsProtectedRoute } from "./aws-auth-pages";
+import { AwsOrganizationProvider } from "./aws-organization-provider";
+import { AwsLanding, AwsShell } from "./aws-shell";
+import { BillingReviewPage } from "./billing-review-page";
+
+export interface AwsRuntime {
+  readonly auth: CognitoAuthClient;
+  readonly api: AwsApiClient;
+}
+
+export type AwsEnv = CognitoEnv & { VITE_SV_API_BASE_URL?: string | undefined };
+
+/** Builds the runtime from build-time env. Fails closed on any invalid value. */
+export function createAwsRuntime(env: AwsEnv): AwsRuntime {
+  const config = parseCognitoConfig(env);
+  const baseUrl = env.VITE_SV_API_BASE_URL?.trim();
+  if (!baseUrl || !baseUrl.startsWith("https://")) {
+    throw new Error("VITE_SV_API_BASE_URL must be the https API URL.");
+  }
+  const auth = new CognitoAuthClient(config);
+  return { auth, api: createAwsApiClient({ baseUrl, getAccessToken: () => auth.getAccessToken() }) };
+}
+
+function AwsBackendProvider({ api, children }: PropsWithChildren<{ api: AwsApiClient }>) {
+  const { organizations } = useOrganization();
+  const backend = useMemo(
+    () => createAwsServiceVerificationBackend(api, (id) => organizations.find((o) => o.id === id)?.displayName ?? null),
+    [api, organizations],
+  );
+  return <ServiceVerificationBackendContext.Provider value={backend}>{children}</ServiceVerificationBackendContext.Provider>;
+}
+
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: { staleTime: 30_000, retry: 1, refetchOnWindowFocus: false },
+    mutations: { retry: 0 },
+  },
+});
+
+export function AwsRoutes({ api }: { api: AwsApiClient }) {
+  return (
+    <Routes>
+      <Route path="/login" element={<AwsLoginPage />} />
+      <Route path="/auth/callback" element={<AuthCallbackPage />} />
+      <Route
+        path="*"
+        element={
+          <AwsProtectedRoute>
+            <AwsOrganizationProvider api={api}>
+              <AwsBackendProvider api={api}>
+                <AwsShell>
+                  <Routes>
+                    <Route path="/" element={<AwsLanding />} />
+                    <Route path="/service-verification" element={<ServiceVerificationPage />} />
+                    <Route path="/service-verification/reports" element={<ServiceVerificationReportsPage />} />
+                    <Route path="/billing-review" element={<BillingReviewPage />} />
+                    <Route path="*" element={<Navigate to="/" replace />} />
+                  </Routes>
+                </AwsShell>
+              </AwsBackendProvider>
+            </AwsOrganizationProvider>
+          </AwsProtectedRoute>
+        }
+      />
+    </Routes>
+  );
+}
+
+export function AwsApp({ runtime }: { runtime: AwsRuntime }) {
+  return (
+    <BrowserRouter>
+      <QueryClientProvider client={queryClient}>
+        <CognitoAuthProvider client={runtime.auth}>
+          <AwsRoutes api={runtime.api} />
+        </CognitoAuthProvider>
+      </QueryClientProvider>
+    </BrowserRouter>
+  );
+}
+
+export function AwsConfigurationError({ message }: { message: string }) {
+  return (
+    <div className="flex min-h-screen items-center justify-center bg-slate-50 px-4">
+      <div className="max-w-md text-center">
+        <p className="text-sm font-medium text-slate-900">This Ogevia build is not configured correctly.</p>
+        <p className="mt-1 text-sm text-slate-600">{message}</p>
+      </div>
+    </div>
+  );
+}

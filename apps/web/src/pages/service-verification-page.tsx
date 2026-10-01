@@ -15,7 +15,14 @@ import {
 import { useAuth } from "@carelik/auth";
 import { Button, Card, StatusBadge, cn } from "@carelik/ui";
 import { useOrganization } from "@/providers/organization-provider";
-import { supabase } from "@/lib/supabase";
+import {
+  newIdempotencyKey,
+  type ActiveVisit,
+  type AssignedClient,
+  type AuthorizedService,
+  type VisitResult,
+} from "@/lib/sv-backend";
+import { useServiceVerificationBackend } from "@/lib/sv-backend-supabase";
 import {
   formatClockTime,
   formatElapsed,
@@ -26,40 +33,8 @@ import {
   type VisitSignerRole,
 } from "@/lib/service-verification";
 
-interface AssignedClient {
-  client_id: string;
-  client_code: string;
-  next_scheduled_starts_at: string | null;
-  next_scheduled_ends_at: string | null;
-  active_service_count: number;
-}
 
-interface AuthorizedService {
-  service_id: string;
-  service_code: string;
-  service_name: string;
-  service_color: string | null;
-  authorization_id: string;
-  max_monthly_hours: number;
-  hours_used_this_month: number;
-  hours_scheduled_this_month: number;
-}
 
-interface ActiveVisit {
-  visit_id: string;
-  visit_number: string | null;
-  client_code: string;
-  service_code: string;
-  service_name: string;
-  scheduled_starts_at: string | null;
-  scheduled_ends_at: string | null;
-  time_in: string;
-  time_out: string | null;
-  worked_minutes: number | null;
-  visit_status: "draft" | "awaiting_signature";
-  max_monthly_hours: number;
-  confirmed_minutes_this_month: number;
-}
 
 interface EndedVisit {
   timeIn: string;
@@ -71,14 +46,6 @@ interface EndedVisit {
   visitNumber: string | null;
 }
 
-interface VisitResult {
-  status: ServiceVisitStatus;
-  authorization_status: VisitAuthorizationStatus;
-  worked_minutes: number;
-  billable_minutes: number;
-  month_to_date_minutes: number;
-  remaining_minutes: number;
-}
 
 type Phase = "loading" | "select" | "active" | "confirm" | "success";
 type ConfirmationMode = "signature" | "exception";
@@ -301,6 +268,7 @@ export function ServiceVerificationPage() {
   const { user } = useAuth();
   const { activeOrganizationId, activeOrganization } = useOrganization();
   const queryClient = useQueryClient();
+  const backend = useServiceVerificationBackend();
 
   const [phase, setPhase] = useState<Phase>("loading");
   const [selectedClientId, setSelectedClientId] = useState("");
@@ -319,34 +287,23 @@ export function ServiceVerificationPage() {
   const [error, setError] = useState<string | null>(null);
   const [nowTick, setNowTick] = useState(() => Date.now());
   const [result, setResult] = useState<VisitResult | null>(null);
+  // One key per intended action: retries of the same submission (double tap,
+  // ambiguous network failure) reuse it so the server applies it once; any
+  // change to what is being submitted gets a new key.
+  const startKey = useRef(newIdempotencyKey());
+  const confirmKey = useRef(newIdempotencyKey());
 
   const activeVisitQuery = useQuery({
     queryKey: ["active-service-visit-v3", activeOrganizationId],
-    queryFn: async () => {
-      const { data, error: queryError } = await supabase.rpc(
-        "get_active_service_visit_v3",
-        {
-          target_organization_id: activeOrganizationId!,
-        },
-      );
-      if (queryError) throw queryError;
-      return ((data ?? [])[0] ?? null) as ActiveVisit | null;
-    },
+    queryFn: (): Promise<ActiveVisit | null> =>
+      backend.getActiveVisit(activeOrganizationId!),
     enabled: !!user && !!activeOrganizationId,
   });
 
   const clientsQuery = useQuery({
     queryKey: ["assigned-visit-clients", activeOrganizationId],
-    queryFn: async () => {
-      const { data, error: queryError } = await supabase.rpc(
-        "list_assigned_visit_clients",
-        {
-          target_organization_id: activeOrganizationId!,
-        },
-      );
-      if (queryError) throw queryError;
-      return (data ?? []) as AssignedClient[];
-    },
+    queryFn: (): Promise<AssignedClient[]> =>
+      backend.listAssignedClients(activeOrganizationId!),
     enabled: !!user && !!activeOrganizationId && phase === "select",
   });
 
@@ -364,17 +321,8 @@ export function ServiceVerificationPage() {
       activeOrganizationId,
       selectedClientId,
     ],
-    queryFn: async () => {
-      const { data, error: queryError } = await supabase.rpc(
-        "list_authorized_services_for_client",
-        {
-          target_organization_id: activeOrganizationId!,
-          target_client_id: selectedClientId,
-        },
-      );
-      if (queryError) throw queryError;
-      return (data ?? []) as AuthorizedService[];
-    },
+    queryFn: (): Promise<AuthorizedService[]> =>
+      backend.listAuthorizedServices(activeOrganizationId!, selectedClientId),
     enabled: !!activeOrganizationId && !!selectedClientId && phase === "select",
   });
 
@@ -400,6 +348,22 @@ export function ServiceVerificationPage() {
     authorizationMinutes - (active?.confirmed_minutes_this_month ?? 0),
   );
   const willExceed = !!active && projectedMinutes > authorizationMinutes;
+
+  useEffect(() => {
+    startKey.current = newIdempotencyKey();
+  }, [selectedClientId, selectedServiceId]);
+
+  useEffect(() => {
+    confirmKey.current = newIdempotencyKey();
+  }, [
+    visitId,
+    confirmationMode,
+    signerRole,
+    signatureKind,
+    signature,
+    noSignerReason,
+    noSignerNote,
+  ]);
 
   useEffect(() => {
     const interval = window.setInterval(() => setNowTick(Date.now()), 1000);
@@ -483,18 +447,13 @@ export function ServiceVerificationPage() {
     setSaving(true);
     setError(null);
     try {
-      const { data, error: startError } = await supabase.rpc(
-        "start_ad_hoc_service_visit",
-        {
-          target_organization_id: activeOrganizationId,
-          target_client_id: selectedClient.client_id,
-          target_service_id: selectedService.service_id,
-          visit_task_categories: [],
-          visit_service_notes: null,
-        },
-      );
-      if (startError) throw startError;
-      if (typeof data === "string") setVisitId(data);
+      const data = await backend.startVisit({
+        organizationId: activeOrganizationId,
+        clientId: selectedClient.client_id,
+        serviceId: selectedService.service_id,
+        idempotencyKey: startKey.current,
+      });
+      if (data) setVisitId(data);
       invalidateVisitData();
       const refreshed = await activeVisitQuery.refetch();
       if (!refreshed.data)
@@ -514,20 +473,7 @@ export function ServiceVerificationPage() {
     setSaving(true);
     setError(null);
     try {
-      const { data, error: endError } = await supabase.rpc(
-        "end_service_visit",
-        {
-          target_visit_id: visitId,
-          visit_task_categories: [],
-          visit_service_notes: null,
-        },
-      );
-      if (endError) throw endError;
-      const ended = (Array.isArray(data) ? data[0] : data) as {
-        time_in: string;
-        time_out: string;
-        worked_minutes: number;
-      };
+      const ended = await backend.endVisit(visitId);
       setEndedVisit({
         timeIn: ended.time_in,
         timeOut: ended.time_out,
@@ -562,40 +508,21 @@ export function ServiceVerificationPage() {
     setSaving(true);
     setError(null);
     try {
-      let storagePath: string | null = null;
-      if (confirmationMode === "signature") {
-        const response = await fetch(signature!);
-        const blob = await response.blob();
-        storagePath = `${activeOrganizationId}/${visitId}/client-signature.png`;
-        const { error: uploadError } = await supabase.storage
-          .from("visit-signatures")
-          .upload(storagePath, blob, {
-            contentType: "image/png",
-            upsert: true,
-          });
-        if (uploadError) throw uploadError;
-      }
-
-      const { data, error: confirmError } = await supabase.rpc(
-        "confirm_service_visit",
-        {
-          target_visit_id: visitId,
-          signer_role: signerRole,
-          confirmation_method:
-            confirmationMode === "signature"
-              ? signatureKind === "assisted_mark"
-                ? "assisted_mark"
-                : "draw"
-              : "unable_to_confirm",
-          signature_storage_path: storagePath,
-          typed_signer_name: null,
-          signer_relationship: null,
-          confirmation_reason:
-            confirmationMode === "exception" ? exceptionExplanation() : null,
-        },
-      );
-      if (confirmError) throw confirmError;
-      const confirmed = (Array.isArray(data) ? data[0] : data) as VisitResult;
+      const confirmed: VisitResult = await backend.confirmVisit({
+        organizationId: activeOrganizationId,
+        visitId,
+        signerRole,
+        method:
+          confirmationMode === "signature"
+            ? signatureKind === "assisted_mark"
+              ? "assisted_mark"
+              : "draw"
+            : "unable_to_confirm",
+        signatureDataUrl: confirmationMode === "signature" ? signature : null,
+        reason:
+          confirmationMode === "exception" ? exceptionExplanation() : null,
+        idempotencyKey: confirmKey.current,
+      });
       setResult(confirmed);
       setPhase("success");
       invalidateVisitData();

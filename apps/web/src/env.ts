@@ -36,6 +36,24 @@ const envSchema = z.object({
   VITE_STRIPE_PUBLISHABLE_KEY: z
     .string()
     .optional(),
+
+  // Sign-in provider. Unset/"supabase" = CURRENT production (unchanged).
+  // "cognito" = AWS build: Cognito managed login + Ogevia AWS API.
+  VITE_AUTH_PROVIDER: z
+    .enum(["supabase", "cognito"])
+    .default("supabase"),
+
+  // AWS build only (validated again, fail-closed, by parseCognitoConfig).
+  VITE_COGNITO_REGION: z.string().optional(),
+  VITE_COGNITO_USER_POOL_ID: z.string().optional(),
+  VITE_COGNITO_CLIENT_ID: z.string().optional(),
+  VITE_COGNITO_DOMAIN: z.string().url().optional(),
+  VITE_COGNITO_REDIRECT_URI: z.string().url().optional(),
+  VITE_COGNITO_LOGOUT_URI: z.string().url().optional(),
+  VITE_COGNITO_SCOPES: z.string().optional(),
+  VITE_COGNITO_REFRESH_PERSISTENCE: z.enum(["memory", "session"]).optional(),
+  // Service Verification API base URL (API Gateway stage URL).
+  VITE_SV_API_BASE_URL: z.string().url().optional(),
 });
 
 const parsed = envSchema.safeParse(import.meta.env);
