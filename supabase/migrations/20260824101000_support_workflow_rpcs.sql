@@ -40,6 +40,9 @@ begin
 end;
 $$;
 
+revoke all on function public.create_support_request(uuid, text, text) from public, anon;
+grant execute on function public.create_support_request(uuid, text, text) to authenticated;
+
 -- 2. List support requests for an organization (org member view)
 create or replace function public.list_support_requests(
   target_organization_id uuid,
