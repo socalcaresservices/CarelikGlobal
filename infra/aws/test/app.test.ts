@@ -260,6 +260,23 @@ describe("configuration-driven identifiers", () => {
     expect(offenders).toEqual([]);
   });
 
+  it("commits no credential material anywhere in infra/aws source", () => {
+    const SECRET_PATTERN =
+      /\b(AKIA|ASIA)[A-Z0-9]{16}\b|-----BEGIN [A-Z ]*PRIVATE KEY-----|aws_secret_access_key\s*=\s*\S+|"password"\s*:\s*"[^"]+"/i;
+    const roots = ["../bin/", "../lib/", "../scripts/", "../"];
+    const offenders: string[] = [];
+    for (const root of roots) {
+      const dir = new URL(root, import.meta.url);
+      for (const file of readdirSync(dir)) {
+        if (!/\.(ts|json)$/.test(file) || file === "package.json") continue;
+        if (SECRET_PATTERN.test(readFileSync(new URL(file, dir), "utf8"))) {
+          offenders.push(`${root}${file}`);
+        }
+      }
+    }
+    expect(offenders).toEqual([]);
+  });
+
   it("has no unverified placeholder left in the prod environment", () => {
     expect(findPlaceholders(ENVIRONMENTS.prod)).toEqual([]);
   });

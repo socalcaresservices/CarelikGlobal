@@ -5,8 +5,12 @@
 //
 import { RetentionDays } from "aws-cdk-lib/aws-logs";
 
-// Every identifier in `existing` was verified read-only (see
-// docs/aws/CURRENT_AWS_INVENTORY.md and docs/aws/PHASE_1_CDK_ARCHITECTURE.md).
+// Every identifier below was VERIFIED on 2026-10-01 with read-only AWS APIs
+// (ogevia-readonly / AWSReservedSSO_ReadOnlyAccess): describe-db-instances,
+// describe-stacks (ogevia-prod-data-layer outputs), describe-subnets,
+// describe-route-tables, describe-security-groups, describe-vpc-endpoints,
+// list-secrets (metadata only), describe-user-pool, list-user-pool-clients.
+// See docs/aws/PHASE_1_RESOURCE_OWNERSHIP.md.
 // CDK REFERENCES these resources; it does not own them. Referencing never
 // creates, imports, or modifies a resource.
 
@@ -36,8 +40,6 @@ export interface ExistingDatabaseRef {
         readonly logicalId: string;
       }
     | { readonly kind: "unmanaged" };
-  /** Initial database name on the instance (non-secret). */
-  readonly databaseName: string;
   /** Complete ARN (with suffix) of the RDS-managed master secret. Metadata only. */
   readonly masterSecretArn: string;
 }
@@ -84,7 +86,10 @@ export interface OgeviaEnvironmentConfig {
   /** Finite retention for every log group CDK creates (CLAUDE.md section 11). */
   readonly logRetention: RetentionDays;
   readonly auth: {
-    /** Cognito app client the API's JWT authorizer accepts (audience). */
+    /**
+     * Existing Cognito app client the API's JWT authorizer accepts (audience).
+     * VERIFIED 2026-10-01: "ogevia-web", public (no secret), code flow.
+     */
     readonly appClientId: string;
     /** Browser origins allowed by API CORS. */
     readonly allowedOrigins: readonly string[];
@@ -100,7 +105,7 @@ export const ENVIRONMENTS: Record<OgeviaEnvName, OgeviaEnvironmentConfig> = {
     terminationProtection: true,
     logRetention: RetentionDays.ONE_YEAR,
     auth: {
-      appClientId: "__COGNITO_APP_CLIENT_ID__",
+      appClientId: "1i27abbina08fvg1i9u8vprgo9",
       // VERIFIED in repo: README.md APP_URL and organization-provider.tsx.
       allowedOrigins: ["https://app.ogevia.com"],
     },
@@ -147,7 +152,8 @@ export const ENVIRONMENTS: Record<OgeviaEnvName, OgeviaEnvironmentConfig> = {
       databases: {
         prod: {
           instanceIdentifier: "ogevia-prod-postgres",
-          endpointAddress: "__RDS_ENDPOINT__",
+          endpointAddress:
+            "ogevia-prod-postgres.c50cageec7mv.us-west-2.rds.amazonaws.com",
           port: 5432,
           securityGroupIds: ["sg-00530a1f4f7648e65"],
           owner: {
@@ -155,11 +161,12 @@ export const ENVIRONMENTS: Record<OgeviaEnvName, OgeviaEnvironmentConfig> = {
             stackName: "ogevia-prod-data-layer",
             logicalId: "PostgreSQLDatabase",
           },
-          databaseName: "__RDS_DB_NAME__",
-          masterSecretArn: "__RDS_MASTER_SECRET_ARN__",
+          masterSecretArn:
+            "arn:aws:secretsmanager:us-west-2:300094796789:secret:rds!db-ceb5276c-c146-4b3d-9ce6-dab7b70e0cfa-PRte3a",
         },
       },
-      appDatabaseSecretArn: "__APP_DB_SECRET_ARN__",
+      appDatabaseSecretArn:
+        "arn:aws:secretsmanager:us-west-2:300094796789:secret:ogevia/database/app-JsOTVQ",
       cognitoUserPoolId: "us-west-2_849AYz5J7",
     },
   },

@@ -10,6 +10,18 @@ import * as s3 from "aws-cdk-lib/aws-s3";
 import type { Construct } from "constructs";
 import type { OgeviaEnvironmentConfig } from "./config.js";
 
+/**
+ * Deterministic, config-derived bucket name. Other stacks reference the bucket
+ * by this name instead of a CloudFormation export, so the evidence stack is
+ * never locked by a cross-stack import. Contains no client data.
+ */
+export function signatureBucketName(config: OgeviaEnvironmentConfig): string {
+  return `ogevia-${config.envName}-signature-evidence-${config.account}-${config.region}`;
+}
+
+/** Only object-key shape the application may read or write. */
+export const SIGNATURE_OBJECT_KEY_PATTERN = "*/*/client-signature.png";
+
 export interface EvidenceStorageStackProps extends StackProps {
   readonly config: OgeviaEnvironmentConfig;
 }
@@ -61,6 +73,7 @@ export class EvidenceStorageStack extends Stack {
     });
 
     this.signatureBucket = new s3.Bucket(this, "SignatureEvidenceBucket", {
+      bucketName: signatureBucketName(props.config),
       encryption: s3.BucketEncryption.KMS,
       encryptionKey: this.dataKey,
       // S3 Bucket Keys cut KMS request charges for per-object encryption.

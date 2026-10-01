@@ -13,15 +13,17 @@ import * as iam from "aws-cdk-lib/aws-iam";
 import type * as kms from "aws-cdk-lib/aws-kms";
 import * as lambda from "aws-cdk-lib/aws-lambda";
 import * as logs from "aws-cdk-lib/aws-logs";
-import type * as s3 from "aws-cdk-lib/aws-s3";
 import type { Construct } from "constructs";
 import { cognitoIssuer } from "./auth-contract.js";
 import { assertVerified, type OgeviaEnvironmentConfig } from "./config.js";
+import {
+  SIGNATURE_OBJECT_KEY_PATTERN,
+  signatureBucketName,
+} from "./evidence-storage-stack.js";
 import { ExistingFoundation } from "./existing-foundation.js";
 
 export interface ServiceVerificationApiStackProps extends StackProps {
   readonly config: OgeviaEnvironmentConfig;
-  readonly evidenceBucket: s3.IBucket;
   readonly evidenceKey: kms.IKey;
 }
 
@@ -48,14 +50,15 @@ export const SERVICE_VERIFICATION_ROUTES: ReadonlyArray<{
 
 /**
  * Environment-variable contract for the Phase 4 handler. Identifiers only:
- * no secret values, no PHI. The DB password is fetched at runtime from
- * Secrets Manager by ARN (see the egress note in PHASE_1_CDK_ARCHITECTURE.md).
+ * no secret values, no PHI. Credentials AND the database name are read at
+ * runtime from the app secret (JSON keys username/password/dbname) by ARN:
+ * RDS metadata has no application database name (DBName is null). See the
+ * egress note in docs/aws/PHASE_1_CDK_ARCHITECTURE.md.
  */
 export const LAMBDA_ENVIRONMENT_KEYS = [
   "OGEVIA_ENV",
   "DB_HOST",
   "DB_PORT",
-  "DB_NAME",
   "DB_SECRET_ARN",
   "EVIDENCE_BUCKET",
   "EVIDENCE_KEY_ARN",
@@ -103,9 +106,10 @@ export class ServiceVerificationApiStack extends Stack {
       terminationProtection: props.config.terminationProtection,
     });
     const { config } = props;
+    const evidenceBucketName = signatureBucketName(config);
+    const signatureObjectsArn = `arn:aws:s3:::${evidenceBucketName}/${SIGNATURE_OBJECT_KEY_PATTERN}`;
     assertVerified(config.auth, "API auth contract");
     const existing = new ExistingFoundation(this, "Existing", config.existing);
-    const db = config.existing.databases.prod;
 
     this.handlerLogGroup = new logs.LogGroup(this, "HandlerLogGroup", {
       retention: config.logRetention,
@@ -161,9 +165,7 @@ export class ServiceVerificationApiStack extends Stack {
         sid: "SignatureObjects",
         actions: ["s3:PutObject", "s3:GetObject", "s3:GetObjectVersion"],
         // Only the documented key shape {org_uuid}/{visit_uuid}/client-signature.png.
-        resources: [
-          props.evidenceBucket.arnForObjects("*/*/client-signature.png"),
-        ],
+        resources: [signatureObjectsArn],
       }),
     );
     policy.addStatements(
@@ -197,9 +199,8 @@ export class ServiceVerificationApiStack extends Stack {
         OGEVIA_ENV: config.envName,
         DB_HOST: existing.prodDatabase.dbInstanceEndpointAddress,
         DB_PORT: existing.prodDatabase.dbInstanceEndpointPort,
-        DB_NAME: db.databaseName,
         DB_SECRET_ARN: existing.appDatabaseSecret.secretArn,
-        EVIDENCE_BUCKET: props.evidenceBucket.bucketName,
+        EVIDENCE_BUCKET: evidenceBucketName,
         EVIDENCE_KEY_ARN: props.evidenceKey.keyArn,
         COGNITO_USER_POOL_ID: existing.userPool.userPoolId,
         COGNITO_APP_CLIENT_ID: config.auth.appClientId,
@@ -261,18 +262,28 @@ export class ServiceVerificationApiStack extends Stack {
       });
     }
 
-    // Acknowledged on this one policy only. lib/template-scan.ts still fails
-    // any wildcard action and any Resource "*" outside the ENI action list.
+    // Exact finding IDs. lib/template-scan.ts independently fails any wildcard
+    // action and any Resource "*" outside the ENI action list.
     Validations.of(policy).acknowledge({
-      id: "AwsSolutions-IAM5",
+      id: "AwsSolutions-IAM5[Resource::*]",
       reason:
-        "Two scoped wildcards: (1) Resource * for the five ec2 ENI actions Lambda VPC attachment needs (DescribeNetworkInterfaces has no resource-level permissions); (2) signature objects limited to */*/client-signature.png because keys are per-visit UUIDs; tenant ownership is checked server-side before every presign.",
+        "Only the five ec2 ENI actions Lambda VPC attachment needs; DescribeNetworkInterfaces has no resource-level permissions.",
+    });
+    Validations.of(policy).acknowledge({
+      id: `AwsSolutions-IAM5[Resource::${signatureObjectsArn}]`,
+      reason:
+        "Object keys are per-visit UUIDs unknown at deploy time; restricted to the documented */*/client-signature.png shape. Tenant ownership is checked server-side before every presign.",
     });
     for (const ack of [
       {
         id: "HIPAA.Security-CloudWatchLogGroupEncrypted",
         reason:
           "CloudWatch Logs encrypts at rest with service-owned keys. Logs carry no PHI by design (access-log format and handler contract). A customer-managed key is an owner cost decision (PHASE_1_COST_MODEL.md).",
+      },
+      {
+        id: "HIPAA.Security-LambdaConcurrency",
+        reason:
+          "VERIFIED account Lambda concurrency limit is 10 with 10 unreserved; AWS requires >= 10 unreserved, so no reserved concurrency can be set. API stage throttling (20 rps / 50 burst) caps load. A quota increase is a Phase 4 prerequisite.",
       },
       {
         id: "HIPAA.Security-LambdaDLQ",

@@ -51,7 +51,6 @@ export function buildOgeviaApp(
     {
       config,
       env,
-      evidenceBucket: evidence.signatureBucket,
       evidenceKey: evidence.dataKey,
       description: `Ogevia ${config.envName} - Service Verification API Gateway + Lambda tier (FUTURE, Phase 4; not deployed)`,
     },
