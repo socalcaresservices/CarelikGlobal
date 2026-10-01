@@ -47,8 +47,10 @@ Arn: arn:aws:sts::300094796789:assumed-role/AWSReservedSSO_ReadOnlyAccess_81b69e
 
 #### Databases (2 resources + 4 snapshots)
 - **RDS Instances:** 2 (PostgreSQL 18.3 db.t4g.micro, both encrypted, not publicly accessible)
+  - `ogevia-postgres`: UNMANAGED (manually created; no CloudFormation tags)
+  - `ogevia-prod-postgres`: CloudFormation-managed (ogevia-prod-data-layer stack)
 - **RDS Snapshots:** 4 (2 per instance, all encrypted)
-- **RDS Subnet Groups:** 2 (both using same subnets in 2a/2b)
+- **RDS Subnet Groups:** 2 (both using same subnets in 2a/2b); managed by CloudFormation
 
 #### Storage (2 buckets)
 - **S3:** aws-cloudtrail-logs, cf-templates-13x2infn5nltk (both private, encrypted, public access blocked)
@@ -75,9 +77,9 @@ Arn: arn:aws:sts::300094796789:assumed-role/AWSReservedSSO_ReadOnlyAccess_81b69e
 - **AWS Budgets:** 1 budget ($50/month limit; insufficient for Phase 1)
 - **CloudWatch Alarms:** 0 (none configured)
 
-#### Infrastructure as Code (1 stack)
-- **CloudFormation:** 1 stack (ogevia-prod-data-layer, CREATE_COMPLETE, manages RDS + security groups)
-- **CDK:** 0 (no CDK scaffolding exists; must be created Phase 1)
+#### Infrastructure as Code (1 live stack + 1 provisional CDK scaffold)
+- **CloudFormation:** 1 stack (ogevia-prod-data-layer, CREATE_COMPLETE, manages RDS + security groups) — LIVE
+- **CDK:** 1 scaffold (claude/serene-einstein-1rzi90, EvidenceStorageStack for Phase 5) — PROVISIONAL; not deployed; no live resources; no duplication risk
 
 #### API & Authentication (1 user pool)
 - **Cognito:** 1 user pool (not yet integrated; Supabase Auth still in use)
@@ -193,39 +195,47 @@ Arn: arn:aws:sts::300094796789:assumed-role/AWSReservedSSO_ReadOnlyAccess_81b69e
 
 ## 6. CDK Infrastructure Analysis
 
-### Current State
-- **CDK Scaffolding:** ❌ DOES NOT EXIST
-- **AWS CDK CLI:** ❌ NOT INSTALLED
-- **CDK Configuration:** No cdk.json, no lib/, no bin/ directory
+### Current State (VERIFIED)
+- **CDK Scaffolding:** ✅ EXISTS (branch: claude/serene-einstein-1rzi90, commit: 2784d50)
+- **AWS CDK CLI:** Installable via `npm install -g aws-cdk` (used in scaffold: 2.1143.0)
+- **CDK Configuration:** Complete (infra/aws/cdk.json, bin/, lib/, package.json, tests)
 
 ### Existing Infrastructure Code
-- **CloudFormation Stack:** 1 (ogevia-prod-data-layer, manages RDS + security groups + subnet group)
-- **CloudFormation Duplicate Risk:** None. Phase 1 CDK should reference this stack, not recreate resources.
+- **CloudFormation Stack:** 1 (ogevia-prod-data-layer, manages RDS + security groups + subnet group) — LIVE
+- **CDK Scaffold:** 1 EvidenceStorageStack (Phase 5 evidence storage S3 + KMS) — PROVISIONAL; not deployed; synth-verified
+
+### Reconciliation: Duplication Risk Assessment
+
+**ZERO DUPLICATION RISK identified.**
+
+The CDK scaffold is independent:
+- Creates ONLY S3 buckets (evidence storage) + KMS key (for encryption)
+- Does NOT reference or recreate VPC, subnets, route tables, security groups, RDS, existing KMS keys, existing S3 buckets, IAM roles, VPC Endpoints, Cognito
+- Manually created foundation (per config.ts comment) deliberately NOT referenced yet
+- Phase 5 target; no dependency on Phase 0–1 resources
+- Tests confirm: "creates only the expected resource types (no network, compute, or database)"
 
 ### `cdk synth` and `cdk diff` Status
 
-**Cannot run:** CDK not installed. Phase 1 task: Initialize CDK scaffolding.
+**`cdk synth` (read-only):** ✅ VERIFIED
+- Successfully synthesized Ogevia-dev-EvidenceStorage template
+- Outputs: S3 buckets (2), KMS key (1), KMS alias (1), bucket policies (2)
+- Template: `cdk.out/Ogevia-dev-EvidenceStorage.template.json`
+- Feature flags: 80 unstable flags (not configured; expected for CDK 2.272)
 
-**Proposed CDK Structure (Phase 1 start):**
-```
-infra/
-├── cdk.json                           # CDK configuration
-├── bin/
-│   └── ogevia.ts                      # Main app; instantiates stacks
-└── lib/
-    ├── ogevia-vpc-stack.ts            # References existing VPC, subnets, route tables
-    ├── ogevia-data-layer-stack.ts     # References CloudFormation stack outputs for RDS
-    ├── ogevia-app-stack.ts            # PLACEHOLDER (Phase 2); Lambda, API Gateway
-    └── ogevia-auth-stack.ts           # PLACEHOLDER (Phase 3); Cognito integration
-```
+**`cdk diff` (read-only, requires AWS credentials):** Not yet run (phase 0 read-only scope)
 
-### Next Phase 1 Steps
-1. Install AWS CDK CLI: `npm install -g aws-cdk`
-2. Initialize CDK app: `cdk init --language typescript`
-3. Create stack structure per above
-4. Run `cdk synth` to generate CloudFormation
-5. Run `cdk diff` to compare with existing stack (should show zero changes to RDS, SGs, subnets)
-6. Document stack dependencies and resource references
+**Tests:** ✅ ALL PASSED (10/10)
+- AwsSolutions checks: PASSED
+- HIPAA Security checks: PASSED
+- No unacknowledged findings
+
+### Next Phase 1 Steps (for existing scaffold)
+1. Reconcile scaffold against live inventory (this gate — COMPLETE)
+2. Run `cdk diff --quiet` (read-only, Phase 1) to compare generated template to existing infrastructure
+3. Phase 5 prep: Maintain scaffold; reference when planning Phase 5 evidence storage migration
+4. Phase 1 additions: Add stacks for VPC references, RDS data-layer references (per MIGRATION_PLAN.md)
+5. Document stack dependencies and resource references
 
 ---
 
@@ -284,20 +294,27 @@ infra/
 
 ## 9. Duplicate & Conflict Analysis
 
-### CDK vs. CloudFormation Overlap
+### CDK Scaffold vs. Live Infrastructure Overlap
 
 **Existing CloudFormation Stack:** ogevia-prod-data-layer
 - **Manages:** AppSecurityGroup, RDSSecurityGroup, DBSubnetGroup, PostgreSQLDatabase (ogevia-prod-postgres), PostgreSQLFromApplication (ingress rule)
+- **Status:** LIVE; REFERENCED by Phase 1 CDK (per MIGRATION_PLAN.md)
 
-**Proposed CDK Approach (Phase 1):**
-- **Option A (Recommended):** CDK references CloudFormation stack outputs; does not recreate RDS, security groups, or subnets managed by CloudFormation
-- **Result:** ✅ ZERO DUPLICATION
+**Existing CDK Scaffold:** claude/serene-einstein-1rzi90
+- **Creates (Phase 5):** EvidenceStorageStack (S3 buckets for evidence storage + KMS key for encryption)
+- **Creates (NOT YET):** New S3 buckets (2) + KMS key (1) — no live deployment
+- **Does NOT touch:** VPC, subnets, RDS, security groups, existing KMS keys, existing S3 buckets, IAM roles
+- **Verified via:** `cdk synth` output, test assertions, manual inspection
 
-**Option B (Alternative - not recommended Phase 1):**
-- Gradual transition: Use `cdk import` to adopt existing RDS instance (complex, risky)
-- Result: ⚠️ High risk of resource drift or service interruption
+**Overlap Assessment:** ✅ ZERO DUPLICATION RISK
+- Evidence storage is Phase 5 (future migration from Supabase `visit-signatures` bucket)
+- No existing evidence storage infrastructure to conflict with
+- No network/database/IAM dependencies
+- Safe to maintain scaffold pending Phase 5 deployment approval
 
-✅ **Verdict: Proceed with Option A.** Phase 1 CDK depends-on CloudFormation stack; no conflicts.
+**CDK Phase 1 approach:** Reference ogevia-prod-data-layer CloudFormation stack for RDS/SGs; add new stacks for VPC/RDS data-layer references; extend with Phase 5 evidence storage when ready
+
+✅ **Verdict: Zero conflicts identified. CDK scaffold is safe; existing CloudFormation stack will be referenced by Phase 1 additions.**
 
 ---
 
@@ -318,8 +335,8 @@ infra/
 | ⚠️ CloudTrail multi-region verified | INCOMPLETE | AccessDenied on API; status unknown (assume us-east-2 home region only) |
 | ✅ RDS security group audit complete | COMPLETE | No 0.0.0.0 on port 5432; restricted to AppSG only |
 | ✅ Four owner decisions documented | COMPLETE | EC2 retirement, budget monitoring, CloudTrail, RDS audit |
-| ❌ `cdk synth` run | N/A | CDK not installed; scaffold does not exist (Phase 1 task) |
-| ❌ `cdk diff` run | N/A | CDK not installed; scaffold does not exist (Phase 1 task) |
+| ✅ `cdk synth` run | VERIFIED | EvidenceStorageStack synthesized; outputs verified; no duplication with live infrastructure |
+| ⚠️ `cdk diff` run | NOT YET (Phase 1) | Read-only; deferred to Phase 1; will compare generated template to live infrastructure |
 | ✅ Documentation updated | COMPLETE | 4 files created/updated, committed to claude/phase0-aws-inventory |
 | ✅ No AWS mutations performed | COMPLETE | Read-only profile only; no deployments, terminations, creations |
 
@@ -351,7 +368,7 @@ infra/
 - ⚠️ Resource tagging not implemented
 - ⚠️ App tier security group rules not finalized
 - ⚠️ RDS backup testing not documented
-- ℹ️ CDK does not exist yet (expected; Phase 1 start task)
+- ℹ️ CDK scaffold exists but needs Phase 1 integration (VPC/RDS references not yet added)
 
 **Blocking Issues for Phase 2 Production:** None identified.
 
