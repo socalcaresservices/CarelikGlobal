@@ -1,30 +1,29 @@
 # @carelik/infra-aws
 
-Ogevia AWS infrastructure (AWS CDK v2, TypeScript). See `CLAUDE.md` and `docs/aws/`.
+Ogevia AWS infrastructure: AWS CDK v2, TypeScript. This is the source of truth for AWS infrastructure (`CLAUDE.md` §6). See `docs/aws/PHASE_1_CDK_ARCHITECTURE.md`.
 
-**PROVISIONAL.** This scaffold is not final until the existing AWS infrastructure has been verified by a live read-only inventory and reconciled against it. It may be changed or discarded to avoid duplicating existing resources.
+**Nothing in this package is deployed.** The account is not bootstrapped. `cdk bootstrap`, `cdk deploy` and `cdk import` are YELLOW actions (`CLAUDE.md` §13) and require explicit owner approval.
 
-**Nothing in this package has been deployed.** `cdk bootstrap`, `cdk deploy`, and `cdk import` are YELLOW actions (`CLAUDE.md` §13) and require explicit owner approval.
+## Ownership model
 
-## Stacks
-
-| Stack                            | Contents                                                                                                                                   | Status                  |
-| -------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------- |
-| `Ogevia-<stage>-EvidenceStorage` | KMS CMK (rotation on, retained), private SSE-KMS signature bucket (versioned, TLS-only, access-logged, retained), SSE-S3 access-log bucket | Provisional; synth only |
-
-The manually created foundation (VPC, SGs, VPC endpoints, IAM role, RDS) is **deliberately not referenced**. It stays that way until a live read-only inventory verifies it (`docs/aws/CURRENT_AWS_INVENTORY.md`).
+|                                       | What                                                                                                                                                         | Where                                                                                  |
+| ------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------- |
+| A. EXISTING (reference only)          | VPC, 4 subnets, prod App/RDS SGs, admin SG, SSM endpoints, `ogevia-prod-postgres`, its master secret ARN, the app DB secret ARN, Cognito pool and app client | `lib/config.ts` (IDs), `lib/existing-foundation.ts` (handles; zero template resources) |
+| B. FUTURE (synthesized, not deployed) | `Ogevia-prod-EvidenceStorage` (Phase 5), `Ogevia-prod-ServiceVerificationApi` (Phase 4), `Ogevia-prod-Observability` (Phase 4/7)                             | `lib/*-stack.ts`, wired in `lib/app.ts`                                                |
+| C. DEFERRED (forbidden)               | NAT, VPC/subnets/SGs/endpoints, RDS, Aurora, ECS, EKS, OpenSearch, ElastiCache, new Cognito pool, Budgets, WAF …                                             | `lib/ownership.ts`                                                                     |
 
 ## Commands
 
 ```bash
 pnpm --filter @carelik/infra-aws typecheck
-pnpm --filter @carelik/infra-aws test            # CDK assertions + cdk-nag (AwsSolutions, HIPAA Security)
-pnpm --filter @carelik/infra-aws exec cdk synth --quiet               # dev
-pnpm --filter @carelik/infra-aws exec cdk synth --quiet -c stage=prod # prod (termination protection on)
+pnpm --filter @carelik/infra-aws test        # CDK assertions, template scanner, cdk-nag AwsSolutions + HIPAA
+pnpm --filter @carelik/infra-aws synth       # cdk synth -c env=prod -c mode=plan (no AWS calls needed)
+pnpm --filter @carelik/infra-aws inventory -- ../../docs/aws/PHASE_1_SYNTH_INVENTORY.md   # after synth; exits 1 on violations
+CDK_DISABLE_CLI_TELEMETRY=true pnpm --filter @carelik/infra-aws diff:template   # read-only; needs `aws sso login --profile ogevia-readonly`
 ```
 
-`cdk diff` needs working AWS credentials and is read-only, but it has not been run yet (credentials were rejected).
+Always diff with `--method=template` (the `diff:template` script). The CLI default `auto` method tries to **create a CloudFormation change set**, which is a write.
 
 ## Security checks
 
-cdk-nag is enforced in `test/evidence-storage-stack.test.ts` via `NagPack.validateScope()`. Removing a load-bearing acknowledgement makes the test fail; this was checked. cdk-nag is **not** registered as a synth-time validation plugin, because with aws-cdk-lib 2.272 / cdk-nag 3.0.2 the plugins produced no report entries during `cdk synth`.
+`lib/template-scan.ts` runs over every synthesized stack in the tests and in the inventory script. Each rule has a negative test. cdk-nag runs in the tests through `NagPack.validateScope()`. It is not a synth-time plugin, because with aws-cdk-lib 2.272 / cdk-nag 3.0.2 the plugins are not invoked during `cdk synth`.
