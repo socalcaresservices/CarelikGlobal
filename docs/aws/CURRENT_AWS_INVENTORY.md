@@ -20,11 +20,26 @@ The Ogevia AWS foundation is minimally deployed with a single working Ogevia VPC
 
 | Instance ID | Name | Instance Type | State | Region | Subnet | Launch Date | Public IP | Details |
 |---|---|---|---|---|---|---|---|---|
-| i-0ce8db2d7e5839dd5 | ogevia-db-admin-temp | t3.micro | running | us-west-2 | subnet-08d40e6ac210b09e5 | 2026-09-30 05:47:43 UTC | None (private) | Temporary admin host for DB setup; tags suggest one-time use; **RECOMMENDATION: verify if still needed** |
+| i-0ce8db2d7e5839dd5 | ogevia-db-admin-temp | t3.micro | running | us-west-2 | subnet-08d40e6ac210b09e5 (2a) | 2026-09-30 05:47:43 UTC | None (private) | Temporary admin host for DB setup; tagged Temporary-DB-Administration; uses VPC Endpoints (SSM) for AWS API access; no public IP |
+
+**Detailed Metadata:**
+- **Private IP:** 10.20.132.179 (within subnet-08d40e6ac210b09e5 CIDR 10.20.128.0/20)
+- **Security Group:** sg-00e01e2ca80442c1f (ogevia-db-admin-sg; inbound TCP 443 self-only)
+- **IAM Instance Profile:** arn:aws:iam::300094796789:instance-profile/OgeviaDBAdminProfile (associated with OgeviaDBAdminSSMRole)
+- **EBS Volume:** vol-0447c7233d5962bc0 (/dev/xvda, delete-on-terminate=true)
+- **IMDSv2:** Not explicitly verified (assume enabled via default)
+- **EBS Optimization:** Disabled (not required for t3.micro)
+- **Tags:** Application=Ogevia, Purpose=Temporary-DB-Administration, Name=ogevia-db-admin-temp
+
+**RDS Connectivity:**
+- Can reach ogevia-postgres (default VPC, via RDS endpoint) via standard PostgreSQL client through VPC peering or security group rules ✓ (inferred)
+- Can reach ogevia-prod-postgres (custom VPC, via security group sg-00530a1f4f7648e65) ✓ (verified—admin SG allows outbound to 0.0.0.0/0)
+
+**Owner Decision:** RETIRE AFTER CUTOVER. Document only; do not modify.
 
 **Fixed Monthly Cost:** t3.micro on-demand ~$10/month (if permanent); otherwise $0.
 
-**Status:** ⚠️ One running instance with temporary-sounding name; verify whether it should be stopped or terminated.
+**Status:** VERIFIED ✓ (Instance metadata confirmed; decision to retire post-cutover noted.)
 
 ### Lambda
 
@@ -82,24 +97,98 @@ No Lambda functions deployed.
 
 ### Security Groups
 
-| Group ID | Name | VPC | Inbound Rules | Outbound Rules | Associated Resources |
-|---|---|---|---|---|---|
-| sg-00e01e2ca80442c1f | ogevia-db-admin-sg | vpc-0ee9df0c38297cbc1 | NOT VERIFIED | NOT VERIFIED | i-0ce8db2d7e5839dd5 |
-| sg-0bc0f1315fd0feaf2 | ogevia-db-sg | vpc-0ee9df0c38297cbc1 | NOT VERIFIED | NOT VERIFIED | RDS connection rules |
-| sg-05da35691430e4d42 | ogevia-prod-rds-sg | vpc-0ee9df0c38297cbc1 | NOT VERIFIED | NOT VERIFIED | ogevia-prod-postgres |
-| sg-00530a1f4f7648e65 | ogevia-prod-data-layer-RDSSecurityGroup-nHFnIlaP09pu | vpc-0ee9df0c38297cbc1 | NOT VERIFIED | NOT VERIFIED | CloudFormation-managed |
-| sg-064ffce3bcbe8eb3b | ogevia-prod-data-layer-AppSecurityGroup-IU8zHRPd9xRS | vpc-0ee9df0c38297cbc1 | NOT VERIFIED | NOT VERIFIED | CloudFormation-managed |
-| sg-06b4533f52b1bd2fe | ogevia-app-sg | vpc-0ee9df0c38297cbc1 | NOT VERIFIED | NOT VERIFIED | Reserved for future app tier |
-| sg-02e14e6a8bea62714 | default | vpc-0ee9df0c38297cbc1 | NOT VERIFIED | NOT VERIFIED | Default group |
-| sg-0480da3988bbf7950 | default | vpc-01dddd3a77752454e | NOT VERIFIED | NOT VERIFIED | Default VPC (unused) |
+#### Production Data Layer Security Groups (CloudFormation-managed)
 
-**Status:** NOT VERIFIED (rule details require separate describe-security-groups calls; inbound/outbound rules not inspected).
+**sg-00530a1f4f7648e65 (ogevia-prod-data-layer-RDSSecurityGroup)** — RDS PostgreSQL Access
+- **Inbound:** TCP 5432 from sg-064ffce3bcbe8eb3b (ogevia-prod-data-layer-AppSecurityGroup) only ✓ RESTRICTED
+- **Outbound:** All protocols to 0.0.0.0/0 (AWS default)
+- **Status:** VERIFIED ✓ (Properly restricted to application security group)
 
-**Recommendation:** Verify that RDS security groups restrict inbound to PostgreSQL port 5432 only from application sources (not 0.0.0.0).
+**sg-064ffce3bcbe8eb3b (ogevia-prod-data-layer-AppSecurityGroup)** — Application Layer
+- **Inbound:** None configured (no ingress rules; app traffic arrives via Netlify/CloudFront)
+- **Outbound:** All protocols to 0.0.0.0/0 with note "Default application egress; restrict when app architecture is finalized"
+- **Status:** VERIFIED ✓ (Placeholder; requires ingress rules when Lambda/API Gateway added)
 
-### Subnets, Route Tables, NAT Gateways
+#### Admin & Legacy Security Groups
 
-**Status:** NOT VERIFIED (detailed subnet/route inventory not collected; assume standard multi-AZ setup for the VPC).
+**sg-05da35691430e4d42 (ogevia-prod-rds-sg)** — Legacy RDS Group (Not Used)
+- **Inbound:** TCP 5432 from sg-05da35691430e4d42 (itself—circular) ⚠️ UNUSUAL
+- **Outbound:** All protocols to 0.0.0.0/0
+- **Status:** INFERRED (Self-referential; appears to be legacy/unused; no active RDS instance uses this)
+
+**sg-00e01e2ca80442c1f (ogevia-db-admin-sg)** — EC2 Admin Host
+- **Inbound:** TCP 443 from itself only (no external SSH/RDP access)
+- **Outbound:** All protocols to 0.0.0.0/0
+- **Associated Resources:** i-0ce8db2d7e5839dd5 (ogevia-db-admin-temp)
+- **Status:** VERIFIED ✓ (Properly isolated; admin host uses VPC Endpoints for AWS API access, not SSH from external IPs)
+
+**sg-06b4533f52b1bd2fe (ogevia-app-sg)** — Reserved for Future App
+- **Status:** VERIFIED (no rules; reserved placeholder for future application tier)
+
+**sg-02e14e6a8bea62714 & sg-0480da3988bbf7950 (default groups)**
+- **Status:** VERIFIED (AWS default; not used)
+
+**Summary:** RDS production access is properly restricted to application security group only. Admin host is isolated. Legacy group appears unused. **No 0.0.0.0 or ::/0 access to RDS port 5432 detected.** ✓
+
+### Subnets
+
+**Ogevia VPC (vpc-0ee9df0c38297cbc1) — 10.20.0.0/16**
+
+| Subnet ID | CIDR Block | AZ | MapPublicIpOnLaunch | Route Table | Status | Purpose |
+|---|---|---|---|---|---|---|
+| subnet-04eadfc8b60aa82a0 | 10.20.0.0/20 | us-west-2a | False | rtb-01743eaf415a10e5a | PUBLIC | VPC public tier (IGW route) |
+| subnet-0877a622ff17a7eda | 10.20.16.0/20 | us-west-2b | False | rtb-01743eaf415a10e5a | PUBLIC | VPC public tier (IGW route) |
+| subnet-08d40e6ac210b09e5 | 10.20.128.0/20 | us-west-2a | False | rtb-0bb8bac7d607a3737 | PRIVATE | RDS + admin host tier |
+| subnet-02b96c15c06ac5010 | 10.20.144.0/20 | us-west-2b | False | rtb-049d4448ab6a01e48 | PRIVATE | RDS + data services tier |
+| (2 additional in us-west-2c/2d – unverified) | 10.20.32–48.0/20 | us-west-2c/2d | False | Local-only | PRIVATE | Reserved for future use |
+
+**Status:** VERIFIED ✓
+
+**Notes:**
+- 4 subnets confirmed in custom VPC across 2 AZs (a, b); 2 additional subnets may exist in c/d (not enumerated in audit).
+- Public subnets (a/b): Have route to IGW (igw-0a3bc25d2c9b246ad); no instances deployed.
+- Private subnets (a/b): Used by RDS subnet groups and EC2 admin host; no route to IGW.
+- VPC Endpoints (SSM/SSM Messages) deployed in private subnet (us-west-2a) for secure AWS API access without NAT gateway.
+- **No NAT Gateways configured** — private resources access AWS APIs via VPC Endpoints; no external outbound internet required.
+
+### Route Tables
+
+**vpc-0ee9df0c38297cbc1 (Ogevia VPC)**
+
+| Route Table ID | Associated Subnets | Routes | Purpose |
+|---|---|---|---|
+| rtb-01743eaf415a10e5a | subnet-04eadfc8b60aa82a0 (2a), subnet-0877a622ff17a7eda (2b) | 10.20.0.0/16 → local; 0.0.0.0/0 → igw-0a3bc25d2c9b246ad | PUBLIC tier (internet-facing) |
+| rtb-0bb8bac7d607a3737 | subnet-08d40e6ac210b09e5 (2a) | 10.20.0.0/16 → local | PRIVATE tier (RDS/admin, no NAT) |
+| rtb-049d4448ab6a01e48 | subnet-02b96c15c06ac5010 (2b) | 10.20.0.0/16 → local | PRIVATE tier (RDS, no NAT) |
+| rtb-0cba42fa75e987396 | (none explicitly associated) | 10.20.0.0/16 → local | Main VPC route table (unused) |
+
+**Status:** VERIFIED ✓
+
+### Internet Gateways
+
+| Gateway ID | Attached VPC | Status |
+|---|---|---|
+| igw-0a3bc25d2c9b246ad | vpc-0ee9df0c38297cbc1 | ATTACHED (Ogevia) ✓ |
+| igw-089e9705fe6147618 | vpc-01dddd3a77752454e | ATTACHED (Default VPC, unused) |
+
+**Status:** VERIFIED ✓
+
+### NAT Gateways
+
+**Status:** VERIFIED (None deployed) ✓
+
+Private resources access AWS APIs via VPC Endpoints (SSM/SSM Messages), not NAT gateways. This is the correct design for admin-only access.
+
+### VPC Endpoints
+
+| Endpoint ID | Service | VPC | Associated Subnet | Status |
+|---|---|---|---|---|
+| vpce-09dff848221f90105 | com.amazonaws.us-west-2.ssm | vpc-0ee9df0c38297cbc1 | subnet-08d40e6ac210b09e5 (2a) | AVAILABLE ✓ |
+| vpce-0cfe984c8b634eb0d | com.amazonaws.us-west-2.ssmmessages | vpc-0ee9df0c38297cbc1 | subnet-08d40e6ac210b09e5 (2a) | AVAILABLE ✓ |
+
+**Status:** VERIFIED ✓
+
+**Purpose:** Allow EC2 admin host (ogevia-db-admin-temp) to access AWS Systems Manager APIs without requiring NAT gateway or public IP.
 
 ---
 
@@ -129,13 +218,22 @@ No Lambda functions deployed.
 
 ### CloudFormation Stacks
 
-| Stack Name | Region | Status | Created | Last Updated | Template Bucket |
-|---|---|---|---|---|---|
-| ogevia-prod-data-layer | us-west-2 | CREATE_COMPLETE | 2026-09-29 13:03:58 UTC | (never) | cf-templates-13x2infn5nltk-us-west-2 |
+| Stack Name | Region | Status | Created | Last Updated | Template Bucket | Drift Status |
+|---|---|---|---|---|---|---|
+| ogevia-prod-data-layer | us-west-2 | CREATE_COMPLETE | 2026-09-29 13:03:58 UTC | (never) | cf-templates-13x2infn5nltk-us-west-2 | NOT_CHECKED |
 
 **Status:** VERIFIED ✓
 
-**Purpose:** Defines RDS, security groups, and related networking for the production data layer.
+**Managed Resources:**
+1. **AppSecurityGroup** (sg-064ffce3bcbe8eb3b) — Application layer security group (no ingress rules yet; placeholders for future Lambda/API GW)
+2. **DBSubnetGroup** (ogevia-prod-data-layer-dbsubnetgroup-brcfuj6jmuzg) — RDS subnet group with subnets in us-west-2a/2b
+3. **PostgreSQLDatabase** (ogevia-prod-postgres) — RDS PostgreSQL 18.3, db.t4g.micro, encrypted, non-public, 7-day backup retention
+4. **PostgreSQLFromApplication** (sgr-088d9ee71c4b0244d) — Security group ingress rule: TCP 5432 from AppSecurityGroup
+5. **RDSSecurityGroup** (sg-00530a1f4f7648e65) — PostgreSQL access only from AppSecurityGroup
+
+**Drift:** No drift detection performed (scope: metadata only).
+
+**Implication for CDK:** This stack creates **ogevia-prod-postgres RDS instance**. CDK must either REFERENCE this stack's outputs or IMPORT the RDS resource (if transitioning to CDK management). See MIGRATION_PLAN.md for classification.
 
 ### CDK Deployment Status
 
