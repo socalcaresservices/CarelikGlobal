@@ -32,6 +32,11 @@ export async function createTestDb(): Promise<TestDb> {
   const url = new URL(ADMIN_URL);
   url.pathname = `/${name}`;
   const admin = new pg.Pool({ connectionString: url.toString(), max: 30 });
+  // Teardown uses DROP DATABASE ... WITH (FORCE), which terminates idle pool
+  // connections (57P01). That one code is expected; anything else is a failure.
+  admin.on("error", (error: Error & { code?: string }) => {
+    if (error.code !== "57P01") throw error;
+  });
   const client = await admin.connect();
   try {
     await migrate(client);

@@ -66,7 +66,9 @@ function renderPage() {
 
 async function openReport(name: RegExp) {
   const option = await screen.findByRole("option", { name });
-  fireEvent.change(screen.getByLabelText("Report"), { target: { value: option.getAttribute("value") } });
+  fireEvent.change(screen.getByLabelText("Report"), {
+    target: { value: option.getAttribute("value") },
+  });
 }
 
 function mockOrgLetterhead() {
@@ -101,6 +103,7 @@ function mockOrgLetterhead() {
 describe("ServiceVerificationReportsPage", () => {
   afterEach(() => {
     vi.clearAllMocks();
+    vi.useRealTimers();
     window.history.replaceState({}, "", "/");
   });
 
@@ -222,6 +225,10 @@ describe("ServiceVerificationReportsPage", () => {
   });
 
   it("maps each caregiver's daily worked and billable hours into the monthly calendar", async () => {
+    // The calendar defaults to the current month; pin only Date so the
+    // 2026-08 fixture rows stay in view regardless of when the suite runs.
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date("2026-08-15T12:00:00.000Z"));
     mockedUseOrganization.mockReturnValue({
       activeOrganizationId: ORG_ID,
       activeOrganization: { displayName: "Acme Care" },

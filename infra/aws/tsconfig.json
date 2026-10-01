@@ -6,5 +6,13 @@
     "jsx": "preserve",
     "exactOptionalPropertyTypes": false
   },
-  "include": ["bin", "lib", "test", "scripts", "db", "vitest.config.ts", "vitest.db.config.ts"]
+  "include": [
+    "bin",
+    "lib",
+    "test",
+    "scripts",
+    "db",
+    "vitest.config.ts",
+    "vitest.db.config.ts"
+  ]
 }
