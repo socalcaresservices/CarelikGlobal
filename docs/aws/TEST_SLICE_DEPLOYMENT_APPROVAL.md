@@ -143,3 +143,29 @@ None of these affect Supabase, Netlify, `ogevia-web`, or the existing RDS databa
 | SG removed | Admin host groups = `sg-00e01e2ca80442c1f` only; no network interface uses AppSG; tunnel process closed |
 | RDS SG `sg-00530a1f4f7648e65` | Unchanged: 5432 from `sg-064ffce3bcbe8eb3b` only |
 | Note | Roles are instance-wide: `ogevia_app` can now log in to other databases on this instance via the default PUBLIC CONNECT, but it holds no privileges there. Revoke PUBLIC CONNECT on other databases in Phase 7 |
+
+### 8.2 One-command finish (2026-10-01)
+
+`infra/aws/slice/finish.sh` (run from CloudShell) does the following:
+- verifies the account, region, AdministratorAccess, bootstrap, test sign-ins and stack states (it stops on any failed stack and never deletes);
+- shows the template diff;
+- deploys the 5 stacks with `--require-approval broadening` (the owner types `y`);
+- uploads the AWS web build plus a runtime `config.json` written from the stack outputs;
+- invalidates CloudFront and waits until the site is reachable;
+- runs `slice/smoke.py`.
+
+The smoke suite (≈45 checks) covers:
+- Cognito client/pool;
+- API authorizer, routes, 401s and CORS;
+- the Lambda configuration;
+- the full workflow through the deployed Lambda using the seeded subs: start/idempotency/one-open/end/signature/retry/lock/no-signer/manager list/signature view/correction/history/billing review;
+- tenant negatives;
+- the S3 evidence object (SSE-KMS, versioned, anonymous 403) and the bucket controls;
+- web routing, headers and config;
+- log groups, alarms and SNS;
+- RDS not public, the RDS SG unchanged, the admin host without AppSG;
+- no sensitive values in Lambda logs.
+
+Testing: the suite was run locally against PostgreSQL with the real handler, 30/30 workflow + tenant checks, re-run and interrupted-run recovery included. `finish.sh` was dry-run with stub tools (happy path + failed-stack stop). The bundled web build passed 22/22 in Chromium via `config.json` only.
+
+Bundle: `s3://cdk-hnb659fds-assets-300094796789-us-west-2/ogevia-test-slice/ogevia-slice-7dc040c25549.tgz` (private bootstrap bucket, SSE-KMS), SHA-256 `c40b0fe5d3e18c76f8f8e41417c35640284c85cc66411b8ce753a240e822dcea`. It is built by `infra/aws/scripts/build-slice-bundle.sh` from commit `7dc040c25549`.
