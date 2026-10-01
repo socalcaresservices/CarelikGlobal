@@ -28,8 +28,6 @@ import {
   formatElapsed,
   formatHours,
   formatVisitDate,
-  type ServiceVisitStatus,
-  type VisitAuthorizationStatus,
   type VisitSignerRole,
 } from "@/lib/service-verification";
 

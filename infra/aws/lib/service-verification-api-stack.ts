@@ -1,4 +1,5 @@
 import {
+  CfnOutput,
   Duration,
   RemovalPolicy,
   Stack,
@@ -276,6 +277,8 @@ export class ServiceVerificationApiStack extends Stack {
         ),
       },
     });
+
+    new CfnOutput(this, "ApiUrl", { value: this.api.apiEndpoint });
 
     const integration = new HttpLambdaIntegration("Handler", this.handler);
     for (const route of SERVICE_VERIFICATION_ROUTES) {

@@ -3,7 +3,7 @@
 // the AWS build (VITE_AUTH_PROVIDER=cognito) provides the AWS API one.
 // Business rules (identity, tenant, assignment, authorization, timestamps,
 // locking) are enforced by the backend in both cases, never here.
-import { createContext, useContext } from "react";
+import { createContext } from "react";
 import type {
   ServiceVisitStatus,
   VisitAuthorizationStatus,

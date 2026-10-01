@@ -60,7 +60,6 @@ const OrganizationContext = createContext<OrganizationContextValue | null>(null)
  * Lets the AWS build supply the same context from GET /v1/me (PostgreSQL is
  * the authority) so the existing screens work unchanged.
  */
-// eslint-disable-next-line react-refresh/only-export-components
 export const OrganizationContextProvider = OrganizationContext.Provider;
 
 export function OrganizationProvider({

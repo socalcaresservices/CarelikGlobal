@@ -50,7 +50,6 @@ import {
   formatVisitDate,
   VISIT_STATUS_LABEL,
   type ServiceVisitStatus,
-  type VisitAuthorizationStatus,
 } from "@/lib/service-verification";
 
 

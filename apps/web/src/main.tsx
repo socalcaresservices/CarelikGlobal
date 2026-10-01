@@ -2,7 +2,7 @@ import React from "react";
 import ReactDOM from "react-dom/client";
 import { resolveAuthMode } from "@carelik/auth";
 import "@/index.css";
-import type { AwsEnv } from "@/aws/aws-root";
+import type { AwsEnv } from "@/aws/aws-runtime";
 
 const root = ReactDOM.createRoot(document.getElementById("root")!);
 
@@ -10,7 +10,7 @@ const root = ReactDOM.createRoot(document.getElementById("root")!);
 // (Supabase) exactly as before. "cognito" = the AWS Service Verification
 // build; its module graph never creates a Supabase client.
 if (resolveAuthMode(import.meta.env.VITE_AUTH_PROVIDER) === "cognito") {
-  void import("@/aws/aws-root").then(({ AwsApp, AwsConfigurationError, createAwsRuntime }) => {
+  void Promise.all([import("@/aws/aws-root"), import("@/aws/aws-runtime")]).then(([{ AwsApp, AwsConfigurationError }, { createAwsRuntime }]) => {
     try {
       const runtime = createAwsRuntime(import.meta.env as unknown as AwsEnv);
       root.render(

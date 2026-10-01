@@ -9,7 +9,7 @@ import { OrganizationContextProvider, type OrganizationContextValue } from "@/pr
 const KNOWN_PERMISSIONS = new Set<string>(permissionSchema.options);
 const ROLES = new Set<string>(["organization_owner", "organization_admin", "manager", "scheduler", "coordinator", "staff", "caregiver", "read_only"]);
 
-export function toOrganization(m: AwsMembership): Organization {
+function toOrganization(m: AwsMembership): Organization {
   return {
     id: m.organizationId,
     slug: m.organizationSlug,

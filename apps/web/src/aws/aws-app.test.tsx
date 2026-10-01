@@ -8,7 +8,8 @@ import { MemoryRouter } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createAwsApiClient } from "@/lib/aws-api";
 import { isSupabaseClientCreated } from "@/lib/supabase";
-import { AwsRoutes, createAwsRuntime } from "./aws-root";
+import { AwsRoutes } from "./aws-root";
+import { createAwsRuntime, type AwsEnv } from "./aws-runtime";
 
 const ORG = "aaaaaaaa-0000-4000-8000-000000000001";
 const CLIENT = "cccccccc-0000-4000-8000-000000000001";
@@ -16,11 +17,12 @@ const SERVICE = "dddddddd-0000-4000-8000-000000000001";
 const VISIT = "eeeeeeee-0000-4000-8000-000000000001";
 const SUB = "11111111-2222-4333-8444-555555555555";
 
-type Call = { method: string; path: string; headers: Record<string, string>; body: any };
+type Call = { method: string; path: string; headers: Record<string, string>; body: Record<string, unknown> | null };
+type FakeVisit = Record<string, unknown>;
 
 function fakeApi(role: "caregiver" | "manager") {
   const calls: Call[] = [];
-  let visit: any = null;
+  let visit: FakeVisit | null = null;
   const permissions = role === "manager" ? ["billing.approve", "billing.visits.read", "visits.manage", "visits.read"] : [];
   const json = (status: number, body: unknown) => new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json" } });
   const fetchImpl = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
@@ -44,7 +46,7 @@ function fakeApi(role: "caregiver" | "manager") {
         return json(201, { visitId: VISIT });
       case `POST /v1/visits/${VISIT}/end`:
         visit = { ...visit, timeOut: new Date().toISOString(), workedMinutes: 120, visitStatus: "awaiting_signature" };
-        return json(200, { visit: { visitId: VISIT, workedMinutes: 120, timeIn: visit.timeIn, timeOut: visit.timeOut } });
+        return json(200, { visit: { visitId: VISIT, workedMinutes: 120, timeIn: visit["timeIn"], timeOut: visit["timeOut"] } });
       case `POST /v1/visits/${VISIT}/confirm`:
         visit = null;
         return json(200, { result: { visitId: VISIT, status: "signed", authorizationStatus: "within_authorization", workedMinutes: 120, billableMinutes: 120, monthToDateMinutes: 1590, remainingMinutes: 4410 } });
@@ -217,7 +219,7 @@ describe("AWS runtime configuration fails closed", () => {
     ["missing client id", { VITE_COGNITO_CLIENT_ID: undefined }],
     ["http redirect", { VITE_COGNITO_REDIRECT_URI: "http://app.example.test/auth/callback" }],
   ])("rejects %s", (_l, patch) => {
-    expect(() => createAwsRuntime({ ...env, ...patch })).toThrow();
+    expect(() => createAwsRuntime({ ...env, ...patch } as AwsEnv)).toThrow();
   });
 });
 
@@ -233,11 +235,15 @@ describe("AWS API client", () => {
     await expect(offline.post("/v1/visits", {})).rejects.toMatchObject({ code: "network_error" });
   });
   it("sends no cookies and disables caching", async () => {
-    const fetchImpl = vi.fn(async () => new Response("{}", { status: 200 }));
+    const seen: RequestInit[] = [];
+    const fetchImpl = vi.fn(async (...args: [string, RequestInit?]) => {
+      seen.push(args[1] ?? {});
+      return new Response("{}", { status: 200 });
+    });
     const client = createAwsApiClient({ baseUrl: "https://api.example.test", getAccessToken: async () => "t", fetch: fetchImpl as never });
     await act(async () => {
       await client.get("/v1/me");
     });
-    expect(fetchImpl.mock.calls[0]![1]).toMatchObject({ credentials: "omit", cache: "no-store" });
+    expect(seen[0]).toMatchObject({ credentials: "omit", cache: "no-store" });
   });
 });

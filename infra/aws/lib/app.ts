@@ -7,16 +7,29 @@ import { ObservabilityStack } from "./observability-stack.js";
 import { ServiceVerificationApiStack } from "./service-verification-api-stack.js";
 
 /**
- * Synthesis modes. Only `plan` exists in Phase 1: it synthesizes the complete
- * FUTURE architecture for review, tests, and template-only diff. A deploy mode
- * is added only after the owner approves a deployment (CLAUDE.md section 13).
+ * Synthesis modes.
+ * - plan: synth/test/template-diff. Never deploys anything.
+ * - deploy: the same stacks, for `cdk deploy` ONLY after the owner's single
+ *   consolidated approval (docs/aws/TEST_SLICE_DEPLOYMENT_APPROVAL.md). It
+ *   requires OGEVIA_DEPLOY_APPROVAL=<approval reference>, which is written to
+ *   every stack's ogevia:deployment-status tag (CLAUDE.md section 13, YELLOW).
  */
-export type OgeviaMode = "plan";
+export type OgeviaMode = "plan" | "deploy";
 
-export function resolveMode(value: unknown): OgeviaMode {
+const APPROVAL_REF = /^[A-Za-z0-9._-]{6,64}$/;
+
+export function resolveMode(value: unknown, approval?: string): OgeviaMode {
   if (value === "plan") return "plan";
+  if (value === "deploy") {
+    if (!approval || !APPROVAL_REF.test(approval)) {
+      throw new Error(
+        "mode=deploy requires OGEVIA_DEPLOY_APPROVAL=<owner approval reference> (6-64 chars [A-Za-z0-9._-]). Use -c mode=plan for synth/test/diff.",
+      );
+    }
+    return "deploy";
+  }
   throw new Error(
-    `Missing or unknown mode "${String(value)}". Phase 1 supports only -c mode=plan (synth/test/diff; never deploy).`,
+    `Missing or unknown mode "${String(value)}". Use -c mode=plan (synth/test/diff; never deploy) or -c mode=deploy with an owner approval reference.`,
   );
 }
 
@@ -37,7 +50,8 @@ export interface PlannedStack {
 export function buildOgeviaApp(
   app: App,
   config: OgeviaEnvironmentConfig,
-  _mode: OgeviaMode = "plan",
+  mode: OgeviaMode = "plan",
+  approvalRef?: string,
 ): PlannedStack[] {
   const env = { account: config.account, region: config.region };
   const name = (suffix: string) => `Ogevia-${config.envName}-${suffix}`;
@@ -95,7 +109,10 @@ export function buildOgeviaApp(
   for (const { stack, plannedPhase } of planned) {
     Tags.of(stack).add("ogevia:ownership", "cdk-future");
     Tags.of(stack).add("ogevia:planned-phase", String(plannedPhase));
-    Tags.of(stack).add("ogevia:deployment-status", "not-approved");
+    Tags.of(stack).add(
+      "ogevia:deployment-status",
+      mode === "deploy" && approvalRef ? `approved-${approvalRef}` : "not-approved",
+    );
   }
   return planned;
 }

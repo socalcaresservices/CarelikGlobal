@@ -311,7 +311,9 @@ describe("configuration-driven identifiers", () => {
     expect(() => resolveEnvironment("dev")).toThrow(/unknown environment/);
     expect(resolveMode("plan")).toBe("plan");
     expect(() => resolveMode(undefined)).toThrow(/mode=plan/);
-    expect(() => resolveMode("deploy")).toThrow(/mode=plan/);
+    expect(() => resolveMode("deploy")).toThrow(/OGEVIA_DEPLOY_APPROVAL/);
+    expect(() => resolveMode("deploy", "x y")).toThrow(/OGEVIA_DEPLOY_APPROVAL/);
+    expect(resolveMode("deploy", "owner-2026-10-01")).toBe("deploy");
   });
 
   it("refuses to synthesize against credentials for another account", () => {

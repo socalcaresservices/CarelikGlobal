@@ -9,6 +9,7 @@ import { assertAccount, resolveEnvironment } from "../lib/config.js";
 
 const app = new App();
 const config = resolveEnvironment(app.node.tryGetContext("env"));
-const mode = resolveMode(app.node.tryGetContext("mode"));
+const approval = process.env.OGEVIA_DEPLOY_APPROVAL;
+const mode = resolveMode(app.node.tryGetContext("mode"), approval);
 assertAccount(config, process.env.CDK_DEFAULT_ACCOUNT);
-buildOgeviaApp(app, config, mode);
+buildOgeviaApp(app, config, mode, approval);
