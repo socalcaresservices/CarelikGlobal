@@ -114,7 +114,7 @@ Arn: arn:aws:sts::300094796789:assumed-role/AWSReservedSSO_ReadOnlyAccess_81b69e
 | **IMPORT INTO CDK** | 0 | (None; use REFERENCE or KEEP EXISTING instead) |
 | **CREATE NEW** | 2 | Lambda (Phase 4), API Gateway (Phase 4), CloudWatch alarms (Phase 1, owner decision) |
 | **DEFER** | 1 | NAT Gateway (Phase 1, only if external egress requirement confirmed) |
-| **MIGRATE FROM SUPABASE** | 0 | (Auth/Cognito transition deferred to Phase 3) |
+| **MIGRATE FROM SUPABASE** | 2 | Supabase Auth (Phase 3 → AWS Cognito), visit-signatures bucket (Phase 5 → AWS S3 + KMS EvidenceStorageStack) |
 | **DEFER** | 2 | Route 53 (external DNS assumed), CloudFront (Netlify CDN assumed) |
 | **RETIRE AFTER CUTOVER** | 2 | EC2 admin host ($10/month cost), legacy RDS security group (unused) |
 
@@ -377,10 +377,10 @@ The CDK scaffold is independent:
 ## Phase 1 Immediate Next Steps
 
 1. **Approve budget decision** → Owner approval required for budget increase to $200/month and alarm threshold at $160/month
-2. **Install AWS CDK** → `npm install -g aws-cdk`
-3. **Initialize CDK app** → `cdk init --language typescript` in `infra/` directory
-4. **Create stack structure** → Reference existing VPC, subnets, RDS via CloudFormation stack outputs
-5. **Document decisions** → Finalize Cognito vs. Supabase Auth, Route 53/DNS, RDS Multi-AZ requirements, external egress needs (NAT Gateway decision)
+2. **Reconcile existing CDK scaffold** → Branch claude/serene-einstein-1rzi90 (EvidenceStorageStack); run `cdk diff --quiet` to verify no conflicts with live infrastructure
+3. **Extend CDK scaffolding** → Add stacks to reference existing VPC, subnets, RDS via CloudFormation stack outputs (do NOT re-initialize)
+4. **Create stack structure** → Ogevia-vpc-stack (references), Ogevia-data-layer-stack (CloudFormation reference), Ogevia-app-stack (Phase 2 placeholder)
+5. **Document decisions** → Finalize Cognito vs. Supabase Auth (Phase 3), Route 53/DNS, RDS Multi-AZ requirements, external egress needs (NAT Gateway decision)
 6. **Implement tagging** → Apply cost allocation tags to all resources (post-budget-approval)
 7. **Configure VPC Flow Logs** → Enable for network monitoring and troubleshooting baseline (post-budget-approval)
 

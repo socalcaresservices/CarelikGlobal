@@ -285,11 +285,11 @@ infra/
 
 ## Next Steps (Immediate)
 
-1. **Verify CloudTrail:** Separately confirm multi-region trail is active and logging (AccessDenied prevents automated verification).
-2. **Initialize CDK scaffold:** Create `infra/` directory with cdk.json, bin/, lib/ structure per Phase 1 plan.
-3. **Run `cdk synth`:** Generate CloudFormation template from CDK to verify stack topology (no deploy).
-4. **Run `cdk diff`:** Compare generated template to existing CloudFormation stack; confirm zero duplication.
-5. **Document decisions:** Confirm EC2 retirement plan, budget alarm creation timing, Cognito/Route 53 decisions.
+1. **Verify CloudTrail:** Separately confirm multi-region trail is active and logging (AccessDenied prevents automated verification; optional, not blocking).
+2. **Reconcile existing CDK scaffold (Phase 0 gate):** EvidenceStorageStack exists in branch claude/serene-einstein-1rzi90; verify via `cdk synth` (VERIFIED) and `cdk diff` (Phase 1 action).
+3. **Extend CDK scaffold (Phase 1):** Add stacks for VPC/RDS references; maintain EvidenceStorageStack (Phase 5 target); do NOT re-initialize.
+4. **Run `cdk diff`:** Compare generated template to existing CloudFormation stack; confirm zero duplication (Phase 1 action; credentials required).
+5. **Document decisions:** Confirm EC2 retirement plan, budget alarm creation timing, Cognito/Route 53 decisions, NAT Gateway requirement, RDS adoption strategy.
 
 ---
 
