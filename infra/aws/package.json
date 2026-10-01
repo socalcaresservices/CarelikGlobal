@@ -9,8 +9,10 @@
     "lint": "tsc --noEmit",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "synth": "cdk synth --quiet",
-    "cdk": "cdk"
+    "synth": "cdk synth --quiet -c env=prod -c mode=plan",
+    "cdk": "cdk",
+    "inventory": "tsx scripts/synth-inventory.ts",
+    "diff:template": "cdk diff --method=template --lookups=false -c env=prod -c mode=plan --profile ogevia-readonly"
   },
   "dependencies": {
     "aws-cdk-lib": "2.272.0",

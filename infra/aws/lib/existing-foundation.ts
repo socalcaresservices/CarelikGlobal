@@ -3,7 +3,7 @@ import * as ec2 from "aws-cdk-lib/aws-ec2";
 import * as rds from "aws-cdk-lib/aws-rds";
 import * as secretsmanager from "aws-cdk-lib/aws-secretsmanager";
 import { Construct } from "constructs";
-import type { ExistingFoundationIds } from "./config.js";
+import { assertVerified, type ExistingFoundationIds } from "./config.js";
 
 /**
  * A. EXISTING RESOURCE REFERENCES.
@@ -97,15 +97,17 @@ export class ExistingFoundation extends Construct {
         engine: rds.DatabaseInstanceEngine.POSTGRES,
       },
     );
-    this.prodDatabaseMasterSecret = secretsmanager.Secret.fromSecretNameV2(
+    // Complete ARNs (not names) so IAM grants name the exact secret instead
+    // of a "-??????" wildcard suffix.
+    this.prodDatabaseMasterSecret = secretsmanager.Secret.fromSecretCompleteArn(
       this,
       "ProdDatabaseMasterSecret",
-      db.masterSecretName,
+      db.masterSecretArn,
     );
-    this.appDatabaseSecret = secretsmanager.Secret.fromSecretNameV2(
+    this.appDatabaseSecret = secretsmanager.Secret.fromSecretCompleteArn(
       this,
       "AppDatabaseSecret",
-      ids.appDatabaseSecretName,
+      ids.appDatabaseSecretArn,
     );
 
     this.userPool = cognito.UserPool.fromUserPoolId(
@@ -116,24 +118,9 @@ export class ExistingFoundation extends Construct {
   }
 }
 
-/** Fails synthesis if any identifier was left as an unverified placeholder. */
+/** Fails synthesis on unverified placeholders or inconsistent subnet order. */
 function assertConfigured(ids: ExistingFoundationIds): void {
-  const placeholders: string[] = [];
-  const walk = (value: unknown, path: string) => {
-    if (typeof value === "string" && /^__.+__$/.test(value)) {
-      placeholders.push(path);
-    } else if (value && typeof value === "object") {
-      for (const [key, child] of Object.entries(value)) {
-        walk(child, path ? `${path}.${key}` : key);
-      }
-    }
-  };
-  walk(ids, "");
-  if (placeholders.length > 0) {
-    throw new Error(
-      `Existing-resource identifiers not verified yet: ${placeholders.join(", ")}`,
-    );
-  }
+  assertVerified(ids, "Existing-resource identifiers");
   const { vpc } = ids;
   for (const tier of [vpc.publicSubnets, vpc.privateSubnets]) {
     tier.forEach((subnet, index) => {

@@ -1,5 +1,5 @@
 import { App } from "aws-cdk-lib";
-import { buildOgeviaApp } from "../lib/app.js";
+import { buildOgeviaApp, resolveMode } from "../lib/app.js";
 import { assertAccount, resolveEnvironment } from "../lib/config.js";
 
 // cdk-nag (AwsSolutions + HIPAA Security) is enforced by the unit tests via
@@ -9,5 +9,6 @@ import { assertAccount, resolveEnvironment } from "../lib/config.js";
 
 const app = new App();
 const config = resolveEnvironment(app.node.tryGetContext("env"));
+const mode = resolveMode(app.node.tryGetContext("mode"));
 assertAccount(config, process.env.CDK_DEFAULT_ACCOUNT);
-buildOgeviaApp(app, config);
+buildOgeviaApp(app, config, mode);

@@ -3,6 +3,8 @@
 // must never hard-code an account, VPC, subnet, security group, database, or
 // pool identifier.
 //
+import { RetentionDays } from "aws-cdk-lib/aws-logs";
+
 // Every identifier in `existing` was verified read-only (see
 // docs/aws/CURRENT_AWS_INVENTORY.md and docs/aws/PHASE_1_CDK_ARCHITECTURE.md).
 // CDK REFERENCES these resources; it does not own them. Referencing never
@@ -28,10 +30,16 @@ export interface ExistingDatabaseRef {
   readonly securityGroupIds: readonly string[];
   /** Who owns the instance's lifecycle. CDK never does in Phase 1. */
   readonly owner:
-    | { readonly kind: "cloudformation"; readonly stackName: string; readonly logicalId: string }
+    | {
+        readonly kind: "cloudformation";
+        readonly stackName: string;
+        readonly logicalId: string;
+      }
     | { readonly kind: "unmanaged" };
-  /** Secrets Manager secret name of the RDS-managed master credential. */
-  readonly masterSecretName: string;
+  /** Initial database name on the instance (non-secret). */
+  readonly databaseName: string;
+  /** Complete ARN (with suffix) of the RDS-managed master secret. Metadata only. */
+  readonly masterSecretArn: string;
 }
 
 export interface ExistingFoundationIds {
@@ -62,8 +70,8 @@ export interface ExistingFoundationIds {
     /** CloudFormation-managed production database. REFERENCE only. */
     readonly prod: ExistingDatabaseRef;
   };
-  /** Application credential secret (manually created). REFERENCE only. */
-  readonly appDatabaseSecretName: string;
+  /** Complete ARN of the manually created application DB secret. REFERENCE only. */
+  readonly appDatabaseSecretArn: string;
   readonly cognitoUserPoolId: string;
 }
 
@@ -73,6 +81,14 @@ export interface OgeviaEnvironmentConfig {
   readonly region: string;
   /** CloudFormation termination protection for stacks CDK may later own. */
   readonly terminationProtection: boolean;
+  /** Finite retention for every log group CDK creates (CLAUDE.md section 11). */
+  readonly logRetention: RetentionDays;
+  readonly auth: {
+    /** Cognito app client the API's JWT authorizer accepts (audience). */
+    readonly appClientId: string;
+    /** Browser origins allowed by API CORS. */
+    readonly allowedOrigins: readonly string[];
+  };
   readonly existing: ExistingFoundationIds;
 }
 
@@ -82,6 +98,12 @@ export const ENVIRONMENTS: Record<OgeviaEnvName, OgeviaEnvironmentConfig> = {
     account: OGEVIA_ACCOUNT,
     region: OGEVIA_REGION,
     terminationProtection: true,
+    logRetention: RetentionDays.ONE_YEAR,
+    auth: {
+      appClientId: "__COGNITO_APP_CLIENT_ID__",
+      // VERIFIED in repo: README.md APP_URL and organization-provider.tsx.
+      allowedOrigins: ["https://app.ogevia.com"],
+    },
     existing: {
       vpc: {
         vpcId: "vpc-0ee9df0c38297cbc1",
@@ -133,10 +155,11 @@ export const ENVIRONMENTS: Record<OgeviaEnvName, OgeviaEnvironmentConfig> = {
             stackName: "ogevia-prod-data-layer",
             logicalId: "PostgreSQLDatabase",
           },
-          masterSecretName: "__RDS_MASTER_SECRET__",
+          databaseName: "__RDS_DB_NAME__",
+          masterSecretArn: "__RDS_MASTER_SECRET_ARN__",
         },
       },
-      appDatabaseSecretName: "ogevia/database/app",
+      appDatabaseSecretArn: "__APP_DB_SECRET_ARN__",
       cognitoUserPoolId: "us-west-2_849AYz5J7",
     },
   },
@@ -166,5 +189,24 @@ export function assertAccount(
     throw new Error(
       `Active AWS credentials are for account ${resolvedAccount}, but env "${config.envName}" targets ${config.account}. Refusing to synthesize.`,
     );
+  }
+}
+
+/** Paths of any `__PLACEHOLDER__` values left in a config object. */
+export function findPlaceholders(value: unknown, path = ""): string[] {
+  if (typeof value === "string") return /^__.+__$/.test(value) ? [path] : [];
+  if (value && typeof value === "object") {
+    return Object.entries(value).flatMap(([key, child]) =>
+      findPlaceholders(child, path ? `${path}.${key}` : key),
+    );
+  }
+  return [];
+}
+
+/** Synthesis fails safely instead of falling back to creating a resource. */
+export function assertVerified(value: unknown, label: string): void {
+  const placeholders = findPlaceholders(value);
+  if (placeholders.length > 0) {
+    throw new Error(`${label} not verified yet: ${placeholders.join(", ")}`);
   }
 }
