@@ -15,7 +15,8 @@
     "diff:template": "cdk diff --method=template --lookups=false -c env=prod -c mode=plan --profile ogevia-readonly",
     "test:db": "vitest run --config vitest.db.config.ts",
     "db:migrate": "tsx db/scripts/migrate.ts",
-    "db:verify": "tsx db/scripts/verify.ts"
+    "db:verify": "tsx db/scripts/verify.ts",
+    "user-migration:plan": "tsx scripts/user-migration-plan.ts"
   },
   "dependencies": {
     "aws-cdk-lib": "2.272.0",
