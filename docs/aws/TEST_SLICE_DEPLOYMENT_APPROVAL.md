@@ -122,7 +122,7 @@ None of these affect Supabase, Netlify, `ogevia-web`, or the existing RDS databa
 | preflight | PASS (gate green; bootstrap absent; admin host running; Lambda limit 10) |
 | bootstrap | **DONE**: `CDKToolkit` created in us-west-2 |
 | infra | **NOT RUN**: the session's safety policy refuses `--require-approval never` (no human review of IAM/SG changes). Must be run by the owner in an interactive terminal |
-| database | **FAILED SAFELY, nothing created**: RDS SG `sg-00530a1f4f7648e65` admits 5432 only from AppSG `sg-064ffce3bcbe8eb3b`; the admin host has only `sg-00e01e2ca80442c1f` (VERIFIED). The approval package missed this |
+| database | (first attempt) **FAILED SAFELY, nothing created**: RDS SG `sg-00530a1f4f7648e65` admits 5432 only from AppSG `sg-064ffce3bcbe8eb3b`; the admin host has only `sg-00e01e2ca80442c1f` (VERIFIED). The approval package missed this |
 | users, seed, web, smoke | Not run (held so invitation passwords do not expire before the stack exists) |
 
 **Decision needed (not covered by the original approval):** how the one-time database setup reaches RDS.
@@ -132,3 +132,14 @@ None of these affect Supabase, Netlify, `ogevia-web`, or the existing RDS databa
 | A | Temporarily attach AppSG to the admin host (`aws ec2 modify-instance-attribute --instance-id i-0ce8db2d7e5839dd5 --groups sg-00e01e2ca80442c1f sg-064ffce3bcbe8eb3b`), run `database` + `seed`, then restore `--groups sg-00e01e2ca80442c1f` | Yes, immediately | **Recommended**: no rule on any CloudFormation-owned group; the host gains exactly the Lambda's DB reachability, for minutes |
 | B | Add an RDS SG ingress rule from the admin SG | Yes | Not recommended: changes a CloudFormation-owned group outside its stack (drift) |
 | C | A one-off migration Lambda in the VPC | Yes | More code and another deploy; slower |
+
+### 8.1 Database window (owner-approved option A, TEST only), 2026-10-01
+
+| Item | Result (VERIFIED) |
+| --- | --- |
+| AppSG attached to `i-0ce8db2d7e5839dd5` | Only during the window, inside a script whose EXIT trap always restores the original group |
+| Attempt 1 | `ogevia_sv_test` created + 0001-0009 applied, then stopped: the app secret's login is `ogevia_app` itself (`grant ogevia_app to ogevia_app`). SG restored and verified. Fixed in `01_app_login_role.sql` (+ test; 98 DB tests pass) |
+| Attempt 2 | database (idempotent), `ogevia_app` LOGIN NOINHERIT with the secret's password, CONNECT on `ogevia_sv_test`; `db:verify` 97 PASS / 0 FAIL; 2 Cognito users created (`FORCE_CHANGE_PASSWORD`, invitations emailed); synthetic seed: 2 memberships, 2 assignments, 2 authorizations |
+| SG removed | Admin host groups = `sg-00e01e2ca80442c1f` only; no network interface uses AppSG; tunnel process closed |
+| RDS SG `sg-00530a1f4f7648e65` | Unchanged: 5432 from `sg-064ffce3bcbe8eb3b` only |
+| Note | Roles are instance-wide: `ogevia_app` can now log in to other databases on this instance via the default PUBLIC CONNECT, but it holds no privileges there. Revoke PUBLIC CONNECT on other databases in Phase 7 |
