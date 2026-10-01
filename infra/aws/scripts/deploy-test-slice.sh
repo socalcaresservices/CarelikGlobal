@@ -50,6 +50,23 @@ guard() {
 
 cdk_() { (cd "$HERE" && npx cdk "$@" --no-notices -c env=prod -c mode=deploy); }
 
+# SSM port-forward to RDS through the admin host + master credentials in shell
+# memory only (never echoed, never written to disk).
+tunnel_as_master() {
+  : "${OGEVIA_RDS_MASTER_SECRET_ARN:?set to the RDS-managed master secret ARN}"
+  IID=$(aws ec2 describe-instances --filters "Name=tag:Name,Values=$ADMIN_HOST_TAG" "Name=instance-state-name,Values=running" \
+    --query 'Reservations[0].Instances[0].InstanceId' --output text)
+  [[ "$IID" == i-* ]] || die "Admin host $ADMIN_HOST_TAG is not running (start it, or approve another tunnel)."
+  aws ssm start-session --target "$IID" --document-name AWS-StartPortForwardingSessionToRemoteHost \
+    --parameters "host=$RDS_HOST,portNumber=5432,localPortNumber=$LOCAL_PORT" >/dev/null &
+  TUNNEL=$!; trap 'kill $TUNNEL 2>/dev/null || true' EXIT; sleep 5
+  MASTER=$(aws secretsmanager get-secret-value --secret-id "$OGEVIA_RDS_MASTER_SECRET_ARN" --query SecretString --output text)
+  export PGHOST=127.0.0.1 PGPORT=$LOCAL_PORT PGSSLMODE=require
+  export PGUSER; PGUSER=$(jq -r .username <<<"$MASTER")
+  export PGPASSWORD; PGPASSWORD=$(jq -r .password <<<"$MASTER")
+  unset MASTER
+}
+
 case "${1:-}" in
   preflight)
     need aws; need jq; need psql; need pnpm; need session-manager-plugin
@@ -78,19 +95,8 @@ case "${1:-}" in
 
   database)
     guard
-    : "${OGEVIA_RDS_MASTER_SECRET_ARN:?set to the RDS-managed master secret ARN}"
-    IID=$(aws ec2 describe-instances --filters "Name=tag:Name,Values=$ADMIN_HOST_TAG" "Name=instance-state-name,Values=running" \
-      --query 'Reservations[0].Instances[0].InstanceId' --output text)
-    [[ "$IID" == i-* ]] || die "Admin host $ADMIN_HOST_TAG is not running (start it, or approve another tunnel)."
-    aws ssm start-session --target "$IID" --document-name AWS-StartPortForwardingSessionToRemoteHost \
-      --parameters "host=$RDS_HOST,portNumber=5432,localPortNumber=$LOCAL_PORT" >/dev/null &
-    TUNNEL=$!; trap 'kill $TUNNEL 2>/dev/null || true' EXIT; sleep 5
-    # Secret values stay in shell variables only (never echoed, never on disk).
-    MASTER=$(aws secretsmanager get-secret-value --secret-id "$OGEVIA_RDS_MASTER_SECRET_ARN" --query SecretString --output text)
+    tunnel_as_master
     APP=$(aws secretsmanager get-secret-value --secret-id "$APP_SECRET_ARN" --query SecretString --output text)
-    export PGHOST=127.0.0.1 PGPORT=$LOCAL_PORT PGSSLMODE=require
-    export PGUSER; PGUSER=$(jq -r .username <<<"$MASTER")
-    export PGPASSWORD; PGPASSWORD=$(jq -r .password <<<"$MASTER")
     psql -X -v ON_ERROR_STOP=1 -d postgres -f "$HERE/db/deploy/00_create_test_database.sql"
     # Node TLS through the SSM tunnel: the RDS certificate names the RDS host,
     # not 127.0.0.1, so verification is relaxed ONLY on this local tunnel.
@@ -100,7 +106,7 @@ case "${1:-}" in
       -f "$HERE/db/deploy/01_app_login_role.sql" >/dev/null
     OGEVIA_DATABASE_URL="postgres://$(jq -rn --arg u "$PGUSER" '$u|@uri'):$(jq -rn --arg p "$PGPASSWORD" '$p|@uri')@127.0.0.1:$LOCAL_PORT/$DB_NAME?sslmode=no-verify" \
       npx --prefix "$HERE" tsx "$HERE/db/scripts/verify.ts"
-    unset MASTER APP PGPASSWORD
+    unset APP PGPASSWORD
     ;;
 
   users)
@@ -118,9 +124,11 @@ case "${1:-}" in
     guard
     sub_of() { aws cognito-idp admin-get-user --user-pool-id "$POOL" --username "$1" --query 'UserAttributes[?Name==`sub`].Value' --output text; }
     CG=$(sub_of "$OGEVIA_TEST_CAREGIVER_EMAIL"); MG=$(sub_of "$OGEVIA_TEST_MANAGER_EMAIL")
-    echo "Seed with caregiver_sub=$CG manager_sub=$MG (synthetic organization only)."
-    echo "Run through the same tunnel as 'database':"
-    echo "  psql -X -d $DB_NAME -v caregiver_sub=$CG -v manager_sub=$MG -f $HERE/db/deploy/02_seed_synthetic_test_slice.sql"
+    [[ "$CG" =~ ^[0-9a-f-]{36}$ && "$MG" =~ ^[0-9a-f-]{36}$ ]] || die "Run 'users' first (subs not found)."
+    tunnel_as_master
+    psql -X -v ON_ERROR_STOP=1 -d "$DB_NAME" -v caregiver_sub="$CG" -v manager_sub="$MG" \
+      -f "$HERE/db/deploy/02_seed_synthetic_test_slice.sql"
+    unset PGPASSWORD
     ;;
 
   web)

@@ -1,0 +1,115 @@
+# Consolidated Deployment Approval Request: Ogevia Test Slice (Phases 3-6)
+
+**One approval covers everything below.** Nothing has been deployed. Every item is YELLOW under CLAUDE.md §13. It is prepared as code on branch `claude/phase3-cognito-auth`, synthesized, scanned (0 violations), cdk-nag clean, and diffed read-only.
+
+## 1. Read-only facts (VERIFIED 2026-10-01, profile `ogevia-readonly`)
+
+| Fact | Value |
+| --- | --- |
+| Account / region | 300094796789 / us-west-2 |
+| CDK bootstrap (`CDKToolkit`) | **absent** |
+| Template diff (`--method=template`) | 5 stacks: **61 resources added, 0 modified, 0 removed** |
+| RDS `ogevia-prod-postgres` | available, PostgreSQL 18.3, db.t4g.micro, private, encrypted, `default.postgres18` |
+| Admin host `ogevia-db-admin-temp` | `i-0ce8db2d7e5839dd5`, **running**, t3.micro (SSM tunnel available) |
+| Cognito pool | 0 users, MFA ON, Essentials; one client `ogevia-web` |
+| CloudFront distributions | none |
+| VPC endpoints | SSM, SSM Messages only |
+| Lambda account concurrency | 10 (D-P1-3: enough for testing; increase before production) |
+| Budget | "ogevia phase 1 Budget", $50 |
+
+## 2. What the approval authorizes (exact list)
+
+| # | Action | Mutates | Reversible? |
+| --- | --- | --- | --- |
+| 1 | `cdk bootstrap aws://300094796789/us-west-2` (default template) | Creates the `CDKToolkit` stack: assets bucket, ECR repo, deploy roles | Yes (delete the stack + empty the bucket) |
+| 2 | `cdk deploy` **Ogevia-prod-EvidenceStorage** | KMS key (rotation, RETAIN), signature bucket (SSE-KMS, versioned, private), access-log bucket | Stack delete keeps the key/buckets (RETAIN) |
+| 3 | `cdk deploy` **Ogevia-prod-NetworkEgress** (D-P1-1) | Secrets Manager interface endpoint (1 AZ, private DNS), new endpoint SG (443 from AppSG), S3 gateway endpoint on the two private route tables (scoped policy) | Yes (stack delete) |
+| 4 | `cdk deploy` **Ogevia-prod-WebHosting** | CloudFront + OAC + function + headers policy, site + log buckets, **new** Cognito app client `ogevia-web-prod-test-slice` + managed-login branding in the existing pool | Yes; buckets RETAIN |
+| 5 | `cdk deploy` **Ogevia-prod-ServiceVerificationApi** | HTTP API (12 JWT routes), Lambda (real handler), IAM role/policy, 2 log groups (365 d) | Yes; log groups RETAIN |
+| 6 | `cdk deploy` **Ogevia-prod-Observability** | 6 alarms, SNS topic | Yes |
+| 7 | Create database `ogevia_sv_test` on the existing instance; apply migrations 0001-0009; create the app login role (NOINHERIT, member of `ogevia_app`) from the existing `ogevia/database/app` secret | DB objects only; no existing database touched | Yes (`drop database ogevia_sv_test`; drop role) |
+| 8 | Create **2** Cognito users (caregiver + manager) at inboxes you control; invitation email; TOTP at first sign-in | 2 users | Yes (disable) |
+| 9 | Seed **synthetic** org/clients/service/assignments/authorizations for those 2 users | Rows in `ogevia_sv_test` only | Yes |
+| 10 | Upload the AWS web build to the site bucket; CloudFront invalidation | Objects | Yes |
+
+**Not included (still prohibited):**
+- changing `ogevia-web` or any pool setting;
+- DNS, Netlify or Supabase;
+- real users, clients or PHI;
+- deleting anything;
+- NAT, WAF, a production cutover;
+- Object Lock;
+- a Lambda concurrency quota request.
+
+## 3. Cost (new recurring)
+
+Unit prices are the VERIFIED values from `PHASE_1_COST_MODEL.md` unless marked otherwise.
+
+| Item | Fixed / month | Usage at test volume |
+| --- | --- | --- |
+| Secrets Manager interface endpoint, 1 AZ | **$7.30** | +$0.01/GB |
+| KMS evidence key | $1.00 | ≈ $0.01 |
+| 6 CloudWatch alarms | $0.60 | — |
+| Lambda, HTTP API, logs, S3, SNS | $0 | < $0.25 |
+| CloudFront | $0 | ≈ $0 at test volume (always-free allowance; INFERRED, not re-verified) |
+| Cognito (2 test users) | $0 | ≈ $0 (Essentials MAU pricing; not re-verified) |
+| CDK bootstrap resources | $0 | pennies (asset storage) |
+| **Total new** | **≈ $8.90/month** | **< $1/month** |
+
+Existing cost to note: the admin host t3.micro is running. Recommendation: stop it after steps 7 and 9; stopping it is your action, not part of this approval. The 2-AZ endpoint alternative is ≈ $14.60/month.
+
+## 4. Security posture after deployment
+
+- RDS stays private; no SG rule is added to CloudFormation-owned groups; NAT stays deferred.
+- Every API route requires a Cognito access token for one of 2 named app clients; the database decides tenant, role and assignment.
+- Evidence is private (SSE-KMS, versioned, no CORS, no presigned URLs).
+- Logs carry no PHI by design (tested).
+- Only synthetic data exists in `ogevia_sv_test`.
+
+**BAA gate (CLAUDE.md §8):** this deployment carries no PHI. The BAA must still be confirmed before any real client data (Phase 7).
+
+## 5. Execution (one command per step, after approval)
+
+```bash
+cd infra/aws
+export OGEVIA_DEPLOY_APPROVAL=<your approval reference, e.g. owner-2026-10-02>
+export AWS_PROFILE=<administrator SSO profile>
+export OGEVIA_TEST_CAREGIVER_EMAIL=<inbox you control>   # e.g. you+caregiver@…
+export OGEVIA_TEST_MANAGER_EMAIL=<inbox you control>
+export OGEVIA_RDS_MASTER_SECRET_ARN=arn:aws:secretsmanager:us-west-2:300094796789:secret:rds!db-ceb5276c-c146-4b3d-9ce6-dab7b70e0cfa-PRte3a
+./scripts/deploy-test-slice.sh preflight
+./scripts/deploy-test-slice.sh bootstrap
+./scripts/deploy-test-slice.sh infra        # cdk stops for confirmation on IAM/SG widening
+./scripts/deploy-test-slice.sh database     # SSM tunnel via the admin host; secrets stay in shell memory
+./scripts/deploy-test-slice.sh users
+./scripts/deploy-test-slice.sh seed         # synthetic data for the two subs (opens its own tunnel)
+./scripts/deploy-test-slice.sh web
+./scripts/deploy-test-slice.sh smoke
+```
+
+Tools needed: AWS CLI v2, session-manager-plugin, psql, jq, pnpm, Node 22.
+
+## 6. Browser testing (after `smoke` passes)
+
+1. Open the `WebOrigin` URL printed by `web` (`https://<id>.cloudfront.net`) on a phone.
+2. **Caregiver account:** open the invitation email → *Sign in* → temporary password → new password → TOTP enrolment (authenticator app). Then:
+   1. Pick TEST-C01, start, wait at least 1 minute, end.
+   2. Draw a signature and confirm. Expect "Visit saved / Confirmed".
+   3. Repeat on TEST-C02 with **"No signature"** → expect review. (Optional: a visit over 2 h on TEST-C02 shows the authorization cap.)
+3. **Manager account** (another browser or private window):
+   1. Open *Visit records*: see both visits. Correct one (time + reason) and open *History*.
+   2. Open *Billing review*: "Billing ready" vs "Needs review". *View signature* shows the drawn PNG.
+4. Negative checks:
+   - The caregiver has no *Billing review* link.
+   - Signing out ends the session (Back does not restore it).
+   - `curl <ApiUrl>/v1/me` without a token returns 401.
+
+## 7. Rollback
+
+- **Web:** delete the WebHosting stack. This removes the test client; buckets are retained.
+- **API:** delete the API + Observability stacks.
+- **Egress:** delete the NetworkEgress stack. This restores the route tables.
+- **Database:** `drop database ogevia_sv_test with (force)`; drop the login role.
+- **Users:** `admin-disable-user`.
+
+None of these affect Supabase, Netlify, `ogevia-web`, or the existing RDS databases.
