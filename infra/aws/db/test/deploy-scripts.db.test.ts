@@ -73,6 +73,28 @@ describe("test-slice deployment SQL (runbook order)", () => {
     expect(rows[0]).toEqual({ rolcanlogin: true, rolinherit: false, rolsuper: false, rolbypassrls: false, member: true });
   });
 
+  it("01 also works when the login IS ogevia_app (the deployed secret's user)", async () => {
+    psql(DB, "01_app_login_role.sql", { app_user: "ogevia_app", app_password: APP_PASSWORD });
+    psql(DB, "01_app_login_role.sql", { app_user: "ogevia_app", app_password: APP_PASSWORD });
+    const appUrl = new URL(url(DB));
+    appUrl.username = "ogevia_app";
+    appUrl.password = APP_PASSWORD;
+    const c = new pg.Client({ connectionString: appUrl.toString() });
+    await c.connect();
+    try {
+      await c.query("begin");
+      await c.query("set local role ogevia_app");
+      await expect(c.query("select * from ogevia.clients")).rejects.toMatchObject({ code: "42501" });
+      await c.query("rollback");
+    } finally {
+      await c.end();
+      const root = new pg.Client({ connectionString: url(DB) });
+      await root.connect();
+      await root.query("alter role ogevia_app nologin password null");
+      await root.end();
+    }
+  });
+
   it("02 seeds synthetic data idempotently; the caregiver sees exactly the two test clients through the API", async () => {
     const vars = { caregiver_sub: CAREGIVER_SUB, manager_sub: MANAGER_SUB };
     const out = psql(DB, "02_seed_synthetic_test_slice.sql", vars);

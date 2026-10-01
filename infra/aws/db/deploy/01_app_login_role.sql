@@ -16,7 +16,11 @@ where not exists (select 1 from pg_roles where rolname = :'app_user')
 \gexec
 select format('alter role %I login noinherit password %L', :'app_user', :'app_password')
 \gexec
+-- When the secret's login IS ogevia_app (the Phase 2 design: "LOGIN plus a
+-- credential granted at deploy time"), it already holds exactly the API
+-- privileges; a role cannot be granted to itself.
 select format('grant ogevia_app to %I', :'app_user')
+where :'app_user' <> 'ogevia_app'
 \gexec
 select format('grant connect on database %I to %I', current_database(), :'app_user')
 \gexec
