@@ -31,6 +31,7 @@ POOL=us-west-2_849AYz5J7
 RDS_HOST=ogevia-prod-postgres.c50cageec7mv.us-west-2.rds.amazonaws.com
 APP_SECRET_ARN=arn:aws:secretsmanager:us-west-2:300094796789:secret:ogevia/database/app-JsOTVQ
 ADMIN_HOST_TAG=ogevia-db-admin-temp
+APP_SG=sg-064ffce3bcbe8eb3b
 DB_NAME=ogevia_sv_test
 LOCAL_PORT=15432
 STACKS=(Ogevia-prod-EvidenceStorage Ogevia-prod-NetworkEgress Ogevia-prod-WebHosting Ogevia-prod-ServiceVerificationApi Ogevia-prod-Observability)
@@ -57,9 +58,17 @@ tunnel_as_master() {
   IID=$(aws ec2 describe-instances --filters "Name=tag:Name,Values=$ADMIN_HOST_TAG" "Name=instance-state-name,Values=running" \
     --query 'Reservations[0].Instances[0].InstanceId' --output text)
   [[ "$IID" == i-* ]] || die "Admin host $ADMIN_HOST_TAG is not running (start it, or approve another tunnel)."
+  # RDS admits 5432 ONLY from the AppSecurityGroup (CloudFormation-owned rule).
+  # The admin host can reach RDS only while that group is attached to it
+  # (owner-approved, temporary; see TEST_SLICE_DEPLOYMENT_APPROVAL.md section 8).
+  aws ec2 describe-instances --instance-ids "$IID" --query 'Reservations[0].Instances[0].SecurityGroups[].GroupId' --output text \
+    | grep -q "$APP_SG" || die "Admin host lacks $APP_SG, so RDS will refuse it. See section 8 of the approval doc."
   aws ssm start-session --target "$IID" --document-name AWS-StartPortForwardingSessionToRemoteHost \
     --parameters "host=$RDS_HOST,portNumber=5432,localPortNumber=$LOCAL_PORT" >/dev/null &
-  TUNNEL=$!; trap 'kill $TUNNEL 2>/dev/null || true' EXIT; sleep 5
+  TUNNEL=$!
+  # Also stop the session-manager-plugin child, which otherwise outlives the CLI.
+  trap 'kill $TUNNEL 2>/dev/null || true; pkill -f "session-manager-plugin.*$IID" 2>/dev/null || true' EXIT
+  sleep 8
   MASTER=$(aws secretsmanager get-secret-value --secret-id "$OGEVIA_RDS_MASTER_SECRET_ARN" --query SecretString --output text)
   export PGHOST=127.0.0.1 PGPORT=$LOCAL_PORT PGSSLMODE=require
   export PGUSER; PGUSER=$(jq -r .username <<<"$MASTER")
@@ -83,13 +92,15 @@ case "${1:-}" in
   bootstrap)
     guard
     # Default bootstrap: CDKToolkit stack, asset bucket (SSE), ECR repo, deploy roles.
-    (cd "$HERE" && npx cdk bootstrap "aws://$ACCOUNT/$REGION" --no-notices)
+    (cd "$HERE" && npx cdk bootstrap "aws://$ACCOUNT/$REGION" --no-notices -c env=prod -c mode=plan)
     ;;
 
   infra)
     guard
     cdk_ diff "${STACKS[@]}" || true
     # broadening: CDK stops for confirmation on any IAM/security-group widening.
+    # Needs an interactive terminal (answer y after reviewing the printed changes).
+    [[ -t 0 ]] || die "Run 'infra' from an interactive terminal: CDK asks you to confirm IAM/SG changes."
     cdk_ deploy "${STACKS[@]}" --require-approval broadening
     ;;
 

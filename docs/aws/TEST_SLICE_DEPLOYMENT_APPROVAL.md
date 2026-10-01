@@ -113,3 +113,22 @@ Tools needed: AWS CLI v2, session-manager-plugin, psql, jq, pnpm, Node 22.
 - **Users:** `admin-disable-user`.
 
 None of these affect Supabase, Netlify, `ogevia-web`, or the existing RDS databases.
+
+## 8. Execution log and open gate (2026-10-01)
+
+| Step | Result |
+| --- | --- |
+| Approval | Owner approved ("approve the test deployment"); reference `owner-approved-2026-10-01-test-slice` |
+| preflight | PASS (gate green; bootstrap absent; admin host running; Lambda limit 10) |
+| bootstrap | **DONE**: `CDKToolkit` created in us-west-2 |
+| infra | **NOT RUN**: the session's safety policy refuses `--require-approval never` (no human review of IAM/SG changes). Must be run by the owner in an interactive terminal |
+| database | **FAILED SAFELY, nothing created**: RDS SG `sg-00530a1f4f7648e65` admits 5432 only from AppSG `sg-064ffce3bcbe8eb3b`; the admin host has only `sg-00e01e2ca80442c1f` (VERIFIED). The approval package missed this |
+| users, seed, web, smoke | Not run (held so invitation passwords do not expire before the stack exists) |
+
+**Decision needed (not covered by the original approval):** how the one-time database setup reaches RDS.
+
+| Option | Change | Reversible | Recommendation |
+| --- | --- | --- | --- |
+| A | Temporarily attach AppSG to the admin host (`aws ec2 modify-instance-attribute --instance-id i-0ce8db2d7e5839dd5 --groups sg-00e01e2ca80442c1f sg-064ffce3bcbe8eb3b`), run `database` + `seed`, then restore `--groups sg-00e01e2ca80442c1f` | Yes, immediately | **Recommended**: no rule on any CloudFormation-owned group; the host gains exactly the Lambda's DB reachability, for minutes |
+| B | Add an RDS SG ingress rule from the admin SG | Yes | Not recommended: changes a CloudFormation-owned group outside its stack (drift) |
+| C | A one-off migration Lambda in the VPC | Yes | More code and another deploy; slower |
