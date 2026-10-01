@@ -9,7 +9,8 @@ with required_tables(t) as (values
   ('list_authorized_services_for_client'), ('start_ad_hoc_service_visit'), ('end_service_visit'),
   ('register_visit_evidence'), ('confirm_service_visit'), ('void_service_visit'),
   ('correct_service_visit'), ('amend_client_authorization'), ('list_service_visits'),
-  ('list_visit_corrections'), ('list_billing_review_visits')
+  ('list_visit_corrections'), ('list_billing_review_visits'),
+  ('get_my_context'), ('get_visit_signature_evidence'), ('get_confirmation_replay')
 )
 select 'table_exists:' || t as check_name,
        exists (select 1 from pg_tables where schemaname = 'ogevia' and tablename = t) as ok,
