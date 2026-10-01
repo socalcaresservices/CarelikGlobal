@@ -36,6 +36,7 @@ Every AWS resource is classified into one of seven categories to guide CDK infra
 | rtb-0bb8bac7d607a3737 | Route Table (private, 2a) | EXISTS | **KEEP EXISTING** | Reference; do not recreate | Local-only; used by RDS + admin host |
 | rtb-049d4448ab6a01e48 | Route Table (private, 2b) | EXISTS | **KEEP EXISTING** | Reference; do not recreate | Local-only; used by RDS data tier |
 | vpc-01dddd3a77752454e | Default VPC (172.31.0.0/16) | EXISTS, UNUSED | **RETIRE AFTER CUTOVER** | Do not reference; schedule deletion post-Phase 1 | No resources deployed; kept for AWS defaults |
+| NAT Gateway | (Not deployed) | N/A | **DEFER** | Provision only if Phase 1 app tier requires external egress (third-party APIs). AWS service APIs do not require NAT; use VPC Gateway/Interface Endpoints instead. | **Owner decision pending:** Confirm Phase 1 app tier external egress requirement. Default assumption: NOT REQUIRED (Lambda via Supabase-managed APIs, RDS within VPC, AWS services via Endpoints) |
 
 #### Subnets
 
@@ -43,9 +44,11 @@ Every AWS resource is classified into one of seven categories to guide CDK infra
 |---|---|---|---|---|---|
 | subnet-04eadfc8b60aa82a0 | 10.20.0.0/20 | 2a | PUBLIC tier (reserved) | **KEEP EXISTING** | Reference for future app/ALB |
 | subnet-0877a622ff17a7eda | 10.20.16.0/20 | 2b | PUBLIC tier (reserved) | **KEEP EXISTING** | Reference for future app/ALB |
-| subnet-08d40e6ac210b09e5 | 10.20.128.0/20 | 2a | RDS + admin host | **KEEP EXISTING** | Reference; used by RDS subnet groups |
+| subnet-08d40e6ac210b09e5 | 10.20.128.0/20 | 2a | RDS + admin host | **KEEP EXISTING** | Reference; used by RDS subnet groups, VPC Endpoints |
 | subnet-02b96c15c06ac5010 | 10.20.144.0/20 | 2b | RDS data services | **KEEP EXISTING** | Reference; used by RDS subnet groups |
 | (2 additional) | 10.20.32–48.0/20 | 2c/2d | Reserved for future | **KEEP EXISTING** | Reference if discovered; part of multi-AZ setup |
+
+**Note on Egress:** Phase 1 app tier does not require NAT Gateway by default. AWS service APIs (Secrets Manager, KMS, CloudWatch Logs, S3) are accessed via VPC Gateway Endpoints or do not require internet access. Third-party API calls (if any) DEFER as owner decision; only provision NAT if external egress requirement is confirmed.
 
 #### VPC Endpoints
 
@@ -90,10 +93,10 @@ Every AWS resource is classified into one of seven categories to guide CDK infra
 
 #### RDS Instances
 
-| Instance | Engine | Classification | CDK Action | Current Owner | Notes |
+| Instance | Engine | Current Owner | Classification | CDK Action | Notes |
 |---|---|---|---|---|---|
-| ogevia-postgres | PostgreSQL 18.3, db.t4g.micro | **REFERENCE FROM CDK** | CloudFormation manages (via ogevia-prod-data-layer stack); CDK may reference stack outputs for connection strings | CloudFormation (ogevia-prod-data-layer stack) | Likely development/staging database; encrypted, non-public, 7-day backups |
-| ogevia-prod-postgres | PostgreSQL 18.3, db.t4g.micro | **REFERENCE FROM CDK** | CloudFormation manages (via ogevia-prod-data-layer stack); CDK may reference stack outputs for connection strings | CloudFormation (ogevia-prod-data-layer stack) | Production database; encrypted, non-public, 7-day backups; managed by app layer |
+| ogevia-postgres | PostgreSQL 18.3, db.t4g.micro | UNMANAGED (VERIFIED: no CloudFormation tags; manually created or retained from deleted stack) | **KEEP EXISTING** | Do not recreate; manually manage or import if adopting into CDK | Development/staging database; encrypted, non-public, 7-day backups; ownership UNMANAGED (VERIFIED) |
+| ogevia-prod-postgres | PostgreSQL 18.3, db.t4g.micro | CloudFormation (ogevia-prod-data-layer stack, logical ID: PostgreSQLDatabase) — VERIFIED via tags | **REFERENCE FROM CDK** | CDK references CloudFormation stack outputs for connection strings; do not recreate | Production database; encrypted, non-public, 7-day backups; owned by CloudFormation (VERIFIED) |
 
 **Migration Strategy:**
 - **Phase 1 CDK Scaffolding:** Create CDK stack that depends-on or references the CloudFormation stack (ogevia-prod-data-layer).

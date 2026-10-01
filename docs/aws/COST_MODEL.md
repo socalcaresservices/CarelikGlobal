@@ -9,11 +9,23 @@
 
 ## Executive Summary
 
-**Estimated Monthly Recurring Cost:** $85–120 USD
+**Phase 0 Cost Assessment: ESTIMATE (NOT VERIFIED)**
 
-Current Ogevia infrastructure is in development phase with minimal production workload. Primary costs are RDS database instances (db.t4g.micro, encrypted, $15 each) and supporting networking/storage. The one temporary EC2 instance adds ~$10/month but is scheduled for retirement post-cutover.
+Current Ogevia infrastructure is in development phase. **Estimated monthly recurring cost: $65–90 USD (baseline without optional NAT Gateway or enhanced monitoring).**
 
-**No Cost Overruns Detected.** Current $50/month budget ceiling (AWS Budgets) is **insufficient for Phase 1+ production transition.** Recommend increasing to $200–300/month before Phase 1 CDK deployment to cover app tier (Lambda, API Gateway, additional NAT/data transfer).
+**Cost Data Verification Status:**
+- ⚠️ AWS Cost Explorer queries returned empty results (no billing data populated or Cost Explorer disabled)
+- ✓ Configuration costs calculated from AWS pricing tables (on-demand rates, us-west-2, verified 2026-10-01)
+- ❌ Actual AWS billing spend NOT VERIFIED (Cost Explorer empty)
+- ❌ Reserved Instance savings NOT CALCULATED (no historical spend baseline)
+
+**Budget Assessment:**
+- Current AWS Budgets: $50/month (BELOW estimated Phase 0 spend of $65–90)
+- Recommendation: OWNER APPROVAL REQUIRED for budget increase amount and threshold
+
+**Note on Phase 1 Cost Projections:**
+- NAT Gateway: **CLASSIFIED AS DEFER.** Only provision if Phase 1 app tier requires external egress (third-party APIs). AWS service APIs accessible via VPC Endpoints (no NAT required).
+- Reserved Instances: Not recommended Phase 0–1 without confirmed production workload baseline.
 
 ---
 
@@ -23,14 +35,14 @@ Current Ogevia infrastructure is in development phase with minimal production wo
 
 #### EC2 Instances
 - **Instance:** i-0ce8db2d7e5839dd5 (ogevia-db-admin-temp, t3.micro)
-- **Pricing (on-demand, us-west-2):**
-  - t3.micro: $0.0116 USD/hour
-  - Monthly (730 hours): $0.0116 × 730 = **$8.47/month**
+- **Pricing (on-demand, us-west-2) — ESTIMATE based on published rates:**
+  - t3.micro: $0.0116 USD/hour (AWS pricing 2026-10-01)
+  - Monthly (730 hours): $0.0116 × 730 = **$8.47/month (ESTIMATE)**
   - Data transfer: ~$0 (internal VPC traffic, low volume)
-- **Status:** RUNNING; **retirement decision made—terminate post-Phase 2 cutover**
-- **Cost Impact if Retired:** **Savings $8.47/month** (~10% of total cost)
+- **Status:** RUNNING; **owner decision made—retire post-Phase 2 cutover (VERIFIED)**
+- **Cost Impact if Retired:** **Savings $8.47/month** (~10% of baseline)
 
-**Subtotal (EC2):** $8.47/month (or $0/month if terminated)
+**Subtotal (EC2): $8.47/month (ESTIMATE) — $0/month if retired**
 
 #### Lambda
 - **Status:** Not deployed; not included in Phase 0 cost model
@@ -49,7 +61,7 @@ Current Ogevia infrastructure is in development phase with minimal production wo
 - **Pricing (on-demand, multi-AZ pricing applies only if HA enabled; currently single-AZ):**
   - db.t4g.micro on-demand: $0.022 USD/hour
   - Monthly (730 hours): $0.022 × 730 = **$16.06/month (on-demand)**
-  - Reserved Instance (1-year): $0.011/hour (~$8/month) — **Recommend purchasing RI after Phase 1**
+  - Reserved Instance (1-year): $0.011/hour (~$8/month) — Not recommended Phase 0–1 without confirmed production baseline
   - Storage (20 GiB gp3 @ $0.115/GiB): 20 × $0.115 = **$2.30/month**
   - Backup storage (7-day retention, estimated): ~$0.50/month
   - Data transfer: ~$1–2/month (minimal in dev phase)
@@ -63,7 +75,7 @@ Current Ogevia infrastructure is in development phase with minimal production wo
 
 **Total RDS (2 instances, on-demand):** **$39.72/month**
 
-**RI Recommendation:** Purchase 1-year Reserved Instances for both databases to reduce cost by ~$14/month during Phase 2+ production ramp (payback period ~9 months).
+**RI Consideration (Phase 2+ evaluation):** Reserved Instances for both databases would reduce cost by ~$14/month (payback ~9 months). Decision deferred to Phase 2 when production baseline is established.
 
 **Subtotal (RDS):** $39.72/month (current); $25.60/month with RIs (Phase 2 recommendation)
 
@@ -134,7 +146,7 @@ Current Ogevia infrastructure is in development phase with minimal production wo
 ### Monitoring & Audit
 
 #### CloudTrail
-- **Trail:** 1 (ogevia-audit-trail, multi-region, logs to CloudTrail S3 bucket)
+- **Trail:** 1 (ogevia-audit-trail, home region us-east-2; multi-region status NOT VERIFIED, logs to CloudTrail S3 bucket)
 - **Pricing:**
   - First trail: Free (AWS covers cost of first trail per account)
   - Additional trails: $2.00/trail/month (N/A—only 1 trail)
@@ -217,12 +229,12 @@ Current Ogevia infrastructure is in development phase with minimal production wo
 | Service | Cost | Notes |
 |---|---|---|
 | EC2 | $0.00 | Admin host retired |
-| RDS (RI) | $25.60 | 1-year RI purchased (savings $14/month) |
-| NAT Gateway | $32–48 | New; enables app tier egress |
-| App Security Group / Networking | $5–10 | Data transfer increase; estimated |
+| RDS (on-demand) | $39.72 | No RI purchased (decision deferred to Phase 2) |
+| NAT Gateway | $0.00 | DEFER — not required by default; only provision if Phase 1 app tier requires external egress (third-party APIs) |
+| App Security Group / Networking | $0–5 | Data transfer via VPC Endpoints; estimated |
 | Lambda | $0–5 | Preview/testing phase |
 | API Gateway | $0–5 | Preview/testing phase |
-| **Total Phase 1** | **$80–100/month** | ESTIMATE (subject to change with app tier deployment) |
+| **Total Phase 1** | **$45–50/month** | ESTIMATE without NAT Gateway; add $32–48/month if external egress confirmed |
 
 ### Phase 2+ (Production Ramp)
 
@@ -242,10 +254,10 @@ Current Ogevia infrastructure is in development phase with minimal production wo
 
 ### Immediate (Phase 0)
 
-1. **Increase AWS Budgets Limit:** Raise from $50 to $200/month to accommodate Phase 1 app tier without budget breach alerts.
-   - **Impact:** No financial impact; prevents alert fatigue.
+1. **AWS Budgets Limit Adjustment (Phase 1, OWNER DECISION):** Current limit ($50/month) is below Phase 0 estimate ($66.57/month). Recommended adjustment to $200/month to accommodate Phase 1 app tier. Owner approval required for amount and threshold.
+   - **Impact:** No financial impact; enables cost control without alert fatigue.
 
-2. **Create CloudWatch Budget Alarm:** Set threshold at 80% ($160/month) to alert when Phase 1 spend is on track.
+2. **Create CloudWatch Budget Alarm (Phase 1, DEFERRED):** Per owner decision (CLAUDE.md), create budget alert at 80% threshold ($160/month for $200 limit) when budget is approved.
    - **Impact:** $0/month; essential for cost control.
 
 3. **Terminate ogevia-db-admin-temp (Post-Phase 2):** Schedule EC2 instance termination after RDS cutover validation.
@@ -253,15 +265,15 @@ Current Ogevia infrastructure is in development phase with minimal production wo
 
 ### Phase 1
 
-4. **Purchase RDS Reserved Instances:** 1-year RI for both db.t4g.micro instances.
+4. **RDS Reserved Instances (Phase 2 Evaluation):** 1-year RI for both db.t4g.micro instances considered after Phase 1 production baseline established.
    - **Cost:** ~$100 upfront per instance (1-year commitment)
    - **Savings:** $14/month (~$168/year); breakeven at month 7
-   - **Recommendation:** Purchase after Phase 1 CDK deployment approved
+   - **Decision:** Deferred to Phase 2 when workload characteristics are known
 
-5. **Review NAT Gateway Placement:** Phase 1 app tier will require NAT for external API calls (AWS SDKs, third-party APIs).
-   - **Cost:** $32/month NAT + $0.045/GiB data processing
-   - **Optimization:** Use VPC Endpoints for AWS API calls (free); only NAT for third-party APIs
-   - **Potential savings:** $20–30/month if third-party API calls are minimized
+5. **NAT Gateway (Phase 1, DEFER unless external egress required):** Phase 1 app tier does not require NAT by default.
+   - **AWS API access:** Via VPC Endpoints (Secrets Manager, KMS, CloudWatch Logs, S3) — no NAT needed; no cost
+   - **Third-party APIs:** Only if confirmed Phase 1 requirement; cost $32/month NAT + $0.045/GiB data processing
+   - **Decision:** Owner approval required if external egress confirmed
 
 ### Phase 2+
 
@@ -285,11 +297,12 @@ Current Ogevia infrastructure is in development phase with minimal production wo
 
 **Current:** ogevia phase 1 Budget = $50/month limit
 
-**Phase 0 Assessment:** Spend ≥ $66.57/month (estimated) exceeds budget.
+**Phase 0 Assessment:** Phase 0 estimated spend ($66.57/month) exceeds current budget ($50/month). Cost Explorer returned empty results (AWS billing data NOT VERIFIED).
 
-**Action Required:**
-- Increase budget to $200/month effective immediately (or confirm Cost Explorer data from AWS Billing)
-- Create CloudWatch alarm at 80% threshold ($160/month) to alert operations team
+**Owner Decision Required (Phase 1):**
+- Approve budget adjustment (recommended: $200/month) and cost-control threshold (recommended: 80% = $160/month)
+- Verify Phase 0 actual spend via AWS Billing Console (Bills section; Cost Explorer API data unavailable)
+- Create CloudWatch alarm post-approval at agreed threshold
 
 ### Cost Allocation Tags
 
@@ -306,32 +319,39 @@ Current Ogevia infrastructure is in development phase with minimal production wo
 
 ---
 
-## Cost Explorer Query Results (Phase 0)
+## Cost Explorer Query Results (Phase 0) — NOT VERIFIED
+
+**Status:** ⚠️ **AWS BILLING DATA NOT AVAILABLE**
 
 **Queries Executed:** 3 of 5 allowed
 
-| Query | Result | Issue |
+| Query | Result | Status |
 |---|---|---|
-| Call 1: Monthly Summary (60 days) | Empty | Possible: no historical spend data in Cost Explorer yet (account <30 days old); or insufficient API permissions |
-| Call 2: Daily (October MTD) | Empty | Same as above; Oct 1 is today; likely no daily rollup yet |
-| Call 3: By Region | Empty | Same as above |
+| Call 1: Monthly Summary (60 days) | Empty | Cost Explorer returned no results (reason unknown: account too new, Cost Explorer not populated, or API permissions insufficient) |
+| Call 2: Daily (October MTD) | Empty | Same; Oct 1 is today; insufficient rollup time may be factor |
+| Call 3: By Region | Empty | Same |
 
-**Fallback:** Estimated costs calculated from AWS pricing tables (us-west-2 on-demand rates) and verified resource counts.
+**Implication:** Phase 0 cost estimates are NOT VERIFIED against actual AWS billing data. All costs in this document are ESTIMATE based on:
+- Published AWS pricing tables (on-demand rates for us-west-2, verified 2026-10-01)
+- Verified resource configuration (instance class, storage size, region)
+- Standard AWS billing models (no discounts or Reserved Instances assumed)
 
-**Recommendation:** Retry Cost Explorer queries after October 3–5, when first full days of cost data are available; alternatively, cross-check via AWS Billing Console (IAM permission: `ce:GetCostAndUsage`).
+**Cost Accuracy:** These are ESTIMATE figures ±10% until verified against AWS Billing Console (Billing user role required; not accessible to ogevia-readonly).
+
+**Phase 1 Action:** Obtain actual Phase 0 spend from AWS Billing Console (Bills section, not Cost Explorer API). Compare ESTIMATE vs. ACTUAL to refine Phase 1 budget and RI recommendations.
 
 ---
 
 ## Next Steps
 
-1. **Verify Phase 0 Costs:** Check AWS Billing dashboard to confirm estimated $66.57/month actual spend (Cost Explorer queries returned empty).
-2. **Increase Budget:** Raise AWS Budgets limit to $200/month and create CloudWatch alarm at $160 threshold.
+1. **Verify Phase 0 Costs (Phase 1):** Check AWS Billing dashboard (Bills section) to confirm estimated $66.57/month vs. actual Phase 0 spend (Cost Explorer API returned empty).
+2. **Budget Decision (Phase 1):** Owner approval required for budget adjustment (recommended $200/month) and cost-control threshold (recommended 80% = $160/month). Create CloudWatch alarm post-approval.
 3. **Plan EC2 Retirement:** Document ogevia-db-admin-temp termination in Phase 2 runbook; confirm no admin access dependencies exist.
-4. **RDS RI Planning:** After Phase 1 CDK deployment is approved, purchase 1-year RIs for both db.t4g.micro instances (~$14/month savings).
-5. **Phase 1 Cost Projection:** Refine estimates for Lambda, API Gateway, NAT Gateway once app tier architecture is finalized.
+4. **RDS RI Evaluation (Phase 2):** After production baseline established, evaluate 1-year RIs for both db.t4g.micro instances (~$14/month savings potential).
+5. **Phase 1 Cost Projection:** Refine estimates for Lambda, API Gateway, and confirm NAT Gateway need (if any) once app tier architecture is finalized.
 
 ---
 
 **Cost Model Complete:** 2026-10-01  
-**Phase 0 Estimated Monthly Cost:** $66–120 USD (pending Cost Explorer verification)  
-**Budget Recommendation:** $200/month (Phase 1 threshold); $500+/month (Phase 2+ production)  
+**Phase 0 Estimated Monthly Cost:** $66–90 USD (ESTIMATE, NOT VERIFIED via Cost Explorer)  
+**Budget Decision Required (Phase 1):** Recommend $200/month (owner approval pending); $500+/month (Phase 2+ production)  

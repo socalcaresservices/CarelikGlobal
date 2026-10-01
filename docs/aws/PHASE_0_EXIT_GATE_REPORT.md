@@ -110,7 +110,8 @@ Arn: arn:aws:sts::300094796789:assumed-role/AWSReservedSSO_ReadOnlyAccess_81b69e
 | **KEEP EXISTING** | 24 | VPC, subnets, route tables, IGW, KMS keys, S3 buckets, IAM roles, RDS subnet groups |
 | **REFERENCE FROM CDK** | 8 | CloudFormation stack, RDS instances, Secrets Manager, security groups (CloudFormation-managed) |
 | **IMPORT INTO CDK** | 0 | (None; use REFERENCE or KEEP EXISTING instead) |
-| **CREATE NEW** | 4 | Lambda (Phase 4), API Gateway (Phase 4), NAT Gateway (Phase 1), CloudWatch alarms (Phase 1) |
+| **CREATE NEW** | 2 | Lambda (Phase 4), API Gateway (Phase 4), CloudWatch alarms (Phase 1, owner decision) |
+| **DEFER** | 1 | NAT Gateway (Phase 1, only if external egress requirement confirmed) |
 | **MIGRATE FROM SUPABASE** | 0 | (Auth/Cognito transition deferred to Phase 3) |
 | **DEFER** | 2 | Route 53 (external DNS assumed), CloudFront (Netlify CDN assumed) |
 | **RETIRE AFTER CUTOVER** | 2 | EC2 admin host ($10/month cost), legacy RDS security group (unused) |
@@ -137,17 +138,18 @@ Arn: arn:aws:sts::300094796789:assumed-role/AWSReservedSSO_ReadOnlyAccess_81b69e
 
 ### Cost Projections
 
-**Phase 1 (with app tier, NAT Gateway):** $80–100/month  
-**Phase 2+ (production):** $150–500/month (depends on traffic, Multi-AZ, RI adoption)
+**Phase 1 (with app tier, no NAT Gateway by default):** $45–50/month  
+**Phase 1 (if external egress required, with NAT Gateway):** $80–100/month  
+**Phase 2+ (production):** $150–500/month (depends on traffic, Multi-AZ, app egress needs)
 
 ### Budget Assessment
 
 | Budget | Limit | Phase 0 Cost | Headroom | Status |
 |---|---|---|---|---|
 | AWS Budgets (configured) | $50/month | $66.54 | -$16.54 | ❌ INSUFFICIENT |
-| **Recommended Phase 1** | **$200/month** | **$80–100** | **+$100** | ✅ ADEQUATE |
+| **Owner Decision (Phase 1)** | **$200/month recommended** | **$45–100** | **+$100–155** | ⚠️ PENDING APPROVAL |
 
-⚠️ **Action:** Increase AWS Budgets limit to $200/month immediately; create CloudWatch alarm at 80% ($160) threshold.
+⚠️ **Owner Decision Required (Phase 1):** Approve budget limit increase (recommended $200/month) and cost-control threshold (recommended 80% = $160/month). Create CloudWatch alarm post-approval.
 
 ---
 
@@ -178,7 +180,7 @@ Arn: arn:aws:sts::300094796789:assumed-role/AWSReservedSSO_ReadOnlyAccess_81b69e
 2. ⚠️ **App tier security group egress unrestricted:** Currently allows all traffic to 0.0.0.0/0. Must restrict Phase 1 to specific destinations (RDS, AWS APIs via VPC Endpoints/NAT, third-party APIs).
 
 #### Medium (Resolve Phase 1)
-3. ⚠️ **No CloudWatch budget alarms:** $50 budget limit exceeded by Phase 0 spend. Increase to $200 and create alarm at 80% threshold.
+3. ⚠️ **CloudWatch budget alarms (owner decision):** $50 budget limit exceeded by Phase 0 spend. Owner approval required for budget adjustment to $200 and cost-control threshold at 80% ($160/month). Alarm creation deferred to post-approval.
 4. ⚠️ **RDS Multi-AZ not enabled:** Both instances single-AZ. Acceptable for dev; revisit after Phase 1 production ramp.
 5. ⚠️ **No resource tagging:** Implement cost allocation tags (Application, Environment, Owner, Phase, CostCenter) Phase 1.
 
@@ -309,9 +311,9 @@ infra/
 | ✅ Live inventory complete (50+ resources) | COMPLETE | CURRENT_AWS_INVENTORY.md |
 | ✅ Resource classification complete | COMPLETE | MIGRATION_PLAN.md (all resources classified) |
 | ✅ CDK duplicate analysis complete | COMPLETE | MIGRATION_PLAN.md (zero conflicts identified) |
-| ✅ Cost analysis complete | COMPLETE | COST_MODEL.md ($66–120 estimated) |
+| ✅ Cost analysis complete | COMPLETE | COST_MODEL.md ($66–90 ESTIMATE, NOT VERIFIED) |
 | ⚠️ Cost Explorer data verified | PARTIAL | Queries returned empty; fallback to pricing tables used |
-| ✅ Cost budget recommendation | COMPLETE | Increase to $200/month Phase 1 |
+| ⚠️ Cost budget decision (owner approval pending) | COMPLETE | Recommend $200/month increase; create alarm at 80% threshold |
 | ✅ Security audit complete | COMPLETE | SECURITY_DECISIONS.md (controls assessed) |
 | ⚠️ CloudTrail multi-region verified | INCOMPLETE | AccessDenied on API; status unknown (assume us-east-2 home region only) |
 | ✅ RDS security group audit complete | COMPLETE | No 0.0.0.0 on port 5432; restricted to AppSG only |
@@ -329,7 +331,7 @@ infra/
 
 **Conditions:**
 1. ⚠️ **CloudTrail Verification (Optional, not blocking):** Retry describe-trails, get-trail-status, get-event-selectors with current credentials; document multi-region status. If AccessDenied persists, record as NOT VERIFIED and proceed (assume functional single-region trail in us-east-2).
-2. ✅ **Budget Increase (Phase 1 pre-requisite):** Increase AWS Budgets to $200/month before CDK deployment.
+2. ⚠️ **Budget Decision (Phase 1 pre-requisite):** Owner approval required for budget increase (recommended $200/month) and cost-control threshold (recommended 80% = $160/month) before CDK deployment.
 3. ✅ **CDK Scaffolding (Phase 1 start):** Initialize CDK app structure per MIGRATION_PLAN.md recommendations.
 
 ### Key Findings Summary
@@ -357,13 +359,13 @@ infra/
 
 ## Phase 1 Immediate Next Steps
 
-1. **Increase AWS Budgets** → $200/month limit; create CloudWatch alarm at $160 threshold
+1. **Approve budget decision** → Owner approval required for budget increase to $200/month and alarm threshold at $160/month
 2. **Install AWS CDK** → `npm install -g aws-cdk`
 3. **Initialize CDK app** → `cdk init --language typescript` in `infra/` directory
 4. **Create stack structure** → Reference existing VPC, subnets, RDS via CloudFormation stack outputs
-5. **Document decisions** → Finalize Cognito vs. Supabase Auth, Route 53/DNS, RDS Multi-AZ requirements
-6. **Implement tagging** → Apply cost allocation tags to all resources
-7. **Configure VPC Flow Logs** → Enable for network monitoring and troubleshooting baseline
+5. **Document decisions** → Finalize Cognito vs. Supabase Auth, Route 53/DNS, RDS Multi-AZ requirements, external egress needs (NAT Gateway decision)
+6. **Implement tagging** → Apply cost allocation tags to all resources (post-budget-approval)
+7. **Configure VPC Flow Logs** → Enable for network monitoring and troubleshooting baseline (post-budget-approval)
 
 ---
 

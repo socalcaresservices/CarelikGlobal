@@ -220,10 +220,10 @@ However, **several gaps must be addressed before Phase 1 production transition:*
 
 | Framework | Status | Assessment |
 |---|---|---|
-| **SOC 2** | ⚠️ PARTIAL | Encryption, audit logging, access control present; lacks formal controls testing |
-| **HIPAA** | ⚠️ NOT APPLICABLE | No PHI handled; not required unless healthcare integration added |
-| **PCI DSS** | ⚠️ NOT APPLICABLE | No payment card data stored; not required for Ogevia's current scope |
-| **GDPR** | ⚠️ CONDITIONAL | If European users/data, requires data residency (current: us-west-2 only) and DPA with AWS |
+| **SOC 2** | ⚠️ PARTIAL | Encryption, audit logging, access control present (VERIFIED); lacks formal controls testing (INFERRED) |
+| **HIPAA** | ⚠️ DESIGN REQUIREMENT (NOT YET APPLICABLE) | **Correction:** Ogevia is architected to eventually create, receive, maintain, and transmit service-verification data that may constitute PHI/ePHI. Development currently avoids production PHI (VERIFIED). Production PHI remains prohibited until the AWS BAA and security/compliance gates are satisfied (INFERRED Phase 7+). HIPAA safeguards are therefore design requirements now, not future nice-to-haves. |
+| **PCI DSS** | ⚠️ NOT CURRENTLY APPLICABLE | No payment card data stored; not required for current Ogevia scope (VERIFIED) |
+| **GDPR** | ⚠️ CONDITIONAL | If European users/data, requires data residency (current: us-west-2 only) and DPA with AWS (INFERRED) |
 
 **Decision:** ℹ️ **INFORMATIONAL (no immediate action Phase 0–1):**
 1. **Document compliance baseline** (Phase 2): If SOC 2 Type II certification is business requirement, begin controls testing.
