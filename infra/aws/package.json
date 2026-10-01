@@ -24,9 +24,11 @@
     "pg": "^8.23.1"
   },
   "devDependencies": {
+    "@carelik/sv-api": "workspace:^",
     "@types/node": "^22.10.2",
     "@types/pg": "^8.23.1",
     "aws-cdk": "2.1143.0",
+    "esbuild": "0.25.12",
     "tsx": "^4.19.2",
     "typescript": "^5.7.2",
     "vitest": "^2.1.8"

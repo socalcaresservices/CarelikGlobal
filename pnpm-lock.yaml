@@ -43,10 +43,10 @@ importers:
   apps/sv-api:
     dependencies:
       '@aws-sdk/client-s3':
-        specifier: ^3
+        specifier: ^3.1144.0
         version: 3.1144.0
       '@aws-sdk/client-secrets-manager':
-        specifier: ^3
+        specifier: ^3.1144.0
         version: 3.1144.0
       '@carelik/auth':
         specifier: workspace:*
@@ -192,6 +192,9 @@ importers:
         specifier: ^8.23.1
         version: 8.23.1
     devDependencies:
+      '@carelik/sv-api':
+        specifier: workspace:^
+        version: link:../../apps/sv-api
       '@types/node':
         specifier: ^22.10.2
         version: 22.20.4
@@ -201,6 +204,9 @@ importers:
       aws-cdk:
         specifier: 2.1143.0
         version: 2.1143.0
+      esbuild:
+        specifier: 0.25.12
+        version: 0.25.12
       tsx:
         specifier: ^4.19.2
         version: 4.23.15

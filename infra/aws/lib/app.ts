@@ -1,6 +1,8 @@
 import { Tags, type App, type Stack } from "aws-cdk-lib";
 import type { OgeviaEnvironmentConfig } from "./config.js";
 import { EvidenceStorageStack } from "./evidence-storage-stack.js";
+import { NetworkEgressStack } from "./network-egress-stack.js";
+import { WebHostingStack } from "./web-hosting-stack.js";
 import { ObservabilityStack } from "./observability-stack.js";
 import { ServiceVerificationApiStack } from "./service-verification-api-stack.js";
 
@@ -45,6 +47,16 @@ export function buildOgeviaApp(
     env,
     description: `Ogevia ${config.envName} - private encrypted visit signature/evidence storage (FUTURE, Phase 5; not deployed)`,
   });
+  const egress = new NetworkEgressStack(app, name("NetworkEgress"), {
+    config,
+    env,
+    description: `Ogevia ${config.envName} - Lambda egress without NAT: Secrets Manager interface + S3 gateway endpoints (D-P1-1; not deployed)`,
+  });
+  const web = new WebHostingStack(app, name("WebHosting"), {
+    config,
+    env,
+    description: `Ogevia ${config.envName} - CloudFront + private S3 web hosting and test-slice Cognito app client (Phase 6; not deployed)`,
+  });
   const api = new ServiceVerificationApiStack(
     app,
     name("ServiceVerificationApi"),
@@ -52,6 +64,8 @@ export function buildOgeviaApp(
       config,
       env,
       evidenceKey: evidence.dataKey,
+      extraAllowedOrigins: [web.webOrigin],
+      extraAppClientIds: [web.testAppClient.ref],
       description: `Ogevia ${config.envName} - Service Verification API Gateway + Lambda tier (FUTURE, Phase 4; not deployed)`,
     },
   );
@@ -63,10 +77,16 @@ export function buildOgeviaApp(
     description: `Ogevia ${config.envName} - operational alarms (FUTURE, Phase 4/7; not deployed)`,
   });
 
+  // The Lambda cannot reach Secrets Manager/S3 until the endpoints exist.
+  api.addStackDependency(egress, "Lambda egress (D-P1-1) must exist before the API serves traffic");
+
+  // NOTE: index order is relied on by tests ([evidence, api, observability] first).
   const planned: PlannedStack[] = [
     { stack: evidence, plannedPhase: 5 },
     { stack: api, plannedPhase: 4 },
     { stack: observability, plannedPhase: 4 },
+    { stack: egress, plannedPhase: 4 },
+    { stack: web, plannedPhase: 6 },
   ];
 
   Tags.of(app).add("project", "ogevia");

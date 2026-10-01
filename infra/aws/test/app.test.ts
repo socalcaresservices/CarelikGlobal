@@ -30,6 +30,8 @@ describe("plan mode: every synthesized stack", () => {
       "Ogevia-prod-EvidenceStorage",
       "Ogevia-prod-ServiceVerificationApi",
       "Ogevia-prod-Observability",
+      "Ogevia-prod-NetworkEgress",
+      "Ogevia-prod-WebHosting",
     ]);
   });
 
@@ -40,17 +42,16 @@ describe("plan mode: every synthesized stack", () => {
     expect(violations).toEqual([]);
   });
 
-  it("creates no VPC, subnet, NAT gateway, RDS instance, or DB subnet group", () => {
+  it("creates no VPC, subnet, NAT gateway, route, RDS instance, or DB subnet group anywhere", () => {
     const forbidden = [
       "AWS::EC2::VPC",
       "AWS::EC2::Subnet",
       "AWS::EC2::NatGateway",
+      "AWS::EC2::Route",
+      "AWS::EC2::RouteTable",
       "AWS::RDS::DBInstance",
       "AWS::RDS::DBSubnetGroup",
-      "AWS::EC2::SecurityGroup",
-      "AWS::EC2::SecurityGroupIngress",
       "AWS::EC2::SecurityGroupEgress",
-      "AWS::EC2::VPCEndpoint",
     ];
     for (const { stack, template } of stacks) {
       const found = Object.values(template.Resources ?? {})
@@ -58,6 +59,29 @@ describe("plan mode: every synthesized stack", () => {
         .filter((t) => forbidden.includes(t));
       expect(found, stack.stackName).toEqual([]);
     }
+  });
+
+  it("network resources (endpoints, SG) exist ONLY in the NetworkEgress stack (D-P1-1)", () => {
+    const network = ["AWS::EC2::SecurityGroup", "AWS::EC2::SecurityGroupIngress", "AWS::EC2::VPCEndpoint"];
+    for (const { stack, template } of stacks) {
+      const found = Object.values(template.Resources ?? {}).map((r) => r.Type).filter((t) => network.includes(t)).sort();
+      if (stack.stackName.endsWith("-NetworkEgress")) {
+        expect(found).toEqual(["AWS::EC2::SecurityGroup", "AWS::EC2::SecurityGroupIngress", "AWS::EC2::VPCEndpoint", "AWS::EC2::VPCEndpoint"]);
+      } else {
+        expect(found, stack.stackName).toEqual([]);
+      }
+    }
+  });
+
+  it("creates no NAT gateway (the only fixed-cost network item is the Secrets Manager endpoint)", () => {
+    const egress = stacks.find((s) => s.stack.stackName.endsWith("-NetworkEgress"))!.template;
+    const endpoints = Object.values(egress.Resources ?? {}).filter((r) => r.Type === "AWS::EC2::VPCEndpoint");
+    const interfaceEndpoints = endpoints.filter((r) => r.Properties?.VpcEndpointType === "Interface");
+    expect(interfaceEndpoints).toHaveLength(1);
+    expect((interfaceEndpoints[0]!.Properties!.SubnetIds as unknown[]).length).toBe(1);
+    expect(interfaceEndpoints[0]!.Properties!.PrivateDnsEnabled).toBe(true);
+    const gateway = endpoints.find((r) => r.Properties?.VpcEndpointType === "Gateway")!;
+    expect(gateway.Properties!.RouteTableIds).toEqual(["rtb-0bb8bac7d607a3737", "rtb-049d4448ab6a01e48"]);
   });
 
   it("targets the verified account and region, with termination protection", () => {

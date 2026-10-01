@@ -14,7 +14,7 @@ export interface ConnectionSource {
 interface DbSecret {
   username: string;
   password: string;
-  dbname: string;
+  dbname?: string;
 }
 
 function parseSecret(raw: string | undefined): DbSecret {
@@ -24,8 +24,8 @@ function parseSecret(raw: string | undefined): DbSecret {
   } catch {
     // fall through: reported without echoing the secret
   }
-  if (typeof value.username !== "string" || typeof value.password !== "string" || typeof value.dbname !== "string" || !value.dbname) {
-    throw new Error("Database secret is missing username, password or dbname");
+  if (typeof value.username !== "string" || typeof value.password !== "string") {
+    throw new Error("Database secret is missing username or password");
   }
   return value as DbSecret;
 }
@@ -41,10 +41,12 @@ export function secretsManagerPool(config: ApiConfig, secrets: SecretsManagerCli
   const create = async () => {
     const result = await secrets.send(new GetSecretValueCommand({ SecretId: config.dbSecretArn }));
     const secret = parseSecret(result.SecretString);
+    const database = config.dbName ?? secret.dbname;
+    if (!database) throw new Error("No database name: set DB_NAME or add dbname to the secret");
     const p = new pg.Pool({
       host: config.dbHost,
       port: config.dbPort,
-      database: secret.dbname,
+      database,
       user: secret.username,
       password: secret.password,
       ssl: { rejectUnauthorized: true },

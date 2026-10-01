@@ -31,6 +31,7 @@ describe("config (fail closed)", () => {
     ["bad port", { DB_PORT: "99999" }],
     ["bad secret arn", { DB_SECRET_ARN: "secret" }],
     ["injected role", { DB_SET_ROLE: "ogevia_app; drop" }],
+    ["injected database name", { DB_NAME: "x; drop database y" }],
     ["missing bucket", { EVIDENCE_BUCKET: "" }],
     ["bad key arn", { EVIDENCE_KEY_ARN: "alias/x" }],
   ])("rejects %s", (_l, patch) => {

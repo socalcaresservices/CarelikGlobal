@@ -25,7 +25,7 @@ describe("ServiceVerificationApiStack (FUTURE, Phase 4)", () => {
     template.hasResourceProperties("AWS::ApiGatewayV2::Api", {
       ProtocolType: "HTTP",
       CorsConfiguration: Match.objectLike({
-        AllowOrigins: [...prod.auth.allowedOrigins],
+        AllowOrigins: [...prod.auth.allowedOrigins, Match.anyValue()],
       }),
     });
     template.hasResourceProperties("AWS::ApiGatewayV2::Authorizer", {
@@ -33,7 +33,7 @@ describe("ServiceVerificationApiStack (FUTURE, Phase 4)", () => {
       IdentitySource: ["$request.header.Authorization"],
       JwtConfiguration: {
         Issuer: cognitoIssuer(prod.region, existing.cognitoUserPoolId),
-        Audience: [prod.auth.appClientId],
+        Audience: [prod.auth.appClientId, Match.anyValue()],
       },
     });
   });

@@ -95,6 +95,23 @@ export interface OgeviaEnvironmentConfig {
     readonly allowedOrigins: readonly string[];
   };
   readonly existing: ExistingFoundationIds;
+  /** D-P1-1 network egress for the private Lambda (no NAT). */
+  readonly egress: {
+    /** AZs hosting the Secrets Manager interface endpoint (FIXED cost per AZ). */
+    readonly secretsEndpointAzCount: number;
+  };
+  /**
+   * Phase 6 testable vertical slice: CloudFront-hosted frontend and a NEW
+   * public Cognito app client (code + PKCE) bound to that distribution.
+   */
+  readonly testSlice: {
+    /** Application database inside the existing RDS instance (synthetic data only). */
+    readonly databaseName: string;
+    /** Extra local-dev callback, e.g. http://localhost:5173/auth/callback. Empty = none. */
+    readonly localDevOrigins: readonly string[];
+    /** Managed-login domain (existing, VERIFIED): https://<prefix>.auth.<region>.amazoncognito.com */
+    readonly cognitoDomain: string;
+  };
 }
 
 export const ENVIRONMENTS: Record<OgeviaEnvName, OgeviaEnvironmentConfig> = {
@@ -168,6 +185,20 @@ export const ENVIRONMENTS: Record<OgeviaEnvName, OgeviaEnvironmentConfig> = {
       appDatabaseSecretArn:
         "arn:aws:secretsmanager:us-west-2:300094796789:secret:ogevia/database/app-JsOTVQ",
       cognitoUserPoolId: "us-west-2_849AYz5J7",
+    },
+    egress: {
+      // Recommended 1 AZ for the pilot (~$7.30/month). Lambda reads the secret
+      // once per container, so the endpoint is only on the cold-start path.
+      // 2 = AZ redundancy (~$14.60/month).
+      secretsEndpointAzCount: 1,
+    },
+    testSlice: {
+      // A separate database in the existing instance keeps synthetic test data
+      // apart from the future production database.
+      databaseName: "ogevia_sv_test",
+      localDevOrigins: [],
+      // VERIFIED 2026-10-01 (describe-user-pool-domain): prefix us-west-2849ayz5j7, ACTIVE, managed login v2.
+      cognitoDomain: "https://us-west-2849ayz5j7.auth.us-west-2.amazoncognito.com",
     },
   },
 };

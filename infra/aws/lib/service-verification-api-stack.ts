@@ -12,8 +12,11 @@ import { HttpLambdaIntegration } from "aws-cdk-lib/aws-apigatewayv2-integrations
 import * as iam from "aws-cdk-lib/aws-iam";
 import type * as kms from "aws-cdk-lib/aws-kms";
 import * as lambda from "aws-cdk-lib/aws-lambda";
+import * as nodejs from "aws-cdk-lib/aws-lambda-nodejs";
 import * as logs from "aws-cdk-lib/aws-logs";
 import type { Construct } from "constructs";
+import { dirname, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import { cognitoIssuer } from "./auth-contract.js";
 import { assertVerified, type OgeviaEnvironmentConfig } from "./config.js";
 import {
@@ -25,7 +28,15 @@ import { ExistingFoundation } from "./existing-foundation.js";
 export interface ServiceVerificationApiStackProps extends StackProps {
   readonly config: OgeviaEnvironmentConfig;
   readonly evidenceKey: kms.IKey;
+  /** Extra browser origins (e.g. the CloudFront test-slice origin). */
+  readonly extraAllowedOrigins?: readonly string[];
+  /** Extra approved app clients (e.g. the test-slice client) for the JWT audience. */
+  readonly extraAppClientIds?: readonly string[];
 }
+
+const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "../../..");
+/** The real Service Verification handler (apps/sv-api), bundled by esbuild at synth. */
+export const HANDLER_ENTRY = resolve(REPO_ROOT, "apps/sv-api/src/index.ts");
 
 /**
  * Service Verification routes from docs/aws/MIGRATION_PLAN.md section 4. Every
@@ -35,17 +46,20 @@ export const SERVICE_VERIFICATION_ROUTES: ReadonlyArray<{
   readonly method: apigw.HttpMethod;
   readonly path: string;
 }> = [
+  { method: apigw.HttpMethod.GET, path: "/v1/me" },
   { method: apigw.HttpMethod.GET, path: "/v1/visits/active" },
   { method: apigw.HttpMethod.GET, path: "/v1/clients/assigned" },
   { method: apigw.HttpMethod.GET, path: "/v1/clients/{clientId}/services" },
   { method: apigw.HttpMethod.POST, path: "/v1/visits" },
   { method: apigw.HttpMethod.POST, path: "/v1/visits/{visitId}/end" },
-  {
-    method: apigw.HttpMethod.POST,
-    path: "/v1/visits/{visitId}/signature-upload",
-  },
+  // Signature PNG travels in this request: Lambda validates, hashes and writes
+  // it to S3 (SSE-KMS), then registers + confirms in one DB transaction.
   { method: apigw.HttpMethod.POST, path: "/v1/visits/{visitId}/confirm" },
+  { method: apigw.HttpMethod.GET, path: "/v1/visits" },
+  { method: apigw.HttpMethod.GET, path: "/v1/visits/{visitId}/corrections" },
   { method: apigw.HttpMethod.POST, path: "/v1/visits/{visitId}/corrections" },
+  { method: apigw.HttpMethod.GET, path: "/v1/visits/{visitId}/signature" },
+  { method: apigw.HttpMethod.GET, path: "/v1/billing-review" },
 ];
 
 /**
@@ -65,17 +79,11 @@ export const LAMBDA_ENVIRONMENT_KEYS = [
   "COGNITO_USER_POOL_ID",
   "COGNITO_APP_CLIENT_ID",
   "LOG_LEVEL",
+  "DB_NAME",
+  "DB_SET_ROLE",
+  "NODE_EXTRA_CA_CERTS",
 ] as const;
 
-// Non-PHI placeholder so CDK can synthesize the function. It answers 501 for
-// every route and logs nothing about the request. Replaced in Phase 4.
-const PLACEHOLDER_HANDLER = `
-exports.handler = async () => ({
-  statusCode: 501,
-  headers: { "content-type": "application/json" },
-  body: JSON.stringify({ error: "not_implemented" }),
-});
-`;
 
 /**
  * B. NEW FUTURE INFRASTRUCTURE - FUTURE/PLANNED (Phase 4).
@@ -181,12 +189,23 @@ export class ServiceVerificationApiStack extends Stack {
       }),
     );
 
-    this.handler = new lambda.Function(this, "Handler", {
-      description: "Ogevia Service Verification API (Phase 1 placeholder: 501)",
+    this.handler = new nodejs.NodejsFunction(this, "Handler", {
+      description: "Ogevia Service Verification API",
       runtime: lambda.Runtime.NODEJS_24_X,
       architecture: lambda.Architecture.ARM_64,
-      handler: "index.handler",
-      code: lambda.Code.fromInline(PLACEHOLDER_HANDLER),
+      entry: HANDLER_ENTRY,
+      handler: "handler",
+      projectRoot: REPO_ROOT,
+      depsLockFilePath: resolve(REPO_ROOT, "pnpm-lock.yaml"),
+      bundling: {
+        format: nodejs.OutputFormat.CJS,
+        target: "node22",
+        minify: true,
+        sourceMap: false,
+        // Bundle the AWS SDK too (pinned, reproducible); pg-native is optional and unused.
+        externalModules: ["pg-native"],
+        forceDockerBundling: false,
+      },
       memorySize: 512,
       timeout: Duration.seconds(10),
       role,
@@ -203,22 +222,28 @@ export class ServiceVerificationApiStack extends Stack {
         EVIDENCE_BUCKET: evidenceBucketName,
         EVIDENCE_KEY_ARN: props.evidenceKey.keyArn,
         COGNITO_USER_POOL_ID: existing.userPool.userPoolId,
-        COGNITO_APP_CLIENT_ID: config.auth.appClientId,
+        COGNITO_APP_CLIENT_ID: [config.auth.appClientId, ...(props.extraAppClientIds ?? [])].join(","),
         LOG_LEVEL: "info",
+        DB_NAME: config.testSlice.databaseName,
+        // The secret's login user is granted ogevia_app; every request also
+        // SET LOCAL ROLEs to it (no table privileges, EXECUTE on ogevia_api only).
+        DB_SET_ROLE: "ogevia_app",
+        // Lambda Node.js 20+: adds the Amazon RDS CA bundle for verified TLS.
+        NODE_EXTRA_CA_CERTS: "/var/runtime/ca-cert.pem",
       },
     });
 
     const authorizer = new HttpJwtAuthorizer(
       "CognitoJwt",
       cognitoIssuer(config.region, existing.userPool.userPoolId),
-      { jwtAudience: [config.auth.appClientId] },
+      { jwtAudience: [config.auth.appClientId, ...(props.extraAppClientIds ?? [])] },
     );
 
     this.api = new apigw.HttpApi(this, "Api", {
       description: "Ogevia Service Verification API",
       createDefaultStage: false,
       corsPreflight: {
-        allowOrigins: [...config.auth.allowedOrigins],
+        allowOrigins: [...config.auth.allowedOrigins, ...(props.extraAllowedOrigins ?? [])],
         allowMethods: [
           apigw.CorsHttpMethod.GET,
           apigw.CorsHttpMethod.POST,
@@ -272,7 +297,7 @@ export class ServiceVerificationApiStack extends Stack {
     Validations.of(policy).acknowledge({
       id: `AwsSolutions-IAM5[Resource::${signatureObjectsArn}]`,
       reason:
-        "Object keys are per-visit UUIDs unknown at deploy time; restricted to the documented */*/client-signature.png shape. Tenant ownership is checked server-side before every presign.",
+        "Object keys are per-visit UUIDs unknown at deploy time; restricted to the documented */*/client-signature.png shape. Tenant ownership is checked in PostgreSQL before every write and read.",
     });
     for (const ack of [
       {

@@ -6,6 +6,7 @@ import {
   ALLOWED_PHASE1_RESOURCE_TYPES,
   DEFERRED_RESOURCE_TYPES,
   RETAINED_RESOURCE_TYPES,
+  stackException,
   WILDCARD_RESOURCE_ALLOWED_ACTIONS,
 } from "./ownership.js";
 
@@ -66,7 +67,9 @@ export function scanTemplate(
   for (const [logicalId, r] of Object.entries(template.Resources ?? {})) {
     const props = r.Properties ?? {};
 
-    if (r.Type in DEFERRED_RESOURCE_TYPES) {
+    if (stackException(stack, r.Type)) {
+      // Allowed only in its documented stack; the rules below still apply.
+    } else if (r.Type in DEFERRED_RESOURCE_TYPES) {
       flag(
         logicalId,
         "deferred-or-existing-resource-type",
@@ -191,6 +194,73 @@ export function scanTemplate(
           "secret-in-environment",
           "Secret values must be fetched at runtime, not injected",
         );
+      }
+    }
+
+    if (r.Type === "AWS::EC2::SecurityGroupIngress" || r.Type === "AWS::EC2::SecurityGroupEgress") {
+      // A rule may only target a security group CREATED in this template
+      // (Ref/Fn::GetAtt). A literal sg-... id is an existing group.
+      const groupId = props.GroupId;
+      if (typeof groupId === "string") {
+        flag(logicalId, "rule-on-existing-sg", `${r.Type} targets existing group ${groupId}`);
+      }
+    }
+
+    if (r.Type === "AWS::ApiGatewayV2::Route") {
+      // Phase 3 gate: no API route may ever lose the Cognito JWT authorizer.
+      const routeKey = String(props.RouteKey ?? "");
+      if (props.AuthorizationType !== "JWT" || props.AuthorizerId === undefined) {
+        flag(logicalId, "unauthenticated-route", `${routeKey} must use the Cognito JWT authorizer`);
+      }
+      if (routeKey === "$default" || routeKey.startsWith("ANY ")) {
+        flag(logicalId, "catch-all-route", `${routeKey}: only explicit method + path routes are allowed`);
+      }
+    }
+
+    if (r.Type === "AWS::ApiGatewayV2::Authorizer") {
+      const jwt = props.JwtConfiguration as { Audience?: unknown[] } | undefined;
+      if (props.AuthorizerType !== "JWT" || !jwt?.Audience?.length) {
+        flag(logicalId, "weak-authorizer", "Authorizer must be JWT with an explicit audience (app client) list");
+      }
+    }
+
+    if (r.Type === "AWS::EC2::VPCEndpoint") {
+      if (props.VpcEndpointType === "Interface" && props.PrivateDnsEnabled !== true) {
+        flag(logicalId, "endpoint-private-dns", "Interface endpoints must enable private DNS");
+      }
+      if (props.VpcEndpointType === "Gateway") {
+        const statements = asArray(
+          (props.PolicyDocument as { Statement?: Statement[] } | undefined)?.Statement,
+        );
+        if (statements.length === 0 || statements.some((st) => asArray(st.Resource).includes("*"))) {
+          flag(logicalId, "endpoint-policy", "Gateway endpoints need a policy scoped to Ogevia resources");
+        }
+      }
+    }
+
+    if (r.Type === "AWS::Cognito::UserPoolClient") {
+      const flows = asArray(props.AllowedOAuthFlows as string[] | undefined);
+      if (props.GenerateSecret === true) flag(logicalId, "client-secret", "Browser app clients must not have a secret");
+      if (flows.some((f) => f !== "code")) flag(logicalId, "oauth-flow", "Only the authorization code flow is allowed");
+      const urls = [
+        ...asArray(props.CallbackURLs as unknown[] | undefined),
+        ...asArray(props.LogoutURLs as unknown[] | undefined),
+      ];
+      if (urls.some((u) => typeof u === "string" && !u.startsWith("https://"))) {
+        flag(logicalId, "insecure-redirect", "Callback and logout URLs must be https");
+      }
+      const authFlows = asArray(props.ExplicitAuthFlows as string[] | undefined);
+      if (authFlows.some((f) => /USER_PASSWORD_AUTH|ADMIN_USER_PASSWORD_AUTH|CUSTOM_AUTH/.test(f))) {
+        flag(logicalId, "password-flow", "Plaintext password auth flows are not allowed for browser clients");
+      }
+    }
+
+    if (r.Type === "AWS::CloudFront::Distribution") {
+      const config = props.DistributionConfig as
+        { DefaultCacheBehavior?: { ViewerProtocolPolicy?: string }; CacheBehaviors?: Array<{ ViewerProtocolPolicy?: string }> } | undefined;
+      const behaviors = [config?.DefaultCacheBehavior, ...(config?.CacheBehaviors ?? [])];
+      if (behaviors.some((b) => !b || !["redirect-to-https", "https-only"].includes(String(b.ViewerProtocolPolicy)))) {
+        flag(logicalId, "cloudfront-http", "Every behavior must redirect to or require HTTPS");
       }
     }
 

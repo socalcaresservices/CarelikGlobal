@@ -11,6 +11,8 @@ export interface ApiConfig {
   readonly dbHost: string;
   readonly dbPort: number;
   readonly dbSecretArn: string;
+  /** Database name; overrides the secret's dbname (e.g. the test-slice database). */
+  readonly dbName: string | undefined;
   /** Optional SET LOCAL ROLE after connect (when the login user is not ogevia_app itself). */
   readonly dbSetRole: string | undefined;
   readonly evidenceBucket: string;
@@ -45,6 +47,8 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
   if (!Number.isInteger(dbPort) || dbPort < 1 || dbPort > 65535) throw new ConfigError("DB_PORT is malformed");
   const dbSecretArn = required(env, "DB_SECRET_ARN");
   if (!dbSecretArn.startsWith("arn:aws:secretsmanager:")) throw new ConfigError("DB_SECRET_ARN is malformed");
+  const dbName = env.DB_NAME?.trim() || undefined;
+  if (dbName && !/^[a-z_][a-z0-9_]{0,62}$/.test(dbName)) throw new ConfigError("DB_NAME is malformed");
   const dbSetRole = env.DB_SET_ROLE?.trim() || undefined;
   if (dbSetRole && !/^[a-z_][a-z0-9_]*$/.test(dbSetRole)) throw new ConfigError("DB_SET_ROLE is malformed");
   const evidenceKeyArn = required(env, "EVIDENCE_KEY_ARN");
@@ -57,6 +61,7 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
     dbHost: required(env, "DB_HOST"),
     dbPort,
     dbSecretArn,
+    dbName,
     dbSetRole,
     evidenceBucket: required(env, "EVIDENCE_BUCKET"),
     evidenceKeyArn,

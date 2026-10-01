@@ -75,7 +75,51 @@ export const ALLOWED_RESOURCE_COST_CLASS: Readonly<Record<string, CostClass>> =
     "AWS::SNS::TopicPolicy": "FREE",
     "AWS::CloudWatch::Alarm": "FIXED",
     "AWS::CDK::Metadata": "FREE",
+    // Phase 6 web hosting (static assets only; no PHI at rest in the bucket).
+    "AWS::CloudFront::Distribution": "USAGE",
+    "AWS::CloudFront::OriginAccessControl": "FREE",
+    "AWS::CloudFront::Function": "USAGE",
+    "AWS::CloudFront::ResponseHeadersPolicy": "FREE",
+    // Phase 3/6: a NEW public app client in the EXISTING pool for the test
+    // slice. The pool itself and the existing ogevia-web client are untouched.
+    "AWS::Cognito::UserPoolClient": "FREE",
+    "AWS::Cognito::ManagedLoginBranding": "FREE",
   };
+
+/**
+ * Per-stack exceptions to DEFERRED_RESOURCE_TYPES. Matched on the stack-name
+ * suffix. Each exists for one documented decision and only in that stack.
+ *
+ * NetworkEgress (decision D-P1-1): the Lambda runs in private subnets with no
+ * NAT. It needs Secrets Manager (interface endpoint, FIXED cost) and S3
+ * (gateway endpoint, FREE). The endpoint gets its OWN new security group;
+ * no rule is added to any CloudFormation-owned group.
+ */
+export const STACK_RESOURCE_EXCEPTIONS: Readonly<
+  Record<string, Readonly<Record<string, { cost: CostClass; reason: string }>>>
+> = {
+  NetworkEgress: {
+    "AWS::EC2::VPCEndpoint": {
+      cost: "FIXED",
+      reason: "D-P1-1: Secrets Manager interface endpoint (fixed hourly) + S3 gateway endpoint (free); NAT stays deferred",
+    },
+    "AWS::EC2::SecurityGroup": {
+      cost: "FREE",
+      reason: "New SG for the Secrets Manager endpoint ENIs only: 443 from the Lambda AppSecurityGroup",
+    },
+    "AWS::EC2::SecurityGroupIngress": {
+      cost: "FREE",
+      reason: "The 443 rule ON THE NEW endpoint SG (source: AppSecurityGroup). template-scan fails any rule whose GroupId is a pre-existing SG",
+    },
+  },
+};
+
+export function stackException(stack: string, type: string) {
+  for (const [suffix, types] of Object.entries(STACK_RESOURCE_EXCEPTIONS)) {
+    if (stack.endsWith(`-${suffix}`) && types[type]) return types[type];
+  }
+  return undefined;
+}
 
 export const ALLOWED_PHASE1_RESOURCE_TYPES: readonly string[] = Object.keys(
   ALLOWED_RESOURCE_COST_CLASS,
