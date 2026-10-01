@@ -19,3 +19,38 @@ export function createAwsRuntime(env: AwsEnv): AwsRuntime {
   return { auth, api: createAwsApiClient({ baseUrl, getAccessToken: () => auth.getAccessToken() }) };
 }
 
+
+/** Keys a deployment may set at runtime through /config.json (identifiers only, never secrets). */
+const RUNTIME_KEYS = [
+  "VITE_COGNITO_REGION",
+  "VITE_COGNITO_USER_POOL_ID",
+  "VITE_COGNITO_CLIENT_ID",
+  "VITE_COGNITO_DOMAIN",
+  "VITE_COGNITO_REDIRECT_URI",
+  "VITE_COGNITO_LOGOUT_URI",
+  "VITE_COGNITO_SCOPES",
+  "VITE_COGNITO_REFRESH_PERSISTENCE",
+  "VITE_SV_API_BASE_URL",
+] as const;
+
+/**
+ * Merges same-origin /config.json (written by the deployment from
+ * CloudFormation outputs) over the build-time env, so one build serves any
+ * environment. Unknown keys and non-string values are ignored; a missing
+ * file falls back to build-time values. Validation stays in createAwsRuntime.
+ */
+export async function loadRuntimeEnv(buildEnv: AwsEnv, fetchImpl: typeof fetch = fetch): Promise<AwsEnv> {
+  let runtime: Record<string, unknown> = {};
+  try {
+    const response = await fetchImpl("/config.json", { cache: "no-store", credentials: "omit" });
+    if (response.ok) runtime = (await response.json()) as Record<string, unknown>;
+  } catch {
+    runtime = {};
+  }
+  const merged: Record<string, string | undefined> = { ...(buildEnv as Record<string, string | undefined>) };
+  for (const key of RUNTIME_KEYS) {
+    const value = runtime[key];
+    if (typeof value === "string" && value.trim()) merged[key] = value.trim();
+  }
+  return merged as AwsEnv;
+}

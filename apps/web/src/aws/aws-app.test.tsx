@@ -9,7 +9,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createAwsApiClient } from "@/lib/aws-api";
 import { isSupabaseClientCreated } from "@/lib/supabase";
 import { AwsRoutes } from "./aws-root";
-import { createAwsRuntime, type AwsEnv } from "./aws-runtime";
+import { createAwsRuntime, loadRuntimeEnv, type AwsEnv } from "./aws-runtime";
 
 const ORG = "aaaaaaaa-0000-4000-8000-000000000001";
 const CLIENT = "cccccccc-0000-4000-8000-000000000001";
@@ -245,5 +245,22 @@ describe("AWS API client", () => {
       await client.get("/v1/me");
     });
     expect(seen[0]).toMatchObject({ credentials: "omit", cache: "no-store" });
+  });
+});
+
+describe("runtime /config.json", () => {
+  const fetchJson = (body: unknown, status = 200) => (async () => new Response(JSON.stringify(body), { status })) as unknown as typeof fetch;
+  it("overrides build-time values with deployment values", async () => {
+    const env = await loadRuntimeEnv({ VITE_COGNITO_CLIENT_ID: "build" } as AwsEnv, fetchJson({ VITE_COGNITO_CLIENT_ID: "runtime0000000000000000000", VITE_SV_API_BASE_URL: "https://api.example.test" }));
+    expect(env.VITE_COGNITO_CLIENT_ID).toBe("runtime0000000000000000000");
+    expect(env.VITE_SV_API_BASE_URL).toBe("https://api.example.test");
+  });
+  it("ignores unknown keys and non-strings, and falls back when the file is missing", async () => {
+    const env = await loadRuntimeEnv({ VITE_COGNITO_CLIENT_ID: "build" } as AwsEnv, fetchJson({ VITE_AUTH_PROVIDER: "supabase", VITE_COGNITO_CLIENT_ID: 7, EVIL: "x" }));
+    expect(env).toEqual({ VITE_COGNITO_CLIENT_ID: "build" });
+    const missing = await loadRuntimeEnv({ VITE_COGNITO_CLIENT_ID: "build" } as AwsEnv, fetchJson({}, 404));
+    expect(missing.VITE_COGNITO_CLIENT_ID).toBe("build");
+    const offline = await loadRuntimeEnv({ VITE_COGNITO_CLIENT_ID: "build" } as AwsEnv, (async () => { throw new TypeError("offline"); }) as unknown as typeof fetch);
+    expect(offline.VITE_COGNITO_CLIENT_ID).toBe("build");
   });
 });

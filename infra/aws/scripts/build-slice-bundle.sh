@@ -1,0 +1,21 @@
+#!/usr/bin/env bash
+# Builds the self-contained TEST-slice bundle run from AWS CloudShell:
+#   cdk.out (deploy-mode assembly, Lambda bundled) + web/ (AWS build; runtime
+#   config written at deploy time) + finish.sh + smoke.py
+# No AWS calls. Output: <repo>/deploy-bundle/ogevia-slice-<gitsha>.tgz (+ .sha256)
+set -euo pipefail
+HERE="$(cd "$(dirname "$0")/.." && pwd)"; REPO="$(cd "$HERE/../.." && pwd)"
+SHA=$(git -C "$REPO" rev-parse --short=12 HEAD)
+STAGE="$REPO/deploy-bundle/ogevia-slice"; OUT="$REPO/deploy-bundle/ogevia-slice-$SHA.tgz"
+rm -rf "$STAGE" && mkdir -p "$STAGE"
+(cd "$HERE" && rm -rf cdk.out && env -u AWS_ACCESS_KEY_ID -u AWS_SECRET_ACCESS_KEY \
+  OGEVIA_DEPLOY_APPROVAL=owner-approved-2026-10-01-test-slice CDK_DISABLE_CLI_TELEMETRY=true \
+  npx cdk synth --quiet --no-notices -c env=prod -c mode=deploy >/dev/null)
+(cd "$HERE" && npx tsx scripts/synth-inventory.ts | grep -q "Scanner violations: \*\*0\*\*") || { echo "template scanner found violations"; exit 1; }
+cp -r "$HERE/cdk.out" "$STAGE/cdk.out"
+(cd "$REPO/apps/web" && VITE_APP_ENV=production VITE_AUTH_PROVIDER=cognito npx vite build --outDir "$STAGE/web" --emptyOutDir >/dev/null)
+cp "$HERE/slice/finish.sh" "$HERE/slice/smoke.py" "$STAGE/"
+printf 'commit %s\nbuilt %s\napproval owner-approved-2026-10-01-test-slice\n' "$(git -C "$REPO" rev-parse HEAD)" "$(date -u +%FT%TZ)" > "$STAGE/BUILD_INFO"
+tar -czf "$OUT" -C "$REPO/deploy-bundle" ogevia-slice
+sha256sum "$OUT" | awk '{print $1}' > "$OUT.sha256"
+echo "$OUT"; cat "$OUT.sha256"
