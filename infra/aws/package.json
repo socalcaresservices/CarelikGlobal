@@ -12,15 +12,20 @@
     "synth": "cdk synth --quiet -c env=prod -c mode=plan",
     "cdk": "cdk",
     "inventory": "tsx scripts/synth-inventory.ts",
-    "diff:template": "cdk diff --method=template --lookups=false -c env=prod -c mode=plan --profile ogevia-readonly"
+    "diff:template": "cdk diff --method=template --lookups=false -c env=prod -c mode=plan --profile ogevia-readonly",
+    "test:db": "vitest run --config vitest.db.config.ts",
+    "db:migrate": "tsx db/scripts/migrate.ts",
+    "db:verify": "tsx db/scripts/verify.ts"
   },
   "dependencies": {
     "aws-cdk-lib": "2.272.0",
     "cdk-nag": "3.0.2",
-    "constructs": "10.8.1"
+    "constructs": "10.8.1",
+    "pg": "^8.23.1"
   },
   "devDependencies": {
     "@types/node": "^22.10.2",
+    "@types/pg": "^8.23.1",
     "aws-cdk": "2.1143.0",
     "tsx": "^4.19.2",
     "typescript": "^5.7.2",
