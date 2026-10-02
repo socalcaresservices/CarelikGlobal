@@ -256,6 +256,11 @@ describe("ServiceVerificationReportsPage", () => {
     renderPage();
 
     await openReport(/Client calendar/);
+    // The calendar defaults to the current month; pin the fixture month
+    // explicitly instead of depending on today's date.
+    fireEvent.change(await screen.findByLabelText("Calendar month"), {
+      target: { value: "2026-08" },
+    });
 
     const calendar = await screen.findByRole("grid", {
       name: /Caregiver hours for 2026-08/,
