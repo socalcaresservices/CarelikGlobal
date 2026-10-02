@@ -43,6 +43,14 @@ type Statement = {
 const asArray = <T>(value: T | T[] | undefined): T[] =>
   value === undefined ? [] : Array.isArray(value) ? value : [value];
 
+const PUBLIC_CAPABILITY_ROUTES = new Set([
+  "GET /public/request/{token}",
+  "POST /public/request/{token}",
+  "POST /public/request/{token}/cancel",
+  "GET /public/opportunity/{token}",
+  "POST /public/opportunity/{token}/respond",
+]);
+
 function policyStatements(resource: CfnResource): Statement[] {
   const props = resource.Properties ?? {};
   const docs = [props.PolicyDocument, props.AssumeRolePolicyDocument].concat(
@@ -207,9 +215,13 @@ export function scanTemplate(
     }
 
     if (r.Type === "AWS::ApiGatewayV2::Route") {
-      // Phase 3 gate: no API route may ever lose the Cognito JWT authorizer.
       const routeKey = String(props.RouteKey ?? "");
-      if (props.AuthorizationType !== "JWT" || props.AuthorizerId === undefined) {
+      const isPublicCapabilityRoute = PUBLIC_CAPABILITY_ROUTES.has(routeKey);
+      if (isPublicCapabilityRoute) {
+        if (props.AuthorizationType !== "NONE" || props.AuthorizerId !== undefined) {
+          flag(logicalId, "public-route-authorizer", `${routeKey} must use token capability auth in the Lambda, not Cognito`);
+        }
+      } else if (props.AuthorizationType !== "JWT" || props.AuthorizerId === undefined) {
         flag(logicalId, "unauthenticated-route", `${routeKey} must use the Cognito JWT authorizer`);
       }
       if (routeKey === "$default" || routeKey.startsWith("ANY ")) {
