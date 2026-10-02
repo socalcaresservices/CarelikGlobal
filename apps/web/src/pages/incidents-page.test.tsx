@@ -102,6 +102,39 @@ describe("IncidentsPage", () => {
     expect(screen.getByText("open", { selector: "span" })).toBeInTheDocument();
   });
 
+  it("shows every category of an incident", async () => {
+    mockedUseOrganization.mockReturnValue({
+      ...baseOrganization(),
+      hasPermission: vi.fn((permission: string) => permission === "incidents.read")
+    });
+    mockedRpc.mockResolvedValue({
+      data: [
+        {
+          id: "77777777-7777-4777-8777-777777777777",
+          client_id: null,
+          client_name: null,
+          caregiver_user_id: null,
+          caregiver_name: null,
+          occurred_at: "2026-07-19T09:00:00.000Z",
+          category: "Fall",
+          categories: ["Fall", "Injury"],
+          severity: "medium",
+          status: "open",
+          description: "Synthetic.",
+          reported_by: USER_ID,
+          reported_by_name: "Sam Caregiver",
+          resolution_notes: null,
+          resolved_at: null
+        }
+      ],
+      error: null
+    } as never);
+
+    renderPage();
+
+    expect(await screen.findByText("Fall, Injury")).toBeInTheDocument();
+  });
+
   it("files a new incident", async () => {
     mockedUseOrganization.mockReturnValue({
       ...baseOrganization(),
@@ -116,7 +149,10 @@ describe("IncidentsPage", () => {
             eq: vi.fn(() => ({
               is: vi.fn(() => ({
                 order: vi.fn().mockResolvedValue({
-                  data: [{ id: "type-1", name: "Fall", is_active: true }],
+                  data: [
+                    { id: "type-1", name: "Fall", is_active: true },
+                    { id: "type-2", name: "Injury", is_active: true }
+                  ],
                   error: null
                 })
               }))
@@ -131,9 +167,12 @@ describe("IncidentsPage", () => {
     renderPage();
     await waitFor(() => expect(screen.getByText("File an incident")).toBeInTheDocument());
 
-    fireEvent.focus(screen.getByLabelText("Category"));
+    const picker = screen.getByRole("combobox", { name: "Categories" });
+    fireEvent.focus(picker);
     await waitFor(() => expect(screen.getByRole("option", { name: "Fall" })).toBeInTheDocument());
     fireEvent.mouseDown(screen.getByRole("option", { name: "Fall" }));
+    fireEvent.focus(picker);
+    fireEvent.mouseDown(await screen.findByRole("option", { name: "Injury" }));
 
     fireEvent.change(screen.getByLabelText("What happened"), {
       target: { value: "Client had a minor fall while getting up." }
@@ -145,12 +184,41 @@ describe("IncidentsPage", () => {
         expect.objectContaining({
           organization_id: ORG_ID,
           category: "Fall",
+          categories: ["Fall", "Injury"],
           reported_by: USER_ID
         })
       )
     );
   });
 
+
+  it("will not file an incident without a category", async () => {
+    mockedUseOrganization.mockReturnValue({
+      ...baseOrganization(),
+      hasPermission: vi.fn((permission: string) => permission === "incidents.create")
+    });
+    mockedRpc.mockResolvedValue({ data: [], error: null } as never);
+    const insertMock = vi.fn().mockResolvedValue({ error: null });
+    mockedFrom.mockImplementation((table: string) => {
+      if (table === "incident_types") {
+        return {
+          select: vi.fn(() => ({
+            eq: vi.fn(() => ({ is: vi.fn(() => ({ order: vi.fn().mockResolvedValue({ data: [], error: null }) })) }))
+          }))
+        } as never;
+      }
+      return { insert: insertMock } as never;
+    });
+    mockedGetUser.mockResolvedValue({ data: { user: { id: USER_ID } }, error: null } as never);
+
+    renderPage();
+    await waitFor(() => expect(screen.getByText("File an incident")).toBeInTheDocument());
+    fireEvent.change(screen.getByLabelText("What happened"), { target: { value: "Synthetic description." } });
+    fireEvent.click(screen.getByRole("button", { name: "File incident" }));
+
+    expect(await screen.findByText("Choose at least one category.")).toBeInTheDocument();
+    expect(insertMock).not.toHaveBeenCalled();
+  });
   it("exports filtered incidents as a CSV download", async () => {
     mockedUseOrganization.mockReturnValue({
       ...baseOrganization(),
