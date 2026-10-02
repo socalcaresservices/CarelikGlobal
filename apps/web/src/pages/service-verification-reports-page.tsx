@@ -1326,6 +1326,44 @@ export function ServiceVerificationReportsPage() {
         </Card>
       ) : null}
 
+      {/* Letterhead - shown only when printing, built from this organization's
+          own settings so a re-branded/white-labeled tenant prints correctly
+          instead of hardcoded agency details. */}
+      <div className="hidden print:block">
+        <div className="flex items-start justify-between border-b border-slate-300 pb-4">
+          <div>
+            {letterhead?.logo_url ? (
+              <img
+                src={letterhead.logo_url}
+                alt={letterhead.display_name}
+                className="mb-2 max-h-14"
+              />
+            ) : null}
+            <p className="text-lg font-semibold">
+              {letterhead?.legal_name ?? activeOrganization?.displayName}
+            </p>
+            {letterhead?.address_street ? (
+              <p className="text-sm">
+                {letterhead.address_street}, {letterhead.address_city},{" "}
+                {letterhead.address_state} {letterhead.address_zip}
+              </p>
+            ) : null}
+            <p className="text-sm">
+              {[letterhead?.contact_phone, letterhead?.contact_email]
+                .filter(Boolean)
+                .join(" · ")}
+            </p>
+          </div>
+          <div className="text-right text-sm text-slate-600">
+            <p className="font-semibold">Service Verification Report</p>
+            {selectedCaregiverName ? (
+              <p>Caregiver: {selectedCaregiverName}</p>
+            ) : null}
+            <p>{new Date().toLocaleDateString()}</p>
+          </div>
+        </div>
+      </div>
+
       {reportView === "calendar" ? (
         <Card className="print:border-none print:p-0 print:shadow-none">
           <div className="flex flex-wrap items-end justify-between gap-4">
@@ -1524,44 +1562,6 @@ export function ServiceVerificationReportsPage() {
           )}
         </Card>
       ) : null}
-
-      {/* Letterhead - shown only when printing, built from this organization's
-          own settings so a re-branded/white-labeled tenant prints correctly
-          instead of hardcoded agency details. */}
-      <div className="hidden print:block">
-        <div className="flex items-start justify-between border-b border-slate-300 pb-4">
-          <div>
-            {letterhead?.logo_url ? (
-              <img
-                src={letterhead.logo_url}
-                alt={letterhead.display_name}
-                className="mb-2 max-h-14"
-              />
-            ) : null}
-            <p className="text-lg font-semibold">
-              {letterhead?.legal_name ?? activeOrganization?.displayName}
-            </p>
-            {letterhead?.address_street ? (
-              <p className="text-sm">
-                {letterhead.address_street}, {letterhead.address_city},{" "}
-                {letterhead.address_state} {letterhead.address_zip}
-              </p>
-            ) : null}
-            <p className="text-sm">
-              {[letterhead?.contact_phone, letterhead?.contact_email]
-                .filter(Boolean)
-                .join(" · ")}
-            </p>
-          </div>
-          <div className="text-right text-sm text-slate-600">
-            <p className="font-semibold">Service Verification Report</p>
-            {selectedCaregiverName ? (
-              <p>Caregiver: {selectedCaregiverName}</p>
-            ) : null}
-            <p>{new Date().toLocaleDateString()}</p>
-          </div>
-        </div>
-      </div>
 
       {reportView === "reconciliation" ? (
         <Card className="print:border-none print:p-0 print:shadow-none">
