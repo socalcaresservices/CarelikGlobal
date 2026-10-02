@@ -15,6 +15,9 @@ rm -rf "$STAGE" && mkdir -p "$STAGE"
 cp -r "$HERE/cdk.out" "$STAGE/cdk.out"
 (cd "$REPO/apps/web" && VITE_APP_ENV=production VITE_AUTH_PROVIDER=cognito npx vite build --outDir "$STAGE/web" --emptyOutDir >/dev/null)
 cp "$HERE/slice/finish.sh" "$HERE/slice/smoke.py" "$STAGE/"
+mkdir -p "$STAGE/db"
+cp "$HERE/db/migrations/0010_reporting_acceptance_improvements.sql" "$STAGE/db/"
+cp "$HERE/db/verification/01_schema_version.sql" "$HERE/db/verification/02_required_objects.sql" "$STAGE/db/"
 printf 'commit %s\nbuilt %s\napproval owner-approved-2026-10-01-test-slice\n' "$(git -C "$REPO" rev-parse HEAD)" "$(date -u +%FT%TZ)" > "$STAGE/BUILD_INFO"
 tar -czf "$OUT" -C "$REPO/deploy-bundle" ogevia-slice
 sha256sum "$OUT" | awk '{print $1}' > "$OUT.sha256"
