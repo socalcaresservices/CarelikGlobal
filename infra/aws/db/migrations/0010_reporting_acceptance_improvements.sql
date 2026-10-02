@@ -59,8 +59,8 @@ for each row execute function ogevia.set_human_visit_number();
 
 create function ogevia_api.list_monthly_service_summary(
   p_organization_id uuid,
-  p_client_id uuid default null,
-  p_month_start date
+  p_month_start date,
+  p_client_id uuid default null
 )
 returns table (
   client_id uuid,
@@ -214,8 +214,8 @@ as $$
 $$;
 
 revoke all on function ogevia.set_human_visit_number() from public;
-revoke all on function ogevia_api.list_monthly_service_summary(uuid, uuid, date) from public;
+revoke all on function ogevia_api.list_monthly_service_summary(uuid, date, uuid) from public;
 revoke all on function ogevia_api.list_correction_history_report(uuid, date, date, uuid, uuid) from public;
 
-grant execute on function ogevia_api.list_monthly_service_summary(uuid, uuid, date) to ogevia_app;
+grant execute on function ogevia_api.list_monthly_service_summary(uuid, date, uuid) to ogevia_app;
 grant execute on function ogevia_api.list_correction_history_report(uuid, date, date, uuid, uuid) to ogevia_app;
