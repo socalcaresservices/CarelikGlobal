@@ -72,12 +72,12 @@ returns table (
   authorization_period_start date,
   authorization_period_end date,
   authorized_minutes integer,
-  worked_minutes bigint,
-  verified_minutes bigint,
-  billable_minutes bigint,
-  remaining_minutes bigint,
-  review_minutes bigint,
-  visit_count bigint
+  worked_minutes integer,
+  verified_minutes integer,
+  billable_minutes integer,
+  remaining_minutes integer,
+  review_minutes integer,
+  visit_count integer
 )
 language sql
 stable
@@ -112,11 +112,11 @@ as $$
   usage as (
     select
       va.lineage_id,
-      coalesce(sum(v.worked_minutes), 0)::bigint as worked_minutes,
-      coalesce(sum(v.verified_minutes), 0)::bigint as verified_minutes,
-      coalesce(sum(v.billable_minutes), 0)::bigint as billable_minutes,
-      coalesce(sum(v.worked_minutes) filter (where v.status = 'administrator_review'), 0)::bigint as review_minutes,
-      count(*)::bigint as visit_count
+      coalesce(sum(v.worked_minutes), 0)::integer as worked_minutes,
+      coalesce(sum(v.verified_minutes), 0)::integer as verified_minutes,
+      coalesce(sum(v.billable_minutes), 0)::integer as billable_minutes,
+      coalesce(sum(v.worked_minutes) filter (where v.status = 'administrator_review'), 0)::integer as review_minutes,
+      count(*)::integer as visit_count
     from ogevia.service_visits v
     join ogevia.client_authorizations va on va.id = v.service_authorization_id
     cross join bounds b
@@ -140,7 +140,7 @@ as $$
     coalesce(u.worked_minutes, 0),
     coalesce(u.verified_minutes, 0),
     coalesce(u.billable_minutes, 0),
-    greatest(a.monthly_authorized_minutes::bigint - coalesce(u.billable_minutes, 0), 0),
+    greatest(a.monthly_authorized_minutes - coalesce(u.billable_minutes, 0), 0),
     coalesce(u.review_minutes, 0),
     coalesce(u.visit_count, 0)
   from authorizations a
