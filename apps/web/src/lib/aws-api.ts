@@ -19,18 +19,20 @@ export interface AwsApiClient {
 
 export function createAwsApiClient(options: {
   baseUrl: string;
-  getAccessToken: () => Promise<string | null>;
+  getAccessToken?: () => Promise<string | null>;
+  requireAuth?: boolean;
   fetch?: typeof fetch;
 }): AwsApiClient {
   const base = options.baseUrl.replace(/\/+$/, "");
   const doFetch = options.fetch ?? ((input: RequestInfo | URL, init?: RequestInit) => fetch(input, init));
 
   async function request<T>(method: "GET" | "POST", path: string, init: { query?: Record<string, string | null | undefined>; body?: unknown; idempotencyKey?: string }): Promise<T> {
-    const token = await options.getAccessToken();
-    if (!token) throw new ApiRequestError(401, "unauthenticated", "Your session has ended. Please sign in again.");
+    const token = options.getAccessToken ? await options.getAccessToken() : null;
+    if ((options.requireAuth ?? true) && !token) throw new ApiRequestError(401, "unauthenticated", "Your session has ended. Please sign in again.");
     const url = new URL(`${base}${path}`, window.location.origin);
     for (const [k, v] of Object.entries(init.query ?? {})) if (v) url.searchParams.set(k, v);
-    const headers: Record<string, string> = { authorization: `Bearer ${token}`, accept: "application/json" };
+    const headers: Record<string, string> = { accept: "application/json" };
+    if (token) headers.authorization = `Bearer ${token}`;
     if (init.body !== undefined) headers["content-type"] = "application/json";
     if (init.idempotencyKey) headers["idempotency-key"] = init.idempotencyKey;
     let response: Response;
@@ -63,3 +65,7 @@ export function createAwsApiClient(options: {
     post: (path, body, opts) => request("POST", path, { body, ...(opts?.idempotencyKey ? { idempotencyKey: opts.idempotencyKey } : {}) }),
   };
 }
+
+/** Anonymous client for opaque-token care portal/offer routes only. */
+export const createAwsPublicApiClient = (baseUrl: string, fetchImpl?: typeof fetch) =>
+  createAwsApiClient({ baseUrl, requireAuth: false, ...(fetchImpl ? { fetch: fetchImpl } : {}) });

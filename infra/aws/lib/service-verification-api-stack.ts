@@ -19,6 +19,7 @@ import type { Construct } from "constructs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { cognitoIssuer } from "./auth-contract.js";
+import { APPROVED_PUBLIC_ROUTE_KEYS, PUBLIC_ROUTE_ACKNOWLEDGEMENT } from "./public-routes.js";
 import { assertVerified, type OgeviaEnvironmentConfig } from "./config.js";
 import {
   SIGNATURE_OBJECT_KEY_PATTERN,
@@ -46,6 +47,7 @@ export const HANDLER_ENTRY = resolve(REPO_ROOT, "apps/sv-api/src/index.ts");
 export const SERVICE_VERIFICATION_ROUTES: ReadonlyArray<{
   readonly method: apigw.HttpMethod;
   readonly path: string;
+  readonly public?: boolean;
 }> = [
   { method: apigw.HttpMethod.GET, path: "/v1/me" },
   { method: apigw.HttpMethod.GET, path: "/v1/visits/active" },
@@ -63,7 +65,39 @@ export const SERVICE_VERIFICATION_ROUTES: ReadonlyArray<{
   { method: apigw.HttpMethod.GET, path: "/v1/reports/monthly-service-summary" },
   { method: apigw.HttpMethod.GET, path: "/v1/reports/correction-history" },
   { method: apigw.HttpMethod.GET, path: "/v1/billing-review" },
+  { method: apigw.HttpMethod.GET, path: "/v1/public/care-portals/{token}", public: true },
+  { method: apigw.HttpMethod.GET, path: "/v1/public/care-portals/{token}/requests", public: true },
+  { method: apigw.HttpMethod.POST, path: "/v1/public/care-portals/{token}/requests", public: true },
+  { method: apigw.HttpMethod.GET, path: "/v1/public/care-portals/{token}/requests/{requestId}", public: true },
+  { method: apigw.HttpMethod.POST, path: "/v1/public/care-portals/{token}/requests/{requestId}/cancel", public: true },
+  { method: apigw.HttpMethod.GET, path: "/v1/public/care-offers/{token}", public: true },
+  { method: apigw.HttpMethod.POST, path: "/v1/public/care-offers/{token}/respond", public: true },
+  { method: apigw.HttpMethod.POST, path: "/v1/public/care-offers/{token}/cancel-assignment", public: true },
+  { method: apigw.HttpMethod.GET, path: "/v1/care-requests" },
+  { method: apigw.HttpMethod.GET, path: "/v1/care-requests/{requestId}/candidates" },
+  { method: apigw.HttpMethod.GET, path: "/v1/care-requests/{requestId}/offers" },
+  { method: apigw.HttpMethod.POST, path: "/v1/care-requests/{requestId}/offers" },
+  { method: apigw.HttpMethod.POST, path: "/v1/care-requests/{requestId}/assign" },
+  { method: apigw.HttpMethod.GET, path: "/v1/care-portals/clients" },
+  { method: apigw.HttpMethod.POST, path: "/v1/care-portals" },
+  { method: apigw.HttpMethod.POST, path: "/v1/care-portals/revoke" },
+  { method: apigw.HttpMethod.GET, path: "/v1/care-alert-staff" },
+  { method: apigw.HttpMethod.POST, path: "/v1/care-alert-staff" },
+  { method: apigw.HttpMethod.GET, path: "/v1/care-notifications" },
+  { method: apigw.HttpMethod.GET, path: "/v1/availability/me" },
+  { method: apigw.HttpMethod.POST, path: "/v1/availability/me" },
+  { method: apigw.HttpMethod.GET, path: "/v1/care-opportunities" },
+  { method: apigw.HttpMethod.POST, path: "/v1/care-opportunities/{offerId}/respond" },
 ];
+
+/** Fails synthesis if a route is public without being on the exact approved list. */
+export function assertPublicRoutesApproved(routes: ReadonlyArray<{ method: string; path: string; public?: boolean }>): void {
+  const declared = routes.filter((r) => r.public).map((r) => `${r.method} ${r.path}`).sort();
+  const approved = [...APPROVED_PUBLIC_ROUTE_KEYS].sort();
+  if (JSON.stringify(declared) !== JSON.stringify(approved)) {
+    throw new Error(`Public API routes must exactly match lib/public-routes.ts. Declared: ${declared.join(", ")}`);
+  }
+}
 
 /**
  * Environment-variable contract for the Phase 4 handler. Identifiers only:
@@ -291,13 +325,17 @@ export class ServiceVerificationApiStack extends Stack {
     new CfnOutput(this, "ApiUrl", { value: this.api.apiEndpoint });
 
     const integration = new HttpLambdaIntegration("Handler", this.handler);
+    assertPublicRoutesApproved(SERVICE_VERIFICATION_ROUTES);
     for (const route of SERVICE_VERIFICATION_ROUTES) {
-      this.api.addRoutes({
+      const created = this.api.addRoutes({
         path: route.path,
         methods: [route.method],
         integration,
-        authorizer,
+        ...(route.public ? {} : { authorizer }),
       });
+      if (route.public) {
+        for (const r of created) Validations.of(r).acknowledge({ id: "AwsSolutions-APIG4", reason: PUBLIC_ROUTE_ACKNOWLEDGEMENT });
+      }
     }
 
     // Exact finding IDs. lib/template-scan.ts independently fails any wildcard

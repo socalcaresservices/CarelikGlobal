@@ -48,12 +48,12 @@ describe("test-slice deployment SQL (runbook order)", () => {
     psql("postgres", "00_create_test_database.sql");
   });
 
-  it("migrations 0001-0010 apply to it", async () => {
+  it("migrations 0001-0012 apply to it", async () => {
     const client = new pg.Client({ connectionString: url(DB) });
     await client.connect();
     try {
       const result = await migrate(client);
-      expect(result.applied).toHaveLength(10);
+      expect(result.applied).toHaveLength(12);
     } finally {
       await client.end();
     }
@@ -128,5 +128,18 @@ describe("test-slice deployment SQL (runbook order)", () => {
     } finally {
       await asApp.end();
     }
+  });
+
+  it("03 seeds a link-only replacement caregiver with availability, idempotently", async () => {
+    const out1 = psql(DB, "03_seed_care_acceptance.sql");
+    psql(DB, "03_seed_care_acceptance.sql");
+    expect(out1).toMatch(/\b7\b/);
+    const root = new pg.Client({ connectionString: url(DB) });
+    await root.connect();
+    const { rows } = await root.query("select count(*)::int n from ogevia.caregiver_availability_windows where caregiver_record_id='7e570000-0000-4000-8000-0000000000b2'");
+    const rec = await root.query("select linked_user_id, status from ogevia.caregiver_records where id='7e570000-0000-4000-8000-0000000000b2'");
+    await root.end();
+    expect(rows[0].n).toBe(7);
+    expect(rec.rows[0]).toEqual({ linked_user_id: null, status: "active" });
   });
 });

@@ -42,7 +42,10 @@ export const permissionSchema = z.enum([
   "billing.update",
   "billing.visits.read",
   "billing.approve",
-  "billing.submit"
+  "billing.submit",
+  "care_requests.read",
+  "care_requests.manage",
+  "availability.manage_own"
 ]);
 
 export type Permission = z.infer<typeof permissionSchema>;

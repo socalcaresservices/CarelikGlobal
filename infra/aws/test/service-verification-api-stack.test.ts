@@ -38,7 +38,7 @@ describe("ServiceVerificationApiStack (FUTURE, Phase 4)", () => {
     });
   });
 
-  it("protects every Service Verification route with the JWT authorizer", () => {
+  it("JWT-protects staff routes and leaves only opaque-token care links public", () => {
     const routes = template.findResources("AWS::ApiGatewayV2::Route");
     const keys = Object.values(routes).map(
       (r) => (r.Properties as { RouteKey: string }).RouteKey,
@@ -46,10 +46,12 @@ describe("ServiceVerificationApiStack (FUTURE, Phase 4)", () => {
     expect(keys.sort()).toEqual(
       SERVICE_VERIFICATION_ROUTES.map((r) => `${r.method} ${r.path}`).sort(),
     );
+    const publicKeys = new Set(
+      SERVICE_VERIFICATION_ROUTES.filter((r) => r.public).map((r) => `${r.method} ${r.path}`),
+    );
     for (const route of Object.values(routes)) {
-      expect(
-        (route.Properties as { AuthorizationType: string }).AuthorizationType,
-      ).toBe("JWT");
+      const props = route.Properties as { RouteKey: string; AuthorizationType: string };
+      expect(props.AuthorizationType).toBe(publicKeys.has(props.RouteKey) ? "NONE" : "JWT");
     }
   });
 

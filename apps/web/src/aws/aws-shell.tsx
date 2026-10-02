@@ -28,6 +28,8 @@ export function AwsShell({ children }: PropsWithChildren) {
     { to: "/service-verification", label: "Verify visit", show: role === "caregiver" || hasPermission("visits.manage") },
     { to: "/service-verification/reports", label: "Visit records", show: hasPermission("visits.read") },
     { to: "/billing-review", label: "Billing review", show: hasPermission("billing.visits.read") },
+    { to: "/care-requests", label: "Care requests", show: hasPermission("care_requests.read") },
+    { to: "/availability", label: "Availability", show: role === "caregiver" },
   ].filter((l) => l.show);
 
   return (

@@ -40,6 +40,8 @@ describe("SCHEMA: migration chain", () => {
       "0008",
       "0009",
       "0010",
+      "0011",
+      "0012",
     ]);
   });
 
@@ -77,9 +79,18 @@ describe("SCHEMA: migration chain", () => {
     expect(tables).toEqual([
       "app_users",
       "audit_events",
+      "authorization_reservations",
+      "care_notifications",
+      "care_request_alert_recipients",
+      "care_request_events",
+      "care_request_offers",
+      "care_requests",
       "caregiver_assignments",
+      "caregiver_availability_windows",
       "caregiver_records",
+      "caregiver_unavailable_dates",
       "client_authorizations",
+      "client_care_portals",
       "clients",
       "idempotency_records",
       "organization_memberships",

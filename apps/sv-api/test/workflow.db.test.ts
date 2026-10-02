@@ -49,7 +49,7 @@ describe("caregiver workflow: login → client → service → start → end →
     const r = await call("GET /v1/me", w.caregiverA1);
     expect(r.status).toBe(200);
     expect(r.body.memberships).toHaveLength(1);
-    expect(r.body.memberships[0]).toMatchObject({ organizationId: w.orgA, role: "caregiver", permissions: [] });
+    expect(r.body.memberships[0]).toMatchObject({ organizationId: w.orgA, role: "caregiver", permissions: ["availability.manage_own"] });
   });
 
   it("lists only assigned clients, by code, without names or payer identifiers", async () => {

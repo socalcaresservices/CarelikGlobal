@@ -84,7 +84,7 @@ function renderAws(path: string, role: "caregiver" | "manager", signedIn = true)
     <MemoryRouter initialEntries={[path]}>
       <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
         <CognitoAuthProvider client={auth as unknown as CognitoAuthClient}>
-          <AwsRoutes api={client} />
+          <AwsRoutes api={client} publicApi={client} />
         </CognitoAuthProvider>
       </QueryClientProvider>
     </MemoryRouter>,
@@ -190,7 +190,7 @@ describe("AWS build: sign-in states", () => {
       <MemoryRouter initialEntries={["/auth/callback"]}>
         <QueryClientProvider client={new QueryClient()}>
           <CognitoAuthProvider client={auth as unknown as CognitoAuthClient}>
-            <AwsRoutes api={client} />
+            <AwsRoutes api={client} publicApi={client} />
           </CognitoAuthProvider>
         </QueryClientProvider>
       </MemoryRouter>,

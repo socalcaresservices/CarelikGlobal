@@ -15,6 +15,9 @@ import { AuthCallbackPage, AwsLoginPage, AwsProtectedRoute } from "./aws-auth-pa
 import { AwsOrganizationProvider } from "./aws-organization-provider";
 import { AwsLanding, AwsShell } from "./aws-shell";
 import { BillingReviewPage } from "./billing-review-page";
+import { CareRequestsPage } from "./care-requests-page";
+import { CaregiverAvailabilityPage } from "./caregiver-availability-page";
+import { PublicCareOfferPage, PublicCareRequestPage } from "./care-public-pages";
 
 function AwsBackendProvider({ api, children }: PropsWithChildren<{ api: AwsApiClient }>) {
   const { organizations } = useOrganization();
@@ -32,11 +35,14 @@ const queryClient = new QueryClient({
   },
 });
 
-export function AwsRoutes({ api }: { api: AwsApiClient }) {
+export function AwsRoutes({ api, publicApi }: { api: AwsApiClient; publicApi: AwsApiClient }) {
   return (
     <Routes>
       <Route path="/login" element={<AwsLoginPage />} />
       <Route path="/auth/callback" element={<AuthCallbackPage />} />
+      {/* Token links: the token is in the URL fragment (#...), never the path. */}
+      <Route path="/care" element={<PublicCareRequestPage api={publicApi} />} />
+      <Route path="/care-offer" element={<PublicCareOfferPage api={publicApi} />} />
       <Route
         path="*"
         element={
@@ -49,6 +55,8 @@ export function AwsRoutes({ api }: { api: AwsApiClient }) {
                     <Route path="/service-verification" element={<ServiceVerificationPage />} />
                     <Route path="/service-verification/reports" element={<ServiceVerificationReportsPage />} />
                     <Route path="/billing-review" element={<BillingReviewPage />} />
+                    <Route path="/care-requests" element={<CareRequestsPage api={api} />} />
+                    <Route path="/availability" element={<CaregiverAvailabilityPage api={api} />} />
                     <Route path="*" element={<Navigate to="/" replace />} />
                   </Routes>
                 </AwsShell>
@@ -66,7 +74,7 @@ export function AwsApp({ runtime }: { runtime: AwsRuntime }) {
     <BrowserRouter>
       <QueryClientProvider client={queryClient}>
         <CognitoAuthProvider client={runtime.auth}>
-          <AwsRoutes api={runtime.api} />
+          <AwsRoutes api={runtime.api} publicApi={runtime.publicApi} />
         </CognitoAuthProvider>
       </QueryClientProvider>
     </BrowserRouter>
