@@ -46,6 +46,7 @@ export const HANDLER_ENTRY = resolve(REPO_ROOT, "apps/sv-api/src/index.ts");
 export const SERVICE_VERIFICATION_ROUTES: ReadonlyArray<{
   readonly method: apigw.HttpMethod;
   readonly path: string;
+  readonly public?: boolean;
 }> = [
   { method: apigw.HttpMethod.GET, path: "/v1/me" },
   { method: apigw.HttpMethod.GET, path: "/v1/visits/active" },
@@ -63,6 +64,27 @@ export const SERVICE_VERIFICATION_ROUTES: ReadonlyArray<{
   { method: apigw.HttpMethod.GET, path: "/v1/reports/monthly-service-summary" },
   { method: apigw.HttpMethod.GET, path: "/v1/reports/correction-history" },
   { method: apigw.HttpMethod.GET, path: "/v1/billing-review" },
+  { method: apigw.HttpMethod.GET, path: "/v1/public/care-portals/{token}", public: true },
+  { method: apigw.HttpMethod.POST, path: "/v1/public/care-portals/{token}/requests", public: true },
+  { method: apigw.HttpMethod.GET, path: "/v1/public/care-portals/{token}/requests/{requestId}", public: true },
+  { method: apigw.HttpMethod.POST, path: "/v1/public/care-portals/{token}/requests/{requestId}/cancel", public: true },
+  { method: apigw.HttpMethod.GET, path: "/v1/public/care-offers/{token}", public: true },
+  { method: apigw.HttpMethod.POST, path: "/v1/public/care-offers/{token}/respond", public: true },
+  { method: apigw.HttpMethod.POST, path: "/v1/public/care-offers/{token}/cancel-assignment", public: true },
+  { method: apigw.HttpMethod.GET, path: "/v1/care-requests" },
+  { method: apigw.HttpMethod.GET, path: "/v1/care-requests/{requestId}/candidates" },
+  { method: apigw.HttpMethod.GET, path: "/v1/care-requests/{requestId}/offers" },
+  { method: apigw.HttpMethod.POST, path: "/v1/care-requests/{requestId}/offers" },
+  { method: apigw.HttpMethod.POST, path: "/v1/care-requests/{requestId}/assign" },
+  { method: apigw.HttpMethod.GET, path: "/v1/care-portals/clients" },
+  { method: apigw.HttpMethod.POST, path: "/v1/care-portals" },
+  { method: apigw.HttpMethod.GET, path: "/v1/care-alert-staff" },
+  { method: apigw.HttpMethod.POST, path: "/v1/care-alert-staff" },
+  { method: apigw.HttpMethod.GET, path: "/v1/care-notifications" },
+  { method: apigw.HttpMethod.GET, path: "/v1/availability/me" },
+  { method: apigw.HttpMethod.POST, path: "/v1/availability/me" },
+  { method: apigw.HttpMethod.GET, path: "/v1/care-opportunities" },
+  { method: apigw.HttpMethod.POST, path: "/v1/care-opportunities/{offerId}/respond" },
 ];
 
 /**
@@ -296,7 +318,7 @@ export class ServiceVerificationApiStack extends Stack {
         path: route.path,
         methods: [route.method],
         integration,
-        authorizer,
+        ...(route.public ? {} : { authorizer }),
       });
     }
 
