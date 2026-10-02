@@ -27,7 +27,6 @@ import {
   formatClockTime,
   formatDuration,
   formatElapsed,
-  formatHours,
   formatVisitDate,
   type VisitSignerRole,
 } from "@/lib/service-verification";
