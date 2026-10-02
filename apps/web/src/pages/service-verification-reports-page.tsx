@@ -745,7 +745,9 @@ export function ServiceVerificationReportsPage() {
             >
               <option value="overview">Operations overview</option>
               <option value="caregiver">Caregiver hours</option>
-              <option value="calendar">Client calendar</option>
+              <option value="calendar">Client monthly calendar</option>
+              <option value="reconciliation">Monthly hours & billing reconciliation</option>
+              <option value="corrections">Correction history</option>
               <option value="visits">Visit details</option>
               <option value="exceptions">Exceptions needing attention</option>
               {canManage ? <option value="staff-access">Staff access</option> : null}
