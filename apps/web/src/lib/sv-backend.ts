@@ -211,7 +211,7 @@ export interface ServiceVerificationBackend {
   /** AWS only: the locked signature as a PNG data URL (permission-checked, audited). */
   getSignatureDataUrl?(visitId: string): Promise<string>;
   /** AWS reporting: one row per client + service + authorization lineage for a month. */
-  listMonthlyServiceSummary?(organizationId: string, clientId: string, monthStart: string): Promise<MonthlyServiceSummaryRow[]>;
+  listMonthlyServiceSummary?(organizationId: string, clientId: string | null, monthStart: string): Promise<MonthlyServiceSummaryRow[]>;
   /** AWS reporting: organization correction audit report. */
   listCorrectionHistoryReport?(organizationId: string, dateFrom: string | null, dateTo: string | null, clientId: string | null, serviceId: string | null): Promise<CorrectionHistoryReportRow[]>;
   /** AWS only: billing-review data (read-only; no approval or submission). */
