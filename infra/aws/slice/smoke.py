@@ -302,7 +302,7 @@ def workflow(args, inv, cg, mg):
                             "dateFrom": str(today - datetime.timedelta(days=2)),
                             "dateTo": str(today + datetime.timedelta(days=1)),
                             "clientId": c1,
-                            "caregiverUserId": cg})
+                            "caregiverUserId": orig.get("caregiverUserId")})
     correction_rows = (ch or {}).get("corrections", [])
     check(A, "correction-history report exposes immutable before/after audit data",
           s == 200 and any(r["visitNumber"] == visit_ref
