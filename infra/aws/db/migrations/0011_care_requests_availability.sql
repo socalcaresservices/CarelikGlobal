@@ -453,3 +453,80 @@ grant execute on function ogevia_api.public_cancel_assigned_offer(text,text) to 
 grant execute on function ogevia_api.get_my_availability(uuid) to ogevia_app;
 grant execute on function ogevia_api.replace_my_availability(uuid,jsonb,jsonb) to ogevia_app;
 grant execute on function ogevia_api.list_staff_care_notifications(uuid) to ogevia_app;
+
+
+create function ogevia_api.list_care_request_offers(p_organization_id uuid,p_request_id uuid)
+returns table(offer_id uuid,caregiver_record_id uuid,caregiver_name text,status ogevia.care_offer_status,responded_at timestamptz)
+language sql stable security definer set search_path=ogevia,pg_temp as $$
+ select o.id,o.caregiver_record_id,coalesce(cr.preferred_name,cr.first_name)||' '||cr.last_name,o.status,o.responded_at
+ from ogevia.care_request_offers o join ogevia.caregiver_records cr on cr.id=o.caregiver_record_id
+ where o.organization_id=p_organization_id and o.care_request_id=p_request_id and ogevia.has_permission(p_organization_id,'care_requests.read')
+ order by case o.status when 'available' then 0 when 'sent' then 1 else 2 end,cr.last_name,cr.first_name;
+$$;
+
+create function ogevia_api.list_client_portal_options(p_organization_id uuid)
+returns table(client_id uuid,client_code text)
+language sql stable security definer set search_path=ogevia,pg_temp as $$
+ select c.id,c.client_code from ogevia.clients c where c.organization_id=p_organization_id and c.status='active' and c.deleted_at is null and ogevia.has_permission(p_organization_id,'care_requests.manage') order by c.client_code;
+$$;
+
+create function ogevia_api.list_care_alert_staff(p_organization_id uuid)
+returns table(user_id uuid,display_name text,selected boolean)
+language sql stable security definer set search_path=ogevia,pg_temp as $$
+ select u.id,coalesce(u.display_name,'Staff'),exists(select 1 from ogevia.care_request_alert_recipients a where a.organization_id=p_organization_id and a.user_id=u.id)
+ from ogevia.organization_memberships m join ogevia.app_users u on u.id=m.user_id
+ where m.organization_id=p_organization_id and m.status='active' and ogevia.has_permission(p_organization_id,'care_requests.manage')
+   and exists(select 1 from ogevia.role_permissions rp where rp.role=m.role and rp.permission_key='care_requests.manage')
+ order by 2;
+$$;
+
+create function ogevia_api.replace_care_alert_staff(p_organization_id uuid,p_user_ids uuid[])
+returns void language plpgsql security definer set search_path=ogevia,pg_temp as $$
+begin
+ if not ogevia.has_permission(p_organization_id,'care_requests.manage') then raise exception 'Forbidden' using errcode='OGA03'; end if;
+ delete from ogevia.care_request_alert_recipients where organization_id=p_organization_id;
+ insert into ogevia.care_request_alert_recipients(organization_id,user_id)
+ select p_organization_id,m.user_id from ogevia.organization_memberships m
+ where m.organization_id=p_organization_id and m.status='active' and m.user_id=any(coalesce(p_user_ids,'{}'::uuid[]))
+   and exists(select 1 from ogevia.role_permissions rp where rp.role=m.role and rp.permission_key='care_requests.manage');
+end;$$;
+
+create function ogevia_api.list_my_care_opportunities(p_organization_id uuid)
+returns table(offer_id uuid,care_request_id uuid,status ogevia.care_offer_status,service_code text,service_name text,starts_at timestamptz,ends_at timestamptz,client_label text)
+language sql stable security definer set search_path=ogevia,pg_temp as $$
+ select o.id,r.id,o.status,s.code,s.name,r.starts_at,r.ends_at,coalesce(c.caregiver_display_code,c.client_code)
+ from ogevia.caregiver_records cr join ogevia.care_request_offers o on o.caregiver_record_id=cr.id and o.organization_id=cr.organization_id
+ join ogevia.care_requests r on r.id=o.care_request_id join ogevia.services s on s.id=r.service_id join ogevia.clients c on c.id=r.client_id
+ where cr.organization_id=p_organization_id and cr.linked_user_id=ogevia.require_actor() and cr.deleted_at is null and ogevia.is_active_member(p_organization_id)
+ order by r.starts_at;
+$$;
+
+create function ogevia_api.respond_my_care_opportunity(p_organization_id uuid,p_offer_id uuid,p_available boolean,p_note text default null)
+returns ogevia.care_offer_status language plpgsql security definer set search_path=ogevia,pg_temp as $$
+declare v_request uuid; v_status ogevia.care_offer_status;
+begin
+ select o.care_request_id into v_request from ogevia.care_request_offers o join ogevia.caregiver_records cr on cr.id=o.caregiver_record_id and cr.organization_id=o.organization_id
+ where o.id=p_offer_id and o.organization_id=p_organization_id and cr.linked_user_id=ogevia.require_actor() for update of o;
+ if v_request is null then raise exception 'Offer not found' using errcode='OGN04'; end if;
+ v_status:=case when p_available then 'available'::ogevia.care_offer_status else 'not_available'::ogevia.care_offer_status end;
+ update ogevia.care_request_offers set status=v_status,note=nullif(btrim(p_note),''),responded_at=now(),updated_at=now() where id=p_offer_id;
+ if p_available then update ogevia.care_requests set status='accepted_pending_assignment',updated_at=now() where id=v_request and status='offering'; end if;
+ insert into ogevia.care_notifications(organization_id,care_request_id,recipient_type,recipient_user_id,event_key)
+ select p_organization_id,v_request,'staff',m.user_id,case when p_available then 'caregiver_available' else 'caregiver_unavailable' end
+ from ogevia.organization_memberships m where m.organization_id=p_organization_id and m.status='active'
+   and exists(select 1 from ogevia.role_permissions rp where rp.role=m.role and rp.permission_key='care_requests.manage');
+ return v_status;
+end;$$;
+
+revoke all on function ogevia_api.list_care_request_offers(uuid,uuid) from public;
+revoke all on function ogevia_api.list_client_portal_options(uuid) from public;
+revoke all on function ogevia_api.list_care_alert_staff(uuid) from public;
+revoke all on function ogevia_api.replace_care_alert_staff(uuid,uuid[]) from public;
+revoke all on function ogevia_api.list_my_care_opportunities(uuid) from public;
+revoke all on function ogevia_api.respond_my_care_opportunity(uuid,uuid,boolean,text) from public;
+grant execute on function ogevia_api.list_care_request_offers(uuid,uuid) to ogevia_app;
+grant execute on function ogevia_api.list_client_portal_options(uuid) to ogevia_app;
+grant execute on function ogevia_api.list_care_alert_staff(uuid) to ogevia_app;
+grant execute on function ogevia_api.replace_care_alert_staff(uuid,uuid[]) to ogevia_app;
+grant execute on function ogevia_api.list_my_care_opportunities(uuid) to ogevia_app;
+grant execute on function ogevia_api.respond_my_care_opportunity(uuid,uuid,boolean,text) to ogevia_app;
