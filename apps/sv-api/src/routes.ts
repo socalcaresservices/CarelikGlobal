@@ -471,7 +471,7 @@ export const ROUTES: Record<string, Route> = {
           uuid(body.caregiverRecordId, "caregiverRecordId"),
           hashOpaqueToken(token),
         ]);
-        return String(result.rows[0]!.id);
+        return String((result.rows[0] as { id: string }).id);
       });
       return { offer: { offerId, token } };
     },
@@ -513,7 +513,7 @@ export const ROUTES: Record<string, Route> = {
           hashOpaqueToken(token),
           text(body.label, "label", 100),
         ]);
-        return String(result.rows[0]!.id);
+        return String((result.rows[0] as { id: string }).id);
       });
       return { portal: { portalId, token } };
     },
