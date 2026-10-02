@@ -361,6 +361,27 @@ export const ROUTES: Record<string, Route> = {
     },
   },
 
+  "GET /v1/care-opportunities": {
+    mutating: false,
+    handle: async ({ event, tx }) => {
+      const org = orgParam(event);
+      return { opportunities: await tx((db) => rows(db, "select * from ogevia_api.list_my_care_opportunities($1)", [org])) };
+    },
+  },
+
+  "POST /v1/care-opportunities/{offerId}/respond": {
+    mutating: true,
+    handle: async ({ event, tx }) => {
+      const offerId = uuid(p(event).offerId, "offerId");
+      const body = parseBody(event.body, event.isBase64Encoded);
+      if (typeof body.available !== "boolean") throw new ApiError(400, "bad_request", "available must be true or false.");
+      const [result] = await tx((db) =>
+        rows(db, "select ogevia_api.respond_my_care_offer($1, $2) as status", [offerId, body.available]),
+      );
+      return { status: result.status };
+    },
+  },
+
   "GET /public/request/{token}": {
     auth: "public",
     mutating: false,
