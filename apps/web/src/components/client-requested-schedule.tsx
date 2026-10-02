@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@carelik/ui";
 import { supabase } from "@/lib/supabase";
+import { windowHint, windowKind } from "@/lib/time-window";
 
 type Weekday =
   | "monday"
@@ -233,6 +234,17 @@ export function ClientRequestedSchedule({
                       placeholder="Optional timing notes"
                       className="col-span-3 rounded-md border border-slate-200 px-2 py-1.5 text-sm"
                     />
+                    {windowHint(slot.start_time, slot.end_time) ? (
+                      <p
+                        className={`col-span-3 text-xs ${
+                          windowKind(slot.start_time, slot.end_time) === "invalid"
+                            ? "text-red-700"
+                            : "text-indigo-700"
+                        }`}
+                      >
+                        {windowHint(slot.start_time, slot.end_time)}
+                      </p>
+                    ) : null}
                   </div>
                 ))}
               </div>

@@ -285,6 +285,31 @@ describe("CareTeamDetailPage visits and assignments", () => {
     );
   });
 
+  it("accepts an overnight availability window, says it ends the next day, and saves it", async () => {
+    mockedUseOrganization.mockReturnValue(baseOrganization());
+    mockFromByTable(baseRecord({ linked_user_id: null }));
+    mockedRpc.mockResolvedValue({ data: [], error: null } as never);
+
+    renderPage();
+
+    await waitFor(() => expect(screen.getByRole("button", { name: "Save availability" })).toBeInTheDocument());
+    fireEvent.click(screen.getAllByRole("button", { name: "+ Add time" })[0]!);
+    const [start, end] = Array.from(document.querySelectorAll<HTMLInputElement>('input[type="time"]'));
+    fireEvent.change(start!, { target: { value: "22:00" } });
+    fireEvent.change(end!, { target: { value: "06:00" } });
+    expect(screen.getByText("Overnight: ends the next day.")).toBeInTheDocument();
+    fireEvent.change(end!, { target: { value: "22:00" } });
+    expect(screen.getByText("Start and end can't be the same.")).toBeInTheDocument();
+    fireEvent.change(end!, { target: { value: "06:00" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save availability" }));
+
+    await waitFor(() =>
+      expect(mockedRpc).toHaveBeenCalledWith("replace_caregiver_record_availability", expect.objectContaining({
+        availability_slots: [expect.objectContaining({ day_of_week: "monday", start_time: "22:00", end_time: "06:00" })],
+      }))
+    );
+  });
+
   it("shows only this record's assignments once linked to a login", async () => {
     mockedUseOrganization.mockReturnValue(baseOrganization());
     mockFromByTable(baseRecord({ linked_user_id: USER_ID }));
