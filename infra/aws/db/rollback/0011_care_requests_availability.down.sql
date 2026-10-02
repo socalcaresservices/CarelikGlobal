@@ -8,6 +8,7 @@ drop function if exists ogevia_api.public_create_care_request(text, uuid, timest
 drop function if exists ogevia_api.public_request_link_context(text);
 drop function if exists ogevia_api.assign_care_request(uuid, uuid);
 drop function if exists ogevia_api.create_care_request_offer(uuid, uuid, text, timestamptz);
+drop function if exists ogevia_api.list_care_request_offers(uuid);
 drop function if exists ogevia_api.list_care_request_candidates(uuid);
 drop function if exists ogevia_api.list_care_requests(uuid, ogevia.care_request_status);
 drop function if exists ogevia_api.list_care_request_clients(uuid);
