@@ -2100,25 +2100,26 @@ export function ServiceVerificationReportsPage() {
             )}
           </Card>
 
-          {clientSubtotals.length > 0 ? (
+          {clientServiceSubtotals.length > 0 ? (
             <Card>
               <h3 className="font-semibold text-slate-950">
-                By client (billing view)
+                By client and service
               </h3>
+              <p className="mt-1 text-xs text-slate-500">
+                Service totals remain separate even when one client has multiple services.
+              </p>
               <ul className="mt-3 divide-y divide-slate-100">
-                {clientSubtotals.map((entry) => (
+                {clientServiceSubtotals.map((entry) => (
                   <li
-                    key={entry.code}
-                    className="flex items-center justify-between py-2 text-sm"
+                    key={entry.key}
+                    className="flex flex-wrap items-center justify-between gap-3 py-2 text-sm"
                   >
                     <span className="text-slate-700">
-                      {entry.legalName ?? entry.code}{" "}
-                      <span className="text-slate-400">
-                        · {entry.visits} visits
-                      </span>
+                      {entry.legalName ?? entry.code} · {entry.serviceName}
+                      <span className="text-slate-400"> · {entry.visits} visits</span>
                     </span>
                     <span className="font-medium text-slate-900">
-                      {formatHours(entry.billableMinutes)} billable hrs
+                      {formatDuration(entry.workedMinutes)} worked · {formatDuration(entry.billableMinutes)} billable
                     </span>
                   </li>
                 ))}
