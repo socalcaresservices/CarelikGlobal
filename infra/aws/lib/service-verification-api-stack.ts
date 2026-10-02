@@ -46,6 +46,7 @@ export const HANDLER_ENTRY = resolve(REPO_ROOT, "apps/sv-api/src/index.ts");
 export const SERVICE_VERIFICATION_ROUTES: ReadonlyArray<{
   readonly method: apigw.HttpMethod;
   readonly path: string;
+  readonly auth?: "jwt" | "public";
 }> = [
   { method: apigw.HttpMethod.GET, path: "/v1/me" },
   { method: apigw.HttpMethod.GET, path: "/v1/visits/active" },
@@ -60,6 +61,17 @@ export const SERVICE_VERIFICATION_ROUTES: ReadonlyArray<{
   { method: apigw.HttpMethod.GET, path: "/v1/visits/{visitId}/corrections" },
   { method: apigw.HttpMethod.POST, path: "/v1/visits/{visitId}/corrections" },
   { method: apigw.HttpMethod.GET, path: "/v1/visits/{visitId}/signature" },
+  { method: apigw.HttpMethod.GET, path: "/v1/care-requests/clients" },
+  { method: apigw.HttpMethod.POST, path: "/v1/clients/{clientId}/request-link" },
+  { method: apigw.HttpMethod.GET, path: "/v1/care-requests" },
+  { method: apigw.HttpMethod.GET, path: "/v1/care-requests/{requestId}/candidates" },
+  { method: apigw.HttpMethod.POST, path: "/v1/care-requests/{requestId}/offers" },
+  { method: apigw.HttpMethod.POST, path: "/v1/care-requests/{requestId}/assign" },
+  { method: apigw.HttpMethod.GET, path: "/public/request/{token}", auth: "public" },
+  { method: apigw.HttpMethod.POST, path: "/public/request/{token}", auth: "public" },
+  { method: apigw.HttpMethod.POST, path: "/public/request/{token}/cancel", auth: "public" },
+  { method: apigw.HttpMethod.GET, path: "/public/opportunity/{token}", auth: "public" },
+  { method: apigw.HttpMethod.POST, path: "/public/opportunity/{token}/respond", auth: "public" },
   { method: apigw.HttpMethod.GET, path: "/v1/reports/monthly-service-summary" },
   { method: apigw.HttpMethod.GET, path: "/v1/reports/correction-history" },
   { method: apigw.HttpMethod.GET, path: "/v1/billing-review" },
@@ -291,12 +303,13 @@ export class ServiceVerificationApiStack extends Stack {
     new CfnOutput(this, "ApiUrl", { value: this.api.apiEndpoint });
 
     const integration = new HttpLambdaIntegration("Handler", this.handler);
+    const publicAuthorizer = new apigw.HttpNoneAuthorizer();
     for (const route of SERVICE_VERIFICATION_ROUTES) {
       this.api.addRoutes({
         path: route.path,
         methods: [route.method],
         integration,
-        authorizer,
+        authorizer: route.auth === "public" ? publicAuthorizer : authorizer,
       });
     }
 
