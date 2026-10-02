@@ -277,6 +277,26 @@ export function scanTemplate(
     }
   }
 
+  // A VPC Lambda is validated at create time for ENI permissions; the policy
+  // granting them must exist and be attached first (explicit DependsOn).
+  for (const [logicalId, r] of Object.entries(template.Resources ?? {})) {
+    if (r.Type !== "AWS::Lambda::Function" || !(r.Properties ?? {}).VpcConfig) continue;
+    const role = ((r.Properties ?? {}).Role as { "Fn::GetAtt"?: [string, string] } | undefined)?.["Fn::GetAtt"]?.[0];
+    const dependsOn = asArray((r as { DependsOn?: string | string[] }).DependsOn);
+    const grants = Object.entries(template.Resources ?? {}).filter(
+      ([, p]) =>
+        (p.Type === "AWS::IAM::Policy" || p.Type === "AWS::IAM::ManagedPolicy") &&
+        role !== undefined &&
+        JSON.stringify(p.Properties?.Roles ?? []).includes(role) &&
+        policyStatements(p).some((st) => asArray(st.Action).includes("ec2:CreateNetworkInterface")),
+    );
+    if (grants.length === 0) {
+      flag(logicalId, "vpc-lambda-eni-policy", "VPC Lambda role has no attached policy granting ec2:CreateNetworkInterface");
+    } else if (!grants.some(([id]) => dependsOn.includes(id))) {
+      flag(logicalId, "vpc-lambda-eni-ordering", `Lambda must DependsOn ${grants.map(([id]) => id).join(", ")} (ENI permissions)`);
+    }
+  }
+
   for (const [outputId, output] of Object.entries(template.Outputs ?? {})) {
     const text = JSON.stringify(output);
     if (/secret|password|resolve:secretsmanager|SecretString/i.test(text)) {

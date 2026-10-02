@@ -152,7 +152,50 @@ describe("template scanner negative controls (each rule must fire)", () => {
   it("CloudFront allowing plain HTTP", () => {
     expect(scan("x", { D: { Type: "AWS::CloudFront::Distribution", Properties: { DistributionConfig: { DefaultCacheBehavior: { ViewerProtocolPolicy: "allow-all" } } } } })).toContain("cloudfront-http");
   });
+  it("VPC Lambda without an ordered ENI policy", () => {
+    const fn = { Type: "AWS::Lambda::Function", Properties: { VpcConfig: { SubnetIds: ["s"], SecurityGroupIds: ["g"] }, Role: { "Fn::GetAtt": ["R", "Arn"] } } };
+    const pol = { Type: "AWS::IAM::ManagedPolicy", Properties: { Roles: [{ Ref: "R" }], PolicyDocument: { Statement: [{ Effect: "Allow", Action: ["ec2:CreateNetworkInterface"], Resource: "*" }] } } };
+    expect(scan("x", { F: { ...fn, DependsOn: ["R"] } as never, P: pol })).toContain("vpc-lambda-eni-ordering");
+    expect(scan("x", { F: { ...fn, DependsOn: ["R", "P"] } as never, P: pol })).not.toContain("vpc-lambda-eni-ordering");
+    expect(scan("x", { F: fn })).toContain("vpc-lambda-eni-policy");
+  });
   it("NAT gateways stay deferred everywhere", () => {
     expect(scan("Ogevia-prod-NetworkEgress", { N: { Type: "AWS::EC2::NatGateway", Properties: {} } })).toContain("deferred-or-existing-resource-type");
+  });
+});
+
+describe("Lambda creation ordering (regression: first deploy failed on CreateNetworkInterface)", () => {
+  const resources = api.toJSON().Resources as Record<string, { Type: string; DependsOn?: string[]; Properties?: Record<string, unknown> }>;
+  const [fnId, fn] = Object.entries(resources).find(([, r]) => r.Type === "AWS::Lambda::Function")!;
+  const roleRef = (fn.Properties!.Role as { "Fn::GetAtt": [string, string] })["Fn::GetAtt"][0];
+  const enIActions = ["ec2:CreateNetworkInterface", "ec2:DescribeNetworkInterfaces", "ec2:DeleteNetworkInterface"];
+  const enIPolicies = Object.entries(resources).filter(([, r]) => {
+    if (r.Type !== "AWS::IAM::ManagedPolicy" && r.Type !== "AWS::IAM::Policy") return false;
+    const roles = JSON.stringify(r.Properties!.Roles ?? []);
+    const actions = JSON.stringify((r.Properties!.PolicyDocument as { Statement: unknown[] }).Statement);
+    return roles.includes(roleRef) && enIActions.every((a) => actions.includes(a));
+  });
+
+  it("the execution role receives the ENI permissions from exactly one attached policy", () => {
+    expect(enIPolicies).toHaveLength(1);
+  });
+
+  it(`${fnId} DependsOn the policy that grants its ENI permissions`, () => {
+    expect(fn.DependsOn ?? []).toEqual(expect.arrayContaining([enIPolicies[0]![0], roleRef]));
+  });
+
+  it("ENI actions stay least-privilege (exactly the 5 VPC attachment actions on *)", () => {
+    const statements = (resources[enIPolicies[0]![0]]!.Properties!.PolicyDocument as { Statement: Array<{ Action: string | string[]; Resource: unknown }> }).Statement;
+    const wildcard = statements.filter((st) => JSON.stringify(st.Resource) === '"*"');
+    expect(wildcard).toHaveLength(1);
+    expect([...(wildcard[0]!.Action as string[])].sort()).toEqual([
+      "ec2:AssignPrivateIpAddresses",
+      "ec2:CreateNetworkInterface",
+      "ec2:DeleteNetworkInterface",
+      "ec2:DescribeNetworkInterfaces",
+      "ec2:UnassignPrivateIpAddresses",
+    ]);
+    const managed = JSON.stringify(resources[roleRef]!.Properties!.ManagedPolicyArns ?? []);
+    expect(managed).not.toMatch(/AWSLambdaVPCAccessExecutionRole|AdministratorAccess/);
   });
 });

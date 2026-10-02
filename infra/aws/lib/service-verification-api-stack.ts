@@ -234,6 +234,14 @@ export class ServiceVerificationApiStack extends Stack {
       },
     });
 
+    // Lambda validates at CREATE time that its execution role can manage VPC
+    // ENIs. Those actions live in HandlerPolicy (a separate managed policy
+    // attached to the role), so the function must not be created until the
+    // policy exists and is attached. Without this, CloudFormation creates them
+    // in parallel and the create fails ("...does not have permissions to call
+    // CreateNetworkInterface on EC2"), as seen on the first test-slice deploy.
+    this.handler.node.addDependency(policy);
+
     const authorizer = new HttpJwtAuthorizer(
       "CognitoJwt",
       cognitoIssuer(config.region, existing.userPool.userPoolId),

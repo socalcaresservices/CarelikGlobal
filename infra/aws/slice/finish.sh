@@ -23,7 +23,7 @@ CDK=(npx -y aws-cdk@2.1143.0)
 SMOKE_LOG="$HOME/ogevia-smoke-$(date +%Y%m%d-%H%M%S).log"
 
 STEP=0
-step() { STEP=$((STEP + 1)); printf '\n\033[1m=== [%s/9] %s\033[0m\n' "$STEP" "$*"; }
+step() { STEP=$((STEP + 1)); printf '\n\033[1m=== [%s/10] %s\033[0m\n' "$STEP" "$*"; }
 die() { printf '\n\033[1;31mSTOPPED at step %s: %s\033[0m\nNothing was deleted. Fix the cause (or send this output to Claude) and re-run the same command.\n' "$STEP" "$*"; exit 1; }
 trap 'die "unexpected error on line $LINENO"' ERR
 
@@ -46,14 +46,55 @@ CG_SUB=$(sub_of "$CAREGIVER_EMAIL"); MG_SUB=$(sub_of "$MANAGER_EMAIL")
 [[ "$CG_SUB" =~ ^[0-9a-f-]{36}$ && "$MG_SUB" =~ ^[0-9a-f-]{36}$ ]] || die "the two test sign-ins are missing from Cognito"
 echo "Test sign-ins: present (caregiver + manager)"
 echo "Test database + synthetic seed: verified through the deployed API in step 8"
+# Recovery for ONE known case only: Ogevia-prod-ServiceVerificationApi left in
+# ROLLBACK_COMPLETE by a failed FIRST create. CloudFormation cannot update such
+# a stack; it must be deleted and re-created. Allowed only when the owner set
+# OGEVIA_APPROVE_FAILED_API_CLEANUP=yes AND nothing in the stack is live (every
+# resource DELETE_COMPLETE; only retained, empty log groups DELETE_SKIPPED).
+recover_failed_api() {
+  local s=Ogevia-prod-ServiceVerificationApi
+  [[ "${OGEVIA_APPROVE_FAILED_API_CLEANUP:-}" == yes ]] || die "$s is ROLLBACK_COMPLETE. Deleting this failed stack record needs the owner's explicit approval (OGEVIA_APPROVE_FAILED_API_CLEANUP=yes)."
+  local live
+  live=$(aws cloudformation list-stack-resources --stack-name "$s" \
+    --query "StackResourceSummaries[?ResourceStatus!='DELETE_COMPLETE' && !(ResourceStatus=='DELETE_SKIPPED' && ResourceType=='AWS::Logs::LogGroup')].LogicalResourceId" --output text)
+  [[ -z "$live" || "$live" == None ]] || die "$s still holds live resources ($live); not deleting it."
+  echo "$s: failed first create with no live resources. Removing the failed stack record (approved)."
+  aws cloudformation update-termination-protection --stack-name "$s" --no-enable-termination-protection >/dev/null
+  aws cloudformation delete-stack --stack-name "$s"
+  aws cloudformation wait stack-delete-complete --stack-name "$s"
+  echo "$s: removed. Retained empty log groups are kept. CDK re-creates the stack (termination protection on)."
+}
 for s in "${STACKS[@]}"; do
   st=$(aws cloudformation describe-stacks --stack-name "$s" --query 'Stacks[0].StackStatus' --output text 2>/dev/null || echo NOT_DEPLOYED)
   case "$st" in
     *_IN_PROGRESS) echo "$s: $st (waiting)"; while aws cloudformation describe-stacks --stack-name "$s" --query 'Stacks[0].StackStatus' --output text | grep -q IN_PROGRESS; do sleep 20; done ;;
-    ROLLBACK_COMPLETE|*_FAILED|DELETE_COMPLETE) die "$s is $st: it needs owner review before anything else (a failed first create must be deleted, which this script never does)" ;;
-    *) echo "$s: $st" ;;
+    ROLLBACK_COMPLETE) [[ "$s" == Ogevia-prod-ServiceVerificationApi ]] && recover_failed_api || die "$s is ROLLBACK_COMPLETE: owner review needed (only the API stack has an approved recovery)" ;;
+    *_FAILED|DELETE_COMPLETE) die "$s is $st: owner review needed before anything else" ;;
+    *) echo "$s: $st (reused)" ;;
   esac
 done
+
+step "Static safety check of the templates being deployed"
+python3 - "$HERE/cdk.out" <<'PY' || die "template safety check failed (see above); not deploying"
+import glob, json, sys
+bad = []
+for f in glob.glob(sys.argv[1] + "/Ogevia-prod-*.template.json"):
+    res = json.load(open(f)).get("Resources", {})
+    for lid, r in res.items():
+        if r["Type"] != "AWS::Lambda::Function" or "VpcConfig" not in r.get("Properties", {}):
+            continue
+        role = r["Properties"]["Role"]["Fn::GetAtt"][0]
+        deps = r.get("DependsOn", [])
+        deps = deps if isinstance(deps, list) else [deps]
+        eni = [pid for pid, p in res.items() if p["Type"] in ("AWS::IAM::Policy", "AWS::IAM::ManagedPolicy")
+               and role in json.dumps(p["Properties"].get("Roles", [])) and "ec2:CreateNetworkInterface" in json.dumps(p["Properties"]["PolicyDocument"])]
+        if not eni or not any(e in deps for e in eni):
+            bad.append("%s: %s must DependsOn its ENI policy %s" % (f.split("/")[-1], lid, eni))
+for b in bad:
+    print("  " + b)
+print("VPC Lambda ENI-policy ordering: %s" % ("OK" if not bad else "BROKEN"))
+sys.exit(1 if bad else 0)
+PY
 
 step "Planned infrastructure changes (read-only diff)"
 cd "$HERE"
