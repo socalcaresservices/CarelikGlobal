@@ -181,7 +181,18 @@ interface CaregiverMatchDetailRow {
   availability_score: number;
   skills_score: number;
   history_score: number;
+  // Data the client needs but this caregiver has not recorded; scored 0, not
+  // assumed (see 20260826010000_matching_no_credit_for_missing_caregiver_data.sql).
+  missing_data?: string[] | null;
 }
+
+const MISSING_DATA_LABELS: Record<string, string> = {
+  availability_windows: "availability",
+  skills: "skills",
+  weekly_hours_target: "weekly hours target",
+  languages: "languages",
+  location: "location",
+};
 
 function formatHours(hours: number) {
   return Number.isInteger(hours) ? String(hours) : hours.toFixed(1);
@@ -1239,6 +1250,12 @@ export function ClientDetailPage() {
                     <span>Skills {match.skills_score}/10</span>
                     <span>History {match.history_score}/15</span>
                   </div>
+                  {match.missing_data && match.missing_data.length > 0 ? (
+                    <p className="mt-1 text-xs text-amber-700">
+                      Not recorded (scored 0):{" "}
+                      {match.missing_data.map((key) => MISSING_DATA_LABELS[key] ?? key).join(", ")}
+                    </p>
+                  ) : null}
                 </li>
               ))}
             </ul>

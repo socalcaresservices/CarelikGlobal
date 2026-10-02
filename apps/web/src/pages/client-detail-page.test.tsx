@@ -655,6 +655,18 @@ describe("ClientDetailPage", () => {
               availability_score: 17,
               skills_score: 10,
               history_score: 5,
+              missing_data: [],
+            },
+            {
+              caregiver_record_id: "caregiver-record-2",
+              caregiver_name: "Riley Incomplete",
+              match_score: 18,
+              proximity_score: 18,
+              language_score: 0,
+              availability_score: 0,
+              skills_score: 0,
+              history_score: 0,
+              missing_data: ["availability_windows", "skills", "weekly_hours_target"],
             },
           ],
           error: null,
@@ -676,6 +688,11 @@ describe("ClientDetailPage", () => {
     expect(screen.getByText("87")).toBeInTheDocument();
     expect(screen.getByText("Proximity 30/30")).toBeInTheDocument();
     expect(screen.getByText("Skills 10/10")).toBeInTheDocument();
+    // Missing caregiver data is named, not hidden in a low score.
+    expect(
+      screen.getByText("Not recorded (scored 0): availability, skills, weekly hours target"),
+    ).toBeInTheDocument();
+    expect(screen.getAllByText(/Not recorded/)).toHaveLength(1);
     expect(screen.getByText("Sam Caregiver").closest("a")).toHaveAttribute(
       "href",
       "/team",
