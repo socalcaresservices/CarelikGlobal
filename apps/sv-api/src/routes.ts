@@ -314,6 +314,14 @@ export const ROUTES: Record<string, Route> = {
     },
   },
 
+  "GET /v1/care-requests/{requestId}/offers": {
+    mutating: false,
+    handle: async ({ event, tx }) => {
+      const requestId = uuid(p(event).requestId, "requestId");
+      return { offers: await tx((db) => rows(db, "select * from ogevia_api.list_care_request_offers($1)", [requestId])) };
+    },
+  },
+
   "POST /v1/care-requests/{requestId}/offers": {
     status: 201,
     mutating: true,
