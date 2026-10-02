@@ -52,7 +52,7 @@ export function PublicCareRequestPage({ api }: { api: AwsApiClient }) {
   });
   const cancel = useMutation({
     mutationFn: () => api.post("/v1/public/care-portals/" + token + "/requests/" + requestId + "/cancel", { reason: "Cancelled through care portal" }),
-    onSuccess: () => void qc.invalidateQueries({ queryKey: ["public-care-request", token, requestId] }),
+    onSettled: () => void qc.invalidateQueries({ queryKey: ["public-care-request", token, requestId] }),
   });
 
   const services = portal.data?.services ?? [];
@@ -73,6 +73,7 @@ export function PublicCareRequestPage({ api }: { api: AwsApiClient }) {
               {!["client_cancelled", "closed"].includes(request.data.request.status) ? (
                 <Button variant="secondary" loading={cancel.isPending} onClick={() => cancel.mutate()}>Cancel request</Button>
               ) : null}
+              <ActionError error={cancel.error} fallback="Could not cancel the request. Please try again." />
             </div>
           ) : <p className="mt-2 text-sm text-slate-600">Checking status…</p>}
         </Card>
@@ -91,7 +92,7 @@ export function PublicCareRequestPage({ api }: { api: AwsApiClient }) {
             <label className="text-sm">End<input type="datetime-local" value={endsAt} onChange={(e) => setEndsAt(e.target.value)} className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2" /></label>
             <label className="text-sm">Note (optional)<textarea value={note} onChange={(e) => setNote(e.target.value)} className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2" rows={3} /></label>
             <p className="text-xs text-slate-500">Minimum request: 3 hours. Requests made less than 72 hours ahead are marked short notice.</p>
-            {create.isError ? <p className="text-sm text-red-700">{create.error instanceof Error ? create.error.message : "Could not submit request."}</p> : null}
+            <ActionError error={create.error} fallback="Could not submit request." />
             <Button disabled={!serviceId || !startsAt || !endsAt} loading={create.isPending} onClick={() => create.mutate()}>Request care</Button>
           </div>
         </Card>
@@ -112,11 +113,12 @@ export function PublicCareOfferPage({ api }: { api: AwsApiClient }) {
   });
   const respond = useMutation({
     mutationFn: (available: boolean) => api.post("/v1/public/care-offers/" + token + "/respond", { available }),
-    onSuccess: () => void qc.invalidateQueries({ queryKey: ["public-care-offer", token] }),
+    // Refresh on failure too: a 409 usually means the shift was filled or closed meanwhile.
+    onSettled: () => void qc.invalidateQueries({ queryKey: ["public-care-offer", token] }),
   });
   const cancel = useMutation({
     mutationFn: () => api.post("/v1/public/care-offers/" + token + "/cancel-assignment", { reason }),
-    onSuccess: () => void qc.invalidateQueries({ queryKey: ["public-care-offer", token] }),
+    onSettled: () => void qc.invalidateQueries({ queryKey: ["public-care-offer", token] }),
   });
   if (offer.isLoading) return <PublicShell><p>Loading opportunity…</p></PublicShell>;
   if (offer.isError || !offer.data?.offer) return <PublicShell><p>This opportunity link is invalid or no longer active.</p></PublicShell>;
@@ -142,9 +144,17 @@ export function PublicCareOfferPage({ api }: { api: AwsApiClient }) {
           </div>
         ) : null}
         {item.status === "filled" ? <p className="mt-4 text-sm text-slate-600">This opportunity has been filled.</p> : null}
+        <ActionError error={respond.error} fallback="Your answer was not sent. Please try again." />
+        <ActionError error={cancel.error} fallback="Your cancellation was not sent. Please try again or call the agency." />
       </Card>
     </PublicShell>
   );
+}
+
+/** Shows why a link action failed (the API's safe message), so a failure is never silent. */
+function ActionError({ error, fallback }: { error: unknown; fallback: string }) {
+  if (!error) return null;
+  return <p role="alert" className="mt-3 text-sm text-red-700">{error instanceof Error && error.message ? error.message : fallback}</p>;
 }
 
 function PublicShell({ title = "Care request", children }: { title?: string; children: ReactNode }) {

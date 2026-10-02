@@ -59,6 +59,73 @@ describe("public care links", () => {
   });
 });
 
+const OFFER = (status: string) => ({ offer: { offerId: "o1", status, serviceCode: "RSP", serviceName: "Respite", startsAt: "2026-10-20T18:00:00Z", endsAt: "2026-10-20T22:00:00Z", clientLabel: "TEST-C01" } });
+
+describe("public link actions never fail silently", () => {
+  it("offer response refused by the API (409) shows the API message and refreshes the offer", async () => {
+    let gets = 0;
+    const h = harness((url, init) => {
+      if (init.method === "POST") return json({ error: { code: "conflict", message: "This opportunity is no longer open" } }, 409);
+      gets += 1;
+      return json(OFFER("sent"));
+    });
+    renderAt("/care-offer#" + TOKEN, <PublicCareOfferPage api={createAwsPublicApiClient("https://api.example.test", h.fetchImpl)} />, "/care-offer");
+    fireEvent.click(await screen.findByRole("button", { name: "I’m available" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent("This opportunity is no longer open");
+    await waitFor(() => expect(gets).toBe(2));
+  });
+
+  it("a network failure on Not available shows a retry message, not nothing", async () => {
+    const fetchImpl = vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
+      if (init?.method === "POST") throw new TypeError("Failed to fetch");
+      return json(OFFER("sent"));
+    }) as unknown as typeof fetch;
+    renderAt("/care-offer#" + TOKEN, <PublicCareOfferPage api={createAwsPublicApiClient("https://api.example.test", fetchImpl)} />, "/care-offer");
+    fireEvent.click(await screen.findByRole("button", { name: "Not available" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent("Could not reach Ogevia");
+  });
+
+  it("a failed call-out (I can no longer work this shift) shows the error", async () => {
+    const h = harness((_url, init) => init.method === "POST"
+      ? json({ error: { code: "not_found", message: "This link is not valid or is no longer active" } }, 404)
+      : json(OFFER("assigned")));
+    renderAt("/care-offer#" + TOKEN, <PublicCareOfferPage api={createAwsPublicApiClient("https://api.example.test", h.fetchImpl)} />, "/care-offer");
+    fireEvent.change(await screen.findByPlaceholderText("Reason if you can no longer work"), { target: { value: "sick" } });
+    fireEvent.click(screen.getByRole("button", { name: "I can no longer work this shift" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent("not valid or is no longer active");
+    expect(h.calls.find((c) => c.init.method === "POST")!.url.pathname).toBe("/v1/public/care-offers/" + TOKEN + "/cancel-assignment");
+  });
+
+  it("a successful response shows no error", async () => {
+    let status = "sent";
+    const h = harness((_url, init) => {
+      if (init.method === "POST") { status = "available"; return json({ status }); }
+      return json(OFFER(status));
+    });
+    renderAt("/care-offer#" + TOKEN, <PublicCareOfferPage api={createAwsPublicApiClient("https://api.example.test", h.fetchImpl)} />, "/care-offer");
+    fireEvent.click(await screen.findByRole("button", { name: "I’m available" }));
+    expect(await screen.findByText(/Availability sent/)).toBeInTheDocument();
+    expect(screen.queryByRole("alert")).toBeNull();
+  });
+
+  it("a failed client cancellation shows the error", async () => {
+    const h = harness((url, init) => {
+      if (url.pathname.endsWith("/cancel")) return json({ error: { code: "conflict", message: "This request can no longer be cancelled here" } }, 409);
+      if (init.method === "POST") return json({ request: { requestId: "r1" } }, 201);
+      if (url.pathname.endsWith("/requests/r1")) return json({ request: { requestId: "r1", status: "requested", serviceCode: "RSP", serviceName: "Respite", startsAt: "2026-10-20T18:00:00Z", endsAt: "2026-10-20T22:00:00Z", caregiverName: null } });
+      return json({ services: [{ organizationName: "Synthetic Care Co", clientCode: "TEST-C01", serviceId: "s1", serviceCode: "RSP", serviceName: "Respite", periodEnd: "2026-12-31" }] });
+    });
+    renderAt("/care#" + TOKEN, <PublicCareRequestPage api={createAwsPublicApiClient("https://api.example.test", h.fetchImpl)} />, "/care");
+    fireEvent.change(await screen.findByDisplayValue("Select service"), { target: { value: "s1" } });
+    const [start, end] = document.querySelectorAll('input[type="datetime-local"]');
+    fireEvent.change(start!, { target: { value: "2026-10-20T11:00" } });
+    fireEvent.change(end!, { target: { value: "2026-10-20T15:00" } });
+    fireEvent.click(screen.getByRole("button", { name: "Request care" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Cancel request" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent("can no longer be cancelled here");
+  });
+});
+
 describe("staff care-request page link handling", () => {
   it("creates fragment links and can revoke a client's links", async () => {
     const h = harness((url, init) => {
