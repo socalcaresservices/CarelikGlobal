@@ -21,6 +21,7 @@ export function CareRequestsPage({ api }: { api: AwsApiClient }) {
   const [portalLink, setPortalLink] = useState("");
   const [offerLink, setOfferLink] = useState("");
   const [selectedAlertUsers, setSelectedAlertUsers] = useState<Set<string>>(new Set());
+  const [alertsInitialized, setAlertsInitialized] = useState(false);
 
   const requests = useQuery({
     queryKey: ["care-requests", activeOrganizationId],
@@ -82,10 +83,11 @@ export function CareRequestsPage({ api }: { api: AwsApiClient }) {
 
   const staffRows = staff.data?.staff ?? [];
   useEffect(() => {
-    if (staffRows.length && selectedAlertUsers.size === 0) {
-      setSelectedAlertUsers(new Set(staffRows.filter((s) => s.selected).map((s) => s.userId)));
+    if (staff.data && !alertsInitialized) {
+      setSelectedAlertUsers(new Set(staff.data.staff.filter((s) => s.selected).map((s) => s.userId)));
+      setAlertsInitialized(true);
     }
-  }, [staffRows, selectedAlertUsers.size]);
+  }, [staff.data, alertsInitialized]);
 
   return (
     <section className="space-y-6">
