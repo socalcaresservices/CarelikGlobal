@@ -291,6 +291,7 @@ export function ServiceVerificationReportsPage() {
   );
   const [serviceFilter, setServiceFilter] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
+  const [correctedByFilter, setCorrectedByFilter] = useState("");
   const [locationFilter, setLocationFilter] = useState("");
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
@@ -387,6 +388,9 @@ export function ServiceVerificationReportsPage() {
       dateTo,
       clientFilter,
       serviceFilter,
+      caregiverFilter,
+      correctedByFilter,
+      statusFilter,
     ],
     queryFn: (): Promise<CorrectionHistoryReportRow[]> =>
       backend.listCorrectionHistoryReport!(
@@ -395,6 +399,9 @@ export function ServiceVerificationReportsPage() {
         dateTo || null,
         clientFilter || null,
         serviceFilter || null,
+        caregiverFilter || null,
+        correctedByFilter || null,
+        statusFilter || null,
       ),
     enabled:
       !!activeOrganizationId &&
@@ -585,6 +592,20 @@ export function ServiceVerificationReportsPage() {
     [monthlyServiceSummaryQuery.data, serviceFilter],
   );
 
+  const correctionRows = correctionHistoryReportQuery.data ?? [];
+  const correctedByOptions = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const row of correctionRows) {
+      map.set(row.correctedByUserId, row.correctedByName);
+    }
+    return Array.from(map.entries()).sort((a, b) => a[1].localeCompare(b[1]));
+  }, [correctionRows]);
+  const correctionNetMinutes = correctionRows.reduce(
+    (total, row) =>
+      total + row.afterSnapshot.workedMinutes - row.beforeSnapshot.workedMinutes,
+    0,
+  );
+
   const billable = useMemo(() => billableRows(rows), [rows]);
   const monthCalendar = useMemo(
     () => buildMonthCalendar(rows, reportMonth),
@@ -688,7 +709,7 @@ export function ServiceVerificationReportsPage() {
   const chartData = useMemo(() => {
     const grouped = new Map<
       string,
-      { name: string; workedHours: number; billableHours: number }
+      { name: string; workedMinutes: number; billableMinutes: number }
     >();
     for (const row of billable) {
       const name =
@@ -701,31 +722,31 @@ export function ServiceVerificationReportsPage() {
               : (clientLocationMap.get(row.client_id) ?? "Location not set");
       const entry = grouped.get(name) ?? {
         name,
-        workedHours: 0,
-        billableHours: 0,
+        workedMinutes: 0,
+        billableMinutes: 0,
       };
-      entry.workedHours += (row.worked_minutes ?? 0) / 60;
-      entry.billableHours += (row.billable_minutes ?? 0) / 60;
+      entry.workedMinutes += row.worked_minutes ?? 0;
+      entry.billableMinutes += row.billable_minutes ?? 0;
       grouped.set(name, entry);
     }
     return Array.from(grouped.values()).sort(
-      (a, b) => b.workedHours - a.workedHours,
+      (a, b) => b.workedMinutes - a.workedMinutes,
     );
   }, [billable, chartGroup, clientLocationMap]);
 
   const trendData = useMemo(() => {
     const grouped = new Map<
       string,
-      { name: string; workedHours: number; billableHours: number }
+      { name: string; workedMinutes: number; billableMinutes: number }
     >();
     for (const row of billable) {
       const entry = grouped.get(row.service_date) ?? {
         name: row.service_date,
-        workedHours: 0,
-        billableHours: 0,
+        workedMinutes: 0,
+        billableMinutes: 0,
       };
-      entry.workedHours += (row.worked_minutes ?? 0) / 60;
-      entry.billableHours += (row.billable_minutes ?? 0) / 60;
+      entry.workedMinutes += row.worked_minutes ?? 0;
+      entry.billableMinutes += row.billable_minutes ?? 0;
       grouped.set(row.service_date, entry);
     }
     return Array.from(grouped.values()).sort((a, b) =>
@@ -1043,6 +1064,29 @@ export function ServiceVerificationReportsPage() {
                 ))}
               </select>
             </div>
+            {reportView === "corrections" ? (
+              <div>
+                <label
+                  htmlFor="report-corrected-by"
+                  className="block text-xs font-medium text-slate-600"
+                >
+                  Corrected by
+                </label>
+                <select
+                  id="report-corrected-by"
+                  value={correctedByFilter}
+                  onChange={(event) => setCorrectedByFilter(event.target.value)}
+                  className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900"
+                >
+                  <option value="">All correctors</option>
+                  {correctedByOptions.map(([id, label]) => (
+                    <option key={id} value={id}>
+                      {label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            ) : null}
             <div>
               <label
                 htmlFor="report-from"
@@ -1210,11 +1254,11 @@ export function ServiceVerificationReportsPage() {
                     <PieChart>
                       <Pie
                         data={chartData}
-                        dataKey="workedHours"
+                        dataKey="workedMinutes"
                         nameKey="name"
                         outerRadius={105}
                         label={({ name, value }) =>
-                          `${name}: ${Number(value).toFixed(1)}h`
+                          `${name}: ${formatDuration(Number(value))}`
                         }
                       >
                         {chartData.map((entry, index) => (
@@ -1224,26 +1268,26 @@ export function ServiceVerificationReportsPage() {
                           />
                         ))}
                       </Pie>
-                      <Tooltip />
+                      <Tooltip formatter={(value) => formatDuration(Number(value))} />
                       <Legend />
                     </PieChart>
                   ) : chartType === "line" ? (
                     <LineChart data={trendData}>
                       <CartesianGrid strokeDasharray="3 3" />
                       <XAxis dataKey="name" tick={{ fontSize: 11 }} />
-                      <YAxis unit="h" />
-                      <Tooltip />
+                      <YAxis tickFormatter={(value) => formatDuration(Number(value))} />
+                      <Tooltip formatter={(value) => formatDuration(Number(value))} />
                       <Legend />
                       <Line
                         type="monotone"
-                        dataKey="workedHours"
+                        dataKey="workedMinutes"
                         name="Worked hours"
                         stroke="#4f46e5"
                         strokeWidth={3}
                       />
                       <Line
                         type="monotone"
-                        dataKey="billableHours"
+                        dataKey="billableMinutes"
                         name="Billable hours"
                         stroke="#059669"
                         strokeWidth={3}
@@ -1253,17 +1297,17 @@ export function ServiceVerificationReportsPage() {
                     <BarChart data={chartData}>
                       <CartesianGrid strokeDasharray="3 3" />
                       <XAxis dataKey="name" tick={{ fontSize: 11 }} />
-                      <YAxis unit="h" />
-                      <Tooltip />
+                      <YAxis tickFormatter={(value) => formatDuration(Number(value))} />
+                      <Tooltip formatter={(value) => formatDuration(Number(value))} />
                       <Legend />
                       <Bar
-                        dataKey="workedHours"
+                        dataKey="workedMinutes"
                         name="Worked hours"
                         fill="#4f46e5"
                         radius={[6, 6, 0, 0]}
                       />
                       <Bar
-                        dataKey="billableHours"
+                        dataKey="billableMinutes"
                         name="Billable hours"
                         fill="#059669"
                         radius={[6, 6, 0, 0]}
@@ -1414,6 +1458,7 @@ export function ServiceVerificationReportsPage() {
                         "Authorization period",
                         "Authorized",
                         "Worked",
+                        "Confirmed",
                         "Billable",
                         "Remaining",
                         "Needs review",
@@ -1424,6 +1469,7 @@ export function ServiceVerificationReportsPage() {
                         `${row.authorizationPeriodStart} to ${row.authorizationPeriodEnd}`,
                         formatDuration(row.authorizedMinutes),
                         formatDuration(row.workedMinutes),
+                        formatDuration(row.verifiedMinutes),
                         formatDuration(row.billableMinutes),
                         formatDuration(row.remainingMinutes),
                         formatDuration(row.reviewMinutes),
@@ -1545,6 +1591,7 @@ export function ServiceVerificationReportsPage() {
                           <th className="pb-2 pr-3 font-medium">Service</th>
                           <th className="pb-2 pr-3 font-medium">Authorized</th>
                           <th className="pb-2 pr-3 font-medium">Worked</th>
+                          <th className="pb-2 pr-3 font-medium">Confirmed</th>
                           <th className="pb-2 pr-3 font-medium">Billable</th>
                           <th className="pb-2 pr-3 font-medium">Remaining</th>
                           <th className="pb-2 font-medium">Needs review</th>
@@ -1558,6 +1605,7 @@ export function ServiceVerificationReportsPage() {
                             </td>
                             <td className="py-2 pr-3">{formatDuration(row.authorizedMinutes)}</td>
                             <td className="py-2 pr-3">{formatDuration(row.workedMinutes)}</td>
+                            <td className="py-2 pr-3">{formatDuration(row.verifiedMinutes)}</td>
                             <td className="py-2 pr-3">{formatDuration(row.billableMinutes)}</td>
                             <td className="py-2 pr-3">{formatDuration(row.remainingMinutes)}</td>
                             <td className="py-2">{formatDuration(row.reviewMinutes)}</td>
@@ -1717,7 +1765,7 @@ export function ServiceVerificationReportsPage() {
                 immutable; this report shows who changed what, why, and when.
               </p>
             </div>
-            {(correctionHistoryReportQuery.data ?? []).length > 0 ? (
+            {correctionRows.length > 0 ? (
               <Button
                 type="button"
                 variant="secondary"
@@ -1731,24 +1779,28 @@ export function ServiceVerificationReportsPage() {
                       "Client",
                       "Service",
                       "Service date",
+                      "Caregiver",
                       "Original time",
                       "Corrected time",
                       "Original duration",
                       "Corrected duration",
                       "Corrected by",
+                      "Status",
                       "Reason",
                       "Corrected on",
                     ],
-                    (correctionHistoryReportQuery.data ?? []).map((row) => [
+                    correctionRows.map((row) => [
                       row.visitNumber,
                       row.clientCode,
                       `${row.serviceCode} ${row.serviceName}`,
                       row.serviceDate,
+                      row.caregiverName,
                       formatTimeRange(row.beforeSnapshot.timeIn, row.beforeSnapshot.timeOut),
                       formatTimeRange(row.afterSnapshot.timeIn, row.afterSnapshot.timeOut),
                       formatDuration(row.beforeSnapshot.workedMinutes),
                       formatDuration(row.afterSnapshot.workedMinutes),
                       row.correctedByName,
+                      VISIT_STATUS_LABEL[row.correctedVisitStatus],
                       row.reason,
                       formatDateTime(row.createdAt),
                     ]),
@@ -1759,11 +1811,23 @@ export function ServiceVerificationReportsPage() {
               </Button>
             ) : null}
           </div>
+          {!correctionHistoryReportQuery.isLoading && !correctionHistoryReportQuery.isError ? (
+            <div className="mt-4 flex flex-wrap gap-3 text-sm">
+              <span className="rounded-lg bg-slate-100 px-3 py-2 font-semibold text-slate-700">
+                Corrections: {correctionRows.length}
+              </span>
+              <span className="rounded-lg bg-slate-100 px-3 py-2 font-semibold text-slate-700">
+                Net worked-time change: {correctionNetMinutes === 0
+                  ? "No change"
+                  : `${correctionNetMinutes > 0 ? "+" : "−"}${formatDuration(Math.abs(correctionNetMinutes))}`}
+              </span>
+            </div>
+          ) : null}
           {correctionHistoryReportQuery.isLoading ? (
             <p className="mt-4 text-sm text-slate-500">Loading correction history…</p>
           ) : correctionHistoryReportQuery.isError ? (
             <p className="mt-4 text-sm text-red-700">Could not load correction history.</p>
-          ) : (correctionHistoryReportQuery.data ?? []).length === 0 ? (
+          ) : correctionRows.length === 0 ? (
             <p className="mt-4 text-sm text-slate-500">No corrections match these filters.</p>
           ) : (
             <div className="mt-4 overflow-x-auto">
@@ -1774,20 +1838,23 @@ export function ServiceVerificationReportsPage() {
                     <th className="pb-2 pr-3 font-medium">Client</th>
                     <th className="pb-2 pr-3 font-medium">Service</th>
                     <th className="pb-2 pr-3 font-medium">Date</th>
+                    <th className="pb-2 pr-3 font-medium">Caregiver</th>
                     <th className="pb-2 pr-3 font-medium">Original</th>
                     <th className="pb-2 pr-3 font-medium">Corrected</th>
                     <th className="pb-2 pr-3 font-medium">Corrected by</th>
+                    <th className="pb-2 pr-3 font-medium">Status</th>
                     <th className="pb-2 pr-3 font-medium">Reason</th>
                     <th className="pb-2 font-medium">Corrected on</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {(correctionHistoryReportQuery.data ?? []).map((row) => (
+                  {correctionRows.map((row) => (
                     <tr key={row.correctionId} className="border-b border-slate-100 align-top">
                       <td className="py-2 pr-3 whitespace-nowrap font-mono text-xs">{row.visitNumber ?? "—"}</td>
                       <td className="py-2 pr-3">{row.clientCode}</td>
                       <td className="py-2 pr-3">{row.serviceCode} · {row.serviceName}</td>
-                      <td className="py-2 pr-3 whitespace-nowrap">{formatNumericDate(`${row.serviceDate}T12:00:00-07:00`)}</td>
+                      <td className="py-2 pr-3 whitespace-nowrap">{formatNumericDate(`${row.serviceDate}T12:00:00Z`)}</td>
+                      <td className="py-2 pr-3">{row.caregiverName}</td>
                       <td className="py-2 pr-3 whitespace-nowrap">
                         {formatTimeRange(row.beforeSnapshot.timeIn, row.beforeSnapshot.timeOut)}
                         <span className="block text-xs text-slate-400">{formatDuration(row.beforeSnapshot.workedMinutes)}</span>
@@ -1797,6 +1864,7 @@ export function ServiceVerificationReportsPage() {
                         <span className="block text-xs text-slate-400">{formatDuration(row.afterSnapshot.workedMinutes)}</span>
                       </td>
                       <td className="py-2 pr-3">{row.correctedByName}</td>
+                      <td className="py-2 pr-3">{VISIT_STATUS_LABEL[row.correctedVisitStatus]}</td>
                       <td className="py-2 pr-3">{row.reason}</td>
                       <td className="py-2 whitespace-nowrap">{formatDateTime(row.createdAt)}</td>
                     </tr>
