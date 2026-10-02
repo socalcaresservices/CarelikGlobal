@@ -1,10 +1,11 @@
 // Phase 3-6 infrastructure contract for the testable vertical slice.
 import { Template } from "aws-cdk-lib/assertions";
-import { ROUTE_KEYS } from "@carelik/sv-api";
+import { ROUTE_KEYS, ROUTES } from "@carelik/sv-api";
 import { describe, expect, it } from "vitest";
 import { buildOgeviaApp } from "../lib/app.js";
 import { ENVIRONMENTS } from "../lib/config.js";
-import { SERVICE_VERIFICATION_ROUTES } from "../lib/service-verification-api-stack.js";
+import { APPROVED_PUBLIC_ROUTE_KEYS } from "../lib/public-routes.js";
+import { assertPublicRoutesApproved, SERVICE_VERIFICATION_ROUTES } from "../lib/service-verification-api-stack.js";
 import { scanTemplate, type CfnTemplate } from "../lib/template-scan.js";
 import { contentSecurityPolicy } from "../lib/web-hosting-stack.js";
 import { newApp } from "./helpers.js";
@@ -18,19 +19,46 @@ const byName = (suffix: string) => {
 const api = byName("-ServiceVerificationApi");
 const web = byName("-WebHosting");
 
-describe("API routes == handler routes, every one JWT-protected", () => {
+describe("API routes == handler routes; JWT everywhere except the exact approved token links", () => {
   it("CDK routes are exactly the handler's route table", () => {
     expect(SERVICE_VERIFICATION_ROUTES.map((r) => `${r.method} ${r.path}`).sort()).toEqual(ROUTE_KEYS);
   });
 
-  it("every synthesized route uses the JWT authorizer and none is a catch-all", () => {
+  it("every synthesized route uses the JWT authorizer, except exactly the 7 approved token-link routes", () => {
     const routes = Object.values(api.findResources("AWS::ApiGatewayV2::Route"));
     expect(routes).toHaveLength(ROUTE_KEYS.length);
+    const anonymous: string[] = [];
     for (const r of routes) {
-      expect(r.Properties.AuthorizationType).toBe("JWT");
-      expect(r.Properties.AuthorizerId).toBeDefined();
       expect(r.Properties.RouteKey).not.toBe("$default");
+      expect(String(r.Properties.RouteKey)).not.toMatch(/^ANY /);
+      if (r.Properties.AuthorizationType === "JWT") {
+        expect(r.Properties.AuthorizerId).toBeDefined();
+      } else {
+        expect(r.Properties.AuthorizerId).toBeUndefined();
+        anonymous.push(r.Properties.RouteKey as string);
+      }
     }
+    expect(anonymous.sort()).toEqual([...APPROVED_PUBLIC_ROUTE_KEYS].sort());
+    expect(APPROVED_PUBLIC_ROUTE_KEYS).toHaveLength(7);
+  });
+
+  it("approved public routes are all opaque-token link routes under /v1/public/", () => {
+    for (const key of APPROVED_PUBLIC_ROUTE_KEYS) expect(key).toMatch(/^(GET|POST) \/v1\/public\/care-(portals|offers)\/\{token\}/);
+  });
+
+  it("the handler skips Cognito for exactly the approved routes (stack, handler and allowlist agree)", () => {
+    const handlerPublic = ROUTE_KEYS.filter((k) => ROUTES[k]!.public).sort();
+    const stackPublic = SERVICE_VERIFICATION_ROUTES.filter((r) => r.public).map((r) => `${r.method} ${r.path}`).sort();
+    expect(handlerPublic).toEqual([...APPROVED_PUBLIC_ROUTE_KEYS].sort());
+    expect(stackPublic).toEqual(handlerPublic);
+  });
+
+  it("synthesis refuses a public route that is not on the approved list", () => {
+    const extra = [...SERVICE_VERIFICATION_ROUTES, { method: "GET", path: "/v1/public/care-portals/{token}/everything", public: true }];
+    expect(() => assertPublicRoutesApproved(extra)).toThrow(/exactly match/);
+    const staff = SERVICE_VERIFICATION_ROUTES.map((r) => (r.path === "/v1/care-requests" ? { ...r, public: true } : r));
+    expect(() => assertPublicRoutesApproved(staff)).toThrow(/exactly match/);
+    expect(() => assertPublicRoutesApproved(SERVICE_VERIFICATION_ROUTES)).not.toThrow();
   });
 
   it("the authorizer accepts exactly the existing client and the test-slice client", () => {
@@ -126,6 +154,12 @@ describe("template scanner negative controls (each rule must fire)", () => {
   const scan = (stack: string, Resources: CfnTemplate["Resources"]) => scanTemplate(stack, { Resources }).map((v) => v.rule);
   it("unauthenticated and catch-all routes", () => {
     expect(scan("x", { R: { Type: "AWS::ApiGatewayV2::Route", Properties: { RouteKey: "GET /v1/me", AuthorizationType: "NONE" } } })).toContain("unauthenticated-route");
+    // Approved token-link route: allowed anonymous, but only exactly as approved.
+    expect(scan("x", { R: { Type: "AWS::ApiGatewayV2::Route", Properties: { RouteKey: "GET /v1/public/care-offers/{token}", AuthorizationType: "NONE" } } })).not.toContain("unauthenticated-route");
+    expect(scan("x", { R: { Type: "AWS::ApiGatewayV2::Route", Properties: { RouteKey: "DELETE /v1/public/care-offers/{token}", AuthorizationType: "NONE" } } })).toContain("unauthenticated-route");
+    expect(scan("x", { R: { Type: "AWS::ApiGatewayV2::Route", Properties: { RouteKey: "GET /v1/public/anything", AuthorizationType: "NONE" } } })).toContain("unauthenticated-route");
+    expect(scan("x", { R: { Type: "AWS::ApiGatewayV2::Route", Properties: { RouteKey: "GET /v1/public/care-offers/{token}/x", AuthorizationType: "NONE" } } })).toContain("unauthenticated-route");
+    expect(scan("x", { R: { Type: "AWS::ApiGatewayV2::Route", Properties: { RouteKey: "GET /v1/public/care-offers/{token}", AuthorizationType: "AWS_IAM", AuthorizerId: "x" } } })).toContain("unauthenticated-route");
     expect(scan("x", { R: { Type: "AWS::ApiGatewayV2::Route", Properties: { RouteKey: "$default", AuthorizationType: "JWT", AuthorizerId: "a" } } })).toContain("catch-all-route");
     expect(scan("x", { R: { Type: "AWS::ApiGatewayV2::Route", Properties: { RouteKey: "ANY /{proxy+}", AuthorizationType: "JWT", AuthorizerId: "a" } } })).toContain("catch-all-route");
   });
@@ -197,5 +231,15 @@ describe("Lambda creation ordering (regression: first deploy failed on CreateNet
     ]);
     const managed = JSON.stringify(resources[roleRef]!.Properties!.ManagedPolicyArns ?? []);
     expect(managed).not.toMatch(/AWSLambdaVPCAccessExecutionRole|AdministratorAccess/);
+  });
+});
+
+describe("smoke suite stays aligned with the approved public routes", () => {
+  it("slice/smoke.py lists exactly lib/public-routes.ts", async () => {
+    const { readFileSync } = await import("node:fs");
+    const text = readFileSync(new URL("../slice/smoke.py", import.meta.url), "utf8");
+    const block = text.slice(text.indexOf("APPROVED_PUBLIC_ROUTE_KEYS = sorted(["), text.indexOf("])", text.indexOf("APPROVED_PUBLIC_ROUTE_KEYS = sorted([")));
+    const keys = [...block.matchAll(/"([A-Z]+ \/v1\/[^"]+)"/g)].map((m) => m[1]).sort();
+    expect(keys).toEqual([...APPROVED_PUBLIC_ROUTE_KEYS].sort());
   });
 });

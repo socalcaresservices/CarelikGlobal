@@ -9,6 +9,7 @@ import {
   stackException,
   WILDCARD_RESOURCE_ALLOWED_ACTIONS,
 } from "./ownership.js";
+import { APPROVED_PUBLIC_ROUTE_KEYS } from "./public-routes.js";
 
 export interface CfnTemplate {
   Resources?: Record<string, CfnResource>;
@@ -209,7 +210,15 @@ export function scanTemplate(
     if (r.Type === "AWS::ApiGatewayV2::Route") {
       // Phase 3 gate: no API route may ever lose the Cognito JWT authorizer.
       const routeKey = String(props.RouteKey ?? "");
-      if (props.AuthorizationType !== "JWT" || props.AuthorizerId === undefined) {
+      const jwt = props.AuthorizationType === "JWT" && props.AuthorizerId !== undefined;
+      // Exact-match allowlist (lib/public-routes.ts): token-link routes only,
+      // and they must be truly anonymous (no half-configured authorizer).
+      const approvedPublic =
+        APPROVED_PUBLIC_ROUTE_KEYS.includes(routeKey) &&
+        routeKey.includes("{token}") &&
+        (props.AuthorizationType === undefined || props.AuthorizationType === "NONE") &&
+        props.AuthorizerId === undefined;
+      if (!jwt && !approvedPublic) {
         flag(logicalId, "unauthenticated-route", `${routeKey} must use the Cognito JWT authorizer`);
       }
       if (routeKey === "$default" || routeKey.startsWith("ANY ")) {

@@ -41,7 +41,17 @@ RDS_ID = "ogevia-prod-postgres"
 EVIDENCE_BUCKET = "ogevia-prod-signature-evidence-%s-%s" % (ACCOUNT, REGION)
 EXISTING_CLIENT = "1i27abbina08fvg1i9u8vprgo9"
 TEST_ORG_SLUG = "ogevia-test-slice"
-EXPECTED_ROUTES = 35
+EXPECTED_ROUTES = 36
+# Must equal infra/aws/lib/public-routes.ts (checked by a unit test).
+APPROVED_PUBLIC_ROUTE_KEYS = sorted([
+    "GET /v1/public/care-portals/{token}",
+    "POST /v1/public/care-portals/{token}/requests",
+    "GET /v1/public/care-portals/{token}/requests/{requestId}",
+    "POST /v1/public/care-portals/{token}/requests/{requestId}/cancel",
+    "GET /v1/public/care-offers/{token}",
+    "POST /v1/public/care-offers/{token}/respond",
+    "POST /v1/public/care-offers/{token}/cancel-assignment",
+])
 
 RESULTS = []
 
@@ -343,6 +353,84 @@ def workflow(args, inv, cg, mg):
     return {"sensitive": [cg, mg, org, v1, v2, sig_b64[:40], "Technical problem prevented"]}
 
 
+# ---------------------------------------------------------------- care requests
+def care_workflow(args, inv, cg, mg):
+    """Client link -> availability -> offer -> Available (no auto-assign) -> agency
+    assignment (one reservation) -> caregiver call-out (same shift, Coverage Needed)
+    -> client cancellation -> link revocation. SYNTHETIC TEST data only."""
+    C = "care"
+    s, me = inv.call("GET /v1/me", mg)
+    orgs = [m for m in (me or {}).get("memberships", []) if m.get("organizationSlug") == TEST_ORG_SLUG]
+    if not check(C, "manager has care_requests.manage in the test agency", s == 200 and orgs and "care_requests.manage" in orgs[0]["permissions"]):
+        return
+    org = orgs[0]["organizationId"]
+    s, cl = inv.call("GET /v1/care-portals/clients", mg, query={"organizationId": org})
+    clients = dict((c["clientCode"], c["clientId"]) for c in (cl or {}).get("clients", []))
+    if not check(C, "TEST-C01 available for a client link", "TEST-C01" in clients):
+        return
+    s, pr = inv.call("POST /v1/care-portals", mg, body={"organizationId": org, "clientId": clients["TEST-C01"], "label": "smoke (synthetic)"})
+    token = (pr or {}).get("portal", {}).get("token", "")
+    check(C, "agency creates a reusable client link (256-bit token returned once)", s == 201 and len(token) == 64)
+    s, portal = inv.call("GET /v1/public/care-portals/{token}", None, path={"token": token})
+    services = (portal or {}).get("services", [])
+    check(C, "client link shows only that client's authorized services", s == 200 and services and all(x["clientCode"] == "TEST-C01" for x in services))
+    if not services:
+        return
+    service = services[0]["serviceId"]
+    start = (datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(days=5)).replace(hour=18, minute=0, second=0, microsecond=0)
+    s, short = inv.call("POST /v1/public/care-portals/{token}/requests", None, path={"token": token},
+                        body={"serviceId": service, "startsAt": start.isoformat(), "endsAt": (start + datetime.timedelta(hours=2)).isoformat(), "requestKey": str(uuid.uuid4())})
+    check(C, "requests under 3 hours are refused (422)", s == 422)
+    key = str(uuid.uuid4())
+    body = {"serviceId": service, "startsAt": start.isoformat(), "endsAt": (start + datetime.timedelta(hours=4)).isoformat(), "requestKey": key, "note": "smoke (synthetic)"}
+    s, rq = inv.call("POST /v1/public/care-portals/{token}/requests", None, path={"token": token}, body=body)
+    req = (rq or {}).get("request", {})
+    check(C, "client submits a request through the link (not short notice)", s == 201 and req.get("status") == "requested" and req.get("shortNotice") is False)
+    s, again = inv.call("POST /v1/public/care-portals/{token}/requests", None, path={"token": token}, body=body)
+    check(C, "re-submitting the same request is idempotent", s == 201 and (again or {}).get("request", {}).get("requestId") == req.get("requestId"))
+    rid = req.get("requestId")
+    if not rid:
+        return
+    allweek = [{"weekday": d, "specific_date": None, "start_local": "00:00", "end_local": "23:59"} for d in range(7)]
+    s, _ = inv.call("POST /v1/availability/me", cg, body={"organizationId": org, "windows": allweek, "unavailableDates": []})
+    check(C, "caregiver records explicit availability", s in (200, 201, 204), "status %s" % s)
+    s, cand = inv.call("GET /v1/care-requests/{requestId}/candidates", mg, path={"requestId": rid}, query={"organizationId": org})
+    cands = (cand or {}).get("caregivers", [])
+    check(C, "available caregiver is a candidate", s == 200 and len(cands) >= 1)
+    if not cands:
+        return
+    cr = cands[0]["caregiverRecordId"]
+    s, of = inv.call("POST /v1/care-requests/{requestId}/offers", mg, path={"requestId": rid}, body={"organizationId": org, "caregiverRecordId": cr})
+    offer = (of or {}).get("offer", {})
+    check(C, "agency sends an offer link", s == 201 and len(offer.get("token", "")) == 64)
+    s, rs = inv.call("POST /v1/public/care-offers/{token}/respond", None, path={"token": offer.get("token")}, body={"available": True})
+    check(C, "caregiver answers Available through the link", s == 200 and (rs or {}).get("status") == "available")
+    s, lst = inv.call("GET /v1/care-requests", mg, query={"organizationId": org})
+    row = next((r for r in (lst or {}).get("requests", []) if r["requestId"] == rid), {})
+    check(C, "Available does NOT assign (pending agency decision)", row.get("status") == "accepted_pending_assignment" and not row.get("assignedCaregiverName"))
+    s, _ = inv.call("POST /v1/care-requests/{requestId}/assign", cg, path={"requestId": rid}, body={"organizationId": org, "offerId": offer.get("offerId")})
+    check(C, "a caregiver cannot assign (403)", s == 403)
+    s, asg = inv.call("POST /v1/care-requests/{requestId}/assign", mg, path={"requestId": rid}, body={"organizationId": org, "offerId": offer.get("offerId")})
+    shift = (asg or {}).get("shiftId")
+    check(C, "agency assigns: one shift created", s == 200 and shift)
+    s, view = inv.call("GET /v1/public/care-portals/{token}/requests/{requestId}", None, path={"token": token, "requestId": rid})
+    check(C, "client sees Assigned through the link", s == 200 and view["request"]["status"] == "assigned")
+    s, co = inv.call("POST /v1/public/care-offers/{token}/cancel-assignment", None, path={"token": offer.get("token")}, body={"reason": "smoke call-out (synthetic)"})
+    check(C, "caregiver call-out returns the request to Coverage Needed", s == 200 and (co or {}).get("status") == "coverage_needed")
+    s, lst = inv.call("GET /v1/care-requests", mg, query={"organizationId": org})
+    row = next((r for r in (lst or {}).get("requests", []) if r["requestId"] == rid), {})
+    check(C, "staff queue shows Coverage Needed", row.get("status") == "coverage_needed")
+    s, cc = inv.call("POST /v1/public/care-portals/{token}/requests/{requestId}/cancel", None, path={"token": token, "requestId": rid}, body={"reason": "smoke (synthetic)"})
+    check(C, "client cancels through the link", s == 200 and (cc or {}).get("status") == "client_cancelled")
+    s, _ = inv.call("GET /v1/public/care-offers/{token}", None, path={"token": offer.get("token")})
+    check(C, "offer link stops working after client cancellation (404)", s == 404)
+    s, rv = inv.call("POST /v1/care-portals/revoke", mg, body={"organizationId": org, "clientId": clients["TEST-C01"]})
+    check(C, "agency revokes the client's links", s == 200 and (rv or {}).get("revoked", 0) >= 1)
+    s, _ = inv.call("GET /v1/public/care-portals/{token}", None, path={"token": token})
+    check(C, "revoked client link -> 404", s == 404)
+    return [token, offer.get("token", "")]
+
+
 # ---------------------------------------------------------------- infra (aws mode)
 def infra(args, out):
     web, api_url, client_id = out["WebOrigin"], out["ApiUrl"], out["TestAppClientId"]
@@ -369,15 +457,27 @@ def infra(args, out):
         check(G, "JWT authorizer: issuer = existing pool", jwt["Issuer"] == "https://cognito-idp.%s.amazonaws.com/%s" % (REGION, POOL))
         check(G, "JWT audience = ogevia-web + test client only", sorted(jwt["Audience"]) == sorted([EXISTING_CLIENT, client_id]))
         routes = aws("apigatewayv2", "get-routes", "--api-id", api_id)["Items"]
-        public_care = [r for r in routes if "/v1/public/care-" in r["RouteKey"]]
-        staff_routes = [r for r in routes if r not in public_care]
-        check(G, "%d routes; only opaque-token care links are public" % EXPECTED_ROUTES, len(routes) == EXPECTED_ROUTES
-              and len(public_care) == 7
+        public_care = [r for r in routes if r.get("AuthorizationType") != "JWT"]
+        staff_routes = [r for r in routes if r.get("AuthorizationType") == "JWT"]
+        check(G, "%d routes; only the exact approved token-link routes are public" % EXPECTED_ROUTES, len(routes) == EXPECTED_ROUTES
+              and sorted(r["RouteKey"] for r in public_care) == APPROVED_PUBLIC_ROUTE_KEYS
               and all(r.get("AuthorizationType") == "NONE" and not r.get("AuthorizerId") for r in public_care)
               and all(r.get("AuthorizationType") == "JWT" and r.get("AuthorizerId") for r in staff_routes)
               and not any(r["RouteKey"] == "$default" or r["RouteKey"].startswith("ANY ") for r in routes))
         code, _, _ = http(api_url + "/v1/me")
         check(G, "anonymous GET /v1/me -> 401", code == 401, "got %s" % code)
+        rnd = os.urandom(32).hex()
+        code, _, body = http(api_url + "/v1/public/care-portals/" + rnd)
+        check(G, "public portal link with an unknown token -> 404 (generic)", code == 404 and b"not valid or is no longer active" in body, "got %s" % code)
+        code, _, _ = http(api_url + "/v1/public/care-offers/" + rnd)
+        check(G, "public offer link with an unknown token -> 404", code == 404, "got %s" % code)
+        code, _, _ = http(api_url + "/v1/public/care-offers/" + rnd + "/respond", method="POST", headers={"content-type": "application/json"}, body=b'{"available":true}')
+        check(G, "public offer response with an unknown token -> 404", code == 404, "got %s" % code)
+        code, _, _ = http(api_url + "/v1/public/care-portals/not-a-token")
+        check(G, "public link with a malformed token -> 400", code == 400, "got %s" % code)
+        for key in ("/v1/care-requests", "/v1/care-portals/clients", "/v1/availability/me"):
+            code, _, _ = http(api_url + key + "?organizationId=" + str(uuid.uuid4()))
+            check(G, "anonymous staff/caregiver care route %s -> 401" % key, code == 401, "got %s" % code)
         code, _, _ = http(api_url + "/v1/clients/assigned?organizationId=" + str(uuid.uuid4()))
         check(G, "anonymous data route -> 401", code == 401, "got %s" % code)
         fake = "eyJhbGciOiJSUzI1NiIsImtpZCI6IngifQ." + base64.urlsafe_b64encode(json.dumps({"sub": str(uuid.uuid4()), "token_use": "access", "client_id": client_id}).encode()).decode().rstrip("=") + ".c2ln"
@@ -501,6 +601,9 @@ def main():
     groups = infra(args, out) if args.mode == "aws" else []
     inv = Invoker(args, client_id)
     sens = guarded("workflow", "service verification workflow", lambda: workflow(args, inv, args.caregiver_sub, args.manager_sub))
+    care_tokens = guarded("care", "care request workflow", lambda: care_workflow(args, inv, args.caregiver_sub, args.manager_sub)) or []
+    if isinstance(sens, dict):
+        sens["sensitive"] = sens.get("sensitive", []) + [t for t in care_tokens if t]
     if args.mode == "aws":
         log_check(groups, (sens or {}).get("sensitive", [args.caregiver_sub, args.manager_sub]))
     failed = [r for r in RESULTS if not r[2]]
