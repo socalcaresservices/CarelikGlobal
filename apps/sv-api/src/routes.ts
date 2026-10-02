@@ -23,7 +23,9 @@ export interface RouteContext {
 
 export interface Route {
   readonly status?: number;
-  /** Mutating routes require an Idempotency-Key header. */
+  /** Public routes are protected by a 256-bit opaque portal/offer token instead of Cognito. */
+  readonly public?: boolean;
+  /** Mutating routes require an Idempotency-Key header when the route handler consumes one. */
   readonly mutating: boolean;
   handle(ctx: RouteContext): Promise<unknown>;
 }
@@ -31,6 +33,16 @@ export interface Route {
 const SIGNER_ROLES = ["client", "parent", "guardian", "authorized_representative"] as const;
 const METHODS = ["draw", "assisted_mark", "typed", "verbal", "unable_to_confirm"] as const;
 const VISIT_STATUSES = ["draft", "awaiting_signature", "signed", "administrator_review", "corrected", "voided"] as const;
+const CARE_REQUEST_STATUSES = ["requested", "offering", "accepted_pending_assignment", "assigned", "coverage_needed", "client_cancelled", "filled", "closed"] as const;
+const OPAQUE_TOKEN = /^[0-9a-f]{64}$/i;
+const opaqueToken = (value: unknown, name = "token") => {
+  if (typeof value !== "string" || !OPAQUE_TOKEN.test(value)) throw new ApiError(400, "bad_request", `${name} is invalid.`);
+  return value.toLowerCase();
+};
+const booleanValue = (value: unknown, name: string) => {
+  if (typeof value !== "boolean") throw new ApiError(400, "bad_request", `${name} must be true or false.`);
+  return value;
+};
 
 const camel = (key: string) => key.replace(/_([a-z0-9])/g, (_, c: string) => c.toUpperCase());
 /** snake_case DB row -> camelCase JSON. Values are passed through unchanged. */
@@ -314,6 +326,260 @@ export const ROUTES: Record<string, Route> = {
       return { visits: await tx((db) => rows(db, "select * from ogevia_api.list_billing_review_visits($1, $2, $3)", [org, from, to])) };
     },
   },
+
+  "GET /v1/public/care-portals/{token}": {
+    public: true,
+    mutating: false,
+    handle: async ({ event, tx }) => {
+      const token = opaqueToken(p(event).token);
+      return { services: await tx((db) => rows(db, "select * from ogevia_api.get_public_care_portal($1)", [token])) };
+    },
+  },
+
+  "POST /v1/public/care-portals/{token}/requests": {
+    public: true,
+    status: 201,
+    mutating: true,
+    handle: async ({ event, tx }) => {
+      const token = opaqueToken(p(event).token);
+      const body = parseBody(event.body, event.isBase64Encoded);
+      const params = [
+        token,
+        uuid(body.serviceId, "serviceId"),
+        timestamp(body.startsAt, "startsAt"),
+        timestamp(body.endsAt, "endsAt"),
+        text(body.note, "note", 1000),
+        uuid(body.requestKey, "requestKey"),
+      ];
+      const [request] = await tx((db) => rows(db, "select * from ogevia_api.public_create_care_request($1,$2,$3,$4,$5,$6)", params));
+      return { request };
+    },
+  },
+
+  "GET /v1/public/care-portals/{token}/requests/{requestId}": {
+    public: true,
+    mutating: false,
+    handle: async ({ event, tx }) => {
+      const token = opaqueToken(p(event).token);
+      const requestId = uuid(p(event).requestId, "requestId");
+      const [request] = await tx((db) => rows(db, "select * from ogevia_api.public_get_care_request($1,$2)", [token, requestId]));
+      if (!request) throw new ApiError(404, "not_found", "Care request not found.");
+      return { request };
+    },
+  },
+
+  "POST /v1/public/care-portals/{token}/requests/{requestId}/cancel": {
+    public: true,
+    mutating: true,
+    handle: async ({ event, tx }) => {
+      const body = parseBody(event.body, event.isBase64Encoded);
+      const result = await tx(async (db) => {
+        const row = await db.query("select ogevia_api.public_cancel_care_request($1,$2,$3) status", [
+          opaqueToken(p(event).token),
+          uuid(p(event).requestId, "requestId"),
+          text(body.reason, "reason", 500),
+        ]);
+        return toCamel(row.rows[0]);
+      });
+      return result;
+    },
+  },
+
+  "GET /v1/public/care-offers/{token}": {
+    public: true,
+    mutating: false,
+    handle: async ({ event, tx }) => {
+      const [offer] = await tx((db) => rows(db, "select * from ogevia_api.public_get_care_offer($1)", [opaqueToken(p(event).token)]));
+      if (!offer) throw new ApiError(404, "not_found", "Care opportunity not found.");
+      return { offer };
+    },
+  },
+
+  "POST /v1/public/care-offers/{token}/respond": {
+    public: true,
+    mutating: true,
+    handle: async ({ event, tx }) => {
+      const body = parseBody(event.body, event.isBase64Encoded);
+      const result = await tx(async (db) => {
+        const row = await db.query("select ogevia_api.public_respond_care_offer($1,$2,$3) status", [
+          opaqueToken(p(event).token),
+          booleanValue(body.available, "available"),
+          text(body.note, "note", 500),
+        ]);
+        return toCamel(row.rows[0]);
+      });
+      return result;
+    },
+  },
+
+  "POST /v1/public/care-offers/{token}/cancel-assignment": {
+    public: true,
+    mutating: true,
+    handle: async ({ event, tx }) => {
+      const body = parseBody(event.body, event.isBase64Encoded);
+      const result = await tx(async (db) => {
+        const row = await db.query("select ogevia_api.public_cancel_assigned_offer($1,$2) status", [
+          opaqueToken(p(event).token),
+          text(body.reason, "reason", 500, { required: true }),
+        ]);
+        return toCamel(row.rows[0]);
+      });
+      return result;
+    },
+  },
+
+  "GET /v1/care-requests": {
+    mutating: false,
+    handle: async ({ event, tx }) => {
+      const query = q(event);
+      const status = query.status ? oneOf(query.status, "status", CARE_REQUEST_STATUSES) : null;
+      return { requests: await tx((db) => rows(db, "select * from ogevia_api.list_care_requests($1,$2)", [orgParam(event), status])) };
+    },
+  },
+
+  "GET /v1/care-requests/{requestId}/candidates": {
+    mutating: false,
+    handle: async ({ event, tx }) => ({
+      caregivers: await tx((db) => rows(db, "select * from ogevia_api.list_available_caregivers($1,$2)", [
+        orgParam(event), uuid(p(event).requestId, "requestId"),
+      ])),
+    }),
+  },
+
+  "GET /v1/care-requests/{requestId}/offers": {
+    mutating: false,
+    handle: async ({ event, tx }) => ({
+      offers: await tx((db) => rows(db, "select * from ogevia_api.list_care_request_offers($1,$2)", [
+        orgParam(event), uuid(p(event).requestId, "requestId"),
+      ])),
+    }),
+  },
+
+  "POST /v1/care-requests/{requestId}/offers": {
+    status: 201,
+    mutating: true,
+    handle: async ({ event, tx }) => {
+      const body = parseBody(event.body, event.isBase64Encoded);
+      const [offer] = await tx((db) => rows(db, "select * from ogevia_api.send_care_offer($1,$2,$3)", [
+        uuid(body.organizationId, "organizationId"),
+        uuid(p(event).requestId, "requestId"),
+        uuid(body.caregiverRecordId, "caregiverRecordId"),
+      ]));
+      return { offer };
+    },
+  },
+
+  "POST /v1/care-requests/{requestId}/assign": {
+    mutating: true,
+    handle: async ({ event, tx }) => {
+      const body = parseBody(event.body, event.isBase64Encoded);
+      const result = await tx(async (db) => {
+        const row = await db.query("select ogevia_api.assign_care_request($1,$2,$3) shift_id", [
+          uuid(body.organizationId, "organizationId"),
+          uuid(p(event).requestId, "requestId"),
+          uuid(body.offerId, "offerId"),
+        ]);
+        return toCamel(row.rows[0]);
+      });
+      return result;
+    },
+  },
+
+  "GET /v1/care-portals/clients": {
+    mutating: false,
+    handle: async ({ event, tx }) => ({
+      clients: await tx((db) => rows(db, "select * from ogevia_api.list_client_portal_options($1)", [orgParam(event)])),
+    }),
+  },
+
+  "POST /v1/care-portals": {
+    status: 201,
+    mutating: true,
+    handle: async ({ event, tx }) => {
+      const body = parseBody(event.body, event.isBase64Encoded);
+      const [portal] = await tx((db) => rows(db, "select * from ogevia_api.create_client_care_portal($1,$2,$3)", [
+        uuid(body.organizationId, "organizationId"),
+        uuid(body.clientId, "clientId"),
+        text(body.label, "label", 100),
+      ]));
+      return { portal };
+    },
+  },
+
+  "GET /v1/care-alert-staff": {
+    mutating: false,
+    handle: async ({ event, tx }) => ({
+      staff: await tx((db) => rows(db, "select * from ogevia_api.list_care_alert_staff($1)", [orgParam(event)])),
+    }),
+  },
+
+  "POST /v1/care-alert-staff": {
+    mutating: true,
+    handle: async ({ event, tx }) => {
+      const body = parseBody(event.body, event.isBase64Encoded);
+      if (!Array.isArray(body.userIds)) throw new ApiError(400, "bad_request", "userIds must be an array.");
+      const userIds = body.userIds.map((value) => uuid(value, "userId"));
+      await tx((db) => db.query("select ogevia_api.replace_care_alert_staff($1,$2::uuid[])", [
+        uuid(body.organizationId, "organizationId"), userIds,
+      ]));
+      return { saved: true };
+    },
+  },
+
+  "GET /v1/care-notifications": {
+    mutating: false,
+    handle: async ({ event, tx }) => ({
+      notifications: await tx((db) => rows(db, "select * from ogevia_api.list_staff_care_notifications($1)", [orgParam(event)])),
+    }),
+  },
+
+  "GET /v1/availability/me": {
+    mutating: false,
+    handle: async ({ event, tx }) => ({
+      windows: await tx((db) => rows(db, "select * from ogevia_api.get_my_availability($1)", [orgParam(event)])),
+    }),
+  },
+
+  "POST /v1/availability/me": {
+    mutating: true,
+    handle: async ({ event, tx }) => {
+      const body = parseBody(event.body, event.isBase64Encoded);
+      if (!Array.isArray(body.windows) || !Array.isArray(body.unavailableDates)) {
+        throw new ApiError(400, "bad_request", "windows and unavailableDates must be arrays.");
+      }
+      await tx((db) => db.query("select ogevia_api.replace_my_availability($1,$2::jsonb,$3::jsonb)", [
+        uuid(body.organizationId, "organizationId"),
+        JSON.stringify(body.windows),
+        JSON.stringify(body.unavailableDates),
+      ]));
+      return { saved: true };
+    },
+  },
+
+  "GET /v1/care-opportunities": {
+    mutating: false,
+    handle: async ({ event, tx }) => ({
+      opportunities: await tx((db) => rows(db, "select * from ogevia_api.list_my_care_opportunities($1)", [orgParam(event)])),
+    }),
+  },
+
+  "POST /v1/care-opportunities/{offerId}/respond": {
+    mutating: true,
+    handle: async ({ event, tx }) => {
+      const body = parseBody(event.body, event.isBase64Encoded);
+      const result = await tx(async (db) => {
+        const row = await db.query("select ogevia_api.respond_my_care_opportunity($1,$2,$3,$4) status", [
+          uuid(body.organizationId, "organizationId"),
+          uuid(p(event).offerId, "offerId"),
+          booleanValue(body.available, "available"),
+          text(body.note, "note", 500),
+        ]);
+        return toCamel(row.rows[0]);
+      });
+      return result;
+    },
+  },
+
 };
 
 export const ROUTE_KEYS = Object.keys(ROUTES).sort();
