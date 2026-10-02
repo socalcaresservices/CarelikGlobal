@@ -139,13 +139,25 @@ export function createAwsServiceVerificationBackend(
       });
       return services;
     },
-    async listCorrectionHistoryReport(organizationId, dateFrom, dateTo, clientId, serviceId) {
+    async listCorrectionHistoryReport(
+      organizationId,
+      dateFrom,
+      dateTo,
+      clientId,
+      serviceId,
+      caregiverUserId,
+      correctedByUserId,
+      status,
+    ) {
       const { corrections } = await api.get<{ corrections: CorrectionHistoryReportRow[] }>("/v1/reports/correction-history", {
         organizationId,
         dateFrom,
         dateTo,
         clientId,
         serviceId,
+        caregiverUserId,
+        correctedByUserId,
+        status,
       });
       return corrections;
     },
