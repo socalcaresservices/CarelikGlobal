@@ -28,6 +28,12 @@ export function CareRequestsPage({ api }: { api: AwsApiClient }) {
     enabled: !!activeOrganizationId,
     refetchInterval: 15_000,
   });
+  const notifications = useQuery({
+    queryKey: ["care-notifications", activeOrganizationId],
+    queryFn: () => api.get<{ notifications: Array<{ notificationId: string; eventKey: string }> }>("/v1/care-notifications", { organizationId: activeOrganizationId }),
+    enabled: !!activeOrganizationId,
+    refetchInterval: 15_000,
+  });
   const clients = useQuery({
     queryKey: ["care-portal-clients", activeOrganizationId],
     queryFn: () => api.get<{ clients: ClientOption[] }>("/v1/care-portals/clients", { organizationId: activeOrganizationId }),
@@ -83,7 +89,7 @@ export function CareRequestsPage({ api }: { api: AwsApiClient }) {
 
   return (
     <section className="space-y-6">
-      <div><h1 className="text-2xl font-semibold text-slate-950">Care requests</h1><p className="mt-1 text-sm text-slate-600">Client requests, caregiver availability, assignment, and replacement coverage in one queue.</p></div>
+      <div className="flex flex-wrap items-start justify-between gap-3"><div><h1 className="text-2xl font-semibold text-slate-950">Care requests</h1><p className="mt-1 text-sm text-slate-600">Client requests, caregiver availability, assignment, and replacement coverage in one queue.</p></div>{(notifications.data?.notifications.length ?? 0) > 0 ? <span className="rounded-full bg-amber-100 px-3 py-1 text-sm font-semibold text-amber-800">{notifications.data!.notifications.length} new alert{notifications.data!.notifications.length === 1 ? "" : "s"}</span> : null}</div>
 
       <Card>
         <h2 className="font-semibold text-slate-950">Client request link</h2>
