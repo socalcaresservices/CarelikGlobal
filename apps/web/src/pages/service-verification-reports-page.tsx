@@ -651,6 +651,42 @@ export function ServiceVerificationReportsPage() {
     );
   }, [billable]);
 
+  const clientServiceSubtotals = useMemo(() => {
+    const map = new Map<
+      string,
+      {
+        key: string;
+        code: string;
+        legalName: string | null;
+        serviceName: string;
+        workedMinutes: number;
+        billableMinutes: number;
+        visits: number;
+      }
+    >();
+    for (const row of billable) {
+      const key = `${row.client_id}:${row.service_id}`;
+      const entry = map.get(key) ?? {
+        key,
+        code: row.client_code,
+        legalName: row.client_legal_name,
+        serviceName: row.service_name,
+        workedMinutes: 0,
+        billableMinutes: 0,
+        visits: 0,
+      };
+      entry.workedMinutes += row.worked_minutes ?? 0;
+      entry.billableMinutes += row.billable_minutes ?? 0;
+      entry.visits += 1;
+      map.set(key, entry);
+    }
+    return Array.from(map.values()).sort(
+      (a, b) =>
+        a.code.localeCompare(b.code) ||
+        a.serviceName.localeCompare(b.serviceName),
+    );
+  }, [billable]);
+
   const chartData = useMemo(() => {
     const grouped = new Map<
       string,
