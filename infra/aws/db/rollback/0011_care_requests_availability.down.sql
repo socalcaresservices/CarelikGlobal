@@ -2,6 +2,8 @@
 -- Removes care-request workflow objects only. Existing shifts created from requests are retained.
 
 drop function if exists ogevia_api.public_respond_care_offer(text, boolean);
+drop function if exists ogevia_api.respond_my_care_offer(uuid, boolean);
+drop function if exists ogevia_api.list_my_care_opportunities(uuid);
 drop function if exists ogevia_api.public_offer_context(text);
 drop function if exists ogevia_api.public_cancel_care_request(text, uuid, text);
 drop function if exists ogevia_api.public_create_care_request(text, uuid, timestamptz, timestamptz, text, uuid);
