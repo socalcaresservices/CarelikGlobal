@@ -37,6 +37,28 @@ ACCT=$(aws sts get-caller-identity --query Account --output text)
 [[ "$ARN" == *AdministratorAccess* ]] || die "this needs the AdministratorAccess role (current: $ARN)"
 echo "Account $ACCT, region $AWS_REGION, role AdministratorAccess: OK"
 
+step "Static safety check of the templates being deployed"
+python3 - "$HERE/cdk.out" <<'PY' || die "template safety check failed (see above); not deploying"
+import glob, json, sys
+bad = []
+for f in glob.glob(sys.argv[1] + "/Ogevia-prod-*.template.json"):
+    res = json.load(open(f)).get("Resources", {})
+    for lid, r in res.items():
+        if r["Type"] != "AWS::Lambda::Function" or "VpcConfig" not in r.get("Properties", {}):
+            continue
+        role = r["Properties"]["Role"]["Fn::GetAtt"][0]
+        deps = r.get("DependsOn", [])
+        deps = deps if isinstance(deps, list) else [deps]
+        eni = [pid for pid, p in res.items() if p["Type"] in ("AWS::IAM::Policy", "AWS::IAM::ManagedPolicy")
+               and role in json.dumps(p["Properties"].get("Roles", [])) and "ec2:CreateNetworkInterface" in json.dumps(p["Properties"]["PolicyDocument"])]
+        if not eni or not any(e in deps for e in eni):
+            bad.append("%s: %s must DependsOn its ENI policy %s" % (f.split("/")[-1], lid, eni))
+for b in bad:
+    print("  " + b)
+print("VPC Lambda ENI-policy ordering: %s" % ("OK" if not bad else "BROKEN"))
+sys.exit(1 if bad else 0)
+PY
+
 step "Existing state (nothing is recreated)"
 BOOT=$(aws cloudformation describe-stacks --stack-name CDKToolkit --query 'Stacks[0].StackStatus' --output text 2>/dev/null || echo MISSING)
 [[ "$BOOT" == *_COMPLETE && "$BOOT" != *ROLLBACK* ]] || die "CDK bootstrap (CDKToolkit) is $BOOT"
@@ -70,31 +92,10 @@ for s in "${STACKS[@]}"; do
     *_IN_PROGRESS) echo "$s: $st (waiting)"; while aws cloudformation describe-stacks --stack-name "$s" --query 'Stacks[0].StackStatus' --output text | grep -q IN_PROGRESS; do sleep 20; done ;;
     ROLLBACK_COMPLETE) [[ "$s" == Ogevia-prod-ServiceVerificationApi ]] && recover_failed_api || die "$s is ROLLBACK_COMPLETE: owner review needed (only the API stack has an approved recovery)" ;;
     *_FAILED|DELETE_COMPLETE) die "$s is $st: owner review needed before anything else" ;;
+    NOT_DEPLOYED) echo "$s: not deployed yet (will be created)" ;;
     *) echo "$s: $st (reused)" ;;
   esac
 done
-
-step "Static safety check of the templates being deployed"
-python3 - "$HERE/cdk.out" <<'PY' || die "template safety check failed (see above); not deploying"
-import glob, json, sys
-bad = []
-for f in glob.glob(sys.argv[1] + "/Ogevia-prod-*.template.json"):
-    res = json.load(open(f)).get("Resources", {})
-    for lid, r in res.items():
-        if r["Type"] != "AWS::Lambda::Function" or "VpcConfig" not in r.get("Properties", {}):
-            continue
-        role = r["Properties"]["Role"]["Fn::GetAtt"][0]
-        deps = r.get("DependsOn", [])
-        deps = deps if isinstance(deps, list) else [deps]
-        eni = [pid for pid, p in res.items() if p["Type"] in ("AWS::IAM::Policy", "AWS::IAM::ManagedPolicy")
-               and role in json.dumps(p["Properties"].get("Roles", [])) and "ec2:CreateNetworkInterface" in json.dumps(p["Properties"]["PolicyDocument"])]
-        if not eni or not any(e in deps for e in eni):
-            bad.append("%s: %s must DependsOn its ENI policy %s" % (f.split("/")[-1], lid, eni))
-for b in bad:
-    print("  " + b)
-print("VPC Lambda ENI-policy ordering: %s" % ("OK" if not bad else "BROKEN"))
-sys.exit(1 if bad else 0)
-PY
 
 step "Planned infrastructure changes (read-only diff)"
 cd "$HERE"
