@@ -63,7 +63,13 @@ begin
     );
   end loop;
 
-  if v_attempt > 255 then
+  if exists (
+    select 1
+    from ogevia.service_visits existing
+    where existing.organization_id = new.organization_id
+      and existing.original_visit_id is null
+      and existing.visit_number_snapshot = v_candidate
+  ) then
     raise exception 'Could not allocate a unique two-character visit reference suffix'
       using errcode = 'OGC09';
   end if;
