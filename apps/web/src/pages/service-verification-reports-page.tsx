@@ -1355,11 +1355,21 @@ export function ServiceVerificationReportsPage() {
             </p>
           </div>
           <div className="text-right text-sm text-slate-600">
-            <p className="font-semibold">Service Verification Report</p>
-            {selectedCaregiverName ? (
-              <p>Caregiver: {selectedCaregiverName}</p>
+            <p className="font-semibold">
+              {reportView === "calendar"
+                ? "Client Monthly Service Calendar"
+                : reportView === "reconciliation"
+                  ? "Monthly Hours & Billing Reconciliation"
+                  : reportView === "corrections"
+                    ? "Correction History"
+                    : "Service Verification Report"}
+            </p>
+            {selectedClientName ? <p>Client: {selectedClientName}</p> : null}
+            {selectedCaregiverName ? <p>Caregiver: {selectedCaregiverName}</p> : null}
+            {reportView === "calendar" || reportView === "reconciliation" ? (
+              <p>Month: {reportMonth}</p>
             ) : null}
-            <p>{new Date().toLocaleDateString()}</p>
+            <p>Printed: {new Date().toLocaleDateString()}</p>
           </div>
         </div>
       </div>
