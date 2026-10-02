@@ -18,17 +18,19 @@ const byName = (suffix: string) => {
 const api = byName("-ServiceVerificationApi");
 const web = byName("-WebHosting");
 
-describe("API routes == handler routes, every one JWT-protected", () => {
+describe("API routes == handler routes with explicit auth contracts", () => {
   it("CDK routes are exactly the handler's route table", () => {
     expect(SERVICE_VERIFICATION_ROUTES.map((r) => `${r.method} ${r.path}`).sort()).toEqual(ROUTE_KEYS);
   });
 
-  it("every synthesized route uses the JWT authorizer and none is a catch-all", () => {
+  it("JWT protects app routes; only declared capability routes are public", () => {
     const routes = Object.values(api.findResources("AWS::ApiGatewayV2::Route"));
     expect(routes).toHaveLength(ROUTE_KEYS.length);
     for (const r of routes) {
-      expect(r.Properties.AuthorizationType).toBe("JWT");
-      expect(r.Properties.AuthorizerId).toBeDefined();
+      const declared = SERVICE_VERIFICATION_ROUTES.find((route) => `${route.method} ${route.path}` === r.Properties.RouteKey);
+      expect(r.Properties.AuthorizationType).toBe(declared?.auth === "public" ? "NONE" : "JWT");
+      if (declared?.auth === "public") expect(r.Properties.AuthorizerId).toBeUndefined();
+      else expect(r.Properties.AuthorizerId).toBeDefined();
       expect(r.Properties.RouteKey).not.toBe("$default");
     }
   });
