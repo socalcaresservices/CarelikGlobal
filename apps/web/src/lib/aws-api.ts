@@ -15,6 +15,8 @@ export class ApiRequestError extends Error {
 export interface AwsApiClient {
   get<T>(path: string, query?: Record<string, string | null | undefined>): Promise<T>;
   post<T>(path: string, body: unknown, options?: { idempotencyKey?: string }): Promise<T>;
+  publicGet<T>(path: string, query?: Record<string, string | null | undefined>): Promise<T>;
+  publicPost<T>(path: string, body: unknown, options?: { idempotencyKey?: string }): Promise<T>;
 }
 
 export function createAwsApiClient(options: {
@@ -25,12 +27,18 @@ export function createAwsApiClient(options: {
   const base = options.baseUrl.replace(/\/+$/, "");
   const doFetch = options.fetch ?? ((input: RequestInfo | URL, init?: RequestInit) => fetch(input, init));
 
-  async function request<T>(method: "GET" | "POST", path: string, init: { query?: Record<string, string | null | undefined>; body?: unknown; idempotencyKey?: string }): Promise<T> {
-    const token = await options.getAccessToken();
-    if (!token) throw new ApiRequestError(401, "unauthenticated", "Your session has ended. Please sign in again.");
+  async function request<T>(
+    method: "GET" | "POST",
+    path: string,
+    init: { query?: Record<string, string | null | undefined>; body?: unknown; idempotencyKey?: string },
+    requireAuth = true,
+  ): Promise<T> {
+    const token = requireAuth ? await options.getAccessToken() : null;
+    if (requireAuth && !token) throw new ApiRequestError(401, "unauthenticated", "Your session has ended. Please sign in again.");
     const url = new URL(`${base}${path}`, window.location.origin);
     for (const [k, v] of Object.entries(init.query ?? {})) if (v) url.searchParams.set(k, v);
-    const headers: Record<string, string> = { authorization: `Bearer ${token}`, accept: "application/json" };
+    const headers: Record<string, string> = { accept: "application/json" };
+    if (token) headers.authorization = `Bearer ${token}`;
     if (init.body !== undefined) headers["content-type"] = "application/json";
     if (init.idempotencyKey) headers["idempotency-key"] = init.idempotencyKey;
     let response: Response;
@@ -61,5 +69,7 @@ export function createAwsApiClient(options: {
   return {
     get: (path, query) => request("GET", path, query ? { query } : {}),
     post: (path, body, opts) => request("POST", path, { body, ...(opts?.idempotencyKey ? { idempotencyKey: opts.idempotencyKey } : {}) }),
+    publicGet: (path, query) => request("GET", path, query ? { query } : {}, false),
+    publicPost: (path, body, opts) => request("POST", path, { body, ...(opts?.idempotencyKey ? { idempotencyKey: opts.idempotencyKey } : {}) }, false),
   };
 }
