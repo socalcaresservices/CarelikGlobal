@@ -1,4 +1,4 @@
--- ROLLBACK 0011_care_requests_availability | CLASS: SAFE AUTOMATED
+-- ROLLBACK 0011_care_requests_availability | CLASS: BACKUP REQUIRED
 -- Removes the new scheduling-request objects. Do not run after real request data is accepted without a backup.
 
 drop function if exists ogevia_api.respond_my_care_opportunity(uuid,uuid,boolean,text);
