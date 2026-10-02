@@ -1122,13 +1122,13 @@ export function ServiceVerificationReportsPage() {
             {[
               {
                 label: "Worked hours",
-                value: formatHours(totalWorkedMinutes),
+                value: formatDuration(totalWorkedMinutes),
                 icon: <BarChart3 className="h-5 w-5" />,
                 color: "bg-indigo-50 text-indigo-800 border-indigo-100",
               },
               {
                 label: "Billable hours",
-                value: formatHours(totalBillableMinutes),
+                value: formatDuration(totalBillableMinutes),
                 icon: <Check className="h-5 w-5" />,
                 color: "bg-emerald-50 text-emerald-800 border-emerald-100",
               },
@@ -1313,10 +1313,10 @@ export function ServiceVerificationReportsPage() {
                         {entry.name}
                       </td>
                       <td className="py-2 text-indigo-700">
-                        {formatHours(entry.workedMinutes)} hrs
+                        {formatDuration(entry.workedMinutes)}
                       </td>
                       <td className="py-2 text-emerald-700">
-                        {formatHours(entry.billableMinutes)} hrs
+                        {formatDuration(entry.billableMinutes)}
                       </td>
                       <td className="py-2 text-slate-600">{entry.visits}</td>
                     </tr>
@@ -2145,7 +2145,7 @@ export function ServiceVerificationReportsPage() {
                     {row.client_legal_name ?? row.client_code}{" "}
                     <span className="text-slate-400">
                       · {row.caregiver_name} ·{" "}
-                      {formatVisitDate(row.service_date)}
+                      {formatNumericDate(`${row.service_date}T12:00:00-07:00`)}
                     </span>
                   </span>
                   <span className="flex flex-wrap gap-1.5">
