@@ -65,6 +65,7 @@ export const SERVICE_VERIFICATION_ROUTES: ReadonlyArray<{
   { method: apigw.HttpMethod.POST, path: "/v1/clients/{clientId}/request-link" },
   { method: apigw.HttpMethod.GET, path: "/v1/care-requests" },
   { method: apigw.HttpMethod.GET, path: "/v1/care-requests/{requestId}/candidates" },
+  { method: apigw.HttpMethod.GET, path: "/v1/care-requests/{requestId}/offers" },
   { method: apigw.HttpMethod.POST, path: "/v1/care-requests/{requestId}/offers" },
   { method: apigw.HttpMethod.POST, path: "/v1/care-requests/{requestId}/assign" },
   { method: apigw.HttpMethod.GET, path: "/public/request/{token}", auth: "public" },
