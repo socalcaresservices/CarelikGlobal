@@ -465,13 +465,13 @@ export const ROUTES: Record<string, Route> = {
       const body = parseBody(event.body, event.isBase64Encoded);
       const token = newOpaqueToken();
       const offerId = await tx(async (db) => {
-        const result = await db.query<{ id: string }>("select ogevia_api.send_care_offer($1,$2,$3,$4) id", [
+        const result = await db.query("select ogevia_api.send_care_offer($1,$2,$3,$4) id", [
           uuid(body.organizationId, "organizationId"),
           uuid(p(event).requestId, "requestId"),
           uuid(body.caregiverRecordId, "caregiverRecordId"),
           hashOpaqueToken(token),
         ]);
-        return result.rows[0]!.id;
+        return String(result.rows[0]!.id);
       });
       return { offer: { offerId, token } };
     },
@@ -507,13 +507,13 @@ export const ROUTES: Record<string, Route> = {
       const body = parseBody(event.body, event.isBase64Encoded);
       const token = newOpaqueToken();
       const portalId = await tx(async (db) => {
-        const result = await db.query<{ id: string }>("select ogevia_api.create_client_care_portal($1,$2,$3,$4) id", [
+        const result = await db.query("select ogevia_api.create_client_care_portal($1,$2,$3,$4) id", [
           uuid(body.organizationId, "organizationId"),
           uuid(body.clientId, "clientId"),
           hashOpaqueToken(token),
           text(body.label, "label", 100),
         ]);
-        return result.rows[0]!.id;
+        return String(result.rows[0]!.id);
       });
       return { portal: { portalId, token } };
     },
