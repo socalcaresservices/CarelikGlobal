@@ -1,7 +1,7 @@
 import { useMemo, useState, type FormEvent } from "react";
 import { useInfiniteQuery, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Download } from "lucide-react";
-import { Card, FilterBar, Button, SearchableCombobox, type ActiveFilter, type ComboboxOption } from "@carelik/ui";
+import { Card, FilterBar, Button, MultiSelectCombobox, type ActiveFilter, type ComboboxOption } from "@carelik/ui";
 import { incidentSeveritySchema, incidentStatusSchema } from "@carelik/shared";
 import type { IncidentSeverity, IncidentStatus } from "@carelik/shared";
 import { useOrganization } from "@/providers/organization-provider";
@@ -33,6 +33,8 @@ interface IncidentRow {
   caregiver_name: string | null;
   occurred_at: string;
   category: string;
+  // Full ordered list (20260826050000); category is its first entry.
+  categories?: string[] | null;
   severity: IncidentSeverity;
   status: IncidentStatus;
   description: string;
@@ -78,8 +80,17 @@ function toLocalInputValue(date: Date) {
   )}`;
 }
 
+// Older rows / databases without the migration only have the single category.
+function incidentCategories(row: Pick<IncidentRow, "category" | "categories">): string[] {
+  return row.categories && row.categories.length > 0 ? row.categories : [row.category];
+}
+function isMissingCategoriesColumn(error: { code?: string; message?: string }) {
+  return error.code === "PGRST204" && /categories/.test(error.message ?? "");
+}
+const categoriesLabel = (row: Pick<IncidentRow, "category" | "categories">) => incidentCategories(row).join(", ");
+
 const emptyForm = {
-  category: "",
+  categories: [] as string[],
   occurredAt: toLocalInputValue(new Date()),
   clientId: "",
   caregiverUserId: "",
@@ -175,12 +186,12 @@ export function IncidentsPage() {
 
   const table = useTableControls<IncidentRow, "when" | "category" | "severity" | "status">(filters.rows, {
     matchesSearch: (row, query) =>
-      row.category.toLowerCase().includes(query) ||
+      categoriesLabel(row).toLowerCase().includes(query) ||
       (row.client_name ?? "").toLowerCase().includes(query) ||
       (row.caregiver_name ?? "").toLowerCase().includes(query),
     sorters: {
       when: (a, b) => new Date(b.occurred_at).getTime() - new Date(a.occurred_at).getTime(),
-      category: (a, b) => a.category.localeCompare(b.category),
+      category: (a, b) => categoriesLabel(a).localeCompare(categoriesLabel(b)),
       severity: (a, b) => a.severity.localeCompare(b.severity),
       status: (a, b) => a.status.localeCompare(b.status)
     },
@@ -207,7 +218,7 @@ export function IncidentsPage() {
     ];
     const rows = table.rows.map((row) => [
       row.occurred_at,
-      row.category,
+      categoriesLabel(row),
       row.client_name,
       row.caregiver_name,
       row.severity,
@@ -260,22 +271,32 @@ export function IncidentsPage() {
     if (!activeOrganizationId) return;
 
     setFormError(null);
+    if (form.categories.length === 0) {
+      setFormError("Choose at least one category.");
+      return;
+    }
     setSaving(true);
     try {
       const {
         data: { user }
       } = await supabase.auth.getUser();
 
-      const { error } = await supabase.from("incidents").insert({
+      const base = {
         organization_id: activeOrganizationId,
-        category: form.category,
+        category: form.categories[0],
         occurred_at: new Date(form.occurredAt).toISOString(),
         client_id: form.clientId || null,
         caregiver_user_id: form.caregiverUserId || null,
         severity: form.severity,
         description: form.description,
         reported_by: user?.id ?? null
-      });
+      };
+      let { error } = await supabase.from("incidents").insert({ ...base, categories: form.categories });
+      // A database without 20260826050000 has no categories column (the API
+      // rejects unknown columns): file with the first category rather than fail.
+      if (error && isMissingCategoriesColumn(error)) {
+        ({ error } = await supabase.from("incidents").insert(base));
+      }
       if (error) throw error;
       setForm(emptyForm);
       refreshIncidents();
@@ -318,11 +339,10 @@ export function IncidentsPage() {
         <Card>
           <h3 className="font-semibold text-slate-950">File an incident</h3>
           <form onSubmit={handleFile} className="mt-4 grid gap-3 sm:grid-cols-2">
-            <SearchableCombobox
-              label="Category"
-              required
-              value={form.category || null}
-              onChange={(value) => setForm({ ...form, category: value ?? "" })}
+            <MultiSelectCombobox
+              label="Categories"
+              values={form.categories}
+              onChange={(values) => setForm({ ...form, categories: values })}
               options={incidentTypeOptions}
               placeholder="Search incident types…"
             />
@@ -531,7 +551,7 @@ export function IncidentsPage() {
                     <td className="py-2.5 whitespace-nowrap text-slate-600">
                       {new Date(row.occurred_at).toLocaleString()}
                     </td>
-                    <td className="py-2.5 text-slate-800">{row.category}</td>
+                    <td className="py-2.5 text-slate-800">{categoriesLabel(row)}</td>
                     <td className="py-2.5 text-slate-600">{row.client_name ?? "—"}</td>
                     <td className="py-2.5">
                       <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${severityStyles[row.severity]}`}>
