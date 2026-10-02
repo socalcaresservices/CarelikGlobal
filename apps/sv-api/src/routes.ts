@@ -1,3 +1,4 @@
+import { createHash, randomBytes } from "node:crypto";
 import type { Queryable } from "@carelik/auth/server";
 import { ApiError } from "./errors";
 import { signatureObjectKey, validateSignaturePng, type EvidenceStore } from "./evidence";
@@ -23,7 +24,9 @@ export interface RouteContext {
 
 export interface Route {
   readonly status?: number;
-  /** Mutating routes require an Idempotency-Key header. */
+  /** Public routes use an opaque, hashed capability token instead of Cognito. */
+  readonly auth?: "jwt" | "public";
+  /** Mutating routes require an Idempotency-Key header when the route calls idempotencyKey(). */
   readonly mutating: boolean;
   handle(ctx: RouteContext): Promise<unknown>;
 }
@@ -31,6 +34,16 @@ export interface Route {
 const SIGNER_ROLES = ["client", "parent", "guardian", "authorized_representative"] as const;
 const METHODS = ["draw", "assisted_mark", "typed", "verbal", "unable_to_confirm"] as const;
 const VISIT_STATUSES = ["draft", "awaiting_signature", "signed", "administrator_review", "corrected", "voided"] as const;
+const CARE_REQUEST_STATUSES = ["new", "awaiting_responses", "assigned", "cancelled", "closed"] as const;
+
+const tokenHash = (token: string) => createHash("sha256").update(token, "utf8").digest("hex");
+const newOpaqueToken = () => randomBytes(32).toString("base64url");
+const capabilityToken = (value: unknown, name: string) => {
+  if (typeof value !== "string" || !/^[A-Za-z0-9_-]{32,128}$/.test(value)) {
+    throw new ApiError(404, "not_found", `${name} is invalid or expired.`);
+  }
+  return value;
+};
 
 const camel = (key: string) => key.replace(/_([a-z0-9])/g, (_, c: string) => c.toUpperCase());
 /** snake_case DB row -> camelCase JSON. Values are passed through unchanged. */
@@ -254,6 +267,165 @@ export const ROUTES: Record<string, Route> = {
         throw new ApiError(500, "evidence_integrity_failure", "The stored signature failed an integrity check.");
       }
       return { contentType: "image/png", sha256: meta.sha256Hex, pngBase64: object.bytes.toString("base64") };
+    },
+  },
+
+  "GET /v1/care-requests/clients": {
+    mutating: false,
+    handle: async ({ event, tx }) => {
+      const org = orgParam(event);
+      return { clients: await tx((db) => rows(db, "select * from ogevia_api.list_care_request_clients($1)", [org])) };
+    },
+  },
+
+  "POST /v1/clients/{clientId}/request-link": {
+    status: 201,
+    mutating: true,
+    handle: async ({ event, tx }) => {
+      const body = parseBody(event.body, event.isBase64Encoded);
+      const org = uuid(body.organizationId, "organizationId");
+      const clientId = uuid(p(event).clientId, "clientId");
+      const token = newOpaqueToken();
+      const expiresAt = body.expiresAt ? timestamp(body.expiresAt, "expiresAt") : null;
+      const [result] = await tx((db) =>
+        rows(db, "select ogevia_api.create_client_request_link($1, $2, $3, $4) as link_id", [
+          org, clientId, tokenHash(token), expiresAt,
+        ]),
+      );
+      return { linkId: result.linkId, token };
+    },
+  },
+
+  "GET /v1/care-requests": {
+    mutating: false,
+    handle: async ({ event, tx }) => {
+      const query = q(event);
+      const org = orgParam(event);
+      const status = query.status ? oneOf(query.status, "status", CARE_REQUEST_STATUSES) : null;
+      return { requests: await tx((db) => rows(db, "select * from ogevia_api.list_care_requests($1, $2)", [org, status])) };
+    },
+  },
+
+  "GET /v1/care-requests/{requestId}/candidates": {
+    mutating: false,
+    handle: async ({ event, tx }) => {
+      const requestId = uuid(p(event).requestId, "requestId");
+      return { candidates: await tx((db) => rows(db, "select * from ogevia_api.list_care_request_candidates($1)", [requestId])) };
+    },
+  },
+
+  "POST /v1/care-requests/{requestId}/offers": {
+    status: 201,
+    mutating: true,
+    handle: async ({ event, tx }) => {
+      const requestId = uuid(p(event).requestId, "requestId");
+      const body = parseBody(event.body, event.isBase64Encoded);
+      if (!Array.isArray(body.caregiverRecordIds) || body.caregiverRecordIds.length < 1 || body.caregiverRecordIds.length > 20) {
+        throw new ApiError(400, "bad_request", "Select between 1 and 20 caregivers.");
+      }
+      const caregiverIds = body.caregiverRecordIds.map((value) => uuid(value, "caregiverRecordId"));
+      const expiresAt = body.expiresAt ? timestamp(body.expiresAt, "expiresAt") : new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
+      const offers: Array<{ caregiverRecordId: string; offerId: unknown; token: string }> = [];
+      await tx(async (db) => {
+        for (const caregiverRecordId of caregiverIds) {
+          const token = newOpaqueToken();
+          const result = await db.query(
+            "select ogevia_api.create_care_request_offer($1, $2, $3, $4) as offer_id",
+            [requestId, caregiverRecordId, tokenHash(token), expiresAt],
+          );
+          offers.push({ caregiverRecordId, offerId: (result.rows[0] as { offer_id: unknown }).offer_id, token });
+        }
+      });
+      return { offers, expiresAt };
+    },
+  },
+
+  "POST /v1/care-requests/{requestId}/assign": {
+    mutating: true,
+    handle: async ({ event, tx }) => {
+      const requestId = uuid(p(event).requestId, "requestId");
+      const body = parseBody(event.body, event.isBase64Encoded);
+      const caregiverRecordId = uuid(body.caregiverRecordId, "caregiverRecordId");
+      const [result] = await tx((db) =>
+        rows(db, "select ogevia_api.assign_care_request($1, $2) as shift_id", [requestId, caregiverRecordId]),
+      );
+      return { shiftId: result.shiftId };
+    },
+  },
+
+  "GET /public/request/{token}": {
+    auth: "public",
+    mutating: false,
+    handle: async ({ event, tx }) => {
+      const token = capabilityToken(p(event).token, "Request link");
+      const [context] = await tx((db) =>
+        rows(db, "select * from ogevia_api.public_request_link_context($1)", [tokenHash(token)]),
+      );
+      if (!context) throw new ApiError(404, "not_found", "Request link is invalid or expired.");
+      return { context };
+    },
+  },
+
+  "POST /public/request/{token}": {
+    auth: "public",
+    status: 201,
+    mutating: true,
+    handle: async ({ event, tx }) => {
+      const token = capabilityToken(p(event).token, "Request link");
+      const body = parseBody(event.body, event.isBase64Encoded);
+      const key = idempotencyKey(event.headers);
+      const serviceId = uuid(body.serviceId, "serviceId");
+      const requestedStart = timestamp(body.requestedStart, "requestedStart");
+      const requestedEnd = timestamp(body.requestedEnd, "requestedEnd");
+      const note = text(body.note, "note", 1000);
+      const [result] = await tx((db) =>
+        rows(db, "select ogevia_api.public_create_care_request($1, $2, $3, $4, $5, $6) as request_id", [
+          tokenHash(token), serviceId, requestedStart, requestedEnd, note, key,
+        ]),
+      );
+      return { requestId: result.requestId };
+    },
+  },
+
+  "POST /public/request/{token}/cancel": {
+    auth: "public",
+    mutating: true,
+    handle: async ({ event, tx }) => {
+      const token = capabilityToken(p(event).token, "Request link");
+      const body = parseBody(event.body, event.isBase64Encoded);
+      const requestId = uuid(body.requestId, "requestId");
+      const reason = text(body.reason, "reason", 500) ?? "";
+      await tx((db) =>
+        rows(db, "select ogevia_api.public_cancel_care_request($1, $2, $3)", [tokenHash(token), requestId, reason]),
+      );
+      return { cancelled: true };
+    },
+  },
+
+  "GET /public/opportunity/{token}": {
+    auth: "public",
+    mutating: false,
+    handle: async ({ event, tx }) => {
+      const token = capabilityToken(p(event).token, "Opportunity link");
+      const [context] = await tx((db) =>
+        rows(db, "select * from ogevia_api.public_offer_context($1)", [tokenHash(token)]),
+      );
+      if (!context) throw new ApiError(404, "not_found", "Opportunity link is invalid or expired.");
+      return { context };
+    },
+  },
+
+  "POST /public/opportunity/{token}/respond": {
+    auth: "public",
+    mutating: true,
+    handle: async ({ event, tx }) => {
+      const token = capabilityToken(p(event).token, "Opportunity link");
+      const body = parseBody(event.body, event.isBase64Encoded);
+      if (typeof body.available !== "boolean") throw new ApiError(400, "bad_request", "available must be true or false.");
+      const [result] = await tx((db) =>
+        rows(db, "select ogevia_api.public_respond_care_offer($1, $2) as status", [tokenHash(token), body.available]),
+      );
+      return { status: result.status };
     },
   },
 
