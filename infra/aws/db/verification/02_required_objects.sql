@@ -10,6 +10,7 @@ with required_tables(t) as (values
   ('register_visit_evidence'), ('confirm_service_visit'), ('void_service_visit'),
   ('correct_service_visit'), ('amend_client_authorization'), ('list_service_visits'),
   ('list_visit_corrections'), ('list_billing_review_visits'),
+  ('list_monthly_service_summary'), ('list_correction_history_report'),
   ('get_my_context'), ('get_visit_signature_evidence'), ('get_confirmation_replay')
 )
 select 'table_exists:' || t as check_name,
