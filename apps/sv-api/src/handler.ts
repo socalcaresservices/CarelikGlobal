@@ -65,17 +65,20 @@ export function createHandler(deps: HandlerDeps) {
     const route = ROUTES[routeKey];
     if (!route) return finish(json(404, errorBody("not_found", "No such endpoint."), requestId));
 
-    // Defense in depth: API Gateway's JWT authorizer already verified the
-    // access token. Re-check the verified claims; derive ONLY the sub.
-    let principal: AuthenticatedPrincipal;
-    try {
-      principal = principalFromClaims(claimsFromHttpApiEvent(event), {
-        issuer: deps.config.issuer,
-        clientIds: deps.config.appClientIds,
-      }, Math.floor(now() / 1000));
-    } catch (error) {
-      const reason = error instanceof PrincipalError ? error.reason : "missing_claims";
-      return finish(json(401, errorBody("unauthenticated", "Sign in again to continue."), requestId), { errorCode: reason });
+    // Public care-request/offer links use 256-bit opaque tokens and deliberately
+    // do not require a Cognito account. Every other route still requires the
+    // API Gateway JWT authorizer plus this defense-in-depth claims check.
+    let principal: AuthenticatedPrincipal | null = null;
+    if (!route.public) {
+      try {
+        principal = principalFromClaims(claimsFromHttpApiEvent(event), {
+          issuer: deps.config.issuer,
+          clientIds: deps.config.appClientIds,
+        }, Math.floor(now() / 1000));
+      } catch (error) {
+        const reason = error instanceof PrincipalError ? error.reason : "missing_claims";
+        return finish(json(401, errorBody("unauthenticated", "Sign in again to continue."), requestId), { errorCode: reason });
+      }
     }
 
     try {
@@ -86,10 +89,22 @@ export function createHandler(deps: HandlerDeps) {
           const client = await deps.db.connect();
           let broken = false;
           try {
-            return await withPrincipal(client, principal, work, {
-              requestId,
-              ...(deps.config.dbSetRole ? { setRole: deps.config.dbSetRole } : {}),
-            });
+            if (principal) {
+              return await withPrincipal(client, principal, work, {
+                requestId,
+                ...(deps.config.dbSetRole ? { setRole: deps.config.dbSetRole } : {}),
+              });
+            }
+            await client.query("begin");
+            try {
+              if (deps.config.dbSetRole) await client.query(`set local role ${deps.config.dbSetRole}`);
+              const result = await work(client);
+              await client.query("commit");
+              return result;
+            } catch (error) {
+              await client.query("rollback");
+              throw error;
+            }
           } catch (error) {
             // Connection-level failures poison the client; destroy it.
             broken = !(error as { code?: unknown })?.code;
