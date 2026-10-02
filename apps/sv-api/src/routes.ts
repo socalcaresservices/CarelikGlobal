@@ -1,3 +1,4 @@
+import { createHash, randomBytes } from "node:crypto";
 import type { Queryable } from "@carelik/auth/server";
 import { ApiError } from "./errors";
 import { signatureObjectKey, validateSignaturePng, type EvidenceStore } from "./evidence";
@@ -43,6 +44,8 @@ const booleanValue = (value: unknown, name: string) => {
   if (typeof value !== "boolean") throw new ApiError(400, "bad_request", `${name} must be true or false.`);
   return value;
 };
+const newOpaqueToken = () => randomBytes(32).toString("hex");
+const hashOpaqueToken = (token: string) => createHash("sha256").update(token, "hex").digest("hex");
 
 const camel = (key: string) => key.replace(/_([a-z0-9])/g, (_, c: string) => c.toUpperCase());
 /** snake_case DB row -> camelCase JSON. Values are passed through unchanged. */
@@ -332,7 +335,7 @@ export const ROUTES: Record<string, Route> = {
     mutating: false,
     handle: async ({ event, tx }) => {
       const token = opaqueToken(p(event).token);
-      return { services: await tx((db) => rows(db, "select * from ogevia_api.get_public_care_portal($1)", [token])) };
+      return { services: await tx((db) => rows(db, "select * from ogevia_api.get_public_care_portal($1)", [hashOpaqueToken(token)])) };
     },
   },
 
@@ -344,7 +347,7 @@ export const ROUTES: Record<string, Route> = {
       const token = opaqueToken(p(event).token);
       const body = parseBody(event.body, event.isBase64Encoded);
       const params = [
-        token,
+        hashOpaqueToken(token),
         uuid(body.serviceId, "serviceId"),
         timestamp(body.startsAt, "startsAt"),
         timestamp(body.endsAt, "endsAt"),
@@ -362,7 +365,7 @@ export const ROUTES: Record<string, Route> = {
     handle: async ({ event, tx }) => {
       const token = opaqueToken(p(event).token);
       const requestId = uuid(p(event).requestId, "requestId");
-      const [request] = await tx((db) => rows(db, "select * from ogevia_api.public_get_care_request($1,$2)", [token, requestId]));
+      const [request] = await tx((db) => rows(db, "select * from ogevia_api.public_get_care_request($1,$2)", [hashOpaqueToken(token), requestId]));
       if (!request) throw new ApiError(404, "not_found", "Care request not found.");
       return { request };
     },
@@ -375,7 +378,7 @@ export const ROUTES: Record<string, Route> = {
       const body = parseBody(event.body, event.isBase64Encoded);
       const result = await tx(async (db) => {
         const row = await db.query("select ogevia_api.public_cancel_care_request($1,$2,$3) status", [
-          opaqueToken(p(event).token),
+          hashOpaqueToken(opaqueToken(p(event).token)),
           uuid(p(event).requestId, "requestId"),
           text(body.reason, "reason", 500),
         ]);
@@ -389,7 +392,7 @@ export const ROUTES: Record<string, Route> = {
     public: true,
     mutating: false,
     handle: async ({ event, tx }) => {
-      const [offer] = await tx((db) => rows(db, "select * from ogevia_api.public_get_care_offer($1)", [opaqueToken(p(event).token)]));
+      const [offer] = await tx((db) => rows(db, "select * from ogevia_api.public_get_care_offer($1)", [hashOpaqueToken(opaqueToken(p(event).token))]));
       if (!offer) throw new ApiError(404, "not_found", "Care opportunity not found.");
       return { offer };
     },
@@ -402,7 +405,7 @@ export const ROUTES: Record<string, Route> = {
       const body = parseBody(event.body, event.isBase64Encoded);
       const result = await tx(async (db) => {
         const row = await db.query("select ogevia_api.public_respond_care_offer($1,$2,$3) status", [
-          opaqueToken(p(event).token),
+          hashOpaqueToken(opaqueToken(p(event).token)),
           booleanValue(body.available, "available"),
           text(body.note, "note", 500),
         ]);
@@ -419,7 +422,7 @@ export const ROUTES: Record<string, Route> = {
       const body = parseBody(event.body, event.isBase64Encoded);
       const result = await tx(async (db) => {
         const row = await db.query("select ogevia_api.public_cancel_assigned_offer($1,$2) status", [
-          opaqueToken(p(event).token),
+          hashOpaqueToken(opaqueToken(p(event).token)),
           text(body.reason, "reason", 500, { required: true }),
         ]);
         return toCamel(row.rows[0]);
@@ -460,12 +463,17 @@ export const ROUTES: Record<string, Route> = {
     mutating: true,
     handle: async ({ event, tx }) => {
       const body = parseBody(event.body, event.isBase64Encoded);
-      const [offer] = await tx((db) => rows(db, "select * from ogevia_api.send_care_offer($1,$2,$3)", [
-        uuid(body.organizationId, "organizationId"),
-        uuid(p(event).requestId, "requestId"),
-        uuid(body.caregiverRecordId, "caregiverRecordId"),
-      ]));
-      return { offer };
+      const token = newOpaqueToken();
+      const offerId = await tx(async (db) => {
+        const result = await db.query<{ id: string }>("select ogevia_api.send_care_offer($1,$2,$3,$4) id", [
+          uuid(body.organizationId, "organizationId"),
+          uuid(p(event).requestId, "requestId"),
+          uuid(body.caregiverRecordId, "caregiverRecordId"),
+          hashOpaqueToken(token),
+        ]);
+        return result.rows[0]!.id;
+      });
+      return { offer: { offerId, token } };
     },
   },
 
@@ -497,12 +505,17 @@ export const ROUTES: Record<string, Route> = {
     mutating: true,
     handle: async ({ event, tx }) => {
       const body = parseBody(event.body, event.isBase64Encoded);
-      const [portal] = await tx((db) => rows(db, "select * from ogevia_api.create_client_care_portal($1,$2,$3)", [
-        uuid(body.organizationId, "organizationId"),
-        uuid(body.clientId, "clientId"),
-        text(body.label, "label", 100),
-      ]));
-      return { portal };
+      const token = newOpaqueToken();
+      const portalId = await tx(async (db) => {
+        const result = await db.query<{ id: string }>("select ogevia_api.create_client_care_portal($1,$2,$3,$4) id", [
+          uuid(body.organizationId, "organizationId"),
+          uuid(body.clientId, "clientId"),
+          hashOpaqueToken(token),
+          text(body.label, "label", 100),
+        ]);
+        return result.rows[0]!.id;
+      });
+      return { portal: { portalId, token } };
     },
   },
 
