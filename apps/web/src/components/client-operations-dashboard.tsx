@@ -382,29 +382,68 @@ export function ClientOperationsDashboard({
                       </div>
                       <div className="rounded-xl bg-sky-50 p-3">
                         <p className="text-xs font-semibold text-sky-700">
-                          Delivered
+                          Worked
                         </p>
                         <p className="mt-1 text-xl font-black text-sky-950">
                           {formatHours(progress.deliveredHours)} hrs
                         </p>
                       </div>
-                      <div className="rounded-xl bg-amber-50 p-3">
-                        <p className="text-xs font-semibold text-amber-700">
-                          Remaining
+                      <div
+                        className={`rounded-xl p-3 ${progress.remainingHours !== null && progress.remainingHours < 0 ? "bg-rose-50" : "bg-amber-50"}`}
+                      >
+                        <p
+                          className={`text-xs font-semibold ${progress.remainingHours !== null && progress.remainingHours < 0 ? "text-rose-700" : "text-amber-700"}`}
+                        >
+                          {progress.remainingHours !== null && progress.remainingHours < 0
+                            ? "Over authorization"
+                            : progress.projectionBasis === "plan"
+                              ? "Left to schedule"
+                              : "Remaining"}
                         </p>
-                        <p className="mt-1 text-xl font-black text-amber-950">
-                          {formatHours(progress.remainingHours)} hrs
+                        <p
+                          className={`mt-1 text-xl font-black ${progress.remainingHours !== null && progress.remainingHours < 0 ? "text-rose-950" : "text-amber-950"}`}
+                        >
+                          {progress.remainingHours === null
+                            ? "—"
+                            : formatHours(Math.abs(progress.remainingHours))}{" "}
+                          {progress.remainingHours === null ? "" : "hrs"}
                         </p>
                       </div>
                       <div className="rounded-xl bg-emerald-50 p-3">
                         <p className="text-xs font-semibold text-emerald-700">
-                          Forecast
+                          {progress.projectionBasis === "plan"
+                            ? "Projected (worked + scheduled)"
+                            : "Forecast"}
                         </p>
                         <p className="mt-1 text-xl font-black text-emerald-950">
                           {formatHours(progress.projectedHours)} hrs
                         </p>
                       </div>
                     </div>
+
+                    {progress.breakdown ? (
+                      <dl
+                        aria-label={`Hours breakdown for ${row.service_name ?? "service"}`}
+                        className="mt-3 grid grid-cols-2 gap-x-4 gap-y-1 rounded-xl border border-slate-200 p-3 text-xs sm:grid-cols-5"
+                      >
+                        {(
+                          [
+                            ["Requested", progress.breakdown.requestedHours],
+                            ["Scheduled", progress.breakdown.scheduledHours],
+                            ["Still scheduled", progress.breakdown.upcomingHours],
+                            ["Confirmed", progress.breakdown.confirmedHours],
+                            ["Billable", progress.breakdown.billableHours],
+                          ] as const
+                        ).map(([label, value]) => (
+                          <div key={label}>
+                            <dt className="text-slate-500">{label}</dt>
+                            <dd className="font-semibold tabular-nums text-slate-900">
+                              {formatHours(value)} hrs
+                            </dd>
+                          </div>
+                        ))}
+                      </dl>
+                    ) : null}
 
                     {progress.utilizationPercent !== null ? (
                       <div className="mt-3">
@@ -416,7 +455,7 @@ export function ClientOperationsDashboard({
                         </div>
                         <p className="mt-1 text-xs text-slate-500">
                           {Math.round(progress.utilizationPercent)}% of monthly
-                          authorized hours delivered
+                          authorized hours worked
                         </p>
                       </div>
                     ) : null}

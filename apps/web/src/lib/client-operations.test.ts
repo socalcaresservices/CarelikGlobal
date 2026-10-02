@@ -64,4 +64,53 @@ describe("client operations calculations", () => {
     expect(progress.projectedHours).toBeNull();
     expect(progress.health).toBe("no-authorization");
   });
+
+  it("projects from the schedule, not a straight line, when the breakdown is available", () => {
+    // Day 2 of the month: 4 h worked, 76 h still scheduled. A straight-line
+    // pace (4 h / 2 days x 30) would forecast 60 h and call this 'behind'.
+    const progress = calculateServiceProgress(
+      {
+        ...baseRow,
+        delivered_minutes: 240,
+        worked_minutes: 240,
+        requested_minutes: 80 * 60,
+        scheduled_minutes: 80 * 60,
+        upcoming_scheduled_minutes: 76 * 60,
+        confirmed_minutes: 180,
+        billable_minutes: 180,
+        remaining_minutes: 0,
+        projected_minutes: 80 * 60,
+      },
+      new Date("2026-09-02T19:00:00.000Z"),
+    );
+    expect(progress.projectionBasis).toBe("plan");
+    expect(progress.projectedHours).toBe(80);
+    expect(progress.remainingHours).toBe(0);
+    expect(progress.health).toBe("on-track");
+    expect(progress.breakdown).toEqual({
+      requestedHours: 80,
+      scheduledHours: 80,
+      upcomingHours: 76,
+      confirmedHours: 3,
+      billableHours: 3,
+    });
+  });
+
+  it("reports a plan that exceeds the authorization as negative remaining", () => {
+    const progress = calculateServiceProgress(
+      { ...baseRow, worked_minutes: 600, scheduled_minutes: 5400, upcoming_scheduled_minutes: 4800, remaining_minutes: -600, projected_minutes: 5400 },
+      new Date("2026-08-10T19:00:00.000Z"),
+    );
+    expect(progress.remainingHours).toBe(-10);
+    expect(progress.projectedHours).toBe(90);
+  });
+
+  it("flags 'behind' when the scheduled plan falls short of the authorization", () => {
+    const progress = calculateServiceProgress(
+      { ...baseRow, worked_minutes: 600, scheduled_minutes: 1800, upcoming_scheduled_minutes: 1200, remaining_minutes: 2400, projected_minutes: 1800 },
+      new Date("2026-08-24T19:00:00.000Z"),
+    );
+    expect(progress.projectedHours).toBe(30);
+    expect(progress.health).toBe("behind");
+  });
 });
