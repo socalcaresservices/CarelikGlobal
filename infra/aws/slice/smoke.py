@@ -415,6 +415,25 @@ def care_workflow(args, inv, cg, mg):
     s, _ = inv.call("POST /v1/care-requests/{requestId}/assign", cg, path={"requestId": rid}, body={"organizationId": org, "offerId": offer.get("offerId")})
     check(C, "a caregiver cannot assign (403)", s == 403)
     s, asg = inv.call("POST /v1/care-requests/{requestId}/assign", mg, path={"requestId": rid}, body={"organizationId": org, "offerId": offer.get("offerId")})
+    if s == 409 and "authorized time" in ((asg or {}).get("error") or {}).get("message", ""):
+        # The month is already reserved by other TEST activity (e.g. owner browser testing).
+        # That refusal IS the authorization cap working; staff the same flow in the next
+        # authorized month instead of touching anyone else's synthetic requests.
+        check(C, "authorization cap enforced: assignment beyond the month's remaining authorized time is refused (409)", True,
+              "this month is already reserved by other TEST activity")
+        inv.call("POST /v1/public/care-portals/{token}/requests/{requestId}/cancel", None, path={"token": token, "requestId": rid}, body={"reason": "smoke (synthetic) - month full"})
+        now = datetime.datetime.now(datetime.timezone.utc)
+        nxt = (now.replace(day=1) + datetime.timedelta(days=32)).replace(day=5, hour=18, minute=0, second=0, microsecond=0)
+        s, rq = inv.call("POST /v1/public/care-portals/{token}/requests", None, path={"token": token},
+                         body={"serviceId": service, "startsAt": nxt.isoformat(), "endsAt": (nxt + datetime.timedelta(hours=4)).isoformat(), "requestKey": str(uuid.uuid4()), "note": "smoke (synthetic)"})
+        rid = (rq or {}).get("request", {}).get("requestId")
+        s, cand = inv.call("GET /v1/care-requests/{requestId}/candidates", mg, path={"requestId": rid}, query={"organizationId": org})
+        cands = (cand or {}).get("caregivers", [])
+        cr = cands[0]["caregiverRecordId"] if cands else cr
+        s, of = inv.call("POST /v1/care-requests/{requestId}/offers", mg, path={"requestId": rid}, body={"organizationId": org, "caregiverRecordId": cr})
+        offer = (of or {}).get("offer", {})
+        inv.call("POST /v1/public/care-offers/{token}/respond", None, path={"token": offer.get("token")}, body={"available": True})
+        s, asg = inv.call("POST /v1/care-requests/{requestId}/assign", mg, path={"requestId": rid}, body={"organizationId": org, "offerId": offer.get("offerId")})
     shift = (asg or {}).get("shiftId")
     check(C, "agency assigns: one shift created", s == 200 and shift)
     s, view = inv.call("GET /v1/public/care-portals/{token}/requests/{requestId}", None, path={"token": token, "requestId": rid})
