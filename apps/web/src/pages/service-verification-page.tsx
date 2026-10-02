@@ -20,6 +20,7 @@ import {
   formatClockTime,
   formatElapsed,
   formatHours,
+  formatScheduledWindow,
   formatVisitDate,
   type ServiceVisitStatus,
   type VisitAuthorizationStatus,
@@ -69,6 +70,8 @@ interface EndedVisit {
   serviceCode: string;
   serviceName: string;
   visitNumber: string | null;
+  scheduledStartsAt: string | null;
+  scheduledEndsAt: string | null;
 }
 
 interface VisitResult {
@@ -433,6 +436,8 @@ export function ServiceVerificationPage() {
         serviceCode: visit.service_code,
         serviceName: visit.service_name,
         visitNumber: visit.visit_number,
+        scheduledStartsAt: visit.scheduled_starts_at,
+        scheduledEndsAt: visit.scheduled_ends_at,
       });
       setPhase("confirm");
     } else if (phase === "loading" || phase === "select") {
@@ -536,6 +541,8 @@ export function ServiceVerificationPage() {
         serviceCode: active.service_code,
         serviceName: active.service_name,
         visitNumber: active.visit_number,
+        scheduledStartsAt: active.scheduled_starts_at,
+        scheduledEndsAt: active.scheduled_ends_at,
       });
       setConfirmationMode("signature");
       setSignatureKind("signature");
@@ -936,6 +943,16 @@ export function ServiceVerificationPage() {
                 </p>
               </div>
 
+              <p className="text-center text-sm text-slate-600">
+                {active.scheduled_starts_at ? "Scheduled shift: " : ""}
+                <span className="font-semibold text-slate-900">
+                  {formatScheduledWindow(
+                    active.scheduled_starts_at,
+                    active.scheduled_ends_at,
+                  )}
+                </span>
+              </p>
+
               {willExceed ? (
                 <div className="flex gap-3 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
                   <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0" />
@@ -995,6 +1012,13 @@ export function ServiceVerificationPage() {
                     `${endedVisit.serviceCode} · ${endedVisit.serviceName}`,
                   ],
                   ["Date", formatVisitDate(endedVisit.timeIn)],
+                  [
+                    "Scheduled",
+                    formatScheduledWindow(
+                      endedVisit.scheduledStartsAt,
+                      endedVisit.scheduledEndsAt,
+                    ),
+                  ],
                   ["Time in", formatClockTime(endedVisit.timeIn)],
                   ["Time out", formatClockTime(endedVisit.timeOut)],
                   [

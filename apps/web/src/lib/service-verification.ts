@@ -17,6 +17,19 @@ export function formatClockTime(value: string | Date): string {
   }).format(new Date(value));
 }
 
+// A visit is linked to its scheduled shift on the server at Time In
+// (20260826070000). Visits started with no matching shift - and every visit
+// recorded before the link existed - have no scheduled window.
+export const UNLINKED_VISIT_LABEL = "Not linked to a scheduled shift";
+
+export function formatScheduledWindow(
+  startsAt: string | null | undefined,
+  endsAt: string | null | undefined
+): string {
+  if (!startsAt || !endsAt) return UNLINKED_VISIT_LABEL;
+  return `${formatClockTime(startsAt)}–${formatClockTime(endsAt)}`;
+}
+
 export function formatVisitDate(value: string | Date): string {
   return new Intl.DateTimeFormat("en-US", {
     month: "short",

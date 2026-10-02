@@ -39,6 +39,7 @@ import { supabase } from "@/lib/supabase";
 import {
   AUTHORIZATION_STATUS_LABEL,
   formatDateTime,
+  formatScheduledWindow,
   formatHours,
   formatVisitDate,
   VISIT_STATUS_LABEL,
@@ -70,6 +71,10 @@ interface VisitReportRow {
   month_to_date_before_minutes: number | null;
   month_to_date_after_minutes: number | null;
   remaining_minutes: number | null;
+  // The linked shift's window (20260826070000); null when the visit has no
+  // scheduled shift.
+  scheduled_starts_at?: string | null;
+  scheduled_ends_at?: string | null;
 }
 
 interface VisitCorrectionRow {
@@ -1428,6 +1433,15 @@ export function ServiceVerificationReportsPage() {
                             {row.time_out
                               ? ` – ${formatDateTime(row.time_out)}`
                               : ""}
+                            <p className="text-xs text-slate-400">
+                              {row.scheduled_starts_at
+                                ? "Scheduled "
+                                : ""}
+                              {formatScheduledWindow(
+                                row.scheduled_starts_at,
+                                row.scheduled_ends_at,
+                              )}
+                            </p>
                           </td>
                           <td className="py-2 pr-3 text-slate-700">
                             {row.worked_minutes
