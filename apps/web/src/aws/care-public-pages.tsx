@@ -1,18 +1,31 @@
 import { useState, type ReactNode } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button, Card } from "@carelik/ui";
-import { useParams } from "react-router-dom";
+import { useLocation } from "react-router-dom";
 import type { AwsApiClient } from "@/lib/aws-api";
 
 type PortalService = { organizationName: string; clientCode: string; serviceId: string; serviceCode: string; serviceName: string; periodEnd: string };
 type CareRequest = { requestId: string; status: string; serviceCode: string; serviceName: string; startsAt: string; endsAt: string; caregiverName: string | null };
 type CareOffer = { offerId: string; status: string; serviceCode: string; serviceName: string; startsAt: string; endsAt: string; clientLabel: string };
 
+/**
+ * Link tokens travel in the URL FRAGMENT (/care#<token>): browsers never send
+ * the fragment to the web server, so CloudFront access logs and any proxy see
+ * only "/care". The token goes to the API only as a path segment that the API
+ * access logs record as the route template, never the value.
+ */
+// eslint-disable-next-line react-refresh/only-export-components
+export function useLinkToken(): string {
+  const { hash } = useLocation();
+  const value = hash.replace(/^#/, "");
+  return /^[0-9a-f]{64}$/i.test(value) ? value.toLowerCase() : "";
+}
+
 const when = (value: string) => new Date(value).toLocaleString([], { dateStyle: "medium", timeStyle: "short" });
 const toIso = (value: string) => new Date(value).toISOString();
 
 export function PublicCareRequestPage({ api }: { api: AwsApiClient }) {
-  const { token = "" } = useParams();
+  const token = useLinkToken();
   const qc = useQueryClient();
   const [serviceId, setServiceId] = useState("");
   const [startsAt, setStartsAt] = useState("");
@@ -88,7 +101,7 @@ export function PublicCareRequestPage({ api }: { api: AwsApiClient }) {
 }
 
 export function PublicCareOfferPage({ api }: { api: AwsApiClient }) {
-  const { token = "" } = useParams();
+  const token = useLinkToken();
   const qc = useQueryClient();
   const [reason, setReason] = useState("");
   const offer = useQuery({

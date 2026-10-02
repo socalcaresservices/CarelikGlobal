@@ -40,8 +40,9 @@ export function AwsRoutes({ api, publicApi }: { api: AwsApiClient; publicApi: Aw
     <Routes>
       <Route path="/login" element={<AwsLoginPage />} />
       <Route path="/auth/callback" element={<AuthCallbackPage />} />
-      <Route path="/care/:token" element={<PublicCareRequestPage api={publicApi} />} />
-      <Route path="/care-offer/:token" element={<PublicCareOfferPage api={publicApi} />} />
+      {/* Token links: the token is in the URL fragment (#...), never the path. */}
+      <Route path="/care" element={<PublicCareRequestPage api={publicApi} />} />
+      <Route path="/care-offer" element={<PublicCareOfferPage api={publicApi} />} />
       <Route
         path="*"
         element={

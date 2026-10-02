@@ -59,12 +59,16 @@ export function CareRequestsPage({ api }: { api: AwsApiClient }) {
 
   const createPortal = useMutation({
     mutationFn: () => api.post<{ portal: { portalId: string; token: string } }>("/v1/care-portals", { organizationId: activeOrganizationId, clientId }),
-    onSuccess: ({ portal }) => setPortalLink(window.location.origin + "/care/" + portal.token),
+    onSuccess: ({ portal }) => setPortalLink(window.location.origin + "/care#" + portal.token),
+  });
+  const revokePortals = useMutation({
+    mutationFn: () => api.post<{ revoked: number }>("/v1/care-portals/revoke", { organizationId: activeOrganizationId, clientId }),
+    onSuccess: () => setPortalLink(""),
   });
   const sendOffer = useMutation({
     mutationFn: (caregiverRecordId: string) => api.post<{ offer: { offerId: string; token: string } }>("/v1/care-requests/" + selectedRequestId + "/offers", { organizationId: activeOrganizationId, caregiverRecordId }),
     onSuccess: ({ offer }) => {
-      setOfferLink(window.location.origin + "/care-offer/" + offer.token);
+      setOfferLink(window.location.origin + "/care-offer#" + offer.token);
       void qc.invalidateQueries({ queryKey: ["care-offers", activeOrganizationId, selectedRequestId] });
       void qc.invalidateQueries({ queryKey: ["care-requests", activeOrganizationId] });
     },
@@ -101,7 +105,10 @@ export function CareRequestsPage({ api }: { api: AwsApiClient }) {
             <option value="">Select client</option>{(clients.data?.clients ?? []).map((c) => <option key={c.clientId} value={c.clientId}>{c.clientCode}</option>)}
           </select>
           <Button disabled={!clientId} loading={createPortal.isPending} onClick={() => createPortal.mutate()}>Create request link</Button>
+          <Button variant="secondary" disabled={!clientId} loading={revokePortals.isPending} onClick={() => revokePortals.mutate()}>Revoke this client's links</Button>
         </div>
+        {revokePortals.isSuccess ? <p role="status" className="mt-3 text-sm text-slate-700">{revokePortals.data.revoked} link(s) revoked. Old links no longer work; create a new link if needed.</p> : null}
+        {revokePortals.isError ? <p role="alert" className="mt-3 text-sm text-red-700">{revokePortals.error instanceof Error ? revokePortals.error.message : "Could not revoke links."}</p> : null}
         {portalLink ? <div className="mt-3 flex items-center gap-2"><input readOnly value={portalLink} className="min-w-0 flex-1 rounded-lg border border-slate-200 px-3 py-2 text-sm" /><Button variant="secondary" onClick={() => void navigator.clipboard.writeText(portalLink)}>Copy</Button></div> : null}
       </Card>
 
