@@ -30,6 +30,11 @@ create table ogevia.client_care_portals (
   token_hash text not null unique check (token_hash ~ '^[0-9a-f]{64}$'),
   label text,
   is_active boolean not null default true,
+  -- Optional hard expiry; NULL = valid until revoked. A revoked link never
+  -- becomes valid again (a new link must be issued).
+  expires_at timestamptz,
+  revoked_at timestamptz,
+  revoked_by uuid references ogevia.app_users(id),
   created_by uuid references ogevia.app_users(id),
   created_at timestamptz not null default now(),
   last_used_at timestamptz,
@@ -175,6 +180,35 @@ returns bigint language sql stable set search_path = ogevia, pg_temp as $$
     and r.care_request_id is distinct from p_exclude_request_id;
 $$;
 
+-- ---------------------------------------------------------------------------
+-- Opaque-token resolution. EVERY public (no-Cognito) function resolves its
+-- token only through these two functions, so the validity rules live in one
+-- place. The API stores/sends only SHA-256(token); an invalid, expired,
+-- revoked or out-of-scope token resolves to NULL and the caller raises the
+-- same generic OGN04, so responses never reveal which rule failed.
+-- ---------------------------------------------------------------------------
+create function ogevia.care_portal_by_token(p_token_hash text)
+returns ogevia.client_care_portals
+language sql stable set search_path = ogevia, pg_temp as $$
+  select p.* from ogevia.client_care_portals p
+  join ogevia.organizations o on o.id=p.organization_id and o.status='active'
+  join ogevia.clients c on c.id=p.client_id and c.organization_id=p.organization_id and c.status='active' and c.deleted_at is null
+  where p.token_hash=p_token_hash and p.is_active and p.revoked_at is null
+    and (p.expires_at is null or p.expires_at>now());
+$$;
+
+-- An offer link is usable only while its care request is still open and has
+-- not ended. Re-sending an offer replaces token_hash, which revokes the old link.
+create function ogevia.care_offer_by_token(p_token_hash text)
+returns ogevia.care_request_offers
+language sql stable set search_path = ogevia, pg_temp as $$
+  select o.* from ogevia.care_request_offers o
+  join ogevia.care_requests r on r.id=o.care_request_id and r.organization_id=o.organization_id
+  join ogevia.organizations org on org.id=o.organization_id and org.status='active'
+  join ogevia.caregiver_records cg on cg.id=o.caregiver_record_id and cg.organization_id=o.organization_id and cg.deleted_at is null
+  where o.token_hash=p_token_hash and r.status not in ('client_cancelled','closed') and r.ends_at>now();
+$$;
+
 create function ogevia_api.create_client_care_portal(p_organization_id uuid,p_client_id uuid,p_token_hash text,p_label text default null)
 returns uuid
 language plpgsql security definer set search_path = ogevia, pg_temp as $$
@@ -190,24 +224,28 @@ end;$$;
 
 create function ogevia_api.get_public_care_portal(p_token_hash text)
 returns table(organization_name text, client_code text, service_id uuid, service_code text, service_name text, period_end date)
-language sql security definer set search_path = ogevia, pg_temp as $$
+language plpgsql security definer set search_path = ogevia, pg_temp as $$
+declare v_portal ogevia.client_care_portals%rowtype;
+begin
+  v_portal := ogevia.care_portal_by_token(p_token_hash);
+  if v_portal.id is null then raise exception 'This link is not valid or is no longer active' using errcode='OGN04'; end if;
+  return query
   select o.display_name,c.client_code,s.id,s.code,s.name,a.period_end
-  from ogevia.client_care_portals p
-  join ogevia.organizations o on o.id=p.organization_id and o.status='active'
-  join ogevia.clients c on c.id=p.client_id and c.organization_id=p.organization_id and c.status='active' and c.deleted_at is null
-  join ogevia.client_authorizations a on a.organization_id=p.organization_id and a.client_id=p.client_id and a.is_current and a.deleted_at is null and a.period_end >= ogevia.organization_local_date(p.organization_id,now())
-  join ogevia.services s on s.id=a.service_id and s.organization_id=p.organization_id and s.is_active and s.deleted_at is null
-  where p.is_active and p.token_hash=p_token_hash
+  from ogevia.organizations o
+  join ogevia.clients c on c.id=v_portal.client_id and c.organization_id=o.id
+  join ogevia.client_authorizations a on a.organization_id=o.id and a.client_id=c.id and a.is_current and a.deleted_at is null and a.period_end >= ogevia.organization_local_date(o.id,now())
+  join ogevia.services s on s.id=a.service_id and s.organization_id=o.id and s.is_active and s.deleted_at is null
+  where o.id=v_portal.organization_id
   order by s.code;
-$$;
+end;$$;
 
 create function ogevia_api.public_create_care_request(p_token_hash text,p_service_id uuid,p_starts_at timestamptz,p_ends_at timestamptz,p_note text,p_request_key uuid)
 returns table(request_id uuid,status ogevia.care_request_status,short_notice boolean)
 language plpgsql security definer set search_path = ogevia, pg_temp as $$
 declare v_portal ogevia.client_care_portals%rowtype; v_auth ogevia.client_authorizations%rowtype; v_minutes integer; v_id uuid; v_short boolean;
 begin
-  select * into v_portal from ogevia.client_care_portals where is_active and token_hash=p_token_hash;
-  if v_portal.id is null then raise exception 'Invalid care portal' using errcode='OGA01'; end if;
+  v_portal := ogevia.care_portal_by_token(p_token_hash);
+  if v_portal.id is null then raise exception 'This link is not valid or is no longer active' using errcode='OGN04'; end if;
   if p_ends_at<=p_starts_at or p_starts_at<=now() then raise exception 'Choose a future time range' using errcode='OGV22'; end if;
   v_minutes:=ceil(extract(epoch from(p_ends_at-p_starts_at))/60)::integer;
   if v_minutes<180 then raise exception 'Care requests must be at least 3 hours' using errcode='OGV22'; end if;
@@ -233,18 +271,18 @@ returns table(request_id uuid,status ogevia.care_request_status,service_code tex
 language sql security definer set search_path = ogevia, pg_temp as $$
   select r.id,r.status,s.code,s.name,r.starts_at,r.ends_at,
     case when r.status='assigned' then coalesce(cr.preferred_name,cr.first_name) else null end
-  from ogevia.client_care_portals p join ogevia.care_requests r on r.portal_id=p.id
+  from ogevia.care_portal_by_token(p_token_hash) p join ogevia.care_requests r on r.portal_id=p.id
   join ogevia.services s on s.id=r.service_id
   left join ogevia.caregiver_records cr on cr.id=r.assigned_caregiver_record_id
-  where p.is_active and p.token_hash=p_token_hash and r.id=p_request_id;
+  where p.id is not null and r.id=p_request_id;
 $$;
 
 create function ogevia_api.public_cancel_care_request(p_token_hash text,p_request_id uuid,p_reason text default null)
 returns ogevia.care_request_status language plpgsql security definer set search_path = ogevia, pg_temp as $$
 declare r ogevia.care_requests%rowtype;
 begin
-  select cr.* into r from ogevia.client_care_portals p join ogevia.care_requests cr on cr.portal_id=p.id
-  where p.is_active and p.token_hash=p_token_hash and cr.id=p_request_id for update of cr;
+  select cr.* into r from ogevia.care_portal_by_token(p_token_hash) p join ogevia.care_requests cr on cr.portal_id=p.id
+  where p.id is not null and cr.id=p_request_id for update of cr;
   if r.id is null then raise exception 'Request not found' using errcode='OGN04'; end if;
   if r.status in ('client_cancelled','filled','closed') then return r.status; end if;
   update ogevia.care_requests set status='client_cancelled',cancelled_at=now(),updated_at=now() where id=r.id;
@@ -325,17 +363,22 @@ create function ogevia_api.public_get_care_offer(p_token_hash text)
 returns table(offer_id uuid,status ogevia.care_offer_status,service_code text,service_name text,starts_at timestamptz,ends_at timestamptz,client_label text)
 language sql security definer set search_path = ogevia, pg_temp as $$
  select o.id,o.status,s.code,s.name,r.starts_at,r.ends_at,coalesce(c.caregiver_display_code,c.client_code)
- from ogevia.care_request_offers o join ogevia.care_requests r on r.id=o.care_request_id join ogevia.services s on s.id=r.service_id join ogevia.clients c on c.id=r.client_id
- where o.token_hash=p_token_hash;
+ from ogevia.care_offer_by_token(p_token_hash) o join ogevia.care_requests r on r.id=o.care_request_id join ogevia.services s on s.id=r.service_id join ogevia.clients c on c.id=r.client_id
+ where o.id is not null;
 $$;
 
 create function ogevia_api.public_respond_care_offer(p_token_hash text,p_available boolean,p_note text default null)
 returns ogevia.care_offer_status language plpgsql security definer set search_path = ogevia, pg_temp as $$
-declare o ogevia.care_request_offers%rowtype; v_status ogevia.care_offer_status;
+declare o ogevia.care_request_offers%rowtype; v_status ogevia.care_offer_status; v_open boolean;
 begin
- select * into o from ogevia.care_request_offers where token_hash=p_token_hash for update;
- if o.id is null then raise exception 'Offer not found' using errcode='OGN04'; end if;
+ o := ogevia.care_offer_by_token(p_token_hash);
+ if o.id is null then raise exception 'This link is not valid or is no longer active' using errcode='OGN04'; end if;
+ select * into o from ogevia.care_request_offers where id=o.id for update;
  if o.status not in('sent','available','not_available') then return o.status; end if;
+ -- Responses are only accepted while the request is still being staffed and has not started.
+ select r.status in('requested','offering','accepted_pending_assignment','coverage_needed') and r.starts_at>now() into v_open
+ from ogevia.care_requests r where r.id=o.care_request_id for update;
+ if not v_open then raise exception 'This opportunity is no longer open' using errcode='OGC09'; end if;
  v_status:=case when p_available then 'available'::ogevia.care_offer_status else 'not_available'::ogevia.care_offer_status end;
  update ogevia.care_request_offers set status=v_status,note=nullif(btrim(p_note),''),responded_at=now(),updated_at=now() where id=o.id;
  if p_available then update ogevia.care_requests set status='accepted_pending_assignment',updated_at=now() where id=o.care_request_id and status='offering'; end if;
@@ -390,9 +433,14 @@ create function ogevia_api.public_cancel_assigned_offer(p_token_hash text,p_reas
 returns ogevia.care_request_status language plpgsql security definer set search_path = ogevia, pg_temp as $$
 declare o ogevia.care_request_offers%rowtype; r ogevia.care_requests%rowtype;
 begin
- select * into o from ogevia.care_request_offers where token_hash=p_token_hash for update;
- if o.id is null or o.status<>'assigned' then raise exception 'Assigned offer not found' using errcode='OGN04'; end if;
+ o := ogevia.care_offer_by_token(p_token_hash);
+ if o.id is null then raise exception 'This link is not valid or is no longer active' using errcode='OGN04'; end if;
+ select * into o from ogevia.care_request_offers where id=o.id for update;
  select * into r from ogevia.care_requests where id=o.care_request_id for update;
+ -- Only the caregiver currently assigned to this request can call out.
+ if o.status<>'assigned' or r.status<>'assigned' or r.assigned_caregiver_record_id is distinct from o.caregiver_record_id then
+   raise exception 'Assigned offer not found' using errcode='OGN04';
+ end if;
  update ogevia.care_request_offers set status='cancelled',note=nullif(btrim(p_reason),''),updated_at=now() where id=o.id;
  update ogevia.care_requests set status='coverage_needed',updated_at=now() where id=r.id;
  insert into ogevia.shift_coverage_events(organization_id,shift_id,event_type,original_caregiver_record_id,reason,before_snapshot,after_snapshot)
@@ -432,6 +480,26 @@ language sql stable security definer set search_path = ogevia, pg_temp as $$
  select n.id,n.care_request_id,n.event_key,n.created_at from ogevia.care_notifications n where n.organization_id=p_organization_id and n.recipient_type='staff' and n.recipient_user_id=ogevia.require_actor() and n.read_at is null and ogevia.has_permission(p_organization_id,'care_requests.read') order by n.created_at desc limit 100;
 $$;
 
+-- Staff revoke every active link for a client (e.g. a family link was shared
+-- too widely). Revoked links never work again; issue a new link if needed.
+create function ogevia_api.revoke_client_care_portals(p_organization_id uuid,p_client_id uuid)
+returns integer language plpgsql security definer set search_path = ogevia, pg_temp as $$
+declare v_actor uuid := ogevia.require_actor(); v_count integer;
+begin
+  if not ogevia.has_permission(p_organization_id,'care_requests.manage') then raise exception 'Forbidden' using errcode='OGA03'; end if;
+  update ogevia.client_care_portals set is_active=false,revoked_at=now(),revoked_by=v_actor
+  where organization_id=p_organization_id and client_id=p_client_id and revoked_at is null;
+  get diagnostics v_count = row_count;
+  if v_count>0 then
+    perform ogevia.write_audit(p_organization_id,'care_portal.revoked','client',p_client_id,null,jsonb_build_object('revoked_links',v_count));
+  end if;
+  return v_count;
+end;$$;
+
+revoke all on function ogevia.care_portal_by_token(text) from public;
+revoke all on function ogevia.care_offer_by_token(text) from public;
+revoke all on function ogevia_api.revoke_client_care_portals(uuid,uuid) from public;
+grant execute on function ogevia_api.revoke_client_care_portals(uuid,uuid) to ogevia_app;
 revoke all on function ogevia_api.create_client_care_portal(uuid,uuid,text,text) from public;
 revoke all on function ogevia_api.get_public_care_portal(text) from public;
 revoke all on function ogevia_api.public_create_care_request(text,uuid,timestamptz,timestamptz,text,uuid) from public;

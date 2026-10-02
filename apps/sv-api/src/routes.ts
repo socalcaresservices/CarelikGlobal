@@ -166,15 +166,20 @@ export const ROUTES: Record<string, Route> = {
 
       // 2. Authority check BEFORE writing to S3: the visit must be the caller's
       //    own visit in this organization, waiting for a signature.
-      await tx(async (db) => {
+      const waiting = await tx(async (db) => {
         const r = await db.query("select visit_id, visit_status from ogevia_api.get_active_service_visit($1)", [org]);
         const mine = (r.rows as Array<{ visit_id: string; visit_status: string }>).find((v) => v.visit_id === visit);
+        return !!mine && mine.visit_status === "awaiting_signature";
+      });
+      if (!waiting) {
+        // A duplicate of this same request may have committed between the
+        // replay check above and this check: return its stored result.
+        const [committed] = await replay();
+        if (committed) return { result: committed };
         // One response for "not yours", "already locked" and "still running":
         // it reveals nothing about visits the caller does not own.
-        if (!mine || mine.visit_status !== "awaiting_signature") {
-          throw new ApiError(409, "conflict", "This visit is not waiting for a confirmation.");
-        }
-      });
+        throw new ApiError(409, "conflict", "This visit is not waiting for a confirmation.");
+      }
 
       // 3. Private, KMS-encrypted, checksummed write. Key = UUIDs only.
       const objectKey = signatureObjectKey(org, visit);
@@ -375,13 +380,10 @@ export const ROUTES: Record<string, Route> = {
     public: true,
     mutating: true,
     handle: async ({ event, tx }) => {
-      const body = parseBody(event.body, event.isBase64Encoded);
+      // Validate everything before touching the database (anonymous route).
+      const params = [hashOpaqueToken(opaqueToken(p(event).token)), uuid(p(event).requestId, "requestId"), text(parseBody(event.body, event.isBase64Encoded).reason, "reason", 500)];
       const result = await tx(async (db) => {
-        const row = await db.query("select ogevia_api.public_cancel_care_request($1,$2,$3) status", [
-          hashOpaqueToken(opaqueToken(p(event).token)),
-          uuid(p(event).requestId, "requestId"),
-          text(body.reason, "reason", 500),
-        ]);
+        const row = await db.query("select ogevia_api.public_cancel_care_request($1,$2,$3) status", params);
         return toCamel(row.rows[0]);
       });
       return result;
@@ -392,7 +394,8 @@ export const ROUTES: Record<string, Route> = {
     public: true,
     mutating: false,
     handle: async ({ event, tx }) => {
-      const [offer] = await tx((db) => rows(db, "select * from ogevia_api.public_get_care_offer($1)", [hashOpaqueToken(opaqueToken(p(event).token))]));
+      const tokenHash = hashOpaqueToken(opaqueToken(p(event).token));
+      const [offer] = await tx((db) => rows(db, "select * from ogevia_api.public_get_care_offer($1)", [tokenHash]));
       if (!offer) throw new ApiError(404, "not_found", "Care opportunity not found.");
       return { offer };
     },
@@ -403,12 +406,9 @@ export const ROUTES: Record<string, Route> = {
     mutating: true,
     handle: async ({ event, tx }) => {
       const body = parseBody(event.body, event.isBase64Encoded);
+      const params = [hashOpaqueToken(opaqueToken(p(event).token)), booleanValue(body.available, "available"), text(body.note, "note", 500)];
       const result = await tx(async (db) => {
-        const row = await db.query("select ogevia_api.public_respond_care_offer($1,$2,$3) status", [
-          hashOpaqueToken(opaqueToken(p(event).token)),
-          booleanValue(body.available, "available"),
-          text(body.note, "note", 500),
-        ]);
+        const row = await db.query("select ogevia_api.public_respond_care_offer($1,$2,$3) status", params);
         return toCamel(row.rows[0]);
       });
       return result;
@@ -420,11 +420,9 @@ export const ROUTES: Record<string, Route> = {
     mutating: true,
     handle: async ({ event, tx }) => {
       const body = parseBody(event.body, event.isBase64Encoded);
+      const params = [hashOpaqueToken(opaqueToken(p(event).token)), text(body.reason, "reason", 500, { required: true })];
       const result = await tx(async (db) => {
-        const row = await db.query("select ogevia_api.public_cancel_assigned_offer($1,$2) status", [
-          hashOpaqueToken(opaqueToken(p(event).token)),
-          text(body.reason, "reason", 500, { required: true }),
-        ]);
+        const row = await db.query("select ogevia_api.public_cancel_assigned_offer($1,$2) status", params);
         return toCamel(row.rows[0]);
       });
       return result;
@@ -498,6 +496,23 @@ export const ROUTES: Record<string, Route> = {
     handle: async ({ event, tx }) => ({
       clients: await tx((db) => rows(db, "select * from ogevia_api.list_client_portal_options($1)", [orgParam(event)])),
     }),
+  },
+
+  "POST /v1/care-portals/revoke": {
+    // Revokes every active link for one client (e.g. a family link was shared
+    // too widely). Naturally idempotent: revoking twice revokes nothing more.
+    mutating: false,
+    handle: async ({ event, tx }) => {
+      const body = parseBody(event.body, event.isBase64Encoded);
+      const revoked = await tx(async (db) => {
+        const r = await db.query("select ogevia_api.revoke_client_care_portals($1,$2) n", [
+          uuid(body.organizationId, "organizationId"),
+          uuid(body.clientId, "clientId"),
+        ]);
+        return Number((r.rows[0] as { n: number }).n);
+      });
+      return { revoked };
+    },
   },
 
   "POST /v1/care-portals": {

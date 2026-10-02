@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { describe, expect, it, vi } from "vitest";
 import { ConfigError, loadConfig } from "../src/config";
 import { ApiError, toApiError } from "../src/errors";
@@ -165,5 +166,71 @@ describe("handler boundary (no database reached)", () => {
       "POST /v1/visits/{visitId}/confirm",
       "POST /v1/visits/{visitId}/corrections",
     ]));
+  });
+});
+
+describe("opaque-token care links (public routes)", () => {
+  const raw = "ab".repeat(32);
+  const sha = createHash("sha256").update(raw, "hex").digest("hex");
+  function fakeDb(rows: unknown[] = []) {
+    const queries: Array<{ text: string; params?: unknown[] }> = [];
+    const db = {
+      connect: vi.fn(async () => ({
+        query: async (text: string, params?: unknown[]) => {
+          queries.push({ text, ...(params ? { params } : {}) });
+          return { rows: /select \*/.test(text) ? rows : [] };
+        },
+        release: () => {},
+      })),
+    };
+    return { db, queries };
+  }
+  const logs: LogRecord[] = [];
+  const make = (db: ReturnType<typeof fakeDb>["db"]) =>
+    createHandler({ config: CONFIG, db: db as never, evidence: new MemoryEvidenceStore(), log: (r) => logs.push(r) });
+
+  it("a malformed token is rejected (400) before any database connection", async () => {
+    const f = fakeDb();
+    const routes = ["GET /v1/public/care-portals/{token}", "POST /v1/public/care-portals/{token}/requests", "GET /v1/public/care-portals/{token}/requests/{requestId}",
+      "POST /v1/public/care-portals/{token}/requests/{requestId}/cancel", "GET /v1/public/care-offers/{token}", "POST /v1/public/care-offers/{token}/respond",
+      "POST /v1/public/care-offers/{token}/cancel-assignment"];
+    for (const route of routes) {
+      for (const bad of ["short", "z".repeat(64), raw + "00", "../" + raw.slice(3)]) {
+        const r = await make(f.db)(event(route, { sub: null, path: { token: bad, requestId: "00000000-0000-4000-8000-000000000001" }, body: { available: true, reason: "x" } }));
+        expect(r.statusCode, route).toBe(400);
+      }
+    }
+    expect(f.db.connect).not.toHaveBeenCalled();
+  });
+
+  it("the database receives only SHA-256(token); no identity is established; restricted role is used", async () => {
+    const f = fakeDb();
+    const r = await make(f.db)(event("GET /v1/public/care-offers/{token}", { sub: null, path: { token: raw } }));
+    expect(r.statusCode).toBe(404);
+    const all = JSON.stringify(f.queries);
+    expect(all).toContain(sha);
+    expect(all).not.toContain(raw);
+    expect(f.queries.some((q) => q.text.includes("begin_request"))).toBe(false);
+    expect(f.queries.map((q) => q.text)).toEqual(expect.arrayContaining(["begin", "set local role ogevia_app", "commit"]));
+  });
+
+  it("claims sent to a public route are ignored (the token is the only authority)", async () => {
+    const f = fakeDb();
+    await make(f.db)(event("GET /v1/public/care-portals/{token}", { claims: claims("11111111-2222-4333-8444-555555555555", { "custom:role": "manager" }), path: { token: raw } }));
+    expect(f.queries.some((q) => q.text.includes("begin_request"))).toBe(false);
+  });
+
+  it("staff care routes still require Cognito (401, no DB)", async () => {
+    const f = fakeDb();
+    for (const key of ["GET /v1/care-requests", "POST /v1/care-portals", "POST /v1/care-portals/revoke", "POST /v1/care-requests/{requestId}/assign"]) {
+      const r = await make(f.db)(event(key, { sub: null, body: {} }));
+      expect(r.statusCode, key).toBe(401);
+    }
+    expect(f.db.connect).not.toHaveBeenCalled();
+  });
+
+  it("tokens never appear in log records", () => {
+    expect(JSON.stringify(logs)).not.toContain(raw);
+    expect(JSON.stringify(logs)).not.toContain(sha);
   });
 });
