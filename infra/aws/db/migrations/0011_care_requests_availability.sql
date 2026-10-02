@@ -257,6 +257,13 @@ begin
   end if;
   insert into ogevia.care_notifications(organization_id,care_request_id,recipient_type,caregiver_record_id,event_key)
   select r.organization_id,r.id,'caregiver',r.assigned_caregiver_record_id,'client_cancelled' where r.assigned_caregiver_record_id is not null;
+  insert into ogevia.care_notifications(organization_id,care_request_id,recipient_type,recipient_user_id,event_key)
+  select r.organization_id,r.id,'staff',m.user_id,case when r.starts_at < now()+interval '24 hours' then 'client_cancelled_short_notice' else 'client_cancelled' end
+  from ogevia.organization_memberships m
+  where m.organization_id=r.organization_id and m.status='active'
+    and (exists(select 1 from ogevia.care_request_alert_recipients ar where ar.organization_id=m.organization_id and ar.user_id=m.user_id)
+      or (not exists(select 1 from ogevia.care_request_alert_recipients ar where ar.organization_id=m.organization_id)
+          and exists(select 1 from ogevia.role_permissions rp where rp.role=m.role and rp.permission_key='care_requests.manage')));
   return 'client_cancelled';
 end;$$;
 
