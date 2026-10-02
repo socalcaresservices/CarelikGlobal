@@ -4,7 +4,9 @@
 # 1) negative control: the PREVIOUS scorer (20260823080000) on the same
 #    fixtures ranks the incomplete profile above the documented caregiver;
 # 2) the fix (20260826010000) applied on top passes every assertion and
-#    can be re-applied.
+#    can be re-applied;
+# 3) caregiver_records.skills (20260826020000): backfill, union with a
+#    linked login's profile skills, credit for caregivers without a login.
 set -euo pipefail
 HERE="$(cd "$(dirname "$0")" && pwd)"; MIG="$HERE/../../migrations"
 DB="care_score_test_$$"
@@ -20,3 +22,6 @@ q -f "$MIG/20260826010000_matching_no_credit_for_missing_caregiver_data.sql"   #
 echo "fixed scorer:"
 q -At -c "select caregiver_name || ' total=' || match_score || ' availability=' || availability_score || ' skills=' || skills_score || ' missing=' || missing_data::text from public.list_caregiver_matches('00000000-0000-4000-8000-000000000001','00000000-0000-4000-8000-0000000000c1')"
 q -f "$HERE/care_score_missing_data.test.sql"
+q -f "$MIG/20260826020000_caregiver_record_skills.sql"
+q -f "$MIG/20260826020000_caregiver_record_skills.sql"   # re-runnable
+q -f "$HERE/caregiver_record_skills.test.sql"
