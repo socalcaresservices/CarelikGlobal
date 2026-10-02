@@ -191,7 +191,7 @@ describe("opaque-token care links (public routes)", () => {
 
   it("a malformed token is rejected (400) before any database connection", async () => {
     const f = fakeDb();
-    const routes = ["GET /v1/public/care-portals/{token}", "POST /v1/public/care-portals/{token}/requests", "GET /v1/public/care-portals/{token}/requests/{requestId}",
+    const routes = ["GET /v1/public/care-portals/{token}", "GET /v1/public/care-portals/{token}/requests", "POST /v1/public/care-portals/{token}/requests", "GET /v1/public/care-portals/{token}/requests/{requestId}",
       "POST /v1/public/care-portals/{token}/requests/{requestId}/cancel", "GET /v1/public/care-offers/{token}", "POST /v1/public/care-offers/{token}/respond",
       "POST /v1/public/care-offers/{token}/cancel-assignment"];
     for (const route of routes) {
@@ -212,6 +212,17 @@ describe("opaque-token care links (public routes)", () => {
     expect(all).not.toContain(raw);
     expect(f.queries.some((q) => q.text.includes("begin_request"))).toBe(false);
     expect(f.queries.map((q) => q.text)).toEqual(expect.arrayContaining(["begin", "set local role ogevia_app", "commit"]));
+  });
+
+  it("the link's request list sends only SHA-256(token) to the restricted role", async () => {
+    const f = fakeDb();
+    await make(f.db)(event("GET /v1/public/care-portals/{token}/requests", { sub: null, path: { token: raw } }));
+    const all = JSON.stringify(f.queries);
+    expect(all).toContain("public_list_care_requests");
+    expect(all).toContain(sha);
+    expect(all).not.toContain(raw);
+    expect(f.queries.some((q) => q.text.includes("begin_request"))).toBe(false);
+    expect(f.queries.map((q) => q.text)).toContain("set local role ogevia_app");
   });
 
   it("claims sent to a public route are ignored (the token is the only authority)", async () => {

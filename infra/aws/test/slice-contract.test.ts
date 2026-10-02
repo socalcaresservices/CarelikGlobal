@@ -39,7 +39,7 @@ describe("API routes == handler routes; JWT everywhere except the exact approved
       }
     }
     expect(anonymous.sort()).toEqual([...APPROVED_PUBLIC_ROUTE_KEYS].sort());
-    expect(APPROVED_PUBLIC_ROUTE_KEYS).toHaveLength(7);
+    expect(APPROVED_PUBLIC_ROUTE_KEYS).toHaveLength(8);
   });
 
   it("approved public routes are all opaque-token link routes under /v1/public/", () => {

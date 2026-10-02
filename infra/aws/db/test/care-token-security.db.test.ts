@@ -321,3 +321,59 @@ describe("care workflow acceptance rules", () => {
     expect(view.rows[0].status).toBe("client_cancelled");
   });
 });
+
+describe("portal request list (0012): a reusable link shows only its own upcoming requests", () => {
+  const list = (t: string) => asPublic((c) => c.query("select * from ogevia_api.public_list_care_requests($1)", [hash(t)]));
+
+  it("lists this link's requests with status, and only those", async () => {
+    const mine = await portal(fx.client);
+    const sibling = await portal(fx.client); // second link for the SAME client
+    const other = await portal(fx2.client);
+    const a = await request(mine, fx.service, 8);
+    const b = await request(mine, fx.service, 9);
+    await request(sibling, fx.service, 10);
+    await request(other, fx2.service, 11);
+    const rows = (await list(mine)).rows;
+    expect(rows.map((r) => r.request_id).sort()).toEqual([a.request_id, b.request_id].sort());
+    expect(rows[0]).toMatchObject({ status: "requested", short_notice: false, caregiver_name: null });
+    expect(Object.keys(rows[0]).sort()).toEqual(["caregiver_name", "ends_at", "request_id", "service_code", "service_name", "short_notice", "starts_at", "status"]);
+  });
+
+  it("shows the caregiver first name only while assigned, and the cancelled status after a client cancel", async () => {
+    const pt = await portal(fx.client);
+    const r = await request(pt, fx.service, 12);
+    const o = await offer(r.request_id, w.caregiverA2);
+    await respond(o.token, true);
+    expect((await list(pt)).rows[0].caregiver_name).toBeNull();
+    await assign(r.request_id, o.id);
+    expect((await list(pt)).rows[0]).toMatchObject({ status: "assigned" });
+    expect((await list(pt)).rows[0].caregiver_name).toBeTruthy();
+    await asPublic((c) => c.query("select ogevia_api.public_cancel_care_request($1,$2,null)", [hash(pt), r.request_id]));
+    expect((await list(pt)).rows[0]).toMatchObject({ status: "client_cancelled", caregiver_name: null });
+  });
+
+  it("excludes requests that have already ended", async () => {
+    const pt = await portal(fx.client);
+    const r = await request(pt, fx.service, 13);
+    await q("update ogevia.care_requests set starts_at=now()-interval '5 hours', ends_at=now()-interval '1 hour' where id=$1", [r.request_id]);
+    expect((await list(pt)).rows).toHaveLength(0);
+  });
+
+  it("unknown, raw (unhashed), revoked and expired links are refused (OGN04), never an empty success", async () => {
+    await expectPgError(list(token()), "OGN04", NOT_VALID);
+    const pt = await portal(fx2.client);
+    await expectPgError(asPublic((c) => c.query("select * from ogevia_api.public_list_care_requests($1)", [pt])), "OGN04");
+    await q("update ogevia.client_care_portals set expires_at=now()-interval '1 second' where token_hash=$1", [hash(pt)]);
+    await expectPgError(list(pt), "OGN04");
+    const rv = await portal(fx2.client);
+    await asActor(db, w.managerA.sub, (c) => c.query("select ogevia_api.revoke_client_care_portals($1,$2)", [w.orgA, fx2.client]));
+    await expectPgError(list(rv), "OGN04");
+  });
+
+  it("an offer token cannot be used as a portal token", async () => {
+    const pt = await portal(fx.client);
+    const r = await request(pt, fx.service, 14);
+    const o = await offer(r.request_id, w.caregiverA3);
+    await expectPgError(list(o.token), "OGN04");
+  });
+});

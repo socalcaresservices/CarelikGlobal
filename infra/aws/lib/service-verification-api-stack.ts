@@ -66,6 +66,7 @@ export const SERVICE_VERIFICATION_ROUTES: ReadonlyArray<{
   { method: apigw.HttpMethod.GET, path: "/v1/reports/correction-history" },
   { method: apigw.HttpMethod.GET, path: "/v1/billing-review" },
   { method: apigw.HttpMethod.GET, path: "/v1/public/care-portals/{token}", public: true },
+  { method: apigw.HttpMethod.GET, path: "/v1/public/care-portals/{token}/requests", public: true },
   { method: apigw.HttpMethod.POST, path: "/v1/public/care-portals/{token}/requests", public: true },
   { method: apigw.HttpMethod.GET, path: "/v1/public/care-portals/{token}/requests/{requestId}", public: true },
   { method: apigw.HttpMethod.POST, path: "/v1/public/care-portals/{token}/requests/{requestId}/cancel", public: true },

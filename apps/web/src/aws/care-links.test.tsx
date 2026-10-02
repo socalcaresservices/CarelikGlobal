@@ -108,21 +108,69 @@ describe("public link actions never fail silently", () => {
     expect(screen.queryByRole("alert")).toBeNull();
   });
 
-  it("a failed client cancellation shows the error", async () => {
-    const h = harness((url, init) => {
+  it("a failed client cancellation shows the error on that request", async () => {
+    const h = harness((url) => {
       if (url.pathname.endsWith("/cancel")) return json({ error: { code: "conflict", message: "This request can no longer be cancelled here" } }, 409);
-      if (init.method === "POST") return json({ request: { requestId: "r1" } }, 201);
-      if (url.pathname.endsWith("/requests/r1")) return json({ request: { requestId: "r1", status: "requested", serviceCode: "RSP", serviceName: "Respite", startsAt: "2026-10-20T18:00:00Z", endsAt: "2026-10-20T22:00:00Z", caregiverName: null } });
-      return json({ services: [{ organizationName: "Synthetic Care Co", clientCode: "TEST-C01", serviceId: "s1", serviceCode: "RSP", serviceName: "Respite", periodEnd: "2026-12-31" }] });
+      if (url.pathname.endsWith("/requests")) return json({ requests: [REQ("r1", "requested")] });
+      return json(PORTAL);
     });
     renderAt("/care#" + TOKEN, <PublicCareRequestPage api={createAwsPublicApiClient("https://api.example.test", h.fetchImpl)} />, "/care");
-    fireEvent.change(await screen.findByDisplayValue("Select service"), { target: { value: "s1" } });
+    fireEvent.click(await screen.findByRole("button", { name: "Cancel request" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent("can no longer be cancelled here");
+  });
+});
+
+const PORTAL = { services: [{ organizationName: "Synthetic Care Co", clientCode: "TEST-C01", serviceId: "s1", serviceCode: "RSP", serviceName: "Respite", periodEnd: "2026-12-31" }] };
+const REQ = (requestId: string, status: string, extra: Record<string, unknown> = {}) =>
+  ({ requestId, status, serviceCode: "RSP", serviceName: "Respite", startsAt: "2026-10-20T18:00:00Z", endsAt: "2026-10-20T22:00:00Z", shortNotice: false, caregiverName: null, ...extra });
+
+describe("reusable client link: returning to the link shows its requests", () => {
+  it("a reopened link lists existing requests with status and caregiver, without knowing any request id", async () => {
+    const h = harness((url) => url.pathname.endsWith("/requests")
+      ? json({ requests: [REQ("r1", "assigned", { caregiverName: "Test" }), REQ("r2", "coverage_needed", { shortNotice: true }), REQ("r3", "client_cancelled")] })
+      : json(PORTAL));
+    renderAt("/care#" + TOKEN, <PublicCareRequestPage api={createAwsPublicApiClient("https://api.example.test", h.fetchImpl)} />, "/care");
+    expect(await screen.findByText("Assigned caregiver:")).toBeInTheDocument();
+    expect(screen.getByText("coverage needed")).toBeInTheDocument();
+    expect(screen.getByText("short notice")).toBeInTheDocument();
+    expect(screen.getByText("client cancelled")).toBeInTheDocument();
+    // Cancel offered only for open requests (not the cancelled one).
+    expect(screen.getAllByRole("button", { name: "Cancel request" })).toHaveLength(2);
+    const list = h.calls.find((c) => c.url.pathname === "/v1/public/care-portals/" + TOKEN + "/requests")!;
+    expect((list.init.headers as Record<string, string>).authorization).toBeUndefined();
+  });
+
+  it("cancelling from the list cancels that request and refreshes the list", async () => {
+    let status = "requested";
+    const h = harness((url) => {
+      if (url.pathname.endsWith("/r1/cancel")) { status = "client_cancelled"; return json({ status }); }
+      if (url.pathname.endsWith("/requests")) return json({ requests: [REQ("r1", status)] });
+      return json(PORTAL);
+    });
+    renderAt("/care#" + TOKEN, <PublicCareRequestPage api={createAwsPublicApiClient("https://api.example.test", h.fetchImpl)} />, "/care");
+    fireEvent.click(await screen.findByRole("button", { name: "Cancel request" }));
+    expect(await screen.findByText("client cancelled")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Cancel request" })).toBeNull();
+    expect(h.calls.some((c) => c.url.pathname === "/v1/public/care-portals/" + TOKEN + "/requests/r1/cancel")).toBe(true);
+  });
+
+  it("a new request appears in the list and the form clears", async () => {
+    const created: unknown[] = [];
+    const h = harness((url, init) => {
+      if (url.pathname.endsWith("/requests") && init.method === "POST") { created.push(REQ("r9", "requested")); return json({ request: { requestId: "r9" } }, 201); }
+      if (url.pathname.endsWith("/requests")) return json({ requests: created });
+      return json(PORTAL);
+    });
+    renderAt("/care#" + TOKEN, <PublicCareRequestPage api={createAwsPublicApiClient("https://api.example.test", h.fetchImpl)} />, "/care");
+    expect(await screen.findByText("No upcoming requests from this link yet.")).toBeInTheDocument();
+    fireEvent.change(screen.getByDisplayValue("Select service"), { target: { value: "s1" } });
     const [start, end] = document.querySelectorAll('input[type="datetime-local"]');
     fireEvent.change(start!, { target: { value: "2026-10-20T11:00" } });
     fireEvent.change(end!, { target: { value: "2026-10-20T15:00" } });
     fireEvent.click(screen.getByRole("button", { name: "Request care" }));
-    fireEvent.click(await screen.findByRole("button", { name: "Cancel request" }));
-    expect(await screen.findByRole("alert")).toHaveTextContent("can no longer be cancelled here");
+    expect(await screen.findByRole("status")).toHaveTextContent("Request received");
+    expect(await screen.findByText("requested")).toBeInTheDocument();
+    expect((start as HTMLInputElement).value).toBe("");
   });
 });
 

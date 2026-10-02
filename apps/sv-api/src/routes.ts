@@ -344,6 +344,16 @@ export const ROUTES: Record<string, Route> = {
     },
   },
 
+  /** Upcoming requests made through THIS link, so a family can return to check status or cancel. */
+  "GET /v1/public/care-portals/{token}/requests": {
+    public: true,
+    mutating: false,
+    handle: async ({ event, tx }) => {
+      const token = opaqueToken(p(event).token);
+      return { requests: await tx((db) => rows(db, "select * from ogevia_api.public_list_care_requests($1)", [hashOpaqueToken(token)])) };
+    },
+  },
+
   "POST /v1/public/care-portals/{token}/requests": {
     public: true,
     status: 201,

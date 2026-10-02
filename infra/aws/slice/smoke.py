@@ -41,10 +41,11 @@ RDS_ID = "ogevia-prod-postgres"
 EVIDENCE_BUCKET = "ogevia-prod-signature-evidence-%s-%s" % (ACCOUNT, REGION)
 EXISTING_CLIENT = "1i27abbina08fvg1i9u8vprgo9"
 TEST_ORG_SLUG = "ogevia-test-slice"
-EXPECTED_ROUTES = 36
+EXPECTED_ROUTES = 37
 # Must equal infra/aws/lib/public-routes.ts (checked by a unit test).
 APPROVED_PUBLIC_ROUTE_KEYS = sorted([
     "GET /v1/public/care-portals/{token}",
+    "GET /v1/public/care-portals/{token}/requests",
     "POST /v1/public/care-portals/{token}/requests",
     "GET /v1/public/care-portals/{token}/requests/{requestId}",
     "POST /v1/public/care-portals/{token}/requests/{requestId}/cancel",
@@ -391,6 +392,9 @@ def care_workflow(args, inv, cg, mg):
     rid = req.get("requestId")
     if not rid:
         return
+    s, mine = inv.call("GET /v1/public/care-portals/{token}/requests", None, path={"token": token})
+    check(C, "reopened client link lists its own request (status visible without the request id)",
+          s == 200 and [r["requestId"] for r in (mine or {}).get("requests", [])] == [rid] and mine["requests"][0]["status"] == "requested")
     allweek = [{"weekday": d, "specific_date": None, "start_local": "00:00", "end_local": "23:59"} for d in range(7)]
     s, _ = inv.call("POST /v1/availability/me", cg, body={"organizationId": org, "windows": allweek, "unavailableDates": []})
     check(C, "caregiver records explicit availability", s in (200, 201, 204), "status %s" % s)
@@ -422,12 +426,16 @@ def care_workflow(args, inv, cg, mg):
     check(C, "staff queue shows Coverage Needed", row.get("status") == "coverage_needed")
     s, cc = inv.call("POST /v1/public/care-portals/{token}/requests/{requestId}/cancel", None, path={"token": token, "requestId": rid}, body={"reason": "smoke (synthetic)"})
     check(C, "client cancels through the link", s == 200 and (cc or {}).get("status") == "client_cancelled")
+    s, mine = inv.call("GET /v1/public/care-portals/{token}/requests", None, path={"token": token})
+    check(C, "client link list shows the cancellation", s == 200 and any(r["requestId"] == rid and r["status"] == "client_cancelled" for r in (mine or {}).get("requests", [])))
     s, _ = inv.call("GET /v1/public/care-offers/{token}", None, path={"token": offer.get("token")})
     check(C, "offer link stops working after client cancellation (404)", s == 404)
     s, rv = inv.call("POST /v1/care-portals/revoke", mg, body={"organizationId": org, "clientId": clients["TEST-C01"]})
     check(C, "agency revokes the client's links", s == 200 and (rv or {}).get("revoked", 0) >= 1)
     s, _ = inv.call("GET /v1/public/care-portals/{token}", None, path={"token": token})
     check(C, "revoked client link -> 404", s == 404)
+    s, _ = inv.call("GET /v1/public/care-portals/{token}/requests", None, path={"token": token})
+    check(C, "revoked client link cannot list requests (404)", s == 404)
     return [token, offer.get("token", "")]
 
 
@@ -469,6 +477,8 @@ def infra(args, out):
         rnd = os.urandom(32).hex()
         code, _, body = http(api_url + "/v1/public/care-portals/" + rnd)
         check(G, "public portal link with an unknown token -> 404 (generic)", code == 404 and b"not valid or is no longer active" in body, "got %s" % code)
+        code, _, body = http(api_url + "/v1/public/care-portals/" + rnd + "/requests")
+        check(G, "request list with an unknown token -> 404 (never an empty list)", code == 404 and b"not valid or is no longer active" in body, "got %s" % code)
         code, _, _ = http(api_url + "/v1/public/care-offers/" + rnd)
         check(G, "public offer link with an unknown token -> 404", code == 404, "got %s" % code)
         code, _, _ = http(api_url + "/v1/public/care-offers/" + rnd + "/respond", method="POST", headers={"content-type": "application/json"}, body=b'{"available":true}')

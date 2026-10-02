@@ -5,7 +5,7 @@ import { useLocation } from "react-router-dom";
 import type { AwsApiClient } from "@/lib/aws-api";
 
 type PortalService = { organizationName: string; clientCode: string; serviceId: string; serviceCode: string; serviceName: string; periodEnd: string };
-type CareRequest = { requestId: string; status: string; serviceCode: string; serviceName: string; startsAt: string; endsAt: string; caregiverName: string | null };
+type CareRequest = { requestId: string; status: string; serviceCode: string; serviceName: string; startsAt: string; endsAt: string; shortNotice: boolean; caregiverName: string | null };
 type CareOffer = { offerId: string; status: string; serviceCode: string; serviceName: string; startsAt: string; endsAt: string; clientLabel: string };
 
 /**
@@ -24,6 +24,8 @@ export function useLinkToken(): string {
 const when = (value: string) => new Date(value).toLocaleString([], { dateStyle: "medium", timeStyle: "short" });
 const toIso = (value: string) => new Date(value).toISOString();
 
+const CLOSED_REQUEST = ["client_cancelled", "filled", "closed"];
+
 export function PublicCareRequestPage({ api }: { api: AwsApiClient }) {
   const token = useLinkToken();
   const qc = useQueryClient();
@@ -31,72 +33,90 @@ export function PublicCareRequestPage({ api }: { api: AwsApiClient }) {
   const [startsAt, setStartsAt] = useState("");
   const [endsAt, setEndsAt] = useState("");
   const [note, setNote] = useState("");
-  const [requestId, setRequestId] = useState<string | null>(null);
+  const [submitted, setSubmitted] = useState(false);
+  const valid = /^[0-9a-f]{64}$/i.test(token);
 
   const portal = useQuery({
     queryKey: ["public-care-portal", token],
     queryFn: () => api.get<{ services: PortalService[] }>("/v1/public/care-portals/" + token),
-    enabled: /^[0-9a-f]{64}$/i.test(token),
+    enabled: valid,
   });
-  const request = useQuery({
-    queryKey: ["public-care-request", token, requestId],
-    queryFn: () => api.get<{ request: CareRequest }>("/v1/public/care-portals/" + token + "/requests/" + requestId),
-    enabled: !!requestId,
+  // The link's own upcoming requests: anyone reopening the link (another device,
+  // another family member, a reload) sees status and can cancel.
+  const requests = useQuery({
+    queryKey: ["public-care-requests", token],
+    queryFn: () => api.get<{ requests: CareRequest[] }>("/v1/public/care-portals/" + token + "/requests"),
+    enabled: valid && portal.isSuccess,
     refetchInterval: 15_000,
   });
+  const refreshList = () => void qc.invalidateQueries({ queryKey: ["public-care-requests", token] });
   const create = useMutation({
     mutationFn: () => api.post<{ request: { requestId: string } }>("/v1/public/care-portals/" + token + "/requests", {
       serviceId, startsAt: toIso(startsAt), endsAt: toIso(endsAt), note, requestKey: crypto.randomUUID(),
     }),
-    onSuccess: (data) => setRequestId(data.request.requestId),
+    onSuccess: () => {
+      setSubmitted(true);
+      setStartsAt("");
+      setEndsAt("");
+      setNote("");
+      refreshList();
+    },
   });
   const cancel = useMutation({
-    mutationFn: () => api.post("/v1/public/care-portals/" + token + "/requests/" + requestId + "/cancel", { reason: "Cancelled through care portal" }),
-    onSettled: () => void qc.invalidateQueries({ queryKey: ["public-care-request", token, requestId] }),
+    mutationFn: (requestId: string) => api.post("/v1/public/care-portals/" + token + "/requests/" + requestId + "/cancel", { reason: "Cancelled through care portal" }),
+    onSettled: refreshList,
   });
 
   const services = portal.data?.services ?? [];
   const orgName = services[0]?.organizationName ?? "Care request";
   if (portal.isLoading) return <PublicShell><p>Loading your care request page…</p></PublicShell>;
   if (portal.isError || services.length === 0) return <PublicShell><p>This care-request link is invalid or no longer active.</p></PublicShell>;
+  const list = requests.data?.requests ?? [];
 
   return (
     <PublicShell title={orgName}>
-      {requestId ? (
-        <Card>
-          <h2 className="text-lg font-semibold text-slate-950">Request received</h2>
-          {request.data?.request ? (
-            <div className="mt-3 space-y-2 text-sm text-slate-700">
-              <p><strong>{request.data.request.serviceCode}</strong> · {when(request.data.request.startsAt)}–{new Date(request.data.request.endsAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</p>
-              <p>Status: <strong>{request.data.request.status.replaceAll("_", " ")}</strong></p>
-              {request.data.request.caregiverName ? <p>Assigned caregiver: <strong>{request.data.request.caregiverName}</strong></p> : <p>You can close this page. It updates automatically when the agency assigns a caregiver.</p>}
-              {!["client_cancelled", "closed"].includes(request.data.request.status) ? (
-                <Button variant="secondary" loading={cancel.isPending} onClick={() => cancel.mutate()}>Cancel request</Button>
+      <Card>
+        <h2 className="text-lg font-semibold text-slate-950">Your requests</h2>
+        {submitted ? <p role="status" className="mt-2 text-sm font-medium text-emerald-700">Request received. The agency will select and confirm the caregiver.</p> : null}
+        {requests.isLoading ? <p className="mt-2 text-sm text-slate-600">Checking your requests…</p> : null}
+        {requests.isError ? <p role="alert" className="mt-2 text-sm text-red-700">Could not load your requests. This page will try again.</p> : null}
+        {requests.isSuccess && list.length === 0 ? <p className="mt-2 text-sm text-slate-600">No upcoming requests from this link yet.</p> : null}
+        <ul className="mt-3 space-y-3">
+          {list.map((r) => (
+            <li key={r.requestId} data-request-id={r.requestId} className="rounded-lg border border-slate-200 p-3 text-sm text-slate-700">
+              <p><strong>{r.serviceCode}</strong> · {when(r.startsAt)}–{new Date(r.endsAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</p>
+              <p className="mt-1">Status: <strong>{r.status.replaceAll("_", " ")}</strong>{r.shortNotice ? <span className="ml-2 rounded bg-amber-100 px-1.5 py-0.5 text-xs text-amber-800">short notice</span> : null}</p>
+              {r.caregiverName ? <p className="mt-1">Assigned caregiver: <strong>{r.caregiverName}</strong></p> : null}
+              {!CLOSED_REQUEST.includes(r.status) ? (
+                <div className="mt-2">
+                  <Button variant="secondary" loading={cancel.isPending && cancel.variables === r.requestId} onClick={() => cancel.mutate(r.requestId)}>Cancel request</Button>
+                </div>
               ) : null}
-              <ActionError error={cancel.error} fallback="Could not cancel the request. Please try again." />
-            </div>
-          ) : <p className="mt-2 text-sm text-slate-600">Checking status…</p>}
-        </Card>
-      ) : (
-        <Card>
-          <h2 className="text-lg font-semibold text-slate-950">Request care</h2>
-          <p className="mt-1 text-sm text-slate-600">Submit the date and time you need care. The agency will select and confirm the caregiver.</p>
-          <div className="mt-4 grid gap-3">
-            <label className="text-sm">Service
-              <select value={serviceId} onChange={(e) => setServiceId(e.target.value)} className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2">
-                <option value="">Select service</option>
-                {services.map((s) => <option key={s.serviceId} value={s.serviceId}>{s.serviceCode} — {s.serviceName}</option>)}
-              </select>
-            </label>
-            <label className="text-sm">Start<input type="datetime-local" value={startsAt} onChange={(e) => setStartsAt(e.target.value)} className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2" /></label>
-            <label className="text-sm">End<input type="datetime-local" value={endsAt} onChange={(e) => setEndsAt(e.target.value)} className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2" /></label>
-            <label className="text-sm">Note (optional)<textarea value={note} onChange={(e) => setNote(e.target.value)} className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2" rows={3} /></label>
-            <p className="text-xs text-slate-500">Minimum request: 3 hours. Requests made less than 72 hours ahead are marked short notice.</p>
-            <ActionError error={create.error} fallback="Could not submit request." />
-            <Button disabled={!serviceId || !startsAt || !endsAt} loading={create.isPending} onClick={() => create.mutate()}>Request care</Button>
-          </div>
-        </Card>
-      )}
+              {cancel.variables === r.requestId ? <ActionError error={cancel.error} fallback="Could not cancel the request. Please try again." /> : null}
+            </li>
+          ))}
+        </ul>
+        {list.length > 0 ? <p className="mt-3 text-xs text-slate-500">This page updates automatically. You can close it and reopen the same link later.</p> : null}
+      </Card>
+      <div className="h-4" />
+      <Card>
+        <h2 className="text-lg font-semibold text-slate-950">Request care</h2>
+        <p className="mt-1 text-sm text-slate-600">Submit the date and time you need care. The agency will select and confirm the caregiver.</p>
+        <div className="mt-4 grid gap-3">
+          <label className="text-sm">Service
+            <select value={serviceId} onChange={(e) => setServiceId(e.target.value)} className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2">
+              <option value="">Select service</option>
+              {services.map((s) => <option key={s.serviceId} value={s.serviceId}>{s.serviceCode} — {s.serviceName}</option>)}
+            </select>
+          </label>
+          <label className="text-sm">Start<input type="datetime-local" value={startsAt} onChange={(e) => setStartsAt(e.target.value)} className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2" /></label>
+          <label className="text-sm">End<input type="datetime-local" value={endsAt} onChange={(e) => setEndsAt(e.target.value)} className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2" /></label>
+          <label className="text-sm">Note (optional)<textarea value={note} onChange={(e) => setNote(e.target.value)} className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2" rows={3} /></label>
+          <p className="text-xs text-slate-500">Minimum request: 3 hours. Requests made less than 72 hours ahead are marked short notice.</p>
+          <ActionError error={create.error} fallback="Could not submit request." />
+          <Button disabled={!serviceId || !startsAt || !endsAt} loading={create.isPending} onClick={() => { setSubmitted(false); create.mutate(); }}>Request care</Button>
+        </div>
+      </Card>
     </PublicShell>
   );
 }

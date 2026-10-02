@@ -17,6 +17,7 @@
  */
 export const APPROVED_PUBLIC_ROUTE_KEYS: readonly string[] = [
   "GET /v1/public/care-portals/{token}",
+  "GET /v1/public/care-portals/{token}/requests",
   "POST /v1/public/care-portals/{token}/requests",
   "GET /v1/public/care-portals/{token}/requests/{requestId}",
   "POST /v1/public/care-portals/{token}/requests/{requestId}/cancel",
