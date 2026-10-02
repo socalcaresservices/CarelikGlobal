@@ -50,10 +50,8 @@ import {
   AUTHORIZATION_STATUS_LABEL,
   formatDateTime,
   formatDuration,
-  formatHours,
   formatNumericDate,
   formatTimeRange,
-  formatVisitDate,
   VISIT_STATUS_LABEL,
   type ServiceVisitStatus,
 } from "@/lib/service-verification";
