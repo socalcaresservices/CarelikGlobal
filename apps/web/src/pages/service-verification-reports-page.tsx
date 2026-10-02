@@ -76,6 +76,37 @@ type ReportView =
 type DatePreset =
   "all" | "week" | "biweekly" | "month" | "quarter" | "year" | "custom";
 
+type VisitColumn =
+  | "visitRef"
+  | "client"
+  | "caregiver"
+  | "service"
+  | "date"
+  | "time"
+  | "worked"
+  | "billable"
+  | "authorized"
+  | "usedMtd"
+  | "remaining"
+  | "status";
+
+const VISIT_COLUMN_OPTIONS: Array<{ key: VisitColumn; label: string }> = [
+  { key: "visitRef", label: "Visit ref" },
+  { key: "client", label: "Client" },
+  { key: "caregiver", label: "Caregiver" },
+  { key: "service", label: "Service" },
+  { key: "date", label: "Date" },
+  { key: "time", label: "Time" },
+  { key: "worked", label: "Worked" },
+  { key: "billable", label: "Billable" },
+  { key: "authorized", label: "Authorized" },
+  { key: "usedMtd", label: "Used MTD" },
+  { key: "remaining", label: "Remaining" },
+  { key: "status", label: "Status" },
+];
+
+const DEFAULT_VISIT_COLUMNS = VISIT_COLUMN_OPTIONS.map((column) => column.key);
+
 const CHART_COLORS = [
   "#4f46e5",
   "#059669",
