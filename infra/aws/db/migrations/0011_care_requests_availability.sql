@@ -380,6 +380,41 @@ begin
 end;
 $$;
 
+create function ogevia_api.list_care_request_offers(p_care_request_id uuid)
+returns table (
+  offer_id uuid,
+  caregiver_record_id uuid,
+  caregiver_name text,
+  status ogevia.care_offer_status,
+  responded_at timestamptz,
+  expires_at timestamptz
+)
+language plpgsql
+stable
+security definer
+set search_path = ogevia, pg_temp
+as $
+declare
+  v_org uuid;
+begin
+  perform ogevia.require_actor();
+  select organization_id into v_org from ogevia.care_requests where id = p_care_request_id;
+  if v_org is null then raise exception 'Care request not found' using errcode = 'OGA04'; end if;
+  if not ogevia.is_active_member(v_org)
+     or not ogevia.has_permission(v_org, 'care_requests.read') then
+    raise exception 'Not permitted' using errcode = 'OGA03';
+  end if;
+  return query
+  select f.id, f.caregiver_record_id,
+         coalesce(nullif(btrim(cr.preferred_name), ''), cr.first_name) || ' ' || cr.last_name,
+         f.status, f.responded_at, f.expires_at
+  from ogevia.care_request_offers f
+  join ogevia.caregiver_records cr on cr.id = f.caregiver_record_id
+  where f.care_request_id = p_care_request_id
+  order by case f.status when 'available' then 0 when 'pending' then 1 else 2 end, 3;
+end;
+$;
+
 create function ogevia_api.create_care_request_offer(
   p_care_request_id uuid,
   p_caregiver_record_id uuid,
@@ -834,6 +869,7 @@ revoke all on function ogevia_api.create_client_request_link(uuid, uuid, text, t
 revoke all on function ogevia_api.list_care_request_clients(uuid) from public;
 revoke all on function ogevia_api.list_care_requests(uuid, ogevia.care_request_status) from public;
 revoke all on function ogevia_api.list_care_request_candidates(uuid) from public;
+revoke all on function ogevia_api.list_care_request_offers(uuid) from public;
 revoke all on function ogevia_api.create_care_request_offer(uuid, uuid, text, timestamptz) from public;
 revoke all on function ogevia_api.assign_care_request(uuid, uuid) from public;
 revoke all on function ogevia_api.public_request_link_context(text) from public;
@@ -846,6 +882,7 @@ grant execute on function ogevia_api.create_client_request_link(uuid, uuid, text
 grant execute on function ogevia_api.list_care_request_clients(uuid) to ogevia_app;
 grant execute on function ogevia_api.list_care_requests(uuid, ogevia.care_request_status) to ogevia_app;
 grant execute on function ogevia_api.list_care_request_candidates(uuid) to ogevia_app;
+grant execute on function ogevia_api.list_care_request_offers(uuid) to ogevia_app;
 grant execute on function ogevia_api.create_care_request_offer(uuid, uuid, text, timestamptz) to ogevia_app;
 grant execute on function ogevia_api.assign_care_request(uuid, uuid) to ogevia_app;
 grant execute on function ogevia_api.public_request_link_context(text) to ogevia_app;
