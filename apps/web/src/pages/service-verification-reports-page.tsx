@@ -592,7 +592,10 @@ export function ServiceVerificationReportsPage() {
     [monthlyServiceSummaryQuery.data, serviceFilter],
   );
 
-  const correctionRows = correctionHistoryReportQuery.data ?? [];
+  const correctionRows = useMemo(
+    () => correctionHistoryReportQuery.data ?? [],
+    [correctionHistoryReportQuery.data],
+  );
   const correctedByOptions = useMemo(() => {
     const map = new Map<string, string>();
     for (const row of correctionRows) {
