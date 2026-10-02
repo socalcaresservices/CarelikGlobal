@@ -629,6 +629,67 @@ describe("ClientDetailPage", () => {
     );
   });
 
+  it("shows service and preferred-area notes on matches without counting them as scored gaps", async () => {
+    mockedUseOrganization.mockReturnValue(baseOrganization());
+    mockFromByTable({
+      id: CLIENT_ID,
+      first_name: "Jordan",
+      last_name: "Rivera",
+      phone: null,
+      email: null,
+      address: null,
+      care_notes: null,
+      status: "active",
+      client_requested_services: [],
+    });
+    mockedRpc.mockImplementation((fn: string) => {
+      if (fn === "list_caregiver_matches") {
+        return Promise.resolve({
+          data: [
+            {
+              caregiver_record_id: "caregiver-record-1",
+              caregiver_name: "Dana Elsewhere",
+              match_score: 70,
+              proximity_score: 30,
+              language_score: 25,
+              availability_score: 15,
+              skills_score: 0,
+              history_score: 0,
+              missing_data: [],
+              match_notes: ["service_not_supported", "outside_preferred_area"],
+            },
+            {
+              caregiver_record_id: "caregiver-record-2",
+              caregiver_name: "Blair Unrecorded",
+              match_score: 40,
+              proximity_score: 30,
+              language_score: 0,
+              availability_score: 10,
+              skills_score: 0,
+              history_score: 0,
+              missing_data: ["services", "languages"],
+              match_notes: [],
+            },
+          ],
+          error: null,
+        }) as never;
+      }
+      return Promise.resolve({ data: [], error: null }) as never;
+    });
+
+    renderPage();
+    await waitFor(() => expect(screen.getByText("Jordan Rivera")).toBeInTheDocument());
+    fireEvent.click(screen.getByRole("button", { name: "Matches" }));
+
+    await waitFor(() => expect(screen.getByText("Dana Elsewhere")).toBeInTheDocument());
+    expect(
+      screen.getByText("Doesn't support the requested services · Outside preferred cities"),
+    ).toBeInTheDocument();
+    expect(screen.getByText("Services supported not recorded")).toBeInTheDocument();
+    // Services are not scored, so they never appear under "scored 0".
+    expect(screen.getByText("Not recorded (scored 0): languages")).toBeInTheDocument();
+  });
+
   it("shows ranked CareScore matches with a breakdown on the Matches tab", async () => {
     mockedUseOrganization.mockReturnValue(baseOrganization());
     mockFromByTable({

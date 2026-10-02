@@ -9,7 +9,9 @@
 #    linked login's profile skills, credit for caregivers without a login;
 # 4) overnight windows (20260826030000): helpers, RPCs, CareScore match and
 #    the shift -> requested-schedule link in the agency timezone;
-# 5) client operations utilization breakdown (20260826040000).
+# 5) client operations utilization breakdown (20260826040000);
+# 6) caregiver services and preferred areas (20260826060000; the transfer
+#    function is loaded with check_function_bodies off, not executed).
 set -euo pipefail
 HERE="$(cd "$(dirname "$0")" && pwd)"; MIG="$HERE/../../migrations"
 DB="care_score_test_$$"
@@ -34,3 +36,11 @@ q -f "$HERE/overnight_availability.test.sql"
 q -f "$MIG/20260826040000_client_operations_utilization_breakdown.sql"
 q -f "$MIG/20260826040000_client_operations_utilization_breakdown.sql"   # re-runnable
 q -f "$HERE/utilization_breakdown.test.sql"
+# 6) caregiver services and preferred areas: seed an applicant-linked record first so the backfill has work.
+q -c "insert into public.services (id, organization_id, name) values ('00000000-0000-4000-8000-0000000000e3','00000000-0000-4000-8000-000000000001','Companion'),('00000000-0000-4000-8000-0000000000f9','00000000-0000-4000-8000-000000000999','Other org service') on conflict do nothing;
+       insert into public.job_applicants values ('00000000-0000-4000-8000-0000000000d0','00000000-0000-4000-8000-000000000001','{Riverside}');
+       insert into public.job_applicant_services values ('00000000-0000-4000-8000-000000000001','00000000-0000-4000-8000-0000000000d0','00000000-0000-4000-8000-0000000000e3');
+       update public.caregiver_records set applicant_id = '00000000-0000-4000-8000-0000000000d0' where id = '00000000-0000-4000-8000-00000000000d';"
+PGOPTIONS='-c check_function_bodies=off' q -f "$MIG/20260826060000_caregiver_services_and_areas.sql"
+PGOPTIONS='-c check_function_bodies=off' q -f "$MIG/20260826060000_caregiver_services_and_areas.sql"   # re-runnable
+q -f "$HERE/caregiver_services_areas.test.sql"

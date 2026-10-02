@@ -86,14 +86,14 @@ function baseRecord(overrides: Record<string, unknown> = {}) {
   };
 }
 
-function mockFromByTable(record: unknown) {
+function mockFromByTable(record: unknown, recordServiceIds: string[] = []) {
   const singleMock = vi.fn().mockResolvedValue({ data: record, error: null });
   const isMock = vi.fn(() => ({ single: singleMock }));
   const orMock = vi.fn(() => ({ is: isMock }));
   const recordEqMock = vi.fn(() => ({ or: orMock }));
   const recordSelectMock = vi.fn(() => ({ eq: recordEqMock }));
   const updateEqMock = vi.fn().mockResolvedValue({ error: null });
-  const updateMock = vi.fn(() => ({ eq: updateEqMock }));
+  const updateMock = vi.fn(() => ({ eq: vi.fn(() => ({ eq: updateEqMock })) }));
 
   const lookupChain = vi.fn(() => ({ eq: vi.fn(() => ({ eq: vi.fn().mockResolvedValue({ data: [], error: null }) })) }));
 
@@ -123,6 +123,33 @@ function mockFromByTable(record: unknown) {
                 error: null,
               }),
             })),
+          })),
+        })),
+      } as never;
+    }
+    if (table === "services") {
+      return {
+        select: vi.fn(() => ({
+          eq: vi.fn(() => ({
+            is: vi.fn(() => ({
+              order: vi.fn().mockResolvedValue({
+                data: [
+                  { id: "service-respite", name: "Respite", is_active: true },
+                  { id: "service-pc", name: "Personal Care", is_active: true },
+                  { id: "service-old", name: "Retired Service", is_active: false },
+                ],
+                error: null,
+              }),
+            })),
+          })),
+        })),
+      } as never;
+    }
+    if (table === "caregiver_record_services") {
+      return {
+        select: vi.fn(() => ({
+          eq: vi.fn(() => ({
+            eq: vi.fn().mockResolvedValue({ data: recordServiceIds.map((service_id) => ({ service_id })), error: null }),
           })),
         })),
       } as never;
@@ -283,6 +310,51 @@ describe("CareTeamDetailPage visits and assignments", () => {
     await waitFor(() =>
       expect(updateMock).toHaveBeenCalledWith(expect.objectContaining({ skills: ["dementia", "hoyer lift"] }))
     );
+  });
+
+  it("records services supported and preferred cities, and saves services through the RPC", async () => {
+    mockedUseOrganization.mockReturnValue(baseOrganization());
+    const { updateMock } = mockFromByTable(baseRecord({ linked_user_id: null, preferred_cities: ["Riverside"] }), ["service-respite"]);
+    mockedRpc.mockResolvedValue({ data: [], error: null } as never);
+
+    renderPage();
+
+    await waitFor(() => expect(screen.getByRole("button", { name: "Remove Respite" })).toBeInTheDocument());
+    const servicesLabel = screen.getAllByText("Services supported").find((el) => el.tagName === "DT")!;
+    expect(servicesLabel.nextElementSibling?.textContent).toBe("Respite");
+    const citiesLabel = screen.getAllByText("Preferred cities").find((el) => el.tagName === "DT")!;
+    expect(citiesLabel.nextElementSibling?.textContent).toBe("Riverside");
+    // Only ACTIVE services are offered.
+    const box = screen.getByRole("combobox", { name: "Services supported" });
+    fireEvent.focus(box);
+    fireEvent.change(box, { target: { value: "retired" } });
+    expect(screen.queryByRole("option", { name: /Retired Service/ })).toBeNull();
+    fireEvent.change(box, { target: { value: "personal" } });
+    fireEvent.mouseDown(await screen.findByRole("option", { name: /Personal Care/ }));
+    fireEvent.change(screen.getByLabelText("Preferred cities (comma separated)"), { target: { value: "Riverside, Corona " } });
+    fireEvent.click(screen.getByRole("button", { name: "Save profile" }));
+
+    await waitFor(() =>
+      expect(mockedRpc).toHaveBeenCalledWith("replace_caregiver_record_services", {
+        target_organization_id: ORG_ID,
+        target_caregiver_record_id: RECORD_ID,
+        service_ids: ["service-respite", "service-pc"],
+      })
+    );
+    expect(updateMock).toHaveBeenCalledWith(expect.objectContaining({ preferred_cities: ["Riverside", "Corona"] }));
+  });
+
+  it("omits preferred_cities from the save when the database has no such column yet", async () => {
+    mockedUseOrganization.mockReturnValue(baseOrganization());
+    const { updateMock } = mockFromByTable(baseRecord({ linked_user_id: null }));
+    mockedRpc.mockResolvedValue({ data: [], error: null } as never);
+
+    renderPage();
+
+    await waitFor(() => expect(screen.getByText("Edit workforce profile")).toBeInTheDocument());
+    fireEvent.click(screen.getByRole("button", { name: "Save profile" }));
+    await waitFor(() => expect(updateMock).toHaveBeenCalled());
+    expect(updateMock).toHaveBeenCalledWith(expect.not.objectContaining({ preferred_cities: expect.anything() }));
   });
 
   it("accepts an overnight availability window, says it ends the next day, and saves it", async () => {

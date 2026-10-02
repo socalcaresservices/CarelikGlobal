@@ -36,7 +36,8 @@ create table public.caregiver_records (
   first_name text not null, last_name text not null, preferred_name text,
   address_zip text, address_city text, address_state text,
   languages text[] not null default '{}', desired_weekly_hours numeric,
-  status text not null default 'active', deleted_at timestamptz
+  status text not null default 'active', deleted_at timestamptz,
+  applicant_id uuid
 );
 create table public.caregiver_record_availability (
   id uuid primary key default gen_random_uuid(), organization_id uuid not null, caregiver_record_id uuid not null,
@@ -75,3 +76,6 @@ create table public.incidents (
   status public.incident_status not null default 'open'
 );
 create function public.has_permission(org uuid, perm text) returns boolean language sql stable as $$ select true $$;
+create function public.organization_is_active(org uuid) returns boolean language sql stable as $$ select true $$;
+create table public.job_applicants (id uuid primary key, organization_id uuid not null, preferred_cities text[] not null default '{}');
+create table public.job_applicant_services (organization_id uuid not null, applicant_id uuid not null, service_id uuid not null);
