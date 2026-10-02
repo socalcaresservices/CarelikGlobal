@@ -303,6 +303,19 @@ export function ServiceVerificationReportsPage() {
   const [linkCopied, setLinkCopied] = useState(false);
   const [reportMonth, setReportMonth] = useState(currentPacificMonth);
   const [showSuperseded, setShowSuperseded] = useState(false);
+  const [visitColumns, setVisitColumns] = useState<Set<VisitColumn>>(() => {
+    try {
+      const saved = JSON.parse(localStorage.getItem("ogevia.visit-report-columns") ?? "null");
+      if (Array.isArray(saved)) {
+        const allowed = new Set(VISIT_COLUMN_OPTIONS.map((column) => column.key));
+        const valid = saved.filter((key): key is VisitColumn => allowed.has(key as VisitColumn));
+        if (valid.length > 0) return new Set(valid);
+      }
+    } catch {
+      // Ignore a malformed local preference and use the safe default.
+    }
+    return new Set(DEFAULT_VISIT_COLUMNS);
+  });
 
   const visitsQuery = useQuery({
     queryKey: [
@@ -395,6 +408,29 @@ export function ServiceVerificationReportsPage() {
   useEffect(() => {
     correctionKey.current = newIdempotencyKey();
   }, [expandedVisitId, correctionForm]);
+
+  useEffect(() => {
+    localStorage.setItem(
+      "ogevia.visit-report-columns",
+      JSON.stringify(Array.from(visitColumns)),
+    );
+  }, [visitColumns]);
+
+  function toggleVisitColumn(column: VisitColumn) {
+    setVisitColumns((current) => {
+      const next = new Set(current);
+      if (next.has(column)) {
+        if (next.size > 1) next.delete(column);
+      } else {
+        next.add(column);
+      }
+      return next;
+    });
+  }
+
+  function resetVisitColumns() {
+    setVisitColumns(new Set(DEFAULT_VISIT_COLUMNS));
+  }
 
   function openCorrect(row: VisitReportRow) {
     setExpandedVisitId(row.id);
@@ -532,6 +568,8 @@ export function ServiceVerificationReportsPage() {
     () => serviceOptions.find(([id]) => id === serviceFilter)?.[1] ?? null,
     [serviceFilter, serviceOptions],
   );
+
+  const visibleVisitColumnCount = visitColumns.size + (canManage ? 1 : 0);
 
   const visibleVisitRows = useMemo(
     () =>
