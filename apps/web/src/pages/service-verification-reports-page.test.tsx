@@ -223,10 +223,6 @@ describe("ServiceVerificationReportsPage", () => {
   });
 
   it("maps each service's daily worked and billable hours into the monthly client calendar", async () => {
-    // The calendar defaults to the current month; pin only Date so the
-    // 2026-08 fixture rows stay in view regardless of when the suite runs.
-    vi.useFakeTimers({ toFake: ["Date"] });
-    vi.setSystemTime(new Date("2026-08-15T12:00:00.000Z"));
     mockedUseOrganization.mockReturnValue({
       activeOrganizationId: ORG_ID,
       activeOrganization: { displayName: "Acme Care" },
