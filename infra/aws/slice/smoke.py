@@ -41,7 +41,7 @@ RDS_ID = "ogevia-prod-postgres"
 EVIDENCE_BUCKET = "ogevia-prod-signature-evidence-%s-%s" % (ACCOUNT, REGION)
 EXISTING_CLIENT = "1i27abbina08fvg1i9u8vprgo9"
 TEST_ORG_SLUG = "ogevia-test-slice"
-EXPECTED_ROUTES = 14
+EXPECTED_ROUTES = 28
 
 RESULTS = []
 
@@ -369,13 +369,26 @@ def infra(args, out):
         check(G, "JWT authorizer: issuer = existing pool", jwt["Issuer"] == "https://cognito-idp.%s.amazonaws.com/%s" % (REGION, POOL))
         check(G, "JWT audience = ogevia-web + test client only", sorted(jwt["Audience"]) == sorted([EXISTING_CLIENT, client_id]))
         routes = aws("apigatewayv2", "get-routes", "--api-id", api_id)["Items"]
-        check(G, "%d routes, every one JWT-protected, no $default/ANY" % EXPECTED_ROUTES, len(routes) == EXPECTED_ROUTES
-              and all(r.get("AuthorizationType") == "JWT" and r.get("AuthorizerId") for r in routes)
+        public_keys = {
+            "GET /public/request/{token}", "POST /public/request/{token}",
+            "POST /public/request/{token}/cancel", "GET /public/opportunity/{token}",
+            "POST /public/opportunity/{token}/respond",
+        }
+        protected = [r for r in routes if r["RouteKey"] not in public_keys]
+        public = [r for r in routes if r["RouteKey"] in public_keys]
+        check(G, "%d routes: 23 JWT + 5 token-scoped public; no $default/ANY" % EXPECTED_ROUTES,
+              len(routes) == EXPECTED_ROUTES
+              and len(protected) == 23
+              and all(r.get("AuthorizationType") == "JWT" and r.get("AuthorizerId") for r in protected)
+              and len(public) == 5
+              and all(r.get("AuthorizationType") == "NONE" and not r.get("AuthorizerId") for r in public)
               and not any(r["RouteKey"] == "$default" or r["RouteKey"].startswith("ANY ") for r in routes))
         code, _, _ = http(api_url + "/v1/me")
         check(G, "anonymous GET /v1/me -> 401", code == 401, "got %s" % code)
         code, _, _ = http(api_url + "/v1/clients/assigned?organizationId=" + str(uuid.uuid4()))
-        check(G, "anonymous data route -> 401", code == 401, "got %s" % code)
+        check(G, "anonymous protected data route -> 401", code == 401, "got %s" % code)
+        code, _, _ = http(api_url + "/public/request/" + ("A" * 43))
+        check(G, "public care route reaches token validation without Cognito", code == 404, "got %s" % code)
         fake = "eyJhbGciOiJSUzI1NiIsImtpZCI6IngifQ." + base64.urlsafe_b64encode(json.dumps({"sub": str(uuid.uuid4()), "token_use": "access", "client_id": client_id}).encode()).decode().rstrip("=") + ".c2ln"
         code, _, _ = http(api_url + "/v1/me", headers={"Authorization": "Bearer " + fake})
         check(G, "forged bearer token -> 401", code == 401, "got %s" % code)
