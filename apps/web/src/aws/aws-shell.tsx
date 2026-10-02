@@ -26,6 +26,8 @@ export function AwsShell({ children }: PropsWithChildren) {
 
   const links = [
     { to: "/service-verification", label: "Verify visit", show: role === "caregiver" || hasPermission("visits.manage") },
+    { to: "/care-opportunities", label: "Opportunities", show: role === "caregiver" },
+    { to: "/care-requests", label: "Care requests", show: hasPermission("care_requests.read") },
     { to: "/service-verification/reports", label: "Visit records", show: hasPermission("visits.read") },
     { to: "/billing-review", label: "Billing review", show: hasPermission("billing.visits.read") },
   ].filter((l) => l.show);
