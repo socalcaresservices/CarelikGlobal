@@ -502,6 +502,22 @@ export function ServiceVerificationReportsPage() {
     [serviceFilter, serviceOptions],
   );
 
+  const visibleVisitRows = useMemo(
+    () =>
+      showSuperseded
+        ? rows
+        : rows.filter((row) => row.status !== "corrected"),
+    [rows, showSuperseded],
+  );
+
+  const monthlyServiceRows = useMemo(
+    () =>
+      (monthlyServiceSummaryQuery.data ?? []).filter(
+        (row) => !serviceFilter || row.serviceId === serviceFilter,
+      ),
+    [monthlyServiceSummaryQuery.data, serviceFilter],
+  );
+
   const billable = useMemo(() => billableRows(rows), [rows]);
   const monthCalendar = useMemo(
     () => buildMonthCalendar(rows, reportMonth),
