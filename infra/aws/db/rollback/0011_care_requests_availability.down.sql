@@ -1,6 +1,12 @@
 -- ROLLBACK 0011_care_requests_availability | CLASS: SAFE AUTOMATED
 -- Removes the new scheduling-request objects. Do not run after real request data is accepted without a backup.
 
+drop function if exists ogevia_api.respond_my_care_opportunity(uuid,uuid,boolean,text);
+drop function if exists ogevia_api.list_my_care_opportunities(uuid);
+drop function if exists ogevia_api.replace_care_alert_staff(uuid,uuid[]);
+drop function if exists ogevia_api.list_care_alert_staff(uuid);
+drop function if exists ogevia_api.list_client_portal_options(uuid);
+drop function if exists ogevia_api.list_care_request_offers(uuid,uuid);
 drop function if exists ogevia_api.list_staff_care_notifications(uuid);
 drop function if exists ogevia_api.replace_my_availability(uuid,jsonb,jsonb);
 drop function if exists ogevia_api.get_my_availability(uuid);
@@ -18,6 +24,7 @@ drop function if exists ogevia_api.get_public_care_portal(text);
 drop function if exists ogevia_api.create_client_care_portal(uuid,uuid,text);
 drop function if exists ogevia.care_request_reserved_usage(uuid,date,uuid);
 
+drop table if exists ogevia.care_request_events;
 drop table if exists ogevia.care_request_events;
 drop table if exists ogevia.care_notifications;
 drop table if exists ogevia.care_request_alert_recipients;
