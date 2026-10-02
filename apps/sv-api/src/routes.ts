@@ -262,7 +262,7 @@ export const ROUTES: Record<string, Route> = {
     handle: async ({ event, tx }) => {
       const query = q(event);
       const org = orgParam(event);
-      const client = uuid(query.clientId, "clientId");
+      const client = optionalUuid(query.clientId, "clientId");
       const monthStart = date(query.monthStart, "monthStart");
       return {
         services: await tx((db) =>
