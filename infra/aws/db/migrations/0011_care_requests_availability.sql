@@ -165,7 +165,7 @@ create table ogevia.care_request_events (
 create index care_request_events_request_idx on ogevia.care_request_events(care_request_id, created_at);
 
 create function ogevia.care_request_reserved_usage(p_lineage_id uuid, p_service_date date, p_exclude_request_id uuid default null)
-returns bigint language sql stable set search_path=ogevia,pg_temp as $$
+returns bigint language sql stable set search_path = ogevia, pg_temp as $$
   select coalesce(sum(r.reserved_minutes),0)::bigint
   from ogevia.authorization_reservations r
   where r.authorization_lineage_id=p_lineage_id
@@ -177,7 +177,7 @@ $$;
 
 create function ogevia_api.create_client_care_portal(p_organization_id uuid,p_client_id uuid,p_token_hash text,p_label text default null)
 returns uuid
-language plpgsql security definer set search_path=ogevia,pg_temp as $$
+language plpgsql security definer set search_path = ogevia, pg_temp as $$
 declare v_id uuid;
 begin
   if not ogevia.has_permission(p_organization_id,'care_requests.manage') then raise exception 'Forbidden' using errcode='OGA03'; end if;
@@ -190,7 +190,7 @@ end;$$;
 
 create function ogevia_api.get_public_care_portal(p_token_hash text)
 returns table(organization_name text, client_code text, service_id uuid, service_code text, service_name text, period_end date)
-language sql security definer set search_path=ogevia,pg_temp as $$
+language sql security definer set search_path = ogevia, pg_temp as $$
   select o.display_name,c.client_code,s.id,s.code,s.name,a.period_end
   from ogevia.client_care_portals p
   join ogevia.organizations o on o.id=p.organization_id and o.status='active'
@@ -203,7 +203,7 @@ $$;
 
 create function ogevia_api.public_create_care_request(p_token_hash text,p_service_id uuid,p_starts_at timestamptz,p_ends_at timestamptz,p_note text,p_request_key uuid)
 returns table(request_id uuid,status ogevia.care_request_status,short_notice boolean)
-language plpgsql security definer set search_path=ogevia,pg_temp as $$
+language plpgsql security definer set search_path = ogevia, pg_temp as $$
 declare v_portal ogevia.client_care_portals%rowtype; v_auth ogevia.client_authorizations%rowtype; v_minutes integer; v_id uuid; v_short boolean;
 begin
   select * into v_portal from ogevia.client_care_portals where is_active and token_hash=p_token_hash;
@@ -230,7 +230,7 @@ end;$$;
 
 create function ogevia_api.public_get_care_request(p_token_hash text,p_request_id uuid)
 returns table(request_id uuid,status ogevia.care_request_status,service_code text,service_name text,starts_at timestamptz,ends_at timestamptz,caregiver_name text)
-language sql security definer set search_path=ogevia,pg_temp as $$
+language sql security definer set search_path = ogevia, pg_temp as $$
   select r.id,r.status,s.code,s.name,r.starts_at,r.ends_at,
     case when r.status='assigned' then coalesce(cr.preferred_name,cr.first_name) else null end
   from ogevia.client_care_portals p join ogevia.care_requests r on r.portal_id=p.id
@@ -240,7 +240,7 @@ language sql security definer set search_path=ogevia,pg_temp as $$
 $$;
 
 create function ogevia_api.public_cancel_care_request(p_token_hash text,p_request_id uuid,p_reason text default null)
-returns ogevia.care_request_status language plpgsql security definer set search_path=ogevia,pg_temp as $$
+returns ogevia.care_request_status language plpgsql security definer set search_path = ogevia, pg_temp as $$
 declare r ogevia.care_requests%rowtype;
 begin
   select cr.* into r from ogevia.client_care_portals p join ogevia.care_requests cr on cr.portal_id=p.id
@@ -269,7 +269,7 @@ end;$$;
 
 create function ogevia_api.list_care_requests(p_organization_id uuid,p_status ogevia.care_request_status default null)
 returns table(request_id uuid,client_code text,service_id uuid,service_code text,service_name text,starts_at timestamptz,ends_at timestamptz,requested_minutes integer,status ogevia.care_request_status,short_notice boolean,available_count bigint,awaiting_count bigint,assigned_caregiver_name text)
-language sql stable security definer set search_path=ogevia,pg_temp as $$
+language sql stable security definer set search_path = ogevia, pg_temp as $$
   select r.id,c.client_code,s.id,s.code,s.name,r.starts_at,r.ends_at,r.requested_minutes,r.status,r.short_notice,
     count(o.id) filter(where o.status='available'),count(o.id) filter(where o.status='sent'),coalesce(cr.preferred_name,cr.first_name)
   from ogevia.care_requests r join ogevia.clients c on c.id=r.client_id join ogevia.services s on s.id=r.service_id
@@ -281,7 +281,7 @@ $$;
 
 create function ogevia_api.list_available_caregivers(p_organization_id uuid,p_request_id uuid)
 returns table(caregiver_record_id uuid,caregiver_name text,current_client_match boolean,availability_source text)
-language sql stable security definer set search_path=ogevia,pg_temp as $$
+language sql stable security definer set search_path = ogevia, pg_temp as $$
   with req as(
     select r.*,o.timezone,(r.starts_at at time zone o.timezone)::date local_date,
       (r.starts_at at time zone o.timezone)::time local_start,
@@ -307,7 +307,7 @@ $$;
 
 create function ogevia_api.send_care_offer(p_organization_id uuid,p_request_id uuid,p_caregiver_record_id uuid,p_token_hash text)
 returns uuid
-language plpgsql security definer set search_path=ogevia,pg_temp as $$
+language plpgsql security definer set search_path = ogevia, pg_temp as $$
 declare v_offer uuid;
 begin
   if not ogevia.has_permission(p_organization_id,'care_requests.manage') then raise exception 'Forbidden' using errcode='OGA03'; end if;
@@ -323,14 +323,14 @@ end;$$;
 
 create function ogevia_api.public_get_care_offer(p_token_hash text)
 returns table(offer_id uuid,status ogevia.care_offer_status,service_code text,service_name text,starts_at timestamptz,ends_at timestamptz,client_label text)
-language sql security definer set search_path=ogevia,pg_temp as $$
+language sql security definer set search_path = ogevia, pg_temp as $$
  select o.id,o.status,s.code,s.name,r.starts_at,r.ends_at,coalesce(c.caregiver_display_code,c.client_code)
  from ogevia.care_request_offers o join ogevia.care_requests r on r.id=o.care_request_id join ogevia.services s on s.id=r.service_id join ogevia.clients c on c.id=r.client_id
  where o.token_hash=p_token_hash;
 $$;
 
 create function ogevia_api.public_respond_care_offer(p_token_hash text,p_available boolean,p_note text default null)
-returns ogevia.care_offer_status language plpgsql security definer set search_path=ogevia,pg_temp as $$
+returns ogevia.care_offer_status language plpgsql security definer set search_path = ogevia, pg_temp as $$
 declare o ogevia.care_request_offers%rowtype; v_status ogevia.care_offer_status;
 begin
  select * into o from ogevia.care_request_offers where token_hash=p_token_hash for update;
@@ -346,7 +346,7 @@ begin
 end;$$;
 
 create function ogevia_api.assign_care_request(p_organization_id uuid,p_request_id uuid,p_offer_id uuid)
-returns uuid language plpgsql security definer set search_path=ogevia,pg_temp as $$
+returns uuid language plpgsql security definer set search_path = ogevia, pg_temp as $$
 declare r ogevia.care_requests%rowtype; o ogevia.care_request_offers%rowtype; cr ogevia.caregiver_records%rowtype; a ogevia.client_authorizations%rowtype; v_shift uuid; v_used bigint; v_reserved bigint; v_date date;
 begin
  if not ogevia.has_permission(p_organization_id,'care_requests.manage') then raise exception 'Forbidden' using errcode='OGA03'; end if;
@@ -387,7 +387,7 @@ begin
 end;$$;
 
 create function ogevia_api.public_cancel_assigned_offer(p_token_hash text,p_reason text)
-returns ogevia.care_request_status language plpgsql security definer set search_path=ogevia,pg_temp as $$
+returns ogevia.care_request_status language plpgsql security definer set search_path = ogevia, pg_temp as $$
 declare o ogevia.care_request_offers%rowtype; r ogevia.care_requests%rowtype;
 begin
  select * into o from ogevia.care_request_offers where token_hash=p_token_hash for update;
@@ -406,13 +406,13 @@ end;$$;
 
 create function ogevia_api.get_my_availability(p_organization_id uuid)
 returns table(window_id uuid,weekday smallint,specific_date date,start_local time,end_local time)
-language sql stable security definer set search_path=ogevia,pg_temp as $$
+language sql stable security definer set search_path = ogevia, pg_temp as $$
  select w.id,w.weekday,w.specific_date,w.start_local,w.end_local from ogevia.caregiver_availability_windows w join ogevia.caregiver_records cr on cr.id=w.caregiver_record_id and cr.organization_id=w.organization_id and cr.linked_user_id=ogevia.require_actor()
  where w.organization_id=p_organization_id and ogevia.has_permission(p_organization_id,'availability.manage_own') order by w.specific_date nulls last,w.weekday,w.start_local;
 $$;
 
 create function ogevia_api.replace_my_availability(p_organization_id uuid,p_windows jsonb,p_unavailable_dates jsonb default '[]'::jsonb)
-returns void language plpgsql security definer set search_path=ogevia,pg_temp as $$
+returns void language plpgsql security definer set search_path = ogevia, pg_temp as $$
 declare v_cr uuid;
 begin
  if not ogevia.has_permission(p_organization_id,'availability.manage_own') then raise exception 'Forbidden' using errcode='OGA03'; end if;
@@ -428,7 +428,7 @@ end;$$;
 
 create function ogevia_api.list_staff_care_notifications(p_organization_id uuid)
 returns table(notification_id uuid,care_request_id uuid,event_key text,created_at timestamptz)
-language sql stable security definer set search_path=ogevia,pg_temp as $$
+language sql stable security definer set search_path = ogevia, pg_temp as $$
  select n.id,n.care_request_id,n.event_key,n.created_at from ogevia.care_notifications n where n.organization_id=p_organization_id and n.recipient_type='staff' and n.recipient_user_id=ogevia.require_actor() and n.read_at is null and ogevia.has_permission(p_organization_id,'care_requests.read') order by n.created_at desc limit 100;
 $$;
 
@@ -467,7 +467,7 @@ grant execute on function ogevia_api.list_staff_care_notifications(uuid) to ogev
 
 create function ogevia_api.list_care_request_offers(p_organization_id uuid,p_request_id uuid)
 returns table(offer_id uuid,caregiver_record_id uuid,caregiver_name text,status ogevia.care_offer_status,responded_at timestamptz)
-language sql stable security definer set search_path=ogevia,pg_temp as $$
+language sql stable security definer set search_path = ogevia, pg_temp as $$
  select o.id,o.caregiver_record_id,coalesce(cr.preferred_name,cr.first_name)||' '||cr.last_name,o.status,o.responded_at
  from ogevia.care_request_offers o join ogevia.caregiver_records cr on cr.id=o.caregiver_record_id
  where o.organization_id=p_organization_id and o.care_request_id=p_request_id and ogevia.has_permission(p_organization_id,'care_requests.read')
@@ -476,13 +476,13 @@ $$;
 
 create function ogevia_api.list_client_portal_options(p_organization_id uuid)
 returns table(client_id uuid,client_code text)
-language sql stable security definer set search_path=ogevia,pg_temp as $$
+language sql stable security definer set search_path = ogevia, pg_temp as $$
  select c.id,c.client_code from ogevia.clients c where c.organization_id=p_organization_id and c.status='active' and c.deleted_at is null and ogevia.has_permission(p_organization_id,'care_requests.manage') order by c.client_code;
 $$;
 
 create function ogevia_api.list_care_alert_staff(p_organization_id uuid)
 returns table(user_id uuid,display_name text,selected boolean)
-language sql stable security definer set search_path=ogevia,pg_temp as $$
+language sql stable security definer set search_path = ogevia, pg_temp as $$
  select u.id,coalesce(u.display_name,'Staff'),exists(select 1 from ogevia.care_request_alert_recipients a where a.organization_id=p_organization_id and a.user_id=u.id)
  from ogevia.organization_memberships m join ogevia.app_users u on u.id=m.user_id
  where m.organization_id=p_organization_id and m.status='active' and ogevia.has_permission(p_organization_id,'care_requests.manage')
@@ -491,7 +491,7 @@ language sql stable security definer set search_path=ogevia,pg_temp as $$
 $$;
 
 create function ogevia_api.replace_care_alert_staff(p_organization_id uuid,p_user_ids uuid[])
-returns void language plpgsql security definer set search_path=ogevia,pg_temp as $$
+returns void language plpgsql security definer set search_path = ogevia, pg_temp as $$
 begin
  if not ogevia.has_permission(p_organization_id,'care_requests.manage') then raise exception 'Forbidden' using errcode='OGA03'; end if;
  delete from ogevia.care_request_alert_recipients where organization_id=p_organization_id;
@@ -503,7 +503,7 @@ end;$$;
 
 create function ogevia_api.list_my_care_opportunities(p_organization_id uuid)
 returns table(offer_id uuid,care_request_id uuid,status ogevia.care_offer_status,service_code text,service_name text,starts_at timestamptz,ends_at timestamptz,client_label text)
-language sql stable security definer set search_path=ogevia,pg_temp as $$
+language sql stable security definer set search_path = ogevia, pg_temp as $$
  select o.id,r.id,o.status,s.code,s.name,r.starts_at,r.ends_at,coalesce(c.caregiver_display_code,c.client_code)
  from ogevia.caregiver_records cr join ogevia.care_request_offers o on o.caregiver_record_id=cr.id and o.organization_id=cr.organization_id
  join ogevia.care_requests r on r.id=o.care_request_id join ogevia.services s on s.id=r.service_id join ogevia.clients c on c.id=r.client_id
@@ -512,7 +512,7 @@ language sql stable security definer set search_path=ogevia,pg_temp as $$
 $$;
 
 create function ogevia_api.respond_my_care_opportunity(p_organization_id uuid,p_offer_id uuid,p_available boolean,p_note text default null)
-returns ogevia.care_offer_status language plpgsql security definer set search_path=ogevia,pg_temp as $$
+returns ogevia.care_offer_status language plpgsql security definer set search_path = ogevia, pg_temp as $$
 declare v_request uuid; v_status ogevia.care_offer_status;
 begin
  select o.care_request_id into v_request from ogevia.care_request_offers o join ogevia.caregiver_records cr on cr.id=o.caregiver_record_id and cr.organization_id=o.organization_id
