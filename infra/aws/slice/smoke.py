@@ -41,7 +41,7 @@ RDS_ID = "ogevia-prod-postgres"
 EVIDENCE_BUCKET = "ogevia-prod-signature-evidence-%s-%s" % (ACCOUNT, REGION)
 EXISTING_CLIENT = "1i27abbina08fvg1i9u8vprgo9"
 TEST_ORG_SLUG = "ogevia-test-slice"
-EXPECTED_ROUTES = 14
+EXPECTED_ROUTES = 35
 
 RESULTS = []
 
@@ -369,8 +369,12 @@ def infra(args, out):
         check(G, "JWT authorizer: issuer = existing pool", jwt["Issuer"] == "https://cognito-idp.%s.amazonaws.com/%s" % (REGION, POOL))
         check(G, "JWT audience = ogevia-web + test client only", sorted(jwt["Audience"]) == sorted([EXISTING_CLIENT, client_id]))
         routes = aws("apigatewayv2", "get-routes", "--api-id", api_id)["Items"]
-        check(G, "%d routes, every one JWT-protected, no $default/ANY" % EXPECTED_ROUTES, len(routes) == EXPECTED_ROUTES
-              and all(r.get("AuthorizationType") == "JWT" and r.get("AuthorizerId") for r in routes)
+        public_care = [r for r in routes if "/v1/public/care-" in r["RouteKey"]]
+        staff_routes = [r for r in routes if r not in public_care]
+        check(G, "%d routes; only opaque-token care links are public" % EXPECTED_ROUTES, len(routes) == EXPECTED_ROUTES
+              and len(public_care) == 7
+              and all(r.get("AuthorizationType") == "NONE" and not r.get("AuthorizerId") for r in public_care)
+              and all(r.get("AuthorizationType") == "JWT" and r.get("AuthorizerId") for r in staff_routes)
               and not any(r["RouteKey"] == "$default" or r["RouteKey"].startswith("ANY ") for r in routes))
         code, _, _ = http(api_url + "/v1/me")
         check(G, "anonymous GET /v1/me -> 401", code == 401, "got %s" % code)
