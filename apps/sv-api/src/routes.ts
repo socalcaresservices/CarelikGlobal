@@ -288,12 +288,15 @@ export const ROUTES: Record<string, Route> = {
       }
       return {
         corrections: await tx((db) =>
-          rows(db, "select * from ogevia_api.list_correction_history_report($1, $2, $3, $4, $5)", [
+          rows(db, "select * from ogevia_api.list_correction_history_report($1, $2, $3, $4, $5, $6, $7, $8)", [
             org,
             from,
             to,
             optionalUuid(query.clientId, "clientId"),
             optionalUuid(query.serviceId, "serviceId"),
+            optionalUuid(query.caregiverUserId, "caregiverUserId"),
+            optionalUuid(query.correctedByUserId, "correctedByUserId"),
+            query.status ? oneOf(query.status, "status", VISIT_STATUSES) : null,
           ]),
         ),
       };
