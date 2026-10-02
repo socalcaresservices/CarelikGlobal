@@ -9,14 +9,22 @@ end $$;
 create type public.weekday as enum ('monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday');
 create type public.shift_status as enum ('scheduled', 'completed', 'cancelled', 'no_show');
 create type public.incident_status as enum ('open', 'under_review', 'resolved');
+create type public.availability_preference as enum ('available', 'preferred');
+create schema if not exists auth;
+create function auth.uid() returns uuid language sql stable as $$ select null::uuid $$;
+create table public.organizations (id uuid primary key, timezone text not null default 'America/Los_Angeles');
+create table public.services (id uuid primary key, organization_id uuid not null, deleted_at timestamptz);
 create table public.clients (
   id uuid primary key, organization_id uuid not null,
   address_zip text, address_city text, address_state text,
-  language_needs text[] not null default '{}', care_needs text[] not null default '{}'
+  language_needs text[] not null default '{}', care_needs text[] not null default '{}',
+  deleted_at timestamptz
 );
 create table public.client_requested_schedule (
   id uuid primary key default gen_random_uuid(), organization_id uuid not null, client_id uuid not null,
-  day_of_week public.weekday not null, start_time time not null, end_time time not null
+  day_of_week public.weekday not null, start_time time not null, end_time time not null,
+  service_id uuid, notes text, created_by uuid,
+  constraint client_requested_schedule_time_order check (end_time > start_time)
 );
 create table public.user_profiles (id uuid primary key, skills text[] not null default '{}');
 create table public.caregiver_records (
@@ -28,12 +36,15 @@ create table public.caregiver_records (
 );
 create table public.caregiver_record_availability (
   id uuid primary key default gen_random_uuid(), organization_id uuid not null, caregiver_record_id uuid not null,
-  day_of_week public.weekday not null, start_time time not null, end_time time not null
+  day_of_week public.weekday not null, start_time time not null, end_time time not null,
+  preference public.availability_preference not null default 'available',
+  constraint caregiver_record_availability_order check (end_time > start_time)
 );
 create table public.shifts (
   id uuid primary key default gen_random_uuid(), organization_id uuid not null, client_id uuid not null,
   caregiver_record_id uuid, starts_at timestamptz not null, ends_at timestamptz not null,
-  status public.shift_status not null default 'scheduled'
+  status public.shift_status not null default 'scheduled',
+  source_requested_schedule_id uuid
 );
 create table public.incidents (
   id uuid primary key default gen_random_uuid(), client_id uuid, caregiver_user_id uuid,

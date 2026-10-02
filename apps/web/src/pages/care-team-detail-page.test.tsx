@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -283,6 +283,52 @@ describe("CareTeamDetailPage visits and assignments", () => {
     await waitFor(() =>
       expect(updateMock).toHaveBeenCalledWith(expect.objectContaining({ skills: ["dementia", "hoyer lift"] }))
     );
+  });
+
+  it("accepts an overnight availability window, says it ends the next day, and saves it", async () => {
+    mockedUseOrganization.mockReturnValue(baseOrganization());
+    mockFromByTable(baseRecord({ linked_user_id: null }));
+    mockedRpc.mockResolvedValue({ data: [], error: null } as never);
+
+    renderPage();
+
+    // "+ Add time" only appears once the saved windows have loaded, so an
+    // added window can no longer be overwritten by the initial load.
+    fireEvent.click((await screen.findAllByRole("button", { name: "+ Add time" }))[0]!);
+    const [start, end] = Array.from(document.querySelectorAll<HTMLInputElement>('input[type="time"]'));
+    fireEvent.change(start!, { target: { value: "22:00" } });
+    fireEvent.change(end!, { target: { value: "06:00" } });
+    expect(screen.getByText("Overnight: ends the next day.")).toBeInTheDocument();
+    fireEvent.change(end!, { target: { value: "22:00" } });
+    expect(screen.getByText("Start and end can't be the same.")).toBeInTheDocument();
+    fireEvent.change(end!, { target: { value: "06:00" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save availability" }));
+
+    await waitFor(() =>
+      expect(mockedRpc).toHaveBeenCalledWith("replace_caregiver_record_availability", expect.objectContaining({
+        availability_slots: [expect.objectContaining({ day_of_week: "monday", start_time: "22:00", end_time: "06:00" })],
+      }))
+    );
+  });
+
+  it("does not offer '+ Add time' until the saved availability has loaded", async () => {
+    mockedUseOrganization.mockReturnValue(baseOrganization());
+    mockFromByTable(baseRecord({ linked_user_id: null }));
+    const base = mockedFrom.getMockImplementation()!;
+    let release: (value: { data: unknown[]; error: null }) => void = () => {};
+    const pending = new Promise<{ data: unknown[]; error: null }>((resolve) => { release = resolve; });
+    mockedFrom.mockImplementation(((table: string) =>
+      table === "caregiver_record_availability"
+        ? ({ select: vi.fn(() => ({ eq: vi.fn(() => ({ eq: vi.fn(() => pending) })) })) } as never)
+        : base(table as never)) as never);
+    mockedRpc.mockResolvedValue({ data: [], error: null } as never);
+
+    renderPage();
+
+    await waitFor(() => expect(screen.getByRole("button", { name: "Save availability" })).toBeInTheDocument());
+    expect(screen.queryAllByRole("button", { name: "+ Add time" })).toHaveLength(0);
+    act(() => release({ data: [], error: null }));
+    expect((await screen.findAllByRole("button", { name: "+ Add time" })).length).toBe(7);
   });
 
   it("shows only this record's assignments once linked to a login", async () => {

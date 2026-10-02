@@ -6,7 +6,9 @@
 # 2) the fix (20260826010000) applied on top passes every assertion and
 #    can be re-applied;
 # 3) caregiver_records.skills (20260826020000): backfill, union with a
-#    linked login's profile skills, credit for caregivers without a login.
+#    linked login's profile skills, credit for caregivers without a login;
+# 4) overnight windows (20260826030000): helpers, RPCs, CareScore match and
+#    the shift -> requested-schedule link in the agency timezone.
 set -euo pipefail
 HERE="$(cd "$(dirname "$0")" && pwd)"; MIG="$HERE/../../migrations"
 DB="care_score_test_$$"
@@ -25,3 +27,6 @@ q -f "$HERE/care_score_missing_data.test.sql"
 q -f "$MIG/20260826020000_caregiver_record_skills.sql"
 q -f "$MIG/20260826020000_caregiver_record_skills.sql"   # re-runnable
 q -f "$HERE/caregiver_record_skills.test.sql"
+q -f "$MIG/20260826030000_overnight_availability.sql"
+q -f "$MIG/20260826030000_overnight_availability.sql"   # re-runnable
+q -f "$HERE/overnight_availability.test.sql"
