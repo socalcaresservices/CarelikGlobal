@@ -18,6 +18,8 @@ declare
   v_timezone text;
   v_client_token text;
   v_service_token text;
+  v_candidate text;
+  v_attempt integer;
 begin
   -- A correction is a revision of the same visit, not a new visit identity.
   if new.original_visit_id is not null then
@@ -42,13 +44,31 @@ begin
     'SVC'
   );
 
-  new.visit_number_snapshot :=
-    v_client_token || '-' ||
-    v_service_token || '-' ||
-    to_char(new.service_date, 'DDMMYY') || '-' ||
-    to_char(new.time_in at time zone coalesce(v_timezone, 'America/Los_Angeles'), 'HH24MI') || '-' ||
-    upper(substr(md5(new.id::text), 1, 2));
+  -- Keep the human suffix at the requested two characters, but retry if
+  -- another ROOT visit already owns that exact reference. Corrections bypass
+  -- this trigger branch and intentionally keep the root visit reference.
+  for v_attempt in 0..255 loop
+    v_candidate :=
+      v_client_token || '-' ||
+      v_service_token || '-' ||
+      to_char(new.service_date, 'DDMMYY') || '-' ||
+      to_char(new.time_in at time zone coalesce(v_timezone, 'America/Los_Angeles'), 'HH24MI') || '-' ||
+      upper(substr(md5(new.id::text || ':' || v_attempt::text), 1, 2));
+    exit when not exists (
+      select 1
+      from ogevia.service_visits existing
+      where existing.organization_id = new.organization_id
+        and existing.original_visit_id is null
+        and existing.visit_number_snapshot = v_candidate
+    );
+  end loop;
 
+  if v_attempt > 255 then
+    raise exception 'Could not allocate a unique two-character visit reference suffix'
+      using errcode = 'OGC09';
+  end if;
+
+  new.visit_number_snapshot := v_candidate;
   return new;
 end;
 $$;
@@ -162,7 +182,10 @@ create function ogevia_api.list_correction_history_report(
   p_date_from date default null,
   p_date_to date default null,
   p_client_id uuid default null,
-  p_service_id uuid default null
+  p_service_id uuid default null,
+  p_caregiver_user_id uuid default null,
+  p_corrected_by_user_id uuid default null,
+  p_status ogevia.service_visit_status default null
 )
 returns table (
   correction_id uuid,
@@ -173,7 +196,11 @@ returns table (
   service_code text,
   service_name text,
   service_date date,
+  caregiver_user_id uuid,
+  caregiver_name text,
+  corrected_by_user_id uuid,
   corrected_by_name text,
+  corrected_visit_status ogevia.service_visit_status,
   reason text,
   before_snapshot jsonb,
   after_snapshot jsonb,
@@ -193,13 +220,18 @@ as $$
     sv.code,
     sv.name,
     original.service_date,
+    original.caregiver_user_id,
+    original.caregiver_name_snapshot,
+    vc.corrected_by,
     coalesce(u.display_name, 'Administrator'),
+    corrected.status,
     vc.reason,
     vc.before_snapshot,
     vc.after_snapshot,
     vc.created_at
   from ogevia.visit_corrections vc
   join ogevia.service_visits original on original.id = vc.original_visit_id
+  join ogevia.service_visits corrected on corrected.id = vc.corrected_visit_id
   join ogevia.services sv on sv.id = original.service_id
   left join ogevia.app_users u on u.id = vc.corrected_by
   where ogevia.require_actor() is not null
@@ -210,12 +242,15 @@ as $$
     and (p_date_to is null or original.service_date <= p_date_to)
     and (p_client_id is null or original.client_id = p_client_id)
     and (p_service_id is null or original.service_id = p_service_id)
+    and (p_caregiver_user_id is null or original.caregiver_user_id = p_caregiver_user_id)
+    and (p_corrected_by_user_id is null or vc.corrected_by = p_corrected_by_user_id)
+    and (p_status is null or corrected.status = p_status)
   order by original.service_date desc, vc.created_at desc;
 $$;
 
 revoke all on function ogevia.set_human_visit_number() from public;
 revoke all on function ogevia_api.list_monthly_service_summary(uuid, date, uuid) from public;
-revoke all on function ogevia_api.list_correction_history_report(uuid, date, date, uuid, uuid) from public;
+revoke all on function ogevia_api.list_correction_history_report(uuid, date, date, uuid, uuid, uuid, uuid, ogevia.service_visit_status) from public;
 
 grant execute on function ogevia_api.list_monthly_service_summary(uuid, date, uuid) to ogevia_app;
-grant execute on function ogevia_api.list_correction_history_report(uuid, date, date, uuid, uuid) to ogevia_app;
+grant execute on function ogevia_api.list_correction_history_report(uuid, date, date, uuid, uuid, uuid, uuid, ogevia.service_visit_status) to ogevia_app;
