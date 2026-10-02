@@ -109,6 +109,24 @@ function mockFromByTable(record: unknown) {
         }))
       } as never;
     }
+    if (table === "skills") {
+      return {
+        select: vi.fn(() => ({
+          eq: vi.fn(() => ({
+            is: vi.fn(() => ({
+              order: vi.fn().mockResolvedValue({
+                data: [
+                  { id: "skill-1", name: "dementia", is_active: true },
+                  { id: "skill-2", name: "hoyer lift", is_active: true },
+                  { id: "skill-3", name: "retired skill", is_active: false },
+                ],
+                error: null,
+              }),
+            })),
+          })),
+        })),
+      } as never;
+    }
     return { select: lookupChain } as never;
   });
 
@@ -237,6 +255,33 @@ describe("CareTeamDetailPage visits and assignments", () => {
 
     await waitFor(() =>
       expect(updateMock).toHaveBeenCalledWith(expect.objectContaining({ position: "Overnight Companion" }))
+    );
+  });
+
+  it("records skills for a caregiver without a login from the skill catalog and saves them to caregiver_records", async () => {
+    mockedUseOrganization.mockReturnValue(baseOrganization());
+    const { updateMock } = mockFromByTable(baseRecord({ linked_user_id: null, skills: ["dementia"] }));
+    mockedRpc.mockResolvedValue({ data: [], error: null } as never);
+
+    renderPage();
+
+    await waitFor(() => expect(screen.getByText("Edit workforce profile")).toBeInTheDocument());
+    // Existing skill shows on the profile and as a removable chip.
+    const skillsLabel = screen.getAllByText("Skills").find((el) => el.tagName === "DT")!;
+    expect(skillsLabel.nextElementSibling?.textContent).toBe("dementia");
+    expect(screen.getByRole("button", { name: "Remove dementia" })).toBeInTheDocument();
+    // Only ACTIVE catalog skills are offered.
+    const box = screen.getByRole("combobox", { name: "Skills" });
+    fireEvent.focus(box);
+    fireEvent.change(box, { target: { value: "lift" } });
+    const option = await screen.findByRole("option", { name: /hoyer lift/ });
+    fireEvent.mouseDown(option);
+    fireEvent.change(box, { target: { value: "retired" } });
+    expect(screen.queryByRole("option", { name: /retired skill/ })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Save profile" }));
+
+    await waitFor(() =>
+      expect(updateMock).toHaveBeenCalledWith(expect.objectContaining({ skills: ["dementia", "hoyer lift"] }))
     );
   });
 
