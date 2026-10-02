@@ -9,6 +9,46 @@ export function formatHours(minutes: number): string {
   return (minutes / 60).toFixed(2).replace(/\.00$/, "");
 }
 
+/** Human-readable duration for operational UI and printed reports. */
+export function formatDuration(minutes: number | null | undefined): string {
+  if (minutes === null || minutes === undefined) return "—";
+  const total = Math.max(0, Math.round(minutes));
+  const hours = Math.floor(total / 60);
+  const mins = total % 60;
+  if (hours === 0) return `${mins} min`;
+  if (mins === 0) return `${hours} hr`;
+  return `${hours} hr ${mins} min`;
+}
+
+/** Compact DD/MM/YY date used in dense operational reports. */
+export function formatNumericDate(value: string | Date): string {
+  const parts = new Intl.DateTimeFormat("en-GB", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "2-digit",
+    timeZone: PACIFIC_TIME_ZONE,
+  }).formatToParts(new Date(value));
+  const get = (type: Intl.DateTimeFormatPartTypes) =>
+    parts.find((part) => part.type === type)?.value ?? "";
+  return `${get("day")}/${get("month")}/${get("year")}`;
+}
+
+/** Compact 24-hour time used in report tables. */
+export function format24HourTime(value: string | Date): string {
+  return new Intl.DateTimeFormat("en-GB", {
+    hour: "2-digit",
+    minute: "2-digit",
+    hourCycle: "h23",
+    timeZone: PACIFIC_TIME_ZONE,
+  }).format(new Date(value));
+}
+
+export function formatTimeRange(timeIn: string, timeOut: string | null): string {
+  return timeOut
+    ? `${format24HourTime(timeIn)}–${format24HourTime(timeOut)}`
+    : format24HourTime(timeIn);
+}
+
 export function formatClockTime(value: string | Date): string {
   return new Intl.DateTimeFormat("en-US", {
     hour: "numeric",
