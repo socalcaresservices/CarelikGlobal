@@ -101,6 +101,21 @@ function sumMinutes(
   return rows.reduce((total, row) => total + (row[key] ?? 0), 0);
 }
 
+function csvQuote(value: unknown) {
+  return `"${String(value ?? "").replace(/"/g, '""')}"`;
+}
+
+function downloadCsv(filename: string, header: string[], rows: unknown[][]) {
+  const csv = [header, ...rows].map((row) => row.map(csvQuote).join(",")).join("\r\n");
+  const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = filename;
+  anchor.click();
+  URL.revokeObjectURL(url);
+}
+
 // Excludes voided and superseded ('corrected') rows from every subtotal -
 // a corrected visit's replacement carries the numbers that should count,
 // and a voided visit was never real time to begin with.
@@ -256,6 +271,7 @@ export function ServiceVerificationReportsPage() {
   const [reportView, setReportView] = useState<ReportView>("overview");
   const [linkCopied, setLinkCopied] = useState(false);
   const [reportMonth, setReportMonth] = useState(currentPacificMonth);
+  const [showSuperseded, setShowSuperseded] = useState(false);
 
   const visitsQuery = useQuery({
     queryKey: [
@@ -299,6 +315,50 @@ export function ServiceVerificationReportsPage() {
     queryFn: (): Promise<VisitCorrectionRow[]> =>
       backend.listCorrections(expandedVisitId!),
     enabled: expandedMode === "history" && !!expandedVisitId,
+  });
+
+  const monthlyServiceSummaryQuery = useQuery({
+    queryKey: [
+      "monthly-service-summary",
+      activeOrganizationId,
+      clientFilter,
+      reportMonth,
+    ],
+    queryFn: (): Promise<MonthlyServiceSummaryRow[]> =>
+      backend.listMonthlyServiceSummary!(
+        activeOrganizationId!,
+        clientFilter || null,
+        `${reportMonth}-01`,
+      ),
+    enabled:
+      !!activeOrganizationId &&
+      canRead &&
+      !!backend.listMonthlyServiceSummary &&
+      (reportView === "calendar" || reportView === "reconciliation"),
+  });
+
+  const correctionHistoryReportQuery = useQuery({
+    queryKey: [
+      "correction-history-report",
+      activeOrganizationId,
+      dateFrom,
+      dateTo,
+      clientFilter,
+      serviceFilter,
+    ],
+    queryFn: (): Promise<CorrectionHistoryReportRow[]> =>
+      backend.listCorrectionHistoryReport!(
+        activeOrganizationId!,
+        dateFrom || null,
+        dateTo || null,
+        clientFilter || null,
+        serviceFilter || null,
+      ),
+    enabled:
+      !!activeOrganizationId &&
+      canRead &&
+      !!backend.listCorrectionHistoryReport &&
+      reportView === "corrections",
   });
 
   useEffect(() => {
