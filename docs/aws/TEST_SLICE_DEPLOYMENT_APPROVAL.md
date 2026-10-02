@@ -169,3 +169,16 @@ The smoke suite (≈45 checks) covers:
 Testing: the suite was run locally against PostgreSQL with the real handler, 30/30 workflow + tenant checks, re-run and interrupted-run recovery included. `finish.sh` was dry-run with stub tools (happy path + failed-stack stop). The bundled web build passed 22/22 in Chromium via `config.json` only.
 
 Bundle: `s3://cdk-hnb659fds-assets-300094796789-us-west-2/ogevia-test-slice/ogevia-slice-7dc040c25549.tgz` (private bootstrap bucket, SSE-KMS), SHA-256 `c40b0fe5d3e18c76f8f8e41417c35640284c85cc66411b8ce753a240e822dcea`. It is built by `infra/aws/scripts/build-slice-bundle.sh` from commit `7dc040c25549`.
+
+### 8.3 First CloudShell run: API stack failure and fix (2026-10-02)
+
+| Item | Finding (VERIFIED) |
+| --- | --- |
+| Result | EvidenceStorage, NetworkEgress, WebHosting: `CREATE_COMPLETE` (kept, reused). ServiceVerificationApi: `ROLLBACK_COMPLETE`. Observability: not started |
+| Cause | Lambda `Handler886CB40B` had `DependsOn: [HandlerRole]` only. The ENI actions live in the separate managed policy `HandlerPolicy7544C855`, which CloudFormation created in parallel. Events: Lambda `CREATE_FAILED` 23:57:30.904 ("...does not have permissions to call CreateNetworkInterface on EC2"); `HandlerPolicy` "Resource creation cancelled" 23:57:31.126 |
+| Fix (`c70af6e`) | `this.handler.node.addDependency(policy)`; synthesized `DependsOn: [HandlerPolicy7544C855, HandlerRoleF4C27E12]`. No permission change: the same 5 ENI actions on `*`, no AWS managed policies |
+| Guards | Regression tests (fail without the fix: negative control run); template-scanner rule `vpc-lambda-eni-ordering`; `finish.sh` checks every shipped VPC Lambda template before any action |
+| Failed stack contents | Lambda, role, policy, API, stage, authorizer, metadata: `DELETE_COMPLETE` (no leftover role/function/API found). Two log groups `DELETE_SKIPPED` by design (RETAIN), 0 bytes, outside the stack. No outputs/exports |
+| Recovery | Delete only the `Ogevia-prod-ServiceVerificationApi` stack record (termination protection must be lifted for it). This removes no live resource. `finish.sh` does it only with `OGEVIA_APPROVE_FAILED_API_CLEANUP=yes` and only if every resource is `DELETE_COMPLETE` (or a retained log group); it never touches another stack |
+| Leftovers | The 2 empty retained log groups stay (no cost while empty). They can be deleted later on request |
+| New bundle | `s3://cdk-hnb659fds-assets-300094796789-us-west-2/ogevia-test-slice/ogevia-slice-4f705a2f86ec.tgz`, SHA-256 `f76b50b95c502cf528b260d5d2bd295ce4674dda42939cc233d923e056e2e191` (commit `4f705a2`) |
