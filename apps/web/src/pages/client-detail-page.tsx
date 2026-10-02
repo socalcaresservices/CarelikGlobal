@@ -184,7 +184,15 @@ interface CaregiverMatchDetailRow {
   // Data the client needs but this caregiver has not recorded; scored 0, not
   // assumed (see 20260826010000_matching_no_credit_for_missing_caregiver_data.sql).
   missing_data?: string[] | null;
+  // Informational only, never scored (see 20260826060000_caregiver_services_and_areas.sql).
+  match_notes?: string[] | null;
 }
+
+const MATCH_NOTE_LABELS: Record<string, string> = {
+  service_not_supported: "Doesn't support the requested services",
+  some_services_not_supported: "Supports only some requested services",
+  outside_preferred_area: "Outside preferred cities",
+};
 
 const MISSING_DATA_LABELS: Record<string, string> = {
   availability_windows: "availability",
@@ -1250,12 +1258,24 @@ export function ClientDetailPage() {
                     <span>Skills {match.skills_score}/10</span>
                     <span>History {match.history_score}/15</span>
                   </div>
-                  {match.missing_data && match.missing_data.length > 0 ? (
-                    <p className="mt-1 text-xs text-amber-700">
-                      Not recorded (scored 0):{" "}
-                      {match.missing_data.map((key) => MISSING_DATA_LABELS[key] ?? key).join(", ")}
-                    </p>
-                  ) : null}
+                  {(() => {
+                    // "services" is not a scored factor, so it is reported
+                    // as a note rather than under "scored 0".
+                    const scoredMissing = (match.missing_data ?? []).filter((key) => key !== "services");
+                    const notes = (match.match_notes ?? []).map((key) => MATCH_NOTE_LABELS[key] ?? key);
+                    if (match.missing_data?.includes("services")) notes.push("Services supported not recorded");
+                    return (
+                      <>
+                        {notes.length > 0 ? <p className="mt-1 text-xs text-slate-700">{notes.join(" · ")}</p> : null}
+                        {scoredMissing.length > 0 ? (
+                          <p className="mt-1 text-xs text-amber-700">
+                            Not recorded (scored 0):{" "}
+                            {scoredMissing.map((key) => MISSING_DATA_LABELS[key] ?? key).join(", ")}
+                          </p>
+                        ) : null}
+                      </>
+                    );
+                  })()}
                 </li>
               ))}
             </ul>
