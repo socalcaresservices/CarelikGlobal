@@ -28,7 +28,7 @@ export function formatNumericDate(value: string | Date): string {
     year: "2-digit",
     timeZone: PACIFIC_TIME_ZONE,
   }).formatToParts(new Date(value));
-  const get = (type: Intl.DateTimeFormatPartTypes) =>
+  const get = (type: string) =>
     parts.find((part) => part.type === type)?.value ?? "";
   return `${get("day")}/${get("month")}/${get("year")}`;
 }
