@@ -348,6 +348,9 @@ begin
  if r.id is null or o.id is null then raise exception 'Request or accepted offer not found' using errcode='OGN04'; end if;
  select * into cr from ogevia.caregiver_records where id=o.caregiver_record_id and organization_id=p_organization_id and status in('ready','active') and deleted_at is null;
  if cr.id is null then raise exception 'Caregiver is no longer active' using errcode='OGV22'; end if;
+ if not exists(select 1 from ogevia_api.list_available_caregivers(p_organization_id,p_request_id) x where x.caregiver_record_id=cr.id) then
+   raise exception 'Caregiver is no longer available for this request' using errcode='OGC09';
+ end if;
  if exists(select 1 from ogevia.shifts sh where sh.organization_id=p_organization_id and sh.caregiver_record_id=cr.id and sh.id is distinct from r.assigned_shift_id and sh.status in('scheduled','completed') and sh.starts_at<r.ends_at and sh.ends_at>r.starts_at) then raise exception 'Caregiver is already scheduled at this time' using errcode='OGC09'; end if;
  v_date:=ogevia.organization_local_date(p_organization_id,r.starts_at);
  if r.assigned_shift_id is null then
