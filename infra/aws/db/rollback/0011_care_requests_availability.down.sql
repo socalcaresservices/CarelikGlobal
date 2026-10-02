@@ -14,14 +14,14 @@ drop function if exists ogevia_api.public_cancel_assigned_offer(text,text);
 drop function if exists ogevia_api.assign_care_request(uuid,uuid,uuid);
 drop function if exists ogevia_api.public_respond_care_offer(text,boolean,text);
 drop function if exists ogevia_api.public_get_care_offer(text);
-drop function if exists ogevia_api.send_care_offer(uuid,uuid,uuid);
+drop function if exists ogevia_api.send_care_offer(uuid,uuid,uuid,text);
 drop function if exists ogevia_api.list_available_caregivers(uuid,uuid);
 drop function if exists ogevia_api.list_care_requests(uuid,ogevia.care_request_status);
 drop function if exists ogevia_api.public_cancel_care_request(text,uuid,text);
 drop function if exists ogevia_api.public_get_care_request(text,uuid);
 drop function if exists ogevia_api.public_create_care_request(text,uuid,timestamptz,timestamptz,text,uuid);
 drop function if exists ogevia_api.get_public_care_portal(text);
-drop function if exists ogevia_api.create_client_care_portal(uuid,uuid,text);
+drop function if exists ogevia_api.create_client_care_portal(uuid,uuid,text,text);
 drop function if exists ogevia.care_request_reserved_usage(uuid,date,uuid);
 
 drop table if exists ogevia.care_request_events;
