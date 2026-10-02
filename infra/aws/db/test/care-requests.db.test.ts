@@ -1,10 +1,12 @@
-import { randomUUID } from "node:crypto";
+import { createHash, randomBytes, randomUUID } from "node:crypto";
 import type pg from "pg";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { asActor, createTestDb, freshClient, seedWorld, type TestDb, type World } from "./harness.js";
 
 let db: TestDb;
 let w: World;
+const token = () => randomBytes(32).toString("hex");
+const hash = (value: string) => createHash("sha256").update(value, "hex").digest("hex");
 
 async function asPublic<T>(fn: (client: pg.PoolClient) => Promise<T>) {
   const client = await db.admin.connect();
@@ -31,10 +33,9 @@ describe("care request -> availability -> offer -> assignment -> replacement", (
 
   it("keeps agency assignment control while allowing link/app self service", async () => {
     const fixture = await freshClient(db, w, w.caregiverA1, 600, w.orgA, { before: 10, after: 10 });
-    const portal = await asActor(db, w.managerA.sub, async (c) =>
-      (await c.query<{ portal_id: string; token: string }>(
-        "select * from ogevia_api.create_client_care_portal($1,$2,null)", [w.orgA, fixture.client],
-      )).rows[0]!,
+    const portalToken = token();
+    await asActor(db, w.managerA.sub, async (c) =>
+      c.query("select ogevia_api.create_client_care_portal($1,$2,$3,null)", [w.orgA, fixture.client, hash(portalToken)]),
     );
 
     const slot = await db.admin.query<{ starts_at: string; ends_at: string; dow: number }>(
@@ -54,7 +55,7 @@ describe("care request -> availability -> offer -> assignment -> replacement", (
     const created = await asPublic(async (c) =>
       (await c.query<{ request_id: string }>(
         "select * from ogevia_api.public_create_care_request($1,$2,$3,$4,'Need respite',$5)",
-        [portal.token, fixture.service, starts_at, ends_at, randomUUID()],
+        [hash(portalToken), fixture.service, starts_at, ends_at, randomUUID()],
       )).rows[0]!,
     );
 
@@ -66,13 +67,14 @@ describe("care request -> availability -> offer -> assignment -> replacement", (
     expect(candidates).toHaveLength(2);
     expect(candidates[0]!.current_client_match).toBe(true);
 
+    const offerToken = token();
     const offer = await asActor(db, w.managerA.sub, async (c) =>
-      (await c.query<{ offer_id: string; token: string }>(
-        "select * from ogevia_api.send_care_offer($1,$2,$3)",
-        [w.orgA, created.request_id, candidates[0]!.caregiver_record_id],
+      (await c.query<{ offer_id: string }>(
+        "select ogevia_api.send_care_offer($1,$2,$3,$4) offer_id",
+        [w.orgA, created.request_id, candidates[0]!.caregiver_record_id, hash(offerToken)],
       )).rows[0]!,
     );
-    await asPublic((c) => c.query("select ogevia_api.public_respond_care_offer($1,true,null)", [offer.token]));
+    await asPublic((c) => c.query("select ogevia_api.public_respond_care_offer($1,true,null)", [hash(offerToken)]));
 
     const beforeAssign = await db.admin.query("select assigned_shift_id from ogevia.care_requests where id=$1", [created.request_id]);
     expect(beforeAssign.rows[0]!.assigned_shift_id).toBeNull();
@@ -86,15 +88,16 @@ describe("care request -> availability -> offer -> assignment -> replacement", (
     );
     expect(assigned.rows[0]).toMatchObject({ status: "assigned", shift_id: shiftId, reserved_minutes: 240 });
 
-    await asPublic((c) => c.query("select ogevia_api.public_cancel_assigned_offer($1,'Cannot work')", [offer.token]));
+    await asPublic((c) => c.query("select ogevia_api.public_cancel_assigned_offer($1,'Cannot work')", [hash(offerToken)]));
     expect((await db.admin.query("select status from ogevia.care_requests where id=$1", [created.request_id])).rows[0]!.status).toBe("coverage_needed");
     expect((await db.admin.query("select released_at from ogevia.authorization_reservations where care_request_id=$1", [created.request_id])).rows[0]!.released_at).toBeNull();
 
     const replacement = candidates[1]!;
+    const replacementToken = token();
     const replacementOffer = await asActor(db, w.managerA.sub, async (c) =>
-      (await c.query<{ offer_id: string; token: string }>("select * from ogevia_api.send_care_offer($1,$2,$3)", [w.orgA, created.request_id, replacement.caregiver_record_id])).rows[0]!,
+      (await c.query<{ offer_id: string }>("select ogevia_api.send_care_offer($1,$2,$3,$4) offer_id", [w.orgA, created.request_id, replacement.caregiver_record_id, hash(replacementToken)])).rows[0]!,
     );
-    await asPublic((c) => c.query("select ogevia_api.public_respond_care_offer($1,true,null)", [replacementOffer.token]));
+    await asPublic((c) => c.query("select ogevia_api.public_respond_care_offer($1,true,null)", [hash(replacementToken)]));
     const replacementShift = await asActor(db, w.managerA.sub, async (c) =>
       (await c.query<{ id: string }>("select ogevia_api.assign_care_request($1,$2,$3) id", [w.orgA, created.request_id, replacementOffer.offer_id])).rows[0]!.id,
     );
