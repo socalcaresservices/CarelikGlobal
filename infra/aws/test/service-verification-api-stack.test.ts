@@ -38,7 +38,7 @@ describe("ServiceVerificationApiStack (FUTURE, Phase 4)", () => {
     });
   });
 
-  it("protects every Service Verification route with the JWT authorizer", () => {
+  it("uses JWT for app routes and NONE only for explicit capability-link routes", () => {
     const routes = template.findResources("AWS::ApiGatewayV2::Route");
     const keys = Object.values(routes).map(
       (r) => (r.Properties as { RouteKey: string }).RouteKey,
@@ -47,9 +47,11 @@ describe("ServiceVerificationApiStack (FUTURE, Phase 4)", () => {
       SERVICE_VERIFICATION_ROUTES.map((r) => `${r.method} ${r.path}`).sort(),
     );
     for (const route of Object.values(routes)) {
-      expect(
-        (route.Properties as { AuthorizationType: string }).AuthorizationType,
-      ).toBe("JWT");
+      const props = route.Properties as { RouteKey: string; AuthorizationType: string; AuthorizerId?: unknown };
+      const declared = SERVICE_VERIFICATION_ROUTES.find((r) => `${r.method} ${r.path}` === props.RouteKey);
+      expect(props.AuthorizationType).toBe(declared?.auth === "public" ? "NONE" : "JWT");
+      if (declared?.auth === "public") expect(props.AuthorizerId).toBeUndefined();
+      else expect(props.AuthorizerId).toBeDefined();
     }
   });
 
