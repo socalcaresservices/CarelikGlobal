@@ -25,6 +25,7 @@ import {
 import { useServiceVerificationBackend } from "@/lib/sv-backend-supabase";
 import {
   formatClockTime,
+  formatDuration,
   formatElapsed,
   formatHours,
   formatVisitDate,
@@ -741,25 +742,23 @@ export function ServiceVerificationPage() {
                   <div className="mt-3 grid grid-cols-3 gap-2 text-center">
                     <div className="rounded-2xl border border-indigo-100 bg-indigo-100/70 p-2 text-indigo-950">
                       <p className="text-lg font-bold">
-                        {formatHours(
+                        {formatDuration(
                           Number(selectedService.max_monthly_hours) * 60,
                         )}
-                        h
                       </p>
                       <p className="text-[11px] text-indigo-800">Authorized</p>
                     </div>
                     <div className="rounded-2xl border border-sky-100 bg-sky-100/80 p-2 text-sky-950">
                       <p className="text-lg font-bold">
-                        {formatHours(
+                        {formatDuration(
                           Number(selectedService.hours_used_this_month) * 60,
                         )}
-                        h
                       </p>
                       <p className="text-[11px] text-indigo-800">Serviced</p>
                     </div>
                     <div className="rounded-2xl border border-emerald-100 bg-emerald-100/80 p-2 text-emerald-950">
                       <p className="text-lg font-bold">
-                        {formatHours(
+                        {formatDuration(
                           Math.max(
                             0,
                             Number(
@@ -768,7 +767,6 @@ export function ServiceVerificationPage() {
                             ),
                           ) * 60,
                         )}
-                        h
                       </p>
                       <p className="text-[11px] text-indigo-800">Remaining</p>
                     </div>
@@ -872,10 +870,10 @@ export function ServiceVerificationPage() {
               ) : (
                 <div className="rounded-3xl border border-emerald-200 bg-emerald-50 p-4 text-center shadow-sm">
                   <p className="text-3xl font-extrabold tabular-nums text-emerald-800">
-                    {formatHours(remainingMinutes)}h
+                    {formatDuration(remainingMinutes)}
                   </p>
                   <p className="mt-1 text-sm font-semibold text-emerald-900">
-                    Authorized hours remaining this month
+                    Authorized time remaining this month
                   </p>
                 </div>
               )}
@@ -924,7 +922,7 @@ export function ServiceVerificationPage() {
                   ["Time out", formatClockTime(endedVisit.timeOut)],
                   [
                     "Total time",
-                    `${formatHours(endedVisit.workedMinutes)} hours`,
+                    formatDuration(endedVisit.workedMinutes),
                   ],
                 ].map(([label, value]) => (
                   <div
@@ -942,9 +940,9 @@ export function ServiceVerificationPage() {
               {confirmationMode === "signature" ? (
                 <div className="space-y-4">
                   <label className="block text-sm font-semibold text-slate-700">
-                    Who is signing?
+                    Person confirming
                     <select
-                      aria-label="Who is signing?"
+                      aria-label="Person confirming"
                       value={signerRole}
                       onChange={(event) =>
                         setSignerRole(event.target.value as VisitSignerRole)
@@ -983,7 +981,7 @@ export function ServiceVerificationPage() {
                       )}
                     >
                       <PenLine className="mb-2 h-8 w-8" />
-                      Write signature
+                      Sign name
                       <span className="text-xs font-normal">Firmar</span>
                     </button>
                     <button
@@ -1001,7 +999,7 @@ export function ServiceVerificationPage() {
                       )}
                     >
                       <Hand className="mb-2 h-8 w-8" />
-                      Make a simple mark
+                      Make a mark
                       <span className="text-xs font-normal">
                         Hacer una marca
                       </span>
@@ -1023,6 +1021,10 @@ export function ServiceVerificationPage() {
                         : "Use su dedo para firmar en el cuadro"}
                     </p>
                   </div>
+                  <div className="rounded-2xl border border-slate-200 bg-white p-3 text-sm text-slate-700">
+                    By signing or making a mark, I confirm that the service and
+                    times shown above are correct.
+                  </div>
                   <SignaturePad key={signatureKind} onChange={setSignature} />
                   <Button
                     type="button"
@@ -1042,7 +1044,7 @@ export function ServiceVerificationPage() {
                     }}
                     className="min-h-12 w-full rounded-xl border border-slate-300 bg-white px-4 text-sm font-semibold text-slate-700"
                   >
-                    Signing problem · Problema para firmar
+                    Unable to obtain confirmation
                   </button>
                 </div>
               ) : (
@@ -1138,7 +1140,7 @@ export function ServiceVerificationPage() {
                 <p className="mt-1 text-slate-600">
                   {formatClockTime(endedVisit.timeIn)}–
                   {formatClockTime(endedVisit.timeOut)} ·{" "}
-                  {formatHours(endedVisit.workedMinutes)} hours
+                  {formatDuration(endedVisit.workedMinutes)}
                 </p>
                 {endedVisit.visitNumber ? (
                   <p className="mt-1 text-xs text-slate-400">
