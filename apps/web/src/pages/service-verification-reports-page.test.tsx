@@ -264,6 +264,9 @@ describe("ServiceVerificationReportsPage", () => {
       target: { value: visitRow.client_id },
     });
     await openReport(/Client monthly calendar/);
+    fireEvent.change(screen.getByLabelText("Calendar month"), {
+      target: { value: "2026-08" },
+    });
 
     const calendar = await screen.findByRole("grid", {
       name: /Service hours for Jamie Smith in 2026-08/,
@@ -466,7 +469,7 @@ describe("ServiceVerificationReportsPage", () => {
     ).toBeInTheDocument();
   });
 
-  it("shows the visit number and authorization before/after balance", async () => {
+  it("shows the visit number with separate authorized, used MTD, and remaining values", async () => {
     mockedUseOrganization.mockReturnValue({
       activeOrganizationId: ORG_ID,
       activeOrganization: { displayName: "Acme Care" },
@@ -480,7 +483,10 @@ describe("ServiceVerificationReportsPage", () => {
     await openReport(/Visit details/);
 
     expect(await screen.findByText("SCS-V-20260801-4F7K")).toBeInTheDocument();
-    expect(screen.getByText("10 → 11 (29 left)")).toBeInTheDocument();
+    const visitTable = screen.getByRole("table", { name: "Visit details" });
+    expect(within(visitTable).getByText("40 hr")).toBeInTheDocument();
+    expect(within(visitTable).getByText("11 hr")).toBeInTheDocument();
+    expect(within(visitTable).getByText("29 hr")).toBeInTheDocument();
   });
 
   it("submits a correction for a signed visit", async () => {
