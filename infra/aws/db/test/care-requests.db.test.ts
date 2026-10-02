@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import type pg from "pg";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { asActor, createTestDb, seedWorld, type TestDb, type World } from "./harness.js";
+import { asActor, createTestDb, freshClient, seedWorld, type TestDb, type World } from "./harness.js";
 
 let db: TestDb;
 let w: World;
@@ -30,9 +30,10 @@ describe("care request -> availability -> offer -> assignment -> replacement", (
   afterAll(async () => db?.drop());
 
   it("keeps agency assignment control while allowing link/app self service", async () => {
+    const fixture = await freshClient(db, w, w.caregiverA1, 600, w.orgA, { before: 10, after: 10 });
     const portal = await asActor(db, w.managerA.sub, async (c) =>
       (await c.query<{ portal_id: string; token: string }>(
-        "select * from ogevia_api.create_client_care_portal($1,$2,null)", [w.orgA, w.clientA1],
+        "select * from ogevia_api.create_client_care_portal($1,$2,null)", [w.orgA, fixture.client],
       )).rows[0]!,
     );
 
@@ -53,7 +54,7 @@ describe("care request -> availability -> offer -> assignment -> replacement", (
     const created = await asPublic(async (c) =>
       (await c.query<{ request_id: string }>(
         "select * from ogevia_api.public_create_care_request($1,$2,$3,$4,'Need respite',$5)",
-        [portal.token, w.serviceA, starts_at, ends_at, randomUUID()],
+        [portal.token, fixture.service, starts_at, ends_at, randomUUID()],
       )).rows[0]!,
     );
 
