@@ -1460,6 +1460,241 @@ export function ServiceVerificationReportsPage() {
         </div>
       </div>
 
+      {reportView === "reconciliation" ? (
+        <Card className="print:border-none print:p-0 print:shadow-none">
+          <div className="flex flex-wrap items-end justify-between gap-4">
+            <div>
+              <h3 className="font-semibold text-slate-950">
+                Monthly hours & billing reconciliation
+              </h3>
+              <p className="mt-1 max-w-3xl text-sm text-slate-500">
+                Each row is one client + service + authorization lineage.
+                Services are never combined. Worked and billable time remain
+                separate so documentation or authorization differences cannot
+                be hidden by a client-level total.
+              </p>
+            </div>
+            <div className="flex items-end gap-2 print:hidden">
+              <label className="text-xs font-medium text-slate-600">
+                Month
+                <input
+                  type="month"
+                  value={reportMonth}
+                  onChange={(event) => setReportMonth(event.target.value)}
+                  className="mt-1 block rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900"
+                />
+              </label>
+              {monthlyServiceRows.length > 0 ? (
+                <Button
+                  type="button"
+                  variant="secondary"
+                  icon={<Download className="h-4 w-4" />}
+                  onClick={() =>
+                    downloadCsv(
+                      `monthly-service-reconciliation-${reportMonth}.csv`,
+                      [
+                        "Client",
+                        "Service",
+                        "Authorization period",
+                        "Authorized",
+                        "Worked",
+                        "Verified",
+                        "Billable",
+                        "Remaining",
+                        "Needs review",
+                        "Worked minus billable",
+                      ],
+                      monthlyServiceRows.map((row) => [
+                        row.clientCode,
+                        `${row.serviceCode} ${row.serviceName}`,
+                        `${row.authorizationPeriodStart} to ${row.authorizationPeriodEnd}`,
+                        formatDuration(row.authorizedMinutes),
+                        formatDuration(row.workedMinutes),
+                        formatDuration(row.verifiedMinutes),
+                        formatDuration(row.billableMinutes),
+                        formatDuration(row.remainingMinutes),
+                        formatDuration(row.reviewMinutes),
+                        formatDuration(Math.max(0, row.workedMinutes - row.billableMinutes)),
+                      ]),
+                    )
+                  }
+                >
+                  CSV
+                </Button>
+              ) : null}
+            </div>
+          </div>
+
+          {monthlyServiceSummaryQuery.isLoading ? (
+            <p className="mt-4 text-sm text-slate-500">Loading reconciliation…</p>
+          ) : monthlyServiceSummaryQuery.isError ? (
+            <p className="mt-4 text-sm text-red-700">
+              Could not load monthly reconciliation.
+            </p>
+          ) : monthlyServiceRows.length === 0 ? (
+            <p className="mt-4 text-sm text-slate-500">
+              No client/service authorizations match this month and filter.
+            </p>
+          ) : (
+            <div className="mt-4 overflow-x-auto">
+              <table className="w-full text-left text-sm" aria-label="Monthly hours and billing reconciliation">
+                <thead>
+                  <tr className="border-b border-slate-200 text-xs uppercase tracking-wide text-slate-500">
+                    <th className="pb-2 pr-3 font-medium">Client</th>
+                    <th className="pb-2 pr-3 font-medium">Service</th>
+                    <th className="pb-2 pr-3 font-medium">Authorized</th>
+                    <th className="pb-2 pr-3 font-medium">Worked</th>
+                    <th className="pb-2 pr-3 font-medium">Verified</th>
+                    <th className="pb-2 pr-3 font-medium">Billable</th>
+                    <th className="pb-2 pr-3 font-medium">Remaining</th>
+                    <th className="pb-2 pr-3 font-medium">Needs review</th>
+                    <th className="pb-2 font-medium">Difference</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {monthlyServiceRows.map((row) => {
+                    const difference = Math.max(0, row.workedMinutes - row.billableMinutes);
+                    return (
+                      <tr key={row.authorizationLineageId} className="border-b border-slate-100">
+                        <td className="py-2 pr-3 font-medium text-slate-800">{row.clientCode}</td>
+                        <td className="py-2 pr-3">
+                          <p className="font-medium text-slate-800">{row.serviceCode} · {row.serviceName}</p>
+                          <p className="text-xs text-slate-400">
+                            {row.authorizationPeriodStart}–{row.authorizationPeriodEnd}
+                          </p>
+                        </td>
+                        <td className="py-2 pr-3">{formatDuration(row.authorizedMinutes)}</td>
+                        <td className="py-2 pr-3">{formatDuration(row.workedMinutes)}</td>
+                        <td className="py-2 pr-3">{formatDuration(row.verifiedMinutes)}</td>
+                        <td className="py-2 pr-3 font-medium">{formatDuration(row.billableMinutes)}</td>
+                        <td className="py-2 pr-3">{formatDuration(row.remainingMinutes)}</td>
+                        <td className="py-2 pr-3">{formatDuration(row.reviewMinutes)}</td>
+                        <td className="py-2">
+                          {difference > 0 ? (
+                            <StatusBadge
+                              label={`${formatDuration(difference)} worked not billable`}
+                              tone="warning"
+                            />
+                          ) : (
+                            <StatusBadge label="Matched" tone="success" />
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+          <p className="mt-4 text-xs text-slate-500">
+            “Billable” means eligible to bill after visit verification and
+            authorization controls. Actual submitted/billed totals will remain a
+            separate ledger value; they must never be inferred from billable time.
+          </p>
+        </Card>
+      ) : null}
+
+      {reportView === "corrections" ? (
+        <Card className="print:border-none print:p-0 print:shadow-none">
+          <div className="flex flex-wrap items-start justify-between gap-4">
+            <div>
+              <h3 className="font-semibold text-slate-950">Correction history</h3>
+              <p className="mt-1 max-w-3xl text-sm text-slate-500">
+                Agency audit report of visit revisions. Original records remain
+                immutable; this report shows who changed what, why, and when.
+              </p>
+            </div>
+            {(correctionHistoryReportQuery.data ?? []).length > 0 ? (
+              <Button
+                type="button"
+                variant="secondary"
+                className="print:hidden"
+                icon={<Download className="h-4 w-4" />}
+                onClick={() =>
+                  downloadCsv(
+                    "correction-history.csv",
+                    [
+                      "Visit ref",
+                      "Client",
+                      "Service",
+                      "Service date",
+                      "Original time",
+                      "Corrected time",
+                      "Original duration",
+                      "Corrected duration",
+                      "Corrected by",
+                      "Reason",
+                      "Corrected on",
+                    ],
+                    (correctionHistoryReportQuery.data ?? []).map((row) => [
+                      row.visitNumber,
+                      row.clientCode,
+                      `${row.serviceCode} ${row.serviceName}`,
+                      row.serviceDate,
+                      formatTimeRange(row.beforeSnapshot.timeIn, row.beforeSnapshot.timeOut),
+                      formatTimeRange(row.afterSnapshot.timeIn, row.afterSnapshot.timeOut),
+                      formatDuration(row.beforeSnapshot.workedMinutes),
+                      formatDuration(row.afterSnapshot.workedMinutes),
+                      row.correctedByName,
+                      row.reason,
+                      formatDateTime(row.createdAt),
+                    ]),
+                  )
+                }
+              >
+                CSV
+              </Button>
+            ) : null}
+          </div>
+          {correctionHistoryReportQuery.isLoading ? (
+            <p className="mt-4 text-sm text-slate-500">Loading correction history…</p>
+          ) : correctionHistoryReportQuery.isError ? (
+            <p className="mt-4 text-sm text-red-700">Could not load correction history.</p>
+          ) : (correctionHistoryReportQuery.data ?? []).length === 0 ? (
+            <p className="mt-4 text-sm text-slate-500">No corrections match these filters.</p>
+          ) : (
+            <div className="mt-4 overflow-x-auto">
+              <table className="w-full text-left text-sm" aria-label="Correction history report">
+                <thead>
+                  <tr className="border-b border-slate-200 text-xs uppercase tracking-wide text-slate-500">
+                    <th className="pb-2 pr-3 font-medium">Visit ref</th>
+                    <th className="pb-2 pr-3 font-medium">Client</th>
+                    <th className="pb-2 pr-3 font-medium">Service</th>
+                    <th className="pb-2 pr-3 font-medium">Date</th>
+                    <th className="pb-2 pr-3 font-medium">Original</th>
+                    <th className="pb-2 pr-3 font-medium">Corrected</th>
+                    <th className="pb-2 pr-3 font-medium">Corrected by</th>
+                    <th className="pb-2 pr-3 font-medium">Reason</th>
+                    <th className="pb-2 font-medium">Corrected on</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {(correctionHistoryReportQuery.data ?? []).map((row) => (
+                    <tr key={row.correctionId} className="border-b border-slate-100 align-top">
+                      <td className="py-2 pr-3 whitespace-nowrap font-mono text-xs">{row.visitNumber ?? "—"}</td>
+                      <td className="py-2 pr-3">{row.clientCode}</td>
+                      <td className="py-2 pr-3">{row.serviceCode} · {row.serviceName}</td>
+                      <td className="py-2 pr-3 whitespace-nowrap">{formatNumericDate(`${row.serviceDate}T12:00:00-07:00`)}</td>
+                      <td className="py-2 pr-3 whitespace-nowrap">
+                        {formatTimeRange(row.beforeSnapshot.timeIn, row.beforeSnapshot.timeOut)}
+                        <span className="block text-xs text-slate-400">{formatDuration(row.beforeSnapshot.workedMinutes)}</span>
+                      </td>
+                      <td className="py-2 pr-3 whitespace-nowrap">
+                        {formatTimeRange(row.afterSnapshot.timeIn, row.afterSnapshot.timeOut)}
+                        <span className="block text-xs text-slate-400">{formatDuration(row.afterSnapshot.workedMinutes)}</span>
+                      </td>
+                      <td className="py-2 pr-3">{row.correctedByName}</td>
+                      <td className="py-2 pr-3">{row.reason}</td>
+                      <td className="py-2 whitespace-nowrap">{formatDateTime(row.createdAt)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </Card>
+      ) : null}
+
       {reportView === "visits" ? (
         <>
           <Card className="print:border-none print:p-0 print:shadow-none">
