@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button, Card } from "@carelik/ui";
 import type { AwsApiClient } from "@/lib/aws-api";
@@ -75,9 +75,10 @@ export function CareRequestsPage({ api }: { api: AwsApiClient }) {
   });
 
   const staffRows = staff.data?.staff ?? [];
-  useMemo(() => {
-    if (staffRows.length && selectedAlertUsers.size === 0) setSelectedAlertUsers(new Set(staffRows.filter((s) => s.selected).map((s) => s.userId)));
-    return null;
+  useEffect(() => {
+    if (staffRows.length && selectedAlertUsers.size === 0) {
+      setSelectedAlertUsers(new Set(staffRows.filter((s) => s.selected).map((s) => s.userId)));
+    }
   }, [staffRows, selectedAlertUsers.size]);
 
   return (
