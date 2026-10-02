@@ -84,6 +84,9 @@ function toLocalInputValue(date: Date) {
 function incidentCategories(row: Pick<IncidentRow, "category" | "categories">): string[] {
   return row.categories && row.categories.length > 0 ? row.categories : [row.category];
 }
+function isMissingCategoriesColumn(error: { code?: string; message?: string }) {
+  return error.code === "PGRST204" && /categories/.test(error.message ?? "");
+}
 const categoriesLabel = (row: Pick<IncidentRow, "category" | "categories">) => incidentCategories(row).join(", ");
 
 const emptyForm = {
@@ -278,17 +281,22 @@ export function IncidentsPage() {
         data: { user }
       } = await supabase.auth.getUser();
 
-      const { error } = await supabase.from("incidents").insert({
+      const base = {
         organization_id: activeOrganizationId,
         category: form.categories[0],
-        categories: form.categories,
         occurred_at: new Date(form.occurredAt).toISOString(),
         client_id: form.clientId || null,
         caregiver_user_id: form.caregiverUserId || null,
         severity: form.severity,
         description: form.description,
         reported_by: user?.id ?? null
-      });
+      };
+      let { error } = await supabase.from("incidents").insert({ ...base, categories: form.categories });
+      // A database without 20260826050000 has no categories column (the API
+      // rejects unknown columns): file with the first category rather than fail.
+      if (error && isMissingCategoriesColumn(error)) {
+        ({ error } = await supabase.from("incidents").insert(base));
+      }
       if (error) throw error;
       setForm(emptyForm);
       refreshIncidents();

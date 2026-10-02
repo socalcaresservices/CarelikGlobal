@@ -192,6 +192,41 @@ describe("IncidentsPage", () => {
   });
 
 
+  it("still files an incident (first category) on a database without the categories column", async () => {
+    mockedUseOrganization.mockReturnValue({
+      ...baseOrganization(),
+      hasPermission: vi.fn((permission: string) => permission === "incidents.create")
+    });
+    mockedRpc.mockResolvedValue({ data: [], error: null } as never);
+    const insertMock = vi
+      .fn()
+      .mockResolvedValueOnce({ error: { code: "PGRST204", message: "Could not find the 'categories' column of 'incidents' in the schema cache" } })
+      .mockResolvedValueOnce({ error: null });
+    mockedFrom.mockImplementation((table: string) => {
+      if (table === "incident_types") {
+        return {
+          select: vi.fn(() => ({
+            eq: vi.fn(() => ({ is: vi.fn(() => ({ order: vi.fn().mockResolvedValue({ data: [{ id: "type-1", name: "Fall", is_active: true }], error: null }) })) }))
+          }))
+        } as never;
+      }
+      return { insert: insertMock } as never;
+    });
+    mockedGetUser.mockResolvedValue({ data: { user: { id: USER_ID } }, error: null } as never);
+
+    renderPage();
+    await waitFor(() => expect(screen.getByText("File an incident")).toBeInTheDocument());
+    fireEvent.focus(screen.getByRole("combobox", { name: "Categories" }));
+    fireEvent.mouseDown(await screen.findByRole("option", { name: "Fall" }));
+    fireEvent.change(screen.getByLabelText("What happened"), { target: { value: "Synthetic description." } });
+    fireEvent.click(screen.getByRole("button", { name: "File incident" }));
+
+    await waitFor(() => expect(insertMock).toHaveBeenCalledTimes(2));
+    expect(insertMock.mock.calls[1]![0]).toEqual(expect.objectContaining({ category: "Fall" }));
+    expect(insertMock.mock.calls[1]![0]).not.toHaveProperty("categories");
+    expect(screen.queryByText(/Could not find/)).toBeNull();
+  });
+
   it("will not file an incident without a category", async () => {
     mockedUseOrganization.mockReturnValue({
       ...baseOrganization(),
