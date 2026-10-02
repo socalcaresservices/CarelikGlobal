@@ -171,7 +171,11 @@ export interface CorrectionHistoryReportRow {
   serviceCode: string;
   serviceName: string;
   serviceDate: string;
+  caregiverUserId: string | null;
+  caregiverName: string;
+  correctedByUserId: string;
   correctedByName: string;
+  correctedVisitStatus: ServiceVisitStatus;
   reason: string;
   beforeSnapshot: { timeIn: string; timeOut: string; workedMinutes: number; billableMinutes: number };
   afterSnapshot: { timeIn: string; timeOut: string; workedMinutes: number; billableMinutes: number };
@@ -213,7 +217,16 @@ export interface ServiceVerificationBackend {
   /** AWS reporting: one row per client + service + authorization lineage for a month. */
   listMonthlyServiceSummary?(organizationId: string, clientId: string | null, monthStart: string): Promise<MonthlyServiceSummaryRow[]>;
   /** AWS reporting: organization correction audit report. */
-  listCorrectionHistoryReport?(organizationId: string, dateFrom: string | null, dateTo: string | null, clientId: string | null, serviceId: string | null): Promise<CorrectionHistoryReportRow[]>;
+  listCorrectionHistoryReport?(
+    organizationId: string,
+    dateFrom: string | null,
+    dateTo: string | null,
+    clientId: string | null,
+    serviceId: string | null,
+    caregiverUserId: string | null,
+    correctedByUserId: string | null,
+    status: string | null,
+  ): Promise<CorrectionHistoryReportRow[]>;
   /** AWS only: billing-review data (read-only; no approval or submission). */
   listBillingReview?(organizationId: string, dateFrom: string, dateTo: string): Promise<BillingReviewRow[]>;
 }
