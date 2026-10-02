@@ -5,6 +5,7 @@ import {
   CalendarDays,
   Check,
   Copy,
+  Download,
   FileText,
   Folder,
   MapPin,
@@ -38,6 +39,8 @@ import { useOrganization } from "@/providers/organization-provider";
 import {
   newIdempotencyKey,
   type ClientLocation,
+  type CorrectionHistoryReportRow,
+  type MonthlyServiceSummaryRow,
   type OrgLetterhead,
   type VisitCorrectionRow,
   type VisitReportRow,
@@ -46,7 +49,10 @@ import { useServiceVerificationBackend } from "@/lib/sv-backend-supabase";
 import {
   AUTHORIZATION_STATUS_LABEL,
   formatDateTime,
+  formatDuration,
   formatHours,
+  formatNumericDate,
+  formatTimeRange,
   formatVisitDate,
   VISIT_STATUS_LABEL,
   type ServiceVisitStatus,
@@ -62,6 +68,8 @@ type ReportView =
   | "overview"
   | "caregiver"
   | "calendar"
+  | "reconciliation"
+  | "corrections"
   | "visits"
   | "exceptions"
   | "staff-access";
@@ -151,7 +159,7 @@ function presetRange(preset: DatePreset) {
 
 interface CalendarEntry {
   key: string;
-  caregiverName: string;
+  serviceName: string;
   workedMinutes: number;
   billableMinutes: number;
   needsReview: boolean;
@@ -176,12 +184,15 @@ function buildMonthCalendar(rows: VisitReportRow[], monthValue: string) {
   const entriesByDate = new Map<string, Map<string, CalendarEntry>>();
   for (const row of billableRows(rows)) {
     if (!row.service_date.startsWith(`${monthValue}-`)) continue;
-    const caregiverKey = row.caregiver_user_id || row.caregiver_name;
+    // Calendar reporting is intentionally grouped by SERVICE, never caregiver.
+    // A client may hold multiple authorizations and those service buckets must
+    // never be mixed on a date or in monthly totals.
+    const serviceKey = row.service_id;
     const dayEntries =
       entriesByDate.get(row.service_date) ?? new Map<string, CalendarEntry>();
-    const entry = dayEntries.get(caregiverKey) ?? {
-      key: caregiverKey,
-      caregiverName: row.caregiver_name,
+    const entry = dayEntries.get(serviceKey) ?? {
+      key: serviceKey,
+      serviceName: row.service_name,
       workedMinutes: 0,
       billableMinutes: 0,
       needsReview: false,
@@ -189,7 +200,7 @@ function buildMonthCalendar(rows: VisitReportRow[], monthValue: string) {
     entry.workedMinutes += row.worked_minutes ?? 0;
     entry.billableMinutes += row.billable_minutes ?? 0;
     entry.needsReview ||= row.status === "administrator_review";
-    dayEntries.set(caregiverKey, entry);
+    dayEntries.set(serviceKey, entry);
     entriesByDate.set(row.service_date, dayEntries);
   }
 
@@ -201,7 +212,7 @@ function buildMonthCalendar(rows: VisitReportRow[], monthValue: string) {
       Array.from(entriesByDate.entries()).map(([date, dayEntries]) => [
         date,
         Array.from(dayEntries.values()).sort((a, b) =>
-          a.caregiverName.localeCompare(b.caregiverName),
+          a.serviceName.localeCompare(b.serviceName),
         ),
       ]),
     ),
