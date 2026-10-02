@@ -1224,108 +1224,201 @@ export function ServiceVerificationReportsPage() {
       ) : null}
 
       {reportView === "calendar" ? (
-        <Card>
+        <Card className="print:border-none print:p-0 print:shadow-none">
           <div className="flex flex-wrap items-end justify-between gap-4">
             <div className="flex items-start gap-3">
               <CalendarDays className="mt-0.5 h-5 w-5 text-sky-700" />
               <div>
                 <h3 className="font-semibold text-slate-950">
-                  Monthly hours calendar
+                  Client monthly service calendar
                 </h3>
                 <p className="mt-1 text-sm text-slate-500">
-                  Select one client above to see every caregiver who served that
-                  client and the hours recorded each day. Amber entries need
-                  manager review.
+                  One client per calendar. Every worked date shows the service
+                  and actual hours. Different services are never combined.
                 </p>
               </div>
             </div>
-            <label className="text-xs font-medium text-slate-600">
-              Calendar month
-              <input
-                type="month"
-                aria-label="Calendar month"
-                value={reportMonth}
-                onChange={(event) => setReportMonth(event.target.value)}
-                className="mt-1 block rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900"
-              />
-            </label>
-          </div>
-
-          <div className="mt-4 overflow-x-auto">
-            <div
-              role="grid"
-              aria-label={`Caregiver hours for ${reportMonth}`}
-              className="min-w-[760px]"
-            >
-              <div
-                role="row"
-                className="grid grid-cols-7 border-b border-slate-200 bg-slate-50"
-              >
-                {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map(
-                  (day) => (
-                    <div
-                      key={day}
-                      role="columnheader"
-                      className="px-2 py-2 text-center text-xs font-semibold uppercase tracking-wide text-slate-500"
-                    >
-                      {day}
-                    </div>
-                  ),
-                )}
-              </div>
-              {monthCalendar.weeks.map((week, weekIndex) => (
-                <div key={weekIndex} role="row" className="grid grid-cols-7">
-                  {week.map((day, dayIndex) => {
-                    const date = day
-                      ? `${reportMonth}-${String(day).padStart(2, "0")}`
-                      : null;
-                    const entries = date
-                      ? (monthCalendar.entries.get(date) ?? [])
-                      : [];
-                    return (
-                      <div
-                        key={`${weekIndex}-${dayIndex}`}
-                        role="gridcell"
-                        aria-label={date ?? "Outside selected month"}
-                        className="min-h-28 border-b border-r border-slate-100 p-2 last:border-r-0"
-                      >
-                        {day ? (
-                          <p className="text-xs font-semibold text-slate-600">
-                            {day}
-                          </p>
-                        ) : null}
-                        <div className="mt-1 space-y-1.5">
-                          {entries.map((entry) => (
-                            <div
-                              key={entry.key}
-                              className={
-                                entry.needsReview
-                                  ? "rounded-md bg-amber-50 px-1.5 py-1"
-                                  : "rounded-md bg-sky-50 px-1.5 py-1"
-                              }
-                            >
-                              <p
-                                className="truncate text-[11px] font-semibold text-slate-800"
-                                title={entry.caregiverName}
-                              >
-                                {entry.caregiverName}
-                              </p>
-                              <p className="text-[11px] tabular-nums text-slate-600">
-                                {formatHours(entry.workedMinutes)}h worked
-                                {entry.billableMinutes !== entry.workedMinutes
-                                  ? ` · ${formatHours(entry.billableMinutes)}h billable`
-                                  : ""}
-                              </p>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              ))}
+            <div className="flex items-end gap-2 print:hidden">
+              <label className="text-xs font-medium text-slate-600">
+                Calendar month
+                <input
+                  type="month"
+                  aria-label="Calendar month"
+                  value={reportMonth}
+                  onChange={(event) => setReportMonth(event.target.value)}
+                  className="mt-1 block rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900"
+                />
+              </label>
+              {clientFilter && monthlyServiceRows.length > 0 ? (
+                <Button
+                  type="button"
+                  variant="secondary"
+                  icon={<Download className="h-4 w-4" />}
+                  onClick={() =>
+                    downloadCsv(
+                      `client-service-calendar-${reportMonth}.csv`,
+                      [
+                        "Client",
+                        "Service",
+                        "Authorization period",
+                        "Authorized",
+                        "Worked",
+                        "Billable",
+                        "Remaining",
+                        "Needs review",
+                      ],
+                      monthlyServiceRows.map((row) => [
+                        row.clientCode,
+                        `${row.serviceCode} ${row.serviceName}`,
+                        `${row.authorizationPeriodStart} to ${row.authorizationPeriodEnd}`,
+                        formatDuration(row.authorizedMinutes),
+                        formatDuration(row.workedMinutes),
+                        formatDuration(row.billableMinutes),
+                        formatDuration(row.remainingMinutes),
+                        formatDuration(row.reviewMinutes),
+                      ]),
+                    )
+                  }
+                >
+                  CSV
+                </Button>
+              ) : null}
             </div>
           </div>
+
+          {!clientFilter ? (
+            <div className="mt-5 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-950">
+              Select one client above. A monthly client calendar is never
+              generated by combining multiple clients.
+            </div>
+          ) : (
+            <>
+              <div className="mt-4 border-b border-slate-200 pb-3">
+                <p className="font-semibold text-slate-950">
+                  {selectedClientName ?? "Selected client"} · {reportMonth}
+                </p>
+              </div>
+              <div className="mt-4 overflow-x-auto">
+                <div
+                  role="grid"
+                  aria-label={`Service hours for ${selectedClientName ?? "selected client"} in ${reportMonth}`}
+                  className="min-w-[760px]"
+                >
+                  <div
+                    role="row"
+                    className="grid grid-cols-7 border-b border-slate-200 bg-slate-50"
+                  >
+                    {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map(
+                      (day) => (
+                        <div
+                          key={day}
+                          role="columnheader"
+                          className="px-2 py-2 text-center text-xs font-semibold uppercase tracking-wide text-slate-500"
+                        >
+                          {day}
+                        </div>
+                      ),
+                    )}
+                  </div>
+                  {monthCalendar.weeks.map((week, weekIndex) => (
+                    <div key={weekIndex} role="row" className="grid grid-cols-7">
+                      {week.map((day, dayIndex) => {
+                        const date = day
+                          ? `${reportMonth}-${String(day).padStart(2, "0")}`
+                          : null;
+                        const entries = date
+                          ? (monthCalendar.entries.get(date) ?? [])
+                          : [];
+                        return (
+                          <div
+                            key={`${weekIndex}-${dayIndex}`}
+                            role="gridcell"
+                            aria-label={date ?? "Outside selected month"}
+                            className="min-h-28 border-b border-r border-slate-100 p-2 last:border-r-0"
+                          >
+                            {day ? (
+                              <p className="text-xs font-semibold text-slate-600">
+                                {day}
+                              </p>
+                            ) : null}
+                            <div className="mt-1 space-y-1.5">
+                              {entries.map((entry) => (
+                                <div
+                                  key={entry.key}
+                                  className={
+                                    entry.needsReview
+                                      ? "rounded-md bg-amber-50 px-1.5 py-1"
+                                      : "rounded-md bg-sky-50 px-1.5 py-1"
+                                  }
+                                >
+                                  <p
+                                    className="text-[11px] font-semibold text-slate-800"
+                                    title={entry.serviceName}
+                                  >
+                                    {entry.serviceName}
+                                  </p>
+                                  <p className="text-[11px] font-medium tabular-nums text-slate-700">
+                                    {formatDuration(entry.workedMinutes)}
+                                  </p>
+                                  {entry.billableMinutes !== entry.workedMinutes ? (
+                                    <p className="text-[10px] tabular-nums text-slate-500">
+                                      Billable {formatDuration(entry.billableMinutes)}
+                                    </p>
+                                  ) : null}
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div className="mt-5">
+                <h4 className="font-semibold text-slate-950">
+                  Monthly totals by service
+                </h4>
+                {monthlyServiceSummaryQuery.isLoading ? (
+                  <p className="mt-2 text-sm text-slate-500">Loading totals…</p>
+                ) : monthlyServiceRows.length === 0 ? (
+                  <p className="mt-2 text-sm text-slate-500">
+                    No authorization/service totals are available for this month.
+                  </p>
+                ) : (
+                  <div className="mt-2 overflow-x-auto">
+                    <table className="w-full text-left text-sm" aria-label="Monthly service totals">
+                      <thead>
+                        <tr className="border-b border-slate-200 text-xs uppercase tracking-wide text-slate-500">
+                          <th className="pb-2 pr-3 font-medium">Service</th>
+                          <th className="pb-2 pr-3 font-medium">Authorized</th>
+                          <th className="pb-2 pr-3 font-medium">Worked</th>
+                          <th className="pb-2 pr-3 font-medium">Billable</th>
+                          <th className="pb-2 pr-3 font-medium">Remaining</th>
+                          <th className="pb-2 font-medium">Needs review</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {monthlyServiceRows.map((row) => (
+                          <tr key={row.authorizationLineageId} className="border-b border-slate-100">
+                            <td className="py-2 pr-3 font-medium text-slate-800">
+                              {row.serviceCode} · {row.serviceName}
+                            </td>
+                            <td className="py-2 pr-3">{formatDuration(row.authorizedMinutes)}</td>
+                            <td className="py-2 pr-3">{formatDuration(row.workedMinutes)}</td>
+                            <td className="py-2 pr-3">{formatDuration(row.billableMinutes)}</td>
+                            <td className="py-2 pr-3">{formatDuration(row.remainingMinutes)}</td>
+                            <td className="py-2">{formatDuration(row.reviewMinutes)}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+            </>
+          )}
         </Card>
       ) : null}
 
