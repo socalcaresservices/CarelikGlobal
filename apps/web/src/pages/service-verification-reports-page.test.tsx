@@ -256,7 +256,11 @@ describe("ServiceVerificationReportsPage", () => {
 
     renderPage();
 
-    fireEvent.change(await screen.findByLabelText("Client"), {
+    // Wait until the visit query has populated the client option before
+    // selecting it. Changing a native <select> to a value whose option has
+    // not rendered yet resolves back to the empty "All clients" value.
+    await screen.findByRole("option", { name: "Jamie Smith" });
+    fireEvent.change(screen.getByLabelText("Client"), {
       target: { value: visitRow.client_id },
     });
     await openReport(/Client monthly calendar/);
