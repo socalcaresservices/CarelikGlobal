@@ -98,4 +98,35 @@ describe("ClientOperationsDashboard", () => {
       ),
     );
   });
+
+  it("shows the month's hours by source when the breakdown is available", async () => {
+    mockedRpc.mockImplementation((name: string) => {
+      if (name === "list_client_operations") {
+        return Promise.resolve({
+          data: [{
+            ...row,
+            worked_minutes: 600,
+            requested_minutes: 4800,
+            scheduled_minutes: 5400,
+            upcoming_scheduled_minutes: 4800,
+            confirmed_minutes: 540,
+            billable_minutes: 480,
+            remaining_minutes: -600,
+            projected_minutes: 5400,
+          }],
+          error: null,
+        }) as never;
+      }
+      return Promise.resolve({ data: "review-1", error: null }) as never;
+    });
+    renderDashboard();
+    const breakdown = await screen.findByLabelText("Hours breakdown for Respite");
+    expect(breakdown).toHaveTextContent("Requested80 hrs");
+    expect(breakdown).toHaveTextContent("Scheduled90 hrs");
+    expect(breakdown).toHaveTextContent("Still scheduled80 hrs");
+    expect(breakdown).toHaveTextContent("Confirmed9 hrs");
+    expect(breakdown).toHaveTextContent("Billable8 hrs");
+    expect(screen.getByText("Projected (worked + scheduled)")).toBeInTheDocument();
+    expect(screen.getByText("Over authorization")).toBeInTheDocument();
+  });
 });

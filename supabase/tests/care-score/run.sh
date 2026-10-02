@@ -8,7 +8,8 @@
 # 3) caregiver_records.skills (20260826020000): backfill, union with a
 #    linked login's profile skills, credit for caregivers without a login;
 # 4) overnight windows (20260826030000): helpers, RPCs, CareScore match and
-#    the shift -> requested-schedule link in the agency timezone.
+#    the shift -> requested-schedule link in the agency timezone;
+# 5) client operations utilization breakdown (20260826040000).
 set -euo pipefail
 HERE="$(cd "$(dirname "$0")" && pwd)"; MIG="$HERE/../../migrations"
 DB="care_score_test_$$"
@@ -30,3 +31,6 @@ q -f "$HERE/caregiver_record_skills.test.sql"
 q -f "$MIG/20260826030000_overnight_availability.sql"
 q -f "$MIG/20260826030000_overnight_availability.sql"   # re-runnable
 q -f "$HERE/overnight_availability.test.sql"
+q -f "$MIG/20260826040000_client_operations_utilization_breakdown.sql"
+q -f "$MIG/20260826040000_client_operations_utilization_breakdown.sql"   # re-runnable
+q -f "$HERE/utilization_breakdown.test.sql"

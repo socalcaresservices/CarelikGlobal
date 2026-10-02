@@ -24,6 +24,16 @@ export interface ClientOperationRow {
   gap_reason: string | null;
   gap_notes: string | null;
   gap_resolved: boolean;
+  // Month breakdown in minutes (20260826040000). Optional so the page keeps
+  // working against a database that does not have the migration yet.
+  requested_minutes?: number | null;
+  scheduled_minutes?: number | null;
+  upcoming_scheduled_minutes?: number | null;
+  worked_minutes?: number | null;
+  confirmed_minutes?: number | null;
+  billable_minutes?: number | null;
+  remaining_minutes?: number | null;
+  projected_minutes?: number | null;
 }
 
 export type ServiceHealth =
@@ -36,11 +46,24 @@ export type ServiceHealth =
 
 export interface ServiceProgress {
   deliveredHours: number;
+  /** Authorized - worked - still-scheduled; negative when the plan exceeds the authorization. */
   remainingHours: number | null;
   projectedHours: number | null;
+  /** "plan" = worked + still-scheduled shifts (server); "pace" = legacy straight-line fallback. */
+  projectionBasis: "plan" | "pace" | null;
   utilizationPercent: number | null;
   health: ServiceHealth;
+  breakdown: {
+    requestedHours: number;
+    scheduledHours: number;
+    upcomingHours: number;
+    confirmedHours: number;
+    billableHours: number;
+  } | null;
 }
+
+const toHours = (minutes: number | null | undefined) =>
+  minutes === null || minutes === undefined ? null : Number(minutes) / 60;
 
 function datePartsInTimeZone(
   now = new Date(),
@@ -72,7 +95,17 @@ export function calculateServiceProgress(
   now = new Date(),
   timeZone = "America/Los_Angeles",
 ): ServiceProgress {
-  const deliveredHours = Math.max(0, Number(row.delivered_minutes ?? 0) / 60);
+  const deliveredHours = Math.max(0, Number(row.worked_minutes ?? row.delivered_minutes ?? 0) / 60);
+  const hasBreakdown = row.projected_minutes !== undefined && row.scheduled_minutes !== undefined;
+  const breakdown = hasBreakdown
+    ? {
+        requestedHours: toHours(row.requested_minutes) ?? 0,
+        scheduledHours: toHours(row.scheduled_minutes) ?? 0,
+        upcomingHours: toHours(row.upcoming_scheduled_minutes) ?? 0,
+        confirmedHours: toHours(row.confirmed_minutes) ?? 0,
+        billableHours: toHours(row.billable_minutes) ?? 0,
+      }
+    : null;
   const authorized =
     row.max_monthly_hours === null
       ? null
@@ -83,8 +116,10 @@ export function calculateServiceProgress(
       deliveredHours,
       remainingHours: null,
       projectedHours: null,
+      projectionBasis: null,
       utilizationPercent: null,
       health: "no-service",
+      breakdown,
     };
   }
 
@@ -92,9 +127,11 @@ export function calculateServiceProgress(
     return {
       deliveredHours,
       remainingHours: null,
-      projectedHours: null,
+      projectedHours: hasBreakdown ? toHours(row.projected_minutes) : null,
+      projectionBasis: hasBreakdown ? "plan" : null,
       utilizationPercent: null,
       health: "no-authorization",
+      breakdown,
     };
   }
 
@@ -103,11 +140,17 @@ export function calculateServiceProgress(
     Date.UTC(localDate.year, localDate.month, 0),
   ).getUTCDate();
   const currentDay = Math.min(localDate.day, daysInMonth);
-  const projectedHours =
-    currentDay > 0
+  // Prefer the server's plan (worked + still-scheduled shifts); fall back to
+  // the old straight-line pace only when the breakdown is not available.
+  const projectionBasis: "plan" | "pace" = hasBreakdown ? "plan" : "pace";
+  const projectedHours = hasBreakdown
+    ? toHours(row.projected_minutes) ?? deliveredHours
+    : currentDay > 0
       ? (deliveredHours / currentDay) * daysInMonth
       : deliveredHours;
-  const remainingHours = Math.max(0, authorized - deliveredHours);
+  const remainingHours = hasBreakdown
+    ? toHours(row.remaining_minutes) ?? authorized - deliveredHours
+    : Math.max(0, authorized - deliveredHours);
   const utilizationPercent =
     authorized === 0 ? 100 : Math.min(100, (deliveredHours / authorized) * 100);
 
@@ -119,8 +162,10 @@ export function calculateServiceProgress(
       deliveredHours,
       remainingHours,
       projectedHours,
+      projectionBasis,
       utilizationPercent,
       health: "authorization-expired",
+      breakdown,
     };
   }
 
@@ -129,8 +174,10 @@ export function calculateServiceProgress(
       deliveredHours,
       remainingHours,
       projectedHours,
+      projectionBasis,
       utilizationPercent,
       health: "unassigned",
+      breakdown,
     };
   }
 
@@ -138,8 +185,10 @@ export function calculateServiceProgress(
     deliveredHours,
     remainingHours,
     projectedHours,
+    projectionBasis,
     utilizationPercent,
     health: projectedHours < authorized * 0.9 ? "behind" : "on-track",
+    breakdown,
   };
 }
 
