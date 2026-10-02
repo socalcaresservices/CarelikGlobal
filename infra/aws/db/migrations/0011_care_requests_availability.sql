@@ -540,3 +540,49 @@ grant execute on function ogevia_api.list_care_alert_staff(uuid) to ogevia_app;
 grant execute on function ogevia_api.replace_care_alert_staff(uuid,uuid[]) to ogevia_app;
 grant execute on function ogevia_api.list_my_care_opportunities(uuid) to ogevia_app;
 grant execute on function ogevia_api.respond_my_care_opportunity(uuid,uuid,boolean,text) to ogevia_app;
+
+
+-- Preserve the 0008 least-privilege/RLS contract for every table introduced here.
+revoke all on table
+  ogevia.client_care_portals,
+  ogevia.caregiver_availability_windows,
+  ogevia.caregiver_unavailable_dates,
+  ogevia.care_requests,
+  ogevia.care_request_offers,
+  ogevia.authorization_reservations,
+  ogevia.care_request_alert_recipients,
+  ogevia.care_notifications,
+  ogevia.care_request_events
+from public, ogevia_app;
+
+grant select on table
+  ogevia.client_care_portals,
+  ogevia.caregiver_availability_windows,
+  ogevia.caregiver_unavailable_dates,
+  ogevia.care_requests,
+  ogevia.care_request_offers,
+  ogevia.authorization_reservations,
+  ogevia.care_request_alert_recipients,
+  ogevia.care_notifications,
+  ogevia.care_request_events
+to ogevia_readonly;
+
+alter table ogevia.client_care_portals enable row level security;
+alter table ogevia.caregiver_availability_windows enable row level security;
+alter table ogevia.caregiver_unavailable_dates enable row level security;
+alter table ogevia.care_requests enable row level security;
+alter table ogevia.care_request_offers enable row level security;
+alter table ogevia.authorization_reservations enable row level security;
+alter table ogevia.care_request_alert_recipients enable row level security;
+alter table ogevia.care_notifications enable row level security;
+alter table ogevia.care_request_events enable row level security;
+
+create policy readonly_select on ogevia.client_care_portals for select to ogevia_readonly using (true);
+create policy readonly_select on ogevia.caregiver_availability_windows for select to ogevia_readonly using (true);
+create policy readonly_select on ogevia.caregiver_unavailable_dates for select to ogevia_readonly using (true);
+create policy readonly_select on ogevia.care_requests for select to ogevia_readonly using (true);
+create policy readonly_select on ogevia.care_request_offers for select to ogevia_readonly using (true);
+create policy readonly_select on ogevia.authorization_reservations for select to ogevia_readonly using (true);
+create policy readonly_select on ogevia.care_request_alert_recipients for select to ogevia_readonly using (true);
+create policy readonly_select on ogevia.care_notifications for select to ogevia_readonly using (true);
+create policy readonly_select on ogevia.care_request_events for select to ogevia_readonly using (true);
