@@ -3,7 +3,7 @@
 Portable PostgreSQL (RDS-compatible) schema and logic for Service Verification. **Nothing here has been applied to any AWS database.** See `docs/aws/PHASE_2_POSTGRES_ARCHITECTURE.md`.
 
 ```text
-migrations/     0001–0008, applied in order; each in one transaction; SHA-256 recorded
+migrations/     0001–0010, applied in order; each in one transaction; SHA-256 recorded
 rollback/       NNNN_*.down.sql, each classified (SAFE AUTOMATED / BACKUP REQUIRED /
                 FORWARD FIX PREFERRED / IRREVERSIBLE WITHOUT DATA LOSS)
 verification/   READ-ONLY checks (check_name, ok, detail) for any approved target

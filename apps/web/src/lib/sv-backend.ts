@@ -144,6 +144,44 @@ export interface CorrectVisitInput {
   idempotencyKey: string;
 }
 
+export interface MonthlyServiceSummaryRow {
+  clientId: string;
+  clientCode: string;
+  serviceId: string;
+  serviceCode: string;
+  serviceName: string;
+  authorizationLineageId: string;
+  authorizationPeriodStart: string;
+  authorizationPeriodEnd: string;
+  authorizedMinutes: number;
+  workedMinutes: number;
+  verifiedMinutes: number;
+  billableMinutes: number;
+  remainingMinutes: number;
+  reviewMinutes: number;
+  visitCount: number;
+}
+
+export interface CorrectionHistoryReportRow {
+  correctionId: string;
+  visitNumber: string | null;
+  clientId: string;
+  clientCode: string;
+  serviceId: string;
+  serviceCode: string;
+  serviceName: string;
+  serviceDate: string;
+  caregiverUserId: string | null;
+  caregiverName: string;
+  correctedByUserId: string;
+  correctedByName: string;
+  correctedVisitStatus: ServiceVisitStatus;
+  reason: string;
+  beforeSnapshot: { timeIn: string; timeOut: string; workedMinutes: number; billableMinutes: number };
+  afterSnapshot: { timeIn: string; timeOut: string; workedMinutes: number; billableMinutes: number };
+  createdAt: string;
+}
+
 export interface BillingReviewRow {
   visitId: string;
   visitNumber: string | null;
@@ -176,6 +214,19 @@ export interface ServiceVerificationBackend {
   correctVisit(input: CorrectVisitInput): Promise<void>;
   /** AWS only: the locked signature as a PNG data URL (permission-checked, audited). */
   getSignatureDataUrl?(visitId: string): Promise<string>;
+  /** AWS reporting: one row per client + service + authorization lineage for a month. */
+  listMonthlyServiceSummary?(organizationId: string, clientId: string | null, monthStart: string): Promise<MonthlyServiceSummaryRow[]>;
+  /** AWS reporting: organization correction audit report. */
+  listCorrectionHistoryReport?(
+    organizationId: string,
+    dateFrom: string | null,
+    dateTo: string | null,
+    clientId: string | null,
+    serviceId: string | null,
+    caregiverUserId: string | null,
+    correctedByUserId: string | null,
+    status: string | null,
+  ): Promise<CorrectionHistoryReportRow[]>;
   /** AWS only: billing-review data (read-only; no approval or submission). */
   listBillingReview?(organizationId: string, dateFrom: string, dateTo: string): Promise<BillingReviewRow[]>;
 }

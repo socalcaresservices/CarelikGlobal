@@ -296,7 +296,7 @@ describe("ServiceVerificationPage v3", () => {
       }),
     ).toBeInTheDocument();
     expect(screen.getByText("Client C-104")).toBeInTheDocument();
-    expect(screen.getByText("2 hours")).toBeInTheDocument();
+    expect(screen.getByText("2 hr")).toBeInTheDocument();
   });
 
   it("ends with a server timestamp and captures a client signature", async () => {
@@ -399,7 +399,7 @@ describe("ServiceVerificationPage v3", () => {
     renderPage();
 
     await openConfirmation();
-    fireEvent.click(screen.getByRole("button", { name: /Signing problem/ }));
+    fireEvent.click(screen.getByRole("button", { name: /Unable to obtain confirmation/ }));
     expect(
       screen.getByRole("button", { name: "Submit for manager review" }),
     ).toBeDisabled();

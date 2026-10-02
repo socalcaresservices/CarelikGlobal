@@ -34,7 +34,14 @@ export function AwsShell({ children }: PropsWithChildren) {
     <div className="min-h-screen bg-slate-50">
       <header className="border-b border-slate-200 bg-white">
         <div className="mx-auto flex max-w-6xl flex-wrap items-center gap-3 px-4 py-3">
-          <span className="text-base font-semibold text-slate-950">Ogevia</span>
+          <div className="min-w-0">
+            <p className="truncate text-base font-semibold text-slate-950">
+              {activeOrganization?.displayName ?? "Organization"}
+            </p>
+            <p className="text-[10px] font-medium uppercase tracking-wide text-slate-400">
+              Powered by Ogevia
+            </p>
+          </div>
           {organizations.length > 1 ? (
             <select
               aria-label="Organization"
@@ -44,9 +51,7 @@ export function AwsShell({ children }: PropsWithChildren) {
             >
               {organizations.map((o) => <option key={o.id} value={o.id}>{o.displayName}</option>)}
             </select>
-          ) : (
-            <span className="text-sm text-slate-600">{activeOrganization?.displayName}</span>
-          )}
+          ) : null}
           <nav className="flex flex-wrap gap-1" aria-label="Main">
             {links.map((l) => (
               <NavLink key={l.to} to={l.to} end className={({ isActive }) => cn("rounded-lg px-3 py-1.5 text-sm", isActive ? "bg-slate-900 text-white" : "text-slate-700 hover:bg-slate-100")}>

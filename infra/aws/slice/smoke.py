@@ -20,6 +20,7 @@ import base64
 import datetime
 import json
 import os
+import re
 import struct
 import subprocess
 import sys
@@ -40,7 +41,7 @@ RDS_ID = "ogevia-prod-postgres"
 EVIDENCE_BUCKET = "ogevia-prod-signature-evidence-%s-%s" % (ACCOUNT, REGION)
 EXISTING_CLIENT = "1i27abbina08fvg1i9u8vprgo9"
 TEST_ORG_SLUG = "ogevia-test-slice"
-EXPECTED_ROUTES = 12
+EXPECTED_ROUTES = 14
 
 RESULTS = []
 
@@ -243,6 +244,10 @@ def workflow(args, inv, cg, mg):
     s, lst = inv.call("GET /v1/visits", mg, query={"organizationId": org})
     by_id = dict((v["id"], v) for v in (lst or {}).get("visits", []))
     check(A, "manager visit records include the signed visit", s == 200 and by_id.get(v1, {}).get("status") == "signed")
+    visit_ref = by_id.get(v1, {}).get("visitNumber", "")
+    check(A, "new visit reference is tenant-neutral CLIENT-SERVICE-DDMMYY-HHMM-XX",
+          bool(re.match(r"^[A-Z0-9]+-[A-Z0-9]+-[0-9]{6}-[0-9]{4}-[0-9A-F]{2}$", visit_ref)),
+          visit_ref)
     s, sg = inv.call("GET /v1/visits/{visitId}/signature", mg, path={"visitId": v1})
     check(A, "manager views signature (bytes identical; integrity-checked)", s == 200 and sg["pngBase64"] == sig_b64)
     s, _ = inv.call("GET /v1/visits/{visitId}/signature", cg, path={"visitId": v1})
@@ -276,6 +281,44 @@ def workflow(args, inv, cg, mg):
     check(A, "manager visit records: original kept as corrected, no-signature visit in review", s == 200 and statuses.get(v1) == "corrected" and statuses.get(v2) == "administrator_review")
 
     today = datetime.date.today()
+    month_start = today.replace(day=1)
+
+    s, ms = inv.call("GET /v1/reports/monthly-service-summary", mg,
+                     query={"organizationId": org, "clientId": c1, "monthStart": str(month_start)})
+    service_rows = (ms or {}).get("services", [])
+    check(A, "monthly service summary returns a separate RSP authorization row",
+          s == 200 and any(r["clientId"] == c1 and r["serviceId"] == service
+                           and r["serviceCode"] == "RSP"
+                           and r["authorizedMinutes"] == 600
+                           and r["workedMinutes"] >= 1 for r in service_rows),
+          "status %s rows %d" % (s, len(service_rows)))
+    s, ms_cg = inv.call("GET /v1/reports/monthly-service-summary", cg,
+                        query={"organizationId": org, "clientId": c1, "monthStart": str(month_start)})
+    check(A, "caregiver gets no manager monthly-summary data",
+          s == 200 and (ms_cg or {}).get("services", []) == [])
+
+    s, ch = inv.call("GET /v1/reports/correction-history", mg,
+                     query={"organizationId": org,
+                            "dateFrom": str(today - datetime.timedelta(days=2)),
+                            "dateTo": str(today + datetime.timedelta(days=1)),
+                            "clientId": c1,
+                            "caregiverUserId": orig.get("caregiverUserId")})
+    correction_rows = (ch or {}).get("corrections", [])
+    check(A, "correction-history report exposes immutable before/after audit data",
+          s == 200 and any(r["visitNumber"] == visit_ref
+                           and r["beforeSnapshot"] and r["afterSnapshot"]
+                           and r["caregiverUserId"]
+                           and r["correctedByUserId"]
+                           and r["correctedVisitStatus"] in ("signed", "administrator_review")
+                           for r in correction_rows),
+          "status %s rows %d" % (s, len(correction_rows)))
+    s, ch_cg = inv.call("GET /v1/reports/correction-history", cg,
+                        query={"organizationId": org,
+                               "dateFrom": str(today - datetime.timedelta(days=2)),
+                               "dateTo": str(today + datetime.timedelta(days=1))})
+    check(A, "caregiver gets no organization correction-history data",
+          s == 200 and (ch_cg or {}).get("corrections", []) == [])
+
     s, br = inv.call("GET /v1/billing-review", mg, query={"organizationId": org, "dateFrom": str(today - datetime.timedelta(days=2)), "dateTo": str(today + datetime.timedelta(days=1))})
     rows = (br or {}).get("visits", [])
     check(A, "billing review: corrected signed visit = ready", s == 200 and any(r["isCorrection"] and r["reviewState"] == "ready" for r in rows))

@@ -6,6 +6,8 @@ import type {
   AssignedClient,
   AuthorizedService,
   BillingReviewRow,
+  CorrectionHistoryReportRow,
+  MonthlyServiceSummaryRow,
   ServiceVerificationBackend,
   VisitCorrectionRow,
   VisitReportRow,
@@ -128,6 +130,36 @@ export function createAwsServiceVerificationBackend(
     async getSignatureDataUrl(visitId) {
       const { pngBase64 } = await api.get<{ pngBase64: string }>(`/v1/visits/${enc(visitId)}/signature`);
       return `data:image/png;base64,${pngBase64}`;
+    },
+    async listMonthlyServiceSummary(organizationId, clientId, monthStart) {
+      const { services } = await api.get<{ services: MonthlyServiceSummaryRow[] }>("/v1/reports/monthly-service-summary", {
+        organizationId,
+        clientId,
+        monthStart,
+      });
+      return services;
+    },
+    async listCorrectionHistoryReport(
+      organizationId,
+      dateFrom,
+      dateTo,
+      clientId,
+      serviceId,
+      caregiverUserId,
+      correctedByUserId,
+      status,
+    ) {
+      const { corrections } = await api.get<{ corrections: CorrectionHistoryReportRow[] }>("/v1/reports/correction-history", {
+        organizationId,
+        dateFrom,
+        dateTo,
+        clientId,
+        serviceId,
+        caregiverUserId,
+        correctedByUserId,
+        status,
+      });
+      return corrections;
     },
     async listBillingReview(organizationId, dateFrom, dateTo) {
       const { visits } = await api.get<{ visits: BillingReviewRow[] }>("/v1/billing-review", { organizationId, dateFrom, dateTo });

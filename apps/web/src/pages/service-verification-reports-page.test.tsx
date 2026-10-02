@@ -146,21 +146,19 @@ describe("ServiceVerificationReportsPage", () => {
 
     await openReport(/Visit details/);
 
-    expect(await screen.findByText("Visits (2)")).toBeInTheDocument();
+    expect(await screen.findByText("Visits (1)")).toBeInTheDocument();
     // "Jamie Smith" also appears in the client filter <option> and the
     // per-client subtotal card, so this only checks it appears in the
     // table row, not that it appears exactly once anywhere on the page.
     const table = screen.getByRole("table", { name: "Visit details" });
     expect(table).toHaveTextContent("Jamie Smith");
-    // Grand total excludes the corrected row (30 min) - only the signed
-    // 60-minute visit counts.
-    const totalsRow = screen
-      .getByText("Total (signed + under review)")
-      .closest("tr")!;
-    expect(totalsRow).toHaveTextContent("1");
-    // Two matches for the corrected row: the "Corrected" status badge
-    // (status === 'corrected') and the separate is_corrected marker badge.
-    expect(screen.getAllByText("Corrected").length).toBeGreaterThan(0);
+    // Superseded correction-chain rows are hidden by default; totals count
+    // only the current signed/reviewable version.
+    expect(screen.getByText("Worked: 1 hr")).toBeInTheDocument();
+    expect(screen.getByText("Billable: 1 hr")).toBeInTheDocument();
+    expect(screen.queryByText("Superseded")).not.toBeInTheDocument();
+    fireEvent.click(screen.getByLabelText("Show superseded records"));
+    expect(await screen.findByText("Superseded")).toBeInTheDocument();
   });
 
   it("shows manager filters, charts, and a caregiver-hours sheet", async () => {
@@ -189,7 +187,7 @@ describe("ServiceVerificationReportsPage", () => {
       name: "Caregiver hours summary",
     });
     expect(caregiverSheet).toHaveTextContent("Jordan Rivera");
-    expect(caregiverSheet).toHaveTextContent("1 hrs");
+    expect(caregiverSheet).toHaveTextContent("1 hr");
   });
 
   it("copies one common staff link and explains assignment protection", async () => {
@@ -224,11 +222,7 @@ describe("ServiceVerificationReportsPage", () => {
     ).toBeInTheDocument();
   });
 
-  it("maps each caregiver's daily worked and billable hours into the monthly calendar", async () => {
-    // The calendar defaults to the current month; pin only Date so the
-    // 2026-08 fixture rows stay in view regardless of when the suite runs.
-    vi.useFakeTimers({ toFake: ["Date"] });
-    vi.setSystemTime(new Date("2026-08-15T12:00:00.000Z"));
+  it("maps each service's daily worked and billable hours into the monthly client calendar", async () => {
     mockedUseOrganization.mockReturnValue({
       activeOrganizationId: ORG_ID,
       activeOrganization: { displayName: "Acme Care" },
@@ -262,19 +256,25 @@ describe("ServiceVerificationReportsPage", () => {
 
     renderPage();
 
-    await openReport(/Client calendar/);
+    // Wait until the visit query has populated the client option before
+    // selecting it. Changing a native <select> to a value whose option has
+    // not rendered yet resolves back to the empty "All clients" value.
+    await screen.findByRole("option", { name: "Jamie Smith" });
+    fireEvent.change(screen.getByLabelText("Client"), {
+      target: { value: visitRow.client_id },
+    });
+    await openReport(/Client monthly calendar/);
+    fireEvent.change(screen.getByLabelText("Calendar month"), {
+      target: { value: "2026-08" },
+    });
 
     const calendar = await screen.findByRole("grid", {
-      name: /Caregiver hours for 2026-08/,
+      name: /Service hours for Jamie Smith in 2026-08/,
     });
-    expect(
-      await within(calendar).findByText("Jordan Rivera"),
-    ).toBeInTheDocument();
-    expect(within(calendar).getByText("1h worked")).toBeInTheDocument();
-    expect(within(calendar).getByText("Sam Caregiver")).toBeInTheDocument();
-    expect(
-      within(calendar).getByText("0.75h worked · 0h billable"),
-    ).toBeInTheDocument();
+    expect(await within(calendar).findByText("Personal Care")).toBeInTheDocument();
+    expect(within(calendar).getByText("1 hr 45 min")).toBeInTheDocument();
+    expect(within(calendar).getByText("Billable 1 hr")).toBeInTheDocument();
+    expect(within(calendar).queryByText("Jordan Rivera")).not.toBeInTheDocument();
     expect(within(calendar).queryByText("Old Record")).not.toBeInTheDocument();
   });
 
@@ -469,7 +469,7 @@ describe("ServiceVerificationReportsPage", () => {
     ).toBeInTheDocument();
   });
 
-  it("shows the visit number and authorization before/after balance", async () => {
+  it("shows the visit number with separate authorized, used MTD, and remaining values", async () => {
     mockedUseOrganization.mockReturnValue({
       activeOrganizationId: ORG_ID,
       activeOrganization: { displayName: "Acme Care" },
@@ -483,7 +483,10 @@ describe("ServiceVerificationReportsPage", () => {
     await openReport(/Visit details/);
 
     expect(await screen.findByText("SCS-V-20260801-4F7K")).toBeInTheDocument();
-    expect(screen.getByText("10 → 11 (29 left)")).toBeInTheDocument();
+    const visitTable = screen.getByRole("table", { name: "Visit details" });
+    expect(within(visitTable).getByText("40 hr")).toBeInTheDocument();
+    expect(within(visitTable).getByText("11 hr")).toBeInTheDocument();
+    expect(within(visitTable).getByText("29 hr")).toBeInTheDocument();
   });
 
   it("submits a correction for a signed visit", async () => {

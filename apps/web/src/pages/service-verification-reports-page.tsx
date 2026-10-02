@@ -5,6 +5,7 @@ import {
   CalendarDays,
   Check,
   Copy,
+  Download,
   FileText,
   Folder,
   MapPin,
@@ -38,6 +39,8 @@ import { useOrganization } from "@/providers/organization-provider";
 import {
   newIdempotencyKey,
   type ClientLocation,
+  type CorrectionHistoryReportRow,
+  type MonthlyServiceSummaryRow,
   type OrgLetterhead,
   type VisitCorrectionRow,
   type VisitReportRow,
@@ -46,8 +49,9 @@ import { useServiceVerificationBackend } from "@/lib/sv-backend-supabase";
 import {
   AUTHORIZATION_STATUS_LABEL,
   formatDateTime,
-  formatHours,
-  formatVisitDate,
+  formatDuration,
+  formatNumericDate,
+  formatTimeRange,
   VISIT_STATUS_LABEL,
   type ServiceVisitStatus,
 } from "@/lib/service-verification";
@@ -62,11 +66,44 @@ type ReportView =
   | "overview"
   | "caregiver"
   | "calendar"
+  | "reconciliation"
+  | "corrections"
   | "visits"
   | "exceptions"
   | "staff-access";
 type DatePreset =
   "all" | "week" | "biweekly" | "month" | "quarter" | "year" | "custom";
+
+type VisitColumn =
+  | "visitRef"
+  | "client"
+  | "caregiver"
+  | "service"
+  | "date"
+  | "time"
+  | "worked"
+  | "billable"
+  | "authorized"
+  | "usedMtd"
+  | "remaining"
+  | "status";
+
+const VISIT_COLUMN_OPTIONS: Array<{ key: VisitColumn; label: string }> = [
+  { key: "visitRef", label: "Visit ref" },
+  { key: "client", label: "Client" },
+  { key: "caregiver", label: "Caregiver" },
+  { key: "service", label: "Service" },
+  { key: "date", label: "Date" },
+  { key: "time", label: "Time" },
+  { key: "worked", label: "Worked" },
+  { key: "billable", label: "Billable" },
+  { key: "authorized", label: "Authorized" },
+  { key: "usedMtd", label: "Used MTD" },
+  { key: "remaining", label: "Remaining" },
+  { key: "status", label: "Status" },
+];
+
+const DEFAULT_VISIT_COLUMNS = VISIT_COLUMN_OPTIONS.map((column) => column.key);
 
 const CHART_COLORS = [
   "#4f46e5",
@@ -91,6 +128,21 @@ function sumMinutes(
   key: "worked_minutes" | "billable_minutes",
 ) {
   return rows.reduce((total, row) => total + (row[key] ?? 0), 0);
+}
+
+function csvQuote(value: unknown) {
+  return `"${String(value ?? "").replace(/"/g, '""')}"`;
+}
+
+function downloadCsv(filename: string, header: string[], rows: unknown[][]) {
+  const csv = [header, ...rows].map((row) => row.map(csvQuote).join(",")).join("\r\n");
+  const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = filename;
+  anchor.click();
+  URL.revokeObjectURL(url);
 }
 
 // Excludes voided and superseded ('corrected') rows from every subtotal -
@@ -151,7 +203,7 @@ function presetRange(preset: DatePreset) {
 
 interface CalendarEntry {
   key: string;
-  caregiverName: string;
+  serviceName: string;
   workedMinutes: number;
   billableMinutes: number;
   needsReview: boolean;
@@ -176,12 +228,15 @@ function buildMonthCalendar(rows: VisitReportRow[], monthValue: string) {
   const entriesByDate = new Map<string, Map<string, CalendarEntry>>();
   for (const row of billableRows(rows)) {
     if (!row.service_date.startsWith(`${monthValue}-`)) continue;
-    const caregiverKey = row.caregiver_user_id || row.caregiver_name;
+    // Calendar reporting is intentionally grouped by SERVICE, never caregiver.
+    // A client may hold multiple authorizations and those service buckets must
+    // never be mixed on a date or in monthly totals.
+    const serviceKey = row.service_id;
     const dayEntries =
       entriesByDate.get(row.service_date) ?? new Map<string, CalendarEntry>();
-    const entry = dayEntries.get(caregiverKey) ?? {
-      key: caregiverKey,
-      caregiverName: row.caregiver_name,
+    const entry = dayEntries.get(serviceKey) ?? {
+      key: serviceKey,
+      serviceName: row.service_name,
       workedMinutes: 0,
       billableMinutes: 0,
       needsReview: false,
@@ -189,7 +244,7 @@ function buildMonthCalendar(rows: VisitReportRow[], monthValue: string) {
     entry.workedMinutes += row.worked_minutes ?? 0;
     entry.billableMinutes += row.billable_minutes ?? 0;
     entry.needsReview ||= row.status === "administrator_review";
-    dayEntries.set(caregiverKey, entry);
+    dayEntries.set(serviceKey, entry);
     entriesByDate.set(row.service_date, dayEntries);
   }
 
@@ -201,7 +256,7 @@ function buildMonthCalendar(rows: VisitReportRow[], monthValue: string) {
       Array.from(entriesByDate.entries()).map(([date, dayEntries]) => [
         date,
         Array.from(dayEntries.values()).sort((a, b) =>
-          a.caregiverName.localeCompare(b.caregiverName),
+          a.serviceName.localeCompare(b.serviceName),
         ),
       ]),
     ),
@@ -236,6 +291,7 @@ export function ServiceVerificationReportsPage() {
   );
   const [serviceFilter, setServiceFilter] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
+  const [correctedByFilter, setCorrectedByFilter] = useState("");
   const [locationFilter, setLocationFilter] = useState("");
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
@@ -245,6 +301,20 @@ export function ServiceVerificationReportsPage() {
   const [reportView, setReportView] = useState<ReportView>("overview");
   const [linkCopied, setLinkCopied] = useState(false);
   const [reportMonth, setReportMonth] = useState(currentPacificMonth);
+  const [showSuperseded, setShowSuperseded] = useState(false);
+  const [visitColumns, setVisitColumns] = useState<Set<VisitColumn>>(() => {
+    try {
+      const saved = JSON.parse(localStorage.getItem("ogevia.visit-report-columns") ?? "null");
+      if (Array.isArray(saved)) {
+        const allowed = new Set(VISIT_COLUMN_OPTIONS.map((column) => column.key));
+        const valid = saved.filter((key): key is VisitColumn => allowed.has(key as VisitColumn));
+        if (valid.length > 0) return new Set(valid);
+      }
+    } catch {
+      // Ignore a malformed local preference and use the safe default.
+    }
+    return new Set(DEFAULT_VISIT_COLUMNS);
+  });
 
   const visitsQuery = useQuery({
     queryKey: [
@@ -290,9 +360,82 @@ export function ServiceVerificationReportsPage() {
     enabled: expandedMode === "history" && !!expandedVisitId,
   });
 
+  const monthlyServiceSummaryQuery = useQuery({
+    queryKey: [
+      "monthly-service-summary",
+      activeOrganizationId,
+      clientFilter,
+      reportMonth,
+    ],
+    queryFn: (): Promise<MonthlyServiceSummaryRow[]> =>
+      backend.listMonthlyServiceSummary!(
+        activeOrganizationId!,
+        clientFilter || null,
+        `${reportMonth}-01`,
+      ),
+    enabled:
+      !!activeOrganizationId &&
+      canRead &&
+      !!backend.listMonthlyServiceSummary &&
+      (reportView === "calendar" || reportView === "reconciliation"),
+  });
+
+  const correctionHistoryReportQuery = useQuery({
+    queryKey: [
+      "correction-history-report",
+      activeOrganizationId,
+      dateFrom,
+      dateTo,
+      clientFilter,
+      serviceFilter,
+      caregiverFilter,
+      correctedByFilter,
+      statusFilter,
+    ],
+    queryFn: (): Promise<CorrectionHistoryReportRow[]> =>
+      backend.listCorrectionHistoryReport!(
+        activeOrganizationId!,
+        dateFrom || null,
+        dateTo || null,
+        clientFilter || null,
+        serviceFilter || null,
+        caregiverFilter || null,
+        correctedByFilter || null,
+        statusFilter || null,
+      ),
+    enabled:
+      !!activeOrganizationId &&
+      canRead &&
+      !!backend.listCorrectionHistoryReport &&
+      reportView === "corrections",
+  });
+
   useEffect(() => {
     correctionKey.current = newIdempotencyKey();
   }, [expandedVisitId, correctionForm]);
+
+  useEffect(() => {
+    localStorage.setItem(
+      "ogevia.visit-report-columns",
+      JSON.stringify(Array.from(visitColumns)),
+    );
+  }, [visitColumns]);
+
+  function toggleVisitColumn(column: VisitColumn) {
+    setVisitColumns((current) => {
+      const next = new Set(current);
+      if (next.has(column)) {
+        if (next.size > 1) next.delete(column);
+      } else {
+        next.add(column);
+      }
+      return next;
+    });
+  }
+
+  function resetVisitColumns() {
+    setVisitColumns(new Set(DEFAULT_VISIT_COLUMNS));
+  }
 
   function openCorrect(row: VisitReportRow) {
     setExpandedVisitId(row.id);
@@ -431,6 +574,41 @@ export function ServiceVerificationReportsPage() {
     [serviceFilter, serviceOptions],
   );
 
+  const visibleVisitColumnCount = visitColumns.size + (canManage ? 1 : 0);
+
+  const visibleVisitRows = useMemo(
+    () =>
+      showSuperseded
+        ? rows
+        : rows.filter((row) => row.status !== "corrected"),
+    [rows, showSuperseded],
+  );
+
+  const monthlyServiceRows = useMemo(
+    () =>
+      (monthlyServiceSummaryQuery.data ?? []).filter(
+        (row) => !serviceFilter || row.serviceId === serviceFilter,
+      ),
+    [monthlyServiceSummaryQuery.data, serviceFilter],
+  );
+
+  const correctionRows = useMemo(
+    () => correctionHistoryReportQuery.data ?? [],
+    [correctionHistoryReportQuery.data],
+  );
+  const correctedByOptions = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const row of correctionRows) {
+      map.set(row.correctedByUserId, row.correctedByName);
+    }
+    return Array.from(map.entries()).sort((a, b) => a[1].localeCompare(b[1]));
+  }, [correctionRows]);
+  const correctionNetMinutes = correctionRows.reduce(
+    (total, row) =>
+      total + row.afterSnapshot.workedMinutes - row.beforeSnapshot.workedMinutes,
+    0,
+  );
+
   const billable = useMemo(() => billableRows(rows), [rows]);
   const monthCalendar = useMemo(
     () => buildMonthCalendar(rows, reportMonth),
@@ -495,10 +673,46 @@ export function ServiceVerificationReportsPage() {
     );
   }, [billable]);
 
+  const clientServiceSubtotals = useMemo(() => {
+    const map = new Map<
+      string,
+      {
+        key: string;
+        code: string;
+        legalName: string | null;
+        serviceName: string;
+        workedMinutes: number;
+        billableMinutes: number;
+        visits: number;
+      }
+    >();
+    for (const row of billable) {
+      const key = `${row.client_id}:${row.service_id}`;
+      const entry = map.get(key) ?? {
+        key,
+        code: row.client_code,
+        legalName: row.client_legal_name,
+        serviceName: row.service_name,
+        workedMinutes: 0,
+        billableMinutes: 0,
+        visits: 0,
+      };
+      entry.workedMinutes += row.worked_minutes ?? 0;
+      entry.billableMinutes += row.billable_minutes ?? 0;
+      entry.visits += 1;
+      map.set(key, entry);
+    }
+    return Array.from(map.values()).sort(
+      (a, b) =>
+        a.code.localeCompare(b.code) ||
+        a.serviceName.localeCompare(b.serviceName),
+    );
+  }, [billable]);
+
   const chartData = useMemo(() => {
     const grouped = new Map<
       string,
-      { name: string; workedHours: number; billableHours: number }
+      { name: string; workedMinutes: number; billableMinutes: number }
     >();
     for (const row of billable) {
       const name =
@@ -511,31 +725,31 @@ export function ServiceVerificationReportsPage() {
               : (clientLocationMap.get(row.client_id) ?? "Location not set");
       const entry = grouped.get(name) ?? {
         name,
-        workedHours: 0,
-        billableHours: 0,
+        workedMinutes: 0,
+        billableMinutes: 0,
       };
-      entry.workedHours += (row.worked_minutes ?? 0) / 60;
-      entry.billableHours += (row.billable_minutes ?? 0) / 60;
+      entry.workedMinutes += row.worked_minutes ?? 0;
+      entry.billableMinutes += row.billable_minutes ?? 0;
       grouped.set(name, entry);
     }
     return Array.from(grouped.values()).sort(
-      (a, b) => b.workedHours - a.workedHours,
+      (a, b) => b.workedMinutes - a.workedMinutes,
     );
   }, [billable, chartGroup, clientLocationMap]);
 
   const trendData = useMemo(() => {
     const grouped = new Map<
       string,
-      { name: string; workedHours: number; billableHours: number }
+      { name: string; workedMinutes: number; billableMinutes: number }
     >();
     for (const row of billable) {
       const entry = grouped.get(row.service_date) ?? {
         name: row.service_date,
-        workedHours: 0,
-        billableHours: 0,
+        workedMinutes: 0,
+        billableMinutes: 0,
       };
-      entry.workedHours += (row.worked_minutes ?? 0) / 60;
-      entry.billableHours += (row.billable_minutes ?? 0) / 60;
+      entry.workedMinutes += row.worked_minutes ?? 0;
+      entry.billableMinutes += row.billable_minutes ?? 0;
       grouped.set(row.service_date, entry);
     }
     return Array.from(grouped.values()).sort((a, b) =>
@@ -658,7 +872,9 @@ export function ServiceVerificationReportsPage() {
             >
               <option value="overview">Operations overview</option>
               <option value="caregiver">Caregiver hours</option>
-              <option value="calendar">Client calendar</option>
+              <option value="calendar">Client monthly calendar</option>
+              <option value="reconciliation">Monthly hours & billing reconciliation</option>
+              <option value="corrections">Correction history</option>
               <option value="visits">Visit details</option>
               <option value="exceptions">Exceptions needing attention</option>
               {canManage ? <option value="staff-access">Staff access</option> : null}
@@ -851,6 +1067,29 @@ export function ServiceVerificationReportsPage() {
                 ))}
               </select>
             </div>
+            {reportView === "corrections" ? (
+              <div>
+                <label
+                  htmlFor="report-corrected-by"
+                  className="block text-xs font-medium text-slate-600"
+                >
+                  Corrected by
+                </label>
+                <select
+                  id="report-corrected-by"
+                  value={correctedByFilter}
+                  onChange={(event) => setCorrectedByFilter(event.target.value)}
+                  className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900"
+                >
+                  <option value="">All correctors</option>
+                  {correctedByOptions.map(([id, label]) => (
+                    <option key={id} value={id}>
+                      {label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            ) : null}
             <div>
               <label
                 htmlFor="report-from"
@@ -928,13 +1167,13 @@ export function ServiceVerificationReportsPage() {
             {[
               {
                 label: "Worked hours",
-                value: formatHours(totalWorkedMinutes),
+                value: formatDuration(totalWorkedMinutes),
                 icon: <BarChart3 className="h-5 w-5" />,
                 color: "bg-indigo-50 text-indigo-800 border-indigo-100",
               },
               {
                 label: "Billable hours",
-                value: formatHours(totalBillableMinutes),
+                value: formatDuration(totalBillableMinutes),
                 icon: <Check className="h-5 w-5" />,
                 color: "bg-emerald-50 text-emerald-800 border-emerald-100",
               },
@@ -1018,11 +1257,11 @@ export function ServiceVerificationReportsPage() {
                     <PieChart>
                       <Pie
                         data={chartData}
-                        dataKey="workedHours"
+                        dataKey="workedMinutes"
                         nameKey="name"
                         outerRadius={105}
                         label={({ name, value }) =>
-                          `${name}: ${Number(value).toFixed(1)}h`
+                          `${name}: ${formatDuration(Number(value))}`
                         }
                       >
                         {chartData.map((entry, index) => (
@@ -1032,26 +1271,26 @@ export function ServiceVerificationReportsPage() {
                           />
                         ))}
                       </Pie>
-                      <Tooltip />
+                      <Tooltip formatter={(value) => formatDuration(Number(value))} />
                       <Legend />
                     </PieChart>
                   ) : chartType === "line" ? (
                     <LineChart data={trendData}>
                       <CartesianGrid strokeDasharray="3 3" />
                       <XAxis dataKey="name" tick={{ fontSize: 11 }} />
-                      <YAxis unit="h" />
-                      <Tooltip />
+                      <YAxis tickFormatter={(value) => formatDuration(Number(value))} />
+                      <Tooltip formatter={(value) => formatDuration(Number(value))} />
                       <Legend />
                       <Line
                         type="monotone"
-                        dataKey="workedHours"
+                        dataKey="workedMinutes"
                         name="Worked hours"
                         stroke="#4f46e5"
                         strokeWidth={3}
                       />
                       <Line
                         type="monotone"
-                        dataKey="billableHours"
+                        dataKey="billableMinutes"
                         name="Billable hours"
                         stroke="#059669"
                         strokeWidth={3}
@@ -1061,17 +1300,17 @@ export function ServiceVerificationReportsPage() {
                     <BarChart data={chartData}>
                       <CartesianGrid strokeDasharray="3 3" />
                       <XAxis dataKey="name" tick={{ fontSize: 11 }} />
-                      <YAxis unit="h" />
-                      <Tooltip />
+                      <YAxis tickFormatter={(value) => formatDuration(Number(value))} />
+                      <Tooltip formatter={(value) => formatDuration(Number(value))} />
                       <Legend />
                       <Bar
-                        dataKey="workedHours"
+                        dataKey="workedMinutes"
                         name="Worked hours"
                         fill="#4f46e5"
                         radius={[6, 6, 0, 0]}
                       />
                       <Bar
-                        dataKey="billableHours"
+                        dataKey="billableMinutes"
                         name="Billable hours"
                         fill="#059669"
                         radius={[6, 6, 0, 0]}
@@ -1119,10 +1358,10 @@ export function ServiceVerificationReportsPage() {
                         {entry.name}
                       </td>
                       <td className="py-2 text-indigo-700">
-                        {formatHours(entry.workedMinutes)} hrs
+                        {formatDuration(entry.workedMinutes)}
                       </td>
                       <td className="py-2 text-emerald-700">
-                        {formatHours(entry.billableMinutes)} hrs
+                        {formatDuration(entry.billableMinutes)}
                       </td>
                       <td className="py-2 text-slate-600">{entry.visits}</td>
                     </tr>
@@ -1131,112 +1370,6 @@ export function ServiceVerificationReportsPage() {
               </table>
             </div>
           )}
-        </Card>
-      ) : null}
-
-      {reportView === "calendar" ? (
-        <Card>
-          <div className="flex flex-wrap items-end justify-between gap-4">
-            <div className="flex items-start gap-3">
-              <CalendarDays className="mt-0.5 h-5 w-5 text-sky-700" />
-              <div>
-                <h3 className="font-semibold text-slate-950">
-                  Monthly hours calendar
-                </h3>
-                <p className="mt-1 text-sm text-slate-500">
-                  Select one client above to see every caregiver who served that
-                  client and the hours recorded each day. Amber entries need
-                  manager review.
-                </p>
-              </div>
-            </div>
-            <label className="text-xs font-medium text-slate-600">
-              Calendar month
-              <input
-                type="month"
-                aria-label="Calendar month"
-                value={reportMonth}
-                onChange={(event) => setReportMonth(event.target.value)}
-                className="mt-1 block rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900"
-              />
-            </label>
-          </div>
-
-          <div className="mt-4 overflow-x-auto">
-            <div
-              role="grid"
-              aria-label={`Caregiver hours for ${reportMonth}`}
-              className="min-w-[760px]"
-            >
-              <div
-                role="row"
-                className="grid grid-cols-7 border-b border-slate-200 bg-slate-50"
-              >
-                {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map(
-                  (day) => (
-                    <div
-                      key={day}
-                      role="columnheader"
-                      className="px-2 py-2 text-center text-xs font-semibold uppercase tracking-wide text-slate-500"
-                    >
-                      {day}
-                    </div>
-                  ),
-                )}
-              </div>
-              {monthCalendar.weeks.map((week, weekIndex) => (
-                <div key={weekIndex} role="row" className="grid grid-cols-7">
-                  {week.map((day, dayIndex) => {
-                    const date = day
-                      ? `${reportMonth}-${String(day).padStart(2, "0")}`
-                      : null;
-                    const entries = date
-                      ? (monthCalendar.entries.get(date) ?? [])
-                      : [];
-                    return (
-                      <div
-                        key={`${weekIndex}-${dayIndex}`}
-                        role="gridcell"
-                        aria-label={date ?? "Outside selected month"}
-                        className="min-h-28 border-b border-r border-slate-100 p-2 last:border-r-0"
-                      >
-                        {day ? (
-                          <p className="text-xs font-semibold text-slate-600">
-                            {day}
-                          </p>
-                        ) : null}
-                        <div className="mt-1 space-y-1.5">
-                          {entries.map((entry) => (
-                            <div
-                              key={entry.key}
-                              className={
-                                entry.needsReview
-                                  ? "rounded-md bg-amber-50 px-1.5 py-1"
-                                  : "rounded-md bg-sky-50 px-1.5 py-1"
-                              }
-                            >
-                              <p
-                                className="truncate text-[11px] font-semibold text-slate-800"
-                                title={entry.caregiverName}
-                              >
-                                {entry.caregiverName}
-                              </p>
-                              <p className="text-[11px] tabular-nums text-slate-600">
-                                {formatHours(entry.workedMinutes)}h worked
-                                {entry.billableMinutes !== entry.workedMinutes
-                                  ? ` · ${formatHours(entry.billableMinutes)}h billable`
-                                  : ""}
-                              </p>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              ))}
-            </div>
-          </div>
         </Card>
       ) : null}
 
@@ -1269,26 +1402,532 @@ export function ServiceVerificationReportsPage() {
             </p>
           </div>
           <div className="text-right text-sm text-slate-600">
-            <p className="font-semibold">Service Verification Report</p>
-            {selectedCaregiverName ? (
-              <p>Caregiver: {selectedCaregiverName}</p>
+            <p className="font-semibold">
+              {reportView === "calendar"
+                ? "Client Monthly Service Calendar"
+                : reportView === "reconciliation"
+                  ? "Monthly Hours & Billing Reconciliation"
+                  : reportView === "corrections"
+                    ? "Correction History"
+                    : "Service Verification Report"}
+            </p>
+            {selectedClientName ? <p>Client: {selectedClientName}</p> : null}
+            {selectedCaregiverName ? <p>Caregiver: {selectedCaregiverName}</p> : null}
+            {reportView === "calendar" || reportView === "reconciliation" ? (
+              <p>Month: {reportMonth}</p>
             ) : null}
-            <p>{new Date().toLocaleDateString()}</p>
+            <p>Printed: {new Date().toLocaleDateString()}</p>
           </div>
         </div>
       </div>
 
+      {reportView === "calendar" ? (
+        <Card className="print:border-none print:p-0 print:shadow-none">
+          <div className="flex flex-wrap items-end justify-between gap-4">
+            <div className="flex items-start gap-3">
+              <CalendarDays className="mt-0.5 h-5 w-5 text-sky-700" />
+              <div>
+                <h3 className="font-semibold text-slate-950">
+                  Client monthly service calendar
+                </h3>
+                <p className="mt-1 text-sm text-slate-500">
+                  One client per calendar. Every worked date shows the service
+                  and actual hours. Different services are never combined.
+                </p>
+              </div>
+            </div>
+            <div className="flex items-end gap-2 print:hidden">
+              <label className="text-xs font-medium text-slate-600">
+                Calendar month
+                <input
+                  type="month"
+                  aria-label="Calendar month"
+                  value={reportMonth}
+                  onChange={(event) => setReportMonth(event.target.value)}
+                  className="mt-1 block rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900"
+                />
+              </label>
+              {clientFilter && monthlyServiceRows.length > 0 ? (
+                <Button
+                  type="button"
+                  variant="secondary"
+                  icon={<Download className="h-4 w-4" />}
+                  onClick={() =>
+                    downloadCsv(
+                      `client-service-calendar-${reportMonth}.csv`,
+                      [
+                        "Client",
+                        "Service",
+                        "Authorization period",
+                        "Authorized",
+                        "Worked",
+                        "Confirmed",
+                        "Billable",
+                        "Remaining",
+                        "Needs review",
+                      ],
+                      monthlyServiceRows.map((row) => [
+                        row.clientCode,
+                        `${row.serviceCode} ${row.serviceName}`,
+                        `${row.authorizationPeriodStart} to ${row.authorizationPeriodEnd}`,
+                        formatDuration(row.authorizedMinutes),
+                        formatDuration(row.workedMinutes),
+                        formatDuration(row.verifiedMinutes),
+                        formatDuration(row.billableMinutes),
+                        formatDuration(row.remainingMinutes),
+                        formatDuration(row.reviewMinutes),
+                      ]),
+                    )
+                  }
+                >
+                  CSV
+                </Button>
+              ) : null}
+            </div>
+          </div>
+
+          {!clientFilter ? (
+            <div className="mt-5 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-950">
+              Select one client above. A monthly client calendar is never
+              generated by combining multiple clients.
+            </div>
+          ) : (
+            <>
+              <div className="mt-4 border-b border-slate-200 pb-3">
+                <p className="font-semibold text-slate-950">
+                  {selectedClientName ?? "Selected client"} · {reportMonth}
+                </p>
+              </div>
+              <div className="mt-4 overflow-x-auto">
+                <div
+                  role="grid"
+                  aria-label={`Service hours for ${selectedClientName ?? "selected client"} in ${reportMonth}`}
+                  className="min-w-[760px]"
+                >
+                  <div
+                    role="row"
+                    className="grid grid-cols-7 border-b border-slate-200 bg-slate-50"
+                  >
+                    {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map(
+                      (day) => (
+                        <div
+                          key={day}
+                          role="columnheader"
+                          className="px-2 py-2 text-center text-xs font-semibold uppercase tracking-wide text-slate-500"
+                        >
+                          {day}
+                        </div>
+                      ),
+                    )}
+                  </div>
+                  {monthCalendar.weeks.map((week, weekIndex) => (
+                    <div key={weekIndex} role="row" className="grid grid-cols-7">
+                      {week.map((day, dayIndex) => {
+                        const date = day
+                          ? `${reportMonth}-${String(day).padStart(2, "0")}`
+                          : null;
+                        const entries = date
+                          ? (monthCalendar.entries.get(date) ?? [])
+                          : [];
+                        return (
+                          <div
+                            key={`${weekIndex}-${dayIndex}`}
+                            role="gridcell"
+                            aria-label={date ?? "Outside selected month"}
+                            className="min-h-28 border-b border-r border-slate-100 p-2 last:border-r-0"
+                          >
+                            {day ? (
+                              <p className="text-xs font-semibold text-slate-600">
+                                {day}
+                              </p>
+                            ) : null}
+                            <div className="mt-1 space-y-1.5">
+                              {entries.map((entry) => (
+                                <div
+                                  key={entry.key}
+                                  className={
+                                    entry.needsReview
+                                      ? "rounded-md bg-amber-50 px-1.5 py-1"
+                                      : "rounded-md bg-sky-50 px-1.5 py-1"
+                                  }
+                                >
+                                  <p
+                                    className="text-[11px] font-semibold text-slate-800"
+                                    title={entry.serviceName}
+                                  >
+                                    {entry.serviceName}
+                                  </p>
+                                  <p className="text-[11px] font-medium tabular-nums text-slate-700">
+                                    {formatDuration(entry.workedMinutes)}
+                                  </p>
+                                  {entry.billableMinutes !== entry.workedMinutes ? (
+                                    <p className="text-[10px] tabular-nums text-slate-500">
+                                      Billable {formatDuration(entry.billableMinutes)}
+                                    </p>
+                                  ) : null}
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div className="mt-5">
+                <h4 className="font-semibold text-slate-950">
+                  Monthly totals by service
+                </h4>
+                {monthlyServiceSummaryQuery.isLoading ? (
+                  <p className="mt-2 text-sm text-slate-500">Loading totals…</p>
+                ) : monthlyServiceRows.length === 0 ? (
+                  <p className="mt-2 text-sm text-slate-500">
+                    No authorization/service totals are available for this month.
+                  </p>
+                ) : (
+                  <div className="mt-2 overflow-x-auto">
+                    <table className="w-full text-left text-sm" aria-label="Monthly service totals">
+                      <thead>
+                        <tr className="border-b border-slate-200 text-xs uppercase tracking-wide text-slate-500">
+                          <th className="pb-2 pr-3 font-medium">Service</th>
+                          <th className="pb-2 pr-3 font-medium">Authorized</th>
+                          <th className="pb-2 pr-3 font-medium">Worked</th>
+                          <th className="pb-2 pr-3 font-medium">Confirmed</th>
+                          <th className="pb-2 pr-3 font-medium">Billable</th>
+                          <th className="pb-2 pr-3 font-medium">Remaining</th>
+                          <th className="pb-2 font-medium">Needs review</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {monthlyServiceRows.map((row) => (
+                          <tr key={row.authorizationLineageId} className="border-b border-slate-100">
+                            <td className="py-2 pr-3 font-medium text-slate-800">
+                              {row.serviceCode} · {row.serviceName}
+                            </td>
+                            <td className="py-2 pr-3">{formatDuration(row.authorizedMinutes)}</td>
+                            <td className="py-2 pr-3">{formatDuration(row.workedMinutes)}</td>
+                            <td className="py-2 pr-3">{formatDuration(row.verifiedMinutes)}</td>
+                            <td className="py-2 pr-3">{formatDuration(row.billableMinutes)}</td>
+                            <td className="py-2 pr-3">{formatDuration(row.remainingMinutes)}</td>
+                            <td className="py-2">{formatDuration(row.reviewMinutes)}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+            </>
+          )}
+        </Card>
+      ) : null}
+
+      {reportView === "reconciliation" ? (
+        <Card className="print:border-none print:p-0 print:shadow-none">
+          <div className="flex flex-wrap items-end justify-between gap-4">
+            <div>
+              <h3 className="font-semibold text-slate-950">
+                Monthly hours & billing reconciliation
+              </h3>
+              <p className="mt-1 max-w-3xl text-sm text-slate-500">
+                Each row is one client + service + authorization lineage.
+                Services are never combined. Worked and billable time remain
+                separate so documentation or authorization differences cannot
+                be hidden by a client-level total.
+              </p>
+            </div>
+            <div className="flex items-end gap-2 print:hidden">
+              <label className="text-xs font-medium text-slate-600">
+                Month
+                <input
+                  type="month"
+                  value={reportMonth}
+                  onChange={(event) => setReportMonth(event.target.value)}
+                  className="mt-1 block rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900"
+                />
+              </label>
+              {monthlyServiceRows.length > 0 ? (
+                <Button
+                  type="button"
+                  variant="secondary"
+                  icon={<Download className="h-4 w-4" />}
+                  onClick={() =>
+                    downloadCsv(
+                      `monthly-service-reconciliation-${reportMonth}.csv`,
+                      [
+                        "Client",
+                        "Service",
+                        "Authorization period",
+                        "Authorized",
+                        "Worked",
+                        "Verified",
+                        "Billable",
+                        "Remaining",
+                        "Needs review",
+                        "Worked minus billable",
+                      ],
+                      monthlyServiceRows.map((row) => [
+                        row.clientCode,
+                        `${row.serviceCode} ${row.serviceName}`,
+                        `${row.authorizationPeriodStart} to ${row.authorizationPeriodEnd}`,
+                        formatDuration(row.authorizedMinutes),
+                        formatDuration(row.workedMinutes),
+                        formatDuration(row.verifiedMinutes),
+                        formatDuration(row.billableMinutes),
+                        formatDuration(row.remainingMinutes),
+                        formatDuration(row.reviewMinutes),
+                        formatDuration(Math.max(0, row.workedMinutes - row.billableMinutes)),
+                      ]),
+                    )
+                  }
+                >
+                  CSV
+                </Button>
+              ) : null}
+            </div>
+          </div>
+
+          {monthlyServiceSummaryQuery.isLoading ? (
+            <p className="mt-4 text-sm text-slate-500">Loading reconciliation…</p>
+          ) : monthlyServiceSummaryQuery.isError ? (
+            <p className="mt-4 text-sm text-red-700">
+              Could not load monthly reconciliation.
+            </p>
+          ) : monthlyServiceRows.length === 0 ? (
+            <p className="mt-4 text-sm text-slate-500">
+              No client/service authorizations match this month and filter.
+            </p>
+          ) : (
+            <div className="mt-4 overflow-x-auto">
+              <table className="w-full text-left text-sm" aria-label="Monthly hours and billing reconciliation">
+                <thead>
+                  <tr className="border-b border-slate-200 text-xs uppercase tracking-wide text-slate-500">
+                    <th className="pb-2 pr-3 font-medium">Client</th>
+                    <th className="pb-2 pr-3 font-medium">Service</th>
+                    <th className="pb-2 pr-3 font-medium">Authorized</th>
+                    <th className="pb-2 pr-3 font-medium">Worked</th>
+                    <th className="pb-2 pr-3 font-medium">Verified</th>
+                    <th className="pb-2 pr-3 font-medium">Billable</th>
+                    <th className="pb-2 pr-3 font-medium">Remaining</th>
+                    <th className="pb-2 pr-3 font-medium">Needs review</th>
+                    <th className="pb-2 font-medium">Difference</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {monthlyServiceRows.map((row) => {
+                    const difference = Math.max(0, row.workedMinutes - row.billableMinutes);
+                    return (
+                      <tr key={row.authorizationLineageId} className="border-b border-slate-100">
+                        <td className="py-2 pr-3 font-medium text-slate-800">{row.clientCode}</td>
+                        <td className="py-2 pr-3">
+                          <p className="font-medium text-slate-800">{row.serviceCode} · {row.serviceName}</p>
+                          <p className="text-xs text-slate-400">
+                            {row.authorizationPeriodStart}–{row.authorizationPeriodEnd}
+                          </p>
+                        </td>
+                        <td className="py-2 pr-3">{formatDuration(row.authorizedMinutes)}</td>
+                        <td className="py-2 pr-3">{formatDuration(row.workedMinutes)}</td>
+                        <td className="py-2 pr-3">{formatDuration(row.verifiedMinutes)}</td>
+                        <td className="py-2 pr-3 font-medium">{formatDuration(row.billableMinutes)}</td>
+                        <td className="py-2 pr-3">{formatDuration(row.remainingMinutes)}</td>
+                        <td className="py-2 pr-3">{formatDuration(row.reviewMinutes)}</td>
+                        <td className="py-2">
+                          {difference > 0 ? (
+                            <StatusBadge
+                              label={`${formatDuration(difference)} worked not billable`}
+                              tone="warning"
+                            />
+                          ) : (
+                            <StatusBadge label="Matched" tone="success" />
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+          <p className="mt-4 text-xs text-slate-500">
+            “Billable” means eligible to bill after visit verification and
+            authorization controls. Actual submitted/billed totals will remain a
+            separate ledger value; they must never be inferred from billable time.
+          </p>
+        </Card>
+      ) : null}
+
+      {reportView === "corrections" ? (
+        <Card className="print:border-none print:p-0 print:shadow-none">
+          <div className="flex flex-wrap items-start justify-between gap-4">
+            <div>
+              <h3 className="font-semibold text-slate-950">Correction history</h3>
+              <p className="mt-1 max-w-3xl text-sm text-slate-500">
+                Agency audit report of visit revisions. Original records remain
+                immutable; this report shows who changed what, why, and when.
+              </p>
+            </div>
+            {correctionRows.length > 0 ? (
+              <Button
+                type="button"
+                variant="secondary"
+                className="print:hidden"
+                icon={<Download className="h-4 w-4" />}
+                onClick={() =>
+                  downloadCsv(
+                    "correction-history.csv",
+                    [
+                      "Visit ref",
+                      "Client",
+                      "Service",
+                      "Service date",
+                      "Caregiver",
+                      "Original time",
+                      "Corrected time",
+                      "Original duration",
+                      "Corrected duration",
+                      "Corrected by",
+                      "Status",
+                      "Reason",
+                      "Corrected on",
+                    ],
+                    correctionRows.map((row) => [
+                      row.visitNumber,
+                      row.clientCode,
+                      `${row.serviceCode} ${row.serviceName}`,
+                      row.serviceDate,
+                      row.caregiverName,
+                      formatTimeRange(row.beforeSnapshot.timeIn, row.beforeSnapshot.timeOut),
+                      formatTimeRange(row.afterSnapshot.timeIn, row.afterSnapshot.timeOut),
+                      formatDuration(row.beforeSnapshot.workedMinutes),
+                      formatDuration(row.afterSnapshot.workedMinutes),
+                      row.correctedByName,
+                      VISIT_STATUS_LABEL[row.correctedVisitStatus],
+                      row.reason,
+                      formatDateTime(row.createdAt),
+                    ]),
+                  )
+                }
+              >
+                CSV
+              </Button>
+            ) : null}
+          </div>
+          {!correctionHistoryReportQuery.isLoading && !correctionHistoryReportQuery.isError ? (
+            <div className="mt-4 flex flex-wrap gap-3 text-sm">
+              <span className="rounded-lg bg-slate-100 px-3 py-2 font-semibold text-slate-700">
+                Corrections: {correctionRows.length}
+              </span>
+              <span className="rounded-lg bg-slate-100 px-3 py-2 font-semibold text-slate-700">
+                Net worked-time change: {correctionNetMinutes === 0
+                  ? "No change"
+                  : `${correctionNetMinutes > 0 ? "+" : "−"}${formatDuration(Math.abs(correctionNetMinutes))}`}
+              </span>
+            </div>
+          ) : null}
+          {correctionHistoryReportQuery.isLoading ? (
+            <p className="mt-4 text-sm text-slate-500">Loading correction history…</p>
+          ) : correctionHistoryReportQuery.isError ? (
+            <p className="mt-4 text-sm text-red-700">Could not load correction history.</p>
+          ) : correctionRows.length === 0 ? (
+            <p className="mt-4 text-sm text-slate-500">No corrections match these filters.</p>
+          ) : (
+            <div className="mt-4 overflow-x-auto">
+              <table className="w-full text-left text-sm" aria-label="Correction history report">
+                <thead>
+                  <tr className="border-b border-slate-200 text-xs uppercase tracking-wide text-slate-500">
+                    <th className="pb-2 pr-3 font-medium">Visit ref</th>
+                    <th className="pb-2 pr-3 font-medium">Client</th>
+                    <th className="pb-2 pr-3 font-medium">Service</th>
+                    <th className="pb-2 pr-3 font-medium">Date</th>
+                    <th className="pb-2 pr-3 font-medium">Caregiver</th>
+                    <th className="pb-2 pr-3 font-medium">Original</th>
+                    <th className="pb-2 pr-3 font-medium">Corrected</th>
+                    <th className="pb-2 pr-3 font-medium">Corrected by</th>
+                    <th className="pb-2 pr-3 font-medium">Status</th>
+                    <th className="pb-2 pr-3 font-medium">Reason</th>
+                    <th className="pb-2 font-medium">Corrected on</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {correctionRows.map((row) => (
+                    <tr key={row.correctionId} className="border-b border-slate-100 align-top">
+                      <td className="py-2 pr-3 whitespace-nowrap font-mono text-xs">{row.visitNumber ?? "—"}</td>
+                      <td className="py-2 pr-3">{row.clientCode}</td>
+                      <td className="py-2 pr-3">{row.serviceCode} · {row.serviceName}</td>
+                      <td className="py-2 pr-3 whitespace-nowrap">{formatNumericDate(`${row.serviceDate}T12:00:00Z`)}</td>
+                      <td className="py-2 pr-3">{row.caregiverName}</td>
+                      <td className="py-2 pr-3 whitespace-nowrap">
+                        {formatTimeRange(row.beforeSnapshot.timeIn, row.beforeSnapshot.timeOut)}
+                        <span className="block text-xs text-slate-400">{formatDuration(row.beforeSnapshot.workedMinutes)}</span>
+                      </td>
+                      <td className="py-2 pr-3 whitespace-nowrap">
+                        {formatTimeRange(row.afterSnapshot.timeIn, row.afterSnapshot.timeOut)}
+                        <span className="block text-xs text-slate-400">{formatDuration(row.afterSnapshot.workedMinutes)}</span>
+                      </td>
+                      <td className="py-2 pr-3">{row.correctedByName}</td>
+                      <td className="py-2 pr-3">{VISIT_STATUS_LABEL[row.correctedVisitStatus]}</td>
+                      <td className="py-2 pr-3">{row.reason}</td>
+                      <td className="py-2 whitespace-nowrap">{formatDateTime(row.createdAt)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </Card>
+      ) : null}
+
       {reportView === "visits" ? (
         <>
           <Card className="print:border-none print:p-0 print:shadow-none">
-            <div className="flex items-center gap-3 print:hidden">
-              <FileText className="h-5 w-5 text-sky-700" />
-              <h3 className="font-semibold text-slate-950">
-                {selectedCaregiverName
-                  ? `Caregiver ${selectedCaregiverName}`
-                  : "Visits"}{" "}
-                ({rows.length})
-              </h3>
+            <div className="flex flex-wrap items-center justify-between gap-3 print:hidden">
+              <div className="flex items-center gap-3">
+                <FileText className="h-5 w-5 text-sky-700" />
+                <h3 className="font-semibold text-slate-950">
+                  {selectedCaregiverName
+                    ? `Caregiver ${selectedCaregiverName}`
+                    : "Visits"}{" "}
+                  ({visibleVisitRows.length})
+                </h3>
+              </div>
+              <div className="flex flex-wrap items-center gap-3">
+                <label className="flex items-center gap-2 text-xs font-medium text-slate-600">
+                  <input
+                    type="checkbox"
+                    checked={showSuperseded}
+                    onChange={(event) => setShowSuperseded(event.target.checked)}
+                  />
+                  Show superseded records
+                </label>
+                <details className="relative">
+                  <summary className="cursor-pointer list-none rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-semibold text-slate-700">
+                    Columns
+                  </summary>
+                  <div className="absolute right-0 z-20 mt-2 w-52 rounded-xl border border-slate-200 bg-white p-3 shadow-lg">
+                    <div className="space-y-2">
+                      {VISIT_COLUMN_OPTIONS.map((column) => (
+                        <label key={column.key} className="flex items-center gap-2 text-xs text-slate-700">
+                          <input
+                            type="checkbox"
+                            checked={visitColumns.has(column.key)}
+                            onChange={() => toggleVisitColumn(column.key)}
+                          />
+                          {column.label}
+                        </label>
+                      ))}
+                    </div>
+                    <button
+                      type="button"
+                      onClick={resetVisitColumns}
+                      className="mt-3 text-xs font-medium text-slate-600 underline"
+                    >
+                      Reset columns
+                    </button>
+                  </div>
+                </details>
+              </div>
             </div>
             {visitsQuery.isLoading ? (
               <p className="mt-3 text-sm text-slate-500">Loading…</p>
@@ -1296,7 +1935,7 @@ export function ServiceVerificationReportsPage() {
               <p className="mt-3 text-sm text-red-700">
                 Could not load service verification records.
               </p>
-            ) : rows.length === 0 ? (
+            ) : visibleVisitRows.length === 0 ? (
               <p className="mt-3 text-sm text-slate-400">
                 No visits match these filters.
               </p>
@@ -1308,328 +1947,258 @@ export function ServiceVerificationReportsPage() {
                 >
                   <thead>
                     <tr className="border-b border-slate-200 text-xs uppercase tracking-wide text-slate-500">
-                      <th className="pb-2 pr-3 font-medium">Visit #</th>
-                      <th className="pb-2 pr-3 font-medium">Date</th>
-                      <th className="pb-2 pr-3 font-medium">Client</th>
-                      <th className="pb-2 pr-3 font-medium">Caregiver</th>
-                      <th className="pb-2 pr-3 font-medium">Service</th>
-                      <th className="pb-2 pr-3 font-medium">Time</th>
-                      <th className="pb-2 pr-3 font-medium">Worked</th>
-                      <th className="pb-2 pr-3 font-medium">Billable</th>
-                      <th className="pb-2 pr-3 font-medium">
-                        Authorization (before → after)
-                      </th>
-                      <th className="pb-2 pr-3 font-medium">Status</th>
-                      {canManage ? (
-                        <th className="pb-2 font-medium print:hidden">
-                          Actions
-                        </th>
-                      ) : null}
+                      {visitColumns.has("visitRef") ? <th className="pb-2 pr-3 font-medium">Visit ref</th> : null}
+                      {visitColumns.has("client") ? <th className="pb-2 pr-3 font-medium">Client</th> : null}
+                      {visitColumns.has("caregiver") ? <th className="pb-2 pr-3 font-medium">Caregiver</th> : null}
+                      {visitColumns.has("service") ? <th className="pb-2 pr-3 font-medium">Service</th> : null}
+                      {visitColumns.has("date") ? <th className="pb-2 pr-3 font-medium">Date</th> : null}
+                      {visitColumns.has("time") ? <th className="pb-2 pr-3 font-medium">Time</th> : null}
+                      {visitColumns.has("worked") ? <th className="pb-2 pr-3 font-medium">Worked</th> : null}
+                      {visitColumns.has("billable") ? <th className="pb-2 pr-3 font-medium">Billable</th> : null}
+                      {visitColumns.has("authorized") ? <th className="pb-2 pr-3 font-medium">Authorized</th> : null}
+                      {visitColumns.has("usedMtd") ? <th className="pb-2 pr-3 font-medium">Used MTD</th> : null}
+                      {visitColumns.has("remaining") ? <th className="pb-2 pr-3 font-medium">Remaining</th> : null}
+                      {visitColumns.has("status") ? <th className="pb-2 pr-3 font-medium">Status</th> : null}
+                      {canManage ? <th className="pb-2 font-medium print:hidden">Actions</th> : null}
                     </tr>
                   </thead>
                   <tbody>
-                    {rows.map((row) => (
-                      <Fragment key={row.id}>
-                        <tr className="border-b border-slate-100 last:border-0">
-                          <td className="py-2 pr-3 whitespace-nowrap font-mono text-xs text-slate-500">
-                            {row.visit_number ?? "—"}
-                          </td>
-                          <td className="py-2 pr-3 whitespace-nowrap text-slate-600">
-                            {formatVisitDate(
-                              `${row.service_date}T12:00:00-07:00`,
-                            )}
-                          </td>
-                          <td className="py-2 pr-3">
-                            <p className="text-slate-800">
-                              {row.client_legal_name ?? row.client_code}
-                            </p>
-                            <p className="text-xs text-slate-400">
-                              {row.client_code}
-                            </p>
-                          </td>
-                          <td className="py-2 pr-3 text-slate-700">
-                            {row.caregiver_name}
-                          </td>
-                          <td className="py-2 pr-3 text-slate-600">
-                            {row.service_name}
-                          </td>
-                          <td className="py-2 pr-3 whitespace-nowrap text-slate-500">
-                            {formatDateTime(row.time_in)}
-                            {row.time_out
-                              ? ` – ${formatDateTime(row.time_out)}`
-                              : ""}
-                          </td>
-                          <td className="py-2 pr-3 text-slate-700">
-                            {row.worked_minutes
-                              ? formatHours(row.worked_minutes)
-                              : "—"}
-                          </td>
-                          <td className="py-2 pr-3 text-slate-700">
-                            {row.billable_minutes !== null
-                              ? formatHours(row.billable_minutes)
-                              : "—"}
-                          </td>
-                          <td className="py-2 pr-3 whitespace-nowrap text-xs text-slate-500">
-                            {row.month_to_date_before_minutes !== null &&
-                            row.month_to_date_after_minutes !== null
-                              ? `${formatHours(row.month_to_date_before_minutes)} → ${formatHours(row.month_to_date_after_minutes)} (${formatHours(row.remaining_minutes ?? 0)} left)`
-                              : "—"}
-                          </td>
-                          <td className="py-2 pr-3">
-                            <div className="flex flex-wrap items-center gap-1">
-                              {row.is_corrected ? (
-                                <StatusBadge label="Corrected" tone="neutral" />
-                              ) : null}
-                              <StatusBadge
-                                label={VISIT_STATUS_LABEL[row.status]}
-                                tone={STATUS_TONE[row.status]}
-                              />
-                            </div>
-                          </td>
-                          {canManage ? (
-                            <td className="py-2 print:hidden">
-                              <div className="flex gap-2">
-                                {row.status === "signed" ||
-                                row.status === "administrator_review" ? (
+                    {visibleVisitRows.map((row) => {
+                      const authorizedMinutes =
+                        row.month_to_date_after_minutes !== null &&
+                        row.remaining_minutes !== null
+                          ? row.month_to_date_after_minutes + row.remaining_minutes
+                          : null;
+                      return (
+                        <Fragment key={row.id}>
+                          <tr className="border-b border-slate-100 last:border-0">
+                            {visitColumns.has("visitRef") ? (
+                              <td className="py-2 pr-3 whitespace-nowrap font-mono text-xs text-slate-500">
+                                {row.visit_number ?? "—"}
+                              </td>
+                            ) : null}
+                            {visitColumns.has("client") ? (
+                              <td className="py-2 pr-3">
+                                <p className="text-slate-800">
+                                  {row.client_legal_name ?? row.client_code}
+                                </p>
+                                <p className="text-xs text-slate-400">{row.client_code}</p>
+                              </td>
+                            ) : null}
+                            {visitColumns.has("caregiver") ? (
+                              <td className="py-2 pr-3 text-slate-700">{row.caregiver_name}</td>
+                            ) : null}
+                            {visitColumns.has("service") ? (
+                              <td className="py-2 pr-3 text-slate-700">{row.service_name}</td>
+                            ) : null}
+                            {visitColumns.has("date") ? (
+                              <td className="py-2 pr-3 whitespace-nowrap text-slate-600">
+                                {formatNumericDate(`${row.service_date}T12:00:00-07:00`)}
+                              </td>
+                            ) : null}
+                            {visitColumns.has("time") ? (
+                              <td className="py-2 pr-3 whitespace-nowrap font-mono text-xs text-slate-600">
+                                {formatTimeRange(row.time_in, row.time_out)}
+                              </td>
+                            ) : null}
+                            {visitColumns.has("worked") ? (
+                              <td className="py-2 pr-3 whitespace-nowrap text-slate-700">
+                                {formatDuration(row.worked_minutes)}
+                              </td>
+                            ) : null}
+                            {visitColumns.has("billable") ? (
+                              <td className="py-2 pr-3 whitespace-nowrap text-slate-700">
+                                {formatDuration(row.billable_minutes)}
+                              </td>
+                            ) : null}
+                            {visitColumns.has("authorized") ? (
+                              <td className="py-2 pr-3 whitespace-nowrap text-slate-700">
+                                {formatDuration(authorizedMinutes)}
+                              </td>
+                            ) : null}
+                            {visitColumns.has("usedMtd") ? (
+                              <td className="py-2 pr-3 whitespace-nowrap text-slate-700">
+                                {formatDuration(row.month_to_date_after_minutes)}
+                              </td>
+                            ) : null}
+                            {visitColumns.has("remaining") ? (
+                              <td className="py-2 pr-3 whitespace-nowrap text-slate-700">
+                                {formatDuration(row.remaining_minutes)}
+                              </td>
+                            ) : null}
+                            {visitColumns.has("status") ? (
+                              <td className="py-2 pr-3">
+                                {row.status === "corrected" ? (
+                                  <StatusBadge label="Superseded" tone="neutral" />
+                                ) : row.is_corrected && row.status === "signed" ? (
+                                  <StatusBadge label="Confirmed · Revised" tone="success" />
+                                ) : (
+                                  <StatusBadge
+                                    label={VISIT_STATUS_LABEL[row.status]}
+                                    tone={STATUS_TONE[row.status]}
+                                  />
+                                )}
+                              </td>
+                            ) : null}
+                            {canManage ? (
+                              <td className="py-2 print:hidden">
+                                <div className="flex gap-2">
+                                  {row.status === "signed" ||
+                                  row.status === "administrator_review" ? (
+                                    <button
+                                      type="button"
+                                      onClick={() => openCorrect(row)}
+                                      className="text-xs font-medium text-slate-700 underline-offset-2 hover:underline"
+                                    >
+                                      Correct
+                                    </button>
+                                  ) : null}
                                   <button
                                     type="button"
-                                    onClick={() => openCorrect(row)}
+                                    onClick={() => openHistory(row)}
                                     className="text-xs font-medium text-slate-700 underline-offset-2 hover:underline"
                                   >
-                                    Correct
+                                    History
                                   </button>
-                                ) : null}
-                                <button
-                                  type="button"
-                                  onClick={() => openHistory(row)}
-                                  className="text-xs font-medium text-slate-700 underline-offset-2 hover:underline"
-                                >
-                                  History
-                                </button>
-                              </div>
-                            </td>
-                          ) : null}
-                        </tr>
-                        {expandedVisitId === row.id &&
-                        expandedMode === "correct" ? (
-                          <tr className="border-b border-slate-100 bg-slate-50 print:hidden">
-                            <td colSpan={canManage ? 10 : 9} className="p-4">
-                              <p className="text-sm font-semibold text-slate-900">
-                                Correct this visit
-                              </p>
-                              <p className="mt-1 text-xs text-slate-500">
-                                The signed record is never overwritten - this
-                                creates a new, linked corrected visit and marks
-                                the original as superseded.
-                              </p>
-                              <div className="mt-3 grid gap-3 sm:grid-cols-3">
-                                <div>
-                                  <label
-                                    htmlFor="correction-time-in"
-                                    className="block text-xs font-medium text-slate-600"
-                                  >
-                                    Time in
-                                  </label>
-                                  <input
-                                    id="correction-time-in"
-                                    type="datetime-local"
-                                    value={correctionForm.timeIn}
-                                    onChange={(event) =>
-                                      setCorrectionForm({
-                                        ...correctionForm,
-                                        timeIn: event.target.value,
-                                      })
-                                    }
-                                    className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900"
-                                  />
                                 </div>
-                                <div>
-                                  <label
-                                    htmlFor="correction-time-out"
-                                    className="block text-xs font-medium text-slate-600"
-                                  >
-                                    Time out
-                                  </label>
-                                  <input
-                                    id="correction-time-out"
-                                    type="datetime-local"
-                                    value={correctionForm.timeOut}
-                                    onChange={(event) =>
-                                      setCorrectionForm({
-                                        ...correctionForm,
-                                        timeOut: event.target.value,
-                                      })
-                                    }
-                                    className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900"
-                                  />
-                                </div>
-                                <div>
-                                  <label
-                                    htmlFor="correction-reason"
-                                    className="block text-xs font-medium text-slate-600"
-                                  >
-                                    Reason (required)
-                                  </label>
-                                  <input
-                                    id="correction-reason"
-                                    required
-                                    value={correctionForm.reason}
-                                    onChange={(event) =>
-                                      setCorrectionForm({
-                                        ...correctionForm,
-                                        reason: event.target.value,
-                                      })
-                                    }
-                                    className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900"
-                                  />
-                                </div>
-                              </div>
-                              {correctionError ? (
-                                <p className="mt-2 text-sm text-red-700">
-                                  {correctionError}
-                                </p>
-                              ) : null}
-                              <div className="mt-3 flex gap-3">
-                                <Button
-                                  type="button"
-                                  loading={correctionSaving}
-                                  onClick={() => handleSubmitCorrection(row.id)}
-                                >
-                                  {correctionSaving
-                                    ? "Saving…"
-                                    : "Save correction"}
-                                </Button>
-                                <button
-                                  type="button"
-                                  onClick={closeExpanded}
-                                  className="text-sm font-medium text-slate-600 hover:text-slate-900"
-                                >
-                                  Cancel
-                                </button>
-                              </div>
-                            </td>
+                              </td>
+                            ) : null}
                           </tr>
-                        ) : null}
-                        {expandedVisitId === row.id &&
-                        expandedMode === "history" ? (
-                          <tr className="border-b border-slate-100 bg-slate-50 print:hidden">
-                            <td colSpan={canManage ? 10 : 9} className="p-4">
-                              <div className="flex items-center justify-between">
-                                <p className="text-sm font-semibold text-slate-900">
-                                  Correction history
+                          {expandedVisitId === row.id && expandedMode === "correct" ? (
+                            <tr className="border-b border-slate-100 bg-slate-50 print:hidden">
+                              <td colSpan={visibleVisitColumnCount} className="p-4">
+                                <p className="text-sm font-semibold text-slate-900">Correct this visit</p>
+                                <p className="mt-1 text-xs text-slate-500">
+                                  The signed record is never overwritten. The correction creates a
+                                  linked revision and preserves the original in History.
                                 </p>
-                                <button
-                                  type="button"
-                                  onClick={closeExpanded}
-                                  className="text-xs font-medium text-slate-600 hover:text-slate-900"
-                                >
-                                  Close
-                                </button>
-                              </div>
-                              {correctionsQuery.isLoading ? (
-                                <p className="mt-2 text-sm text-slate-500">
-                                  Loading…
-                                </p>
-                              ) : (correctionsQuery.data ?? []).length === 0 ? (
-                                <p className="mt-2 text-sm text-slate-400">
-                                  No corrections recorded for this visit.
-                                </p>
-                              ) : (
-                                <ul className="mt-2 space-y-2">
-                                  {(correctionsQuery.data ?? []).map(
-                                    (entry) => (
-                                      <li
-                                        key={entry.id}
-                                        className="rounded-lg border border-slate-200 bg-white p-3 text-sm"
-                                      >
-                                        <p className="text-slate-800">
-                                          <span className="font-medium">
-                                            {entry.corrected_by_name}
-                                          </span>{" "}
-                                          · {formatDateTime(entry.created_at)}
-                                        </p>
-                                        <p className="mt-1 text-slate-600">
-                                          Reason: {entry.reason}
-                                        </p>
+                                <div className="mt-3 grid gap-3 sm:grid-cols-3">
+                                  <div>
+                                    <label htmlFor="correction-time-in" className="block text-xs font-medium text-slate-600">
+                                      Time in
+                                    </label>
+                                    <input
+                                      id="correction-time-in"
+                                      type="datetime-local"
+                                      value={correctionForm.timeIn}
+                                      onChange={(event) =>
+                                        setCorrectionForm({ ...correctionForm, timeIn: event.target.value })
+                                      }
+                                      className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900"
+                                    />
+                                  </div>
+                                  <div>
+                                    <label htmlFor="correction-time-out" className="block text-xs font-medium text-slate-600">
+                                      Time out
+                                    </label>
+                                    <input
+                                      id="correction-time-out"
+                                      type="datetime-local"
+                                      value={correctionForm.timeOut}
+                                      onChange={(event) =>
+                                        setCorrectionForm({ ...correctionForm, timeOut: event.target.value })
+                                      }
+                                      className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900"
+                                    />
+                                  </div>
+                                  <div>
+                                    <label htmlFor="correction-reason" className="block text-xs font-medium text-slate-600">
+                                      Reason (required)
+                                    </label>
+                                    <input
+                                      id="correction-reason"
+                                      required
+                                      value={correctionForm.reason}
+                                      onChange={(event) =>
+                                        setCorrectionForm({ ...correctionForm, reason: event.target.value })
+                                      }
+                                      className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900"
+                                    />
+                                  </div>
+                                </div>
+                                {correctionError ? <p className="mt-2 text-sm text-red-700">{correctionError}</p> : null}
+                                <div className="mt-3 flex gap-3">
+                                  <Button type="button" loading={correctionSaving} onClick={() => handleSubmitCorrection(row.id)}>
+                                    {correctionSaving ? "Saving…" : "Save correction"}
+                                  </Button>
+                                  <button type="button" onClick={closeExpanded} className="text-sm font-medium text-slate-600 hover:text-slate-900">
+                                    Cancel
+                                  </button>
+                                </div>
+                              </td>
+                            </tr>
+                          ) : null}
+                          {expandedVisitId === row.id && expandedMode === "history" ? (
+                            <tr className="border-b border-slate-100 bg-slate-50 print:hidden">
+                              <td colSpan={visibleVisitColumnCount} className="p-4">
+                                <div className="flex items-center justify-between">
+                                  <p className="text-sm font-semibold text-slate-900">Correction history</p>
+                                  <button type="button" onClick={closeExpanded} className="text-xs font-medium text-slate-600 hover:text-slate-900">
+                                    Close
+                                  </button>
+                                </div>
+                                {correctionsQuery.isLoading ? (
+                                  <p className="mt-2 text-sm text-slate-500">Loading…</p>
+                                ) : (correctionsQuery.data ?? []).length === 0 ? (
+                                  <p className="mt-2 text-sm text-slate-400">No corrections recorded for this visit.</p>
+                                ) : (
+                                  <ul className="mt-2 space-y-2">
+                                    {(correctionsQuery.data ?? []).map((entry, index) => (
+                                      <li key={entry.id} className="rounded-lg border border-slate-200 bg-white p-3 text-sm">
+                                        <div className="flex flex-wrap items-center justify-between gap-2">
+                                          <p className="font-medium text-slate-900">
+                                            Revision {index + 1} · {entry.corrected_by_name}
+                                          </p>
+                                          <p className="text-xs text-slate-500">{formatDateTime(entry.created_at)}</p>
+                                        </div>
+                                        <p className="mt-1 text-slate-600">Reason: {entry.reason}</p>
                                         <p className="mt-1 text-xs text-slate-500">
-                                          {formatDateTime(
-                                            entry.before_snapshot.timeIn,
-                                          )}{" "}
-                                          –{" "}
-                                          {formatDateTime(
-                                            entry.before_snapshot.timeOut,
-                                          )}{" "}
-                                          (
-                                          {formatHours(
-                                            entry.before_snapshot
-                                              .billableMinutes,
-                                          )}
-                                          h) →{" "}
-                                          {formatDateTime(
-                                            entry.after_snapshot.timeIn,
-                                          )}{" "}
-                                          –{" "}
-                                          {formatDateTime(
-                                            entry.after_snapshot.timeOut,
-                                          )}{" "}
-                                          (
-                                          {formatHours(
-                                            entry.after_snapshot
-                                              .billableMinutes,
-                                          )}
-                                          h)
+                                          {formatTimeRange(entry.before_snapshot.timeIn, entry.before_snapshot.timeOut)}
+                                          {" "}({formatDuration(entry.before_snapshot.workedMinutes)})
+                                          {" "}→{" "}
+                                          {formatTimeRange(entry.after_snapshot.timeIn, entry.after_snapshot.timeOut)}
+                                          {" "}({formatDuration(entry.after_snapshot.workedMinutes)})
                                         </p>
                                       </li>
-                                    ),
-                                  )}
-                                </ul>
-                              )}
-                            </td>
-                          </tr>
-                        ) : null}
-                      </Fragment>
-                    ))}
+                                    ))}
+                                  </ul>
+                                )}
+                              </td>
+                            </tr>
+                          ) : null}
+                        </Fragment>
+                      );
+                    })}
                   </tbody>
-                  <tfoot>
-                    <tr className="border-t-2 border-slate-300 font-semibold text-slate-900">
-                      <td className="py-2 pr-3" colSpan={6}>
-                        Total (signed + under review)
-                      </td>
-                      <td className="py-2 pr-3">
-                        {formatHours(totalWorkedMinutes)}
-                      </td>
-                      <td className="py-2 pr-3">
-                        {formatHours(totalBillableMinutes)}
-                      </td>
-                      <td className="py-2 pr-3" />
-                      <td className="py-2" />
-                      {canManage ? <td className="py-2 print:hidden" /> : null}
-                    </tr>
-                  </tfoot>
                 </table>
+                <div className="mt-3 flex flex-wrap gap-4 border-t border-slate-200 pt-3 text-sm font-medium text-slate-800">
+                  <span>Worked: {formatDuration(totalWorkedMinutes)}</span>
+                  <span>Billable: {formatDuration(totalBillableMinutes)}</span>
+                </div>
               </div>
             )}
           </Card>
 
-          {clientSubtotals.length > 0 ? (
+          {clientServiceSubtotals.length > 0 ? (
             <Card>
               <h3 className="font-semibold text-slate-950">
-                By client (billing view)
+                By client and service
               </h3>
+              <p className="mt-1 text-xs text-slate-500">
+                Service totals remain separate even when one client has multiple services.
+              </p>
               <ul className="mt-3 divide-y divide-slate-100">
-                {clientSubtotals.map((entry) => (
+                {clientServiceSubtotals.map((entry) => (
                   <li
-                    key={entry.code}
-                    className="flex items-center justify-between py-2 text-sm"
+                    key={entry.key}
+                    className="flex flex-wrap items-center justify-between gap-3 py-2 text-sm"
                   >
                     <span className="text-slate-700">
-                      {entry.legalName ?? entry.code}{" "}
-                      <span className="text-slate-400">
-                        · {entry.visits} visits
-                      </span>
+                      {entry.legalName ?? entry.code} · {entry.serviceName}
+                      <span className="text-slate-400"> · {entry.visits} visits</span>
                     </span>
                     <span className="font-medium text-slate-900">
-                      {formatHours(entry.billableMinutes)} billable hrs
+                      {formatDuration(entry.workedMinutes)} worked · {formatDuration(entry.billableMinutes)} billable
                     </span>
                   </li>
                 ))}
@@ -1655,7 +2224,7 @@ export function ServiceVerificationReportsPage() {
                     {row.client_legal_name ?? row.client_code}{" "}
                     <span className="text-slate-400">
                       · {row.caregiver_name} ·{" "}
-                      {formatVisitDate(row.service_date)}
+                      {formatNumericDate(`${row.service_date}T12:00:00-07:00`)}
                     </span>
                   </span>
                   <span className="flex flex-wrap gap-1.5">

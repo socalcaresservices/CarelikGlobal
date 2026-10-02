@@ -257,6 +257,52 @@ export const ROUTES: Record<string, Route> = {
     },
   },
 
+  "GET /v1/reports/monthly-service-summary": {
+    mutating: false,
+    handle: async ({ event, tx }) => {
+      const query = q(event);
+      const org = orgParam(event);
+      const client = optionalUuid(query.clientId, "clientId");
+      const monthStart = date(query.monthStart, "monthStart");
+      return {
+        services: await tx((db) =>
+          rows(db, "select * from ogevia_api.list_monthly_service_summary($1, $2, $3)", [
+            org,
+            monthStart,
+            client,
+          ]),
+        ),
+      };
+    },
+  },
+
+  "GET /v1/reports/correction-history": {
+    mutating: false,
+    handle: async ({ event, tx }) => {
+      const query = q(event);
+      const org = orgParam(event);
+      const from = optionalDate(query.dateFrom, "dateFrom");
+      const to = optionalDate(query.dateTo, "dateTo");
+      if (from && to && from > to) {
+        throw new ApiError(400, "bad_request", "dateFrom must not be after dateTo.");
+      }
+      return {
+        corrections: await tx((db) =>
+          rows(db, "select * from ogevia_api.list_correction_history_report($1, $2, $3, $4, $5, $6, $7, $8)", [
+            org,
+            from,
+            to,
+            optionalUuid(query.clientId, "clientId"),
+            optionalUuid(query.serviceId, "serviceId"),
+            optionalUuid(query.caregiverUserId, "caregiverUserId"),
+            optionalUuid(query.correctedByUserId, "correctedByUserId"),
+            query.status ? oneOf(query.status, "status", VISIT_STATUSES) : null,
+          ]),
+        ),
+      };
+    },
+  },
+
   "GET /v1/billing-review": {
     mutating: false,
     handle: async ({ event, tx }) => {
