@@ -268,8 +268,8 @@ export const ROUTES: Record<string, Route> = {
         services: await tx((db) =>
           rows(db, "select * from ogevia_api.list_monthly_service_summary($1, $2, $3)", [
             org,
-            client,
             monthStart,
+            client,
           ]),
         ),
       };
