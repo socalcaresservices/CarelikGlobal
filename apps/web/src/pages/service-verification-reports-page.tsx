@@ -1767,14 +1767,52 @@ export function ServiceVerificationReportsPage() {
       {reportView === "visits" ? (
         <>
           <Card className="print:border-none print:p-0 print:shadow-none">
-            <div className="flex items-center gap-3 print:hidden">
-              <FileText className="h-5 w-5 text-sky-700" />
-              <h3 className="font-semibold text-slate-950">
-                {selectedCaregiverName
-                  ? `Caregiver ${selectedCaregiverName}`
-                  : "Visits"}{" "}
-                ({rows.length})
-              </h3>
+            <div className="flex flex-wrap items-center justify-between gap-3 print:hidden">
+              <div className="flex items-center gap-3">
+                <FileText className="h-5 w-5 text-sky-700" />
+                <h3 className="font-semibold text-slate-950">
+                  {selectedCaregiverName
+                    ? `Caregiver ${selectedCaregiverName}`
+                    : "Visits"}{" "}
+                  ({visibleVisitRows.length})
+                </h3>
+              </div>
+              <div className="flex flex-wrap items-center gap-3">
+                <label className="flex items-center gap-2 text-xs font-medium text-slate-600">
+                  <input
+                    type="checkbox"
+                    checked={showSuperseded}
+                    onChange={(event) => setShowSuperseded(event.target.checked)}
+                  />
+                  Show superseded records
+                </label>
+                <details className="relative">
+                  <summary className="cursor-pointer list-none rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-semibold text-slate-700">
+                    Columns
+                  </summary>
+                  <div className="absolute right-0 z-20 mt-2 w-52 rounded-xl border border-slate-200 bg-white p-3 shadow-lg">
+                    <div className="space-y-2">
+                      {VISIT_COLUMN_OPTIONS.map((column) => (
+                        <label key={column.key} className="flex items-center gap-2 text-xs text-slate-700">
+                          <input
+                            type="checkbox"
+                            checked={visitColumns.has(column.key)}
+                            onChange={() => toggleVisitColumn(column.key)}
+                          />
+                          {column.label}
+                        </label>
+                      ))}
+                    </div>
+                    <button
+                      type="button"
+                      onClick={resetVisitColumns}
+                      className="mt-3 text-xs font-medium text-slate-600 underline"
+                    >
+                      Reset columns
+                    </button>
+                  </div>
+                </details>
+              </div>
             </div>
             {visitsQuery.isLoading ? (
               <p className="mt-3 text-sm text-slate-500">Loading…</p>
@@ -1782,7 +1820,7 @@ export function ServiceVerificationReportsPage() {
               <p className="mt-3 text-sm text-red-700">
                 Could not load service verification records.
               </p>
-            ) : rows.length === 0 ? (
+            ) : visibleVisitRows.length === 0 ? (
               <p className="mt-3 text-sm text-slate-400">
                 No visits match these filters.
               </p>
