@@ -59,7 +59,7 @@ for each row execute function ogevia.set_human_visit_number();
 
 create function ogevia_api.list_monthly_service_summary(
   p_organization_id uuid,
-  p_client_id uuid,
+  p_client_id uuid default null,
   p_month_start date
 )
 returns table (
@@ -99,7 +99,7 @@ as $$
     from ogevia.client_authorizations a
     cross join bounds b
     where a.organization_id = p_organization_id
-      and a.client_id = p_client_id
+      and (p_client_id is null or a.client_id = p_client_id)
       and a.deleted_at is null
       and a.period_start < b.month_end
       and a.period_end >= b.month_start
@@ -121,7 +121,7 @@ as $$
     join ogevia.client_authorizations va on va.id = v.service_authorization_id
     cross join bounds b
     where v.organization_id = p_organization_id
-      and v.client_id = p_client_id
+      and (p_client_id is null or v.client_id = p_client_id)
       and v.service_date >= b.month_start
       and v.service_date < b.month_end
       and v.status in ('signed', 'administrator_review')
