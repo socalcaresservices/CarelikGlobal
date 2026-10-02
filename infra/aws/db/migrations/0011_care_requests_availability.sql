@@ -587,6 +587,94 @@ begin
 end;
 $$;
 
+create function ogevia_api.list_my_care_opportunities(p_organization_id uuid)
+returns table (
+  offer_id uuid,
+  request_id uuid,
+  service_code text,
+  service_name text,
+  requested_start timestamptz,
+  requested_end timestamptz,
+  offer_status ogevia.care_offer_status,
+  request_status ogevia.care_request_status,
+  expires_at timestamptz
+)
+language sql
+stable
+security definer
+set search_path = ogevia, pg_temp
+as $
+  select f.id, r.id, s.code, s.name, r.requested_start, r.requested_end,
+         f.status, r.status, f.expires_at
+  from ogevia.care_request_offers f
+  join ogevia.care_requests r on r.id = f.care_request_id
+  join ogevia.services s on s.id = r.service_id
+  join ogevia.caregiver_records cr on cr.id = f.caregiver_record_id
+  where ogevia.require_actor() is not null
+    and f.organization_id = p_organization_id
+    and ogevia.is_active_member(p_organization_id)
+    and cr.organization_id = p_organization_id
+    and cr.linked_user_id = ogevia.current_user_id()
+  order by case f.status when 'pending' then 0 when 'available' then 1 when 'assigned' then 2 else 3 end,
+           r.requested_start;
+$;
+
+create function ogevia_api.respond_my_care_offer(
+  p_offer_id uuid,
+  p_available boolean
+)
+returns ogevia.care_offer_status
+language plpgsql
+security definer
+set search_path = ogevia, pg_temp
+as $
+declare
+  v_offer ogevia.care_request_offers%rowtype;
+  v_request_status ogevia.care_request_status;
+  v_status ogevia.care_offer_status;
+begin
+  perform ogevia.require_actor();
+  select f.*, r.status into v_offer, v_request_status
+  from ogevia.care_request_offers f
+  join ogevia.care_requests r on r.id = f.care_request_id
+  join ogevia.caregiver_records cr on cr.id = f.caregiver_record_id
+  where f.id = p_offer_id
+    and cr.organization_id = f.organization_id
+    and cr.linked_user_id = ogevia.current_user_id()
+  for update of f;
+
+  if v_offer.id is null then raise exception 'Opportunity not found' using errcode = 'OGA04'; end if;
+  if not ogevia.is_active_member(v_offer.organization_id) then
+    raise exception 'Not permitted' using errcode = 'OGA03';
+  end if;
+  if v_offer.expires_at <= now() then
+    if v_offer.status = 'pending' then
+      update ogevia.care_request_offers set status = 'expired', updated_at = now() where id = v_offer.id;
+    end if;
+    return 'expired';
+  end if;
+  if v_request_status in ('assigned','cancelled','closed') then
+    if v_offer.status in ('pending','available','unavailable') then
+      update ogevia.care_request_offers set status = 'not_selected', updated_at = now() where id = v_offer.id;
+    end if;
+    return 'not_selected';
+  end if;
+  if v_offer.status not in ('pending','available','unavailable') then return v_offer.status; end if;
+
+  v_status := case when p_available then 'available'::ogevia.care_offer_status
+                   else 'unavailable'::ogevia.care_offer_status end;
+  update ogevia.care_request_offers
+  set status = v_status, responded_at = now(), updated_at = now()
+  where id = v_offer.id;
+
+  perform ogevia.write_care_request_event(
+    v_offer.organization_id, v_offer.care_request_id, 'caregiver_responded',
+    jsonb_build_object('caregiverRecordId', v_offer.caregiver_record_id, 'response', v_status)
+  );
+  return v_status;
+end;
+$;
+
 -- ---------------------------------------------------------------------------
 -- Public token-scoped API. No actor context is required or accepted.
 -- ---------------------------------------------------------------------------
@@ -872,6 +960,8 @@ revoke all on function ogevia_api.list_care_request_candidates(uuid) from public
 revoke all on function ogevia_api.list_care_request_offers(uuid) from public;
 revoke all on function ogevia_api.create_care_request_offer(uuid, uuid, text, timestamptz) from public;
 revoke all on function ogevia_api.assign_care_request(uuid, uuid) from public;
+revoke all on function ogevia_api.list_my_care_opportunities(uuid) from public;
+revoke all on function ogevia_api.respond_my_care_offer(uuid, boolean) from public;
 revoke all on function ogevia_api.public_request_link_context(text) from public;
 revoke all on function ogevia_api.public_create_care_request(text, uuid, timestamptz, timestamptz, text, uuid) from public;
 revoke all on function ogevia_api.public_cancel_care_request(text, uuid, text) from public;
@@ -885,6 +975,8 @@ grant execute on function ogevia_api.list_care_request_candidates(uuid) to ogevi
 grant execute on function ogevia_api.list_care_request_offers(uuid) to ogevia_app;
 grant execute on function ogevia_api.create_care_request_offer(uuid, uuid, text, timestamptz) to ogevia_app;
 grant execute on function ogevia_api.assign_care_request(uuid, uuid) to ogevia_app;
+grant execute on function ogevia_api.list_my_care_opportunities(uuid) to ogevia_app;
+grant execute on function ogevia_api.respond_my_care_offer(uuid, boolean) to ogevia_app;
 grant execute on function ogevia_api.public_request_link_context(text) to ogevia_app;
 grant execute on function ogevia_api.public_create_care_request(text, uuid, timestamptz, timestamptz, text, uuid) to ogevia_app;
 grant execute on function ogevia_api.public_cancel_care_request(text, uuid, text) to ogevia_app;
