@@ -11,8 +11,12 @@ pilot scope:
   - the API's unauthenticated routes are exactly the approved public list.
 Resource Metadata (CDK asset paths) is ignored, and so is the value of the
 `ogevia:deployment-status` tag: it records the approval reference by design
-(lib/app.ts), so a new approval changes it on every resource. Every other tag
-and property is compared. Prints a summary; exit 1 = stop.
+(lib/app.ts), so a new approval changes it on every resource. A change limited
+to the Analytics string of an AWS::CDK::Metadata resource is reported, not
+blocked: that resource only records the CDK version and construct usage and
+creates nothing in AWS. Every other tag and property is compared. Also prints
+which approved public routes are already live and which this deploy adds.
+Prints a summary; exit 1 = stop.
 """
 import argparse
 import json
@@ -115,13 +119,20 @@ def main():
         for l in modified:
             t = rn[l]["Type"]
             keys = changed_property_keys(ro[l], rn[l])
-            if stack == API_STACK and t == "AWS::Lambda::Function" and keys <= {"Code"}:
+            if t == "AWS::CDK::Metadata" and keys <= {"Analytics"}:
+                lines.append("%s: ~ CDK version metadata only (AWS::CDK::Metadata Analytics; creates nothing in AWS)" % stack)
+            elif stack == API_STACK and t == "AWS::Lambda::Function" and keys <= {"Code"}:
                 lines.append("%s: ~ %s code package only" % (stack, l))
             else:
                 failures.append("%s: would MODIFY %s (%s): %s" % (stack, l, t, ", ".join(sorted(keys))))
 
     api = json.load(open(os.path.join(args.cdk_out, API_STACK + ".template.json")))
     pub = public_route_keys(api)
+    live_path = os.path.join(args.deployed, API_STACK + ".json")
+    if os.path.exists(live_path):
+        live_pub = set(public_route_keys(json.load(open(live_path))))
+        for key in pub:
+            lines.append("Public route %s: %s" % (key, "already live" if key in live_pub else "ADDED by this deployment"))
     if pub == APPROVED_PUBLIC_ROUTE_KEYS:
         lines.append("Public (no sign-in) API routes: %d, exactly the approved list" % len(pub))
     else:

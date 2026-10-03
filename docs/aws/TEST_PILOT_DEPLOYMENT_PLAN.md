@@ -50,8 +50,9 @@ Re-running the bootstrap resumes after the last completed step.
 | Cognito pool `us-west-2_849AYz5J7` | +3 individual users (email invitation, password + TOTP at first sign-in) | Subs read back |
 | Pilot organization `scs-pilot-synthetic` | Synthetic seed: 3 clients, 2 services, 4 authorizations, 4 assignments | Read-back `3 \| 2 \| 4 \| 4` |
 | Admin host `ogevia-db-admin-temp` | AppSG attached **only during the DB window** | Original groups restored and re-checked |
-| Stack `Ogevia-prod-ServiceVerificationApi` | +2 routes, +2 route-scoped `lambda:InvokeFunction` permissions, new Lambda code | Scope gate. Proven locally on the real templates of the deployed commit `d775647` against this build: exactly these 5 changes. |
-| Other 4 stacks | **None** | Scope gate (any change stops) |
+| Stack `Ogevia-prod-ServiceVerificationApi` | **Live evidence (CloudShell, 2026-10-03):** `GET /v1/public/care-portals/{token}/requests` is already deployed. This build adds only `POST /v1/visits/{visitId}/close`, its route-scoped `lambda:InvokeFunction` permission, and new Lambda code. | Scope gate against the captured live templates. It prints each approved public route as "already live" or "ADDED". |
+| Other 4 stacks | **None** (they are not deployed: `--exclusively`) | Scope gate: any change stops, except the next row |
+| `AWS::CDK::Metadata` (all 5 stacks) | `Analytics` string only: CDK version and construct usage, which differs with the synth toolchain. It creates nothing in AWS, and is updated only in the API stack when that stack deploys. | Gate reports it; any other change to the metadata resource still stops |
 | Site bucket + CloudFront | New web build + `config.json`, invalidation | Site reachable |
 
 CDK runs with `--require-approval never`. The scope gate has just proven, for that exact `cdk.out`, that the change set equals the approved scope, and your DEPLOY covers it. This replaces CDK's separate IAM prompt so there is exactly one approval.
@@ -93,6 +94,10 @@ The workflow writes `~/ogevia-pilot-run/SHARED_RESOURCES.md` from live reads. Th
   - the Lambda swap is atomic, with cold starts of about 1–3 s;
   - CloudFront takes minutes to refresh.
 - **Total run:** about 30–50 minutes. Most of it is the test suite, the snapshot and CloudFront. Keep CloudShell open; if the session times out, re-paste and it resumes.
+
+## Correction: what is currently deployed
+
+The repo's deployment log ends at `d775647` (§8.5 of TEST_SLICE_DEPLOYMENT_APPROVAL.md). The live API templates captured on 2026-10-03 already contain `GET /v1/public/care-portals/{token}/requests` (commit `f15ed8c`), so a later, unrecorded deployment happened. Live state, not the log, is authoritative. The rollback capture holds the actual live templates and Lambda version. The DB window accepts a ledger anywhere from 0011 to 0018 and applies only what is missing.
 
 ## Reviews completed for this deployment
 
