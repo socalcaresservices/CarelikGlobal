@@ -1,5 +1,5 @@
 // SCS pilot browser acceptance, LOCAL: the exact AWS-mode web build <-> the
-// real sv-api handler <-> a real PostgreSQL 18 database (migrations 0001-0017,
+// real sv-api handler <-> a real PostgreSQL 18 database (migrations 0001-0018,
 // test-slice seed + SCS pilot seed). SYNTHETIC DATA ONLY.
 //
 // Stand-ins (stated, not hidden):
@@ -476,14 +476,14 @@ async function main() {
   // The button relabels to "Saving…" while the request runs; the form closes only on success.
   await M.page.getByText("Correct this visit", { exact: true }).waitFor({ state: "detached", timeout: 15000 });
   const revised = (await admin.query(
-    `select v.time_in, v.time_out, v.status::text, v.billable_minutes, o.status::text as original_status, o.time_out as original_out
+    `select v.time_in, v.time_out, v.status::text, v.billable_minutes, o.status::text as original_status, o.time_out as original_out,
+            v.time_in::text as in_text, o.time_in::text as original_in_text
      from ogevia.service_visits v join ogevia.service_visits o on o.id = v.original_visit_id where o.id = $1`, [v1.id])).rows[0];
-  // Corrected times are whole minutes (the form has no seconds), so the
-  // pre-filled Time In drops the original's seconds.
-  const correctedIn = new Date(v1.time_in); correctedIn.setSeconds(0, 0);
-  const expectedRevisedMin = Math.floor((newOut.getTime() - correctedIn.getTime()) / 60_000);
-  check("correction (DB): revision stores the entered Pacific instants; original kept as corrected",
-    !!revised && new Date(revised.time_out).getTime() === newOut.getTime() && new Date(revised.time_in).getTime() === new Date(v1.time_in).setSeconds(0, 0) &&
+  // Time In was left unchanged: it must be kept exactly (seconds and
+  // microseconds), through JSON milliseconds and the 0018 server restore.
+  const expectedRevisedMin = Math.floor((newOut.getTime() - new Date(v1.time_in).getTime()) / 60_000);
+  check("correction (DB): unchanged Time In kept to the microsecond, Time Out = entered Pacific minute, original kept as corrected",
+    !!revised && new Date(revised.time_out).getTime() === newOut.getTime() && revised.in_text === revised.original_in_text && /:\d\d\.\d+/.test(revised.in_text) &&
       revised.original_status === "corrected" && new Date(revised.original_out).getTime() === new Date(v1.time_out).getTime(),
     JSON.stringify({ revised, expectedOut: newOut.toISOString(), summary: corrSummary }));
   const corrections = await api(SUB.pilotManager, "GET /v1/visits/{visitId}/corrections", { path: { visitId: v1.id }, query: { organizationId: org } });

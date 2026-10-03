@@ -353,6 +353,33 @@ describe("ServiceVerificationReportsPage", () => {
     );
   });
 
+  it("sends an unchanged Time In exactly as stored, seconds included", async () => {
+    mockedUseOrganization.mockReturnValue({
+      activeOrganizationId: ORG_ID,
+      activeOrganization: { displayName: "Acme Care" },
+      hasPermission: vi.fn(() => true),
+    } as never);
+    mockOrgLetterhead();
+    const withSeconds = { ...visitRow, time_in: "2026-08-01T13:00:37.123456+00:00", time_out: "2026-08-01T14:00:12.5+00:00" };
+    mockedRpc.mockImplementation((fn: string) =>
+      Promise.resolve(fn === "list_service_visits" ? { data: [withSeconds], error: null } : { data: [], error: null }) as never,
+    );
+    renderPage();
+    await openReport(/Visit details/);
+    fireEvent.click(await screen.findByRole("button", { name: "Correct" }));
+    fireEvent.change(screen.getByLabelText("Reason (required)"), { target: { value: "Left later (synthetic)" } });
+    fireEvent.change(screen.getByLabelText("Corrected Time Out minute"), { target: { value: "20" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save correction" }));
+    await waitFor(() =>
+      expect(mockedRpc).toHaveBeenCalledWith("correct_service_visit", {
+        target_visit_id: visitRow.id,
+        new_time_in: "2026-08-01T13:00:37.123456+00:00",
+        new_time_out: "2026-08-01T14:20:00.000Z",
+        reason: "Left later (synthetic)",
+      }),
+    );
+  });
+
   it("refuses an incomplete corrected time with a message naming which time", async () => {
     mockedUseOrganization.mockReturnValue({
       activeOrganizationId: ORG_ID,

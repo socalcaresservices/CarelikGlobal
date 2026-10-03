@@ -57,6 +57,7 @@ import {
   formatTimeRange,
   formatClockTime,
   formatVisitDate,
+  correctedTimeValue,
   pacificWallTimeToDate,
   toPacificWallTime,
   validateManagerTimeOut,
@@ -505,19 +506,18 @@ export function ServiceVerificationReportsPage() {
       setCorrectionError("A reason is required to correct a visit.");
       return;
     }
-    const parsedIn = pacificWallTimeToDate(correctionForm.timeIn);
+    const parsedIn = correctedTimeValue(correctionForm.timeIn, correctionForm.originalTimeIn);
     if (!parsedIn.ok) {
       setCorrectionError(`Time In: ${parsedIn.error.replace("the visit ended", "the visit started")}`);
       return;
     }
-    const parsedOut = pacificWallTimeToDate(correctionForm.timeOut);
+    const parsedOut = correctedTimeValue(correctionForm.timeOut, correctionForm.originalTimeOut);
     if (!parsedOut.ok) {
       setCorrectionError(`Time Out: ${parsedOut.error}`);
       return;
     }
-    const newTimeIn = parsedIn.value;
     const newTimeOut = parsedOut.value;
-    const invalid = validateManagerTimeOut(newTimeIn.toISOString(), newTimeOut);
+    const invalid = validateManagerTimeOut(parsedIn.iso, newTimeOut);
     if (invalid) {
       setCorrectionError(invalid);
       return;
@@ -527,8 +527,8 @@ export function ServiceVerificationReportsPage() {
     try {
       await backend.correctVisit({
         visitId,
-        timeIn: newTimeIn.toISOString(),
-        timeOut: newTimeOut.toISOString(),
+        timeIn: parsedIn.iso,
+        timeOut: parsedOut.iso,
         reason: correctionForm.reason.trim(),
         idempotencyKey: correctionKey.current,
       });

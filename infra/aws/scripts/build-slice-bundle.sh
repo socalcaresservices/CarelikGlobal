@@ -24,6 +24,7 @@ cp "$HERE/db/migrations/0014_visit_access_from_scheduled_shift.sql" "$STAGE/db/"
 cp "$HERE/db/migrations/0015_manager_close_missed_visit.sql" "$STAGE/db/"
 cp "$HERE/db/migrations/0016_remaining_minutes_count_reservations.sql" "$STAGE/db/"
 cp "$HERE/db/migrations/0017_next_scheduled_service.sql" "$STAGE/db/"
+cp "$HERE/db/migrations/0018_correction_keeps_unchanged_times.sql" "$STAGE/db/"
 cp "$HERE/db/verification/01_schema_version.sql" "$HERE/db/verification/02_required_objects.sql" "$STAGE/db/"
 printf 'commit %s\nbuilt %s\napproval owner-approved-2026-10-01-test-slice\n' "$(git -C "$REPO" rev-parse HEAD)" "$(date -u +%FT%TZ)" > "$STAGE/BUILD_INFO"
 tar -czf "$OUT" -C "$REPO/deploy-bundle" ogevia-slice

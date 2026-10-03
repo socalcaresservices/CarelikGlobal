@@ -277,3 +277,28 @@ export function validateManagerTimeOut(
   }
   return null;
 }
+
+/**
+ * A corrected time for submission. When the entry still shows the original
+ * time (same Pacific date, hour, minute and AM/PM), the original value is
+ * sent unchanged, so an untouched Time In or Time Out keeps its seconds
+ * instead of being re-entered as a whole minute.
+ */
+export function correctedTimeValue(
+  entry: PacificWallTime,
+  original: string | null,
+): { ok: true; iso: string; value: Date } | { ok: false; error: string } {
+  if (original) {
+    const was = toPacificWallTime(original);
+    if (
+      was.date === entry.date &&
+      was.hour === entry.hour &&
+      was.minute === entry.minute &&
+      was.meridiem === entry.meridiem
+    ) {
+      return { ok: true, iso: original, value: new Date(original) };
+    }
+  }
+  const parsed = pacificWallTimeToDate(entry);
+  return parsed.ok ? { ok: true, iso: parsed.value.toISOString(), value: parsed.value } : parsed;
+}

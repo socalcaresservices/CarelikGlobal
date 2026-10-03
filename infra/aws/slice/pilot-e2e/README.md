@@ -1,7 +1,7 @@
 # SCS pilot browser acceptance (local, synthetic)
 
 Runs the exact AWS-mode web build in mobile Chromium (390x844, touch) against
-the real `sv-api` handler and a local PostgreSQL 18 with migrations 0001-0017,
+the real `sv-api` handler and a local PostgreSQL 18 with migrations 0001-0018,
 the test-slice seed and the SCS pilot seed. Synthetic data only; no AWS calls.
 
 Stand-ins: Cognito login/token endpoints are answered by Playwright routes with

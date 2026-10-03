@@ -3,7 +3,7 @@
 -- are individual (one Cognito user per person; no shared logins).
 --
 -- Run as the RDS master user against ogevia_sv_test, AFTER migrations
--- 0001-0017 are applied and AFTER the three Cognito users exist:
+-- 0001-0018 are applied and AFTER the three Cognito users exist:
 --
 --   psql ... \
 --     -v manager_sub="$MANAGER_SUB" \
