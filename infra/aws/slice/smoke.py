@@ -204,7 +204,8 @@ def workflow(args, inv, cg, mg):
     s, cl = inv.call("GET /v1/clients/assigned", cg, query={"organizationId": org})
     codes = {c["clientCode"]: c["clientId"] for c in (cl or {}).get("clients", [])}
     check(A, "assigned clients = TEST-C01, TEST-C02 (codes only, no names)", s == 200 and {"TEST-C01", "TEST-C02"} <= set(codes)
-          and all(set(c) == {"clientId", "clientCode", "nextScheduledStartsAt", "nextScheduledEndsAt", "activeServiceCount"} for c in cl["clients"]))
+          and all(set(c) == {"clientId", "clientCode", "nextScheduledStartsAt", "nextScheduledEndsAt", "activeServiceCount",
+                         "nextScheduledServiceId"} for c in cl["clients"]))
     if "TEST-C01" not in codes or "TEST-C02" not in codes:
         return
     c1, c2 = codes["TEST-C01"], codes["TEST-C02"]
