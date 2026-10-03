@@ -37,9 +37,25 @@ phase() { PHASE="$1"; printf '\n\033[1m=== %s\033[0m\n' "$1"; }
 done_() { touch "$STATE/$1"; }
 is_done() { [[ -f "$STATE/$1" ]]; }
 die() {
-  printf '\n\033[1;31mSTOPPED in "%s": %s\033[0m\n' "$PHASE" "$*"
-  printf 'Nothing after this point ran. Log: %s\nFix the cause (or send the log to Claude) and re-run the same command; completed steps are skipped.\n' "${LOG:-}"
+  local msg
+  msg=$(printf '\n\033[1;31mSTOPPED in "%s": %s\033[0m\nNothing after this point ran. Log: %s\nFix the cause (or send the log to Claude) and re-run the same command; completed steps are skipped.\n' "$PHASE" "$*" "${LOG:-}")
+  DIED=1
+  # Straight to the terminal (fd 3, if saved) and the log as well, so the
+  # message survives even if the tee logging pipe has been killed.
+  { printf '%s\n' "$msg" >&3; } 2>/dev/null || printf '%s\n' "$msg"
+  [[ -n "${LOG:-}" ]] && printf '%s\n' "$msg" >> "$LOG"
   exit 1
+}
+# An exit that did not go through die() (for example a killed child that took
+# the shell's pipeline down) still says so, with the exit code.
+on_exit() {
+  local rc=$?
+  [[ $rc == 0 || -n "${DIED:-}" ]] && return 0
+  local hint="" msg
+  [[ $rc == 137 ]] && hint=", killed: likely out of memory"
+  msg="EXITED UNEXPECTEDLY in \"$PHASE\" (exit $rc$hint). Log: ${LOG:-}. Re-run the same command to resume."
+  { printf '%s\n' "$msg" >&3; } 2>/dev/null || printf '%s\n' "$msg"
+  [[ -n "${LOG:-}" ]] && printf '%s\n' "$msg" >> "$LOG"
 }
 out() { aws cloudformation describe-stacks --stack-name "$1" --query "Stacks[0].Outputs[?OutputKey=='$2'].OutputValue" --output text; }
 sub_of() { aws cognito-idp admin-get-user --user-pool-id "$POOL" --username "$1" --query 'UserAttributes[?Name==`sub`].Value' --output text 2>/dev/null || true; }

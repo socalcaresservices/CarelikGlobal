@@ -21,9 +21,16 @@ set -Eeuo pipefail
 source "$(dirname "${BASH_SOURCE[0]}")/pilot-lib.sh"
 SNAPSHOT_ID=ogevia-prod-postgres-pre-pilot-$(date -u +%Y%m%d)
 LOG="$RUN/deploy-$(date -u +%Y%m%dT%H%M%SZ).log"
+exec 3>&1
 exec > >(tee -a "$LOG") 2>&1
+trap '' PIPE                     # a dead tee must not kill this script silently
+trap on_exit EXIT
 trap 'die "unexpected error on line $LINENO (command: $BASH_COMMAND)"' ERR
 PNPM=(npx -y pnpm@9.15.4)
+# Small CloudShell environments: one build/test task at a time, capped Node
+# heap (parallel typecheck peaks ~2.0 GB and tests ~2.8 GB; serial ~1.15 GB).
+export NODE_OPTIONS="${NODE_OPTIONS:---max-old-space-size=1536}"
+GATE_TEST_ARGS=(-- --pool=forks --poolOptions.forks.maxForks=1 --poolOptions.forks.minForks=1)
 
 # ----------------------------------------------------------------------------
 phase "1/12 Prerequisites and versions"
@@ -123,7 +130,11 @@ phase "5/12 Build and test this exact code"
 cd "$REPO"
 if ! is_done "tests-$COMMIT"; then
   "${PNPM[@]}" install --frozen-lockfile
-  "${PNPM[@]}" typecheck && "${PNPM[@]}" lint && "${PNPM[@]}" test && "${PNPM[@]}" build || die "the quality gate failed on this code"
+  for t in typecheck lint test build; do
+    extra=(); [[ "$t" == test ]] && extra=("${GATE_TEST_ARGS[@]}")
+    echo "-- $t (one task at a time)"
+    "${PNPM[@]}" exec turbo run "$t" --concurrency=1 "${extra[@]}" || die "the quality gate failed on this code ($t, exit $?)"
+  done
   done_ "tests-$COMMIT"
 else
   echo "Quality gate already passed for $COMMIT in this run."
@@ -203,7 +214,7 @@ echo "Snapshot $SNAPSHOT_ID: available"
 # ----------------------------------------------------------------------------
 phase "10/12 DB window: migrations, pilot sign-ins, synthetic seed"
 if ! is_done db-window; then
-  trap 'db_window_close' EXIT
+  trap 'rc=$?; db_window_close; (exit $rc); on_exit' EXIT
   trap 'db_window_close; die "unexpected error on line $LINENO (command: $BASH_COMMAND)"' ERR
   db_window_open
 
@@ -251,7 +262,7 @@ if ! is_done db-window; then
   grep -Eq '3 \|\s+2 \|\s+4 \|\s+4' <<<"$SEED" || die "pilot seed read-back is not 3|2|4|4: $SEED"
   echo "Pilot seed: 3 memberships, 2 caregivers, 4 assignments, 4 authorizations"
   db_window_close
-  trap - EXIT
+  trap on_exit EXIT
   trap 'die "unexpected error on line $LINENO (command: $BASH_COMMAND)"' ERR
   admin_host_groups | grep -qw "$APP_SG" && die "$APP_SG is still attached to $IID: remove it in the EC2 console"
   done_ db-window
