@@ -1,6 +1,6 @@
 # SCS pilot readiness — Monday 2026-10-05
 
-**Status (2026-10-03):** DEPLOYED to AWS TEST and **ACCEPTED on real phones, synthetic data only**. See [PILOT_ACCEPTANCE_RECORD.md](PILOT_ACCEPTANCE_RECORD.md). Nothing was merged; Netlify, Supabase and production are unchanged. The sections below are the pre-deployment readiness report.
+**Status (2026-10-03):** DEPLOYED to AWS TEST and **ACCEPTED on real phones, synthetic data only**. See [PILOT_ACCEPTANCE_RECORD.md](PILOT_ACCEPTANCE_RECORD.md). Phase 7 security review for real-client data: [PHASE7_SECURITY_REVIEW.md](PHASE7_SECURITY_REVIEW.md) (not yet signed). Nothing was merged; Netlify, Supabase and production are unchanged. The sections below are the pre-deployment readiness report.
 **Pilot branch:** `claude/ogevia-socal-pilot-prep-vfu5tf`. The report covers the code at `454f934` plus the harness/docs commit that adds this file.
 **Data:** synthetic only until the BAA and live-data gates in §5 pass.
 
