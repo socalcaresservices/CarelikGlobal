@@ -212,7 +212,7 @@ describe("ServiceVerificationReportsPage", () => {
     );
     const enter = (iso: string) => {
       const wall = toPacificWallTime(iso);
-      fireEvent.change(screen.getByLabelText("Date"), { target: { value: wall.date } });
+      fireEvent.change(screen.getByLabelText("Time Out date"), { target: { value: wall.date } });
       fireEvent.change(screen.getByLabelText("Hour"), { target: { value: String(wall.hour) } });
       fireEvent.change(screen.getByLabelText("Minute"), { target: { value: String(wall.minute) } });
       fireEvent.click(screen.getByRole("radio", { name: wall.meridiem! }));
@@ -223,7 +223,7 @@ describe("ServiceVerificationReportsPage", () => {
     fireEvent.click(await screen.findByRole("button", { name: "Close visit" }));
 
     // Only the date is pre-filled (Time In's Pacific date); the time must be entered.
-    expect(screen.getByLabelText("Date")).toHaveValue(toPacificWallTime(missed.time_in).date);
+    expect(screen.getByLabelText("Time Out date")).toHaveValue(toPacificWallTime(missed.time_in).date);
     expect(screen.getByLabelText("Hour")).toHaveValue("");
     expect(screen.getByRole("radio", { name: "AM" })).toHaveAttribute("aria-checked", "false");
     expect(screen.getByRole("radio", { name: "PM" })).toHaveAttribute("aria-checked", "false");
@@ -247,8 +247,10 @@ describe("ServiceVerificationReportsPage", () => {
     expect(await screen.findByRole("alert")).toHaveTextContent(/is in the future/);
     expect(mockedRpc).not.toHaveBeenCalledWith("close_missed_service_visit", expect.anything());
 
-    // Valid: the summary spells out Time In, Time Out and the worked duration.
+    // Valid: editing clears the stale error; the summary spells out Time In,
+    // Time Out and the worked duration.
     enter(ago(60));
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
     const summary = screen.getByLabelText("Time Out summary");
     expect(summary).toHaveTextContent(`${formatVisitDate(ago(60))}, ${formatClockTime(ago(60))}`);
     expect(summary).toHaveTextContent("Duration4 hr");
@@ -290,7 +292,7 @@ describe("ServiceVerificationReportsPage", () => {
     await openReport(/Exceptions needing attention/);
     fireEvent.click(await screen.findByRole("button", { name: "Close visit" }));
     const wall = toPacificWallTime(ago(60));
-    fireEvent.change(screen.getByLabelText("Date"), { target: { value: wall.date } });
+    fireEvent.change(screen.getByLabelText("Time Out date"), { target: { value: wall.date } });
     fireEvent.change(screen.getByLabelText("Hour"), { target: { value: String(wall.hour) } });
     fireEvent.change(screen.getByLabelText("Minute"), { target: { value: String(wall.minute) } });
     fireEvent.click(screen.getByRole("radio", { name: wall.meridiem! }));

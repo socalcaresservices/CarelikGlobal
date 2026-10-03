@@ -108,7 +108,7 @@ describe("AWS build: caregiver vertical slice", () => {
     // Landing sends caregivers to Verify Visit; only the assigned client code is shown.
     fireEvent.click(await screen.findByRole("button", { name: /Client C-104/ }));
     const details = await screen.findByRole("group", { name: "Visit details" });
-    await waitFor(() => expect(details).toHaveTextContent("Client C-104"));
+    await waitFor(() => expect(details).toHaveTextContent("ClientC-104"));
     await waitFor(() => expect(screen.getByRole("button", { name: /Start visit/ })).toBeEnabled());
 
     fireEvent.click(screen.getByRole("button", { name: /Start visit/ }));

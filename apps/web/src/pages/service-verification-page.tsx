@@ -789,7 +789,7 @@ export function ServiceVerificationPage() {
                   <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-2">
                     <dt className="text-slate-500">Client</dt>
                     <dd className="font-semibold">
-                      Client {selectedClient.client_code}
+                      {selectedClient.client_code}
                     </dd>
                     <dt className="text-slate-500">Service</dt>
                     <dd className="min-w-0 break-words font-semibold">

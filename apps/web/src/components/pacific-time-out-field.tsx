@@ -43,6 +43,7 @@ export function PacificTimeOutField({
           <input
             id={`${idPrefix}-date`}
             type="date"
+            aria-label="Time Out date"
             value={value.date}
             onChange={(event) => onChange({ ...value, date: event.target.value })}
             className={selectClass}
@@ -51,6 +52,7 @@ export function PacificTimeOutField({
         <label className="block text-xs text-slate-600">
           Hour
           <select
+            aria-label="Hour"
             value={value.hour ?? ""}
             onChange={(event) =>
               onChange({ ...value, hour: event.target.value ? Number(event.target.value) : null })
@@ -68,6 +70,7 @@ export function PacificTimeOutField({
         <label className="block text-xs text-slate-600">
           Minute
           <select
+            aria-label="Minute"
             value={value.minute ?? ""}
             onChange={(event) =>
               onChange({ ...value, minute: event.target.value ? Number(event.target.value) : null })

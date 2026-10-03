@@ -2379,7 +2379,10 @@ export function ServiceVerificationReportsPage() {
                       idPrefix={`close-${row.id}`}
                       timeIn={closeForm.timeIn}
                       value={closeForm.timeOut}
-                      onChange={(timeOut) => setCloseForm({ ...closeForm, timeOut })}
+                      onChange={(timeOut) => {
+                        setCloseError(null);
+                        setCloseForm({ ...closeForm, timeOut });
+                      }}
                     />
                     <label className="block text-xs font-medium text-slate-700">
                       Reason
