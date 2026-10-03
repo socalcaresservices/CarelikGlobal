@@ -170,9 +170,12 @@ export interface MonthlyServiceSummaryRow {
   workedMinutes: number;
   verifiedMinutes: number;
   billableMinutes: number;
+  // Authorized - billable - scheduled (reserved by assigned Care Requests), as the assignment cap counts it (0016).
   remainingMinutes: number;
   reviewMinutes: number;
   visitCount: number;
+  // Time held by assigned Care Request shifts not yet signed (0016).
+  reservedMinutes?: number;
 }
 
 export interface CorrectionHistoryReportRow {
