@@ -6,7 +6,10 @@
 #
 #   APPLY  (one approval, all reversible, $0 or near-$0):
 #     R1  subscribe your inbox to the alarm topic (G1); you confirm the email
-#     R8  account-wide S3 public access block (D2); refused if any bucket is public
+#     R8  account-wide S3 public access block (D2). Pre-checks every bucket's
+#         policy status and ACL in its own region; any public or unreadable
+#         result blocks R8. Saves the current account setting first and writes
+#         an exact rollback script; rolls back by itself if verification fails.
 #     R9  GuardDuty in us-west-2 (G3); 30-day free trial, then usage-based
 #   DRILL  (separate approval: it creates, then deletes, a temporary database):
 #     R7  restore ogevia-prod-postgres to a NEW instance ogevia-restore-drill-<time>,
@@ -78,20 +81,65 @@ TOPIC=$(aws cloudformation describe-stack-resources --stack-name "$OBS_STACK" \
   --query "StackResources[?ResourceType=='AWS::SNS::Topic'].PhysicalResourceId | [0]" --output text) || stop "cannot read the alarm topic"
 [[ "$TOPIC" == arn:aws:sns:* ]] || stop "alarm topic not found in $OBS_STACK"
 echo "Alarm topic: $TOPIC"
-PUBLIC_BUCKETS=""
-for b in $(aws s3api list-buckets --query 'Buckets[].Name' --output text); do
-  pub=$(aws s3api get-bucket-policy-status --bucket "$b" --query PolicyStatus.IsPublic --output text 2>/dev/null || echo False)
-  [[ "$pub" == True ]] && PUBLIC_BUCKETS+="$b "
+# R8 pre-check (read-only). Every bucket's policy status and ACL are read in
+# the bucket's own region. A public result skips R8; an unreadable result also
+# skips R8 (never treated as "not public"). The current account-level setting
+# is saved first, with a rollback script that restores it exactly.
+R8_STATE=ready; R8_PUBLIC=""; R8_UNREADABLE=""; R8_OBJACL=""
+s3err() { grep -oE '\([A-Za-z]+\)' <<<"$1" | head -1 | tr -d '()'; }
+if ! BUCKETS=$(aws s3api list-buckets --query 'Buckets[].Name' --output text 2>&1); then
+  R8_UNREADABLE="list-buckets($(s3err "$BUCKETS")) "; BUCKETS=""
+fi
+for b in $BUCKETS; do
+  if ! loc=$(aws s3api get-bucket-location --bucket "$b" --query LocationConstraint --output text 2>&1); then
+    R8_UNREADABLE+="$b(location:$(s3err "$loc")) "; continue
+  fi
+  case "$loc" in None|null|"") br=us-east-1 ;; EU) br=eu-west-1 ;; *) br=$loc ;; esac
+  if ! ps=$(aws s3api get-bucket-policy-status --bucket "$b" --region "$br" --query PolicyStatus.IsPublic --output text 2>&1); then
+    if [[ "$(s3err "$ps")" == NoSuchBucketPolicy ]]; then ps=False; else R8_UNREADABLE+="$b(policy:$(s3err "$ps")) "; continue; fi
+  fi
+  if ! acl=$(aws s3api get-bucket-acl --bucket "$b" --region "$br" --query 'Grants[].Grantee.URI' --output text 2>&1); then
+    R8_UNREADABLE+="$b(acl:$(s3err "$acl")) "; continue
+  fi
+  own=$(aws s3api get-bucket-ownership-controls --bucket "$b" --region "$br" --query 'OwnershipControls.Rules[0].ObjectOwnership' --output text 2>/dev/null) || own=none
+  why=""
+  [[ "$ps" == True ]] && why+="policy,"
+  grep -qE 'global/(AllUsers|AuthenticatedUsers)' <<<"$acl" && why+="acl,"
+  [[ -n "$why" ]] && R8_PUBLIC+="$b(${why%,}) "
+  [[ "$own" != BucketOwnerEnforced ]] && R8_OBJACL+="$b "
 done
-echo "Buckets with a public policy: ${PUBLIC_BUCKETS:-none}"
+PAB_FILE="$OUT/account-public-access-block-before-$STAMP.json"
+PAB_ROLLBACK="$OUT/account-public-access-block-rollback-$STAMP.sh"
+if pab=$(aws s3control get-public-access-block --account-id "$ACCOUNT" --output json 2>&1); then
+  if jq -ce .PublicAccessBlockConfiguration <<<"$pab" > "$PAB_FILE"; then
+    printf '#!/bin/bash\n# Restores the account public access block exactly as saved at %s\naws s3control put-public-access-block --region us-west-2 --account-id %s --public-access-block-configuration %q\n' \
+      "$STAMP" "$ACCOUNT" "$(cat "$PAB_FILE")" > "$PAB_ROLLBACK"
+  else
+    R8_UNREADABLE+="account-setting(unparseable) "
+  fi
+elif [[ "$(s3err "$pab")" == NoSuchPublicAccessBlockConfiguration ]]; then
+  echo none > "$PAB_FILE"
+  printf '#!/bin/bash\n# At %s the account had NO public access block; this removes it again\naws s3control delete-public-access-block --region us-west-2 --account-id %s\n' \
+    "$STAMP" "$ACCOUNT" > "$PAB_ROLLBACK"
+else
+  R8_UNREADABLE+="account-setting($(s3err "$pab")) "
+fi
+if [[ -n "$R8_UNREADABLE" ]]; then R8_STATE=unreadable; elif [[ -n "$R8_PUBLIC" ]]; then R8_STATE=public; fi
+echo "R8 pre-check: $R8_STATE | public: ${R8_PUBLIC:-none} | unreadable: ${R8_UNREADABLE:-none}"
+echo "  Object ACLs still enabled (individual objects not scanned): ${R8_OBJACL:-none}"
+echo "  Account setting before: $(cat "$PAB_FILE" 2>/dev/null || echo unread) | rollback script: $( [[ -f "$PAB_ROLLBACK" ]] && echo "$PAB_ROLLBACK" || echo none)"
 GD=$(aws guardduty list-detectors --query 'DetectorIds[0]' --output text 2>/dev/null)
 echo "GuardDuty detector: ${GD:-none}"
 WEB=$(aws cloudformation describe-stacks --stack-name "$WEB_STACK" --query "Stacks[0].Outputs[?OutputKey=='WebOrigin'].OutputValue" --output text)
 WEB_BEFORE=$(curl -s -o /dev/null -w '%{http_code}' "$WEB/" || echo 000)
 echo "Web origin $WEB answers HTTP $WEB_BEFORE (re-checked after R8)"
 
-read -r -p "Email address for alarm notifications (R1; kept in this shell only): " ALERT_EMAIL
+EMAIL_FILE="$OUT/alert-email"
+SAVED_EMAIL=$(cat "$EMAIL_FILE" 2>/dev/null || true)
+read -r -p "Email address for alarm notifications (R1)${SAVED_EMAIL:+ [Enter = $SAVED_EMAIL]}: " ALERT_EMAIL
+ALERT_EMAIL=${ALERT_EMAIL:-$SAVED_EMAIL}
 [[ "$ALERT_EMAIL" =~ ^[^@[:space:]]+@[^@[:space:]]+\.[^@[:space:]]+$ ]] || stop "not an email address"
+( umask 077; printf '%s\n' "$ALERT_EMAIL" > "$EMAIL_FILE" )
 
 cat <<EOF
 
@@ -99,9 +147,13 @@ APPLY makes exactly these changes (all reversible):
   R1  SNS: subscribe <your email> to $TOPIC (protocol email). AWS emails a
       confirmation link; alarms reach you only after you click it.
   R8  S3: account-wide public access block (all four settings) on $ACCOUNT.
-      $( [[ -n "$PUBLIC_BUCKETS" ]] && echo "SKIPPED: these buckets are public: $PUBLIC_BUCKETS" || echo "No bucket is public today; the site is served through CloudFront." )
+      $(case "$R8_STATE" in
+          ready) echo "Pre-check passed: no public bucket policy or ACL. Saved: $PAB_FILE" ;;
+          public) echo "WILL BE SKIPPED: public access found: $R8_PUBLIC" ;;
+          *) echo "WILL BE SKIPPED: could not read: $R8_UNREADABLE" ;;
+        esac)
   R9  GuardDuty: $( [[ -n "$GD" && "$GD" != None ]] && echo "already enabled; no change" || echo "create a detector in us-west-2 (30-day free trial, then usage-based)" )
-Undo: R1 unsubscribe in SNS; R8 s3control delete-public-access-block; R9 GuardDuty > Settings > Suspend/Disable.
+Undo: R1 unsubscribe in SNS; R8 bash $PAB_ROLLBACK (restores the saved setting exactly); R9 GuardDuty > Settings > Suspend/Disable.
 EOF
 read -r -p "Type APPLY to make these changes (anything else skips them): " ans
 if [[ "$ans" == APPLY ]]; then
@@ -116,19 +168,25 @@ if [[ "$ans" == APPLY ]]; then
   fi
 
   step "3 R8 account S3 public access block"
-  if [[ -n "$PUBLIC_BUCKETS" ]]; then
-    result "R8 SKIPPED: public buckets exist ($PUBLIC_BUCKETS); send this to Claude"
+  if [[ "$R8_STATE" == public ]]; then
+    result "R8 SKIPPED: public access found ($R8_PUBLIC); nothing changed; send this to Claude"
+  elif [[ "$R8_STATE" != ready ]]; then
+    result "R8 SKIPPED: could not read ${R8_UNREADABLE}; nothing changed; send this to Claude"
   elif aws s3control put-public-access-block --account-id "$ACCOUNT" \
       --public-access-block-configuration BlockPublicAcls=true,IgnorePublicAcls=true,BlockPublicPolicy=true,RestrictPublicBuckets=true; then
     sleep 5
+    ALLON=$(aws s3control get-public-access-block --account-id "$ACCOUNT" --output json 2>/dev/null \
+      | jq -r '[.PublicAccessBlockConfiguration[]] | (length == 4 and all)' 2>/dev/null)
     WEB_AFTER=$(curl -s -o /dev/null -w '%{http_code}' "$WEB/" || echo 000)
-    if [[ "$WEB_AFTER" == "$WEB_BEFORE" ]]; then
-      result "R8 applied; web origin still HTTP $WEB_AFTER"
+    if [[ "$ALLON" == true && "$WEB_AFTER" == "$WEB_BEFORE" ]]; then
+      result "R8 applied and read back (all four on); web origin still HTTP $WEB_AFTER; rollback: bash $PAB_ROLLBACK"
+    elif bash "$PAB_ROLLBACK"; then
+      result "R8 ROLLED BACK automatically (read-back all-on: ${ALLON:-unread}; web HTTP $WEB_BEFORE -> $WEB_AFTER); saved setting restored; send this to Claude"
     else
-      result "R8 applied BUT the web origin changed HTTP $WEB_BEFORE -> $WEB_AFTER. Undo: aws s3control delete-public-access-block --account-id $ACCOUNT"
+      result "R8 verification failed AND automatic rollback FAILED: run bash $PAB_ROLLBACK, then send this to Claude"
     fi
   else
-    result "R8 FAILED (see the error above)"
+    result "R8 FAILED (see the error above); nothing changed"
   fi
 
   step "4 R9 GuardDuty"
