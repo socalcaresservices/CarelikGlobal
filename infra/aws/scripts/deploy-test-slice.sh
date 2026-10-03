@@ -16,6 +16,13 @@
 #   users       create 2 synthetic test sign-ins in Cognito          [mutates]
 #   seed        synthetic org/clients/assignments for those users    [mutates]
 #   web         build the AWS frontend, upload, invalidate           [mutates]
+#   pilot-users create the 3 individual SCS pilot sign-ins in Cognito [mutates]
+#   pilot-seed  SCS pilot org (synthetic clients) for those users    [mutates]
+#               (db/deploy/04_seed_scs_pilot_synthetic.sql; needs 0001-0016)
+#
+# Pilot steps also need: OGEVIA_PILOT_MANAGER_EMAIL, OGEVIA_PILOT_CAREGIVER_A_EMAIL,
+# OGEVIA_PILOT_CAREGIVER_B_EMAIL (each person's own inbox), and the display
+# names OGEVIA_PILOT_MANAGER_NAME, OGEVIA_PILOT_CAREGIVER_{A,B}_{FIRST,LAST}.
 #   smoke       read-only checks of the deployed slice
 #
 # Never: production users, real clients/PHI, Netlify/Supabase/DNS changes,
@@ -142,6 +149,35 @@ case "${1:-}" in
     unset PGPASSWORD
     ;;
 
+  pilot-users)
+    guard
+    : "${OGEVIA_PILOT_MANAGER_EMAIL:?}" "${OGEVIA_PILOT_CAREGIVER_A_EMAIL:?}" "${OGEVIA_PILOT_CAREGIVER_B_EMAIL:?}"
+    for EMAIL in "$OGEVIA_PILOT_MANAGER_EMAIL" "$OGEVIA_PILOT_CAREGIVER_A_EMAIL" "$OGEVIA_PILOT_CAREGIVER_B_EMAIL"; do
+      # One individual sign-in per person. Invitation email with a temporary
+      # password; password change + TOTP at first sign-in (pool MFA is ON).
+      aws cognito-idp admin-create-user --user-pool-id "$POOL" --username "$EMAIL" \
+        --user-attributes Name=email,Value="$EMAIL" Name=email_verified,Value=true \
+        --desired-delivery-mediums EMAIL --query 'User.Username' --output text || true
+    done
+    ;;
+
+  pilot-seed)
+    guard
+    : "${OGEVIA_PILOT_MANAGER_NAME:?}" "${OGEVIA_PILOT_CAREGIVER_A_FIRST:?}" "${OGEVIA_PILOT_CAREGIVER_A_LAST:?}"
+    : "${OGEVIA_PILOT_CAREGIVER_B_FIRST:?}" "${OGEVIA_PILOT_CAREGIVER_B_LAST:?}"
+    sub_of() { aws cognito-idp admin-get-user --user-pool-id "$POOL" --username "$1" --query 'UserAttributes[?Name==`sub`].Value' --output text; }
+    MG=$(sub_of "$OGEVIA_PILOT_MANAGER_EMAIL"); CA=$(sub_of "$OGEVIA_PILOT_CAREGIVER_A_EMAIL"); CB=$(sub_of "$OGEVIA_PILOT_CAREGIVER_B_EMAIL")
+    for s in "$MG" "$CA" "$CB"; do [[ "$s" =~ ^[0-9a-f-]{36}$ ]] || die "Run 'pilot-users' first (subs not found)."; done
+    tunnel_as_master
+    psql -X -v ON_ERROR_STOP=1 -d "$DB_NAME" -v manager_sub="$MG" -v manager_name="$OGEVIA_PILOT_MANAGER_NAME" \
+      -v caregiver_a_sub="$CA" -v caregiver_a_code=SCS-CG-A \
+      -v caregiver_a_first="$OGEVIA_PILOT_CAREGIVER_A_FIRST" -v caregiver_a_last="$OGEVIA_PILOT_CAREGIVER_A_LAST" \
+      -v caregiver_b_sub="$CB" -v caregiver_b_code=SCS-CG-B \
+      -v caregiver_b_first="$OGEVIA_PILOT_CAREGIVER_B_FIRST" -v caregiver_b_last="$OGEVIA_PILOT_CAREGIVER_B_LAST" \
+      -f "$HERE/db/deploy/04_seed_scs_pilot_synthetic.sql"
+    unset PGPASSWORD
+    ;;
+
   web)
     guard
     WEB=$(out Ogevia-prod-WebHosting WebOrigin); CLIENT=$(out Ogevia-prod-WebHosting TestAppClientId)
@@ -168,5 +204,5 @@ case "${1:-}" in
     echo "Smoke OK: API rejects anonymous calls; web origin serves the app with security headers."
     ;;
 
-  *) sed -n '2,30p' "$0"; exit 2 ;;
+  *) sed -n '2,37p' "$0"; exit 2 ;;
 esac

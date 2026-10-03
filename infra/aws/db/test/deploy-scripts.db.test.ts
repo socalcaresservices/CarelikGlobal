@@ -15,6 +15,9 @@ const APP_USER = `ogevia_app_login_${randomUUID().slice(0, 8)}`;
 const APP_PASSWORD = randomUUID(); // synthetic, local only
 const CAREGIVER_SUB = randomUUID();
 const MANAGER_SUB = randomUUID();
+const PILOT = { manager: randomUUID(), caregiverA: randomUUID(), caregiverB: randomUUID() };
+const PILOT_ORG = "5c500000-0000-4000-8000-000000000001";
+const TEST_ORG = "7e570000-0000-4000-8000-000000000001";
 
 const url = (database: string) => {
   const u = new URL(ADMIN_URL);
@@ -141,5 +144,62 @@ describe("test-slice deployment SQL (runbook order)", () => {
     await root.end();
     expect(rows[0].n).toBe(7);
     expect(rec.rows[0]).toEqual({ linked_user_id: null, status: "active" });
+  });
+
+  it("04 seeds the SCS pilot organization idempotently: individual accounts, own clients only, isolated from the test slice", async () => {
+    const vars = {
+      manager_sub: PILOT.manager,
+      manager_name: "Pilot Manager",
+      caregiver_a_sub: PILOT.caregiverA,
+      caregiver_a_code: "SCS-CG-A",
+      caregiver_a_first: "Pilot",
+      caregiver_a_last: "Caregiver A",
+      caregiver_b_sub: PILOT.caregiverB,
+      caregiver_b_code: "SCS-CG-B",
+      caregiver_b_first: "Pilot",
+      caregiver_b_last: "Caregiver B",
+    };
+    const out = psql(DB, "04_seed_scs_pilot_synthetic.sql", vars);
+    psql(DB, "04_seed_scs_pilot_synthetic.sql", vars);
+    // memberships | caregiver_records | assignments | authorizations
+    expect(out).toMatch(/3 \|\s+2 \|\s+3 \|\s+3/);
+
+    const appUrl = new URL(url(DB));
+    appUrl.username = APP_USER;
+    appUrl.password = APP_PASSWORD;
+    const asApp = new pg.Client({ connectionString: appUrl.toString() });
+    await asApp.connect();
+    const as = async <T>(sub: string, fn: () => Promise<T>) => {
+      await asApp.query("begin");
+      try {
+        await asApp.query("set local role ogevia_app");
+        await asApp.query("select ogevia_api.begin_request($1, $2)", [sub, randomUUID()]);
+        return await fn();
+      } finally {
+        await asApp.query("rollback");
+      }
+    };
+    const codes = (sub: string, org: string) =>
+      as(sub, async () =>
+        (await asApp.query("select client_code from ogevia_api.list_assigned_visit_clients($1)", [org])).rows
+          .map((r) => r.client_code)
+          .sort(),
+      );
+    try {
+      for (const [sub, role] of [[PILOT.manager, "manager"], [PILOT.caregiverA, "caregiver"], [PILOT.caregiverB, "caregiver"]] as const) {
+        const ctx = await as(sub, async () => (await asApp.query("select * from ogevia_api.get_my_context()")).rows);
+        expect(ctx.map((r) => [r.organization_id, r.role])).toEqual([[PILOT_ORG, role]]);
+      }
+      expect(await codes(PILOT.caregiverA, PILOT_ORG)).toEqual(["P-AAXRX", "P-QAUF7"]);
+      expect(await codes(PILOT.caregiverB, PILOT_ORG)).toEqual(["P-AHXN7"]);
+      expect(await codes(PILOT.manager, PILOT_ORG)).toEqual(["P-AAXRX", "P-AHXN7", "P-QAUF7"]);
+      // Neither tenant's accounts see the other's clients.
+      expect(await codes(PILOT.manager, TEST_ORG)).toEqual([]);
+      expect(await codes(PILOT.caregiverA, TEST_ORG)).toEqual([]);
+      expect(await codes(CAREGIVER_SUB, PILOT_ORG)).toEqual([]);
+      expect(await codes(MANAGER_SUB, PILOT_ORG)).toEqual([]);
+    } finally {
+      await asApp.end();
+    }
   });
 });
