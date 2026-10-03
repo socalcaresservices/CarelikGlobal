@@ -6,10 +6,14 @@
 #      with the source key) and that it is not the production instance;
 #   2. reads the restore point and timings from RDS events;
 #   3. through the admin host (app security group attached only for the check,
-#      always restored), compares the restored database with the source:
-#      identical migration ledger, and identical row counts for rows created
-#      at or before the restore point (organizations, clients, visits,
-#      corrections, audit events). Read-only queries only;
+#      always restored), compares the restored database with the source.
+#      The BASELINE is the source's own migration ledger (never a hardcoded
+#      version): versions must be contiguous from 0001 and known to the pilot
+#      build, and version+checksum must be identical on both sides; row counts
+#      for rows created at or before the restore point must match. Read-only.
+#      Also records read-only diagnostics about which pilot migrations the
+#      source is missing and why (databases, ledgers, objects, Lambda target,
+#      pilot logs). It never applies a migration;
 #   4. STOPS if any check fails: the drill instance is then kept for diagnosis
 #      (about 2 cents an hour) and the exact delete command is printed;
 #   5. otherwise deletes ONLY the drill instance (no final snapshot, no retained
@@ -88,18 +92,24 @@ echo "$DRILL_ID: available, tag restore-drill, encrypted with the source key, no
 step "2 Restore point and timings (RDS events)"
 EV=$(aws rds describe-events --source-type db-instance --source-identifier "$DRILL_ID" --duration 1440 \
   --query 'Events[].[Date,Message]' --output json) || stop "cannot read RDS events for $DRILL_ID"
-FIRST=$(jq -r '.[0][0] // empty' <<<"$EV")
 RESTORED_EV=$(jq -r '[.[] | select(.[1] | test("Restored from"))][0] // empty | @tsv' <<<"$EV")
 # The restore point is read from the event MESSAGE only, never from the event date.
 RESTORE_POINT=$(cut -f2- <<<"$RESTORED_EV" | grep -oE '[0-9]{4}-[0-9]{2}-[0-9]{2}[ T][0-9]{2}:[0-9]{2}:[0-9]{2}' | tail -1)
 DONE_AT=$(cut -f1 <<<"$RESTORED_EV")
-echo "First event: ${FIRST:-unknown} | restore finished: ${DONE_AT:-unknown} | restore point: ${RESTORE_POINT:-unknown}"
+echo "Restore point (from the event message): ${RESTORE_POINT:-unknown}"
 [[ -n "$RESTORE_POINT" ]] || stop "the restore point could not be read from the RDS events; send this to Claude"
+# Start = the drill instance's creation time (the restore request); end = the
+# "Restored from" event. The first EVENT is often that same event, so it can
+# not be the start (that produced a false 0 s). If the two do not bracket a
+# positive interval, the duration is reported as unknown, never as 0.
+CREATED=$(jq -r '.InstanceCreateTime // empty' <<<"$D")
 DUR="unknown"
-if [[ -n "$FIRST" && -n "$DONE_AT" ]]; then
-  s=$(( $(date -d "$DONE_AT" +%s) - $(date -d "$FIRST" +%s) )); DUR="$((s / 60)) min $((s % 60)) s"
+if [[ -n "$CREATED" && -n "$DONE_AT" ]]; then
+  s=$(( $(date -d "$DONE_AT" +%s) - $(date -d "$CREATED" +%s) ))
+  if (( s > 0 )); then DUR="$((s / 60)) min $((s % 60)) s"; else DUR="unknown (creation $CREATED is not before restore event $DONE_AT)"; fi
 fi
-echo "Time from restore request to restored: $DUR"
+echo "Instance created (restore requested): ${CREATED:-unknown} | restore completed event: ${DONE_AT:-unknown}"
+echo "Time to restore: $DUR"
 
 step "3 Tools and the admin host"
 for t in jq psql session-manager-plugin; do
@@ -147,7 +157,7 @@ export PGPASSWORD; PGPASSWORD=$(jq -r .password <<<"$SEC")
 unset SEC
 TP="${RESTORE_POINT/ /T}+00"
 QUERY="set default_transaction_read_only = on;
-select 'ledger=' || (select string_agg(version, ',' order by version) from ogevia_meta.schema_migrations)
+select 'ledger=' || (select string_agg(version || ':' || left(checksum, 12), ',' order by version) from ogevia_meta.schema_migrations)
  || ' organizations=' || (select count(*) from ogevia.organizations where created_at <= '$TP')
  || ' clients=' || (select count(*) from ogevia.clients where created_at <= '$TP')
  || ' visits=' || (select count(*) from ogevia.service_visits where created_at <= '$TP')
@@ -158,13 +168,54 @@ R_SRC=$(PGPORT=$P_SRC psql -X -At -v ON_ERROR_STOP=1 -c "$QUERY" 2>&1 | tail -1)
 unset PGPASSWORD
 echo "restored: $R_DRILL"
 echo "source:   $R_SRC"
-EXPECTED_LEDGER=$(seq -f '%04g' 1 18 | paste -sd,)
 [[ "$R_DRILL" == ledger=* ]] || stop "the restored copy could not be queried: $R_DRILL"
 [[ "$R_SRC" == ledger=* ]] || stop "the source could not be queried: $R_SRC"
-[[ "$R_DRILL" == "ledger=$EXPECTED_LEDGER "* ]] || stop "restored migration ledger is not 0001-0018"
-[[ "$R_DRILL" == "$R_SRC" ]] || stop "restored data differs from the source for rows up to the restore point"
-CHECK="PASS: ledger 0001-0018 identical; row counts up to $RESTORE_POINT UTC identical (${R_DRILL#ledger=$EXPECTED_LEDGER })"
+SRC_LEDGER=$(sed -E 's/^ledger=([^ ]*).*/\1/' <<<"$R_SRC")
+VERSIONS=$(tr ',' '\n' <<<"$SRC_LEDGER" | cut -d: -f1 | paste -sd,)
+N=$(tr ',' '\n' <<<"$VERSIONS" | grep -c .)
+BASELINE=$(tr ',' '\n' <<<"$VERSIONS" | tail -1)
+[[ "$VERSIONS" == "$(seq -f '%04g' 1 "$N" | paste -sd,)" ]] || stop "source ledger is not contiguous from 0001: $VERSIONS"
+(( N >= 1 && N <= 18 )) || stop "source ledger has $N migrations; the pilot build knows 0001-0018"
+[[ "$R_DRILL" == "$R_SRC" ]] || stop "restored copy differs from the source (ledger with checksums, or row counts up to the restore point)"
+COUNTS=${R_DRILL#ledger=$SRC_LEDGER }
+CHECK="PASS: migration ledger 0001-$BASELINE (versions and checksums) identical to the source; row counts up to $RESTORE_POINT UTC identical ($COUNTS)"
 echo "$CHECK"
+
+step "4b Read-only diagnostics: pilot migrations on the source"
+DIAG="$OUT/migration-diagnostics-$STAMP.txt"
+export PGPASSWORD; PGPASSWORD=$(aws secretsmanager get-secret-value --secret-id "$SECRET_ARN" --query SecretString --output text | jq -r .password)
+{
+  echo "Source $SRC_ID, read $(date -u +%FT%TZ). Pilot build 87a9be2 contains migrations 0001-0018."
+  echo "Missing from ogevia_sv_test (pilot build minus source ledger): $(comm -23 <(seq -f '%04g' 1 18) <(tr ',' '\n' <<<"$VERSIONS") | paste -sd, -)"
+  echo "-- ledgers of every database on the instance:"
+  if ! DBLIST=$(PGPORT=$P_SRC PGDATABASE=postgres psql -X -At -c "select datname from pg_database where not datistemplate order by 1" 2>&1); then
+    echo "   could not list databases: $(tail -1 <<<"$DBLIST")"; DBLIST=""
+  fi
+  for db in $DBLIST; do
+    L=$(PGPORT=$P_SRC PGDATABASE="$db" psql -X -At -c "select case when to_regclass('ogevia_meta.schema_migrations') is null then 'no ledger' else (select 'count ' || count(*) || ', latest ' || max(version) || ', last applied ' || to_char(max(applied_at), 'YYYY-MM-DD HH24:MI:SS') || ' UTC by ' || string_agg(distinct applied_by, '/') from ogevia_meta.schema_migrations) end" 2>&1 | tail -1)
+    echo "   $db: $L"
+  done
+  echo "-- ogevia_sv_test ledger with apply times:"
+  PGPORT=$P_SRC psql -X -At -F ' | ' -c "select version, name, to_char(applied_at, 'YYYY-MM-DD HH24:MI:SS'), applied_by from ogevia_meta.schema_migrations where version >= '0010' order by version" 2>&1 | sed 's/^/   /'
+  echo "-- objects that 0013/0014/0015 create (present = applied outside the ledger):"
+  PGPORT=$P_SRC psql -X -At -c "select '   0013 ogevia.match_scheduled_shift_for_visit: ' || (to_regproc('ogevia.match_scheduled_shift_for_visit') is not null)
+    union all select '   0014 ogevia.caregiver_has_current_shift: ' || exists(select 1 from pg_proc p join pg_namespace n on n.oid = p.pronamespace where n.nspname = 'ogevia' and p.proname = 'caregiver_has_current_shift')
+    union all select '   0015 ogevia_api.close_missed_service_visit: ' || exists(select 1 from pg_proc p join pg_namespace n on n.oid = p.pronamespace where n.nspname = 'ogevia_api' and p.proname = 'close_missed_service_visit')
+    union all select '   0015 column service_visits.time_out_entered_by: ' || exists(select 1 from information_schema.columns where table_schema = 'ogevia' and table_name = 'service_visits' and column_name = 'time_out_entered_by')" 2>&1
+  FN=$(aws cloudformation describe-stack-resources --stack-name Ogevia-prod-ServiceVerificationApi --query "StackResources[?ResourceType=='AWS::Lambda::Function'].PhysicalResourceId | [0]" --output text 2>&1)
+  FENV=$(aws lambda get-function-configuration --function-name "$FN" --query 'Environment.Variables' --output json 2>&1)
+  echo "-- API Lambda target: DB_NAME=$(jq -r .DB_NAME <<<"$FENV" 2>/dev/null), DB_HOST=$(jq -r .DB_HOST <<<"$FENV" 2>/dev/null | cut -d. -f1)"
+  APPSEC=$(jq -r .DB_SECRET_ARN <<<"$FENV" 2>/dev/null)
+  echo "   app secret dbname key (password not read out): $(aws secretsmanager get-secret-value --secret-id "$APPSEC" --query SecretString --output text 2>/dev/null | jq -r '.dbname // "not set"' 2>/dev/null)"
+  echo "-- pilot run (~/ogevia-pilot-run): state markers: $(ls "$HOME/ogevia-pilot-run/state" 2>/dev/null | tr '\n' ' ')"
+  for f in "$HOME"/ogevia-pilot-run/deploy-*.log; do
+    [[ -e "$f" ]] || continue
+    hits=$(sed -E 's/\x1b\[[0-9;]*m//g' "$f" | grep -E '^=== 1[0-2]/12|Migration ledger before|^applying 00|^applied [0-9]+, already|01_schema_version|STOPPED|Existing visit timestamps unchanged|Pilot seed' | head -n 14)
+    [[ -n "$hits" ]] && { echo "   $(basename "$f"):"; sed 's/^/      /' <<<"$hits"; }
+  done
+} > "$DIAG" 2>&1
+unset PGPASSWORD
+sed -E 's/[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/<email>/g' "$DIAG"
 close_tunnels; restore_sgs; BASE_SGS_DONE=$BASE_SGS
 
 step "5 Delete ONLY $DRILL_ID"
@@ -192,10 +243,11 @@ LEFT=$(aws rds describe-db-instances --query "DBInstances[?starts_with(DBInstanc
 {
   echo "Ogevia restore drill, finished $STAMP"
   echo "drill instance: $DRILL_ID (restored from $SRC_ID; deleted after the check)"
-  echo "restore point: $RESTORE_POINT UTC; first event $FIRST; restored $DONE_AT; duration $DUR"
+  echo "restore point: $RESTORE_POINT UTC; restore requested (instance created) ${CREATED:-unknown}; restore completed event $DONE_AT; time to restore $DUR"
   echo "encrypted with the source KMS key: $ENC; publicly accessible: $PUB"
   echo "data check: $CHECK"
   echo "cleanup: $([[ $OK == 1 ]] && echo PASS || echo 'INCOMPLETE (see log)')"
+  echo "baseline: the source database is at migration $BASELINE; diagnostics: $DIAG"
 } > "$REPORT"
 DONE=1
 echo

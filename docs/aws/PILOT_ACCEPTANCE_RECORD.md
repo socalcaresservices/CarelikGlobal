@@ -1,6 +1,14 @@
 # SCS pilot: AWS TEST deployment and real-phone acceptance record
 
-**Result:** The pilot build is **ACCEPTED on AWS TEST** (synthetic data only). Every row of [PILOT_PHONE_ACCEPTANCE.md](PILOT_PHONE_ACCEPTANCE.md) passed.
+**Result: CONFLICTING EVIDENCE (2026-10-03, after the restore drill). Do not rely on this acceptance yet.**
+
+**Conflict found:** the owner read the migration ledger of `ogevia_sv_test` during the Phase 7 restore drill. Both the live database and the restored copy show migrations **0001–0012** only. The pilot build (87a9be2) contains 0001–0018, and its deployment step cannot complete without its verification check `latest_migration_is_0018` passing. So at least one of these statements is wrong:
+1. "phase 10 applied 0013–0018 and verified 0018";
+2. "the phone tests ran against a database that had 0013–0018".
+
+Rows C, D, E and F depend on functions from 0013–0018 (`close_missed_service_visit`, scheduled-service preselection, unchanged-time corrections). `infra/aws/slice/phase7-drill-finish.sh` collects read-only diagnostics: every database's ledger with apply times, whether 0013–0015 objects exist, the Lambda's target database, and the pilot run's DB-phase log lines. Until those diagnostics reconcile the conflict, this record is **NOT VERIFIED**.
+
+Previously recorded (owner-reported): every row of [PILOT_PHONE_ACCEPTANCE.md](PILOT_PHONE_ACCEPTANCE.md) passed.
 **Date:** 2026-10-03
 **Environment:** account `300094796789`, `us-west-2`, database `ogevia_sv_test`, Cognito pool `us-west-2_849AYz5J7`, synthetic org `scs-pilot-synthetic`.
 **Not changed:** production, `main`, Netlify and Supabase. Nothing was merged.

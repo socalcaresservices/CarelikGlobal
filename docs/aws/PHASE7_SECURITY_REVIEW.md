@@ -31,6 +31,10 @@ The terminal ends with a short summary of under 10 lines: counts, then the IDs o
 
 Rehearsed against simulated AWS responses in a clean and a failing scenario, with no crashes, and with every unreadable item reported as ERROR.
 
+### 3.0 Restore drill and migration baseline (2026-10-03, owner-reported)
+
+The drill restored `ogevia-prod-postgres` to a new instance. The restored and live `ogevia_sv_test` both hold migrations **0001–0012**, with all compared row counts identical. The first drill-finish script wrongly required 0018 and stopped; it was corrected to use the **source's own ledger as the baseline** (versions plus checksums identical, contiguous from 0001). It also reported a false 0-second duration because it measured from the first RDS event, which was the completion event itself; it now measures from the instance creation time and reports "unknown" rather than 0. Missing pilot migrations: **0013–0018** (see PILOT_ACCEPTANCE_RECORD.md, conflict note). No migration is applied as part of Phase 7.
+
 ### 3.1 Live result, 2026-10-03 21:03 UTC (owner-reported summary)
 
 `SUMMARY PASS 36 GAP 5 MANUAL 1 ERROR 0 INFO 8`, saved in CloudShell as `~/ogevia-phase7/evidence-20261003T210313Z.txt`. Claude received the summary line; the per-check detail lines stay in that file.
