@@ -98,6 +98,9 @@ export interface VisitReportRow {
   month_to_date_before_minutes: number | null;
   month_to_date_after_minutes: number | null;
   remaining_minutes: number | null;
+  // The linked shift's window (0013); null when the visit has no scheduled shift.
+  scheduled_starts_at?: string | null;
+  scheduled_ends_at?: string | null;
 }
 
 export interface VisitCorrectionRow {

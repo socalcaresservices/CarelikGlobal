@@ -51,6 +51,7 @@ import {
   formatDateTime,
   formatDuration,
   formatNumericDate,
+  formatScheduledWindow,
   formatTimeRange,
   VISIT_STATUS_LABEL,
   type ServiceVisitStatus,
@@ -1999,6 +2000,10 @@ export function ServiceVerificationReportsPage() {
                             {visitColumns.has("time") ? (
                               <td className="py-2 pr-3 whitespace-nowrap font-mono text-xs text-slate-600">
                                 {formatTimeRange(row.time_in, row.time_out)}
+                                <p className="font-sans text-slate-400">
+                                  {row.scheduled_starts_at ? "Scheduled " : ""}
+                                  {formatScheduledWindow(row.scheduled_starts_at, row.scheduled_ends_at)}
+                                </p>
                               </td>
                             ) : null}
                             {visitColumns.has("worked") ? (

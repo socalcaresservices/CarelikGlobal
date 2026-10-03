@@ -120,6 +120,42 @@ describe("ServiceVerificationReportsPage", () => {
     expect(mockedRpc).not.toHaveBeenCalled();
   });
 
+  it("shows each visit's scheduled shift next to the actual times, or that it has none", async () => {
+    mockedUseOrganization.mockReturnValue({
+      activeOrganizationId: ORG_ID,
+      activeOrganization: { displayName: "Acme Care" },
+      hasPermission: vi.fn(() => true),
+    } as never);
+    mockOrgLetterhead();
+    mockedRpc.mockResolvedValue({
+      data: [
+        {
+          ...visitRow,
+          scheduled_starts_at: "2026-08-01T12:30:00.000Z",
+          scheduled_ends_at: "2026-08-01T14:30:00.000Z",
+        },
+        {
+          ...visitRow,
+          id: "unlinked-1",
+          visit_number: "SCS-V-20260801-9Z9Z",
+          scheduled_starts_at: null,
+          scheduled_ends_at: null,
+        },
+      ],
+      error: null,
+    } as never);
+
+    renderPage();
+    await openReport(/Visit details/);
+
+    const table = await screen.findByRole("table", { name: "Visit details" });
+    // 12:30Z-14:30Z is 5:30-7:30 AM Pacific (PDT).
+    const linkedRow = within(table).getByText("SCS-V-20260801-4F7K").closest("tr")!;
+    expect(linkedRow).toHaveTextContent(/Scheduled 5:30\sAM–7:30\sAM/);
+    const unlinkedRow = within(table).getByText("SCS-V-20260801-9Z9Z").closest("tr")!;
+    expect(unlinkedRow).toHaveTextContent("Not linked to a scheduled shift");
+  });
+
   it("lists visits and computes worked/billable subtotals, excluding corrected records", async () => {
     mockedUseOrganization.mockReturnValue({
       activeOrganizationId: ORG_ID,
