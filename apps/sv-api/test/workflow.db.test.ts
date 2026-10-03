@@ -181,6 +181,28 @@ describe("caregiver workflow: login → client → service → start → end →
     expect(sig.status).toBe(200);
   });
 
+  it("a manager closes a missed clock-out through the API; a caregiver cannot", async () => {
+    const own = await freshClient(db, w, w.caregiverA3, 600, w.orgA, { before: 40, after: 40 });
+    const start = await call("POST /v1/visits", w.caregiverA3, {
+      body: { organizationId: w.orgA, clientId: own.client, serviceId: own.service },
+    });
+    expect(start.status, JSON.stringify(start.body)).toBe(201);
+    const openId = start.body.visitId;
+    await ageVisit(db, openId, 120);
+    const timeOut = new Date(Date.now() - 30 * 60_000).toISOString();
+    const denied = await call("POST /v1/visits/{visitId}/close", w.caregiverA3, {
+      path: { visitId: openId }, body: { timeOut, reason: "Forgot to sign out (synthetic)" },
+    });
+    expect(denied.status).toBe(403);
+    const r = await call("POST /v1/visits/{visitId}/close", w.managerA, {
+      path: { visitId: openId }, body: { timeOut, reason: "Forgot to sign out (synthetic)" },
+    });
+    expect(r.status, JSON.stringify(r.body)).toBe(200);
+    expect(r.body.visit).toMatchObject({ visitId: openId, workedMinutes: 90 });
+    const active = await call("GET /v1/visits/active", w.caregiverA3, { query: { organizationId: w.orgA } });
+    expect(active.body.visit).toMatchObject({ visitId: openId, visitStatus: "awaiting_signature", timeOutEnteredByManager: true });
+  });
+
   it("a caregiver cannot correct a visit", async () => {
     const r = await call("POST /v1/visits/{visitId}/corrections", w.caregiverA1, {
       path: { visitId },

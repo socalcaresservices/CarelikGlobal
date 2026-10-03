@@ -45,6 +45,7 @@ interface EndedVisit {
   visitNumber: string | null;
   scheduledStartsAt: string | null;
   scheduledEndsAt: string | null;
+  timeOutEnteredByManager: boolean;
 }
 
 
@@ -400,6 +401,7 @@ export function ServiceVerificationPage() {
         visitNumber: visit.visit_number,
         scheduledStartsAt: visit.scheduled_starts_at,
         scheduledEndsAt: visit.scheduled_ends_at,
+        timeOutEnteredByManager: !!visit.time_out_entered_by_manager,
       });
       setPhase("confirm");
     } else if (phase === "loading" || phase === "select") {
@@ -487,6 +489,7 @@ export function ServiceVerificationPage() {
         visitNumber: active.visit_number,
         scheduledStartsAt: active.scheduled_starts_at,
         scheduledEndsAt: active.scheduled_ends_at,
+        timeOutEnteredByManager: false,
       });
       setConfirmationMode("signature");
       setSignatureKind("signature");
@@ -925,6 +928,16 @@ export function ServiceVerificationPage() {
                   Review the exact visit before signing.
                 </p>
               </div>
+
+              {endedVisit.timeOutEnteredByManager ? (
+                <div className="flex gap-3 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
+                  <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0" />
+                  <p>
+                    The Time Out below was entered by your agency because the visit
+                    was not signed out. Check it with the client before they confirm.
+                  </p>
+                </div>
+              ) : null}
 
               <dl className="divide-y divide-slate-100 rounded-2xl border border-slate-200 bg-white px-4">
                 {[

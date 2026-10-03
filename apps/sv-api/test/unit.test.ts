@@ -159,12 +159,13 @@ describe("handler boundary (no database reached)", () => {
     expect(toCamel({ visit_id: "x", month_to_date_minutes: 3 })).toEqual({ visitId: "x", monthToDateMinutes: 3 });
   });
 
-  it("keeps the three visit routes that consume idempotency keys marked mutating", () => {
+  it("keeps the visit routes that consume idempotency keys marked mutating", () => {
     const mutating = ROUTE_KEYS.filter((k) => ROUTES[k]!.mutating);
     expect(mutating).toEqual(expect.arrayContaining([
       "POST /v1/visits",
       "POST /v1/visits/{visitId}/confirm",
       "POST /v1/visits/{visitId}/corrections",
+      "POST /v1/visits/{visitId}/close",
     ]));
   });
 });

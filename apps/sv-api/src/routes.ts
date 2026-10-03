@@ -130,6 +130,23 @@ export const ROUTES: Record<string, Route> = {
     },
   },
 
+  // Manager close-out of a missed clock-out (0015): enters the actual Time
+  // Out; the visit goes back to the caregiver for client confirmation.
+  "POST /v1/visits/{visitId}/close": {
+    mutating: true,
+    handle: async ({ event, tx }) => {
+      const visit = uuid(p(event).visitId, "visitId");
+      const body = parseBody(event.body, event.isBase64Encoded);
+      const key = idempotencyKey(event.headers);
+      const timeOut = timestamp(body.timeOut, "timeOut");
+      const reason = text(body.reason, "reason", 1000, { required: true });
+      const [closed] = await tx((db) =>
+        rows(db, "select * from ogevia_api.close_missed_service_visit($1, $2, $3, $4)", [visit, timeOut, reason, key]),
+      );
+      return { visit: closed };
+    },
+  },
+
   "POST /v1/visits/{visitId}/confirm": {
     mutating: true,
     handle: async ({ event, tx, evidence }) => {
