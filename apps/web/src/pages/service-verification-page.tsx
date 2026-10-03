@@ -73,9 +73,85 @@ function normalizeError(cause: unknown, fallback: string) {
     .replace(/^RATE_LIMITED:\s*/i, "");
 }
 
-function clientOptionLabel(client: AssignedClient) {
-  const services = `${client.active_service_count} active service${client.active_service_count === 1 ? "" : "s"}`;
-  return `${client.client_code} · ${services}`;
+function serviceCountLabel(count: number) {
+  return `${count} active service${count === 1 ? "" : "s"}`;
+}
+
+// The caregiver's entry list. "Scheduled today" comes from the server: the
+// next_scheduled_* window is only set for the caller's own, not-called-out
+// shift on the organization's current local date (both backends).
+function ClientChoiceList({
+  heading,
+  emptyText,
+  clients,
+  selectedClientId,
+  onChoose,
+}: {
+  heading: string;
+  emptyText?: string;
+  clients: AssignedClient[];
+  selectedClientId: string;
+  onChoose: (clientId: string) => void;
+}) {
+  const headingId = `client-list-${heading.toLowerCase().replace(/\W+/g, "-")}`;
+  return (
+    <div>
+      <h2
+        id={headingId}
+        className="text-xs font-semibold uppercase tracking-wide text-slate-500"
+      >
+        {heading}
+      </h2>
+      {clients.length === 0 && emptyText ? (
+        <p className="mt-2 rounded-2xl bg-slate-50 p-3 text-sm text-slate-600">
+          {emptyText}
+        </p>
+      ) : (
+        <ul className="mt-2 space-y-2" aria-labelledby={headingId}>
+          {clients.map((client) => {
+            const selected = client.client_id === selectedClientId;
+            return (
+              <li key={client.client_id}>
+                <button
+                  type="button"
+                  aria-pressed={selected}
+                  onClick={() => onChoose(client.client_id)}
+                  className={cn(
+                    "flex min-h-14 w-full items-center justify-between gap-3 rounded-2xl border px-4 py-3 text-left",
+                    selected
+                      ? "border-indigo-600 bg-indigo-50 ring-2 ring-indigo-200"
+                      : "border-slate-200 bg-white hover:border-slate-300",
+                  )}
+                >
+                  <span className="min-w-0">
+                    <span className="block font-semibold text-slate-950">
+                      Client {client.client_code}
+                    </span>
+                    <span className="block text-sm text-slate-600">
+                      {client.next_scheduled_starts_at
+                        ? formatScheduledWindow(
+                            client.next_scheduled_starts_at,
+                            client.next_scheduled_ends_at,
+                          )
+                        : "Not scheduled today"}
+                      {" · "}
+                      {serviceCountLabel(client.active_service_count)}
+                    </span>
+                  </span>
+                  {selected ? (
+                    <Check
+                      className="h-5 w-5 shrink-0 text-indigo-600"
+                      aria-hidden="true"
+                    />
+                  ) : null}
+                </button>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+    </div>
+  );
 }
 
 function SignaturePad({
@@ -225,7 +301,7 @@ function Progress({ phase }: { phase: Phase }) {
       className="grid grid-cols-3 gap-2 border-b border-slate-200 pb-4"
       aria-label="Visit progress"
     >
-      {["Select", "Visit", "Confirm"].map((label, index) => {
+      {["Start", "Visit", "Confirm"].map((label, index) => {
         const done = complete || index < current;
         const selected = !complete && index === current;
         const selectedStyles = [
@@ -308,6 +384,21 @@ export function ServiceVerificationPage() {
       backend.listAssignedClients(activeOrganizationId!),
     enabled: !!user && !!activeOrganizationId && phase === "select",
   });
+
+  const scheduledToday = useMemo(
+    () =>
+      (clientsQuery.data ?? []).filter(
+        (client) => !!client.next_scheduled_starts_at,
+      ),
+    [clientsQuery.data],
+  );
+  const notScheduledToday = useMemo(
+    () =>
+      (clientsQuery.data ?? []).filter(
+        (client) => !client.next_scheduled_starts_at,
+      ),
+    [clientsQuery.data],
+  );
 
   const selectedClient = useMemo(
     () =>
@@ -637,39 +728,24 @@ export function ServiceVerificationPage() {
                   id="select-visit-heading"
                   className="text-xl font-semibold text-slate-950"
                 >
-                  Select this visit
+                  Today's visits
                 </h1>
                 <p className="mt-1 text-sm text-slate-500">
-                  Only clients assigned to you are shown.
+                  {formatVisitDate(new Date(nowTick).toISOString())} · Only
+                  clients assigned to you are shown.
                 </p>
               </div>
 
-              <label className="block text-sm font-semibold text-slate-700">
-                Assigned client
-                <select
-                  aria-label="Assigned client"
-                  value={selectedClientId}
-                  onChange={(event) => chooseClient(event.target.value)}
-                  className="mt-2 min-h-14 w-full rounded-xl border border-slate-300 bg-white px-3 text-base text-slate-950"
-                >
-                  <option value="">Choose a client</option>
-                  {(clientsQuery.data ?? []).map((client) => (
-                    <option key={client.client_id} value={client.client_id}>
-                      {clientOptionLabel(client)}
-                    </option>
-                  ))}
-                </select>
-              </label>
-
               {clientsQuery.isLoading ? (
-                <p className="text-sm text-slate-500">
-                  Loading assigned clients…
-                </p>
+                <p className="text-sm text-slate-500">Loading your visits…</p>
               ) : null}
               {clientsQuery.isError ? (
-                <p className="rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-800">
-                  Assigned clients could not be loaded. Contact your agency
-                  manager.
+                <p
+                  role="alert"
+                  className="rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-800"
+                >
+                  Your visits could not be loaded. Refresh the page or contact
+                  your agency manager.
                 </p>
               ) : null}
               {clientsQuery.isSuccess && clientsQuery.data.length === 0 ? (
@@ -684,46 +760,140 @@ export function ServiceVerificationPage() {
                 </div>
               ) : null}
 
-              {selectedClient ? (
-                <label className="block text-sm font-semibold text-slate-700">
-                  Service for this visit
-                  <span className="mt-1 block text-xs font-normal text-slate-500">
-                    {(servicesQuery.data?.length ?? 0) > 1
-                      ? `This client has ${servicesQuery.data!.length} active services. Choose the exact one.`
-                      : "The service must match the work being provided."}
-                  </span>
-                  <select
-                    aria-label="Service for this visit"
-                    value={selectedServiceId}
-                    onChange={(event) =>
-                      setSelectedServiceId(event.target.value)
-                    }
-                    disabled={
-                      servicesQuery.isLoading ||
-                      (servicesQuery.data?.length ?? 0) === 0
-                    }
-                    className="mt-2 min-h-14 w-full rounded-xl border border-slate-300 bg-white px-3 text-base text-slate-950 disabled:bg-slate-100"
-                  >
-                    <option value="">Choose a service</option>
-                    {(servicesQuery.data ?? []).map((service) => (
-                      <option
-                        key={service.service_id}
-                        value={service.service_id}
-                      >
-                        {service.service_code} · {service.service_name}
-                      </option>
-                    ))}
-                  </select>
-                </label>
+              {clientsQuery.isSuccess && clientsQuery.data.length > 0 ? (
+                <div className="space-y-4">
+                  <ClientChoiceList
+                    heading="Scheduled today"
+                    emptyText="You have no visits scheduled for today."
+                    clients={scheduledToday}
+                    selectedClientId={selectedClientId}
+                    onChoose={chooseClient}
+                  />
+                  {notScheduledToday.length > 0 ? (
+                    <ClientChoiceList
+                      heading="Other assigned clients"
+                      clients={notScheduledToday}
+                      selectedClientId={selectedClientId}
+                      onChoose={chooseClient}
+                    />
+                  ) : null}
+                </div>
               ) : null}
 
-              {servicesQuery.isLoading ? (
-                <p className="text-sm text-slate-500">
-                  Loading authorized services…
-                </p>
+              {selectedClient ? (
+                <div
+                  className="rounded-3xl border border-indigo-100 bg-gradient-to-br from-indigo-50 via-white to-sky-50 p-4 text-sm text-indigo-950 shadow-sm"
+                  aria-label="Visit details"
+                  role="group"
+                >
+                  <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-2">
+                    <dt className="text-slate-500">Client</dt>
+                    <dd className="font-semibold">
+                      Client {selectedClient.client_code}
+                    </dd>
+                    <dt className="text-slate-500">Service</dt>
+                    <dd className="min-w-0 break-words font-semibold">
+                      {servicesQuery.isLoading
+                        ? "Loading…"
+                        : selectedService
+                          ? `${selectedService.service_code} · ${selectedService.service_name}`
+                          : (servicesQuery.data?.length ?? 0) > 1
+                            ? "Choose below"
+                            : "—"}
+                    </dd>
+                    <dt className="text-slate-500">Date</dt>
+                    <dd className="font-semibold">
+                      {formatVisitDate(
+                        selectedClient.next_scheduled_starts_at ??
+                          new Date(nowTick).toISOString(),
+                      )}
+                    </dd>
+                    <dt className="text-slate-500">Scheduled</dt>
+                    <dd className="font-semibold">
+                      {formatScheduledWindow(
+                        selectedClient.next_scheduled_starts_at,
+                        selectedClient.next_scheduled_ends_at,
+                      )}
+                    </dd>
+                  </dl>
+                  {!selectedClient.next_scheduled_starts_at ? (
+                    <p className="mt-3 rounded-xl bg-amber-50 p-3 text-xs text-amber-900">
+                      This client is not on your schedule today. Start only if
+                      your manager asked you to.
+                    </p>
+                  ) : null}
+
+                  {(servicesQuery.data?.length ?? 0) > 1 ? (
+                    <label className="mt-4 block text-sm font-semibold text-slate-700">
+                      Service for this visit
+                      <span className="mt-1 block text-xs font-normal text-slate-500">
+                        {`This client has ${servicesQuery.data!.length} active services. Choose the one you are providing.`}
+                      </span>
+                      <select
+                        aria-label="Service for this visit"
+                        value={selectedServiceId}
+                        onChange={(event) =>
+                          setSelectedServiceId(event.target.value)
+                        }
+                        className="mt-2 min-h-14 w-full rounded-xl border border-slate-300 bg-white px-3 text-base text-slate-950"
+                      >
+                        <option value="">Choose a service</option>
+                        {(servicesQuery.data ?? []).map((service) => (
+                          <option
+                            key={service.service_id}
+                            value={service.service_id}
+                          >
+                            {service.service_code} · {service.service_name}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                  ) : null}
+
+                  {selectedService ? (
+                    <div className="mt-4 grid grid-cols-3 gap-2 text-center">
+                      <div className="rounded-2xl border border-indigo-100 bg-indigo-100/70 p-2 text-indigo-950">
+                        <p className="text-base font-bold">
+                          {formatDuration(
+                            Number(selectedService.max_monthly_hours) * 60,
+                          )}
+                        </p>
+                        <p className="text-[11px] text-indigo-800">
+                          Authorized
+                        </p>
+                      </div>
+                      <div className="rounded-2xl border border-sky-100 bg-sky-100/80 p-2 text-sky-950">
+                        <p className="text-base font-bold">
+                          {formatDuration(
+                            Number(selectedService.hours_used_this_month) * 60,
+                          )}
+                        </p>
+                        <p className="text-[11px] text-indigo-800">Serviced</p>
+                      </div>
+                      <div className="rounded-2xl border border-emerald-100 bg-emerald-100/80 p-2 text-emerald-950">
+                        <p className="text-base font-bold">
+                          {formatDuration(
+                            Math.max(
+                              0,
+                              Number(
+                                selectedService.max_monthly_hours -
+                                  selectedService.hours_used_this_month,
+                              ),
+                            ) * 60,
+                          )}
+                        </p>
+                        <p className="text-[11px] text-indigo-800">Remaining</p>
+                      </div>
+                    </div>
+                  ) : null}
+                </div>
               ) : null}
+
               {servicesQuery.isError ? (
-                <p className="rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-800">
+                <p
+                  role="alert"
+                  className="rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-800"
+                >
                   Services could not be loaded. Contact your agency manager.
                 </p>
               ) : null}
@@ -737,64 +907,10 @@ export function ServiceVerificationPage() {
                   </p>
                   <p className="mt-1">
                     A manager must add, renew, or assign the correct service
-                    before sign-in.
+                    before you can start.
                   </p>
                 </div>
               ) : null}
-
-              {selectedService ? (
-                <div className="rounded-3xl border border-indigo-100 bg-gradient-to-br from-indigo-50 via-white to-sky-50 p-4 text-sm text-indigo-950 shadow-sm">
-                  <p className="font-semibold">
-                    {selectedService.service_code} ·{" "}
-                    {selectedService.service_name}
-                  </p>
-                  <div className="mt-3 grid grid-cols-3 gap-2 text-center">
-                    <div className="rounded-2xl border border-indigo-100 bg-indigo-100/70 p-2 text-indigo-950">
-                      <p className="text-lg font-bold">
-                        {formatDuration(
-                          Number(selectedService.max_monthly_hours) * 60,
-                        )}
-                      </p>
-                      <p className="text-[11px] text-indigo-800">Authorized</p>
-                    </div>
-                    <div className="rounded-2xl border border-sky-100 bg-sky-100/80 p-2 text-sky-950">
-                      <p className="text-lg font-bold">
-                        {formatDuration(
-                          Number(selectedService.hours_used_this_month) * 60,
-                        )}
-                      </p>
-                      <p className="text-[11px] text-indigo-800">Serviced</p>
-                    </div>
-                    <div className="rounded-2xl border border-emerald-100 bg-emerald-100/80 p-2 text-emerald-950">
-                      <p className="text-lg font-bold">
-                        {formatDuration(
-                          Math.max(
-                            0,
-                            Number(
-                              selectedService.max_monthly_hours -
-                                selectedService.hours_used_this_month,
-                            ),
-                          ) * 60,
-                        )}
-                      </p>
-                      <p className="text-[11px] text-indigo-800">Remaining</p>
-                    </div>
-                  </div>
-                </div>
-              ) : null}
-
-              <div className="rounded-2xl bg-slate-50 p-4 text-center">
-                <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-                  Current Pacific time
-                </p>
-                <p className="mt-1 text-3xl font-semibold tabular-nums text-slate-950">
-                  {formatClockTime(new Date(nowTick).toISOString())}
-                </p>
-                <p className="mt-1 text-xs text-slate-500">
-                  {formatVisitDate(new Date(nowTick).toISOString())} · automatic
-                  server timestamp
-                </p>
-              </div>
 
               <Button
                 type="button"
@@ -803,8 +919,11 @@ export function ServiceVerificationPage() {
                 loading={saving}
                 onClick={startVisit}
               >
-                Sign in now · Iniciar ahora
+                Start visit · Iniciar visita
               </Button>
+              <p className="text-center text-xs text-slate-500">
+                Time In is recorded by the server when you tap Start.
+              </p>
             </section>
           ) : null}
 
@@ -858,7 +977,7 @@ export function ServiceVerificationPage() {
 
               <div className="mx-auto flex h-56 w-56 flex-col items-center justify-center rounded-full border-8 border-sky-100 bg-gradient-to-br from-white to-sky-50 text-center shadow-xl shadow-sky-100/70 ring-4 ring-sky-50">
                 <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-                  Signed in at
+                  Time In
                 </p>
                 <p className="mt-1 text-3xl font-semibold tabular-nums text-slate-950">
                   {formatClockTime(active.time_in)}
@@ -903,7 +1022,7 @@ export function ServiceVerificationPage() {
                 loading={saving}
                 onClick={endVisit}
               >
-                Sign out now · Finalizar ahora
+                End visit · Terminar visita
               </Button>
               <p className="text-center text-xs text-slate-500">
                 The sign-in sheet records Time Out automatically. A manager can

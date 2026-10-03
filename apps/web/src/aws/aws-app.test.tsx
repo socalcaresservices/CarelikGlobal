@@ -102,17 +102,17 @@ afterEach(() => {
 });
 
 describe("AWS build: caregiver vertical slice", () => {
-  it("login → client → service → start → end → signature → submitted, all through the AWS API", async () => {
+  it("login → today's visit → start → end → signature → submitted, all through the AWS API", async () => {
     const { api } = renderAws("/", "caregiver");
 
     // Landing sends caregivers to Verify Visit; only the assigned client code is shown.
-    const picker = await screen.findByLabelText("Assigned client");
-    await screen.findByRole("option", { name: /C-104/ });
-    fireEvent.change(picker, { target: { value: CLIENT } });
-    await waitFor(() => expect(screen.getByLabelText("Service for this visit")).toHaveValue(SERVICE));
+    fireEvent.click(await screen.findByRole("button", { name: /Client C-104/ }));
+    const details = await screen.findByRole("group", { name: "Visit details" });
+    await waitFor(() => expect(details).toHaveTextContent("Client C-104"));
+    await waitFor(() => expect(screen.getByRole("button", { name: /Start visit/ })).toBeEnabled());
 
-    fireEvent.click(screen.getByRole("button", { name: /Sign in now/ }));
-    fireEvent.click(await screen.findByRole("button", { name: /Sign out now/ }));
+    fireEvent.click(screen.getByRole("button", { name: /Start visit/ }));
+    fireEvent.click(await screen.findByRole("button", { name: /End visit/ }));
     await screen.findByRole("heading", { name: "Client or guardian confirmation" });
 
     const canvas = screen.getByLabelText("Client or guardian signature");
@@ -137,7 +137,7 @@ describe("AWS build: caregiver vertical slice", () => {
 
   it("never creates a Supabase client in the AWS runtime", async () => {
     renderAws("/", "caregiver");
-    await screen.findByLabelText("Assigned client");
+    await screen.findByRole("heading", { name: "Today's visits" });
     expect(isSupabaseClientCreated()).toBe(false);
   });
 });
@@ -161,7 +161,7 @@ describe("AWS build: manager review and billing-review data", () => {
 
   it("a caregiver sees no billing or records navigation", async () => {
     renderAws("/", "caregiver");
-    await screen.findByLabelText("Assigned client");
+    await screen.findByRole("heading", { name: "Today's visits" });
     expect(screen.queryByRole("link", { name: "Billing review" })).not.toBeInTheDocument();
     expect(screen.queryByRole("link", { name: "Visit records" })).not.toBeInTheDocument();
   });
