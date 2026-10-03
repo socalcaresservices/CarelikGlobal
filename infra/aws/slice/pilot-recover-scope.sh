@@ -8,11 +8,14 @@
 #   1. saved run; an existing approval is reused ONLY if it was given for this
 #      commit and this exact scope-gate result (re-pasting resumes, no 2nd DEPLOY)
 #   2. checkout at 87a9be2 (downloaded again if CloudShell cleared /tmp)
-#   3. strict gate (sha256-verified) + one-line synth patch (live tag value)
+#   3. strict gate (sha256-verified) + checksum-locked 2-line patch of
+#      pilot-deploy.sh: synth with the live tag value, and print the exact
+#      change set (read-only) immediately before the DEPLOY prompt
 #   4. live ogevia:deployment-status value
 #   5. live templates still equal the rollback capture (until the API deploys)
 #   6. re-synthesis and the strict scope gate
-#   7. pilot-deploy.sh: asks for DEPLOY once, then snapshot, DB window, API,
+#   7. pilot-deploy.sh: asks for DEPLOY once, then snapshot, DB window
+#      (migrations: whatever is missing up to 0018; live baseline 0012), API,
 #      web, smoke suites, REPORT.md
 #   8. read-only live verification of API, web, snapshot, sign-ins, admin host
 #   9. prints the URL, smoke results, report and verification
@@ -25,6 +28,7 @@ REPO="${OGEVIA_PILOT_REPO:-/tmp/ogevia-pilot}"
 RUN="${OGEVIA_PILOT_RUN_DIR:-$HOME/ogevia-pilot-run}"
 EXPECT="${PILOT_COMMIT:-87a9be2bf87e83750d235bfe943b18d5e702cac2}"
 GATE_SHA=484b7dfcf74ad2d2e9e3a77d3d4eceaf27fc6a1733c4041c41996138aae0203c
+DEPLOY_SH_PATCHED_SHA=3057bc9ff458fa07defb5adb1a78a921af66f7593c4fe7387ae44989ee125b81
 REPO_SLUG=socalcaresservices/CarelikGlobal
 BRANCH=claude/ogevia-socal-pilot-prep-vfu5tf
 ACCOUNT=300094796789
@@ -101,21 +105,28 @@ OTHER=$(git -C "$REPO" status --porcelain --untracked-files=no | grep -vE ' infr
 [[ -z "$OTHER" ]] || stop "the checkout has other local changes ($OTHER); delete $REPO and paste the block again"
 echo "Code: $(git -C "$REPO" log --oneline -1)"
 
-step "3/9 strict gate and one-line synth patch"
+step "3/9 strict gate and the checksum-locked pilot-deploy.sh patch"
 GATE="$RUN/tools/pilot_diff_gate.py"
 [[ "$(sha256sum "$GATE" 2>/dev/null | cut -d' ' -f1)" == "$GATE_SHA" ]] || stop "strict gate file checksum mismatch (paste the whole block again)"
 cp "$GATE" "$REPO/infra/aws/slice/pilot_diff_gate.py"
 DEPLOY_SH="$REPO/infra/aws/slice/pilot-deploy.sh"
-OLD_LINE='export OGEVIA_DEPLOY_APPROVAL="pilot-test-$COMMIT"'
-NEW_LINE='export OGEVIA_DEPLOY_APPROVAL="${OGEVIA_PILOT_TAG_REF:-pilot-test-$COMMIT}"'
-if grep -qxF "$OLD_LINE" "$DEPLOY_SH"; then
-  sed -i "s|^export OGEVIA_DEPLOY_APPROVAL=\"pilot-test-\$COMMIT\"\$|$NEW_LINE|" "$DEPLOY_SH"
-fi
-[[ "$(grep -c '^export OGEVIA_DEPLOY_APPROVAL=' "$DEPLOY_SH")" == 1 ]] && grep -qxF "$NEW_LINE" "$DEPLOY_SH" \
-  || stop "could not apply the one-line synth patch to pilot-deploy.sh"
-[[ "$(git -C "$REPO" diff --numstat -- infra/aws/slice/pilot-deploy.sh | awk '{print $1+$2}')" == 2 ]] \
-  || stop "pilot-deploy.sh differs from ${EXPECT:0:12} by more than the one patched line"
-echo "Installed: strict scope gate (sha256 ${GATE_SHA:0:12}...); pilot-deploy.sh synth uses the live tag value (1 line)."
+# Start from the exact 87a9be2 file, apply exactly two edits, then require the
+# known checksum: (1) synth with the live approval tag value; (2) run the
+# read-only exact-change report right before the DEPLOY prompt.
+git -C "$REPO" checkout -q -- infra/aws/slice/pilot-deploy.sh || stop "could not reset pilot-deploy.sh in the checkout"
+python3 - "$DEPLOY_SH" <<'PYEDIT' || stop "could not apply the pilot-deploy.sh patch"
+import sys
+p = sys.argv[1]; s = open(p).read()
+a = 'export OGEVIA_DEPLOY_APPROVAL="pilot-test-$COMMIT"\n'
+b = 'export OGEVIA_DEPLOY_APPROVAL="${OGEVIA_PILOT_TAG_REF:-pilot-test-$COMMIT}"\n'
+c = '  read -r -p "Type DEPLOY to approve exactly this scope (anything else cancels): " answer\n'
+d = '  [[ -f "$RUN/tools/exact-changes.sh" ]] && bash "$RUN/tools/exact-changes.sh"\n' + c
+assert s.count(a) == 1 and s.count(c) == 1
+open(p, "w").write(s.replace(a, b).replace(c, d))
+PYEDIT
+[[ "$(sha256sum "$DEPLOY_SH" | cut -d' ' -f1)" == "$DEPLOY_SH_PATCHED_SHA" ]] \
+  || stop "patched pilot-deploy.sh does not match the reviewed version"
+echo "Installed: strict scope gate (sha256 ${GATE_SHA:0:12}...); pilot-deploy.sh = 87a9be2 + 2 reviewed lines (sha256 ${DEPLOY_SH_PATCHED_SHA:0:12}...)."
 
 step "4/9 live approval tag"
 TAGS=$(python3 - "$RUN/rollback/templates" <<'PY'
@@ -179,6 +190,56 @@ if [[ -n "$APPROVED" ]]; then
     || stop "this scope differs from the one approved earlier ($APPROVED); send this to Claude"
   echo "Scope is identical to the one approved earlier: resuming without a second DEPLOY."
 fi
+
+# Read-only report that pilot-deploy.sh runs immediately before its DEPLOY
+# prompt (patched line). Always exits 0 so it can never stop the deployment.
+export OGEVIA_PILOT_RUN_DIR="$RUN" OGEVIA_PILOT_REPO="$REPO"
+cat > "$RUN/tools/exact-changes.sh" <<'EXACT'
+#!/usr/bin/env bash
+# READ-ONLY. Prints the exact change set right before the DEPLOY prompt.
+RUN="${OGEVIA_PILOT_RUN_DIR:-$HOME/ogevia-pilot-run}"; REPO="${OGEVIA_PILOT_REPO:-/tmp/ogevia-pilot}"; R=us-west-2
+API_STACK=Ogevia-prod-ServiceVerificationApi
+item() { printf '     %s\n' "$*"; }
+entry() { grep -o 'assets/index-[A-Za-z0-9_-]*\.js' | head -1; }
+echo
+echo "=================== EXACT CHANGES IF YOU TYPE DEPLOY ==================="
+echo " 1. Backup: manual snapshot ogevia-prod-postgres-pre-pilot-$(date -u +%Y%m%d) of ogevia-prod-postgres (kept until you delete it)."
+echo " 2. Database ogevia_sv_test only. Live ledger 0001-0012 (restore drill, 2026-10-03). Migrations to apply, in order:"
+for f in "$REPO"/infra/aws/db/migrations/001[3-8]_*.sql; do item "$(basename "$f")  sha256 $(sha256sum "$f" | cut -c1-12)"; done
+item "one transaction each; the DB step re-reads the ledger first and applies only what is missing;"
+item "then verify.ts must PASS latest_migration_is_0018 and migration_count_is_18, and every existing"
+item "visit's time_in/time_out/signed_at fingerprint must be unchanged, or the deployment stops."
+echo " 3. Synthetic pilot seed, org scs-pilot-synthetic: 3 clients, 2 services, 4 authorizations, 4 assignments (idempotent)."
+echo " 4. Cognito pool us-west-2_849AYz5J7, individual pilot sign-ins:"
+(
+  # shellcheck disable=SC1091
+  source "$RUN/inputs.env" 2>/dev/null
+  for pair in "manager|${M_EMAIL:-}" "caregiver A|${A_EMAIL:-}" "caregiver B|${B_EMAIL:-}"; do
+    role=${pair%%|*}; e=${pair#*|}
+    if st=$(aws cognito-idp admin-get-user --region $R --user-pool-id us-west-2_849AYz5J7 --username "$e" --query UserStatus --output text 2>/dev/null); then
+      item "$role ($e): already exists ($st), kept"
+    else
+      item "$role ($e): create, invitation emailed"
+    fi
+  done
+)
+echo " 5. Admin host ogevia-db-admin-temp: app security group attached only during the DB step; original groups restored and re-checked."
+echo " 6. $API_STACK (strict scope gate, compared with the captured live templates):"
+sed 's/^/   /' "$RUN/scope-gate.txt" 2>/dev/null || item "scope-gate.txt unread"
+OLD=$(jq -r .CodeSha256 "$RUN/rollback/lambda.json" 2>/dev/null)
+NEW=$(jq -r '[.Resources[] | select(.Type == "AWS::Lambda::Function") | .Properties.Code.S3Key] | join(", ")' "$REPO/infra/aws/cdk.out/$API_STACK.template.json" 2>/dev/null)
+item "Lambda code: live CodeSha256 ${OLD:0:16}... -> new package $NEW"
+BUCKET=$(aws cloudformation describe-stacks --region $R --stack-name Ogevia-prod-WebHosting --query "Stacks[0].Outputs[?OutputKey=='SiteBucketName'].OutputValue" --output text 2>/dev/null)
+LIVE=$(aws s3 cp --region $R "s3://$BUCKET/index.html" - 2>/dev/null | entry)
+NEWW=$(entry < "$RUN/web-build/index.html" 2>/dev/null)
+echo " 7. Web: bucket $BUCKET: entry ${LIVE:-unread} -> ${NEWW:-unread} ($(find "$RUN/web-build" -type f 2>/dev/null | wc -l) files), config.json rewritten, CloudFront invalidation /*."
+echo " 8. Then: smoke suites (test slice + pilot) and the read-only live verification."
+echo " Not touched: other 4 stacks (CDK Analytics metadata only; not deployed), production users and clients,"
+echo "              Netlify, Supabase, DNS, the ogevia-web client, RDS security-group rules."
+echo "========================================================================="
+exit 0
+EXACT
+chmod +x "$RUN/tools/exact-changes.sh"
 
 step "7/9 deployment (asks for DEPLOY once; resumes after completed steps)"
 echo "Deployment log: $RUN/deploy-<UTC>.log"
@@ -310,6 +371,19 @@ def host():
     return app_sg not in ids, "admin host groups: %s" % ", ".join(ids)
 check("DB access window closed (app security group removed)", host)
 
+def migrations():
+    import glob
+    txt = ""
+    for f in sorted(glob.glob(os.path.join(run, "deploy-*.log"))):
+        txt += re.sub(r"\x1b\[[0-9;]*m", "", open(f, errors="replace").read())
+    a = "PASS 01_schema_version.sql latest_migration_is_0018" in txt
+    b = "PASS 01_schema_version.sql migration_count_is_18" in txt
+    fp = "Existing visit timestamps unchanged" in txt
+    applied = sorted(set(re.findall(r"^applying (\d{4})_", txt, re.M)))
+    return a and b and fp, "deployment log: applied %s; latest_migration_is_0018 %s; migration_count_is_18 %s; visit timestamps unchanged %s" % (
+        ",".join(applied) or "none", a, b, fp)
+check("Database migrated to 0018 (from the DB step's own verify.ts output)", migrations)
+
 def smoke():
     rep = open(os.path.join(run, "REPORT.md")).read() if os.path.exists(os.path.join(run, "REPORT.md")) else ""
     s = re.search(r"Smoke \(test slice\): (\w+)", rep); p = re.search(r"Pilot checks: (\w+)", rep)
@@ -331,7 +405,7 @@ for f in smoke.log pilot-smoke.log; do
   if [[ -f "$RUN/$f" ]]; then plain < "$RUN/$f" | grep -E 'checks, [0-9]+ passed|FAILED|FAIL ' | mask | tail -n 12; else echo "$f: not produced"; fi
 done
 echo "---------------- deployment evidence (from $DLOG) ----------------"
-cat "$RUN"/deploy-*.log 2>/dev/null | plain | grep -E 'Snapshot .*available|Migration ledger before|Existing visit|Pilot seed|DB window closed|API and web deployed' | mask | awk '!seen[$0]++'
+cat "$RUN"/deploy-*.log 2>/dev/null | plain | grep -E 'Snapshot .*available|Migration ledger before|^applying 00|^applied [0-9]+, already|01_schema_version|Existing visit|Pilot seed|DB window closed|API and web deployed' | mask | awk '!seen[$0]++'
 echo "---------------- REPORT.md ----------------"
 if [[ -f "$RUN/REPORT.md" ]]; then mask < "$RUN/REPORT.md"; else echo "REPORT.md was not produced"; fi
 echo "---------------- live verification ($VERIFY) ----------------"

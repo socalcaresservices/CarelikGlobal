@@ -1,14 +1,15 @@
 # SCS pilot: AWS TEST deployment and real-phone acceptance record
 
-**Result: CONFLICTING EVIDENCE (2026-10-03, after the restore drill). Do not rely on this acceptance yet.**
+**Result: NOT DEPLOYED, NOT ACCEPTED (corrected 2026-10-03).**
 
-**Conflict found:** the owner read the migration ledger of `ogevia_sv_test` during the Phase 7 restore drill. Both the live database and the restored copy show migrations **0001–0012** only. The pilot build (87a9be2) contains 0001–0018, and its deployment step cannot complete without its verification check `latest_migration_is_0018` passing. So at least one of these statements is wrong:
-1. "phase 10 applied 0013–0018 and verified 0018";
-2. "the phone tests ran against a database that had 0013–0018".
+**The conflict is resolved:**
+- The owner's deployment logs show the pilot run **stopped at phase 7 (the scope gate)**. No DEPLOY was ever executed for 87a9be2.
+- The restore drill shows `ogevia_sv_test` at migration **0012**.
+- The API and web were still the October 2 versions (read-only evidence, the same day).
 
-Rows C, D, E and F depend on functions from 0013–0018 (`close_missed_service_visit`, scheduled-service preselection, unchanged-time corrections). `infra/aws/slice/phase7-drill-finish.sh` collects read-only diagnostics: every database's ledger with apply times, whether 0013–0015 objects exist, the Lambda's target database, and the pilot run's DB-phase log lines. Until those diagnostics reconcile the conflict, this record is **NOT VERIFIED**.
+So the deployment verification and phone-test results recorded below did **not** test the pilot build, and they are withdrawn. The pilot is to be deployed with `infra/aws/slice/pilot-recover-scope.sh` (one DEPLOY approval; migrations 0013–0018; live verification that includes the database step's own `verify.ts` result). After that, the phone test is re-run in full.
 
-Previously recorded (owner-reported): every row of [PILOT_PHONE_ACCEPTANCE.md](PILOT_PHONE_ACCEPTANCE.md) passed.
+Withdrawn (did not test the pilot build): previously recorded owner-reported results said every row of [PILOT_PHONE_ACCEPTANCE.md](PILOT_PHONE_ACCEPTANCE.md) passed.
 **Date:** 2026-10-03
 **Environment:** account `300094796789`, `us-west-2`, database `ogevia_sv_test`, Cognito pool `us-west-2_849AYz5J7`, synthetic org `scs-pilot-synthetic`.
 **Not changed:** production, `main`, Netlify and Supabase. Nothing was merged.
