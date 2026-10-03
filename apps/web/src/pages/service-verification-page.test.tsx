@@ -274,6 +274,84 @@ describe("ServiceVerificationPage v3", () => {
     expect(screen.queryByText("Darby Crash")).not.toBeInTheDocument();
   });
 
+  it("shows the linked shift's scheduled window during the visit and at confirmation", async () => {
+    const timeIn = new Date(Date.now() - 5 * 60_000).toISOString();
+    mockRpcImplementation({
+      get_active_service_visit_v3: {
+        data: [{ ...activeVisit, time_in: timeIn }],
+        error: null,
+      },
+      end_service_visit: {
+        data: [
+          {
+            visit_id: VISIT_ID,
+            worked_minutes: 120,
+            time_in: "2026-08-24T21:30:00.000Z",
+            time_out: "2026-08-24T23:30:00.000Z",
+          },
+        ],
+        error: null,
+      },
+    });
+    renderPage();
+
+    await screen.findByRole("heading", { name: "Visit in progress" });
+    // 21:30Z-23:30Z is 2:30-4:30 PM Pacific (PDT).
+    expect(screen.getByText(/Scheduled shift:/)).toBeInTheDocument();
+    expect(screen.getByText(/^2:30\sPM–4:30\sPM$/)).toBeInTheDocument();
+
+    await openConfirmation();
+    const scheduled = screen.getByText("Scheduled");
+    expect(scheduled.nextElementSibling?.textContent).toMatch(
+      /^2:30\sPM–4:30\sPM$/,
+    );
+  });
+
+  it("says plainly when a visit is not linked to a scheduled shift", async () => {
+    const timeIn = new Date(Date.now() - 5 * 60_000).toISOString();
+    mockRpcImplementation({
+      get_active_service_visit_v3: {
+        data: [
+          {
+            ...activeVisit,
+            time_in: timeIn,
+            scheduled_starts_at: null,
+            scheduled_ends_at: null,
+          },
+        ],
+        error: null,
+      },
+    });
+    renderPage();
+
+    await screen.findByRole("heading", { name: "Visit in progress" });
+    expect(
+      screen.getByText("Not linked to a scheduled shift"),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/Scheduled shift:/)).not.toBeInTheDocument();
+  });
+
+  it("tells the caregiver and client when the agency entered the Time Out", async () => {
+    mockRpcImplementation({
+      get_active_service_visit_v3: {
+        data: [
+          {
+            ...activeVisit,
+            visit_status: "awaiting_signature",
+            time_out: "2026-08-24T23:30:00.000Z",
+            worked_minutes: 120,
+            time_out_entered_by_manager: true,
+          },
+        ],
+        error: null,
+      },
+    });
+    renderPage();
+
+    await screen.findByRole("heading", { name: "Client or guardian confirmation" });
+    expect(screen.getByText(/entered by your agency because the visit was not signed out/)).toBeInTheDocument();
+  });
+
   it("recovers an ended visit directly into confirmation after a refresh", async () => {
     mockRpcImplementation({
       get_active_service_visit_v3: {

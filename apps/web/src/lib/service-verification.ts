@@ -17,6 +17,57 @@ export function formatClockTime(value: string | Date): string {
   }).format(new Date(value));
 }
 
+// A visit is linked to its scheduled shift on the server at Time In
+// (20260826070000). Visits started with no matching shift - and every visit
+// recorded before the link existed - have no scheduled window.
+export const UNLINKED_VISIT_LABEL = "Not linked to a scheduled shift";
+
+export function formatScheduledWindow(
+  startsAt: string | null | undefined,
+  endsAt: string | null | undefined
+): string {
+  if (!startsAt || !endsAt) return UNLINKED_VISIT_LABEL;
+  return `${formatClockTime(startsAt)}–${formatClockTime(endsAt)}`;
+}
+
+// Incomplete visits (Report Center "Exceptions"). A visit with Time In but no
+// Time Out is a missed clock-out once it runs past its scheduled shift's end;
+// a visit with no linked shift has no expected end, so it is flagged once it
+// has been open this long. An ended visit that was never confirmed (client
+// confirmation or a no-signer reason) is flagged once this long after Time
+// Out - the caregiver confirms right after signing out.
+export const UNSCHEDULED_OPEN_VISIT_ALERT_HOURS = 12;
+export const UNCONFIRMED_VISIT_ALERT_MINUTES = 60;
+
+export type IncompleteVisit =
+  | { kind: "missing_time_out"; reason: "past_scheduled_end" | "open_without_schedule"; minutesOverdue: number }
+  | { kind: "not_confirmed"; minutesSinceTimeOut: number };
+
+export function classifyIncompleteVisit(
+  visit: {
+    status: string;
+    time_in: string;
+    time_out: string | null;
+    scheduled_ends_at?: string | null;
+  },
+  now: Date = new Date()
+): IncompleteVisit | null {
+  const minutesSince = (value: string) => Math.floor((now.getTime() - new Date(value).getTime()) / 60_000);
+  if (visit.status === "draft" && !visit.time_out) {
+    if (visit.scheduled_ends_at) {
+      const overdue = minutesSince(visit.scheduled_ends_at);
+      return overdue > 0 ? { kind: "missing_time_out", reason: "past_scheduled_end", minutesOverdue: overdue } : null;
+    }
+    const overdue = minutesSince(visit.time_in) - UNSCHEDULED_OPEN_VISIT_ALERT_HOURS * 60;
+    return overdue >= 0 ? { kind: "missing_time_out", reason: "open_without_schedule", minutesOverdue: overdue } : null;
+  }
+  if (visit.status === "awaiting_signature" && visit.time_out) {
+    const since = minutesSince(visit.time_out);
+    return since >= UNCONFIRMED_VISIT_ALERT_MINUTES ? { kind: "not_confirmed", minutesSinceTimeOut: since } : null;
+  }
+  return null;
+}
+
 export function formatVisitDate(value: string | Date): string {
   return new Intl.DateTimeFormat("en-US", {
     month: "short",

@@ -27,6 +27,7 @@ import {
   formatClockTime,
   formatElapsed,
   formatHours,
+  formatScheduledWindow,
   formatVisitDate,
   type VisitSignerRole,
 } from "@/lib/service-verification";
@@ -42,6 +43,9 @@ interface EndedVisit {
   serviceCode: string;
   serviceName: string;
   visitNumber: string | null;
+  scheduledStartsAt: string | null;
+  scheduledEndsAt: string | null;
+  timeOutEnteredByManager: boolean;
 }
 
 
@@ -395,6 +399,9 @@ export function ServiceVerificationPage() {
         serviceCode: visit.service_code,
         serviceName: visit.service_name,
         visitNumber: visit.visit_number,
+        scheduledStartsAt: visit.scheduled_starts_at,
+        scheduledEndsAt: visit.scheduled_ends_at,
+        timeOutEnteredByManager: !!visit.time_out_entered_by_manager,
       });
       setPhase("confirm");
     } else if (phase === "loading" || phase === "select") {
@@ -480,6 +487,9 @@ export function ServiceVerificationPage() {
         serviceCode: active.service_code,
         serviceName: active.service_name,
         visitNumber: active.visit_number,
+        scheduledStartsAt: active.scheduled_starts_at,
+        scheduledEndsAt: active.scheduled_ends_at,
+        timeOutEnteredByManager: false,
       });
       setConfirmationMode("signature");
       setSignatureKind("signature");
@@ -861,6 +871,16 @@ export function ServiceVerificationPage() {
                 </p>
               </div>
 
+              <p className="text-center text-sm text-slate-600">
+                {active.scheduled_starts_at ? "Scheduled shift: " : ""}
+                <span className="font-semibold text-slate-900">
+                  {formatScheduledWindow(
+                    active.scheduled_starts_at,
+                    active.scheduled_ends_at,
+                  )}
+                </span>
+              </p>
+
               {willExceed ? (
                 <div className="flex gap-3 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
                   <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0" />
@@ -912,6 +932,16 @@ export function ServiceVerificationPage() {
                 </p>
               </div>
 
+              {endedVisit.timeOutEnteredByManager ? (
+                <div className="flex gap-3 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
+                  <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0" />
+                  <p>
+                    The Time Out below was entered by your agency because the visit
+                    was not signed out. Check it with the client before they confirm.
+                  </p>
+                </div>
+              ) : null}
+
               <dl className="divide-y divide-slate-100 rounded-2xl border border-slate-200 bg-white px-4">
                 {[
                   ["Client", `Client ${endedVisit.clientCode}`],
@@ -920,6 +950,13 @@ export function ServiceVerificationPage() {
                     `${endedVisit.serviceCode} · ${endedVisit.serviceName}`,
                   ],
                   ["Date", formatVisitDate(endedVisit.timeIn)],
+                  [
+                    "Scheduled",
+                    formatScheduledWindow(
+                      endedVisit.scheduledStartsAt,
+                      endedVisit.scheduledEndsAt,
+                    ),
+                  ],
                   ["Time in", formatClockTime(endedVisit.timeIn)],
                   ["Time out", formatClockTime(endedVisit.timeOut)],
                   [

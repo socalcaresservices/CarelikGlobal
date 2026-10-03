@@ -45,12 +45,25 @@ import {
 import { useServiceVerificationBackend } from "@/lib/sv-backend-supabase";
 import {
   AUTHORIZATION_STATUS_LABEL,
+  classifyIncompleteVisit,
+  UNSCHEDULED_OPEN_VISIT_ALERT_HOURS,
   formatDateTime,
+  formatScheduledWindow,
   formatHours,
   formatVisitDate,
   VISIT_STATUS_LABEL,
   type ServiceVisitStatus,
 } from "@/lib/service-verification";
+
+function overdueMinutes(issue: { kind: string; minutesOverdue?: number; minutesSinceTimeOut?: number }) {
+  return issue.kind === "not_confirmed" ? (issue.minutesSinceTimeOut ?? 0) : (issue.minutesOverdue ?? 0);
+}
+
+function formatOverdue(minutes: number) {
+  const h = Math.floor(minutes / 60);
+  const m = minutes % 60;
+  return h > 0 ? `${h}h ${m}m` : `${m}m`;
+}
 
 
 
@@ -229,6 +242,11 @@ export function ServiceVerificationReportsPage() {
   });
   const [correctionSaving, setCorrectionSaving] = useState(false);
   const [correctionError, setCorrectionError] = useState<string | null>(null);
+  // Manager close-out of a missed clock-out (close_missed_service_visit).
+  const [closeForm, setCloseForm] = useState<{ visitId: string; timeOut: string; reason: string } | null>(null);
+  const [closeSaving, setCloseSaving] = useState(false);
+  const closeKey = useRef(newIdempotencyKey());
+  const [closeError, setCloseError] = useState<string | null>(null);
 
   const [clientFilter, setClientFilter] = useState("");
   const [caregiverFilter, setCaregiverFilter] = useState(
@@ -358,6 +376,46 @@ export function ServiceVerificationReportsPage() {
       );
     } finally {
       setCorrectionSaving(false);
+    }
+  }
+
+  function openClose(row: VisitReportRow) {
+    setCloseError(null);
+    setCloseForm({
+      visitId: row.id,
+      timeOut: row.scheduled_ends_at ? toLocalInputValue(row.scheduled_ends_at) : "",
+      reason: "",
+    });
+  }
+
+  async function handleSubmitClose() {
+    if (!closeForm) return;
+    setCloseError(null);
+    if (!closeForm.reason.trim()) {
+      setCloseError("A reason is required to close a missed visit.");
+      return;
+    }
+    const timeOut = new Date(closeForm.timeOut);
+    if (Number.isNaN(timeOut.getTime())) {
+      setCloseError("Enter the actual Time Out.");
+      return;
+    }
+    setCloseSaving(true);
+    try {
+      if (!backend.closeMissedVisit) throw new Error("Closing a missed visit is not available here.");
+      await backend.closeMissedVisit({
+        visitId: closeForm.visitId,
+        timeOut: timeOut.toISOString(),
+        reason: closeForm.reason.trim(),
+        idempotencyKey: closeKey.current,
+      });
+      closeKey.current = newIdempotencyKey();
+      setCloseForm(null);
+      void queryClient.invalidateQueries({ queryKey: ["service-visit-report"] });
+    } catch (cause) {
+      setCloseError(cause instanceof Error ? cause.message : "Could not close this visit.");
+    } finally {
+      setCloseSaving(false);
     }
   }
 
@@ -563,6 +621,16 @@ export function ServiceVerificationReportsPage() {
       ),
     [rows],
   );
+
+  // Missed clock-outs and visits never confirmed (classifyIncompleteVisit),
+  // most overdue first. In-progress visits inside their shift are not listed.
+  const incompleteVisits = useMemo(() => {
+    const now = new Date();
+    return rows
+      .map((row) => ({ row, issue: classifyIncompleteVisit(row, now) }))
+      .filter((x): x is { row: VisitReportRow; issue: NonNullable<typeof x.issue> } => x.issue !== null)
+      .sort((a, b) => overdueMinutes(b.issue) - overdueMinutes(a.issue));
+  }, [rows]);
 
   function handlePrint() {
     window.print();
@@ -1358,6 +1426,15 @@ export function ServiceVerificationReportsPage() {
                             {row.time_out
                               ? ` – ${formatDateTime(row.time_out)}`
                               : ""}
+                            <p className="text-xs text-slate-400">
+                              {row.scheduled_starts_at
+                                ? "Scheduled "
+                                : ""}
+                              {formatScheduledWindow(
+                                row.scheduled_starts_at,
+                                row.scheduled_ends_at,
+                              )}
+                            </p>
                           </td>
                           <td className="py-2 pr-3 text-slate-700">
                             {row.worked_minutes
@@ -1379,6 +1456,9 @@ export function ServiceVerificationReportsPage() {
                             <div className="flex flex-wrap items-center gap-1">
                               {row.is_corrected ? (
                                 <StatusBadge label="Corrected" tone="neutral" />
+                              ) : null}
+                              {row.time_out_entered_by_manager ? (
+                                <StatusBadge label="Time Out entered by manager" tone="warning" />
                               ) : null}
                               <StatusBadge
                                 label={VISIT_STATUS_LABEL[row.status]}
@@ -1639,6 +1719,90 @@ export function ServiceVerificationReportsPage() {
         </>
       ) : null}
 
+      {reportView === "exceptions" && incompleteVisits.length > 0 ? (
+        <Card>
+          <h3 className="font-semibold text-slate-950">
+            Incomplete visits ({incompleteVisits.length})
+          </h3>
+          <p className="mt-1 text-xs text-slate-500">
+            Missing Time Out: still open past the scheduled shift end (or open{" "}
+            {UNSCHEDULED_OPEN_VISIT_ALERT_HOURS}+ hours with no scheduled shift). Not confirmed: signed out over an
+            hour ago without a client confirmation or a no-signer reason. Ask
+            the caregiver to finish the visit on their phone.
+          </p>
+          <ul className="mt-3 divide-y divide-slate-100">
+            {incompleteVisits.map(({ row, issue }) => (
+              <li key={row.id} className="py-2 text-sm">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <span className="text-slate-700">
+                    {row.client_legal_name ?? row.client_code}{" "}
+                    <span className="text-slate-400">
+                      · {row.caregiver_name} · Time In {formatDateTime(row.time_in)}
+                      {row.scheduled_starts_at
+                        ? ` · Scheduled ${formatScheduledWindow(row.scheduled_starts_at, row.scheduled_ends_at)}`
+                        : ""}
+                    </span>
+                  </span>
+                  <span className="flex flex-wrap items-center gap-1.5">
+                    <StatusBadge
+                      label={issue.kind === "missing_time_out" ? "Missing Time Out" : "Not confirmed"}
+                      tone={issue.kind === "missing_time_out" ? "danger" : "warning"}
+                    />
+                    <span className="text-xs text-slate-500">
+                      {issue.kind === "not_confirmed"
+                        ? `Signed out ${formatOverdue(issue.minutesSinceTimeOut)} ago`
+                        : issue.reason === "past_scheduled_end"
+                          ? `${formatOverdue(issue.minutesOverdue)} past scheduled end`
+                          : `Open ${formatOverdue(issue.minutesOverdue + UNSCHEDULED_OPEN_VISIT_ALERT_HOURS * 60)}, no scheduled shift`}
+                    </span>
+                    {canManage && backend.closeMissedVisit && issue.kind === "missing_time_out" && closeForm?.visitId !== row.id ? (
+                      <Button type="button" variant="secondary" onClick={() => openClose(row)}>
+                        Close visit
+                      </Button>
+                    ) : null}
+                  </span>
+                </div>
+                {closeForm?.visitId === row.id ? (
+                  <div className="mt-2 space-y-2 rounded-lg border border-slate-200 bg-slate-50 p-3">
+                    <p className="text-xs text-slate-600">
+                      Enter when the visit actually ended. The caregiver&apos;s app then
+                      asks for the client&apos;s confirmation, marked as entered by the agency.
+                    </p>
+                    <label className="block text-xs font-medium text-slate-700">
+                      Actual Time Out
+                      <input
+                        type="datetime-local"
+                        value={closeForm.timeOut}
+                        onChange={(event) => setCloseForm({ ...closeForm, timeOut: event.target.value })}
+                        className="mt-1 block w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+                      />
+                    </label>
+                    <label className="block text-xs font-medium text-slate-700">
+                      Reason
+                      <textarea
+                        value={closeForm.reason}
+                        onChange={(event) => setCloseForm({ ...closeForm, reason: event.target.value })}
+                        rows={2}
+                        className="mt-1 block w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+                      />
+                    </label>
+                    {closeError ? <p className="text-xs text-red-700">{closeError}</p> : null}
+                    <div className="flex gap-2">
+                      <Button type="button" loading={closeSaving} onClick={() => void handleSubmitClose()}>
+                        Save Time Out
+                      </Button>
+                      <Button type="button" variant="secondary" onClick={() => setCloseForm(null)}>
+                        Cancel
+                      </Button>
+                    </div>
+                  </div>
+                ) : null}
+              </li>
+            ))}
+          </ul>
+        </Card>
+      ) : null}
+
       {reportView === "exceptions" && exceptionVisits.length > 0 ? (
         <Card>
           <h3 className="font-semibold text-slate-950">Exception visits</h3>
@@ -1683,7 +1847,7 @@ export function ServiceVerificationReportsPage() {
             ))}
           </ul>
         </Card>
-      ) : reportView === "exceptions" ? (
+      ) : reportView === "exceptions" && incompleteVisits.length === 0 ? (
         <Card>
           <h3 className="font-semibold text-slate-950">Exceptions</h3>
           <p className="mt-3 text-sm text-emerald-700">

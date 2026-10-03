@@ -120,6 +120,152 @@ describe("ServiceVerificationReportsPage", () => {
     expect(mockedRpc).not.toHaveBeenCalled();
   });
 
+  it("shows each visit's scheduled shift next to the actual times, or that it has none", async () => {
+    mockedUseOrganization.mockReturnValue({
+      activeOrganizationId: ORG_ID,
+      activeOrganization: { displayName: "Acme Care" },
+      hasPermission: vi.fn(() => true),
+    } as never);
+    mockOrgLetterhead();
+    mockedRpc.mockResolvedValue({
+      data: [
+        {
+          ...visitRow,
+          scheduled_starts_at: "2026-08-01T12:30:00.000Z",
+          scheduled_ends_at: "2026-08-01T14:30:00.000Z",
+        },
+        {
+          ...visitRow,
+          id: "unlinked-1",
+          visit_number: "SCS-V-20260801-9Z9Z",
+          scheduled_starts_at: null,
+          scheduled_ends_at: null,
+        },
+      ],
+      error: null,
+    } as never);
+
+    renderPage();
+    await openReport(/Visit details/);
+
+    const table = await screen.findByRole("table", { name: "Visit details" });
+    // 12:30Z-14:30Z is 5:30-7:30 AM Pacific (PDT).
+    const linkedRow = within(table).getByText("SCS-V-20260801-4F7K").closest("tr")!;
+    expect(linkedRow).toHaveTextContent(/Scheduled 5:30\sAM–7:30\sAM/);
+    const unlinkedRow = within(table).getByText("SCS-V-20260801-9Z9Z").closest("tr")!;
+    expect(unlinkedRow).toHaveTextContent("Not linked to a scheduled shift");
+  });
+
+  it("lists missed clock-outs and unconfirmed visits under Exceptions, but not visits still in their shift", async () => {
+    mockedUseOrganization.mockReturnValue({
+      activeOrganizationId: ORG_ID,
+      activeOrganization: { displayName: "Acme Care" },
+      hasPermission: vi.fn(() => true),
+    } as never);
+    mockOrgLetterhead();
+    const ago = (minutes: number) => new Date(Date.now() - minutes * 60_000).toISOString();
+    const open = { ...visitRow, status: "draft" as const, time_out: null, worked_minutes: null, billable_minutes: null, signed_at: null };
+    mockedRpc.mockResolvedValue({
+      data: [
+        { ...open, id: "missed-1", caregiver_name: "Missed Clockout", time_in: ago(300), scheduled_starts_at: ago(300), scheduled_ends_at: ago(90) },
+        { ...open, id: "working-1", caregiver_name: "Still Working", time_in: ago(30), scheduled_starts_at: ago(30), scheduled_ends_at: ago(-120) },
+        { ...visitRow, id: "unconfirmed-1", caregiver_name: "Never Confirmed", status: "awaiting_signature", time_in: ago(300), time_out: ago(120), signed_at: null },
+      ],
+      error: null,
+    } as never);
+
+    renderPage();
+    await openReport(/Exceptions needing attention/);
+
+    const card = (await screen.findByText("Incomplete visits (2)")).closest("div")!;
+    const items = within(card).getAllByRole("listitem");
+    // Most overdue first: signed out 2h ago, then 1h 30m past scheduled end.
+    expect(items[0]).toHaveTextContent("Never Confirmed");
+    expect(items[0]).toHaveTextContent("Not confirmed");
+    expect(items[0]).toHaveTextContent("Signed out 2h 0m ago");
+    expect(items[1]).toHaveTextContent("Missed Clockout");
+    expect(items[1]).toHaveTextContent("Missing Time Out");
+    expect(items[1]).toHaveTextContent("1h 30m past scheduled end");
+    expect(card).not.toHaveTextContent("Still Working");
+    expect(screen.queryByText(/No visits currently need manager attention/)).not.toBeInTheDocument();
+  });
+
+  it("lets a visit manager close a missed clock-out with the actual Time Out and a reason", async () => {
+    mockedUseOrganization.mockReturnValue({
+      activeOrganizationId: ORG_ID,
+      activeOrganization: { displayName: "Acme Care" },
+      hasPermission: vi.fn(() => true),
+    } as never);
+    mockOrgLetterhead();
+    const ago = (minutes: number) => new Date(Date.now() - minutes * 60_000).toISOString();
+    const missed = {
+      ...visitRow, id: "missed-1", caregiver_name: "Missed Clockout", status: "draft" as const, time_out: null,
+      worked_minutes: null, billable_minutes: null, signed_at: null,
+      time_in: ago(300), scheduled_starts_at: ago(300), scheduled_ends_at: ago(90),
+    };
+    mockedRpc.mockImplementation((fn: string) =>
+      Promise.resolve(fn === "list_service_visits" ? { data: [missed], error: null } : { data: [], error: null }) as never,
+    );
+
+    renderPage();
+    await openReport(/Exceptions needing attention/);
+    fireEvent.click(await screen.findByRole("button", { name: "Close visit" }));
+
+    // Defaults to the scheduled end; a reason is required.
+    const timeOut = screen.getByLabelText("Actual Time Out") as HTMLInputElement;
+    expect(new Date(timeOut.value).getTime()).toBe(new Date(missed.scheduled_ends_at).setSeconds(0, 0));
+    fireEvent.click(screen.getByRole("button", { name: "Save Time Out" }));
+    expect(await screen.findByText("A reason is required to close a missed visit.")).toBeInTheDocument();
+    expect(mockedRpc).not.toHaveBeenCalledWith("close_missed_service_visit", expect.anything());
+
+    fireEvent.change(screen.getByLabelText("Reason"), { target: { value: "Caregiver confirmed by phone" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save Time Out" }));
+    await waitFor(() =>
+      expect(mockedRpc).toHaveBeenCalledWith("close_missed_service_visit", {
+        target_visit_id: "missed-1",
+        actual_time_out: new Date(timeOut.value).toISOString(),
+        reason: "Caregiver confirmed by phone",
+      }),
+    );
+  });
+
+  it("does not offer the close-out without visits.manage", async () => {
+    mockedUseOrganization.mockReturnValue({
+      activeOrganizationId: ORG_ID,
+      activeOrganization: { displayName: "Acme Care" },
+      hasPermission: vi.fn((key: string) => key !== "visits.manage"),
+    } as never);
+    mockOrgLetterhead();
+    const ago = (minutes: number) => new Date(Date.now() - minutes * 60_000).toISOString();
+    mockedRpc.mockResolvedValue({
+      data: [{
+        ...visitRow, id: "missed-1", status: "draft" as const, time_out: null, worked_minutes: null,
+        billable_minutes: null, signed_at: null, time_in: ago(300), scheduled_starts_at: ago(300), scheduled_ends_at: ago(90),
+      }],
+      error: null,
+    } as never);
+
+    renderPage();
+    await openReport(/Exceptions needing attention/);
+    expect(await screen.findByText("Missing Time Out")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Close visit" })).not.toBeInTheDocument();
+  });
+
+  it("marks visits whose Time Out a manager entered", async () => {
+    mockedUseOrganization.mockReturnValue({
+      activeOrganizationId: ORG_ID,
+      activeOrganization: { displayName: "Acme Care" },
+      hasPermission: vi.fn(() => true),
+    } as never);
+    mockOrgLetterhead();
+    mockedRpc.mockResolvedValue({ data: [{ ...visitRow, time_out_entered_by_manager: true }], error: null } as never);
+
+    renderPage();
+    await openReport(/Visit details/);
+    const table = await screen.findByRole("table", { name: "Visit details" });
+    expect(within(table).getByText("Time Out entered by manager")).toBeInTheDocument();
+  });
+
   it("lists visits and computes worked/billable subtotals, excluding corrected records", async () => {
     mockedUseOrganization.mockReturnValue({
       activeOrganizationId: ORG_ID,
@@ -263,6 +409,11 @@ describe("ServiceVerificationReportsPage", () => {
     renderPage();
 
     await openReport(/Client calendar/);
+    // The calendar defaults to the current month; pin the fixture month
+    // explicitly instead of depending on today's date.
+    fireEvent.change(await screen.findByLabelText("Calendar month"), {
+      target: { value: "2026-08" },
+    });
 
     const calendar = await screen.findByRole("grid", {
       name: /Caregiver hours for 2026-08/,
