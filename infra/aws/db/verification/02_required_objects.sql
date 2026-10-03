@@ -26,4 +26,14 @@ union all
 select 'api_function_exists:' || f,
        exists (select 1 from pg_proc p join pg_namespace n on n.oid = p.pronamespace
                where n.nspname = 'ogevia_api' and p.proname = f), null
-from required_functions;
+from required_functions
+union all
+select 'helper_function_exists:match_scheduled_shift_for_visit',
+       exists (select 1 from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+               where n.nspname = 'ogevia' and p.proname = 'match_scheduled_shift_for_visit'), null
+union all
+select 'trigger_exists:service_visits_release_reservation',
+       exists (select 1 from pg_trigger tg join pg_class c on c.oid = tg.tgrelid
+               join pg_namespace n on n.oid = c.relnamespace
+               where n.nspname = 'ogevia' and c.relname = 'service_visits'
+                 and tg.tgname = 'service_visits_release_reservation'), null;
