@@ -115,7 +115,7 @@ cat > "$RUN/SHARED_RESOURCES.md" <<EOF
 | Resource | Live facts | Shared with production? | This deployment |
 | --- | --- | --- | --- |
 | RDS \`$RDS_ID\` | $RDS_STATUS, public=$RDS_PUBLIC, encrypted=$RDS_ENC, backups ${RDS_RET}d | Production-NAMED instance. Production runs on Supabase. The databases on the instance are listed in the DB window, before any change. | Snapshot first. Migrations touch database \`$DB_NAME\` only. |
-| API Lambda \`$FN\` | DB_NAME=$LAMBDA_DB, code $(jq -r .CodeSha256 <<<"$FNCFG" | cut -c1-12)…, modified $(jq -r .LastModified <<<"$FNCFG") | No: it serves the TEST database only (checked above) | New code + 2 routes |
+| API Lambda \`$FN\` | DB_NAME=$LAMBDA_DB, code $(jq -r .CodeSha256 <<<"$FNCFG" | cut -c1-12)…, modified $(jq -r .LastModified <<<"$FNCFG") | No: it serves the TEST database only (checked above) | New code + the routes the scope gate lists |
 | Stacks \`Ogevia-prod-*\` (5) | all *_COMPLETE | Production-named. They hold the TEST slice; nothing in production depends on them. | Only \`$API_STACK\` changes (scope gate) |
 | CloudFront \`$DIST\` / bucket \`$BUCKET\` | origin $WEB; custom domains: ${ALIASES:-none} | ${ALIASES:+REVIEW: serves $ALIASES}${ALIASES:-No custom domain: TEST web origin only} | Web files + config.json |
 | Cognito pool \`$POOL\` | users≈$(cut -f1 <<<"$POOLINFO"), MFA=$(cut -f2 <<<"$POOLINFO"), clients: $CLIENTS | Shared pool. The \`ogevia-web\` client is reserved for a future production cutover and is not changed. | +3 individual users |
