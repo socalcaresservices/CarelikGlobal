@@ -55,9 +55,16 @@ import {
   formatNumericDate,
   formatScheduledWindow,
   formatTimeRange,
+  formatClockTime,
+  formatVisitDate,
+  pacificWallTimeToDate,
+  toPacificWallTime,
+  validateManagerTimeOut,
   VISIT_STATUS_LABEL,
+  type PacificWallTime,
   type ServiceVisitStatus,
 } from "@/lib/service-verification";
+import { PacificTimeOutField } from "@/components/pacific-time-out-field";
 
 
 
@@ -165,6 +172,18 @@ function billableRows(rows: VisitReportRow[]) {
   return rows.filter(
     (row) => row.status === "signed" || row.status === "administrator_review",
   );
+}
+
+// The server's refusal message (both backends: an Error from the AWS API
+// client, a plain { message } object from PostgREST), else the fallback.
+function errorMessage(cause: unknown, fallback: string) {
+  return cause &&
+    typeof cause === "object" &&
+    "message" in cause &&
+    typeof cause.message === "string" &&
+    cause.message
+    ? cause.message
+    : fallback;
 }
 
 // datetime-local inputs need "YYYY-MM-DDTHH:mm" in the browser's local
@@ -298,7 +317,12 @@ export function ServiceVerificationReportsPage() {
   const [correctionSaving, setCorrectionSaving] = useState(false);
   const [correctionError, setCorrectionError] = useState<string | null>(null);
   // Manager close-out of a missed clock-out (closeMissedVisit).
-  const [closeForm, setCloseForm] = useState<{ visitId: string; timeOut: string; reason: string } | null>(null);
+  const [closeForm, setCloseForm] = useState<{
+    visitId: string;
+    timeIn: string;
+    timeOut: PacificWallTime;
+    reason: string;
+  } | null>(null);
   const [closeSaving, setCloseSaving] = useState(false);
   const [closeError, setCloseError] = useState<string | null>(null);
   const closeKey = useRef(newIdempotencyKey());
@@ -512,11 +536,7 @@ export function ServiceVerificationReportsPage() {
         queryKey: ["service-visit-report"],
       });
     } catch (cause) {
-      setCorrectionError(
-        cause instanceof Error
-          ? cause.message
-          : "Could not correct this visit.",
-      );
+      setCorrectionError(errorMessage(cause, "Could not correct this visit."));
     } finally {
       setCorrectionSaving(false);
     }
@@ -798,9 +818,12 @@ export function ServiceVerificationReportsPage() {
 
   function openClose(row: VisitReportRow) {
     setCloseError(null);
+    // Only the date is pre-filled: the actual end time must be entered, not
+    // assumed from the schedule.
     setCloseForm({
       visitId: row.id,
-      timeOut: row.scheduled_ends_at ? toLocalInputValue(row.scheduled_ends_at) : "",
+      timeIn: row.time_in,
+      timeOut: { date: toPacificWallTime(row.time_in).date, hour: null, minute: null, meridiem: null },
       reason: "",
     });
   }
@@ -812,9 +835,15 @@ export function ServiceVerificationReportsPage() {
       setCloseError("A reason is required to close a missed visit.");
       return;
     }
-    const timeOut = new Date(closeForm.timeOut);
-    if (Number.isNaN(timeOut.getTime())) {
-      setCloseError("Enter the actual Time Out.");
+    const parsed = pacificWallTimeToDate(closeForm.timeOut);
+    if (!parsed.ok) {
+      setCloseError(parsed.error);
+      return;
+    }
+    const timeOut = parsed.value;
+    const invalid = validateManagerTimeOut(closeForm.timeIn, timeOut);
+    if (invalid) {
+      setCloseError(invalid);
       return;
     }
     setCloseSaving(true);
@@ -829,7 +858,7 @@ export function ServiceVerificationReportsPage() {
       setCloseForm(null);
       void queryClient.invalidateQueries({ queryKey: ["service-visit-report"] });
     } catch (cause) {
-      setCloseError(cause instanceof Error ? cause.message : "Could not close this visit.");
+      setCloseError(errorMessage(cause, "Could not close this visit."));
     } finally {
       setCloseSaving(false);
     }
@@ -2341,15 +2370,17 @@ export function ServiceVerificationReportsPage() {
                       Enter when the visit actually ended. The caregiver&apos;s app then
                       asks for the client&apos;s confirmation, marked as entered by the agency.
                     </p>
-                    <label className="block text-xs font-medium text-slate-700">
-                      Actual Time Out
-                      <input
-                        type="datetime-local"
-                        value={closeForm.timeOut}
-                        onChange={(event) => setCloseForm({ ...closeForm, timeOut: event.target.value })}
-                        className="mt-1 block w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
-                      />
-                    </label>
+                    {row.scheduled_ends_at ? (
+                      <p className="text-xs text-slate-500">
+                        Scheduled end: {formatVisitDate(row.scheduled_ends_at)}, {formatClockTime(row.scheduled_ends_at)}
+                      </p>
+                    ) : null}
+                    <PacificTimeOutField
+                      idPrefix={`close-${row.id}`}
+                      timeIn={closeForm.timeIn}
+                      value={closeForm.timeOut}
+                      onChange={(timeOut) => setCloseForm({ ...closeForm, timeOut })}
+                    />
                     <label className="block text-xs font-medium text-slate-700">
                       Reason
                       <textarea
@@ -2359,7 +2390,11 @@ export function ServiceVerificationReportsPage() {
                         className="mt-1 block w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
                       />
                     </label>
-                    {closeError ? <p className="text-xs text-red-700">{closeError}</p> : null}
+                    {closeError ? (
+                      <p role="alert" className="text-sm font-medium text-red-700">
+                        {closeError}
+                      </p>
+                    ) : null}
                     <div className="flex gap-2">
                       <Button type="button" loading={closeSaving} onClick={() => void handleSubmitClose()}>
                         Save Time Out

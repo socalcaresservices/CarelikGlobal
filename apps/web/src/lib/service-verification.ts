@@ -178,3 +178,102 @@ export const SIGNER_ROLE_LABEL: Record<VisitSignerRole, string> = {
   guardian: "Guardian",
   authorized_representative: "Authorized representative"
 };
+
+// ---------------------------------------------------------------------------
+// Manager-entered Time Out. Every time on these screens is shown in Pacific
+// time, so entry is Pacific too (not the manager's device timezone), split
+// into date, hour, minute and an explicit AM/PM.
+
+export type Meridiem = "AM" | "PM";
+
+export interface PacificWallTime {
+  /** YYYY-MM-DD */
+  date: string;
+  /** 1-12, or null while not chosen */
+  hour: number | null;
+  /** 0-59, or null while not chosen */
+  minute: number | null;
+  meridiem: Meridiem | null;
+}
+
+function pacificFields(utcMs: number) {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: PACIFIC_TIME_ZONE,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hourCycle: "h23",
+  }).formatToParts(new Date(utcMs));
+  const get = (type: string) => Number(parts.find((p) => p.type === type)?.value);
+  return { year: get("year"), month: get("month"), day: get("day"), hour: get("hour"), minute: get("minute") };
+}
+
+/** The Pacific date/hour/minute/AM-PM of an instant, for pre-filling the form. */
+export function toPacificWallTime(value: string | Date): PacificWallTime {
+  const f = pacificFields(new Date(value).getTime());
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return {
+    date: `${f.year}-${pad(f.month)}-${pad(f.day)}`,
+    hour: f.hour % 12 === 0 ? 12 : f.hour % 12,
+    minute: f.minute,
+    meridiem: f.hour < 12 ? "AM" : "PM",
+  };
+}
+
+export type WallTimeResult =
+  | { ok: true; value: Date }
+  | { ok: false; error: string };
+
+/** Converts a Pacific wall-clock entry to an instant, rejecting incomplete or non-existent times. */
+export function pacificWallTimeToDate(entry: PacificWallTime): WallTimeResult {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(entry.date)) {
+    return { ok: false, error: "Enter the date the visit ended." };
+  }
+  if (entry.hour === null || entry.minute === null || entry.meridiem === null) {
+    return { ok: false, error: "Choose the hour, minute, and AM or PM." };
+  }
+  const [year, month, day] = entry.date.split("-").map(Number) as [number, number, number];
+  const hour24 = (entry.hour % 12) + (entry.meridiem === "PM" ? 12 : 0);
+  const asUtc = Date.UTC(year, month - 1, day, hour24, entry.minute);
+  // Pacific offset at the guessed instant, re-checked once for a DST edge.
+  const offsetAt = (ms: number) => {
+    const f = pacificFields(ms);
+    return Date.UTC(f.year, f.month - 1, f.day, f.hour, f.minute) - ms;
+  };
+  let instant = asUtc - offsetAt(asUtc);
+  const second = asUtc - offsetAt(instant);
+  if (second !== instant) instant = second;
+  const check = pacificFields(instant);
+  if (check.year !== year || check.month !== month || check.day !== day || check.hour !== hour24 || check.minute !== entry.minute) {
+    return {
+      ok: false,
+      error: "That time does not exist on this date (daylight saving change). Choose another time.",
+    };
+  }
+  return { ok: true, value: new Date(instant) };
+}
+
+/** Same limits the server enforces on a manager-entered Time Out (0015 / 20260826090000). */
+export const MAX_VISIT_MINUTES = 24 * 60;
+
+export function validateManagerTimeOut(
+  timeIn: string,
+  timeOut: Date,
+  now: Date = new Date(),
+): string | null {
+  const start = new Date(timeIn);
+  const minutes = Math.floor((timeOut.getTime() - start.getTime()) / 60_000);
+  const describe = (d: Date) => `${formatVisitDate(d)}, ${formatClockTime(d)}`;
+  if (timeOut.getTime() > now.getTime()) {
+    return `Time Out (${describe(timeOut)}) is in the future. Check the date and AM/PM.`;
+  }
+  if (minutes < 1) {
+    return `Time Out (${describe(timeOut)}) must be after Time In (${describe(start)}). Check the date and AM/PM.`;
+  }
+  if (minutes > MAX_VISIT_MINUTES) {
+    return `This would make the visit ${formatDuration(minutes)}. A visit cannot be longer than 24 hours. Check the date.`;
+  }
+  return null;
+}

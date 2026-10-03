@@ -11,6 +11,7 @@ import { useOrganization } from "@/providers/organization-provider";
 import { supabase } from "@/lib/supabase";
 import { ServiceVerificationBackendContext, type ServiceVerificationBackend } from "@/lib/sv-backend";
 import { ServiceVerificationReportsPage } from "./service-verification-reports-page";
+import { formatClockTime, formatVisitDate, toPacificWallTime } from "@/lib/service-verification";
 
 vi.mock("@/providers/organization-provider", () => ({
   useOrganization: vi.fn(),
@@ -191,14 +192,16 @@ describe("ServiceVerificationReportsPage", () => {
     expect(screen.queryByText(/No visits currently need manager attention/)).not.toBeInTheDocument();
   });
 
-  it("lets a visit manager close a missed clock-out with the actual Time Out and a reason", async () => {
+  it("lets a visit manager close a missed clock-out with an explicit Pacific date, AM/PM and duration", async () => {
     mockedUseOrganization.mockReturnValue({
       activeOrganizationId: ORG_ID,
       activeOrganization: { displayName: "Acme Care" },
       hasPermission: vi.fn(() => true),
     } as never);
     mockOrgLetterhead();
-    const ago = (minutes: number) => new Date(Date.now() - minutes * 60_000).toISOString();
+    const base = new Date();
+    base.setSeconds(0, 0);
+    const ago = (minutes: number) => new Date(base.getTime() - minutes * 60_000).toISOString();
     const missed = {
       ...visitRow, id: "missed-1", caregiver_name: "Missed Clockout", status: "draft" as const, time_out: null,
       worked_minutes: null, billable_minutes: null, signed_at: null,
@@ -207,27 +210,93 @@ describe("ServiceVerificationReportsPage", () => {
     mockedRpc.mockImplementation((fn: string) =>
       Promise.resolve(fn === "list_service_visits" ? { data: [missed], error: null } : { data: [], error: null }) as never,
     );
+    const enter = (iso: string) => {
+      const wall = toPacificWallTime(iso);
+      fireEvent.change(screen.getByLabelText("Date"), { target: { value: wall.date } });
+      fireEvent.change(screen.getByLabelText("Hour"), { target: { value: String(wall.hour) } });
+      fireEvent.change(screen.getByLabelText("Minute"), { target: { value: String(wall.minute) } });
+      fireEvent.click(screen.getByRole("radio", { name: wall.meridiem! }));
+    };
 
     renderPage();
     await openReport(/Exceptions needing attention/);
     fireEvent.click(await screen.findByRole("button", { name: "Close visit" }));
 
-    // Defaults to the scheduled end; a reason is required.
-    const timeOut = screen.getByLabelText("Actual Time Out") as HTMLInputElement;
-    expect(new Date(timeOut.value).getTime()).toBe(new Date(missed.scheduled_ends_at).setSeconds(0, 0));
+    // Only the date is pre-filled (Time In's Pacific date); the time must be entered.
+    expect(screen.getByLabelText("Date")).toHaveValue(toPacificWallTime(missed.time_in).date);
+    expect(screen.getByLabelText("Hour")).toHaveValue("");
+    expect(screen.getByRole("radio", { name: "AM" })).toHaveAttribute("aria-checked", "false");
+    expect(screen.getByRole("radio", { name: "PM" })).toHaveAttribute("aria-checked", "false");
+    expect(screen.getByText(/^Scheduled end:/)).toBeInTheDocument();
+
     fireEvent.click(screen.getByRole("button", { name: "Save Time Out" }));
-    expect(await screen.findByText("A reason is required to close a missed visit.")).toBeInTheDocument();
-    expect(mockedRpc).not.toHaveBeenCalledWith("close_missed_service_visit", expect.anything());
+    expect(await screen.findByRole("alert")).toHaveTextContent("A reason is required to close a missed visit.");
 
     fireEvent.change(screen.getByLabelText("Reason"), { target: { value: "Caregiver confirmed by phone" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save Time Out" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent("Choose the hour, minute, and AM or PM.");
+
+    // Before Time In (e.g. the wrong AM/PM): named, with both times.
+    enter(ago(360));
+    fireEvent.click(screen.getByRole("button", { name: "Save Time Out" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent(/must be after Time In \(.+\)\. Check the date and AM\/PM\./);
+
+    // In the future.
+    enter(new Date(base.getTime() + 120 * 60_000).toISOString());
+    fireEvent.click(screen.getByRole("button", { name: "Save Time Out" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent(/is in the future/);
+    expect(mockedRpc).not.toHaveBeenCalledWith("close_missed_service_visit", expect.anything());
+
+    // Valid: the summary spells out Time In, Time Out and the worked duration.
+    enter(ago(60));
+    const summary = screen.getByLabelText("Time Out summary");
+    expect(summary).toHaveTextContent(`${formatVisitDate(ago(60))}, ${formatClockTime(ago(60))}`);
+    expect(summary).toHaveTextContent("Duration4 hr");
     fireEvent.click(screen.getByRole("button", { name: "Save Time Out" }));
     await waitFor(() =>
       expect(mockedRpc).toHaveBeenCalledWith("close_missed_service_visit", {
         target_visit_id: "missed-1",
-        actual_time_out: new Date(timeOut.value).toISOString(),
+        actual_time_out: ago(60),
         reason: "Caregiver confirmed by phone",
       }),
     );
+  });
+
+  it("shows the server's message when it refuses a Time Out (e.g. an overlap)", async () => {
+    mockedUseOrganization.mockReturnValue({
+      activeOrganizationId: ORG_ID,
+      activeOrganization: { displayName: "Acme Care" },
+      hasPermission: vi.fn(() => true),
+    } as never);
+    mockOrgLetterhead();
+    const base = new Date();
+    base.setSeconds(0, 0);
+    const ago = (minutes: number) => new Date(base.getTime() - minutes * 60_000).toISOString();
+    const missed = {
+      ...visitRow, id: "missed-1", status: "draft" as const, time_out: null, worked_minutes: null,
+      billable_minutes: null, signed_at: null, time_in: ago(300), scheduled_starts_at: ago(300), scheduled_ends_at: ago(90),
+    };
+    mockedRpc.mockImplementation((fn: string) =>
+      Promise.resolve(
+        fn === "list_service_visits"
+          ? { data: [missed], error: null }
+          : fn === "close_missed_service_visit"
+            ? { data: null, error: { message: "The Time Out overlaps another visit for this caregiver" } }
+            : { data: [], error: null },
+      ) as never,
+    );
+
+    renderPage();
+    await openReport(/Exceptions needing attention/);
+    fireEvent.click(await screen.findByRole("button", { name: "Close visit" }));
+    const wall = toPacificWallTime(ago(60));
+    fireEvent.change(screen.getByLabelText("Date"), { target: { value: wall.date } });
+    fireEvent.change(screen.getByLabelText("Hour"), { target: { value: String(wall.hour) } });
+    fireEvent.change(screen.getByLabelText("Minute"), { target: { value: String(wall.minute) } });
+    fireEvent.click(screen.getByRole("radio", { name: wall.meridiem! }));
+    fireEvent.change(screen.getByLabelText("Reason"), { target: { value: "Phone check" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save Time Out" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent("The Time Out overlaps another visit for this caregiver");
   });
 
   it("does not offer the close-out without visits.manage", async () => {
