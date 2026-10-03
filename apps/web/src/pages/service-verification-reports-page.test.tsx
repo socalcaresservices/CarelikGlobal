@@ -213,8 +213,8 @@ describe("ServiceVerificationReportsPage", () => {
     const enter = (iso: string) => {
       const wall = toPacificWallTime(iso);
       fireEvent.change(screen.getByLabelText("Time Out date"), { target: { value: wall.date } });
-      fireEvent.change(screen.getByLabelText("Hour"), { target: { value: String(wall.hour) } });
-      fireEvent.change(screen.getByLabelText("Minute"), { target: { value: String(wall.minute) } });
+      fireEvent.change(screen.getByLabelText("Time Out hour"), { target: { value: String(wall.hour) } });
+      fireEvent.change(screen.getByLabelText("Time Out minute"), { target: { value: String(wall.minute) } });
       fireEvent.click(screen.getByRole("radio", { name: wall.meridiem! }));
     };
 
@@ -224,7 +224,7 @@ describe("ServiceVerificationReportsPage", () => {
 
     // Only the date is pre-filled (Time In's Pacific date); the time must be entered.
     expect(screen.getByLabelText("Time Out date")).toHaveValue(toPacificWallTime(missed.time_in).date);
-    expect(screen.getByLabelText("Hour")).toHaveValue("");
+    expect(screen.getByLabelText("Time Out hour")).toHaveValue("");
     expect(screen.getByRole("radio", { name: "AM" })).toHaveAttribute("aria-checked", "false");
     expect(screen.getByRole("radio", { name: "PM" })).toHaveAttribute("aria-checked", "false");
     expect(screen.getByText(/^Scheduled end:/)).toBeInTheDocument();
@@ -293,12 +293,83 @@ describe("ServiceVerificationReportsPage", () => {
     fireEvent.click(await screen.findByRole("button", { name: "Close visit" }));
     const wall = toPacificWallTime(ago(60));
     fireEvent.change(screen.getByLabelText("Time Out date"), { target: { value: wall.date } });
-    fireEvent.change(screen.getByLabelText("Hour"), { target: { value: String(wall.hour) } });
-    fireEvent.change(screen.getByLabelText("Minute"), { target: { value: String(wall.minute) } });
+    fireEvent.change(screen.getByLabelText("Time Out hour"), { target: { value: String(wall.hour) } });
+    fireEvent.change(screen.getByLabelText("Time Out minute"), { target: { value: String(wall.minute) } });
     fireEvent.click(screen.getByRole("radio", { name: wall.meridiem! }));
     fireEvent.change(screen.getByLabelText("Reason"), { target: { value: "Phone check" } });
     fireEvent.click(screen.getByRole("button", { name: "Save Time Out" }));
     expect(await screen.findByRole("alert")).toHaveTextContent("The Time Out overlaps another visit for this caregiver");
+  });
+
+  it("corrects a signed visit in Pacific time with explicit AM/PM, specific errors and the exact instants saved", async () => {
+    mockedUseOrganization.mockReturnValue({
+      activeOrganizationId: ORG_ID,
+      activeOrganization: { displayName: "Acme Care" },
+      hasPermission: vi.fn(() => true),
+    } as never);
+    mockOrgLetterhead();
+    mockedRpc.mockImplementation((fn: string) =>
+      Promise.resolve(fn === "list_service_visits" ? { data: [visitRow], error: null } : { data: [], error: null }) as never,
+    );
+
+    renderPage();
+    await openReport(/Visit details/);
+    fireEvent.click(await screen.findByRole("button", { name: "Correct" }));
+
+    // Pre-filled from the original record in Pacific time (13:00Z = 6:00 AM PDT),
+    // whatever the device timezone.
+    expect(screen.getByLabelText("Corrected Time In date")).toHaveValue("2026-08-01");
+    expect(screen.getByLabelText("Corrected Time In hour")).toHaveValue("6");
+    expect(screen.getByLabelText("Corrected Time Out hour")).toHaveValue("7");
+    const inGroup = screen.getByRole("radiogroup", { name: "Corrected Time In AM or PM" });
+    expect(within(inGroup).getByRole("radio", { name: "AM" })).toHaveAttribute("aria-checked", "true");
+    const summary = screen.getByLabelText("Correction summary");
+    expect(summary).toHaveTextContent("Aug 1, 2026, 6:00 AM → Aug 1, 2026, 7:00 AM (1 hr)");
+
+    fireEvent.click(screen.getByRole("button", { name: "Save correction" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent("A reason is required to correct a visit.");
+    fireEvent.change(screen.getByLabelText("Reason (required)"), { target: { value: "Caregiver left later (synthetic)" } });
+
+    // Time Out before Time In: named, with both times.
+    fireEvent.change(screen.getByLabelText("Corrected Time Out hour"), { target: { value: "5" } });
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Save correction" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "Time Out (Aug 1, 2026, 5:00 AM) must be after Time In (Aug 1, 2026, 6:00 AM). Check the date and AM/PM.",
+    );
+    expect(mockedRpc).not.toHaveBeenCalledWith("correct_service_visit", expect.anything());
+
+    fireEvent.change(screen.getByLabelText("Corrected Time Out hour"), { target: { value: "7" } });
+    fireEvent.change(screen.getByLabelText("Corrected Time Out minute"), { target: { value: "30" } });
+    expect(summary).toHaveTextContent("→ Aug 1, 2026, 7:30 AM (1 hr 30 min)");
+    fireEvent.click(screen.getByRole("button", { name: "Save correction" }));
+    await waitFor(() =>
+      expect(mockedRpc).toHaveBeenCalledWith("correct_service_visit", {
+        target_visit_id: visitRow.id,
+        new_time_in: "2026-08-01T13:00:00.000Z",
+        new_time_out: "2026-08-01T14:30:00.000Z",
+        reason: "Caregiver left later (synthetic)",
+      }),
+    );
+  });
+
+  it("refuses an incomplete corrected time with a message naming which time", async () => {
+    mockedUseOrganization.mockReturnValue({
+      activeOrganizationId: ORG_ID,
+      activeOrganization: { displayName: "Acme Care" },
+      hasPermission: vi.fn(() => true),
+    } as never);
+    mockOrgLetterhead();
+    mockedRpc.mockImplementation((fn: string) =>
+      Promise.resolve(fn === "list_service_visits" ? { data: [visitRow], error: null } : { data: [], error: null }) as never,
+    );
+    renderPage();
+    await openReport(/Visit details/);
+    fireEvent.click(await screen.findByRole("button", { name: "Correct" }));
+    fireEvent.change(screen.getByLabelText("Reason (required)"), { target: { value: "x" } });
+    fireEvent.change(screen.getByLabelText("Corrected Time In minute"), { target: { value: "" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save correction" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent("Time In: Choose the hour, minute, and AM or PM.");
   });
 
   it("does not offer the close-out without visits.manage", async () => {

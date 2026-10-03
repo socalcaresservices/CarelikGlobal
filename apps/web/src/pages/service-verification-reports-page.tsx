@@ -64,7 +64,7 @@ import {
   type PacificWallTime,
   type ServiceVisitStatus,
 } from "@/lib/service-verification";
-import { PacificTimeOutField } from "@/components/pacific-time-out-field";
+import { PacificCorrectionFields, PacificTimeOutField } from "@/components/pacific-time-out-field";
 
 
 
@@ -186,15 +186,6 @@ function errorMessage(cause: unknown, fallback: string) {
     : fallback;
 }
 
-// datetime-local inputs need "YYYY-MM-DDTHH:mm" in the browser's local
-// time - toISOString() always renders UTC, so this reformats from the
-// Date object's own local getters instead.
-function toLocalInputValue(value: string) {
-  const date = new Date(value);
-  const pad = (n: number) => String(n).padStart(2, "0");
-  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
-}
-
 function currentPacificMonth() {
   const parts = new Intl.DateTimeFormat("en-US", {
     timeZone: "America/Los_Angeles",
@@ -309,11 +300,16 @@ export function ServiceVerificationReportsPage() {
   const [expandedMode, setExpandedMode] = useState<
     "correct" | "history" | null
   >(null);
-  const [correctionForm, setCorrectionForm] = useState({
-    timeIn: "",
-    timeOut: "",
-    reason: "",
-  });
+  // Corrections are entered in Pacific time (date, hour, minute, AM/PM),
+  // starting from the original record's times.
+  const emptyWallTime: PacificWallTime = { date: "", hour: null, minute: null, meridiem: null };
+  const [correctionForm, setCorrectionForm] = useState<{
+    originalTimeIn: string;
+    originalTimeOut: string | null;
+    timeIn: PacificWallTime;
+    timeOut: PacificWallTime;
+    reason: string;
+  }>({ originalTimeIn: "", originalTimeOut: null, timeIn: emptyWallTime, timeOut: emptyWallTime, reason: "" });
   const [correctionSaving, setCorrectionSaving] = useState(false);
   const [correctionError, setCorrectionError] = useState<string | null>(null);
   // Manager close-out of a missed clock-out (closeMissedVisit).
@@ -484,8 +480,10 @@ export function ServiceVerificationReportsPage() {
     setExpandedMode("correct");
     setCorrectionError(null);
     setCorrectionForm({
-      timeIn: toLocalInputValue(row.time_in),
-      timeOut: row.time_out ? toLocalInputValue(row.time_out) : "",
+      originalTimeIn: row.time_in,
+      originalTimeOut: row.time_out,
+      timeIn: toPacificWallTime(row.time_in),
+      timeOut: row.time_out ? toPacificWallTime(row.time_out) : emptyWallTime,
       reason: "",
     });
   }
@@ -507,17 +505,21 @@ export function ServiceVerificationReportsPage() {
       setCorrectionError("A reason is required to correct a visit.");
       return;
     }
-    const newTimeIn = new Date(correctionForm.timeIn);
-    const newTimeOut = new Date(correctionForm.timeOut);
-    if (
-      Number.isNaN(newTimeIn.getTime()) ||
-      Number.isNaN(newTimeOut.getTime())
-    ) {
-      setCorrectionError("Enter valid times.");
+    const parsedIn = pacificWallTimeToDate(correctionForm.timeIn);
+    if (!parsedIn.ok) {
+      setCorrectionError(`Time In: ${parsedIn.error.replace("the visit ended", "the visit started")}`);
       return;
     }
-    if (newTimeOut.getTime() <= newTimeIn.getTime()) {
-      setCorrectionError("Time out must be after time in.");
+    const parsedOut = pacificWallTimeToDate(correctionForm.timeOut);
+    if (!parsedOut.ok) {
+      setCorrectionError(`Time Out: ${parsedOut.error}`);
+      return;
+    }
+    const newTimeIn = parsedIn.value;
+    const newTimeOut = parsedOut.value;
+    const invalid = validateManagerTimeOut(newTimeIn.toISOString(), newTimeOut);
+    if (invalid) {
+      setCorrectionError(invalid);
       return;
     }
 
@@ -2185,35 +2187,21 @@ export function ServiceVerificationReportsPage() {
                                   The signed record is never overwritten. The correction creates a
                                   linked revision and preserves the original in History.
                                 </p>
-                                <div className="mt-3 grid gap-3 sm:grid-cols-3">
-                                  <div>
-                                    <label htmlFor="correction-time-in" className="block text-xs font-medium text-slate-600">
-                                      Time in
-                                    </label>
-                                    <input
-                                      id="correction-time-in"
-                                      type="datetime-local"
-                                      value={correctionForm.timeIn}
-                                      onChange={(event) =>
-                                        setCorrectionForm({ ...correctionForm, timeIn: event.target.value })
-                                      }
-                                      className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900"
-                                    />
-                                  </div>
-                                  <div>
-                                    <label htmlFor="correction-time-out" className="block text-xs font-medium text-slate-600">
-                                      Time out
-                                    </label>
-                                    <input
-                                      id="correction-time-out"
-                                      type="datetime-local"
-                                      value={correctionForm.timeOut}
-                                      onChange={(event) =>
-                                        setCorrectionForm({ ...correctionForm, timeOut: event.target.value })
-                                      }
-                                      className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900"
-                                    />
-                                  </div>
+                                <div className="mt-3 space-y-3">
+                                  <PacificCorrectionFields
+                                    originalTimeIn={correctionForm.originalTimeIn}
+                                    originalTimeOut={correctionForm.originalTimeOut}
+                                    timeIn={correctionForm.timeIn}
+                                    timeOut={correctionForm.timeOut}
+                                    onTimeInChange={(timeIn) => {
+                                      setCorrectionError(null);
+                                      setCorrectionForm({ ...correctionForm, timeIn });
+                                    }}
+                                    onTimeOutChange={(timeOut) => {
+                                      setCorrectionError(null);
+                                      setCorrectionForm({ ...correctionForm, timeOut });
+                                    }}
+                                  />
                                   <div>
                                     <label htmlFor="correction-reason" className="block text-xs font-medium text-slate-600">
                                       Reason (required)
@@ -2229,7 +2217,11 @@ export function ServiceVerificationReportsPage() {
                                     />
                                   </div>
                                 </div>
-                                {correctionError ? <p className="mt-2 text-sm text-red-700">{correctionError}</p> : null}
+                                {correctionError ? (
+                                  <p role="alert" className="mt-2 text-sm font-medium text-red-700">
+                                    {correctionError}
+                                  </p>
+                                ) : null}
                                 <div className="mt-3 flex gap-3">
                                   <Button type="button" loading={correctionSaving} onClick={() => handleSubmitCorrection(row.id)}>
                                     {correctionSaving ? "Saving…" : "Save correction"}
@@ -2376,7 +2368,6 @@ export function ServiceVerificationReportsPage() {
                       </p>
                     ) : null}
                     <PacificTimeOutField
-                      idPrefix={`close-${row.id}`}
                       timeIn={closeForm.timeIn}
                       value={closeForm.timeOut}
                       onChange={(timeOut) => {
