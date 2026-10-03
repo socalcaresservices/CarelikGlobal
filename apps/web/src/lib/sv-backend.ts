@@ -43,6 +43,8 @@ export interface ActiveVisit {
   visit_status: "draft" | "awaiting_signature";
   max_monthly_hours: number;
   confirmed_minutes_this_month: number;
+  // Time Out entered by a manager closing a missed clock-out (0015).
+  time_out_entered_by_manager?: boolean | null;
 }
 
 export interface EndedVisitTimes {
@@ -101,6 +103,7 @@ export interface VisitReportRow {
   // The linked shift's window (0013); null when the visit has no scheduled shift.
   scheduled_starts_at?: string | null;
   scheduled_ends_at?: string | null;
+  time_out_entered_by_manager?: boolean | null;
 }
 
 export interface VisitCorrectionRow {
@@ -142,6 +145,13 @@ export interface VisitReportFilters {
 export interface CorrectVisitInput {
   visitId: string;
   timeIn: string;
+  timeOut: string;
+  reason: string;
+  idempotencyKey: string;
+}
+
+export interface CloseMissedVisitInput {
+  visitId: string;
   timeOut: string;
   reason: string;
   idempotencyKey: string;
@@ -215,6 +225,8 @@ export interface ServiceVerificationBackend {
   listClientLocations(organizationId: string): Promise<ClientLocation[]>;
   listCorrections(visitId: string): Promise<VisitCorrectionRow[]>;
   correctVisit(input: CorrectVisitInput): Promise<void>;
+  /** Manager close-out of a missed clock-out: enters the actual Time Out. */
+  closeMissedVisit(input: CloseMissedVisitInput): Promise<void>;
   /** AWS only: the locked signature as a PNG data URL (permission-checked, audited). */
   getSignatureDataUrl?(visitId: string): Promise<string>;
   /** AWS reporting: one row per client + service + authorization lineage for a month. */

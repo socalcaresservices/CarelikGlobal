@@ -41,7 +41,7 @@ RDS_ID = "ogevia-prod-postgres"
 EVIDENCE_BUCKET = "ogevia-prod-signature-evidence-%s-%s" % (ACCOUNT, REGION)
 EXISTING_CLIENT = "1i27abbina08fvg1i9u8vprgo9"
 TEST_ORG_SLUG = "ogevia-test-slice"
-EXPECTED_ROUTES = 37
+EXPECTED_ROUTES = 38
 # Must equal infra/aws/lib/public-routes.ts (checked by a unit test).
 APPROVED_PUBLIC_ROUTE_KEYS = sorted([
     "GET /v1/public/care-portals/{token}",

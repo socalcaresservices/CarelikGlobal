@@ -125,6 +125,14 @@ export const supabaseServiceVerificationBackend: ServiceVerificationBackend = {
     });
     if (error) throw error;
   },
+  async closeMissedVisit({ visitId, timeOut, reason }) {
+    const { error } = await supabase.rpc("close_missed_service_visit", {
+      target_visit_id: visitId,
+      actual_time_out: timeOut,
+      reason,
+    });
+    if (error) throw error;
+  },
 };
 
 /** The backend for the current screen: AWS when provided, otherwise the current Supabase one. */

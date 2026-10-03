@@ -44,6 +44,7 @@ describe("SCHEMA: migration chain", () => {
       "0012",
       "0013",
       "0014",
+      "0015",
     ]);
   });
 
