@@ -153,6 +153,40 @@ describe("ServiceVerificationReportsPage", () => {
     expect(unlinkedRow).toHaveTextContent("Not linked to a scheduled shift");
   });
 
+  it("lists missed clock-outs and unconfirmed visits under Exceptions, but not visits still in their shift", async () => {
+    mockedUseOrganization.mockReturnValue({
+      activeOrganizationId: ORG_ID,
+      activeOrganization: { displayName: "Acme Care" },
+      hasPermission: vi.fn(() => true),
+    } as never);
+    mockOrgLetterhead();
+    const ago = (minutes: number) => new Date(Date.now() - minutes * 60_000).toISOString();
+    const open = { ...visitRow, status: "draft" as const, time_out: null, worked_minutes: null, billable_minutes: null, signed_at: null };
+    mockedRpc.mockResolvedValue({
+      data: [
+        { ...open, id: "missed-1", caregiver_name: "Missed Clockout", time_in: ago(300), scheduled_starts_at: ago(300), scheduled_ends_at: ago(90) },
+        { ...open, id: "working-1", caregiver_name: "Still Working", time_in: ago(30), scheduled_starts_at: ago(30), scheduled_ends_at: ago(-120) },
+        { ...visitRow, id: "unconfirmed-1", caregiver_name: "Never Confirmed", status: "awaiting_signature", time_in: ago(300), time_out: ago(120), signed_at: null },
+      ],
+      error: null,
+    } as never);
+
+    renderPage();
+    await openReport(/Exceptions needing attention/);
+
+    const card = (await screen.findByText("Incomplete visits (2)")).closest("div")!;
+    const items = within(card).getAllByRole("listitem");
+    // Most overdue first: signed out 2h ago, then 1h 30m past scheduled end.
+    expect(items[0]).toHaveTextContent("Never Confirmed");
+    expect(items[0]).toHaveTextContent("Not confirmed");
+    expect(items[0]).toHaveTextContent("Signed out 2h 0m ago");
+    expect(items[1]).toHaveTextContent("Missed Clockout");
+    expect(items[1]).toHaveTextContent("Missing Time Out");
+    expect(items[1]).toHaveTextContent("1h 30m past scheduled end");
+    expect(card).not.toHaveTextContent("Still Working");
+    expect(screen.queryByText(/No visits currently need manager attention/)).not.toBeInTheDocument();
+  });
+
   it("lists visits and computes worked/billable subtotals, excluding corrected records", async () => {
     mockedUseOrganization.mockReturnValue({
       activeOrganizationId: ORG_ID,

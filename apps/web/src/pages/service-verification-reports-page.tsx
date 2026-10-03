@@ -38,6 +38,8 @@ import { useOrganization } from "@/providers/organization-provider";
 import { supabase } from "@/lib/supabase";
 import {
   AUTHORIZATION_STATUS_LABEL,
+  classifyIncompleteVisit,
+  UNSCHEDULED_OPEN_VISIT_ALERT_HOURS,
   formatDateTime,
   formatScheduledWindow,
   formatHours,
@@ -46,6 +48,16 @@ import {
   type ServiceVisitStatus,
   type VisitAuthorizationStatus,
 } from "@/lib/service-verification";
+
+function overdueMinutes(issue: { kind: string; minutesOverdue?: number; minutesSinceTimeOut?: number }) {
+  return issue.kind === "not_confirmed" ? (issue.minutesSinceTimeOut ?? 0) : (issue.minutesOverdue ?? 0);
+}
+
+function formatOverdue(minutes: number) {
+  const h = Math.floor(minutes / 60);
+  const m = minutes % 60;
+  return h > 0 ? `${h}h ${m}m` : `${m}m`;
+}
 
 interface VisitReportRow {
   id: string;
@@ -638,6 +650,16 @@ export function ServiceVerificationReportsPage() {
       ),
     [rows],
   );
+
+  // Missed clock-outs and visits never confirmed (classifyIncompleteVisit),
+  // most overdue first. In-progress visits inside their shift are not listed.
+  const incompleteVisits = useMemo(() => {
+    const now = new Date();
+    return rows
+      .map((row) => ({ row, issue: classifyIncompleteVisit(row, now) }))
+      .filter((x): x is { row: VisitReportRow; issue: NonNullable<typeof x.issue> } => x.issue !== null)
+      .sort((a, b) => overdueMinutes(b.issue) - overdueMinutes(a.issue));
+  }, [rows]);
 
   function handlePrint() {
     window.print();
@@ -1723,6 +1745,50 @@ export function ServiceVerificationReportsPage() {
         </>
       ) : null}
 
+      {reportView === "exceptions" && incompleteVisits.length > 0 ? (
+        <Card>
+          <h3 className="font-semibold text-slate-950">
+            Incomplete visits ({incompleteVisits.length})
+          </h3>
+          <p className="mt-1 text-xs text-slate-500">
+            Missing Time Out: still open past the scheduled shift end (or open{" "}
+            {UNSCHEDULED_OPEN_VISIT_ALERT_HOURS}+ hours with no scheduled shift). Not confirmed: signed out over an
+            hour ago without a client confirmation or a no-signer reason. Ask
+            the caregiver to finish the visit on their phone.
+          </p>
+          <ul className="mt-3 divide-y divide-slate-100">
+            {incompleteVisits.map(({ row, issue }) => (
+              <li key={row.id} className="py-2 text-sm">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <span className="text-slate-700">
+                    {row.client_legal_name ?? row.client_code}{" "}
+                    <span className="text-slate-400">
+                      · {row.caregiver_name} · Time In {formatDateTime(row.time_in)}
+                      {row.scheduled_starts_at
+                        ? ` · Scheduled ${formatScheduledWindow(row.scheduled_starts_at, row.scheduled_ends_at)}`
+                        : ""}
+                    </span>
+                  </span>
+                  <span className="flex flex-wrap items-center gap-1.5">
+                    <StatusBadge
+                      label={issue.kind === "missing_time_out" ? "Missing Time Out" : "Not confirmed"}
+                      tone={issue.kind === "missing_time_out" ? "danger" : "warning"}
+                    />
+                    <span className="text-xs text-slate-500">
+                      {issue.kind === "not_confirmed"
+                        ? `Signed out ${formatOverdue(issue.minutesSinceTimeOut)} ago`
+                        : issue.reason === "past_scheduled_end"
+                          ? `${formatOverdue(issue.minutesOverdue)} past scheduled end`
+                          : `Open ${formatOverdue(issue.minutesOverdue + UNSCHEDULED_OPEN_VISIT_ALERT_HOURS * 60)}, no scheduled shift`}
+                    </span>
+                  </span>
+                </div>
+              </li>
+            ))}
+          </ul>
+        </Card>
+      ) : null}
+
       {reportView === "exceptions" && exceptionVisits.length > 0 ? (
         <Card>
           <h3 className="font-semibold text-slate-950">Exception visits</h3>
@@ -1767,7 +1833,7 @@ export function ServiceVerificationReportsPage() {
             ))}
           </ul>
         </Card>
-      ) : reportView === "exceptions" ? (
+      ) : reportView === "exceptions" && incompleteVisits.length === 0 ? (
         <Card>
           <h3 className="font-semibold text-slate-950">Exceptions</h3>
           <p className="mt-3 text-sm text-emerald-700">
