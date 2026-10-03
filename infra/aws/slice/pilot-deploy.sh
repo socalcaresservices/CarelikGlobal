@@ -140,7 +140,9 @@ else
   echo "Quality gate already passed for $COMMIT in this run."
   [[ -d node_modules ]] || "${PNPM[@]}" install --frozen-lockfile
 fi
-export OGEVIA_DEPLOY_APPROVAL="pilot-test-$COMMIT"
+# Synthesize with the LIVE approval tag value when given (pilot-recover-scope.sh),
+# so tags stay identical and the strict scope gate sees only the approved change.
+export OGEVIA_DEPLOY_APPROVAL="${OGEVIA_PILOT_TAG_REF:-pilot-test-$COMMIT}"
 (cd "$HERE" && npx cdk synth --quiet --no-notices -c env=prod -c mode=deploy >/dev/null) || die "cdk synth (deploy mode) failed"
 (cd "$REPO/apps/web" && VITE_APP_ENV=production VITE_AUTH_PROVIDER=cognito npx vite build --outDir "$RUN/web-build" --emptyOutDir >/dev/null) \
   || die "web build failed"
