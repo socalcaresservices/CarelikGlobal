@@ -44,7 +44,7 @@ create table public.clients (
 );
 create table public.services (
   id uuid primary key, organization_id uuid not null references public.organizations(id),
-  name text not null, code text, is_active boolean not null default true, deleted_at timestamptz
+  name text not null, code text, color text, is_active boolean not null default true, deleted_at timestamptz
 );
 create table public.client_authorizations (
   id uuid primary key default gen_random_uuid(), organization_id uuid not null, client_id uuid not null,

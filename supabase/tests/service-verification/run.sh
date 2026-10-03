@@ -25,3 +25,13 @@ echo "  visit during an in-progress shift: $linked"
 q -f "$MIG/20260826070000_link_visits_to_scheduled_shifts.sql"
 q -f "$MIG/20260826070000_link_visits_to_scheduled_shifts.sql"   # re-runnable
 q -f "$HERE/visit_shift_link.test.sql"
+# 3) shift-based access (20260826080000): caregivers with a shift but no
+#    standing assignment. Negative control on the previous start function first.
+q -f "$HERE/fixtures_shift_access.sql"
+refused=$(q -At -c "select set_config('test.uid','00000000-0000-4000-8000-00000000010a',false)" \
+  -c "do \$\$ begin perform public.start_ad_hoc_service_visit('00000000-0000-4000-8000-000000000001','00000000-0000-4000-8000-0000000000c1','00000000-0000-4000-8000-0000000000e1'); raise notice 'started'; exception when others then raise notice '%', sqlerrm; end \$\$" 2>&1 | tail -1)
+echo "  scheduled caregiver without an assignment, previous function: $refused"
+case "$refused" in *"not assigned to you"*) ;; *) echo "negative control did not reproduce the gap"; exit 1;; esac
+q -f "$MIG/20260826080000_visit_access_from_scheduled_shift.sql"
+q -f "$MIG/20260826080000_visit_access_from_scheduled_shift.sql"   # re-runnable
+q -f "$HERE/shift_access.test.sql"
