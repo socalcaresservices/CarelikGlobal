@@ -35,3 +35,7 @@ case "$refused" in *"not assigned to you"*) ;; *) echo "negative control did not
 q -f "$MIG/20260826080000_visit_access_from_scheduled_shift.sql"
 q -f "$MIG/20260826080000_visit_access_from_scheduled_shift.sql"   # re-runnable
 q -f "$HERE/shift_access.test.sql"
+# 4) manager close-out of a missed clock-out (20260826090000).
+q -f "$MIG/20260826090000_manager_close_missed_visit.sql"
+q -f "$MIG/20260826090000_manager_close_missed_visit.sql"   # re-runnable
+q -f "$HERE/close_out.test.sql"

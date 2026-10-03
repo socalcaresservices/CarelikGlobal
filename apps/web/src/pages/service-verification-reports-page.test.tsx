@@ -187,6 +187,82 @@ describe("ServiceVerificationReportsPage", () => {
     expect(screen.queryByText(/No visits currently need manager attention/)).not.toBeInTheDocument();
   });
 
+  it("lets a visit manager close a missed clock-out with the actual Time Out and a reason", async () => {
+    mockedUseOrganization.mockReturnValue({
+      activeOrganizationId: ORG_ID,
+      activeOrganization: { displayName: "Acme Care" },
+      hasPermission: vi.fn(() => true),
+    } as never);
+    mockOrgLetterhead();
+    const ago = (minutes: number) => new Date(Date.now() - minutes * 60_000).toISOString();
+    const missed = {
+      ...visitRow, id: "missed-1", caregiver_name: "Missed Clockout", status: "draft" as const, time_out: null,
+      worked_minutes: null, billable_minutes: null, signed_at: null,
+      time_in: ago(300), scheduled_starts_at: ago(300), scheduled_ends_at: ago(90),
+    };
+    mockedRpc.mockImplementation((fn: string) =>
+      Promise.resolve(fn === "list_service_visits" ? { data: [missed], error: null } : { data: [], error: null }) as never,
+    );
+
+    renderPage();
+    await openReport(/Exceptions needing attention/);
+    fireEvent.click(await screen.findByRole("button", { name: "Close visit" }));
+
+    // Defaults to the scheduled end; a reason is required.
+    const timeOut = screen.getByLabelText("Actual Time Out") as HTMLInputElement;
+    expect(new Date(timeOut.value).getTime()).toBe(new Date(missed.scheduled_ends_at).setSeconds(0, 0));
+    fireEvent.click(screen.getByRole("button", { name: "Save Time Out" }));
+    expect(await screen.findByText("A reason is required to close a missed visit.")).toBeInTheDocument();
+    expect(mockedRpc).not.toHaveBeenCalledWith("close_missed_service_visit", expect.anything());
+
+    fireEvent.change(screen.getByLabelText("Reason"), { target: { value: "Caregiver confirmed by phone" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save Time Out" }));
+    await waitFor(() =>
+      expect(mockedRpc).toHaveBeenCalledWith("close_missed_service_visit", {
+        target_visit_id: "missed-1",
+        actual_time_out: new Date(timeOut.value).toISOString(),
+        reason: "Caregiver confirmed by phone",
+      }),
+    );
+  });
+
+  it("does not offer the close-out without visits.manage", async () => {
+    mockedUseOrganization.mockReturnValue({
+      activeOrganizationId: ORG_ID,
+      activeOrganization: { displayName: "Acme Care" },
+      hasPermission: vi.fn((key: string) => key !== "visits.manage"),
+    } as never);
+    mockOrgLetterhead();
+    const ago = (minutes: number) => new Date(Date.now() - minutes * 60_000).toISOString();
+    mockedRpc.mockResolvedValue({
+      data: [{
+        ...visitRow, id: "missed-1", status: "draft" as const, time_out: null, worked_minutes: null,
+        billable_minutes: null, signed_at: null, time_in: ago(300), scheduled_starts_at: ago(300), scheduled_ends_at: ago(90),
+      }],
+      error: null,
+    } as never);
+
+    renderPage();
+    await openReport(/Exceptions needing attention/);
+    expect(await screen.findByText("Missing Time Out")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Close visit" })).not.toBeInTheDocument();
+  });
+
+  it("marks visits whose Time Out a manager entered", async () => {
+    mockedUseOrganization.mockReturnValue({
+      activeOrganizationId: ORG_ID,
+      activeOrganization: { displayName: "Acme Care" },
+      hasPermission: vi.fn(() => true),
+    } as never);
+    mockOrgLetterhead();
+    mockedRpc.mockResolvedValue({ data: [{ ...visitRow, time_out_entered_by_manager: true }], error: null } as never);
+
+    renderPage();
+    await openReport(/Visit details/);
+    const table = await screen.findByRole("table", { name: "Visit details" });
+    expect(within(table).getByText("Time Out entered by manager")).toBeInTheDocument();
+  });
+
   it("lists visits and computes worked/billable subtotals, excluding corrected records", async () => {
     mockedUseOrganization.mockReturnValue({
       activeOrganizationId: ORG_ID,

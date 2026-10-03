@@ -87,6 +87,8 @@ interface VisitReportRow {
   // scheduled shift.
   scheduled_starts_at?: string | null;
   scheduled_ends_at?: string | null;
+  // Time Out entered by a manager closing a missed clock-out (20260826090000).
+  time_out_entered_by_manager?: boolean | null;
 }
 
 interface VisitCorrectionRow {
@@ -296,6 +298,10 @@ export function ServiceVerificationReportsPage() {
   });
   const [correctionSaving, setCorrectionSaving] = useState(false);
   const [correctionError, setCorrectionError] = useState<string | null>(null);
+  // Manager close-out of a missed clock-out (close_missed_service_visit).
+  const [closeForm, setCloseForm] = useState<{ visitId: string; timeOut: string; reason: string } | null>(null);
+  const [closeSaving, setCloseSaving] = useState(false);
+  const [closeError, setCloseError] = useState<string | null>(null);
 
   const [clientFilter, setClientFilter] = useState("");
   const [caregiverFilter, setCaregiverFilter] = useState(
@@ -445,6 +451,44 @@ export function ServiceVerificationReportsPage() {
       );
     } finally {
       setCorrectionSaving(false);
+    }
+  }
+
+  function openClose(row: VisitReportRow) {
+    setCloseError(null);
+    setCloseForm({
+      visitId: row.id,
+      timeOut: row.scheduled_ends_at ? toLocalInputValue(row.scheduled_ends_at) : "",
+      reason: "",
+    });
+  }
+
+  async function handleSubmitClose() {
+    if (!closeForm) return;
+    setCloseError(null);
+    if (!closeForm.reason.trim()) {
+      setCloseError("A reason is required to close a missed visit.");
+      return;
+    }
+    const timeOut = new Date(closeForm.timeOut);
+    if (Number.isNaN(timeOut.getTime())) {
+      setCloseError("Enter the actual Time Out.");
+      return;
+    }
+    setCloseSaving(true);
+    try {
+      const { error } = await supabase.rpc("close_missed_service_visit", {
+        target_visit_id: closeForm.visitId,
+        actual_time_out: timeOut.toISOString(),
+        reason: closeForm.reason.trim(),
+      });
+      if (error) throw error;
+      setCloseForm(null);
+      void queryClient.invalidateQueries({ queryKey: ["service-visit-report"] });
+    } catch (cause) {
+      setCloseError(cause instanceof Error ? cause.message : "Could not close this visit.");
+    } finally {
+      setCloseSaving(false);
     }
   }
 
@@ -1486,6 +1530,9 @@ export function ServiceVerificationReportsPage() {
                               {row.is_corrected ? (
                                 <StatusBadge label="Corrected" tone="neutral" />
                               ) : null}
+                              {row.time_out_entered_by_manager ? (
+                                <StatusBadge label="Time Out entered by manager" tone="warning" />
+                              ) : null}
                               <StatusBadge
                                 label={VISIT_STATUS_LABEL[row.status]}
                                 tone={STATUS_TONE[row.status]}
@@ -1781,8 +1828,48 @@ export function ServiceVerificationReportsPage() {
                           ? `${formatOverdue(issue.minutesOverdue)} past scheduled end`
                           : `Open ${formatOverdue(issue.minutesOverdue + UNSCHEDULED_OPEN_VISIT_ALERT_HOURS * 60)}, no scheduled shift`}
                     </span>
+                    {canManage && issue.kind === "missing_time_out" && closeForm?.visitId !== row.id ? (
+                      <Button type="button" variant="secondary" onClick={() => openClose(row)}>
+                        Close visit
+                      </Button>
+                    ) : null}
                   </span>
                 </div>
+                {closeForm?.visitId === row.id ? (
+                  <div className="mt-2 space-y-2 rounded-lg border border-slate-200 bg-slate-50 p-3">
+                    <p className="text-xs text-slate-600">
+                      Enter when the visit actually ended. The caregiver&apos;s app then
+                      asks for the client&apos;s confirmation, marked as entered by the agency.
+                    </p>
+                    <label className="block text-xs font-medium text-slate-700">
+                      Actual Time Out
+                      <input
+                        type="datetime-local"
+                        value={closeForm.timeOut}
+                        onChange={(event) => setCloseForm({ ...closeForm, timeOut: event.target.value })}
+                        className="mt-1 block w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+                      />
+                    </label>
+                    <label className="block text-xs font-medium text-slate-700">
+                      Reason
+                      <textarea
+                        value={closeForm.reason}
+                        onChange={(event) => setCloseForm({ ...closeForm, reason: event.target.value })}
+                        rows={2}
+                        className="mt-1 block w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+                      />
+                    </label>
+                    {closeError ? <p className="text-xs text-red-700">{closeError}</p> : null}
+                    <div className="flex gap-2">
+                      <Button type="button" loading={closeSaving} onClick={() => void handleSubmitClose()}>
+                        Save Time Out
+                      </Button>
+                      <Button type="button" variant="secondary" onClick={() => setCloseForm(null)}>
+                        Cancel
+                      </Button>
+                    </div>
+                  </div>
+                ) : null}
               </li>
             ))}
           </ul>

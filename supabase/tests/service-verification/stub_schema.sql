@@ -98,7 +98,7 @@ create table public.visit_signatures (
 );
 create table public.audit_logs (
   id bigserial primary key, organization_id uuid, actor_user_id uuid, action text not null,
-  entity_type text, entity_id text, source text, metadata jsonb, occurred_at timestamptz not null default now()
+  entity_type text, entity_id text, source text, reason text, metadata jsonb, occurred_at timestamptz not null default now()
 );
 
 create function public.organization_is_active(target_organization_id uuid) returns boolean
