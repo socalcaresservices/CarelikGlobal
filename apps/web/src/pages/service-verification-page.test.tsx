@@ -482,6 +482,11 @@ describe("ServiceVerificationPage v3", () => {
     expect(
       await screen.findByRole("heading", { name: "Visit saved" }),
     ).toBeInTheDocument();
+    const outcome = screen.getByLabelText("Visit result");
+    expect(outcome).toHaveTextContent("Worked2 hr");
+    expect(outcome).toHaveTextContent("Billable2 hr");
+    expect(outcome).toHaveTextContent("BillingBilling ready");
+    expect(outcome).toHaveTextContent("Billing ready does not mean billed.");
   });
 
   it("saves a no-signer visit as unverified and not billable", async () => {
@@ -548,6 +553,10 @@ describe("ServiceVerificationPage v3", () => {
     expect(
       screen.getByText(/not counted as confirmed or billable/i),
     ).toBeInTheDocument();
+    const outcome = screen.getByLabelText("Visit result");
+    expect(outcome).toHaveTextContent("Billable0 min");
+    expect(outcome).toHaveTextContent("BillingNeeds manager review");
+    expect(outcome).not.toHaveTextContent("Billing ready");
   });
 
   it("does not mislabel a signed visit when authorization leaves zero billable minutes", async () => {

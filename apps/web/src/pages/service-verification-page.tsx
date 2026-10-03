@@ -1315,6 +1315,30 @@ export function ServiceVerificationPage() {
                     : "success"
                 }
               />
+              <dl
+                aria-label="Visit result"
+                className="grid grid-cols-2 gap-2 rounded-2xl border border-slate-200 p-4 text-left text-sm"
+              >
+                <dt className="text-slate-500">Worked</dt>
+                <dd className="font-semibold text-slate-950">
+                  {formatDuration(result.worked_minutes)}
+                </dd>
+                <dt className="text-slate-500">Billable</dt>
+                <dd className="font-semibold text-slate-950">
+                  {formatDuration(result.billable_minutes)}
+                </dd>
+                <dt className="text-slate-500">Billing</dt>
+                <dd className="font-semibold text-slate-950">
+                  {result.status === "signed"
+                    ? "Billing ready"
+                    : "Needs manager review"}
+                </dd>
+                <dd className="col-span-2 text-xs text-slate-500">
+                  {result.status === "signed"
+                    ? "Billing ready does not mean billed. The agency reviews and approves billing separately."
+                    : "Not billable until a manager reviews it."}
+                </dd>
+              </dl>
               <div className="flex items-start gap-3 rounded-2xl border border-slate-200 p-4 text-left text-xs text-slate-600">
                 <LockKeyhole className="mt-0.5 h-4 w-4 shrink-0" />
                 <p>
