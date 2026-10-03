@@ -1530,7 +1530,8 @@ export function ServiceVerificationReportsPage() {
                         "Worked",
                         "Confirmed",
                         "Billable",
-                        "Remaining",
+                        "Scheduled (reserved)",
+                        "Remaining to schedule",
                         "Needs review",
                       ],
                       monthlyServiceRows.map((row) => [
@@ -1541,6 +1542,7 @@ export function ServiceVerificationReportsPage() {
                         formatDuration(row.workedMinutes),
                         formatDuration(row.verifiedMinutes),
                         formatDuration(row.billableMinutes),
+                        formatDuration(row.reservedMinutes ?? 0),
                         formatDuration(row.remainingMinutes),
                         formatDuration(row.reviewMinutes),
                       ]),
@@ -1663,7 +1665,8 @@ export function ServiceVerificationReportsPage() {
                           <th className="pb-2 pr-3 font-medium">Worked</th>
                           <th className="pb-2 pr-3 font-medium">Confirmed</th>
                           <th className="pb-2 pr-3 font-medium">Billable</th>
-                          <th className="pb-2 pr-3 font-medium">Remaining</th>
+                          <th className="pb-2 pr-3 font-medium">Scheduled</th>
+                          <th className="pb-2 pr-3 font-medium">Remaining to schedule</th>
                           <th className="pb-2 font-medium">Needs review</th>
                         </tr>
                       </thead>
@@ -1677,6 +1680,7 @@ export function ServiceVerificationReportsPage() {
                             <td className="py-2 pr-3">{formatDuration(row.workedMinutes)}</td>
                             <td className="py-2 pr-3">{formatDuration(row.verifiedMinutes)}</td>
                             <td className="py-2 pr-3">{formatDuration(row.billableMinutes)}</td>
+                            <td className="py-2 pr-3">{formatDuration(row.reservedMinutes ?? 0)}</td>
                             <td className="py-2 pr-3">{formatDuration(row.remainingMinutes)}</td>
                             <td className="py-2">{formatDuration(row.reviewMinutes)}</td>
                           </tr>
@@ -1731,7 +1735,8 @@ export function ServiceVerificationReportsPage() {
                         "Worked",
                         "Verified",
                         "Billable",
-                        "Remaining",
+                        "Scheduled (reserved)",
+                        "Remaining to schedule",
                         "Needs review",
                         "Worked minus billable",
                       ],
@@ -1743,6 +1748,7 @@ export function ServiceVerificationReportsPage() {
                         formatDuration(row.workedMinutes),
                         formatDuration(row.verifiedMinutes),
                         formatDuration(row.billableMinutes),
+                        formatDuration(row.reservedMinutes ?? 0),
                         formatDuration(row.remainingMinutes),
                         formatDuration(row.reviewMinutes),
                         formatDuration(Math.max(0, row.workedMinutes - row.billableMinutes)),
@@ -1777,7 +1783,8 @@ export function ServiceVerificationReportsPage() {
                     <th className="pb-2 pr-3 font-medium">Worked</th>
                     <th className="pb-2 pr-3 font-medium">Verified</th>
                     <th className="pb-2 pr-3 font-medium">Billable</th>
-                    <th className="pb-2 pr-3 font-medium">Remaining</th>
+                    <th className="pb-2 pr-3 font-medium">Scheduled</th>
+                    <th className="pb-2 pr-3 font-medium">Remaining to schedule</th>
                     <th className="pb-2 pr-3 font-medium">Needs review</th>
                     <th className="pb-2 font-medium">Difference</th>
                   </tr>
@@ -1798,6 +1805,7 @@ export function ServiceVerificationReportsPage() {
                         <td className="py-2 pr-3">{formatDuration(row.workedMinutes)}</td>
                         <td className="py-2 pr-3">{formatDuration(row.verifiedMinutes)}</td>
                         <td className="py-2 pr-3 font-medium">{formatDuration(row.billableMinutes)}</td>
+                        <td className="py-2 pr-3">{formatDuration(row.reservedMinutes ?? 0)}</td>
                         <td className="py-2 pr-3">{formatDuration(row.remainingMinutes)}</td>
                         <td className="py-2 pr-3">{formatDuration(row.reviewMinutes)}</td>
                         <td className="py-2">

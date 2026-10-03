@@ -9,6 +9,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { useOrganization } from "@/providers/organization-provider";
 import { supabase } from "@/lib/supabase";
+import { ServiceVerificationBackendContext, type ServiceVerificationBackend } from "@/lib/sv-backend";
 import { ServiceVerificationReportsPage } from "./service-verification-reports-page";
 
 vi.mock("@/providers/organization-provider", () => ({
@@ -264,6 +265,45 @@ describe("ServiceVerificationReportsPage", () => {
     await openReport(/Visit details/);
     const table = await screen.findByRole("table", { name: "Visit details" });
     expect(within(table).getByText("Time Out entered by manager")).toBeInTheDocument();
+  });
+
+  it("shows scheduled (reserved) time and what is left to schedule in the monthly reconciliation", async () => {
+    mockedUseOrganization.mockReturnValue({
+      activeOrganizationId: ORG_ID,
+      activeOrganization: { displayName: "Acme Care" },
+      hasPermission: vi.fn(() => true),
+    } as never);
+    const backend = {
+      listVisits: vi.fn().mockResolvedValue([]),
+      getLetterhead: vi.fn().mockResolvedValue({ legal_name: "Acme Care LLC", display_name: "Acme Care" }),
+      listClientLocations: vi.fn().mockResolvedValue([]),
+      listCorrections: vi.fn().mockResolvedValue([]),
+      listMonthlyServiceSummary: vi.fn().mockResolvedValue([
+        {
+          clientId: "c1", clientCode: "TEST-C01", serviceId: "s1", serviceCode: "RSP", serviceName: "Respite",
+          authorizationLineageId: "l1", authorizationPeriodStart: "2026-10-01", authorizationPeriodEnd: "2026-12-31",
+          authorizedMinutes: 600, workedMinutes: 10, verifiedMinutes: 10, billableMinutes: 10,
+          reservedMinutes: 420, remainingMinutes: 170, reviewMinutes: 0, visitCount: 1,
+        },
+      ]),
+    } as unknown as ServiceVerificationBackend;
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    render(
+      <QueryClientProvider client={queryClient}>
+        <ServiceVerificationBackendContext.Provider value={backend}>
+          <ServiceVerificationReportsPage />
+        </ServiceVerificationBackendContext.Provider>
+      </QueryClientProvider>,
+    );
+    fireEvent.change(screen.getByLabelText("Report"), { target: { value: "reconciliation" } });
+
+    const header = await screen.findByRole("columnheader", { name: "Remaining to schedule" });
+    const table = header.closest("table")!;
+    const headers = within(table).getAllByRole("columnheader").map((th) => th.textContent);
+    const row = within(table).getAllByRole("row")[1]!;
+    const cells = within(row).getAllByRole("cell").map((td) => td.textContent);
+    expect(cells[headers.indexOf("Scheduled")]).toBe("7 hr");
+    expect(cells[headers.indexOf("Remaining to schedule")]).toBe("2 hr 50 min");
   });
 
   it("lists visits and computes worked/billable subtotals, excluding corrected records", async () => {
