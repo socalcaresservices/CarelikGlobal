@@ -1,6 +1,6 @@
 # Phase 7 security review: AWS Service Verification (SCS pilot)
 
-**Status:** PREPARED FOR SIGN-OFF. **Not signed.** The live evidence has not been collected yet (§3).
+**Status:** PREPARED FOR SIGN-OFF. **Not signed.** Live evidence collected 2026-10-03 21:03 UTC: **PASS 36, GAP 5, MANUAL 1, ERROR 0** (§3.1). The remaining fixes are in `phase7-remediate.sh` and need your approval (§5).
 **Prepared:** 2026-10-03, from the repository at the pilot build and the owner-reported pilot results.
 **Environment:** account `300094796789`, `us-west-2`, RDS `ogevia-prod-postgres` (database `ogevia_sv_test`), Cognito pool `us-west-2_849AYz5J7`, stacks `Ogevia-prod-*`.
 
@@ -29,7 +29,20 @@ Run `infra/aws/slice/phase7_evidence.py` in CloudShell (us-west-2, Administrator
 
 The terminal ends with a short summary of under 10 lines: counts, then the IDs of every GAP, MANUAL and ERROR item. The full result is saved to `~/ogevia-phase7/evidence-<UTC>.txt`.
 
-Rehearsed against simulated AWS responses in a clean and a failing scenario, with no crashes, and with every unreadable item reported as ERROR. **Not yet run against real AWS.**
+Rehearsed against simulated AWS responses in a clean and a failing scenario, with no crashes, and with every unreadable item reported as ERROR.
+
+### 3.1 Live result, 2026-10-03 21:03 UTC (owner-reported summary)
+
+`SUMMARY PASS 36 GAP 5 MANUAL 1 ERROR 0 INFO 8`, saved in CloudShell as `~/ogevia-phase7/evidence-20261003T210313Z.txt`. Claude received the summary line; the per-check detail lines stay in that file.
+
+| Result | Checks | Meaning |
+| --- | --- | --- |
+| **PASS** (not listed below) | A1 A2 A3 A4, B1 B2 B3, C1 C2 C3 C4 C7, D1 D3, E1 E2, F1 F2 F3 F4 F5, G2 | Includes: **AWS BAA ACTIVE in Artifact (A2)**; root MFA, no root keys, no IAM-user keys; CloudTrail multi-region with log-file validation; **no personal data in 14 days of API logs (B3)**; RDS private, encrypted, `rds.force_ssl=1`, deletion protection on; admin host IMDSv2 required, app group detached; evidence bucket controls; Cognito MFA ON, deletion protection, admin-only sign-up; least-privilege Lambda role; 8 public routes only; budget alerts with subscribers |
+| **GAP** | **C6** VPC flow logs · **D2** account-wide S3 public access block · **D4** app DB secret rotation off · **G1** alarm topic has no subscriber · **G3** GuardDuty off | Fixes R1, R8, R9 and R10, plus decision R11 (§5) |
+| **MANUAL** | **E3** restore drill | R7 (§5) |
+| **INFO** (8) | B4, C5, C7 (admin host running), E1 (single-AZ), F1 (tier and users), F5 (TLS minimum, no WAF), G3 (Security Hub) | Covered by §6 accepted risks, or recorded only |
+
+Interpretation note: A2 passes only when the Artifact API returns an agreement named as a Business Associate Addendum in state ACTIVE. The effective date is in the evidence file's A2 line.
 
 ## 4. Control review
 
@@ -129,6 +142,8 @@ Status key: ✅ meets the requirement · ⚠️ gap with a fix · ❓ unknown un
 
 Nothing below has been run. Every item is a YELLOW action, so Claude prepares it and runs nothing until you approve each item. Costs are estimates (INFERRED) unless marked; check the AWS pricing pages before approving anything recurring.
 
+**After the live run (§3.1):** R2, R3, R4, R5 and IMDSv2 (R6) **already pass**, so no action is needed. R1, R7, R8 and R9 are in one script, `infra/aws/slice/phase7-remediate.sh`. It asks for **APPLY** (R1, R8, R9) and separately for **DRILL** (R7), because the drill creates and then deletes a temporary database. It was rehearsed against simulated AWS: full path, a public bucket present (R8 refused), everything declined, and an invalid email. R10 (flow logs, a CDK change) and R11 (rotation decision) remain.
+
 | # | Action | How | New recurring cost | Recommendation |
 | --- | --- | --- | --- | --- |
 | R1 | **Subscribe a person to alarms** (G1) | `aws sns subscribe --topic-arn <AlarmTopic ARN from the Observability stack> --protocol email --notification-endpoint <owner inbox>`, then confirm the email. The topic is a CDK resource, but a subscription does not drift the stack. | $0 | **Do before real data** |
@@ -167,14 +182,18 @@ Nothing below has been run. Every item is a YELLOW action, so Claude prepares it
 
 Real client data may be entered only when **all** of these are true:
 
-- [ ] AWS BAA ACTIVE in AWS Artifact (A2), and the services in use confirmed HIPAA-eligible
-- [ ] `phase7_evidence.py` run on real AWS: **0 ERROR**, and every GAP either fixed or listed in §6 as accepted
+- [x] AWS BAA ACTIVE in AWS Artifact (A2: PASS, live 2026-10-03)
+- [ ] Services in use confirmed on AWS's current HIPAA-eligible list (owner, §4.1)
+- [x] `phase7_evidence.py` run on real AWS with 0 ERROR (2026-10-03 21:03 UTC)
+- [ ] Re-run after remediation: GAP only C6/D4 (or fixed), each covered by §5 or §6
 - [ ] R1 alarms reach a person
-- [ ] R2 budget alerts
-- [ ] R3 CloudTrail multi-region + log-file validation
-- [ ] R4 RDS deletion protection
-- [ ] R5 Cognito deletion protection
-- [ ] R6 admin host IMDSv2, stopped when idle
+- [x] R2 budget alerts (G2: PASS)
+- [x] R3 CloudTrail multi-region + log-file validation (B1: PASS)
+- [x] R4 RDS deletion protection (E1: PASS)
+- [x] R5 Cognito deletion protection (F1: PASS)
+- [x] R6 admin host IMDSv2 required (C7: PASS); stop it when idle (owner habit)
+- [ ] R8 account-wide S3 public access block (D2)
+- [ ] R9 GuardDuty (G3), or accept in §6
 - [ ] R7 restore drill passed, with the time recorded
 - [ ] R11 rotation decision recorded
 - [ ] R12 retention decision recorded (or "retain everything until decided")
