@@ -1,6 +1,6 @@
 # SCS pilot readiness — Monday 2026-10-05
 
-**Status:** NOT DEPLOYED. Nothing was merged, and nothing in AWS, Netlify or Supabase changed.
+**Status (2026-10-03):** DEPLOYED to AWS TEST and **ACCEPTED on real phones, synthetic data only**. See [PILOT_ACCEPTANCE_RECORD.md](PILOT_ACCEPTANCE_RECORD.md). Nothing was merged; Netlify, Supabase and production are unchanged. The sections below are the pre-deployment readiness report.
 **Pilot branch:** `claude/ogevia-socal-pilot-prep-vfu5tf`. The report covers the code at `454f934` plus the harness/docs commit that adds this file.
 **Data:** synthetic only until the BAA and live-data gates in §5 pass.
 
@@ -68,7 +68,7 @@ Covered in the browser:
 3. **Cognito MFA is ON for the whole pool.** Every caregiver must set up a TOTP authenticator app at first sign-in. *Recommended:* keep it, and onboard caregivers in person on Monday morning. Turning it off weakens authentication and needs explicit approval.
 4. **Correction to an earlier claim:** there is **no** manager-permission conflict. AWS matches production #46. Managers keep operational approval (`billing.approve`) and `billing.visits.read`. Submission (`billing.submit`) and financial data (`billing.read`, rates) are owner-only, no AWS route exposes rates, and amendments carry the existing rate forward. VERIFIED from `supabase/migrations/*manager_operational_access_from_financial_data.sql` and AWS 0002/0006/0011.
 5. **Residual risks (not blockers):**
-   - Fixed in `420122a`: the visit correction form now uses Pacific date/hour/minute/AM-PM. Corrected times are whole minutes, so the seconds of an unchanged Time In are dropped (the summary shows it).
+   - Fixed in `420122a` and `113a81d` (AWS 0018): the visit correction form uses Pacific date/hour/minute/AM-PM, and an unchanged Time In keeps its original seconds. Confirmed on a real phone (acceptance row E4).
    - Fixed in `e8b351e` (AWS 0017): the start screen preselects the scheduled shift's service. Production Supabase does not return it, so the explicit choice remains there.
    - The 1:00–2:00 AM fall-back hour resolves to the first occurrence.
    - RDS is single-AZ.
