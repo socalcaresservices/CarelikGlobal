@@ -272,6 +272,68 @@ describe("ServiceVerificationPage v3", () => {
     ).toHaveTextContent("S-9 · Service 9");
   });
 
+  it("preselects the service of today's scheduled visit and warns when it is changed", async () => {
+    const services = Array.from({ length: 3 }, (_, index) => ({
+      ...authorizedService,
+      service_id: `88888888-8888-4888-8888-88888888888${index}`,
+      service_code: `S-${index + 1}`,
+      service_name: `Service ${index + 1}`,
+    }));
+    mockRpcImplementation({
+      list_assigned_visit_clients: {
+        data: [{ ...assignedClients[1], active_service_count: 3, next_scheduled_service_id: services[1]!.service_id }],
+        error: null,
+      },
+      list_authorized_services_for_client: { data: services, error: null },
+    });
+    renderPage();
+
+    fireEvent.click(await screen.findByRole("button", { name: /Client C-207/ }));
+    await waitFor(() =>
+      expect(screen.getByLabelText("Service for this visit")).toHaveValue(services[1]!.service_id),
+    );
+    expect(screen.getByText(/Scheduled today: S-2 · Service 2/)).toBeInTheDocument();
+    expect(screen.queryByText(/not the scheduled service/)).not.toBeInTheDocument();
+    expect(screen.getByRole("group", { name: "Visit details" })).toHaveTextContent("S-2 · Service 2");
+
+    // A deliberate change is kept, and flagged.
+    fireEvent.change(screen.getByLabelText("Service for this visit"), {
+      target: { value: services[2]!.service_id },
+    });
+    expect(screen.getByLabelText("Service for this visit")).toHaveValue(services[2]!.service_id);
+    expect(screen.getByRole("status")).toHaveTextContent(
+      "This is not the scheduled service. The visit will not be linked to today's scheduled visit.",
+    );
+
+    fireEvent.change(screen.getByLabelText("Service for this visit"), {
+      target: { value: services[1]!.service_id },
+    });
+    fireEvent.click(screen.getByRole("button", { name: /Start visit/ }));
+    await waitFor(() =>
+      expect(mockedRpc).toHaveBeenCalledWith("start_ad_hoc_service_visit", expect.objectContaining({
+        target_client_id: SECOND_CLIENT_ID,
+        target_service_id: services[1]!.service_id,
+      })),
+    );
+  });
+
+  it("asks for an explicit choice when the backend does not report the scheduled service", async () => {
+    const services = Array.from({ length: 2 }, (_, index) => ({
+      ...authorizedService,
+      service_id: `88888888-8888-4888-8888-88888888888${index}`,
+      service_code: `S-${index + 1}`,
+      service_name: `Service ${index + 1}`,
+    }));
+    mockRpcImplementation({
+      list_authorized_services_for_client: { data: services, error: null },
+    });
+    renderPage();
+    fireEvent.click(await screen.findByRole("button", { name: /Client C-207/ }));
+    expect(await screen.findByText(/Choose the one you are providing/)).toBeInTheDocument();
+    expect(screen.getByLabelText("Service for this visit")).toHaveValue("");
+    expect(screen.getByRole("button", { name: /Start visit/ })).toBeDisabled();
+  });
+
   it("blocks the start when the selected client has no active authorized service", async () => {
     mockRpcImplementation({
       list_authorized_services_for_client: { data: [], error: null },

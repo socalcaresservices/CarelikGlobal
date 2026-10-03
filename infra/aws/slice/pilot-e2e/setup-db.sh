@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Fresh local PG18 database with migrations 0001-0016, the app login, the
+# Fresh local PG18 database with migrations 0001-0017, the app login, the
 # test-slice seed (second tenant) and the SCS pilot seed. Synthetic only.
 set -euo pipefail
 R=/home/user/CarelikGlobal/infra/aws; DB=ogevia_pilot_e2e

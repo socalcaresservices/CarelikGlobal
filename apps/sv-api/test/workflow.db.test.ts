@@ -56,7 +56,7 @@ describe("caregiver workflow: login → client → service → start → end →
     const r = await call("GET /v1/clients/assigned", w.caregiverA1, { query: { organizationId: w.orgA } });
     expect(r.status).toBe(200);
     expect(r.body.clients.map((c: any) => c.clientId).sort()).toEqual([w.clientA1, fresh.client].sort());
-    expect(Object.keys(r.body.clients[0]).sort()).toEqual(["activeServiceCount", "clientCode", "clientId", "nextScheduledEndsAt", "nextScheduledStartsAt"]);
+    expect(Object.keys(r.body.clients[0]).sort()).toEqual(["activeServiceCount", "clientCode", "clientId", "nextScheduledEndsAt", "nextScheduledServiceId", "nextScheduledStartsAt"]);
   });
 
   it("lists the authorized service with its monthly minutes", async () => {

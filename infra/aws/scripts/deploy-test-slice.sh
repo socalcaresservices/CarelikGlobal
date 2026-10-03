@@ -18,7 +18,7 @@
 #   web         build the AWS frontend, upload, invalidate           [mutates]
 #   pilot-users create the 3 individual SCS pilot sign-ins in Cognito [mutates]
 #   pilot-seed  SCS pilot org (synthetic clients) for those users    [mutates]
-#               (db/deploy/04_seed_scs_pilot_synthetic.sql; needs 0001-0016)
+#               (db/deploy/04_seed_scs_pilot_synthetic.sql; needs 0001-0017)
 #
 # Pilot steps also need: OGEVIA_PILOT_MANAGER_EMAIL, OGEVIA_PILOT_CAREGIVER_A_EMAIL,
 # OGEVIA_PILOT_CAREGIVER_B_EMAIL (each person's own inbox), and the display

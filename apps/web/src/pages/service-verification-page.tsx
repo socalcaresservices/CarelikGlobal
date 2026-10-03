@@ -370,6 +370,7 @@ export function ServiceVerificationPage() {
   // change to what is being submitted gets a new key.
   const startKey = useRef(newIdempotencyKey());
   const confirmKey = useRef(newIdempotencyKey());
+  const scheduledServiceAppliedFor = useRef<string | null>(null);
 
   const activeVisitQuery = useQuery({
     queryKey: ["active-service-visit-v3", activeOrganizationId],
@@ -418,6 +419,16 @@ export function ServiceVerificationPage() {
       backend.listAuthorizedServices(activeOrganizationId!, selectedClientId),
     enabled: !!activeOrganizationId && !!selectedClientId && phase === "select",
   });
+
+  const scheduledService = useMemo(
+    () =>
+      (servicesQuery.data ?? []).find(
+        (service) =>
+          !!selectedClient?.next_scheduled_service_id &&
+          service.service_id === selectedClient.next_scheduled_service_id,
+      ) ?? null,
+    [selectedClient, servicesQuery.data],
+  );
 
   const selectedService = useMemo(
     () =>
@@ -508,13 +519,27 @@ export function ServiceVerificationPage() {
   useEffect(() => {
     const services = servicesQuery.data ?? [];
     if (services.length === 1) setSelectedServiceId(services[0]!.service_id);
+    // Several services: start on the one the caregiver is scheduled for
+    // today (once per client, so a deliberate change is not overridden).
+    const scheduled = selectedClient?.next_scheduled_service_id;
+    if (
+      services.length > 1 &&
+      selectedClient &&
+      scheduledServiceAppliedFor.current !== selectedClient.client_id &&
+      scheduled &&
+      services.some((service) => service.service_id === scheduled)
+    ) {
+      scheduledServiceAppliedFor.current = selectedClient.client_id;
+      setSelectedServiceId(scheduled);
+      return;
+    }
     if (
       services.length !== 1 &&
       !services.some((service) => service.service_id === selectedServiceId)
     ) {
       setSelectedServiceId("");
     }
-  }, [selectedServiceId, servicesQuery.data]);
+  }, [selectedClient, selectedServiceId, servicesQuery.data]);
 
   function invalidateVisitData() {
     void queryClient.invalidateQueries({
@@ -532,6 +557,7 @@ export function ServiceVerificationPage() {
   }
 
   function chooseClient(clientId: string) {
+    scheduledServiceAppliedFor.current = null;
     setSelectedClientId(clientId);
     setSelectedServiceId("");
     setError(null);
@@ -827,7 +853,9 @@ export function ServiceVerificationPage() {
                     <label className="mt-4 block text-sm font-semibold text-slate-700">
                       Service for this visit
                       <span className="mt-1 block text-xs font-normal text-slate-500">
-                        {`This client has ${servicesQuery.data!.length} active services. Choose the one you are providing.`}
+                        {scheduledService
+                          ? `Scheduled today: ${scheduledService.service_code} · ${scheduledService.service_name}. Change it only if you are providing a different service.`
+                          : `This client has ${servicesQuery.data!.length} active services. Choose the one you are providing.`}
                       </span>
                       <select
                         aria-label="Service for this visit"
@@ -848,6 +876,18 @@ export function ServiceVerificationPage() {
                         ))}
                       </select>
                     </label>
+                  ) : null}
+
+                  {scheduledService &&
+                  selectedService &&
+                  selectedService.service_id !== scheduledService.service_id ? (
+                    <p
+                      role="status"
+                      className="mt-3 rounded-xl bg-amber-50 p-3 text-xs text-amber-900"
+                    >
+                      This is not the scheduled service. The visit will not
+                      be linked to today's scheduled visit.
+                    </p>
                   ) : null}
 
                   {selectedService ? (

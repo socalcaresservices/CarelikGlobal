@@ -300,6 +300,7 @@ describe("ASSIGNMENTS are enforced in the database", () => {
       "client_code",
       "client_id",
       "next_scheduled_ends_at",
+      "next_scheduled_service_id",
       "next_scheduled_starts_at",
     ]);
   });

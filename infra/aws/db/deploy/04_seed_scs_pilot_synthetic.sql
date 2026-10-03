@@ -3,7 +3,7 @@
 -- are individual (one Cognito user per person; no shared logins).
 --
 -- Run as the RDS master user against ogevia_sv_test, AFTER migrations
--- 0001-0016 are applied and AFTER the three Cognito users exist:
+-- 0001-0017 are applied and AFTER the three Cognito users exist:
 --
 --   psql ... \
 --     -v manager_sub="$MANAGER_SUB" \
@@ -57,35 +57,39 @@ values ('5c500000-0000-4000-8000-0000000000c1', '5c500000-0000-4000-8000-0000000
 on conflict (id) do nothing;
 
 insert into ogevia.services (id, organization_id, code, name)
-values ('5c500000-0000-4000-8000-0000000000e1', '5c500000-0000-4000-8000-000000000001', 'RSP', 'Respite (synthetic)')
+values ('5c500000-0000-4000-8000-0000000000e1', '5c500000-0000-4000-8000-000000000001', 'RSP', 'Respite (synthetic)'),
+       ('5c500000-0000-4000-8000-0000000000e2', '5c500000-0000-4000-8000-000000000001', 'PCS', 'Personal care (synthetic)')
 on conflict (id) do nothing;
 
 -- Standing assignments: caregiver A -> P-QAUF7 and P-AAXRX; caregiver B ->
--- P-AHXN7 only. B reaches P-QAUF7 only through a reassigned (replacement)
--- shift, which exercises shift-based access (0014).
+-- P-AHXN7 only, for both services (multi-service start screen, 0017). B
+-- reaches A's clients only through a reassigned (replacement) shift, which
+-- exercises shift-based access (0014).
 insert into ogevia.caregiver_assignments (organization_id, caregiver_user_id, client_id, service_id, effective_start)
-select '5c500000-0000-4000-8000-000000000001', u.id, v.client_id, '5c500000-0000-4000-8000-0000000000e1',
+select '5c500000-0000-4000-8000-000000000001', u.id, v.client_id, v.service_id,
        (now() at time zone 'America/Los_Angeles')::date - 1
-from (values (:'caregiver_a_sub', '5c500000-0000-4000-8000-0000000000c1'::uuid),
-             (:'caregiver_a_sub', '5c500000-0000-4000-8000-0000000000c2'::uuid),
-             (:'caregiver_b_sub', '5c500000-0000-4000-8000-0000000000c3'::uuid)) as v(sub, client_id)
+from (values (:'caregiver_a_sub', '5c500000-0000-4000-8000-0000000000c1'::uuid, '5c500000-0000-4000-8000-0000000000e1'::uuid),
+             (:'caregiver_a_sub', '5c500000-0000-4000-8000-0000000000c2'::uuid, '5c500000-0000-4000-8000-0000000000e1'::uuid),
+             (:'caregiver_b_sub', '5c500000-0000-4000-8000-0000000000c3'::uuid, '5c500000-0000-4000-8000-0000000000e1'::uuid),
+             (:'caregiver_b_sub', '5c500000-0000-4000-8000-0000000000c3'::uuid, '5c500000-0000-4000-8000-0000000000e2'::uuid)) as v(sub, client_id, service_id)
 join ogevia.app_users u on u.cognito_sub = v.sub
 where not exists (
   select 1 from ogevia.caregiver_assignments a
-  where a.caregiver_user_id = u.id and a.client_id = v.client_id
-    and a.service_id = '5c500000-0000-4000-8000-0000000000e1');
+  where a.caregiver_user_id = u.id and a.client_id = v.client_id and a.service_id = v.service_id);
 
 -- Authorizations, this month + 2: P-QAUF7 20 h (clean path), P-AAXRX 3 h
--- (limit_reached / exceeds -> administrator review), P-AHXN7 10 h.
+-- (limit_reached / exceeds -> administrator review), P-AHXN7 10 h Respite
+-- + 10 h Personal care.
 insert into ogevia.client_authorizations
   (id, organization_id, client_id, service_id, payer, monthly_authorized_minutes, period_start, period_end)
-select v.id, '5c500000-0000-4000-8000-000000000001', v.client_id, '5c500000-0000-4000-8000-0000000000e1',
+select v.id, '5c500000-0000-4000-8000-000000000001', v.client_id, v.service_id,
        'SYNTHETIC-PAYER', v.minutes,
        date_trunc('month', (now() at time zone 'America/Los_Angeles'))::date,
        (date_trunc('month', (now() at time zone 'America/Los_Angeles')) + interval '3 months - 1 day')::date
-from (values ('5c500000-0000-4000-8000-0000000000a1'::uuid, '5c500000-0000-4000-8000-0000000000c1'::uuid, 1200),
-             ('5c500000-0000-4000-8000-0000000000a2'::uuid, '5c500000-0000-4000-8000-0000000000c2'::uuid, 180),
-             ('5c500000-0000-4000-8000-0000000000a3'::uuid, '5c500000-0000-4000-8000-0000000000c3'::uuid, 600)) as v(id, client_id, minutes)
+from (values ('5c500000-0000-4000-8000-0000000000a1'::uuid, '5c500000-0000-4000-8000-0000000000c1'::uuid, '5c500000-0000-4000-8000-0000000000e1'::uuid, 1200),
+             ('5c500000-0000-4000-8000-0000000000a2'::uuid, '5c500000-0000-4000-8000-0000000000c2'::uuid, '5c500000-0000-4000-8000-0000000000e1'::uuid, 180),
+             ('5c500000-0000-4000-8000-0000000000a3'::uuid, '5c500000-0000-4000-8000-0000000000c3'::uuid, '5c500000-0000-4000-8000-0000000000e1'::uuid, 600),
+             ('5c500000-0000-4000-8000-0000000000a4'::uuid, '5c500000-0000-4000-8000-0000000000c3'::uuid, '5c500000-0000-4000-8000-0000000000e2'::uuid, 600)) as v(id, client_id, service_id, minutes)
 on conflict (id) do nothing;
 
 commit;

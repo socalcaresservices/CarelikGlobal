@@ -51,12 +51,12 @@ describe("test-slice deployment SQL (runbook order)", () => {
     psql("postgres", "00_create_test_database.sql");
   });
 
-  it("migrations 0001-0016 apply to it", async () => {
+  it("migrations 0001-0017 apply to it", async () => {
     const client = new pg.Client({ connectionString: url(DB) });
     await client.connect();
     try {
       const result = await migrate(client);
-      expect(result.applied).toHaveLength(16);
+      expect(result.applied).toHaveLength(17);
     } finally {
       await client.end();
     }
@@ -162,7 +162,7 @@ describe("test-slice deployment SQL (runbook order)", () => {
     const out = psql(DB, "04_seed_scs_pilot_synthetic.sql", vars);
     psql(DB, "04_seed_scs_pilot_synthetic.sql", vars);
     // memberships | caregiver_records | assignments | authorizations
-    expect(out).toMatch(/3 \|\s+2 \|\s+3 \|\s+3/);
+    expect(out).toMatch(/3 \|\s+2 \|\s+4 \|\s+4/);
 
     const appUrl = new URL(url(DB));
     appUrl.username = APP_USER;

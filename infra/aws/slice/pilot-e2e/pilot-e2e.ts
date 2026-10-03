@@ -1,5 +1,5 @@
 // SCS pilot browser acceptance, LOCAL: the exact AWS-mode web build <-> the
-// real sv-api handler <-> a real PostgreSQL 18 database (migrations 0001-0016,
+// real sv-api handler <-> a real PostgreSQL 18 database (migrations 0001-0017,
 // test-slice seed + SCS pilot seed). SYNTHETIC DATA ONLY.
 //
 // Stand-ins (stated, not hidden):
@@ -136,8 +136,8 @@ function accessToken(sub: string) {
 // ---------------------------------------------------------------- browser
 const MIME: Record<string, string> = { ".js": "text/javascript", ".css": "text/css", ".html": "text/html", ".svg": "image/svg+xml", ".png": "image/png", ".ico": "image/x-icon", ".json": "application/json", ".webmanifest": "application/manifest+json", ".woff2": "font/woff2" };
 
-async function persona(browser: Browser, sub: string) {
-  const ctx: BrowserContext = await browser.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2, isMobile: true, hasTouch: true });
+async function persona(browser: Browser, sub: string, timezoneId = "America/Los_Angeles") {
+  const ctx: BrowserContext = await browser.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2, isMobile: true, hasTouch: true, timezoneId });
   let nonce = "";
   // The web origin is served by `vite preview` (SPA fallback); /config.json 404s.
   await ctx.route(`${IDP}/**`, async (route) => {
@@ -218,11 +218,12 @@ async function main() {
     const r = await api(cg, "POST /v1/availability/me", { body: { organizationId: org, windows: allWeek, unavailableDates: [] } });
     check("setup: caregiver records availability", [200, 201, 204].includes(r.status), `status ${r.status}`);
   }
-  async function scheduleFor(code: string, startInMin: number, caregiverSub: string) {
+  async function scheduleFor(code: string, startInMin: number, caregiverSub: string, serviceCode?: string) {
     const p = await api(SUB.pilotManager, "POST /v1/care-portals", { body: { organizationId: org, clientId: clientId[code], label: "e2e (synthetic)" } });
     const token = p.body.portal.token;
     const portal = await api(null, "GET /v1/public/care-portals/{token}", { path: { token } });
-    const serviceId = portal.body.services[0].serviceId;
+    const offered = portal.body.services as { serviceId: string; serviceCode: string }[];
+    const serviceId = (serviceCode ? offered.find((x) => x.serviceCode === serviceCode) : offered[0])!.serviceId;
     const start = new Date(Date.now() + startInMin * 60_000);
     start.setSeconds(0, 0);
     const rq = await api(null, "POST /v1/public/care-portals/{token}/requests", { path: { token }, body: { serviceId, startsAt: start.toISOString(), endsAt: new Date(start.getTime() + 180 * 60_000).toISOString(), requestKey: randomUUID() } });
@@ -341,7 +342,9 @@ async function main() {
   const bVisit = (await admin.query("select v.id, v.time_in from ogevia.service_visits v join ogevia.app_users u on u.id = v.caregiver_user_id where u.cognito_sub = $1 and v.time_out is null", [SUB.caregiverB])).rows[0];
 
   // ---- Manager: Exceptions -> Close visit with explicit Pacific date / AM-PM.
-  const M = await persona(browser, SUB.pilotManager);
+  // The manager's device is deliberately NOT on Pacific time: entry must be
+  // Pacific regardless of the device timezone.
+  const M = await persona(browser, SUB.pilotManager, "America/New_York");
   await signIn(M.page, "/service-verification/reports");
   await M.page.getByLabel("Report").selectOption("exceptions");
   await M.page.getByRole("button", { name: "Close visit" }).first().waitFor({ timeout: 15000 });
@@ -357,8 +360,8 @@ async function main() {
   const wrong = target.ampm === "AM" ? "PM" : "AM";
   await M.page.getByLabel("Reason", { exact: true }).fill("Caregiver confirmed end time by phone (synthetic)");
   await M.page.getByLabel("Time Out date", { exact: true }).fill(target.date);
-  await M.page.getByLabel("Hour", { exact: true }).selectOption(target.hour);
-  await M.page.getByLabel("Minute", { exact: true }).selectOption(target.minute);
+  await M.page.getByLabel("Time Out hour", { exact: true }).selectOption(target.hour);
+  await M.page.getByLabel("Time Out minute", { exact: true }).selectOption(target.minute);
   await M.page.getByRole("radio", { name: wrong }).click();
   await M.page.getByRole("button", { name: "Save Time Out" }).click();
   const err = (await M.page.getByRole("alert").first().innerText()).trim();
@@ -375,7 +378,7 @@ async function main() {
   await noHorizontalScroll(M.page, "manager close-out form");
   await snap(M.page, "manager-close-out");
   await M.page.getByRole("button", { name: "Save Time Out" }).click();
-  await M.page.getByRole("button", { name: "Save Time Out" }).waitFor({ state: "detached", timeout: 15000 });
+  await M.page.getByLabel("Time Out summary").waitFor({ state: "detached", timeout: 15000 });
   const closed = (await admin.query("select time_out, worked_minutes, time_out_entered_by is not null as by_mgr, status::text from ogevia.service_visits where id = $1", [bVisit.id])).rows[0];
   check("manager Time Out (DB): stored exactly the entered Pacific minute, worked = summary, marked entered by manager", new Date(closed.time_out).getTime() === enteredOut.getTime() && closed.worked_minutes === expectedMin && closed.by_mgr && closed.status === "awaiting_signature", JSON.stringify(closed));
 
@@ -388,6 +391,35 @@ async function main() {
   await B.page.getByRole("heading", { name: "Visit saved" }).waitFor({ timeout: 15000 });
   const bResult = (await B.page.getByLabel("Visit result").innerText()).replace(/\s+/g, " ");
   check("caregiver B: manager-closed visit signed -> Billing ready with the manager-entered worked time", bResult.includes(`Worked ${expectedLabel}`) && /Billing ready/.test(bResult), bResult);
+
+  // ---- Multi-service client: the scheduled service is preselected (0017).
+  const s3 = await scheduleFor("P-AHXN7", 20, SUB.caregiverB, "PCS");
+  await B.page.getByRole("button", { name: "Start next visit" }).click();
+  await B.page.getByRole("list", { name: "Scheduled today" }).getByText(/P-AHXN7/).waitFor({ timeout: 15000 });
+  await B.page.getByRole("button", { name: /Client P-AHXN7/ }).click();
+  const picker = B.page.getByLabel("Service for this visit");
+  await B.page.getByText(/Scheduled today: PCS · Personal care/).waitFor({ timeout: 15000 });
+  const pre = await picker.inputValue();
+  const pcsId = (await admin.query("select id from ogevia.services where id = '5c500000-0000-4000-8000-0000000000e2'")).rows[0].id;
+  check("service selection: multi-service client preselects the scheduled service (PCS, not RSP)", pre === pcsId, pre);
+  await picker.selectOption({ label: "RSP · Respite (synthetic)" });
+  check("service selection: changing away from the scheduled service shows the unlinked warning",
+    await B.page.getByText("This is not the scheduled service.", { exact: false }).isVisible());
+  await picker.selectOption({ label: "PCS · Personal care (synthetic)" });
+  await noHorizontalScroll(B.page, "multi-service start screen");
+  await snap(B.page, "caregiver-multi-service");
+  await B.page.getByRole("button", { name: /Start visit/ }).click();
+  await B.page.getByRole("heading", { name: "Visit in progress" }).waitFor();
+  const msVisit = (await admin.query("select v.service_id, v.scheduled_shift_id from ogevia.service_visits v join ogevia.app_users u on u.id = v.caregiver_user_id where u.cognito_sub = $1 and v.time_out is null", [SUB.caregiverB])).rows[0];
+  check("service selection (DB): visit started on PCS and linked to the PCS shift", msVisit?.service_id === pcsId && msVisit?.scheduled_shift_id === s3.shiftId, JSON.stringify(msVisit));
+  await ageCaregiver(SUB.caregiverB, 45);
+  await B.page.reload();
+  await B.page.getByRole("button", { name: /End visit/ }).click();
+  await drawSignature(B.page);
+  await B.page.getByRole("button", { name: /Confirm visit/ }).click();
+  await B.page.getByRole("heading", { name: "Visit saved" }).waitFor({ timeout: 15000 });
+  const msResult = (await B.page.getByLabel("Visit result").innerText()).replace(/\s+/g, " ");
+  check("service selection: PCS visit signed -> Billing ready", /Billing ready/.test(msResult) && /Worked 45 min/.test(msResult), msResult);
 
   // ---- Manager reports and billing review.
   await M.page.goto(`${WEB}/billing-review`);
@@ -408,6 +440,92 @@ async function main() {
   check("monthly summary API: P-AAXRX unconfirmed 20 min is review (not billable); manager-closed visit billable",
     !!x && x.reviewMinutes === 20 && x.billableMinutes === expectedMin && x.remainingMinutes === Math.max(0, x.authorizedMinutes - x.billableMinutes - x.reservedMinutes), JSON.stringify(x));
   check("cross-tenant: pilot monthly summary contains only pilot client codes", rowsOf.every((r) => r.clientCode.startsWith("P-")));
+
+  // ---- Manager correction in the browser (Pacific entry on a New York device).
+  const v1 = (await admin.query(
+    `select v.id, v.time_in, v.time_out from ogevia.service_visits v join ogevia.clients c on c.id = v.client_id
+     where c.client_code = 'P-QAUF7' and v.status = 'signed'`)).rows[0];
+  const newOut = new Date(new Date(v1.time_out).getTime() + 15 * 60_000);
+  newOut.setSeconds(0, 0);
+  const inWall = wall(new Date(v1.time_in));
+  const outWall = wall(newOut);
+  await M.page.goto(`${WEB}/service-verification/reports`);
+  await M.page.getByLabel("Report").selectOption({ label: "Visit details" }).catch(async () => {
+    const value = await M.page.locator("option", { hasText: "Visit details" }).first().getAttribute("value");
+    await M.page.getByLabel("Report").selectOption(value!);
+  });
+  const row = M.page.locator("tr", { hasText: "P-QAUF7" }).first();
+  await row.getByRole("button", { name: "Correct" }).click();
+  check("correction: Time In pre-filled in Pacific on a New York device",
+    (await M.page.getByLabel("Corrected Time In hour", { exact: true }).inputValue()) === inWall.hour &&
+      (await M.page.getByRole("radiogroup", { name: "Corrected Time In AM or PM" }).getByRole("radio", { name: inWall.ampm }).getAttribute("aria-checked")) === "true",
+    `expected ${inWall.hour} ${inWall.ampm}`);
+  await M.page.getByLabel("Reason (required)").fill("Caregiver stayed 15 minutes longer (synthetic)");
+  await M.page.getByLabel("Corrected Time Out date", { exact: true }).fill(outWall.date);
+  await M.page.getByLabel("Corrected Time Out hour", { exact: true }).selectOption(outWall.hour);
+  await M.page.getByLabel("Corrected Time Out minute", { exact: true }).selectOption(outWall.minute);
+  await M.page.getByRole("radiogroup", { name: "Corrected Time Out AM or PM" }).getByRole("radio", { name: outWall.ampm === "AM" ? "PM" : "AM" }).click();
+  await M.page.getByRole("button", { name: "Save correction" }).click();
+  const corrErr = (await M.page.getByRole("alert").first().innerText()).trim();
+  check("correction: wrong AM/PM refused with a specific message", /must be after Time In|is in the future|longer than 24 hours/.test(corrErr), corrErr);
+  await M.page.getByRole("radiogroup", { name: "Corrected Time Out AM or PM" }).getByRole("radio", { name: outWall.ampm }).click();
+  const corrSummary = (await M.page.getByLabel("Correction summary").innerText()).replace(/\s+/g, " ");
+  await snap(M.page, "manager-correction");
+  await noHorizontalScroll(M.page, "manager correction form");
+  await M.page.getByRole("button", { name: "Save correction" }).click();
+  // The button relabels to "Saving…" while the request runs; the form closes only on success.
+  await M.page.getByText("Correct this visit", { exact: true }).waitFor({ state: "detached", timeout: 15000 });
+  const revised = (await admin.query(
+    `select v.time_in, v.time_out, v.status::text, v.billable_minutes, o.status::text as original_status, o.time_out as original_out
+     from ogevia.service_visits v join ogevia.service_visits o on o.id = v.original_visit_id where o.id = $1`, [v1.id])).rows[0];
+  // Corrected times are whole minutes (the form has no seconds), so the
+  // pre-filled Time In drops the original's seconds.
+  const correctedIn = new Date(v1.time_in); correctedIn.setSeconds(0, 0);
+  const expectedRevisedMin = Math.floor((newOut.getTime() - correctedIn.getTime()) / 60_000);
+  check("correction (DB): revision stores the entered Pacific instants; original kept as corrected",
+    !!revised && new Date(revised.time_out).getTime() === newOut.getTime() && new Date(revised.time_in).getTime() === new Date(v1.time_in).setSeconds(0, 0) &&
+      revised.original_status === "corrected" && new Date(revised.original_out).getTime() === new Date(v1.time_out).getTime(),
+    JSON.stringify({ revised, expectedOut: newOut.toISOString(), summary: corrSummary }));
+  const corrections = await api(SUB.pilotManager, "GET /v1/visits/{visitId}/corrections", { path: { visitId: v1.id }, query: { organizationId: org } });
+  check("correction: audit record has actor, reason and before/after", corrections.status === 200 && JSON.stringify(corrections.body).includes("stayed 15 minutes longer"), `status ${corrections.status}`);
+  check("correction: revised visit billable reflects corrected time", revised?.billable_minutes === expectedRevisedMin, `billable ${revised?.billable_minutes}, expected ${expectedRevisedMin}`);
+
+  // ---- Authorized-hour limits.
+  // P-AAXRX (180 min/month) has 124 billable now; a 3-hour request cannot be staffed.
+  const p2 = await api(SUB.pilotManager, "POST /v1/care-portals", { body: { organizationId: org, clientId: clientId["P-AAXRX"], label: "e2e cap (synthetic)" } });
+  const tok2 = p2.body.portal.token;
+  const svc2 = (await api(null, "GET /v1/public/care-portals/{token}", { path: { token: tok2 } })).body.services[0].serviceId;
+  const capStart = new Date(Date.now() + 26 * 3600_000); capStart.setMinutes(0, 0, 0);
+  const capReq = await api(null, "POST /v1/public/care-portals/{token}/requests", { path: { token: tok2 }, body: { serviceId: svc2, startsAt: capStart.toISOString(), endsAt: new Date(capStart.getTime() + 180 * 60_000).toISOString(), requestKey: randomUUID() } });
+  const capRid = capReq.body?.request?.requestId;
+  const recA = (await admin.query("select cr.id from ogevia.caregiver_records cr join ogevia.app_users u on u.id = cr.linked_user_id where u.cognito_sub = $1", [SUB.caregiverA])).rows[0].id;
+  const capOffer = await api(SUB.pilotManager, "POST /v1/care-requests/{requestId}/offers", { path: { requestId: capRid }, body: { organizationId: org, caregiverRecordId: recA } });
+  await api(null, "POST /v1/public/care-offers/{token}/respond", { path: { token: capOffer.body?.offer?.token }, body: { available: true } });
+  const capAssign = await api(SUB.pilotManager, "POST /v1/care-requests/{requestId}/assign", { path: { requestId: capRid }, body: { organizationId: org, offerId: capOffer.body?.offer?.offerId } });
+  check("authorization limit: assigning beyond the month's remaining authorized time is refused", capAssign.status === 409 && /authori[sz]ed time/i.test(JSON.stringify(capAssign.body)), `status ${capAssign.status} ${JSON.stringify(capAssign.body?.error ?? "")}`);
+  // A visit that runs past the remaining 56 minutes: full worked time kept, billable capped, review.
+  await ageCaregiver(SUB.caregiverA, 5);
+  await A.page.getByRole("button", { name: "Start next visit" }).click();
+  await A.page.getByRole("button", { name: /Client P-AAXRX/ }).click();
+  await A.page.getByRole("button", { name: /Start visit/ }).click();
+  await A.page.getByRole("heading", { name: "Visit in progress" }).waitFor();
+  await ageCaregiver(SUB.caregiverA, 90);
+  await A.page.reload();
+  await A.page.getByRole("heading", { name: "Visit in progress" }).waitFor({ timeout: 15000 });
+  check("authorization limit: active visit warns it will exceed the authorization", await A.page.getByText(/projected to exceed the authorization/).isVisible());
+  await A.page.getByRole("button", { name: /End visit/ }).click();
+  await drawSignature(A.page);
+  await A.page.getByRole("button", { name: /Confirm visit/ }).click();
+  await A.page.getByRole("heading", { name: "Visit saved" }).waitFor({ timeout: 15000 });
+  const capText = (await A.page.getByLabel("Visit result").innerText()).replace(/\s+/g, " ");
+  const capRow = (await admin.query(
+    `select v.worked_minutes, v.billable_minutes, v.status::text, v.authorization_status::text from ogevia.service_visits v join ogevia.clients c on c.id = v.client_id
+     where c.client_code = 'P-AAXRX' order by v.created_at desc limit 1`)).rows[0];
+  check("authorization limit (DB): worked 90 kept, billable capped at the remaining 56, sent to review",
+    capRow?.worked_minutes === 90 && capRow?.billable_minutes === 56 && capRow?.status === "administrator_review", JSON.stringify(capRow));
+  check("authorization limit: caregiver sees Worked 1 hr 30 min, Billable 56 min, Needs manager review",
+    /Worked 1 hr 30 min/.test(capText) && /Billable 56 min/.test(capText) && /Needs manager review/.test(capText), capText);
+  await snap(A.page, "caregiver-over-limit");
 
   // ---- Other tenant's manager sees none of the pilot's records.
   const T = await persona(browser, SUB.testManager);

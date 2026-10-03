@@ -16,6 +16,8 @@ export interface AssignedClient {
   next_scheduled_starts_at: string | null;
   next_scheduled_ends_at: string | null;
   active_service_count: number;
+  /** Service of that same shift (AWS 0017). Absent on backends without it. */
+  next_scheduled_service_id?: string | null;
 }
 
 export interface AuthorizedService {
