@@ -183,3 +183,15 @@ Prices were not re-checked today. The AWS Budgets alert configured in Phase 7 is
 - that the API rollback is complete (pilot routes and Lambda; the Lambda policy equals the pilot template's permissions);
 - the web build;
 - the admin-host security groups.
+- the API stack status (`UPDATE_ROLLBACK_COMPLETE`);
+- the failed run's own record (approved for 1a39dd5; steps through `db-window`, no API or web step);
+- its pre-0021 snapshot is `available`.
+
+The preflight writes `~/ogevia-increment-v2-run/recovery-from-1a39dd5` only when every one of these holds; the deploy script accepts a ledger at 0021 only with that marker. Any other state STOPS before anything changes.
+
+**Snapshots in the recovery run:** the failed run's `ogevia-prod-postgres-pre-0021-<date>` holds the database before 0019–0021. It stays the point to restore to if the whole increment must be undone, and it is recorded as `preIncrementSnapshot` in the new manifest. The recovery run takes its own `ogevia-prod-postgres-at-0021-v2-<date>` (database at 0021, before the API and web change). It never reuses the earlier name. `increment-rollback.sh status` prints both restore commands. A restore always goes to a new instance.
+
+**Rehearsal (2026-10-04, local stubs that enforce the 20,480-byte limit during the transition):**
+- The original 1a39dd5 block failed at 10/12 exactly as live: the simulated peak was 21,381 bytes; the stack rolled back; the ledger was at 0021.
+- From that state, the corrected block decided RECOVER and deployed the revision with a peak of 13,963 bytes. All 10 live checks passed, and so did the post-check.
+- The refusal and resume paths are listed in `docs/product/PILOT_SCOPE_RECONCILIATION.md`.

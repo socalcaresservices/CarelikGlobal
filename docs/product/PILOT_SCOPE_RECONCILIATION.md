@@ -1,6 +1,6 @@
 # Ogevia controlled-pilot scope: status against the consolidated requirements
 
-**Date:** 2026-10-04, updated about 14:10 Pacific. **Builds:** (a) the 1a39dd5 increment (0019–0021), pinned in `infra/aws/slice/increment-bootstrap.sh`; completion in AWS is **NOT VERIFIED** (no live evidence returned yet). (b) Release 0022–0025, packaged in `infra/aws/slice/release-0025-bootstrap.sh`, requires (a) live first.
+**Date:** 2026-10-04, updated about 16:45 Pacific. **Builds:** (a) the 0019–0021 increment. The first deployment (1a39dd5) failed at 10/12 because the Lambda resource policy exceeded 20 KB, and the API stack was rolled back. The revision (69e8799: one API-scoped invoke permission) and its recovery are in `infra/aws/slice/increment-resume-block.sh`. Live completion is **NOT VERIFIED**. (b) Release 0022–0026, packaged in `infra/aws/slice/release-0026-bootstrap.sh`, requires (a) live first.
 **Verdict: NOT READY FOR OGEVIA CONTROLLED PILOT (real clients).** The blockers are in the summary at the end.
 
 ## Status key
@@ -8,7 +8,7 @@
 | Status | Meaning | Evidence class |
 | --- | --- | --- |
 | **LIVE** | Deployed to AWS TEST through migration 0018 (pilot build 87a9be2) | Owner-reported deployment 12/12. Phone results C and part of G passed 2026-10-04. Live check ledger 0018. |
-| **THIS DEPLOYMENT** | In the 1a39dd5 increment (0019–0021). Passes the local gate and the rehearsal; live completion not yet confirmed. | Verified locally; needs live evidence plus phone checks |
+| **THIS DEPLOYMENT** | In the 0019–0021 increment (revision 69e8799; the first attempt, 1a39dd5, failed at 10/12 and was rolled back). Passes the local gate and the rehearsal; live completion not yet confirmed. | Verified locally; needs live evidence plus phone checks |
 | **RELEASE 0025** | In release 0022–0025 (built, tested, deployment package prepared). Not deployed. | Local tests and scope gate; needs the live run plus screen checks |
 | **NEEDS IMPLEMENTATION** | Not in either build for AWS. Either absent, or only in the old Supabase build. | Repository search (cited) |
 | **BLOCKED** | Waiting on an owner action or decision | Cited |
@@ -166,8 +166,8 @@ Proposal: `docs/product/PRICING_PROPOSAL.md`. It is a recommendation. Nothing is
 | Item | Status |
 | --- | --- |
 | Pilot through 0018 | LIVE; not restarted |
-| 1a39dd5 increment (0019–0021): backup, rollback that keeps records, strict scope check, 9 live checks | **NOT VERIFIED** live. Paste block with a verifying preflight, supported-state resume and a value-level post-check; rehearsed (fresh, failure + resume, complete, 12 refusals, 5 value-change detections) |
-| Release 0022–0025: snapshot, account/record counts checked unchanged, applied migrations never modified (checksums), strict gate (25-variant self-test), 12 live checks, layered rollback | Package ready; rehearsal against stubbed AWS: see the commit that pins it. Requires the 1a39dd5 increment live. New fixed cost ≈ 7.30 USD/month (Lambda endpoint) needs approval (typing DEPLOY). |
+| 0019–0021 increment: backup, rollback that keeps records, strict scope check, 10 live checks | **NOT VERIFIED** live. The first deployment (1a39dd5) **FAILED** at 10/12: the Lambda resource policy reached 20,624 of 20,480 bytes because there was one invoke statement per route. CloudFormation rolled the API back; migrations 0019–0021 stayed applied (owner report). **Fixed** in 69e8799: one invoke permission limited to this API; route authentication is unchanged. The peak during the update is today's policy + 1 statement, and it is checked before deploying. The recovery block verifies the state the failed run left (ledger, objects, record values, API rollback, Lambda policy, stack status, web, admin host groups, snapshot), then deploys without re-applying migrations. Rehearsed: the reproduced failure, then RECOVER (peak 13,963 bytes) with 10/10 live checks and the post-check passing; 19 refusals; failure and resume; complete re-paste; API rollback. |
+| Release 0022–0026: snapshot, account/record counts checked unchanged, applied migrations never modified (checksums), strict gate (27-variant self-test, including per-route or widened invoke permissions), 13 live checks (13 = the Lambda policy is still one statement), layered rollback | Package ready on the single-permission base. It refuses to start unless the revised increment is live (one invoke statement). Requires the 0019–0021 increment live. New fixed cost ≈ 7.30 USD/month (Lambda endpoint) needs approval (typing DEPLOY). |
 | Full workflow on real AWS (authorization and scheduling through confirmation, approval and reports), with two-agency isolation | After deployment. Authorizations and schedules still come from seeds, so only the seeded part can be tested. |
 | Phone retest of changed workflows | After deployment (plan section 6) |
 | Production correction fix | Kept separate; needs its own approval |
@@ -176,7 +176,7 @@ Proposal: `docs/product/PRICING_PROPOSAL.md`. It is a recommendation. Nothing is
 
 | # | Blocker | Next step owner | Next action | Fits the 13:20 target? |
 | --- | --- | --- | --- | --- |
-| 0 | 1a39dd5 increment NOT VERIFIED. Live evidence so far: no `~/ogevia-increment-run`, 38 routes (the pilot route names). That shows the workflow did not complete; it does not prove the database, Lambda or web are unchanged | Owner | Paste `infra/aws/slice/increment-resume-block.sh`: its preflight verifies routes and authorisation, Lambda code and settings, web build, TEST database, ledger, database objects and record values before anything is deployed | — |
+| 0 | 0019–0021 increment NOT VERIFIED. The 1a39dd5 deployment failed at 10/12 (Lambda policy size) and was rolled back. Ledger 0021 and the completed rollback are owner-reported, not yet verified | Owner | Paste `infra/aws/slice/increment-resume-block.sh` (revision 69e8799). Its preflight verifies the failed run's state before anything changes, then the revision deploys with one invoke permission | — |
 | 1 | Release 0022–0026 (administration, invitations, planned assignments, schedule and call-outs, S3 endpoint fix) not deployed | Owner | Only after 0 is verified: paste the release block, type DEPLOY, then screen checks 6.1–6.11 | — |
 | 2 | Staff shifts, call-outs, replacements: built (0026), not deployed | Owner | Deploys with release 0022–0026 | — |
 | 3 | Utilisation beyond monthly per service (section 9) | Claude (build) | Periods, breakdowns, coverage and expiry warnings, projections | **No** |
