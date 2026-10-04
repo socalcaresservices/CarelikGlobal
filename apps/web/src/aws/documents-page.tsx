@@ -122,7 +122,7 @@ function ReviewControls({ doc, selfReview, onDone }: { doc: StaffDocument; selfR
   return (
     <div className="mt-3 space-y-2 rounded-lg bg-slate-50 p-3">
       <p className="text-xs text-slate-600">Check the file and its dates. Verifying records your name and the time; it is an administrative check, not legal clearance.</p>
-      {selfReview ? <p className="text-xs font-semibold text-amber-900">You uploaded this version. Your review is recorded as an owner self-review.</p> : null}
+      {selfReview ? <p className="text-xs font-semibold text-amber-900">You uploaded this version. Your review is recorded as an Administrator self-review.</p> : null}
       <label className="block text-sm font-medium text-slate-700">
         Reason (required to reject)
         <input value={reason} maxLength={1000} onChange={(e) => setReason(e.target.value)} className="mt-1 block w-full rounded-lg border border-slate-200 px-3 py-2 text-sm" />
@@ -165,7 +165,7 @@ function DocumentCard({ d, canManage, canUpload, canReviewOwn, refresh }: { d: S
       {mode === "upload" ? <UploadForm doc={d} onDone={() => { setMode(null); refresh(); }} /> : null}
       {canManage && d.latestReviewStatus === "awaiting_review" ? (
         d.latestUploadedByMe && !canReviewOwn ? (
-          <p className="mt-3 rounded-lg bg-slate-50 p-3 text-sm text-slate-700">You uploaded this version, so the owner or another manager must review it.</p>
+          <p className="mt-3 rounded-lg bg-slate-50 p-3 text-sm text-slate-700">You uploaded this version, so the Administrator or another manager must review it.</p>
         ) : (
           <ReviewControls doc={d} selfReview={!!d.latestUploadedByMe} onDone={refresh} />
         )

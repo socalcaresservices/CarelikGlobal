@@ -4,7 +4,7 @@
 
 **Environment:** account 300094796789, us-west-2, database `ogevia_sv_test`, synthetic data only.
 
-**Build to deploy:** the commit pinned in `infra/aws/slice/increment-bootstrap.sh` (the paste block). The script refuses any other commit and any checkout with local changes.
+**Build to deploy:** the commit pinned in (status of every pilot requirement: `docs/product/PILOT_SCOPE_RECONCILIATION.md`) `infra/aws/slice/increment-bootstrap.sh` (the paste block). The script refuses any other commit and any checkout with local changes.
 
 **Not affected:** the completed pilot deployment. This run uses its own state and rollback folder (`~/ogevia-increment-run`) and its own checkout (`/tmp/ogevia-increment`); `~/ogevia-pilot-run` and `/tmp/ogevia-pilot` are never written.
 
@@ -78,7 +78,7 @@ The previous build's `index.html` and assets stay in the versioned bucket for ro
 | 10 | Gate again against the templates read just before deploying; `cdk deploy` of the API stack only; web files (`config.json` not changed); invalidation | Yes |
 | 11 | 9 live checks (section 6) and `REPORT.md` | No |
 | 12 | Optional **SEED** (typed): synthetic client names, TEST only | Yes (TEST data) |
-| 13 | `pilot-manager-account.sh` (typed **MANAGER**). Creates the separate manager sign-in `ogemails+ogevia-pilot-manager@gmail.com` in the TEST Cognito pool (email invitation; MFA at first sign-in). Adds a `manager` membership in `scs-pilot-synthetic`, audited. Reads back that the role holds no `billing.read` and no `organization.update`, and that the owner remains. Rollback file: revoke (audited) and disable; nothing is deleted. Rehearsed: it refuses when there is no owner, applies once, and a re-run changes nothing. | Yes (TEST sign-in and data) |
+| 13 | `pilot-manager-account.sh` (typed **MANAGER**). Creates the separate manager sign-in `ogemails+ogevia-pilot-manager@gmail.com` in the TEST Cognito pool (email invitation; MFA at first sign-in). Adds a `manager` membership in `scs-pilot-synthetic`, audited. Reads back that the role holds no `billing.read` and no `organization.update`, and that the owner remains. Rollback file: revoke (audited) and disable; nothing is deleted. It then checks live, **as the new manager** (read-only): can approve hours = true, can see money = false, can change branding = false, and 0 billing-approval or utilisation rows carrying a rate or dollar value. The Administrator's count is shown for comparison. Rehearsed: it refuses when there is no owner, applies once, and a re-run changes nothing. | Yes (TEST sign-in and data) |
 
 A stop at any step prints the reason; pasting the block again resumes after the last completed step. A cancelled DEPLOY changes nothing (rehearsed: no AWS calls that change anything).
 
@@ -121,7 +121,7 @@ Rehearsed against the rehearsal deployment:
 9. The pre-deploy snapshot is available.
 
 **Real phones** (synthetic data):
-1. **Owner:** shows OWNER VIEW with your name; the logo upload appears in the header for the manager and caregiver too; the colour change applies; Home financial cards appear, with cost and margin "Unavailable".
+1. **Administrator** (`admin.ogevia@gmail.com`): shows **ADMINISTRATOR VIEW** (never "OWNER") with your name; the logo upload appears in the header for the manager and caregiver too; the colour change applies; Home financial cards appear, with cost and margin "Unavailable".
 2. **Manager** (`ogemails+ogevia-pilot-manager@gmail.com`, not the owner account): shows MANAGER VIEW; NEEDS ATTENTION shows a count and opens the exceptions list.
    - Approves one Billing Ready visit and sees no dollar amounts.
    - Voids it with a reason.

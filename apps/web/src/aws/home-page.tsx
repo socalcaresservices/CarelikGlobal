@@ -142,7 +142,7 @@ export function AwsHomePage() {
             </Card>
             {isOwnerFinance ? (
               <section aria-labelledby="finance-heading" className="space-y-2">
-                <h3 id="finance-heading" className="text-sm font-semibold text-slate-900">Financial impact (owner only)</h3>
+                <h3 id="finance-heading" className="text-sm font-semibold text-slate-900">Financial impact (Administrator only)</h3>
                 <div className="grid gap-2 md:grid-cols-2">
                   {[
                     ["Billable value", moneyLabel(sumMoney(rows, "billableValueCents")), "Billable hours × authorization rate. Not collected revenue."],
@@ -164,7 +164,7 @@ export function AwsHomePage() {
                 ) : null}
               </section>
             ) : role !== "organization_owner" ? (
-              <p className="text-xs text-slate-500">Dollar values, rates, costs and margins are visible to the agency owner only.</p>
+              <p className="text-xs text-slate-500">Dollar values, rates, costs and margins are visible to the agency Administrator only.</p>
             ) : null}
           </>
         ) : null}

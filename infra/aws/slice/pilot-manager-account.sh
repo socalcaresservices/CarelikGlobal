@@ -150,10 +150,33 @@ AFTER=$(Q -d "$DB_NAME" -c "select m.role || '/' || m.status from ogevia.organiz
 PERMS=$(Q -d "$DB_NAME" -c "select string_agg(permission_key, ' ' order by permission_key) from ogevia.role_permissions where role = 'manager'")
 OWNERS=$(Q -d "$DB_NAME" -c "select count(*) from ogevia.organization_memberships where organization_id = '$ORG_ID' and role = 'organization_owner' and status = 'active'")
 AUDIT=$(Q -d "$DB_NAME" -c "select count(*) from ogevia.audit_events a join ogevia.organization_memberships m on m.id = a.entity_id join ogevia.app_users u on u.id = m.user_id where u.cognito_sub = '$SUB' and a.action = 'membership.manager_granted'")
+# Live money boundary, READ ONLY, acting as the new manager through the same
+# request context the API uses: may approve hours, may not see rates or dollars.
+MONEY_SQL="begin transaction read only;
+set local role ogevia_owner;
+select ogevia_api.begin_request('$SUB') is not null;
+select ogevia.has_permission('$ORG_ID', 'billing.approve')::text || ' ' || ogevia.has_permission('$ORG_ID', 'billing.read')::text
+       || ' ' || ogevia.has_permission('$ORG_ID', 'organization.update')::text;
+select count(*) || ' ' || count(*) filter (where rate_cents is not null or amount_cents is not null)
+  from ogevia_api.list_billing_approvals('$ORG_ID', date '2000-01-01', current_date + 366);
+select count(*) || ' ' || count(*) filter (where billable_value_cents is not null or approved_value_cents is not null or unused_value_cents is not null)
+  from ogevia_api.get_utilisation_overview('$ORG_ID', date_trunc('month', current_date)::date);
+select ogevia_api.begin_request((select u.cognito_sub from ogevia.organization_memberships m join ogevia.app_users u on u.id = m.user_id
+  where m.organization_id = '$ORG_ID' and m.role = 'organization_owner' and m.status = 'active' order by m.created_at limit 1)) is not null;
+select count(*) filter (where billable_value_cents is not null or approved_value_cents is not null or unused_value_cents is not null)
+  from ogevia_api.get_utilisation_overview('$ORG_ID', date_trunc('month', current_date)::date);
+rollback;"
+mapfile -t MONEY < <(Q -d "$DB_NAME" -f - <<<"$MONEY_SQL" | grep -vE '^(BEGIN|SET|ROLLBACK|t)$')
 db_window_close
 trap on_exit EXIT
 trap 'die "unexpected error on line $LINENO (command: $BASH_COMMAND)"' ERR
 admin_host_groups | grep -qw "$APP_SG" && die "$APP_SG is still attached to $IID: remove it in the EC2 console"
+echo "Live check as the manager: can approve hours / can see money / can change branding = ${MONEY[0]:-?}"
+echo "  billing approvals visible: ${MONEY[1]%% *}, of which with a rate or amount: ${MONEY[1]##* }"
+echo "  utilisation rows visible: ${MONEY[2]%% *}, of which with a dollar value: ${MONEY[2]##* }"
+echo "  for comparison, the Administrator sees dollar values on ${MONEY[3]:-?} utilisation rows$( [[ "${MONEY[3]:-0}" == 0 ]] && echo " (no rated authorization this month, so this live check cannot show the difference; the database and API tests cover it)")"
+[[ "${MONEY[0]:-}" == "true false false" && "${MONEY[1]##* }" == 0 && "${MONEY[2]##* }" == 0 ]] \
+  || die "the manager can see monetary information or cannot approve hours; stop and send this to Claude (rollback: $RBF)"
 echo "Read back: $EMAIL is $AFTER in $ORG_SLUG; audit events: $AUDIT; agency owners: $OWNERS"
 echo "Manager permissions: $PERMS"
 [[ "$AFTER" == manager/active && "$AUDIT" == 1 && "$OWNERS" -ge 1 ]] || die "read-back did not match (rollback: bash $RBF inside a DB window)"

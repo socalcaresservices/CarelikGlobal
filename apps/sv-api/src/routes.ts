@@ -129,7 +129,7 @@ export const ROUTES: Record<string, Route> = {
       // Authority before storing: only holders of organization.update.
       const [me] = await tx((db) => rows(db, "select permissions from ogevia_api.get_my_context() where organization_id = $1", [org]));
       if (!me) throw new ApiError(404, "not_found", "Organization not found.");
-      if (!(me.permissions as string[]).includes("organization.update")) throw new ApiError(403, "forbidden", "Only the agency owner can change the logo.");
+      if (!(me.permissions as string[]).includes("organization.update")) throw new ApiError(403, "forbidden", "Only the agency Administrator can change the logo.");
       const logoId = randomUUID();
       const objectKey = logoObjectKey(org, logoId);
       let s3VersionId: string | null;

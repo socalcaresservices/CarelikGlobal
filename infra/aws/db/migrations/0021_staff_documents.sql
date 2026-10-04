@@ -26,7 +26,7 @@
 --   * Self-review: nobody reviews their own upload, except the agency owner
 --     (documents.review_own, owner decision 2026-10-04). An owner
 --     self-review is allowed and recorded as such in the audit row
---     (after_state.self_review = true, reason prefixed "Owner self-review").
+--     (after_state.self_review = true, reason prefixed "Administrator self-review").
 
 insert into ogevia.permissions (key, description) values
   ('documents.read', 'View staff documents and their files'),
@@ -476,7 +476,7 @@ begin
   end if;
   v_self := v.uploaded_by = v_actor;
   if v_self and not ogevia.has_permission(v.organization_id, 'documents.review_own') then
-    raise exception 'You cannot review a document you uploaded; ask the owner or another manager' using errcode = 'OGA03';
+    raise exception 'You cannot review a document you uploaded; ask the Administrator or another manager' using errcode = 'OGA03';
   end if;
   if v.review_status <> 'awaiting_review' then
     raise exception 'This document version has already been reviewed' using errcode = 'OGC09';
@@ -490,7 +490,7 @@ begin
   perform ogevia.write_audit(v.organization_id, 'document.' || p_decision, 'document_versions', v.id,
     jsonb_build_object('review_status', 'awaiting_review'),
     jsonb_build_object('review_status', p_decision, 'self_review', v_self),
-    case when v_self then 'Owner self-review' || coalesce(': ' || nullif(btrim(coalesce(p_reason, '')), ''), '')
+    case when v_self then 'Administrator self-review' || coalesce(': ' || nullif(btrim(coalesce(p_reason, '')), ''), '')
          else nullif(btrim(coalesce(p_reason, '')), '') end);
   perform ogevia.idempotency_finish('review_document_version', p_idempotency_key, v.organization_id, v_fp,
     jsonb_build_object('decision', p_decision));

@@ -154,7 +154,7 @@ begin
     raise exception 'Organization not found' using errcode = 'OGN04';
   end if;
   if not ogevia.has_permission(p_organization_id, 'organization.update') then
-    raise exception 'Only the agency owner can change branding' using errcode = 'OGA03';
+    raise exception 'Only the agency Administrator can change branding' using errcode = 'OGA03';
   end if;
   v_prior := ogevia.idempotency_begin('set_branding', p_idempotency_key, p_organization_id, v_fingerprint);
   if v_prior is null then
@@ -357,7 +357,7 @@ begin
     raise exception 'Organization not found' using errcode = 'OGN04';
   end if;
   if not ogevia.has_permission(p_organization_id, 'organization.update') then
-    raise exception 'Only the agency owner can change the logo' using errcode = 'OGA03';
+    raise exception 'Only the agency Administrator can change the logo' using errcode = 'OGA03';
   end if;
   v_prior := ogevia.idempotency_begin('set_logo', p_idempotency_key, p_organization_id, v_fp);
   if v_prior is not null then return v_prior ->> 'sha256'; end if;
@@ -394,7 +394,7 @@ begin
     raise exception 'Organization not found' using errcode = 'OGN04';
   end if;
   if not ogevia.has_permission(p_organization_id, 'organization.update') then
-    raise exception 'Only the agency owner can change the logo' using errcode = 'OGA03';
+    raise exception 'Only the agency Administrator can change the logo' using errcode = 'OGA03';
   end if;
   select jsonb_build_object('logo_sha256', o.logo_sha256, 'logo_object_key', o.logo_object_key) into v_before
     from ogevia.organizations o where o.id = p_organization_id for update;

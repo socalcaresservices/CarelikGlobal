@@ -10,7 +10,7 @@ const DEFAULT_ACCENT = "#0f172a"; // slate-900: the colour used before agency br
 
 /**
  * Shell for the AWS build: agency identity first, the signed-in person and
- * their view (OWNER / MANAGER / CAREGIVER VIEW), NEEDS ATTENTION, and
+ * their view (ADMINISTRATOR / MANAGER / CAREGIVER VIEW), NEEDS ATTENTION, and
  * role-appropriate navigation. Navigation only decides what is shown; every
  * screen's data is authorized again in PostgreSQL.
  */

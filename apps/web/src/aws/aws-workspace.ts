@@ -65,19 +65,20 @@ export interface UtilisationRow {
   approvedMinutes: number;
   remainingMinutes: number;
   lineagesWithoutRate: number;
-  /** Owner only (billing.read); null for everyone else. Values are in cents. */
+  /** Administrator only (billing.read); null for everyone else. Values are in cents. */
   billableValueCents: number | null;
   approvedValueCents: number | null;
   unusedValueCents: number | null;
 }
 
-export type ViewKind = "OWNER" | "MANAGER" | "SCHEDULER" | "CAREGIVER" | "STAFF";
+export type ViewKind = "ADMINISTRATOR" | "MANAGER" | "SCHEDULER" | "CAREGIVER" | "STAFF";
 
 /** The view label comes from the server-provided role, never from the email. */
 export function viewKind(role: string | null): ViewKind {
   switch (role) {
+    // Internal role organization_owner is shown to people as Administrator.
     case "organization_owner":
-      return "OWNER";
+      return "ADMINISTRATOR";
     case "manager":
     case "organization_admin":
       return "MANAGER";
@@ -92,7 +93,7 @@ export function viewKind(role: string | null): ViewKind {
 }
 
 export const VIEW_TITLE: Record<ViewKind, string> = {
-  OWNER: "Owner",
+  ADMINISTRATOR: "Administrator",
   MANAGER: "Manager",
   SCHEDULER: "Scheduler",
   CAREGIVER: "Caregiver",

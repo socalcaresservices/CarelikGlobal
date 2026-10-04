@@ -195,17 +195,18 @@ describe("AWS build: manager review and billing-review data", () => {
     expect(attention.className).toMatch(/text-red-700/);
     // 1590 of 6000 minutes worked = 26.5 h of 100 h, 27 %.
     expect(await screen.findByText(/26\.5 h of 100 h · 27%/)).toBeInTheDocument();
-    expect(screen.queryByText("Financial impact (owner only)")).not.toBeInTheDocument();
-    expect(screen.getByText(/visible to the agency owner only/)).toBeInTheDocument();
+    expect(screen.queryByText("Financial impact (Administrator only)")).not.toBeInTheDocument();
+    expect(screen.getByText(/visible to the agency Administrator only/)).toBeInTheDocument();
     expect(screen.queryByRole("link", { name: "Settings" })).not.toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Billing review" })).toBeInTheDocument();
     expect(api.calls.some((c) => c.path.startsWith("/v1/attention?organizationId="))).toBe(true);
   });
 
-  it("owner sees OWNER VIEW, the financial cards with unavailable cost/margin, and Settings", async () => {
+  it("organization_owner sees ADMINISTRATOR VIEW, the financial cards with unavailable cost/margin, and Settings", async () => {
     renderAws("/", "organization_owner");
-    expect(await screen.findByText("OWNER VIEW")).toBeInTheDocument();
-    expect(await screen.findByText("Financial impact (owner only)")).toBeInTheDocument();
+    expect(await screen.findByText("ADMINISTRATOR VIEW")).toBeInTheDocument();
+    expect(screen.queryByText("OWNER VIEW")).not.toBeInTheDocument();
+    expect(await screen.findByText("Financial impact (Administrator only)")).toBeInTheDocument();
     expect(screen.getByText("$735")).toBeInTheDocument();
     expect(screen.getByText("Caregiver cost and margin")).toBeInTheDocument();
     expect(screen.getByText(/no caregiver pay data/)).toBeInTheDocument();

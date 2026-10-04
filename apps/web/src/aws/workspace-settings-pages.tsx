@@ -50,7 +50,7 @@ export function ProfilePage() {
   );
 }
 
-/** Owner-only: agency name and accent colour, applied to every role's header. */
+/** Administrator only: agency name and accent colour, applied to every role's header. */
 export function BrandingSettingsPage() {
   const api = useAwsApi();
   const queryClient = useQueryClient();
@@ -67,7 +67,7 @@ export function BrandingSettingsPage() {
     }
   }, [branding.data]);
 
-  if (!hasPermission("organization.update")) return <p className="text-sm text-slate-600">Only the agency owner can change branding.</p>;
+  if (!hasPermission("organization.update")) return <p className="text-sm text-slate-600">Only the agency Administrator can change branding.</p>;
 
   const valid = /^#[0-9a-fA-F]{6}$/.test(color);
   const contrast = valid ? contrastWithWhite(color.toLowerCase()) : null;
@@ -129,7 +129,7 @@ export function BrandingSettingsPage() {
   );
 }
 
-/** Owner-only agency logo: stored privately; shown to every role and on printouts. */
+/** Administrator-only agency logo: stored privately; shown to every role and on printouts. */
 function LogoSettings() {
   const api = useAwsApi();
   const queryClient = useQueryClient();

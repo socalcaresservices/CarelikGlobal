@@ -153,7 +153,7 @@ describe("request, upload, review", () => {
     const v = await upload(w.ownerA, doc, { issued: today });
     await review(w.ownerA, v.document_version_id, "verified");
     const [a] = (await db.admin.query("select actor_user_id, after_state, reason from ogevia.audit_events where action = 'document.verified' and entity_id = $1", [v.document_version_id])).rows;
-    expect(a).toMatchObject({ actor_user_id: w.ownerA.userId, reason: "Owner self-review" });
+    expect(a).toMatchObject({ actor_user_id: w.ownerA.userId, reason: "Administrator self-review" });
     expect(a.after_state).toMatchObject({ self_review: true });
     const holders = await db.admin.query("select role::text from ogevia.role_permissions where permission_key = 'documents.review_own'");
     expect(holders.rows.map((r) => r.role)).toEqual(["organization_owner"]);
