@@ -190,7 +190,7 @@ Proposal: `docs/product/PRICING_PROPOSAL.md`. It is a recommendation. Nothing is
 | # | Criterion | Evidence required |
 | --- | --- | --- |
 | C1 | One combined recovery drill restores together: the database (to a new instance), document and signature objects (versioned S3, referenced keys resolve), account access (Cognito users can sign in and keep their roles and agency), and the application (API and web work against the recovered data) | A drill log with start and end times for each part |
-| C2 | Recovery time, as measured | Measured minutes from the drill; no target is stated as a guarantee |
+| C2 | Recovery time, as measured | Measured minutes from the drill for the whole system; no target is stated as a guarantee. The database restore alone measured 4 min 15 s on 2026-10-03 |
 | C3 | Maximum potential data loss, per data type, from the actual configuration | Database (backup and point-in-time settings as read live), S3 objects, Cognito, and anything outside them, each stated with its source |
 | C4 | Each agency has a recent operational export, reachable while Ogevia is down, with a "last updated" time | A design and implementation, tested with two agencies: each sees only its own export, only authorised staff can open it, and the export holds no more data than needed for the minimum required |
 | C5 | Temporary visit recording during an outage, and reconciliation afterwards, with no lost or duplicate hours | A written procedure plus the system support for entering outage visits as provisional exception visits, with duplicate detection and an audit trail. Must be rehearsed |
@@ -200,7 +200,7 @@ Proposal: `docs/product/PRICING_PROPOSAL.md`. It is a recommendation. Nothing is
 
 | Part | What is known | Class |
 | --- | --- | --- |
-| Database | RDS automated backups for 7 days with point-in-time recovery (Phase 7 E1). One restore to a new instance on 2026-10-03: ledger and row counts matched. The duration was **not measured** (the script reported a false 0 seconds; corrected to report "unknown") | OWNER-REPORTED; recovery time UNKNOWN |
+| Database | RDS automated backups for 7 days with point-in-time recovery (Phase 7 E1). One restore to a new instance on 2026-10-03 took **4 min 15.142 s** (23:03:12.179 to 23:07:27.321 UTC). Data verification (ledger, row counts) and cleanup passed. Evidence: `~/ogevia-phase7/drill-finish-20261003T234756Z.log` (CloudShell). This is the database restore only; it does not include finding the fault, repointing the application, or verifying documents, signatures and sign-in | OWNER-REPORTED; database restore time MEASURED; **full-system recovery time UNKNOWN** |
 | Documents and signatures | Evidence bucket versioned, KMS-encrypted, private. Never restored together with the database | VERIFIED controls; joint recovery NOT VERIFIED |
 | Account access | Cognito with deletion protection and MFA. No user-pool backup or restore path has been defined or tested | NOT VERIFIED |
 | Application | Infrastructure as code (CDK) plus pinned deploy scripts. Rebuilding it against a restored database was never drilled | NOT VERIFIED |
