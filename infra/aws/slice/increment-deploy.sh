@@ -38,6 +38,15 @@ BASE_MIGRATION=0018
 NEW_ROUTE_COUNT=22
 PIN="${OGEVIA_INCREMENT_PIN:-}"
 SNAPSHOT_ID=ogevia-prod-postgres-pre-0021-$(date -u +%Y%m%d)
+# Recovery: the database is already at 0021, so this run's snapshot has its own
+# name (never the failed run's pre-0019 snapshot, which stays the point to restore
+# to for undoing the whole increment and is recorded in the manifest).
+RECOVERY=false; PRE_INCREMENT_SNAPSHOT=""
+if [[ -f "$RUN/recovery-from-1a39dd5" ]]; then
+  RECOVERY=true
+  SNAPSHOT_ID=ogevia-prod-postgres-at-0021-v2-$(date -u +%Y%m%d)
+  PRE_INCREMENT_SNAPSHOT=$(jq -r '.snapshot // empty' "$HOME/ogevia-increment-run/rollback/MANIFEST.json" 2>/dev/null || true)
+fi
 LOG="$RUN/deploy-$(date -u +%Y%m%dT%H%M%SZ).log"
 exec 3>&1
 exec > >(tee -a "$LOG") 2>&1
@@ -163,9 +172,9 @@ if ! is_done rollback-captured; then
   aws lambda get-policy --function-name "$FN" --query Policy --output text > "$RB/lambda-resource-policy.json"
   aws s3 sync "s3://$BUCKET" "$RB/web" --only-show-errors
   aws s3api head-object --bucket "$BUCKET" --key index.html --query '{ETag:ETag,LastModified:LastModified,VersionId:VersionId}' --output json > "$RB/web-index.json"
-  jq -n --arg commit "$COMMIT" --arg fn "$FN" --arg bucket "$BUCKET" --arg dist "$DIST" --arg snap "$SNAPSHOT_ID" \
+  jq -n --arg commit "$COMMIT" --arg fn "$FN" --arg bucket "$BUCKET" --arg dist "$DIST" --arg snap "$SNAPSHOT_ID" --arg presnap "$PRE_INCREMENT_SNAPSHOT" \
     --arg routes "$(jq length "$RB/routes.json")" --arg at "$(date -u +%FT%TZ)" \
-    '{capturedAt:$at, deployingCommit:$commit, lambda:$fn, apiRoutesBefore:($routes|tonumber), siteBucket:$bucket, distribution:$dist, snapshot:$snap}' > "$RB/MANIFEST.json"
+    '{capturedAt:$at, deployingCommit:$commit, lambda:$fn, apiRoutesBefore:($routes|tonumber), siteBucket:$bucket, distribution:$dist, snapshot:$snap, preIncrementSnapshot:$presnap}' > "$RB/MANIFEST.json"
   done_ rollback-captured
 fi
 SNAPSHOT_ID=$(jq -r .snapshot "$RB/MANIFEST.json")
@@ -184,14 +193,21 @@ echo "Gate self-test: PASS (refuses 19 tampered variants of this exact build)"
 phase "7/12 APPROVAL (the only approval for the deployment)"
 if ! is_done approved; then
   [[ -t 0 ]] || die "approval needs an interactive terminal"
+  if [[ "$RECOVERY" == true ]]; then
+    DBLINE="migrations 0019-0021 are ALREADY applied (by the failed 1a39dd5 run, verified by the
+     preflight): none is applied again; db:verify must pass; existing visits must be unchanged.
+     Pre-increment snapshot (to undo everything): ${PRE_INCREMENT_SNAPSHOT:-none recorded}."
+  else
+    DBLINE="migrations 0019, 0020, 0021 are applied (one transaction each); db:verify must pass;
+     existing visits (id, times, signed time, status) must be unchanged."
+  fi
   cat <<EOF
 
 Exactly this will change in AWS TEST (account $ACCOUNT, $REGION), commit ${COMMIT:0:12}:
   1. RDS snapshot $SNAPSHOT_ID of $RDS_ID (kept until you delete it).
   2. DB window: $APP_SG is attached to admin host $IID, then its original groups are restored.
-     On $DB_NAME only: the ledger must be exactly 0001-$BASE_MIGRATION with matching checksums;
-     migrations 0019, 0020, 0021 are applied (one transaction each); db:verify must pass;
-     existing visits (id, times, signed time, status) must be unchanged.
+     On $DB_NAME only: the ledger must be contiguous with checksums matching the repository;
+     $DBLINE
   3. $API_STACK: exactly the scope-gate list above: 22 routes (JWT, as before), Handler
      code, 2 added S3 statements, and the invoke-permission transition: + 1 permission
      limited to this API, - the route-scoped permissions (peak during the update: one
