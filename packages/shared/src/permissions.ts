@@ -34,6 +34,8 @@ export const permissionSchema = z.enum([
   "languages.update",
   "clients.names.read",
   "clients.names.manage",
+  "clients.manage",
+  "authorizations.rates.manage",
   "documents.read",
   "documents.manage",
   "documents.manage_own",

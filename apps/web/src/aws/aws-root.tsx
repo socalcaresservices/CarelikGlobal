@@ -19,7 +19,8 @@ import { CareRequestsPage } from "./care-requests-page";
 import { CaregiverAvailabilityPage } from "./caregiver-availability-page";
 import { AwsHomePage } from "./home-page";
 import { DocumentsPage } from "./documents-page";
-import { ClientNamesPage } from "./clients-page";
+import { ClientDetailPage } from "./client-detail-page";
+import { ClientsPage } from "./clients-page";
 import { BrandingSettingsPage, ProfilePage } from "./workspace-settings-pages";
 import { PublicCareOfferPage, PublicCareRequestPage } from "./care-public-pages";
 
@@ -63,7 +64,8 @@ export function AwsRoutes({ api, publicApi }: { api: AwsApiClient; publicApi: Aw
                     <Route path="/availability" element={<CaregiverAvailabilityPage api={api} />} />
                     <Route path="/profile" element={<ProfilePage />} />
                     <Route path="/documents" element={<DocumentsPage />} />
-                    <Route path="/clients" element={<ClientNamesPage />} />
+                    <Route path="/clients" element={<ClientsPage />} />
+                    <Route path="/clients/:clientId" element={<ClientDetailPage />} />
                     <Route path="/settings/branding" element={<BrandingSettingsPage />} />
                     <Route path="*" element={<Navigate to="/" replace />} />
                   </Routes>

@@ -27,3 +27,13 @@ $E2E_DIR/node_modules/.bin/tsx pilot-e2e.ts
 Re-run `setup-db.sh` before every run (it recreates `ogevia_pilot_e2e`).
 Exit 0 = every check passed; results in `$E2E_DIR/e2e-results.json`,
 screenshots in `$E2E_DIR/shots/`.
+
+## Client and authorization administration (0022)
+
+`clients-e2e.ts` uses the same setup, with database `ogevia_clients_e2e` migrated to 0022. It checks:
+- manager: add a client, add an authorization, refused overlap, amendment with history, balances, status change;
+- the Administrator's rate is hidden from the manager;
+- caregiver: no access;
+- audit and version rows in the database.
+
+Result 2026-10-04: 28/28 PASS at 390 px.

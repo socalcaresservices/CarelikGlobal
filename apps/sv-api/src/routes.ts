@@ -58,6 +58,34 @@ async function rows(db: Queryable, sql: string, params: unknown[]) {
   return (await db.query(sql, params)).rows.map(toCamel);
 }
 
+const CLIENT_STATUSES = ["active", "inactive", "discharged"] as const;
+function wholeNumber(value: unknown, name: string, min: number, max: number): number {
+  if (typeof value !== "number" || !Number.isInteger(value) || value < min || value > max) {
+    throw new ApiError(400, "bad_request", `${name} must be a whole number from ${min} to ${max}.`);
+  }
+  return value;
+}
+function clientDetails(body: Record<string, unknown>) {
+  return {
+    org: uuid(body.organizationId, "organizationId"),
+    first: text(body.firstName, "firstName", 80, { required: true }),
+    last: text(body.lastName, "lastName", 80, { required: true }),
+    city: text(body.city, "city", 80),
+    type: optionalUuid(body.clientTypeId, "clientTypeId"),
+    label: text(body.caregiverLabel, "caregiverLabel", 40),
+  };
+}
+function authorizationTerms(body: Record<string, unknown>) {
+  return {
+    payer: text(body.payer, "payer", 120, { required: true }),
+    minutes: wholeNumber(body.monthlyAuthorizedMinutes, "monthlyAuthorizedMinutes", 1, 44640),
+    start: date(body.periodStart, "periodStart"),
+    end: date(body.periodEnd, "periodEnd"),
+    number: text(body.authorizationNumber, "authorizationNumber", 80),
+    received: optionalDate(body.receivedDate, "receivedDate"),
+    source: text(body.sourceReference, "sourceReference", 200),
+  };
+}
 const q = (event: HttpApiEvent) => event.queryStringParameters ?? {};
 const p = (event: HttpApiEvent) => event.pathParameters ?? {};
 const orgParam = (event: HttpApiEvent) => uuid(q(event).organizationId, "organizationId");
@@ -190,6 +218,138 @@ export const ROUTES: Record<string, Route> = {
       const last = text(body.lastName, "lastName", 80, { required: true });
       await tx((db) => db.query("select ogevia_api.set_client_legal_name($1, $2, $3, $4, $5)", [org, client, first, last, key]));
       return { ok: true };
+    },
+  },
+
+  // Client and authorization administration (0022). Permissions are enforced in
+  // PostgreSQL: clients.manage + clients.names.manage to change clients,
+  // authorizations.update to add or amend, authorizations.rates.manage to set a
+  // rate; names, city and rates are returned only to the roles that may see them.
+  "GET /v1/client-types": {
+    mutating: false,
+    handle: async ({ event, tx }) => ({
+      clientTypes: await tx((db) => rows(db, "select * from ogevia_api.list_client_types($1)", [orgParam(event)])),
+    }),
+  },
+
+  "POST /v1/client-types": {
+    status: 201,
+    mutating: true,
+    handle: async ({ event, tx }) => {
+      const body = parseBody(event.body, event.isBase64Encoded);
+      const key = idempotencyKey(event.headers);
+      const org = uuid(body.organizationId, "organizationId");
+      const name = text(body.name, "name", 60, { required: true });
+      const clientTypeId = await tx(async (db) =>
+        ((await db.query("select ogevia_api.create_client_type($1, $2, $3) as id", [org, name, key])).rows[0] as { id: string }).id);
+      return { clientTypeId };
+    },
+  },
+
+  "GET /v1/services": {
+    mutating: false,
+    handle: async ({ event, tx }) => ({
+      services: await tx((db) => rows(db, "select * from ogevia_api.list_services($1)", [orgParam(event)])),
+    }),
+  },
+
+  "GET /v1/clients": {
+    mutating: false,
+    handle: async ({ event, tx }) => ({
+      clients: await tx((db) => rows(db, "select * from ogevia_api.list_clients($1)", [orgParam(event)])),
+    }),
+  },
+
+  "POST /v1/clients": {
+    status: 201,
+    mutating: true,
+    handle: async ({ event, tx }) => {
+      const body = parseBody(event.body, event.isBase64Encoded);
+      const key = idempotencyKey(event.headers);
+      const c = clientDetails(body);
+      const [created] = await tx((db) =>
+        rows(db, "select * from ogevia_api.create_client($1, $2, $3, $4, $5, $6, $7)", [c.org, c.first, c.last, c.city, c.type, c.label, key]));
+      return { client: created };
+    },
+  },
+
+  "POST /v1/clients/{clientId}/details": {
+    mutating: true,
+    handle: async ({ event, tx }) => {
+      const client = uuid(p(event).clientId, "clientId");
+      const body = parseBody(event.body, event.isBase64Encoded);
+      const key = idempotencyKey(event.headers);
+      const c = clientDetails(body);
+      await tx((db) => db.query("select ogevia_api.update_client($1, $2, $3, $4, $5, $6, $7, $8)", [c.org, client, c.first, c.last, c.city, c.type, c.label, key]));
+      return { ok: true };
+    },
+  },
+
+  "POST /v1/clients/{clientId}/status": {
+    mutating: true,
+    handle: async ({ event, tx }) => {
+      const client = uuid(p(event).clientId, "clientId");
+      const body = parseBody(event.body, event.isBase64Encoded);
+      const key = idempotencyKey(event.headers);
+      const org = uuid(body.organizationId, "organizationId");
+      const status = oneOf(body.status, "status", CLIENT_STATUSES);
+      const reason = text(body.reason, "reason", 500, { required: true });
+      await tx((db) => db.query("select ogevia_api.set_client_status($1, $2, $3, $4, $5)", [org, client, status, reason, key]));
+      return { ok: true };
+    },
+  },
+
+  "GET /v1/clients/{clientId}/authorizations": {
+    mutating: false,
+    handle: async ({ event, tx }) => {
+      const client = uuid(p(event).clientId, "clientId");
+      return {
+        authorizations: await tx((db) => rows(db, "select * from ogevia_api.list_client_authorizations($1, $2)", [orgParam(event), client])),
+      };
+    },
+  },
+
+  "POST /v1/clients/{clientId}/authorizations": {
+    status: 201,
+    mutating: true,
+    handle: async ({ event, tx }) => {
+      const client = uuid(p(event).clientId, "clientId");
+      const body = parseBody(event.body, event.isBase64Encoded);
+      const key = idempotencyKey(event.headers);
+      const org = uuid(body.organizationId, "organizationId");
+      const service = uuid(body.serviceId, "serviceId");
+      const a = authorizationTerms(body);
+      const rate = body.hourlyRateCents === undefined || body.hourlyRateCents === null
+        ? null : wholeNumber(body.hourlyRateCents, "hourlyRateCents", 0, 100000);
+      const authorizationId = await tx(async (db) =>
+        ((await db.query(
+          "select ogevia_api.create_client_authorization($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12) as id",
+          [org, client, service, a.payer, a.minutes, a.start, a.end, a.number, a.received, a.source, rate, key],
+        )).rows[0] as { id: string }).id);
+      return { authorizationId };
+    },
+  },
+
+  "POST /v1/authorizations/{authorizationId}/amend": {
+    mutating: true,
+    handle: async ({ event, tx }) => {
+      const authorization = uuid(p(event).authorizationId, "authorizationId");
+      const body = parseBody(event.body, event.isBase64Encoded);
+      const key = idempotencyKey(event.headers);
+      const a = authorizationTerms(body);
+      const reason = text(body.reason, "reason", 500, { required: true });
+      const impact = await tx((db) =>
+        rows(db, "select * from ogevia_api.amend_client_authorization($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)",
+          [authorization, a.minutes, a.start, a.end, a.payer, reason, a.number, a.received, a.source, key]));
+      const first = impact[0] ?? {};
+      return {
+        newAuthorizationId: first.newAuthorizationId ?? null,
+        newVersionNumber: first.newVersionNumber ?? null,
+        affectedVisits: impact.filter((r) => r.affectedVisitId).map((r) => ({
+          visitId: r.affectedVisitId, status: r.affectedVisitStatus, serviceDate: r.affectedServiceDate,
+          workedMinutes: r.affectedWorkedMinutes, billableMinutes: r.affectedBillableMinutes, impact: r.impactKind,
+        })),
+      };
     },
   },
 

@@ -49,10 +49,11 @@
 
 | Requirement | Status | Evidence |
 | --- | --- | --- |
-| Create, view, update and activate/deactivate clients, caregivers and services from screens | **NEEDS IMPLEMENTATION** | The AWS database API has no create or update function for clients, caregivers or services (full list of `ogevia_api` functions checked 2026-10-04). Records come from SQL seeds. |
+| Create, view, update and activate/deactivate **clients** from screens | **BUILT, NOT YET DEPLOYED** (migration 0022, 2026-10-04) | Clients list and client page: add, edit details, change status with a reason (refused while a visit is in progress), configurable client types, city. Audited. Tests: DB 12, API 2, web 8, browser 28/28 at 390 px. |
+| Same for **caregivers and services** | **NEEDS IMPLEMENTATION** | The AWS database API has no create or update function for clients, caregivers or services (full list of `ogevia_api` functions checked 2026-10-04). Records come from SQL seeds. |
 | Administrator and manager see client names | THIS DEPLOYMENT | 0020 `client_private_names`, `clients.names.read` |
 | Caregiver restrictions; payer identifiers protected | LIVE | Caregivers see codes only. Payer and authorization numbers are not returned to caregivers. |
-| Location/city and configurable client type | NEEDS IMPLEMENTATION | Neither field exists in the AWS schema |
+| Location/city and configurable client type | BUILT, NOT YET DEPLOYED (0022) | `clients.city`, per-agency `client_types`; names and city returned only with `clients.names.read` |
 | **Ordinary administration without database commands** | **NOT MET** | Onboarding a real client, caregiver, service or authorization needs SQL today |
 
 ## 5. Authorizations and hours
@@ -62,7 +63,7 @@
 | Service-specific monthly minutes, period start and end, remaining balance | LIVE (data and calculations) | `client_authorizations`, reconciliation and summary reports |
 | Amendments keep history (versioned lineage) | LIVE (database) | `amend_client_authorization`; `06_authorization_invariants.sql` |
 | No double allowance or double counting; calculated per client, service and period | LIVE | `no_overlapping_current_authorizations`; reservations; tests |
-| **Create or amend authorizations from a screen** | **NEEDS IMPLEMENTATION** | No API route for `amend_client_authorization` and no create function |
+| **Create or amend authorizations from a screen** | **BUILT, NOT YET DEPLOYED** (0022) | Add (version 1); overlapping coverage for the same client and service is refused with "amend that one instead"; minutes 1–44,640 (catches hours typed as minutes); amend creates a new version with a reason, keeps history, carries the rate forward and lists visits to review. Balances come from the existing `list_monthly_service_summary`, so there is one calculation. Only the Administrator can set a rate (`authorizations.rates.manage`), and only `billing.read` sees it. Concurrent overlapping creations: exactly one succeeds (test). |
 | Warnings for approaching limits, overages and expiry | PARTIAL | NEEDS ATTENTION counts review and overage visits; there is no expiry warning |
 | Worked hours kept when not billable | LIVE | `worked_minutes` versus `billable_minutes`; administrator review |
 
@@ -170,7 +171,7 @@ Proposal: `docs/product/PRICING_PROPOSAL.md`. It is a recommendation. Nothing is
 
 | # | Blocker | Owner of the next step | Next action | Fits today's 13:20 target? |
 | --- | --- | --- | --- | --- |
-| 1 | No screens for clients, caregivers, services, authorizations, assignments or shifts (sections 4–6). Real data would need SQL. | Claude (build) | Port the Supabase screens to the AWS API, starting with authorizations, then clients, team and schedule (inventory order), with permission, versioning and double-count tests | **No.** Several days. |
+| 1 | Clients and authorizations: **built, needs a reviewed deployment** (0022 plus 10 API routes). Still missing: caregivers, services, assignments and shifts (sections 4–6). | Claude (build) | Port the Supabase screens to the AWS API, starting with authorizations, then clients, team and schedule (inventory order), with permission, versioning and double-count tests | **No.** Several days. |
 | 2 | Utilisation dashboard beyond monthly per service (section 9) | Claude (build) | Periods, breakdowns, coverage and expiry warnings, projections | **No** |
 | 3 | G1 and D2 not applied | Owner | Run `phase7-remediate.sh`, type APPLY, confirm the alarm email | Yes, about 10 minutes |
 | 4 | HIPAA operating policies not confirmed | Owner | Confirm in writing | Owner decision |

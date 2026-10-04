@@ -553,3 +553,53 @@ describe("agency logo and restricted client names (0020) through the API", () =>
     expect(cg.status).toBe(403);
   });
 });
+
+describe("client and authorization administration (0022) through the API", () => {
+  const body = (extra: Record<string, unknown> = {}) => ({ organizationId: w.orgA, ...extra });
+
+  it("manager creates, edits and deactivates a client; caregivers and other agencies cannot", async () => {
+    const created = await call("POST /v1/clients", w.managerA, { body: body({ firstName: "Synthetic", lastName: "Api Client", city: "Fontana" }) });
+    expect(created.status, JSON.stringify(created.body)).toBe(201);
+    const clientId = created.body.client.clientId as string;
+    expect(created.body.client.clientCode).toMatch(/^CL-/);
+    const listed = await call("GET /v1/clients", w.managerA, { query: { organizationId: w.orgA } });
+    expect(listed.body.clients.find((c: any) => c.clientId === clientId)).toMatchObject({ legalLastName: "Api Client", city: "Fontana", status: "active" });
+    const edited = await call("POST /v1/clients/{clientId}/details", w.managerA, { path: { clientId }, body: body({ firstName: "Synthetic", lastName: "Api Client 2" }) });
+    expect(edited.status).toBe(200);
+    const noReason = await call("POST /v1/clients/{clientId}/status", w.managerA, { path: { clientId }, body: body({ status: "inactive" }) });
+    expect(noReason.status).toBe(400);
+    const off = await call("POST /v1/clients/{clientId}/status", w.managerA, { path: { clientId }, body: body({ status: "inactive", reason: "On hold" }) });
+    expect(off.status).toBe(200);
+    expect((await call("POST /v1/clients", w.caregiverA1, { body: body({ firstName: "X", lastName: "Y" }) })).status).toBe(403);
+    expect((await call("POST /v1/clients", w.managerB, { body: body({ firstName: "X", lastName: "Y" }) })).status).toBe(404);
+    expect((await call("GET /v1/clients", w.managerB, { query: { organizationId: w.orgA } })).body.clients).toEqual([]);
+    expect((await call("POST /v1/clients", w.managerA, { body: body({ firstName: "X", lastName: "Y" }), key: null })).status).toBe(400);
+  });
+
+  it("authorizations: create, refuse overlap, amend with history; rates are Administrator-only to set and to see", async () => {
+    const created = await call("POST /v1/clients", w.managerA, { body: body({ firstName: "Synthetic", lastName: "Api Auth" }) });
+    const clientId = created.body.client.clientId as string;
+    const services = await call("GET /v1/services", w.managerA, { query: { organizationId: w.orgA } });
+    const serviceId = services.body.services[0].serviceId as string;
+    const terms = { serviceId, payer: "Synthetic Payer", monthlyAuthorizedMinutes: 1800, periodStart: "2026-11-01", periodEnd: "2026-11-30" };
+    expect((await call("POST /v1/clients/{clientId}/authorizations", w.managerA, { path: { clientId }, body: body({ ...terms, monthlyAuthorizedMinutes: 30.5 }) })).status).toBe(400);
+    expect((await call("POST /v1/clients/{clientId}/authorizations", w.managerA, { path: { clientId }, body: body({ ...terms, hourlyRateCents: 3000 }) })).status).toBe(403);
+    const ok = await call("POST /v1/clients/{clientId}/authorizations", w.ownerA, { path: { clientId }, body: body({ ...terms, hourlyRateCents: 3000 }) });
+    expect(ok.status, JSON.stringify(ok.body)).toBe(201);
+    const overlap = await call("POST /v1/clients/{clientId}/authorizations", w.managerA, { path: { clientId }, body: body(terms) });
+    expect(overlap.status).toBe(409);
+    expect(overlap.body.error.message).toMatch(/amend that one instead/);
+    const amended = await call("POST /v1/authorizations/{authorizationId}/amend", w.managerA, {
+      path: { authorizationId: ok.body.authorizationId },
+      body: { payer: "Synthetic Payer", monthlyAuthorizedMinutes: 2400, periodStart: "2026-11-01", periodEnd: "2026-11-30", reason: "Amendment received" },
+    });
+    expect(amended.status, JSON.stringify(amended.body)).toBe(200);
+    expect(amended.body).toMatchObject({ newVersionNumber: 2, affectedVisits: [] });
+    const asManager = await call("GET /v1/clients/{clientId}/authorizations", w.managerA, { path: { clientId }, query: { organizationId: w.orgA } });
+    expect(asManager.body.authorizations.map((a: any) => [a.versionNumber, a.isCurrent, a.hourlyRateCents])).toEqual([[2, true, null], [1, false, null]]);
+    const asOwner = await call("GET /v1/clients/{clientId}/authorizations", w.ownerA, { path: { clientId }, query: { organizationId: w.orgA } });
+    expect(asOwner.body.authorizations.map((a: any) => a.hourlyRateCents)).toEqual([3000, 3000]);
+    const cg = await call("GET /v1/clients/{clientId}/authorizations", w.caregiverA1, { path: { clientId }, query: { organizationId: w.orgA } });
+    expect(cg.body.authorizations).toEqual([]);
+  });
+});
