@@ -16,10 +16,21 @@
 #
 # Never: Netlify/Supabase/DNS, Cognito users or clients, config.json, the
 # other four stacks, RDS security-group rules, deleting anything.
+#
+# Revision 2026-10-04 (after the first deployment failed at 10/12 with "final
+# policy size (20624) is bigger than the limit (20480)"): ONE invoke permission
+# for the whole API replaces the per-route permissions (transition checked by
+# the scope gate; projected peak policy size checked before deploying; final
+# policy checked live). Own run folder ~/ogevia-increment-v2-run; the failed
+# run's folder is evidence and is never written. Recovery: when the block's
+# preflight has verified that the failed run left migrations 0019-0021 applied
+# with matching checksums and every record unchanged, it writes
+# $RUN/recovery-from-1a39dd5 and the ledger is accepted at 0021 (nothing is
+# re-applied; no applied migration is changed).
 # =============================================================================
 set -Eeuo pipefail
 
-export OGEVIA_PILOT_RUN_DIR="${OGEVIA_INCREMENT_RUN_DIR:-$HOME/ogevia-increment-run}"
+export OGEVIA_PILOT_RUN_DIR="${OGEVIA_INCREMENT_RUN_DIR:-$HOME/ogevia-increment-v2-run}"
 # shellcheck source=pilot-lib.sh
 source "$(dirname "${BASH_SOURCE[0]}")/pilot-lib.sh"
 FINAL_MIGRATION=0021
@@ -75,7 +86,8 @@ load_rds_and_host
 [[ "$(jq -r .StorageEncrypted <<<"$RDS")" == true ]] || die "RDS storage is not encrypted"
 for s in "${STACKS[@]}"; do
   st=$(aws cloudformation describe-stacks --stack-name "$s" --query 'Stacks[0].StackStatus' --output text 2>/dev/null || echo MISSING)
-  [[ "$st" == CREATE_COMPLETE || "$st" == UPDATE_COMPLETE ]] || die "$s is $st (this workflow never creates or repairs stacks)"
+  [[ "$st" == CREATE_COMPLETE || "$st" == UPDATE_COMPLETE || ( "$s" == "$API_STACK" && "$st" == UPDATE_ROLLBACK_COMPLETE ) ]] \
+    || die "$s is $st (this workflow never creates or repairs stacks)"
 done
 FN=$(aws cloudformation describe-stack-resources --stack-name "$API_STACK" \
   --query "StackResources[?ResourceType=='AWS::Lambda::Function'].PhysicalResourceId | [0]" --output text)
@@ -148,6 +160,7 @@ if ! is_done rollback-captured; then
   printf '%s\n' "$LIVE_ROUTES" > "$RB/routes.json"
   PV=$(aws iam get-policy --policy-arn "$POLICY_ARN" --query Policy.DefaultVersionId --output text)
   aws iam get-policy-version --policy-arn "$POLICY_ARN" --version-id "$PV" --query PolicyVersion.Document --output json > "$RB/handler-policy.json"
+  aws lambda get-policy --function-name "$FN" --query Policy --output text > "$RB/lambda-resource-policy.json"
   aws s3 sync "s3://$BUCKET" "$RB/web" --only-show-errors
   aws s3api head-object --bucket "$BUCKET" --key index.html --query '{ETag:ETag,LastModified:LastModified,VersionId:VersionId}' --output json > "$RB/web-index.json"
   jq -n --arg commit "$COMMIT" --arg fn "$FN" --arg bucket "$BUCKET" --arg dist "$DIST" --arg snap "$SNAPSHOT_ID" \
@@ -165,7 +178,7 @@ python3 "$SLICE/increment_gate_selftest.py" --cdk-out "$HERE/cdk.out" --deployed
   || die "the scope gate self-test failed (the gate would not catch a tampered change)"
 python3 "$SLICE/increment_diff_gate.py" --cdk-out "$HERE/cdk.out" --deployed "$TEMPLATE_BASE" --summary "$RUN/scope-gate.txt" \
   || die "the change set is outside the approved scope (see above); nothing was changed"
-echo "Gate self-test: PASS (refuses 14 tampered variants of this exact build)"
+echo "Gate self-test: PASS (refuses 19 tampered variants of this exact build)"
 
 # ----------------------------------------------------------------------------
 phase "7/12 APPROVAL (the only approval for the deployment)"
@@ -179,10 +192,13 @@ Exactly this will change in AWS TEST (account $ACCOUNT, $REGION), commit ${COMMI
      On $DB_NAME only: the ledger must be exactly 0001-$BASE_MIGRATION with matching checksums;
      migrations 0019, 0020, 0021 are applied (one transaction each); db:verify must pass;
      existing visits (id, times, signed time, status) must be unchanged.
-  3. $API_STACK: exactly the scope-gate list above (22 routes + 22 permissions, Handler
-     code, 2 added S3 statements). The other 4 stacks: no change.
+  3. $API_STACK: exactly the scope-gate list above: 22 routes (JWT, as before), Handler
+     code, 2 added S3 statements, and the invoke-permission transition: + 1 permission
+     limited to this API, - the route-scoped permissions (peak during the update: one
+     more statement than today; checked against the 20,480-byte limit before deploying).
+     The other 4 stacks: no change.
   4. Web: new files to $BUCKET (config.json NOT changed), CloudFront $DIST invalidated.
-  5. 9 read-only live checks.
+  5. 10 read-only live checks.
 Not touched: Cognito users and app clients, Netlify, Supabase, DNS, RDS SG rules.
 Afterwards, optionally and only if you type SEED: synthetic names for the synthetic pilot clients.
 Rollback: docs/aws/DEPLOYMENT_PLAN_0019_0021.md section 5 (material in $RB).
@@ -226,7 +242,11 @@ if ! is_done db-window; then
   [[ "$(cut -d' ' -f1 "$RUN/ledger-before.txt" | paste -sd,)" == "$(seq -f '%04g' 1 "$N" | paste -sd,)" ]] \
     || die "the migration ledger is not contiguous: $(cut -d' ' -f1 "$RUN/ledger-before.txt" | paste -sd,)"
   if [[ "$N" != "${BASE_MIGRATION#00}" ]] && ! is_done migrate-started; then
-    die "the ledger ends at $(printf '%04d' "$N"), expected $BASE_MIGRATION before this deployment"
+    if [[ "$N" == 21 && -f "$RUN/recovery-from-1a39dd5" ]]; then
+      echo "Recovery: migrations 0019-0021 were applied by the failed 1a39dd5 run (verified by the preflight); they are kept and none is re-applied."
+    else
+      die "the ledger ends at $(printf '%04d' "$N"), expected $BASE_MIGRATION before this deployment"
+    fi
   fi
   while read -r v sum; do
     f=$(ls "$HERE/db/migrations/${v}_"*.sql)
@@ -267,6 +287,18 @@ if ! is_done api-deployed; then
   done
   python3 "$SLICE/increment_diff_gate.py" --cdk-out "$HERE/cdk.out" --deployed "$RUN/predeploy-templates" >/dev/null \
     || die "AWS changed since approval (the scope gate no longer passes); nothing deployed"
+  # Peak resource-policy size during the transition: today's policy plus one new
+  # statement (the old ones are deleted only in the cleanup phase).
+  aws lambda get-policy --function-name "$FN" --query Policy --output text > "$RUN/lambda-policy-predeploy.json"
+  PEAK=$(python3 - "$RUN/lambda-policy-predeploy.json" <<'PEAKPY'
+import json, sys
+raw = open(sys.argv[1]).read().strip()
+st = json.loads(raw)["Statement"]
+print(len(raw) + max(len(json.dumps(s, separators=(",", ":"))) for s in st) + 1)
+PEAKPY
+)
+  [[ "$PEAK" -lt 19000 ]] || die "projected peak Lambda policy size $PEAK bytes is too close to the 20,480-byte limit; nothing deployed"
+  echo "Lambda resource policy: $(wc -c < "$RUN/lambda-policy-predeploy.json") bytes now; projected peak during the update $PEAK bytes (limit 20,480)"
   # --require-approval never is safe ONLY because the strict gate just proved
   # the change set equals the approved scope for this exact cdk.out.
   (cd "$HERE" && npx cdk deploy --app cdk.out --exclusively "$API_STACK" --require-approval never --no-notices) \
@@ -355,7 +387,18 @@ check "8 DB window closed: admin host groups are back to the original" "$r" "$(a
 SS=$(aws rds describe-db-snapshots --db-snapshot-identifier "$SNAPSHOT_ID" --query 'DBSnapshots[0].Status' --output text 2>/dev/null || echo missing)
 [[ "$SS" == available ]] && r=ok || r=no
 check "9 pre-deploy snapshot available" "$r" "$SNAPSHOT_ID"
-echo "Live verification: $PASSES/9 PASS" | tee -a "$VERIFY"
+aws lambda get-policy --function-name "$FN" --query Policy --output text > "$RUN/lambda-policy-after.json"
+r=$(python3 - "$RUN/lambda-policy-after.json" "$API_ID" "$ACCOUNT" "$REGION" <<'POLPY'
+import json, sys
+raw = open(sys.argv[1]).read().strip(); st = json.loads(raw)["Statement"]
+want = "arn:aws:execute-api:%s:%s:%s/*/*/*" % (sys.argv[4], sys.argv[3], sys.argv[2])
+ok = (len(st) == 1 and st[0].get("Principal") == {"Service": "apigateway.amazonaws.com"} and st[0].get("Action") == "lambda:InvokeFunction"
+      and st[0].get("Condition") == {"ArnLike": {"AWS:SourceArn": want}} and len(raw) < 2048)
+print("ok" if ok else "no")
+POLPY
+)
+check "10 Lambda resource policy: exactly one invoke statement, API Gateway, this API only" "$r" "$(wc -c < "$RUN/lambda-policy-after.json") bytes"
+echo "Live verification: $PASSES/10 PASS" | tee -a "$VERIFY"
 
 cat > "$RUN/REPORT.md" <<EOF
 # Ogevia AWS TEST increment 0019-0021: deployment report
@@ -365,11 +408,11 @@ cat > "$RUN/REPORT.md" <<EOF
 - Database $DB_NAME: ledger 0001-0021; existing data before: $(cat "$RB/rows-before.txt"); existing visits unchanged
 - API: $(cut -f1 <<<"$ST"); $(jq length "$RB/routes.json") -> $(jq length "$RUN/routes-after.json") routes; 2 S3 statements added
 - Web: $WEB (config.json unchanged)
-- Live verification: $PASSES/9 PASS
+- Live verification: $PASSES/10 PASS
 - Rollback material: $RB
 EOF
 cat "$RUN/REPORT.md"
-[[ "$FAILS" == 0 ]] || die "live verification failed ($FAILS of 9). The deployment stays in place for diagnosis; send $VERIFY to Claude"
+[[ "$FAILS" == 0 ]] || die "live verification failed ($FAILS of 10). The deployment stays in place for diagnosis; send $VERIFY to Claude"
 done_ verified
 
 # ----------------------------------------------------------------------------

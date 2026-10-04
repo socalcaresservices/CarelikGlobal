@@ -161,3 +161,25 @@ Prices were not re-checked today. The AWS Budgets alert configured in Phase 7 is
   - Managers approve billable **hours**.
   - Rates and dollar amounts are returned only with `billing.read` (owner).
   - Automatic payer submission is **outside launch scope**.
+
+## Revision 2026-10-04: one invoke permission for the API (after the failed first deployment)
+
+**What happened (owner report):** the first deployment of 1a39dd5 failed at step 10/12. Lambda refused new invoke permissions: "The final policy size (20624) is bigger than the limit (20480)". CloudFormation rolled the API stack back. Migrations 0019–0021 had already been applied in step 9.
+
+**Cause:** CDK added one invoke permission (one resource-policy statement, about 340 bytes) per API route. The pilot's 38 statements plus the 22 new ones exceed the 20 KB Lambda resource-policy limit. The pending 0022–0026 routes would add 30 more.
+
+**Fix (this revision):** `HttpLambdaIntegration(..., { scopePermissionToRoute: false })` gives the API Lambda ONE invoke permission with source `arn:aws:execute-api:us-west-2:300094796789:<this API>/*/*/*`.
+- Only this API can invoke the function, as before. Route authentication is unchanged: every non-public route keeps the JWT authorizer, and the public routes are exactly the approved list. The scope gate checks both.
+- The resource policy no longer grows with routes.
+
+**Transition and temporary size:** in one CloudFormation update, the new permission is created before the 38 route-scoped permissions are deleted (cleanup phase). The policy therefore peaks at 39 statements (about 13 KB). The deploy script measures the live policy and refuses if the projected peak is 19,000 bytes or more. Live check 10 verifies the final policy: exactly one statement, API Gateway, this API.
+
+**Rollback:** `increment-rollback.sh api` restores the captured template. CloudFormation re-creates the 38 route permissions first, then deletes the single one (same peak), so the API keeps working throughout.
+
+**Recovery of the failed run:** its folder `~/ogevia-increment-run` is kept as evidence. This revision runs in `~/ogevia-increment-v2-run`. Migrations 0019–0021 are kept and none is re-applied. This is accepted only after the preflight has verified:
+- the ledger and checksums;
+- every function and column;
+- every existing record, by value;
+- that the API rollback is complete (pilot routes and Lambda; the Lambda policy equals the pilot template's permissions);
+- the web build;
+- the admin-host security groups.

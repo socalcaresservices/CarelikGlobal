@@ -1,6 +1,10 @@
 #!/usr/bin/env python3
 """Deployment scope gate for the 0019-0021 increment (standard library only). STRICT.
 
+Revised 2026-10-04 after the first deployment of 1a39dd5 failed: the Lambda
+resource policy (max 20,480 bytes) overflowed with one invoke permission per
+route. This build uses ONE invoke permission for the whole API.
+
 Compares each synthesized template (cdk.out) with the template CloudFormation
 has deployed (captured just before the change) and FAILS unless the difference
 is exactly the approved increment:
@@ -8,9 +12,12 @@ is exactly the approved increment:
   1. ADD the 22 routes in NEW_ROUTES. Each must be identical to the live
      GET /v1/me route except its RouteKey: same API, JWT authorizer and the
      API's one existing integration (no new integration).
-  2. ADD one route-scoped invoke permission per new route (logical id
-     <route prefix>HandlerPermission<hash>), identical to the live GET /v1/me
-     permission except the path in SourceArn.
+  2. Permission transition: ADD exactly one invoke permission for the API
+     Lambda (principal apigateway.amazonaws.com, source ARN limited to this
+     API: arn:<partition>:execute-api:us-west-2:<account>:<api>/*/*/*), and
+     REMOVE every live route-scoped invoke permission of that Lambda (all of
+     them; none may stay, none other may go). No route-scoped permission is
+     added. Route authentication is unchanged (item 1).
   3. MODIFY the existing Handler's code package only (Code.S3Key and Metadata
      aws:asset:path); runtime, memory, timeout, VPC, role, environment, tags
      and everything else identical.
@@ -18,15 +25,16 @@ is exactly the approved increment:
      added; every existing statement is unchanged and in the same order.
   5. MODIFY AWS::CDK::Metadata Properties.Analytics only (creates nothing).
 
-Everything else, in every stack, must be identical: nothing removed, no other
-resource added or changed, template sections identical, public (no sign-in)
-routes exactly the approved list. Tags are compared too, so the build must be
+Everything else, in every stack, must be identical: no other resource added,
+removed or changed, template sections identical, public (no sign-in) routes
+exactly the approved list. Tags are compared too, so the build must be
 synthesized with the live approval tag value. Exit 1 = stop.
 """
 import argparse
 import copy
 import json
 import os
+import re
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -83,12 +91,48 @@ def permission_for(res, route_id):
     return hits[0] if len(hits) == 1 else None
 
 
-def check_additions(old, new, added, failures, lines):
+ACCOUNT, REGION = "300094796789", "us-west-2"
+
+
+def single_api_id(res):
+    apis = [lid for lid, r in res.items() if r.get("Type") == "AWS::ApiGatewayV2::Api"]
+    return apis[0] if len(apis) == 1 else None
+
+
+def expected_api_permission(handler, api):
+    return {"Type": "AWS::Lambda::Permission", "Properties": {
+        "Action": "lambda:InvokeFunction", "FunctionName": {"Fn::GetAtt": [handler, "Arn"]},
+        "Principal": "apigateway.amazonaws.com",
+        "SourceArn": {"Fn::Join": ["", ["arn:", {"Ref": "AWS::Partition"}, ":execute-api:%s:%s:" % (REGION, ACCOUNT), {"Ref": api}, "/*/*/*"]]}}}
+
+
+def handler_permissions(res, handler):
+    """Every invoke permission of the API Lambda: (api-scoped ids, route-scoped ids, other ids)."""
+    api = single_api_id(res)
+    want = expected_api_permission(handler, api) if api else None
+    scoped, route, other = [], [], []
+    for lid, r in res.items():
+        if r.get("Type") != "AWS::Lambda::Permission":
+            continue
+        p = r.get("Properties", {})
+        if want and without(r, "Metadata") == want:
+            scoped.append(lid)
+        elif (p.get("FunctionName") == {"Fn::GetAtt": [handler, "Arn"]} and p.get("Principal") == "apigateway.amazonaws.com"
+              and p.get("Action") == "lambda:InvokeFunction" and set(p) == {"Action", "FunctionName", "Principal", "SourceArn"}
+              and re.search(r'"/\*/\*/v1/[^"]*"\]\]\}$', json.dumps(p.get("SourceArn"), separators=(",", ":")))):
+            route.append(lid)
+        else:
+            other.append(lid)
+    return scoped, route, other
+
+
+def check_additions(old, new, added, failures, lines, removed=()):
+    """Routes (no per-route permissions) and the one-permission transition."""
     old_routes, new_routes = routes_by_key(old), routes_by_key(new)
     sib = old_routes.get(SIBLING_ROUTE, [])
-    sib_perm = permission_for(old, sib[0]) if len(sib) == 1 else None
-    if not sib_perm:
-        failures.append("%s: live %s route/permission not found; cannot verify additions" % (API_STACK, SIBLING_ROUTE))
+    h = handler_id(old)
+    if len(sib) != 1 or not h or handler_id(new) != h:
+        failures.append("%s: live %s route or the API Lambda not found; cannot verify additions" % (API_STACK, SIBLING_ROUTE))
         return
     integrations = [lid for lid, r in old.items() if r.get("Type") == "AWS::ApiGatewayV2::Integration"]
     expected_ids = set()
@@ -101,26 +145,38 @@ def check_additions(old, new, added, failures, lines):
             failures.append("%s: expected exactly one new route %s, found %d" % (API_STACK, key, len(ids)))
             continue
         rid = ids[0]
-        pid = permission_for(new, rid)
-        if not pid:
-            failures.append("%s: no route-scoped permission for %s" % (API_STACK, key))
-            continue
-        expected_ids |= {rid, pid}
+        expected_ids.add(rid)
         want = copy.deepcopy(old[sib[0]])
         want["Properties"]["RouteKey"] = key
         got = new[rid]
         bad = diff_paths(without(want, "Metadata"), without(got, "Metadata"))
         target = json.dumps(got["Properties"].get("Target"))
         on_existing = len(integrations) == 1 and ('"Ref": "%s"' % integrations[0]) in target
-        path = key.split(" ", 1)[1]
-        want_p = json.loads(json.dumps(old[sib_perm]).replace('/*/*%s"' % SIBLING_PATH, '/*/*%s"' % path))
-        bad_p = diff_paths(without(want_p, "Metadata"), without(new[pid], "Metadata"))
-        if bad or bad_p or not on_existing or not only_cdk_path(got) or not only_cdk_path(new[pid]):
-            failures.append("%s: %s differs from the live %s route/permission beyond its key/path: %s%s" % (
-                API_STACK, key, SIBLING_ROUTE, ", ".join(bad + bad_p) or "Metadata",
-                "" if on_existing else "; does not target the existing integration"))
+        if bad or not on_existing or not only_cdk_path(got):
+            failures.append("%s: %s differs from the live %s route beyond its key: %s%s" % (
+                API_STACK, key, SIBLING_ROUTE, ", ".join(bad) or "Metadata", "" if on_existing else "; does not target the existing integration"))
         else:
-            lines.append("%s: + route %s (JWT, existing integration) + its invoke permission" % (API_STACK, key))
+            lines.append("%s: + route %s (JWT, existing integration; no per-route permission)" % (API_STACK, key))
+    # Permission transition.
+    o_scoped, o_route, o_other = handler_permissions(old, h)
+    n_scoped, n_route, n_other = handler_permissions(new, h)
+    if n_route:
+        failures.append("%s: the build still has %d route-scoped invoke permissions" % (API_STACK, len(n_route)))
+    if len(n_scoped) != 1:
+        failures.append("%s: the build must have exactly one API-scoped invoke permission, found %d" % (API_STACK, len(n_scoped)))
+    if sorted(n_other) != sorted(o_other):
+        failures.append("%s: other Lambda permissions differ: %s" % (API_STACK, sorted(set(n_other) ^ set(o_other))))
+    if o_scoped:
+        if n_scoped != o_scoped:
+            failures.append("%s: the live API-scoped permission would be replaced" % API_STACK)
+    elif len(n_scoped) == 1:
+        expected_ids.add(n_scoped[0])
+        if sorted(removed) != sorted(o_route) or len(o_route) != len(old_routes):
+            failures.append("%s: the transition must remove exactly the %d live route-scoped permissions (one per live route); would remove %d" % (
+                API_STACK, len(o_route), len(removed)))
+        else:
+            lines.append("%s: + 1 invoke permission limited to this API (%s), - %d route-scoped invoke permissions; "
+                         "during the update the policy holds at most %d statements" % (API_STACK, n_scoped[0], len(o_route), len(o_route) + 1))
     extra = sorted(set(added) - expected_ids)
     for lid in extra:
         failures.append("%s: would ADD %s (%s), not in the approved list" % (API_STACK, lid, new[lid]["Type"]))
@@ -170,10 +226,16 @@ def main():
         if not (added or removed or modified):
             lines.append("%s: no changes" % stack)
             continue
+        allowed_removals = set()
+        if stack == API_STACK and handler_id(old):
+            o_scoped, o_route, _ = handler_permissions(old, handler_id(old))
+            if not o_scoped:
+                allowed_removals = set(o_route)
         for lid in removed:
-            failures.append("%s: would REMOVE %s (%s)" % (stack, lid, old[lid]["Type"]))
+            if lid not in allowed_removals:
+                failures.append("%s: would REMOVE %s (%s)" % (stack, lid, old[lid]["Type"]))
         if stack == API_STACK:
-            check_additions(old, new, added, failures, lines)
+            check_additions(old, new, added, failures, lines, removed)
         else:
             for lid in added:
                 failures.append("%s: would ADD %s (%s)" % (stack, lid, new[lid]["Type"]))

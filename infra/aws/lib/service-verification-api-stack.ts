@@ -473,7 +473,13 @@ export class ServiceVerificationApiStack extends Stack {
 
     new CfnOutput(this, "ApiUrl", { value: this.api.apiEndpoint });
 
-    const integration = new HttpLambdaIntegration("Handler", this.handler);
+    // ONE invoke permission for the whole API instead of one per route. A Lambda
+    // resource policy is capped at 20 KB; per-route statements (about 340 bytes
+    // each) passed it at 60 routes (deploy of 2026-10-04). The source ARN still
+    // names only this API (arn:aws:execute-api:<region>:<account>:<apiId>/*/*/*);
+    // who may call each route is unchanged: the JWT authorizer on every
+    // non-public route decides that, not this permission.
+    const integration = new HttpLambdaIntegration("Handler", this.handler, { scopePermissionToRoute: false });
     assertPublicRoutesApproved(SERVICE_VERIFICATION_ROUTES);
     for (const route of SERVICE_VERIFICATION_ROUTES) {
       const created = this.api.addRoutes({
