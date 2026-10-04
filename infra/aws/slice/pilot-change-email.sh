@@ -46,7 +46,8 @@ read -r -p "Type CHANGE to apply exactly this (anything else cancels): " a
 aws cognito-idp admin-update-user-attributes --user-pool-id "$POOL" --username "$USERNAME" \
   --user-attributes Name=email,Value="$NEW" Name=email_verified,Value=true
 if [[ "$STATUS" == FORCE_CHANGE_PASSWORD ]]; then
-  aws cognito-idp admin-create-user --user-pool-id "$POOL" --username "$USERNAME" --message-action RESEND \
+  # AdminCreateUser (RESEND) in an email-sign-in pool takes the email, not the internal username.
+  aws cognito-idp admin-create-user --user-pool-id "$POOL" --username "$NEW" --message-action RESEND \
     --desired-delivery-mediums EMAIL >/dev/null
   echo "Invitation re-sent to $NEW."
 fi

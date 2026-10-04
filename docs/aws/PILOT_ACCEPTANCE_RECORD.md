@@ -47,7 +47,7 @@ These results are kept as the acceptance record of build 87a9be2. **They are not
 | Migration ledger (`ogevia_sv_test`) | 18 migrations, latest 0018 |
 | Live API | Pilot build; the only billing route is `GET /v1/billing-review`, so none of the 0019 routes are live yet |
 | Cognito TEST pool | 5 sign-ins, all enabled. `pinkpops@gmail.com` (pilot caregiver) has not completed first sign-in (`FORCE_CHANGE_PASSWORD`). |
-| Email correction (owner request, 2026-10-04) | Pilot caregiver sign-in `pinkpops@gmail.com` → `pinkpopsllc@gmail.com`, same person. Step: `pilot-change-email.sh`. The `sub` is unchanged, so the database membership, caregiver record and assignments stay linked. The invitation is re-sent to the new address. **Pending: owner runs it in CloudShell.** |
+| Email correction (owner request, 2026-10-04) | Pilot caregiver sign-in `pinkpops@gmail.com` → `pinkpopsllc@gmail.com`, same person. Step: `pilot-change-email.sh`. The `sub` is unchanged, so the database membership, caregiver record and assignments stay linked. The invitation is re-sent to the new address. First run: email updated, then the re-send failed (`Username should be an email`: the re-send must name the email, not the internal username; fixed). Completion step pending. |
 | `scs-pilot-synthetic` before the owner step | `admin.ogevia@gmail.com` manager; `footietree@gmail.com` and `pinkpops@gmail.com` caregivers; no owner in either test agency |
 | Owner step (typed OWNER) | `admin.ogevia@gmail.com` is now active `organization_owner`, read back, with an audit event and a rollback file |
 | DB window | Admin host groups restored and verified: `sg-00e01e2ca80442c1f` |
