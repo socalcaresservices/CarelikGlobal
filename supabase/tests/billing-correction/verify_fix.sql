@@ -1,4 +1,4 @@
--- With proposed_fix.sql loaded: the correction of an approved visit is refused
+-- With the proposed migration loaded: the correction of an approved visit is refused
 -- and nothing changes; after voiding the approval the correction succeeds.
 insert into public.service_visits (id, organization_id, client_id, caregiver_user_id, caregiver_record_id,
   service_authorization_id, service_id, service_date, time_in, time_out, worked_minutes, verified_minutes,
