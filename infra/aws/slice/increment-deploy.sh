@@ -215,7 +215,7 @@ echo "Snapshot $SNAPSHOT_ID: available"
 # ----------------------------------------------------------------------------
 phase "9/12 DB window: migrations 0019-0021 and verification"
 if ! is_done db-window; then
-  trap 'rc=$?; db_window_close; (exit $rc); on_exit' EXIT
+  trap 'rc=$?; trap - ERR; db_window_close; (exit $rc); on_exit' EXIT
   trap 'db_window_close; die "unexpected error on line $LINENO (command: $BASH_COMMAND)"' ERR
   db_window_open
   Q -d postgres -c "select datname from pg_database where not datistemplate order by 1" > "$RUN/rds-databases.txt"
@@ -379,7 +379,7 @@ if ! is_done seeded; then
   echo "(\"Synthetic Client Alpha\", ...) so the calendar print can be checked. It refuses any other database."
   read -r -p "Type SEED to add them now (anything else skips; you can re-run later): " answer || answer=""
   if [[ "$answer" == SEED ]]; then
-    trap 'rc=$?; db_window_close; (exit $rc); on_exit' EXIT
+    trap 'rc=$?; trap - ERR; db_window_close; (exit $rc); on_exit' EXIT
     trap 'db_window_close; die "unexpected error on line $LINENO (command: $BASH_COMMAND)"' ERR
     db_window_open
     psql -X -v ON_ERROR_STOP=1 -d "$DB_NAME" -f "$HERE/db/deploy/05_seed_synthetic_client_names.sql" | tail -3
