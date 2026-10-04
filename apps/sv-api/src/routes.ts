@@ -352,6 +352,56 @@ export const ROUTES: Record<string, Route> = {
     },
   },
 
+  // Human billing approval (0019). Managers and owners approve the billable
+  // minutes of a Billing Ready visit; dollar amounts are returned only to
+  // holders of billing.read (owner). Approval is not payer submission.
+  "GET /v1/billing-approvals": {
+    mutating: false,
+    handle: async ({ event, tx }) => {
+      const query = q(event);
+      const org = orgParam(event);
+      const from = date(query.dateFrom, "dateFrom");
+      const to = date(query.dateTo, "dateTo");
+      if (from > to) throw new ApiError(400, "bad_request", "dateFrom must not be after dateTo.");
+      return { approvals: await tx((db) => rows(db, "select * from ogevia_api.list_billing_approvals($1, $2, $3)", [org, from, to])) };
+    },
+  },
+
+  "POST /v1/visits/{visitId}/billing-approval": {
+    status: 201,
+    mutating: true,
+    handle: async ({ event, tx }) => {
+      const visit = uuid(p(event).visitId, "visitId");
+      const body = parseBody(event.body, event.isBase64Encoded);
+      const key = idempotencyKey(event.headers);
+      const minutes = body.approvedMinutes;
+      if (typeof minutes !== "number" || !Number.isInteger(minutes) || minutes < 0 || minutes > 1440) {
+        throw new ApiError(400, "bad_request", "approvedMinutes must be a whole number of minutes.");
+      }
+      const notes = text(body.notes, "notes", 1000);
+      const billingApprovalId = await tx(async (db) => {
+        const r = await db.query("select ogevia_api.approve_visit_for_billing($1, $2, $3, $4) as id", [visit, minutes, notes, key]);
+        return (r.rows[0] as { id: string }).id;
+      });
+      return { billingApprovalId };
+    },
+  },
+
+  "POST /v1/billing-approvals/{approvalId}/void": {
+    mutating: true,
+    handle: async ({ event, tx }) => {
+      const approval = uuid(p(event).approvalId, "approvalId");
+      const body = parseBody(event.body, event.isBase64Encoded);
+      const key = idempotencyKey(event.headers);
+      const reason = text(body.reason, "reason", 1000, { required: true });
+      const billingApprovalId = await tx(async (db) => {
+        const r = await db.query("select ogevia_api.void_billing_approval($1, $2, $3) as id", [approval, reason, key]);
+        return (r.rows[0] as { id: string }).id;
+      });
+      return { billingApprovalId };
+    },
+  },
+
   "GET /v1/public/care-portals/{token}": {
     public: true,
     mutating: false,

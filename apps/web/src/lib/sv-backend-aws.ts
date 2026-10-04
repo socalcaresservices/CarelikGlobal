@@ -5,6 +5,7 @@ import type {
   ActiveVisit,
   AssignedClient,
   AuthorizedService,
+  BillingApprovalRow,
   BillingReviewRow,
   CorrectionHistoryReportRow,
   MonthlyServiceSummaryRow,
@@ -167,6 +168,21 @@ export function createAwsServiceVerificationBackend(
     async listBillingReview(organizationId, dateFrom, dateTo) {
       const { visits } = await api.get<{ visits: BillingReviewRow[] }>("/v1/billing-review", { organizationId, dateFrom, dateTo });
       return visits;
+    },
+    async listBillingApprovals(organizationId, dateFrom, dateTo) {
+      const { approvals } = await api.get<{ approvals: BillingApprovalRow[] }>("/v1/billing-approvals", { organizationId, dateFrom, dateTo });
+      return approvals;
+    },
+    async approveVisitForBilling({ visitId, approvedMinutes, notes, idempotencyKey }) {
+      const { billingApprovalId } = await api.post<{ billingApprovalId: string }>(
+        `/v1/visits/${enc(visitId)}/billing-approval`,
+        { approvedMinutes, notes },
+        { idempotencyKey },
+      );
+      return billingApprovalId;
+    },
+    async voidBillingApproval({ billingApprovalId, reason, idempotencyKey }) {
+      await api.post(`/v1/billing-approvals/${enc(billingApprovalId)}/void`, { reason }, { idempotencyKey });
     },
   };
 }

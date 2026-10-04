@@ -2,7 +2,7 @@
 // (local, disposable) PostgreSQL migrated from zero. SYNTHETIC data only.
 import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { ageVisit, createTestDb, freshClient, seedWorld, type Actor, type TestDb, type World } from "../../../infra/aws/db/test/harness";
+import { ageVisit, createTestDb, freshClient, seedWorld, signedVisit, type Actor, type TestDb, type World } from "../../../infra/aws/db/test/harness";
 import { MemoryEvidenceStore, signatureObjectKey } from "../src/evidence";
 import { createHandler, type LogRecord } from "../src/handler";
 import { claims, CONFIG, event, syntheticPng } from "./fixtures";
@@ -357,5 +357,45 @@ describe("logging policy under real traffic", () => {
       expect(text).not.toContain(value);
     }
     expect(logs.length).toBeGreaterThan(20);
+  });
+});
+
+describe("human billing approval (0019) through the API", () => {
+  const range = { dateFrom: "2000-01-01", dateTo: "2100-01-01" };
+  it("manager approves; scheduler and caregiver are refused; the manager sees no dollar amounts; void needs a reason", async () => {
+    const own = await freshClient(db, w, w.caregiverA2, 600);
+    const { visit } = await signedVisit(db, w.caregiverA2, w, 40, w.orgA, own.client);
+
+    for (const who of [w.schedulerA, w.caregiverA2]) {
+      const denied = await call("POST /v1/visits/{visitId}/billing-approval", who, { path: { visitId: visit }, body: { approvedMinutes: 40 } });
+      expect(denied.status).toBe(403);
+    }
+    const bad = await call("POST /v1/visits/{visitId}/billing-approval", w.managerA, { path: { visitId: visit }, body: { approvedMinutes: "40" } });
+    expect(bad.status).toBe(400);
+    const over = await call("POST /v1/visits/{visitId}/billing-approval", w.managerA, { path: { visitId: visit }, body: { approvedMinutes: 41 } });
+    expect(over.status).toBe(422);
+
+    const key = randomUUID();
+    const ok = await call("POST /v1/visits/{visitId}/billing-approval", w.managerA, { path: { visitId: visit }, body: { approvedMinutes: 40, notes: "Matches timesheet" }, key });
+    expect(ok.status, JSON.stringify(ok.body)).toBe(201);
+    const retry = await call("POST /v1/visits/{visitId}/billing-approval", w.managerA, { path: { visitId: visit }, body: { approvedMinutes: 40, notes: "Matches timesheet" }, key });
+    expect(retry.status).toBe(201);
+    expect(retry.body.billingApprovalId).toBe(ok.body.billingApprovalId);
+    const twice = await call("POST /v1/visits/{visitId}/billing-approval", w.ownerA, { path: { visitId: visit }, body: { approvedMinutes: 40 } });
+    expect(twice.status).toBe(409);
+
+    const list = await call("GET /v1/billing-approvals", w.managerA, { query: { organizationId: w.orgA, ...range } });
+    expect(list.status).toBe(200);
+    const mine = list.body.approvals.find((a: any) => a.billingApprovalId === ok.body.billingApprovalId);
+    expect(mine).toMatchObject({ approvedMinutes: 40, rateCents: null, amountCents: null });
+    const cg = await call("GET /v1/billing-approvals", w.caregiverA2, { query: { organizationId: w.orgA, ...range } });
+    expect(cg.body.approvals).toEqual([]);
+    const other = await call("GET /v1/billing-approvals", w.managerB, { query: { organizationId: w.orgA, ...range } });
+    expect(other.body.approvals).toEqual([]);
+
+    const noReason = await call("POST /v1/billing-approvals/{approvalId}/void", w.managerA, { path: { approvalId: ok.body.billingApprovalId }, body: {} });
+    expect(noReason.status).toBe(400);
+    const voided = await call("POST /v1/billing-approvals/{approvalId}/void", w.managerA, { path: { approvalId: ok.body.billingApprovalId }, body: { reason: "Approved the wrong visit" } });
+    expect(voided.status, JSON.stringify(voided.body)).toBe(200);
   });
 });

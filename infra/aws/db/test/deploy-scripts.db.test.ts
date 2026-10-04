@@ -51,12 +51,12 @@ describe("test-slice deployment SQL (runbook order)", () => {
     psql("postgres", "00_create_test_database.sql");
   });
 
-  it("migrations 0001-0018 apply to it", async () => {
+  it("migrations 0001-0019 apply to it", async () => {
     const client = new pg.Client({ connectionString: url(DB) });
     await client.connect();
     try {
       const result = await migrate(client);
-      expect(result.applied).toHaveLength(18);
+      expect(result.applied).toHaveLength(19);
     } finally {
       await client.end();
     }

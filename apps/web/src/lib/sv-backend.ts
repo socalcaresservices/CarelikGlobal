@@ -217,6 +217,24 @@ export interface BillingReviewRow {
   reviewState: string;
 }
 
+/** A human billing approval. rateCents/amountCents are null unless the caller holds billing.read (owner). */
+export interface BillingApprovalRow {
+  billingApprovalId: string;
+  visitId: string;
+  visitNumber: string | null;
+  serviceDate: string;
+  approvedMinutes: number;
+  billableMinutesAtApproval: number;
+  approvedAt: string;
+  approvedByName: string;
+  notes: string | null;
+  voidedAt: string | null;
+  voidedByName: string | null;
+  voidReason: string | null;
+  rateCents: number | null;
+  amountCents: number | null;
+}
+
 export interface ServiceVerificationBackend {
   readonly kind: "supabase" | "aws";
   getActiveVisit(organizationId: string): Promise<ActiveVisit | null>;
@@ -249,6 +267,10 @@ export interface ServiceVerificationBackend {
   ): Promise<CorrectionHistoryReportRow[]>;
   /** AWS only: billing-review data (read-only; no approval or submission). */
   listBillingReview?(organizationId: string, dateFrom: string, dateTo: string): Promise<BillingReviewRow[]>;
+  /** AWS only: human billing approvals (approval is not submission). */
+  listBillingApprovals?(organizationId: string, dateFrom: string, dateTo: string): Promise<BillingApprovalRow[]>;
+  approveVisitForBilling?(input: { visitId: string; approvedMinutes: number; notes: string | null; idempotencyKey: string }): Promise<string>;
+  voidBillingApproval?(input: { billingApprovalId: string; reason: string; idempotencyKey: string }): Promise<void>;
 }
 
 export const ServiceVerificationBackendContext = createContext<ServiceVerificationBackend | null>(null);

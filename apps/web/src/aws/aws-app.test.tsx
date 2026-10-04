@@ -23,6 +23,7 @@ type FakeVisit = Record<string, unknown>;
 function fakeApi(role: "caregiver" | "manager") {
   const calls: Call[] = [];
   let visit: FakeVisit | null = null;
+  let approvals: Record<string, unknown>[] = [];
   const permissions = role === "manager" ? ["billing.approve", "billing.visits.read", "visits.manage", "visits.read"] : [];
   const json = (status: number, body: unknown) => new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json" } });
   const fetchImpl = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
@@ -54,6 +55,11 @@ function fakeApi(role: "caregiver" | "manager") {
         return json(200, { visits: [{ id: VISIT, visitNumber: "V-1", clientId: CLIENT, clientCode: "C-104", caregiverUserId: "u1", caregiverName: "CAREGIVER_A1", serviceId: SERVICE, serviceName: "Respite Care", serviceDate: "2026-09-30", timeIn: "2026-09-30T17:00:00Z", timeOut: "2026-09-30T19:00:00Z", workedMinutes: 120, verifiedMinutes: 120, billableMinutes: 120, status: "signed", authorizationStatus: "within_authorization", signedAt: "2026-09-30T19:01:00Z", originalVisitId: null, isCorrected: false, monthToDateBeforeMinutes: 0, monthToDateAfterMinutes: 120, remainingMinutes: 5880 }] });
       case "GET /v1/billing-review":
         return json(200, { visits: [{ visitId: VISIT, visitNumber: "V-1", serviceCode: "862", serviceDate: "2026-09-30", workedMinutes: 120, verifiedMinutes: 120, billableMinutes: 120, visitStatus: "signed", authorizationStatus: "within_authorization", authorizationVersion: 1, confirmationMethod: "draw", hasSignatureEvidence: true, isCorrection: false, reviewState: "ready" }] });
+      case "GET /v1/billing-approvals":
+        return json(200, { approvals });
+      case `POST /v1/visits/${VISIT}/billing-approval`:
+        approvals = [{ billingApprovalId: "abababab-0000-4000-8000-000000000001", visitId: VISIT, visitNumber: "V-1", serviceDate: "2026-09-30", approvedMinutes: body?.["approvedMinutes"], billableMinutesAtApproval: 120, approvedAt: "2026-10-01T10:00:00Z", approvedByName: "Manager A", notes: null, voidedAt: null, voidedByName: null, voidReason: null, rateCents: null, amountCents: null }];
+        return json(201, { billingApprovalId: "abababab-0000-4000-8000-000000000001" });
       case `GET /v1/visits/${VISIT}/signature`:
         return json(200, { contentType: "image/png", sha256: "x", pngBase64: "iVBORw0KGgo=" });
       default:
@@ -152,11 +158,31 @@ describe("AWS build: manager review and billing-review data", () => {
   it("billing review shows Billing Ready (not billed) and the audited signature view", async () => {
     const { api } = renderAws("/billing-review", "manager");
     expect(await screen.findByText("Billing ready")).toBeInTheDocument();
-    expect(screen.getByText(/has not been approved, billed, or submitted/)).toBeInTheDocument();
+    expect(screen.getByText(/approval is not submission/)).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "View signature" }));
     const img = await screen.findByAltText("Client signature for the selected visit");
     expect(img.getAttribute("src")).toBe("data:image/png;base64,iVBORw0KGgo=");
     expect(api.calls.some((c) => c.path === `/v1/visits/${VISIT}/signature`)).toBe(true);
+  });
+
+  it("a manager approves the billable minutes with an idempotency key; more than billable is refused in the form", async () => {
+    const { api } = renderAws("/billing-review", "manager");
+    fireEvent.click(await screen.findByRole("button", { name: "Approve" }));
+    const minutes = screen.getByLabelText("Approved minutes");
+    expect(minutes).toHaveValue("120");
+    fireEvent.change(minutes, { target: { value: "121" } });
+    fireEvent.click(screen.getByRole("button", { name: "Approve for billing" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent("Enter whole minutes from 0 to 120.");
+    expect(api.calls.some((c) => c.method === "POST" && c.path.endsWith("/billing-approval"))).toBe(false);
+    fireEvent.change(minutes, { target: { value: "110" } });
+    fireEvent.click(screen.getByRole("button", { name: "Approve for billing" }));
+    expect(await screen.findByText(/approved for billing \(1\.83 h\)|approved for billing/)).toBeInTheDocument();
+    const post = api.calls.find((c) => c.method === "POST" && c.path === `/v1/visits/${VISIT}/billing-approval`)!;
+    expect(post.body).toEqual({ approvedMinutes: 110, notes: null });
+    expect(post.headers["idempotency-key"]).toMatch(/^[0-9a-f-]{36}$/);
+    expect(await screen.findByText(/by Manager A · not submitted/)).toBeInTheDocument();
+    // No owner-only Amount column for a manager.
+    expect(screen.queryByRole("columnheader", { name: "Amount" })).not.toBeInTheDocument();
   });
 
   it("a caregiver sees no billing or records navigation", async () => {

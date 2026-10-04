@@ -15,17 +15,28 @@ import {
 let db: TestDb;
 let w: World;
 
-/** Gives a visit microsecond-precise times, as the server clock records them. */
+/**
+ * Gives a visit microsecond-precise times, as the server clock records them.
+ * Time Out moves to second 12 of the PREVIOUS minute so it is never in the
+ * future (a correction refuses a future Time Out), whatever second the test
+ * runs at. Uses one dedicated connection so the trigger bypass applies to the
+ * update itself (a pooled query could run on another connection).
+ */
 async function withMicroseconds(visit: string) {
-  await db.admin.query("set session_replication_role = replica");
-  await db.admin.query(
-    `update ogevia.service_visits
-        set time_in = date_trunc('minute', time_in) + interval '37.123456 seconds',
-            time_out = date_trunc('minute', time_out) + interval '12.654321 seconds'
-      where id = $1`,
-    [visit],
-  );
-  await db.admin.query("set session_replication_role = origin");
+  const c = await db.admin.connect();
+  try {
+    await c.query("set session_replication_role = replica");
+    await c.query(
+      `update ogevia.service_visits
+          set time_in = date_trunc('minute', time_in) + interval '37.123456 seconds',
+              time_out = date_trunc('minute', time_out) - interval '1 minute' + interval '12.654321 seconds'
+        where id = $1`,
+      [visit],
+    );
+  } finally {
+    await c.query("reset session_replication_role");
+    c.release();
+  }
   return (
     await db.admin.query<{ time_in: Date; time_out: Date; in_text: string; out_text: string }>(
       "select time_in, time_out, time_in::text as in_text, time_out::text as out_text from ogevia.service_visits where id = $1",

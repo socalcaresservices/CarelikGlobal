@@ -48,6 +48,7 @@ describe("SCHEMA: migration chain", () => {
       "0016",
       "0017",
       "0018",
+      "0019",
     ]);
   });
 
@@ -86,6 +87,7 @@ describe("SCHEMA: migration chain", () => {
       "app_users",
       "audit_events",
       "authorization_reservations",
+      "billing_approvals",
       "care_notifications",
       "care_request_alert_recipients",
       "care_request_events",
