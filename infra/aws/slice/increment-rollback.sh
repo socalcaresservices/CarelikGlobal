@@ -47,6 +47,11 @@ case "$LAYER" in
     echo "Completed deploy steps: $(find "$STATE" -type f -printf "%f ")"
     echo "Full DB restore (to a NEW instance, never in place):"
     echo "  aws rds restore-db-instance-from-db-snapshot --db-snapshot-identifier $(jq -r .snapshot "$RB/MANIFEST.json") --db-instance-identifier ogevia-prod-postgres-restore --no-publicly-accessible"
+    PRE=$(jq -r '.preIncrementSnapshot // empty' "$RB/MANIFEST.json")
+    if [[ -n "$PRE" ]]; then
+      echo "Recovery run: that snapshot is already at 0021. The database before 0019-0021 is in $PRE:"
+      echo "  aws rds restore-db-instance-from-db-snapshot --db-snapshot-identifier $PRE --db-instance-identifier ogevia-prod-postgres-restore-0018 --no-publicly-accessible"
+    fi
     ;;
 
   export)
