@@ -1,6 +1,6 @@
 # AWS TEST deployment plan: release 0022–0025 (office administration, invitations, planned assignments)
 
-**Status:** prepared 2026-10-04. Executable workflow `infra/aws/slice/release-0025-deploy.sh`, started by the paste block `infra/aws/slice/release-0025-bootstrap.sh` (pinned commit). **Not executed in AWS.** Production, Netlify and Supabase are not touched.
+**Status:** prepared 2026-10-04; rehearsed end to end at 0b6996f against stubbed AWS and a local PostgreSQL copy at 0021 (scope gate PASS, self-test 25/25, 12/12 live checks PASS, accounts and records unchanged; only the approved AWS actions recorded). Executable workflow `infra/aws/slice/release-0025-deploy.sh`, started by the paste block `infra/aws/slice/release-0025-bootstrap.sh` (pinned commit). **Not executed in AWS.** Production, Netlify and Supabase are not touched.
 
 **Environment:** account 300094796789, us-west-2, database `ogevia_sv_test`, synthetic data only.
 
