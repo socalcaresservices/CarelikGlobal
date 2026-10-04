@@ -211,3 +211,13 @@ Recommendation: these owner summaries, branding settings and minimal document/ex
 ## Scope decision (owner, 4 October 2026)
 
 **Automatic payer submission is removed from launch scope.** Ogevia stops at a human Billing Approval. Claims, eBilling and payer connectors are not built for launch. Any later "recorded as submitted" ledger would be a manual record only.
+
+## Implementation log (continued, 4 October 2026)
+
+| Item | Change | Environment | Verified | Owner acceptance |
+| --- | --- | --- | --- | --- |
+| Agency logo upload | 0020 + API + web (`4861711`): owner only; private storage; header and printouts | Not deployed | Database, API, web tests; browser run 42/42 | Pending |
+| Restricted client names on the calendar | 0020 + API + web (`4861711`): owner and manager only, never caregivers; audited; TEST seed `05` is synthetic only | Not deployed | Same | Pending. Real names only after the BAA/security gate. |
+| Owner self-verification of documents | 0021 (`4861711`): `documents.review_own` (owner), audited as an owner self-review; managers still cannot review their own upload | Not deployed | Database and API tests | Pending |
+| Automatic payer submission | Removed from launch scope | n/a | n/a | Decided |
+| Deployment plan 0019–0021 | `docs/aws/DEPLOYMENT_PLAN_0019_0021.md` (`f91fe68`) | Prepared, not executed | Template diff against 87a9be2 | Awaiting live status, then DEPLOY |
