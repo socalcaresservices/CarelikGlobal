@@ -1,6 +1,6 @@
 # SCS pilot: AWS TEST deployment and real-phone acceptance record
 
-**Result (reconciled 2026-10-04): DEPLOYED to AWS TEST (owner-reported 12/12). Real-phone acceptance of the deployed build: NOT YET RECORDED.**
+**Result (reconciled 2026-10-04): DEPLOYED to AWS TEST (owner-reported 12/12). Real-phone acceptance of the deployed build: PARTIAL, owner-reported. Caregiver start and end, client confirmation, Signed status and manager visibility PASS, recorded 00:51–01:30 UTC on October 4. Sections B, D, E and F are not yet reported.**
 
 ## Timeline (UTC, from this session's messages)
 
@@ -20,17 +20,22 @@ They are kept here as historical records and are **not** used as acceptance of t
 
 ## Post-deployment phone acceptance (deployed build 87a9be2)
 
-Status (2026-10-04): the owner reports phone screenshots taken on **October 4, after the deployment**. Those screenshots have **not reached this session** (only the UX change list was uploaded), so they are not yet transcribed here. When they arrive, record each section below with the screenshot time. The A–G results from 3 October 19:58–20:01 UTC stay classified as pre-deployment, by timeline.
+Recorded 2026-10-04 from the owner's statement: "caregiver start/end, client confirmation, Signed status and manager visibility. Screenshots were recorded around 00:51–01:30 UTC on October 4."
+- **Time:** 00:51–01:30 UTC on October 4 is **17:51–18:30 Pacific (PDT) on October 3**.
+- **Order:** this is after the recovery run that the owner reports started after 23:59 UTC. So these results describe the deployed pilot build, not the October 2 build.
+- **Evidence class:** owner-reported. The screenshots did not reach this session and are not transcribed. The exact deployment completion time is in CloudShell `~/ogevia-pilot-run/REPORT.md`.
 
-| Section | Result | Screenshot time (Pacific) | Notes |
+| Section | Result | Recorded (UTC, Oct 4) | Basis and limits |
 | --- | --- | --- | --- |
-| A. Sign-in with MFA | Awaiting October 4 screenshots | | |
-| B. Scheduling within authorization | Awaiting | | |
-| C. Complete visit | Awaiting | | |
-| D. Scheduled service preselected (0017) | Awaiting | | Pilot-only behaviour; proves the deployed build |
-| E. Correction keeps unchanged times (0018) | Awaiting | | Pilot-only behaviour |
-| F. Manager close-out of a missed Time Out (0015, close route) | Awaiting | | Pilot-only behaviour |
-| G. Review and isolation | Awaiting | | |
+| A. Sign-in with MFA | Signed in (implied by the results below) | 00:51–01:30 | MFA at each sign-in was not separately reported |
+| B. Scheduling within authorization | Not reported | | The B4 over-authorization refusal is still unconfirmed on the deployed build |
+| C. Complete visit | **PASS** | 00:51–01:30 | Caregiver start and end; client confirmation; visit shows **Signed** |
+| D. Scheduled service preselected (0017) | Not reported | | Pilot-only behaviour |
+| E. Correction keeps unchanged times (0018) | Not reported | | Pilot-only behaviour |
+| F. Manager close-out of a missed Time Out (0015, close route) | Not reported | | Pilot-only behaviour |
+| G. Review and isolation | **PARTIAL**: manager visibility PASS | 00:51–01:30 | Isolation (the test-slice manager sees no pilot data) was not reported |
+
+These results are kept as the acceptance record of build 87a9be2. **They are not evidence for the 0019–0021 build.** That build is accepted separately, with the checklist in `docs/aws/DEPLOYMENT_PLAN_0019_0021.md` section 6, after its own deployment.
 
 ## Independent live confirmation (pending)
 
