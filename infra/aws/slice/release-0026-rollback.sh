@@ -64,7 +64,7 @@ case "$LAYER" in
     trap 'db_window_close' EXIT
     trap 'db_window_close; die "unexpected error on line $LINENO (command: $BASH_COMMAND)"' ERR
     db_window_open
-    for t in caregiver_invitations caregiver_assignments caregiver_records client_types clients client_authorizations services billing_approvals client_private_names staff_documents document_versions document_types; do
+    for t in shifts authorization_reservations shift_coverage_events caregiver_invitations caregiver_assignments caregiver_records client_types clients client_authorizations services billing_approvals client_private_names staff_documents document_versions document_types; do
       if [[ -n "$(Q -d "$DB_NAME" -c "select to_regclass('ogevia.$t')")" ]]; then
         psql -X -q -v ON_ERROR_STOP=1 -d "$DB_NAME" -c "\\copy (select * from ogevia.$t) to '$OUT/$t.csv' csv header"
         echo "$t: $(($(wc -l < "$OUT/$t.csv") - 1)) rows"
@@ -150,7 +150,7 @@ case "$LAYER" in
       fi
       if ! { echo "set local role ogevia_owner;"; cat "$f"; echo "reset role;"; echo "delete from ogevia_meta.schema_migrations where version = '$v';"; } \
           | psql -X -q -v ON_ERROR_STOP=1 -1 -d "$DB_NAME" -f - 2>&1 | tee "$RUN/db-rollback-$v.txt"; then
-        die "$v was not rolled back and nothing in it changed: $(grep -m1 -o 'Refusing[^.]*' "$RUN/db-rollback-$v.txt" || tail -1 "$RUN/db-rollback-$v.txt"). Keep 0026, or restore the snapshot to a new instance"
+        die "$v was not rolled back and nothing in it changed: $(grep -m1 -oE '(Refusing|ROLLBACK REFUSED)[^.]*' "$RUN/db-rollback-$v.txt" || tail -1 "$RUN/db-rollback-$v.txt"). Keep 0026, or restore the snapshot to a new instance"
       fi
       echo "$v: rolled back"
     done
