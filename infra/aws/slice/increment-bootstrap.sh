@@ -2,10 +2,12 @@ cat > ~/ogevia-increment-run.sh <<'EOF'
 #!/usr/bin/env bash
 # Ogevia AWS TEST increment 0019-0021. Downloads the PINNED commit into its own
 # folder (/tmp/ogevia-increment; the pilot's /tmp/ogevia-pilot and
-# ~/ogevia-pilot-run are not touched) and runs increment-deploy.sh.
-# Nothing changes in AWS before you type DEPLOY. Paste again to resume.
+# ~/ogevia-pilot-run are not touched), runs increment-deploy.sh, then, only if
+# the deployment verified, pilot-manager-account.sh (separate manager sign-in).
+# Nothing changes in AWS before you type DEPLOY (and MANAGER for the sign-in).
+# Paste again to resume; completed steps are skipped.
 set -uo pipefail
-PIN=4400c209d3b195fa43ac591ff1e9813919d0b51f
+PIN=cbdfa3a0e6cfc87e736e29b0a892b60ad58677fc
 BR=claude/ogevia-socal-pilot-prep-vfu5tf
 SRC=/tmp/ogevia-increment
 if [ "$(git -C "$SRC" rev-parse HEAD 2>/dev/null)" != "$PIN" ]; then
@@ -32,6 +34,7 @@ if [ "$(git -C "$SRC" rev-parse HEAD 2>/dev/null)" != "$PIN" ]; then
   git -C "$SRC" -c advice.detachedHead=false checkout -q "$PIN" || { echo "STOP: commit ${PIN:0:7} not found on $BR. Nothing ran."; exit 1; }
 fi
 echo "Code: $(git -C "$SRC" log --oneline -1)"
-cd "$SRC" && OGEVIA_INCREMENT_PIN="$PIN" bash infra/aws/slice/increment-deploy.sh
+cd "$SRC" && OGEVIA_INCREMENT_PIN="$PIN" bash infra/aws/slice/increment-deploy.sh \
+  && bash infra/aws/slice/pilot-manager-account.sh
 EOF
 bash ~/ogevia-increment-run.sh
