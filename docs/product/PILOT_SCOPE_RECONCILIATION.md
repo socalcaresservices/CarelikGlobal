@@ -1,6 +1,6 @@
 # Ogevia controlled-pilot scope: status against the consolidated requirements
 
-**Date:** 2026-10-04, about 08:40 Pacific. **Release candidate:** the commit pinned in `infra/aws/slice/increment-bootstrap.sh`. It is `cbdfa3a` plus the Administrator label and the live manager money check.
+**Date:** 2026-10-04, updated about 14:10 Pacific. **Builds:** (a) the 1a39dd5 increment (0019–0021), pinned in `infra/aws/slice/increment-bootstrap.sh`; completion in AWS is **NOT VERIFIED** (no live evidence returned yet). (b) Release 0022–0025, packaged in `infra/aws/slice/release-0025-bootstrap.sh`, requires (a) live first.
 **Verdict: NOT READY FOR OGEVIA CONTROLLED PILOT (real clients).** The blockers are in the summary at the end.
 
 ## Status key
@@ -8,7 +8,8 @@
 | Status | Meaning | Evidence class |
 | --- | --- | --- |
 | **LIVE** | Deployed to AWS TEST through migration 0018 (pilot build 87a9be2) | Owner-reported deployment 12/12. Phone results C and part of G passed 2026-10-04. Live check ledger 0018. |
-| **THIS DEPLOYMENT** | In the release candidate. Passes the local gate and the rehearsal, but is not yet live. | Verified locally; needs the live run plus phone checks |
+| **THIS DEPLOYMENT** | In the 1a39dd5 increment (0019–0021). Passes the local gate and the rehearsal; live completion not yet confirmed. | Verified locally; needs live evidence plus phone checks |
+| **RELEASE 0025** | In release 0022–0025 (built, tested, deployment package prepared). Not deployed. | Local tests and scope gate; needs the live run plus screen checks |
 | **NEEDS IMPLEMENTATION** | Not in either build for AWS. Either absent, or only in the old Supabase build. | Repository search (cited) |
 | **BLOCKED** | Waiting on an owner action or decision | Cited |
 
@@ -23,6 +24,7 @@
 | Caregiver: own assignments, visits, availability, documents | LIVE (visits, availability); THIS DEPLOYMENT (My documents) | Pilot phone section C; 0021 `documents.manage_own` |
 | Platform Administrator distinct; agency isolation | LIVE | No platform-admin role in the AWS build. Isolation: `05_tenant_boundaries.sql` verification and tests `managerB` → `[]`. The phone isolation check (G) has not been re-reported. |
 | `admin.ogevia@gmail.com` is Administrator | LIVE (done 2026-10-04, not repeated) | Owner-reported read-back and audit event |
+| Caregiver invitations from the Care Team screen (manager or Administrator); caregiver role only; server-checked agency and role; invite and resend audited; no password shown or logged; invited / first-signed-in status shown | RELEASE 0025 | 0025 `begin/complete_caregiver_invitation`, `begin_invitation_resend`, `note_my_sign_in`; identity Lambda with AdminCreateUser/AdminGetUser on the one pool only; tests `invitations-planned.db.test.ts` (11), API (2), identity unit (4), web (2). Staff sign-ins cannot be attached (test). |
 | Separate manager sign-in in the pilot agency | THIS DEPLOYMENT (runs after the deployment) | `ogemails+ogevia-pilot-manager@gmail.com` via `pilot-manager-account.sh`. Rehearsed: refuses with no owner, applies once, a re-run changes nothing, and the rollback file works. |
 
 ## 2. Branding and agency settings
@@ -49,12 +51,12 @@
 
 | Requirement | Status | Evidence |
 | --- | --- | --- |
-| Create, view, update and activate/deactivate **clients** from screens | **BUILT, NOT YET DEPLOYED** (migration 0022, 2026-10-04) | Clients list and client page: add, edit details, change status with a reason (refused while a visit is in progress), configurable client types, city. Audited. Tests: DB 12, API 2, web 8, browser 28/28 at 390 px. |
-| Same for **caregivers and services** | **BUILT, NOT YET DEPLOYED** (migration 0023, 2026-10-04) | Care Team: add (random code), rename, status with a reason. Making a caregiver **inactive ends their active assignments and suspends their sign-in for the agency at once** (refused while a visit is in progress); reactivation restores the sign-in only. Services (Administrator only): add (code fixed, unique per agency), rename, deactivate/reactivate with a reason; deactivation refused while current authorizations use the service. Audited. Tests: DB 7, API 2, web 5, browser 20/20 at 390 px, including a signed-in caregiver losing access. **Not included:** inviting a caregiver to sign in (needs the API to create Cognito users, a security decision). | The AWS database API has no create or update function for clients, caregivers or services (full list of `ogevia_api` functions checked 2026-10-04). Records come from SQL seeds. |
+| Create, view, update and activate/deactivate **clients** from screens | **RELEASE 0025** (migration 0022) | Clients list and client page: add, edit details, change status with a reason (refused while a visit is in progress), configurable client types, city. Audited. Tests: DB 12, API 2, web 8, browser 28/28 at 390 px. |
+| Same for **caregivers and services** | **RELEASE 0025** (migration 0023) | Care Team: add (random code), rename, status with a reason. Making a caregiver **inactive ends their active assignments and suspends their sign-in for the agency at once** (refused while a visit is in progress); reactivation restores the sign-in only. Services (Administrator only): add (code fixed, unique per agency), rename, deactivate/reactivate with a reason; deactivation refused while current authorizations use the service. Audited. Tests: DB 7, API 2, web 5, browser 20/20 at 390 px, including a signed-in caregiver losing access. **Not included:** inviting a caregiver to sign in (needs the API to create Cognito users, a security decision). | The AWS database API has no create or update function for clients, caregivers or services (full list of `ogevia_api` functions checked 2026-10-04). Records come from SQL seeds. |
 | Administrator and manager see client names | THIS DEPLOYMENT | 0020 `client_private_names`, `clients.names.read` |
 | Caregiver restrictions; payer identifiers protected | LIVE | Caregivers see codes only. Payer and authorization numbers are not returned to caregivers. |
-| Location/city and configurable client type | BUILT, NOT YET DEPLOYED (0022) | `clients.city`, per-agency `client_types`; names and city returned only with `clients.names.read` |
-| **Ordinary administration without database commands** | **NOT MET** | Onboarding a real client, caregiver, service or authorization needs SQL today |
+| Location/city and configurable client type | RELEASE 0025 (0022) | `clients.city`, per-agency `client_types`; names and city returned only with `clients.names.read` |
+| **Ordinary administration without database commands** | **NOT MET live; MET in RELEASE 0025 except shifts** | After release 0025: clients, authorizations, caregivers (with invitations), services and assignments from screens. Shifts are still created only through Care Requests. |
 
 ## 5. Authorizations and hours
 
@@ -63,7 +65,7 @@
 | Service-specific monthly minutes, period start and end, remaining balance | LIVE (data and calculations) | `client_authorizations`, reconciliation and summary reports |
 | Amendments keep history (versioned lineage) | LIVE (database) | `amend_client_authorization`; `06_authorization_invariants.sql` |
 | No double allowance or double counting; calculated per client, service and period | LIVE | `no_overlapping_current_authorizations`; reservations; tests |
-| **Create or amend authorizations from a screen** | **BUILT, NOT YET DEPLOYED** (0022) | Add (version 1); overlapping coverage for the same client and service is refused with "amend that one instead"; minutes 1–44,640 (catches hours typed as minutes); amend creates a new version with a reason, keeps history, carries the rate forward and lists visits to review. Balances come from the existing `list_monthly_service_summary`, so there is one calculation. Only the Administrator can set a rate (`authorizations.rates.manage`), and only `billing.read` sees it. Concurrent overlapping creations: exactly one succeeds (test). |
+| **Create or amend authorizations from a screen** | **RELEASE 0025** (0022) | Add (version 1); overlapping coverage for the same client and service is refused with "amend that one instead"; minutes 1–44,640 (catches hours typed as minutes); amend creates a new version with a reason, keeps history, carries the rate forward and lists visits to review. Balances come from the existing `list_monthly_service_summary`, so there is one calculation. Only the Administrator can set a rate (`authorizations.rates.manage`), and only `billing.read` sees it. Concurrent overlapping creations: exactly one succeeds (test). |
 | Warnings for approaching limits, overages and expiry | PARTIAL | NEEDS ATTENTION counts review and overage visits; there is no expiry warning |
 | Worked hours kept when not billable | LIVE | `worked_minutes` versus `billable_minutes`; administrator review |
 
@@ -73,8 +75,9 @@
 | --- | --- | --- |
 | Availability; shifts created through Care Requests with authorization checks | LIVE | Pilot section B (pre-deployment result; B4 refusal not re-reported) |
 | Visits linked to scheduled shifts; unscheduled visits flagged for review; overlaps prevented | LIVE | 0016/0017 shift link; `start_ad_hoc_service_visit`; one open visit per caregiver; overlap check in close-out |
-| **Call-outs, replacement caregivers, uncovered-shift view, coverage history screens** | **NEEDS IMPLEMENTATION** | `shift_coverage_events` table exists, but there is no API or screen for it |
-| Assignment management screens | **BUILT, NOT YET DEPLOYED** (migration 0024, 2026-10-04) | On the client page ("Caregivers assigned") and the caregiver page ("Clients assigned"): assign with a first day (defaults to the agency's local today) and an optional last day. The caregiver must have a sign-in; overlapping assignments for the same caregiver, client and service are refused (two simultaneous attempts: exactly one succeeds); a missing authorization is flagged in red, not hidden. End with a reason: a future assignment is cancelled; a running one gets a last day (shortening only); ending before today is refused while a visit is in progress. Audited. Tests: DB 7, API 1, web 2, browser 19/19 at 390 px (a caregiver gains the client on Verify visit once assigned). |
+| **Staff-scheduled shifts, call-outs, replacement caregivers, uncovered-shift view, coverage history screens** | **NEEDS IMPLEMENTATION (not started; exceeds today)** | Database support exists (0003/0011: `shifts`, `shift_coverage_events`, Care Request assign/reassign with reservations; caregiver call-out by link). Missing: staff API and screens to create a shift directly, record a call-out, pick a replacement, and list uncovered shifts. Reservations are keyed to a care request (`authorization_reservations.care_request_id NOT NULL`), so staff-created shifts need a schema decision. |
+| Assignment management screens | **RELEASE 0025** (0024) |
+| Plan an assignment before the caregiver has a sign-in (planning separate from access) | RELEASE 0025 (0025) | Planned assignments grant nothing; access starts automatically once the record has a linked sign-in and is Ready or Active, and stops if it returns to Onboarding. Visit start unchanged. Tests: 5 DB, 1 API, 1 web. | On the client page ("Caregivers assigned") and the caregiver page ("Clients assigned"): assign with a first day (defaults to the agency's local today) and an optional last day. The caregiver must have a sign-in; overlapping assignments for the same caregiver, client and service are refused (two simultaneous attempts: exactly one succeeds); a missing authorization is flagged in red, not hidden. End with a reason: a future assignment is cancelled; a running one gets a last day (shortening only); ending before today is refused while a visit is in progress. Audited. Tests: DB 7, API 1, web 2, browser 19/19 at 390 px (a caregiver gains the client on Verify visit once assigned). |
 
 ## 7. Visit verification
 
@@ -121,6 +124,7 @@
 | Due versus issued versus expiry dates; missing, awaiting, rejected, due soon, overdue, expiring and expired statuses, with exact days | THIS DEPLOYMENT | `document-status.ts`, 0021 alerts |
 | Upload confirmed by the server before success is shown | THIS DEPLOYMENT | Upload registers after the S3 put; replay check |
 | File reopens on another device | Not verified | Phone check 4 and 5 after deployment |
+| **Uploads reach S3 from the private API Lambda** | **DEFECT FOUND (INFERRED), fixed in RELEASE 0025** | The deployed S3 gateway endpoint policy allows only the signature key shape; document and logo keys are expected to be refused. Release 0025 adds both shapes; acceptance check 6.4 proves it. |
 | Agency's approved requirements, such as required types per role | NEEDS IMPLEMENTATION | Types only have a requires-expiry setting. There is no list of required types and no per-role requirement set; documents are requested one by one. |
 
 ## 12. Feature recovery
@@ -162,19 +166,22 @@ Proposal: `docs/product/PRICING_PROPOSAL.md`. It is a recommendation. Nothing is
 | Item | Status |
 | --- | --- |
 | Pilot through 0018 | LIVE; not restarted |
-| Pinned release with backup, rollback that keeps later records and uploads, strict scope check, 9 live checks | Ready (rehearsed); waiting for the owner's DEPLOY |
+| 1a39dd5 increment (0019–0021): backup, rollback that keeps records, strict scope check, 9 live checks | Owner run status **NOT VERIFIED**; read-only status command given |
+| Release 0022–0025: snapshot, account/record counts checked unchanged, applied migrations never modified (checksums), strict gate (25-variant self-test), 12 live checks, layered rollback | Package ready; rehearsal against stubbed AWS: see the commit that pins it. Requires the 1a39dd5 increment live. New fixed cost ≈ 7.30 USD/month (Lambda endpoint) needs approval (typing DEPLOY). |
 | Full workflow on real AWS (authorization and scheduling through confirmation, approval and reports), with two-agency isolation | After deployment. Authorizations and schedules still come from seeds, so only the seeded part can be tested. |
 | Phone retest of changed workflows | After deployment (plan section 6) |
 | Production correction fix | Kept separate; needs its own approval |
 
 ## Summary: why NOT READY for real clients, and what clears it
 
-| # | Blocker | Owner of the next step | Next action | Fits today's 13:20 target? |
+| # | Blocker | Next step owner | Next action | Fits the 13:20 target? |
 | --- | --- | --- | --- | --- |
-| 1 | Clients and authorizations: **built, needs a reviewed deployment** (0022 plus 10 API routes). Caregivers and services: **built, needs a reviewed deployment** (0023 plus 7 routes). Assignments: **built, needs a reviewed deployment** (0024 plus 3 routes). Still missing: caregiver sign-in invitations and shift scheduling with call-outs (sections 4–6). | Claude (build) | Port the Supabase screens to the AWS API, starting with authorizations, then clients, team and schedule (inventory order), with permission, versioning and double-count tests | **No.** Several days. |
-| 2 | Utilisation dashboard beyond monthly per service (section 9) | Claude (build) | Periods, breakdowns, coverage and expiry warnings, projections | **No** |
-| 3 | G1 and D2 not applied | Owner | Run `phase7-remediate.sh`, type APPLY, confirm the alarm email | Yes, about 10 minutes |
-| 4 | HIPAA operating policies not confirmed | Owner | Confirm in writing | Owner decision |
-| 5 | Release not yet deployed or phone-tested | Owner | Paste the pinned block; run the phone checks | Yes |
+| 0 | 1a39dd5 increment completion unknown | Owner | Run the one read-only status command; return its output | Target already passed (it is after 13:20) |
+| 1 | Release 0022–0025 (administration screens, invitations, planned assignments, S3 endpoint fix) not deployed | Owner | After 0: paste the release block, type DEPLOY, then screen checks 6.1–6.7 | No (target passed); about 45 minutes once started |
+| 2 | Staff shifts, call-outs, replacements, uncovered-shift view | Claude (build) | Schema decision for staff-created shift reservations, then API, screens, tests | **No.** About 1–2 working days |
+| 3 | Utilisation beyond monthly per service (section 9) | Claude (build) | Periods, breakdowns, coverage and expiry warnings, projections | **No** |
+| 4 | G1 alarm subscriber and D2 account S3 public-access block | Owner | `phase7-remediate.sh`, type APPLY, confirm the alarm email | About 10 minutes |
+| 5 | HIPAA operating policies not confirmed | Owner | Confirm in writing | Owner decision |
+| 6 | Phone/screen retest of changed workflows (mobile usability at phone width for the new screens; the invitation card has not been browser-checked at 390 px) | Owner + Claude | After deployments | No |
 
-What can be finished today: deploy the release, create the manager, apply G1 and D2, and run the phone checks on **synthetic** data. That makes Ogevia ready for a **synthetic-data dress rehearsal**, not for real clients.
+Verdict unchanged: **NOT READY** for real clients. After 0, 1, 4 and 6 it is ready for a synthetic-data dress rehearsal of everything except staff-created shifts and call-outs.
