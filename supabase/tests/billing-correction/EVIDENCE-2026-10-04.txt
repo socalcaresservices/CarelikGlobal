@@ -22,3 +22,45 @@ REGRESSION PASSED: existing Service Verification assertions all pass with the fi
 ## 3. Live production, read-only (2026-10-04, earlier in this session)
 correct_service_visit, approve_visit_for_billing, submit_billing_approvals, list_billing_ready_visits: md5 of live bodies identical to the migration texts used above.
 billing_approvals = 0, visit_corrections = 0 (nothing double-billed).
+
+## 4. Every write path and concurrent sessions (added 2026-10-04T14:30:02Z, same fix sha256 a0843174e3894920...)
+Live production, read-only: the functions whose body updates service_visits are exactly these 7:
+  approve_visit_billing (legacy), close_missed_service_visit, confirm_service_visit, correct_service_visit,
+  end_service_visit, sign_service_visit, void_service_visit (all SECURITY DEFINER, executable by authenticated).
+Live production table privileges: anon and authenticated hold UPDATE and DELETE on service_visits and billing_approvals;
+RLS is enabled with SELECT-only policies, so direct writes affect 0 rows (tested below with the same policies).
+Function bodies under test vs live production (md5 of prosrc, CRLF normalised; close_missed_service_visit is stored with CRLF in production):
+Function bodies identical to production: 11 of 11
+
+all_paths.sql (fix loaded) - one approved visit, every path, as the role that may normally use it:
+ REFUSED approve_visit_billing, legacy (manager)                        This visit is not awaiting administrator review
+ REFUSED approve_visit_for_billing again (manager)                      This visit already has an active billing approval
+ REFUSED close_missed_service_visit (manager)                           Only an open visit (no Time Out) can be closed this way
+ REFUSED confirm_service_visit (its caregiver)                          Visit is already locked or is not ready for confirmation
+ REFUSED correct_service_visit (manager)                                This visit is approved for billing; void the billing approval before correcting it
+ REFUSED direct as authenticated manager: delete from public.billing_approvals where visit 0 rows
+ REFUSED direct as authenticated manager: delete from public.service_visits where id = '00 0 rows
+ REFUSED direct as authenticated manager: update public.billing_approvals set voided_at =  0 rows
+ REFUSED direct as authenticated manager: update public.service_visits set billable_minute 0 rows
+ REFUSED direct as authenticated manager: update public.service_visits set status = 'corre 0 rows
+ REFUSED direct status UPDATE as table owner (bypasses RLS)             This visit is approved for billing; void the billing approval before correcting it
+ REFUSED end_service_visit (its caregiver)                              Visit has already been ended
+ REFUSED sign_service_visit (its caregiver)                             Visit is already locked
+ REFUSED void_service_visit (manager)                                   A signed visit cannot be voided - use a correction instead
+ALL PATHS VERIFIED: 14 write paths refused; visit, approval and visit count unchanged
+
+concurrency.sh (fix loaded) - two real sessions; session 1 holds its transaction 3 s, session 2 starts 1 s later:
+PASS C1 correction first, approval concurrently (session 2 waited 2.1s, then refused: Only a signed visit can be approved for billing)
+PASS C2 approval first, correction concurrently (session 2 waited 2.0s, then refused: This visit is approved for billing)
+PASS C3 two approvals concurrently (session 2 waited 2.0s, then refused: This visit already has an active billing approval)
+PASS C4 void of the approval in progress, correction concurrently (session 2 waited 0.0s, then refused: This visit is approved for billing)
+PASS C4 retry after the void committed: the correction applies
+PASS C5 two corrections concurrently (session 2 waited 2.0s, then refused: Only a submitted visit can be corrected)
+CONCURRENCY VERIFIED: 5 cases
+
+Control (same tests, fix NOT loaded) - the tests detect the defect:
+  all_paths: FAIL correct_service_visit NOT REFUSED; FAIL direct status UPDATE as table owner NOT REFUSED; ALL-PATHS FAILED
+  concurrency: FAIL C2 (correction applied while the approval stayed active); FAIL C4; CONCURRENCY FAILED: 3
+
+Residual, outside application paths: a role that bypasses RLS (service_role / postgres) can still change minutes on an
+approved visit without a status change. No application function does this; the guard covers every status change.

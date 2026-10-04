@@ -1,10 +1,12 @@
 # AWS TEST deployment plan: migrations 0019–0021, API routes, permissions, storage and web
 
-**Status:** prepared 2026-10-04. **Not executed.** Production, Netlify and Supabase are not touched.
+**Status:** prepared 2026-10-04; executable workflow `infra/aws/slice/increment-deploy.sh`, rehearsed end to end against stubbed AWS and a local PostgreSQL copy at 0018 (9/9 checks PASS). **Not executed in AWS.** Production, Netlify and Supabase are not touched.
 
 **Environment:** account 300094796789, us-west-2, database `ogevia_sv_test`, synthetic data only.
 
-**Build to deploy:** branch `claude/ogevia-socal-pilot-prep-vfu5tf` at the commit named in the deploy block. The pinned commit is fixed when the block is generated, and the block refuses any other commit.
+**Build to deploy:** the commit pinned in `infra/aws/slice/increment-bootstrap.sh` (the paste block). The script refuses any other commit and any checkout with local changes.
+
+**Not affected:** the completed pilot deployment. This run uses its own state and rollback folder (`~/ogevia-increment-run`) and its own checkout (`/tmp/ogevia-increment`); `~/ogevia-pilot-run` and `/tmp/ogevia-pilot` are never written.
 
 ## 0. Preconditions: read live first, then decide
 
@@ -59,24 +61,50 @@ Steps:
 
 The previous build's `index.html` and assets stay in the versioned bucket for rollback.
 
-## 4. Order and approvals
+## 4. How to run (CloudShell, us-west-2, AdministratorAccess)
 
-1. Run the read-only live status (section 0).
-2. Run the quality gate on the pinned commit: lint, typecheck, unit tests, build, database tests (193), API database tests (38), `cdk synth`.
-3. Run the scope gate against the live templates. It prints the exact change list.
-4. **DEPLOY** (typed). This takes the snapshot, then runs the database migrations, then the API stack, then the web.
-5. Live acceptance (section 6).
-6. Optional **SEED** (typed).
+1. **Live check first** (read-only): paste `infra/aws/slice/live-status-bootstrap.sh`. Type `READ-DB` when asked. The ledger must read 0018 and every Phase 7 line must match the reviewed list. Do not type `OWNER` unless the owner row is missing.
+2. **Deploy:** paste `infra/aws/slice/increment-bootstrap.sh`. It downloads the pinned commit (GitHub sign-in in the browser if needed, signed out again afterwards) and runs `increment-deploy.sh`:
 
-Reason for the order: the database comes before the API because the old API code never calls the new functions, so 0019–0021 are safe under the running build. The API comes before the web because the old web never calls the new routes.
-
-## 5. Rollback (reverse order; each step independent)
-
-| Layer | How | Data |
+| Step | What happens | Changes AWS? |
 | --- | --- | --- |
-| Web | Re-sync the previous build (kept in the versioned bucket and in `~/ogevia-pilot-run/rollback`) and invalidate | None |
-| API | Deploy the captured 87a9be2 templates or code (`pilot-rollback.sh api`). This removes the 22 routes, the 22 permissions and the 2 policy statements. | None. The new tables simply stop being called. |
-| Database | Run the down scripts 0021 → 0020 → 0019. Each **refuses** while its records exist (documents, client names, approvals), so data is never silently dropped. If records exist, restore the pre-deploy snapshot to a new instance instead (as in the restore drill). | S3 document and logo files are never deleted by a rollback |
+| 1–3 | Tools, pinned clean commit, identity, inventory. Pilot preconditions: the `close` route is live, the Lambda serves `ogevia_sv_test`, no custom web domain. The live approval tag is read so the build's tags equal the deployed ones. | No |
+| 4 | Lint, typecheck, unit tests, build (one task at a time), `cdk synth`, web build | No |
+| 5 | Capture rollback material: 5 templates, Lambda version, 38 routes, Handler policy, web files | No |
+| 6 | Strict scope gate (`increment_diff_gate.py`) plus its self-test, which must refuse 14 tampered variants of this exact build. It prints the exact change list. | No |
+| 7 | **DEPLOY** prompt (the only approval) | No |
+| 8 | Snapshot `ogevia-prod-postgres-pre-0021-<date>` | Yes |
+| 9 | DB window. Checks: ledger exactly 0001–0018, checksums equal to the repository. Applies 0019–0021, then `db:verify` (all PASS). Checks that existing visits (id, times, signed time, status) are unchanged. Restores and verifies the admin-host security groups. | Yes |
+| 10 | Gate again against the templates read just before deploying; `cdk deploy` of the API stack only; web files (`config.json` not changed); invalidation | Yes |
+| 11 | 9 live checks (section 6) and `REPORT.md` | No |
+| 12 | Optional **SEED** (typed): synthetic client names, TEST only | Yes (TEST data) |
+
+A stop at any step prints the reason; pasting the block again resumes after the last completed step. A cancelled DEPLOY changes nothing (rehearsed: no AWS calls that change anything).
+
+**Database tests** (193 + 38) need a PostgreSQL server, which CloudShell does not have. They ran in development on the pinned commit; CloudShell runs lint, typecheck, unit tests and build.
+
+**Order rationale:** database before API (the running pilot API never calls 0019–0021); API before web (the old web never calls the new routes).
+
+## 5. Rollback: what happens to records and files created after the deployment
+
+`infra/aws/slice/increment-rollback.sh <status|export|web|api|db>`, run from `/tmp/ogevia-increment`. Each layer asks for `ROLLBACK <layer>`. It uses only `~/ogevia-increment-run/rollback`.
+
+| Layer | What it does | Approvals, client names, documents, logo, audit rows | Files in S3 |
+| --- | --- | --- | --- |
+| `export` (read-only) | Copies every approval, client name, document record, document type, the organizations row and audit rows since DEPLOY to `~/ogevia-increment-run/export-<time>` (mode 700) | Unchanged | Unchanged |
+| `web` | Restores the previous web files; `config.json` is not touched | Unchanged | Unchanged |
+| `api` | Restores the captured API template: removes the 22 routes, their permissions and the 2 S3 statements, and the previous Lambda code returns | Unchanged. The previous API never calls the new tables, so the data stays, unused. | Unchanged; no longer reachable through the API |
+| `db` | Runs 0021 → 0020 → 0019 down scripts. **Each refuses while its records exist** (documents; client names; approvals); a refusal leaves that migration and its data intact. | Kept unless the layer is empty | Never deleted by any rollback |
+| Full restore | `status` prints the command: restore the snapshot to a **new** instance, never in place | The live database is untouched | Unchanged |
+
+**Recommended rollback** if the new build misbehaves: `web`, then `api`. The database stays at 0021 with every record created after the deployment, ready for a fixed build. Use `db` only when no records exist.
+
+Rehearsed against the rehearsal deployment:
+- `export` wrote 3 client names and 3 audit rows.
+- `db` rolled back 0021 (no documents), then **refused 0020** because client names exist. All 3 names and all 8 visits stayed.
+- `web` and `api` restored the previous build. `config.json` was unchanged.
+
+**S3:** the evidence bucket is versioned with no expiry. Documents (`{org}/documents/...`) and the logo (`{org}/branding/logo/...`) remain after any rollback, and the IAM role simply loses access to those two prefixes after an `api` rollback.
 
 ## 6. Acceptance checks
 
@@ -87,7 +115,7 @@ Reason for the order: the database comes before the API because the old API code
 4. The Lambda `CodeSha256` matches this build's asset.
 5. The policy has exactly the two new statements, on the two documented key shapes.
 6. The ledger shows 0021 and 21 migrations, with checksums matching the repository; `db:verify` passes.
-7. The served web build matches.
+7. The served web build matches, and `config.json` is unchanged.
 8. The DB window is closed: the admin host's security groups are back to the original.
 9. The pre-deploy snapshot is available.
 
@@ -104,8 +132,31 @@ Reason for the order: the database comes before the API because the old API code
 
 ## 7. Cost and security
 
-- **Cost:** no new fixed cost. Variable costs are Lambda invocations, S3 storage for documents and logos (MB scale), and KMS requests (S3 bucket keys enabled). The snapshot adds a small storage cost until it is deleted.
-- **Security:**
-  - IAM grows by two prefix-scoped statements.
-  - No public access, no CORS, no new secrets.
-  - Names and documents are stored only in TEST, and only synthetic data is allowed until the BAA and security gate.
+**No new fixed (always-on) charge.** This deployment creates:
+- no instance, NAT gateway, VPC endpoint, KMS key, bucket, alarm or log group;
+- no change to the RDS instance class or storage.
+
+The API stack gains routes and permissions, which have no standing charge.
+
+**Variable costs (pay per use)**, at the current TEST scale:
+
+| Driver | What increases it |
+| --- | --- |
+| Lambda requests and duration | Each call of the new screens (Home, NEEDS ATTENTION, documents, billing review) |
+| API Gateway HTTP API requests | The same calls, per request |
+| S3 storage and requests | Uploaded documents (up to 4 MB each) and one logo (up to 512 KB), per GB-month; PUT/GET per request. Versioning keeps replaced files, which are also billed. |
+| KMS requests | Encrypting and decrypting those objects; S3 bucket keys reduce this |
+| CloudFront | Data transfer for the web app and the logo |
+| CloudWatch Logs | Lambda log ingestion, with the existing finite retention |
+| RDS snapshot storage | `ogevia-prod-postgres-pre-0021-<date>`: charged per GB-month only beyond the free backup allowance (equal to the provisioned storage). It is kept until you delete it. |
+
+Prices were not re-checked today. The AWS Budgets alert configured in Phase 7 is the control.
+
+**Security:**
+- IAM grows by two prefix-scoped statements.
+- No public access, no CORS, no new secrets.
+- Names and documents are stored only in TEST, and only synthetic data is allowed until the BAA and security gate are confirmed.
+- Billing:
+  - Managers approve billable **hours**.
+  - Rates and dollar amounts are returned only with `billing.read` (owner).
+  - Automatic payer submission is **outside launch scope**.

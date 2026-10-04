@@ -26,6 +26,23 @@ for spec in "20260822020000_billing_pipeline_amounts.sql approve_visit_for_billi
             "20260812193042_billing_approval_pipeline_functions.sql void_billing_approval"; do
   set -- $spec; python3 "$HERE/extract.py" "$MIG/$1" "$2" | q
 done
+# The other production paths that update service_visits (latest definitions).
+for spec in "20260826070000_link_visits_to_scheduled_shifts.sql end_service_visit" \
+            "20260821120000_service_visits_no_login_caregiver.sql sign_service_visit" \
+            "20260826090000_manager_close_missed_visit.sql close_missed_service_visit" \
+            "20260813061500_shift_verification_v2_guardrails.sql void_service_visit" \
+            "20260809042943_service_verification.sql approve_visit_billing"; do
+  set -- $spec; python3 "$HERE/extract.py" "$MIG/$1" "$2" | q
+done
+# Every function body under test must be identical to live production: md5 of
+# prosrc with CRLF line endings normalised to LF (read-only, 2026-10-04). Only
+# close_missed_service_visit has CRLF endings in production (it was applied
+# outside this repository's migration history); its text is otherwise identical.
+while read -r fn want; do
+  got=$(q -At -c "select md5(replace(prosrc, E'\\r\\n', E'\\n')) from pg_proc where proname = '$fn' and pronamespace = 'public'::regnamespace")
+  [[ "$got" == "$want" ]] || { echo "BODY MISMATCH: $fn is not the production body ($got vs $want)"; exit 1; }
+done < "$HERE/prod_function_md5_2026-10-04.txt"
+echo "Function bodies identical to production: $(wc -l < "$HERE/prod_function_md5_2026-10-04.txt") of $(wc -l < "$HERE/prod_function_md5_2026-10-04.txt")"
 q -f "$SV/fixtures.sql"
 q -f "$HERE/scenario.sql"
 
@@ -34,3 +51,7 @@ echo "--- proposed fix ---"
 q -f "$HERE/../../proposed/20261004120000_block_correction_of_billing_approved_visits.sql"
 q -f "$HERE/../../proposed/20261004120000_block_correction_of_billing_approved_visits.sql"   # re-runnable
 q -f "$HERE/verify_fix.sql"
+echo "--- every write path on an approved visit ---"
+q -f "$HERE/all_paths.sql"
+echo "--- concurrent sessions ---"
+source "$HERE/concurrency.sh"
