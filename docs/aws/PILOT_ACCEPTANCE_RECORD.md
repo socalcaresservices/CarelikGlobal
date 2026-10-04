@@ -1,20 +1,34 @@
 # SCS pilot: AWS TEST deployment and real-phone acceptance record
 
-**Result: NOT DEPLOYED, NOT ACCEPTED (corrected 2026-10-03).**
+**Result (reconciled 2026-10-04): DEPLOYED to AWS TEST (owner-reported 12/12). Real-phone acceptance of the deployed build: NOT YET RECORDED.**
 
-**The conflict is resolved:**
-- The owner's deployment logs show the pilot run **stopped at phase 7 (the scope gate)**. No DEPLOY was ever executed for 87a9be2.
-- The restore drill shows `ogevia_sv_test` at migration **0012**.
-- The API and web were still the October 2 versions (read-only evidence, the same day).
+## Timeline (UTC, from this session's messages)
 
-So the deployment verification and phone-test results recorded below did **not** test the pilot build, and they are withdrawn. The pilot is to be deployed with `infra/aws/slice/pilot-recover-scope.sh` (one DEPLOY approval; migrations 0013–0018; live verification that includes the database step's own `verify.ts` result). After that, the phone test is re-run in full.
+| Time | Event | Evidence class |
+| --- | --- | --- |
+| 2026-10-03 19:57 | First recovery run (`ecf513c`, 11 checks) reported "Live verification 11/11 PASS" | Owner-reported; later contradicted (next rows) |
+| 19:58 to 20:01 | Phone results A–G reported PASS, all seven sections within about 3 minutes | Owner-reported |
+| 23:40 | Restore drill: the source database `ogevia_sv_test` was at migration **0012** | Owner-reported drill output |
+| 23:51 | Owner: "Deployment logs confirm the pilot stopped at phase 7's scope gate" | Owner-reported |
+| after 23:59 | Recovery block `pilot-recover-scope.sh` (`5f7a10a`, 12 checks, pinned build 87a9be2) run; owner reports **migrations through 0018 and 12/12 live verification** | Owner-reported. The terminal output did not reach Claude. This container has no valid AWS credentials, so Claude has not independently confirmed it. |
 
-Withdrawn (did not test the pilot build): previously recorded owner-reported results said every row of [PILOT_PHONE_ACCEPTANCE.md](PILOT_PHONE_ACCEPTANCE.md) passed.
-**Date:** 2026-10-03
-**Environment:** account `300094796789`, `us-west-2`, database `ogevia_sv_test`, Cognito pool `us-west-2_849AYz5J7`, synthetic org `scs-pilot-synthetic`.
-**Not changed:** production, `main`, Netlify and Supabase. Nothing was merged.
+**Classification of the phone results.** The A–G results were reported at 19:58–20:01, before the database was migrated past 0012. They therefore did not test the deployed pilot build:
+- D (scheduled service preselected, 0017), E (correction keeps seconds, 0018) and F (manager close-out, 0015 and the `close` route) depend on code that was not live at that time.
+- A and C (sign-in, start/end/confirm) cover behaviour that also existed in the October 2 build, so those results describe that earlier build only.
 
-## Evidence basis
+They are kept here as historical records and are **not** used as acceptance of the pilot build. Re-run the phone checklist on the deployed build; post-deployment results are recorded in the table below when received.
+
+## Post-deployment phone acceptance (deployed build 87a9be2)
+
+| Section | Result | Date | Notes |
+| --- | --- | --- | --- |
+| A–G | Not yet reported | | |
+
+## Independent live confirmation (pending)
+
+Run `infra/aws/slice/live-status-check.sh` in CloudShell (read-only, except the temporary DB-window security group, which it restores and verifies). It prints the migration ledger, the live API and web versions, Cognito sign-ins, agency owner and manager access, and the Phase 7 security settings.
+
+## Evidence basis (earlier record, kept for audit)
 
 | Item | Source | Classification |
 | --- | --- | --- |
