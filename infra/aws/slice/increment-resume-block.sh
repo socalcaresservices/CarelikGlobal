@@ -1,31 +1,42 @@
 cat > ~/ogevia-increment-resume.sh <<'EOF'
 #!/usr/bin/env bash
-# Ogevia AWS TEST increment 0019-0021: verify, then deploy or resume, then
-# post-check, then the separate manager sign-in.
+# Ogevia AWS TEST increment 0019-0021, REVISED after the failed 1a39dd5 run:
+# verify, then recover / deploy / resume, then post-check, then the separate
+# manager sign-in.
 #
-# Status before this run: the increment is NOT VERIFIED. The absence of
-# ~/ogevia-increment-run and the 38 live routes show it was not completed
-# through this workflow; they do not prove that the database, Lambda or web
-# were left untouched. The preflight establishes that from live evidence.
+# Status before this run: NOT VERIFIED. The 1a39dd5 run stopped at 10/12
+# ("final policy size (20624) is bigger than the limit (20480)": one Lambda
+# invoke permission per route) and CloudFormation rolled the API stack back.
+# Expected, and verified live by the preflight before anything changes:
+# migrations 0019-0021 applied with matching checksums, every earlier record
+# unchanged by value, the API back on the pilot (38 routes, pilot code, 38
+# route-scoped permissions), the pilot web build, the original admin host
+# security groups, and the failed run's pre-0021 snapshot available.
 #
 # Two pinned commits:
-#   PIN        1a39dd5, the code that is deployed (unchanged, reviewed);
-#   TOOLS_PIN  the reviewed preflight / post-check tools (increment-preflight.sh,
-#              increment_preflight.py and the expected database fingerprints).
+#   PIN        69e8799: 1a39dd5 + ONE invoke permission limited to this API
+#              (route authentication unchanged; peak policy during the update
+#              = today's 38 statements + 1, about 14 KB of 20 KB);
+#   TOOLS_PIN  the reviewed preflight / post-check tools and their self-test
+#              (8 accepted states, 28 refused deviations, 9 policy cases).
 #
-# 1. PREFLIGHT (no deployment): routes and their authorisation, API Lambda code
-#    and settings, web build, TEST database, migration ledger and checksums,
-#    every function and column, and (fresh run) a value fingerprint of every
-#    existing record. Anything UNKNOWN, unexpected or partial STOPS. An existing
-#    run resumes only in a supported recovery state that matches live evidence.
-# 2. DEPLOY: the pinned increment-deploy.sh (its own DEPLOY prompt; resumable).
-# 3. POST-CHECK: ledger and objects at 0021, the 1a39dd5 routes, Lambda and web,
-#    and every existing record unchanged by value.
+# 1. PREFLIGHT (no deployment): routes and their authorisation, API Lambda code,
+#    settings and resource policy, API stack status, web build, TEST database,
+#    ledger and checksums, every function and column, every existing record by
+#    value against the baseline taken before the failed run, admin host groups,
+#    the failed run's evidence and snapshot. Anything UNKNOWN, unexpected or
+#    partial STOPS. RECOVER only from exactly the state the failed run left.
+# 2. DEPLOY: the pinned increment-deploy.sh in ~/ogevia-increment-v2-run (its own
+#    DEPLOY prompt; resumable). No migration is applied again. The failed run's
+#    folder ~/ogevia-increment-run is kept as evidence and never written.
+# 3. POST-CHECK: ledger and objects at 0021, the 60 routes, this Lambda, exactly
+#    one invoke statement for this API, stack UPDATE_COMPLETE, this web build,
+#    admin host groups, every existing record unchanged by value.
 # 4. MANAGER: pilot-manager-account.sh (its own MANAGER prompt).
 # Paste again to resume. Never prints secrets.
 set -uo pipefail
-PIN=1a39dd59fddd48d5c4e57a815331487a979e4b0b
-TOOLS_PIN=d315668e76c387f6e3066c735dcd9908185a887c
+PIN=69e8799c7a39405d551fa49e1e9cd4a025ae7ea0
+TOOLS_PIN=065ca70a23912d68129e3ba71b90ee62d3eb1a5b
 BR=claude/ogevia-socal-pilot-prep-vfu5tf
 SRC=${OGEVIA_INCREMENT_SRC:-/tmp/ogevia-increment}
 TOOLS=${OGEVIA_PREFLIGHT_TOOLS:-/tmp/ogevia-increment-tools}
@@ -57,10 +68,12 @@ git -C "$SRC" cat-file -e "$TOOLS_PIN^{commit}" 2>/dev/null || { echo "STOP: too
 if [ -z "${OGEVIA_PREFLIGHT_TOOLS:-}" ]; then
   rm -rf "$TOOLS" && mkdir -p "$TOOLS"
   git -C "$SRC" archive "$TOOLS_PIN" infra/aws/slice/increment-preflight.sh infra/aws/slice/increment_preflight.py \
-    infra/aws/slice/increment-preflight-expected | tar -x -C "$TOOLS" --strip-components=3 \
+    infra/aws/slice/increment_preflight_selftest.py infra/aws/slice/increment-preflight-expected | tar -x -C "$TOOLS" --strip-components=3 \
     || { echo "STOP: could not extract the preflight tools. Nothing ran."; exit 1; }
 fi
 echo "Code: $(git -C "$SRC" log --oneline -1); tools: ${TOOLS_PIN:0:7}"
+PYTHONDONTWRITEBYTECODE=1 python3 "$TOOLS/increment_preflight_selftest.py" | tail -1 | grep 'self-test: PASS' \
+  || { echo "STOP: the preflight decision self-test failed. Nothing ran."; exit 1; }
 
 bash "$TOOLS/increment-preflight.sh" pre "$SRC" "$TOOLS"; rc=$?
 if [ "$rc" = 3 ]; then
@@ -75,7 +88,8 @@ if [ -f "$HOME/ogevia-increment-preflight/state/postcheck" ]; then
 else
   bash "$TOOLS/increment-preflight.sh" post "$SRC" "$TOOLS" || exit $?
 fi
-(cd "$SRC" && bash infra/aws/slice/pilot-manager-account.sh)
+# The manager step logs to the revision's folder; the failed run's folder is never written.
+(cd "$SRC" && OGEVIA_INCREMENT_RUN_DIR="$HOME/ogevia-increment-v2-run" bash infra/aws/slice/pilot-manager-account.sh)
 rc=$?
 # Read-only: first-sign-in status of the corrected caregiver and the new manager.
 for e in pinkpopsllc@gmail.com ogemails+ogevia-pilot-manager@gmail.com; do
