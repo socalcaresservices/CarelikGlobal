@@ -717,3 +717,33 @@ describe("caregiver invitations and planned assignments (0025) through the API",
     expect(list.body.caregivers.find((c: any) => c.caregiverRecordId === record)).toMatchObject({ hasSignIn: false, invitationEmail: null });
   });
 });
+
+describe("schedule (0026) through the API", () => {
+  it("manager schedules, records a call-out and a replacement; the caregiver sees and calls out of their own shift", async () => {
+    const recs = Object.fromEntries((await db.admin.query("select caregiver_code, id from ogevia.caregiver_records where organization_id = $1", [w.orgA])).rows.map((r) => [r.caregiver_code, r.id]));
+    const tomorrow = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Los_Angeles" }).format(new Date(Date.now() + 864e5));
+    const body = { organizationId: w.orgA, clientId: fresh.client, serviceId: w.serviceA, date: tomorrow, startTime: "09:00", endTime: "11:00", caregiverRecordId: recs["CG-A1"] };
+    expect((await call("POST /v1/shifts", w.managerA, { body: { ...body, startTime: "9am" } })).status).toBe(400);
+    expect((await call("POST /v1/shifts", w.caregiverA1, { body })).status).toBe(403);
+    const created = await call("POST /v1/shifts", w.managerA, { body });
+    expect(created.status, JSON.stringify(created.body)).toBe(201);
+    expect(created.body.shift).toMatchObject({ reservedMinutes: 120 });
+    const id = created.body.shift.shiftId as string;
+    const list = await call("GET /v1/shifts", w.managerA, { query: { organizationId: w.orgA, from: tomorrow, to: tomorrow } });
+    expect(list.body.shifts.find((s: any) => s.shiftId === id)).toMatchObject({ coverageState: "covered", caregiverCode: "CG-A1" });
+    expect((await call("GET /v1/shifts", w.managerB, { query: { organizationId: w.orgA, from: tomorrow, to: tomorrow } })).body.shifts).toEqual([]);
+
+    const mine = await call("GET /v1/my-shifts", w.caregiverA1, { query: { organizationId: w.orgA } });
+    expect(mine.body.shifts.find((s: any) => s.shiftId === id)).toMatchObject({ canCallOut: true });
+    const out = await call("POST /v1/my-shifts/{shiftId}/callout", w.caregiverA1, { path: { shiftId: id }, body: { organizationId: w.orgA, reason: "Sick (synthetic)" } });
+    expect(out.body).toEqual({ coverageState: "needs_coverage" });
+    expect((await call("POST /v1/my-shifts/{shiftId}/callout", w.caregiverA2, { path: { shiftId: id }, body: { organizationId: w.orgA, reason: "Not mine (synthetic)" } })).status).toBe(404);
+
+    const repl = await call("POST /v1/shifts/{shiftId}/caregiver", w.managerA, { path: { shiftId: id }, body: { organizationId: w.orgA, caregiverRecordId: recs["CG-A3"] } });
+    expect(repl.body).toEqual({ coverageState: "covered" });
+    const history = await call("GET /v1/shifts/{shiftId}/coverage", w.managerA, { path: { shiftId: id }, query: { organizationId: w.orgA } });
+    expect(history.body.events.map((e: any) => e.eventType)).toEqual(["called_out", "reassigned"]);
+    const cancelled = await call("POST /v1/shifts/{shiftId}/cancel", w.managerA, { path: { shiftId: id }, body: { organizationId: w.orgA, reason: "Client away (synthetic)" } });
+    expect(cancelled.body).toEqual({ releasedMinutes: 120 });
+  });
+});

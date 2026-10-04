@@ -80,7 +80,7 @@ describe("ROLLBACK scripts", () => {
     expect(rows[0].n).toBe(0);
     const client = await empty.admin.connect();
     try {
-      expect((await migrate(client)).applied).toHaveLength(25);
+      expect((await migrate(client)).applied).toHaveLength(26);
     } finally {
       client.release();
     }
@@ -88,6 +88,7 @@ describe("ROLLBACK scripts", () => {
 
   it("refuses the destructive rollbacks while real (synthetic) visit data exists", async () => {
     for (const f of [
+      "0026_staff_shifts_coverage.down.sql",
       "0025_invitations_planned_assignments.down.sql",
       "0024_assignment_admin.down.sql",
       "0023_caregiver_service_admin.down.sql",

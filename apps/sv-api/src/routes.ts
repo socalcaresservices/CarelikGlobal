@@ -98,6 +98,10 @@ function authorizationTerms(body: Record<string, unknown>) {
     source: text(body.sourceReference, "sourceReference", 200),
   };
 }
+function clockTime(value: unknown, name: string): string {
+  if (typeof value !== "string" || !/^([01]\d|2[0-3]):[0-5]\d$/.test(value)) throw new ApiError(400, "bad_request", `${name} must be a time like 09:30.`);
+  return value;
+}
 const q = (event: HttpApiEvent) => event.queryStringParameters ?? {};
 const p = (event: HttpApiEvent) => event.pathParameters ?? {};
 const orgParam = (event: HttpApiEvent) => uuid(q(event).organizationId, "organizationId");
@@ -493,6 +497,107 @@ export const ROUTES: Record<string, Route> = {
       const reason = text(body.reason, "reason", 500, { required: true });
       await tx((db) => db.query("select ogevia_api.set_service_active($1, $2, $3, $4, $5)", [org, service, active, reason, key]));
       return { ok: true };
+    },
+  },
+
+  // Schedule (0026): shifts.manage (Administrator, manager, scheduler); caregivers: own shifts only.
+  "GET /v1/shifts": {
+    mutating: false,
+    handle: async ({ event, tx }) => {
+      const query = q(event);
+      const from = date(query.from, "from");
+      const to = date(query.to, "to");
+      const client = optionalUuid(query.clientId, "clientId");
+      return { shifts: await tx((db) => rows(db, "select * from ogevia_api.list_shifts($1, $2, $3, $4)", [orgParam(event), from, to, client])) };
+    },
+  },
+
+  "POST /v1/shifts": {
+    status: 201,
+    mutating: true,
+    handle: async ({ event, tx }) => {
+      const body = parseBody(event.body, event.isBase64Encoded);
+      const key = idempotencyKey(event.headers);
+      const org = uuid(body.organizationId, "organizationId");
+      const client = uuid(body.clientId, "clientId");
+      const service = uuid(body.serviceId, "serviceId");
+      const day = date(body.date, "date");
+      const start = clockTime(body.startTime, "startTime");
+      const end = clockTime(body.endTime, "endTime");
+      const caregiver = optionalUuid(body.caregiverRecordId, "caregiverRecordId");
+      const [shift] = await tx((db) =>
+        rows(db, "select * from ogevia_api.create_shift($1, $2, $3, $4, $5::time, $6::time, $7, $8)", [org, client, service, day, start, end, caregiver, key]));
+      return { shift };
+    },
+  },
+
+  "POST /v1/shifts/{shiftId}/callout": {
+    mutating: true,
+    handle: async ({ event, tx }) => {
+      const shift = uuid(p(event).shiftId, "shiftId");
+      const body = parseBody(event.body, event.isBase64Encoded);
+      const key = idempotencyKey(event.headers);
+      const org = uuid(body.organizationId, "organizationId");
+      const reason = text(body.reason, "reason", 500, { required: true });
+      const state = await tx(async (db) =>
+        ((await db.query("select ogevia_api.record_shift_callout($1, $2, $3, $4) as s", [org, shift, reason, key])).rows[0] as { s: string }).s);
+      return { coverageState: state };
+    },
+  },
+
+  "POST /v1/shifts/{shiftId}/caregiver": {
+    mutating: true,
+    handle: async ({ event, tx }) => {
+      const shift = uuid(p(event).shiftId, "shiftId");
+      const body = parseBody(event.body, event.isBase64Encoded);
+      const key = idempotencyKey(event.headers);
+      const org = uuid(body.organizationId, "organizationId");
+      const caregiver = uuid(body.caregiverRecordId, "caregiverRecordId");
+      const reason = text(body.reason, "reason", 500);
+      const state = await tx(async (db) =>
+        ((await db.query("select ogevia_api.assign_shift_caregiver($1, $2, $3, $4, $5) as s", [org, shift, caregiver, reason, key])).rows[0] as { s: string }).s);
+      return { coverageState: state };
+    },
+  },
+
+  "POST /v1/shifts/{shiftId}/cancel": {
+    mutating: true,
+    handle: async ({ event, tx }) => {
+      const shift = uuid(p(event).shiftId, "shiftId");
+      const body = parseBody(event.body, event.isBase64Encoded);
+      const key = idempotencyKey(event.headers);
+      const org = uuid(body.organizationId, "organizationId");
+      const reason = text(body.reason, "reason", 500, { required: true });
+      const released = await tx(async (db) =>
+        ((await db.query("select ogevia_api.cancel_shift($1, $2, $3, $4) as n", [org, shift, reason, key])).rows[0] as { n: number }).n);
+      return { releasedMinutes: released };
+    },
+  },
+
+  "GET /v1/shifts/{shiftId}/coverage": {
+    mutating: false,
+    handle: async ({ event, tx }) => {
+      const shift = uuid(p(event).shiftId, "shiftId");
+      return { events: await tx((db) => rows(db, "select * from ogevia_api.list_shift_coverage($1, $2)", [orgParam(event), shift])) };
+    },
+  },
+
+  "GET /v1/my-shifts": {
+    mutating: false,
+    handle: async ({ event, tx }) => ({ shifts: await tx((db) => rows(db, "select * from ogevia_api.list_my_shifts($1)", [orgParam(event)])) }),
+  },
+
+  "POST /v1/my-shifts/{shiftId}/callout": {
+    mutating: true,
+    handle: async ({ event, tx }) => {
+      const shift = uuid(p(event).shiftId, "shiftId");
+      const body = parseBody(event.body, event.isBase64Encoded);
+      const key = idempotencyKey(event.headers);
+      const org = uuid(body.organizationId, "organizationId");
+      const reason = text(body.reason, "reason", 500, { required: true });
+      const state = await tx(async (db) =>
+        ((await db.query("select ogevia_api.call_out_my_shift($1, $2, $3, $4) as s", [org, shift, reason, key])).rows[0] as { s: string }).s);
+      return { coverageState: state };
     },
   },
 
