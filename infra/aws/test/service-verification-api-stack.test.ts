@@ -155,6 +155,8 @@ describe("ServiceVerificationApiStack (FUTURE, Phase 4)", () => {
       "s3:GetObjectVersion",
       "s3:PutObject",
     ]);
+    expect(JSON.stringify(bySid.StaffDocumentObjects?.Resource)).toContain("/*/documents/*/*");
+    expect(bySid.StaffDocumentObjects?.Action).toEqual(["s3:GetObject", "s3:GetObjectVersion", "s3:PutObject"]);
     expect(bySid.EvidenceKeyForSignatureObjects?.Condition).toEqual({
       StringEquals: { "kms:ViaService": "s3.us-west-2.amazonaws.com" },
     });
@@ -166,6 +168,7 @@ describe("ServiceVerificationApiStack (FUTURE, Phase 4)", () => {
       "EvidenceKeyForSignatureObjects",
       "ReadAppDatabaseSecret",
       "SignatureObjects",
+      "StaffDocumentObjects",
       "VpcNetworkInterfaces",
       "WriteOwnLogGroup",
     ]);

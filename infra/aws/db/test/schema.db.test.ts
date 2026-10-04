@@ -50,6 +50,7 @@ describe("SCHEMA: migration chain", () => {
       "0018",
       "0019",
       "0020",
+      "0021",
     ]);
   });
 
@@ -101,6 +102,8 @@ describe("SCHEMA: migration chain", () => {
       "client_authorizations",
       "client_care_portals",
       "clients",
+      "document_types",
+      "document_versions",
       "idempotency_records",
       "organization_memberships",
       "organizations",
@@ -110,6 +113,7 @@ describe("SCHEMA: migration chain", () => {
       "services",
       "shift_coverage_events",
       "shifts",
+      "staff_documents",
       "visit_confirmations",
       "visit_corrections",
       "visit_evidence",

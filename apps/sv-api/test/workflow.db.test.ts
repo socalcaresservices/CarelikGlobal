@@ -49,7 +49,7 @@ describe("caregiver workflow: login → client → service → start → end →
     const r = await call("GET /v1/me", w.caregiverA1);
     expect(r.status).toBe(200);
     expect(r.body.memberships).toHaveLength(1);
-    expect(r.body.memberships[0]).toMatchObject({ organizationId: w.orgA, role: "caregiver", permissions: ["availability.manage_own"] });
+    expect(r.body.memberships[0]).toMatchObject({ organizationId: w.orgA, role: "caregiver", permissions: ["availability.manage_own", "documents.manage_own"] });
   });
 
   it("lists only assigned clients, by code, without names or payer identifiers", async () => {
@@ -438,5 +438,76 @@ describe("workspace (0020) through the API", () => {
     for (const row of m.body.services) expect(row).toMatchObject({ billableValueCents: null, approvedValueCents: null, unusedValueCents: null });
     const c = await call("GET /v1/reports/utilisation", w.caregiverA1, { query: { organizationId: w.orgA, monthStart: month } });
     expect(c.body.services).toEqual([]);
+  });
+});
+
+describe("staff documents (0021) through the API", () => {
+  const pdf = Buffer.concat([Buffer.from("%PDF-1.4\n% synthetic\n"), Buffer.alloc(200, 32)]);
+  const docsOf = (a: Actor) => call("GET /v1/documents", a, { query: { organizationId: w.orgA } });
+  let doc: string;
+
+  it("manager sets up a type and requests a document from a Care Team member", async () => {
+    const t = await call("POST /v1/document-types", w.managerA, { body: { organizationId: w.orgA, name: "TB test (synthetic)", requiresExpiry: true } });
+    expect(t.status, JSON.stringify(t.body)).toBe(201);
+    const people = await call("GET /v1/documents/people", w.managerA, { query: { organizationId: w.orgA } });
+    const me = (await call("GET /v1/documents", w.caregiverA1, { query: { organizationId: w.orgA } })).body.documents;
+    expect(me).toEqual([]);
+    const target = people.body.people.find((x: any) => x.caregiverCode === "CG-A1") ?? people.body.people[0];
+    const r = await call("POST /v1/documents/requests", w.managerA, {
+      body: { organizationId: w.orgA, caregiverRecordId: target.caregiverRecordId, documentTypeId: t.body.documentTypeId, dueOn: null },
+    });
+    expect(r.status, JSON.stringify(r.body)).toBe(201);
+    doc = r.body.documentId;
+    expect((await call("GET /v1/documents/people", w.caregiverA1, { query: { organizationId: w.orgA } })).body.people).toEqual([]);
+  });
+
+  it("refuses spoofed types, oversized files and a missing expiry before storing anything", async () => {
+    const owner = (await docsOf(w.managerA)).body.documents.find((d: any) => d.documentId === doc);
+    const uploader = w.managerA;
+    const before = [...evidence.objects.keys()].filter((k) => k.includes("/documents/")).length;
+    const spoof = await call("POST /v1/documents/{documentId}/versions", uploader, { path: { documentId: doc }, body: { organizationId: w.orgA, contentType: "application/pdf", fileBase64: syntheticPng().toString("base64"), expiresOn: "2099-01-01" } });
+    expect(spoof.status).toBe(422);
+    const big = await call("POST /v1/documents/{documentId}/versions", uploader, { path: { documentId: doc }, body: { organizationId: w.orgA, contentType: "application/pdf", fileBase64: Buffer.concat([pdf, Buffer.alloc(4_000_001)]).toString("base64"), expiresOn: "2099-01-01" } });
+    expect([400, 422]).toContain(big.status);
+    const noExpiry = await call("POST /v1/documents/{documentId}/versions", uploader, { path: { documentId: doc }, body: { organizationId: w.orgA, contentType: "application/pdf", fileBase64: pdf.toString("base64") } });
+    expect(noExpiry.status).toBe(422);
+    expect([...evidence.objects.keys()].filter((k) => k.includes("/documents/")).length).toBe(before);
+    expect(owner).toBeTruthy();
+  });
+
+  it("a storage failure saves nothing; a retry with the same key stores once and returns the same version", async () => {
+    evidence.failNextPut = true;
+    const failed = await call("POST /v1/documents/{documentId}/versions", w.managerA, { path: { documentId: doc }, body: { organizationId: w.orgA, contentType: "application/pdf", fileBase64: pdf.toString("base64"), expiresOn: "2099-01-01" } });
+    expect(failed.status).toBe(503);
+    expect((await docsOf(w.managerA)).body.documents.find((d: any) => d.documentId === doc).latestVersionId).toBeNull();
+
+    const key = randomUUID();
+    const body = { organizationId: w.orgA, contentType: "application/pdf", fileBase64: pdf.toString("base64"), issuedOn: "2026-01-02", expiresOn: "2099-01-01" };
+    const first = await call("POST /v1/documents/{documentId}/versions", w.managerA, { path: { documentId: doc }, body, key });
+    expect(first.status, JSON.stringify(first.body)).toBe(201);
+    const putsAfterFirst = [...evidence.objects.keys()].filter((k) => k.startsWith(`${w.orgA}/documents/${doc}/`)).length;
+    const retry = await call("POST /v1/documents/{documentId}/versions", w.managerA, { path: { documentId: doc }, body, key });
+    expect(retry.status).toBe(201);
+    expect(retry.body.version.documentVersionId).toBe(first.body.version.documentVersionId);
+    expect([...evidence.objects.keys()].filter((k) => k.startsWith(`${w.orgA}/documents/${doc}/`)).length).toBe(putsAfterFirst);
+    const stored = evidence.objects.get(`${w.orgA}/documents/${doc}/${first.body.version.documentVersionId}`)!;
+    expect(stored[0]!.contentType).toBe("application/pdf");
+  });
+
+  it("files are readable only by permitted people, with an integrity check; review needs a different person", async () => {
+    const v = (await docsOf(w.managerA)).body.documents.find((d: any) => d.documentId === doc).latestVersionId;
+    const file = await call("GET /v1/document-versions/{versionId}/file", w.ownerA, { path: { versionId: v } });
+    expect(file.status).toBe(200);
+    expect(Buffer.from(file.body.fileBase64, "base64").equals(pdf)).toBe(true);
+    for (const who of [w.managerB, w.outsider, w.schedulerA]) {
+      const denied = await call("GET /v1/document-versions/{versionId}/file", who, { path: { versionId: v } });
+      expect([401, 404]).toContain(denied.status);
+    }
+    const self = await call("POST /v1/document-versions/{versionId}/review", w.managerA, { path: { versionId: v }, body: { decision: "verified" } });
+    expect(self.status).toBe(403);
+    const ok = await call("POST /v1/document-versions/{versionId}/review", w.ownerA, { path: { versionId: v }, body: { decision: "verified" } });
+    expect(ok.status, JSON.stringify(ok.body)).toBe(200);
+    const alerts = await call("GET /v1/documents/alerts", w.managerA, { query: { organizationId: w.orgA } });
+    expect(alerts.body.alerts).toMatchObject({ expired: 0, awaitingReview: 0 });
   });
 });

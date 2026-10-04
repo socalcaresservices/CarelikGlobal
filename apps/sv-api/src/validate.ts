@@ -53,10 +53,10 @@ export function oneOf<T extends string>(value: unknown, name: string, allowed: r
 /** Max accepted JSON body (a 1 MiB PNG is ~1.4 MB base64) */
 export const MAX_BODY_BYTES = 1_500_000;
 
-export function parseBody(body: string | null | undefined, isBase64Encoded = false): Record<string, unknown> {
+export function parseBody(body: string | null | undefined, isBase64Encoded = false, maxBytes = MAX_BODY_BYTES): Record<string, unknown> {
   if (!body) return {};
   const raw = isBase64Encoded ? Buffer.from(body, "base64").toString("utf8") : body;
-  if (Buffer.byteLength(raw) > MAX_BODY_BYTES) throw badRequest("Request body is too large.");
+  if (Buffer.byteLength(raw) > maxBytes) throw badRequest("Request body is too large.");
   let parsed: unknown;
   try {
     parsed = JSON.parse(raw);

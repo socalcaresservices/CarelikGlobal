@@ -3,7 +3,7 @@ import { Link } from "react-router-dom";
 import { Card } from "@carelik/ui";
 import { useOrganization } from "@/providers/organization-provider";
 import { EXCEPTIONS_PATH } from "./aws-shell";
-import { hoursLabel, moneyLabel, useAttention, useUtilisation, type UtilisationRow } from "./aws-workspace";
+import { hoursLabel, moneyLabel, useAttention, useDocumentAlerts, useUtilisation, type UtilisationRow } from "./aws-workspace";
 
 function thisMonth(): string {
   const now = new Date();
@@ -28,12 +28,19 @@ export function AwsHomePage() {
   const rows = utilisation.data ?? [];
   const isOwnerFinance = hasPermission("billing.read");
   const a = attention.data;
+  const docAlerts = useDocumentAlerts().data;
 
   const items = a
     ? [
         { label: "Missing Time Out", count: a.missingTimeOut, to: EXCEPTIONS_PATH, hint: "Still open past the shift end, or 12 h without a schedule" },
         { label: "Not confirmed", count: a.notConfirmed, to: EXCEPTIONS_PATH, hint: "Ended over 60 min ago, no client confirmation yet" },
         { label: "Needs review", count: a.needsReview, to: EXCEPTIONS_PATH, hint: "Unconfirmed or over the authorization; not billable until reviewed" },
+        ...(docAlerts
+          ? [
+              { label: "Documents expired or overdue", count: docAlerts.expired + docAlerts.overdue, to: "/documents", hint: "Staff credentials past their expiry or due date" },
+              { label: "Documents to review", count: docAlerts.awaitingReview, to: "/documents", hint: `Uploaded, not yet verified · ${docAlerts.expiring} expiring within 30 days` },
+            ]
+          : []),
         ...(a.billingReadyUnapproved !== null
           ? [{ label: "Billing ready, not approved", count: a.billingReadyUnapproved, to: "/billing-review", hint: "Approval is a human step; it is not submission" }]
           : []),

@@ -25,8 +25,8 @@ beforeAll(async () => {
 });
 afterAll(async () => db?.drop());
 
-const one = async <T = Record<string, any>>(a: Actor, sql: string, params: unknown[] = []) =>
-  asActor(db, a.sub, async (c) => (await c.query(sql, params)).rows as T[]);
+const one = async <T = any>(a: Actor, sql: string, params: unknown[] = []) =>
+  asActor(db, a.sub, async (c) => (await c.query(sql, params)).rows as any[] as T[]);
 
 /** TEST-ONLY: shift a visit's server times into the past (triggers off, one connection). */
 async function shiftVisit(visit: string, minutes: number) {

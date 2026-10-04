@@ -13,10 +13,14 @@ export interface StoredObject {
   readonly contentType: string | null;
 }
 
-/** Private evidence store. Keys are UUID-only: {org}/{visit}/client-signature.png. */
+/**
+ * Private evidence store. Keys are UUID-only:
+ *   {org}/{visit}/client-signature.png            (signatures)
+ *   {org}/documents/{document}/{version}          (staff documents, 0021)
+ */
 export interface EvidenceStore {
-  put(key: string, bytes: Buffer, sha256: Buffer): Promise<{ versionId: string | null }>;
-  get(key: string, versionId: string | null): Promise<StoredObject>;
+  put(key: string, bytes: Buffer, sha256: Buffer, contentType?: string): Promise<{ versionId: string | null }>;
+  get(key: string, versionId: string | null, maxBytes?: number): Promise<StoredObject>;
 }
 
 export function signatureObjectKey(organizationId: string, visitId: string): string {
@@ -61,13 +65,13 @@ export function s3EvidenceStore(s3: S3Client, bucket: string, kmsKeyArn: string)
   const account = kmsKeyArn.split(":")[4];
   const expectedOwner = account && /^\d{12}$/.test(account) ? account : undefined;
   return {
-    async put(key, bytes, sha256) {
+    async put(key, bytes, sha256, contentType = "image/png") {
       const result = await s3.send(
         new PutObjectCommand({
           Bucket: bucket,
           Key: key,
           Body: bytes,
-          ContentType: "image/png",
+          ContentType: contentType,
           ContentLength: bytes.length,
           ChecksumSHA256: sha256.toString("base64"),
           ServerSideEncryption: "aws:kms",
@@ -78,7 +82,7 @@ export function s3EvidenceStore(s3: S3Client, bucket: string, kmsKeyArn: string)
       );
       return { versionId: result.VersionId ?? null };
     },
-    async get(key, versionId) {
+    async get(key, versionId, maxBytes = MAX_SIGNATURE_BYTES) {
       const result = await s3.send(
         new GetObjectCommand({
           Bucket: bucket,
@@ -89,7 +93,7 @@ export function s3EvidenceStore(s3: S3Client, bucket: string, kmsKeyArn: string)
       );
       if (!result.Body) throw new Error("empty object");
       const bytes = Buffer.from(await result.Body.transformToByteArray());
-      if (bytes.length > MAX_SIGNATURE_BYTES) throw new Error("object too large");
+      if (bytes.length > maxBytes) throw new Error("object too large");
       return { bytes, versionId: result.VersionId ?? null, contentType: result.ContentType ?? null };
     },
   };
@@ -97,11 +101,11 @@ export function s3EvidenceStore(s3: S3Client, bucket: string, kmsKeyArn: string)
 
 /** In-memory store for tests and local development. Versioned like the real bucket. */
 export class MemoryEvidenceStore implements EvidenceStore {
-  readonly objects = new Map<string, Array<{ versionId: string; bytes: Buffer }>>();
+  readonly objects = new Map<string, Array<{ versionId: string; bytes: Buffer; contentType: string }>>();
   private counter = 0;
   failNextPut = false;
 
-  async put(key: string, bytes: Buffer, sha256: Buffer) {
+  async put(key: string, bytes: Buffer, sha256: Buffer, contentType = "image/png") {
     if (this.failNextPut) {
       this.failNextPut = false;
       throw new Error("simulated S3 failure");
@@ -109,7 +113,7 @@ export class MemoryEvidenceStore implements EvidenceStore {
     if (!createHash("sha256").update(bytes).digest().equals(sha256)) throw new Error("checksum mismatch");
     const versionId = `v${++this.counter}`;
     const versions = this.objects.get(key) ?? [];
-    versions.push({ versionId, bytes: Buffer.from(bytes) });
+    versions.push({ versionId, bytes: Buffer.from(bytes), contentType });
     this.objects.set(key, versions);
     return { versionId };
   }
@@ -118,6 +122,6 @@ export class MemoryEvidenceStore implements EvidenceStore {
     const versions = this.objects.get(key) ?? [];
     const found = versionId ? versions.find((v) => v.versionId === versionId) : versions.at(-1);
     if (!found) throw Object.assign(new Error("NoSuchKey"), { name: "NoSuchKey" });
-    return { bytes: Buffer.from(found.bytes), versionId: found.versionId, contentType: "image/png" };
+    return { bytes: Buffer.from(found.bytes), versionId: found.versionId, contentType: found.contentType };
   }
 }

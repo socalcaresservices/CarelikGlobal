@@ -21,6 +21,8 @@ export function signatureBucketName(config: OgeviaEnvironmentConfig): string {
 
 /** Only object-key shape the application may read or write. */
 export const SIGNATURE_OBJECT_KEY_PATTERN = "*/*/client-signature.png";
+/** Staff documents (0021): {org}/documents/{document}/{version}. */
+export const DOCUMENT_OBJECT_KEY_PATTERN = "*/documents/*/*";
 
 export interface EvidenceStorageStackProps extends StackProps {
   readonly config: OgeviaEnvironmentConfig;

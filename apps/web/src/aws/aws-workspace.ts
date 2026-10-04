@@ -141,3 +141,21 @@ export function moneyLabel(cents: number | null | undefined): string | null {
   if (cents === null || cents === undefined) return null;
   return (Number(cents) / 100).toLocaleString("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 });
 }
+
+export interface DocumentAlerts {
+  expired: number;
+  expiring: number;
+  overdue: number;
+  awaitingReview: number;
+  rejected: number;
+}
+
+export function useDocumentAlerts() {
+  const api = useAwsApi();
+  const { activeOrganizationId, hasPermission } = useOrganization();
+  return useQuery({
+    queryKey: ["aws-document-alerts", activeOrganizationId],
+    queryFn: async () => (await api.get<{ alerts: DocumentAlerts | null }>("/v1/documents/alerts", { organizationId: activeOrganizationId })).alerts,
+    enabled: !!activeOrganizationId && hasPermission("documents.read"),
+  });
+}

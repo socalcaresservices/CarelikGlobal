@@ -1,7 +1,8 @@
-import { createHash, randomBytes } from "node:crypto";
+import { createHash, randomBytes, randomUUID } from "node:crypto";
 import type { Queryable } from "@carelik/auth/server";
 import { ApiError } from "./errors";
 import { signatureObjectKey, validateSignaturePng, type EvidenceStore } from "./evidence";
+import { documentObjectKey, MAX_DOCUMENT_BYTES, validateDocumentFile } from "./documents";
 import type { HttpApiEvent } from "./http";
 import {
   date,
@@ -462,6 +463,147 @@ export const ROUTES: Record<string, Route> = {
         return (r.rows[0] as { id: string }).id;
       });
       return { billingApprovalId };
+    },
+  },
+
+  // Staff documents (0021): request -> upload -> review. Files live in the
+  // private evidence bucket under {org}/documents/{document}/{version};
+  // the database authorizes every read and write.
+  "GET /v1/document-types": {
+    mutating: false,
+    handle: async ({ event, tx }) => ({
+      types: await tx((db) => rows(db, "select * from ogevia_api.list_document_types($1)", [orgParam(event)])),
+    }),
+  },
+
+  "POST /v1/document-types": {
+    status: 201,
+    mutating: true,
+    handle: async ({ event, tx }) => {
+      const body = parseBody(event.body, event.isBase64Encoded);
+      const key = idempotencyKey(event.headers);
+      const org = uuid(body.organizationId, "organizationId");
+      const name = text(body.name, "name", 80, { required: true });
+      const requiresExpiry = booleanValue(body.requiresExpiry, "requiresExpiry");
+      const documentTypeId = await tx(async (db) => {
+        const r = await db.query("select ogevia_api.create_document_type($1, $2, $3, $4) as id", [org, name, requiresExpiry, key]);
+        return (r.rows[0] as { id: string }).id;
+      });
+      return { documentTypeId };
+    },
+  },
+
+  "GET /v1/documents/people": {
+    mutating: false,
+    handle: async ({ event, tx }) => ({
+      people: await tx((db) => rows(db, "select * from ogevia_api.list_document_people($1)", [orgParam(event)])),
+    }),
+  },
+
+  "GET /v1/documents": {
+    mutating: false,
+    handle: async ({ event, tx }) => ({
+      documents: await tx((db) => rows(db, "select * from ogevia_api.list_staff_documents($1)", [orgParam(event)])),
+    }),
+  },
+
+  "GET /v1/documents/alerts": {
+    mutating: false,
+    handle: async ({ event, tx }) => {
+      const [alerts] = await tx((db) => rows(db, "select * from ogevia_api.get_document_alerts($1)", [orgParam(event)]));
+      return { alerts: alerts ?? null };
+    },
+  },
+
+  "POST /v1/documents/requests": {
+    status: 201,
+    mutating: true,
+    handle: async ({ event, tx }) => {
+      const body = parseBody(event.body, event.isBase64Encoded);
+      const key = idempotencyKey(event.headers);
+      const org = uuid(body.organizationId, "organizationId");
+      const person = uuid(body.caregiverRecordId, "caregiverRecordId");
+      const type = uuid(body.documentTypeId, "documentTypeId");
+      const dueOn = optionalDate(body.dueOn, "dueOn");
+      const documentId = await tx(async (db) => {
+        const r = await db.query("select ogevia_api.request_staff_document($1, $2, $3, $4, $5) as id", [org, person, type, dueOn, key]);
+        return (r.rows[0] as { id: string }).id;
+      });
+      return { documentId };
+    },
+  },
+
+  "POST /v1/documents/{documentId}/versions": {
+    status: 201,
+    mutating: true,
+    handle: async ({ event, tx, evidence }) => {
+      const documentId = uuid(p(event).documentId, "documentId");
+      // 4 MB as base64 (+33%) plus the JSON fields; under the 6 MB Lambda payload limit.
+      const body = parseBody(event.body, event.isBase64Encoded, 5_600_000);
+      const key = idempotencyKey(event.headers);
+      const org = uuid(body.organizationId, "organizationId");
+      const issuedOn = optionalDate(body.issuedOn, "issuedOn");
+      const expiresOn = optionalDate(body.expiresOn, "expiresOn");
+      const file = validateDocumentFile(body.fileBase64, body.contentType);
+
+      // 1. Retry of a request that already committed: return it, store nothing again.
+      const replay = () => tx((db) => rows(db, "select * from ogevia_api.get_document_upload_replay($1, $2)", [documentId, key]));
+      const [prior] = await replay();
+      if (prior) return { version: prior };
+
+      // 2. Authority and the cheap checks BEFORE writing to S3.
+      const [doc] = await tx((db) =>
+        rows(db, "select * from ogevia_api.list_staff_documents($1) where document_id = $2", [org, documentId]),
+      );
+      if (!doc) throw new ApiError(404, "not_found", "Document not found.");
+      if (doc.requiresExpiry && !expiresOn) throw new ApiError(422, "validation_failed", "This document type needs its expiry date.");
+      if (issuedOn && expiresOn && expiresOn <= issuedOn) throw new ApiError(422, "validation_failed", "The expiry date must be after the issue date.");
+
+      // 3. Store the file (SSE-KMS, checksum enforced), then record it.
+      const versionId = randomUUID();
+      const objectKey = documentObjectKey(org, documentId, versionId);
+      let s3VersionId: string | null;
+      try {
+        ({ versionId: s3VersionId } = await evidence.put(objectKey, file.bytes, file.sha256, file.contentType));
+      } catch {
+        throw new ApiError(503, "storage_unavailable", "The file could not be stored. Nothing was saved; please try again.");
+      }
+      const [version] = await tx((db) =>
+        rows(db, "select * from ogevia_api.register_document_version($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)", [
+          documentId, versionId, objectKey, s3VersionId, file.contentType, file.bytes.length, file.sha256Hex, issuedOn, expiresOn, key,
+        ]),
+      );
+      return { version };
+    },
+  },
+
+  "POST /v1/document-versions/{versionId}/review": {
+    mutating: true,
+    handle: async ({ event, tx }) => {
+      const versionId = uuid(p(event).versionId, "versionId");
+      const body = parseBody(event.body, event.isBase64Encoded);
+      const key = idempotencyKey(event.headers);
+      const decision = oneOf(body.decision, "decision", ["verified", "rejected"] as const);
+      const reason = text(body.reason, "reason", 1000);
+      const result = await tx(async (db) => {
+        const r = await db.query("select ogevia_api.review_document_version($1, $2, $3, $4) as d", [versionId, decision, reason, key]);
+        return (r.rows[0] as { d: string }).d;
+      });
+      return { decision: result };
+    },
+  },
+
+  "GET /v1/document-versions/{versionId}/file": {
+    mutating: false,
+    handle: async ({ event, tx, evidence }) => {
+      const versionId = uuid(p(event).versionId, "versionId");
+      // Authorized and audited in the database before any S3 read.
+      const [meta] = await tx((db) => rows(db, "select * from ogevia_api.open_document_version($1)", [versionId]));
+      if (!meta) throw new ApiError(404, "not_found", "Document not found.");
+      const stored = await evidence.get(meta.objectKey as string, (meta.s3VersionId as string | null) ?? null, MAX_DOCUMENT_BYTES);
+      const digest = createHash("sha256").update(stored.bytes).digest("hex");
+      if (digest !== meta.sha256) throw new ApiError(500, "integrity_error", "The stored file failed its integrity check.");
+      return { contentType: meta.contentType, fileBase64: stored.bytes.toString("base64"), sha256: digest };
     },
   },
 

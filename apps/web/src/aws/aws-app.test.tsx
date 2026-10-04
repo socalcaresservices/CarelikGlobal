@@ -2,7 +2,7 @@
 // the Ogevia AWS API. SYNTHETIC data only. lib/supabase is NOT mocked here: the
 // test proves the AWS runtime never creates a Supabase client.
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { AuthError, CognitoAuthProvider, type CognitoAuthClient } from "@carelik/auth";
 import { MemoryRouter } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -24,10 +24,12 @@ function fakeApi(role: "caregiver" | "manager" | "organization_owner", opts: { d
   const calls: Call[] = [];
   let visit: FakeVisit | null = null;
   let approvals: Record<string, unknown>[] = [];
+  const DOC = "dddddddd-0000-4000-8000-00000000d0c1";
+  let docStatus: "requested" | "awaiting_review" = role === "caregiver" ? "requested" : "awaiting_review";
   const permissions =
-    role === "manager" ? ["billing.approve", "billing.visits.read", "visits.manage", "visits.read"]
+    role === "manager" ? ["billing.approve", "billing.visits.read", "documents.manage", "documents.read", "visits.manage", "visits.read"]
     : role === "organization_owner" ? ["billing.approve", "billing.read", "billing.visits.read", "organization.update", "visits.manage", "visits.read"]
-    : [];
+    : ["availability.manage_own", "documents.manage_own"];
   const displayName = opts.displayName === undefined ? (role === "caregiver" ? "Caregiver A1" : role === "manager" ? "Morgan Manager" : "Olivia Owner") : opts.displayName;
   const canMoney = role === "organization_owner";
   const json = (status: number, body: unknown) => new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json" } });
@@ -68,6 +70,21 @@ function fakeApi(role: "caregiver" | "manager" | "organization_owner", opts: { d
         return json(200, { visits: [{ id: VISIT, visitNumber: "V-1", clientId: CLIENT, clientCode: "C-104", caregiverUserId: "u1", caregiverName: "CAREGIVER_A1", serviceId: SERVICE, serviceName: "Respite Care", serviceDate: "2026-09-30", timeIn: "2026-09-30T17:00:00Z", timeOut: "2026-09-30T19:00:00Z", workedMinutes: 120, verifiedMinutes: 120, billableMinutes: 120, status: "signed", authorizationStatus: "within_authorization", signedAt: "2026-09-30T19:01:00Z", originalVisitId: null, isCorrected: false, monthToDateBeforeMinutes: 0, monthToDateAfterMinutes: 120, remainingMinutes: 5880 }] });
       case "GET /v1/billing-review":
         return json(200, { visits: [{ visitId: VISIT, visitNumber: "V-1", serviceCode: "862", serviceDate: "2026-09-30", workedMinutes: 120, verifiedMinutes: 120, billableMinutes: 120, visitStatus: "signed", authorizationStatus: "within_authorization", authorizationVersion: 1, confirmationMethod: "draw", hasSignatureEvidence: true, isCorrection: false, reviewState: "ready" }] });
+      case "GET /v1/documents":
+        return json(200, { documents: [{ documentId: DOC, caregiverRecordId: "r1", personName: "Pilot Caregiver A", documentTypeId: "t1", documentTypeName: "TB test", requiresExpiry: true, dueOn: "2026-10-20", requestedAt: "2026-10-01T00:00:00Z",
+          latestVersionId: docStatus === "requested" ? null : "eeeeeeee-0000-4000-8000-00000000d0c2", latestVersionNumber: docStatus === "requested" ? null : 1, latestContentType: null, latestUploadedAt: docStatus === "requested" ? null : "2026-10-02T00:00:00Z",
+          latestReviewStatus: docStatus === "requested" ? null : "awaiting_review", latestRejectionReason: null, issuedOn: null, expiresOn: null, verifiedExpiresOn: null, displayStatus: docStatus, daysUntil: 16 }] });
+      case "GET /v1/document-types":
+        return json(200, { types: [{ documentTypeId: "t1", name: "TB test", requiresExpiry: true, isActive: true }] });
+      case "GET /v1/documents/people":
+        return json(200, { people: [{ caregiverRecordId: "r1", displayName: "Pilot Caregiver A", caregiverCode: "SCS-CG-A" }] });
+      case "GET /v1/documents/alerts":
+        return json(200, { alerts: { expired: 0, expiring: 1, overdue: 0, awaitingReview: 1, rejected: 0 } });
+      case `POST /v1/documents/${DOC}/versions`:
+        docStatus = "awaiting_review";
+        return json(201, { version: { documentVersionId: "eeeeeeee-0000-4000-8000-00000000d0c2", versionNumber: 1 } });
+      case "POST /v1/document-versions/eeeeeeee-0000-4000-8000-00000000d0c2/review":
+        return json(200, { decision: body?.["decision"] });
       case "GET /v1/billing-approvals":
         return json(200, { approvals });
       case `POST /v1/visits/${VISIT}/billing-approval`:
@@ -242,6 +259,41 @@ describe("AWS build: manager review and billing-review data", () => {
     expect(await screen.findByText(/by Manager A · not submitted/)).toBeInTheDocument();
     // No owner-only Amount column for a manager.
     expect(screen.queryByRole("columnheader", { name: "Amount" })).not.toBeInTheDocument();
+  });
+
+  it("caregiver: My documents shows the due date with days left; upload waits for the server and requires the expiry", async () => {
+    const { api } = renderAws("/documents", "caregiver");
+    expect(await screen.findByRole("heading", { name: "My documents" })).toBeInTheDocument();
+    expect(await screen.findByText("Due Oct 20, 2026 (in 16 days)")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Upload" }));
+    const file = new File([new Uint8Array([0x25, 0x50, 0x44, 0x46, 0x2d, 0x31])], "tb.pdf", { type: "application/pdf" });
+    fireEvent.change(screen.getByLabelText(/Photo or PDF/), { target: { files: [file] } });
+    fireEvent.click(screen.getByRole("button", { name: "Upload" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent("Enter the expiry date");
+    fireEvent.change(screen.getByLabelText(/Expiry date/), { target: { value: "2027-10-01" } });
+    fireEvent.click(screen.getByRole("button", { name: "Upload" }));
+    await waitFor(() => expect(screen.queryByRole("button", { name: /Uploading/ })).not.toBeInTheDocument());
+    expect(await screen.findByText("Uploaded – awaiting review")).toBeInTheDocument();
+    const post = api.calls.find((c) => c.method === "POST" && c.path.endsWith("/versions"))!;
+    expect(post.body).toMatchObject({ organizationId: ORG, contentType: "application/pdf", expiresOn: "2027-10-01", fileBase64: "JVBERi0x" });
+    expect(post.headers["idempotency-key"]).toBeTruthy();
+  });
+
+  it("manager: Documents lists people's requests; rejecting needs a reason; Home shows document alerts", async () => {
+    const { api } = renderAws("/", "manager");
+    expect(await screen.findByText("Documents to review")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("link", { name: "Documents" }));
+    expect(await screen.findByRole("heading", { name: "Documents" })).toBeInTheDocument();
+    const card = (await screen.findByText("TB test", { selector: "p" })).closest("li")!;
+    expect(within(card).getByText("Pilot Caregiver A")).toBeInTheDocument();
+    expect(within(card).getByText("Uploaded – awaiting review")).toBeInTheDocument();
+    fireEvent.click(within(card).getByRole("button", { name: "Reject" }));
+    expect(await within(card).findByRole("alert")).toHaveTextContent("Enter why it is rejected");
+    expect(api.calls.some((c) => c.method === "POST" && c.path.endsWith("/review"))).toBe(false);
+    fireEvent.click(within(card).getByRole("button", { name: "Verify" }));
+    await waitFor(() => expect(api.calls.some((c) => c.method === "POST" && c.path.endsWith("/review"))).toBe(true));
+    expect(screen.getByRole("button", { name: "Request document" })).toBeInTheDocument();
+    expect(api.calls.some((c) => c.path.startsWith("/v1/documents/people"))).toBe(true);
   });
 
   it("a caregiver sees no billing or records navigation", async () => {

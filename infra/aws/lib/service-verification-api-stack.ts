@@ -24,6 +24,7 @@ import { assertVerified, type OgeviaEnvironmentConfig } from "./config.js";
 import {
   SIGNATURE_OBJECT_KEY_PATTERN,
   signatureBucketName,
+  DOCUMENT_OBJECT_KEY_PATTERN,
 } from "./evidence-storage-stack.js";
 import { ExistingFoundation } from "./existing-foundation.js";
 
@@ -71,6 +72,15 @@ export const SERVICE_VERIFICATION_ROUTES: ReadonlyArray<{
   { method: apigw.HttpMethod.POST, path: "/v1/branding" },
   { method: apigw.HttpMethod.GET, path: "/v1/attention" },
   { method: apigw.HttpMethod.GET, path: "/v1/reports/utilisation" },
+  { method: apigw.HttpMethod.GET, path: "/v1/document-types" },
+  { method: apigw.HttpMethod.POST, path: "/v1/document-types" },
+  { method: apigw.HttpMethod.GET, path: "/v1/documents/people" },
+  { method: apigw.HttpMethod.GET, path: "/v1/documents" },
+  { method: apigw.HttpMethod.GET, path: "/v1/documents/alerts" },
+  { method: apigw.HttpMethod.POST, path: "/v1/documents/requests" },
+  { method: apigw.HttpMethod.POST, path: "/v1/documents/{documentId}/versions" },
+  { method: apigw.HttpMethod.POST, path: "/v1/document-versions/{versionId}/review" },
+  { method: apigw.HttpMethod.GET, path: "/v1/document-versions/{versionId}/file" },
   { method: apigw.HttpMethod.GET, path: "/v1/billing-approvals" },
   { method: apigw.HttpMethod.POST, path: "/v1/visits/{visitId}/billing-approval" },
   { method: apigw.HttpMethod.POST, path: "/v1/billing-approvals/{approvalId}/void" },
@@ -162,6 +172,7 @@ export class ServiceVerificationApiStack extends Stack {
     const { config } = props;
     const evidenceBucketName = signatureBucketName(config);
     const signatureObjectsArn = `arn:aws:s3:::${evidenceBucketName}/${SIGNATURE_OBJECT_KEY_PATTERN}`;
+    const documentObjectsArn = `arn:aws:s3:::${evidenceBucketName}/${DOCUMENT_OBJECT_KEY_PATTERN}`;
     assertVerified(config.auth, "API auth contract");
     const existing = new ExistingFoundation(this, "Existing", config.existing);
 
@@ -220,6 +231,14 @@ export class ServiceVerificationApiStack extends Stack {
         actions: ["s3:PutObject", "s3:GetObject", "s3:GetObjectVersion"],
         // Only the documented key shape {org_uuid}/{visit_uuid}/client-signature.png.
         resources: [signatureObjectsArn],
+      }),
+    );
+    policy.addStatements(
+      new iam.PolicyStatement({
+        sid: "StaffDocumentObjects",
+        actions: ["s3:PutObject", "s3:GetObject", "s3:GetObjectVersion"],
+        // Only {org_uuid}/documents/{document_uuid}/{version_uuid} (0021).
+        resources: [documentObjectsArn],
       }),
     );
     policy.addStatements(
@@ -358,6 +377,11 @@ export class ServiceVerificationApiStack extends Stack {
       id: `AwsSolutions-IAM5[Resource::${signatureObjectsArn}]`,
       reason:
         "Object keys are per-visit UUIDs unknown at deploy time; restricted to the documented */*/client-signature.png shape. Tenant ownership is checked in PostgreSQL before every write and read.",
+    });
+    Validations.of(policy).acknowledge({
+      id: `AwsSolutions-IAM5[Resource::${documentObjectsArn}]`,
+      reason:
+        "Staff document keys are per-document/per-version UUIDs unknown at deploy time; restricted to the documented */documents/*/* shape. Tenant and person access is checked in PostgreSQL before every write and read.",
     });
     for (const ack of [
       {
