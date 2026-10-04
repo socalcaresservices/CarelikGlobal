@@ -6,7 +6,7 @@ cat > ~/ogevia-release-0026-run.sh <<'EOF'
 # Nothing changes in AWS before you type DEPLOY.
 # Paste again to resume; completed steps are skipped.
 set -uo pipefail
-PIN=__PIN__
+PIN=0c739c91e4873f1c95a7dca2c5ccdf656703f7de
 BR=claude/ogevia-socal-pilot-prep-vfu5tf
 SRC=/tmp/ogevia-release-0026
 if [ "$(git -C "$SRC" rev-parse HEAD 2>/dev/null)" != "$PIN" ]; then
