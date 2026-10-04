@@ -20,11 +20,16 @@ const SUB = "11111111-2222-4333-8444-555555555555";
 type Call = { method: string; path: string; headers: Record<string, string>; body: Record<string, unknown> | null };
 type FakeVisit = Record<string, unknown>;
 
-function fakeApi(role: "caregiver" | "manager") {
+function fakeApi(role: "caregiver" | "manager" | "organization_owner", opts: { displayName?: string | null } = {}) {
   const calls: Call[] = [];
   let visit: FakeVisit | null = null;
   let approvals: Record<string, unknown>[] = [];
-  const permissions = role === "manager" ? ["billing.approve", "billing.visits.read", "visits.manage", "visits.read"] : [];
+  const permissions =
+    role === "manager" ? ["billing.approve", "billing.visits.read", "visits.manage", "visits.read"]
+    : role === "organization_owner" ? ["billing.approve", "billing.read", "billing.visits.read", "organization.update", "visits.manage", "visits.read"]
+    : [];
+  const displayName = opts.displayName === undefined ? (role === "caregiver" ? "Caregiver A1" : role === "manager" ? "Morgan Manager" : "Olivia Owner") : opts.displayName;
+  const canMoney = role === "organization_owner";
   const json = (status: number, body: unknown) => new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json" } });
   const fetchImpl = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = new URL(String(input));
@@ -35,7 +40,15 @@ function fakeApi(role: "caregiver" | "manager") {
     if (headers.authorization !== "Bearer synthetic-access-token") return json(401, { error: { code: "unauthenticated", message: "no" } });
     switch (key) {
       case "GET /v1/me":
-        return json(200, { memberships: [{ organizationId: ORG, organizationSlug: "org-a", organizationName: "Synthetic Care Co", organizationTimezone: "America/Los_Angeles", role, permissions }] });
+        return json(200, { memberships: [{ organizationId: ORG, organizationSlug: "org-a", organizationName: "Synthetic Care Co", organizationTimezone: "America/Los_Angeles", role, permissions }], profile: { displayName } });
+      case "GET /v1/branding":
+        return json(200, { branding: { organizationId: ORG, displayName: "Synthetic Care Co", accentColor: "#1f5f8b" } });
+      case "POST /v1/branding":
+        return json(200, { branding: { organizationId: ORG, displayName: body?.["displayName"], accentColor: body?.["accentColor"] } });
+      case "GET /v1/attention":
+        return json(200, { summary: role === "caregiver" ? null : { missingTimeOut: 1, notConfirmed: 0, needsReview: 2, billingReadyUnapproved: 1, total: 3 } });
+      case "GET /v1/reports/utilisation":
+        return json(200, { services: role === "caregiver" ? [] : [{ serviceId: SERVICE, serviceCode: "862", serviceName: "Respite Care", clientCount: 1, authorizedMinutes: 6000, scheduledMinutes: 240, workedMinutes: 1590, billableMinutes: 1470, reviewMinutes: 120, approvedMinutes: 600, remainingMinutes: 4530, lineagesWithoutRate: 0, billableValueCents: canMoney ? 73500 : null, approvedValueCents: canMoney ? 30000 : null, unusedValueCents: canMoney ? 226500 : null }] });
       case "GET /v1/visits/active":
         return json(200, { visit });
       case "GET /v1/clients/assigned":
@@ -82,8 +95,8 @@ function fakeAuth(signedIn = true) {
   };
 }
 
-function renderAws(path: string, role: "caregiver" | "manager", signedIn = true) {
-  const api = fakeApi(role);
+function renderAws(path: string, role: "caregiver" | "manager" | "organization_owner", signedIn = true, opts: { displayName?: string | null } = {}) {
+  const api = fakeApi(role, opts);
   const auth = fakeAuth(signedIn);
   const client = createAwsApiClient({ baseUrl: "https://api.example.test", getAccessToken: () => auth.getAccessToken(), fetch: api.fetchImpl as never });
   render(
@@ -149,10 +162,56 @@ describe("AWS build: caregiver vertical slice", () => {
 });
 
 describe("AWS build: manager review and billing-review data", () => {
-  it("manager lands on visit records loaded from the AWS API", async () => {
+  it("manager lands on Home: MANAGER VIEW with the real name, NEEDS ATTENTION with a count, hours without dollar values", async () => {
     const { api } = renderAws("/", "manager");
-    await waitFor(() => expect(api.calls.some((c) => c.path.startsWith("/v1/visits?organizationId="))).toBe(true));
-    expect(await screen.findByRole("link", { name: "Billing review" })).toBeInTheDocument();
+    expect(await screen.findByText("MANAGER VIEW")).toBeInTheDocument();
+    expect(await screen.findByText("Morgan Manager")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Sign out" })).toBeInTheDocument();
+    const attention = await screen.findByRole("link", { name: "Needs attention: 3 visits" });
+    expect(attention.getAttribute("href")).toBe("/service-verification/reports?view=exceptions");
+    expect(attention.className).toMatch(/font-bold/);
+    expect(attention.className).toMatch(/uppercase/);
+    expect(attention.className).toMatch(/text-red-700/);
+    // 1590 of 6000 minutes worked = 26.5 h of 100 h, 27 %.
+    expect(await screen.findByText(/26\.5 h of 100 h · 27%/)).toBeInTheDocument();
+    expect(screen.queryByText("Financial impact (owner only)")).not.toBeInTheDocument();
+    expect(screen.getByText(/visible to the agency owner only/)).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "Settings" })).not.toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Billing review" })).toBeInTheDocument();
+    expect(api.calls.some((c) => c.path.startsWith("/v1/attention?organizationId="))).toBe(true);
+  });
+
+  it("owner sees OWNER VIEW, the financial cards with unavailable cost/margin, and Settings", async () => {
+    renderAws("/", "organization_owner");
+    expect(await screen.findByText("OWNER VIEW")).toBeInTheDocument();
+    expect(await screen.findByText("Financial impact (owner only)")).toBeInTheDocument();
+    expect(screen.getByText("$735")).toBeInTheDocument();
+    expect(screen.getByText("Caregiver cost and margin")).toBeInTheDocument();
+    expect(screen.getByText(/no caregiver pay data/)).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Settings" })).toBeInTheDocument();
+  });
+
+  it("a missing name is shown explicitly with a way to add it, never replaced by the email", async () => {
+    renderAws("/", "manager", true, { displayName: null });
+    const link = await screen.findByRole("link", { name: /Name not set/ });
+    expect(link.getAttribute("href")).toBe("/profile");
+  });
+
+  it("owner branding: a colour too light for white text is refused before saving", async () => {
+    const { api } = renderAws("/settings/branding", "organization_owner");
+    const hex = await screen.findByLabelText("Hex");
+    await waitFor(() => expect(hex).toHaveValue("#1f5f8b"));
+    fireEvent.change(hex, { target: { value: "#ffd966" } });
+    expect(screen.getByText(/too light: needs 4\.5:1/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Save branding" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent("Choose a darker colour");
+    expect(api.calls.some((c) => c.method === "POST" && c.path === "/v1/branding")).toBe(false);
+    fireEvent.change(hex, { target: { value: "#14532d" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save branding" }));
+    expect(await screen.findByRole("status")).toHaveTextContent("Saved");
+    const post = api.calls.find((c) => c.method === "POST" && c.path === "/v1/branding")!;
+    expect(post.body).toMatchObject({ organizationId: ORG, accentColor: "#14532d" });
+    expect(post.headers["idempotency-key"]).toBeTruthy();
   });
 
   it("billing review shows Billing Ready (not billed) and the audited signature view", async () => {
@@ -188,6 +247,8 @@ describe("AWS build: manager review and billing-review data", () => {
   it("a caregiver sees no billing or records navigation", async () => {
     renderAws("/", "caregiver");
     await screen.findByRole("heading", { name: "Today's visits" });
+    expect(screen.getByText("CAREGIVER VIEW")).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: /Needs attention/i })).not.toBeInTheDocument();
     expect(screen.queryByRole("link", { name: "Billing review" })).not.toBeInTheDocument();
     expect(screen.queryByRole("link", { name: "Visit records" })).not.toBeInTheDocument();
   });

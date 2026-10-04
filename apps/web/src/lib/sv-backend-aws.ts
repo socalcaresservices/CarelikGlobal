@@ -32,8 +32,15 @@ export interface AwsMembership {
   permissions: string[];
 }
 
-export async function fetchMemberships(api: AwsApiClient): Promise<AwsMembership[]> {
-  return (await api.get<{ memberships: AwsMembership[] }>("/v1/me")).memberships;
+export interface AwsMe {
+  memberships: AwsMembership[];
+  /** The signed-in person's own name; null when they have not set one (never invented). */
+  displayName: string | null;
+}
+
+export async function fetchMe(api: AwsApiClient): Promise<AwsMe> {
+  const me = await api.get<{ memberships: AwsMembership[]; profile?: { displayName: string | null } }>("/v1/me");
+  return { memberships: me.memberships, displayName: me.profile?.displayName ?? null };
 }
 
 export function createAwsServiceVerificationBackend(

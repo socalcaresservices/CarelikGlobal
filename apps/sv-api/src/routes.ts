@@ -69,9 +69,72 @@ const orgParam = (event: HttpApiEvent) => uuid(q(event).organizationId, "organiz
 export const ROUTES: Record<string, Route> = {
   "GET /v1/me": {
     mutating: false,
-    handle: async ({ tx }) => ({
-      memberships: await tx((db) => rows(db, "select * from ogevia_api.get_my_context()", [])),
-    }),
+    handle: async ({ tx }) =>
+      tx(async (db) => {
+        const memberships = await rows(db, "select * from ogevia_api.get_my_context()", []);
+        const [profile] = await rows(db, "select display_name from ogevia_api.get_my_profile()", []);
+        // displayName is null when the person has not set one; the UI says so instead of inventing a name.
+        return { memberships, profile: { displayName: (profile?.displayName as string | null | undefined) ?? null } };
+      }),
+  },
+
+  "POST /v1/me/display-name": {
+    mutating: true,
+    handle: async ({ event, tx }) => {
+      const body = parseBody(event.body, event.isBase64Encoded);
+      const name = text(body.displayName, "displayName", 80, { required: true });
+      const displayName = await tx(async (db) => {
+        const r = await db.query("select ogevia_api.set_my_display_name($1) as name", [name]);
+        return (r.rows[0] as { name: string }).name;
+      });
+      return { profile: { displayName } };
+    },
+  },
+
+  // Agency name and accent colour (0020). Read: any member. Change: organization.update (owner).
+  "GET /v1/branding": {
+    mutating: false,
+    handle: async ({ event, tx }) => {
+      const org = orgParam(event);
+      const [branding] = await tx((db) => rows(db, "select * from ogevia_api.get_organization_branding($1)", [org]));
+      if (!branding) throw new ApiError(404, "not_found", "Organization not found.");
+      return { branding };
+    },
+  },
+
+  "POST /v1/branding": {
+    mutating: true,
+    handle: async ({ event, tx }) => {
+      const body = parseBody(event.body, event.isBase64Encoded);
+      const key = idempotencyKey(event.headers);
+      const org = uuid(body.organizationId, "organizationId");
+      const name = text(body.displayName, "displayName", 120, { required: true });
+      const color = body.accentColor === null || body.accentColor === undefined ? null : text(body.accentColor, "accentColor", 7);
+      const [branding] = await tx((db) =>
+        rows(db, "select * from ogevia_api.set_organization_branding($1, $2, $3, $4)", [org, name, color, key]),
+      );
+      return { branding };
+    },
+  },
+
+  // NEEDS ATTENTION counts (0020): visits.read; the billing count only with billing.visits.read.
+  "GET /v1/attention": {
+    mutating: false,
+    handle: async ({ event, tx }) => {
+      const org = orgParam(event);
+      const [summary] = await tx((db) => rows(db, "select * from ogevia_api.get_attention_summary($1)", [org]));
+      return { summary: summary ?? null };
+    },
+  },
+
+  // Monthly utilisation per service (0020): visits.read; dollar values only with billing.read (owner).
+  "GET /v1/reports/utilisation": {
+    mutating: false,
+    handle: async ({ event, tx }) => {
+      const org = orgParam(event);
+      const month = date(q(event).monthStart, "monthStart");
+      return { services: await tx((db) => rows(db, "select * from ogevia_api.get_utilisation_overview($1, $2)", [org, month])) };
+    },
   },
 
   "GET /v1/visits/active": {

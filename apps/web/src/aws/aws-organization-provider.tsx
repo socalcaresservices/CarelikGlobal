@@ -3,7 +3,8 @@ import { useAuth } from "@carelik/auth";
 import { permissionSchema, type Organization, type Permission, type SystemRole } from "@carelik/shared";
 import { useEffect, useMemo, useState, type PropsWithChildren } from "react";
 import type { AwsApiClient } from "@/lib/aws-api";
-import { fetchMemberships, type AwsMembership } from "@/lib/sv-backend-aws";
+import { fetchMe, type AwsMembership } from "@/lib/sv-backend-aws";
+import { AwsApiContext, meQueryKey } from "./aws-workspace";
 import { OrganizationContextProvider, type OrganizationContextValue } from "@/providers/organization-provider";
 
 const KNOWN_PERMISSIONS = new Set<string>(permissionSchema.options);
@@ -31,12 +32,12 @@ const selectionKey = (userId: string) => `ogevia.aws.activeOrganization.${userId
 export function AwsOrganizationProvider({ api, children }: PropsWithChildren<{ api: AwsApiClient }>) {
   const { user } = useAuth();
   const membershipsQuery = useQuery({
-    queryKey: ["aws-memberships", user?.id],
-    queryFn: () => fetchMemberships(api),
+    queryKey: meQueryKey(user?.id),
+    queryFn: () => fetchMe(api),
     enabled: !!user,
     staleTime: 60_000,
   });
-  const memberships = membershipsQuery.data;
+  const memberships = membershipsQuery.data?.memberships;
   const [selected, setSelected] = useState<string | null>(null);
 
   useEffect(() => {
@@ -85,5 +86,9 @@ export function AwsOrganizationProvider({ api, children }: PropsWithChildren<{ a
       </div>
     );
   }
-  return <OrganizationContextProvider value={value}>{children}</OrganizationContextProvider>;
+  return (
+    <AwsApiContext.Provider value={api}>
+      <OrganizationContextProvider value={value}>{children}</OrganizationContextProvider>
+    </AwsApiContext.Provider>
+  );
 }

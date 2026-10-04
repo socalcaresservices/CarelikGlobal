@@ -399,3 +399,44 @@ describe("human billing approval (0019) through the API", () => {
     expect(voided.status, JSON.stringify(voided.body)).toBe(200);
   });
 });
+
+describe("workspace (0020) through the API", () => {
+  it("GET /v1/me returns the caller's own display name (null when unset), and the caller can complete it", async () => {
+    const before = await call("GET /v1/me", w.schedulerA);
+    expect(before.status).toBe(200);
+    expect(before.body.profile).toHaveProperty("displayName");
+    const bad = await call("POST /v1/me/display-name", w.schedulerA, { body: { displayName: "" } });
+    expect(bad.status).toBe(400);
+    const ok = await call("POST /v1/me/display-name", w.schedulerA, { body: { displayName: "Synthetic Scheduler" } });
+    expect(ok.status, JSON.stringify(ok.body)).toBe(200);
+    expect((await call("GET /v1/me", w.schedulerA)).body.profile.displayName).toBe("Synthetic Scheduler");
+  });
+
+  it("branding: members read it; only the owner changes it; a too-light colour is refused", async () => {
+    const read = await call("GET /v1/branding", w.caregiverA1, { query: { organizationId: w.orgA } });
+    expect(read.status).toBe(200);
+    expect(read.body.branding).toHaveProperty("accentColor");
+    const denied = await call("POST /v1/branding", w.managerA, { body: { organizationId: w.orgA, displayName: "X Agency", accentColor: "#1f5f8b" } });
+    expect(denied.status).toBe(403);
+    const light = await call("POST /v1/branding", w.ownerA, { body: { organizationId: w.orgA, displayName: "Synthetic Agency A", accentColor: "#fff2cc" } });
+    expect(light.status).toBe(422);
+    const ok = await call("POST /v1/branding", w.ownerA, { body: { organizationId: w.orgA, displayName: "Synthetic Agency A", accentColor: "#1f5f8b" } });
+    expect(ok.status, JSON.stringify(ok.body)).toBe(200);
+    expect(ok.body.branding).toMatchObject({ displayName: "Synthetic Agency A", accentColor: "#1f5f8b" });
+    const other = await call("GET /v1/branding", w.managerB, { query: { organizationId: w.orgA } });
+    expect(other.status).toBe(404);
+  });
+
+  it("attention and utilisation: managers get counts and hours without dollar values; caregivers get nothing", async () => {
+    const a = await call("GET /v1/attention", w.managerA, { query: { organizationId: w.orgA } });
+    expect(a.status).toBe(200);
+    expect(a.body.summary).toHaveProperty("total");
+    expect((await call("GET /v1/attention", w.caregiverA1, { query: { organizationId: w.orgA } })).body.summary).toBeNull();
+    const month = new Date().toISOString().slice(0, 7) + "-01";
+    const m = await call("GET /v1/reports/utilisation", w.managerA, { query: { organizationId: w.orgA, monthStart: month } });
+    expect(m.status).toBe(200);
+    for (const row of m.body.services) expect(row).toMatchObject({ billableValueCents: null, approvedValueCents: null, unusedValueCents: null });
+    const c = await call("GET /v1/reports/utilisation", w.caregiverA1, { query: { organizationId: w.orgA, monthStart: month } });
+    expect(c.body.services).toEqual([]);
+  });
+});

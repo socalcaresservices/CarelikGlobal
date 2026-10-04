@@ -1,13 +1,27 @@
-import type { PropsWithChildren } from "react";
-import { Navigate, NavLink } from "react-router-dom";
+import { useState, type CSSProperties, type PropsWithChildren } from "react";
+import { Link, Navigate, NavLink, useLocation } from "react-router-dom";
 import { useAuth } from "@carelik/auth";
 import { cn } from "@carelik/ui";
 import { useOrganization } from "@/providers/organization-provider";
+import { useAttention, useBranding, useMyDisplayName, viewKind, VIEW_TITLE } from "./aws-workspace";
 
-/** Minimal shell for the AWS Service Verification build. */
+export const EXCEPTIONS_PATH = "/service-verification/reports?view=exceptions";
+const DEFAULT_ACCENT = "#0f172a"; // slate-900: the colour used before agency branding existed
+
+/**
+ * Shell for the AWS build: agency identity first, the signed-in person and
+ * their view (OWNER / MANAGER / CAREGIVER VIEW), NEEDS ATTENTION, and
+ * role-appropriate navigation. Navigation only decides what is shown; every
+ * screen's data is authorized again in PostgreSQL.
+ */
 export function AwsShell({ children }: PropsWithChildren) {
   const { signOut, user } = useAuth();
   const { organizations, activeOrganization, activeOrganizationId, setActiveOrganizationId, hasPermission, role, loading } = useOrganization();
+  const { displayName, loading: nameLoading } = useMyDisplayName();
+  const branding = useBranding();
+  const attention = useAttention();
+  const location = useLocation();
+  const [menuOpen, setMenuOpen] = useState(false);
 
   if (loading) {
     return <div className="flex min-h-screen items-center justify-center"><p className="text-sm text-slate-500">Loading…</p></div>;
@@ -24,47 +38,106 @@ export function AwsShell({ children }: PropsWithChildren) {
     );
   }
 
+  const view = viewKind(role);
+  const isCaregiver = view === "CAREGIVER";
+  const canSeeAttention = hasPermission("visits.read");
   const links = [
-    { to: "/service-verification", label: "Verify visit", show: role === "caregiver" || hasPermission("visits.manage") },
+    { to: "/", label: "Home", show: !isCaregiver },
+    { to: "/service-verification", label: "Verify visit", show: isCaregiver || hasPermission("visits.manage") },
     { to: "/service-verification/reports", label: "Visit records", show: hasPermission("visits.read") },
     { to: "/billing-review", label: "Billing review", show: hasPermission("billing.visits.read") },
     { to: "/care-requests", label: "Care requests", show: hasPermission("care_requests.read") },
-    { to: "/availability", label: "Availability", show: role === "caregiver" },
+    { to: "/availability", label: "Availability", show: isCaregiver },
+    { to: "/settings/branding", label: "Settings", show: hasPermission("organization.update") },
   ].filter((l) => l.show);
+  const current = links.find((l) => (l.to === "/" ? location.pathname === "/" : location.pathname.startsWith(l.to))) ?? null;
+  const agencyName = branding.data?.displayName ?? activeOrganization?.displayName ?? "Organization";
+  const accent = branding.data?.accentColor ?? DEFAULT_ACCENT;
+  const count = attention.data?.total ?? null;
 
   return (
-    <div className="min-h-screen bg-slate-50">
-      <header className="border-b border-slate-200 bg-white">
-        <div className="mx-auto flex max-w-6xl flex-wrap items-center gap-3 px-4 py-3">
-          <div className="min-w-0">
-            <p className="truncate text-base font-semibold text-slate-950">
-              {activeOrganization?.displayName ?? "Organization"}
-            </p>
-            <p className="text-[10px] font-medium uppercase tracking-wide text-slate-400">
-              Powered by Ogevia
-            </p>
+    <div className="min-h-screen bg-slate-50" style={{ "--agency-accent": accent } as CSSProperties}>
+      <header className="border-b border-slate-200 border-t-4 bg-white" style={{ borderTopColor: accent }}>
+        <div className="mx-auto max-w-6xl px-4 py-3">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div className="min-w-0">
+              <p className="truncate text-base font-semibold text-slate-950">{agencyName}</p>
+              <p className="text-[10px] font-medium uppercase tracking-wide text-slate-500">Powered by Ogevia</p>
+            </div>
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-right">
+              <div className="min-w-0">
+                <p className="text-xs font-bold uppercase tracking-wide" style={{ color: accent }} data-testid="view-label">
+                  {view} VIEW
+                </p>
+                <p className="text-sm text-slate-900">
+                  {VIEW_TITLE[view]}:{" "}
+                  {displayName ? (
+                    <span className="font-medium">{displayName}</span>
+                  ) : nameLoading ? (
+                    <span className="text-slate-500">…</span>
+                  ) : (
+                    <Link to="/profile" className="font-medium text-amber-800 underline">Name not set – add your name</Link>
+                  )}
+                </p>
+                <p className="truncate text-xs text-slate-500">
+                  {user?.email}
+                  {displayName ? <> · <Link to="/profile" className="underline">Profile</Link></> : null}
+                </p>
+              </div>
+              <button type="button" className="min-h-[40px] rounded-lg border border-slate-300 px-3 text-sm font-medium text-slate-800 hover:bg-slate-100" onClick={() => void signOut()}>
+                Sign out
+              </button>
+            </div>
           </div>
           {organizations.length > 1 ? (
             <select
               aria-label="Organization"
               value={activeOrganizationId}
               onChange={(e) => setActiveOrganizationId(e.target.value)}
-              className="rounded-lg border border-slate-200 px-2 py-1 text-sm"
+              className="mt-2 rounded-lg border border-slate-200 px-2 py-1 text-sm"
             >
               {organizations.map((o) => <option key={o.id} value={o.id}>{o.displayName}</option>)}
             </select>
           ) : null}
-          <nav className="flex flex-wrap gap-1" aria-label="Main">
+          <div className="mt-3 flex flex-wrap items-center gap-2">
+            {canSeeAttention ? (
+              <Link
+                to={EXCEPTIONS_PATH}
+                className="inline-flex min-h-[40px] items-center gap-2 rounded-lg border-2 border-red-700 px-3 text-sm font-bold uppercase tracking-wide text-red-700 hover:bg-red-50"
+                aria-label={count === null ? "Needs attention" : `Needs attention: ${count} ${count === 1 ? "visit" : "visits"}`}
+              >
+                <span aria-hidden="true">⚠</span> Needs attention
+                {count !== null ? <span className="rounded-full bg-red-700 px-2 py-0.5 text-xs text-white">{count}</span> : null}
+              </Link>
+            ) : null}
+            <button
+              type="button"
+              className="inline-flex min-h-[40px] items-center gap-2 rounded-lg border border-slate-300 px-3 text-sm font-medium text-slate-800 md:hidden"
+              aria-expanded={menuOpen}
+              aria-controls="aws-main-nav"
+              onClick={() => setMenuOpen((o) => !o)}
+            >
+              Menu <span className="text-slate-500">· {current?.label ?? "Choose a section"}</span>
+            </button>
+          </div>
+          <nav
+            id="aws-main-nav"
+            aria-label="Main"
+            className={cn("mt-2 flex-col gap-1 md:flex md:flex-row md:flex-wrap", menuOpen ? "flex" : "hidden")}
+          >
             {links.map((l) => (
-              <NavLink key={l.to} to={l.to} end className={({ isActive }) => cn("rounded-lg px-3 py-1.5 text-sm", isActive ? "bg-slate-900 text-white" : "text-slate-700 hover:bg-slate-100")}>
+              <NavLink
+                key={l.to}
+                to={l.to}
+                end={l.to === "/"}
+                onClick={() => setMenuOpen(false)}
+                className={({ isActive }) => cn("rounded-lg px-3 py-2 text-sm", isActive ? "font-medium text-white" : "text-slate-700 hover:bg-slate-100")}
+                style={({ isActive }) => (isActive ? { backgroundColor: accent } : undefined)}
+              >
                 {l.label}
               </NavLink>
             ))}
           </nav>
-          <div className="ml-auto flex items-center gap-3">
-            <span className="hidden text-xs text-slate-500 sm:inline">{user?.email}</span>
-            <button type="button" className="text-sm text-slate-700 underline" onClick={() => void signOut()}>Sign out</button>
-          </div>
         </div>
       </header>
       <main className="mx-auto max-w-6xl px-4 py-6">{children}</main>
@@ -72,10 +145,10 @@ export function AwsShell({ children }: PropsWithChildren) {
   );
 }
 
-/** Caregivers land on Verify Visit; reviewers on Visit records. */
-export function AwsLanding() {
+/** Caregivers land on Verify Visit; everyone else on Home. */
+export function AwsLanding({ home }: { home: React.ReactNode }) {
   const { role, hasPermission } = useOrganization();
   if (role === "caregiver") return <Navigate to="/service-verification" replace />;
-  if (hasPermission("visits.read")) return <Navigate to="/service-verification/reports" replace />;
+  if (hasPermission("visits.read")) return <>{home}</>;
   return <p className="text-sm text-slate-600">Your role has no Service Verification screens.</p>;
 }
