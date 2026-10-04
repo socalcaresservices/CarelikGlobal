@@ -172,6 +172,42 @@ Proposal: `docs/product/PRICING_PROPOSAL.md`. It is a recommendation. Nothing is
 | Phone retest of changed workflows | After deployment (plan section 6) |
 | Production correction fix | Kept separate; needs its own approval |
 
+## 17. Outage continuity and recovery (requirement recorded 2026-10-04)
+
+**Owner requirement, recorded as stated:** outage continuity and recovery are part of pilot readiness.
+- Verify database, documents/signatures, account access and application recovery together.
+- State the measured recovery time and the maximum potential data loss. Do not invent guarantees.
+- Define how each agency can securely reach a recent operational export, with its "last updated" time, while Ogevia is unavailable.
+- Provide a temporary visit-recording and reconciliation process that prevents lost or duplicate hours.
+- Explain which parts already work, which need implementation, and what each agency must set up.
+- Keep agency exports isolated and restricted to authorised staff.
+- Do not claim that AWS database backups alone provide agency continuity.
+
+**Sequencing (owner instruction):** this work does not change the 0019–0021 recovery block or its pins. It starts after the permission fix is deployed and the recovery is verified live (blocker 0). It must be finished before real-client readiness is declared.
+
+**Acceptance criteria:**
+
+| # | Criterion | Evidence required |
+| --- | --- | --- |
+| C1 | One combined recovery drill restores together: the database (to a new instance), document and signature objects (versioned S3, referenced keys resolve), account access (Cognito users can sign in and keep their roles and agency), and the application (API and web work against the recovered data) | A drill log with start and end times for each part |
+| C2 | Recovery time, as measured | Measured minutes from the drill; no target is stated as a guarantee |
+| C3 | Maximum potential data loss, per data type, from the actual configuration | Database (backup and point-in-time settings as read live), S3 objects, Cognito, and anything outside them, each stated with its source |
+| C4 | Each agency has a recent operational export, reachable while Ogevia is down, with a "last updated" time | A design and implementation, tested with two agencies: each sees only its own export, only authorised staff can open it, and the export holds no more data than needed for the minimum required |
+| C5 | Temporary visit recording during an outage, and reconciliation afterwards, with no lost or duplicate hours | A written procedure plus the system support for entering outage visits as provisional exception visits, with duplicate detection and an audit trail. Must be rehearsed |
+| C6 | A status table: works now / needs implementation / agency must set up | Each row supported by evidence |
+
+**Initial evidence (for the assessment; not the assessment itself):**
+
+| Part | What is known | Class |
+| --- | --- | --- |
+| Database | RDS automated backups for 7 days with point-in-time recovery (Phase 7 E1). One restore to a new instance on 2026-10-03: ledger and row counts matched. The duration was **not measured** (the script reported a false 0 seconds; corrected to report "unknown") | OWNER-REPORTED; recovery time UNKNOWN |
+| Documents and signatures | Evidence bucket versioned, KMS-encrypted, private. Never restored together with the database | VERIFIED controls; joint recovery NOT VERIFIED |
+| Account access | Cognito with deletion protection and MFA. No user-pool backup or restore path has been defined or tested | NOT VERIFIED |
+| Application | Infrastructure as code (CDK) plus pinned deploy scripts. Rebuilding it against a restored database was never drilled | NOT VERIFIED |
+| Agency export while Ogevia is down | Does not exist. The existing reports and rollback exports run inside Ogevia or CloudShell, so they are unavailable in the same outage | NOT BUILT |
+| Temporary visit recording | The Phase 7 risk table assumes "paper, corrected later with audit history". No procedure, form or reconciliation support is defined | NOT BUILT |
+| Continuity from backups alone | Not sufficient: backups restore data after an outage; they give no agency access to visits, schedules or authorizations during one | — |
+
 ## Summary: why NOT READY for real clients, and what clears it
 
 | # | Blocker | Next step owner | Next action | Fits the 13:20 target? |
@@ -183,5 +219,6 @@ Proposal: `docs/product/PRICING_PROPOSAL.md`. It is a recommendation. Nothing is
 | 4 | G1 alarm subscriber and D2 account S3 public-access block | Owner | `phase7-remediate.sh`, type APPLY, confirm the alarm email | About 10 minutes |
 | 5 | HIPAA operating policies not confirmed | Owner | Confirm in writing | Owner decision |
 | 6 | Phone/screen retest of changed workflows on real AWS | Owner | After deployments (plan section 6) | — |
+| 7 | Outage continuity and recovery (section 17): combined recovery drill with measured recovery time and data loss; per-agency offline export with a "last updated" time; outage visit recording and reconciliation | Claude (assess, build) + Owner (drill run, agency setup) | Starts after 0 is verified; the recovery block is not changed | — |
 
-Verdict unchanged: **NOT READY** for real clients. After 0, 1, 4 and 6 it is ready for a synthetic-data dress rehearsal of everything except staff-created shifts and call-outs.
+Verdict unchanged: **NOT READY** for real clients. After 0, 1, 4 and 6 it is ready for a synthetic-data dress rehearsal of everything except staff-created shifts and call-outs. Real-client readiness also requires 7 (outage continuity and recovery), 3 and 5.
