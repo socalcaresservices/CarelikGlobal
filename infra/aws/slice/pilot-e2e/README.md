@@ -47,3 +47,13 @@ Result 2026-10-04: 28/28 PASS at 390 px.
 - audit rows in the database.
 
 Result 2026-10-04: 20/20 PASS at 390 px.
+
+## Assignments (0024)
+
+`assignments-e2e.ts` uses the same setup, with database `ogevia_assign_e2e` migrated to 0024. It checks:
+- manager: add a client and authorization, assign a signed-in caregiver, who then sees the client on Verify visit;
+- an uncovered assignment is flagged; a caregiver without a sign-in cannot be chosen;
+- cancel an upcoming assignment and end a current one;
+- audit and assignment rows in the database.
+
+Result 2026-10-04: 19/19 PASS at 390 px.

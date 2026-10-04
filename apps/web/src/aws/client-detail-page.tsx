@@ -11,6 +11,7 @@ import {
   useClientAuthorizations, useClients, useMonthlyBalances, useServices,
   type AdminClient, type AuthorizationVersion, type ClientStatus,
 } from "./client-admin";
+import { AssignmentsCard } from "./assignments-card";
 import { ClientTypeField } from "./clients-page";
 
 const message = (cause: unknown, fallback: string) => (cause instanceof Error ? cause.message : fallback);
@@ -370,6 +371,7 @@ export function ClientDetailPage() {
         <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${STATUS_BADGE[c.status]}`}>{STATUS_LABEL[c.status]}</span>
       </div>
       <AuthorizationsCard clientId={c.clientId} />
+      <AssignmentsCard clientId={c.clientId} />
       <DetailsCard c={c} canManage={canManage} />
       {canManage ? <StatusCard c={c} /> : null}
     </div>

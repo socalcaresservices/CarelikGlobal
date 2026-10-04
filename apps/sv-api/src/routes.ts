@@ -456,6 +456,52 @@ export const ROUTES: Record<string, Route> = {
     },
   },
 
+  // Assignments (0024): assignments.manage (Administrator, manager); list with visits.read.
+  "GET /v1/assignments": {
+    mutating: false,
+    handle: async ({ event, tx }) => {
+      const query = q(event);
+      const client = optionalUuid(query.clientId, "clientId");
+      const caregiver = optionalUuid(query.caregiverRecordId, "caregiverRecordId");
+      return {
+        assignments: await tx((db) => rows(db, "select * from ogevia_api.list_assignments($1, $2, $3)", [orgParam(event), client, caregiver])),
+      };
+    },
+  },
+
+  "POST /v1/assignments": {
+    status: 201,
+    mutating: true,
+    handle: async ({ event, tx }) => {
+      const body = parseBody(event.body, event.isBase64Encoded);
+      const key = idempotencyKey(event.headers);
+      const org = uuid(body.organizationId, "organizationId");
+      const caregiver = uuid(body.caregiverRecordId, "caregiverRecordId");
+      const client = uuid(body.clientId, "clientId");
+      const service = uuid(body.serviceId, "serviceId");
+      const start = date(body.effectiveStart, "effectiveStart");
+      const end = optionalDate(body.effectiveEnd, "effectiveEnd");
+      const [created] = await tx((db) =>
+        rows(db, "select * from ogevia_api.create_assignment($1, $2, $3, $4, $5, $6, $7)", [org, caregiver, client, service, start, end, key]));
+      return { assignment: created };
+    },
+  },
+
+  "POST /v1/assignments/{assignmentId}/end": {
+    mutating: true,
+    handle: async ({ event, tx }) => {
+      const assignment = uuid(p(event).assignmentId, "assignmentId");
+      const body = parseBody(event.body, event.isBase64Encoded);
+      const key = idempotencyKey(event.headers);
+      const org = uuid(body.organizationId, "organizationId");
+      const end = optionalDate(body.lastDay, "lastDay");
+      const reason = text(body.reason, "reason", 500, { required: true });
+      const outcome = await tx(async (db) =>
+        ((await db.query("select ogevia_api.end_assignment($1, $2, $3, $4, $5) as outcome", [org, assignment, end, reason, key])).rows[0] as { outcome: string }).outcome);
+      return { outcome };
+    },
+  },
+
   // NEEDS ATTENTION counts (0020): visits.read; the billing count only with billing.visits.read.
   "GET /v1/attention": {
     mutating: false,

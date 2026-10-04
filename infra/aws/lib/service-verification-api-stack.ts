@@ -97,6 +97,10 @@ export const SERVICE_VERIFICATION_ROUTES: ReadonlyArray<{
   { method: apigw.HttpMethod.POST, path: "/v1/services" },
   { method: apigw.HttpMethod.POST, path: "/v1/services/{serviceId}/name" },
   { method: apigw.HttpMethod.POST, path: "/v1/services/{serviceId}/status" },
+  // Assignments (0024).
+  { method: apigw.HttpMethod.GET, path: "/v1/assignments" },
+  { method: apigw.HttpMethod.POST, path: "/v1/assignments" },
+  { method: apigw.HttpMethod.POST, path: "/v1/assignments/{assignmentId}/end" },
   { method: apigw.HttpMethod.GET, path: "/v1/document-types" },
   { method: apigw.HttpMethod.POST, path: "/v1/document-types" },
   { method: apigw.HttpMethod.GET, path: "/v1/documents/people" },

@@ -636,3 +636,28 @@ describe("Care Team and services (0023) through the API", () => {
     expect(list.body.services.find((s: any) => s.serviceId === serviceId)).toMatchObject({ code: "API-1", name: "Synthetic Api Service 2", isActive: false });
   });
 });
+
+describe("assignments (0024) through the API", () => {
+  it("manager assigns a signed-in caregiver, sees coverage and state, refuses overlap, and ends it; caregivers cannot", async () => {
+    const sub = crypto.randomUUID();
+    const userId = (await db.admin.query("insert into ogevia.app_users (cognito_sub, display_name) values ($1, 'Synthetic Caregiver') returning id", [sub])).rows[0].id;
+    await db.admin.query("insert into ogevia.organization_memberships (organization_id, user_id, role, status) values ($1, $2, 'caregiver', 'active')", [w.orgA, userId]);
+    const record = (await db.admin.query("insert into ogevia.caregiver_records (organization_id, linked_user_id, caregiver_code, first_name, last_name) values ($1, $2, $3, 'Synthetic', $3) returning id",
+      [w.orgA, userId, "API-" + sub.slice(0, 6)])).rows[0].id as string;
+    const today = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Los_Angeles" }).format(new Date());
+    const body = { organizationId: w.orgA, caregiverRecordId: record, clientId: w.clientA1, serviceId: w.serviceA, effectiveStart: today };
+    const created = await call("POST /v1/assignments", w.managerA, { body });
+    expect(created.status, JSON.stringify(created.body)).toBe(201);
+    expect(created.body.assignment.hasAuthorization).toBe(true);
+    const id = created.body.assignment.assignmentId as string;
+    expect((await call("POST /v1/assignments", w.managerA, { body })).status).toBe(409);
+    expect((await call("POST /v1/assignments", w.caregiverA1, { body })).status).toBe(403);
+    expect((await call("POST /v1/assignments", w.managerA, { body: { ...body, effectiveStart: "not-a-date" } })).status).toBe(400);
+    const list = await call("GET /v1/assignments", w.managerA, { query: { organizationId: w.orgA, caregiverRecordId: record } });
+    expect(list.body.assignments).toEqual([expect.objectContaining({ assignmentId: id, state: "current", hasAuthorization: true })]);
+    expect((await call("POST /v1/assignments/{assignmentId}/end", w.managerA, { path: { assignmentId: id }, body: { organizationId: w.orgA, lastDay: today } })).status).toBe(400);
+    const ended = await call("POST /v1/assignments/{assignmentId}/end", w.managerA, { path: { assignmentId: id }, body: { organizationId: w.orgA, lastDay: today, reason: "Schedule change (synthetic)" } });
+    expect(ended.body).toEqual({ outcome: "ends_later" });
+    expect((await call("GET /v1/assignments", w.managerB, { query: { organizationId: w.orgA } })).body.assignments).toEqual([]);
+  });
+});

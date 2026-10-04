@@ -46,6 +46,8 @@ function fakeApi(role: Role) {
         return json(201, { serviceId: "s2" });
       case `POST /v1/services/${SVC}/status`:
         return json(409, { error: { code: "conflict", message: "Clients still have current authorizations for this service; let them end or amend them first" } });
+      case "GET /v1/assignments":
+        return json(200, { assignments: [] });
       default:
         return json(404, { error: { code: "not_found", message: "No such endpoint." } });
     }

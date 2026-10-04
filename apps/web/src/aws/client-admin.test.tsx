@@ -60,6 +60,8 @@ function fakeApi(role: Role) {
       case `POST /v1/authorizations/${AUTH1}/amend`:
         versions = [version({ authorizationId: "a2", versionNumber: 2, monthlyAuthorizedMinutes: body?.monthlyAuthorizedMinutes as number, changeReason: body?.reason as string }), version({ isCurrent: false })];
         return json(200, { newAuthorizationId: "a2", newVersionNumber: 2, affectedVisits: [{ visitId: "v1", status: "signed", serviceDate: "2026-10-02", workedMinutes: 120, billableMinutes: 120, impact: "decrease_now_exceeds" }] });
+      case "GET /v1/assignments":
+        return json(200, { assignments: [] });
       default:
         return json(404, { error: { code: "not_found", message: "No such endpoint." } });
     }

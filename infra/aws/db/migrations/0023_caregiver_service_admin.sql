@@ -54,7 +54,8 @@ as $$
          cr.linked_user_id is not null,
          m.status::text,
          (select count(*)::integer from ogevia.caregiver_assignments a
-           where a.organization_id = cr.organization_id and a.caregiver_user_id = cr.linked_user_id and a.is_active),
+           where a.organization_id = cr.organization_id and a.caregiver_user_id = cr.linked_user_id and a.is_active
+             and (a.effective_end is null or a.effective_end >= ogevia.organization_local_date(cr.organization_id, now()))),
          (select count(*)::integer from ogevia.service_visits v
            where v.organization_id = cr.organization_id and v.status = 'draft'
              and (v.caregiver_record_id = cr.id or (cr.linked_user_id is not null and v.caregiver_user_id = cr.linked_user_id))),

@@ -4,6 +4,7 @@ import { Link, useParams } from "react-router-dom";
 import { Button, Card } from "@carelik/ui";
 import { newIdempotencyKey } from "@/lib/sv-backend";
 import { useOrganization } from "@/providers/organization-provider";
+import { AssignmentsCard } from "./assignments-card";
 import { useAwsApi } from "./aws-workspace";
 import {
   CAREGIVER_STATUS_BADGE, CAREGIVER_STATUS_LABEL, caregiverName, signInLabel, useCaregivers,
@@ -249,6 +250,7 @@ export function CaregiverDetailPage() {
         <p><span className="font-semibold">{signInLabel(c)}.</span> {c.hasSignIn ? "" : "Inviting a caregiver to sign in is not available on this screen yet."}</p>
         <p className="mt-1">{c.activeAssignments} active assignment{c.activeAssignments === 1 ? "" : "s"}{c.openVisits > 0 ? ` · ${c.openVisits} visit in progress` : ""}</p>
       </Card>
+      <AssignmentsCard caregiverRecordId={c.caregiverRecordId} />
       {canManage ? <CaregiverDetails c={c} /> : null}
       {canManage ? <CaregiverStatusCard c={c} /> : null}
     </div>

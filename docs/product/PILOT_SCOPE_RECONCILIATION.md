@@ -74,7 +74,7 @@
 | Availability; shifts created through Care Requests with authorization checks | LIVE | Pilot section B (pre-deployment result; B4 refusal not re-reported) |
 | Visits linked to scheduled shifts; unscheduled visits flagged for review; overlaps prevented | LIVE | 0016/0017 shift link; `start_ad_hoc_service_visit`; one open visit per caregiver; overlap check in close-out |
 | **Call-outs, replacement caregivers, uncovered-shift view, coverage history screens** | **NEEDS IMPLEMENTATION** | `shift_coverage_events` table exists, but there is no API or screen for it |
-| Assignment management screens | NEEDS IMPLEMENTATION | Assignments are seeded by SQL |
+| Assignment management screens | **BUILT, NOT YET DEPLOYED** (migration 0024, 2026-10-04) | On the client page ("Caregivers assigned") and the caregiver page ("Clients assigned"): assign with a first day (defaults to the agency's local today) and an optional last day. The caregiver must have a sign-in; overlapping assignments for the same caregiver, client and service are refused (two simultaneous attempts: exactly one succeeds); a missing authorization is flagged in red, not hidden. End with a reason: a future assignment is cancelled; a running one gets a last day (shortening only); ending before today is refused while a visit is in progress. Audited. Tests: DB 7, API 1, web 2, browser 19/19 at 390 px (a caregiver gains the client on Verify visit once assigned). |
 
 ## 7. Visit verification
 
@@ -171,7 +171,7 @@ Proposal: `docs/product/PRICING_PROPOSAL.md`. It is a recommendation. Nothing is
 
 | # | Blocker | Owner of the next step | Next action | Fits today's 13:20 target? |
 | --- | --- | --- | --- | --- |
-| 1 | Clients and authorizations: **built, needs a reviewed deployment** (0022 plus 10 API routes). Caregivers and services: **built, needs a reviewed deployment** (0023 plus 7 routes). Still missing: caregiver sign-in invitations, assignments and shifts (sections 4–6). | Claude (build) | Port the Supabase screens to the AWS API, starting with authorizations, then clients, team and schedule (inventory order), with permission, versioning and double-count tests | **No.** Several days. |
+| 1 | Clients and authorizations: **built, needs a reviewed deployment** (0022 plus 10 API routes). Caregivers and services: **built, needs a reviewed deployment** (0023 plus 7 routes). Assignments: **built, needs a reviewed deployment** (0024 plus 3 routes). Still missing: caregiver sign-in invitations and shift scheduling with call-outs (sections 4–6). | Claude (build) | Port the Supabase screens to the AWS API, starting with authorizations, then clients, team and schedule (inventory order), with permission, versioning and double-count tests | **No.** Several days. |
 | 2 | Utilisation dashboard beyond monthly per service (section 9) | Claude (build) | Periods, breakdowns, coverage and expiry warnings, projections | **No** |
 | 3 | G1 and D2 not applied | Owner | Run `phase7-remediate.sh`, type APPLY, confirm the alarm email | Yes, about 10 minutes |
 | 4 | HIPAA operating policies not confirmed | Owner | Confirm in writing | Owner decision |
