@@ -51,7 +51,11 @@ export function AwsShell({ children }: PropsWithChildren) {
     { to: "/availability", label: "Availability", show: isCaregiver },
     { to: "/settings/branding", label: "Settings", show: hasPermission("organization.update") },
   ].filter((l) => l.show);
-  const current = links.find((l) => (l.to === "/" ? location.pathname === "/" : location.pathname.startsWith(l.to))) ?? null;
+  // Longest matching path wins (/service-verification/reports is Visit records, not Verify visit).
+  const current =
+    links
+      .filter((l) => (l.to === "/" ? location.pathname === "/" : location.pathname === l.to || location.pathname.startsWith(`${l.to}/`)))
+      .sort((a, b) => b.to.length - a.to.length)[0] ?? null;
   const agencyName = branding.data?.displayName ?? activeOrganization?.displayName ?? "Organization";
   const accent = branding.data?.accentColor ?? DEFAULT_ACCENT;
   const count = attention.data?.total ?? null;

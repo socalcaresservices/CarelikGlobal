@@ -296,6 +296,13 @@ describe("AWS build: manager review and billing-review data", () => {
     expect(api.calls.some((c) => c.path.startsWith("/v1/documents/people"))).toBe(true);
   });
 
+  it("NEEDS ATTENTION opens the exceptions view; the Visit records menu item returns to the visit list", async () => {
+    renderAws("/service-verification/reports?view=exceptions", "manager");
+    expect(await screen.findByRole("heading", { name: "Needs attention" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("link", { name: "Visit records" }));
+    expect(await screen.findByRole("heading", { name: "Visit records" })).toBeInTheDocument();
+  });
+
   it("a caregiver sees no billing or records navigation", async () => {
     renderAws("/", "caregiver");
     await screen.findByRole("heading", { name: "Today's visits" });

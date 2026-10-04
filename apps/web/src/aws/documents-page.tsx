@@ -189,20 +189,20 @@ function RequestForm({ types, people, onDone }: { types: DocumentType[]; people:
   }
   return (
     <form onSubmit={(e) => { e.preventDefault(); void submit(); }} className="flex flex-wrap items-end gap-3">
-      <label className="text-sm font-medium text-slate-700">
-        Person
-        <select value={person} onChange={(e) => setPerson(e.target.value)} className="mt-1 block rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm">
+      <div className="text-sm font-medium text-slate-700">
+        <label htmlFor="doc-request-person">Person</label>
+        <select id="doc-request-person" value={person} onChange={(e) => setPerson(e.target.value)} className="mt-1 block rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm">
           <option value="">Choose…</option>
           {people.map((p) => <option key={p.caregiverRecordId} value={p.caregiverRecordId}>{p.displayName}</option>)}
         </select>
-      </label>
-      <label className="text-sm font-medium text-slate-700">
-        Document
-        <select value={type} onChange={(e) => setType(e.target.value)} className="mt-1 block rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm">
+      </div>
+      <div className="text-sm font-medium text-slate-700">
+        <label htmlFor="doc-request-type">Document</label>
+        <select id="doc-request-type" value={type} onChange={(e) => setType(e.target.value)} className="mt-1 block rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm">
           <option value="">Choose…</option>
           {types.filter((t) => t.isActive).map((t) => <option key={t.documentTypeId} value={t.documentTypeId}>{t.name}</option>)}
         </select>
-      </label>
+      </div>
       <label className="text-sm font-medium text-slate-700">
         Due date (optional)
         <input type="date" value={due} onChange={(e) => setDue(e.target.value)} className="mt-1 block rounded-lg border border-slate-200 px-3 py-2 text-sm" />
