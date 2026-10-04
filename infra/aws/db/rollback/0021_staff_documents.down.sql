@@ -26,5 +26,5 @@ drop table if exists ogevia.staff_documents;
 drop table if exists ogevia.document_types;
 drop function if exists ogevia.document_versions_guard_update();
 drop type if exists ogevia.document_review_status;
-delete from ogevia.role_permissions where permission_key in ('documents.read', 'documents.manage', 'documents.manage_own');
-delete from ogevia.permissions where key in ('documents.read', 'documents.manage', 'documents.manage_own');
+delete from ogevia.role_permissions where permission_key in ('documents.read', 'documents.manage', 'documents.manage_own', 'documents.review_own');
+delete from ogevia.permissions where key in ('documents.read', 'documents.manage', 'documents.manage_own', 'documents.review_own');

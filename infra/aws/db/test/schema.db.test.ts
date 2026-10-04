@@ -101,6 +101,7 @@ describe("SCHEMA: migration chain", () => {
       "caregiver_unavailable_dates",
       "client_authorizations",
       "client_care_portals",
+      "client_private_names",
       "clients",
       "document_types",
       "document_versions",

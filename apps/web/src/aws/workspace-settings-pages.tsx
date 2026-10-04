@@ -4,7 +4,8 @@ import { Button, Card } from "@carelik/ui";
 import { newIdempotencyKey } from "@/lib/sv-backend";
 import { useOrganization } from "@/providers/organization-provider";
 import { contrastWithWhite } from "./contrast";
-import { useAwsApi, useBranding, useMyDisplayName, useSetMyDisplayName, type Branding } from "./aws-workspace";
+import { prepareLogoFile } from "./document-file";
+import { useLogo, useAwsApi, useBranding, useMyDisplayName, useSetMyDisplayName, type Branding } from "./aws-workspace";
 
 const message = (cause: unknown, fallback: string) => (cause instanceof Error ? cause.message : fallback);
 
@@ -123,7 +124,62 @@ export function BrandingSettingsPage() {
           <Button type="submit" disabled={state.busy}>{state.busy ? "Saving…" : "Save branding"}</Button>
         </form>
       </Card>
-      <p className="text-xs text-slate-500">Logo upload is not available yet; it needs private file storage for agency images.</p>
+      <LogoSettings />
     </div>
+  );
+}
+
+/** Owner-only agency logo: stored privately; shown to every role and on printouts. */
+function LogoSettings() {
+  const api = useAwsApi();
+  const queryClient = useQueryClient();
+  const { activeOrganizationId } = useOrganization();
+  const logo = useLogo();
+  const [file, setFile] = useState<File | null>(null);
+  const [state, setState] = useState<{ busy: boolean; error: string | null; done: string | null }>({ busy: false, error: null, done: null });
+  const key = useRef(newIdempotencyKey());
+  const refresh = async () => {
+    await queryClient.invalidateQueries({ queryKey: ["aws-branding"] });
+    await queryClient.invalidateQueries({ queryKey: ["organization-letterhead"] });
+  };
+  async function upload() {
+    if (!file) return setState({ busy: false, error: "Choose a PNG or JPEG image.", done: null });
+    setState({ busy: true, error: null, done: null });
+    try {
+      const prepared = await prepareLogoFile(file);
+      await api.post("/v1/branding/logo", { organizationId: activeOrganizationId, contentType: prepared.contentType, fileBase64: prepared.base64 }, { idempotencyKey: key.current });
+      key.current = newIdempotencyKey();
+      await refresh();
+      setState({ busy: false, error: null, done: "Logo saved." });
+    } catch (cause) {
+      setState({ busy: false, error: message(cause, "The logo was not saved."), done: null });
+    }
+  }
+  async function remove() {
+    setState({ busy: true, error: null, done: null });
+    try {
+      await api.post("/v1/branding/logo/clear", { organizationId: activeOrganizationId });
+      await refresh();
+      setState({ busy: false, error: null, done: "Logo removed." });
+    } catch (cause) {
+      setState({ busy: false, error: message(cause, "The logo was not removed."), done: null });
+    }
+  }
+  return (
+    <Card className="space-y-3 p-4">
+      <h2 className="text-sm font-semibold text-slate-900">Agency logo</h2>
+      {logo.data ? <img src={logo.data} alt="Current agency logo" className="h-14 max-w-[200px] object-contain" /> : <p className="text-sm text-slate-500">No logo yet.</p>}
+      <label className="block text-sm font-medium text-slate-700">
+        Logo image (PNG or JPEG, up to 512 KB)
+        <input type="file" accept="image/png,image/jpeg" onChange={(e) => { setFile(e.target.files?.[0] ?? null); key.current = newIdempotencyKey(); }} className="mt-1 block w-full text-sm" />
+      </label>
+      {state.error ? <p role="alert" className="text-sm text-red-700">{state.error}</p> : null}
+      {state.done ? <p role="status" className="text-sm text-emerald-800">{state.done}</p> : null}
+      <div className="flex flex-wrap gap-2">
+        <Button type="button" disabled={state.busy} onClick={() => void upload()}>{state.busy ? "Saving…" : "Save logo"}</Button>
+        {logo.data ? <Button type="button" variant="secondary" disabled={state.busy} onClick={() => void remove()}>Remove logo</Button> : null}
+      </div>
+      <p className="text-xs text-slate-500">Stored privately; only people in your agency can see it. It appears in the header and on printed reports.</p>
+    </Card>
   );
 }

@@ -44,7 +44,7 @@ function fakeApi(role: "caregiver" | "manager" | "organization_owner", opts: { d
       case "GET /v1/me":
         return json(200, { memberships: [{ organizationId: ORG, organizationSlug: "org-a", organizationName: "Synthetic Care Co", organizationTimezone: "America/Los_Angeles", role, permissions }], profile: { displayName } });
       case "GET /v1/branding":
-        return json(200, { branding: { organizationId: ORG, displayName: "Synthetic Care Co", accentColor: "#1f5f8b" } });
+        return json(200, { branding: { organizationId: ORG, displayName: "Synthetic Care Co", accentColor: "#1f5f8b", logoSha256: "a".repeat(64) } });
       case "POST /v1/branding":
         return json(200, { branding: { organizationId: ORG, displayName: body?.["displayName"], accentColor: body?.["accentColor"] } });
       case "GET /v1/attention":
@@ -70,6 +70,10 @@ function fakeApi(role: "caregiver" | "manager" | "organization_owner", opts: { d
         return json(200, { visits: [{ id: VISIT, visitNumber: "V-1", clientId: CLIENT, clientCode: "C-104", caregiverUserId: "u1", caregiverName: "CAREGIVER_A1", serviceId: SERVICE, serviceName: "Respite Care", serviceDate: "2026-09-30", timeIn: "2026-09-30T17:00:00Z", timeOut: "2026-09-30T19:00:00Z", workedMinutes: 120, verifiedMinutes: 120, billableMinutes: 120, status: "signed", authorizationStatus: "within_authorization", signedAt: "2026-09-30T19:01:00Z", originalVisitId: null, isCorrected: false, monthToDateBeforeMinutes: 0, monthToDateAfterMinutes: 120, remainingMinutes: 5880 }] });
       case "GET /v1/billing-review":
         return json(200, { visits: [{ visitId: VISIT, visitNumber: "V-1", serviceCode: "862", serviceDate: "2026-09-30", workedMinutes: 120, verifiedMinutes: 120, billableMinutes: 120, visitStatus: "signed", authorizationStatus: "within_authorization", authorizationVersion: 1, confirmationMethod: "draw", hasSignatureEvidence: true, isCorrection: false, reviewState: "ready" }] });
+      case "GET /v1/clients/directory":
+        return json(200, { clients: role === "caregiver" ? [] : [{ clientId: CLIENT, clientCode: "C-104", caregiverDisplayCode: null, status: "active", legalFirstName: "Synthetic", legalLastName: "Person" }] });
+      case "GET /v1/branding/logo":
+        return json(200, { contentType: "image/png", fileBase64: "iVBORw0KGgo=" });
       case "GET /v1/documents":
         return json(200, { documents: [{ documentId: DOC, caregiverRecordId: "r1", personName: "Pilot Caregiver A", documentTypeId: "t1", documentTypeName: "TB test", requiresExpiry: true, dueOn: "2026-10-20", requestedAt: "2026-10-01T00:00:00Z",
           latestVersionId: docStatus === "requested" ? null : "eeeeeeee-0000-4000-8000-00000000d0c2", latestVersionNumber: docStatus === "requested" ? null : 1, latestContentType: null, latestUploadedAt: docStatus === "requested" ? null : "2026-10-02T00:00:00Z",
@@ -301,6 +305,14 @@ describe("AWS build: manager review and billing-review data", () => {
     expect(await screen.findByRole("heading", { name: "Needs attention" })).toBeInTheDocument();
     fireEvent.click(screen.getByRole("link", { name: "Visit records" }));
     expect(await screen.findByRole("heading", { name: "Visit records" })).toBeInTheDocument();
+  });
+
+  it("office roles see the client's name (code alongside) in visit records; the agency logo shows in the header", async () => {
+    renderAws("/service-verification/reports", "manager");
+    expect(await screen.findByAltText("Synthetic Care Co logo")).toBeInTheDocument();
+    const table = await screen.findByRole("table", { name: "Visit details" });
+    expect(await within(table).findByText("Synthetic Person")).toBeInTheDocument();
+    expect(within(table).getByText("C-104")).toBeInTheDocument();
   });
 
   it("a caregiver sees no billing or records navigation", async () => {

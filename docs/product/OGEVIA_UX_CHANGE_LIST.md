@@ -207,3 +207,7 @@ Recommendation: these owner summaries, branding settings and minimal document/ex
 | 2026-10-04 | Owner Home: utilisation by service; owner-only values; cost and margin "Unavailable" | 0020 + web | Not deployed | Tests | Pending |
 | 2026-10-04 | Branding: agency name and accent colour (owner only; contrast enforced) | 0020 + web | Not deployed | Tests; browser run | Pending. Logo needs a storage decision. |
 | 2026-10-04 | Minimal Documents & Compliance (staff): request, phone upload, review, expiry and overdue warnings | 0021 + API + web (`942b28f`) | Not deployed | Database, API and web tests; browser run | Pending |
+
+## Scope decision (owner, 4 October 2026)
+
+**Automatic payer submission is removed from launch scope.** Ogevia stops at a human Billing Approval. Claims, eBilling and payer connectors are not built for launch. Any later "recorded as submitted" ledger would be a manual record only.

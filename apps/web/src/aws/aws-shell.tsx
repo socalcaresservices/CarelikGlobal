@@ -3,7 +3,7 @@ import { Link, Navigate, NavLink, useLocation } from "react-router-dom";
 import { useAuth } from "@carelik/auth";
 import { cn } from "@carelik/ui";
 import { useOrganization } from "@/providers/organization-provider";
-import { useAttention, useBranding, useMyDisplayName, viewKind, VIEW_TITLE } from "./aws-workspace";
+import { useAttention, useBranding, useLogo, useMyDisplayName, viewKind, VIEW_TITLE } from "./aws-workspace";
 
 export const EXCEPTIONS_PATH = "/service-verification/reports?view=exceptions";
 const DEFAULT_ACCENT = "#0f172a"; // slate-900: the colour used before agency branding existed
@@ -19,6 +19,7 @@ export function AwsShell({ children }: PropsWithChildren) {
   const { organizations, activeOrganization, activeOrganizationId, setActiveOrganizationId, hasPermission, role, loading } = useOrganization();
   const { displayName, loading: nameLoading } = useMyDisplayName();
   const branding = useBranding();
+  const logo = useLogo();
   const attention = useAttention();
   const location = useLocation();
   const [menuOpen, setMenuOpen] = useState(false);
@@ -47,6 +48,7 @@ export function AwsShell({ children }: PropsWithChildren) {
     { to: "/service-verification/reports", label: "Visit records", show: hasPermission("visits.read") },
     { to: "/billing-review", label: "Billing review", show: hasPermission("billing.visits.read") },
     { to: "/care-requests", label: "Care requests", show: hasPermission("care_requests.read") },
+    { to: "/clients", label: "Clients", show: hasPermission("clients.names.manage") },
     { to: "/documents", label: hasPermission("documents.read") ? "Documents" : "My documents", show: hasPermission("documents.read") || hasPermission("documents.manage_own") },
     { to: "/availability", label: "Availability", show: isCaregiver },
     { to: "/settings/branding", label: "Settings", show: hasPermission("organization.update") },
@@ -65,9 +67,12 @@ export function AwsShell({ children }: PropsWithChildren) {
       <header className="border-b border-slate-200 border-t-4 bg-white print:hidden" style={{ borderTopColor: accent }}>
         <div className="mx-auto max-w-6xl px-4 py-3">
           <div className="flex flex-wrap items-start justify-between gap-3">
-            <div className="min-w-0">
-              <p className="truncate text-base font-semibold text-slate-950">{agencyName}</p>
-              <p className="text-[10px] font-medium uppercase tracking-wide text-slate-500">Powered by Ogevia</p>
+            <div className="flex min-w-0 items-center gap-3">
+              {logo.data ? <img src={logo.data} alt={`${agencyName} logo`} className="h-10 max-w-[120px] object-contain" /> : null}
+              <div className="min-w-0">
+                <p className="truncate text-base font-semibold text-slate-950">{agencyName}</p>
+                <p className="text-[10px] font-medium uppercase tracking-wide text-slate-500">Powered by Ogevia</p>
+              </div>
             </div>
             <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-right">
               <div className="min-w-0">

@@ -1,7 +1,7 @@
 // Local, synthetic browser check of the AWS TEST workspace (0019-0021) at 390 px:
-// owner/manager/caregiver headers, NEEDS ATTENTION, Home, branding, visit
-// cards, printable calendar, documents (request/upload/review), billing cards.
-// Same setup as README.md, with database ogevia_workspace_e2e.
+// owner/manager/caregiver headers, NEEDS ATTENTION, Home, branding and logo,
+// restricted client names, visit cards, printable calendar, documents
+// (request/upload/review), billing cards. Setup as README.md, database ogevia_workspace_e2e.
 // Real AWS-mode web build + real sv-api handler + local PostgreSQL (0001-0019,
 // SCS pilot seed). Cognito is faked with unsigned tokens (as pilot-e2e.ts).
 import { createHash, randomUUID } from "node:crypto";
@@ -162,6 +162,11 @@ async function main() {
     await O.page.getByRole("button", { name: "Save branding" }).click();
     await O.page.getByText("Saved. Every role sees it on next load.").waitFor({ timeout: 15000 });
     check("owner branding: saved", true);
+    await O.page.getByLabel(/Logo image/).setInputFiles({ name: "logo.png", mimeType: "image/png", buffer: syntheticPng(200, 80, 3) });
+    await O.page.getByRole("button", { name: "Save logo" }).click();
+    await O.page.getByText("Logo saved.").waitFor({ timeout: 15000 });
+    await O.page.getByAltText("Current agency logo").waitFor({ timeout: 15000 });
+    check("owner logo: uploaded and shown from private storage", true);
     await shot(O.page, "02-owner-branding");
     check("owner: no page errors", O.errors.length === 0, O.errors.join(" | "));
 
@@ -172,6 +177,7 @@ async function main() {
     check("manager header: MANAGER VIEW with the real name", await M.page.getByText("Pilot Manager", { exact: true }).isVisible());
     const borderTop = await M.page.locator("header").evaluate((h) => getComputedStyle(h).borderTopColor);
     check("manager sees the owner's agency colour", borderTop === "rgb(20, 83, 45)", borderTop);
+    check("manager sees the agency logo in the header", await M.page.locator("header img[alt$='logo']").isVisible());
     check("manager Home: no owner-only financial cards", (await M.page.getByText("Financial impact (owner only)").count()) === 0);
     await noHScroll(M.page, "manager Home");
     await shot(M.page, "03-manager-home");
@@ -194,15 +200,31 @@ async function main() {
     await noHScroll(M.page, "manager Visit records");
     await shot(M.page, "05-manager-visit-records");
 
+    await M.page.getByRole("button", { name: /Menu/ }).click();
+    await M.page.getByRole("link", { name: "Clients" }).click();
+    await M.page.getByRole("heading", { name: "Clients" }).waitFor({ timeout: 15000 });
+    const firstRow = M.page.locator("li").filter({ has: M.page.getByLabel("First name") }).first();
+    const clientCode = (await firstRow.locator("p").first().innerText()).split(" ")[0]!;
+    await firstRow.getByLabel("First name").fill("Synthetic");
+    await firstRow.getByLabel("Last name").fill("Calendar Person");
+    await firstRow.getByRole("button", { name: /Save name/ }).click();
+    await firstRow.getByText("Saved.").waitFor({ timeout: 15000 });
+    check("manager set a synthetic client name (office only)", true, clientCode);
+    await noHScroll(M.page, "manager Clients");
+    await shot(M.page, "05b-manager-clients");
+    await M.page.getByRole("button", { name: /Menu/ }).click();
+    await M.page.getByRole("link", { name: "Visit records" }).click();
+    await M.page.getByRole("heading", { name: "Visit records" }).waitFor({ timeout: 15000 });
     await M.page.getByLabel("Report").selectOption("calendar");
     const clientSelect = M.page.getByLabel("Calendar client");
-    const firstClient = await clientSelect.locator("option").nth(1).getAttribute("value");
-    await clientSelect.selectOption(firstClient!);
+    await clientSelect.selectOption({ label: "Synthetic Calendar Person" });
     const month = new Date().toISOString().slice(0, 7);
     await M.page.getByLabel("Calendar month").fill(month);
     await M.page.getByRole("grid").waitFor({ timeout: 15000 });
     check("calendar: Print calendar button beside the month", await M.page.getByRole("button", { name: /Print calendar/ }).isEnabled());
+    check("calendar shows the full name with the code", await M.page.getByText(`(${clientCode})`, { exact: true }).waitFor({ timeout: 15000 }).then(() => true, () => false), clientCode);
     await M.page.emulateMedia({ media: "print" });
+    check("printed calendar header: Client: full name (code)", await M.page.getByText(`Client: Synthetic Calendar Person (${clientCode})`).isVisible());
     check("calendar print: app header and filters hidden", !(await M.page.locator("header").isVisible()) && !(await M.page.getByLabel("Report").isVisible()));
     await M.page.pdf({ path: join(SHOTS, "06-calendar.pdf"), format: "Letter", landscape: true, printBackground: true });
     await M.page.setViewportSize({ width: 1056, height: 816 });
@@ -234,6 +256,7 @@ async function main() {
     await signIn(C.page, "/documents");
     await C.page.getByText("CAREGIVER VIEW").waitFor({ timeout: 15000 });
     check("caregiver header: CAREGIVER VIEW; no NEEDS ATTENTION", (await C.page.getByRole("link", { name: /Needs attention/ }).count()) === 0);
+    check("caregiver has no Clients menu entry", (await C.page.getByRole("link", { name: "Clients" }).count()) === 0);
     await C.page.getByRole("heading", { name: "My documents" }).waitFor({ timeout: 15000 });
     check("caregiver sees the due date with days left (agency-local date)", await C.page.getByText(/Due .* \(in 7 days\)/).isVisible());
     await C.page.getByRole("button", { name: "Upload" }).first().click();

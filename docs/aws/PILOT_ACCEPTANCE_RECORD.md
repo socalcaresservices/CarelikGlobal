@@ -20,9 +20,17 @@ They are kept here as historical records and are **not** used as acceptance of t
 
 ## Post-deployment phone acceptance (deployed build 87a9be2)
 
-| Section | Result | Date | Notes |
+Status (2026-10-04): the owner reports phone screenshots taken on **October 4, after the deployment**. Those screenshots have **not reached this session** (only the UX change list was uploaded), so they are not yet transcribed here. When they arrive, record each section below with the screenshot time. The A–G results from 3 October 19:58–20:01 UTC stay classified as pre-deployment, by timeline.
+
+| Section | Result | Screenshot time (Pacific) | Notes |
 | --- | --- | --- | --- |
-| A–G | Not yet reported | | |
+| A. Sign-in with MFA | Awaiting October 4 screenshots | | |
+| B. Scheduling within authorization | Awaiting | | |
+| C. Complete visit | Awaiting | | |
+| D. Scheduled service preselected (0017) | Awaiting | | Pilot-only behaviour; proves the deployed build |
+| E. Correction keeps unchanged times (0018) | Awaiting | | Pilot-only behaviour |
+| F. Manager close-out of a missed Time Out (0015, close route) | Awaiting | | Pilot-only behaviour |
+| G. Review and isolation | Awaiting | | |
 
 ## Independent live confirmation (pending)
 

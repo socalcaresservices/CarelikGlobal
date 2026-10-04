@@ -212,3 +212,57 @@ describe("utilisation overview", () => {
     expect(await one(w.managerB, "select * from ogevia_api.get_utilisation_overview($1, $2::date)", [w.orgA, month])).toEqual([]);
   });
 });
+
+describe("agency logo (metadata; the file itself is covered by the API test)", () => {
+  const sha = "b".repeat(64);
+  const setLogo = (a: Actor, key?: string, size = 1000) => {
+    const id = crypto.randomUUID();
+    return one(a, "select ogevia_api.set_organization_logo($1,$2,$3,'v1','image/png',$4,$5,null) as s", [w.orgA, id, key ?? `${w.orgA}/branding/logo/${id}`, size, sha]);
+  };
+  it("only the owner sets it, with the server-built key and size limit; members read it; audited", async () => {
+    await expectPgError(setLogo(w.managerA), "OGA03");
+    await expectPgError(setLogo(w.managerB), "OGN04");
+    await expectPgError(setLogo(w.ownerA, "elsewhere/logo"), "OGV22");
+    await expectPgError(setLogo(w.ownerA, undefined, 600000), "OGV22");
+    await setLogo(w.ownerA);
+    const [b] = await one(w.caregiverA1, "select * from ogevia_api.get_organization_branding($1)", [w.orgA]);
+    expect(b.logo_sha256).toBe(sha);
+    expect(await one(w.caregiverA1, "select * from ogevia_api.get_organization_logo($1)", [w.orgA])).toHaveLength(1);
+    expect(await one(w.managerB, "select * from ogevia_api.get_organization_logo($1)", [w.orgA])).toEqual([]);
+    await expectPgError(one(w.managerA, "select ogevia_api.clear_organization_logo($1)", [w.orgA]), "OGA03");
+    await one(w.ownerA, "select ogevia_api.clear_organization_logo($1)", [w.orgA]);
+    expect(await one(w.caregiverA1, "select * from ogevia_api.get_organization_logo($1)", [w.orgA])).toEqual([]);
+    const audit = await db.admin.query("select action from ogevia.audit_events where action like 'organization.logo%' order by id");
+    expect(audit.rows.map((r) => r.action)).toEqual(["organization.logo_updated", "organization.logo_removed"]);
+  });
+});
+
+describe("restricted client names", () => {
+  const dir = (a: Actor) => one(a, "select * from ogevia_api.list_client_directory($1)", [w.orgA]);
+  const setName = (a: Actor, client: string, first: string, last: string, org = w.orgA) =>
+    one(a, "select ogevia_api.set_client_legal_name($1,$2,$3,$4,null)", [org, client, first, last]);
+
+  it("owners and managers set and see names; schedulers see codes only; caregivers and other agencies see nothing; audited", async () => {
+    await setName(w.managerA, w.clientA1, "Synthetic", "Client One");
+    await expectPgError(setName(w.schedulerA, w.clientA1, "X", "Y"), "OGA03");
+    await expectPgError(setName(w.caregiverA1, w.clientA1, "X", "Y"), "OGA03");
+    await expectPgError(setName(w.managerB, w.clientA1, "X", "Y"), "OGN04");
+    await expectPgError(setName(w.managerB, w.clientA1, "X", "Y", w.orgB), "OGN04");
+    await expectPgError(setName(w.managerA, w.clientA1, " ", "Y"), "OGV22");
+    const m = (await dir(w.managerA)).find((r) => r.client_id === w.clientA1);
+    expect(m).toMatchObject({ legal_first_name: "Synthetic", legal_last_name: "Client One" });
+    const o = (await dir(w.ownerA)).find((r) => r.client_id === w.clientA1);
+    expect(o.legal_last_name).toBe("Client One");
+    const sch = (await dir(w.schedulerA)).find((r) => r.client_id === w.clientA1);
+    expect(sch).toMatchObject({ legal_first_name: null, legal_last_name: null });
+    expect(await dir(w.caregiverA1)).toEqual([]);
+    expect(await dir(w.managerB)).toEqual([]);
+    const audit = await db.admin.query("select count(*)::int as n from ogevia.audit_events where action = 'client.legal_name_set' and entity_id = $1", [w.clientA1]);
+    expect(audit.rows[0].n).toBe(1);
+  });
+
+  it("caregiver-facing functions never carry names", async () => {
+    const r = await one(w.caregiverA1, "select * from ogevia_api.list_assigned_visit_clients($1)", [w.orgA]);
+    expect(JSON.stringify(r)).not.toContain("Client One");
+  });
+});

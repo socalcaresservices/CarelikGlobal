@@ -22,6 +22,25 @@ export interface Branding {
   organizationId: string;
   displayName: string;
   accentColor: string | null;
+  /** Changes whenever the owner replaces the logo; null when there is none. */
+  logoSha256?: string | null;
+}
+
+/** The agency logo as a data URL, fetched through the API (the bucket is private). */
+export function useLogo() {
+  const api = useAwsApi();
+  const { activeOrganizationId } = useOrganization();
+  const branding = useBranding();
+  const sha = branding.data?.logoSha256 ?? null;
+  return useQuery({
+    queryKey: ["aws-logo", activeOrganizationId, sha],
+    queryFn: async () => {
+      const r = await api.get<{ contentType: string; fileBase64: string }>("/v1/branding/logo", { organizationId: activeOrganizationId });
+      return `data:${r.contentType};base64,${r.fileBase64}`;
+    },
+    enabled: !!activeOrganizationId && !!sha,
+    staleTime: Infinity,
+  });
 }
 
 export interface AttentionSummary {

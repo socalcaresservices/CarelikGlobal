@@ -26,7 +26,7 @@ Tests:
 | Home: authorized, scheduled, worked, billable, approved hours and hours left by service | Yes | Yes |
 | Home: billable value, approved value, potential value of unused hours | **No** (null) | Yes |
 | Caregiver pay, labour cost, margin, profit | No | Not available: no pay data source exists, so the UI shows "Unavailable" |
-| Payer submission, invoices, exports | Not built (approval is not submission) | Not built |
+| Payer submission, invoices, exports | Out of launch scope: Ogevia does not submit to payers (approval is not submission) | Out of launch scope |
 | Change agency branding | No | Yes |
 
 The approval audit rows store minutes only, never dollar values.

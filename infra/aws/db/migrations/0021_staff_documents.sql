@@ -23,17 +23,23 @@
 --     documents.manage_own (caregiver: own requested documents only).
 --     Scheduler: none, until Scheduler access is defined.
 --   * Viewing a file is audited (document.viewed).
+--   * Self-review: nobody reviews their own upload, except the agency owner
+--     (documents.review_own, owner decision 2026-10-04). An owner
+--     self-review is allowed and recorded as such in the audit row
+--     (after_state.self_review = true, reason prefixed "Owner self-review").
 
 insert into ogevia.permissions (key, description) values
   ('documents.read', 'View staff documents and their files'),
   ('documents.manage', 'Request, review and configure staff documents'),
-  ('documents.manage_own', 'Upload and view your own requested documents');
+  ('documents.manage_own', 'Upload and view your own requested documents'),
+  ('documents.review_own', 'Review a document you uploaded yourself (audited as a self-review)');
 insert into ogevia.role_permissions (role, permission_key) values
   ('organization_owner', 'documents.read'),
   ('organization_owner', 'documents.manage'),
   ('manager', 'documents.read'),
   ('manager', 'documents.manage'),
-  ('caregiver', 'documents.manage_own');
+  ('caregiver', 'documents.manage_own'),
+  ('organization_owner', 'documents.review_own');
 
 create type ogevia.document_review_status as enum ('awaiting_review', 'verified', 'rejected');
 
@@ -303,7 +309,8 @@ returns table (
   expires_on date,
   verified_expires_on date,
   display_status text,
-  days_until integer
+  days_until integer,
+  latest_uploaded_by_me boolean
 )
 language sql
 stable
@@ -322,6 +329,7 @@ as $$
            coalesce(nullif(btrim(r.preferred_name), ''), r.first_name) || ' ' || r.last_name as person,
            lv.id as v_id, lv.version_number as v_no, lv.content_type as v_type, lv.uploaded_at as v_at,
            lv.review_status as v_status, lv.rejection_reason as v_reason, lv.issued_on as v_issued, lv.expires_on as v_expires,
+           lv.uploaded_by = ctx.actor as v_mine,
            (select vv.expires_on from ogevia.document_versions vv where vv.document_id = d.id and vv.review_status = 'verified'
             order by vv.version_number desc limit 1) as verified_expires,
            exists (select 1 from ogevia.document_versions vv where vv.document_id = d.id and vv.review_status = 'verified') as any_verified
@@ -350,7 +358,8 @@ as $$
          case
            when docs.verified_expires is not null then docs.verified_expires - ctx.today
            when docs.due_on is not null and not docs.any_verified then docs.due_on - ctx.today
-         end
+         end,
+         coalesce(docs.v_mine, false)
   from docs, ctx
   order by docs.person, docs.type_name;
 $$;
@@ -448,6 +457,7 @@ declare
   v ogevia.document_versions%rowtype;
   v_fp text := concat_ws('|', p_version_id, p_decision, btrim(coalesce(p_reason, '')));
   v_prior jsonb;
+  v_self boolean;
 begin
   select * into v from ogevia.document_versions where id = p_version_id for update;
   if v.id is null or not ogevia.is_active_member(v.organization_id) then
@@ -464,8 +474,9 @@ begin
   if p_decision = 'rejected' and length(btrim(coalesce(p_reason, ''))) = 0 then
     raise exception 'A reason is required to reject a document' using errcode = 'OGV22';
   end if;
-  if v.uploaded_by = v_actor then
-    raise exception 'You cannot review a document you uploaded' using errcode = 'OGA03';
+  v_self := v.uploaded_by = v_actor;
+  if v_self and not ogevia.has_permission(v.organization_id, 'documents.review_own') then
+    raise exception 'You cannot review a document you uploaded; ask the owner or another manager' using errcode = 'OGA03';
   end if;
   if v.review_status <> 'awaiting_review' then
     raise exception 'This document version has already been reviewed' using errcode = 'OGC09';
@@ -477,8 +488,10 @@ begin
     reviewed_at = now(), rejection_reason = case when p_decision = 'rejected' then btrim(p_reason) end
    where id = v.id;
   perform ogevia.write_audit(v.organization_id, 'document.' || p_decision, 'document_versions', v.id,
-    jsonb_build_object('review_status', 'awaiting_review'), jsonb_build_object('review_status', p_decision),
-    nullif(btrim(coalesce(p_reason, '')), ''));
+    jsonb_build_object('review_status', 'awaiting_review'),
+    jsonb_build_object('review_status', p_decision, 'self_review', v_self),
+    case when v_self then 'Owner self-review' || coalesce(': ' || nullif(btrim(coalesce(p_reason, '')), ''), '')
+         else nullif(btrim(coalesce(p_reason, '')), '') end);
   perform ogevia.idempotency_finish('review_document_version', p_idempotency_key, v.organization_id, v_fp,
     jsonb_build_object('decision', p_decision));
   return p_decision;

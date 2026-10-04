@@ -29,9 +29,9 @@ function toBase64(buffer: ArrayBuffer): string {
   return btoa(binary);
 }
 
-async function downscale(file: File): Promise<Blob> {
+async function downscale(file: File, maxEdge = MAX_IMAGE_EDGE): Promise<Blob> {
   const bitmap = await createImageBitmap(file);
-  const scale = Math.min(1, MAX_IMAGE_EDGE / Math.max(bitmap.width, bitmap.height));
+  const scale = Math.min(1, maxEdge / Math.max(bitmap.width, bitmap.height));
   const canvas = document.createElement("canvas");
   canvas.width = Math.round(bitmap.width * scale);
   canvas.height = Math.round(bitmap.height * scale);
@@ -56,4 +56,14 @@ export async function prepareDocumentFile(file: File): Promise<PreparedFile> {
     return { contentType: "image/jpeg", base64: toBase64(await readBytes(smaller)), byteSize: smaller.size };
   }
   throw new Error("Upload a PDF, JPEG or PNG file.");
+}
+
+/** Agency logo: PNG or JPEG, at most 512 KB; larger images are scaled to 600 px. */
+export const MAX_LOGO_BYTES = 512_000;
+export async function prepareLogoFile(file: File): Promise<PreparedFile> {
+  if (file.type !== "image/png" && file.type !== "image/jpeg") throw new Error("Choose a PNG or JPEG image for the logo.");
+  if (file.size <= MAX_LOGO_BYTES) return { contentType: file.type, base64: toBase64(await readBytes(file)), byteSize: file.size };
+  const smaller = await downscale(file, 600);
+  if (smaller.size > MAX_LOGO_BYTES) throw new Error("The logo is still larger than 512 KB after resizing. Use a simpler image.");
+  return { contentType: "image/jpeg", base64: toBase64(await readBytes(smaller)), byteSize: smaller.size };
 }

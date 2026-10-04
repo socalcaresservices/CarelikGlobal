@@ -25,6 +25,7 @@ import {
   SIGNATURE_OBJECT_KEY_PATTERN,
   signatureBucketName,
   DOCUMENT_OBJECT_KEY_PATTERN,
+  LOGO_OBJECT_KEY_PATTERN,
 } from "./evidence-storage-stack.js";
 import { ExistingFoundation } from "./existing-foundation.js";
 
@@ -72,6 +73,11 @@ export const SERVICE_VERIFICATION_ROUTES: ReadonlyArray<{
   { method: apigw.HttpMethod.POST, path: "/v1/branding" },
   { method: apigw.HttpMethod.GET, path: "/v1/attention" },
   { method: apigw.HttpMethod.GET, path: "/v1/reports/utilisation" },
+  { method: apigw.HttpMethod.POST, path: "/v1/branding/logo" },
+  { method: apigw.HttpMethod.POST, path: "/v1/branding/logo/clear" },
+  { method: apigw.HttpMethod.GET, path: "/v1/branding/logo" },
+  { method: apigw.HttpMethod.GET, path: "/v1/clients/directory" },
+  { method: apigw.HttpMethod.POST, path: "/v1/clients/{clientId}/legal-name" },
   { method: apigw.HttpMethod.GET, path: "/v1/document-types" },
   { method: apigw.HttpMethod.POST, path: "/v1/document-types" },
   { method: apigw.HttpMethod.GET, path: "/v1/documents/people" },
@@ -173,6 +179,7 @@ export class ServiceVerificationApiStack extends Stack {
     const evidenceBucketName = signatureBucketName(config);
     const signatureObjectsArn = `arn:aws:s3:::${evidenceBucketName}/${SIGNATURE_OBJECT_KEY_PATTERN}`;
     const documentObjectsArn = `arn:aws:s3:::${evidenceBucketName}/${DOCUMENT_OBJECT_KEY_PATTERN}`;
+    const logoObjectsArn = `arn:aws:s3:::${evidenceBucketName}/${LOGO_OBJECT_KEY_PATTERN}`;
     assertVerified(config.auth, "API auth contract");
     const existing = new ExistingFoundation(this, "Existing", config.existing);
 
@@ -239,6 +246,14 @@ export class ServiceVerificationApiStack extends Stack {
         actions: ["s3:PutObject", "s3:GetObject", "s3:GetObjectVersion"],
         // Only {org_uuid}/documents/{document_uuid}/{version_uuid} (0021).
         resources: [documentObjectsArn],
+      }),
+    );
+    policy.addStatements(
+      new iam.PolicyStatement({
+        sid: "AgencyLogoObjects",
+        actions: ["s3:PutObject", "s3:GetObject", "s3:GetObjectVersion"],
+        // Only {org_uuid}/branding/logo/{logo_uuid} (0020).
+        resources: [logoObjectsArn],
       }),
     );
     policy.addStatements(
@@ -377,6 +392,11 @@ export class ServiceVerificationApiStack extends Stack {
       id: `AwsSolutions-IAM5[Resource::${signatureObjectsArn}]`,
       reason:
         "Object keys are per-visit UUIDs unknown at deploy time; restricted to the documented */*/client-signature.png shape. Tenant ownership is checked in PostgreSQL before every write and read.",
+    });
+    Validations.of(policy).acknowledge({
+      id: `AwsSolutions-IAM5[Resource::${logoObjectsArn}]`,
+      reason:
+        "Agency logo keys are per-upload UUIDs unknown at deploy time; restricted to the documented */branding/logo/* shape. Only the owner can write (checked in PostgreSQL) and only agency members can read.",
     });
     Validations.of(policy).acknowledge({
       id: `AwsSolutions-IAM5[Resource::${documentObjectsArn}]`,

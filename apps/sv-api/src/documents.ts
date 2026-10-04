@@ -47,3 +47,17 @@ export function validateDocumentFile(input: unknown, declaredType: unknown): Val
   const sha256 = createHash("sha256").update(bytes).digest();
   return { bytes, contentType, sha256, sha256Hex: sha256.toString("hex") };
 }
+
+/** Agency logo: PNG or JPEG, at most 512 KB (same rule as ogevia.set_organization_logo). */
+export const MAX_LOGO_BYTES = 512_000;
+export function logoObjectKey(organizationId: string, logoId: string): string {
+  return `${organizationId}/branding/logo/${logoId}`;
+}
+export function validateLogoFile(input: unknown, declaredType: unknown): ValidatedDocument {
+  if (declaredType !== "image/png" && declaredType !== "image/jpeg") {
+    throw new ApiError(422, "validation_failed", "The logo must be a PNG or JPEG image.");
+  }
+  const file = validateDocumentFile(input, declaredType);
+  if (file.bytes.length > MAX_LOGO_BYTES) throw new ApiError(422, "validation_failed", "The logo must be at most 512 KB.");
+  return file;
+}

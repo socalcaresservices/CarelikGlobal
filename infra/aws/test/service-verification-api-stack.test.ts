@@ -164,7 +164,9 @@ describe("ServiceVerificationApiStack (FUTURE, Phase 4)", () => {
       "logs:CreateLogStream",
       "logs:PutLogEvents",
     ]);
+    expect(JSON.stringify(bySid.AgencyLogoObjects?.Resource)).toContain("/*/branding/logo/*");
     expect(statements.map((s) => s.Sid).sort()).toEqual([
+      "AgencyLogoObjects",
       "EvidenceKeyForSignatureObjects",
       "ReadAppDatabaseSecret",
       "SignatureObjects",

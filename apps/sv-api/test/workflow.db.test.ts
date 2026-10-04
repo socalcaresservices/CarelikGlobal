@@ -507,7 +507,49 @@ describe("staff documents (0021) through the API", () => {
     expect(self.status).toBe(403);
     const ok = await call("POST /v1/document-versions/{versionId}/review", w.ownerA, { path: { versionId: v }, body: { decision: "verified" } });
     expect(ok.status, JSON.stringify(ok.body)).toBe(200);
+    // The owner may verify their own upload (audited as an owner self-review).
+    const own = await call("POST /v1/documents/{documentId}/versions", w.ownerA, { path: { documentId: doc }, body: { organizationId: w.orgA, contentType: "application/pdf", fileBase64: pdf.toString("base64"), expiresOn: "2099-06-01" } });
+    expect(own.status, JSON.stringify(own.body)).toBe(201);
+    const listed = (await docsOf(w.ownerA)).body.documents.find((d: any) => d.documentId === doc);
+    expect(listed.latestUploadedByMe).toBe(true);
+    const selfOk = await call("POST /v1/document-versions/{versionId}/review", w.ownerA, { path: { versionId: own.body.version.documentVersionId }, body: { decision: "verified" } });
+    expect(selfOk.status, JSON.stringify(selfOk.body)).toBe(200);
     const alerts = await call("GET /v1/documents/alerts", w.managerA, { query: { organizationId: w.orgA } });
     expect(alerts.body.alerts).toMatchObject({ expired: 0, awaitingReview: 0 });
+  });
+});
+
+describe("agency logo and restricted client names (0020) through the API", () => {
+  const png = syntheticPng(60, 30, 5);
+  it("owner uploads a logo; it is private and readable by members with an integrity check; managers cannot change it", async () => {
+    const denied = await call("POST /v1/branding/logo", w.managerA, { body: { organizationId: w.orgA, contentType: "image/png", fileBase64: png.toString("base64") } });
+    expect(denied.status).toBe(403);
+    const spoof = await call("POST /v1/branding/logo", w.ownerA, { body: { organizationId: w.orgA, contentType: "image/jpeg", fileBase64: png.toString("base64") } });
+    expect(spoof.status).toBe(422);
+    const big = await call("POST /v1/branding/logo", w.ownerA, { body: { organizationId: w.orgA, contentType: "image/png", fileBase64: Buffer.concat([png, Buffer.alloc(520_000)]).toString("base64") } });
+    expect(big.status).toBe(422);
+    const ok = await call("POST /v1/branding/logo", w.ownerA, { body: { organizationId: w.orgA, contentType: "image/png", fileBase64: png.toString("base64") } });
+    expect(ok.status, JSON.stringify(ok.body)).toBe(200);
+    expect([...evidence.objects.keys()].some((k) => k.startsWith(`${w.orgA}/branding/logo/`))).toBe(true);
+    const read = await call("GET /v1/branding/logo", w.caregiverA1, { query: { organizationId: w.orgA } });
+    expect(read.status).toBe(200);
+    expect(Buffer.from(read.body.fileBase64, "base64").equals(png)).toBe(true);
+    expect((await call("GET /v1/branding/logo", w.managerB, { query: { organizationId: w.orgA } })).status).toBe(404);
+    const b = await call("GET /v1/branding", w.caregiverA1, { query: { organizationId: w.orgA } });
+    expect(b.body.branding.logoSha256).toBe(ok.body.logoSha256);
+    expect((await call("POST /v1/branding/logo/clear", w.managerA, { body: { organizationId: w.orgA } })).status).toBe(403);
+  });
+
+  it("client names: managers set and read them; caregivers and other agencies never get them", async () => {
+    const set = await call("POST /v1/clients/{clientId}/legal-name", w.managerA, { path: { clientId: fresh.client }, body: { organizationId: w.orgA, firstName: "Synthetic", lastName: "Calendar Client" } });
+    expect(set.status, JSON.stringify(set.body)).toBe(200);
+    const m = await call("GET /v1/clients/directory", w.managerA, { query: { organizationId: w.orgA } });
+    expect(m.body.clients.find((c: any) => c.clientId === fresh.client)).toMatchObject({ legalFirstName: "Synthetic", legalLastName: "Calendar Client" });
+    expect((await call("GET /v1/clients/directory", w.caregiverA1, { query: { organizationId: w.orgA } })).body.clients).toEqual([]);
+    expect((await call("GET /v1/clients/directory", w.managerB, { query: { organizationId: w.orgA } })).body.clients).toEqual([]);
+    const assigned = await call("GET /v1/clients/assigned", w.caregiverA1, { query: { organizationId: w.orgA } });
+    expect(JSON.stringify(assigned.body)).not.toContain("Calendar Client");
+    const cg = await call("POST /v1/clients/{clientId}/legal-name", w.caregiverA1, { path: { clientId: fresh.client }, body: { organizationId: w.orgA, firstName: "X", lastName: "Y" } });
+    expect(cg.status).toBe(403);
   });
 });

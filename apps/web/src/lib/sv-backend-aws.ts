@@ -47,6 +47,17 @@ export function createAwsServiceVerificationBackend(
   api: AwsApiClient,
   lookupOrganizationName: (organizationId: string) => string | null,
 ): ServiceVerificationBackend {
+  async function clientNames(organizationId: string): Promise<Map<string, string>> {
+    const { clients } = await api.get<{ clients: Array<{ clientId: string; legalFirstName: string | null; legalLastName: string | null }> }>(
+      "/v1/clients/directory",
+      { organizationId },
+    );
+    return new Map(
+      clients
+        .filter((c) => c.legalFirstName && c.legalLastName)
+        .map((c) => [c.clientId, `${c.legalFirstName} ${c.legalLastName}`]),
+    );
+  }
   return {
     kind: "aws",
     async getActiveVisit(organizationId) {
@@ -107,15 +118,26 @@ export function createAwsServiceVerificationBackend(
         dateTo: f.dateTo,
         status: f.status,
       });
-      // client_legal_name is not exposed by the AWS API (data minimization).
-      return visits.map((v) => ({ ...toSnake<VisitReportRow>(v), client_legal_name: null }));
+      // Legal names come only from the restricted directory: the server returns
+      // them to office roles (clients.names.read) and null to everyone else.
+      const names = await clientNames(organizationId);
+      return visits.map((v) => {
+        const row = toSnake<VisitReportRow>(v);
+        return { ...row, client_legal_name: names.get(row.client_id) ?? null };
+      });
     },
     async getLetterhead(organizationId) {
-      const name = lookupOrganizationName(organizationId) ?? "Organization";
+      const { branding } = await api.get<{ branding: { displayName: string; logoSha256?: string | null } }>("/v1/branding", { organizationId });
+      const name = branding.displayName ?? lookupOrganizationName(organizationId) ?? "Organization";
+      let logoUrl: string | null = null;
+      if (branding.logoSha256) {
+        const logo = await api.get<{ contentType: string; fileBase64: string }>("/v1/branding/logo", { organizationId });
+        logoUrl = `data:${logo.contentType};base64,${logo.fileBase64}`;
+      }
       return {
         legal_name: name,
         display_name: name,
-        logo_url: null,
+        logo_url: logoUrl,
         address_street: null,
         address_city: null,
         address_state: null,

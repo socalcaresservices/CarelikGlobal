@@ -18,6 +18,7 @@ export interface StaffDocument {
   verifiedExpiresOn: string | null;
   displayStatus: "requested" | "overdue" | "awaiting_review" | "rejected" | "verified" | "expiring" | "expired";
   daysUntil: number | null;
+  latestUploadedByMe?: boolean;
 }
 export interface DocumentType { documentTypeId: string; name: string; requiresExpiry: boolean; isActive: boolean }
 export interface Person { caregiverRecordId: string; displayName: string; caregiverCode: string }

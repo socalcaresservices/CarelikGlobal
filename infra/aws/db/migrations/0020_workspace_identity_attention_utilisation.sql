@@ -23,6 +23,15 @@
 --     approved value (snapshotted), potential value of unused authorized
 --     hours. Missing rates are reported, never treated as $0. There is no
 --     caregiver pay source, so cost and margin are not computed.
+--   * Agency logo (owner, organization.update): PNG or JPEG, at most 512 KB,
+--     stored in the private evidence bucket at {org}/branding/logo/{uuid}
+--     and read only through the API by members of the agency. The database
+--     holds key, S3 version, type and SHA-256. Changes are audited.
+--   * Client names (restricted): AWS clients carry codes only. An optional
+--     legal first/last name lives in a separate table, readable and editable
+--     only with clients.names.read / clients.names.manage (owner, manager).
+--     Caregivers never receive names. Changes are audited. Real names must
+--     not be entered before the AWS BAA/security gate (synthetic in TEST).
 
 -- ---------------------------------------------------------------------------
 -- Identity
@@ -100,14 +109,21 @@ as $$
   select round(1.05 / (0.2126 * r + 0.7152 * g + 0.0722 * b + 0.05), 2) from lin;
 $$;
 
+alter table ogevia.organizations
+  add column logo_object_key text,
+  add column logo_s3_version_id text,
+  add column logo_content_type text check (logo_content_type is null or logo_content_type in ('image/png', 'image/jpeg')),
+  add column logo_sha256 text check (logo_sha256 is null or logo_sha256 ~ '^[0-9a-f]{64}$'),
+  add column logo_updated_at timestamptz;
+
 create function ogevia_api.get_organization_branding(p_organization_id uuid)
-returns table (organization_id uuid, display_name text, accent_color text)
+returns table (organization_id uuid, display_name text, accent_color text, logo_sha256 text)
 language sql
 stable
 security definer
 set search_path = ogevia, pg_temp
 as $$
-  select o.id, o.display_name, o.accent_color
+  select o.id, o.display_name, o.accent_color, o.logo_sha256
   from ogevia.organizations o
   where o.id = p_organization_id
     and ogevia.require_actor() is not null
@@ -319,6 +335,196 @@ as $$
   order by ps.service_name, ps.service_code;
 $$;
 
+-- ---------------------------------------------------------------------------
+-- Agency logo
+-- ---------------------------------------------------------------------------
+create function ogevia_api.set_organization_logo(
+  p_organization_id uuid, p_logo_id uuid, p_object_key text, p_s3_version_id text,
+  p_content_type text, p_byte_size integer, p_sha256 text, p_idempotency_key uuid default null
+)
+returns text
+language plpgsql
+security definer
+set search_path = ogevia, pg_temp
+as $$
+declare
+  v_actor uuid := ogevia.require_actor();
+  v_fp text := concat_ws('|', p_organization_id, lower(coalesce(p_sha256, '')));
+  v_prior jsonb;
+  v_before jsonb;
+begin
+  if not ogevia.is_active_member(p_organization_id) then
+    raise exception 'Organization not found' using errcode = 'OGN04';
+  end if;
+  if not ogevia.has_permission(p_organization_id, 'organization.update') then
+    raise exception 'Only the agency owner can change the logo' using errcode = 'OGA03';
+  end if;
+  v_prior := ogevia.idempotency_begin('set_logo', p_idempotency_key, p_organization_id, v_fp);
+  if v_prior is not null then return v_prior ->> 'sha256'; end if;
+  if p_object_key <> p_organization_id::text || '/branding/logo/' || p_logo_id::text then
+    raise exception 'Invalid object key' using errcode = 'OGV22';
+  end if;
+  if p_content_type not in ('image/png', 'image/jpeg') or p_byte_size not between 1 and 512000 then
+    raise exception 'The logo must be a PNG or JPEG of at most 512 KB' using errcode = 'OGV22';
+  end if;
+  select jsonb_build_object('logo_sha256', o.logo_sha256, 'logo_object_key', o.logo_object_key) into v_before
+    from ogevia.organizations o where o.id = p_organization_id for update;
+  update ogevia.organizations
+     set logo_object_key = p_object_key, logo_s3_version_id = p_s3_version_id, logo_content_type = p_content_type,
+         logo_sha256 = lower(p_sha256), logo_updated_at = now(), updated_at = now()
+   where id = p_organization_id;
+  perform ogevia.write_audit(p_organization_id, 'organization.logo_updated', 'organizations', p_organization_id,
+    v_before, jsonb_build_object('logo_sha256', lower(p_sha256), 'logo_object_key', p_object_key, 'byte_size', p_byte_size), null);
+  perform ogevia.idempotency_finish('set_logo', p_idempotency_key, p_organization_id, v_fp, jsonb_build_object('sha256', lower(p_sha256)));
+  return lower(p_sha256);
+end;
+$$;
+
+create function ogevia_api.clear_organization_logo(p_organization_id uuid)
+returns void
+language plpgsql
+security definer
+set search_path = ogevia, pg_temp
+as $$
+declare
+  v_before jsonb;
+begin
+  perform ogevia.require_actor();
+  if not ogevia.is_active_member(p_organization_id) then
+    raise exception 'Organization not found' using errcode = 'OGN04';
+  end if;
+  if not ogevia.has_permission(p_organization_id, 'organization.update') then
+    raise exception 'Only the agency owner can change the logo' using errcode = 'OGA03';
+  end if;
+  select jsonb_build_object('logo_sha256', o.logo_sha256, 'logo_object_key', o.logo_object_key) into v_before
+    from ogevia.organizations o where o.id = p_organization_id for update;
+  -- The S3 object is kept (versioned bucket); only the reference is removed.
+  update ogevia.organizations
+     set logo_object_key = null, logo_s3_version_id = null, logo_content_type = null, logo_sha256 = null,
+         logo_updated_at = now(), updated_at = now()
+   where id = p_organization_id;
+  perform ogevia.write_audit(p_organization_id, 'organization.logo_removed', 'organizations', p_organization_id,
+    v_before, jsonb_build_object('logo_sha256', null), null);
+end;
+$$;
+
+create function ogevia_api.get_organization_logo(p_organization_id uuid)
+returns table (object_key text, s3_version_id text, content_type text, sha256 text)
+language sql
+stable
+security definer
+set search_path = ogevia, pg_temp
+as $$
+  select o.logo_object_key, o.logo_s3_version_id, o.logo_content_type, o.logo_sha256
+  from ogevia.organizations o
+  where o.id = p_organization_id
+    and o.logo_object_key is not null
+    and ogevia.require_actor() is not null
+    and ogevia.is_active_member(p_organization_id);
+$$;
+
+-- ---------------------------------------------------------------------------
+-- Restricted client names
+-- ---------------------------------------------------------------------------
+insert into ogevia.permissions (key, description) values
+  ('clients.names.read', 'See client legal names (office only; never caregivers)'),
+  ('clients.names.manage', 'Enter or change client legal names (office only)')
+on conflict (key) do nothing;
+insert into ogevia.role_permissions (role, permission_key) values
+  ('organization_owner', 'clients.names.read'),
+  ('organization_owner', 'clients.names.manage'),
+  ('manager', 'clients.names.read'),
+  ('manager', 'clients.names.manage')
+on conflict do nothing;
+
+create table ogevia.client_private_names (
+  client_id uuid primary key,
+  organization_id uuid not null references ogevia.organizations(id),
+  legal_first_name text not null check (length(btrim(legal_first_name)) between 1 and 80),
+  legal_last_name text not null check (length(btrim(legal_last_name)) between 1 and 80),
+  updated_by uuid not null references ogevia.app_users(id),
+  updated_at timestamptz not null default now(),
+  foreign key (client_id, organization_id) references ogevia.clients (id, organization_id)
+);
+alter table ogevia.client_private_names enable row level security;
+create policy readonly_select on ogevia.client_private_names for select to ogevia_readonly using (true);
+grant select on ogevia.client_private_names to ogevia_readonly;
+
+-- Office directory: codes for visits.read; names only with clients.names.read.
+create function ogevia_api.list_client_directory(p_organization_id uuid)
+returns table (client_id uuid, client_code text, caregiver_display_code text, status ogevia.client_status,
+               legal_first_name text, legal_last_name text)
+language sql
+stable
+security definer
+set search_path = ogevia, pg_temp
+as $$
+  with ctx as (
+    select ogevia.require_actor() as actor,
+           ogevia.is_active_member(p_organization_id) and ogevia.has_permission(p_organization_id, 'visits.read') as can_list,
+           ogevia.has_permission(p_organization_id, 'clients.names.read') as can_names
+  )
+  select c.id, c.client_code, c.caregiver_display_code, c.status,
+         case when ctx.can_names then n.legal_first_name end,
+         case when ctx.can_names then n.legal_last_name end
+  from ctx
+  join ogevia.clients c on c.organization_id = p_organization_id and c.deleted_at is null
+  left join ogevia.client_private_names n on n.client_id = c.id
+  where ctx.actor is not null and ctx.can_list
+  order by c.client_code;
+$$;
+
+create function ogevia_api.set_client_legal_name(
+  p_organization_id uuid, p_client_id uuid, p_first_name text, p_last_name text, p_idempotency_key uuid default null
+)
+returns void
+language plpgsql
+security definer
+set search_path = ogevia, pg_temp
+as $$
+declare
+  v_actor uuid := ogevia.require_actor();
+  v_first text := btrim(coalesce(p_first_name, ''));
+  v_last text := btrim(coalesce(p_last_name, ''));
+  v_fp text := concat_ws('|', p_organization_id, p_client_id, v_first, v_last);
+  v_prior jsonb;
+  v_before jsonb;
+begin
+  if not ogevia.is_active_member(p_organization_id) then
+    raise exception 'Organization not found' using errcode = 'OGN04';
+  end if;
+  if not ogevia.has_permission(p_organization_id, 'clients.names.manage') then
+    raise exception 'You do not have permission to change client names' using errcode = 'OGA03';
+  end if;
+  v_prior := ogevia.idempotency_begin('set_client_name', p_idempotency_key, p_organization_id, v_fp);
+  if v_prior is not null then return; end if;
+  if not exists (select 1 from ogevia.clients c where c.id = p_client_id and c.organization_id = p_organization_id and c.deleted_at is null) then
+    raise exception 'Client not found' using errcode = 'OGN04';
+  end if;
+  if length(v_first) not between 1 and 80 or length(v_last) not between 1 and 80 then
+    raise exception 'Enter a first and last name (up to 80 characters each)' using errcode = 'OGV22';
+  end if;
+  select to_jsonb(n) - array['updated_by', 'updated_at'] into v_before from ogevia.client_private_names n where n.client_id = p_client_id;
+  insert into ogevia.client_private_names (client_id, organization_id, legal_first_name, legal_last_name, updated_by)
+  values (p_client_id, p_organization_id, v_first, v_last, v_actor)
+  on conflict (client_id) do update set legal_first_name = excluded.legal_first_name, legal_last_name = excluded.legal_last_name,
+    updated_by = excluded.updated_by, updated_at = now();
+  perform ogevia.write_audit(p_organization_id, 'client.legal_name_set', 'clients', p_client_id,
+    v_before, jsonb_build_object('legal_first_name', v_first, 'legal_last_name', v_last), null);
+  perform ogevia.idempotency_finish('set_client_name', p_idempotency_key, p_organization_id, v_fp, jsonb_build_object('ok', true));
+end;
+$$;
+
+revoke all on function ogevia_api.set_organization_logo(uuid, uuid, text, text, text, integer, text, uuid) from public;
+revoke all on function ogevia_api.clear_organization_logo(uuid) from public;
+revoke all on function ogevia_api.get_organization_logo(uuid) from public;
+revoke all on function ogevia_api.list_client_directory(uuid) from public;
+revoke all on function ogevia_api.set_client_legal_name(uuid, uuid, text, text, uuid) from public;
+grant execute on function ogevia_api.set_organization_logo(uuid, uuid, text, text, text, integer, text, uuid) to ogevia_app;
+grant execute on function ogevia_api.clear_organization_logo(uuid) to ogevia_app;
+grant execute on function ogevia_api.get_organization_logo(uuid) to ogevia_app;
+grant execute on function ogevia_api.list_client_directory(uuid) to ogevia_app;
+grant execute on function ogevia_api.set_client_legal_name(uuid, uuid, text, text, uuid) to ogevia_app;
 revoke all on function ogevia_api.get_my_profile() from public;
 revoke all on function ogevia_api.set_my_display_name(text) from public;
 revoke all on function ogevia_api.get_organization_branding(uuid) from public;

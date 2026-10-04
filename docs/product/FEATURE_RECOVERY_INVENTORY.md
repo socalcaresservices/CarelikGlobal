@@ -29,7 +29,7 @@ Classification:
 | Exceptions / NEEDS ATTENTION | Report view plus Action Center | Report view only | UX item 2: make it a visible entry with a count |
 | Billing review | Working | Working (read-only, hours only) | Done |
 | **Billing approval (human)** | Working (`approve_visit_for_billing`) | **Built on this branch (0019), not deployed** | Deploy needs approval |
-| Payer submission | Working (owner, `billing.submit`) | Not migrated | Later; owner-only |
+| Payer submission | Supabase has a manual "mark as submitted" ledger (owner, `billing.submit`); it sends nothing to payers | Not migrated | **Automatic payer submission and eBilling connectors are out of launch scope** (owner decision, 2026-10-04). A manual "recorded as submitted" ledger is a later, optional item; it is not a launch requirement. |
 | Owner utilisation / financial home | Hours stand-in (`owner-insights.tsx`), not revenue | Absent | New build per brief; needs rate and cost sources |
 | Payroll / caregiver cost / margin | Absent | Absent | Needs a cost data source; do not fabricate |
 | Clients, Care Team, Authorizations, Schedule | Working | Not migrated (DB has `amend_client_authorization` but no route) | Migrate in order: authorizations, schedule, clients, team |

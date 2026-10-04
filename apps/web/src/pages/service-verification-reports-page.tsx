@@ -640,6 +640,11 @@ export function ServiceVerificationReportsPage() {
     () => clientOptions.find(([id]) => id === clientFilter)?.[1] ?? null,
     [clientFilter, clientOptions],
   );
+  // The client code, shown next to a legal name (office printouts only).
+  const selectedClientCode = useMemo(() => {
+    const row = rows.find((r) => r.client_id === clientFilter);
+    return row && row.client_legal_name ? row.client_code : null;
+  }, [clientFilter, rows]);
   const selectedServiceName = useMemo(
     () => serviceOptions.find(([id]) => id === serviceFilter)?.[1] ?? null,
     [serviceFilter, serviceOptions],
@@ -1668,7 +1673,7 @@ export function ServiceVerificationReportsPage() {
                     ? "Correction History"
                     : "Service Verification Report"}
             </p>
-            {selectedClientName ? <p>Client: {selectedClientName}</p> : null}
+            {selectedClientName ? <p>Client: {selectedClientName}{selectedClientCode ? ` (${selectedClientCode})` : ""}</p> : null}
             {selectedCaregiverName && reportView !== "calendar" ? <p>Caregiver: {selectedCaregiverName}</p> : null}
             {reportView === "calendar" || reportView === "reconciliation" ? (
               <p>Month: {calendarMonthLabel}</p>
@@ -1783,7 +1788,9 @@ export function ServiceVerificationReportsPage() {
             <>
               <div className="mt-4 border-b border-slate-200 pb-3">
                 <p className="font-semibold text-slate-950">
-                  {selectedClientName ?? "Selected client"} · {calendarMonthLabel}
+                  {selectedClientName ?? "Selected client"}
+                  {selectedClientCode ? <span className="ml-1 text-sm font-normal text-slate-500">({selectedClientCode})</span> : null}
+                  {" "}· {calendarMonthLabel}
                 </p>
                 {calendarVisitsQuery.isError ? (
                   <p role="alert" className="mt-1 text-sm text-red-700">Could not load this month's visits.</p>

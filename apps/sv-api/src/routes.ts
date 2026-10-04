@@ -2,7 +2,7 @@ import { createHash, randomBytes, randomUUID } from "node:crypto";
 import type { Queryable } from "@carelik/auth/server";
 import { ApiError } from "./errors";
 import { signatureObjectKey, validateSignaturePng, type EvidenceStore } from "./evidence";
-import { documentObjectKey, MAX_DOCUMENT_BYTES, validateDocumentFile } from "./documents";
+import { documentObjectKey, logoObjectKey, MAX_DOCUMENT_BYTES, MAX_LOGO_BYTES, validateDocumentFile, validateLogoFile } from "./documents";
 import type { HttpApiEvent } from "./http";
 import {
   date,
@@ -115,6 +115,81 @@ export const ROUTES: Record<string, Route> = {
         rows(db, "select * from ogevia_api.set_organization_branding($1, $2, $3, $4)", [org, name, color, key]),
       );
       return { branding };
+    },
+  },
+
+  // Agency logo (0020): owner sets it; any member of the agency reads it.
+  "POST /v1/branding/logo": {
+    mutating: true,
+    handle: async ({ event, tx, evidence }) => {
+      const body = parseBody(event.body, event.isBase64Encoded);
+      const key = idempotencyKey(event.headers);
+      const org = uuid(body.organizationId, "organizationId");
+      const file = validateLogoFile(body.fileBase64, body.contentType);
+      // Authority before storing: only holders of organization.update.
+      const [me] = await tx((db) => rows(db, "select permissions from ogevia_api.get_my_context() where organization_id = $1", [org]));
+      if (!me) throw new ApiError(404, "not_found", "Organization not found.");
+      if (!(me.permissions as string[]).includes("organization.update")) throw new ApiError(403, "forbidden", "Only the agency owner can change the logo.");
+      const logoId = randomUUID();
+      const objectKey = logoObjectKey(org, logoId);
+      let s3VersionId: string | null;
+      try {
+        ({ versionId: s3VersionId } = await evidence.put(objectKey, file.bytes, file.sha256, file.contentType));
+      } catch {
+        throw new ApiError(503, "storage_unavailable", "The logo could not be stored. Nothing was changed; please try again.");
+      }
+      const sha256 = await tx(async (db) => {
+        const r = await db.query("select ogevia_api.set_organization_logo($1, $2, $3, $4, $5, $6, $7, $8) as s", [
+          org, logoId, objectKey, s3VersionId, file.contentType, file.bytes.length, file.sha256Hex, key,
+        ]);
+        return (r.rows[0] as { s: string }).s;
+      });
+      return { logoSha256: sha256 };
+    },
+  },
+
+  "POST /v1/branding/logo/clear": {
+    mutating: true,
+    handle: async ({ event, tx }) => {
+      const body = parseBody(event.body, event.isBase64Encoded);
+      const org = uuid(body.organizationId, "organizationId");
+      await tx((db) => db.query("select ogevia_api.clear_organization_logo($1)", [org]));
+      return { logoSha256: null };
+    },
+  },
+
+  "GET /v1/branding/logo": {
+    mutating: false,
+    handle: async ({ event, tx, evidence }) => {
+      const org = orgParam(event);
+      const [meta] = await tx((db) => rows(db, "select * from ogevia_api.get_organization_logo($1)", [org]));
+      if (!meta) throw new ApiError(404, "not_found", "No logo.");
+      const stored = await evidence.get(meta.objectKey as string, (meta.s3VersionId as string | null) ?? null, MAX_LOGO_BYTES);
+      const digest = createHash("sha256").update(stored.bytes).digest("hex");
+      if (digest !== meta.sha256) throw new ApiError(500, "integrity_error", "The stored logo failed its integrity check.");
+      return { contentType: meta.contentType, fileBase64: stored.bytes.toString("base64"), sha256: digest };
+    },
+  },
+
+  // Client directory (0020): codes for visits.read; legal names only with clients.names.read (never caregivers).
+  "GET /v1/clients/directory": {
+    mutating: false,
+    handle: async ({ event, tx }) => ({
+      clients: await tx((db) => rows(db, "select * from ogevia_api.list_client_directory($1)", [orgParam(event)])),
+    }),
+  },
+
+  "POST /v1/clients/{clientId}/legal-name": {
+    mutating: true,
+    handle: async ({ event, tx }) => {
+      const client = uuid(p(event).clientId, "clientId");
+      const body = parseBody(event.body, event.isBase64Encoded);
+      const key = idempotencyKey(event.headers);
+      const org = uuid(body.organizationId, "organizationId");
+      const first = text(body.firstName, "firstName", 80, { required: true });
+      const last = text(body.lastName, "lastName", 80, { required: true });
+      await tx((db) => db.query("select ogevia_api.set_client_legal_name($1, $2, $3, $4, $5)", [org, client, first, last, key]));
+      return { ok: true };
     },
   },
 
