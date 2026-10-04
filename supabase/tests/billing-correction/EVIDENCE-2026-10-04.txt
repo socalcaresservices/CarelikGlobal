@@ -1,0 +1,24 @@
+Evidence run 2026-10-04T04:09:51Z, PostgreSQL 16.14 (Ubuntu 16.14-0ubuntu0.24.04.1). Fix under test: supabase/proposed/20261004120000_block_correction_of_billing_approved_visits.sql (sha256 a0843174e3894920...)
+
+## 1. Reproduction on the real production function bodies, then the fix (run.sh)
+STEP 1 approved original visit: approval b2aeb453-1aab-458a-ad86-aaeddcddbdd3
+STEP 2 corrected: original is now corrected, replacement a5a8b6e3-22e8-4ab8-a7c5-74b4754a98dd is signed
+STEP 3 approval b2aeb453-1aab-458a-ad86-aaeddcddbdd3 is still ACTIVE on the replaced (corrected) row
+STEP 4 replacement a5a8b6e3-22e8-4ab8-a7c5-74b4754a98dd is listed as Billing Ready
+STEP 5 second approval d65620aa-3143-47f4-8609-52a6a041f37c accepted for the replacement
+STEP 6 submission 6624839e-91ba-4f25-b503-4224f3e72ff0 contains 2 items totalling 210 minutes for ONE visit actually worked for 90 minutes
+REPRODUCED: 210 minutes submitted for one 90-minute visit
+FIX STEP 1 correction of an approved visit refused; visit unchanged
+FIX STEP 2 after voiding the approval, the correction applies
+FIX VERIFIED
+
+## 2. Regression: existing production Service Verification harness with the fix loaded (regression.sh)
+proposed fix loaded
+visit/shift link assertions: all passed
+shift-based visit access assertions: all passed
+manager close-out assertions: all passed
+REGRESSION PASSED: existing Service Verification assertions all pass with the fix loaded
+
+## 3. Live production, read-only (2026-10-04, earlier in this session)
+correct_service_visit, approve_visit_for_billing, submit_billing_approvals, list_billing_ready_visits: md5 of live bodies identical to the migration texts used above.
+billing_approvals = 0, visit_corrections = 0 (nothing double-billed).

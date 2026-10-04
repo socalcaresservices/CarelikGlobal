@@ -31,6 +31,6 @@ q -f "$HERE/scenario.sql"
 
 # The proposed fix (not applied anywhere): load it, then the same path is refused.
 echo "--- proposed fix ---"
-q -f "$HERE/proposed_fix.sql"
-q -f "$HERE/proposed_fix.sql"   # re-runnable
+q -f "$HERE/../../proposed/20261004120000_block_correction_of_billing_approved_visits.sql"
+q -f "$HERE/../../proposed/20261004120000_block_correction_of_billing_approved_visits.sql"   # re-runnable
 q -f "$HERE/verify_fix.sql"

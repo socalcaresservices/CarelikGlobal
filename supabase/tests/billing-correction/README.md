@@ -14,7 +14,7 @@
 - On 2026-10-04 the live production function bodies were compared read-only by md5 against these migration texts: `correct_service_visit`, `approve_visit_for_billing`, `submit_billing_approvals` and `list_billing_ready_visits` are **identical**.
 - Live production (read-only, counts only) has 0 billing approvals and 0 visit corrections, so the defect has not caused a double submission yet.
 
-**Proposed fix (not applied):** `proposed_fix.sql`, a status guard trigger, which is the same rule as AWS migration 0019. `verify_fix.sql` shows:
+**Proposed fix (not applied):** `supabase/proposed/20261004120000_block_correction_of_billing_approved_visits.sql`, a status guard trigger, which is the same rule as AWS migration 0019. `verify_fix.sql` shows:
 - the correction of an approved visit is refused and leaves nothing behind;
 - after `void_billing_approval`, the correction applies.
 
