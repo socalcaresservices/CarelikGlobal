@@ -1,0 +1,8 @@
+billing.read
+clients.names.manage
+clients.names.read
+documents.manage
+documents.manage_own
+documents.read
+documents.review_own
+organization.update

@@ -166,7 +166,7 @@ Proposal: `docs/product/PRICING_PROPOSAL.md`. It is a recommendation. Nothing is
 | Item | Status |
 | --- | --- |
 | Pilot through 0018 | LIVE; not restarted |
-| 1a39dd5 increment (0019–0021): backup, rollback that keeps records, strict scope check, 9 live checks | Owner run status **NOT VERIFIED**; read-only status command given |
+| 1a39dd5 increment (0019–0021): backup, rollback that keeps records, strict scope check, 9 live checks | **NOT VERIFIED** live. Paste block with a verifying preflight, supported-state resume and a value-level post-check; rehearsed (fresh, failure + resume, complete, 12 refusals, 5 value-change detections) |
 | Release 0022–0025: snapshot, account/record counts checked unchanged, applied migrations never modified (checksums), strict gate (25-variant self-test), 12 live checks, layered rollback | Package ready; rehearsal against stubbed AWS: see the commit that pins it. Requires the 1a39dd5 increment live. New fixed cost ≈ 7.30 USD/month (Lambda endpoint) needs approval (typing DEPLOY). |
 | Full workflow on real AWS (authorization and scheduling through confirmation, approval and reports), with two-agency isolation | After deployment. Authorizations and schedules still come from seeds, so only the seeded part can be tested. |
 | Phone retest of changed workflows | After deployment (plan section 6) |
@@ -176,7 +176,7 @@ Proposal: `docs/product/PRICING_PROPOSAL.md`. It is a recommendation. Nothing is
 
 | # | Blocker | Next step owner | Next action | Fits the 13:20 target? |
 | --- | --- | --- | --- | --- |
-| 0 | 1a39dd5 increment NOT deployed (live: no run folder, 38 pilot routes) | Owner | Paste `infra/aws/slice/increment-resume-block.sh` (preflight first; stops on any partial state) | — |
+| 0 | 1a39dd5 increment NOT VERIFIED. Live evidence so far: no `~/ogevia-increment-run`, 38 routes (the pilot route names). That shows the workflow did not complete; it does not prove the database, Lambda or web are unchanged | Owner | Paste `infra/aws/slice/increment-resume-block.sh`: its preflight verifies routes and authorisation, Lambda code and settings, web build, TEST database, ledger, database objects and record values before anything is deployed | — |
 | 1 | Release 0022–0026 (administration, invitations, planned assignments, schedule and call-outs, S3 endpoint fix) not deployed | Owner | Only after 0 is verified: paste the release block, type DEPLOY, then screen checks 6.1–6.11 | — |
 | 2 | Staff shifts, call-outs, replacements: built (0026), not deployed | Owner | Deploys with release 0022–0026 | — |
 | 3 | Utilisation beyond monthly per service (section 9) | Claude (build) | Periods, breakdowns, coverage and expiry warnings, projections | **No** |
