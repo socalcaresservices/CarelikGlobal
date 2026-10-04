@@ -1,7 +1,8 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { Button, Card } from "@carelik/ui";
-import { formatHours, formatVisitDate } from "@/lib/service-verification";
+import { confirmationMethodLabel, formatHours, formatVisitDate } from "@/lib/service-verification";
+import { useIsNarrow } from "@/lib/use-is-narrow";
 import { newIdempotencyKey, type BillingApprovalRow, type BillingReviewRow } from "@/lib/sv-backend";
 import { useServiceVerificationBackend } from "@/lib/sv-backend-supabase";
 import { useOrganization } from "@/providers/organization-provider";
@@ -43,6 +44,7 @@ export function BillingReviewPage() {
   const queryClient = useQueryClient();
   const [pending, setPending] = useState<Pending | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const narrow = useIsNarrow();
 
   const query = useQuery({
     queryKey: ["aws-billing-review", activeOrganizationId, from, to],
@@ -103,6 +105,46 @@ export function BillingReviewPage() {
     }
   }
 
+  function evidenceCell(r: BillingReviewRow) {
+    return <>{r.hasSignatureEvidence ? (
+                      <Button type="button" variant="secondary" onClick={() => void showSignature(r.visitId)}>View signature</Button>
+                    ) : (
+                      confirmationMethodLabel(r.confirmationMethod)
+                    )}</>;
+  }
+  function approvalCell(r: BillingReviewRow) {
+    return <>{(() => {
+                      const a = activeApproval.get(r.visitId);
+                      if (a) {
+                        return (
+                          <div className="space-y-1">
+                            <p className="font-medium text-emerald-800">Approved {formatHours(a.approvedMinutes)} h</p>
+                            <p className="text-xs text-slate-500">by {a.approvedByName} · not submitted</p>
+                            {canApprove ? (
+                              <button type="button" className="text-xs text-slate-600 underline" onClick={() => { setNotice(null); setPending({ kind: "void", approval: a, reason: "", key: newIdempotencyKey(), busy: false, error: null }); }}>
+                                Void approval
+                              </button>
+                            ) : null}
+                          </div>
+                        );
+                      }
+                      if (r.reviewState !== "ready") return <span className="text-slate-500">Review first</span>;
+                      if (!canApprove) return <span className="text-slate-500">Not approved</span>;
+                      return (
+                        <Button type="button" onClick={() => { setNotice(null); setPending({ kind: "approve", row: r, minutes: String(r.billableMinutes ?? 0), notes: "", key: newIdempotencyKey(), busy: false, error: null }); }}>
+                          Approve
+                        </Button>
+                      );
+                    })()}</>;
+  }
+  function amountCell(r: BillingReviewRow) {
+    return <>{(() => {
+                        const a = activeApproval.get(r.visitId);
+                        if (!a) return "—";
+                        return a.amountCents === null ? <span className="text-slate-500">Rate not set</span> : money(a.amountCents);
+                      })()}</>;
+  }
+
   if (!canRead) return <p className="text-sm text-slate-600">You do not have access to billing review.</p>;
 
   const rows = query.data ?? [];
@@ -130,7 +172,28 @@ export function BillingReviewPage() {
       {approvalsQuery.isError ? <p role="alert" className="text-sm text-red-700">Approvals could not be loaded: {(approvalsQuery.error as Error).message}</p> : null}
       {notice ? <p role="status" className="text-sm text-emerald-800">{notice}</p> : null}
       {!query.isLoading && !query.isError && rows.length === 0 ? <p className="text-sm text-slate-500">No signed or review visits in this range.</p> : null}
-      {rows.length > 0 ? (
+      {rows.length > 0 && narrow ? (
+        <ul aria-label="Billing review visits" className="space-y-3">
+          {rows.map((r) => (
+            <li key={r.visitId} className="rounded-xl border border-slate-200 bg-white p-3">
+              <div className="flex flex-wrap items-start justify-between gap-2">
+                <div>
+                  <p className="font-semibold text-slate-950">{formatVisitDate(`${r.serviceDate}T12:00:00Z`)} · {r.serviceCode}</p>
+                  <p className="font-mono text-[11px] text-slate-500">Visit {r.visitNumber ?? "—"}{r.isCorrection ? " (corrected)" : ""}</p>
+                </div>
+                <span className={r.reviewState === "ready" ? "rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-medium text-emerald-800" : "rounded-full bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-900"}>
+                  {REVIEW_LABEL[r.reviewState] ?? r.reviewState}
+                </span>
+              </div>
+              <p className="mt-1 text-sm text-slate-800">Worked {formatHours(r.workedMinutes ?? 0)} h · Billable {formatHours(r.billableMinutes ?? 0)} h</p>
+              <div className="mt-2 text-sm">{evidenceCell(r)}</div>
+              <div className="mt-2 text-sm">{approvalCell(r)}</div>
+              {canSeeMoney ? <p className="mt-1 text-sm text-slate-700">Amount: {amountCell(r)}</p> : null}
+            </li>
+          ))}
+        </ul>
+      ) : null}
+      {rows.length > 0 && !narrow ? (
         <Card className="overflow-x-auto p-0">
           <table className="w-full text-left text-sm">
             <thead className="bg-slate-50 text-xs uppercase text-slate-500">
@@ -138,8 +201,8 @@ export function BillingReviewPage() {
                 <th scope="col" className="px-3 py-2">Visit</th>
                 <th scope="col" className="px-3 py-2">Date</th>
                 <th scope="col" className="px-3 py-2">Service</th>
-                <th scope="col" className="px-3 py-2">Worked h</th>
-                <th scope="col" className="px-3 py-2">Billable h</th>
+                <th scope="col" className="px-3 py-2">Worked</th>
+                <th scope="col" className="px-3 py-2">Billable</th>
                 <th scope="col" className="px-3 py-2">State</th>
                 <th scope="col" className="px-3 py-2">Evidence</th>
                 <th scope="col" className="px-3 py-2">Approval</th>
@@ -152,50 +215,12 @@ export function BillingReviewPage() {
                   <td className="px-3 py-2">{r.visitNumber ?? "—"}{r.isCorrection ? " (corrected)" : ""}</td>
                   <td className="px-3 py-2">{formatVisitDate(`${r.serviceDate}T12:00:00Z`)}</td>
                   <td className="px-3 py-2">{r.serviceCode}</td>
-                  <td className="px-3 py-2">{formatHours(r.workedMinutes ?? 0)}</td>
-                  <td className="px-3 py-2">{formatHours(r.billableMinutes ?? 0)}</td>
+                  <td className="px-3 py-2">{formatHours(r.workedMinutes ?? 0)} h</td>
+                  <td className="px-3 py-2">{formatHours(r.billableMinutes ?? 0)} h</td>
                   <td className="px-3 py-2">{REVIEW_LABEL[r.reviewState] ?? r.reviewState}</td>
-                  <td className="px-3 py-2">
-                    {r.hasSignatureEvidence ? (
-                      <Button type="button" variant="secondary" onClick={() => void showSignature(r.visitId)}>View signature</Button>
-                    ) : (
-                      r.confirmationMethod ?? "—"
-                    )}
-                  </td>
-                  <td className="px-3 py-2">
-                    {(() => {
-                      const a = activeApproval.get(r.visitId);
-                      if (a) {
-                        return (
-                          <div className="space-y-1">
-                            <p className="font-medium text-emerald-800">Approved {formatHours(a.approvedMinutes)} h</p>
-                            <p className="text-xs text-slate-500">by {a.approvedByName} · not submitted</p>
-                            {canApprove ? (
-                              <button type="button" className="text-xs text-slate-600 underline" onClick={() => { setNotice(null); setPending({ kind: "void", approval: a, reason: "", key: newIdempotencyKey(), busy: false, error: null }); }}>
-                                Void approval
-                              </button>
-                            ) : null}
-                          </div>
-                        );
-                      }
-                      if (r.reviewState !== "ready") return <span className="text-slate-500">Review first</span>;
-                      if (!canApprove) return <span className="text-slate-500">Not approved</span>;
-                      return (
-                        <Button type="button" onClick={() => { setNotice(null); setPending({ kind: "approve", row: r, minutes: String(r.billableMinutes ?? 0), notes: "", key: newIdempotencyKey(), busy: false, error: null }); }}>
-                          Approve
-                        </Button>
-                      );
-                    })()}
-                  </td>
-                  {canSeeMoney ? (
-                    <td className="px-3 py-2">
-                      {(() => {
-                        const a = activeApproval.get(r.visitId);
-                        if (!a) return "—";
-                        return a.amountCents === null ? <span className="text-slate-500">Rate not set</span> : money(a.amountCents);
-                      })()}
-                    </td>
-                  ) : null}
+                  <td className="px-3 py-2">{evidenceCell(r)}</td>
+                  <td className="px-3 py-2">{approvalCell(r)}</td>
+                  {canSeeMoney ? <td className="px-3 py-2">{amountCell(r)}</td> : null}
                 </tr>
               ))}
             </tbody>

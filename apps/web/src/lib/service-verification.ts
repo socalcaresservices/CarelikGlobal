@@ -60,7 +60,7 @@ export function formatClockTime(value: string | Date): string {
 // A visit is linked to its scheduled shift on the server at Time In
 // (0013 / 20260826070000). Visits started with no matching shift - and every
 // visit recorded before the link existed - have no scheduled window.
-export const UNLINKED_VISIT_LABEL = "Not linked to a scheduled shift";
+export const UNLINKED_VISIT_LABEL = "Unscheduled visit";
 
 export function formatScheduledWindow(
   startsAt: string | null | undefined,
@@ -302,3 +302,14 @@ export function correctedTimeValue(
   const parsed = pacificWallTimeToDate(entry);
   return parsed.ok ? { ok: true, iso: parsed.value.toISOString(), value: parsed.value } : parsed;
 }
+
+/** Plain-language confirmation methods (stored values stay unchanged). */
+export const CONFIRMATION_METHOD_LABEL: Record<string, string> = {
+  draw: "Drawn signature",
+  assisted_mark: "Assisted mark",
+  typed: "Typed name",
+  verbal: "Verbal confirmation",
+  unable_to_confirm: "Unable to confirm",
+};
+export const confirmationMethodLabel = (method: string | null | undefined) =>
+  method ? CONFIRMATION_METHOD_LABEL[method] ?? method : "—";

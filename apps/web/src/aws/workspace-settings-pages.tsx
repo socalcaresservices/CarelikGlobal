@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import { Button, Card } from "@carelik/ui";
 import { newIdempotencyKey } from "@/lib/sv-backend";
 import { useOrganization } from "@/providers/organization-provider";
+import { contrastWithWhite } from "./contrast";
 import { useAwsApi, useBranding, useMyDisplayName, useSetMyDisplayName, type Branding } from "./aws-workspace";
 
 const message = (cause: unknown, fallback: string) => (cause instanceof Error ? cause.message : fallback);
@@ -46,15 +47,6 @@ export function ProfilePage() {
       </Card>
     </div>
   );
-}
-
-function hexToLuminance(hex: string): number {
-  const c = [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16) / 255).map((v) => (v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4));
-  return 0.2126 * c[0]! + 0.7152 * c[1]! + 0.0722 * c[2]!;
-}
-/** Contrast of white text on this colour (the server enforces the same 4.5:1 rule). */
-export function contrastWithWhite(hex: string): number {
-  return Math.round((1.05 / (hexToLuminance(hex) + 0.05)) * 100) / 100;
 }
 
 /** Owner-only: agency name and accent colour, applied to every role's header. */

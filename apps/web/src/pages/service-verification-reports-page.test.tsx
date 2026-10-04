@@ -1,3 +1,4 @@
+import { MemoryRouter } from "react-router-dom";
 import {
   fireEvent,
   render,
@@ -60,9 +61,11 @@ function renderPage() {
     defaultOptions: { queries: { retry: false } },
   });
   return render(
-    <QueryClientProvider client={queryClient}>
-      <ServiceVerificationReportsPage />
-    </QueryClientProvider>,
+    <MemoryRouter>
+      <QueryClientProvider client={queryClient}>
+        <ServiceVerificationReportsPage />
+      </QueryClientProvider>
+    </MemoryRouter>,
   );
 }
 
@@ -148,14 +151,14 @@ describe("ServiceVerificationReportsPage", () => {
     } as never);
 
     renderPage();
-    await openReport(/Visit details/);
+    await openReport(/Visit records \(list\)/);
 
     const table = await screen.findByRole("table", { name: "Visit details" });
     // 12:30Z-14:30Z is 5:30-7:30 AM Pacific (PDT).
     const linkedRow = within(table).getByText("SCS-V-20260801-4F7K").closest("tr")!;
     expect(linkedRow).toHaveTextContent(/Scheduled 5:30\sAM–7:30\sAM/);
     const unlinkedRow = within(table).getByText("SCS-V-20260801-9Z9Z").closest("tr")!;
-    expect(unlinkedRow).toHaveTextContent("Not linked to a scheduled shift");
+    expect(unlinkedRow).toHaveTextContent("Unscheduled visit");
   });
 
   it("lists missed clock-outs and unconfirmed visits under Exceptions, but not visits still in their shift", async () => {
@@ -177,7 +180,7 @@ describe("ServiceVerificationReportsPage", () => {
     } as never);
 
     renderPage();
-    await openReport(/Exceptions needing attention/);
+    await openReport(/Needs attention/);
 
     const card = (await screen.findByText("Incomplete visits (2)")).closest("div")!;
     const items = within(card).getAllByRole("listitem");
@@ -219,7 +222,7 @@ describe("ServiceVerificationReportsPage", () => {
     };
 
     renderPage();
-    await openReport(/Exceptions needing attention/);
+    await openReport(/Needs attention/);
     fireEvent.click(await screen.findByRole("button", { name: "Close visit" }));
 
     // Only the date is pre-filled (Time In's Pacific date); the time must be entered.
@@ -289,7 +292,7 @@ describe("ServiceVerificationReportsPage", () => {
     );
 
     renderPage();
-    await openReport(/Exceptions needing attention/);
+    await openReport(/Needs attention/);
     fireEvent.click(await screen.findByRole("button", { name: "Close visit" }));
     const wall = toPacificWallTime(ago(60));
     fireEvent.change(screen.getByLabelText("Time Out date"), { target: { value: wall.date } });
@@ -313,8 +316,8 @@ describe("ServiceVerificationReportsPage", () => {
     );
 
     renderPage();
-    await openReport(/Visit details/);
-    fireEvent.click(await screen.findByRole("button", { name: "Correct" }));
+    await openReport(/Visit records \(list\)/);
+    fireEvent.click(await screen.findByRole("button", { name: "Correct visit" }));
 
     // Pre-filled from the original record in Pacific time (13:00Z = 6:00 AM PDT),
     // whatever the device timezone.
@@ -365,8 +368,8 @@ describe("ServiceVerificationReportsPage", () => {
       Promise.resolve(fn === "list_service_visits" ? { data: [withSeconds], error: null } : { data: [], error: null }) as never,
     );
     renderPage();
-    await openReport(/Visit details/);
-    fireEvent.click(await screen.findByRole("button", { name: "Correct" }));
+    await openReport(/Visit records \(list\)/);
+    fireEvent.click(await screen.findByRole("button", { name: "Correct visit" }));
     fireEvent.change(screen.getByLabelText("Reason (required)"), { target: { value: "Left later (synthetic)" } });
     fireEvent.change(screen.getByLabelText("Corrected Time Out minute"), { target: { value: "20" } });
     fireEvent.click(screen.getByRole("button", { name: "Save correction" }));
@@ -391,8 +394,8 @@ describe("ServiceVerificationReportsPage", () => {
       Promise.resolve(fn === "list_service_visits" ? { data: [visitRow], error: null } : { data: [], error: null }) as never,
     );
     renderPage();
-    await openReport(/Visit details/);
-    fireEvent.click(await screen.findByRole("button", { name: "Correct" }));
+    await openReport(/Visit records \(list\)/);
+    fireEvent.click(await screen.findByRole("button", { name: "Correct visit" }));
     fireEvent.change(screen.getByLabelText("Reason (required)"), { target: { value: "x" } });
     fireEvent.change(screen.getByLabelText("Corrected Time In minute"), { target: { value: "" } });
     fireEvent.click(screen.getByRole("button", { name: "Save correction" }));
@@ -416,7 +419,7 @@ describe("ServiceVerificationReportsPage", () => {
     } as never);
 
     renderPage();
-    await openReport(/Exceptions needing attention/);
+    await openReport(/Needs attention/);
     expect(await screen.findByText("Missing Time Out")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Close visit" })).not.toBeInTheDocument();
   });
@@ -431,7 +434,7 @@ describe("ServiceVerificationReportsPage", () => {
     mockedRpc.mockResolvedValue({ data: [{ ...visitRow, time_out_entered_by_manager: true }], error: null } as never);
 
     renderPage();
-    await openReport(/Visit details/);
+    await openReport(/Visit records \(list\)/);
     const table = await screen.findByRole("table", { name: "Visit details" });
     expect(within(table).getByText("Time Out entered by manager")).toBeInTheDocument();
   });
@@ -458,11 +461,13 @@ describe("ServiceVerificationReportsPage", () => {
     } as unknown as ServiceVerificationBackend;
     const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     render(
-      <QueryClientProvider client={queryClient}>
-        <ServiceVerificationBackendContext.Provider value={backend}>
-          <ServiceVerificationReportsPage />
-        </ServiceVerificationBackendContext.Provider>
-      </QueryClientProvider>,
+      <MemoryRouter>
+        <QueryClientProvider client={queryClient}>
+          <ServiceVerificationBackendContext.Provider value={backend}>
+            <ServiceVerificationReportsPage />
+          </ServiceVerificationBackendContext.Provider>
+        </QueryClientProvider>
+      </MemoryRouter>,
     );
     fireEvent.change(screen.getByLabelText("Report"), { target: { value: "reconciliation" } });
 
@@ -499,7 +504,7 @@ describe("ServiceVerificationReportsPage", () => {
 
     renderPage();
 
-    await openReport(/Visit details/);
+    await openReport(/Visit records \(list\)/);
 
     expect(await screen.findByText("Visits (1)")).toBeInTheDocument();
     // "Jamie Smith" also appears in the client filter <option> and the
@@ -511,9 +516,9 @@ describe("ServiceVerificationReportsPage", () => {
     // only the current signed/reviewable version.
     expect(screen.getByText("Worked: 1 hr")).toBeInTheDocument();
     expect(screen.getByText("Billable: 1 hr")).toBeInTheDocument();
-    expect(screen.queryByText("Superseded")).not.toBeInTheDocument();
-    fireEvent.click(screen.getByLabelText("Show superseded records"));
-    expect(await screen.findByText("Superseded")).toBeInTheDocument();
+    expect(screen.queryByText("Replaced by a correction")).not.toBeInTheDocument();
+    fireEvent.click(screen.getByLabelText(/Show replaced records/));
+    expect(await screen.findByText("Replaced by a correction")).toBeInTheDocument();
   });
 
   it("shows manager filters, charts, and a caregiver-hours sheet", async () => {
@@ -527,7 +532,7 @@ describe("ServiceVerificationReportsPage", () => {
 
     renderPage();
 
-    expect(await screen.findByText("Report Center")).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Reports" })).toBeInTheDocument();
     expect(
       await screen.findByRole("option", { name: "Anaheim, CA" }),
     ).toBeInTheDocument();
@@ -631,6 +636,18 @@ describe("ServiceVerificationReportsPage", () => {
     expect(within(calendar).getByText("Billable 1 hr")).toBeInTheDocument();
     expect(within(calendar).queryByText("Jordan Rivera")).not.toBeInTheDocument();
     expect(within(calendar).queryByText("Old Record")).not.toBeInTheDocument();
+    // The calendar has its own whole-month query for this client: the
+    // caregiver, service, status and date filters never make it a partial total.
+    expect(mockedRpc).toHaveBeenCalledWith("list_service_visits", {
+      target_organization_id: ORG_ID,
+      filter_client_id: visitRow.client_id,
+      filter_caregiver_user_id: null,
+      filter_service_id: null,
+      filter_date_from: "2026-08-01",
+      filter_date_to: "2026-08-31",
+      filter_status: null,
+    });
+    expect(screen.getByRole("button", { name: /Print calendar/ })).toBeEnabled();
   });
 
   it("shows exception visits flagged for review, correction, or over-authorization, but not a plain signed visit", async () => {
@@ -655,7 +672,7 @@ describe("ServiceVerificationReportsPage", () => {
 
     renderPage();
 
-    await openReport(/Exceptions/);
+    await openReport(/Needs attention/);
 
     await waitFor(() =>
       expect(screen.getByText("Exception visits")).toBeInTheDocument(),
@@ -780,6 +797,8 @@ describe("ServiceVerificationReportsPage", () => {
       expect(screen.getByLabelText("Client")).toBeInTheDocument(),
     );
 
+    // Custom range: the date-range dropdown reveals From and To.
+    fireEvent.change(screen.getByLabelText("Date range"), { target: { value: "custom" } });
     fireEvent.change(screen.getByLabelText("From"), {
       target: { value: "2026-08-01" },
     });
@@ -835,7 +854,7 @@ describe("ServiceVerificationReportsPage", () => {
 
     renderPage();
 
-    await openReport(/Visit details/);
+    await openReport(/Visit records \(list\)/);
 
     expect(await screen.findByText("SCS-V-20260801-4F7K")).toBeInTheDocument();
     const visitTable = screen.getByRole("table", { name: "Visit details" });
@@ -860,10 +879,10 @@ describe("ServiceVerificationReportsPage", () => {
     });
 
     renderPage();
-    await openReport(/Visit details/);
+    await openReport(/Visit records \(list\)/);
     await screen.findByText("SCS-V-20260801-4F7K");
 
-    fireEvent.click(screen.getByRole("button", { name: "Correct" }));
+    fireEvent.click(screen.getByRole("button", { name: "Correct visit" }));
     fireEvent.change(screen.getByLabelText("Reason (required)"), {
       target: { value: "Forgot to clock out on time" },
     });
@@ -890,10 +909,10 @@ describe("ServiceVerificationReportsPage", () => {
     mockedRpc.mockResolvedValue({ data: [visitRow], error: null } as never);
 
     renderPage();
-    await openReport(/Visit details/);
+    await openReport(/Visit records \(list\)/);
     await screen.findByText("SCS-V-20260801-4F7K");
 
-    fireEvent.click(screen.getByRole("button", { name: "Correct" }));
+    fireEvent.click(screen.getByRole("button", { name: "Correct visit" }));
     fireEvent.click(screen.getByRole("button", { name: "Save correction" }));
 
     await waitFor(() =>
@@ -942,10 +961,10 @@ describe("ServiceVerificationReportsPage", () => {
     });
 
     renderPage();
-    await openReport(/Visit details/);
+    await openReport(/Visit records \(list\)/);
     await screen.findByText("SCS-V-20260801-4F7K");
 
-    fireEvent.click(screen.getByRole("button", { name: "History" }));
+    fireEvent.click(screen.getByRole("button", { name: "Correction history" }));
 
     await waitFor(() =>
       expect(
@@ -967,14 +986,14 @@ describe("ServiceVerificationReportsPage", () => {
     mockedRpc.mockResolvedValue({ data: [visitRow], error: null } as never);
 
     renderPage();
-    await openReport(/Visit details/);
+    await openReport(/Visit records \(list\)/);
     await screen.findByText("SCS-V-20260801-4F7K");
 
     expect(
-      screen.queryByRole("button", { name: "Correct" }),
+      screen.queryByRole("button", { name: "Correct visit" }),
     ).not.toBeInTheDocument();
     expect(
-      screen.queryByRole("button", { name: "History" }),
+      screen.queryByRole("button", { name: "Correction history" }),
     ).not.toBeInTheDocument();
   });
 

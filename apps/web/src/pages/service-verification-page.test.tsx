@@ -204,7 +204,7 @@ describe("ServiceVerificationPage v3", () => {
 
     fireEvent.click(screen.getByRole("button", { name: /Client C-104/ }));
     const details = await screen.findByRole("group", { name: "Visit details" });
-    expect(details).toHaveTextContent("Not linked to a scheduled shift");
+    expect(details).toHaveTextContent("Unscheduled visit");
     expect(details).toHaveTextContent(
       "This client is not on your schedule today.",
     );
@@ -426,7 +426,7 @@ describe("ServiceVerificationPage v3", () => {
 
     await screen.findByRole("heading", { name: "Visit in progress" });
     expect(
-      screen.getByText("Not linked to a scheduled shift"),
+      screen.getByText("Unscheduled visit"),
     ).toBeInTheDocument();
     expect(screen.queryByText(/Scheduled shift:/)).not.toBeInTheDocument();
   });

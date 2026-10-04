@@ -57,7 +57,7 @@ export function AwsShell({ children }: PropsWithChildren) {
 
   return (
     <div className="min-h-screen bg-slate-50" style={{ "--agency-accent": accent } as CSSProperties}>
-      <header className="border-b border-slate-200 border-t-4 bg-white" style={{ borderTopColor: accent }}>
+      <header className="border-b border-slate-200 border-t-4 bg-white print:hidden" style={{ borderTopColor: accent }}>
         <div className="mx-auto max-w-6xl px-4 py-3">
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div className="min-w-0">
@@ -140,7 +140,7 @@ export function AwsShell({ children }: PropsWithChildren) {
           </nav>
         </div>
       </header>
-      <main className="mx-auto max-w-6xl px-4 py-6">{children}</main>
+      <main className="mx-auto max-w-6xl px-4 py-6 print:max-w-none print:p-0">{children}</main>
     </div>
   );
 }
