@@ -1,17 +1,17 @@
 # AWS TEST deployment plan: release 0022–0026 (office administration, invitations, planned assignments, schedule and call-outs)
 
-**Status:** prepared 2026-10-04; pinned at `0c739c9` and rehearsed end to end at that commit against stubbed AWS and a local PostgreSQL copy at 0021 (scope gate PASS, self-test 25/25, 12/12 live checks PASS, accounts and records unchanged; also resumed after a stop). Every rollback layer rehearsed (status, export, web, api, egress, db): db refuses while records exist and changes nothing; a full rollback returns to 0021 with users, memberships, assignments and visits unchanged. **Not executed in AWS. Run only after the 1a39dd5 increment is verified live** (paste block `infra/aws/slice/increment-resume-block.sh`). Paste block for this release: `infra/aws/slice/release-0026-bootstrap.sh`.
+**Status:** prepared 2026-10-04 and re-pinned at `a3b1681` after the 0019–0021 policy-size fix. Rehearsed end to end at that commit against stubbed AWS that enforces the 20,480-byte Lambda policy limit, on the revised increment's state (ledger 0021, 60 routes, one invoke statement): scope gate PASS; self-test 27/27, including per-route and widened permissions; 13/13 live checks PASS. At 90 routes the policy is still one statement (384 bytes; peak 384). The API rollback keeps one statement. The earlier rehearsal at `0c739c9` covered every rollback layer and a resume; those scripts are unchanged except for the policy check. **Not executed in AWS. Run only after the 0019–0021 increment is verified live** (paste block `infra/aws/slice/increment-resume-block.sh`, revision 69e8799). Paste block for this release: `infra/aws/slice/release-0026-bootstrap.sh`.
 
 **Environment:** account 300094796789, us-west-2, database `ogevia_sv_test`, synthetic data only.
 
-**Base (required):** the 1a39dd5 increment (migrations 0019–0021, `GET /v1/attention` live). The script refuses to run on any other base. Its own state and rollback folder is `~/ogevia-release-0026-run`; earlier run folders are never written.
+**Base (required):** the revised 0019–0021 increment (migrations 0019–0021, `GET /v1/attention` live, the API Lambda's resource policy is ONE invoke statement for this API). The script refuses to run on any other base. Its own state and rollback folder is `~/ogevia-release-0026-run`; earlier run folders are never written.
 
 ## 0. Preconditions (checked by the script before anything changes)
 
 | Check | Expected | If not |
 | --- | --- | --- |
 | Migration ledger | exactly 0001–0021, contiguous, every checksum equal to the repository file | Stop. No applied migration is ever modified. |
-| Live API | `GET /v1/attention` present (1a39dd5 increment); `GET /v1/clients` absent | Stop; finish the 1a39dd5 increment first |
+| Live API | `GET /v1/attention` present and exactly one Lambda invoke statement (revised increment); `GET /v1/clients` absent | Stop; finish the 0019–0021 increment first |
 | Stacks | all five `*_COMPLETE` | Stop |
 | RDS | available, private, encrypted | Stop |
 | Scope gate | `release_0026_gate.py` PASS against the live templates; its self-test refuses 25 tampered variants | Stop; nothing changed |
@@ -20,7 +20,7 @@
 
 | Stack / target | Change |
 | --- | --- |
-| Ogevia-prod-ServiceVerificationApi | **+30** JWT routes on the existing integration, one route-scoped invoke permission each: `GET/POST /v1/assignments`, `POST /v1/assignments/{assignmentId}/end`, `POST /v1/authorizations/{authorizationId}/amend`, `GET/POST /v1/caregivers`, `POST /v1/caregivers/{id}/details`, `…/status`, `…/invitation`, `…/invitation/resend`, `GET/POST /v1/client-types`, `GET/POST /v1/clients`, `GET/POST /v1/clients/{clientId}/authorizations`, `POST /v1/clients/{clientId}/details`, `…/status`, `GET/POST /v1/services`, `POST /v1/services/{serviceId}/name`, `…/status`, `GET/POST /v1/shifts`, `POST /v1/shifts/{shiftId}/callout`, `…/caregiver`, `…/cancel`, `GET /v1/shifts/{shiftId}/coverage`, `GET /v1/my-shifts`, `POST /v1/my-shifts/{shiftId}/callout` |
+| Ogevia-prod-ServiceVerificationApi | **+30** JWT routes on the existing integration, covered by the existing single API-scoped invoke permission (no permission added; the gate refuses any): `GET/POST /v1/assignments`, `POST /v1/assignments/{assignmentId}/end`, `POST /v1/authorizations/{authorizationId}/amend`, `GET/POST /v1/caregivers`, `POST /v1/caregivers/{id}/details`, `…/status`, `…/invitation`, `…/invitation/resend`, `GET/POST /v1/client-types`, `GET/POST /v1/clients`, `GET/POST /v1/clients/{clientId}/authorizations`, `POST /v1/clients/{clientId}/details`, `…/status`, `GET/POST /v1/services`, `POST /v1/services/{serviceId}/name`, `…/status`, `GET/POST /v1/shifts`, `POST /v1/shifts/{shiftId}/callout`, `…/caregiver`, `…/cancel`, `GET /v1/shifts/{shiftId}/coverage`, `GET /v1/my-shifts`, `POST /v1/my-shifts/{shiftId}/callout` |
 | Same | **~** Handler: code package + one environment variable `IDENTITY_FUNCTION_NAME=Ogevia-prod-IdentityAdmin`. Runtime, memory, timeout, VPC, role and every other variable unchanged. |
 | Same | **~** HandlerPolicy: one statement added, `InvokeIdentityAdmin` = `lambda:InvokeFunction` on the identity function only. |
 | Same | **+** `Ogevia-prod-IdentityAdmin` Lambda (outside the VPC, 256 MB, 8 s, pool id its only setting), its role (trust: Lambda only), its managed policy (`cognito-idp:AdminCreateUser`, `cognito-idp:AdminGetUser` on pool `us-west-2_849AYz5J7` only; logs to its own group), its log group (365 days, retained). |
