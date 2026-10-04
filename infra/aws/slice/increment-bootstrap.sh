@@ -7,7 +7,7 @@ cat > ~/ogevia-increment-run.sh <<'EOF'
 # Nothing changes in AWS before you type DEPLOY (and MANAGER for the sign-in).
 # Paste again to resume; completed steps are skipped.
 set -uo pipefail
-PIN=cbdfa3a0e6cfc87e736e29b0a892b60ad58677fc
+PIN=1a39dd59fddd48d5c4e57a815331487a979e4b0b
 BR=claude/ogevia-socal-pilot-prep-vfu5tf
 SRC=/tmp/ogevia-increment
 if [ "$(git -C "$SRC" rev-parse HEAD 2>/dev/null)" != "$PIN" ]; then
@@ -36,5 +36,14 @@ fi
 echo "Code: $(git -C "$SRC" log --oneline -1)"
 cd "$SRC" && OGEVIA_INCREMENT_PIN="$PIN" bash infra/aws/slice/increment-deploy.sh \
   && bash infra/aws/slice/pilot-manager-account.sh
+rc=$?
+# Read-only: first-sign-in status of the corrected caregiver and the new manager.
+for e in pinkpopsllc@gmail.com ogemails+ogevia-pilot-manager@gmail.com; do
+  aws cognito-idp admin-get-user --region us-west-2 --user-pool-id us-west-2_849AYz5J7 --username "$e" \
+    --query '[UserStatus, join(`","`, UserMFASettingList || [`"none"`])]' --output text 2>/dev/null \
+    | awk -v e="$e" '{ printf "Sign-in %-42s %s, MFA %s%s\n", e, $1, $2, ($1 == "CONFIRMED" && $2 != "none") ? " (first sign-in done)" : " (first sign-in NOT done yet)" }' \
+    || echo "Sign-in $e: not found"
+done
+exit $rc
 EOF
 bash ~/ogevia-increment-run.sh
