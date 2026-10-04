@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""Read-only live checks for release 0022-0025 (standard library only).
+"""Read-only live checks for release 0022-0026 (standard library only).
 
-Each sub-command reads files captured by release-0025-deploy.sh and prints
+Each sub-command reads files captured by release-0026-deploy.sh and prints
 "ok" or "no". It never calls AWS itself.
 """
 import json
@@ -9,7 +9,7 @@ import os
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from release_0025_gate import ACCOUNT, IDENTITY_NAME, NEW_ROUTES, POOL, REGION, S3_RESOURCES  # noqa: E402
+from release_0026_gate import ACCOUNT, IDENTITY_NAME, NEW_ROUTES, POOL, REGION, S3_RESOURCES  # noqa: E402
 
 
 def as_list(v):

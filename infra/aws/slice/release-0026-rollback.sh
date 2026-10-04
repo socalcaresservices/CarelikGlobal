@@ -1,38 +1,39 @@
 #!/usr/bin/env bash
 # =============================================================================
-# Ogevia AWS TEST release 0022-0025: rollback, one layer at a time, in this
+# Ogevia AWS TEST release 0022-0026: rollback, one layer at a time, in this
 # order: web, api, egress, (db only if really needed).
-# Uses ONLY what release-0025-deploy.sh captured before it changed anything
-# (~/ogevia-release-0025-run/rollback). Earlier run folders are not used.
+# Uses ONLY what release-0026-deploy.sh captured before it changed anything
+# (~/ogevia-release-0026-run/rollback). Earlier run folders are not used.
 #
-#   bash infra/aws/slice/release-0025-rollback.sh status   # read-only
-#   bash infra/aws/slice/release-0025-rollback.sh export   # read-only copy of records made since DEPLOY
-#   bash infra/aws/slice/release-0025-rollback.sh web      # previous web files (config.json untouched)
-#   bash infra/aws/slice/release-0025-rollback.sh api      # previous API template: removes the 22 routes and
+#   bash infra/aws/slice/release-0026-rollback.sh status   # read-only
+#   bash infra/aws/slice/release-0026-rollback.sh export   # read-only copy of records made since DEPLOY
+#   bash infra/aws/slice/release-0026-rollback.sh web      # previous web files (config.json untouched)
+#   bash infra/aws/slice/release-0026-rollback.sh api      # previous API template: removes the 30 routes and
 #                                                          # the identity function; previous Lambda code
-#   bash infra/aws/slice/release-0025-rollback.sh egress   # previous NetworkEgress template: removes the
+#   bash infra/aws/slice/release-0026-rollback.sh egress   # previous NetworkEgress template: removes the
 #                                                          # Lambda endpoint (run AFTER api)
-#   bash infra/aws/slice/release-0025-rollback.sh db       # 0025..0022 down; REFUSES while their records exist
+#   bash infra/aws/slice/release-0026-rollback.sh db       # 0026..0022 down; REFUSES while their records exist
 #
 # Records and files made after the deployment are kept:
 # - web, api and egress rollbacks change no data. The previous API never calls
 #   the new functions or tables, so they stop being used and remain.
 # - Sign-ins created by invitations stay in Cognito and stay linked in the
 #   database; nothing here deletes a user.
-# - db: 0025 refuses while invitations or planned assignments exist; 0022
+# - db: 0026 refuses while staff-scheduled shifts exist; 0025 while invitations or
+#   planned assignments exist; 0022
 #   refuses while client types or client cities exist (see its header).
 # - Nothing here deletes S3 objects (the evidence bucket is versioned).
 # - A full restore goes to a NEW instance from the pre-deploy snapshot, never
 #   in place (command printed by `status`).
 # =============================================================================
 set -Eeuo pipefail
-export OGEVIA_PILOT_RUN_DIR="${OGEVIA_RELEASE_RUN_DIR:-$HOME/ogevia-release-0025-run}"
+export OGEVIA_PILOT_RUN_DIR="${OGEVIA_RELEASE_RUN_DIR:-$HOME/ogevia-release-0026-run}"
 # shellcheck source=pilot-lib.sh
 source "$(dirname "${BASH_SOURCE[0]}")/pilot-lib.sh"
 LOG="$RUN/rollback-$(date -u +%Y%m%dT%H%M%SZ).log"
 exec > >(tee -a "$LOG") 2>&1
 trap 'die "unexpected error on line $LINENO (command: $BASH_COMMAND)"' ERR
-[[ -f "$RB/MANIFEST.json" ]] || die "no rollback capture in $RB (release-0025-deploy.sh never reached its capture step)"
+[[ -f "$RB/MANIFEST.json" ]] || die "no rollback capture in $RB (release-0026-deploy.sh never reached its capture step)"
 LAYER="${1:-status}"
 confirm() {
   [[ -t 0 ]] || die "needs an interactive terminal"
@@ -98,10 +99,10 @@ case "$LAYER" in
     for key in $(jq -r '.Resources[] | select(.Type=="AWS::Lambda::Function") | .Properties.Code.S3Key | strings' "$T"); do
       aws s3api head-object --bucket "$BOOT" --key "$key" >/dev/null || die "previous Lambda package $key is missing from $BOOT"
     done
-    echo "Removes the 22 routes, their permissions, the invoke statement and the identity function (its log group is kept);"
+    echo "Removes the 30 routes, their permissions, the invoke statement and the identity function (its log group is kept);"
     echo "restores the previous Lambda code. No data changes; Cognito users created by invitations stay."
     confirm api
-    KEY="release-0025-rollback/$(date -u +%Y%m%dT%H%M%SZ)/$API_STACK.json"
+    KEY="release-0026-rollback/$(date -u +%Y%m%dT%H%M%SZ)/$API_STACK.json"
     aws s3 cp "$T" "s3://$BOOT/$KEY" --only-show-errors
     PARAMS=$(jq -r '(.Parameters // {}) | keys[] | "ParameterKey=\(.),UsePreviousValue=true"' "$T" | xargs)
     # shellcheck disable=SC2086
@@ -124,7 +125,7 @@ case "$LAYER" in
     echo "Note: the previous S3 endpoint policy did not include the document and logo key shapes."
     confirm egress
     BOOT="cdk-hnb659fds-assets-$ACCOUNT-$REGION"
-    KEY="release-0025-rollback/$(date -u +%Y%m%dT%H%M%SZ)/Ogevia-prod-NetworkEgress.json"
+    KEY="release-0026-rollback/$(date -u +%Y%m%dT%H%M%SZ)/Ogevia-prod-NetworkEgress.json"
     aws s3 cp "$T" "s3://$BOOT/$KEY" --only-show-errors
     aws cloudformation update-stack --stack-name Ogevia-prod-NetworkEgress --template-url "https://$BOOT.s3.$REGION.amazonaws.com/$KEY" \
       --capabilities CAPABILITY_IAM CAPABILITY_NAMED_IAM CAPABILITY_AUTO_EXPAND >/dev/null
@@ -133,23 +134,23 @@ case "$LAYER" in
     ;;
 
   db)
-    phase "Rollback: database migrations 0025..0022 on $DB_NAME"
-    echo "Each down script REFUSES while records it cannot keep exist (0025 invitations or planned assignments;"
+    phase "Rollback: database migrations 0026..0022 on $DB_NAME"
+    echo "Each down script REFUSES while records it cannot keep exist (0026 staff shifts; 0025 invitations or planned assignments;"
     echo "0022 client types and client cities). 0024 and 0023 drop screen functions only."
-    echo "Run 'export' first. Leaving the database at 0025 after an api/web rollback is safe and keeps every record."
+    echo "Run 'export' first. Leaving the database at 0026 after an api/web rollback is safe and keeps every record."
     load_rds_and_host
     confirm db
     trap 'db_window_close' EXIT
     trap 'db_window_close; die "unexpected error on line $LINENO (command: $BASH_COMMAND)"' ERR
     db_window_open
-    for v in 0025 0024 0023 0022; do
+    for v in 0026 0025 0024 0023 0022; do
       f=$(ls "$HERE/db/rollback/${v}_"*.down.sql)
       if [[ -z "$(Q -d "$DB_NAME" -c "select 1 from ogevia_meta.schema_migrations where version = '$v'")" ]]; then
         echo "$v: not applied"; continue
       fi
       if ! { echo "set local role ogevia_owner;"; cat "$f"; echo "reset role;"; echo "delete from ogevia_meta.schema_migrations where version = '$v';"; } \
           | psql -X -q -v ON_ERROR_STOP=1 -1 -d "$DB_NAME" -f - 2>&1 | tee "$RUN/db-rollback-$v.txt"; then
-        die "$v was not rolled back and nothing in it changed: $(grep -m1 -o 'Refusing[^.]*' "$RUN/db-rollback-$v.txt" || tail -1 "$RUN/db-rollback-$v.txt"). Keep 0025, or restore the snapshot to a new instance"
+        die "$v was not rolled back and nothing in it changed: $(grep -m1 -o 'Refusing[^.]*' "$RUN/db-rollback-$v.txt" || tail -1 "$RUN/db-rollback-$v.txt"). Keep 0026, or restore the snapshot to a new instance"
       fi
       echo "$v: rolled back"
     done

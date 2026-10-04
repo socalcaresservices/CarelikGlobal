@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Proves the release 0022-0025 scope gate is not vacuous, on the real templates.
+"""Proves the release 0022-0026 scope gate is not vacuous, on the real templates.
 
 The gate must PASS on the untampered build and FAIL on each tampered copy
 (one change each). Read-only: works on copies in a temporary directory.
@@ -80,7 +80,7 @@ def other_stack(cdk):
 
 
 def gate(cdk, deployed):
-    return subprocess.run([sys.executable, os.path.join(HERE, "release_0025_gate.py"), "--cdk-out", cdk, "--deployed", deployed],
+    return subprocess.run([sys.executable, os.path.join(HERE, "release_0026_gate.py"), "--cdk-out", cdk, "--deployed", deployed],
                           stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, env=dict(os.environ, PYTHONDONTWRITEBYTECODE="1")).returncode
 
 

@@ -1,14 +1,14 @@
-cat > ~/ogevia-release-0025-run.sh <<'EOF'
+cat > ~/ogevia-release-0026-run.sh <<'EOF'
 #!/usr/bin/env bash
-# Ogevia AWS TEST release 0022-0025. Downloads the PINNED commit into its own
-# folder (/tmp/ogevia-release-0025; earlier checkouts and run folders
-# are not touched) and runs release-0025-deploy.sh.
+# Ogevia AWS TEST release 0022-0026. Downloads the PINNED commit into its own
+# folder (/tmp/ogevia-release-0026; earlier checkouts and run folders
+# are not touched) and runs release-0026-deploy.sh.
 # Nothing changes in AWS before you type DEPLOY.
 # Paste again to resume; completed steps are skipped.
 set -uo pipefail
-PIN=0b6996ff80e5cfc7d98053f08d1954b1e64570c3
+PIN=__PIN__
 BR=claude/ogevia-socal-pilot-prep-vfu5tf
-SRC=/tmp/ogevia-release-0025
+SRC=/tmp/ogevia-release-0026
 if [ "$(git -C "$SRC" rev-parse HEAD 2>/dev/null)" != "$PIN" ]; then
   if ! command -v gh >/dev/null; then
     echo "Installing the GitHub CLI from GitHub's official package repository..."
@@ -33,7 +33,7 @@ if [ "$(git -C "$SRC" rev-parse HEAD 2>/dev/null)" != "$PIN" ]; then
   git -C "$SRC" -c advice.detachedHead=false checkout -q "$PIN" || { echo "STOP: commit ${PIN:0:7} not found on $BR. Nothing ran."; exit 1; }
 fi
 echo "Code: $(git -C "$SRC" log --oneline -1)"
-cd "$SRC" && OGEVIA_RELEASE_PIN="$PIN" bash infra/aws/slice/release-0025-deploy.sh
+cd "$SRC" && OGEVIA_RELEASE_PIN="$PIN" bash infra/aws/slice/release-0026-deploy.sh
 rc=$?
 # Read-only: first-sign-in status of the corrected caregiver and the new manager.
 for e in pinkpopsllc@gmail.com ogemails+ogevia-pilot-manager@gmail.com; do
@@ -44,4 +44,4 @@ for e in pinkpopsllc@gmail.com ogemails+ogevia-pilot-manager@gmail.com; do
 done
 exit $rc
 EOF
-bash ~/ogevia-release-0025-run.sh
+bash ~/ogevia-release-0026-run.sh

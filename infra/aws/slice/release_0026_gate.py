@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
-"""Deployment scope gate for release 0022-0025 (standard library only). STRICT.
+"""Deployment scope gate for release 0022-0026 (standard library only). STRICT.
 
 Compares each synthesized template (cdk.out) with the template CloudFormation
 has deployed (captured just before the change; base = the 1a39dd5 increment)
 and FAILS unless the difference is exactly this release:
 
 ServiceVerificationApi
-  1. ADD the 22 routes in NEW_ROUTES, each identical to the live GET /v1/me
+  1. ADD the 30 routes in NEW_ROUTES, each identical to the live GET /v1/me
      route except its RouteKey (JWT, the one existing integration), plus one
      route-scoped invoke permission each (checked by increment_diff_gate).
   2. MODIFY the existing Handler: code package, and exactly one new
@@ -63,6 +63,14 @@ NEW_ROUTES = sorted([
     "POST /v1/services",
     "POST /v1/services/{serviceId}/name",
     "POST /v1/services/{serviceId}/status",
+    "GET /v1/shifts",
+    "POST /v1/shifts",
+    "POST /v1/shifts/{shiftId}/callout",
+    "POST /v1/shifts/{shiftId}/caregiver",
+    "POST /v1/shifts/{shiftId}/cancel",
+    "GET /v1/shifts/{shiftId}/coverage",
+    "GET /v1/my-shifts",
+    "POST /v1/my-shifts/{shiftId}/callout",
 ])
 INVOKE_STATEMENT_SID = "InvokeIdentityAdmin"
 S3_RESOURCES = sorted(BUCKET_ARN + p for p in ["/*/*/client-signature.png", "/*/documents/*/*", "/*/branding/logo/*"])
@@ -279,7 +287,7 @@ def main():
         failures.append("Public API routes differ from the approved list: extra %s, missing %s" % (
             sorted(set(pub) - set(APPROVED_PUBLIC_ROUTE_KEYS)), sorted(set(APPROVED_PUBLIC_ROUTE_KEYS) - set(pub))))
 
-    out = ["Deployment scope gate, release 0022-0025 (strict)"] + ["  " + line for line in lines]
+    out = ["Deployment scope gate, release 0022-0026 (strict)"] + ["  " + line for line in lines]
     out += (["STOP - outside the approved change:"] + ["  " + f for f in failures]) if failures else ["Scope gate: PASS"]
     text = "\n".join(out)
     print(text)
