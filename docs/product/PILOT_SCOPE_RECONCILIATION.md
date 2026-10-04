@@ -75,7 +75,7 @@
 | --- | --- | --- |
 | Availability; shifts created through Care Requests with authorization checks | LIVE | Pilot section B (pre-deployment result; B4 refusal not re-reported) |
 | Visits linked to scheduled shifts; unscheduled visits flagged for review; overlaps prevented | LIVE | 0016/0017 shift link; `start_ad_hoc_service_visit`; one open visit per caregiver; overlap check in close-out |
-| **Staff-scheduled shifts, call-outs, replacement caregivers, uncovered-shift view, coverage history screens** | **NEEDS IMPLEMENTATION (not started; exceeds today)** | Database support exists (0003/0011: `shifts`, `shift_coverage_events`, Care Request assign/reassign with reservations; caregiver call-out by link). Missing: staff API and screens to create a shift directly, record a call-out, pick a replacement, and list uncovered shifts. Reservations are keyed to a care request (`authorization_reservations.care_request_id NOT NULL`), so staff-created shifts need a schema decision. |
+| Staff-scheduled shifts, call-outs (staff and caregiver), replacement caregivers, uncovered-shift view, coverage history screens | **BUILT, NOT YET DEPLOYED** (0026, in release 0022–0026) | Schedule page (week, NEEDS COVERAGE count, add, call-out, assign, cancel, history); My shifts for caregivers. Hours reserved against the authorization under the lineage lock; overbooking refused (concurrency test). Bug found and fixed: reservations without a Care Request were not counted by the existing helper. Tests: DB 9 + 2 rollback, API 1, web 4, browser 22/22 at 390 px. |
 | Assignment management screens | **RELEASE 0025** (0024) |
 | Plan an assignment before the caregiver has a sign-in (planning separate from access) | RELEASE 0025 (0025) | Planned assignments grant nothing; access starts automatically once the record has a linked sign-in and is Ready or Active, and stops if it returns to Onboarding. Visit start unchanged. Tests: 5 DB, 1 API, 1 web. | On the client page ("Caregivers assigned") and the caregiver page ("Clients assigned"): assign with a first day (defaults to the agency's local today) and an optional last day. The caregiver must have a sign-in; overlapping assignments for the same caregiver, client and service are refused (two simultaneous attempts: exactly one succeeds); a missing authorization is flagged in red, not hidden. End with a reason: a future assignment is cancelled; a running one gets a last day (shortening only); ending before today is refused while a visit is in progress. Audited. Tests: DB 7, API 1, web 2, browser 19/19 at 390 px (a caregiver gains the client on Verify visit once assigned). |
 
@@ -176,12 +176,12 @@ Proposal: `docs/product/PRICING_PROPOSAL.md`. It is a recommendation. Nothing is
 
 | # | Blocker | Next step owner | Next action | Fits the 13:20 target? |
 | --- | --- | --- | --- | --- |
-| 0 | 1a39dd5 increment completion unknown | Owner | Run the one read-only status command; return its output | Target already passed (it is after 13:20) |
-| 1 | Release 0022–0025 (administration screens, invitations, planned assignments, S3 endpoint fix) not deployed | Owner | After 0: paste the release block, type DEPLOY, then screen checks 6.1–6.7 | No (target passed); about 45 minutes once started |
-| 2 | Staff shifts, call-outs, replacements, uncovered-shift view | Claude (build) | Schema decision for staff-created shift reservations, then API, screens, tests | **No.** About 1–2 working days |
+| 0 | 1a39dd5 increment NOT deployed (live: no run folder, 38 pilot routes) | Owner | Paste `infra/aws/slice/increment-resume-block.sh` (preflight first; stops on any partial state) | — |
+| 1 | Release 0022–0026 (administration, invitations, planned assignments, schedule and call-outs, S3 endpoint fix) not deployed | Owner | Only after 0 is verified: paste the release block, type DEPLOY, then screen checks 6.1–6.11 | — |
+| 2 | Staff shifts, call-outs, replacements: built (0026), not deployed | Owner | Deploys with release 0022–0026 | — |
 | 3 | Utilisation beyond monthly per service (section 9) | Claude (build) | Periods, breakdowns, coverage and expiry warnings, projections | **No** |
 | 4 | G1 alarm subscriber and D2 account S3 public-access block | Owner | `phase7-remediate.sh`, type APPLY, confirm the alarm email | About 10 minutes |
 | 5 | HIPAA operating policies not confirmed | Owner | Confirm in writing | Owner decision |
-| 6 | Phone/screen retest of changed workflows (mobile usability at phone width for the new screens; the invitation card has not been browser-checked at 390 px) | Owner + Claude | After deployments | No |
+| 6 | Phone/screen retest of changed workflows on real AWS | Owner | After deployments (plan section 6) | — |
 
 Verdict unchanged: **NOT READY** for real clients. After 0, 1, 4 and 6 it is ready for a synthetic-data dress rehearsal of everything except staff-created shifts and call-outs.

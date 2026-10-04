@@ -57,3 +57,14 @@ Result 2026-10-04: 20/20 PASS at 390 px.
 - audit and assignment rows in the database.
 
 Result 2026-10-04: 19/19 PASS at 390 px.
+
+## Invitations, planned assignments and schedule (0025, 0026)
+
+`schedule-e2e.ts` uses the same setup, with database `ogevia_sched_e2e` migrated to 0026 and an in-memory identity service (no Cognito call). It checks:
+- manager: plan an assignment for a caregiver without a sign-in ("no access yet"), invite them, see "Invited — has not signed in yet", resend; the identity service receives only the email; audit rows and API logs carry no email address;
+- schedule: 3 h reserved with the hours left; more hours than authorized refused with the minutes left;
+- caregiver: My shifts by client code only; "I can't make it" with a reason;
+- manager: NEEDS COVERAGE count and reason, replacement, history; coverage events in the database;
+- no horizontal scroll at 390 px on the caregiver page, Schedule and My shifts; no page errors.
+
+Result 2026-10-04: 22/22 PASS at 390 px (after renaming the ambiguous "Start"/"End" fields to "Start time"/"End time").

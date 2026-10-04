@@ -132,8 +132,8 @@ describe("Schedule (staff)", () => {
     fireEvent.change(screen.getByLabelText("Client"), { target: { value: CLIENT } });
     await screen.findByRole("option", { name: "Personal care (PCS)" });
     fireEvent.change(screen.getByLabelText("Service"), { target: { value: SVC } });
-    fireEvent.change(screen.getByLabelText("Start"), { target: { value: "22:00" } });
-    fireEvent.change(screen.getByLabelText("End"), { target: { value: "01:00" } });
+    fireEvent.change(screen.getByLabelText("Start time"), { target: { value: "22:00" } });
+    fireEvent.change(screen.getByLabelText("End time"), { target: { value: "01:00" } });
     fireEvent.click(screen.getByRole("button", { name: "Schedule shift" }));
     expect(await screen.findByText(/Shift scheduled as OPEN \(no caregiver yet\)\. 3 h reserved; 7 h of authorized time left this month\./)).toBeInTheDocument();
     expect(api.calls.find((c) => c.method === "POST" && c.path === "/v1/shifts")!.body).toEqual({

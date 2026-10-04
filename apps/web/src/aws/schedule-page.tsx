@@ -120,8 +120,8 @@ function AddShiftForm({ onDone }: { onDone: (text: string) => void }) {
       </div>
       <div className="sm:col-span-2 grid grid-cols-3 gap-2">
         <div><label htmlFor="sh-date" className="block text-sm font-medium text-slate-700">Date</label><input id="sh-date" type="date" value={form.date} min={today} onChange={(e) => set("date", e.target.value)} className={inputClass} /></div>
-        <div><label htmlFor="sh-start" className="block text-sm font-medium text-slate-700">Start</label><input id="sh-start" type="time" value={form.startTime} onChange={(e) => set("startTime", e.target.value)} className={inputClass} /></div>
-        <div><label htmlFor="sh-end" className="block text-sm font-medium text-slate-700">End</label><input id="sh-end" type="time" value={form.endTime} onChange={(e) => set("endTime", e.target.value)} className={inputClass} /></div>
+        <div><label htmlFor="sh-start" className="block text-sm font-medium text-slate-700">Start time</label><input id="sh-start" type="time" value={form.startTime} onChange={(e) => set("startTime", e.target.value)} className={inputClass} /></div>
+        <div><label htmlFor="sh-end" className="block text-sm font-medium text-slate-700">End time</label><input id="sh-end" type="time" value={form.endTime} onChange={(e) => set("endTime", e.target.value)} className={inputClass} /></div>
       </div>
       <p className="text-xs text-slate-600 sm:col-span-2">Times are the agency's local time. An end time earlier than the start means the next day. The hours are reserved against the client's current authorization and refused if not enough time is left this month.</p>
       {state.error ? <p role="alert" className="text-sm text-red-700 sm:col-span-2">{state.error}</p> : null}
