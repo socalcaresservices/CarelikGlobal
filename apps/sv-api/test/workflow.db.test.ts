@@ -603,3 +603,36 @@ describe("client and authorization administration (0022) through the API", () =>
     expect(cg.body.authorizations).toEqual([]);
   });
 });
+
+describe("Care Team and services (0023) through the API", () => {
+  it("manager adds and renames a caregiver; status needs a reason; caregivers and other agencies cannot", async () => {
+    const created = await call("POST /v1/caregivers", w.managerA, { body: { organizationId: w.orgA, firstName: "Synthetic", lastName: "Api Caregiver", status: "ready" } });
+    expect(created.status, JSON.stringify(created.body)).toBe(201);
+    const id = created.body.caregiver.caregiverRecordId as string;
+    expect(created.body.caregiver.caregiverCode).toMatch(/^CG-/);
+    expect((await call("POST /v1/caregivers", w.managerA, { body: { organizationId: w.orgA, firstName: "X", lastName: "Y", status: "inactive" } })).status).toBe(400);
+    expect((await call("POST /v1/caregivers/{caregiverRecordId}/details", w.managerA, { path: { caregiverRecordId: id }, body: { organizationId: w.orgA, firstName: "Synthetic", lastName: "Api Caregiver 2", preferredName: "Sam" } })).status).toBe(200);
+    expect((await call("POST /v1/caregivers/{caregiverRecordId}/status", w.managerA, { path: { caregiverRecordId: id }, body: { organizationId: w.orgA, status: "inactive" } })).status).toBe(400);
+    const off = await call("POST /v1/caregivers/{caregiverRecordId}/status", w.managerA, { path: { caregiverRecordId: id }, body: { organizationId: w.orgA, status: "inactive", reason: "Left (synthetic)" } });
+    expect(off.body.result).toMatchObject({ endedAssignments: 0, signInStatus: null });
+    const listed = await call("GET /v1/caregivers", w.managerA, { query: { organizationId: w.orgA } });
+    expect(listed.body.caregivers.find((c: any) => c.caregiverRecordId === id)).toMatchObject({ lastName: "Api Caregiver 2", preferredName: "Sam", status: "inactive", hasSignIn: false });
+    expect((await call("POST /v1/caregivers", w.caregiverA1, { body: { organizationId: w.orgA, firstName: "X", lastName: "Y" } })).status).toBe(403);
+    expect((await call("GET /v1/caregivers", w.managerB, { query: { organizationId: w.orgA } })).body.caregivers).toEqual([]);
+  });
+
+  it("services: only the Administrator adds, renames and deactivates; duplicates and in-use deactivation are refused", async () => {
+    expect((await call("POST /v1/services", w.managerA, { body: { organizationId: w.orgA, code: "MGR1", name: "Manager service" } })).status).toBe(403);
+    const created = await call("POST /v1/services", w.ownerA, { body: { organizationId: w.orgA, code: "api-1", name: "Synthetic Api Service" } });
+    expect(created.status, JSON.stringify(created.body)).toBe(201);
+    const serviceId = created.body.serviceId as string;
+    expect((await call("POST /v1/services", w.ownerA, { body: { organizationId: w.orgA, code: "API-1", name: "Again" } })).status).toBe(409);
+    expect((await call("POST /v1/services/{serviceId}/name", w.ownerA, { path: { serviceId }, body: { organizationId: w.orgA, name: "Synthetic Api Service 2" } })).status).toBe(200);
+    const inUse = await call("POST /v1/services/{serviceId}/status", w.ownerA, { path: { serviceId: w.serviceA }, body: { organizationId: w.orgA, active: false, reason: "Stop" } });
+    expect(inUse.status).toBe(409);
+    expect((await call("POST /v1/services/{serviceId}/status", w.ownerA, { path: { serviceId }, body: { organizationId: w.orgA, active: "no", reason: "Stop" } })).status).toBe(400);
+    expect((await call("POST /v1/services/{serviceId}/status", w.ownerA, { path: { serviceId }, body: { organizationId: w.orgA, active: false, reason: "Not offered (synthetic)" } })).status).toBe(200);
+    const list = await call("GET /v1/services", w.managerA, { query: { organizationId: w.orgA } });
+    expect(list.body.services.find((s: any) => s.serviceId === serviceId)).toMatchObject({ code: "API-1", name: "Synthetic Api Service 2", isActive: false });
+  });
+});

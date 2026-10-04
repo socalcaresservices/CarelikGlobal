@@ -59,6 +59,15 @@ async function rows(db: Queryable, sql: string, params: unknown[]) {
 }
 
 const CLIENT_STATUSES = ["active", "inactive", "discharged"] as const;
+const CAREGIVER_STATUSES = ["onboarding", "ready", "active", "inactive"] as const;
+const NEW_CAREGIVER_STATUSES = ["onboarding", "ready", "active"] as const;
+function caregiverNames(body: Record<string, unknown>) {
+  return {
+    first: text(body.firstName, "firstName", 80, { required: true }),
+    last: text(body.lastName, "lastName", 80, { required: true }),
+    preferred: text(body.preferredName, "preferredName", 80),
+  };
+}
 function wholeNumber(value: unknown, name: string, min: number, max: number): number {
   if (typeof value !== "number" || !Number.isInteger(value) || value < min || value > max) {
     throw new ApiError(400, "bad_request", `${name} must be a whole number from ${min} to ${max}.`);
@@ -350,6 +359,100 @@ export const ROUTES: Record<string, Route> = {
           workedMinutes: r.affectedWorkedMinutes, billableMinutes: r.affectedBillableMinutes, impact: r.impactKind,
         })),
       };
+    },
+  },
+
+  // Care Team and services (0023): caregivers.manage (Administrator, manager);
+  // services.manage (Administrator). Enforced in PostgreSQL.
+  "GET /v1/caregivers": {
+    mutating: false,
+    handle: async ({ event, tx }) => ({
+      caregivers: await tx((db) => rows(db, "select * from ogevia_api.list_caregivers($1)", [orgParam(event)])),
+    }),
+  },
+
+  "POST /v1/caregivers": {
+    status: 201,
+    mutating: true,
+    handle: async ({ event, tx }) => {
+      const body = parseBody(event.body, event.isBase64Encoded);
+      const key = idempotencyKey(event.headers);
+      const org = uuid(body.organizationId, "organizationId");
+      const n = caregiverNames(body);
+      const status = oneOf(body.status ?? "onboarding", "status", NEW_CAREGIVER_STATUSES);
+      const [created] = await tx((db) =>
+        rows(db, "select * from ogevia_api.create_caregiver($1, $2, $3, $4, $5, $6)", [org, n.first, n.last, n.preferred, status, key]));
+      return { caregiver: created };
+    },
+  },
+
+  "POST /v1/caregivers/{caregiverRecordId}/details": {
+    mutating: true,
+    handle: async ({ event, tx }) => {
+      const record = uuid(p(event).caregiverRecordId, "caregiverRecordId");
+      const body = parseBody(event.body, event.isBase64Encoded);
+      const key = idempotencyKey(event.headers);
+      const org = uuid(body.organizationId, "organizationId");
+      const n = caregiverNames(body);
+      await tx((db) => db.query("select ogevia_api.update_caregiver($1, $2, $3, $4, $5, $6)", [org, record, n.first, n.last, n.preferred, key]));
+      return { ok: true };
+    },
+  },
+
+  "POST /v1/caregivers/{caregiverRecordId}/status": {
+    mutating: true,
+    handle: async ({ event, tx }) => {
+      const record = uuid(p(event).caregiverRecordId, "caregiverRecordId");
+      const body = parseBody(event.body, event.isBase64Encoded);
+      const key = idempotencyKey(event.headers);
+      const org = uuid(body.organizationId, "organizationId");
+      const status = oneOf(body.status, "status", CAREGIVER_STATUSES);
+      const reason = text(body.reason, "reason", 500, { required: true });
+      const [result] = await tx((db) =>
+        rows(db, "select * from ogevia_api.set_caregiver_status($1, $2, $3, $4, $5)", [org, record, status, reason, key]));
+      return { result };
+    },
+  },
+
+  "POST /v1/services": {
+    status: 201,
+    mutating: true,
+    handle: async ({ event, tx }) => {
+      const body = parseBody(event.body, event.isBase64Encoded);
+      const key = idempotencyKey(event.headers);
+      const org = uuid(body.organizationId, "organizationId");
+      const code = text(body.code, "code", 20, { required: true });
+      const name = text(body.name, "name", 80, { required: true });
+      const serviceId = await tx(async (db) =>
+        ((await db.query("select ogevia_api.create_service($1, $2, $3, $4) as id", [org, code, name, key])).rows[0] as { id: string }).id);
+      return { serviceId };
+    },
+  },
+
+  "POST /v1/services/{serviceId}/name": {
+    mutating: true,
+    handle: async ({ event, tx }) => {
+      const service = uuid(p(event).serviceId, "serviceId");
+      const body = parseBody(event.body, event.isBase64Encoded);
+      const key = idempotencyKey(event.headers);
+      const org = uuid(body.organizationId, "organizationId");
+      const name = text(body.name, "name", 80, { required: true });
+      await tx((db) => db.query("select ogevia_api.rename_service($1, $2, $3, $4)", [org, service, name, key]));
+      return { ok: true };
+    },
+  },
+
+  "POST /v1/services/{serviceId}/status": {
+    mutating: true,
+    handle: async ({ event, tx }) => {
+      const service = uuid(p(event).serviceId, "serviceId");
+      const body = parseBody(event.body, event.isBase64Encoded);
+      const key = idempotencyKey(event.headers);
+      const org = uuid(body.organizationId, "organizationId");
+      const active = booleanValue(body.active, "active");
+      const reason = text(body.reason, "reason", 500, { required: true });
+      await tx((db) => db.query("select ogevia_api.set_service_active($1, $2, $3, $4, $5)", [org, service, active, reason, key]));
+      return { ok: true };
     },
   },
 

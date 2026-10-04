@@ -49,6 +49,8 @@ export function AwsShell({ children }: PropsWithChildren) {
     { to: "/billing-review", label: "Billing review", show: hasPermission("billing.visits.read") },
     { to: "/care-requests", label: "Care requests", show: hasPermission("care_requests.read") },
     { to: "/clients", label: "Clients", show: hasPermission("clients.names.read") },
+    { to: "/care-team", label: "Care Team", show: hasPermission("caregivers.manage") || hasPermission("visits.manage") },
+    { to: "/services", label: "Services", show: !isCaregiver && hasPermission("authorizations.read") },
     { to: "/documents", label: hasPermission("documents.read") ? "Documents" : "My documents", show: hasPermission("documents.read") || hasPermission("documents.manage_own") },
     { to: "/availability", label: "Availability", show: isCaregiver },
     { to: "/settings/branding", label: "Settings", show: hasPermission("organization.update") },

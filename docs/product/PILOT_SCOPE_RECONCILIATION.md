@@ -33,7 +33,7 @@
 | Logo upload and removal; private storage; appears for every role and on printed reports | THIS DEPLOYMENT | 0020 logo functions, private S3 `{org}/branding/logo/*`, letterhead fetch |
 | **Reset** branding to default | NEEDS IMPLEMENTATION (small) | No reset control; the colour can be set back manually |
 | Ogevia shown subtly | THIS DEPLOYMENT | "Powered by Ogevia" in the header |
-| Services, timezone and operational rules configured per agency without hard-coding | NEEDS IMPLEMENTATION | No AWS API to create or edit services or set the timezone. Services and the agency are seeded by SQL (`04_seed_scs_pilot_synthetic.sql`). Shared code has no SoCal or IRC logic; the seed is agency data. |
+| Services, timezone and operational rules configured per agency without hard-coding | PARTIAL: services BUILT, NOT YET DEPLOYED (0023); timezone and rules NEEDS IMPLEMENTATION | No AWS API to create or edit services or set the timezone. Services and the agency are seeded by SQL (`04_seed_scs_pilot_synthetic.sql`). Shared code has no SoCal or IRC logic; the seed is agency data. |
 
 ## 3. Navigation and mobile
 
@@ -50,7 +50,7 @@
 | Requirement | Status | Evidence |
 | --- | --- | --- |
 | Create, view, update and activate/deactivate **clients** from screens | **BUILT, NOT YET DEPLOYED** (migration 0022, 2026-10-04) | Clients list and client page: add, edit details, change status with a reason (refused while a visit is in progress), configurable client types, city. Audited. Tests: DB 12, API 2, web 8, browser 28/28 at 390 px. |
-| Same for **caregivers and services** | **NEEDS IMPLEMENTATION** | The AWS database API has no create or update function for clients, caregivers or services (full list of `ogevia_api` functions checked 2026-10-04). Records come from SQL seeds. |
+| Same for **caregivers and services** | **BUILT, NOT YET DEPLOYED** (migration 0023, 2026-10-04) | Care Team: add (random code), rename, status with a reason. Making a caregiver **inactive ends their active assignments and suspends their sign-in for the agency at once** (refused while a visit is in progress); reactivation restores the sign-in only. Services (Administrator only): add (code fixed, unique per agency), rename, deactivate/reactivate with a reason; deactivation refused while current authorizations use the service. Audited. Tests: DB 7, API 2, web 5, browser 20/20 at 390 px, including a signed-in caregiver losing access. **Not included:** inviting a caregiver to sign in (needs the API to create Cognito users, a security decision). | The AWS database API has no create or update function for clients, caregivers or services (full list of `ogevia_api` functions checked 2026-10-04). Records come from SQL seeds. |
 | Administrator and manager see client names | THIS DEPLOYMENT | 0020 `client_private_names`, `clients.names.read` |
 | Caregiver restrictions; payer identifiers protected | LIVE | Caregivers see codes only. Payer and authorization numbers are not returned to caregivers. |
 | Location/city and configurable client type | BUILT, NOT YET DEPLOYED (0022) | `clients.city`, per-agency `client_types`; names and city returned only with `clients.names.read` |
@@ -171,7 +171,7 @@ Proposal: `docs/product/PRICING_PROPOSAL.md`. It is a recommendation. Nothing is
 
 | # | Blocker | Owner of the next step | Next action | Fits today's 13:20 target? |
 | --- | --- | --- | --- | --- |
-| 1 | Clients and authorizations: **built, needs a reviewed deployment** (0022 plus 10 API routes). Still missing: caregivers, services, assignments and shifts (sections 4–6). | Claude (build) | Port the Supabase screens to the AWS API, starting with authorizations, then clients, team and schedule (inventory order), with permission, versioning and double-count tests | **No.** Several days. |
+| 1 | Clients and authorizations: **built, needs a reviewed deployment** (0022 plus 10 API routes). Caregivers and services: **built, needs a reviewed deployment** (0023 plus 7 routes). Still missing: caregiver sign-in invitations, assignments and shifts (sections 4–6). | Claude (build) | Port the Supabase screens to the AWS API, starting with authorizations, then clients, team and schedule (inventory order), with permission, versioning and double-count tests | **No.** Several days. |
 | 2 | Utilisation dashboard beyond monthly per service (section 9) | Claude (build) | Periods, breakdowns, coverage and expiry warnings, projections | **No** |
 | 3 | G1 and D2 not applied | Owner | Run `phase7-remediate.sh`, type APPLY, confirm the alarm email | Yes, about 10 minutes |
 | 4 | HIPAA operating policies not confirmed | Owner | Confirm in writing | Owner decision |

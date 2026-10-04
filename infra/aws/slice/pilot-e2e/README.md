@@ -37,3 +37,13 @@ screenshots in `$E2E_DIR/shots/`.
 - audit and version rows in the database.
 
 Result 2026-10-04: 28/28 PASS at 390 px.
+
+## Care Team and services (0023)
+
+`care-team-e2e.ts` uses the same setup, with database `ogevia_careteam_e2e` migrated to 0023. It checks:
+- manager: add and rename a caregiver;
+- inactive status: assignments end, the sign-in is suspended, and the caregiver loses access at their next request; reactivation restores the sign-in only;
+- services: read-only for managers; the Administrator adds a service, an in-use deactivation is refused, and an unused service is deactivated;
+- audit rows in the database.
+
+Result 2026-10-04: 20/20 PASS at 390 px.
