@@ -58,6 +58,11 @@ API_MUTATIONS = {
     "route_missing": lambda t: t["Resources"].pop(next(k for k, r in t["Resources"].items() if r["Type"] == "AWS::ApiGatewayV2::Route" and r["Properties"]["RouteKey"] == "GET /v1/assignments")),
     "route_extra": lambda t: t["Resources"].__setitem__("ApiDELETEv1caregivers0000ABCD", dict(copy.deepcopy(route(t, "GET /v1/caregivers")), Properties=dict(route(t, "GET /v1/caregivers")["Properties"], RouteKey="DELETE /v1/caregivers"))),
     "output_added": lambda t: t.setdefault("Outputs", {}).__setitem__("Extra", {"Value": "x"}),
+    "route_permission_added": lambda t: t["Resources"].__setitem__("ApiGETv1shiftsHandlerPermission0000ABCD", dict(
+        copy.deepcopy([r for r in t["Resources"].values() if r["Type"] == "AWS::Lambda::Permission"][0]),
+        Properties=dict([r for r in t["Resources"].values() if r["Type"] == "AWS::Lambda::Permission"][0]["Properties"],
+                        SourceArn={"Fn::Join": ["", ["arn:", {"Ref": "AWS::Partition"}, ":execute-api:us-west-2:300094796789:", {"Ref": "ApiF70053CD"}, "/*/*/v1/shifts"]]}))),
+    "api_permission_widened": lambda t: [r for r in t["Resources"].values() if r["Type"] == "AWS::Lambda::Permission"][0]["Properties"].__setitem__("SourceArn", "*"),
 }
 
 EGRESS_MUTATIONS = {

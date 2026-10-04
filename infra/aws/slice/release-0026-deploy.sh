@@ -16,7 +16,7 @@
 #   Web      matching build (config.json kept)
 #
 # Everything before the single DEPLOY prompt is read-only. After DEPLOY:
-# snapshot, one DB window, NetworkEgress + API stacks, web files, then 12
+# snapshot, one DB window, NetworkEgress + API stacks, web files, then 13
 # read-only live checks. Re-running resumes (state in ~/ogevia-release-0026-run;
 # earlier run folders are never written). TEST ONLY, SYNTHETIC DATA ONLY.
 #
@@ -104,7 +104,9 @@ ALIASES=$(aws cloudfront get-distribution-config --id "$DIST" --query 'Distribut
 [[ "$ALIASES" == None || -z "$ALIASES" ]] || die "the TEST web distribution serves a custom domain ($ALIASES); review first"
 LIVE_ROUTES=$(aws apigatewayv2 get-routes --api-id "$API_ID" --query 'Items[].[RouteKey,AuthorizationType]' --output json)
 jq -e 'map(.[0]) | index("GET /v1/attention")' <<<"$LIVE_ROUTES" >/dev/null \
-  || die "GET /v1/attention is not live: the 1a39dd5 increment (0019-0021) is not the base; finish it first"
+  || die "GET /v1/attention is not live: the 0019-0021 increment is not the base; finish it first"
+[[ "$(aws lambda get-policy --function-name "$FN" --query Policy --output text | jq '.Statement | length')" == 1 ]] \
+  || die "the API Lambda does not have the single API-scoped invoke permission: the revised 0019-0021 increment (dfdb710) is not the base"
 jq -e 'map(.[0]) | index("GET /v1/clients") | not' <<<"$LIVE_ROUTES" >/dev/null || echo "Note: GET /v1/clients is already live (resuming after the API deploy)."
 echo "RDS $RDS_ID available, private, encrypted. Stacks complete. Lambda serves $DB_NAME."
 echo "API $API_ID: $(jq length <<<"$LIVE_ROUTES") live routes, 1a39dd5 increment present. Web $WEB (no custom domain)."
@@ -177,7 +179,7 @@ python3 "$SLICE/release_0026_gate_selftest.py" --cdk-out "$HERE/cdk.out" --deplo
   || die "the scope gate self-test failed (the gate would not catch a tampered change)"
 python3 "$SLICE/release_0026_gate.py" --cdk-out "$HERE/cdk.out" --deployed "$TEMPLATE_BASE" --summary "$RUN/scope-gate.txt" \
   || die "the change set is outside the approved scope (see above); nothing was changed"
-echo "Gate self-test: PASS (refuses 25 tampered variants of this exact build)"
+echo "Gate self-test: PASS (refuses 27 tampered variants of this exact build)"
 
 # ----------------------------------------------------------------------------
 phase "7/12 APPROVAL (the only approval for the deployment)"
@@ -199,7 +201,7 @@ Exactly this will change in AWS TEST (account $ACCOUNT, $REGION), commit ${COMMI
      invoke statement; NEW $IDENTITY_FN (outside the VPC; Cognito AdminCreateUser and
      AdminGetUser on the one pool only), its role, policy and log group.
   5. Web: new files to $BUCKET (config.json NOT changed), CloudFront $DIST invalidated.
-  6. 12 read-only live checks.
+  6. 13 read-only live checks.
 Not touched: Cognito users, app clients and pool settings; Netlify, Supabase, DNS, RDS SG rules;
 the other 3 stacks. No one is invited by this deployment.
 Afterwards, optionally and only if you type SEED: synthetic names for the synthetic pilot clients.
@@ -317,7 +319,7 @@ echo "API and web deployed."
 # ----------------------------------------------------------------------------
 phase "11/12 Live verification (read-only)"
 : > "$VERIFY"
-PASSES=0; FAILS=0; TOTAL=12
+PASSES=0; FAILS=0; TOTAL=13
 check() { if [[ "$2" == ok ]]; then PASSES=$((PASSES + 1)); echo "PASS $1${3:+ - $3}" | tee -a "$VERIFY"; else FAILS=$((FAILS + 1)); echo "FAIL $1${3:+ - $3}" | tee -a "$VERIFY"; fi; }
 APPROVED_AT=$(grep '^approved_at=' "$RUN/APPROVAL.txt" | cut -d= -f2)
 r=ok; detail=""
@@ -398,6 +400,17 @@ check "11 DB window closed: admin host groups are back to the original" "$r" "$(
 SS=$(aws rds describe-db-snapshots --db-snapshot-identifier "$SNAPSHOT_ID" --query 'DBSnapshots[0].Status' --output text 2>/dev/null || echo missing)
 [[ "$SS" == available ]] && r=ok || r=no
 check "12 pre-deploy snapshot available" "$r" "$SNAPSHOT_ID"
+aws lambda get-policy --function-name "$FN" --query Policy --output text > "$RUN/lambda-policy-after.json" 2>/dev/null || echo '{"Statement":[]}' > "$RUN/lambda-policy-after.json"
+r=$(python3 - "$RUN/lambda-policy-after.json" "$API_ID" "$ACCOUNT" "$REGION" <<'POLPY'
+import json, sys
+raw = open(sys.argv[1]).read().strip(); st = json.loads(raw)["Statement"]
+want = "arn:aws:execute-api:%s:%s:%s/*/*/*" % (sys.argv[4], sys.argv[3], sys.argv[2])
+ok = (len(st) == 1 and st[0].get("Principal") == {"Service": "apigateway.amazonaws.com"} and st[0].get("Action") == "lambda:InvokeFunction"
+      and st[0].get("Condition") == {"ArnLike": {"AWS:SourceArn": want}} and len(raw) < 2048)
+print("ok" if ok else "no")
+POLPY
+)
+check "13 API Lambda resource policy still exactly one invoke statement for this API (no per-route growth)" "$r" "$(wc -c < "$RUN/lambda-policy-after.json") bytes"
 echo "Live verification: $PASSES/$TOTAL PASS" | tee -a "$VERIFY"
 
 cat > "$RUN/REPORT.md" <<EOF
