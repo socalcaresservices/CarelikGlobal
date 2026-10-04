@@ -37,9 +37,24 @@ Recorded 2026-10-04 from the owner's statement: "caregiver start/end, client con
 
 These results are kept as the acceptance record of build 87a9be2. **They are not evidence for the 0019–0021 build.** That build is accepted separately, with the checklist in `docs/aws/DEPLOYMENT_PLAN_0019_0021.md` section 6, after its own deployment.
 
-## Independent live confirmation (pending)
+## Independent live confirmation (2026-10-04, owner-run, read-only except the owner step)
 
-Run `infra/aws/slice/live-status-check.sh` in CloudShell (read-only, except the temporary DB-window security group, which it restores and verifies). It prints the migration ledger, the live API and web versions, Cognito sign-ins, agency owner and manager access, and the Phase 7 security settings.
+`live-status-bootstrap.sh` (pinned f91fe68) was run in CloudShell at about 14:50 UTC. Results as reported by the owner:
+
+| Item | Result |
+| --- | --- |
+| Phase 7 settings | PASS 36, GAP 5 (C6, D2, D4, G1, G3), MANUAL 1 (E3), ERROR 0. These are the same gaps as the reviewed list; nothing new. |
+| Migration ledger (`ogevia_sv_test`) | 18 migrations, latest 0018 |
+| Live API | Pilot build; the only billing route is `GET /v1/billing-review`, so none of the 0019 routes are live yet |
+| Cognito TEST pool | 5 sign-ins, all enabled. `pinkpops@gmail.com` (pilot caregiver) has not completed first sign-in (`FORCE_CHANGE_PASSWORD`). |
+| `scs-pilot-synthetic` before the owner step | `admin.ogevia@gmail.com` manager; `footietree@gmail.com` and `pinkpops@gmail.com` caregivers; no owner in either test agency |
+| Owner step (typed OWNER) | `admin.ogevia@gmail.com` is now active `organization_owner`, read back, with an audit event and a rollback file |
+| DB window | Admin host groups restored and verified: `sg-00e01e2ca80442c1f` |
+| AWS BAA | **ACTIVE, effective 2026-09-29.** Owner-reported; AWS Artifact is not visible to Claude. |
+
+**Consequence:** the pilot agency had no manager-only account after the owner step. `pilot-manager-account.sh` adds a separate manager sign-in (`ogemails+ogevia-pilot-manager@gmail.com`, a plus-address of the owner's inbox) for permission testing. It runs after the 0019–0021 deployment, with its own typed approval.
+
+**Before real client data:** the BAA is one condition. Phase 7 items G1 (alarm subscriber), E3 (restore drill) and D2 (account-wide S3 public-access block) remain required, followed by the security sign-off.
 
 ## Evidence basis (earlier record, kept for audit)
 
