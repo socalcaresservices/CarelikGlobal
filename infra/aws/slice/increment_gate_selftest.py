@@ -88,9 +88,36 @@ def m_remove_resource(t):
     del t["Resources"][res_of(t, "AWS::Logs::LogGroup")[0]]
 
 
+def api_permission(t):
+    return [r for r in t["Resources"].values() if r["Type"] == "AWS::Lambda::Permission"][0]
+
+
 def m_permission_wildcard(t):
-    lid = res_of(t, "AWS::Lambda::Permission", lambda lid, r: "attention" in json.dumps(r))[0]
-    t["Resources"][lid]["Properties"]["SourceArn"] = "*"
+    api_permission(t)["Properties"]["SourceArn"] = "*"
+
+
+def m_permission_any_principal(t):
+    api_permission(t)["Properties"]["Principal"] = "*"
+
+
+def m_permission_whole_account(t):
+    api_permission(t)["Properties"]["SourceArn"] = "arn:aws:execute-api:us-west-2:300094796789:*"
+
+
+def m_route_permission_kept(t):
+    perm = copy.deepcopy(api_permission(t))
+    perm["Properties"]["SourceArn"] = {"Fn::Join": ["", ["arn:", {"Ref": "AWS::Partition"}, ":execute-api:us-west-2:300094796789:", {"Ref": "ApiF70053CD"}, "/*/*/v1/attention"]]}
+    t["Resources"]["ApiGETv1attentionHandlerPermission0000ABCD"] = perm
+
+
+def m_second_api_permission(t):
+    t["Resources"]["ExtraApiPermission0000ABCD"] = copy.deepcopy(api_permission(t))
+
+
+def m_route_authorizer_dropped(t):
+    p = new_route(t, "GET /v1/billing-approvals")["Properties"]
+    p.pop("AuthorizerId", None)
+    p["AuthorizationType"] = "NONE"
 
 
 def m_tag(t):
@@ -107,7 +134,8 @@ def m_output(t):
 
 API_MUTATIONS = [m_delete_action, m_wide_resource, m_third_statement, m_existing_statement, m_route_public,
                  m_extra_route, m_missing_route, m_memory, m_env, m_remove_resource, m_permission_wildcard,
-                 m_tag, m_output]
+                 m_permission_any_principal, m_permission_whole_account, m_route_permission_kept, m_second_api_permission,
+                 m_route_authorizer_dropped, m_tag, m_output]
 
 
 def m_other_stack(cdk):

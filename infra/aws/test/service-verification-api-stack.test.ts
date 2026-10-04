@@ -7,6 +7,7 @@ import {
   LAMBDA_ENVIRONMENT_KEYS,
   SERVICE_VERIFICATION_ROUTES,
 } from "../lib/service-verification-api-stack.js";
+import { APPROVED_PUBLIC_ROUTE_KEYS } from "../lib/public-routes.js";
 import { newApp } from "./helpers.js";
 
 const prod = ENVIRONMENTS.prod;
@@ -191,5 +192,37 @@ describe("ServiceVerificationApiStack (FUTURE, Phase 4)", () => {
     expect(() => buildOgeviaApp(newApp(), unverified, "plan")).toThrow(
       /API auth contract not verified yet: appClientId/,
     );
+  });
+});
+
+describe("Lambda invoke permission (policy-size fix, 2026-10-04)", () => {
+  const t = Template.fromStack(buildOgeviaApp(newApp(), ENVIRONMENTS.prod, "plan").find((s) => s.stack.stackName.endsWith("-ServiceVerificationApi"))!.stack);
+  const perms = Object.values(t.findResources("AWS::Lambda::Permission"));
+  it("exactly one permission, for API Gateway, limited to this API", () => {
+    expect(perms).toHaveLength(1);
+    const p = perms[0]!.Properties as Record<string, any>;
+    expect(p.Action).toBe("lambda:InvokeFunction");
+    expect(p.Principal).toBe("apigateway.amazonaws.com");
+    const arn = JSON.stringify(p.SourceArn);
+    expect(arn).toContain("arn:");
+    expect(arn).toContain(":execute-api:us-west-2:300094796789:");
+    expect(arn).toMatch(/"Ref":"Api[0-9A-F]{8}"/);
+    expect(arn).toContain("/*/*/*");
+  });
+  it("route authentication is unchanged: every non-public route still uses the JWT authorizer", () => {
+    const routes = Object.values(t.findResources("AWS::ApiGatewayV2::Route")).map((r) => r.Properties as Record<string, any>);
+    const pub = routes.filter((r) => (r.AuthorizationType ?? "NONE") === "NONE").map((r) => r.RouteKey).sort();
+    expect(pub).toEqual([...APPROVED_PUBLIC_ROUTE_KEYS].sort());
+    for (const r of routes.filter((x) => x.AuthorizationType !== "NONE" && x.AuthorizationType !== undefined)) {
+      expect(r.AuthorizationType).toBe("JWT");
+      expect(r.AuthorizerId).toBeDefined();
+    }
+  });
+  it("worst-case resource-policy size stays far below 20 KB, also during a transition from per-route permissions", () => {
+    // During the update CloudFormation creates the new permission before it deletes the
+    // per-route ones, so the policy briefly holds both. 60 statements of about 345 bytes
+    // reached 20,624 bytes; the transition from the pilot holds 38 + 1.
+    const perStatement = 345;
+    expect((38 + perms.length) * perStatement).toBeLessThan(20480 * 0.7);
   });
 });

@@ -19,7 +19,7 @@
 #   in place (command printed by `status`).
 # =============================================================================
 set -Eeuo pipefail
-export OGEVIA_PILOT_RUN_DIR="${OGEVIA_INCREMENT_RUN_DIR:-$HOME/ogevia-increment-run}"
+export OGEVIA_PILOT_RUN_DIR="${OGEVIA_INCREMENT_RUN_DIR:-$HOME/ogevia-increment-v2-run}"
 # shellcheck source=pilot-lib.sh
 source "$(dirname "${BASH_SOURCE[0]}")/pilot-lib.sh"
 LOG="$RUN/rollback-$(date -u +%Y%m%dT%H%M%SZ).log"
@@ -91,7 +91,9 @@ case "$LAYER" in
     for key in $(jq -r '.Resources[] | select(.Type=="AWS::Lambda::Function") | .Properties.Code.S3Key | strings' "$T"); do
       aws s3api head-object --bucket "$BOOT" --key "$key" >/dev/null || die "previous Lambda package $key is missing from $BOOT"
     done
-    echo "Removes the 22 routes, their permissions and the 2 S3 statements; restores the previous Lambda code."
+    echo "Removes the 22 routes and the 2 S3 statements; restores the previous Lambda code and the previous"
+    echo "route-scoped invoke permissions (CloudFormation adds them back before it deletes the single API"
+    echo "permission, so the API keeps working; peak policy = previous policy + 1 statement, as in the deploy)."
     echo "No data changes: approvals, names, documents and S3 files stay; the previous API never calls them."
     confirm api
     KEY="increment-rollback/$(date -u +%Y%m%dT%H%M%SZ)/$API_STACK.json"
