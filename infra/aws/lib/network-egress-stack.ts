@@ -3,8 +3,9 @@ import * as ec2 from "aws-cdk-lib/aws-ec2";
 import * as iam from "aws-cdk-lib/aws-iam";
 import { Construct } from "constructs";
 import type { OgeviaEnvironmentConfig } from "./config.js";
-import { SIGNATURE_OBJECT_KEY_PATTERN, signatureBucketName } from "./evidence-storage-stack.js";
+import { DOCUMENT_OBJECT_KEY_PATTERN, LOGO_OBJECT_KEY_PATTERN, SIGNATURE_OBJECT_KEY_PATTERN, signatureBucketName } from "./evidence-storage-stack.js";
 import { ExistingFoundation } from "./existing-foundation.js";
+import { identityFunctionName } from "./service-verification-api-stack.js";
 
 export interface NetworkEgressStackProps extends StackProps {
   readonly config: OgeviaEnvironmentConfig;
@@ -30,6 +31,7 @@ export interface NetworkEgressStackProps extends StackProps {
 export class NetworkEgressStack extends Stack {
   public readonly secretsManagerEndpoint: ec2.InterfaceVpcEndpoint;
   public readonly s3GatewayEndpoint: ec2.GatewayVpcEndpoint;
+  public readonly lambdaEndpoint: ec2.InterfaceVpcEndpoint;
   public readonly endpointSecurityGroup: ec2.SecurityGroup;
 
   constructor(scope: Construct, id: string, props: NetworkEgressStackProps) {
@@ -80,7 +82,32 @@ export class NetworkEgressStack extends Stack {
       new iam.PolicyStatement({
         principals: [new iam.AnyPrincipal()],
         actions: ["s3:GetObject", "s3:GetObjectVersion", "s3:PutObject"],
-        resources: [`arn:aws:s3:::${signatureBucketName(config)}/${SIGNATURE_OBJECT_KEY_PATTERN}`],
+        // Signatures, staff documents (0021) and the agency logo (0020): the API
+        // role allows exactly these three key shapes, so the endpoint must too.
+        resources: [SIGNATURE_OBJECT_KEY_PATTERN, DOCUMENT_OBJECT_KEY_PATTERN, LOGO_OBJECT_KEY_PATTERN]
+          .map((pattern) => `arn:aws:s3:::${signatureBucketName(config)}/${pattern}`),
+        conditions: { StringEquals: { "aws:PrincipalAccount": config.account } },
+      }),
+    );
+
+    // Caregiver invitations (0025): the private API Lambda invokes the identity
+    // function (outside the VPC) through this endpoint. Same AZ count and the same
+    // 443-from-AppSecurityGroup-only security group as the Secrets endpoint.
+    // FIXED cost ~$7.30/AZ/month. The endpoint policy allows invoking that one
+    // function only.
+    this.lambdaEndpoint = new ec2.InterfaceVpcEndpoint(this, "LambdaEndpoint", {
+      vpc: existing.vpc,
+      service: ec2.InterfaceVpcEndpointAwsService.LAMBDA,
+      privateDnsEnabled: true,
+      subnets: { subnets: privateSubnets.slice(0, azCount) },
+      securityGroups: [this.endpointSecurityGroup],
+      open: false,
+    });
+    this.lambdaEndpoint.addToPolicy(
+      new iam.PolicyStatement({
+        principals: [new iam.AnyPrincipal()],
+        actions: ["lambda:InvokeFunction"],
+        resources: [`arn:aws:lambda:${config.region}:${config.account}:function:${identityFunctionName(config)}`],
         conditions: { StringEquals: { "aws:PrincipalAccount": config.account } },
       }),
     );

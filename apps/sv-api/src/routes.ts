@@ -4,6 +4,7 @@ import { ApiError } from "./errors";
 import { signatureObjectKey, validateSignaturePng, type EvidenceStore } from "./evidence";
 import { documentObjectKey, logoObjectKey, MAX_DOCUMENT_BYTES, MAX_LOGO_BYTES, validateDocumentFile, validateLogoFile } from "./documents";
 import type { HttpApiEvent } from "./http";
+import type { IdentityAdmin } from "./identity";
 import {
   date,
   idempotencyKey,
@@ -21,6 +22,8 @@ export interface RouteContext {
   /** Runs work in ONE transaction bound to the verified caller (begin_request(sub)). */
   tx<T>(work: (db: Queryable) => Promise<T>): Promise<T>;
   readonly evidence: EvidenceStore;
+  /** Creates caregiver sign-ins and resends invitations (0025); database checks run first. */
+  readonly identity: IdentityAdmin;
 }
 
 export interface Route {
@@ -109,6 +112,8 @@ export const ROUTES: Record<string, Route> = {
     mutating: false,
     handle: async ({ tx }) =>
       tx(async (db) => {
+        // The first successful call after the temporary password was changed marks first sign-in (0025).
+        await db.query("select ogevia_api.note_my_sign_in()");
         const memberships = await rows(db, "select * from ogevia_api.get_my_context()", []);
         const [profile] = await rows(db, "select display_name from ogevia_api.get_my_profile()", []);
         // displayName is null when the person has not set one; the UI says so instead of inventing a name.
@@ -411,6 +416,41 @@ export const ROUTES: Record<string, Route> = {
       const [result] = await tx((db) =>
         rows(db, "select * from ogevia_api.set_caregiver_status($1, $2, $3, $4, $5)", [org, record, status, reason, key]));
       return { result };
+    },
+  },
+
+  // Invitations (0025). The database decides first (caregivers.manage, own agency,
+  // caregiver role only); then the sign-in is created; then the database links it.
+  // The temporary password is generated and emailed by Cognito; it never passes here.
+  "POST /v1/caregivers/{caregiverRecordId}/invitation": {
+    status: 201,
+    mutating: true,
+    handle: async ({ event, tx, identity }) => {
+      const record = uuid(p(event).caregiverRecordId, "caregiverRecordId");
+      const body = parseBody(event.body, event.isBase64Encoded);
+      const org = uuid(body.organizationId, "organizationId");
+      const email = text(body.email, "email", 254, { required: true })!;
+      const normalized = await tx(async (db) =>
+        ((await db.query("select ogevia_api.begin_caregiver_invitation($1, $2, $3) as email", [org, record, email])).rows[0] as { email: string }).email);
+      const signIn = await identity.invite(normalized);
+      const [invitation] = await tx((db) =>
+        rows(db, "select * from ogevia_api.complete_caregiver_invitation($1, $2, $3, $4, $5)", [org, record, normalized, signIn.sub, signIn.existingAccount]));
+      return { invitation };
+    },
+  },
+
+  "POST /v1/caregivers/{caregiverRecordId}/invitation/resend": {
+    mutating: true,
+    handle: async ({ event, tx, identity }) => {
+      const record = uuid(p(event).caregiverRecordId, "caregiverRecordId");
+      const body = parseBody(event.body, event.isBase64Encoded);
+      const org = uuid(body.organizationId, "organizationId");
+      const email = await tx(async (db) =>
+        ((await db.query("select ogevia_api.begin_invitation_resend($1, $2) as email", [org, record])).rows[0] as { email: string }).email);
+      await identity.resend(email);
+      const sendCount = await tx(async (db) =>
+        ((await db.query("select ogevia_api.record_invitation_resent($1, $2) as n", [org, record])).rows[0] as { n: number }).n);
+      return { invitation: { sendCount } };
     },
   },
 

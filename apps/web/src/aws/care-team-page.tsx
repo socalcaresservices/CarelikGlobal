@@ -227,6 +227,83 @@ function CaregiverStatusCard({ c }: { c: Caregiver }) {
   );
 }
 
+
+const fmtWhen = (iso: string) => new Date(iso).toLocaleString("en-US", { month: "short", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit" });
+
+/**
+ * Sign-in and invitation (0025). The server checks caregivers.manage, the
+ * agency and that only a caregiver sign-in is created; Cognito emails the
+ * temporary password, which Ogevia never sees, shows or stores.
+ */
+function SignInCard({ c, canManage }: { c: Caregiver; canManage: boolean }) {
+  const api = useAwsApi();
+  const queryClient = useQueryClient();
+  const { activeOrganizationId } = useOrganization();
+  const [email, setEmail] = useState("");
+  const [state, setState] = useState<{ busy: boolean; error: string | null; done: string | null }>({ busy: false, error: null, done: null });
+  const refresh = () => queryClient.invalidateQueries({ queryKey: ["aws-caregivers"] }).then(() => queryClient.invalidateQueries({ queryKey: ["aws-assignments"] }));
+  async function invite() {
+    const value = email.trim();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)) return setState({ busy: false, error: "Enter the caregiver's own email address.", done: null });
+    setState({ busy: true, error: null, done: null });
+    try {
+      const r = await api.post<{ invitation: { existingAccount: boolean } }>(`/v1/caregivers/${encodeURIComponent(c.caregiverRecordId)}/invitation`,
+        { organizationId: activeOrganizationId, email: value });
+      await refresh();
+      setEmail("");
+      setState({ busy: false, error: null, done: r.invitation.existingAccount
+        ? "This email already had an Ogevia sign-in. It is now linked to this caregiver; they sign in with their existing password."
+        : "Invitation sent. The caregiver gets an email with a temporary password and sets their own on first sign-in." });
+    } catch (cause) {
+      setState({ busy: false, error: cause instanceof Error ? cause.message : "The invitation was not sent.", done: null });
+    }
+  }
+  async function resend() {
+    setState({ busy: true, error: null, done: null });
+    try {
+      await api.post(`/v1/caregivers/${encodeURIComponent(c.caregiverRecordId)}/invitation/resend`, { organizationId: activeOrganizationId });
+      await refresh();
+      setState({ busy: false, error: null, done: "Invitation sent again with a new temporary password." });
+    } catch (cause) {
+      setState({ busy: false, error: cause instanceof Error ? cause.message : "The invitation was not sent.", done: null });
+    }
+  }
+  const pending = !!c.invitedAt && !c.firstSignedInAt;
+  return (
+    <Card className="p-4 text-sm text-slate-800">
+      <h2 className="text-base font-semibold text-slate-950">Sign-in</h2>
+      <p className={`mt-1 font-semibold ${c.hasSignIn && !pending ? "text-slate-900" : "text-amber-900"}`}>{signInLabel(c)}.</p>
+      {c.invitedAt ? (
+        <ul className="mt-1 space-y-0.5 text-slate-700">
+          <li>Invited {fmtWhen(c.invitedAt)} to <span className="break-all">{c.invitationEmail}</span></li>
+          {c.invitationSendCount && c.invitationSendCount > 1 && c.invitationLastSentAt ? <li>Sent {c.invitationSendCount} times, last {fmtWhen(c.invitationLastSentAt)}</li> : null}
+          <li>{c.firstSignedInAt ? `First signed in ${fmtWhen(c.firstSignedInAt)}` : "Has not signed in yet"}</li>
+        </ul>
+      ) : null}
+      <p className="mt-1">{c.activeAssignments} active assignment{c.activeAssignments === 1 ? "" : "s"}{c.plannedAssignments ? ` (${c.plannedAssignments} planned, no access yet)` : ""}{c.openVisits > 0 ? ` · ${c.openVisits} visit in progress` : ""}</p>
+      {c.hasSignIn && (c.status === "onboarding") ? <p className="mt-1 text-amber-900">Still onboarding: they can sign in but see no clients until you change their status to Ready to work or Active.</p> : null}
+      {canManage && !c.hasSignIn && c.status !== "inactive" ? (
+        <form onSubmit={(e) => { e.preventDefault(); void invite(); }} className="mt-3 grid gap-2 sm:grid-cols-[1fr_auto] sm:items-end">
+          <div>
+            <label htmlFor="invite-email" className="block text-sm font-medium text-slate-700">Caregiver's email</label>
+            <input id="invite-email" type="email" autoComplete="off" inputMode="email" value={email} maxLength={254} onChange={(e) => setEmail(e.target.value)} className="mt-1 block w-full rounded-lg border border-slate-200 px-3 py-2 text-base" />
+          </div>
+          <Button type="submit" disabled={state.busy}>{state.busy ? "Sending…" : "Send invitation"}</Button>
+          <p className="text-xs text-slate-600 sm:col-span-2">Use the caregiver's own email. They get a caregiver sign-in for this agency only. Ogevia never shows or stores the temporary password.</p>
+        </form>
+      ) : null}
+      {canManage && pending ? (
+        <div className="mt-3">
+          <Button type="button" variant="secondary" disabled={state.busy} onClick={() => void resend()}>{state.busy ? "Sending…" : "Resend invitation"}</Button>
+          <p className="mt-1 text-xs text-slate-600">Temporary passwords expire; resend if the caregiver did not sign in in time or cannot find the email.</p>
+        </div>
+      ) : null}
+      {state.error ? <p role="alert" className="mt-2 text-red-700">{state.error}</p> : null}
+      {state.done ? <p role="status" className="mt-2 text-emerald-800">{state.done}</p> : null}
+    </Card>
+  );
+}
+
 /** One caregiver record (0023). */
 export function CaregiverDetailPage() {
   const { caregiverRecordId } = useParams<{ caregiverRecordId: string }>();
@@ -246,10 +323,7 @@ export function CaregiverDetailPage() {
         <span className="text-sm text-slate-500">{c.caregiverCode}</span>
         <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${CAREGIVER_STATUS_BADGE[c.status]}`}>{CAREGIVER_STATUS_LABEL[c.status]}</span>
       </div>
-      <Card className="p-4 text-sm text-slate-800">
-        <p><span className="font-semibold">{signInLabel(c)}.</span> {c.hasSignIn ? "" : "Inviting a caregiver to sign in is not available on this screen yet."}</p>
-        <p className="mt-1">{c.activeAssignments} active assignment{c.activeAssignments === 1 ? "" : "s"}{c.openVisits > 0 ? ` · ${c.openVisits} visit in progress` : ""}</p>
-      </Card>
+      <SignInCard c={c} canManage={canManage} />
       <AssignmentsCard caregiverRecordId={c.caregiverRecordId} />
       {canManage ? <CaregiverDetails c={c} /> : null}
       {canManage ? <CaregiverStatusCard c={c} /> : null}

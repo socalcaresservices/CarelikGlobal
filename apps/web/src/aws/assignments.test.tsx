@@ -51,7 +51,7 @@ function fakeApi(opts: { covered: boolean }) {
       case "GET /v1/assignments":
         return json(200, { assignments: [assignment] });
       case "POST /v1/assignments":
-        return json(201, { assignment: { assignmentId: "new", hasAuthorization: opts.covered } });
+        return json(201, { assignment: { assignmentId: "new", hasAuthorization: opts.covered, grantsAccess: body?.caregiverRecordId !== CG_NO_LOGIN } });
       case `POST /v1/assignments/${ASG}/end`:
         return json(200, { outcome: "ended" });
       default:
@@ -84,23 +84,35 @@ function renderAt(path: string, opts = { covered: true }) {
 afterEach(() => vi.clearAllMocks());
 
 describe("assignments", () => {
-  it("client page: lists the assigned caregiver; caregivers without a sign-in cannot be chosen; an uncovered assignment is flagged", async () => {
+  it("client page: lists the assigned caregiver; caregivers without a sign-in can be planned (0025); an uncovered assignment is flagged", async () => {
     const api = renderAt(`/clients/${CLIENT}`, { covered: false });
     const card = (await screen.findByRole("heading", { name: "Caregivers assigned" })).closest("div")!.parentElement!;
     expect(await within(card).findByText(/Synthetic Caregiver One/)).toBeInTheDocument();
     fireEvent.click(within(card).getByRole("button", { name: "Assign" }));
-    await screen.findByRole("option", { name: /Synthetic Caregiver Two.*no sign-in yet/ });
-    expect((screen.getByRole("option", { name: /Synthetic Caregiver Two/ }) as HTMLOptionElement).disabled).toBe(true);
+    await screen.findByRole("option", { name: /Synthetic Caregiver Two.*planned: no sign-in yet/ });
+    expect((screen.getByRole("option", { name: /Synthetic Caregiver Two/ }) as HTMLOptionElement).disabled).toBe(false);
     fireEvent.click(screen.getAllByRole("button", { name: "Assign" }).at(-1)!);
     expect(await screen.findByRole("alert")).toHaveTextContent("Choose the caregiver");
     fireEvent.change(screen.getByLabelText("Caregiver"), { target: { value: CG } });
     await screen.findByRole("option", { name: "Personal care (PCS)" });
     fireEvent.change(screen.getByLabelText("Service"), { target: { value: SVC } });
     fireEvent.click(screen.getAllByRole("button", { name: "Assign" }).at(-1)!);
-    expect(await screen.findByText(/no current authorization covers it/)).toBeInTheDocument();
+    expect(await screen.findByText(/no current authorization covers it/i)).toBeInTheDocument();
     const post = api.calls.find((c) => c.method === "POST" && c.path === "/v1/assignments")!;
     expect(post.body).toMatchObject({ organizationId: ORG, caregiverRecordId: CG, clientId: CLIENT, serviceId: SVC, effectiveEnd: null });
     expect(post.body!.effectiveStart).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+  });
+
+  it("planning for a caregiver without a sign-in says plainly that no access is given yet", async () => {
+    renderAt(`/clients/${CLIENT}`, { covered: true });
+    const card = (await screen.findByRole("heading", { name: "Caregivers assigned" })).closest("div")!.parentElement!;
+    fireEvent.click(within(card).getByRole("button", { name: "Assign" }));
+    await screen.findByRole("option", { name: /Synthetic Caregiver Two/ });
+    fireEvent.change(screen.getByLabelText("Caregiver", { exact: true }), { target: { value: CG_NO_LOGIN } });
+    await screen.findByRole("option", { name: "Personal care (PCS)" });
+    fireEvent.change(screen.getByLabelText("Service"), { target: { value: SVC } });
+    fireEvent.click(screen.getAllByRole("button", { name: "Assign" }).at(-1)!);
+    expect(await screen.findByText(/Planned\. Access starts once the caregiver has signed in/)).toBeInTheDocument();
   });
 
   it("caregiver page: ending an assignment needs a reason and reports that access stopped", async () => {

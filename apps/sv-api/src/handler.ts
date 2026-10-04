@@ -10,6 +10,7 @@ import type { ApiConfig } from "./config";
 import type { ConnectionSource } from "./db";
 import { toApiError } from "./errors";
 import type { EvidenceStore } from "./evidence";
+import { unavailableIdentityAdmin, type IdentityAdmin } from "./identity";
 import { errorBody, json, type HttpApiEvent, type HttpResult } from "./http";
 import { ROUTES } from "./routes";
 
@@ -37,6 +38,7 @@ export interface HandlerDeps {
   readonly config: Pick<ApiConfig, "issuer" | "appClientIds" | "dbSetRole">;
   readonly db: ConnectionSource;
   readonly evidence: EvidenceStore;
+  readonly identity?: IdentityAdmin;
   readonly log?: Logger;
   readonly now?: () => number;
 }
@@ -85,6 +87,7 @@ export function createHandler(deps: HandlerDeps) {
       const body = await route.handle({
         event,
         evidence: deps.evidence,
+        identity: deps.identity ?? unavailableIdentityAdmin,
         tx: async (work) => {
           const client = await deps.db.connect();
           let broken = false;

@@ -17,6 +17,8 @@ export interface ApiConfig {
   readonly dbSetRole: string | undefined;
   readonly evidenceBucket: string;
   readonly evidenceKeyArn: string;
+  /** Identity Lambda for caregiver invitations (0025); unset = invitations switched off. */
+  readonly identityFunctionName: string | undefined;
 }
 
 export class ConfigError extends Error {
@@ -53,8 +55,11 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
   if (dbSetRole && !/^[a-z_][a-z0-9_]*$/.test(dbSetRole)) throw new ConfigError("DB_SET_ROLE is malformed");
   const evidenceKeyArn = required(env, "EVIDENCE_KEY_ARN");
   if (!evidenceKeyArn.startsWith("arn:aws:kms:")) throw new ConfigError("EVIDENCE_KEY_ARN is malformed");
+  const identityFunctionName = env.IDENTITY_FUNCTION_NAME?.trim() || undefined;
+  if (identityFunctionName && !/^[A-Za-z0-9-_]{1,64}$/.test(identityFunctionName)) throw new ConfigError("IDENTITY_FUNCTION_NAME is malformed");
   return {
     region,
+    identityFunctionName,
     userPoolId,
     appClientIds,
     issuer: `https://cognito-idp.${region}.amazonaws.com/${userPoolId}`,

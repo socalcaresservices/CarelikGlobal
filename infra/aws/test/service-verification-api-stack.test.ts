@@ -2,7 +2,7 @@ import { Match, Template } from "aws-cdk-lib/assertions";
 import { describe, expect, it } from "vitest";
 import { buildOgeviaApp } from "../lib/app.js";
 import { cognitoIssuer } from "../lib/auth-contract.js";
-import { ENVIRONMENTS } from "../lib/config.js";
+import { ENVIRONMENTS, OGEVIA_ACCOUNT } from "../lib/config.js";
 import {
   LAMBDA_ENVIRONMENT_KEYS,
   SERVICE_VERIFICATION_ROUTES,
@@ -101,7 +101,7 @@ describe("ServiceVerificationApiStack (FUTURE, Phase 4)", () => {
 
   it("exposes exactly the environment contract, pointing at the existing database by reference", () => {
     const fn = Object.values(
-      template.findResources("AWS::Lambda::Function"),
+      template.findResources("AWS::Lambda::Function", { Properties: { Description: "Ogevia Service Verification API" } }),
     )[0]!;
     const vars = (
       fn.Properties as { Environment: { Variables: Record<string, unknown> } }
@@ -121,9 +121,10 @@ describe("ServiceVerificationApiStack (FUTURE, Phase 4)", () => {
 
   it("grants least-privilege access: one secret by exact ARN, signature objects, KMS via S3 only", () => {
     const policies = Object.values(
-      template.findResources("AWS::IAM::ManagedPolicy"),
+      template.findResources("AWS::IAM::ManagedPolicy", { Properties: { Description: "Ogevia Service Verification API handler permissions" } }),
     );
     expect(policies).toHaveLength(1);
+    template.resourceCountIs("AWS::IAM::ManagedPolicy", 2);
     template.resourceCountIs("AWS::IAM::Policy", 0);
     const statements = (
       policies[0]!.Properties as {
@@ -168,6 +169,7 @@ describe("ServiceVerificationApiStack (FUTURE, Phase 4)", () => {
     expect(statements.map((s) => s.Sid).sort()).toEqual([
       "AgencyLogoObjects",
       "EvidenceKeyForSignatureObjects",
+      "InvokeIdentityAdmin",
       "ReadAppDatabaseSecret",
       "SignatureObjects",
       "StaffDocumentObjects",
@@ -176,11 +178,30 @@ describe("ServiceVerificationApiStack (FUTURE, Phase 4)", () => {
     ]);
   });
 
-  it("attaches no AWS managed policy to the Lambda role", () => {
-    const role = Object.values(template.findResources("AWS::IAM::Role"))[0]!;
-    expect(
-      (role.Properties as { ManagedPolicyArns?: unknown }).ManagedPolicyArns,
-    ).toBeUndefined();
+  it("attaches no AWS managed policy to either Lambda role", () => {
+    const roles = Object.values(template.findResources("AWS::IAM::Role"));
+    expect(roles).toHaveLength(2);
+    for (const role of roles) {
+      expect((role.Properties as { ManagedPolicyArns?: unknown }).ManagedPolicyArns).toBeUndefined();
+    }
+  });
+
+  it("the invitation identity function: outside the VPC, Cognito create/get on the one pool only, pool id its only setting", () => {
+    const fn = Object.values(template.findResources("AWS::Lambda::Function", { Properties: { FunctionName: "Ogevia-prod-IdentityAdmin" } }))[0]!;
+    const props = fn.Properties as Record<string, any>;
+    expect(props.VpcConfig).toBeUndefined();
+    expect(props.Environment.Variables).toEqual({ COGNITO_USER_POOL_ID: existing.cognitoUserPoolId });
+    const [policy] = Object.values(template.findResources("AWS::IAM::ManagedPolicy", { Properties: { Description: "Ogevia identity function: own logs + AdminCreateUser/AdminGetUser on the one user pool" } }));
+    const statements = (policy!.Properties as any).PolicyDocument.Statement as Array<{ Sid: string; Action: unknown; Resource: unknown }>;
+    expect(statements.map((st) => st.Sid).sort()).toEqual(["CreateCaregiverSignIns", "WriteOwnLogGroup"]);
+    const cognito = statements.find((st) => st.Sid === "CreateCaregiverSignIns")!;
+    expect(cognito.Action).toEqual(["cognito-idp:AdminCreateUser", "cognito-idp:AdminGetUser"]);
+    expect(cognito.Resource).toBe(`arn:aws:cognito-idp:us-west-2:${OGEVIA_ACCOUNT}:userpool/${existing.cognitoUserPoolId}`);
+    expect(JSON.stringify(statements)).not.toMatch(/AdminSetUserPassword|AdminAddUserToGroup|AdminUpdateUserAttributes|AdminDeleteUser|cognito-idp:\*|secretsmanager|s3:|kms:/);
+    const api = Object.values(template.findResources("AWS::IAM::ManagedPolicy", { Properties: { Description: "Ogevia Service Verification API handler permissions" } }))[0]!;
+    const invoke = ((api.Properties as any).PolicyDocument.Statement as Array<{ Sid: string; Action: unknown; Resource: unknown }>).find((st) => st.Sid === "InvokeIdentityAdmin")!;
+    expect(invoke.Action).toBe("lambda:InvokeFunction");
+    expect(JSON.stringify(invoke.Resource)).toContain("IdentityHandler");
   });
 
   it("refuses to synthesize without a verified Cognito app client", () => {

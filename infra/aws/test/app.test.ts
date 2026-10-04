@@ -66,22 +66,33 @@ describe("plan mode: every synthesized stack", () => {
     for (const { stack, template } of stacks) {
       const found = Object.values(template.Resources ?? {}).map((r) => r.Type).filter((t) => network.includes(t)).sort();
       if (stack.stackName.endsWith("-NetworkEgress")) {
-        expect(found).toEqual(["AWS::EC2::SecurityGroup", "AWS::EC2::SecurityGroupIngress", "AWS::EC2::VPCEndpoint", "AWS::EC2::VPCEndpoint"]);
+        expect(found).toEqual(["AWS::EC2::SecurityGroup", "AWS::EC2::SecurityGroupIngress", "AWS::EC2::VPCEndpoint", "AWS::EC2::VPCEndpoint", "AWS::EC2::VPCEndpoint"]);
       } else {
         expect(found, stack.stackName).toEqual([]);
       }
     }
   });
 
-  it("creates no NAT gateway (the only fixed-cost network item is the Secrets Manager endpoint)", () => {
+  it("creates no NAT gateway (the only fixed-cost network items are the Secrets Manager and Lambda endpoints, 1 AZ each)", () => {
     const egress = stacks.find((s) => s.stack.stackName.endsWith("-NetworkEgress"))!.template;
     const endpoints = Object.values(egress.Resources ?? {}).filter((r) => r.Type === "AWS::EC2::VPCEndpoint");
     const interfaceEndpoints = endpoints.filter((r) => r.Properties?.VpcEndpointType === "Interface");
-    expect(interfaceEndpoints).toHaveLength(1);
-    expect((interfaceEndpoints[0]!.Properties!.SubnetIds as unknown[]).length).toBe(1);
-    expect(interfaceEndpoints[0]!.Properties!.PrivateDnsEnabled).toBe(true);
+    expect(interfaceEndpoints).toHaveLength(2);
+    for (const e of interfaceEndpoints) {
+      expect((e.Properties!.SubnetIds as unknown[]).length).toBe(1);
+      expect(e.Properties!.PrivateDnsEnabled).toBe(true);
+    }
+    expect(JSON.stringify(interfaceEndpoints.map((e) => e.Properties!.ServiceName))).toMatch(/lambda/);
+    // The Lambda endpoint may invoke the identity function only.
+    const lambdaEndpoint = interfaceEndpoints.find((e) => JSON.stringify(e.Properties!.ServiceName).includes("lambda"))!;
+    expect(JSON.stringify(lambdaEndpoint.Properties!.PolicyDocument)).toContain("function:Ogevia-prod-IdentityAdmin");
+    expect(JSON.stringify(lambdaEndpoint.Properties!.PolicyDocument)).not.toContain("function:*");
+    expect(Object.values(egress.Resources ?? {}).filter((r) => r.Type === "AWS::EC2::NatGateway")).toEqual([]);
     const gateway = endpoints.find((r) => r.Properties?.VpcEndpointType === "Gateway")!;
     expect(gateway.Properties!.RouteTableIds).toEqual(["rtb-0bb8bac7d607a3737", "rtb-049d4448ab6a01e48"]);
+    // Signatures, staff documents and the agency logo: the same three key shapes the API role has.
+    const s3Resources = JSON.stringify(gateway.Properties!.PolicyDocument);
+    for (const pattern of ["/*/*/client-signature.png", "/*/documents/*/*", "/*/branding/logo/*"]) expect(s3Resources).toContain(pattern);
   });
 
   it("targets the verified account and region, with termination protection", () => {

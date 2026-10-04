@@ -21,6 +21,8 @@ function fakeApi(role: Role) {
     : role === "organization_owner" ? ["authorizations.read", "caregivers.manage", "services.manage", "visits.manage", "visits.read", "organization.update"]
     : ["availability.manage_own", "documents.manage_own"];
   let status = "active";
+  let invited: { email: string; at: string; count: number } | null = null;
+  const NEW = "abababab-0000-4000-8000-000000000009";
   const json = (code: number, body: unknown) => new Response(JSON.stringify(body), { status: code, headers: { "content-type": "application/json" } });
   const fetchImpl = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = new URL(String(input));
@@ -34,12 +36,18 @@ function fakeApi(role: Role) {
       case "GET /v1/attention":
         return json(200, { summary: null });
       case "GET /v1/caregivers":
-        return json(200, { caregivers: [{ caregiverRecordId: CG, caregiverCode: "CG-1A2B3C4D", firstName: "Synthetic", lastName: "Caregiver One", preferredName: null, status, hasSignIn: true, signInStatus: status === "inactive" ? "suspended" : "active", activeAssignments: status === "inactive" ? 0 : 2, openVisits: 0 }] });
+        return json(200, { caregivers: [{ caregiverRecordId: NEW, caregiverCode: "CG-NEW00001", firstName: "Synthetic", lastName: "Newcomer", preferredName: null, status: "ready", hasSignIn: !!invited, signInStatus: invited ? "active" : null, activeAssignments: 1, plannedAssignments: invited ? 0 : 1, openVisits: 0, invitationEmail: invited?.email ?? null, invitedAt: invited?.at ?? null, invitationLastSentAt: invited?.at ?? null, invitationSendCount: invited?.count ?? null, firstSignedInAt: null }, { caregiverRecordId: CG, caregiverCode: "CG-1A2B3C4D", firstName: "Synthetic", lastName: "Caregiver One", preferredName: null, status, hasSignIn: true, signInStatus: status === "inactive" ? "suspended" : "active", activeAssignments: status === "inactive" ? 0 : 2, openVisits: 0 }] });
       case "POST /v1/caregivers":
         return json(201, { caregiver: { caregiverRecordId: "abababab-0000-4000-8000-000000000002", caregiverCode: "CG-99999999" } });
       case `POST /v1/caregivers/${CG}/status`:
         status = String(body?.status);
         return json(200, { result: { endedAssignments: 2, signInStatus: "suspended" } });
+      case `POST /v1/caregivers/${NEW}/invitation`:
+        invited = { email: String(body?.email), at: "2026-10-04T20:00:00Z", count: 1 };
+        return json(201, { invitation: { invitationId: "i1", existingAccount: false } });
+      case `POST /v1/caregivers/${NEW}/invitation/resend`:
+        invited = { ...invited!, count: invited!.count + 1 };
+        return json(200, { invitation: { sendCount: invited.count } });
       case "GET /v1/services":
         return json(200, { services: [{ serviceId: SVC, code: "PCS", name: "Personal care", isActive: true }] });
       case "POST /v1/services":
@@ -111,6 +119,32 @@ describe("Care Team", () => {
     expect(await screen.findByText("You do not have access to the Care Team.")).toBeInTheDocument();
     expect(screen.queryByRole("link", { name: "Care Team" })).not.toBeInTheDocument();
     expect(screen.queryByRole("link", { name: "Services" })).not.toBeInTheDocument();
+  });
+});
+
+describe("Invitations (0025)", () => {
+  it("manager invites by email, sees Invited / not signed in yet, and can resend; no password appears anywhere", async () => {
+    const api = renderAt("/care-team/abababab-0000-4000-8000-000000000009", "manager");
+    expect(await screen.findByText("No sign-in yet.")).toBeInTheDocument();
+    expect(screen.getByText(/1 planned, no access yet/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Send invitation" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent("own email");
+    fireEvent.change(screen.getByLabelText("Caregiver's email"), { target: { value: "newcomer@example.test" } });
+    fireEvent.click(screen.getByRole("button", { name: "Send invitation" }));
+    expect(await screen.findByText(/Invitation sent\. The caregiver gets an email with a temporary password/)).toBeInTheDocument();
+    expect(await screen.findByText("Invited — has not signed in yet.")).toBeInTheDocument();
+    expect(screen.getByText("Has not signed in yet")).toBeInTheDocument();
+    expect(api.calls.find((c) => c.path.endsWith("/invitation"))!.body).toEqual({ organizationId: ORG, email: "newcomer@example.test" });
+    fireEvent.click(screen.getByRole("button", { name: "Resend invitation" }));
+    expect(await screen.findByText("Invitation sent again with a new temporary password.")).toBeInTheDocument();
+    expect(await screen.findByText(/Sent 2 times/)).toBeInTheDocument();
+    expect(document.body.textContent).not.toMatch(/password:\s*\S/i);
+  });
+
+  it("a caregiver signed in through other means shows no invite form", async () => {
+    renderAt(`/care-team/${CG}`, "manager");
+    expect(await screen.findByText("Sign-in active.")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Send invitation" })).not.toBeInTheDocument();
   });
 });
 

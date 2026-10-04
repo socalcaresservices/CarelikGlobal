@@ -178,7 +178,12 @@ export function scanTemplate(
     if (r.Type === "AWS::Lambda::Function") {
       const vpc = props.VpcConfig as
         { SubnetIds?: unknown[]; SecurityGroupIds?: unknown[] } | undefined;
-      if (!vpc?.SubnetIds?.length || !vpc.SecurityGroupIds?.length) {
+      // The one exception (0025): the caregiver-invitation identity function, which
+      // must reach Cognito and carries nothing but the pool id in its environment.
+      const envKeys = Object.keys((props.Environment as { Variables?: Record<string, unknown> } | undefined)?.Variables ?? {});
+      const identityException = typeof props.FunctionName === "string" && /^Ogevia-[a-z0-9-]+-IdentityAdmin$/.test(props.FunctionName)
+        && envKeys.length === 1 && envKeys[0] === "COGNITO_USER_POOL_ID";
+      if (!identityException && (!vpc?.SubnetIds?.length || !vpc.SecurityGroupIds?.length)) {
         flag(
           logicalId,
           "lambda-outside-vpc",

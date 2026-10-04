@@ -63,9 +63,10 @@ describe("assignments", () => {
     expect(row).toMatchObject({ state: "upcoming" });
   });
 
-  it("refuses caregivers without a sign-in, inactive clients, already-ended dates and people without assignments.manage", async () => {
+  it("refuses inactive clients, already-ended dates and people without assignments.manage", async () => {
     const [noLogin] = await q<{ caregiver_record_id: string }>(w.managerA, "select * from ogevia_api.create_caregiver($1, 'Synthetic', 'No Login', null, 'active')", [w.orgA]);
-    await expectPgError(assign(w.managerA, noLogin!.caregiver_record_id, w.clientA1, w.serviceA, today), "OGV22", /no sign-in/);
+    // Since 0025 a caregiver without a sign-in can be assigned (planned, no access).
+    expect(await assign(w.managerA, noLogin!.caregiver_record_id, w.clientA1, w.serviceA, today)).toMatchObject({ grants_access: false });
     const cg = await caregiver();
     const [inactive] = await q<{ client_id: string }>(w.managerA, "select * from ogevia_api.create_client($1, 'Synthetic', 'Client Paused')", [w.orgA]);
     await q(w.managerA, "select ogevia_api.set_client_status($1, $2, 'inactive', 'Paused (synthetic)')", [w.orgA, inactive!.client_id]);

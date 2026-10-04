@@ -17,6 +17,13 @@ export interface Caregiver {
   signInStatus: string | null;
   activeAssignments: number;
   openVisits: number;
+  /** Invitation (0025); null when never invited through Ogevia. */
+  invitationEmail?: string | null;
+  invitedAt?: string | null;
+  invitationLastSentAt?: string | null;
+  invitationSendCount?: number | null;
+  firstSignedInAt?: string | null;
+  plannedAssignments?: number;
 }
 
 export const CAREGIVER_STATUS_LABEL: Record<CaregiverStatus, string> = {
@@ -36,8 +43,9 @@ export const CAREGIVER_STATUS_BADGE: Record<CaregiverStatus, string> = {
 export const caregiverName = (c: Pick<Caregiver, "firstName" | "lastName" | "preferredName">) =>
   `${c.firstName} ${c.lastName}${c.preferredName ? ` ("${c.preferredName}")` : ""}`;
 
-export function signInLabel(c: Pick<Caregiver, "hasSignIn" | "signInStatus">): string {
+export function signInLabel(c: Pick<Caregiver, "hasSignIn" | "signInStatus"> & Partial<Pick<Caregiver, "invitedAt" | "firstSignedInAt">>): string {
   if (!c.hasSignIn) return "No sign-in yet";
+  if (c.invitedAt && !c.firstSignedInAt && c.signInStatus === "active") return "Invited — has not signed in yet";
   if (c.signInStatus === "active") return "Sign-in active";
   if (c.signInStatus === "suspended") return "Sign-in suspended";
   return `Sign-in ${c.signInStatus ?? "not in this agency"}`;

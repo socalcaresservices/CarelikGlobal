@@ -41,6 +41,15 @@ export interface ServiceVerificationApiStackProps extends StackProps {
 const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "../../..");
 /** The real Service Verification handler (apps/sv-api), bundled by esbuild at synth. */
 export const HANDLER_ENTRY = resolve(REPO_ROOT, "apps/sv-api/src/index.ts");
+export const IDENTITY_HANDLER_ENTRY = resolve(REPO_ROOT, "apps/sv-api/src/identity-handler.ts");
+
+/**
+ * Caregiver invitations (0025). Fixed name so the Lambda VPC endpoint policy
+ * (NetworkEgress stack) can name this one function without a cross-stack export.
+ */
+export function identityFunctionName(config: Pick<OgeviaEnvironmentConfig, "envName">): string {
+  return `Ogevia-${config.envName}-IdentityAdmin`;
+}
 
 /**
  * Service Verification routes from docs/aws/MIGRATION_PLAN.md section 4. Every
@@ -94,6 +103,8 @@ export const SERVICE_VERIFICATION_ROUTES: ReadonlyArray<{
   { method: apigw.HttpMethod.POST, path: "/v1/caregivers" },
   { method: apigw.HttpMethod.POST, path: "/v1/caregivers/{caregiverRecordId}/details" },
   { method: apigw.HttpMethod.POST, path: "/v1/caregivers/{caregiverRecordId}/status" },
+  { method: apigw.HttpMethod.POST, path: "/v1/caregivers/{caregiverRecordId}/invitation" },
+  { method: apigw.HttpMethod.POST, path: "/v1/caregivers/{caregiverRecordId}/invitation/resend" },
   { method: apigw.HttpMethod.POST, path: "/v1/services" },
   { method: apigw.HttpMethod.POST, path: "/v1/services/{serviceId}/name" },
   { method: apigw.HttpMethod.POST, path: "/v1/services/{serviceId}/status" },
@@ -167,6 +178,7 @@ export const LAMBDA_ENVIRONMENT_KEYS = [
   "DB_NAME",
   "DB_SET_ROLE",
   "NODE_EXTRA_CA_CERTS",
+  "IDENTITY_FUNCTION_NAME",
 ] as const;
 
 
@@ -185,6 +197,8 @@ export const LAMBDA_ENVIRONMENT_KEYS = [
  */
 export class ServiceVerificationApiStack extends Stack {
   public readonly handler: lambda.Function;
+  public readonly identityHandler: lambda.Function;
+  public readonly identityLogGroup: logs.LogGroup;
   public readonly api: apigw.HttpApi;
   public readonly handlerLogGroup: logs.LogGroup;
   public readonly accessLogGroup: logs.LogGroup;
@@ -292,6 +306,66 @@ export class ServiceVerificationApiStack extends Stack {
       }),
     );
 
+    // Caregiver invitations (0025). OUTSIDE the VPC: the pool has a managed-login
+    // domain, so Cognito PrivateLink cannot be used and the private API Lambda has
+    // no route to Cognito. This function can only create a user and resend the
+    // invitation email on the one pool; it has no database, S3 or KMS access and
+    // never handles a password (Cognito generates and emails it).
+    this.identityLogGroup = new logs.LogGroup(this, "IdentityLogGroup", {
+      retention: config.logRetention,
+      removalPolicy: RemovalPolicy.RETAIN,
+    });
+    const identityRole = new iam.Role(this, "IdentityRole", {
+      assumedBy: new iam.ServicePrincipal("lambda.amazonaws.com"),
+      description: "Ogevia caregiver invitation identity function (Cognito create/resend only)",
+    });
+    const identityPolicy = new iam.ManagedPolicy(this, "IdentityPolicy", {
+      description: "Ogevia identity function: own logs + AdminCreateUser/AdminGetUser on the one user pool",
+      roles: [identityRole],
+    });
+    identityPolicy.addStatements(
+      new iam.PolicyStatement({
+        sid: "WriteOwnLogGroup",
+        actions: ["logs:CreateLogStream", "logs:PutLogEvents"],
+        resources: [this.identityLogGroup.logGroupArn],
+      }),
+      new iam.PolicyStatement({
+        sid: "CreateCaregiverSignIns",
+        actions: ["cognito-idp:AdminCreateUser", "cognito-idp:AdminGetUser"],
+        resources: [`arn:aws:cognito-idp:${config.region}:${config.account}:userpool/${existing.userPool.userPoolId}`],
+      }),
+    );
+    this.identityHandler = new nodejs.NodejsFunction(this, "IdentityHandler", {
+      functionName: identityFunctionName(config),
+      description: "Ogevia caregiver invitations: Cognito AdminCreateUser/AdminGetUser only",
+      runtime: lambda.Runtime.NODEJS_24_X,
+      architecture: lambda.Architecture.ARM_64,
+      entry: IDENTITY_HANDLER_ENTRY,
+      handler: "handler",
+      projectRoot: REPO_ROOT,
+      depsLockFilePath: resolve(REPO_ROOT, "pnpm-lock.yaml"),
+      bundling: { format: nodejs.OutputFormat.CJS, target: "node22", minify: true, sourceMap: false, forceDockerBundling: false },
+      memorySize: 256,
+      timeout: Duration.seconds(8),
+      role: identityRole,
+      logGroup: this.identityLogGroup,
+      environment: { COGNITO_USER_POOL_ID: existing.userPool.userPoolId },
+    });
+    this.identityHandler.node.addDependency(identityPolicy);
+    // Scoped to this one function; the API handler is still checked by the rule.
+    Validations.of(this.identityHandler).acknowledge({
+      id: "HIPAA.Security-LambdaInsideVPC",
+      reason:
+        "Deliberately outside the VPC: Cognito PrivateLink cannot serve a pool with a managed-login domain and NAT is deferred. The function has no database, S3, KMS or secret access; it only calls AdminCreateUser/AdminGetUser on the one pool and never handles a password.",
+    });
+    policy.addStatements(
+      new iam.PolicyStatement({
+        sid: "InvokeIdentityAdmin",
+        actions: ["lambda:InvokeFunction"],
+        resources: [this.identityHandler.functionArn],
+      }),
+    );
+
     this.handler = new nodejs.NodejsFunction(this, "Handler", {
       description: "Ogevia Service Verification API",
       runtime: lambda.Runtime.NODEJS_24_X,
@@ -333,6 +407,7 @@ export class ServiceVerificationApiStack extends Stack {
         DB_SET_ROLE: "ogevia_app",
         // Lambda Node.js 20+: adds the Amazon RDS CA bundle for verified TLS.
         NODE_EXTRA_CA_CERTS: "/var/runtime/ca-cert.pem",
+        IDENTITY_FUNCTION_NAME: identityFunctionName(config),
       },
     });
 

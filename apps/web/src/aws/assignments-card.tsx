@@ -28,6 +28,8 @@ export interface Assignment {
   effectiveEnd: string | null;
   state: "current" | "upcoming" | "ended";
   hasAuthorization: boolean;
+  /** False while the caregiver has no sign-in or is not ready/active yet (planned). */
+  grantsAccess?: boolean;
 }
 
 const message = (cause: unknown, fallback: string) => (cause instanceof Error ? cause.message : fallback);
@@ -64,7 +66,9 @@ function useRefreshAssignments() {
   };
 }
 
-function AddAssignmentForm({ clientId, caregiverRecordId, onDone }: { clientId?: string | undefined; caregiverRecordId?: string | undefined; onDone: (covered: boolean) => void }) {
+type Added = { covered: boolean; grantsAccess: boolean };
+
+function AddAssignmentForm({ clientId, caregiverRecordId, onDone }: { clientId?: string | undefined; caregiverRecordId?: string | undefined; onDone: (added: Added) => void }) {
   const api = useAwsApi();
   const refresh = useRefreshAssignments();
   const today = useAgencyToday();
@@ -88,7 +92,7 @@ function AddAssignmentForm({ clientId, caregiverRecordId, onDone }: { clientId?:
     if (end && end < start) return setState({ busy: false, error: "The end date cannot be before the start date." });
     setState({ busy: true, error: null });
     try {
-      const r = await api.post<{ assignment: { assignmentId: string; hasAuthorization: boolean } }>("/v1/assignments", {
+      const r = await api.post<{ assignment: { assignmentId: string; hasAuthorization: boolean; grantsAccess?: boolean } }>("/v1/assignments", {
         organizationId: activeOrganizationId,
         caregiverRecordId: caregiverRecordId ?? pick,
         clientId: clientId ?? pick,
@@ -97,7 +101,7 @@ function AddAssignmentForm({ clientId, caregiverRecordId, onDone }: { clientId?:
       key.current = newIdempotencyKey();
       await refresh();
       setState({ busy: false, error: null });
-      onDone(r.assignment.hasAuthorization);
+      onDone({ covered: r.assignment.hasAuthorization, grantsAccess: r.assignment.grantsAccess !== false });
     } catch (cause) {
       setState({ busy: false, error: message(cause, "The assignment was not added.") });
     }
@@ -110,8 +114,8 @@ function AddAssignmentForm({ clientId, caregiverRecordId, onDone }: { clientId?:
           <select id="asg-caregiver" value={pick} onChange={(e) => { setPick(e.target.value); touch(); }} className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-base">
             <option value="">Choose a caregiver</option>
             {eligibleCaregivers.map((c) => (
-              <option key={c.caregiverRecordId} value={c.caregiverRecordId} disabled={!c.hasSignIn || c.status === "onboarding"}>
-                {caregiverName(c)} ({c.caregiverCode}){!c.hasSignIn ? " — no sign-in yet" : c.status === "onboarding" ? " — still onboarding" : ""}
+              <option key={c.caregiverRecordId} value={c.caregiverRecordId}>
+                {caregiverName(c)} ({c.caregiverCode}){!c.hasSignIn ? " — planned: no sign-in yet" : c.status === "onboarding" ? " — planned: still onboarding" : ""}
               </option>
             ))}
           </select>
@@ -191,6 +195,9 @@ function AssignmentRow({ a, side, canManage, onDone }: { a: Assignment; side: "c
         <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${STATE_BADGE[a.state]}`}>{STATE_LABEL[a.state]}</span>
       </div>
       <p className="mt-1 text-sm text-slate-800">{a.serviceName} ({a.serviceCode}) · from {fmtDate(a.effectiveStart)}{a.effectiveEnd ? ` to ${fmtDate(a.effectiveEnd)}` : ", no end date"}</p>
+      {a.state !== "ended" && a.grantsAccess === false ? (
+        <p className="mt-1 text-sm font-semibold text-amber-900">Planned — no access yet. It starts by itself once the caregiver has signed in and is Ready to work or Active.</p>
+      ) : null}
       {a.state !== "ended" && !a.hasAuthorization ? (
         <p className="mt-1 text-sm font-semibold text-red-700">No current authorization covers this client and service. Visits will be refused until one is added.</p>
       ) : null}
@@ -208,7 +215,7 @@ export function AssignmentsCard({ clientId, caregiverRecordId }: { clientId?: st
   const side = clientId ? "client" : "caregiver";
   const assignments = useAssignments({ clientId, caregiverRecordId });
   const [adding, setAdding] = useState(false);
-  const [added, setAdded] = useState<boolean | null>(null);
+  const [added, setAdded] = useState<Added | null>(null);
   const [endedText, setEndedText] = useState<string | null>(null);
   const [showEnded, setShowEnded] = useState(false);
   const all = assignments.data ?? [];
@@ -220,11 +227,12 @@ export function AssignmentsCard({ clientId, caregiverRecordId }: { clientId?: st
         <h2 className="text-base font-semibold text-slate-950">{side === "client" ? "Caregivers assigned" : "Clients assigned"}</h2>
         {canManage ? <Button type="button" variant="secondary" onClick={() => { setAdding((x) => !x); setAdded(null); setEndedText(null); }} aria-expanded={adding}>{adding ? "Close" : "Assign"}</Button> : null}
       </div>
-      <p className="mt-1 text-xs text-slate-600">An assignment lets the caregiver see this {side === "client" ? "client" : "person's clients"} and verify visits for that service between the first and last day.</p>
-      {adding ? <AddAssignmentForm clientId={clientId} caregiverRecordId={caregiverRecordId} onDone={(covered) => { setAdding(false); setAdded(covered); }} /> : null}
+      <p className="mt-1 text-xs text-slate-600">An assignment lets the caregiver see this {side === "client" ? "client" : "person's clients"} and verify visits for that service between the first and last day. You can plan one before the caregiver has a sign-in; it gives no access until they have signed in and are Ready to work or Active.</p>
+      {adding ? <AddAssignmentForm clientId={clientId} caregiverRecordId={caregiverRecordId} onDone={(result) => { setAdding(false); setAdded(result); }} /> : null}
       {added !== null ? (
-        <p role="status" className={`mt-2 text-sm ${added ? "text-emerald-800" : "font-semibold text-red-700"}`}>
-          {added ? "Assigned." : "Assigned, but no current authorization covers it. Visits will be refused until one is added."}
+        <p role="status" className={`mt-2 text-sm ${added.covered ? "text-emerald-800" : "font-semibold text-red-700"}`}>
+          {added.grantsAccess ? "Assigned." : "Planned. Access starts once the caregiver has signed in and is Ready to work or Active."}
+          {added.covered ? "" : " No current authorization covers it; visits will be refused until one is added."}
         </p>
       ) : null}
       {endedText ? <p role="status" className="mt-2 text-sm text-emerald-800">{endedText}</p> : null}

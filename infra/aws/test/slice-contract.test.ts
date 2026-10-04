@@ -71,7 +71,7 @@ describe("API routes == handler routes; JWT everywhere except the exact approved
 });
 
 describe("Lambda runs the real bundled handler", () => {
-  const [fn] = Object.values(api.findResources("AWS::Lambda::Function"));
+  const [fn] = Object.values(api.findResources("AWS::Lambda::Function", { Properties: { Description: "Ogevia Service Verification API" } }));
   it("code is a bundled asset (not the Phase 1 inline placeholder)", () => {
     expect(fn!.Properties.Code.ZipFile).toBeUndefined();
     expect(fn!.Properties.Code.S3Key).toMatch(/\.zip$/);
@@ -200,7 +200,7 @@ describe("template scanner negative controls (each rule must fire)", () => {
 
 describe("Lambda creation ordering (regression: first deploy failed on CreateNetworkInterface)", () => {
   const resources = api.toJSON().Resources as Record<string, { Type: string; DependsOn?: string[]; Properties?: Record<string, unknown> }>;
-  const [fnId, fn] = Object.entries(resources).find(([, r]) => r.Type === "AWS::Lambda::Function")!;
+  const [fnId, fn] = Object.entries(resources).find(([, r]) => r.Type === "AWS::Lambda::Function" && r.Properties?.Description === "Ogevia Service Verification API")!;
   const roleRef = (fn.Properties!.Role as { "Fn::GetAtt": [string, string] })["Fn::GetAtt"][0];
   const enIActions = ["ec2:CreateNetworkInterface", "ec2:DescribeNetworkInterfaces", "ec2:DeleteNetworkInterface"];
   const enIPolicies = Object.entries(resources).filter(([, r]) => {

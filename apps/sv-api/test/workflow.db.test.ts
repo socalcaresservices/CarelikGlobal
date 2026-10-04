@@ -5,6 +5,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { ageVisit, createTestDb, freshClient, seedWorld, signedVisit, type Actor, type TestDb, type World } from "../../../infra/aws/db/test/harness";
 import { MemoryEvidenceStore, signatureObjectKey } from "../src/evidence";
 import { createHandler, type LogRecord } from "../src/handler";
+import { MemoryIdentityAdmin } from "../src/identity";
 import { claims, CONFIG, event, syntheticPng } from "./fixtures";
 
 let db: TestDb;
@@ -14,13 +15,14 @@ let w: World;
 let fresh: { client: string; service: string; auth: string };
 const evidence = new MemoryEvidenceStore();
 const logs: LogRecord[] = [];
+const identity = new MemoryIdentityAdmin();
 let handler: ReturnType<typeof createHandler>;
 
 beforeAll(async () => {
   db = await createTestDb();
   w = await seedWorld(db, 600);
   fresh = await freshClient(db, w, w.caregiverA1, 600, w.orgA, { before: 40, after: 40 });
-  handler = createHandler({ config: CONFIG, db: { connect: () => db.admin.connect() }, evidence, log: (r) => logs.push(r) });
+  handler = createHandler({ config: CONFIG, db: { connect: () => db.admin.connect() }, evidence, identity, log: (r) => logs.push(r) });
 });
 afterAll(async () => {
   await db?.drop();
@@ -659,5 +661,59 @@ describe("assignments (0024) through the API", () => {
     const ended = await call("POST /v1/assignments/{assignmentId}/end", w.managerA, { path: { assignmentId: id }, body: { organizationId: w.orgA, lastDay: today, reason: "Schedule change (synthetic)" } });
     expect(ended.body).toEqual({ outcome: "ends_later" });
     expect((await call("GET /v1/assignments", w.managerB, { query: { organizationId: w.orgA } })).body.assignments).toEqual([]);
+  });
+});
+
+describe("caregiver invitations and planned assignments (0025) through the API", () => {
+  it("plan before sign-in, invite, resend, first sign-in; no password or email in responses or logs", async () => {
+    const today = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Los_Angeles" }).format(new Date());
+    const created = await call("POST /v1/caregivers", w.managerA, { body: { organizationId: w.orgA, firstName: "Synthetic", lastName: "Invitee", status: "ready" } });
+    expect(created.status, JSON.stringify(created.body)).toBe(201);
+    const record = created.body.caregiver.caregiverRecordId as string;
+
+    const planned = await call("POST /v1/assignments", w.managerA, { body: { organizationId: w.orgA, caregiverRecordId: record, clientId: w.clientA1, serviceId: w.serviceA, effectiveStart: today } });
+    expect(planned.status, JSON.stringify(planned.body)).toBe(201);
+    expect(planned.body.assignment).toMatchObject({ grantsAccess: false, hasAuthorization: true });
+
+    const path = { caregiverRecordId: record };
+    expect((await call("POST /v1/caregivers/{caregiverRecordId}/invitation", w.caregiverA1, { path, body: { organizationId: w.orgA, email: "invitee@example.test" } })).status).toBe(403);
+    expect((await call("POST /v1/caregivers/{caregiverRecordId}/invitation", w.managerB, { path, body: { organizationId: w.orgA, email: "invitee@example.test" } })).status).toBe(404);
+    expect((await call("POST /v1/caregivers/{caregiverRecordId}/invitation", w.managerA, { path, body: { organizationId: w.orgA, email: "nope" } })).status).toBe(422);
+    expect(identity.calls).toEqual([]); // refused before any sign-in was created
+
+    const inv = await call("POST /v1/caregivers/{caregiverRecordId}/invitation", w.managerA, { path, body: { organizationId: w.orgA, email: "Invitee@Example.test" } });
+    expect(inv.status, JSON.stringify(inv.body)).toBe(201);
+    expect(inv.body.invitation).toEqual({ invitationId: expect.any(String), existingAccount: false });
+    expect(identity.calls).toEqual([{ action: "invite", email: "invitee@example.test" }]);
+    expect(JSON.stringify(inv.body)).not.toMatch(/password/i);
+    expect((await call("POST /v1/caregivers/{caregiverRecordId}/invitation", w.managerA, { path, body: { organizationId: w.orgA, email: "invitee@example.test" } })).status).toBe(409);
+
+    const list = await call("GET /v1/caregivers", w.managerA, { query: { organizationId: w.orgA } });
+    expect(list.body.caregivers.find((c: any) => c.caregiverRecordId === record)).toMatchObject({ hasSignIn: true, invitationEmail: "invitee@example.test", invitationSendCount: 1, firstSignedInAt: null });
+    const assignments = await call("GET /v1/assignments", w.managerA, { query: { organizationId: w.orgA, caregiverRecordId: record } });
+    expect(assignments.body.assignments[0]).toMatchObject({ grantsAccess: true });
+
+    const resent = await call("POST /v1/caregivers/{caregiverRecordId}/invitation/resend", w.managerA, { path, body: { organizationId: w.orgA } });
+    expect(resent.status, JSON.stringify(resent.body)).toBe(200);
+    expect(resent.body).toEqual({ invitation: { sendCount: 2 } });
+
+    const sub = identity.users.get("invitee@example.test")!.sub;
+    const me = await call("GET /v1/me", sub);
+    expect(me.body.memberships).toEqual([expect.objectContaining({ organizationId: w.orgA, role: "caregiver" })]);
+    expect((await call("GET /v1/clients/assigned", sub, { query: { organizationId: w.orgA } })).body.clients.map((c: any) => c.clientId)).toContain(w.clientA1);
+    const after = await call("GET /v1/caregivers", w.managerA, { query: { organizationId: w.orgA } });
+    expect(after.body.caregivers.find((c: any) => c.caregiverRecordId === record).firstSignedInAt).not.toBeNull();
+    expect((await call("POST /v1/caregivers/{caregiverRecordId}/invitation/resend", w.managerA, { path, body: { organizationId: w.orgA } })).status).toBe(409);
+    expect(JSON.stringify(logs)).not.toContain("invitee@example.test");
+  });
+
+  it("an identity-service failure changes nothing and says so", async () => {
+    const failing = createHandler({ config: CONFIG, db: { connect: () => db.admin.connect() }, evidence, log: () => {} });
+    const created = await call("POST /v1/caregivers", w.managerA, { body: { organizationId: w.orgA, firstName: "Synthetic", lastName: "Unsent", status: "ready" } });
+    const record = created.body.caregiver.caregiverRecordId as string;
+    const r = await failing(event("POST /v1/caregivers/{caregiverRecordId}/invitation", { sub: w.managerA.sub, path: { caregiverRecordId: record }, body: { organizationId: w.orgA, email: "unsent@example.test" } }));
+    expect(r.statusCode).toBe(503);
+    const list = await call("GET /v1/caregivers", w.managerA, { query: { organizationId: w.orgA } });
+    expect(list.body.caregivers.find((c: any) => c.caregiverRecordId === record)).toMatchObject({ hasSignIn: false, invitationEmail: null });
   });
 });
