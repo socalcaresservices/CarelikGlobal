@@ -49,7 +49,14 @@ export interface AttentionSummary {
   needsReview: number;
   /** null when the viewer has no billing review permission. */
   billingReadyUnapproved: number | null;
+  /** Visits + uncovered shifts + blocking documents + documents to review, each only when the viewer may see it (0033). */
   total: number;
+  /** 0033: null when the viewer cannot manage shifts/visits (coverage) or read documents. */
+  uncoveredShifts?: number | null;
+  documentsBlocking?: number | null;
+  documentsToReview?: number | null;
+  /** Informational reminder; not part of the total. */
+  documentsExpiring?: number | null;
 }
 
 export interface UtilisationRow {
@@ -170,12 +177,3 @@ export interface DocumentAlerts {
   rejected: number;
 }
 
-export function useDocumentAlerts() {
-  const api = useAwsApi();
-  const { activeOrganizationId, hasPermission } = useOrganization();
-  return useQuery({
-    queryKey: ["aws-document-alerts", activeOrganizationId],
-    queryFn: async () => (await api.get<{ alerts: DocumentAlerts | null }>("/v1/documents/alerts", { organizationId: activeOrganizationId })).alerts,
-    enabled: !!activeOrganizationId && hasPermission("documents.read"),
-  });
-}

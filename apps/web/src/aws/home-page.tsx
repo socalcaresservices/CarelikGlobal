@@ -4,7 +4,7 @@ import { Card } from "@carelik/ui";
 import { ContinuityStatusCard } from "./continuity-page";
 import { useOrganization } from "@/providers/organization-provider";
 import { EXCEPTIONS_PATH } from "./aws-shell";
-import { hoursLabel, moneyLabel, useAttention, useDocumentAlerts, useUtilisation, type UtilisationRow } from "./aws-workspace";
+import { hoursLabel, moneyLabel, useAttention, useUtilisation, type UtilisationRow } from "./aws-workspace";
 
 function thisMonth(): string {
   const now = new Date();
@@ -29,19 +29,29 @@ export function AwsHomePage() {
   const rows = utilisation.data ?? [];
   const isOwnerFinance = hasPermission("billing.read");
   const a = attention.data;
-  const docAlerts = useDocumentAlerts().data;
 
+  // One definition with the header badge: every count comes from GET /v1/attention (0033),
+  // already limited to what this person may see. Blocking items add up to the badge total;
+  // reminders are shown separately and never counted.
   const items = a
     ? [
         { label: "Missing Time Out", count: a.missingTimeOut, to: EXCEPTIONS_PATH, hint: "Still open past the shift end, or 12 h without a schedule" },
         { label: "Not confirmed", count: a.notConfirmed, to: EXCEPTIONS_PATH, hint: "Ended over 60 min ago, no client confirmation yet" },
-        { label: "Needs review", count: a.needsReview, to: EXCEPTIONS_PATH, hint: "Unconfirmed or over the authorization; not billable until reviewed" },
-        ...(docAlerts
+        { label: "Needs review", count: a.needsReview, to: EXCEPTIONS_PATH, hint: "Unconfirmed or over the authorization; open each visit to review it" },
+        ...(a.uncoveredShifts !== null && a.uncoveredShifts !== undefined
+          ? [{ label: "Shifts without a caregiver", count: a.uncoveredShifts, to: "/schedule", hint: "Upcoming shifts that are open or called out and not replaced" }]
+          : []),
+        ...(a.documentsBlocking !== null && a.documentsBlocking !== undefined
           ? [
-              { label: "Documents expired or overdue", count: docAlerts.expired + docAlerts.overdue, to: "/documents", hint: "Staff credentials past their expiry or due date" },
-              { label: "Documents to review", count: docAlerts.awaitingReview, to: "/documents", hint: `Uploaded, not yet verified · ${docAlerts.expiring} expiring within 30 days` },
+              { label: "Documents expired or overdue", count: a.documentsBlocking, to: "/documents", hint: "Staff credentials past their expiry or due date" },
+              { label: "Documents to review", count: a.documentsToReview ?? 0, to: "/documents", hint: "Uploaded, not yet verified" },
             ]
           : []),
+      ]
+    : [];
+  const reminders = a
+    ? [
+        ...(a.documentsExpiring ? [{ label: "Documents expiring soon", count: a.documentsExpiring, to: "/documents", hint: "Within the agency's reminder days; not yet a problem" }] : []),
         ...(a.billingReadyUnapproved !== null
           ? [{ label: "Billing ready, not approved", count: a.billingReadyUnapproved, to: "/billing-review", hint: "Approval is a human step; it is not submission" }]
           : []),
@@ -57,7 +67,7 @@ export function AwsHomePage() {
       <h1 className="text-xl font-semibold text-slate-950">Home</h1>
       <ContinuityStatusCard />
 
-      <section aria-labelledby="attention-heading">
+      <section id="attention" aria-labelledby="attention-heading">
         <h2 id="attention-heading" className="text-sm font-bold uppercase tracking-wide text-red-700">Needs attention</h2>
         {attention.isLoading ? <p className="mt-2 text-sm text-slate-500">Loading…</p> : null}
         {attention.isError ? <p role="alert" className="mt-2 text-sm text-red-700">{(attention.error as Error).message}</p> : null}
@@ -75,6 +85,24 @@ export function AwsHomePage() {
               </li>
             ))}
           </ul>
+        ) : null}
+        {reminders.length > 0 ? (
+          <>
+            <h3 className="mt-4 text-xs font-semibold uppercase tracking-wide text-slate-500">Reminders (not counted above)</h3>
+            <ul className="mt-2 grid gap-2 sm:grid-cols-2">
+              {reminders.map((i) => (
+                <li key={i.label}>
+                  <Link to={i.to} className="flex min-h-[56px] items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3 hover:border-slate-300">
+                    <span>
+                      <span className="block text-sm font-medium text-slate-900">{i.label}</span>
+                      <span className="block text-xs text-slate-500">{i.hint}</span>
+                    </span>
+                    <span className="text-2xl font-semibold tabular-nums text-slate-600">{i.count}</span>
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          </>
         ) : null}
       </section>
 

@@ -121,8 +121,9 @@ export function AwsShell({ children }: PropsWithChildren) {
           <div className="mt-3 flex flex-wrap items-center gap-2">
             {canSeeAttention ? (
               // Green only when zero is CONFIRMED by the server; loading or a failed check stays neutral.
+              // Opens the Home list built from the same server summary as this count (0033).
               <Link
-                to={EXCEPTIONS_PATH}
+                to="/"
                 className={cn(
                   "inline-flex min-h-[40px] items-center gap-2 rounded-lg border-2 px-3 text-sm font-bold uppercase tracking-wide",
                   attentionState.kind === "attention" && "border-red-700 text-red-700 hover:bg-red-50",

@@ -5,7 +5,7 @@ import { newIdempotencyKey } from "@/lib/sv-backend";
 import { useOrganization } from "@/providers/organization-provider";
 import { useAwsApi } from "./aws-workspace";
 import { prepareDocumentFile } from "./document-file";
-import { DOCUMENT_STATUS, documentDateLine, type DocumentType, type Person, type StaffDocument } from "./document-status";
+import { CURRENCY_STATUS, DOCUMENT_STATUS, documentDateLine, parseReminderDays, REVIEW_STATE, type DocumentType, type Person, type StaffDocument } from "./document-status";
 import { formatDateTime } from "@/lib/service-verification";
 
 const message = (cause: unknown, fallback: string) => (cause instanceof Error ? cause.message : fallback);
@@ -148,9 +148,21 @@ function DocumentCard({ d, canManage, canUpload, canReviewOwn, refresh }: { d: S
           <p className="font-semibold text-slate-950">{d.documentTypeName}</p>
           {canManage ? <p className="text-sm text-slate-700">{d.personName}</p> : null}
         </div>
-        <StatusChip status={d.displayStatus} />
+        {d.reviewState ? (
+          <div className="flex flex-wrap gap-1">
+            <span className={`inline-block rounded-full px-2 py-0.5 text-xs font-semibold ${REVIEW_STATE[d.reviewState].className}`}>{REVIEW_STATE[d.reviewState].label}</span>
+            {d.currencyStatus && CURRENCY_STATUS[d.currencyStatus] ? (
+              <span className={`inline-block rounded-full px-2 py-0.5 text-xs font-semibold ${CURRENCY_STATUS[d.currencyStatus]!.className}`}>{CURRENCY_STATUS[d.currencyStatus]!.label}</span>
+            ) : null}
+          </div>
+        ) : (
+          <StatusChip status={d.displayStatus} />
+        )}
       </div>
       {line ? <p className={d.daysUntil !== null && d.daysUntil < 0 ? "mt-1 text-sm font-semibold text-red-700" : "mt-1 text-sm text-slate-700"}>{line}</p> : null}
+      {d.currencyStatus === "expiring" && d.reminderStage ? <p className="mt-1 text-xs text-amber-900">Reminder: within {d.reminderStage} days of expiry</p> : null}
+      {d.currencyStatus === "no_expiry_required" ? <p className="mt-1 text-xs text-slate-500">This document type has no expiry date.</p> : null}
+      {d.reviewedByName && d.reviewedAt ? <p className="mt-1 text-xs text-slate-500">Reviewed by {d.reviewedByName} on {formatDateTime(d.reviewedAt)}</p> : null}
       {d.latestReviewStatus === "rejected" && d.latestRejectionReason ? <p className="mt-1 text-sm text-amber-900">Rejected: {d.latestRejectionReason}</p> : null}
       {d.latestUploadedAt ? (
         <p className="mt-1 text-xs text-slate-500">Version {d.latestVersionNumber} uploaded {formatDateTime(d.latestUploadedAt)}</p>
@@ -219,6 +231,65 @@ function RequestForm({ types, people, onDone }: { types: DocumentType[]; people:
       {state.error ? <p role="alert" className="w-full text-sm text-red-700">{state.error}</p> : null}
       {state.done ? <p role="status" className="w-full text-sm text-emerald-800">Requested. It appears in their My documents.</p> : null}
     </form>
+  );
+}
+
+/** Reminder days before expiry: the agency default and per-type overrides (0033). Screens only: nothing is emailed or texted. */
+function ReminderDaysForm({ types, onDone }: { types: DocumentType[]; onDone: () => void }) {
+  const api = useAwsApi();
+  const { activeOrganizationId } = useOrganization();
+  const [typeId, setTypeId] = useState("");
+  const [text, setText] = useState("");
+  const [state, setState] = useState<{ busy: boolean; error: string | null; done: string | null }>({ busy: false, error: null, done: null });
+  const key = useRef(newIdempotencyKey());
+  const expiring = types.filter((t) => t.requiresExpiry);
+  async function save() {
+    const days = text.trim() === "" && typeId ? null : parseReminderDays(text);
+    if (days === null && !(text.trim() === "" && typeId)) {
+      return setState({ busy: false, error: "Enter 1 to 8 different whole numbers of days from 1 to 365, for example 90, 60, 30, 14, 7.", done: null });
+    }
+    setState({ busy: true, error: null, done: null });
+    try {
+      await api.post("/v1/document-reminder-days", { organizationId: activeOrganizationId, documentTypeId: typeId || null, days }, { idempotencyKey: key.current });
+      key.current = newIdempotencyKey();
+      setState({ busy: false, error: null, done: days ? `Saved: ${days.join(", ")} days.` : "Saved: this type uses the agency default." });
+      setText("");
+      onDone();
+    } catch (cause) {
+      setState({ busy: false, error: message(cause, "The reminder days were not saved."), done: null });
+    }
+  }
+  return (
+    <div className="space-y-2 border-t border-slate-100 pt-3">
+      <h3 className="text-sm font-semibold text-slate-900">Reminder days before expiry</h3>
+      <p className="text-xs text-slate-500">
+        A verified document shows as Expiring once it is within the largest number of days. Ogevia does not send email or text
+        reminders; these days decide what the screens and Needs attention show.
+      </p>
+      {expiring.length > 0 ? (
+        <ul className="space-y-1 text-xs text-slate-700">
+          {expiring.map((t) => (
+            <li key={t.documentTypeId}>{t.name}: {(t.reminderDays ?? []).join(", ")} days{t.usesAgencyDefault ? " (agency default)" : ""}</li>
+          ))}
+        </ul>
+      ) : null}
+      <form onSubmit={(e) => { e.preventDefault(); void save(); }} className="flex flex-wrap items-end gap-3">
+        <label className="text-sm font-medium text-slate-700">
+          Applies to
+          <select value={typeId} onChange={(e) => setTypeId(e.target.value)} className="mt-1 block rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm">
+            <option value="">Agency default</option>
+            {expiring.map((t) => <option key={t.documentTypeId} value={t.documentTypeId}>{t.name}</option>)}
+          </select>
+        </label>
+        <label className="text-sm font-medium text-slate-700">
+          Days (e.g. 90, 60, 30, 14, 7)
+          <input value={text} onChange={(e) => setText(e.target.value)} placeholder={typeId ? "blank = agency default" : "90, 60, 30, 14, 7"} className="mt-1 block rounded-lg border border-slate-200 px-3 py-2 text-sm" />
+        </label>
+        <Button type="submit" variant="secondary" disabled={state.busy}>Save reminder days</Button>
+      </form>
+      {state.error ? <p role="alert" className="text-sm text-red-700">{state.error}</p> : null}
+      {state.done ? <p role="status" className="text-sm text-emerald-800">{state.done}</p> : null}
+    </div>
   );
 }
 
@@ -352,6 +423,7 @@ export function DocumentsPage() {
           <h2 className="text-sm font-semibold text-slate-900">Document types</h2>
           <p className="text-xs text-slate-500">Set expiry only where the document has one. Reminder periods follow your agency's own requirements.</p>
           <TypesForm types={types.data ?? []} onDone={refresh} />
+          <ReminderDaysForm types={types.data ?? []} onDone={refresh} />
         </Card>
       ) : null}
     </div>

@@ -48,7 +48,7 @@ function fakeApi(role: "caregiver" | "manager" | "organization_owner", opts: { d
       case "POST /v1/branding":
         return json(200, { branding: { organizationId: ORG, displayName: body?.["displayName"], accentColor: body?.["accentColor"] } });
       case "GET /v1/attention":
-        return json(200, { summary: role === "caregiver" ? null : { missingTimeOut: 1, notConfirmed: 0, needsReview: 2, billingReadyUnapproved: 1, total: 3 } });
+        return json(200, { summary: role === "caregiver" ? null : { missingTimeOut: 1, notConfirmed: 0, needsReview: 2, billingReadyUnapproved: 1, uncoveredShifts: 0, documentsBlocking: 1, documentsToReview: 1, documentsExpiring: 1, total: 5 } });
       case "GET /v1/reports/utilisation":
         return json(200, { services: role === "caregiver" ? [] : [{ serviceId: SERVICE, serviceCode: "862", serviceName: "Respite Care", clientCount: 1, authorizedMinutes: 6000, scheduledMinutes: 240, workedMinutes: 1590, billableMinutes: 1470, reviewMinutes: 120, approvedMinutes: 600, remainingMinutes: 4530, lineagesWithoutRate: 0, billableValueCents: canMoney ? 73500 : null, approvedValueCents: canMoney ? 30000 : null, unusedValueCents: canMoney ? 226500 : null }] });
       case "GET /v1/visits/active":
@@ -190,8 +190,9 @@ describe("AWS build: manager review and billing-review data", () => {
     expect(await screen.findByText("MANAGER VIEW")).toBeInTheDocument();
     expect(await screen.findByText("Morgan Manager")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Sign out" })).toBeInTheDocument();
-    const attention = await screen.findByRole("link", { name: "Needs attention: 3 items" });
-    expect(attention.getAttribute("href")).toBe("/service-verification/reports?view=exceptions");
+    const attention = await screen.findByRole("link", { name: "Needs attention: 5 items" });
+    // 0033: the badge opens Home, whose list is built from the same server summary as the count.
+    expect(attention.getAttribute("href")).toBe("/");
     expect(attention.className).toMatch(/font-bold/);
     expect(attention.className).toMatch(/uppercase/);
     expect(attention.className).toMatch(/text-red-700/);

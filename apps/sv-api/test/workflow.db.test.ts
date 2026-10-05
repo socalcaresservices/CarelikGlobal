@@ -892,3 +892,15 @@ describe("visit review (0031) through the API", () => {
     expect(rv.status).toBe(409);
   });
 });
+
+describe("document reminder days and attention (0033) through the API", () => {
+  it("manager sets agency reminder days; bad input refused; caregiver refused; attention carries the new categories", async () => {
+    const ok = await call("POST /v1/document-reminder-days", w.managerA, { body: { organizationId: w.orgA, documentTypeId: null, days: [7, 30, 60] } });
+    expect(ok.status, JSON.stringify(ok.body)).toBe(200);
+    expect(ok.body.days).toEqual([60, 30, 7]);
+    expect((await call("POST /v1/document-reminder-days", w.managerA, { body: { organizationId: w.orgA, documentTypeId: null, days: [0] } })).status).toBe(400);
+    expect((await call("POST /v1/document-reminder-days", w.caregiverA1, { body: { organizationId: w.orgA, documentTypeId: null, days: [30] } })).status).toBe(403);
+    const att = await call("GET /v1/attention", w.managerA, { query: { organizationId: w.orgA } });
+    expect(Object.keys(att.body.summary)).toEqual(expect.arrayContaining(["uncoveredShifts", "documentsBlocking", "documentsToReview", "documentsExpiring", "total"]));
+  });
+});

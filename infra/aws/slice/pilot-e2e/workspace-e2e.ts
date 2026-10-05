@@ -274,7 +274,7 @@ async function main() {
     await C.page.getByLabel(/Expiry date/).fill(laDate(365));
     await C.page.getByLabel(/Issue \/ completion date/).fill(laDate(0));
     await C.page.getByRole("button", { name: "Upload", exact: true }).last().click();
-    await C.page.getByText("Uploaded – awaiting review").waitFor({ timeout: 15000 });
+    await C.page.getByText("Awaiting review", { exact: true }).waitFor({ timeout: 15000 });
     check("caregiver upload: shown as awaiting review only after the server confirmed", true);
     await noHScroll(C.page, "caregiver My documents");
     await shot(C.page, "08-caregiver-my-documents");

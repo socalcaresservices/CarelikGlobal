@@ -1225,6 +1225,31 @@ export const ROUTES: Record<string, Route> = {
     }),
   },
 
+  // 0033: reminder thresholds (days before expiry) for the agency (documentTypeId null) or one
+  // document type (days null = use the agency default). Screens only; nothing is emailed.
+  "POST /v1/document-reminder-days": {
+    mutating: true,
+    handle: async ({ event, tx }) => {
+      const body = parseBody(event.body, event.isBase64Encoded);
+      const key = idempotencyKey(event.headers);
+      const org = uuid(body.organizationId, "organizationId");
+      const type = body.documentTypeId === null || body.documentTypeId === undefined ? null : uuid(body.documentTypeId, "documentTypeId");
+      let days: number[] | null = null;
+      if (body.days !== null && body.days !== undefined) {
+        if (!Array.isArray(body.days) || body.days.length === 0 || body.days.length > 8
+          || !body.days.every((d) => typeof d === "number" && Number.isInteger(d) && d >= 1 && d <= 365)) {
+          throw new ApiError(400, "bad_request", "days must be 1 to 8 whole numbers from 1 to 365.");
+        }
+        days = body.days as number[];
+      }
+      const saved = await tx(async (db) => {
+        const r = await db.query("select ogevia_api.set_document_reminder_days($1, $2, $3::integer[], $4) as d", [org, type, days, key]);
+        return (r.rows[0] as { d: number[] | null }).d;
+      });
+      return { days: saved };
+    },
+  },
+
   "POST /v1/document-types": {
     status: 201,
     mutating: true,
