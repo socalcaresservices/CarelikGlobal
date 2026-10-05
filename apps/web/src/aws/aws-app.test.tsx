@@ -283,7 +283,7 @@ describe("AWS build: manager review and billing-review data", () => {
   it("caregiver: My documents shows the due date with days left; upload waits for the server and requires the expiry", async () => {
     const { api } = renderAws("/documents", "caregiver");
     expect(await screen.findByRole("heading", { name: "My documents" })).toBeInTheDocument();
-    expect(await screen.findByText("Due Oct 20, 2026 (in 16 days)")).toBeInTheDocument();
+    expect(await screen.findByText("Due 10/20/2026 (in 16 days)")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Upload" }));
     const file = new File([new Uint8Array([0x25, 0x50, 0x44, 0x46, 0x2d, 0x31])], "tb.pdf", { type: "application/pdf" });
     fireEvent.change(screen.getByLabelText(/Photo or PDF/), { target: { files: [file] } });

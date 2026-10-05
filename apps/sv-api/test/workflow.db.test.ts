@@ -852,3 +852,18 @@ describe("hire type, scheduling and family relationship (0030) through the API",
     expect(fr.body.result).toMatchObject({ familyRelationship: "none" });
   });
 });
+
+describe("monthly approval summary (0030) through the API", () => {
+  it("returns approved minutes per authorization lineage with no money fields; bad month refused", async () => {
+    const month = (await db.admin.query("select to_char(date_trunc('month', now() at time zone 'America/Los_Angeles'), 'YYYY-MM-DD') m")).rows[0].m;
+    const r = await call("GET /v1/reports/monthly-approval-summary", w.managerA, { query: { organizationId: w.orgA, monthStart: month } });
+    expect(r.status, JSON.stringify(r.body)).toBe(200);
+    expect(Array.isArray(r.body.lineages)).toBe(true);
+    for (const row of r.body.lineages) {
+      expect(Object.keys(row).sort()).toEqual(["approvedMinutes", "approvedVisitCount", "authorizationLineageId", "roundingAdjustmentMinutes"]);
+    }
+    expect((await call("GET /v1/reports/monthly-approval-summary", w.managerA, { query: { organizationId: w.orgA, monthStart: "October" } })).status).toBe(400);
+    const other = await call("GET /v1/reports/monthly-approval-summary", w.managerB, { query: { organizationId: w.orgA, monthStart: month } });
+    expect(other.body.lineages ?? []).toEqual([]);
+  });
+});

@@ -180,6 +180,16 @@ export interface MonthlyServiceSummaryRow {
   visitCount: number;
   // Time held by assigned Care Request shifts not yet signed (0016).
   reservedMinutes?: number;
+  /** AWS: legal name from the restricted directory (null without clients.names.read). */
+  clientName?: string | null;
+}
+
+/** AWS (0030): human-approved minutes per authorization lineage for a month. Minutes only. */
+export interface MonthlyApprovalSummaryRow {
+  authorizationLineageId: string;
+  approvedMinutes: number;
+  approvedVisitCount: number;
+  roundingAdjustmentMinutes: number;
 }
 
 export interface CorrectionHistoryReportRow {
@@ -196,6 +206,8 @@ export interface CorrectionHistoryReportRow {
   correctedByUserId: string;
   correctedByName: string;
   correctedVisitStatus: ServiceVisitStatus;
+  /** AWS: legal name from the restricted directory (null without clients.names.read). */
+  clientName?: string | null;
   reason: string;
   beforeSnapshot: { timeIn: string; timeOut: string; workedMinutes: number; billableMinutes: number };
   afterSnapshot: { timeIn: string; timeOut: string; workedMinutes: number; billableMinutes: number };
@@ -265,6 +277,8 @@ export interface ServiceVerificationBackend {
   getSignatureDataUrl?(visitId: string): Promise<string>;
   /** AWS reporting: one row per client + service + authorization lineage for a month. */
   listMonthlyServiceSummary?(organizationId: string, clientId: string | null, monthStart: string): Promise<MonthlyServiceSummaryRow[]>;
+  /** AWS reporting (0030): approved minutes per authorization lineage for a month. */
+  listMonthlyApprovalSummary?(organizationId: string, clientId: string | null, monthStart: string): Promise<MonthlyApprovalSummaryRow[]>;
   /** AWS reporting: organization correction audit report. */
   listCorrectionHistoryReport?(
     organizationId: string,

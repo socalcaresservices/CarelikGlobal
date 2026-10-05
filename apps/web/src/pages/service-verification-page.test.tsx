@@ -224,7 +224,7 @@ describe("ServiceVerificationPage v3", () => {
     const details = await screen.findByRole("group", { name: "Visit details" });
     await waitFor(() => expect(details).toHaveTextContent("862 · Respite Care"));
     expect(details).toHaveTextContent("ClientC-104");
-    expect(details).toHaveTextContent("Aug 24, 2026");
+    expect(details).toHaveTextContent("08/24/2026");
     expect(details).toHaveTextContent("2:30 PM–4:30 PM");
     // One service: no picker to operate.
     expect(

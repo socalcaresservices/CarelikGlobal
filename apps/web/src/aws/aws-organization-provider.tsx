@@ -4,6 +4,7 @@ import { permissionSchema, type Organization, type Permission, type SystemRole }
 import { useEffect, useMemo, useState, type PropsWithChildren } from "react";
 import type { AwsApiClient } from "@/lib/aws-api";
 import { fetchMe, type AwsMembership } from "@/lib/sv-backend-aws";
+import { setAgencyTimeZone } from "@/lib/service-verification";
 import { AwsApiContext, meQueryKey } from "./aws-workspace";
 import { OrganizationContextProvider, type OrganizationContextValue } from "@/providers/organization-provider";
 
@@ -53,6 +54,9 @@ export function AwsOrganizationProvider({ api, children }: PropsWithChildren<{ a
   const value = useMemo<OrganizationContextValue>(() => {
     const list = memberships ?? [];
     const active = list.find((m) => m.organizationId === selected) ?? list[0] ?? null;
+    // Before children render (not in an effect), so the first paint already
+    // shows times in this agency's zone. Idempotent.
+    setAgencyTimeZone(active?.organizationTimezone);
     const permissions = new Set((active?.permissions ?? []).filter((p) => KNOWN_PERMISSIONS.has(p)) as Permission[]);
     return {
       organizations: list.map(toOrganization),

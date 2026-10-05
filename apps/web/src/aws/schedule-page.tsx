@@ -7,6 +7,7 @@ import { useOrganization } from "@/providers/organization-provider";
 import { useAwsApi } from "./aws-workspace";
 import { caregiverName, useCaregivers } from "./care-team-admin";
 import { clientName, useClients, useServices } from "./client-admin";
+import { formatClockTime, formatWeekdayDate, formatWeekdayDateTime } from "@/lib/service-verification";
 
 /**
  * Schedule (0026): staff-scheduled shifts, call-outs, replacements and
@@ -50,9 +51,9 @@ function useAgencyClock() {
   const { activeOrganization } = useOrganization();
   const tz = (activeOrganization as { timezone?: string } | null)?.timezone || "America/Los_Angeles";
   const today = new Intl.DateTimeFormat("en-CA", { timeZone: tz }).format(new Date());
-  const time = (iso: string) => new Date(iso).toLocaleTimeString("en-US", { timeZone: tz, hour: "numeric", minute: "2-digit" });
-  const dayLabel = (d: string) => new Date(`${d}T12:00:00Z`).toLocaleDateString("en-US", { weekday: "long", month: "short", day: "numeric", timeZone: "UTC" });
-  const when = (iso: string) => new Date(iso).toLocaleString("en-US", { timeZone: tz, weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
+  const time = (iso: string) => formatClockTime(iso);
+  const dayLabel = (d: string) => formatWeekdayDate(d);
+  const when = (iso: string) => formatWeekdayDateTime(iso);
   return { tz, today, time, dayLabel, when };
 }
 const addDays = (d: string, n: number) => new Date(Date.parse(`${d}T12:00:00Z`) + n * 864e5).toISOString().slice(0, 10);

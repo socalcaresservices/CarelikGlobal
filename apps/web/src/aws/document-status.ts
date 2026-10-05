@@ -1,4 +1,5 @@
 // Staff document view model and plain-language status (0021).
+import { formatDateOnly } from "@/lib/service-verification";
 export interface StaffDocument {
   documentId: string;
   caregiverRecordId: string;
@@ -33,7 +34,7 @@ export const DOCUMENT_STATUS: Record<StaffDocument["displayStatus"], { label: st
   expired: { label: "Expired", className: "bg-red-100 text-red-800" },
 };
 
-const fmtDate = (iso: string) => new Date(`${iso}T12:00:00Z`).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "UTC" });
+const fmtDate = (iso: string) => formatDateOnly(iso);
 const plural = (n: number, w: string) => `${n} ${w}${n === 1 ? "" : "s"}`;
 
 /** Always the exact date plus days remaining/overdue (never a bare colour). */

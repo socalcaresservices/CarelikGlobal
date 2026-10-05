@@ -6,6 +6,7 @@ import { useOrganization } from "@/providers/organization-provider";
 import { useAwsApi } from "./aws-workspace";
 import { prepareDocumentFile } from "./document-file";
 import { DOCUMENT_STATUS, documentDateLine, type DocumentType, type Person, type StaffDocument } from "./document-status";
+import { formatDateTime } from "@/lib/service-verification";
 
 const message = (cause: unknown, fallback: string) => (cause instanceof Error ? cause.message : fallback);
 
@@ -152,7 +153,7 @@ function DocumentCard({ d, canManage, canUpload, canReviewOwn, refresh }: { d: S
       {line ? <p className={d.daysUntil !== null && d.daysUntil < 0 ? "mt-1 text-sm font-semibold text-red-700" : "mt-1 text-sm text-slate-700"}>{line}</p> : null}
       {d.latestReviewStatus === "rejected" && d.latestRejectionReason ? <p className="mt-1 text-sm text-amber-900">Rejected: {d.latestRejectionReason}</p> : null}
       {d.latestUploadedAt ? (
-        <p className="mt-1 text-xs text-slate-500">Version {d.latestVersionNumber} uploaded {new Date(d.latestUploadedAt).toLocaleString("en-US")}</p>
+        <p className="mt-1 text-xs text-slate-500">Version {d.latestVersionNumber} uploaded {formatDateTime(d.latestUploadedAt)}</p>
       ) : null}
       <div className="mt-2 flex flex-wrap gap-2">
         {d.latestVersionId ? <OpenFileButton versionId={d.latestVersionId} /> : null}

@@ -136,3 +136,27 @@ describe("billing review rows", () => {
     expect(await review(w.caregiverA3)).toEqual([]);
   });
 });
+
+describe("monthly approval summary (reconciliation: Approved separate from Billable)", () => {
+  it("returns approved minutes per authorization lineage, minutes only; voided approvals do not count; agency and role isolated", async () => {
+    const fresh = await freshClient(db, w, w.caregiverA3, 6000, w.orgA, { before: 40, after: 40 });
+    const { visit } = await signedVisit(db, w.caregiverA3, w, 30, w.orgA, fresh.client, fresh.service);
+    const lineage = (await db.admin.query("select a.lineage_id from ogevia.service_visits v join ogevia.client_authorizations a on a.id = v.service_authorization_id where v.id = $1", [visit])).rows[0].lineage_id;
+    const month = "date_trunc('month', now() at time zone 'America/Los_Angeles')::date";
+    const summary = (a: Actor, org = w.orgA) => q(a, `select * from ogevia_api.list_monthly_approval_summary($1, ${month}, $2)`, [org, fresh.client]);
+    expect(await summary(w.managerA)).toEqual([]);
+    const approve = (minutes: number) => q(w.managerA, "select ogevia_api.approve_visit_for_billing($1, $2, null, null) as id", [visit, minutes]).then((r) => r[0].id as string);
+    const id = await approve(20);
+    const rows = await summary(w.managerA);
+    expect(rows).toEqual([{ authorization_lineage_id: lineage, approved_minutes: 20, approved_visit_count: 1, rounding_adjustment_minutes: 0 }]);
+    expect(Object.keys(rows[0]).some((k) => /rate|cents|amount|value/.test(k))).toBe(false);
+    // Billable (eligible) stays 30 in the service summary; approved is a separate fact.
+    const svc = (await q(w.managerA, `select * from ogevia_api.list_monthly_service_summary($1, ${month}, $2)`, [w.orgA, fresh.client]))[0];
+    expect(svc).toMatchObject({ billable_minutes: 30, authorization_lineage_id: lineage });
+    await q(w.managerA, "select ogevia_api.void_billing_approval($1, 'Synthetic void', null)", [id]);
+    expect(await summary(w.managerA)).toEqual([]);
+    expect(await summary(w.managerB)).toEqual([]);
+    expect(await summary(w.managerB, w.orgB)).toEqual([]);
+    expect(await summary(w.caregiverA3)).toEqual([]);
+  });
+});

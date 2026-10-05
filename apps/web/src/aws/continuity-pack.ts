@@ -1,3 +1,4 @@
+import { formatDateOnly, formatWallClock } from "@/lib/service-verification";
 import { useQuery } from "@tanstack/react-query";
 import { useOrganization } from "@/providers/organization-provider";
 import { useAwsApi } from "./aws-workspace";
@@ -36,7 +37,11 @@ export function continuityFileName(pack: Pick<ContinuityPack, "data_as_of" | "ti
 
 /** A self-contained, printable file that opens in any browser without Ogevia. */
 export function buildContinuityHtml(pack: ContinuityPack): string {
-  const asOf = new Date(pack.data_as_of).toLocaleString("en-US", { timeZone: pack.timezone, dateStyle: "full", timeStyle: "short" });
+  // MM/DD/YYYY h:mm AM/PM in the pack's own agency zone (the file is read without Ogevia).
+  const asOfParts = Object.fromEntries(new Intl.DateTimeFormat("en-US", { timeZone: pack.timezone, weekday: "long", year: "numeric", month: "2-digit", day: "2-digit", hour: "numeric", minute: "2-digit", hour12: true })
+    .formatToParts(new Date(pack.data_as_of)).map((p) => [p.type, p.value]));
+  const asOf = `${asOfParts.weekday} ${asOfParts.month}/${asOfParts.day}/${asOfParts.year} ${asOfParts.hour}:${asOfParts.minute} ${asOfParts.dayPeriod}`;
+  const nameByCode = new Map(pack.clients.map((c) => [c.client_code, c.client_name]));
   const table = (head: string[], rows: string[][]) =>
     `<div class="tw"><table><thead><tr>${head.map((h) => `<th>${esc(h)}</th>`).join("")}</tr></thead><tbody>${
       rows.length ? rows.map((r) => `<tr>${r.map((c) => `<td>${esc(c)}</td>`).join("")}</tr>`).join("") : `<tr><td colspan="${head.length}">None</td></tr>`
@@ -61,11 +66,11 @@ th{background:#e2e8f0}.note{font-size:13px;color:#334155}.form{border:2px solid 
 Keep it only on agency-approved encrypted storage; delete or shred it when a newer pack replaces it. This file is not a billing record.</p>
 
 <h2>Schedule: next 14 days</h2>
-${table(["Date", "Time", "Client", "Service", "Caregiver", "Coverage"], pack.shifts.map((s) => [s.local_date, `${s.start}–${s.end}`, client(s.client_code, s.client_label, s.client_name), s.service ?? "", s.caregiver ? `${s.caregiver} (${s.caregiver_code ?? ""})` : "OPEN", s.coverage === "needs_coverage" ? "NEEDS COVERAGE" : s.coverage]))}
+${table(["Date", "Time", "Client", "Service", "Caregiver", "Coverage"], pack.shifts.map((s) => [formatDateOnly(s.local_date), `${formatWallClock(s.start)}–${formatWallClock(s.end)}`, client(s.client_code, s.client_label, s.client_name), s.service ?? "", s.caregiver ? `${s.caregiver} (${s.caregiver_code ?? ""})` : "OPEN", s.coverage === "needs_coverage" ? "NEEDS COVERAGE" : s.coverage]))}
 
 <h2>Authorized hours this month</h2>
 <p class="note">"Remaining" already subtracts approved-eligible (billable) time and time reserved by scheduled shifts. Hours worked during an outage are not included until entered in Ogevia.</p>
-${table(["Client", "Service", "Period", "Authorized", "Reserved", "Billable so far", "In review", "Remaining"], pack.authorizations.map((a) => [client(a.client_code, a.client_label, null), a.service ?? "", `${a.period_start} to ${a.period_end}`, hrs(a.authorized_minutes), hrs(a.reserved_minutes), hrs(a.billable_minutes), hrs(a.review_minutes), hrs(a.remaining_minutes)]))}
+${table(["Client", "Service", "Period", "Authorized", "Reserved", "Billable so far", "In review", "Remaining"], pack.authorizations.map((a) => [client(a.client_code, a.client_label, nameByCode.get(a.client_code) ?? null), a.service ?? "", `${formatDateOnly(a.period_start)} to ${formatDateOnly(a.period_end)}`, hrs(a.authorized_minutes), hrs(a.reserved_minutes), hrs(a.billable_minutes), hrs(a.review_minutes), hrs(a.remaining_minutes)]))}
 
 <h2>Active clients</h2>
 ${table(["Client code", "Label", "City", "Name"], pack.clients.map((c) => [c.client_code, c.client_label ?? "", c.city ?? "", c.client_name ?? ""]))}

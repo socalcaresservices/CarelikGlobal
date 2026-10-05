@@ -8,6 +8,7 @@ import { useAwsApi } from "./aws-workspace";
 import { caregiverName, useCaregivers } from "./care-team-admin";
 import { clientName, useClients, useServices } from "./client-admin";
 import { outageNumber } from "./continuity-pack";
+import { formatDateOnly } from "@/lib/service-verification";
 
 /**
  * Outage visit records (0028): after an outage, the office enters each numbered
@@ -182,7 +183,7 @@ export function OutageVisitsPage() {
               <ul className="mt-2 divide-y divide-slate-100 text-sm">
                 {entered.map((r) => (
                   <li key={r.outageNumber} className="py-2">
-                    <span className="font-mono">{outageNumber(r.outageNumber)}</span> → visit {r.visitNumber} · {r.serviceDate} · {r.workedMinutes} min · {r.caregiverName}
+                    <span className="font-mono">{outageNumber(r.outageNumber)}</span> → visit {r.visitNumber} · {formatDateOnly(r.serviceDate)} · {r.workedMinutes} min · {r.caregiverName}
                     {r.authorizationStatus === "exceeds_authorization" ? <span className="ml-1 font-bold text-red-700">EXCEEDS AUTHORIZATION</span> : null}
                     <span className="ml-1 text-slate-500">({r.visitStatus === "administrator_review" ? "needs review" : r.visitStatus})</span>
                   </li>

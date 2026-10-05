@@ -327,7 +327,7 @@ describe("ServiceVerificationReportsPage", () => {
     const inGroup = screen.getByRole("radiogroup", { name: "Corrected Time In AM or PM" });
     expect(within(inGroup).getByRole("radio", { name: "AM" })).toHaveAttribute("aria-checked", "true");
     const summary = screen.getByLabelText("Correction summary");
-    expect(summary).toHaveTextContent("Aug 1, 2026, 6:00 AM → Aug 1, 2026, 7:00 AM (1 hr)");
+    expect(summary).toHaveTextContent("08/01/2026, 6:00 AM → 08/01/2026, 7:00 AM (1 hr)");
 
     fireEvent.click(screen.getByRole("button", { name: "Save correction" }));
     expect(await screen.findByRole("alert")).toHaveTextContent("A reason is required to correct a visit.");
@@ -338,13 +338,13 @@ describe("ServiceVerificationReportsPage", () => {
     expect(screen.queryByRole("alert")).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Save correction" }));
     expect(await screen.findByRole("alert")).toHaveTextContent(
-      "Time Out (Aug 1, 2026, 5:00 AM) must be after Time In (Aug 1, 2026, 6:00 AM). Check the date and AM/PM.",
+      "Time Out (08/01/2026, 5:00 AM) must be after Time In (08/01/2026, 6:00 AM). Check the date and AM/PM.",
     );
     expect(mockedRpc).not.toHaveBeenCalledWith("correct_service_visit", expect.anything());
 
     fireEvent.change(screen.getByLabelText("Corrected Time Out hour"), { target: { value: "7" } });
     fireEvent.change(screen.getByLabelText("Corrected Time Out minute"), { target: { value: "30" } });
-    expect(summary).toHaveTextContent("→ Aug 1, 2026, 7:30 AM (1 hr 30 min)");
+    expect(summary).toHaveTextContent("→ 08/01/2026, 7:30 AM (1 hr 30 min)");
     fireEvent.click(screen.getByRole("button", { name: "Save correction" }));
     await waitFor(() =>
       expect(mockedRpc).toHaveBeenCalledWith("correct_service_visit", {
@@ -455,8 +455,11 @@ describe("ServiceVerificationReportsPage", () => {
           clientId: "c1", clientCode: "TEST-C01", serviceId: "s1", serviceCode: "RSP", serviceName: "Respite",
           authorizationLineageId: "l1", authorizationPeriodStart: "2026-10-01", authorizationPeriodEnd: "2026-12-31",
           authorizedMinutes: 600, workedMinutes: 10, verifiedMinutes: 10, billableMinutes: 10,
-          reservedMinutes: 420, remainingMinutes: 170, reviewMinutes: 0, visitCount: 1,
+          reservedMinutes: 420, remainingMinutes: 170, reviewMinutes: 0, visitCount: 1, clientName: "Synthetic Person",
         },
+      ]),
+      listMonthlyApprovalSummary: vi.fn().mockResolvedValue([
+        { authorizationLineageId: "l1", approvedMinutes: 5, approvedVisitCount: 1, roundingAdjustmentMinutes: 0 },
       ]),
     } as unknown as ServiceVerificationBackend;
     const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
@@ -476,8 +479,15 @@ describe("ServiceVerificationReportsPage", () => {
     const headers = within(table).getAllByRole("columnheader").map((th) => th.textContent);
     const row = within(table).getAllByRole("row")[1]!;
     const cells = within(row).getAllByRole("cell").map((td) => td.textContent);
-    expect(cells[headers.indexOf("Scheduled")]).toBe("7 hr");
+    expect(cells[headers.indexOf("Still scheduled (not yet worked)")]).toBe("7 hr");
     expect(cells[headers.indexOf("Remaining to schedule")]).toBe("2 hr 50 min");
+    // Client name first with the code; billable (eligible) and human-approved stay separate.
+    expect(cells[headers.indexOf("Client")]).toBe("Synthetic PersonTEST-C01");
+    expect(cells[headers.indexOf("Billable (eligible)")]).toBe("10 min");
+    await waitFor(() => expect(within(within(table).getAllByRole("row")[1]!).getAllByRole("cell")[headers.indexOf("Approved")]).toHaveTextContent("5 min"));
+    expect(headers).not.toContain("Submitted");
+    expect(screen.getByText(/Approval is not submission/)).toBeInTheDocument();
+    expect(within(row).getByText("10/01/2026–12/31/2026")).toBeInTheDocument();
   });
 
   it("lists visits and computes worked/billable subtotals, excluding corrected records", async () => {

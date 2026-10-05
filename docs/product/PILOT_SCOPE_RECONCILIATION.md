@@ -208,6 +208,25 @@ Proposal: `docs/product/PRICING_PROPOSAL.md`. It is a recommendation. Nothing is
 | Temporary visit recording | The Phase 7 risk table assumes "paper, corrected later with audit history". No procedure, form or reconciliation support is defined | NOT BUILT |
 | Continuity from backups alone | Not sufficient: backups restore data after an outage; they give no agency access to visits, schedules or authorizations during one | — |
 
+## 18. Consolidated pilot fixes (owner request 2026-10-05) — tracked checklist
+
+Status values: **Already implemented** (existed before this request) · **In progress** · **Built and tested** (on the branch, automated tests pass; not deployed) · **Deployed and verified** (live in AWS TEST with evidence) · **Blocked**.
+Nothing in this section is deployed. It ships in the next pinned AWS TEST release (0027–0030 + web). Production, Netlify and Supabase are untouched.
+
+Owner-reported acceptance evidence already in hand (AWS TEST, synthetic): caregiver started and ended a visit and saved a signature; the pilot manager found it Signed with the correct client and times; Billing review approved 0.02 hr; balance 3 hr authorised, 1 min billable, 0 in review, 2 hr 59 min remaining; the calendar showed the visit on 10/04/2026. This does not prove scheduling, rounding or print scenarios.
+
+| # | Item | Status | Evidence / what remains |
+| --- | --- | --- | --- |
+| 1 | Navigation: only the current section highlighted, `aria-current="page"` | **Built and tested** | Commit 7363560; unit tests (fail without the fix); browser check 23/23 desktop + 390 px phone incl. direct load, reload, back/forward. Pending: deployment |
+| 2 | NEEDS ATTENTION badge: red with count / green ALL CLEAR — 0 / "Checking…" / "Unable to check" | **Built and tested** | d9c1813; `attention-badge.test.tsx` covers all four states and that a failure or load never shows green. The badge reads the same `/v1/attention` summary (same permission checks) as the attention list. Pending: phone check after deployment |
+| 3 | Billing review identification | **In progress** | Built and tested (d9c1813): client name first + code, caregiver, service name + code, MM/DD/YYYY, AM/PM in the agency time zone, `1 min (0.02 hr)`, approval status beside the client ("Awaiting approval" / "Approved — not submitted"), visit reference under "Visit details"; "Billing ready" label removed. Eligibility (review state) and approval are separate fields. DB test: manager rows carry no rate/amount fields; other agency sees none. Remaining: names in reconciliation/correction reports and CSVs (item 6) |
+| 4 | Dates MM/DD/YYYY, times AM/PM in the agency time zone; stored values unchanged | **In progress** | Finding: the visit-record report tables used DD/MM/YY and 24-hour times; several AWS screens used "Oct 5, 2026" or the device locale. Sweep in progress; date-only values are formatted from the string (no time-zone conversion), so authorisation dates cannot shift |
+| 5 | Billing-only rounding | **Built and tested** (core); extra cases **In progress** | 0029 + `docs/product/BILLING_ROUNDING.md`; 12 DB tests, UI tests, browser 14/14. Adding: retry/idempotency, correction after adjustment, policy change after approval, agency isolation. Wording: a configured option is the agency's setting, not proof of payer compliance |
+| 6 | Report names, reconciliation, Scheduled = 0, utilisation | **In progress** | Scheduled = 0 diagnosis (code): a shift's reservation is released when its visit is signed (0013 trigger), so the column shows time still reserved for future, unworked shifts; the tested visit was worked and signed, so 0 is correct but the label is unclear. Fix: rename and explain. Names in reports/CSVs and utilisation discoverability pending |
+| 7 | Hire type and flexible care | **Built and tested** (fields, flexible visits); recurring shifts **Blocked (not built)** | Audit: Carelik never had Direct Hire/EOR; only `employment_type` (full_time/part_time/per_diem/contractor), not migrated. 0030 adds three separate fields (hire type, scheduling mode, family relationship per client assignment), nothing inferred or backfilled. 7 DB tests: Direct Hire visit links to its shift; EOR flexible visit with no shift is Billing Ready; sign-in, assignment, authorisation, confirmation and the hour cap still apply. AWS shifts (0026) support one-time create, assign, call-out, replacement and cancel; **recurring series and "change one occurrence / future occurrences" do not exist in AWS** |
+| 8 | One-page client monthly calendar (US Letter landscape) | **In progress** | Already implemented: per-client calendar, daily worked hours by service, service totals, letter-landscape print. Missing: caregiver summary with names, worked/billable/remaining reconciliation check, separate incomplete-work list, rendered-PDF inspection |
+| R | Pinned AWS TEST release 0027–0030 + web with rollback and live checks | **In progress** | Not packaged yet |
+
 ## Summary: why NOT READY for real clients, and what clears it
 
 | # | Blocker | Next step owner | Next action | Fits the 13:20 target? |

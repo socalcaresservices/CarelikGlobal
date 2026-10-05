@@ -31,6 +31,13 @@
 -- with clients.names.read), caregiver and service names, the caregiver's
 -- scheduling mode and the linked shift. Rates and dollar amounts are not part
 -- of it (they stay owner-only in billing approvals).
+--
+-- list_monthly_approval_summary (NEW, read-only, visits.read): per authorization
+-- lineage and month, the human-approved minutes, how many visits are approved,
+-- and approved billing-rounding adjustments, so the monthly reconciliation can
+-- show Approved separately from Billable (eligible). Minutes only, never money.
+-- A separate function, because list_monthly_service_summary is used by three
+-- other functions (0020, 0022, 0027) and must keep its return type.
 
 alter table ogevia.caregiver_records
   add column hire_type text check (hire_type is null or hire_type in ('direct_hire', 'eor')),
@@ -378,3 +385,53 @@ grant execute on function ogevia_api.list_service_visits(uuid, uuid, uuid, uuid,
 grant execute on function ogevia_api.list_caregivers(uuid) to ogevia_app;
 grant execute on function ogevia_api.list_assignments(uuid, uuid, uuid) to ogevia_app;
 grant execute on function ogevia_api.list_billing_review_visits(uuid, date, date) to ogevia_app;
+
+create function ogevia_api.list_monthly_approval_summary(
+  p_organization_id uuid,
+  p_month_start date,
+  p_client_id uuid default null
+)
+returns table (
+  authorization_lineage_id uuid,
+  approved_minutes integer,
+  approved_visit_count integer,
+  rounding_adjustment_minutes integer
+)
+language sql
+stable
+security definer
+set search_path = ogevia, pg_temp
+as $$
+  with ctx as (
+    select date_trunc('month', p_month_start::timestamp)::date as m0,
+           (date_trunc('month', p_month_start::timestamp) + interval '1 month')::date as m1
+    where ogevia.require_actor() is not null
+      and ogevia.is_active_member(p_organization_id)
+      and ogevia.has_permission(p_organization_id, 'visits.read')
+  ),
+  approvals as (
+    select va.lineage_id, coalesce(sum(b.approved_minutes), 0)::integer as minutes, count(*)::integer as visits
+    from ctx
+    join ogevia.service_visits v on v.organization_id = p_organization_id
+     and v.service_date >= ctx.m0 and v.service_date < ctx.m1
+     and v.status in ('signed', 'administrator_review')
+     and (p_client_id is null or v.client_id = p_client_id)
+    join ogevia.client_authorizations va on va.id = v.service_authorization_id
+    join ogevia.billing_approvals b on b.visit_id = v.id and b.organization_id = p_organization_id and b.voided_at is null
+    group by va.lineage_id
+  ),
+  adjustments as (
+    select r.authorization_lineage_id as lineage_id, coalesce(sum(r.adjustment_minutes), 0)::integer as minutes
+    from ctx
+    join ogevia.billing_rounding_adjustments r on r.organization_id = p_organization_id and r.voided_at is null
+     and r.service_date >= ctx.m0 and r.service_date < ctx.m1
+     and (p_client_id is null or r.client_id = p_client_id)
+    group by r.authorization_lineage_id
+  )
+  select coalesce(a.lineage_id, j.lineage_id), coalesce(a.minutes, 0), coalesce(a.visits, 0), coalesce(j.minutes, 0)
+  from approvals a
+  full join adjustments j on j.lineage_id = a.lineage_id;
+$$;
+
+revoke all on function ogevia_api.list_monthly_approval_summary(uuid, date, uuid) from public;
+grant execute on function ogevia_api.list_monthly_approval_summary(uuid, date, uuid) to ogevia_app;

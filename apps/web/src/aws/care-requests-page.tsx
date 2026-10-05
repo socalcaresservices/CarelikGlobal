@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button, Card } from "@carelik/ui";
 import type { AwsApiClient } from "@/lib/aws-api";
 import { useOrganization } from "@/providers/organization-provider";
+import { formatDateTime } from "@/lib/service-verification";
 
 type RequestRow = { requestId: string; clientCode: string; serviceCode: string; serviceName: string; startsAt: string; endsAt: string; requestedMinutes: number; status: string; shortNotice: boolean; availableCount: number; awaitingCount: number; assignedCaregiverName: string | null };
 type Candidate = { caregiverRecordId: string; caregiverName: string; currentClientMatch: boolean; availabilitySource: string };
@@ -10,7 +11,7 @@ type Offer = { offerId: string; caregiverRecordId: string; caregiverName: string
 type ClientOption = { clientId: string; clientCode: string };
 type AlertStaff = { userId: string; displayName: string; selected: boolean };
 
-const when = (value: string) => new Date(value).toLocaleString([], { dateStyle: "medium", timeStyle: "short" });
+const when = (value: string) => formatDateTime(value);
 const duration = (minutes: number) => minutes % 60 ? Math.floor(minutes / 60) + " hr " + (minutes % 60) + " min" : (minutes / 60) + " hr";
 
 export function CareRequestsPage({ api }: { api: AwsApiClient }) {

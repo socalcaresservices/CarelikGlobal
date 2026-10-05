@@ -10,6 +10,7 @@ import {
   CAREGIVER_STATUS_BADGE, CAREGIVER_STATUS_LABEL, caregiverName, signInLabel, useCaregivers,
   type Caregiver, type CaregiverStatus,
 } from "./care-team-admin";
+import { formatDateTime } from "@/lib/service-verification";
 
 const message = (cause: unknown, fallback: string) => (cause instanceof Error ? cause.message : fallback);
 const inputClass = "mt-1 block w-full rounded-lg border border-slate-200 px-3 py-2 text-base";
@@ -228,7 +229,7 @@ function CaregiverStatusCard({ c }: { c: Caregiver }) {
 }
 
 
-const fmtWhen = (iso: string) => new Date(iso).toLocaleString("en-US", { month: "short", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit" });
+const fmtWhen = (iso: string) => formatDateTime(iso);
 
 /**
  * Sign-in and invitation (0025). The server checks caregivers.manage, the

@@ -13,10 +13,11 @@ import {
 } from "./client-admin";
 import { AssignmentsCard } from "./assignments-card";
 import { ClientTypeField } from "./clients-page";
+import { formatDateOnly } from "@/lib/service-verification";
 
 const message = (cause: unknown, fallback: string) => (cause instanceof Error ? cause.message : fallback);
 const inputClass = "mt-1 block w-full rounded-lg border border-slate-200 px-3 py-2 text-base";
-const fmtDate = (d: string | null) => (d ? new Date(`${d}T12:00:00Z`).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "UTC" }) : "—");
+const fmtDate = (d: string | null) => formatDateOnly(d);
 const minutesAsHours = (m: number) => (m % 60 === 0 ? String(m / 60) : (m / 60).toFixed(2));
 const thisMonth = () => new Date().toISOString().slice(0, 7);
 

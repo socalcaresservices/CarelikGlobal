@@ -5,6 +5,24 @@
 // module only controls how they're *shown*.
 export const PACIFIC_TIME_ZONE = "America/Los_Angeles";
 
+// The agency's own time zone (organizations.timezone; default
+// America/Los_Angeles). The AWS build sets it from the active membership so
+// display and manager-entered wall times use the same zone the server uses
+// for service dates. An unknown zone is ignored (keeps the previous one).
+let agencyTimeZone = PACIFIC_TIME_ZONE;
+export function setAgencyTimeZone(timeZone: string | null | undefined): void {
+  if (!timeZone) return;
+  try {
+    new Intl.DateTimeFormat("en-US", { timeZone }).format(0);
+    agencyTimeZone = timeZone;
+  } catch {
+    console.warn("Ignoring unknown agency time zone; keeping", agencyTimeZone);
+  }
+}
+export function getAgencyTimeZone(): string {
+  return agencyTimeZone;
+}
+
 export function formatHours(minutes: number): string {
   return (minutes / 60).toFixed(2).replace(/\.00$/, "");
 }
@@ -20,40 +38,40 @@ export function formatDuration(minutes: number | null | undefined): string {
   return `${hours} hr ${mins} min`;
 }
 
-/** Compact DD/MM/YY date used in dense operational reports. */
+/** MM/DD/YYYY in the agency time zone, for an instant (timestamptz). */
 export function formatNumericDate(value: string | Date): string {
-  const parts = new Intl.DateTimeFormat("en-GB", {
+  const parts = new Intl.DateTimeFormat("en-US", {
     day: "2-digit",
     month: "2-digit",
-    year: "2-digit",
-    timeZone: PACIFIC_TIME_ZONE,
+    year: "numeric",
+    timeZone: agencyTimeZone,
   }).formatToParts(new Date(value));
   const get = (type: string) =>
     parts.find((part) => part.type === type)?.value ?? "";
-  return `${get("day")}/${get("month")}/${get("year")}`;
+  return `${get("month")}/${get("day")}/${get("year")}`;
 }
 
-/** Compact 24-hour time used in report tables. */
-export function format24HourTime(value: string | Date): string {
-  return new Intl.DateTimeFormat("en-GB", {
-    hour: "2-digit",
-    minute: "2-digit",
-    hourCycle: "h23",
-    timeZone: PACIFIC_TIME_ZONE,
-  }).format(new Date(value));
+/** MM/DD/YYYY for a calendar date (YYYY-MM-DD) - read from the string, never
+ *  converted through a time zone, so a stored date cannot shift a day. */
+export function formatDateOnly(value: string | null | undefined): string {
+  if (!value) return "—";
+  const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(value);
+  return match ? `${match[2]}/${match[3]}/${match[1]}` : value;
 }
 
 export function formatTimeRange(timeIn: string, timeOut: string | null): string {
   return timeOut
-    ? `${format24HourTime(timeIn)}–${format24HourTime(timeOut)}`
-    : format24HourTime(timeIn);
+    ? `${formatClockTime(timeIn)}–${formatClockTime(timeOut)}`
+    : formatClockTime(timeIn);
 }
 
+/** h:mm AM/PM in the agency time zone. */
 export function formatClockTime(value: string | Date): string {
   return new Intl.DateTimeFormat("en-US", {
     hour: "numeric",
     minute: "2-digit",
-    timeZone: PACIFIC_TIME_ZONE
+    hour12: true,
+    timeZone: agencyTimeZone
   }).format(new Date(value));
 }
 
@@ -113,23 +131,32 @@ export function classifyIncompleteVisit(
 }
 
 export function formatVisitDate(value: string | Date): string {
-  return new Intl.DateTimeFormat("en-US", {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-    timeZone: PACIFIC_TIME_ZONE
-  }).format(new Date(value));
+  return formatNumericDate(value);
 }
 
+/** "2:30 PM" for a wall-clock "HH:MM" already in the agency's zone (no conversion). */
+export function formatWallClock(value: string | null | undefined): string {
+  const match = /^(\d{1,2}):(\d{2})/.exec(value ?? "");
+  if (!match) return value ?? "—";
+  const hour = Number(match[1]);
+  return `${hour % 12 === 0 ? 12 : hour % 12}:${match[2]} ${hour < 12 ? "AM" : "PM"}`;
+}
+
+/** "Monday 10/05/2026" for a calendar date (weekday computed at UTC noon, so no shift). */
+export function formatWeekdayDate(value: string, weekday: "long" | "short" = "long"): string {
+  const day = new Intl.DateTimeFormat("en-US", { weekday, timeZone: "UTC" }).format(new Date(`${value.slice(0, 10)}T12:00:00Z`));
+  return `${day} ${formatDateOnly(value)}`;
+}
+
+/** "Mon 10/05/2026 9:00 AM" for an instant, in the agency time zone. */
+export function formatWeekdayDateTime(value: string | Date): string {
+  const day = new Intl.DateTimeFormat("en-US", { weekday: "short", timeZone: agencyTimeZone }).format(new Date(value));
+  return `${day} ${formatDateTime(value)}`;
+}
+
+/** MM/DD/YYYY h:mm AM/PM in the agency time zone. */
 export function formatDateTime(value: string | Date): string {
-  return new Intl.DateTimeFormat("en-US", {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
-    timeZone: PACIFIC_TIME_ZONE
-  }).format(new Date(value));
+  return `${formatNumericDate(value)} ${formatClockTime(value)}`;
 }
 
 // mm:ss under an hour, h:mm:ss at or over - a caregiver glancing at a
@@ -202,7 +229,7 @@ export interface PacificWallTime {
 
 function pacificFields(utcMs: number) {
   const parts = new Intl.DateTimeFormat("en-US", {
-    timeZone: PACIFIC_TIME_ZONE,
+    timeZone: agencyTimeZone,
     year: "numeric",
     month: "2-digit",
     day: "2-digit",

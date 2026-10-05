@@ -116,7 +116,7 @@ describe("Rounding policies page", () => {
   it("lists every dated version, and requires the payer rule before enabling rounding", async () => {
     const api = renderAt("/settings/billing-rounding", "owner");
     expect(await screen.findByText(/Synthetic Payer · Respite \(synthetic\) · v2/)).toBeInTheDocument();
-    expect(screen.getByText(/Payer rule: Synthetic manual 4.2 \(2026-01-15\)/)).toBeInTheDocument();
+    expect(screen.getByText(/Payer rule: Synthetic manual 4.2 \(01\/15\/2026\)/)).toBeInTheDocument();
     expect(screen.getByText("in effect today")).toBeInTheDocument();
     fireEvent.change(screen.getByLabelText("Payer (as on the authorizations)"), { target: { value: "Synthetic Payer" } });
     fireEvent.change(await screen.findByLabelText("Service"), { target: { value: SVC } });
@@ -130,7 +130,7 @@ describe("Rounding policies page", () => {
     fireEvent.change(screen.getByLabelText("Payer rule (document and section)"), { target: { value: "Synthetic manual 4.3" } });
     fireEvent.change(screen.getByLabelText("Date of that payer document"), { target: { value: "2026-10-01" } });
     fireEvent.click(screen.getByRole("button", { name: "Save new version" }));
-    expect(await screen.findByText(/Saved as version 3, effective 2026-11-01\. Earlier versions and approved adjustments are unchanged\./)).toBeInTheDocument();
+    expect(await screen.findByText(/Saved as version 3, effective 11\/01\/2026\. Earlier versions and approved adjustments are unchanged\./)).toBeInTheDocument();
     expect(api.calls.find((c) => c.method === "POST")!.body).toEqual({
       organizationId: ORG, payer: "Synthetic Payer", serviceId: SVC, method: "nearest", incrementMinutes: 15, basis: "daily_total",
       payerRuleReference: "Synthetic manual 4.3", payerRuleDate: "2026-10-01", effectiveFrom: "2026-11-01", reason: "Payer changed its rule (synthetic)",

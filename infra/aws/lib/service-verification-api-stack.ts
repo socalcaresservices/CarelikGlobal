@@ -75,6 +75,7 @@ export const SERVICE_VERIFICATION_ROUTES: ReadonlyArray<{
   { method: apigw.HttpMethod.POST, path: "/v1/visits/{visitId}/close" },
   { method: apigw.HttpMethod.GET, path: "/v1/visits/{visitId}/signature" },
   { method: apigw.HttpMethod.GET, path: "/v1/reports/monthly-service-summary" },
+  { method: apigw.HttpMethod.GET, path: "/v1/reports/monthly-approval-summary" },
   { method: apigw.HttpMethod.GET, path: "/v1/reports/correction-history" },
   { method: apigw.HttpMethod.GET, path: "/v1/billing-review" },
   { method: apigw.HttpMethod.POST, path: "/v1/me/display-name" },

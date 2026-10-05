@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button, Card } from "@carelik/ui";
 import { useLocation } from "react-router-dom";
 import type { AwsApiClient } from "@/lib/aws-api";
+import { formatClockTime, formatDateTime } from "@/lib/service-verification";
 
 type PortalService = { organizationName: string; clientCode: string; serviceId: string; serviceCode: string; serviceName: string; periodEnd: string };
 type CareRequest = { requestId: string; status: string; serviceCode: string; serviceName: string; startsAt: string; endsAt: string; shortNotice: boolean; caregiverName: string | null };
@@ -21,7 +22,7 @@ export function useLinkToken(): string {
   return /^[0-9a-f]{64}$/i.test(value) ? value.toLowerCase() : "";
 }
 
-const when = (value: string) => new Date(value).toLocaleString([], { dateStyle: "medium", timeStyle: "short" });
+const when = (value: string) => formatDateTime(value);
 const toIso = (value: string) => new Date(value).toISOString();
 
 const CLOSED_REQUEST = ["client_cancelled", "filled", "closed"];
@@ -84,7 +85,7 @@ export function PublicCareRequestPage({ api }: { api: AwsApiClient }) {
         <ul className="mt-3 space-y-3">
           {list.map((r) => (
             <li key={r.requestId} data-request-id={r.requestId} className="rounded-lg border border-slate-200 p-3 text-sm text-slate-700">
-              <p><strong>{r.serviceCode}</strong> · {when(r.startsAt)}–{new Date(r.endsAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</p>
+              <p><strong>{r.serviceCode}</strong> · {when(r.startsAt)}–{formatClockTime(r.endsAt)}</p>
               <p className="mt-1">Status: <strong>{r.status.replaceAll("_", " ")}</strong>{r.shortNotice ? <span className="ml-2 rounded bg-amber-100 px-1.5 py-0.5 text-xs text-amber-800">short notice</span> : null}</p>
               {r.caregiverName ? <p className="mt-1">Assigned caregiver: <strong>{r.caregiverName}</strong></p> : null}
               {!CLOSED_REQUEST.includes(r.status) ? (
@@ -147,7 +148,7 @@ export function PublicCareOfferPage({ api }: { api: AwsApiClient }) {
     <PublicShell title="Care opportunity">
       <Card>
         <h2 className="text-lg font-semibold text-slate-950">{item.serviceCode} · {item.clientLabel}</h2>
-        <p className="mt-2 text-sm text-slate-700">{when(item.startsAt)}–{new Date(item.endsAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</p>
+        <p className="mt-2 text-sm text-slate-700">{when(item.startsAt)}–{formatClockTime(item.endsAt)}</p>
         <p className="mt-1 text-sm">Status: <strong>{item.status.replaceAll("_", " ")}</strong></p>
         {item.status === "sent" ? (
           <div className="mt-4 flex gap-2">

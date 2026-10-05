@@ -1,7 +1,15 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   classifyIncompleteVisit,
+  formatClockTime,
+  formatDateOnly,
+  formatDateTime,
   formatElapsed,
+  formatNumericDate,
+  formatWallClock,
+  formatWeekdayDate,
+  getAgencyTimeZone,
+  setAgencyTimeZone,
   formatHours,
   formatScheduledWindow,
   pacificWallTimeToDate,
@@ -127,11 +135,48 @@ describe("Pacific Time Out entry", () => {
   it("mirrors the server's Time Out limits with specific messages", () => {
     expect(validateManagerTimeOut(timeIn, new Date("2026-10-03T20:15:00.000Z"), now)).toBeNull();
     expect(validateManagerTimeOut(timeIn, new Date("2026-10-03T08:15:00.000Z"), now)).toBe(
-      "Time Out (Oct 3, 2026, 1:15 AM) must be after Time In (Oct 3, 2026, 9:02 AM). Check the date and AM/PM.",
+      "Time Out (10/03/2026, 1:15 AM) must be after Time In (10/03/2026, 9:02 AM). Check the date and AM/PM.",
     );
     expect(validateManagerTimeOut(timeIn, new Date("2026-10-04T08:15:00.000Z"), now)).toMatch(/is in the future/);
     expect(
       validateManagerTimeOut(timeIn, new Date("2026-10-04T17:00:00.000Z"), new Date("2026-10-05T00:00:00.000Z")),
     ).toBe("This would make the visit 24 hr 58 min. A visit cannot be longer than 24 hours. Check the date.");
+  });
+});
+
+describe("US date/time display (MM/DD/YYYY, AM/PM, agency time zone)", () => {
+  afterEach(() => setAgencyTimeZone("America/Los_Angeles"));
+
+  it("formats a calendar date from the string, so it never shifts a day in any zone", () => {
+    for (const tz of ["America/Los_Angeles", "Pacific/Honolulu", "Asia/Tokyo"]) {
+      setAgencyTimeZone(tz);
+      expect(formatDateOnly("2026-10-01")).toBe("10/01/2026");
+      expect(formatDateOnly("2026-12-31")).toBe("12/31/2026");
+    }
+    expect(formatDateOnly(null)).toBe("—");
+    expect(formatWeekdayDate("2026-10-05")).toBe("Monday 10/05/2026");
+  });
+
+  it("formats instants in the agency zone with AM/PM", () => {
+    const instant = "2026-10-05T16:05:00Z"; // 9:05 AM Pacific (PDT)
+    expect(formatDateTime(instant)).toBe("10/05/2026 9:05 AM");
+    expect(formatClockTime(instant)).toBe("9:05 AM");
+    expect(formatNumericDate("2026-10-05T06:30:00Z")).toBe("10/04/2026"); // 11:30 PM the day before in Pacific
+    setAgencyTimeZone("America/New_York");
+    expect(formatDateTime(instant)).toBe("10/05/2026 12:05 PM");
+  });
+
+  it("ignores an unknown zone and keeps the previous one", () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    setAgencyTimeZone("Not/AZone");
+    expect(getAgencyTimeZone()).toBe("America/Los_Angeles");
+    expect(warn).toHaveBeenCalled();
+    warn.mockRestore();
+  });
+
+  it("formats wall-clock HH:MM without conversion", () => {
+    expect(formatWallClock("00:05")).toBe("12:05 AM");
+    expect(formatWallClock("12:00")).toBe("12:00 PM");
+    expect(formatWallClock("23:59")).toBe("11:59 PM");
   });
 });

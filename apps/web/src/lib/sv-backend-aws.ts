@@ -8,6 +8,7 @@ import type {
   BillingApprovalRow,
   BillingReviewRow,
   CorrectionHistoryReportRow,
+  MonthlyApprovalSummaryRow,
   MonthlyServiceSummaryRow,
   ServiceVerificationBackend,
   VisitCorrectionRow,
@@ -170,7 +171,16 @@ export function createAwsServiceVerificationBackend(
         clientId,
         monthStart,
       });
-      return services;
+      const names = await clientNames(organizationId);
+      return services.map((row) => ({ ...row, clientName: names.get(row.clientId) ?? null }));
+    },
+    async listMonthlyApprovalSummary(organizationId, clientId, monthStart) {
+      const { lineages } = await api.get<{ lineages: MonthlyApprovalSummaryRow[] }>("/v1/reports/monthly-approval-summary", {
+        organizationId,
+        clientId,
+        monthStart,
+      });
+      return lineages;
     },
     async listCorrectionHistoryReport(
       organizationId,
@@ -192,7 +202,8 @@ export function createAwsServiceVerificationBackend(
         correctedByUserId,
         status,
       });
-      return corrections;
+      const names = await clientNames(organizationId);
+      return corrections.map((row) => ({ ...row, clientName: names.get(row.clientId) ?? null }));
     },
     async listBillingReview(organizationId, dateFrom, dateTo) {
       const { visits } = await api.get<{ visits: BillingReviewRow[] }>("/v1/billing-review", { organizationId, dateFrom, dateTo });

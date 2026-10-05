@@ -6,6 +6,7 @@ import { newIdempotencyKey } from "@/lib/sv-backend";
 import { useOrganization } from "@/providers/organization-provider";
 import { useAwsApi } from "./aws-workspace";
 import { buildContinuityHtml, continuityFileName, continuityState, outageNumber, useContinuityStatus, type ContinuityPack } from "./continuity-pack";
+import { formatDateTime } from "@/lib/service-verification";
 
 /**
  * Continuity pack (0027): the agency's own recent copy of what it needs to keep
@@ -51,7 +52,7 @@ export function ContinuityPage() {
       a.href = url; a.download = continuityFileName(r.pack); a.click();
       setTimeout(() => URL.revokeObjectURL(url), 10_000);
       key.current = newIdempotencyKey();
-      setDone(`Downloaded: data as of ${new Date(r.pack.data_as_of).toLocaleString("en-US", { timeZone: r.pack.timezone })}; outage numbers ${outageNumber(r.pack.outage_numbers.first)} to ${outageNumber(r.pack.outage_numbers.last)}.`);
+      setDone(`Downloaded: data as of ${formatDateTime(r.pack.data_as_of)}; outage numbers ${outageNumber(r.pack.outage_numbers.first)} to ${outageNumber(r.pack.outage_numbers.last)}.`);
       await qc.invalidateQueries({ queryKey: ["aws-continuity-status"] });
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "The download did not complete. Try again; the same outage numbers are kept.");

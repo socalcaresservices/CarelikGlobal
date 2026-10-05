@@ -103,7 +103,7 @@ afterEach(() => vi.restoreAllMocks());
 describe("continuity pack file", () => {
   it("states its data-as-of time, escapes every value, lists the issued outage numbers and carries no money", () => {
     const html = buildContinuityHtml(PACK);
-    expect(html).toContain("Data as of Monday, October 5, 2026 at 9:05 AM (America/Los_Angeles)");
+    expect(html).toContain("Data as of Monday 10/05/2026 9:05 AM (America/Los_Angeles)");
     expect(html).toContain("Synthetic &lt;b&gt;Client&lt;/b&gt;");
     expect(html).not.toContain("<b>Client</b>");
     expect(html).toContain("OUT-000026");

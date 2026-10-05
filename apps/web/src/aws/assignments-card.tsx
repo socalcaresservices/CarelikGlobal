@@ -7,6 +7,7 @@ import { useOrganization } from "@/providers/organization-provider";
 import { useAwsApi } from "./aws-workspace";
 import { caregiverName, useCaregivers } from "./care-team-admin";
 import { clientName, useClients, useServices } from "./client-admin";
+import { formatDateOnly } from "@/lib/service-verification";
 
 /**
  * Assignments (0024): which caregiver may serve which client for which
@@ -70,7 +71,7 @@ function RelationshipField({ a, canManage }: { a: Assignment; canManage: boolean
 
 const message = (cause: unknown, fallback: string) => (cause instanceof Error ? cause.message : fallback);
 const inputClass = "mt-1 block w-full rounded-lg border border-slate-200 px-3 py-2 text-base";
-const fmtDate = (d: string) => new Date(`${d}T12:00:00Z`).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "UTC" });
+const fmtDate = (d: string) => formatDateOnly(d);
 const STATE_LABEL = { current: "Current", upcoming: "Starts later", ended: "Ended" } as const;
 const STATE_BADGE = { current: "bg-emerald-100 text-emerald-900", upcoming: "bg-sky-100 text-sky-900", ended: "bg-slate-200 text-slate-800" } as const;
 

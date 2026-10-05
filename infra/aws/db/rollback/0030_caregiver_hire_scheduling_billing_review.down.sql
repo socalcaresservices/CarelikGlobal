@@ -1,7 +1,8 @@
 -- ROLLBACK 0030_caregiver_hire_scheduling_billing_review | CLASS: SAFE AUTOMATED (refuses when records would be lost)
 -- Refuses while any hire type, flexible scheduling or family relationship is
 -- recorded (those facts would be lost). Otherwise restores the four list
--- functions exactly as before 0030 and drops the new functions and columns.
+-- functions exactly as before 0030 and drops the new functions (including the
+-- read-only list_monthly_approval_summary) and columns.
 do $$ begin
   if exists (select 1 from ogevia.caregiver_records where hire_type is not null or scheduling_mode <> 'fixed')
      or exists (select 1 from ogevia.caregiver_assignments where family_relationship is not null) then
@@ -10,6 +11,7 @@ do $$ begin
 end $$;
 drop function if exists ogevia_api.set_assignment_family_relationship(uuid, uuid, text, uuid);
 drop function if exists ogevia_api.set_caregiver_employment(uuid, uuid, text, text, text, uuid);
+drop function if exists ogevia_api.list_monthly_approval_summary(uuid, date, uuid);
 drop function ogevia_api.list_service_visits(uuid, uuid, uuid, uuid, date, date, ogevia.service_visit_status);
 create function ogevia_api.list_service_visits(
   p_organization_id uuid,

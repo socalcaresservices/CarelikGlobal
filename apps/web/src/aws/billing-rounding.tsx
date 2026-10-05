@@ -6,6 +6,7 @@ import { newIdempotencyKey } from "@/lib/sv-backend";
 import { useOrganization } from "@/providers/organization-provider";
 import { useAwsApi } from "./aws-workspace";
 import { useServices } from "./client-admin";
+import { formatDateOnly, formatDateTime } from "@/lib/service-verification";
 
 /**
  * Billing rounding (0029). Default: no rounding. The Administrator records a
@@ -105,7 +106,7 @@ export function RoundingSection({ from, to, refreshKey }: { from: string; to: st
               <Card className="p-3">
                 <div className="flex flex-wrap items-baseline justify-between gap-2">
                   <p className="text-sm font-medium text-slate-900">
-                    {u.serviceDate} · {u.clientCode} · {u.serviceName} · {u.unitKind === "day" ? `daily total of ${u.visitCount} visit${u.visitCount === 1 ? "" : "s"}` : `visit ${u.visitNumber}`}
+                    {formatDateOnly(u.serviceDate)} · {u.clientCode} · {u.serviceName} · {u.unitKind === "day" ? `daily total of ${u.visitCount} visit${u.visitCount === 1 ? "" : "s"}` : `visit ${u.visitNumber}`}
                   </p>
                   <span className="text-xs font-medium text-slate-700">{STATE_LABEL[u.state]}</span>
                 </div>
@@ -166,7 +167,7 @@ export function BillingRoundingSettingsPage() {
       key.current = newIdempotencyKey();
       await qc.invalidateQueries({ queryKey: ["aws-rounding-policies"] });
       await qc.invalidateQueries({ queryKey: ["aws-rounding-preview"] });
-      setState({ busy: false, error: null, done: `Saved as version ${r.policy.version}, effective ${f.from}. Earlier versions and approved adjustments are unchanged.` });
+      setState({ busy: false, error: null, done: `Saved as version ${r.policy.version}, effective ${formatDateOnly(f.from)}. Earlier versions and approved adjustments are unchanged.` });
     } catch (cause) { setState({ busy: false, error: message(cause, "The policy was not saved."), done: null }); }
   }
 
@@ -231,9 +232,9 @@ export function BillingRoundingSettingsPage() {
           {(policies.data ?? []).map((p) => (
             <li key={p.policyId} className="py-2">
               <p className="font-medium">{p.payer} · {p.serviceName} · v{p.version}{p.inEffectToday ? <span className="ml-1 rounded bg-emerald-100 px-1 text-xs text-emerald-900">in effect today</span> : null}</p>
-              <p className="text-slate-700">{METHOD_LABEL[p.method]}{p.incrementMinutes ? `, ${p.incrementMinutes} min` : ""}{p.basis ? `, ${BASIS_LABEL[p.basis]}` : ""} · effective {p.effectiveFrom}</p>
-              {p.payerRuleReference ? <p className="text-xs text-slate-600">Payer rule: {p.payerRuleReference} ({p.payerRuleDate})</p> : null}
-              <p className="text-xs text-slate-500">{p.reason} · {p.createdByName}, {new Date(p.createdAt).toLocaleString()}</p>
+              <p className="text-slate-700">{METHOD_LABEL[p.method]}{p.incrementMinutes ? `, ${p.incrementMinutes} min` : ""}{p.basis ? `, ${BASIS_LABEL[p.basis]}` : ""} · effective {formatDateOnly(p.effectiveFrom)}</p>
+              {p.payerRuleReference ? <p className="text-xs text-slate-600">Payer rule: {p.payerRuleReference} ({formatDateOnly(p.payerRuleDate)})</p> : null}
+              <p className="text-xs text-slate-500">{p.reason} · {p.createdByName}, {formatDateTime(p.createdAt)}</p>
             </li>
           ))}
         </ul>

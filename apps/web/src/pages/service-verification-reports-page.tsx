@@ -1,6 +1,6 @@
 import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useLocation } from "react-router-dom";
+import { Link, useLocation } from "react-router-dom";
 import { useIsNarrow } from "@/lib/use-is-narrow";
 import {
   BarChart3,
@@ -42,6 +42,7 @@ import {
   newIdempotencyKey,
   type ClientLocation,
   type CorrectionHistoryReportRow,
+  type MonthlyApprovalSummaryRow,
   type MonthlyServiceSummaryRow,
   type OrgLetterhead,
   type VisitCorrectionRow,
@@ -52,9 +53,10 @@ import {
   AUTHORIZATION_STATUS_LABEL,
   classifyIncompleteVisit,
   UNSCHEDULED_OPEN_VISIT_ALERT_HOURS,
+  formatDateOnly,
+  getAgencyTimeZone,
   formatDateTime,
   formatDuration,
-  formatNumericDate,
   formatScheduledWindow,
   formatTimeRange,
   formatClockTime,
@@ -182,6 +184,31 @@ function downloadCsv(filename: string, header: string[], rows: unknown[][]) {
   URL.revokeObjectURL(url);
 }
 
+// Client name first (office roles with clients.names.read), code underneath.
+// Without the names permission the server returns no name: the code alone.
+function ClientCell({ name, code }: { name?: string | null | undefined; code: string }) {
+  return name ? (
+    <>
+      <p className="font-medium text-slate-800">{name}</p>
+      <p className="text-xs text-slate-500">{code}</p>
+    </>
+  ) : (
+    <p className="font-medium text-slate-800">{code}</p>
+  );
+}
+
+// "Client name" column only when the report actually carries names.
+function clientCsvHeader(rows: Array<{ clientName?: string | null | undefined }>): string[] {
+  return rows.some((row) => row.clientName) ? ["Client name", "Client code"] : ["Client code"];
+}
+function clientCsvCells(rows: Array<{ clientName?: string | null | undefined }>, row: { clientName?: string | null | undefined; clientCode: string }): string[] {
+  return rows.some((r) => r.clientName) ? [row.clientName ?? "", row.clientCode] : [row.clientCode];
+}
+
+const STILL_SCHEDULED_LABEL = "Still scheduled (not yet worked)";
+const formatSignedDuration = (minutes: number) =>
+  minutes === 0 ? "0 min" : `${minutes > 0 ? "+" : "−"}${formatDuration(Math.abs(minutes))}`;
+
 // Excludes voided and superseded ('corrected') rows from every subtotal -
 // a corrected visit's replacement carries the numbers that should count,
 // and a voided visit was never real time to begin with.
@@ -205,7 +232,7 @@ function errorMessage(cause: unknown, fallback: string) {
 
 function currentPacificMonth() {
   const parts = new Intl.DateTimeFormat("en-US", {
-    timeZone: "America/Los_Angeles",
+    timeZone: getAgencyTimeZone(),
     year: "numeric",
     month: "2-digit",
   }).formatToParts(new Date());
@@ -449,6 +476,22 @@ export function ServiceVerificationReportsPage() {
       !!backend.listMonthlyServiceSummary &&
       (reportView === "calendar" || reportView === "reconciliation"),
   });
+
+  const monthlyApprovalSummaryQuery = useQuery({
+    queryKey: ["monthly-approval-summary", activeOrganizationId, clientFilter, reportMonth],
+    queryFn: (): Promise<MonthlyApprovalSummaryRow[]> =>
+      backend.listMonthlyApprovalSummary!(activeOrganizationId!, clientFilter || null, `${reportMonth}-01`),
+    enabled:
+      !!activeOrganizationId &&
+      canRead &&
+      !!backend.listMonthlyApprovalSummary &&
+      reportView === "reconciliation",
+  });
+  const approvedByLineage = useMemo(
+    () => new Map((monthlyApprovalSummaryQuery.data ?? []).map((row) => [row.authorizationLineageId, row])),
+    [monthlyApprovalSummaryQuery.data],
+  );
+  const showApproved = !!backend.listMonthlyApprovalSummary;
 
   const correctionHistoryReportQuery = useQuery({
     queryKey: [
@@ -1678,7 +1721,7 @@ export function ServiceVerificationReportsPage() {
             {reportView === "calendar" || reportView === "reconciliation" ? (
               <p>Month: {calendarMonthLabel}</p>
             ) : null}
-            <p>Printed: {new Date().toLocaleDateString()}</p>
+            <p>Printed: {formatDateTime(new Date())}</p>
           </div>
         </div>
       </div>
@@ -1747,21 +1790,21 @@ export function ServiceVerificationReportsPage() {
                     downloadCsv(
                       `client-service-calendar-${reportMonth}.csv`,
                       [
-                        "Client",
+                        ...clientCsvHeader(monthlyServiceRows),
                         "Service",
                         "Authorization period",
                         "Authorized",
                         "Worked",
                         "Confirmed",
                         "Billable",
-                        "Scheduled (reserved)",
+                        STILL_SCHEDULED_LABEL,
                         "Remaining to schedule",
                         "Needs review",
                       ],
                       monthlyServiceRows.map((row) => [
-                        row.clientCode,
+                        ...clientCsvCells(monthlyServiceRows, row),
                         `${row.serviceCode} ${row.serviceName}`,
-                        `${row.authorizationPeriodStart} to ${row.authorizationPeriodEnd}`,
+                        `${formatDateOnly(row.authorizationPeriodStart)} to ${formatDateOnly(row.authorizationPeriodEnd)}`,
                         formatDuration(row.authorizedMinutes),
                         formatDuration(row.workedMinutes),
                         formatDuration(row.verifiedMinutes),
@@ -1894,7 +1937,7 @@ export function ServiceVerificationReportsPage() {
                           <th className="pb-2 pr-3 font-medium">Worked</th>
                           <th className="pb-2 pr-3 font-medium">Confirmed</th>
                           <th className="pb-2 pr-3 font-medium">Billable</th>
-                          <th className="pb-2 pr-3 font-medium">Scheduled</th>
+                          <th className="pb-2 pr-3 font-medium">{STILL_SCHEDULED_LABEL}</th>
                           <th className="pb-2 pr-3 font-medium">Hours left to schedule</th>
                           <th className="pb-2 font-medium">Needs review</th>
                         </tr>
@@ -1937,6 +1980,22 @@ export function ServiceVerificationReportsPage() {
                 separate so documentation or authorization differences cannot
                 be hidden by a client-level total.
               </p>
+              <p className="mt-1 max-w-3xl text-xs text-slate-500">
+                <strong>Billable (eligible)</strong> is confirmed time within the
+                authorization; <strong>Approved</strong> is what a person approved
+                for billing. Approval is not submission: Ogevia does not submit to
+                payers or track submissions. <strong>{STILL_SCHEDULED_LABEL}</strong>{" "}
+                is time held by scheduled shifts that have not been worked yet; it
+                drops to 0 once those visits are signed, because the worked time
+                then counts as worked and billable instead.
+              </p>
+              {backend.kind === "aws" ? (
+                <p className="mt-1 text-xs print:hidden">
+                  <Link className="font-medium text-slate-800 underline" to="/">
+                    Agency-wide utilization by service is on Home
+                  </Link>
+                </p>
+              ) : null}
             </div>
             <div className="flex items-end gap-2 print:hidden">
               <label className="text-xs font-medium text-slate-600">
@@ -1957,26 +2016,33 @@ export function ServiceVerificationReportsPage() {
                     downloadCsv(
                       `monthly-service-reconciliation-${reportMonth}.csv`,
                       [
-                        "Client",
+                        ...clientCsvHeader(monthlyServiceRows),
                         "Service",
                         "Authorization period",
                         "Authorized",
                         "Worked",
                         "Verified",
-                        "Billable",
-                        "Scheduled (reserved)",
+                        "Billable (eligible)",
+                        ...(showApproved ? ["Approved (human)", "Approved rounding adjustment"] : []),
+                        STILL_SCHEDULED_LABEL,
                         "Remaining to schedule",
                         "Needs review",
                         "Worked minus billable",
                       ],
                       monthlyServiceRows.map((row) => [
-                        row.clientCode,
+                        ...clientCsvCells(monthlyServiceRows, row),
                         `${row.serviceCode} ${row.serviceName}`,
-                        `${row.authorizationPeriodStart} to ${row.authorizationPeriodEnd}`,
+                        `${formatDateOnly(row.authorizationPeriodStart)} to ${formatDateOnly(row.authorizationPeriodEnd)}`,
                         formatDuration(row.authorizedMinutes),
                         formatDuration(row.workedMinutes),
                         formatDuration(row.verifiedMinutes),
                         formatDuration(row.billableMinutes),
+                        ...(showApproved
+                          ? [
+                              formatDuration(approvedByLineage.get(row.authorizationLineageId)?.approvedMinutes ?? 0),
+                              formatSignedDuration(approvedByLineage.get(row.authorizationLineageId)?.roundingAdjustmentMinutes ?? 0),
+                            ]
+                          : []),
                         formatDuration(row.reservedMinutes ?? 0),
                         formatDuration(row.remainingMinutes),
                         formatDuration(row.reviewMinutes),
@@ -2011,8 +2077,9 @@ export function ServiceVerificationReportsPage() {
                     <th className="pb-2 pr-3 font-medium">Authorized</th>
                     <th className="pb-2 pr-3 font-medium">Worked</th>
                     <th className="pb-2 pr-3 font-medium">Verified</th>
-                    <th className="pb-2 pr-3 font-medium">Billable</th>
-                    <th className="pb-2 pr-3 font-medium">Scheduled</th>
+                    <th className="pb-2 pr-3 font-medium">Billable (eligible)</th>
+                    {showApproved ? <th className="pb-2 pr-3 font-medium">Approved</th> : null}
+                    <th className="pb-2 pr-3 font-medium">{STILL_SCHEDULED_LABEL}</th>
                     <th className="pb-2 pr-3 font-medium">Remaining to schedule</th>
                     <th className="pb-2 pr-3 font-medium">Needs review</th>
                     <th className="pb-2 font-medium">Difference</th>
@@ -2023,17 +2090,35 @@ export function ServiceVerificationReportsPage() {
                     const difference = Math.max(0, row.workedMinutes - row.billableMinutes);
                     return (
                       <tr key={row.authorizationLineageId} className="border-b border-slate-100">
-                        <td className="py-2 pr-3 font-medium text-slate-800">{row.clientCode}</td>
+                        <td className="py-2 pr-3"><ClientCell name={row.clientName} code={row.clientCode} /></td>
                         <td className="py-2 pr-3">
                           <p className="font-medium text-slate-800">{row.serviceCode} · {row.serviceName}</p>
                           <p className="text-xs text-slate-400">
-                            {row.authorizationPeriodStart}–{row.authorizationPeriodEnd}
+                            {formatDateOnly(row.authorizationPeriodStart)}–{formatDateOnly(row.authorizationPeriodEnd)}
                           </p>
                         </td>
                         <td className="py-2 pr-3">{formatDuration(row.authorizedMinutes)}</td>
                         <td className="py-2 pr-3">{formatDuration(row.workedMinutes)}</td>
                         <td className="py-2 pr-3">{formatDuration(row.verifiedMinutes)}</td>
                         <td className="py-2 pr-3 font-medium">{formatDuration(row.billableMinutes)}</td>
+                        {showApproved ? (
+                          <td className="py-2 pr-3">
+                            {monthlyApprovalSummaryQuery.isError ? (
+                              "Unable to load"
+                            ) : monthlyApprovalSummaryQuery.isLoading ? (
+                              "…"
+                            ) : (
+                              <>
+                                {formatDuration(approvedByLineage.get(row.authorizationLineageId)?.approvedMinutes ?? 0)}
+                                {approvedByLineage.get(row.authorizationLineageId)?.roundingAdjustmentMinutes ? (
+                                  <span className="block text-xs text-slate-500">
+                                    Rounding {formatSignedDuration(approvedByLineage.get(row.authorizationLineageId)!.roundingAdjustmentMinutes)}
+                                  </span>
+                                ) : null}
+                              </>
+                            )}
+                          </td>
+                        ) : null}
                         <td className="py-2 pr-3">{formatDuration(row.reservedMinutes ?? 0)}</td>
                         <td className="py-2 pr-3">{formatDuration(row.remainingMinutes)}</td>
                         <td className="py-2 pr-3">{formatDuration(row.reviewMinutes)}</td>
@@ -2083,7 +2168,7 @@ export function ServiceVerificationReportsPage() {
                     "correction-history.csv",
                     [
                       "Visit ref",
-                      "Client",
+                      ...clientCsvHeader(correctionRows),
                       "Service",
                       "Service date",
                       "Caregiver",
@@ -2098,9 +2183,9 @@ export function ServiceVerificationReportsPage() {
                     ],
                     correctionRows.map((row) => [
                       row.visitNumber,
-                      row.clientCode,
+                      ...clientCsvCells(correctionRows, row),
                       `${row.serviceCode} ${row.serviceName}`,
-                      row.serviceDate,
+                      formatDateOnly(row.serviceDate),
                       row.caregiverName,
                       formatTimeRange(row.beforeSnapshot.timeIn, row.beforeSnapshot.timeOut),
                       formatTimeRange(row.afterSnapshot.timeIn, row.afterSnapshot.timeOut),
@@ -2158,9 +2243,9 @@ export function ServiceVerificationReportsPage() {
                   {correctionRows.map((row) => (
                     <tr key={row.correctionId} className="border-b border-slate-100 align-top">
                       <td className="py-2 pr-3 whitespace-nowrap font-mono text-xs">{row.visitNumber ?? "—"}</td>
-                      <td className="py-2 pr-3">{row.clientCode}</td>
+                      <td className="py-2 pr-3"><ClientCell name={row.clientName} code={row.clientCode} /></td>
                       <td className="py-2 pr-3">{row.serviceCode} · {row.serviceName}</td>
-                      <td className="py-2 pr-3 whitespace-nowrap">{formatNumericDate(`${row.serviceDate}T12:00:00Z`)}</td>
+                      <td className="py-2 pr-3 whitespace-nowrap">{formatDateOnly(row.serviceDate)}</td>
                       <td className="py-2 pr-3">{row.caregiverName}</td>
                       <td className="py-2 pr-3 whitespace-nowrap">
                         {formatTimeRange(row.beforeSnapshot.timeIn, row.beforeSnapshot.timeOut)}
@@ -2274,7 +2359,7 @@ export function ServiceVerificationReportsPage() {
                         </div>
                         <p className="mt-1 text-sm text-slate-700">{row.caregiver_name} · {row.service_name}</p>
                         <p className="mt-1 text-sm text-slate-700">
-                          {formatVisitDate(`${row.service_date}T12:00:00-07:00`)} · <span className="font-mono">{formatTimeRange(row.time_in, row.time_out)}</span>
+                          {formatDateOnly(row.service_date)} · <span className="font-mono">{formatTimeRange(row.time_in, row.time_out)}</span>
                         </p>
                         <p className="text-xs text-slate-500">
                           {row.scheduled_starts_at ? "Scheduled " : ""}
@@ -2373,7 +2458,7 @@ export function ServiceVerificationReportsPage() {
                             ) : null}
                             {visitColumns.has("date") ? (
                               <td className="py-2 pr-3 whitespace-nowrap text-slate-600">
-                                {formatNumericDate(`${row.service_date}T12:00:00-07:00`)}
+                                {formatDateOnly(row.service_date)}
                               </td>
                             ) : null}
                             {visitColumns.has("time") ? (
@@ -2617,7 +2702,7 @@ export function ServiceVerificationReportsPage() {
                     {row.client_legal_name ?? row.client_code}{" "}
                     <span className="text-slate-400">
                       · {row.caregiver_name} ·{" "}
-                      {formatNumericDate(`${row.service_date}T12:00:00-07:00`)}
+                      {formatDateOnly(row.service_date)}
                     </span>
                   </span>
                   <span className="flex flex-wrap gap-1.5">

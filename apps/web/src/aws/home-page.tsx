@@ -81,9 +81,14 @@ export function AwsHomePage() {
       <section aria-labelledby="util-heading" className="space-y-3">
         <div className="flex flex-wrap items-end justify-between gap-3">
           <div>
-            <h2 id="util-heading" className="text-lg font-semibold text-slate-950">Hours this month</h2>
+            <h2 id="util-heading" className="text-lg font-semibold text-slate-950">Hours this month (utilization)</h2>
             <p className="text-xs text-slate-500">
               Utilization = worked hours ÷ authorized hours for the same client, service and month. Amended authorizations count once (the latest version).
+            </p>
+            <p className="text-xs">
+              <Link className="font-medium text-slate-800 underline" to="/service-verification/reports?view=reconciliation">
+                By client and authorization: monthly reconciliation
+              </Link>
             </p>
           </div>
           <label className="text-xs font-medium text-slate-600">

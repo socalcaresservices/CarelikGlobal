@@ -985,6 +985,22 @@ export const ROUTES: Record<string, Route> = {
     },
   },
 
+  // 0030: approved minutes per authorization lineage (minutes only, never money).
+  "GET /v1/reports/monthly-approval-summary": {
+    mutating: false,
+    handle: async ({ event, tx }) => {
+      const query = q(event);
+      const org = orgParam(event);
+      const client = optionalUuid(query.clientId, "clientId");
+      const monthStart = date(query.monthStart, "monthStart");
+      return {
+        lineages: await tx((db) =>
+          rows(db, "select * from ogevia_api.list_monthly_approval_summary($1, $2, $3)", [org, monthStart, client]),
+        ),
+      };
+    },
+  },
+
   "GET /v1/reports/monthly-service-summary": {
     mutating: false,
     handle: async ({ event, tx }) => {
