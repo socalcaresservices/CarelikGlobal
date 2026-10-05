@@ -162,9 +162,11 @@ Run this after the 14/14 live checks.
    landscape page with the caregiver summary.
 9. **Manager boundary.** A manager sees the monthly approval summary in
    minutes, with no rates or money.
-10. **Reconciliation query.** Run
-    `psql … -f infra/aws/slice/reconcile-2026-10-05-no-signer.sql`. It is
-    read-only and settles Synthetic Bulk Test vs Client Bravo.
+10. **Which client was used.** On the visit page from step 1, read the client
+    name and code; that settles Synthetic Bulk Test vs Client Bravo without
+    database access. The query `infra/aws/slice/reconcile-2026-10-05-no-signer.sql`
+    (read-only, on the branch after the pin) is a fallback that needs a DB
+    window on the admin host; it is not part of the release run.
 
 ## 8. Cost and security
 

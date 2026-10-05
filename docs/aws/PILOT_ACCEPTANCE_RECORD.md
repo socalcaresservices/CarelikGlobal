@@ -77,7 +77,7 @@ Recorded from the owner's statement: "caregiver started, ended and signed a synt
 | Correct visit preview | **FAIL** (display) | Showed 3 min where the list showed 4 min. The preview used whole minutes; saving already kept seconds (0018). Fixed in the web build, not deployed |
 | Needs attention badge vs destination | **FAIL** | The badge counted visits only and pointed elsewhere. Fixed in 0033 and the web build, not deployed |
 | No-signer visit review | **NOT PASSED: blocker** | The screenshots show Synthetic Client Bravo / Pilot B saved as unscheduled, Needs review, worked 3 min, billable 0. The no-signer reason and any resolution were not reachable. Fixed in 0031 and the web build (Visit review page), not deployed |
-| Requested client vs recorded client | **UNRECONCILED** | The test asked for "Synthetic Bulk Test", but the screenshots show Client Bravo. Run the read-only `infra/aws/slice/reconcile-2026-10-05-no-signer.sql` in CloudShell to list synthetic clients and every unable-to-confirm visit with its linked client |
+| Requested client vs recorded client | **UNRECONCILED** | The test asked for "Synthetic Bulk Test", but the screenshots show Client Bravo. After release 0027–0034, the Visit review page shows the linked client. Fallback: the read-only `infra/aws/slice/reconcile-2026-10-05-no-signer.sql`, which needs a DB window |
 
 **Not tested:**
 - recurring shifts;

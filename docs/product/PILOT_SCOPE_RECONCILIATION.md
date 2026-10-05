@@ -240,7 +240,7 @@ Supabase are untouched.
 | 12 | One-page Letter-landscape client calendar with caregiver summary and reconciliation check | Built and tested | `calendar-e2e.ts` 16/16; PDFs in `evidence/2026-10-05/` |
 | 13 | Utilization pace and projection; small values never shown as zero | **Open** | Not started in this batch |
 | 14 | Continuity: combined recovery drill (database + documents + accounts + application) | **Open** | Database-only restore measured at 4 min 15 s (owner-run). Full-system time not measured, so no claim of full recovery |
-| 15 | Client Bravo vs "Synthetic Bulk Test" | **Open** (needs a CloudShell read) | `infra/aws/slice/reconcile-2026-10-05-no-signer.sql` (read-only) |
+| 15 | Client Bravo vs "Synthetic Bulk Test" | **Open** | After deployment: the Visit review page shows the linked client (retest step 10). Fallback: `infra/aws/slice/reconcile-2026-10-05-no-signer.sql` (read-only; needs a DB window) |
 | 16 | Monthly cost estimate | Done (estimate) | `docs/aws/MONTHLY_PLATFORM_COST_2026-10.md` |
 
 ## Summary: why NOT READY for real clients, and what clears it
