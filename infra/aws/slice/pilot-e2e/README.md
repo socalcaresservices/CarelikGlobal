@@ -79,3 +79,13 @@ Result 2026-10-04: 22/22 PASS at 390 px (after renaming the ambiguous "Start"/"E
 - a caregiver offered neither screen.
 
 Result 2026-10-05: 23/23 PASS at 390 px.
+
+## Main menu (navigation fix, 2026-10-05)
+
+`nav-e2e.ts` uses the same setup and database as `continuity-e2e.ts`. On desktop (1280 px) and on a phone (390 px) it checks that exactly one menu item is current: it carries `aria-current="page"` and is the only one with the highlight (with the pointer moved off the menu). It covers:
+- direct loads of Visit records, the exceptions view, Home and Schedule;
+- a reload;
+- a click to Verify visit, then Back and Forward;
+- the caregiver menu.
+
+Result 2026-10-05: 23/23 PASS.

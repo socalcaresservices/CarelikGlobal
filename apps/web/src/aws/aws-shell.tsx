@@ -1,5 +1,5 @@
 import { useState, type CSSProperties, type PropsWithChildren } from "react";
-import { Link, Navigate, NavLink, useLocation } from "react-router-dom";
+import { Link, Navigate, useLocation } from "react-router-dom";
 import { useAuth } from "@carelik/auth";
 import { cn } from "@carelik/ui";
 import { useOrganization } from "@/providers/organization-provider";
@@ -141,18 +141,23 @@ export function AwsShell({ children }: PropsWithChildren) {
             aria-label="Main"
             className={cn("mt-2 flex-col gap-1 md:flex md:flex-row md:flex-wrap", menuOpen ? "flex" : "hidden")}
           >
-            {links.map((l) => (
-              <NavLink
-                key={l.to}
-                to={l.to}
-                end={l.to === "/"}
-                onClick={() => setMenuOpen(false)}
-                className={({ isActive }) => cn("rounded-lg px-3 py-2 text-sm", isActive ? "font-medium text-white" : "text-slate-700 hover:bg-slate-100")}
-                style={({ isActive }) => (isActive ? { backgroundColor: accent } : undefined)}
-              >
-                {l.label}
-              </NavLink>
-            ))}
+            {links.map((l) => {
+              // Exactly one item is current: the longest matching path (computed above).
+              // NavLink's own prefix matching would also mark "Verify visit" on Visit records.
+              const active = l.to === current?.to;
+              return (
+                <Link
+                  key={l.to}
+                  to={l.to}
+                  aria-current={active ? "page" : undefined}
+                  onClick={() => setMenuOpen(false)}
+                  className={cn("rounded-lg px-3 py-2 text-sm", active ? "font-medium text-white" : "text-slate-700 hover:bg-slate-100")}
+                  style={active ? { backgroundColor: accent } : undefined}
+                >
+                  {l.label}
+                </Link>
+              );
+            })}
           </nav>
         </div>
       </header>

@@ -37,6 +37,25 @@ Recorded 2026-10-04 from the owner's statement: "caregiver start/end, client con
 
 These results are kept as the acceptance record of build 87a9be2. **They are not evidence for the 0019–0021 build.** That build is accepted separately, with the checklist in `docs/aws/DEPLOYMENT_PLAN_0019_0021.md` section 6, after its own deployment.
 
+## Phone test 2026-10-05 (owner-reported, after the 0019–0021 recovery)
+
+Recorded from the owner's statement: "caregiver started, ended and signed a synthetic visit; the separate pilot manager found it with Signed status and correct client and times."
+
+| Check | Result | Basis and limits |
+| --- | --- | --- |
+| Caregiver starts a synthetic visit | **PASS** | Owner-reported |
+| Caregiver ends it | **PASS** | Owner-reported |
+| Client confirmation; visit **Signed** | **PASS** | Owner-reported |
+| The separate pilot manager account (not the owner account) finds the visit with Signed status, the correct client, and the correct Time In and Time Out | **PASS** | Owner-reported. This implies the manager's first sign-in (new password and authenticator) was completed. The status check at the end of the deployment blocks has not yet been reported as `CONFIRMED`. |
+
+**Limits:**
+- **Build:** not stated. The 0019–0021 revision (69e8799) was live, owner-reported 10/10. Whether release 0022–0026 had already been deployed when the test was made has not been reported.
+- **Not reported:** which caregiver account was used, the times, and the visit number.
+- **Evidence:** no screenshots reached this session.
+- **Still open:**
+  - the rest of plan section 6 for 0019–0021 (attention counts, billing approval, the manager's money boundary on screen, documents);
+  - the corrected caregiver's first sign-in, unless that was the caregiver used here.
+
 ## Independent live confirmation (2026-10-04, owner-run, read-only except the owner step)
 
 `live-status-bootstrap.sh` (pinned f91fe68) was run in CloudShell at about 14:50 UTC. Results as reported by the owner:
