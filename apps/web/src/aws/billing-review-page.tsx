@@ -1,5 +1,6 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
+import { RoundingSection } from "./billing-rounding";
 import { Button, Card } from "@carelik/ui";
 import { confirmationMethodLabel, formatHours, formatVisitDate } from "@/lib/service-verification";
 import { useIsNarrow } from "@/lib/use-is-narrow";
@@ -266,6 +267,7 @@ export function BillingReviewPage() {
           </form>
         </Card>
       ) : null}
+      <RoundingSection from={from} to={to} refreshKey={approvalsQuery.dataUpdatedAt} />
       {signature ? (
         <Card>
           <div className="flex items-center justify-between">

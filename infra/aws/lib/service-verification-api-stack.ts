@@ -120,6 +120,12 @@ export const SERVICE_VERIFICATION_ROUTES: ReadonlyArray<{
   { method: apigw.HttpMethod.POST, path: "/v1/outage-visits" },
   { method: apigw.HttpMethod.POST, path: "/v1/outage-visits/not-used" },
   { method: apigw.HttpMethod.GET, path: "/v1/outage-visits/reconciliation" },
+  // Billing rounding (0029): policies (Administrator), preview and adjustments (billing approvers).
+  { method: apigw.HttpMethod.GET, path: "/v1/billing-rounding/policies" },
+  { method: apigw.HttpMethod.POST, path: "/v1/billing-rounding/policies" },
+  { method: apigw.HttpMethod.GET, path: "/v1/billing-rounding/preview" },
+  { method: apigw.HttpMethod.POST, path: "/v1/billing-rounding/adjustments" },
+  { method: apigw.HttpMethod.POST, path: "/v1/billing-rounding/adjustments/{adjustmentId}/void" },
   { method: apigw.HttpMethod.POST, path: "/v1/services" },
   { method: apigw.HttpMethod.POST, path: "/v1/services/{serviceId}/name" },
   { method: apigw.HttpMethod.POST, path: "/v1/services/{serviceId}/status" },

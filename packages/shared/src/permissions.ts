@@ -54,6 +54,7 @@ export const permissionSchema = z.enum([
   "billing.visits.read",
   "billing.approve",
   "billing.submit",
+  "billing.rounding.manage",
   "care_requests.read",
   "care_requests.manage",
   "availability.manage_own"

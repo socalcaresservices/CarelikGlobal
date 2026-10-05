@@ -91,6 +91,8 @@ function fakeApi(role: "caregiver" | "manager" | "organization_owner", opts: { d
         return json(200, { decision: body?.["decision"] });
       case "GET /v1/billing-approvals":
         return json(200, { approvals });
+      case "GET /v1/billing-rounding/preview":
+        return json(200, { units: [] });
       case `POST /v1/visits/${VISIT}/billing-approval`:
         approvals = [{ billingApprovalId: "abababab-0000-4000-8000-000000000001", visitId: VISIT, visitNumber: "V-1", serviceDate: "2026-09-30", approvedMinutes: body?.["approvedMinutes"], billableMinutesAtApproval: 120, approvedAt: "2026-10-01T10:00:00Z", approvedByName: "Manager A", notes: null, voidedAt: null, voidedByName: null, voidReason: null, rateCents: null, amountCents: null }];
         return json(201, { billingApprovalId: "abababab-0000-4000-8000-000000000001" });

@@ -58,6 +58,7 @@ describe("SCHEMA: migration chain", () => {
       "0026",
       "0027",
       "0028",
+      "0029",
     ]);
   });
 
@@ -97,6 +98,8 @@ describe("SCHEMA: migration chain", () => {
       "audit_events",
       "authorization_reservations",
       "billing_approvals",
+      "billing_rounding_adjustments",
+      "billing_rounding_policies",
       "care_notifications",
       "care_request_alert_recipients",
       "care_request_events",

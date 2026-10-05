@@ -79,9 +79,12 @@ describe("effective permissions per role (get_my_context)", () => {
 
   it("dollar amounts (billing.read) are owner-only; there is no finance role and no submission permission", async () => {
     const { rows } = await db.admin.query("select key from ogevia.permissions where key like 'billing.%' order by key");
-    expect(rows.map((r) => r.key)).toEqual(["billing.approve", "billing.read", "billing.visits.read"]);
+    expect(rows.map((r) => r.key)).toEqual(["billing.approve", "billing.read", "billing.rounding.manage", "billing.visits.read"]);
     const holders = await db.admin.query("select role::text from ogevia.role_permissions where permission_key = 'billing.read'");
     expect(holders.rows.map((r) => r.role)).toEqual(["organization_owner"]);
+    // Rounding policies (0029) are set by the Administrator only.
+    const rounding = await db.admin.query("select role::text from ogevia.role_permissions where permission_key = 'billing.rounding.manage'");
+    expect(rounding.rows.map((r) => r.role)).toEqual(["organization_owner"]);
     const roles = await db.admin.query("select unnest(enum_range(null::ogevia.system_role))::text as r");
     expect(roles.rows.map((r) => r.r)).not.toContain("finance");
   });

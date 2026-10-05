@@ -1051,6 +1051,71 @@ export const ROUTES: Record<string, Route> = {
     },
   },
 
+  // Billing rounding (0029). Policies: Administrator only (billing.rounding.manage), each change a new
+  // dated version that records the payer rule. Adjustments: billing.approve, computed by the server,
+  // separate from the visit approval; clock times, worked and billable minutes are never changed.
+  "GET /v1/billing-rounding/policies": {
+    mutating: false,
+    handle: async ({ event, tx }) => ({ policies: await tx((db) => rows(db, "select * from ogevia_api.list_billing_rounding_policies($1)", [orgParam(event)])) }),
+  },
+
+  "POST /v1/billing-rounding/policies": {
+    status: 201,
+    mutating: true,
+    handle: async ({ event, tx }) => {
+      const body = parseBody(event.body, event.isBase64Encoded);
+      const key = idempotencyKey(event.headers);
+      const method = oneOf(body.method, "method", ["none", "nearest", "up", "down"] as const);
+      const inc = body.incrementMinutes === null || body.incrementMinutes === undefined ? null : body.incrementMinutes;
+      if (inc !== null && (typeof inc !== "number" || !Number.isInteger(inc))) throw new ApiError(400, "bad_request", "incrementMinutes must be a whole number of minutes.");
+      const basis = method === "none" ? null : oneOf(body.basis, "basis", ["per_visit", "daily_total"] as const);
+      const [policy] = await tx((db) => rows(db,
+        "select * from ogevia_api.set_billing_rounding_policy($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)",
+        [uuid(body.organizationId, "organizationId"), text(body.payer, "payer", 200, { required: true }), uuid(body.serviceId, "serviceId"), method, inc, basis,
+         text(body.payerRuleReference, "payerRuleReference", 500), optionalDate(body.payerRuleDate, "payerRuleDate"),
+         date(body.effectiveFrom, "effectiveFrom"), text(body.reason, "reason", 1000, { required: true }), key]));
+      return { policy };
+    },
+  },
+
+  "GET /v1/billing-rounding/preview": {
+    mutating: false,
+    handle: async ({ event, tx }) => {
+      const query = q(event);
+      return { units: await tx((db) => rows(db, "select * from ogevia_api.list_billing_rounding_preview($1, $2, $3)",
+        [orgParam(event), date(query.from, "from"), date(query.to, "to")])) };
+    },
+  },
+
+  "POST /v1/billing-rounding/adjustments": {
+    status: 201,
+    mutating: true,
+    handle: async ({ event, tx }) => {
+      const body = parseBody(event.body, event.isBase64Encoded);
+      const key = idempotencyKey(event.headers);
+      const visit = optionalUuid(body.visitId, "visitId");
+      const lineage = optionalUuid(body.authorizationLineageId, "authorizationLineageId");
+      const day = optionalDate(body.serviceDate, "serviceDate");
+      if (!visit && !(lineage && day)) throw new ApiError(400, "bad_request", "Give visitId, or authorizationLineageId and serviceDate for a daily total.");
+      const [adjustment] = await tx((db) => rows(db,
+        "select * from ogevia_api.approve_billing_rounding_adjustment($1, $2, $3, $4, $5, $6)",
+        [uuid(body.organizationId, "organizationId"), visit, visit ? null : lineage, visit ? null : day, text(body.notes, "notes", 1000), key]));
+      return { adjustment };
+    },
+  },
+
+  "POST /v1/billing-rounding/adjustments/{adjustmentId}/void": {
+    mutating: true,
+    handle: async ({ event, tx }) => {
+      const id = uuid(p(event).adjustmentId, "adjustmentId");
+      const body = parseBody(event.body, event.isBase64Encoded);
+      const key = idempotencyKey(event.headers);
+      const reason = text(body.reason, "reason", 1000, { required: true });
+      const adjustmentId = await tx(async (db) => ((await db.query("select ogevia_api.void_billing_rounding_adjustment($1, $2, $3) as id", [id, reason, key])).rows[0] as { id: string }).id);
+      return { adjustmentId };
+    },
+  },
+
   "POST /v1/billing-approvals/{approvalId}/void": {
     mutating: true,
     handle: async ({ event, tx }) => {

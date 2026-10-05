@@ -794,3 +794,44 @@ describe("schedule (0026) through the API", () => {
     expect(cancelled.body).toEqual({ releasedMinutes: 120 });
   });
 });
+
+describe("billing rounding (0029) through the API", () => {
+  it("Administrator sets a dated policy with the payer rule; manager cannot; the adjustment is approved separately and voided with a reason", async () => {
+    // Its own synthetic caregiver, so no earlier open visit is in the way.
+    const sub = crypto.randomUUID();
+    const cgId = (await db.admin.query("insert into ogevia.app_users (cognito_sub, display_name) values ($1, 'Synthetic Rounding Caregiver') returning id", [sub])).rows[0].id;
+    await db.admin.query("insert into ogevia.organization_memberships (organization_id, user_id, role, status) values ($1, $2, 'caregiver', 'active')", [w.orgA, cgId]);
+    await db.admin.query("insert into ogevia.caregiver_records (organization_id, linked_user_id, caregiver_code, first_name, last_name, status) values ($1, $2, 'CG-RND', 'Synthetic', 'Rounding', 'active')", [w.orgA, cgId]);
+    const cg = { userId: cgId as string, sub };
+    const svc = (await db.admin.query("insert into ogevia.services (organization_id, code, name) values ($1, 'RNA', 'Rounding API (synthetic)') returning id", [w.orgA])).rows[0].id;
+    const c = (await db.admin.query("insert into ogevia.clients (organization_id) values ($1) returning id", [w.orgA])).rows[0].id;
+    const today = (await db.admin.query("select ((now() at time zone 'America/Los_Angeles')::date)::text d")).rows[0].d;
+    await db.admin.query("insert into ogevia.caregiver_assignments (organization_id, caregiver_user_id, client_id, service_id, effective_start) values ($1,$2,$3,$4,$5::date)", [w.orgA, cg.userId, c, svc, today]);
+    await db.admin.query(`insert into ogevia.client_authorizations (organization_id, client_id, service_id, payer, monthly_authorized_minutes, period_start, period_end)
+      values ($1, $2, $3, 'Synthetic API Payer', 6000, $4::date - 40, $4::date + 40)`, [w.orgA, c, svc, today]);
+    const body = { organizationId: w.orgA, payer: "synthetic api payer", serviceId: svc, method: "up", incrementMinutes: 15, basis: "per_visit",
+      payerRuleReference: "Synthetic payer manual 3.1", payerRuleDate: "2026-01-10", effectiveFrom: "2026-01-01", reason: "Synthetic 15-minute units" };
+    expect((await call("POST /v1/billing-rounding/policies", w.managerA, { body })).status).toBe(403);
+    const missingRule = await call("POST /v1/billing-rounding/policies", w.ownerA, { body: { ...body, payerRuleReference: null } });
+    expect(missingRule.status).toBe(422);
+    expect(missingRule.body.error.message).toMatch(/Record the payer rule/);
+    const set = await call("POST /v1/billing-rounding/policies", w.ownerA, { body });
+    expect(set.status, JSON.stringify(set.body)).toBe(201);
+    expect(set.body.policy.version).toBe(1);
+    const list = await call("GET /v1/billing-rounding/policies", w.managerA, { query: { organizationId: w.orgA } });
+    expect(list.body.policies[0]).toMatchObject({ payer: "Synthetic API Payer", method: "up", incrementMinutes: 15, basis: "per_visit", inEffectToday: true });
+
+    const { visit } = await signedVisit(db, cg, w, 50, w.orgA, c, svc);
+    const approve = await call("POST /v1/visits/{visitId}/billing-approval", w.managerA, { path: { visitId: visit }, body: { approvedMinutes: 50 } });
+    expect(approve.status, JSON.stringify(approve.body)).toBe(201);
+    const pv = await call("GET /v1/billing-rounding/preview", w.managerA, { query: { organizationId: w.orgA, from: today, to: today } });
+    expect(pv.body.units.find((u: { visitId: string }) => u.visitId === visit)).toMatchObject({ state: "ready_to_approve", workedMinutes: 50, approvedMinutes: 50, proposedMinutes: 60, adjustmentMinutes: 10, proposedUnits: "4.00" });
+    const adj = await call("POST /v1/billing-rounding/adjustments", w.managerA, { body: { organizationId: w.orgA, visitId: visit } });
+    expect(adj.status, JSON.stringify(adj.body)).toBe(201);
+    expect(adj.body.adjustment).toMatchObject({ baseMinutes: 50, proposedMinutes: 60, adjustmentMinutes: 10, cappedByAuthorization: false });
+    expect((await call("POST /v1/billing-rounding/adjustments", w.managerA, { body: { organizationId: w.orgA } })).status).toBe(400);
+    const v = await call(`POST /v1/billing-rounding/adjustments/{adjustmentId}/void`, w.managerA, { path: { adjustmentId: adj.body.adjustment.adjustmentId }, body: { reason: "Synthetic void" } });
+    expect(v.status, JSON.stringify(v.body)).toBe(200);
+    expect((await call("GET /v1/billing-rounding/preview", cg, { query: { organizationId: w.orgA, from: today, to: today } })).body.units).toEqual([]);
+  });
+});

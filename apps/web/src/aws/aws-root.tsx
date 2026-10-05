@@ -15,6 +15,7 @@ import { AuthCallbackPage, AwsLoginPage, AwsProtectedRoute } from "./aws-auth-pa
 import { AwsOrganizationProvider } from "./aws-organization-provider";
 import { AwsLanding, AwsShell } from "./aws-shell";
 import { BillingReviewPage } from "./billing-review-page";
+import { BillingRoundingSettingsPage } from "./billing-rounding";
 import { CareRequestsPage } from "./care-requests-page";
 import { CaregiverAvailabilityPage } from "./caregiver-availability-page";
 import { AwsHomePage } from "./home-page";
@@ -79,6 +80,7 @@ export function AwsRoutes({ api, publicApi }: { api: AwsApiClient; publicApi: Aw
                     <Route path="/continuity" element={<ContinuityPage />} />
                     <Route path="/outage-visits" element={<OutageVisitsPage />} />
                     <Route path="/settings/branding" element={<BrandingSettingsPage />} />
+                    <Route path="/settings/billing-rounding" element={<BillingRoundingSettingsPage />} />
                     <Route path="*" element={<Navigate to="/" replace />} />
                   </Routes>
                 </AwsShell>
