@@ -305,6 +305,53 @@ function SignInCard({ c, canManage }: { c: Caregiver; canManage: boolean }) {
 }
 
 /** One caregiver record (0023). */
+const HIRE_LABEL = { direct_hire: "Direct Hire", eor: "EOR (employer of record)" } as const;
+const SCHEDULING_LABEL = { fixed: "Fixed — works scheduled shifts", flexible: "Flexible — authorized visits without a scheduled shift" } as const;
+
+/** 0030: hire type and scheduling arrangement are separate facts; neither implies a family relationship. */
+function EmploymentCard({ c, canManage }: { c: Caregiver; canManage: boolean }) {
+  const api = useAwsApi();
+  const qc = useQueryClient();
+  const { activeOrganizationId } = useOrganization();
+  const [hire, setHire] = useState<string>(c.hireType ?? "");
+  const [mode, setMode] = useState<string>(c.schedulingMode ?? "fixed");
+  const [state, setState] = useState<{ busy: boolean; error: string | null; done: string | null }>({ busy: false, error: null, done: null });
+  const key = useRef(newIdempotencyKey());
+  async function save() {
+    setState({ busy: true, error: null, done: null });
+    try {
+      await api.post(`/v1/caregivers/${encodeURIComponent(c.caregiverRecordId)}/employment`, { organizationId: activeOrganizationId, hireType: hire || null, schedulingMode: mode },
+        { idempotencyKey: key.current });
+      key.current = newIdempotencyKey();
+      await qc.invalidateQueries({ queryKey: ["aws-caregivers"] });
+      setState({ busy: false, error: null, done: "Saved. Visit rules are unchanged: sign-in, assignment, authorization, confirmation and hour limits still apply." });
+    } catch (cause) { setState({ busy: false, error: cause instanceof Error ? cause.message : "Not saved.", done: null }); }
+  }
+  return (
+    <Card className="p-4">
+      <h2 className="text-base font-semibold text-slate-950">Hire type and scheduling</h2>
+      {!canManage ? (
+        <p className="mt-1 text-sm text-slate-700">{c.hireType ? HIRE_LABEL[c.hireType] : "Hire type not recorded"} · {SCHEDULING_LABEL[c.schedulingMode ?? "fixed"]}</p>
+      ) : (
+        <form onSubmit={(e) => { e.preventDefault(); void save(); }} className="mt-2 grid gap-3 sm:grid-cols-2">
+          <div><label htmlFor="emp-hire" className="block text-sm font-medium text-slate-700">Hire type</label>
+            <select id="emp-hire" value={hire} onChange={(e) => { setHire(e.target.value); key.current = newIdempotencyKey(); }} className="mt-1 block w-full rounded-lg border border-slate-200 px-3 py-2 text-base">
+              <option value="">Not recorded</option><option value="direct_hire">{HIRE_LABEL.direct_hire}</option><option value="eor">{HIRE_LABEL.eor}</option>
+            </select></div>
+          <div><label htmlFor="emp-mode" className="block text-sm font-medium text-slate-700">Scheduling</label>
+            <select id="emp-mode" value={mode} onChange={(e) => { setMode(e.target.value); key.current = newIdempotencyKey(); }} className="mt-1 block w-full rounded-lg border border-slate-200 px-3 py-2 text-base">
+              <option value="fixed">{SCHEDULING_LABEL.fixed}</option><option value="flexible">{SCHEDULING_LABEL.flexible}</option>
+            </select></div>
+          <p className="text-xs text-slate-600 sm:col-span-2">Family relationship is recorded per client on each assignment below. EOR does not mean family, and Direct Hire does not require fixed shifts.</p>
+          {state.error ? <p role="alert" className="text-sm text-red-700 sm:col-span-2">{state.error}</p> : null}
+          {state.done ? <p role="status" className="text-sm text-emerald-800 sm:col-span-2">{state.done}</p> : null}
+          <div className="sm:col-span-2"><Button type="submit" variant="secondary" disabled={state.busy}>{state.busy ? "Saving…" : "Save hire type and scheduling"}</Button></div>
+        </form>
+      )}
+    </Card>
+  );
+}
+
 export function CaregiverDetailPage() {
   const { caregiverRecordId } = useParams<{ caregiverRecordId: string }>();
   const { hasPermission } = useOrganization();
@@ -323,6 +370,7 @@ export function CaregiverDetailPage() {
         <span className="text-sm text-slate-500">{c.caregiverCode}</span>
         <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${CAREGIVER_STATUS_BADGE[c.status]}`}>{CAREGIVER_STATUS_LABEL[c.status]}</span>
       </div>
+      <EmploymentCard c={c} canManage={canManage} />
       <SignInCard c={c} canManage={canManage} />
       <AssignmentsCard caregiverRecordId={c.caregiverRecordId} />
       {canManage ? <CaregiverDetails c={c} /> : null}

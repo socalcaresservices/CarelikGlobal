@@ -665,6 +665,33 @@ export const ROUTES: Record<string, Route> = {
     },
   },
 
+  // Hire type, scheduling and family relationship (0030): separate facts; none relaxes any visit rule.
+  "POST /v1/caregivers/{caregiverRecordId}/employment": {
+    mutating: true,
+    handle: async ({ event, tx }) => {
+      const body = parseBody(event.body, event.isBase64Encoded);
+      const key = idempotencyKey(event.headers);
+      const hire = body.hireType === null || body.hireType === undefined || body.hireType === "" ? null : oneOf(body.hireType, "hireType", ["direct_hire", "eor"] as const);
+      const mode = oneOf(body.schedulingMode, "schedulingMode", ["fixed", "flexible"] as const);
+      const [result] = await tx((db) => rows(db, "select * from ogevia_api.set_caregiver_employment($1, $2, $3, $4, $5, $6)",
+        [uuid(body.organizationId, "organizationId"), uuid(p(event).caregiverRecordId, "caregiverRecordId"), hire, mode, text(body.reason, "reason", 500), key]));
+      return { result };
+    },
+  },
+
+  "POST /v1/assignments/{assignmentId}/family-relationship": {
+    mutating: true,
+    handle: async ({ event, tx }) => {
+      const body = parseBody(event.body, event.isBase64Encoded);
+      const key = idempotencyKey(event.headers);
+      const rel = body.relationship === null || body.relationship === undefined || body.relationship === "" ? null
+        : oneOf(body.relationship, "relationship", ["none", "parent", "spouse_partner", "child", "sibling", "grandparent", "grandchild", "other_relative"] as const);
+      const [result] = await tx((db) => rows(db, "select * from ogevia_api.set_assignment_family_relationship($1, $2, $3, $4)",
+        [uuid(body.organizationId, "organizationId"), uuid(p(event).assignmentId, "assignmentId"), rel, key]));
+      return { result };
+    },
+  },
+
   // Continuity pack (0027): continuity.export (Administrator, manager). The agency is checked
   // server-side from the caller's membership; the pack is returned, never stored or logged here.
   "POST /v1/continuity/pack": {

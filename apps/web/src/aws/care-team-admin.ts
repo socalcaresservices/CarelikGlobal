@@ -24,6 +24,9 @@ export interface Caregiver {
   invitationSendCount?: number | null;
   firstSignedInAt?: string | null;
   plannedAssignments?: number;
+  /** 0030: separate facts. null hire type = not recorded (never guessed). */
+  hireType?: "direct_hire" | "eor" | null;
+  schedulingMode?: "fixed" | "flexible";
 }
 
 export const CAREGIVER_STATUS_LABEL: Record<CaregiverStatus, string> = {

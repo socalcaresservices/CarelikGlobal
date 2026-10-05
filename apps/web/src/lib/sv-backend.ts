@@ -106,6 +106,8 @@ export interface VisitReportRow {
   scheduled_starts_at?: string | null;
   scheduled_ends_at?: string | null;
   time_out_entered_by_manager?: boolean | null;
+  /** 0030 (AWS): the caregiver's scheduling arrangement; "flexible" visits need no shift. */
+  caregiver_scheduling_mode?: string | null;
 }
 
 export interface VisitCorrectionRow {
@@ -215,6 +217,15 @@ export interface BillingReviewRow {
   hasSignatureEvidence: boolean;
   isCorrection: boolean;
   reviewState: string;
+  /** AWS (0030); absent on older back ends. clientName is null without clients.names.read. */
+  clientCode?: string | null;
+  clientName?: string | null;
+  caregiverName?: string | null;
+  serviceName?: string | null;
+  timeIn?: string | null;
+  timeOut?: string | null;
+  caregiverSchedulingMode?: "fixed" | "flexible" | null;
+  scheduledShiftId?: string | null;
 }
 
 /** A human billing approval. rateCents/amountCents are null unless the caller holds billing.read (owner). */

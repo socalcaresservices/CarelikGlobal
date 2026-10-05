@@ -62,11 +62,15 @@ export function formatClockTime(value: string | Date): string {
 // visit recorded before the link existed - have no scheduled window.
 export const UNLINKED_VISIT_LABEL = "Unscheduled visit";
 
+export const FLEXIBLE_VISIT_LABEL = "Flexible visit — no shift required";
+
 export function formatScheduledWindow(
   startsAt: string | null | undefined,
   endsAt: string | null | undefined,
+  /** 0030: a flexible caregiver's visit without a shift is normal, not unscheduled. */
+  schedulingMode?: string | null,
 ): string {
-  if (!startsAt || !endsAt) return UNLINKED_VISIT_LABEL;
+  if (!startsAt || !endsAt) return schedulingMode === "flexible" ? FLEXIBLE_VISIT_LABEL : UNLINKED_VISIT_LABEL;
   return `${formatClockTime(startsAt)}–${formatClockTime(endsAt)}`;
 }
 

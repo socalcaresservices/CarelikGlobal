@@ -835,3 +835,20 @@ describe("billing rounding (0029) through the API", () => {
     expect((await call("GET /v1/billing-rounding/preview", cg, { query: { organizationId: w.orgA, from: today, to: today } })).body.units).toEqual([]);
   });
 });
+
+describe("hire type, scheduling and family relationship (0030) through the API", () => {
+  it("records EOR + flexible and a non-family relationship as separate facts; caregivers refused", async () => {
+    const rec = (await db.admin.query("select id from ogevia.caregiver_records where organization_id = $1 and linked_user_id = $2", [w.orgA, w.caregiverA2.userId])).rows[0].id;
+    const r = await call("POST /v1/caregivers/{caregiverRecordId}/employment", w.managerA, { path: { caregiverRecordId: rec }, body: { organizationId: w.orgA, hireType: "eor", schedulingMode: "flexible" } });
+    expect(r.status, JSON.stringify(r.body)).toBe(200);
+    expect(r.body.result).toMatchObject({ hireType: "eor", schedulingMode: "flexible" });
+    expect((await call("POST /v1/caregivers/{caregiverRecordId}/employment", w.managerA, { path: { caregiverRecordId: rec }, body: { organizationId: w.orgA, hireType: "family", schedulingMode: "flexible" } })).status).toBe(400);
+    expect((await call("POST /v1/caregivers/{caregiverRecordId}/employment", w.caregiverA2, { path: { caregiverRecordId: rec }, body: { organizationId: w.orgA, hireType: "eor", schedulingMode: "fixed" } })).status).toBe(403);
+    const list = await call("GET /v1/caregivers", w.managerA, { query: { organizationId: w.orgA } });
+    expect(list.body.caregivers.find((c: { caregiverRecordId: string }) => c.caregiverRecordId === rec)).toMatchObject({ hireType: "eor", schedulingMode: "flexible" });
+    const assignment = (await db.admin.query("select id from ogevia.caregiver_assignments where organization_id = $1 and caregiver_user_id = $2 limit 1", [w.orgA, w.caregiverA2.userId])).rows[0].id;
+    const fr = await call("POST /v1/assignments/{assignmentId}/family-relationship", w.managerA, { path: { assignmentId: assignment }, body: { organizationId: w.orgA, relationship: "none" } });
+    expect(fr.status, JSON.stringify(fr.body)).toBe(200);
+    expect(fr.body.result).toMatchObject({ familyRelationship: "none" });
+  });
+});

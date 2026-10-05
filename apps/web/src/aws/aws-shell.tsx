@@ -67,6 +67,7 @@ export function AwsShell({ children }: PropsWithChildren) {
   const agencyName = branding.data?.displayName ?? activeOrganization?.displayName ?? "Organization";
   const accent = branding.data?.accentColor ?? DEFAULT_ACCENT;
   const count = attention.data?.total ?? null;
+  const attentionState = attentionBadge(attention.isLoading, attention.isError, count);
 
   return (
     <div className="min-h-screen bg-slate-50" style={{ "--agency-accent": accent } as CSSProperties}>
@@ -117,13 +118,21 @@ export function AwsShell({ children }: PropsWithChildren) {
           ) : null}
           <div className="mt-3 flex flex-wrap items-center gap-2">
             {canSeeAttention ? (
+              // Green only when zero is CONFIRMED by the server; loading or a failed check stays neutral.
               <Link
                 to={EXCEPTIONS_PATH}
-                className="inline-flex min-h-[40px] items-center gap-2 rounded-lg border-2 border-red-700 px-3 text-sm font-bold uppercase tracking-wide text-red-700 hover:bg-red-50"
-                aria-label={count === null ? "Needs attention" : `Needs attention: ${count} ${count === 1 ? "visit" : "visits"}`}
+                className={cn(
+                  "inline-flex min-h-[40px] items-center gap-2 rounded-lg border-2 px-3 text-sm font-bold uppercase tracking-wide",
+                  attentionState.kind === "attention" && "border-red-700 text-red-700 hover:bg-red-50",
+                  attentionState.kind === "clear" && "border-emerald-700 text-emerald-800 hover:bg-emerald-50",
+                  (attentionState.kind === "checking" || attentionState.kind === "unknown") && "border-slate-400 text-slate-700 hover:bg-slate-50",
+                )}
+                aria-label={attentionState.aria}
               >
-                <span aria-hidden="true">⚠</span> Needs attention
-                {count !== null ? <span className="rounded-full bg-red-700 px-2 py-0.5 text-xs text-white">{count}</span> : null}
+                <span aria-hidden="true">{attentionState.icon}</span> {attentionState.label}
+                {attentionState.count !== null ? (
+                  <span className={cn("rounded-full px-2 py-0.5 text-xs text-white", attentionState.kind === "clear" ? "bg-emerald-700" : "bg-red-700")}>{attentionState.count}</span>
+                ) : null}
               </Link>
             ) : null}
             <button
@@ -172,4 +181,12 @@ export function AwsLanding({ home }: { home: React.ReactNode }) {
   if (role === "caregiver") return <Navigate to="/service-verification" replace />;
   if (hasPermission("visits.read")) return <>{home}</>;
   return <p className="text-sm text-slate-600">Your role has no Service Verification screens.</p>;
+}
+
+/** NEEDS ATTENTION badge: red with a count, green only for a confirmed zero, neutral while checking or when the check failed. */
+function attentionBadge(loading: boolean, failed: boolean, count: number | null) {
+  if (loading) return { kind: "checking" as const, label: "Checking…", icon: "…", count: null, aria: "Checking items that need attention" };
+  if (failed || count === null) return { kind: "unknown" as const, label: "Unable to check", icon: "?", count: null, aria: "Unable to check items that need attention" };
+  if (count > 0) return { kind: "attention" as const, label: "Needs attention", icon: "⚠", count, aria: `Needs attention: ${count} ${count === 1 ? "item" : "items"}` };
+  return { kind: "clear" as const, label: "All clear", icon: "✓", count: 0, aria: "All clear: 0 items need attention" };
 }

@@ -30,6 +30,42 @@ export interface Assignment {
   hasAuthorization: boolean;
   /** False while the caregiver has no sign-in or is not ready/active yet (planned). */
   grantsAccess?: boolean;
+  /** 0030: the caregiver's family relationship to THIS client; null = not recorded. */
+  familyRelationship?: FamilyRelationship | null;
+}
+type FamilyRelationship = "none" | "parent" | "spouse_partner" | "child" | "sibling" | "grandparent" | "grandchild" | "other_relative";
+const RELATIONSHIP_LABEL: Record<FamilyRelationship, string> = {
+  none: "Not a family member", parent: "Parent", spouse_partner: "Spouse or partner", child: "Child", sibling: "Sibling",
+  grandparent: "Grandparent", grandchild: "Grandchild", other_relative: "Other relative",
+};
+
+function RelationshipField({ a, canManage }: { a: Assignment; canManage: boolean }) {
+  const api = useAwsApi();
+  const refresh = useRefreshAssignments();
+  const { activeOrganizationId } = useOrganization();
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const id = `rel-${a.assignmentId.slice(0, 8)}`;
+  const current = a.familyRelationship ?? "";
+  if (!canManage) return <p className="mt-1 text-sm text-slate-700">Family relationship: {a.familyRelationship ? RELATIONSHIP_LABEL[a.familyRelationship] : "not recorded"}</p>;
+  async function change(value: string) {
+    setBusy(true); setError(null);
+    try {
+      await api.post(`/v1/assignments/${encodeURIComponent(a.assignmentId)}/family-relationship`, { organizationId: activeOrganizationId, relationship: value || null },
+        { idempotencyKey: newIdempotencyKey() });
+      await refresh();
+    } catch (cause) { setError(message(cause, "Not saved.")); } finally { setBusy(false); }
+  }
+  return (
+    <div className="mt-2">
+      <label htmlFor={id} className="block text-xs font-medium text-slate-600">Family relationship to this client</label>
+      <select id={id} value={current} disabled={busy} onChange={(e) => void change(e.target.value)} className={inputClass}>
+        <option value="">Not recorded</option>
+        {(Object.keys(RELATIONSHIP_LABEL) as FamilyRelationship[]).map((k) => <option key={k} value={k}>{RELATIONSHIP_LABEL[k]}</option>)}
+      </select>
+      {error ? <p role="alert" className="mt-1 text-sm text-red-700">{error}</p> : null}
+    </div>
+  );
 }
 
 const message = (cause: unknown, fallback: string) => (cause instanceof Error ? cause.message : fallback);
@@ -201,6 +237,7 @@ function AssignmentRow({ a, side, canManage, onDone }: { a: Assignment; side: "c
       {a.state !== "ended" && !a.hasAuthorization ? (
         <p className="mt-1 text-sm font-semibold text-red-700">No current authorization covers this client and service. Visits will be refused until one is added.</p>
       ) : null}
+      {a.state !== "ended" ? <RelationshipField a={a} canManage={canManage} /> : null}
       {canManage && a.state !== "ended" && !ending ? (
         <button type="button" className="mt-2 text-sm font-medium text-slate-800 underline" onClick={() => setEnding(true)}>{a.state === "upcoming" ? "Cancel" : "End"}</button>
       ) : null}

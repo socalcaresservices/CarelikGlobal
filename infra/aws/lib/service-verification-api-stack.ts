@@ -113,6 +113,9 @@ export const SERVICE_VERIFICATION_ROUTES: ReadonlyArray<{
   { method: apigw.HttpMethod.GET, path: "/v1/shifts/{shiftId}/coverage" },
   { method: apigw.HttpMethod.GET, path: "/v1/my-shifts" },
   { method: apigw.HttpMethod.POST, path: "/v1/my-shifts/{shiftId}/callout" },
+  // Hire type / scheduling (caregivers.manage) and family relationship (assignments.manage), 0030.
+  { method: apigw.HttpMethod.POST, path: "/v1/caregivers/{caregiverRecordId}/employment" },
+  { method: apigw.HttpMethod.POST, path: "/v1/assignments/{assignmentId}/family-relationship" },
   // Continuity pack (0027): continuity.export only; JWT like every staff route.
   { method: apigw.HttpMethod.POST, path: "/v1/continuity/pack" },
   { method: apigw.HttpMethod.GET, path: "/v1/continuity/status" },

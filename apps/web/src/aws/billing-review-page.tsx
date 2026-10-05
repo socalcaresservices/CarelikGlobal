@@ -1,8 +1,9 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { RoundingSection } from "./billing-rounding";
+import { APPROVAL_STATUS_CLASS, APPROVAL_STATUS_LABEL, formatClock, formatDuration, formatUsDate, visitScheduleLabel, type ApprovalStatus } from "./billing-format";
 import { Button, Card } from "@carelik/ui";
-import { confirmationMethodLabel, formatHours, formatVisitDate } from "@/lib/service-verification";
+import { confirmationMethodLabel, formatHours } from "@/lib/service-verification";
 import { useIsNarrow } from "@/lib/use-is-narrow";
 import { newIdempotencyKey, type BillingApprovalRow, type BillingReviewRow } from "@/lib/sv-backend";
 import { useServiceVerificationBackend } from "@/lib/sv-backend-supabase";
@@ -16,10 +17,6 @@ function monthBounds(now = new Date()) {
   return { from: `${y}-${pad(m + 1)}-01`, to: `${y}-${pad(m + 1)}-${pad(last)}` };
 }
 
-const REVIEW_LABEL: Record<string, string> = {
-  ready: "Billing ready",
-  needs_review: "Needs review",
-};
 
 const money = (cents: number) => (cents / 100).toLocaleString("en-US", { style: "currency", currency: "USD" });
 
@@ -36,7 +33,8 @@ type Pending =
  */
 export function BillingReviewPage() {
   const backend = useServiceVerificationBackend();
-  const { activeOrganizationId, hasPermission } = useOrganization();
+  const { activeOrganizationId, activeOrganization, hasPermission } = useOrganization();
+  const tz = (activeOrganization as { timezone?: string } | null)?.timezone || "America/Los_Angeles";
   const [{ from, to }, setRange] = useState(monthBounds);
   const [signature, setSignature] = useState<{ visitId: string; url: string | null; error: string | null } | null>(null);
   const canRead = hasPermission("billing.visits.read");
@@ -146,6 +144,37 @@ export function BillingReviewPage() {
                       })()}</>;
   }
 
+  function approvalStatus(r: BillingReviewRow): ApprovalStatus {
+    if (activeApproval.get(r.visitId)) return "approved";
+    return r.reviewState === "ready" ? "awaiting" : "review";
+  }
+  function statusPill(r: BillingReviewRow) {
+    const st = approvalStatus(r);
+    return <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${APPROVAL_STATUS_CLASS[st]}`}>{APPROVAL_STATUS_LABEL[st]}</span>;
+  }
+  function clientCell(r: BillingReviewRow) {
+    const code = r.clientCode ?? null;
+    return (
+      <div>
+        <p className="font-semibold text-slate-950">{r.clientName ?? code ?? "Client"}</p>
+        {r.clientName && code ? <p className="text-xs text-slate-500">{code}</p> : null}
+      </div>
+    );
+  }
+  const serviceText = (r: BillingReviewRow) => (r.serviceName ? `${r.serviceName} (${r.serviceCode})` : r.serviceCode);
+  const timesText = (r: BillingReviewRow) => (r.timeIn ? `${formatClock(r.timeIn, tz)} – ${formatClock(r.timeOut, tz)}` : "");
+  const whenText = (r: BillingReviewRow) => `${formatUsDate(r.serviceDate)}${r.timeIn ? `, ${timesText(r)}` : ""}`;
+  function detailsCell(r: BillingReviewRow) {
+    return (
+      <details className="mt-2 text-xs text-slate-600">
+        <summary className="cursor-pointer select-none text-slate-700 underline">Visit details</summary>
+        <p className="mt-1 font-mono break-all">Visit {r.visitNumber ?? "—"}{r.isCorrection ? " (corrected)" : ""}</p>
+        <p>{visitScheduleLabel(r.caregiverSchedulingMode, r.scheduledShiftId)}</p>
+        {r.authorizationVersion ? <p>Authorization version {r.authorizationVersion}</p> : null}
+      </details>
+    );
+  }
+
   if (!canRead) return <p className="text-sm text-slate-600">You do not have access to billing review.</p>;
 
   const rows = query.data ?? [];
@@ -178,18 +207,17 @@ export function BillingReviewPage() {
           {rows.map((r) => (
             <li key={r.visitId} className="rounded-xl border border-slate-200 bg-white p-3">
               <div className="flex flex-wrap items-start justify-between gap-2">
-                <div>
-                  <p className="font-semibold text-slate-950">{formatVisitDate(`${r.serviceDate}T12:00:00Z`)} · {r.serviceCode}</p>
-                  <p className="font-mono text-[11px] text-slate-500">Visit {r.visitNumber ?? "—"}{r.isCorrection ? " (corrected)" : ""}</p>
-                </div>
-                <span className={r.reviewState === "ready" ? "rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-medium text-emerald-800" : "rounded-full bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-900"}>
-                  {REVIEW_LABEL[r.reviewState] ?? r.reviewState}
-                </span>
+                {clientCell(r)}
+                {statusPill(r)}
               </div>
-              <p className="mt-1 text-sm text-slate-800">Worked {formatHours(r.workedMinutes ?? 0)} h · Billable {formatHours(r.billableMinutes ?? 0)} h</p>
+              <p className="mt-2 text-sm text-slate-800"><span className="text-slate-500">Caregiver:</span> {r.caregiverName ?? "—"}</p>
+              <p className="text-sm text-slate-800"><span className="text-slate-500">Service:</span> {serviceText(r)}</p>
+              <p className="text-sm text-slate-800"><span className="text-slate-500">Visit:</span> {whenText(r)}</p>
+              <p className="text-sm text-slate-800"><span className="text-slate-500">Worked:</span> {formatDuration(r.workedMinutes)} · <span className="text-slate-500">Billable:</span> {formatDuration(r.billableMinutes)}</p>
               <div className="mt-2 text-sm">{evidenceCell(r)}</div>
               <div className="mt-2 text-sm">{approvalCell(r)}</div>
               {canSeeMoney ? <p className="mt-1 text-sm text-slate-700">Amount: {amountCell(r)}</p> : null}
+              {detailsCell(r)}
             </li>
           ))}
         </ul>
@@ -199,29 +227,31 @@ export function BillingReviewPage() {
           <table className="w-full text-left text-sm">
             <thead className="bg-slate-50 text-xs uppercase text-slate-500">
               <tr>
-                <th scope="col" className="px-3 py-2">Visit</th>
-                <th scope="col" className="px-3 py-2">Date</th>
+                <th scope="col" className="px-3 py-2">Client</th>
+                <th scope="col" className="px-3 py-2">Caregiver</th>
                 <th scope="col" className="px-3 py-2">Service</th>
+                <th scope="col" className="px-3 py-2">Date and time</th>
                 <th scope="col" className="px-3 py-2">Worked</th>
                 <th scope="col" className="px-3 py-2">Billable</th>
-                <th scope="col" className="px-3 py-2">State</th>
                 <th scope="col" className="px-3 py-2">Evidence</th>
                 <th scope="col" className="px-3 py-2">Approval</th>
                 {canSeeMoney ? <th scope="col" className="px-3 py-2">Amount</th> : null}
+                <th scope="col" className="px-3 py-2">Details</th>
               </tr>
             </thead>
             <tbody>
               {rows.map((r) => (
-                <tr key={r.visitId} className="border-t border-slate-100">
-                  <td className="px-3 py-2">{r.visitNumber ?? "—"}{r.isCorrection ? " (corrected)" : ""}</td>
-                  <td className="px-3 py-2">{formatVisitDate(`${r.serviceDate}T12:00:00Z`)}</td>
-                  <td className="px-3 py-2">{r.serviceCode}</td>
-                  <td className="px-3 py-2">{formatHours(r.workedMinutes ?? 0)} h</td>
-                  <td className="px-3 py-2">{formatHours(r.billableMinutes ?? 0)} h</td>
-                  <td className="px-3 py-2">{REVIEW_LABEL[r.reviewState] ?? r.reviewState}</td>
+                <tr key={r.visitId} className="border-t border-slate-100 align-top">
+                  <td className="px-3 py-2">{clientCell(r)}<div className="mt-1">{statusPill(r)}</div></td>
+                  <td className="px-3 py-2">{r.caregiverName ?? "—"}</td>
+                  <td className="px-3 py-2">{serviceText(r)}</td>
+                  <td className="px-3 py-2 whitespace-nowrap">{formatUsDate(r.serviceDate)}<br /><span className="text-slate-600">{timesText(r)}</span></td>
+                  <td className="px-3 py-2 whitespace-nowrap">{formatDuration(r.workedMinutes)}</td>
+                  <td className="px-3 py-2 whitespace-nowrap">{formatDuration(r.billableMinutes)}</td>
                   <td className="px-3 py-2">{evidenceCell(r)}</td>
                   <td className="px-3 py-2">{approvalCell(r)}</td>
                   {canSeeMoney ? <td className="px-3 py-2">{amountCell(r)}</td> : null}
+                  <td className="px-3 py-2">{detailsCell(r)}</td>
                 </tr>
               ))}
             </tbody>

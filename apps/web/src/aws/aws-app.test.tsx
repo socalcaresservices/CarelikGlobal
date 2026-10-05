@@ -69,7 +69,7 @@ function fakeApi(role: "caregiver" | "manager" | "organization_owner", opts: { d
       case "GET /v1/visits":
         return json(200, { visits: [{ id: VISIT, visitNumber: "V-1", clientId: CLIENT, clientCode: "C-104", caregiverUserId: "u1", caregiverName: "CAREGIVER_A1", serviceId: SERVICE, serviceName: "Respite Care", serviceDate: "2026-09-30", timeIn: "2026-09-30T17:00:00Z", timeOut: "2026-09-30T19:00:00Z", workedMinutes: 120, verifiedMinutes: 120, billableMinutes: 120, status: "signed", authorizationStatus: "within_authorization", signedAt: "2026-09-30T19:01:00Z", originalVisitId: null, isCorrected: false, monthToDateBeforeMinutes: 0, monthToDateAfterMinutes: 120, remainingMinutes: 5880 }] });
       case "GET /v1/billing-review":
-        return json(200, { visits: [{ visitId: VISIT, visitNumber: "V-1", serviceCode: "862", serviceDate: "2026-09-30", workedMinutes: 120, verifiedMinutes: 120, billableMinutes: 120, visitStatus: "signed", authorizationStatus: "within_authorization", authorizationVersion: 1, confirmationMethod: "draw", hasSignatureEvidence: true, isCorrection: false, reviewState: "ready" }] });
+        return json(200, { visits: [{ visitId: VISIT, visitNumber: "V-1", serviceCode: "862", serviceDate: "2026-09-30", workedMinutes: 120, verifiedMinutes: 120, billableMinutes: 120, visitStatus: "signed", authorizationStatus: "within_authorization", authorizationVersion: 1, confirmationMethod: "draw", hasSignatureEvidence: true, isCorrection: false, reviewState: "ready", clientCode: "C-104", clientName: "Synthetic Person", caregiverName: "Synthetic Caregiver", serviceName: "Respite", timeIn: "2026-09-30T16:05:00Z", timeOut: "2026-09-30T18:05:00Z", caregiverSchedulingMode: "flexible", scheduledShiftId: null }] });
       case "GET /v1/clients/directory":
         return json(200, { clients: role === "caregiver" ? [] : [{ clientId: CLIENT, clientCode: "C-104", caregiverDisplayCode: null, status: "active", legalFirstName: "Synthetic", legalLastName: "Person" }] });
       case "GET /v1/branding/logo":
@@ -190,7 +190,7 @@ describe("AWS build: manager review and billing-review data", () => {
     expect(await screen.findByText("MANAGER VIEW")).toBeInTheDocument();
     expect(await screen.findByText("Morgan Manager")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Sign out" })).toBeInTheDocument();
-    const attention = await screen.findByRole("link", { name: "Needs attention: 3 visits" });
+    const attention = await screen.findByRole("link", { name: "Needs attention: 3 items" });
     expect(attention.getAttribute("href")).toBe("/service-verification/reports?view=exceptions");
     expect(attention.className).toMatch(/font-bold/);
     expect(attention.className).toMatch(/uppercase/);
@@ -240,7 +240,19 @@ describe("AWS build: manager review and billing-review data", () => {
 
   it("billing review shows Billing Ready (not billed) and the audited signature view", async () => {
     const { api } = renderAws("/billing-review", "manager");
-    expect(await screen.findByText("Billing ready")).toBeInTheDocument();
+    // Client name first, short code beneath; caregiver; service name and code; MM/DD/YYYY with AM/PM; readable durations.
+    expect(await screen.findByText("Synthetic Person")).toBeInTheDocument();
+    expect(screen.getAllByText("C-104").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Awaiting approval").length).toBeGreaterThan(0);
+    expect(screen.queryByText("Billing ready")).toBeNull();
+    expect(screen.getAllByText(/Synthetic Caregiver/).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/Respite \(862\)/).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/09\/30\/2026/).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/9:05 AM – 11:05 AM/).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/2 h \(2\.00 hr\)/).length).toBeGreaterThan(0);
+    // The long visit reference sits in the expandable details, with the schedule basis.
+    expect(screen.getAllByText("Visit details").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Flexible visit — no shift required").length).toBeGreaterThan(0);
     expect(screen.getByText(/approval is not submission/)).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "View signature" }));
     const img = await screen.findByAltText("Client signature for the selected visit");

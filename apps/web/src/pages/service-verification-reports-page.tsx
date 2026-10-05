@@ -2278,7 +2278,7 @@ export function ServiceVerificationReportsPage() {
                         </p>
                         <p className="text-xs text-slate-500">
                           {row.scheduled_starts_at ? "Scheduled " : ""}
-                          {formatScheduledWindow(row.scheduled_starts_at, row.scheduled_ends_at)}
+                          {formatScheduledWindow(row.scheduled_starts_at, row.scheduled_ends_at, row.caregiver_scheduling_mode)}
                         </p>
                         <p className="mt-1 text-sm font-medium text-slate-900">
                           Worked {formatDuration(row.worked_minutes)} · Billable {formatDuration(row.billable_minutes)}
@@ -2381,7 +2381,7 @@ export function ServiceVerificationReportsPage() {
                                 {formatTimeRange(row.time_in, row.time_out)}
                                 <p className="font-sans text-slate-400">
                                   {row.scheduled_starts_at ? "Scheduled " : ""}
-                                  {formatScheduledWindow(row.scheduled_starts_at, row.scheduled_ends_at)}
+                                  {formatScheduledWindow(row.scheduled_starts_at, row.scheduled_ends_at, row.caregiver_scheduling_mode)}
                                 </p>
                               </td>
                             ) : null}
@@ -2529,7 +2529,7 @@ export function ServiceVerificationReportsPage() {
                     <span className="text-slate-400">
                       · {row.caregiver_name} · Time In {formatDateTime(row.time_in)}
                       {row.scheduled_starts_at
-                        ? ` · Scheduled ${formatScheduledWindow(row.scheduled_starts_at, row.scheduled_ends_at)}`
+                        ? ` · Scheduled ${formatScheduledWindow(row.scheduled_starts_at, row.scheduled_ends_at, row.caregiver_scheduling_mode)}`
                         : ""}
                     </span>
                   </span>
