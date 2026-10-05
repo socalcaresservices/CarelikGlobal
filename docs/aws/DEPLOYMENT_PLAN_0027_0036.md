@@ -234,3 +234,16 @@ the S3 package):**
 **Owner steps:**
 1. `release-0036-check6-diagnose.sh` (read-only): the field list.
 2. `release-0036-verify-bootstrap.sh`: the read-only rerun.
+
+**Owner-run diagnosis (read-only), 10/05/2026 10:10 UTC** (saved in
+`~/ogevia-release-0036-run/check6-diagnosis-20261005T101055Z.txt`):
+- Exactly one field differs: `CodeSize`, 244,853 → 248,020 bytes.
+- `RuntimeVersionConfig` is unchanged (update mode Auto).
+- State is Active; LastUpdateStatus is Successful.
+- The live code is exactly the deployed package (size 248,020, SHA-256
+  `p1YuHmva…U7s=`). The live template references
+  `b410e5994d8e…376a.zip`, the same key the clean rebuild of `7b1236d`
+  produces.
+
+**Conclusion:** VERIFIED comparison defect. There was no unapproved change.
+Next: the read-only rerun (`release-0036-verify-bootstrap.sh`).
