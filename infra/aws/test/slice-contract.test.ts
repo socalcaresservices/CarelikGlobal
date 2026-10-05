@@ -24,7 +24,7 @@ describe("API routes == handler routes; JWT everywhere except the exact approved
     expect(SERVICE_VERIFICATION_ROUTES.map((r) => `${r.method} ${r.path}`).sort()).toEqual(ROUTE_KEYS);
   });
 
-  it("every synthesized route uses the JWT authorizer, except exactly the 7 approved token-link routes", () => {
+  it("every synthesized route uses the JWT authorizer, except exactly the 10 approved token-link routes (8 care links + 2 visit-confirmation links, 0036)", () => {
     const routes = Object.values(api.findResources("AWS::ApiGatewayV2::Route"));
     expect(routes).toHaveLength(ROUTE_KEYS.length);
     const anonymous: string[] = [];
@@ -39,11 +39,11 @@ describe("API routes == handler routes; JWT everywhere except the exact approved
       }
     }
     expect(anonymous.sort()).toEqual([...APPROVED_PUBLIC_ROUTE_KEYS].sort());
-    expect(APPROVED_PUBLIC_ROUTE_KEYS).toHaveLength(8);
+    expect(APPROVED_PUBLIC_ROUTE_KEYS).toHaveLength(10);
   });
 
   it("approved public routes are all opaque-token link routes under /v1/public/", () => {
-    for (const key of APPROVED_PUBLIC_ROUTE_KEYS) expect(key).toMatch(/^(GET|POST) \/v1\/public\/care-(portals|offers)\/\{token\}/);
+    for (const key of APPROVED_PUBLIC_ROUTE_KEYS) expect(key).toMatch(/^(GET|POST) \/v1\/public\/(care-portals|care-offers|visit-confirmations)\/\{token\}/);
   });
 
   it("the handler skips Cognito for exactly the approved routes (stack, handler and allowlist agree)", () => {

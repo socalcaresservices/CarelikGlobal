@@ -64,6 +64,8 @@ describe("SCHEMA: migration chain", () => {
       "0032",
       "0033",
       "0034",
+      "0035",
+      "0036",
     ]);
   });
 
@@ -136,9 +138,12 @@ describe("SCHEMA: migration chain", () => {
       "shift_series_skipped_dates",
       "shifts",
       "staff_documents",
+      "visit_confirmation_requests",
       "visit_confirmations",
       "visit_corrections",
       "visit_evidence",
+      "visit_late_confirmation_reviews",
+      "visit_late_confirmations",
       "visit_review_decisions",
     ]);
   });

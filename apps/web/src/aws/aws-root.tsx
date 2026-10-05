@@ -30,6 +30,7 @@ import { MyShiftsPage, SchedulePage } from "./schedule-page";
 import { ServicesPage } from "./services-page";
 import { BrandingSettingsPage, ProfilePage } from "./workspace-settings-pages";
 import { PublicCareOfferPage, PublicCareRequestPage } from "./care-public-pages";
+import { ConfirmVisitPage } from "./confirm-visit-page";
 
 function AwsBackendProvider({ api, children }: PropsWithChildren<{ api: AwsApiClient }>) {
   const { organizations } = useOrganization();
@@ -55,6 +56,7 @@ export function AwsRoutes({ api, publicApi }: { api: AwsApiClient; publicApi: Aw
       {/* Token links: the token is in the URL fragment (#...), never the path. */}
       <Route path="/care" element={<PublicCareRequestPage api={publicApi} />} />
       <Route path="/care-offer" element={<PublicCareOfferPage api={publicApi} />} />
+      <Route path="/confirm-visit" element={<ConfirmVisitPage api={publicApi} />} />
       <Route
         path="*"
         element={

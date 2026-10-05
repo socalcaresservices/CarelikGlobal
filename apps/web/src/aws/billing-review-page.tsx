@@ -2,7 +2,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import { RoundingSection } from "./billing-rounding";
-import { APPROVAL_STATUS_CLASS, APPROVAL_STATUS_LABEL, formatClock, formatDuration, formatUsDate, visitScheduleLabel, type ApprovalStatus } from "./billing-format";
+import { APPROVAL_STATUS_CLASS, APPROVAL_STATUS_LABEL, approvableMinutes, formatClock, formatDuration, formatUsDate, visitScheduleLabel, type ApprovalStatus } from "./billing-format";
 import { Button, Card } from "@carelik/ui";
 import { confirmationMethodLabel, formatHours } from "@/lib/service-verification";
 import { useIsNarrow } from "@/lib/use-is-narrow";
@@ -63,7 +63,7 @@ export function BillingReviewPage() {
     if (!pending || pending.busy) return;
     if (pending.kind === "approve") {
       const minutes = Number(pending.minutes);
-      const max = pending.row.billableMinutes ?? 0;
+      const max = approvableMinutes(pending.row);
       if (!Number.isInteger(minutes) || minutes < 0 || minutes > max) {
         setPending({ ...pending, error: `Enter whole minutes from 0 to ${max}.` });
         return;
@@ -140,7 +140,7 @@ export function BillingReviewPage() {
                       }
                       if (!canApprove) return <span className="text-slate-500">Not approved</span>;
                       return (
-                        <Button type="button" onClick={() => { setNotice(null); setPending({ kind: "approve", row: r, minutes: String(r.billableMinutes ?? 0), notes: "", key: newIdempotencyKey(), busy: false, error: null }); }}>
+                        <Button type="button" onClick={() => { setNotice(null); setPending({ kind: "approve", row: r, minutes: String(approvableMinutes(r)), notes: "", key: newIdempotencyKey(), busy: false, error: null }); }}>
                           Approve
                         </Button>
                       );
@@ -157,6 +157,8 @@ export function BillingReviewPage() {
   function approvalStatus(r: BillingReviewRow): ApprovalStatus {
     if (activeApproval.get(r.visitId)) return "approved";
     if (r.reviewState === "ready" || r.reviewState === "reviewed_eligible") return "awaiting";
+    if (r.reviewState === "awaiting_signature") return "awaiting_signature";
+    if (r.reviewState === "late_response_to_review") return "late_response";
     return r.reviewState === "reviewed_not_billable" ? "not_billable" : "review";
   }
   function statusPill(r: BillingReviewRow) {
@@ -276,7 +278,7 @@ export function BillingReviewPage() {
               <>
                 <p className="text-sm font-medium text-slate-900">Approve visit {pending.row.visitNumber ?? ""} for billing</p>
                 <p className="text-xs text-slate-600">
-                  Billable: {pending.row.billableMinutes ?? 0} min ({formatHours(pending.row.billableMinutes ?? 0)} h). You can approve less, never more.
+                  {pending.row.reviewDecision === "accept_late_confirmation" ? "Accepted from a late confirmation" : "Billable"}: {approvableMinutes(pending.row)} min ({formatHours(approvableMinutes(pending.row))} h). You can approve less, never more.
                   Approval records your name and the time. It does not submit anything to a payer.
                 </p>
                 <label className="block text-xs font-medium text-slate-600">

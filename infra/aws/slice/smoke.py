@@ -52,6 +52,8 @@ APPROVED_PUBLIC_ROUTE_KEYS = sorted([
     "GET /v1/public/care-offers/{token}",
     "POST /v1/public/care-offers/{token}/respond",
     "POST /v1/public/care-offers/{token}/cancel-assignment",
+    "POST /v1/public/visit-confirmations/{token}/open",
+    "POST /v1/public/visit-confirmations/{token}/respond",
 ])
 
 RESULTS = []

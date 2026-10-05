@@ -12,7 +12,7 @@ export interface Occurrence {
   usedMinutes: number | null;
   reservedMinutes: number | null;
   seriesMinutesBefore: number | null;
-  outcome: "ok" | "exceeds_authorization" | "no_authorization" | "caregiver_conflict" | "already_started";
+  outcome: "ok" | "exceeds_authorization" | "no_authorization" | "caregiver_conflict" | "already_started" | "time_does_not_exist" | "time_occurs_twice";
 }
 export interface SeriesRow {
   seriesId: string;
@@ -42,6 +42,8 @@ export const OUTCOME_LABEL: Record<Occurrence["outcome"], string> = {
   no_authorization: "No authorization covers this date",
   caregiver_conflict: "Caregiver already has a shift then",
   already_started: "Already started",
+  time_does_not_exist: "This time does not exist that day (clocks move forward)",
+  time_occurs_twice: "This time happens twice that day (clocks move back)",
 };
 export const monthLabel = (iso: string) => new Date(`${iso.slice(0, 10)}T12:00:00Z`).toLocaleDateString("en-US", { month: "long", year: "numeric", timeZone: "UTC" });
 export const hhmm = (t: string) => t.slice(0, 5);

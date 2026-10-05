@@ -57,6 +57,10 @@ export interface AttentionSummary {
   documentsToReview?: number | null;
   /** Informational reminder; not part of the total. */
   documentsExpiring?: number | null;
+  /** 0036: visits waiting for a requested late confirmation (reminder, not counted). */
+  awaitingSignature?: number | null;
+  /** 0036: late confirmations received and waiting for review (counted). */
+  lateResponsesToReview?: number | null;
 }
 
 export interface UtilisationRow {

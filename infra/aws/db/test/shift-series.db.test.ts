@@ -63,9 +63,9 @@ describe("occurrences from the real calendar", () => {
     // Spring forward, Sunday 03/14/2027: 1:00–4:00 AM is 2 real hours (2:00–3:00 does not exist).
     const spring = (await db.admin.query("select local_date::text d, minutes from ogevia.series_occurrences('America/Los_Angeles', '{0}', '01:00', '04:00', '2027-03-07', '2027-03-21')")).rows;
     expect(spring).toEqual([{ d: "2027-03-07", minutes: 180 }, { d: "2027-03-14", minutes: 120 }, { d: "2027-03-21", minutes: 180 }]);
-    // Fall back, Sunday 11/01/2026: a start inside the repeated hour (1:00 AM) is read as standard time
-    // (PostgreSQL's rule, same as single shifts in 0026), so 1:00–3:00 AM reserves 2 h, not 3.
-    // Documented limitation: reservations only; worked time comes from the server clock.
+    // Fall back, Sunday 11/01/2026: series_occurrences itself reads 1:00 AM with PostgreSQL's rule
+    // (standard time). Since 0035 such a date is never scheduled silently: series_evaluate flags it
+    // time_occurs_twice and single shifts refuse it (dst-local-times.db.test.ts).
     const fall = (await db.admin.query("select local_date::text d, minutes from ogevia.series_occurrences('America/Los_Angeles', '{0}', '01:00', '03:00', '2026-11-01', '2026-11-01')")).rows;
     expect(fall).toEqual([{ d: "2026-11-01", minutes: 120 }]);
   });

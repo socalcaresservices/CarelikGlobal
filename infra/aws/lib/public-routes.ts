@@ -1,7 +1,13 @@
 /**
  * The ONLY API routes allowed without the Cognito JWT authorizer.
  *
- * Each is a client/family care-request portal link or a caregiver offer link.
+ * Each is a client/family care-request portal link, a caregiver offer link, or
+ * (0036, owner-approved 2026-10-05) a late visit-confirmation link. The visit
+ * confirmation link additionally needs a 6-digit one-time code that staff give
+ * by phone to a recipient they verified; the database keeps only
+ * SHA-256(token hash + ":" + code), counts wrong codes and locks the link after 5
+ * (ogevia.confirmation_request_check). Tests:
+ * infra/aws/db/test/signature-recovery.db.test.ts.
  * The caller proves possession of a 256-bit random token carried in the
  * {token} path segment:
  * - the API accepts only 64 hex characters and sends PostgreSQL only SHA-256(token);
@@ -24,6 +30,8 @@ export const APPROVED_PUBLIC_ROUTE_KEYS: readonly string[] = [
   "GET /v1/public/care-offers/{token}",
   "POST /v1/public/care-offers/{token}/respond",
   "POST /v1/public/care-offers/{token}/cancel-assignment",
+  "POST /v1/public/visit-confirmations/{token}/open",
+  "POST /v1/public/visit-confirmations/{token}/respond",
 ];
 
 export const PUBLIC_ROUTE_ACKNOWLEDGEMENT =

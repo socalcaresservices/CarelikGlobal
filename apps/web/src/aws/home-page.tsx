@@ -38,6 +38,9 @@ export function AwsHomePage() {
         { label: "Missing Time Out", count: a.missingTimeOut, to: EXCEPTIONS_PATH, hint: "Still open past the shift end, or 12 h without a schedule" },
         { label: "Not confirmed", count: a.notConfirmed, to: EXCEPTIONS_PATH, hint: "Ended over 60 min ago, no client confirmation yet" },
         { label: "Needs review", count: a.needsReview, to: EXCEPTIONS_PATH, hint: "Unconfirmed or over the authorization; open each visit to review it" },
+        ...(a.lateResponsesToReview !== null && a.lateResponsesToReview !== undefined
+          ? [{ label: "Signatures received to review", count: a.lateResponsesToReview, to: "/billing-review", hint: "A client or representative answered a confirmation request; accept or reject it" }]
+          : []),
         ...(a.uncoveredShifts !== null && a.uncoveredShifts !== undefined
           ? [{ label: "Shifts without a caregiver", count: a.uncoveredShifts, to: "/schedule", hint: "Upcoming shifts that are open or called out and not replaced" }]
           : []),
@@ -51,6 +54,7 @@ export function AwsHomePage() {
     : [];
   const reminders = a
     ? [
+        ...(a.awaitingSignature ? [{ label: "Waiting for a signature", count: a.awaitingSignature, to: "/billing-review", hint: "A confirmation was requested; the visit returns here if the request expires" }] : []),
         ...(a.documentsExpiring ? [{ label: "Documents expiring soon", count: a.documentsExpiring, to: "/documents", hint: "Within the agency's reminder days; not yet a problem" }] : []),
         ...(a.billingReadyUnapproved !== null
           ? [{ label: "Billing ready, not approved", count: a.billingReadyUnapproved, to: "/billing-review", hint: "Approval is a human step; it is not submission" }]

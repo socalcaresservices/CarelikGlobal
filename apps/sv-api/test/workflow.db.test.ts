@@ -2,7 +2,7 @@
 // (local, disposable) PostgreSQL migrated from zero. SYNTHETIC data only.
 import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { ageVisit, createTestDb, freshClient, seedWorld, signedVisit, type Actor, type TestDb, type World } from "../../../infra/aws/db/test/harness";
+import { ageVisit, api, createTestDb, endedVisit, freshClient, seedWorld, signedVisit, type Actor, type TestDb, type World } from "../../../infra/aws/db/test/harness";
 import { MemoryEvidenceStore, signatureObjectKey } from "../src/evidence";
 import { createHandler, type LogRecord } from "../src/handler";
 import { MemoryIdentityAdmin } from "../src/identity";
@@ -929,5 +929,100 @@ describe("recurring shifts (0034) through the API", () => {
     expect(perMonth.reduce((t: number, r: { n: number }) => t + r.n, 0)).toBe(made.body.series.reservedMinutes);
     const list = await call("GET /v1/shift-series", w.managerA, { query: { organizationId: w.orgA } });
     expect(list.body.series.find((s: { seriesId: string }) => s.seriesId === made.body.series.seriesId)).toMatchObject({ status: "active" });
+  });
+});
+
+describe("missing-signature recovery (0036) through the API", () => {
+  /** A new caregiver (no other open visit) whose visit ends "unable to confirm". */
+  async function noSignerVisit(minutes = 45) {
+    const sub = randomUUID();
+    const userId = (await db.admin.query("insert into ogevia.app_users (cognito_sub, display_name) values ($1, 'Synthetic Robin Caregiver') returning id", [sub])).rows[0].id;
+    await db.admin.query("insert into ogevia.organization_memberships (organization_id, user_id, role, status) values ($1,$2,'caregiver','active')", [w.orgA, userId]);
+    await db.admin.query("insert into ogevia.caregiver_records (organization_id, linked_user_id, caregiver_code, first_name, last_name) values ($1,$2,$3,'Synthetic','Robin')", [w.orgA, userId, "CG-" + sub.slice(0, 6)]);
+    const cg = { userId, sub };
+    const c = await freshClient(db, w, cg, 600, w.orgA, { before: 40, after: 40 });
+    const visit = await endedVisit(db, cg, w, minutes, w.orgA, c.client, c.service);
+    await api.confirm(db, cg, visit, { method: "unable_to_confirm", reason: "Parent not home (synthetic)" });
+    return { visit, cg };
+  }
+  const pub = async (routeKey: string, token: string, body: unknown) => {
+    const r = await handler(event(routeKey, { sub: null, path: { token }, body }));
+    return { status: r.statusCode, body: JSON.parse(r.body) as Record<string, any> };
+  };
+
+  it("link: created once with a code; wrong code counted; recipient confirms by drawing; manager accepts; Administrator approves within the accepted minutes", async () => {
+    const { visit, cg } = await noSignerVisit(45);
+    const body = { channel: "link", recipientName: "Synthetic Parent Kim", recipientRole: "parent", identityCheck: "Called the number on file; confirmed name", expiresInDays: 7 };
+    expect((await call("POST /v1/visits/{visitId}/confirmation-requests", cg, { path: { visitId: visit }, body })).status).toBe(403);
+    expect((await call("POST /v1/visits/{visitId}/confirmation-requests", w.managerB, { path: { visitId: visit }, body })).status).toBe(404);
+    const key = randomUUID();
+    const made = await call("POST /v1/visits/{visitId}/confirmation-requests", w.managerA, { path: { visitId: visit }, body, key });
+    expect(made.status, JSON.stringify(made.body)).toBe(201);
+    expect(made.body.token).toMatch(/^[0-9a-f]{64}$/);
+    expect(made.body.code).toMatch(/^\d{6}$/);
+    // A retry with the same key returns the same request; the link is not shown again.
+    const again = await call("POST /v1/visits/{visitId}/confirmation-requests", w.managerA, { path: { visitId: visit }, body, key });
+    expect(again.body).toMatchObject({ requestId: made.body.requestId, token: null, code: null, linkAlreadyShown: true });
+    const token = made.body.token as string;
+    const code = made.body.code as string;
+    const wrongCode = code === "000000" ? "111111" : "000000";
+
+    expect(await pub("POST /v1/public/visit-confirmations/{token}/open", token, { code: wrongCode })).toMatchObject({ status: 422, body: { error: { code: "wrong_code" } } });
+    expect((await pub("POST /v1/public/visit-confirmations/{token}/open", "f".repeat(64), { code })).status).toBe(404);
+    expect((await pub("POST /v1/public/visit-confirmations/{token}/open", token, { code: "12ab" })).status).toBe(400);
+    const opened = await pub("POST /v1/public/visit-confirmations/{token}/open", token, { code });
+    expect(opened.status, JSON.stringify(opened.body)).toBe(200);
+    expect(opened.body.visit).toMatchObject({ recipientName: "Synthetic Parent Kim", workedMinutes: 45, caregiverFirstName: "Synthetic", attemptsLeft: 4 });
+    expect(opened.body.visit.organizationId).toBeUndefined();
+
+    const responseKey = randomUUID();
+    const respond = { code, outcome: "confirmed", method: "draw", signerName: "Synthetic Parent Kim", attested: true, signaturePng: syntheticPng().toString("base64"), responseKey };
+    const r1 = await pub("POST /v1/public/visit-confirmations/{token}/respond", token, respond);
+    expect(r1.status, JSON.stringify(r1.body)).toBe(201);
+    // A network retry with the same response key is answered the same way, and stores nothing new.
+    const objectsBefore = evidence.objects.size;
+    expect((await pub("POST /v1/public/visit-confirmations/{token}/respond", token, respond)).status).toBe(201);
+    expect(evidence.objects.size).toBe(objectsBefore);
+    expect((await pub("POST /v1/public/visit-confirmations/{token}/respond", token, { ...respond, responseKey: randomUUID() })).status).toBe(404);
+
+    const list = await call("GET /v1/visits/{visitId}/confirmation-requests", w.managerA, { path: { visitId: visit } });
+    const resp = list.body.requests[0];
+    expect(resp).toMatchObject({ state: "answered", outcome: "confirmed", method: "draw", hasEvidence: true });
+    expect(JSON.stringify(list.body)).not.toContain(token);
+    const file = await call("GET /v1/late-confirmations/{lateConfirmationId}/evidence", w.managerA, { path: { lateConfirmationId: resp.lateConfirmationId } });
+    expect(file.status).toBe(200);
+    expect(file.body.contentType).toBe("image/png");
+    expect((await call("GET /v1/late-confirmations/{lateConfirmationId}/evidence", w.managerB, { path: { lateConfirmationId: resp.lateConfirmationId } })).status).toBe(404);
+
+    const rv = await call("POST /v1/late-confirmations/{lateConfirmationId}/review", w.managerA, { path: { lateConfirmationId: resp.lateConfirmationId }, body: { outcome: "accepted", reason: "Matches the schedule (synthetic)" } });
+    expect(rv.status, JSON.stringify(rv.body)).toBe(200);
+    expect(rv.body.review).toMatchObject({ acceptedMinutes: 45, cappedByAuthorization: false });
+    expect((await call("POST /v1/visits/{visitId}/billing-approval", w.ownerA, { path: { visitId: visit }, body: { approvedMinutes: 46 } })).status).toBe(422);
+    expect((await call("POST /v1/visits/{visitId}/billing-approval", w.ownerA, { path: { visitId: visit }, body: { approvedMinutes: 45 } })).status).toBe(201);
+    // Neither the token nor the code appears in any log line.
+    const logged = JSON.stringify(logs);
+    expect(logged).not.toContain(token);
+    expect(logged).not.toContain(`"${code}"`);
+  });
+
+  it("paper: authority is checked before the file is stored; the form is recorded and reviewed", async () => {
+    const { visit } = await noSignerVisit(30);
+    const made = await call("POST /v1/visits/{visitId}/confirmation-requests", w.managerA, { path: { visitId: visit }, body: { channel: "paper", recipientName: "Synthetic Guardian Ortiz", recipientRole: "guardian", expiresInDays: 14 } });
+    expect(made.status, JSON.stringify(made.body)).toBe(201);
+    expect(made.body.token).toBeNull();
+    const pdf = Buffer.from("%PDF-1.4 synthetic paper form").toString("base64");
+    const today = (await db.admin.query("select ogevia.organization_local_date($1, now())::text d", [w.orgA])).rows[0].d;
+    const form = { organizationId: w.orgA, signerName: "Synthetic Guardian Ortiz", signerRole: "guardian", signedOn: today, fileBase64: pdf, contentType: "application/pdf" };
+    const before = evidence.objects.size;
+    expect((await call("POST /v1/visit-confirmation-requests/{requestId}/paper", w.managerB, { path: { requestId: made.body.requestId }, body: { ...form, organizationId: w.orgB } })).status).toBe(404);
+    expect((await call("POST /v1/visit-confirmation-requests/{requestId}/paper", w.managerA, { path: { requestId: made.body.requestId }, body: { ...form, organizationId: w.orgB } })).status).toBe(404);
+    expect(evidence.objects.size).toBe(before);
+    const rec = await call("POST /v1/visit-confirmation-requests/{requestId}/paper", w.managerA, { path: { requestId: made.body.requestId }, body: form });
+    expect(rec.status, JSON.stringify(rec.body)).toBe(201);
+    expect([...evidence.objects.keys()].some((k) => k === `${w.orgA}/documents/${rec.body.lateConfirmationId}/paper-form`)).toBe(true);
+    const rv = await call("POST /v1/late-confirmations/{lateConfirmationId}/review", w.managerA, { path: { lateConfirmationId: rec.body.lateConfirmationId }, body: { outcome: "rejected", reason: "Signature does not match the guardian on file (synthetic)" } });
+    expect(rv.status).toBe(200);
+    const review = await call("GET /v1/visits/{visitId}/review", w.managerA, { path: { visitId: visit } });
+    expect(review.body.visit).toMatchObject({ recoveryState: null, canRequestConfirmation: true, allowedDecisions: ["close_not_billable"] });
   });
 });

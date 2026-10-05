@@ -26,6 +26,7 @@ function review(kind: "no_signer" | "over") {
     hasSignatureEvidence: kind === "over", isCorrection: false, reviewReasons: kind === "over" ? ["over_authorization"] : ["no_client_signature"],
     decisionId: null, decision: null, decisionReason: null, decidedByName: null, decidedAt: null, activeBillingApprovalId: null, approvedMinutes: null,
     canDecide: true, allowedDecisions: kind === "over" ? ["accept_capped_billable", "close_not_billable"] : ["close_not_billable"],
+    recoveryState: null, canRequestConfirmation: kind === "no_signer", decisionAcceptedMinutes: null,
   };
 }
 
@@ -46,6 +47,10 @@ function fakeApi(kind: "no_signer" | "over") {
         return json(200, { summary: null });
       case `GET /v1/visits/${VISIT_ID}/review`:
         return json(200, { visit: decided ? { ...review(kind), decisionId: "d1", decision: "close_not_billable", decisionReason: "Parent unreachable (synthetic)", decidedByName: "Synthetic Manager", decidedAt: "2026-10-05T15:00:00Z", allowedDecisions: [] } : review(kind) });
+      case `GET /v1/visits/${VISIT_ID}/confirmation-requests`:
+        return json(200, { requests: [] });
+      case `POST /v1/visits/${VISIT_ID}/confirmation-requests`:
+        return json(201, { requestId: "r1", expiresAt: "2026-10-12T15:00:00Z", token: "ab".repeat(32), code: "042917" });
       case `POST /v1/visits/${VISIT_ID}/review-decision`:
         decided = true;
         return json(201, { decisionId: "d1" });
@@ -99,10 +104,10 @@ describe("Visit review page", () => {
     // Opening the page posted nothing.
     expect(api.calls.filter((c) => c.method === "POST")).toEqual([]);
     fireEvent.click(screen.getByRole("button", { name: "Record decision" }));
-    expect(await screen.findByRole("alert")).toHaveTextContent("Choose what to record");
+    expect(await screen.findByText("Choose what to record.")).toBeInTheDocument();
     fireEvent.click(screen.getByLabelText(/Close the review: not billable/));
     fireEvent.click(screen.getByRole("button", { name: "Record decision" }));
-    expect(await screen.findByRole("alert")).toHaveTextContent("Give the reason");
+    expect(await screen.findByText("Give the reason for this decision.")).toBeInTheDocument();
     fireEvent.change(screen.getByLabelText(/Reason \(required/), { target: { value: "Parent unreachable (synthetic)" } });
     fireEvent.click(screen.getByRole("button", { name: "Record decision" }));
     expect(await screen.findByText("Review decision recorded. The visit record is unchanged.")).toBeInTheDocument();
@@ -119,6 +124,26 @@ describe("Visit review page", () => {
     expect(await screen.findByText(/Worked 50 min, but only 30 min fit within this month's authorization; 20 min is over it/)).toBeInTheDocument();
     expect(screen.getByLabelText(/Accept the billable minutes within the authorization/)).toBeInTheDocument();
     expect(screen.getByLabelText(/Close the review: not billable/)).toBeInTheDocument();
+  });
+
+  it("no-signer visit can wait for a signature instead: a secure link and phone code are created once and shown with instructions", async () => {
+    const api = renderAt(`/visits/${VISIT_ID}`, "no_signer");
+    expect(await screen.findByRole("heading", { name: "Get the missing signature" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Create secure link" }));
+    expect(await screen.findByText("Enter the name of the person who will confirm the visit.")).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText("Person who will confirm"), { target: { value: "Synthetic Parent Rivera" } });
+    fireEvent.click(screen.getByRole("button", { name: "Create secure link" }));
+    expect(await screen.findByText("Record how you will verify the person by phone before you give the code.")).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText("How you will verify them by phone"), { target: { value: "Call the number on file" } });
+    fireEvent.click(screen.getByRole("button", { name: "Create secure link" }));
+    expect(await screen.findByText("Shown only once. Copy them now.")).toBeInTheDocument();
+    // The token goes in the URL fragment (never sent to the web server); the code is shown separately.
+    expect(screen.getByText(`${window.location.origin}/confirm-visit#${"ab".repeat(32)}`)).toBeInTheDocument();
+    expect(screen.getByLabelText("One-time code")).toHaveTextContent("042917");
+    expect(screen.getByText(/Give this code only by phone/)).toBeInTheDocument();
+    const post = api.calls.find((c) => c.method === "POST" && c.path.endsWith("/confirmation-requests"))!;
+    expect(post.body).toEqual({ organizationId: ORG, channel: "link", recipientName: "Synthetic Parent Rivera", recipientRole: "parent", identityCheck: "Call the number on file", expiresInDays: 7 });
+    expect(Object.keys(post.headers).map((h) => h.toLowerCase())).toContain("idempotency-key");
   });
 
   it("Billing review offers 'Review visit' linking to the exact visit (no 'Review first' text)", async () => {

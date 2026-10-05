@@ -20,6 +20,7 @@ import {
 import { newIdempotencyKey } from "@/lib/sv-backend";
 import { useOrganization } from "@/providers/organization-provider";
 import { useAwsApi } from "./aws-workspace";
+import { SignatureRecoveryCard } from "./signature-recovery";
 
 interface VisitReview {
   visitId: string;
@@ -51,7 +52,7 @@ interface VisitReview {
   isCorrection: boolean;
   reviewReasons: string[];
   decisionId: string | null;
-  decision: "accept_capped_billable" | "close_not_billable" | null;
+  decision: "accept_capped_billable" | "close_not_billable" | "accept_late_confirmation" | null;
   decisionReason: string | null;
   decidedByName: string | null;
   decidedAt: string | null;
@@ -59,6 +60,10 @@ interface VisitReview {
   approvedMinutes: number | null;
   canDecide: boolean;
   allowedDecisions: Array<"accept_capped_billable" | "close_not_billable">;
+  /** 0036: missing-signature recovery. */
+  recoveryState?: "awaiting_response" | "response_to_review" | null;
+  canRequestConfirmation?: boolean;
+  decisionAcceptedMinutes?: number | null;
 }
 
 const message = (cause: unknown, fallback: string) => (cause instanceof Error ? cause.message : fallback);
@@ -66,12 +71,13 @@ const message = (cause: unknown, fallback: string) => (cause instanceof Error ? 
 const DECISION_LABEL: Record<string, string> = {
   accept_capped_billable: "Accept the billable minutes within the authorization",
   close_not_billable: "Close the review: not billable",
+  accept_late_confirmation: "Late confirmation accepted",
 };
 const DECISION_EXPLAIN: Record<string, string> = {
   accept_capped_billable:
     "The client signed or marked the visit. Only the minutes that fit within the authorization become eligible; the minutes over it stay not billable. Billing still needs its own approval.",
   close_not_billable:
-    "Records that the review is finished and nothing more is billable for this visit. The visit and its times are not changed. It can be revoked later with a reason (for example, if a signature is obtained).",
+    "Records that the review is finished and nothing more is billable for this visit. The visit and its times are not changed. It can be revoked later with a reason (for example, if a signature is obtained). You do not have to close it: you can ask for the signature instead (below).",
 };
 
 function reasonText(reason: string, v: VisitReview): string {
@@ -178,7 +184,11 @@ export function VisitReviewPage() {
         {v.clientName ? <p className="text-sm text-slate-500">{v.clientCode}</p> : null}
         <p className="mt-1">
           <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${inReview && !v.decision ? "bg-amber-50 text-amber-900 ring-1 ring-amber-200" : "bg-slate-100 text-slate-700"}`}>
-            {inReview ? (v.decision ? (v.decision === "accept_capped_billable" ? "Reviewed — capped minutes eligible" : "Reviewed — not billable") : "Needs review") : VISIT_STATUS_LABEL[v.visitStatus]}
+            {inReview
+              ? v.decision
+                ? v.decision === "close_not_billable" ? "Reviewed — not billable" : v.decision === "accept_late_confirmation" ? "Late confirmation accepted — eligible for billing approval" : "Reviewed — capped minutes eligible"
+                : v.recoveryState === "awaiting_response" ? "Waiting for signature" : v.recoveryState === "response_to_review" ? "Signature received — review it" : "Needs review"
+              : VISIT_STATUS_LABEL[v.visitStatus]}
           </span>
         </p>
       </div>
@@ -204,16 +214,19 @@ export function VisitReviewPage() {
           <ul className="list-disc space-y-1 pl-5 text-sm text-slate-800">
             {v.reviewReasons.map((r) => <li key={r}>{reasonText(r, v)}</li>)}
           </ul>
-          {v.reviewReasons.includes("no_client_signature") ? (
+          {v.reviewReasons.includes("no_client_signature") && !v.decision ? (
             <p className="text-xs text-slate-600">
-              Ogevia cannot add a signature after the visit yet (requesting an electronic signature or uploading a signed
-              paper form is being built). Until then, an unsigned visit stays not billable.
+              The original visit record and its confirmation are never changed. A signature obtained later is kept as a
+              separate record and reviewed by a person (see “Get the missing signature” below).
             </p>
           ) : null}
 
           {v.decision ? (
             <div className="rounded-lg bg-slate-50 p-3 text-sm">
-              <p className="font-medium text-slate-900">{DECISION_LABEL[v.decision]}</p>
+              <p className="font-medium text-slate-900">
+                {DECISION_LABEL[v.decision]}
+                {v.decision === "accept_late_confirmation" ? ` — ${formatDuration(v.decisionAcceptedMinutes)} eligible for billing approval` : ""}
+              </p>
               <p className="text-slate-700">“{v.decisionReason}”</p>
               <p className="text-xs text-slate-500">{v.decidedByName} · {v.decidedAt ? formatDateTime(v.decidedAt) : ""}</p>
               {v.canDecide && v.decisionId ? (
@@ -247,10 +260,27 @@ export function VisitReviewPage() {
               </label>
               <Button type="submit" disabled={state.busy}>Record decision</Button>
             </form>
+          ) : v.recoveryState ? (
+            <p className="text-sm text-slate-600">
+              {v.recoveryState === "awaiting_response"
+                ? "A confirmation has been requested. To close the review instead, revoke the request first."
+                : "A response came in. Review it below before recording anything else."}
+            </p>
           ) : (
             <p className="text-sm text-slate-600">You can see this review but not record a decision.</p>
           )}
         </Card>
+      ) : null}
+
+      {inReview && v.reviewReasons.includes("no_client_signature") && activeOrganizationId ? (
+        <SignatureRecoveryCard
+          visitId={v.visitId}
+          organizationId={activeOrganizationId}
+          canManage={v.canDecide}
+          canRequest={!!v.canRequestConfirmation}
+          recoveryState={v.recoveryState ?? null}
+          workedMinutes={v.workedMinutes}
+        />
       ) : null}
 
       {state.error ? <p role="alert" className="text-sm text-red-700">{state.error}</p> : null}

@@ -240,7 +240,9 @@ export interface BillingReviewRow {
   scheduledShiftId?: string | null;
   /** AWS (0031): why the visit is in review, and the active review decision. */
   reviewReasons?: string[];
-  reviewDecision?: "accept_capped_billable" | "close_not_billable" | null;
+  reviewDecision?: "accept_capped_billable" | "close_not_billable" | "accept_late_confirmation" | null;
+  /** AWS (0036): the most minutes a person may approve (billable, or minutes accepted from a late confirmation). */
+  eligibleMinutes?: number | null;
 }
 
 /** A human billing approval. rateCents/amountCents are null unless the caller holds billing.read (owner). */

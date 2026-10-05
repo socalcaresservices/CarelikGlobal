@@ -1,4 +1,4 @@
-import { createHash, randomBytes, randomUUID } from "node:crypto";
+import { createHash, randomBytes, randomInt, randomUUID } from "node:crypto";
 import type { Queryable } from "@carelik/auth/server";
 import { ApiError } from "./errors";
 import { signatureObjectKey, validateSignaturePng, type EvidenceStore } from "./evidence";
@@ -50,6 +50,34 @@ const booleanValue = (value: unknown, name: string) => {
 };
 const newOpaqueToken = () => randomBytes(32).toString("hex");
 const hashOpaqueToken = (token: string) => createHash("sha256").update(token, "hex").digest("hex");
+
+/** The one-time code is bound to its link: SHA-256 of "<token hash>:<6 digits>". */
+const confirmationCodeHash = (tokenHash: string, code: string) => createHash("sha256").update(`${tokenHash}:${code}`).digest("hex");
+const confirmationCode = (value: unknown) => {
+  if (typeof value !== "string" || !/^\d{6}$/.test(value)) throw new ApiError(400, "bad_request", "Enter the 6-digit code you were given by phone.");
+  return value;
+};
+/** A UUID derived from a string, so a retried request reuses the same ids and object keys. */
+const stableUuid = (seed: string) => {
+  const h = createHash("sha256").update(seed).digest();
+  h[6] = (h[6]! & 0x0f) | 0x40;
+  h[8] = (h[8]! & 0x3f) | 0x80;
+  const x = h.subarray(0, 16).toString("hex");
+  return `${x.slice(0, 8)}-${x.slice(8, 12)}-${x.slice(12, 16)}-${x.slice(16, 20)}-${x.slice(20, 32)}`;
+};
+/** Maps a public confirmation status to the response the recipient sees; 'ok' passes through. */
+const publicConfirmationOrThrow = (row: Record<string, unknown> | undefined) => {
+  switch (row?.status) {
+    case "ok":
+      return row;
+    case "wrong_code":
+      throw new ApiError(422, "wrong_code", `That code is not correct. ${row.attemptsLeft ?? 0} attempts left.`);
+    case "locked":
+      throw new ApiError(423, "locked", "This link is locked after too many wrong codes. Ask the agency for a new link.");
+    default:
+      throw new ApiError(404, "not_found", "This link is not valid any more. Ask the agency for a new link.");
+  }
+};
 
 const camel = (key: string) => key.replace(/_([a-z0-9])/g, (_, c: string) => c.toUpperCase());
 /** snake_case DB row -> camelCase JSON. Values are passed through unchanged. */
@@ -1244,6 +1272,126 @@ export const ROUTES: Record<string, Route> = {
     },
   },
 
+  // Missing-signature recovery (0036): a staff-copied secure link plus a one-time code that staff
+  // give by phone to a recipient they verified, or a paper form. Responses are reviewed by a person;
+  // acceptance makes the visit eligible for the separate human billing approval, never approved.
+  "POST /v1/visits/{visitId}/confirmation-requests": {
+    status: 201,
+    mutating: true,
+    handle: async ({ event, tx }) => {
+      const visit = uuid(p(event).visitId, "visitId");
+      const body = parseBody(event.body, event.isBase64Encoded);
+      const key = idempotencyKey(event.headers);
+      const channel = oneOf(body.channel, "channel", ["link", "paper"] as const);
+      const recipientName = text(body.recipientName, "recipientName", 200, { required: true });
+      const recipientRole = oneOf(body.recipientRole, "recipientRole", ["client", "parent", "guardian", "authorized_representative"] as const);
+      const identityCheck = text(body.identityCheck, "identityCheck", 500);
+      const days = body.expiresInDays;
+      if (typeof days !== "number" || !Number.isInteger(days) || days < 1 || days > 30) {
+        throw new ApiError(400, "bad_request", "expiresInDays must be a whole number from 1 to 30.");
+      }
+      // The token and code exist only in this response; the database keeps their hashes.
+      const token = channel === "link" ? newOpaqueToken() : null;
+      const code = channel === "link" ? String(randomInt(0, 1_000_000)).padStart(6, "0") : null;
+      const tokenHash = token ? hashOpaqueToken(token) : null;
+      const codeHash = token && code ? confirmationCodeHash(tokenHash!, code) : null;
+      const [made] = await tx((db) =>
+        rows(db, "select * from ogevia_api.create_visit_confirmation_request($1, $2, $3, $4, $5, $6, $7, $8, $9)", [
+          visit, channel, recipientName, recipientRole, identityCheck, tokenHash, codeHash, days, key,
+        ]),
+      );
+      const request = made as { requestId: string; expiresAt: string; isNew: boolean };
+      // A retried request returns the one already made; its link cannot be shown again.
+      return request.isNew
+        ? { requestId: request.requestId, expiresAt: request.expiresAt, token, code }
+        : { requestId: request.requestId, expiresAt: request.expiresAt, token: null, code: null, linkAlreadyShown: channel === "link" };
+    },
+  },
+
+  "GET /v1/visits/{visitId}/confirmation-requests": {
+    mutating: false,
+    handle: async ({ event, tx }) => {
+      const visit = uuid(p(event).visitId, "visitId");
+      return { requests: await tx((db) => rows(db, "select * from ogevia_api.list_visit_confirmation_requests($1)", [visit])) };
+    },
+  },
+
+  "POST /v1/visit-confirmation-requests/{requestId}/revoke": {
+    mutating: true,
+    handle: async ({ event, tx }) => {
+      const requestId = uuid(p(event).requestId, "requestId");
+      const body = parseBody(event.body, event.isBase64Encoded);
+      const key = idempotencyKey(event.headers);
+      const reason = text(body.reason, "reason", 500, { required: true });
+      await tx((db) => db.query("select ogevia_api.revoke_visit_confirmation_request($1, $2, $3)", [requestId, reason, key]));
+      return { requestId, revoked: true };
+    },
+  },
+
+  "POST /v1/visit-confirmation-requests/{requestId}/paper": {
+    status: 201,
+    mutating: true,
+    handle: async ({ event, tx, evidence }) => {
+      const requestId = uuid(p(event).requestId, "requestId");
+      const body = parseBody(event.body, event.isBase64Encoded, 5_600_000);
+      const key = idempotencyKey(event.headers);
+      const org = uuid(body.organizationId, "organizationId");
+      const signerName = text(body.signerName, "signerName", 200, { required: true });
+      const signerRole = oneOf(body.signerRole, "signerRole", ["client", "parent", "guardian", "authorized_representative"] as const);
+      const signedOn = date(body.signedOn, "signedOn");
+      const file = validateDocumentFile(body.fileBase64, body.contentType);
+      // Authority and the request's state are checked BEFORE anything is stored.
+      await tx((db) => db.query("select ogevia_api.check_paper_confirmation_upload($1, $2)", [requestId, org]));
+      // A retry with the same key uses the same id, so it stores the same object and returns the same record.
+      const lateId = key ? stableUuid(`paper:${requestId}:${key}`) : randomUUID();
+      const objectKey = `${org}/documents/${lateId}/paper-form`;
+      let s3VersionId: string | null;
+      try {
+        ({ versionId: s3VersionId } = await evidence.put(objectKey, file.bytes, file.sha256, file.contentType));
+      } catch {
+        throw new ApiError(503, "storage_unavailable", "The form could not be stored. Nothing was saved; please try again.");
+      }
+      const id = await tx(async (db) => {
+        const r = await db.query("select ogevia_api.record_paper_visit_confirmation($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) as id", [
+          requestId, lateId, signerName, signerRole, signedOn, objectKey, s3VersionId, file.contentType, file.bytes.length, file.sha256Hex, key,
+        ]);
+        return (r.rows[0] as { id: string }).id;
+      });
+      return { lateConfirmationId: id };
+    },
+  },
+
+  "POST /v1/late-confirmations/{lateConfirmationId}/review": {
+    mutating: true,
+    handle: async ({ event, tx }) => {
+      const lateId = uuid(p(event).lateConfirmationId, "lateConfirmationId");
+      const body = parseBody(event.body, event.isBase64Encoded);
+      const key = idempotencyKey(event.headers);
+      const outcome = oneOf(body.outcome, "outcome", ["accepted", "rejected"] as const);
+      const reason = text(body.reason, "reason", 1000, { required: true });
+      const [result] = await tx((db) => rows(db, "select * from ogevia_api.review_late_visit_confirmation($1, $2, $3, $4)", [lateId, outcome, reason, key]));
+      return { review: result };
+    },
+  },
+
+  "GET /v1/late-confirmations/{lateConfirmationId}/evidence": {
+    mutating: false,
+    handle: async ({ event, tx, evidence }) => {
+      const lateId = uuid(p(event).lateConfirmationId, "lateConfirmationId");
+      const [meta] = await tx((db) => rows(db, "select * from ogevia_api.get_late_confirmation_evidence($1)", [lateId]));
+      if (!meta) throw new ApiError(404, "not_found", "No signature or form is stored for this response.");
+      let stored;
+      try {
+        stored = await evidence.get(meta.objectKey as string, (meta.versionId as string | null) ?? null, MAX_DOCUMENT_BYTES);
+      } catch {
+        throw new ApiError(503, "evidence_unavailable", "The file could not be loaded. Please try again.");
+      }
+      const digest = createHash("sha256").update(stored.bytes).digest("hex");
+      if (digest !== meta.sha256) throw new ApiError(500, "integrity_error", "The stored file failed its integrity check.");
+      return { contentType: meta.contentType, fileBase64: stored.bytes.toString("base64") };
+    },
+  },
+
   "POST /v1/visits/{visitId}/billing-approval": {
     status: 201,
     mutating: true,
@@ -1507,6 +1655,66 @@ export const ROUTES: Record<string, Route> = {
       const digest = createHash("sha256").update(stored.bytes).digest("hex");
       if (digest !== meta.sha256) throw new ApiError(500, "integrity_error", "The stored file failed its integrity check.");
       return { contentType: meta.contentType, fileBase64: stored.bytes.toString("base64"), sha256: digest };
+    },
+  },
+
+  // Public visit confirmation (0036). The caller holds the link token AND the one-time code given by
+  // phone. A wrong code is counted (5 lock the link) in a committed transaction, then refused.
+  "POST /v1/public/visit-confirmations/{token}/open": {
+    public: true,
+    mutating: true,
+    handle: async ({ event, tx }) => {
+      const tokenHash = hashOpaqueToken(opaqueToken(p(event).token));
+      const code = confirmationCode(parseBody(event.body, event.isBase64Encoded).code);
+      const [found] = await tx((db) => rows(db, "select * from ogevia_api.public_open_visit_confirmation($1, $2)", [tokenHash, confirmationCodeHash(tokenHash, code)]));
+      const visit = publicConfirmationOrThrow(found);
+      const { organizationId: _org, status: _status, ...shown } = visit;
+      return { visit: shown };
+    },
+  },
+
+  "POST /v1/public/visit-confirmations/{token}/respond": {
+    public: true,
+    status: 201,
+    mutating: true,
+    handle: async ({ event, tx, evidence }) => {
+      const tokenHash = hashOpaqueToken(opaqueToken(p(event).token));
+      const body = parseBody(event.body, event.isBase64Encoded, 2_000_000);
+      const codeHash = confirmationCodeHash(tokenHash, confirmationCode(body.code));
+      const outcome = oneOf(body.outcome, "outcome", ["confirmed", "disputed"] as const);
+      const method = outcome === "confirmed" ? oneOf(body.method, "method", ["draw", "typed"] as const) : null;
+      const signerName = text(body.signerName, "signerName", 200, { required: true });
+      const disputeReason = outcome === "disputed" ? text(body.disputeReason, "disputeReason", 1000, { required: true }) : null;
+      const attested = body.attested === true;
+      const responseKey = uuid(body.responseKey, "responseKey");
+      const signature = method === "draw" ? validateSignaturePng(body.signaturePng) : null;
+      if (method !== "draw" && body.signaturePng !== undefined && body.signaturePng !== null) {
+        throw new ApiError(422, "validation_failed", "A signature image is only accepted for a drawn signature.");
+      }
+      // Check the link and code (a wrong code is counted and committed) before storing anything.
+      const [found] = await tx((db) => rows(db, "select * from ogevia_api.public_open_visit_confirmation($1, $2)", [tokenHash, codeHash]));
+      // A retry after the response was recorded: the link is answered, so look the response up by its key.
+      const lateId = stableUuid(`late:${tokenHash}:${responseKey}`);
+      let objectKey: string | null = null;
+      let s3VersionId: string | null = null;
+      if (found?.status === "ok" && signature) {
+        objectKey = signatureObjectKey(found.organizationId as string, lateId);
+        try {
+          ({ versionId: s3VersionId } = await evidence.put(objectKey, signature.bytes, signature.sha256));
+        } catch {
+          throw new ApiError(503, "evidence_unavailable", "The signature could not be saved. Nothing was recorded; please try again.");
+        }
+      } else if (found?.status !== "ok" && found?.status !== "unavailable") {
+        publicConfirmationOrThrow(found);
+      }
+      const [result] = await tx((db) =>
+        rows(db, "select * from ogevia_api.public_respond_visit_confirmation($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)", [
+          tokenHash, codeHash, lateId, outcome, method, signerName, disputeReason, attested,
+          objectKey, s3VersionId, signature ? signature.bytes.length : null, signature ? signature.sha256Hex : null, responseKey,
+        ]),
+      );
+      publicConfirmationOrThrow(result);
+      return { received: true, outcome };
     },
   },
 
