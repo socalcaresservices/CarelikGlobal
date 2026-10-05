@@ -65,12 +65,12 @@ python3 "$SLICE/release_0036_gate.py" --cdk-out "$BUILD_DIR" --deployed "$RB/tem
 echo "Build $BUILD_DIR reproduces the approved scope exactly."
 
 phase "3/4 Read-only inventory"
-FN=$(aws cloudformation describe-stack-resources --stack-name "$API_STACK" \
-  --query "StackResources[?ResourceType=='AWS::Lambda::Function' && starts_with(LogicalResourceId, 'Handler')].PhysicalResourceId | [0]" --output text)
-API_ID=$(aws cloudformation describe-stack-resources --stack-name "$API_STACK" \
-  --query "StackResources[?ResourceType=='AWS::ApiGatewayV2::Api'].PhysicalResourceId | [0]" --output text)
-POLICY_ARN=$(aws cloudformation describe-stack-resources --stack-name "$API_STACK" \
-  --query "StackResources[?ResourceType=='AWS::IAM::ManagedPolicy' && starts_with(LogicalResourceId, 'HandlerPolicy')].PhysicalResourceId | [0]" --output text)
+FN=$(aws cloudformation list-stack-resources --stack-name "$API_STACK" \
+  --query "StackResourceSummaries[?ResourceType=='AWS::Lambda::Function' && starts_with(LogicalResourceId, 'Handler')].PhysicalResourceId | [0]" --output text)
+API_ID=$(aws cloudformation list-stack-resources --stack-name "$API_STACK" \
+  --query "StackResourceSummaries[?ResourceType=='AWS::ApiGatewayV2::Api'].PhysicalResourceId | [0]" --output text)
+POLICY_ARN=$(aws cloudformation list-stack-resources --stack-name "$API_STACK" \
+  --query "StackResourceSummaries[?ResourceType=='AWS::IAM::ManagedPolicy' && starts_with(LogicalResourceId, 'HandlerPolicy')].PhysicalResourceId | [0]" --output text)
 WEB=$(out Ogevia-prod-WebHosting WebOrigin); API=$(out "$API_STACK" ApiUrl)
 SNAPSHOT_ID=$(jq -r .snapshot "$RB/MANIFEST.json")
 # The admin host in any state (check 11 reads its security groups; it need not be running).

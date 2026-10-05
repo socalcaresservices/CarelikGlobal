@@ -77,8 +77,8 @@ echo "Account $ACCOUNT, us-west-2, AdministratorAccess: OK"
 
 # ---------------------------------------------------------------------------
 step "1 Plan (read-only checks first)"
-TOPIC=$(aws cloudformation describe-stack-resources --stack-name "$OBS_STACK" \
-  --query "StackResources[?ResourceType=='AWS::SNS::Topic'].PhysicalResourceId | [0]" --output text) || stop "cannot read the alarm topic"
+TOPIC=$(aws cloudformation list-stack-resources --stack-name "$OBS_STACK" \
+  --query "StackResourceSummaries[?ResourceType=='AWS::SNS::Topic'].PhysicalResourceId | [0]" --output text) || stop "cannot read the alarm topic"
 [[ "$TOPIC" == arn:aws:sns:* ]] || stop "alarm topic not found in $OBS_STACK"
 echo "Alarm topic: $TOPIC"
 # R8 pre-check (read-only). Every bucket's policy status and ACL are read in

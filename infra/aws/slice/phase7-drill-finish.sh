@@ -202,7 +202,7 @@ export PGPASSWORD; PGPASSWORD=$(aws secretsmanager get-secret-value --secret-id 
     union all select '   0014 ogevia.caregiver_has_current_shift: ' || exists(select 1 from pg_proc p join pg_namespace n on n.oid = p.pronamespace where n.nspname = 'ogevia' and p.proname = 'caregiver_has_current_shift')
     union all select '   0015 ogevia_api.close_missed_service_visit: ' || exists(select 1 from pg_proc p join pg_namespace n on n.oid = p.pronamespace where n.nspname = 'ogevia_api' and p.proname = 'close_missed_service_visit')
     union all select '   0015 column service_visits.time_out_entered_by: ' || exists(select 1 from information_schema.columns where table_schema = 'ogevia' and table_name = 'service_visits' and column_name = 'time_out_entered_by')" 2>&1
-  FN=$(aws cloudformation describe-stack-resources --stack-name Ogevia-prod-ServiceVerificationApi --query "StackResources[?ResourceType=='AWS::Lambda::Function'].PhysicalResourceId | [0]" --output text 2>&1)
+  FN=$(aws cloudformation list-stack-resources --stack-name Ogevia-prod-ServiceVerificationApi --query "StackResourceSummaries[?ResourceType=='AWS::Lambda::Function'].PhysicalResourceId | [0]" --output text 2>&1)
   FENV=$(aws lambda get-function-configuration --function-name "$FN" --query 'Environment.Variables' --output json 2>&1)
   echo "-- API Lambda target: DB_NAME=$(jq -r .DB_NAME <<<"$FENV" 2>/dev/null), DB_HOST=$(jq -r .DB_HOST <<<"$FENV" 2>/dev/null | cut -d. -f1)"
   APPSEC=$(jq -r .DB_SECRET_ARN <<<"$FENV" 2>/dev/null)

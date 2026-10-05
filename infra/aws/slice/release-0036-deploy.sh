@@ -90,14 +90,14 @@ for s in "${STACKS[@]}"; do
   [[ "$st" == CREATE_COMPLETE || "$st" == UPDATE_COMPLETE ]] || die "$s is $st (this workflow never creates or repairs stacks)"
 done
 # The API handler by logical id (the stack gains a second function in this release).
-FN=$(aws cloudformation describe-stack-resources --stack-name "$API_STACK" \
-  --query "StackResources[?ResourceType=='AWS::Lambda::Function' && starts_with(LogicalResourceId, 'Handler')].PhysicalResourceId | [0]" --output text)
+FN=$(aws cloudformation list-stack-resources --stack-name "$API_STACK" \
+  --query "StackResourceSummaries[?ResourceType=='AWS::Lambda::Function' && starts_with(LogicalResourceId, 'Handler')].PhysicalResourceId | [0]" --output text)
 FNCFG=$(aws lambda get-function-configuration --function-name "$FN" --output json)
 [[ "$(jq -r '.Environment.Variables.DB_NAME // empty' <<<"$FNCFG")" == "$DB_NAME" ]] || die "the API Lambda does not serve $DB_NAME"
-API_ID=$(aws cloudformation describe-stack-resources --stack-name "$API_STACK" \
-  --query "StackResources[?ResourceType=='AWS::ApiGatewayV2::Api'].PhysicalResourceId | [0]" --output text)
-POLICY_ARN=$(aws cloudformation describe-stack-resources --stack-name "$API_STACK" \
-  --query "StackResources[?ResourceType=='AWS::IAM::ManagedPolicy' && starts_with(LogicalResourceId, 'HandlerPolicy')].PhysicalResourceId | [0]" --output text)
+API_ID=$(aws cloudformation list-stack-resources --stack-name "$API_STACK" \
+  --query "StackResourceSummaries[?ResourceType=='AWS::ApiGatewayV2::Api'].PhysicalResourceId | [0]" --output text)
+POLICY_ARN=$(aws cloudformation list-stack-resources --stack-name "$API_STACK" \
+  --query "StackResourceSummaries[?ResourceType=='AWS::IAM::ManagedPolicy' && starts_with(LogicalResourceId, 'HandlerPolicy')].PhysicalResourceId | [0]" --output text)
 WEB=$(out Ogevia-prod-WebHosting WebOrigin); BUCKET=$(out Ogevia-prod-WebHosting SiteBucketName)
 DIST=$(out Ogevia-prod-WebHosting DistributionId); API=$(out "$API_STACK" ApiUrl)
 for v in WEB BUCKET DIST API API_ID POLICY_ARN; do [[ -n "${!v}" && "${!v}" != None ]] || die "missing $v"; done

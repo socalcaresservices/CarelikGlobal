@@ -73,7 +73,7 @@ def check(cid, name):
 
 
 def stack_resources(key, rtype):
-    res = aws("cloudformation", "describe-stack-resources", "--stack-name", STACKS[key])["StackResources"]
+    res = aws("cloudformation", "list-stack-resources", "--stack-name", STACKS[key])["StackResourceSummaries"]
     return [r for r in res if r["ResourceType"] == rtype]
 
 
@@ -581,10 +581,10 @@ else
 fi
 
 step "A3 Which API build is live"
-FN=$(aws cloudformation describe-stack-resources --stack-name Ogevia-prod-ServiceVerificationApi --query "StackResources[?ResourceType=='AWS::Lambda::Function'].PhysicalResourceId | [0]" --output text 2>/dev/null)
+FN=$(aws cloudformation list-stack-resources --stack-name Ogevia-prod-ServiceVerificationApi --query "StackResourceSummaries[?ResourceType=='AWS::Lambda::Function'].PhysicalResourceId | [0]" --output text 2>/dev/null)
 LIVE_SHA=$(aws lambda get-function-configuration --function-name "$FN" --query CodeSha256 --output text 2>/dev/null)
 CAP_SHA=$(jq -r .CodeSha256 "$HOME/ogevia-pilot-run/rollback/lambda.json" 2>/dev/null)
-API_ID=$(aws cloudformation describe-stack-resources --stack-name Ogevia-prod-ServiceVerificationApi --query "StackResources[?ResourceType=='AWS::ApiGatewayV2::Api'].PhysicalResourceId | [0]" --output text 2>/dev/null)
+API_ID=$(aws cloudformation list-stack-resources --stack-name Ogevia-prod-ServiceVerificationApi --query "StackResourceSummaries[?ResourceType=='AWS::ApiGatewayV2::Api'].PhysicalResourceId | [0]" --output text 2>/dev/null)
 CLOSE=$(aws apigatewayv2 get-routes --api-id "$API_ID" --query "Items[?RouteKey=='POST /v1/visits/{visitId}/close'] | length(@)" --output text 2>/dev/null)
 if [[ -n "$CAP_SHA" && "$LIVE_SHA" == "$CAP_SHA" ]]; then BUILD="the October 2 build (pilot NOT deployed)"; elif [[ "$CLOSE" == 1 ]]; then BUILD="the pilot build (close route live)"; else BUILD="unknown build"; fi
 echo "Lambda CodeSha256 ${LIVE_SHA:0:12}... -> $BUILD"
