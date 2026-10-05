@@ -1,0 +1,112 @@
+[
+  {
+    "name": "visit page: 'Get the missing signature' offered on a no-signer visit",
+    "ok": true,
+    "detail": ""
+  },
+  {
+    "name": "link: token in the URL fragment, code shown separately",
+    "ok": true,
+    "detail": ""
+  },
+  {
+    "name": "visit page with the new link: no horizontal scroll at 390 px",
+    "ok": true,
+    "detail": "scrollWidth 390, innerWidth 390"
+  },
+  {
+    "name": "database keeps only hashes (no token or code)",
+    "ok": true,
+    "detail": ""
+  },
+  {
+    "name": "Needs attention drops by one while waiting (no forced closure)",
+    "ok": true,
+    "detail": "1 -> 0"
+  },
+  {
+    "name": "no review decision was recorded",
+    "ok": true,
+    "detail": ""
+  },
+  {
+    "name": "recipient: wrong code explained with attempts left",
+    "ok": true,
+    "detail": ""
+  },
+  {
+    "name": "recipient: date MM/DD/YYYY and times AM/PM",
+    "ok": true,
+    "detail": ""
+  },
+  {
+    "name": "recipient: no client code, client name or visit number shown",
+    "ok": true,
+    "detail": ""
+  },
+  {
+    "name": "recipient page: no horizontal scroll at 390 px",
+    "ok": true,
+    "detail": "scrollWidth 390, innerWidth 390"
+  },
+  {
+    "name": "recipient: confirmation sent",
+    "ok": true,
+    "detail": ""
+  },
+  {
+    "name": "recipient: the link no longer works after answering",
+    "ok": true,
+    "detail": ""
+  },
+  {
+    "name": "Needs attention counts the response to review",
+    "ok": true,
+    "detail": "1"
+  },
+  {
+    "name": "manager: the drawn signature is shown",
+    "ok": true,
+    "detail": ""
+  },
+  {
+    "name": "manager: accepted with eligible minutes shown",
+    "ok": true,
+    "detail": ""
+  },
+  {
+    "name": "visit page after acceptance: no horizontal scroll at 390 px",
+    "ok": true,
+    "detail": "scrollWidth 390, innerWidth 390"
+  },
+  {
+    "name": "visit status: eligible for billing approval, not approved",
+    "ok": true,
+    "detail": ""
+  },
+  {
+    "name": "billing review: the visit can now be approved by a person",
+    "ok": true,
+    "detail": ""
+  },
+  {
+    "name": "visit row still present",
+    "ok": true,
+    "detail": ""
+  },
+  {
+    "name": "the visit record itself is unchanged (status, times, 0 billable)",
+    "ok": true,
+    "detail": ""
+  },
+  {
+    "name": "late confirmation stored separately with the drawn signature in private storage",
+    "ok": true,
+    "detail": ""
+  },
+  {
+    "name": "no token or code in any API log line",
+    "ok": true,
+    "detail": ""
+  }
+]

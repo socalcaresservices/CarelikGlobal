@@ -167,7 +167,8 @@ export function VisitReviewPage() {
     ["Actual times", `${formatClockTime(v.timeIn)} – ${v.timeOut ? formatClockTime(v.timeOut) : "still open"}`],
     ["Scheduled", scheduled],
     ["Worked", formatDuration(v.workedMinutes)],
-    ["Billable", formatDuration(v.billableMinutes)],
+    ["Billable", v.decision === "accept_late_confirmation" ? `${formatDuration(v.billableMinutes)} on the original record` : formatDuration(v.billableMinutes)],
+    ...(v.decision === "accept_late_confirmation" ? [["Eligible for approval", `${formatDuration(v.decisionAcceptedMinutes)} (from the accepted late confirmation)`] as [string, string]] : []),
     ["Confirmation", confirmationMethodLabel(v.confirmationMethod)],
   ];
   if (v.signerName) facts.push(["Confirmed by", `${v.signerName}${v.signerRelationship ? ` (${v.signerRelationship})` : ""}`]);

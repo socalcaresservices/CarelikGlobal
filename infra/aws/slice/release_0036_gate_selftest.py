@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Proves the release 0027-0034 scope gate is not vacuous, on the real templates.
+"""Proves the release 0027-0036 scope gate is not vacuous, on the real templates.
 
 The gate must PASS on the untampered build and FAIL on each tampered copy
 (one change each). Read-only: works on copies in a temporary directory.
@@ -48,6 +48,15 @@ API_MUTATIONS = {
     "route_permission_added": lambda t: t["Resources"].__setitem__("ApiGETv1shiftseriesHandlerPermission0000ABCD", dict(
         copy.deepcopy(permission(t)),
         Properties=dict(permission(t)["Properties"], SourceArn={"Fn::Join": ["", ["arn:", {"Ref": "AWS::Partition"}, ":execute-api:us-west-2:300094796789:", {"Ref": "ApiF70053CD"}, "/*/*/v1/shift-series"]]}))),
+    "public_route_extra": lambda t: t["Resources"].__setitem__("ApiPOSTv1publicvisitconfirmationsall0000", dict(copy.deepcopy(route(t, "POST /v1/public/visit-confirmations/{token}/open")),
+        Properties=dict(route(t, "POST /v1/public/visit-confirmations/{token}/open")["Properties"], RouteKey="GET /v1/public/visit-confirmations/{token}/all"))),
+    "public_route_missing": lambda t: t["Resources"].pop(next(k for k, r in t["Resources"].items() if r["Type"] == "AWS::ApiGatewayV2::Route" and r["Properties"]["RouteKey"] == "POST /v1/public/visit-confirmations/{token}/respond")),
+    "staff_recovery_route_public": lambda t: (route(t, "POST /v1/late-confirmations/{lateConfirmationId}/review")["Properties"].__setitem__("AuthorizationType", "NONE"),
+                                              route(t, "POST /v1/late-confirmations/{lateConfirmationId}/review")["Properties"].pop("AuthorizerId", None)),
+    "public_route_permission_added": lambda t: t["Resources"].__setitem__("ApiPOSTv1publicvisitconfirmationsPermission0000", dict(
+        copy.deepcopy(permission(t)),
+        Properties=dict(permission(t)["Properties"], SourceArn={"Fn::Join": ["", ["arn:", {"Ref": "AWS::Partition"}, ":execute-api:us-west-2:300094796789:", {"Ref": "ApiF70053CD"}, "/*/*/v1/public/visit-confirmations/{token}/open"]]}))),
+    "evidence_policy_new_prefix": lambda t: next(s for s in stmts(t, "HandlerPolicy") if s["Sid"] == "SignatureObjects").__setitem__("Resource", "*"),
     "api_permission_widened": lambda t: permission(t)["Properties"].__setitem__("SourceArn", "*"),
     "handler_other_env": lambda t: res(t, "Handler8")["Properties"]["Environment"]["Variables"].__setitem__("DB_NAME", "postgres"),
     "handler_new_env": lambda t: res(t, "Handler8")["Properties"]["Environment"]["Variables"].__setitem__("SES_FROM", "x@example.com"),
@@ -76,7 +85,7 @@ def other_stack(cdk):
 
 
 def gate(cdk, deployed):
-    return subprocess.run([sys.executable, os.path.join(HERE, "release_0034_gate.py"), "--cdk-out", cdk, "--deployed", deployed],
+    return subprocess.run([sys.executable, os.path.join(HERE, "release_0036_gate.py"), "--cdk-out", cdk, "--deployed", deployed],
                           stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, env=dict(os.environ, PYTHONDONTWRITEBYTECODE="1")).returncode
 
 

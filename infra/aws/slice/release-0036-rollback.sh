@@ -1,22 +1,23 @@
 #!/usr/bin/env bash
 # =============================================================================
-# Ogevia AWS TEST release 0027-0034: rollback, one layer at a time, in this
+# Ogevia AWS TEST release 0027-0036: rollback, one layer at a time, in this
 # order: web, api, (db only if really needed).
-# Uses ONLY what release-0034-deploy.sh captured before it changed anything
-# (~/ogevia-release-0034-run/rollback). Earlier run folders are not used.
+# Uses ONLY what release-0036-deploy.sh captured before it changed anything
+# (~/ogevia-release-0036-run/rollback). Earlier run folders are not used.
 #
-#   bash infra/aws/slice/release-0034-rollback.sh status   # read-only
-#   bash infra/aws/slice/release-0034-rollback.sh export   # read-only copy of records made since DEPLOY
-#   bash infra/aws/slice/release-0034-rollback.sh web      # previous web files (config.json untouched)
-#   bash infra/aws/slice/release-0034-rollback.sh api      # previous API template: removes the 24 routes;
+#   bash infra/aws/slice/release-0036-rollback.sh status   # read-only
+#   bash infra/aws/slice/release-0036-rollback.sh export   # read-only copy of records made since DEPLOY
+#   bash infra/aws/slice/release-0036-rollback.sh web      # previous web files (config.json untouched)
+#   bash infra/aws/slice/release-0036-rollback.sh api      # previous API template: removes the 32 routes;
 #                                                          # previous Lambda code
-#   bash infra/aws/slice/release-0034-rollback.sh db       # 0034..0027 down; REFUSES while their records exist
+#   bash infra/aws/slice/release-0036-rollback.sh db       # 0036..0027 down; REFUSES while their records exist
 #
 # Records made after the deployment are kept:
 # - web and api rollbacks change no data. The previous API never calls the new
 #   functions or tables, so they stop being used and remain.
-# - db: each down script refuses while records it cannot keep exist (0034 shift
-#   series; 0033 custom reminder days; 0031 review decisions; 0030 hire type,
+# - db: each down script refuses while records it cannot keep exist (0036
+#   confirmation requests, responses or reviews; 0035 daylight-saving skipped
+#   dates; 0034 shift series; 0033 custom reminder days; 0031 review decisions; 0030 hire type,
 #   flexible scheduling or family relationships; 0029 rounding policies or
 #   adjustments; 0028 outage records; 0027 continuity exports - see headers).
 # - Nothing here deletes S3 objects (the evidence bucket is versioned).
@@ -24,13 +25,13 @@
 #   in place (command printed by `status`).
 # =============================================================================
 set -Eeuo pipefail
-export OGEVIA_PILOT_RUN_DIR="${OGEVIA_RELEASE_RUN_DIR:-$HOME/ogevia-release-0034-run}"
+export OGEVIA_PILOT_RUN_DIR="${OGEVIA_RELEASE_RUN_DIR:-$HOME/ogevia-release-0036-run}"
 # shellcheck source=pilot-lib.sh
 source "$(dirname "${BASH_SOURCE[0]}")/pilot-lib.sh"
 LOG="$RUN/rollback-$(date -u +%Y%m%dT%H%M%SZ).log"
 exec > >(tee -a "$LOG") 2>&1
 trap 'die "unexpected error on line $LINENO (command: $BASH_COMMAND)"' ERR
-[[ -f "$RB/MANIFEST.json" ]] || die "no rollback capture in $RB (release-0034-deploy.sh never reached its capture step)"
+[[ -f "$RB/MANIFEST.json" ]] || die "no rollback capture in $RB (release-0036-deploy.sh never reached its capture step)"
 LAYER="${1:-status}"
 confirm() {
   [[ -t 0 ]] || die "needs an interactive terminal"
@@ -96,9 +97,9 @@ case "$LAYER" in
     for key in $(jq -r '.Resources[] | select(.Type=="AWS::Lambda::Function") | .Properties.Code.S3Key | strings' "$T"); do
       aws s3api head-object --bucket "$BOOT" --key "$key" >/dev/null || die "previous Lambda package $key is missing from $BOOT"
     done
-    echo "Removes the 24 routes and restores the previous Lambda code. No data changes."
+    echo "Removes the 32 routes and restores the previous Lambda code. No data changes."
     confirm api
-    KEY="release-0034-rollback/$(date -u +%Y%m%dT%H%M%SZ)/$API_STACK.json"
+    KEY="release-0036-rollback/$(date -u +%Y%m%dT%H%M%SZ)/$API_STACK.json"
     aws s3 cp "$T" "s3://$BOOT/$KEY" --only-show-errors
     PARAMS=$(jq -r '(.Parameters // {}) | keys[] | "ParameterKey=\(.),UsePreviousValue=true"' "$T" | xargs)
     # shellcheck disable=SC2086
@@ -112,22 +113,22 @@ case "$LAYER" in
     ;;
 
   db)
-    phase "Rollback: database migrations 0034..0027 on $DB_NAME"
+    phase "Rollback: database migrations 0036..0027 on $DB_NAME"
     echo "Each down script REFUSES while records it cannot keep exist (see the header of this script)."
-    echo "Run 'export' first. Leaving the database at 0034 after an api/web rollback is safe and keeps every record."
+    echo "Run 'export' first. Leaving the database at 0036 after an api/web rollback is safe and keeps every record."
     load_rds_and_host
     confirm db
     trap 'db_window_close' EXIT
     trap 'db_window_close; die "unexpected error on line $LINENO (command: $BASH_COMMAND)"' ERR
     db_window_open
-    for v in 0034 0033 0032 0031 0030 0029 0028 0027; do
+    for v in 0036 0035 0034 0033 0032 0031 0030 0029 0028 0027; do
       f=$(ls "$HERE/db/rollback/${v}_"*.down.sql)
       if [[ -z "$(Q -d "$DB_NAME" -c "select 1 from ogevia_meta.schema_migrations where version = '$v'")" ]]; then
         echo "$v: not applied"; continue
       fi
       if ! { echo "set local role ogevia_owner;"; cat "$f"; echo "reset role;"; echo "delete from ogevia_meta.schema_migrations where version = '$v';"; } \
           | psql -X -q -v ON_ERROR_STOP=1 -1 -d "$DB_NAME" -f - 2>&1 | tee "$RUN/db-rollback-$v.txt"; then
-        die "$v was not rolled back and nothing in it changed: $(grep -m1 -oE '(Refusing|ROLLBACK REFUSED)[^.]*' "$RUN/db-rollback-$v.txt" || tail -1 "$RUN/db-rollback-$v.txt"). Keep 0034, or restore the snapshot to a new instance"
+        die "$v was not rolled back and nothing in it changed: $(grep -m1 -oE '(Refusing|ROLLBACK REFUSED)[^.]*' "$RUN/db-rollback-$v.txt" || tail -1 "$RUN/db-rollback-$v.txt"). Keep 0036, or restore the snapshot to a new instance"
       fi
       echo "$v: rolled back"
     done

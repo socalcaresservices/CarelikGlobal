@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""Read-only live checks for release 0027-0034 (standard library only).
+"""Read-only live checks for release 0027-0036 (standard library only).
 
-Each sub-command reads files captured by release-0034-deploy.sh and prints
+Each sub-command reads files captured by release-0036-deploy.sh and prints
 "ok" or "no". It never calls AWS itself.
 """
 import json
@@ -9,14 +9,14 @@ import os
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from release_0034_gate import NEW_ROUTES  # noqa: E402
+from release_0036_gate import NEW_PUBLIC_ROUTES, NEW_ROUTES  # noqa: E402
 
 
 def routes(before_path, after_path):
     before = dict(map(tuple, json.load(open(before_path))))
     after = dict(map(tuple, json.load(open(after_path))))
-    return (len(after) == len(before) + len(NEW_ROUTES) and all(after.get(k) == a for k, a in before.items())
-            and all(after.get(k) == "JWT" for k in NEW_ROUTES))
+    return (len(after) == len(before) + len(NEW_ROUTES) + len(NEW_PUBLIC_ROUTES) and all(after.get(k) == a for k, a in before.items())
+            and all(after.get(k) == "JWT" for k in NEW_ROUTES) and all(after.get(k) == "NONE" for k in NEW_PUBLIC_ROUTES))
 
 
 def same_json(a_path, b_path):

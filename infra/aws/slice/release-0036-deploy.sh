@@ -1,13 +1,15 @@
 #!/usr/bin/env bash
 # =============================================================================
-# Ogevia AWS TEST release 0027-0034: continuity pack, outage visit records,
+# Ogevia AWS TEST release 0027-0036: continuity pack, outage visit records,
 # billing rounding, hire type / scheduling / family relationship, visit review,
 # shift-card and refusal wording fix, document reminders + one Needs attention
-# definition, recurring shifts. Base: release 0022-0026 (0ca5616) live.
+# definition, recurring shifts, daylight-saving refusals (0035), missing-
+# signature recovery (0036). Base: release 0022-0026 (0ca5616) live.
 #
-# Changes (all checked by release_0034_gate.py and its self-test):
-#   DB       migrations 0027-0034 on ogevia_sv_test (one transaction each)
-#   API      24 JWT routes on the existing integration (no invoke permission
+# Changes (all checked by release_0036_gate.py and its self-test):
+#   DB       migrations 0027-0036 on ogevia_sv_test (one transaction each)
+#   API      30 JWT routes + 2 owner-approved public visit-confirmation link
+#            routes on the existing integration (no invoke permission
 #            added); Handler code package only (identity function: code only,
 #            if its bundle changed). NO new resource, NO new fixed cost.
 #   Web      matching build (config.json kept)
@@ -16,7 +18,7 @@
 #
 # Everything before the single DEPLOY prompt is read-only. After DEPLOY:
 # snapshot, one DB window, API stack, web files, then read-only live checks.
-# Re-running resumes (state in ~/ogevia-release-0034-run; earlier run folders
+# Re-running resumes (state in ~/ogevia-release-0036-run; earlier run folders
 # are never written). TEST ONLY, SYNTHETIC DATA ONLY.
 #
 # Never: Netlify/Supabase/DNS, Cognito, config.json, the other four stacks,
@@ -25,16 +27,16 @@
 # =============================================================================
 set -Eeuo pipefail
 
-export OGEVIA_PILOT_RUN_DIR="${OGEVIA_RELEASE_RUN_DIR:-$HOME/ogevia-release-0034-run}"
+export OGEVIA_PILOT_RUN_DIR="${OGEVIA_RELEASE_RUN_DIR:-$HOME/ogevia-release-0036-run}"
 # shellcheck source=pilot-lib.sh
 source "$(dirname "${BASH_SOURCE[0]}")/pilot-lib.sh"
-FINAL_MIGRATION=0034
+FINAL_MIGRATION=0036
 BASE_MIGRATION=0026
-NEW_ROUTE_COUNT=24
+NEW_ROUTE_COUNT=32
 
 IDENTITY_FN=Ogevia-prod-IdentityAdmin
 PIN="${OGEVIA_RELEASE_PIN:-}"
-SNAPSHOT_ID=ogevia-prod-postgres-pre-0034-$(date -u +%Y%m%d)
+SNAPSHOT_ID=ogevia-prod-postgres-pre-0036-$(date -u +%Y%m%d)
 LOG="$RUN/deploy-$(date -u +%Y%m%dT%H%M%SZ).log"
 exec 3>&1
 exec > >(tee -a "$LOG") 2>&1
@@ -60,12 +62,12 @@ if ! command -v session-manager-plugin >/dev/null; then
   sudo dnf install -y -q https://s3.amazonaws.com/session-manager-downloads/plugin/latest/linux_64bit/session-manager-plugin.rpm >/dev/null \
     || die "could not install session-manager-plugin"
 fi
-[[ "$PIN" =~ ^[0-9a-f]{40}$ ]] || die "OGEVIA_RELEASE_PIN is not a full commit id; start from release-0034-bootstrap.sh"
+[[ "$PIN" =~ ^[0-9a-f]{40}$ ]] || die "OGEVIA_RELEASE_PIN is not a full commit id; start from release-0036-bootstrap.sh"
 COMMIT=$(git -C "$REPO" rev-parse HEAD)
 [[ "$COMMIT" == "$PIN" ]] || die "the checkout is at $COMMIT, not the pinned $PIN"
 DIRTY=$(git -C "$REPO" status --porcelain --untracked-files=no)
 [[ -z "$DIRTY" ]] || die "the checkout has local changes: $DIRTY"
-for v in 0027 0028 0029 0030 0031 0032 0033 0034; do ls "$HERE/db/migrations/${v}_"*.sql >/dev/null 2>&1 || die "migration $v missing"; done
+for v in 0027 0028 0029 0030 0031 0032 0033 0034 0035 0036; do ls "$HERE/db/migrations/${v}_"*.sql >/dev/null 2>&1 || die "migration $v missing"; done
 [[ "$(ls "$HERE/db/migrations" | tail -1)" == ${FINAL_MIGRATION}_* ]] || die "unexpected newest migration: $(ls "$HERE/db/migrations" | tail -1)"
 echo "Code: $(git -C "$REPO" log --oneline -1) (pinned, clean)"
 printf 'aws %s | node %s | %s\n' "$(aws --version 2>&1 | cut -d' ' -f1)" "$(node -v)" "$(psql --version)"
@@ -179,9 +181,9 @@ echo "Captured in $RB: 5 templates, Lambda $(jq -r .CodeSha256 "$RB/lambda.json"
 # ----------------------------------------------------------------------------
 phase "6/11 Strict scope gate: live templates vs this build"
 TEMPLATE_BASE="$RB/templates"   # always the pre-deploy capture, also when resuming
-python3 "$SLICE/release_0034_gate_selftest.py" --cdk-out "$HERE/cdk.out" --deployed "$TEMPLATE_BASE" | tail -1 | grep -q 'Gate self-test: PASS' \
+python3 "$SLICE/release_0036_gate_selftest.py" --cdk-out "$HERE/cdk.out" --deployed "$TEMPLATE_BASE" | tail -1 | grep -q 'Gate self-test: PASS' \
   || die "the scope gate self-test failed (the gate would not catch a tampered change)"
-python3 "$SLICE/release_0034_gate.py" --cdk-out "$HERE/cdk.out" --deployed "$TEMPLATE_BASE" --summary "$RUN/scope-gate.txt" \
+python3 "$SLICE/release_0036_gate.py" --cdk-out "$HERE/cdk.out" --deployed "$TEMPLATE_BASE" --summary "$RUN/scope-gate.txt" \
   || die "the change set is outside the approved scope (see above); nothing was changed"
 echo "Gate self-test: PASS (refuses every tampered variant of this exact build)"
 
@@ -195,18 +197,19 @@ Exactly this will change in AWS TEST (account $ACCOUNT, $REGION), commit ${COMMI
   1. RDS snapshot $SNAPSHOT_ID of $RDS_ID (kept until you delete it).
   2. DB window: $APP_SG is attached to admin host $IID, then its original groups are restored.
      On $DB_NAME only: the ledger must be exactly 0001-$BASE_MIGRATION with matching checksums
-     (no applied migration is modified); migrations 0027-0034 are applied (one transaction
+     (no applied migration is modified); migrations 0027-0036 are applied (one transaction
      each); db:verify must pass. Every existing row of every 0026 table must be unchanged
      BY VALUE (all 0026 columns); permissions = today's plus exactly the 2 permissions and
-     3 role grants 0027-0034 add; earlier audit rows unchanged. Otherwise it stops before
+     3 role grants 0027-0036 add; earlier audit rows unchanged. Otherwise it stops before
      the API and web are changed.
-  3. $API_STACK: 24 JWT routes on the existing integration (covered by the existing single
+  3. $API_STACK: 30 JWT routes + 2 public visit-confirmation link routes (token + phone
+     code; approved 10/05/2026) on the existing integration (covered by the existing single
      API-scoped invoke permission; none added); Handler code package (and the identity
-     function's code package if its bundle changed). No policy, environment or resource change.
+     function's code package if its bundle changed). No IAM policy, environment or resource change.
   4. Web: new files to $BUCKET (config.json NOT changed), CloudFront $DIST invalidated.
   5. Read-only live checks.
 NEW FIXED COST: none. Not touched: Cognito, Netlify, Supabase, DNS, RDS SG rules, the other 4 stacks.
-Rollback: docs/aws/DEPLOYMENT_PLAN_0027_0034.md section 5 (material in $RB).
+Rollback: docs/aws/DEPLOYMENT_PLAN_0027_0036.md section 5 (material in $RB).
 EOF
   read -r -p "Type DEPLOY to approve exactly this scope (anything else cancels): " answer
   [[ "$answer" == DEPLOY ]] || die "not approved; nothing was changed"
@@ -224,7 +227,7 @@ if ! is_done snapshot; then
   SNAPSHOT_ID=$(jq -r .snapshot "$RB/MANIFEST.json")
   if ! aws rds describe-db-snapshots --db-snapshot-identifier "$SNAPSHOT_ID" >/dev/null 2>&1; then
     aws rds create-db-snapshot --db-instance-identifier "$RDS_ID" --db-snapshot-identifier "$SNAPSHOT_ID" \
-      --tags Key=purpose,Value=pre-0034-rollback >/dev/null
+      --tags Key=purpose,Value=pre-0036-rollback >/dev/null
   fi
   echo "Waiting for $SNAPSHOT_ID (usually 5-15 minutes)..."
   aws rds wait db-snapshot-available --db-snapshot-identifier "$SNAPSHOT_ID" || die "snapshot did not complete"
@@ -234,7 +237,7 @@ SNAPSHOT_ID=$(jq -r .snapshot "$RB/MANIFEST.json")
 echo "Snapshot $SNAPSHOT_ID: available"
 
 # ----------------------------------------------------------------------------
-phase "9/11 DB window: migrations 0027-0034 and verification"
+phase "9/11 DB window: migrations 0027-0036 and verification"
 if ! is_done db-window; then
   trap 'rc=$?; trap - ERR; db_window_close; (exit $rc); on_exit' EXIT
   trap 'db_window_close; die "unexpected error on line $LINENO (command: $BASH_COMMAND)"' ERR
@@ -262,7 +265,7 @@ if ! is_done db-window; then
   echo "Accounts and records: $(cat "$RB/keep-before.txt")"
   # Value fingerprint of every existing row (all 0026 columns), permissions and audit log.
   if [[ ! -f "$RB/records-before.txt" ]]; then
-    Q -d "$DB_NAME" -f <(python3 "$SLICE/release_0034_records.py" snapshot-sql "$SLICE/release-0034-expected") > "$RB/records-before.tmp"
+    Q -d "$DB_NAME" -f <(python3 "$SLICE/release_0036_records.py" snapshot-sql "$SLICE/release-0036-expected") > "$RB/records-before.tmp"
     mv "$RB/records-before.tmp" "$RB/records-before.txt"
   fi
   echo "Record values captured: $(grep -c '^table ' "$RB/records-before.txt") tables, $(grep -c '^rp ' "$RB/records-before.txt") role permissions, audit rows up to id $(grep '^audit ' "$RB/records-before.txt" | cut -d' ' -f2)"
@@ -274,7 +277,7 @@ if ! is_done db-window; then
     || die "schema verification failed"
   grep -q '^FAIL' "$RUN/db-verify.txt" && die "schema verification reported FAIL"
   Q -d "$DB_NAME" -F' ' -c "select version, checksum from ogevia_meta.schema_migrations order by version" > "$RUN/ledger-after.txt"
-  [[ "$(cut -d' ' -f1 "$RUN/ledger-after.txt" | paste -sd,)" == "$(seq -f '%04g' 1 34 | paste -sd,)" ]] || die "ledger after is not 0001-0034"
+  [[ "$(cut -d' ' -f1 "$RUN/ledger-after.txt" | paste -sd,)" == "$(seq -f '%04g' 1 36 | paste -sd,)" ]] || die "ledger after is not 0001-0036"
   while read -r v sum; do
     [[ "$(grep "^$v " "$RUN/ledger-before.txt" | cut -d' ' -f2)" == "$sum" ]] || die "applied migration $v changed its checksum"
   done < <(grep -E '^00(0[1-9]|1[0-9]|2[0-6]) ' "$RUN/ledger-after.txt")
@@ -286,9 +289,9 @@ if ! is_done db-window; then
   [[ "$KEEP_AFTER" == "$(cat "$RB/keep-before.txt")" ]] \
     || die "accounts or records changed during migration: before $(cat "$RB/keep-before.txt"); after $KEEP_AFTER. Stop; see the rollback section"
   echo "Existing users, memberships, records, assignments and approvals unchanged: OK ($KEEP_AFTER)"
-  Q -d "$DB_NAME" -f <(python3 "$SLICE/release_0034_records.py" snapshot-sql "$SLICE/release-0034-expected") > "$RUN/records-after.txt"
-  Q -d "$DB_NAME" -f <(python3 "$SLICE/release_0034_records.py" audit-sql "$SLICE/release-0034-expected" "$(grep '^audit ' "$RB/records-before.txt" | cut -d' ' -f2)") > "$RUN/audit-prefix.txt"
-  RECORDS=$(python3 "$SLICE/release_0034_records.py" compare "$RB/records-before.txt" "$RUN/records-after.txt" "$SLICE/release-0034-expected" "$RUN/audit-prefix.txt") \
+  Q -d "$DB_NAME" -f <(python3 "$SLICE/release_0036_records.py" snapshot-sql "$SLICE/release-0036-expected") > "$RUN/records-after.txt"
+  Q -d "$DB_NAME" -f <(python3 "$SLICE/release_0036_records.py" audit-sql "$SLICE/release-0036-expected" "$(grep '^audit ' "$RB/records-before.txt" | cut -d' ' -f2)") > "$RUN/audit-prefix.txt"
+  RECORDS=$(python3 "$SLICE/release_0036_records.py" compare "$RB/records-before.txt" "$RUN/records-after.txt" "$SLICE/release-0036-expected" "$RUN/audit-prefix.txt") \
     || die "existing record values changed during migration: $RECORDS. The API and web were NOT changed; see the rollback section"
   echo "$RECORDS" > "$RUN/records-compare.txt"
   echo "Record values: $RECORDS"
@@ -307,12 +310,12 @@ if ! is_done api-deployed; then
   for s in "${STACKS[@]}"; do
     aws cloudformation get-template --stack-name "$s" --template-stage Original --query TemplateBody --output json > "$RUN/predeploy-templates/$s.json"
   done
-  python3 "$SLICE/release_0034_gate.py" --cdk-out "$HERE/cdk.out" --deployed "$RUN/predeploy-templates" >/dev/null \
+  python3 "$SLICE/release_0036_gate.py" --cdk-out "$HERE/cdk.out" --deployed "$RUN/predeploy-templates" >/dev/null \
     || die "AWS changed since approval (the scope gate no longer passes); nothing deployed"
   # --require-approval never is safe ONLY because the strict gate just proved
   # the change set equals the approved scope for this exact cdk.out.
   (cd "$HERE" && npx cdk deploy --app cdk.out --exclusively "$API_STACK" --require-approval never --no-notices) \
-    || die "stack deployment failed (CloudFormation rolls the failed stack back automatically); run release-0034-rollback.sh status"
+    || die "stack deployment failed (CloudFormation rolls the failed stack back automatically); run release-0036-rollback.sh status"
   [[ "$(aws lambda get-function-configuration --function-name "$FN" --query 'Environment.Variables.DB_NAME' --output text)" == "$DB_NAME" ]] \
     || die "the deployed Lambda no longer points at $DB_NAME"
   done_ api-deployed
@@ -344,20 +347,23 @@ r=ok
 for s in "${STACKS[@]}"; do
   [[ "$s" == "$API_STACK" ]] && continue
   aws cloudformation get-template --stack-name "$s" --template-stage Original --query TemplateBody --output json > "$RUN/after-templates/$s.json"
-  [[ "$(python3 "$SLICE/release_0034_live.py" same-json "$RB/templates/$s.json" "$RUN/after-templates/$s.json")" == ok ]] || r=no
+  [[ "$(python3 "$SLICE/release_0036_live.py" same-json "$RB/templates/$s.json" "$RUN/after-templates/$s.json")" == ok ]] || r=no
 done
 check "2 the other four stacks unchanged (NetworkEgress, EvidenceStorage, Observability, WebHosting)" "$r"
 
 aws apigatewayv2 get-routes --api-id "$API_ID" --query 'Items[].[RouteKey,AuthorizationType]' --output json > "$RUN/routes-after.json"
-r=$(python3 "$SLICE/release_0034_live.py" routes "$RB/routes.json" "$RUN/routes-after.json")
-check "3 $NEW_ROUTE_COUNT new routes, all JWT; every earlier route unchanged" "$r" "$(jq length "$RB/routes.json") -> $(jq length "$RUN/routes-after.json") routes"
+r=$(python3 "$SLICE/release_0036_live.py" routes "$RB/routes.json" "$RUN/routes-after.json")
+check "3 $NEW_ROUTE_COUNT new routes: 30 JWT + exactly the 2 approved public link routes; every earlier route unchanged" "$r" "$(jq length "$RB/routes.json") -> $(jq length "$RUN/routes-after.json") routes"
 
 codes=""; r=ok
 for p in /v1/shift-series /v1/continuity/status /v1/billing-rounding/policies "/v1/visits/00000000-0000-4000-8000-000000000000/review"; do
   c=$(curl -s -o /dev/null -w '%{http_code}' "${API%/}$p"); codes="$codes $p=$c"; [[ "$c" == 401 ]] || r=no
 done
 c=$(curl -s -o /dev/null -w '%{http_code}' -X POST "${API%/}/v1/shift-series"); codes="$codes POST/shift-series=$c"; [[ "$c" == 401 ]] || r=no
-check "4 new routes refuse requests without sign-in (401)" "$r" "${codes# }"
+c=$(curl -s -o /dev/null -w '%{http_code}' -X POST "${API%/}/v1/visits/00000000-0000-4000-8000-000000000000/confirmation-requests"); codes="$codes POST/confirmation-requests=$c"; [[ "$c" == 401 ]] || r=no
+# The public link route answers without sign-in but refuses a request without the phone code (400, before any database work).
+c=$(curl -s -o /dev/null -w '%{http_code}' -X POST "${API%/}/v1/public/visit-confirmations/$(printf '0%.0s' {1..64})/open"); codes="$codes POST/public-open=$c"; [[ "$c" == 400 ]] || r=no
+check "4 new staff routes refuse requests without sign-in (401); the public link route refuses a request without a code (400)" "$r" "${codes# }"
 
 FNCFG2=$(aws lambda get-function-configuration --function-name "$FN" --output json)
 HANDLER_KEY='.Resources | to_entries[] | select(.value.Type=="AWS::Lambda::Function" and (.key | startswith("Handler"))) | .value.Properties.Code.S3Key'
@@ -367,12 +373,12 @@ NEW_SHA=$(jq -r .CodeSha256 <<<"$FNCFG2")
 [[ "$LIVE_KEY" == "$BUILD_KEY" && "$NEW_SHA" != "$(jq -r .CodeSha256 "$RB/lambda.json")" && "$(jq -r .Environment.Variables.DB_NAME <<<"$FNCFG2")" == "$DB_NAME" ]] && r=ok || r=no
 check "5 API Lambda runs this build and still serves $DB_NAME" "$r" "CodeSha256 ${NEW_SHA:0:12}…"
 jq 'del(.CodeSha256, .LastModified, .Version, .RevisionId, .LastUpdateStatus, .State)' <<<"$FNCFG2" > "$RUN/handler-config-after.json"
-r=$(python3 "$SLICE/release_0034_live.py" same-config "$RB/handler-config.json" "$RUN/handler-config-after.json")
+r=$(python3 "$SLICE/release_0036_live.py" same-config "$RB/handler-config.json" "$RUN/handler-config-after.json")
 check "6 API Lambda configuration unchanged apart from its code (environment, memory, timeout, role, VPC)" "$r"
 
 PV=$(aws iam get-policy --policy-arn "$POLICY_ARN" --query Policy.DefaultVersionId --output text)
 aws iam get-policy-version --policy-arn "$POLICY_ARN" --version-id "$PV" --query PolicyVersion.Document --output json > "$RUN/handler-policy-after.json"
-r=$(python3 "$SLICE/release_0034_live.py" same-json "$RB/handler-policy.json" "$RUN/handler-policy-after.json")
+r=$(python3 "$SLICE/release_0036_live.py" same-json "$RB/handler-policy.json" "$RUN/handler-policy-after.json")
 check "7 Handler IAM policy unchanged" "$r" "policy version $PV"
 
 if aws lambda get-function-configuration --function-name "$IDENTITY_FN" --output json > "$RUN/identity-fn-after.json" 2>/dev/null; then
@@ -380,14 +386,14 @@ if aws lambda get-function-configuration --function-name "$IDENTITY_FN" --output
 else
   echo '{}' > "$RUN/identity-config-after.json"
 fi
-r=$(python3 "$SLICE/release_0034_live.py" same-config "$RB/identity-config.json" "$RUN/identity-config-after.json")
+r=$(python3 "$SLICE/release_0036_live.py" same-config "$RB/identity-config.json" "$RUN/identity-config-after.json")
 check "8 identity function configuration unchanged" "$r"
 
-r=no; grep -q '^PASS .*latest_migration_is_0034' "$RUN/db-verify.txt" && grep -q '^PASS .*migration_count_is_34' "$RUN/db-verify.txt" \
+r=no; grep -q '^PASS .*latest_migration_is_0036' "$RUN/db-verify.txt" && grep -q '^PASS .*migration_count_is_36' "$RUN/db-verify.txt" \
   && ! grep -q '^FAIL' "$RUN/db-verify.txt" && r=ok
-check "9 database at 0034 (0001-0026 checksums unchanged), db:verify all PASS, accounts and records kept" "$r" "$(grep -c '^PASS' "$RUN/db-verify.txt") checks; $(cat "$RB/keep-before.txt" 2>/dev/null)"
+check "9 database at 0036 (0001-0026 checksums unchanged), db:verify all PASS, accounts and records kept" "$r" "$(grep -c '^PASS' "$RUN/db-verify.txt") checks; $(cat "$RB/keep-before.txt" 2>/dev/null)"
 r=no; [[ -s "$RUN/records-compare.txt" ]] && grep -q '^every existing row' "$RUN/records-compare.txt" && r=ok
-check "9b every existing record unchanged by value; permissions = baseline + exactly the 0027-0034 rows; earlier audit rows unchanged" "$r" "$(cat "$RUN/records-compare.txt" 2>/dev/null)"
+check "9b every existing record unchanged by value; permissions = baseline + exactly the 0027-0036 rows; earlier audit rows unchanged" "$r" "$(cat "$RUN/records-compare.txt" 2>/dev/null)"
 
 SERVED=$(curl -fsS "${WEB%/}/index.html" | sha256sum | cut -d' ' -f1 || true)
 [[ "$SERVED" == "$(sha256sum "$RUN/web-build/index.html" | cut -d' ' -f1)" ]] && r=ok || r=no
@@ -415,11 +421,11 @@ check "13 API Lambda resource policy still exactly one invoke statement for this
 echo "Live verification: $PASSES/$TOTAL PASS" | tee -a "$VERIFY"
 
 cat > "$RUN/REPORT.md" <<REPORTEOF
-# Ogevia AWS TEST release 0027-0034: deployment report
+# Ogevia AWS TEST release 0027-0036: deployment report
 
 - Code: $COMMIT (pinned); approved $APPROVED_AT
 - Snapshot: $SNAPSHOT_ID
-- Database $DB_NAME: ledger 0001-0034; accounts and records kept: $(cat "$RB/keep-before.txt"); record values: $(cat "$RUN/records-compare.txt")
+- Database $DB_NAME: ledger 0001-0036; accounts and records kept: $(cat "$RB/keep-before.txt"); record values: $(cat "$RUN/records-compare.txt")
 - API: $(jq length "$RB/routes.json") -> $(jq length "$RUN/routes-after.json") routes; Lambda configuration and IAM unchanged apart from code
 - Other stacks: unchanged. New fixed cost: none
 - Web: $WEB (config.json unchanged)
@@ -434,9 +440,9 @@ done_ complete
 cat <<EOF
 
 ==============================================
-OGEVIA 0027-0034 DEPLOYED AND VERIFIED (TEST)
+OGEVIA 0027-0036 DEPLOYED AND VERIFIED (TEST)
 ==============================================
 Web URL: $WEB
-Next: the retest batch in docs/aws/DEPLOYMENT_PLAN_0027_0034.md section 6 (synthetic data only).
+Next: the retest batch in docs/aws/DEPLOYMENT_PLAN_0027_0036.md section 6 (synthetic data only).
 Report: $RUN/REPORT.md   Verification: $VERIFY
 EOF

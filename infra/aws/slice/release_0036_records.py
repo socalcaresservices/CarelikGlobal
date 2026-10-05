@@ -1,16 +1,16 @@
 #!/usr/bin/env python3
-"""Record-value checks for release 0027-0034 (standard library only).
+"""Record-value checks for release 0027-0036 (standard library only).
 
   snapshot-sql EXPECTED_DIR
       SQL fingerprinting the VALUES of every existing row of every table that
       exists at 0026, over every 0026 column (timestamps in UTC; columns that
-      0027-0034 add are not part of it), plus every permission and
+      0027-0036 add are not part of it), plus every permission and
       role-permission row and the audit log (count, max id, hash).
   audit-sql EXPECTED_DIR N
       Fingerprint of the audit rows with id <= N (the rows before the release).
   compare BEFORE AFTER EXPECTED_DIR AUDIT_PREFIX
       Every table identical by value; permissions and role permissions equal the
-      baseline plus EXACTLY the rows 0027-0034 add; the earlier audit rows are
+      baseline plus EXACTLY the rows 0027-0036 add; the earlier audit rows are
       unchanged (new audit rows are allowed). Exit 0 = unchanged, 1 = changed.
 """
 import os
@@ -58,19 +58,19 @@ def compare(before, after, exp, audit_prefix):
     problems = ["%s changed (rows %s -> %s)" % (t, tb[t].split(" ")[0], (ta.get(t) or "missing").split(" ")[0])
                 for t in sorted(tb) if ta.get(t) != tb[t]]
     read = lambda f, p: {p + l for l in open(os.path.join(exp, f)).read().split("\n") if l}
-    add_rp = read("role-permissions-added-0027-0034.txt", "rp ")
-    add_pk = read("permissions-added-0027-0034.txt", "perm ")
+    add_rp = read("role-permissions-added-0027-0036.txt", "rp ")
+    add_pk = read("permissions-added-0027-0036.txt", "perm ")
     if set(pick(a, "rp ")) != set(pick(b, "rp ")) | add_rp:
-        problems.append("role permissions are not the baseline plus exactly the 0027-0034 additions")
+        problems.append("role permissions are not the baseline plus exactly the 0027-0036 additions")
     if set(pick(a, "perm ")) != set(pick(b, "perm ")) | add_pk:
-        problems.append("permissions are not the baseline plus exactly the 0027-0034 additions")
+        problems.append("permissions are not the baseline plus exactly the 0027-0036 additions")
     ab = pick(b, "audit ")[0].split(" ")
     pref = lines(audit_prefix)
     if not pref or pref[-1] != ab[2]:
         problems.append("audit rows that existed before (ids 1-%s) changed" % ab[1])
     print("; ".join(problems) if problems else
           "every existing row of %d tables unchanged (all 0026 columns, by value); permissions = baseline + the %d role and %d "
-          "permission rows 0027-0034 add; the %s earlier audit rows unchanged" % (len(tb), len(add_rp), len(add_pk), ab[1]))
+          "permission rows 0027-0036 add; the %s earlier audit rows unchanged" % (len(tb), len(add_rp), len(add_pk), ab[1]))
     sys.exit(1 if problems else 0)
 
 
