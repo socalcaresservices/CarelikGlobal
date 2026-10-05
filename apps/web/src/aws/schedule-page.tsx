@@ -8,6 +8,7 @@ import { useAwsApi } from "./aws-workspace";
 import { caregiverName, useCaregivers } from "./care-team-admin";
 import { clientName, useClients, useServices } from "./client-admin";
 import { formatClockTime, formatWeekdayDate, formatWeekdayDateTime } from "@/lib/service-verification";
+import { RecurringSeriesForm, RescheduleForm, SeriesList } from "./recurring-schedule";
 
 /**
  * Schedule (0026): staff-scheduled shifts, call-outs, replacements and
@@ -35,6 +36,8 @@ export interface Shift {
   fromCareRequest: boolean;
   hasVisit: boolean;
   lastCalloutReason: string | null;
+  /** 0034: the weekly series this occurrence belongs to, if any. */
+  seriesId?: string | null;
 }
 interface CoverageEvent { eventType: "called_out" | "reassigned"; createdAt: string; reason: string | null; originalCaregiverName: string | null; replacementCaregiverName: string | null; recordedBy: string }
 interface MyShift { shiftId: string; startsAt: string; endsAt: string; clientCode: string; serviceName: string | null; coverageState: string; canCallOut: boolean }
@@ -131,9 +134,9 @@ function AddShiftForm({ onDone }: { onDone: (text: string) => void }) {
   );
 }
 
-type Action = "callout" | "assign" | "cancel" | "history" | null;
+type Action = "callout" | "assign" | "cancel" | "history" | "reschedule" | null;
 
-function ShiftActions({ s, action, onClose, onDone }: { s: Shift; action: Exclude<Action, null>; onClose: () => void; onDone: (text: string) => void }) {
+function ShiftActions({ s, action, onClose, onDone }: { s: Shift; action: Exclude<Action, null | "reschedule">; onClose: () => void; onDone: (text: string) => void }) {
   const api = useAwsApi();
   const refresh = useRefreshSchedule();
   const { activeOrganizationId } = useOrganization();
@@ -234,14 +237,18 @@ function ShiftRow({ s, canManage, onDone }: { s: Shift; canManage: boolean; onDo
           : <span className="font-semibold text-red-800">OPEN — no caregiver</span>}
       </p>
       {calledOut && s.lastCalloutReason ? <p className="mt-1 text-sm text-red-800">Reason: {s.lastCalloutReason}</p> : null}
+      {s.seriesId ? <p className="mt-1 text-xs text-slate-600">Repeats weekly — changes here affect this date only; change the series under Recurring series.</p> : null}
       {s.fromCareRequest ? <p className="mt-1 text-xs text-slate-600">From a Care Request; manage it on the <Link className="underline" to="/care-requests">Care Requests</Link> page.</p> : null}
       <div className="mt-2 flex flex-wrap gap-3 text-sm font-medium text-slate-800">
         {editable && s.coverageState === "covered" ? <button type="button" className="underline" onClick={() => setAction("callout")}>Record call-out</button> : null}
         {editable ? <button type="button" className="underline" onClick={() => setAction("assign")}>{s.coverageState === "needs_coverage" ? "Assign caregiver" : "Change caregiver"}</button> : null}
-        {editable ? <button type="button" className="underline" onClick={() => setAction("cancel")}>Cancel shift</button> : null}
+        {editable && new Date(s.startsAt).getTime() > Date.now() ? <button type="button" className="underline" onClick={() => setAction("reschedule")}>{s.seriesId ? "Change this date only" : "Change time"}</button> : null}
+        {editable ? <button type="button" className="underline" onClick={() => setAction("cancel")}>{s.seriesId ? "Cancel this date" : "Cancel shift"}</button> : null}
         <button type="button" className="underline" onClick={() => setAction(action === "history" ? null : "history")}>History</button>
       </div>
-      {action ? <ShiftActions s={s} action={action} onClose={() => setAction(null)} onDone={(t) => { setAction(null); onDone(t); }} /> : null}
+      {action === "reschedule" ? (
+        <RescheduleForm shiftId={s.shiftId} localDate={s.localDate} startsAt={s.startsAt} endsAt={s.endsAt} onClose={() => setAction(null)} onDone={(t) => { setAction(null); onDone(t); }} />
+      ) : action ? <ShiftActions s={s} action={action} onClose={() => setAction(null)} onDone={(t) => { setAction(null); onDone(t); }} /> : null}
     </li>
   );
 }
@@ -254,6 +261,8 @@ export function SchedulePage() {
   const [from, setFrom] = useState(today);
   const [onlyOpen, setOnlyOpen] = useState(false);
   const [adding, setAdding] = useState(false);
+  const [repeating, setRepeating] = useState(false);
+  const [showSeries, setShowSeries] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   const canManage = hasPermission("shifts.manage");
   const to = addDays(from, 6);
@@ -276,10 +285,18 @@ export function SchedulePage() {
     <div className="max-w-3xl space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h1 className="text-xl font-semibold text-slate-950">Schedule</h1>
-        {canManage ? <Button type="button" onClick={() => { setAdding((x) => !x); setNotice(null); }} aria-expanded={adding}>{adding ? "Close" : "Add shift"}</Button> : null}
+        {canManage ? (
+          <div className="flex flex-wrap gap-2">
+            <Button type="button" onClick={() => { setAdding((x) => !x); setRepeating(false); setNotice(null); }} aria-expanded={adding}>{adding ? "Close" : "Add shift"}</Button>
+            <Button type="button" variant="secondary" onClick={() => { setRepeating((x) => !x); setAdding(false); setNotice(null); }} aria-expanded={repeating}>{repeating ? "Close" : "Repeat weekly"}</Button>
+            <Button type="button" variant="secondary" onClick={() => setShowSeries((x) => !x)} aria-expanded={showSeries}>Recurring series</Button>
+          </div>
+        ) : null}
       </div>
       {needs > 0 ? <p className="text-base font-bold uppercase text-red-700">{needs} shift{needs === 1 ? "" : "s"} need{needs === 1 ? "s" : ""} coverage this week</p> : null}
       {adding ? <Card className="p-3"><AddShiftForm onDone={(t) => { setAdding(false); setNotice(t); }} /></Card> : null}
+      {repeating ? <Card className="p-3"><h2 className="text-base font-semibold text-slate-950">Repeat weekly</h2><RecurringSeriesForm today={today} onDone={(t) => { setRepeating(false); setNotice(t); }} /></Card> : null}
+      {showSeries && canManage ? <Card className="space-y-2 p-3"><h2 className="text-base font-semibold text-slate-950">Recurring series</h2><SeriesList today={today} onDone={setNotice} /></Card> : null}
       {notice ? <p role="status" className="text-sm text-emerald-800">{notice}</p> : null}
       <div className="flex flex-wrap items-end gap-3">
         <Button type="button" variant="secondary" onClick={() => setFrom(addDays(from, -7))}>← Previous week</Button>

@@ -119,6 +119,17 @@ const orgParam = (event: HttpApiEvent) => uuid(q(event).organizationId, "organiz
  * declared (with the JWT authorizer) in infra/aws/lib/service-verification-api-stack.ts;
  * a test enforces that the two lists are identical.
  */
+
+/** "1,3,5" or [1, 3, 5] → distinct weekdays 0 (Sunday)..6 (Saturday). */
+function weekdayList(value: unknown): number[] {
+  const list = Array.isArray(value) ? value : typeof value === "string" ? value.split(",").filter((x) => x.trim() !== "").map(Number) : null;
+  if (!list || list.length < 1 || list.length > 7 || !list.every((d) => typeof d === "number" && Number.isInteger(d) && d >= 0 && d <= 6)
+      || new Set(list).size !== list.length) {
+    throw new ApiError(400, "bad_request", "weekdays must be 1 to 7 different days, 0 (Sunday) to 6 (Saturday).");
+  }
+  return list as number[];
+}
+
 export const ROUTES: Record<string, Route> = {
   "GET /v1/me": {
     mutating: false,
@@ -536,6 +547,124 @@ export const ROUTES: Record<string, Route> = {
       const [shift] = await tx((db) =>
         rows(db, "select * from ogevia_api.create_shift($1, $2, $3, $4, $5::time, $6::time, $7, $8)", [org, client, service, day, start, end, caregiver, key]));
       return { shift };
+    },
+  },
+
+  // Recurring shifts (0034). Occurrences are ordinary shifts; every check runs in PostgreSQL.
+  "GET /v1/shift-series/preview": {
+    mutating: false,
+    handle: async ({ event, tx }) => {
+      const query = q(event);
+      const org = orgParam(event);
+      const client = uuid(query.clientId, "clientId");
+      const service = uuid(query.serviceId, "serviceId");
+      const caregiver = optionalUuid(query.caregiverRecordId, "caregiverRecordId");
+      const days = weekdayList(query.weekdays);
+      const start = clockTime(query.startTime, "startTime");
+      const end = clockTime(query.endTime, "endTime");
+      const startsOn = date(query.startsOn, "startsOn");
+      const endsOn = optionalDate(query.endsOn, "endsOn");
+      return {
+        occurrences: await tx((db) => rows(db,
+          "select *, local_date::text as local_date, month_start::text as month_start from ogevia_api.preview_shift_series($1, $2, $3, $4, $5::smallint[], $6::time, $7::time, $8, $9)",
+          [org, client, service, caregiver, days, start, end, startsOn, endsOn])),
+      };
+    },
+  },
+
+  "GET /v1/shift-series": {
+    mutating: false,
+    handle: async ({ event, tx }) => ({
+      series: await tx((db) => rows(db, "select * from ogevia_api.list_shift_series($1)", [orgParam(event)])),
+    }),
+  },
+
+  "POST /v1/shift-series": {
+    status: 201,
+    mutating: true,
+    handle: async ({ event, tx }) => {
+      const body = parseBody(event.body, event.isBase64Encoded);
+      const key = idempotencyKey(event.headers);
+      const org = uuid(body.organizationId, "organizationId");
+      const client = uuid(body.clientId, "clientId");
+      const service = uuid(body.serviceId, "serviceId");
+      const caregiver = optionalUuid(body.caregiverRecordId, "caregiverRecordId");
+      const days = weekdayList(body.weekdays);
+      const start = clockTime(body.startTime, "startTime");
+      const end = clockTime(body.endTime, "endTime");
+      const startsOn = date(body.startsOn, "startsOn");
+      const endsOn = optionalDate(body.endsOn, "endsOn");
+      const onConflict = oneOf(body.onConflict ?? "refuse", "onConflict", ["refuse", "skip_flagged"]);
+      const [series] = await tx((db) => rows(db,
+        "select * from ogevia_api.create_shift_series($1, $2, $3, $4, $5::smallint[], $6::time, $7::time, $8, $9, $10, $11)",
+        [org, client, service, caregiver, days, start, end, startsOn, endsOn, onConflict, key]));
+      return { series };
+    },
+  },
+
+  "POST /v1/shift-series/{seriesId}/change": {
+    mutating: true,
+    handle: async ({ event, tx }) => {
+      const series = uuid(p(event).seriesId, "seriesId");
+      const body = parseBody(event.body, event.isBase64Encoded);
+      const key = idempotencyKey(event.headers);
+      const org = uuid(body.organizationId, "organizationId");
+      const from = date(body.fromDate, "fromDate");
+      const caregiver = optionalUuid(body.caregiverRecordId, "caregiverRecordId");
+      const days = weekdayList(body.weekdays);
+      const start = clockTime(body.startTime, "startTime");
+      const end = clockTime(body.endTime, "endTime");
+      const endsOn = optionalDate(body.endsOn, "endsOn");
+      const onConflict = oneOf(body.onConflict ?? "refuse", "onConflict", ["refuse", "skip_flagged"]);
+      const reason = text(body.reason, "reason", 500, { required: true });
+      const [result] = await tx((db) => rows(db,
+        "select * from ogevia_api.change_shift_series_from($1, $2, $3, $4, $5::smallint[], $6::time, $7::time, $8, $9, $10, $11)",
+        [org, series, from, caregiver, days, start, end, endsOn, onConflict, reason, key]));
+      return { result };
+    },
+  },
+
+  "POST /v1/shift-series/{seriesId}/end": {
+    mutating: true,
+    handle: async ({ event, tx }) => {
+      const series = uuid(p(event).seriesId, "seriesId");
+      const body = parseBody(event.body, event.isBase64Encoded);
+      const key = idempotencyKey(event.headers);
+      const org = uuid(body.organizationId, "organizationId");
+      const from = date(body.fromDate, "fromDate");
+      const reason = text(body.reason, "reason", 500, { required: true });
+      const [result] = await tx((db) => rows(db, "select * from ogevia_api.end_shift_series($1, $2, $3, $4, $5)", [org, series, from, reason, key]));
+      return { result };
+    },
+  },
+
+  "POST /v1/shift-series/{seriesId}/extend": {
+    mutating: true,
+    handle: async ({ event, tx }) => {
+      const series = uuid(p(event).seriesId, "seriesId");
+      const body = parseBody(event.body, event.isBase64Encoded);
+      const key = idempotencyKey(event.headers);
+      const org = uuid(body.organizationId, "organizationId");
+      const through = date(body.through, "through");
+      const onConflict = oneOf(body.onConflict ?? "refuse", "onConflict", ["refuse", "skip_flagged"]);
+      const [result] = await tx((db) => rows(db, "select * from ogevia_api.extend_shift_series($1, $2, $3, $4, $5)", [org, series, through, onConflict, key]));
+      return { result };
+    },
+  },
+
+  "POST /v1/shifts/{shiftId}/reschedule": {
+    mutating: true,
+    handle: async ({ event, tx }) => {
+      const shift = uuid(p(event).shiftId, "shiftId");
+      const body = parseBody(event.body, event.isBase64Encoded);
+      const key = idempotencyKey(event.headers);
+      const org = uuid(body.organizationId, "organizationId");
+      const day = date(body.date, "date");
+      const start = clockTime(body.startTime, "startTime");
+      const end = clockTime(body.endTime, "endTime");
+      const reason = text(body.reason, "reason", 500, { required: true });
+      const [result] = await tx((db) => rows(db, "select * from ogevia_api.reschedule_shift($1, $2, $3, $4::time, $5::time, $6, $7)", [org, shift, day, start, end, reason, key]));
+      return { shift: result };
     },
   },
 

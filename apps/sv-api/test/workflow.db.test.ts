@@ -904,3 +904,30 @@ describe("document reminder days and attention (0033) through the API", () => {
     expect(Object.keys(att.body.summary)).toEqual(expect.arrayContaining(["uncoveredShifts", "documentsBlocking", "documentsToReview", "documentsExpiring", "total"]));
   });
 });
+
+describe("recurring shifts (0034) through the API", () => {
+  it("preview lists each date with its outcome; create returns the series; bad weekdays refused; caregiver refused", async () => {
+    const small = await freshClient(db, w, w.caregiverA1, 600, w.orgA, { before: 40, after: 150 });
+    const today = (await db.admin.query("select (now() at time zone 'America/Los_Angeles')::date + 3 as d")).rows[0].d as Date;
+    const startsOn = today.toISOString().slice(0, 10);
+    const endsOn = new Date(today.getTime() + 27 * 864e5).toISOString().slice(0, 10);
+    const pv = await call("GET /v1/shift-series/preview", w.managerA, { query: { organizationId: w.orgA, clientId: small.client, serviceId: small.service, weekdays: "1,3,5", startTime: "09:00", endTime: "11:00", startsOn, endsOn } });
+    expect(pv.status, JSON.stringify(pv.body)).toBe(200);
+    expect(pv.body.occurrences.length).toBeGreaterThanOrEqual(11);
+    expect(pv.body.occurrences[0]).toMatchObject({ minutes: 120, outcome: expect.stringMatching(/ok|exceeds_authorization/) });
+    expect(typeof pv.body.occurrences[0].localDate).toBe("string");
+    expect((await call("GET /v1/shift-series/preview", w.managerA, { query: { organizationId: w.orgA, clientId: small.client, serviceId: small.service, weekdays: "1,8", startTime: "09:00", endTime: "11:00", startsOn } })).status).toBe(400);
+    expect((await call("POST /v1/shift-series", w.caregiverA1, { body: { organizationId: w.orgA, clientId: small.client, serviceId: small.service, weekdays: [1], startTime: "09:00", endTime: "10:00", startsOn, endsOn } })).status).toBe(403);
+    const refused = await call("POST /v1/shift-series", w.managerA, { body: { organizationId: w.orgA, clientId: small.client, serviceId: small.service, weekdays: [1, 3, 5], startTime: "09:00", endTime: "11:00", startsOn, endsOn } });
+    expect(refused.status).toBe(409);
+    const made = await call("POST /v1/shift-series", w.managerA, { body: { organizationId: w.orgA, clientId: small.client, serviceId: small.service, weekdays: [1, 3, 5], startTime: "09:00", endTime: "11:00", startsOn, endsOn, onConflict: "skip_flagged" } });
+    expect(made.status, JSON.stringify(made.body)).toBe(201);
+    // The range spans two months: the limit applies to each month separately.
+    const perMonth = (await db.admin.query(`select date_trunc('month', r.service_date) m, sum(r.reserved_minutes)::int n from ogevia.authorization_reservations r
+      join ogevia.shifts s on s.id = r.shift_id where s.series_id = $1 and r.released_at is null group by 1`, [made.body.series.seriesId])).rows;
+    expect(perMonth.every((r: { n: number }) => r.n <= 600)).toBe(true);
+    expect(perMonth.reduce((t: number, r: { n: number }) => t + r.n, 0)).toBe(made.body.series.reservedMinutes);
+    const list = await call("GET /v1/shift-series", w.managerA, { query: { organizationId: w.orgA } });
+    expect(list.body.series.find((s: { seriesId: string }) => s.seriesId === made.body.series.seriesId)).toMatchObject({ status: "active" });
+  });
+});
