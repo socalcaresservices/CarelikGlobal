@@ -63,6 +63,7 @@ describe("SCHEMA: migration chain", () => {
       "0031",
       "0032",
       "0033",
+      "0034",
     ]);
   });
 
@@ -131,6 +132,8 @@ describe("SCHEMA: migration chain", () => {
       "service_visits",
       "services",
       "shift_coverage_events",
+      "shift_series",
+      "shift_series_skipped_dates",
       "shifts",
       "staff_documents",
       "visit_confirmations",
