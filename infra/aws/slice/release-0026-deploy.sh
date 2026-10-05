@@ -16,7 +16,7 @@
 #   Web      matching build (config.json kept)
 #
 # Everything before the single DEPLOY prompt is read-only. After DEPLOY:
-# snapshot, one DB window, NetworkEgress + API stacks, web files, then 13
+# snapshot, one DB window, NetworkEgress + API stacks, web files, then 14
 # read-only live checks. Re-running resumes (state in ~/ogevia-release-0026-run;
 # earlier run folders are never written). TEST ONLY, SYNTHETIC DATA ONLY.
 #
@@ -192,16 +192,18 @@ Exactly this will change in AWS TEST (account $ACCOUNT, $REGION), commit ${COMMI
   2. DB window: $APP_SG is attached to admin host $IID, then its original groups are restored.
      On $DB_NAME only: the ledger must be exactly 0001-$BASE_MIGRATION with matching checksums
      (no applied migration is modified); migrations 0022-0026 are applied (one transaction
-     each); db:verify must pass; existing visits must be unchanged; existing users,
-     memberships, caregiver records, clients, authorizations, assignments and billing
-     approvals must have the same counts afterwards.
+     each); db:verify must pass. Every existing row of every 0021 table must be unchanged
+     BY VALUE (all columns: visits, confirmations, signatures, assignments, users,
+     memberships, clients, authorizations, approvals...); permissions = today's plus
+     exactly the 6 permissions and 11 role grants 0022-0026 add; earlier audit rows
+     unchanged. Otherwise it stops before the API and web are changed.
   3. $EGRESS_STACK: + Lambda interface endpoint (1 AZ; NEW FIXED COST about 7.30 USD/month;
      may invoke $IDENTITY_FN only); S3 endpoint policy + document and logo key shapes.
-  4. $API_STACK: 30 JWT routes + permissions; Handler code + IDENTITY_FUNCTION_NAME; one
-     invoke statement; NEW $IDENTITY_FN (outside the VPC; Cognito AdminCreateUser and
+  4. $API_STACK: 30 JWT routes (no invoke permission added: the existing single
+     API-scoped statement covers them); Handler code + IDENTITY_FUNCTION_NAME; NEW $IDENTITY_FN (outside the VPC; Cognito AdminCreateUser and
      AdminGetUser on the one pool only), its role, policy and log group.
   5. Web: new files to $BUCKET (config.json NOT changed), CloudFront $DIST invalidated.
-  6. 13 read-only live checks.
+  6. 14 read-only live checks.
 Not touched: Cognito users, app clients and pool settings; Netlify, Supabase, DNS, RDS SG rules;
 the other 3 stacks. No one is invited by this deployment.
 Afterwards, optionally and only if you type SEED: synthetic names for the synthetic pilot clients.
@@ -259,6 +261,12 @@ if ! is_done db-window; then
   [[ -f "$RB/keep-before.txt" ]] || Q -d "$DB_NAME" -c "$KEEP_SQL" > "$RB/keep-before.txt"
   echo "Existing data: $(cat "$RB/rows-before.txt"); visit fingerprint $(cat "$RB/visit-fingerprint-before.txt")"
   echo "Accounts and records: $(cat "$RB/keep-before.txt")"
+  # Value fingerprint of every existing row (all 0021 columns), permissions and audit log.
+  if [[ ! -f "$RB/records-before.txt" ]]; then
+    Q -d "$DB_NAME" -f <(python3 "$SLICE/release_0026_records.py" snapshot-sql "$SLICE/release-0026-expected") > "$RB/records-before.tmp"
+    mv "$RB/records-before.tmp" "$RB/records-before.txt"
+  fi
+  echo "Record values captured: $(grep -c '^table ' "$RB/records-before.txt") tables, $(grep -c '^rp ' "$RB/records-before.txt") role permissions, audit rows up to id $(grep '^audit ' "$RB/records-before.txt" | cut -d' ' -f2)"
 
   done_ migrate-started
   OGEVIA_DATABASE_URL="$DBURL" npx --prefix "$HERE" tsx "$HERE/db/scripts/migrate.ts" \
@@ -279,6 +287,12 @@ if ! is_done db-window; then
   [[ "$KEEP_AFTER" == "$(cat "$RB/keep-before.txt")" ]] \
     || die "accounts or records changed during migration: before $(cat "$RB/keep-before.txt"); after $KEEP_AFTER. Stop; see the rollback section"
   echo "Existing users, memberships, records, assignments and approvals unchanged: OK ($KEEP_AFTER)"
+  Q -d "$DB_NAME" -f <(python3 "$SLICE/release_0026_records.py" snapshot-sql "$SLICE/release-0026-expected") > "$RUN/records-after.txt"
+  Q -d "$DB_NAME" -f <(python3 "$SLICE/release_0026_records.py" audit-sql "$SLICE/release-0026-expected" "$(grep '^audit ' "$RB/records-before.txt" | cut -d' ' -f2)") > "$RUN/audit-prefix.txt"
+  RECORDS=$(python3 "$SLICE/release_0026_records.py" compare "$RB/records-before.txt" "$RUN/records-after.txt" "$SLICE/release-0026-expected" "$RUN/audit-prefix.txt") \
+    || die "existing record values changed during migration: $RECORDS. The API and web were NOT changed; see the rollback section"
+  echo "$RECORDS" > "$RUN/records-compare.txt"
+  echo "Record values: $RECORDS"
   db_window_close
   trap on_exit EXIT
   trap 'die "unexpected error on line $LINENO (command: $BASH_COMMAND)"' ERR
@@ -319,7 +333,7 @@ echo "API and web deployed."
 # ----------------------------------------------------------------------------
 phase "11/12 Live verification (read-only)"
 : > "$VERIFY"
-PASSES=0; FAILS=0; TOTAL=13
+PASSES=0; FAILS=0; TOTAL=14
 check() { if [[ "$2" == ok ]]; then PASSES=$((PASSES + 1)); echo "PASS $1${3:+ - $3}" | tee -a "$VERIFY"; else FAILS=$((FAILS + 1)); echo "FAIL $1${3:+ - $3}" | tee -a "$VERIFY"; fi; }
 APPROVED_AT=$(grep '^approved_at=' "$RUN/APPROVAL.txt" | cut -d= -f2)
 r=ok; detail=""
@@ -387,6 +401,8 @@ check "8 identity function answers and refuses bad input before calling Cognito 
 r=no; grep -q '^PASS .*latest_migration_is_0026' "$RUN/db-verify.txt" && grep -q '^PASS .*migration_count_is_26' "$RUN/db-verify.txt" \
   && ! grep -q '^FAIL' "$RUN/db-verify.txt" && r=ok
 check "9 database at 0026 (0001-0021 checksums unchanged), db:verify all PASS, accounts and records kept" "$r" "$(grep -c '^PASS' "$RUN/db-verify.txt") checks; $(cat "$RB/keep-before.txt" 2>/dev/null)"
+r=no; [[ -s "$RUN/records-compare.txt" ]] && grep -q '^every existing row' "$RUN/records-compare.txt" && r=ok
+check "9b every existing record unchanged by value; permissions = baseline + exactly the 0022-0026 rows; earlier audit rows unchanged" "$r" "$(cat "$RUN/records-compare.txt" 2>/dev/null)"
 
 SERVED=$(curl -fsS "${WEB%/}/index.html" | sha256sum | cut -d' ' -f1 || true)
 [[ "$SERVED" == "$(sha256sum "$RUN/web-build/index.html" | cut -d' ' -f1)" ]] && r=ok || r=no
@@ -418,7 +434,7 @@ cat > "$RUN/REPORT.md" <<EOF
 
 - Code: $COMMIT (pinned); approved $APPROVED_AT
 - Snapshot: $SNAPSHOT_ID
-- Database $DB_NAME: ledger 0001-0026; existing visits unchanged; accounts and records kept: $(cat "$RB/keep-before.txt")
+- Database $DB_NAME: ledger 0001-0026; accounts and records kept: $(cat "$RB/keep-before.txt"); record values: $(cat "$RUN/records-compare.txt")
 - API: $(jq length "$RB/routes.json") -> $(jq length "$RUN/routes-after.json") routes; identity function $IDENTITY_FN
 - Network: Lambda interface endpoint (1 AZ); S3 endpoint policy covers documents and logo
 - Web: $WEB (config.json unchanged)

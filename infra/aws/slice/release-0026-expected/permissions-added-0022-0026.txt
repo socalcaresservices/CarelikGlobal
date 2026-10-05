@@ -1,0 +1,6 @@
+assignments.manage
+authorizations.rates.manage
+caregivers.manage
+clients.manage
+services.manage
+shifts.manage
