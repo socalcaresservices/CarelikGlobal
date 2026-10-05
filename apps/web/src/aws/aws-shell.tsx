@@ -60,9 +60,11 @@ export function AwsShell({ children }: PropsWithChildren) {
     { to: "/settings/branding", label: "Settings", show: hasPermission("organization.update") },
   ].filter((l) => l.show);
   // Longest matching path wins (/service-verification/reports is Visit records, not Verify visit).
+  // A single visit (/visits/:id) belongs to Visit records.
+  const navPath = location.pathname.startsWith("/visits/") ? "/service-verification/reports" : location.pathname;
   const current =
     links
-      .filter((l) => (l.to === "/" ? location.pathname === "/" : location.pathname === l.to || location.pathname.startsWith(`${l.to}/`)))
+      .filter((l) => (l.to === "/" ? navPath === "/" : navPath === l.to || navPath.startsWith(`${l.to}/`)))
       .sort((a, b) => b.to.length - a.to.length)[0] ?? null;
   const agencyName = branding.data?.displayName ?? activeOrganization?.displayName ?? "Organization";
   const accent = branding.data?.accentColor ?? DEFAULT_ACCENT;

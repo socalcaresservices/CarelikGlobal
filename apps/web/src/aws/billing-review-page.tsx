@@ -1,5 +1,6 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
+import { Link } from "react-router-dom";
 import { RoundingSection } from "./billing-rounding";
 import { APPROVAL_STATUS_CLASS, APPROVAL_STATUS_LABEL, formatClock, formatDuration, formatUsDate, visitScheduleLabel, type ApprovalStatus } from "./billing-format";
 import { Button, Card } from "@carelik/ui";
@@ -127,7 +128,16 @@ export function BillingReviewPage() {
                           </div>
                         );
                       }
-                      if (r.reviewState !== "ready") return <span className="text-slate-500">Review first</span>;
+                      if (r.reviewState === "reviewed_not_billable") {
+                        return <span className="text-slate-600">Reviewed — not billable</span>;
+                      }
+                      if (r.reviewState !== "ready" && r.reviewState !== "reviewed_eligible") {
+                        return (
+                          <Link to={`/visits/${r.visitId}`} className="inline-flex min-h-[40px] items-center rounded-lg border border-amber-600 px-3 text-sm font-medium text-amber-900 hover:bg-amber-50">
+                            Review visit
+                          </Link>
+                        );
+                      }
                       if (!canApprove) return <span className="text-slate-500">Not approved</span>;
                       return (
                         <Button type="button" onClick={() => { setNotice(null); setPending({ kind: "approve", row: r, minutes: String(r.billableMinutes ?? 0), notes: "", key: newIdempotencyKey(), busy: false, error: null }); }}>
@@ -146,7 +156,8 @@ export function BillingReviewPage() {
 
   function approvalStatus(r: BillingReviewRow): ApprovalStatus {
     if (activeApproval.get(r.visitId)) return "approved";
-    return r.reviewState === "ready" ? "awaiting" : "review";
+    if (r.reviewState === "ready" || r.reviewState === "reviewed_eligible") return "awaiting";
+    return r.reviewState === "reviewed_not_billable" ? "not_billable" : "review";
   }
   function statusPill(r: BillingReviewRow) {
     const st = approvalStatus(r);

@@ -60,6 +60,7 @@ describe("SCHEMA: migration chain", () => {
       "0028",
       "0029",
       "0030",
+      "0031",
     ]);
   });
 
@@ -133,6 +134,7 @@ describe("SCHEMA: migration chain", () => {
       "visit_confirmations",
       "visit_corrections",
       "visit_evidence",
+      "visit_review_decisions",
     ]);
   });
 

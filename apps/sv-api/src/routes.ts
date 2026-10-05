@@ -1074,6 +1074,47 @@ export const ROUTES: Record<string, Route> = {
     },
   },
 
+  // Visit review (0031): why a visit needs review, the no-signer reason, and an explicit, audited
+  // decision. Opening a visit changes nothing; nothing here creates a signature or a billing approval.
+  "GET /v1/visits/{visitId}/review": {
+    mutating: false,
+    handle: async ({ event, tx }) => {
+      const visit = uuid(p(event).visitId, "visitId");
+      const found = await tx((db) => rows(db, "select * from ogevia_api.get_visit_review($1)", [visit]));
+      if (found.length === 0) throw new ApiError(404, "not_found", "Visit not found.");
+      return { visit: found[0] };
+    },
+  },
+
+  "POST /v1/visits/{visitId}/review-decision": {
+    status: 201,
+    mutating: true,
+    handle: async ({ event, tx }) => {
+      const visit = uuid(p(event).visitId, "visitId");
+      const body = parseBody(event.body, event.isBase64Encoded);
+      const key = idempotencyKey(event.headers);
+      const decision = oneOf(body.decision, "decision", ["accept_capped_billable", "close_not_billable"]);
+      const reason = text(body.reason, "reason", 1000);
+      const decisionId = await tx(async (db) => {
+        const r = await db.query("select ogevia_api.decide_visit_review($1, $2, $3, $4) as id", [visit, decision, reason, key]);
+        return (r.rows[0] as { id: string }).id;
+      });
+      return { decisionId };
+    },
+  },
+
+  "POST /v1/visit-review-decisions/{decisionId}/revoke": {
+    mutating: true,
+    handle: async ({ event, tx }) => {
+      const decision = uuid(p(event).decisionId, "decisionId");
+      const body = parseBody(event.body, event.isBase64Encoded);
+      const key = idempotencyKey(event.headers);
+      const reason = text(body.reason, "reason", 1000);
+      await tx((db) => db.query("select ogevia_api.revoke_visit_review_decision($1, $2, $3)", [decision, reason, key]));
+      return { decisionId: decision, revoked: true };
+    },
+  },
+
   "POST /v1/visits/{visitId}/billing-approval": {
     status: 201,
     mutating: true,

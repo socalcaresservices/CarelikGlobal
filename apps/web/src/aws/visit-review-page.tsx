@@ -1,0 +1,269 @@
+// One visit, with why it needs review and what can be done about it (0031).
+// Opening this page changes nothing. A review decision is a separate, audited
+// record with a reason; it never creates a signature, never raises billable
+// minutes, and never approves billing (that stays a separate human step).
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useRef, useState } from "react";
+import { Link, useParams } from "react-router-dom";
+import { Button, Card } from "@carelik/ui";
+import {
+  confirmationMethodLabel,
+  FLEXIBLE_VISIT_LABEL,
+  formatClockTime,
+  formatDateOnly,
+  formatDateTime,
+  formatDuration,
+  UNLINKED_VISIT_LABEL,
+  VISIT_STATUS_LABEL,
+  type ServiceVisitStatus,
+} from "@/lib/service-verification";
+import { newIdempotencyKey } from "@/lib/sv-backend";
+import { useOrganization } from "@/providers/organization-provider";
+import { useAwsApi } from "./aws-workspace";
+
+interface VisitReview {
+  visitId: string;
+  visitNumber: string | null;
+  visitStatus: ServiceVisitStatus;
+  clientId: string;
+  clientCode: string;
+  clientName: string | null;
+  caregiverName: string;
+  serviceCode: string;
+  serviceName: string;
+  serviceDate: string;
+  timeIn: string;
+  timeOut: string | null;
+  workedMinutes: number | null;
+  verifiedMinutes: number | null;
+  billableMinutes: number | null;
+  authorizationStatus: string | null;
+  scheduledStartsAt: string | null;
+  scheduledEndsAt: string | null;
+  caregiverSchedulingMode: string | null;
+  confirmationMethod: string | null;
+  signerRole: string | null;
+  signerName: string | null;
+  signerRelationship: string | null;
+  confirmationReason: string | null;
+  confirmedAt: string | null;
+  hasSignatureEvidence: boolean;
+  isCorrection: boolean;
+  reviewReasons: string[];
+  decisionId: string | null;
+  decision: "accept_capped_billable" | "close_not_billable" | null;
+  decisionReason: string | null;
+  decidedByName: string | null;
+  decidedAt: string | null;
+  activeBillingApprovalId: string | null;
+  approvedMinutes: number | null;
+  canDecide: boolean;
+  allowedDecisions: Array<"accept_capped_billable" | "close_not_billable">;
+}
+
+const message = (cause: unknown, fallback: string) => (cause instanceof Error ? cause.message : fallback);
+
+const DECISION_LABEL: Record<string, string> = {
+  accept_capped_billable: "Accept the billable minutes within the authorization",
+  close_not_billable: "Close the review: not billable",
+};
+const DECISION_EXPLAIN: Record<string, string> = {
+  accept_capped_billable:
+    "The client signed or marked the visit. Only the minutes that fit within the authorization become eligible; the minutes over it stay not billable. Billing still needs its own approval.",
+  close_not_billable:
+    "Records that the review is finished and nothing more is billable for this visit. The visit and its times are not changed. It can be revoked later with a reason (for example, if a signature is obtained).",
+};
+
+function reasonText(reason: string, v: VisitReview): string {
+  if (reason === "no_client_signature") {
+    return v.confirmationMethod === "unable_to_confirm"
+      ? "The client or representative did not confirm the visit, so it has 0 billable minutes."
+      : `Confirmed by ${confirmationMethodLabel(v.confirmationMethod).toLowerCase()} without a drawn signature or mark, so it has 0 billable minutes.`;
+  }
+  if (reason === "over_authorization") {
+    const over = (v.workedMinutes ?? 0) - (v.billableMinutes ?? 0);
+    return `Worked ${formatDuration(v.workedMinutes)}, but only ${formatDuration(v.billableMinutes)} fit within this month's authorization; ${formatDuration(over)} is over it and not billable.`;
+  }
+  return reason;
+}
+
+export function VisitReviewPage() {
+  const { visitId = "" } = useParams();
+  const api = useAwsApi();
+  const queryClient = useQueryClient();
+  const { activeOrganizationId } = useOrganization();
+  const query = useQuery({
+    queryKey: ["visit-review", visitId],
+    queryFn: async () => (await api.get<{ visit: VisitReview }>(`/v1/visits/${encodeURIComponent(visitId)}/review`, { organizationId: activeOrganizationId })).visit,
+    enabled: !!visitId && !!activeOrganizationId,
+  });
+  const [choice, setChoice] = useState<string>("");
+  const [reason, setReason] = useState("");
+  const [revokeReason, setRevokeReason] = useState("");
+  const [state, setState] = useState<{ busy: boolean; error: string | null; done: string | null }>({ busy: false, error: null, done: null });
+  const key = useRef(newIdempotencyKey());
+
+  async function refresh() {
+    await Promise.all([
+      queryClient.invalidateQueries({ queryKey: ["visit-review", visitId] }),
+      queryClient.invalidateQueries({ queryKey: ["aws-attention"] }),
+    ]);
+  }
+
+  async function decide() {
+    if (!choice) return setState({ busy: false, error: "Choose what to record.", done: null });
+    if (reason.trim().length < 3) return setState({ busy: false, error: "Give the reason for this decision.", done: null });
+    setState({ busy: true, error: null, done: null });
+    try {
+      await api.post(`/v1/visits/${encodeURIComponent(visitId)}/review-decision`, { organizationId: activeOrganizationId, decision: choice, reason: reason.trim() }, { idempotencyKey: key.current });
+      key.current = newIdempotencyKey();
+      setChoice("");
+      setReason("");
+      setState({ busy: false, error: null, done: "Review decision recorded. The visit record is unchanged." });
+      await refresh();
+    } catch (cause) {
+      setState({ busy: false, error: message(cause, "The decision was not saved."), done: null });
+    }
+  }
+
+  async function revoke(decisionId: string) {
+    if (revokeReason.trim().length < 3) return setState({ busy: false, error: "Give the reason for revoking.", done: null });
+    setState({ busy: true, error: null, done: null });
+    try {
+      await api.post(`/v1/visit-review-decisions/${encodeURIComponent(decisionId)}/revoke`, { organizationId: activeOrganizationId, reason: revokeReason.trim() }, { idempotencyKey: key.current });
+      key.current = newIdempotencyKey();
+      setRevokeReason("");
+      setState({ busy: false, error: null, done: "Decision revoked. The visit needs review again." });
+      await refresh();
+    } catch (cause) {
+      setState({ busy: false, error: message(cause, "The decision was not revoked."), done: null });
+    }
+  }
+
+  if (query.isLoading) return <p className="text-sm text-slate-500">Loading visit…</p>;
+  if (query.isError || !query.data) {
+    return (
+      <div className="space-y-2">
+        <p role="alert" className="text-sm text-red-700">{query.isError ? message(query.error, "This visit could not be loaded.") : "Visit not found."}</p>
+        <Link to="/service-verification/reports" className="text-sm underline">Back to visit records</Link>
+      </div>
+    );
+  }
+  const v = query.data;
+  const inReview = v.visitStatus === "administrator_review";
+  const scheduled = v.scheduledStartsAt && v.scheduledEndsAt
+    ? `${formatClockTime(v.scheduledStartsAt)}–${formatClockTime(v.scheduledEndsAt)}`
+    : v.caregiverSchedulingMode === "flexible" ? FLEXIBLE_VISIT_LABEL : UNLINKED_VISIT_LABEL;
+  const facts: Array<[string, string]> = [
+    ["Caregiver", v.caregiverName],
+    ["Service", `${v.serviceName} (${v.serviceCode})`],
+    ["Date", formatDateOnly(v.serviceDate)],
+    ["Actual times", `${formatClockTime(v.timeIn)} – ${v.timeOut ? formatClockTime(v.timeOut) : "still open"}`],
+    ["Scheduled", scheduled],
+    ["Worked", formatDuration(v.workedMinutes)],
+    ["Billable", formatDuration(v.billableMinutes)],
+    ["Confirmation", confirmationMethodLabel(v.confirmationMethod)],
+  ];
+  if (v.signerName) facts.push(["Confirmed by", `${v.signerName}${v.signerRelationship ? ` (${v.signerRelationship})` : ""}`]);
+  if (v.confirmationReason) facts.push([v.confirmationMethod === "unable_to_confirm" ? "No-signer reason" : "Confirmation note", v.confirmationReason]);
+  if (v.confirmedAt) facts.push(["Submitted", formatDateTime(v.confirmedAt)]);
+  facts.push(["Signature on file", v.hasSignatureEvidence ? "Yes" : "No"]);
+  facts.push(["Billing approval", v.activeBillingApprovalId ? `Approved ${formatDuration(v.approvedMinutes)} — not submitted` : "Not approved"]);
+
+  return (
+    <div className="space-y-4">
+      <div>
+        <Link to="/service-verification/reports" className="text-sm text-slate-600 underline">Visit records</Link>
+        <h1 className="mt-1 text-xl font-semibold text-slate-950">{v.clientName ?? v.clientCode}</h1>
+        {v.clientName ? <p className="text-sm text-slate-500">{v.clientCode}</p> : null}
+        <p className="mt-1">
+          <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${inReview && !v.decision ? "bg-amber-50 text-amber-900 ring-1 ring-amber-200" : "bg-slate-100 text-slate-700"}`}>
+            {inReview ? (v.decision ? (v.decision === "accept_capped_billable" ? "Reviewed — capped minutes eligible" : "Reviewed — not billable") : "Needs review") : VISIT_STATUS_LABEL[v.visitStatus]}
+          </span>
+        </p>
+      </div>
+
+      <Card className="p-4">
+        <dl className="grid grid-cols-1 gap-x-4 gap-y-2 text-sm sm:grid-cols-[auto_1fr]">
+          {facts.map(([k, val]) => (
+            <div key={k} className="contents">
+              <dt className="text-slate-500">{k}</dt>
+              <dd className="break-words font-medium text-slate-900">{val}</dd>
+            </div>
+          ))}
+        </dl>
+        <details className="mt-3 text-xs text-slate-500">
+          <summary className="cursor-pointer">Visit reference</summary>
+          <p className="mt-1 font-mono">{v.visitNumber ?? v.visitId}</p>
+        </details>
+      </Card>
+
+      {inReview ? (
+        <Card className="space-y-3 p-4">
+          <h2 className="text-base font-semibold text-slate-950">Why this visit needs review</h2>
+          <ul className="list-disc space-y-1 pl-5 text-sm text-slate-800">
+            {v.reviewReasons.map((r) => <li key={r}>{reasonText(r, v)}</li>)}
+          </ul>
+          {v.reviewReasons.includes("no_client_signature") ? (
+            <p className="text-xs text-slate-600">
+              Ogevia cannot add a signature after the visit yet (requesting an electronic signature or uploading a signed
+              paper form is being built). Until then, an unsigned visit stays not billable.
+            </p>
+          ) : null}
+
+          {v.decision ? (
+            <div className="rounded-lg bg-slate-50 p-3 text-sm">
+              <p className="font-medium text-slate-900">{DECISION_LABEL[v.decision]}</p>
+              <p className="text-slate-700">“{v.decisionReason}”</p>
+              <p className="text-xs text-slate-500">{v.decidedByName} · {v.decidedAt ? formatDateTime(v.decidedAt) : ""}</p>
+              {v.canDecide && v.decisionId ? (
+                <div className="mt-3 space-y-2">
+                  <label className="block text-sm font-medium text-slate-700">
+                    Reason for revoking
+                    <input value={revokeReason} onChange={(e) => setRevokeReason(e.target.value)} maxLength={1000} className="mt-1 block w-full rounded-lg border border-slate-200 px-3 py-2 text-sm" />
+                  </label>
+                  <Button type="button" variant="secondary" disabled={state.busy} onClick={() => void revoke(v.decisionId!)}>Revoke decision</Button>
+                  {v.activeBillingApprovalId ? <p className="text-xs text-slate-500">Void the billing approval first; a decision behind an approval cannot be revoked.</p> : null}
+                </div>
+              ) : null}
+            </div>
+          ) : v.canDecide && v.allowedDecisions.length > 0 ? (
+            <form onSubmit={(e) => { e.preventDefault(); void decide(); }} className="space-y-3">
+              <fieldset className="space-y-2">
+                <legend className="text-sm font-medium text-slate-700">Record a review decision</legend>
+                {v.allowedDecisions.map((d) => (
+                  <label key={d} className="flex gap-2 rounded-lg border border-slate-200 p-3 text-sm">
+                    <input type="radio" name="decision" value={d} checked={choice === d} onChange={() => setChoice(d)} className="mt-1" />
+                    <span>
+                      <span className="font-medium text-slate-900">{DECISION_LABEL[d]}</span>
+                      <span className="block text-xs text-slate-600">{DECISION_EXPLAIN[d]}</span>
+                    </span>
+                  </label>
+                ))}
+              </fieldset>
+              <label className="block text-sm font-medium text-slate-700">
+                Reason (required, kept in the audit trail)
+                <textarea value={reason} onChange={(e) => setReason(e.target.value)} maxLength={1000} rows={2} className="mt-1 block w-full rounded-lg border border-slate-200 px-3 py-2 text-sm" />
+              </label>
+              <Button type="submit" disabled={state.busy}>Record decision</Button>
+            </form>
+          ) : (
+            <p className="text-sm text-slate-600">You can see this review but not record a decision.</p>
+          )}
+        </Card>
+      ) : null}
+
+      {state.error ? <p role="alert" className="text-sm text-red-700">{state.error}</p> : null}
+      {state.done ? <p role="status" className="text-sm text-emerald-800">{state.done}</p> : null}
+
+      <Card className="space-y-2 p-4 text-sm">
+        <h2 className="text-base font-semibold text-slate-950">Other actions</h2>
+        <p className="text-slate-700">
+          Wrong times? <Link className="font-medium underline" to={`/service-verification/reports?view=visits&correct=${encodeURIComponent(v.visitId)}`}>Correct visit</Link>{" "}
+          creates a corrected record and keeps the original; it is separate from review.
+        </p>
+        <p className="text-slate-700"><Link className="font-medium underline" to="/billing-review">Billing review</Link> is where billable minutes are approved.</p>
+      </Card>
+    </div>
+  );
+}

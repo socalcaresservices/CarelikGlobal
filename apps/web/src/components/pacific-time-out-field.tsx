@@ -1,4 +1,5 @@
 import {
+  correctedTimeValue,
   formatClockTime,
   formatDuration,
   formatVisitDate,
@@ -170,9 +171,16 @@ export function PacificCorrectionFields({
   onTimeInChange: (next: PacificWallTime) => void;
   onTimeOutChange: (next: PacificWallTime) => void;
 }) {
-  const newIn = instantOf(timeIn);
-  const newOut = instantOf(timeOut);
+  // Same rule as saving: a time left as it was keeps its stored instant
+  // (with seconds), so an unchanged form previews the original duration.
+  const resolvedIn = correctedTimeValue(timeIn, originalTimeIn);
+  const resolvedOut = correctedTimeValue(timeOut, originalTimeOut);
+  const newIn = resolvedIn.ok ? resolvedIn.value : instantOf(timeIn);
+  const newOut = resolvedOut.ok ? resolvedOut.value : instantOf(timeOut);
   const newMinutes = newIn && newOut ? minutesBetween(newIn, newOut) : null;
+  const originalMinutes = originalTimeOut ? minutesBetween(originalTimeIn, originalTimeOut) : null;
+  const changedTime = (resolvedIn.ok && resolvedIn.iso !== originalTimeIn) || (resolvedOut.ok && resolvedOut.iso !== originalTimeOut);
+  const hasSeconds = (iso: string | null) => !!iso && new Date(iso).getTime() % 60_000 !== 0;
   return (
     <div className="space-y-3">
       <div className="grid gap-3 sm:grid-cols-2">
@@ -192,8 +200,16 @@ export function PacificCorrectionFields({
         <dd className="font-semibold">
           {newIn ? describe(newIn) : "—"} → {newOut ? describe(newOut) : "—"}
           {newMinutes !== null && newMinutes > 0 ? ` (${formatDuration(newMinutes)})` : ""}
+          {!changedTime ? " · unchanged" : ""}
         </dd>
       </dl>
+      {changedTime && (hasSeconds(originalTimeIn) || hasSeconds(originalTimeOut)) && newMinutes !== null && originalMinutes !== null ? (
+        <p className="text-xs text-slate-600">
+          The original times were recorded to the second; a time you change is saved at the exact minute
+          you choose, and a time you leave alone keeps its seconds. Durations count whole minutes, so the
+          corrected duration can differ by a minute from the clock times shown.
+        </p>
+      ) : null}
     </div>
   );
 }

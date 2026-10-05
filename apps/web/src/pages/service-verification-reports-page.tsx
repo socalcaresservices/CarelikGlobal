@@ -935,6 +935,20 @@ export function ServiceVerificationReportsPage() {
     [rows],
   );
 
+  // A link to ?correct=<visit> (from a visit's review page) opens that visit's correction once.
+  const correctFromUrl = new URLSearchParams(location.search).get("correct");
+  const openedFromUrl = useRef<string | null>(null);
+  useEffect(() => {
+    if (!correctFromUrl || openedFromUrl.current === correctFromUrl) return;
+    const row = rows.find((r) => r.id === correctFromUrl);
+    if (row && (row.status === "signed" || row.status === "administrator_review")) {
+      openedFromUrl.current = correctFromUrl;
+      openCorrect(row);
+    }
+    // openCorrect only reads the row it is given.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [correctFromUrl, rows]);
+
   function openClose(row: VisitReportRow) {
     setCloseError(null);
     // Only the date is pre-filled: the actual end time must be entered, not
@@ -2363,6 +2377,11 @@ export function ServiceVerificationReportsPage() {
                         <p className="mt-2 font-mono text-[11px] text-slate-400">Visit {row.visit_number ?? "—"}</p>
                         {canManage ? (
                           <div className="mt-2 flex flex-wrap gap-2 print:hidden">
+                            {backend.kind === "aws" && row.status === "administrator_review" ? (
+                              <Link to={`/visits/${row.id}`} className="inline-flex min-h-[40px] items-center rounded-lg border border-amber-600 px-3 text-sm font-medium text-amber-900">
+                                Review visit
+                              </Link>
+                            ) : null}
                             {row.status === "signed" || row.status === "administrator_review" ? (
                               <button type="button" onClick={() => openCorrect(row)} className="min-h-[40px] rounded-lg border border-slate-300 px-3 text-sm font-medium text-slate-800">
                                 Correct visit
@@ -2501,6 +2520,11 @@ export function ServiceVerificationReportsPage() {
                             {canManage ? (
                               <td className="py-2 print:hidden">
                                 <div className="flex gap-2">
+                                  {backend.kind === "aws" && row.status === "administrator_review" ? (
+                                    <Link to={`/visits/${row.id}`} className="text-xs font-medium text-amber-900 underline">
+                                      Review visit
+                                    </Link>
+                                  ) : null}
                                   {row.status === "signed" ||
                                   row.status === "administrator_review" ? (
                                     <button
@@ -2689,12 +2713,17 @@ export function ServiceVerificationReportsPage() {
                       {formatDateOnly(row.service_date)}
                     </span>
                   </span>
-                  <span className="flex flex-wrap gap-1.5">
+                  <span className="flex flex-wrap items-center gap-1.5">
                     {row.status === "administrator_review" ? (
                       <StatusBadge
                         label={VISIT_STATUS_LABEL[row.status]}
                         tone="danger"
                       />
+                    ) : null}
+                    {backend.kind === "aws" && row.status === "administrator_review" ? (
+                      <Link to={`/visits/${row.id}`} className="inline-flex min-h-[32px] items-center rounded-lg border border-amber-600 px-2 text-xs font-medium text-amber-900">
+                        Review visit
+                      </Link>
                     ) : null}
                     {row.is_corrected ? (
                       <StatusBadge label="Corrected" tone="neutral" />

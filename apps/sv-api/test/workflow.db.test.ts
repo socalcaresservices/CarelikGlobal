@@ -867,3 +867,28 @@ describe("monthly approval summary (0030) through the API", () => {
     expect(other.body.lineages ?? []).toEqual([]);
   });
 });
+
+describe("visit review (0031) through the API", () => {
+  it("over-authorization visit: review shows reasons; decision recorded with a key; capped minutes then approvable; caregiver refused", async () => {
+    // Earlier tests leave this synthetic caregiver with an open visit: void it (local test database only).
+    const c = await db.admin.connect();
+    try {
+      await c.query("set session_replication_role = replica");
+      await c.query("update ogevia.service_visits set status = 'voided', voided_at = now(), voided_by = created_by, void_reason = 'test isolation' where caregiver_user_id = $1 and status in ('draft', 'awaiting_signature')", [w.caregiverA3.userId]);
+    } finally { await c.query("reset session_replication_role"); c.release(); }
+    const small = await freshClient(db, w, w.caregiverA3, 30, w.orgA, { before: 40, after: 40 });
+    const { visit } = await signedVisit(db, w.caregiverA3, w, 50, w.orgA, small.client, small.service);
+    const r = await call("GET /v1/visits/{visitId}/review", w.managerA, { path: { visitId: visit } });
+    expect(r.status, JSON.stringify(r.body)).toBe(200);
+    expect(r.body.visit).toMatchObject({ visitStatus: "administrator_review", reviewReasons: ["over_authorization"], allowedDecisions: ["accept_capped_billable", "close_not_billable"], billableMinutes: 30 });
+    expect((await call("GET /v1/visits/{visitId}/review", w.managerB, { path: { visitId: visit } })).status).toBe(404);
+    expect((await call("POST /v1/visits/{visitId}/review-decision", w.caregiverA3, { path: { visitId: visit }, body: { decision: "close_not_billable", reason: "Synthetic" } })).status).toBe(403);
+    expect((await call("POST /v1/visits/{visitId}/review-decision", w.managerA, { path: { visitId: visit }, body: { decision: "approve_everything", reason: "Synthetic" } })).status).toBe(400);
+    const d = await call("POST /v1/visits/{visitId}/review-decision", w.managerA, { path: { visitId: visit }, body: { decision: "accept_capped_billable", reason: "Signed; 20 min over not billable (synthetic)" } });
+    expect(d.status, JSON.stringify(d.body)).toBe(201);
+    const ap = await call("POST /v1/visits/{visitId}/billing-approval", w.managerA, { path: { visitId: visit }, body: { approvedMinutes: 30 } });
+    expect(ap.status, JSON.stringify(ap.body)).toBe(201);
+    const rv = await call("POST /v1/visit-review-decisions/{decisionId}/revoke", w.managerA, { path: { decisionId: d.body.decisionId }, body: { reason: "Synthetic" } });
+    expect(rv.status).toBe(409);
+  });
+});

@@ -238,6 +238,9 @@ export interface BillingReviewRow {
   timeOut?: string | null;
   caregiverSchedulingMode?: "fixed" | "flexible" | null;
   scheduledShiftId?: string | null;
+  /** AWS (0031): why the visit is in review, and the active review decision. */
+  reviewReasons?: string[];
+  reviewDecision?: "accept_capped_billable" | "close_not_billable" | null;
 }
 
 /** A human billing approval. rateCents/amountCents are null unless the caller holds billing.read (owner). */
