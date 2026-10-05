@@ -1,7 +1,7 @@
 // 0026 Staff-scheduled shifts, call-outs and replacements. SYNTHETIC data only.
 // Every call runs as the application role through begin_request.
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { api, asActor, createTestDb, expectPgError, freshClient, orgToday, seedWorld, type Actor, type TestDb, type World } from "./harness.js";
+import { api, asActor, createTestDb, expectPgError, freshClient, orgToday, seedWorld, signedVisit, type Actor, type TestDb, type World } from "./harness.js";
 
 let db: TestDb;
 let w: World;
@@ -69,7 +69,7 @@ describe("staff-scheduled shifts", () => {
     expect(results.filter((r) => r.status === "fulfilled")).toHaveLength(1);
     const rejected = results.find((r) => r.status === "rejected") as PromiseRejectedResult;
     expect(rejected.reason.code).toBe("OGC09");
-    expect(rejected.reason.message).toMatch(/Not enough authorized time remains this month for this shift \(120 minutes left\)/);
+    expect(rejected.reason.message).toMatch(/Not enough authorized time remains this month for this shift: 2 hr available, this shift needs/);
     // Exactly the remaining 120 minutes still fit.
     expect(await q(w.managerA, "select * from ogevia_api.create_shift($1, $2, $3, $4::date, '12:00', '14:00', null, null)",
       [w.orgA, small.client, small.service, d]).then((r) => r[0].remaining_minutes)).toBe("0");
@@ -133,10 +133,13 @@ describe("call-outs and replacements", () => {
     const before = await reservedTotal();
     const s = await create(w.managerA, slotDay(), "18:00", "19:30");
     expect(await reservedTotal()).toBe(before + 90);
+    expect((await row(s.shift_id)).reserved_minutes).toBe(90);
     await expectPgError(q(w.managerA, "select ogevia_api.cancel_shift($1, $2, '')", [w.orgA, s.shift_id]), "OGV22");
     expect((await q(w.managerA, "select ogevia_api.cancel_shift($1, $2, 'Client away (synthetic)') as n", [w.orgA, s.shift_id]))[0].n).toBe(90);
     expect(await reservedTotal()).toBe(before);
     expect((await row(s.shift_id)).coverage_state).toBe("cancelled");
+    // 0032 (owner test 2026-10-05): the card must not still show the released hour as reserved.
+    expect((await row(s.shift_id)).reserved_minutes).toBeNull();
     await expectPgError(q(w.managerA, "select ogevia_api.assign_shift_caregiver($1, $2, $3)", [w.orgA, s.shift_id, rec["CG-A3"]]), "OGC09", /no longer scheduled/);
     await expectPgError(q(w.caregiverA1, "select ogevia_api.cancel_shift($1, $2, 'Nope (synthetic)')", [w.orgA, s.shift_id]), "OGA03");
   });
@@ -151,5 +154,18 @@ describe("call-outs and replacements", () => {
     expect((await row(s.shift_id)).has_visit).toBe(true);
     await expectPgError(q(w.managerA, "select ogevia_api.record_shift_callout($1, $2, 'Too late (synthetic)')", [w.orgA, s.shift_id]), "OGC09", /visit has already started/);
     await expectPgError(q(w.managerA, "select ogevia_api.cancel_shift($1, $2, 'Too late (synthetic)')", [w.orgA, s.shift_id]), "OGC09", /visit is linked/);
+  });
+});
+
+describe("owner test 2026-10-05: 3 hr authorized, 1 min used", () => {
+  it("a 3-hour shift is refused and the message says 2 hr 59 min available (exact minutes still enforced)", async () => {
+    const small = await freshClient(db, w, w.caregiverA3, 180, w.orgA, { before: 40, after: 40 });
+    await signedVisit(db, w.caregiverA3, w, 1, w.orgA, small.client, small.service);
+    const date = day(1).slice(0, 7) === today.slice(0, 7) ? day(1) : today;
+    const attempt = q(w.managerA, "select * from ogevia_api.create_shift($1, $2, $3, $4::date, '09:00'::time, '12:00'::time, null, null)", [w.orgA, small.client, small.service, date]);
+    await expectPgError(attempt, "OGC09", /Not enough authorized time remains this month for this shift: 2 hr 59 min available, this shift needs 3 hr/);
+    // 2 hr 59 min fits exactly; nothing is rounded away and no overrun is allowed.
+    const ok = await q(w.managerA, "select * from ogevia_api.create_shift($1, $2, $3, $4::date, '09:00'::time, '11:59'::time, null, null)", [w.orgA, small.client, small.service, date]);
+    expect({ reserved: ok[0].reserved_minutes, remaining: Number(ok[0].remaining_minutes) }).toEqual({ reserved: 179, remaining: 0 });
   });
 });

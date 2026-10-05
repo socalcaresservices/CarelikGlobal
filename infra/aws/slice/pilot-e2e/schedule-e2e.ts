@@ -185,7 +185,7 @@ async function main() {
   await m.page.getByLabel("Start time").fill("08:00");
   await m.page.getByLabel("End time").fill("16:00");
   await m.page.getByRole("button", { name: "Schedule shift" }).click();
-  check("schedule: more hours than authorized are refused, with the minutes left", await m.page.getByText(/Not enough authorized time remains this month for this shift \(420 minutes left\)/).waitFor({ timeout: 8000 }).then(() => true, () => false));
+  check("schedule: more hours than authorized are refused, with the minutes left", await m.page.getByText(/Not enough authorized time remains this month for this shift: 7 hr available, this shift needs 8 hr/).waitFor({ timeout: 8000 }).then(() => true, () => false));
   await m.page.getByRole("button", { name: "Close" }).first().click();
 
   // Caregiver B calls out from My shifts.
