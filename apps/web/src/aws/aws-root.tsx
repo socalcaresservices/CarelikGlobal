@@ -22,6 +22,8 @@ import { DocumentsPage } from "./documents-page";
 import { ClientDetailPage } from "./client-detail-page";
 import { ClientsPage } from "./clients-page";
 import { CareTeamPage, CaregiverDetailPage } from "./care-team-page";
+import { ContinuityPage } from "./continuity-page";
+import { OutageVisitsPage } from "./outage-visits-page";
 import { MyShiftsPage, SchedulePage } from "./schedule-page";
 import { ServicesPage } from "./services-page";
 import { BrandingSettingsPage, ProfilePage } from "./workspace-settings-pages";
@@ -74,6 +76,8 @@ export function AwsRoutes({ api, publicApi }: { api: AwsApiClient; publicApi: Aw
                     <Route path="/services" element={<ServicesPage />} />
                     <Route path="/schedule" element={<SchedulePage />} />
                     <Route path="/my-shifts" element={<MyShiftsPage />} />
+                    <Route path="/continuity" element={<ContinuityPage />} />
+                    <Route path="/outage-visits" element={<OutageVisitsPage />} />
                     <Route path="/settings/branding" element={<BrandingSettingsPage />} />
                     <Route path="*" element={<Navigate to="/" replace />} />
                   </Routes>

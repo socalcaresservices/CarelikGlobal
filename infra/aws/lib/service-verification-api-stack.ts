@@ -113,6 +113,13 @@ export const SERVICE_VERIFICATION_ROUTES: ReadonlyArray<{
   { method: apigw.HttpMethod.GET, path: "/v1/shifts/{shiftId}/coverage" },
   { method: apigw.HttpMethod.GET, path: "/v1/my-shifts" },
   { method: apigw.HttpMethod.POST, path: "/v1/my-shifts/{shiftId}/callout" },
+  // Continuity pack (0027): continuity.export only; JWT like every staff route.
+  { method: apigw.HttpMethod.POST, path: "/v1/continuity/pack" },
+  { method: apigw.HttpMethod.GET, path: "/v1/continuity/status" },
+  // Outage visit records (0028): visits.manage only.
+  { method: apigw.HttpMethod.POST, path: "/v1/outage-visits" },
+  { method: apigw.HttpMethod.POST, path: "/v1/outage-visits/not-used" },
+  { method: apigw.HttpMethod.GET, path: "/v1/outage-visits/reconciliation" },
   { method: apigw.HttpMethod.POST, path: "/v1/services" },
   { method: apigw.HttpMethod.POST, path: "/v1/services/{serviceId}/name" },
   { method: apigw.HttpMethod.POST, path: "/v1/services/{serviceId}/status" },

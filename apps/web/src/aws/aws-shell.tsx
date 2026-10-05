@@ -55,6 +55,8 @@ export function AwsShell({ children }: PropsWithChildren) {
     { to: "/services", label: "Services", show: !isCaregiver && hasPermission("authorizations.read") },
     { to: "/documents", label: hasPermission("documents.read") ? "Documents" : "My documents", show: hasPermission("documents.read") || hasPermission("documents.manage_own") },
     { to: "/availability", label: "Availability", show: isCaregiver },
+    { to: "/continuity", label: "Continuity", show: !isCaregiver && hasPermission("continuity.export") },
+    { to: "/outage-visits", label: "Outage records", show: !isCaregiver && hasPermission("visits.manage") },
     { to: "/settings/branding", label: "Settings", show: hasPermission("organization.update") },
   ].filter((l) => l.show);
   // Longest matching path wins (/service-verification/reports is Visit records, not Verify visit).

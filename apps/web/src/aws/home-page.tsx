@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import { Card } from "@carelik/ui";
+import { ContinuityStatusCard } from "./continuity-page";
 import { useOrganization } from "@/providers/organization-provider";
 import { EXCEPTIONS_PATH } from "./aws-shell";
 import { hoursLabel, moneyLabel, useAttention, useDocumentAlerts, useUtilisation, type UtilisationRow } from "./aws-workspace";
@@ -54,6 +55,7 @@ export function AwsHomePage() {
   return (
     <div className="space-y-6">
       <h1 className="text-xl font-semibold text-slate-950">Home</h1>
+      <ContinuityStatusCard />
 
       <section aria-labelledby="attention-heading">
         <h2 id="attention-heading" className="text-sm font-bold uppercase tracking-wide text-red-700">Needs attention</h2>

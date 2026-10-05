@@ -98,6 +98,14 @@ function authorizationTerms(body: Record<string, unknown>) {
     source: text(body.sourceReference, "sourceReference", 200),
   };
 }
+function outageNumber(value: unknown): number {
+  const n = typeof value === "string" ? Number(value.replace(/^OUT-/i, "")) : value;
+  if (typeof n !== "number" || !Number.isInteger(n) || n < 1 || n > 99_999_999) {
+    throw new ApiError(400, "bad_request", "outageNumber must be the number printed on the outage visit record.");
+  }
+  return n;
+}
+
 function clockTime(value: unknown, name: string): string {
   if (typeof value !== "string" || !/^([01]\d|2[0-3]):[0-5]\d$/.test(value)) throw new ApiError(400, "bad_request", `${name} must be a time like 09:30.`);
   return value;
@@ -654,6 +662,69 @@ export const ROUTES: Record<string, Route> = {
       const org = orgParam(event);
       const [summary] = await tx((db) => rows(db, "select * from ogevia_api.get_attention_summary($1)", [org]));
       return { summary: summary ?? null };
+    },
+  },
+
+  // Continuity pack (0027): continuity.export (Administrator, manager). The agency is checked
+  // server-side from the caller's membership; the pack is returned, never stored or logged here.
+  "POST /v1/continuity/pack": {
+    mutating: true,
+    handle: async ({ event, tx }) => {
+      const body = parseBody(event.body, event.isBase64Encoded);
+      const key = idempotencyKey(event.headers);
+      const org = uuid(body.organizationId, "organizationId");
+      const [row] = await tx((db) => rows(db, "select ogevia_api.create_continuity_pack($1, $2) as pack", [org, key]));
+      return { pack: row?.pack ?? null };
+    },
+  },
+
+  "GET /v1/continuity/status": {
+    mutating: false,
+    handle: async ({ event, tx }) => {
+      const [status] = await tx((db) => rows(db, "select * from ogevia_api.get_continuity_status($1)", [orgParam(event)]));
+      return { status: status ?? null };
+    },
+  },
+
+  // Outage visit records (0028): visits.manage. Each numbered paper record is entered once and
+  // becomes a locked visit in administrator review with 0 billable minutes.
+  "POST /v1/outage-visits": {
+    status: 201,
+    mutating: true,
+    handle: async ({ event, tx }) => {
+      const body = parseBody(event.body, event.isBase64Encoded);
+      const key = idempotencyKey(event.headers);
+      const org = uuid(body.organizationId, "organizationId");
+      const n = outageNumber(body.outageNumber);
+      const params = [
+        org, n, uuid(body.clientId, "clientId"), uuid(body.serviceId, "serviceId"), uuid(body.caregiverRecordId, "caregiverRecordId"),
+        date(body.date, "date"), clockTime(body.timeIn, "timeIn"), clockTime(body.timeOut, "timeOut"),
+        oneOf(body.paperConfirmation, "paperConfirmation", ["signature_on_form", "verbal", "unable_to_confirm", "declined"] as const),
+        text(body.signerName, "signerName", 120), text(body.notes, "notes", 1000), key,
+      ];
+      const [visit] = await tx((db) => rows(db,
+        "select * from ogevia_api.record_outage_visit($1, $2, $3, $4, $5, $6, $7::time, $8::time, $9, $10, $11, $12)", params));
+      return { visit };
+    },
+  },
+
+  "POST /v1/outage-visits/not-used": {
+    mutating: true,
+    handle: async ({ event, tx }) => {
+      const body = parseBody(event.body, event.isBase64Encoded);
+      const key = idempotencyKey(event.headers);
+      const org = uuid(body.organizationId, "organizationId");
+      const reason = text(body.reason, "reason", 500, { required: true });
+      const [row] = await tx((db) => rows(db, "select * from ogevia_api.mark_outage_number_unused($1, $2, $3, $4)", [org, outageNumber(body.outageNumber), reason, key]));
+      return { outageNumber: row?.outageNumber ?? null, state: row?.state ?? null };
+    },
+  },
+
+  "GET /v1/outage-visits/reconciliation": {
+    mutating: false,
+    handle: async ({ event, tx }) => {
+      const openOnly = q(event).openOnly === "true";
+      return { records: await tx((db) => rows(db, "select * from ogevia_api.list_outage_reconciliation($1, $2)", [orgParam(event), openOnly])) };
     },
   },
 

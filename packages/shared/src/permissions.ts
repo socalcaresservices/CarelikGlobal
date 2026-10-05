@@ -40,6 +40,7 @@ export const permissionSchema = z.enum([
   "services.manage",
   "assignments.manage",
   "shifts.manage",
+  "continuity.export",
   "documents.read",
   "documents.manage",
   "documents.manage_own",

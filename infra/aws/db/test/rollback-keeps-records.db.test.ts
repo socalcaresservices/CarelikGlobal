@@ -34,6 +34,12 @@ const counts = async () => (await db.admin.query(
 const tomorrow = async () => (await db.admin.query("select (now() at time zone o.timezone)::date + 1 as d from ogevia.organizations o where o.id = $1", [w.orgA])).rows[0].d.toISOString().slice(0, 10);
 
 describe("rollbacks keep records", () => {
+  it("0028 and 0027 roll back cleanly when no outage record or continuity pack exists", async () => {
+    await runDown("0028_outage_visit_records.down.sql");
+    await runDown("0027_continuity_pack.down.sql");
+    expect((await counts()).v).toBe("0026");
+  });
+
   it("0026 refuses while a staff-scheduled shift exists; nothing changes", async () => {
     const fresh = await freshClient(db, w, w.caregiverA1, 6000, w.orgA, { before: 40, after: 40 });
     const d = await tomorrow();

@@ -68,3 +68,14 @@ Result 2026-10-04: 19/19 PASS at 390 px.
 - no horizontal scroll at 390 px on the caregiver page, Schedule and My shifts; no page errors.
 
 Result 2026-10-04: 22/22 PASS at 390 px (after renaming the ambiguous "Start"/"End" fields to "Start time"/"End time").
+
+## Outage continuity (0027–0028)
+
+`continuity-e2e.ts` uses the same setup with database `ogevia_cont_e2e` (`E2E_DB=ogevia_cont_e2e bash setup-db.sh`; `E2E_PG` selects the server). It checks:
+- the manager's outage-readiness warning on Home;
+- the continuity pack download: file name, data-as-of time, every active client of the agency, none of the other agency's, no money, the audit row;
+- the file opened offline at 390 px;
+- an outage record entered (administrator review, 0 billable), reconciliation counts, and the duplicate number refused;
+- a caregiver offered neither screen.
+
+Result 2026-10-05: 23/23 PASS at 390 px.

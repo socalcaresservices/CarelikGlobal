@@ -56,6 +56,8 @@ describe("SCHEMA: migration chain", () => {
       "0024",
       "0025",
       "0026",
+      "0027",
+      "0028",
     ]);
   });
 
@@ -110,11 +112,13 @@ describe("SCHEMA: migration chain", () => {
       "client_private_names",
       "client_types",
       "clients",
+      "continuity_exports",
       "document_types",
       "document_versions",
       "idempotency_records",
       "organization_memberships",
       "organizations",
+      "outage_visit_records",
       "permissions",
       "role_permissions",
       "service_visits",

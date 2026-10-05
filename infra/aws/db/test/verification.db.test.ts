@@ -2,6 +2,7 @@ import { readdirSync, readFileSync } from "node:fs";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import {
   api,
+  asActor,
   createTestDb,
   endedVisit,
   freshClient,
@@ -59,6 +60,12 @@ beforeAll(async () => {
   });
   await api.amend(db, w.managerA, f.auth, 30);
   await signedVisit(db, w.caregiverB1, w, 25, w.orgB, w.clientB1, w.serviceB);
+  // An outage visit record (0028), entered after a continuity pack (0027).
+  await asActor(db, w.managerA.sub, (c) => c.query("select ogevia_api.create_continuity_pack($1, $2)", [w.orgA, crypto.randomUUID()]));
+  const rec = (await db.admin.query("select id from ogevia.caregiver_records where organization_id = $1 and linked_user_id = $2", [w.orgA, w.caregiverA3.userId])).rows[0].id;
+  await asActor(db, w.managerA.sub, (c) => c.query(
+    "select * from ogevia_api.record_outage_visit($1, 1, $2, $3, $4, (now() at time zone 'America/Los_Angeles')::date - 3, '06:00', '07:00', 'signature_on_form', 'Synthetic Representative', null, null)",
+    [w.orgA, f.client, f.service, rec]));
 });
 afterAll(async () => db?.drop());
 

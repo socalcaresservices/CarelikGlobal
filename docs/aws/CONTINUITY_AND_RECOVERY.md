@@ -1,6 +1,6 @@
 # Ogevia outage continuity and recovery (pilot readiness, blocker 7)
 
-**Status:** assessment 2026-10-05. **NOT READY.** Requirement recorded in `docs/product/PILOT_SCOPE_RECONCILIATION.md` section 17.
+**Status:** assessment 2026-10-05; continuity pack (0027) and outage visit records (0028) BUILT and verified locally, NOT deployed. **NOT READY** (combined recovery drill outstanding). Requirement recorded in `docs/product/PILOT_SCOPE_RECONCILIATION.md` section 17.
 **Scope:** AWS TEST environment (`us-west-2`, account 300094796789) and every agency that uses it.
 
 Evidence classes:
@@ -94,14 +94,18 @@ Cross-region protection (snapshot copy to a second region, S3 replication, a use
 | S3 version recovery | Yes (controls verified) | Drill together with the database | — |
 | Account recovery | Deletion protection only | User list export and re-link procedure; drill | Users re-enrol MFA after a pool loss |
 | Application rebuild against a restored database | Pinned scripts exist | Written procedure plus a drill | — |
-| Full-system recovery time | — | Combined drill (criterion C1/C2) | — |
-| Continuity pack | No | Permission, export function, page, audit, last-downloaded indicator, isolation test | Section 3, items 1–5 |
-| Outage visit recording | No | Form, numbered blocks, "Record outage visit", duplicate and overlap refusal, reconciliation report | Keep forms in the field; daily hand-in |
+| Full-system recovery time | — | Combined drill (criteria C1/C2) | — |
+| Continuity pack (0027) | **Built, verified locally; not deployed** (DB 7 tests, API, web 6, browser 23/23 at 390 px, including the file opened offline) | Deploy with the next release | Section 3, items 1–5 |
+| Outage visit recording and reconciliation (0028) | **Built, verified locally; not deployed**: numbered records entered once; duplicates, unissued numbers and overlaps refused; administrator review with 0 billable; reconciliation lists MISSING numbers (DB 6 tests, db:verify passes with an outage visit, API, web, browser) | Deploy with the next release | Keep the forms in the field; hand them in daily |
 | Cross-region protection | No | Owner decision (cost) | — |
+
+**Local evidence (2026-10-05):**
+- Database suite: 254/254. API: 48/48. Web: 601/601. Infra: 106/106. Lint and typecheck clean.
+- Browser at 390 px: `infra/aws/slice/pilot-e2e/continuity-e2e.ts`, 23/23 PASS.
 
 ## 6. Order of work
 
-1. Continuity pack (largest gap for agencies; no new AWS cost).
-2. Outage visit recording and reconciliation.
+1. ~~Continuity pack~~ (built: 0027).
+2. ~~Outage visit recording and reconciliation~~ (built: 0028).
 3. Combined recovery drill script (database + S3 + Cognito list + application), with measured times. Run by the owner in TEST.
 4. Owner decision on cross-region protection.

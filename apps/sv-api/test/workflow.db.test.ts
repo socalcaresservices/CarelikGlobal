@@ -443,6 +443,53 @@ describe("workspace (0020) through the API", () => {
   });
 });
 
+describe("continuity pack (0027) through the API", () => {
+  it("manager downloads the agency's pack with a data-as-of time and outage numbers; status reflects it; caregivers refused", async () => {
+    const key = crypto.randomUUID();
+    const p = await call("POST /v1/continuity/pack", w.managerA, { body: { organizationId: w.orgA }, key });
+    expect(p.status, JSON.stringify(p.body)).toBe(200);
+    expect(p.body.pack).toMatchObject({ outage_numbers: { first: 1, last: 25 }, includes_client_names: true });
+    expect(Date.parse(p.body.pack.data_as_of)).toBeGreaterThan(Date.now() - 60_000);
+    expect(JSON.stringify(p.body.pack)).not.toMatch(/cents|payer|rate/i);
+    const again = await call("POST /v1/continuity/pack", w.managerA, { body: { organizationId: w.orgA }, key });
+    expect(again.body.pack.outage_numbers).toEqual(p.body.pack.outage_numbers);
+    const s = await call("GET /v1/continuity/status", w.managerA, { query: { organizationId: w.orgA } });
+    expect(s.status).toBe(200);
+    expect(Number(s.body.status.hoursSince)).toBeLessThan(1);
+    const c = await call("POST /v1/continuity/pack", w.caregiverA1, { body: { organizationId: w.orgA } });
+    expect(c.status).toBe(403);
+    const other = await call("POST /v1/continuity/pack", w.managerB, { body: { organizationId: w.orgA } });
+    expect([403, 404]).toContain(other.status);
+  });
+});
+
+describe("outage visit records (0028) through the API", () => {
+  it("manager enters a numbered record once; duplicates refused; reconciliation lists the rest; caregivers refused", async () => {
+    // Numbers 1-25 were issued by the continuity pack test above; this test uses its own block.
+    const pack = await call("POST /v1/continuity/pack", w.managerA, { body: { organizationId: w.orgA } });
+    const n = pack.body.pack.outage_numbers.first as number;
+    const rec = (await db.admin.query("select id from ogevia.caregiver_records where organization_id = $1 and linked_user_id = $2", [w.orgA, w.caregiverA1.userId])).rows[0].id;
+    const day = (await db.admin.query("select ((now() at time zone 'America/Los_Angeles')::date - 5)::text as d")).rows[0].d;
+    const body = { organizationId: w.orgA, outageNumber: `OUT-${String(n).padStart(6, "0")}`, clientId: fresh.client, serviceId: fresh.service,
+      caregiverRecordId: rec, date: day, timeIn: "05:00", timeOut: "06:15", paperConfirmation: "signature_on_form", signerName: "Synthetic Representative" };
+    const r = await call("POST /v1/outage-visits", w.managerA, { body });
+    expect(r.status, JSON.stringify(r.body)).toBe(201);
+    expect(r.body.visit).toMatchObject({ workedMinutes: 75, outageNumber: n });
+    const dup = await call("POST /v1/outage-visits", w.managerA, { body: { ...body, timeIn: "07:00", timeOut: "08:00" } });
+    expect(dup.status).toBe(409);
+    expect(dup.body.error.message).toMatch(/already entered/);
+    const bad = await call("POST /v1/outage-visits", w.managerA, { body: { ...body, outageNumber: "OUT-abc" } });
+    expect(bad.status).toBe(400);
+    const unused = await call("POST /v1/outage-visits/not-used", w.managerA, { body: { organizationId: w.orgA, outageNumber: n + 1, reason: "Form spoiled (synthetic)" } });
+    expect(unused.status, JSON.stringify(unused.body)).toBe(200);
+    const open = await call("GET /v1/outage-visits/reconciliation", w.managerA, { query: { organizationId: w.orgA, openOnly: "true" } });
+    expect(open.body.records.map((x: { outageNumber: number }) => x.outageNumber)).not.toContain(n);
+    expect(open.body.records.map((x: { outageNumber: number }) => x.outageNumber)).not.toContain(n + 1);
+    expect(open.body.records.every((x: { state: string }) => x.state === "missing")).toBe(true);
+    expect((await call("POST /v1/outage-visits", w.caregiverA1, { body: { ...body, outageNumber: n + 2 } })).status).toBe(403);
+  });
+});
+
 describe("staff documents (0021) through the API", () => {
   const pdf = Buffer.concat([Buffer.from("%PDF-1.4\n% synthetic\n"), Buffer.alloc(200, 32)]);
   const docsOf = (a: Actor) => call("GET /v1/documents", a, { query: { organizationId: w.orgA } });

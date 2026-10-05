@@ -2,8 +2,8 @@
 # Fresh local PG18 database with migrations 0001-0018, the app login, the
 # test-slice seed (second tenant) and the SCS pilot seed. Synthetic only.
 set -euo pipefail
-R=/home/user/CarelikGlobal/infra/aws; DB=ogevia_pilot_e2e
-ADMIN=postgres://ogevia_admin@127.0.0.1:5432
+R=/home/user/CarelikGlobal/infra/aws; DB=${E2E_DB:-ogevia_pilot_e2e}
+ADMIN=${E2E_PG:-postgres://ogevia_admin@127.0.0.1:5432}
 psql -X -q "$ADMIN/postgres" -c "drop database if exists $DB with (force)" -c "create database $DB"
 psql -X -q "$ADMIN/postgres" -c "do \$\$ begin if not exists (select 1 from pg_roles where rolname='e2e_app_login') then create role e2e_app_login; end if; end \$\$" 2>/dev/null || true
 (cd $R && OGEVIA_DATABASE_URL="$ADMIN/$DB" npx tsx db/scripts/migrate.ts | tail -1)
