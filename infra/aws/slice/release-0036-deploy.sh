@@ -155,6 +155,7 @@ export OGEVIA_DEPLOY_APPROVAL="$TAG_REF"
 (cd "$REPO/apps/web" && VITE_APP_ENV=production VITE_AUTH_PROVIDER=cognito npx vite build --outDir "$RUN/web-build" --emptyOutDir >/dev/null) \
   || die "web build failed"
 rm -f "$RUN/web-build/config.json"   # the live config.json is kept as it is
+mkdir -p "$RUN/built-templates" && cp "$HERE/cdk.out/"*.template.json "$RUN/built-templates/"   # the approved build, for a later verify-only rerun
 echo "Lint, typecheck, unit tests, build, synth, web build: OK"
 
 # ----------------------------------------------------------------------------
@@ -334,105 +335,11 @@ echo "API and web deployed."
 
 # ----------------------------------------------------------------------------
 phase "11/11 Live verification (read-only)"
-: > "$VERIFY"
-PASSES=0; FAILS=0; TOTAL=14
-check() { if [[ "$2" == ok ]]; then PASSES=$((PASSES + 1)); echo "PASS $1${3:+ - $3}" | tee -a "$VERIFY"; else FAILS=$((FAILS + 1)); echo "FAIL $1${3:+ - $3}" | tee -a "$VERIFY"; fi; }
-APPROVED_AT=$(grep '^approved_at=' "$RUN/APPROVAL.txt" | cut -d= -f2)
-ST=$(aws cloudformation describe-stacks --stack-name "$API_STACK" --query 'Stacks[0].[StackStatus,LastUpdatedTime]' --output text)
-[[ "$(cut -f1 <<<"$ST")" == UPDATE_COMPLETE && "$(cut -f2 <<<"$ST")" > "$APPROVED_AT" ]] && r=ok || r=no
-check "1 API stack UPDATE_COMPLETE after the approval" "$r" "$(cut -f1 <<<"$ST")"
-
-mkdir -p "$RUN/after-templates"
-r=ok
-for s in "${STACKS[@]}"; do
-  [[ "$s" == "$API_STACK" ]] && continue
-  aws cloudformation get-template --stack-name "$s" --template-stage Original --query TemplateBody --output json > "$RUN/after-templates/$s.json"
-  [[ "$(python3 "$SLICE/release_0036_live.py" same-json "$RB/templates/$s.json" "$RUN/after-templates/$s.json")" == ok ]] || r=no
-done
-check "2 the other four stacks unchanged (NetworkEgress, EvidenceStorage, Observability, WebHosting)" "$r"
-
-aws apigatewayv2 get-routes --api-id "$API_ID" --query 'Items[].[RouteKey,AuthorizationType]' --output json > "$RUN/routes-after.json"
-r=$(python3 "$SLICE/release_0036_live.py" routes "$RB/routes.json" "$RUN/routes-after.json")
-check "3 $NEW_ROUTE_COUNT new routes: 30 JWT + exactly the 2 approved public link routes; every earlier route unchanged" "$r" "$(jq length "$RB/routes.json") -> $(jq length "$RUN/routes-after.json") routes"
-
-codes=""; r=ok
-for p in /v1/shift-series /v1/continuity/status /v1/billing-rounding/policies "/v1/visits/00000000-0000-4000-8000-000000000000/review"; do
-  c=$(curl -s -o /dev/null -w '%{http_code}' "${API%/}$p"); codes="$codes $p=$c"; [[ "$c" == 401 ]] || r=no
-done
-c=$(curl -s -o /dev/null -w '%{http_code}' -X POST "${API%/}/v1/shift-series"); codes="$codes POST/shift-series=$c"; [[ "$c" == 401 ]] || r=no
-c=$(curl -s -o /dev/null -w '%{http_code}' -X POST "${API%/}/v1/visits/00000000-0000-4000-8000-000000000000/confirmation-requests"); codes="$codes POST/confirmation-requests=$c"; [[ "$c" == 401 ]] || r=no
-# The public link route answers without sign-in but refuses a request without the phone code (400, before any database work).
-c=$(curl -s -o /dev/null -w '%{http_code}' -X POST "${API%/}/v1/public/visit-confirmations/$(printf '0%.0s' {1..64})/open"); codes="$codes POST/public-open=$c"; [[ "$c" == 400 ]] || r=no
-check "4 new staff routes refuse requests without sign-in (401); the public link route refuses a request without a code (400)" "$r" "${codes# }"
-
-FNCFG2=$(aws lambda get-function-configuration --function-name "$FN" --output json)
-HANDLER_KEY='.Resources | to_entries[] | select(.value.Type=="AWS::Lambda::Function" and (.key | startswith("Handler"))) | .value.Properties.Code.S3Key'
-LIVE_KEY=$(aws cloudformation get-template --stack-name "$API_STACK" --template-stage Original --query TemplateBody --output json | jq -r "$HANDLER_KEY")
-BUILD_KEY=$(jq -r "$HANDLER_KEY" "$HERE/cdk.out/$API_STACK.template.json")
-NEW_SHA=$(jq -r .CodeSha256 <<<"$FNCFG2")
-[[ "$LIVE_KEY" == "$BUILD_KEY" && "$NEW_SHA" != "$(jq -r .CodeSha256 "$RB/lambda.json")" && "$(jq -r .Environment.Variables.DB_NAME <<<"$FNCFG2")" == "$DB_NAME" ]] && r=ok || r=no
-check "5 API Lambda runs this build and still serves $DB_NAME" "$r" "CodeSha256 ${NEW_SHA:0:12}…"
-jq 'del(.CodeSha256, .LastModified, .Version, .RevisionId, .LastUpdateStatus, .State)' <<<"$FNCFG2" > "$RUN/handler-config-after.json"
-r=$(python3 "$SLICE/release_0036_live.py" same-config "$RB/handler-config.json" "$RUN/handler-config-after.json")
-check "6 API Lambda configuration unchanged apart from its code (environment, memory, timeout, role, VPC)" "$r"
-
-PV=$(aws iam get-policy --policy-arn "$POLICY_ARN" --query Policy.DefaultVersionId --output text)
-aws iam get-policy-version --policy-arn "$POLICY_ARN" --version-id "$PV" --query PolicyVersion.Document --output json > "$RUN/handler-policy-after.json"
-r=$(python3 "$SLICE/release_0036_live.py" same-json "$RB/handler-policy.json" "$RUN/handler-policy-after.json")
-check "7 Handler IAM policy unchanged" "$r" "policy version $PV"
-
-if aws lambda get-function-configuration --function-name "$IDENTITY_FN" --output json > "$RUN/identity-fn-after.json" 2>/dev/null; then
-  jq 'del(.CodeSha256, .LastModified, .Version, .RevisionId, .LastUpdateStatus, .State)' "$RUN/identity-fn-after.json" > "$RUN/identity-config-after.json"
-else
-  echo '{}' > "$RUN/identity-config-after.json"
-fi
-r=$(python3 "$SLICE/release_0036_live.py" same-config "$RB/identity-config.json" "$RUN/identity-config-after.json")
-check "8 identity function configuration unchanged" "$r"
-
-r=no; grep -q '^PASS .*latest_migration_is_0036' "$RUN/db-verify.txt" && grep -q '^PASS .*migration_count_is_36' "$RUN/db-verify.txt" \
-  && ! grep -q '^FAIL' "$RUN/db-verify.txt" && r=ok
-check "9 database at 0036 (0001-0026 checksums unchanged), db:verify all PASS, accounts and records kept" "$r" "$(grep -c '^PASS' "$RUN/db-verify.txt") checks; $(cat "$RB/keep-before.txt" 2>/dev/null)"
-r=no; [[ -s "$RUN/records-compare.txt" ]] && grep -q '^every existing row' "$RUN/records-compare.txt" && r=ok
-check "9b every existing record unchanged by value; permissions = baseline + exactly the 0027-0036 rows; earlier audit rows unchanged" "$r" "$(cat "$RUN/records-compare.txt" 2>/dev/null)"
-
-SERVED=$(curl -fsS "${WEB%/}/index.html" | sha256sum | cut -d' ' -f1 || true)
-[[ "$SERVED" == "$(sha256sum "$RUN/web-build/index.html" | cut -d' ' -f1)" ]] && r=ok || r=no
-CFG=$(curl -fsS "${WEB%/}/config.json" | sha256sum | cut -d' ' -f1 || true)
-[[ "$CFG" == "$(sha256sum "$RB/web/config.json" | cut -d' ' -f1)" ]] || r=no
-check "10 the web URL serves this build; config.json unchanged" "$r"
-
-[[ "$(admin_host_groups | tr -s ' \t' '\n' | sort | xargs)" == "$(tr -s ' \t' '\n' < "$RB/admin-host-sgs.txt" | grep -v "^$APP_SG$" | sort | xargs)" ]] && r=ok || r=no
-check "11 DB window closed: admin host groups are back to the original" "$r" "$(admin_host_groups)"
-
-SS=$(aws rds describe-db-snapshots --db-snapshot-identifier "$SNAPSHOT_ID" --query 'DBSnapshots[0].Status' --output text 2>/dev/null || echo missing)
-[[ "$SS" == available ]] && r=ok || r=no
-check "12 pre-deploy snapshot available" "$r" "$SNAPSHOT_ID"
-aws lambda get-policy --function-name "$FN" --query Policy --output text > "$RUN/lambda-policy-after.json" 2>/dev/null || echo '{"Statement":[]}' > "$RUN/lambda-policy-after.json"
-r=$(python3 - "$RUN/lambda-policy-after.json" "$API_ID" "$ACCOUNT" "$REGION" <<'POLPY'
-import json, sys
-raw = open(sys.argv[1]).read().strip(); st = json.loads(raw)["Statement"]
-want = "arn:aws:execute-api:%s:%s:%s/*/*/*" % (sys.argv[4], sys.argv[3], sys.argv[2])
-ok = (len(st) == 1 and st[0].get("Principal") == {"Service": "apigateway.amazonaws.com"} and st[0].get("Action") == "lambda:InvokeFunction"
-      and st[0].get("Condition") == {"ArnLike": {"AWS:SourceArn": want}} and len(raw) < 2048)
-print("ok" if ok else "no")
-POLPY
-)
-check "13 API Lambda resource policy still exactly one invoke statement for this API (no per-route growth)" "$r" "$(wc -c < "$RUN/lambda-policy-after.json") bytes"
-echo "Live verification: $PASSES/$TOTAL PASS" | tee -a "$VERIFY"
-
-cat > "$RUN/REPORT.md" <<REPORTEOF
-# Ogevia AWS TEST release 0027-0036: deployment report
-
-- Code: $COMMIT (pinned); approved $APPROVED_AT
-- Snapshot: $SNAPSHOT_ID
-- Database $DB_NAME: ledger 0001-0036; accounts and records kept: $(cat "$RB/keep-before.txt"); record values: $(cat "$RUN/records-compare.txt")
-- API: $(jq length "$RB/routes.json") -> $(jq length "$RUN/routes-after.json") routes; Lambda configuration and IAM unchanged apart from code
-- Other stacks: unchanged. New fixed cost: none
-- Web: $WEB (config.json unchanged)
-- Live verification: $PASSES/$TOTAL PASS
-- Rollback material: $RB
-REPORTEOF
-cat "$RUN/REPORT.md"
+# shellcheck source=release-0036-live-checks.sh
+source "$SLICE/release-0036-live-checks.sh"
+BUILD_DIR="$HERE/cdk.out"
+live_checks
+write_report
 [[ "$FAILS" == 0 ]] || die "live verification failed ($FAILS of $TOTAL). The deployment stays in place for diagnosis; send $VERIFY to Claude"
 done_ verified
 
