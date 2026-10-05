@@ -218,23 +218,29 @@ Proposal: `docs/product/PRICING_PROPOSAL.md`. It is a recommendation. Nothing is
 - **Open.**
 
 **Release:** everything below marked "Built and tested" is in the pinned
-release **0027–0034 at `859728f`**. It was rehearsed 10/05/2026: clean
-14/14, tampered run stopped, every rollback layer exercised. It is **not
-deployed**; see `docs/aws/DEPLOYMENT_PLAN_0027_0034.md`. The deployed TEST
-base is 0022–0026 (`0ca5616`), owner-reported. Production, Netlify and
-Supabase are untouched.
+release **0027–0036 at `7b1236d`**. That release replaces the unreleased
+0027–0034 package.
+
+It was rehearsed against stubbed AWS on 10/05/2026:
+- clean run 14/14;
+- a tampered run that stopped in the DB window;
+- every rollback layer, including the 0036 refusal.
+
+It is **not deployed**; see `docs/aws/DEPLOYMENT_PLAN_0027_0036.md`. The
+deployed TEST base is 0022–0026 (`0ca5616`), as reported by the owner.
+Production, Netlify and Supabase are untouched.
 
 | # | Item | Status | Evidence / what remains |
 | --- | --- | --- | --- |
 | 1 | Navigation: exactly one current item, `aria-current="page"`; `/visits/*` maps to Visit records | Built and tested | Unit tests; browser nav 23/23 desktop and 390 px. Deploy, then the phone check |
 | 2 | Needs attention: badge and Home use one server definition, including uncovered shifts and documents blocking or to review; expiring documents listed separately as Reminders | Built and tested | 0033 `get_attention_summary`; `document-reminders.db.test.ts` 5/5; badge links to Home |
 | 3 | Visit review **(priority blocker)**: "Review visit" opens the exact visit; names, code, caregiver, service, times, scheduled window, confirmation, no-signer reason; explained decisions; separate from Correct visit; audited; agency-isolated | Built and tested | 0031; `visit-review.db.test.ts` 6/6; API tests; `review-e2e.ts` 17/17 including phone. A no-signer visit can only be closed **not billable** |
-| 4 | Missing-signature recovery (electronic first, paper fallback) | **Designed (not built)** | `SIGNATURE_RECOVERY_DESIGN.md`. Owner gates: A delivery channel, B identity check, C payer acceptance (UNKNOWN), D billing rule. **Not complete** |
-| 5 | Correction preview 3 vs 4 min; MM/DD/YYYY and AM/PM everywhere; UTC storage; DST | Built and tested | `pacific-correction-fields.test.tsx` reproduces the bug and fails without the fix; date-format sweep with tests. Limitation: a fall-back (ambiguous) local time resolves to standard time |
+| 4 | Missing-signature recovery: staff-copied secure link + one-time phone code, paper fallback. The visit stays pending (no forced closure); accepted evidence makes it eligible for manager billing review only | Built and tested; **not complete until done end to end on AWS TEST** | 0036. DB tests 14 (lock after 5 wrong codes, expiry, void on correction, dispute never billable, capped minutes, append-only, isolation, rollback refusal); API 2 (token and code never logged); web 3; browser `recovery-e2e.ts` 22/22 at 390 px (`evidence/2026-10-05/recovery/`). Payer acceptance of late or electronic confirmations: **UNKNOWN** (owner) |
+| 5 | Correction preview 3 vs 4 min; MM/DD/YYYY and AM/PM everywhere; UTC storage; DST | Built and tested | `pacific-correction-fields.test.tsx` reproduces the bug and fails without the fix; date-format sweep with tests. 0035: a time that does not exist or happens twice is refused for one-time shifts and one-date changes, and flagged per date in series. Skipping a flagged date is an explicit choice. `dst-local-times.db.test.ts` 6/6 uses the next real transitions |
 | 6 | Cancelled shift showed "1h reserved"; wording "2 hr 59 min available" | Built and tested | 0032; shifts DB tests including the owner case (3 h authorized, 1 min used, a 3 h shift refused with "2 hr 59 min available") |
 | 7 | Document reminders 90/60/30/14/7 per agency and document type; separate review and currency status; reviewer and date shown; no alerts without an expiry; no email implied | Built and tested | 0033; DB 5/5; Documents page |
 | 8 | Recurring schedules: weekly series, real occurrence counts, per-month limits, conflicts and overages flagged, this-occurrence vs this-and-future changes, reservations released or moved, agency timezone, concurrency | Built and tested | 0034; `shift-series.db.test.ts` 9/9, including real weekday counts per month (a fifth weekday included) and the 30 h example (15 occurrences fit, the 16th and later flagged with dates); `recurring-e2e.ts` 15/15 |
-| 9 | Billing rounding (0029) | Built and tested; extra cases **Open** | Retries, correction after adjustment, policy change after approval, isolation, and the review-accepted visits not covered |
+| 9 | Billing rounding (0029) | Built and tested, regression complete | `rounding-regression.db.test.ts` 11/11 covers retries/idempotency, concurrent approval, the authorization cap under a race, concurrent policy versions, correction after an adjustment (void, correct, re-round), future-dated and "no rounding" policy changes, a retroactive authorization decrease (the adjustment is never rewritten) and agency isolation. No defect found. 0036 adds rounding of review-accepted visits once approved |
 | 10 | Report names, approval summary (minutes only for managers), Scheduled label | Built and tested | 0030 `list_monthly_approval_summary`; API test |
 | 11 | Hire type, flexible scheduling, family relationship (0030) | Built and tested | Not yet accepted on screens |
 | 12 | One-page Letter-landscape client calendar with caregiver summary and reconciliation check | Built and tested | `calendar-e2e.ts` 16/16; PDFs in `evidence/2026-10-05/` |
@@ -247,8 +253,8 @@ Supabase are untouched.
 
 | # | Blocker | Owner of the next step | Next action |
 | --- | --- | --- | --- |
-| 1 | Release 0027–0034 not deployed | Owner | Paste `release-0034-bootstrap.sh` in CloudShell, type DEPLOY, expect 14/14, then the retest batch (plan section 7) |
-| 2 | Missing-signature recovery not built | Owner (gates A–D), then Claude | Decide the gates; then build, test end to end, release |
+| 1 | Release 0027–0036 not deployed | Owner | Paste the 0036 bootstrap in CloudShell, type DEPLOY, expect 14/14, then the retest batch below |
+| 2 | Payer acceptance of late or electronic confirmations unknown | Owner | Confirm with the payer or contract before any real-client use of recovered signatures |
 | 3 | G1 alarm subscriber, D2 account S3 public-access block | Owner | `phase7-remediate.sh`, type APPLY |
 | 4 | HIPAA/BAA and operating policies | Owner | Confirm in writing; separate from TEST work |
 | 5 | Full-system recovery drill | Claude (script) + Owner (run) | Measure full-system time and the data-loss window |
@@ -258,4 +264,72 @@ Supabase are untouched.
 - **Synthetic pilot:** ready for a synthetic-data dress rehearsal after
   blocker 1 and its retest.
 - **Real clients:** **NOT READY**. Blockers 2–5 must be resolved first.
-- **Remote signature:** **NOT BUILT**.
+- **Remote signature:** built and rehearsed. It is **not accepted** until the
+  retest batch passes on AWS TEST, and real use stays blocked by blocker 2.
+
+## 19. Retest batch after release 0027–0036 (AWS TEST, synthetic data only)
+
+1. **Visit review.** In Billing review, open "Review visit" on the no-signer
+   visit (Client Bravo, 3 min).
+   - The visit page shows the client name and code, caregiver, service, times,
+     "Unscheduled visit" and the no-signer reason. This also settles Synthetic
+     Bulk Test vs Client Bravo.
+   - The page offers both "Close the review: not billable" and "Get the
+     missing signature". Do not close it.
+2. **Request a link.** Under "Get the missing signature", enter the person's
+   name, choose Parent, enter how you will verify them by phone, then press
+   "Create secure link".
+   - The link and the 6-digit code are shown once.
+   - The badge count drops by 1. Home shows "Waiting for a signature".
+     Billing review shows "Waiting for signature".
+3. **Recipient phone.** Use a private window, not signed in. Open the link.
+   - A wrong code shows "4 attempts left". The right code shows the service,
+     date (MM/DD/YYYY), times (AM/PM), length and the caregiver's first name,
+     with no client code or name.
+   - Sign with a finger, tick the box and send: "Thank you".
+   - Reopening the link says it is no longer valid.
+4. **Review.** On the visit page:
+   - It shows "Signature received — review it"; Home shows "Signatures
+     received to review"; the badge rises by 1.
+   - "View signature" shows the drawing.
+   - "Accept confirmation" with a reason shows "Accepted — 3 min eligible for
+     billing approval". No billing approval exists yet.
+5. **Human billing approval.** In Billing review the visit shows "Awaiting
+   approval".
+   - Approving 4 min is refused; approving 3 min shows "Approved — not
+     submitted".
+   - Nothing is submitted anywhere.
+6. **Paper path.** On a second no-signer visit, choose "Paper form", then
+   "Upload a signed paper form" (a PDF or photo, the signer and the date on the
+   form).
+   - "View form" works.
+   - Reject it with a reason: the visit returns to Needs attention.
+7. **Dispute.** Make a new link and, as the recipient, choose "No, something
+   is wrong" with a description.
+   - The manager can only "Record as reviewed". Nothing becomes billable.
+8. **Lock.** Make a new link and enter a wrong code 5 times.
+   - The link is locked, and the visit returns to Needs attention.
+   - A new request shows the old one as "Closed … (locked)".
+9. **Daylight saving.**
+   - A one-time shift on 11/01/2026 from 1:30 AM is refused: "happens twice".
+   - A one-time shift on 03/14/2027 from 2:30 AM is refused: "does not
+     exist".
+   - A Sunday 1:00–3:00 AM series from 10/25/2026 flags 11/01/2026 and creates
+     nothing until you choose to skip it.
+10. **Recurring.** For a 30 h/month service, create Mon/Wed/Fri 2–4 PM from
+    11/01/2026.
+    - Over-limit dates are listed, and "Create series" stays disabled until
+      you choose skip.
+    - "Change this date only" and "Cancel this date" work.
+11. **Correction precision.** Open "Correct visit" on a 4-minute visit and
+    change nothing: the preview shows the same minutes, with "unchanged".
+12. **Shift card.** Cancel a shift: no reserved time shows.
+    - An over-limit shift says "X hr Y min available".
+13. **Needs attention.** The badge equals the item count on Home. Waiting
+    signatures and expiring documents are under Reminders only.
+14. **Document reminders.** Set agency reminder days to 60, 30 and 7.
+    - The CPR document shows its reminder stage, reviewer and date.
+    - A document type without expiry shows none.
+15. **Calendar and boundary.**
+    - One client's month prints on one Letter landscape page.
+    - A manager sees approval summaries in minutes only.

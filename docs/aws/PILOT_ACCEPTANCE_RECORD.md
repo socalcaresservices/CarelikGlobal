@@ -63,7 +63,7 @@ Recorded from the owner's statement: "caregiver started, ended and signed a synt
 - This session has no AWS access, so the state is **not independently
   verified here**.
 - Release 0027–0034 is **built and rehearsed, not deployed**; see
-  `DEPLOYMENT_PLAN_0027_0034.md`.
+  `DEPLOYMENT_PLAN_0027_0036.md`.
 
 | Check | Result | Basis and limits |
 |---|---|---|

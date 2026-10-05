@@ -1,11 +1,23 @@
-# Missing-signature recovery: design and decision gates
+# Missing-signature recovery: design, owner decisions and what is built
 
-**Status:** DESIGN ONLY. Nothing in this document is built or deployed. Do not
-call the missing-signature workflow complete until a recipient and a manager
-can finish it end to end on AWS TEST (pilot findings, Oct 4–5 2026, item 3).
+**Status (10/05/2026): BUILT and tested locally; in release 0027–0036; NOT
+deployed.** It is not "complete" until a recipient and a manager have finished
+it end to end on AWS TEST (retest batch, plan section 7).
 
-**Date:** 10/05/2026. **Scope:** AWS TEST, synthetic data only, until the
-BAA/security gate is confirmed separately.
+**Owner decisions (10/05/2026):**
+- Delivery for the pilot: staff copy a secure link and send it themselves; a
+  one-time 6-digit code is given **by phone** to a recipient staff verified.
+  No email or SMS service, no new vendor, no new fixed cost.
+- Accepted late evidence makes a visit **eligible for manager billing
+  review** only. It is never approved or submitted automatically.
+- This is an implementation preference, **not** confirmation that any payer
+  accepts late or electronic confirmations. Real-client activation stays
+  blocked until payer acceptance and the security requirements are confirmed.
+
+**Built (migration 0036, API, web):** sections 3–5 below as designed, with
+gate A = staff-copied link, gate B = phone code, gate D = eligibility for the
+existing human approval. Gate C (payer acceptance) remains **UNKNOWN** and is
+an owner action outside the software.
 
 ## 1. Problem
 

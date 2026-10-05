@@ -38,7 +38,7 @@ Billing console (Bills → us-west-2, current month) to confirm it.
 
 **New fixed cost in release 0027–0034: none.** That release adds no AWS
 resource, only API routes, code and migrations, as checked by
-`release_0034_gate.py`.
+`release_0036_gate.py`.
 
 ## 2. Variable cost per agency (usage-driven)
 
