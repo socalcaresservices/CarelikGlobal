@@ -56,6 +56,37 @@ Recorded from the owner's statement: "caregiver started, ended and signed a synt
   - the rest of plan section 6 for 0019–0021 (attention counts, billing approval, the manager's money boundary on screen, documents);
   - the corrected caregiver's first sign-in, unless that was the caregiver used here.
 
+## Pilot test 10/04–10/05/2026 (release 0022–0026 at `0ca5616`, owner-reported)
+
+**Deployed state:**
+- The owner reports migrations 0022–0026 deployed and verified on AWS TEST.
+- This session has no AWS access, so the state is **not independently
+  verified here**.
+- Release 0027–0034 is **built and rehearsed, not deployed**; see
+  `DEPLOYMENT_PLAN_0027_0034.md`.
+
+| Check | Result | Basis and limits |
+|---|---|---|
+| Preferred name saves | **PASS** | Owner-reported |
+| Bulk tests (10): clients; authorizations, with overlap refused; assignments, with duplicate refused; shifts, with caregiver conflict refused; cancellation releases the reservation; access through an assignment without a shift | **PASS** | Owner-reported |
+| Call-out, replacement, history, cancel | **PASS** | Owner-reported |
+| Signed visit, signature view, hours approval | **PASS** | Owner-reported |
+| Document request → upload → review | **PASS** | From screenshots: the CPR document then shows Expiring, 27 days left |
+| Cancelled shift card | **FAIL** (display) | The card still showed "1h reserved" after cancellation. The reservation itself was released; `list_shifts` counted released rows. Fixed in 0032, not deployed |
+| Over-authorization refusal wording | **PASS with a wording defect** | A 3 h authorization with 1 min used refused a 3-hour shift, which is correct. The message should say "2 hr 59 min available". Fixed in 0032, not deployed |
+| Correct visit preview | **FAIL** (display) | Showed 3 min where the list showed 4 min. The preview used whole minutes; saving already kept seconds (0018). Fixed in the web build, not deployed |
+| Needs attention badge vs destination | **FAIL** | The badge counted visits only and pointed elsewhere. Fixed in 0033 and the web build, not deployed |
+| No-signer visit review | **NOT PASSED: blocker** | The screenshots show Synthetic Client Bravo / Pilot B saved as unscheduled, Needs review, worked 3 min, billable 0. The no-signer reason and any resolution were not reachable. Fixed in 0031 and the web build (Visit review page), not deployed |
+| Requested client vs recorded client | **UNRECONCILED** | The test asked for "Synthetic Bulk Test", but the screenshots show Client Bravo. Run the read-only `infra/aws/slice/reconcile-2026-10-05-no-signer.sql` in CloudShell to list synthetic clients and every unable-to-confirm visit with its linked client |
+
+**Not tested:**
+- recurring shifts;
+- document reminder thresholds;
+- the visit review decision;
+- the printable calendar on the deployed build.
+
+All of these are in release 0027–0034.
+
 ## Independent live confirmation (2026-10-04, owner-run, read-only except the owner step)
 
 `live-status-bootstrap.sh` (pinned f91fe68) was run in CloudShell at about 14:50 UTC. Results as reported by the owner:

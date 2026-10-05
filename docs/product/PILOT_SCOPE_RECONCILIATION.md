@@ -208,38 +208,54 @@ Proposal: `docs/product/PRICING_PROPOSAL.md`. It is a recommendation. Nothing is
 | Temporary visit recording | The Phase 7 risk table assumes "paper, corrected later with audit history". No procedure, form or reconciliation support is defined | NOT BUILT |
 | Continuity from backups alone | Not sufficient: backups restore data after an outage; they give no agency access to visits, schedules or authorizations during one | — |
 
-## 18. Consolidated pilot fixes (owner request 2026-10-05) — tracked checklist
+## 18. Consolidated pilot fixes and the 10/05/2026 findings: tracked checklist
 
-Status values: **Already implemented** (existed before this request) · **In progress** · **Built and tested** (on the branch, automated tests pass; not deployed) · **Deployed and verified** (live in AWS TEST with evidence) · **Blocked**.
-Nothing in this section is deployed. It ships in the next pinned AWS TEST release (0027–0030 + web). Production, Netlify and Supabase are untouched.
+**Status values:**
+- **Built and tested:** on the branch, automated tests pass; not deployed.
+- **Rehearsed:** in the pinned release, rehearsed against stubbed AWS.
+- **Deployed and verified:** live in AWS TEST, with evidence.
+- **Designed:** not built.
+- **Open.**
 
-Owner-reported acceptance evidence already in hand (AWS TEST, synthetic): caregiver started and ended a visit and saved a signature; the pilot manager found it Signed with the correct client and times; Billing review approved 0.02 hr; balance 3 hr authorised, 1 min billable, 0 in review, 2 hr 59 min remaining; the calendar showed the visit on 10/04/2026. This does not prove scheduling, rounding or print scenarios.
+**Release:** everything below marked "Built and tested" is in the pinned
+release **0027–0034 at `859728f`**. It was rehearsed 10/05/2026: clean
+14/14, tampered run stopped, every rollback layer exercised. It is **not
+deployed**; see `docs/aws/DEPLOYMENT_PLAN_0027_0034.md`. The deployed TEST
+base is 0022–0026 (`0ca5616`), owner-reported. Production, Netlify and
+Supabase are untouched.
 
 | # | Item | Status | Evidence / what remains |
 | --- | --- | --- | --- |
-| 1 | Navigation: only the current section highlighted, `aria-current="page"` | **Built and tested** | Commit 7363560; unit tests (fail without the fix); browser check 23/23 desktop + 390 px phone incl. direct load, reload, back/forward. Pending: deployment |
-| 2 | NEEDS ATTENTION badge: red with count / green ALL CLEAR — 0 / "Checking…" / "Unable to check" | **Built and tested** | d9c1813; `attention-badge.test.tsx` covers all four states and that a failure or load never shows green. The badge reads the same `/v1/attention` summary (same permission checks) as the attention list. Pending: phone check after deployment |
-| 3 | Billing review identification | **In progress** | Built and tested (d9c1813): client name first + code, caregiver, service name + code, MM/DD/YYYY, AM/PM in the agency time zone, `1 min (0.02 hr)`, approval status beside the client ("Awaiting approval" / "Approved — not submitted"), visit reference under "Visit details"; "Billing ready" label removed. Eligibility (review state) and approval are separate fields. DB test: manager rows carry no rate/amount fields; other agency sees none. Remaining: names in reconciliation/correction reports and CSVs (item 6) |
-| 4 | Dates MM/DD/YYYY, times AM/PM in the agency time zone; stored values unchanged | **In progress** | Finding: the visit-record report tables used DD/MM/YY and 24-hour times; several AWS screens used "Oct 5, 2026" or the device locale. Sweep in progress; date-only values are formatted from the string (no time-zone conversion), so authorisation dates cannot shift |
-| 5 | Billing-only rounding | **Built and tested** (core); extra cases **In progress** | 0029 + `docs/product/BILLING_ROUNDING.md`; 12 DB tests, UI tests, browser 14/14. Adding: retry/idempotency, correction after adjustment, policy change after approval, agency isolation. Wording: a configured option is the agency's setting, not proof of payer compliance |
-| 6 | Report names, reconciliation, Scheduled = 0, utilisation | **In progress** | Scheduled = 0 diagnosis (code): a shift's reservation is released when its visit is signed (0013 trigger), so the column shows time still reserved for future, unworked shifts; the tested visit was worked and signed, so 0 is correct but the label is unclear. Fix: rename and explain. Names in reports/CSVs and utilisation discoverability pending |
-| 7 | Hire type and flexible care | **Built and tested** (fields, flexible visits); recurring shifts **Blocked (not built)** | Audit: Carelik never had Direct Hire/EOR; only `employment_type` (full_time/part_time/per_diem/contractor), not migrated. 0030 adds three separate fields (hire type, scheduling mode, family relationship per client assignment), nothing inferred or backfilled. 7 DB tests: Direct Hire visit links to its shift; EOR flexible visit with no shift is Billing Ready; sign-in, assignment, authorisation, confirmation and the hour cap still apply. AWS shifts (0026) support one-time create, assign, call-out, replacement and cancel; **recurring series and "change one occurrence / future occurrences" do not exist in AWS** |
-| 8 | One-page client monthly calendar (US Letter landscape) | **In progress** | Already implemented: per-client calendar, daily worked hours by service, service totals, letter-landscape print. Missing: caregiver summary with names, worked/billable/remaining reconciliation check, separate incomplete-work list, rendered-PDF inspection |
-| R | Pinned AWS TEST release 0027–0030 + web with rollback and live checks | **In progress** | Not packaged yet |
+| 1 | Navigation: exactly one current item, `aria-current="page"`; `/visits/*` maps to Visit records | Built and tested | Unit tests; browser nav 23/23 desktop and 390 px. Deploy, then the phone check |
+| 2 | Needs attention: badge and Home use one server definition, including uncovered shifts and documents blocking or to review; expiring documents listed separately as Reminders | Built and tested | 0033 `get_attention_summary`; `document-reminders.db.test.ts` 5/5; badge links to Home |
+| 3 | Visit review **(priority blocker)**: "Review visit" opens the exact visit; names, code, caregiver, service, times, scheduled window, confirmation, no-signer reason; explained decisions; separate from Correct visit; audited; agency-isolated | Built and tested | 0031; `visit-review.db.test.ts` 6/6; API tests; `review-e2e.ts` 17/17 including phone. A no-signer visit can only be closed **not billable** |
+| 4 | Missing-signature recovery (electronic first, paper fallback) | **Designed (not built)** | `SIGNATURE_RECOVERY_DESIGN.md`. Owner gates: A delivery channel, B identity check, C payer acceptance (UNKNOWN), D billing rule. **Not complete** |
+| 5 | Correction preview 3 vs 4 min; MM/DD/YYYY and AM/PM everywhere; UTC storage; DST | Built and tested | `pacific-correction-fields.test.tsx` reproduces the bug and fails without the fix; date-format sweep with tests. Limitation: a fall-back (ambiguous) local time resolves to standard time |
+| 6 | Cancelled shift showed "1h reserved"; wording "2 hr 59 min available" | Built and tested | 0032; shifts DB tests including the owner case (3 h authorized, 1 min used, a 3 h shift refused with "2 hr 59 min available") |
+| 7 | Document reminders 90/60/30/14/7 per agency and document type; separate review and currency status; reviewer and date shown; no alerts without an expiry; no email implied | Built and tested | 0033; DB 5/5; Documents page |
+| 8 | Recurring schedules: weekly series, real occurrence counts, per-month limits, conflicts and overages flagged, this-occurrence vs this-and-future changes, reservations released or moved, agency timezone, concurrency | Built and tested | 0034; `shift-series.db.test.ts` 9/9, including real weekday counts per month (a fifth weekday included) and the 30 h example (15 occurrences fit, the 16th and later flagged with dates); `recurring-e2e.ts` 15/15 |
+| 9 | Billing rounding (0029) | Built and tested; extra cases **Open** | Retries, correction after adjustment, policy change after approval, isolation, and the review-accepted visits not covered |
+| 10 | Report names, approval summary (minutes only for managers), Scheduled label | Built and tested | 0030 `list_monthly_approval_summary`; API test |
+| 11 | Hire type, flexible scheduling, family relationship (0030) | Built and tested | Not yet accepted on screens |
+| 12 | One-page Letter-landscape client calendar with caregiver summary and reconciliation check | Built and tested | `calendar-e2e.ts` 16/16; PDFs in `evidence/2026-10-05/` |
+| 13 | Utilization pace and projection; small values never shown as zero | **Open** | Not started in this batch |
+| 14 | Continuity: combined recovery drill (database + documents + accounts + application) | **Open** | Database-only restore measured at 4 min 15 s (owner-run). Full-system time not measured, so no claim of full recovery |
+| 15 | Client Bravo vs "Synthetic Bulk Test" | **Open** (needs a CloudShell read) | `infra/aws/slice/reconcile-2026-10-05-no-signer.sql` (read-only) |
+| 16 | Monthly cost estimate | Done (estimate) | `docs/aws/MONTHLY_PLATFORM_COST_2026-10.md` |
 
 ## Summary: why NOT READY for real clients, and what clears it
 
-| # | Blocker | Next step owner | Next action | Fits the 13:20 target? |
-| --- | --- | --- | --- | --- |
-| 0 | 0019–0021 increment: DONE (owner-reported 2026-10-05). Remaining: first sign-ins (manager, corrected caregiver) and the phone checks in plan section 6 | Owner | Sign in with each account (new password + authenticator), then the phone checks | — |
-| 1 | Release 0022–0026 (administration, invitations, planned assignments, schedule and call-outs, S3 endpoint fix) not deployed | Owner | Only after 0 is verified: paste the release block, type DEPLOY, then screen checks 6.1–6.11 | — |
-| 2 | Staff shifts, call-outs, replacements: built (0026), not deployed | Owner | Deploys with release 0022–0026 | — |
-| 3 | Utilisation beyond monthly per service (section 9) | Claude (build) | Periods, breakdowns, coverage and expiry warnings, projections | **No** |
-| 4 | G1 alarm subscriber and D2 account S3 public-access block | Owner | `phase7-remediate.sh`, type APPLY, confirm the alarm email | About 10 minutes |
-| 5 | HIPAA operating policies not confirmed | Owner | Confirm in writing | Owner decision |
-| 6 | Phone/screen retest of changed workflows on real AWS. **2026-10-05, owner-reported: PASS** for the core visit flow: caregiver start, end and signature; the separate pilot manager finds the visit Signed with the correct client and times (`docs/aws/PILOT_ACCEPTANCE_RECORD.md`). The rest of plan section 6 is not yet reported | Owner | Finish plan section 6 after the 0022–0026 deployment | — |
-| 8 | Menu highlighting defect (owner-reported 2026-10-05): on Visit records both "Verify visit" and "Visit records" appeared selected. **Fixed on the branch**: exactly one item is current, with `aria-current="page"`. Verified locally: web unit tests (they fail without the fix) and a browser check 23/23 on desktop and phone, covering direct loads, reload and back/forward. **Not deployed**: ships in the next reviewed AWS TEST release (0027–0028 + this fix); the pinned 0022–0026 release (0ca5616) does not contain it | Claude (package) + Owner (deploy) | Next release package | — |
-| 9 | Billing rounding per payer and service (0029): default none; nearest, up or down; increment; per-visit or daily basis (never both); payer rule required; dated versions; separate approved adjustments; authorization cap; no recalculation of approved items; payroll unaffected. **Built, verified locally** (`docs/product/BILLING_ROUNDING.md`), not deployed | Claude (package) + Owner (deploy; record each payer's rule before enabling) | Next release | — |
-| 7 | Outage continuity and recovery (section 17). Assessment: `docs/aws/CONTINUITY_AND_RECOVERY.md`. Continuity pack (0027) and outage visit records with reconciliation (0028) are BUILT and verified locally (browser 23/23 at 390 px), not deployed. Still open: the combined recovery drill (database + documents + accounts + application) with the measured full-system time and data-loss window; the account re-link procedure; the cross-region decision | Claude (drill script, release package) + Owner (drill run, agency setup, cross-region decision) | Package 0027–0028 as the next release after 0022–0026 | — |
+| # | Blocker | Owner of the next step | Next action |
+| --- | --- | --- | --- |
+| 1 | Release 0027–0034 not deployed | Owner | Paste `release-0034-bootstrap.sh` in CloudShell, type DEPLOY, expect 14/14, then the retest batch (plan section 7) |
+| 2 | Missing-signature recovery not built | Owner (gates A–D), then Claude | Decide the gates; then build, test end to end, release |
+| 3 | G1 alarm subscriber, D2 account S3 public-access block | Owner | `phase7-remediate.sh`, type APPLY |
+| 4 | HIPAA/BAA and operating policies | Owner | Confirm in writing; separate from TEST work |
+| 5 | Full-system recovery drill | Claude (script) + Owner (run) | Measure full-system time and the data-loss window |
+| 6 | Utilization pace and projection | Claude | Build |
 
-Verdict unchanged: **NOT READY** for real clients. After 0, 1, 4 and 6 it is ready for a synthetic-data dress rehearsal of everything except staff-created shifts and call-outs. Real-client readiness also requires 7 (outage continuity and recovery), 3 and 5.
+**Verdicts:**
+- **Synthetic pilot:** ready for a synthetic-data dress rehearsal after
+  blocker 1 and its retest.
+- **Real clients:** **NOT READY**. Blockers 2–5 must be resolved first.
+- **Remote signature:** **NOT BUILT**.
