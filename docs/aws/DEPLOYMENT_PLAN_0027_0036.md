@@ -272,3 +272,26 @@ Next: the read-only rerun (`release-0036-verify-bootstrap.sh`).
   the Handler, not the identity function.
 - **Rehearsal:** the stub now models per-page text output. `efcdba1`
   reproduces the stop; `95087eb` gives 14/14.
+
+**Verify-only rerun, attempt 3 (owner, 10:37 UTC): 14/14 PASS. Release
+0027–0036 is DEPLOYED AND VERIFIED on AWS TEST** (owner-run; output pasted in
+the session).
+- Check 6: the code is the approved package (248,020 bytes, was 244,853).
+  The runtime version is unchanged. No other configuration field differs.
+- Data:
+  - ledger 0001–0036; db:verify 119 checks PASS;
+  - every row of 31 tables unchanged by value;
+  - permissions = baseline + 2 permissions + 3 role grants;
+  - the 140 earlier audit rows unchanged;
+  - kept: 6 users, 6 memberships, 4 caregiver records, 6 clients,
+    7 authorizations, 6 assignments, 1 billing approval, 12 shifts,
+    3 held reservations, 1 staff document.
+- API: 90 → 122 routes; Handler IAM policy unchanged; one invoke
+  statement.
+- Web: serves this build; config.json unchanged.
+- Snapshot `ogevia-prod-postgres-pre-0036-20261005` is available.
+- The earlier 13/14 result is kept as
+  `VERIFY-20261005T103755Z-before-rerun.txt`.
+
+**Next:** the retest batch in `PILOT_SCOPE_RECONCILIATION.md` §19, on
+synthetic data only.

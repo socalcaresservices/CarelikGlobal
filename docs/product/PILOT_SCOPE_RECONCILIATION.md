@@ -226,7 +226,7 @@ It was rehearsed against stubbed AWS on 10/05/2026:
 - a tampered run that stopped in the DB window;
 - every rollback layer, including the 0036 refusal.
 
-It is **not deployed**; see `docs/aws/DEPLOYMENT_PLAN_0027_0036.md`. The
+It is **deployed and verified on AWS TEST** (owner-run, 10/05/2026: 14/14 PASS after the read-only rerun with corrected checks; see `docs/aws/DEPLOYMENT_PLAN_0027_0036.md` §9). Screen acceptance (§19) is pending. The
 deployed TEST base is 0022–0026 (`0ca5616`), as reported by the owner.
 Production, Netlify and Supabase are untouched.
 
@@ -253,7 +253,7 @@ Production, Netlify and Supabase are untouched.
 
 | # | Blocker | Owner of the next step | Next action |
 | --- | --- | --- | --- |
-| 1 | Release 0027–0036 not deployed | Owner | Paste the 0036 bootstrap in CloudShell, type DEPLOY, expect 14/14, then the retest batch below |
+| 1 | Release 0027–0036 deployed and verified 14/14; screen acceptance pending | Owner | Run the retest batch in §19 (synthetic data only) |
 | 2 | Payer acceptance of late or electronic confirmations unknown | Owner | Confirm with the payer or contract before any real-client use of recovered signatures |
 | 3 | G1 alarm subscriber, D2 account S3 public-access block | Owner | `phase7-remediate.sh`, type APPLY |
 | 4 | HIPAA/BAA and operating policies | Owner | Confirm in writing; separate from TEST work |
