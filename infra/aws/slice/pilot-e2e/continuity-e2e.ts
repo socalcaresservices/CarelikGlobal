@@ -91,7 +91,7 @@ async function signIn(page: Page, path: string) {
 }
 async function noHScroll(page: Page, label: string) {
   const { sw, iw } = await page.evaluate(() => ({ sw: document.documentElement.scrollWidth, iw: window.innerWidth }));
-  check(`${label}: no horizontal scroll at 390 px`, sw <= iw, `scrollWidth ${sw}, innerWidth ${iw}`);
+  check(`${label}: no horizontal scroll at 390 px`, sw <= iw && iw <= 390, `scrollWidth ${sw}, innerWidth ${iw}`);
 }
 const visible = (page: Page, text: string | RegExp) => page.getByText(text).first().isVisible().catch(() => false);
 const laDate = (n = 0) => new Intl.DateTimeFormat("en-CA", { timeZone: "America/Los_Angeles" }).format(new Date(Date.now() + n * 864e5));

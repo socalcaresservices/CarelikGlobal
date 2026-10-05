@@ -74,3 +74,18 @@ body {
   min-width: 320px;
   min-height: 100vh;
 }
+
+/* Printouts: white page; the screen's full-height body and its margin must not
+   push a blank extra page (the page margin comes from @page). */
+@media print {
+  :root,
+  html,
+  body {
+    background: #ffffff;
+    min-height: 0;
+    height: auto;
+  }
+  body {
+    margin: 0;
+  }
+}

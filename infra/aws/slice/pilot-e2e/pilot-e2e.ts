@@ -36,8 +36,8 @@ const IDP = "https://pilot-e2e.auth.us-west-2.amazoncognito.com";
 const POOL = "us-west-2_PILOTE2E1";
 const CLIENT = "pilote2eclient000000000000";
 const ISSUER = `https://cognito-idp.us-west-2.amazonaws.com/${POOL}`;
-const ADMIN_URL = "postgres://ogevia_admin@127.0.0.1:5432/ogevia_pilot_e2e";
-const APP_URL = "postgres://e2e_app_login:e2e-local-only@127.0.0.1:5432/ogevia_pilot_e2e";
+const ADMIN_URL = process.env.E2E_ADMIN_URL ?? "postgres://ogevia_admin@127.0.0.1:5432/ogevia_pilot_e2e";
+const APP_URL = process.env.E2E_APP_URL ?? "postgres://e2e_app_login:e2e-local-only@127.0.0.1:5432/ogevia_pilot_e2e";
 const SUB = {
   testManager: process.env.TEST_MG!,
   pilotManager: process.env.PILOT_MG!,
@@ -180,7 +180,7 @@ async function signIn(page: Page, path = "/") {
 
 async function noHorizontalScroll(page: Page, label: string) {
   const { sw, iw } = await page.evaluate(() => ({ sw: document.documentElement.scrollWidth, iw: window.innerWidth }));
-  check(`${label}: no horizontal scroll at 390 px`, sw <= iw, `scrollWidth ${sw}, innerWidth ${iw}`);
+  check(`${label}: no horizontal scroll at 390 px`, sw <= iw && iw <= 390, `scrollWidth ${sw}, innerWidth ${iw}`);
 }
 let shot = 0;
 const snap = (page: Page, name: string) => page.screenshot({ path: join(SHOTS, `${String(++shot).padStart(2, "0")}-${name}.png`), fullPage: true });
@@ -277,7 +277,7 @@ async function main() {
   const details = A.page.getByRole("group", { name: "Visit details" });
   await details.getByText("RSP · Respite (synthetic)").waitFor();
   const detailText = (await details.innerText()).replace(/\s+/g, " ");
-  check("caregiver A: details show client, service, date and scheduled window", /Client P-QAUF7/.test(detailText.replace("Client ", "Client ")) && /P-QAUF7/.test(detailText) && /RSP · Respite/.test(detailText) && /[A-Z][a-z]{2} \d{1,2}, \d{4}/.test(detailText) && /[AP]M–/.test(detailText), detailText);
+  check("caregiver A: details show client, service, date and scheduled window", /Client P-QAUF7/.test(detailText.replace("Client ", "Client ")) && /P-QAUF7/.test(detailText) && /RSP · Respite/.test(detailText) && /\d{2}\/\d{2}\/\d{4}/.test(detailText) && /[AP]M–/.test(detailText), detailText);
   const startBtn = A.page.getByRole("button", { name: /Start visit/ });
   check("caregiver A: Start visit is a ≥44px tap target", ((await startBtn.boundingBox())?.height ?? 0) >= 44);
   await snap(A.page, "caregiver-details");
@@ -423,9 +423,10 @@ async function main() {
 
   // ---- Manager reports and billing review.
   await M.page.goto(`${WEB}/billing-review`);
-  await M.page.getByText("Billing ready").first().waitFor({ timeout: 15000 });
+  // Since 0019/0030: eligible visits show "Awaiting approval"; the page states approval is not submission.
+  await M.page.getByText("Awaiting approval").first().waitFor({ timeout: 15000 });
   const billing = await M.page.locator("body").innerText();
-  check("billing review: Billing ready visits listed and stated as not approved/billed/submitted", /has not been approved, billed, or submitted/.test(billing));
+  check("billing review: eligible visits listed as Awaiting approval; approval is not submission", /approval is not submission/.test(billing));
   check("billing review: unconfirmed visit shown as needing review, not ready", /review/i.test(billing));
   check("billing review: no other tenant's client codes", !/TEST-C0/.test(billing));
   await noHorizontalScroll(M.page, "billing review");
@@ -450,12 +451,10 @@ async function main() {
   const inWall = wall(new Date(v1.time_in));
   const outWall = wall(newOut);
   await M.page.goto(`${WEB}/service-verification/reports`);
-  await M.page.getByLabel("Report").selectOption({ label: "Visit details" }).catch(async () => {
-    const value = await M.page.locator("option", { hasText: "Visit details" }).first().getAttribute("value");
-    await M.page.getByLabel("Report").selectOption(value!);
-  });
-  const row = M.page.locator("tr", { hasText: "P-QAUF7" }).first();
-  await row.getByRole("button", { name: "Correct" }).click();
+  await M.page.getByLabel("Report").selectOption("visits"); // "Visit records (list)" since 0021
+  // Phone width shows cards (li) since 0021; desktop shows table rows.
+  const row = M.page.locator("li, tr", { hasText: "P-QAUF7" }).filter({ has: M.page.getByRole("button", { name: "Correct visit" }) }).first();
+  await row.getByRole("button", { name: "Correct visit" }).click();
   check("correction: Time In pre-filled in Pacific on a New York device",
     (await M.page.getByLabel("Corrected Time In hour", { exact: true }).inputValue()) === inWall.hour &&
       (await M.page.getByRole("radiogroup", { name: "Corrected Time In AM or PM" }).getByRole("radio", { name: inWall.ampm }).getAttribute("aria-checked")) === "true",

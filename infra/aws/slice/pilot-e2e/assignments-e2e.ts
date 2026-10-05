@@ -88,7 +88,7 @@ async function signIn(page: Page, path: string) {
 }
 async function noHScroll(page: Page, label: string) {
   const { sw, iw } = await page.evaluate(() => ({ sw: document.documentElement.scrollWidth, iw: window.innerWidth }));
-  check(`${label}: no horizontal scroll at 390 px`, sw <= iw, `scrollWidth ${sw}, innerWidth ${iw}`);
+  check(`${label}: no horizontal scroll at 390 px`, sw <= iw && iw <= 390, `scrollWidth ${sw}, innerWidth ${iw}`);
 }
 const visible = (page: Page, text: string | RegExp) => page.getByText(text).first().isVisible().catch(() => false);
 const laDate = (n = 0) => new Intl.DateTimeFormat("en-CA", { timeZone: "America/Los_Angeles" }).format(new Date(Date.now() + n * 864e5));
@@ -158,7 +158,7 @@ async function main() {
   await svcB.selectOption({ index: 2 });
   await m.page.getByLabel("First day").fill(laDate(3));
   await m.page.getByRole("button", { name: "Assign", exact: true }).last().click();
-  await m.page.getByText(/no current authorization covers it/).waitFor();
+  await m.page.getByText(/no current authorization covers it/i).waitFor();
   check("manager: an assignment without authorization is added but flagged in red", await visible(m.page, /Visits will be refused until one is added/));
   check("manager: the future assignment shows 'Starts later'", await visible(m.page, /^Starts later$/));
   await m.page.screenshot({ path: join(SHOTS, "01-client-assignments.png"), fullPage: true });
@@ -171,11 +171,11 @@ async function main() {
   await m.page.getByText("Assignment cancelled.").waitFor();
   check("manager: upcoming assignment cancelled", true);
 
-  // A caregiver without a sign-in cannot be chosen.
+  // Since 0025 a caregiver without a sign-in can be chosen for a PLANNED
+  // assignment, and is labelled as such (visits stay impossible until sign-in).
   await m.page.getByRole("button", { name: "Assign", exact: true }).first().click();
-  const noLogin = await cg.locator("option", { hasText: "no sign-in yet" }).count();
-  const disabledAll = noLogin === 0 || (await cg.locator("option", { hasText: "no sign-in yet" }).evaluateAll((os) => os.every((o) => (o as HTMLOptionElement).disabled)));
-  check("manager: caregivers without a sign-in are listed but cannot be chosen", noLogin >= 1 && disabledAll, `${noLogin} such option(s)`);
+  const noLogin = await cg.locator("option", { hasText: "planned: no sign-in yet" }).count();
+  check("manager: caregivers without a sign-in are listed and labelled as planned (0025)", noLogin >= 1, `${noLogin} such option(s)`);
   await m.page.getByRole("button", { name: "Close" }).last().click();
 
   // Caregiver page: end the current assignment (last day today: access continues through today).

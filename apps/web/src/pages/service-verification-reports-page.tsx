@@ -49,6 +49,8 @@ import {
   type VisitReportRow,
 } from "@/lib/sv-backend";
 import { useServiceVerificationBackend } from "@/lib/sv-backend-supabase";
+import { buildClientMonthSummary } from "@/lib/client-month-summary";
+import { CalendarSummary } from "@/components/calendar-summary";
 import {
   AUTHORIZATION_STATUS_LABEL,
   classifyIncompleteVisit,
@@ -755,6 +757,16 @@ export function ServiceVerificationReportsPage() {
     () => buildMonthCalendar(calendarVisitsQuery.data ?? [], reportMonth),
     [reportMonth, calendarVisitsQuery.data],
   );
+  const [calendarDetailPage, setCalendarDetailPage] = useState(false);
+  const clientMonth = useMemo(
+    () =>
+      buildClientMonthSummary(
+        calendarVisitsQuery.data ?? [],
+        reportMonth,
+        monthlyServiceSummaryQuery.isSuccess ? monthlyServiceSummaryQuery.data : null,
+      ),
+    [calendarVisitsQuery.data, reportMonth, monthlyServiceSummaryQuery.isSuccess, monthlyServiceSummaryQuery.data],
+  );
   const calendarMonthLabel = useMemo(() => {
     const [y, m] = reportMonth.split("-").map(Number);
     return y && m ? new Date(y, m - 1, 1).toLocaleDateString("en-US", { month: "long", year: "numeric" }) : reportMonth;
@@ -1128,7 +1140,7 @@ export function ServiceVerificationReportsPage() {
   }
 
   return (
-    <section className="mx-auto max-w-6xl space-y-6 pb-12 print:max-w-none print:space-y-4">
+    <section className="mx-auto max-w-6xl space-y-6 pb-12 print:max-w-none print:space-y-2 print:pb-0">
       <div className="print:hidden">
         <PageHeader
           eyebrow="Service Verification"
@@ -1682,16 +1694,16 @@ export function ServiceVerificationReportsPage() {
           own settings so a re-branded/white-labeled tenant prints correctly
           instead of hardcoded agency details. */}
       <div className="hidden print:block">
-        <div className="flex items-start justify-between border-b border-slate-300 pb-4">
+        <div className={`flex items-start justify-between border-b border-slate-300 ${reportView === "calendar" ? "pb-1 text-[10px] leading-tight" : "pb-4"}`}>
           <div>
             {letterhead?.logo_url ? (
               <img
                 src={letterhead.logo_url}
                 alt={letterhead.display_name}
-                className="mb-2 max-h-14"
+                className={reportView === "calendar" ? "mb-1 max-h-9" : "mb-2 max-h-14"}
               />
             ) : null}
-            <p className="text-lg font-semibold">
+            <p className={reportView === "calendar" ? "text-sm font-semibold" : "text-lg font-semibold"}>
               {letterhead?.legal_name ?? activeOrganization?.displayName}
             </p>
             {letterhead?.address_street ? (
@@ -1706,7 +1718,7 @@ export function ServiceVerificationReportsPage() {
                 .join(" · ")}
             </p>
           </div>
-          <div className="text-right text-sm text-slate-600">
+          <div className={`text-right text-slate-600 ${reportView === "calendar" ? "text-[10px] leading-tight" : "text-sm"}`}>
             <p className="font-semibold">
               {reportView === "calendar"
                 ? "Client Monthly Service Calendar"
@@ -1730,21 +1742,23 @@ export function ServiceVerificationReportsPage() {
         <Card className="print:border-none print:p-0 print:shadow-none">
           <div className="flex flex-wrap items-end justify-between gap-4">
             <div className="flex items-start gap-3">
-              <CalendarDays className="mt-0.5 h-5 w-5 text-sky-700" />
+              <CalendarDays className="mt-0.5 h-5 w-5 text-sky-700 print:hidden" />
               <div>
-                <h3 className="font-semibold text-slate-950">
+                <h3 className="font-semibold text-slate-950 print:hidden">
                   Client monthly service calendar
                 </h3>
-                <p className="mt-1 text-sm text-slate-500">
-                  One client per calendar. Each date shows actual worked hours per
-                  service, added up across all caregivers (no caregiver names).
-                  Different services are never combined.
+                <p className="mt-1 text-sm text-slate-500 print:hidden">
+                  One client per calendar. Each date shows actual worked time per
+                  service, added up across caregivers; the caregiver summary below
+                  gives each caregiver's time by service. Different services are
+                  never combined.
                 </p>
-                <p className="mt-1 text-xs text-slate-500 print:text-slate-700">
+                <p className="mt-1 text-xs text-slate-500 print:mt-0 print:text-[9px] print:text-slate-700">
                   Includes confirmed visits and visits in review (shaded amber). Replaced
                   originals and voided visits are left out, so corrections are not counted
-                  twice. Always the full month for this client: the caregiver, service,
-                  status and date filters do not apply here.
+                  twice. Visits not yet complete are listed separately and not counted.
+                  <span className="print:hidden"> Always the full month for this client: the caregiver, service,
+                  status and date filters do not apply here.</span>
                 </p>
               </div>
             </div>
@@ -1772,6 +1786,14 @@ export function ServiceVerificationReportsPage() {
                   onChange={(event) => setReportMonth(event.target.value)}
                   className="mt-1 block rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900"
                 />
+              </label>
+              <label className="flex items-center gap-2 self-center text-xs font-medium text-slate-600">
+                <input
+                  type="checkbox"
+                  checked={calendarDetailPage}
+                  onChange={(event) => setCalendarDetailPage(event.target.checked)}
+                />
+                Add a visit detail page
               </label>
               <Button
                 type="button"
@@ -1829,7 +1851,7 @@ export function ServiceVerificationReportsPage() {
             </div>
           ) : (
             <>
-              <div className="mt-4 border-b border-slate-200 pb-3">
+              <div className="mt-4 border-b border-slate-200 pb-3 print:hidden">
                 <p className="font-semibold text-slate-950">
                   {selectedClientName ?? "Selected client"}
                   {selectedClientCode ? <span className="ml-1 text-sm font-normal text-slate-500">({selectedClientCode})</span> : null}
@@ -1839,7 +1861,7 @@ export function ServiceVerificationReportsPage() {
                   <p role="alert" className="mt-1 text-sm text-red-700">Could not load this month's visits.</p>
                 ) : null}
               </div>
-              <div className="mt-4 overflow-x-auto">
+              <div className="mt-4 overflow-x-auto print:mt-1 print:overflow-visible">
                 <div
                   role="grid"
                   aria-label={`Service hours for ${selectedClientName ?? "selected client"} in ${reportMonth}`}
@@ -1854,7 +1876,7 @@ export function ServiceVerificationReportsPage() {
                         <div
                           key={day}
                           role="columnheader"
-                          className="px-2 py-2 text-center text-xs font-semibold uppercase tracking-wide text-slate-500"
+                          className="px-2 py-2 text-center text-xs font-semibold uppercase tracking-wide text-slate-500 print:py-0.5 print:text-[9px]"
                         >
                           {day}
                         </div>
@@ -1875,34 +1897,34 @@ export function ServiceVerificationReportsPage() {
                             key={`${weekIndex}-${dayIndex}`}
                             role="gridcell"
                             aria-label={date ?? "Outside selected month"}
-                            className="min-h-28 border-b border-r border-slate-100 p-2 last:border-r-0"
+                            className="min-h-28 border-b border-r border-slate-100 p-2 last:border-r-0 print:min-h-[0.56in] print:break-inside-avoid print:p-1"
                           >
                             {day ? (
-                              <p className="text-xs font-semibold text-slate-600">
+                              <p className="text-xs font-semibold text-slate-600 print:text-[9px]">
                                 {day}
                               </p>
                             ) : null}
-                            <div className="mt-1 space-y-1.5">
+                            <div className="mt-1 space-y-1.5 print:mt-0 print:space-y-0.5">
                               {entries.map((entry) => (
                                 <div
                                   key={entry.key}
                                   className={
                                     entry.needsReview
-                                      ? "rounded-md bg-amber-50 px-1.5 py-1"
-                                      : "rounded-md bg-sky-50 px-1.5 py-1"
+                                      ? "rounded-md bg-amber-50 px-1.5 py-1 print:px-1 print:py-0"
+                                      : "rounded-md bg-sky-50 px-1.5 py-1 print:px-1 print:py-0"
                                   }
                                 >
                                   <p
-                                    className="text-[11px] font-semibold text-slate-800"
+                                    className="break-words text-[11px] font-semibold leading-tight text-slate-800 print:text-[8px]"
                                     title={entry.serviceName}
                                   >
                                     {entry.serviceName}
                                   </p>
-                                  <p className="text-[11px] font-medium tabular-nums text-slate-700">
+                                  <p className="text-[11px] font-medium tabular-nums text-slate-700 print:text-[9px]">
                                     {formatDuration(entry.workedMinutes)}
                                   </p>
                                   {entry.billableMinutes !== entry.workedMinutes ? (
-                                    <p className="text-[10px] tabular-nums text-slate-500">
+                                    <p className="text-[10px] tabular-nums text-slate-500 print:text-[8px]">
                                       Billable {formatDuration(entry.billableMinutes)}
                                     </p>
                                   ) : null}
@@ -1917,51 +1939,13 @@ export function ServiceVerificationReportsPage() {
                 </div>
               </div>
 
-              <div className="mt-5">
-                <h4 className="font-semibold text-slate-950">
-                  Monthly totals by service
-                </h4>
-                {monthlyServiceSummaryQuery.isLoading ? (
-                  <p className="mt-2 text-sm text-slate-500">Loading totals…</p>
-                ) : monthlyServiceRows.length === 0 ? (
-                  <p className="mt-2 text-sm text-slate-500">
-                    No authorization/service totals are available for this month.
-                  </p>
-                ) : (
-                  <div className="mt-2 overflow-x-auto">
-                    <table className="w-full text-left text-sm" aria-label="Monthly service totals">
-                      <thead>
-                        <tr className="border-b border-slate-200 text-xs uppercase tracking-wide text-slate-500">
-                          <th className="pb-2 pr-3 font-medium">Service</th>
-                          <th className="pb-2 pr-3 font-medium">Authorized</th>
-                          <th className="pb-2 pr-3 font-medium">Worked</th>
-                          <th className="pb-2 pr-3 font-medium">Confirmed</th>
-                          <th className="pb-2 pr-3 font-medium">Billable</th>
-                          <th className="pb-2 pr-3 font-medium">{STILL_SCHEDULED_LABEL}</th>
-                          <th className="pb-2 pr-3 font-medium">Hours left to schedule</th>
-                          <th className="pb-2 font-medium">Needs review</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {monthlyServiceRows.map((row) => (
-                          <tr key={row.authorizationLineageId} className="border-b border-slate-100">
-                            <td className="py-2 pr-3 font-medium text-slate-800">
-                              {row.serviceCode} · {row.serviceName}
-                            </td>
-                            <td className="py-2 pr-3">{formatDuration(row.authorizedMinutes)}</td>
-                            <td className="py-2 pr-3">{formatDuration(row.workedMinutes)}</td>
-                            <td className="py-2 pr-3">{formatDuration(row.verifiedMinutes)}</td>
-                            <td className="py-2 pr-3">{formatDuration(row.billableMinutes)}</td>
-                            <td className="py-2 pr-3">{formatDuration(row.reservedMinutes ?? 0)}</td>
-                            <td className="py-2 pr-3">{formatDuration(row.remainingMinutes)}</td>
-                            <td className="py-2">{formatDuration(row.reviewMinutes)}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                )}
-              </div>
+              <CalendarSummary
+                summary={clientMonth}
+                serviceRows={monthlyServiceSummaryQuery.data ?? []}
+                serviceRowsState={monthlyServiceSummaryQuery.isLoading ? "loading" : monthlyServiceSummaryQuery.isError ? "error" : "ready"}
+                visitsState={calendarVisitsQuery.isLoading ? "loading" : calendarVisitsQuery.isError ? "error" : "ready"}
+                detailPage={calendarDetailPage}
+              />
             </>
           )}
         </Card>

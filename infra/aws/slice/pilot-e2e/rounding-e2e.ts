@@ -90,7 +90,7 @@ async function signIn(page: Page, path: string) {
 }
 async function noHScroll(page: Page, label: string) {
   const { sw, iw } = await page.evaluate(() => ({ sw: document.documentElement.scrollWidth, iw: window.innerWidth }));
-  check(`${label}: no horizontal scroll at 390 px`, sw <= iw, `scrollWidth ${sw}, innerWidth ${iw}`);
+  check(`${label}: no horizontal scroll at 390 px`, sw <= iw && iw <= 390, `scrollWidth ${sw}, innerWidth ${iw}`);
 }
 const visible = (page: Page, text: string | RegExp) => page.getByText(text).first().isVisible().catch(() => false);
 const laDate = (n = 0) => new Intl.DateTimeFormat("en-CA", { timeZone: "America/Los_Angeles" }).format(new Date(Date.now() + n * 864e5));
@@ -137,8 +137,8 @@ async function main() {
   await o.page.getByLabel("Payer rule (document and section)").fill("Synthetic payer manual 4.2");
   await o.page.getByLabel("Date of that payer document").fill("2026-01-15");
   await o.page.getByRole("button", { name: "Save new version" }).click();
-  check("settings: saved as version 1", await o.page.getByText(/Saved as version 1, effective 2026-01-01/).waitFor({ timeout: 8000 }).then(() => true, () => false));
-  check("settings: history shows the payer rule", await o.page.getByText(/Payer rule: Synthetic payer manual 4.2 \(2026-01-15\)/).waitFor({ timeout: 8000 }).then(() => true, () => false));
+  check("settings: saved as version 1", await o.page.getByText(/Saved as version 1, effective 01\/01\/2026/).waitFor({ timeout: 8000 }).then(() => true, () => false));
+  check("settings: history shows the payer rule", await o.page.getByText(/Payer rule: Synthetic payer manual 4.2 \(01\/15\/2026\)/).waitFor({ timeout: 8000 }).then(() => true, () => false));
   await noHScroll(o.page, "rounding policies");
   await o.page.screenshot({ path: join(SHOTS, "01-policies.png"), fullPage: true });
 

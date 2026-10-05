@@ -98,7 +98,7 @@ async function signIn(page: Page, path: string) {
 }
 async function noHScroll(page: Page, label: string) {
   const { sw, iw } = await page.evaluate(() => ({ sw: document.documentElement.scrollWidth, iw: window.innerWidth }));
-  check(`${label}: page has no horizontal scroll at 390 px`, sw <= iw, `scrollWidth ${sw}, innerWidth ${iw}`);
+  check(`${label}: page has no horizontal scroll at 390 px`, sw <= iw && iw <= 390, `scrollWidth ${sw}, innerWidth ${iw}`);
 }
 
 async function visit(sub: string, minutesAgo: number, confirm: "draw" | "unable_to_confirm") {
@@ -146,11 +146,12 @@ async function main() {
     // ---------------- Owner: Home, branding
     const O = await persona(browser, OWNER);
     await signIn(O.page, "/");
-    await O.page.getByText("OWNER VIEW").waitFor({ timeout: 15000 });
-    check("owner header: OWNER VIEW with the real name", await O.page.getByText("Synthetic Owner").isVisible());
-    const needs = O.page.getByRole("link", { name: /Needs attention/ });
-    check("owner header: NEEDS ATTENTION visible with a count", (await needs.isVisible()) && /Needs attention: \d+/.test((await needs.getAttribute("aria-label")) ?? ""), (await needs.getAttribute("aria-label")) ?? "");
-    await O.page.getByText("Financial impact (owner only)").waitFor({ timeout: 15000 });
+    await O.page.getByText("ADMINISTRATOR VIEW").waitFor({ timeout: 15000 });
+    check("owner header: ADMINISTRATOR VIEW with the real name", await O.page.getByText("Synthetic Owner").isVisible());
+    const needs = O.page.getByRole("link", { name: /Needs attention|All clear/ });
+    await needs.waitFor({ timeout: 15000 }); // not while it still says "Checking…"
+    check("owner header: NEEDS ATTENTION visible with a count", (await needs.isVisible()) && /^(Needs attention: \d+|All clear: 0)/.test((await needs.getAttribute("aria-label")) ?? ""), (await needs.getAttribute("aria-label")) ?? "");
+    await O.page.getByText("Financial impact (Administrator only)").waitFor({ timeout: 15000 });
     check("owner Home: financial cards with cost/margin unavailable", await O.page.getByText(/no caregiver pay data/).isVisible());
     await noHScroll(O.page, "owner Home");
     await shot(O.page, "01-owner-home");
@@ -171,14 +172,14 @@ async function main() {
     check("owner: no page errors", O.errors.length === 0, O.errors.join(" | "));
 
     // ---------------- Manager: Home, NEEDS ATTENTION, visit records, calendar, documents
-    const M = await persona(browser, MG);
+    let M = await persona(browser, MG);
     await signIn(M.page, "/");
     await M.page.getByText("MANAGER VIEW").waitFor({ timeout: 15000 });
     check("manager header: MANAGER VIEW with the real name", await M.page.getByText("Pilot Manager", { exact: true }).isVisible());
     const borderTop = await M.page.locator("header").evaluate((h) => getComputedStyle(h).borderTopColor);
     check("manager sees the owner's agency colour", borderTop === "rgb(20, 83, 45)", borderTop);
     check("manager sees the agency logo in the header", await M.page.locator("header img[alt$='logo']").isVisible());
-    check("manager Home: no owner-only financial cards", (await M.page.getByText("Financial impact (owner only)").count()) === 0);
+    check("manager Home: no owner-only financial cards", (await M.page.getByText("Financial impact (Administrator only)").count()) === 0);
     await noHScroll(M.page, "manager Home");
     await shot(M.page, "03-manager-home");
     await M.page.getByRole("link", { name: /Needs attention/ }).click();
@@ -196,24 +197,29 @@ async function main() {
     const code = firstCard.split("\n")[0]!;
     check("client code shown once per card", firstCard.split(code).length - 1 === 1, code);
     check("Menu button names the current section", (await M.page.getByRole("button", { name: /Menu/ }).innerText()).includes("Visit records"));
-    check("visit card date is unambiguous (month name)", /[A-Z][a-z]{2} \d{1,2}, \d{4}/.test(firstCard), firstCard.split("\n")[3] ?? "");
+    check("visit card date is MM/DD/YYYY (owner requirement 2026-10-05)", /\d{2}\/\d{2}\/\d{4}/.test(firstCard), firstCard.split("\n")[3] ?? "");
     await noHScroll(M.page, "manager Visit records");
     await shot(M.page, "05-manager-visit-records");
 
     await M.page.getByRole("button", { name: /Menu/ }).click();
     await M.page.getByRole("link", { name: "Clients" }).click();
     await M.page.getByRole("heading", { name: "Clients" }).waitFor({ timeout: 15000 });
-    const firstRow = M.page.locator("li").filter({ has: M.page.getByLabel("First name") }).first();
-    const clientCode = (await firstRow.locator("p").first().innerText()).split(" ")[0]!;
-    await firstRow.getByLabel("First name").fill("Synthetic");
-    await firstRow.getByLabel("Last name").fill("Calendar Person");
-    await firstRow.getByRole("button", { name: /Save name/ }).click();
-    await firstRow.getByText("Saved.").waitFor({ timeout: 15000 });
+    // Name editing moved to the client detail page in 0022 (covered by clients-e2e.ts);
+    // here the synthetic legal name is set directly for a client that has visits.
+    const named = (await admin.query(`select v.client_id, c.client_code from ogevia.service_visits v join ogevia.clients c on c.id = v.client_id
+      join ogevia.organizations o on o.id = v.organization_id where o.slug = 'scs-pilot-synthetic' order by v.time_in limit 1`)).rows[0];
+    const clientCode = named.client_code as string;
+    await admin.query(`insert into ogevia.client_private_names (client_id, organization_id, legal_first_name, legal_last_name, updated_by)
+      select $1, c.organization_id, 'Synthetic', 'Calendar Person', m.user_id from ogevia.clients c
+      join ogevia.organization_memberships m on m.organization_id = c.organization_id and m.role = 'manager' where c.id = $1 limit 1
+      on conflict (client_id) do update set legal_first_name = excluded.legal_first_name, legal_last_name = excluded.legal_last_name`, [named.client_id]);
     check("manager set a synthetic client name (office only)", true, clientCode);
     await noHScroll(M.page, "manager Clients");
     await shot(M.page, "05b-manager-clients");
     await M.page.getByRole("button", { name: /Menu/ }).click();
     await M.page.getByRole("link", { name: "Visit records" }).click();
+    await M.page.getByRole("heading", { name: "Visit records" }).waitFor({ timeout: 15000 });
+    await M.page.reload(); // the name was set directly in the database: drop cached rows
     await M.page.getByRole("heading", { name: "Visit records" }).waitFor({ timeout: 15000 });
     await M.page.getByLabel("Report").selectOption("calendar");
     const clientSelect = M.page.getByLabel("Calendar client");
@@ -230,7 +236,11 @@ async function main() {
     await M.page.setViewportSize({ width: 1056, height: 816 });
     await shot(M.page, "06-calendar-print");
     await M.page.emulateMedia({ media: "screen" });
-    await M.page.setViewportSize({ width: 390, height: 844 });
+    // Resizing an emulated phone back from 1056 px leaves it zoomed (scale ~1.45), which
+    // misplaces taps; continue in a fresh phone page instead.
+    await M.ctx.close();
+    M = await persona(browser, MG);
+    await signIn(M.page, "/documents");
 
     await M.page.getByRole("button", { name: /Menu/ }).click();
     await M.page.getByRole("link", { name: "Documents" }).click();

@@ -70,7 +70,7 @@ export function AwsShell({ children }: PropsWithChildren) {
   const attentionState = attentionBadge(attention.isLoading, attention.isError, count);
 
   return (
-    <div className="min-h-screen bg-slate-50" style={{ "--agency-accent": accent } as CSSProperties}>
+    <div className="min-h-screen bg-slate-50 print:min-h-0 print:bg-white" style={{ "--agency-accent": accent } as CSSProperties}>
       <header className="border-b border-slate-200 border-t-4 bg-white print:hidden" style={{ borderTopColor: accent }}>
         <div className="mx-auto max-w-6xl px-4 py-3">
           <div className="flex flex-wrap items-start justify-between gap-3">
