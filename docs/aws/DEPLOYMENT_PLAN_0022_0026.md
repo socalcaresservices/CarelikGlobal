@@ -21,7 +21,7 @@
 | Live API | `GET /v1/attention` present and exactly one Lambda invoke statement (revised increment); `GET /v1/clients` absent | Stop; finish the 0019–0021 increment first |
 | Stacks | all five `*_COMPLETE` | Stop |
 | RDS | available, private, encrypted | Stop |
-| Scope gate | `release_0026_gate.py` PASS against the live templates; its self-test refuses 25 tampered variants | Stop; nothing changed |
+| Scope gate | `release_0026_gate.py` PASS against the live templates; its self-test refuses 27 tampered variants | Stop; nothing changed |
 
 ## 1. Exact change set
 
