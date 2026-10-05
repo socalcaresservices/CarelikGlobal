@@ -247,3 +247,15 @@ the S3 package):**
 
 **Conclusion:** VERIFIED comparison defect. There was no unapproved change.
 Next: the read-only rerun (`release-0036-verify-bootstrap.sh`).
+
+**Verify-only rerun, attempt 1 (owner, 10:16 UTC):**
+- It stopped at "3/4 Read-only inventory: missing FN". Nothing was checked
+  and nothing was changed.
+- **Cause (verified):** the API stack grew from 104 to 136 resources with this
+  release. `DescribeStackResources` returns only the first 100 resources, and
+  the API Lambda was no longer among them.
+- **Fix (`efcdba1`):** use `ListStackResources`, which returns every resource,
+  in the current scripts. The superseded historical scripts were left
+  unchanged.
+- **Rehearsal:** the stub now models the 100-resource limit. The previous
+  verify script reproduces "missing FN"; the fixed one gives 14/14.
