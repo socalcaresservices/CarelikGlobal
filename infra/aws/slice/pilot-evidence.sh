@@ -47,14 +47,12 @@ aws cloudformation describe-stacks --stack-name "$API_STACK" --query 'Stacks[0].
 aws cloudformation describe-stack-events --stack-name "$API_STACK" --max-items 6 \
   --query 'StackEvents[].[Timestamp,LogicalResourceId,ResourceStatus]' --output text 2>&1 | grep -v '^None$'
 echo "-- Lambda (now vs captured before approval):"
-FN=$(aws cloudformation list-stack-resources --stack-name "$API_STACK" \
-  --query "StackResourceSummaries[?ResourceType=='AWS::Lambda::Function'].PhysicalResourceId | [0]" --output text 2>&1)
+FN=$(aws cloudformation list-stack-resources --stack-name "$API_STACK" --output json | jq -r '[.StackResourceSummaries[] | select(.ResourceType == "AWS::Lambda::Function" and (.LogicalResourceId | startswith("Handler")))] | if length == 1 then .[0].PhysicalResourceId else "" end' 2>&1)
 aws lambda get-function-configuration --function-name "$FN" \
   --query '[CodeSha256,LastModified,Version,Environment.Variables.DB_NAME]' --output text 2>&1
 jq -r '"captured:   \(.CodeSha256)  \(.LastModified)  \(.DB_NAME)"' "$RB/lambda.json" 2>&1
 echo "-- API routes:"
-API_ID=$(aws cloudformation list-stack-resources --stack-name "$API_STACK" \
-  --query "StackResourceSummaries[?ResourceType=='AWS::ApiGatewayV2::Api'].PhysicalResourceId | [0]" --output text 2>&1)
+API_ID=$(aws cloudformation list-stack-resources --stack-name "$API_STACK" --output json | jq -r '[.StackResourceSummaries[] | select(.ResourceType == "AWS::ApiGatewayV2::Api" and (.LogicalResourceId | startswith("")))] | if length == 1 then .[0].PhysicalResourceId else "" end' 2>&1)
 NOW=$(aws apigatewayv2 get-routes --api-id "$API_ID" --query 'Items[].[RouteKey,AuthorizationType]' --output json 2>&1)
 echo "now: $(jq length <<<"$NOW") routes ($(jq '[.[]|select(.[1]=="NONE")]|length' <<<"$NOW") public); captured before: $(jq length "$RB/routes.json" 2>&1)"
 echo "POST /v1/visits/{visitId}/close: $(jq -r 'if any(.[]; .[0]=="POST /v1/visits/{visitId}/close") then "LIVE" else "not live" end' <<<"$NOW")"

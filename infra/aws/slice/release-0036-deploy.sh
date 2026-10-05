@@ -90,14 +90,11 @@ for s in "${STACKS[@]}"; do
   [[ "$st" == CREATE_COMPLETE || "$st" == UPDATE_COMPLETE ]] || die "$s is $st (this workflow never creates or repairs stacks)"
 done
 # The API handler by logical id (the stack gains a second function in this release).
-FN=$(aws cloudformation list-stack-resources --stack-name "$API_STACK" \
-  --query "StackResourceSummaries[?ResourceType=='AWS::Lambda::Function' && starts_with(LogicalResourceId, 'Handler')].PhysicalResourceId | [0]" --output text)
+FN=$(aws cloudformation list-stack-resources --stack-name "$API_STACK" --output json | jq -r '[.StackResourceSummaries[] | select(.ResourceType == "AWS::Lambda::Function" and (.LogicalResourceId | startswith("Handler")))] | if length == 1 then .[0].PhysicalResourceId else "" end')
 FNCFG=$(aws lambda get-function-configuration --function-name "$FN" --output json)
 [[ "$(jq -r '.Environment.Variables.DB_NAME // empty' <<<"$FNCFG")" == "$DB_NAME" ]] || die "the API Lambda does not serve $DB_NAME"
-API_ID=$(aws cloudformation list-stack-resources --stack-name "$API_STACK" \
-  --query "StackResourceSummaries[?ResourceType=='AWS::ApiGatewayV2::Api'].PhysicalResourceId | [0]" --output text)
-POLICY_ARN=$(aws cloudformation list-stack-resources --stack-name "$API_STACK" \
-  --query "StackResourceSummaries[?ResourceType=='AWS::IAM::ManagedPolicy' && starts_with(LogicalResourceId, 'HandlerPolicy')].PhysicalResourceId | [0]" --output text)
+API_ID=$(aws cloudformation list-stack-resources --stack-name "$API_STACK" --output json | jq -r '[.StackResourceSummaries[] | select(.ResourceType == "AWS::ApiGatewayV2::Api" and (.LogicalResourceId | startswith("")))] | if length == 1 then .[0].PhysicalResourceId else "" end')
+POLICY_ARN=$(aws cloudformation list-stack-resources --stack-name "$API_STACK" --output json | jq -r '[.StackResourceSummaries[] | select(.ResourceType == "AWS::IAM::ManagedPolicy" and (.LogicalResourceId | startswith("HandlerPolicy")))] | if length == 1 then .[0].PhysicalResourceId else "" end')
 WEB=$(out Ogevia-prod-WebHosting WebOrigin); BUCKET=$(out Ogevia-prod-WebHosting SiteBucketName)
 DIST=$(out Ogevia-prod-WebHosting DistributionId); API=$(out "$API_STACK" ApiUrl)
 for v in WEB BUCKET DIST API API_ID POLICY_ARN; do [[ -n "${!v}" && "${!v}" != None ]] || die "missing $v"; done
