@@ -259,3 +259,16 @@ Next: the read-only rerun (`release-0036-verify-bootstrap.sh`).
   unchanged.
 - **Rehearsal:** the stub now models the 100-resource limit. The previous
   verify script reproduces "missing FN"; the fixed one gives 14/14.
+
+**Verify-only rerun, attempt 2 (owner, 10:34 UTC):**
+- It stopped at "3/4: the API Lambda is not the one captured before the
+  deployment". Nothing was checked and nothing was changed; the identity
+  guard worked as intended.
+- **Cause (verified, reproduced):** with `--output text`, the AWS CLI applies
+  `--query` to each page of results. The 136 resources span two pages, so
+  `... | [0]` returned the function name plus "None".
+- **Fix (`95087eb`):** lookups read the whole result as JSON and require
+  exactly one match. Status scripts that took "the first Lambda" now select
+  the Handler, not the identity function.
+- **Rehearsal:** the stub now models per-page text output. `efcdba1`
+  reproduces the stop; `95087eb` gives 14/14.

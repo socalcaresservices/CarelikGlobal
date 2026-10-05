@@ -8,7 +8,7 @@ cat > ~/ogevia-release-0036-verify.sh <<'EOF'
 # build that does not reproduce the approved scope-gate result.
 set -uo pipefail
 PIN=7b1236d86294c4dacee155d7d3fa06c0af55d9c1   # the approved, deployed commit
-FIX=efcdba1c128095dac14fb2c3efe41247155bad4e   # corrected live checks + verify-only script
+FIX=95087eb8cdb3f7984efd146c09f42921d77c9965   # corrected live checks + verify-only script
 BR=claude/ogevia-socal-pilot-prep-vfu5tf
 SRC=/tmp/ogevia-release-0036
 FIXSRC=/tmp/ogevia-release-0036-verify
