@@ -1,6 +1,13 @@
 # AWS TEST deployment plan: release 0022–0026 (office administration, invitations, planned assignments, schedule and call-outs)
 
-**Status:** prepared 2026-10-04 and re-pinned at `a3b1681` after the 0019–0021 policy-size fix. Rehearsed end to end at that commit against stubbed AWS that enforces the 20,480-byte Lambda policy limit, on the revised increment's state (ledger 0021, 60 routes, one invoke statement): scope gate PASS; self-test 27/27, including per-route and widened permissions; 13/13 live checks PASS. At 90 routes the policy is still one statement (384 bytes; peak 384). The API rollback keeps one statement. The earlier rehearsal at `0c739c9` covered every rollback layer and a resume; those scripts are unchanged except for the policy check. **Not executed in AWS. Run only after the 0019–0021 increment is verified live** (paste block `infra/aws/slice/increment-resume-block.sh`, revision 69e8799). Paste block for this release: `infra/aws/slice/release-0026-bootstrap.sh`.
+**Status:** pinned at `0ca5616` (2026-10-05). The base (the 0019–0021 increment, revision 69e8799) is live: owner-reported 10/10 live checks and post-check all PASS.
+- **Record values are now checked, not only counts.** Before the migrations, the script fingerprints every existing row of every table that exists at 0021, across all of its columns, plus the permission rows and the audit log. Afterwards it must find every row unchanged, the permissions equal to the baseline plus exactly the 6 permissions and 11 role grants that 0022–0026 add, and the earlier audit rows unchanged. Otherwise it stops before the API and web are changed. The result is also live check 9b, so there are 14 live checks.
+- **Rehearsed** at `0ca5616` against stubbed AWS that enforces the 20,480-byte Lambda policy limit, on the revised base:
+  - Clean run: 14/14 live checks PASS; 29 tables unchanged by value; the policy stays one statement.
+  - Tampered run: a migration side effect changed one confirmation's signer name, with counts and visit times unchanged. The script stopped in the database window and the API and web were not changed.
+- The earlier rehearsal (`0c739c9`/`a3b1681`) covered every rollback layer and a resume.
+
+**Not executed in AWS.** Paste block: `infra/aws/slice/release-0026-bootstrap.sh`.
 
 **Environment:** account 300094796789, us-west-2, database `ogevia_sv_test`, synthetic data only.
 
