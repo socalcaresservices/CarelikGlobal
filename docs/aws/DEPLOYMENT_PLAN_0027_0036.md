@@ -187,3 +187,50 @@ The numbered steps are in the release report and in
   electronic confirmations. Real-client activation stays blocked until the
   owner confirms payer acceptance and the security requirements (BAA,
   Phase 7).
+
+## 9. Deployment record and the check-6 defect (10/05/2026)
+
+**Deployed:** owner-run, approved commit `7b1236d`. Live verification
+reported 13/14 PASS, with FAIL 6.
+
+**Cause (verified in the code and reproduced in the rehearsal):** check 6 was
+a comparison defect, not evidence of a configuration change.
+- It compared the full Lambda configuration after removing only six fields.
+  `CodeSize` was not removed, and it changes with every new code package.
+- The rehearsal stub did not return `CodeSize`, so the rehearsal could not
+  catch this.
+- `REPORT.md` was a fixed template. It stated "Lambda configuration and IAM
+  unchanged apart from code" whatever the checks found.
+
+**Fix (`d690994`), with the check kept strict:**
+- Every configuration field must be identical, except:
+  - `CodeSha256` and `CodeSize`, which must equal the SHA-256 and size of the
+    S3 package the live template deploys;
+  - `RuntimeVersionConfig`, which may differ only when the function's runtime
+    update mode is Auto and `Runtime` is unchanged. Under Auto, AWS Lambda
+    applies the newest runtime version to a function when it is updated (the
+    first phase of its two-phase rollout). The change is reported, never
+    hidden.
+- `State` must be Active and `LastUpdateStatus` must be Successful.
+- Differences are listed with environment values hashed, never printed.
+- `REPORT.md` is now written from the check results.
+- `release-0036-verify.sh` reruns the 14 checks read-only on the finished
+  deployment. It uses the approved build, which must reproduce the approved
+  scope-gate result.
+
+**Rehearsal of the fix (stub now returns `CodeSize`, the runtime version and
+the S3 package):**
+- The pinned script reproduces 13/14, FAIL 6, and the false report line.
+- The verify-only rerun gives 14/14 with no AWS mutation, and keeps the
+  earlier `VERIFY.txt` and `REPORT.md` as copies.
+- An environment variable added, memory changed, or code that is not the
+  package: each gives FAIL 6 naming the field, and the environment value never
+  appears.
+- A build that is not the approved commit is refused.
+- A clean rebuild of `7b1236d` reproduces the identical Lambda asset keys and
+  the identical scope-gate hash.
+- The fixed deploy script reaches 14/14 on a fresh run.
+
+**Owner steps:**
+1. `release-0036-check6-diagnose.sh` (read-only): the field list.
+2. `release-0036-verify-bootstrap.sh`: the read-only rerun.
