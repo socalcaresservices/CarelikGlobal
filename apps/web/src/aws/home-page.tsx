@@ -3,7 +3,7 @@ import { Link } from "react-router-dom";
 import { Card } from "@carelik/ui";
 import { ContinuityStatusCard } from "./continuity-page";
 import { useOrganization } from "@/providers/organization-provider";
-import { EXCEPTIONS_PATH } from "./aws-shell";
+import { actionCategories, actionNeededState, reminders } from "./action-needed";
 import { hoursLabel, moneyLabel, useAttention, useUtilisation, type UtilisationRow } from "./aws-workspace";
 
 function thisMonth(): string {
@@ -16,7 +16,7 @@ const sumMoney = (rows: UtilisationRow[], key: "billableValueCents" | "approvedV
   rows.some((r) => r[key] !== null) ? rows.reduce((t, r) => t + Number(r[key] ?? 0), 0) : null;
 
 /**
- * Home for owners, managers and schedulers: what needs attention, then the
+ * Home for owners, managers and schedulers: what needs action, then the
  * month's authorized vs worked hours by service. Dollar values appear only
  * when the server returns them (billing.read: owner). Missing rates and
  * the absent caregiver-pay source are stated, never shown as $0.
@@ -30,37 +30,12 @@ export function AwsHomePage() {
   const isOwnerFinance = hasPermission("billing.read");
   const a = attention.data;
 
-  // One definition with the header badge: every count comes from GET /v1/attention (0033),
-  // already limited to what this person may see. Blocking items add up to the badge total;
-  // reminders are shown separately and never counted.
-  const items = a
-    ? [
-        { label: "Missing Time Out", count: a.missingTimeOut, to: EXCEPTIONS_PATH, hint: "Still open past the shift end, or 12 h without a schedule" },
-        { label: "Not confirmed", count: a.notConfirmed, to: EXCEPTIONS_PATH, hint: "Ended over 60 min ago, no client confirmation yet" },
-        { label: "Needs review", count: a.needsReview, to: EXCEPTIONS_PATH, hint: "Unconfirmed or over the authorization; open each visit to review it" },
-        ...(a.lateResponsesToReview !== null && a.lateResponsesToReview !== undefined
-          ? [{ label: "Signatures received to review", count: a.lateResponsesToReview, to: "/billing-review", hint: "A client or representative answered a confirmation request; accept or reject it" }]
-          : []),
-        ...(a.uncoveredShifts !== null && a.uncoveredShifts !== undefined
-          ? [{ label: "Shifts without a caregiver", count: a.uncoveredShifts, to: "/schedule", hint: "Upcoming shifts that are open or called out and not replaced" }]
-          : []),
-        ...(a.documentsBlocking !== null && a.documentsBlocking !== undefined
-          ? [
-              { label: "Documents expired or overdue", count: a.documentsBlocking, to: "/documents", hint: "Staff credentials past their expiry or due date" },
-              { label: "Documents to review", count: a.documentsToReview ?? 0, to: "/documents", hint: "Uploaded, not yet verified" },
-            ]
-          : []),
-      ]
-    : [];
-  const reminders = a
-    ? [
-        ...(a.awaitingSignature ? [{ label: "Waiting for a signature", count: a.awaitingSignature, to: "/billing-review", hint: "A confirmation was requested; the visit returns here if the request expires" }] : []),
-        ...(a.documentsExpiring ? [{ label: "Documents expiring soon", count: a.documentsExpiring, to: "/documents", hint: "Within the agency's reminder days; not yet a problem" }] : []),
-        ...(a.billingReadyUnapproved !== null
-          ? [{ label: "Billing ready, not approved", count: a.billingReadyUnapproved, to: "/billing-review", hint: "Approval is a human step; it is not submission" }]
-          : []),
-      ]
-    : [];
+  // One definition with the header badge (action-needed.ts): the same query, the same
+  // category counts. The total is the sum of the category counts; reminders are shown
+  // separately and never counted.
+  const items = a ? actionCategories(a) : [];
+  const reminderItems = a ? reminders(a) : [];
+  const state = actionNeededState(attention.isLoading, attention.isError, a);
 
   const authorized = sum(rows, "authorizedMinutes");
   const worked = sum(rows, "workedMinutes");
@@ -72,7 +47,22 @@ export function AwsHomePage() {
       <ContinuityStatusCard />
 
       <section id="attention" aria-labelledby="attention-heading">
-        <h2 id="attention-heading" className="text-sm font-bold uppercase tracking-wide text-red-700">Needs attention</h2>
+        <h2 id="attention-heading" className="text-sm font-bold uppercase tracking-wide text-slate-700">Action needed</h2>
+        {/* Banner: the same total as the header badge. Red above zero, green only for a confirmed zero, neutral while loading or when the check failed. */}
+        <p
+          role="status"
+          data-testid="action-needed-banner"
+          className={
+            "mt-2 rounded-xl border-2 px-4 py-3 text-base font-bold uppercase tracking-wide " +
+            (state.kind === "attention" ? "border-red-700 bg-red-50 text-red-700"
+              : state.kind === "clear" ? "border-emerald-700 bg-emerald-50 text-emerald-800"
+              : "border-slate-400 bg-slate-50 text-slate-700")
+          }
+        >
+          <span aria-hidden="true">{state.icon}</span>{" "}
+          {state.kind === "attention" ? `Action needed: ${state.count}` : state.kind === "clear" ? "All clear: nothing needs action" : state.label}
+        </p>
+        {state.kind === "attention" ? <p className="mt-1 text-xs text-slate-500">The total adds up the counts below. One visit can appear in more than one count.</p> : null}
         {attention.isLoading ? <p className="mt-2 text-sm text-slate-500">Loading…</p> : null}
         {attention.isError ? <p role="alert" className="mt-2 text-sm text-red-700">{(attention.error as Error).message}</p> : null}
         {a ? (
@@ -90,11 +80,11 @@ export function AwsHomePage() {
             ))}
           </ul>
         ) : null}
-        {reminders.length > 0 ? (
+        {reminderItems.length > 0 ? (
           <>
-            <h3 className="mt-4 text-xs font-semibold uppercase tracking-wide text-slate-500">Reminders (not counted above)</h3>
+            <h3 className="mt-4 text-xs font-semibold uppercase tracking-wide text-slate-500">Reminders (not in the Action needed total)</h3>
             <ul className="mt-2 grid gap-2 sm:grid-cols-2">
-              {reminders.map((i) => (
+              {reminderItems.map((i) => (
                 <li key={i.label}>
                   <Link to={i.to} className="flex min-h-[56px] items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3 hover:border-slate-300">
                     <span>

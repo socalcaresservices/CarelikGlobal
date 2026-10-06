@@ -3,14 +3,15 @@ import { Link, Navigate, useLocation } from "react-router-dom";
 import { useAuth } from "@carelik/auth";
 import { cn } from "@carelik/ui";
 import { useOrganization } from "@/providers/organization-provider";
+import { actionNeededState, EXCEPTIONS_ROUTE } from "./action-needed";
 import { useAttention, useBranding, useLogo, useMyDisplayName, viewKind, VIEW_TITLE } from "./aws-workspace";
 
-export const EXCEPTIONS_PATH = "/service-verification/reports?view=exceptions";
+export const EXCEPTIONS_PATH = EXCEPTIONS_ROUTE;
 const DEFAULT_ACCENT = "#0f172a"; // slate-900: the colour used before agency branding existed
 
 /**
  * Shell for the AWS build: agency identity first, the signed-in person and
- * their view (ADMINISTRATOR / MANAGER / CAREGIVER VIEW), NEEDS ATTENTION, and
+ * their view (ADMINISTRATOR / MANAGER / CAREGIVER VIEW), ACTION NEEDED, and
  * role-appropriate navigation. Navigation only decides what is shown; every
  * screen's data is authorized again in PostgreSQL.
  */
@@ -68,8 +69,8 @@ export function AwsShell({ children }: PropsWithChildren) {
       .sort((a, b) => b.to.length - a.to.length)[0] ?? null;
   const agencyName = branding.data?.displayName ?? activeOrganization?.displayName ?? "Organization";
   const accent = branding.data?.accentColor ?? DEFAULT_ACCENT;
-  const count = attention.data?.total ?? null;
-  const attentionState = attentionBadge(attention.isLoading, attention.isError, count);
+  // The same function and the same query result as the Home banner (action-needed.ts).
+  const attentionState = actionNeededState(attention.isLoading, attention.isError, attention.data);
 
   return (
     <div className="min-h-screen bg-slate-50 print:min-h-0 print:bg-white" style={{ "--agency-accent": accent } as CSSProperties}>
@@ -184,12 +185,4 @@ export function AwsLanding({ home }: { home: React.ReactNode }) {
   if (role === "caregiver") return <Navigate to="/service-verification" replace />;
   if (hasPermission("visits.read")) return <>{home}</>;
   return <p className="text-sm text-slate-600">Your role has no Service Verification screens.</p>;
-}
-
-/** NEEDS ATTENTION badge: red with a count, green only for a confirmed zero, neutral while checking or when the check failed. */
-function attentionBadge(loading: boolean, failed: boolean, count: number | null) {
-  if (loading) return { kind: "checking" as const, label: "Checking…", icon: "…", count: null, aria: "Checking items that need attention" };
-  if (failed || count === null) return { kind: "unknown" as const, label: "Unable to check", icon: "?", count: null, aria: "Unable to check items that need attention" };
-  if (count > 0) return { kind: "attention" as const, label: "Needs attention", icon: "⚠", count, aria: `Needs attention: ${count} ${count === 1 ? "item" : "items"}` };
-  return { kind: "clear" as const, label: "All clear", icon: "✓", count: 0, aria: "All clear: 0 items need attention" };
 }

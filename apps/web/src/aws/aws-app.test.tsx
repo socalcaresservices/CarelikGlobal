@@ -185,13 +185,14 @@ describe("AWS build: caregiver vertical slice", () => {
 });
 
 describe("AWS build: manager review and billing-review data", () => {
-  it("manager lands on Home: MANAGER VIEW with the real name, NEEDS ATTENTION with a count, hours without dollar values", async () => {
+  it("manager lands on Home: MANAGER VIEW with the real name, ACTION NEEDED with a count, hours without dollar values", async () => {
     const { api } = renderAws("/", "manager");
     expect(await screen.findByText("MANAGER VIEW")).toBeInTheDocument();
     expect(await screen.findByText("Morgan Manager")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Sign out" })).toBeInTheDocument();
-    const attention = await screen.findByRole("link", { name: "Needs attention: 5 items" });
-    // 0033: the badge opens Home, whose list is built from the same server summary as the count.
+    const attention = await screen.findByRole("link", { name: "Action needed: 6" });
+    // The badge opens Home, whose banner and list use the same summary and the same total
+    // (fixture: 1 + 0 + 2 + 0 + 1 + 1 + 1 ready for approval = 6; the expiring document is a reminder).
     expect(attention.getAttribute("href")).toBe("/");
     expect(attention.className).toMatch(/font-bold/);
     expect(attention.className).toMatch(/uppercase/);
@@ -299,9 +300,9 @@ describe("AWS build: manager review and billing-review data", () => {
     expect(post.headers["idempotency-key"]).toBeTruthy();
   });
 
-  it("manager: Documents lists people's requests; rejecting needs a reason; Home shows document alerts", async () => {
+  it("manager: Documents lists people's requests; rejecting needs a reason; Home shows document counts", async () => {
     const { api } = renderAws("/", "manager");
-    expect(await screen.findByText("Documents to review")).toBeInTheDocument();
+    expect(await screen.findByText("Documents to Review")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("link", { name: "Documents" }));
     expect(await screen.findByRole("heading", { name: "Documents" })).toBeInTheDocument();
     const card = (await screen.findByText("TB test", { selector: "p" })).closest("li")!;

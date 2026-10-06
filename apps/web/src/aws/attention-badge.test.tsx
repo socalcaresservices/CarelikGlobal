@@ -1,4 +1,4 @@
-// NEEDS ATTENTION badge: red with a confirmed count, green only for a confirmed
+// ACTION NEEDED badge and Home banner: red with a confirmed count, green only for a confirmed
 // zero, neutral while checking or when the check failed. SYNTHETIC data only.
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { render, screen, waitFor, within } from "@testing-library/react";
@@ -53,10 +53,10 @@ afterEach(() => vi.clearAllMocks());
 const json = (code: number, body: unknown) => new Response(JSON.stringify(body), { status: code, headers: { "content-type": "application/json" } });
 const summary = (total: number) => ({ missingTimeOut: total, notConfirmed: 0, needsReview: 0, billingReadyUnapproved: 0, total });
 
-describe("NEEDS ATTENTION badge", () => {
-  it("count above zero: red NEEDS ATTENTION with the count and a warning icon", async () => {
+describe("ACTION NEEDED badge", () => {
+  it("count above zero: red ACTION NEEDED with the count and a warning icon", async () => {
     renderAt("/", "manager", () => json(200, { summary: summary(2) }));
-    const badge = await screen.findByRole("link", { name: "Needs attention: 2 items" });
+    const badge = await screen.findByRole("link", { name: "Action needed: 2" });
     expect(badge).toHaveTextContent("⚠");
     expect(badge).toHaveTextContent("2");
     expect(badge.className).toMatch(/text-red-700/);
@@ -65,7 +65,7 @@ describe("NEEDS ATTENTION badge", () => {
 
   it("confirmed zero: green ALL CLEAR — 0 with a checkmark", async () => {
     renderAt("/", "manager", () => json(200, { summary: summary(0) }));
-    const badge = await screen.findByRole("link", { name: "All clear: 0 items need attention" });
+    const badge = await screen.findByRole("link", { name: "All clear: nothing needs action" });
     expect(badge).toHaveTextContent("✓");
     expect(badge).toHaveTextContent("All clear");
     expect(badge).toHaveTextContent("0");
@@ -74,14 +74,14 @@ describe("NEEDS ATTENTION badge", () => {
 
   it("while loading: neutral Checking…, never green", async () => {
     renderAt("/", "manager", () => new Promise<Response>(() => {}));
-    const badge = await screen.findByRole("link", { name: "Checking items that need attention" });
+    const badge = await screen.findByRole("link", { name: "Checking items that need action" });
     expect(badge).toHaveTextContent("Checking…");
     expect(badge.className).not.toMatch(/emerald|red/);
   });
 
   it("failed check: neutral Unable to check, never green", async () => {
     renderAt("/", "manager", () => json(500, { error: { code: "internal", message: "Synthetic failure" } }));
-    const badge = await screen.findByRole("link", { name: "Unable to check items that need attention" });
+    const badge = await screen.findByRole("link", { name: "Unable to check items that need action" });
     expect(badge).toHaveTextContent("Unable to check");
     expect(badge.className).not.toMatch(/emerald|red/);
     await waitFor(() => expect(screen.queryByText("All clear")).toBeNull());
@@ -97,5 +97,69 @@ describe("navigation highlight", () => {
   it("a nested route highlights its own section only, not its parent", async () => {
     renderAt("/service-verification/reports", "manager", () => json(200, { summary: summary(0) }));
     await waitFor(async () => expect(await currentItems()).toEqual(["Visit records"]));
+  });
+});
+
+// The same total on the header badge and the Home banner, from the same summary.
+const full = {
+  missingTimeOut: 1, notConfirmed: 2, needsReview: 3, lateResponsesToReview: 4, uncoveredShifts: 12,
+  documentsBlocking: 5, documentsToReview: 6, billingReadyUnapproved: 3,
+  // Reminders: must never change the total.
+  awaitingSignature: 7, documentsExpiring: 1,
+  // The old server total (without Ready for Approval): the client must not use it.
+  total: 33,
+};
+const FULL_TOTAL = 1 + 2 + 3 + 4 + 12 + 5 + 6 + 3; // 36
+
+describe("ACTION NEEDED: one total for the badge and the Home banner", () => {
+  it("badge and banner both show the sum of the eight category counts, ignoring the stale server total and the reminders", async () => {
+    renderAt("/", "manager", () => json(200, { summary: full }));
+    const badge = await screen.findByRole("link", { name: `Action needed: ${FULL_TOTAL}` });
+    expect(badge).toHaveTextContent(String(FULL_TOTAL));
+    const banner = await screen.findByTestId("action-needed-banner");
+    expect(banner).toHaveTextContent(`Action needed: ${FULL_TOTAL}`);
+    expect(banner.className).toMatch(/text-red-700/);
+    // The eight categories, with the new labels and their own counts.
+    const list = screen.getByRole("heading", { name: "Action needed" }).closest("section")!;
+    for (const [label, n] of [["Missing Clock-Out", 1], ["Awaiting Confirmation", 2], ["Visits to Review", 3], ["Signatures to Review", 4], ["Unfilled Shifts", 12],
+      ["Overdue Documents", 5], ["Documents to Review", 6], ["Ready for Approval", 3]] as const) {
+      const row = within(list).getByText(label).closest("a")!;
+      expect(row).toHaveTextContent(String(n));
+    }
+    // Reminders are shown, outside the total.
+    const reminders = within(list).getByText(/Reminders/).closest("section, div") ? within(list) : within(list);
+    expect(reminders.getByText("Waiting for a Signature")).toBeInTheDocument();
+    expect(reminders.getByText("Documents Expiring Soon")).toBeInTheDocument();
+    expect(within(list).queryByText("Billing ready, not approved")).toBeNull();
+  });
+
+  it("example: 12 Unfilled Shifts + 3 Ready for Approval, everything else 0 = 15; an expiring document stays a reminder", async () => {
+    renderAt("/", "manager", () => json(200, { summary: { missingTimeOut: 0, notConfirmed: 0, needsReview: 0, lateResponsesToReview: 0, uncoveredShifts: 12,
+      documentsBlocking: 0, documentsToReview: 0, billingReadyUnapproved: 3, awaitingSignature: 0, documentsExpiring: 1, total: 12 } }));
+    expect(await screen.findByRole("link", { name: "Action needed: 15" })).toBeInTheDocument();
+    expect(await screen.findByTestId("action-needed-banner")).toHaveTextContent("Action needed: 15");
+    expect(screen.getByText("Documents Expiring Soon")).toBeInTheDocument();
+  });
+
+  it("zero is a green all-clear banner while reminders remain visible", async () => {
+    renderAt("/", "manager", () => json(200, { summary: { ...summary(0), lateResponsesToReview: 0, uncoveredShifts: 0, documentsBlocking: 0, documentsToReview: 0, awaitingSignature: 2, documentsExpiring: 1 } }));
+    const banner = await screen.findByTestId("action-needed-banner");
+    await waitFor(() => expect(banner).toHaveTextContent("All clear: nothing needs action"));
+    expect(banner.className).toMatch(/emerald/);
+    expect(screen.getByText("Waiting for a Signature")).toBeInTheDocument();
+  });
+
+  it("loading and failed states are neutral on the banner too, never a false zero", async () => {
+    renderAt("/", "manager", () => json(500, { error: { code: "internal", message: "Synthetic failure" } }));
+    const banner = await screen.findByTestId("action-needed-banner");
+    await waitFor(() => expect(banner).toHaveTextContent("Unable to check"));
+    expect(banner.className).not.toMatch(/emerald|text-red/);
+    expect(banner).not.toHaveTextContent(/all clear|: 0/i);
+  });
+
+  it("a viewer without the billing permission has no Ready for Approval category and it adds nothing", async () => {
+    renderAt("/", "manager", () => json(200, { summary: { ...summary(0), missingTimeOut: 2, billingReadyUnapproved: null, uncoveredShifts: null, documentsBlocking: null, documentsToReview: null } }));
+    expect(await screen.findByRole("link", { name: "Action needed: 2" })).toBeInTheDocument();
+    expect(screen.queryByText("Ready for Approval")).toBeNull();
   });
 });
