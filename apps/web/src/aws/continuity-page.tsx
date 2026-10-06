@@ -19,11 +19,14 @@ export function ContinuityStatusCard() {
   const status = useContinuityStatus();
   if (!hasPermission("continuity.export") || status.isLoading) return null;
   const s = continuityState(status.data);
+  // Home's "Outage readiness" panel: the former continuity banner's text and link, unchanged,
+  // now with a heading. Amber (with text, not colour alone) when the pack is stale.
   return (
-    <Card className={`p-3 ${s.stale ? "border-2 border-amber-500 bg-amber-50" : ""}`}>
-      <p className={`text-sm ${s.stale ? "font-bold text-amber-900" : "text-slate-700"}`}>{s.stale ? "OUTAGE READINESS: " : ""}{s.text}.</p>
-      <Link to="/continuity" className="mt-1 inline-block text-sm underline">Continuity pack</Link>
-    </Card>
+    <section aria-labelledby="outage-readiness-heading" className={`rounded-og border p-4 ${s.stale ? "border-2 border-amber-500 bg-amber-50" : "border-og-line bg-white"}`}>
+      <h3 id="outage-readiness-heading" className="text-sm font-bold text-og-ink">Outage readiness</h3>
+      <p className={`mt-1 text-sm ${s.stale ? "font-bold text-amber-900" : "text-og-sub"}`}>{s.stale ? "OUTAGE READINESS: " : ""}{s.text}.</p>
+      <Link to="/continuity" className="mt-2 inline-flex min-h-[40px] items-center text-sm font-semibold text-og-link underline">Continuity pack</Link>
+    </section>
   );
 }
 

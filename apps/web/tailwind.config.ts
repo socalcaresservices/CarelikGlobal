@@ -17,7 +17,15 @@ export default {
   theme: {
     extend: {
       borderRadius: {
-        xl: "0.875rem"
+        xl: "0.875rem",
+        og: "14px"
+      },
+      // Light-teal Administrator Home / sidebar palette (owner-approved
+      // screenshot). Muted greys that failed 4.5:1 on white were darkened:
+      // see docs/product/UX_RESTYLE_HOME_SIDEBAR.md.
+      fontFamily: {
+        og: ['"Plus Jakarta Sans Variable"', "ui-sans-serif", "system-ui", "-apple-system", '"Segoe UI"', "sans-serif"],
+        "og-mono": ['"IBM Plex Mono"', "ui-monospace", "SFMono-Regular", "Menlo", "monospace"]
       },
       // Semantic color aliases (BUILD 001.5 foundation layer) for
       // docs/design-system.md's five status tones. These point at the
@@ -31,7 +39,27 @@ export default {
         success: colors.emerald,
         warning: colors.amber,
         danger: colors.red,
-        info: colors.sky
+        info: colors.sky,
+        og: {
+          page: "#F4F7F7",
+          card: "#FFFFFF",
+          line: "#E1E9EB",
+          side: "#E8F5F3",
+          ink: "#0F2430",
+          sub: "#4F6470",
+          link: "#0B5E5B",
+          active: "#BFE7E2",
+          "active-ink": "#06262B",
+          worked: "#0B5E5B",
+          billable: "#1E3A8A",
+          review: "#19A69C",
+          approved: "#0C2B33",
+          ahead: "#9ED9D3",
+          "warn-bg": "#FFF6EA",
+          warn: "#C2410C",
+          zero: "#5C727B",
+          na: "#5C727B"
+        }
       },
       // Typography scale (BUILD 001.5 foundation layer). Named sizes for
       // the handful of text roles that repeat on every page (see
