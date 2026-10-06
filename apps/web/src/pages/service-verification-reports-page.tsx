@@ -1161,6 +1161,10 @@ export function ServiceVerificationReportsPage() {
           title={reportView === "visits" ? "Visit records" : reportView === "exceptions" ? "Needs attention" : "Reports"}
           description={reportView === "visits" ? "Recent visits first. Open a visit to correct it or see its correction history." : "Choose a report, then narrow it with the date range and filters."}
           actions={
+            <div className="flex flex-wrap items-center gap-2">
+              <Button type="button" variant="secondary" icon={<Printer className="h-4 w-4" />} onClick={handlePrint}>
+                Print / Save as PDF
+              </Button>
             <details className="relative">
               <summary className="cursor-pointer list-none rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700">
                 More actions
@@ -1182,16 +1186,9 @@ export function ServiceVerificationReportsPage() {
                   {linkCopied ? "Staff link copied" : "Copy staff sign-in link"}
                 </Button>
               ) : null}
-              <Button
-                type="button"
-                variant="secondary"
-                icon={<Printer className="h-4 w-4" />}
-                onClick={handlePrint}
-              >
-                Print / Save as PDF
-              </Button>
               </div>
             </details>
+            </div>
           }
         />
       </div>
@@ -2408,7 +2405,16 @@ export function ServiceVerificationReportsPage() {
                 </div>
               </>
             ) : (
-              <div className="mt-4 overflow-x-auto">
+              <div
+                className="mt-4 overflow-x-auto"
+                role="region"
+                aria-label="Visit records table (scrolls sideways when the window is narrow)"
+                tabIndex={0}
+                style={{
+                  background:
+                    "linear-gradient(to right, #fff 30%, rgba(255,255,255,0)) 0 0 / 40px 100% no-repeat local, linear-gradient(to left, #fff 30%, rgba(255,255,255,0)) 100% 0 / 40px 100% no-repeat local, radial-gradient(farthest-side at 0 50%, rgba(15,36,48,0.22), rgba(15,36,48,0)) 0 0 / 14px 100% no-repeat scroll, radial-gradient(farthest-side at 100% 50%, rgba(15,36,48,0.22), rgba(15,36,48,0)) 100% 0 / 14px 100% no-repeat scroll",
+                }}
+              >
                 <table
                   aria-label="Visit details"
                   className="w-full text-left text-sm"
@@ -2519,9 +2525,9 @@ export function ServiceVerificationReportsPage() {
                             ) : null}
                             {canManage ? (
                               <td className="py-2 print:hidden">
-                                <div className="flex gap-2">
+                                <div className="flex flex-col items-start gap-1.5">
                                   {backend.kind === "aws" && row.status === "administrator_review" ? (
-                                    <Link to={`/visits/${row.id}`} className="text-xs font-medium text-amber-900 underline">
+                                    <Link to={`/visits/${row.id}`} className="inline-flex min-h-[40px] items-center whitespace-nowrap rounded-lg border border-amber-600 px-3 text-sm font-medium text-amber-900 hover:bg-amber-50">
                                       Review visit
                                     </Link>
                                   ) : null}
@@ -2530,7 +2536,7 @@ export function ServiceVerificationReportsPage() {
                                     <button
                                       type="button"
                                       onClick={() => openCorrect(row)}
-                                      className="text-xs font-medium text-slate-700 underline-offset-2 hover:underline"
+                                      className="inline-flex min-h-[40px] items-center whitespace-nowrap rounded-lg border border-slate-300 bg-white px-3 text-sm font-medium text-slate-900 hover:bg-slate-50"
                                     >
                                       Correct visit
                                     </button>
@@ -2538,7 +2544,7 @@ export function ServiceVerificationReportsPage() {
                                   <button
                                     type="button"
                                     onClick={() => openHistory(row)}
-                                    className="text-xs font-medium text-slate-700 underline-offset-2 hover:underline"
+                                    className="inline-flex min-h-[40px] items-center whitespace-nowrap rounded-lg px-2 text-sm font-medium text-og-link underline underline-offset-2 hover:bg-slate-50"
                                   >
                                     Correction history
                                   </button>

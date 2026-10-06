@@ -39,6 +39,17 @@ function renderAt(path: string, role: Role) {
         return json(200, { summary: role === "caregiver" ? null : SUMMARY });
       case "/v1/reports/utilisation":
         return json(200, { services: [{ ...ROW, billableValueCents: owner ? 7350 : null, approvedValueCents: owner ? 3000 : null, unusedValueCents: owner ? 22650 : null }] });
+      case "/v1/clients":
+        return json(200, { clients: [{ clientId: "cccccccc-0000-4000-8000-000000000001", clientCode: "C-104", caregiverDisplayCode: null, status: "active", legalFirstName: "Synthetic", legalLastName: "Client Alpha", city: "Riverside", clientTypeId: null, clientTypeName: null, currentAuthorizations: 2, openVisits: 0 }] });
+      case "/v1/services":
+        return json(200, { services: [{ serviceId: SERVICE, code: "862", name: "Respite Care", isActive: true }] });
+      case "/v1/caregivers":
+        return json(200, { caregivers: [] });
+      case "/v1/shifts": {
+        const at = (h: number) => new Date(Date.now() + h * 3600e3).toISOString();
+        return json(200, { shifts: [{ shiftId: "s1", clientId: "cccccccc-0000-4000-8000-000000000001", clientCode: "C-104", clientName: "Synthetic Client Alpha", serviceId: SERVICE, serviceCode: "862", serviceName: "Respite Care", localDate: "2026-12-01", startsAt: at(30), endsAt: at(32),
+          hasSignIn: true, reservedMinutes: 120, fromCareRequest: false, hasVisit: false, lastCalloutReason: null, coverageState: "covered", caregiverRecordId: "g1", caregiverCode: "CG-1", caregiverName: "Synthetic Caregiver" }] });
+      }
       case "/v1/continuity/status":
         return json(200, { status: { lastDownloadedAt: "2026-10-05T10:00:00Z", lastDownloadedBy: "Synthetic Manager", hoursSince: "30", downloadsLast7Days: 1, outageNumbersIssued: 25 } });
       default:
@@ -251,5 +262,23 @@ describe("Home layout", () => {
     await screen.findByText(/26\.5 h of 100 h/);
     expect(screen.queryByText(/\$\d/)).toBeNull();
     expect(screen.getByText(/visible to the agency Administrator only/)).toBeInTheDocument();
+  });
+});
+
+describe("Clearer actions and records (presentation only)", () => {
+  it("Clients: each row points to the client's authorized hours, and still opens the same client page", async () => {
+    renderAt("/clients", "organization_owner");
+    const row = (await screen.findByText("View authorized hours →")).closest("a")!;
+    expect(row.getAttribute("href")).toBe("/clients/cccccccc-0000-4000-8000-000000000001");
+    expect(row).toHaveTextContent("2 current authorizations");
+  });
+
+  it("Schedule: shift actions are buttons at least 40px tall, and Cancel shift is visibly different from the others", async () => {
+    renderAt("/schedule", "organization_owner");
+    const cancel = await screen.findByRole("button", { name: "Cancel shift" });
+    const change = screen.getByRole("button", { name: "Change time" });
+    for (const b of [cancel, change, screen.getByRole("button", { name: "Record call-out" })]) expect(b.className).toMatch(/min-h-\[40px\]/);
+    expect(cancel.className).toMatch(/border-red-700/);
+    expect(change.className).not.toMatch(/border-red-700/);
   });
 });

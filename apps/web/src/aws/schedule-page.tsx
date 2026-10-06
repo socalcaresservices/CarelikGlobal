@@ -239,12 +239,12 @@ function ShiftRow({ s, canManage, onDone }: { s: Shift; canManage: boolean; onDo
       {calledOut && s.lastCalloutReason ? <p className="mt-1 text-sm text-red-800">Reason: {s.lastCalloutReason}</p> : null}
       {s.seriesId ? <p className="mt-1 text-xs text-slate-600">Repeats weekly — changes here affect this date only; change the series under Recurring series.</p> : null}
       {s.fromCareRequest ? <p className="mt-1 text-xs text-slate-600">From a Care Request; manage it on the <Link className="underline" to="/care-requests">Care Requests</Link> page.</p> : null}
-      <div className="mt-2 flex flex-wrap gap-3 text-sm font-medium text-slate-800">
-        {editable && s.coverageState === "covered" ? <button type="button" className="underline" onClick={() => setAction("callout")}>Record call-out</button> : null}
-        {editable ? <button type="button" className="underline" onClick={() => setAction("assign")}>{s.coverageState === "needs_coverage" ? "Assign caregiver" : "Change caregiver"}</button> : null}
-        {editable && new Date(s.startsAt).getTime() > Date.now() ? <button type="button" className="underline" onClick={() => setAction("reschedule")}>{s.seriesId ? "Change this date only" : "Change time"}</button> : null}
-        {editable ? <button type="button" className="underline" onClick={() => setAction("cancel")}>{s.seriesId ? "Cancel this date" : "Cancel shift"}</button> : null}
-        <button type="button" className="underline" onClick={() => setAction(action === "history" ? null : "history")}>History</button>
+      <div className="mt-2 flex flex-wrap items-center gap-2">
+        {editable && s.coverageState === "covered" ? <button type="button" className="inline-flex min-h-[40px] items-center rounded-lg border border-slate-300 bg-white px-3 text-sm font-medium text-slate-900 hover:bg-slate-50" onClick={() => setAction("callout")}>Record call-out</button> : null}
+        {editable ? <button type="button" className="inline-flex min-h-[40px] items-center rounded-lg border border-slate-300 bg-white px-3 text-sm font-medium text-slate-900 hover:bg-slate-50" onClick={() => setAction("assign")}>{s.coverageState === "needs_coverage" ? "Assign caregiver" : "Change caregiver"}</button> : null}
+        {editable && new Date(s.startsAt).getTime() > Date.now() ? <button type="button" className="inline-flex min-h-[40px] items-center rounded-lg border border-slate-300 bg-white px-3 text-sm font-medium text-slate-900 hover:bg-slate-50" onClick={() => setAction("reschedule")}>{s.seriesId ? "Change this date only" : "Change time"}</button> : null}
+        {editable ? <button type="button" className="inline-flex min-h-[40px] items-center rounded-lg border border-red-700 bg-white px-3 text-sm font-medium text-red-800 hover:bg-red-50" onClick={() => setAction("cancel")}>{s.seriesId ? "Cancel this date" : "Cancel shift"}</button> : null}
+        <button type="button" className="inline-flex min-h-[40px] items-center rounded-lg px-2 text-sm font-medium text-og-link underline underline-offset-2 hover:bg-slate-50" onClick={() => setAction(action === "history" ? null : "history")}>History</button>
       </div>
       {action === "reschedule" ? (
         <RescheduleForm shiftId={s.shiftId} localDate={s.localDate} startsAt={s.startsAt} endsAt={s.endsAt} onClose={() => setAction(null)} onDone={(t) => { setAction(null); onDone(t); }} />
