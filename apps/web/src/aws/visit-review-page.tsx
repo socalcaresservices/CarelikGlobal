@@ -288,7 +288,7 @@ export function VisitReviewPage() {
       {state.done ? <p role="status" className="text-sm text-emerald-800">{state.done}</p> : null}
 
       <Card className="space-y-2 p-4 text-sm">
-        <h2 className="text-base font-semibold text-slate-950">Other actions</h2>
+        <h2 className="text-base font-semibold text-slate-950">Correct or approve</h2>
         <p className="text-slate-700">
           Wrong times? <Link className="font-medium underline" to={`/service-verification/reports?view=visits&correct=${encodeURIComponent(v.visitId)}`}>Correct visit</Link>{" "}
           creates a corrected record and keeps the original; it is separate from review.

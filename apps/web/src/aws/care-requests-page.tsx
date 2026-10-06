@@ -122,7 +122,7 @@ export function CareRequestsPage({ api }: { api: AwsApiClient }) {
       <Card>
         <h2 className="font-semibold text-slate-950">Request queue</h2>
         <div className="mt-3 overflow-x-auto"><table className="w-full text-left text-sm"><thead className="text-xs text-slate-500"><tr><th className="pb-2">Client</th><th>Service</th><th>When</th><th>Hours</th><th>Status</th><th>Responses</th><th></th></tr></thead><tbody>
-          {(requests.data?.requests ?? []).map((r) => <tr key={r.requestId} className="border-t border-slate-100"><td className="py-3">{r.clientCode}</td><td>{r.serviceCode}</td><td>{when(r.startsAt)}{r.shortNotice ? <span className="ml-1 text-amber-700">short notice</span> : null}</td><td>{duration(r.requestedMinutes)}</td><td>{r.status.replaceAll("_"," ")}</td><td>{r.availableCount} available · {r.awaitingCount} waiting</td><td><Button size="sm" variant="secondary" onClick={() => setSelectedRequestId(r.requestId)}>Open</Button></td></tr>)}
+          {(requests.data?.requests ?? []).map((r) => <tr key={r.requestId} className="border-t border-slate-100"><td className="py-3">{r.clientCode}</td><td title={r.serviceCode}>{r.serviceName}</td><td>{when(r.startsAt)}{r.shortNotice ? <span className="ml-1 text-amber-700">short notice</span> : null}</td><td>{duration(r.requestedMinutes)}</td><td className="capitalize">{r.status.replaceAll("_"," ")}</td><td>{r.availableCount} available · {r.awaitingCount} waiting</td><td><Button size="sm" variant="secondary" className="min-h-[40px]" onClick={() => setSelectedRequestId(r.requestId)}>Open</Button></td></tr>)}
         </tbody></table></div>
       </Card>
 

@@ -230,7 +230,7 @@ describe("AWS build: manager review and billing-review data", () => {
     fireEvent.change(hex, { target: { value: "#ffd966" } });
     expect(screen.getByText(/too light: needs 4\.5:1/)).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Save branding" }));
-    expect(await screen.findByRole("alert")).toHaveTextContent("Choose a darker colour");
+    expect(await screen.findByRole("alert")).toHaveTextContent("Choose a darker color");
     expect(api.calls.some((c) => c.method === "POST" && c.path === "/v1/branding")).toBe(false);
     fireEvent.change(hex, { target: { value: "#14532d" } });
     fireEvent.click(screen.getByRole("button", { name: "Save branding" }));
@@ -320,7 +320,7 @@ describe("AWS build: manager review and billing-review data", () => {
 
   it("NEEDS ATTENTION opens the exceptions view; the Visit records menu item returns to the visit list", async () => {
     renderAws("/service-verification/reports?view=exceptions", "manager");
-    expect(await screen.findByRole("heading", { name: "Needs attention" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Action needed" })).toBeInTheDocument();
     fireEvent.click(screen.getByRole("link", { name: "Visit records" }));
     expect(await screen.findByRole("heading", { name: "Visit records" })).toBeInTheDocument();
   });
@@ -337,7 +337,7 @@ describe("AWS build: manager review and billing-review data", () => {
     renderAws("/", "caregiver");
     await screen.findByRole("heading", { name: "Today's visits" });
     expect(screen.getByText("CAREGIVER VIEW")).toBeInTheDocument();
-    expect(screen.queryByRole("link", { name: /Needs attention/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: /Action needed/i })).not.toBeInTheDocument();
     expect(screen.queryByRole("link", { name: "Billing review" })).not.toBeInTheDocument();
     expect(screen.queryByRole("link", { name: "Visit records" })).not.toBeInTheDocument();
   });

@@ -50,7 +50,7 @@ export function CaregiverAvailabilityPage({ api }: { api: AwsApiClient }) {
   });
 
   return <section className="space-y-6">
-    <div><h1 className="text-2xl font-semibold text-slate-950">Availability & opportunities</h1><p className="mt-1 text-sm text-slate-600">Keep your normal availability current. An availability response is not an assignment until the agency confirms it.</p></div>
+    <div><h1 className="text-2xl font-semibold text-slate-950">Availability</h1><p className="mt-1 text-sm text-slate-600">Keep your normal availability current. An availability response is not an assignment until the agency confirms it.</p></div>
     <Card>
       <h2 className="font-semibold text-slate-950">My regular availability</h2>
       <div className="mt-3 flex flex-wrap gap-2">{DAYS.map((label,weekday)=><label key={label} className="flex items-center gap-1 rounded-lg border border-slate-200 px-2 py-1.5 text-sm"><input type="checkbox" checked={days.has(weekday)} onChange={(e)=>setDays((current)=>{const next=new Set(current);if(e.target.checked)next.add(weekday);else next.delete(weekday);return next;})}/>{label}</label>)}</div>
@@ -58,7 +58,7 @@ export function CaregiverAvailabilityPage({ api }: { api: AwsApiClient }) {
     </Card>
     <Card>
       <h2 className="font-semibold text-slate-950">Care opportunities</h2>
-      <div className="mt-3 space-y-3">{(opportunities.data?.opportunities ?? []).map((o)=><div key={o.offerId} className="rounded-lg border border-slate-100 p-3"><div className="flex flex-wrap items-start justify-between gap-3"><div><p className="font-medium text-slate-900">{o.serviceCode} · {o.clientLabel}</p><p className="text-sm text-slate-600">{when(o.startsAt)}–{formatClockTime(o.endsAt)}</p><p className="text-xs text-slate-500">{o.status.replaceAll("_"," ")}</p></div>{o.status==="sent"?<div className="flex gap-2"><Button size="sm" loading={respond.isPending} onClick={()=>respond.mutate({offerId:o.offerId,available:true})}>Available</Button><Button size="sm" variant="secondary" loading={respond.isPending} onClick={()=>respond.mutate({offerId:o.offerId,available:false})}>Not available</Button></div>:null}</div></div>)}
+      <div className="mt-3 space-y-3">{(opportunities.data?.opportunities ?? []).map((o)=><div key={o.offerId} className="rounded-lg border border-slate-100 p-3"><div className="flex flex-wrap items-start justify-between gap-3"><div><p className="font-medium text-slate-900">{o.serviceName} · {o.clientLabel}</p><p className="text-sm text-slate-600">{when(o.startsAt)}–{formatClockTime(o.endsAt)}</p><p className="text-xs capitalize text-slate-500">{o.status.replaceAll("_"," ")}</p></div>{o.status==="sent"?<div className="flex gap-2"><Button size="sm" className="min-h-[40px]" loading={respond.isPending} onClick={()=>respond.mutate({offerId:o.offerId,available:true})}>Available</Button><Button size="sm" variant="secondary" className="min-h-[40px]" loading={respond.isPending} onClick={()=>respond.mutate({offerId:o.offerId,available:false})}>Not available</Button></div>:null}</div></div>)}
       {!opportunities.isLoading && (opportunities.data?.opportunities ?? []).length===0?<p className="text-sm text-slate-500">No open opportunities.</p>:null}</div>
     </Card>
   </section>;

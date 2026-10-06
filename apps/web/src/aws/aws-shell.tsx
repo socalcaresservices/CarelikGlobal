@@ -164,7 +164,7 @@ export function AwsShell({ children }: PropsWithChildren) {
     { to: "/care-team", label: "Care Team", group: "PEOPLE", icon: HeartHandshake, show: hasPermission("caregivers.manage") || hasPermission("visits.manage") },
     { to: "/documents", label: hasPermission("documents.read") ? "Documents" : "My documents", group: "PEOPLE", icon: FolderOpen, show: hasPermission("documents.read") || hasPermission("documents.manage_own") },
     { to: "/services", label: "Services", group: "SETUP", icon: Stethoscope, show: !isCaregiver && hasPermission("authorizations.read") },
-    { to: "/continuity", label: "Continuity", group: "SETUP", icon: LifeBuoy, show: !isCaregiver && hasPermission("continuity.export") },
+    { to: "/continuity", label: "Continuity pack", group: "SETUP", icon: LifeBuoy, show: !isCaregiver && hasPermission("continuity.export") },
     { to: "/outage-visits", label: "Outage records", group: "SETUP", icon: FileArchive, show: !isCaregiver && hasPermission("visits.manage") },
     { to: "/settings/branding", label: "Settings", group: "SETUP", icon: Settings, show: hasPermission("organization.update") },
   ];

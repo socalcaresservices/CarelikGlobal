@@ -62,7 +62,7 @@ describe("main menu: one current item", () => {
     ["/clients", "Clients"],
     ["/clients/cccccccc-0000-4000-8000-000000000001", "Clients"],
     ["/care-team/abababab-0000-4000-8000-000000000001", "Care Team"],
-    ["/continuity", "Continuity"],
+    ["/continuity", "Continuity pack"],
     ["/outage-visits", "Outage records"],
   ])("manager on %s: only %s is current", async (path, label) => {
     renderAt(path, "manager");

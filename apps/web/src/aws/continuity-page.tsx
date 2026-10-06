@@ -82,7 +82,7 @@ export function ContinuityPage() {
       <Card className="p-4 text-sm text-slate-700">
         <p className="font-semibold text-slate-900">Your agency must</p>
         <ul className="mt-1 list-disc pl-5">
-          <li>keep the file only on agency-approved encrypted storage, and only for authorised staff;</li>
+          <li>keep the file only on agency-approved encrypted storage, and only for authorized staff;</li>
           <li>download a new pack at least daily and delete the old one;</li>
           <li>during an outage, record each visit on an outage visit record with the next unused number;</li>
           <li>after Ogevia returns, enter each record once on <Link to="/outage-visits" className="underline">Outage records</Link>; Ogevia refuses a duplicate number.</li>

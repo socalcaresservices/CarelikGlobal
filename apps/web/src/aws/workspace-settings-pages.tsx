@@ -75,7 +75,7 @@ export function BrandingSettingsPage() {
 
   async function submit() {
     if (!readable || name.trim().length < 2) {
-      setState({ busy: false, error: !readable ? "Choose a darker colour so white text stays readable (4.5:1)." : "Enter the agency name.", done: false });
+      setState({ busy: false, error: !readable ? "Choose a darker color so white text stays readable (4.5:1)." : "Enter the agency name.", done: false });
       return;
     }
     setState({ busy: true, error: null, done: false });
@@ -92,7 +92,7 @@ export function BrandingSettingsPage() {
   return (
     <div className="max-w-lg space-y-4">
       <h1 className="text-xl font-semibold text-slate-950">Agency branding</h1>
-      <p className="text-sm text-slate-600">Shown to every role in your agency, on phones and desktop. Warning colours (such as NEEDS ATTENTION) stay red.</p>
+      <p className="text-sm text-slate-600">Shown to every role in your agency, on phones and desktop. Warning colors (such as ACTION NEEDED) stay red.</p>
       <Card className="p-4">
         <form onSubmit={(e) => { e.preventDefault(); void submit(); }} className="space-y-4">
           <label className="block text-sm font-medium text-slate-700">
@@ -101,7 +101,7 @@ export function BrandingSettingsPage() {
           </label>
           <div className="flex flex-wrap items-end gap-3">
             <label className="text-sm font-medium text-slate-700">
-              Accent colour
+              Accent color
               <input type="color" value={valid ? color : "#0f172a"} onChange={(e) => setColor(e.target.value)} className="mt-1 block h-10 w-16 rounded border border-slate-200" />
             </label>
             <label className="text-sm font-medium text-slate-700">
@@ -110,7 +110,7 @@ export function BrandingSettingsPage() {
             </label>
           </div>
           <p className={readable ? "text-xs text-slate-600" : "text-xs font-semibold text-red-700"}>
-            {contrast === null ? "Enter a colour like #1f5f8b." : `White text contrast ${contrast}:1 ${readable ? "(readable)" : "(too light: needs 4.5:1)"}`}
+            {contrast === null ? "Enter a color like #1f5f8b." : `White text contrast ${contrast}:1 ${readable ? "(readable)" : "(too light: needs 4.5:1)"}`}
           </p>
           <div aria-label="Preview" className="rounded-lg border border-slate-200 bg-white">
             <div className="h-1 rounded-t-lg" style={{ backgroundColor: valid ? color : "#0f172a" }} />
@@ -179,7 +179,7 @@ function LogoSettings() {
         <Button type="button" disabled={state.busy} onClick={() => void upload()}>{state.busy ? "Saving…" : "Save logo"}</Button>
         {logo.data ? <Button type="button" variant="secondary" disabled={state.busy} onClick={() => void remove()}>Remove logo</Button> : null}
       </div>
-      <p className="text-xs text-slate-500">Stored privately; only people in your agency can see it. It appears in the header and on printed reports.</p>
+      <p className="text-xs text-slate-500">Stored privately; only people in your agency can see it. It appears in the sidebar and on printed reports.</p>
     </Card>
   );
 }

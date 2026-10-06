@@ -1,4 +1,4 @@
-import { MemoryRouter } from "react-router-dom";
+import { MemoryRouter, useLocation } from "react-router-dom";
 import {
   fireEvent,
   render,
@@ -105,6 +105,33 @@ function mockOrgLetterhead() {
   });
 }
 
+function LocationProbe() {
+  const location = useLocation();
+  return <p data-testid="location">{location.pathname}{location.search}</p>;
+}
+
+function renderPageWithLocation() {
+  const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  return render(
+    <MemoryRouter initialEntries={["/service-verification/reports"]}>
+      <QueryClientProvider client={queryClient}>
+        <ServiceVerificationReportsPage />
+        <LocationProbe />
+      </QueryClientProvider>
+    </MemoryRouter>,
+  );
+}
+
+function allowEverything() {
+  mockedUseOrganization.mockReturnValue({
+    activeOrganizationId: ORG_ID,
+    activeOrganization: { displayName: "Acme Care" },
+    hasPermission: vi.fn(() => true),
+  } as never);
+  mockOrgLetterhead();
+  mockedRpc.mockResolvedValue({ data: [visitRow], error: null } as never);
+}
+
 describe("ServiceVerificationReportsPage", () => {
   afterEach(() => {
     vi.clearAllMocks();
@@ -151,7 +178,7 @@ describe("ServiceVerificationReportsPage", () => {
     } as never);
 
     renderPage();
-    await openReport(/Visit records \(list\)/);
+    await openReport(/^Visit records$/);
 
     const table = await screen.findByRole("table", { name: "Visit details" });
     // 12:30Z-14:30Z is 5:30-7:30 AM Pacific (PDT).
@@ -180,7 +207,7 @@ describe("ServiceVerificationReportsPage", () => {
     } as never);
 
     renderPage();
-    await openReport(/Needs attention/);
+    await openReport(/^Action needed$/);
 
     const card = (await screen.findByText("Incomplete visits (2)")).closest("div")!;
     const items = within(card).getAllByRole("listitem");
@@ -222,7 +249,7 @@ describe("ServiceVerificationReportsPage", () => {
     };
 
     renderPage();
-    await openReport(/Needs attention/);
+    await openReport(/^Action needed$/);
     fireEvent.click(await screen.findByRole("button", { name: "Close visit" }));
 
     // Only the date is pre-filled (Time In's Pacific date); the time must be entered.
@@ -292,7 +319,7 @@ describe("ServiceVerificationReportsPage", () => {
     );
 
     renderPage();
-    await openReport(/Needs attention/);
+    await openReport(/^Action needed$/);
     fireEvent.click(await screen.findByRole("button", { name: "Close visit" }));
     const wall = toPacificWallTime(ago(60));
     fireEvent.change(screen.getByLabelText("Time Out date"), { target: { value: wall.date } });
@@ -316,7 +343,7 @@ describe("ServiceVerificationReportsPage", () => {
     );
 
     renderPage();
-    await openReport(/Visit records \(list\)/);
+    await openReport(/^Visit records$/);
     fireEvent.click(await screen.findByRole("button", { name: "Correct visit" }));
 
     // Pre-filled from the original record in Pacific time (13:00Z = 6:00 AM PDT),
@@ -368,7 +395,7 @@ describe("ServiceVerificationReportsPage", () => {
       Promise.resolve(fn === "list_service_visits" ? { data: [withSeconds], error: null } : { data: [], error: null }) as never,
     );
     renderPage();
-    await openReport(/Visit records \(list\)/);
+    await openReport(/^Visit records$/);
     fireEvent.click(await screen.findByRole("button", { name: "Correct visit" }));
     fireEvent.change(screen.getByLabelText("Reason (required)"), { target: { value: "Left later (synthetic)" } });
     fireEvent.change(screen.getByLabelText("Corrected Time Out minute"), { target: { value: "20" } });
@@ -394,7 +421,7 @@ describe("ServiceVerificationReportsPage", () => {
       Promise.resolve(fn === "list_service_visits" ? { data: [visitRow], error: null } : { data: [], error: null }) as never,
     );
     renderPage();
-    await openReport(/Visit records \(list\)/);
+    await openReport(/^Visit records$/);
     fireEvent.click(await screen.findByRole("button", { name: "Correct visit" }));
     fireEvent.change(screen.getByLabelText("Reason (required)"), { target: { value: "x" } });
     fireEvent.change(screen.getByLabelText("Corrected Time In minute"), { target: { value: "" } });
@@ -419,7 +446,7 @@ describe("ServiceVerificationReportsPage", () => {
     } as never);
 
     renderPage();
-    await openReport(/Needs attention/);
+    await openReport(/^Action needed$/);
     expect(await screen.findByText("Missing Time Out")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Close visit" })).not.toBeInTheDocument();
   });
@@ -434,7 +461,7 @@ describe("ServiceVerificationReportsPage", () => {
     mockedRpc.mockResolvedValue({ data: [{ ...visitRow, time_out_entered_by_manager: true }], error: null } as never);
 
     renderPage();
-    await openReport(/Visit records \(list\)/);
+    await openReport(/^Visit records$/);
     const table = await screen.findByRole("table", { name: "Visit details" });
     expect(within(table).getByText("Time Out entered by manager")).toBeInTheDocument();
   });
@@ -474,13 +501,13 @@ describe("ServiceVerificationReportsPage", () => {
     );
     fireEvent.change(screen.getByLabelText("Report"), { target: { value: "reconciliation" } });
 
-    const header = await screen.findByRole("columnheader", { name: "Remaining to schedule" });
+    const header = await screen.findByRole("columnheader", { name: "Hours left" });
     const table = header.closest("table")!;
     const headers = within(table).getAllByRole("columnheader").map((th) => th.textContent);
     const row = within(table).getAllByRole("row")[1]!;
     const cells = within(row).getAllByRole("cell").map((td) => td.textContent);
     expect(cells[headers.indexOf("Still scheduled (not yet worked)")]).toBe("7 hr");
-    expect(cells[headers.indexOf("Remaining to schedule")]).toBe("2 hr 50 min");
+    expect(cells[headers.indexOf("Hours left")]).toBe("2 hr 50 min");
     // Client name first with the code; billable (eligible) and human-approved stay separate.
     expect(cells[headers.indexOf("Client")]).toBe("Synthetic PersonTEST-C01");
     expect(cells[headers.indexOf("Billable (eligible)")]).toBe("10 min");
@@ -514,7 +541,7 @@ describe("ServiceVerificationReportsPage", () => {
 
     renderPage();
 
-    await openReport(/Visit records \(list\)/);
+    await openReport(/^Visit records$/);
 
     expect(await screen.findByText("Visits (1)")).toBeInTheDocument();
     // "Jamie Smith" also appears in the client filter <option> and the
@@ -682,7 +709,7 @@ describe("ServiceVerificationReportsPage", () => {
 
     renderPage();
 
-    await openReport(/Needs attention/);
+    await openReport(/^Action needed$/);
 
     await waitFor(() =>
       expect(screen.getByText("Exception visits")).toBeInTheDocument(),
@@ -864,13 +891,15 @@ describe("ServiceVerificationReportsPage", () => {
 
     renderPage();
 
-    await openReport(/Visit records \(list\)/);
+    await openReport(/^Visit records$/);
 
     expect(await screen.findByText("SCS-V-20260801-4F7K")).toBeInTheDocument();
     const visitTable = screen.getByRole("table", { name: "Visit details" });
-    expect(within(visitTable).getByText("40 hr")).toBeInTheDocument();
-    expect(within(visitTable).getByText("11 hr")).toBeInTheDocument();
-    expect(within(visitTable).getByText("29 hr")).toBeInTheDocument();
+    // Shown under the row's Hours balance control (and, for a printout, written out in full).
+    const row = within(visitTable).getByText("SCS-V-20260801-4F7K").closest("tr")!;
+    expect(row).toHaveTextContent("Monthly limit: 40 hr");
+    expect(row).toHaveTextContent("Used this month: 11 hr");
+    expect(row).toHaveTextContent("Hours left: 29 hr");
   });
 
   it("submits a correction for a signed visit", async () => {
@@ -889,7 +918,7 @@ describe("ServiceVerificationReportsPage", () => {
     });
 
     renderPage();
-    await openReport(/Visit records \(list\)/);
+    await openReport(/^Visit records$/);
     await screen.findByText("SCS-V-20260801-4F7K");
 
     fireEvent.click(screen.getByRole("button", { name: "Correct visit" }));
@@ -919,7 +948,7 @@ describe("ServiceVerificationReportsPage", () => {
     mockedRpc.mockResolvedValue({ data: [visitRow], error: null } as never);
 
     renderPage();
-    await openReport(/Visit records \(list\)/);
+    await openReport(/^Visit records$/);
     await screen.findByText("SCS-V-20260801-4F7K");
 
     fireEvent.click(screen.getByRole("button", { name: "Correct visit" }));
@@ -971,7 +1000,7 @@ describe("ServiceVerificationReportsPage", () => {
     });
 
     renderPage();
-    await openReport(/Visit records \(list\)/);
+    await openReport(/^Visit records$/);
     await screen.findByText("SCS-V-20260801-4F7K");
 
     fireEvent.click(screen.getByRole("button", { name: "Correction history" }));
@@ -996,7 +1025,7 @@ describe("ServiceVerificationReportsPage", () => {
     mockedRpc.mockResolvedValue({ data: [visitRow], error: null } as never);
 
     renderPage();
-    await openReport(/Visit records \(list\)/);
+    await openReport(/^Visit records$/);
     await screen.findByText("SCS-V-20260801-4F7K");
 
     expect(
@@ -1023,5 +1052,81 @@ describe("ServiceVerificationReportsPage", () => {
     );
 
     expect(printSpy).toHaveBeenCalled();
+  });
+
+  it("hides the three authorization columns by default behind each row's Hours balance, and Columns brings them back", async () => {
+    window.localStorage.clear();
+    allowEverything();
+    renderPage();
+    await openReport(/^Visit records$/);
+    const table = await screen.findByRole("table", { name: "Visit details" });
+    const headers = within(table).getAllByRole("columnheader").map((h) => h.textContent);
+    expect(headers).toEqual(expect.arrayContaining(["Hours balance", "Status", "Actions"]));
+    expect(headers).not.toContain("Monthly limit");
+    expect(headers).not.toContain("Used this month");
+    // The same three values sit under the row's Hours balance control.
+    const row = within(table).getByText("Jamie Smith").closest("tr")!;
+    expect(within(row).getByText("Hours balance")).toBeInTheDocument();
+    expect(row).toHaveTextContent("Hours left: 29 hr");
+    expect(row).toHaveTextContent("Used this month: 11 hr");
+    fireEvent.click(screen.getByLabelText("Hours left"));
+    expect(within(table).getAllByRole("columnheader").map((h) => h.textContent)).toContain("Hours left");
+  });
+
+  it("treats a previously auto-saved full column set as 'never customised', but keeps a real choice", async () => {
+    allowEverything();
+    window.localStorage.setItem("ogevia.visit-report-columns", JSON.stringify(["visitRef", "client", "caregiver", "service", "date", "time", "worked", "billable", "authorized", "usedMtd", "remaining", "status"]));
+    const first = renderPage();
+    await openReport(/^Visit records$/);
+    let table = await screen.findByRole("table", { name: "Visit details" });
+    expect(within(table).getAllByRole("columnheader").map((h) => h.textContent)).toContain("Hours balance");
+    first.unmount();
+    window.localStorage.setItem("ogevia.visit-report-columns", JSON.stringify(["client", "worked", "remaining", "status"]));
+    renderPage();
+    await openReport(/^Visit records$/);
+    table = await screen.findByRole("table", { name: "Visit details" });
+    const headers = within(table).getAllByRole("columnheader").map((h) => h.textContent);
+    expect(headers).toContain("Hours left");
+    expect(headers).not.toContain("Hours balance");
+  });
+
+  it("keeps the address in step with the Report selection, so the sidebar highlight follows", async () => {
+    window.localStorage.clear();
+    allowEverything();
+    renderPageWithLocation();
+    await openReport(/^Client monthly calendar$/);
+    expect(screen.getByTestId("location")).toHaveTextContent("/service-verification/reports?view=calendar");
+    await openReport(/^Action needed$/);
+    expect(screen.getByTestId("location")).toHaveTextContent("?view=exceptions");
+    await openReport(/^Visit records$/);
+    // This (Supabase-path) test backend opens on Visits overview, so the visit list is the explicit view here;
+    // on the AWS backend the visit list is the default and the address has no ?view=.
+    expect(screen.getByTestId("location")).toHaveTextContent("?view=visits");
+  });
+
+  it("does not show the date range and filters on the client calendar, where they do not apply", async () => {
+    window.localStorage.clear();
+    allowEverything();
+    renderPage();
+    expect(await screen.findByText("Date range")).toBeInTheDocument();
+    await openReport(/^Client monthly calendar$/);
+    await screen.findByLabelText("Calendar client");
+    expect(screen.queryByText("Date range")).toBeNull();
+    expect(screen.queryByText(/^Filters/)).toBeNull();
+  });
+
+  it("repeats the agency, report, client and period on every printed page, with page numbers", async () => {
+    window.localStorage.clear();
+    allowEverything();
+    renderPage();
+    await screen.findByLabelText("Report");
+    const runningCss = () => Array.from(document.querySelectorAll("style")).map((e) => e.textContent ?? "").find((t) => t.includes("@top-left")) ?? "";
+    await waitFor(() => expect(runningCss()).toContain("Acme Care LLC"));
+    const css = runningCss();
+    expect(css).toContain("Acme Care LLC");
+    expect(css).toContain("Service Verification Report");
+    expect(css).toContain("Client: All clients");
+    expect(css).toContain("Period: All dates");
+    expect(css).toContain('"Page " counter(page) " of " counter(pages)');
   });
 });

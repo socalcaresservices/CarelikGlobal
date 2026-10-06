@@ -166,7 +166,7 @@ export function OutageVisitsPage() {
   const entered = rows.filter((r) => r.state === "entered");
   return (
     <div className="space-y-4">
-      <h1 className="text-xl font-semibold">Outage visit records</h1>
+      <h1 className="text-xl font-semibold">Outage records</h1>
       <p className="text-sm text-slate-700">Enter each paper outage record once, after Ogevia is back. <Link to="/continuity" className="underline">Continuity pack</Link></p>
       {done ? <p role="status" className="rounded-lg bg-emerald-50 p-3 text-sm text-emerald-900">{done}</p> : null}
       <Card className="p-4"><h2 className="mb-2 text-base font-semibold">Enter a record</h2><EntryForm onDone={setDone} /></Card>

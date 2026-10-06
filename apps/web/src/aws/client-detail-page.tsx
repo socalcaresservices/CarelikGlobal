@@ -334,12 +334,12 @@ function AuthorizationsCard({ clientId }: { clientId: string }) {
                   <div><dt className="text-xs text-slate-600">Authorized</dt><dd>{formatDuration(b.authorizedMinutes)}</dd></div>
                   <div><dt className="text-xs text-slate-600">Billable</dt><dd>{formatDuration(b.billableMinutes)}</dd></div>
                   <div><dt className="text-xs text-slate-600">In review</dt><dd>{formatDuration(b.reviewMinutes)}</dd></div>
-                  <div><dt className="text-xs text-slate-600">Remaining</dt><dd className={`font-semibold ${b.remainingMinutes <= 0 ? "text-red-700" : "text-slate-900"}`}>{formatDuration(b.remainingMinutes)}</dd></div>
+                  <div><dt className="text-xs text-slate-600">Hours left</dt><dd className={`font-semibold ${b.remainingMinutes <= 0 ? "text-red-700" : "text-slate-900"}`}>{formatDuration(b.remainingMinutes)}</dd></div>
                 </dl>
               </li>
             ))}
           </ul>
-          <p className="mt-1 text-xs text-slate-500">Remaining = authorized − billable − time already scheduled (same calculation as the reports).</p>
+          <p className="mt-1 text-xs text-slate-500">Hours left = authorized − billable − time already scheduled (same calculation as the reports).</p>
         </div>
       ) : null}
       {versions.isLoading ? <p className="mt-3 text-sm text-slate-500">Loading…</p> : null}

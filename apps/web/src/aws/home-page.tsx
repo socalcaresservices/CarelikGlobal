@@ -95,7 +95,7 @@ export function AwsHomePage() {
 
       <section aria-labelledby="util-heading" className="space-y-3">
         <div>
-          <h2 id="util-heading" className="text-lg font-bold text-og-ink">Hours this month (utilization)</h2>
+          <h2 id="util-heading" className="text-lg font-bold text-og-ink">Hours this month</h2>
           <p className="text-xs text-og-sub">
             Utilization = worked hours ÷ authorized hours for the same client, service and month. Amended authorizations count once (the latest version).
           </p>
@@ -236,7 +236,7 @@ export function AwsHomePage() {
         <div className="space-y-4">
           {a ? (
             <div className="rounded-og border-2 border-dashed border-og-line bg-og-card p-4">
-              <h3 className="text-sm font-bold text-og-ink">Reminders (not in the Action needed total)</h3>
+              <h3 className="text-sm font-bold text-og-ink">Reminders (not counted)</h3>
               {reminderItems.length > 0 ? (
                 <ul className="mt-2 space-y-2">
                   {reminderItems.map((i) => (

@@ -1,6 +1,6 @@
 import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Link, useLocation } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useIsNarrow } from "@/lib/use-is-narrow";
 import {
   BarChart3,
@@ -134,7 +134,13 @@ const VISIT_COLUMN_OPTIONS: Array<{ key: VisitColumn; label: string }> = [
   { key: "status", label: "Status" },
 ];
 
-const DEFAULT_VISIT_COLUMNS = VISIT_COLUMN_OPTIONS.map((column) => column.key);
+// The three authorization columns are off by default: each row's "Hours balance" control shows the
+// same three values, so the table keeps Status and Actions in view. They stay available in Columns.
+const BALANCE_COLUMNS: VisitColumn[] = ["authorized", "usedMtd", "remaining"];
+const ALL_VISIT_COLUMNS = VISIT_COLUMN_OPTIONS.map((column) => column.key);
+// The visit reference moves under the client name (still shown, in less width) so Status and Actions fit
+// beside the expanded sidebar at 1440px; it is still a column in Columns.
+const DEFAULT_VISIT_COLUMNS = ALL_VISIT_COLUMNS.filter((key) => !BALANCE_COLUMNS.includes(key) && key !== "visitRef");
 
 const CHART_COLORS = [
   "#4f46e5",
@@ -385,6 +391,7 @@ export function ServiceVerificationReportsPage() {
   const [chartType, setChartType] = useState<ChartType>("bar");
   const [chartGroup, setChartGroup] = useState<ChartGroup>("caregiver");
   const location = useLocation();
+  const navigate = useNavigate();
   const viewFromUrl = new URLSearchParams(location.search).get("view");
   const defaultView: ReportView = backend.kind === "aws" ? "visits" : "overview";
   const [reportView, setReportView] = useState<ReportView>(() =>
@@ -407,7 +414,11 @@ export function ServiceVerificationReportsPage() {
       if (Array.isArray(saved)) {
         const allowed = new Set(VISIT_COLUMN_OPTIONS.map((column) => column.key));
         const valid = saved.filter((key): key is VisitColumn => allowed.has(key as VisitColumn));
-        if (valid.length > 0) return new Set(valid);
+        // Before the balance columns were hidden by default, the full set was saved automatically on every
+        // visit. A saved full set is therefore treated as "never customised" and takes the new default;
+        // any other saved choice is kept.
+        const wasAutoSavedFullSet = valid.length === ALL_VISIT_COLUMNS.length;
+        if (valid.length > 0 && !wasAutoSavedFullSet) return new Set(valid);
       }
     } catch {
       // Ignore a malformed local preference and use the safe default.
@@ -695,7 +706,8 @@ export function ServiceVerificationReportsPage() {
     [serviceFilter, serviceOptions],
   );
 
-  const visibleVisitColumnCount = visitColumns.size + (canManage ? 1 : 0);
+  const showBalanceDetails = BALANCE_COLUMNS.every((key) => !visitColumns.has(key));
+  const visibleVisitColumnCount = visitColumns.size + (showBalanceDetails ? 1 : 0) + (canManage ? 1 : 0);
 
   const visibleVisitRows = useMemo(
     () =>
@@ -1058,6 +1070,30 @@ export function ServiceVerificationReportsPage() {
 
   const letterhead = letterheadQuery.data;
 
+  // Running print header and page numbers: the browser repeats these on EVERY printed page (CSS page
+  // margin boxes), so a page that is separated from the first one still names the agency, report,
+  // client and period. Values go into a CSS string, so quotes, backslashes and control characters are removed.
+  const printReportTitle =
+    reportView === "calendar" ? "Client Monthly Service Calendar"
+    : reportView === "reconciliation" ? "Monthly Hours & Billing"
+    : reportView === "corrections" ? "Correction History"
+    : "Service Verification Report";
+  const printPeriod =
+    reportView === "calendar" || reportView === "reconciliation"
+      ? calendarMonthLabel
+      : dateFrom || dateTo
+        ? `${dateFrom || "start"} to ${dateTo || "today"}`
+        : "All dates";
+  const printRunningHeader = [
+    letterhead?.legal_name ?? activeOrganization?.displayName ?? "",
+    printReportTitle,
+    `Client: ${selectedClientName ? `${selectedClientName}${selectedClientCode ? ` (${selectedClientCode})` : ""}` : "All clients"}`,
+    `${reportView === "calendar" || reportView === "reconciliation" ? "Month" : "Period"}: ${printPeriod}`,
+  ]
+    .filter(Boolean)
+    .join("  ·  ");
+  const printRunningHeaderCss = Array.from(printRunningHeader, (ch) => (ch.charCodeAt(0) < 32 || ch === '"' || ch === "\\" ? " " : ch)).join("");
+
   // Shared by the desktop table row and the phone card (only one layout renders).
   function renderCorrectionPanel(row: VisitReportRow) {
     return (
@@ -1158,8 +1194,8 @@ export function ServiceVerificationReportsPage() {
       <div className="print:hidden">
         <PageHeader
           eyebrow="Service Verification"
-          title={reportView === "visits" ? "Visit records" : reportView === "exceptions" ? "Needs attention" : "Reports"}
-          description={reportView === "visits" ? "Recent visits first. Open a visit to correct it or see its correction history." : "Choose a report, then narrow it with the date range and filters."}
+          title={reportView === "visits" ? "Visit records" : reportView === "exceptions" ? "Action needed" : "Reports"}
+          description={reportView === "visits" ? "Recent visits first. Open a visit to correct it or see its correction history." : reportView === "calendar" ? "Choose a client and a month. The calendar always covers that client's whole month." : "Choose a report, then narrow it with the date range and filters."}
           actions={
             <div className="flex flex-wrap items-center gap-2">
               <Button type="button" variant="secondary" icon={<Printer className="h-4 w-4" />} onClick={handlePrint}>
@@ -1203,17 +1239,24 @@ export function ServiceVerificationReportsPage() {
               id="report-view"
               value={reportView}
               onChange={(event) => {
-                setReportView(event.target.value as ReportView);
+                const next = event.target.value as ReportView;
+                setReportView(next);
+                // Keep the address (and so the sidebar highlight) in step with the selection.
+                const params = new URLSearchParams(location.search);
+                if (next === defaultView) params.delete("view");
+                else params.set("view", next);
+                const search = params.toString();
+                navigate({ pathname: location.pathname, search: search ? `?${search}` : "" }, { replace: true });
                 closeExpanded();
               }}
               className="mt-1 w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm font-semibold text-slate-950"
             >
-              <option value="visits">Visit records (list)</option>
-              <option value="exceptions">Needs attention</option>
-              <option value="overview">Operations overview</option>
+              <option value="visits">Visit records</option>
+              <option value="exceptions">Action needed</option>
+              <option value="overview">Visits overview</option>
               <option value="caregiver">Caregiver hours</option>
               <option value="calendar">Client monthly calendar</option>
-              <option value="reconciliation">Monthly hours & billing reconciliation</option>
+              <option value="reconciliation">Monthly hours & billing</option>
               <option value="corrections">Correction history</option>
               {canManage ? <option value="staff-access">Staff access</option> : null}
             </select>
@@ -1297,7 +1340,9 @@ export function ServiceVerificationReportsPage() {
         </Card>
       ) : null}
 
-      {reportView !== "staff-access" ? (
+      <style>{`@media print { @page { ${reportView === "visits" ? "size: letter landscape; " : ""}margin: 0.5in; @top-left { content: "${printRunningHeaderCss}"; font: 8pt sans-serif; color: #334155; } @bottom-right { content: "Page " counter(page) " of " counter(pages); font: 8pt sans-serif; color: #334155; } } }`}</style>
+      {/* The date range and filters do not apply to the client calendar (it is always one client, one full month), so they are not shown there. */}
+      {reportView !== "staff-access" && reportView !== "calendar" ? (
         <Card className="print:hidden">
           <div className="flex flex-wrap items-end gap-3">
             <div>
@@ -1734,7 +1779,7 @@ export function ServiceVerificationReportsPage() {
               {reportView === "calendar"
                 ? "Client Monthly Service Calendar"
                 : reportView === "reconciliation"
-                  ? "Monthly Hours & Billing Reconciliation"
+                  ? "Monthly Hours & Billing"
                   : reportView === "corrections"
                     ? "Correction History"
                     : "Service Verification Report"}
@@ -1967,7 +2012,7 @@ export function ServiceVerificationReportsPage() {
           <div className="flex flex-wrap items-end justify-between gap-4">
             <div>
               <h3 className="font-semibold text-slate-950">
-                Monthly hours & billing reconciliation
+                Monthly hours & billing
               </h3>
               <p className="mt-1 max-w-3xl text-sm text-slate-500">
                 Each row is one client + service + authorization lineage.
@@ -2075,7 +2120,7 @@ export function ServiceVerificationReportsPage() {
                     <th className="pb-2 pr-3 font-medium">Billable (eligible)</th>
                     {showApproved ? <th className="pb-2 pr-3 font-medium">Approved</th> : null}
                     <th className="pb-2 pr-3 font-medium">{STILL_SCHEDULED_LABEL}</th>
-                    <th className="pb-2 pr-3 font-medium">Remaining to schedule</th>
+                    <th className="pb-2 pr-3 font-medium">Hours left</th>
                     <th className="pb-2 pr-3 font-medium">Needs review</th>
                     <th className="pb-2 font-medium">Difference</th>
                   </tr>
@@ -2406,7 +2451,7 @@ export function ServiceVerificationReportsPage() {
               </>
             ) : (
               <div
-                className="mt-4 overflow-x-auto"
+                className="mt-4 overflow-x-auto print:overflow-visible"
                 role="region"
                 aria-label="Visit records table (scrolls sideways when the window is narrow)"
                 tabIndex={0}
@@ -2417,22 +2462,23 @@ export function ServiceVerificationReportsPage() {
               >
                 <table
                   aria-label="Visit details"
-                  className="w-full text-left text-sm"
+                  className="w-full text-left text-sm print:text-[9px]"
                 >
                   <thead>
                     <tr className="border-b border-slate-200 text-xs uppercase tracking-wide text-slate-500">
-                      {visitColumns.has("visitRef") ? <th className="pb-2 pr-3 font-medium">Visit ref</th> : null}
-                      {visitColumns.has("client") ? <th className="pb-2 pr-3 font-medium">Client</th> : null}
-                      {visitColumns.has("caregiver") ? <th className="pb-2 pr-3 font-medium">Caregiver</th> : null}
-                      {visitColumns.has("service") ? <th className="pb-2 pr-3 font-medium">Service</th> : null}
-                      {visitColumns.has("date") ? <th className="pb-2 pr-3 font-medium">Date</th> : null}
-                      {visitColumns.has("time") ? <th className="pb-2 pr-3 font-medium">Time</th> : null}
-                      {visitColumns.has("worked") ? <th className="pb-2 pr-3 font-medium">Worked</th> : null}
-                      {visitColumns.has("billable") ? <th className="pb-2 pr-3 font-medium">Billable</th> : null}
-                      {visitColumns.has("authorized") ? <th className="pb-2 pr-3 font-medium">Monthly limit</th> : null}
-                      {visitColumns.has("usedMtd") ? <th className="pb-2 pr-3 font-medium">Used this month</th> : null}
-                      {visitColumns.has("remaining") ? <th className="pb-2 pr-3 font-medium">Hours left</th> : null}
-                      {visitColumns.has("status") ? <th className="pb-2 pr-3 font-medium">Status</th> : null}
+                      {visitColumns.has("visitRef") ? <th className="pb-2 pr-2 font-medium">Visit ref</th> : null}
+                      {visitColumns.has("client") ? <th className="pb-2 pr-2 font-medium">Client</th> : null}
+                      {visitColumns.has("caregiver") ? <th className="pb-2 pr-2 font-medium">Caregiver</th> : null}
+                      {visitColumns.has("service") ? <th className="pb-2 pr-2 font-medium">Service</th> : null}
+                      {visitColumns.has("date") ? <th className="pb-2 pr-2 font-medium">Date</th> : null}
+                      {visitColumns.has("time") ? <th className="pb-2 pr-2 font-medium">Time</th> : null}
+                      {visitColumns.has("worked") ? <th className="pb-2 pr-2 font-medium">Worked</th> : null}
+                      {visitColumns.has("billable") ? <th className="pb-2 pr-2 font-medium">Billable</th> : null}
+                      {visitColumns.has("authorized") ? <th className="pb-2 pr-2 font-medium">Monthly limit</th> : null}
+                      {visitColumns.has("usedMtd") ? <th className="pb-2 pr-2 font-medium">Used this month</th> : null}
+                      {visitColumns.has("remaining") ? <th className="pb-2 pr-2 font-medium">Hours left</th> : null}
+                      {showBalanceDetails ? <th className="pb-2 pr-2 font-medium">Hours balance</th> : null}
+                      {visitColumns.has("status") ? <th className="pb-2 pr-2 font-medium">Status</th> : null}
                       {canManage ? <th className="pb-2 font-medium print:hidden">Actions</th> : null}
                     </tr>
                   </thead>
@@ -2447,31 +2493,32 @@ export function ServiceVerificationReportsPage() {
                         <Fragment key={row.id}>
                           <tr className="border-b border-slate-100 last:border-0">
                             {visitColumns.has("visitRef") ? (
-                              <td className="py-2 pr-3 whitespace-nowrap font-mono text-xs text-slate-500">
+                              <td className="py-2 pr-2 whitespace-nowrap font-mono text-xs text-slate-500">
                                 {row.visit_number ?? "—"}
                               </td>
                             ) : null}
                             {visitColumns.has("client") ? (
-                              <td className="py-2 pr-3">
-                                <p className="text-slate-800">
+                              <td className="min-w-[9rem] print:min-w-0 py-2 pr-2">
+                                <p className="font-medium text-slate-900">
                                   {row.client_legal_name ?? row.client_code}
                                 </p>
                                 {row.client_legal_name ? <p className="text-xs text-slate-400">{row.client_code}</p> : null}
+                                {!visitColumns.has("visitRef") && row.visit_number ? <p className="font-mono text-[11px] text-slate-400">{row.visit_number}</p> : null}
                               </td>
                             ) : null}
                             {visitColumns.has("caregiver") ? (
-                              <td className="py-2 pr-3 text-slate-700">{row.caregiver_name}</td>
+                              <td className="min-w-[7.5rem] print:min-w-0 py-2 pr-2 text-slate-700">{row.caregiver_name}</td>
                             ) : null}
                             {visitColumns.has("service") ? (
-                              <td className="py-2 pr-3 text-slate-700">{row.service_name}</td>
+                              <td className="min-w-[7rem] print:min-w-0 py-2 pr-2 text-slate-700">{row.service_name}</td>
                             ) : null}
                             {visitColumns.has("date") ? (
-                              <td className="py-2 pr-3 whitespace-nowrap text-slate-600">
+                              <td className="py-2 pr-2 whitespace-nowrap text-slate-600">
                                 {formatDateOnly(row.service_date)}
                               </td>
                             ) : null}
                             {visitColumns.has("time") ? (
-                              <td className="py-2 pr-3 whitespace-nowrap font-mono text-xs text-slate-600">
+                              <td className="py-2 pr-2 whitespace-nowrap font-mono text-xs text-slate-600">
                                 {formatTimeRange(row.time_in, row.time_out)}
                                 <p className="font-sans text-slate-400">
                                   {row.scheduled_starts_at ? "Scheduled " : ""}
@@ -2480,32 +2527,52 @@ export function ServiceVerificationReportsPage() {
                               </td>
                             ) : null}
                             {visitColumns.has("worked") ? (
-                              <td className="py-2 pr-3 whitespace-nowrap text-slate-700">
+                              <td className="py-2 pr-2 whitespace-nowrap text-slate-700">
                                 {formatDuration(row.worked_minutes)}
                               </td>
                             ) : null}
                             {visitColumns.has("billable") ? (
-                              <td className="py-2 pr-3 whitespace-nowrap text-slate-700">
+                              <td className="py-2 pr-2 whitespace-nowrap text-slate-700">
                                 {formatDuration(row.billable_minutes)}
                               </td>
                             ) : null}
                             {visitColumns.has("authorized") ? (
-                              <td className="py-2 pr-3 whitespace-nowrap text-slate-700">
+                              <td className="py-2 pr-2 whitespace-nowrap text-slate-700">
                                 {formatDuration(authorizedMinutes)}
                               </td>
                             ) : null}
                             {visitColumns.has("usedMtd") ? (
-                              <td className="py-2 pr-3 whitespace-nowrap text-slate-700">
+                              <td className="py-2 pr-2 whitespace-nowrap text-slate-700">
                                 {formatDuration(row.month_to_date_after_minutes)}
                               </td>
                             ) : null}
                             {visitColumns.has("remaining") ? (
-                              <td className="py-2 pr-3 whitespace-nowrap text-slate-700">
+                              <td className="py-2 pr-2 whitespace-nowrap text-slate-700">
                                 {formatDuration(row.remaining_minutes)}
                               </td>
                             ) : null}
+                            {showBalanceDetails ? (
+                              <td className="py-2 pr-2 align-top">
+                                {/* A printout cannot open a control, so print shows the same three values in full. */}
+                                <dl className="hidden space-y-0.5 whitespace-nowrap text-[10px] print:block">
+                                  <div><dt className="inline">Monthly limit: </dt><dd className="inline font-medium">{formatDuration(authorizedMinutes)}</dd></div>
+                                  <div><dt className="inline">Used this month: </dt><dd className="inline font-medium">{formatDuration(row.month_to_date_after_minutes)}</dd></div>
+                                  <div><dt className="inline">Hours left: </dt><dd className="inline font-medium">{formatDuration(row.remaining_minutes)}</dd></div>
+                                </dl>
+                                <details className="text-xs print:hidden">
+                                  <summary className="inline-flex min-h-[40px] cursor-pointer list-none items-center rounded-lg border border-slate-300 bg-white px-3 text-sm font-medium text-slate-900 hover:bg-slate-50">
+                                    Hours balance
+                                  </summary>
+                                  <dl className="mt-1 space-y-1 whitespace-nowrap">
+                                    <div><dt className="inline text-slate-500">Monthly limit: </dt><dd className="inline font-medium text-slate-900">{formatDuration(authorizedMinutes)}</dd></div>
+                                    <div><dt className="inline text-slate-500">Used this month: </dt><dd className="inline font-medium text-slate-900">{formatDuration(row.month_to_date_after_minutes)}</dd></div>
+                                    <div><dt className="inline text-slate-500">Hours left: </dt><dd className="inline font-medium text-slate-900">{formatDuration(row.remaining_minutes)}</dd></div>
+                                  </dl>
+                                </details>
+                              </td>
+                            ) : null}
                             {visitColumns.has("status") ? (
-                              <td className="py-2 pr-3">
+                              <td className="py-2 pr-2">
                                 {row.status === "corrected" ? (
                                   <StatusBadge label="Replaced by a correction" tone="neutral" />
                                 ) : row.is_corrected && row.status === "signed" ? (
@@ -2595,7 +2662,7 @@ export function ServiceVerificationReportsPage() {
                   >
                     <span className="text-slate-700">
                       {entry.legalName ?? entry.code} · {entry.serviceName}
-                      <span className="text-slate-400"> · {entry.visits} visits</span>
+                      <span className="text-slate-400"> · {entry.visits} {entry.visits === 1 ? "visit" : "visits"}</span>
                     </span>
                     <span className="font-medium text-slate-900">
                       {formatDuration(entry.workedMinutes)} worked · {formatDuration(entry.billableMinutes)} billable

@@ -237,7 +237,7 @@ function ShiftRow({ s, canManage, onDone }: { s: Shift; canManage: boolean; onDo
           : <span className="font-semibold text-red-800">OPEN — no caregiver</span>}
       </p>
       {calledOut && s.lastCalloutReason ? <p className="mt-1 text-sm text-red-800">Reason: {s.lastCalloutReason}</p> : null}
-      {s.seriesId ? <p className="mt-1 text-xs text-slate-600">Repeats weekly — changes here affect this date only; change the series under Recurring series.</p> : null}
+      {s.seriesId ? <p className="mt-1 text-xs text-slate-600">Repeats weekly — changes here affect this date only; change the series under Manage repeating shifts.</p> : null}
       {s.fromCareRequest ? <p className="mt-1 text-xs text-slate-600">From a Care Request; manage it on the <Link className="underline" to="/care-requests">Care Requests</Link> page.</p> : null}
       <div className="mt-2 flex flex-wrap items-center gap-2">
         {editable && s.coverageState === "covered" ? <button type="button" className="inline-flex min-h-[40px] items-center rounded-lg border border-slate-300 bg-white px-3 text-sm font-medium text-slate-900 hover:bg-slate-50" onClick={() => setAction("callout")}>Record call-out</button> : null}
@@ -289,14 +289,14 @@ export function SchedulePage() {
           <div className="flex flex-wrap gap-2">
             <Button type="button" onClick={() => { setAdding((x) => !x); setRepeating(false); setNotice(null); }} aria-expanded={adding}>{adding ? "Close" : "Add shift"}</Button>
             <Button type="button" variant="secondary" onClick={() => { setRepeating((x) => !x); setAdding(false); setNotice(null); }} aria-expanded={repeating}>{repeating ? "Close" : "Repeat weekly"}</Button>
-            <Button type="button" variant="secondary" onClick={() => setShowSeries((x) => !x)} aria-expanded={showSeries}>Recurring series</Button>
+            <Button type="button" variant="secondary" onClick={() => setShowSeries((x) => !x)} aria-expanded={showSeries}>Manage repeating shifts</Button>
           </div>
         ) : null}
       </div>
       {needs > 0 ? <p className="text-base font-bold uppercase text-red-700">{needs} shift{needs === 1 ? "" : "s"} need{needs === 1 ? "s" : ""} coverage this week</p> : null}
       {adding ? <Card className="p-3"><AddShiftForm onDone={(t) => { setAdding(false); setNotice(t); }} /></Card> : null}
       {repeating ? <Card className="p-3"><h2 className="text-base font-semibold text-slate-950">Repeat weekly</h2><RecurringSeriesForm today={today} onDone={(t) => { setRepeating(false); setNotice(t); }} /></Card> : null}
-      {showSeries && canManage ? <Card className="space-y-2 p-3"><h2 className="text-base font-semibold text-slate-950">Recurring series</h2><SeriesList today={today} onDone={setNotice} /></Card> : null}
+      {showSeries && canManage ? <Card className="space-y-2 p-3"><h2 className="text-base font-semibold text-slate-950">Manage repeating shifts</h2><SeriesList today={today} onDone={setNotice} /></Card> : null}
       {notice ? <p role="status" className="text-sm text-emerald-800">{notice}</p> : null}
       <div className="flex flex-wrap items-end gap-3">
         <Button type="button" variant="secondary" onClick={() => setFrom(addDays(from, -7))}>← Previous week</Button>
@@ -359,7 +359,7 @@ export function MyShiftsPage() {
             <p className="text-sm text-slate-800">Client {s.clientCode}{s.serviceName ? ` · ${s.serviceName}` : ""}</p>
             {s.coverageState === "called_out" ? <p className="mt-1 text-sm font-semibold text-amber-900">You called out. The office is finding cover.</p> : null}
             {s.canCallOut && open !== s.shiftId ? (
-              <button type="button" className="mt-2 min-h-11 text-sm font-medium text-slate-900 underline" onClick={() => { setOpen(s.shiftId); setState({ busy: false, error: null, done: null }); }}>I can't make it</button>
+              <button type="button" className="mt-2 inline-flex min-h-11 items-center rounded-lg border border-slate-300 bg-white px-4 text-sm font-medium text-slate-900 hover:bg-slate-50" onClick={() => { setOpen(s.shiftId); setState({ busy: false, error: null, done: null }); }}>I can't make it</button>
             ) : null}
             {open === s.shiftId ? (
               <form onSubmit={(e) => { e.preventDefault(); void callOut(s.shiftId); }} className="mt-2 space-y-2">

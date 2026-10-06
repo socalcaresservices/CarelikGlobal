@@ -69,8 +69,8 @@ Keep it only on agency-approved encrypted storage; delete or shred it when a new
 ${table(["Date", "Time", "Client", "Service", "Caregiver", "Coverage"], pack.shifts.map((s) => [formatDateOnly(s.local_date), `${formatWallClock(s.start)}–${formatWallClock(s.end)}`, client(s.client_code, s.client_label, s.client_name), s.service ?? "", s.caregiver ? `${s.caregiver} (${s.caregiver_code ?? ""})` : "OPEN", s.coverage === "needs_coverage" ? "NEEDS COVERAGE" : s.coverage]))}
 
 <h2>Authorized hours this month</h2>
-<p class="note">"Remaining" already subtracts approved-eligible (billable) time and time reserved by scheduled shifts. Hours worked during an outage are not included until entered in Ogevia.</p>
-${table(["Client", "Service", "Period", "Authorized", "Reserved", "Billable so far", "In review", "Remaining"], pack.authorizations.map((a) => [client(a.client_code, a.client_label, nameByCode.get(a.client_code) ?? null), a.service ?? "", `${formatDateOnly(a.period_start)} to ${formatDateOnly(a.period_end)}`, hrs(a.authorized_minutes), hrs(a.reserved_minutes), hrs(a.billable_minutes), hrs(a.review_minutes), hrs(a.remaining_minutes)]))}
+<p class="note">"Hours left" already subtracts approved-eligible (billable) time and time reserved by scheduled shifts. Hours worked during an outage are not included until entered in Ogevia.</p>
+${table(["Client", "Service", "Period", "Authorized", "Reserved", "Billable so far", "In review", "Hours left"], pack.authorizations.map((a) => [client(a.client_code, a.client_label, nameByCode.get(a.client_code) ?? null), a.service ?? "", `${formatDateOnly(a.period_start)} to ${formatDateOnly(a.period_end)}`, hrs(a.authorized_minutes), hrs(a.reserved_minutes), hrs(a.billable_minutes), hrs(a.review_minutes), hrs(a.remaining_minutes)]))}
 
 <h2>Active clients</h2>
 ${table(["Client code", "Label", "City", "Name"], pack.clients.map((c) => [c.client_code, c.client_label ?? "", c.city ?? "", c.client_name ?? ""]))}

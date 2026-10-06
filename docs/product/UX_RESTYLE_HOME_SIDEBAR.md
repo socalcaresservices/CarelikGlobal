@@ -1,113 +1,80 @@
 # Sidebar, Home and UX review: status and evidence
 
-Updated 6 October 2026. **The full UX request is NOT complete.** Presentation only: no query, calculation, count, route, permission or business rule was changed.
-Branch `claude/vibrant-sagan-rn9z58`. Not merged, not deployed. All screenshots use synthetic data and are in `docs/product/evidence/2026-10-06/ux/`.
+Updated 6 October 2026 (second round). **The full UX request is not marked complete** (see section 6). Presentation only: no query, calculation, count, route, permission or business rule was changed. Branch `claude/vibrant-sagan-rn9z58`. Not merged, not deployed. Screenshots (synthetic data) are in `docs/product/evidence/2026-10-06/ux/`.
 
-## 1. Base branch and what AWS TEST runs
+Related documents: `OMITTED_BRANCHES_COMPARISON.md` (the eight omitted branches), `PROPOSAL_LETTERHEAD_AND_ENV_MARKER.md` (two separate fixes, proposals only).
 
-| Question | Finding | Basis |
-| --- | --- | --- |
-| Which commit powers AWS TEST? | **Cannot be verified from here.** No AWS access in this session. | The last deployment on record is release 0036 at `7b1236d` (database, API and web), owner-run and verified 14/14 on 2026-10-05 (`PILOT_ACCEPTANCE_RECORD.md`, `DEPLOYMENT_PLAN_0027_0036.md`). That is owner-reported, not live-checked. |
-| Is `claude/ogevia-action-needed-filters` (a17eb7c) the right base? | **Yes.** | `7b1236d` is an ancestor. `main` is an ancestor. Every AWS pull request branch (#51, #52, #60 to #68: reporting, care requests, visit-to-shift, missed clock-out, manager close, remaining hours, Cognito) is an ancestor. Nothing newer exists on any branch (tip 2026-10-06 21:33). |
-| What changed since the deployed commit? | Web only. | `git diff 7b1236d..a17eb7c`: no migration, no API handler; only the Action needed web code, Billing review filters, two database tests, deploy scripts and docs. The Action needed web code expects fields the deployed API already returns (0033). So the Action needed change and this restyle are **not deployed yet** and need only a web deploy. |
-| What would this branch omit? | Eight open Supabase-path branches: #53 CareScore missing-data credit, #54 caregiver skills, #55 overnight availability, #56 month hours by source, #57 incident categories, #58 caregiver services and cities, #43 support access, plus `claude/serene-einstein-1rzi90` (audit docs). | `git cherry` finds none of their commits in the base. They change the Supabase app (`apps/web/src/pages`, `supabase/migrations`). **Whether AWS TEST needs any of them is UNKNOWN.** Owner decision. |
+## 1. Base branch and deployed commit
 
-## 2. Completed
+- **The deployed commit is still unverified.** This session has no AWS access. The last deployment on record is release 0036 at `7b1236d` (database, API, web), reported by the owner as verified 14/14 on 2026-10-05.
+- **Git history supports the base choice.** `claude/ogevia-action-needed-filters` contains `7b1236d`, `main` and every AWS pull request branch, and no branch is newer. Since `7b1236d` the base differs only in web code, tests, scripts and docs (no migration, no API handler), so the Action needed change and this restyle need a web deploy only.
+- That is a statement about history, not about what is running. To close it, the owner can compare the deployed web build and `config.json` with `7b1236d` or the later web commits.
 
-| Requirement | Evidence |
+## 2. Decisions applied (from your instructions)
+
+| Decision | Applied |
 | --- | --- |
-| Left sidebar 256px / 76px, remembered, drawer below 768px, tooltips, accessible names | Chromium at 1440, 1024, 390. Collapse persists across reload; Escape closes drawer and returns focus; Tab is trapped in the open drawer; tooltips dismiss with Escape. `sidebar-home.test.tsx`. |
-| Groups TODAY / VISITS / BILLING / PEOPLE / SETUP; all existing links and permissions kept | Test lists every link and href for manager, Administrator and caregiver. |
-| Reports and Client monthly calendar easy to find | Sidebar links to the existing reports route (`?view=overview`, `?view=calendar`); correct one is highlighted. Print / Save as PDF is now a visible button in the page header instead of inside "More actions". |
-| Home layout, palette, fonts, 1180px | Screenshots `home-*`. Fonts are bundled npm packages; no font-host request (checked in the browser). |
-| Financial split | Administrator sees dollar values; manager sees none (`home-manager-*-no-money.png`, test). Server returns null to managers. |
-| Schedule actions | Record call-out, Change caregiver, Change time, Cancel shift and History are now 40px buttons; Cancel shift has a red outline (`page-schedule.png`, test). |
-| Visit records actions | Correct visit, Review visit and Correction history are visible 40px buttons, stacked; the table has scroll shadows and is keyboard-scrollable. |
-| Client authorisations | The Clients list now says "View authorized hours →" on each row. The client page's first card is Authorized hours (months, balances, versions). |
-| Calendar and print | See section 5. |
+| "Action needed" everywhere | Reports page title and dropdown, Visit review text, Documents text, Branding page text. |
+| US spelling | "colour" to "color" and "authorised" to "authorized" in visible text. Server messages in the API were not touched (not web code). |
+| "Administrator" kept | Unchanged. |
+| Shorter labels | Visit records, Visits overview, **Monthly hours & billing** (not "Monthly reconciliation"), Hours this month, Reminders (not counted), Outage records, Continuity pack (menu), Availability, Manage repeating shifts, "1 visit". |
+| "Other actions" | It contained only Correct visit and the link to Billing review where minutes are approved, so it became **Correct or approve**. |
+| "Hours left" | Used where the value is identical: Home, visit records, client page (was Remaining), calendar service totals, monthly reconciliation table, continuity pack. The CSV column header "Remaining to schedule" was left unchanged so exported spreadsheets do not break. |
+| Authorization columns | Hidden by default; each row has an **Hours balance** control with the same three values (Monthly limit, Used this month, Hours left); all three stay in Columns. A previously auto-saved full column set counts as "never customized" and takes the new default; a real saved choice is kept. In a printout the three values are written out in full. |
+| Actions visible without collapsing the sidebar | At 1440px with the sidebar expanded the visit table now fits its card (1074 of 1074 px); Status and Actions are visible. The visit reference moved under the client name (still a column in Columns). |
 
-## 3. Remaining UX work (needs your decision or a later change)
+## 3. Completed, with evidence
 
-1. **Label changes in section 4**: proposed only; none applied.
-2. **Visit records table at 1440px with the sidebar expanded**: the table is wider than the card. Status is visible; the Actions column is partly clipped until you scroll sideways (shadow shows it). Collapsing the sidebar fits it. Option: default-hide the three authorization columns (your change list item 4 asked for them under "Hours balance"). That changes defaults, so not done.
-3. **Printed continuation pages** carry no agency, client or page number (section 5).
-4. **Visit records, billing review: names wrap to three lines** in narrow columns.
-5. **"Hours left" vs "Remaining"**: Home and Visit records say "Hours left"; the client page says "Remaining".
-6. **Pages not walked in the browser**: caregiver screens, Care requests (needs unmocked endpoints), Care Team detail, Documents with data, Settings, Billing rounding. Their buttons were only checked in code.
-7. **Calendar view shows the general "Filters" card** although the calendar ignores those filters (the page says so in small text).
-
-## 4. Label proposals (for approval; "Action needed" kept)
-
-| Where | Current | Proposed | Reason |
-| --- | --- | --- | --- |
-| Reports page title and Report dropdown (exceptions view) | Needs attention | **Action needed** | The header badge and Home say Action needed. Needs a test update (`aws-app.test.tsx` asserts the old heading). |
-| Visit review, "Get the missing signature" text | "…instead of in Needs attention" | "…instead of in Action needed" | Same. |
-| Report dropdown | Visit records (list) | Visit records | "(list)" adds nothing. |
-| Report dropdown | Operations overview | Visits overview | "Operations" is vague. |
-| Report dropdown | Monthly hours & billing reconciliation | Monthly reconciliation | Home already calls it that. |
-| Home heading | Hours this month (utilization) | Hours this month | The definition sentence already explains utilization. |
-| Home reminders | Reminders (not in the Action needed total) | Reminders (not counted) | Shorter. |
-| Page title vs menu | Outage visit records / Outage records | Outage records | Match the menu. |
-| Page title vs menu | Continuity pack / Continuity | Continuity pack (menu too) | Match. |
-| Page title vs menu | Availability & opportunities / Availability | Availability | Match. |
-| Schedule buttons | Repeat weekly, Recurring series | Repeat weekly, Manage repeating shifts | "Recurring series" is vague. |
-| Visit review | Other actions | Correct or approve | Says what is there. |
-| Client page | Remaining | Hours left | Consistency. |
-| Visit records "By client and service" | "1 visits" | "1 visit" | Plural defect. |
-| Spelling | Authorized (US) | Keep | Your messages use "Authorisations"; the product uses US spelling. Confirm. |
-| Role name | Administrator | Keep, or Owner | The change list says OWNER VIEW; the product says ADMINISTRATOR VIEW. Confirm. |
-
-## 5. Client monthly calendar: selection and print
-
-Verified in Chromium print emulation and `page.pdf` (letter landscape), synthetic data:
-
-| Check | Result |
+| Item | Evidence |
 | --- | --- |
-| Print button disabled until a client is chosen | PASS |
-| One client per calendar, services never combined | PASS (separate lines per service per day) |
-| Totals | PASS. Recomputed by hand: worked 18 h 33 min (1,113 min), billable 18 h 30 min, Respite 13 h 3 min, Personal Assistance 5 h 30 min; caregiver A 14 h, B 4 h 33 min. The page shows the same and "agree to the minute". |
-| Branding (screen and print) | Agency logo and name print on page 1. **Address, phone and email do not print: the AWS build has no source for them** (functional gap). |
-| Sidebar, header and padding in print | Hidden (computed styles in print media). |
-| Pages | Calendar alone: 1 page. With "Add a visit detail page", 84 visits: 4 pages; the table header repeats. |
-| Continuation pages | **No agency, client, month or page number** on pages 3 and 4 (gap). |
-| CSV | Button present; not exercised here. |
-| Not verified | A real printer or the browser's own print dialog; other browsers. |
+| Sidebar, drawer, tooltips, remembered choice | Screenshots 01 to 05; `sidebar-home.test.tsx`; Chromium checks in the first round. |
+| Home layout and palette; financial split | Screenshots 01 to 03, 06; test shows no dollar value for the manager. |
+| Action buttons: Schedule, Visit records, Care requests (Open), caregiver Availability and My shifts | 40px or taller buttons; Cancel shift is red. Screenshots 07, 14, 20, 21, 22. Tests in `sidebar-home.test.tsx`. |
+| Readable names | Client, caregiver and service cells have minimum widths; client name is bold; Care requests and caregiver opportunities show the service name, not only its code. Screenshot 07, 14, 20. |
+| Per-client authorizations | Clients rows say "View authorized hours →"; the client page opens on Authorized hours. Screenshot 23. |
+| Calendar filters | Date range and Filters are not shown on the client calendar; its description says it is always one client and one month. Screenshot 10; test. |
+| Report selection and sidebar in sync | Choosing a report updates `?view=`; the highlight follows (browser: calendar, overview and reconciliation, exceptions, visit list); test. |
+| **Every printed page identified** | A running header (agency, report, client or "All clients", month or period) and "Page N of M" on every page. Browser PDFs: calendar with detail (4 pages) and visit list (12 pages), every page carries both. The visit list now prints landscape with all columns (it used to clip at the right edge). Screenshots 11 to 13. |
 
-## 6. Navigation and highlighting
+## 4. Remaining screens: what was checked
 
-- The correct item is highlighted on Home, Visit records, Reports (`?view=overview`) and Client monthly calendar (`?view=calendar`); tested.
-- **Gap (existing behaviour):** choosing a report in the Report dropdown does not change the address, so the highlight stays on "Visit records" (verified in Chromium).
-- Reports opened from the Action needed link (`?view=exceptions`) highlight Visit records.
+Walked in Chromium with faked data at 1280px (office) and 390px (caregiver), screenshots 14 to 21:
 
-## 7. Does AWS TEST identify synthetic data?
+| Screen | Result |
+| --- | --- |
+| Care requests | Readable. Fixed: Open button height, service name, capitalized status. **Shows client codes only** (the endpoint returns no name). |
+| Care Team and detail | Clear. Detail page showed "2 active assignments" and "No current or upcoming assignments" together; I believe that is my fixture (list and assignments endpoints disagree), **not verified as a product defect**. |
+| Settings: Branding | Fixed "NEEDS ATTENTION" and UK spellings. Billing rounding: opened with no policies only. |
+| Documents | Due dates read "Due 10/20/2026 (in 14 days)" and "(5 days overdue)"; statuses are text. The "Reminder days" list showed blank values because my fixture lacks that endpoint; **not verified with real data**. |
+| Caregiver: Verify visit, My shifts, Availability, My documents, Profile | Open at 390px with no sideways scroll. Fixed: availability opportunity shows the service name; "I can't make it" is now a bordered button. The Start/End/Confirm steps were not re-walked (covered by the existing end-to-end test). |
 
-- **Only partly.** The Clients page has a fixed sentence, "TEST environment: synthetic clients only until the security approval." It is hard-coded, so it would also show in a production build, and no other page shows anything.
-- The sidebar chip appears only when the build sets `VITE_APP_ENV` to `test` or `development`. `/config.json` does not carry that key, so a deployed build shows it only if it was set at build time. **Unknown for AWS TEST.**
-- Recommendation: drive one environment banner from deployed configuration. That is a configuration change, so it is not made here.
+**Not verified:** a real printer and the browser's own print dialog; **Safari and Firefox** (the running header and page numbers use CSS page margin boxes, which Chromium browsers support; elsewhere the first-page letterhead still prints but the header and page numbers may not); screen readers; real touch devices; care request detail panel and offers; Documents and Billing rounding with real data; the deployed build.
 
-## 8. Functional gaps (not styling)
+## 5. Functional gaps (not styling)
 
-1. No standalone Authorisations route in the AWS build.
-2. Printed letterhead has no address, phone or email in the AWS build.
-3. Printed continuation pages lack identification and page numbers.
-4. Hard-coded test sentence on Clients; no configuration-driven environment label.
-5. Report dropdown does not update the URL (sidebar highlight lags).
-6. No Ogevia logo image exists in the repository.
-7. Eight Supabase-path branches are not in this base (relevance unknown).
+1. No standalone Authorisations page in the AWS build (authorizations are per client).
+2. Printed letterhead has no address, phone or email: see the proposal (Fix A).
+3. No configuration-driven TEST marker; the Clients page has a fixed sentence: see the proposal (Fix B).
+4. Care requests show client codes only.
+5. Overnight availability and overnight care requests are not supported by AWS matching (see the branch comparison).
+6. No Ogevia logo image in the repository (text wordmark used).
+7. CSV exports keep the old column title "Remaining to schedule".
 
-## 9. Requirement checklist
+## 6. Requirement checklist
 
 | # | Requirement | Status |
 | --- | --- | --- |
-| 1 | Preserve working system | Done; all pre-existing tests pass |
-| 2 | Clearer titles and labels | **Proposed, awaiting approval** |
+| 1 | Preserve working system | Done; all existing tests pass |
+| 2 | Titles and labels | Applied as approved (section 2) |
 | 3 | Sidebar | Done |
-| 4 | Home layout | Done (screenshot comparison pending your reference) |
-| 5 | Reports, calendar, printing | Discoverability done; calendar verified; gaps in section 8 |
-| 6 | Clear records and actions | Partly done (section 3) |
-| 7 | Style | Done, with contrast deviation: zero and unavailable grey darkened to `#5C727B` |
-| 8 | Verify and hand off | Partly: browser checks in sections 5 and 6; real print, screen readers and deployed build not verified |
+| 4 | Home layout | Done; **your reference screenshot has not been compared** |
+| 5 | Reports, calendar, printing | Done and verified in Chromium print; other browsers not verified |
+| 6 | Clear records and actions | Done for the screens listed; Care requests client names are a gap |
+| 7 | Style | Done; zero and unavailable grey darkened to `#5C727B` for contrast |
+| 8 | Verify and hand off | Partly: see "Not verified" in section 4 |
+| Branch comparison | Done as a document; decisions pending |
+| Letterhead and TEST marker | Proposals only; not built |
 
-## 10. Checks run
+## 7. Checks run
 
-`pnpm typecheck`, `pnpm lint`, `pnpm test` and `pnpm build` (results in the final report). Browser checks used a production build with faked Cognito and API responses.
+`pnpm typecheck`, `pnpm lint`, `pnpm test`, `pnpm build`; results are in the hand-off message. Browser checks used a production build with faked Cognito and API responses.

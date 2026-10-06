@@ -60,7 +60,7 @@ export function SignatureRecoveryCard({ visitId, organizationId, canManage, canR
       <h2 className="text-base font-semibold text-slate-950">Get the missing signature</h2>
       <p className="text-sm text-slate-700">
         Ask the client or their representative to confirm this visit now. While a request is open, the visit waits here
-        instead of in Needs attention. It is never closed for you, and nothing becomes billable until a person accepts
+        instead of in Action needed. It is never closed for you, and nothing becomes billable until a person accepts
         the confirmation and billing is approved separately.
       </p>
       {recoveryState === "awaiting_response" ? <p className="rounded-lg bg-violet-50 p-2 text-sm text-violet-900">Waiting for the confirmation.</p> : null}

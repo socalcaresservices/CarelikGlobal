@@ -94,7 +94,7 @@ export function CalendarSummary({
                   <th className={th}>Worked</th>
                   <th className={th}>Billable</th>
                   <th className={th}>Still scheduled</th>
-                  <th className={th}>Remaining</th>
+                  <th className={th}>Hours left</th>
                 </tr>
               </thead>
               <tbody>

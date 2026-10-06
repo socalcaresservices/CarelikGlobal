@@ -119,7 +119,7 @@ describe("sidebar: expanded", () => {
       "Visit records": "/service-verification/reports", "Reports": "/service-verification/reports?view=overview",
       "Client monthly calendar": "/service-verification/reports?view=calendar", "Billing review": "/billing-review",
       "Clients": "/clients", "Care Team": "/care-team", "Documents": "/documents", "Services": "/services",
-      "Continuity": "/continuity", "Outage records": "/outage-visits",
+      "Continuity pack": "/continuity", "Outage records": "/outage-visits",
     });
     // Settings stays Administrator-only (organization.update), unchanged.
     expect(within(nav).queryByRole("link", { name: "Settings" })).toBeNull();
@@ -213,7 +213,7 @@ describe("Home layout", () => {
     expect(await screen.findByRole("heading", { name: "Home", level: 1 })).toBeInTheDocument();
     expect(await screen.findByTestId("action-needed-banner")).toHaveTextContent("Action needed: 6");
     expect(screen.getByLabelText("Month")).toHaveAttribute("type", "month");
-    const hours = (await screen.findByRole("heading", { name: "Hours this month (utilization)" })).closest("section")!;
+    const hours = (await screen.findByRole("heading", { name: "Hours this month" })).closest("section")!;
     for (const k of ["Authorized", "Worked", "Billable (confirmed)", "Hours left"]) expect(within(hours).getAllByText(k).length).toBeGreaterThan(0);
     expect(within(hours).getByRole("link", { name: /monthly reconciliation/ }).getAttribute("href")).toBe("/service-verification/reports?view=reconciliation");
     const table = await within(hours).findByRole("table");
