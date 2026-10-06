@@ -3,6 +3,7 @@ import { useState } from "react";
 import { Link } from "react-router-dom";
 import { RoundingSection } from "./billing-rounding";
 import { APPROVAL_STATUS_CLASS, APPROVAL_STATUS_LABEL, approvableMinutes, formatClock, formatDuration, formatUsDate, visitScheduleLabel, type ApprovalStatus } from "./billing-format";
+import { activeFilterCount, applyBillingFilters, filterOptions, NO_FILTERS, type BillingFilters } from "./billing-filters";
 import { Button, Card } from "@carelik/ui";
 import { confirmationMethodLabel, formatHours } from "@/lib/service-verification";
 import { useIsNarrow } from "@/lib/use-is-narrow";
@@ -45,6 +46,7 @@ export function BillingReviewPage() {
   const [pending, setPending] = useState<Pending | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const narrow = useIsNarrow();
+  const [filters, setFilters] = useState<BillingFilters>(NO_FILTERS);
 
   const query = useQuery({
     queryKey: ["aws-billing-review", activeOrganizationId, from, to],
@@ -190,7 +192,18 @@ export function BillingReviewPage() {
 
   if (!canRead) return <p className="text-sm text-slate-600">You do not have access to billing review.</p>;
 
-  const rows = query.data ?? [];
+  const loaded = query.data ?? [];
+  const rows = applyBillingFilters(loaded, filters, approvalStatus);
+  const options = filterOptions(loaded, approvalStatus);
+  const nFilters = activeFilterCount(filters);
+  const setFilter = (key: keyof BillingFilters) => (e: React.ChangeEvent<HTMLSelectElement>) => setFilters((f) => ({ ...f, [key]: e.target.value }));
+  const selects: Array<{ key: keyof BillingFilters; label: string; all: string; opts: Array<[string, string]> }> = [
+    { key: "client", label: "Client", all: "All clients", opts: options.clients },
+    { key: "caregiver", label: "Caregiver", all: "All caregivers", opts: options.caregivers },
+    { key: "service", label: "Service", all: "All services", opts: options.services },
+    { key: "visitStatus", label: "Visit status", all: "All visit statuses", opts: options.visitStatuses },
+    { key: "approval", label: "Approval status", all: "All approval statuses", opts: options.approvals },
+  ];
   return (
     <div className="space-y-4">
       <div>
@@ -210,11 +223,41 @@ export function BillingReviewPage() {
           <input type="date" value={to} onChange={(e) => setRange((r) => ({ ...r, to: e.target.value }))} className="mt-1 block rounded-lg border border-slate-200 px-3 py-2 text-sm" />
         </label>
       </div>
+      {loaded.length > 0 ? (
+        // Filter records = which visits are listed. (Visit records also has Show/hide columns, which only changes what is displayed.)
+        <details open={!narrow} className="rounded-xl border border-slate-200 bg-white p-3">
+          <summary className="cursor-pointer select-none text-sm font-medium text-slate-800">
+            Filters{nFilters > 0 ? ` (${nFilters} active)` : ""}
+          </summary>
+          <div className="mt-2 grid grid-cols-2 gap-2 md:grid-cols-5">
+            {selects.map((x) => (
+              <label key={x.key} className="text-xs font-medium text-slate-600">
+                {x.label}
+                <select
+                  value={filters[x.key]}
+                  onChange={setFilter(x.key)}
+                  className={`mt-1 block w-full min-w-0 rounded-lg border px-2 py-2 text-sm ${filters[x.key] ? "border-sky-600 bg-sky-50" : "border-slate-200"}`}
+                >
+                  <option value="">{x.all}</option>
+                  {x.opts.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+                </select>
+              </label>
+            ))}
+          </div>
+          <div className="mt-2 flex flex-wrap items-center gap-3 text-xs text-slate-600">
+            <span role="status">
+              {nFilters > 0 ? `Showing ${rows.length} of ${loaded.length} visits in this date range` : `${loaded.length} ${loaded.length === 1 ? "visit" : "visits"} in this date range`}
+            </span>
+            {nFilters > 0 ? <button type="button" onClick={() => setFilters(NO_FILTERS)} className="font-medium text-sky-700 underline">Clear filters</button> : null}
+          </div>
+        </details>
+      ) : null}
       {query.isLoading ? <p className="text-sm text-slate-500">Loading…</p> : null}
       {query.isError ? <p role="alert" className="text-sm text-red-700">{(query.error as Error).message}</p> : null}
       {approvalsQuery.isError ? <p role="alert" className="text-sm text-red-700">Approvals could not be loaded: {(approvalsQuery.error as Error).message}</p> : null}
       {notice ? <p role="status" className="text-sm text-emerald-800">{notice}</p> : null}
-      {!query.isLoading && !query.isError && rows.length === 0 ? <p className="text-sm text-slate-500">No signed or review visits in this range.</p> : null}
+      {!query.isLoading && !query.isError && loaded.length === 0 ? <p className="text-sm text-slate-500">No signed or review visits in this range.</p> : null}
+      {loaded.length > 0 && rows.length === 0 ? <p className="text-sm text-slate-500">No visits match these filters. <button type="button" onClick={() => setFilters(NO_FILTERS)} className="font-medium text-sky-700 underline">Clear filters</button></p> : null}
       {rows.length > 0 && narrow ? (
         <ul aria-label="Billing review visits" className="space-y-3">
           {rows.map((r) => (

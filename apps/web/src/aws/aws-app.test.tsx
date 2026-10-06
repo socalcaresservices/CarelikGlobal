@@ -243,7 +243,8 @@ describe("AWS build: manager review and billing-review data", () => {
   it("billing review shows Billing Ready (not billed) and the audited signature view", async () => {
     const { api } = renderAws("/billing-review", "manager");
     // Client name first, short code beneath; caregiver; service name and code; MM/DD/YYYY with AM/PM; readable durations.
-    expect(await screen.findByText("Synthetic Person")).toBeInTheDocument();
+    // The name also appears as a Client filter option, so match every occurrence.
+    expect((await screen.findAllByText("Synthetic Person")).length).toBeGreaterThan(0);
     expect(screen.getAllByText("C-104").length).toBeGreaterThan(0);
     expect(screen.getAllByText("Awaiting approval").length).toBeGreaterThan(0);
     expect(screen.queryByText("Billing ready")).toBeNull();

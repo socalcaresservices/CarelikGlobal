@@ -1352,7 +1352,7 @@ export function ServiceVerificationReportsPage() {
             </summary>
             {activeFilterCount > 0 ? (
               <button type="button" onClick={resetFilters} className="mt-2 text-xs font-medium text-sky-700 underline">
-                Reset filters
+                Clear filters
               </button>
             ) : null}
           <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
