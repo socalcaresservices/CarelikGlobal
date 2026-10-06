@@ -2,6 +2,41 @@
 
 **Result (reconciled 2026-10-04): DEPLOYED to AWS TEST (owner-reported 12/12). Real-phone acceptance of the deployed build: PARTIAL, owner-reported. Caregiver start and end, client confirmation, Signed status and manager visibility PASS, recorded 00:51–01:30 UTC on October 4. Sections B, D, E and F are not yet reported.**
 
+## A-series acceptance (user-reported), recorded 2026-10-06
+
+**Provenance.** These labels (A1–A18) come from the owner's separate ChatGPT test programme. They are **not** the numbered checklists in `PILOT_SCOPE_RECONCILIATION.md` §19. Every result below is **user-reported**: no screenshots or transcripts reached the repository or this session, and Claude did not run any of these tests. A broad PASS is not read as evidence of each detailed subtest.
+
+**Deployed baseline.** The last deployment evidenced is release 0036 at `7b1236d86294c4dacee155d7d3fa06c0af55d9c1`, verified 14/14 (owner-run, 2026-10-05). `909f91d` is the repository revision that holds the deployment record, not a deployed revision. The database, API, web and CDK code are identical between `7b1236d` and `909f91d`; only deploy scripts and docs differ.
+
+| Label | Area | Status | Basis and gaps |
+| --- | --- | --- | --- |
+| A1 | Login, identity and navigation | PASS | User-reported |
+| A2 | Clients and services | PASS | User-reported |
+| A3 | Authorisations | PASS | User-reported |
+| A4 | Care Team, invitations and hire type | PASS | User-reported |
+| A5 | Assignments and flexible visits | PASS | User-reported |
+| A6 | One-time scheduling, call-outs and replacements | PASS | User-reported |
+| A7 | Recurring schedules and monthly caps | PASS | User-reported |
+| A8 | Normal caregiver visit | PASS | User-reported |
+| A9 | Missing Time Out and corrections | PASS | User-reported |
+| A10 | Electronic signature recovery | PASS | User-reported. Which of link, code, lock, review and approval steps were exercised is not itemized. |
+| A11 | Paper recovery, disputes and locked links | PASS | User-reported. Not itemized per step. |
+| A12 | Billing-hour policy and approval | Screen checks PASS (user-reported); **live correction-screen check OPEN** | See below |
+| A13 | Documents and expiry reminders | PASS (user-reported); **expiry requirement outstanding** | See "Document expiry" below |
+| A14 | Attention, utilisation and reports | Not reported complete | Retest needed after the Action needed change is deployed |
+| A15 | Printable client calendar | Not reported complete | |
+| A16 | Branding and role boundaries | Not reported complete | |
+| A17 | Outage continuity | Not reported complete | The combined recovery drill is also still open (scope reconciliation §17) |
+| A18 | Phone usability | Not reported complete | |
+
+**A12: approved-visit correction.**
+- *Local database verification (not live AWS, not a phone test).* Existing suites (access-roles, rounding-regression, visit-review, signature-recovery) 51/51 passed, plus the three probe tests, now permanent in `infra/aws/db/test/approved-visit-correction.db.test.ts`. Run against local PostgreSQL 16 on code identical to the deployed `7b1236d`. They show: a correction of an approved visit is refused ("void the billing approval before correcting it"); the approval is voided with a required reason; the corrected visit can be approved; the superseded original can never regain an active approval; history and audit rows stay; same-key retries replay; a concurrent approve and correct never leaves an active approval on a corrected visit (20 rounds).
+- *Still open (live screens):* (1) an approved visit refuses correction with an understandable message; (2) an authorised user can void with a reason; (3) the correction preserves history; (4) the corrected visit can be approved; (5) the original visit cannot regain an active approval.
+
+**Document expiry (A13).** Expiry is configured per document type (`requires_expiry`). Verified in the database code and tests (`document-expiry-types.db.test.ts`): a type that requires expiry refuses a version without a date; a non-expiring type needs no date and never expires or warns; a missing date does not make it overdue; the submission due date is separate and does make a requested document overdue. **Limit:** there is no "optional expiry" state. A date typed on a non-expiring type is stored but ignored for status and alerts. Supporting required, optional and not-applicable as three states needs a schema and backend change, kept out of the dashboard branch.
+
+**Affected by `claude/ogevia-action-needed-filters` (built, not deployed).** Retest only: the header badge and Home banner total and navigation (A14); Billing review filters (A12 screens; A18 on a phone). Nothing else changes.
+
 ## Timeline (UTC, from this session's messages)
 
 | Time | Event | Evidence class |

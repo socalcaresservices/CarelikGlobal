@@ -325,8 +325,15 @@ Production, Netlify and Supabase are untouched.
     change nothing: the preview shows the same minutes, with "unchanged".
 12. **Shift card.** Cancel a shift: no reserved time shows.
     - An over-limit shift says "X hr Y min available".
-13. **Needs attention.** The badge equals the item count on Home. Waiting
-    signatures and expiring documents are under Reminders only.
+13. **Action needed** (replaces the earlier Needs attention expectation,
+    owner decision 2026-10-06). The header badge and the Home banner show the
+    same total: Missing Clock-Out + Awaiting Confirmation + Visits to Review +
+    Signatures to Review + Unfilled Shifts + Overdue Documents + Documents to
+    Review + Ready for Approval. It is the sum of the category counts, not a
+    count of unique visits. Ready for Approval now counts. Waiting for a
+    Signature and Documents Expiring Soon stay under Reminders and are not
+    counted. Red above zero, green only for a confirmed zero, neutral while
+    loading or on failure. Not deployed until the branch is reviewed.
 14. **Document reminders.** Set agency reminder days to 60, 30 and 7.
     - The CPR document shows its reminder stage, reviewer and date.
     - A document type without expiry shows none.
