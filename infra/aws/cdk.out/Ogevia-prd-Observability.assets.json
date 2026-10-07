@@ -1,0 +1,21 @@
+{
+  "version": "54.0.0",
+  "files": {
+    "f60990bd4a27da62f2be2dd1ab352d3ec720bc2b1e7e18fb2ca389ffed180ddd": {
+      "displayName": "Ogevia-prd-Observability Template",
+      "source": {
+        "path": "Ogevia-prd-Observability.template.json",
+        "packaging": "file"
+      },
+      "destinations": {
+        "300094796789-us-west-2-e4f23aaa": {
+          "bucketName": "cdk-hnb659fds-assets-300094796789-us-west-2",
+          "objectKey": "f60990bd4a27da62f2be2dd1ab352d3ec720bc2b1e7e18fb2ca389ffed180ddd.json",
+          "region": "us-west-2",
+          "assumeRoleArn": "arn:${AWS::Partition}:iam::300094796789:role/cdk-hnb659fds-file-publishing-role-300094796789-us-west-2"
+        }
+      }
+    }
+  },
+  "dockerImages": {}
+}

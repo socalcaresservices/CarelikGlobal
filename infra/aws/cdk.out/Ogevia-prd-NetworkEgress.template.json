@@ -1,0 +1,326 @@
+{
+ "Description": "Ogevia prd - Lambda egress without NAT: Secrets Manager interface + S3 gateway endpoints (D-P1-1; not deployed)",
+ "Resources": {
+  "SecretsEndpointSecurityGroup7D4D5733": {
+   "Type": "AWS::EC2::SecurityGroup",
+   "Properties": {
+    "GroupDescription": "Ogevia Secrets Manager endpoint: HTTPS from the SV Lambda AppSecurityGroup only",
+    "SecurityGroupEgress": [
+     {
+      "CidrIp": "255.255.255.255/32",
+      "Description": "Disallow all traffic",
+      "FromPort": 252,
+      "IpProtocol": "icmp",
+      "ToPort": 86
+     }
+    ],
+    "Tags": [
+     {
+      "Key": "environment",
+      "Value": "prd"
+     },
+     {
+      "Key": "managed-by",
+      "Value": "cdk"
+     },
+     {
+      "Key": "ogevia:deployment-status",
+      "Value": "not-approved"
+     },
+     {
+      "Key": "ogevia:ownership",
+      "Value": "cdk-future"
+     },
+     {
+      "Key": "ogevia:planned-phase",
+      "Value": "4"
+     },
+     {
+      "Key": "project",
+      "Value": "ogevia"
+     }
+    ],
+    "VpcId": "vpc-0ee9df0c38297cbc1"
+   },
+   "Metadata": {
+    "aws:cdk:path": "Ogevia-prd-NetworkEgress/SecretsEndpointSecurityGroup/Resource"
+   }
+  },
+  "SecretsEndpointSecurityGroupfromOgeviaprdNetworkEgressExistingProdAppSecurityGroup05877C1B44349EE7B1E": {
+   "Type": "AWS::EC2::SecurityGroupIngress",
+   "Properties": {
+    "Description": "HTTPS from the Service Verification Lambda (AppSecurityGroup)",
+    "FromPort": 443,
+    "GroupId": {
+     "Fn::GetAtt": [
+      "SecretsEndpointSecurityGroup7D4D5733",
+      "GroupId"
+     ]
+    },
+    "IpProtocol": "tcp",
+    "SourceSecurityGroupId": "sg-064ffce3bcbe8eb3b",
+    "ToPort": 443
+   },
+   "Metadata": {
+    "aws:cdk:path": "Ogevia-prd-NetworkEgress/SecretsEndpointSecurityGroup/from OgeviaprdNetworkEgressExistingProdAppSecurityGroup05877C1B:443"
+   }
+  },
+  "SecretsManagerEndpoint5E83C66B": {
+   "Type": "AWS::EC2::VPCEndpoint",
+   "Properties": {
+    "PolicyDocument": {
+     "Statement": [
+      {
+       "Action": "secretsmanager:GetSecretValue",
+       "Condition": {
+        "StringEquals": {
+         "aws:PrincipalAccount": "300094796789"
+        }
+       },
+       "Effect": "Allow",
+       "Principal": {
+        "AWS": "*"
+       },
+       "Resource": "arn:aws:secretsmanager:us-west-2:300094796789:secret:ogevia/database/app-JsOTVQ"
+      }
+     ],
+     "Version": "2012-10-17"
+    },
+    "PrivateDnsEnabled": true,
+    "SecurityGroupIds": [
+     {
+      "Fn::GetAtt": [
+       "SecretsEndpointSecurityGroup7D4D5733",
+       "GroupId"
+      ]
+     }
+    ],
+    "ServiceName": "com.amazonaws.us-west-2.secretsmanager",
+    "SubnetIds": [
+     "subnet-08d40e6ac210b09e5",
+     "subnet-02b96c15c06ac5010"
+    ],
+    "Tags": [
+     {
+      "Key": "environment",
+      "Value": "prd"
+     },
+     {
+      "Key": "managed-by",
+      "Value": "cdk"
+     },
+     {
+      "Key": "ogevia:deployment-status",
+      "Value": "not-approved"
+     },
+     {
+      "Key": "ogevia:ownership",
+      "Value": "cdk-future"
+     },
+     {
+      "Key": "ogevia:planned-phase",
+      "Value": "4"
+     },
+     {
+      "Key": "project",
+      "Value": "ogevia"
+     }
+    ],
+    "VpcEndpointType": "Interface",
+    "VpcId": "vpc-0ee9df0c38297cbc1"
+   },
+   "Metadata": {
+    "aws:cdk:path": "Ogevia-prd-NetworkEgress/SecretsManagerEndpoint/Resource"
+   }
+  },
+  "S3GatewayEndpointE8BAF1BC": {
+   "Type": "AWS::EC2::VPCEndpoint",
+   "Properties": {
+    "PolicyDocument": {
+     "Statement": [
+      {
+       "Action": [
+        "s3:GetObject",
+        "s3:GetObjectVersion",
+        "s3:PutObject"
+       ],
+       "Condition": {
+        "StringEquals": {
+         "aws:PrincipalAccount": "300094796789"
+        }
+       },
+       "Effect": "Allow",
+       "Principal": {
+        "AWS": "*"
+       },
+       "Resource": [
+        "arn:aws:s3:::ogevia-prd-signature-evidence-300094796789-us-west-2/*/*/client-signature.png",
+        "arn:aws:s3:::ogevia-prd-signature-evidence-300094796789-us-west-2/*/branding/logo/*",
+        "arn:aws:s3:::ogevia-prd-signature-evidence-300094796789-us-west-2/*/documents/*/*"
+       ]
+      }
+     ],
+     "Version": "2012-10-17"
+    },
+    "RouteTableIds": [
+     "rtb-0bb8bac7d607a3737",
+     "rtb-049d4448ab6a01e48"
+    ],
+    "ServiceName": {
+     "Fn::Join": [
+      "",
+      [
+       "com.amazonaws.",
+       {
+        "Ref": "AWS::Region"
+       },
+       ".s3"
+      ]
+     ]
+    },
+    "Tags": [
+     {
+      "Key": "environment",
+      "Value": "prd"
+     },
+     {
+      "Key": "managed-by",
+      "Value": "cdk"
+     },
+     {
+      "Key": "ogevia:deployment-status",
+      "Value": "not-approved"
+     },
+     {
+      "Key": "ogevia:ownership",
+      "Value": "cdk-future"
+     },
+     {
+      "Key": "ogevia:planned-phase",
+      "Value": "4"
+     },
+     {
+      "Key": "project",
+      "Value": "ogevia"
+     }
+    ],
+    "VpcEndpointType": "Gateway",
+    "VpcId": "vpc-0ee9df0c38297cbc1"
+   },
+   "Metadata": {
+    "aws:cdk:path": "Ogevia-prd-NetworkEgress/S3GatewayEndpoint/Resource"
+   }
+  },
+  "LambdaEndpoint2E8B9D92": {
+   "Type": "AWS::EC2::VPCEndpoint",
+   "Properties": {
+    "PolicyDocument": {
+     "Statement": [
+      {
+       "Action": "lambda:InvokeFunction",
+       "Condition": {
+        "StringEquals": {
+         "aws:PrincipalAccount": "300094796789"
+        }
+       },
+       "Effect": "Allow",
+       "Principal": {
+        "AWS": "*"
+       },
+       "Resource": "arn:aws:lambda:us-west-2:300094796789:function:Ogevia-prd-IdentityAdmin"
+      }
+     ],
+     "Version": "2012-10-17"
+    },
+    "PrivateDnsEnabled": true,
+    "SecurityGroupIds": [
+     {
+      "Fn::GetAtt": [
+       "SecretsEndpointSecurityGroup7D4D5733",
+       "GroupId"
+      ]
+     }
+    ],
+    "ServiceName": "com.amazonaws.us-west-2.lambda",
+    "SubnetIds": [
+     "subnet-08d40e6ac210b09e5",
+     "subnet-02b96c15c06ac5010"
+    ],
+    "Tags": [
+     {
+      "Key": "environment",
+      "Value": "prd"
+     },
+     {
+      "Key": "managed-by",
+      "Value": "cdk"
+     },
+     {
+      "Key": "ogevia:deployment-status",
+      "Value": "not-approved"
+     },
+     {
+      "Key": "ogevia:ownership",
+      "Value": "cdk-future"
+     },
+     {
+      "Key": "ogevia:planned-phase",
+      "Value": "4"
+     },
+     {
+      "Key": "project",
+      "Value": "ogevia"
+     }
+    ],
+    "VpcEndpointType": "Interface",
+    "VpcId": "vpc-0ee9df0c38297cbc1"
+   },
+   "Metadata": {
+    "aws:cdk:path": "Ogevia-prd-NetworkEgress/LambdaEndpoint/Resource"
+   }
+  },
+  "CDKMetadata": {
+   "Type": "AWS::CDK::Metadata",
+   "Properties": {
+    "Analytics": "v2:deflate64:H4sIAAAAAAAA/32KQQuCQBBGf0v3dYq9dM9CvIWC1xh3x1itWdnZTUT87yFBdAoefLyPp0EfNRx2OElm7JA9XAtLHdEMqiLxKRhSOMltCVbgjBFbFCpZIrKhEwopMhqWmkwKLs5F8GlUecf/j5LvgURUyZFCh4aa0VzYjt5x3OLmmn+1wEgTzj/Fuq6KvSXoZf/SGjZ2vTiXhcTRPQmqz74BearTe90AAAA="
+   },
+   "Metadata": {
+    "aws:cdk:path": "Ogevia-prd-NetworkEgress/CDKMetadata/Default"
+   }
+  }
+ },
+ "Parameters": {
+  "BootstrapVersion": {
+   "Type": "AWS::SSM::Parameter::Value<String>",
+   "Default": "/cdk-bootstrap/hnb659fds/version",
+   "Description": "Version of the CDK Bootstrap resources in this environment, automatically retrieved from SSM Parameter Store. [cdk:skip]"
+  }
+ },
+ "Rules": {
+  "CheckBootstrapVersion": {
+   "Assertions": [
+    {
+     "Assert": {
+      "Fn::Not": [
+       {
+        "Fn::Contains": [
+         [
+          "1",
+          "2",
+          "3",
+          "4",
+          "5"
+         ],
+         {
+          "Ref": "BootstrapVersion"
+         }
+        ]
+       }
+      ]
+     },
+     "AssertDescription": "CDK bootstrap stack version 6 required. Please run 'cdk bootstrap' with a recent version of the CDK CLI."
+    }
+   ]
+  }
+ }
+}

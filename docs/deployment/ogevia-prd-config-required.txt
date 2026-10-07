@@ -1,0 +1,107 @@
+OGEVIA PRODUCTION (PRD) ENVIRONMENT - REQUIRED CONFIGURATION
+============================================================
+
+AWS ACCOUNT: 300094796789
+REGION: us-west-2
+STAGE: prd
+
+===== SECRETS MANAGER (create with -prd suffix) =====
+
+1. ogevia/database/app-prd
+   - Required for: Lambda API database access
+   - Contains: {
+       "username": "<db_user>",
+       "password": "<db_pass>",
+       "engine": "postgres",
+       "host": "<ogevia-prd-postgres.*.rds.amazonaws.com>",
+       "port": 5432,
+       "dbname": "ogevia_prd"
+     }
+   - Access: Lambda assumes role with SecretManagerRead policy
+
+2. rds!db-<uuid>-prd  (RDS master secret - auto-managed)
+   - Created automatically by RDS when database is created
+   - DO NOT modify, AWS manages this
+
+===== COGNITO (create new app client) =====
+
+3. Cognito User Pool: Create new or reuse us-west-2_849AYz5J7
+   
+4. Cognito App Client (new, for prd frontend)
+   - Name: ogevia-prd-web
+   - Type: Public
+   - Auth flow: Authorization code + PKCE
+   - Allowed callback URLs:
+     * https://app.ogevia.com/auth/callback
+     * http://localhost:5173/auth/callback (dev only)
+   - Allowed logout URLs:
+     * https://app.ogevia.com/
+     * http://localhost:5173/ (dev only)
+   - Generate: Copy Client ID for VITE_COGNITO_CLIENT_ID
+
+===== ENVIRONMENT VARIABLES (Frontend - VITE_*) =====
+
+For apps/web/.env.production:
+
+VITE_AUTH_PROVIDER=cognito
+VITE_COGNITO_REGION=us-west-2
+VITE_COGNITO_USER_POOL_ID=us-west-2_849AYz5J7          # (from Cognito)
+VITE_COGNITO_CLIENT_ID=<from Cognito App Client>       # REQUIRED - create
+VITE_COGNITO_DOMAIN=https://us-west-2849ayz5j7.auth.us-west-2.amazoncognito.com
+VITE_COGNITO_REDIRECT_URI=https://app.ogevia.com/auth/callback
+VITE_COGNITO_LOGOUT_URI=https://app.ogevia.com/
+VITE_COGNITO_REFRESH_PERSISTENCE=session
+VITE_SV_API_BASE_URL=https://<api-id>.execute-api.us-west-2.amazonaws.com  # (from CDK deploy)
+
+===== ENVIRONMENT VARIABLES (Backend - Netlify Functions) =====
+
+Netlify Environment Variables (Site settings → Environment variables):
+
+STRIPE_SECRET_KEY=sk_live_...                          # From Stripe Dashboard
+STRIPE_STARTER_PRICE_ID=price_...                      # From Stripe Dashboard
+STRIPE_WEBHOOK_SECRET=whsec_...                        # From Stripe Webhook
+APP_URL=https://app.ogevia.com
+SUPABASE_URL=https://<project>.supabase.co
+SUPABASE_PUBLISHABLE_KEY=eyJhbGc...                    # From Supabase project
+SUPABASE_SECRET_KEY=eyJhbGc...                         # From Supabase project
+
+===== ENVIRONMENT VARIABLES (CDK/Deployment) =====
+
+For CDK deployment (infra/aws):
+
+AWS_PROFILE=default                                     # or assume role
+AWS_REGION=us-west-2
+CDK_DEFAULT_ACCOUNT=300094796789
+
+===== DEPLOYMENT CHECKLIST =====
+
+Before `cdk deploy` for prd:
+
+[ ] RDS database created: ogevia-prd-postgres
+    - Engine: PostgreSQL 15+
+    - Instance: db.t3.micro (pilot) → db.t3.small (prd recommended)
+    - Encrypted: true
+    - BackupRetentionPeriod: 30 days
+    - MultiAZ: true (or false for non-prod)
+    - DeletionProtection: true
+    
+[ ] KMS key created for encryption (optional, uses AWS-managed if not specified)
+
+[ ] Secrets Manager secrets created with -prd suffix:
+    [ ] ogevia/database/app-prd
+    [ ] rds!db-<uuid>-prd (auto-created by RDS)
+
+[ ] Cognito app client created:
+    [ ] Client ID noted
+    [ ] Callback URLs configured
+    [ ] Logout URLs configured
+
+[ ] Environment variables set in:
+    [ ] infra/aws/lib/config.ts (Cognito IDs, endpoints)
+    [ ] apps/web/.env.production (VITE_* variables)
+    [ ] Netlify site settings (STRIPE_*, SUPABASE_*, APP_URL)
+
+[ ] CDK synth successful: `pnpm cdk synth -c env=prd -c mode=plan`
+
+[ ] Ready for deployment: `pnpm cdk deploy -c env=prd --all`
+
