@@ -1,0 +1,3 @@
+cdk.synth.out/
+node_modules/
+cdk.context.json

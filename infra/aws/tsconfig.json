@@ -1,0 +1,12 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "lib": ["ES2022"],
+    "types": ["node"],
+    "jsx": "preserve",
+    "module": "ESNext",
+    "moduleResolution": "Bundler"
+  },
+  "include": ["bin", "lib", "test", "lambda"],
+  "exclude": ["cdk.out", "cdk.synth.out", "legacy-cdk-out", "node_modules"]
+}
