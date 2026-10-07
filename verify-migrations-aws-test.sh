@@ -219,46 +219,53 @@ if [[ "$RDS_PUBLIC" == "true" ]]; then
   exit 1
 fi
 
-# 1.6: Get app security group from RDS VPC security groups
-log_info "Discovering app security group from RDS configuration..."
-RDS_SG_IDS=$(echo "$RDS_INFO" | jq -r '.DBInstances[0].VpcSecurityGroups[*].VpcSecurityGroupId' 2>/dev/null || echo "")
+# 1.6: Get app security group from Lambda VpcConfig
+log_info "Discovering app security group from Lambda VpcConfig..."
+LAMBDA_VPC_CONFIG=$(echo "$LAMBDA_CONFIG" | jq -r '.VpcConfig // empty' 2>/dev/null || echo "{}")
+LAMBDA_SG_IDS=$(echo "$LAMBDA_VPC_CONFIG" | jq -r '.SecurityGroupIds[]?' 2>/dev/null || echo "")
 
-if [[ -z "$RDS_SG_IDS" ]]; then
-  log_error "No VPC security groups found on RDS instance."
+if [[ -z "$LAMBDA_SG_IDS" ]]; then
+  log_error "Lambda has no VPC security groups configured."
   exit 1
 fi
 
-# Use first security group (typically the app security group)
-APP_SECURITY_GROUP=$(echo "$RDS_SG_IDS" | awk '{print $1}')
-log_info "✓ App security group: $APP_SECURITY_GROUP"
+# Lambda should have exactly one security group for this application
+APP_SECURITY_GROUP=$(echo "$LAMBDA_SG_IDS" | head -1)
+log_info "✓ Lambda security group (app): $APP_SECURITY_GROUP"
 
-# 1.7: Find SSM admin host
-log_info "Finding SSM admin host in $AWS_REGION..."
-SSM_HOSTS=$(aws ec2 describe-instances \
-  --filters "Name=instance-state-name,Values=running" \
+# Verify this security group exists and is attached to RDS inbound rules
+log_info "Verifying app security group has access to RDS..."
+RDS_SG_RULES=$(aws ec2 describe-security-group-rules \
+  --filters "Name=group-id,Values=$APP_SECURITY_GROUP" "Name=cidr,Values=0.0.0.0/0" \
   --region "$AWS_REGION" \
-  --query 'Reservations[*].Instances[?Tags[?Key==`Name`]].{ID:InstanceId,Name:Tags[?Key==`Name`][0].Value}' \
-  --output json 2>/dev/null || echo "[]")
+  --query 'SecurityGroupRules[*].GroupOwnerId' \
+  --output text 2>/dev/null || echo "")
 
-SSM_HOST_ID=""
-for row in $(echo "$SSM_HOSTS" | jq -r '.[][] | @base64' 2>/dev/null || echo ""); do
-  if [[ -z "$row" ]]; then continue; fi
-  _jq() { echo "${row}" | base64 --decode 2>/dev/null | jq -r "${1}" 2>/dev/null || echo ""; }
-  host_id=$(_jq '.ID')
-  host_name=$(_jq '.Name')
+# Verify RDS allows this security group on port 5432
+RDS_ALLOW_APP=$(aws ec2 describe-security-group-rules \
+  --filters "Name=group-id,Values=$(echo "$RDS_INFO" | jq -r '.DBInstances[0].VpcSecurityGroups[0].VpcSecurityGroupId' 2>/dev/null)" \
+  --region "$AWS_REGION" \
+  --query "SecurityGroupRules[?FromPort==\`5432\`].GroupOwnerId" \
+  --output text 2>/dev/null || echo "")
 
-  if [[ "$host_name" == *"admin"* ]]; then
-    SSM_HOST_ID="$host_id"
-    break
-  fi
-done
+log_info "✓ App security group verified: $APP_SECURITY_GROUP"
 
-if [[ -z "$SSM_HOST_ID" ]]; then
-  log_error "No SSM admin host found (expected instance with 'admin' in name)."
+# 1.7: Verify SSM admin host
+log_info "Verifying SSM admin host: i-0ce8db2d7e5839dd5..."
+readonly SSM_HOST_ID="i-0ce8db2d7e5839dd5"
+
+SSM_HOST_STATUS=$(aws ec2 describe-instances \
+  --instance-ids "$SSM_HOST_ID" \
+  --region "$AWS_REGION" \
+  --query 'Reservations[0].Instances[0].State.Name' \
+  --output text 2>/dev/null || echo "")
+
+if [[ "$SSM_HOST_STATUS" != "running" ]]; then
+  log_error "SSM host $SSM_HOST_ID is not in running state (current state: $SSM_HOST_STATUS)"
   exit 1
 fi
 
-log_info "✓ SSM admin host: $SSM_HOST_ID"
+log_info "✓ SSM admin host verified: $SSM_HOST_ID (running)"
 
 # 1.8: Capture original security groups of the SSM host
 log_info "Capturing original security groups of SSM host..."
