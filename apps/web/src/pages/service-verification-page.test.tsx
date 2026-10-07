@@ -239,7 +239,6 @@ describe("ServiceVerificationPage v3", () => {
         target_organization_id: ORG_ID,
         target_client_id: CLIENT_ID,
         target_service_id: SERVICE_ID,
-        scheduled_shift_id: null,
         visit_task_categories: [],
         visit_service_notes: null,
       }),

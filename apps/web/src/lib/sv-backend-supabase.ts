@@ -18,6 +18,11 @@ import {
   type VisitResult,
 } from "@/lib/sv-backend";
 
+// PostgREST PGRST202 / Postgres 42883: the function (or this argument list) does not exist.
+function isMissingFunction(error: { code?: string } | null): boolean {
+  return error?.code === "PGRST202" || error?.code === "42883";
+}
+
 export const supabaseServiceVerificationBackend: ServiceVerificationBackend = {
   kind: "supabase",
   async getActiveVisit(organizationId) {
@@ -39,11 +44,14 @@ export const supabaseServiceVerificationBackend: ServiceVerificationBackend = {
     return (data ?? []) as AuthorizedService[];
   },
   async startVisit({ organizationId, clientId, serviceId, scheduledShiftId }) {
+    // scheduled_shift_id exists only after 20260828_visit_verification_redesign is applied.
+    // Send it only when a shift was chosen so the call also matches the older signature
+    // (without it) that production had when this was written.
     const { data, error } = await supabase.rpc("start_ad_hoc_service_visit", {
       target_organization_id: organizationId,
       target_client_id: clientId,
       target_service_id: serviceId,
-      scheduled_shift_id: scheduledShiftId ?? null,
+      ...(scheduledShiftId ? { scheduled_shift_id: scheduledShiftId } : {}),
       visit_task_categories: [],
       visit_service_notes: null,
     });
@@ -55,6 +63,8 @@ export const supabaseServiceVerificationBackend: ServiceVerificationBackend = {
       target_organization_id: organizationId,
       target_client_id: clientId,
     });
+    // Database without the redesign migration: no shift picker; the server links the shift itself.
+    if (isMissingFunction(error)) return [];
     if (error) throw error;
     return (data ?? []) as ScheduledShift[];
   },
