@@ -397,15 +397,23 @@ export function ServiceVerificationReportsPage() {
   const environmentMarker = useEnvironmentMarker();
   const viewFromUrl = new URLSearchParams(location.search).get("view");
   const defaultView: ReportView = backend.kind === "aws" ? "visits" : "overview";
+  // Monthly hours & billing and Correction history read data only the AWS back end provides.
+  // Offering them on another back end would show an empty report that looks like "no records".
+  const viewAvailable = (view: string | null): view is ReportView =>
+    REPORT_VIEWS.includes(view as ReportView) &&
+    (view !== "reconciliation" || !!backend.listMonthlyServiceSummary) &&
+    (view !== "corrections" || !!backend.listCorrectionHistoryReport);
   const [reportView, setReportView] = useState<ReportView>(() =>
-    REPORT_VIEWS.includes(viewFromUrl as ReportView) ? (viewFromUrl as ReportView) : defaultView,
+    viewAvailable(viewFromUrl) ? viewFromUrl : defaultView,
   );
   // Navigation changes the open page too: a link to ?view=... (for example
   // NEEDS ATTENTION) opens that view, and the plain address (the "Visit
   // records" menu item) returns to the default. Choosing from the Report
   // dropdown does not change the address, so it is not overridden.
   useEffect(() => {
-    setReportView(REPORT_VIEWS.includes(viewFromUrl as ReportView) ? (viewFromUrl as ReportView) : defaultView);
+    setReportView(viewAvailable(viewFromUrl) ? viewFromUrl : defaultView);
+    // viewAvailable only reads the back end, which defaultView already tracks.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [viewFromUrl, defaultView]);
   const narrow = useIsNarrow();
   const [linkCopied, setLinkCopied] = useState(false);
@@ -1260,8 +1268,8 @@ export function ServiceVerificationReportsPage() {
               <option value="overview">Visits overview</option>
               <option value="caregiver">Caregiver hours</option>
               <option value="calendar">Client monthly calendar</option>
-              <option value="reconciliation">Monthly hours & billing</option>
-              <option value="corrections">Correction history</option>
+              {viewAvailable("reconciliation") ? <option value="reconciliation">Monthly hours & billing</option> : null}
+              {viewAvailable("corrections") ? <option value="corrections">Correction history</option> : null}
               {canManage ? <option value="staff-access">Staff access</option> : null}
             </select>
           </div>

@@ -468,6 +468,50 @@ describe("ServiceVerificationReportsPage", () => {
     expect(within(table).getByText("Time Out entered by manager")).toBeInTheDocument();
   });
 
+  it("does not offer the AWS-only reports on the Supabase back end, even from a link", async () => {
+    allowEverything();
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    render(
+      <MemoryRouter initialEntries={["/service-verification/reports?view=corrections"]}>
+        <QueryClientProvider client={queryClient}>
+          <ServiceVerificationReportsPage />
+        </QueryClientProvider>
+      </MemoryRouter>,
+    );
+    await screen.findByRole("option", { name: "Visits overview" });
+    expect(screen.queryByRole("option", { name: "Monthly hours & billing" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("option", { name: "Correction history" })).not.toBeInTheDocument();
+    // A saved link to a view this back end cannot supply opens the default view, not an empty report.
+    expect(screen.getByLabelText("Report")).toHaveValue("overview");
+    expect(screen.queryByText("No corrections match these filters.")).not.toBeInTheDocument();
+  });
+
+  it("offers Monthly hours & billing and Correction history when the back end supplies them", async () => {
+    allowEverything();
+    const backend = {
+      kind: "aws",
+      listVisits: vi.fn().mockResolvedValue([]),
+      getLetterhead: vi.fn().mockResolvedValue({ legal_name: "Acme Care LLC", display_name: "Acme Care" }),
+      listClientLocations: vi.fn().mockResolvedValue([]),
+      listCorrections: vi.fn().mockResolvedValue([]),
+      listMonthlyServiceSummary: vi.fn().mockResolvedValue([]),
+      listCorrectionHistoryReport: vi.fn().mockResolvedValue([]),
+    } as unknown as ServiceVerificationBackend;
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    render(
+      <MemoryRouter initialEntries={["/service-verification/reports?view=corrections"]}>
+        <QueryClientProvider client={queryClient}>
+          <ServiceVerificationBackendContext.Provider value={backend}>
+            <ServiceVerificationReportsPage />
+          </ServiceVerificationBackendContext.Provider>
+        </QueryClientProvider>
+      </MemoryRouter>,
+    );
+    expect(await screen.findByRole("option", { name: "Monthly hours & billing" })).toBeInTheDocument();
+    expect(screen.getByRole("option", { name: "Correction history" })).toBeInTheDocument();
+    expect(screen.getByLabelText("Report")).toHaveValue("corrections");
+  });
+
   it("shows scheduled (reserved) time and what is left to schedule in the monthly reconciliation", async () => {
     mockedUseOrganization.mockReturnValue({
       activeOrganizationId: ORG_ID,
