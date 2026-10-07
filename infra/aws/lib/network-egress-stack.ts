@@ -2,7 +2,7 @@ import { Stack, type StackProps } from "aws-cdk-lib";
 import * as ec2 from "aws-cdk-lib/aws-ec2";
 import * as iam from "aws-cdk-lib/aws-iam";
 import { Construct } from "constructs";
-import { ENVIRONMENTS, type OgeviaEnvironmentConfig } from "./config.js";
+import { ENVIRONMENTS, secretArnPattern, type OgeviaEnvironmentConfig } from "./config.js";
 import { DOCUMENT_OBJECT_KEY_PATTERN, LOGO_OBJECT_KEY_PATTERN, SIGNATURE_OBJECT_KEY_PATTERN, signatureBucketName } from "./evidence-storage-stack.js";
 import { ExistingFoundation } from "./existing-foundation.js";
 import { identityFunctionName } from "./service-verification-api-stack.js";
@@ -35,11 +35,6 @@ export interface NetworkEgressStackProps extends StackProps {
  */
 export function sharingPeers(config: OgeviaEnvironmentConfig): OgeviaEnvironmentConfig[] {
   return Object.values(ENVIRONMENTS).filter((e) => e.egress.sharedWith === config.envName);
-}
-
-/** Secret ARN pattern (Secrets Manager appends "-" + 6 random characters). */
-export function secretArnPattern(config: OgeviaEnvironmentConfig): string {
-  return `arn:aws:secretsmanager:${config.region}:${config.account}:secret:${config.database.appSecretName}-??????`;
 }
 
 export class NetworkEgressStack extends Stack {

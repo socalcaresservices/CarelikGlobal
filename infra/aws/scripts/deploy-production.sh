@@ -24,9 +24,9 @@
 #   web       (separate) build + publish the frontend for the prd API [mutates]
 #
 # The database is fully prepared BEFORE the API stack exists; nothing serves
-# traffic from an unprepared database. The pilot (Ogevia-prod-*, ogevia_sv_test)
+# traffic from an unprepared database. The pilot (Ogevia-prod-*, the test database)
 # is never repointed. Secret VALUES are read only into this shell's memory and
-# are never printed, logged, or written to disk. No `set -x`.
+# are never printed, logged, or written to disk. Shell tracing is never enabled.
 # =============================================================================
 set -euo pipefail
 set +x
@@ -204,7 +204,7 @@ do_database() {
 
   STEP="database:migrate"
   # The SAME runner and folder as the test slice: db/scripts/migrate.ts over
-  # db/migrations (36 files; ledger ogevia_meta.schema_migrations; checksum drift
+  # db/migrations (38 files, 0001-0038; ledger ogevia_meta.schema_migrations; checksum drift
   # refuses; reruns apply nothing).
   OGEVIA_ALLOW_REMOTE_MIGRATION=approved-by-owner OGEVIA_DATABASE_URL="$(url_of "$DB_NAME")" \
     npx --no-install --prefix "$HERE" tsx "$HERE/db/scripts/migrate.ts"

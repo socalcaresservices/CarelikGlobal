@@ -246,3 +246,15 @@ describe("opaque-token care links (public routes)", () => {
     expect(JSON.stringify(logs)).not.toContain(sha);
   });
 });
+
+describe("production (OGEVIA_ENV=prd) fails closed on the database name", () => {
+  it("requires DB_NAME=ogevia_prd; a missing, test or other name stops cold start", () => {
+    expect(loadConfig({ ...ENV, OGEVIA_ENV: "prd", DB_NAME: "ogevia_prd" }).dbName).toBe("ogevia_prd");
+    for (const DB_NAME of [undefined, "", "ogevia_sv_test", "postgres"]) {
+      expect(() => loadConfig({ ...ENV, OGEVIA_ENV: "prd", DB_NAME })).toThrow(ConfigError);
+    }
+  });
+  it("leaves the pilot environment unchanged", () => {
+    expect(loadConfig({ ...ENV, OGEVIA_ENV: "prod", DB_NAME: "ogevia_sv_test" }).dbName).toBe("ogevia_sv_test");
+  });
+});

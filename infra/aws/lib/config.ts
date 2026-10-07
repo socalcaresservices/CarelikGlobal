@@ -265,6 +265,11 @@ export const ENVIRONMENTS: Record<OgeviaEnvName, OgeviaEnvironmentConfig> = {
   prd: PRD,
 };
 
+/** Secret ARN pattern (Secrets Manager appends "-" + 6 random characters). */
+export function secretArnPattern(config: OgeviaEnvironmentConfig): string {
+  return `arn:aws:secretsmanager:${config.region}:${config.account}:secret:${config.database.appSecretName}-??????`;
+}
+
 /**
  * Fails closed on any production database misconfiguration. Production must
  * name ogevia_prd, a dedicated login and a dedicated secret, and must never

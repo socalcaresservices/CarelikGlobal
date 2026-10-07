@@ -60,11 +60,11 @@ beforeAll(async () => {
 afterAll(dropAll);
 
 describe("production deployment SQL (runbook order)", () => {
-  it("uses the existing migration folder and runner: exactly the repository's 36 files", () => {
+  it("uses the existing migration folder and runner: exactly the repository's 38 files", () => {
     const all = loadMigrations();
-    expect(all).toHaveLength(36);
+    expect(all).toHaveLength(38);
     expect(all[0]!.name).toBe("0001_roles_schemas_extensions.sql");
-    expect(all[35]!.name).toBe("0036_signature_recovery.sql");
+    expect(all[37]!.name).toBe("0038_org_letterhead_contact.sql");
   });
 
   it("10 creates ogevia_prd, idempotently, and never touches an existing database", async () => {
@@ -79,10 +79,10 @@ describe("production deployment SQL (runbook order)", () => {
 
   it("migrations apply with the existing runner, and a rerun applies nothing", async () => {
     const first = await admin(PRD, (c) => migrate(c));
-    expect(first.applied).toHaveLength(36);
+    expect(first.applied).toHaveLength(38);
     const second = await admin(PRD, (c) => migrate(c));
     expect(second.applied).toHaveLength(0);
-    expect(second.alreadyApplied).toHaveLength(36);
+    expect(second.alreadyApplied).toHaveLength(38);
   });
 
   it("11 creates the dedicated login with only ogevia_app membership and CONNECT; idempotent", async () => {
