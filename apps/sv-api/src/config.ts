@@ -4,6 +4,8 @@
  * instead of running with a partial security configuration.
  */
 export interface ApiConfig {
+  /** OGEVIA_ENV: "prd" is production and fails closed on the database name. */
+  readonly environment: string | undefined;
   readonly region: string;
   readonly userPoolId: string;
   readonly appClientIds: readonly string[];
@@ -51,6 +53,13 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
   if (!dbSecretArn.startsWith("arn:aws:secretsmanager:")) throw new ConfigError("DB_SECRET_ARN is malformed");
   const dbName = env.DB_NAME?.trim() || undefined;
   if (dbName && !/^[a-z_][a-z0-9_]{0,62}$/.test(dbName)) throw new ConfigError("DB_NAME is malformed");
+  const environment = env.OGEVIA_ENV?.trim() || undefined;
+  // Production never guesses its database: DB_NAME must be exactly ogevia_prd, so
+  // a missing or test-slice value stops cold start instead of serving real data
+  // from (or writing it to) the wrong database.
+  if (environment === "prd" && dbName !== "ogevia_prd") {
+    throw new ConfigError("OGEVIA_ENV=prd requires DB_NAME=ogevia_prd");
+  }
   const dbSetRole = env.DB_SET_ROLE?.trim() || undefined;
   if (dbSetRole && !/^[a-z_][a-z0-9_]*$/.test(dbSetRole)) throw new ConfigError("DB_SET_ROLE is malformed");
   const evidenceKeyArn = required(env, "EVIDENCE_KEY_ARN");
@@ -58,6 +67,7 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
   const identityFunctionName = env.IDENTITY_FUNCTION_NAME?.trim() || undefined;
   if (identityFunctionName && !/^[A-Za-z0-9-_]{1,64}$/.test(identityFunctionName)) throw new ConfigError("IDENTITY_FUNCTION_NAME is malformed");
   return {
+    environment,
     region,
     identityFunctionName,
     userPoolId,

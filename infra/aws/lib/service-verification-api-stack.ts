@@ -12,6 +12,7 @@ import { HttpJwtAuthorizer } from "aws-cdk-lib/aws-apigatewayv2-authorizers";
 import { HttpLambdaIntegration } from "aws-cdk-lib/aws-apigatewayv2-integrations";
 import * as iam from "aws-cdk-lib/aws-iam";
 import type * as kms from "aws-cdk-lib/aws-kms";
+import type * as secretsmanager from "aws-cdk-lib/aws-secretsmanager";
 import * as lambda from "aws-cdk-lib/aws-lambda";
 import * as nodejs from "aws-cdk-lib/aws-lambda-nodejs";
 import * as logs from "aws-cdk-lib/aws-logs";
@@ -20,7 +21,7 @@ import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { cognitoIssuer } from "./auth-contract.js";
 import { APPROVED_PUBLIC_ROUTE_KEYS, PUBLIC_ROUTE_ACKNOWLEDGEMENT } from "./public-routes.js";
-import { assertVerified, type OgeviaEnvironmentConfig } from "./config.js";
+import { assertDatabaseConfig, assertVerified, type OgeviaEnvironmentConfig } from "./config.js";
 import {
   SIGNATURE_OBJECT_KEY_PATTERN,
   signatureBucketName,
@@ -36,6 +37,13 @@ export interface ServiceVerificationApiStackProps extends StackProps {
   readonly extraAllowedOrigins?: readonly string[];
   /** Extra approved app clients (e.g. the test-slice client) for the JWT audience. */
   readonly extraAppClientIds?: readonly string[];
+  /**
+   * The application database secret this API reads. Production passes the secret
+   * created by DatabaseSecretStack. Omitted ONLY for the pilot/test slice, which
+   * keeps using the existing manually created secret; production never falls
+   * back to it (enforced below).
+   */
+  readonly appDatabaseSecret?: secretsmanager.ISecret;
 }
 
 const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "../../..");
@@ -263,7 +271,12 @@ export class ServiceVerificationApiStack extends Stack {
     const documentObjectsArn = `arn:aws:s3:::${evidenceBucketName}/${DOCUMENT_OBJECT_KEY_PATTERN}`;
     const logoObjectsArn = `arn:aws:s3:::${evidenceBucketName}/${LOGO_OBJECT_KEY_PATTERN}`;
     assertVerified(config.auth, "API auth contract");
+    assertDatabaseConfig(config);
     const existing = new ExistingFoundation(this, "Existing", config.existing);
+    if (config.database.purpose === "production" && !props.appDatabaseSecret) {
+      throw new Error("Production API requires its dedicated database secret; it never falls back to the test slice's");
+    }
+    const appDatabaseSecret = props.appDatabaseSecret ?? existing.appDatabaseSecret;
 
     this.handlerLogGroup = new logs.LogGroup(this, "HandlerLogGroup", {
       retention: config.logRetention,
@@ -311,7 +324,7 @@ export class ServiceVerificationApiStack extends Stack {
       new iam.PolicyStatement({
         sid: "ReadAppDatabaseSecret",
         actions: ["secretsmanager:GetSecretValue"],
-        resources: [existing.appDatabaseSecret.secretArn],
+        resources: [appDatabaseSecret.secretArn],
       }),
     );
     policy.addStatements(
@@ -440,13 +453,15 @@ export class ServiceVerificationApiStack extends Stack {
         OGEVIA_ENV: config.envName,
         DB_HOST: existing.prodDatabase.dbInstanceEndpointAddress,
         DB_PORT: existing.prodDatabase.dbInstanceEndpointPort,
-        DB_SECRET_ARN: existing.appDatabaseSecret.secretArn,
+        DB_SECRET_ARN: appDatabaseSecret.secretArn,
         EVIDENCE_BUCKET: evidenceBucketName,
         EVIDENCE_KEY_ARN: props.evidenceKey.keyArn,
         COGNITO_USER_POOL_ID: existing.userPool.userPoolId,
         COGNITO_APP_CLIENT_ID: [config.auth.appClientId, ...(props.extraAppClientIds ?? [])].join(","),
         LOG_LEVEL: "info",
-        DB_NAME: config.testSlice.databaseName,
+        // The ONLY source of the database name (config.database.name): ogevia_sv_test
+        // for env=prod, ogevia_prd for env=prd. Never set by hand outside CDK.
+        DB_NAME: config.database.name,
         // The secret's login user is granted ogevia_app; every request also
         // SET LOCAL ROLEs to it (no table privileges, EXECUTE on ogevia_api only).
         DB_SET_ROLE: "ogevia_app",

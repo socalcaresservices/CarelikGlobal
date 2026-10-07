@@ -103,7 +103,7 @@ export class WebHostingStack extends Stack {
     });
 
     this.distribution = new cloudfront.Distribution(this, "WebDistribution", {
-      comment: `Ogevia ${config.envName} web (test slice)`,
+      comment: config.database.purpose === "production" ? `Ogevia ${config.envName} web` : `Ogevia ${config.envName} web (test slice)`,
       defaultRootObject: "index.html",
       priceClass: cloudfront.PriceClass.PRICE_CLASS_100,
       httpVersion: cloudfront.HttpVersion.HTTP2_AND_3,
@@ -131,7 +131,8 @@ export class WebHostingStack extends Stack {
 
     this.testAppClient = new cognito.CfnUserPoolClient(this, "TestSliceAppClient", {
       userPoolId: config.existing.cognitoUserPoolId,
-      clientName: `ogevia-web-${config.envName}-test-slice`,
+      // env=prod keeps its deployed name; production is not a test slice.
+      clientName: config.database.purpose === "production" ? `ogevia-web-${config.envName}` : `ogevia-web-${config.envName}-test-slice`,
       generateSecret: false,
       allowedOAuthFlowsUserPoolClient: true,
       allowedOAuthFlows: ["code"],

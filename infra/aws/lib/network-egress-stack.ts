@@ -2,7 +2,7 @@ import { Stack, type StackProps } from "aws-cdk-lib";
 import * as ec2 from "aws-cdk-lib/aws-ec2";
 import * as iam from "aws-cdk-lib/aws-iam";
 import { Construct } from "constructs";
-import type { OgeviaEnvironmentConfig } from "./config.js";
+import { ENVIRONMENTS, type OgeviaEnvironmentConfig } from "./config.js";
 import { DOCUMENT_OBJECT_KEY_PATTERN, LOGO_OBJECT_KEY_PATTERN, SIGNATURE_OBJECT_KEY_PATTERN, signatureBucketName } from "./evidence-storage-stack.js";
 import { ExistingFoundation } from "./existing-foundation.js";
 import { identityFunctionName } from "./service-verification-api-stack.js";
@@ -28,6 +28,20 @@ export interface NetworkEgressStackProps extends StackProps {
  *
  * NOT DEPLOYED. Part of the single consolidated deployment approval.
  */
+/**
+ * Environments whose Lambdas use THIS environment's endpoints
+ * (egress.sharedWith === this env). Their secret, evidence bucket and identity
+ * function are admitted additively by the endpoint policies below.
+ */
+export function sharingPeers(config: OgeviaEnvironmentConfig): OgeviaEnvironmentConfig[] {
+  return Object.values(ENVIRONMENTS).filter((e) => e.egress.sharedWith === config.envName);
+}
+
+/** Secret ARN pattern (Secrets Manager appends "-" + 6 random characters). */
+export function secretArnPattern(config: OgeviaEnvironmentConfig): string {
+  return `arn:aws:secretsmanager:${config.region}:${config.account}:secret:${config.database.appSecretName}-??????`;
+}
+
 export class NetworkEgressStack extends Stack {
   public readonly secretsManagerEndpoint: ec2.InterfaceVpcEndpoint;
   public readonly s3GatewayEndpoint: ec2.GatewayVpcEndpoint;
@@ -44,6 +58,7 @@ export class NetworkEgressStack extends Stack {
       throw new Error(`egress.secretsEndpointAzCount must be 1..${privateSubnets.length}`);
     }
 
+    const peers = sharingPeers(config);
     this.endpointSecurityGroup = new ec2.SecurityGroup(this, "SecretsEndpointSecurityGroup", {
       vpc: existing.vpc,
       description: "Ogevia Secrets Manager endpoint: HTTPS from the SV Lambda AppSecurityGroup only",
@@ -68,7 +83,7 @@ export class NetworkEgressStack extends Stack {
       new iam.PolicyStatement({
         principals: [new iam.AnyPrincipal()],
         actions: ["secretsmanager:GetSecretValue"],
-        resources: [config.existing.appDatabaseSecretArn],
+        resources: [config.existing.appDatabaseSecretArn, ...peers.map(secretArnPattern)],
         conditions: { StringEquals: { "aws:PrincipalAccount": config.account } },
       }),
     );
@@ -84,8 +99,9 @@ export class NetworkEgressStack extends Stack {
         actions: ["s3:GetObject", "s3:GetObjectVersion", "s3:PutObject"],
         // Signatures, staff documents (0021) and the agency logo (0020): the API
         // role allows exactly these three key shapes, so the endpoint must too.
-        resources: [SIGNATURE_OBJECT_KEY_PATTERN, DOCUMENT_OBJECT_KEY_PATTERN, LOGO_OBJECT_KEY_PATTERN]
-          .map((pattern) => `arn:aws:s3:::${signatureBucketName(config)}/${pattern}`),
+        resources: [config, ...peers].flatMap((env) =>
+          [SIGNATURE_OBJECT_KEY_PATTERN, DOCUMENT_OBJECT_KEY_PATTERN, LOGO_OBJECT_KEY_PATTERN]
+            .map((pattern) => `arn:aws:s3:::${signatureBucketName(env)}/${pattern}`)),
         conditions: { StringEquals: { "aws:PrincipalAccount": config.account } },
       }),
     );
@@ -107,7 +123,7 @@ export class NetworkEgressStack extends Stack {
       new iam.PolicyStatement({
         principals: [new iam.AnyPrincipal()],
         actions: ["lambda:InvokeFunction"],
-        resources: [`arn:aws:lambda:${config.region}:${config.account}:function:${identityFunctionName(config)}`],
+        resources: [config, ...peers].map((env) => `arn:aws:lambda:${config.region}:${config.account}:function:${identityFunctionName(env)}`),
         conditions: { StringEquals: { "aws:PrincipalAccount": config.account } },
       }),
     );

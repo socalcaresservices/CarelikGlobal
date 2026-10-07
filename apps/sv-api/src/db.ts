@@ -42,6 +42,10 @@ export function secretsManagerPool(config: ApiConfig, secrets: SecretsManagerCli
     const result = await secrets.send(new GetSecretValueCommand({ SecretId: config.dbSecretArn }));
     const secret = parseSecret(result.SecretString);
     const database = config.dbName ?? secret.dbname;
+    // Production: the credential must itself name the database CDK configured.
+    if (config.environment === "prd" && secret.dbname !== database) {
+      throw new Error("Production database secret does not name the configured database");
+    }
     if (!database) throw new Error("No database name: set DB_NAME or add dbname to the secret");
     const p = new pg.Pool({
       host: config.dbHost,

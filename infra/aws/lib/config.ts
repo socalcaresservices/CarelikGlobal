@@ -17,7 +17,17 @@ import { RetentionDays } from "aws-cdk-lib/aws-logs";
 export const OGEVIA_ACCOUNT = "300094796789";
 export const OGEVIA_REGION = "us-west-2";
 
-export type OgeviaEnvName = "prod";
+/**
+ * "prod"  - the AWS production ACCOUNT's existing pilot/test-slice deployment
+ *           (stacks Ogevia-prod-*, database ogevia_sv_test, synthetic data).
+ *           Unchanged; kept so the running pilot is never repointed.
+ * "prd"   - the PRODUCTION deployment (stacks Ogevia-prd-*, database
+ *           ogevia_prd, its own app login + secret). Real data only here.
+ */
+export type OgeviaEnvName = "prod" | "prd";
+
+/** The one database name production may ever use. */
+export const PRODUCTION_DATABASE_NAME = "ogevia_prd";
 
 export interface ExistingSubnetRef {
   readonly subnetId: string;
@@ -95,10 +105,34 @@ export interface OgeviaEnvironmentConfig {
     readonly allowedOrigins: readonly string[];
   };
   readonly existing: ExistingFoundationIds;
+  /**
+   * The application database this environment's Lambda connects to. The ONLY
+   * source of the Lambda's DB_NAME. Production must never resolve to the test
+   * database (assertDatabaseConfig).
+   */
+  readonly database: {
+    readonly purpose: "test-slice" | "production";
+    /** Database inside the existing RDS instance. */
+    readonly name: string;
+    /** Production only: the dedicated application login role. */
+    readonly appLogin?: string;
+    /**
+     * Production only: Secrets Manager NAME of the dedicated application
+     * secret. CDK creates it (generated password; never in Git or output).
+     */
+    readonly appSecretName?: string;
+  };
   /** D-P1-1 network egress for the private Lambda (no NAT). */
   readonly egress: {
     /** AZs hosting the Secrets Manager interface endpoint (FIXED cost per AZ). */
     readonly secretsEndpointAzCount: number;
+    /**
+     * Use the NetworkEgress endpoints owned by this other environment instead
+     * of creating new ones. Private-DNS interface endpoints are unique per VPC
+     * and service, so a second environment in the same VPC must share them;
+     * the owning environment's endpoint policies then also admit this one.
+     */
+    readonly sharedWith?: OgeviaEnvName;
   };
   /**
    * Phase 6 testable vertical slice: CloudFront-hosted frontend and a NEW
@@ -114,8 +148,7 @@ export interface OgeviaEnvironmentConfig {
   };
 }
 
-export const ENVIRONMENTS: Record<OgeviaEnvName, OgeviaEnvironmentConfig> = {
-  prod: {
+const PROD: OgeviaEnvironmentConfig = {
     envName: "prod",
     account: OGEVIA_ACCOUNT,
     region: OGEVIA_REGION,
@@ -186,6 +219,11 @@ export const ENVIRONMENTS: Record<OgeviaEnvName, OgeviaEnvironmentConfig> = {
         "arn:aws:secretsmanager:us-west-2:300094796789:secret:ogevia/database/app-JsOTVQ",
       cognitoUserPoolId: "us-west-2_849AYz5J7",
     },
+    database: {
+      purpose: "test-slice",
+      // Single source: the Lambda's DB_NAME for env=prod is the test slice.
+      name: "ogevia_sv_test",
+    },
     egress: {
       // Recommended 1 AZ for the pilot (~$7.30/month). Lambda reads the secret
       // once per container, so the endpoint is only on the cold-start path.
@@ -200,17 +238,88 @@ export const ENVIRONMENTS: Record<OgeviaEnvName, OgeviaEnvironmentConfig> = {
       // VERIFIED 2026-10-01 (describe-user-pool-domain): prefix us-west-2849ayz5j7, ACTIVE, managed login v2.
       cognitoDomain: "https://us-west-2849ayz5j7.auth.us-west-2.amazoncognito.com",
     },
-  },
 };
+
+/**
+ * PRODUCTION. Same AWS account, VPC, RDS instance, Cognito pool and Lambda
+ * subnets/security group as the pilot (all REFERENCED, none owned), but:
+ * separate CloudFormation stacks (Ogevia-prd-*), a separate evidence bucket and
+ * KMS key, a separate database (ogevia_prd) inside the existing instance, and a
+ * separate application login + secret that cannot connect to the test database.
+ * Nothing here falls back to the test slice: assertDatabaseConfig refuses it.
+ */
+const PRD: OgeviaEnvironmentConfig = {
+  ...PROD,
+  envName: "prd",
+  database: {
+    purpose: "production",
+    name: PRODUCTION_DATABASE_NAME,
+    appLogin: "ogevia_prd_app",
+    appSecretName: "ogevia/prd/database/app",
+  },
+  egress: { ...PROD.egress, sharedWith: "prod" },
+};
+
+export const ENVIRONMENTS: Record<OgeviaEnvName, OgeviaEnvironmentConfig> = {
+  prod: PROD,
+  prd: PRD,
+};
+
+/**
+ * Fails closed on any production database misconfiguration. Production must
+ * name ogevia_prd, a dedicated login and a dedicated secret, and must never
+ * resolve to the test-slice database, the shared test secret, or the shared
+ * `ogevia_app` role. The test slice must keep naming its own database.
+ */
+export function assertDatabaseConfig(config: OgeviaEnvironmentConfig): void {
+  const { database: db } = config;
+  if (!/^[a-z_][a-z0-9_]{0,62}$/.test(db.name ?? "")) {
+    throw new Error(`env "${config.envName}": database.name is missing or malformed`);
+  }
+  if (db.purpose === "test-slice") {
+    if (config.envName === "prd" || db.name !== config.testSlice.databaseName) {
+      throw new Error(`env "${config.envName}": test-slice database must be testSlice.databaseName`);
+    }
+    return;
+  }
+  if (config.envName !== "prd") {
+    throw new Error(`Only env "prd" may use a production database (got "${config.envName}")`);
+  }
+  if (db.name !== PRODUCTION_DATABASE_NAME) {
+    throw new Error(`Production database must be ${PRODUCTION_DATABASE_NAME}`);
+  }
+  if (db.name === config.testSlice.databaseName || /test/.test(db.name)) {
+    throw new Error("Production database must not be the test-slice database");
+  }
+  if (!db.appLogin || !/^[a-z_][a-z0-9_]{0,62}$/.test(db.appLogin) || db.appLogin === "ogevia_app" || /test/.test(db.appLogin)) {
+    throw new Error("Production needs its own application login (not ogevia_app, not a test role)");
+  }
+  if (
+    !db.appSecretName ||
+    !/^ogevia\/[A-Za-z0-9/_+=.@-]{1,200}$/.test(db.appSecretName) ||
+    db.appSecretName === "ogevia/database/app" ||
+    config.existing.appDatabaseSecretArn.includes(`:secret:${db.appSecretName}-`)
+  ) {
+    throw new Error("Production needs its own Secrets Manager secret, distinct from the test slice's");
+  }
+}
 
 /**
  * Resolves the target environment from `-c env=<name>`. There is no default:
  * every synth/diff must name its target explicitly.
  */
 export function resolveEnvironment(value: unknown): OgeviaEnvironmentConfig {
-  if (value === "prod") return ENVIRONMENTS.prod;
+  // "prod" = the existing pilot/test slice (ogevia_sv_test). "prd" (alias
+  // "production") = the production database path (ogevia_prd). Both are
+  // explicit; there is no default and no fallback between them.
+  const name = value === "production" ? "prd" : value;
+  if (name === "prod" || name === "prd") {
+    const config = ENVIRONMENTS[name];
+    assertDatabaseConfig(config);
+    return config;
+  }
   throw new Error(
-    `Missing or unknown environment "${String(value)}". Pass -c env=prod. Valid: ${Object.keys(ENVIRONMENTS).join(", ")}`,
+    `Missing or unknown environment "${String(value)}". Pass -c env=prod (pilot/test slice) or -c env=prd (production). Valid: ${Object.keys(ENVIRONMENTS).join(", ")}`,
   );
 }
 
