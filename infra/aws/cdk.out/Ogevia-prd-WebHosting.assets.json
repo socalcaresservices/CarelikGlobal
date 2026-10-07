@@ -1,0 +1,21 @@
+{
+  "version": "54.0.0",
+  "files": {
+    "448fd18ccac1b1790448f72bb0902f98e7972415e7dc6b28fa3fab2ad8895fc1": {
+      "displayName": "Ogevia-prd-WebHosting Template",
+      "source": {
+        "path": "Ogevia-prd-WebHosting.template.json",
+        "packaging": "file"
+      },
+      "destinations": {
+        "300094796789-us-west-2-7012248c": {
+          "bucketName": "cdk-hnb659fds-assets-300094796789-us-west-2",
+          "objectKey": "448fd18ccac1b1790448f72bb0902f98e7972415e7dc6b28fa3fab2ad8895fc1.json",
+          "region": "us-west-2",
+          "assumeRoleArn": "arn:${AWS::Partition}:iam::300094796789:role/cdk-hnb659fds-file-publishing-role-300094796789-us-west-2"
+        }
+      }
+    }
+  },
+  "dockerImages": {}
+}

@@ -1,0 +1,21 @@
+{
+  "version": "54.0.0",
+  "files": {
+    "368be95415a1321185b7378edf412afc713cd4961bc0e67ec79d5ee9b8bc20ad": {
+      "displayName": "Ogevia-prd-EvidenceStorage Template",
+      "source": {
+        "path": "Ogevia-prd-EvidenceStorage.template.json",
+        "packaging": "file"
+      },
+      "destinations": {
+        "300094796789-us-west-2-e8014c01": {
+          "bucketName": "cdk-hnb659fds-assets-300094796789-us-west-2",
+          "objectKey": "368be95415a1321185b7378edf412afc713cd4961bc0e67ec79d5ee9b8bc20ad.json",
+          "region": "us-west-2",
+          "assumeRoleArn": "arn:${AWS::Partition}:iam::300094796789:role/cdk-hnb659fds-file-publishing-role-300094796789-us-west-2"
+        }
+      }
+    }
+  },
+  "dockerImages": {}
+}

@@ -1,0 +1,22 @@
+# CDK synthesis output - build artifacts only
+# CloudFormation templates and asset references are committed
+# Build artifacts and metadata are ephemeral and should not be versioned
+
+# CDK metadata (regenerated on each synth)
+*.metadata.json
+
+# Build asset directories
+asset.*/
+
+# CDK build artifacts
+tree.json
+validation-report.json
+cdk.out
+
+# Node modules and dependencies
+node_modules/
+*.tgz
+
+# OS files
+.DS_Store
+Thumbs.db
