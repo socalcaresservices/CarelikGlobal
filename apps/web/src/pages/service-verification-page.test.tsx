@@ -298,7 +298,7 @@ describe("ServiceVerificationPage v3", () => {
     expect(screen.getByText(/^2:30\sPM–4:30\sPM$/)).toBeInTheDocument();
 
     await openConfirmation();
-    const scheduled = screen.getByText("Scheduled");
+    const scheduled = screen.getByText("Scheduled shift");
     expect(scheduled.nextElementSibling?.textContent).toMatch(
       /^2:30\sPM–4:30\sPM$/,
     );
@@ -345,7 +345,7 @@ describe("ServiceVerificationPage v3", () => {
     });
     renderPage();
 
-    await screen.findByRole("heading", { name: "Client or guardian confirmation" });
+    await screen.findByRole("heading", { name: "Verify visit details" });
     expect(screen.getByText(/entered by your agency because the visit was not signed out/)).toBeInTheDocument();
   });
 
