@@ -568,6 +568,47 @@ describe("staff documents (0021) through the API", () => {
   });
 });
 
+describe("print letterhead (0038) through the API", () => {
+  const FULL = { legalName: "Synthetic Home Care LLC", addressStreet: "100 Example Way", addressCity: "Exampleville", addressState: "ca", addressZip: "90001", contactPhone: "(555) 010-0100", contactEmail: "Office@Example.Test" };
+  it("only the Administrator of the named agency can save it; the saved values come back on GET /v1/branding for any member", async () => {
+    const denied = await call("POST /v1/branding/letterhead", w.managerA, { body: { organizationId: w.orgA, ...FULL } });
+    expect(denied.status).toBe(403);
+    expect((await call("POST /v1/branding/letterhead", w.caregiverA1, { body: { organizationId: w.orgA, ...FULL } })).status).toBe(403);
+    // The other agency's people cannot write this agency's letterhead, even naming it.
+    expect((await call("POST /v1/branding/letterhead", w.managerB, { body: { organizationId: w.orgA, ...FULL } })).status).toBe(404);
+    const ok = await call("POST /v1/branding/letterhead", w.ownerA, { body: { organizationId: w.orgA, ...FULL } });
+    expect(ok.status, JSON.stringify(ok.body)).toBe(200);
+    expect(ok.body.letterhead).toMatchObject({ legalName: "Synthetic Home Care LLC", addressState: "CA", contactEmail: "office@example.test" });
+    const read = await call("GET /v1/branding", w.caregiverA1, { query: { organizationId: w.orgA } });
+    expect(read.body.branding).toMatchObject({ legalName: "Synthetic Home Care LLC", addressStreet: "100 Example Way", addressCity: "Exampleville", addressZip: "90001", contactPhone: "(555) 010-0100" });
+    expect((await call("GET /v1/branding", w.managerB, { query: { organizationId: w.orgA } })).status).toBe(404);
+  });
+
+  it("refuses bad input with a clear message and changes nothing; the organization must be a UUID; a blank clears", async () => {
+    const bad = await call("POST /v1/branding/letterhead", w.ownerA, { body: { organizationId: w.orgA, ...FULL, addressZip: "9000" } });
+    expect(bad.status).toBe(422);
+    expect(JSON.stringify(bad.body)).toMatch(/ZIP code/);
+    expect((await call("POST /v1/branding/letterhead", w.ownerA, { body: { organizationId: "not-a-uuid", ...FULL } })).status).toBe(400);
+    expect((await call("POST /v1/branding/letterhead", w.ownerA, { body: { organizationId: w.orgA, ...FULL, legalName: 42 } })).status).toBe(400);
+    expect((await call("POST /v1/branding/letterhead", w.ownerA, { body: { organizationId: w.orgA, ...FULL, addressStreet: "x".repeat(121) } })).status).toBe(400);
+    expect((await call("GET /v1/branding", w.ownerA, { query: { organizationId: w.orgA } })).body.branding.addressZip).toBe("90001");
+    const cleared = await call("POST /v1/branding/letterhead", w.ownerA, { body: { organizationId: w.orgA } });
+    expect(cleared.status).toBe(200);
+    expect(cleared.body.letterhead).toMatchObject({ legalName: null, addressStreet: null, contactPhone: null });
+  });
+
+  it("is idempotent: a retried save with the same key is not recorded twice", async () => {
+    const key = "7a1f0c52-0000-4000-8000-0000000000aa";
+    const send = () => call("POST /v1/branding/letterhead", w.ownerA, { body: { organizationId: w.orgA, ...FULL }, key });
+    const first = await send();
+    expect(first.status, JSON.stringify(first.body)).toBe(200);
+    const count = async () => (await db.admin.query("select count(*)::int n from ogevia.audit_events where action = 'organization.letterhead_updated'")).rows[0].n;
+    const n = await count();
+    expect((await send()).status).toBe(200);
+    expect(await count()).toBe(n);
+  });
+});
+
 describe("agency logo and restricted client names (0020) through the API", () => {
   const png = syntheticPng(60, 30, 5);
   it("owner uploads a logo; it is private and readable by members with an integrity check; managers cannot change it", async () => {

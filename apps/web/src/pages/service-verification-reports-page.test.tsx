@@ -12,6 +12,8 @@ import { useOrganization } from "@/providers/organization-provider";
 import { supabase } from "@/lib/supabase";
 import { ServiceVerificationBackendContext, type ServiceVerificationBackend } from "@/lib/sv-backend";
 import { ServiceVerificationReportsPage } from "./service-verification-reports-page";
+import { EnvironmentProvider } from "@/aws/environment-marker";
+import { resolveEnvironmentMarker } from "@/aws/environment";
 import { formatClockTime, formatVisitDate, toPacificWallTime } from "@/lib/service-verification";
 
 vi.mock("@/providers/organization-provider", () => ({
@@ -1128,5 +1130,45 @@ describe("ServiceVerificationReportsPage", () => {
     expect(css).toContain("Client: All clients");
     expect(css).toContain("Period: All dates");
     expect(css).toContain('"Page " counter(page) " of " counter(pages)');
+  });
+
+  it.each([
+    ["test", "TEST — synthetic data only"],
+    ["staging", "Environment not verified"],
+  ])("a printout from environment %j carries '%s' on every page header and on page one", async (env, label) => {
+    window.localStorage.clear();
+    allowEverything();
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    render(
+      <MemoryRouter>
+        <QueryClientProvider client={queryClient}>
+          <EnvironmentProvider marker={resolveEnvironmentMarker(env)}>
+            <ServiceVerificationReportsPage />
+          </EnvironmentProvider>
+        </QueryClientProvider>
+      </MemoryRouter>,
+    );
+    await screen.findByLabelText("Report");
+    const runningCss = () => Array.from(document.querySelectorAll("style")).map((e) => e.textContent ?? "").find((t) => t.includes("@top-left")) ?? "";
+    await waitFor(() => expect(runningCss()).toContain(label));
+    expect(screen.getAllByText(label).length).toBeGreaterThan(0);
+  });
+
+  it("production prints no environment line", async () => {
+    window.localStorage.clear();
+    allowEverything();
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    render(
+      <MemoryRouter>
+        <QueryClientProvider client={queryClient}>
+          <EnvironmentProvider marker={resolveEnvironmentMarker("production")}>
+            <ServiceVerificationReportsPage />
+          </EnvironmentProvider>
+        </QueryClientProvider>
+      </MemoryRouter>,
+    );
+    await screen.findByLabelText("Report");
+    const css = Array.from(document.querySelectorAll("style")).map((e) => e.textContent ?? "").find((t) => t.includes("@top-left")) ?? "";
+    expect(css).not.toMatch(/TEST|not verified/);
   });
 });

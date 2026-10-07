@@ -211,6 +211,29 @@ export const ROUTES: Record<string, Route> = {
     },
   },
 
+  // Print letterhead (0038): the agency's own legal name, address, phone and email for printed reports.
+  // Read with GET /v1/branding (any member). Change: organization.update (the Administrator) for the agency
+  // named in the request, enforced again in the database function. Agency business details only.
+  "POST /v1/branding/letterhead": {
+    mutating: true,
+    handle: async ({ event, tx }) => {
+      const body = parseBody(event.body, event.isBase64Encoded);
+      const key = idempotencyKey(event.headers);
+      const org = uuid(body.organizationId, "organizationId");
+      const legalName = text(body.legalName, "legalName", 120);
+      const street = text(body.addressStreet, "addressStreet", 120);
+      const city = text(body.addressCity, "addressCity", 80);
+      const state = text(body.addressState, "addressState", 2);
+      const zip = text(body.addressZip, "addressZip", 10);
+      const phone = text(body.contactPhone, "contactPhone", 25);
+      const email = text(body.contactEmail, "contactEmail", 254);
+      const [letterhead] = await tx((db) =>
+        rows(db, "select * from ogevia_api.set_organization_letterhead($1, $2, $3, $4, $5, $6, $7, $8, $9)", [org, legalName, street, city, state, zip, phone, email, key]),
+      );
+      return { letterhead };
+    },
+  },
+
   // Agency logo (0020): owner sets it; any member of the agency reads it.
   "POST /v1/branding/logo": {
     mutating: true,

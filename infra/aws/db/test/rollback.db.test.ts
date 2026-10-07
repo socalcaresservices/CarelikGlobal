@@ -80,7 +80,7 @@ describe("ROLLBACK scripts", () => {
     expect(rows[0].n).toBe(0);
     const client = await empty.admin.connect();
     try {
-      expect((await migrate(client)).applied).toHaveLength(36);
+      expect((await migrate(client)).applied).toHaveLength(38);
     } finally {
       client.release();
     }

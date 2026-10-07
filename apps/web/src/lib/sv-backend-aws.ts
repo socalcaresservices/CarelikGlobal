@@ -1,6 +1,7 @@
 // AWS Service Verification backend (Phase 6). Maps the camelCase API to the
 // row shapes the existing screens render, so the screens are unchanged.
 import type { AwsApiClient } from "@/lib/aws-api";
+import type { Branding } from "@/aws/aws-workspace";
 import type {
   ActiveVisit,
   AssignedClient,
@@ -128,7 +129,7 @@ export function createAwsServiceVerificationBackend(
       });
     },
     async getLetterhead(organizationId) {
-      const { branding } = await api.get<{ branding: { displayName: string; logoSha256?: string | null } }>("/v1/branding", { organizationId });
+      const { branding } = await api.get<{ branding: Branding }>("/v1/branding", { organizationId });
       const name = branding.displayName ?? lookupOrganizationName(organizationId) ?? "Organization";
       let logoUrl: string | null = null;
       if (branding.logoSha256) {
@@ -136,15 +137,16 @@ export function createAwsServiceVerificationBackend(
         logoUrl = `data:${logo.contentType};base64,${logo.fileBase64}`;
       }
       return {
-        legal_name: name,
+        // Only what the agency's Administrator entered (Settings > Branding); nothing is assumed.
+        legal_name: branding.legalName ?? name,
         display_name: name,
         logo_url: logoUrl,
-        address_street: null,
-        address_city: null,
-        address_state: null,
-        address_zip: null,
-        contact_phone: null,
-        contact_email: null,
+        address_street: branding.addressStreet ?? null,
+        address_city: branding.addressCity ?? null,
+        address_state: branding.addressState ?? null,
+        address_zip: branding.addressZip ?? null,
+        contact_phone: branding.contactPhone ?? null,
+        contact_email: branding.contactEmail ?? null,
       };
     },
     async listClientLocations() {

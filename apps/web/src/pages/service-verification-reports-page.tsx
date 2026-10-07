@@ -51,6 +51,7 @@ import {
 import { useServiceVerificationBackend } from "@/lib/sv-backend-supabase";
 import { buildClientMonthSummary } from "@/lib/client-month-summary";
 import { CalendarSummary } from "@/components/calendar-summary";
+import { useEnvironmentMarker } from "@/aws/environment";
 import {
   AUTHORIZATION_STATUS_LABEL,
   classifyIncompleteVisit,
@@ -392,6 +393,8 @@ export function ServiceVerificationReportsPage() {
   const [chartGroup, setChartGroup] = useState<ChartGroup>("caregiver");
   const location = useLocation();
   const navigate = useNavigate();
+  // A printout from a test or unverified environment says so on every page, so it cannot pass for a real record.
+  const environmentMarker = useEnvironmentMarker();
   const viewFromUrl = new URLSearchParams(location.search).get("view");
   const defaultView: ReportView = backend.kind === "aws" ? "visits" : "overview";
   const [reportView, setReportView] = useState<ReportView>(() =>
@@ -1089,6 +1092,7 @@ export function ServiceVerificationReportsPage() {
     printReportTitle,
     `Client: ${selectedClientName ? `${selectedClientName}${selectedClientCode ? ` (${selectedClientCode})` : ""}` : "All clients"}`,
     `${reportView === "calendar" || reportView === "reconciliation" ? "Month" : "Period"}: ${printPeriod}`,
+    environmentMarker?.label ?? "",
   ]
     .filter(Boolean)
     .join("  ·  ");
@@ -1790,6 +1794,7 @@ export function ServiceVerificationReportsPage() {
               <p>Month: {calendarMonthLabel}</p>
             ) : null}
             <p>Printed: {formatDateTime(new Date())}</p>
+            {environmentMarker?.label ? <p className="font-bold text-slate-900">{environmentMarker.label}</p> : null}
           </div>
         </div>
       </div>

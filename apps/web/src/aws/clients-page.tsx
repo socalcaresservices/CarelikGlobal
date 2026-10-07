@@ -127,7 +127,6 @@ export function ClientsPage() {
         <div>
           <h1 className="text-xl font-semibold text-slate-950">Clients</h1>
           <p className="mt-1 text-sm text-slate-600">Client details, status and authorized hours. Caregivers only ever see the client code or label.</p>
-          <p className="mt-1 text-xs font-semibold text-amber-900">TEST environment: synthetic clients only until the security approval.</p>
         </div>
         {canManage ? <Button type="button" onClick={() => setAdding((a) => !a)} aria-expanded={adding}>{adding ? "Close" : "Add client"}</Button> : null}
       </div>

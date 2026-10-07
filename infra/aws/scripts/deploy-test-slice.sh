@@ -31,6 +31,9 @@
 # are never printed or written to disk.
 # =============================================================================
 set -euo pipefail
+# Explicit environment label for the web app's banner (never guessed): test | development | production.
+APP_ENV="${OGEVIA_APP_ENV:-test}"
+case "$APP_ENV" in test|development|production) ;; *) echo "OGEVIA_APP_ENV must be test, development or production (got '$APP_ENV')" >&2; exit 1;; esac
 
 ACCOUNT=300094796789
 REGION=us-west-2
@@ -184,7 +187,7 @@ case "${1:-}" in
     BUCKET=$(out Ogevia-prod-WebHosting SiteBucketName); DIST=$(out Ogevia-prod-WebHosting DistributionId)
     API=$(out Ogevia-prod-ServiceVerificationApi ApiUrl)
     (cd "$REPO/apps/web" && \
-      VITE_APP_ENV=production VITE_AUTH_PROVIDER=cognito VITE_COGNITO_REGION=$REGION VITE_COGNITO_USER_POOL_ID=$POOL \
+      VITE_APP_ENV="$APP_ENV" VITE_AUTH_PROVIDER=cognito VITE_COGNITO_REGION=$REGION VITE_COGNITO_USER_POOL_ID=$POOL \
       VITE_COGNITO_CLIENT_ID="$CLIENT" VITE_COGNITO_DOMAIN=https://us-west-2849ayz5j7.auth.us-west-2.amazoncognito.com \
       VITE_COGNITO_REDIRECT_URI="$WEB/auth/callback" VITE_COGNITO_LOGOUT_URI="$WEB/" VITE_COGNITO_REFRESH_PERSISTENCE=session \
       VITE_SV_API_BASE_URL="$API" npx vite build --outDir dist-aws --emptyOutDir)

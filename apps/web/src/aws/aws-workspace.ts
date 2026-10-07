@@ -24,6 +24,14 @@ export interface Branding {
   accentColor: string | null;
   /** Changes whenever the owner replaces the logo; null when there is none. */
   logoSha256?: string | null;
+  /** Print letterhead (0038): entered by the agency's Administrator; null until entered. */
+  legalName?: string | null;
+  addressStreet?: string | null;
+  addressCity?: string | null;
+  addressState?: string | null;
+  addressZip?: string | null;
+  contactPhone?: string | null;
+  contactEmail?: string | null;
 }
 
 /** The agency logo as a data URL, fetched through the API (the bucket is private). */

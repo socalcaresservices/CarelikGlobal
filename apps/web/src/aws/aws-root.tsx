@@ -31,6 +31,7 @@ import { ServicesPage } from "./services-page";
 import { BrandingSettingsPage, ProfilePage } from "./workspace-settings-pages";
 import { PublicCareOfferPage, PublicCareRequestPage } from "./care-public-pages";
 import { ConfirmVisitPage } from "./confirm-visit-page";
+import { EnvironmentProvider } from "./environment-marker";
 
 function AwsBackendProvider({ api, children }: PropsWithChildren<{ api: AwsApiClient }>) {
   const { organizations } = useOrganization();
@@ -102,7 +103,9 @@ export function AwsApp({ runtime }: { runtime: AwsRuntime }) {
     <BrowserRouter>
       <QueryClientProvider client={queryClient}>
         <CognitoAuthProvider client={runtime.auth}>
-          <AwsRoutes api={runtime.api} publicApi={runtime.publicApi} />
+          <EnvironmentProvider marker={runtime.environment}>
+            <AwsRoutes api={runtime.api} publicApi={runtime.publicApi} />
+          </EnvironmentProvider>
         </CognitoAuthProvider>
       </QueryClientProvider>
     </BrowserRouter>

@@ -6,16 +6,18 @@
 
 ## Summary
 
-| Feature (branch) | In AWS today | Documented as deferred? | Recommendation |
+"No AWS module exists" explains a gap; it does not decide whether the feature is needed. **No feature below is discarded.** The branches themselves are not merged (they change the Supabase app), but every feature is kept as pending restoration with its existing requirements: see `PENDING_RESTORATION.md` for the definitions, dependencies and the ordered plan.
+
+| Feature (branch) | In AWS today | Status | Next step |
 | --- | --- | --- | --- |
-| **Overnight and weekend availability** (#55) | **Gap.** Weekends work (weekday 0 and 6). Overnight does not. | No | **Port now** (small AWS migration). |
-| **CareScore, missing-data credit** (#53) | Missing. The AWS matcher is a yes/no filter with no score. | Yes: "NEEDS IMPLEMENTATION in AWS" | Port later, with CareScore. |
-| **Caregiver skills** (#54) | Missing (no column, route or field). | Implied (matching is not ported) | Port later, with CareScore. |
-| **Caregiver services and preferred cities** (#58) | Services per caregiver exist (0023). **Cities for caregivers: missing.** Matching uses neither. | Staged last in the owner's list | Port later, with CareScore. |
-| **Month hours by source** (#56) | Partial. Authorized, scheduled, worked, billable, remaining and approved exist. "Requested" and "projected" do not. | Yes: item 13 "Open" | Do not port the branch. Build pace and projection on the AWS data later. |
-| **Incidents, multiple categories** (#57) | No incidents module in AWS. | Yes: "Not migrated" | Do not port. Carry "several categories" into any future design. |
-| **Support access workflow** (#43) | Missing. | Yes: "needs a later, explicitly audited design" | Defer. Needs an owner-approved design first (tenant isolation). |
-| **Audit docs and Phase 0** (`claude/serene-einstein-1rzi90`) | Superseded by the much larger `docs/aws` and `infra/aws`. | n/a | Do not merge. |
+| **Overnight and weekend availability** (#55) | Weekends already worked (weekday 0 and 6). Overnight was a gap. | **Built on the working branch** (migration 0037, tests, rollback). Not applied, not deployed. | Owner approval to deploy (`RELEASE_0037_0038_RUNBOOK.md`). |
+| **CareScore, missing-data credit** (#53) | Missing; the AWS matcher is a yes/no filter. | **Pending restoration**, documented as "NEEDS IMPLEMENTATION in AWS". | Step 4 of the ordered plan, after the owner's decisions. |
+| **Caregiver skills** (#54) | Missing. | **Pending restoration.** | Step 2 (profile fields), then step 4. |
+| **Caregiver services and preferred cities** (#58) | Services per caregiver partly (0023); cities missing; matching uses neither. | **Pending restoration.** | Step 2. |
+| **Month hours by source** (#56) | Partial (0020). No "requested", no separate "confirmed", no "projected". | **Pending restoration** (item 13 "Open"). | Step 7. |
+| **Incidents, several categories** (#57) | No incidents module. | **Pending restoration**; "Not migrated" in the recovery inventory. Several categories is part of the requirement. | Step 6, after the owner's decisions on categories and visibility. |
+| **Support access workflow** (#43) | Missing; the AWS design has no platform-owner bypass. | **Pending an owner-approved design** (it changes tenant isolation). | Step 9. |
+| **Audit docs and Phase 0** (`claude/serene-einstein-1rzi90`) | Superseded by the larger `docs/aws` and `infra/aws`. | Documents only; nothing to restore. Reference reading. | None. |
 
 ## Availability: what AWS does today (CHECKED)
 
@@ -25,7 +27,7 @@
 - Matching (`list_available_caregivers`, 0011 line 335): a caregiver matches if a window on the request's local date or weekday has `start_local <= request start` and `end_local >= request end`, and they are not marked unavailable that date, not double-booked and not previously declined.
 - **Overnight request, read from the code (not run):** the request's end time of day is earlier than its start, so it is compared against a single day's window. It either matches nobody, or matches only someone whose window covers the whole day, without checking the part after midnight. Either way an overnight request is not matched correctly.
 - The branch's approach (`supabase/migrations/20260826030000_overnight_availability.sql`) puts windows on a week-minute axis, so Sunday night runs into Monday. It is a usable design reference; its SQL cannot be reused as is.
-- **Proposed AWS work (coarse):** one migration to relax `availability_time` and compare on a week-minute range inside `list_available_caregivers`; allow end earlier than start in `replace_my_availability` and in the page; keep the daylight-saving handling from 0035. Tests: a 22:00 to 06:00 window matches a 23:00 to 05:00 request, does not match 07:00 to 09:00, and a weekend overnight window crossing Sunday into Monday works.
+- **Built:** one migration to relax `availability_time` and compare real instants in the agency time zone inside `list_available_caregivers` (overlapping and adjacent windows are merged); allow end earlier than start in `replace_my_availability` and in the page; keep the daylight-saving handling from 0035. Tests: a 22:00 to 06:00 window matches a 23:00 to 05:00 request, does not match 07:00 to 09:00, and a weekend overnight window crossing Sunday into Monday works.
 
 ## Per-feature notes
 
@@ -45,4 +47,4 @@
 
 ## Decision for you
 
-Approve or change the overnight work (port now), and confirm CareScore with skills, services and cities as one later AWS build. Everything else is "do not port" or "defer", with reasons above.
+The overnight fix is built and awaits your approval to deploy. For everything else, the questions that only you can answer are listed in section 4 of `PENDING_RESTORATION.md`.

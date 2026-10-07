@@ -35,6 +35,8 @@ const tomorrow = async () => (await db.admin.query("select (now() at time zone o
 
 describe("rollbacks keep records", () => {
   it("0029, 0028 and 0027 roll back cleanly when no rounding policy, outage record or continuity pack exists", async () => {
+    await runDown("0038_org_letterhead_contact.down.sql");
+    await runDown("0037_overnight_availability.down.sql");
     await runDown("0036_signature_recovery.down.sql");
     await runDown("0035_dst_local_times.down.sql");
     await runDown("0034_recurring_shift_series.down.sql");

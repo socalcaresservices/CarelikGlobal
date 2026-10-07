@@ -83,6 +83,7 @@ export const SERVICE_VERIFICATION_ROUTES: ReadonlyArray<{
   { method: apigw.HttpMethod.POST, path: "/v1/branding" },
   { method: apigw.HttpMethod.GET, path: "/v1/attention" },
   { method: apigw.HttpMethod.GET, path: "/v1/reports/utilisation" },
+  { method: apigw.HttpMethod.POST, path: "/v1/branding/letterhead" },
   { method: apigw.HttpMethod.POST, path: "/v1/branding/logo" },
   { method: apigw.HttpMethod.POST, path: "/v1/branding/logo/clear" },
   { method: apigw.HttpMethod.GET, path: "/v1/branding/logo" },

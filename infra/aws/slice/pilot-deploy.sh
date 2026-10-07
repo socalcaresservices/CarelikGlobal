@@ -16,6 +16,9 @@
 # app client, RDS security-group rules, deleting anything.
 # =============================================================================
 set -Eeuo pipefail
+# Explicit environment label for the web app's banner (never guessed): test | development | production.
+APP_ENV="${OGEVIA_APP_ENV:-test}"
+case "$APP_ENV" in test|development|production) ;; *) echo "OGEVIA_APP_ENV must be test, development or production (got '$APP_ENV')" >&2; exit 1;; esac
 
 # shellcheck source=pilot-lib.sh
 source "$(dirname "${BASH_SOURCE[0]}")/pilot-lib.sh"
@@ -297,7 +300,7 @@ json.dump({
   "VITE_COGNITO_REGION": "$REGION", "VITE_COGNITO_USER_POOL_ID": "$POOL", "VITE_COGNITO_CLIENT_ID": "$CLIENT",
   "VITE_COGNITO_DOMAIN": "$COGNITO_DOMAIN", "VITE_COGNITO_REDIRECT_URI": "$WEB/auth/callback",
   "VITE_COGNITO_LOGOUT_URI": "$WEB/", "VITE_COGNITO_SCOPES": "openid email",
-  "VITE_COGNITO_REFRESH_PERSISTENCE": "session", "VITE_SV_API_BASE_URL": "$API"}, open(sys.argv[1], "w"), indent=2)
+  "VITE_COGNITO_REFRESH_PERSISTENCE": "session", "VITE_SV_API_BASE_URL": "$API", "VITE_APP_ENV": "$APP_ENV"}, open(sys.argv[1], "w"), indent=2)
 PY
   W="$RUN/web-build"
   aws s3 sync "$W/assets" "s3://$BUCKET/assets" --only-show-errors --cache-control "public,max-age=31536000,immutable"

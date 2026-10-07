@@ -36,6 +36,15 @@ export function CaregiverAvailabilityPage({ api }: { api: AwsApiClient }) {
     setEnd(recurring[0]!.endLocal.slice(0,5));
   }, [availability.data]);
 
+  // Saving writes ONE time range for every selected day (as before). Tell the caregiver when that would replace
+  // something more detailed, instead of doing it silently.
+  const savedWindows = availability.data?.windows ?? [];
+  const savedRecurring = savedWindows.filter((w) => w.weekday !== null);
+  const mixed =
+    savedWindows.some((w) => w.weekday === null) ||
+    savedRecurring.some((w) => w.startLocal !== savedRecurring[0]!.startLocal || w.endLocal !== savedRecurring[0]!.endLocal) ||
+    new Set(savedRecurring.map((w) => w.weekday)).size !== savedRecurring.length;
+
   const save = useMutation({
     mutationFn: () => api.post("/v1/availability/me", {
       organizationId: activeOrganizationId,
@@ -54,7 +63,10 @@ export function CaregiverAvailabilityPage({ api }: { api: AwsApiClient }) {
     <Card>
       <h2 className="font-semibold text-slate-950">My regular availability</h2>
       <div className="mt-3 flex flex-wrap gap-2">{DAYS.map((label,weekday)=><label key={label} className="flex items-center gap-1 rounded-lg border border-slate-200 px-2 py-1.5 text-sm"><input type="checkbox" checked={days.has(weekday)} onChange={(e)=>setDays((current)=>{const next=new Set(current);if(e.target.checked)next.add(weekday);else next.delete(weekday);return next;})}/>{label}</label>)}</div>
-      <div className="mt-3 flex flex-wrap items-end gap-3"><label className="text-sm">From<input type="time" value={start} onChange={(e)=>setStart(e.target.value)} className="mt-1 block rounded-lg border border-slate-200 px-3 py-2"/></label><label className="text-sm">To<input type="time" value={end} onChange={(e)=>setEnd(e.target.value)} className="mt-1 block rounded-lg border border-slate-200 px-3 py-2"/></label><Button disabled={!days.size || start>=end} loading={save.isPending} onClick={()=>save.mutate()}>Save availability</Button></div>
+      <div className="mt-3 flex flex-wrap items-end gap-3"><label className="text-sm">From<input type="time" value={start} onChange={(e)=>setStart(e.target.value)} className="mt-1 block rounded-lg border border-slate-200 px-3 py-2"/></label><label className="text-sm">To<input type="time" value={end} onChange={(e)=>setEnd(e.target.value)} className="mt-1 block rounded-lg border border-slate-200 px-3 py-2"/></label><Button disabled={!days.size || !start || !end || start===end} loading={save.isPending} onClick={()=>save.mutate()}>Save availability</Button></div>
+      {start && end && start===end ? <p role="alert" className="mt-2 text-sm text-red-700">From and To cannot be the same time.</p> : null}
+      {start && end && end<start ? <p className="mt-2 text-sm text-slate-700" data-testid="overnight-note">Overnight: each selected day starts at {start} and ends the next morning at {end}. For example, Saturday 10:00 PM to 6:00 AM covers Saturday night into Sunday.</p> : null}
+      {mixed ? <p role="note" className="mt-2 text-sm font-medium text-amber-900">Your saved availability has different times on different days, or dates set just for one day. Saving here replaces all of it with this one time range for the selected days.</p> : null}
     </Card>
     <Card>
       <h2 className="font-semibold text-slate-950">Care opportunities</h2>

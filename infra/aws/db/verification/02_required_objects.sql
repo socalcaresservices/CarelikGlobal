@@ -16,7 +16,8 @@ with required_tables(t) as (values
   ('get_my_context'), ('get_visit_signature_evidence'), ('get_confirmation_replay'),
   ('public_create_care_request'), ('list_care_requests'), ('list_available_caregivers'),
   ('send_care_offer'), ('assign_care_request'), ('replace_my_availability'), ('list_my_care_opportunities'),
-  ('revoke_client_care_portals'), ('public_list_care_requests'), ('close_missed_service_visit')
+  ('revoke_client_care_portals'), ('public_list_care_requests'), ('close_missed_service_visit'),
+  ('set_organization_letterhead')
 )
 select 'table_exists:' || t as check_name,
        exists (select 1 from pg_tables where schemaname = 'ogevia' and tablename = t) as ok,

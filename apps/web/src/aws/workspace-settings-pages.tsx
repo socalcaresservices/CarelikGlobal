@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import { Button, Card } from "@carelik/ui";
 import { newIdempotencyKey } from "@/lib/sv-backend";
 import { useOrganization } from "@/providers/organization-provider";
+import { LETTERHEAD_FIELDS, EMPTY_LETTERHEAD, letterheadProblem, type LetterheadForm } from "./letterhead-validation";
 import { contrastWithWhite } from "./contrast";
 import { prepareLogoFile } from "./document-file";
 import { useLogo, useAwsApi, useBranding, useMyDisplayName, useSetMyDisplayName, type Branding } from "./aws-workspace";
@@ -125,7 +126,68 @@ export function BrandingSettingsPage() {
         </form>
       </Card>
       <LogoSettings />
+      <LetterheadSettings />
     </div>
+  );
+}
+
+/**
+ * Administrator-only print letterhead (0038): the agency's own legal name, address, phone and email for printed
+ * reports. Nothing is pre-filled and nothing is built into the product; a blank field prints nothing.
+ */
+function LetterheadSettings() {
+  const api = useAwsApi();
+  const queryClient = useQueryClient();
+  const { activeOrganizationId } = useOrganization();
+  const branding = useBranding();
+  const [form, setForm] = useState<LetterheadForm>(EMPTY_LETTERHEAD);
+  const [state, setState] = useState<{ busy: boolean; error: string | null; done: boolean }>({ busy: false, error: null, done: false });
+  const key = useRef(newIdempotencyKey());
+  useEffect(() => {
+    const b = branding.data;
+    if (b) {
+      setForm({
+        legalName: b.legalName ?? "", addressStreet: b.addressStreet ?? "", addressCity: b.addressCity ?? "", addressState: b.addressState ?? "",
+        addressZip: b.addressZip ?? "", contactPhone: b.contactPhone ?? "", contactEmail: b.contactEmail ?? "",
+      });
+    }
+  }, [branding.data]);
+  async function submit() {
+    const problem = letterheadProblem(form);
+    if (problem) return setState({ busy: false, error: problem, done: false });
+    setState({ busy: true, error: null, done: false });
+    try {
+      await api.post("/v1/branding/letterhead", { organizationId: activeOrganizationId, ...Object.fromEntries(Object.entries(form).map(([k, x]) => [k, x.trim() || null])) }, { idempotencyKey: key.current });
+      key.current = newIdempotencyKey();
+      await queryClient.invalidateQueries({ queryKey: ["aws-branding"] });
+      await queryClient.invalidateQueries({ queryKey: ["organization-letterhead"] });
+      setState({ busy: false, error: null, done: true });
+    } catch (cause) {
+      setState({ busy: false, error: message(cause, "The letterhead was not saved."), done: false });
+    }
+  }
+  return (
+    <Card className="space-y-3 p-4">
+      <h2 className="text-sm font-semibold text-slate-900">Print letterhead</h2>
+      <p className="text-sm text-slate-600">Printed at the top of reports with your logo. Only what you enter is printed; leave a field blank to leave it off. Agency business details only: never enter client or caregiver information.</p>
+      <form onSubmit={(e) => { e.preventDefault(); void submit(); }} className="space-y-3">
+        {LETTERHEAD_FIELDS.map((f) => (
+          <label key={f.id} className="block text-sm font-medium text-slate-700">
+            {f.label}
+            <input
+              value={form[f.id]}
+              maxLength={f.max}
+              autoComplete={f.autoComplete}
+              onChange={(e) => { setForm((x) => ({ ...x, [f.id]: e.target.value })); setState((s) => ({ ...s, done: false })); }}
+              className="mt-1 block min-h-[40px] w-full rounded-lg border border-slate-200 px-3 py-2 text-base"
+            />
+          </label>
+        ))}
+        {state.error ? <p role="alert" className="text-sm text-red-700">{state.error}</p> : null}
+        {state.done ? <p role="status" className="text-sm text-emerald-800">Letterhead saved. It prints on the next report.</p> : null}
+        <Button type="submit" disabled={state.busy}>{state.busy ? "Saving…" : "Save letterhead"}</Button>
+      </form>
+    </Card>
   );
 }
 

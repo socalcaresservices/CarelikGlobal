@@ -30,6 +30,7 @@ import { cn } from "@carelik/ui";
 import { useOrganization } from "@/providers/organization-provider";
 import { actionNeededState, EXCEPTIONS_ROUTE } from "./action-needed";
 import { useAttention, useBranding, useLogo, useMyDisplayName, viewKind, VIEW_TITLE } from "./aws-workspace";
+import { EnvironmentBanner } from "./environment-marker";
 import { currentLink, isCalendarView, isReportView, isVisitListView, linkKey, REPORTS_PATH, visibleGroups, type NavLinkDef } from "./nav-model";
 
 export const EXCEPTIONS_PATH = EXCEPTIONS_ROUTE;
@@ -74,14 +75,6 @@ function useIsMobile() {
     return () => mq.removeEventListener("change", update);
   }, []);
   return mobile;
-}
-
-/** Shows the environment only when the build configures one that is not production (existing VITE_APP_ENV). */
-function environmentLabel(): string | null {
-  const value = (import.meta.env as Record<string, string | undefined>).VITE_APP_ENV?.trim().toLowerCase();
-  if (value === "test") return "Test environment";
-  if (value === "development") return "Development";
-  return null;
 }
 
 function initialsOf(name: string): string {
@@ -174,7 +167,6 @@ export function AwsShell({ children }: PropsWithChildren) {
   const accent = branding.data?.accentColor ?? DEFAULT_ACCENT;
   // The same function and the same query result as the Home banner (action-needed.ts).
   const attentionState = actionNeededState(attention.isLoading, attention.isError, attention.data);
-  const environment = environmentLabel();
 
   function trapFocus(e: KeyboardEvent<HTMLElement>) {
     if (!drawerShown) return;
@@ -271,7 +263,6 @@ export function AwsShell({ children }: PropsWithChildren) {
             )}
             <div className={cn("min-w-0", collapsed && "sr-only")}>
               <p className="truncate text-sm font-semibold text-og-ink">{agencyName}</p>
-              {environment ? <p className="mt-0.5 inline-block rounded-full border border-og-line bg-og-page px-2 text-[11px] font-semibold text-og-sub">{environment}</p> : null}
               <p className="text-[11px] font-medium text-og-sub">Powered by Ogevia</p>
             </div>
           </div>
@@ -370,6 +361,7 @@ export function AwsShell({ children }: PropsWithChildren) {
       ) : null}
 
       <div className={cn("print:pl-0", !isMobile && (collapsed ? "pl-[76px]" : "pl-64"))}>
+        <EnvironmentBanner />
         <header className="border-b border-og-line bg-white print:hidden" style={{ borderTop: `4px solid ${accent}` }}>
           <div className="flex flex-wrap items-center gap-2 px-4 py-2.5 md:px-8">
             <button

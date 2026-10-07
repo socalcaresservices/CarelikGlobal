@@ -1,13 +1,16 @@
 import { CognitoAuthClient, parseCognitoConfig, type CognitoEnv } from "@carelik/auth";
 import { createAwsApiClient, createAwsPublicApiClient, type AwsApiClient } from "@/lib/aws-api";
+import { resolveEnvironmentMarker, type EnvironmentMarker } from "./environment";
 
 export interface AwsRuntime {
   readonly auth: CognitoAuthClient;
   readonly api: AwsApiClient;
   readonly publicApi: AwsApiClient;
+  /** From explicit configuration (VITE_APP_ENV); never guessed. */
+  readonly environment: EnvironmentMarker;
 }
 
-export type AwsEnv = CognitoEnv & { VITE_SV_API_BASE_URL?: string | undefined };
+export type AwsEnv = CognitoEnv & { VITE_SV_API_BASE_URL?: string | undefined; VITE_APP_ENV?: string | undefined };
 
 /** Builds the runtime from build-time env. Fails closed on any invalid value. */
 export function createAwsRuntime(env: AwsEnv): AwsRuntime {
@@ -21,6 +24,7 @@ export function createAwsRuntime(env: AwsEnv): AwsRuntime {
     auth,
     api: createAwsApiClient({ baseUrl, getAccessToken: () => auth.getAccessToken() }),
     publicApi: createAwsPublicApiClient(baseUrl),
+    environment: resolveEnvironmentMarker(env.VITE_APP_ENV),
   };
 }
 
@@ -36,6 +40,7 @@ const RUNTIME_KEYS = [
   "VITE_COGNITO_SCOPES",
   "VITE_COGNITO_REFRESH_PERSISTENCE",
   "VITE_SV_API_BASE_URL",
+  "VITE_APP_ENV", // a label (test | development | production), not an identifier or a secret
 ] as const;
 
 /**
