@@ -429,7 +429,11 @@ export function AuthorizationsPage() {
           new_authorization_number: form.authorizationNumber || null,
           new_notes: form.notes || null,
           reason: form.reason.trim(),
-          ...(canManageFinancial ? { new_hourly_rate_cents: rateCents } : {}),
+          // Always sent: production has two amend_client_authorization overloads (with and
+          // without new_hourly_rate_cents), and omitting it makes the call "not unique".
+          // For a caller without billing.update, null is safe: the
+          // client_authorizations_protect_financial_fields trigger carries the prior rate forward.
+          new_hourly_rate_cents: canManageFinancial ? rateCents : null,
         });
         if (error) throw error;
       } else {

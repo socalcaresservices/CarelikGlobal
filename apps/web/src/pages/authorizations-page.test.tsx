@@ -342,7 +342,7 @@ describe("AuthorizationsPage", () => {
     );
   });
 
-  it("does not expose or send an authorization rate for a manager", async () => {
+  it("does not expose or send an authorization rate for a manager (sends null, not omitted)", async () => {
     mockedUseOrganization.mockReturnValue({
       ...baseOrganization(),
       role: "manager",
@@ -402,7 +402,9 @@ describe("AuthorizationsPage", () => {
     const amendCall = mockedRpc.mock.calls.find(
       ([fn]) => fn === "amend_client_authorization",
     );
-    expect(amendCall?.[1]).not.toHaveProperty("new_hourly_rate_cents");
+    // Always present (a missing key makes the production overload call ambiguous) but never a rate:
+    // null, and the database trigger carries the existing rate forward for a manager.
+    expect(amendCall?.[1]).toHaveProperty("new_hourly_rate_cents", null);
   });
 
   it("soft-deletes an authorization via Remove", async () => {
