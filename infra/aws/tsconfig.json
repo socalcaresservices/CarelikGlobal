@@ -1,0 +1,18 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "lib": ["ES2022"],
+    "types": ["node"],
+    "jsx": "preserve",
+    "exactOptionalPropertyTypes": false
+  },
+  "include": [
+    "bin",
+    "lib",
+    "test",
+    "scripts",
+    "db",
+    "vitest.config.ts",
+    "vitest.db.config.ts"
+  ]
+}

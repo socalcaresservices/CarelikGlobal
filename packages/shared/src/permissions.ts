@@ -32,8 +32,19 @@ export const permissionSchema = z.enum([
   "skills.update",
   "languages.read",
   "languages.update",
+  "clients.names.read",
+  "clients.names.manage",
+  "clients.manage",
+  "authorizations.rates.manage",
+  "caregivers.manage",
+  "services.manage",
+  "assignments.manage",
+  "shifts.manage",
+  "continuity.export",
   "documents.read",
   "documents.manage",
+  "documents.manage_own",
+  "documents.review_own",
   "visits.read",
   "visits.manage",
   "assignments.read",
@@ -42,7 +53,11 @@ export const permissionSchema = z.enum([
   "billing.update",
   "billing.visits.read",
   "billing.approve",
-  "billing.submit"
+  "billing.submit",
+  "billing.rounding.manage",
+  "care_requests.read",
+  "care_requests.manage",
+  "availability.manage_own"
 ]);
 
 export type Permission = z.infer<typeof permissionSchema>;

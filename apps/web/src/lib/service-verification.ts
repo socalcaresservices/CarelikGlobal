@@ -5,28 +5,90 @@
 // module only controls how they're *shown*.
 export const PACIFIC_TIME_ZONE = "America/Los_Angeles";
 
+// The agency's own time zone (organizations.timezone; default
+// America/Los_Angeles). The AWS build sets it from the active membership so
+// display and manager-entered wall times use the same zone the server uses
+// for service dates. An unknown zone is ignored (keeps the previous one).
+let agencyTimeZone = PACIFIC_TIME_ZONE;
+export function setAgencyTimeZone(timeZone: string | null | undefined): void {
+  if (!timeZone) return;
+  try {
+    new Intl.DateTimeFormat("en-US", { timeZone }).format(0);
+    agencyTimeZone = timeZone;
+  } catch {
+    console.warn("Ignoring unknown agency time zone; keeping", agencyTimeZone);
+  }
+}
+export function getAgencyTimeZone(): string {
+  return agencyTimeZone;
+}
+
 export function formatHours(minutes: number): string {
   return (minutes / 60).toFixed(2).replace(/\.00$/, "");
 }
 
+/** Human-readable duration for operational UI and printed reports. */
+export function formatDuration(minutes: number | null | undefined): string {
+  if (minutes === null || minutes === undefined) return "—";
+  const total = Math.max(0, Math.round(minutes));
+  const hours = Math.floor(total / 60);
+  const mins = total % 60;
+  if (hours === 0) return `${mins} min`;
+  if (mins === 0) return `${hours} hr`;
+  return `${hours} hr ${mins} min`;
+}
+
+/** MM/DD/YYYY in the agency time zone, for an instant (timestamptz). */
+export function formatNumericDate(value: string | Date): string {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    timeZone: agencyTimeZone,
+  }).formatToParts(new Date(value));
+  const get = (type: string) =>
+    parts.find((part) => part.type === type)?.value ?? "";
+  return `${get("month")}/${get("day")}/${get("year")}`;
+}
+
+/** MM/DD/YYYY for a calendar date (YYYY-MM-DD) - read from the string, never
+ *  converted through a time zone, so a stored date cannot shift a day. */
+export function formatDateOnly(value: string | null | undefined): string {
+  if (!value) return "—";
+  const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(value);
+  return match ? `${match[2]}/${match[3]}/${match[1]}` : value;
+}
+
+export function formatTimeRange(timeIn: string, timeOut: string | null): string {
+  return timeOut
+    ? `${formatClockTime(timeIn)}–${formatClockTime(timeOut)}`
+    : formatClockTime(timeIn);
+}
+
+/** h:mm AM/PM in the agency time zone. */
 export function formatClockTime(value: string | Date): string {
   return new Intl.DateTimeFormat("en-US", {
     hour: "numeric",
     minute: "2-digit",
-    timeZone: PACIFIC_TIME_ZONE
+    hour12: true,
+    timeZone: agencyTimeZone
   }).format(new Date(value));
 }
 
 // A visit is linked to its scheduled shift on the server at Time In
-// (20260826070000). Visits started with no matching shift - and every visit
-// recorded before the link existed - have no scheduled window.
-export const UNLINKED_VISIT_LABEL = "Not linked to a scheduled shift";
+// (0013 / 20260826070000). Visits started with no matching shift - and every
+// visit recorded before the link existed - have no scheduled window.
+export const UNLINKED_VISIT_LABEL = "Unscheduled visit";
+
+export const FLEXIBLE_VISIT_LABEL = "Flexible visit — no shift required";
 
 export function formatScheduledWindow(
   startsAt: string | null | undefined,
-  endsAt: string | null | undefined
+  endsAt: string | null | undefined,
+  /** 0030: a flexible caregiver's visit without a shift is normal, not unscheduled. */
+  schedulingMode?: string | null,
 ): string {
-  if (!startsAt || !endsAt) return UNLINKED_VISIT_LABEL;
+  if (!startsAt || !endsAt) return schedulingMode === "flexible" ? FLEXIBLE_VISIT_LABEL : UNLINKED_VISIT_LABEL;
   return `${formatClockTime(startsAt)}–${formatClockTime(endsAt)}`;
 }
 
@@ -69,23 +131,32 @@ export function classifyIncompleteVisit(
 }
 
 export function formatVisitDate(value: string | Date): string {
-  return new Intl.DateTimeFormat("en-US", {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-    timeZone: PACIFIC_TIME_ZONE
-  }).format(new Date(value));
+  return formatNumericDate(value);
 }
 
+/** "2:30 PM" for a wall-clock "HH:MM" already in the agency's zone (no conversion). */
+export function formatWallClock(value: string | null | undefined): string {
+  const match = /^(\d{1,2}):(\d{2})/.exec(value ?? "");
+  if (!match) return value ?? "—";
+  const hour = Number(match[1]);
+  return `${hour % 12 === 0 ? 12 : hour % 12}:${match[2]} ${hour < 12 ? "AM" : "PM"}`;
+}
+
+/** "Monday 10/05/2026" for a calendar date (weekday computed at UTC noon, so no shift). */
+export function formatWeekdayDate(value: string, weekday: "long" | "short" = "long"): string {
+  const day = new Intl.DateTimeFormat("en-US", { weekday, timeZone: "UTC" }).format(new Date(`${value.slice(0, 10)}T12:00:00Z`));
+  return `${day} ${formatDateOnly(value)}`;
+}
+
+/** "Mon 10/05/2026 9:00 AM" for an instant, in the agency time zone. */
+export function formatWeekdayDateTime(value: string | Date): string {
+  const day = new Intl.DateTimeFormat("en-US", { weekday: "short", timeZone: agencyTimeZone }).format(new Date(value));
+  return `${day} ${formatDateTime(value)}`;
+}
+
+/** MM/DD/YYYY h:mm AM/PM in the agency time zone. */
 export function formatDateTime(value: string | Date): string {
-  return new Intl.DateTimeFormat("en-US", {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
-    timeZone: PACIFIC_TIME_ZONE
-  }).format(new Date(value));
+  return `${formatNumericDate(value)} ${formatClockTime(value)}`;
 }
 
 // mm:ss under an hour, h:mm:ss at or over - a caregiver glancing at a
@@ -155,3 +226,138 @@ export const SIGNER_ROLE_LABEL: Record<VisitSignerRole, string> = {
   guardian: "Guardian",
   authorized_representative: "Authorized representative"
 };
+
+// ---------------------------------------------------------------------------
+// Manager-entered Time Out. Every time on these screens is shown in Pacific
+// time, so entry is Pacific too (not the manager's device timezone), split
+// into date, hour, minute and an explicit AM/PM.
+
+export type Meridiem = "AM" | "PM";
+
+export interface PacificWallTime {
+  /** YYYY-MM-DD */
+  date: string;
+  /** 1-12, or null while not chosen */
+  hour: number | null;
+  /** 0-59, or null while not chosen */
+  minute: number | null;
+  meridiem: Meridiem | null;
+}
+
+function pacificFields(utcMs: number) {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: agencyTimeZone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hourCycle: "h23",
+  }).formatToParts(new Date(utcMs));
+  const get = (type: string) => Number(parts.find((p) => p.type === type)?.value);
+  return { year: get("year"), month: get("month"), day: get("day"), hour: get("hour"), minute: get("minute") };
+}
+
+/** The Pacific date/hour/minute/AM-PM of an instant, for pre-filling the form. */
+export function toPacificWallTime(value: string | Date): PacificWallTime {
+  const f = pacificFields(new Date(value).getTime());
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return {
+    date: `${f.year}-${pad(f.month)}-${pad(f.day)}`,
+    hour: f.hour % 12 === 0 ? 12 : f.hour % 12,
+    minute: f.minute,
+    meridiem: f.hour < 12 ? "AM" : "PM",
+  };
+}
+
+export type WallTimeResult =
+  | { ok: true; value: Date }
+  | { ok: false; error: string };
+
+/** Converts a Pacific wall-clock entry to an instant, rejecting incomplete or non-existent times. */
+export function pacificWallTimeToDate(entry: PacificWallTime): WallTimeResult {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(entry.date)) {
+    return { ok: false, error: "Enter the date the visit ended." };
+  }
+  if (entry.hour === null || entry.minute === null || entry.meridiem === null) {
+    return { ok: false, error: "Choose the hour, minute, and AM or PM." };
+  }
+  const [year, month, day] = entry.date.split("-").map(Number) as [number, number, number];
+  const hour24 = (entry.hour % 12) + (entry.meridiem === "PM" ? 12 : 0);
+  const asUtc = Date.UTC(year, month - 1, day, hour24, entry.minute);
+  // Pacific offset at the guessed instant, re-checked once for a DST edge.
+  const offsetAt = (ms: number) => {
+    const f = pacificFields(ms);
+    return Date.UTC(f.year, f.month - 1, f.day, f.hour, f.minute) - ms;
+  };
+  let instant = asUtc - offsetAt(asUtc);
+  const second = asUtc - offsetAt(instant);
+  if (second !== instant) instant = second;
+  const check = pacificFields(instant);
+  if (check.year !== year || check.month !== month || check.day !== day || check.hour !== hour24 || check.minute !== entry.minute) {
+    return {
+      ok: false,
+      error: "That time does not exist on this date (daylight saving change). Choose another time.",
+    };
+  }
+  return { ok: true, value: new Date(instant) };
+}
+
+/** Same limits the server enforces on a manager-entered Time Out (0015 / 20260826090000). */
+export const MAX_VISIT_MINUTES = 24 * 60;
+
+export function validateManagerTimeOut(
+  timeIn: string,
+  timeOut: Date,
+  now: Date = new Date(),
+): string | null {
+  const start = new Date(timeIn);
+  const minutes = Math.floor((timeOut.getTime() - start.getTime()) / 60_000);
+  const describe = (d: Date) => `${formatVisitDate(d)}, ${formatClockTime(d)}`;
+  if (timeOut.getTime() > now.getTime()) {
+    return `Time Out (${describe(timeOut)}) is in the future. Check the date and AM/PM.`;
+  }
+  if (minutes < 1) {
+    return `Time Out (${describe(timeOut)}) must be after Time In (${describe(start)}). Check the date and AM/PM.`;
+  }
+  if (minutes > MAX_VISIT_MINUTES) {
+    return `This would make the visit ${formatDuration(minutes)}. A visit cannot be longer than 24 hours. Check the date.`;
+  }
+  return null;
+}
+
+/**
+ * A corrected time for submission. When the entry still shows the original
+ * time (same Pacific date, hour, minute and AM/PM), the original value is
+ * sent unchanged, so an untouched Time In or Time Out keeps its seconds
+ * instead of being re-entered as a whole minute.
+ */
+export function correctedTimeValue(
+  entry: PacificWallTime,
+  original: string | null,
+): { ok: true; iso: string; value: Date } | { ok: false; error: string } {
+  if (original) {
+    const was = toPacificWallTime(original);
+    if (
+      was.date === entry.date &&
+      was.hour === entry.hour &&
+      was.minute === entry.minute &&
+      was.meridiem === entry.meridiem
+    ) {
+      return { ok: true, iso: original, value: new Date(original) };
+    }
+  }
+  const parsed = pacificWallTimeToDate(entry);
+  return parsed.ok ? { ok: true, iso: parsed.value.toISOString(), value: parsed.value } : parsed;
+}
+
+/** Plain-language confirmation methods (stored values stay unchanged). */
+export const CONFIRMATION_METHOD_LABEL: Record<string, string> = {
+  draw: "Drawn signature",
+  assisted_mark: "Assisted mark",
+  typed: "Typed name",
+  verbal: "Verbal confirmation",
+  unable_to_confirm: "Unable to confirm",
+};
+export const confirmationMethodLabel = (method: string | null | undefined) =>
+  method ? CONFIRMATION_METHOD_LABEL[method] ?? method : "—";

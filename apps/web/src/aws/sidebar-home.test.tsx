@@ -1,0 +1,284 @@
+// Left sidebar (expanded / collapsed / mobile drawer) and the restyled Home. SYNTHETIC data only.
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { CognitoAuthProvider, type CognitoAuthClient } from "@carelik/auth";
+import { MemoryRouter } from "react-router-dom";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { createAwsApiClient } from "@/lib/aws-api";
+import { AwsRoutes } from "./aws-root";
+import { currentLink, visibleGroups, type NavLinkDef } from "./nav-model";
+
+const ORG = "aaaaaaaa-0000-4000-8000-000000000001";
+const SERVICE = "bbbbbbbb-0000-4000-8000-000000000001";
+type Role = "caregiver" | "manager" | "organization_owner";
+const PERMS: Record<Role, string[]> = {
+  manager: ["visits.read", "visits.manage", "billing.visits.read", "shifts.manage", "care_requests.read", "clients.names.read", "caregivers.manage",
+    "authorizations.read", "documents.read", "continuity.export"],
+  organization_owner: ["visits.read", "visits.manage", "billing.visits.read", "billing.read", "organization.update", "shifts.manage", "care_requests.read",
+    "clients.names.read", "caregivers.manage", "authorizations.read", "documents.read", "continuity.export"],
+  caregiver: ["availability.manage_own", "documents.manage_own"],
+};
+const json = (code: number, body: unknown) => new Response(JSON.stringify(body), { status: code, headers: { "content-type": "application/json" } });
+
+const SUMMARY = { missingTimeOut: 1, notConfirmed: 0, needsReview: 2, lateResponsesToReview: 0, uncoveredShifts: 0, documentsBlocking: 0, documentsToReview: 0, billingReadyUnapproved: 3, awaitingSignature: 0, documentsExpiring: 2, total: 3 };
+const ROW = {
+  serviceId: SERVICE, serviceCode: "862", serviceName: "Respite Care", clientCount: 2, authorizedMinutes: 6000, scheduledMinutes: 240, workedMinutes: 1590,
+  billableMinutes: 1470, reviewMinutes: 120, approvedMinutes: 600, remainingMinutes: 4530, lineagesWithoutRate: 0,
+};
+
+function renderAt(path: string, role: Role) {
+  const owner = role === "organization_owner";
+  const fetchImpl = vi.fn(async (input: RequestInfo | URL) => {
+    const url = new URL(String(input));
+    switch (url.pathname) {
+      case "/v1/me":
+        return json(200, { memberships: [{ organizationId: ORG, organizationSlug: "org-a", organizationName: "Synthetic Care Co", organizationTimezone: "America/Los_Angeles", role, permissions: PERMS[role] }], profile: { displayName: "Synthetic Person" } });
+      case "/v1/branding":
+        return json(200, { branding: { organizationId: ORG, displayName: "Synthetic Care Co", accentColor: null, logoSha256: null } });
+      case "/v1/attention":
+        return json(200, { summary: role === "caregiver" ? null : SUMMARY });
+      case "/v1/reports/utilisation":
+        return json(200, { services: [{ ...ROW, billableValueCents: owner ? 7350 : null, approvedValueCents: owner ? 3000 : null, unusedValueCents: owner ? 22650 : null }] });
+      case "/v1/clients":
+        return json(200, { clients: [{ clientId: "cccccccc-0000-4000-8000-000000000001", clientCode: "C-104", caregiverDisplayCode: null, status: "active", legalFirstName: "Synthetic", legalLastName: "Client Alpha", city: "Riverside", clientTypeId: null, clientTypeName: null, currentAuthorizations: 2, openVisits: 0 }] });
+      case "/v1/services":
+        return json(200, { services: [{ serviceId: SERVICE, code: "862", name: "Respite Care", isActive: true }] });
+      case "/v1/caregivers":
+        return json(200, { caregivers: [] });
+      case "/v1/shifts": {
+        const at = (h: number) => new Date(Date.now() + h * 3600e3).toISOString();
+        return json(200, { shifts: [{ shiftId: "s1", clientId: "cccccccc-0000-4000-8000-000000000001", clientCode: "C-104", clientName: "Synthetic Client Alpha", serviceId: SERVICE, serviceCode: "862", serviceName: "Respite Care", localDate: "2026-12-01", startsAt: at(30), endsAt: at(32),
+          hasSignIn: true, reservedMinutes: 120, fromCareRequest: false, hasVisit: false, lastCalloutReason: null, coverageState: "covered", caregiverRecordId: "g1", caregiverCode: "CG-1", caregiverName: "Synthetic Caregiver" }] });
+      }
+      case "/v1/continuity/status":
+        return json(200, { status: { lastDownloadedAt: "2026-10-05T10:00:00Z", lastDownloadedBy: "Synthetic Manager", hoursSince: "30", downloadsLast7Days: 1, outageNumbersIssued: 25 } });
+      default:
+        return json(404, { error: { code: "not_found", message: "No such endpoint." } });
+    }
+  });
+  const auth = {
+    subscribe: vi.fn(() => () => {}),
+    getSession: vi.fn(async () => ({ user: { id: "11111111-2222-4333-8444-555555555555", email: "person@example.test", emailVerified: true }, access_token: "t", expires_at: 4_000_000_000 })),
+    getAccessToken: vi.fn(async () => "t"), signIn: vi.fn(), handleCallback: vi.fn(), startPasswordReset: vi.fn(), signOut: vi.fn(),
+  };
+  const client = createAwsApiClient({ baseUrl: "https://api.example.test", getAccessToken: () => auth.getAccessToken(), fetch: fetchImpl as never });
+  return render(
+    <MemoryRouter initialEntries={[path]}>
+      <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+        <CognitoAuthProvider client={auth as unknown as CognitoAuthClient}>
+          <AwsRoutes api={client} publicApi={client} />
+        </CognitoAuthProvider>
+      </QueryClientProvider>
+    </MemoryRouter>,
+  );
+}
+
+function mockMobile(matches: boolean) {
+  vi.stubGlobal("matchMedia", (query: string) => ({ matches, media: query, addEventListener: () => {}, removeEventListener: () => {}, addListener: () => {}, removeListener: () => {}, onchange: null, dispatchEvent: () => false }));
+}
+
+beforeEach(() => window.localStorage.clear());
+afterEach(() => {
+  cleanup();
+  vi.unstubAllGlobals();
+  vi.clearAllMocks();
+});
+
+const hrefs = (nav: HTMLElement) => Object.fromEntries(within(nav).getAllByRole("link").map((a) => [a.textContent, a.getAttribute("href")]));
+
+describe("navigation model", () => {
+  const icon = (() => null) as never;
+  const link = (over: Partial<NavLinkDef>): NavLinkDef => ({ to: "/x", label: "X", group: "TODAY", show: true, icon, ...over });
+
+  it("keeps the group order and drops groups with nothing visible", () => {
+    const groups = visibleGroups([link({ label: "A", group: "SETUP" }), link({ label: "B", group: "TODAY" }), link({ label: "C", group: "BILLING", show: false })]);
+    expect(groups.map((g) => g.group)).toEqual(["TODAY", "SETUP"]);
+  });
+
+  it("one current link per address: Visit records, Reports and Client monthly calendar share a route but not a view", () => {
+    const path = "/service-verification/reports";
+    const links = [
+      link({ to: path, label: "Visit records", matchView: (v) => v !== "overview" && v !== "calendar" }),
+      link({ to: path, search: "?view=overview", label: "Reports", matchView: (v) => v === "overview" }),
+      link({ to: path, search: "?view=calendar", label: "Client monthly calendar", matchView: (v) => v === "calendar" }),
+    ];
+    expect(currentLink(links, path, "")?.label).toBe("Visit records");
+    expect(currentLink(links, path, "?view=overview")?.label).toBe("Reports");
+    expect(currentLink(links, path, "?view=calendar")?.label).toBe("Client monthly calendar");
+    expect(currentLink(links, "/visits/abc", "")?.label).toBe("Visit records");
+  });
+});
+
+describe("sidebar: expanded", () => {
+  it("manager: grouped links, every earlier destination kept, Reports and Client monthly calendar added on the existing reports route", async () => {
+    renderAt("/", "manager");
+    const nav = await screen.findByRole("navigation", { name: "Main" });
+    expect(within(nav).getAllByText(/^(TODAY|VISITS|BILLING|PEOPLE|SETUP)$/).map((e) => e.textContent)).toEqual(["TODAY", "VISITS", "BILLING", "PEOPLE", "SETUP"]);
+    expect(hrefs(nav)).toEqual({
+      "Home": "/", "Verify visit": "/service-verification", "Schedule": "/schedule", "Care requests": "/care-requests",
+      "Visit records": "/service-verification/reports", "Reports": "/service-verification/reports?view=overview",
+      "Client monthly calendar": "/service-verification/reports?view=calendar", "Billing review": "/billing-review",
+      "Clients": "/clients", "Care Team": "/care-team", "Documents": "/documents", "Services": "/services",
+      "Continuity pack": "/continuity", "Outage records": "/outage-visits",
+    });
+    // Settings stays Administrator-only (organization.update), unchanged.
+    expect(within(nav).queryByRole("link", { name: "Settings" })).toBeNull();
+  });
+
+  it("owner also sees Settings; the footer shows the view, name, email, Profile and Sign out", async () => {
+    renderAt("/", "organization_owner");
+    const nav = await screen.findByRole("navigation", { name: "Main" });
+    expect(within(nav).getByRole("link", { name: "Settings" }).getAttribute("href")).toBe("/settings/branding");
+    expect(await screen.findByText("ADMINISTRATOR VIEW")).toBeInTheDocument();
+    expect(screen.getByText("Synthetic Person")).toBeInTheDocument();
+    expect(screen.getByText("person@example.test")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Profile" }).getAttribute("href")).toBe("/profile");
+    expect(screen.getByRole("button", { name: "Sign out" })).toBeInTheDocument();
+  });
+
+  it("the agency card shows the agency name from existing data and no hard-coded name or environment badge", async () => {
+    renderAt("/", "manager");
+    expect(await screen.findByText("Synthetic Care Co", { selector: "p" })).toBeInTheDocument();
+    expect(screen.queryByText(/synthetic data|test environment/i)).toBeNull();
+  });
+
+  it("caregiver: only the caregiver links, in TODAY and PEOPLE", async () => {
+    renderAt("/service-verification", "caregiver");
+    const nav = await screen.findByRole("navigation", { name: "Main" });
+    expect(Object.keys(hrefs(nav)).sort()).toEqual(["Availability", "My documents", "My shifts", "Verify visit"]);
+    expect(within(nav).queryByText("SETUP")).toBeNull();
+  });
+
+  it("hides the sidebar and gives the page the full width when printing", async () => {
+    renderAt("/", "manager");
+    const aside = (await screen.findByRole("navigation", { name: "Main" })).closest("aside")!;
+    expect(aside.className).toMatch(/print:hidden/);
+    expect(document.querySelector("header")!.className).toMatch(/print:hidden/);
+    expect(document.querySelector("main")!.parentElement!.className).toMatch(/print:pl-0/);
+  });
+});
+
+describe("sidebar: collapse", () => {
+  it("collapses to icons with accessible names, shows a tooltip, and remembers the choice", async () => {
+    const first = renderAt("/", "manager");
+    const nav = await screen.findByRole("navigation", { name: "Main" });
+    const aside = nav.closest("aside")!;
+    expect(aside.className).toMatch(/w-64/);
+    fireEvent.click(screen.getByRole("button", { name: "Collapse sidebar" }));
+    expect(aside.className).toMatch(/w-\[76px\]/);
+    expect(window.localStorage.getItem("ogevia.sidebar.collapsed")).toBe("1");
+    // Icon-only, but every control still has its name.
+    expect(within(nav).getByRole("link", { name: "Schedule" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Sign out" })).toBeInTheDocument();
+    fireEvent.mouseEnter(within(nav).getByRole("link", { name: "Schedule" }));
+    expect(screen.getByText("Schedule", { selector: "div[role=presentation]" })).toBeInTheDocument();
+    fireEvent.keyDown(within(nav).getByRole("link", { name: "Schedule" }), { key: "Escape" });
+    expect(screen.queryByText("Schedule", { selector: "div[role=presentation]" })).toBeNull();
+
+    first.unmount();
+    renderAt("/", "manager");
+    const again = (await screen.findByRole("navigation", { name: "Main" })).closest("aside")!;
+    expect(again.className).toMatch(/w-\[76px\]/);
+    fireEvent.click(screen.getByRole("button", { name: "Expand sidebar" }));
+    expect(again.className).toMatch(/w-64/);
+    expect(window.localStorage.getItem("ogevia.sidebar.collapsed")).toBe("0");
+  });
+});
+
+describe("sidebar: mobile drawer", () => {
+  it("below 768px the menu button opens the drawer; Escape closes it and returns focus; choosing a link closes it", async () => {
+    mockMobile(true);
+    renderAt("/", "manager");
+    const menu = await screen.findByRole("button", { name: /^Menu/ });
+    expect(menu).toHaveTextContent("Home");
+    expect(menu).toHaveAttribute("aria-expanded", "false");
+    // Closed: the sidebar is removed from the accessibility tree.
+    expect(screen.queryByRole("navigation", { name: "Main" })).toBeNull();
+    fireEvent.click(menu);
+    const nav = await screen.findByRole("navigation", { name: "Main" });
+    expect(menu).toHaveAttribute("aria-expanded", "true");
+    await waitFor(() => expect(screen.getByRole("button", { name: "Close menu" })).toHaveFocus());
+    fireEvent.keyDown(nav, { key: "Escape" });
+    await waitFor(() => expect(screen.queryByRole("navigation", { name: "Main" })).toBeNull());
+    expect(menu).toHaveFocus();
+    fireEvent.click(menu);
+    fireEvent.click(await screen.findByRole("link", { name: "Schedule" }));
+    await waitFor(() => expect(screen.queryByRole("navigation", { name: "Main" })).toBeNull());
+  });
+});
+
+describe("Home layout", () => {
+  it("keeps every Home element: title, count, month, KPIs, the service table, Action needed, Reminders and Outage readiness", async () => {
+    renderAt("/", "manager");
+    expect(await screen.findByRole("heading", { name: "Home", level: 1 })).toBeInTheDocument();
+    expect(await screen.findByTestId("action-needed-banner")).toHaveTextContent("Action needed: 6");
+    expect(screen.getByLabelText("Month")).toHaveAttribute("type", "month");
+    const hours = (await screen.findByRole("heading", { name: "Hours this month" })).closest("section")!;
+    for (const k of ["Authorized", "Worked", "Billable (confirmed)", "Hours left"]) expect(within(hours).getAllByText(k).length).toBeGreaterThan(0);
+    expect(within(hours).getByRole("link", { name: /monthly reconciliation/ }).getAttribute("href")).toBe("/service-verification/reports?view=reconciliation");
+    const table = await within(hours).findByRole("table");
+    expect(within(table).getAllByRole("columnheader").map((c) => c.textContent)).toEqual(["Service", "Progress", "Billable", "In review", "Approved", "Scheduled ahead", "Hours left"]);
+    const row = within(table).getAllByRole("row")[1]!;
+    expect(row).toHaveTextContent("Respite Care");
+    expect(row).toHaveTextContent("26.5 h of 100 h · 27%");
+    // Numeric cells are right-aligned; the columns hold the same values the lines did.
+    const cells = within(row).getAllByRole("cell");
+    expect(cells.map((c) => c.textContent)).toEqual(["26.5 h of 100 h · 27%", "24.5 h", "2 h", "10 h", "4 h", "75.5 h"]);
+    for (const c of cells.slice(1)) expect(c.className).toMatch(/text-right/);
+    // The table scrolls sideways instead of squeezing, and the scroller is keyboard-reachable.
+    const scroller = within(hours).getByRole("region", { name: /scrolls sideways/ });
+    expect(scroller.className).toMatch(/overflow-x-auto/);
+    expect(scroller).toHaveAttribute("tabindex", "0");
+    expect(screen.queryByText("Financial impact (Administrator only)")).toBeNull();
+  });
+
+  it("Action needed: one row per item, highlighted only above zero, with a text cue; Reminders dashed; Outage readiness holds the Continuity pack link", async () => {
+    renderAt("/", "manager");
+    const section = (await screen.findByRole("heading", { name: "Action needed" })).closest("section")!;
+    await within(section).findByText("Missing Clock-Out");
+    const rows = within(section).getAllByRole("link");
+    const byLabel = (label: string) => within(section).getByText(label).closest("a")!;
+    expect(byLabel("Missing Clock-Out").className).toMatch(/bg-og-warn-bg/);
+    expect(byLabel("Missing Clock-Out")).toHaveTextContent("Needs action: 1");
+    expect(byLabel("Awaiting Confirmation").className).not.toMatch(/bg-og-warn-bg/);
+    expect(byLabel("Awaiting Confirmation")).not.toHaveTextContent("Needs action");
+    // Rendered from the data: one link per category the server returned (eight for this viewer).
+    expect(rows.filter((a) => a.closest("ul")?.className.includes("divide-y"))).toHaveLength(8);
+    const reminders = within(section).getByRole("heading", { name: /Reminders/ }).parentElement!;
+    expect(reminders.className).toMatch(/border-dashed/);
+    expect(within(reminders).getByText("Documents Expiring Soon")).toBeInTheDocument();
+    const outage = within(section).getByRole("heading", { name: "Outage readiness" }).closest("section")!;
+    expect(outage).toHaveTextContent("OUTAGE READINESS: Continuity pack last downloaded 30 hours ago by Synthetic Manager.");
+    expect(within(outage).getByRole("link", { name: "Continuity pack" }).getAttribute("href")).toBe("/continuity");
+  });
+
+  it("Financial impact: Administrator sees it with Unavailable cost and margin; the manager sees no dollar value", async () => {
+    renderAt("/", "organization_owner");
+    expect(await screen.findByText("Financial impact (Administrator only)")).toBeInTheDocument();
+    expect(screen.getByText("$74")).toBeInTheDocument();
+    expect(screen.getByText("Unavailable")).toBeInTheDocument();
+    cleanup();
+    renderAt("/", "manager");
+    await screen.findByText(/26\.5 h of 100 h/);
+    expect(screen.queryByText(/\$\d/)).toBeNull();
+    expect(screen.getByText(/visible to the agency Administrator only/)).toBeInTheDocument();
+  });
+});
+
+describe("Clearer actions and records (presentation only)", () => {
+  it("Clients: each row points to the client's authorized hours, and still opens the same client page", async () => {
+    renderAt("/clients", "organization_owner");
+    const row = (await screen.findByText("View authorized hours →")).closest("a")!;
+    expect(row.getAttribute("href")).toBe("/clients/cccccccc-0000-4000-8000-000000000001");
+    expect(row).toHaveTextContent("2 current authorizations");
+  });
+
+  it("Schedule: shift actions are buttons at least 40px tall, and Cancel shift is visibly different from the others", async () => {
+    renderAt("/schedule", "organization_owner");
+    const cancel = await screen.findByRole("button", { name: "Cancel shift" });
+    const change = screen.getByRole("button", { name: "Change time" });
+    for (const b of [cancel, change, screen.getByRole("button", { name: "Record call-out" })]) expect(b.className).toMatch(/min-h-\[40px\]/);
+    expect(cancel.className).toMatch(/border-red-700/);
+    expect(change.className).not.toMatch(/border-red-700/);
+  });
+});

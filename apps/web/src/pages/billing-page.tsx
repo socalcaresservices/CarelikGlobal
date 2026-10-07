@@ -4,7 +4,7 @@ import { Download } from "lucide-react";
 import { Button, Card, PageHeader, StatusBadge } from "@carelik/ui";
 import { useOrganization } from "@/providers/organization-provider";
 import { supabase } from "@/lib/supabase";
-import { formatHours, formatVisitDate } from "@/lib/service-verification";
+import { formatDateOnly, formatHours, formatVisitDate } from "@/lib/service-verification";
 
 // Reads/writes the pre-existing billing_approvals/billing_submissions
 // pipeline (supabase/migrations/20260812193010 and 20260812193042) -
@@ -371,7 +371,7 @@ export function BillingPage() {
                   <Fragment key={row.visit_id}>
                     <tr className="border-b border-slate-100 last:border-0">
                       <td className="py-2 pr-3 whitespace-nowrap text-slate-600">
-                        {formatVisitDate(row.service_date)}
+                        {formatDateOnly(row.service_date)}
                       </td>
                       <td className="py-2 pr-3 text-slate-800">
                         {row.client_name}
@@ -564,7 +564,7 @@ export function BillingPage() {
                       </td>
                     ) : null}
                     <td className="py-2 pr-3 whitespace-nowrap text-slate-600">
-                      {formatVisitDate(row.service_date)}
+                      {formatDateOnly(row.service_date)}
                     </td>
                     <td className="py-2 pr-3 text-slate-800">
                       {row.client_name}
@@ -677,7 +677,7 @@ export function BillingPage() {
                             >
                               <span className="text-slate-700">
                                 {item.client_name} · {item.service_name} ·{" "}
-                                {formatVisitDate(item.service_date)}
+                                {formatDateOnly(item.service_date)}
                               </span>
                               <span className="flex items-center gap-2">
                                 {item.is_voided ? (

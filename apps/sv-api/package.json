@@ -1,0 +1,31 @@
+{
+  "name": "@carelik/sv-api",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Ogevia Service Verification API (AWS Lambda behind API Gateway HTTP API + Cognito JWT authorizer).",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "build": "tsc --noEmit",
+    "lint": "tsc --noEmit",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:db": "vitest run --config vitest.db.config.ts"
+  },
+  "dependencies": {
+    "@aws-sdk/client-cognito-identity-provider": "^3.1144.0",
+    "@aws-sdk/client-lambda": "^3.1144.0",
+    "@aws-sdk/client-s3": "^3.1144.0",
+    "@aws-sdk/client-secrets-manager": "^3.1144.0",
+    "@carelik/auth": "workspace:*",
+    "pg": "^8.23.1"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.2",
+    "@types/pg": "^8.23.1",
+    "typescript": "^5.7.2",
+    "vitest": "^2.1.8"
+  }
+}

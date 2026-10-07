@@ -1,0 +1,286 @@
+ogevia.app_users.cognito_sub text
+ogevia.app_users.created_at timestamp with time zone
+ogevia.app_users.display_name text
+ogevia.app_users.id uuid
+ogevia.app_users.status text
+ogevia.app_users.updated_at timestamp with time zone
+ogevia.audit_events.action text
+ogevia.audit_events.actor_user_id uuid
+ogevia.audit_events.after_state jsonb
+ogevia.audit_events.before_state jsonb
+ogevia.audit_events.entity_id uuid
+ogevia.audit_events.entity_type text
+ogevia.audit_events.id bigint
+ogevia.audit_events.occurred_at timestamp with time zone
+ogevia.audit_events.organization_id uuid
+ogevia.audit_events.reason text
+ogevia.audit_events.request_id uuid
+ogevia.authorization_reservations.authorization_lineage_id uuid
+ogevia.authorization_reservations.care_request_id uuid
+ogevia.authorization_reservations.created_at timestamp with time zone
+ogevia.authorization_reservations.id uuid
+ogevia.authorization_reservations.organization_id uuid
+ogevia.authorization_reservations.release_reason text
+ogevia.authorization_reservations.released_at timestamp with time zone
+ogevia.authorization_reservations.reserved_minutes integer
+ogevia.authorization_reservations.service_date date
+ogevia.authorization_reservations.shift_id uuid
+ogevia.care_notifications.care_request_id uuid
+ogevia.care_notifications.caregiver_record_id uuid
+ogevia.care_notifications.created_at timestamp with time zone
+ogevia.care_notifications.event_key text
+ogevia.care_notifications.id uuid
+ogevia.care_notifications.organization_id uuid
+ogevia.care_notifications.read_at timestamp with time zone
+ogevia.care_notifications.recipient_type USER-DEFINED
+ogevia.care_notifications.recipient_user_id uuid
+ogevia.care_request_alert_recipients.created_at timestamp with time zone
+ogevia.care_request_alert_recipients.organization_id uuid
+ogevia.care_request_alert_recipients.user_id uuid
+ogevia.care_request_events.actor_user_id uuid
+ogevia.care_request_events.after_snapshot jsonb
+ogevia.care_request_events.before_snapshot jsonb
+ogevia.care_request_events.care_request_id uuid
+ogevia.care_request_events.created_at timestamp with time zone
+ogevia.care_request_events.event_key text
+ogevia.care_request_events.id uuid
+ogevia.care_request_events.organization_id uuid
+ogevia.care_request_events.reason text
+ogevia.care_request_events.shift_id uuid
+ogevia.care_request_offers.care_request_id uuid
+ogevia.care_request_offers.caregiver_record_id uuid
+ogevia.care_request_offers.id uuid
+ogevia.care_request_offers.note text
+ogevia.care_request_offers.organization_id uuid
+ogevia.care_request_offers.responded_at timestamp with time zone
+ogevia.care_request_offers.sent_at timestamp with time zone
+ogevia.care_request_offers.status USER-DEFINED
+ogevia.care_request_offers.token_hash text
+ogevia.care_request_offers.updated_at timestamp with time zone
+ogevia.care_requests.assigned_at timestamp with time zone
+ogevia.care_requests.assigned_caregiver_record_id uuid
+ogevia.care_requests.assigned_shift_id uuid
+ogevia.care_requests.authorization_lineage_id uuid
+ogevia.care_requests.cancelled_at timestamp with time zone
+ogevia.care_requests.client_id uuid
+ogevia.care_requests.created_at timestamp with time zone
+ogevia.care_requests.ends_at timestamp with time zone
+ogevia.care_requests.id uuid
+ogevia.care_requests.note text
+ogevia.care_requests.organization_id uuid
+ogevia.care_requests.portal_id uuid
+ogevia.care_requests.request_key uuid
+ogevia.care_requests.requested_minutes integer
+ogevia.care_requests.service_id uuid
+ogevia.care_requests.short_notice boolean
+ogevia.care_requests.starts_at timestamp with time zone
+ogevia.care_requests.status USER-DEFINED
+ogevia.care_requests.updated_at timestamp with time zone
+ogevia.caregiver_assignments.caregiver_user_id uuid
+ogevia.caregiver_assignments.client_id uuid
+ogevia.caregiver_assignments.created_at timestamp with time zone
+ogevia.caregiver_assignments.effective_end date
+ogevia.caregiver_assignments.effective_start date
+ogevia.caregiver_assignments.id uuid
+ogevia.caregiver_assignments.is_active boolean
+ogevia.caregiver_assignments.organization_id uuid
+ogevia.caregiver_assignments.service_id uuid
+ogevia.caregiver_assignments.updated_at timestamp with time zone
+ogevia.caregiver_availability_windows.caregiver_record_id uuid
+ogevia.caregiver_availability_windows.created_at timestamp with time zone
+ogevia.caregiver_availability_windows.end_local time without time zone
+ogevia.caregiver_availability_windows.id uuid
+ogevia.caregiver_availability_windows.organization_id uuid
+ogevia.caregiver_availability_windows.specific_date date
+ogevia.caregiver_availability_windows.start_local time without time zone
+ogevia.caregiver_availability_windows.weekday smallint
+ogevia.caregiver_records.caregiver_code text
+ogevia.caregiver_records.created_at timestamp with time zone
+ogevia.caregiver_records.deleted_at timestamp with time zone
+ogevia.caregiver_records.first_name text
+ogevia.caregiver_records.id uuid
+ogevia.caregiver_records.last_name text
+ogevia.caregiver_records.linked_user_id uuid
+ogevia.caregiver_records.organization_id uuid
+ogevia.caregiver_records.preferred_name text
+ogevia.caregiver_records.status text
+ogevia.caregiver_records.updated_at timestamp with time zone
+ogevia.caregiver_unavailable_dates.caregiver_record_id uuid
+ogevia.caregiver_unavailable_dates.created_at timestamp with time zone
+ogevia.caregiver_unavailable_dates.organization_id uuid
+ogevia.caregiver_unavailable_dates.reason text
+ogevia.caregiver_unavailable_dates.unavailable_date date
+ogevia.client_authorizations.authorization_number text
+ogevia.client_authorizations.change_reason text
+ogevia.client_authorizations.client_id uuid
+ogevia.client_authorizations.created_at timestamp with time zone
+ogevia.client_authorizations.created_by uuid
+ogevia.client_authorizations.deleted_at timestamp with time zone
+ogevia.client_authorizations.hourly_rate_cents integer
+ogevia.client_authorizations.id uuid
+ogevia.client_authorizations.is_current boolean
+ogevia.client_authorizations.lineage_id uuid
+ogevia.client_authorizations.monthly_authorized_minutes integer
+ogevia.client_authorizations.organization_id uuid
+ogevia.client_authorizations.payer text
+ogevia.client_authorizations.period_end date
+ogevia.client_authorizations.period_start date
+ogevia.client_authorizations.received_date date
+ogevia.client_authorizations.service_id uuid
+ogevia.client_authorizations.source_reference text
+ogevia.client_authorizations.superseded_by_id uuid
+ogevia.client_authorizations.supersedes_id uuid
+ogevia.client_authorizations.updated_at timestamp with time zone
+ogevia.client_authorizations.version_number integer
+ogevia.client_care_portals.client_id uuid
+ogevia.client_care_portals.created_at timestamp with time zone
+ogevia.client_care_portals.created_by uuid
+ogevia.client_care_portals.expires_at timestamp with time zone
+ogevia.client_care_portals.id uuid
+ogevia.client_care_portals.is_active boolean
+ogevia.client_care_portals.label text
+ogevia.client_care_portals.last_used_at timestamp with time zone
+ogevia.client_care_portals.organization_id uuid
+ogevia.client_care_portals.revoked_at timestamp with time zone
+ogevia.client_care_portals.revoked_by uuid
+ogevia.client_care_portals.token_hash text
+ogevia.clients.caregiver_display_code text
+ogevia.clients.client_code text
+ogevia.clients.created_at timestamp with time zone
+ogevia.clients.deleted_at timestamp with time zone
+ogevia.clients.id uuid
+ogevia.clients.organization_id uuid
+ogevia.clients.status USER-DEFINED
+ogevia.clients.updated_at timestamp with time zone
+ogevia.idempotency_records.actor_user_id uuid
+ogevia.idempotency_records.created_at timestamp with time zone
+ogevia.idempotency_records.idempotency_key uuid
+ogevia.idempotency_records.operation text
+ogevia.idempotency_records.organization_id uuid
+ogevia.idempotency_records.request_fingerprint text
+ogevia.idempotency_records.response jsonb
+ogevia.organization_memberships.created_at timestamp with time zone
+ogevia.organization_memberships.id uuid
+ogevia.organization_memberships.organization_id uuid
+ogevia.organization_memberships.role USER-DEFINED
+ogevia.organization_memberships.status USER-DEFINED
+ogevia.organization_memberships.updated_at timestamp with time zone
+ogevia.organization_memberships.user_id uuid
+ogevia.organizations.created_at timestamp with time zone
+ogevia.organizations.display_name text
+ogevia.organizations.id uuid
+ogevia.organizations.slug text
+ogevia.organizations.status USER-DEFINED
+ogevia.organizations.timezone text
+ogevia.organizations.updated_at timestamp with time zone
+ogevia.permissions.description text
+ogevia.permissions.key text
+ogevia.role_permissions.permission_key text
+ogevia.role_permissions.role USER-DEFINED
+ogevia.service_visits.authorization_status USER-DEFINED
+ogevia.service_visits.billable_minutes integer
+ogevia.service_visits.caregiver_attested_at timestamp with time zone
+ogevia.service_visits.caregiver_name_snapshot text
+ogevia.service_visits.caregiver_record_id uuid
+ogevia.service_visits.caregiver_user_id uuid
+ogevia.service_visits.client_code_snapshot text
+ogevia.service_visits.client_id uuid
+ogevia.service_visits.correction_reason text
+ogevia.service_visits.created_at timestamp with time zone
+ogevia.service_visits.created_by uuid
+ogevia.service_visits.id uuid
+ogevia.service_visits.locked_at timestamp with time zone
+ogevia.service_visits.organization_id uuid
+ogevia.service_visits.original_visit_id uuid
+ogevia.service_visits.scheduled_shift_id uuid
+ogevia.service_visits.service_authorization_id uuid
+ogevia.service_visits.service_date date
+ogevia.service_visits.service_id uuid
+ogevia.service_visits.service_notes text
+ogevia.service_visits.signed_at timestamp with time zone
+ogevia.service_visits.status USER-DEFINED
+ogevia.service_visits.task_categories ARRAY
+ogevia.service_visits.time_in timestamp with time zone
+ogevia.service_visits.time_out timestamp with time zone
+ogevia.service_visits.time_out_entered_by uuid
+ogevia.service_visits.time_out_reason text
+ogevia.service_visits.updated_at timestamp with time zone
+ogevia.service_visits.verified_minutes integer
+ogevia.service_visits.visit_number_snapshot text
+ogevia.service_visits.void_reason text
+ogevia.service_visits.voided_at timestamp with time zone
+ogevia.service_visits.voided_by uuid
+ogevia.service_visits.worked_minutes integer
+ogevia.services.code text
+ogevia.services.color text
+ogevia.services.created_at timestamp with time zone
+ogevia.services.deleted_at timestamp with time zone
+ogevia.services.id uuid
+ogevia.services.is_active boolean
+ogevia.services.name text
+ogevia.services.organization_id uuid
+ogevia.services.updated_at timestamp with time zone
+ogevia.shift_coverage_events.actor_user_id uuid
+ogevia.shift_coverage_events.after_snapshot jsonb
+ogevia.shift_coverage_events.before_snapshot jsonb
+ogevia.shift_coverage_events.created_at timestamp with time zone
+ogevia.shift_coverage_events.event_type USER-DEFINED
+ogevia.shift_coverage_events.id uuid
+ogevia.shift_coverage_events.organization_id uuid
+ogevia.shift_coverage_events.original_caregiver_record_id uuid
+ogevia.shift_coverage_events.reason text
+ogevia.shift_coverage_events.replacement_caregiver_record_id uuid
+ogevia.shift_coverage_events.shift_id uuid
+ogevia.shifts.caregiver_record_id uuid
+ogevia.shifts.caregiver_user_id uuid
+ogevia.shifts.client_id uuid
+ogevia.shifts.created_at timestamp with time zone
+ogevia.shifts.ends_at timestamp with time zone
+ogevia.shifts.id uuid
+ogevia.shifts.organization_id uuid
+ogevia.shifts.service_id uuid
+ogevia.shifts.starts_at timestamp with time zone
+ogevia.shifts.status USER-DEFINED
+ogevia.shifts.updated_at timestamp with time zone
+ogevia.visit_confirmations.confirmation_method text
+ogevia.visit_confirmations.confirmation_reason text
+ogevia.visit_confirmations.confirmation_version integer
+ogevia.visit_confirmations.confirmed_at timestamp with time zone
+ogevia.visit_confirmations.confirmed_by uuid
+ogevia.visit_confirmations.confirmed_visit_snapshot jsonb
+ogevia.visit_confirmations.evidence_id uuid
+ogevia.visit_confirmations.id uuid
+ogevia.visit_confirmations.organization_id uuid
+ogevia.visit_confirmations.request_id uuid
+ogevia.visit_confirmations.signer_relationship text
+ogevia.visit_confirmations.signer_role USER-DEFINED
+ogevia.visit_confirmations.typed_signer_name text
+ogevia.visit_confirmations.visit_id uuid
+ogevia.visit_corrections.after_snapshot jsonb
+ogevia.visit_corrections.before_snapshot jsonb
+ogevia.visit_corrections.corrected_by uuid
+ogevia.visit_corrections.corrected_visit_id uuid
+ogevia.visit_corrections.created_at timestamp with time zone
+ogevia.visit_corrections.id uuid
+ogevia.visit_corrections.organization_id uuid
+ogevia.visit_corrections.original_visit_id uuid
+ogevia.visit_corrections.reason text
+ogevia.visit_corrections.request_id uuid
+ogevia.visit_evidence.byte_size integer
+ogevia.visit_evidence.content_type text
+ogevia.visit_evidence.evidence_type text
+ogevia.visit_evidence.id uuid
+ogevia.visit_evidence.object_key text
+ogevia.visit_evidence.object_version_id text
+ogevia.visit_evidence.organization_id uuid
+ogevia.visit_evidence.registered_at timestamp with time zone
+ogevia.visit_evidence.registered_by uuid
+ogevia.visit_evidence.request_id uuid
+ogevia.visit_evidence.sha256_hex text
+ogevia.visit_evidence.storage_provider text
+ogevia.visit_evidence.visit_id uuid
+ogevia_meta.schema_migrations.applied_at timestamp with time zone
+ogevia_meta.schema_migrations.applied_by text
+ogevia_meta.schema_migrations.checksum text
+ogevia_meta.schema_migrations.name text
+ogevia_meta.schema_migrations.version text

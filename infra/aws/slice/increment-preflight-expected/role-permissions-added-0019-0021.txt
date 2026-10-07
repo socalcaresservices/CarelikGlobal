@@ -1,0 +1,12 @@
+caregiver documents.manage_own
+manager clients.names.manage
+manager clients.names.read
+manager documents.manage
+manager documents.read
+organization_owner billing.read
+organization_owner clients.names.manage
+organization_owner clients.names.read
+organization_owner documents.manage
+organization_owner documents.read
+organization_owner documents.review_own
+organization_owner organization.update

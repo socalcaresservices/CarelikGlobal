@@ -1,3 +1,9 @@
+/* Locally bundled fonts (npm packages, emitted into dist by Vite): no request to a font CDN. */
+@import "@fontsource-variable/plus-jakarta-sans/index.css";
+@import "@fontsource/ibm-plex-mono/400.css";
+@import "@fontsource/ibm-plex-mono/500.css";
+@import "@fontsource/ibm-plex-mono/600.css";
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -73,4 +79,19 @@ body {
   margin: 0;
   min-width: 320px;
   min-height: 100vh;
+}
+
+/* Printouts: white page; the screen's full-height body and its margin must not
+   push a blank extra page (the page margin comes from @page). */
+@media print {
+  :root,
+  html,
+  body {
+    background: #ffffff;
+    min-height: 0;
+    height: auto;
+  }
+  body {
+    margin: 0;
+  }
 }

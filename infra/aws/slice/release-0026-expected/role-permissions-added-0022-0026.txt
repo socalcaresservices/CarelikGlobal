@@ -1,0 +1,11 @@
+manager assignments.manage
+manager caregivers.manage
+manager clients.manage
+manager shifts.manage
+organization_owner assignments.manage
+organization_owner authorizations.rates.manage
+organization_owner caregivers.manage
+organization_owner clients.manage
+organization_owner services.manage
+organization_owner shifts.manage
+scheduler shifts.manage

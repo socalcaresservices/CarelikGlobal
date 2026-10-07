@@ -43,7 +43,7 @@ function storageKeyForUser(userId: string | undefined) {
 // arrays below (they'd see a "new" organizations value on every render).
 const EMPTY_ORGANIZATIONS: Organization[] = [];
 
-interface OrganizationContextValue {
+export interface OrganizationContextValue {
   organizations: Organization[];
   activeOrganization: Organization | null;
   activeOrganizationId: string | null;
@@ -55,6 +55,12 @@ interface OrganizationContextValue {
 }
 
 const OrganizationContext = createContext<OrganizationContextValue | null>(null);
+
+/**
+ * Lets the AWS build supply the same context from GET /v1/me (PostgreSQL is
+ * the authority) so the existing screens work unchanged.
+ */
+export const OrganizationContextProvider = OrganizationContext.Provider;
 
 export function OrganizationProvider({
   children,

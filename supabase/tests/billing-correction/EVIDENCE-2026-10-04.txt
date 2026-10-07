@@ -1,0 +1,66 @@
+Evidence run 2026-10-04T04:09:51Z, PostgreSQL 16.14 (Ubuntu 16.14-0ubuntu0.24.04.1). Fix under test: supabase/proposed/20261004120000_block_correction_of_billing_approved_visits.sql (sha256 a0843174e3894920...)
+
+## 1. Reproduction on the real production function bodies, then the fix (run.sh)
+STEP 1 approved original visit: approval b2aeb453-1aab-458a-ad86-aaeddcddbdd3
+STEP 2 corrected: original is now corrected, replacement a5a8b6e3-22e8-4ab8-a7c5-74b4754a98dd is signed
+STEP 3 approval b2aeb453-1aab-458a-ad86-aaeddcddbdd3 is still ACTIVE on the replaced (corrected) row
+STEP 4 replacement a5a8b6e3-22e8-4ab8-a7c5-74b4754a98dd is listed as Billing Ready
+STEP 5 second approval d65620aa-3143-47f4-8609-52a6a041f37c accepted for the replacement
+STEP 6 submission 6624839e-91ba-4f25-b503-4224f3e72ff0 contains 2 items totalling 210 minutes for ONE visit actually worked for 90 minutes
+REPRODUCED: 210 minutes submitted for one 90-minute visit
+FIX STEP 1 correction of an approved visit refused; visit unchanged
+FIX STEP 2 after voiding the approval, the correction applies
+FIX VERIFIED
+
+## 2. Regression: existing production Service Verification harness with the fix loaded (regression.sh)
+proposed fix loaded
+visit/shift link assertions: all passed
+shift-based visit access assertions: all passed
+manager close-out assertions: all passed
+REGRESSION PASSED: existing Service Verification assertions all pass with the fix loaded
+
+## 3. Live production, read-only (2026-10-04, earlier in this session)
+correct_service_visit, approve_visit_for_billing, submit_billing_approvals, list_billing_ready_visits: md5 of live bodies identical to the migration texts used above.
+billing_approvals = 0, visit_corrections = 0 (nothing double-billed).
+
+## 4. Every write path and concurrent sessions (added 2026-10-04T14:30:02Z, same fix sha256 a0843174e3894920...)
+Live production, read-only: the functions whose body updates service_visits are exactly these 7:
+  approve_visit_billing (legacy), close_missed_service_visit, confirm_service_visit, correct_service_visit,
+  end_service_visit, sign_service_visit, void_service_visit (all SECURITY DEFINER, executable by authenticated).
+Live production table privileges: anon and authenticated hold UPDATE and DELETE on service_visits and billing_approvals;
+RLS is enabled with SELECT-only policies, so direct writes affect 0 rows (tested below with the same policies).
+Function bodies under test vs live production (md5 of prosrc, CRLF normalised; close_missed_service_visit is stored with CRLF in production):
+Function bodies identical to production: 11 of 11
+
+all_paths.sql (fix loaded) - one approved visit, every path, as the role that may normally use it:
+ REFUSED approve_visit_billing, legacy (manager)                        This visit is not awaiting administrator review
+ REFUSED approve_visit_for_billing again (manager)                      This visit already has an active billing approval
+ REFUSED close_missed_service_visit (manager)                           Only an open visit (no Time Out) can be closed this way
+ REFUSED confirm_service_visit (its caregiver)                          Visit is already locked or is not ready for confirmation
+ REFUSED correct_service_visit (manager)                                This visit is approved for billing; void the billing approval before correcting it
+ REFUSED direct as authenticated manager: delete from public.billing_approvals where visit 0 rows
+ REFUSED direct as authenticated manager: delete from public.service_visits where id = '00 0 rows
+ REFUSED direct as authenticated manager: update public.billing_approvals set voided_at =  0 rows
+ REFUSED direct as authenticated manager: update public.service_visits set billable_minute 0 rows
+ REFUSED direct as authenticated manager: update public.service_visits set status = 'corre 0 rows
+ REFUSED direct status UPDATE as table owner (bypasses RLS)             This visit is approved for billing; void the billing approval before correcting it
+ REFUSED end_service_visit (its caregiver)                              Visit has already been ended
+ REFUSED sign_service_visit (its caregiver)                             Visit is already locked
+ REFUSED void_service_visit (manager)                                   A signed visit cannot be voided - use a correction instead
+ALL PATHS VERIFIED: 14 write paths refused; visit, approval and visit count unchanged
+
+concurrency.sh (fix loaded) - two real sessions; session 1 holds its transaction 3 s, session 2 starts 1 s later:
+PASS C1 correction first, approval concurrently (session 2 waited 2.1s, then refused: Only a signed visit can be approved for billing)
+PASS C2 approval first, correction concurrently (session 2 waited 2.0s, then refused: This visit is approved for billing)
+PASS C3 two approvals concurrently (session 2 waited 2.0s, then refused: This visit already has an active billing approval)
+PASS C4 void of the approval in progress, correction concurrently (session 2 waited 0.0s, then refused: This visit is approved for billing)
+PASS C4 retry after the void committed: the correction applies
+PASS C5 two corrections concurrently (session 2 waited 2.0s, then refused: Only a submitted visit can be corrected)
+CONCURRENCY VERIFIED: 5 cases
+
+Control (same tests, fix NOT loaded) - the tests detect the defect:
+  all_paths: FAIL correct_service_visit NOT REFUSED; FAIL direct status UPDATE as table owner NOT REFUSED; ALL-PATHS FAILED
+  concurrency: FAIL C2 (correction applied while the approval stayed active); FAIL C4; CONCURRENCY FAILED: 3
+
+Residual, outside application paths: a role that bypasses RLS (service_role / postgres) can still change minutes on an
+approved visit without a status change. No application function does this; the guard covers every status change.

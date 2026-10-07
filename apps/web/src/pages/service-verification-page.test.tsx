@@ -34,6 +34,12 @@ function authUser() {
     user: { id: USER_ID } as never,
     session: {} as never,
     loading: false,
+    provider: "supabase" as const,
+    error: null,
+    sessionExpired: false,
+    signIn: vi.fn(),
+    completeSignIn: vi.fn(),
+    getAccessToken: vi.fn(),
     signInWithGithub: vi.fn(),
     signInWithPassword: vi.fn(),
     resetPasswordForEmail: vi.fn(),
@@ -127,7 +133,7 @@ function mockRpcImplementation(overrides: Record<string, unknown> = {}) {
 }
 
 async function openConfirmation() {
-  fireEvent.click(await screen.findByRole("button", { name: /Sign out now/ }));
+  fireEvent.click(await screen.findByRole("button", { name: /End visit/ }));
   await screen.findByRole("heading", {
     name: "Verify visit details",
   });
@@ -150,49 +156,89 @@ describe("ServiceVerificationPage v3", () => {
     vi.unstubAllGlobals();
   });
 
-  it("shows only assigned client codes and never renders a client legal name", async () => {
+  it("lists today's scheduled visits by client code and never renders a client legal name", async () => {
     mockRpcImplementation();
     renderPage();
 
-    const picker = await screen.findByLabelText("Assigned client");
-    await screen.findByRole("option", { name: /C-104/ });
-    expect(picker).toHaveTextContent("C-104");
-    expect(picker).toHaveTextContent("C-207");
-    expect(picker).toHaveTextContent("9 active services");
+    expect(
+      await screen.findByRole("heading", { name: "Today's visits" }),
+    ).toBeInTheDocument();
+    const scheduled = await screen.findByRole("list", {
+      name: "Scheduled today",
+    });
+    expect(scheduled).toHaveTextContent("Client C-104");
+    expect(scheduled).toHaveTextContent("2:30 PM–4:30 PM");
+    expect(scheduled).toHaveTextContent("Client C-207");
+    expect(scheduled).toHaveTextContent("9 active services");
     expect(screen.queryByText("Darby Crash")).not.toBeInTheDocument();
     expect(
       screen.getByText("Visit Verification · Verificación de Visita"),
     ).toBeInTheDocument();
     expect(screen.getByText("Acme Care")).toBeInTheDocument();
     expect(screen.queryByText(/EVV|GPS/i)).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Start visit/ })).toBeDisabled();
 
     expect(mockedRpc).toHaveBeenCalledWith("list_assigned_visit_clients", {
       target_organization_id: ORG_ID,
     });
   });
 
-  it("auto-selects one authorized service and starts exactly that client-service pair", async () => {
+  it("separates assigned clients with no visit today and warns before an unscheduled start", async () => {
+    mockRpcImplementation({
+      list_assigned_visit_clients: {
+        data: [
+          {
+            ...assignedClients[0],
+            next_scheduled_starts_at: null,
+            next_scheduled_ends_at: null,
+          },
+        ],
+        error: null,
+      },
+    });
+    renderPage();
+
+    expect(
+      await screen.findByText("You have no visits scheduled for today."),
+    ).toBeInTheDocument();
+    const other = screen.getByRole("list", { name: "Other assigned clients" });
+    expect(other).toHaveTextContent("Not scheduled today");
+
+    fireEvent.click(screen.getByRole("button", { name: /Client C-104/ }));
+    const details = await screen.findByRole("group", { name: "Visit details" });
+    expect(details).toHaveTextContent("Unscheduled visit");
+    expect(details).toHaveTextContent(
+      "This client is not on your schedule today.",
+    );
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: /Start visit/ })).toBeEnabled(),
+    );
+  });
+
+  it("shows client, service, date and scheduled times, then starts exactly that client-service pair", async () => {
     mockRpcImplementation();
     renderPage();
 
-    await screen.findByRole("option", { name: /C-104/ });
-    fireEvent.change(screen.getByLabelText("Assigned client"), {
-      target: { value: CLIENT_ID },
-    });
-    await waitFor(() =>
-      expect(screen.getByLabelText("Service for this visit")).toHaveValue(
-        SERVICE_ID,
-      ),
-    );
-    expect(screen.getAllByText("862 · Respite Care")).toHaveLength(2);
+    fireEvent.click(await screen.findByRole("button", { name: /Client C-104/ }));
+    expect(
+      screen.getByRole("button", { name: /Client C-104/ }),
+    ).toHaveAttribute("aria-pressed", "true");
+    const details = await screen.findByRole("group", { name: "Visit details" });
+    await waitFor(() => expect(details).toHaveTextContent("862 · Respite Care"));
+    expect(details).toHaveTextContent("ClientC-104");
+    expect(details).toHaveTextContent("08/24/2026");
+    expect(details).toHaveTextContent("2:30 PM–4:30 PM");
+    // One service: no picker to operate.
+    expect(
+      screen.queryByLabelText("Service for this visit"),
+    ).not.toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole("button", { name: /Sign in now/ }));
+    fireEvent.click(screen.getByRole("button", { name: /Start visit/ }));
     await waitFor(() =>
       expect(mockedRpc).toHaveBeenCalledWith("start_ad_hoc_service_visit", {
         target_organization_id: ORG_ID,
         target_client_id: CLIENT_ID,
         target_service_id: SERVICE_ID,
-        scheduled_shift_id: null,
         visit_task_categories: [],
         visit_service_notes: null,
       }),
@@ -211,40 +257,99 @@ describe("ServiceVerificationPage v3", () => {
     });
     renderPage();
 
-    await screen.findByRole("option", { name: /C-207/ });
-    fireEvent.change(screen.getByLabelText("Assigned client"), {
-      target: { value: SECOND_CLIENT_ID },
-    });
+    fireEvent.click(await screen.findByRole("button", { name: /Client C-207/ }));
     expect(
       await screen.findByText(
-        "This client has 9 active services. Choose the exact one.",
+        "This client has 9 active services. Choose the one you are providing.",
       ),
     ).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /Sign in now/ })).toBeDisabled();
+    expect(screen.getByRole("button", { name: /Start visit/ })).toBeDisabled();
 
     fireEvent.change(screen.getByLabelText("Service for this visit"), {
       target: { value: services[8]!.service_id },
     });
-    expect(screen.getByRole("button", { name: /Sign in now/ })).toBeEnabled();
+    expect(screen.getByRole("button", { name: /Start visit/ })).toBeEnabled();
+    expect(
+      screen.getByRole("group", { name: "Visit details" }),
+    ).toHaveTextContent("S-9 · Service 9");
   });
 
-  it("blocks sign-in when the selected client has no active authorized service", async () => {
+  it("preselects the service of today's scheduled visit and warns when it is changed", async () => {
+    const services = Array.from({ length: 3 }, (_, index) => ({
+      ...authorizedService,
+      service_id: `88888888-8888-4888-8888-88888888888${index}`,
+      service_code: `S-${index + 1}`,
+      service_name: `Service ${index + 1}`,
+    }));
+    mockRpcImplementation({
+      list_assigned_visit_clients: {
+        data: [{ ...assignedClients[1], active_service_count: 3, next_scheduled_service_id: services[1]!.service_id }],
+        error: null,
+      },
+      list_authorized_services_for_client: { data: services, error: null },
+    });
+    renderPage();
+
+    fireEvent.click(await screen.findByRole("button", { name: /Client C-207/ }));
+    await waitFor(() =>
+      expect(screen.getByLabelText("Service for this visit")).toHaveValue(services[1]!.service_id),
+    );
+    expect(screen.getByText(/Scheduled today: S-2 · Service 2/)).toBeInTheDocument();
+    expect(screen.queryByText(/not the scheduled service/)).not.toBeInTheDocument();
+    expect(screen.getByRole("group", { name: "Visit details" })).toHaveTextContent("S-2 · Service 2");
+
+    // A deliberate change is kept, and flagged.
+    fireEvent.change(screen.getByLabelText("Service for this visit"), {
+      target: { value: services[2]!.service_id },
+    });
+    expect(screen.getByLabelText("Service for this visit")).toHaveValue(services[2]!.service_id);
+    expect(screen.getByRole("status")).toHaveTextContent(
+      "This is not the scheduled service. The visit will not be linked to today's scheduled visit.",
+    );
+
+    fireEvent.change(screen.getByLabelText("Service for this visit"), {
+      target: { value: services[1]!.service_id },
+    });
+    fireEvent.click(screen.getByRole("button", { name: /Start visit/ }));
+    await waitFor(() =>
+      expect(mockedRpc).toHaveBeenCalledWith("start_ad_hoc_service_visit", expect.objectContaining({
+        target_client_id: SECOND_CLIENT_ID,
+        target_service_id: services[1]!.service_id,
+      })),
+    );
+  });
+
+  it("asks for an explicit choice when the backend does not report the scheduled service", async () => {
+    const services = Array.from({ length: 2 }, (_, index) => ({
+      ...authorizedService,
+      service_id: `88888888-8888-4888-8888-88888888888${index}`,
+      service_code: `S-${index + 1}`,
+      service_name: `Service ${index + 1}`,
+    }));
+    mockRpcImplementation({
+      list_authorized_services_for_client: { data: services, error: null },
+    });
+    renderPage();
+    fireEvent.click(await screen.findByRole("button", { name: /Client C-207/ }));
+    expect(await screen.findByText(/Choose the one you are providing/)).toBeInTheDocument();
+    expect(screen.getByLabelText("Service for this visit")).toHaveValue("");
+    expect(screen.getByRole("button", { name: /Start visit/ })).toBeDisabled();
+  });
+
+  it("blocks the start when the selected client has no active authorized service", async () => {
     mockRpcImplementation({
       list_authorized_services_for_client: { data: [], error: null },
     });
     renderPage();
 
-    await screen.findByRole("option", { name: /C-104/ });
-    fireEvent.change(screen.getByLabelText("Assigned client"), {
-      target: { value: CLIENT_ID },
-    });
+    fireEvent.click(await screen.findByRole("button", { name: /Client C-104/ }));
 
     expect(
       await screen.findByText(
         "No active service authorization is available for Client C-104.",
       ),
     ).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /Sign in now/ })).toBeDisabled();
+    expect(screen.getByRole("button", { name: /Start visit/ })).toBeDisabled();
   });
 
   it("shows one locked live visit with no time-edit or client-name controls", async () => {
@@ -265,7 +370,7 @@ describe("ServiceVerificationPage v3", () => {
       screen.getByText("Client and service are locked."),
     ).toBeInTheDocument();
     expect(
-      screen.getByRole("button", { name: /Sign out now/ }),
+      screen.getByRole("button", { name: /End visit/ }),
     ).toBeInTheDocument();
     expect(screen.queryByLabelText(/time in/i)).not.toBeInTheDocument();
     expect(screen.queryByText("Darby Crash")).not.toBeInTheDocument();
@@ -298,7 +403,7 @@ describe("ServiceVerificationPage v3", () => {
     expect(screen.getByText(/^2:30\sPM–4:30\sPM$/)).toBeInTheDocument();
 
     await openConfirmation();
-    const scheduled = screen.getByText("Scheduled");
+    const scheduled = screen.getByText("Scheduled shift");
     expect(scheduled.nextElementSibling?.textContent).toMatch(
       /^2:30\sPM–4:30\sPM$/,
     );
@@ -323,7 +428,7 @@ describe("ServiceVerificationPage v3", () => {
 
     await screen.findByRole("heading", { name: "Visit in progress" });
     expect(
-      screen.getByText("Not linked to a scheduled shift"),
+      screen.getByText("Unscheduled visit"),
     ).toBeInTheDocument();
     expect(screen.queryByText(/Scheduled shift:/)).not.toBeInTheDocument();
   });
@@ -345,7 +450,7 @@ describe("ServiceVerificationPage v3", () => {
     });
     renderPage();
 
-    await screen.findByRole("heading", { name: "Client or guardian confirmation" });
+    await screen.findByRole("heading", { name: "Verify visit details" });
     expect(screen.getByText(/entered by your agency because the visit was not signed out/)).toBeInTheDocument();
   });
 
@@ -369,7 +474,7 @@ describe("ServiceVerificationPage v3", () => {
       await screen.findByRole("heading", { name: "Verify visit details" }),
     ).toBeInTheDocument();
     expect(screen.getByText("C-104")).toBeInTheDocument();
-    expect(screen.getByText("2 hours")).toBeInTheDocument();
+    expect(screen.getByText("2 hr")).toBeInTheDocument();
   });
 
   it("ends with a server timestamp and captures a client signature", async () => {
@@ -439,6 +544,11 @@ describe("ServiceVerificationPage v3", () => {
     expect(
       await screen.findByRole("heading", { name: "Visit saved" }),
     ).toBeInTheDocument();
+    const outcome = screen.getByLabelText("Visit result");
+    expect(outcome).toHaveTextContent("Worked2 hr");
+    expect(outcome).toHaveTextContent("Billable2 hr");
+    expect(outcome).toHaveTextContent("BillingBilling ready");
+    expect(outcome).toHaveTextContent("Billing ready does not mean billed.");
   });
 
   it("saves a no-signer visit as unverified and not billable", async () => {
@@ -472,7 +582,7 @@ describe("ServiceVerificationPage v3", () => {
     renderPage();
 
     await openConfirmation();
-    fireEvent.click(screen.getByRole("button", { name: /Signing problem/ }));
+    fireEvent.click(screen.getByRole("button", { name: /Unable to obtain confirmation/ }));
     expect(
       screen.getByRole("button", { name: "Submit for manager review" }),
     ).toBeDisabled();
@@ -505,6 +615,10 @@ describe("ServiceVerificationPage v3", () => {
     expect(
       screen.getByText(/not counted as confirmed or billable/i),
     ).toBeInTheDocument();
+    const outcome = screen.getByLabelText("Visit result");
+    expect(outcome).toHaveTextContent("Billable0 min");
+    expect(outcome).toHaveTextContent("BillingNeeds manager review");
+    expect(outcome).not.toHaveTextContent("Billing ready");
   });
 
   it("does not mislabel a signed visit when authorization leaves zero billable minutes", async () => {
@@ -580,7 +694,7 @@ describe("ServiceVerificationPage v3", () => {
       ),
     ).toBeInTheDocument();
     expect(
-      screen.queryByRole("button", { name: /Sign in now/ }),
+      screen.queryByRole("button", { name: /Start visit/ }),
     ).not.toBeInTheDocument();
   });
 

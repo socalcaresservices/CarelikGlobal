@@ -17,3 +17,8 @@ supabase/.temp
 # directory (not part of the project - see chat for context). Ignored
 # rather than deleted from here since it's large and outside git's remit.
 /Git/
+dist-aws
+deploy-bundle/
+
+# CDK synth output (generated)
+cdk.synth.out/
