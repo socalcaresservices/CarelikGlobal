@@ -1,0 +1,28 @@
+{
+  "allow": [
+    "Bash(git:*)",
+    "Bash(gh:*)",
+    "Bash(pnpm:*)",
+    "Bash(npm:*)",
+    "Bash(npx cdk synth:*)",
+    "Bash(npx cdk diff:*)",
+    "Bash(cdk synth:*)",
+    "Bash(cdk diff:*)",
+    "Bash(aws sts:*)",
+    "Bash(aws cloudformation describe:*)",
+    "Bash(aws cloudformation list:*)",
+    "Bash(cat:*)",
+    "Bash(ls:*)",
+    "Bash(df:*)",
+    "Bash(mkdir:*)",
+    "Bash(cd:*)"
+  ],
+  "deny": [
+    "Bash(cdk deploy:*)",
+    "Bash(npx cdk deploy:*)",
+    "Bash(cdk destroy:*)",
+    "Bash(npx cdk destroy:*)",
+    "Bash(rm:*)",
+    "Bash(sudo:*)"
+  ]
+}

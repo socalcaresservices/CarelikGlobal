@@ -11,6 +11,7 @@ import {
   type ClientLocation,
   type EndedVisitTimes,
   type OrgLetterhead,
+  type ScheduledShift,
   type ServiceVerificationBackend,
   type VisitCorrectionRow,
   type VisitReportRow,
@@ -37,16 +38,25 @@ export const supabaseServiceVerificationBackend: ServiceVerificationBackend = {
     if (error) throw error;
     return (data ?? []) as AuthorizedService[];
   },
-  async startVisit({ organizationId, clientId, serviceId }) {
+  async startVisit({ organizationId, clientId, serviceId, scheduledShiftId }) {
     const { data, error } = await supabase.rpc("start_ad_hoc_service_visit", {
       target_organization_id: organizationId,
       target_client_id: clientId,
       target_service_id: serviceId,
+      scheduled_shift_id: scheduledShiftId ?? null,
       visit_task_categories: [],
       visit_service_notes: null,
     });
     if (error) throw error;
     return typeof data === "string" ? data : "";
+  },
+  async listScheduledShifts(organizationId, clientId) {
+    const { data, error } = await supabase.rpc("list_scheduled_shifts_for_visit", {
+      target_organization_id: organizationId,
+      target_client_id: clientId,
+    });
+    if (error) throw error;
+    return (data ?? []) as ScheduledShift[];
   },
   async endVisit(visitId) {
     const { data, error } = await supabase.rpc("end_service_visit", {

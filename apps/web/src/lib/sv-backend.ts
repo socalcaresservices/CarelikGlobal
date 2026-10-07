@@ -263,12 +263,30 @@ export interface BillingApprovalRow {
   amountCents: number | null;
 }
 
+/** A scheduled shift the caregiver can start (redesign: explicit shift choice). */
+export interface ScheduledShift {
+  shift_id: string;
+  service_id: string;
+  service_code: string;
+  service_name: string;
+  service_color: string | null;
+  authorization_id: string;
+  max_monthly_hours: number;
+  hours_used_this_month: number;
+  hours_scheduled_this_month: number;
+  starts_at: string;
+  ends_at: string;
+}
+
 export interface ServiceVerificationBackend {
   readonly kind: "supabase" | "aws";
   getActiveVisit(organizationId: string): Promise<ActiveVisit | null>;
   listAssignedClients(organizationId: string): Promise<AssignedClient[]>;
   listAuthorizedServices(organizationId: string, clientId: string): Promise<AuthorizedService[]>;
-  startVisit(input: { organizationId: string; clientId: string; serviceId: string; idempotencyKey: string }): Promise<string>;
+  /** scheduledShiftId is optional; when absent the server links the matching shift itself. */
+  startVisit(input: { organizationId: string; clientId: string; serviceId: string; scheduledShiftId?: string | null; idempotencyKey: string }): Promise<string>;
+  /** Optional: only back ends that expose the shift picker implement this (Supabase today). */
+  listScheduledShifts?(organizationId: string, clientId: string): Promise<ScheduledShift[]>;
   endVisit(visitId: string): Promise<EndedVisitTimes>;
   confirmVisit(input: ConfirmVisitInput): Promise<VisitResult>;
   listVisits(organizationId: string, filters: VisitReportFilters): Promise<VisitReportRow[]>;

@@ -155,7 +155,7 @@ describe("AWS build: caregiver vertical slice", () => {
 
     fireEvent.click(screen.getByRole("button", { name: /Start visit/ }));
     fireEvent.click(await screen.findByRole("button", { name: /End visit/ }));
-    await screen.findByRole("heading", { name: "Client or guardian confirmation" });
+    await screen.findByRole("heading", { name: "Verify visit details" });
 
     const canvas = screen.getByLabelText("Client or guardian signature");
     fireEvent.pointerDown(canvas, { pointerId: 1, clientX: 10, clientY: 10 });

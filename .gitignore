@@ -19,3 +19,6 @@ supabase/.temp
 /Git/
 dist-aws
 deploy-bundle/
+
+# CDK synth output (generated)
+cdk.synth.out/

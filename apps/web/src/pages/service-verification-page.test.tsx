@@ -124,6 +124,8 @@ function mockRpcImplementation(overrides: Record<string, unknown> = {}) {
         error: null,
       }) as never;
     }
+    if (fn === "list_scheduled_shifts_for_visit")
+      return Promise.resolve({ data: [], error: null }) as never;
     if (fn === "start_ad_hoc_service_visit")
       return Promise.resolve({ data: VISIT_ID, error: null }) as never;
     return Promise.resolve({ data: null, error: null }) as never;
@@ -133,7 +135,7 @@ function mockRpcImplementation(overrides: Record<string, unknown> = {}) {
 async function openConfirmation() {
   fireEvent.click(await screen.findByRole("button", { name: /End visit/ }));
   await screen.findByRole("heading", {
-    name: "Client or guardian confirmation",
+    name: "Verify visit details",
   });
 }
 
@@ -170,7 +172,7 @@ describe("ServiceVerificationPage v3", () => {
     expect(scheduled).toHaveTextContent("9 active services");
     expect(screen.queryByText("Darby Crash")).not.toBeInTheDocument();
     expect(
-      screen.getByText("Sign-in sheet · Hoja de registro"),
+      screen.getByText("Visit Verification · Verificación de Visita"),
     ).toBeInTheDocument();
     expect(screen.getByText("Acme Care")).toBeInTheDocument();
     expect(screen.queryByText(/EVV|GPS/i)).not.toBeInTheDocument();
@@ -237,6 +239,7 @@ describe("ServiceVerificationPage v3", () => {
         target_organization_id: ORG_ID,
         target_client_id: CLIENT_ID,
         target_service_id: SERVICE_ID,
+        scheduled_shift_id: null,
         visit_task_categories: [],
         visit_service_notes: null,
       }),
@@ -363,7 +366,7 @@ describe("ServiceVerificationPage v3", () => {
     expect(
       await screen.findByRole("heading", { name: "Visit in progress" }),
     ).toBeInTheDocument();
-    expect(screen.getByText("Client C-104")).toBeInTheDocument();
+    expect(screen.getByText("C-104")).toBeInTheDocument();
     expect(
       screen.getByText("Client and service are locked."),
     ).toBeInTheDocument();
@@ -401,7 +404,7 @@ describe("ServiceVerificationPage v3", () => {
     expect(screen.getByText(/^2:30\sPM–4:30\sPM$/)).toBeInTheDocument();
 
     await openConfirmation();
-    const scheduled = screen.getByText("Scheduled");
+    const scheduled = screen.getByText("Scheduled shift");
     expect(scheduled.nextElementSibling?.textContent).toMatch(
       /^2:30\sPM–4:30\sPM$/,
     );
@@ -448,7 +451,7 @@ describe("ServiceVerificationPage v3", () => {
     });
     renderPage();
 
-    await screen.findByRole("heading", { name: "Client or guardian confirmation" });
+    await screen.findByRole("heading", { name: "Verify visit details" });
     expect(screen.getByText(/entered by your agency because the visit was not signed out/)).toBeInTheDocument();
   });
 
@@ -469,11 +472,9 @@ describe("ServiceVerificationPage v3", () => {
     renderPage();
 
     expect(
-      await screen.findByRole("heading", {
-        name: "Client or guardian confirmation",
-      }),
+      await screen.findByRole("heading", { name: "Verify visit details" }),
     ).toBeInTheDocument();
-    expect(screen.getByText("Client C-104")).toBeInTheDocument();
+    expect(screen.getByText("C-104")).toBeInTheDocument();
     expect(screen.getByText("2 hr")).toBeInTheDocument();
   });
 

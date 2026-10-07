@@ -296,7 +296,7 @@ async function main() {
   await A.page.reload();
   await A.page.getByRole("heading", { name: "Visit in progress" }).waitFor({ timeout: 15000 });
   await A.page.getByRole("button", { name: /End visit/ }).click();
-  await A.page.getByRole("heading", { name: "Client or guardian confirmation" }).waitFor();
+  await A.page.getByRole("heading", { name: "Verify visit details" }).waitFor();
   await noHorizontalScroll(A.page, "caregiver confirm screen");
   await snap(A.page, "caregiver-confirm");
   await drawSignature(A.page);
@@ -384,7 +384,7 @@ async function main() {
 
   // ---- Caregiver B confirms the manager-closed visit.
   await B.page.reload();
-  await B.page.getByRole("heading", { name: "Client or guardian confirmation" }).waitFor({ timeout: 15000 });
+  await B.page.getByRole("heading", { name: "Verify visit details" }).waitFor({ timeout: 15000 });
   check("caregiver B: confirmation says the Time Out was entered by the agency", await B.page.getByText(/entered by your agency/).isVisible());
   await drawSignature(B.page);
   await B.page.getByRole("button", { name: /Confirm visit/ }).click();

@@ -1,0 +1,21 @@
+{
+  "version": "54.0.0",
+  "files": {
+    "b20378b356615d529465aadbd21ab823b5c0281b044caa420309648a265f7dc2": {
+      "displayName": "Ogevia-prd-NetworkEgress Template",
+      "source": {
+        "path": "Ogevia-prd-NetworkEgress.template.json",
+        "packaging": "file"
+      },
+      "destinations": {
+        "300094796789-us-west-2-a70e745f": {
+          "bucketName": "cdk-hnb659fds-assets-300094796789-us-west-2",
+          "objectKey": "b20378b356615d529465aadbd21ab823b5c0281b044caa420309648a265f7dc2.json",
+          "region": "us-west-2",
+          "assumeRoleArn": "arn:${AWS::Partition}:iam::300094796789:role/cdk-hnb659fds-file-publishing-role-300094796789-us-west-2"
+        }
+      }
+    }
+  },
+  "dockerImages": {}
+}
