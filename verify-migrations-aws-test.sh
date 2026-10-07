@@ -219,8 +219,8 @@ if [[ "$RDS_PUBLIC" == "true" ]]; then
   exit 1
 fi
 
-# 1.6: Get app security group from Lambda VpcConfig
-log_info "Discovering app security group from Lambda VpcConfig..."
+# 1.6: Get and verify app security group from Lambda VpcConfig
+log_info "Discovering Lambda security groups from VpcConfig..."
 LAMBDA_VPC_CONFIG=$(echo "$LAMBDA_CONFIG" | jq -r '.VpcConfig // empty' 2>/dev/null || echo "{}")
 LAMBDA_SG_IDS=$(echo "$LAMBDA_VPC_CONFIG" | jq -r '.SecurityGroupIds[]?' 2>/dev/null || echo "")
 
@@ -229,26 +229,69 @@ if [[ -z "$LAMBDA_SG_IDS" ]]; then
   exit 1
 fi
 
-# Lambda should have exactly one security group for this application
-APP_SECURITY_GROUP=$(echo "$LAMBDA_SG_IDS" | head -1)
-log_info "✓ Lambda security group (app): $APP_SECURITY_GROUP"
+log_info "  Lambda security groups: $LAMBDA_SG_IDS"
 
-# Verify this security group exists and is attached to RDS inbound rules
-log_info "Verifying app security group has access to RDS..."
-RDS_SG_RULES=$(aws ec2 describe-security-group-rules \
-  --filters "Name=group-id,Values=$APP_SECURITY_GROUP" "Name=cidr,Values=0.0.0.0/0" \
-  --region "$AWS_REGION" \
-  --query 'SecurityGroupRules[*].GroupOwnerId' \
-  --output text 2>/dev/null || echo "")
+# Get RDS security group ID
+RDS_SG_ID=$(echo "$RDS_INFO" | jq -r '.DBInstances[0].VpcSecurityGroups[0].VpcSecurityGroupId' 2>/dev/null || echo "")
+if [[ -z "$RDS_SG_ID" ]]; then
+  log_error "Could not retrieve RDS security group."
+  exit 1
+fi
 
-# Verify RDS allows this security group on port 5432
-RDS_ALLOW_APP=$(aws ec2 describe-security-group-rules \
-  --filters "Name=group-id,Values=$(echo "$RDS_INFO" | jq -r '.DBInstances[0].VpcSecurityGroups[0].VpcSecurityGroupId' 2>/dev/null)" \
-  --region "$AWS_REGION" \
-  --query "SecurityGroupRules[?FromPort==\`5432\`].GroupOwnerId" \
-  --output text 2>/dev/null || echo "")
+log_info "  RDS security group: $RDS_SG_ID"
 
-log_info "✓ App security group verified: $APP_SECURITY_GROUP"
+# Verify which Lambda security group(s) are allowed on RDS port 5432
+log_info "Verifying Lambda security group(s) have RDS inbound access on port 5432..."
+APP_SECURITY_GROUP=""
+VERIFIED_SG_COUNT=0
+
+for lambda_sg in $LAMBDA_SG_IDS; do
+  # Check if RDS inbound rules allow this security group on port 5432
+  RULE_COUNT=$(aws ec2 describe-security-group-rules \
+    --filters "Name=group-id,Values=$RDS_SG_ID" \
+            "Name=cidr,Values=0.0.0.0/0" \
+            "Name=from-port,Values=5432" \
+            "Name=to-port,Values=5432" \
+            "Name=group-owner-id,Values=$lambda_sg" \
+    --region "$AWS_REGION" \
+    --query 'length(SecurityGroupRules)' \
+    --output text 2>/dev/null || echo "0")
+
+  # Also check for rules allowing the security group (not just CIDR)
+  RULE_FROM_SG=$(aws ec2 describe-security-groups \
+    --group-ids "$RDS_SG_ID" \
+    --region "$AWS_REGION" \
+    --query "SecurityGroups[0].IpPermissions[?FromPort==\`5432\` || FromPort==\`null\`].UserIdGroupPairs[?GroupId==\`$lambda_sg\`]" \
+    --output json 2>/dev/null || echo "[]")
+
+  RULE_COUNT_FROM_SG=$(echo "$RULE_FROM_SG" | jq 'length' 2>/dev/null || echo "0")
+
+  if [[ "$RULE_COUNT" -gt 0 || "$RULE_COUNT_FROM_SG" -gt 0 ]]; then
+    if [[ $VERIFIED_SG_COUNT -eq 0 ]]; then
+      APP_SECURITY_GROUP="$lambda_sg"
+      VERIFIED_SG_COUNT=$((VERIFIED_SG_COUNT + 1))
+      log_info "  ✓ Security group $lambda_sg verified on RDS port 5432 inbound rules"
+    else
+      log_warn "  Additional security group $lambda_sg also allowed on RDS (ambiguous; using first verified)"
+    fi
+  else
+    log_warn "  Security group $lambda_sg NOT found in RDS port 5432 inbound rules"
+  fi
+done
+
+if [[ -z "$APP_SECURITY_GROUP" ]]; then
+  log_error "No Lambda security group verified against RDS inbound rules on port 5432."
+  log_error "Lambda security groups: $LAMBDA_SG_IDS"
+  log_error "RDS security group: $RDS_SG_ID"
+  log_error "Check that RDS inbound rules allow Lambda security group(s) on port 5432."
+  exit 1
+fi
+
+if [[ $VERIFIED_SG_COUNT -gt 1 ]]; then
+  log_warn "Multiple Lambda security groups verified; ambiguous. Using first: $APP_SECURITY_GROUP"
+fi
+
+log_info "✓ App security group selected: $APP_SECURITY_GROUP (verified against RDS inbound rules)"
 
 # 1.7: Verify SSM admin host
 log_info "Verifying SSM admin host: i-0ce8db2d7e5839dd5..."
