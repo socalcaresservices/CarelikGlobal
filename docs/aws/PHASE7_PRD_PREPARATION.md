@@ -1,6 +1,6 @@
 # Phase 7 fixes and read-only check, prepared for the production deploy
 
-Status: **PREPARED, NOTHING EXECUTED.** Prepared 2026-10-08. Every item that changes AWS is a YELLOW action (CLAUDE.md section 13): it runs only after the owner approves it, from an operator shell with AWS admin access. No AWS access was available when this was written, so every AWS value is from the repo or from the 2026-10-03 live run recorded in `PHASE7_SECURITY_REVIEW.md` (owner-reported).
+Status: **A1 and A2 EXECUTED on the test slice on 2026-10-08 (owner-run in CloudShell, results in section 8). Nothing has been deployed to production.** Prepared 2026-10-08. Every item that changes AWS is a YELLOW action (CLAUDE.md section 13): it runs only after the owner approves it, from an operator shell with AWS admin access. No AWS access was available when this was written, so every AWS value is from the repo or from the 2026-10-03 live run recorded in `PHASE7_SECURITY_REVIEW.md` (owner-reported).
 
 ## Approvals recorded (owner, 2026-10-08)
 
@@ -9,11 +9,12 @@ Status: **PREPARED, NOTHING EXECUTED.** Prepared 2026-10-08. Every item that cha
 | A1 | Run the read-only check (section 2, steps 1 to 4) | **Approved.** Who runs it: to be named by the owner. |
 | A2 | Run `phase7-remediate.sh`, part APPLY (alarm email subscription, account-wide S3 public-access block, GuardDuty) | **Approved.** The alarm email address is typed by the operator when the script asks. |
 | A3 | Restore test (script part DRILL) | **Not run now. REQUIRED before any real client data is stored in `ogevia_prd`** (owner, 2026-10-08). Run a production version, covering `ogevia_prd`, after the database exists; record the time to restore and the result. |
-| D4 | App database secret rotation | **Rotate by hand** every 90 days (draft procedure in section 7; rehearse on the test slice first). |
+| D4 | App database secret rotation | **Rotate by hand** (draft procedure in section 7). **Owner: SoCal Care Services. First rotation due 30 days after production go-live** (then the 90-day cycle already decided). **Rehearse the procedure in the test environment before production** (owner, 2026-10-08). A named person still has to be assigned. |
+| C6 | VPC flow logs | **Go-live approved without them. Flow logs are REQUIRED within 30 days after production go-live** (owner, 2026-10-08). Not prepared yet; it is a separate reviewed change to the shared network stack. |
 
 **Gate: no real client data goes into `ogevia_prd` until a production restore test has passed and its record is saved.**
 
-Still open: the HIPAA-eligible service list (owner step), VPC flow logs, the record-retention period, and approval of the production deploy and of the Cognito client change (see `GO_LIVE_RUNBOOK.md`).
+Still open: the HIPAA-eligible service list (owner step), the record-retention period, and approval of the production deploy and of the Cognito client change (see `GO_LIVE_RUNBOOK.md`).
 
 Sources: `PHASE7_SECURITY_REVIEW.md` (sections 3, 5, 6), `infra/aws/slice/phase7-remediate.sh`, `infra/aws/slice/phase7_evidence.py`, `infra/aws/scripts/deploy-production.sh`, `PRODUCTION_DEPLOYMENT.md`.
 
@@ -62,8 +63,8 @@ The script asks for the word **APPLY** once for these three and separately for *
 
 | Gap | Item | Recommendation |
 |---|---|---|
-| D4 | App database secret rotation | **Decided: manual, every 90 days** (section 7). Automate later; that needs a rotation Lambda that can reach RDS and Secrets Manager. |
-| C6 | VPC flow logs | A CDK change delivering to S3 with a lifecycle rule, under $1 a month (INFERRED). Recommended, not blocking. **Not prepared yet** (section 4). |
+| D4 | App database secret rotation | **Decided: manual, every 90 days; first rotation 30 days after go-live; rehearse on the test slice first** (section 7). Automate later; that needs a rotation Lambda that can reach RDS and Secrets Manager. |
+| C6 | VPC flow logs | A CDK change delivering to S3 with a lifecycle rule, under $1 a month (INFERRED). Not blocking go-live; **REQUIRED within 30 days after go-live** (owner, 2026-10-08). **Not prepared yet** (section 4). |
 | R12 | Record-retention period | A legal and business decision; it sets S3 lifecycle rules. Nothing is deleted until decided. |
 | HIPAA list | Confirm the services in use are on AWS's current HIPAA Eligible Services Reference | Owner step; the page could not be fetched from the environment that prepared this. Services: RDS, S3, KMS, Lambda, API Gateway, Cognito, CloudFront, CloudWatch Logs, Secrets Manager, SNS, CloudTrail, VPC, EC2, Systems Manager. |
 
@@ -103,3 +104,53 @@ Why it is a draft: no written rotation procedure exists in the repo, and this on
 7. Run the smoke step (`deploy-production.sh smoke`): the API must connect to `ogevia_prd` as `ogevia_prd_app`.
 8. If anything fails: restore the previous secret version and set the login's password back to it, then smoke again.
 
+
+## 8. Results recorded 2026-10-08 (owner-run in AWS CloudShell; reported by the owner, not independently observed)
+
+### 8.1 What was run
+
+| Step | What | Result as reported |
+|---|---|---|
+| A1 | Read-only check | Run; led to the evidence-script fix in 8.3 |
+| A2 | `phase7-remediate.sh`, APPLY | R1 alarm email subscribed and confirmed; R8 account-wide S3 public access block applied and read back (all four settings on), web origin still HTTP 200; R9 GuardDuty enabled in us-west-2. Rollback script saved for R8. |
+| (not planned) | Restore drill typed `DRILL` at the prompt | The first script lost its CloudShell credentials while waiting. The restored copy `ogevia-restore-drill-202610080522` was then checked by hand with a read-only script, then deleted (only that instance, after a tag check). |
+
+### 8.2 Restore drill: what it shows and what it does not
+
+- The copy was created from `ogevia-prod-postgres` (request created 2026-10-08 05:26 UTC), `db.t4g.micro`, private, encrypted with the same KMS key as the source, single-AZ.
+- Databases on the copy: `ogevia_sv_test`, `postgres`, `rdsadmin`. `ogevia_sv_test`: 36 migrations (0001-0036), 32 visits, 9 corrections. The copy's counts were not compared with the live database in this run.
+- **`ogevia_prd` does not exist yet**, so no production restore test has been done.
+- **Time to restore was not measured** (the script died before it timed the restore).
+- Admin host security groups were verified restored to the original `sg-00e01e2ca80442c1f`.
+
+### 8.3 Evidence script
+
+- First run after A2: `PASS 35 GAP 2 MANUAL 1 ERROR 3`. C4, D4 and F3 errored (`list index out of range`); F4 reported 10 public routes against an approved 8.
+- Cause: the script listed stack resources with `describe-stack-resources`, which appears to cap at 100; the API stack returned exactly 100 and the Lambda function was cut off (INFERRED; the API stack returned a count of exactly 100 and its Lambda function exists, `Ogevia-prod-ServiceVerificationApi-Handler886CB40B-...`). F4's approved count was stale: the 10 live public routes equal the 10 in `infra/aws/lib/public-routes.ts` (8 original + 2 visit-confirmation links approved 2026-10-05).
+- Fix: commit `09af160` (`phase7_evidence.py` now uses `list-stack-resources` and compares public routes to the exact approved list). The file with SHA-256 `de6e058c40d2fa1f4366930847097f2f74363a80bb23c5a43e21340f6afe255f` was installed in CloudShell and verified by checksum.
+- Final run: **`PASS 41 GAP 2 MANUAL 1 ERROR 0 INFO 8`.** GAP: C6, D4. MANUAL: E3.
+- Not fixed: older test-deploy scripts (`increment-deploy.sh`, `increment-preflight.sh`, `pilot-deploy.sh`, `release-0026-deploy.sh`, `pilot-recover-scope.sh`, `smoke.py`) still use `describe-stack-resources` and may miss resources in stacks over 100 resources. `deploy-production.sh` already uses `list-stack-resources`.
+- E3 in the script is a fixed MANUAL line (it does not read AWS) and its text "no restore has ever been tested" is out of date. It will stay MANUAL until the script is changed.
+
+### 8.4 Budget and cost
+
+Budget `ogevia phase 1 Budget`: limit 50.0 USD, actual this month 14.33 USD, 3 alerts with 3 subscribers. GuardDuty is in its 30-day free trial; check its cost estimate before day 30.
+
+### 8.5 Owner decisions (2026-10-08)
+
+| Item | Decision |
+|---|---|
+| C6 VPC flow logs | Go-live approved; flow logs REQUIRED within 30 days after production go-live. |
+| D4 password rotation | Owner: SoCal Care Services. First rotation due 30 days after production go-live. Rehearse the procedure in the test environment before production. |
+| E3 / A3 restore test | Unchanged: a successful `ogevia_prd` restore test is REQUIRED before any real client data is entered into production. |
+
+### 8.6 What remains before go-live (nothing below has started)
+
+1. Approval reference for `OGEVIA_DEPLOY_APPROVAL`, and written approval of the Cognito client change (`GO_LIVE_RUNBOOK.md` section 5).
+2. Who runs the AWS steps (operator shell with AWS admin access, `session-manager-plugin`, `psql`), and the first administrator's own email address.
+3. Run `deploy-production.sh check`; it has never been run (NO-GO items 6 to 17 in the runbook are NOT RUN).
+4. Deploy production (database `ogevia_prd`, stacks `Ogevia-prd-*`), then the Cognito client change and the first administrator sign-in.
+5. **Production restore test of `ogevia_prd` (step 4a): script to be written and reviewed first, run after step 4 and before any real data.**
+6. Rehearse the manual password rotation on the test slice (D4); name the person who will do it.
+7. Owner steps still open: confirm the HIPAA-eligible service list; record-retention period; security headers for the AWS build on Netlify; decision on the `Ogevia-prd-WebHosting` stack; confirm that Netlify keeps serving `app.ogevia.com`.
+8. After go-live: flow logs within 30 days (C6); first password rotation within 30 days (D4); alarm subscription on the production alarm topic (G1, after deploy); GuardDuty cost check before day 30.
