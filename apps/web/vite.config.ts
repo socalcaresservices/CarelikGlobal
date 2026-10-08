@@ -21,5 +21,7 @@ export default defineConfig({
     environment: "jsdom",
     globals: false,
     setupFiles: ["./src/test/setup.ts"],
+    // Must exceed asyncUtilTimeout (src/test/setup.ts), or a slow findBy* is cut off by the 5 s default.
+    testTimeout: 15000,
   },
 });

@@ -1,6 +1,13 @@
 import { afterEach } from "vitest";
-import { cleanup } from "@testing-library/react";
+import { cleanup, configure } from "@testing-library/react";
 import "@testing-library/jest-dom/vitest";
+
+// Testing Library's findBy*/waitFor give up after 1000 ms by default. On a slow
+// or busy machine (a 2-CPU CloudShell, a loaded CI runner) the first render in a
+// file can take longer than that, which fails the test with "Unable to find role
+// ..." even though the code is correct. A longer ceiling only costs time when a
+// test is already failing.
+configure({ asyncUtilTimeout: 5000 });
 
 // jsdom has no ResizeObserver, but recharts' <ResponsiveContainer>
 // (owner-insights.tsx's capacity/team-composition charts, Build 012)
