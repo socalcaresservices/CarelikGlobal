@@ -8,8 +8,10 @@ Status: **PREPARED, NOTHING EXECUTED.** Prepared 2026-10-08. Every item that cha
 |---|---|---|
 | A1 | Run the read-only check (section 2, steps 1 to 4) | **Approved.** Who runs it: to be named by the owner. |
 | A2 | Run `phase7-remediate.sh`, part APPLY (alarm email subscription, account-wide S3 public-access block, GuardDuty) | **Approved.** The alarm email address is typed by the operator when the script asks. |
-| A3 | Restore test (script part DRILL) | **Not approved now.** Run a production version after `ogevia_prd` exists. |
+| A3 | Restore test (script part DRILL) | **Not run now. REQUIRED before any real client data is stored in `ogevia_prd`** (owner, 2026-10-08). Run a production version, covering `ogevia_prd`, after the database exists; record the time to restore and the result. |
 | D4 | App database secret rotation | **Rotate by hand** every 90 days (draft procedure in section 7; rehearse on the test slice first). |
+
+**Gate: no real client data goes into `ogevia_prd` until a production restore test has passed and its record is saved.**
 
 Still open: the HIPAA-eligible service list (owner step), VPC flow logs, the record-retention period, and approval of the production deploy and of the Cognito client change (see `GO_LIVE_RUNBOOK.md`).
 
@@ -54,7 +56,7 @@ The script asks for the word **APPLY** once for these three and separately for *
 |---|---|---|---|
 | G1 | Subscribe a person to the **production** alarm topic | Find it: `aws cloudformation describe-stack-resources --stack-name Ogevia-prd-Observability --region us-west-2 --query "StackResources[?ResourceType=='AWS::SNS::Topic'].PhysicalResourceId"`. Then `aws sns subscribe --topic-arn <that ARN> --protocol email --notification-endpoint <owner inbox> --region us-west-2` and confirm the email. A subscription does not drift the CDK stack. | $0 |
 | (all) | Re-run the evidence | `OGEVIA_ENV=prd python3 phase7_evidence.py` | $0 |
-| E3 | Restore drill that includes `ogevia_prd` | The existing drill (`phase7-drill-finish.sh`) verifies only `ogevia_sv_test`. Extend it to also verify `ogevia_prd` before running it. **Not prepared yet** (section 4). | about $0.02 to 0.10 one-off |
+| E3 | **REQUIRED before real client data:** restore drill that includes `ogevia_prd` | The existing drill (`phase7-drill-finish.sh`) verifies only `ogevia_sv_test`. Extend it to also verify `ogevia_prd` before running it. **Not prepared yet** (section 4). | about $0.02 to 0.10 one-off |
 
 ### Decisions and recommended-only items
 
@@ -85,7 +87,7 @@ The production API stack accepts tokens from the web-hosting stack's own Cognito
 | D2, G3, G1 on the test topic (script part APPLY) | Yes, before the production deploy |
 | Production deploy | Yes (approval reference) |
 | G1 on the production topic | Yes, after deploy |
-| Restore drill (script part DRILL, and the production version) | Yes |
+| Restore drill (script part DRILL, and the production version). **Required before real client data.** | Yes |
 | D4, C6, retention period | Decisions |
 
 ## 7. Manual rotation of the application database login (draft, not run)
