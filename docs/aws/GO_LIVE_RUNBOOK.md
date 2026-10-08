@@ -23,6 +23,7 @@ Evidence labels: **Repo** = stated in the repository; **Owner** = reported by th
 | Who runs the AWS steps (an operator shell with AWS admin access, `session-manager-plugin`, `psql`) | Pending |
 | Owner email for the first administrator (the person's own inbox) | Pending |
 | AWS BAA | Confirmed by the owner |
+| Production restore test of `ogevia_prd` (step 4a): required before any real client data | Required; not yet prepared |
 | Security headers for the AWS build on Netlify (section 4) | Open |
 | Decision on the `Ogevia-prd-WebHosting` stack (section 7) | Open |
 
@@ -36,6 +37,7 @@ Each step ends with its GO criterion. Stop at the first failure.
 | 2 | Deploy production | `OGEVIA_DEPLOY_APPROVAL=<ref> OGEVIA_ADMIN_EMAIL=<owner inbox> OGEVIA_ADMIN_NAME="<name>" AWS_PROFILE=<admin> ./scripts/deploy-production.sh all` (interactive; CDK asks to confirm IAM changes). Order: check, snapshot, secret, egress, database, infra, smoke. | Script exits 0. A pre-deploy snapshot exists. `ogevia_prd` has all 38 migrations (a rerun applies none). The smoke step shows the API running on `ogevia_prd` as `ogevia_prd_app`, anonymous calls return 401, and the test credential is refused on `ogevia_prd`. |
 | 3 | Fix the sign-in client | Section 5. | `describe-user-pool-client` shows the target values. |
 | 4 | Owner first sign-in | The invited owner opens the Cognito invitation, sets a password and enrols the authenticator code. The pool's multi-factor must be on or step 2 stops. | The owner signs in with the code, sees SoCal Care Services as `organization_owner`. |
+| 4a | **Production restore test (REQUIRED before step 5)** | Restore the latest backup to a temporary instance, check that `ogevia_prd` is in it, record the time it took, and delete only the temporary instance. The existing restore script checks only the pilot database, so a version that also checks `ogevia_prd` must be prepared first. | The record shows the restore worked, `ogevia_prd` is present and intact, and the time to restore is written down. |
 | 5 | Enter real data | In the app: services, clients (random client codes), authorizations, caregivers, assignments, managers. Staff get no production membership by default; the owner adds them. | Records visible to the owner only. Caregivers see only their assignments. |
 | 6 | Real-phone test on a non-production address | Build the web with the production variables (section 4) and open it on a phone. During this test only, add the test address to the client's callback list, and remove it afterwards. | Start, end, confirm, signature stored in the `ogevia-prd-signature-evidence-...` bucket; a caregiver cannot see agency data; a synthetic client is voided afterwards. |
 | 7 | Switch the site | Netlify, Production context: set the variables in section 4. Redeploy from `main`. | Netlify shows the new production deploy Published. |
