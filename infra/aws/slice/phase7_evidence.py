@@ -44,7 +44,19 @@ STACKS = {
     "api": "Ogevia-%s-ServiceVerificationApi" % ENV,
     "obs": "Ogevia-%s-Observability" % ENV,
 }
-APPROVED_PUBLIC_ROUTES = 8
+# Mirrors infra/aws/lib/public-routes.ts (8 approved at pilot, +2 visit-confirmation links approved 2026-10-05).
+APPROVED_PUBLIC_ROUTES = {
+    "GET /v1/public/care-portals/{token}",
+    "GET /v1/public/care-portals/{token}/requests",
+    "POST /v1/public/care-portals/{token}/requests",
+    "GET /v1/public/care-portals/{token}/requests/{requestId}",
+    "POST /v1/public/care-portals/{token}/requests/{requestId}/cancel",
+    "GET /v1/public/care-offers/{token}",
+    "POST /v1/public/care-offers/{token}/respond",
+    "POST /v1/public/care-offers/{token}/cancel-assignment",
+    "POST /v1/public/visit-confirmations/{token}/open",
+    "POST /v1/public/visit-confirmations/{token}/respond",
+}
 
 RESULTS = []
 
@@ -76,7 +88,9 @@ def check(cid, name):
 
 
 def stack_resources(key, rtype):
-    res = aws("cloudformation", "describe-stack-resources", "--stack-name", STACKS[key])["StackResources"]
+    # list-stack-resources pages through every resource. describe-stack-resources stops at 100,
+    # and the API stack has more than that, so it silently dropped the Lambda function.
+    res = aws("cloudformation", "list-stack-resources", "--stack-name", STACKS[key])["StackResourceSummaries"]
     return [r for r in res if r["ResourceType"] == rtype]
 
 
@@ -410,7 +424,10 @@ def _():
     thr = stage.get("DefaultRouteSettings", {})
     fmt = (stage.get("AccessLogSettings") or {}).get("Format", "")
     leaks = [f for f in ("$context.path", "$context.identity.sourceIp", "$context.requestBody") if f in fmt]
-    out = [("PASS" if len(pub) == APPROVED_PUBLIC_ROUTES else "GAP", "%d routes, %d public (approved %d: tokenized care-portal/offer links)" % (len(items), len(pub), APPROVED_PUBLIC_ROUTES))]
+    unapproved = sorted(set(pub) - APPROVED_PUBLIC_ROUTES)
+    missing = sorted(APPROVED_PUBLIC_ROUTES - set(pub))
+    out = [("PASS" if not unapproved and not missing else "GAP", "%d routes, %d public (approved %d: tokenized care-portal/offer/visit-confirmation links); not on the approved list: %s; approved but not found: %s" % (
+        len(items), len(pub), len(APPROVED_PUBLIC_ROUTES), "; ".join(unapproved) or "none", "; ".join(missing) or "none"))]
     out.append(("PASS" if thr.get("ThrottlingRateLimit") else "GAP", "throttling %s req/s, burst %s" % (thr.get("ThrottlingRateLimit"), thr.get("ThrottlingBurstLimit"))))
     out.append(("PASS" if fmt and not leaks else "GAP", "access log %s; path/IP/body fields: %s" % ("on" if fmt else "OFF", ", ".join(leaks) or "none")))
     return out
