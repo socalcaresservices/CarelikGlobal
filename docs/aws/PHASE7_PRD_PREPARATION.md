@@ -57,7 +57,7 @@ The script asks for the word **APPLY** once for these three and separately for *
 |---|---|---|---|
 | G1 | Subscribe a person to the **production** alarm topic | Find it: `aws cloudformation describe-stack-resources --stack-name Ogevia-prd-Observability --region us-west-2 --query "StackResources[?ResourceType=='AWS::SNS::Topic'].PhysicalResourceId"`. Then `aws sns subscribe --topic-arn <that ARN> --protocol email --notification-endpoint <owner inbox> --region us-west-2` and confirm the email. A subscription does not drift the CDK stack. | $0 |
 | (all) | Re-run the evidence | `OGEVIA_ENV=prd python3 phase7_evidence.py` | $0 |
-| E3 | **REQUIRED before real client data:** restore drill that includes `ogevia_prd` | The existing drill (`phase7-drill-finish.sh`) verifies only `ogevia_sv_test`. Extend it to also verify `ogevia_prd` before running it. **Not prepared yet** (section 4). | about $0.02 to 0.10 one-off |
+| E3 | **REQUIRED before real client data:** restore drill that includes `ogevia_prd` | The existing drill (`phase7-drill-finish.sh`) verifies only `ogevia_sv_test`. **Prepared for review, not run: `infra/aws/slice/prd-restore-test.sh`, explained in `PRD_RESTORE_TEST.md`.** | about $0.02 to 0.10 one-off |
 
 ### Decisions and recommended-only items
 
@@ -74,7 +74,7 @@ The script asks for the word **APPLY** once for these three and separately for *
 
 **Not prepared, and why:**
 - **C6 flow logs.** It adds a stack for a VPC the pilot also uses, and the tests assert the exact stack set. Doing it safely is a separate change; it is recommended but does not block launch.
-- **A production restore drill.** The drill script is written for `ogevia_sv_test`; it should be extended once `ogevia_prd` exists so it can be tested against real data shape.
+- **A production restore drill.** Prepared for review on 2026-10-08 as `infra/aws/slice/prd-restore-test.sh` (see `PRD_RESTORE_TEST.md`). Rehearsed only against a simulated AWS; it has not run against real AWS.
 - **D4 rotation automation.** Waiting on the manual-rotation decision.
 
 ## 5. One fact that helps the pre-switch phone test
@@ -150,7 +150,7 @@ Budget `ogevia phase 1 Budget`: limit 50.0 USD, actual this month 14.33 USD, 3 a
 2. Who runs the AWS steps (operator shell with AWS admin access, `session-manager-plugin`, `psql`), and the first administrator's own email address.
 3. Run `deploy-production.sh check`; it has never been run (NO-GO items 6 to 17 in the runbook are NOT RUN).
 4. Deploy production (database `ogevia_prd`, stacks `Ogevia-prd-*`), then the Cognito client change and the first administrator sign-in.
-5. **Production restore test of `ogevia_prd` (step 4a): script to be written and reviewed first, run after step 4 and before any real data.**
+5. **Production restore test of `ogevia_prd` (step 4a): script prepared (`prd-restore-test.sh`); it needs your review and an approval reference, then runs after step 4 and before any real data.**
 6. Rehearse the manual password rotation on the test slice (D4); name the person who will do it.
 7. Owner steps still open: confirm the HIPAA-eligible service list; record-retention period; security headers for the AWS build on Netlify; decision on the `Ogevia-prd-WebHosting` stack; confirm that Netlify keeps serving `app.ogevia.com`.
 8. After go-live: flow logs within 30 days (C6); first password rotation within 30 days (D4); alarm subscription on the production alarm topic (G1, after deploy); GuardDuty cost check before day 30.
