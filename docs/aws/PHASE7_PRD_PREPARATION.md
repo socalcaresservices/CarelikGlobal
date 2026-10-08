@@ -2,6 +2,17 @@
 
 Status: **PREPARED, NOTHING EXECUTED.** Prepared 2026-10-08. Every item that changes AWS is a YELLOW action (CLAUDE.md section 13): it runs only after the owner approves it, from an operator shell with AWS admin access. No AWS access was available when this was written, so every AWS value is from the repo or from the 2026-10-03 live run recorded in `PHASE7_SECURITY_REVIEW.md` (owner-reported).
 
+## Approvals recorded (owner, 2026-10-08)
+
+| # | Item | Decision |
+|---|---|---|
+| A1 | Run the read-only check (section 2, steps 1 to 4) | **Approved.** Who runs it: to be named by the owner. |
+| A2 | Run `phase7-remediate.sh`, part APPLY (alarm email subscription, account-wide S3 public-access block, GuardDuty) | **Approved.** The alarm email address is typed by the operator when the script asks. |
+| A3 | Restore test (script part DRILL) | **Not approved now.** Run a production version after `ogevia_prd` exists. |
+| D4 | App database secret rotation | **Rotate by hand** every 90 days (draft procedure in section 7; rehearse on the test slice first). |
+
+Still open: the HIPAA-eligible service list (owner step), VPC flow logs, the record-retention period, and approval of the production deploy and of the Cognito client change (see `GO_LIVE_RUNBOOK.md`).
+
 Sources: `PHASE7_SECURITY_REVIEW.md` (sections 3, 5, 6), `infra/aws/slice/phase7-remediate.sh`, `infra/aws/slice/phase7_evidence.py`, `infra/aws/scripts/deploy-production.sh`, `PRODUCTION_DEPLOYMENT.md`.
 
 ## 1. Where it stands
@@ -49,7 +60,7 @@ The script asks for the word **APPLY** once for these three and separately for *
 
 | Gap | Item | Recommendation |
 |---|---|---|
-| D4 | App database secret rotation | Manual rotation every 90 days for launch; automate later (needs a rotation Lambda that can reach RDS and Secrets Manager). Owner decision. |
+| D4 | App database secret rotation | **Decided: manual, every 90 days** (section 7). Automate later; that needs a rotation Lambda that can reach RDS and Secrets Manager. |
 | C6 | VPC flow logs | A CDK change delivering to S3 with a lifecycle rule, under $1 a month (INFERRED). Recommended, not blocking. **Not prepared yet** (section 4). |
 | R12 | Record-retention period | A legal and business decision; it sets S3 lifecycle rules. Nothing is deleted until decided. |
 | HIPAA list | Confirm the services in use are on AWS's current HIPAA Eligible Services Reference | Owner step; the page could not be fetched from the environment that prepared this. Services: RDS, S3, KMS, Lambda, API Gateway, Cognito, CloudFront, CloudWatch Logs, Secrets Manager, SNS, CloudTrail, VPC, EC2, Systems Manager. |
@@ -76,3 +87,17 @@ The production API stack accepts tokens from the web-hosting stack's own Cognito
 | G1 on the production topic | Yes, after deploy |
 | Restore drill (script part DRILL, and the production version) | Yes |
 | D4, C6, retention period | Decisions |
+
+## 7. Manual rotation of the application database login (draft, not run)
+
+Why it is a draft: no written rotation procedure exists in the repo, and this one has not been rehearsed. Rehearse it once on the test slice before using it on production. Production's login is `ogevia_prd_app` and its secret is `ogevia/prd/database/app` (`PRODUCTION_DEPLOYMENT.md` section 1); the login's password is set from the secret by `infra/aws/db/deploy/11_prd_app_login.sql`.
+
+1. Put a recurring reminder in the owner's calendar for every 90 days.
+2. Take a manual snapshot of the RDS instance first (the rollback anchor).
+3. Save the current secret version label (`AWSCURRENT`) so it can be restored.
+4. Generate a new password with `aws secretsmanager get-random-password` and write it into the secret as a new version, keeping every other key (`username`, `dbname`, `host`, `port`) unchanged. Never print the value or put it in a command history or log.
+5. Set the database login's password to the new value by re-running `11_prd_app_login.sql` through the admin host, with the value read from the secret.
+6. Make the API pick up the new value. The API reads the secret when it opens a database connection (`apps/sv-api/src/db.ts`); whether it caches it is **not confirmed**. Check this before the first rotation; if it caches, force new Lambda execution environments.
+7. Run the smoke step (`deploy-production.sh smoke`): the API must connect to `ogevia_prd` as `ogevia_prd_app`.
+8. If anything fails: restore the previous secret version and set the login's password back to it, then smoke again.
+
