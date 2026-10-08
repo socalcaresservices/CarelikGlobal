@@ -1,9 +1,26 @@
 # Ogevia Operating Record
 
-**Status:** October 7, 2026 — Pilot Launch Ready  
-**Last Updated:** 2026-10-07  
-**Confidence Level:** High (infrastructure verified, workflow tested)  
-**Classification:** VERIFIED FINDINGS + OUTSTANDING ITEMS
+**Status:** CORRECTED 2026-10-08. Read the correction notice below first; parts of this record describe the AWS pilot/test environment as "production".  
+**Last Updated:** 2026-10-08 (originally 2026-10-07)  
+**Classification:** FINDINGS + OUTSTANDING ITEMS. Statements marked VERIFIED below were not re-checked in the 2026-10-08 correction.
+
+## Correction notice (2026-10-08)
+
+This record said the customer-facing application signs in with Cognito and runs on AWS. That is not what is deployed. The current arrangement, with its sources:
+
+| Question | Answer | Source |
+|---|---|---|
+| What does `https://app.ogevia.com` serve? | The web app built by the Netlify site `carelikglobal` from the `main` branch. | Owner-confirmed 2026-10-08 (domain attached to the site). |
+| How do users sign in there? | Email and password through Supabase. The app has no multi-factor step. | `VITE_AUTH_PROVIDER` is not set in Netlify (owner-confirmed); the app then defaults to Supabase (`apps/web/src/env.ts`). |
+| Which database does it use? | A Supabase project, not an AWS database. The Supabase project "CarelikGlobal" holds the `socal-care-services` organization; which project Netlify's production setting points at was not visible and is unverified. | Read-only check of the Supabase project, 2026-10-08. |
+| Where is AWS used today? | AWS TEST only: the pilot slice (CloudFront origin `d2xumch5w0izfg`, database `ogevia_sv_test`), with synthetic data. | `docs/aws/PRODUCTION_DEPLOYMENT.md` section 5; `docs/aws/PILOT_ACCEPTANCE_RECORD.md`. |
+| Is AWS production (`ogevia_prd`) deployed? | No. The go/no-go table is NO-GO with items 6 to 17 NOT RUN, and `app.ogevia.com` has not been repointed. | `docs/aws/PRODUCTION_DEPLOYMENT.md` section 7. |
+
+How to read the rest of this record:
+
+- Where it says "production" for AWS resources (the `Ogevia-prod-*` stacks, `ogevia-prod-postgres`, "production branches"), read "AWS, named prod". Per `docs/aws/PRODUCTION_DEPLOYMENT.md` section 1, the `Ogevia-prod-*` stacks are the pilot/test slice. They are not the customer-facing application.
+- "Pilot Launch Ready", "READY PENDING FINAL VERIFICATION" and the PASS table in the go-live section describe the AWS pilot and are not a current go-live assessment. The authoritative gate is `docs/aws/PRODUCTION_DEPLOYMENT.md` section 7.
+- Current environments, links and logins by role: `docs/ENVIRONMENTS.md`.
 
 ---
 
@@ -21,9 +38,9 @@
   - Caregiver and client management
 
 **Application Login:**
-- URL: https://app.ogevia.com
-- Authentication: Cognito OAuth
-- Access: Active production environment
+- URL: https://app.ogevia.com (sign-in page: https://app.ogevia.com/login)
+- Authentication: Supabase email and password. No multi-factor step in the app. (Corrected 2026-10-08; this line previously said "Cognito OAuth".)
+- Access: Customer-facing production, served by the Netlify site `carelikglobal` from `main`. Cognito is used only by the AWS TEST environment.
 
 ---
 
@@ -60,7 +77,7 @@
 | Environment | Database | VPC Status | Encryption | Public Access | Deletion Protection |
 |-------------|----------|-----------|-----------|---|---|
 | **Development** | `ogevia-postgres` | Private | StorageEncrypted=true | PubliclyAccessible=false | DeletionProtection=true |
-| **Production** | `ogevia-prod-postgres` | Private | StorageEncrypted=true | PubliclyAccessible=false | DeletionProtection=true |
+| **AWS "prod"-named** (not the customer-facing database; see correction notice) | `ogevia-prod-postgres` | Private | StorageEncrypted=true | PubliclyAccessible=false | DeletionProtection=true |
 
 **Admin Access Method:** AWS Systems Manager Session Manager via EC2 admin host (no direct internet access)
 
@@ -308,6 +325,8 @@ All technical prerequisites have been verified. Resolve outstanding items before
 
 ## Go-Live Readiness Assessment
 
+> **Superseded 2026-10-08.** This table assessed the AWS pilot environment. It is not a current go-live assessment of the customer-facing application, and the AWS PRD (`ogevia_prd`) gate is NO-GO. See the correction notice and `docs/aws/PRODUCTION_DEPLOYMENT.md` section 7.
+
 | Component | Status | Evidence |
 |-----------|--------|----------|
 | **Infrastructure** | ✓ PASS | AWS account verified, services operational, security controls confirmed |
@@ -329,3 +348,4 @@ All technical prerequisites have been verified. Resolve outstanding items before
 - **Source:** Direct infrastructure inspection + codebase analysis + workflow testing
 - **Classification:** Internal — Operational Intelligence
 - **Next Review:** October 7, 2026 (pilot launch readiness)
+- **Corrected:** 2026-10-08. Correction notice and login/URL fixes added; other statements not re-verified.
