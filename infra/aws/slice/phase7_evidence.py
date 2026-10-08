@@ -31,12 +31,18 @@ APP_SG = "sg-064ffce3bcbe8eb3b"
 VPC = "vpc-0ee9df0c38297cbc1"
 POOL = "us-west-2_849AYz5J7"
 ADMIN_TAG = "ogevia-db-admin-temp"
+# OGEVIA_ENV selects which stacks are checked: "prod" (default) is the pilot/test slice,
+# "prd" is the production deployment (ogevia_prd). Production shares the pilot's network
+# endpoints, so its egress stack is always the "prod" one.
+ENV = os.environ.get("OGEVIA_ENV", "prod")
+if ENV not in ("prod", "prd"):
+    sys.exit('OGEVIA_ENV must be "prod" (pilot/test slice) or "prd" (production), got %r' % ENV)
 STACKS = {
-    "evidence": "Ogevia-prod-EvidenceStorage",
+    "evidence": "Ogevia-%s-EvidenceStorage" % ENV,
     "egress": "Ogevia-prod-NetworkEgress",
-    "web": "Ogevia-prod-WebHosting",
-    "api": "Ogevia-prod-ServiceVerificationApi",
-    "obs": "Ogevia-prod-Observability",
+    "web": "Ogevia-%s-WebHosting" % ENV,
+    "api": "Ogevia-%s-ServiceVerificationApi" % ENV,
+    "obs": "Ogevia-%s-Observability" % ENV,
 }
 APPROVED_PUBLIC_ROUTES = 8
 
