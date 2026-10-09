@@ -68,6 +68,7 @@ describe("SCHEMA: migration chain", () => {
     ).map((r) => r.t);
     expect(tables).toEqual([
       "app_users",
+      "assignment_readiness_flags",
       "audit_events",
       "authorization_reservations",
       "availability_requests",
@@ -84,6 +85,7 @@ describe("SCHEMA: migration chain", () => {
       "caregiver_availability_windows",
       "caregiver_invitations",
       "caregiver_records",
+      "caregiver_service_approvals",
       "caregiver_unavailable_dates",
       "client_authorizations",
       "client_care_portals",
