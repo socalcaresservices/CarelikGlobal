@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any -- a test double: request bodies and fixtures are free-form JSON */
 // A stateful in-memory fake of the AWS API for the readiness screens' tests. SYNTHETIC data only.
 import { vi } from "vitest";
 

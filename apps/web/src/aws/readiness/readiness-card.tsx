@@ -5,6 +5,7 @@ import { Button, Card } from "@carelik/ui";
 import { newIdempotencyKey } from "@/lib/sv-backend";
 import { useOrganization } from "@/providers/organization-provider";
 import { useAwsApi } from "../aws-workspace";
+import { useReadiness } from "./queries";
 import { actionError } from "./format";
 
 export interface ReadinessStatus {
@@ -20,16 +21,6 @@ interface DocType { documentTypeId: string; name: string }
 interface SetupRow { requirement: "cpr" | "tb"; documentTypeId: string | null; documentTypeName: string | null; validityBasis: string | null; validityDays: number | null; complete: boolean; gap: string | null }
 
 const inputClass = "mt-1 block w-full rounded-md border border-slate-300 px-3 py-2 text-base";
-
-export function useReadiness() {
-  const api = useAwsApi();
-  const { activeOrganizationId, hasPermission } = useOrganization();
-  return useQuery({
-    queryKey: ["readiness", activeOrganizationId],
-    queryFn: async () => (await api.get<{ readiness: ReadinessStatus }>("/v1/readiness", { organizationId: activeOrganizationId })).readiness,
-    enabled: !!activeOrganizationId && hasPermission("readiness.read"),
-  });
-}
 
 /** Choose which document type is the CPR / TB record and how long it stays valid. Ogevia ships no default period. */
 function RequiredDocumentsSetup() {

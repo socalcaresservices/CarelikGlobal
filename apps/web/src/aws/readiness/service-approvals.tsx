@@ -9,6 +9,7 @@ import { useAwsApi } from "../aws-workspace";
 import { useServices } from "../client-admin";
 import { SERVICE_STATE_LABEL, actionError } from "./format";
 import { useGuardedMutate } from "./use-guarded";
+import { useServiceApprovals } from "./queries";
 
 export interface ServiceApproval {
   approvalId: string;
@@ -34,16 +35,6 @@ const STATE_BADGE: Record<string, string> = {
   expired: "bg-slate-100 text-slate-800",
   not_started: "bg-sky-100 text-sky-950",
 };
-
-export function useServiceApprovals(caregiverRecordId?: string) {
-  const api = useAwsApi();
-  const { activeOrganizationId } = useOrganization();
-  return useQuery({
-    queryKey: ["caregiver-services", activeOrganizationId, caregiverRecordId ?? "me"],
-    queryFn: async () => (await api.get<{ approvals: ServiceApproval[] }>("/v1/caregiver-services", { organizationId: activeOrganizationId, caregiverRecordId })).approvals,
-    enabled: !!activeOrganizationId,
-  });
-}
 
 function RevokeForm({ approval, onDone }: { approval: ServiceApproval; onDone: (note: string) => void }) {
   const api = useAwsApi();

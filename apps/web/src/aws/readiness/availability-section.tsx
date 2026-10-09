@@ -1,4 +1,4 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useRef, useState } from "react";
 import { Button, Card } from "@carelik/ui";
 import { newIdempotencyKey } from "@/lib/sv-backend";
@@ -6,6 +6,7 @@ import { useOrganization } from "@/providers/organization-provider";
 import { formatDateOnly } from "@/lib/service-verification";
 import { useAwsApi } from "../aws-workspace";
 import { useGuardedMutate } from "./use-guarded";
+import { useAvailability } from "./queries";
 import { DAY_NAMES, REQUEST_STATUS_BADGE, REQUEST_STATUS_LABEL, actionError, rangeLabel, weeklySummary, type HoursRange } from "./format";
 
 export interface AvailabilityRequestRow {
@@ -37,16 +38,6 @@ export interface AvailabilityState {
 
 const inputClass = "mt-1 block w-full rounded-md border border-slate-300 px-3 py-2 text-base";
 export const SENT_MESSAGE = "Request sent. Your current hours stay in place until approved.";
-
-export function useAvailability(caregiverRecordId?: string) {
-  const api = useAwsApi();
-  const { activeOrganizationId } = useOrganization();
-  return useQuery({
-    queryKey: ["availability", activeOrganizationId, caregiverRecordId ?? "me"],
-    queryFn: async () => (await api.get<{ availability: AvailabilityState }>("/v1/availability", { organizationId: activeOrganizationId, caregiverRecordId })).availability,
-    enabled: !!activeOrganizationId,
-  });
-}
 
 /** The APPROVED hours, with the agency time zone. "Not provided" when nothing has ever been approved or entered. */
 export function CurrentAvailability({ state }: { state: AvailabilityState }) {
