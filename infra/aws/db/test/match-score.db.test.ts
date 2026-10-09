@@ -345,6 +345,31 @@ describe("the decision record", () => {
   });
 });
 
+describe("decisions recorded after an assignment (shift and recurring series)", () => {
+  it("record_decision_for_shift reads the server's own assignment; the shift does not conflict with itself", async () => {
+    const date = day(40);
+    const made = (await q(w.managerA, "select * from ogevia_api.create_shift($1,$2,$3,$4::date,'10:00','12:00',$5,null)", [w.orgA, fresh.client, fresh.service, date, rec["CG-A2"]]))[0]!;
+    const id = (await q(w.managerA, "select ogevia_api.record_decision_for_shift($1,$2,'Nearest verified match',null) as id", [w.orgA, made.shift_id]))[0]!.id;
+    const row = (await db.admin.query("select context, reference_id, eligibility, score_version, caregiver_record_id from ogevia.assignment_decisions where id = $1", [id])).rows[0];
+    expect(row).toMatchObject({ context: "shift", reference_id: made.shift_id, score_version: "match-v1", caregiver_record_id: rec["CG-A2"] });
+    expect(row.eligibility).not.toBe("not_eligible"); // the new shift is excluded from its own conflict check
+    await expectPgError(q(w.caregiverA2, "select ogevia_api.record_decision_for_shift($1,$2,null,null)", [w.orgA, made.shift_id]), "OGA03");
+    await expectPgError(q(w.managerB, "select ogevia_api.record_decision_for_shift($1,$2,null,null)", [w.orgA, made.shift_id]), "OGN04");
+    await expectPgError(q(w.managerA, "select ogevia_api.record_decision_for_shift($1,$2,null,null)", [w.orgA, "99999999-9999-4999-8999-999999999999"]), "OGN04");
+  });
+
+  it("record_decision_for_series records the occurrences the series actually created", async () => {
+    const A3 = rec["CG-A3"]!;
+    const series = (await q(w.managerA, "select * from ogevia_api.create_shift_series($1,$2,$3,$4,$5::smallint[],'10:00','12:00',$6::date,$7::date,'skip_flagged',null)",
+      [w.orgA, fresh.client, fresh.service, A3, `{${dow(day(50))}}`, day(50), day(64)]))[0]!;
+    const id = (await q(w.managerA, "select ogevia_api.record_decision_for_series($1,$2,'Weekly pattern',null) as id", [w.orgA, series.series_id]).catch((e) => ({ error: e })) as any);
+    // the caregiver may need an override on some dates; either a decision is recorded or the refusal is a plain, specific one
+    if ((id as any).error) throw (id as any).error;
+    const n = (await db.admin.query("select count(*)::int n from ogevia.assignment_decisions where reference_id = $1 and context = 'series'", [series.series_id])).rows[0].n;
+    expect(n).toBe(1);
+  });
+});
+
 describe("access, privacy and isolation", () => {
   it("only schedulers and managers see matches; caregivers and other agencies are refused; the output holds no ZIP code or address", async () => {
     const occ = JSON.stringify([{ starts_at: target.starts, ends_at: target.ends }]);

@@ -504,7 +504,7 @@ $$;
 -- ---------------------------------------------------------------------------
 create function ogevia.match_candidate(
   p_organization_id uuid, p_caregiver_record_id uuid, p_client_id uuid, p_service_id uuid,
-  p_occurrences jsonb, p_exclude_shift uuid default null
+  p_occurrences jsonb, p_exclude_shift uuid default null, p_check_conflicts boolean default true
 )
 returns jsonb
 language plpgsql
@@ -557,7 +557,7 @@ begin
     v_ends := (v_occ ->> 'ends_at')::timestamptz;
     v_first := (v_starts at time zone v_tz)::date;
     v_last := ((v_ends - interval '1 microsecond') at time zone v_tz)::date;
-    v_r := ogevia.assignment_readiness(p_organization_id, p_caregiver_record_id, p_client_id, p_service_id, v_starts, v_ends, p_exclude_shift, 'force', true, true);
+    v_r := ogevia.assignment_readiness(p_organization_id, p_caregiver_record_id, p_client_id, p_service_id, v_starts, v_ends, p_exclude_shift, 'force', p_check_conflicts, true);
     v_n := v_n + 1;
     v_total_min := v_total_min + extract(epoch from (v_ends - v_starts)) / 60;
     v_cov_min := v_cov_min + ogevia.availability_covered_minutes(p_organization_id, p_caregiver_record_id, v_tz, v_starts, v_ends, v_first, v_last);
@@ -749,7 +749,8 @@ $$;
 -- ---------------------------------------------------------------------------
 create function ogevia_api.record_assignment_decision(
   p_organization_id uuid, p_caregiver_record_id uuid, p_client_id uuid, p_service_id uuid, p_occurrences jsonb,
-  p_context text, p_reference_id uuid, p_rationale text default null, p_override_reason text default null
+  p_context text, p_reference_id uuid, p_rationale text default null, p_override_reason text default null,
+  p_exclude_shift_id uuid default null, p_check_conflicts boolean default true
 )
 returns uuid
 language plpgsql
@@ -773,7 +774,7 @@ begin
   if p_context not in ('shift', 'care_request', 'series') then
     raise exception 'Unknown assignment context' using errcode = 'OGV22';
   end if;
-  v_c := ogevia.match_candidate(p_organization_id, p_caregiver_record_id, p_client_id, p_service_id, p_occurrences, null);
+  v_c := ogevia.match_candidate(p_organization_id, p_caregiver_record_id, p_client_id, p_service_id, p_occurrences, p_exclude_shift_id, p_check_conflicts);
   if v_c ->> 'caregiver_code' is null then
     raise exception 'Care Team member not found' using errcode = 'OGN04';
   end if;
@@ -792,14 +793,102 @@ begin
     (select jsonb_agg(jsonb_build_object('key', c ->> 'key', 'status', c ->> 'status', 'value', c -> 'value', 'weight', c -> 'weight', 'points', c -> 'points'))
        from jsonb_array_elements(v_c -> 'components') c),
     round((v_c ->> 'approx_distance_miles')::numeric, 1), v_refs,
-    nullif(btrim(coalesce(p_rationale, '')), ''), nullif(btrim(coalesce(p_override_reason, '')), ''))
+    nullif(btrim(coalesce(p_rationale, '')), ''),
+    case when v_c ->> 'eligibility' = 'needs_override' then nullif(btrim(coalesce(p_override_reason, '')), '') end)
   returning id into v_id;
   perform ogevia.write_audit(p_organization_id, 'assignment.decision_recorded', 'assignment_decisions', v_id, null,
     jsonb_build_object('context', p_context, 'reference_id', p_reference_id, 'caregiver_record_id', p_caregiver_record_id,
                        'score', v_c -> 'score', 'score_status', v_c ->> 'score_status', 'score_version', v_c ->> 'score_version',
                        'eligibility', v_c ->> 'eligibility'),
-    nullif(btrim(coalesce(p_override_reason, p_rationale, '')), ''));
+    case when v_c ->> 'eligibility' = 'needs_override' then nullif(btrim(coalesce(p_override_reason, p_rationale, '')), '') else nullif(btrim(coalesce(p_rationale, '')), '') end);
   return v_id;
+end;
+$$;
+
+-- Wrappers used by the API after an assignment: they read the assignment the server just made (never a
+-- client-supplied time), exclude that shift from the conflict check so it does not conflict with itself, and
+-- record who chose whom with the score at that moment.
+create function ogevia_api.record_decision_for_shift(p_organization_id uuid, p_shift_id uuid, p_rationale text default null, p_override_reason text default null)
+returns uuid
+language plpgsql
+volatile
+security definer
+set search_path = ogevia, pg_temp
+as $$
+declare
+  s ogevia.shifts%rowtype;
+begin
+  if ogevia.require_actor() is null or not ogevia.is_active_member(p_organization_id) then
+    raise exception 'Organization not found' using errcode = 'OGN04';
+  end if;
+  if not (ogevia.has_permission(p_organization_id, 'shifts.manage') or ogevia.has_permission(p_organization_id, 'care_requests.manage')) then
+    raise exception 'You do not have permission to record an assignment' using errcode = 'OGA03';
+  end if;
+  select * into s from ogevia.shifts where id = p_shift_id and organization_id = p_organization_id;
+  if s.id is null or s.caregiver_record_id is null or s.service_id is null then
+    raise exception 'Shift with a caregiver not found' using errcode = 'OGN04';
+  end if;
+  return ogevia_api.record_assignment_decision(p_organization_id, s.caregiver_record_id, s.client_id, s.service_id,
+    jsonb_build_array(jsonb_build_object('starts_at', s.starts_at, 'ends_at', s.ends_at)), 'shift', s.id, p_rationale, p_override_reason, s.id, true);
+end;
+$$;
+
+create function ogevia_api.record_decision_for_care_request(p_organization_id uuid, p_request_id uuid, p_rationale text default null, p_override_reason text default null)
+returns uuid
+language plpgsql
+volatile
+security definer
+set search_path = ogevia, pg_temp
+as $$
+declare
+  r ogevia.care_requests%rowtype;
+  s ogevia.shifts%rowtype;
+begin
+  if ogevia.require_actor() is null or not ogevia.is_active_member(p_organization_id) then
+    raise exception 'Organization not found' using errcode = 'OGN04';
+  end if;
+  if not (ogevia.has_permission(p_organization_id, 'shifts.manage') or ogevia.has_permission(p_organization_id, 'care_requests.manage')) then
+    raise exception 'You do not have permission to record an assignment' using errcode = 'OGA03';
+  end if;
+  select * into r from ogevia.care_requests where id = p_request_id and organization_id = p_organization_id;
+  if r.id is null or r.assigned_shift_id is null then
+    raise exception 'Assigned care request not found' using errcode = 'OGN04';
+  end if;
+  select * into s from ogevia.shifts where id = r.assigned_shift_id and organization_id = p_organization_id;
+  return ogevia_api.record_assignment_decision(p_organization_id, s.caregiver_record_id, s.client_id, s.service_id,
+    jsonb_build_array(jsonb_build_object('starts_at', s.starts_at, 'ends_at', s.ends_at)), 'care_request', r.id, p_rationale, p_override_reason, s.id, true);
+end;
+$$;
+
+create function ogevia_api.record_decision_for_series(p_organization_id uuid, p_series_id uuid, p_rationale text default null, p_override_reason text default null)
+returns uuid
+language plpgsql
+volatile
+security definer
+set search_path = ogevia, pg_temp
+as $$
+declare
+  ss ogevia.shift_series%rowtype;
+  v_occ jsonb;
+begin
+  if ogevia.require_actor() is null or not ogevia.is_active_member(p_organization_id) then
+    raise exception 'Organization not found' using errcode = 'OGN04';
+  end if;
+  if not (ogevia.has_permission(p_organization_id, 'shifts.manage') or ogevia.has_permission(p_organization_id, 'care_requests.manage')) then
+    raise exception 'You do not have permission to record an assignment' using errcode = 'OGA03';
+  end if;
+  select * into ss from ogevia.shift_series where id = p_series_id and organization_id = p_organization_id;
+  if ss.id is null or ss.caregiver_record_id is null then
+    raise exception 'Series with a caregiver not found' using errcode = 'OGN04';
+  end if;
+  select coalesce(jsonb_agg(jsonb_build_object('starts_at', x.starts_at, 'ends_at', x.ends_at) order by x.starts_at), '[]'::jsonb) into v_occ
+    from (select s.starts_at, s.ends_at from ogevia.shifts s
+           where s.series_id = ss.id and s.organization_id = p_organization_id and s.status = 'scheduled' order by s.starts_at limit 100) x;
+  if jsonb_array_length(v_occ) = 0 then
+    raise exception 'The series has no scheduled shifts' using errcode = 'OGN04';
+  end if;
+  return ogevia_api.record_assignment_decision(p_organization_id, ss.caregiver_record_id, ss.client_id, ss.service_id, v_occ, 'series', ss.id,
+    p_rationale, p_override_reason, null, false);
 end;
 $$;
 
@@ -974,6 +1063,7 @@ begin
   end if;
   v_admin := ogevia.has_permission(p_organization_id, 'caregivers.manage');
   v_own := ogevia.my_caregiver_record(p_organization_id);
+  p_caregiver_record_id := coalesce(p_caregiver_record_id, v_own);
   if not v_admin and (v_own is null or v_own <> p_caregiver_record_id or not ogevia.has_permission(p_organization_id, 'availability.manage_own')) then
     raise exception 'You can only submit your own experience' using errcode = 'OGA03';
   end if;
@@ -1089,6 +1179,7 @@ begin
   end if;
   v_admin := ogevia.has_permission(p_organization_id, 'caregivers.manage');
   v_own := ogevia.my_caregiver_record(p_organization_id);
+  p_caregiver_record_id := coalesce(p_caregiver_record_id, v_own);
   if not v_admin and (v_own is null or v_own <> p_caregiver_record_id) then
     raise exception 'You can only see your own experience' using errcode = 'OGA03';
   end if;
@@ -1310,9 +1401,12 @@ revoke all on function ogevia.client_support_guard_update() from public;
 revoke all on function ogevia.approx_distance_miles(text, text) from public;
 revoke all on function ogevia.availability_covered_minutes(uuid, uuid, text, timestamptz, timestamptz, date, date) from public;
 revoke all on function ogevia.caregiver_verified_tags(uuid, uuid) from public;
-revoke all on function ogevia.match_candidate(uuid, uuid, uuid, uuid, jsonb, uuid) from public;
+revoke all on function ogevia.match_candidate(uuid, uuid, uuid, uuid, jsonb, uuid, boolean) from public;
 revoke all on function ogevia_api.list_match_candidates(uuid, uuid, uuid, jsonb, uuid) from public;
-revoke all on function ogevia_api.record_assignment_decision(uuid, uuid, uuid, uuid, jsonb, text, uuid, text, text) from public;
+revoke all on function ogevia_api.record_assignment_decision(uuid, uuid, uuid, uuid, jsonb, text, uuid, text, text, uuid, boolean) from public;
+revoke all on function ogevia_api.record_decision_for_shift(uuid, uuid, text, text) from public;
+revoke all on function ogevia_api.record_decision_for_care_request(uuid, uuid, text, text) from public;
+revoke all on function ogevia_api.record_decision_for_series(uuid, uuid, text, text) from public;
 revoke all on function ogevia_api.list_assignment_decisions(uuid, uuid) from public;
 revoke all on function ogevia_api.get_match_settings(uuid) from public;
 revoke all on function ogevia_api.set_match_settings(uuid, numeric, boolean, text) from public;
@@ -1331,7 +1425,10 @@ revoke all on function ogevia_api.set_caregiver_location(uuid, uuid, text, integ
 revoke all on function ogevia_api.get_caregiver_location(uuid, uuid) from public;
 revoke all on function ogevia_api.get_client_location(uuid, uuid) from public;
 grant execute on function ogevia_api.list_match_candidates(uuid, uuid, uuid, jsonb, uuid) to ogevia_app;
-grant execute on function ogevia_api.record_assignment_decision(uuid, uuid, uuid, uuid, jsonb, text, uuid, text, text) to ogevia_app;
+grant execute on function ogevia_api.record_assignment_decision(uuid, uuid, uuid, uuid, jsonb, text, uuid, text, text, uuid, boolean) to ogevia_app;
+grant execute on function ogevia_api.record_decision_for_shift(uuid, uuid, text, text) to ogevia_app;
+grant execute on function ogevia_api.record_decision_for_care_request(uuid, uuid, text, text) to ogevia_app;
+grant execute on function ogevia_api.record_decision_for_series(uuid, uuid, text, text) to ogevia_app;
 grant execute on function ogevia_api.list_assignment_decisions(uuid, uuid) to ogevia_app;
 grant execute on function ogevia_api.get_match_settings(uuid) to ogevia_app;
 grant execute on function ogevia_api.set_match_settings(uuid, numeric, boolean, text) to ogevia_app;

@@ -30,9 +30,12 @@ drop function ogevia_api.create_experience_tag(uuid, text);
 drop function ogevia_api.set_match_settings(uuid, numeric, boolean, text);
 drop function ogevia_api.get_match_settings(uuid);
 drop function ogevia_api.list_assignment_decisions(uuid, uuid);
-drop function ogevia_api.record_assignment_decision(uuid, uuid, uuid, uuid, jsonb, text, uuid, text, text);
+drop function ogevia_api.record_decision_for_series(uuid, uuid, text, text);
+drop function ogevia_api.record_decision_for_care_request(uuid, uuid, text, text);
+drop function ogevia_api.record_decision_for_shift(uuid, uuid, text, text);
+drop function ogevia_api.record_assignment_decision(uuid, uuid, uuid, uuid, jsonb, text, uuid, text, text, uuid, boolean);
 drop function ogevia_api.list_match_candidates(uuid, uuid, uuid, jsonb, uuid);
-drop function ogevia.match_candidate(uuid, uuid, uuid, uuid, jsonb, uuid);
+drop function ogevia.match_candidate(uuid, uuid, uuid, uuid, jsonb, uuid, boolean);
 
 create or replace function ogevia.assignment_readiness(
   p_organization_id uuid,
