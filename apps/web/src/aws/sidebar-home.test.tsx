@@ -194,6 +194,51 @@ describe("sidebar: collapse", () => {
   });
 });
 
+describe("sidebar: Option B styling contract", () => {
+  it("applies the specified palette, heading, divider, link and selected-row styles", async () => {
+    renderAt("/schedule", "manager");
+    const nav = await screen.findByRole("navigation", { name: "Main" });
+    const aside = nav.closest("aside")!;
+    expect(aside.className).toContain("bg-[#FAFBFC]");
+    expect(aside.className).toContain("border-r");
+    expect(aside.className).toContain("border-[#E2E8EC]");
+    const heading = within(nav).getAllByTestId("nav-group-heading")[0]!;
+    expect(heading.textContent).toBe("CAREGIVERS");
+    for (const c of ["text-[12px]", "font-bold", "leading-[18px]", "tracking-[0.06em]", "text-[#334155]", "border-b", "border-[#DCE5E9]", "pb-[10px]"]) {
+      expect(heading.className).toContain(c);
+    }
+    const current = within(nav).getByRole("link", { name: "Schedule" });
+    expect(current).toHaveAttribute("aria-current", "page");
+    for (const c of ["bg-[#E8F5F4]", "text-[#0F6674]", "font-semibold", "rounded-md", "min-h-[40px]", "text-[14px]", "gap-2", "[@media(pointer:coarse)]:min-h-[44px]", "focus-visible:outline-[#0F6674]"]) {
+      expect(current.className).toContain(c);
+    }
+    expect(current.className).not.toMatch(/border-l|before:|shadow-\[inset/); // no vertical accent bar
+    const other = within(nav).getByRole("link", { name: "Care Team" });
+    for (const c of ["text-[#243244]", "font-medium", "hover:bg-[#F0F7F7]"]) expect(other.className).toContain(c);
+    expect(other).not.toHaveAttribute("aria-current");
+    // Icons are 18px; long labels wrap rather than clip.
+    expect(other.querySelector("svg")!.getAttribute("class")).toContain("h-[18px]");
+    expect(other.querySelector("span")!.className).toContain("break-words");
+  });
+
+  it("collapsed mode hides headings and dividers but keeps accessible link names", async () => {
+    window.localStorage.setItem("ogevia.sidebar.collapsed", "1");
+    renderAt("/", "manager");
+    const nav = await screen.findByRole("navigation", { name: "Main" });
+    expect(within(nav).queryAllByTestId("nav-group-heading")).toHaveLength(0);
+    expect(nav.querySelector(".border-t")).toBeNull();
+    expect(within(nav).getByRole("link", { name: "Care Team" })).toBeInTheDocument();
+    expect(within(nav).getAllByRole("link")).toHaveLength(14);
+  });
+
+  it("keyboard: every link is reachable by Tab order (real anchors) and the collapse control is a labelled button", async () => {
+    renderAt("/", "manager");
+    const nav = await screen.findByRole("navigation", { name: "Main" });
+    for (const a of within(nav).getAllByRole("link")) expect(a).toHaveAttribute("href");
+    expect(screen.getByRole("button", { name: "Collapse sidebar" })).toHaveAttribute("aria-expanded", "true");
+  });
+});
+
 describe("sidebar: mobile drawer", () => {
   it("below 768px the menu button opens the drawer; Escape closes it and returns focus; choosing a link closes it", async () => {
     mockMobile(true);

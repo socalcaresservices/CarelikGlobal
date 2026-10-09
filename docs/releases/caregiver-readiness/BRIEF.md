@@ -1,11 +1,11 @@
-# Unified caregiver-readiness release: owner brief (verbatim record)
+# Unified caregiver-readiness release: owner brief (faithful condensed record)
 
 Recorded 2026-10-09. Branch `feature/caregiver-readiness`, based on PR #75 head `111fc7cea90296fc430a9b9a0c1f5100fcbe6cbe`
 (PR #75 = main `a59a4b8` + 2 commits). **Dependency: this branch contains PR #75's commits. PR #75 must be merged first, or this
 branch rebased on main after it merges. PR #75 is not merged by this work.** Status words used below: proposed, implemented, tested,
 deployed. Nothing in this release is deployed. No production deployment is authorised.
 
-The brief below is the owner's instruction text, reproduced for the record.
+The brief below condenses the owner's instruction text section by section without changing requirements; the owner message is the authority.
 
 ---
 
