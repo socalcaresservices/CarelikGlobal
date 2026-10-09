@@ -62,12 +62,13 @@ afterAll(dropAll);
 describe("production deployment SQL (runbook order)", () => {
   it("uses the existing migration folder and runner: exactly the repository's migration files", () => {
     const all = loadMigrations();
-    expect(all.length).toBeGreaterThanOrEqual(42);
+    expect(all.length).toBeGreaterThanOrEqual(43);
     expect(all[0]!.name).toBe("0001_roles_schemas_extensions.sql");
     expect(all[38]!.name).toBe("0039_availability_approval.sql");
     expect(all[39]!.name).toBe("0040_caregiver_service_approvals.sql");
     expect(all[40]!.name).toBe("0041_required_documents.sql");
     expect(all[41]!.name).toBe("0042_readiness_gate.sql");
+    expect(all[42]!.name).toBe("0043_explainable_matching.sql");
   });
 
   it("10 creates ogevia_prd, idempotently, and never touches an existing database", async () => {

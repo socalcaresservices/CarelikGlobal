@@ -66,7 +66,8 @@ describe("SCHEMA: migration chain", () => {
         "select tablename as t from pg_tables where schemaname = 'ogevia' order by 1",
       )
     ).map((r) => r.t);
-    expect(tables).toEqual([
+    // Sorted comparison: membership is what matters, not the database collation.
+    expect([...tables].sort()).toEqual([
       "app_users",
       "assignment_readiness_flags",
       "audit_events",
@@ -84,13 +85,18 @@ describe("SCHEMA: migration chain", () => {
       "caregiver_assignments",
       "caregiver_availability_state",
       "caregiver_availability_windows",
+      "caregiver_experience",
+      "caregiver_experience_reviews",
       "caregiver_invitations",
       "caregiver_records",
       "caregiver_service_approvals",
       "caregiver_unavailable_dates",
+      "caregiver_zip",
       "client_authorizations",
       "client_care_portals",
+      "client_experience_requirements",
       "client_private_names",
+      "client_service_zip",
       "client_types",
       "clients",
       "continuity_exports",
@@ -98,6 +104,7 @@ describe("SCHEMA: migration chain", () => {
       "document_requirement_policy_history",
       "document_types",
       "document_versions",
+      "experience_tags",
       "idempotency_records",
       "organization_memberships",
       "organization_readiness_settings",
@@ -106,6 +113,7 @@ describe("SCHEMA: migration chain", () => {
       "permissions",
       "readiness_setting_events",
       "role_permissions",
+      "scoring_rule_versions",
       "service_visits",
       "services",
       "shift_coverage_events",
@@ -121,6 +129,7 @@ describe("SCHEMA: migration chain", () => {
       "visit_late_confirmation_reviews",
       "visit_late_confirmations",
       "visit_review_decisions",
+      "zip_centroids",
     ]);
   });
 

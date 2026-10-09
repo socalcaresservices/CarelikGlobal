@@ -20,7 +20,8 @@
 --     documents, tenant permissions, caregiver status or double-booking.
 --   * Not enforced here: manager-started visits (unscheduled visits a manager approves are not changed
 --     retroactively) and visits already in progress (never interrupted). Client mandatory requirements are
---     checked through ogevia.client_requirement_issues (extended in 0043).
+--     checked through ogevia.client_requirement_issues (extended in 0043). A recorded mandatory client requirement is
+--     always enforced: it is new data, so there is no existing work to strand.
 --
 -- Locking: every commit-time check and every readiness change (service approve/revoke, document review,
 -- policy change) first takes ogevia.lock_caregiver(caregiver) - the same advisory lock the overlap check already
@@ -142,7 +143,7 @@ begin
     when 'conflict' then true
     when 'cpr' then v_active
     when 'tb' then v_active
-    when 'client' then v_active
+    when 'client' then true
     when 'availability' then v_active or p_context = 'care_request'
     when 'service' then v_active and coalesce(s.service_checks, false)
     else v_active end;
