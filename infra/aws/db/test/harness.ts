@@ -141,6 +141,38 @@ export async function retireOldShifts(db: TestDb, caregiverUserId: string): Prom
   }
 }
 
+/**
+ * Sets a caregiver's APPROVED availability the way production does: the caregiver submits a request
+ * with a reason, an administrator (the org A manager) approves it. A request identical to what is
+ * already approved is not an error here (the end state is what the caller wants).
+ */
+export async function approveAvailability(
+  db: TestDb,
+  w: Pick<World, "orgA" | "managerA">,
+  caregiver: Actor,
+  windows: unknown[],
+  unavailable: unknown[] = [],
+): Promise<void> {
+  let id: string | null = null;
+  try {
+    id = await asActor(db, caregiver.sub, async (c) => {
+      const state = (await c.query("select ogevia_api.get_my_availability_state($1) as s", [w.orgA])).rows[0]!.s as { version: number };
+      return (
+        await c.query<{ id: string }>("select ogevia_api.submit_availability_request($1,'Test availability',$2::jsonb,$3::jsonb,$4,null) as id", [
+          w.orgA,
+          JSON.stringify(windows),
+          JSON.stringify(unavailable),
+          state.version,
+        ])
+      ).rows[0]!.id;
+    });
+  } catch (error) {
+    if (/same as your approved availability/.test((error as Error).message)) return;
+    throw error;
+  }
+  await asActor(db, w.managerA.sub, (c) => c.query("select ogevia_api.review_availability_request($1,'approve','Approved for the test',null)", [id]));
+}
+
 // ---------------------------------------------------------------------------
 // Synthetic world
 // ---------------------------------------------------------------------------

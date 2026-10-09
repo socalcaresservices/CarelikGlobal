@@ -1,7 +1,7 @@
 import { createHash, randomBytes, randomUUID } from "node:crypto";
 import type pg from "pg";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { asActor, createTestDb, freshClient, seedWorld, type TestDb, type World } from "./harness.js";
+import { asActor, createTestDb, freshClient, seedWorld, type TestDb, type World, approveAvailability } from "./harness.js";
 
 let db: TestDb;
 let w: World;
@@ -44,12 +44,7 @@ describe("care request -> availability -> offer -> assignment -> replacement", (
     const { starts_at, ends_at, dow } = slot.rows[0]!;
 
     for (const actor of [w.caregiverA1, w.caregiverA2]) {
-      await asActor(db, actor.sub, async (c) => {
-        await c.query("select ogevia_api.replace_my_availability($1,$2::jsonb,'[]'::jsonb)", [
-          w.orgA,
-          JSON.stringify([{ weekday: dow, specific_date: null, start_local: "08:00", end_local: "23:00" }]),
-        ]);
-      });
+      await approveAvailability(db, w, actor, [{ weekday: dow, specific_date: null, start_local: "08:00", end_local: "23:00" }]);
     }
 
     const created = await asPublic(async (c) =>

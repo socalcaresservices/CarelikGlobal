@@ -2,7 +2,7 @@
 // agency-local dates (not "today"), so the suite gives the same answer whenever it runs.
 import { readFileSync } from "node:fs";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { asActor, createTestDb, expectPgError, freshClient, seedWorld, type Actor, type TestDb, type World } from "./harness.js";
+import { asActor, createTestDb, expectPgError, freshClient, seedWorld, type Actor, type TestDb, type World, approveAvailability } from "./harness.js";
 
 let db: TestDb;
 let w: World;
@@ -68,13 +68,9 @@ describe("window shape", () => {
     await setWindows(w.caregiverA1, []);
   });
 
-  it("a caregiver can save an overnight window through the application function, and read it back", async () => {
+  it("a caregiver can request an overnight window; once an administrator approves it, it reads back", async () => {
     await setWindows(w.caregiverA1, []);
-    await asActor(db, w.caregiverA1.sub, (c) =>
-      c.query("select ogevia_api.replace_my_availability($1,$2::jsonb,'[]'::jsonb)", [
-        w.orgA, JSON.stringify([{ weekday: 6, specific_date: null, start_local: "22:00", end_local: "06:00" }]),
-      ]),
-    );
+    await approveAvailability(db, w, w.caregiverA1, [{ weekday: 6, specific_date: null, start_local: "22:00", end_local: "06:00" }]);
     const back = await asActor(db, w.caregiverA1.sub, async (c) =>
       (await c.query("select weekday, start_local::text s, end_local::text e from ogevia_api.get_my_availability($1)", [w.orgA])).rows,
     );

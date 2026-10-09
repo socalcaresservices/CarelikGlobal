@@ -69,6 +69,7 @@ describe("SCHEMA: migration chain", () => {
       "0037",
       "0038",
       "0039",
+      "0040",
     ]);
   });
 
@@ -117,6 +118,8 @@ describe("SCHEMA: migration chain", () => {
       "care_request_offers",
       "care_requests",
       "caregiver_assignments",
+      "caregiver_availability_profiles",
+      "caregiver_availability_requests",
       "caregiver_availability_windows",
       "caregiver_invitations",
       "caregiver_records",
