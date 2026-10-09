@@ -301,6 +301,8 @@ begin
   if v_rec.linked_user_id is not null and v_rec.linked_user_id = v_actor then
     raise exception 'You cannot approve your own services. Ask another administrator.' using errcode = 'OGA03';
   end if;
+  -- Same lock every commit-time check takes, so an approval and a concurrent assignment cannot interleave.
+  perform ogevia.lock_caregiver(v_rec.id);
   if not exists (select 1 from ogevia.services s where s.id = p_service_id and s.organization_id = p_organization_id and s.deleted_at is null and s.is_active) then
     raise exception 'Service not found or inactive' using errcode = 'OGN04';
   end if;
@@ -352,8 +354,11 @@ begin
   v_prior := ogevia.idempotency_begin('revoke_caregiver_service', p_idempotency_key, p_organization_id, v_fp);
   if v_prior is not null then return v_prior; end if;
   if length(v_reason) < 3 then raise exception 'Enter a reason for the revocation' using errcode = 'OGV22'; end if;
-  select * into a from ogevia.caregiver_service_approvals x where x.id = p_approval_id and x.organization_id = p_organization_id for update;
+  select * into a from ogevia.caregiver_service_approvals x where x.id = p_approval_id and x.organization_id = p_organization_id;
   if a.id is null then raise exception 'Approval not found' using errcode = 'OGN04'; end if;
+  -- Caregiver lock first (the order every commit-time path uses), then the approval row.
+  perform ogevia.lock_caregiver(a.caregiver_record_id);
+  select * into a from ogevia.caregiver_service_approvals x where x.id = p_approval_id and x.organization_id = p_organization_id for update;
   if a.revoked_at is not null then raise exception 'This approval was already revoked.' using errcode = 'OGC09'; end if;
   if v_on < v_today then raise exception 'A revocation cannot take effect in the past' using errcode = 'OGV22'; end if;
   if v_on < a.effective_from then v_on := a.effective_from; end if;
@@ -468,6 +473,7 @@ begin
     if exists (select 1 from ogevia.caregiver_records c where c.id = r.rec and c.linked_user_id = v_actor) then
       raise exception 'You cannot approve your own services. Ask another administrator.' using errcode = 'OGA03';
     end if;
+    perform ogevia.lock_caregiver(r.rec);
     perform pg_advisory_xact_lock(hashtextextended('ogevia.service-approval:' || r.rec::text || ':' || r.svc::text, 0));
     if exists (select 1 from ogevia.caregiver_service_approvals a
                where a.organization_id = p_organization_id and a.caregiver_record_id = r.rec and a.service_id = r.svc

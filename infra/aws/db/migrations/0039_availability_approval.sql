@@ -121,6 +121,17 @@ alter table ogevia.caregiver_availability_state enable row level security;
 alter table ogevia.availability_requests enable row level security;
 alter table ogevia.shift_readiness_flags enable row level security;
 
+-- The one lock that every commit-time check and every readiness change takes first, per caregiver.
+-- (check_shift_caregiver already used this key for overlap protection; it is now shared.)
+create function ogevia.lock_caregiver(p_caregiver_record_id uuid)
+returns void
+language sql
+volatile
+set search_path = ogevia, pg_temp
+as $$
+  select pg_advisory_xact_lock(hashtextextended('ogevia.caregiver-schedule:' || p_caregiver_record_id::text, 0));
+$$;
+
 -- ---------------------------------------------------------------------------
 -- Approved hours, resolved layer by layer (internal; the API functions below are the doors)
 -- ---------------------------------------------------------------------------
@@ -412,6 +423,7 @@ declare
   w record;
 begin
   select * into r from ogevia.availability_requests where id = p_request_id;
+  perform ogevia.lock_caregiver(r.caregiver_record_id);
   insert into ogevia.caregiver_availability_state (organization_id, caregiver_record_id)
   values (r.organization_id, r.caregiver_record_id) on conflict do nothing;
   select s.version + 1 into v_ver from ogevia.caregiver_availability_state s
@@ -900,6 +912,7 @@ language sql stable security definer set search_path = ogevia, pg_temp as $$
   order by 3 desc,2;
 $$;
 
+revoke all on function ogevia.lock_caregiver(uuid) from public;
 revoke all on function ogevia.availability_layer_ranges(uuid, uuid, text, date, date) from public;
 revoke all on function ogevia.availability_blocked_days(uuid, uuid, text, date, date) from public;
 revoke all on function ogevia.availability_status(uuid, uuid, timestamptz, timestamptz) from public;

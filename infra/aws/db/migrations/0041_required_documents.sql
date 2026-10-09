@@ -58,17 +58,6 @@ create table ogevia.document_requirement_policy_history (
 );
 alter table ogevia.document_requirement_policy_history enable row level security;
 
--- The one lock that every commit-time check and every readiness change takes first, per caregiver.
--- (check_shift_caregiver already used this key for overlap protection; it is now shared.)
-create function ogevia.lock_caregiver(p_caregiver_record_id uuid)
-returns void
-language sql
-volatile
-set search_path = ogevia, pg_temp
-as $$
-  select pg_advisory_xact_lock(hashtextextended('ogevia.caregiver-schedule:' || p_caregiver_record_id::text, 0));
-$$;
-
 -- ---------------------------------------------------------------------------
 -- Status of one requirement for one caregiver (internal)
 -- ---------------------------------------------------------------------------
@@ -468,7 +457,6 @@ begin
 end;
 $$;
 
-revoke all on function ogevia.lock_caregiver(uuid) from public;
 revoke all on function ogevia.document_requirement_check(uuid, uuid, text, timestamptz, timestamptz) from public;
 revoke all on function ogevia.document_readiness(uuid, uuid, timestamptz, timestamptz) from public;
 revoke all on function ogevia.document_flag_impact(uuid, uuid, uuid, uuid) from public;

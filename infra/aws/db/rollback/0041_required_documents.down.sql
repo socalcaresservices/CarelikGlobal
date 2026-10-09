@@ -102,7 +102,6 @@ drop function ogevia.requirement_admin_guard(uuid);
 drop function ogevia.document_flag_impact(uuid, uuid, uuid, uuid);
 drop function ogevia.document_readiness(uuid, uuid, timestamptz, timestamptz);
 drop function ogevia.document_requirement_check(uuid, uuid, text, timestamptz, timestamptz);
-drop function ogevia.lock_caregiver(uuid);
 drop table ogevia.document_requirement_policy_history;
 drop table ogevia.document_requirement_policies;
 drop index ogevia.document_types_one_work_requirement;

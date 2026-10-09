@@ -148,6 +148,7 @@ drop function ogevia.availability_status(uuid, uuid, timestamptz, timestamptz);
 drop function ogevia.availability_day(uuid, uuid, date);
 drop function ogevia.availability_pattern(uuid, uuid, date);
 drop function ogevia.availability_check_windows(text, jsonb);
+drop function ogevia.lock_caregiver(uuid);
 drop function ogevia.availability_blocked_days(uuid, uuid, text, date, date);
 drop function ogevia.availability_layer_ranges(uuid, uuid, text, date, date);
 drop table ogevia.shift_readiness_flags;
