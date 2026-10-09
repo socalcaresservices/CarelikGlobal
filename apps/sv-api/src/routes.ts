@@ -2266,11 +2266,19 @@ export const ROUTES: Record<string, Route> = {
     mutating: false,
     handle: async ({ event, tx }) => {
       const body = parseBody(event.body, event.isBase64Encoded);
+      const org = uuid(body.organizationId, "organizationId");
+      const caregiver = uuid(body.caregiverRecordId, "caregiverRecordId");
+      const service = optionalUuid(body.serviceId, "serviceId");
+      const context = body.context === undefined ? "shift" : oneOf(body.context, "context", ["shift", "care_request", "reschedule", "series", "assignment", "visit_start"] as const);
+      const exclude = optionalUuid(body.excludeShiftId, "excludeShiftId");
+      const client = optionalUuid(body.clientId, "clientId");
+      // Either exact instants, or the agency-local date and times the schedule screen uses (converted in the database).
+      if (body.date !== undefined) {
+        return { evaluation: await tx(async (db) => (await first(db, "select ogevia_api.evaluate_assignment_readiness_local($1,$2,$3,$4::date,$5::time,$6::time,$7,$8,$9) as r", [
+          org, caregiver, service, date(body.date, "date"), clockTime(body.startTime, "startTime"), clockTime(body.endTime, "endTime"), context, exclude, client])).r) };
+      }
       return { evaluation: await tx(async (db) => (await first(db, "select ogevia_api.evaluate_assignment_readiness($1,$2,$3,$4::timestamptz,$5::timestamptz,$6,$7,$8) as r", [
-        uuid(body.organizationId, "organizationId"), uuid(body.caregiverRecordId, "caregiverRecordId"), optionalUuid(body.serviceId, "serviceId"),
-        timestamp(body.startsAt, "startsAt"), timestamp(body.endsAt, "endsAt"),
-        body.context === undefined ? "shift" : oneOf(body.context, "context", ["shift", "care_request", "reschedule", "series", "assignment", "visit_start"] as const),
-        optionalUuid(body.excludeShiftId, "excludeShiftId"), optionalUuid(body.clientId, "clientId")])).r) };
+        org, caregiver, service, timestamp(body.startsAt, "startsAt"), timestamp(body.endsAt, "endsAt"), context, exclude, client])).r) };
     },
   },
 
@@ -2287,6 +2295,13 @@ export const ROUTES: Record<string, Route> = {
         uuid(body.organizationId, "organizationId"), uuid(body.serviceId, "serviceId"), uuid(body.clientId, "clientId"), JSON.stringify(intervals),
         optionalUuid(body.careRequestId, "careRequestId"), text(body.ruleVersion, "ruleVersion", 60)])).r) };
     },
+  },
+
+  "GET /v1/care-requests/{requestId}/matches": {
+    mutating: false,
+    handle: async ({ event, tx }) => ({
+      matches: await tx(async (db) => (await first(db, "select ogevia_api.match_caregivers_for_request($1,$2,$3) as r", [orgParam(event), uuid(p(event).requestId, "requestId"), text(q(event).ruleVersion, "ruleVersion", 60)])).r),
+    }),
   },
 
   "GET /v1/experience-tags": {

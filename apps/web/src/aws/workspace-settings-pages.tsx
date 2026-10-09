@@ -6,6 +6,7 @@ import { useOrganization } from "@/providers/organization-provider";
 import { LETTERHEAD_FIELDS, EMPTY_LETTERHEAD, letterheadProblem, type LetterheadForm } from "./letterhead-validation";
 import { contrastWithWhite } from "./contrast";
 import { prepareLogoFile } from "./document-file";
+import { MyReadiness } from "./readiness/caregiver-readiness";
 import { useLogo, useAwsApi, useBranding, useMyDisplayName, useSetMyDisplayName, type Branding } from "./aws-workspace";
 
 const message = (cause: unknown, fallback: string) => (cause instanceof Error ? cause.message : fallback);
@@ -47,6 +48,7 @@ export function ProfilePage() {
           <Button type="submit" disabled={state.busy}>{state.busy ? "Saving…" : "Save name"}</Button>
         </form>
       </Card>
+      <MyReadiness />
     </div>
   );
 }

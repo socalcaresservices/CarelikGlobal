@@ -226,6 +226,7 @@ export const SERVICE_VERIFICATION_ROUTES: ReadonlyArray<{
   { method: apigw.HttpMethod.POST, path: "/v1/readiness/service-checks" },
   { method: apigw.HttpMethod.POST, path: "/v1/readiness/evaluate" },
   { method: apigw.HttpMethod.POST, path: "/v1/matching/candidates" },
+  { method: apigw.HttpMethod.GET, path: "/v1/care-requests/{requestId}/matches" },
   { method: apigw.HttpMethod.GET, path: "/v1/experience-tags" },
   { method: apigw.HttpMethod.POST, path: "/v1/experience-tags" },
   { method: apigw.HttpMethod.GET, path: "/v1/experience/me" },

@@ -593,6 +593,27 @@ begin
 end;
 $$;
 
+-- The same ranked list for a care request, built from the request's own client, service and time.
+create function ogevia_api.match_caregivers_for_request(p_organization_id uuid, p_request_id uuid, p_rule_version text default null)
+returns jsonb
+language plpgsql
+stable
+security definer
+set search_path = ogevia, pg_temp
+as $$
+declare r ogevia.care_requests%rowtype;
+begin
+  if not ogevia.is_active_member(p_organization_id) then raise exception 'Organization not found' using errcode = 'OGN04'; end if;
+  if not (ogevia.has_permission(p_organization_id, 'care_requests.manage') or ogevia.has_permission(p_organization_id, 'matching.read')) then
+    raise exception 'Forbidden' using errcode = 'OGA03';
+  end if;
+  select * into r from ogevia.care_requests x where x.id = p_request_id and x.organization_id = p_organization_id;
+  if r.id is null then raise exception 'Request not found' using errcode = 'OGN04'; end if;
+  return ogevia_api.match_caregivers(p_organization_id, r.service_id, r.client_id,
+           jsonb_build_array(jsonb_build_object('starts_at', r.starts_at, 'ends_at', r.ends_at)), r.id, p_rule_version);
+end;
+$$;
+
 -- Care-request candidates are now ELIGIBLE caregivers: same columns and order as before (already assigned to this
 -- client first, then name), but a caregiver who fails a required check is no longer offered the work.
 create or replace function ogevia_api.list_available_caregivers(p_organization_id uuid, p_request_id uuid)
@@ -632,6 +653,7 @@ revoke all on function ogevia_api.set_caregiver_zip(uuid, uuid, text) from publi
 revoke all on function ogevia_api.set_client_service_zip(uuid, uuid, text) from public;
 revoke all on function ogevia_api.location_data_status(uuid) from public;
 revoke all on function ogevia_api.match_caregivers(uuid, uuid, uuid, jsonb, uuid, text) from public;
+revoke all on function ogevia_api.match_caregivers_for_request(uuid, uuid, text) from public;
 grant execute on function ogevia_api.create_experience_tag(uuid, text) to ogevia_app;
 grant execute on function ogevia_api.list_experience_tags(uuid) to ogevia_app;
 grant execute on function ogevia_api.report_my_experience(uuid, uuid[]) to ogevia_app;
@@ -643,3 +665,4 @@ grant execute on function ogevia_api.set_caregiver_zip(uuid, uuid, text) to ogev
 grant execute on function ogevia_api.set_client_service_zip(uuid, uuid, text) to ogevia_app;
 grant execute on function ogevia_api.location_data_status(uuid) to ogevia_app;
 grant execute on function ogevia_api.match_caregivers(uuid, uuid, uuid, jsonb, uuid, text) to ogevia_app;
+grant execute on function ogevia_api.match_caregivers_for_request(uuid, uuid, text) to ogevia_app;

@@ -198,35 +198,4 @@ describe("print letterhead settings", () => {
   });
 });
 
-describe("caregiver availability editor: overnight", () => {
-  it("allows From later than To as an overnight window and explains it; refuses equal times", async () => {
-    renderApp("/availability", "caregiver");
-    const from = await screen.findByLabelText("From");
-    const to = screen.getByLabelText("To");
-    fireEvent.click(screen.getByLabelText("Sat"));
-    fireEvent.change(from, { target: { value: "22:00" } });
-    fireEvent.change(to, { target: { value: "06:00" } });
-    expect(screen.getByTestId("overnight-note")).toHaveTextContent("ends the next morning at 06:00");
-    expect(screen.getByRole("button", { name: "Save availability" })).toBeEnabled();
-    fireEvent.change(to, { target: { value: "22:00" } });
-    expect(screen.getByRole("alert")).toHaveTextContent("cannot be the same");
-    expect(screen.getByRole("button", { name: "Save availability" })).toBeDisabled();
-    fireEvent.change(to, { target: { value: "17:00" } });
-    fireEvent.change(from, { target: { value: "08:00" } });
-    expect(screen.queryByTestId("overnight-note")).toBeNull();
-    expect(screen.getByRole("button", { name: "Save availability" })).toBeEnabled();
-  });
-
-  it("sends the overnight window as saved, and warns before replacing a more detailed saved schedule", async () => {
-    const detailed = [
-      { windowId: "w1", weekday: 1, specificDate: null, startLocal: "08:00:00", endLocal: "17:00:00" },
-      { windowId: "w2", weekday: 6, specificDate: null, startLocal: "22:00:00", endLocal: "06:00:00" },
-    ];
-    const { posts } = renderApp("/availability", "caregiver", { windows: detailed });
-    expect(await screen.findByRole("note")).toHaveTextContent(/different times on different days/);
-    fireEvent.click(screen.getByLabelText("Sat"));
-    fireEvent.click(screen.getByRole("button", { name: "Save availability" }));
-    await waitFor(() => expect(posts.find((x) => x.path === "/v1/availability/me")).toBeTruthy());
-    expect((posts.find((x) => x.path === "/v1/availability/me")!.body.windows as unknown[])).toContainEqual({ weekday: 1, specific_date: null, start_local: "08:00", end_local: "17:00" });
-  });
-});
+// The caregiver availability editor moved to request-and-approve (0039); its tests are in readiness/availability.test.tsx.

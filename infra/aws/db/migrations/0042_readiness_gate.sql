@@ -989,9 +989,35 @@ begin
   from ogevia.readiness_checks(p_organization_id, p_caregiver_record_id, p_service_id, p_starts, p_ends, p_context, p_exclude_shift, p_client_id,
                                p_context in ('shift', 'care_request', 'reschedule', 'series')) c;
   return jsonb_build_object(
+    'startsAt', p_starts, 'endsAt', p_ends, 'context', p_context,
     'checks', v_rows,
     'ready', not exists (select 1 from jsonb_array_elements(v_rows) e where (e ->> 'blocking')::boolean),
     'wouldBlockAfterActivation', exists (select 1 from jsonb_array_elements(v_rows) e where e ->> 'status' = 'blocked' and not (e ->> 'enforced')::boolean));
+end;
+$$;
+
+-- The same evaluation for a shift typed the way the schedule screen types it: agency-local date and times (an end
+-- earlier than the start means the next day). The conversion and the daylight-saving refusal are the ones create_shift uses.
+create function ogevia_api.evaluate_assignment_readiness_local(
+  p_organization_id uuid, p_caregiver_record_id uuid, p_service_id uuid, p_local_date date, p_start time, p_end time,
+  p_context text default 'shift', p_exclude_shift uuid default null, p_client_id uuid default null
+)
+returns jsonb
+language plpgsql
+stable
+security definer
+set search_path = ogevia, pg_temp
+as $$
+declare v_tz text;
+begin
+  if not ogevia.is_active_member(p_organization_id) then raise exception 'Organization not found' using errcode = 'OGN04'; end if;
+  if p_local_date is null or p_start is null or p_end is null or p_start = p_end then raise exception 'Enter the date, start and end time' using errcode = 'OGV22'; end if;
+  select o.timezone into v_tz from ogevia.organizations o where o.id = p_organization_id;
+  perform ogevia.require_clear_local_times(v_tz, p_local_date, p_start, p_end);
+  return ogevia_api.evaluate_assignment_readiness(p_organization_id, p_caregiver_record_id, p_service_id,
+    (p_local_date + p_start) at time zone v_tz,
+    (case when p_end <= p_start then p_local_date + 1 else p_local_date end + p_end) at time zone v_tz,
+    p_context, p_exclude_shift, p_client_id);
 end;
 $$;
 
@@ -1256,12 +1282,14 @@ revoke all on function ogevia.check_shift_caregiver(uuid, uuid, timestamptz, tim
 revoke all on function ogevia.readiness_read_guard(uuid) from public;
 revoke all on function ogevia.readiness_manage_guard(uuid) from public;
 revoke all on function ogevia_api.evaluate_assignment_readiness(uuid, uuid, uuid, timestamptz, timestamptz, text, uuid, uuid) from public;
+revoke all on function ogevia_api.evaluate_assignment_readiness_local(uuid, uuid, uuid, date, time, time, text, uuid, uuid) from public;
 revoke all on function ogevia_api.get_readiness_status(uuid) from public;
 revoke all on function ogevia_api.activate_readiness_enforcement(uuid, text, integer) from public;
 revoke all on function ogevia_api.set_service_checks(uuid, boolean, text) from public;
 revoke all on function ogevia_api.authorize_availability_override(uuid, uuid, timestamptz, timestamptz, text) from public;
 revoke all on function ogevia_api.list_readiness_flags(uuid, text) from public;
 grant execute on function ogevia_api.evaluate_assignment_readiness(uuid, uuid, uuid, timestamptz, timestamptz, text, uuid, uuid) to ogevia_app;
+grant execute on function ogevia_api.evaluate_assignment_readiness_local(uuid, uuid, uuid, date, time, time, text, uuid, uuid) to ogevia_app;
 grant execute on function ogevia_api.get_readiness_status(uuid) to ogevia_app;
 grant execute on function ogevia_api.activate_readiness_enforcement(uuid, text, integer) to ogevia_app;
 grant execute on function ogevia_api.set_service_checks(uuid, boolean, text) to ogevia_app;

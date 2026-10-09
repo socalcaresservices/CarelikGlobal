@@ -56,6 +56,7 @@ as $$
   select null::text, null::text where false;
 $$;
 
+drop function ogevia_api.match_caregivers_for_request(uuid, uuid, text);
 drop function ogevia_api.match_caregivers(uuid, uuid, uuid, jsonb, uuid, text);
 drop function ogevia_api.location_data_status(uuid);
 drop function ogevia_api.set_client_service_zip(uuid, uuid, text);

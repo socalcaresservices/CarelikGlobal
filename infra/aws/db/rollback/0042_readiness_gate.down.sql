@@ -618,6 +618,7 @@ drop function ogevia_api.authorize_availability_override(uuid, uuid, timestamptz
 drop function ogevia_api.set_service_checks(uuid, boolean, text);
 drop function ogevia_api.activate_readiness_enforcement(uuid, text, integer);
 drop function ogevia_api.get_readiness_status(uuid);
+drop function ogevia_api.evaluate_assignment_readiness_local(uuid, uuid, uuid, date, time, time, text, uuid, uuid);
 drop function ogevia_api.evaluate_assignment_readiness(uuid, uuid, uuid, timestamptz, timestamptz, text, uuid, uuid);
 drop function ogevia.readiness_manage_guard(uuid);
 drop function ogevia.readiness_read_guard(uuid);

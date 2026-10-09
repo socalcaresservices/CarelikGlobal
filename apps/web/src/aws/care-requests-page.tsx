@@ -4,9 +4,9 @@ import { Button, Card } from "@carelik/ui";
 import type { AwsApiClient } from "@/lib/aws-api";
 import { useOrganization } from "@/providers/organization-provider";
 import { formatDateTime } from "@/lib/service-verification";
+import { MatchingPanel } from "./readiness/matching-panel";
 
 type RequestRow = { requestId: string; clientCode: string; serviceCode: string; serviceName: string; startsAt: string; endsAt: string; requestedMinutes: number; status: string; shortNotice: boolean; availableCount: number; awaitingCount: number; assignedCaregiverName: string | null };
-type Candidate = { caregiverRecordId: string; caregiverName: string; currentClientMatch: boolean; availabilitySource: string };
 type Offer = { offerId: string; caregiverRecordId: string; caregiverName: string; status: string; respondedAt: string | null };
 type ClientOption = { clientId: string; clientCode: string };
 type AlertStaff = { userId: string; displayName: string; selected: boolean };
@@ -45,11 +45,6 @@ export function CareRequestsPage({ api }: { api: AwsApiClient }) {
     queryKey: ["care-alert-staff", activeOrganizationId],
     queryFn: () => api.get<{ staff: AlertStaff[] }>("/v1/care-alert-staff", { organizationId: activeOrganizationId }),
     enabled: !!activeOrganizationId,
-  });
-  const candidates = useQuery({
-    queryKey: ["care-candidates", activeOrganizationId, selectedRequestId],
-    queryFn: () => api.get<{ caregivers: Candidate[] }>("/v1/care-requests/" + selectedRequestId + "/candidates", { organizationId: activeOrganizationId }),
-    enabled: !!activeOrganizationId && !!selectedRequestId,
   });
   const offers = useQuery({
     queryKey: ["care-offers", activeOrganizationId, selectedRequestId],
@@ -128,10 +123,9 @@ export function CareRequestsPage({ api }: { api: AwsApiClient }) {
 
       {selectedRequestId ? <div className="grid gap-6 lg:grid-cols-2">
         <Card>
-          <h2 className="font-semibold text-slate-950">Available caregivers</h2>
-          <p className="mt-1 text-xs text-slate-500">Only caregivers whose saved availability covers the request and who have no schedule conflict are shown. Existing client/service matches appear first.</p>
-          <div className="mt-3 space-y-2">{(candidates.data?.caregivers ?? []).map((c) => <div key={c.caregiverRecordId} className="flex items-center justify-between rounded-lg border border-slate-100 p-3"><div><p className="text-sm font-medium">{c.caregiverName}</p><p className="text-xs text-slate-500">{c.currentClientMatch ? "Current client/service match · " : ""}{c.availabilitySource}</p></div><Button size="sm" loading={sendOffer.isPending} onClick={() => sendOffer.mutate(c.caregiverRecordId)}>Ask availability</Button></div>)}
-          {!candidates.isLoading && (candidates.data?.caregivers ?? []).length === 0 ? <p className="text-sm text-slate-500">No caregivers have confirmed availability for this time.</p> : null}</div>
+          <h2 className="font-semibold text-slate-950">Matches</h2>
+          <p className="mt-1 text-xs text-slate-500">Caregivers are checked first (approved hours, documents, conflicts, services where required), then ranked. A score never makes a blocked caregiver assignable.</p>
+          <div className="mt-3"><MatchingPanel requestId={selectedRequestId} onOffer={(id) => sendOffer.mutate(id)} offering={sendOffer.isPending} /></div>
           {offerLink ? <div className="mt-3 rounded-lg bg-slate-50 p-3"><p className="text-xs text-slate-500">Secure fallback link. Caregivers with Ogevia access also see the opportunity in-app.</p><div className="mt-2 flex gap-2"><input readOnly value={offerLink} className="min-w-0 flex-1 rounded-lg border border-slate-200 px-2 py-1 text-xs" /><Button size="sm" variant="secondary" onClick={() => void navigator.clipboard.writeText(offerLink)}>Copy</Button></div></div> : null}
         </Card>
         <Card>
