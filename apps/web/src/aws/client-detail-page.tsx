@@ -314,7 +314,7 @@ function AuthorizationsCard({ clientId }: { clientId: string }) {
   return (
     <Card className="p-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <h2 className="text-base font-semibold text-slate-950">Authorized hours</h2>
+        <h2 className="text-base font-semibold text-slate-950">Authorizations</h2>
         {canUpdate ? <Button type="button" variant="secondary" onClick={() => setAdding((a) => !a)} aria-expanded={adding}>{adding ? "Close" : "Add authorization"}</Button> : null}
       </div>
       {adding ? <AddAuthorizationForm clientId={clientId} onDone={() => setAdding(false)} /> : null}

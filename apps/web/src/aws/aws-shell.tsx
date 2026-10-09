@@ -143,19 +143,20 @@ export function AwsShell({ children }: PropsWithChildren) {
   // Same destinations and the same permission conditions as the horizontal menu had.
   // Reports and Client monthly calendar are two views of the existing reports route.
   const links: NavLinkDef[] = [
-    { to: "/", label: "Home", group: "TODAY", icon: LayoutDashboard, show: !isCaregiver },
-    { to: "/service-verification", label: "Verify visit", group: "TODAY", icon: PenLine, show: isCaregiver || hasPermission("visits.manage") },
-    { to: "/my-shifts", label: "My shifts", group: "TODAY", icon: CalendarClock, show: isCaregiver },
-    { to: "/availability", label: "Availability", group: "TODAY", icon: Clock, show: isCaregiver },
-    { to: "/schedule", label: "Schedule", group: "VISITS", icon: CalendarDays, show: hasPermission("shifts.manage") || (!isCaregiver && hasPermission("visits.manage")) },
-    { to: "/care-requests", label: "Care requests", group: "VISITS", icon: HandHeart, show: hasPermission("care_requests.read") },
+    { to: "/", label: "Home", group: "HOME", icon: LayoutDashboard, show: !isCaregiver },
+    { to: "/care-team", label: "Care Team", group: "CAREGIVERS", icon: HeartHandshake, show: hasPermission("caregivers.manage") || hasPermission("visits.manage") },
+    { to: "/schedule", label: "Schedule", group: "CAREGIVERS", icon: CalendarDays, show: hasPermission("shifts.manage") || (!isCaregiver && hasPermission("visits.manage")) },
+    { to: "/service-verification", label: "Verify visit", group: "CAREGIVERS", icon: PenLine, show: isCaregiver || hasPermission("visits.manage") },
+    { to: "/my-shifts", label: "My shifts", group: "CAREGIVERS", icon: CalendarClock, show: isCaregiver },
+    { to: "/availability", label: "Availability", group: "CAREGIVERS", icon: Clock, show: isCaregiver },
+    // Authorizations are a section of each client's page (Clients > a client > Authorizations); there is no separate page.
+    { to: "/clients", label: "Clients", group: "CLIENTS", icon: Users, show: hasPermission("clients.names.read") },
+    { to: "/care-requests", label: "Care requests", group: "CLIENTS", icon: HandHeart, show: hasPermission("care_requests.read") },
+    { to: REPORTS_PATH, search: "?view=calendar", label: "Client monthly calendar", group: "CLIENTS", icon: CalendarHeart, show: canReadVisits, matchView: isCalendarView },
     { to: REPORTS_PATH, label: "Visit records", group: "VISITS", icon: FileText, show: canReadVisits, matchView: isVisitListView },
-    { to: REPORTS_PATH, search: "?view=overview", label: "Reports", group: "VISITS", icon: ChartNoAxesColumn, show: canReadVisits, matchView: isReportView },
-    { to: REPORTS_PATH, search: "?view=calendar", label: "Client monthly calendar", group: "VISITS", icon: CalendarHeart, show: canReadVisits, matchView: isCalendarView },
     { to: "/billing-review", label: "Billing review", group: "BILLING", icon: Receipt, show: hasPermission("billing.visits.read") },
-    { to: "/clients", label: "Clients", group: "PEOPLE", icon: Users, show: hasPermission("clients.names.read") },
-    { to: "/care-team", label: "Care Team", group: "PEOPLE", icon: HeartHandshake, show: hasPermission("caregivers.manage") || hasPermission("visits.manage") },
-    { to: "/documents", label: hasPermission("documents.read") ? "Documents" : "My documents", group: "PEOPLE", icon: FolderOpen, show: hasPermission("documents.read") || hasPermission("documents.manage_own") },
+    { to: REPORTS_PATH, search: "?view=overview", label: "Reports", group: "REPORTS", icon: ChartNoAxesColumn, show: canReadVisits, matchView: isReportView },
+    { to: "/documents", label: hasPermission("documents.read") ? "Documents" : "My documents", group: "DOCUMENTS", icon: FolderOpen, show: hasPermission("documents.read") || hasPermission("documents.manage_own") },
     { to: "/services", label: "Services", group: "SETUP", icon: Stethoscope, show: !isCaregiver && hasPermission("authorizations.read") },
     { to: "/continuity", label: "Continuity pack", group: "SETUP", icon: LifeBuoy, show: !isCaregiver && hasPermission("continuity.export") },
     { to: "/outage-visits", label: "Outage records", group: "SETUP", icon: FileArchive, show: !isCaregiver && hasPermission("visits.manage") },
@@ -271,7 +272,7 @@ export function AwsShell({ children }: PropsWithChildren) {
         <nav id="aws-main-nav" aria-label="Main" className="flex-1 overflow-y-auto px-3 pb-3">
           {groups.map(({ group, links: items }) => (
             <div key={group} className="mt-3 first:mt-1">
-              {collapsed ? (
+              {group === "HOME" ? null : collapsed ? (
                 <div aria-hidden="true" className="mx-3 mb-1 border-t border-og-line" />
               ) : (
                 <p className="px-3 pb-1 text-[11px] font-bold uppercase tracking-wider text-og-sub">{group}</p>

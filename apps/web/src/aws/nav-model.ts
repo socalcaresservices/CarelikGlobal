@@ -7,7 +7,9 @@
 
 import type { LucideIcon } from "lucide-react";
 
-export const NAV_GROUPS = ["TODAY", "VISITS", "BILLING", "PEOPLE", "SETUP"] as const;
+// Grouped by operational workflow: caregiver -> client -> visit -> billing -> reports.
+// HOME is a single link and is shown without a heading.
+export const NAV_GROUPS = ["HOME", "CAREGIVERS", "CLIENTS", "VISITS", "BILLING", "REPORTS", "DOCUMENTS", "SETUP"] as const;
 export type NavGroup = (typeof NAV_GROUPS)[number];
 
 export const REPORTS_PATH = "/service-verification/reports";

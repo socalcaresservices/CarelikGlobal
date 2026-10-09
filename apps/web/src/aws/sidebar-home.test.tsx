@@ -88,11 +88,11 @@ const hrefs = (nav: HTMLElement) => Object.fromEntries(within(nav).getAllByRole(
 
 describe("navigation model", () => {
   const icon = (() => null) as never;
-  const link = (over: Partial<NavLinkDef>): NavLinkDef => ({ to: "/x", label: "X", group: "TODAY", show: true, icon, ...over });
+  const link = (over: Partial<NavLinkDef>): NavLinkDef => ({ to: "/x", label: "X", group: "HOME", show: true, icon, ...over });
 
   it("keeps the group order and drops groups with nothing visible", () => {
-    const groups = visibleGroups([link({ label: "A", group: "SETUP" }), link({ label: "B", group: "TODAY" }), link({ label: "C", group: "BILLING", show: false })]);
-    expect(groups.map((g) => g.group)).toEqual(["TODAY", "SETUP"]);
+    const groups = visibleGroups([link({ label: "A", group: "SETUP" }), link({ label: "B", group: "HOME" }), link({ label: "C", group: "BILLING", show: false })]);
+    expect(groups.map((g) => g.group)).toEqual(["HOME", "SETUP"]);
   });
 
   it("one current link per address: Visit records, Reports and Client monthly calendar share a route but not a view", () => {
@@ -113,7 +113,15 @@ describe("sidebar: expanded", () => {
   it("manager: grouped links, every earlier destination kept, Reports and Client monthly calendar added on the existing reports route", async () => {
     renderAt("/", "manager");
     const nav = await screen.findByRole("navigation", { name: "Main" });
-    expect(within(nav).getAllByText(/^(TODAY|VISITS|BILLING|PEOPLE|SETUP)$/).map((e) => e.textContent)).toEqual(["TODAY", "VISITS", "BILLING", "PEOPLE", "SETUP"]);
+    expect(within(nav).getAllByText(/^(HOME|CAREGIVERS|CLIENTS|VISITS|BILLING|REPORTS|DOCUMENTS|SETUP)$/).map((e) => e.textContent))
+      .toEqual(["CAREGIVERS", "CLIENTS", "VISITS", "BILLING", "REPORTS", "DOCUMENTS", "SETUP"]);
+    // Workflow order: Home, then caregiver -> client -> visit -> billing -> reports -> documents -> setup.
+    expect(within(nav).getAllByRole("link").map((a) => a.textContent)).toEqual([
+      "Home", "Care Team", "Schedule", "Verify visit", "Clients", "Care requests", "Client monthly calendar", "Visit records",
+      "Billing review", "Reports", "Documents", "Services", "Continuity pack", "Outage records",
+    ]);
+    // Authorizations are a section of each client's page, not a separate menu item.
+    expect(within(nav).queryByRole("link", { name: /^Authorizations$/ })).toBeNull();
     expect(hrefs(nav)).toEqual({
       "Home": "/", "Verify visit": "/service-verification", "Schedule": "/schedule", "Care requests": "/care-requests",
       "Visit records": "/service-verification/reports", "Reports": "/service-verification/reports?view=overview",
@@ -142,11 +150,12 @@ describe("sidebar: expanded", () => {
     expect(screen.queryByText(/synthetic data|test environment/i)).toBeNull();
   });
 
-  it("caregiver: only the caregiver links, in TODAY and PEOPLE", async () => {
+  it("caregiver: only the caregiver links, in CAREGIVERS and DOCUMENTS", async () => {
     renderAt("/service-verification", "caregiver");
     const nav = await screen.findByRole("navigation", { name: "Main" });
     expect(Object.keys(hrefs(nav)).sort()).toEqual(["Availability", "My documents", "My shifts", "Verify visit"]);
     expect(within(nav).queryByText("SETUP")).toBeNull();
+    expect(within(nav).getAllByText(/^(CAREGIVERS|DOCUMENTS)$/).map((e) => e.textContent)).toEqual(["CAREGIVERS", "DOCUMENTS"]);
   });
 
   it("hides the sidebar and gives the page the full width when printing", async () => {

@@ -170,7 +170,7 @@ function ClientCard({ c }: { c: AdminClient }) {
         <p className={`mt-1 text-sm ${c.currentAuthorizations === 0 && c.status === "active" ? "font-semibold text-red-700" : "text-slate-700"}`}>
           {c.currentAuthorizations === 0 ? "No current authorization" : `${c.currentAuthorizations} current authorization${c.currentAuthorizations === 1 ? "" : "s"}`}
           {c.openVisits > 0 ? ` · ${c.openVisits} visit in progress` : ""}
-          {/* The whole row opens the client page, whose first card is Authorized hours (months, balances, versions). */}
+          {/* The whole row opens the client page, whose first card is Authorizations (months, balances, versions). */}
           <span className="ml-2 font-medium text-og-link underline">View authorized hours →</span>
         </p>
       </Link>
