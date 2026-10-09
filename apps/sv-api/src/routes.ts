@@ -348,6 +348,28 @@ export const ROUTES: Record<string, Route> = {
     }),
   },
 
+  // One client with its current authorizations embedded (client.authorizations[]).
+  // Read model only: no new database object. The same two functions the list and
+  // history screens use, in one transaction, so permissions are unchanged (names
+  // need clients.names.read; rates need billing.read; an actor without
+  // authorizations.read gets an empty list). History stays on
+  // GET /v1/clients/{clientId}/authorizations.
+  "GET /v1/clients/{clientId}": {
+    mutating: false,
+    handle: async ({ event, tx }) => {
+      const clientId = uuid(p(event).clientId, "clientId");
+      const org = orgParam(event);
+      const client = await tx(async (db) => {
+        const found = (await rows(db, "select * from ogevia_api.list_clients($1)", [org])).find((c) => c.clientId === clientId);
+        if (!found) return null;
+        const versions = await rows(db, "select * from ogevia_api.list_client_authorizations($1, $2)", [org, clientId]);
+        return { ...found, authorizations: versions.filter((a) => a.isCurrent === true) };
+      });
+      if (!client) throw new ApiError(404, "not_found", "Client not found.");
+      return { client };
+    },
+  },
+
   "POST /v1/clients": {
     status: 201,
     mutating: true,

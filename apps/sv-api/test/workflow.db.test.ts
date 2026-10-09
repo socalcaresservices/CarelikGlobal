@@ -692,6 +692,57 @@ describe("client and authorization administration (0022) through the API", () =>
     const cg = await call("GET /v1/clients/{clientId}/authorizations", w.caregiverA1, { path: { clientId }, query: { organizationId: w.orgA } });
     expect(cg.body.authorizations).toEqual([]);
   });
+
+  it("GET /v1/clients/{clientId} embeds current authorizations; history, versioning and billing rules are unchanged", async () => {
+    const created = await call("POST /v1/clients", w.managerA, { body: body({ firstName: "Synthetic", lastName: "Embedded Auth" }) });
+    const clientId = created.body.client.clientId as string;
+    const first = (await call("GET /v1/services", w.managerA, { query: { organizationId: w.orgA } })).body.services[0].serviceId as string;
+    const newService = await call("POST /v1/services", w.ownerA, { body: body({ code: "EMB2", name: "Synthetic Second Service" }) });
+    expect(newService.status, JSON.stringify(newService.body)).toBe(201);
+    const second = newService.body.serviceId as string;
+    const terms = (serviceId: string, minutes: number) => ({ serviceId, payer: "Synthetic Payer", monthlyAuthorizedMinutes: minutes, periodStart: "2026-12-01", periodEnd: "2026-12-31" });
+    const a1 = await call("POST /v1/clients/{clientId}/authorizations", w.ownerA, { path: { clientId }, body: body({ ...terms(first, 1800), hourlyRateCents: 3000 }) });
+    const a2 = await call("POST /v1/clients/{clientId}/authorizations", w.ownerA, { path: { clientId }, body: body({ ...terms(second, 900), hourlyRateCents: 4000 }) });
+    expect([a1.status, a2.status], JSON.stringify([a1.body, a2.body])).toEqual([201, 201]);
+    const history = async () => (await call("GET /v1/clients/{clientId}/authorizations", w.ownerA, { path: { clientId }, query: { organizationId: w.orgA } })).body.authorizations as any[];
+    const v1Before = (await history()).find((a) => a.authorizationId === a1.body.authorizationId);
+
+    const amended = await call("POST /v1/authorizations/{authorizationId}/amend", w.managerA, {
+      path: { authorizationId: a1.body.authorizationId },
+      body: { payer: "Synthetic Payer", monthlyAuthorizedMinutes: 2400, periodStart: "2026-12-01", periodEnd: "2026-12-31", reason: "Amendment received" },
+    });
+    expect(amended.status, JSON.stringify(amended.body)).toBe(200);
+
+    // Owner: two concurrent authorizations (one per service), current versions only, rates visible.
+    const asOwner = await call("GET /v1/clients/{clientId}", w.ownerA, { path: { clientId }, query: { organizationId: w.orgA } });
+    expect(asOwner.status, JSON.stringify(asOwner.body)).toBe(200);
+    expect(asOwner.body.client).toMatchObject({ clientId, status: "active" });
+    const embedded = asOwner.body.client.authorizations as any[];
+    expect(embedded).toHaveLength(2);
+    expect(embedded.every((a) => a.isCurrent === true)).toBe(true);
+    expect(new Set(embedded.map((a) => a.serviceId))).toEqual(new Set([first, second]));
+    expect(embedded.find((a) => a.serviceId === first)).toMatchObject({ versionNumber: 2, monthlyAuthorizedMinutes: 2400, hourlyRateCents: 3000 });
+    expect(embedded.find((a) => a.serviceId === second)).toMatchObject({ versionNumber: 1, monthlyAuthorizedMinutes: 900, hourlyRateCents: 4000 });
+
+    // Billing permission is still enforced: a manager sees the authorizations but never the rate.
+    const asManager = await call("GET /v1/clients/{clientId}", w.managerA, { path: { clientId }, query: { organizationId: w.orgA } });
+    expect(asManager.status).toBe(200);
+    expect(asManager.body.client.authorizations).toHaveLength(2);
+    expect(asManager.body.client.authorizations.map((a: any) => a.hourlyRateCents)).toEqual([null, null]);
+    expect(JSON.stringify(asManager.body)).not.toMatch(/3000|4000/);
+
+    // History is untouched: version 1 is byte-for-byte what it was, now superseded.
+    const after = await history();
+    expect(after).toHaveLength(3);
+    const v1After = after.find((a) => a.authorizationId === a1.body.authorizationId);
+    expect(v1After).toMatchObject({ ...v1Before, isCurrent: false, supersededById: expect.any(String) });
+    expect({ ...v1After, isCurrent: undefined, supersededById: undefined }).toEqual({ ...v1Before, isCurrent: undefined, supersededById: undefined });
+
+    // Other agencies and unknown clients see nothing.
+    expect((await call("GET /v1/clients/{clientId}", w.managerB, { path: { clientId }, query: { organizationId: w.orgA } })).status).toBe(404);
+    expect((await call("GET /v1/clients/{clientId}", w.managerA, { path: { clientId: randomUUID() }, query: { organizationId: w.orgA } })).status).toBe(404);
+    expect((await call("GET /v1/clients/{clientId}", w.managerB, { path: { clientId }, query: { organizationId: w.orgB } })).status).toBe(404);
+  });
 });
 
 describe("Care Team and services (0023) through the API", () => {

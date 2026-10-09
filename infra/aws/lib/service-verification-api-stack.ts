@@ -102,6 +102,7 @@ export const SERVICE_VERIFICATION_ROUTES: ReadonlyArray<{
   { method: apigw.HttpMethod.POST, path: "/v1/client-types" },
   { method: apigw.HttpMethod.GET, path: "/v1/services" },
   { method: apigw.HttpMethod.GET, path: "/v1/clients" },
+  { method: apigw.HttpMethod.GET, path: "/v1/clients/{clientId}" },
   { method: apigw.HttpMethod.POST, path: "/v1/clients" },
   { method: apigw.HttpMethod.POST, path: "/v1/clients/{clientId}/details" },
   { method: apigw.HttpMethod.POST, path: "/v1/clients/{clientId}/status" },
