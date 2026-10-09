@@ -666,3 +666,13 @@ grant execute on function ogevia_api.set_client_service_zip(uuid, uuid, text) to
 grant execute on function ogevia_api.location_data_status(uuid) to ogevia_app;
 grant execute on function ogevia_api.match_caregivers(uuid, uuid, uuid, jsonb, uuid, text) to ogevia_app;
 grant execute on function ogevia_api.match_caregivers_for_request(uuid, uuid, text) to ogevia_app;
+
+-- Read-only verification/support role: SELECT through explicit policies, like every other table.
+grant select on table ogevia.scoring_rule_versions, ogevia.experience_tags, ogevia.caregiver_experience, ogevia.caregiver_experience_reviews, ogevia.client_experience_requirements, ogevia.zip_centroids to ogevia_readonly;
+create policy readonly_select on ogevia.scoring_rule_versions for select to ogevia_readonly using (true);
+create policy readonly_select on ogevia.experience_tags for select to ogevia_readonly using (true);
+create policy readonly_select on ogevia.caregiver_experience for select to ogevia_readonly using (true);
+create policy readonly_select on ogevia.caregiver_experience_reviews for select to ogevia_readonly using (true);
+create policy readonly_select on ogevia.client_experience_requirements for select to ogevia_readonly using (true);
+create policy readonly_select on ogevia.zip_centroids for select to ogevia_readonly using (true);
+-- caregiver_zip and client_service_zip are deliberately NOT readable by the verification role (location data).

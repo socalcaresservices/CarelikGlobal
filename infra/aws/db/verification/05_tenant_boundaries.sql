@@ -29,4 +29,24 @@ select 'visit_caregiver_is_org_member', count(*) = 0, 'violations=' || count(*)
 from ogevia.service_visits v
 where v.caregiver_user_id is not null
   and not exists (select 1 from ogevia.organization_memberships m
-                  where m.organization_id = v.organization_id and m.user_id = v.caregiver_user_id);
+                  where m.organization_id = v.organization_id and m.user_id = v.caregiver_user_id)
+union all
+select 'availability_requests_same_org', count(*) = 0, 'violations=' || count(*)
+from ogevia.availability_requests r join ogevia.caregiver_records c on c.id = r.caregiver_record_id
+where c.organization_id <> r.organization_id
+union all
+select 'service_approvals_same_org', count(*) = 0, 'violations=' || count(*)
+from ogevia.caregiver_service_approvals a
+join ogevia.caregiver_records c on c.id = a.caregiver_record_id
+join ogevia.services s on s.id = a.service_id
+where c.organization_id <> a.organization_id or s.organization_id <> a.organization_id
+union all
+select 'availability_overrides_same_org', count(*) = 0, 'violations=' || count(*)
+from ogevia.availability_overrides o join ogevia.caregiver_records c on c.id = o.caregiver_record_id
+where c.organization_id <> o.organization_id
+union all
+select 'experience_same_org', count(*) = 0, 'violations=' || count(*)
+from ogevia.caregiver_experience e
+join ogevia.caregiver_records c on c.id = e.caregiver_record_id
+join ogevia.experience_tags t on t.id = e.tag_id
+where c.organization_id <> e.organization_id or t.organization_id <> e.organization_id;

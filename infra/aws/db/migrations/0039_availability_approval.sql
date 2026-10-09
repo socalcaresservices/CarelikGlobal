@@ -936,3 +936,9 @@ grant execute on function ogevia_api.list_availability_requests(uuid, text) to o
 grant execute on function ogevia_api.preview_availability_request(uuid, uuid) to ogevia_app;
 grant execute on function ogevia_api.review_availability_request(uuid, uuid, text, text, uuid) to ogevia_app;
 grant execute on function ogevia_api.set_availability_direct(uuid, uuid, text, jsonb, date, date, text, uuid) to ogevia_app;
+
+-- Read-only verification/support role: SELECT through explicit policies, like every other table.
+grant select on table ogevia.caregiver_availability_state, ogevia.availability_requests, ogevia.shift_readiness_flags to ogevia_readonly;
+create policy readonly_select on ogevia.caregiver_availability_state for select to ogevia_readonly using (true);
+create policy readonly_select on ogevia.availability_requests for select to ogevia_readonly using (true);
+create policy readonly_select on ogevia.shift_readiness_flags for select to ogevia_readonly using (true);

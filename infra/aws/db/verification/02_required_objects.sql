@@ -5,7 +5,12 @@ with required_tables(t) as (values
   ('shift_coverage_events'), ('client_authorizations'), ('service_visits'), ('visit_evidence'),
   ('visit_confirmations'), ('visit_corrections'), ('audit_events'), ('idempotency_records'),
   ('client_care_portals'), ('caregiver_availability_windows'), ('care_requests'), ('care_request_offers'),
-  ('authorization_reservations'), ('care_notifications'), ('care_request_events')
+  ('authorization_reservations'), ('care_notifications'), ('care_request_events'),
+  ('availability_requests'), ('caregiver_availability_state'), ('shift_readiness_flags'), ('assignment_readiness_flags'),
+  ('caregiver_service_approvals'), ('document_requirement_policies'), ('organization_readiness_settings'),
+  ('readiness_setting_events'), ('availability_overrides'), ('scoring_rule_versions'), ('experience_tags'),
+  ('caregiver_experience'), ('caregiver_experience_reviews'), ('client_experience_requirements'),
+  ('caregiver_zip'), ('client_service_zip'), ('zip_centroids')
 ), required_functions(f) as (values
   ('begin_request'), ('get_active_service_visit'), ('list_assigned_visit_clients'),
   ('list_authorized_services_for_client'), ('start_ad_hoc_service_visit'), ('end_service_visit'),
@@ -17,7 +22,11 @@ with required_tables(t) as (values
   ('public_create_care_request'), ('list_care_requests'), ('list_available_caregivers'),
   ('send_care_offer'), ('assign_care_request'), ('replace_my_availability'), ('list_my_care_opportunities'),
   ('revoke_client_care_portals'), ('public_list_care_requests'), ('close_missed_service_visit'),
-  ('set_organization_letterhead')
+  ('set_organization_letterhead'), ('get_availability'), ('request_availability_change'), ('review_availability_request'),
+  ('set_availability_direct'), ('approve_caregiver_service'), ('revoke_caregiver_service'), ('bulk_approve_reviewed_services'),
+  ('get_readiness_status'), ('activate_readiness_enforcement'), ('set_service_checks'), ('evaluate_assignment_readiness'),
+  ('authorize_availability_override'), ('get_document_readiness'), ('set_requirement_policy'), ('match_caregivers'),
+  ('match_caregivers_for_request')
 )
 select 'table_exists:' || t as check_name,
        exists (select 1 from pg_tables where schemaname = 'ogevia' and tablename = t) as ok,

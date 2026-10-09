@@ -471,3 +471,8 @@ grant execute on function ogevia_api.set_document_work_requirement(uuid, text, u
 grant execute on function ogevia_api.set_requirement_policy(uuid, text, text, integer, text, uuid) to ogevia_app;
 grant execute on function ogevia_api.get_document_readiness(uuid, uuid, timestamptz, timestamptz) to ogevia_app;
 grant execute on function ogevia_api.list_document_readiness(uuid) to ogevia_app;
+
+-- Read-only verification/support role: SELECT through explicit policies, like every other table.
+grant select on table ogevia.document_requirement_policies, ogevia.document_requirement_policy_history to ogevia_readonly;
+create policy readonly_select on ogevia.document_requirement_policies for select to ogevia_readonly using (true);
+create policy readonly_select on ogevia.document_requirement_policy_history for select to ogevia_readonly using (true);

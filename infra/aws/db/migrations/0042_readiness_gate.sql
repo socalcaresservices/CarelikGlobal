@@ -1295,3 +1295,9 @@ grant execute on function ogevia_api.activate_readiness_enforcement(uuid, text, 
 grant execute on function ogevia_api.set_service_checks(uuid, boolean, text) to ogevia_app;
 grant execute on function ogevia_api.authorize_availability_override(uuid, uuid, timestamptz, timestamptz, text) to ogevia_app;
 grant execute on function ogevia_api.list_readiness_flags(uuid, text) to ogevia_app;
+
+-- Read-only verification/support role: SELECT through explicit policies, like every other table.
+grant select on table ogevia.organization_readiness_settings, ogevia.readiness_setting_events, ogevia.availability_overrides to ogevia_readonly;
+create policy readonly_select on ogevia.organization_readiness_settings for select to ogevia_readonly using (true);
+create policy readonly_select on ogevia.readiness_setting_events for select to ogevia_readonly using (true);
+create policy readonly_select on ogevia.availability_overrides for select to ogevia_readonly using (true);

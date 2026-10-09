@@ -540,3 +540,8 @@ grant execute on function ogevia_api.revoke_caregiver_service(uuid, uuid, text, 
 grant execute on function ogevia_api.list_service_review_pairs(uuid) to ogevia_app;
 grant execute on function ogevia_api.bulk_approve_reviewed_services(uuid, jsonb, integer, date, text, uuid) to ogevia_app;
 grant execute on function ogevia_api.list_service_flags(uuid) to ogevia_app;
+
+-- Read-only verification/support role: SELECT through explicit policies, like every other table.
+grant select on table ogevia.caregiver_service_approvals, ogevia.assignment_readiness_flags to ogevia_readonly;
+create policy readonly_select on ogevia.caregiver_service_approvals for select to ogevia_readonly using (true);
+create policy readonly_select on ogevia.assignment_readiness_flags for select to ogevia_readonly using (true);
