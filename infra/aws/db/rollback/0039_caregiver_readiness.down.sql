@@ -31,6 +31,7 @@ drop function ogevia_api.set_caregiver_service_approval(uuid, uuid, uuid, date, 
 drop function ogevia_api.revoke_document_verification(uuid, text, uuid);
 drop function ogevia_api.verify_document_version(uuid, date, date, date, text, uuid);
 drop function ogevia_api.set_document_type_required(uuid, uuid, boolean, text);
+drop function ogevia_api.list_required_document_types(uuid);
 drop function ogevia_api.set_readiness_settings(uuid, boolean, boolean, integer, text);
 drop function ogevia_api.get_readiness_settings(uuid);
 drop function ogevia_api.begin_availability_override(uuid, text);

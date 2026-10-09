@@ -710,6 +710,26 @@ begin
 end;
 $$;
 
+-- Which document types the agency has marked required (for the document-type screen).
+create function ogevia_api.list_required_document_types(p_organization_id uuid)
+returns table (document_type_id uuid, required boolean)
+language plpgsql
+stable
+security definer
+set search_path = ogevia, pg_temp
+as $$
+begin
+  if ogevia.require_actor() is null or not ogevia.is_active_member(p_organization_id) then
+    raise exception 'Organization not found' using errcode = 'OGN04';
+  end if;
+  if not ogevia.has_permission(p_organization_id, 'caregivers.manage') then
+    raise exception 'You do not have permission to see document requirements' using errcode = 'OGA03';
+  end if;
+  return query select dt.id, dt.required_for_work from ogevia.document_types dt
+   where dt.organization_id = p_organization_id and dt.is_active order by lower(dt.name);
+end;
+$$;
+
 -- ---------------------------------------------------------------------------
 -- API: verify (with the agency-approved validity dates) and revoke a document
 -- ---------------------------------------------------------------------------
@@ -1132,6 +1152,7 @@ revoke all on function ogevia_api.begin_availability_override(uuid, text) from p
 revoke all on function ogevia_api.get_readiness_settings(uuid) from public;
 revoke all on function ogevia_api.set_readiness_settings(uuid, boolean, boolean, integer, text) from public;
 revoke all on function ogevia_api.set_document_type_required(uuid, uuid, boolean, text) from public;
+revoke all on function ogevia_api.list_required_document_types(uuid) from public;
 revoke all on function ogevia_api.verify_document_version(uuid, date, date, date, text, uuid) from public;
 revoke all on function ogevia_api.revoke_document_verification(uuid, text, uuid) from public;
 revoke all on function ogevia_api.set_caregiver_service_approval(uuid, uuid, uuid, date, date, text, uuid) from public;
@@ -1147,6 +1168,7 @@ grant execute on function ogevia_api.begin_availability_override(uuid, text) to 
 grant execute on function ogevia_api.get_readiness_settings(uuid) to ogevia_app;
 grant execute on function ogevia_api.set_readiness_settings(uuid, boolean, boolean, integer, text) to ogevia_app;
 grant execute on function ogevia_api.set_document_type_required(uuid, uuid, boolean, text) to ogevia_app;
+grant execute on function ogevia_api.list_required_document_types(uuid) to ogevia_app;
 grant execute on function ogevia_api.verify_document_version(uuid, date, date, date, text, uuid) to ogevia_app;
 grant execute on function ogevia_api.revoke_document_verification(uuid, text, uuid) to ogevia_app;
 grant execute on function ogevia_api.set_caregiver_service_approval(uuid, uuid, uuid, date, date, text, uuid) to ogevia_app;

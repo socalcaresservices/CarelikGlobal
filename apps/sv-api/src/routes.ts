@@ -2207,6 +2207,13 @@ export const ROUTES: Record<string, Route> = {
     }),
   },
 
+  "GET /v1/document-types/required": {
+    mutating: false,
+    handle: async ({ event, tx }) => ({
+      required: await tx((db) => rows(db, "select * from ogevia_api.list_required_document_types($1)", [orgParam(event)])),
+    }),
+  },
+
   "POST /v1/document-types/{documentTypeId}/required": {
     mutating: true,
     handle: async ({ event, tx }) => {

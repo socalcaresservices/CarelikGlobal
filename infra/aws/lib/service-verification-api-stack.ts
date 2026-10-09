@@ -123,6 +123,7 @@ export const SERVICE_VERIFICATION_ROUTES: ReadonlyArray<{
   { method: apigw.HttpMethod.GET, path: "/v1/readiness/assignment" },
   { method: apigw.HttpMethod.GET, path: "/v1/readiness/flags" },
   { method: apigw.HttpMethod.GET, path: "/v1/documents/compliance" },
+  { method: apigw.HttpMethod.GET, path: "/v1/document-types/required" },
   { method: apigw.HttpMethod.POST, path: "/v1/document-types/{documentTypeId}/required" },
   { method: apigw.HttpMethod.POST, path: "/v1/documents/versions/{versionId}/verify" },
   { method: apigw.HttpMethod.POST, path: "/v1/documents/versions/{versionId}/revoke" },

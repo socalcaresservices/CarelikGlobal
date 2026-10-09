@@ -305,6 +305,13 @@ describe("required documents (CPR and TB for this agency)", () => {
     await expectPgError(q(w.managerB, "select * from ogevia_api.list_document_compliance($1)", [w.orgA]), "OGN04");
   });
 
+  it("the document-type screen can read which types are required; caregivers and other agencies cannot", async () => {
+    const rows = await q(w.managerA, "select * from ogevia_api.list_required_document_types($1)", [w.orgA]);
+    expect(rows.filter((r: any) => r.required)).toHaveLength(2); // CPR and TB are the required types in this fixture
+    await expectPgError(q(w.caregiverA1, "select * from ogevia_api.list_required_document_types($1)", [w.orgA]), "OGA03");
+    await expectPgError(q(w.managerB, "select * from ogevia_api.list_required_document_types($1)", [w.orgA]), "OGN04");
+  });
+
   it("an expiry warning window is configurable and shows 'expiring' on the list", async () => {
     await q(w.ownerA, "select ogevia_api.set_readiness_settings($1,true,false,365,'Show a long warning window')", [w.orgA]);
     const rows = await q(w.managerA, "select * from ogevia_api.list_document_compliance($1)", [w.orgA]);

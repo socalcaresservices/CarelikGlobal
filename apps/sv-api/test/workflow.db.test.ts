@@ -1163,6 +1163,10 @@ describe("caregiver readiness, availability approval, service approvals and matc
     const typeId = (await db.admin.query("select id from ogevia.document_types where name = 'API CPR'")).rows[0].id as string;
     expect((await call("POST /v1/document-types/{documentTypeId}/required", w.managerA, { path: { documentTypeId: typeId }, body: body({ required: true, reason: "Required for work" }) })).status).toBe(403);
     expect((await call("POST /v1/document-types/{documentTypeId}/required", w.ownerA, { path: { documentTypeId: typeId }, body: body({ required: true, reason: "CPR is required before assignment" }) })).status).toBe(200);
+    const req = await call("GET /v1/document-types/required", w.managerA, { query: q() });
+    expect(req.status).toBe(200);
+    expect(req.body.required.find((r: any) => r.documentTypeId === typeId)).toMatchObject({ required: true });
+    expect((await call("GET /v1/document-types/required", w.caregiverA1, { query: q() })).status).toBe(403);
     const A3 = await rec(w.caregiverA3);
     const date = await day(20);
     const attempt = () => call("POST /v1/shifts", w.managerA, { body: body({ clientId: fresh.client, serviceId: fresh.service, date, startTime: "09:00", endTime: "10:00", caregiverRecordId: A3 }) });
