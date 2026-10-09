@@ -268,7 +268,7 @@ end;
 $$;
 
 -- p_windows / p_unavailable: null keeps what is approved; [] clears it explicitly.
-create function ogevia_api.submit_availability_request(
+create function ogevia_api.request_availability_change(
   p_organization_id uuid, p_reason text, p_windows jsonb, p_unavailable jsonb, p_expected_version integer, p_idempotency_key uuid default null
 )
 returns uuid
@@ -293,7 +293,7 @@ begin
   if not ogevia.has_permission(p_organization_id, 'availability.manage_own') then
     raise exception 'You do not have permission to request availability changes' using errcode = 'OGA03';
   end if;
-  v_prior := ogevia.idempotency_begin('submit_availability_request', p_idempotency_key, p_organization_id, v_fp);
+  v_prior := ogevia.idempotency_begin('request_availability_change', p_idempotency_key, p_organization_id, v_fp);
   if v_prior is not null then return (v_prior ->> 'id')::uuid; end if;
   if length(btrim(coalesce(p_reason, ''))) < 3 then
     raise exception 'Tell your agency why you are asking for this change' using errcode = 'OGV22';
@@ -320,7 +320,7 @@ begin
   returning id into v_id;
   perform ogevia.write_audit(p_organization_id, 'availability.requested', 'caregiver_availability_requests', v_id,
     v_snap, v_norm, btrim(p_reason));
-  perform ogevia.idempotency_finish('submit_availability_request', p_idempotency_key, p_organization_id, v_fp, jsonb_build_object('id', v_id));
+  perform ogevia.idempotency_finish('request_availability_change', p_idempotency_key, p_organization_id, v_fp, jsonb_build_object('id', v_id));
   return v_id;
 end;
 $$;
@@ -575,7 +575,7 @@ revoke all on function ogevia.normalize_availability(jsonb, jsonb) from public;
 revoke all on function ogevia.apply_availability(uuid, uuid, jsonb, uuid, text) from public;
 revoke all on function ogevia.availability_version(uuid, uuid) from public;
 revoke all on function ogevia_api.get_my_availability_state(uuid) from public;
-revoke all on function ogevia_api.submit_availability_request(uuid, text, jsonb, jsonb, integer, uuid) from public;
+revoke all on function ogevia_api.request_availability_change(uuid, text, jsonb, jsonb, integer, uuid) from public;
 revoke all on function ogevia_api.cancel_my_availability_request(uuid, uuid) from public;
 revoke all on function ogevia_api.get_caregiver_availability(uuid, uuid) from public;
 revoke all on function ogevia_api.list_availability_requests(uuid, text) from public;
@@ -583,7 +583,7 @@ revoke all on function ogevia_api.review_availability_request(uuid, text, text, 
 revoke all on function ogevia_api.set_caregiver_availability(uuid, uuid, jsonb, jsonb, text, integer, uuid) from public;
 revoke all on function ogevia_api.list_availability_conflicts(uuid, uuid, integer) from public;
 grant execute on function ogevia_api.get_my_availability_state(uuid) to ogevia_app;
-grant execute on function ogevia_api.submit_availability_request(uuid, text, jsonb, jsonb, integer, uuid) to ogevia_app;
+grant execute on function ogevia_api.request_availability_change(uuid, text, jsonb, jsonb, integer, uuid) to ogevia_app;
 grant execute on function ogevia_api.cancel_my_availability_request(uuid, uuid) to ogevia_app;
 grant execute on function ogevia_api.get_caregiver_availability(uuid, uuid) to ogevia_app;
 grant execute on function ogevia_api.list_availability_requests(uuid, text) to ogevia_app;

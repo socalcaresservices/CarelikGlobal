@@ -204,7 +204,7 @@ do_database() {
 
   STEP="database:migrate"
   # The SAME runner and folder as the test slice: db/scripts/migrate.ts over
-  # db/migrations (40 files, 0001-0040; ledger ogevia_meta.schema_migrations; checksum drift
+  # db/migrations (41 files, 0001-0041; ledger ogevia_meta.schema_migrations; checksum drift
   # refuses; reruns apply nothing).
   OGEVIA_ALLOW_REMOTE_MIGRATION=approved-by-owner OGEVIA_DATABASE_URL="$(url_of "$DB_NAME")" \
     npx --no-install --prefix "$HERE" tsx "$HERE/db/scripts/migrate.ts"

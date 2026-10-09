@@ -158,7 +158,7 @@ export async function approveAvailability(
     id = await asActor(db, caregiver.sub, async (c) => {
       const state = (await c.query("select ogevia_api.get_my_availability_state($1) as s", [w.orgA])).rows[0]!.s as { version: number };
       return (
-        await c.query<{ id: string }>("select ogevia_api.submit_availability_request($1,'Test availability',$2::jsonb,$3::jsonb,$4,null) as id", [
+        await c.query<{ id: string }>("select ogevia_api.request_availability_change($1,'Test availability',$2::jsonb,$3::jsonb,$4,null) as id", [
           w.orgA,
           JSON.stringify(windows),
           JSON.stringify(unavailable),

@@ -13,7 +13,7 @@ drop function ogevia_api.review_availability_request(uuid, text, text, uuid);
 drop function ogevia_api.list_availability_requests(uuid, text);
 drop function ogevia_api.get_caregiver_availability(uuid, uuid);
 drop function ogevia_api.cancel_my_availability_request(uuid, uuid);
-drop function ogevia_api.submit_availability_request(uuid, text, jsonb, jsonb, integer, uuid);
+drop function ogevia_api.request_availability_change(uuid, text, jsonb, jsonb, integer, uuid);
 drop function ogevia_api.get_my_availability_state(uuid);
 create or replace function ogevia_api.replace_my_availability(p_organization_id uuid,p_windows jsonb,p_unavailable_dates jsonb default '[]'::jsonb)
 returns void language plpgsql security definer set search_path = ogevia, pg_temp as $$

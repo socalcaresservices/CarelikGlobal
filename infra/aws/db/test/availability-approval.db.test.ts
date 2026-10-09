@@ -26,7 +26,7 @@ const dow = (d: string) => new Date(`${d}T12:00:00Z`).getUTCDay();
 const win = (weekday: number, start: string, end: string) => ({ weekday, specific_date: null, start_local: start, end_local: end });
 const state = (a: Actor) => q(a, "select ogevia_api.get_my_availability_state($1) as s", [w.orgA]).then((r) => r[0]!.s as any);
 const submit = (a: Actor, reason: string, windows: unknown[] | null, unavailable: unknown[] | null, version: number | null, key: string | null = null) =>
-  q(a, "select ogevia_api.submit_availability_request($1,$2,$3::jsonb,$4::jsonb,$5,$6) as id",
+  q(a, "select ogevia_api.request_availability_change($1,$2,$3::jsonb,$4::jsonb,$5,$6) as id",
     [w.orgA, reason, windows === null ? null : JSON.stringify(windows), unavailable === null ? null : JSON.stringify(unavailable), version, key]).then((r) => r[0]!.id as string);
 const review = (a: Actor, id: string, decision: string, note: string | null = null) =>
   q(a, "select ogevia_api.review_availability_request($1,$2,$3,null) as v", [id, decision, note]).then((r) => r[0]!.v as number);
@@ -75,7 +75,7 @@ describe("requests", () => {
   it("a reason is required; only caregivers submit for themselves; the same availability is not a change; one pending at a time; cancel", async () => {
     const A2 = w.caregiverA2;
     await expectPgError(submit(A2, " ", [win(1, "08:00", "12:00")], null, 0), "OGV22");
-    await expectPgError(q(w.managerA, "select ogevia_api.submit_availability_request($1,'Reason here',null,null,0,null)", [w.orgA]), "OGA03");
+    await expectPgError(q(w.managerA, "select ogevia_api.request_availability_change($1,'Reason here',null,null,0,null)", [w.orgA]), "OGA03");
     await expectPgError(submit(A2, "No change at all", null, null, 0), "OGV22");
     const id = await submit(A2, "New school hours", [win(1, "08:00", "12:00")], [], 0);
     await expectPgError(submit(A2, "Another change", [win(2, "08:00", "12:00")], [], 0), "OGC09");

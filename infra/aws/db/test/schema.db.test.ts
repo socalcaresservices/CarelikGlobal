@@ -70,6 +70,7 @@ describe("SCHEMA: migration chain", () => {
       "0038",
       "0039",
       "0040",
+      "0041",
     ]);
   });
 
@@ -107,6 +108,7 @@ describe("SCHEMA: migration chain", () => {
     expect(tables).toEqual([
       "agency_readiness_settings",
       "app_users",
+      "assignment_decisions",
       "audit_events",
       "authorization_reservations",
       "billing_approvals",
@@ -121,19 +123,25 @@ describe("SCHEMA: migration chain", () => {
       "caregiver_availability_profiles",
       "caregiver_availability_requests",
       "caregiver_availability_windows",
+      "caregiver_experience",
+      "caregiver_experience_reviews",
       "caregiver_invitations",
+      "caregiver_locations",
       "caregiver_records",
       "caregiver_service_approvals",
       "caregiver_unavailable_dates",
       "client_authorizations",
       "client_care_portals",
+      "client_locations",
       "client_private_names",
+      "client_support_preferences",
       "client_types",
       "clients",
       "continuity_exports",
       "document_types",
       "document_version_revocations",
       "document_versions",
+      "experience_tags",
       "idempotency_records",
       "organization_memberships",
       "organizations",
@@ -154,6 +162,7 @@ describe("SCHEMA: migration chain", () => {
       "visit_late_confirmation_reviews",
       "visit_late_confirmations",
       "visit_review_decisions",
+      "zip_centroids",
     ]);
   });
 
