@@ -1,4 +1,6 @@
--- ROLLBACK 0042_readiness_gate | CLASS: SAFE AUTOMATED (archives settings, history and overrides; drops nothing that holds data)
+-- Archive copies retain values, not operational constraints or automatic restoration.
+-- Prefer retaining the migrated database and rolling back compatible application artifacts.
+-- ROLLBACK 0042_readiness_gate | CLASS: BACKUP REQUIRED (archives settings, history and overrides; drops nothing that holds data)
 -- Restores every function the gate was added to, exactly as it was, then archives the readiness settings,
 -- the setting-change history and the availability overrides into ogevia.archived_*_0042_<timestamp> tables
 -- (count-checked). Series skipped dates recorded for readiness reasons are archived and removed so the old

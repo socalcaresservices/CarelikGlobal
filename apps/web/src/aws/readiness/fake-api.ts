@@ -92,6 +92,26 @@ export function fakeApi(opts: FakeOptions) {
         return json(200, { services: [{ serviceId: SVC, code: "PCS", name: "Personal care", isActive: true }] });
       case "GET /v1/clients":
         return json(200, { clients: [{ clientId: CLIENT, clientCode: "C-104", caregiverDisplayCode: null, status: "active", legalFirstName: "Synthetic", legalLastName: "Client", city: null }] });
+      case "GET /v1/experience-tags":
+        return json(200, { tags: [{ tagId: SVC, label: "ABA experience" }] });
+      case `GET /v1/caregivers/${CG}/experience`:
+        return json(200, { experience: { reviewed: false, reviewedAt: null, tags: [{ tagId: SVC, label: "ABA experience", status: "reported" }] } });
+      case `POST /v1/caregivers/${CG}/experience/review`:
+        return json(200, { reviewed: true });
+      case `GET /v1/clients/${CLIENT}/experience-requirements`:
+        return json(200, { requirements: [] });
+      case `POST /v1/clients/${CLIENT}/experience-requirements`:
+        return json(200, { saved: true });
+      case `GET /v1/caregivers/${CG}/zip`:
+      case `GET /v1/clients/${CLIENT}/zip`:
+        return json(200, { location: { zip: "92592" } });
+      case `POST /v1/caregivers/${CG}/zip`:
+      case `POST /v1/clients/${CLIENT}/zip`:
+        return json(200, { saved: true });
+      case "GET /v1/location-data":
+        return json(200, { status: { distanceDataLoaded: false } });
+      case "POST /v1/experience-tags":
+        return json(201, { tagId: SVC });
       case "GET /v1/assignments":
         return json(200, { assignments: [] });
       case "GET /v1/availability":

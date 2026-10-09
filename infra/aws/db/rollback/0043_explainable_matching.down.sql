@@ -1,4 +1,6 @@
--- ROLLBACK 0043_explainable_matching | CLASS: SAFE AUTOMATED (archives experience, ZIP and tag data; drops nothing that holds data)
+-- Archive copies retain values, not operational constraints or automatic restoration.
+-- Prefer retaining the migrated database and rolling back compatible application artifacts.
+-- ROLLBACK 0043_explainable_matching | CLASS: BACKUP REQUIRED (archives experience, ZIP and tag data; drops nothing that holds data)
 -- list_available_caregivers returns to its 0039 form and the client-requirement hook returns to the empty 0042 form.
 -- Every table that holds data is first copied to ogevia.archived_<table>_0043_<timestamp> (count-checked).
 do $$

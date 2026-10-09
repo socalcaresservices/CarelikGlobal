@@ -1,4 +1,6 @@
--- ROLLBACK 0040_caregiver_service_approvals | CLASS: SAFE AUTOMATED (archives approvals and flags; drops nothing that holds data)
+-- Archive copies retain values, not operational constraints or automatic restoration.
+-- Prefer retaining the migrated database and rolling back compatible application artifacts.
+-- ROLLBACK 0040_caregiver_service_approvals | CLASS: BACKUP REQUIRED (archives approvals and flags; drops nothing that holds data)
 -- Approvals, standing-assignment flags and the service flags on shifts are first copied to
 -- ogevia.archived_*_0040_<timestamp> tables (count-checked), then removed from the live tables.
 -- Past visits, shifts and billing approvals are not touched by 0040 and are not touched here.

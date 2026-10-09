@@ -1,4 +1,6 @@
--- ROLLBACK 0041_required_documents | CLASS: SAFE AUTOMATED (archives rules and flags; document records are untouched)
+-- Archive copies retain values, not operational constraints or automatic restoration.
+-- Prefer retaining the migrated database and rolling back compatible application artifacts.
+-- ROLLBACK 0041_required_documents | CLASS: BACKUP REQUIRED (archives rules and flags; document records are untouched)
 -- The CPR/TB designations, validity rules, rule history and document flags are copied to
 -- ogevia.archived_*_0041_<timestamp> tables (count-checked) before being removed. Staff documents,
 -- versions and their reviews (0021) are not touched. review_document_version returns to its 0021 form.

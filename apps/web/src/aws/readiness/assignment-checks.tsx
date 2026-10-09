@@ -79,7 +79,7 @@ export function AssignmentChecks({ input, onReady }: { input: AssignmentCheckInp
           );
         })}
       </ul>
-      {ev.ready ? <p className="text-sm font-semibold text-emerald-900" role="status">Ready to assign</p> : <p className="text-sm font-semibold text-red-800" role="status">Cannot be assigned yet</p>}
+      {ev.ready ? <p className="text-sm font-semibold text-emerald-900" role="status">{ev.wouldBlockAfterActivation ? "Assignment allowed with unenforced checks. Review the warnings above." : "Ready to assign"}</p> : <p className="text-sm font-semibold text-red-800" role="status">Cannot be assigned yet</p>}
       {canOverride ? (
         overriding ? (
           <div role="group" className="space-y-2" aria-label="Override availability">

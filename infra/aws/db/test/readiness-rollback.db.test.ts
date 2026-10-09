@@ -61,7 +61,7 @@ describe("readiness release rollback keeps data", () => {
       approvals: (await db.admin.query("select count(*)::int n from ogevia.caregiver_service_approvals")).rows[0].n,
       audit: (await db.admin.query("select count(*)::int n from ogevia.audit_events")).rows[0].n,
     };
-    for (const f of ["0043_explainable_matching", "0042_readiness_gate", "0041_required_documents", "0040_caregiver_service_approvals", "0039_availability_approval"]) {
+    for (const f of ["0044_readiness_review", "0043_explainable_matching", "0042_readiness_gate", "0041_required_documents", "0040_caregiver_service_approvals", "0039_availability_approval"]) {
       await runDown(`${f}.down.sql`);
     }
     // Records that existed before the release are untouched; audit history only grows.
@@ -83,11 +83,18 @@ describe("readiness release rollback keeps data", () => {
     // Re-applying the whole release works and starts clean.
     const client = await db.admin.connect();
     try {
-      expect((await migrate(client)).applied.map((x) => x.slice(0, 4))).toEqual(["0039", "0040", "0041", "0042", "0043"]);
+      expect((await migrate(client)).applied.map((x) => x.slice(0, 4))).toEqual(["0039", "0040", "0041", "0042", "0043", "0044"]);
     } finally {
       client.release();
     }
     const status = (await call(w.ownerA, "select ogevia_api.get_readiness_status($1) as s", [w.orgA]))[0].s;
     expect(status).toMatchObject({ enforcementActive: false, serviceChecks: { state: "Off" } });
+    // Reapplication creates operational tables; it does NOT restore archived
+    // records. Archives are plain copies without the live dependency constraints.
+    expect((await db.admin.query("select count(*)::int n from ogevia.caregiver_service_approvals")).rows[0].n).toBe(0);
+    expect((await db.admin.query("select count(*)::int n from ogevia.caregiver_experience")).rows[0].n).toBe(0);
+    expect((await db.admin.query(`select count(*)::int n from ogevia.${arch}`)).rows[0].n).toBe(before.approvals);
+    expect((await db.admin.query("select count(*)::int n from pg_constraint where conrelid=$1::regclass", [`ogevia.${arch}`])).rows[0].n).toBe(0);
+    expect((await db.admin.query(`select count(*)::int n from ogevia.${arch} a join ogevia.caregiver_records c on c.id=a.caregiver_record_id join ogevia.services s on s.id=a.service_id`)).rows[0].n).toBe(before.approvals);
   });
 });

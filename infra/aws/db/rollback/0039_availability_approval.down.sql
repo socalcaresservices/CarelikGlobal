@@ -1,4 +1,6 @@
--- ROLLBACK 0039_availability_approval | CLASS: SAFE AUTOMATED (keeps approved hours; archives request history)
+-- Archive copies retain values, not operational constraints or automatic restoration.
+-- Prefer retaining the migrated database and rolling back compatible application artifacts.
+-- ROLLBACK 0039_availability_approval | CLASS: BACKUP REQUIRED (keeps approved hours; archives request history)
 -- Nothing is dropped while it holds data. The approved hours in force today (and approved
 -- future-dated exceptions) are rewritten as plain availability rows, exactly the shape 0011/0037
 -- read, so matching keeps working. Every request, version counter, flag and original window row is

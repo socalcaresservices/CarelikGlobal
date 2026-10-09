@@ -68,6 +68,16 @@ describe("availability request → approval, over HTTP", () => {
 });
 
 describe("readiness gate over HTTP", () => {
+  it("reads saved ZIPs through the administrator API, with own-user and cross-tenant denial", async () => {
+    const caregiverRecordId = await rec(w.caregiverA1);
+    expect((await call("POST /v1/caregivers/{caregiverRecordId}/zip", w.ownerA, { path: { caregiverRecordId }, body: { organizationId: w.orgA, zip: "92592" } })).status).toBe(200);
+    const opts = { path: { caregiverRecordId }, query: { organizationId: w.orgA } };
+    expect((await call("GET /v1/caregivers/{caregiverRecordId}/zip", w.ownerA, opts)).body.location).toEqual({ zip: "92592" });
+    expect((await call("GET /v1/caregivers/{caregiverRecordId}/zip", w.caregiverA1, opts)).status).toBe(403);
+    expect((await call("GET /v1/caregivers/{caregiverRecordId}/zip", w.managerB, opts)).status).toBe(404);
+    expect((await call("POST /v1/clients/{clientId}/zip", w.ownerA, { path: { clientId: fx.client }, body: { organizationId: w.orgA, zip: "92595" } })).status).toBe(200);
+    expect((await call("GET /v1/clients/{clientId}/zip", w.ownerA, { path: { clientId: fx.client }, query: { organizationId: w.orgA } })).body.location).toEqual({ zip: "92595" });
+  });
   it("setup gaps are reported, activation is audited, and a blocked commit returns 422 not_ready with the exact words", async () => {
     const st = await call("GET /v1/readiness", w.managerA, { query: { organizationId: w.orgA } });
     expect(st.status).toBe(200);

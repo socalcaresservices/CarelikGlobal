@@ -20,7 +20,7 @@ const SUB = "11111111-2222-4333-8444-555555555555";
 type Call = { method: string; path: string; headers: Record<string, string>; body: Record<string, unknown> | null };
 type FakeVisit = Record<string, unknown>;
 
-function fakeApi(role: "caregiver" | "manager" | "organization_owner", opts: { displayName?: string | null } = {}) {
+function fakeApi(role: "caregiver" | "manager" | "organization_owner", opts: { displayName?: string | null; requiredTb?: boolean } = {}) {
   const calls: Call[] = [];
   let visit: FakeVisit | null = null;
   let approvals: Record<string, unknown>[] = [];
@@ -80,6 +80,8 @@ function fakeApi(role: "caregiver" | "manager" | "organization_owner", opts: { d
           latestReviewStatus: docStatus === "requested" ? null : "awaiting_review", latestRejectionReason: null, issuedOn: null, expiresOn: null, verifiedExpiresOn: null, displayStatus: docStatus, daysUntil: 16 }] });
       case "GET /v1/document-types":
         return json(200, { types: [{ documentTypeId: "t1", name: "TB test", requiresExpiry: true, isActive: true }] });
+      case "GET /v1/document-requirements":
+        return json(200, { setup: { requirements: opts.requiredTb ? [{ documentTypeId: "t1", requirement: "tb" }] : [] } });
       case "GET /v1/documents/people":
         return json(200, { people: [{ caregiverRecordId: "r1", displayName: "Pilot Caregiver A", caregiverCode: "SCS-CG-A" }] });
       case "GET /v1/documents/alerts":
@@ -118,7 +120,7 @@ function fakeAuth(signedIn = true) {
   };
 }
 
-function renderAws(path: string, role: "caregiver" | "manager" | "organization_owner", signedIn = true, opts: { displayName?: string | null } = {}) {
+function renderAws(path: string, role: "caregiver" | "manager" | "organization_owner", signedIn = true, opts: { displayName?: string | null; requiredTb?: boolean } = {}) {
   const api = fakeApi(role, opts);
   const auth = fakeAuth(signedIn);
   const client = createAwsApiClient({ baseUrl: "https://api.example.test", getAccessToken: () => auth.getAccessToken(), fetch: api.fetchImpl as never });
@@ -309,13 +311,22 @@ describe("AWS build: manager review and billing-review data", () => {
     const card = (await screen.findByText("TB test", { selector: "p" })).closest("li")!;
     expect(within(card).getByText("Pilot Caregiver A")).toBeInTheDocument();
     expect(within(card).getByText("Uploaded – awaiting review")).toBeInTheDocument();
-    fireEvent.click(within(card).getByRole("button", { name: "Reject" }));
+    fireEvent.click(await within(card).findByRole("button", { name: "Reject" }));
     expect(await within(card).findByRole("alert")).toHaveTextContent("Enter why it is rejected");
     expect(api.calls.some((c) => c.method === "POST" && c.path.endsWith("/review"))).toBe(false);
     fireEvent.click(within(card).getByRole("button", { name: "Verify" }));
     await waitFor(() => expect(api.calls.some((c) => c.method === "POST" && c.path.endsWith("/review"))).toBe(true));
     expect(screen.getByRole("button", { name: "Request document" })).toBeInTheDocument();
     expect(api.calls.some((c) => c.path.startsWith("/v1/documents/people"))).toBe(true);
+  });
+
+  it("manager cannot verify a document designated as mandatory TB", async () => {
+    const { api } = renderAws("/documents", "manager", true, { requiredTb: true });
+    expect(await screen.findByText(/Required CPR and TB records need Administrator verification/)).toBeInTheDocument();
+    await waitFor(() => expect(api.calls.some((c) => c.path.startsWith("/v1/document-requirements"))).toBe(true));
+    expect(screen.queryByRole("button", { name: "Verify" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Reject" })).not.toBeInTheDocument();
+    expect(api.calls.some((c) => c.method === "POST" && c.path.endsWith("/review"))).toBe(false);
   });
 
   it("NEEDS ATTENTION opens the exceptions view; the Visit records menu item returns to the visit list", async () => {

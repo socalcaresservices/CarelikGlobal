@@ -7,7 +7,7 @@ import { MemoryRouter } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createAwsApiClient } from "@/lib/aws-api";
 import { AwsRoutes } from "../aws-root";
-import { CG, REQ, SVC, fakeApi, okChecks, type Call, type FakeOptions } from "./fake-api";
+import { CG, CLIENT, REQ, SVC, fakeApi, okChecks, type Call, type FakeOptions } from "./fake-api";
 
 function renderAt(path: string, opts: FakeOptions) {
   const api = fakeApi(opts);
@@ -31,6 +31,45 @@ function renderAt(path: string, opts: FakeOptions) {
 beforeEach(() => window.localStorage.clear());
 afterEach(() => { cleanup(); vi.clearAllMocks(); });
 const posts = (calls: Call[], path: string) => calls.filter((c) => c.method === "POST" && c.path === path);
+
+describe("administrator matching inputs", () => {
+  it("separates reported experience from confirmed tags and requires an explicit review", async () => {
+    const { calls } = renderAt(`/care-team/${CG}`, { role: "organization_owner" });
+    expect(await screen.findByText("ABA experience · Caregiver-reported")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Review experience" }));
+    expect(screen.getByLabelText("ABA experience")).not.toBeChecked();
+    expect(screen.getByRole("button", { name: "Save review" })).toBeDisabled();
+    fireEvent.click(screen.getByLabelText("ABA experience"));
+    fireEvent.change(screen.getByLabelText("Review note"), { target: { value: "Owner reviewed prior experience" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save review" }));
+    expect(await screen.findByText("Experience review saved.")).toBeInTheDocument();
+    expect(posts(calls, `/v1/caregivers/${CG}/experience/review`)[0]?.body).toMatchObject({ confirmedTagIds: [SVC], note: "Owner reviewed prior experience" });
+  });
+
+  it("loads the saved ZIP but never implies it provides distance", async () => {
+    const { calls } = renderAt(`/care-team/${CG}`, { role: "organization_owner" });
+    expect(await screen.findByText("ZIP: 92592")).toBeInTheDocument();
+    expect(screen.getByText(/Approx\. distance unavailable/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Edit location" }));
+    expect(screen.getByLabelText("ZIP code")).toHaveValue("92592");
+    fireEvent.change(screen.getByLabelText("ZIP code"), { target: { value: "12" } });
+    expect(screen.getByRole("button", { name: "Save location" })).toBeDisabled();
+    fireEvent.change(screen.getByLabelText("ZIP code"), { target: { value: "92595" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save location" }));
+    expect(await screen.findByText("Location saved.")).toBeInTheDocument();
+    expect(posts(calls, `/v1/caregivers/${CG}/zip`)[0]?.body.zip).toBe("92595");
+  });
+
+  it("records optional client preferences separately from mandatory requirements", async () => {
+    const { calls } = renderAt(`/clients/${CLIENT}`, { role: "organization_owner" });
+    fireEvent.click(await screen.findByRole("button", { name: "Edit preferences" }));
+    fireEvent.change(screen.getByLabelText("ABA experience"), { target: { value: "optional" } });
+    fireEvent.change(screen.getByLabelText("Reason for preferences"), { target: { value: "Family preference only" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save preferences" }));
+    expect(await screen.findByText(/Preferences saved/)).toBeInTheDocument();
+    expect(posts(calls, `/v1/clients/${CLIENT}/experience-requirements`)[0]?.body).toMatchObject({ requirements: [{ tagId: SVC, mandatory: false }], reason: "Family preference only" });
+  });
+});
 
 describe("caregiver: Availability", () => {
   it("shows the approved hours with the agency time zone and exceptions, apart from pending changes", async () => {
@@ -311,7 +350,8 @@ describe("Assignment checks on the schedule", () => {
     renderAt("/schedule", { role: "manager", evaluation: { ready: true, wouldBlockAfterActivation: true, checks } });
     await chooseAll();
     const panel = await screen.findByRole("region", { name: "Assignment checks" });
-    expect(within(panel).getByText("Ready to assign")).toBeInTheDocument();
+    expect(within(panel).getByText("Assignment allowed with unenforced checks. Review the warnings above.")).toBeInTheDocument();
+    expect(within(panel).queryByText("Ready to assign")).toBeNull();
     expect(within(panel).getByText(/Approved services:/).parentElement).toHaveTextContent("Not approved for this service.");
     expect(within(panel).getByText(/Not blocking yet\. This will be required after readiness checks are activated and Service checks are On\./)).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Schedule shift" })).toBeEnabled();

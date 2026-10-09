@@ -137,7 +137,7 @@ function ReviewControls({ doc, selfReview, onDone }: { doc: StaffDocument; selfR
   );
 }
 
-function DocumentCard({ d, canManage, canUpload, canReviewOwn, refresh }: { d: StaffDocument; canManage: boolean; canUpload: boolean; canReviewOwn: boolean; refresh: () => void }) {
+function DocumentCard({ d, canManage, canUpload, canReviewOwn, canReview, refresh }: { d: StaffDocument; canManage: boolean; canUpload: boolean; canReviewOwn: boolean; canReview: boolean; refresh: () => void }) {
   const [mode, setMode] = useState<"upload" | null>(null);
   const line = documentDateLine(d);
   const uploadLabel = d.latestVersionId ? "Upload a new version" : "Upload";
@@ -177,7 +177,7 @@ function DocumentCard({ d, canManage, canUpload, canReviewOwn, refresh }: { d: S
       </div>
       {mode === "upload" ? <UploadForm doc={d} onDone={() => { setMode(null); refresh(); }} /> : null}
       {canManage && d.latestReviewStatus === "awaiting_review" ? (
-        d.latestUploadedByMe && !canReviewOwn ? (
+        !canReview ? <p className="mt-3 text-sm text-slate-700">Required CPR and TB records need Administrator verification. Review controls appear only after the requirement rules are loaded.</p> : d.latestUploadedByMe && !canReviewOwn ? (
           <p className="mt-3 rounded-lg bg-slate-50 p-3 text-sm text-slate-700">You uploaded this version, so the Administrator or another manager must review it.</p>
         ) : (
           <ReviewControls doc={d} selfReview={!!d.latestUploadedByMe} onDone={refresh} />
@@ -351,6 +351,12 @@ export function DocumentsPage() {
   const canRead = hasPermission("documents.read");
   const canManage = hasPermission("documents.manage");
   const canOwn = hasPermission("documents.manage_own");
+  const canVerifyRequired = hasPermission("documents.requirements.manage");
+  const requirementRules = useQuery({
+    queryKey: ["document-requirements", activeOrganizationId],
+    queryFn: async () => (await api.get<{ setup: { requirements: { documentTypeId: string | null }[] } }>("/v1/document-requirements", { organizationId: activeOrganizationId })).setup.requirements,
+    enabled: !!activeOrganizationId && canManage && !canVerifyRequired,
+  });
   const docs = useQuery({
     queryKey: ["aws-documents", activeOrganizationId],
     queryFn: async () => (await api.get<{ documents: StaffDocument[] }>("/v1/documents", { organizationId: activeOrganizationId })).documents,
@@ -414,7 +420,7 @@ export function DocumentsPage() {
       ) : null}
       <ul className="space-y-3">
         {shown.map((d) => (
-          <DocumentCard key={d.documentId} d={d} canManage={canManage} canUpload={canManage || canOwn} canReviewOwn={hasPermission("documents.review_own")} refresh={refresh} />
+          <DocumentCard key={d.documentId} d={d} canManage={canManage} canUpload={canManage || canOwn} canReviewOwn={hasPermission("documents.review_own")} canReview={canVerifyRequired || (!!requirementRules.data && !requirementRules.data.some((r) => r.documentTypeId === d.documentTypeId))} refresh={refresh} />
         ))}
       </ul>
 

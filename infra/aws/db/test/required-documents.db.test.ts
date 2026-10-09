@@ -47,7 +47,7 @@ async function addVersion(doc: string, owner: Actor, opts: { issued?: string | n
   const row = (await call(owner, "select * from ogevia_api.register_document_version($1,$2,$3,'v1','application/pdf',1234,$4,$5::date,$6::date,null)", [
     doc, version, `${w.orgA}/documents/${doc}/${version}`, sha, opts.issued ?? null, opts.expires ?? null,
   ]))[0];
-  if (opts.verify) await call(opts.by ?? w.managerA, "select ogevia_api.review_document_version($1,$2,$3,null)", [row.document_version_id, opts.verify, opts.verify === "rejected" ? "Image unreadable" : null]);
+  if (opts.verify) await call(opts.by ?? w.ownerA, "select ogevia_api.review_document_version($1,$2,$3,null)", [row.document_version_id, opts.verify, opts.verify === "rejected" ? "Image unreadable" : null]);
   return { version: row.document_version_id as string };
 }
 const resetDocs = async () => {
@@ -93,7 +93,7 @@ describe("verified and current only", () => {
     expect(await status(recA1, "cpr")).toMatchObject({ status: "missing" });
     const { doc, version } = await deliver(recA1, cpr, w.caregiverA1, { issued: await add(-30), expires: await add(300) });
     expect(await status(recA1, "cpr")).toMatchObject({ status: "awaiting_review" });
-    await call(w.managerA, "select ogevia_api.review_document_version($1,'verified',null,null)", [version]);
+    await call(w.ownerA, "select ogevia_api.review_document_version($1,'verified',null,null)", [version]);
     expect(await status(recA1, "cpr")).toMatchObject({ status: "ok", u: await add(300) });
     // A replacement that is still awaiting review does not void a verified, unexpired record.
     await addVersion(doc, w.caregiverA1, { issued: await add(-1), expires: await add(400) });
@@ -165,7 +165,7 @@ describe("visibility and flags", () => {
       [w.orgA, w.clientA1, w.serviceA, w.caregiverA1.userId, recA1, later, LA],
     )).rows[0]!.id;
     const { version } = await deliver(recA1, cpr, w.caregiverA1, { issued: await add(-5), expires: await add(5) });
-    await call(w.managerA, "select ogevia_api.review_document_version($1,'verified',null,null)", [version]);
+    await call(w.ownerA, "select ogevia_api.review_document_version($1,'verified',null,null)", [version]);
     const flag = (await db.admin.query("select kind, reason_code, resolved_at from ogevia.shift_readiness_flags where shift_id = $1", [shiftId])).rows;
     expect(flag).toMatchObject([{ kind: "document", reason_code: "documents_cpr_expired,tb_missing", resolved_at: null }]);
     expect((await db.admin.query("select status::text s from ogevia.shifts where id = $1", [shiftId])).rows[0].s).toBe("scheduled");
@@ -173,7 +173,7 @@ describe("visibility and flags", () => {
     await deliver(recA1, tb, w.caregiverA1, { issued: await add(-5), expires: null, verify: "verified" });
     const doc = (await db.admin.query("select id from ogevia.staff_documents where caregiver_record_id = $1 and document_type_id = $2 and closed_at is null", [recA1, cpr])).rows[0].id;
     const { version: v2 } = await addVersion(doc, w.caregiverA1, { issued: await add(-1), expires: await add(400) });
-    await call(w.managerA, "select ogevia_api.review_document_version($1,'verified',null,null)", [v2]);
+    await call(w.ownerA, "select ogevia_api.review_document_version($1,'verified',null,null)", [v2]);
     expect((await db.admin.query("select resolved_at is not null r from ogevia.shift_readiness_flags where shift_id = $1", [shiftId])).rows[0].r).toBe(true);
   });
 });

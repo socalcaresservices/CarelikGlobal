@@ -1,3 +1,12 @@
+# Current review
+
+PR #76 is the owner-selected release. The earlier #75-first dependency is superseded: do not merge competing readiness migrations from #75. See [DEPLOYMENT_AND_ROLLBACK.md](DEPLOYMENT_AND_ROLLBACK.md) and [TEST_REPORT.md](TEST_REPORT.md) for the current review and exact handoff. No deployment or live AWS changes. New real administrator screenshots are linked below; synthetic data, real UI/API/PostgreSQL 18, authentication stubbed.
+
+- [Caregiver desktop](screenshots/administrator-caregiver-desktop.png) / [mobile](screenshots/administrator-caregiver-mobile.png)
+- [Client desktop](screenshots/administrator-client-desktop.png) / [mobile](screenshots/administrator-client-mobile.png)
+
+The original release notes below describe the baseline; current decisions and gaps are in [DECISIONS_AND_RISKS.md](DECISIONS_AND_RISKS.md).
+
 # Unified caregiver-readiness release: release notes and status
 
 Branch `feature/caregiver-readiness`, based on PR #75 head `111fc7c`. **Depends on PR #75 (not merged by this work).**
@@ -14,7 +23,7 @@ Nothing in this release is deployed. No AWS resource was touched. No production 
 | F CPR / TB | Yes: DB 0041 (explicit agency rules, verified-and-current), status screens, setup | DB (8), UI | No |
 | G Assignment safety | Yes: one gate (0042) on every commit path; care-request race fixed | DB (17 incl. race tests + path scan), API | No |
 | H Enforcement transition | Yes: report-only default, report, audited activation, "Service checks" switch | DB, API, UI | No |
-| I Explainable matching | Yes as **provisional** scoring; ZIP/experience have DB+API only (no screens) | DB (12 arithmetic/gate tests), UI (panel) | No |
+| I Explainable matching | Yes as **provisional** scoring; administrator experience, client preferences and ZIP forms completed in the PR #76 review | DB (12 arithmetic/gate tests), UI (panel) | No |
 | J UX | Yes for availability, services, documents, readiness, assignment checks, matches | UI (29 tests), screenshots | No |
 | K Delivery | This folder | See [TEST_REPORT.md](TEST_REPORT.md) | n/a |
 
@@ -34,7 +43,7 @@ Nothing in this release is deployed. No AWS resource was touched. No production 
 
 ## Files and commits
 `git log --oneline 111fc7c..HEAD` is the authoritative list. Migrations `infra/aws/db/migrations/0039`-`0043` with classified rollbacks in
-`.../rollback/`; API in `apps/sv-api/src/routes.ts` (36 routes, listed in `infra/aws/lib/service-verification-api-stack.ts`); screens in
+`.../rollback/`; API in `apps/sv-api/src/routes.ts` (38 routes, listed in `infra/aws/lib/service-verification-api-stack.ts`); screens in
 `apps/web/src/aws/readiness/`; sidebar in `apps/web/src/aws/aws-shell.tsx`; shared permission keys in `packages/shared/src/permissions.ts`.
 
 ## Defects found and fixed along the way

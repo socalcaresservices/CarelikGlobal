@@ -238,6 +238,8 @@ export const SERVICE_VERIFICATION_ROUTES: ReadonlyArray<{
   { method: apigw.HttpMethod.POST, path: "/v1/caregivers/{caregiverRecordId}/zip" },
   { method: apigw.HttpMethod.POST, path: "/v1/clients/{clientId}/zip" },
   { method: apigw.HttpMethod.GET, path: "/v1/location-data" },
+  { method: apigw.HttpMethod.GET, path: "/v1/caregivers/{caregiverRecordId}/zip" },
+  { method: apigw.HttpMethod.GET, path: "/v1/clients/{clientId}/zip" },
 ];
 
 /** Fails synthesis if a route is public without being on the exact approved list. */

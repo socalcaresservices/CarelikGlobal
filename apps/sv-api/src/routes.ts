@@ -2385,6 +2385,16 @@ export const ROUTES: Record<string, Route> = {
     },
   },
 
+  "GET /v1/caregivers/{caregiverRecordId}/zip": {
+    mutating: false,
+    handle: async ({ event, tx }) => ({ location: await tx(async (db) => (await first(db, "select ogevia_api.get_matching_zip($1,$2,'caregiver') as location", [orgParam(event), uuid(p(event).caregiverRecordId, "caregiverRecordId")])).location) }),
+  },
+
+  "GET /v1/clients/{clientId}/zip": {
+    mutating: false,
+    handle: async ({ event, tx }) => ({ location: await tx(async (db) => (await first(db, "select ogevia_api.get_matching_zip($1,$2,'client') as location", [orgParam(event), uuid(p(event).clientId, "clientId")])).location) }),
+  },
+
   "POST /v1/clients/{clientId}/zip": {
     mutating: true,
     handle: async ({ event, tx }) => {

@@ -7,6 +7,7 @@ import { useAvailability } from "./queries";
 import { AvailabilityReview } from "./availability-review";
 import { CaregiverDocuments } from "./documents-readiness";
 import { CaregiverServices } from "./service-approvals";
+import { CaregiverExperience, MatchingLocation } from "./matching-inputs";
 
 /**
  * The caregiver record's readiness sections, each kept separate: Availability, Approved services, Documents.
@@ -40,6 +41,8 @@ export function CaregiverReadiness({ caregiverRecordId }: { caregiverRecordId: s
       <AvailabilityReview caregiverRecordId={caregiverRecordId} />
       {hasPermission("caregiver_services.read") ? <CaregiverServices caregiverRecordId={caregiverRecordId} /> : null}
       {hasPermission("documents.read") ? <CaregiverDocuments caregiverRecordId={caregiverRecordId} /> : null}
+      {hasPermission("matching.read") ? <CaregiverExperience caregiverRecordId={caregiverRecordId} /> : null}
+      {hasPermission("matching.manage") ? <MatchingLocation caregiverRecordId={caregiverRecordId} /> : null}
     </>
   );
 }

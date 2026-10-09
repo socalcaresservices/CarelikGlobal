@@ -88,6 +88,8 @@ describe("TENANT isolation (Organization A vs Organization B)", () => {
       w.clientB1,
       w.serviceB,
     );
+    // A manager doing live work needs an active Care Team profile too.
+    await db.admin.query("insert into ogevia.caregiver_records (organization_id, linked_user_id, caregiver_code, first_name, last_name, status) values ($1,$2,'MANAGER-WORKER','Synthetic','Manager','active')", [w.orgB, w.managerB.userId]);
     const open = await endedVisit(
       db,
       w.managerB,

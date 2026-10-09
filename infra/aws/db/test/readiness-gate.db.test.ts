@@ -43,7 +43,7 @@ async function makeDocsCurrent(rec: string, owner: Actor) {
     const version = randomUUID();
     const row = (await call(owner, "select * from ogevia_api.register_document_version($1,$2,$3,'v1','application/pdf',1234,$4,$5::date,$6::date,null)", [
       doc, version, `${w.orgA}/documents/${doc}/${version}`, sha, await add(-5), expires]))[0];
-    await call(w.managerA, "select ogevia_api.review_document_version($1,'verified',null,null)", [row.document_version_id]);
+    await call(w.ownerA, "select ogevia_api.review_document_version($1,'verified',null,null)", [row.document_version_id]);
   }
 }
 async function resetCaregiverDocs(rec: string) {
@@ -167,7 +167,7 @@ describe("once active: every commit path checks, with messages that match the fa
     const cprDoc = (await call(w.managerA, "select ogevia_api.request_staff_document($1,$2,$3,null,null) as id", [w.orgA, recA2, cpr]))[0].id;
     const v2 = randomUUID();
     const row = (await call(w.caregiverA2, "select * from ogevia_api.register_document_version($1,$2,$3,'v1','application/pdf',1234,$4,$5::date,$6::date,null)", [cprDoc, v2, `${w.orgA}/documents/${cprDoc}/${v2}`, sha, await add(-400), await add(-1)]))[0];
-    await call(w.managerA, "select ogevia_api.review_document_version($1,'verified',null,null)", [row.document_version_id]);
+    await call(w.ownerA, "select ogevia_api.review_document_version($1,'verified',null,null)", [row.document_version_id]);
     await expectPgError(createShift(w.managerA, day, "09:00", "11:00", recA2), "OGR30", /CPR expired\./);
   });
 
@@ -182,11 +182,11 @@ describe("once active: every commit path checks, with messages that match the fa
     const cprDoc = (await call(w.managerA, "select ogevia_api.request_staff_document($1,$2,$3,null,null) as id", [w.orgA, recA3, cpr]))[0].id;
     const v = randomUUID();
     const row = (await call(w.caregiverA3, "select * from ogevia_api.register_document_version($1,$2,$3,'v1','application/pdf',1234,$4,$5::date,$6::date,null)", [cprDoc, v, `${w.orgA}/documents/${cprDoc}/${v}`, sha, await add(-5), d1]))[0];
-    await call(w.managerA, "select ogevia_api.review_document_version($1,'verified',null,null)", [row.document_version_id]);
+    await call(w.ownerA, "select ogevia_api.review_document_version($1,'verified',null,null)", [row.document_version_id]);
     const tbDoc = (await call(w.managerA, "select ogevia_api.request_staff_document($1,$2,$3,null,null) as id", [w.orgA, recA3, tb]))[0].id;
     const v2 = randomUUID();
     const row2 = (await call(w.caregiverA3, "select * from ogevia_api.register_document_version($1,$2,$3,'v1','application/pdf',1234,$4,$5::date,null,null)", [tbDoc, v2, `${w.orgA}/documents/${tbDoc}/${v2}`, sha, await add(-5)]))[0];
-    await call(w.managerA, "select ogevia_api.review_document_version($1,'verified',null,null)", [row2.document_version_id]);
+    await call(w.ownerA, "select ogevia_api.review_document_version($1,'verified',null,null)", [row2.document_version_id]);
     const ev = await evaluate(recA3, fx.service, at(d1, "22:00"), at(d2, "06:00"));
     expect(ev.checks.find((c: any) => c.check === "cpr")).toMatchObject({ status: "blocked", message: "CPR expires before this work ends." });
     expect(ev.ready).toBe(false);
@@ -414,7 +414,7 @@ describe("concurrency and unprotected paths", () => {
 describe("migration files", () => {
   it("0042 ships with a classified rollback", () => {
     const down = readFileSync(new URL("../rollback/0042_readiness_gate.down.sql", import.meta.url), "utf8");
-    expect(down).toMatch(/CLASS: SAFE AUTOMATED/);
+    expect(down).toMatch(/CLASS: BACKUP REQUIRED/);
     expect(readdirSync(new URL("../migrations/", import.meta.url))).toContain("0042_readiness_gate.sql");
   });
 });
