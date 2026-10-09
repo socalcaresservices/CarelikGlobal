@@ -150,7 +150,8 @@ export function ReadinessCard() {
       </section>
 
       <section aria-label="Checks status" className="space-y-1">
-        <p className="text-sm font-medium text-slate-900">{s.enforcementActive ? "Readiness checks are active" : "Readiness checks are not active yet. Nothing is blocked."}</p>
+        <p className="text-sm font-medium text-slate-900">{s.enforcementActive ? "Readiness checks are active" : "Report-only. Readiness checks are NOT active."}</p>
+        {!s.enforcementActive ? <p className="text-sm text-amber-950">Current verified CPR and TB are not being required yet. A caregiver without them can still be assigned and can still start visits until the checks are activated.</p> : null}
         <ul className="list-disc pl-5 text-sm text-slate-800">
           <li>{s.caregivers.withDocumentGaps} of {s.caregivers.readyOrActive} caregivers {s.caregivers.withDocumentGaps === 1 ? "does" : "do"} not have current CPR and TB.</li>
           <li>{plural(s.caregivers.availabilityNotProvided, "caregiver has", "caregivers have")} no availability on file.</li>

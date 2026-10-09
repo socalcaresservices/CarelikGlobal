@@ -71,7 +71,7 @@ export function AssignmentChecks({ input, onReady }: { input: AssignmentCheckInp
               {o.state === "ok" || o.state === "not_checked" ? <span className={tone}>{STATE_TEXT[o.state]}</span> : (
                 <span className={tone}>
                   {o.messages.join(" ")}
-                  {o.state === "would_block" ? <span className="block text-xs text-slate-600">Not blocking yet. This will be required after readiness checks are activated{g.key === "service" ? " and Service checks are On" : ""}.</span> : null}
+                  {o.state === "would_block" ? <span className="block text-xs text-slate-600">{g.key === "documents" ? "Report-only: this does NOT meet the requirement for current, verified CPR and TB. It will block assignment and new visits once readiness checks are activated." : `Not blocking yet. This will be required after readiness checks are activated${g.key === "service" ? " and Service checks are On" : ""}.`}</span> : null}
                   {o.state === "overridden" ? <span className="block text-xs text-slate-600">Approved by an administrator for this assignment only.</span> : null}
                 </span>
               )}
@@ -79,7 +79,7 @@ export function AssignmentChecks({ input, onReady }: { input: AssignmentCheckInp
           );
         })}
       </ul>
-      {ev.ready ? <p className="text-sm font-semibold text-emerald-900" role="status">{ev.wouldBlockAfterActivation ? "Assignment allowed with unenforced checks. Review the warnings above." : "Ready to assign"}</p> : <p className="text-sm font-semibold text-red-800" role="status">Cannot be assigned yet</p>}
+      {ev.ready ? <p className={`text-sm font-semibold ${ev.wouldBlockAfterActivation ? "text-amber-950" : "text-emerald-900"}`} role="status">{ev.wouldBlockAfterActivation ? "Assignment allowed with unenforced checks. Review the warnings above." : "Ready to assign"}</p> : <p className="text-sm font-semibold text-red-800" role="status">Cannot be assigned yet</p>}
       {canOverride ? (
         overriding ? (
           <div role="group" className="space-y-2" aria-label="Override availability">

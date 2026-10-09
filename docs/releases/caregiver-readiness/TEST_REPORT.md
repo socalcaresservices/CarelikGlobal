@@ -27,3 +27,7 @@ Rollback tests prove archived copies remain and reapplication succeeds, and now 
 Earlier failing runs found real issues or local tooling limits and were corrected before the passing results above. The final database run took 51.66 seconds; API/database 2.65 seconds; web 57.23 seconds. JSDOM emits existing print-CSS/canvas limitations; these did not fail the final suites. Real browser screenshots were visually inspected in both desktop and mobile widths.
 
 Remaining verification: deployed Cognito login/MFA/token refresh and each database role, actual phone hardware, assistive technology, load, production migration ledger/checksums and exact deployed artifacts. See [deployment handoff](DEPLOYMENT_AND_ROLLBACK.md). Nothing here certifies a report-only agency for real work.
+
+## Review follow-up (patch on top of #76): added tests
+`manual-assignment.db.test.ts` (8), `enforcement-matrix.db.test.ts` (5: 7 conditions x report-only / active / Service checks On x assignment / visit start), `readiness-restore.db.test.ts` (1),
+migration 0045 covered by the manual-offer tests and the updated rollback test; UI: report-only CPR wording, "Offer manually", My experience (3 tests).

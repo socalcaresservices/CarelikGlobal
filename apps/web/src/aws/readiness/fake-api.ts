@@ -94,6 +94,10 @@ export function fakeApi(opts: FakeOptions) {
         return json(200, { clients: [{ clientId: CLIENT, clientCode: "C-104", caregiverDisplayCode: null, status: "active", legalFirstName: "Synthetic", legalLastName: "Client", city: null }] });
       case "GET /v1/experience-tags":
         return json(200, { tags: [{ tagId: SVC, label: "ABA experience" }] });
+      case "GET /v1/experience/me":
+        return json(200, { experience: { reviewed: false, reviewedAt: null, tags: [] } });
+      case "POST /v1/experience/me":
+        return json(200, { saved: true });
       case `GET /v1/caregivers/${CG}/experience`:
         return json(200, { experience: { reviewed: false, reviewedAt: null, tags: [{ tagId: SVC, label: "ABA experience", status: "reported" }] } });
       case `POST /v1/caregivers/${CG}/experience/review`:

@@ -85,6 +85,12 @@ export function MatchingPanel({ requestId, onOffer, offering }: { requestId: str
               <li key={c.caregiverRecordId} className="text-sm">
                 <p className="font-medium text-slate-900">{c.name} <span className="font-normal text-slate-500">({c.caregiverCode})</span> · {ELIGIBILITY_LABEL[c.eligibility]}{c.coverage.total > 1 ? ` · ${c.coverage.covered} of ${c.coverage.total} dates covered` : ""}</p>
                 <ul className="text-xs text-slate-700">{c.blockedChecks.map((b) => <li key={b.check}>{b.message}{c.coverage.total > 1 ? ` (${b.occurrences} of ${c.coverage.total} dates)` : ""}</li>)}</ul>
+                {c.blockedChecks.length > 0 && c.blockedChecks.every((b) => b.check === "availability") ? (
+                  <div className="mt-1 space-y-1">
+                    <p className="text-xs text-slate-600">Excluded from Matches, but an administrator may still offer this work. At assignment the hours must be approved or covered by a recorded availability override; documents, bookings and client requirements are still checked.</p>
+                    <Button type="button" variant="secondary" disabled={offering} onClick={() => onOffer(c.caregiverRecordId)}>Offer manually</Button>
+                  </div>
+                ) : <p className="mt-1 text-xs text-slate-600">Cannot be offered this work until the item above is resolved.</p>}
               </li>
             ))}
           </ul>
