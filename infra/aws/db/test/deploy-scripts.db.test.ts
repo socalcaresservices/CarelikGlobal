@@ -6,7 +6,7 @@ import { randomUUID } from "node:crypto";
 import { join } from "node:path";
 import pg from "pg";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { assertSafeTarget, migrate } from "../scripts/migrations.js";
+import { assertSafeTarget, loadMigrations, migrate } from "../scripts/migrations.js";
 import { ADMIN_URL } from "./harness.js";
 
 const DIR = join(__dirname, "../deploy");
@@ -51,12 +51,12 @@ describe("test-slice deployment SQL (runbook order)", () => {
     psql("postgres", "00_create_test_database.sql");
   });
 
-  it("migrations 0001-0038 apply to it", async () => {
+  it("every migration applies to it", async () => {
     const client = new pg.Client({ connectionString: url(DB) });
     await client.connect();
     try {
       const result = await migrate(client);
-      expect(result.applied).toHaveLength(38);
+      expect(result.applied).toHaveLength(loadMigrations().length);
     } finally {
       await client.end();
     }

@@ -2,7 +2,7 @@
 // agency-local dates (not "today"), so the suite gives the same answer whenever it runs.
 import { readFileSync } from "node:fs";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { asActor, createTestDb, expectPgError, freshClient, seedWorld, type Actor, type TestDb, type World } from "./harness.js";
+import { asActor, createTestDb, expectPgError, freshClient, orgToday, seedWorld, type Actor, type TestDb, type World } from "./harness.js";
 
 let db: TestDb;
 let w: World;
@@ -24,6 +24,8 @@ async function setWindows(a: Actor, windows: Win[], unavailable: string[] = []) 
   const id = await recordOf(a);
   await db.admin.query("delete from ogevia.caregiver_availability_windows where caregiver_record_id = $1", [id]);
   await db.admin.query("delete from ogevia.caregiver_unavailable_dates where caregiver_record_id = $1", [id]);
+  await db.admin.query("delete from ogevia.availability_requests where caregiver_record_id = $1", [id]);
+  await db.admin.query("delete from ogevia.caregiver_availability_state where caregiver_record_id = $1", [id]);
   for (const x of windows) {
     await db.admin.query(
       "insert into ogevia.caregiver_availability_windows(organization_id, caregiver_record_id, weekday, specific_date, start_local, end_local) values ($1,$2,$3,$4,$5,$6)",
@@ -68,13 +70,15 @@ describe("window shape", () => {
     await setWindows(w.caregiverA1, []);
   });
 
-  it("a caregiver can save an overnight window through the application function, and read it back", async () => {
+  it("an overnight window requested by a caregiver and approved by an administrator is read back", async () => {
     await setWindows(w.caregiverA1, []);
-    await asActor(db, w.caregiverA1.sub, (c) =>
-      c.query("select ogevia_api.replace_my_availability($1,$2::jsonb,'[]'::jsonb)", [
-        w.orgA, JSON.stringify([{ weekday: 6, specific_date: null, start_local: "22:00", end_local: "06:00" }]),
-      ]),
+    const today = await orgToday(db);
+    const id = await asActor(db, w.caregiverA1.sub, async (c) =>
+      (await c.query<{ id: string }>("select ogevia_api.request_availability_change($1,'weekly',$2::jsonb,$3::date,null,'Night shift preference',0,null) as id", [
+        w.orgA, JSON.stringify([{ weekday: 6, start_local: "22:00", end_local: "06:00" }]), today,
+      ])).rows[0]!.id,
     );
+    await asActor(db, w.ownerA.sub, (c) => c.query("select ogevia_api.review_availability_request($1,$2,'approve',null)", [w.orgA, id]));
     const back = await asActor(db, w.caregiverA1.sub, async (c) =>
       (await c.query("select weekday, start_local::text s, end_local::text e from ogevia_api.get_my_availability($1)", [w.orgA])).rows,
     );

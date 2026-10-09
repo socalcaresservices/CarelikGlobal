@@ -1,6 +1,6 @@
 // Rollbacks 0026 and 0025 refuse while records they cannot keep exist, and a
 // refusal changes nothing. SYNTHETIC data only.
-import { readFileSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { asActor, createTestDb, expectPgError, freshClient, seedWorld, type TestDb, type World } from "./harness.js";
 
@@ -35,6 +35,8 @@ const tomorrow = async () => (await db.admin.query("select (now() at time zone o
 
 describe("rollbacks keep records", () => {
   it("0029, 0028 and 0027 roll back cleanly when no rounding policy, outage record or continuity pack exists", async () => {
+    // Everything newer than 0038 (the caregiver-readiness release) is taken back first, newest first.
+    for (const f of readdirSync(DIR).filter((x) => x.endsWith(".down.sql") && x > "0038z").sort().reverse()) await runDown(f);
     await runDown("0038_org_letterhead_contact.down.sql");
     await runDown("0037_overnight_availability.down.sql");
     await runDown("0036_signature_recovery.down.sql");
