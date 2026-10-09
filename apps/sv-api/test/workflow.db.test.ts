@@ -1118,3 +1118,151 @@ describe("missing-signature recovery (0036) through the API", () => {
     expect(review.body.visit).toMatchObject({ recoveryState: null, canRequestConfirmation: true, allowedDecisions: ["close_not_billable"] });
   });
 });
+
+describe("caregiver readiness, availability approval, service approvals and matching (0039-0041) through the API", () => {
+  const body = (extra: Record<string, unknown> = {}) => ({ organizationId: w.orgA, ...extra });
+  const day = async (n: number) => (await db.admin.query("select ((now() at time zone 'America/Los_Angeles')::date + $1::int)::text as d", [n])).rows[0].d as string;
+  const rec = async (a: Actor) => (await db.admin.query("select id from ogevia.caregiver_records where linked_user_id = $1", [a.userId])).rows[0].id as string;
+  const q = (extra: Record<string, string> = {}) => ({ organizationId: w.orgA, ...extra });
+  const settings = (service: boolean, availability: boolean, reason = "API test settings") =>
+    call("POST /v1/readiness/settings", w.ownerA, { body: body({ serviceChecksEnabled: service, availabilityRequired: availability, expiryWarningDays: 30, reason }) });
+
+  it("availability: a caregiver requests with a reason, the approved record stays until an administrator approves", async () => {
+    const A1 = await rec(w.caregiverA1);
+    const noReason = await call("POST /v1/availability/me", w.caregiverA1, { body: body({ windows: [{ weekday: 2, specific_date: null, start_local: "08:00", end_local: "12:00" }], unavailableDates: [] }) });
+    expect(noReason.status).toBe(400);
+    const sent = await call("POST /v1/availability/me", w.caregiverA1, { body: body({ reason: "New weekday hours", windows: [{ weekday: 2, specific_date: null, start_local: "08:00", end_local: "12:00" }], unavailableDates: [], expectedVersion: 0 }) });
+    expect(sent.status, JSON.stringify(sent.body)).toBe(201);
+    const state = await call("GET /v1/availability/me/state", w.caregiverA1, { query: q() });
+    expect(state.body.availability).toMatchObject({ hasRecord: true, timezone: "America/Los_Angeles", pending: { requestId: sent.body.requestId, stale: false } });
+    expect(state.body.availability.windows).toEqual([]); // approved is still empty
+    expect((await call("POST /v1/availability/requests/{requestId}/review", w.caregiverA1, { path: { requestId: sent.body.requestId }, body: body({ decision: "approve" }) })).status).toBe(403);
+    expect((await call("GET /v1/availability/requests", w.caregiverA1, { query: q() })).status).toBe(403);
+    const pending = await call("GET /v1/availability/requests", w.managerA, { query: q() });
+    expect(pending.body.requests.find((r: any) => r.requestId === sent.body.requestId)).toMatchObject({ status: "pending", stale: false });
+    const approved = await call("POST /v1/availability/requests/{requestId}/review", w.managerA, { path: { requestId: sent.body.requestId }, body: body({ decision: "approve", note: "Confirmed by phone" }) });
+    expect(approved.status, JSON.stringify(approved.body)).toBe(200);
+    expect(approved.body.version).toBe(1);
+    expect((await call("GET /v1/availability/me/state", w.caregiverA1, { query: q() })).body.availability.windows).toHaveLength(1);
+    const admin = await call("GET /v1/caregivers/{caregiverRecordId}/availability", w.managerA, { path: { caregiverRecordId: A1 }, query: q() });
+    expect(admin.body.availability).toMatchObject({ version: 1, updateSource: "request", provided: true });
+    // another agency sees nothing
+    expect((await call("GET /v1/caregivers/{caregiverRecordId}/availability", w.managerB, { path: { caregiverRecordId: A1 }, query: q() })).status).toBe(404);
+    // an administrator edit needs a reason and the version seen
+    expect((await call("POST /v1/caregivers/{caregiverRecordId}/availability", w.managerA, { path: { caregiverRecordId: A1 }, body: body({ windows: [], unavailableDates: [], reason: "", expectedVersion: 1 }) })).status).toBe(400);
+    expect((await call("POST /v1/caregivers/{caregiverRecordId}/availability", w.managerA, { path: { caregiverRecordId: A1 }, body: body({ windows: [], unavailableDates: [], reason: "Stale edit", expectedVersion: 0 }) })).status).toBe(409);
+  });
+
+  it("settings and required documents: only the Administrator; documents verified with agency dates; a shift is refused until then", async () => {
+    expect((await call("GET /v1/readiness/settings", w.caregiverA1, { query: q() })).status).toBe(200);
+    expect((await settings(false, false)).status).toBe(200);
+    expect((await call("POST /v1/readiness/settings", w.managerA, { body: body({ serviceChecksEnabled: true, availabilityRequired: false, expiryWarningDays: 30, reason: "No" }) })).status).toBe(403);
+    expect((await call("POST /v1/readiness/settings", w.ownerA, { body: body({ serviceChecksEnabled: true, availabilityRequired: false, expiryWarningDays: 30 }) })).status).toBe(400);
+    const type = (await call("POST /v1/documents/requests", w.managerA, { body: body({ caregiverRecordId: await rec(w.caregiverA3), documentTypeId: (await db.admin.query("insert into ogevia.document_types(organization_id, name, requires_expiry, created_by) values ($1,'API CPR',false,$2) returning id", [w.orgA, w.managerA.userId])).rows[0].id }) }));
+    expect(type.status, JSON.stringify(type.body)).toBe(201);
+    const typeId = (await db.admin.query("select id from ogevia.document_types where name = 'API CPR'")).rows[0].id as string;
+    expect((await call("POST /v1/document-types/{documentTypeId}/required", w.managerA, { path: { documentTypeId: typeId }, body: body({ required: true, reason: "Required for work" }) })).status).toBe(403);
+    expect((await call("POST /v1/document-types/{documentTypeId}/required", w.ownerA, { path: { documentTypeId: typeId }, body: body({ required: true, reason: "CPR is required before assignment" }) })).status).toBe(200);
+    const A3 = await rec(w.caregiverA3);
+    const date = await day(20);
+    const attempt = () => call("POST /v1/shifts", w.managerA, { body: body({ clientId: fresh.client, serviceId: fresh.service, date, startTime: "09:00", endTime: "10:00", caregiverRecordId: A3 }) });
+    const blocked = await attempt();
+    expect(blocked.status).toBe(422);
+    expect(blocked.body.error.message).toMatch(/Blocked: API CPR missing/);
+    // upload (database path, as the existing upload route needs S3), then verify through the API
+    const doc = (await db.admin.query("select id from ogevia.staff_documents where caregiver_record_id = $1 and document_type_id = $2", [A3, typeId])).rows[0].id as string;
+    const version = (await db.admin.query(
+      "insert into ogevia.document_versions (organization_id, document_id, version_number, object_key, content_type, byte_size, sha256, uploaded_by) values ($1,$2,1,$3,'application/pdf',100,$4,$5) returning id",
+      [w.orgA, doc, `${w.orgA}/documents/${doc}/api-test`, "c".repeat(64), w.caregiverA3.userId])).rows[0].id as string;
+    expect((await attempt()).body.error.message).toMatch(/API CPR pending/);
+    const from = await day(-1);
+    expect((await call("POST /v1/documents/versions/{versionId}/verify", w.caregiverA3, { path: { versionId: version }, body: body({ validFrom: from, validThrough: await day(400) }) })).status).toBe(403);
+    expect((await call("POST /v1/documents/versions/{versionId}/verify", w.managerA, { path: { versionId: version }, body: body({ validFrom: from }) })).status).toBe(422);
+    expect((await call("POST /v1/documents/versions/{versionId}/verify", w.managerA, { path: { versionId: version }, body: body({ validFrom: from, validThrough: await day(400) }) })).status).toBe(200);
+    expect((await attempt()).status).toBe(201);
+    const flags = await call("GET /v1/readiness/flags", w.managerA, { query: q() });
+    expect(flags.status).toBe(200);
+    expect((await call("POST /v1/documents/versions/{versionId}/revoke", w.managerA, { path: { versionId: version }, body: body({ reason: "Card reported invalid" }) })).status).toBe(200);
+    expect((await call("GET /v1/readiness/flags", w.managerA, { query: q() })).body.flags.some((f: any) => f.reasonCodes?.includes("DOC_REVOKED"))).toBe(true);
+    const compliance = await call("GET /v1/documents/compliance", w.managerA, { query: q() });
+    expect(compliance.body.compliance.find((c: any) => c.documentTypeName === "API CPR" && c.caregiverRecordId === A3)).toMatchObject({ state: "revoked" });
+    expect((await call("GET /v1/documents/compliance", w.caregiverA1, { query: q() })).status).toBe(403);
+    await db.admin.query("update ogevia.document_types set required_for_work = false where id = $1", [typeId]); // leave the later tests unaffected
+  });
+
+  it("service approvals: written by administrators, read by the caregiver; service checks Off by default and an unapproved caregiver is refused once On", async () => {
+    const A2 = await rec(w.caregiverA2);
+    const date = await day(21);
+    const shiftFor = (extra: Record<string, unknown> = {}) => call("POST /v1/shifts", w.managerA, { body: body({ clientId: fresh.client, serviceId: fresh.service, date, startTime: "09:00", endTime: "10:00", caregiverRecordId: A2, ...extra }) });
+    const approvalBody = { serviceId: fresh.service, effectiveFrom: await day(-10), reason: "Reviewed with the family" };
+    expect((await call("POST /v1/caregivers/{caregiverRecordId}/service-approvals", w.caregiverA2, { path: { caregiverRecordId: A2 }, body: body(approvalBody) })).status).toBe(403);
+    expect((await call("POST /v1/caregivers/{caregiverRecordId}/service-approvals", w.managerB, { path: { caregiverRecordId: A2 }, body: body(approvalBody) })).status).toBe(404);
+    expect((await settings(true, false)).status).toBe(200);
+    const refused = await shiftFor();
+    expect(refused.status).toBe(422);
+    expect(refused.body.error.message).toMatch(/Blocked: Service not approved/);
+    const made = await call("POST /v1/caregivers/{caregiverRecordId}/service-approvals", w.managerA, { path: { caregiverRecordId: A2 }, body: body(approvalBody) });
+    expect(made.status, JSON.stringify(made.body)).toBe(201);
+    const mine = await call("GET /v1/service-approvals/me", w.caregiverA2, { query: q() });
+    expect(mine.body.approvals).toHaveLength(1);
+    expect(mine.body.approvals[0]).toMatchObject({ serviceId: fresh.service, state: "current" });
+    expect(mine.body.approvals[0].reason).toBeUndefined();
+    const ok = await shiftFor();
+    expect(ok.status, JSON.stringify(ok.body)).toBe(201);
+    // the decision is recorded server-side, with the score version and no names
+    const decisions = await call("GET /v1/assignment-decisions", w.managerA, { query: q({ referenceId: ok.body.shift.shiftId }) });
+    expect(decisions.body.decisions).toHaveLength(1);
+    expect(decisions.body.decisions[0]).toMatchObject({ scoreVersion: "match-v1", caregiverCode: expect.any(String) });
+    expect((await call("POST /v1/service-approvals/{approvalId}/revoke", w.managerA, { path: { approvalId: made.body.approvalId }, body: body({ reason: "" }) })).status).toBe(400);
+    expect((await call("POST /v1/service-approvals/{approvalId}/revoke", w.managerA, { path: { approvalId: made.body.approvalId }, body: body({ reason: "Retraining needed" }) })).status).toBe(200);
+    expect((await shiftFor({ date: await day(22) })).status).toBe(422);
+    expect((await settings(false, false)).status).toBe(200);
+  });
+
+  it("assignment with an availability exception: the reason travels with the request, only an authorised administrator can use it, and it is recorded", async () => {
+    const A1 = await rec(w.caregiverA1);
+    expect((await settings(false, true)).status).toBe(200);
+    const date = await day(23);
+    const asShift = (a: Actor, selection?: Record<string, unknown>) =>
+      call("POST /v1/shifts", a, { body: body({ clientId: fresh.client, serviceId: fresh.service, date, startTime: "13:00", endTime: "14:00", caregiverRecordId: A1, ...(selection ? { selection } : {}) }) });
+    const outside = await asShift(w.managerA);
+    expect(outside.status).toBe(422);
+    expect(outside.body.error.message).toMatch(/Needs override/);
+    expect((await asShift(w.schedulerA, { overrideReason: "Family asked for this caregiver" })).status).toBe(403);
+    expect((await asShift(w.managerA, { overrideReason: " " })).status).toBe(422);
+    const ok = await asShift(w.managerA, { overrideReason: "Family asked for this caregiver", rationale: "Known to the family" });
+    expect(ok.status, JSON.stringify(ok.body)).toBe(201);
+    const decision = (await call("GET /v1/assignment-decisions", w.managerA, { query: q({ referenceId: ok.body.shift.shiftId }) })).body.decisions[0];
+    expect(decision).toMatchObject({ overrideReason: "Family asked for this caregiver", rationale: "Known to the family", eligibility: "needs_override" });
+    expect((await settings(false, false)).status).toBe(200);
+  });
+
+  it("experience, matches and locations: caregivers submit, administrators verify; matches show eligibility first; privacy holds", async () => {
+    const tag = await call("POST /v1/experience-tags", w.managerA, { body: body({ name: "API behaviour support" }) });
+    expect(tag.status).toBe(201);
+    expect((await call("POST /v1/experience-tags", w.caregiverA1, { body: body({ name: "Mine" }) })).status).toBe(403);
+    const mine = await call("POST /v1/experience/me", w.caregiverA1, { body: body({ tagId: tag.body.tagId, context: "Two years with a family" }) });
+    expect(mine.status, JSON.stringify(mine.body)).toBe(201);
+    expect((await call("POST /v1/experience/{experienceId}/review", w.caregiverA1, { path: { experienceId: mine.body.experienceId }, body: body({ decision: "verify" }) })).status).toBe(403);
+    expect((await call("POST /v1/experience/{experienceId}/review", w.managerA, { path: { experienceId: mine.body.experienceId }, body: body({ decision: "verify" }) })).status).toBe(200);
+    const list = await call("GET /v1/experience/me", w.caregiverA1, { query: q() });
+    expect(list.body.experience[0]).toMatchObject({ tagName: "API behaviour support", status: "verified" });
+    // a client need, a location and a match request
+    const pref = await call("POST /v1/clients/{clientId}/support-preferences", w.managerA, { path: { clientId: fresh.client }, body: body({ tagId: tag.body.tagId, weight: 2, reason: "Confirmed with the family" }) });
+    expect(pref.status, JSON.stringify(pref.body)).toBe(201);
+    expect((await call("POST /v1/clients/{clientId}/location", w.managerA, { path: { clientId: fresh.client }, body: body({ zip: "9000" }) })).status).toBe(422);
+    expect((await call("POST /v1/clients/{clientId}/location", w.managerA, { path: { clientId: fresh.client }, body: body({ zip: "90001" }) })).status).toBe(200);
+    const starts = new Date(Date.now() + 40 * 864e5).toISOString();
+    const ends = new Date(Date.now() + 40 * 864e5 + 2 * 3600e3).toISOString();
+    expect((await call("POST /v1/matches", w.caregiverA1, { body: body({ clientId: fresh.client, serviceId: fresh.service, occurrences: [{ startsAt: starts, endsAt: ends }] }) })).status).toBe(403);
+    expect((await call("POST /v1/matches", w.managerA, { body: body({ clientId: fresh.client, serviceId: fresh.service, occurrences: [] }) })).status).toBe(400);
+    const m = await call("POST /v1/matches", w.managerA, { body: body({ clientId: fresh.client, serviceId: fresh.service, occurrences: [{ startsAt: starts, endsAt: ends }] }) });
+    expect(m.status, JSON.stringify(m.body)).toBe(200);
+    expect(m.body.matches.version).toBe("match-v1");
+    expect(m.body.matches.candidates.length).toBeGreaterThan(0);
+    const c = m.body.matches.candidates[0];
+    expect(Object.keys(c)).toEqual(expect.arrayContaining(["eligibility", "components", "scoreStatus", "approxDistanceMiles", "cover"]));
+    expect(JSON.stringify(m.body)).not.toMatch(/90001/);
+    expect((await call("POST /v1/matches", w.managerB, { body: body({ clientId: fresh.client, serviceId: fresh.service, occurrences: [{ startsAt: starts, endsAt: ends }] }) })).status).toBe(404);
+  });
+});
