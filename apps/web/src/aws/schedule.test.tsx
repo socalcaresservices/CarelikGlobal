@@ -7,6 +7,7 @@ import { MemoryRouter } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { createAwsApiClient } from "@/lib/aws-api";
 import { AwsRoutes } from "./aws-root";
+import { fakeCandidate, fakeMatches, readinessFake } from "./readiness-test-fakes";
 
 const ORG = "aaaaaaaa-0000-4000-8000-000000000001";
 const CLIENT = "cccccccc-0000-4000-8000-000000000001";
@@ -53,6 +54,11 @@ function fakeApi(role: Role) {
       case `POST /v1/shifts/${OPEN}/caregiver`:
         open = { ...open, coverageState: "covered", caregiverRecordId: CG2, caregiverCode: "CG-2", caregiverName: "Synthetic Caregiver Two" };
         return json(200, { coverageState: "covered" });
+      case "POST /v1/matches":
+        return json(200, fakeMatches([
+          fakeCandidate({ caregiverRecordId: CG2 }),
+          fakeCandidate({ caregiverRecordId: CG1, caregiverCode: "CG-1", caregiverName: "Synthetic Caregiver One", eligibility: "not_eligible", score: null, scoreStatus: "incomplete", reasons: [{ code: "DOC_MISSING", label: "Missing: CPR" }] }),
+        ]));
       case `GET /v1/shifts/${COVERED}/coverage`:
         return json(200, { events: [{ eventType: "called_out", createdAt: `${today}T18:00:00Z`, reason: "Sick (synthetic)", originalCaregiverName: "Synthetic Caregiver One", replacementCaregiverName: null, recordedBy: "caregiver" }] });
       case "GET /v1/my-shifts":
@@ -70,7 +76,7 @@ function fakeApi(role: Role) {
           { caregiverRecordId: CG2, caregiverCode: "CG-2", firstName: "Synthetic", lastName: "Caregiver Two", preferredName: null, status: "ready", hasSignIn: false, signInStatus: null, activeAssignments: 0, openVisits: 0 },
         ] });
       default:
-        return json(404, { error: { code: "not_found", message: "No such endpoint." } });
+        return readinessFake(init?.method ?? "GET", url.pathname) ?? json(404, { error: { code: "not_found", message: "No such endpoint." } });
     }
   });
   return { calls, fetchImpl };
@@ -117,10 +123,16 @@ describe("Schedule (staff)", () => {
 
     const openRow = screen.getByText("OPEN — no caregiver").closest("li")!;
     fireEvent.click(within(openRow).getByRole("button", { name: "Assign caregiver" }));
-    fireEvent.change(within(openRow).getByLabelText("Caregiver"), { target: { value: CG2 } });
+    // Ranked server answer: the not-eligible caregiver cannot be chosen; the eligible one is chosen from the table.
+    const table = await within(openRow).findByRole("table", { name: "Caregiver matches, best first" });
+    const cg1Row = within(table).getByText("Synthetic Caregiver One").closest("tr")!;
+    expect(within(cg1Row).getByRole("button", { name: "Choose" })).toBeDisabled();
+    expect(within(cg1Row).getByText("Missing: CPR")).toBeInTheDocument();
+    expect(within(cg1Row).getByText("Incomplete")).toBeInTheDocument();
+    fireEvent.click(within(within(table).getByText("Synthetic Caregiver Two").closest("tr")!).getByRole("button", { name: "Choose" }));
     fireEvent.click(within(openRow).getAllByRole("button", { name: "Assign caregiver" }).at(-1)!);
     expect(await screen.findByText("Caregiver assigned. The shift is covered.")).toBeInTheDocument();
-    expect(api.calls.find((c) => c.path.endsWith("/caregiver"))!.body).toMatchObject({ caregiverRecordId: CG2, reason: null });
+    expect(api.calls.find((c) => c.path.endsWith("/caregiver"))!.body).toMatchObject({ caregiverRecordId: CG2, reason: null, selection: { rationale: null, overrideReason: null } });
   });
 
   it("schedules a shift: agency-local date and times, open if no caregiver, reports reserved and remaining hours", async () => {

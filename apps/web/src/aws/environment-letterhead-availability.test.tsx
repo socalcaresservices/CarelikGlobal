@@ -11,6 +11,7 @@ import { createAwsRuntime, loadRuntimeEnv } from "./aws-runtime";
 import { EnvironmentProvider } from "./environment-marker";
 import { resolveEnvironmentMarker, TEST_MARKER_LABEL, UNVERIFIED_MARKER_LABEL } from "./environment";
 import { letterheadProblem, EMPTY_LETTERHEAD } from "./letterhead-validation";
+import { readinessFake } from "./readiness-test-fakes";
 
 const ORG = "aaaaaaaa-0000-4000-8000-000000000001";
 type Role = "organization_owner" | "manager" | "caregiver";
@@ -41,12 +42,12 @@ function renderApp(path: string, role: Role, opts: { env?: string | null; window
         return json(200, { clients: [] });
       case "/v1/client-types":
         return json(200, { clientTypes: [] });
-      case "/v1/availability/me":
-        return json(200, { windows: opts.windows ?? [] });
+      case "/v1/availability/me/state":
+        return json(200, { availability: { hasRecord: true, timezone: "America/Los_Angeles", version: 3, provided: true, windows: opts.windows ?? [], unavailable: [], pending: null, lastDecision: null } });
       case "/v1/care-opportunities":
         return json(200, { opportunities: [] });
       default:
-        return json(404, { error: { code: "not_found", message: "No such endpoint." } });
+        return readinessFake("GET", url.pathname) ?? json(404, { error: { code: "not_found", message: "No such endpoint." } });
     }
   });
   const auth = {
@@ -199,7 +200,7 @@ describe("print letterhead settings", () => {
 });
 
 describe("caregiver availability editor: overnight", () => {
-  it("allows From later than To as an overnight window and explains it; refuses equal times", async () => {
+  it("allows From later than To as an overnight window and explains it; refuses equal times; a reason is required", async () => {
     renderApp("/availability", "caregiver");
     const from = await screen.findByLabelText("From");
     const to = screen.getByLabelText("To");
@@ -207,26 +208,33 @@ describe("caregiver availability editor: overnight", () => {
     fireEvent.change(from, { target: { value: "22:00" } });
     fireEvent.change(to, { target: { value: "06:00" } });
     expect(screen.getByTestId("overnight-note")).toHaveTextContent("ends the next morning at 06:00");
-    expect(screen.getByRole("button", { name: "Save availability" })).toBeEnabled();
+    // days and times are valid, but a request without a reason cannot be sent
+    expect(screen.getByRole("button", { name: "Send for approval" })).toBeDisabled();
+    fireEvent.change(screen.getByLabelText(/Reason for the change/), { target: { value: "New night job" } });
+    expect(screen.getByRole("button", { name: "Send for approval" })).toBeEnabled();
     fireEvent.change(to, { target: { value: "22:00" } });
     expect(screen.getByRole("alert")).toHaveTextContent("cannot be the same");
-    expect(screen.getByRole("button", { name: "Save availability" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Send for approval" })).toBeDisabled();
     fireEvent.change(to, { target: { value: "17:00" } });
     fireEvent.change(from, { target: { value: "08:00" } });
     expect(screen.queryByTestId("overnight-note")).toBeNull();
-    expect(screen.getByRole("button", { name: "Save availability" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "Send for approval" })).toBeEnabled();
   });
 
-  it("sends the overnight window as saved, and warns before replacing a more detailed saved schedule", async () => {
+  it("sends a REQUEST (reason and the approved version), and warns before replacing a more detailed approved schedule", async () => {
     const detailed = [
-      { windowId: "w1", weekday: 1, specificDate: null, startLocal: "08:00:00", endLocal: "17:00:00" },
-      { windowId: "w2", weekday: 6, specificDate: null, startLocal: "22:00:00", endLocal: "06:00:00" },
+      { weekday: 1, specificDate: null, startLocal: "08:00", endLocal: "17:00" },
+      { weekday: 6, specificDate: null, startLocal: "22:00", endLocal: "06:00" },
     ];
     const { posts } = renderApp("/availability", "caregiver", { windows: detailed });
     expect(await screen.findByRole("note")).toHaveTextContent(/different times on different days/);
     fireEvent.click(screen.getByLabelText("Sat"));
-    fireEvent.click(screen.getByRole("button", { name: "Save availability" }));
+    fireEvent.change(screen.getByLabelText(/Reason for the change/), { target: { value: "No more Saturday nights" } });
+    fireEvent.click(screen.getByRole("button", { name: "Send for approval" }));
     await waitFor(() => expect(posts.find((x) => x.path === "/v1/availability/me")).toBeTruthy());
-    expect((posts.find((x) => x.path === "/v1/availability/me")!.body.windows as unknown[])).toContainEqual({ weekday: 1, specific_date: null, start_local: "08:00", end_local: "17:00" });
+    const sent = posts.find((x) => x.path === "/v1/availability/me")!;
+    expect(sent.body.windows as unknown[]).toContainEqual({ weekday: 1, specific_date: null, start_local: "08:00", end_local: "17:00" });
+    expect(sent.body).toMatchObject({ reason: "No more Saturday nights", expectedVersion: 3 });
+    expect(sent.key).toBeTruthy();
   });
 });

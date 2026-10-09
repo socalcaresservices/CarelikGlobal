@@ -10,6 +10,7 @@ import { createAwsApiClient } from "@/lib/aws-api";
 import { isSupabaseClientCreated } from "@/lib/supabase";
 import { AwsRoutes } from "./aws-root";
 import { createAwsRuntime, loadRuntimeEnv, type AwsEnv } from "./aws-runtime";
+import { readinessFake } from "./readiness-test-fakes";
 
 const ORG = "aaaaaaaa-0000-4000-8000-000000000001";
 const CLIENT = "cccccccc-0000-4000-8000-000000000001";
@@ -89,6 +90,8 @@ function fakeApi(role: "caregiver" | "manager" | "organization_owner", opts: { d
         return json(201, { version: { documentVersionId: "eeeeeeee-0000-4000-8000-00000000d0c2", versionNumber: 1 } });
       case "POST /v1/document-versions/eeeeeeee-0000-4000-8000-00000000d0c2/review":
         return json(200, { decision: body?.["decision"] });
+      case "POST /v1/documents/versions/eeeeeeee-0000-4000-8000-00000000d0c2/verify":
+        return json(200, { decision: "verified" });
       case "GET /v1/billing-approvals":
         return json(200, { approvals });
       case "GET /v1/billing-rounding/preview":
@@ -99,7 +102,7 @@ function fakeApi(role: "caregiver" | "manager" | "organization_owner", opts: { d
       case `GET /v1/visits/${VISIT}/signature`:
         return json(200, { contentType: "image/png", sha256: "x", pngBase64: "iVBORw0KGgo=" });
       default:
-        return json(404, { error: { code: "not_found", message: "No such endpoint." } });
+        return readinessFake(init?.method ?? "GET", url.pathname) ?? json(404, { error: { code: "not_found", message: "No such endpoint." } });
     }
   });
   return { calls, fetchImpl };
@@ -312,8 +315,15 @@ describe("AWS build: manager review and billing-review data", () => {
     fireEvent.click(within(card).getByRole("button", { name: "Reject" }));
     expect(await within(card).findByRole("alert")).toHaveTextContent("Enter why it is rejected");
     expect(api.calls.some((c) => c.method === "POST" && c.path.endsWith("/review"))).toBe(false);
+    // Verifying records the dates shown on the document; without them nothing is sent.
     fireEvent.click(within(card).getByRole("button", { name: "Verify" }));
-    await waitFor(() => expect(api.calls.some((c) => c.method === "POST" && c.path.endsWith("/review"))).toBe(true));
+    expect(await within(card).findByRole("alert")).toHaveTextContent("valid from");
+    expect(api.calls.some((c) => c.method === "POST" && c.path.endsWith("/verify"))).toBe(false);
+    fireEvent.change(within(card).getByLabelText("Valid from"), { target: { value: "2026-01-05" } });
+    fireEvent.change(within(card).getByLabelText(/Valid through/), { target: { value: "2028-01-05" } });
+    fireEvent.click(within(card).getByRole("button", { name: "Verify" }));
+    await waitFor(() => expect(api.calls.some((c) => c.method === "POST" && c.path.endsWith("/verify"))).toBe(true));
+    expect(api.calls.find((c) => c.path.endsWith("/verify"))!.body).toMatchObject({ validFrom: "2026-01-05", validThrough: "2028-01-05" });
     expect(screen.getByRole("button", { name: "Request document" })).toBeInTheDocument();
     expect(api.calls.some((c) => c.path.startsWith("/v1/documents/people"))).toBe(true);
   });

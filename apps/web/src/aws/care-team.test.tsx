@@ -7,6 +7,7 @@ import { MemoryRouter } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { createAwsApiClient } from "@/lib/aws-api";
 import { AwsRoutes } from "./aws-root";
+import { readinessFake } from "./readiness-test-fakes";
 
 const ORG = "aaaaaaaa-0000-4000-8000-000000000001";
 const CG = "abababab-0000-4000-8000-000000000001";
@@ -57,7 +58,7 @@ function fakeApi(role: Role) {
       case "GET /v1/assignments":
         return json(200, { assignments: [] });
       default:
-        return json(404, { error: { code: "not_found", message: "No such endpoint." } });
+        return readinessFake(init?.method ?? "GET", url.pathname) ?? json(404, { error: { code: "not_found", message: "No such endpoint." } });
     }
   });
   return { calls, fetchImpl };

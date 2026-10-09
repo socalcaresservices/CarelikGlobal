@@ -1,4 +1,5 @@
 import { useQueryClient } from "@tanstack/react-query";
+import { ClientLocationCard, ClientSupportCard } from "./readiness-cards";
 import { useEffect, useRef, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { Button, Card } from "@carelik/ui";
@@ -373,6 +374,8 @@ export function ClientDetailPage() {
       </div>
       <AuthorizationsCard clientId={c.clientId} />
       <AssignmentsCard clientId={c.clientId} />
+      {hasPermission("clients.manage") ? <ClientSupportCard clientId={c.clientId} /> : null}
+      {hasPermission("clients.manage") ? <ClientLocationCard clientId={c.clientId} /> : null}
       <DetailsCard c={c} canManage={canManage} />
       {canManage ? <StatusCard c={c} /> : null}
     </div>

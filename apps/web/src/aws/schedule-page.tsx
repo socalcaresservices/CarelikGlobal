@@ -8,6 +8,8 @@ import { useAwsApi } from "./aws-workspace";
 import { caregiverName, useCaregivers } from "./care-team-admin";
 import { clientName, useClients, useServices } from "./client-admin";
 import { formatClockTime, formatWeekdayDate, formatWeekdayDateTime } from "@/lib/service-verification";
+import { MatchPanel } from "./match-panel";
+import type { MatchCandidate } from "./readiness-format";
 import { RecurringSeriesForm, RescheduleForm, SeriesList } from "./recurring-schedule";
 
 /**
@@ -24,6 +26,7 @@ export interface Shift {
   localDate: string;
   coverageState: CoverageState;
   clientId: string;
+  serviceId: string;
   clientCode: string;
   clientName: string | null;
   serviceName: string | null;
@@ -140,9 +143,11 @@ function ShiftActions({ s, action, onClose, onDone }: { s: Shift; action: Exclud
   const api = useAwsApi();
   const refresh = useRefreshSchedule();
   const { activeOrganizationId } = useOrganization();
-  const caregivers = useCaregivers();
   const [reason, setReason] = useState("");
   const [pick, setPick] = useState("");
+  const [picked, setPicked] = useState<MatchCandidate | null>(null);
+  const [rationale, setRationale] = useState("");
+  const [overrideReason, setOverrideReason] = useState("");
   const [state, setState] = useState<{ busy: boolean; error: string | null }>({ busy: false, error: null });
   const key = useRef(newIdempotencyKey());
   const history = useQuery({
@@ -156,11 +161,15 @@ function ShiftActions({ s, action, onClose, onDone }: { s: Shift; action: Exclud
   async function submit() {
     if ((action === "callout" || action === "cancel" || (action === "assign" && covered)) && reason.trim().length < 3) return setState({ busy: false, error: "Give a reason." });
     if (action === "assign" && !pick) return setState({ busy: false, error: "Choose the caregiver." });
+    if (action === "assign" && picked?.eligibility === "needs_override" && overrideReason.trim().length < 3) return setState({ busy: false, error: "This caregiver is outside approved availability. Give the override reason." });
     setState({ busy: true, error: null });
     try {
       const path = `/v1/shifts/${encodeURIComponent(s.shiftId)}/${action === "assign" ? "caregiver" : action}`;
       const payload = action === "assign"
-        ? { organizationId: activeOrganizationId, caregiverRecordId: pick, reason: reason.trim() || null }
+        ? {
+            organizationId: activeOrganizationId, caregiverRecordId: pick, reason: reason.trim() || null,
+            selection: { rationale: rationale.trim() || null, overrideReason: picked?.eligibility === "needs_override" ? overrideReason.trim() : null },
+          }
         : { organizationId: activeOrganizationId, reason: reason.trim() };
       const r = await api.post<{ releasedMinutes?: number }>(path, payload, { idempotencyKey: key.current });
       key.current = newIdempotencyKey();
@@ -192,14 +201,17 @@ function ShiftActions({ s, action, onClose, onDone }: { s: Shift; action: Exclud
   return (
     <form onSubmit={(e) => { e.preventDefault(); void submit(); }} className="mt-2 grid gap-2 rounded-lg bg-slate-50 p-2 sm:grid-cols-2">
       {action === "assign" ? (
-        <div className="sm:col-span-2">
-          <label htmlFor={`${id}-cg`} className="block text-xs font-medium text-slate-600">Caregiver</label>
-          <select id={`${id}-cg`} value={pick} onChange={(e) => { setPick(e.target.value); key.current = newIdempotencyKey(); }} className={inputClass}>
-            <option value="">Choose a caregiver</option>
-            {(caregivers.data ?? []).filter((c) => (c.status === "ready" || c.status === "active") && c.caregiverRecordId !== s.caregiverRecordId).map((c) => (
-              <option key={c.caregiverRecordId} value={c.caregiverRecordId}>{caregiverName(c)} ({c.caregiverCode})</option>
-            ))}
-          </select>
+        <div className="sm:col-span-2 space-y-2">
+          <p className="text-xs font-medium text-slate-600">Choose a caregiver{picked ? <> — selected: <span className="text-slate-900">{picked.caregiverName}</span></> : null}</p>
+          <MatchPanel
+            api={api}
+            organizationId={activeOrganizationId ?? ""}
+            input={{ clientId: s.clientId, serviceId: s.serviceId, occurrences: [{ startsAt: s.startsAt, endsAt: s.endsAt }], excludeShiftId: s.shiftId }}
+            actionLabel="Choose"
+            onAction={(c) => { if (c.caregiverRecordId === s.caregiverRecordId) return; setPick(c.caregiverRecordId); setPicked(c); setOverrideReason(""); key.current = newIdempotencyKey(); }}
+          />
+          {picked ? <label className="block text-xs font-medium text-slate-600">Why this caregiver (optional)<input value={rationale} maxLength={500} onChange={(e) => { setRationale(e.target.value); key.current = newIdempotencyKey(); }} className={inputClass} /></label> : null}
+          {picked?.eligibility === "needs_override" ? <label className="block text-xs font-medium text-amber-900">Override reason (required): {picked.caregiverName} is outside approved availability<input value={overrideReason} maxLength={500} onChange={(e) => { setOverrideReason(e.target.value); key.current = newIdempotencyKey(); }} className={inputClass} /></label> : null}
         </div>
       ) : null}
       {action !== "assign" || covered ? (

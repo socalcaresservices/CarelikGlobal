@@ -4,9 +4,10 @@ import { Button, Card } from "@carelik/ui";
 import type { AwsApiClient } from "@/lib/aws-api";
 import { useOrganization } from "@/providers/organization-provider";
 import { formatDateTime } from "@/lib/service-verification";
+import { MatchPanel } from "./match-panel";
+import type { MatchCandidate } from "./readiness-format";
 
-type RequestRow = { requestId: string; clientCode: string; serviceCode: string; serviceName: string; startsAt: string; endsAt: string; requestedMinutes: number; status: string; shortNotice: boolean; availableCount: number; awaitingCount: number; assignedCaregiverName: string | null };
-type Candidate = { caregiverRecordId: string; caregiverName: string; currentClientMatch: boolean; availabilitySource: string };
+type RequestRow = { requestId: string; clientCode: string; serviceId: string; serviceCode: string; serviceName: string; startsAt: string; endsAt: string; requestedMinutes: number; status: string; shortNotice: boolean; availableCount: number; awaitingCount: number; assignedCaregiverName: string | null };
 type Offer = { offerId: string; caregiverRecordId: string; caregiverName: string; status: string; respondedAt: string | null };
 type ClientOption = { clientId: string; clientCode: string };
 type AlertStaff = { userId: string; displayName: string; selected: boolean };
@@ -23,6 +24,9 @@ export function CareRequestsPage({ api }: { api: AwsApiClient }) {
   const [offerLink, setOfferLink] = useState("");
   const [selectedAlertUsers, setSelectedAlertUsers] = useState<Set<string>>(new Set());
   const [alertsInitialized, setAlertsInitialized] = useState(false);
+  const [assigning, setAssigning] = useState<string | null>(null);
+  const [rationale, setRationale] = useState("");
+  const [overrideReason, setOverrideReason] = useState("");
 
   const requests = useQuery({
     queryKey: ["care-requests", activeOrganizationId],
@@ -46,17 +50,16 @@ export function CareRequestsPage({ api }: { api: AwsApiClient }) {
     queryFn: () => api.get<{ staff: AlertStaff[] }>("/v1/care-alert-staff", { organizationId: activeOrganizationId }),
     enabled: !!activeOrganizationId,
   });
-  const candidates = useQuery({
-    queryKey: ["care-candidates", activeOrganizationId, selectedRequestId],
-    queryFn: () => api.get<{ caregivers: Candidate[] }>("/v1/care-requests/" + selectedRequestId + "/candidates", { organizationId: activeOrganizationId }),
-    enabled: !!activeOrganizationId && !!selectedRequestId,
-  });
   const offers = useQuery({
     queryKey: ["care-offers", activeOrganizationId, selectedRequestId],
     queryFn: () => api.get<{ offers: Offer[] }>("/v1/care-requests/" + selectedRequestId + "/offers", { organizationId: activeOrganizationId }),
     enabled: !!activeOrganizationId && !!selectedRequestId,
     refetchInterval: selectedRequestId ? 10_000 : false,
   });
+
+
+  const selected = (requests.data?.requests ?? []).find((r) => r.requestId === selectedRequestId) ?? null;
+  const selectedClientId = selected ? (clients.data?.clients ?? []).find((c) => c.clientCode === selected.clientCode)?.clientId ?? null : null;
 
   const createPortal = useMutation({
     mutationFn: () => api.post<{ portal: { portalId: string; token: string } }>("/v1/care-portals", { organizationId: activeOrganizationId, clientId }),
@@ -75,10 +78,16 @@ export function CareRequestsPage({ api }: { api: AwsApiClient }) {
     },
   });
   const assign = useMutation({
-    mutationFn: (offerId: string) => api.post("/v1/care-requests/" + selectedRequestId + "/assign", { organizationId: activeOrganizationId, offerId }),
+    mutationFn: ({ offerId, rationale, overrideReason }: { offerId: string; rationale: string; overrideReason: string }) =>
+      api.post("/v1/care-requests/" + selectedRequestId + "/assign", {
+        organizationId: activeOrganizationId, offerId,
+        selection: { rationale: rationale.trim() || null, overrideReason: overrideReason.trim() || null },
+      }),
     onSuccess: () => {
+      setAssigning(null);
       void qc.invalidateQueries({ queryKey: ["care-offers", activeOrganizationId, selectedRequestId] });
       void qc.invalidateQueries({ queryKey: ["care-requests", activeOrganizationId] });
+      void qc.invalidateQueries({ queryKey: ["matches"] });
     },
   });
   const saveAlerts = useMutation({
@@ -126,17 +135,37 @@ export function CareRequestsPage({ api }: { api: AwsApiClient }) {
         </tbody></table></div>
       </Card>
 
-      {selectedRequestId ? <div className="grid gap-6 lg:grid-cols-2">
-        <Card>
-          <h2 className="font-semibold text-slate-950">Available caregivers</h2>
-          <p className="mt-1 text-xs text-slate-500">Only caregivers whose saved availability covers the request and who have no schedule conflict are shown. Existing client/service matches appear first.</p>
-          <div className="mt-3 space-y-2">{(candidates.data?.caregivers ?? []).map((c) => <div key={c.caregiverRecordId} className="flex items-center justify-between rounded-lg border border-slate-100 p-3"><div><p className="text-sm font-medium">{c.caregiverName}</p><p className="text-xs text-slate-500">{c.currentClientMatch ? "Current client/service match · " : ""}{c.availabilitySource}</p></div><Button size="sm" loading={sendOffer.isPending} onClick={() => sendOffer.mutate(c.caregiverRecordId)}>Ask availability</Button></div>)}
-          {!candidates.isLoading && (candidates.data?.caregivers ?? []).length === 0 ? <p className="text-sm text-slate-500">No caregivers have confirmed availability for this time.</p> : null}</div>
-          {offerLink ? <div className="mt-3 rounded-lg bg-slate-50 p-3"><p className="text-xs text-slate-500">Secure fallback link. Caregivers with Ogevia access also see the opportunity in-app.</p><div className="mt-2 flex gap-2"><input readOnly value={offerLink} className="min-w-0 flex-1 rounded-lg border border-slate-200 px-2 py-1 text-xs" /><Button size="sm" variant="secondary" onClick={() => void navigator.clipboard.writeText(offerLink)}>Copy</Button></div></div> : null}
+      {selectedRequestId ? <div className="grid min-w-0 gap-6 lg:grid-cols-2">
+        <Card className="min-w-0 lg:col-span-2">
+          <h2 className="font-semibold text-slate-950">Matches</h2>
+          <p className="mt-1 text-xs text-slate-500">Ranked on the server from approved availability, documents, service approval, location and verified experience. Ask availability first; assigning is a separate step.</p>
+          <div className="mt-3">
+            {selected && selectedClientId ? (
+              <MatchPanel
+                api={api}
+                organizationId={activeOrganizationId ?? ""}
+                input={{ clientId: selectedClientId, serviceId: selected.serviceId, occurrences: [{ startsAt: selected.startsAt, endsAt: selected.endsAt }] }}
+                actionLabel="Ask availability"
+                actionBusy={sendOffer.isPending}
+                onAction={(c: MatchCandidate) => sendOffer.mutate(c.caregiverRecordId)}
+              />
+            ) : <p className="text-sm text-slate-500" role="status">Loading the client…</p>}
+          </div>
+          {sendOffer.isError ? <p role="alert" className="mt-2 text-sm text-red-700">{sendOffer.error instanceof Error ? sendOffer.error.message : "The request was not sent."}</p> : null}
+          {offerLink ? <div className="mt-3 rounded-lg bg-slate-50 p-3"><p className="text-xs text-slate-500">Secure fallback link. Caregivers with Ogevia access also see the opportunity in-app.</p><div className="mt-2 flex gap-2"><input readOnly value={offerLink} aria-label="Secure offer link" className="min-w-0 flex-1 rounded-lg border border-slate-200 px-2 py-1 text-xs" /><Button size="sm" variant="secondary" onClick={() => void navigator.clipboard.writeText(offerLink)}>Copy</Button></div></div> : null}
         </Card>
-        <Card>
+        <Card className="min-w-0 lg:col-span-2">
           <h2 className="font-semibold text-slate-950">Responses</h2>
-          <div className="mt-3 space-y-2">{(offers.data?.offers ?? []).map((o) => <div key={o.offerId} className="flex items-center justify-between rounded-lg border border-slate-100 p-3"><div><p className="text-sm font-medium">{o.caregiverName}</p><p className="text-xs text-slate-500">{o.status.replaceAll("_"," ")}</p></div>{o.status==="available" ? <Button size="sm" loading={assign.isPending} onClick={() => assign.mutate(o.offerId)}>Assign</Button> : null}</div>)}</div>
+          <div className="mt-3 space-y-2">{(offers.data?.offers ?? []).map((o) => <div key={o.offerId} className="rounded-lg border border-slate-100 p-3">
+            <div className="flex items-center justify-between"><div><p className="text-sm font-medium">{o.caregiverName}</p><p className="text-xs text-slate-500">{o.status.replaceAll("_"," ")}</p></div>{o.status==="available" ? <Button size="sm" className="min-h-[40px]" onClick={() => { setAssigning(assigning === o.offerId ? null : o.offerId); setRationale(""); setOverrideReason(""); assign.reset(); }}>{assigning === o.offerId ? "Cancel" : "Assign"}</Button> : null}</div>
+            {assigning === o.offerId ? <div className="mt-3 space-y-2 rounded-lg bg-slate-50 p-3">
+              <label className="block text-sm font-medium text-slate-700">Why this caregiver (optional)<input value={rationale} maxLength={500} onChange={(e) => setRationale(e.target.value)} className="mt-1 block w-full rounded-lg border border-slate-200 px-3 py-2 text-sm" /></label>
+              <label className="block text-sm font-medium text-slate-700">Override reason (only if the server says availability needs one)<input value={overrideReason} maxLength={500} onChange={(e) => setOverrideReason(e.target.value)} className="mt-1 block w-full rounded-lg border border-slate-200 px-3 py-2 text-sm" /></label>
+              {assign.isError ? <p role="alert" className="text-sm text-red-700">{assign.error instanceof Error ? assign.error.message : "The assignment was not saved."}</p> : null}
+              <Button loading={assign.isPending} onClick={() => assign.mutate({ offerId: o.offerId, rationale, overrideReason })}>Confirm assignment</Button>
+            </div> : null}
+          </div>)}
+          {!offers.isLoading && (offers.data?.offers ?? []).length === 0 ? <p className="text-sm text-slate-500">No responses yet.</p> : null}</div>
         </Card>
       </div> : null}
     </section>

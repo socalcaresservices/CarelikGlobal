@@ -106,13 +106,21 @@ function OpenFileButton({ versionId }: { versionId: string }) {
 function ReviewControls({ doc, selfReview, onDone }: { doc: StaffDocument; selfReview: boolean; onDone: () => void }) {
   const api = useAwsApi();
   const [reason, setReason] = useState("");
+  const [validFrom, setValidFrom] = useState("");
+  const [validThrough, setValidThrough] = useState("");
   const [state, setState] = useState<{ busy: boolean; error: string | null }>({ busy: false, error: null });
   const key = useRef(newIdempotencyKey());
+  const datesOk = !!validFrom && (!doc.requiresExpiry || !!validThrough) && (!validThrough || validThrough >= validFrom);
   async function decide(decision: "verified" | "rejected") {
     if (decision === "rejected" && !reason.trim()) return setState({ busy: false, error: "Enter why it is rejected, so the person knows what to fix." });
+    if (decision === "verified" && !datesOk) return setState({ busy: false, error: doc.requiresExpiry ? "Enter the dates on the document: valid from and valid through." : "Enter the date the document is valid from." });
     setState({ busy: true, error: null });
     try {
-      await api.post(`/v1/document-versions/${encodeURIComponent(doc.latestVersionId!)}/review`, { decision, reason: reason.trim() || null }, { idempotencyKey: key.current });
+      if (decision === "verified") {
+        await api.post(`/v1/documents/versions/${encodeURIComponent(doc.latestVersionId!)}/verify`, { validFrom, validThrough: validThrough || null, note: reason.trim() || null }, { idempotencyKey: key.current });
+      } else {
+        await api.post(`/v1/document-versions/${encodeURIComponent(doc.latestVersionId!)}/review`, { decision, reason: reason.trim() || null }, { idempotencyKey: key.current });
+      }
       key.current = newIdempotencyKey();
       setState({ busy: false, error: null });
       onDone();
@@ -122,10 +130,15 @@ function ReviewControls({ doc, selfReview, onDone }: { doc: StaffDocument; selfR
   }
   return (
     <div className="mt-3 space-y-2 rounded-lg bg-slate-50 p-3">
-      <p className="text-xs text-slate-600">Check the file and its dates. Verifying records your name and the time; it is an administrative check, not legal clearance.</p>
+      <p className="text-xs text-slate-600">Check the file, then enter the dates the document itself shows. Verifying records your name, the dates and the time; it is an administrative check, not legal clearance.</p>
       {selfReview ? <p className="text-xs font-semibold text-amber-900">You uploaded this version. Your review is recorded as an Administrator self-review.</p> : null}
+      <div className="grid gap-2 sm:grid-cols-2">
+        <label className="block text-sm font-medium text-slate-700">Valid from<input type="date" value={validFrom} onChange={(e) => setValidFrom(e.target.value)} className="mt-1 block w-full rounded-lg border border-slate-200 px-3 py-2 text-sm" /></label>
+        <label className="block text-sm font-medium text-slate-700">Valid through{doc.requiresExpiry ? "" : " (leave blank if it does not expire)"}<input type="date" value={validThrough} onChange={(e) => setValidThrough(e.target.value)} className="mt-1 block w-full rounded-lg border border-slate-200 px-3 py-2 text-sm" /></label>
+      </div>
+      {validFrom && validThrough && validThrough < validFrom ? <p role="alert" className="text-sm text-red-700">Valid through is before valid from.</p> : null}
       <label className="block text-sm font-medium text-slate-700">
-        Reason (required to reject)
+        Note (required to reject)
         <input value={reason} maxLength={1000} onChange={(e) => setReason(e.target.value)} className="mt-1 block w-full rounded-lg border border-slate-200 px-3 py-2 text-sm" />
       </label>
       {state.error ? <p role="alert" className="text-sm text-red-700">{state.error}</p> : null}
@@ -133,6 +146,36 @@ function ReviewControls({ doc, selfReview, onDone }: { doc: StaffDocument; selfR
         <Button type="button" disabled={state.busy} onClick={() => void decide("verified")}>Verify</Button>
         <Button type="button" variant="secondary" disabled={state.busy} onClick={() => void decide("rejected")}>Reject</Button>
       </div>
+    </div>
+  );
+}
+
+function RevokeControls({ doc, onDone }: { doc: StaffDocument; onDone: () => void }) {
+  const api = useAwsApi();
+  const [open, setOpen] = useState(false);
+  const [reason, setReason] = useState("");
+  const [state, setState] = useState<{ busy: boolean; error: string | null }>({ busy: false, error: null });
+  const key = useRef(newIdempotencyKey());
+  async function revoke() {
+    setState({ busy: true, error: null });
+    try {
+      await api.post(`/v1/documents/versions/${encodeURIComponent(doc.latestVersionId!)}/revoke`, { reason: reason.trim() }, { idempotencyKey: key.current });
+      key.current = newIdempotencyKey();
+      setOpen(false);
+      setReason("");
+      setState({ busy: false, error: null });
+      onDone();
+    } catch (cause) {
+      setState({ busy: false, error: message(cause, "The verification was not revoked.") });
+    }
+  }
+  if (!open) return <button type="button" onClick={() => setOpen(true)} className="mt-2 min-h-[40px] rounded-lg border border-slate-300 px-3 text-sm font-medium text-slate-800">Revoke verification</button>;
+  return (
+    <div className="mt-3 space-y-2 rounded-lg bg-slate-50 p-3">
+      <p className="text-xs text-slate-600">Revoking marks this version as no longer verified. Its history stays; the caregiver will show as missing this document until a new version is verified.</p>
+      <label className="block text-sm font-medium text-slate-700">Reason (required)<input value={reason} maxLength={500} onChange={(e) => setReason(e.target.value)} className="mt-1 block w-full rounded-lg border border-slate-200 px-3 py-2 text-sm" /></label>
+      {state.error ? <p role="alert" className="text-sm text-red-700">{state.error}</p> : null}
+      <div className="flex gap-2"><Button type="button" disabled={state.busy || reason.trim().length < 3} onClick={() => void revoke()}>Revoke</Button><Button type="button" variant="secondary" onClick={() => setOpen(false)}>Cancel</Button></div>
     </div>
   );
 }
@@ -176,6 +219,7 @@ function DocumentCard({ d, canManage, canUpload, canReviewOwn, refresh }: { d: S
         ) : null}
       </div>
       {mode === "upload" ? <UploadForm doc={d} onDone={() => { setMode(null); refresh(); }} /> : null}
+      {canManage && d.latestReviewStatus === "verified" && d.latestVersionId ? <RevokeControls doc={d} onDone={refresh} /> : null}
       {canManage && d.latestReviewStatus === "awaiting_review" ? (
         d.latestUploadedByMe && !canReviewOwn ? (
           <p className="mt-3 rounded-lg bg-slate-50 p-3 text-sm text-slate-700">You uploaded this version, so the Administrator or another manager must review it.</p>
@@ -293,9 +337,52 @@ function ReminderDaysForm({ types, onDone }: { types: DocumentType[]; onDone: ()
   );
 }
 
-function TypesForm({ types, onDone }: { types: DocumentType[]; onDone: () => void }) {
+function RequiredToggle({ type, required, canChange, onDone }: { type: DocumentType; required: boolean; canChange: boolean; onDone: () => void }) {
   const api = useAwsApi();
   const { activeOrganizationId } = useOrganization();
+  const [open, setOpen] = useState(false);
+  const [reason, setReason] = useState("");
+  const [state, setState] = useState<{ busy: boolean; error: string | null }>({ busy: false, error: null });
+  async function change() {
+    setState({ busy: true, error: null });
+    try {
+      await api.post(`/v1/document-types/${encodeURIComponent(type.documentTypeId)}/required`, { organizationId: activeOrganizationId, required: !required, reason: reason.trim() });
+      setOpen(false);
+      setReason("");
+      setState({ busy: false, error: null });
+      onDone();
+    } catch (cause) {
+      setState({ busy: false, error: message(cause, "The change was not saved.") });
+    }
+  }
+  return (
+    <li className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <span>{type.name}{type.requiresExpiry ? " · expiry required" : ""}</span>
+        <span className="flex items-center gap-2">
+          <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${required ? "bg-teal-50 text-teal-900 ring-1 ring-teal-200" : "bg-slate-100 text-slate-700"}`}>{required ? "Required for work" : "Not required"}</span>
+          {canChange ? <button type="button" className="min-h-[40px] text-sm underline" aria-expanded={open} onClick={() => setOpen((o) => !o)}>{required ? "Make optional" : "Make required"}</button> : null}
+        </span>
+      </div>
+      {open ? <div className="mt-2 space-y-2">
+        <p className="text-xs text-slate-600">{required ? "Caregivers will no longer be checked for this document." : "Every caregiver must have a verified, current copy to be scheduled. Caregivers already scheduled are flagged, not removed."}</p>
+        <label className="block text-sm font-medium text-slate-700">Reason (required)<input value={reason} maxLength={500} onChange={(e) => setReason(e.target.value)} className="mt-1 block w-full rounded-lg border border-slate-200 px-3 py-2 text-sm" /></label>
+        {state.error ? <p role="alert" className="text-sm text-red-700">{state.error}</p> : null}
+        <Button type="button" disabled={state.busy || reason.trim().length < 3} onClick={() => void change()}>{required ? "Make optional" : "Make required"}</Button>
+      </div> : null}
+    </li>
+  );
+}
+
+function TypesForm({ types, onDone }: { types: DocumentType[]; onDone: () => void }) {
+  const api = useAwsApi();
+  const { activeOrganizationId, hasPermission } = useOrganization();
+  const requiredQuery = useQuery({
+    queryKey: ["document-types-required", activeOrganizationId],
+    queryFn: async () => (await api.get<{ required: Array<{ documentTypeId: string; required: boolean }> }>("/v1/document-types/required", { organizationId: activeOrganizationId })).required,
+    enabled: !!activeOrganizationId && hasPermission("caregivers.manage"),
+  });
+  const requiredIds = new Set((requiredQuery.data ?? []).filter((r) => r.required).map((r) => r.documentTypeId));
   const [name, setName] = useState("");
   const [requiresExpiry, setRequiresExpiry] = useState(false);
   const [state, setState] = useState<{ busy: boolean; error: string | null }>({ busy: false, error: null });
@@ -316,14 +403,12 @@ function TypesForm({ types, onDone }: { types: DocumentType[]; onDone: () => voi
   }
   return (
     <div className="space-y-3">
-      <ul className="flex flex-wrap gap-2">
-        {types.map((t) => (
-          <li key={t.documentTypeId} className="rounded-full border border-slate-200 bg-white px-3 py-1 text-xs text-slate-700">
-            {t.name}{t.requiresExpiry ? " · expiry required" : ""}
-          </li>
-        ))}
+      <ul className="space-y-2">
+        {types.map((t) => <RequiredToggle key={t.documentTypeId} type={t} required={requiredIds.has(t.documentTypeId)} canChange={hasPermission("readiness.manage") && !requiredQuery.isLoading && !requiredQuery.isError} onDone={() => { void requiredQuery.refetch(); onDone(); }} />)}
         {types.length === 0 ? <li className="text-sm text-slate-500">No document types yet.</li> : null}
       </ul>
+      {requiredQuery.isError ? <p role="alert" className="text-sm text-red-700">Which types are required could not be loaded.</p> : null}
+      <p className="text-xs text-slate-500">No document is required until the Administrator marks it. Nothing is assumed.</p>
       <form onSubmit={(e) => { e.preventDefault(); void submit(); }} className="flex flex-wrap items-end gap-3">
         <label className="text-sm font-medium text-slate-700">
           New type
