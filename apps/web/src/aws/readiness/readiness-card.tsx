@@ -21,6 +21,7 @@ interface DocType { documentTypeId: string; name: string }
 interface SetupRow { requirement: "cpr" | "tb"; documentTypeId: string | null; documentTypeName: string | null; validityBasis: string | null; validityDays: number | null; complete: boolean; gap: string | null }
 
 const inputClass = "mt-1 block w-full rounded-md border border-slate-300 px-3 py-2 text-base";
+const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
 
 /** Choose which document type is the CPR / TB record and how long it stays valid. Ogevia ships no default period. */
 function RequiredDocumentsSetup() {
@@ -127,13 +128,10 @@ export function ReadinessCard() {
       <h2 className="text-base font-semibold text-slate-950">Caregiver readiness</h2>
 
       <section aria-label="Service checks" className="space-y-1">
-        <p className="text-sm font-medium text-slate-900">{sc.label}: {sc.state}</p>
-        {sc.state === "Off" ? (
-          <>
-            <p className="text-sm font-semibold text-amber-950">{sc.offHeadline}</p>
-            <p className="text-sm text-slate-800">{sc.offMessage}</p>
-          </>
-        ) : <p className="text-sm text-slate-800">A caregiver needs an approval for a service before being assigned to it.</p>}
+        <p className={`text-sm font-semibold ${sc.state === "Off" ? "text-amber-950" : "text-slate-900"}`}>{sc.state === "Off" ? sc.offHeadline : `${sc.label}: ${sc.state}`}</p>
+        {sc.state === "Off"
+          ? <p className="text-sm text-slate-800">{sc.offMessage}</p>
+          : <p className="text-sm text-slate-800">A caregiver needs an approval for a service before being assigned to it.</p>}
         <p className="text-xs text-slate-600">This switch never turns off CPR, TB, availability or any other check.</p>
         <p className="pt-1"><Link to="/care-team/services-review" className="inline-flex min-h-[44px] items-center text-sm font-medium text-[#0F6674] underline">{sc.action}</Link></p>
       </section>
@@ -154,11 +152,11 @@ export function ReadinessCard() {
       <section aria-label="Checks status" className="space-y-1">
         <p className="text-sm font-medium text-slate-900">{s.enforcementActive ? "Readiness checks are active" : "Readiness checks are not active yet. Nothing is blocked."}</p>
         <ul className="list-disc pl-5 text-sm text-slate-800">
-          <li>{s.caregivers.withDocumentGaps} of {s.caregivers.readyOrActive} caregivers do not have current CPR and TB.</li>
-          <li>{s.caregivers.availabilityNotProvided} have no availability on file.</li>
-          <li>{s.caregivers.servicePairsToReview} caregiver and service pairs have no approval yet.</li>
-          <li>{s.futureWork.scheduledShifts} future shifts are booked; {s.affectedShiftsCount} would not meet today's document or hours checks.</li>
-          <li>{s.futureWork.standingAssignmentsNeedingDocuments} standing assignments need documents.</li>
+          <li>{s.caregivers.withDocumentGaps} of {s.caregivers.readyOrActive} caregivers {s.caregivers.withDocumentGaps === 1 ? "does" : "do"} not have current CPR and TB.</li>
+          <li>{plural(s.caregivers.availabilityNotProvided, "caregiver has", "caregivers have")} no availability on file.</li>
+          <li>{plural(s.caregivers.servicePairsToReview, "caregiver and service pair has", "caregiver and service pairs have")} no approval yet.</li>
+          <li>{plural(s.futureWork.scheduledShifts, "future shift is", "future shifts are")} booked; {s.affectedShiftsCount} would not meet today's document or hours checks.</li>
+          <li>{plural(s.futureWork.standingAssignmentsNeedingDocuments, "standing assignment needs", "standing assignments need")} documents.</li>
         </ul>
       </section>
 

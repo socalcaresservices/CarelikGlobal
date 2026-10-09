@@ -89,6 +89,19 @@ describe("requests never change approved availability", () => {
     expect(row.is_temporary).toBe(true);
   });
 
+  it("refuses a request that changes nothing (the same hours, the same day), and an administrator edit that changes nothing", async () => {
+    const rec = await seedLegacy(w.caregiverA1, [{ weekday: 1, start: "08:00", end: "20:00" }]);
+    const from = await add(7);
+    await expectPgError(request(w.caregiverA1, "weekly", [mon("08:00", "20:00")], from, null, "Same hours again"), "OGV22", /already your approved hours/i);
+    await expectPgError(request(w.caregiverA1, "weekly", [mon("08:00", "20:00")], from, await add(30), "Same hours, temporarily"), "OGV22", /already your approved hours/i);
+    const monday = await add(((8 - (await dowOf(today))) % 7) + 7);
+    await expectPgError(request(w.caregiverA1, "date", [{ start_local: "08:00", end_local: "20:00" }], monday, null, "Same day hours"), "OGV22", /already your approved hours/i);
+    const direct = () => asActor(db, w.ownerA.sub, (c) => c.query("select ogevia_api.set_availability_direct($1,$2,'weekly',$3::jsonb,$4::date,null,'Phone call')", [w.orgA, rec, JSON.stringify([mon("08:00", "20:00")]), from]));
+    await expectPgError(direct(), "OGV22", /already the approved hours/i);
+    // A real change is still accepted, and then the old hours would be the change.
+    await request(w.caregiverA1, "weekly", [mon("09:00", "20:00")], from, null, "Start later");
+  });
+
   it("refuses a stale form and a second pending request for the same hours; an idempotent retry returns the same request", async () => {
     await seedLegacy(w.caregiverA1, [{ weekday: 1, start: "08:00", end: "20:00" }]);
     const from = await add(7);

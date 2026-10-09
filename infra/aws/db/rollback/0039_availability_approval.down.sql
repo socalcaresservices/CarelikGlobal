@@ -143,6 +143,7 @@ drop function ogevia_api.get_availability(uuid, uuid);
 drop function ogevia.availability_actor_record(uuid);
 drop function ogevia.availability_apply(uuid, uuid, text, boolean);
 drop function ogevia.availability_covered_future_shifts(uuid, uuid);
+drop function ogevia.availability_is_noop(uuid, uuid, text, jsonb, date);
 
 drop function ogevia.availability_status(uuid, uuid, timestamptz, timestamptz);
 drop function ogevia.availability_day(uuid, uuid, date);

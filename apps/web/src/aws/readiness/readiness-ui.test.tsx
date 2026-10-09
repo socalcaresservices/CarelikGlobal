@@ -86,6 +86,15 @@ describe("caregiver: Availability", () => {
     expect(posts(calls, "/v1/availability/requests")[0]!.body).toMatchObject({ kind: "date", windows: [], effectiveFrom: "2026-10-12", effectiveUntil: null });
   });
 
+  it("a request that changes nothing is explained by the server and the typed reason is kept", async () => {
+    renderAt("/availability", { role: "caregiver", failNextRequestWith: { status: 422, code: "validation_failed", message: "These are already your approved hours. Change something before sending the request." } });
+    fireEvent.click(await screen.findByRole("button", { name: "Request change" }));
+    fireEvent.change(screen.getByLabelText("Reason"), { target: { value: "Same as before" } });
+    fireEvent.click(screen.getByRole("button", { name: "Submit request" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent("These are already your approved hours. Change something before sending the request.");
+    expect(screen.getByLabelText("Reason")).toHaveValue("Same as before");
+  });
+
   it("keeps what was typed and shows the server's words when the request fails (a stale form)", async () => {
     renderAt("/availability", { role: "caregiver", failNextRequestWith: { status: 409, code: "conflict", message: "Your availability changed since you opened this form. Reload and try again." } });
     fireEvent.click(await screen.findByRole("button", { name: "Request change" }));
@@ -230,7 +239,7 @@ describe("Service checks and readiness on the Care Team page", () => {
     renderAt("/care-team", { role: "manager" });
     const card = await screen.findByRole("region", { name: "Service checks" }).catch(() => null);
     expect(card).not.toBeNull();
-    expect(screen.getByText("Service checks: Off", { selector: "p.font-semibold" })).toBeInTheDocument();
+    expect(screen.getAllByText("Service checks: Off")).toHaveLength(1); // said once, not repeated
     expect(screen.getByText("Caregivers can be assigned without service approval.")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Review services" })).toHaveAttribute("href", "/care-team/services-review");
     expect(screen.getByText(/CPR: document type not chosen \(setup incomplete\)/)).toBeInTheDocument();

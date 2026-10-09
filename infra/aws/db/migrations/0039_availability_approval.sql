@@ -390,6 +390,25 @@ begin
 end;
 $$;
 
+-- True when the proposed hours are exactly the hours already approved for that date (weekly) or day (specific date),
+-- so a request or edit would change nothing.
+create function ogevia.availability_is_noop(p_organization_id uuid, p_caregiver_record_id uuid, p_kind text, p_windows jsonb, p_from date)
+returns boolean
+language plpgsql
+stable
+set search_path = ogevia, pg_temp
+as $$
+declare v_day jsonb;
+begin
+  if p_kind = 'weekly' then
+    return ogevia.availability_pattern(p_organization_id, p_caregiver_record_id, p_from) = p_windows;
+  end if;
+  v_day := ogevia.availability_day(p_organization_id, p_caregiver_record_id, p_from);
+  return (jsonb_array_length(p_windows) = 0 and (v_day ->> 'unavailable')::boolean and (v_day ->> 'source') = 'date')
+      or ((v_day -> 'windows') = p_windows and jsonb_array_length(p_windows) > 0);
+end;
+$$;
+
 -- Future scheduled shifts of one caregiver that the CURRENT approved hours fully cover.
 create function ogevia.availability_covered_future_shifts(p_organization_id uuid, p_caregiver_record_id uuid)
 returns uuid[]
@@ -617,6 +636,9 @@ begin
     raise exception 'The end date cannot be before the start date' using errcode = 'OGV22';
   end if;
   v_windows := ogevia.availability_check_windows(p_kind, p_windows);
+  if ogevia.availability_is_noop(p_organization_id, v_rec, p_kind, v_windows, p_effective_from) then
+    raise exception 'These are already your approved hours. Change something before sending the request.' using errcode = 'OGV22';
+  end if;
 
   -- Serialise with approvals so a stale form is refused instead of silently winning.
   insert into ogevia.caregiver_availability_state (organization_id, caregiver_record_id)
@@ -823,6 +845,9 @@ begin
     raise exception 'The end date cannot be before the start date' using errcode = 'OGV22';
   end if;
   v_windows := ogevia.availability_check_windows(p_kind, p_windows);
+  if ogevia.availability_is_noop(p_organization_id, p_caregiver_record_id, p_kind, v_windows, p_effective_from) then
+    raise exception 'These are already the approved hours. Change something before saving.' using errcode = 'OGV22';
+  end if;
   insert into ogevia.caregiver_availability_state (organization_id, caregiver_record_id)
   values (p_organization_id, p_caregiver_record_id) on conflict do nothing;
   select s.version into v_state from ogevia.caregiver_availability_state s
@@ -920,6 +945,7 @@ revoke all on function ogevia.availability_pattern(uuid, uuid, date) from public
 revoke all on function ogevia.availability_day(uuid, uuid, date) from public;
 revoke all on function ogevia.availability_check_windows(text, jsonb) from public;
 revoke all on function ogevia.availability_covered_future_shifts(uuid, uuid) from public;
+revoke all on function ogevia.availability_is_noop(uuid, uuid, text, jsonb, date) from public;
 revoke all on function ogevia.availability_apply(uuid, uuid, text, boolean) from public;
 revoke all on function ogevia.availability_actor_record(uuid) from public;
 revoke all on function ogevia_api.get_availability(uuid, uuid) from public;
