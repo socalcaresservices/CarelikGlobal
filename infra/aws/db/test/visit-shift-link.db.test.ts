@@ -14,8 +14,7 @@ import {
   visitRow,
   type Actor,
   type TestDb,
-  type World,
-} from "./harness.js";
+  type World, retireOldShifts } from "./harness.js";
 
 let db: TestDb;
 let w: World;
@@ -34,6 +33,7 @@ async function recordOf(a: Actor, org: string) {
 /** A scheduled shift for `a` starting `offsetMin` from now (test setup). */
 async function shift(a: Actor, org: string, f: Fixture, offsetMin: number, minutes: number) {
   const record = await recordOf(a, org);
+  await retireOldShifts(db, a.userId);
   return (
     await db.admin.query<{ id: string }>(
       `insert into ogevia.shifts (organization_id, client_id, service_id, caregiver_user_id, caregiver_record_id, starts_at, ends_at)

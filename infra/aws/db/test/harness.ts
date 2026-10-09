@@ -121,6 +121,26 @@ export async function ageVisit(
   }
 }
 
+/**
+ * TEST-ONLY: move a caregiver's earlier fixture shifts 30 days into the past, so a later fixture can
+ * place its own shift "around now" without overlapping them. Real bookings cannot overlap (the
+ * readiness gate refuses them); fixtures that insert directly must not rely on overlapping. Uses
+ * session_replication_role=replica like ageVisit; production code has no such path.
+ */
+export async function retireOldShifts(db: TestDb, caregiverUserId: string): Promise<void> {
+  const client = await db.admin.connect();
+  try {
+    await client.query("set session_replication_role = replica");
+    await client.query(
+      "update ogevia.shifts set starts_at = starts_at - interval '30 days', ends_at = ends_at - interval '30 days' where caregiver_user_id = $1 and starts_at > now() - interval '10 days'",
+      [caregiverUserId],
+    );
+  } finally {
+    await client.query("reset session_replication_role");
+    client.release();
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Synthetic world
 // ---------------------------------------------------------------------------

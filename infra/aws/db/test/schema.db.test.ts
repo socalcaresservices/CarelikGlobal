@@ -68,6 +68,7 @@ describe("SCHEMA: migration chain", () => {
       "0036",
       "0037",
       "0038",
+      "0039",
     ]);
   });
 
@@ -103,6 +104,7 @@ describe("SCHEMA: migration chain", () => {
       )
     ).map((r) => r.t);
     expect(tables).toEqual([
+      "agency_readiness_settings",
       "app_users",
       "audit_events",
       "authorization_reservations",
@@ -118,6 +120,7 @@ describe("SCHEMA: migration chain", () => {
       "caregiver_availability_windows",
       "caregiver_invitations",
       "caregiver_records",
+      "caregiver_service_approvals",
       "caregiver_unavailable_dates",
       "client_authorizations",
       "client_care_portals",
@@ -126,6 +129,7 @@ describe("SCHEMA: migration chain", () => {
       "clients",
       "continuity_exports",
       "document_types",
+      "document_version_revocations",
       "document_versions",
       "idempotency_records",
       "organization_memberships",
