@@ -93,6 +93,8 @@ describe("SCHEMA: migration chain", () => {
       "client_types",
       "clients",
       "continuity_exports",
+      "document_requirement_policies",
+      "document_requirement_policy_history",
       "document_types",
       "document_versions",
       "idempotency_records",
