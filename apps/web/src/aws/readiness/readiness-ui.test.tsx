@@ -283,7 +283,8 @@ describe("Service checks and readiness on the Care Team page", () => {
     expect(screen.getByRole("link", { name: "Review services" })).toHaveAttribute("href", "/care-team/services-review");
     expect(screen.getByText(/CPR: document type not chosen \(setup incomplete\)/)).toBeInTheDocument();
     expect(screen.getByText(/TB: validity rule not set \(setup incomplete\)/)).toBeInTheDocument();
-    expect(screen.getByText("Readiness checks are not active yet. Nothing is blocked.")).toBeInTheDocument();
+    expect(screen.getByText("Report-only. Readiness checks are NOT active.")).toBeInTheDocument();
+    expect(screen.getByText(/Current verified CPR and TB are not being required yet\./)).toBeInTheDocument();
     // A manager cannot change settings.
     expect(screen.queryByRole("button", { name: /Activate readiness checks|Turn Service checks/ })).toBeNull();
   });
@@ -357,6 +358,15 @@ describe("Assignment checks on the schedule", () => {
     expect(screen.getByRole("button", { name: "Schedule shift" })).toBeEnabled();
   });
 
+  it("report-only with missing CPR says it does NOT meet the CPR/TB requirement and is never 'Ready to assign'", async () => {
+    const checks = okChecks().map((c) => (c.check === "cpr" ? { ...c, status: "blocked", code: "missing", message: "CPR missing.", enforced: false, blocking: false } : c));
+    renderAt("/schedule", { role: "manager", evaluation: { ready: true, wouldBlockAfterActivation: true, checks } });
+    await chooseAll();
+    const panel = await screen.findByRole("region", { name: "Assignment checks" });
+    expect(within(panel).getByText(/does NOT meet the requirement for current, verified CPR and TB/)).toBeInTheDocument();
+    expect(within(panel).queryByText("Ready to assign")).toBeNull();
+  });
+
   it("an administrator can override the availability check only, with a reason", async () => {
     const checks = okChecks().map((c) => (c.check === "availability" ? { ...c, status: "blocked", code: "availability_not_provided", message: "Availability not provided.", blocking: true } : c));
     const { calls } = renderAt("/schedule", { role: "organization_owner", evaluation: { ready: false, checks } });
@@ -392,8 +402,86 @@ describe("Matches on care requests", () => {
     expect(within(details).getByText(/Availability not provided\./)).toBeInTheDocument();
     expect(within(details).queryByRole("button", { name: "Send offer" })).toBeNull();
     expect(screen.getAllByRole("button", { name: "Send offer" })).toHaveLength(1);
+    // Excluded only because approved availability is missing: an administrator may still offer manually; the gate decides at assignment.
+    expect(within(details).getByText(/Excluded from Matches, but an administrator may still offer this work\./)).toBeInTheDocument();
+    expect(within(details).getByRole("button", { name: "Offer manually" })).toBeInTheDocument();
     fireEvent.click(sendOffer);
     await waitFor(() => expect(posts(calls, `/v1/care-requests/${REQ}/offers`)).toHaveLength(1));
     expect(posts(calls, `/v1/care-requests/${REQ}/offers`)[0]!.body).toMatchObject({ caregiverRecordId: CG });
+  });
+});
+
+describe("review follow-ups: report-only wording and My experience", () => {
+  it("caregiver profile: My experience reports tags as a note until the agency confirms; no location data is read", async () => {
+    const { calls } = renderAt("/profile", { role: "caregiver" });
+    const card = await screen.findByRole("region", { name: "My experience" });
+    expect(within(card).getByText(/An administrator confirms it; until then it is only a note\./)).toBeInTheDocument();
+    fireEvent.click(await within(card).findByRole("checkbox", { name: /ABA experience/ }));
+    fireEvent.click(within(card).getByRole("button", { name: "Save my experience" }));
+    await waitFor(() => expect(posts(calls, "/v1/experience/me")).toHaveLength(1));
+    expect(posts(calls, "/v1/experience/me")[0]!.body.tagIds).toEqual([SVC]);
+    expect(calls.some((c) => c.path.endsWith("/zip"))).toBe(false);
+  });
+});
+
+describe("My experience cannot erase what was reported earlier", () => {
+  const existing = [{ tagId: SVC, label: "ABA experience", status: "reported" }];
+  const save = () => screen.getByRole("button", { name: /Save my experience|Saving/ });
+
+  it("existing experience fails to load: the form is disabled, an empty submission sends nothing, and after a retry the earlier answers are kept", async () => {
+    const { calls } = renderAt("/profile", { role: "caregiver", myExperience: existing, failFirst: { "GET /v1/experience/me": 1 } });
+    const card = await screen.findByRole("region", { name: "My experience" });
+    expect(await within(card).findByRole("alert")).toHaveTextContent(/Nothing can be saved until it loads/);
+    expect(save()).toBeDisabled();
+    expect(within(card).getByRole("checkbox", { name: /ABA experience/ })).toBeDisabled();
+    fireEvent.submit(within(card).getByRole("form", { name: "Report my experience" })); // even a forced submit is ignored
+    expect(posts(calls, "/v1/experience/me")).toHaveLength(0);
+    fireEvent.click(within(card).getByRole("button", { name: "Try again" }));
+    await waitFor(() => expect(save()).toBeEnabled());
+    expect(within(card).getByRole("checkbox", { name: /ABA experience/ })).toBeChecked(); // the existing report is there
+    fireEvent.click(save());
+    await waitFor(() => expect(posts(calls, "/v1/experience/me")).toHaveLength(1));
+    expect(posts(calls, "/v1/experience/me")[0]!.body.tagIds).toEqual([SVC]); // not []
+  });
+
+  it("the agency's tags fail to load: nothing can be saved until a retry works", async () => {
+    const { calls } = renderAt("/profile", { role: "caregiver", myExperience: existing, failFirst: { "GET /v1/experience-tags": 1 } });
+    const card = await screen.findByRole("region", { name: "My experience" });
+    expect(await within(card).findByRole("alert")).toHaveTextContent(/Nothing can be saved until it loads/);
+    expect(within(card).queryByRole("button", { name: "Save my experience" })).toBeNull();
+    fireEvent.click(within(card).getByRole("button", { name: "Try again" }));
+    await waitFor(() => expect(save()).toBeEnabled());
+    expect(posts(calls, "/v1/experience/me")).toHaveLength(0);
+  });
+
+  it("slow loading: submission stays disabled while either request is pending, then becomes available with the existing answers", async () => {
+    let release!: () => void;
+    const hold = new Promise<void>((r) => { release = r; });
+    const { calls } = renderAt("/profile", { role: "caregiver", myExperience: existing, hold: { "GET /v1/experience/me": hold } });
+    const card = await screen.findByRole("region", { name: "My experience" });
+    const form = await within(card).findByRole("form", { name: "Report my experience" }); // tags have arrived, experience has not
+    expect(within(card).getByRole("status")).toHaveTextContent("Loading…");
+    expect(save()).toBeDisabled();
+    fireEvent.submit(form);
+    expect(posts(calls, "/v1/experience/me")).toHaveLength(0);
+    release();
+    await waitFor(() => expect(save()).toBeEnabled());
+    expect(within(card).getByRole("checkbox", { name: /ABA experience/ })).toBeChecked();
+  });
+
+  it("edits survive a failed save and a retry (nothing is reset by the error)", async () => {
+    const { calls } = renderAt("/profile", { role: "caregiver", myExperience: existing, failFirst: { "POST /v1/experience/me": 1 } });
+    const card = await screen.findByRole("region", { name: "My experience" });
+    await waitFor(() => expect(save()).toBeEnabled());
+    const box = within(card).getByRole("checkbox", { name: /ABA experience/ });
+    fireEvent.click(box); // the caregiver deliberately removes it
+    expect(box).not.toBeChecked();
+    fireEvent.click(save());
+    expect(await within(card).findByRole("alert")).toHaveTextContent(/Your changes are kept/);
+    expect(within(card).getByRole("checkbox", { name: /ABA experience/ })).not.toBeChecked(); // still the caregiver's edit
+    fireEvent.click(save());
+    await waitFor(() => expect(posts(calls, "/v1/experience/me")).toHaveLength(2));
+    expect(posts(calls, "/v1/experience/me")[1]!.body.tagIds).toEqual([]); // an intentional, loaded-and-edited removal is allowed
+    expect(posts(calls, "/v1/experience/me")[0]!.key).not.toBeNull();
   });
 });

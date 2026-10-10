@@ -296,6 +296,7 @@ describe("new visit starts and standing assignments", () => {
     const start = () => call(w.caregiverA1, "select ogevia_api.start_ad_hoc_service_visit($1,$2,$3,'{}',null,null) as id", [w.orgA, f2.client, f2.service]).then((r) => r[0].id as string);
     await expectPgError(start(), "OGR30", /CPR missing\.\s+TB missing\./);
     await makeDocsCurrent(recA1, w.caregiverA1);
+    await baseline(w.caregiverA1, allWeek()); // 0046: a new visit also needs approved availability once readiness is active
     const visit = await start();
     expect(visit).toBeTruthy();
     // CPR then stops being current (the agency tightens its rule): the visit already in progress is left alone,

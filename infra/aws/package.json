@@ -16,6 +16,7 @@
     "test:db": "vitest run --config vitest.db.config.ts",
     "db:migrate": "tsx db/scripts/migrate.ts",
     "db:verify": "tsx db/scripts/verify.ts",
+    "db:rollback-readiness": "tsx db/scripts/rollback.ts",
     "user-migration:plan": "tsx scripts/user-migration-plan.ts"
   },
   "dependencies": {

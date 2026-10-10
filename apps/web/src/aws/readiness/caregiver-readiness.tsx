@@ -8,6 +8,7 @@ import { AvailabilityReview } from "./availability-review";
 import { CaregiverDocuments } from "./documents-readiness";
 import { CaregiverServices } from "./service-approvals";
 import { CaregiverExperience, MatchingLocation } from "./matching-inputs";
+import { MyExperience } from "./my-experience";
 
 /**
  * The caregiver record's readiness sections, each kept separate: Availability, Approved services, Documents.
@@ -54,6 +55,7 @@ export function MyReadiness() {
     <>
       {hasPermission("caregiver_services.read_own") ? <CaregiverServices own /> : null}
       {hasPermission("documents.manage_own") ? <CaregiverDocuments /> : null}
+      <MyExperience />
     </>
   );
 }
