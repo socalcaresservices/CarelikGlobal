@@ -143,19 +143,20 @@ export function AwsShell({ children }: PropsWithChildren) {
   // Same destinations and the same permission conditions as the horizontal menu had.
   // Reports and Client monthly calendar are two views of the existing reports route.
   const links: NavLinkDef[] = [
-    { to: "/", label: "Home", group: "TODAY", icon: LayoutDashboard, show: !isCaregiver },
-    { to: "/service-verification", label: "Verify visit", group: "TODAY", icon: PenLine, show: isCaregiver || hasPermission("visits.manage") },
-    { to: "/my-shifts", label: "My shifts", group: "TODAY", icon: CalendarClock, show: isCaregiver },
-    { to: "/availability", label: "Availability", group: "TODAY", icon: Clock, show: isCaregiver },
-    { to: "/schedule", label: "Schedule", group: "VISITS", icon: CalendarDays, show: hasPermission("shifts.manage") || (!isCaregiver && hasPermission("visits.manage")) },
-    { to: "/care-requests", label: "Care requests", group: "VISITS", icon: HandHeart, show: hasPermission("care_requests.read") },
+    { to: "/", label: "Home", group: "HOME", icon: LayoutDashboard, show: !isCaregiver },
+    { to: "/care-team", label: "Care Team", group: "CAREGIVERS", icon: HeartHandshake, show: hasPermission("caregivers.manage") || hasPermission("visits.manage") },
+    { to: "/schedule", label: "Schedule", group: "CAREGIVERS", icon: CalendarDays, show: hasPermission("shifts.manage") || (!isCaregiver && hasPermission("visits.manage")) },
+    { to: "/service-verification", label: "Verify visit", group: "CAREGIVERS", icon: PenLine, show: isCaregiver || hasPermission("visits.manage") },
+    { to: "/my-shifts", label: "My shifts", group: "CAREGIVERS", icon: CalendarClock, show: isCaregiver },
+    { to: "/availability", label: "Availability", group: "CAREGIVERS", icon: Clock, show: isCaregiver },
+    // Authorizations are a section of each client's page (Clients > a client > Authorizations); there is no separate page.
+    { to: "/clients", label: "Clients", group: "CLIENTS", icon: Users, show: hasPermission("clients.names.read") },
+    { to: "/care-requests", label: "Care requests", group: "CLIENTS", icon: HandHeart, show: hasPermission("care_requests.read") },
+    { to: REPORTS_PATH, search: "?view=calendar", label: "Client monthly calendar", group: "CLIENTS", icon: CalendarHeart, show: canReadVisits, matchView: isCalendarView },
     { to: REPORTS_PATH, label: "Visit records", group: "VISITS", icon: FileText, show: canReadVisits, matchView: isVisitListView },
-    { to: REPORTS_PATH, search: "?view=overview", label: "Reports", group: "VISITS", icon: ChartNoAxesColumn, show: canReadVisits, matchView: isReportView },
-    { to: REPORTS_PATH, search: "?view=calendar", label: "Client monthly calendar", group: "VISITS", icon: CalendarHeart, show: canReadVisits, matchView: isCalendarView },
     { to: "/billing-review", label: "Billing review", group: "BILLING", icon: Receipt, show: hasPermission("billing.visits.read") },
-    { to: "/clients", label: "Clients", group: "PEOPLE", icon: Users, show: hasPermission("clients.names.read") },
-    { to: "/care-team", label: "Care Team", group: "PEOPLE", icon: HeartHandshake, show: hasPermission("caregivers.manage") || hasPermission("visits.manage") },
-    { to: "/documents", label: hasPermission("documents.read") ? "Documents" : "My documents", group: "PEOPLE", icon: FolderOpen, show: hasPermission("documents.read") || hasPermission("documents.manage_own") },
+    { to: REPORTS_PATH, search: "?view=overview", label: "Reports", group: "REPORTS", icon: ChartNoAxesColumn, show: canReadVisits, matchView: isReportView },
+    { to: "/documents", label: hasPermission("documents.read") ? "Documents" : "My documents", group: "DOCUMENTS", icon: FolderOpen, show: hasPermission("documents.read") || hasPermission("documents.manage_own") },
     { to: "/services", label: "Services", group: "SETUP", icon: Stethoscope, show: !isCaregiver && hasPermission("authorizations.read") },
     { to: "/continuity", label: "Continuity pack", group: "SETUP", icon: LifeBuoy, show: !isCaregiver && hasPermission("continuity.export") },
     { to: "/outage-visits", label: "Outage records", group: "SETUP", icon: FileArchive, show: !isCaregiver && hasPermission("visits.manage") },
@@ -197,9 +198,10 @@ export function AwsShell({ children }: PropsWithChildren) {
 
   const itemClass = (active: boolean) =>
     cn(
-      "flex min-h-[40px] items-center gap-3 rounded-lg px-3 text-sm font-medium focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-og-link",
+      // Sidebar "Option B": 14px/500 links, 40px rows (44px for coarse pointers), 18px icons with an 8px gap, no accent bar.
+      "flex min-h-[40px] items-center gap-2 rounded-md px-3 py-1.5 text-[14px] leading-5 [@media(pointer:coarse)]:min-h-[44px] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#0F6674]",
       collapsed && "justify-center px-0",
-      active ? "bg-og-active font-semibold text-og-active-ink" : "text-og-ink hover:bg-white/70",
+      active ? "bg-[#E8F5F4] font-semibold text-[#0F6674]" : "font-medium text-[#243244] hover:bg-[#F0F7F7]",
     );
 
   return (
@@ -218,7 +220,7 @@ export function AwsShell({ children }: PropsWithChildren) {
         aria-label="Sidebar"
         onKeyDown={trapFocus}
         className={cn(
-          "fixed inset-y-0 left-0 z-50 flex-col border-r border-og-line bg-og-side print:hidden",
+          "fixed inset-y-0 left-0 z-50 flex-col border-r border-[#E2E8EC] bg-[#FAFBFC] print:hidden",
           sidebarHidden ? "hidden" : "flex",
           isMobile ? "w-[min(88vw,20rem)] shadow-2xl" : collapsed ? "w-[76px]" : "w-64",
         )}
@@ -230,7 +232,7 @@ export function AwsShell({ children }: PropsWithChildren) {
             <span className={cn("truncate text-lg font-bold tracking-tight text-og-ink", collapsed && "sr-only")}>Ogevia</span>
           </div>
           {isMobile ? (
-            <button ref={closeButtonRef} type="button" aria-label="Close menu" onClick={closeDrawer} className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg text-og-ink hover:bg-white/70 focus-visible:outline focus-visible:outline-2 focus-visible:outline-og-link">
+            <button ref={closeButtonRef} type="button" aria-label="Close menu" onClick={closeDrawer} className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg text-og-ink hover:bg-[#F0F7F7] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#0F6674]">
               <X className="h-5 w-5" aria-hidden="true" />
             </button>
           ) : (
@@ -247,7 +249,7 @@ export function AwsShell({ children }: PropsWithChildren) {
               onFocus={(e) => showTip("Expand sidebar", e.currentTarget)}
               onMouseLeave={() => setTip(null)}
               onBlur={() => setTip(null)}
-              className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg text-og-ink hover:bg-white/70 focus-visible:outline focus-visible:outline-2 focus-visible:outline-og-link"
+              className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg text-og-ink hover:bg-[#F0F7F7] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#0F6674]"
             >
               {collapsed ? <PanelLeftOpen className="h-5 w-5" aria-hidden="true" /> : <PanelLeftClose className="h-5 w-5" aria-hidden="true" />}
             </button>
@@ -270,11 +272,10 @@ export function AwsShell({ children }: PropsWithChildren) {
 
         <nav id="aws-main-nav" aria-label="Main" className="flex-1 overflow-y-auto px-3 pb-3">
           {groups.map(({ group, links: items }) => (
-            <div key={group} className="mt-3 first:mt-1">
-              {collapsed ? (
-                <div aria-hidden="true" className="mx-3 mb-1 border-t border-og-line" />
-              ) : (
-                <p className="px-3 pb-1 text-[11px] font-bold uppercase tracking-wider text-og-sub">{group}</p>
+            <div key={group} className={cn("first:mt-1", collapsed ? "mt-2" : "mt-5")}>
+              {/* Headings and their dividers are hidden when collapsed; the links keep their accessible names. */}
+              {group === "HOME" || collapsed ? null : (
+                <p className="mx-3 mb-2 border-b border-[#DCE5E9] pb-[10px] text-[12px] font-bold leading-[18px] tracking-[0.06em] text-[#334155]" data-testid="nav-group-heading">{group}</p>
               )}
               <ul className="space-y-0.5">
                 {items.map((l) => {
@@ -296,7 +297,7 @@ export function AwsShell({ children }: PropsWithChildren) {
                         className={itemClass(active)}
                       >
                         <Icon className="h-[18px] w-[18px] shrink-0" aria-hidden="true" />
-                        <span className={cn(collapsed && "sr-only")}>{l.label}</span>
+                        <span className={cn("min-w-0 break-words", collapsed && "sr-only")}>{l.label}</span>
                       </Link>
                     </li>
                   );
@@ -306,7 +307,7 @@ export function AwsShell({ children }: PropsWithChildren) {
           ))}
         </nav>
 
-        <div className="border-t border-og-line p-3">
+        <div className="border-t border-[#E2E8EC] p-3">
           <div className={cn("flex items-start gap-2.5", collapsed && "justify-center")}>
             <span aria-hidden="true" className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-og-active text-xs font-bold text-og-active-ink">{displayName ? initialsOf(displayName) : <UserCircle className="h-5 w-5" />}</span>
             <div className={cn("min-w-0 flex-1", collapsed && "sr-only")}>

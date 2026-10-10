@@ -23,6 +23,8 @@ const OGEVIA_SQLSTATES: Record<string, { status: number; code: string }> = {
   OGN04: { status: 404, code: "not_found" },
   OGC09: { status: 409, code: "conflict" },
   OGV22: { status: 422, code: "validation_failed" },
+  // 0042: the commit-time gate refused because a required check failed; the message lists exactly which.
+  OGR30: { status: 422, code: "not_ready" },
   OGI09: { status: 409, code: "idempotency_key_reused" },
 };
 

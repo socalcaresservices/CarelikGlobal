@@ -57,7 +57,20 @@ export const permissionSchema = z.enum([
   "billing.rounding.manage",
   "care_requests.read",
   "care_requests.manage",
-  "availability.manage_own"
+  "availability.manage_own",
+  // Caregiver-readiness release (infra/aws/db migrations 0039-0043). The database is the authority.
+  "availability.read",
+  "availability.review",
+  "availability.override",
+  "caregiver_services.read",
+  "caregiver_services.read_own",
+  "caregiver_services.approve",
+  "documents.requirements.manage",
+  "readiness.read",
+  "readiness.manage",
+  "matching.read",
+  "matching.manage",
+  "experience.report_own"
 ]);
 
 export type Permission = z.infer<typeof permissionSchema>;

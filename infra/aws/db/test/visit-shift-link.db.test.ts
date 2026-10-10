@@ -167,6 +167,8 @@ describe("0013 visit <-> scheduled shift link", () => {
     expect((await visitRow(db, mine)).scheduled_shift_id).toBeNull();
     await closeVisit(w.caregiverA3, w.orgA, mine);
     expect(await shiftStatus(othersShift)).toBe("scheduled");
+    // Retire unrelated synthetic work before the next test uses this worker.
+    await db.admin.query("update ogevia.shifts set status='cancelled' where id=$1", [othersShift]);
   });
 
   it("signing a linked visit releases the shift's reservation, so the cap counts the time once", async () => {

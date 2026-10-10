@@ -519,3 +519,40 @@ export async function freshClient(
   ).rows[0]!.id;
   return { client, service, auth };
 }
+
+/**
+ * Test setup for the hours a caregiver had entered before availability needed approval (0039): the
+ * baseline layer. Replaces any earlier rows for that caregiver, as the withdrawn direct edit did.
+ * New behaviour is tested through request_availability_change / review_availability_request.
+ */
+export async function setBaselineAvailability(
+  db: TestDb,
+  orgId: string,
+  actor: Actor,
+  windows: { weekday?: number | null; specific_date?: string | null; start_local: string; end_local: string }[],
+  unavailableDates: string[] = [],
+): Promise<string> {
+  const rec = (
+    await db.admin.query<{ id: string }>(
+      "select id from ogevia.caregiver_records where organization_id = $1 and linked_user_id = $2",
+      [orgId, actor.userId],
+    )
+  ).rows[0]!.id;
+  await db.admin.query("delete from ogevia.caregiver_availability_windows where caregiver_record_id = $1", [rec]);
+  await db.admin.query("delete from ogevia.caregiver_unavailable_dates where caregiver_record_id = $1", [rec]);
+  await db.admin.query("delete from ogevia.availability_requests where caregiver_record_id = $1", [rec]);
+  await db.admin.query("delete from ogevia.caregiver_availability_state where caregiver_record_id = $1", [rec]);
+  for (const x of windows) {
+    await db.admin.query(
+      "insert into ogevia.caregiver_availability_windows(organization_id, caregiver_record_id, weekday, specific_date, start_local, end_local) values ($1,$2,$3,$4,$5,$6)",
+      [orgId, rec, x.weekday ?? null, x.specific_date ?? null, x.start_local, x.end_local],
+    );
+  }
+  for (const d of unavailableDates) {
+    await db.admin.query(
+      "insert into ogevia.caregiver_unavailable_dates(organization_id, caregiver_record_id, unavailable_date) values ($1,$2,$3)",
+      [orgId, rec, d],
+    );
+  }
+  return rec;
+}

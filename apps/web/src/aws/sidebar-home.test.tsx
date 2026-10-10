@@ -88,11 +88,11 @@ const hrefs = (nav: HTMLElement) => Object.fromEntries(within(nav).getAllByRole(
 
 describe("navigation model", () => {
   const icon = (() => null) as never;
-  const link = (over: Partial<NavLinkDef>): NavLinkDef => ({ to: "/x", label: "X", group: "TODAY", show: true, icon, ...over });
+  const link = (over: Partial<NavLinkDef>): NavLinkDef => ({ to: "/x", label: "X", group: "HOME", show: true, icon, ...over });
 
   it("keeps the group order and drops groups with nothing visible", () => {
-    const groups = visibleGroups([link({ label: "A", group: "SETUP" }), link({ label: "B", group: "TODAY" }), link({ label: "C", group: "BILLING", show: false })]);
-    expect(groups.map((g) => g.group)).toEqual(["TODAY", "SETUP"]);
+    const groups = visibleGroups([link({ label: "A", group: "SETUP" }), link({ label: "B", group: "HOME" }), link({ label: "C", group: "BILLING", show: false })]);
+    expect(groups.map((g) => g.group)).toEqual(["HOME", "SETUP"]);
   });
 
   it("one current link per address: Visit records, Reports and Client monthly calendar share a route but not a view", () => {
@@ -113,7 +113,15 @@ describe("sidebar: expanded", () => {
   it("manager: grouped links, every earlier destination kept, Reports and Client monthly calendar added on the existing reports route", async () => {
     renderAt("/", "manager");
     const nav = await screen.findByRole("navigation", { name: "Main" });
-    expect(within(nav).getAllByText(/^(TODAY|VISITS|BILLING|PEOPLE|SETUP)$/).map((e) => e.textContent)).toEqual(["TODAY", "VISITS", "BILLING", "PEOPLE", "SETUP"]);
+    expect(within(nav).getAllByText(/^(HOME|CAREGIVERS|CLIENTS|VISITS|BILLING|REPORTS|DOCUMENTS|SETUP)$/).map((e) => e.textContent))
+      .toEqual(["CAREGIVERS", "CLIENTS", "VISITS", "BILLING", "REPORTS", "DOCUMENTS", "SETUP"]);
+    // Workflow order: Home, then caregiver -> client -> visit -> billing -> reports -> documents -> setup.
+    expect(within(nav).getAllByRole("link").map((a) => a.textContent)).toEqual([
+      "Home", "Care Team", "Schedule", "Verify visit", "Clients", "Care requests", "Client monthly calendar", "Visit records",
+      "Billing review", "Reports", "Documents", "Services", "Continuity pack", "Outage records",
+    ]);
+    // Authorizations are a section of each client's page, not a separate menu item.
+    expect(within(nav).queryByRole("link", { name: /^Authorizations$/ })).toBeNull();
     expect(hrefs(nav)).toEqual({
       "Home": "/", "Verify visit": "/service-verification", "Schedule": "/schedule", "Care requests": "/care-requests",
       "Visit records": "/service-verification/reports", "Reports": "/service-verification/reports?view=overview",
@@ -142,11 +150,12 @@ describe("sidebar: expanded", () => {
     expect(screen.queryByText(/synthetic data|test environment/i)).toBeNull();
   });
 
-  it("caregiver: only the caregiver links, in TODAY and PEOPLE", async () => {
+  it("caregiver: only the caregiver links, in CAREGIVERS and DOCUMENTS", async () => {
     renderAt("/service-verification", "caregiver");
     const nav = await screen.findByRole("navigation", { name: "Main" });
     expect(Object.keys(hrefs(nav)).sort()).toEqual(["Availability", "My documents", "My shifts", "Verify visit"]);
     expect(within(nav).queryByText("SETUP")).toBeNull();
+    expect(within(nav).getAllByText(/^(CAREGIVERS|DOCUMENTS)$/).map((e) => e.textContent)).toEqual(["CAREGIVERS", "DOCUMENTS"]);
   });
 
   it("hides the sidebar and gives the page the full width when printing", async () => {
@@ -182,6 +191,51 @@ describe("sidebar: collapse", () => {
     fireEvent.click(screen.getByRole("button", { name: "Expand sidebar" }));
     expect(again.className).toMatch(/w-64/);
     expect(window.localStorage.getItem("ogevia.sidebar.collapsed")).toBe("0");
+  });
+});
+
+describe("sidebar: Option B styling contract", () => {
+  it("applies the specified palette, heading, divider, link and selected-row styles", async () => {
+    renderAt("/schedule", "manager");
+    const nav = await screen.findByRole("navigation", { name: "Main" });
+    const aside = nav.closest("aside")!;
+    expect(aside.className).toContain("bg-[#FAFBFC]");
+    expect(aside.className).toContain("border-r");
+    expect(aside.className).toContain("border-[#E2E8EC]");
+    const heading = within(nav).getAllByTestId("nav-group-heading")[0]!;
+    expect(heading.textContent).toBe("CAREGIVERS");
+    for (const c of ["text-[12px]", "font-bold", "leading-[18px]", "tracking-[0.06em]", "text-[#334155]", "border-b", "border-[#DCE5E9]", "pb-[10px]"]) {
+      expect(heading.className).toContain(c);
+    }
+    const current = within(nav).getByRole("link", { name: "Schedule" });
+    expect(current).toHaveAttribute("aria-current", "page");
+    for (const c of ["bg-[#E8F5F4]", "text-[#0F6674]", "font-semibold", "rounded-md", "min-h-[40px]", "text-[14px]", "gap-2", "[@media(pointer:coarse)]:min-h-[44px]", "focus-visible:outline-[#0F6674]"]) {
+      expect(current.className).toContain(c);
+    }
+    expect(current.className).not.toMatch(/border-l|before:|shadow-\[inset/); // no vertical accent bar
+    const other = within(nav).getByRole("link", { name: "Care Team" });
+    for (const c of ["text-[#243244]", "font-medium", "hover:bg-[#F0F7F7]"]) expect(other.className).toContain(c);
+    expect(other).not.toHaveAttribute("aria-current");
+    // Icons are 18px; long labels wrap rather than clip.
+    expect(other.querySelector("svg")!.getAttribute("class")).toContain("h-[18px]");
+    expect(other.querySelector("span")!.className).toContain("break-words");
+  });
+
+  it("collapsed mode hides headings and dividers but keeps accessible link names", async () => {
+    window.localStorage.setItem("ogevia.sidebar.collapsed", "1");
+    renderAt("/", "manager");
+    const nav = await screen.findByRole("navigation", { name: "Main" });
+    expect(within(nav).queryAllByTestId("nav-group-heading")).toHaveLength(0);
+    expect(nav.querySelector(".border-t")).toBeNull();
+    expect(within(nav).getByRole("link", { name: "Care Team" })).toBeInTheDocument();
+    expect(within(nav).getAllByRole("link")).toHaveLength(14);
+  });
+
+  it("keyboard: every link is reachable by Tab order (real anchors) and the collapse control is a labelled button", async () => {
+    renderAt("/", "manager");
+    const nav = await screen.findByRole("navigation", { name: "Main" });
+    for (const a of within(nav).getAllByRole("link")) expect(a).toHaveAttribute("href");
+    expect(screen.getByRole("button", { name: "Collapse sidebar" })).toHaveAttribute("aria-expanded", "true");
   });
 });
 

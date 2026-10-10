@@ -9,6 +9,7 @@ import { caregiverName, useCaregivers } from "./care-team-admin";
 import { clientName, useClients, useServices } from "./client-admin";
 import { formatClockTime, formatWeekdayDate, formatWeekdayDateTime } from "@/lib/service-verification";
 import { RecurringSeriesForm, RescheduleForm, SeriesList } from "./recurring-schedule";
+import { AssignmentChecks } from "./readiness/assignment-checks";
 
 /**
  * Schedule (0026): staff-scheduled shifts, call-outs, replacements and
@@ -26,6 +27,7 @@ export interface Shift {
   clientId: string;
   clientCode: string;
   clientName: string | null;
+  serviceId?: string | null;
   serviceName: string | null;
   serviceCode: string | null;
   caregiverRecordId: string | null;
@@ -77,6 +79,7 @@ function AddShiftForm({ onDone }: { onDone: (text: string) => void }) {
   const caregivers = useCaregivers();
   const [form, setForm] = useState({ clientId: "", serviceId: "", caregiverRecordId: "", date: today, startTime: "09:00", endTime: "12:00" });
   const [state, setState] = useState<{ busy: boolean; error: string | null }>({ busy: false, error: null });
+  const [ready, setReady] = useState<boolean | null>(null);
   const key = useRef(newIdempotencyKey());
   const set = (k: keyof typeof form, v: string) => { setForm((f) => ({ ...f, [k]: v })); key.current = newIdempotencyKey(); };
   async function submit() {
@@ -127,9 +130,14 @@ function AddShiftForm({ onDone }: { onDone: (text: string) => void }) {
         <div><label htmlFor="sh-start" className="block text-sm font-medium text-slate-700">Start time</label><input id="sh-start" type="time" value={form.startTime} onChange={(e) => set("startTime", e.target.value)} className={inputClass} /></div>
         <div><label htmlFor="sh-end" className="block text-sm font-medium text-slate-700">End time</label><input id="sh-end" type="time" value={form.endTime} onChange={(e) => set("endTime", e.target.value)} className={inputClass} /></div>
       </div>
+      {form.caregiverRecordId && form.serviceId ? (
+        <div className="sm:col-span-2">
+          <AssignmentChecks onReady={setReady} input={{ caregiverRecordId: form.caregiverRecordId, serviceId: form.serviceId, ...(form.clientId ? { clientId: form.clientId } : {}), date: form.date, startTime: form.startTime, endTime: form.endTime }} />
+        </div>
+      ) : null}
       <p className="text-xs text-slate-600 sm:col-span-2">Times are the agency's local time. An end time earlier than the start means the next day. The hours are reserved against the client's current authorization and refused if not enough time is left this month.</p>
       {state.error ? <p role="alert" className="text-sm text-red-700 sm:col-span-2">{state.error}</p> : null}
-      <div className="sm:col-span-2"><Button type="submit" disabled={state.busy}>{state.busy ? "Scheduling…" : "Schedule shift"}</Button></div>
+      <div className="sm:col-span-2"><Button type="submit" disabled={state.busy || (!!form.caregiverRecordId && ready === false)}>{state.busy ? "Scheduling…" : "Schedule shift"}</Button></div>
     </form>
   );
 }
@@ -143,6 +151,7 @@ function ShiftActions({ s, action, onClose, onDone }: { s: Shift; action: Exclud
   const caregivers = useCaregivers();
   const [reason, setReason] = useState("");
   const [pick, setPick] = useState("");
+  const [ready, setReady] = useState<boolean | null>(null);
   const [state, setState] = useState<{ busy: boolean; error: string | null }>({ busy: false, error: null });
   const key = useRef(newIdempotencyKey());
   const history = useQuery({
@@ -202,6 +211,11 @@ function ShiftActions({ s, action, onClose, onDone }: { s: Shift; action: Exclud
           </select>
         </div>
       ) : null}
+      {action === "assign" && pick && s.serviceId ? (
+        <div className="sm:col-span-2">
+          <AssignmentChecks onReady={setReady} input={{ caregiverRecordId: pick, serviceId: s.serviceId, clientId: s.clientId, startsAt: s.startsAt, endsAt: s.endsAt, context: "reschedule", excludeShiftId: s.shiftId }} />
+        </div>
+      ) : null}
       {action !== "assign" || covered ? (
         <div className="sm:col-span-2">
           <label htmlFor={`${id}-reason`} className="block text-xs font-medium text-slate-600">{action === "callout" ? "Reason for the call-out" : action === "cancel" ? "Reason for cancelling" : "Reason for changing the caregiver"}</label>
@@ -210,7 +224,7 @@ function ShiftActions({ s, action, onClose, onDone }: { s: Shift; action: Exclud
       ) : null}
       {state.error ? <p role="alert" className="text-sm text-red-700 sm:col-span-2">{state.error}</p> : null}
       <div className="flex gap-2 sm:col-span-2">
-        <Button type="submit" variant={action === "cancel" ? "secondary" : "primary"} disabled={state.busy}>
+        <Button type="submit" variant={action === "cancel" ? "secondary" : "primary"} disabled={state.busy || (action === "assign" && !!pick && ready === false)}>
           {action === "callout" ? "Record call-out" : action === "cancel" ? "Cancel shift" : "Assign caregiver"}
         </Button>
         <button type="button" className="text-sm underline" onClick={onClose}>Close</button>

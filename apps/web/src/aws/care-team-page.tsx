@@ -11,6 +11,9 @@ import {
   type Caregiver, type CaregiverStatus,
 } from "./care-team-admin";
 import { formatDateTime } from "@/lib/service-verification";
+import { CaregiverReadiness } from "./readiness/caregiver-readiness";
+import { ReadinessCard } from "./readiness/readiness-card";
+import { AvailabilityReview } from "./readiness/availability-review";
 
 const message = (cause: unknown, fallback: string) => (cause instanceof Error ? cause.message : fallback);
 const inputClass = "mt-1 block w-full rounded-lg border border-slate-200 px-3 py-2 text-base";
@@ -100,6 +103,8 @@ export function CareTeamPage() {
         </div>
         {canManage ? <Button type="button" onClick={() => setAdding((a) => !a)} aria-expanded={adding}>{adding ? "Close" : "Add caregiver"}</Button> : null}
       </div>
+      <ReadinessCard />
+      <AvailabilityReview />
       {adding ? <AddCaregiverForm onDone={(id) => { setAdding(false); setAdded(id); }} /> : null}
       {added ? <p role="status" className="text-sm text-emerald-800">Caregiver added. <Link className="underline" to={`/care-team/${added}`}>Open the record</Link>.</p> : null}
       <div className="flex flex-wrap items-end gap-3">
@@ -374,6 +379,7 @@ export function CaregiverDetailPage() {
       <EmploymentCard c={c} canManage={canManage} />
       <SignInCard c={c} canManage={canManage} />
       <AssignmentsCard caregiverRecordId={c.caregiverRecordId} />
+      <CaregiverReadiness caregiverRecordId={c.caregiverRecordId} />
       {canManage ? <CaregiverDetails c={c} /> : null}
       {canManage ? <CaregiverStatusCard c={c} /> : null}
     </div>

@@ -258,3 +258,71 @@ describe("production (OGEVIA_ENV=prd) fails closed on the database name", () => 
     expect(loadConfig({ ...ENV, OGEVIA_ENV: "prod", DB_NAME: "ogevia_sv_test" }).dbName).toBe("ogevia_sv_test");
   });
 });
+
+describe("GET /v1/clients/{clientId}: current authorizations embedded", () => {
+  const ORG = "aaaaaaaa-bbbb-4ccc-8ddd-000000000001";
+  const CLIENT_ID = "aaaaaaaa-bbbb-4ccc-8ddd-0000000000c1";
+  const version = (n: number, lineage: string, service: string, current: boolean, rate: number | null = null) => ({
+    authorization_id: `aaaaaaaa-bbbb-4ccc-8ddd-0000000000${n}${lineage}`, lineage_id: `aaaaaaaa-bbbb-4ccc-8ddd-00000000001${lineage}`,
+    version_number: n, is_current: current, service_id: service, monthly_authorized_minutes: 600 * n, hourly_rate_cents: rate,
+  });
+  const HISTORY = [
+    version(2, "1", "s1", true), version(1, "1", "s1", false), // lineage 1: amended once
+    version(1, "2", "s2", true), // lineage 2: a second, concurrent authorization
+  ];
+  const CLIENT_ROW = { client_id: CLIENT_ID, client_code: "C-SYN001", status: "active", current_authorizations: 2 };
+  function fake(clients: unknown[], history: unknown[]) {
+    const queries: Array<{ text: string; params?: unknown[] }> = [];
+    const db = {
+      connect: async () => ({
+        query: async (text: string, params?: unknown[]) => {
+          queries.push({ text, ...(params ? { params } : {}) });
+          if (text.includes("list_clients(")) return { rows: clients };
+          if (text.includes("list_client_authorizations(")) return { rows: history };
+          return { rows: [] };
+        },
+        release: () => {},
+      }),
+    };
+    return { db, queries };
+  }
+  const get = (f: ReturnType<typeof fake>, id = CLIENT_ID) =>
+    createHandler({ config: CONFIG, db: f.db as never, evidence: new MemoryEvidenceStore(), log: () => {} })(
+      event("GET /v1/clients/{clientId}", { path: { clientId: id }, query: { organizationId: ORG } }));
+
+  it("embeds only the current version of each authorization, supports several at once, and reads nothing else", async () => {
+    const f = fake([CLIENT_ROW], HISTORY);
+    const r = await get(f);
+    expect(r.statusCode).toBe(200);
+    const { client } = JSON.parse(r.body as string);
+    expect(client.clientCode).toBe("C-SYN001");
+    expect(client.authorizations.map((a: any) => [a.lineageId.slice(-2), a.versionNumber, a.isCurrent])).toEqual([["11", 2, true], ["12", 1, true]]);
+    const sql = f.queries.map((q) => q.text).filter((t) => /select|insert|update|delete/i.test(t) && !/set_config|begin_request/i.test(t));
+    expect(sql.every((t) => /^select \* from ogevia_api\.list_(clients|client_authorizations)\(/.test(t))).toBe(true);
+  });
+
+  it("does not alter or drop fields: the rate is exactly what the database function returned (null without billing.read)", async () => {
+    const withRate = await get(fake([CLIENT_ROW], [version(1, "1", "s1", true, 3000)]));
+    expect(JSON.parse(withRate.body as string).client.authorizations[0].hourlyRateCents).toBe(3000);
+    const noRate = await get(fake([CLIENT_ROW], [version(1, "1", "s1", true, null)]));
+    expect(JSON.parse(noRate.body as string).client.authorizations[0].hourlyRateCents).toBeNull();
+  });
+
+  it("a client the actor cannot list is 404, an unreadable authorization list is empty, a bad id is 400 without a database read", async () => {
+    expect((await get(fake([], HISTORY))).statusCode).toBe(404);
+    const noAuthRead = await get(fake([CLIENT_ROW], []));
+    expect(JSON.parse(noAuthRead.body as string).client.authorizations).toEqual([]);
+    const f = fake([CLIENT_ROW], HISTORY);
+    expect((await get(f, "not-a-uuid")).statusCode).toBe(400);
+    expect(f.queries.some((q) => q.text.includes("list_clients("))).toBe(false);
+  });
+
+  it("is a read-only route and requires sign-in", async () => {
+    expect(ROUTES["GET /v1/clients/{clientId}"]!.mutating).toBe(false);
+    expect(ROUTES["GET /v1/clients/{clientId}"]!.public).toBeFalsy();
+    const f = fake([CLIENT_ROW], HISTORY);
+    const r = await createHandler({ config: CONFIG, db: f.db as never, evidence: new MemoryEvidenceStore(), log: () => {} })(
+      event("GET /v1/clients/{clientId}", { sub: null, path: { clientId: CLIENT_ID }, query: { organizationId: ORG } }));
+    expect(r.statusCode).toBe(401);
+  });
+});

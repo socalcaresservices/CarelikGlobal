@@ -12,6 +12,7 @@ import {
   type AdminClient, type AuthorizationVersion, type ClientStatus,
 } from "./client-admin";
 import { AssignmentsCard } from "./assignments-card";
+import { ClientExperience, MatchingLocation } from "./readiness/matching-inputs";
 import { ClientTypeField } from "./clients-page";
 import { formatDateOnly } from "@/lib/service-verification";
 
@@ -314,7 +315,7 @@ function AuthorizationsCard({ clientId }: { clientId: string }) {
   return (
     <Card className="p-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <h2 className="text-base font-semibold text-slate-950">Authorized hours</h2>
+        <h2 className="text-base font-semibold text-slate-950">Authorizations</h2>
         {canUpdate ? <Button type="button" variant="secondary" onClick={() => setAdding((a) => !a)} aria-expanded={adding}>{adding ? "Close" : "Add authorization"}</Button> : null}
       </div>
       {adding ? <AddAuthorizationForm clientId={clientId} onDone={() => setAdding(false)} /> : null}
@@ -374,6 +375,8 @@ export function ClientDetailPage() {
       <AuthorizationsCard clientId={c.clientId} />
       <AssignmentsCard clientId={c.clientId} />
       <DetailsCard c={c} canManage={canManage} />
+      {hasPermission("matching.read") ? <ClientExperience clientId={c.clientId} /> : null}
+      {hasPermission("matching.manage") ? <MatchingLocation clientId={c.clientId} /> : null}
       {canManage ? <StatusCard c={c} /> : null}
     </div>
   );

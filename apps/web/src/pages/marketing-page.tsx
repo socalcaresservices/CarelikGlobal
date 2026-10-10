@@ -20,7 +20,7 @@ const FEATURES = [
   {
     title: "CareScore matching",
     description:
-      "A real, computed match score between every caregiver and client - proximity, language, availability, skills, and shared visit history - not a guess. Shown on both the scheduling screen and every caregiver's own profile."
+      "Compare caregivers using explained matching factors. Missing information is clearly marked. Distance needs an approved location dataset, and mandatory assignment checks take effect when activated."
   },
   {
     title: "Service Verification",

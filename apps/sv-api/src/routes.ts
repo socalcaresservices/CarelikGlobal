@@ -89,6 +89,11 @@ async function rows(db: Queryable, sql: string, params: unknown[]) {
   return (await db.query(sql, params)).rows.map(toCamel);
 }
 
+/** The first row of a one-row result (a jsonb or uuid scalar), typed loosely because the database already shaped it. */
+async function first(db: Queryable, sql: string, params: unknown[]): Promise<Record<string, any>> {
+  return (await db.query(sql, params)).rows[0] as Record<string, any>;
+}
+
 const CLIENT_STATUSES = ["active", "inactive", "discharged"] as const;
 const CAREGIVER_STATUSES = ["onboarding", "ready", "active", "inactive"] as const;
 const NEW_CAREGIVER_STATUSES = ["onboarding", "ready", "active"] as const;
@@ -346,6 +351,28 @@ export const ROUTES: Record<string, Route> = {
     handle: async ({ event, tx }) => ({
       clients: await tx((db) => rows(db, "select * from ogevia_api.list_clients($1)", [orgParam(event)])),
     }),
+  },
+
+  // One client with its current authorizations embedded (client.authorizations[]).
+  // Read model only: no new database object. The same two functions the list and
+  // history screens use, in one transaction, so permissions are unchanged (names
+  // need clients.names.read; rates need billing.read; an actor without
+  // authorizations.read gets an empty list). History stays on
+  // GET /v1/clients/{clientId}/authorizations.
+  "GET /v1/clients/{clientId}": {
+    mutating: false,
+    handle: async ({ event, tx }) => {
+      const clientId = uuid(p(event).clientId, "clientId");
+      const org = orgParam(event);
+      const client = await tx(async (db) => {
+        const found = (await rows(db, "select * from ogevia_api.list_clients($1)", [org])).find((c) => c.clientId === clientId);
+        if (!found) return null;
+        const versions = await rows(db, "select * from ogevia_api.list_client_authorizations($1, $2)", [org, clientId]);
+        return { ...found, authorizations: versions.filter((a) => a.isCurrent === true) };
+      });
+      if (!client) throw new ApiError(404, "not_found", "Client not found.");
+      return { client };
+    },
   },
 
   "POST /v1/clients": {
@@ -1984,19 +2011,12 @@ export const ROUTES: Record<string, Route> = {
     }),
   },
 
+  // Withdrawn in 0039: availability changes are requests that an administrator approves (POST /v1/availability/requests).
+  // The route stays so an old client gets a clear, correct message instead of a missing-route error.
   "POST /v1/availability/me": {
     mutating: true,
-    handle: async ({ event, tx }) => {
-      const body = parseBody(event.body, event.isBase64Encoded);
-      if (!Array.isArray(body.windows) || !Array.isArray(body.unavailableDates)) {
-        throw new ApiError(400, "bad_request", "windows and unavailableDates must be arrays.");
-      }
-      await tx((db) => db.query("select ogevia_api.replace_my_availability($1,$2::jsonb,$3::jsonb)", [
-        uuid(body.organizationId, "organizationId"),
-        JSON.stringify(body.windows),
-        JSON.stringify(body.unavailableDates),
-      ]));
-      return { saved: true };
+    handle: async () => {
+      throw new ApiError(422, "availability_requires_approval", "Availability changes need administrator approval. Use Request change.");
     },
   },
 
@@ -2022,6 +2042,371 @@ export const ROUTES: Record<string, Route> = {
       });
       return result;
     },
+  },
+
+  // ---------------------------------------------------------------------------
+  // Caregiver-readiness release (migrations 0039-0043). Every decision is made in PostgreSQL; these routes
+  // only validate the shape of the request. Nested JSON from the database is returned as it is stored
+  // (window items use start_local / end_local).
+  // ---------------------------------------------------------------------------
+
+  "GET /v1/availability": {
+    mutating: false,
+    handle: async ({ event, tx }) => ({
+      availability: await tx(async (db) => (await first(db, "select ogevia_api.get_availability($1, $2) as a", [orgParam(event), optionalUuid(q(event).caregiverRecordId, "caregiverRecordId")])).a),
+    }),
+  },
+
+  "POST /v1/availability/requests": {
+    status: 201,
+    mutating: true,
+    handle: async ({ event, tx }) => {
+      const body = parseBody(event.body, event.isBase64Encoded);
+      const key = idempotencyKey(event.headers);
+      if (!Array.isArray(body.windows)) throw new ApiError(400, "bad_request", "windows must be a list.");
+      const requestId = await tx(async (db) => (await first(db, "select ogevia_api.request_availability_change($1,$2,$3::jsonb,$4::date,$5::date,$6,$7,$8) as id", [
+        uuid(body.organizationId, "organizationId"), oneOf(body.kind, "kind", ["weekly", "date"] as const), JSON.stringify(body.windows),
+        date(body.effectiveFrom, "effectiveFrom"), optionalDate(body.effectiveUntil, "effectiveUntil"), text(body.reason, "reason", 500, { required: true }),
+        wholeNumber(body.baseVersion, "baseVersion", 0, 1_000_000), key])).id);
+      return { requestId };
+    },
+  },
+
+  "GET /v1/availability/requests": {
+    mutating: false,
+    handle: async ({ event, tx }) => {
+      const status = q(event).status;
+      const wanted = status === undefined || status === "" ? "pending" : status === "all" ? null : oneOf(status, "status", ["pending", "approved", "declined", "withdrawn", "superseded"] as const);
+      return { requests: await tx((db) => rows(db, "select * from ogevia_api.list_availability_requests($1, $2)", [orgParam(event), wanted])) };
+    },
+  },
+
+  "GET /v1/availability/requests/{requestId}": {
+    mutating: false,
+    handle: async ({ event, tx }) => ({
+      preview: await tx(async (db) => (await first(db, "select ogevia_api.preview_availability_request($1,$2) as r", [orgParam(event), uuid(p(event).requestId, "requestId")])).r),
+    }),
+  },
+
+  "POST /v1/availability/requests/{requestId}/withdraw": {
+    mutating: true,
+    handle: async ({ event, tx }) => {
+      const body = parseBody(event.body, event.isBase64Encoded);
+      await tx((db) => db.query("select ogevia_api.withdraw_availability_request($1,$2)", [uuid(body.organizationId, "organizationId"), uuid(p(event).requestId, "requestId")]));
+      return { withdrawn: true };
+    },
+  },
+
+  "POST /v1/availability/requests/{requestId}/review": {
+    mutating: true,
+    handle: async ({ event, tx }) => {
+      const body = parseBody(event.body, event.isBase64Encoded);
+      const key = idempotencyKey(event.headers);
+      return { result: await tx(async (db) => (await first(db, "select ogevia_api.review_availability_request($1,$2,$3,$4,$5) as r", [
+        uuid(body.organizationId, "organizationId"), uuid(p(event).requestId, "requestId"), oneOf(body.decision, "decision", ["approve", "decline"] as const),
+        text(body.note, "note", 500), key])).r) };
+    },
+  },
+
+  "POST /v1/caregivers/{caregiverRecordId}/availability": {
+    mutating: true,
+    handle: async ({ event, tx }) => {
+      const body = parseBody(event.body, event.isBase64Encoded);
+      const key = idempotencyKey(event.headers);
+      if (!Array.isArray(body.windows)) throw new ApiError(400, "bad_request", "windows must be a list.");
+      return { result: await tx(async (db) => (await first(db, "select ogevia_api.set_availability_direct($1,$2,$3,$4::jsonb,$5::date,$6::date,$7,$8) as r", [
+        uuid(body.organizationId, "organizationId"), uuid(p(event).caregiverRecordId, "caregiverRecordId"), oneOf(body.kind, "kind", ["weekly", "date"] as const),
+        JSON.stringify(body.windows), date(body.effectiveFrom, "effectiveFrom"), optionalDate(body.effectiveUntil, "effectiveUntil"),
+        text(body.reason, "reason", 500, { required: true }), key])).r) };
+    },
+  },
+
+  "POST /v1/availability/overrides": {
+    status: 201,
+    mutating: true,
+    handle: async ({ event, tx }) => {
+      const body = parseBody(event.body, event.isBase64Encoded);
+      const overrideId = await tx(async (db) => (await first(db, "select ogevia_api.authorize_availability_override($1,$2,$3::timestamptz,$4::timestamptz,$5) as id", [
+        uuid(body.organizationId, "organizationId"), uuid(body.caregiverRecordId, "caregiverRecordId"), timestamp(body.rangeStart, "rangeStart"),
+        timestamp(body.rangeEnd, "rangeEnd"), text(body.reason, "reason", 500, { required: true })])).id);
+      return { overrideId };
+    },
+  },
+
+  "GET /v1/caregiver-services": {
+    mutating: false,
+    handle: async ({ event, tx }) => ({
+      approvals: await tx((db) => rows(db, "select * from ogevia_api.list_caregiver_service_approvals($1, $2)", [orgParam(event), optionalUuid(q(event).caregiverRecordId, "caregiverRecordId")])),
+    }),
+  },
+
+  "POST /v1/caregiver-services": {
+    status: 201,
+    mutating: true,
+    handle: async ({ event, tx }) => {
+      const body = parseBody(event.body, event.isBase64Encoded);
+      const key = idempotencyKey(event.headers);
+      const approvalId = await tx(async (db) => (await first(db, "select ogevia_api.approve_caregiver_service($1,$2,$3,$4::date,$5::date,$6,$7) as id", [
+        uuid(body.organizationId, "organizationId"), uuid(body.caregiverRecordId, "caregiverRecordId"), uuid(body.serviceId, "serviceId"),
+        date(body.effectiveFrom, "effectiveFrom"), optionalDate(body.effectiveUntil, "effectiveUntil"), text(body.reason, "reason", 500, { required: true }), key])).id);
+      return { approvalId };
+    },
+  },
+
+  "POST /v1/caregiver-services/{approvalId}/revoke": {
+    mutating: true,
+    handle: async ({ event, tx }) => {
+      const body = parseBody(event.body, event.isBase64Encoded);
+      const key = idempotencyKey(event.headers);
+      return { result: await tx(async (db) => (await first(db, "select ogevia_api.revoke_caregiver_service($1,$2,$3,$4::date,$5) as r", [
+        uuid(body.organizationId, "organizationId"), uuid(p(event).approvalId, "approvalId"), text(body.reason, "reason", 500, { required: true }),
+        optionalDate(body.effectiveOn, "effectiveOn"), key])).r) };
+    },
+  },
+
+  "GET /v1/caregiver-services/review": {
+    mutating: false,
+    handle: async ({ event, tx }) => ({ pairs: await tx((db) => rows(db, "select * from ogevia_api.list_service_review_pairs($1)", [orgParam(event)])) }),
+  },
+
+  "POST /v1/caregiver-services/bulk-approve": {
+    mutating: true,
+    handle: async ({ event, tx }) => {
+      const body = parseBody(event.body, event.isBase64Encoded);
+      const key = idempotencyKey(event.headers);
+      if (!Array.isArray(body.pairs)) throw new ApiError(400, "bad_request", "pairs must be a list.");
+      const pairs = body.pairs.map((x) => {
+        const o = (x ?? {}) as Record<string, unknown>;
+        return { caregiverRecordId: uuid(o.caregiverRecordId, "caregiverRecordId"), serviceId: uuid(o.serviceId, "serviceId") };
+      });
+      return { result: await tx(async (db) => (await first(db, "select ogevia_api.bulk_approve_reviewed_services($1,$2::jsonb,$3,$4::date,$5,$6) as r", [
+        uuid(body.organizationId, "organizationId"), JSON.stringify(pairs), wholeNumber(body.expectedCount, "expectedCount", 0, 200),
+        date(body.effectiveFrom, "effectiveFrom"), text(body.reason, "reason", 500, { required: true }), key])).r) };
+    },
+  },
+
+  "GET /v1/readiness/flags": {
+    mutating: false,
+    handle: async ({ event, tx }) => {
+      const kind = q(event).kind;
+      return { flags: await tx((db) => rows(db, "select * from ogevia_api.list_readiness_flags($1, $2)", [orgParam(event), kind === undefined || kind === "" ? null : oneOf(kind, "kind", ["availability", "service", "document"] as const)])) };
+    },
+  },
+
+  "GET /v1/document-requirements": {
+    mutating: false,
+    handle: async ({ event, tx }) => ({ setup: await tx(async (db) => (await first(db, "select ogevia_api.get_work_requirement_setup($1) as s", [orgParam(event)])).s) }),
+  },
+
+  "POST /v1/document-requirements/type": {
+    mutating: true,
+    handle: async ({ event, tx }) => {
+      const body = parseBody(event.body, event.isBase64Encoded);
+      const key = idempotencyKey(event.headers);
+      await tx((db) => db.query("select ogevia_api.set_document_work_requirement($1,$2,$3,$4,$5)", [
+        uuid(body.organizationId, "organizationId"), oneOf(body.requirement, "requirement", ["cpr", "tb"] as const), optionalUuid(body.documentTypeId, "documentTypeId"),
+        text(body.reason, "reason", 500, { required: true }), key]));
+      return { saved: true };
+    },
+  },
+
+  "POST /v1/document-requirements/policy": {
+    mutating: true,
+    handle: async ({ event, tx }) => {
+      const body = parseBody(event.body, event.isBase64Encoded);
+      const key = idempotencyKey(event.headers);
+      const days = body.validityDays === undefined || body.validityDays === null ? null : wholeNumber(body.validityDays, "validityDays", 1, 3650);
+      await tx((db) => db.query("select ogevia_api.set_requirement_policy($1,$2,$3,$4,$5,$6)", [
+        uuid(body.organizationId, "organizationId"), oneOf(body.requirement, "requirement", ["cpr", "tb"] as const),
+        oneOf(body.validityBasis, "validityBasis", ["document_expiry", "issue_plus_days"] as const), days, text(body.reason, "reason", 500, { required: true }), key]));
+      return { saved: true };
+    },
+  },
+
+  "GET /v1/document-readiness": {
+    mutating: false,
+    handle: async ({ event, tx }) => {
+      const from = q(event).startsAt;
+      const to = q(event).endsAt;
+      return { readiness: await tx(async (db) => (await first(db, "select ogevia_api.get_document_readiness($1,$2,$3::timestamptz,$4::timestamptz) as r", [
+        orgParam(event), optionalUuid(q(event).caregiverRecordId, "caregiverRecordId"),
+        from ? timestamp(from, "startsAt") : null, to ? timestamp(to, "endsAt") : null])).r) };
+    },
+  },
+
+  "GET /v1/document-readiness/all": {
+    mutating: false,
+    handle: async ({ event, tx }) => ({ caregivers: await tx((db) => rows(db, "select * from ogevia_api.list_document_readiness($1)", [orgParam(event)])) }),
+  },
+
+  "GET /v1/readiness": {
+    mutating: false,
+    handle: async ({ event, tx }) => ({ readiness: await tx(async (db) => (await first(db, "select ogevia_api.get_readiness_status($1) as s", [orgParam(event)])).s) }),
+  },
+
+  "POST /v1/readiness/activate": {
+    mutating: true,
+    handle: async ({ event, tx }) => {
+      const body = parseBody(event.body, event.isBase64Encoded);
+      return { readiness: await tx(async (db) => (await first(db, "select ogevia_api.activate_readiness_enforcement($1,$2,$3) as s", [
+        uuid(body.organizationId, "organizationId"), text(body.reason, "reason", 500, { required: true }), wholeNumber(body.expectedAffectedShifts, "expectedAffectedShifts", 0, 1_000_000)])).s) };
+    },
+  },
+
+  "POST /v1/readiness/service-checks": {
+    mutating: true,
+    handle: async ({ event, tx }) => {
+      const body = parseBody(event.body, event.isBase64Encoded);
+      return { readiness: await tx(async (db) => (await first(db, "select ogevia_api.set_service_checks($1,$2,$3) as s", [
+        uuid(body.organizationId, "organizationId"), booleanValue(body.enabled, "enabled"), text(body.reason, "reason", 500, { required: true })])).s) };
+    },
+  },
+
+  "POST /v1/readiness/evaluate": {
+    mutating: false,
+    handle: async ({ event, tx }) => {
+      const body = parseBody(event.body, event.isBase64Encoded);
+      const org = uuid(body.organizationId, "organizationId");
+      const caregiver = uuid(body.caregiverRecordId, "caregiverRecordId");
+      const service = optionalUuid(body.serviceId, "serviceId");
+      const context = body.context === undefined ? "shift" : oneOf(body.context, "context", ["shift", "care_request", "reschedule", "series", "assignment", "visit_start"] as const);
+      const exclude = optionalUuid(body.excludeShiftId, "excludeShiftId");
+      const client = optionalUuid(body.clientId, "clientId");
+      // Either exact instants, or the agency-local date and times the schedule screen uses (converted in the database).
+      if (body.date !== undefined) {
+        return { evaluation: await tx(async (db) => (await first(db, "select ogevia_api.evaluate_assignment_readiness_local($1,$2,$3,$4::date,$5::time,$6::time,$7,$8,$9) as r", [
+          org, caregiver, service, date(body.date, "date"), clockTime(body.startTime, "startTime"), clockTime(body.endTime, "endTime"), context, exclude, client])).r) };
+      }
+      return { evaluation: await tx(async (db) => (await first(db, "select ogevia_api.evaluate_assignment_readiness($1,$2,$3,$4::timestamptz,$5::timestamptz,$6,$7,$8) as r", [
+        org, caregiver, service, timestamp(body.startsAt, "startsAt"), timestamp(body.endsAt, "endsAt"), context, exclude, client])).r) };
+    },
+  },
+
+  "POST /v1/matching/candidates": {
+    mutating: false,
+    handle: async ({ event, tx }) => {
+      const body = parseBody(event.body, event.isBase64Encoded);
+      if (!Array.isArray(body.intervals) || body.intervals.length < 1 || body.intervals.length > 30) throw new ApiError(400, "bad_request", "intervals must list 1 to 30 time ranges.");
+      const intervals = body.intervals.map((x, i) => {
+        const o = (x ?? {}) as Record<string, unknown>;
+        return { starts_at: timestamp(o.startsAt, `intervals[${i}].startsAt`), ends_at: timestamp(o.endsAt, `intervals[${i}].endsAt`) };
+      });
+      return { matches: await tx(async (db) => (await first(db, "select ogevia_api.match_caregivers($1,$2,$3,$4::jsonb,$5,$6) as r", [
+        uuid(body.organizationId, "organizationId"), uuid(body.serviceId, "serviceId"), uuid(body.clientId, "clientId"), JSON.stringify(intervals),
+        optionalUuid(body.careRequestId, "careRequestId"), text(body.ruleVersion, "ruleVersion", 60)])).r) };
+    },
+  },
+
+  "GET /v1/care-requests/{requestId}/matches": {
+    mutating: false,
+    handle: async ({ event, tx }) => ({
+      matches: await tx(async (db) => (await first(db, "select ogevia_api.match_caregivers_for_request($1,$2,$3) as r", [orgParam(event), uuid(p(event).requestId, "requestId"), text(q(event).ruleVersion, "ruleVersion", 60)])).r),
+    }),
+  },
+
+  "GET /v1/experience-tags": {
+    mutating: false,
+    handle: async ({ event, tx }) => ({ tags: await tx((db) => rows(db, "select * from ogevia_api.list_experience_tags($1)", [orgParam(event)])) }),
+  },
+
+  "POST /v1/experience-tags": {
+    status: 201,
+    mutating: true,
+    handle: async ({ event, tx }) => {
+      const body = parseBody(event.body, event.isBase64Encoded);
+      const tagId = await tx(async (db) => (await first(db, "select ogevia_api.create_experience_tag($1,$2) as id", [uuid(body.organizationId, "organizationId"), text(body.label, "label", 60, { required: true })])).id);
+      return { tagId };
+    },
+  },
+
+  "GET /v1/experience/me": {
+    mutating: false,
+    handle: async ({ event, tx }) => ({ experience: await tx(async (db) => (await first(db, "select ogevia_api.get_caregiver_experience($1, null) as e", [orgParam(event)])).e) }),
+  },
+
+  "POST /v1/experience/me": {
+    mutating: true,
+    handle: async ({ event, tx }) => {
+      const body = parseBody(event.body, event.isBase64Encoded);
+      if (!Array.isArray(body.tagIds) || body.tagIds.length > 40) throw new ApiError(400, "bad_request", "tagIds must be a list of at most 40 tags.");
+      const ids = body.tagIds.map((x) => uuid(x, "tagIds"));
+      await tx((db) => db.query("select ogevia_api.report_my_experience($1,$2::uuid[])", [uuid(body.organizationId, "organizationId"), ids]));
+      return { saved: true };
+    },
+  },
+
+  "GET /v1/caregivers/{caregiverRecordId}/experience": {
+    mutating: false,
+    handle: async ({ event, tx }) => ({
+      experience: await tx(async (db) => (await first(db, "select ogevia_api.get_caregiver_experience($1,$2) as e", [orgParam(event), uuid(p(event).caregiverRecordId, "caregiverRecordId")])).e),
+    }),
+  },
+
+  "POST /v1/caregivers/{caregiverRecordId}/experience/review": {
+    mutating: true,
+    handle: async ({ event, tx }) => {
+      const body = parseBody(event.body, event.isBase64Encoded);
+      if (!Array.isArray(body.confirmedTagIds) || body.confirmedTagIds.length > 40) throw new ApiError(400, "bad_request", "confirmedTagIds must be a list of at most 40 tags.");
+      const ids = body.confirmedTagIds.map((x) => uuid(x, "confirmedTagIds"));
+      await tx((db) => db.query("select ogevia_api.review_caregiver_experience($1,$2,$3::uuid[],$4)", [
+        uuid(body.organizationId, "organizationId"), uuid(p(event).caregiverRecordId, "caregiverRecordId"), ids, text(body.note, "note", 500)]));
+      return { reviewed: true };
+    },
+  },
+
+  "GET /v1/clients/{clientId}/experience-requirements": {
+    mutating: false,
+    handle: async ({ event, tx }) => ({
+      requirements: await tx((db) => rows(db, "select * from ogevia_api.get_client_experience_requirements($1,$2)", [orgParam(event), uuid(p(event).clientId, "clientId")])),
+    }),
+  },
+
+  "POST /v1/clients/{clientId}/experience-requirements": {
+    mutating: true,
+    handle: async ({ event, tx }) => {
+      const body = parseBody(event.body, event.isBase64Encoded);
+      if (!Array.isArray(body.requirements) || body.requirements.length > 20) throw new ApiError(400, "bad_request", "requirements must be a list of at most 20 tags.");
+      const list = body.requirements.map((x) => {
+        const o = (x ?? {}) as Record<string, unknown>;
+        return { tagId: uuid(o.tagId, "tagId"), mandatory: booleanValue(o.mandatory ?? false, "mandatory") };
+      });
+      await tx((db) => db.query("select ogevia_api.set_client_experience_requirements($1,$2,$3::jsonb,$4)", [
+        uuid(body.organizationId, "organizationId"), uuid(p(event).clientId, "clientId"), JSON.stringify(list), text(body.reason, "reason", 500, { required: true })]));
+      return { saved: true };
+    },
+  },
+
+  "POST /v1/caregivers/{caregiverRecordId}/zip": {
+    mutating: true,
+    handle: async ({ event, tx }) => {
+      const body = parseBody(event.body, event.isBase64Encoded);
+      await tx((db) => db.query("select ogevia_api.set_caregiver_zip($1,$2,$3)", [uuid(body.organizationId, "organizationId"), uuid(p(event).caregiverRecordId, "caregiverRecordId"), text(body.zip, "zip", 5, { required: true })]));
+      return { saved: true };
+    },
+  },
+
+  "GET /v1/caregivers/{caregiverRecordId}/zip": {
+    mutating: false,
+    handle: async ({ event, tx }) => ({ location: await tx(async (db) => (await first(db, "select ogevia_api.get_matching_zip($1,$2,'caregiver') as location", [orgParam(event), uuid(p(event).caregiverRecordId, "caregiverRecordId")])).location) }),
+  },
+
+  "GET /v1/clients/{clientId}/zip": {
+    mutating: false,
+    handle: async ({ event, tx }) => ({ location: await tx(async (db) => (await first(db, "select ogevia_api.get_matching_zip($1,$2,'client') as location", [orgParam(event), uuid(p(event).clientId, "clientId")])).location) }),
+  },
+
+  "POST /v1/clients/{clientId}/zip": {
+    mutating: true,
+    handle: async ({ event, tx }) => {
+      const body = parseBody(event.body, event.isBase64Encoded);
+      await tx((db) => db.query("select ogevia_api.set_client_service_zip($1,$2,$3)", [uuid(body.organizationId, "organizationId"), uuid(p(event).clientId, "clientId"), text(body.zip, "zip", 5, { required: true })]));
+      return { saved: true };
+    },
+  },
+
+  "GET /v1/location-data": {
+    mutating: false,
+    handle: async ({ event, tx }) => ({ status: await tx(async (db) => (await first(db, "select ogevia_api.location_data_status($1) as s", [orgParam(event)])).s) }),
   },
 
 };

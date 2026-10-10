@@ -4,7 +4,7 @@
 import { createHash, randomBytes, randomUUID } from "node:crypto";
 import type pg from "pg";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { asActor, createTestDb, expectPgError, freshClient, seedWorld, type Actor, type TestDb, type World } from "./harness.js";
+import { asActor, createTestDb, expectPgError, freshClient, seedWorld, setBaselineAvailability, type Actor, type TestDb, type World } from "./harness.js";
 
 let db: TestDb;
 let w: World;
@@ -74,7 +74,7 @@ beforeAll(async () => {
   fx2 = await freshClient(db, w, w.caregiverA1, 6000, w.orgA, { before: 20, after: 40 });
   const allWeek = JSON.stringify([0, 1, 2, 3, 4, 5, 6].map((d) => ({ weekday: d, specific_date: null, start_local: "00:00", end_local: "23:59" })));
   for (const a of [w.caregiverA1, w.caregiverA2, w.caregiverA3]) {
-    await asActor(db, a.sub, (c) => c.query("select ogevia_api.replace_my_availability($1,$2::jsonb,'[]'::jsonb)", [w.orgA, allWeek]));
+    await setBaselineAvailability(db, w.orgA, a, JSON.parse(allWeek));
   }
 });
 afterAll(async () => db?.drop());
@@ -277,7 +277,7 @@ describe("care workflow acceptance rules", () => {
     // A2 blocks that date; A3 already has an overlapping scheduled shift.
     const day = (await q("select (starts_at at time zone 'America/Los_Angeles')::date::text d from ogevia.care_requests where id=$1", [r.request_id])).rows[0].d;
     const allWeek = JSON.stringify([0, 1, 2, 3, 4, 5, 6].map((d) => ({ weekday: d, specific_date: null, start_local: "00:00", end_local: "23:59" })));
-    await asActor(db, w.caregiverA2.sub, (c) => c.query("select ogevia_api.replace_my_availability($1,$2::jsonb,$3::jsonb)", [w.orgA, allWeek, JSON.stringify([day])]));
+    await setBaselineAvailability(db, w.orgA, w.caregiverA2, JSON.parse(allWeek), [day]);
     const a3 = (await q("select id from ogevia.caregiver_records where linked_user_id=$1", [w.caregiverA3.userId])).rows[0].id;
     await q(
       "insert into ogevia.shifts(organization_id,client_id,service_id,caregiver_user_id,caregiver_record_id,starts_at,ends_at,status) select organization_id,client_id,service_id,$2,$3,starts_at+interval '1 hour',ends_at+interval '1 hour','scheduled' from ogevia.care_requests where id=$1",
@@ -287,7 +287,7 @@ describe("care workflow acceptance rules", () => {
     const a2 = (await q("select id from ogevia.caregiver_records where linked_user_id=$1", [w.caregiverA2.userId])).rows[0].id;
     expect(ids).not.toContain(a2);
     expect(ids).not.toContain(a3);
-    await asActor(db, w.caregiverA2.sub, (c) => c.query("select ogevia_api.replace_my_availability($1,$2::jsonb,'[]'::jsonb)", [w.orgA, allWeek]));
+    await setBaselineAvailability(db, w.orgA, w.caregiverA2, JSON.parse(allWeek));
   });
 
   it("caregiver call-out keeps the same shift + reservation and returns to Coverage Needed", async () => {

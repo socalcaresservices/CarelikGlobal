@@ -10,6 +10,31 @@ financial, and execution direction for Ogevia.
 
 ------------------------------------------------------------------------
 
+# 0. STANDING RULES (added 2026-10-09; take precedence over sections 14 and 17 as a starting instruction)
+
+## Current task first
+- Follow the owner's current explicit instructions. Historical migration phases (section 14) and the "start with Phase 0"
+  instruction (section 17) do **not** restart automatically; they are history unless the owner reopens them.
+- Verify checkout freshness and the intended branch before working: `git fetch origin main`, compare with the current feature or PR
+  base, and confirm the head commit. A stale checkout must never be used to describe current state.
+- Invalid or expired container credentials mean AWS access is unavailable. They do not prove that deployed resources are missing.
+  Do not request credentials until a specific authorised task actually requires live AWS access.
+
+## Reuse existing tools
+- Inspect existing functionality and the current stack first. Reuse or extend suitable tools, libraries and services already used.
+- Do not introduce duplicate platforms or propose replacements because they are familiar or easier.
+- A new tool requires a demonstrated gap, alternatives considered, cost and migration impact, and owner approval before adoption.
+- Do not reopen settled hosting or architecture decisions (CloudFront/AWS web hosting, API route set, database choice) without a
+  concrete need and explicit owner instruction.
+
+## Accurate records
+- Distinguish **proposed**, **implemented**, **tested** and **deployed**. Implemented never means deployed.
+- Do not overwrite current records with findings from a stale checkout.
+- Save the owner's briefs, decisions and implementation notes in repository documentation (see `docs/releases/`).
+- Report the tests actually run and the evidence; do not infer production success.
+
+------------------------------------------------------------------------
+
 ## 1. Authority and supersession
 
 This file is the current source of truth for the Ogevia build.
@@ -621,9 +646,9 @@ Do not bury destructive or billable changes inside a long summary.
 
 ------------------------------------------------------------------------
 
-# 17. Immediate instruction to Claude Code
+# 17. Immediate instruction to Claude Code (HISTORICAL; see section 0)
 
-Start with **Phase 0**.
+The original starting instruction was: start with **Phase 0**. It does not restart automatically.
 
 Do not deploy.
 
