@@ -29,5 +29,7 @@ Earlier failing runs found real issues or local tooling limits and were correcte
 Remaining verification: deployed Cognito login/MFA/token refresh and each database role, actual phone hardware, assistive technology, load, production migration ledger/checksums and exact deployed artifacts. See [deployment handoff](DEPLOYMENT_AND_ROLLBACK.md). Nothing here certifies a report-only agency for real work.
 
 ## Review follow-up (patch on top of #76): added tests
-`manual-assignment.db.test.ts` (8), `enforcement-matrix.db.test.ts` (5: 7 conditions x report-only / active / Service checks On x assignment / visit start), `readiness-restore.db.test.ts` (1),
+`manual-assignment.db.test.ts` (8), `enforcement-matrix.db.test.ts` (5: 7 conditions x report-only / active / Service checks On x assignment / visit start), `readiness-restore.db.test.ts` (9), `visit-start-availability.db.test.ts` (9),
 migration 0045 covered by the manual-offer tests and the updated rollback test; UI: report-only CPR wording, "Offer manually", My experience (3 tests).
+
+Second review round (visit-start availability, restore recovery sets, My experience): see the PR #77 description for the exact commands and counts.

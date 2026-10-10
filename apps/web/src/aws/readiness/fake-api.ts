@@ -25,6 +25,12 @@ export const json = (code: number, body: unknown) => new Response(JSON.stringify
 
 export interface FakeOptions {
   role: Role;
+  /** Routes ("GET /v1/experience/me") that answer 500 this many times before working. */
+  failFirst?: Record<string, number>;
+  /** Routes whose answer waits for this promise (a slow network). */
+  hold?: Record<string, Promise<void>>;
+  /** What the caregiver already reported. */
+  myExperience?: { tagId: string; label: string; status: string }[];
   availability?: Partial<Record<string, unknown>>;
   failNextRequestWith?: { status: number; code: string; message: string };
   evaluation?: Record<string, unknown>;
@@ -76,6 +82,9 @@ export function fakeApi(opts: FakeOptions) {
     const key = new Headers(init?.headers).get("idempotency-key");
     calls.push({ method, path: url.pathname, body, key, query: Object.fromEntries(url.searchParams) });
     const route = `${method} ${url.pathname}`;
+    const failing = opts.failFirst?.[route] ?? 0;
+    if (failing > 0 && opts.failFirst) { opts.failFirst[route] = failing - 1; return json(500, { error: { code: "internal", message: "Something went wrong." } }); }
+    if (opts.hold?.[route]) await opts.hold[route];
     switch (route) {
       case "GET /v1/me":
         return json(200, { memberships: [{ organizationId: ORG, organizationSlug: "org-a", organizationName: "Synthetic Care Co", organizationTimezone: "America/Los_Angeles", role: opts.role, permissions: PERMISSIONS[opts.role] }], profile: null });
@@ -95,7 +104,7 @@ export function fakeApi(opts: FakeOptions) {
       case "GET /v1/experience-tags":
         return json(200, { tags: [{ tagId: SVC, label: "ABA experience" }] });
       case "GET /v1/experience/me":
-        return json(200, { experience: { reviewed: false, reviewedAt: null, tags: [] } });
+        return json(200, { experience: { reviewed: false, reviewedAt: null, tags: opts.myExperience ?? [] } });
       case "POST /v1/experience/me":
         return json(200, { saved: true });
       case `GET /v1/caregivers/${CG}/experience`:

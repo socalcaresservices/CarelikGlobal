@@ -423,3 +423,65 @@ describe("review follow-ups: report-only wording and My experience", () => {
     expect(calls.some((c) => c.path.endsWith("/zip"))).toBe(false);
   });
 });
+
+describe("My experience cannot erase what was reported earlier", () => {
+  const existing = [{ tagId: SVC, label: "ABA experience", status: "reported" }];
+  const save = () => screen.getByRole("button", { name: /Save my experience|Saving/ });
+
+  it("existing experience fails to load: the form is disabled, an empty submission sends nothing, and after a retry the earlier answers are kept", async () => {
+    const { calls } = renderAt("/profile", { role: "caregiver", myExperience: existing, failFirst: { "GET /v1/experience/me": 1 } });
+    const card = await screen.findByRole("region", { name: "My experience" });
+    expect(await within(card).findByRole("alert")).toHaveTextContent(/Nothing can be saved until it loads/);
+    expect(save()).toBeDisabled();
+    expect(within(card).getByRole("checkbox", { name: /ABA experience/ })).toBeDisabled();
+    fireEvent.submit(within(card).getByRole("form", { name: "Report my experience" })); // even a forced submit is ignored
+    expect(posts(calls, "/v1/experience/me")).toHaveLength(0);
+    fireEvent.click(within(card).getByRole("button", { name: "Try again" }));
+    await waitFor(() => expect(save()).toBeEnabled());
+    expect(within(card).getByRole("checkbox", { name: /ABA experience/ })).toBeChecked(); // the existing report is there
+    fireEvent.click(save());
+    await waitFor(() => expect(posts(calls, "/v1/experience/me")).toHaveLength(1));
+    expect(posts(calls, "/v1/experience/me")[0]!.body.tagIds).toEqual([SVC]); // not []
+  });
+
+  it("the agency's tags fail to load: nothing can be saved until a retry works", async () => {
+    const { calls } = renderAt("/profile", { role: "caregiver", myExperience: existing, failFirst: { "GET /v1/experience-tags": 1 } });
+    const card = await screen.findByRole("region", { name: "My experience" });
+    expect(await within(card).findByRole("alert")).toHaveTextContent(/Nothing can be saved until it loads/);
+    expect(within(card).queryByRole("button", { name: "Save my experience" })).toBeNull();
+    fireEvent.click(within(card).getByRole("button", { name: "Try again" }));
+    await waitFor(() => expect(save()).toBeEnabled());
+    expect(posts(calls, "/v1/experience/me")).toHaveLength(0);
+  });
+
+  it("slow loading: submission stays disabled while either request is pending, then becomes available with the existing answers", async () => {
+    let release!: () => void;
+    const hold = new Promise<void>((r) => { release = r; });
+    const { calls } = renderAt("/profile", { role: "caregiver", myExperience: existing, hold: { "GET /v1/experience/me": hold } });
+    const card = await screen.findByRole("region", { name: "My experience" });
+    const form = await within(card).findByRole("form", { name: "Report my experience" }); // tags have arrived, experience has not
+    expect(within(card).getByRole("status")).toHaveTextContent("Loading…");
+    expect(save()).toBeDisabled();
+    fireEvent.submit(form);
+    expect(posts(calls, "/v1/experience/me")).toHaveLength(0);
+    release();
+    await waitFor(() => expect(save()).toBeEnabled());
+    expect(within(card).getByRole("checkbox", { name: /ABA experience/ })).toBeChecked();
+  });
+
+  it("edits survive a failed save and a retry (nothing is reset by the error)", async () => {
+    const { calls } = renderAt("/profile", { role: "caregiver", myExperience: existing, failFirst: { "POST /v1/experience/me": 1 } });
+    const card = await screen.findByRole("region", { name: "My experience" });
+    await waitFor(() => expect(save()).toBeEnabled());
+    const box = within(card).getByRole("checkbox", { name: /ABA experience/ });
+    fireEvent.click(box); // the caregiver deliberately removes it
+    expect(box).not.toBeChecked();
+    fireEvent.click(save());
+    expect(await within(card).findByRole("alert")).toHaveTextContent(/Your changes are kept/);
+    expect(within(card).getByRole("checkbox", { name: /ABA experience/ })).not.toBeChecked(); // still the caregiver's edit
+    fireEvent.click(save());
+    await waitFor(() => expect(posts(calls, "/v1/experience/me")).toHaveLength(2));
+    expect(posts(calls, "/v1/experience/me")[1]!.body.tagIds).toEqual([]); // an intentional, loaded-and-edited removal is allowed
+    expect(posts(calls, "/v1/experience/me")[0]!.key).not.toBeNull();
+  });
+});

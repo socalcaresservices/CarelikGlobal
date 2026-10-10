@@ -96,7 +96,7 @@ const EXPECTED: Record<Cond, Record<Phase, Result>> = {
   "missing TB":               { "report-only": { assignment: "allowed", visitStart: "allowed" }, active: { assignment: "blocked", visitStart: "blocked" }, "active + service checks on": { assignment: "blocked", visitStart: "blocked" } },
   "unverified TB":            { "report-only": { assignment: "allowed", visitStart: "allowed" }, active: { assignment: "blocked", visitStart: "blocked" }, "active + service checks on": { assignment: "blocked", visitStart: "blocked" } },
   "missing service approval": { "report-only": { assignment: "allowed", visitStart: "allowed" }, active: { assignment: "allowed", visitStart: "allowed" }, "active + service checks on": { assignment: "blocked", visitStart: "blocked" } },
-  "unavailable caregiver":    { "report-only": { assignment: "allowed", visitStart: "allowed" }, active: { assignment: "blocked", visitStart: "allowed" }, "active + service checks on": { assignment: "blocked", visitStart: "allowed" } },
+  "unavailable caregiver":    { "report-only": { assignment: "allowed", visitStart: "allowed" }, active: { assignment: "blocked", visitStart: "blocked" }, "active + service checks on": { assignment: "blocked", visitStart: "blocked" } },
   overlap:                    { "report-only": { assignment: "blocked", visitStart: "blocked" }, active: { assignment: "blocked", visitStart: "blocked" }, "active + service checks on": { assignment: "blocked", visitStart: "blocked" } },
 };
 const CONDS = Object.keys(EXPECTED) as Cond[];
@@ -145,7 +145,7 @@ async function probe(c: Cond, day: string): Promise<Result> {
     assignment = "blocked";
   }
   // A caregiver starting a NEW visit, on a client the caregiver is assigned to. (Overlap and availability are about schedules; they are
-  // not checked at the moment of starting a visit, which is why the only visit-start blocks are CPR/TB and an enforced service approval.)
+  // not checked at the moment of starting a visit, which is why the visit-start blocks are CPR/TB, an enforced service approval, and (0046) approved availability once active; an administrator override lifts availability only.)
   const f2 = await freshClient(db, w, w.caregiverA1, 100000, w.orgA, { before: 5, after: 120 });
   if (c === "overlap") {
     // The caregiver is already booked on a shift that is happening now (another client): a new visit cannot start (PR #76: new_live_visit_readiness).
