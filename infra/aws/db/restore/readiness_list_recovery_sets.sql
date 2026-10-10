@@ -1,15 +1,12 @@
--- Read-only. Groups the readiness archive tables (ogevia.archived_*_00NN_<timestamp>) into recovery sets: archives created less than
--- 10 minutes apart belong to the same rollback attempt. Pick ONE row (normally the newest) and pass its archive_names to
--- readiness_restore_from_archives.sql as  set ogevia.recovery_set = '<archive_names>'.
-with a as (
-  select t.tablename::text as name, to_timestamp((regexp_match(t.tablename, '_([0-9]{14})$'))[1], 'YYYYMMDDHH24MISS')::timestamp as ts
-    from pg_catalog.pg_tables t
-   where t.schemaname = 'ogevia' and t.tablename ~ '^archived_.+_[0-9]{4}_[0-9]{14}$'
-), gaps as (
-  select name, ts, (ts - lag(ts) over (order by ts, name)) > interval '10 minutes' as new_set from a
-), g as (
-  select name, ts, sum(case when new_set then 1 else 0 end) over (order by ts, name) as grp from gaps
-)
-select grp + 1 as recovery_set, min(ts) as first_archive_at, max(ts) as last_archive_at, count(*) as archives,
-       string_agg(name, ',' order by name) as archive_names
-  from g group by grp order by grp;
+-- Read-only. Lists the recorded rollback attempts (unique attempt id + manifest) newest first. Pass ONE attempt_id to
+-- readiness_restore_from_archives.sql as  set ogevia.recovery_attempt = '<attempt_id>'. Archives that exist without a manifest (a down script run by
+-- hand) are listed separately: they keep their data but are NOT restorable by the script.
+select a.attempt_id, a.started_at, a.performed_by, a.target_version, a.highest_version, a.slot_count,
+       count(m.*) as manifest_rows,
+       count(m.archive_table) as archives,
+       count(*) filter (where m.archive_table is null) as zero_record_slots,
+       coalesce(sum(m.source_rows) filter (where m.stem = 'caregiver_service_approvals_0040'), 0) as service_approvals_archived
+  from ogevia.readiness_rollback_attempts a
+  left join ogevia.readiness_rollback_manifest m on m.attempt_id = a.attempt_id
+ group by a.attempt_id
+ order by a.started_at desc;
