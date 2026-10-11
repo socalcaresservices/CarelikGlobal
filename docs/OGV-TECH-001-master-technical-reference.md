@@ -525,7 +525,7 @@ The full data dictionary, column definitions, constraints and an ERD are the job
 * Visit state: `draft` → `awaiting_signature` → `signed` | `administrator_review` → `corrected` | `voided` (`0005:6`); authorization status per visit `within_authorization`, `limit_reached`, `exceeds_authorization`, `administrator_override`.
 * Locked visits are immutable through ordinary update (`service_visits_guard_update`, 0005); corrections append rows (`visit_corrections`).
 * `audit_events` and similar tables are append-only by trigger (`forbid_update`, `0005:262`; triggers `audit_events_append_only`, `audit_events_no_delete`).
-* Row level security is enabled on tables (60 statements) with a `readonly_select` policy pattern for `ogevia_readonly` (for example `client_private_names`, `0020:449`); the application never touches tables directly, so the **primary control is the function layer**, with RLS as a second layer. Whether RLS is *forced* for the owner role is not asserted here.
+* Row level security is enabled on tables (60 statements) but the only policies are 59 `SELECT ... USING (true)` policies for the support role `ogevia_readonly`, RLS is not forced, and the table owner (and so every `SECURITY DEFINER` function) bypasses it. **RLS does not enforce tenant isolation here; the function layer does** (`OGV-DATA-001` section 4, verified by building the schema locally).
 
 | Card: PostgreSQL schema and functions | |
 |---|---|
@@ -673,7 +673,7 @@ This is the primary workflow. Trace, with the state and the evidence at each ste
 | # | Step | Frontend | API | SQL (function; migration) | Result / audit |
 |---|---|---|---|---|---|
 | 1 | Find work | `service-verification-page.tsx` (caregiver view) | `GET /v1/visits/active`, `GET /v1/clients/assigned`, `GET /v1/clients/{id}/services` | `get_active_service_visit`, `list_assigned_visit_clients`, `list_authorized_services_for_client` | Only assigned, authorized clients and services |
-| 2 | Start | start button | `POST /v1/visits` (no time or caregiver parameter) | `start_ad_hoc_service_visit(org, client, service, …, idempotency key)`, latest `0042:718`; readiness check at start (0042/0046) | Row in `draft`; `time_in = now()`; caregiver from the verified actor; one open visit per caregiver as a business rule (U exact constraint, see `0005`) |
+| 2 | Start | start button | `POST /v1/visits` (no time or caregiver parameter) | `start_ad_hoc_service_visit(org, client, service, …, idempotency key)`, latest `0042:718`; readiness check at start (0042/0046) | Row in `draft`; `time_in = now()`; caregiver from the verified actor; one open visit per caregiver enforced by partial unique indexes `service_visits_one_open_per_caregiver_user` and `_record` (`OGV-DATA-001` section 10.2) |
 | 3 | End | end button | `POST /v1/visits/{id}/end` | `end_service_visit` (`0006:360`, replaced by `0013:211`) | Locks row `FOR UPDATE`; refuses < 1 min or > 24 h; sets `time_out`, `worked_minutes`, `caregiver_attested_at`, status `awaiting_signature`; audit `service_visit.ended`; idempotent if already ended |
 | 4 | Confirm | confirm page / signature pad | `POST /v1/visits/{id}/confirm` | `confirm_service_visit` (`0006:486`) | Methods `draw`, `assisted_mark` (need evidence), `typed`, `verbal`, `unable_to_confirm`; computes billable minutes against current authorization; status `signed` (Billing Ready) or `administrator_review`; writes `visit_confirmations` with an immutable snapshot (`confirmation_version` 4) |
 | 5 | Lock | | | `service_visits_guard_update` (0005) | Signed visit is immutable via ordinary update |
@@ -718,7 +718,7 @@ Two unrelated implementations exist. Do not mix them.
 
 | | Legacy Supabase CareScore | AWS explainable matching (0043) |
 |---|---|---|
-| Class | H / U current use | RV; **provisional**. Migration 0043 is inside the `ogevia_prd` ledger level 46 (owner-provided 2026-10-11), so it is applied there by inference; pilot level U |
+| Class | H / U current use. The repository records **four** legacy versions (`docs/product/PENDING_RESTORATION.md` §2); the 30/25/20/10/15 shape shown here is the original (`packages/shared`), and the production Supabase version splits availability differently | RV; **provisional**. Migration 0043 is inside the `ogevia_prd` ledger level 46 (owner-provided 2026-10-11), so it is applied there by inference; pilot level U |
 | Shape | `matchScore` 0 to 100 = proximity 30 + language 25 + availability 20 + skills 10 + history 15 | Rule `v0-provisional-50-25-25`: availability 50 + location 25 + experience 25, normalized over applicable components |
 | Source | `packages/shared/src/matching.ts:33` to `:40`; `supabase/migrations/20260719280000_caregiver_client_matching.sql` | `0043_explainable_matching.sql` (header); `docs/releases/caregiver-readiness/MATCHING_WORKED_EXAMPLES.md` |
 | Eligibility | Not separate | **Eligibility first**: the same gate as commit time (status, approved services, CPR, TB, approved availability, double booking, mandatory client requirements). Score only orders eligible people; it can never rescue a failed check |
@@ -1433,7 +1433,7 @@ The conclusion is limited to what the repository shows. A service is not classif
 7. **Pilot database migration level** after 2026-10-05.
 8. **Alarm subscribers and AWS Budgets.**
 9. **Deployed commit of `prd`**; client ids of per-environment Cognito clients; RDS KMS key type.
-10. **Exact one-open-visit-per-caregiver constraint** (business rule stated in `CLAUDE.md` §9; the SQL enforcement was not traced in this pass).
+10. ~~Exact one-open-visit-per-caregiver constraint~~ **Resolved in OGV-DATA-001 (2026-10-11):** two partial unique indexes on `service_visits` (draft and awaiting-signature statuses), plus `service_visits_shift_unique` for one visit per shift.
 11. **Per-route permission mapping and sanitized request/response examples** are deferred to OGV-API-001; the data dictionary and ERD to OGV-DATA-001.
 12. **Test results:** none produced here.
 13. **Pagination and rate behaviour** under load: not evidenced.
@@ -1475,3 +1475,4 @@ Not done: running any test suite, any AWS or Supabase call, or any comparison wi
 | Version | Date | Change |
 |---|---|---|
 | 0.1 | 2026-10-11 | First draft from repository evidence at `2b01572`. |
+| 0.1.1 | 2026-10-11 | Corrections from building the database locally for OGV-DATA-001: RLS wording (section 9), one-open-visit enforcement (section 19, known gap 10), legacy CareScore versions (section 21). |
