@@ -9,7 +9,7 @@ import { asActor, createTestDb, freshClient, orgToday, seedWorld, setBaselineAva
 
 const RESTORE = readFileSync(new URL("../restore/readiness_restore_from_archives.sql", import.meta.url), "utf8");
 const LIST = readFileSync(new URL("../restore/readiness_list_recovery_sets.sql", import.meta.url), "utf8");
-const ALL = ["0039", "0040", "0041", "0042", "0043", "0044", "0045", "0046"];
+const ALL = ["0039", "0040", "0041", "0042", "0043", "0044", "0045", "0046", "0047", "0048"];
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 let db: TestDb;
@@ -62,7 +62,9 @@ async function populate(label: "one" | "two") {
     await db.admin.query("insert into ogevia.organization_readiness_settings(organization_id, enforcement_active_from, service_checks) values ($1, now(), true)", [w.orgA]);
   }
   await db.admin.query("insert into ogevia.readiness_setting_events(organization_id, setting, old_value, new_value, reason, changed_by) values ($1,'service_checks','Off','On',$2,$3)", [w.orgA, `Test ${label}`, w.ownerA.userId]);
-  await call(w.ownerA, "select ogevia_api.authorize_availability_override($1,$2,now(), now() + interval '2 days',$3)", [w.orgA, rec1, `Phone agreement ${label}`]);
+  await db.admin.query(
+      `insert into ogevia.availability_overrides (organization_id, caregiver_record_id, client_id, range_start, range_end, reason, authorised_by, expires_at, original_status)
+       values ($1,$2,$3, now(), now() + interval '2 hours', $4, $5, now() + interval '30 minutes', 'outside')`, [w.orgA, rec1, fx.client, `Phone agreement ${label}`, w.ownerA.userId]);
   const tag = (await call(w.managerA, "select ogevia_api.create_experience_tag($1,$2) as id", [w.orgA, label === "one" ? "ABA experience" : "Dementia care"]))[0].id;
   await call(w.managerA, "select ogevia_api.review_caregiver_experience($1,$2,$3::uuid[],'ok')", [w.orgA, rec1, `{${tag}}`]);
   await call(w.managerA, "select ogevia_api.set_caregiver_zip($1,$2,$3)", [w.orgA, rec1, label === "one" ? "90210" : "90001"]);

@@ -11,24 +11,33 @@ import { ApiError } from "./errors";
  *
  * Passwords: Cognito generates the temporary password and emails it. No
  * password ever passes through, is returned by, or is logged by either Lambda.
+ *
+ * 0048 adds switching a sign-in off or on (AdminDisableUser / AdminEnableUser), addressed by the
+ * person's Cognito `sub` (never an email). The function still cannot set a password, change an
+ * email, assign a group, or delete anyone.
  */
 export interface IdentityAdmin {
   /** Creates the sign-in (Cognito emails the invitation) or finds the existing one. */
   invite(email: string): Promise<{ sub: string; existingAccount: boolean }>;
   /** Re-sends the invitation email to a person who has not set their password yet. */
   resend(email: string): Promise<void>;
+  /** Switches a sign-in off or on in Cognito. `sub` is the person's Cognito identifier. Disabled people cannot sign in; nothing is deleted. */
+  setEnabled(sub: string, enabled: boolean): Promise<void>;
 }
 
-export type IdentityRequest = { action: "invite" | "resend"; email: string };
+export type IdentityRequest =
+  | { action: "invite" | "resend"; email: string }
+  | { action: "disable" | "enable"; sub: string };
 export type IdentityResponse =
   | { ok: true; sub?: string; existingAccount?: boolean }
-  | { ok: false; error: "already_set_up" | "invalid_email" | "rate_limited" | "not_found" | "failed" };
+  | { ok: false; error: "already_set_up" | "invalid_email" | "invalid_request" | "rate_limited" | "not_found" | "failed" };
 
 const MESSAGES: Record<Exclude<IdentityResponse, { ok: true }>["error"], [number, string, string]> = {
   already_set_up: [409, "conflict", "This person has already set up their sign-in; they can use \"Forgot password\" on the sign-in page."],
   invalid_email: [422, "validation_failed", "Enter a valid email address."],
+  invalid_request: [422, "validation_failed", "The request was not valid."],
   rate_limited: [429, "rate_limited", "Too many invitations were sent just now; try again in a few minutes."],
-  not_found: [404, "not_found", "No sign-in was found for this email."],
+  not_found: [404, "not_found", "No sign-in was found for that person."],
   failed: [502, "identity_unavailable", "The sign-in service did not respond; nothing was changed. Try again."],
 };
 
@@ -42,6 +51,7 @@ export function identityError(error: Exclude<IdentityResponse, { ok: true }>["er
 export const unavailableIdentityAdmin: IdentityAdmin = {
   invite: async () => { throw new ApiError(503, "identity_unavailable", "Invitations are not switched on for this environment."); },
   resend: async () => { throw new ApiError(503, "identity_unavailable", "Invitations are not switched on for this environment."); },
+  setEnabled: async () => { throw new ApiError(503, "identity_unavailable", "Account changes are not switched on for this environment."); },
 };
 
 /** Calls the identity Lambda through an injected invoker (the AWS SDK in production). */
@@ -65,6 +75,9 @@ export function lambdaIdentityAdmin(invoke: (request: IdentityRequest) => Promis
     async resend(email) {
       await call({ action: "resend", email });
     },
+    async setEnabled(sub, enabled) {
+      await call({ action: enabled ? "enable" : "disable", sub });
+    },
   };
 }
 
@@ -79,6 +92,11 @@ export class MemoryIdentityAdmin implements IdentityAdmin {
     const sub = crypto.randomUUID();
     this.users.set(email, { sub, confirmed: false });
     return { sub, existingAccount: false };
+  }
+  readonly disabled = new Set<string>();
+  async setEnabled(sub: string, enabled: boolean) {
+    this.calls.push({ action: enabled ? "enable" : "disable", sub });
+    if (enabled) this.disabled.delete(sub); else this.disabled.add(sub);
   }
   async resend(email: string) {
     this.calls.push({ action: "resend", email });

@@ -84,8 +84,10 @@ const approveService = (rec: string, svc: string, reason = "Observed visit compl
   call(w.ownerA, "select ogevia_api.approve_caregiver_service($1,$2,$3,$4::date,null,$5)", [w.orgA, rec, svc, today, reason]);
 
 
-const authOverride = (rec: string, from: string, to: string, reason = "Agency asked for this caregiver") =>
-  call(w.ownerA, "select ogevia_api.authorize_availability_override($1,$2,$3::timestamptz,$4::timestamptz,$5) as id", [w.orgA, rec, from, to, reason]).then((r) => r[0].id as string);
+/** 0047: an override is for ONE client and ONE exact shift time (agency-local day and times), and is used once. */
+const authOverride = (rec: string, day: string, start: string, end: string, reason = "Agency asked for this caregiver", client = fx.client) =>
+  call(w.ownerA, "select ogevia_api.authorize_availability_override($1,$2,($3::date + $4::time) at time zone 'America/Los_Angeles',($3::date + $5::time) at time zone 'America/Los_Angeles',$6,$7) as id",
+    [w.orgA, rec, day, start, end, reason, client]).then((r) => r[0].id as string);
 const matchFor = (day: string) =>
   call(w.managerA, "select ogevia_api.match_caregivers($1,$2,$3,$4::jsonb,null,null) as r", [w.orgA, fx.service, fx.client,
     JSON.stringify([{ starts_at: `${day}T09:00:00-07:00`, ends_at: `${day}T11:00:00-07:00` }])]).then((r) => r[0].r);
@@ -139,8 +141,8 @@ describe("after activation: Matches exclusion is not an assignment block, but ma
     const day = await add(5);
     expect(cand(await matchFor(day), "CG-A2").eligibility).toBe("not_eligible");
     await expectPgError(createShift(w.managerA, day, "09:00", "11:00", recA2), "OGR30", /^Availability not provided\.$/);
-    await expectPgError(call(w.managerA, "select ogevia_api.authorize_availability_override($1,$2,now(),now() + interval '30 days','Because')", [w.orgA, recA2]), "OGA03"); // administrators only
-    const id = await authOverride(recA2, at(day, "00:00"), at(await add(6), "00:00"));
+    await expectPgError(call(w.managerA, "select ogevia_api.authorize_availability_override($1,$2,now(),now() + interval '1 hour','Because',$3)", [w.orgA, recA2, fx.client]), "OGA03"); // administrators only
+    const id = await authOverride(recA2, day, "09:00", "11:00");
     expect(await createShift(w.managerA, day, "09:00", "11:00", recA2)).toHaveLength(1);
     const ov = (await db.admin.query("select reason, authorised_by, used_count from ogevia.availability_overrides where id = $1", [id])).rows[0];
     expect(ov).toMatchObject({ reason: "Agency asked for this caregiver", used_count: 1 });
@@ -151,16 +153,16 @@ describe("after activation: Matches exclusion is not an assignment block, but ma
 
   it("the override lifts availability ONLY: missing CPR/TB, overlap, caregiver status and mandatory client requirements still block", async () => {
     const day = await add(7);
-    const from = at(day, "00:00"), to = at(await add(8), "00:00");
     // A3 has no CPR/TB and no approved hours; override covers the hours but not the documents.
-    await authOverride(recA3, from, to);
     await baseline(w.caregiverA3, []);
+    await authOverride(recA3, day, "09:00", "11:00");
     await expectPgError(createShift(w.managerA, day, "09:00", "11:00", recA3), "OGR30", /CPR missing\.\s+TB missing\./);
     // Overlap with the override in place for A2.
-    await authOverride(recA2, from, to);
+    await authOverride(recA2, day, "09:00", "11:00");
     expect(await createShift(w.managerA, day, "09:00", "11:00", recA2)).toHaveLength(1);
     await expectPgError(createShift(w.managerA, day, "10:00", "12:00", recA2), "OGC09", /already has a shift/);
     // Mandatory client experience that A2 has not had confirmed.
+    await authOverride(recA2, day, "13:00", "15:00"); // the refusal below rolls back, so this override is still unused for the retry
     const tag = (await call(w.managerA, "select ogevia_api.create_experience_tag($1,'Dementia care') as id", [w.orgA]))[0].id;
     await call(w.managerA, "select ogevia_api.set_client_experience_requirements($1,$2,$3::jsonb,'Medical need')", [w.orgA, fx.client, JSON.stringify([{ tagId: tag, mandatory: true }])]);
     await expectPgError(createShift(w.managerA, day, "13:00", "15:00", recA2), "OGR30", /Required experience not confirmed: Dementia care\./);
@@ -191,9 +193,14 @@ describe("after activation: Matches exclusion is not an assignment block, but ma
     expect(offer).toBeTruthy();
     await accept(offer);
     await expectPgError(call(w.managerA, "select ogevia_api.assign_care_request($1,$2,$3)", [w.orgA, req, offer]), "OGR30", /^Availability not provided\.$/);
-    await authOverride(recA2, at(day, "00:00"), at(await add(11), "00:00"));
+    const asked = (await db.admin.query("select client_id, to_char(starts_at at time zone 'America/Los_Angeles', 'YYYY-MM-DD') d, to_char(starts_at at time zone 'America/Los_Angeles', 'HH24:MI') s, to_char(ends_at at time zone 'America/Los_Angeles', 'HH24:MI') e from ogevia.care_requests where id = $1", [req])).rows[0];
+    await authOverride(recA2, asked.d, asked.s, asked.e, "Agency asked for this caregiver", asked.client_id);
     const assigned = await call(w.managerA, "select ogevia_api.assign_care_request($1,$2,$3) as id", [w.orgA, req, offer]);
     expect(assigned[0].id).toBeTruthy();
+    const used = (await db.admin.query("select consumed_context, shift_id, client_id from ogevia.availability_overrides where caregiver_record_id = $1 and consumed_at is not null order by consumed_at desc limit 1", [recA2])).rows[0];
+    expect(used.consumed_context).toBe("care_request");
+    expect(used.client_id).toBe(asked.client_id);
+    expect(used.shift_id).not.toBeNull(); // linked to the shift created for the request
   });
 
   it("a care-request offer to a caregiver without CPR/TB can be sent but never assigned; offers need an active caregiver of this agency and an open request", async () => {

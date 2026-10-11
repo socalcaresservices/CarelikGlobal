@@ -57,4 +57,31 @@ describe("identity Lambda", () => {
     await expect(lambdaIdentityAdmin(async () => ({ ok: false, error: "already_set_up" })).resend("a@example.test")).rejects.toMatchObject({ status: 409 });
     await expect(lambdaIdentityAdmin(async () => ({ ok: true, sub: "x" })).invite("a@example.test")).rejects.toMatchObject({ status: 502 });
   });
+  it("disable/enable (0048): addressed by the Cognito sub only; exactly one disable or enable call; nothing else; no email or password anywhere", async () => {
+    const lines: string[] = [];
+    const c = fakeCognito(() => ({}));
+    const h = createIdentityHandler(c.client as never, "us-west-2_TEST", (l) => lines.push(l));
+    expect(await h({ action: "disable", sub: SUB.toUpperCase() })).toEqual({ ok: true });
+    expect(await h({ action: "enable", sub: SUB })).toEqual({ ok: true });
+    expect(c.sent.map((s) => s.name)).toEqual(["AdminDisableUserCommand", "AdminEnableUserCommand"]);
+    expect(c.sent.map((s) => s.input)).toEqual([{ UserPoolId: "us-west-2_TEST", Username: SUB }, { UserPoolId: "us-west-2_TEST", Username: SUB }]);
+    expect(lines.join("\n")).not.toContain(SUB); // the log line holds the action and outcome only
+  });
+
+  it("disable/enable refuse anything that is not a UUID (an email, a username, empty) before Cognito is called, and map Cognito failures", async () => {
+    const c = fakeCognito(() => { throw err("UserNotFoundException"); });
+    const h = createIdentityHandler(c.client as never, "us-west-2_TEST", () => {});
+    for (const sub of ["a@example.test", "someone", "", "../etc", `${SUB} `.repeat(2)]) {
+      expect(await h({ action: "disable", sub } as never)).toEqual({ ok: false, error: "invalid_request" });
+    }
+    expect(await h({ action: "enable", email: "a@example.test" } as never)).toEqual({ ok: false, error: "invalid_request" });
+    expect(c.sent).toHaveLength(0);
+    expect(await h({ action: "disable", sub: SUB })).toEqual({ ok: false, error: "not_found" });
+  });
+
+  it("the API side maps failures of setEnabled to safe errors", async () => {
+    await expect(lambdaIdentityAdmin(async () => { throw new Error("network"); }).setEnabled(SUB, false)).rejects.toMatchObject({ status: 502 });
+    await expect(lambdaIdentityAdmin(async () => ({ ok: false, error: "not_found" })).setEnabled(SUB, true)).rejects.toMatchObject({ status: 404 });
+    await expect(lambdaIdentityAdmin(async () => ({ ok: true })).setEnabled(SUB, true)).resolves.toBeUndefined();
+  });
 });

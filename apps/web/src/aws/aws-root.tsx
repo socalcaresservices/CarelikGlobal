@@ -17,6 +17,7 @@ import { AwsLanding, AwsShell } from "./aws-shell";
 import { BillingReviewPage } from "./billing-review-page";
 import { VisitReviewPage } from "./visit-review-page";
 import { BillingRoundingSettingsPage } from "./billing-rounding";
+import { AccountsPage } from "./accounts-page";
 import { CareRequestsPage } from "./care-requests-page";
 import { CaregiverAvailabilityPage } from "./caregiver-availability-page";
 import { AwsHomePage } from "./home-page";
@@ -73,6 +74,7 @@ export function AwsRoutes({ api, publicApi }: { api: AwsApiClient; publicApi: Aw
                     <Route path="/billing-review" element={<BillingReviewPage />} />
                     <Route path="/visits/:visitId" element={<VisitReviewPage />} />
                     <Route path="/care-requests" element={<CareRequestsPage api={api} />} />
+                    <Route path="/accounts" element={<AccountsPage />} />
                     <Route path="/availability" element={<CaregiverAvailabilityPage api={api} />} />
                     <Route path="/profile" element={<ProfilePage />} />
                     <Route path="/documents" element={<DocumentsPage />} />

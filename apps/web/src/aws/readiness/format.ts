@@ -105,9 +105,9 @@ export function groupOutcome(rows: CheckRow[], group: (typeof CHECK_GROUPS)[numb
 }
 
 export const ELIGIBILITY_LABEL: Record<string, string> = {
-  eligible: "Eligible",
-  partial: "Partly covered",
-  not_eligible: "Not available",
+  eligible: "Match",
+  partial: "Partial Match",
+  not_eligible: "No Match",
 };
 
 /** "83.3% (provisional)" or "Score incomplete". Never a number the server did not compute. */

@@ -40,6 +40,9 @@ export interface Shift {
   lastCalloutReason: string | null;
   /** 0034: the weekly series this occurrence belongs to, if any. */
   seriesId?: string | null;
+  /** 0047: assigned under a one-shift Administrator availability override (the original result was No Match). */
+  availabilityOverride?: boolean;
+  availabilityOverrideReason?: string | null;
 }
 interface CoverageEvent { eventType: "called_out" | "reassigned"; createdAt: string; reason: string | null; originalCaregiverName: string | null; replacementCaregiverName: string | null; recordedBy: string }
 interface MyShift { shiftId: string; startsAt: string; endsAt: string; clientCode: string; serviceName: string | null; coverageState: string; canCallOut: boolean }
@@ -251,6 +254,7 @@ function ShiftRow({ s, canManage, onDone }: { s: Shift; canManage: boolean; onDo
           : <span className="font-semibold text-red-800">OPEN — no caregiver</span>}
       </p>
       {calledOut && s.lastCalloutReason ? <p className="mt-1 text-sm text-red-800">Reason: {s.lastCalloutReason}</p> : null}
+      {s.availabilityOverride ? <p className="mt-1 text-sm font-medium text-amber-900">Assigned with Admin override (availability was No Match){s.availabilityOverrideReason ? `: ${s.availabilityOverrideReason}` : ""}</p> : null}
       {s.seriesId ? <p className="mt-1 text-xs text-slate-600">Repeats weekly — changes here affect this date only; change the series under Manage repeating shifts.</p> : null}
       {s.fromCareRequest ? <p className="mt-1 text-xs text-slate-600">From a Care Request; manage it on the <Link className="underline" to="/care-requests">Care Requests</Link> page.</p> : null}
       <div className="mt-2 flex flex-wrap items-center gap-2">

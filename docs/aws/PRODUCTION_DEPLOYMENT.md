@@ -1,6 +1,6 @@
 # Production deployment: ogevia_prd
 
-Status: code and tests complete; **deployment not yet executed** (see section 7).
+Status: code and tests complete. **Update 2026-10-10 (owner-provided AWS output): the `Ogevia-prd-*` Lambda is deployed with `DB_NAME=ogevia_prd`, `OGEVIA_ENV=prd`; `Ogevia-prd-WebHosting` and `Ogevia-prd-ServiceVerificationApi` are `UPDATE_COMPLETE`.** Database connectivity, migrations, deployed commit, MFA sign-in and the signature workflow are still unverified. Rows in section 7 marked NOT RUN mean "not recorded", not "not performed". Current evidence and checklist: `URL_REGISTRY_AND_LAUNCH_CHECKLIST.md`. Original status was: deployment not yet executed (see section 7).
 Branch: `claude/prd-database-path`, based on `7ddda43` (`claude/vibrant-sagan-rn9z58`, the newest AWS release: migrations 0001-0038).
 
 ## 1. What this adds (and what it leaves alone)
@@ -61,7 +61,7 @@ Not scripted (needs a signed-in browser, do once after `web`): sign in as the ad
 
 ## 5. URL
 
-The production frontend origin is the `WebOrigin` output of `Ogevia-prd-WebHosting` (a CloudFront domain, built with `VITE_APP_ENV=production` and the production API URL). `app.ogevia.com` is not repointed by this work: that is a DNS change that needs a separate owner decision. `https://d2xumch5w0izfg.cloudfront.net/` is the pilot (test database); do not use it as the production URL.
+The production frontend origin is the `WebOrigin` output of `Ogevia-prd-WebHosting` (a CloudFront domain, built with `VITE_APP_ENV=production` and the production API URL). `app.ogevia.com` is not repointed by this work: that is a DNS change that needs a separate owner decision. `https://d2xumch5w0izfg.cloudfront.net/` is the pilot (test database); do not use it as the production URL. Production candidate (owner-provided CloudFormation output, 2026-10-10): app `https://d3l4psdkokkvnb.cloudfront.net`, API `https://zk527zk4ua.execute-api.us-west-2.amazonaws.com`.
 
 ## 6. Rollback and recovery
 

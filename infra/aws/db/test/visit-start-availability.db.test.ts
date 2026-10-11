@@ -111,8 +111,14 @@ const dropVisit = async (id: string) => {
   const c = await db.admin.connect();
   try { await c.query("set session_replication_role = replica"); await c.query("delete from ogevia.service_visits where id = $1", [id]); } finally { await c.query("reset session_replication_role"); c.release(); }
 };
-const overrideNow = (rec: string, from = "now() - interval '5 minutes'", to = "now() + interval '3 hours'") =>
-  db.admin.query(`select 1`).then(() => call(w.ownerA, `select ogevia_api.authorize_availability_override($1,$2,${from},${to},'Agency asked for this worker today') as id`, [w.orgA, rec])).then((r) => r[0].id as string);
+const overrideNow = (rec: string, client: string, from = "now() - interval '5 minutes'", to = "now() + interval '3 hours'") =>
+  db.admin.query(`select 1`).then(() => call(w.ownerA, `select ogevia_api.authorize_availability_override($1,$2,${from},${to},'Agency asked for this worker today',$3) as id`, [w.orgA, rec, client])).then((r) => r[0].id as string);
+/** 0047: an override is single-use, so each attempt that must be lifted gets a fresh one for this caregiver and client. */
+const attemptOv = async (actor: Actor, f: { client: string; service: string }, rec: string) => {
+  await db.admin.query("delete from ogevia.availability_overrides where consumed_at is null");
+  try { await overrideNow(rec, f.client); } catch (e) { if (!/nothing to override/.test(String((e as Error).message))) throw e; } // already available: no override needed
+  return attempt(actor, f);
+};
 const attempt = async (actor: Actor, f: { client: string; service: string }) => {
   try { const id = await startVisit(actor, f); await dropVisit(id); return "allowed"; } catch (e) { return `${(e as { code?: string }).code}: ${(e as Error).message}`; }
 };
@@ -167,67 +173,76 @@ describe("after activation: new visit starts need approved availability", () => 
     expect(await attempt(w.managerA, f)).toBe("allowed");
   });
 
-  it("a recorded administrator override covering the interval allows the start, is counted and audited, and expires", async () => {
+  it("a recorded administrator override covering the interval allows the start once, is counted and audited, and expires", async () => {
     await baseline(w.caregiverA1, []);
     const f = await fresh(w.caregiverA1);
     await ensureApproval(recA1, f.service);
     expect(await attempt(w.caregiverA1, f)).toMatch(/^OGR30: Availability not provided\./);
-    await expectPgError(call(w.managerA, "select ogevia_api.authorize_availability_override($1,$2,now(),now() + interval '1 hour','Because')", [w.orgA, recA1]), "OGA03"); // administrators only
-    const id = await overrideNow(recA1);
+    await expectPgError(call(w.managerA, "select ogevia_api.authorize_availability_override($1,$2,now(),now() + interval '1 hour','Because',$3)", [w.orgA, recA1, f.client]), "OGA03"); // administrators only
+    const id = await overrideNow(recA1, f.client);
     expect(await attempt(w.caregiverA1, f)).toBe("allowed");
-    const ov = (await db.admin.query("select used_count, reason from ogevia.availability_overrides where id = $1", [id])).rows[0];
-    expect(ov.used_count).toBeGreaterThanOrEqual(1);
-    expect((await db.admin.query("select count(*)::int n from ogevia.audit_events where action = 'availability.override_used' and entity_id = $1", [id])).rows[0].n).toBeGreaterThanOrEqual(1);
-    // An override that has expired, does not cover now, or belongs to another caregiver does nothing.
-    await db.admin.query("update ogevia.availability_overrides set expires_at = now() - interval '1 minute' where id = $1", [id]);
+    const ov = (await db.admin.query("select used_count, reason, consumed_at from ogevia.availability_overrides where id = $1", [id])).rows[0];
+    expect(ov.used_count).toBe(1);
+    expect(ov.consumed_at).not.toBeNull();
+    expect((await db.admin.query("select count(*)::int n from ogevia.audit_events where action = 'availability.override_used' and entity_id = $1", [id])).rows[0].n).toBe(1);
+    // One use only: the next start is refused again.
+    expect(await attempt(w.caregiverA1, f)).toMatch(/^OGR30: Availability not provided\./);
+    // An override that has expired, does not cover now, belongs to another caregiver or to another client does nothing.
+    const expired = await overrideNow(recA1, f.client);
+    await db.admin.query("update ogevia.availability_overrides set expires_at = now() - interval '1 minute' where id = $1", [expired]);
     expect(await attempt(w.caregiverA1, f)).toMatch(/^OGR30: Availability not provided\./);
     await db.admin.query("delete from ogevia.availability_overrides");
-    await overrideNow(recA2);
+    await overrideNow(recA2, f.client);
     expect(await attempt(w.caregiverA1, f)).toMatch(/^OGR30: Availability not provided\./);
     await db.admin.query("delete from ogevia.availability_overrides");
-    await overrideNow(recA1, "now() + interval '1 hour'", "now() + interval '3 hours'"); // starts later: does not cover this start
+    await overrideNow(recA1, f.client, "now() + interval '1 hour'", "now() + interval '3 hours'"); // starts later: does not cover this start
+    expect(await attempt(w.caregiverA1, f)).toMatch(/^OGR30: Availability not provided\./);
+    await db.admin.query("delete from ogevia.availability_overrides");
+    const elsewhere = await fresh(w.caregiverA1);
+    await ensureApproval(recA1, elsewhere.service);
+    await overrideNow(recA1, elsewhere.client); // approved for a different client
     expect(await attempt(w.caregiverA1, f)).toMatch(/^OGR30: Availability not provided\./);
     await db.admin.query("delete from ogevia.availability_overrides");
   });
 
   it("an override never bypasses another mandatory check: CPR/TB, status, overlap, service approval (when On), mandatory client requirement", async () => {
     await baseline(w.caregiverA1, []);
-    await overrideNow(recA1);
     const f = await fresh(w.caregiverA1);
     await ensureApproval(recA1, f.service);
     // CPR/TB
     await setDocs(recA1, "missing", "missing");
-    const m = await attempt(w.caregiverA1, f);
+    const m = await attemptOv(w.caregiverA1, f, recA1);
     expect(m).toMatch(/^OGR30: CPR missing\./);
     expect(m).not.toMatch(/Availability/);
     await setDocs(recA1, "current", "current");
-    expect(await attempt(w.caregiverA1, f)).toBe("allowed"); // control: the override does work when everything else is fine
+    expect(await attemptOv(w.caregiverA1, f, recA1)).toBe("allowed"); // control: the override does work when everything else is fine
     // Overlap
     await db.admin.query(
       `insert into ogevia.shifts (organization_id, client_id, service_id, caregiver_user_id, caregiver_record_id, starts_at, ends_at, status)
        values ($1,$2,$3,$4,$5, now() - interval '30 minutes', now() + interval '90 minutes', 'scheduled')`, [w.orgA, fx.client, fx.service, w.caregiverA1.userId, recA1]);
     const f2 = await fresh(w.caregiverA1);
     await ensureApproval(recA1, f2.service);
-    expect(await attempt(w.caregiverA1, f2)).toMatch(/^OGR30: Already booked\./);
+    expect(await attemptOv(w.caregiverA1, f2, recA1)).toMatch(/^OGR30: Already booked\./);
     await db.admin.query("delete from ogevia.shifts where caregiver_record_id = $1 and status = 'scheduled'", [recA1]);
     // Mandatory client requirement
     const tag = (await call(w.managerA, "select ogevia_api.create_experience_tag($1,'Dementia care') as id", [w.orgA]))[0].id;
     await call(w.managerA, "select ogevia_api.set_client_experience_requirements($1,$2,$3::jsonb,'Medical need')", [w.orgA, f2.client, JSON.stringify([{ tagId: tag, mandatory: true }])]);
-    expect(await attempt(w.caregiverA1, f2)).toMatch(/Required experience not confirmed: Dementia care\./);
+    expect(await attemptOv(w.caregiverA1, f2, recA1)).toMatch(/Required experience not confirmed: Dementia care\./);
     await db.admin.query("delete from ogevia.client_experience_requirements");
     // Enforced service approval
     await serviceChecks(w.ownerA, true);
     await db.admin.query("delete from ogevia.caregiver_service_approvals where caregiver_record_id = $1 and service_id = $2", [recA1, f2.service]);
-    expect(await attempt(w.caregiverA1, f2)).toMatch(/^OGR30: Not approved for this service\./);
+    expect(await attemptOv(w.caregiverA1, f2, recA1)).toMatch(/^OGR30: Not approved for this service\./);
     await serviceChecks(w.ownerA, false);
     // Caregiver status
+    await db.admin.query("delete from ogevia.availability_overrides where consumed_at is null");
+    await overrideNow(recA1, f2.client);
     await db.admin.query("update ogevia.caregiver_records set status = 'inactive' where id = $1", [recA1]);
     expect(await attempt(w.caregiverA1, f2)).not.toBe("allowed");
     await db.admin.query("update ogevia.caregiver_records set status = 'active' where id = $1", [recA1]);
     // A manager-worker with an override still needs CPR/TB.
-    await overrideNow(mgrRec);
     await setDocs(mgrRec, "missing", "current", w.managerA);
-    expect(await attempt(w.managerA, f2)).toMatch(/CPR missing\./);
+    expect(await attemptOv(w.managerA, f2, mgrRec)).toMatch(/CPR missing\./);
     await db.admin.query("delete from ogevia.availability_overrides");
   });
 

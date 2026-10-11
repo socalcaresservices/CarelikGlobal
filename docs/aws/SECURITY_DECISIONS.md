@@ -221,7 +221,7 @@ However, **several gaps must be addressed before Phase 1 production transition:*
 | Framework | Status | Assessment |
 |---|---|---|
 | **SOC 2** | ⚠️ PARTIAL | Encryption, audit logging, access control present (VERIFIED); lacks formal controls testing (INFERRED) |
-| **HIPAA** | ⚠️ DESIGN REQUIREMENT (NOT YET APPLICABLE) | **Correction:** Ogevia is architected to eventually create, receive, maintain, and transmit service-verification data that may constitute PHI/ePHI. Development currently avoids production PHI (VERIFIED). Production PHI remains prohibited until the AWS BAA and security/compliance gates are satisfied (INFERRED Phase 7+). HIPAA safeguards are therefore design requirements now, not future nice-to-haves. |
+| **HIPAA** | ⚠️ DESIGN REQUIREMENT (NOT YET APPLICABLE) | **Correction:** Ogevia is architected to eventually create, receive, maintain, and transmit service-verification data that may constitute PHI/ePHI. Development currently avoids production PHI (VERIFIED). Production PHI remains prohibited until the AWS BAA and security/compliance gates are satisfied (INFERRED Phase 7+). **Update 2026-10-10: AWS BAA is owner-confirmed (owner statement; agreement not in the repository). The other security/compliance gates (MFA sign-in, tenant isolation on the production deployment, backups/restore) are not yet verified on production.** HIPAA safeguards are therefore design requirements now, not future nice-to-haves. |
 | **PCI DSS** | ⚠️ NOT CURRENTLY APPLICABLE | No payment card data stored; not required for current Ogevia scope (VERIFIED) |
 | **GDPR** | ⚠️ CONDITIONAL | If European users/data, requires data residency (current: us-west-2 only) and DPA with AWS (INFERRED) |
 
