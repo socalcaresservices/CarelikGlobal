@@ -178,7 +178,7 @@ Review of the query (author): it is correct for *direct* membership of the three
 | Check | Result | Reading |
 |---|---|---|
 | `ogevia_readonly` holders | None | **Matches the design** (empty until the owner approves an individual audited support login). No login can currently read every agency's rows through this role. |
-| `ogevia_owner` holders | Exactly one: `ogevia_admin`, and the owner was connected as `ogevia_admin` | Matches the design if `ogevia_admin` is the RDS master user, which migration `0001` makes the member. The documented procedure connects with the master secret, which is consistent with this, but the credential used and the master user name were not stated, so it is **likely, not confirmed** (C.7.3 item 1). |
+| `ogevia_owner` holders | Exactly one: `ogevia_admin`, and the owner was connected as `ogevia_admin` | **Matches the design.** The owner has confirmed that `ogevia_admin` is the RDS master user (owner-stated, 2026-10-11; method not stated), which is the member migration `0001` creates. |
 | `ogevia_app` holders | Only `ogevia_prd_app` | `ogevia_prd_app` is the designed production login. The design also expects the **pilot login** (secret `ogevia/database/app`) to hold `ogevia_app`, unless that login *is* `ogevia_app` itself (`01_app_login_role.sql` allows this). No separate pilot login appears among the members. The author's inference, not verified: the pilot API connects as `ogevia_app` itself, which would mean `ogevia_app` has `LOGIN` and a password. That needs Q1 (`rolcanlogin`) to confirm, and Q4 to confirm that it **cannot connect to `ogevia_prd`**. |
 | Unexpected holders of any of the three roles | None reported | Direct membership only. Indirect paths are not covered. |
 
@@ -186,7 +186,7 @@ The reported result does not change that `ogevia_admin`, any `rds_superuser` mem
 
 ### C.7.3 Still open (not in the reported result)
 
-1. **Is `ogevia_admin` the RDS master user?** (Likely; see C.7.2.) Read-only check: `aws rds describe-db-instances --db-instance-identifier ogevia-prod-postgres --query 'DBInstances[0].MasterUsername' --output text`.
+1. ~~Is `ogevia_admin` the RDS master user?~~ **Resolved:** owner-confirmed 2026-10-11.
 2. **Q1:** does `ogevia_app` have `rolcanlogin = true`? Do `ogevia_prd_app` and `ogevia_admin` have the expected attributes (`ogevia_prd_app`: not superuser, not `CREATEROLE`/`CREATEDB`/`BYPASSRLS`, not inherit)?
 3. **Q2 full columns:** `granted_by`, `admin_option`, `inherit_option`, `set_option` for the two memberships (for example, whether anyone holds `ADMIN OPTION` and so can grant these roles onward).
 4. **Q3:** every login or superuser and what it can become indirectly, including all `rds_superuser` members.
@@ -194,7 +194,7 @@ The reported result does not change that `ogevia_admin`, any `rds_superuser` mem
 6. **Q5 and Q6** per database: table and function grants by grantee (expected counts in C.4; at migration level 46 the `ogevia_api` count is 171 and `ogevia` is 120).
 7. **Q7:** connected application names (the API uses `ogevia-sv-api`).
 
-### C.7.4 Next queries (read-only; both tested on a local build, not on the live instance)
+### C.7.4 Optional further queries (read-only; both tested on a local build, not on the live instance). Not required; see C.8
 
 Run **A once** (cluster-wide facts plus who can connect to each database) and **B once in `ogevia_prd` and once in `ogevia_sv_test`**. Each starts with `set default_transaction_read_only = on;`, so the session refuses writes. They return role names, privilege counts and application names only. A covers items 2 to 5 of C.7.3, B covers items 6 and 7, and the AWS CLI command covers item 1.
 
@@ -255,3 +255,27 @@ where datname in ('ogevia_prd', 'ogevia_sv_test')
 group by datname, usename, application_name
 order by 1, 2;
 ```
+
+## C.8 Owner decision and residual items (2026-10-11)
+
+**Decision (owner):** the role review is complete. `ogevia_admin` is the RDS master user; `ogevia_readonly` has no members; `ogevia_app` is held by `ogevia_prd_app`; `ogevia_owner` is held by `ogevia_admin`. Finding F1 is accepted as a **documented latent risk**, not an active finding. No further privilege enumeration will be run unless a specific production risk requires it.
+
+**What this record does and does not mean.** Verified (owner-provided, DV): direct membership of the three roles, the master-user identity, engine 18.3. Accepted without verification: the items below. Accepting a risk is not evidence that it is absent.
+
+| Not checked | Why it could matter | Status |
+|---|---|---|
+| Role attributes (Q1), including whether `ogevia_app` has `LOGIN` | If the pilot connects as `ogevia_app` itself, the shared role has a login and password | Accepted, unverified |
+| Indirect holders: other superusers or `rds_superuser` members (Q3) | They can act as every Ogevia role without being listed | Accepted, unverified |
+| Who can `CONNECT` to `ogevia_prd` and `ogevia_sv_test` (Q4) | Production access model; the pilot login must not reach `ogevia_prd` | Accepted, unverified. Covered by the repository's own gate `14_prd_verify_access.sql` (launch checklist item 8, open) |
+| Table and function grants per database (Q5, Q6) | A direct grant would bypass the function layer | Accepted, unverified |
+| Live sessions and application names (Q7) | Unknown clients | Accepted, unverified |
+| Which IAM principals can read the master secret or open an SSM session to the admin host | The master login bypasses every database safeguard by design, so this is the real control over data access | **Not examined by anyone**; outside the role review |
+
+**Conditions that should re-open this review** (recommendation; the owner decides):
+
+1. Before the first real client data enters `ogevia_prd`: run `db/deploy/14_prd_verify_access.sql` (launch checklist item 8) and record the result. It checks the connect rights that the accepted items above leave open.
+2. Any new login role, any grant of `ogevia_owner`, `ogevia_app` or `ogevia_readonly`, a change of master credential or of who can read it, or a change to the temporary admin host.
+3. An owner-approved support login for `ogevia_readonly` (the design permits one individual, audited login). Record the approval.
+4. At the documentation review cycle proposed in OGV-GOV-001 (quarterly), repeat the one-line membership query recorded in C.7.1.
+
+The optional queries A and B in C.7.4 remain available and are the cheapest way to close the unchecked rows if any of these conditions occurs.
