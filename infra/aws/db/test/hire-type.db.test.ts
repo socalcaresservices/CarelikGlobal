@@ -2,7 +2,7 @@
 // (EOR) visits without a shift vs Direct Hire visits from a scheduled shift;
 // readable billing review rows. SYNTHETIC data only.
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { ageVisit, api, asActor, createTestDb, expectPgError, freshClient, seedWorld, signedVisit, type Actor, type TestDb, type World } from "./harness.js";
+import { ageVisit, api, asActor, createTestDb, expectPgError, freshClient, seedWorld, signedVisit, upcomingShiftWindow, type Actor, type TestDb, type World } from "./harness.js";
 
 let db: TestDb;
 let w: World;
@@ -66,8 +66,7 @@ describe("separate fields", () => {
 describe("Direct Hire with a scheduled shift vs EOR flexible visits", () => {
   it("Direct Hire: the visit links to the scheduled shift and becomes Billing Ready", async () => {
     const fresh = await freshClient(db, w, w.caregiverA1, 6000, w.orgA, { before: 40, after: 40 });
-    const t = (await db.admin.query(`select to_char(now() at time zone 'America/Los_Angeles' + interval '20 minutes', 'YYYY-MM-DD') d,
-      to_char(now() at time zone 'America/Los_Angeles' + interval '20 minutes', 'HH24:MI') s, to_char(now() at time zone 'America/Los_Angeles' + interval '140 minutes', 'HH24:MI') e`)).rows[0];
+    const t = await upcomingShiftWindow(db, w.orgA);
     const [shift] = await q(w.managerA, "select * from ogevia_api.create_shift($1, $2, $3, $4::date, $5::time, $6::time, $7, null)",
       [w.orgA, fresh.client, fresh.service, t.d, t.s, t.e, rec["CG-A1"]]);
     const visit = await api.start(db, w.caregiverA1, w.orgA, fresh.client, fresh.service);

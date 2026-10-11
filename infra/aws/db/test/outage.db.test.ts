@@ -59,8 +59,13 @@ describe("outage visit records", () => {
     // A visit recorded normally in Ogevia (before the outage) for the same caregiver and client.
     const { visit: live } = await signedVisit(db, w.caregiverA1, w, 45, w.orgA, fresh.client, fresh.service);
     const t = (await db.admin.query(
-      "select (time_in at time zone 'America/Los_Angeles')::date::text as d, to_char(time_in at time zone 'America/Los_Angeles', 'HH24:MI') as a, to_char(time_out at time zone 'America/Los_Angeles', 'HH24:MI') as b from ogevia.service_visits where id = $1", [live])).rows[0];
-    if (t.a < t.b) await expectPgError(record(w.managerA, 2, { date: t.d, tin: t.a, tout: t.b }), "OGC09", /overlaps visit/);
+      `select (time_in at time zone 'America/Los_Angeles')::date::text as d, to_char(time_in at time zone 'America/Los_Angeles', 'HH24:MI') as a, to_char(time_out at time zone 'America/Los_Angeles', 'HH24:MI') as b,
+              ogevia.local_time_issue('America/Los_Angeles', (time_in at time zone 'America/Los_Angeles')::date, (time_in at time zone 'America/Los_Angeles')::time) as ai,
+              ogevia.local_time_issue('America/Los_Angeles', (time_out at time zone 'America/Los_Angeles')::date, (time_out at time zone 'America/Los_Angeles')::time) as bi
+         from ogevia.service_visits where id = $1`, [live])).rows[0];
+    // The paper record carries local clock times, so the live visit's times can be replayed only when they exist exactly
+    // once in agency time. In the hour a clock change repeats or skips, the same text names two instants (or none).
+    if (t.a < t.b && !t.ai && !t.bi) await expectPgError(record(w.managerA, 2, { date: t.d, tin: t.a, tout: t.b }), "OGC09", /overlaps visit/);
   });
 
   it("refuses numbers not issued to this agency, other agencies, caregivers and future times", async () => {

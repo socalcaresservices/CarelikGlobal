@@ -458,6 +458,34 @@ export async function endedVisit(
   return visit;
 }
 
+/**
+ * A shift window (agency-local date and start/end clock strings for create_shift) that a visit started now links to:
+ * it starts about 20 minutes from now and lasts 2 hours. Built from real instants, not from wall-clock arithmetic,
+ * because around a daylight-saving change "now + 20 minutes" on the clock is not 20 real minutes, and the product
+ * refuses a start or end local time that does not exist or happens twice (0035). When the preferred window is not
+ * valid, the first valid one is used: a start between 20 minutes ahead and 60 minutes ago, 2 to 5 hours long, so a
+ * visit started now is always inside it.
+ */
+export async function upcomingShiftWindow(db: TestDb, orgId: string): Promise<{ d: string; s: string; e: string }> {
+  const { rows } = await db.admin.query<{ d: string; s: string; e: string }>(
+    `select to_char(c.i0 at time zone o.timezone, 'YYYY-MM-DD') as d,
+            to_char(c.i0 at time zone o.timezone, 'HH24:MI') as s,
+            to_char(c.i1 at time zone o.timezone, 'HH24:MI') as e
+       from ogevia.organizations o
+      cross join lateral (
+        select off, len, now() + make_interval(mins => off) as i0, now() + make_interval(mins => off + len) as i1
+          from unnest(array[20, 10, 0, -30, -60]) off cross join unnest(array[120, 180, 240, 300]) len) c
+      where o.id = $1
+        and ogevia.local_times_issue(o.timezone, (c.i0 at time zone o.timezone)::date,
+                                     (c.i0 at time zone o.timezone)::time, (c.i1 at time zone o.timezone)::time) is null
+      order by abs(c.off - 20), c.len
+      limit 1`,
+    [orgId],
+  );
+  if (!rows[0]) throw new Error("no valid shift window around now");
+  return rows[0];
+}
+
 /** Start -> end -> evidence -> draw confirmation. */
 export async function signedVisit(
   db: TestDb,
