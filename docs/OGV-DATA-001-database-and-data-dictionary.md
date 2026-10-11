@@ -9,7 +9,7 @@
 | Inspection date | 2026-10-11 |
 | Branch / commit | `claude/amazing-meitner-cap9fd` at `f0f1405` (documentation-only commits on top of `origin/main` = `a2d249b`). No database file differs from `a2d249b`. |
 | Schema described | The schema produced by migrations `0001` to `0048` in `infra/aws/db/migrations/` |
-| Companion files | [Appendix A: table dictionary](OGV-DATA-001-appendix-A-table-dictionary.md) (every column, constraint, index) · [Appendix B: functions and triggers](OGV-DATA-001-appendix-B-functions-and-triggers.md) |
+| Companion files | [Appendix A: table dictionary](OGV-DATA-001-appendix-A-table-dictionary.md) (every column, constraint, index) · [Appendix B: functions and triggers](OGV-DATA-001-appendix-B-functions-and-triggers.md) · [Appendix C: who holds the three roles](OGV-DATA-001-appendix-C-role-membership-check.md) (read-only queries, not yet run live) |
 | Related | [OGV-TECH-001](OGV-TECH-001-master-technical-reference.md) (architecture), [OGV-GOV-001](governance/OGV-GOV-001_Documentation_Governance_and_Register.md) (register) |
 | Governance directive | Not available to this inspection; the author's unapproved draft OGV-GOV-001 conventions are used. |
 | Approver | The owner. **Approval is not given.** |
@@ -77,7 +77,7 @@ In scope: the AWS database (`infra/aws/db`), both environments that use it (PILO
 | 1 | The schema has **62 tables, 690 columns, 14 enumerated types, 210 foreign keys, 165 check constraints, 35 unique constraints, 1 exclusion constraint, 166 indexes (including primary-key and unique-constraint indexes) and 45 triggers**, in schema `ogevia`. The API surface is **175 functions** in `ogevia_api`. | RV | local build, catalogs |
 | 2 | The application role `ogevia_app` has **no table privileges** and **no `EXECUTE` on internal `ogevia` functions**. It can execute only the 175 `ogevia_api` functions. All 175 are `SECURITY DEFINER` owned by `ogevia_owner`; all 298 functions (175 in `ogevia_api`, 123 in `ogevia`) pin `search_path`; none is executable by `PUBLIC`. | RV | catalogs; verification `04` |
 | 3 | **Tenant isolation is enforced by the function layer, not by row level security.** RLS is enabled on 60 tables but never forced, the only policy anywhere is `SELECT ... USING (true)` for `ogevia_readonly` (59 policies), and the table owner bypasses RLS. Functions run as the owner. | RV, analysis | `pg_policies`, `pg_class.relforcerowsecurity` |
-| 4 | **`ogevia_readonly` can read every tenant's rows** on 59 tables, including legal client names (`client_private_names`), evidence metadata, and the hash columns of link tokens and one-time codes. It is `NOLOGIN` in the migrations; which login role, if any, holds it in either environment is U. | RV; assignment U | `pg_policies`, grants |
+| 4 | **`ogevia_readonly` can read every tenant's rows** on 59 tables, including legal client names (`client_private_names`), evidence metadata, and the hash columns of link tokens and one-time codes. It is `NOLOGIN` in the migrations and, by the author's stated design, stays so until the owner approves an individual audited support login; no script grants it to anyone. Which login, if any, actually holds it in either environment is U; the procedure to find out is [Appendix C](OGV-DATA-001-appendix-C-role-membership-check.md). | RV; assignment U | `pg_policies`, grants |
 | 5 | **56 of 62 tables carry `organization_id`** (NOT NULL, FK to `organizations`). Global tables: `permissions`, `role_permissions`, `scoring_rule_versions`, `zip_centroids`; identity: `app_users`; tenant root: `organizations`. | RV | catalogs |
 | 6 | **Same-tenant parent/child consistency is enforced by composite foreign key for 45 references and by single-column foreign key (not tenant-bound) for 43** (section 5.3). The repository's detective checks (`verification/05`) cover 11 relationships. | RV, analysis | `pg_constraint` |
 | 7 | **No date of birth, SSN, Medicaid, UCI or payer member ID column exists.** Direct client identifiers are the legal first and last name (`client_private_names`) and, indirectly, client code and city. Free-text columns exist (section 11) and can hold anything staff or public-link users type. | RV | column inventory |
@@ -1574,7 +1574,7 @@ Related SOP: OGV-SOP-002 (Database Migration SOP): **proposed, not written**. In
 
 ### 16.3 Unresolved questions
 
-1. Which login roles hold `ogevia_readonly`, `ogevia_app` or `ogevia_owner` in each database?
+1. Which login roles hold `ogevia_readonly`, `ogevia_app` or `ogevia_owner` in each database? Designed state and the read-only queries to find out: [Appendix C](OGV-DATA-001-appendix-C-role-membership-check.md).
 2. Does `ogevia_prd` contain any `app_users.cognito_sub` that also exists in the pilot database?
 3. Is the pilot database at 0036 or later? Was `14_prd_verify_access.sql` run?
 4. What retention applies to audit events, visit records, evidence and backups?
