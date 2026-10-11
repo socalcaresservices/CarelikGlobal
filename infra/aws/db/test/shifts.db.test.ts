@@ -145,8 +145,20 @@ describe("call-outs and replacements", () => {
   });
 
   it("a caregiver with no standing assignment starts a visit from their staff-scheduled shift; it links, and the shift can no longer be changed", async () => {
+    // A shift that covers this moment, in agency time. Normally "this minute to one hour from now"; around a
+    // daylight-saving change that hour may end at a time that does not exist or happens twice (the product refuses
+    // those, 0035), so use the first window, starting now or earlier, whose start and end each exist exactly once.
     const { rows: [t] } = await db.admin.query(
-      "select to_char(date_trunc('minute', now() at time zone o.timezone), 'HH24:MI') as start, to_char(date_trunc('minute', now() at time zone o.timezone) + interval '1 hour', 'HH24:MI') as end_ from ogevia.organizations o where o.id = $1", [w.orgA]);
+      `select to_char(c.s, 'HH24:MI') as start, to_char(c.s + make_interval(mins => c.len), 'HH24:MI') as end_
+         from ogevia.organizations o
+         cross join lateral (select date_trunc('minute', now() at time zone o.timezone) as n) l
+         cross join lateral (select l.n - make_interval(mins => b) as s, ls.len
+                               from unnest(array[0, 60, 120]) b cross join unnest(array[60, 120, 180, 240]) ls(len)
+                              where ls.len > b) c
+        where o.id = $1
+          and c.s::date = l.n::date
+          and ogevia.local_times_issue(o.timezone, c.s::date, c.s::time, (c.s + make_interval(mins => c.len))::time) is null
+        order by (l.n - c.s), c.len limit 1`, [w.orgA]);
     const s = await create(w.managerA, today, t.start, t.end_, rec["CG-A2"]);
     expect((await db.admin.query("select count(*)::int as n from ogevia.caregiver_assignments where caregiver_user_id = $1 and client_id = $2", [w.caregiverA2.userId, fresh.client])).rows[0].n).toBe(0);
     const visitId = await api.start(db, w.caregiverA2, w.orgA, fresh.client, fresh.service);
