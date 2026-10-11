@@ -3,6 +3,30 @@
 Prepared 2026-10-11 for owner approval. Every action below that changes AWS or production data is YELLOW (CLAUDE.md section 13) and waits for the owner.
 Release content: `docs/releases/availability-override/README.md` (0047) and `docs/releases/account-status/README.md` (0048).
 
+## Owner decision log (recorded 2026-10-11; status: DECIDED, NOT DEPLOYED, NOT ACTIVATED)
+This section records what the owner decided. It is not evidence that anything ran. Nothing in it has been executed against AWS or production by Claude, and Claude cannot do so from the cloud session (no AWS CLI, no `session-manager-plugin`, no tunnel to the private database). Distinguish: **decided** (below) / **deployed** (not yet) / **activated** (not yet).
+
+| Item | Decision / fact |
+|---|---|
+| Commit to deploy | `1639cf6537326e64a2b0359471cca27e42653fe6` (the approved, verified candidate). The owner chose it over the newest `main` on purpose: deploying the reviewed candidate is lower risk than introducing a newer SHA only because it is newer. |
+| Why it is equivalent to later `main` | Merges #80 to #85 changed test files only. Checked by `git diff` against `1639cf6` at `main` = `7b3a1296e3327e3002705ab1c282200509da4c4d`: migrations, rollback scripts, CDK (`infra/aws/lib`, `infra/aws/bin`), `packages` and `apps/sv-api` are byte-identical, and in `apps/web` only `*.test.*` files differ. |
+| Scope | Apply migrations 0047 and 0048; deploy the API, identity function and IAM (`infra`), run `smoke`, then deploy `web`. Do **not** use `deploy-production.sh database` or `all`. Steps and stop conditions are below, unchanged. |
+| Approval reference | The owner gave `OGEVIA_DEPLOY_APPROVAL_20261010` earlier, against a different commit (`6c86b1d`, later `9169ad1`). **Open:** the owner confirms the reference still applies to `1639cf6`, or supplies a new one. |
+| Who runs it / window | Operator with admin AWS credentials in CloudShell. **Open:** the low-traffic window (the earlier instruction was "next available low-traffic window"). |
+| Known risk for this SHA | `1639cf6` does not contain the later fix for the client-detail edit test (PR #83). That web test failed intermittently on CI, so `deploy-production.sh check` could fail on exactly that test. Handling: rerun once; do not loosen the test. If it keeps failing, the newest `main` (`7b3a129`) differs from `1639cf6` only by test files and can be used, as an owner decision. |
+
+### Availability enforcement: NOT activated by this deployment
+Enforcement is one switch per agency, `ogevia_api.activate_readiness_enforcement` (organization owner, in the app, irreversible through the API). It also turns on CPR, TB, client requirements and the visit-start check (0046); it is not availability-only. See `availability-override/ENFORCEMENT_ACTIVATION.md`.
+
+Owner rule (2026-10-11): **do not activate on the same day as the deployment** unless the Readiness report shows **both**:
+1. zero unexpected caregivers, i.e. no one without approved availability, current CPR or current TB who should be working; and
+2. zero problematic upcoming shifts in the affected-shift count.
+
+Otherwise activation waits. **Open:** the owner names the *expected* exceptions beforehand (for example caregivers who are inactive or on leave), so "unexpected" is not decided on the spot. When activating, the reason entered and the affected-shift count must be the ones the report just showed.
+
+### Still unverified (do not treat as done)
+Production ledger now (`46|0046` was owner-reported earlier and must be re-read immediately before `db:migrate`); the result of `check`; the `cdk diff`; the smoke tests; the post-deployment checks below; whether enforcement is currently inactive (read-only query: `select enforcement_active_from from ogevia.organization_readiness_settings where organization_id = '<SoCal org id>'`, no row or null = report-only).
+
 ## Gate evidence (owner-provided output, recorded 2026-10-11; Claude did not run these and cannot verify them independently)
 | Check | Result | Status |
 |---|---|---|
