@@ -9,6 +9,13 @@ import { createAwsApiClient } from "@/lib/aws-api";
 import { AwsRoutes } from "../aws-root";
 import { CG, CLIENT, REQ, SVC, fakeApi, okChecks, type Call, type FakeOptions } from "./fake-api";
 
+// The first lookup of a test waits for the whole app to render for the first time (module load + first paint). On a normal machine that
+// takes about 0.5 s, close to Testing Library's 1 s default; on a small or busy shell (such as the production deploy shell) it can exceed
+// it, which fails with "Unable to find ..." although the screen is correct. Only the cold first lookup and the test as a whole get more
+// time; every assertion is unchanged.
+const COLD_RENDER_MS = 15_000;
+const TEST_TIMEOUT_MS = 30_000;
+
 function renderAt(path: string, opts: FakeOptions) {
   const api = fakeApi(opts);
   const auth = {
@@ -35,7 +42,7 @@ const posts = (calls: Call[], path: string) => calls.filter((c) => c.method === 
 describe("administrator matching inputs", () => {
   it("separates reported experience from confirmed tags and requires an explicit review", async () => {
     const { calls } = renderAt(`/care-team/${CG}`, { role: "organization_owner" });
-    expect(await screen.findByText("ABA experience · Caregiver-reported")).toBeInTheDocument();
+    expect(await screen.findByText("ABA experience · Caregiver-reported", {}, { timeout: COLD_RENDER_MS })).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Review experience" }));
     expect(screen.getByLabelText("ABA experience")).not.toBeChecked();
     expect(screen.getByRole("button", { name: "Save review" })).toBeDisabled();
@@ -44,7 +51,7 @@ describe("administrator matching inputs", () => {
     fireEvent.click(screen.getByRole("button", { name: "Save review" }));
     expect(await screen.findByText("Experience review saved.")).toBeInTheDocument();
     expect(posts(calls, `/v1/caregivers/${CG}/experience/review`)[0]?.body).toMatchObject({ confirmedTagIds: [SVC], note: "Owner reviewed prior experience" });
-  });
+  }, TEST_TIMEOUT_MS);
 
   it("loads the saved ZIP but never implies it provides distance", async () => {
     const { calls } = renderAt(`/care-team/${CG}`, { role: "organization_owner" });

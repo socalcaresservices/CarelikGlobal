@@ -11,6 +11,13 @@ import { isSupabaseClientCreated } from "@/lib/supabase";
 import { AwsRoutes } from "./aws-root";
 import { createAwsRuntime, loadRuntimeEnv, type AwsEnv } from "./aws-runtime";
 
+// The first lookup of a test waits for the whole app to render for the first time (module load + first paint). On a normal machine that
+// takes about 0.5 s, close to Testing Library's 1 s default; on a small or busy shell (such as the production deploy shell) it can exceed
+// it, which fails with "Unable to find ..." although the screen is correct. Only the cold first lookup and the test as a whole get more
+// time; every assertion is unchanged.
+const COLD_RENDER_MS = 15_000;
+const TEST_TIMEOUT_MS = 30_000;
+
 const ORG = "aaaaaaaa-0000-4000-8000-000000000001";
 const CLIENT = "cccccccc-0000-4000-8000-000000000001";
 const SERVICE = "dddddddd-0000-4000-8000-000000000001";
@@ -150,7 +157,7 @@ describe("AWS build: caregiver vertical slice", () => {
     const { api } = renderAws("/", "caregiver");
 
     // Landing sends caregivers to Verify Visit; only the assigned client code is shown.
-    fireEvent.click(await screen.findByRole("button", { name: /Client C-104/ }));
+    fireEvent.click(await screen.findByRole("button", { name: /Client C-104/ }, { timeout: COLD_RENDER_MS }));
     const details = await screen.findByRole("group", { name: "Visit details" });
     await waitFor(() => expect(details).toHaveTextContent("ClientC-104"));
     await waitFor(() => expect(screen.getByRole("button", { name: /Start visit/ })).toBeEnabled());
@@ -177,7 +184,7 @@ describe("AWS build: caregiver vertical slice", () => {
     expect(confirm.body).toMatchObject({ organizationId: ORG, signerRole: "client", method: "draw", signaturePng: "data:image/png;base64,iVBORw0KGgo=" });
     // No browser-supplied time, role, or caregiver identity in any request.
     expect(JSON.stringify(api.calls.map((c) => c.body))).not.toMatch(/timeIn|caregiver|role"/);
-  });
+  }, TEST_TIMEOUT_MS);
 
   it("never creates a Supabase client in the AWS runtime", async () => {
     renderAws("/", "caregiver");
