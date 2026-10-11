@@ -3,6 +3,15 @@
 Prepared 2026-10-11 for owner approval. Every action below that changes AWS or production data is YELLOW (CLAUDE.md section 13) and waits for the owner.
 Release content: `docs/releases/availability-override/README.md` (0047) and `docs/releases/account-status/README.md` (0048).
 
+## Gate evidence (owner-provided output, recorded 2026-10-11; Claude did not run these and cannot verify them independently)
+| Check | Result | Status |
+|---|---|---|
+| Admin host `i-0ce8db2d7e5839dd5` already carries the app security group | groups `sg-064ffce3bcbe8eb3b`, `sg-00e01e2ca80442c1f` | PASS (no security-group change needed) |
+| Production ledger (read-only, `-d ogevia_prd`) | `ogevia_prd|46|0046` | PASS (readiness release 0039-0046 is live; 0047 and 0048 are the only migrations to apply) |
+| Cognito lookup by `sub` (`admin-get-user --username <sub>`, pool `us-west-2_849AYz5J7`) | `status CONFIRMED, enabled true, sub` equal to the one passed | PASS for lookup. It does not prove AdminDisableUser/AdminEnableUser; the first Disable/Enable of a synthetic test person after deployment is the final proof. |
+Observation: the admin host is running with direct database access attached (a standing attachment). Consider stopping the host or detaching the group after deployment (separate change, owner decision).
+Still required before any deployment: the owner's explicit go decision naming the commit SHA, the merge decision, the `OGEVIA_DEPLOY_APPROVAL` reference, who runs it, and the window. Re-run the ledger query immediately before `db:migrate`; it must still read `46|0046` (the runner prints "applied 2, already applied 46").
+
 ## Stop conditions (check these first; any "no" means do not continue)
 1. **Live migration ledger reads exactly `46|0046`** (query in step 2). This release was built on top of the caregiver-readiness release (0039-0046). If production is still at `38|0038`, STOP: applying would also deploy that whole release, which needs its own approval (`docs/releases/caregiver-readiness/RELEASE_HANDOFF.md`). The live level is NOT known to this session.
 2. The read-only Cognito `sub` check in `docs/releases/account-status/README.md` returned the user. (Needed for Disable/Enable to reach Cognito; 0047 does not depend on it.)
