@@ -151,6 +151,15 @@ export interface World {
   authB1: string;
 }
 
+/**
+ * Fixture authorizations start one month before the current month (and still end with it, so the monthly cap
+ * is unchanged). Test visits are aged back with `ageVisit`, so a visit made in the first minutes of a month
+ * starts in the month before; a correction must find ONE authorization covering both its start and end dates
+ * (0006/0018), and without this it is refused as "outside an active authorization period" on the 1st of a month.
+ * `$5` is the organization's local date in both fixtures that use it.
+ */
+export const AUTH_PERIOD_START = "(date_trunc('month', $5::date) - interval '1 month')::date";
+
 /** Org-local "today" for org A (America/Los_Angeles). */
 export async function orgToday(db: TestDb): Promise<string> {
   const { rows } = await db.admin.query<{ d: string }>(
@@ -269,7 +278,7 @@ export async function seedWorld(
     one(
       `insert into ogevia.client_authorizations
          (organization_id, client_id, service_id, payer, monthly_authorized_minutes, period_start, period_end)
-       values ($1,$2,$3,'SYNTHETIC-PAYER',$4, date_trunc('month', $5::date)::date,
+       values ($1,$2,$3,'SYNTHETIC-PAYER',$4, ${AUTH_PERIOD_START},
                (date_trunc('month', $5::date) + interval '1 month - 1 day')::date)
        returning id`,
       [orgId, client, service, monthlyMinutes, today],
@@ -503,7 +512,7 @@ export async function freshClient(
       `insert into ogevia.client_authorizations
        (organization_id, client_id, service_id, payer, monthly_authorized_minutes, period_start, period_end)
      values ($1,$2,$3,'SYNTHETIC-PAYER',$4,
-             case when $6::int is null then date_trunc('month', $5::date)::date else $5::date - $6::int end,
+             case when $6::int is null then ${AUTH_PERIOD_START} else $5::date - $6::int end,
              case when $7::int is null then (date_trunc('month', $5::date) + interval '1 month - 1 day')::date
                   else $5::date + $7::int end) returning id`,
       [

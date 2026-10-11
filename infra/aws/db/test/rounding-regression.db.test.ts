@@ -25,7 +25,7 @@ async function client(caregiver: Actor, monthlyMinutes: number) {
     [w.orgA, caregiver.userId, c, svc, today]);
   const a = (await db.admin.query(
     `insert into ogevia.client_authorizations (organization_id, client_id, service_id, payer, monthly_authorized_minutes, period_start, period_end)
-     values ($1, $2, $3, $4, $5, date_trunc('month', $6::date)::date, (date_trunc('month', $6::date) + interval '1 month - 1 day')::date) returning id, lineage_id`,
+     values ($1, $2, $3, $4, $5, (date_trunc('month', $6::date) - interval '1 month')::date, (date_trunc('month', $6::date) + interval '1 month - 1 day')::date) returning id, lineage_id`,
     [w.orgA, c, svc, PAYER, monthlyMinutes, today])).rows[0];
   return { client: c as string, auth: a.id as string, lineage: a.lineage_id as string };
 }
@@ -51,7 +51,7 @@ const voidApproval = (a: Actor, id: string) => q(a, "select ogevia_api.void_bill
 const approveAdj = (a: Actor, visit: string, key: string | null = null, notes: string | null = null) =>
   q(a, "select * from ogevia_api.approve_billing_rounding_adjustment($1, $2, null, null, $3, $4)", [w.orgA, visit, notes, key]).then((r) => r[0]);
 const voidAdj = (a: Actor, id: string, key: string | null = null) => q(a, "select ogevia_api.void_billing_rounding_adjustment($1, 'Synthetic void', $2) as id", [id, key]).then((r) => r[0].id);
-const usage = async (lineage: string) => Number((await db.admin.query("select ogevia.authorization_month_usage($1, $2::date) n", [lineage, today])).rows[0].n);
+const usage = async (lineage: string, day: string = today) => Number((await db.admin.query("select ogevia.authorization_month_usage($1, $2::date) n", [lineage, day])).rows[0].n);
 const count = async (sql: string, params: unknown[]) => Number((await db.admin.query(sql, params)).rows[0].n);
 
 beforeAll(async () => {
@@ -153,11 +153,12 @@ describe("correction after an adjustment", () => {
     expect(p.find((r) => r.visit_id === corrected)).toMatchObject({ worked_minutes: 40, state: "awaiting_visit_approval", proposed_minutes: 45 });
     // The voided adjustment and approval stay on record.
     expect((await db.admin.query("select voided_at is not null v, adjustment_minutes from ogevia.billing_rounding_adjustments where id = $1", [adj.adjustment_id])).rows[0]).toEqual({ v: true, adjustment_minutes: 10 });
-    expect(await usage(c.lineage)).toBe(40);
+    // Usage is counted in the month the corrected visit starts in, which is the previous month in the first minutes of a month.
+    expect(await usage(c.lineage, correctedDay)).toBe(40);
     // Re-approval and re-rounding of the corrected visit work normally.
     await approveVisit(w.managerA, corrected, 40);
     expect(await approveAdj(w.managerA, corrected)).toMatchObject({ base_minutes: 40, proposed_minutes: 45, adjustment_minutes: 5 });
-    expect(await usage(c.lineage)).toBe(45);
+    expect(await usage(c.lineage, correctedDay)).toBe(45);
   });
 });
 

@@ -160,8 +160,20 @@ describe("call-outs and replacements", () => {
 describe("owner test 2026-10-05: 3 hr authorized, 1 min used", () => {
   it("a 3-hour shift is refused and the message says 2 hr 59 min available (exact minutes still enforced)", async () => {
     const small = await freshClient(db, w, w.caregiverA3, 180, w.orgA, { before: 40, after: 40 });
-    await signedVisit(db, w.caregiverA3, w, 1, w.orgA, small.client, small.service);
-    const date = day(1).slice(0, 7) === today.slice(0, 7) ? day(1) : today;
+    const { visit } = await signedVisit(db, w.caregiverA3, w, 1, w.orgA, small.client, small.service);
+    // Always schedule tomorrow: a shift earlier today is "already over". On the last day of a month tomorrow is in the next
+    // month, so the one used minute is counted in that month (monthly usage follows the visit's service date).
+    const date = day(1);
+    if (date.slice(0, 7) !== today.slice(0, 7)) {
+      const c = await db.admin.connect();
+      try {
+        await c.query("set session_replication_role = replica");
+        await c.query("update ogevia.service_visits set service_date = $2::date where id = $1", [visit, date]);
+      } finally {
+        await c.query("reset session_replication_role");
+        c.release();
+      }
+    }
     const attempt = q(w.managerA, "select * from ogevia_api.create_shift($1, $2, $3, $4::date, '09:00'::time, '12:00'::time, null, null)", [w.orgA, small.client, small.service, date]);
     await expectPgError(attempt, "OGC09", /Not enough authorized time remains this month for this shift: 2 hr 59 min available, this shift needs 3 hr/);
     // 2 hr 59 min fits exactly; nothing is rounded away and no overrun is allowed.
