@@ -5,11 +5,11 @@
 | Field | Value |
 |---|---|
 | Document ID | OGV-DATA-001 |
-| Version | 0.1 (DRAFT, not approved by the owner) |
+| Version | 0.2 (DRAFT, not approved by the owner) |
 | Inspection date | 2026-10-11 |
 | Branch / commit | `claude/amazing-meitner-cap9fd` at `f0f1405` (documentation-only commits on top of `origin/main` = `a2d249b`). No database file differs from `a2d249b`. |
 | Schema described | The schema produced by migrations `0001` to `0048` in `infra/aws/db/migrations/` |
-| Companion files | [Appendix A: table dictionary](OGV-DATA-001-appendix-A-table-dictionary.md) (every column, constraint, index) · [Appendix B: functions and triggers](OGV-DATA-001-appendix-B-functions-and-triggers.md) · [Appendix C: who holds the three roles](OGV-DATA-001-appendix-C-role-membership-check.md) (read-only queries, not yet run live) |
+| Companion files | [Appendix A: table dictionary](OGV-DATA-001-appendix-A-table-dictionary.md) (every column, constraint, index) · [Appendix B: functions and triggers](OGV-DATA-001-appendix-B-functions-and-triggers.md) · [Appendix C: who holds the three roles](OGV-DATA-001-appendix-C-role-membership-check.md) (read-only queries; owner-provided live summary recorded in C.7) |
 | Related | [OGV-TECH-001](OGV-TECH-001-master-technical-reference.md) (architecture), [OGV-GOV-001](governance/OGV-GOV-001_Documentation_Governance_and_Register.md) (register) |
 | Governance directive | Not available to this inspection; the author's unapproved draft OGV-GOV-001 conventions are used. |
 | Approver | The owner. **Approval is not given.** |
@@ -19,7 +19,7 @@
 1. **Repository reading** of `infra/aws/db/` (migrations, rollback, verification, scripts, deploy SQL, tests), `infra/aws/lib/`, `apps/sv-api/src/`, `supabase/`, and `docs/`.
 2. **Local build of the schema.** All 48 migrations were applied, in order, one transaction per file, using the same role rules as the repository runner (`0001` as administrator; every other file after `SET LOCAL ROLE ogevia_owner`; `infra/aws/db/scripts/migrations.ts`) to a **new, empty, local PostgreSQL 16.15** database in the author's disposable container. All 48 applied without error. The schema was then read from the PostgreSQL catalogs (`pg_class`, `pg_attribute`, `pg_constraint`, `pg_indexes`, `pg_trigger`, `pg_proc`, `pg_policies`, privilege functions). The tables in Appendix A and every count in this document come from that build.
 3. **The repository's own read-only verification scripts** `infra/aws/db/verification/02` to `07` were run against that build as `ogevia_readonly`: 158 checks, all true. Scripts `05` to `07` check data, so on an empty database they prove only that the queries run. Script `01` (migration ledger) was not run, because the ledger is created by the runner, which was not used.
-4. **No production, pilot or Supabase database was queried.** No AWS call was made. The local build used no real or synthetic Ogevia data.
+4. **The author queried no production, pilot or Supabase database and made no AWS call.** One owner-provided live result is recorded: role membership and engine version on `ogevia-prod-postgres` (Appendix C, section C.7). The local build used no real or synthetic Ogevia data.
 
 ### Evidence classes
 
@@ -34,7 +34,7 @@
 
 ### Limitations that affect every statement
 
-* The local build is **PostgreSQL 16**, the production engine is **PostgreSQL 18.3** (`docs/aws/CURRENT_AWS_INVENTORY.md`, 2026-10-01 to 05; CI uses `postgres:18`). Migrations applied cleanly on 16; behaviour on 18 was not tested here.
+* The local build is **PostgreSQL 16**; the production engine is **PostgreSQL 18.3** (the owner-provided role-membership queries of 2026-10-11 ran on 18.3 and returned results; the migrations themselves were not re-applied there by the author) (`docs/aws/CURRENT_AWS_INVENTORY.md`, 2026-10-01 to 05; CI uses `postgres:18`). Migrations applied cleanly on 16; behaviour on 18 was not tested here.
 * The described schema is the **repository's `0048`**. The only recorded production level is **`46|0046`** (owner-provided, 2026-10-11, `docs/releases/DEPLOYMENT_CHECKPOINT_0047_0048.md`). Differences are listed in section 13.4. The pilot (`prod`) database level is U.
 * Whether live databases match the migrations (drift, manual changes, data) is U. The repository runner detects checksum drift of applied files, but no drift check output is available.
 * Row counts, data quality and the contents of any real database are U.
@@ -77,7 +77,7 @@ In scope: the AWS database (`infra/aws/db`), both environments that use it (PILO
 | 1 | The schema has **62 tables, 690 columns, 14 enumerated types, 210 foreign keys, 165 check constraints, 35 unique constraints, 1 exclusion constraint, 166 indexes (including primary-key and unique-constraint indexes) and 45 triggers**, in schema `ogevia`. The API surface is **175 functions** in `ogevia_api`. | RV | local build, catalogs |
 | 2 | The application role `ogevia_app` has **no table privileges** and **no `EXECUTE` on internal `ogevia` functions**. It can execute only the 175 `ogevia_api` functions. All 175 are `SECURITY DEFINER` owned by `ogevia_owner`; all 298 functions (175 in `ogevia_api`, 123 in `ogevia`) pin `search_path`; none is executable by `PUBLIC`. | RV | catalogs; verification `04` |
 | 3 | **Tenant isolation is enforced by the function layer, not by row level security.** RLS is enabled on 60 tables but never forced, the only policy anywhere is `SELECT ... USING (true)` for `ogevia_readonly` (59 policies), and the table owner bypasses RLS. Functions run as the owner. | RV, analysis | `pg_policies`, `pg_class.relforcerowsecurity` |
-| 4 | **`ogevia_readonly` can read every tenant's rows** on 59 tables, including legal client names (`client_private_names`), evidence metadata, and the hash columns of link tokens and one-time codes. It is `NOLOGIN` in the migrations and, by the author's stated design, stays so until the owner approves an individual audited support login; no script grants it to anyone. Which login, if any, actually holds it in either environment is U; the procedure to find out is [Appendix C](OGV-DATA-001-appendix-C-role-membership-check.md). | RV; assignment U | `pg_policies`, grants |
+| 4 | **`ogevia_readonly` can read every tenant's rows** on 59 tables, including legal client names (`client_private_names`), evidence metadata, and the hash columns of link tokens and one-time codes. It is `NOLOGIN` in the migrations and, by the author's stated design, stays so until the owner approves an individual audited support login; no script grants it to anyone. **Live (owner-provided summary, 2026-10-11): it has no members**, so no login currently holds it; the exposure is latent, not active ([Appendix C](OGV-DATA-001-appendix-C-role-membership-check.md) C.7). | RV; assignment DV (owner-provided) | `pg_policies`, grants |
 | 5 | **56 of 62 tables carry `organization_id`** (NOT NULL, FK to `organizations`). Global tables: `permissions`, `role_permissions`, `scoring_rule_versions`, `zip_centroids`; identity: `app_users`; tenant root: `organizations`. | RV | catalogs |
 | 6 | **Same-tenant parent/child consistency is enforced by composite foreign key for 45 references and by single-column foreign key (not tenant-bound) for 43** (section 5.3). The repository's detective checks (`verification/05`) cover 11 relationships. | RV, analysis | `pg_constraint` |
 | 7 | **No date of birth, SSN, Medicaid, UCI or payer member ID column exists.** Direct client identifiers are the legal first and last name (`client_private_names`) and, indirectly, client code and city. Free-text columns exist (section 11) and can hold anything staff or public-link users type. | RV | column inventory |
@@ -1554,7 +1554,7 @@ Related SOP: OGV-SOP-002 (Database Migration SOP): **proposed, not written**. In
 
 | # | Finding | Why it matters | Recommended default |
 |---|---|---|---|
-| F1 | `ogevia_readonly` has cross-tenant `SELECT ... USING (true)` on 59 tables, including `client_private_names`. Who holds it in `prd` is U. | Any login granted this role reads every agency's data, including client names, regardless of the function layer. | Confirm in `ogevia_prd` that no login holds `ogevia_readonly` except an approved, audited operator path; consider excluding `client_private_names` and the hash columns from its policy in a future migration (needs owner approval; behavioural change to verification scripts). |
+| F1 | `ogevia_readonly` has cross-tenant `SELECT ... USING (true)` on 59 tables, including `client_private_names`. **Live holders (owner-provided, 2026-10-11): none.** `ogevia_owner` is held only by `ogevia_admin`; `ogevia_app` only by `ogevia_prd_app`. | The active risk is removed for now: no login can read every agency's rows through this role. The exposure is **latent**: the role and its policies remain, and `ogevia_admin` or any `rds_superuser` member can grant the role or act as it at any time. Open: whether `ogevia_admin` is the RDS master user; Q1, Q3 to Q7 not reported (Appendix C C.7.3). | **Status: reduced to latent, not closed.** Add a periodic check of Appendix C Q2 so that a new holder is noticed; confirm the open items; decide before real data whether to narrow the policy (exclude `client_private_names` and the hash columns), which needs a migration and owner approval. |
 | F2 | RLS is not the tenant control and `FORCE ROW LEVEL SECURITY` is off. | Misreading the RLS count (60) as isolation is easy; any future direct-table access path (a new role, a reporting tool) would bypass nothing because no policy restricts by tenant. | Keep the rule "no direct table access for application roles". Document in code review checklists. Consider tenant-scoped policies only if a non-function access path is ever introduced. |
 | F3 | 43 single-column foreign keys between organization-scoped tables are not tenant-bound. | A function bug could create a cross-tenant reference that no constraint rejects. | Add composite keys (or detective checks) for the highest-value relationships first: `service_visits`→`shifts`, `visit_*`→`service_visits`, `billing_approvals`→`service_visits`, `shifts`/`care_requests`→`client_authorizations`. Requires migrations and a data check; owner approval. |
 | F4 | `verification/01_schema_version.sql` hard-codes 48. | `db:verify` against production (46) reports false for two checks until `0047`/`0048` are applied. | Interpret accordingly; parameterize in a future change. |
@@ -1574,7 +1574,7 @@ Related SOP: OGV-SOP-002 (Database Migration SOP): **proposed, not written**. In
 
 ### 16.3 Unresolved questions
 
-1. Which login roles hold `ogevia_readonly`, `ogevia_app` or `ogevia_owner` in each database? Designed state and the read-only queries to find out: [Appendix C](OGV-DATA-001-appendix-C-role-membership-check.md).
+1. ~~Which login roles hold `ogevia_readonly`, `ogevia_app` or `ogevia_owner`?~~ **Answered for direct membership** (owner-provided, 2026-10-11): none, `ogevia_prd_app`, `ogevia_admin`. Still open: whether `ogevia_admin` is the master user, the pilot's login, and who can connect to each database ([Appendix C](OGV-DATA-001-appendix-C-role-membership-check.md) C.7.3).
 2. Does `ogevia_prd` contain any `app_users.cognito_sub` that also exists in the pilot database?
 3. Is the pilot database at 0036 or later? Was `14_prd_verify_access.sql` run?
 4. What retention applies to audit events, visit records, evidence and backups?
@@ -1594,6 +1594,7 @@ Related SOP: OGV-SOP-002 (Database Migration SOP): **proposed, not written**. In
 | Version | Date | Change |
 |---|---|---|
 | 0.1 | 2026-10-11 | First draft: schema built locally from migrations 0001 to 0048 and read from the catalogs. |
+| 0.2 | 2026-10-11 | Appendix C added; owner-provided live role-membership summary recorded (key fact 4, finding F1, question 1). F1 reduced to latent, not closed. |
 
 ### Final validation record
 
@@ -1612,5 +1613,5 @@ Run on 2026-10-11 against the three files at the commit described in the metadat
 | Claims needing deployment evidence or owner confirmation | Section 16.3 (login-role assignments, pilot level, retention, PostgreSQL 18 behaviour, out-of-band objects) |
 | Corrections to earlier documents | OGV-TECH-001 updated to 0.1.1 (RLS wording, one-open-visit enforcement, legacy CareScore versions). OGV-GOV-001 register and conflict C5 updated |
 
-Not done: any query against a live database; any test suite beyond the repository's read-only verification scripts; PostgreSQL 18 execution; review of every function body.
+Not done by the author: any query against a live database (the owner-provided role-membership summary is the only live evidence); any test suite beyond the repository's read-only verification scripts; PostgreSQL 18 execution; review of every function body.
 

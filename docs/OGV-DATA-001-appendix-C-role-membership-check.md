@@ -6,12 +6,12 @@ Part of [OGV-DATA-001](OGV-DATA-001-database-and-data-dictionary.md) (draft v0.1
 
 | Question | Status |
 |---|---|
-| Who actually holds each role in the **PILOT / TEST** database (`prod`, `ogevia_sv_test`)? | **NOT DETERMINED.** Needs a live query. |
-| Who actually holds each role in the **PRODUCTION / PRD** database (`prd`, `ogevia_prd`)? | **NOT DETERMINED.** Needs a live query. |
+| Who holds `ogevia_owner`, `ogevia_app`, `ogevia_readonly` on the shared instance (covers **PILOT / TEST** `ogevia_sv_test` and **PRODUCTION / PRD** `ogevia_prd`; role membership is cluster-wide)? | **DETERMINED for direct membership, from an owner-provided summary** (C.7), engine PostgreSQL 18.3 on `ogevia-prod-postgres`. Raw query output has not been seen by the author. |
+| Everything else the query set covers: role attributes, indirect membership, who can connect to each database, table and function grants, live sessions (Q1, Q3 to Q7)? | **NOT REPORTED.** Open (C.7.3). |
 | Who is *meant* to hold each role, according to the repository? | **Determined** (C.3), with two unknowns. |
 | Is there a repository script that gives `ogevia_readonly` to any login? | **No** (C.3). |
 
-Why it could not be determined in this session:
+Why the author could not run it (the owner then ran it; results in C.7):
 
 * Role membership lives in the PostgreSQL system catalogs (`pg_auth_members`, `pg_roles`). It cannot be read from the repository, from CloudFormation, or from any AWS API.
 * The RDS instance is private. The documented path is an SSM port-forward through the temporary admin host to the instance, authenticated with the RDS master secret (`docs/releases/caregiver-readiness/RELEASE_HANDOFF.md` section 4). That uses an administrator credential and is a YELLOW-class operation under `CLAUDE.md` §13; it was not attempted.
@@ -139,5 +139,44 @@ Record the date, the person, the database, the engine version, and attach the ou
 
 | Database | Run by | Date | `ogevia_owner` members | `ogevia_app` members | `ogevia_readonly` members | Other logins that can connect | Finding? |
 |---|---|---|---|---|---|---|---|
-| `ogevia_prd` (PRODUCTION / PRD) | | | | | | | |
-| `ogevia_sv_test` (PILOT / TEST) | | | | | | | |
+| `ogevia_prd` (PRODUCTION / PRD) | Owner (via approved SSM tunnel); raw output not seen | 2026-10-11 reported; run time not stated | `ogevia_admin` | `ogevia_prd_app` | none | not reported | No unexpected holder. Open items C.7.3 |
+| `ogevia_sv_test` (PILOT / TEST) | same summary; database(s) queried not stated | same | `ogevia_admin` (cluster-wide) | `ogevia_prd_app` (cluster-wide) | none | not reported | Membership same as above; pilot login not visible among `ogevia_app` members (C.7.2) |
+
+## C.7 Live result (owner-provided summary, reported 2026-10-11)
+
+### C.7.1 What was reported
+
+Evidence class: **DV, owner-provided**. The author did not run the queries and has not seen the raw output; what follows is the summary the owner supplied. The run time and which database(s) were connected to were not stated.
+
+| Reported item | Value |
+|---|---|
+| Engine and instance | PostgreSQL **18.3**, RDS instance `ogevia-prod-postgres`, through the approved SSM tunnel, read-only queries |
+| Memberships found (member → granted role) | `ogevia_prd_app` → `ogevia_app`; `ogevia_admin` → `ogevia_owner` |
+| `ogevia_readonly` | **no members** |
+| Other holders of `ogevia_owner` | none found |
+
+Because role membership is stored in a cluster-wide catalog, this describes the shared instance and therefore both databases.
+
+### C.7.2 What it means against the designed state (C.3, C.4)
+
+| Check | Result | Reading |
+|---|---|---|
+| `ogevia_readonly` holders | None | **Matches the design** (empty until the owner approves an individual audited support login). No login can currently read every agency's rows through this role. |
+| `ogevia_owner` holders | Exactly one: `ogevia_admin` | Matches the design **if `ogevia_admin` is the RDS master user**, which migration `0001` makes the member. The report does not say so. Unconfirmed (C.7.3 item 1). |
+| `ogevia_app` holders | Only `ogevia_prd_app` | `ogevia_prd_app` is the designed production login. The design also expects the **pilot login** (secret `ogevia/database/app`) to hold `ogevia_app`, unless that login *is* `ogevia_app` itself (`01_app_login_role.sql` allows this). No separate pilot login appears among the members. The author's inference, not verified: the pilot API connects as `ogevia_app` itself, which would mean `ogevia_app` has `LOGIN` and a password. That needs Q1 (`rolcanlogin`) to confirm, and Q4 to confirm that it **cannot connect to `ogevia_prd`**. |
+| Unexpected holders of any of the three roles | None reported | Direct membership only. Indirect paths are not covered. |
+
+The reported result does not change that `ogevia_admin`, any `rds_superuser` member and any superuser can act as every Ogevia role, including `ogevia_readonly`, without being a member of it.
+
+### C.7.3 Still open (not in the reported summary)
+
+1. **Is `ogevia_admin` the RDS master user?** Read-only check: `aws rds describe-db-instances --db-instance-identifier ogevia-prod-postgres --query 'DBInstances[0].MasterUsername' --output text`.
+2. **Q1:** does `ogevia_app` have `rolcanlogin = true`? Do `ogevia_prd_app` and `ogevia_admin` have the expected attributes (`ogevia_prd_app`: not superuser, not `CREATEROLE`/`CREATEDB`/`BYPASSRLS`, not inherit)?
+3. **Q2 full columns:** `granted_by`, `admin_option`, `inherit_option`, `set_option` for the two memberships (for example, whether anyone holds `ADMIN OPTION` and so can grant these roles onward).
+4. **Q3:** every login or superuser and what it can become indirectly, including all `rds_superuser` members.
+5. **Q4:** every login that can `CONNECT` to `ogevia_prd` and to `ogevia_sv_test`. This is the check behind `14_prd_verify_access.sql` (checklist item 8).
+6. **Q5 and Q6** per database: table and function grants by grantee (expected counts in C.4; at migration level 46 the `ogevia_api` count is 171 and `ogevia` is 120).
+7. **Q7:** connected application names (the API uses `ogevia-sv-api`).
+
+If the raw output files from the earlier run still exist in the CloudShell work folder, `cat "$W"/roles_ogevia_prd.txt "$W"/roles_ogevia_sv_test.txt` shows all of Q1 to Q7 at once. They contain role names, counts and application names only.
+
