@@ -6,7 +6,7 @@ Part of [OGV-DATA-001](OGV-DATA-001-database-and-data-dictionary.md) (draft v0.1
 
 | Question | Status |
 |---|---|
-| Who holds `ogevia_owner`, `ogevia_app`, `ogevia_readonly` on the shared instance (covers **PILOT / TEST** `ogevia_sv_test` and **PRODUCTION / PRD** `ogevia_prd`; role membership is cluster-wide)? | **DETERMINED for direct membership, from an owner-provided summary** (C.7), engine PostgreSQL 18.3 on `ogevia-prod-postgres`. Raw query output has not been seen by the author. |
+| Who holds `ogevia_owner`, `ogevia_app`, `ogevia_readonly` on the shared instance (covers **PILOT / TEST** `ogevia_sv_test` and **PRODUCTION / PRD** `ogevia_prd`; role membership is cluster-wide)? | **DETERMINED for direct membership** from the raw output of one membership query pasted by the owner (C.7.1), engine PostgreSQL 18.3 on `ogevia-prod-postgres`. Not a saved output file; the author did not run it. |
 | Everything else the query set covers: role attributes, indirect membership, who can connect to each database, table and function grants, live sessions (Q1, Q3 to Q7)? | **NOT REPORTED.** Open (C.7.3). |
 | Who is *meant* to hold each role, according to the repository? | **Determined** (C.3), with two unknowns. |
 | Is there a repository script that gives `ogevia_readonly` to any login? | **No** (C.3). |
@@ -139,38 +139,54 @@ Record the date, the person, the database, the engine version, and attach the ou
 
 | Database | Run by | Date | `ogevia_owner` members | `ogevia_app` members | `ogevia_readonly` members | Other logins that can connect | Finding? |
 |---|---|---|---|---|---|---|---|
-| `ogevia_prd` (PRODUCTION / PRD) | Owner (via approved SSM tunnel); raw output not seen | 2026-10-11 reported; run time not stated | `ogevia_admin` | `ogevia_prd_app` | none | not reported | No unexpected holder. Open items C.7.3 |
-| `ogevia_sv_test` (PILOT / TEST) | same summary; database(s) queried not stated | same | `ogevia_admin` (cluster-wide) | `ogevia_prd_app` (cluster-wide) | none | not reported | Membership same as above; pilot login not visible among `ogevia_app` members (C.7.2) |
+| `ogevia_prd` (PRODUCTION / PRD) | Owner, connected as `ogevia_admin` through the approved SSM tunnel (raw output of one query pasted) | 2026-10-11 reported; run time not stated | `ogevia_admin` | `ogevia_prd_app` | none | not reported (Q4 not run) | No unexpected direct holder. Open items C.7.3 |
+| `ogevia_sv_test` (PILOT / TEST) | same query; database connected to not stated | same | `ogevia_admin` (cluster-wide) | `ogevia_prd_app` (cluster-wide) | none | not reported | Membership same as above; pilot login not visible among `ogevia_app` members (C.7.2) |
 
-## C.7 Live result (owner-provided summary, reported 2026-10-11)
+## C.7 Live result (owner-provided, reported 2026-10-11)
 
 ### C.7.1 What was reported
 
-Evidence class: **DV, owner-provided**. The author did not run the queries and has not seen the raw output; what follows is the summary the owner supplied. The run time and which database(s) were connected to were not stated.
+Evidence class: **DV, owner-provided**. The author did not run anything. The owner ran this query interactively (so no output file was saved) and pasted the query and its output:
 
-| Reported item | Value |
+```sql
+SELECT member.rolname AS member_role, parent.rolname AS granted_role
+FROM pg_auth_members m
+JOIN pg_roles parent ON parent.oid = m.roleid
+JOIN pg_roles member ON member.oid = m.member
+WHERE parent.rolname IN ('ogevia_owner', 'ogevia_app', 'ogevia_readonly')
+ORDER BY parent.rolname, member.rolname;
+```
+
+```text
+ member_role    | granted_role
+----------------+--------------
+ ogevia_prd_app | ogevia_app
+ ogevia_admin   | ogevia_owner
+(2 rows)
+```
+
+| Reported observation | Value |
 |---|---|
-| Engine and instance | PostgreSQL **18.3**, RDS instance `ogevia-prod-postgres`, through the approved SSM tunnel, read-only queries |
-| Memberships found (member → granted role) | `ogevia_prd_app` → `ogevia_app`; `ogevia_admin` → `ogevia_owner` |
-| `ogevia_readonly` | **no members** |
-| Other holders of `ogevia_owner` | none found |
+| Server | PostgreSQL **18.3**, RDS instance `ogevia-prod-postgres`, through the approved SSM tunnel |
+| Connected as | `ogevia_admin` |
+| `ogevia_readonly` | no rows returned, so **no members** |
 
-Because role membership is stored in a cluster-wide catalog, this describes the shared instance and therefore both databases.
+Review of the query (author): it is correct for *direct* membership of the three roles in the cluster-wide catalog `pg_auth_members`, and 2 rows with no `ogevia_readonly` row is a valid "no direct members" result. It does not show who granted the membership, `ADMIN`/`INHERIT`/`SET` options, role attributes, indirect membership, or connect rights. It is not the repository's Q2 to Q7. The run time and which database was connected to were not stated; the answer is the same for both databases because the catalog is cluster-wide.
 
 ### C.7.2 What it means against the designed state (C.3, C.4)
 
 | Check | Result | Reading |
 |---|---|---|
 | `ogevia_readonly` holders | None | **Matches the design** (empty until the owner approves an individual audited support login). No login can currently read every agency's rows through this role. |
-| `ogevia_owner` holders | Exactly one: `ogevia_admin` | Matches the design **if `ogevia_admin` is the RDS master user**, which migration `0001` makes the member. The report does not say so. Unconfirmed (C.7.3 item 1). |
+| `ogevia_owner` holders | Exactly one: `ogevia_admin`, and the owner was connected as `ogevia_admin` | Matches the design if `ogevia_admin` is the RDS master user, which migration `0001` makes the member. The documented procedure connects with the master secret, which is consistent with this, but the credential used and the master user name were not stated, so it is **likely, not confirmed** (C.7.3 item 1). |
 | `ogevia_app` holders | Only `ogevia_prd_app` | `ogevia_prd_app` is the designed production login. The design also expects the **pilot login** (secret `ogevia/database/app`) to hold `ogevia_app`, unless that login *is* `ogevia_app` itself (`01_app_login_role.sql` allows this). No separate pilot login appears among the members. The author's inference, not verified: the pilot API connects as `ogevia_app` itself, which would mean `ogevia_app` has `LOGIN` and a password. That needs Q1 (`rolcanlogin`) to confirm, and Q4 to confirm that it **cannot connect to `ogevia_prd`**. |
 | Unexpected holders of any of the three roles | None reported | Direct membership only. Indirect paths are not covered. |
 
 The reported result does not change that `ogevia_admin`, any `rds_superuser` member and any superuser can act as every Ogevia role, including `ogevia_readonly`, without being a member of it.
 
-### C.7.3 Still open (not in the reported summary)
+### C.7.3 Still open (not in the reported result)
 
-1. **Is `ogevia_admin` the RDS master user?** Read-only check: `aws rds describe-db-instances --db-instance-identifier ogevia-prod-postgres --query 'DBInstances[0].MasterUsername' --output text`.
+1. **Is `ogevia_admin` the RDS master user?** (Likely; see C.7.2.) Read-only check: `aws rds describe-db-instances --db-instance-identifier ogevia-prod-postgres --query 'DBInstances[0].MasterUsername' --output text`.
 2. **Q1:** does `ogevia_app` have `rolcanlogin = true`? Do `ogevia_prd_app` and `ogevia_admin` have the expected attributes (`ogevia_prd_app`: not superuser, not `CREATEROLE`/`CREATEDB`/`BYPASSRLS`, not inherit)?
 3. **Q2 full columns:** `granted_by`, `admin_option`, `inherit_option`, `set_option` for the two memberships (for example, whether anyone holds `ADMIN OPTION` and so can grant these roles onward).
 4. **Q3:** every login or superuser and what it can become indirectly, including all `rds_superuser` members.
@@ -178,5 +194,64 @@ The reported result does not change that `ogevia_admin`, any `rds_superuser` mem
 6. **Q5 and Q6** per database: table and function grants by grantee (expected counts in C.4; at migration level 46 the `ogevia_api` count is 171 and `ogevia` is 120).
 7. **Q7:** connected application names (the API uses `ogevia-sv-api`).
 
-If the raw output files from the earlier run still exist in the CloudShell work folder, `cat "$W"/roles_ogevia_prd.txt "$W"/roles_ogevia_sv_test.txt` shows all of Q1 to Q7 at once. They contain role names, counts and application names only.
+### C.7.4 Next queries (read-only; both tested on a local build, not on the live instance)
 
+Run **A once** (cluster-wide facts plus who can connect to each database) and **B once in `ogevia_prd` and once in `ogevia_sv_test`**. Each starts with `set default_transaction_read_only = on;`, so the session refuses writes. They return role names, privilege counts and application names only. A covers items 2 to 5 of C.7.3, B covers items 6 and 7, and the AWS CLI command covers item 1.
+
+**A**
+
+```sql
+set default_transaction_read_only = on;
+select 'connected_as' as section, current_user as name, 'session_user=' || session_user || ' version=' || current_setting('server_version') as detail
+union all
+select 'role', rolname,
+       concat_ws(' ', 'login=' || rolcanlogin, 'super=' || rolsuper, 'inherit=' || rolinherit,
+                 'createrole=' || rolcreaterole, 'createdb=' || rolcreatedb, 'bypassrls=' || rolbypassrls)
+from pg_roles
+where rolname ~ '^ogevia' or rolname in ('rds_superuser', 'rds_iam')
+union all
+select 'membership', r.rolname || ' <- ' || m.rolname,
+       concat_ws(' ', 'granted_by=' || coalesce(g.rolname, '?'), 'admin_option=' || am.admin_option,
+                 'inherit_option=' || am.inherit_option, 'set_option=' || am.set_option)
+from pg_auth_members am
+join pg_roles r on r.oid = am.roleid
+join pg_roles m on m.oid = am.member
+left join pg_roles g on g.oid = am.grantor
+where r.rolname in ('ogevia_owner', 'ogevia_app', 'ogevia_readonly', 'rds_superuser', 'rds_iam')
+union all
+select 'login_can_become', u.rolname,
+       concat_ws(' ', 'super=' || u.rolsuper, 'owner=' || pg_has_role(u.oid, 'ogevia_owner', 'MEMBER'),
+                 'app=' || pg_has_role(u.oid, 'ogevia_app', 'MEMBER'),
+                 'readonly=' || pg_has_role(u.oid, 'ogevia_readonly', 'MEMBER'),
+                 'rds_superuser=' || pg_has_role(u.oid, 'rds_superuser', 'MEMBER'))
+from pg_roles u
+where u.rolcanlogin or u.rolsuper
+union all
+select 'can_connect', u.rolname || ' -> ' || d.datname, 'connect=' || has_database_privilege(u.oid, d.oid, 'CONNECT')
+from pg_roles u
+cross join pg_database d
+where u.rolcanlogin and d.datname in ('ogevia_prd', 'ogevia_sv_test')
+order by 1, 2;
+```
+
+**B**
+
+```sql
+set default_transaction_read_only = on;
+select 'table_grant' as section, grantee || ' ' || privilege_type as name, count(distinct table_name)::text as detail
+from information_schema.role_table_grants
+where table_schema = 'ogevia'
+group by grantee, privilege_type
+union all
+select 'execute_grant', grantee || ' on ' || specific_schema, count(distinct specific_name)::text
+from information_schema.routine_privileges
+where specific_schema in ('ogevia', 'ogevia_api') and privilege_type = 'EXECUTE'
+group by grantee, specific_schema
+union all
+select 'session', coalesce(datname, '-') || ' ' || coalesce(usename, '-'),
+       'app=' || coalesce(nullif(application_name, ''), '-') || ' sessions=' || count(*)
+from pg_stat_activity
+where datname in ('ogevia_prd', 'ogevia_sv_test')
+group by datname, usename, application_name
+order by 1, 2;
+```
