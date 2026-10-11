@@ -70,8 +70,8 @@ describe("upgrade from 0046 to 0048 on a populated database", () => {
        values ($1,$2,$3,$4,$5, now() + interval '3 days', now() + interval '3 days 2 hours', 'scheduled')`, [w.orgA, fx.client, fx.service, w.caregiverA1.userId, rec]);
     const oldOverride = (await call(w.ownerA, "select ogevia_api.authorize_availability_override($1,$2,now(), now() + interval '2 days','Phone agreement') as id", [w.orgA, rec]))[0].id as string;
     const before = await fingerprints();
-    expect(before.availability_overrides.rows).toBe(1);
-    expect(before.shifts.rows).toBeGreaterThan(0);
+    expect(before.availability_overrides!.rows).toBe(1);
+    expect(before.shifts!.rows).toBeGreaterThan(0);
 
     // The real runner applies whatever is missing.
     const client = await db.admin.connect();
@@ -98,6 +98,6 @@ describe("upgrade from 0046 to 0048 on a populated database", () => {
     expect(await fingerprints()).toEqual(before);
     // The fingerprint is not vacuous: a change to a single existing row IS detected.
     await db.admin.query("update ogevia.app_users set display_name = display_name || ' x' where id = $1", [w.managerA.userId]);
-    expect((await fingerprints()).app_users.hash).not.toBe(before.app_users.hash);
+    expect((await fingerprints()).app_users!.hash).not.toBe(before.app_users!.hash);
   });
 });
