@@ -526,8 +526,11 @@ describe("ClientDetailPage", () => {
     mockedRpc.mockResolvedValue({ data: [], error: null } as never);
 
     renderPage();
+    // The form renders before the loaded client fills it in (Save stays disabled until first and last name are
+    // present), so wait for the loaded values rather than for the field to merely exist; otherwise the click below
+    // can land on a disabled Save and nothing is saved.
     await waitFor(() =>
-      expect(screen.getByLabelText("First name")).toBeInTheDocument(),
+      expect(screen.getByLabelText("Last name")).toHaveValue("Rivera"),
     );
 
     fireEvent.change(screen.getByLabelText("First name"), {
