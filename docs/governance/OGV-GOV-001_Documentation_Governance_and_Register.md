@@ -102,6 +102,9 @@ No documentation or records retention policy was found in the repository (search
 | C8 | Status wording is inconsistent: "VERIFIED", "READY FOR EXECUTION", "DOCUMENTED", "COMPLETE", "Pilot Launch Ready" are used without the §3 definitions. | Header lines of `docs/**` | Readers cannot tell tested from deployed. | Adopt §3 in all `OGV-*` documents. |
 | C9 | Product naming varies: "CareLik Global" (README, `PRODUCT_CONSTITUTION.md`, `design-system.md`, August documents) versus "Ogevia". | headings | Confusing, and a risk for the marketing-claims review. | Glossary in OGV-INDEX-001. |
 | C10 | Documents dated 2026-10-05 (the majority of `docs/aws/`) predate migrations 0039–0048 and the releases under `docs/releases/`. | `git log` dates versus migration list | Their inventories are incomplete for current state. | Treat as dated snapshots until refreshed. |
+| C11 | `infra/aws/db/README.md` says migrations are `0001–0011` and "Nothing here has been applied to any AWS database"; the folder holds 0001 to 0048 and the production ledger is recorded at 46. | `infra/aws/db/README.md`; `ls infra/aws/db/migrations`; `DEPLOYMENT_CHECKPOINT_0047_0048.md` | Stale operator guidance. | Correct in OGV-SOP-002. |
+| C12 | `OGEVIA_OPERATING_RECORD.md` (2026-10-07) presents `app.ogevia.com` as the active Cognito login ("VERIFIED") and cites a Supabase migration file as evidence for the AWS API; the URL registry (2026-10-10) says that DNS is not repointed to either AWS distribution. | both files | What `app.ogevia.com` serves is unknown. | Owner to confirm; see OGV-TECH-001 section 39. |
+| C13 | The CDK alarm topic has no subscriber defined, though documents describe monitoring as in place. | `infra/aws/lib/observability-stack.ts` | Alarm delivery unknown. | Verify live; OGV-OPS-001. |
 
 **Not verified in this version:** whether the repository `main` CI is passing (CI definition read: `.github/workflows/ci.yml` runs typecheck, lint, build, test, a deployment-bundle build, and a PostgreSQL 18 integration job; no run result was retrieved); and whether any document outside the repository (Drive, Notion, email) holds additional authoritative material.
 
@@ -111,7 +114,7 @@ Status key: NOT STARTED, DRAFT, APPROVED. "Existing sources" are the repository 
 
 | # | ID | Title | Status | Blocking issue | Existing sources to start from |
 |---|---|---|---|---|---|
-| 1 | OGV-TECH-001 | Master Technical Reference | **BLOCKED** | The "original 57-section prompt" is not in the repository or in this session. It must be supplied. | `CLAUDE.md`, `docs/aws/PHASE_1_CDK_ARCHITECTURE.md` |
+| 1 | OGV-TECH-001 | Master Technical Reference | **DRAFT v0.1** (`docs/OGV-TECH-001-master-technical-reference.md`, inspected at `2b01572`, 2026-10-11) | Owner approval. Live AWS state not verified; see its Known gaps | `CLAUDE.md`, `docs/aws/PHASE_1_CDK_ARCHITECTURE.md` |
 | 2 | OGV-PROD-001 | Master Product Reference | NOT STARTED | none | `docs/OGEVIA_OPERATIONS_PRD.md`, `docs/product/PILOT_SCOPE_RECONCILIATION.md`, `docs/product/FEATURE_RECOVERY_INVENTORY.md`, `docs/product/PENDING_RESTORATION.md` |
 | 3 | OGV-GOV-001 | Documentation Governance and Register | **DRAFT v0.1 (this document)** | Owner approval; D1–D4 | this file |
 | 4 | OGV-INFRA-001 | Environment and Infrastructure Reference | NOT STARTED | Live read-only AWS verification needs credentials (D5) | `docs/aws/CURRENT_AWS_INVENTORY.md`, `PHASE_1_*`, `URL_REGISTRY_AND_LAUNCH_CHECKLIST.md`, `infra/aws/lib/*` |
