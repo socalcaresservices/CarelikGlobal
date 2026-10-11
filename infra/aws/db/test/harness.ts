@@ -463,8 +463,9 @@ export async function endedVisit(
  * it starts about 20 minutes from now and lasts 2 hours. Built from real instants, not from wall-clock arithmetic,
  * because around a daylight-saving change "now + 20 minutes" on the clock is not 20 real minutes, and the product
  * refuses a start or end local time that does not exist or happens twice (0035). When the preferred window is not
- * valid, the first valid one is used: a start between 20 minutes ahead and 60 minutes ago, 2 to 5 hours long, so a
- * visit started now is always inside it.
+ * valid, the first valid one is used: a start between 20 minutes ahead and 3 hours ago, 2 to 6 hours long, ending at
+ * least 30 minutes from now, so a visit started now is always inside it. (The repeated hour of a fall-back night is
+ * an hour long and a start inside it is never valid, so the window may have to start before it.)
  */
 export async function upcomingShiftWindow(db: TestDb, orgId: string): Promise<{ d: string; s: string; e: string }> {
   const { rows } = await db.admin.query<{ d: string; s: string; e: string }>(
@@ -474,8 +475,9 @@ export async function upcomingShiftWindow(db: TestDb, orgId: string): Promise<{ 
        from ogevia.organizations o
       cross join lateral (
         select off, len, now() + make_interval(mins => off) as i0, now() + make_interval(mins => off + len) as i1
-          from unnest(array[20, 10, 0, -30, -60]) off cross join unnest(array[120, 180, 240, 300]) len) c
+          from unnest(array[20, 10, 0, -30, -60, -90, -120, -150, -180]) off cross join unnest(array[120, 180, 240, 300, 360]) len) c
       where o.id = $1
+        and c.off + c.len >= 30
         and ogevia.local_times_issue(o.timezone, (c.i0 at time zone o.timezone)::date,
                                      (c.i0 at time zone o.timezone)::time, (c.i1 at time zone o.timezone)::time) is null
       order by abs(c.off - 20), c.len
