@@ -116,6 +116,9 @@ export const SERVICE_VERIFICATION_ROUTES: ReadonlyArray<{
   { method: apigw.HttpMethod.POST, path: "/v1/caregivers/{caregiverRecordId}/status" },
   { method: apigw.HttpMethod.POST, path: "/v1/caregivers/{caregiverRecordId}/invitation" },
   { method: apigw.HttpMethod.POST, path: "/v1/caregivers/{caregiverRecordId}/invitation/resend" },
+  { method: apigw.HttpMethod.GET, path: "/v1/accounts" },
+  { method: apigw.HttpMethod.POST, path: "/v1/accounts/{userId}/disable" },
+  { method: apigw.HttpMethod.POST, path: "/v1/accounts/{userId}/enable" },
   { method: apigw.HttpMethod.GET, path: "/v1/shifts" },
   { method: apigw.HttpMethod.POST, path: "/v1/shifts" },
   { method: apigw.HttpMethod.GET, path: "/v1/shift-series/preview" },
@@ -415,9 +418,10 @@ export class ServiceVerificationApiStack extends Stack {
     });
     const identityRole = new iam.Role(this, "IdentityRole", {
       assumedBy: new iam.ServicePrincipal("lambda.amazonaws.com"),
-      description: "Ogevia caregiver invitation identity function (Cognito create/resend only)",
+      description: "Ogevia identity function (Cognito create/resend, and switch a sign-in off or on)",
     });
     const identityPolicy = new iam.ManagedPolicy(this, "IdentityPolicy", {
+      // Description is immutable in CloudFormation (changing it would REPLACE the policy), so it keeps its original wording.
       description: "Ogevia identity function: own logs + AdminCreateUser/AdminGetUser on the one user pool",
       roles: [identityRole],
     });
@@ -432,10 +436,17 @@ export class ServiceVerificationApiStack extends Stack {
         actions: ["cognito-idp:AdminCreateUser", "cognito-idp:AdminGetUser"],
         resources: [`arn:aws:cognito-idp:${config.region}:${config.account}:userpool/${existing.userPool.userPoolId}`],
       }),
+      // 0048: an Admin can switch a person's sign-in off and on. These two actions cannot read or set a password, change an email,
+      // assign a group, or delete anyone. The same one pool ARN; the database decides who may ask and for whom.
+      new iam.PolicyStatement({
+        sid: "SwitchSignInsOnOff",
+        actions: ["cognito-idp:AdminDisableUser", "cognito-idp:AdminEnableUser"],
+        resources: [`arn:aws:cognito-idp:${config.region}:${config.account}:userpool/${existing.userPool.userPoolId}`],
+      }),
     );
     this.identityHandler = new nodejs.NodejsFunction(this, "IdentityHandler", {
       functionName: identityFunctionName(config),
-      description: "Ogevia caregiver invitations: Cognito AdminCreateUser/AdminGetUser only",
+      description: "Ogevia identity: Cognito create/get/disable/enable of sign-ins on one pool",
       runtime: lambda.Runtime.NODEJS_24_X,
       architecture: lambda.Architecture.ARM_64,
       entry: IDENTITY_HANDLER_ENTRY,

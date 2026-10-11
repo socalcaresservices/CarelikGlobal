@@ -70,7 +70,9 @@ export const permissionSchema = z.enum([
   "readiness.manage",
   "matching.read",
   "matching.manage",
-  "experience.report_own"
+  "experience.report_own",
+  // Account administration (infra/aws/db migration 0048): see sign-in status, disable/enable sign-ins. Organization owner only.
+  "accounts.manage"
 ]);
 
 export type Permission = z.infer<typeof permissionSchema>;

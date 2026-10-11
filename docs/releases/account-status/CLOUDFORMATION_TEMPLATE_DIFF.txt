@@ -1,0 +1,121 @@
+--- before
++++ after
+@@ -143,4 +143,31 @@
+    "Type": "AWS::ApiGatewayV2::Api"
+   },
++  "ApiGETv1accounts9A8F9CA0": {
++   "Metadata": {
++    "aws:cdk:path": "Ogevia-prd-ServiceVerificationApi/Api/GET--v1--accounts/Resource"
++   },
++   "Properties": {
++    "ApiId": {
++     "Ref": "ApiF70053CD"
++    },
++    "AuthorizationType": "JWT",
++    "AuthorizerId": {
++     "Ref": "ApiCognitoJwt1870F097"
++    },
++    "RouteKey": "GET /v1/accounts",
++    "Target": {
++     "Fn::Join": [
++      "",
++      [
++       "integrations/",
++       {
++        "Ref": "ApiGETv1meHandlerCDA9441F"
++       }
++      ]
++     ]
++    }
++   },
++   "Type": "AWS::ApiGatewayV2::Route"
++  },
+   "ApiGETv1assignments706ED4B4": {
+    "Metadata": {
+@@ -2085,4 +2112,58 @@
+     },
+     "RouteKey": "GET /v1/visits/{visitId}/signature",
++    "Target": {
++     "Fn::Join": [
++      "",
++      [
++       "integrations/",
++       {
++        "Ref": "ApiGETv1meHandlerCDA9441F"
++       }
++      ]
++     ]
++    }
++   },
++   "Type": "AWS::ApiGatewayV2::Route"
++  },
++  "ApiPOSTv1accountsuserIddisable56848497": {
++   "Metadata": {
++    "aws:cdk:path": "Ogevia-prd-ServiceVerificationApi/Api/POST--v1--accounts--{userId}--disable/Resource"
++   },
++   "Properties": {
++    "ApiId": {
++     "Ref": "ApiF70053CD"
++    },
++    "AuthorizationType": "JWT",
++    "AuthorizerId": {
++     "Ref": "ApiCognitoJwt1870F097"
++    },
++    "RouteKey": "POST /v1/accounts/{userId}/disable",
++    "Target": {
++     "Fn::Join": [
++      "",
++      [
++       "integrations/",
++       {
++        "Ref": "ApiGETv1meHandlerCDA9441F"
++       }
++      ]
++     ]
++    }
++   },
++   "Type": "AWS::ApiGatewayV2::Route"
++  },
++  "ApiPOSTv1accountsuserIdenable4A6463BA": {
++   "Metadata": {
++    "aws:cdk:path": "Ogevia-prd-ServiceVerificationApi/Api/POST--v1--accounts--{userId}--enable/Resource"
++   },
++   "Properties": {
++    "ApiId": {
++     "Ref": "ApiF70053CD"
++    },
++    "AuthorizationType": "JWT",
++    "AuthorizerId": {
++     "Ref": "ApiCognitoJwt1870F097"
++    },
++    "RouteKey": "POST /v1/accounts/{userId}/enable",
+     "Target": {
+      "Fn::Join": [
+@@ -4899,5 +4980,5 @@
+      "S3Key": "7c5f8eb676c93261fd7a80f34d40ba70379c040d94bb2e9bd80f2d007ebc9759.zip"
+     },
+-    "Description": "Ogevia caregiver invitations: Cognito AdminCreateUser/AdminGetUser only",
++    "Description": "Ogevia identity: Cognito create/get/disable/enable of sign-ins on one pool",
+     "Environment": {
+      "Variables": {
+@@ -5018,4 +5099,13 @@
+        "Resource": "arn:aws:cognito-idp:us-west-2:300094796789:userpool/us-west-2_849AYz5J7",
+        "Sid": "CreateCaregiverSignIns"
++      },
++      {
++       "Action": [
++        "cognito-idp:AdminDisableUser",
++        "cognito-idp:AdminEnableUser"
++       ],
++       "Effect": "Allow",
++       "Resource": "arn:aws:cognito-idp:us-west-2:300094796789:userpool/us-west-2_849AYz5J7",
++       "Sid": "SwitchSignInsOnOff"
+       }
+      ],
+@@ -5047,5 +5137,5 @@
+      "Version": "2012-10-17"
+     },
+-    "Description": "Ogevia caregiver invitation identity function (Cognito create/resend only)",
++    "Description": "Ogevia identity function (Cognito create/resend, and switch a sign-in off or on)",
+     "Tags": [
+      {

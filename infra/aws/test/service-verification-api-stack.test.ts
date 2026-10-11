@@ -194,10 +194,18 @@ describe("ServiceVerificationApiStack (FUTURE, Phase 4)", () => {
     expect(props.Environment.Variables).toEqual({ COGNITO_USER_POOL_ID: existing.cognitoUserPoolId });
     const [policy] = Object.values(template.findResources("AWS::IAM::ManagedPolicy", { Properties: { Description: "Ogevia identity function: own logs + AdminCreateUser/AdminGetUser on the one user pool" } }));
     const statements = (policy!.Properties as any).PolicyDocument.Statement as Array<{ Sid: string; Action: unknown; Resource: unknown }>;
-    expect(statements.map((st) => st.Sid).sort()).toEqual(["CreateCaregiverSignIns", "WriteOwnLogGroup"]);
+    expect(statements.map((st) => st.Sid).sort()).toEqual(["CreateCaregiverSignIns", "SwitchSignInsOnOff", "WriteOwnLogGroup"]);
     const cognito = statements.find((st) => st.Sid === "CreateCaregiverSignIns")!;
     expect(cognito.Action).toEqual(["cognito-idp:AdminCreateUser", "cognito-idp:AdminGetUser"]);
     expect(cognito.Resource).toBe(`arn:aws:cognito-idp:us-west-2:${OGEVIA_ACCOUNT}:userpool/${existing.cognitoUserPoolId}`);
+    // 0048: exactly two more actions (switch a sign-in off / on), on the same single pool ARN, and nothing broader.
+    const onOff = statements.find((st) => st.Sid === "SwitchSignInsOnOff")!;
+    expect(onOff.Action).toEqual(["cognito-idp:AdminDisableUser", "cognito-idp:AdminEnableUser"]);
+    expect(onOff.Resource).toBe(`arn:aws:cognito-idp:us-west-2:${OGEVIA_ACCOUNT}:userpool/${existing.cognitoUserPoolId}`);
+    const allActions = statements.flatMap((st) => ([] as string[]).concat(st.Action as string[]));
+    expect(allActions.filter((a) => a.startsWith("cognito-idp:")).sort()).toEqual([
+      "cognito-idp:AdminCreateUser", "cognito-idp:AdminDisableUser", "cognito-idp:AdminEnableUser", "cognito-idp:AdminGetUser",
+    ]);
     expect(JSON.stringify(statements)).not.toMatch(/AdminSetUserPassword|AdminAddUserToGroup|AdminUpdateUserAttributes|AdminDeleteUser|cognito-idp:\*|secretsmanager|s3:|kms:/);
     const api = Object.values(template.findResources("AWS::IAM::ManagedPolicy", { Properties: { Description: "Ogevia Service Verification API handler permissions" } }))[0]!;
     const invoke = ((api.Properties as any).PolicyDocument.Statement as Array<{ Sid: string; Action: unknown; Resource: unknown }>).find((st) => st.Sid === "InvokeIdentityAdmin")!;

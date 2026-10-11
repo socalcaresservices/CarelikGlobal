@@ -22,6 +22,7 @@ import {
   Settings,
   Stethoscope,
   UserCircle,
+  UserCog,
   Users,
   X,
 } from "lucide-react";
@@ -160,6 +161,7 @@ export function AwsShell({ children }: PropsWithChildren) {
     { to: "/services", label: "Services", group: "SETUP", icon: Stethoscope, show: !isCaregiver && hasPermission("authorizations.read") },
     { to: "/continuity", label: "Continuity pack", group: "SETUP", icon: LifeBuoy, show: !isCaregiver && hasPermission("continuity.export") },
     { to: "/outage-visits", label: "Outage records", group: "SETUP", icon: FileArchive, show: !isCaregiver && hasPermission("visits.manage") },
+    { to: "/accounts", label: "Accounts", group: "SETUP", icon: UserCog, show: !isCaregiver && hasPermission("accounts.manage") },
     { to: "/settings/branding", label: "Settings", group: "SETUP", icon: Settings, show: hasPermission("organization.update") },
   ];
   const groups = visibleGroups(links);

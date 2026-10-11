@@ -555,6 +555,53 @@ export const ROUTES: Record<string, Route> = {
     },
   },
 
+  // Sign-in accounts (0048): plain-language status, and Admin disable/enable. The database decides first (accounts.manage =
+  // organization owner only, own agency only, never yourself); passwords are never read, set or returned; no email or Cognito
+  // identifier is returned. DISABLE is database-first (the person is blocked in Ogevia at once; the Cognito switch-off follows and a retry
+  // is safe). ENABLE switches the Cognito sign-in on first, then restores access in the database.
+  "GET /v1/accounts": {
+    mutating: false,
+    handle: async ({ event, tx }) => {
+      const org = orgParam(event);
+      return { accounts: await tx((db) => rows(db, "select * from ogevia_api.list_accounts($1)", [org])) };
+    },
+  },
+
+  "POST /v1/accounts/{userId}/disable": {
+    mutating: true,
+    handle: async ({ event, tx, identity }) => {
+      const userId = uuid(p(event).userId, "userId");
+      const body = parseBody(event.body, event.isBase64Encoded);
+      const org = uuid(body.organizationId, "organizationId");
+      const reason = text(body.reason, "reason", 500, { required: true })!;
+      const [result] = await tx((db) => rows(db, "select * from ogevia_api.disable_account($1, $2, $3)", [org, userId, reason]));
+      const signInOff = result?.disableSignIn === true && typeof result.cognitoSub === "string";
+      if (signInOff) {
+        try {
+          await identity.setEnabled(result!.cognitoSub as string, false);
+        } catch {
+          throw new ApiError(502, "identity_unavailable", "Access is blocked in Ogevia, but the sign-in service did not confirm the change. Choose Disable again to finish it.");
+        }
+      }
+      return { account: { userId, accountStatus: "disabled", signInSwitchedOff: signInOff } };
+    },
+  },
+
+  "POST /v1/accounts/{userId}/enable": {
+    mutating: true,
+    handle: async ({ event, tx, identity }) => {
+      const userId = uuid(p(event).userId, "userId");
+      const body = parseBody(event.body, event.isBase64Encoded);
+      const org = uuid(body.organizationId, "organizationId");
+      const reason = text(body.reason, "reason", 500, { required: true })!;
+      const [prep] = await tx((db) => rows(db, "select * from ogevia_api.prepare_account_enable($1, $2)", [org, userId]));
+      // Cognito first: if it cannot be switched on, nothing has changed in Ogevia and the Admin can retry.
+      if (prep?.signInDisabled === true && typeof prep.cognitoSub === "string") await identity.setEnabled(prep.cognitoSub, true);
+      await tx((db) => db.query("select ogevia_api.enable_account($1, $2, $3)", [org, userId, reason]));
+      return { account: { userId, accountStatus: "active" } };
+    },
+  },
+
   "POST /v1/services": {
     status: 201,
     mutating: true,

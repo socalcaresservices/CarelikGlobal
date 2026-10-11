@@ -5,7 +5,7 @@ import { loadConfig } from "./config";
 import { secretsManagerPool } from "./db";
 import { s3EvidenceStore } from "./evidence";
 import { createHandler } from "./handler";
-import { lambdaIdentityAdmin, unavailableIdentityAdmin, type IdentityResponse } from "./identity";
+import { lambdaIdentityAdmin, unavailableIdentityAdmin, type IdentityRequest, type IdentityResponse } from "./identity";
 import type { HttpApiEvent } from "./http";
 
 export { createHandler } from "./handler";
@@ -31,7 +31,7 @@ export async function handler(event: HttpApiEvent) {
 
 /** Synchronous invoke of the identity function; its payload never contains a password. */
 function invokeIdentity(lambda: LambdaClient, functionName: string) {
-  return async (request: { action: "invite" | "resend"; email: string }): Promise<IdentityResponse> => {
+  return async (request: IdentityRequest): Promise<IdentityResponse> => {
     const out = await lambda.send(new InvokeCommand({
       FunctionName: functionName,
       InvocationType: "RequestResponse",

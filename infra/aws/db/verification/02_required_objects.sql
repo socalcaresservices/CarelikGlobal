@@ -26,7 +26,7 @@ with required_tables(t) as (values
   ('set_availability_direct'), ('approve_caregiver_service'), ('revoke_caregiver_service'), ('bulk_approve_reviewed_services'),
   ('get_readiness_status'), ('activate_readiness_enforcement'), ('set_service_checks'), ('evaluate_assignment_readiness'),
   ('authorize_availability_override'), ('get_document_readiness'), ('set_requirement_policy'), ('match_caregivers'),
-  ('match_caregivers_for_request')
+  ('match_caregivers_for_request'), ('list_accounts'), ('disable_account'), ('prepare_account_enable'), ('enable_account')
 )
 select 'table_exists:' || t as check_name,
        exists (select 1 from pg_tables where schemaname = 'ogevia' and tablename = t) as ok,

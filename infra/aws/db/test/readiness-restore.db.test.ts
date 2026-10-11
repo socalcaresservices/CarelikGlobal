@@ -9,7 +9,7 @@ import { asActor, createTestDb, freshClient, orgToday, seedWorld, setBaselineAva
 
 const RESTORE = readFileSync(new URL("../restore/readiness_restore_from_archives.sql", import.meta.url), "utf8");
 const LIST = readFileSync(new URL("../restore/readiness_list_recovery_sets.sql", import.meta.url), "utf8");
-const ALL = ["0039", "0040", "0041", "0042", "0043", "0044", "0045", "0046", "0047"];
+const ALL = ["0039", "0040", "0041", "0042", "0043", "0044", "0045", "0046", "0047", "0048"];
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 let db: TestDb;
