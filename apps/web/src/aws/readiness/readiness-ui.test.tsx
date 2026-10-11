@@ -323,6 +323,7 @@ describe("Service checks and readiness on the Care Team page", () => {
 describe("Assignment checks on the schedule", () => {
   async function chooseAll() {
     fireEvent.click(await screen.findByRole("button", { name: /Add shift|Schedule a shift|New shift/ }));
+    await screen.findByRole("option", { name: /C-104/ }); // the client list has loaded, so choosing it really sets the client
     fireEvent.change(await screen.findByLabelText("Client"), { target: { value: "cccccccc-0000-4000-8000-000000000001" } });
     fireEvent.change(screen.getByLabelText("Service"), { target: { value: SVC } });
     fireEvent.change(screen.getByLabelText(/Caregiver/), { target: { value: CG } });
@@ -374,14 +375,28 @@ describe("Assignment checks on the schedule", () => {
     fireEvent.click(await screen.findByRole("button", { name: "Override availability…" }));
     const form = await screen.findByRole("group", { name: "Override availability" });
     expect(within(form).getByText(/lifts only the availability check/)).toBeInTheDocument();
+    expect(within(form).getByText(/this one shift/)).toBeInTheDocument();
+    expect(within(form).getByText(/does not change the caregiver's recorded availability/)).toBeInTheDocument();
     const go = within(form).getByRole("button", { name: "Override availability" });
     expect(go).toBeDisabled();
     fireEvent.change(within(form).getByLabelText("Reason for the override"), { target: { value: "Caregiver agreed by phone" } });
     fireEvent.click(go);
     await waitFor(() => expect(posts(calls, "/v1/availability/overrides")).toHaveLength(1));
-    expect(posts(calls, "/v1/availability/overrides")[0]!.body).toMatchObject({ caregiverRecordId: CG, reason: "Caregiver agreed by phone", rangeStart: "2026-10-14T16:00:00+00:00" });
+    expect(posts(calls, "/v1/availability/overrides")[0]!.body).toMatchObject({ caregiverRecordId: CG, clientId: expect.any(String), reason: "Caregiver agreed by phone", rangeStart: "2026-10-14T16:00:00+00:00" });
     expect(await screen.findByText("Ready to assign")).toBeInTheDocument();
     expect(screen.getByText(/Availability overridden by an administrator\./)).toBeInTheDocument();
+  });
+
+  it("without a client there is no override button (an override is for one client)", async () => {
+    const checks = okChecks().map((c) => (c.check === "availability" ? { ...c, status: "blocked", code: "availability_not_provided", message: "Availability not provided.", blocking: true } : c));
+    renderAt("/schedule", { role: "organization_owner", evaluation: { ready: false, checks } });
+    // The schedule form only evaluates once a client is chosen, so no checks panel (and no override) exists before that.
+    expect(screen.queryByRole("button", { name: "Override availability…" })).toBeNull();
+  });
+
+  it("a shift assigned under an Admin override says so, with the reason", async () => {
+    renderAt("/schedule", { role: "manager", shiftOverride: true });
+    expect(await screen.findByText(/Assigned with Admin override \(availability was No Match\): Caregiver agreed by phone/)).toBeInTheDocument();
   });
 });
 

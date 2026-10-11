@@ -2126,9 +2126,9 @@ export const ROUTES: Record<string, Route> = {
     mutating: true,
     handle: async ({ event, tx }) => {
       const body = parseBody(event.body, event.isBase64Encoded);
-      const overrideId = await tx(async (db) => (await first(db, "select ogevia_api.authorize_availability_override($1,$2,$3::timestamptz,$4::timestamptz,$5) as id", [
+      const overrideId = await tx(async (db) => (await first(db, "select ogevia_api.authorize_availability_override($1,$2,$3::timestamptz,$4::timestamptz,$5,$6) as id", [
         uuid(body.organizationId, "organizationId"), uuid(body.caregiverRecordId, "caregiverRecordId"), timestamp(body.rangeStart, "rangeStart"),
-        timestamp(body.rangeEnd, "rangeEnd"), text(body.reason, "reason", 500, { required: true })])).id);
+        timestamp(body.rangeEnd, "rangeEnd"), text(body.reason, "reason", 500, { required: true }), uuid(body.clientId, "clientId")])).id);
       return { overrideId };
     },
   },

@@ -51,7 +51,7 @@ describe("manual selection stays separate from optional ranking", () => {
     const matches = (await call(w.ownerA, "select ogevia_api.match_caregivers($1,$2,$3,$4::jsonb,null,null) r", [w.orgA, fx.service, fx.client, JSON.stringify(intervals)]))[0].r;
     expect(matches.candidates.find((c: { caregiverRecordId: string }) => c.caregiverRecordId === rec).eligibility).toBe('not_eligible');
     await expectPgError(shift(4), "OGR30", /Availability not provided/);
-    await call(w.ownerA, "select ogevia_api.authorize_availability_override($1,$2,($3::date+'09:00'::time) at time zone 'America/Los_Angeles',($3::date+'11:00'::time) at time zone 'America/Los_Angeles','Caregiver agreed by phone')", [w.orgA, rec, await day(4)]);
+    await call(w.ownerA, "select ogevia_api.authorize_availability_override($1,$2,($3::date+'09:00'::time) at time zone 'America/Los_Angeles',($3::date+'11:00'::time) at time zone 'America/Los_Angeles','Caregiver agreed by phone',$4)", [w.orgA, rec, await day(4), fx.client]);
     expect(await shift(4)).toHaveLength(1);
     await expectPgError(shift(4), "OGC09", /already has a shift/);
     expect((await db.admin.query("select count(*)::int n from ogevia.audit_events where action='availability.override_used'")).rows[0].n).toBeGreaterThan(0);

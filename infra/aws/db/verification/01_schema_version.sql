@@ -1,10 +1,10 @@
 -- READ ONLY. Schema version and migration ledger.
-select 'latest_migration_is_0046' as check_name,
-       coalesce(max(version) = '0046', false) as ok,
+select 'latest_migration_is_0047' as check_name,
+       coalesce(max(version) = '0047', false) as ok,
        'latest=' || coalesce(max(version), 'none') as detail
 from ogevia_meta.schema_migrations
 union all
-select 'migration_count_is_46', count(*) = 46, 'count=' || count(*)
+select 'migration_count_is_47', count(*) = 47, 'count=' || count(*)
 from ogevia_meta.schema_migrations
 union all
 select 'migration_versions_contiguous',

@@ -41,6 +41,10 @@ Recorded 2026-10-11 from the owner's written answers in the Claude session. Stat
 2. Whether to **activate readiness enforcement** for SoCal Care Services (production policy change).
 3. Whether authorizations also have a **whole-period cap**, or only a monthly cap.
 
+## Progress
+
+- Step 1 (availability override repair) is **implemented and tested locally, not deployed**: `docs/releases/availability-override/README.md`.
+
 ## Recommended build order (each step separate, tested first, separately deployable)
 
 1. Availability override repair: bind to one shift and client, store the original match result, single use, show on the shift, relabel Match / Partial Match / No Match.

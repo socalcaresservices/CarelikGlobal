@@ -25,6 +25,8 @@ export const json = (code: number, body: unknown) => new Response(JSON.stringify
 
 export interface FakeOptions {
   role: Role;
+  /** The listed shift was assigned under a one-shift Administrator availability override. */
+  shiftOverride?: boolean;
   /** Routes ("GET /v1/experience/me") that answer 500 this many times before working. */
   failFirst?: Record<string, number>;
   /** Routes whose answer waits for this promise (a slow network). */
@@ -74,6 +76,7 @@ export function fakeApi(opts: FakeOptions) {
     readiness: { ...baseReadiness(), ...(opts.readiness ?? {}) } as Record<string, any>,
     evaluation: { startsAt: "2026-10-14T16:00:00+00:00", endsAt: "2026-10-14T18:00:00+00:00", ready: true, wouldBlockAfterActivation: false, checks: okChecks(), ...(opts.evaluation ?? {}) } as Record<string, any>,
     failNext: opts.failNextRequestWith ?? null,
+    shiftOverride: opts.shiftOverride === true,
   };
   const fetchImpl = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = new URL(String(input));
@@ -178,7 +181,7 @@ export function fakeApi(opts: FakeOptions) {
         state.evaluation = { ...state.evaluation, ready: true, checks: (state.evaluation.checks as any[]).map((c) => (c.check === "availability" ? { ...c, status: "overridden", blocking: false, code: "availability_override", message: "Availability overridden by an administrator." } : c)) };
         return json(201, { overrideId: "ov1" });
       case "GET /v1/shifts":
-        return json(200, { shifts: [{ shiftId: SHIFT, startsAt: "2026-10-14T16:00:00Z", endsAt: "2026-10-14T18:00:00Z", localDate: "2026-10-14", coverageState: "needs_coverage", clientId: CLIENT, clientCode: "C-104", clientName: "Synthetic Client", serviceId: SVC, serviceCode: "PCS", serviceName: "Personal care", caregiverRecordId: null, caregiverCode: null, caregiverName: null, hasSignIn: false, reservedMinutes: 120, fromCareRequest: false, hasVisit: false, lastCalloutReason: null, seriesId: null }] });
+        return json(200, { shifts: [{ shiftId: SHIFT, startsAt: "2026-10-14T16:00:00Z", endsAt: "2026-10-14T18:00:00Z", localDate: "2026-10-14", coverageState: "needs_coverage", clientId: CLIENT, clientCode: "C-104", clientName: "Synthetic Client", serviceId: SVC, serviceCode: "PCS", serviceName: "Personal care", caregiverRecordId: null, caregiverCode: null, caregiverName: null, hasSignIn: false, reservedMinutes: 120, fromCareRequest: false, hasVisit: false, lastCalloutReason: null, seriesId: null, availabilityOverride: state.shiftOverride === true, availabilityOverrideReason: state.shiftOverride === true ? "Caregiver agreed by phone" : null }] });
       case "GET /v1/care-requests":
         return json(200, { requests: [{ requestId: REQ, clientCode: "C-104", serviceCode: "PCS", serviceName: "Personal care", startsAt: "2026-10-14T16:00:00Z", endsAt: "2026-10-14T20:00:00Z", requestedMinutes: 240, status: "requested", shortNotice: false, assignedCaregiverName: null, responseCount: 0 }] });
       case `GET /v1/care-requests/${REQ}/matches`:

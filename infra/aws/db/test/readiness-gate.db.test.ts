@@ -256,35 +256,104 @@ describe("Service checks (separate, audited, never touching CPR/TB)", () => {
   });
 });
 
-describe("availability override: one caregiver, one range, one reason; lifts only the hours", () => {
-  it("administrator-only, reason required, recorded when used; never lifts documents, service or double-booking", async () => {
+describe("availability override: one caregiver, one client, one shift; lifts only the hours (0047)", () => {
+  it("administrator-only, reason required, used once and linked to the shift; never lifts documents, service or double-booking", async () => {
     await reset();
     await makeDocsCurrent(recA1, w.caregiverA1).catch(() => undefined);
     await baseline(w.caregiverA1, []);
     const day = await add(11);
-    const from = at(day, "00:00");
-    const to = at(await add(12), "00:00");
-    const authorize = (a: Actor, rec: string, reason = "Caregiver agreed by phone") =>
-      call(a, "select ogevia_api.authorize_availability_override($1,$2,$3::timestamptz,$4::timestamptz,$5) as id", [w.orgA, rec, from, to, reason]).then((r) => r[0].id as string);
+    const authorize = (a: Actor, rec: string, start = "09:00", end = "11:00", reason = "Caregiver agreed by phone", client = fx.client) =>
+      call(a, "select ogevia_api.authorize_availability_override($1,$2,($3::date + $4::time) at time zone 'America/Los_Angeles',($3::date + $5::time) at time zone 'America/Los_Angeles',$6,$7) as id",
+        [w.orgA, rec, day, start, end, reason, client]).then((r) => r[0].id as string);
     await expectPgError(createShift(w.managerA, day, "09:00", "11:00", recA1), "OGR30", /Availability not provided\./);
     await expectPgError(authorize(w.managerA, recA1), "OGA03");
-    await expectPgError(authorize(w.ownerA, recA1, " "), "OGV22", /reason/i);
+    await expectPgError(authorize(w.ownerA, recA1, "09:00", "11:00", " "), "OGV22", /reason/i);
     await expectPgError(authorize(w.managerB, recA1), "OGN04");
     const id = await authorize(w.ownerA, recA1);
-    expect(await createShift(w.managerA, day, "09:00", "11:00", recA1)).toHaveLength(1);
-    expect((await db.admin.query("select used_count from ogevia.availability_overrides where id = $1", [id])).rows[0].used_count).toBe(1);
-    expect((await db.admin.query("select action, reason from ogevia.audit_events where action like 'availability.override%' order by id")).rows.map((r) => r.action)).toEqual(["availability.override_authorized", "availability.override_used"]);
+    const made = await createShift(w.managerA, day, "09:00", "11:00", recA1);
+    expect(made).toHaveLength(1);
+    const ov = (await db.admin.query("select used_count, consumed_at, shift_id, client_id, original_status from ogevia.availability_overrides where id = $1", [id])).rows[0];
+    expect(ov.used_count).toBe(1);
+    expect(ov.consumed_at).not.toBeNull();
+    expect(ov.shift_id).toBe(made[0].shift_id);
+    expect(ov.client_id).toBe(fx.client);
+    expect(ov.original_status).toBe("not_provided");
+    expect((await db.admin.query("select action from ogevia.audit_events where action like 'availability.override%' order by id")).rows.map((r) => r.action))
+      .toEqual(["availability.override_authorized", "availability.override_used", "availability.override_linked"]);
+    // The shift list says it was assigned under an administrator override, and why.
+    const listed = await call(w.managerA, "select * from ogevia_api.list_shifts($1,$2::date,$2::date,null)", [w.orgA, day]);
+    expect(listed.find((r) => r.shift_id === made[0].shift_id)).toMatchObject({ availability_override: true, availability_override_reason: "Caregiver agreed by phone" });
     // Double-booking still applies.
     await expectPgError(createShift(w.managerA, day, "10:00", "12:00", recA1), "OGC09", /already has a shift/);
-    // Other caregivers and times are untouched.
+    // The override was for ONE shift: the same hours on another day, or another shift after this one, are refused again.
     await expectPgError(createShift(w.managerA, await add(13), "09:00", "11:00", recA1), "OGR30", /Availability not provided\./);
-    // A missing CPR is NOT overridden by an availability override.
+    await expectPgError(createShift(w.managerA, day, "13:00", "15:00", recA1), "OGR30", /Availability not provided\./);
+    // A missing CPR is NOT overridden by an availability override (and the unused override survives the refusal).
+    const second = await authorize(w.ownerA, recA1, "13:00", "15:00");
     await resetCaregiverDocs(recA1);
     await expectPgError(createShift(w.managerA, day, "13:00", "15:00", recA1), "OGR30", /CPR missing\./);
+    expect((await db.admin.query("select consumed_at from ogevia.availability_overrides where id = $1", [second])).rows[0].consumed_at).toBeNull();
     await makeDocsCurrent(recA1, w.caregiverA1);
+    expect(await createShift(w.managerA, day, "13:00", "15:00", recA1)).toHaveLength(1);
+    // A time that does not match the approved shift, or another client, does not use it.
+    await authorize(w.ownerA, recA1, "16:00", "18:00");
+    await expectPgError(createShift(w.managerA, day, "16:00", "17:00", recA1), "OGR30", /Availability not provided\./);
+    const other = await freshClient(db, w, w.caregiverA1, 100000, w.orgA, { before: 5, after: 120 });
+    await expectPgError(createShift(w.managerA, day, "16:00", "18:00", recA1, other.service, other.client), "OGR30", /different client/);
+    // The failed attempt rolled back, so the override is still unused and still works for the right shift.
+    expect(await createShift(w.managerA, day, "16:00", "18:00", recA1)).toHaveLength(1);
     // The override expires.
-    await db.admin.query("update ogevia.availability_overrides set expires_at = now() - interval '1 minute'");
-    await expectPgError(createShift(w.managerA, day, "13:00", "15:00", recA1), "OGR30", /Availability not provided\./);
+    await authorize(w.ownerA, recA1, "19:00", "21:00");
+    await db.admin.query("update ogevia.availability_overrides set expires_at = now() - interval '1 minute' where consumed_at is null");
+    await expectPgError(createShift(w.managerA, day, "19:00", "21:00", recA1), "OGR30", /Availability not provided\./);
+    // Nothing to override when the caregiver is already available.
+    await baseline(w.caregiverA1, allWeek());
+    await expectPgError(authorize(w.ownerA, recA1, "09:00", "11:00"), "OGV22", /nothing to override/);
+    // Stored availability is never changed by an override.
+    expect((await db.admin.query("select count(*)::int n from ogevia.availability_requests where source = 'administrator' and reason like '%phone%'")).rows[0].n).toBe(0);
+  });
+});
+
+describe("availability override on the other assignment paths (0047)", () => {
+  const grant = (rec: string, day: string, start: string, end: string, client = fx.client) =>
+    call(w.ownerA, "select ogevia_api.authorize_availability_override($1,$2,($3::date + $4::time) at time zone 'America/Los_Angeles',($3::date + $5::time) at time zone 'America/Los_Angeles','Agency asked for this caregiver',$6) as id",
+      [w.orgA, rec, day, start, end, client]).then((r) => r[0].id as string);
+
+  it("filling an OPEN shift under an override links it to that shift and uses it up; a different or later shift needs its own", async () => {
+    await reset();
+    await makeDocsCurrent(recA1, w.caregiverA1).catch(() => undefined);
+    await baseline(w.caregiverA1, []);
+    const day = await add(14);
+    const open = (await createShift(w.managerA, day, "09:00", "11:00", null))[0].shift_id as string;
+    const other = (await createShift(w.managerA, day, "13:00", "15:00", null))[0].shift_id as string;
+    const assign = (shift: string) => call(w.managerA, "select ogevia_api.assign_shift_caregiver($1,$2,$3,null,null) as s", [w.orgA, shift, recA1]);
+    await expectPgError(assign(open), "OGR30", /Availability not provided\./);
+    const id = await grant(recA1, day, "09:00", "11:00");
+    await expectPgError(assign(other), "OGR30", /Availability not provided\./); // the override is for the 09:00 shift only
+    expect((await assign(open))[0].s).toBe("covered");
+    expect((await db.admin.query("select shift_id, consumed_context from ogevia.availability_overrides where id = $1", [id])).rows[0]).toMatchObject({ shift_id: open, consumed_context: "reschedule" });
+    expect((await db.admin.query("select caregiver_record_id from ogevia.shifts where id = $1", [open])).rows[0].caregiver_record_id).toBe(recA1);
+    // Used up: it cannot be reused for the same hours after the caregiver is removed and the shift is refilled.
+    await call(w.managerA, "select ogevia_api.record_shift_callout($1,$2,'Caregiver unwell',null)", [w.orgA, open]);
+    await expectPgError(assign(open), "OGC09"); // the caregiver who called out cannot be put back on it
+    expect((await db.admin.query("select used_count from ogevia.availability_overrides where id = $1", [id])).rows[0].used_count).toBe(1);
+  });
+
+  it("a recurring series is never built on an override: the outside-hours date is still flagged", async () => {
+    await reset();
+    await baseline(w.caregiverA1, []);
+    const day = await add(15);
+    const dow = (await db.admin.query("select extract(dow from $1::date)::int d", [day])).rows[0].d as number;
+    const preview = () => call(w.managerA, "select *, local_date::text as local_date from ogevia_api.preview_shift_series($1,$2,$3,$4,$5::smallint[],'09:00'::time,'11:00'::time,$6::date,$6::date)",
+      [w.orgA, fx.client, fx.service, recA1, [dow], day]);
+    expect((await preview())[0].outcome).toMatch(/^availability_/);
+    await grant(recA1, day, "09:00", "11:00");
+    expect((await preview())[0].outcome).toMatch(/^availability_/); // an override does not apply to a series
+    await expectPgError(
+      call(w.managerA, "select * from ogevia_api.create_shift_series($1,$2,$3,$4,$5::smallint[],'09:00'::time,'11:00'::time,$6::date,$6::date,'refuse',null)", [w.orgA, fx.client, fx.service, recA1, [dow], day]),
+      "OGC09");
+    // The same date as an ordinary shift under the override works; the series can then skip that date.
+    expect(await createShift(w.managerA, day, "09:00", "11:00", recA1)).toHaveLength(1);
   });
 });
 

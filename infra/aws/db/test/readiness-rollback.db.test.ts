@@ -51,7 +51,9 @@ describe("readiness release rollback keeps data", () => {
     await call(w.ownerA, "select ogevia_api.set_requirement_policy($1,'cpr','document_expiry',null,'Policy')", [w.orgA]);
     await db.admin.query("insert into ogevia.organization_readiness_settings(organization_id, enforcement_active_from, service_checks) values ($1, now(), true)", [w.orgA]);
     await db.admin.query("insert into ogevia.readiness_setting_events(organization_id, setting, old_value, new_value, reason, changed_by) values ($1,'service_checks','Off','On','Test',$2)", [w.orgA, w.ownerA.userId]);
-    await call(w.ownerA, "select ogevia_api.authorize_availability_override($1,$2,now(), now() + interval '2 days','Phone agreement')", [w.orgA, rec1]);
+    await db.admin.query(
+      `insert into ogevia.availability_overrides (organization_id, caregiver_record_id, client_id, range_start, range_end, reason, authorised_by, expires_at, original_status)
+       values ($1,$2,$3, now(), now() + interval '2 hours', $4, $5, now() + interval '30 minutes', 'outside')`, [w.orgA, rec1, fx.client, 'Phone agreement', w.ownerA.userId]);
     // 0043: tags, experience, ZIPs and a rule.
     const tag = (await call(w.managerA, "select ogevia_api.create_experience_tag($1,'ABA experience') as id", [w.orgA]))[0].id;
     await call(w.managerA, "select ogevia_api.review_caregiver_experience($1,$2,$3::uuid[],'ok')", [w.orgA, rec1, `{${tag}}`]);
@@ -61,7 +63,7 @@ describe("readiness release rollback keeps data", () => {
       approvals: (await db.admin.query("select count(*)::int n from ogevia.caregiver_service_approvals")).rows[0].n,
       audit: (await db.admin.query("select count(*)::int n from ogevia.audit_events")).rows[0].n,
     };
-    for (const f of ["0046_visit_start_availability", "0045_manual_care_offer", "0044_readiness_review", "0043_explainable_matching", "0042_readiness_gate", "0041_required_documents", "0040_caregiver_service_approvals", "0039_availability_approval"]) {
+    for (const f of ["0047_availability_override_one_shift", "0046_visit_start_availability", "0045_manual_care_offer", "0044_readiness_review", "0043_explainable_matching", "0042_readiness_gate", "0041_required_documents", "0040_caregiver_service_approvals", "0039_availability_approval"]) {
       await runDown(`${f}.down.sql`);
     }
     // Records that existed before the release are untouched; audit history only grows.
@@ -83,7 +85,7 @@ describe("readiness release rollback keeps data", () => {
     // Re-applying the whole release works and starts clean.
     const client = await db.admin.connect();
     try {
-      expect((await migrate(client)).applied.map((x) => x.slice(0, 4))).toEqual(["0039", "0040", "0041", "0042", "0043", "0044", "0045", "0046"]);
+      expect((await migrate(client)).applied.map((x) => x.slice(0, 4))).toEqual(["0039", "0040", "0041", "0042", "0043", "0044", "0045", "0046", "0047"]);
     } finally {
       client.release();
     }
