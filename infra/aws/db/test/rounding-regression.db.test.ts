@@ -44,7 +44,8 @@ const setPolicy = (a: Actor, o: { method?: string; inc?: number | null; basis?: 
   q(a, "select * from ogevia_api.set_billing_rounding_policy($1, $2, $3, $4, $5, $6, 'Synthetic payer manual 7.1', '2026-01-15'::date, $7::date, $8, $9)",
     [w.orgA, PAYER, svc, o.method ?? "up", o.inc === undefined ? 15 : o.inc, o.basis === undefined ? "per_visit" : o.basis,
      o.from ?? "2026-01-01", o.reason ?? "Synthetic regression policy", o.key ?? null]).then((r) => r[0]);
-const preview = (a: Actor = w.managerA) => q(a, "select * from ogevia_api.list_billing_rounding_preview($1, $2::date, $2::date)", [w.orgA, today]);
+const preview = (a: Actor = w.managerA, from: string = today, to: string = today) =>
+  q(a, "select * from ogevia_api.list_billing_rounding_preview($1, $2::date, $3::date)", [w.orgA, from, to]);
 const approveVisit = (a: Actor, visit: string, minutes: number) => q(a, "select ogevia_api.approve_visit_for_billing($1, $2, null, null) as id", [visit, minutes]).then((r) => r[0].id as string);
 const voidApproval = (a: Actor, id: string) => q(a, "select ogevia_api.void_billing_approval($1, 'Synthetic void', null)", [id]);
 const approveAdj = (a: Actor, visit: string, key: string | null = null, notes: string | null = null) =>
@@ -142,7 +143,11 @@ describe("correction after an adjustment", () => {
     const row = (await db.admin.query("select status, worked_minutes, billable_minutes from ogevia.service_visits where id = $1", [corrected])).rows[0];
     expect(row.worked_minutes).toBe(40);
     // The original visit no longer appears for rounding; only the corrected row does.
-    const p = await preview();
+    // A correction takes its service date from its own start time, and the 50-minute test visit starts before Los Angeles
+    // midnight when the suite runs in the first 50 minutes of the day. Look up the corrected visit on its own date, and
+    // look across both days so the original is checked on its date too.
+    const correctedDay = (await db.admin.query("select service_date::text d from ogevia.service_visits where id = $1", [corrected])).rows[0].d as string;
+    const p = await preview(w.managerA, correctedDay < today ? correctedDay : today, today);
     expect(p.find((r) => r.visit_id === visit)).toBeUndefined();
     expect(row).toEqual({ status: "signed", worked_minutes: 40, billable_minutes: 40 });
     expect(p.find((r) => r.visit_id === corrected)).toMatchObject({ worked_minutes: 40, state: "awaiting_visit_approval", proposed_minutes: 45 });
