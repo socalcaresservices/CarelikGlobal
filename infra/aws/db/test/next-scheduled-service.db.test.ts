@@ -51,11 +51,22 @@ async function twoServiceClient(a: Actor) {
   return { client: f.client, first: f.service, second };
 }
 
+/**
+ * A shift `offsetMin` minutes from now that STARTS ON the organization's local today, which is what the start screen
+ * looks for. In the last minutes of the day "now + offset" falls on tomorrow, so the start is held at 23:59 local
+ * (still an upcoming shift today); at any other time it is exactly now + offset.
+ */
 async function shift(a: Actor, client: string, service: string, offsetMin: number) {
   return (
     await db.admin.query<{ id: string }>(
-      `insert into ogevia.shifts (organization_id, client_id, service_id, caregiver_user_id, caregiver_record_id, starts_at, ends_at)
-       values ($1,$2,$3,$4,$5, now() + make_interval(mins => $6), now() + make_interval(mins => $6 + 210)) returning id`,
+      `with t as (
+         select least(
+                  now() + make_interval(mins => $6),
+                  (((now() at time zone o.timezone)::date + 1)::timestamp - interval '1 minute') at time zone o.timezone
+                ) as starts_at
+         from ogevia.organizations o where o.id = $1)
+       insert into ogevia.shifts (organization_id, client_id, service_id, caregiver_user_id, caregiver_record_id, starts_at, ends_at)
+       select $1,$2,$3,$4,$5, t.starts_at, t.starts_at + interval '210 minutes' from t returning id`,
       [w.orgA, client, service, a.userId, await recordOf(a), offsetMin],
     )
   ).rows[0]!.id;
