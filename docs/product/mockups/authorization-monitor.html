@@ -1,0 +1,40 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><title>Authorization monitor mockup</title><link rel="stylesheet" href="_base.css">
+<style>.u{display:flex;align-items:center;gap:8px}.u .bar{flex:1}.neg{color:var(--crit);font-weight:700}.dim{color:var(--sub)}</style></head><body>
+<div class="mock"><b>MOCKUP, NOT BUILT.</b> Synthetic numbers and client codes. Shows decisions D2 (utilization), D4 (statuses; Pending Correction is a warning only) and the 80% / 95% thresholds. Layout is a proposal.</div>
+<div class="shell"><aside><div class="logo"><i></i>Ogevia</div><a>Home</a><h6>CAREGIVERS</h6><a>Care Team</a><a>Schedule</a><h6>CLIENTS</h6><a>Clients</a><a class="on">Authorization monitor</a><h6>BILLING</h6><a>Billing review</a><h6>REPORTS</h6><a>Unfilled shifts</a><a>Reports</a></aside>
+<main>
+<div class="row"><h1>Authorization monitor</h1><span class="sp"></span><label class="note">Month (agency time)<br><span class="sel">October 2026 ▾</span></label><button class="btn">Export CSV</button></div>
+<p class="note" style="margin:4px 0 12px">Utilization = (used + reserved) ÷ authorized. Warnings never block scheduling. Only a shift that would exceed the remaining time is refused.</p>
+
+<div class="grid" style="grid-template-columns:repeat(8,1fr)">
+<div class="card kpi"><b style="font-size:20px">31</b><span>Healthy</span></div>
+<div class="card kpi"><b style="font-size:20px;color:var(--warn)">6</b><span>Near Limit</span><small>80–95%</small></div>
+<div class="card kpi"><b style="font-size:20px;color:var(--crit)">1</b><span>Critical</span><small>95–100%</small></div>
+<div class="card kpi"><b style="font-size:20px;color:var(--crit)">1</b><span>Exhausted</span><small>100%</small></div>
+<div class="card kpi"><b style="font-size:20px;color:var(--crit)">1</b><span>Over Limit</span><small>above 100%</small></div>
+<div class="card kpi"><b style="font-size:20px;color:var(--warn)">3</b><span>Expiring Soon</span><small>30 days</small></div>
+<div class="card kpi"><b style="font-size:20px;color:var(--crit)">2</b><span>Expired / None</span><small>1 + 1</small></div>
+<div class="card kpi"><b style="font-size:20px;color:var(--info)">1</b><span>Pending Correction</span><small>stored</small></div></div>
+
+<div class="row" style="margin:14px 0 8px"><span class="sel">Needs attention ▾</span><span class="sel">All services ▾</span><span class="sel">All clients ▾</span><span class="sp"></span><span class="note">Showing 10 of 58 · Cancelled hidden (1)</span></div>
+
+<div class="card" style="padding:0;overflow:auto"><table>
+<thead><tr><th>Client</th><th>Service</th><th>Authorization period</th><th class="n">Authorized</th><th class="n">Used</th><th class="n">Reserved</th><th class="n">Remaining</th><th style="min-width:170px">Utilization</th><th>Expires</th><th>Status</th></tr></thead><tbody>
+<tr><td>CL-0A93FB</td><td>Respite</td><td>09/01 – 11/30</td><td class="n">30 h</td><td class="n">31 h</td><td class="n">1 h</td><td class="n neg">−2 h</td><td><div class="u"><div class="bar"><i style="width:100%;background:var(--crit)"></i></div><b class="neg">107%</b></div></td><td>11/30</td><td><span class="chip crit">Over Limit</span></td></tr>
+<tr><td>CL-5C77E2</td><td>Personal care</td><td>07/01 – 12/31</td><td class="n">20 h</td><td class="n">18 h</td><td class="n">2 h</td><td class="n">0 h</td><td><div class="u"><div class="bar"><i style="width:100%;background:var(--crit)"></i></div><b>100%</b></div></td><td>12/31</td><td><span class="chip crit">Exhausted</span></td></tr>
+<tr><td>CL-B20E19</td><td>Respite</td><td>09/15 – 12/14</td><td class="n">40 h</td><td class="n">36 h</td><td class="n">3 h</td><td class="n">1 h</td><td><div class="u"><div class="bar"><i style="width:97.5%;background:var(--crit)"></i></div><b>98%</b></div></td><td>12/14</td><td><span class="chip crit">Critical</span></td></tr>
+<tr><td>CL-7F3A2C</td><td>Respite</td><td>09/01 – 11/30</td><td class="n">60 h</td><td class="n">48 h</td><td class="n">6 h</td><td class="n">6 h</td><td><div class="u"><div class="bar"><i style="width:90%;background:#d97706"></i></div><b>90%</b></div></td><td>11/30</td><td><span class="chip warn">Near Limit</span></td></tr>
+<tr><td>CL-E4417D</td><td>Respite</td><td>05/01 – 10/28</td><td class="n">25 h</td><td class="n">10 h</td><td class="n">4 h</td><td class="n">11 h</td><td><div class="u"><div class="bar"><i style="width:56%;background:var(--ok)"></i></div><b>56%</b></div></td><td><b style="color:var(--warn)">10/28</b></td><td><span class="chip warn">Expiring Soon</span></td></tr>
+<tr><td>CL-31D6C8</td><td>Personal care</td><td>08/01 – 01/31</td><td class="n">16 h</td><td class="n">6 h</td><td class="n">0 h</td><td class="n">10 h</td><td><div class="u"><div class="bar"><i style="width:37.5%;background:var(--ok)"></i></div><b>38%</b></div></td><td>01/31</td><td><span class="chip info">Pending Correction</span><br><span class="note">Review needed. Scheduling not blocked.</span></td></tr>
+<tr><td>CL-8A2F56</td><td>Respite</td><td>04/01 – 09/30</td><td class="n dim">—</td><td class="n dim">—</td><td class="n dim">—</td><td class="n dim">—</td><td class="dim">Not applicable</td><td><b class="neg">09/30</b></td><td><span class="chip crit">Expired</span><br><span class="note">2 shifts scheduled in the next 7 days</span></td></tr>
+<tr><td>CL-C913A7</td><td>Personal care</td><td class="dim">None covers 10/15</td><td class="n dim">—</td><td class="n dim">—</td><td class="n dim">—</td><td class="n dim">—</td><td class="dim">Not applicable</td><td class="dim">—</td><td><span class="chip crit">No Authorization</span><br><span class="note">Shift scheduled 10/15</span></td></tr>
+<tr><td>CL-4D81A0</td><td>Personal care</td><td>07/01 – 12/31</td><td class="n">30 h</td><td class="n">12 h</td><td class="n">6 h</td><td class="n">12 h</td><td><div class="u"><div class="bar"><i style="width:60%;background:var(--ok)"></i></div><b>60%</b></div></td><td>12/31</td><td><span class="chip ok">Healthy</span></td></tr>
+</tbody></table></div>
+<p class="note" style="margin:8px 2px">Click a row for the client's authorization history, the shifts and visits behind Used and Reserved, and amendment history. Row counts match the tiles above.</p>
+
+<div class="grid" style="grid-template-columns:1fr 1fr;margin-top:14px">
+<div class="card"><h2>Row detail (CL-7F3A2C)</h2><table><tr><td>Authorized</td><td class="n">60 h</td></tr><tr><td>Used (confirmed visits, rounding, accepted late confirmations)</td><td class="n">48 h</td></tr><tr><td>Reserved (scheduled shifts without a counted visit)</td><td class="n">6 h</td></tr><tr><td><b>Remaining</b></td><td class="n"><b>6 h</b></td></tr></table><p class="note" style="margin:6px 0 0">A minute is counted once: as used or as reserved.</p></div>
+<div class="card"><h2>Thresholds <span class="chip mute">Administrator edits</span></h2><table><tr><td>Near Limit from</td><td class="n">80%</td></tr><tr><td>Critical from</td><td class="n">95%</td></tr><tr><td>Expiring Soon</td><td class="n">30 days</td></tr></table><p class="note" style="margin:6px 0 0">Warning levels only. They never block scheduling.</p></div></div>
+
+<div class="dn"><h3>STILL OPEN (D4 sub-questions)</h3><ul><li>Stored statuses are Active, Pending Correction, Expired, Cancelled. Derived are Exhausted, Near Limit, Over Limit. Whether Expired is set automatically at the period end, or by a person, is not decided.</li><li>Who sets and clears Pending Correction, with what reason and audit record, is not decided. The mockup shows it as an information chip only.</li><li>Cancelled is hidden by default. Its relationship to deleted or superseded versions is not decided.</li><li>"Critical" (95–100%) is a monitor warning level. It is separate from the coverage severity "Critical" (shift started, unfilled).</li></ul></div>
+</main></div></body></html>
