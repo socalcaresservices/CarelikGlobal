@@ -22,3 +22,6 @@ deploy-bundle/
 
 # CDK synth output (generated)
 cdk.synth.out/
+
+# Local development harness: certificates and the web build
+infra/aws/local-harness/.local/

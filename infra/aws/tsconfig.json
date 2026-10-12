@@ -12,6 +12,7 @@
     "test",
     "scripts",
     "db",
+    "local-harness",
     "vitest.config.ts",
     "vitest.db.config.ts"
   ]
