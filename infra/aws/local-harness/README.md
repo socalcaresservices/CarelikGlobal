@@ -34,6 +34,12 @@ Open **https://localhost**. The browser warns about the certificate (a local sel
 
 Run `harness:setup` again at any time to reset the data.
 
+## Smoke check
+```bash
+pnpm --filter @carelik/infra-aws harness:smoke
+```
+Run after `harness:setup` and `harness:build`. It starts the harness itself (stop any running `harness:serve` first, because both use port 443) and checks, over real HTTPS and without a browser: the sign-in settings pass the web app's own validation, the built app and its scripts are served, every person can sign in (authorization code with PKCE; the id token passes the app's own claim checks), the API answers and refuses correctly for each role, and the seeded data is present, including the late-confirmation balance that shows the F1 fix. Exit 0 means all passed. CI runs the same sequence in the `harness` job. It does not render screens: use the harness in a browser for that (Phase B).
+
 ## Port 443
 - macOS and Windows: works as a normal user.
 - Linux: allow unprivileged use of low ports once, then run as yourself:

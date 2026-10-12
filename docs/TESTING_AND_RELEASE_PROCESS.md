@@ -210,7 +210,7 @@ Each release gets `docs/releases/<release-id>/` containing `CHECKLIST.md` (the c
 | `.github/pull_request_template.md` referred only to `supabase/migrations` | The AWS migration path had no PR prompt | **Done 2026-10-13:** the template follows this process; the legacy Supabase section is kept at the end |
 | Whether CI checks are required before merge | Unable to verify from repository evidence | Owner confirms branch protection |
 | Phase C deploy scripts are per release (`pilot-*`, `increment-*`, `release-*`), and `pilot-e2e` browser scripts target older migrations (README: 0001-0018) | Deployment is still per-release scripted | **Regression part done 2026-10-13:** `pilot_regression.py` runs the automatable catalog cases (implemented and tested locally; not yet run on the pilot). Deployment scripts remain per release |
-| The harness is not run in CI | Harness breakage is found late | Add a harness smoke (sign in, load Home) to CI |
+| The harness was not run in CI | Harness breakage was found late | **Done 2026-10-13:** CI job `harness` runs setup, build and `harness:smoke` (41 checks; not rendering screens). CI not yet observed running |
 | No EVV/Sandata, GPS or SMS in the AWS build | Catalog sections for these are "not built" placeholders | Add cases when built |
 | The pilot's current migration ledger and deployed commit are not recorded in the repository | Phase C pre-flight must read them live | Record them in each checklist |
 | Seeded signature images do not exist in the harness | Signature viewing cannot be checked locally | Prove in Phase C against real S3 |
