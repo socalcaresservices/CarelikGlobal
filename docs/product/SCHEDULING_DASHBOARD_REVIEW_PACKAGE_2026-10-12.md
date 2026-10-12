@@ -589,3 +589,16 @@ Direction: when a late confirmation is accepted for a shift-linked visit, count 
 **Conflict (VERIFIED):** the accounting rules exist only as PostgreSQL functions that are defined in migration files. The three places that sum reservations are `ogevia.authorization_month_reserved` (0026:54), `ogevia.care_request_reserved_usage` (0011:172) and the reserved CTE of `ogevia_api.list_monthly_service_summary` (0036, the version in use). There is no application-layer copy: `create_shift`, `series_evaluate`, assignment and the reports all call these in the database. The migration runner refuses to continue if an applied file's checksum changes (`infra/aws/db/scripts/migrations.ts`, "Drift"), so editing 0011, 0026 or 0036 is not possible. The only way to change a function is a new migration file (0049) containing `CREATE OR REPLACE FUNCTION` for those three functions. No table, column, index or row would change, and it would be reversible with a `.down.sql` that restores the current definitions.
 
 Therefore "no migrations" and "fix F1" cannot both be satisfied. Work on F1 stops here until the owner chooses. No migration file has been created.
+
+---
+
+# 17. F1 fix: implemented and tested, NOT deployed (2026-10-13)
+
+Owner approval: one function-only migration, scope limited to F1. No work was done on F2, F4, F6, F7, F8, dashboards, reports or the authorization monitor.
+
+- **Migration:** `infra/aws/db/migrations/0049_reservation_not_counted_when_late_confirmation_accepted.sql`; rollback `infra/aws/db/rollback/0049_reservation_not_counted_when_late_confirmation_accepted.down.sql` (restores the 0026, 0011 and 0036 definitions and drops the helper).
+- **Rule (one definition, `ogevia.reservation_counted_as_used(shift_id)`):** a reservation is excluded from the RESERVED total while its shift has a linked visit in `administrator_review` with an active (not revoked) `accept_late_confirmation` decision. These are exactly the conditions under which `authorization_month_usage` counts the accepted minutes as USED. Revoking the decision makes the condition false and the reservation counts as reserved again. Reservation rows are not released, deleted or changed.
+- **Functions:** new `ogevia.reservation_counted_as_used`; replaced `ogevia.authorization_month_reserved`, `ogevia.care_request_reserved_usage`, `ogevia_api.list_monthly_service_summary` (only the reserved predicate changed).
+- **Ledger-tail expectations updated** (not behaviour): `db/verification/01_schema_version.sql` (0049, 49 migrations), `readiness-restore.db.test.ts` and `upgrade-0046-to-0048.db.test.ts` (0049 is now part of the applied / rolled-back runs).
+- **Results:** F1 test failed before the migration (`expected 165 to be 45`) and passes after, including revoke-restores-reserved and reservation-row-unchanged checks. Full database suite 54 files / 521 tests pass; `pnpm lint`, `pnpm typecheck`, `pnpm test` pass. Schema dump with and without 0049 differs only in the helper and the three function bodies.
+- **Open and unchanged:** the F2, F4, F6, F7, F8 reproductions still pass as expected failures. Production behaviour is unchanged until 0049 is deployed under a separate YELLOW approval.

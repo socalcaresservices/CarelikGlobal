@@ -110,8 +110,8 @@ describe("F1: a minute is counted once, as used OR as reserved", () => {
     expect(await summary(f)).toMatchObject({ billable_minutes: 45, reserved_minutes: 0, remaining_minutes: 555 });
   });
 
-  // OBSERVED FAILURE (see the review package): used = 45 AND reserved = 120, so 165 of 600 is counted for 45 min of care.
-  it.fails("REPRODUCTION: a linked visit left in administrator_review whose late confirmation was ACCEPTED must not also keep the shift's reservation", async () => {
+  // F1 (fixed by migration 0049): before the fix used = 45 AND reserved = 120, so 165 of 600 was counted for 45 min of care.
+  it("a linked visit left in administrator_review whose late confirmation was ACCEPTED must not also keep the shift's reservation", async () => {
     const cg = w.caregiverA1;
     const f = await freshClient(db, w, cg, 600);
     const shift = await reservedShift(cg, f, -5, 120);
@@ -125,14 +125,39 @@ describe("F1: a minute is counted once, as used OR as reserved", () => {
     const before = await counted(f);
     expect(before).toEqual({ used: 0, reserved: 120 }); // held while unresolved: by design (0013)
 
-    expect(await acceptLateConfirmation(visit)).toMatchObject({ accepted_minutes: 45 });
+    const accepted = await acceptLateConfirmation(visit);
+    expect(accepted).toMatchObject({ accepted_minutes: 45 });
 
     const after = await counted(f);
     // The visit stays in administrator_review (locked); only the decision changed.
     expect((await db.admin.query("select status from ogevia.service_visits where id = $1", [visit])).rows[0].status).toBe("administrator_review");
     expect(after.used).toBe(45);
     expect(after.used + after.reserved).toBe(45); // CORRECT: the same minutes are not also reserved
-    expect(await summary(f)).toMatchObject({ remaining_minutes: 555 });
+    expect(await summary(f)).toMatchObject({ reserved_minutes: 0, billable_minutes: 45, remaining_minutes: 555 });
+    // The reservation record itself is neither released nor changed.
+    const reservation = async () =>
+      (await db.admin.query("select released_at, release_reason, reserved_minutes from ogevia.authorization_reservations where shift_id = $1", [shift])).rows[0];
+    expect(await reservation()).toEqual({ released_at: null, release_reason: null, reserved_minutes: 120 });
+
+    // Reversible: revoking the decision puts the reservation back in the reserved total and takes the minutes out of used.
+    await q(w.managerA, "select ogevia_api.revoke_visit_review_decision($1, 'Decision entered in error (synthetic)', null)", [accepted.decision_id]);
+    expect(await counted(f)).toEqual({ used: 0, reserved: 120 });
+    expect(await summary(f)).toMatchObject({ reserved_minutes: 120, billable_minutes: 0, remaining_minutes: 480 });
+    expect(await reservation()).toEqual({ released_at: null, release_reason: null, reserved_minutes: 120 });
+  });
+
+  it("an accepted late confirmation on a visit with NO shift, or a visit not yet decided, changes nothing about other reservations", async () => {
+    const cg = w.caregiverA1;
+    const f = await freshClient(db, w, cg, 600);
+    await reservedShift(cg, f, 600, 90); // a different, future shift for the same lineage
+    const visit = await api.start(db, cg, w.orgA, f.client, f.service); // not linked: the future shift is far outside the 60-minute early window
+    await ageVisit(db, visit, 30);
+    await api.end(db, cg, visit);
+    await api.confirm(db, cg, visit, { method: "unable_to_confirm", reason: "Client asleep; parent not home (synthetic)" });
+    expect((await db.admin.query("select scheduled_shift_id from ogevia.service_visits where id = $1", [visit])).rows[0].scheduled_shift_id).toBeNull();
+    expect(await counted(f)).toEqual({ used: 0, reserved: 90 });
+    await acceptLateConfirmation(visit);
+    expect(await counted(f)).toEqual({ used: 30, reserved: 90 }); // unrelated reservation still counts
   });
 });
 
