@@ -565,3 +565,27 @@ The environment owner can allow these hosts under the environment's Network acce
 | D1 hostname | BLOCKED on infrastructure evidence |
 
 **Requested approval gate:** (a) infrastructure evidence for D1 (section 15.2); (b) approval to implement the F1 fix as a first, isolated change with the committed test flipping from `it.fails` to a normal test; (c) answers to the D4 and D10 sub-questions and to D8, D9, D11. Nothing else proceeds before (a) and (b).
+
+---
+
+# 16. Owner decisions recorded 2026-10-13 and a conflict that blocks the F1 fix
+
+Status of everything below: decided, NOT implemented, NOT deployed. The owner's message ended mid-sentence ("Ready for Approval should remain a separate dashboard/work-"); the rest is read as "dashboard / work queue" and needs confirmation.
+
+## 16.1 Decisions
+
+| # | Decision | Notes |
+|---|---|---|
+| D1 | Remains BLOCKED. Needs actual Route53, CloudFront/ALB, ACM and hostname evidence. Repository evidence is not sufficient | Commands in section 15.2 |
+| D2 | Utilization = (used + reserved) / authorized, the system definition going forward | |
+| D4 (supersedes 15.3) | **Stored** statuses: Active, Pending Correction, Expired, Cancelled. **Derived**: Exhausted, Near Limit, Over Limit. Pending Correction = administrative review required before the authorization can be fully trusted operationally; **warning only, never blocks scheduling**; set and cleared explicitly through authorization workflow permissions. Cancelled = intentionally withdrawn, invalid for future service, distinct from Expired | Open: (a) Expired is now stored, so it can disagree with `period_end`; who or what sets it, and does it move automatically at `period_end`? (b) which permission sets and clears Pending Correction (existing `authorizations.update`?) and what reason and audit are recorded; (c) how Cancelled relates to `deleted_at` and to superseded versions in 0004; (d) where "Near Limit" thresholds (80/95) and "Over Limit" sit relative to the directive's Healthy / Near Limit / Critical monitor statuses |
+| D10 | Urgent coverage gap = unfilled shift starting within 48 h. A shift already started and still unfilled is urgent. Severity: **Critical** = started and unfilled; **Urgent** = starts within 48 h; **Upcoming** = beyond 48 h | My reading, to confirm: Critical and Urgent count toward Action Needed; Upcoming does not and belongs to the Unfilled Shift Report |
+| D8 / D9 / D11 | The server is the system of record for Action Needed totals. Eliminate duplicate calculation paths. The web displays the server total. **Ready for Approval is not included** in the total and stays a separate dashboard / work queue | D8 (Awaiting Confirmation), D9 (review deadline) and D11 (Documents to Review) are not answered by this message; open |
+
+## 16.2 Approved implementation: F1, with a conflict
+
+Direction: when a late confirmation is accepted for a shift-linked visit, count the minutes as used and exclude the matching reservation from reserved; do not release or delete reservations; **do not add migrations**; do not modify stored data; reversible on revoke; limited to accounting logic; remove `it.fails` and have the test pass; no regressions.
+
+**Conflict (VERIFIED):** the accounting rules exist only as PostgreSQL functions that are defined in migration files. The three places that sum reservations are `ogevia.authorization_month_reserved` (0026:54), `ogevia.care_request_reserved_usage` (0011:172) and the reserved CTE of `ogevia_api.list_monthly_service_summary` (0036, the version in use). There is no application-layer copy: `create_shift`, `series_evaluate`, assignment and the reports all call these in the database. The migration runner refuses to continue if an applied file's checksum changes (`infra/aws/db/scripts/migrations.ts`, "Drift"), so editing 0011, 0026 or 0036 is not possible. The only way to change a function is a new migration file (0049) containing `CREATE OR REPLACE FUNCTION` for those three functions. No table, column, index or row would change, and it would be reversible with a `.down.sql` that restores the current definitions.
+
+Therefore "no migrations" and "fix F1" cannot both be satisfied. Work on F1 stops here until the owner chooses. No migration file has been created.
