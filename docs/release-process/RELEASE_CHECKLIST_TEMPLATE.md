@@ -31,7 +31,7 @@ Evidence rules: link or paste real command output and screenshots. Never include
 ---
 
 ## A. Development gates (Phase A)
-Run on a clean checkout of the commit above. Paste the summary line of each.
+Run on a clean checkout of the commit above. Paste the summary line of each. `OGEVIA_TEST_DATABASE_URL=<local database> pnpm test:all` runs A4, A6 and A7 together and fails on any skipped test; if you use it, paste its final `PASS` line and the counts in A4, A6 and A7.
 
 | # | Gate | Command | Result | Evidence |
 |---|---|---|---|---|

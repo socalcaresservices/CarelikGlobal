@@ -54,7 +54,12 @@ pnpm build                 # the web app and packages must build
 export OGEVIA_TEST_DATABASE_URL=postgres://postgres:<pw>@127.0.0.1:5432/postgres
 pnpm --filter @carelik/infra-aws test:db     # database logic, migrations, rollbacks, tenant/role isolation
 pnpm --filter @carelik/sv-api test:db        # the API handler against a real database
+
+# One command that runs all of the above test steps (unit/static with `turbo --force`, then both database suites),
+# refuses to start without a LOCAL database URL, and FAILS if any test is skipped or no test ran:
+OGEVIA_TEST_DATABASE_URL=postgres://postgres:<pw>@127.0.0.1:5432/postgres pnpm test:all
 ```
+`pnpm test:all` replaces the three test lines for G3. Lint, typecheck and build are still run separately. Its summary parser has a self-test: `node scripts/test-all.mjs --self-test`.
 
 Baseline measured 2026-10-13 on this branch (for comparison; a change must not lower these without an explicit, explained reason):
 
@@ -198,10 +203,10 @@ Each release gets `docs/releases/<release-id>/` containing `CHECKLIST.md` (the c
 ## 11. Known gaps in the current tooling (stated, not hidden)
 | Gap | Effect | Proposed fix (needs owner approval) |
 |---|---|---|
-| `pnpm test` runs no database or API-integration tests | A green `pnpm test` says nothing about database rules | This process requires `test:db` in G3; consider adding a root `test:all` script |
-| Database tests skip silently without `OGEVIA_TEST_DATABASE_URL` | A skipped suite can look like a pass | Rule 3.1.1; consider failing the run when the variable is unset in CI |
+| `pnpm test` runs no database or API-integration tests | A green `pnpm test` says nothing about database rules | **Done 2026-10-13:** `pnpm test:all` runs everything and fails on skips; G3 requires it (or the three commands it wraps) |
+| Database tests skip silently without `OGEVIA_TEST_DATABASE_URL` | A skipped suite can look like a pass | **Done for `test:all`** (refuses to start without the variable and fails on any skip). The individual `test:db` commands still skip silently when run on their own; CI sets the variable |
 | CI uses Node 20; the harness and recent work used Node 22; CI installs with `--frozen-lockfile=false` | CI may not match local | Align versions and freeze the lockfile |
-| `.github/pull_request_template.md` still refers to `supabase/migrations` | The AWS migration path has no PR prompt | Update the template to this process |
+| `.github/pull_request_template.md` referred only to `supabase/migrations` | The AWS migration path had no PR prompt | **Done 2026-10-13:** the template follows this process; the legacy Supabase section is kept at the end |
 | Whether CI checks are required before merge | Unable to verify from repository evidence | Owner confirms branch protection |
 | Phase C deploy scripts are per release (`pilot-*`, `increment-*`, `release-*`), and `pilot-e2e` browser scripts target older migrations (README: 0001-0018) | No single command runs the pilot regression set | Build one parameterized pilot regression runner from catalog set R |
 | The harness is not run in CI | Harness breakage is found late | Add a harness smoke (sign in, load Home) to CI |
