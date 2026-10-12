@@ -479,3 +479,89 @@ Recommendations are defaults only; none is applied without approval.
 - **INFERRED:** F1, F6, F8, the mutual exclusivity in F3.
 - **NOT VERIFIED:** any test result; deployed state; enforcement activation; hostname-to-build mapping; behaviour of unread functions (`care_request_reserved_usage`, parts of `amend_client_authorization`).
 - **Not done, by instruction:** implementation code, migrations, pull requests, deployment, production access.
+
+---
+
+# 15. Owner decisions and verification results (recorded 2026-10-12)
+
+**Authorized by the owner on 2026-10-12:** verification tests for the identified risks; hostname and environment verification; decisions D1, D2, D4, D10. **All implementation remains on hold.** Status words: decided / tested / NOT implemented / NOT deployed.
+
+## 15.1 Verification results (tests run against a local PostgreSQL 16 with synthetic data)
+
+Method: each test states the correct behaviour. The failures below were observed on a copy of the tests with `it.fails` replaced by `it`; the committed versions use `it.fails` so CI stays green while a defect is open and turns red when it is fixed (remove `.fails` then). Database tests need `OGEVIA_TEST_DATABASE_URL`; without it they are skipped, not passed.
+
+| Risk | Test | Result | Observed |
+|---|---|---|---|
+| F1 double count | `infra/aws/db/test/authorization-accounting-risks.db.test.ts` | **CONFIRMED** | Linked visit in `administrator_review`, late confirmation accepted: used 45 + reserved 120 = **165** counted for 45 minutes of care (correct: 45; remaining should be 555) |
+| F1 control | same file | passes | A linked visit that is `signed` releases the reservation: 45 counted once |
+| F2 Action Needed totals | same file | **CONFIRMED** | Server `total` = 0; web total = 2 for the same row. The difference is exactly `billing_ready_unapproved` |
+| F2 disjoint categories | same file | passes (control) | A 20-hour open visit adds 1 to missing clock-out and 0 to the other visit categories. This supports, but does not prove, the exclusivity for every status path |
+| F4 / D10 urgency | same file | **CONFIRMED** | An open shift 10 days away raises the count (+1). A shift 24 h away is also counted (control, correct) |
+| F6 scheduled vs reserved | same file | **CONFIRMED** | A reserved shift that started 30 min ago with no visit: authorized and remaining move correctly (600 / 540) but `scheduled_minutes` moves by **0**, not 60. Those 60 minutes are not in billable, scheduled or remaining's complement |
+| F7 browser-clock month | `apps/web/src/aws/home-page-month.test.tsx` | **CONFIRMED** | At 2026-11-01 03:00 UTC (still 2026-10-31 in Los Angeles) Home opens on **2026-11** and requests `2026-11-01` |
+| F8 retroactive decrease | same DB file | **CONFIRMED** | Lowering 600 to 300 with 480 reserved: the amendment result reports no shifts or reservations; remaining shows 0 (clamped). New scheduling is refused afterwards (control passes) |
+
+Existing suites after adding the tests: `pnpm lint` pass, `pnpm typecheck` pass, `pnpm test` (shared 118, auth 138, sv-api 67, ui 73, infra-aws 124, web 762) all pass. The 9 new database tests pass as committed (5 expected-failure markers); the 2 new web tests pass (1 marker).
+
+Not covered by a test, still INFERRED: the exact set of statuses for which the visit categories are disjoint beyond the one path tested; behaviour of `care_request_reserved_usage`.
+
+### Proposed fix for F1 (not implemented; needs its own approval)
+Count a reservation only while its shift has no visit that is counted. Concretely, exclude from `authorization_month_reserved`, from the reserved CTE in `list_monthly_service_summary`, and from `care_request_reserved_usage` any reservation whose shift has a linked visit with an active `accept_late_confirmation` decision. This is computed, mutates no stored row, and reverses by itself if the decision is revoked. Releasing the reservation instead (as the `signed` trigger does) was rejected: a revoked decision would need the reservation re-created. Because the same exclusion would have to be added in three places, this is also the first concrete reason for the single balance function in section 5.3.
+
+### Proposed system of record for Action Needed (F2)
+The server computes the total and every category in `get_attention_summary`; the web displays the server total and no longer sums categories. "Ready for Approval" leaves the count (it stays a queue on Billing review). Pending owner answers: D8, D9, D11.
+
+## 15.2 D1: hostname mapping. **BLOCKED from this session**
+
+- What was tried: `curl https://app.ogevia.com/`, `https://www.ogevia.com/`, `https://ogevia.com/` from the cloud session. Each returned **403 from the environment's network policy** (proxy refused the tunnel), so no DNS answer, TLS certificate or response header was obtained. This session also has no AWS CLI or credentials.
+- Not established: what `app.ogevia.com` and `www.ogevia.com` resolve to, and whether the AWS build or the Supabase/Netlify build answers.
+- Do not proceed past tests and decisions until an operator with network and AWS access returns the following. All commands are read-only.
+
+```bash
+# 1. Public view
+for h in app.ogevia.com www.ogevia.com ogevia.com; do
+  echo "== $h"; dig +short CNAME $h; dig +short A $h
+  curl -sSI https://$h/ | grep -iE "^(HTTP|server|via|x-amz|x-cache|x-nf|x-served|content-type)"
+  echo | openssl s_client -connect $h:443 -servername $h 2>/dev/null | openssl x509 -noout -issuer -subject -dates
+done
+# 2. Which build is live: the AWS build contains the Cognito sign-in; the Supabase build does not.
+curl -s https://app.ogevia.com/ | grep -oE "assets/[^\"']+\.js" | head -3
+# 3. AWS side (admin profile, us-west-2)
+aws cloudfront list-distributions --query "DistributionList.Items[].{id:Id,aliases:Aliases.Items,origins:Origins.Items[].DomainName}"
+aws route53 list-hosted-zones-by-name --dns-name ogevia.com
+aws route53 list-resource-record-sets --hosted-zone-id <ZONE> --query "ResourceRecordSets[?contains(Name,'ogevia.com')]"
+# 4. Netlify side: site list and custom domains for the Ogevia site (dashboard or CLI).
+```
+
+The environment owner can allow these hosts under the environment's Network access settings (Allowed domains) if DNS and HTTP checks should run from this session. The AWS-side commands still need credentials this session does not have.
+
+## 15.3 Decisions recorded
+
+| # | Decision (owner, 2026-10-12) | Status | Notes and open sub-questions |
+|---|---|---|---|
+| D1 | Verify by infrastructure evidence, not repository review. Do not proceed until DNS, CloudFront/ALB, pipeline and environment mappings are verified | Decided; **BLOCKED** pending the evidence in 15.2 | Gate for any production-facing change |
+| D2 | Utilization is committed hours: `(Used + Reserved) / Authorized` | Decided | Worked-only utilization stays available as a historical report. Matches the block rule (`used + reserved + new > cap`). Replaces the Home card's "worked ÷ authorized" wording when implemented |
+| D4 | "Pending Correction" is an **explicit, stored** authorization status, not inferred from other fields. Proposed lifecycle states: Active, Pending Correction, Expired, Exhausted, Cancelled | Decided in principle; **design not final** | See open sub-questions below |
+| D10 | Urgent coverage gap = unfilled shift whose start time is within the next **48 hours**; default KPI. Optional filters later: 24 h, 48 h, 72 h, All | Decided | Open sub-question below |
+
+**D4 open sub-questions (need answers before design):**
+1. *Two status sets.* The 2026-10-11 directive defines monitor statuses Healthy / Near Limit / Critical / Expiring Soon / Expired / No Authorization / Pending Correction. D4 defines lifecycle states Active / Pending Correction / Expired / Exhausted / Cancelled. These measure different things. Recommendation: keep both. The stored lifecycle state is the one D4 describes; the monitor status is derived (usage and dates) and shows Pending Correction when the stored state says so.
+2. *Derived vs stored.* Expired follows from `period_end`, and Exhausted from utilization of 100%. Storing them creates a second source of truth that can disagree with the dates and balances. Recommendation: store only the states that cannot be derived (Pending Correction, Cancelled); derive Active, Expired, Exhausted.
+3. *"Cancelled" has no existing meaning.* The model has `deleted_at` and superseded versions (`0004`). Needs a definition (voided at entry? ended by payer?).
+4. *Who sets and clears Pending Correction, for what reason, with what audit.* Not defined.
+5. *Effect on scheduling.* "Cannot be relied upon for scheduling decisions" could mean a warning or a hard stop. The directive says only true authorization violations are blocked. Recommendation: warning only, until the owner states otherwise.
+
+**D10 open sub-question:** a shift that has already started and is still unfilled (current time between start and end). Recommendation: counted as urgent (the most urgent case). Today it is counted (`ends_at > now()`).
+
+## 15.4 Status of the five identified risks and the next gate
+
+| Item | State |
+|---|---|
+| F1 double count | Confirmed by test. **Fix not authorized.** Highest priority once implementation is approved |
+| F2 totals | Confirmed. System of record proposed (server). Needs D8, D9, D11 |
+| F4 urgency | Confirmed; business rule decided (D10). Not implemented |
+| F7 timezone | Confirmed. Not implemented |
+| F6, F8 (added) | Confirmed. Not implemented |
+| D1 hostname | BLOCKED on infrastructure evidence |
+
+**Requested approval gate:** (a) infrastructure evidence for D1 (section 15.2); (b) approval to implement the F1 fix as a first, isolated change with the committed test flipping from `it.fails` to a normal test; (c) answers to the D4 and D10 sub-questions and to D8, D9, D11. Nothing else proceeds before (a) and (b).
