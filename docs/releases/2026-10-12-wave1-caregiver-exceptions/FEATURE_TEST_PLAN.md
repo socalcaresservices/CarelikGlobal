@@ -7,7 +7,7 @@ Evidence words: **VERIFIED** (read in the repository on branch `claude/determine
 ## 0. Decisions this plan depends on (nothing is coded until each is answered)
 | Ref | Question | Assumption used below | Cases that change if the answer changes |
 |---|---|---|---|
-| D-U | Do unscheduled visits require review? | Yes for caregivers whose `scheduling_mode` is `fixed`; `flexible` caregivers stay Billing Ready (reason still captured). `scheduling_mode` exists (migration 0030). | VIS-22, VIS-23, VIS-25, VIS-26 |
+| D-U | Do unscheduled visits require review? | Yes for caregivers whose `scheduling_mode` is `fixed`; `flexible` caregivers stay Billing Ready (reason still captured). `scheduling_mode` exists (migration 0030). | VIS-23, VIS-24, VIS-24b, VIS-24d, VIS-25 |
 | D-V | Can the office make a no-client-evidence visit billable? | **No.** The existing rule stays: verbal, typed, unable-to-confirm and declined are zero billable until a client confirmation, paper confirmation, or late confirmation is accepted. | VIS-15, VIS-16 |
 | D-P | Self-pickup or request-and-approve? | Self-pickup by an assigned, ready caregiver with no conflict. | SCH-18 to SCH-24 |
 | O-1 | May the caregiver who called out pick the same shift back up? | UNKNOWN. Cases SCH-21b and SCH-21c are written both ways; the owner picks one before code. | SCH-21b/c |
