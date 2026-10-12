@@ -1,6 +1,6 @@
 # Ogevia testing and release process
 
-**Status:** PROPOSED for owner adoption (written 2026-10-13). Once the owner adopts it, it applies to every change. Nothing in this document deploys anything or authorizes a deployment.
+**Status:** ADOPTED by the owner on 2026-10-13. It applies to every change from that date. Nothing in this document deploys anything or authorizes a deployment.
 **Related:** `CLAUDE.md` (sections 0 and 13), `docs/release-process/RELEASE_CHECKLIST_TEMPLATE.md`, `docs/release-process/FEATURE_TEST_PLAN_TEMPLATE.md`, `docs/release-process/ACCEPTANCE_TEST_CATALOG.md`, `infra/aws/local-harness/README.md`.
 
 ## 1. The rule

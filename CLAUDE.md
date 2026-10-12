@@ -27,6 +27,12 @@ financial, and execution direction for Ogevia.
 - Do not reopen settled hosting or architecture decisions (CloudFront/AWS web hosting, API route set, database choice) without a
   concrete need and explicit owner instruction.
 
+## Release process
+- Every change follows `docs/TESTING_AND_RELEASE_PROCESS.md` (adopted by the owner 2026-10-13): Phase A development, B local harness,
+  C pilot/test, D user acceptance, E production approval. No deployment proposal without the completed release checklist
+  (`docs/release-process/RELEASE_CHECKLIST_TEMPLATE.md`), and no deployment without `pnpm lint`, `pnpm typecheck`, `pnpm test`
+  (plus the database and API suites it names), local harness verification, pilot validation and the owner's explicit GO.
+
 ## Accurate records
 - Distinguish **proposed**, **implemented**, **tested** and **deployed**. Implemented never means deployed.
 - Do not overwrite current records with findings from a stale checkout.
