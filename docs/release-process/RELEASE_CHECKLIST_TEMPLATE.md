@@ -91,7 +91,7 @@ Owner has stated in writing: commit SHA ______, target **pilot/test only**, who 
 | C4b | Ledger **after**: `count=__ max=____` (expected: ____); verification SQL `db:verify` all PASS | ☐ | |
 | C5 | Smoke: standard suites (`smoke.py`, `pilot_smoke.py`, release live checks) and catalog set S | ☐ | |
 | C6 | Changed workflows verified on the pilot, **including the items listed in B10** | ☐ | |
-| C7 | Regression set R: all PASS | ☐ | |
+| C7 | Regression set R: all PASS. Automated part: `pilot_regression.py` exit code 0, report attached (`docs/release-process/PILOT_REGRESSION_RUNNER.md`); remaining cases by hand | ☐ | |
 | C8 | Every role opened every menu item: no error screens; API logs searched for 5xx and error codes for the window (read-only) | ☐ | |
 | C9 | Negative checks: unauthenticated 401, forged token 401, other tenant sees nothing, Caregiver cannot reach Administrator data | ☐ | |
 | C10 | Rollback readiness: previous bundle and template available; down script rehearsed (tests; on the pilot if the owner approved) | ☐ | |
