@@ -1,5 +1,8 @@
 # Deployment checkpoint: migrations 0047 and 0048 (PROPOSED. Nothing has been run against AWS.)
 
+> **CORRECTION (2026-10-12): superseded for rollback and ledger expectations.** `pnpm db:rollback-readiness 0047` fails (`readiness_rollback_attempts_slot_count_check`), so the rollback commands in this document do not work for targets 0044 and above. Use the tested manual procedure in `docs/releases/2026-10-13-0047-0048-0049/DEPLOYMENT_PLAN.md` section 10. Migration 0049 now follows 0048, so the expected ledger after applying is `49|0049` and `db:verify` expects version 0049. The current deployment plan for 0047 to 0049 is in that folder.
+
+
 Prepared 2026-10-11 for owner approval. Every action below that changes AWS or production data is YELLOW (CLAUDE.md section 13) and waits for the owner.
 Release content: `docs/releases/availability-override/README.md` (0047) and `docs/releases/account-status/README.md` (0048).
 
