@@ -9,12 +9,13 @@ Evidence words: **VERIFIED** (read in the repository on branch `claude/determine
 |---|---|---|---|
 | D-U | Do unscheduled visits require review? | **Decided 2026-10-13: yes.** Provisional, reason required, UNSCHEDULED — NEEDS REVIEW, no schedule created. Q-F (flexible caregivers) is open; until answered, VIS-24b is written for both answers. | VIS-23, VIS-24, VIS-24b, VIS-24d, VIS-25 |
 | D-V | Can the office make a no-client-evidence visit billable? | **Decided 2026-10-13: no plain Accept.** Only: request confirmation, record the paper form, review the response with a reason, or close as not billable; who, when and why recorded; no fake signature image. | VIS-15, VIS-16, VIS-43 |
+| D-S | Versioned agency variance rule | **Decided 2026-10-13, now Wave 1:** effective-dated, versioned, per agency; each visit stores the version used; future visits only; who and when recorded; conservative system default when unset (Q-D: 15 minutes proposed, no Off option); payer-related rules labeled unverified; this one setting only. | VIS-50 to VIS-57 |
 | D-P | Self-pickup or request-and-approve? | **Decided 2026-10-13: build pickup.** One winner, double taps and retries create no second claim, authorization checked on the server at claim. Q-R (reservation timing) and O-1 are open. | SCH-18 to SCH-27 |
 | O-1 | May the caregiver who called out pick the same shift back up? | Recommended default: no (SCH-21b). Cases SCH-21b and SCH-21c are written both ways until the owner answers. See `DESIGN_NOTE.md` section 2. | SCH-21b/c |
 | O-2 | What billable minutes does an unscheduled visit held for review carry? | ASSUMED: the normal capped billable minutes are kept (not zeroed), and billing approval is blocked until a review decision exists. Reusing the existing decision `accept_capped_billable` (migration 0031) needs a design review, because its text says it applies when a client signed and the visit exceeded authorization. | VIS-24, VIS-24d |
 | O-3 | Is a distinct stored value for Declined needed? | ASSUMED no: Declined is sent as `unable_to_confirm` with the reason "Client declined". No schema change for it. | VIS-15 |
 
-Out of scope for Wave 1: schedule variance (G02), persisted amendment impact (G10), submitted/billed (G11), chain report (G12), authorization monitor (G13), audit screen (G14), dashboard changes beyond the Action Needed counts named below (G15). Accounting risks F2, F4, F6, F7, F8 are untouched. No payer, EVV or GPS work.
+Out of scope for Wave 1: persisted amendment impact (G10), submitted/billed (G11), chain report (G12), authorization monitor (G13), audit screen (G14), dashboard changes beyond the Action Needed counts named below (G15). Accounting risks F2, F4, F6, F7, F8 are untouched. No payer, EVV or GPS work.
 
 ## 1. The change
 | Field | Value |
@@ -87,6 +88,18 @@ Rollback column: "Down" means the `.down.sql` of the migrations in this release 
 | SCH-27 | Double tap by the same caregiver | Auto *proposed*; web: tap Pick up twice fast | One claim, one history line, one audit event; the second call returns the first result | Down |
 | SCH-25 | Authorization arithmetic is untouched by pickup | Auto: extend `authorization-accounting-risks.db.test.ts` with a pickup then a visit | After pickup: used 0, reserved 120. After the visit signs: used 120, reserved 0. Never both | Down |
 
+### 2.5c D-S: the variance rule setting (G02)
+| ID | What to test | How to test | Expected result | Rollback |
+|---|---|---|---|---|
+| VIS-50 | With no agency value the system default applies and sends the visit to review | Auto *proposed* `infra/aws/db/test/wave1-variance-rule.db.test.ts`; harness: scheduled visit worked longer than the default | `administrator_review`, reason code SCHEDULE, text names rule version 0 and "System default"; a visit within the default is not sent | Down |
+| VIS-51 | A change takes effect from its date and never changes earlier visits | Auto *proposed* | New version 1 (minutes, effective date, who, when). A visit evaluated before keeps version 0; a visit evaluated after uses version 1; an effective date in the past is refused | Down |
+| VIS-52 | Each visit stores the version it was evaluated under | Auto *proposed*; web: visit details | Version and minutes stored per visit; unscheduled visits store the version as "not applied"; old visits show "Not recorded" | Down |
+| VIS-53 | History shows who and when | Harness: Administrator, Settings | Every version listed with minutes, effective date, who, when, reason; version 0 stays listed | Web rollback |
+| VIS-54 | A correction re-evaluates under the stored version | Auto *proposed* | After a rule change, correcting an old visit still uses its stored version | Down |
+| VIS-55 | Only the Administrator changes it; other agencies see nothing | Auto *proposed* plus `access-roles.db.test.ts` (pointer) | Manager and Scheduler refused; other agency's rule not readable or writable | Down |
+| VIS-56 | Two saves at once | Auto *proposed* | Two versions with distinct numbers, no lost change | Down |
+| VIS-57 | No rule is shown as verified | Web test; harness | Variance rule labeled "Unverified, not a payer rule"; billing units, rounding and authorization periods labeled "Unverified. Agency responsible for payer compliance."; the word "verified" appears on no rule | Web rollback |
+
 ### 2.5b D-V: no plain Accept
 | ID | What to test | How to test | Expected result | Rollback |
 |---|---|---|---|---|
@@ -130,6 +143,7 @@ Directive failure cases 3, 4, 14 and 15 and duplicate start/finalize. Cases alre
 | Reserved minutes after pickup | Schedule, client page, Home | `authorization_reservations` (row unchanged by pickup) | SCH-18, SCH-21, SCH-25: reserved identical before and after |
 | Worked, confirmed, billable minutes | Screen 4, visit list, review page, billing review | The visit and confirmation rows set by the confirm function | VIS-22d |
 | Unfilled shifts | Home Action needed, Schedule "Needs coverage" filter, My shifts Open shifts | One shift coverage state function (`ogevia.shift_coverage_state`, migration 0026) | SCH-21, SCH-24: three counts equal before and after a pickup |
+| Rule in effect for schedule variance | Settings, the confirm function, the reason text in Action needed | The rule-version table (new) | VIS-50 to VIS-52: same version number and minutes in all three |
 | Visits to review | Home headline, Action needed list, per-reason groups | The review-reason function (new). Headline counts distinct visits; group counts can overlap and may sum to more | VIS-26: a two-reason visit counted once in the headline and once in each group |
 
 ## 5. Evidence plan

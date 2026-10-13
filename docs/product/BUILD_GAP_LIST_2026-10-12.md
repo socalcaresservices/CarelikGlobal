@@ -21,13 +21,13 @@ Status: PROPOSED. Written from reading the repository on branch `claude/determin
 - **Decision:** D-U: review for all caregivers, or only fixed-schedule caregivers? Recommended: all except caregivers marked flexible; reason is always captured.
 
 ### G02 Schedule variance review
-**NOT BUILT** · P1 · size M · migration: Yes (function + org setting)
+**NOT BUILT** · P1 · size M · migration: Yes (append-only table + function)
 
 - **Mockup:** A visit whose worked time differs from the shift by more than 15 minutes goes to NEEDS SCHEDULE REVIEW.
 - **Code:** No variance rule found in the migrations or web code (searched "variance").
 - **Gap:** No rule, no threshold, no reason code.
-- **Work:** Server rule with a per-agency threshold setting; reason code feeds G03.
-- **Decision:** D-S: threshold. The 15 minutes in the demo is my assumption, not a verified payer rule. Recommended: agency setting, default 15, off until you turn it on.
+- **Work:** Per-agency threshold, effective-dated and versioned; each visit stores the version it was evaluated under; conservative system default when unset; payer-related rules labeled unverified. This one setting only, no rules engine.
+- **Decision:** Decided (D-S, 2026-10-13), now Wave 1. Open: Q-D, the default number (15 minutes proposed, not a verified payer figure) and whether an agency may turn it off (recommended: no).
 
 ### G03 Named exception reasons in the exception center
 **PARTIAL** · P0 · size M · migration: Functions only
@@ -167,9 +167,9 @@ Status: PROPOSED. Written from reading the repository on branch `claude/determin
 ## Suggested order
 
 - **Wave 0: decisions, no code.** D-U (G01), D-V (G04), D-S (G02), D-A (G10), D-P (G09); P1 to P7 from the deployment plan; whether to work on F2, F4, F6, F8.
-- **Wave 1: caregiver and exception correctness (P0).** G05, G06, G07 (small, mostly web), G01 and G03 (server rules and reason codes), G09 (pickup with locking and concurrency tests), G08 (failure-case tests). One release, pilot-tested.
+- **Wave 1: caregiver and exception correctness (P0).** G05, G06, G07 (small, mostly web), G01, G02 and G03 (server rules, the versioned variance setting, reason codes), G09 (pickup with locking and concurrency tests), G08 (failure-case tests). One release, pilot-tested.
 - **Wave 2: amendment and billing chain (P0).** G10 (persisted impact), G11 (submitted/billed record), G12 (monthly chain report). One release, pilot-tested.
-- **Wave 3: visibility (P1).** G13 (after the accounting risks are settled), G14, G15, G02.
+- **Wave 3: visibility (P1).** G13 (after the accounting risks are settled), G14, G15.
 
 ## Ground rules
 
