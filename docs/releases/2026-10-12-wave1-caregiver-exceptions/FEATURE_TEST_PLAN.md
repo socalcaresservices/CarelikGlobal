@@ -7,10 +7,10 @@ Evidence words: **VERIFIED** (read in the repository on branch `claude/determine
 ## 0. Decisions this plan depends on (nothing is coded until each is answered)
 | Ref | Question | Assumption used below | Cases that change if the answer changes |
 |---|---|---|---|
-| D-U | Do unscheduled visits require review? | Yes for caregivers whose `scheduling_mode` is `fixed`; `flexible` caregivers stay Billing Ready (reason still captured). `scheduling_mode` exists (migration 0030). | VIS-23, VIS-24, VIS-24b, VIS-24d, VIS-25 |
-| D-V | Can the office make a no-client-evidence visit billable? | **No.** The existing rule stays: verbal, typed, unable-to-confirm and declined are zero billable until a client confirmation, paper confirmation, or late confirmation is accepted. | VIS-15, VIS-16 |
-| D-P | Self-pickup or request-and-approve? | Self-pickup by an assigned, ready caregiver with no conflict. | SCH-18 to SCH-24 |
-| O-1 | May the caregiver who called out pick the same shift back up? | UNKNOWN. Cases SCH-21b and SCH-21c are written both ways; the owner picks one before code. | SCH-21b/c |
+| D-U | Do unscheduled visits require review? | **Decided 2026-10-13: yes.** Provisional, reason required, UNSCHEDULED — NEEDS REVIEW, no schedule created. Q-F (flexible caregivers) is open; until answered, VIS-24b is written for both answers. | VIS-23, VIS-24, VIS-24b, VIS-24d, VIS-25 |
+| D-V | Can the office make a no-client-evidence visit billable? | **Decided 2026-10-13: no plain Accept.** Only: request confirmation, record the paper form, review the response with a reason, or close as not billable; who, when and why recorded; no fake signature image. | VIS-15, VIS-16, VIS-43 |
+| D-P | Self-pickup or request-and-approve? | **Decided 2026-10-13: build pickup.** One winner, double taps and retries create no second claim, authorization checked on the server at claim. Q-R (reservation timing) and O-1 are open. | SCH-18 to SCH-27 |
+| O-1 | May the caregiver who called out pick the same shift back up? | Recommended default: no (SCH-21b). Cases SCH-21b and SCH-21c are written both ways until the owner answers. See `DESIGN_NOTE.md` section 2. | SCH-21b/c |
 | O-2 | What billable minutes does an unscheduled visit held for review carry? | ASSUMED: the normal capped billable minutes are kept (not zeroed), and billing approval is blocked until a review decision exists. Reusing the existing decision `accept_capped_billable` (migration 0031) needs a design review, because its text says it applies when a client signed and the visit exceeded authorization. | VIS-24, VIS-24d |
 | O-3 | Is a distinct stored value for Declined needed? | ASSUMED no: Declined is sent as `unable_to_confirm` with the reason "Client declined". No schema change for it. | VIS-15 |
 
@@ -83,7 +83,14 @@ Rollback column: "Down" means the `.down.sql` of the migrations in this release 
 | SCH-22 | Retry with the same key | Auto *proposed* | One assignment; same result returned; no second history line | Down |
 | SCH-23 | Wrong role, other agency, no login | Auto *proposed* plus `shift-access.db.test.ts`, `access-roles.db.test.ts` (pointers) | A user without a caregiver record cannot pick up; another agency's open shifts are not listed and cannot be claimed; unauthenticated call is 401 (pilot) | Down |
 | SCH-24 | The office sees it | Harness: Morgan after Alex's pickup | Schedule shows Alex; Home "Unfilled shifts" count down by one; Audit event exists (read through the database in the harness) | Web rollback |
+| SCH-26 | Pickup is refused when authorization no longer covers the shift | Auto *proposed*: create an open shift, amend the authorization down so used plus reserved exceeds the cap, then claim | Refused with "Authorization no longer covers this shift"; the shift stays open; nothing saved | Down |
+| SCH-27 | Double tap by the same caregiver | Auto *proposed*; web: tap Pick up twice fast | One claim, one history line, one audit event; the second call returns the first result | Down |
 | SCH-25 | Authorization arithmetic is untouched by pickup | Auto: extend `authorization-accounting-risks.db.test.ts` with a pickup then a visit | After pickup: used 0, reserved 120. After the visit signs: used 120, reserved 0. Never both | Down |
+
+### 2.5b D-V: no plain Accept
+| ID | What to test | How to test | Expected result | Rollback |
+|---|---|---|---|---|
+| VIS-43 | The office cannot make a visit without client confirmation billable in one step | Auto: `visit-review.db.test.ts`, `signature-recovery.db.test.ts` (pointers, run them); web test on Action needed | The only choices for a no-signer visit are request confirmation, record the paper form, review the response, close not billable; each requires its inputs and a reason; the decision shows who, when and why; no signature image is created; the visit becomes billable only after an accepted confirmation | Web rollback |
 
 ### 2.6 Failure cases on the visit flow (G08)
 Directive failure cases 3, 4, 14 and 15 and duplicate start/finalize. Cases already covered by an existing test are marked; run them.
