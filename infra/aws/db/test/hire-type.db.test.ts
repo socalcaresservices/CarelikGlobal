@@ -2,7 +2,7 @@
 // (EOR) visits without a shift vs Direct Hire visits from a scheduled shift;
 // readable billing review rows. SYNTHETIC data only.
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { ageVisit, api, asActor, createTestDb, expectPgError, freshClient, seedWorld, signedVisit, upcomingShiftWindow, type Actor, type TestDb, type World } from "./harness.js";
+import { ageVisit, api, asActor, createTestDb, endedVisit, expectPgError, freshClient, seedWorld, signedVisit, upcomingShiftWindow, type Actor, type TestDb, type World } from "./harness.js";
 
 let db: TestDb;
 let w: World;
@@ -69,7 +69,7 @@ describe("Direct Hire with a scheduled shift vs EOR flexible visits", () => {
     const t = await upcomingShiftWindow(db, w.orgA);
     const [shift] = await q(w.managerA, "select * from ogevia_api.create_shift($1, $2, $3, $4::date, $5::time, $6::time, $7, null)",
       [w.orgA, fresh.client, fresh.service, t.d, t.s, t.e, rec["CG-A1"]]);
-    const visit = await api.start(db, w.caregiverA1, w.orgA, fresh.client, fresh.service);
+    const visit = await api.start(db, w.caregiverA1, w.orgA, fresh.client, fresh.service, null, null);
     expect((await db.admin.query("select scheduled_shift_id from ogevia.service_visits where id = $1", [visit])).rows[0].scheduled_shift_id).toBe(shift.shift_id);
     await ageVisit(db, visit, 30);
     await api.end(db, w.caregiverA1, visit);
@@ -79,12 +79,14 @@ describe("Direct Hire with a scheduled shift vs EOR flexible visits", () => {
     expect((await review()).find((x) => x.visit_id === visit)).toMatchObject({ review_state: "ready", caregiver_scheduling_mode: "fixed", scheduled_shift_id: shift.shift_id });
   });
 
-  it("EOR flexible: an authorized visit without any shift is Billing Ready, not an exception; every visit rule still applies", async () => {
+  it("EOR flexible: a visit without any shift is provisional and goes to review with its reason (Wave 1, D-U); every visit rule still applies", async () => {
     const fresh = await freshClient(db, w, w.caregiverA2, 6000, w.orgA, { before: 40, after: 40 });
-    const { visit, result } = await signedVisit(db, w.caregiverA2, w, 45, w.orgA, fresh.client, fresh.service);
-    expect(result.status).toBe("signed");
+    const visit = await endedVisit(db, w.caregiverA2, w, 45, w.orgA, fresh.client, fresh.service, "Synthetic unscheduled test visit");
+    const evidence = await api.registerEvidence(db, w.caregiverA2, w.orgA, visit);
+    const result = await api.confirm(db, w.caregiverA2, visit, { evidence });
+    expect(result.status).toBe("administrator_review");
     const row = (await review()).find((x) => x.visit_id === visit);
-    expect(row).toMatchObject({ review_state: "ready", caregiver_scheduling_mode: "flexible", scheduled_shift_id: null, billable_minutes: 45 });
+    expect(row).toMatchObject({ review_state: "needs_review", caregiver_scheduling_mode: "flexible", scheduled_shift_id: null, billable_minutes: 45 });
     const listed = (await q(w.managerA, "select * from ogevia_api.list_service_visits($1)", [w.orgA])).find((v) => v.id === visit);
     expect(listed).toMatchObject({ caregiver_scheduling_mode: "flexible", scheduled_shift_id: null });
     const att = (await q(w.managerA, "select * from ogevia_api.get_attention_summary($1)", [w.orgA]))[0];

@@ -113,7 +113,7 @@ describe("NEEDS ATTENTION counts", () => {
 
     // Unscheduled visit open 13 h: Missing Time Out.
     const f2 = await freshClient(db, w, w.caregiverA2, 6000);
-    const open = await api.start(db, w.caregiverA2, w.orgA, f2.client, f2.service);
+    const open = await api.start(db, w.caregiverA2, w.orgA, f2.client, f2.service, null, "Synthetic unscheduled test visit");
     await shiftVisit(open, 13 * 60);
     // Ended 61 min ago, not confirmed.
     const f3 = await freshClient(db, w, w.caregiverA3, 6000);

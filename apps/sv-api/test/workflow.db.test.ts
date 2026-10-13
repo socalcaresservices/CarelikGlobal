@@ -2,7 +2,7 @@
 // (local, disposable) PostgreSQL migrated from zero. SYNTHETIC data only.
 import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { ageVisit, api, createTestDb, endedVisit, freshClient, seedWorld, signedVisit, type Actor, type TestDb, type World } from "../../../infra/aws/db/test/harness";
+import { ageVisit, api, createHelperShift, createTestDb, endedVisit, freshClient, seedWorld, signedVisit, type Actor, type TestDb, type World } from "../../../infra/aws/db/test/harness";
 import { MemoryEvidenceStore, signatureObjectKey } from "../src/evidence";
 import { createHandler, type LogRecord } from "../src/handler";
 import { MemoryIdentityAdmin } from "../src/identity";
@@ -35,6 +35,7 @@ async function call(routeKey: string, actor: Actor | string, opts: Parameters<ty
 }
 
 async function startAndEnd(actor: Actor, org: string, client: string, service: string) {
+  await createHelperShift(db, org, actor.userId, client, service);
   const started = await call("POST /v1/visits", actor, { body: { organizationId: org, clientId: client, serviceId: service } });
   expect(started.status, JSON.stringify(started.body)).toBe(201);
   const visitId = started.body.visitId as string;
@@ -69,6 +70,7 @@ describe("caregiver workflow: login → client → service → start → end →
 
   it("starts a visit with a server timestamp; no client time is accepted", async () => {
     const before = Date.now();
+    await createHelperShift(db, w.orgA, w.caregiverA1.userId, fresh.client, w.serviceA);
     const r = await call("POST /v1/visits", w.caregiverA1, {
       body: { organizationId: w.orgA, clientId: fresh.client, serviceId: w.serviceA, timeIn: "2000-01-01T00:00:00Z" },
     });
@@ -185,6 +187,7 @@ describe("caregiver workflow: login → client → service → start → end →
 
   it("a manager closes a missed clock-out through the API; a caregiver cannot", async () => {
     const own = await freshClient(db, w, w.caregiverA3, 600, w.orgA, { before: 40, after: 40 });
+    await createHelperShift(db, w.orgA, w.caregiverA3.userId, own.client, own.service);
     const start = await call("POST /v1/visits", w.caregiverA3, {
       body: { organizationId: w.orgA, clientId: own.client, serviceId: own.service },
     });

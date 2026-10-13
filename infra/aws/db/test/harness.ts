@@ -115,6 +115,13 @@ export async function ageVisit(
       "update ogevia.service_visits set time_in = time_in - make_interval(mins => $2) where id = $1",
       [visitId, minutes],
     );
+    // Wave 1: keep a linked shift the same length as the time worked so ordinary tests stay inside the variance rule.
+    await client.query(
+      `update ogevia.shifts sh set starts_at = v.time_in, ends_at = v.time_in + make_interval(mins => $2)
+         from ogevia.service_visits v where v.id = $1 and sh.id = v.scheduled_shift_id
+          and sh.ends_at - sh.starts_at = interval '120 minutes'`,
+      [visitId, minutes],
+    );
   } finally {
     await client.query("reset session_replication_role");
     client.release();
@@ -292,6 +299,36 @@ export async function seedWorld(
 // API call helpers
 // ---------------------------------------------------------------------------
 
+/** Retire this helper's own earlier unlinked or voided-visit 120-minute shifts for a caregiver (a refused, voided or repeated start leaves one). */
+export async function retireHelperShifts(db: TestDb, org: string, userId: string): Promise<void> {
+  await db.admin.query(
+    `update ogevia.shifts s set status = 'cancelled'
+      where s.organization_id = $1 and s.caregiver_user_id = $2 and s.status = 'scheduled'
+        and s.ends_at - s.starts_at = interval '120 minutes'
+        and s.starts_at < now() + interval '5 minutes' and s.starts_at > now() - interval '3 hours'
+        and not exists (select 1 from ogevia.service_visits v where v.scheduled_shift_id = s.id and v.status <> 'voided')`,
+    [org, userId],
+  );
+}
+
+/** A 120-minute shift starting a minute ago for an actively assigned caregiver, so a visit started now links to it (Wave 1: scheduled). */
+export async function createHelperShift(db: TestDb, org: string, userId: string, client: string, service: string): Promise<void> {
+  await retireHelperShifts(db, org, userId);
+  await db.admin.query(
+    `insert into ogevia.shifts (organization_id, client_id, service_id, caregiver_user_id, caregiver_record_id, starts_at, ends_at)
+     select $1, $2, $3, $4, cr.id, now() - interval '1 minute', now() + interval '119 minutes'
+       from ogevia.caregiver_records cr
+      where cr.organization_id = $1 and cr.linked_user_id = $4
+        and exists (select 1 from ogevia.caregiver_assignments ca
+                     where ca.organization_id = $1 and ca.caregiver_user_id = $4 and ca.client_id = $2
+                       and ca.service_id = $3 and ca.is_active
+                       and ogevia.organization_local_date($1, now()) >= ca.effective_start
+                       and (ca.effective_end is null or ogevia.organization_local_date($1, now()) <= ca.effective_end))
+      limit 1`,
+    [org, client, service, userId],
+  );
+}
+
 export const api = {
   start: (
     db: TestDb,
@@ -300,18 +337,31 @@ export const api = {
     client: string,
     service: string,
     key: string | null = null,
-  ) =>
-    asActor(
-      db,
-      a.sub,
-      async (c) =>
-        (
-          await c.query<{ id: string }>(
-            "select ogevia_api.start_ad_hoc_service_visit($1,$2,$3,'{}',null,$4) as id",
-            [org, client, service, key],
-          )
-        ).rows[0]!.id,
-    ),
+    /** Wave 1 (0050): omitted = the visit is on a scheduled shift (created here, resized by ageVisit);
+     *  a string = an unscheduled visit started with that reason;
+     *  null = raw start, no helper shift and no reason (the test supplies its own shift). */
+    unscheduledReason?: string | null,
+  ) => {
+    const link = async () => {
+      if (unscheduledReason === null) return;
+      await retireHelperShifts(db, org, a.userId);
+      if (unscheduledReason !== undefined) return;
+      await createHelperShift(db, org, a.userId, client, service);
+    };
+    return link().then(() =>
+      asActor(
+        db,
+        a.sub,
+        async (c) =>
+          (
+            await c.query<{ id: string }>(
+              "select ogevia_api.start_ad_hoc_service_visit($1,$2,$3,'{}',null,$4,$5) as id",
+              [org, client, service, key, unscheduledReason ?? null],
+            )
+          ).rows[0]!.id,
+      ),
+    );
+  },
   end: (db: TestDb, a: Actor, visit: string) =>
     asActor(
       db,
@@ -358,6 +408,7 @@ export const api = {
       name?: string | null;
       reason?: string | null;
       key?: string | null;
+      attestation?: string | null;
     } = {},
   ) =>
     asActor(
@@ -366,7 +417,7 @@ export const api = {
       async (c) =>
         (
           await c.query(
-            "select * from ogevia_api.confirm_service_visit($1,$2,$3,$4,$5,null,$6,$7)",
+            "select * from ogevia_api.confirm_service_visit($1,$2,$3,$4,$5,null,$6,$7,$8)",
             [
               visit,
               opts.role ?? "client",
@@ -375,6 +426,7 @@ export const api = {
               opts.name ?? null,
               opts.reason ?? null,
               opts.key ?? null,
+              opts.attestation ?? null,
             ],
           )
         ).rows[0] as {
@@ -451,8 +503,9 @@ export async function endedVisit(
   org = w.orgA,
   client = w.clientA1,
   service = w.serviceA,
+  unscheduledReason?: string | null,
 ) {
-  const visit = await api.start(db, a, org, client, service);
+  const visit = await api.start(db, a, org, client, service, null, unscheduledReason);
   await ageVisit(db, visit, minutes);
   await api.end(db, a, visit);
   return visit;

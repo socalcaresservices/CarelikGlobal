@@ -134,6 +134,11 @@ export const SERVICE_VERIFICATION_ROUTES: ReadonlyArray<{
   { method: apigw.HttpMethod.GET, path: "/v1/shifts/{shiftId}/coverage" },
   { method: apigw.HttpMethod.GET, path: "/v1/my-shifts" },
   { method: apigw.HttpMethod.POST, path: "/v1/my-shifts/{shiftId}/callout" },
+  // Wave 1 (0050, 0051): open-shift pick-up and the agency's versioned schedule-variance rule. JWT like every staff route.
+  { method: apigw.HttpMethod.GET, path: "/v1/open-shifts" },
+  { method: apigw.HttpMethod.POST, path: "/v1/shifts/{shiftId}/pickup" },
+  { method: apigw.HttpMethod.GET, path: "/v1/visit-rules" },
+  { method: apigw.HttpMethod.POST, path: "/v1/visit-rules" },
   // Hire type / scheduling (caregivers.manage) and family relationship (assignments.manage), 0030.
   { method: apigw.HttpMethod.POST, path: "/v1/caregivers/{caregiverRecordId}/employment" },
   { method: apigw.HttpMethod.POST, path: "/v1/assignments/{assignmentId}/family-relationship" },

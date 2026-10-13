@@ -100,7 +100,7 @@ describe("F1: a minute is counted once, as used OR as reserved", () => {
     const cg = w.caregiverA1;
     const f = await freshClient(db, w, cg, 600);
     const shift = await reservedShift(cg, f, -5, 120);
-    const visit = await api.start(db, cg, w.orgA, f.client, f.service);
+    const visit = await api.start(db, cg, w.orgA, f.client, f.service, null, null);
     expect((await db.admin.query("select scheduled_shift_id from ogevia.service_visits where id = $1", [visit])).rows[0].scheduled_shift_id).toBe(shift);
     await ageVisit(db, visit, 45);
     await api.end(db, cg, visit);
@@ -115,7 +115,7 @@ describe("F1: a minute is counted once, as used OR as reserved", () => {
     const cg = w.caregiverA1;
     const f = await freshClient(db, w, cg, 600);
     const shift = await reservedShift(cg, f, -5, 120);
-    const visit = await api.start(db, cg, w.orgA, f.client, f.service);
+    const visit = await api.start(db, cg, w.orgA, f.client, f.service, null, null);
     await ageVisit(db, visit, 45);
     await api.end(db, cg, visit);
     await api.confirm(db, cg, visit, { method: "unable_to_confirm", reason: "Client asleep; parent not home (synthetic)" });
@@ -150,7 +150,7 @@ describe("F1: a minute is counted once, as used OR as reserved", () => {
     const cg = w.caregiverA1;
     const f = await freshClient(db, w, cg, 600);
     await reservedShift(cg, f, 600, 90); // a different, future shift for the same lineage
-    const visit = await api.start(db, cg, w.orgA, f.client, f.service); // not linked: the future shift is far outside the 60-minute early window
+    const visit = await api.start(db, cg, w.orgA, f.client, f.service, null, "Synthetic unscheduled test visit"); // not linked: the future shift is far outside the 60-minute early window
     await ageVisit(db, visit, 30);
     await api.end(db, cg, visit);
     await api.confirm(db, cg, visit, { method: "unable_to_confirm", reason: "Client asleep; parent not home (synthetic)" });
@@ -176,7 +176,7 @@ describe("F2: the Action Needed total has one definition", () => {
     const cg = w.caregiverA3;
     const f = await freshClient(db, w, cg, 600);
     const baseline = (await q(w.ownerA, "select * from ogevia_api.get_attention_summary($1)", [w.orgA]))[0];
-    const visit = await api.start(db, cg, w.orgA, f.client, f.service); // draft, open
+    const visit = await api.start(db, cg, w.orgA, f.client, f.service, null, "Synthetic unscheduled test visit"); // draft, open
     await ageVisit(db, visit, 20 * 60); // open for 20 h with no schedule: missing clock-out
     const after = (await q(w.ownerA, "select * from ogevia_api.get_attention_summary($1)", [w.orgA]))[0];
     const delta = (k: string) => Number(after[k]) - Number(baseline[k]);

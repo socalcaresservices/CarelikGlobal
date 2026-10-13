@@ -101,7 +101,7 @@ describe("0017 the start screen knows the scheduled visit's service", () => {
     const s = await shift(w.caregiverA1, c.client, c.second, 30);
     expect((await pickerRow(w.caregiverA1, c.client))?.next_scheduled_service_id).toBe(c.second);
 
-    const linked = await api.start(db, w.caregiverA1, w.orgA, c.client, c.second);
+    const linked = await api.start(db, w.caregiverA1, w.orgA, c.client, c.second, null, null);
     expect((await visitRow(db, linked)).scheduled_shift_id).toBe(s);
   });
 

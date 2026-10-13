@@ -103,7 +103,7 @@ describe("0013 visit <-> scheduled shift link", () => {
   it("links the caregiver's own in-progress shift and completes it at Time Out", async () => {
     const f = await freshClient(db, w, w.caregiverA1, 600);
     const s = await shift(w.caregiverA1, w.orgA, f, -30, 210);
-    const visit = await api.start(db, w.caregiverA1, w.orgA, f.client, f.service);
+    const visit = await api.start(db, w.caregiverA1, w.orgA, f.client, f.service, null, null);
     expect((await visitRow(db, visit)).scheduled_shift_id).toBe(s);
     const audit = await db.admin.query(
       "select after_state->>'scheduled_shift_id' shift from ogevia.audit_events where action = 'service_visit.started' and entity_id = $1",
@@ -129,7 +129,7 @@ describe("0013 visit <-> scheduled shift link", () => {
     // The delivered shift is never linked to a second visit.
     const evidence = await api.registerEvidence(db, w.caregiverA1, w.orgA, visit);
     await api.confirm(db, w.caregiverA1, visit, { evidence });
-    const again = await api.start(db, w.caregiverA1, w.orgA, f.client, f.service);
+    const again = await api.start(db, w.caregiverA1, w.orgA, f.client, f.service, null, "Synthetic unscheduled test visit");
     expect((await visitRow(db, again)).scheduled_shift_id).toBeNull();
     await closeVisit(w.caregiverA1, w.orgA, again);
   });
@@ -137,13 +137,13 @@ describe("0013 visit <-> scheduled shift link", () => {
   it("links a shift starting within the early-arrival window, not one 90 minutes away", async () => {
     const f = await freshClient(db, w, w.caregiverA2, 600);
     const soon = await shift(w.caregiverA2, w.orgA, f, 45, 180);
-    const visit = await api.start(db, w.caregiverA2, w.orgA, f.client, f.service);
+    const visit = await api.start(db, w.caregiverA2, w.orgA, f.client, f.service, null, null);
     expect((await visitRow(db, visit)).scheduled_shift_id).toBe(soon);
     await closeVisit(w.caregiverA2, w.orgA, visit);
 
     const g = await freshClient(db, w, w.caregiverA2, 600);
     await shift(w.caregiverA2, w.orgA, g, 90, 180);
-    const later = await api.start(db, w.caregiverA2, w.orgA, g.client, g.service);
+    const later = await api.start(db, w.caregiverA2, w.orgA, g.client, g.service, null, "Synthetic unscheduled test visit");
     expect((await visitRow(db, later)).scheduled_shift_id).toBeNull();
     await closeVisit(w.caregiverA2, w.orgA, later);
   });
@@ -155,7 +155,7 @@ describe("0013 visit <-> scheduled shift link", () => {
       "insert into ogevia.shift_coverage_events (organization_id, shift_id, event_type) values ($1, $2, 'called_out')",
       [w.orgA, calledOut],
     );
-    const visit = await api.start(db, w.caregiverA3, w.orgA, f.client, f.service);
+    const visit = await api.start(db, w.caregiverA3, w.orgA, f.client, f.service, null, "Synthetic unscheduled test visit");
     expect((await visitRow(db, visit)).scheduled_shift_id).toBeNull();
     // An unlinked visit ends exactly as before and leaves shifts alone.
     await closeVisit(w.caregiverA3, w.orgA, visit);
@@ -163,7 +163,7 @@ describe("0013 visit <-> scheduled shift link", () => {
 
     const g = await freshClient(db, w, w.caregiverA3, 600);
     const othersShift = await shift(w.caregiverA1, w.orgA, g, -30, 210);
-    const mine = await api.start(db, w.caregiverA3, w.orgA, g.client, g.service);
+    const mine = await api.start(db, w.caregiverA3, w.orgA, g.client, g.service, null, "Synthetic unscheduled test visit");
     expect((await visitRow(db, mine)).scheduled_shift_id).toBeNull();
     await closeVisit(w.caregiverA3, w.orgA, mine);
     expect(await shiftStatus(othersShift)).toBe("scheduled");
@@ -178,16 +178,17 @@ describe("0013 visit <-> scheduled shift link", () => {
     const { lineage } = await reservation(s);
     expect(await usage(lineage)).toEqual({ worked: "0", reserved: "210" });
 
-    const visit = await api.start(db, w.caregiverA1, w.orgA, f.client, f.service);
+    const visit = await api.start(db, w.caregiverA1, w.orgA, f.client, f.service, null, null);
     expect((await visitRow(db, visit)).scheduled_shift_id).toBe(s);
-    const result = await closeVisit(w.caregiverA1, w.orgA, visit, 60);
+    // Worked as long as the shift: a visit that differs from its shift by more than the agency's rule goes to review (0050).
+    const result = await closeVisit(w.caregiverA1, w.orgA, visit, 210);
     expect(result.status).toBe("signed");
 
     const r = await reservation(s);
     expect(r.released_at).not.toBeNull();
     expect(r.release_reason).toBe("visit_signed");
-    // Before 0013 this read worked 60 + reserved 210 for one 60-minute visit.
-    expect(await usage(lineage)).toEqual({ worked: "60", reserved: "0" });
+    // Before 0013 this read worked 210 + reserved 210 for one 210-minute visit.
+    expect(await usage(lineage)).toEqual({ worked: "210", reserved: "0" });
     const audit = await db.admin.query(
       "select after_state->>'visit_id' visit from ogevia.audit_events where action = 'authorization_reservation.released' and after_state->>'shift_id' = $1",
       [s],
@@ -199,7 +200,7 @@ describe("0013 visit <-> scheduled shift link", () => {
     const f = await freshClient(db, w, w.caregiverB1, 240, w.orgB);
     const s = await shift(w.caregiverB1, w.orgB, f, -10, 210);
     await reserve(w.caregiverB1, w.orgB, f, s, 210);
-    const visit = await api.start(db, w.caregiverB1, w.orgB, f.client, f.service);
+    const visit = await api.start(db, w.caregiverB1, w.orgB, f.client, f.service, null, null);
     expect((await visitRow(db, visit)).scheduled_shift_id).toBe(s);
 
     // 300 worked minutes against a 240-minute month -> administrator review.
@@ -223,7 +224,7 @@ describe("0013 visit <-> scheduled shift link", () => {
   it("keeps the helper internal and the app's visit functions callable", async () => {
     const { rows } = await db.admin.query(
       `select has_function_privilege('ogevia_app', 'ogevia.match_scheduled_shift_for_visit(uuid,uuid,uuid,uuid,uuid,timestamptz)', 'execute') helper,
-              has_function_privilege('ogevia_app', 'ogevia_api.start_ad_hoc_service_visit(uuid,uuid,uuid,text[],text,uuid)', 'execute') start,
+              has_function_privilege('ogevia_app', 'ogevia_api.start_ad_hoc_service_visit(uuid,uuid,uuid,text[],text,uuid,text)', 'execute') start,
               has_function_privilege('ogevia_app', 'ogevia_api.end_service_visit(uuid,text[],text)', 'execute') "end"`,
     );
     expect(rows[0]).toEqual({ helper: false, start: true, end: true });

@@ -12,6 +12,7 @@ import {
   visitRow,
   type TestDb,
   type World,
+  retireHelperShifts,
 } from "./harness.js";
 
 let db: TestDb;
@@ -98,6 +99,7 @@ describe("TENANT isolation (Organization A vs Organization B)", () => {
       w.orgB,
       w.clientB1,
       w.serviceB,
+      "Synthetic manager-started visit",
     );
     await expectPgError(api.end(db, w.managerA, open), "OGN04");
     await expectPgError(
@@ -380,7 +382,7 @@ describe("VISITS: lifecycle", () => {
     const f = await freshClient(db, w, w.caregiverA1, 600);
     const attempts = await Promise.allSettled(
       Array.from({ length: 12 }, () =>
-        api.start(db, w.caregiverA1, w.orgA, f.client, f.service),
+        api.start(db, w.caregiverA1, w.orgA, f.client, f.service, null, "Synthetic concurrent start"),
       ),
     );
     const ok = attempts.filter((a) => a.status === "fulfilled");
@@ -491,12 +493,13 @@ describe("TIME is server-authoritative", () => {
   it("records time_in and time_out from the database clock, ignoring the session time zone", async () => {
     const f = await freshClient(db, w, w.caregiverA1, 600);
     const before = Date.now();
+    await retireHelperShifts(db, w.orgA, w.caregiverA1.userId);
     const visit = await asActor(db, w.caregiverA1.sub, async (c) => {
       // A client-controlled session setting must not shift the service date.
       await c.query("set local timezone = 'Pacific/Kiritimati'");
       return (
         await c.query(
-          "select ogevia_api.start_ad_hoc_service_visit($1,$2,$3) as id",
+          "select ogevia_api.start_ad_hoc_service_visit($1,$2,$3,'{}',null,null,'Synthetic unscheduled test visit') as id",
           [w.orgA, f.client, f.service],
         )
       ).rows[0].id as string;

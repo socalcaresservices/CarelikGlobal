@@ -157,7 +157,7 @@ async function probe(c: Cond, day: string): Promise<Result> {
   if (c !== "missing service approval") await approveService(recA1, f2.service);
   let visitStart: Result["visitStart"] = "allowed";
   try {
-    const id = (await call(w.caregiverA1, "select ogevia_api.start_ad_hoc_service_visit($1,$2,$3,'{}',null,null) as id", [w.orgA, f2.client, f2.service]))[0].id as string;
+    const id = (await call(w.caregiverA1, "select ogevia_api.start_ad_hoc_service_visit($1,$2,$3,'{}',null,null,'Synthetic unscheduled test visit') as id", [w.orgA, f2.client, f2.service]))[0].id as string;
     const cl = await db.admin.connect();
     try { await cl.query("set session_replication_role = replica"); await cl.query("delete from ogevia.service_visits where id = $1", [id]); } finally { await cl.query("reset session_replication_role"); cl.release(); }
   } catch (e) {

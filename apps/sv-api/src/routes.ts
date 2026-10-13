@@ -48,6 +48,8 @@ const booleanValue = (value: unknown, name: string) => {
   if (typeof value !== "boolean") throw new ApiError(400, "bad_request", `${name} must be true or false.`);
   return value;
 };
+/** Wave 1 (0050): the wording the caregiver attests to is versioned; the server, not the browser, names the version. */
+const ATTESTATION_VERSION = "attest-v1";
 const newOpaqueToken = () => randomBytes(32).toString("hex");
 const hashOpaqueToken = (token: string) => createHash("sha256").update(token, "hex").digest("hex");
 
@@ -83,6 +85,13 @@ const camel = (key: string) => key.replace(/_([a-z0-9])/g, (_, c: string) => c.t
 /** snake_case DB row -> camelCase JSON. Values are passed through unchanged. */
 export function toCamel(row: unknown): Record<string, unknown> {
   return Object.fromEntries(Object.entries(row as Record<string, unknown>).map(([k, v]) => [camel(k), v]));
+}
+
+/** The Wave 1 outcome fields (confirmed/billable minutes, authorization left, method, review reasons, rule used) added to a confirm result. */
+async function withOutcome(db: Queryable, visit: string, result: Record<string, unknown> | undefined) {
+  if (!result) return result;
+  const [outcome] = await rows(db, "select * from ogevia_api.get_visit_outcome($1)", [visit]);
+  return outcome ? { ...result, outcome } : result;
 }
 
 async function rows(db: Queryable, sql: string, params: unknown[]) {
@@ -863,6 +872,49 @@ export const ROUTES: Record<string, Route> = {
     },
   },
 
+  // Open shifts (0051, Wave 1): a caregiver sees the open shifts they are assigned to and picks one up. One person wins;
+  // a retry is the same answer; readiness, overlap and authorization are re-checked in the database.
+  "GET /v1/open-shifts": {
+    mutating: false,
+    handle: async ({ event, tx }) => ({ shifts: await tx((db) => rows(db, "select * from ogevia_api.list_open_shifts($1)", [orgParam(event)])) }),
+  },
+
+  "POST /v1/shifts/{shiftId}/pickup": {
+    mutating: true,
+    handle: async ({ event, tx }) => {
+      const shift = uuid(p(event).shiftId, "shiftId");
+      const body = parseBody(event.body, event.isBase64Encoded);
+      const key = idempotencyKey(event.headers);
+      const org = uuid(body.organizationId, "organizationId");
+      const state = await tx(async (db) =>
+        ((await db.query("select ogevia_api.pickup_open_shift($1, $2, $3) as s", [org, shift, key])).rows[0] as { s: string }).s);
+      return { coverageState: state };
+    },
+  },
+
+  // Agency visit rules (0050, Wave 1): the schedule-variance rule is versioned and effective-dated; reading needs
+  // visits.read, changing needs organization.update (the Administrator).
+  "GET /v1/visit-rules": {
+    mutating: false,
+    handle: async ({ event, tx }) => ({ rules: await tx((db) => rows(db, "select * from ogevia_api.list_visit_rules($1)", [orgParam(event)])) }),
+  },
+
+  "POST /v1/visit-rules": {
+    status: 201,
+    mutating: true,
+    handle: async ({ event, tx }) => {
+      const body = parseBody(event.body, event.isBase64Encoded);
+      const key = idempotencyKey(event.headers);
+      const org = uuid(body.organizationId, "organizationId");
+      if (typeof body.minutes !== "number" || !Number.isInteger(body.minutes)) throw new ApiError(400, "bad_request", "minutes must be a whole number.");
+      const effectiveFrom = optionalDate(body.effectiveFrom, "effectiveFrom");
+      const reason = text(body.reason, "reason", 500);
+      const [created] = await tx((db) =>
+        rows(db, "select ogevia_api.set_visit_rule($1, $2, $3, $4, $5) as version", [org, body.minutes, effectiveFrom, reason, key]));
+      return { version: created?.version };
+    },
+  },
+
   // Assignments (0024): assignments.manage (Administrator, manager); list with visits.read.
   "GET /v1/assignments": {
     mutating: false,
@@ -1056,10 +1108,13 @@ export const ROUTES: Record<string, Route> = {
       const org = uuid(body.organizationId, "organizationId");
       const client = uuid(body.clientId, "clientId");
       const service = uuid(body.serviceId, "serviceId");
+      // Wave 1 (0050): a visit that matches no scheduled shift is provisional and needs a reason (the database refuses
+      // it without one). A reason sent with a visit that DOES match a shift is ignored by the database.
+      const unscheduledReason = text(body.unscheduledReason, "unscheduledReason", 500);
       // No time, duration or caregiver parameter exists: the server records
       // time_in and the caregiver from the verified identity.
       const visitId = await tx(async (db) => {
-        const r = await db.query("select ogevia_api.start_ad_hoc_service_visit($1, $2, $3, '{}', null, $4) as id", [org, client, service, key]);
+        const r = await db.query("select ogevia_api.start_ad_hoc_service_visit($1, $2, $3, '{}', null, $4, $5) as id", [org, client, service, key, unscheduledReason]);
         return (r.rows[0] as { id: string }).id;
       });
       return { visitId };
@@ -1103,15 +1158,23 @@ export const ROUTES: Record<string, Route> = {
       const typedName = text(body.typedSignerName, "typedSignerName", 200);
       const relationship = text(body.signerRelationship, "signerRelationship", 100);
       const reason = text(body.reason, "reason", 1000);
+      // Wave 1 (0050): the caregiver's attestation. The version is fixed by the server, never taken from the client.
+      // Absent or false is stored as "not recorded" so an older app version keeps working during a staged release.
+      const attestationVersion = body.attested === true ? ATTESTATION_VERSION : null;
       const needsImage = method === "draw" || method === "assisted_mark";
       if (!needsImage && body.signaturePng !== undefined && body.signaturePng !== null) {
         throw new ApiError(422, "validation_failed", "A signature image is only accepted for drawn signatures or marks.");
       }
 
-      const confirm = (db: Queryable, evidenceId: string | null) =>
-        rows(db, "select * from ogevia_api.confirm_service_visit($1, $2, $3, $4, $5, $6, $7, $8)", [
-          visit, signerRole, method, evidenceId, typedName, relationship, reason, key,
+      const confirm = async (db: Queryable, evidenceId: string | null) => {
+        const [result] = await rows(db, "select * from ogevia_api.confirm_service_visit($1, $2, $3, $4, $5, $6, $7, $8, $9)", [
+          visit, signerRole, method, evidenceId, typedName, relationship, reason, key, attestationVersion,
         ]);
+        return [await withOutcome(db, visit, result)];
+      };
+      // The stored result of a retried request, with the same extra fields the first answer carried.
+      const withStoredOutcome = async (stored: Record<string, unknown> | undefined) =>
+        stored ? tx((db) => withOutcome(db, visit, stored)) : stored;
 
       if (!needsImage) {
         const [result] = await tx((db) => confirm(db, null));
@@ -1124,7 +1187,7 @@ export const ROUTES: Record<string, Route> = {
 
       // 1. Retry of a request that already committed: return the stored result, no new upload.
       const [prior] = await replay();
-      if (prior) return { result: prior };
+      if (prior) return { result: await withStoredOutcome(prior) };
 
       // 2. Authority check BEFORE writing to S3: the visit must be the caller's
       //    own visit in this organization, waiting for a signature.
@@ -1137,7 +1200,7 @@ export const ROUTES: Record<string, Route> = {
         // A duplicate of this same request may have committed between the
         // replay check above and this check: return its stored result.
         const [committed] = await replay();
-        if (committed) return { result: committed };
+        if (committed) return { result: await withStoredOutcome(committed) };
         // One response for "not yours", "already locked" and "still running":
         // it reveals nothing about visits the caller does not own.
         throw new ApiError(409, "conflict", "This visit is not waiting for a confirmation.");
@@ -1165,7 +1228,7 @@ export const ROUTES: Record<string, Route> = {
         // A concurrent duplicate may have committed first with another object version.
         if ((error as { code?: string }).code === "OGI09" || (error as { code?: string }).code === "OGC09") {
           const [committed] = await replay();
-          if (committed) return { result: committed };
+          if (committed) return { result: await withStoredOutcome(committed) };
         }
         throw error;
       }
@@ -1336,7 +1399,8 @@ export const ROUTES: Record<string, Route> = {
       const visit = uuid(p(event).visitId, "visitId");
       const found = await tx((db) => rows(db, "select * from ogevia_api.get_visit_review($1)", [visit]));
       if (found.length === 0) throw new ApiError(404, "not_found", "Visit not found.");
-      return { visit: found[0] };
+      const [outcome] = await tx((db) => rows(db, "select * from ogevia_api.get_visit_outcome($1)", [visit]));
+      return { visit: { ...found[0], ...(outcome ? { unscheduledReason: outcome.unscheduledReason, ruleVersion: outcome.ruleVersion, ruleMinutes: outcome.ruleMinutes, ruleSource: outcome.ruleSource, ruleOutcome: outcome.ruleOutcome, attestationVersion: outcome.attestationVersion } : {}) } };
     },
   },
 

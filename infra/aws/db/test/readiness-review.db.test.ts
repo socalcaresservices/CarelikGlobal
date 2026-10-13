@@ -62,7 +62,7 @@ describe("manual selection stays separate from optional ranking", () => {
 describe("mandatory requirements are checked at final commitment", () => {
   it("report-only still requires a Care Team profile for a manager doing real work", async () => {
     const other = await freshClient(db, w, w.caregiverB1, 100000, w.orgB);
-    await expectPgError(call(w.managerB, "select ogevia_api.start_ad_hoc_service_visit($1,$2,$3,'{}',null,null)", [w.orgB, other.client, other.service]), "OGR30", /Care Team profile/);
+    await expectPgError(call(w.managerB, "select ogevia_api.start_ad_hoc_service_visit($1,$2,$3,'{}',null,null,'Synthetic unscheduled test visit')", [w.orgB, other.client, other.service]), "OGR30", /Care Team profile/);
   });
   it("direct creation, rescheduling, reassignment and standing relationships cannot bypass mandatory experience", async () => {
     await requirements(false);
@@ -81,7 +81,7 @@ describe("mandatory requirements are checked at final commitment", () => {
   });
   it("a new manager-started visit cannot bypass the active Care Team/document checks", async () => {
     const before = (await db.admin.query("select count(*)::int n from ogevia.service_visits")).rows[0].n;
-    await expectPgError(call(w.managerA, "select ogevia_api.start_ad_hoc_service_visit($1,$2,$3,'{}',null,null)", [w.orgA, fx.client, fx.service]), "OGR30", /Care Team profile/);
+    await expectPgError(call(w.managerA, "select ogevia_api.start_ad_hoc_service_visit($1,$2,$3,'{}',null,null,'Synthetic unscheduled test visit')", [w.orgA, fx.client, fx.service]), "OGR30", /Care Team profile/);
     expect((await db.admin.query("select count(*)::int n from ogevia.service_visits")).rows[0].n).toBe(before);
   });
   it("changing mandatory preferences cannot race a final commitment check", async () => {
