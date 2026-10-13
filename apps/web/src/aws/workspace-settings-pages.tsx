@@ -1,3 +1,4 @@
+import { Link } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef, useState } from "react";
 import { Button, Card } from "@carelik/ui";
@@ -95,6 +96,7 @@ export function BrandingSettingsPage() {
   return (
     <div className="max-w-lg space-y-4">
       <h1 className="text-xl font-semibold text-slate-950">Agency branding</h1>
+      <p className="text-sm"><Link to="/settings/visit-rules" className="font-medium underline">Visit rules</Link> · schedule difference that sends a visit to review</p>
       <p className="text-sm text-slate-600">Shown to every role in your agency, on phones and desktop. Warning colors (such as ACTION NEEDED) stay red.</p>
       <Card className="p-4">
         <form onSubmit={(e) => { e.preventDefault(); void submit(); }} className="space-y-4">

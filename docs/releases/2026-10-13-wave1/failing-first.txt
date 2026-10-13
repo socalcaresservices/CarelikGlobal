@@ -1,0 +1,40 @@
+
+ FAIL  db/test/wave1-visit-review.db.test.ts > D-S: the agency's schedule-variance rule (G02) > a rule dated in the future does not apply today
+error: function ogevia_api.set_visit_rule(unknown, unknown, date, unknown, unknown) does not exist
+ ❯ ../../node_modules/.pnpm/pg@8.23.1/node_modules/pg/lib/client.js:694:17
+ ❯ db/test/wave1-visit-review.db.test.ts:17:101
+     15| afterAll(async () => db?.drop());
+     16| 
+     17| const q = async (a: Actor, sql: string, params: unknown[] = []) => asA…
+       |                                                                                                     ^
+     18| const recordOf = async (a: Actor) =>
+     19|   (await db.admin.query("select id from ogevia.caregiver_records where…
+ ❯ asActor db/test/harness.ts:73:20
+ ❯ db/test/wave1-visit-review.db.test.ts:219:5
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[28/29]⎯
+
+ FAIL  db/test/wave1-visit-review.db.test.ts > D-S: the agency's schedule-variance rule (G02) > two simultaneous saves become two distinct versions; a retry with the same key is one version
+AssertionError: expected false to be true // Object.is equality
+
+- Expected
++ Received
+
+- true
++ false
+
+ ❯ db/test/wave1-visit-review.db.test.ts:229:60
+    227|   it("two simultaneous saves become two distinct versions; a retry wit…
+    228|     const results = await Promise.allSettled([setRule(w.ownerA, 61), s…
+    229|     expect(results.every((r) => r.status === "fulfilled")).toBe(true);
+       |                                                            ^
+    230|     const versions = (await db.admin.query("select version from ogevia…
+    231|     expect(new Set(versions).size).toBe(versions.length);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[29/29]⎯
+
+ Test Files  2 failed (2)
+      Tests  29 failed | 1 passed (30)
+   Start at  21:42:28
+   Duration  2.40s (transform 116ms, setup 0ms, collect 174ms, tests 1.71s, environment 0ms, prepare 119ms)
+

@@ -24,6 +24,12 @@ import {
 } from "@/lib/sv-backend";
 import { useServiceVerificationBackend } from "@/lib/sv-backend-supabase";
 import {
+  ATTESTATION_TEXT,
+  describeOutcome,
+  isUnscheduledReasonValid,
+  NO_SIGNER_REASONS_WAVE1,
+} from "@/lib/visit-outcome";
+import {
   formatClockTime,
   formatDuration,
   formatElapsed,
@@ -52,7 +58,7 @@ interface EndedVisit {
 
 type Phase = "loading" | "select" | "active" | "confirm" | "success";
 type ConfirmationMode = "signature" | "exception";
-type SignatureKind = "signature" | "assisted_mark";
+type SignatureKind = "signature" | "assisted_mark" | "verbal";
 
 const NO_SIGNER_REASONS = [
   "Technical problem prevented signing",
@@ -276,6 +282,11 @@ export function ServiceVerificationPage() {
   const [signature, setSignature] = useState<string | null>(null);
   const [noSignerReason, setNoSignerReason] = useState("");
   const [noSignerNote, setNoSignerNote] = useState("");
+  // Wave 1 (AWS only): reason for a visit with no scheduled shift, verbal confirmer's name, attestation tick.
+  const [unscheduledReason, setUnscheduledReason] = useState("");
+  const [serverWantsReason, setServerWantsReason] = useState(false);
+  const [verbalName, setVerbalName] = useState("");
+  const [attested, setAttested] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [nowTick, setNowTick] = useState(() => Date.now());
@@ -498,7 +509,15 @@ export function ServiceVerificationPage() {
     });
   }
 
+  const wave1 = !!backend.wave1;
+  // A visit with no scheduled shift is provisional and needs a reason. The server decides whether a shift matches;
+  // the field shows when nothing is scheduled for this client, or when the server asked for a reason.
+  const needsUnscheduledReason =
+    wave1 && !selectedShiftId && (!selectedClient?.next_scheduled_starts_at || serverWantsReason);
+
   function chooseClient(clientId: string) {
+    setServerWantsReason(false);
+    setUnscheduledReason("");
     scheduledServiceAppliedFor.current = null;
     setSelectedClientId(clientId);
     setSelectedServiceId("");
@@ -508,6 +527,7 @@ export function ServiceVerificationPage() {
   async function startVisit() {
     if (!activeOrganizationId || !selectedClient || !selectedService || saving)
       return;
+    if (needsUnscheduledReason && !isUnscheduledReasonValid(unscheduledReason)) return;
     setSaving(true);
     setError(null);
     try {
@@ -516,6 +536,7 @@ export function ServiceVerificationPage() {
         clientId: selectedClient.client_id,
         serviceId: selectedService.service_id,
         scheduledShiftId: selectedShiftId,
+        unscheduledReason: needsUnscheduledReason ? unscheduledReason.trim() : null,
         idempotencyKey: startKey.current,
       });
       if (data) setVisitId(data);
@@ -527,7 +548,10 @@ export function ServiceVerificationPage() {
         );
       setPhase("active");
     } catch (cause) {
-      setError(normalizeError(cause, "The visit could not be started."));
+      const failure = normalizeError(cause, "The visit could not be started.");
+      // The server found no matching shift and wants a reason: show the field instead of a dead end.
+      if (wave1 && /reason is required to start a visit/i.test(failure)) setServerWantsReason(true);
+      setError(failure);
     } finally {
       setSaving(false);
     }
@@ -570,8 +594,10 @@ export function ServiceVerificationPage() {
 
   async function submitConfirmation() {
     if (!visitId || !activeOrganizationId || saving) return;
-    if (confirmationMode === "signature" && !signature) return;
+    if (confirmationMode === "signature" && signatureKind !== "verbal" && !signature) return;
+    if (confirmationMode === "signature" && signatureKind === "verbal" && !verbalName.trim()) return;
     if (confirmationMode === "exception" && !noSignerReason) return;
+    if (wave1 && !attested) return;
 
     setSaving(true);
     setError(null);
@@ -584,11 +610,21 @@ export function ServiceVerificationPage() {
           confirmationMode === "signature"
             ? signatureKind === "assisted_mark"
               ? "assisted_mark"
-              : "draw"
+              : signatureKind === "verbal"
+                ? "verbal"
+                : "draw"
             : "unable_to_confirm",
-        signatureDataUrl: confirmationMode === "signature" ? signature : null,
+        signatureDataUrl:
+          confirmationMode === "signature" && signatureKind !== "verbal" ? signature : null,
+        typedSignerName:
+          confirmationMode === "signature" && signatureKind === "verbal" ? verbalName.trim() : null,
+        ...(wave1 ? { attested } : {}),
         reason:
-          confirmationMode === "exception" ? exceptionExplanation() : null,
+          confirmationMode === "exception"
+            ? exceptionExplanation()
+            : confirmationMode === "signature" && signatureKind === "verbal"
+              ? "Confirmed verbally; no signature or mark was collected"
+              : null,
         idempotencyKey: confirmKey.current,
       });
       setResult(confirmed);
@@ -614,6 +650,10 @@ export function ServiceVerificationPage() {
     setSignature(null);
     setNoSignerReason("");
     setNoSignerNote("");
+    setUnscheduledReason("");
+    setServerWantsReason(false);
+    setVerbalName("");
+    setAttested(false);
     setResult(null);
     setError(null);
     void activeVisitQuery.refetch();
@@ -1001,10 +1041,37 @@ export function ServiceVerificationPage() {
                 </p>
               </div>
 
+              {needsUnscheduledReason && selectedClient && selectedService ? (
+                <div className="space-y-2 rounded-2xl border border-amber-200 bg-amber-50 p-4">
+                  <label
+                    htmlFor="unscheduled-reason"
+                    className="block text-sm font-semibold text-amber-950"
+                  >
+                    Why is this visit not on your schedule? (required)
+                  </label>
+                  <textarea
+                    id="unscheduled-reason"
+                    value={unscheduledReason}
+                    maxLength={500}
+                    onChange={(event) => setUnscheduledReason(event.target.value)}
+                    aria-describedby="unscheduled-reason-help"
+                    className="min-h-20 w-full rounded-xl border border-amber-300 bg-white p-3 text-base text-slate-950"
+                  />
+                  <p id="unscheduled-reason-help" className="text-xs text-amber-900">
+                    The visit is recorded, marked Unscheduled, and sent to your manager for review before it can be billed.
+                  </p>
+                </div>
+              ) : null}
+
               <Button
                 type="button"
                 className="min-h-14 w-full bg-emerald-600 text-base font-bold text-white shadow-lg shadow-emerald-100 hover:bg-emerald-700"
-                disabled={!selectedClient || !selectedService || saving}
+                disabled={
+                  !selectedClient ||
+                  !selectedService ||
+                  saving ||
+                  (needsUnscheduledReason && !isUnscheduledReasonValid(unscheduledReason))
+                }
                 loading={saving}
                 onClick={startVisit}
               >
@@ -1288,7 +1355,46 @@ export function ServiceVerificationPage() {
                         Hacer una marca
                       </span>
                     </button>
+                    {wave1 ? (
+                      <button
+                        type="button"
+                        aria-pressed={signatureKind === "verbal"}
+                        onClick={() => {
+                          setSignatureKind("verbal");
+                          setSignature(null);
+                        }}
+                        className={cn(
+                          "col-span-2 flex min-h-16 flex-col items-center justify-center rounded-2xl border-2 p-3 text-sm font-semibold",
+                          signatureKind === "verbal"
+                            ? "border-indigo-600 bg-indigo-50 text-indigo-950"
+                            : "border-slate-200 bg-white text-slate-700",
+                        )}
+                      >
+                        Verbal only (no signature)
+                        <span className="text-xs font-normal">
+                          Solo verbal (sin firma)
+                        </span>
+                      </button>
+                    ) : null}
                   </div>
+                  {signatureKind === "verbal" ? (
+                    <div className="space-y-3 rounded-2xl border border-amber-200 bg-amber-50 p-4">
+                      <p className="text-sm text-amber-950">
+                        The person confirmed out loud and no signature or mark was collected. This goes to your manager for review and is not billable until they review it.
+                      </p>
+                      <label className="block text-sm font-semibold text-amber-950">
+                        Name of the person who confirmed (required)
+                        <input
+                          aria-label="Name of the person who confirmed"
+                          value={verbalName}
+                          maxLength={200}
+                          onChange={(event) => setVerbalName(event.target.value)}
+                          className="mt-2 min-h-12 w-full rounded-xl border border-amber-300 bg-white px-3 text-base text-slate-950"
+                        />
+                      </label>
+                    </div>
+                  ) : null}
+                  {signatureKind !== "verbal" ? (
                   <div className="rounded-2xl bg-slate-50 p-4 text-center">
                     <Hand
                       className="mx-auto h-9 w-9 text-indigo-600"
@@ -1305,15 +1411,35 @@ export function ServiceVerificationPage() {
                         : "Use su dedo para firmar en el cuadro"}
                     </p>
                   </div>
-                  <div className="rounded-2xl border border-slate-200 bg-white p-3 text-sm text-slate-700">
-                    By signing or making a mark, I confirm that the service and
-                    times shown above are correct.
-                  </div>
-                  <SignaturePad key={signatureKind} onChange={setSignature} />
+                  ) : null}
+                  {signatureKind !== "verbal" ? (
+                    <>
+                      <div className="rounded-2xl border border-slate-200 bg-white p-3 text-sm text-slate-700">
+                        By signing or making a mark, I confirm that the service and
+                        times shown above are correct.
+                      </div>
+                      <SignaturePad key={signatureKind} onChange={setSignature} />
+                    </>
+                  ) : null}
+                  {wave1 ? (
+                    <label className="flex min-h-12 items-start gap-3 rounded-2xl border border-slate-200 bg-white p-3 text-sm text-slate-800">
+                      <input
+                        type="checkbox"
+                        checked={attested}
+                        onChange={(event) => setAttested(event.target.checked)}
+                        className="mt-0.5 h-6 w-6 shrink-0"
+                      />
+                      <span>{ATTESTATION_TEXT}</span>
+                    </label>
+                  ) : null}
                   <Button
                     type="button"
                     className="min-h-14 w-full text-base"
-                    disabled={!signature || saving}
+                    disabled={
+                      saving ||
+                      (wave1 && !attested) ||
+                      (signatureKind === "verbal" ? !verbalName.trim() : !signature)
+                    }
                     loading={saving}
                     onClick={submitConfirmation}
                   >
@@ -1354,7 +1480,7 @@ export function ServiceVerificationPage() {
                       className="mt-2 min-h-12 w-full rounded-xl border border-amber-300 bg-white px-3 text-base text-slate-950"
                     >
                       <option value="">Choose a reason</option>
-                      {NO_SIGNER_REASONS.map((reason) => (
+                      {(wave1 ? NO_SIGNER_REASONS_WAVE1 : NO_SIGNER_REASONS).map((reason) => (
                         <option key={reason}>{reason}</option>
                       ))}
                     </select>
@@ -1369,10 +1495,21 @@ export function ServiceVerificationPage() {
                       className="mt-2 min-h-20 w-full rounded-xl border border-amber-300 bg-white p-3 text-base text-slate-950"
                     />
                   </label>
+                  {wave1 ? (
+                    <label className="flex min-h-12 items-start gap-3 rounded-xl border border-amber-300 bg-white p-3 text-sm text-slate-800">
+                      <input
+                        type="checkbox"
+                        checked={attested}
+                        onChange={(event) => setAttested(event.target.checked)}
+                        className="mt-0.5 h-6 w-6 shrink-0"
+                      />
+                      <span>{ATTESTATION_TEXT}</span>
+                    </label>
+                  ) : null}
                   <Button
                     type="button"
                     className="min-h-14 w-full text-base"
-                    disabled={!noSignerReason || !noSignerNote.trim() || saving}
+                    disabled={!noSignerReason || !noSignerNote.trim() || saving || (wave1 && !attested)}
                     loading={saving}
                     onClick={submitConfirmation}
                   >
@@ -1405,14 +1542,17 @@ export function ServiceVerificationPage() {
                   id="visit-saved-heading"
                   className="text-2xl font-semibold text-slate-950"
                 >
-                  {confirmationMode === "exception"
+                  {confirmationMode === "exception" ||
+                  (wave1 && result.status === "administrator_review")
                     ? "Saved for manager review"
                     : "Visit saved"}
                 </h1>
                 <p className="mt-2 text-sm text-slate-500">
                   {confirmationMode === "exception"
                     ? "No client confirmation was recorded. The visit is not counted as confirmed or billable."
-                    : result.billable_minutes < result.worked_minutes
+                    : wave1 && result.status === "administrator_review"
+                      ? "The visit and its times are saved. A manager will review it before it can be billed."
+                      : result.billable_minutes < result.worked_minutes
                       ? "Client confirmation was recorded. The full worked time is preserved, and the authorization difference is flagged for manager review."
                       : "Included in the weekly report and monthly hours calendar."}
                 </p>
@@ -1444,6 +1584,48 @@ export function ServiceVerificationPage() {
                     : "success"
                 }
               />
+              {result.outcome ? (
+                (() => {
+                  const o = describeOutcome(result.outcome);
+                  const clean = result.status === "signed";
+                  return (
+                    <>
+                      <dl
+                        aria-label="Visit result"
+                        className="grid grid-cols-2 gap-2 rounded-2xl border border-slate-200 p-4 text-left text-sm"
+                      >
+                        <dt className="text-slate-500">Worked</dt>
+                        <dd className="font-semibold text-slate-950">{formatDuration(result.worked_minutes)}</dd>
+                        <dt className="text-slate-500">Confirmed</dt>
+                        <dd className="font-semibold text-slate-950">{formatDuration(result.outcome.verified_minutes)}</dd>
+                        <dt className="text-slate-500">Billable</dt>
+                        <dd className="font-semibold text-slate-950">{formatDuration(result.outcome.billable_minutes)}</dd>
+                        <dt className="text-slate-500">Authorization left</dt>
+                        <dd className="font-semibold text-slate-950">{formatDuration(result.remaining_minutes)}</dd>
+                        <dt className="text-slate-500">Confirmed by</dt>
+                        <dd className="font-semibold text-slate-950">{o.methodLabel}</dd>
+                        <dt className="text-slate-500">Billing</dt>
+                        <dd className="font-semibold text-slate-950">{clean ? "Billing ready" : "Needs manager review"}</dd>
+                        <dd className="col-span-2 text-xs text-slate-500">
+                          {clean
+                            ? "Billing ready does not mean billed. The agency reviews and approves billing separately."
+                            : "Not billable until a manager reviews it."}
+                        </dd>
+                      </dl>
+                      {o.reasons.length > 0 ? (
+                        <ul
+                          aria-label="Why a manager will review this visit"
+                          className="space-y-2 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-left text-sm text-amber-950"
+                        >
+                          {o.reasons.map((text) => (
+                            <li key={text}>{text}</li>
+                          ))}
+                        </ul>
+                      ) : null}
+                    </>
+                  );
+                })()
+              ) : (
               <dl
                 aria-label="Visit result"
                 className="grid grid-cols-2 gap-2 rounded-2xl border border-slate-200 p-4 text-left text-sm"
@@ -1468,6 +1650,7 @@ export function ServiceVerificationPage() {
                     : "Not billable until a manager reviews it."}
                 </dd>
               </dl>
+              )}
               <div className="flex items-start gap-3 rounded-2xl border border-slate-200 p-4 text-left text-xs text-slate-600">
                 <LockKeyhole className="mt-0.5 h-4 w-4 shrink-0" />
                 <p>

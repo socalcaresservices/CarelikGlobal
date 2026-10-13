@@ -55,7 +55,23 @@ export interface EndedVisitTimes {
   worked_minutes: number;
 }
 
+/** Wave 1 (AWS 0050): what the server decided about a confirmed visit, for the final screen. */
+export interface VisitOutcome {
+  verified_minutes: number;
+  billable_minutes: number;
+  confirmation_method: string | null;
+  confirmation_reason: string | null;
+  /** Plain codes, e.g. "unscheduled", "schedule_variance", "no_client_signature", "over_authorization". */
+  review_reasons: string[];
+  unscheduled_reason: string | null;
+  attestation_version: string | null;
+  rule_minutes: number | null;
+  rule_outcome: string | null;
+}
+
 export interface VisitResult {
+  /** Present only on the AWS back end (Wave 1). */
+  outcome?: VisitOutcome;
   status: ServiceVisitStatus;
   authorization_status: VisitAuthorizationStatus;
   worked_minutes: number;
@@ -64,7 +80,7 @@ export interface VisitResult {
   remaining_minutes: number;
 }
 
-export type ConfirmationMethod = "draw" | "assisted_mark" | "unable_to_confirm";
+export type ConfirmationMethod = "draw" | "assisted_mark" | "verbal" | "unable_to_confirm";
 
 export interface ConfirmVisitInput {
   organizationId: string;
@@ -74,6 +90,10 @@ export interface ConfirmVisitInput {
   /** PNG data URL for draw/assisted_mark; null otherwise. */
   signatureDataUrl: string | null;
   reason: string | null;
+  /** Wave 1: the name of the person who confirmed verbally (required by the server for method "verbal"). */
+  typedSignerName?: string | null;
+  /** Wave 1: the caregiver ticked the attestation. The server names the version; the browser never does. */
+  attested?: boolean;
   /** Same key for retries of the same submission (server deduplicates). */
   idempotencyKey: string;
 }
@@ -279,12 +299,14 @@ export interface ScheduledShift {
 }
 
 export interface ServiceVerificationBackend {
+  /** True only on the AWS build with Wave 1 (unscheduled reason, verbal option, attestation, outcome screen). */
+  wave1?: boolean;
   readonly kind: "supabase" | "aws";
   getActiveVisit(organizationId: string): Promise<ActiveVisit | null>;
   listAssignedClients(organizationId: string): Promise<AssignedClient[]>;
   listAuthorizedServices(organizationId: string, clientId: string): Promise<AuthorizedService[]>;
   /** scheduledShiftId is optional; when absent the server links the matching shift itself. */
-  startVisit(input: { organizationId: string; clientId: string; serviceId: string; scheduledShiftId?: string | null; idempotencyKey: string }): Promise<string>;
+  startVisit(input: { organizationId: string; clientId: string; serviceId: string; scheduledShiftId?: string | null; /** Wave 1: why a visit with no scheduled shift is being started. */ unscheduledReason?: string | null; idempotencyKey: string }): Promise<string>;
   /** Optional: only back ends that expose the shift picker implement this (Supabase today). */
   listScheduledShifts?(organizationId: string, clientId: string): Promise<ScheduledShift[]>;
   endVisit(visitId: string): Promise<EndedVisitTimes>;

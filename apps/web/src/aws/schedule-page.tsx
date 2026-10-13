@@ -7,7 +7,7 @@ import { useOrganization } from "@/providers/organization-provider";
 import { useAwsApi } from "./aws-workspace";
 import { caregiverName, useCaregivers } from "./care-team-admin";
 import { clientName, useClients, useServices } from "./client-admin";
-import { formatClockTime, formatWeekdayDate, formatWeekdayDateTime } from "@/lib/service-verification";
+import { formatClockTime, formatDuration, formatWeekdayDate, formatWeekdayDateTime } from "@/lib/service-verification";
 import { RecurringSeriesForm, RescheduleForm, SeriesList } from "./recurring-schedule";
 import { AssignmentChecks } from "./readiness/assignment-checks";
 
@@ -335,6 +335,64 @@ export function SchedulePage() {
   );
 }
 
+interface OpenShift { shiftId: string; startsAt: string; endsAt: string; minutes: number; clientCode: string; serviceName: string | null; coverageState: string }
+
+/** Wave 1 (G09): open shifts the caregiver is assigned to. One person gets the shift; the office is not asked. */
+function OpenShiftsSection({ onPicked }: { onPicked: (text: string) => void }) {
+  const api = useAwsApi();
+  const queryClient = useQueryClient();
+  const { activeOrganizationId } = useOrganization();
+  const { when, time } = useAgencyClock();
+  const [busyId, setBusyId] = useState<string | null>(null);
+  const [error, setError] = useState<{ shiftId: string; text: string } | null>(null);
+  // One key per shift, so a double tap or a retry is the same request.
+  const keys = useRef(new Map<string, string>());
+  const open = useQuery({
+    queryKey: ["aws-open-shifts", activeOrganizationId],
+    queryFn: async () => (await api.get<{ shifts: OpenShift[] }>("/v1/open-shifts", { organizationId: activeOrganizationId })).shifts,
+    enabled: !!activeOrganizationId,
+  });
+  async function pickUp(shiftId: string) {
+    if (busyId) return;
+    if (!keys.current.has(shiftId)) keys.current.set(shiftId, newIdempotencyKey());
+    setBusyId(shiftId);
+    setError(null);
+    try {
+      await api.post(`/v1/shifts/${encodeURIComponent(shiftId)}/pickup`, { organizationId: activeOrganizationId }, { idempotencyKey: keys.current.get(shiftId)! });
+      keys.current.delete(shiftId);
+      onPicked("You have the shift. It is now in your list below.");
+    } catch (cause) {
+      keys.current.delete(shiftId);
+      setError({ shiftId, text: message(cause, "The shift was not picked up. Check your connection and try again.") });
+    } finally {
+      setBusyId(null);
+      // Whatever happened, show the true state: someone else may have filled it.
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["aws-open-shifts"] }),
+        queryClient.invalidateQueries({ queryKey: ["aws-my-shifts"] }),
+      ]);
+    }
+  }
+  if (open.isError) return <p role="alert" className="text-sm text-red-700">Open shifts could not be loaded. Refresh the page.</p>;
+  if (!open.data || open.data.length === 0) return null;
+  return (
+    <section aria-labelledby="open-shifts-heading" className="space-y-2">
+      <h2 id="open-shifts-heading" className="text-base font-semibold text-slate-950">Open shifts you can pick up</h2>
+      <p className="text-sm text-slate-600">If someone else picks one up first, it will disappear from this list.</p>
+      <ul className="space-y-2">
+        {open.data.map((s) => (
+          <li key={s.shiftId} className="rounded-xl border border-sky-200 bg-sky-50 p-3">
+            <p className="font-semibold text-slate-950">{when(s.startsAt)}–{time(s.endsAt)}</p>
+            <p className="text-sm text-slate-800">Client {s.clientCode}{s.serviceName ? ` · ${s.serviceName}` : ""} · {formatDuration(s.minutes)}</p>
+            {error?.shiftId === s.shiftId ? <p role="alert" className="mt-1 text-sm text-red-700">{error.text}</p> : null}
+            <Button type="button" className="mt-2 min-h-11" disabled={busyId !== null} loading={busyId === s.shiftId} onClick={() => void pickUp(s.shiftId)}>Pick up this shift</Button>
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
+}
+
 /** Caregiver: upcoming shifts (next 14 days) and "I can't make it". */
 export function MyShiftsPage() {
   const api = useAwsApi();
@@ -367,6 +425,7 @@ export function MyShiftsPage() {
     <div className="max-w-xl space-y-3">
       <h1 className="text-xl font-semibold text-slate-950">My shifts</h1>
       {state.done ? <p role="status" className="text-sm text-emerald-800">{state.done}</p> : null}
+      <OpenShiftsSection onPicked={(text) => setState({ busy: false, error: null, done: text })} />
       {shifts.isLoading ? <p className="text-sm text-slate-500">Loading…</p> : null}
       {shifts.isError ? <p role="alert" className="text-sm text-red-700">{(shifts.error as Error).message}</p> : null}
       {shifts.data && shifts.data.length === 0 ? <p className="text-sm text-slate-600">No shifts in the next two weeks.</p> : null}

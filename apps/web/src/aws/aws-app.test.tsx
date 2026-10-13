@@ -72,7 +72,9 @@ function fakeApi(role: "caregiver" | "manager" | "organization_owner", opts: { d
         return json(200, { visit: { visitId: VISIT, workedMinutes: 120, timeIn: visit["timeIn"], timeOut: visit["timeOut"] } });
       case `POST /v1/visits/${VISIT}/confirm`:
         visit = null;
-        return json(200, { result: { visitId: VISIT, status: "signed", authorizationStatus: "within_authorization", workedMinutes: 120, billableMinutes: 120, monthToDateMinutes: 1590, remainingMinutes: 4410 } });
+        // A visit started with no scheduled shift is provisional (Wave 1): the server returns it in review, with its outcome.
+        return json(200, { result: { visitId: VISIT, status: "administrator_review", authorizationStatus: "within_authorization", workedMinutes: 120, billableMinutes: 120, monthToDateMinutes: 1590, remainingMinutes: 4410,
+          outcome: { visitId: VISIT, status: "administrator_review", workedMinutes: 120, verifiedMinutes: 120, billableMinutes: 120, authorizationStatus: "within_authorization", confirmationMethod: body?.["method"], confirmationReason: null, reviewReasons: ["unscheduled"], unscheduledReason: "Synthetic: client asked for extra help", attestationVersion: body?.["attested"] ? "attest-v1" : null, ruleVersion: 0, ruleMinutes: 15, ruleSource: "system_default", ruleOutcome: "not_applicable" } } });
       case "GET /v1/visits":
         return json(200, { visits: [{ id: VISIT, visitNumber: "V-1", clientId: CLIENT, clientCode: "C-104", caregiverUserId: "u1", caregiverName: "CAREGIVER_A1", serviceId: SERVICE, serviceName: "Respite Care", serviceDate: "2026-09-30", timeIn: "2026-09-30T17:00:00Z", timeOut: "2026-09-30T19:00:00Z", workedMinutes: 120, verifiedMinutes: 120, billableMinutes: 120, status: "signed", authorizationStatus: "within_authorization", signedAt: "2026-09-30T19:01:00Z", originalVisitId: null, isCorrected: false, monthToDateBeforeMinutes: 0, monthToDateAfterMinutes: 120, remainingMinutes: 5880 }] });
       case "GET /v1/billing-review":
@@ -160,6 +162,10 @@ describe("AWS build: caregiver vertical slice", () => {
     fireEvent.click(await screen.findByRole("button", { name: /Client C-104/ }, { timeout: COLD_RENDER_MS }));
     const details = await screen.findByRole("group", { name: "Visit details" });
     await waitFor(() => expect(details).toHaveTextContent("ClientC-104"));
+    // Nothing is scheduled for this client: a reason is required before the visit can start (Wave 1).
+    const reasonBox = await screen.findByLabelText(/Why is this visit not on your schedule/);
+    await waitFor(() => expect(screen.getByRole("button", { name: /Start visit/ })).toBeDisabled());
+    fireEvent.change(reasonBox, { target: { value: "Synthetic: client asked for extra help" } });
     await waitFor(() => expect(screen.getByRole("button", { name: /Start visit/ })).toBeEnabled());
 
     fireEvent.click(screen.getByRole("button", { name: /Start visit/ }));
@@ -170,18 +176,31 @@ describe("AWS build: caregiver vertical slice", () => {
     fireEvent.pointerDown(canvas, { pointerId: 1, clientX: 10, clientY: 10 });
     fireEvent.pointerMove(canvas, { pointerId: 1, clientX: 20, clientY: 20 });
     fireEvent.pointerUp(canvas, { pointerId: 1, clientX: 20, clientY: 20 });
+    // The caregiver attests before submitting (Wave 1): the button stays off until the box is ticked.
+    await waitFor(() => expect(screen.getByRole("button", { name: /Confirm visit/ })).toBeDisabled());
+    fireEvent.click(screen.getByRole("checkbox", { name: /I attest that I provided this service/ }));
     fireEvent.click(screen.getByRole("button", { name: /Confirm visit/ }));
 
     await waitFor(() => expect(api.calls.some((c) => c.path.endsWith("/confirm"))).toBe(true));
 
+    // The final screen says what was confirmed, what is billable, what is left, how it was confirmed, and why a manager will review it.
+    expect(await screen.findByRole("heading", { name: "Saved for manager review" })).toBeInTheDocument();
+    const result = document.querySelector('dl[aria-label="Visit result"]')!;
+    expect(result).toHaveTextContent(/Confirmed\s*2 hr/);
+    expect(result).toHaveTextContent(/Billable\s*2 hr/);
+    expect(result).toHaveTextContent(/Authorization left\s*73 hr 30 min/);
+    expect(result).toHaveTextContent(/Confirmed by\s*Drawn signature/);
+    expect(result).toHaveTextContent("Needs manager review");
+    expect(screen.getByLabelText("Why a manager will review this visit")).toHaveTextContent("This visit was not on your schedule");
+
     // Every request carried the bearer token; mutations carried idempotency keys.
     for (const c of api.calls) expect(c.headers.authorization).toBe("Bearer synthetic-access-token");
     const start = api.calls.find((c) => c.method === "POST" && c.path === "/v1/visits")!;
-    expect(start.body).toEqual({ organizationId: ORG, clientId: CLIENT, serviceId: SERVICE });
+    expect(start.body).toEqual({ organizationId: ORG, clientId: CLIENT, serviceId: SERVICE, unscheduledReason: "Synthetic: client asked for extra help" });
     expect(start.headers["idempotency-key"]).toMatch(/^[0-9a-f-]{36}$/);
     const confirm = api.calls.find((c) => c.path.endsWith("/confirm"))!;
     expect(confirm.headers["idempotency-key"]).toMatch(/^[0-9a-f-]{36}$/);
-    expect(confirm.body).toMatchObject({ organizationId: ORG, signerRole: "client", method: "draw", signaturePng: "data:image/png;base64,iVBORw0KGgo=" });
+    expect(confirm.body).toMatchObject({ organizationId: ORG, signerRole: "client", method: "draw", attested: true, signaturePng: "data:image/png;base64,iVBORw0KGgo=" });
     // No browser-supplied time, role, or caregiver identity in any request.
     expect(JSON.stringify(api.calls.map((c) => c.body))).not.toMatch(/timeIn|caregiver|role"/);
   }, TEST_TIMEOUT_MS);

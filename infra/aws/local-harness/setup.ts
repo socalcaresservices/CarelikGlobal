@@ -121,19 +121,31 @@ async function main() {
   const [vega, okafor, lindqvist, tanaka, , , rivera] = clients as [string, string, string, string, string, string, string];
 
   // ---- visits (through the real API functions) -----------------------------------------------------------------
-  async function visit(who: { sub: string }, client: string, service: string, minutes: number, mode: "signed" | "no_signer" | "awaiting" | "open") {
-    const v = String((await asActor(who.sub, () => c.query("select ogevia_api.start_ad_hoc_service_visit($1,$2,$3,'{}',null,null) as id", [org, client, service]))).rows[0]?.id);
+  /** `shift`: true = a scheduled shift exactly as long as the visit; a number = a shift of that many minutes; false = unscheduled (reason required). */
+  async function visit(who: { sub: string; key?: string }, client: string, service: string, minutes: number, mode: "signed" | "no_signer" | "awaiting" | "open", shift: boolean | number = true) {
+    const rec = who.key ? await recordOf(who.key) : null;
+    if (shift !== false && rec) {
+      const length = typeof shift === "number" ? shift : minutes;
+      await q(
+        `insert into ogevia.shifts (organization_id, client_id, service_id, caregiver_user_id, caregiver_record_id, starts_at, ends_at)
+         select $1,$2,$3,u.id,$4, now() - interval '1 minute', now() - interval '1 minute' + make_interval(mins => $5) from ogevia.app_users u where u.cognito_sub = $6`,
+        [org, client, service, rec, Math.max(length, 2), who.sub],
+      );
+    }
+    const reason = shift === false || !rec ? "Client asked for extra help today (synthetic)" : null;
+    const v = String((await asActor(who.sub, () => c.query("select ogevia_api.start_ad_hoc_service_visit($1,$2,$3,'{}',null,null,$4) as id", [org, client, service, reason]))).rows[0]?.id);
     await c.query("set session_replication_role = replica"); // seed-only: make the visit start earlier than now
     await c.query("update ogevia.service_visits set time_in = time_in - make_interval(mins => $2) where id = $1", [v, minutes]);
+    await c.query("update ogevia.shifts sh set starts_at = v.time_in, ends_at = v.time_in + make_interval(mins => $2) from ogevia.service_visits v where v.id = $1 and sh.id = v.scheduled_shift_id and $3::boolean", [v, typeof shift === "number" ? shift : minutes, shift !== false]);
     await c.query("reset session_replication_role");
     if (mode === "open") return v;
     await asActor(who.sub, () => c.query("select * from ogevia_api.end_service_visit($1)", [v]));
     if (mode === "awaiting") return v;
     if (mode === "signed") {
       const ev = String((await asActor(who.sub, () => c.query("select ogevia_api.register_visit_evidence($1,$2,'v1','image/png',2048,$3,null) as id", [v, `${org}/${v}/client-signature.png`, "a".repeat(64)]))).rows[0]?.id);
-      await asActor(who.sub, () => c.query("select * from ogevia_api.confirm_service_visit($1,'client','draw',$2,null,null,null,null)", [v, ev]));
+      await asActor(who.sub, () => c.query("select * from ogevia_api.confirm_service_visit($1,'client','draw',$2,null,null,null,null,'attest-v1')", [v, ev]));
     } else {
-      await asActor(who.sub, () => c.query("select * from ogevia_api.confirm_service_visit($1,'client','unable_to_confirm',null,null,null,'Client asleep; parent not home (synthetic)',null)", [v]));
+      await asActor(who.sub, () => c.query("select * from ogevia_api.confirm_service_visit($1,'client','unable_to_confirm',null,null,null,'Client asleep; parent not home (synthetic)',null,'attest-v1')", [v]));
     }
     return v;
   }
@@ -142,6 +154,9 @@ async function main() {
   await visit(alex, okafor, personal, 480, "signed");
   await visit(alex, lindqvist, respite, 240, "signed");
   await visit(alex, tanaka, respite, 180, "signed");
+  // Wave 1: an unscheduled visit with a drawn signature (goes to review), and a visit 30 minutes longer than its shift (default rule: 15).
+  await visit(alex, vega, respite, 90, "signed", false);
+  await visit(alex, lindqvist, respite, 150, "signed", 120);
   // Action Needed: an unsigned visit in review, and one never closed (Blair). A caregiver cannot start a new visit while
   // another is still open or awaiting a signature, so Alex stays free to try the caregiver flow.
   await visit(alex, okafor, personal, 60, "no_signer");
@@ -158,7 +173,7 @@ async function main() {
      select $1, a.lineage_id, null, $2, (now() at time zone 'America/Los_Angeles')::date, 120 from ogevia.client_authorizations a where a.client_id = $3`,
     [org, shiftNow, rivera],
   );
-  const lateVisit = await visit(alex, rivera, respite, 45, "no_signer");
+  const lateVisit = await visit(alex, rivera, respite, 45, "no_signer", false); // links to the shift above
   const token = randomUUID().replace(/-/g, "") + randomUUID().replace(/-/g, "");
   const tokenHash = sha(token);
   const codeHash = sha(`${tokenHash}:123456`);

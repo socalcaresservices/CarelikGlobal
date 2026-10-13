@@ -64,6 +64,13 @@ interface VisitReview {
   recoveryState?: "awaiting_response" | "response_to_review" | null;
   canRequestConfirmation?: boolean;
   decisionAcceptedMinutes?: number | null;
+  /** Wave 1 (0050). */
+  unscheduledReason?: string | null;
+  ruleVersion?: number | null;
+  ruleMinutes?: number | null;
+  ruleSource?: "system_default" | "agency_setting" | null;
+  ruleOutcome?: "within" | "over" | "not_applicable" | null;
+  attestationVersion?: string | null;
 }
 
 const message = (cause: unknown, fallback: string) => (cause instanceof Error ? cause.message : fallback);
@@ -80,7 +87,23 @@ const DECISION_EXPLAIN: Record<string, string> = {
     "Records that the review is finished and nothing more is billable for this visit. The visit and its times are not changed. It can be revoked later with a reason (for example, if a signature is obtained). You do not have to close it: you can ask for the signature instead (below).",
 };
 
+/** Wave 1: when the review is about an unscheduled visit or a schedule difference, the first decision accepts the visit as worked. */
+const isScheduleReview = (v: VisitReview) => v.reviewReasons.includes("unscheduled") || v.reviewReasons.includes("schedule_variance");
+const decisionLabel = (d: string, v: VisitReview) =>
+  d === "accept_capped_billable" && isScheduleReview(v) ? "Accept this visit as worked (minutes within the authorization)" : DECISION_LABEL[d];
+const decisionExplain = (d: string, v: VisitReview) =>
+  d === "accept_capped_billable" && isScheduleReview(v)
+    ? "Records that you reviewed the schedule difference and accept the visit as worked. Only the minutes that fit within the authorization become eligible; the minutes over it stay not billable. Billing still needs its own approval."
+    : DECISION_EXPLAIN[d];
+
 function reasonText(reason: string, v: VisitReview): string {
+  if (reason === "unscheduled") {
+    return `Started with no scheduled shift. Reason given by the caregiver: “${v.unscheduledReason ?? "not recorded"}”. It stays provisional until you review it.`;
+  }
+  if (reason === "schedule_variance") {
+    const sched = v.scheduledStartsAt && v.scheduledEndsAt ? Math.round((new Date(v.scheduledEndsAt).getTime() - new Date(v.scheduledStartsAt).getTime()) / 60000) : null;
+    return `Worked ${formatDuration(v.workedMinutes)} against a scheduled ${sched === null ? "shift" : formatDuration(sched)}: more than the ${v.ruleMinutes ?? "?"}-minute difference the agency allows${v.ruleSource === "system_default" ? " (a starting value no one has verified for your payer)" : ""}.`;
+  }
   if (reason === "no_client_signature") {
     return v.confirmationMethod === "unable_to_confirm"
       ? "The client or representative did not confirm the visit, so it has 0 billable minutes."
@@ -174,6 +197,11 @@ export function VisitReviewPage() {
   if (v.signerName) facts.push(["Confirmed by", `${v.signerName}${v.signerRelationship ? ` (${v.signerRelationship})` : ""}`]);
   if (v.confirmationReason) facts.push([v.confirmationMethod === "unable_to_confirm" ? "No-signer reason" : "Confirmation note", v.confirmationReason]);
   if (v.confirmedAt) facts.push(["Submitted", formatDateTime(v.confirmedAt)]);
+  if (v.unscheduledReason) facts.push(["Unscheduled reason", v.unscheduledReason]);
+  if (v.ruleMinutes !== undefined && v.ruleMinutes !== null && v.ruleOutcome && v.ruleOutcome !== "not_applicable") {
+    facts.push(["Schedule rule used", `${v.ruleMinutes} minutes (version ${v.ruleVersion}, ${v.ruleSource === "system_default" ? "starting value, not verified" : "set by your agency"}): ${v.ruleOutcome === "over" ? "difference over the rule" : "within the rule"}`]);
+  }
+  if (v.attestationVersion !== undefined) facts.push(["Caregiver attestation", v.attestationVersion ? `Recorded (${v.attestationVersion})` : "Not recorded"]);
   facts.push(["Signature on file", v.hasSignatureEvidence ? "Yes" : "No"]);
   facts.push(["Billing approval", v.activeBillingApprovalId ? `Approved ${formatDuration(v.approvedMinutes)} — not submitted` : "Not approved"]);
 
@@ -225,7 +253,7 @@ export function VisitReviewPage() {
           {v.decision ? (
             <div className="rounded-lg bg-slate-50 p-3 text-sm">
               <p className="font-medium text-slate-900">
-                {DECISION_LABEL[v.decision]}
+                {decisionLabel(v.decision, v)}
                 {v.decision === "accept_late_confirmation" ? ` — ${formatDuration(v.decisionAcceptedMinutes)} eligible for billing approval` : ""}
               </p>
               <p className="text-slate-700">“{v.decisionReason}”</p>
@@ -249,8 +277,8 @@ export function VisitReviewPage() {
                   <label key={d} className="flex gap-2 rounded-lg border border-slate-200 p-3 text-sm">
                     <input type="radio" name="decision" value={d} checked={choice === d} onChange={() => setChoice(d)} className="mt-1" />
                     <span>
-                      <span className="font-medium text-slate-900">{DECISION_LABEL[d]}</span>
-                      <span className="block text-xs text-slate-600">{DECISION_EXPLAIN[d]}</span>
+                      <span className="font-medium text-slate-900">{decisionLabel(d, v)}</span>
+                      <span className="block text-xs text-slate-600">{decisionExplain(d, v)}</span>
                     </span>
                   </label>
                 ))}

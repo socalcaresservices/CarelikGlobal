@@ -17,6 +17,7 @@ import { AwsLanding, AwsShell } from "./aws-shell";
 import { BillingReviewPage } from "./billing-review-page";
 import { VisitReviewPage } from "./visit-review-page";
 import { BillingRoundingSettingsPage } from "./billing-rounding";
+import { VisitRulesPage } from "./visit-rules-page";
 import { AccountsPage } from "./accounts-page";
 import { CareRequestsPage } from "./care-requests-page";
 import { CaregiverAvailabilityPage } from "./caregiver-availability-page";
@@ -90,6 +91,7 @@ export function AwsRoutes({ api, publicApi }: { api: AwsApiClient; publicApi: Aw
                     <Route path="/outage-visits" element={<OutageVisitsPage />} />
                     <Route path="/settings/branding" element={<BrandingSettingsPage />} />
                     <Route path="/settings/billing-rounding" element={<BillingRoundingSettingsPage />} />
+                    <Route path="/settings/visit-rules" element={<VisitRulesPage />} />
                     <Route path="*" element={<Navigate to="/" replace />} />
                   </Routes>
                 </AwsShell>

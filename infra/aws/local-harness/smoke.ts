@@ -166,6 +166,15 @@ async function main() {
     const attn = await api(`/v1/attention?organizationId=${org}`, owner);
     const sm = json(attn).summary ?? {};
     check("Action needed has the seeded items (an unclosed visit and open shifts)", attn.status === 200 && Number(sm.missingTimeOut) >= 1 && Number(sm.uncoveredShifts) >= 1, `status ${attn.status} ${JSON.stringify(sm).slice(0, 120)}`);
+    // Wave 1 (0050, 0051): unscheduled and over-the-rule visits are in review; the agency rule shows its unverified starting value; open shifts can be picked up.
+    check("Wave 1: unscheduled, schedule-difference and no-signer visits are all in review", attn.status === 200 && Number(sm.needsReview) >= 3, `needsReview ${sm.needsReview}`);
+    const rules = await api(`/v1/visit-rules?organizationId=${org}`, owner);
+    const rule0 = ((json(rules).rules ?? []) as Array<Record<string, unknown>>)[0] ?? {};
+    check("Wave 1: the visit rule is the unverified starting value (version 0, 15 minutes) until the agency sets one", rules.status === 200 && rule0.version === 0 && rule0.minutes === 15 && rule0.source === "system_default", `status ${rules.status}`);
+    const openShifts = await api(`/v1/open-shifts?organizationId=${org}`, alex);
+    check("Wave 1: a caregiver sees the open shifts they are assigned to, by client code", openShifts.status === 200 && ((json(openShifts).shifts ?? []) as Array<Record<string, unknown>>).length >= 2, `status ${openShifts.status}`);
+    const managerRules = await api(`/v1/visit-rules?organizationId=${org}`, alex);
+    check("Wave 1: a caregiver is shown no agency rule", managerRules.status === 200 && ((json(managerRules).rules ?? []) as unknown[]).length === 0, `status ${managerRules.status}`);
     const shifts = await api(`/v1/shifts?organizationId=${org}&from=${monthStart}&to=${new Date(Date.now() + 14 * 864e5).toISOString().slice(0, 10)}`, manager);
     check("the manager sees the scheduled shifts", shifts.status === 200 && ((json(shifts).shifts ?? []) as unknown[]).length >= 5, `status ${shifts.status}`);
     // F1: the late-confirmation client counts its minutes once (needs migration 0049)
