@@ -107,7 +107,7 @@ Catalog results. "Auto" = an automated test covers the behavior (A6/A7/A4 pass);
 Not started. Requires the owner's written statement (commit SHA, pilot/test only, operator, window). Nothing was run against AWS; Claude Code has no AWS access in this session. Steps C0–C10 stay as in the template and are all ☐.
 
 Items already known for Phase C:
-- **`infra/aws/slice/smoke.py` must be updated first** (lines ~222–242 and ~284 expect a shift-less visit to return `signed`; since 0050 it returns `administrator_review` with reason `unscheduled`). Recorded in `POST_MERGE_VERIFICATION.md`. Not changed yet.
+- **`infra/aws/slice/smoke.py` updated (2026-10-14)** for unscheduled visits; verified in local mode only (workflow section 32 of 32 checks pass; see `POST_MERGE_VERIFICATION.md` item 6). It has NOT been run against the pilot. Its two `care` failures ("caregiver records explicit availability", 422) are pre-existing and unrelated; investigate before Phase C. The seeded identities have no shift, so smoke.py no longer exercises a clean scheduled-and-signed visit; that path is covered by the DB/API suites only until a scheduled-visit smoke step is added.
 - Count Visits to Review per 100 visits on the pilot (risk 1: unmeasured office workload effect).
 - Deploy order database → API → web; the web app cannot ship before the API.
 - Confirm the `matching-shift` link behaves on real schedules, and the variance rule value is set by the agency (the 15-minute default is a placeholder, not a payer rule).
@@ -129,5 +129,5 @@ Nothing is deployed. The Netlify (Supabase) site received `63de403` on 2026-10-1
 3. Upgrade test with pre-change signed visits (VIS-21b, VIS-27, MIG-W1c).
 4. Bundle search for "EVV compliant" (VIS-38).
 5. Security review checklist for 0050–0052.
-6. Update `smoke.py`.
+6. ~~Update `smoke.py`~~ done locally; still to run on the pilot, and its 2 unrelated `care` failures to diagnose.
 7. Decide whether the plan rows NOT BUILT or PARTIAL (VIS-26, VIS-54, VIS-57) block the pilot or move to a later wave.

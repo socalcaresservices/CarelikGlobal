@@ -24,7 +24,9 @@ Same four files against `1639cf6`, plus one test file. The previously deployed N
 
 `supabase/` is unchanged in this range. The Supabase schema already allows confirmation method `verbal`, and the Supabase UI cannot select it. Limit of this check: static reading of the diff, not a runtime test of the Supabase build; the existing web test suite passed on 63de403 in Phase A.
 
-## Item 6: required pre-pilot task (not done)
+## Item 6: pre-pilot task — UPDATED 2026-10-14 (local mode only)
+`smoke.py` now starts its visits with an `unscheduledReason`, checks that a start without one is refused (422), and expects `administrator_review` with review reason `unscheduled` and attestation `attest-v1`. Local run against a throwaway database seeded like the test slice: workflow section all PASS (before the change: start visit FAIL). Two `care` checks fail both before and after the change ("caregiver records explicit availability", status 422; cause not investigated). Not run on the pilot. Original description follows.
+
 `infra/aws/slice/smoke.py` starts visits with no scheduled shift (about lines 222 to 242 and 284) and expects the confirmed visit to come back `signed` and billable. Since 0050, a visit with no linked shift requires an `unscheduledReason` to start and returns in `administrator_review` with review reason `unscheduled`. The smoke test must be updated before any pilot run: pass a reason or create a shift, and assert the new outcome. The test that currently covers this is the database/API suite, not smoke.py. Not changed here by instruction.
 
 ## Remaining checks to close post-merge verification
