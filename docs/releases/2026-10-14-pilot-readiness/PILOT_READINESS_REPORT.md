@@ -23,7 +23,7 @@ Date 2026-10-14. Author: Claude Code. Companion files in this folder: `BLOCKER_R
 | PR #91, #92, #93 | MERGED (`b46bd40`, `17480dd`, `484135d`): Wave 1 checklist; `smoke.py` unscheduled-visit update; `smoke.py` availability-rule update. CI green on each | git log |
 | Is `484135d` the relevant baseline? | Yes. `git diff 63de403 484135d` changes only `docs/TESTING_AND_RELEASE_PROCESS.md`, the Wave 1 `CHECKLIST.md` and `POST_MERGE_VERIFICATION.md`, and `infra/aws/slice/smoke.py`: **no application code, migration, API or Supabase file** | `git diff --stat` |
 | Commits after `63de403` touching Wave 1 or 0047 to 0052 | None (documentation and the `smoke.py` script only) | same |
-| Working tree | Clean at `main`. This assignment's work is on local branch `claude/pilot-readiness-closure` (test and script commits plus documentation commits; head recorded in the decision package section 6), **not pushed** | `git status` |
+| Working tree | This assignment's work was merged to `main` by PR #94 as `12b5d4b` (branch head `75cb761`, after the owner's explicit push approval and a green CI run), then PR #95 (`9d710eb`, owner action sheet). CI on `main` is green for both merges. **Nothing is deployed.** | PR #94, #95; Actions runs 349 and 351 |
 | Migrations defined | 52 (0001 to 0052); rollback scripts exist for 0047 to 0052 (and earlier ones, not individually checked); `db/verification/01_schema_version.sql` expects 0052 | `ls infra/aws/db/migrations` |
 | Open pull requests | 17 older ones (#43 to #73, created 2026-08-24 to 2026-10-08); none concern Wave 1; whether they are superseded is not verified (Blocker B-18) | `list_pull_requests` |
 
@@ -54,14 +54,14 @@ A Netlify publish does not deploy AWS code or run AWS migrations; an AWS deploym
 
 No percentage is given because there is no measurable denominator; the count that matters is open P0 items: **4 (B-01 to B-04)**, all missing evidence or decisions, none a known defect.
 
-## 5. What was fixed or added during this assignment (local branch, not pushed)
+## 5. What was fixed or added during this assignment (merged to `main` in PR #94; not deployed)
 1. `smoke.py` expected exactly 38 API routes; the handler has 169. It now reads the count from the handler's route table (checked by import and `slice-contract.test.ts`).
 2. New `scheduled` workflow in `smoke.py` (14 checks): a 15-minute shift, start on it, end, signature, signed/Billing Ready, hours counted once, retry refused. Re-runnable within the hour (tries later start times when the slot is taken).
 3. New API test: the clean scheduled visit end to end with accounting and billing-review state.
 4. New upgrade test `upgrade-0049-to-0052.db.test.ts`.
 5. Read-only pilot preflight (`pilot-preflight-readonly.sh`, `pilot_preflight_probe.py`) with a static guard test; not run against AWS.
 6. Pilot deployment procedure, rollback SQL (rehearsed locally), operator runbook, blocker register, evidence matrix, open-PR review, owner action sheet, Phase B walkthrough evidence, this report and the decision package.
-Nothing was pushed, merged or deployed.
+Merged to `main` (PR #94, then #95 for the owner action sheet). Nothing was deployed.
 
 ## 6. Netlify: what to read (owner, about five minutes, no secrets; the same steps are in `OWNER_ACTION_SHEET.md` Task 2)
 Open `https://app.netlify.com/projects/carelikglobal/deploys` and sign in.
@@ -78,7 +78,7 @@ PR #90's rule (`docs/TESTING_AND_RELEASE_PROCESS.md` section 9) is in force: unt
 ## 8. Owner actions, grouped (the smallest set)
 | # | Action | Where | Sensitive? | What happens next |
 |---|---|---|---|---|
-| 0 | Approve pushing branch `claude/pilot-readiness-closure` and opening a PR for review (no merge, no deploy) | A message to me | No | The operator can fetch the preflight script |
+| 0 | ~~Approve pushing the work branch~~ **Done**: merged as PR #94 (`12b5d4b`) and #95 (`9d710eb`). The operator takes the preflight script from `main` | n/a | No | n/a |
 | 1 | Netlify screens (section 6) | app.netlify.com project `carelikglobal` | No (do not capture other variables) | I record them and close B-06, B-07 |
 | 2 | Authorize and run the **read-only** AWS preflight (runbook sections 1 and 5; nothing changes) or name the Operator | AWS CloudShell | No secrets are printed | I record the results; B-01, B-02, B-05, B-09 close or become STOP items |
 | 3 | Decisions: (a) release SHA and `OGEVIA_DEPLOY_APPROVAL` reference; (b) approve writing a reviewed pilot deployment script (B-03); (c) B-08 automatic publishing; (d) B-12 whether VIS-26/54/57 block the pilot (I recommend no); (e) B-13 who sets the agency's variance value; (f) B-17 what `app.ogevia.com` serves | A message to me | No | Deployment is only proposed after 1 and 2 are done |
