@@ -56,8 +56,8 @@ The recommendation for the pilot deployment becomes **GO** when: the preflight s
 
 **D. Improvements that can safely wait:** VIS-26 labels and filters (reasons above); a build stamp so a deployed SHA can be read from AWS (B-14); the `db:rollback-readiness` tool fix (B-15); closing the older pull requests (`OPEN_PR_REVIEW.md`; none blocks anything).
 
-## 5. Branch `claude/pilot-readiness-closure`: scope to confirm before anything is pushed
-Not pushed. Nothing merged.
+## 5. Branch `claude/pilot-readiness-closure`: scope (record; merged as PR #94, `12b5d4b`)
+This section was written before the push. The branch was pushed with the owner's approval and merged as PR #94 after green CI; PR #95 (`9d710eb`) then updated the owner action sheet. Nothing is deployed.
 | Kind | Files |
 |---|---|
 | Tests | `apps/sv-api/test/accounting.db.test.ts` (one new test), `infra/aws/db/test/upgrade-0049-to-0052.db.test.ts` (new), `infra/aws/test/pilot-preflight.test.ts` (new) |
@@ -66,11 +66,13 @@ Not pushed. Nothing merged.
 No application code, migration, API route, infrastructure, seed or Netlify file is changed. The exact file list, the secret scan and the SHA that each test result applies to are in section 6.
 
 ## 6. Exact change set, secret scan, and which test results apply to which commit
-Verified with `git diff --name-only origin/main HEAD` on the local branch (base `main` 484135d).
+Verified with `git diff --name-only origin/main HEAD` on the branch before it was pushed (base `main` 484135d).
 
 - Application code, migrations, API routes, CDK, seeds, `netlify.toml`, `.github/`: **none changed** (0 paths).
 - Changed outside `docs/`: 6 files, all tests or scripts: `apps/sv-api/test/accounting.db.test.ts`, `infra/aws/db/test/upgrade-0049-to-0052.db.test.ts`, `infra/aws/test/pilot-preflight.test.ts`, `infra/aws/slice/smoke.py`, `infra/aws/slice/pilot-preflight-readonly.sh`, `infra/aws/slice/pilot_preflight_probe.py`.
 - Changed under `docs/releases/2026-10-14-pilot-readiness/`: the markdown package, `rollback-0047-0052.sql` (not executed against any database outside the local rehearsal), and `evidence/`.
 - Secret scan of every added non-image line: no AWS key patterns, private-key blocks, JWTs, GitHub or Slack tokens, password assignments, or e-mail addresses. All walkthrough data is synthetic. No bytecode (`.pyc`) is added.
 - Test results: the full verification (lint, typecheck, build, `test:all`, harness smoke, `smoke.py` x2, `pilot_smoke`, pilot regression, probe rehearsal) ran on **3f057a3**. Later commits change **only files under `docs/releases/2026-10-14-pilot-readiness/`**, shown by `git diff --name-only 3f057a3 HEAD` listing no other path. That is equivalence by file scope; the results are not re-run on the documentation-only head.
-- Final head to be pushed: the commit recorded in the final report. Results apply to 3f057a3 as stated above.
+- Final branch head, as pushed and merged: `75cb761` (merge commit `12b5d4b`). Test results apply to 3f057a3 as stated above; CI on `main` was green for `12b5d4b` and `9d710eb`.
+
+Merge and deployment status is tracked in GitHub PRs and the deployment dashboard, not in this file.
