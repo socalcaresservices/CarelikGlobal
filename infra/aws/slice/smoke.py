@@ -411,12 +411,27 @@ def care_workflow(args, inv, cg, mg):
     s, mine = inv.call("GET /v1/public/care-portals/{token}/requests", None, path={"token": token})
     check(C, "reopened client link lists its own request (status visible without the request id)",
           s == 200 and [r["requestId"] for r in (mine or {}).get("requests", [])] == [rid] and mine["requests"][0]["status"] == "requested")
+    # Availability needs administrator approval (0039). The caregiver cannot write it directly, can only request a change,
+    # and the seeded manager (no availability.review) cannot approve it. The candidate below comes from the seeded
+    # availability (db/deploy/03_seed_care_acceptance.sql: TEST-CG-02), not from anything this script writes.
     allweek = [{"weekday": d, "specific_date": None, "start_local": "00:00", "end_local": "23:59"} for d in range(7)]
-    s, _ = inv.call("POST /v1/availability/me", cg, body={"organizationId": org, "windows": allweek, "unavailableDates": []})
-    check(C, "caregiver records explicit availability", s in (200, 201, 204), "status %s" % s)
+    s, direct = inv.call("POST /v1/availability/me", cg, body={"organizationId": org, "windows": allweek, "unavailableDates": []})
+    check(C, "caregiver cannot write availability directly (422 availability_requires_approval)",
+          s == 422 and ((direct or {}).get("error") or {}).get("code") == "availability_requires_approval", "status %s" % s)
+    s, areq = inv.call("POST /v1/availability/requests", cg, body={"organizationId": org, "kind": "weekly", "windows": allweek,
+                       "effectiveFrom": datetime.date.today().isoformat(), "reason": "Automated smoke test (synthetic)", "baseVersion": 0})
+    arid = (areq or {}).get("requestId")
+    check(C, "caregiver can request an availability change (pending, 201)", s == 201 and arid, "status %s" % s)
+    if arid:
+        s, _ = inv.call("POST /v1/availability/requests/{requestId}/review", mg, path={"requestId": arid},
+                        body={"organizationId": org, "decision": "approve"})
+        check(C, "a manager without availability.review cannot approve it (403)", s == 403, "status %s" % s)
+        s, _ = inv.call("POST /v1/availability/requests/{requestId}/withdraw", cg, path={"requestId": arid}, body={"organizationId": org})
+        check(C, "caregiver withdraws the smoke request (nothing left pending)", s == 200, "status %s" % s)
     s, cand = inv.call("GET /v1/care-requests/{requestId}/candidates", mg, path={"requestId": rid}, query={"organizationId": org})
     cands = (cand or {}).get("caregivers", [])
-    check(C, "available caregiver is a candidate", s == 200 and len(cands) >= 1)
+    check(C, "available caregiver is a candidate", s == 200 and len(cands) >= 1,
+          "none: apply db/deploy/03_seed_care_acceptance.sql (seeded availability) to this database" if s == 200 else "status %s" % s)
     if not cands:
         return
     cr = cands[0]["caregiverRecordId"]
