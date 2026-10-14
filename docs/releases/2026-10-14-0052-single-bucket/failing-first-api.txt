@@ -1,0 +1,4 @@
+   × authorization accounting through the API > a visit in review with billable minutes is counted once in the monthly summary, before and after a review decision 77ms
+     → expected { …(16) } to match object { billableMinutes: 60, …(2) }
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+      Tests  1 failed (1)

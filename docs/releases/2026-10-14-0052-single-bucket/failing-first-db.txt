@@ -1,0 +1,12 @@
+   × one bucket: a scheduled visit in review with billable minutes > double count: worked 60 on a 130-minute shift (schedule rule) is used 60 and NOT also reserved 130 78ms
+     → expected { used: 60, reserved: 130 } to deeply equal { used: 60, reserved: +0 }
+   × one bucket: a scheduled visit in review with billable minutes > double count: over the authorization (billable capped at 100 of 150 worked) is used 100, not also reserved 44ms
+     → expected { used: 100, reserved: 150 } to deeply equal { used: 100, reserved: +0 }
+   × one bucket: a scheduled visit in review with billable minutes > double count: the freed capacity is real - a new 180-minute shift fits (60 used + 180 <= 300) while the review is open 43ms
+     → Not enough authorized time remains this month for this shift: 1 hr 50 min available, this shift needs 3 hr
+   × one bucket: a scheduled visit in review with billable minutes > a review decision does not move minutes between buckets: accept-as-worked keeps one bucket, and approval stays within billable 52ms
+     → expected { used: 60, reserved: 130 } to deeply equal { used: 60, reserved: +0 }
+   × one bucket: a scheduled visit in review with billable minutes > CHARACTERIZATION (unchanged by 0052): closing a review as not billable leaves the visit's billable minutes, so they stay in used, still once 52ms
+     → expected 130 to be +0 // Object.is equality
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 5 ⎯⎯⎯⎯⎯⎯⎯
+      Tests  5 failed | 4 passed (9)
