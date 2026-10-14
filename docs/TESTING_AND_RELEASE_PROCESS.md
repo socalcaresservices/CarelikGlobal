@@ -197,6 +197,11 @@ After a GO the Operator deploys the same SHA with the same script that ran on th
 - A waiver of a Major defect is allowed only as a written owner exception inside the decision record. Blockers cannot be waived.
 - Never edit production data by hand, never delete snapshots, databases, tables or users as part of a release (`CLAUDE.md` section 13, RED).
 
+- **Hotfix base while migrations 0047 to 0052 are unreleased (added 2026-10-14).** Main now contains migrations 0047 to 0052 and Wave 1 code that no environment has received. Until the owner records those migrations as released, any hotfix must branch from the last DEPLOYED commit, not from `main`, and must be re-checked against that commit's schema.
+  - AWS releases: the last deploy commit designated by the owner is `1639cf6` (`docs/releases/2026-10-13-0047-0048-0049/DEPLOYMENT_PLAN.md`). Whether it has actually been deployed is recorded in that release's CHECKLIST, not here.
+  - Netlify production (Supabase build): the last deployed commit is NOT VERIFIED. No Netlify record was available to Claude Code on 2026-10-14. The owner must read it from the Netlify deploy list and write it into `docs/releases/2026-10-13-wave1/POST_MERGE_VERIFICATION.md`. Until then, branch hotfixes from the commit shown there, never from `main`.
+  - A hotfix branch still passes all six gates. Do not merge a hotfix branch into `main` without reconciling it with 0047 to 0052.
+
 ## 10. Records
 Each release gets `docs/releases/<release-id>/` containing `CHECKLIST.md` (the completed template), `evidence/` (screenshots and command output without secrets or personal data), and `DECISION.md`. Commit it. Evidence never contains passwords, tokens, secret values, real client or caregiver data, or signature images.
 
