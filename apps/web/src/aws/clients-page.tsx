@@ -1,11 +1,13 @@
 import { useQueryClient } from "@tanstack/react-query";
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
+import { useAuth } from "@carelik/auth";
 import { Button, Card } from "@carelik/ui";
 import { newIdempotencyKey } from "@/lib/sv-backend";
 import { useOrganization } from "@/providers/organization-provider";
 import { useAwsApi } from "./aws-workspace";
 import { clientName, STATUS_BADGE, STATUS_LABEL, useClients, useClientTypes, type AdminClient, type ClientStatus } from "./client-admin";
+import { defaultView, filterClients, hasCurrentAuthorization, readViewPreference, sortClients, WIDE_SCREEN_QUERY, writeViewPreference, type AuthorizationFilter, type ClientSort, type ClientView } from "./client-view";
 
 const message = (cause: unknown, fallback: string) => (cause instanceof Error ? cause.message : fallback);
 const inputClass = "mt-1 block w-full rounded-lg border border-slate-200 px-3 py-2 text-base";
@@ -108,25 +110,36 @@ function AddClientForm({ onDone }: { onDone: (clientId: string) => void }) {
  */
 export function ClientsPage() {
   const { hasPermission } = useOrganization();
+  const { user } = useAuth();
   const canManage = hasPermission("clients.manage") && hasPermission("clients.names.manage");
   const clients = useClients();
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState<ClientStatus | "all">("active");
+  const [authorization, setAuthorization] = useState<AuthorizationFilter>("all");
+  const [sort, setSort] = useState<ClientSort>("name");
   const [adding, setAdding] = useState(false);
   const [added, setAdded] = useState<string | null>(null);
-  const shown = useMemo(() => {
-    const s = search.trim().toLowerCase();
-    return (clients.data ?? []).filter((c) => (status === "all" || c.status === status)
-      && (!s || [clientName(c), c.clientCode, c.caregiverDisplayCode, c.city, c.clientTypeName].some((v) => v?.toLowerCase().includes(s))));
-  }, [clients.data, search, status]);
+  // View: the signed-in person's saved choice, else List on a wide screen and Cards on a phone.
+  const [view, setView] = useState<ClientView>(() => {
+    const saved = readViewPreference(user?.id, safeStorage());
+    return saved ?? defaultView(typeof window === "undefined" || !window.matchMedia ? true : window.matchMedia(WIDE_SCREEN_QUERY).matches);
+  });
+  const userId = user?.id;
+  useEffect(() => {
+    // Another person signing in on this device gets their own saved choice, not the previous person's.
+    const saved = readViewPreference(userId, safeStorage());
+    if (saved) setView(saved);
+  }, [userId]);
+  const chooseView = (next: ClientView) => { setView(next); writeViewPreference(userId, next, safeStorage()); };
+  const shown = useMemo(() => sortClients(filterClients(clients.data ?? [], { search, status, authorization }), sort), [clients.data, search, status, authorization, sort]);
   if (!hasPermission("clients.names.read")) return <p className="text-sm text-slate-600">You do not have access to client records.</p>;
   const counts = (clients.data ?? []).reduce<Record<string, number>>((acc, c) => ({ ...acc, [c.status]: (acc[c.status] ?? 0) + 1 }), {});
   return (
-    <div className="max-w-4xl space-y-4">
+    <div className="max-w-5xl space-y-4">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h1 className="text-xl font-semibold text-slate-950">Clients</h1>
-          <p className="mt-1 text-sm text-slate-600">Client details, status and authorized hours. Caregivers only ever see the client code or label.</p>
+          <p className="mt-1 text-sm text-slate-600">Details, status and authorized hours.</p>
         </div>
         {canManage ? <Button type="button" onClick={() => setAdding((a) => !a)} aria-expanded={adding}>{adding ? "Close" : "Add client"}</Button> : null}
       </div>
@@ -140,17 +153,85 @@ export function ClientsPage() {
         <div>
           <label htmlFor="client-status" className="block text-sm font-medium text-slate-700">Status</label>
           <select id="client-status" value={status} onChange={(e) => setStatus(e.target.value as ClientStatus | "all")} className="mt-1 rounded-lg border border-slate-200 px-3 py-2 text-base">
-            {(["active", "inactive", "discharged"] as const).map((s) => <option key={s} value={s}>{STATUS_LABEL[s]} ({counts[s] ?? 0})</option>)}
+            {(["active", "inactive", "discharged"] as const).map((st) => <option key={st} value={st}>{STATUS_LABEL[st]} ({counts[st] ?? 0})</option>)}
             <option value="all">All ({clients.data?.length ?? 0})</option>
           </select>
+        </div>
+        <div>
+          <label htmlFor="client-authorization" className="block text-sm font-medium text-slate-700">Authorization</label>
+          <select id="client-authorization" value={authorization} onChange={(e) => setAuthorization(e.target.value as AuthorizationFilter)} className="mt-1 rounded-lg border border-slate-200 px-3 py-2 text-base">
+            <option value="all">All</option>
+            <option value="current">Current</option>
+            <option value="none">None current</option>
+          </select>
+        </div>
+        <div>
+          <label htmlFor="client-sort" className="block text-sm font-medium text-slate-700">Sort by</label>
+          <select id="client-sort" value={sort} onChange={(e) => setSort(e.target.value as ClientSort)} className="mt-1 rounded-lg border border-slate-200 px-3 py-2 text-base">
+            <option value="name">Name</option>
+            <option value="status">Status</option>
+            <option value="authorization">Authorization (none first)</option>
+          </select>
+        </div>
+        <div role="group" aria-label="View" className="inline-flex overflow-hidden rounded-lg border border-slate-300">
+          {(["list", "cards"] as const).map((v) => (
+            <button key={v} type="button" aria-pressed={view === v} onClick={() => chooseView(v)}
+              className={`min-h-[44px] px-4 text-sm font-semibold ${view === v ? "bg-[#0F6674] text-white" : "bg-white text-slate-800"}`}>{v === "list" ? "List" : "Cards"}</button>
+          ))}
         </div>
       </div>
       {clients.isLoading ? <p className="text-sm text-slate-500">Loading…</p> : null}
       {clients.isError ? <p role="alert" className="text-sm text-red-700">{(clients.error as Error).message}</p> : null}
       {clients.data && shown.length === 0 ? <p className="text-sm text-slate-600">No clients match.</p> : null}
-      <ul className="space-y-2">
-        {shown.map((c) => <ClientCard key={c.clientId} c={c} />)}
-      </ul>
+      {view === "list" ? (
+        shown.length > 0 ? <ClientList clients={shown} /> : null
+      ) : (
+        <ul className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3" aria-label="Clients as cards">
+          {shown.map((c) => <ClientCard key={c.clientId} c={c} />)}
+        </ul>
+      )}
+    </div>
+  );
+}
+
+function safeStorage(): Storage | null {
+  try {
+    return typeof window === "undefined" ? null : window.localStorage;
+  } catch {
+    return null;
+  }
+}
+
+const authLabel = (c: AdminClient) => (hasCurrentAuthorization(c) ? `${c.currentAuthorizations} current authorization${c.currentAuthorizations === 1 ? "" : "s"}` : "None current");
+const actionLabel = (c: AdminClient) => (hasCurrentAuthorization(c) ? "View authorized hours →" : "Add authorized hours →");
+
+/** Compact rows: client, status, authorization, one action. The same rows and permissions as Cards. */
+function ClientList({ clients }: { clients: AdminClient[] }) {
+  return (
+    <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white">
+      <table className="w-full min-w-[34rem] text-left text-sm" aria-label="Clients as a list">
+        <thead>
+          <tr className="border-b border-slate-200 text-xs uppercase tracking-wide text-slate-600">
+            <th scope="col" className="px-3 py-2 font-semibold">Client</th>
+            <th scope="col" className="px-3 py-2 font-semibold">Status</th>
+            <th scope="col" className="px-3 py-2 font-semibold">Authorization</th>
+            <th scope="col" className="px-3 py-2 font-semibold"><span className="sr-only">Action</span></th>
+          </tr>
+        </thead>
+        <tbody>
+          {clients.map((c) => (
+            <tr key={c.clientId} className="border-b border-slate-100 last:border-0">
+              <th scope="row" className="px-3 py-2 font-medium text-slate-950">
+                {clientName(c) ?? "Name not set"} <span className="font-normal text-slate-500">({c.clientCode})</span>
+                {c.openVisits > 0 ? <span className="ml-2 text-xs font-normal text-slate-600">visit in progress</span> : null}
+              </th>
+              <td className="px-3 py-2"><span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${STATUS_BADGE[c.status]}`}>{STATUS_LABEL[c.status]}</span></td>
+              <td className={`px-3 py-2 ${!hasCurrentAuthorization(c) && c.status === "active" ? "font-semibold text-red-700" : "text-slate-800"}`}>{authLabel(c)}</td>
+              <td className="px-3 py-2"><Link to={`/clients/${c.clientId}`} className="inline-flex min-h-[44px] items-center font-medium text-og-link underline" aria-label={`${actionLabel(c)} for ${clientName(c) ?? c.clientCode}`}>{actionLabel(c)}</Link></td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
     </div>
   );
 }
@@ -168,10 +249,10 @@ function ClientCard({ c }: { c: AdminClient }) {
           {[c.city, c.clientTypeName, c.caregiverDisplayCode ? `caregivers see "${c.caregiverDisplayCode}"` : null].filter(Boolean).join(" · ") || "No city or type"}
         </p>
         <p className={`mt-1 text-sm ${c.currentAuthorizations === 0 && c.status === "active" ? "font-semibold text-red-700" : "text-slate-700"}`}>
-          {c.currentAuthorizations === 0 ? "No current authorization" : `${c.currentAuthorizations} current authorization${c.currentAuthorizations === 1 ? "" : "s"}`}
+          Authorization: {authLabel(c)}
           {c.openVisits > 0 ? ` · ${c.openVisits} visit in progress` : ""}
-          {/* The whole row opens the client page, whose first card is Authorizations (months, balances, versions). */}
-          <span className="ml-2 font-medium text-og-link underline">View authorized hours →</span>
+          {/* The whole card opens the client page, whose first card is Authorizations (months, balances, versions). */}
+          <span className="ml-2 font-medium text-og-link underline">{actionLabel(c)}</span>
         </p>
       </Link>
     </li>

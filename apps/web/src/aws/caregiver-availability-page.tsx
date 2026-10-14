@@ -4,6 +4,8 @@ import type { AwsApiClient } from "@/lib/aws-api";
 import { useOrganization } from "@/providers/organization-provider";
 import { formatClockTime, formatDateTime } from "@/lib/service-verification";
 import { MyAvailability } from "./readiness/availability-section";
+import { ShortHelp } from "./help-text";
+
 
 type Opportunity = { offerId: string; status: string; serviceCode: string; serviceName: string; startsAt: string; endsAt: string; clientLabel: string };
 const when = (value: string) => formatDateTime(value);
@@ -25,7 +27,7 @@ export function CaregiverAvailabilityPage({ api }: { api: AwsApiClient }) {
   return <section className="max-w-3xl space-y-6">
     <div>
       <h1 className="text-2xl font-semibold text-slate-950">Availability</h1>
-      <p className="mt-1 text-sm text-slate-600">Your approved hours are what your agency uses to offer you work. To change them, send a request: your current hours stay in place until an administrator approves it. An availability response is not an assignment.</p>
+      <ShortHelp className="mt-1 text-sm text-slate-600">Your approved hours decide what work you are offered. To change them, send a request; your current hours stay until an administrator approves it. A response is not an assignment.</ShortHelp>
     </div>
     <MyAvailability />
     <Card>

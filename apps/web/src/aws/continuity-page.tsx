@@ -7,6 +7,8 @@ import { useOrganization } from "@/providers/organization-provider";
 import { useAwsApi } from "./aws-workspace";
 import { buildContinuityHtml, continuityFileName, continuityState, outageNumber, useContinuityStatus, type ContinuityPack } from "./continuity-pack";
 import { formatDateTime } from "@/lib/service-verification";
+import { ShortHelp } from "./help-text";
+
 
 /**
  * Continuity pack (0027): the agency's own recent copy of what it needs to keep
@@ -69,10 +71,7 @@ export function ContinuityPage() {
       <h1 className="text-xl font-semibold">Continuity pack</h1>
       <Card className={`p-4 ${s.stale ? "border-2 border-amber-500 bg-amber-50" : ""}`}>
         <p className={`text-base ${s.stale ? "font-bold text-amber-900" : ""}`}>{status.isError ? "Status could not be loaded." : `${s.text}.`}</p>
-        <p className="mt-2 text-sm text-slate-700">
-          A single file with the next 14 days of shifts, this month's authorized and remaining hours, active clients, the Care Team,
-          and numbered outage visit records. It opens in any browser without Ogevia. It shows the exact time its data was taken.
-        </p>
+        <ShortHelp className="mt-2 text-sm text-slate-700" details="Hours are this month's authorized and remaining hours; clients are the active ones; outage records are the numbered visit records. It shows the exact time its data was taken.">One file with the next 14 days of shifts, hours, clients, the Care Team and outage records. It opens in any browser without Ogevia.</ShortHelp>
         <Button className="mt-3 min-h-11 w-full sm:w-auto" disabled={busy} onClick={() => void download()}>
           {busy ? "Preparing…" : "Download continuity pack"}
         </Button>

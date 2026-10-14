@@ -9,6 +9,8 @@ import { caregiverName, useCaregivers } from "./care-team-admin";
 import { clientName, useClients, useServices } from "./client-admin";
 import { outageNumber } from "./continuity-pack";
 import { formatDateOnly } from "@/lib/service-verification";
+import { ShortHelp } from "./help-text";
+
 
 /**
  * Outage visit records (0028): after an outage, the office enters each numbered
@@ -112,7 +114,7 @@ function EntryForm({ onDone }: { onDone: (text: string) => void }) {
         <input id="ov-signer" value={f.signer} onChange={(e) => set("signer", e.target.value)} className={inputClass} /></div>
       <div><label htmlFor="ov-notes" className="block text-sm font-medium text-slate-700">Notes (optional)</label>
         <input id="ov-notes" value={f.notes} onChange={(e) => set("notes", e.target.value)} className={inputClass} /></div>
-      <p className="text-xs text-slate-600 sm:col-span-2">Times are the agency's local time; a Time Out earlier than the Time In means the next day. The visit is stored as written on the form, marked as entered by you, in administrator review with 0 billable minutes. Review the paper form before any billing.</p>
+      <ShortHelp className="text-xs text-slate-600 sm:col-span-2" details="A Time Out earlier than the Time In means the next day. The visit is stored as written on the form, marked as entered by you, in administrator review with 0 billable minutes.">Enter times in the agency's local time. Review the paper form before any billing.</ShortHelp>
       {state.error ? <p role="alert" className="text-sm text-red-700 sm:col-span-2">{state.error}</p> : null}
       <div className="sm:col-span-2"><Button type="submit" className="min-h-11 w-full sm:w-auto" disabled={state.busy}>{state.busy ? "Entering…" : "Enter outage record"}</Button></div>
     </form>

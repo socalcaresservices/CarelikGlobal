@@ -12,6 +12,7 @@ import { formatDateOnly, formatDateTime, formatDuration } from "@/lib/service-ve
 import { newIdempotencyKey } from "@/lib/sv-backend";
 import { useAwsApi } from "./aws-workspace";
 import { prepareDocumentFile } from "./document-file";
+import { ShortHelp } from "./help-text";
 import {
   RECOVERY_ROLE_LABEL,
   REQUEST_STATE_LABEL,
@@ -58,11 +59,7 @@ export function SignatureRecoveryCard({ visitId, organizationId, canManage, canR
   return (
     <Card className="space-y-3 p-4">
       <h2 className="text-base font-semibold text-slate-950">Get the missing signature</h2>
-      <p className="text-sm text-slate-700">
-        Ask the client or their representative to confirm this visit now. While a request is open, the visit waits here
-        instead of in Action needed. It is never closed for you, and nothing becomes billable until a person accepts
-        the confirmation and billing is approved separately.
-      </p>
+      <ShortHelp className="text-sm text-slate-700" details="While a request is open, the visit waits here instead of in Action needed. It is never closed for you, and billing is approved separately.">Ask the client or their representative to confirm this visit now. Nothing becomes billable until a person accepts the confirmation.</ShortHelp>
       {recoveryState === "awaiting_response" ? <p className="rounded-lg bg-violet-50 p-2 text-sm text-violet-900">Waiting for the confirmation.</p> : null}
       {recoveryState === "response_to_review" ? <p className="rounded-lg bg-amber-50 p-2 text-sm text-amber-900">A response came in. Review it below.</p> : null}
 
