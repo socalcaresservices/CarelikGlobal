@@ -68,6 +68,7 @@ describe("SCHEMA: migration chain", () => {
     ).map((r) => r.t);
     // Sorted comparison: membership is what matters, not the database collation.
     expect([...tables].sort()).toEqual([
+      "agency_visit_rules",
       "app_users",
       "assignment_readiness_flags",
       "audit_events",
@@ -129,6 +130,7 @@ describe("SCHEMA: migration chain", () => {
       "visit_late_confirmation_reviews",
       "visit_late_confirmations",
       "visit_review_decisions",
+      "visit_rule_evaluations",
       "zip_centroids",
     ]);
   });

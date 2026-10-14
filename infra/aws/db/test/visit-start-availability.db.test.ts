@@ -103,7 +103,7 @@ async function setDocs(rec: string, cprState: "current" | "missing" | "expired",
 const DAY_WINDOWS = allWeek;
 let mgrRec: string;
 const startVisit = async (actor: Actor, f: { client: string; service: string }) => {
-  const id = (await call(actor, "select ogevia_api.start_ad_hoc_service_visit($1,$2,$3,'{}',null,null) as id", [w.orgA, f.client, f.service]))[0].id as string;
+  const id = (await call(actor, "select ogevia_api.start_ad_hoc_service_visit($1,$2,$3,'{}',null,null,'Synthetic unscheduled test visit') as id", [w.orgA, f.client, f.service]))[0].id as string;
   return id;
 };
 /** Removes a visit the test started so the next start is not refused by the one-open-visit rule (test cleanup only). */

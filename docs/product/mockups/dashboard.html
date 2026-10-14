@@ -1,0 +1,53 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><title>Dashboard mockup</title><link rel="stylesheet" href="_base.css"></head><body>
+<div class="mock"><b>MOCKUP, NOT BUILT.</b> Synthetic numbers. Shows the approved decisions D2, D4, D10, D8/D9/D11 and only KPIs with a data source in the KPI dictionary. Layout is a proposal.</div>
+<div class="shell"><aside><div class="logo"><i></i>Ogevia</div><a class="on">Home</a><h6>CAREGIVERS</h6><a>Care Team</a><a>Schedule</a><h6>CLIENTS</h6><a>Clients</a><a>Authorization monitor</a><h6>BILLING</h6><a>Billing review</a><h6>REPORTS</h6><a>Unfilled shifts</a><a>Reports</a></aside>
+<main>
+<div class="row"><h1>Home</h1><span class="chip crit" style="font-size:13px">⚠ Action needed: 11</span><span class="sp"></span><label class="note">Month (agency time)<br><span class="sel">October 2026 ▾</span></label></div>
+
+<div class="sect">1 · Who needs care and when</div>
+<div class="grid g4">
+<div class="card kpi"><b>1,284 h</b><span>Scheduled hours</span><small>Oct 1–31 · non-cancelled shifts</small></div>
+<div class="card kpi"><b>912 h</b><span>Completed hours</span><small>signed + in review</small></div>
+<div class="card kpi"><b>42</b><span>Active clients</span><small>status Active</small></div>
+<div class="card kpi"><b>31</b><span>Active caregivers</span><small>Ready or Active</small></div></div>
+
+<div class="sect">2 · Shifts that need coverage</div>
+<div class="grid g4">
+<div class="card kpi"><b style="color:var(--crit)">1</b><span>Critical: started, unfilled</span><small><a>View shifts</a></small></div>
+<div class="card kpi"><b style="color:var(--warn)">4</b><span>Urgent: start within 48 h</span><small><a>View shifts</a></small></div>
+<div class="card kpi"><b>96 h</b><span>Open hours (all)</span><small>9 shifts · Upcoming beyond 48 h: 4</small></div>
+<div class="card kpi"><b>92.5%</b><span>Coverage rate</span><small>(1,284 − 96) ÷ 1,284</small></div></div>
+<p class="note" style="margin:6px 2px">Upcoming gaps beyond 48 hours are not Action Needed. They live in the <a>Unfilled shift report</a>.</p>
+
+<div class="sect">3 · Clients approaching limits</div>
+<div class="grid g4">
+<div class="card kpi"><b>74%</b><span>Utilization</span><small>(used + reserved) ÷ authorized</small></div>
+<div class="card kpi"><b style="color:var(--warn)">6</b><span>Near limit</span><small>80% to under 95% · <a>Monitor</a></small></div>
+<div class="card kpi"><b style="color:var(--crit)">3</b><span>Critical, exhausted or over</span><small>95% and above · <a>Monitor</a></small></div>
+<div class="card kpi"><b>3</b><span>Expiring (30 days)</span><small>212 h unused capacity</small></div></div>
+
+<div class="sect">4 · What requires action</div>
+<div class="grid" style="grid-template-columns:3fr 2fr;align-items:start">
+<div class="card" style="padding:0;overflow:hidden">
+<div class="li hot"><span><b>Critical coverage gap</b><br><span class="note">Shift already started, no caregiver</span></span><span class="c" style="color:var(--crit)">1</span></div>
+<div class="li urg"><span><b>Urgent coverage gap</b><br><span class="note">Starts within 48 hours, no caregiver</span></span><span class="c" style="color:var(--warn)">4</span></div>
+<div class="li urg"><span><b>Missing clock-out</b><br><span class="note">Open past shift end, or 12 h unscheduled</span></span><span class="c" style="color:var(--warn)">2</span></div>
+<div class="li urg"><span><b>Visits to review</b><br><span class="note">Unconfirmed or over authorization</span></span><span class="c" style="color:var(--warn)">1</span></div>
+<div class="li urg"><span><b>Signatures to review</b><br><span class="note">Response received, awaiting a person</span></span><span class="c" style="color:var(--warn)">1</span></div>
+<div class="li urg"><span><b>Overdue documents</b><br><span class="note">Credentials past due</span></span><span class="c" style="color:var(--warn)">2</span></div>
+</div>
+<div class="grid">
+<div class="card" style="border-style:dashed"><h2>Work queue (not counted)</h2>
+<div class="row" style="justify-content:space-between"><span><b>Ready for approval</b><br><span class="note">Billing Ready visits awaiting a person</span></span><span class="c" style="font:700 20px ui-monospace">14</span></div><p class="note" style="margin:6px 0 0"><a>Open Billing review</a></p></div>
+<div class="card" style="border-style:dashed"><h2>Reminders (not counted)</h2><div class="row" style="justify-content:space-between"><span>Waiting for a signature</span><b>5</b></div><div class="row" style="justify-content:space-between"><span>Documents expiring soon</span><b>4</b></div></div></div></div>
+<p class="note" style="margin:6px 2px">Every count opens a list with exactly those rows. The total is calculated on the server; no item is in two counts.</p>
+
+<div class="sect">5 · How the agency is performing</div>
+<div class="grid g3">
+<div class="card"><h2>Caregiver management</h2><table><tr><td>Assigned hours</td><td class="n">1,188 h</td></tr><tr><td>Available capacity</td><td class="n">340 h</td></tr><tr><td>Coverage gaps</td><td class="n">9 shifts</td></tr><tr><td>Cancellations</td><td class="n">7</td></tr></table></div>
+<div class="card"><h2>Quality &amp; compliance</h2><table><tr><td>Missing clock-outs</td><td class="n">2</td></tr><tr><td>Pending confirmations</td><td class="n">5</td></tr><tr><td>Review queue</td><td class="n">1</td></tr><tr><td>Corrections (month)</td><td class="n">4</td></tr><tr><td>Credentials</td><td class="n">2 overdue · 4 expiring</td></tr></table></div>
+<div class="card"><h2>Financial <span class="chip mute">Administrator only</span></h2><table><tr><td>Verified billable hours</td><td class="n">861 h</td></tr><tr><td>Estimated revenue*</td><td class="n">$38,740</td></tr><tr><td>Missing rates</td><td class="n">2 authorizations</td></tr></table><p class="note" style="margin:6px 0 0">*Billable hours × authorization rate, only where a rate exists. Not collected revenue. Margin is not shown: there is no caregiver pay data.</p></div></div>
+
+<div class="dn"><h3>NOT SHOWN, BY RULE (no data source yet)</h3><ul><li><b>Discrepancies</b>: no definition yet (D12).</li><li><b>Conflicts</b>: scheduling conflicts are refused, not stored (D14).</li><li><b>Unbilled approved visits</b>: needs a submission state that does not exist in AWS (D15).</li><li><b>Margin</b>: needs caregiver pay data.</li></ul>
+<h3 style="margin-top:8px">STILL OPEN</h3><ul><li>Whether "Awaiting Confirmation" (D8), a review deadline (D9) and "Documents to Review" (D11) count toward Action Needed. This mockup leaves all three out.</li></ul></div>
+</main></div></body></html>

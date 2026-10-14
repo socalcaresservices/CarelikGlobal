@@ -362,7 +362,7 @@ describe("new visit starts and standing assignments", () => {
     await reset();
     const f2 = await freshClient(db, w, w.caregiverA1, 100000, w.orgA, { before: 5, after: 120 });
     await resetCaregiverDocs(recA1);
-    const start = () => call(w.caregiverA1, "select ogevia_api.start_ad_hoc_service_visit($1,$2,$3,'{}',null,null) as id", [w.orgA, f2.client, f2.service]).then((r) => r[0].id as string);
+    const start = () => call(w.caregiverA1, "select ogevia_api.start_ad_hoc_service_visit($1,$2,$3,'{}',null,null,'Synthetic unscheduled test visit') as id", [w.orgA, f2.client, f2.service]).then((r) => r[0].id as string);
     await expectPgError(start(), "OGR30", /CPR missing\.\s+TB missing\./);
     await makeDocsCurrent(recA1, w.caregiverA1);
     await baseline(w.caregiverA1, allWeek()); // 0046: a new visit also needs approved availability once readiness is active
@@ -453,6 +453,7 @@ describe("concurrency and unprotected paths", () => {
       assign_shift_caregiver: /check_shift_caregiver\([^)]*v_s\.service_id\)/,
       create_shift: /check_shift_caregiver\([^)]*p_service_id\)/,
       reschedule_shift: /check_shift_caregiver\([^)]*v_s\.service_id\)/,
+      pickup_open_shift: /check_shift_caregiver\(/, // Wave 1 (0051): the same readiness gate as an office assignment
       series_materialize: /series_evaluate/, // outcomes come from series_evaluate, which includes readiness_outcome
     };
     // Paths that write the caregiver column but do not newly commit a person to work (documented):

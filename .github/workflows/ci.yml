@@ -1,5 +1,9 @@
 name: CI
 
+# Aligned with docs/TESTING_AND_RELEASE_PROCESS.md (Phase A): Node 22 (the version the harness and the release gates are
+# run on), a frozen lockfile, and the same `pnpm test:all` command a developer runs locally. Job ids are unchanged so any
+# branch-protection rule that names them keeps matching.
+
 on:
   pull_request:
   push:
@@ -20,9 +24,9 @@ jobs:
           version: 9.15.4
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
           cache: pnpm
-      - run: pnpm install --frozen-lockfile=false
+      - run: pnpm install --frozen-lockfile
       - run: pnpm typecheck
       - run: pnpm lint
       - run: pnpm build
@@ -39,12 +43,12 @@ jobs:
           if-no-files-found: error
           retention-days: 7
 
-  # Phase 2: PostgreSQL integration tests for infra/aws/db against the same
-  # major version as production RDS (PostgreSQL 18). Disposable service
-  # container; synthetic fixtures only; no AWS credentials involved.
+  # PostgreSQL job: runs `pnpm test:all` (unit and static tests, infra/aws database tests AND sv-api API tests, all against
+  # a real database). test:all fails if any test is skipped or none ran. Same major version as production RDS
+  # (PostgreSQL 18). Disposable service container; synthetic fixtures only; no AWS credentials involved.
   postgres:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 30
     services:
       postgres:
         image: postgres:18
@@ -68,7 +72,46 @@ jobs:
           version: 9.15.4
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
           cache: pnpm
-      - run: pnpm install --frozen-lockfile=false
-      - run: pnpm --filter @carelik/infra-aws test:db
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm test:all
+
+  # Local harness smoke check (docs/TESTING_AND_RELEASE_PROCESS.md, Phase B tooling): builds the harness database (all
+  # migrations plus the demo seed), builds the web app, starts the harness and drives it over HTTPS: the web app's own
+  # sign-in validation, the full sign-in flow for every person, the API for each role, and the seeded balances.
+  # The harness must listen on port 443 (the web app only accepts a sign-in domain without a port).
+  harness:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_USER: ogevia_admin
+          POSTGRES_DB: postgres
+          POSTGRES_HOST_AUTH_METHOD: trust
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U ogevia_admin"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    env:
+      HARNESS_ADMIN_URL: postgres://ogevia_admin@127.0.0.1:5432/postgres
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Allow the harness to listen on port 443
+        run: sudo sysctl -w net.ipv4.ip_unprivileged_port_start=443
+      - run: pnpm --filter @carelik/infra-aws harness:setup
+      - run: pnpm --filter @carelik/infra-aws harness:build
+      - run: pnpm --filter @carelik/infra-aws harness:smoke

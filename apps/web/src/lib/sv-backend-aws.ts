@@ -62,6 +62,7 @@ export function createAwsServiceVerificationBackend(
   }
   return {
     kind: "aws",
+    wave1: true,
     async getActiveVisit(organizationId) {
       const { visit } = await api.get<{ visit: Json | null }>("/v1/visits/active", { organizationId });
       if (!visit) return null;
@@ -88,15 +89,19 @@ export function createAwsServiceVerificationBackend(
         };
       });
     },
-    async startVisit({ organizationId, clientId, serviceId, idempotencyKey }) {
-      const { visitId } = await api.post<{ visitId: string }>("/v1/visits", { organizationId, clientId, serviceId }, { idempotencyKey });
+    async startVisit({ organizationId, clientId, serviceId, unscheduledReason, idempotencyKey }) {
+      const { visitId } = await api.post<{ visitId: string }>(
+        "/v1/visits",
+        { organizationId, clientId, serviceId, ...(unscheduledReason ? { unscheduledReason } : {}) },
+        { idempotencyKey },
+      );
       return visitId;
     },
     async endVisit(visitId) {
       const { visit } = await api.post<{ visit: Json }>(`/v1/visits/${enc(visitId)}/end`, {});
       return { time_in: String(visit.timeIn), time_out: String(visit.timeOut), worked_minutes: Number(visit.workedMinutes) };
     },
-    async confirmVisit({ organizationId, visitId, signerRole, method, signatureDataUrl, reason, idempotencyKey }) {
+    async confirmVisit({ organizationId, visitId, signerRole, method, signatureDataUrl, reason, typedSignerName, attested, idempotencyKey }) {
       const { result } = await api.post<{ result: Json }>(
         `/v1/visits/${enc(visitId)}/confirm`,
         {
@@ -104,11 +109,14 @@ export function createAwsServiceVerificationBackend(
           signerRole,
           method,
           reason,
+          ...(typedSignerName ? { typedSignerName } : {}),
+          ...(attested ? { attested: true } : {}),
           ...(signatureDataUrl ? { signaturePng: signatureDataUrl } : {}),
         },
         { idempotencyKey },
       );
-      return toSnake<VisitResult>(result);
+      const { outcome, ...rest } = result as Json & { outcome?: Json };
+      return { ...toSnake<VisitResult>(rest), ...(outcome ? { outcome: toSnake<NonNullable<VisitResult["outcome"]>>(outcome) } : {}) };
     },
     async listVisits(organizationId, f) {
       const { visits } = await api.get<{ visits: Json[] }>("/v1/visits", {

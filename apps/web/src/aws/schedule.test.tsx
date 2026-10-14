@@ -57,6 +57,8 @@ function fakeApi(role: Role) {
         return json(200, { events: [{ eventType: "called_out", createdAt: `${today}T18:00:00Z`, reason: "Sick (synthetic)", originalCaregiverName: "Synthetic Caregiver One", replacementCaregiverName: null, recordedBy: "caregiver" }] });
       case "GET /v1/my-shifts":
         return json(200, { shifts: [mine] });
+      case "GET /v1/open-shifts":
+        return json(200, { shifts: [] });
       case `POST /v1/my-shifts/${COVERED}/callout`:
         mine = { ...mine, coverageState: "called_out", canCallOut: false };
         return json(200, { coverageState: "needs_coverage" });

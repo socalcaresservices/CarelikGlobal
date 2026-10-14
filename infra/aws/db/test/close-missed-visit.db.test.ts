@@ -48,7 +48,7 @@ describe("0015 manager close-out of a missed clock-out", () => {
     )).rows[0]!.id;
     // Started 30 hours ago inside that shift, then forgotten.
     await db.admin.query("update ogevia.shifts set starts_at = now() + interval '5 minutes', ends_at = now() + interval '4 hours' where id = $1", [shift]);
-    const visit = await api.start(db, w.caregiverA1, w.orgA, f.client, f.service);
+    const visit = await api.start(db, w.caregiverA1, w.orgA, f.client, f.service, null, null);
     await db.admin.query("update ogevia.shifts set starts_at = now() - interval '30 hours', ends_at = now() - interval '27 hours' where id = $1", [shift]);
     expect((await visitRow(db, visit)).scheduled_shift_id).toBe(shift);
     await ageVisit(db, visit, 30 * 60);
