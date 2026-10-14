@@ -218,13 +218,19 @@ def workflow(args, inv, cg, mg):
         return
     service = svc[0]["serviceId"]
 
+    # Wave 1 (0050): the seeded identities have no scheduled shift, so every visit here is an UNSCHEDULED (provisional)
+    # visit. The database refuses it without a reason, and it ends in administrator review (never Billing Ready).
+    reason = "Automated smoke test: no shift scheduled (synthetic)"
+    s0, _ = inv.call("POST /v1/visits", cg, body={"organizationId": org, "clientId": c1, "serviceId": service})
+    check(A, "start without a scheduled shift and without a reason is refused (422)", s0 == 422, "status %s" % s0)
     k1 = str(uuid.uuid4())
-    s, st = inv.call("POST /v1/visits", cg, body={"organizationId": org, "clientId": c1, "serviceId": service, "timeIn": "2000-01-01T00:00:00Z"}, key=k1)
+    s, st = inv.call("POST /v1/visits", cg, body={"organizationId": org, "clientId": c1, "serviceId": service, "unscheduledReason": reason,
+                                                   "timeIn": "2000-01-01T00:00:00Z"}, key=k1)
     v1 = (st or {}).get("visitId")
-    check(A, "start visit (server time; client time ignored)", s == 201 and v1)
-    s2, st2 = inv.call("POST /v1/visits", cg, body={"organizationId": org, "clientId": c1, "serviceId": service}, key=k1)
+    check(A, "start unscheduled visit with a reason (server time; client time ignored)", s == 201 and v1)
+    s2, st2 = inv.call("POST /v1/visits", cg, body={"organizationId": org, "clientId": c1, "serviceId": service, "unscheduledReason": reason}, key=k1)
     check(A, "start retry with the same Idempotency-Key returns the same visit", s2 == 201 and (st2 or {}).get("visitId") == v1)
-    s3, _ = inv.call("POST /v1/visits", cg, body={"organizationId": org, "clientId": c1, "serviceId": service})
+    s3, _ = inv.call("POST /v1/visits", cg, body={"organizationId": org, "clientId": c1, "serviceId": service, "unscheduledReason": reason})
     check(A, "second open visit refused (409)", s3 == 409)
     s, act = inv.call("GET /v1/visits/active", cg, query={"organizationId": org})
     check(A, "active visit = draft, server timestamp near now", s == 200 and act["visit"]["visitId"] == v1 and act["visit"]["visitStatus"] == "draft"
@@ -237,9 +243,16 @@ def workflow(args, inv, cg, mg):
     sig = png(seed=int(time.time()) % 200)
     sig_b64 = base64.b64encode(sig).decode()
     kc = str(uuid.uuid4())
-    body = {"organizationId": org, "signerRole": "parent", "method": "draw", "signaturePng": sig_b64}
+    body = {"organizationId": org, "signerRole": "parent", "method": "draw", "signaturePng": sig_b64, "attested": True}
     s, cf = inv.call("POST /v1/visits/{visitId}/confirm", cg, path={"visitId": v1}, body=body, key=kc)
-    check(A, "signature confirmation locks the visit (signed, billable)", s == 200 and cf["result"]["status"] == "signed" and cf["result"]["billableMinutes"] >= 2, "status %s" % s)
+    res = (cf or {}).get("result") or {}
+    out = res.get("outcome") or {}
+    check(A, "signature confirmation of an unscheduled visit locks it and routes it to administrator review (not Billing Ready)",
+          s == 200 and res.get("status") == "administrator_review", "status %s %s" % (s, res.get("status")))
+    check(A, "review reason 'unscheduled' and the stored reason are returned",
+          "unscheduled" in (out.get("reviewReasons") or []) and out.get("unscheduledReason") == reason,
+          json.dumps({k: out.get(k) for k in ("reviewReasons", "unscheduledReason")})[:160])
+    check(A, "the server names the attestation version (attest-v1); the client cannot", out.get("attestationVersion") == "attest-v1", str(out.get("attestationVersion")))
     s, cf2 = inv.call("POST /v1/visits/{visitId}/confirm", cg, path={"visitId": v1}, body=body, key=kc)
     check(A, "confirm retry (same key) returns the stored result", s == 200 and (cf2 or {}).get("result") == (cf or {}).get("result"))
     s, _ = inv.call("POST /v1/visits/{visitId}/confirm", cg, path={"visitId": v1}, body=body)
@@ -257,7 +270,7 @@ def workflow(args, inv, cg, mg):
 
     s, lst = inv.call("GET /v1/visits", mg, query={"organizationId": org})
     by_id = dict((v["id"], v) for v in (lst or {}).get("visits", []))
-    check(A, "manager visit records include the signed visit", s == 200 and by_id.get(v1, {}).get("status") == "signed")
+    check(A, "manager visit records include the unscheduled visit, in administrator review", s == 200 and by_id.get(v1, {}).get("status") == "administrator_review")
     visit_ref = by_id.get(v1, {}).get("visitNumber", "")
     check(A, "new visit reference is tenant-neutral CLIENT-SERVICE-DDMMYY-HHMM-XX",
           bool(re.match(r"^[A-Z0-9]+-[A-Z0-9]+-[0-9]{6}-[0-9]{4}-[0-9A-F]{2}$", visit_ref)),
@@ -281,7 +294,7 @@ def workflow(args, inv, cg, mg):
 
 
     k2 = str(uuid.uuid4())
-    s, st = inv.call("POST /v1/visits", cg, body={"organizationId": org, "clientId": c2, "serviceId": service}, key=k2)
+    s, st = inv.call("POST /v1/visits", cg, body={"organizationId": org, "clientId": c2, "serviceId": service, "unscheduledReason": reason}, key=k2)
     v2 = (st or {}).get("visitId")
     check(A, "start second visit (TEST-C02)", s == 201 and v2)
     wait_minutes(args, v2, 1)
