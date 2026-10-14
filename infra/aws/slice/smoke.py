@@ -123,15 +123,34 @@ def png(width=48, height=24, seed=0):
             + chunk(b"IDAT", zlib.compress(raw)) + chunk(b"IEND", b""))
 
 
+API_STACK_NAME = "Ogevia-prod-ServiceVerificationApi"
+
+
+def find_api_function(stack=API_STACK_NAME):
+    """Physical name of the API handler Lambda in the pilot API stack.
+
+    Uses list-stack-resources (read-only, paginated by the CLI) and the logical id "Handler": the stack also holds the
+    "IdentityHandler" Lambda and may hold helper Lambdas, so "the first Lambda in the stack" is not a safe choice. If the
+    handler is not found, stop with a message that says what was found, instead of an IndexError."""
+    res = aws("cloudformation", "list-stack-resources", "--stack-name", stack)
+    items = res.get("StackResourceSummaries", [])
+    fns = [r for r in items if r.get("ResourceType") == "AWS::Lambda::Function"]
+    handler = [r for r in fns if r.get("LogicalResourceId", "").startswith("Handler")]
+    if len(handler) == 1:
+        return handler[0]["PhysicalResourceId"]
+    raise RuntimeError(
+        "cannot identify the API handler Lambda in stack %s: %d resources listed, %d Lambda functions (%s), %d match logical id 'Handler*'. "
+        "Check the stack name, the region (%s) and the credentials; nothing was invoked."
+        % (stack, len(items), len(fns), ", ".join(sorted(r.get("LogicalResourceId", "?") for r in fns)) or "none", len(handler), REGION))
+
+
 class Invoker:
     def __init__(self, args, client_id):
         self.args = args
         self.client_id = client_id
         self.function = None
         if args.mode == "aws":
-            res = aws("cloudformation", "describe-stack-resources", "--stack-name", "Ogevia-prod-ServiceVerificationApi")
-            fns = [r["PhysicalResourceId"] for r in res["StackResources"] if r["ResourceType"] == "AWS::Lambda::Function"]
-            self.function = fns[0]
+            self.function = find_api_function()
 
     def claims(self, sub, extra=None):
         c = {"sub": sub, "iss": "https://cognito-idp.%s.amazonaws.com/%s" % (REGION, self.args.pool),
