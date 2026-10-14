@@ -1,21 +1,16 @@
 # Owner action sheet
 
-Three tasks, in this order. **None of them changes any system.** Each says what to do, why, where, the exact buttons, what you should see, what to send back, and what not to touch.
+Two tasks remain, in this order (publishing the work branch is already done: PR #94 was merged to `main` as `12b5d4b`). **None of them changes any system.** Each says what to do, why, where, the exact buttons, what you should see, what to send back, and what not to touch.
 
 ---
 
-## Task 1. Say yes or no to publishing the work branch (one word)
+## Already done: the work is on `main`
 
-1. **What:** reply "approve push" (or "do not push"). I then push the branch `claude/pilot-readiness-closure` to GitHub and open a pull request for your review. I do not merge it.
-2. **Why:** the AWS operator needs the read-only preflight script (Task 3), and it only exists on my local copy until it is pushed. The branch contains only tests, scripts and documents (file list in `RELEASE_DECISION_PACKAGE.md` section 5). It contains no secrets (scan result in the same section) and changes no application code, migration, API, seed, infrastructure or Netlify file.
-3. **Where:** in this chat.
-4. **Expect:** a pull request link from me. Merging is a separate decision.
-5. **Send back:** "approve push".
-6. **Do not:** merge it yourself before the checks pass; it publishes to www.ogevia.com the moment it is merged to `main` if Netlify auto-publishes (documents and scripts only, so no visible change, but you should know).
+PR #94 (tests, scripts and documents only) was merged to `main` as `12b5d4b` after CI passed. Nothing was deployed. Nothing is needed from you here. If Netlify publishes every change merged to `main` automatically, it may have published this documents-and-scripts commit; there is no visible change to the public site.
 
 ---
 
-## Task 2. Netlify: read four things and send screenshots (about 5 minutes)
+## Task 1. Netlify: read four things and send screenshots (about 5 minutes)
 
 1. **What:** look at four screens and send screenshots.
 2. **Why:** to know (a) which version of the public site is live, (b) which sign-in system it uses, (c) whether every change merged to GitHub is published automatically, (d) whether `www.ogevia.com` and `app.ogevia.com` are the same site. These close blockers B-06, B-07, B-17 and give the facts for decision B-08.
@@ -26,21 +21,25 @@ Three tasks, in this order. **None of them changes any system.** Each says what 
    3. **Site configuration** → **Build & deploy** → **Continuous deployment**. Screenshot the part that shows the **production branch** and whether **auto publishing** is on. (On the Deploys page, a button "Stop auto publishing" means it is on.)
    4. **Site configuration** → **Domain management**. Screenshot the list of domains for this site (is `app.ogevia.com` in it?).
    5. *Optional, 1 minute, from any Windows computer:* open Command Prompt and type `nslookup app.ogevia.com`, press Enter, then `nslookup www.ogevia.com`. Copy the text each prints.
-5. **Expect:** the top deploy is `63de403` or a later commit (`484135d` if every merge publishes); `VITE_AUTH_PROVIDER` is "not set" or `supabase`; auto publishing is on; `www.ogevia.com` is in the list; `app.ogevia.com` is either in the list (same Netlify site) or points to an Amazon address (a different system).
+5. **Expect:** the top deploy is `63de403` or a later commit (`12b5d4b` if every merge to `main` publishes); `VITE_AUTH_PROVIDER` is "not set" or `supabase`; auto publishing is on; `www.ogevia.com` is in the list; `app.ogevia.com` is either in the list (same Netlify site) or points to an Amazon address (a different system).
 6. **Send back:** the screenshots (and the optional text). They contain no passwords.
 7. **Do not change anything:** do not press "Stop auto publishing", "Publish deploy", "Trigger deploy", "Lock" or "Clear cache"; do not edit or reveal any variable. What it tells me: if `VITE_AUTH_PROVIDER` says `cognito`, or anything other than not-set or `supabase`, that is a problem and I will tell you at once.
 
 ---
 
-## Task 3. Name the AWS operator and authorize the read-only preflight
+## Task 2. Name the AWS operator and authorize the read-only preflight
 
 1. **What:** tell me who will run it (name and role) and write: "I authorize the read-only pilot preflight, including `--probe-lambda`."
 2. **Why:** it is the only way to learn what is really running in the pilot: which stacks and code, whether the Wave 1 routes exist, backups and snapshots, and (through a few read-only calls with a synthetic test identity) which database generation is live and whether the test seed is present. Today none of this is known.
-3. **Where:** AWS CloudShell (https://console.aws.amazon.com, region **us-west-2**, the administrator role), in a checkout of the branch from Task 1.
+3. **Where:** AWS CloudShell (https://console.aws.amazon.com, region **us-west-2**, the administrator role), in a checkout of `main`.
 4. **Exact commands for the operator** (nothing else):
    ```
-   git fetch origin claude/pilot-readiness-closure
-   git checkout claude/pilot-readiness-closure
+   git clone https://github.com/socalcaresservices/CarelikGlobal.git   # skip if already cloned
+   cd CarelikGlobal
+   git fetch origin main
+   git checkout main
+   git pull --ff-only origin main
+   git rev-parse HEAD     # expect 12b5d4b... or later
    bash infra/aws/slice/pilot-preflight-readonly.sh --probe-lambda
    ```
 5. **Expect:** about two minutes of output, ending in either "No STOP items" or a list of STOP items, and the name of a folder it created in the operator's home directory.
