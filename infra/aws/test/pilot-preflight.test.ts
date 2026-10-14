@@ -44,7 +44,7 @@ describe("pilot_preflight_probe.py", () => {
     const calls = [...probeCode.matchAll(/inv\.call\(\s*("[^"]+"|route)/g)].map((m) => m[1]);
     expect(calls.length).toBeGreaterThan(2);
     expect(probeCode).not.toMatch(/"(POST|PUT|PATCH|DELETE) \//);
-    expect([...probeCode.matchAll(/"((?:GET|POST|PUT|PATCH|DELETE) \/[^"]*)"/g)].every((m) => m[1].startsWith("GET "))).toBe(true);
+    expect([...probeCode.matchAll(/"((?:GET|POST|PUT|PATCH|DELETE) \/[^"]*)"/g)].every((m) => m[1]!.startsWith("GET "))).toBe(true);
   });
   it("uses only the synthetic test identity and prints no identifiers", () => {
     expect(probe).toContain("a0000000-0000-4000-8000-0000000000a9");
