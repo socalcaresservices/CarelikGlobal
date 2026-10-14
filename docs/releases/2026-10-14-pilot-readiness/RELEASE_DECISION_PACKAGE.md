@@ -62,5 +62,15 @@ Not pushed. Nothing merged.
 |---|---|
 | Tests | `apps/sv-api/test/accounting.db.test.ts` (one new test), `infra/aws/db/test/upgrade-0049-to-0052.db.test.ts` (new), `infra/aws/test/pilot-preflight.test.ts` (new) |
 | Scripts (not application code) | `infra/aws/slice/smoke.py` (scheduled workflow, route count), `infra/aws/slice/pilot-preflight-readonly.sh` (new, read-only), `infra/aws/slice/pilot_preflight_probe.py` (new, GET only) |
-| Documents and evidence | `docs/releases/2026-10-14-pilot-readiness/` (this package, procedure, rollback SQL, open-PR review, owner action sheet, `evidence/` with 37 screenshots and text, the walkthrough script), edits to `docs/releases/2026-10-13-wave1/CHECKLIST.md` and `POST_MERGE_VERIFICATION.md` |
+| Documents and evidence | `docs/releases/2026-10-14-pilot-readiness/` (this package, procedure, rollback SQL, open-PR review, owner action sheet, `evidence/` with 31 screenshots, 5 text dumps, `results.json` and the walkthrough scripts). No file under `docs/releases/2026-10-13-wave1/` is changed |
 No application code, migration, API route, infrastructure, seed or Netlify file is changed. The exact file list, the secret scan and the SHA that each test result applies to are in section 6.
+
+## 6. Exact change set, secret scan, and which test results apply to which commit
+Verified with `git diff --name-only origin/main HEAD` on the local branch (base `main` 484135d).
+
+- Application code, migrations, API routes, CDK, seeds, `netlify.toml`, `.github/`: **none changed** (0 paths).
+- Changed outside `docs/`: 6 files, all tests or scripts: `apps/sv-api/test/accounting.db.test.ts`, `infra/aws/db/test/upgrade-0049-to-0052.db.test.ts`, `infra/aws/test/pilot-preflight.test.ts`, `infra/aws/slice/smoke.py`, `infra/aws/slice/pilot-preflight-readonly.sh`, `infra/aws/slice/pilot_preflight_probe.py`.
+- Changed under `docs/releases/2026-10-14-pilot-readiness/`: the markdown package, `rollback-0047-0052.sql` (not executed against any database outside the local rehearsal), and `evidence/`.
+- Secret scan of every added non-image line: no AWS key patterns, private-key blocks, JWTs, GitHub or Slack tokens, password assignments, or e-mail addresses. All walkthrough data is synthetic. No bytecode (`.pyc`) is added.
+- Test results: the full verification (lint, typecheck, build, `test:all`, harness smoke, `smoke.py` x2, `pilot_smoke`, pilot regression, probe rehearsal) ran on **3f057a3**. Later commits change **only files under `docs/releases/2026-10-14-pilot-readiness/`**, shown by `git diff --name-only 3f057a3 HEAD` listing no other path. That is equivalence by file scope; the results are not re-run on the documentation-only head.
+- Final head to be pushed: the commit recorded in the final report. Results apply to 3f057a3 as stated above.
