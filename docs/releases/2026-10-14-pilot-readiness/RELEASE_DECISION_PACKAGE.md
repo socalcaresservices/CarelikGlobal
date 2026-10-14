@@ -34,7 +34,7 @@ The recommendation changes to **GO for pilot deployment** when all of the follow
 3. Choose the release SHA (my suggestion: the merge commit of the final approved `main`; the application code is identical from `63de403` to `484135d`) and issue a new `OGEVIA_DEPLOY_APPROVAL` reference when you are ready.
 4. Approve or decline writing a reviewed pilot deployment script set for 0047 to 0052 (B-03).
 5. B-08, B-12, B-13, B-17, B-18 as listed in the report (section 8, row 3).
-6. Authorize, or push back on, publishing the local branch `claude/pilot-readiness-closure` (3 code/test commits plus these documents; scope below).
+6. Authorize, or push back on, publishing the local branch `claude/pilot-readiness-closure` (2 code and test commits plus the documentation commits; scope below).
 
 ## 5. Scope of the local branch (to confirm before anything is pushed)
 | Commit | Files | Change |

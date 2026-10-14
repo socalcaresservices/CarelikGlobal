@@ -21,7 +21,7 @@ Date 2026-10-14. Author: Claude Code. Companion files in this folder: `BLOCKER_R
 | PR #91, #92, #93 | MERGED (`b46bd40`, `17480dd`, `484135d`): Wave 1 checklist; `smoke.py` unscheduled-visit update; `smoke.py` availability-rule update. CI green on each | git log |
 | Is `484135d` the relevant baseline? | Yes. `git diff 63de403 484135d` changes only `docs/TESTING_AND_RELEASE_PROCESS.md`, the Wave 1 `CHECKLIST.md` and `POST_MERGE_VERIFICATION.md`, and `infra/aws/slice/smoke.py`: **no application code, migration, API or Supabase file** | `git diff --stat` |
 | Commits after `63de403` touching Wave 1 or 0047 to 0052 | None (documentation and the `smoke.py` script only) | same |
-| Working tree | Clean at `main`. This assignment's work is on local branch `claude/pilot-readiness-closure` (3 commits plus these documents), **not pushed** | `git status` |
+| Working tree | Clean at `main`. This assignment's work is on local branch `claude/pilot-readiness-closure` (2 code and test commits plus the documentation commits), **not pushed** | `git status` |
 | Migrations defined | 52 (0001 to 0052); rollback scripts exist for 0047 to 0052 (and earlier ones, not individually checked); `db/verification/01_schema_version.sql` expects 0052 | `ls infra/aws/db/migrations` |
 | Open pull requests | 17 older ones (#43 to #73, created 2026-08-24 to 2026-10-08); none concern Wave 1; whether they are superseded is not verified (Blocker B-18) | `list_pull_requests` |
 
