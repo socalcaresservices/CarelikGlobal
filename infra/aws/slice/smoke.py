@@ -42,7 +42,17 @@ RDS_ID = "ogevia-prod-postgres"
 EVIDENCE_BUCKET = "ogevia-prod-signature-evidence-%s-%s" % (ACCOUNT, REGION)
 EXISTING_CLIENT = "1i27abbina08fvg1i9u8vprgo9"
 TEST_ORG_SLUG = "ogevia-test-slice"
-EXPECTED_ROUTES = 38
+
+
+def expected_route_count():
+    """Number of routes the API under test must expose = the handler's route table in THIS checkout (the slice-contract
+    test keeps the CDK route list equal to it). A fixed number went stale as routes were added (38 -> 169)."""
+    path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "..", "apps", "sv-api", "src", "routes.ts")
+    with open(path, encoding="utf-8") as f:
+        return len(re.findall(r'^  "(?:GET|POST|PUT|PATCH|DELETE) /[^"]*": \{', f.read(), re.M))
+
+
+EXPECTED_ROUTES = expected_route_count()
 # Must equal infra/aws/lib/public-routes.ts (checked by a unit test).
 APPROVED_PUBLIC_ROUTE_KEYS = sorted([
     "GET /v1/public/care-portals/{token}",
