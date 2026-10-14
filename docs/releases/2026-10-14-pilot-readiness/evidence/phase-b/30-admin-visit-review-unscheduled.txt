@@ -1,0 +1,44 @@
+16
+Visit records
+Demo Okafor
+CL-DDF789BB49
+Needs review
+Caregiver
+Alex Caregiver
+Service
+Personal care (PCS)
+Date
+10/14/2026
+Actual times
+8:23 AM – 8:35 AM
+Scheduled
+Unscheduled visit
+Worked
+12 min
+Billable
+12 min
+Confirmation
+Drawn signature
+Submitted
+10/14/2026 8:36 AM
+Unscheduled reason
+Synthetic: manager phoned and asked me to cover
+Caregiver attestation
+Recorded (attest-v1)
+Signature on file
+Yes
+Billing approval
+Not approved
+Visit reference
+Why this visit needs review
+Started with no scheduled shift. Reason given by the caregiver: “Synthetic: manager phoned and asked me to cover”. It stays provisional until you review it.
+Record a review decision
+Accept this visit as worked (minutes within the authorization)
+Records that you reviewed the schedule difference and accept the visit as worked. Only the minutes that fit within the authorization become eligible; the minutes over it stay not billable. Billing still needs its own approval.
+Close the review: not billable
+Records that the review is finished and nothing more is billable for this visit. The visit and its times are not changed. It can be revoked later with a reason (for example, if a signature is obtained). You do not have to close it: you can ask for the signature instead (below).
+Reason (required, kept in the audit trail)
+Record decision
+Other actions
+Wrong times? Correct visit creates a corrected record and keeps the original; it is separate from review.
+Billing review is where billable minutes are approved.

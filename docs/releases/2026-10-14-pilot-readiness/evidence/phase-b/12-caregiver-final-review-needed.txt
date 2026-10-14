@@ -1,0 +1,27 @@
+Start
+Visit
+Confirm
+Saved for manager review
+No client confirmation was recorded. The visit is not counted as confirmed or billable.
+Client CL-A8DE7F155D · Respite
+12:35 PM–8:35 AM · 20 hr
+CLA8DE7F155D-RSP-141026-0835-EE
+Manager review
+Worked
+20 hr
+Confirmed
+0 min
+Billable
+0 min
+Authorization left
+22 hr
+Confirmed by
+Unable to confirm
+Billing
+Needs manager review
+Not billable until a manager reviews it.
+Confirmed by unable to confirm, without a signature or mark. A manager must review it; it is not billable until then.
+The caregiver cannot edit this record. A manager correction keeps the original time, the reason, and who made the change.
+Start next visit
+Server timestamps
+Audit protected

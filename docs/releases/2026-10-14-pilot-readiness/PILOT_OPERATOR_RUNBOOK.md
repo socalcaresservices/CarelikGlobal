@@ -17,17 +17,31 @@ Stop, change nothing, and report if: the account is not `300094796789`/`us-west-
 | O3 | Decision on the deployment tooling (Blocker B-03): no reviewed pilot script exists for 0047 to 0052. | Section 5 below is a manual procedure that mirrors `release-0036-*`; a script is safer. |
 
 ## 1. Read-only preflight (R) — nothing is changed
-Run in CloudShell with the admin profile. Record every output in `docs/releases/2026-10-13-wave1/evidence/` (no secrets, no tokens).
-```bash
-aws sts get-caller-identity --query Account --output text                       # expect 300094796789
-aws configure get region || echo $AWS_REGION                                      # expect us-west-2
-aws cloudformation describe-stacks --query "Stacks[?starts_with(StackName,'Ogevia-prod-')].[StackName,StackStatus,LastUpdatedTime]" --output table
-#   expect every Ogevia-prod-* stack CREATE_COMPLETE or UPDATE_COMPLETE. Record the time of the last update.
-aws lambda get-function-configuration --function-name <pilot handler name from the stack> \
-  --query '[FunctionName,LastModified,CodeSha256,Environment.Variables.DB_NAME,Environment.Variables.OGEVIA_ENV]' --output text
-#   expect DB_NAME=ogevia_sv_test and OGEVIA_ENV not prd. Record CodeSha256 and LastModified.
-aws apigatewayv2 get-routes --api-id s0epy5rgzb --query 'length(Items)'          # record. A pilot without Wave 1 has fewer routes than section 5 lists.
-```
+**One command does sections 1 to 8 of this list for you:** `bash infra/aws/slice/pilot-preflight-readonly.sh --probe-lambda` (in AWS CloudShell, in a checkout of the branch). It uses only `describe`, `list`, `get` and `head` AWS calls plus unauthenticated HTTP GETs, and, with `--probe-lambda`, read-only GET routes through the Lambda with the synthetic test identity. A test in the repository (`infra/aws/test/pilot-preflight.test.ts`) fails if the script ever gains a write. It writes a folder (mode 700) with `SUMMARY.txt`. It has **not** been run against AWS: the first run is the first proof; if it misbehaves, stop and send the output.
+
+**Command classification** (what the preflight includes and what it deliberately excludes):
+| Command | Class | In the preflight? |
+|---|---|---|
+| `aws sts get-caller-identity` | READ | yes |
+| `aws cloudformation describe-stacks`, `list-stack-resources`, `get-template` | READ (the template is saved locally as rollback input) | yes |
+| `aws lambda get-function-configuration` | READ | yes |
+| `aws apigatewayv2 get-routes` | READ | yes |
+| `aws s3api head-object`, `aws cloudfront get-distribution` | READ | yes |
+| `aws rds describe-db-instances`, `describe-db-snapshots` | READ | yes |
+| `aws ec2 describe-instances` | READ | yes |
+| `curl` GET of the API `/v1/me`, `/v1/visit-rules`, `/v1/open-shifts` (no credentials) and of the web `/` and `/config.json` | READ (network probe) | yes |
+| `pilot_preflight_probe.py` (GET routes through the Lambda, synthetic identity) | READ (invokes the Lambda; no GET route writes) | only with `--probe-lambda` |
+| `aws secretsmanager get-secret-value` (RDS master password) | **uses a secret** | **no**: needed only for the ledger read; separate approval (A2) |
+| `aws ssm start-session` (database tunnel) | opens access, changes nothing | **no**: part of the ledger read |
+| `psql ... select count(*), max(version) from ogevia_meta.schema_migrations` | READ (database) | **no**: separate approval (A2) |
+| `aws ec2 modify-instance-attribute` (the "DB window") | **WRITES** (security groups) | **no**: separate approval (A5) |
+| `aws rds create-db-snapshot` | **WRITES** | **no** (A4) |
+| `cdk deploy`, `db:migrate`, `aws s3 sync/cp`, `aws cloudfront create-invalidation`, `aws cloudformation update-stack` | **WRITES** | **no** (A6 to A8) |
+
+What the preflight answers: account and region; pilot stack states and outputs; the API Lambda's code hash, last-modified time and database name (and refuses if it is production); the routes live now versus the routes in the checkout (the exact deployment delta); web file versions; RDS state, encryption, privacy, backup retention and the latest snapshots; whether the admin host already holds the app security group (decides whether the ledger read needs a security-group change); anonymous health probes; and, with `--probe-lambda`, the migration generation (by which database functions exist) and seed 03. **It cannot print the exact ledger (count and max version) or the exact deployed commit**: artifacts carry no build stamp (B-14) and the ledger lives in the database.
+
+The manual commands below remain the reference for what the script does, and for the ledger read.
+
 **Which commit is deployed.** Artifacts carry no build stamp (Blocker B-14), so the deployed SHA is established from: the deploy log of the last release (`$RUN` evidence folder of the last `pilot-*`/`release-*` script, which prints the SHA), the migration ledger below, and the route and function fingerprint below. If none names a SHA, write "SHA NOT VERIFIED" and continue with the ledger.
 
 **Migration ledger (R)** — open the private tunnel exactly as in `docs/releases/caregiver-readiness/RELEASE_HANDOFF.md` section 4, but for the **pilot** database `ogevia_sv_test` (the pilot values, not `print-prd-config.ts`), then:
@@ -64,25 +78,14 @@ psql "$OGEVIA_DATABASE_URL" -Atc "select count(*) from ogevia.clients where clie
 Before any DEPLOY step:
 1. Previous **web bundle** is kept in S3 history (record its version id) and the previous **API template/code** is identifiable (stack template saved with `aws cloudformation get-template`). 
 2. A manual **RDS snapshot** of the pilot instance (`ogevia-prod-postgres`): record the identifier and wait for `available`. (`deploy-production.sh snapshot` is for production only; use `aws rds create-db-snapshot` for the pilot with an owner-approved name.) This is the only rollback anchor for data; restore goes to a **new** instance (separate approval).
-3. The rollback procedure of `docs/releases/2026-10-13-0047-0048-0049/DEPLOYMENT_PLAN.md` section 10 (0049, 0048, 0047) extends to the Wave 1 down scripts: **0052, 0051, 0050 first**. Down 0050 **refuses** once any rule version, rule evaluation, unscheduled reason or attestation version exists; after real use the way back is forward-fix or snapshot restore, not the down script. Say so to the owner before deploying.
+3. The database rollback is `rollback-0047-0052.sql` in this folder (0052, 0051, 0050, 0049, 0048, 0047, newest first; rehearsed locally). Details and limits: `PILOT_DEPLOYMENT_PROCEDURE.md` section 7. Down 0050 **refuses** once any rule version, rule evaluation, unscheduled reason or attestation version exists; after real use the way back is forward-fix or snapshot restore, not the down script. Say so to the owner before deploying.
 4. Accounts disabled while 0048 is live stay disabled after a rollback: re-enable them first.
 
 ## 3. Expected state after a successful deployment
 Ledger `52|0052`; `db:verify` all PASS (`latest_migration_is_0052`); the API stack has the Wave 1 routes (below); web bundle published last. Between the **database** step and the **API** step the old API still works for visits on a scheduled shift, but a start with **no** scheduled shift is refused (reason required) and creating an availability override fails (0047). Do the three steps in one sitting, database first.
 
-## 4. Deployment — DEPLOY (separate approval; only if the preflight shows it is needed)
-Blocked until O1 to O3. Mirrors the 0047 to 0049 plan, extended to 0052:
-```bash
-git fetch origin && git checkout <SHA>
-corepack pnpm@9.15.4 install --frozen-lockfile
-pnpm lint && pnpm typecheck && pnpm build
-OGEVIA_TEST_DATABASE_URL=<local throwaway database> pnpm test:all          # 0 skipped (local database, not the pilot)
-# database (tunnel to the PILOT database; ledger must read 46|0046 immediately before)
-OGEVIA_ALLOW_REMOTE_MIGRATION=approved-by-owner corepack pnpm@9.15.4 --filter @carelik/infra-aws db:migrate     # expect: applied 6, already applied 46
-corepack pnpm@9.15.4 --filter @carelik/infra-aws db:verify                                                    # every line PASS
-psql "$OGEVIA_DATABASE_URL" -Atc "select count(*), max(version) from ogevia_meta.schema_migrations"          # 52|0052
-```
-Then the API/identity/IAM deployment for the pilot stacks (`cdk diff -c env=prod`, read the diff, then deploy), then the web build for the pilot published last (keep `config.json`). **Expected `cdk diff` for `Ogevia-prod-ServiceVerificationApi` only:** the routes `GET /v1/accounts`, `POST /v1/accounts/{userId}/disable`, `POST /v1/accounts/{userId}/enable`, `GET /v1/visit-rules`, `POST /v1/visit-rules`, `GET /v1/open-shifts`, `POST /v1/shifts/{shiftId}/pickup` (all JWT), the IAM statement `SwitchSignInsOnOff` (`AdminDisableUser`, `AdminEnableUser` on the one pool), new code for the API and identity Lambdas, description changes. **STOP** on anything else (another stack, a security group, a secret, a deletion or replacement). Reference: `docs/releases/account-status/CLOUDFORMATION_TEMPLATE_DIFF.txt`.
+## 4. Deployment — DEPLOY (separate approval)
+The complete gated sequence, backups, approvals, failure conditions, rollback and the irreversible items are in **`PILOT_DEPLOYMENT_PROCEDURE.md`** (replaces the outline that was here). The database rollback script is `rollback-0047-0052.sql`.
 
 ## 5. Authentication and API boundary smoke (R) — SMK-06
 No sign-in is used; nothing is created. Run from any machine that can reach the pilot API (the pilot only, never the production API without permission):

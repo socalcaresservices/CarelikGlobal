@@ -1,0 +1,373 @@
+[
+ {
+  "persona": "Scheduler",
+  "id": "SCH-01",
+  "name": "adds a 30-minute shift for Blair; it reserves exactly 30 minutes",
+  "ok": true,
+  "detail": "scheduled|30"
+ },
+ {
+  "persona": "Scheduler",
+  "id": "SCH-02",
+  "name": "a 24-hour shift beyond the authorization left is refused with the hours stated",
+  "ok": true,
+  "detail": "Not enough authorized time remains this month for this shift: 19 hr 30 min available, this shift needs 24 hr"
+ },
+ {
+  "persona": "Scheduler",
+  "id": "USR-01",
+  "name": "client names are not shown to the Scheduler (codes only)",
+  "ok": true,
+  "detail": ""
+ },
+ {
+  "persona": "Scheduler",
+  "id": "NET",
+  "name": "no console error or unexpected 4xx/5xx",
+  "ok": true,
+  "detail": "http 409 POST /api/v1/shifts | console: Failed to load resource: the server responded with a status of 409 (Conflict)"
+ },
+ {
+  "persona": "Caregiver",
+  "id": "VIS-31",
+  "name": "an unclosed visit from yesterday is still open after sign-in (resume), with Time In shown",
+  "ok": true,
+  "detail": ""
+ },
+ {
+  "persona": "Caregiver",
+  "id": "VIS-20",
+  "name": "Submit is disabled until the attestation is ticked; nothing is saved",
+  "ok": true,
+  "detail": ""
+ },
+ {
+  "persona": "Caregiver",
+  "id": "VIS-22c",
+  "name": "no-confirmation visit: final screen says Needs manager review, Confirmed 0 min, Billable 0 min",
+  "ok": true,
+  "detail": "administrator_review|0|attest-v1|unable_to_confirm"
+ },
+ {
+  "persona": "Caregiver",
+  "id": "VIS-24c",
+  "name": "a client on today's schedule shows the shift time and asks for NO reason",
+  "ok": true,
+  "detail": ""
+ },
+ {
+  "persona": "Caregiver",
+  "id": "VIS-02",
+  "name": "active screen shows the server Time In and elapsed time",
+  "ok": true,
+  "detail": ""
+ },
+ {
+  "persona": "Caregiver",
+  "id": "VIS-24c",
+  "name": "the visit is linked to the scheduled shift by the server",
+  "ok": true,
+  "detail": "true"
+ },
+ {
+  "persona": "Caregiver",
+  "id": "VIS-31",
+  "name": "after a page refresh the same active visit is shown",
+  "ok": true,
+  "detail": ""
+ },
+ {
+  "persona": "Caregiver",
+  "id": "VIS-35",
+  "name": "Confirm is disabled until a signature is drawn and the attestation is ticked",
+  "ok": true,
+  "detail": ""
+ },
+ {
+  "persona": "Caregiver",
+  "id": "VIS-22a",
+  "name": "clean scheduled visit: signed, billable = worked, attestation attest-v1",
+  "ok": true,
+  "detail": "signed|25|25|attest-v1"
+ },
+ {
+  "persona": "Caregiver",
+  "id": "VIS-22a",
+  "name": "final screen shows worked, confirmed, billable and authorization left, and says it is ready for billing review",
+  "ok": true,
+  "detail": "Billing\nBilling ready"
+ },
+ {
+  "persona": "Caregiver",
+  "id": "NET",
+  "name": "no console error or unexpected 4xx/5xx",
+  "ok": true,
+  "detail": ""
+ },
+ {
+  "persona": "Authorization",
+  "id": "AUT-01",
+  "name": "after the signed visit the shift's reservation is released and the worked minutes are counted once",
+  "ok": true,
+  "detail": "before used|reserved 2490|480, after 2515|480, worked 25"
+ },
+ {
+  "persona": "Caregiver",
+  "id": "VIS-23",
+  "name": "a client not on today's schedule is labeled Unscheduled and a reason is required (Start is disabled while empty)",
+  "ok": true,
+  "detail": ""
+ },
+ {
+  "persona": "Caregiver",
+  "id": "VIS-23",
+  "name": "after the reason the visit starts and the active screen says Unscheduled visit",
+  "ok": true,
+  "detail": ""
+ },
+ {
+  "persona": "Caregiver",
+  "id": "VIS-24",
+  "name": "signed unscheduled visit: status administrator_review, billable minutes kept (12), reason stored",
+  "ok": true,
+  "detail": "administrator_review|12|Synthetic: manager phoned and asked me to cover"
+ },
+ {
+  "persona": "Caregiver",
+  "id": "VIS-22b",
+  "name": "final screen: Needs manager review, 'not on your schedule' sentence, Not billable until reviewed",
+  "ok": true,
+  "detail": ""
+ },
+ {
+  "persona": "Caregiver",
+  "id": "VIS-16",
+  "name": "Verbal only needs the confirming person's name (Confirm is disabled until a name is typed)",
+  "ok": true,
+  "detail": ""
+ },
+ {
+  "persona": "Caregiver",
+  "id": "VIS-16",
+  "name": "verbal-only: goes to review, 0 billable, no signature stored",
+  "ok": true,
+  "detail": "administrator_review|0|verbal"
+ },
+ {
+  "persona": "Caregiver",
+  "id": "SCH-21b",
+  "name": "the shift Alex called out of is NOT offered for pick-up ('You called out')",
+  "ok": true,
+  "detail": ""
+ },
+ {
+  "persona": "Caregiver",
+  "id": "SCH-18",
+  "name": "pick-up moves the shift to Alex: it leaves the open list and Alex now holds it",
+  "ok": true,
+  "detail": "open 2->1, Alex upcoming 2"
+ },
+ {
+  "persona": "Caregiver",
+  "id": "NET",
+  "name": "no console error or unexpected 4xx/5xx",
+  "ok": true,
+  "detail": ""
+ },
+ {
+  "persona": "Administrator",
+  "id": "VIS-24",
+  "name": "visit page shows Unscheduled, the caregiver's reason, the attestation version and why it needs review",
+  "ok": true,
+  "detail": ""
+ },
+ {
+  "persona": "Administrator",
+  "id": "VIS-24d",
+  "name": "billing review offers 'Review visit', NOT 'Approve', for the unscheduled visit",
+  "ok": true,
+  "detail": "Demo Okafor CL-DDF789BB49 Needs review Alex Caregiver Personal care (PCS) 10/14/2026 8:23 AM – 8:35 AM 12 min (0.20 hr) 12 min (0.20 hr) View signature Review v"
+ },
+ {
+  "persona": "Administrator",
+  "id": "VIS-24d",
+  "name": "no billing approval exists for it before a review decision",
+  "ok": true,
+  "detail": ""
+ },
+ {
+  "persona": "Administrator",
+  "id": "VIS-28",
+  "name": "a review decision is recorded with a reason and is active",
+  "ok": true,
+  "detail": "accept_capped_billable|active"
+ },
+ {
+  "persona": "Administrator",
+  "id": "VIS-28",
+  "name": "the decision is in the audit trail",
+  "ok": true,
+  "detail": "audit rows 1"
+ },
+ {
+  "persona": "Administrator",
+  "id": "VIS-50",
+  "name": "the default rule shows 15 minutes, labeled as not verified",
+  "ok": true,
+  "detail": ""
+ },
+ {
+  "persona": "Administrator",
+  "id": "VIS-51",
+  "name": "saving creates version 1 (20 minutes) and keeps version 0 listed",
+  "ok": true,
+  "detail": "1:20"
+ },
+ {
+  "persona": "Administrator",
+  "id": "NET",
+  "name": "no console error or unexpected 4xx/5xx",
+  "ok": true,
+  "detail": ""
+ },
+ {
+  "persona": "Authorization",
+  "id": "AUT-01",
+  "name": "client page balance equals the database: billable 41 hr 55 min, hours left 5 min",
+  "ok": true,
+  "detail": "used 2515 reserved 480 authorized 3000"
+ },
+ {
+  "persona": "Authorization",
+  "id": "AUT-01",
+  "name": "the signed visit's 25 minutes appear once (billable includes them; the shift is no longer reserved)",
+  "ok": true,
+  "detail": ""
+ },
+ {
+  "persona": "Authorization",
+  "id": "AUT-04",
+  "name": "an amendment adds version 2 (52 h) and keeps version 1 (50 h) unchanged in the history",
+  "ok": true,
+  "detail": "1:3000:false,2:3120:true"
+ },
+ {
+  "persona": "Authorization",
+  "id": "AUT-04",
+  "name": "hours left rise by exactly the 2 hours added (2 hr 5 min)",
+  "ok": true,
+  "detail": "2 hr 5 min"
+ },
+ {
+  "persona": "Authorization",
+  "id": "OBS-1",
+  "name": "caregiver final screen said \"Authorization left 8 hr 5 min\" (= authorized - billable, 8 hr 5 min); the office shows \"Hours left 5 min\" (also subtracts 8 hr of scheduled shifts). Known difference, proposal 01; billing is decided by the server either way",
+  "ok": true,
+  "detail": "caregiver 8 hr 5 min; office 5 min"
+ },
+ {
+  "persona": "Authorization",
+  "id": "BIL-01",
+  "name": "a human approves the clean visit: one approval row for exactly the worked minutes, not submitted anywhere",
+  "ok": true,
+  "detail": "1|25 dialogs: "
+ },
+ {
+  "persona": "Authorization",
+  "id": "VIS-24d",
+  "name": "after the Administrator's review decision, the unscheduled visit can be approved",
+  "ok": true,
+  "detail": ""
+ },
+ {
+  "persona": "Authorization",
+  "id": "VIS-24d",
+  "name": "approval of the reviewed unscheduled visit is limited to its capped billable minutes (12)",
+  "ok": true,
+  "detail": "12"
+ },
+ {
+  "persona": "Authorization",
+  "id": "VIS-55",
+  "name": "the Manager cannot change the variance rule (read-only page, 'only the Administrator')",
+  "ok": true,
+  "detail": ""
+ },
+ {
+  "persona": "Authorization",
+  "id": "ACC-01",
+  "name": "the Manager sees no dollar values on Home",
+  "ok": true,
+  "detail": ""
+ },
+ {
+  "persona": "Authorization",
+  "id": "NET",
+  "name": "no console error or unexpected 4xx/5xx",
+  "ok": true,
+  "detail": ""
+ },
+ {
+  "persona": "Caregiver",
+  "id": "USR-02",
+  "name": "Billing review: a caregiver sees no office data (/billing-review)",
+  "ok": true,
+  "detail": ""
+ },
+ {
+  "persona": "Caregiver",
+  "id": "USR-02",
+  "name": "Accounts: a caregiver sees no office data (/accounts)",
+  "ok": true,
+  "detail": ""
+ },
+ {
+  "persona": "Caregiver",
+  "id": "USR-02",
+  "name": "Visit rules: a caregiver sees no office data (/settings/visit-rules)",
+  "ok": true,
+  "detail": ""
+ },
+ {
+  "persona": "Caregiver",
+  "id": "USR-02",
+  "name": "Schedule: a caregiver sees no office data (/schedule)",
+  "ok": true,
+  "detail": ""
+ },
+ {
+  "persona": "Caregiver",
+  "id": "USR-02",
+  "name": "Clients: a caregiver sees no office data (/clients)",
+  "ok": true,
+  "detail": ""
+ },
+ {
+  "persona": "Caregiver",
+  "id": "VIS-40",
+  "name": "390 px: no horizontal page scroll on /service-verification (390 <= 390)",
+  "ok": true,
+  "detail": ""
+ },
+ {
+  "persona": "Caregiver",
+  "id": "VIS-40",
+  "name": "390 px: no horizontal page scroll on /my-shifts (390 <= 390)",
+  "ok": true,
+  "detail": ""
+ },
+ {
+  "persona": "Caregiver",
+  "id": "VIS-37",
+  "name": "caregiver screens show client codes only: no client names or payer identifiers on the Verify visit screen",
+  "ok": true,
+  "detail": ""
+ },
+ {
+  "persona": "Caregiver",
+  "id": "NET",
+  "name": "no unexpected 4xx/5xx beyond the refused office reads",
+  "ok": true,
+  "detail": ""
+ }
+]

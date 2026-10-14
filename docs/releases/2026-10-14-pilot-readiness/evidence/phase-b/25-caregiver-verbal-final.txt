@@ -1,0 +1,28 @@
+Start
+Visit
+Confirm
+Saved for manager review
+The visit and its times are saved. A manager will review it before it can be billed.
+Client CL-A8DE7F155D · Respite
+8:26 AM–8:36 AM · 10 min
+CLA8DE7F155D-RSP-141026-0836-EC
+Manager review
+Worked
+10 min
+Confirmed
+0 min
+Billable
+0 min
+Authorization left
+22 hr
+Confirmed by
+Verbal confirmation
+Billing
+Needs manager review
+Not billable until a manager reviews it.
+Confirmed by verbal confirmation, without a signature or mark. A manager must review it; it is not billable until then.
+This visit was not on your schedule. Your manager will review it before it can be billed.
+The caregiver cannot edit this record. A manager correction keeps the original time, the reason, and who made the change.
+Start next visit
+Server timestamps
+Audit protected
