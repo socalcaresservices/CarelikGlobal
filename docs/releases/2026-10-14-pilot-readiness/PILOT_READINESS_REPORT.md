@@ -82,3 +82,5 @@ PR #90's rule (`docs/TESTING_AND_RELEASE_PROCESS.md` section 9) is in force: unt
 | 1 | Netlify screens (section 6) | app.netlify.com project `carelikglobal` | No (do not capture other variables) | I record them and close B-06, B-07 |
 | 2 | Authorize and run the **read-only** AWS preflight (runbook sections 1 and 5; nothing changes) or name the Operator | AWS CloudShell | No secrets are printed | I record the results; B-01, B-02, B-05, B-09 close or become STOP items |
 | 3 | Decisions: (a) release SHA and `OGEVIA_DEPLOY_APPROVAL` reference; (b) approve writing a reviewed pilot deployment script (B-03); (c) B-08 automatic publishing; (d) B-12 whether VIS-26/54/57 block the pilot (I recommend no); (e) B-13 who sets the agency's variance value; (f) B-17 what `app.ogevia.com` serves | A message to me | No | Deployment is only proposed after 1 and 2 are done |
+
+Merge and deployment status is tracked in GitHub PRs and the deployment dashboard, not in this file.

@@ -74,3 +74,5 @@ Verified with `git diff --name-only origin/main HEAD` on the branch before it wa
 - Secret scan of every added non-image line: no AWS key patterns, private-key blocks, JWTs, GitHub or Slack tokens, password assignments, or e-mail addresses. All walkthrough data is synthetic. No bytecode (`.pyc`) is added.
 - Test results: the full verification (lint, typecheck, build, `test:all`, harness smoke, `smoke.py` x2, `pilot_smoke`, pilot regression, probe rehearsal) ran on **3f057a3**. Later commits change **only files under `docs/releases/2026-10-14-pilot-readiness/`**, shown by `git diff --name-only 3f057a3 HEAD` listing no other path. That is equivalence by file scope; the results are not re-run on the documentation-only head.
 - Final branch head, as pushed and merged: `75cb761` (merge commit `12b5d4b`). Test results apply to 3f057a3 as stated above; CI on `main` was green for `12b5d4b` and `9d710eb`.
+
+Merge and deployment status is tracked in GitHub PRs and the deployment dashboard, not in this file.
