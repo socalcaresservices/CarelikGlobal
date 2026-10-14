@@ -51,3 +51,57 @@ describe("pilot_preflight_probe.py", () => {
     expect(probeCode).not.toMatch(/print\([^)]*organizationId|print\([^)]*\bsub\b/);
   });
 });
+
+// Behaviour test for the Lambda discovery that crashed in the first live preflight (IndexError on fns[0]).
+import { execFileSync } from "node:child_process";
+import { fileURLToPath } from "node:url";
+
+const slice = fileURLToPath(new URL("../slice/", import.meta.url));
+const discover = (resources: unknown[]): { fn?: string; error?: string; verb?: string } =>
+  JSON.parse(
+    execFileSync(
+      "python3",
+      [
+        "-B",
+        "-c",
+        `import json,sys
+sys.path.insert(0, ${JSON.stringify(slice)})
+import smoke
+calls = []
+def fake(*a):
+    calls.append(a[1])
+    return {"StackResourceSummaries": json.loads(sys.argv[1])}
+smoke.aws = fake
+try:
+    print(json.dumps({"fn": smoke.find_api_function(), "verb": calls[0]}))
+except RuntimeError as e:
+    print(json.dumps({"error": str(e), "verb": calls[0]}))
+`,
+        JSON.stringify(resources),
+      ],
+      { encoding: "utf8" },
+    ),
+  );
+const lambda = (logical: string, physical: string) => ({ LogicalResourceId: logical, PhysicalResourceId: physical, ResourceType: "AWS::Lambda::Function" });
+
+describe("smoke.find_api_function (preflight Lambda discovery)", () => {
+  it("picks the Handler Lambda, not the first Lambda, and reads with list-stack-resources", () => {
+    const r = discover([
+      { LogicalResourceId: "Api", PhysicalResourceId: "x", ResourceType: "AWS::ApiGatewayV2::Api" },
+      lambda("CustomLogRetention1", "helper-fn"),
+      lambda("IdentityHandler", "identity-fn"),
+      lambda("Handler886CB40B", "api-handler-fn"),
+    ]);
+    expect(r.fn).toBe("api-handler-fn");
+    expect(r.verb).toBe("list-stack-resources");
+  });
+  it("stops with a message that says what was found when there is no Lambda (was: IndexError)", () => {
+    const r = discover([{ LogicalResourceId: "Api", PhysicalResourceId: "x", ResourceType: "AWS::ApiGatewayV2::Api" }]);
+    expect(r.fn).toBeUndefined();
+    expect(r.error).toMatch(/cannot identify the API handler Lambda in stack Ogevia-prod-ServiceVerificationApi: 1 resources listed, 0 Lambda functions/);
+  });
+  it("stops when the handler is ambiguous or missing though other Lambdas exist", () => {
+    expect(discover([lambda("IdentityHandler", "i")]).error).toMatch(/1 Lambda functions \(IdentityHandler\), 0 match/);
+    expect(discover([lambda("HandlerA", "a"), lambda("HandlerB", "b")]).error).toMatch(/2 match/);
+  });
+});
