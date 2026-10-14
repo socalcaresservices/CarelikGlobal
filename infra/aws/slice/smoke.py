@@ -31,6 +31,7 @@ import urllib.parse
 import urllib.request
 import uuid
 import zlib
+import zoneinfo
 
 REGION = "us-west-2"
 ACCOUNT = "300094796789"
@@ -41,7 +42,17 @@ RDS_ID = "ogevia-prod-postgres"
 EVIDENCE_BUCKET = "ogevia-prod-signature-evidence-%s-%s" % (ACCOUNT, REGION)
 EXISTING_CLIENT = "1i27abbina08fvg1i9u8vprgo9"
 TEST_ORG_SLUG = "ogevia-test-slice"
-EXPECTED_ROUTES = 38
+
+
+def expected_route_count():
+    """Number of routes the API under test must expose = the handler's route table in THIS checkout (the slice-contract
+    test keeps the CDK route list equal to it). A fixed number went stale as routes were added (38 -> 169)."""
+    path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "..", "apps", "sv-api", "src", "routes.ts")
+    with open(path, encoding="utf-8") as f:
+        return len(re.findall(r'^  "(?:GET|POST|PUT|PATCH|DELETE) /[^"]*": \{', f.read(), re.M))
+
+
+EXPECTED_ROUTES = expected_route_count()
 # Must equal infra/aws/lib/public-routes.ts (checked by a unit test).
 APPROVED_PUBLIC_ROUTE_KEYS = sorted([
     "GET /v1/public/care-portals/{token}",
@@ -371,6 +382,100 @@ def workflow(args, inv, cg, mg):
 
 
 # ---------------------------------------------------------------- care requests
+def scheduled_workflow(args, inv, cg, mg):
+    """A correctly scheduled visit end to end: the clean path that Billing Ready is for (SMK-07).
+
+    Complements `workflow`, whose seeded caregiver has no shift (those visits are unscheduled and go to review).
+    Creates ONE short synthetic shift for TEST-CG-01 on TEST-C01 (the smallest the system allows, 15 minutes), starts
+    the visit on it, ends it after a few minutes, and confirms it with a drawn signature. Expected: signed, billable
+    equal to worked, no review reason, the shift's reservation becomes used time once, authorization left unchanged.
+    """
+    A = "scheduled"
+    s, me = inv.call("GET /v1/me", cg)
+    orgs = [m for m in (me or {}).get("memberships", []) if m.get("organizationSlug") == TEST_ORG_SLUG]
+    if not check(A, "caregiver seeded in the test agency", s == 200 and len(orgs) == 1, "status %s" % s):
+        return
+    org = orgs[0]["organizationId"]
+    tz = zoneinfo.ZoneInfo(orgs[0].get("organizationTimezone") or "America/Los_Angeles")
+    s, cl = inv.call("GET /v1/clients/assigned", cg, query={"organizationId": org})
+    c1 = next((c["clientId"] for c in (cl or {}).get("clients", []) if c["clientCode"] == "TEST-C01"), None)
+    s, sv = inv.call("GET /v1/clients/{clientId}/services", cg, path={"clientId": c1}, query={"organizationId": org}) if c1 else (0, None)
+    svc = (sv or {}).get("services", [])
+    if not check(A, "TEST-C01 and its authorized service are assigned to the caregiver", c1 and svc):
+        return
+    service = svc[0]["serviceId"]
+    s, cgs = inv.call("GET /v1/caregivers", mg, query={"organizationId": org})
+    rec = next((c["caregiverRecordId"] for c in (cgs or {}).get("caregivers", []) if c.get("caregiverCode") == "TEST-CG-01"), None)
+    if not check(A, "manager finds the TEST-CG-01 Care Team record", rec, "status %s" % s):
+        return
+
+    month_start = datetime.date.today().replace(day=1)
+
+    def position():
+        _, ms = inv.call("GET /v1/reports/monthly-service-summary", mg, query={"organizationId": org, "clientId": c1, "monthStart": str(month_start)})
+        return next((r for r in (ms or {}).get("services", []) if r["clientId"] == c1 and r["serviceId"] == service), {})
+
+    # Close anything left open by an interrupted earlier run (same idea as `workflow`).
+    s, act = inv.call("GET /v1/visits/active", cg, query={"organizationId": org})
+    if s == 200 and act.get("visit"):
+        check(A, "a visit left open by an earlier run is present", False, "finish or confirm it, then run again")
+        return
+
+    before = position()
+    local_now = datetime.datetime.now(tz)
+    # A shift from an earlier run keeps its time slot, so a second run within the hour tries later start times. Starts up to
+    # 60 minutes ahead still match at Time In (early-arrival window).
+    for offset in (1, 20, 40):
+        start = local_now + datetime.timedelta(minutes=offset)
+        end = start + datetime.timedelta(minutes=15)
+        s, sh = inv.call("POST /v1/shifts", mg, body={"organizationId": org, "clientId": c1, "serviceId": service, "date": start.date().isoformat(),
+                                                      "startTime": start.strftime("%H:%M"), "endTime": end.strftime("%H:%M"), "caregiverRecordId": rec})
+        if s != 409:
+            break
+    shift = (sh or {}).get("shift", {})
+    if not check(A, "manager schedules a 15-minute shift for the caregiver (reserves authorized time)",
+                 s == 201 and shift.get("shiftId") and shift.get("reservedMinutes") == 15, "status %s %s" % (s, json.dumps(sh)[:160])):
+        return
+    mid = position()
+    check(A, "the reservation shows in the monthly summary (reserved +15)",
+          mid.get("reservedMinutes", 0) - before.get("reservedMinutes", 0) == 15, "%s -> %s" % (before.get("reservedMinutes"), mid.get("reservedMinutes")))
+
+    k = str(uuid.uuid4())
+    s, st = inv.call("POST /v1/visits", cg, body={"organizationId": org, "clientId": c1, "serviceId": service}, key=k)
+    visit = (st or {}).get("visitId")
+    check(A, "start on the scheduled shift needs no reason (201)", s == 201 and visit, "status %s %s" % (s, json.dumps(st)[:120]))
+    if not visit:
+        return
+    wait_minutes(args, visit, 3)
+    s, en = inv.call("POST /v1/visits/{visitId}/end", cg, path={"visitId": visit})
+    worked = (en or {}).get("visit", {}).get("workedMinutes", 0)
+    check(A, "end visit (server time; worked 3 minutes or more)", s == 200 and worked >= 3, "status %s worked %s" % (s, worked))
+    body = {"organizationId": org, "signerRole": "parent", "method": "draw", "signaturePng": base64.b64encode(png(seed=int(time.time()) % 200)).decode(), "attested": True}
+    s, cf = inv.call("POST /v1/visits/{visitId}/confirm", cg, path={"visitId": visit}, body=body, key=str(uuid.uuid4()))
+    res = (cf or {}).get("result") or {}
+    out = res.get("outcome") or {}
+    check(A, "client signature -> signed (Billing Ready), billable equals worked, no review reason",
+          s == 200 and res.get("status") == "signed" and res.get("billableMinutes") == res.get("workedMinutes") == worked and out.get("reviewReasons") == [],
+          "status %s %s" % (s, json.dumps({"status": res.get("status"), "billable": res.get("billableMinutes"), "worked": res.get("workedMinutes"), "reasons": out.get("reviewReasons")})))
+    check(A, "attestation recorded by the server (attest-v1); no unscheduled reason", out.get("attestationVersion") == "attest-v1" and out.get("unscheduledReason") is None)
+    after = position()
+    check(A, "reservation released and the worked minutes used once (reserved back, billable +worked)",
+          after.get("reservedMinutes", 0) == before.get("reservedMinutes", 0)
+          and after.get("billableMinutes", 0) - before.get("billableMinutes", 0) == worked,
+          "before %s after %s" % ({k2: before.get(k2) for k2 in ("billableMinutes", "reservedMinutes")}, {k2: after.get(k2) for k2 in ("billableMinutes", "reservedMinutes")}))
+    check(A, "authorization left reduced by exactly the worked minutes (not by the shift as well)",
+          before.get("remainingMinutes", 0) - after.get("remainingMinutes", 0) == worked,
+          "before %s after %s" % (before.get("remainingMinutes"), after.get("remainingMinutes")))
+    s, lst = inv.call("GET /v1/visits", mg, query={"organizationId": org})
+    row = next((v for v in (lst or {}).get("visits", []) if v["id"] == visit), {})
+    check(A, "manager list shows the visit signed", row.get("status") == "signed", str(row.get("status")))
+    s, br = inv.call("GET /v1/billing-review", mg, query={"organizationId": org, "dateFrom": str(month_start), "dateTo": str(datetime.date.today() + datetime.timedelta(days=1))})
+    brow = next((v for v in (br or {}).get("visits", []) if (v.get("visitId") or v.get("id")) == visit), {})
+    check(A, "billing review lists it as ready", s == 200 and brow.get("reviewState") == "ready", "status %s state %s" % (s, brow.get("reviewState")))
+    s2, again = inv.call("POST /v1/visits/{visitId}/confirm", cg, path={"visitId": visit}, body=body, key=str(uuid.uuid4()))
+    check(A, "a second confirmation with a new key is refused (409); the visit stays locked", s2 == 409, "status %s" % s2)
+
+
 def care_workflow(args, inv, cg, mg):
     """Client link -> availability -> offer -> Available (no auto-assign) -> agency
     assignment (one reservation) -> caregiver call-out (same shift, Coverage Needed)
@@ -661,6 +766,7 @@ def main():
     groups = infra(args, out) if args.mode == "aws" else []
     inv = Invoker(args, client_id)
     sens = guarded("workflow", "service verification workflow", lambda: workflow(args, inv, args.caregiver_sub, args.manager_sub))
+    guarded("scheduled", "scheduled clean-signed visit", lambda: scheduled_workflow(args, inv, args.caregiver_sub, args.manager_sub))
     care_tokens = guarded("care", "care request workflow", lambda: care_workflow(args, inv, args.caregiver_sub, args.manager_sub)) or []
     if isinstance(sens, dict):
         sens["sensitive"] = sens.get("sensitive", []) + [t for t in care_tokens if t]

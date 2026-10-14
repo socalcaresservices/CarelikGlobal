@@ -1,0 +1,27 @@
+Start
+Visit
+Confirm
+Saved for manager review
+The visit and its times are saved. A manager will review it before it can be billed.
+Client CL-DDF789BB49 · Personal care
+8:23 AM–8:35 AM · 12 min
+CLDDF789BB49-PCS-141026-0835-83
+Manager review
+Worked
+12 min
+Confirmed
+12 min
+Billable
+12 min
+Authorization left
+31 hr 48 min
+Confirmed by
+Drawn signature
+Billing
+Needs manager review
+Not billable until a manager reviews it.
+This visit was not on your schedule. Your manager will review it before it can be billed.
+The caregiver cannot edit this record. A manager correction keeps the original time, the reason, and who made the change.
+Start next visit
+Server timestamps
+Audit protected

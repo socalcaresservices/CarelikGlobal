@@ -1,0 +1,26 @@
+Start
+Visit
+Confirm
+Visit saved
+Included in the weekly report and monthly hours calendar.
+Client CL-E05173B0CC · Respite
+8:10 AM–8:35 AM · 25 min
+CLE05173B0CC-RSP-141026-0835-45
+Confirmed
+Worked
+25 min
+Confirmed
+25 min
+Billable
+25 min
+Authorization left
+8 hr 5 min
+Confirmed by
+Drawn signature
+Billing
+Billing ready
+Billing ready does not mean billed. The agency reviews and approves billing separately.
+The caregiver cannot edit this record. A manager correction keeps the original time, the reason, and who made the change.
+Start next visit
+Server timestamps
+Audit protected
