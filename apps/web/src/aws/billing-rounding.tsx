@@ -7,6 +7,8 @@ import { useOrganization } from "@/providers/organization-provider";
 import { useAwsApi } from "./aws-workspace";
 import { useServices } from "./client-admin";
 import { formatDateOnly, formatDateTime } from "@/lib/service-verification";
+import { ShortHelp } from "./help-text";
+
 
 /**
  * Billing rounding (0029). Default: no rounding. The Administrator records a
@@ -90,10 +92,7 @@ export function RoundingSection({ from, to, refreshKey }: { from: string; to: st
         <h2 id="rounding-heading" className="text-base font-semibold text-slate-950">Billing rounding</h2>
         {hasPermission("billing.rounding.manage") ? <Link to="/settings/billing-rounding" className="text-sm underline">Rounding policies</Link> : null}
       </div>
-      <p className="text-sm text-slate-600">
-        Actual times and worked minutes are never changed. A rounding adjustment is a separate line, computed from the approved visit minutes
-        under the payer's policy in effect that day, and billed only when approved here.
-      </p>
+      <ShortHelp className="text-sm text-slate-600" details="It is computed from the approved visit minutes under the payer's policy in effect that day.">Actual times and worked minutes never change. A rounding adjustment is a separate line, billed only when approved here.</ShortHelp>
       {preview.isLoading ? <p className="text-sm text-slate-500">Loading…</p> : null}
       {preview.isError ? <p role="alert" className="text-sm text-red-700">{message(preview.error, "Rounding could not be loaded.")}</p> : null}
       {note ? <p role={note.ok ? "status" : "alert"} className={`text-sm ${note.ok ? "text-emerald-800" : "text-red-700"}`}>{note.text}</p> : null}
@@ -174,10 +173,7 @@ export function BillingRoundingSettingsPage() {
   return (
     <div className="space-y-4">
       <h1 className="text-xl font-semibold">Billing rounding policies</h1>
-      <p className="text-sm text-slate-700">
-        Default: no rounding. Set rounding only as the payer's own rules allow: your choice configures Ogevia; it does not change what the payer accepts.
-        Rounding never changes clock times, worked minutes or payroll, and never exceeds authorized minutes.
-      </p>
+      <ShortHelp className="text-sm text-slate-700" details="Set rounding only as the payer's own rules allow: your choice configures Ogevia; it does not change what the payer accepts. Rounding never exceeds authorized minutes.">No rounding unless you add a rule. Clock times, worked minutes and payroll never change.</ShortHelp>
       {canManage ? (
         <Card className="p-4">
           <h2 className="mb-2 text-base font-semibold">New policy version</h2>

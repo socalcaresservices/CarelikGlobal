@@ -327,6 +327,65 @@ describe("Service checks and readiness on the Care Team page", () => {
   });
 });
 
+describe("Readiness table: issue, affected count, status, next action", () => {
+  const rowOf = (issue: RegExp) => within(screen.getByRole("table", { name: /Readiness by issue/ })).getByRole("row", { name: issue });
+
+  it("report-only: every issue says how many are affected, that it is Report only (not blocking), and the next step", async () => {
+    renderAt("/care-team", { role: "manager" });
+    await screen.findByRole("table", { name: /Readiness by issue/ });
+    expect(screen.getAllByRole("columnheader").map((h) => h.textContent)).toEqual(expect.arrayContaining(["Issue", "Affected", "Status", "Next action"]));
+    const docs = rowOf(/CPR or TB missing or expired/);
+    expect(within(docs).getByText("3 of 4 caregivers")).toBeInTheDocument();
+    expect(within(docs).getByText("Report only")).toBeInTheDocument();
+    expect(within(docs).getByRole("link", { name: "Review documents" })).toHaveAttribute("href", "/documents");
+    expect(within(rowOf(/Availability not provided/)).getByText("2 caregivers")).toBeInTheDocument();
+    expect(within(rowOf(/Service approvals to review/)).getByText("5 caregiver and service pairs")).toBeInTheDocument();
+    expect(within(rowOf(/Service approvals to review/)).getByText("Off")).toBeInTheDocument();
+    const shifts = rowOf(/Booked shifts/);
+    expect(within(shifts).getByText("3 of 6 future shifts")).toBeInTheDocument();
+    expect(within(shifts).getByText("Would block if activated")).toBeInTheDocument();
+    expect(within(shifts).getByRole("link", { name: "Open schedule" })).toHaveAttribute("href", "/schedule");
+  });
+
+  it("an inactive check is never described as blocking: no Active status and no blocked wording while report-only", async () => {
+    renderAt("/care-team", { role: "manager" });
+    const table = await screen.findByRole("table", { name: /Readiness by issue/ });
+    expect(within(table).queryByText("Active")).toBeNull();
+    expect(within(table).queryByText(/blocked|cannot be (newly )?assigned/i)).toBeNull();
+    expect(screen.getByText("Nothing is blocked yet. Caregivers can still be assigned and can still start visits.")).toBeInTheDocument();
+  });
+
+  it("setup incomplete is separate from missing documents and is named in its own row", async () => {
+    renderAt("/care-team", { role: "manager" });
+    await screen.findByRole("table", { name: /Readiness by issue/ });
+    const setup = rowOf(/Document setup/);
+    expect(within(setup).getByText("Setup incomplete")).toBeInTheDocument();
+    expect(within(setup).getByText("2 rules")).toBeInTheDocument();
+    expect(within(setup).getByText("Ask an administrator")).toBeInTheDocument(); // a manager cannot set it up
+  });
+
+  it("active: the same rows say Active / Needs attention and the banner says the checks are active", async () => {
+    renderAt("/care-team", { role: "organization_owner", readiness: { enforcementActive: true, setupComplete: true, setupGaps: [] } });
+    const table = await screen.findByRole("table", { name: /Readiness by issue/ });
+    expect(screen.getByText("Readiness checks are active")).toBeInTheDocument();
+    expect(within(rowOf(/CPR or TB missing or expired/)).getByText("Active")).toBeInTheDocument();
+    expect(within(rowOf(/Booked shifts/)).getByText("Needs attention")).toBeInTheDocument();
+    expect(within(table).queryByText("Report only")).toBeNull();
+    expect(within(rowOf(/Document setup/)).getByText("Set")).toBeInTheDocument();
+    expect(screen.queryByText(/Nothing is blocked yet/)).toBeNull();
+  });
+
+  it("long explanations are behind Details, and the plain status words stay visible", async () => {
+    renderAt("/care-team", { role: "manager" });
+    await screen.findByRole("table", { name: /Readiness by issue/ });
+    const docs = rowOf(/CPR or TB missing or expired/);
+    const details = docs.querySelector("details");
+    expect(details).not.toBeNull();
+    expect(details!.open).toBe(false);
+    expect(within(details as HTMLElement).getByText(/Current verified CPR and TB are not being required yet\./)).toBeInTheDocument();
+  });
+});
+
 describe("Assignment checks on the schedule", () => {
   async function chooseAll() {
     fireEvent.click(await screen.findByRole("button", { name: /Add shift|Schedule a shift|New shift/ }));
@@ -381,7 +440,7 @@ describe("Assignment checks on the schedule", () => {
     await chooseAll();
     fireEvent.click(await screen.findByRole("button", { name: "Override availability…" }));
     const form = await screen.findByRole("group", { name: "Override availability" });
-    expect(within(form).getByText(/lifts only the availability check/)).toBeInTheDocument();
+    expect(within(form).getByText(/One-time override of the availability check/)).toBeInTheDocument();
     expect(within(form).getByText(/this one shift/)).toBeInTheDocument();
     expect(within(form).getByText(/does not change the caregiver's recorded availability/)).toBeInTheDocument();
     const go = within(form).getByRole("button", { name: "Override availability" });

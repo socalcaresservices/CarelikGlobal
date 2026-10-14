@@ -4,6 +4,8 @@ import { Button } from "@carelik/ui";
 import { useOrganization } from "@/providers/organization-provider";
 import { useAwsApi } from "../aws-workspace";
 import { ELIGIBILITY_LABEL, actionError, scoreLabel } from "./format";
+import { ShortHelp } from "../help-text";
+
 
 export interface Candidate {
   caregiverRecordId: string;
@@ -87,7 +89,7 @@ export function MatchingPanel({ requestId, onOffer, offering }: { requestId: str
                 <ul className="text-xs text-slate-700">{c.blockedChecks.map((b) => <li key={b.check}>{b.message}{c.coverage.total > 1 ? ` (${b.occurrences} of ${c.coverage.total} dates)` : ""}</li>)}</ul>
                 {c.blockedChecks.length > 0 && c.blockedChecks.every((b) => b.check === "availability") ? (
                   <div className="mt-1 space-y-1">
-                    <p className="text-xs text-slate-600">Excluded from Matches, but an administrator may still offer this work. At assignment the hours must be approved or covered by a recorded availability override; documents, bookings and client requirements are still checked.</p>
+                    <ShortHelp className="text-xs text-slate-600" details="At assignment the hours must be approved or covered by a recorded availability override; documents, bookings and client requirements are still checked.">Excluded from Matches, but an administrator may still offer this work.</ShortHelp>
                     <Button type="button" variant="secondary" disabled={offering} onClick={() => onOffer(c.caregiverRecordId)}>Offer manually</Button>
                   </div>
                 ) : <p className="mt-1 text-xs text-slate-600">Cannot be offered this work until the item above is resolved.</p>}

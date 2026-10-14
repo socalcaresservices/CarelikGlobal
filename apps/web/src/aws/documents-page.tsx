@@ -7,6 +7,8 @@ import { useAwsApi } from "./aws-workspace";
 import { prepareDocumentFile } from "./document-file";
 import { CURRENCY_STATUS, DOCUMENT_STATUS, documentDateLine, parseReminderDays, REVIEW_STATE, type DocumentType, type Person, type StaffDocument } from "./document-status";
 import { formatDateTime } from "@/lib/service-verification";
+import { ShortHelp } from "./help-text";
+
 
 const message = (cause: unknown, fallback: string) => (cause instanceof Error ? cause.message : fallback);
 
@@ -262,10 +264,7 @@ function ReminderDaysForm({ types, onDone }: { types: DocumentType[]; onDone: ()
   return (
     <div className="space-y-2 border-t border-slate-100 pt-3">
       <h3 className="text-sm font-semibold text-slate-900">Reminder days before expiry</h3>
-      <p className="text-xs text-slate-500">
-        A verified document shows as Expiring once it is within the largest number of days. Ogevia does not send email or text
-        reminders; these days decide what the screens and Action needed show.
-      </p>
+      <ShortHelp className="text-xs text-slate-500" details="A verified document shows as Expiring once it is within the largest number of days.">These days decide when a document shows as Expiring and what Action needed shows. Ogevia does not send email or text reminders.</ShortHelp>
       {expiring.length > 0 ? (
         <ul className="space-y-1 text-xs text-slate-700">
           {expiring.map((t) => (

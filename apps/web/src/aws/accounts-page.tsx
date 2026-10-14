@@ -5,6 +5,8 @@ import { Link } from "react-router-dom";
 import { useOrganization } from "@/providers/organization-provider";
 import { useAwsApi } from "./aws-workspace";
 import { ACCOUNT_STATUS_BADGE, ACCOUNT_STATUS_HELP, ACCOUNT_STATUS_LABEL, isAccountStatus, roleLabel } from "./account-status";
+import { ShortHelp } from "./help-text";
+
 
 interface Account {
   userId: string | null;
@@ -48,7 +50,7 @@ export function AccountsPage() {
     <div className="mx-auto max-w-3xl space-y-4 px-4 py-4">
       <div>
         <h1 className="text-xl font-semibold text-slate-950">Accounts</h1>
-        <p className="mt-1 text-sm text-slate-700">See who can sign in. Disabling stops a person from signing in; their records, shifts and visit history are kept, and you can enable them again. Passwords are never shown here.</p>
+        <ShortHelp className="mt-1 text-sm text-slate-700" details="You can enable a person again. Passwords are never shown here.">See who can sign in. Disabling stops sign-in; records, shifts and visit history are kept.</ShortHelp>
       </div>
       {done ? <p role="status" className="rounded-lg bg-emerald-50 p-3 text-sm text-emerald-900">{done}</p> : null}
       {accounts.isLoading ? <p className="text-sm text-slate-500" role="status">Loading…</p> : null}

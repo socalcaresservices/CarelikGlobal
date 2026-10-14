@@ -17,6 +17,8 @@ const inputClass = "mt-1 block w-full rounded-lg border border-slate-200 px-3 py
 const message = (cause: unknown, fallback: string) => (cause instanceof Error ? cause.message : fallback);
 import { caregiverName, useCaregivers } from "./care-team-admin";
 import { clientName, useClients, useServices } from "./client-admin";
+import { ShortHelp } from "./help-text";
+
 
 function PreviewTable({ rows }: { rows: Occurrence[] }) {
   const months = useMemo(() => summarizeOccurrences(rows), [rows]);
@@ -172,10 +174,7 @@ export function RecurringSeriesForm({ today, series, onDone }: { today: string; 
           <input id={`${id}-reason`} value={reason} maxLength={500} onChange={(e) => { setReason(e.target.value); key.current = newIdempotencyKey(); }} className={inputClass} />
         </div>
       ) : null}
-      <p className="text-xs text-slate-600 sm:col-span-2">
-        Agency local time. Shifts are created through the end of the second month (add later months from the series list).
-        Each month is checked against that month's authorized hours, counting time already used and reserved.
-      </p>
+      <ShortHelp className="text-xs text-slate-600 sm:col-span-2" details="Each month is checked against that month's authorized hours, counting time already used and reserved.">Agency local time. Shifts are created through the end of the second month; add later months from the series list.</ShortHelp>
       {state.error ? <p role="alert" className="text-sm text-red-700 sm:col-span-2">{state.error}</p> : null}
       <div className="sm:col-span-2"><Button type="submit" variant="secondary" disabled={state.busy}>Preview dates and hours</Button></div>
       {preview ? (

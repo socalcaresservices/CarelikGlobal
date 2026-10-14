@@ -5,6 +5,8 @@ import { newIdempotencyKey } from "@/lib/sv-backend";
 import { useOrganization } from "@/providers/organization-provider";
 import { useAwsApi } from "../aws-workspace";
 import { CHECK_GROUPS, actionError, groupOutcome, type CheckRow } from "./format";
+import { ShortHelp } from "../help-text";
+
 
 export interface AssignmentCheckInput {
   caregiverRecordId: string;
@@ -86,7 +88,7 @@ export function AssignmentChecks({ input, onReady }: { input: AssignmentCheckInp
             <label className="block text-sm font-medium text-slate-800">Reason for the override
               <textarea value={reason} onChange={(e) => { setReason(e.target.value); key.current = newIdempotencyKey(); }} rows={2} maxLength={500} className="mt-1 block w-full rounded-md border border-slate-300 px-3 py-2 text-base" />
             </label>
-            <p className="text-xs text-slate-600">This lifts only the availability check, for this caregiver, this client and this one shift. It can be used once, within 30 minutes. It does not change the caregiver's recorded availability, service approval, documents or bookings. To change their ongoing availability, use Edit Availability.</p>
+            <ShortHelp className="text-xs text-slate-600" details="It does not change the caregiver's recorded availability, service approval, documents or bookings. To change their ongoing availability, use Edit Availability.">One-time override of the availability check for this caregiver, this client and this one shift. It can be used once, within 30 minutes.</ShortHelp>
             {override.isError ? <p role="alert" className="text-sm text-red-700">{actionError(override.error, "The override could not be saved.")}</p> : null}
             <Button type="button" variant="secondary" disabled={override.isPending || reason.trim().length < 3} onClick={() => override.mutate()}>{override.isPending ? "Saving…" : "Override availability"}</Button>
           </div>

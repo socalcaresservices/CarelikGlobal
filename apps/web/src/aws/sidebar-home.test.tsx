@@ -322,9 +322,10 @@ describe("Home layout", () => {
 describe("Clearer actions and records (presentation only)", () => {
   it("Clients: each row points to the client's authorized hours, and still opens the same client page", async () => {
     renderAt("/clients", "organization_owner");
-    const row = (await screen.findByText("View authorized hours →")).closest("a")!;
-    expect(row.getAttribute("href")).toBe("/clients/cccccccc-0000-4000-8000-000000000001");
-    expect(row).toHaveTextContent("2 current authorizations");
+    // List view (the default on a wide screen): the row names the authorization count and its action points to the authorized hours.
+    const link = (await screen.findByText("View authorized hours →")).closest("a")!;
+    expect(link.getAttribute("href")).toBe("/clients/cccccccc-0000-4000-8000-000000000001");
+    expect(link.closest("tr")).toHaveTextContent("2 current authorizations");
   });
 
   it("Schedule: shift actions are buttons at least 40px tall, and Cancel shift is visibly different from the others", async () => {
