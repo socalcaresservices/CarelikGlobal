@@ -7,9 +7,13 @@
 
 import type { LucideIcon } from "lucide-react";
 
-// Grouped by operational workflow: caregiver -> client -> visit -> billing -> reports.
-// HOME is a single link and is shown without a heading.
-export const NAV_GROUPS = ["HOME", "CAREGIVERS", "CLIENTS", "VISITS", "BILLING", "REPORTS", "DOCUMENTS", "SETUP"] as const;
+// Organised by workflow. HOME is a single link shown without a heading.
+//   MY WORK  the caregiver's own day: verify a visit, my shifts, availability, my documents.
+//   WORK     the five areas an administrator, manager or scheduler moves through:
+//            Clients, Caregivers, Scheduling, Approvals, Reports. Related pages (care requests,
+//            documents, visit records ...) sit under their area as smaller links.
+//   SETUP    administration and settings, always last (pinned to the bottom of the menu).
+export const NAV_GROUPS = ["HOME", "MY WORK", "WORK", "SETUP"] as const;
 export type NavGroup = (typeof NAV_GROUPS)[number];
 
 export const REPORTS_PATH = "/service-verification/reports";
@@ -26,13 +30,18 @@ export interface NavLinkDef {
   group: NavGroup;
   show: boolean;
   icon: LucideIcon;
+  /** A smaller link shown under its area (the key of the primary link it belongs to). */
+  parent?: string;
+  /** Workflow colour of the area: Clients blue, Caregivers teal, Scheduling violet, Approvals amber, Reports slate. */
+  accent?: string;
   /** Narrows a shared path: given the ?view= value, is this link the current one? */
   matchView?: (view: string | null) => boolean;
 }
 
 export const isReportView = (view: string | null) => !!view && REPORT_VIEWS_AS_REPORTS.has(view);
 export const isCalendarView = (view: string | null) => view === "calendar";
-export const isVisitListView = (view: string | null) => !isReportView(view) && !isCalendarView(view);
+export const isExceptionsView = (view: string | null) => view === "exceptions";
+export const isVisitListView = (view: string | null) => !isReportView(view) && !isCalendarView(view) && !isExceptionsView(view);
 
 export function visibleGroups(links: NavLinkDef[]): { group: NavGroup; links: NavLinkDef[] }[] {
   const shown = links.filter((l) => l.show);

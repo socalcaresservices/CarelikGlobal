@@ -5,6 +5,7 @@ import {
   CalendarDays,
   CalendarHeart,
   ChartNoAxesColumn,
+  ClipboardCheck,
   Clock,
   FileArchive,
   FileText,
@@ -15,10 +16,9 @@ import {
   LifeBuoy,
   LogOut,
   Menu,
-  PanelLeftClose,
-  PanelLeftOpen,
+  PanelRightClose,
+  PanelRightOpen,
   PenLine,
-  Receipt,
   Settings,
   Stethoscope,
   UserCircle,
@@ -29,14 +29,23 @@ import {
 import { useAuth } from "@carelik/auth";
 import { cn } from "@carelik/ui";
 import { useOrganization } from "@/providers/organization-provider";
-import { actionNeededState, EXCEPTIONS_ROUTE } from "./action-needed";
+import { actionCategories, actionNeededState, EXCEPTIONS_ROUTE } from "./action-needed";
 import { useAttention, useBranding, useLogo, useMyDisplayName, viewKind, VIEW_TITLE } from "./aws-workspace";
 import { EnvironmentBanner } from "./environment-marker";
-import { currentLink, isCalendarView, isReportView, isVisitListView, linkKey, REPORTS_PATH, visibleGroups, type NavLinkDef } from "./nav-model";
+import { currentLink, isCalendarView, isExceptionsView, isReportView, isVisitListView, linkKey, REPORTS_PATH, visibleGroups, type NavLinkDef } from "./nav-model";
 
 export const EXCEPTIONS_PATH = EXCEPTIONS_ROUTE;
 const DEFAULT_ACCENT = "#0f172a"; // slate-900: the colour used before agency branding existed
 const COLLAPSE_KEY = "ogevia.sidebar.collapsed";
+/** Workflow colour per area (icon tint and selected row). Status colour is separate: amber = waiting, red = blocking. */
+const ACCENT = { clients: "#0369a1", caregivers: "#0f766e", scheduling: "#6d28d9", approvals: "#b45309", reports: "#475569" } as const;
+/** Which Action-needed categories each area shows as its badge (same server summary as the header count). */
+const AREA_BADGE: Record<string, readonly string[]> = {
+  "/care-team": ["overdueDocuments", "documentsToReview"],
+  "/schedule": ["unfilledShifts"],
+  Approvals: ["missingClockOut", "awaitingConfirmation", "visitsToReview", "signaturesToReview", "readyForApproval"],
+};
+const BLOCKING = new Set(["missingClockOut", "overdueDocuments"]);
 const MOBILE_QUERY = "(max-width: 767px)";
 
 /** The remembered sidebar choice. Storage can be blocked (private windows), so every access is guarded. */
@@ -85,7 +94,7 @@ function initialsOf(name: string): string {
 /**
  * Shell for the AWS build: agency identity, the signed-in person and their view
  * (ADMINISTRATOR / MANAGER / CAREGIVER VIEW), ACTION NEEDED, and role-appropriate
- * navigation in a left sidebar (a drawer below 768px). Navigation only decides what is
+ * navigation in a collapsible right-hand menu (a drawer below 768px). Navigation only decides what is
  * shown; every screen's data is authorized again in PostgreSQL.
  */
 export function AwsShell({ children }: PropsWithChildren) {
@@ -141,30 +150,48 @@ export function AwsShell({ children }: PropsWithChildren) {
   const isCaregiver = view === "CAREGIVER";
   const canSeeAttention = hasPermission("visits.read");
   const canReadVisits = hasPermission("visits.read");
-  // Same destinations and the same permission conditions as the horizontal menu had.
-  // Reports and Client monthly calendar are two views of the existing reports route.
+  // Same destinations and the same permission conditions as before; only the grouping and the labels changed.
+  // Five areas (Clients, Caregivers, Scheduling, Approvals, Reports), their related pages as smaller links,
+  // and administration last. Colour = area (see ACCENT); badges = work waiting, from the same server summary as ACTION NEEDED.
+  const canManageVisits = hasPermission("visits.manage");
+  const canBill = hasPermission("billing.visits.read");
   const links: NavLinkDef[] = [
     { to: "/", label: "Home", group: "HOME", icon: LayoutDashboard, show: !isCaregiver },
-    { to: "/care-team", label: "Care Team", group: "CAREGIVERS", icon: HeartHandshake, show: hasPermission("caregivers.manage") || hasPermission("visits.manage") },
-    { to: "/schedule", label: "Schedule", group: "CAREGIVERS", icon: CalendarDays, show: hasPermission("shifts.manage") || (!isCaregiver && hasPermission("visits.manage")) },
-    { to: "/service-verification", label: "Verify visit", group: "CAREGIVERS", icon: PenLine, show: isCaregiver || hasPermission("visits.manage") },
-    { to: "/my-shifts", label: "My shifts", group: "CAREGIVERS", icon: CalendarClock, show: isCaregiver },
-    { to: "/availability", label: "Availability", group: "CAREGIVERS", icon: Clock, show: isCaregiver },
-    // Authorizations are a section of each client's page (Clients > a client > Authorizations); there is no separate page.
-    { to: "/clients", label: "Clients", group: "CLIENTS", icon: Users, show: hasPermission("clients.names.read") },
-    { to: "/care-requests", label: "Care requests", group: "CLIENTS", icon: HandHeart, show: hasPermission("care_requests.read") },
-    { to: REPORTS_PATH, search: "?view=calendar", label: "Client monthly calendar", group: "CLIENTS", icon: CalendarHeart, show: canReadVisits, matchView: isCalendarView },
-    { to: REPORTS_PATH, label: "Visit records", group: "VISITS", icon: FileText, show: canReadVisits, matchView: isVisitListView },
-    { to: "/billing-review", label: "Billing review", group: "BILLING", icon: Receipt, show: hasPermission("billing.visits.read") },
-    { to: REPORTS_PATH, search: "?view=overview", label: "Reports", group: "REPORTS", icon: ChartNoAxesColumn, show: canReadVisits, matchView: isReportView },
-    { to: "/documents", label: hasPermission("documents.read") ? "Documents" : "My documents", group: "DOCUMENTS", icon: FolderOpen, show: hasPermission("documents.read") || hasPermission("documents.manage_own") },
+    // The caregiver's own day.
+    { to: "/service-verification", label: "Verify visit", group: "MY WORK", icon: PenLine, show: isCaregiver },
+    { to: "/my-shifts", label: "My shifts", group: "MY WORK", icon: CalendarClock, show: isCaregiver },
+    { to: "/availability", label: "Availability", group: "MY WORK", icon: Clock, show: isCaregiver },
+    { to: "/documents", label: "My documents", group: "MY WORK", icon: FolderOpen, show: isCaregiver && hasPermission("documents.manage_own") },
+    // The five areas.
+    { to: "/clients", label: "Clients", group: "WORK", icon: Users, accent: ACCENT.clients, show: hasPermission("clients.names.read") },
+    { to: "/care-requests", label: "Care requests", group: "WORK", parent: "/clients", icon: HandHeart, show: hasPermission("care_requests.read") },
+    { to: REPORTS_PATH, search: "?view=calendar", label: "Monthly calendar", group: "WORK", parent: "/clients", icon: CalendarHeart, show: canReadVisits, matchView: isCalendarView },
+    { to: "/care-team", label: "Caregivers", group: "WORK", icon: HeartHandshake, accent: ACCENT.caregivers, show: hasPermission("caregivers.manage") || canManageVisits },
+    { to: "/documents", label: "Documents", group: "WORK", parent: "/care-team", icon: FolderOpen, show: !isCaregiver && hasPermission("documents.read") },
+    { to: "/schedule", label: "Scheduling", group: "WORK", icon: CalendarDays, accent: ACCENT.scheduling, show: hasPermission("shifts.manage") || (!isCaregiver && canManageVisits) },
+    canBill
+      ? { to: "/billing-review", label: "Approvals", group: "WORK", icon: ClipboardCheck, accent: ACCENT.approvals, show: true }
+      : { to: REPORTS_PATH, search: "?view=exceptions", label: "Approvals", group: "WORK", icon: ClipboardCheck, accent: ACCENT.approvals, show: !isCaregiver && canManageVisits, matchView: isExceptionsView },
+    { to: REPORTS_PATH, search: "?view=exceptions", label: "Visits to review", group: "WORK", parent: "/approvals", icon: ClipboardCheck, show: canBill && canReadVisits, matchView: isExceptionsView },
+    { to: REPORTS_PATH, label: "Visit records", group: "WORK", parent: "/approvals", icon: FileText, show: canReadVisits, matchView: isVisitListView },
+    { to: "/service-verification", label: "Verify visit", group: "WORK", parent: "/approvals", icon: PenLine, show: !isCaregiver && canManageVisits },
+    { to: REPORTS_PATH, search: "?view=overview", label: "Reports", group: "WORK", icon: ChartNoAxesColumn, accent: ACCENT.reports, show: canReadVisits, matchView: isReportView },
+    // Administration and settings, last.
     { to: "/services", label: "Services", group: "SETUP", icon: Stethoscope, show: !isCaregiver && hasPermission("authorizations.read") },
     { to: "/continuity", label: "Continuity pack", group: "SETUP", icon: LifeBuoy, show: !isCaregiver && hasPermission("continuity.export") },
-    { to: "/outage-visits", label: "Outage records", group: "SETUP", icon: FileArchive, show: !isCaregiver && hasPermission("visits.manage") },
+    { to: "/outage-visits", label: "Outage records", group: "SETUP", icon: FileArchive, show: !isCaregiver && canManageVisits },
     { to: "/accounts", label: "Accounts", group: "SETUP", icon: UserCog, show: !isCaregiver && hasPermission("accounts.manage") },
     { to: "/settings/branding", label: "Settings", group: "SETUP", icon: Settings, show: hasPermission("organization.update") },
   ];
   const groups = visibleGroups(links);
+  const cats = attention.data ? actionCategories(attention.data) : [];
+  const badgeOf = (l: NavLinkDef): { n: number; blocking: boolean } | null => {
+    const keys = AREA_BADGE[l.to] ?? (l.label === "Approvals" ? AREA_BADGE.Approvals : undefined);
+    if (!keys || l.parent) return null;
+    const hit = cats.filter((c) => keys.includes(c.key));
+    const n = hit.reduce((sum, c) => sum + c.count, 0);
+    return n > 0 ? { n, blocking: hit.some((c) => c.count > 0 && BLOCKING.has(c.key)) } : null;
+  };
   const current = currentLink(links, location.pathname, location.search);
   const agencyName = branding.data?.displayName ?? activeOrganization?.displayName ?? "Organization";
   const accent = branding.data?.accentColor ?? DEFAULT_ACCENT;
@@ -219,10 +246,10 @@ export function AwsShell({ children }: PropsWithChildren) {
         id="aws-sidebar"
         ref={asideRef}
         hidden={sidebarHidden}
-        aria-label="Sidebar"
+        aria-label="Menu"
         onKeyDown={trapFocus}
         className={cn(
-          "fixed inset-y-0 left-0 z-50 flex-col border-r border-[#E2E8EC] bg-[#FAFBFC] print:hidden",
+          "fixed inset-y-0 right-0 z-50 flex-col border-l border-[#E2E8EC] bg-[#FAFBFC] print:hidden",
           sidebarHidden ? "hidden" : "flex",
           isMobile ? "w-[min(88vw,20rem)] shadow-2xl" : collapsed ? "w-[76px]" : "w-64",
         )}
@@ -240,20 +267,20 @@ export function AwsShell({ children }: PropsWithChildren) {
           ) : (
             <button
               type="button"
-              aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+              aria-label={collapsed ? "Expand menu" : "Collapse menu"}
               aria-expanded={!collapsed}
               aria-controls="aws-sidebar"
               onClick={() => {
                 setTip(null);
                 toggleCollapsed();
               }}
-              onMouseEnter={(e) => showTip("Expand sidebar", e.currentTarget)}
-              onFocus={(e) => showTip("Expand sidebar", e.currentTarget)}
+              onMouseEnter={(e) => showTip("Expand menu", e.currentTarget)}
+              onFocus={(e) => showTip("Expand menu", e.currentTarget)}
               onMouseLeave={() => setTip(null)}
               onBlur={() => setTip(null)}
               className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg text-og-ink hover:bg-[#F0F7F7] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#0F6674]"
             >
-              {collapsed ? <PanelLeftOpen className="h-5 w-5" aria-hidden="true" /> : <PanelLeftClose className="h-5 w-5" aria-hidden="true" />}
+              {collapsed ? <PanelRightOpen className="h-5 w-5" aria-hidden="true" /> : <PanelRightClose className="h-5 w-5" aria-hidden="true" />}
             </button>
           )}
         </div>
@@ -272,17 +299,19 @@ export function AwsShell({ children }: PropsWithChildren) {
           </div>
         </div>
 
-        <nav id="aws-main-nav" aria-label="Main" className="flex-1 overflow-y-auto px-3 pb-3">
+        <nav id="aws-main-nav" aria-label="Main" className="flex flex-1 flex-col overflow-y-auto px-3 pb-3">
           {groups.map(({ group, links: items }) => (
-            <div key={group} className={cn("first:mt-1", collapsed ? "mt-2" : "mt-5")}>
-              {/* Headings and their dividers are hidden when collapsed; the links keep their accessible names. */}
+            // SETUP is pinned to the bottom of the menu.
+            <div key={group} className={cn("first:mt-1", collapsed ? "mt-2" : "mt-4", group === "SETUP" && "mt-auto pt-2")}>
+              {/* Headings are hidden when collapsed; the links keep their accessible names. */}
               {group === "HOME" || collapsed ? null : (
-                <p className="mx-3 mb-2 border-b border-[#DCE5E9] pb-[10px] text-[12px] font-bold leading-[18px] tracking-[0.06em] text-[#334155]" data-testid="nav-group-heading">{group}</p>
+                <p className="mx-3 mb-1.5 text-[11px] font-semibold leading-[18px] tracking-[0.08em] text-[#64748B]" data-testid="nav-group-heading">{group}</p>
               )}
               <ul className="space-y-0.5">
-                {items.map((l) => {
+                {items.filter((l) => !l.parent || !collapsed).map((l) => {
                   const active = current !== null && linkKey(l) === linkKey(current);
                   const Icon = l.icon;
+                  const badge = badgeOf(l);
                   return (
                     <li key={linkKey(l)}>
                       <Link
@@ -296,10 +325,20 @@ export function AwsShell({ children }: PropsWithChildren) {
                         onFocus={(e) => showTip(l.label, e.currentTarget)}
                         onMouseLeave={() => setTip(null)}
                         onBlur={() => setTip(null)}
-                        className={itemClass(active)}
+                        className={cn(itemClass(active), l.parent && !collapsed && "ml-5 min-h-[34px] py-1 text-[13px] font-normal")}
+                        style={active && l.accent ? { backgroundColor: `${l.accent}14`, color: l.accent } : undefined}
                       >
-                        <Icon className="h-[18px] w-[18px] shrink-0" aria-hidden="true" />
-                        <span className={cn("min-w-0 break-words", collapsed && "sr-only")}>{l.label}</span>
+                        <Icon className="h-[18px] w-[18px] shrink-0" aria-hidden="true" style={l.accent ? { color: l.accent } : undefined} />
+                        <span className={cn("min-w-0 flex-1 break-words", collapsed && "sr-only")}>{l.label}</span>
+                        {badge ? (
+                          <span
+                            data-testid="nav-badge"
+                            aria-label={`${badge.n} waiting`}
+                            className={cn("rounded-full px-1.5 text-[11px] font-bold leading-[18px] text-white", badge.blocking ? "bg-red-700" : "bg-amber-600", collapsed && "absolute -mt-5 ml-4")}
+                          >
+                            {badge.n}
+                          </span>
+                        ) : null}
                       </Link>
                     </li>
                   );
@@ -358,12 +397,12 @@ export function AwsShell({ children }: PropsWithChildren) {
         </div>
       </aside>
       {collapsed && tip ? (
-        <div role="presentation" aria-hidden="true" className="pointer-events-none fixed z-[60] -translate-y-1/2 whitespace-nowrap rounded-lg bg-og-ink px-3 py-1.5 text-sm font-medium text-white shadow-lg" style={{ left: 84, top: tip.top }}>
+        <div role="presentation" aria-hidden="true" className="pointer-events-none fixed z-[60] -translate-y-1/2 whitespace-nowrap rounded-lg bg-og-ink px-3 py-1.5 text-sm font-medium text-white shadow-lg" style={{ right: 84, top: tip.top }}>
           {tip.label}
         </div>
       ) : null}
 
-      <div className={cn("print:pl-0", !isMobile && (collapsed ? "pl-[76px]" : "pl-64"))}>
+      <div className={cn("print:pr-0", !isMobile && (collapsed ? "pr-[76px]" : "pr-64"))}>
         <EnvironmentBanner />
         <header className="border-b border-og-line bg-white print:hidden" style={{ borderTop: `4px solid ${accent}` }}>
           <div className="flex flex-wrap items-center gap-2 px-4 py-2.5 md:px-8">

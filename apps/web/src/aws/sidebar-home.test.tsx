@@ -84,14 +84,14 @@ afterEach(() => {
   vi.clearAllMocks();
 });
 
-const hrefs = (nav: HTMLElement) => Object.fromEntries(within(nav).getAllByRole("link").map((a) => [a.textContent, a.getAttribute("href")]));
+const hrefs = (nav: HTMLElement) => Object.fromEntries(within(nav).getAllByRole("link").map((a) => [(a.textContent ?? "").replace(/\d+$/, ""), a.getAttribute("href")]));
 
 describe("navigation model", () => {
   const icon = (() => null) as never;
   const link = (over: Partial<NavLinkDef>): NavLinkDef => ({ to: "/x", label: "X", group: "HOME", show: true, icon, ...over });
 
   it("keeps the group order and drops groups with nothing visible", () => {
-    const groups = visibleGroups([link({ label: "A", group: "SETUP" }), link({ label: "B", group: "HOME" }), link({ label: "C", group: "BILLING", show: false })]);
+    const groups = visibleGroups([link({ label: "A", group: "SETUP" }), link({ label: "B", group: "HOME" }), link({ label: "C", group: "WORK", show: false })]);
     expect(groups.map((g) => g.group)).toEqual(["HOME", "SETUP"]);
   });
 
@@ -113,20 +113,19 @@ describe("sidebar: expanded", () => {
   it("manager: grouped links, every earlier destination kept, Reports and Client monthly calendar added on the existing reports route", async () => {
     renderAt("/", "manager");
     const nav = await screen.findByRole("navigation", { name: "Main" });
-    expect(within(nav).getAllByText(/^(HOME|CAREGIVERS|CLIENTS|VISITS|BILLING|REPORTS|DOCUMENTS|SETUP)$/).map((e) => e.textContent))
-      .toEqual(["CAREGIVERS", "CLIENTS", "VISITS", "BILLING", "REPORTS", "DOCUMENTS", "SETUP"]);
-    // Workflow order: Home, then caregiver -> client -> visit -> billing -> reports -> documents -> setup.
-    expect(within(nav).getAllByRole("link").map((a) => a.textContent)).toEqual([
-      "Home", "Care Team", "Schedule", "Verify visit", "Clients", "Care requests", "Client monthly calendar", "Visit records",
-      "Billing review", "Reports", "Documents", "Services", "Continuity pack", "Outage records",
+    expect(within(nav).getAllByText(/^(HOME|MY WORK|WORK|SETUP)$/).map((e) => e.textContent)).toEqual(["WORK", "SETUP"]);
+    // Five areas in workflow order, each with its related pages beneath it; administration last.
+    expect(within(nav).getAllByRole("link").map((a) => a.textContent?.replace(/\d+$/, ""))).toEqual([
+      "Home", "Clients", "Care requests", "Monthly calendar", "Caregivers", "Documents", "Scheduling", "Approvals", "Visits to review", "Visit records",
+      "Verify visit", "Reports", "Services", "Continuity pack", "Outage records",
     ]);
     // Authorizations are a section of each client's page, not a separate menu item.
     expect(within(nav).queryByRole("link", { name: /^Authorizations$/ })).toBeNull();
     expect(hrefs(nav)).toEqual({
-      "Home": "/", "Verify visit": "/service-verification", "Schedule": "/schedule", "Care requests": "/care-requests",
+      "Home": "/", "Verify visit": "/service-verification", "Scheduling": "/schedule", "Care requests": "/care-requests",
       "Visit records": "/service-verification/reports", "Reports": "/service-verification/reports?view=overview",
-      "Client monthly calendar": "/service-verification/reports?view=calendar", "Billing review": "/billing-review",
-      "Clients": "/clients", "Care Team": "/care-team", "Documents": "/documents", "Services": "/services",
+      "Visits to review": "/service-verification/reports?view=exceptions", "Monthly calendar": "/service-verification/reports?view=calendar",
+      "Approvals": "/billing-review", "Clients": "/clients", "Caregivers": "/care-team", "Documents": "/documents", "Services": "/services",
       "Continuity pack": "/continuity", "Outage records": "/outage-visits",
     });
     // Settings stays Administrator-only (organization.update), unchanged.
@@ -150,12 +149,12 @@ describe("sidebar: expanded", () => {
     expect(screen.queryByText(/synthetic data|test environment/i)).toBeNull();
   });
 
-  it("caregiver: only the caregiver links, in CAREGIVERS and DOCUMENTS", async () => {
+  it("caregiver: only the caregiver links, under MY WORK", async () => {
     renderAt("/service-verification", "caregiver");
     const nav = await screen.findByRole("navigation", { name: "Main" });
     expect(Object.keys(hrefs(nav)).sort()).toEqual(["Availability", "My documents", "My shifts", "Verify visit"]);
     expect(within(nav).queryByText("SETUP")).toBeNull();
-    expect(within(nav).getAllByText(/^(CAREGIVERS|DOCUMENTS)$/).map((e) => e.textContent)).toEqual(["CAREGIVERS", "DOCUMENTS"]);
+    expect(within(nav).getAllByText(/^(MY WORK|WORK)$/).map((e) => e.textContent)).toEqual(["MY WORK"]);
   });
 
   it("hides the sidebar and gives the page the full width when printing", async () => {
@@ -163,7 +162,7 @@ describe("sidebar: expanded", () => {
     const aside = (await screen.findByRole("navigation", { name: "Main" })).closest("aside")!;
     expect(aside.className).toMatch(/print:hidden/);
     expect(document.querySelector("header")!.className).toMatch(/print:hidden/);
-    expect(document.querySelector("main")!.parentElement!.className).toMatch(/print:pl-0/);
+    expect(document.querySelector("main")!.parentElement!.className).toMatch(/print:pr-0/);
   });
 });
 
@@ -173,22 +172,22 @@ describe("sidebar: collapse", () => {
     const nav = await screen.findByRole("navigation", { name: "Main" });
     const aside = nav.closest("aside")!;
     expect(aside.className).toMatch(/w-64/);
-    fireEvent.click(screen.getByRole("button", { name: "Collapse sidebar" }));
+    fireEvent.click(screen.getByRole("button", { name: "Collapse menu" }));
     expect(aside.className).toMatch(/w-\[76px\]/);
     expect(window.localStorage.getItem("ogevia.sidebar.collapsed")).toBe("1");
     // Icon-only, but every control still has its name.
-    expect(within(nav).getByRole("link", { name: "Schedule" })).toBeInTheDocument();
+    expect(within(nav).getByRole("link", { name: "Scheduling" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Sign out" })).toBeInTheDocument();
-    fireEvent.mouseEnter(within(nav).getByRole("link", { name: "Schedule" }));
-    expect(screen.getByText("Schedule", { selector: "div[role=presentation]" })).toBeInTheDocument();
-    fireEvent.keyDown(within(nav).getByRole("link", { name: "Schedule" }), { key: "Escape" });
-    expect(screen.queryByText("Schedule", { selector: "div[role=presentation]" })).toBeNull();
+    fireEvent.mouseEnter(within(nav).getByRole("link", { name: "Scheduling" }));
+    expect(screen.getByText("Scheduling", { selector: "div[role=presentation]" })).toBeInTheDocument();
+    fireEvent.keyDown(within(nav).getByRole("link", { name: "Scheduling" }), { key: "Escape" });
+    expect(screen.queryByText("Scheduling", { selector: "div[role=presentation]" })).toBeNull();
 
     first.unmount();
     renderAt("/", "manager");
     const again = (await screen.findByRole("navigation", { name: "Main" })).closest("aside")!;
     expect(again.className).toMatch(/w-\[76px\]/);
-    fireEvent.click(screen.getByRole("button", { name: "Expand sidebar" }));
+    fireEvent.click(screen.getByRole("button", { name: "Expand menu" }));
     expect(again.className).toMatch(/w-64/);
     expect(window.localStorage.getItem("ogevia.sidebar.collapsed")).toBe("0");
   });
@@ -200,20 +199,21 @@ describe("sidebar: Option B styling contract", () => {
     const nav = await screen.findByRole("navigation", { name: "Main" });
     const aside = nav.closest("aside")!;
     expect(aside.className).toContain("bg-[#FAFBFC]");
-    expect(aside.className).toContain("border-r");
+    expect(aside.className).toContain("border-l");
+    expect(aside.className).toContain("right-0");
     expect(aside.className).toContain("border-[#E2E8EC]");
     const heading = within(nav).getAllByTestId("nav-group-heading")[0]!;
-    expect(heading.textContent).toBe("CAREGIVERS");
-    for (const c of ["text-[12px]", "font-bold", "leading-[18px]", "tracking-[0.06em]", "text-[#334155]", "border-b", "border-[#DCE5E9]", "pb-[10px]"]) {
+    expect(heading.textContent).toBe("WORK");
+    for (const c of ["text-[11px]", "font-semibold", "leading-[18px]", "tracking-[0.08em]", "text-[#64748B]"]) {
       expect(heading.className).toContain(c);
     }
-    const current = within(nav).getByRole("link", { name: "Schedule" });
+    const current = within(nav).getByRole("link", { name: "Scheduling" });
     expect(current).toHaveAttribute("aria-current", "page");
     for (const c of ["bg-[#E8F5F4]", "text-[#0F6674]", "font-semibold", "rounded-md", "min-h-[40px]", "text-[14px]", "gap-2", "[@media(pointer:coarse)]:min-h-[44px]", "focus-visible:outline-[#0F6674]"]) {
       expect(current.className).toContain(c);
     }
     expect(current.className).not.toMatch(/border-l|before:|shadow-\[inset/); // no vertical accent bar
-    const other = within(nav).getByRole("link", { name: "Care Team" });
+    const other = within(nav).getByRole("link", { name: "Caregivers" });
     for (const c of ["text-[#243244]", "font-medium", "hover:bg-[#F0F7F7]"]) expect(other.className).toContain(c);
     expect(other).not.toHaveAttribute("aria-current");
     // Icons are 18px; long labels wrap rather than clip.
@@ -227,15 +227,16 @@ describe("sidebar: Option B styling contract", () => {
     const nav = await screen.findByRole("navigation", { name: "Main" });
     expect(within(nav).queryAllByTestId("nav-group-heading")).toHaveLength(0);
     expect(nav.querySelector(".border-t")).toBeNull();
-    expect(within(nav).getByRole("link", { name: "Care Team" })).toBeInTheDocument();
-    expect(within(nav).getAllByRole("link")).toHaveLength(14);
+    expect(within(nav).getByRole("link", { name: "Caregivers" })).toBeInTheDocument();
+    // Collapsed: the five areas, Home and Setup only; the smaller related links appear when expanded.
+    expect(within(nav).getAllByRole("link")).toHaveLength(9);
   });
 
   it("keyboard: every link is reachable by Tab order (real anchors) and the collapse control is a labelled button", async () => {
     renderAt("/", "manager");
     const nav = await screen.findByRole("navigation", { name: "Main" });
     for (const a of within(nav).getAllByRole("link")) expect(a).toHaveAttribute("href");
-    expect(screen.getByRole("button", { name: "Collapse sidebar" })).toHaveAttribute("aria-expanded", "true");
+    expect(screen.getByRole("button", { name: "Collapse menu" })).toHaveAttribute("aria-expanded", "true");
   });
 });
 
@@ -256,7 +257,7 @@ describe("sidebar: mobile drawer", () => {
     await waitFor(() => expect(screen.queryByRole("navigation", { name: "Main" })).toBeNull());
     expect(menu).toHaveFocus();
     fireEvent.click(menu);
-    fireEvent.click(await screen.findByRole("link", { name: "Schedule" }));
+    fireEvent.click(await screen.findByRole("link", { name: "Scheduling" }));
     await waitFor(() => expect(screen.queryByRole("navigation", { name: "Main" })).toBeNull());
   });
 });

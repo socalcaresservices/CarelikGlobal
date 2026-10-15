@@ -230,7 +230,7 @@ describe("AWS build: manager review and billing-review data", () => {
     expect(screen.queryByText("Financial impact (Administrator only)")).not.toBeInTheDocument();
     expect(screen.getByText(/visible to the agency Administrator only/)).toBeInTheDocument();
     expect(screen.queryByRole("link", { name: "Settings" })).not.toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "Billing review" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /^Approvals/  })).toBeInTheDocument();
     expect(api.calls.some((c) => c.path.startsWith("/v1/attention?organizationId="))).toBe(true);
   });
 
@@ -375,7 +375,7 @@ describe("AWS build: manager review and billing-review data", () => {
     await screen.findByRole("heading", { name: "Today's visits" });
     expect(screen.getByText("CAREGIVER VIEW")).toBeInTheDocument();
     expect(screen.queryByRole("link", { name: /Action needed/i })).not.toBeInTheDocument();
-    expect(screen.queryByRole("link", { name: "Billing review" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "Approvals" })).not.toBeInTheDocument();
     expect(screen.queryByRole("link", { name: "Visit records" })).not.toBeInTheDocument();
   });
 });
