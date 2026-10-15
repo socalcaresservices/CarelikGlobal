@@ -106,6 +106,16 @@ Catalog results. "Auto" = an automated test covers the behavior (A6/A7/A4 pass);
 ## C. Pilot/test environment (Phase C) — OPEN
 Not started. Requires the owner's written statement (commit SHA, pilot/test only, operator, window). Nothing was run against AWS; Claude Code has no AWS access in this session. Steps C0–C10 stay as in the template and are all ☐.
 
+**Owner's written Phase C statement: RECORDED 2026-10-14 17:44:57 PDT (Release 0052, pilot/test only).** Phase E (production) is NOT decided and is not affected.
+- Reference: `owner-go-pilot-0052-2026-10-15` (the owner left the reference for Claude to assign; assigned and recorded at the owner's written instruction to "accept and record my completed Phase C approval").
+- Commit: `d82fefcd37407d837e7c94f6ac57a907ea286ed1`. Operator: Ogechi Okereke.
+- Window (America/Los_Angeles): **2026-10-14 17:44:57 PDT to 2026-10-14 19:44:57 PDT** (two hours from acceptance). When it ends, no further WRITE step starts; a running step finishes; state is reported. Rollback is not covered by the window and needs a separate owner instruction.
+- Approved (owner's words): "migrations 0037-0052 on ogevia_sv_test and deployment of Ogevia-prod-ServiceVerificationApi only, following the release runbook's backup and stop conditions."
+- Applied as: one RDS snapshot (tagged with the reference); migrations 0037-0052 with schema verification; deploy of `Ogevia-prod-ServiceVerificationApi` only; read-only post-deploy checks.
+- NOT approved: web upload (excluded by the owner); seed 03, `smoke.py`, `pilot_smoke.py`, `pilot_regression.py` (not named in the statement; they write synthetic records; need a separate one-line approval); `Ogevia-prod-NetworkEgress`, `-WebHosting`, `-EvidenceStorage`, `-Observability`; any `Ogevia-prd-*` stack; production; Netlify; Supabase; any tag change.
+- Consequence: UI-level validation (C6, C8 screens) and C5/C7 smoke and regression cannot be completed until those are approved.
+- Evidence before the window: C0 target is the pilot (stacks `Ogevia-prod-*`, database `ogevia_sv_test`; banner not checked); C1 ledger before `36|0036`, contiguous `0001|0036|36|true`; Step 5 read-only validation PASS (47 routes added, 0 removed, changed only Handler, IdentityHandler, IdentityPolicy, IdentityRole).
+
 Items already known for Phase C:
 - **`infra/aws/slice/smoke.py` updated (2026-10-14)** for unscheduled visits; verified in local mode only (workflow section 32 of 32 checks pass; see `POST_MERGE_VERIFICATION.md` item 6). It has NOT been run against the pilot. The two earlier `care` failures were diagnosed and fixed in the smoke (availability needs administrator approval since 0039; `POST /v1/availability/me` always returns 422). The care workflow depends on the seeded availability of TEST-CG-02 (`db/deploy/03_seed_care_acceptance.sql`); confirm on the pilot that this seed is still applied (UNKNOWN today). Local run: 65 of 65 checks, twice on the same database. The seeded identities have no shift, so smoke.py no longer exercises a clean scheduled-and-signed visit; that path is covered by the DB/API suites only until a scheduled-visit smoke step is added.
 - Count Visits to Review per 100 visits on the pilot (risk 1: unmeasured office workload effect).
