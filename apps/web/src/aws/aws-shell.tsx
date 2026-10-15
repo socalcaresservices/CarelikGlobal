@@ -301,7 +301,8 @@ export function AwsShell({ children }: PropsWithChildren) {
           </div>
         </div>
 
-        <nav id="aws-main-nav" aria-label="Main" className="flex flex-1 flex-col overflow-y-auto px-3 pb-3">
+        <div className="relative flex min-h-0 flex-1 flex-col">
+        <nav id="aws-main-nav" aria-label="Main" className="flex flex-1 flex-col overflow-y-auto px-3 pb-8">
           {groups.map(({ group, links: items }) => (
             // SETUP is pinned to the bottom of the menu.
             <div key={group} className={cn("first:mt-1", collapsed ? "mt-2" : "mt-4", group === "SETUP" && "mt-auto pt-2")}>
@@ -349,6 +350,8 @@ export function AwsShell({ children }: PropsWithChildren) {
             </div>
           ))}
         </nav>
+        <div aria-hidden="true" className="pointer-events-none absolute inset-x-0 bottom-0 h-8 bg-gradient-to-t from-[#FAFBFC] to-transparent" />
+        </div>
 
         <div className="border-t border-[#E2E8EC] p-3">
           <div className={cn("flex items-start gap-2.5", collapsed && "justify-center")}>
