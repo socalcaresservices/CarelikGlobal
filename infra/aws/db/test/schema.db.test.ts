@@ -88,6 +88,7 @@ describe("SCHEMA: migration chain", () => {
       "caregiver_availability_windows",
       "caregiver_experience",
       "caregiver_experience_reviews",
+      "caregiver_hour_limits",
       "caregiver_invitations",
       "caregiver_records",
       "caregiver_service_approvals",

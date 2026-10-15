@@ -30,7 +30,7 @@ async function runDown(file: string) {
 /** A fingerprint of the rows of a table, on the columns that existed at 0046 (so added columns do not count as a change). */
 const TABLES: Record<string, string> = {
   app_users: "*", organizations: "*", organization_memberships: "*", caregiver_records: "*", clients: "*", services: "*",
-  client_authorizations: "*", caregiver_assignments: "*", caregiver_invitations: "*", shifts: "*", shift_coverage_events: "*",
+  client_authorizations: "*", caregiver_assignments: "*", caregiver_invitations: "*", shifts: "id, organization_id, client_id, service_id, caregiver_user_id, caregiver_record_id, starts_at, ends_at, status, created_at, updated_at, authorization_lineage_id, created_by, cancel_reason, series_id", shift_coverage_events: "*",
   authorization_reservations: "*", service_visits: "*", caregiver_availability_windows: "*", audit_events: "*",
   availability_overrides: "id, organization_id, caregiver_record_id, range_start, range_end, reason, authorised_by, created_at, expires_at, used_count, last_used_at",
   permissions: "*", role_permissions: "*",
@@ -48,7 +48,7 @@ async function fingerprints() {
 }
 
 beforeAll(async () => {
-  db = await createTestDb(); // migrated from zero (0001-0052)
+  db = await createTestDb(); // migrated from zero (0001-0053)
   w = await seedWorld(db, 600);
 });
 afterAll(async () => db?.drop());
@@ -56,6 +56,7 @@ afterAll(async () => db?.drop());
 describe("upgrade from 0046 to 0048 on a populated database", () => {
   it("changes no existing row; adds one permission and its owner grant; legacy overrides stay readable; the runner applies exactly 0047 and 0048", async () => {
     // Put the database back at 0046 (the state production is expected to be in), exactly as the rollback does.
+    await runDown("0053_scheduling_patterns_hour_limits_makeup.down.sql");
     await runDown("0052_reservation_not_counted_when_review_visit_counted_as_used.down.sql");
     await runDown("0051_wave1_open_shift_pickup.down.sql");
     await runDown("0050_wave1_visit_review_and_variance_rule.down.sql");
@@ -81,7 +82,7 @@ describe("upgrade from 0046 to 0048 on a populated database", () => {
     const client = await db.admin.connect();
     let applied: string[];
     try { applied = (await migrate(client)).applied.map((x) => x.slice(0, 4)); } finally { client.release(); }
-    expect(applied).toEqual(["0047", "0048", "0049", "0050", "0051", "0052"]); // 0049-0052 add functions, tables and nullable columns only; they change no row
+    expect(applied).toEqual(["0047", "0048", "0049", "0050", "0051", "0052", "0053"]); // 0049-0053 add functions, tables and nullable columns only; they change no row
 
     const after = await fingerprints();
     expect(after).toEqual(before); // NO existing row, in any table, changed or disappeared
