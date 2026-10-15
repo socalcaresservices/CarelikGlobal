@@ -35,6 +35,9 @@ function fakeApi(opts: { covered: boolean }) {
         return json(200, { summary: null });
       case "GET /v1/clients":
         return json(200, { clients: [{ clientId: CLIENT, clientCode: "CL-1", caregiverDisplayCode: null, status: "active", legalFirstName: "Synthetic", legalLastName: "Client Alpha", city: null, clientTypeId: null, clientTypeName: null, currentAuthorizations: 1, openVisits: 0 }] });
+      case `GET /v1/caregivers/${CG}/onboarding`:
+      case `GET /v1/caregivers/${CG_NO_LOGIN}/onboarding`:
+        return json(200, { onboarding: { caregiverRecordId: CG, status: "active", onboardingRequired: false, done: 0, total: 0, complete: true, items: [] } });
       case "GET /v1/caregivers":
         return json(200, { caregivers: [
           { caregiverRecordId: CG, caregiverCode: "CG-1", firstName: "Synthetic", lastName: "Caregiver One", preferredName: null, status: "active", hasSignIn: true, signInStatus: "active", activeAssignments: 1, openVisits: 0 },

@@ -116,7 +116,7 @@ describe("sidebar: expanded", () => {
     expect(within(nav).getAllByText(/^(HOME|MY WORK|WORK|SETUP)$/).map((e) => e.textContent)).toEqual(["WORK", "SETUP"]);
     // Five areas in workflow order, each with its related pages beneath it; administration last.
     expect(within(nav).getAllByRole("link").map((a) => a.textContent?.replace(/\d+$/, ""))).toEqual([
-      "Home", "Clients", "Care requests", "Monthly calendar", "Caregivers", "Documents", "Scheduling", "Approvals", "Visits to review", "Visit records",
+      "Home", "Clients", "Care requests", "Monthly calendar", "Caregivers", "Recruiting", "Documents", "Scheduling", "Approvals", "Visits to review", "Visit records",
       "Verify visit", "Reports", "Services", "Continuity pack", "Outage records",
     ]);
     // Authorizations are a section of each client's page, not a separate menu item.
@@ -125,7 +125,7 @@ describe("sidebar: expanded", () => {
       "Home": "/", "Verify visit": "/service-verification", "Scheduling": "/schedule", "Care requests": "/care-requests",
       "Visit records": "/service-verification/reports", "Reports": "/service-verification/reports?view=overview",
       "Visits to review": "/service-verification/reports?view=exceptions", "Monthly calendar": "/service-verification/reports?view=calendar",
-      "Approvals": "/billing-review", "Clients": "/clients", "Caregivers": "/care-team", "Documents": "/documents", "Services": "/services",
+      "Approvals": "/billing-review", "Clients": "/clients", "Caregivers": "/care-team", "Recruiting": "/care-team/recruiting", "Documents": "/documents", "Services": "/services",
       "Continuity pack": "/continuity", "Outage records": "/outage-visits",
     });
     // Settings stays Administrator-only (organization.update), unchanged.

@@ -104,8 +104,9 @@ async function first(db: Queryable, sql: string, params: unknown[]): Promise<Rec
 }
 
 const CLIENT_STATUSES = ["active", "inactive", "discharged"] as const;
-const CAREGIVER_STATUSES = ["onboarding", "ready", "active", "inactive"] as const;
-const NEW_CAREGIVER_STATUSES = ["onboarding", "ready", "active"] as const;
+/** 0054: Applicant, Interview, Offer, Onboarding, Pending documents, Approved ("ready"), Active, Inactive. */
+const CAREGIVER_STATUSES = ["applicant", "interview", "offer", "onboarding", "pending_documents", "ready", "active", "inactive"] as const;
+const NEW_CAREGIVER_STATUSES = ["applicant", "onboarding", "ready", "active"] as const;
 function caregiverNames(body: Record<string, unknown>) {
   return {
     first: text(body.firstName, "firstName", 80, { required: true }),
@@ -692,6 +693,75 @@ export const ROUTES: Record<string, Route> = {
       const [shift] = await tx((db) =>
         rows(db, "select * from ogevia_api.create_shift($1, $2, $3, $4, $5::time, $6::time, $7, $8)", [org, client, service, day, start, end, caregiver, key]));
       return { shift };
+    },
+  },
+
+  // Recruiting and onboarding (0054). Every rule (the checklist, the approval gate, the assignment gate) runs in PostgreSQL.
+  "GET /v1/onboarding/overview": {
+    mutating: false,
+    handle: async ({ event, tx }) => ({
+      caregivers: await tx((db) => rows(db, "select *, next_expiry::text as next_expiry from ogevia_api.list_onboarding_overview($1)", [orgParam(event)])),
+    }),
+  },
+
+  "GET /v1/onboarding/requirements": {
+    mutating: false,
+    handle: async ({ event, tx }) => ({
+      requirements: await tx((db) => rows(db, "select * from ogevia_api.list_onboarding_requirements($1)", [orgParam(event)])),
+    }),
+  },
+
+  "POST /v1/onboarding/requirements": {
+    mutating: true,
+    handle: async ({ event, tx }) => {
+      const body = parseBody(event.body, event.isBase64Encoded);
+      const org = uuid(body.organizationId, "organizationId");
+      const key = text(body.requirementKey, "requirementKey", 41, { required: true });
+      const label = text(body.label, "label", 80);
+      const category = body.category === undefined || body.category === null ? null : oneOf(body.category, "category", ["background_check", "training", "clearance", "other"]);
+      const required = body.required === undefined ? null : booleanValue(body.required, "required");
+      const validity = body.validityMonths === undefined || body.validityMonths === null ? null : wholeNumber(body.validityMonths, "validityMonths", 1, 120);
+      const hireType = body.hireType === undefined || body.hireType === null ? null : oneOf(body.hireType, "hireType", ["direct_hire", "eor"]);
+      const active = body.isActive === undefined ? null : booleanValue(body.isActive, "isActive");
+      const reason = text(body.reason, "reason", 500, { required: true });
+      await tx((db) => db.query("select ogevia_api.set_onboarding_requirement($1, $2, $3, $4, $5, $6, $7, $8, $9)", [org, key, label, category, required, validity, hireType, active, reason]));
+      return { ok: true };
+    },
+  },
+
+  "GET /v1/caregivers/{caregiverRecordId}/onboarding": {
+    mutating: false,
+    handle: async ({ event, tx }) => {
+      const record = uuid(p(event).caregiverRecordId, "caregiverRecordId");
+      const org = orgParam(event);
+      return { onboarding: (await tx((db) => first(db, "select ogevia_api.get_onboarding($1, $2) as o", [org, record]))).o };
+    },
+  },
+
+  "POST /v1/caregivers/{caregiverRecordId}/onboarding/start": {
+    mutating: true,
+    handle: async ({ event, tx }) => {
+      const record = uuid(p(event).caregiverRecordId, "caregiverRecordId");
+      const org = uuid(parseBody(event.body, event.isBase64Encoded).organizationId, "organizationId");
+      await tx((db) => db.query("select ogevia_api.start_onboarding($1, $2)", [org, record]));
+      return { onboarding: (await tx((db) => first(db, "select ogevia_api.get_onboarding($1, $2) as o", [org, record]))).o };
+    },
+  },
+
+  "POST /v1/caregivers/{caregiverRecordId}/onboarding/items": {
+    mutating: true,
+    handle: async ({ event, tx }) => {
+      const record = uuid(p(event).caregiverRecordId, "caregiverRecordId");
+      const body = parseBody(event.body, event.isBase64Encoded);
+      const org = uuid(body.organizationId, "organizationId");
+      const key = text(body.requirementKey, "requirementKey", 41, { required: true });
+      const action = oneOf(body.action, "action", ["complete", "waive", "reopen"]);
+      const completedOn = optionalDate(body.completedOn, "completedOn");
+      const expiresOn = optionalDate(body.expiresOn, "expiresOn");
+      const note = text(body.note, "note", 200);
+      const reason = text(body.reason, "reason", 500);
+      return { onboarding: (await tx((db) => first(db,
+        "select ogevia_api.record_onboarding_item($1, $2, $3, $4, $5, $6, $7, $8) as o", [org, record, key, action, completedOn, expiresOn, note, reason]))).o };
     },
   },
 

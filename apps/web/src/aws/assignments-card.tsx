@@ -233,7 +233,7 @@ function AssignmentRow({ a, side, canManage, onDone }: { a: Assignment; side: "c
       </div>
       <p className="mt-1 text-sm text-slate-800">{a.serviceName} ({a.serviceCode}) · from {fmtDate(a.effectiveStart)}{a.effectiveEnd ? ` to ${fmtDate(a.effectiveEnd)}` : ", no end date"}</p>
       {a.state !== "ended" && a.grantsAccess === false ? (
-        <p className="mt-1 text-sm font-semibold text-amber-900">Planned — no access yet. It starts by itself once the caregiver has signed in and is Ready to work or Active.</p>
+        <p className="mt-1 text-sm font-semibold text-amber-900">Planned — no access yet. It starts by itself once the caregiver has signed in and is Approved or Active.</p>
       ) : null}
       {a.state !== "ended" && !a.hasAuthorization ? (
         <p className="mt-1 text-sm font-semibold text-red-700">No current authorization covers this client and service. Visits will be refused until one is added.</p>
@@ -265,11 +265,11 @@ export function AssignmentsCard({ clientId, caregiverRecordId }: { clientId?: st
         <h2 className="text-base font-semibold text-slate-950">{side === "client" ? "Caregivers assigned" : "Clients assigned"}</h2>
         {canManage ? <Button type="button" variant="secondary" onClick={() => { setAdding((x) => !x); setAdded(null); setEndedText(null); }} aria-expanded={adding}>{adding ? "Close" : "Assign"}</Button> : null}
       </div>
-      <p className="mt-1 text-xs text-slate-600">An assignment lets the caregiver see this {side === "client" ? "client" : "person's clients"} and verify visits for that service between the first and last day. You can plan one before the caregiver has a sign-in; it gives no access until they have signed in and are Ready to work or Active.</p>
+      <p className="mt-1 text-xs text-slate-600">An assignment lets the caregiver see this {side === "client" ? "client" : "person's clients"} and verify visits for that service between the first and last day. You can plan one before the caregiver has a sign-in; it gives no access until they have signed in and are Approved or Active.</p>
       {adding ? <AddAssignmentForm clientId={clientId} caregiverRecordId={caregiverRecordId} onDone={(result) => { setAdding(false); setAdded(result); }} /> : null}
       {added !== null ? (
         <p role="status" className={`mt-2 text-sm ${added.covered ? "text-emerald-800" : "font-semibold text-red-700"}`}>
-          {added.grantsAccess ? "Assigned." : "Planned. Access starts once the caregiver has signed in and is Ready to work or Active."}
+          {added.grantsAccess ? "Assigned." : "Planned. Access starts once the caregiver has signed in and is Approved or Active."}
           {added.covered ? "" : " No current authorization covers it; visits will be refused until one is added."}
         </p>
       ) : null}

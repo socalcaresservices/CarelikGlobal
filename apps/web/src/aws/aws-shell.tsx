@@ -23,6 +23,7 @@ import {
   Stethoscope,
   UserCircle,
   UserCog,
+  UserPlus,
   Users,
   X,
 } from "lucide-react";
@@ -167,6 +168,7 @@ export function AwsShell({ children }: PropsWithChildren) {
     { to: "/care-requests", label: "Care requests", group: "WORK", parent: "/clients", icon: HandHeart, show: hasPermission("care_requests.read") },
     { to: REPORTS_PATH, search: "?view=calendar", label: "Monthly calendar", group: "WORK", parent: "/clients", icon: CalendarHeart, show: canReadVisits, matchView: isCalendarView },
     { to: "/care-team", label: "Caregivers", group: "WORK", icon: HeartHandshake, accent: ACCENT.caregivers, show: hasPermission("caregivers.manage") || canManageVisits },
+    { to: "/care-team/recruiting", label: "Recruiting", group: "WORK", parent: "/care-team", icon: UserPlus, show: hasPermission("caregivers.manage") },
     { to: "/documents", label: "Documents", group: "WORK", parent: "/care-team", icon: FolderOpen, show: !isCaregiver && hasPermission("documents.read") },
     { to: "/schedule", label: "Scheduling", group: "WORK", icon: CalendarDays, accent: ACCENT.scheduling, show: hasPermission("shifts.manage") || (!isCaregiver && canManageVisits) },
     canBill

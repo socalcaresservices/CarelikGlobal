@@ -35,6 +35,9 @@ function fakeApi(role: Role) {
         return json(200, { branding: { organizationId: ORG, displayName: "Synthetic Care Co", accentColor: null, logoSha256: null } });
       case "GET /v1/attention":
         return json(200, { summary: null });
+      case `GET /v1/caregivers/${CG}/onboarding`:
+      case `GET /v1/caregivers/${NEW}/onboarding`:
+        return json(200, { onboarding: { caregiverRecordId: CG, status: "active", onboardingRequired: false, done: 0, total: 0, complete: true, items: [] } });
       case "GET /v1/caregivers":
         return json(200, { caregivers: [{ caregiverRecordId: NEW, caregiverCode: "CG-NEW00001", firstName: "Synthetic", lastName: "Newcomer", preferredName: null, status: "ready", hasSignIn: !!invited, signInStatus: invited ? "active" : null, activeAssignments: 1, plannedAssignments: invited ? 0 : 1, openVisits: 0, invitationEmail: invited?.email ?? null, invitedAt: invited?.at ?? null, invitationLastSentAt: invited?.at ?? null, invitationSendCount: invited?.count ?? null, firstSignedInAt: null }, { caregiverRecordId: CG, caregiverCode: "CG-1A2B3C4D", firstName: "Synthetic", lastName: "Caregiver One", preferredName: null, status, hasSignIn: true, signInStatus: status === "inactive" ? "suspended" : "active", activeAssignments: status === "inactive" ? 0 : 2, openVisits: 0 }] });
       case "POST /v1/caregivers":

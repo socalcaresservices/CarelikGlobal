@@ -7,17 +7,18 @@ import { useOrganization } from "@/providers/organization-provider";
 import { AssignmentsCard } from "./assignments-card";
 import { useAwsApi } from "./aws-workspace";
 import {
-  CAREGIVER_STATUS_BADGE, CAREGIVER_STATUS_LABEL, caregiverName, signInLabel, useCaregivers,
+  CAREGIVER_STAGES, CAREGIVER_STATUS_BADGE, CAREGIVER_STATUS_LABEL, caregiverName, signInLabel, useCaregivers,
   type Caregiver, type CaregiverStatus,
 } from "./care-team-admin";
 import { formatDateTime } from "@/lib/service-verification";
 import { CaregiverReadiness } from "./readiness/caregiver-readiness";
+import { OnboardingCard } from "./recruiting";
 import { ReadinessCard } from "./readiness/readiness-card";
 import { AvailabilityReview } from "./readiness/availability-review";
 
 const message = (cause: unknown, fallback: string) => (cause instanceof Error ? cause.message : fallback);
 const inputClass = "mt-1 block w-full rounded-lg border border-slate-200 px-3 py-2 text-base";
-const STATUSES = ["onboarding", "ready", "active", "inactive"] as const;
+const STATUSES = CAREGIVER_STAGES;
 
 function useRefreshCareTeam() {
   const queryClient = useQueryClient();
@@ -41,7 +42,7 @@ function AddCaregiverForm({ onDone }: { onDone: (id: string) => void }) {
   const refresh = useRefreshCareTeam();
   const { activeOrganizationId } = useOrganization();
   const [v, setV] = useState({ first: "", last: "", preferred: "" });
-  const [status, setStatus] = useState<Exclude<CaregiverStatus, "inactive">>("onboarding");
+  const [status, setStatus] = useState<Exclude<CaregiverStatus, "inactive" | "interview" | "offer" | "pending_documents">>("applicant");
   const [state, setState] = useState<{ busy: boolean; error: string | null }>({ busy: false, error: null });
   const key = useRef(newIdempotencyKey());
   const set = (k: "first" | "last" | "preferred") => (x: string) => { setV((o) => ({ ...o, [k]: x })); key.current = newIdempotencyKey(); };
@@ -68,7 +69,7 @@ function AddCaregiverForm({ onDone }: { onDone: (id: string) => void }) {
         <div>
           <label htmlFor="new-cg-status" className="block text-sm font-medium text-slate-700">Starting status</label>
           <select id="new-cg-status" value={status} onChange={(e) => { setStatus(e.target.value as typeof status); key.current = newIdempotencyKey(); }} className="mt-1 rounded-lg border border-slate-200 px-3 py-2 text-base">
-            {(["onboarding", "ready", "active"] as const).map((s) => <option key={s} value={s}>{CAREGIVER_STATUS_LABEL[s]}</option>)}
+            {(["applicant", "onboarding", "ready", "active"] as const).map((s) => <option key={s} value={s}>{CAREGIVER_STATUS_LABEL[s]}</option>)}
           </select>
         </div>
         {state.error ? <p role="alert" className="text-sm text-red-700 sm:col-span-2">{state.error}</p> : null}
@@ -287,7 +288,7 @@ function SignInCard({ c, canManage }: { c: Caregiver; canManage: boolean }) {
         </ul>
       ) : null}
       <p className="mt-1">{c.activeAssignments} active assignment{c.activeAssignments === 1 ? "" : "s"}{c.plannedAssignments ? ` (${c.plannedAssignments} planned, no access yet)` : ""}{c.openVisits > 0 ? ` · ${c.openVisits} visit in progress` : ""}</p>
-      {c.hasSignIn && (c.status === "onboarding") ? <p className="mt-1 text-amber-900">Still onboarding: they can sign in but see no clients until you change their status to Ready to work or Active.</p> : null}
+      {c.hasSignIn && (c.status === "onboarding") ? <p className="mt-1 text-amber-900">Still onboarding: they can sign in but see no clients until they are Approved or Active.</p> : null}
       {canManage && !c.hasSignIn && c.status !== "inactive" ? (
         <form onSubmit={(e) => { e.preventDefault(); void invite(); }} className="mt-3 grid gap-2 sm:grid-cols-[1fr_auto] sm:items-end">
           <div>
@@ -376,6 +377,7 @@ export function CaregiverDetailPage() {
         <span className="text-sm text-slate-500">{c.caregiverCode}</span>
         <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${CAREGIVER_STATUS_BADGE[c.status]}`}>{CAREGIVER_STATUS_LABEL[c.status]}</span>
       </div>
+      {canManage ? <OnboardingCard caregiverRecordId={c.caregiverRecordId} status={c.status} canManage={canManage} /> : null}
       <EmploymentCard c={c} canManage={canManage} />
       <SignInCard c={c} canManage={canManage} />
       <AssignmentsCard caregiverRecordId={c.caregiverRecordId} />
