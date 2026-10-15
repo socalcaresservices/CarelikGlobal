@@ -106,6 +106,8 @@ Catalog results. "Auto" = an automated test covers the behavior (A6/A7/A4 pass);
 ## C. Pilot/test environment (Phase C) — OPEN
 Not started. Requires the owner's written statement (commit SHA, pilot/test only, operator, window). Nothing was run against AWS; Claude Code has no AWS access in this session. Steps C0–C10 stay as in the template and are all ☐.
 
+**2026-10-15:** the owner approved a read-only TEST preflight and PROD inventory (no deployment, database connection, secret read or production smoke). Claude Code could not execute them (AWS credentials in this session are invalid placeholders); instructions are in `docs/releases/2026-10-14-pilot-readiness/OPERATOR_READONLY_VERIFICATION_2026-10-15.md`. Phase C stays OPEN and nothing in it is verified.
+
 Items already known for Phase C:
 - **`infra/aws/slice/smoke.py` updated (2026-10-14)** for unscheduled visits; verified in local mode only (workflow section 32 of 32 checks pass; see `POST_MERGE_VERIFICATION.md` item 6). It has NOT been run against the pilot. The two earlier `care` failures were diagnosed and fixed in the smoke (availability needs administrator approval since 0039; `POST /v1/availability/me` always returns 422). The care workflow depends on the seeded availability of TEST-CG-02 (`db/deploy/03_seed_care_acceptance.sql`); confirm on the pilot that this seed is still applied (UNKNOWN today). Local run: 65 of 65 checks, twice on the same database. The seeded identities have no shift, so smoke.py no longer exercises a clean scheduled-and-signed visit; that path is covered by the DB/API suites only until a scheduled-visit smoke step is added.
 - Count Visits to Review per 100 visits on the pilot (risk 1: unmeasured office workload effect).
