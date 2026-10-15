@@ -10,6 +10,7 @@ import { clientName, useClients, useServices } from "./client-admin";
 import { formatClockTime, formatDuration, formatWeekdayDate, formatWeekdayDateTime } from "@/lib/service-verification";
 import { RecurringSeriesForm, RescheduleForm, SeriesList } from "./recurring-schedule";
 import { AssignmentChecks } from "./readiness/assignment-checks";
+import { HourLimitsPanel, MakeupForm } from "./scheduling-extras";
 
 /**
  * Schedule (0026): staff-scheduled shifts, call-outs, replacements and
@@ -43,6 +44,8 @@ export interface Shift {
   /** 0047: assigned under a one-shift Administrator availability override (the original result was No Match). */
   availabilityOverride?: boolean;
   availabilityOverrideReason?: string | null;
+  /** 0053: the missed shift this one makes up for. */
+  makeupForShiftId?: string | null;
 }
 interface CoverageEvent { eventType: "called_out" | "reassigned"; createdAt: string; reason: string | null; originalCaregiverName: string | null; replacementCaregiverName: string | null; recordedBy: string }
 interface MyShift { shiftId: string; startsAt: string; endsAt: string; clientCode: string; serviceName: string | null; coverageState: string; canCallOut: boolean }
@@ -145,9 +148,9 @@ function AddShiftForm({ onDone }: { onDone: (text: string) => void }) {
   );
 }
 
-type Action = "callout" | "assign" | "cancel" | "history" | "reschedule" | null;
+type Action = "callout" | "assign" | "cancel" | "history" | "reschedule" | "makeup" | null;
 
-function ShiftActions({ s, action, onClose, onDone }: { s: Shift; action: Exclude<Action, null | "reschedule">; onClose: () => void; onDone: (text: string) => void }) {
+function ShiftActions({ s, action, onClose, onDone }: { s: Shift; action: Exclude<Action, null | "reschedule" | "makeup">; onClose: () => void; onDone: (text: string) => void }) {
   const api = useAwsApi();
   const refresh = useRefreshSchedule();
   const { activeOrganizationId } = useOrganization();
@@ -255,17 +258,21 @@ function ShiftRow({ s, canManage, onDone }: { s: Shift; canManage: boolean; onDo
       </p>
       {calledOut && s.lastCalloutReason ? <p className="mt-1 text-sm text-red-800">Reason: {s.lastCalloutReason}</p> : null}
       {s.availabilityOverride ? <p className="mt-1 text-sm font-medium text-amber-900">Assigned with Admin override (availability was No Match){s.availabilityOverrideReason ? `: ${s.availabilityOverrideReason}` : ""}</p> : null}
-      {s.seriesId ? <p className="mt-1 text-xs text-slate-600">Repeats weekly — changes here affect this date only; change the series under Manage repeating shifts.</p> : null}
+      {s.makeupForShiftId ? <p className="mt-1 text-sm font-medium text-violet-900">Make-up visit for missed time</p> : null}
+      {s.seriesId ? <p className="mt-1 text-xs text-slate-600">Repeats on a schedule — changes here affect this date only; change the series under Manage repeating shifts.</p> : null}
       {s.fromCareRequest ? <p className="mt-1 text-xs text-slate-600">From a Care Request; manage it on the <Link className="underline" to="/care-requests">Care Requests</Link> page.</p> : null}
       <div className="mt-2 flex flex-wrap items-center gap-2">
         {editable && s.coverageState === "covered" ? <button type="button" className="inline-flex min-h-[40px] items-center rounded-lg border border-slate-300 bg-white px-3 text-sm font-medium text-slate-900 hover:bg-slate-50" onClick={() => setAction("callout")}>Record call-out</button> : null}
         {editable ? <button type="button" className="inline-flex min-h-[40px] items-center rounded-lg border border-slate-300 bg-white px-3 text-sm font-medium text-slate-900 hover:bg-slate-50" onClick={() => setAction("assign")}>{s.coverageState === "needs_coverage" ? "Assign caregiver" : "Change caregiver"}</button> : null}
         {editable && new Date(s.startsAt).getTime() > Date.now() ? <button type="button" className="inline-flex min-h-[40px] items-center rounded-lg border border-slate-300 bg-white px-3 text-sm font-medium text-slate-900 hover:bg-slate-50" onClick={() => setAction("reschedule")}>{s.seriesId ? "Change this date only" : "Change time"}</button> : null}
         {editable ? <button type="button" className="inline-flex min-h-[40px] items-center rounded-lg border border-red-700 bg-white px-3 text-sm font-medium text-red-800 hover:bg-red-50" onClick={() => setAction("cancel")}>{s.seriesId ? "Cancel this date" : "Cancel shift"}</button> : null}
+        {canManage && !s.makeupForShiftId && (s.coverageState === "cancelled" || s.coverageState === "completed") ? <button type="button" className="inline-flex min-h-[40px] items-center rounded-lg border border-slate-300 bg-white px-3 text-sm font-medium text-slate-900 hover:bg-slate-50" onClick={() => setAction(action === "makeup" ? null : "makeup")}>Schedule make-up</button> : null}
         <button type="button" className="inline-flex min-h-[40px] items-center rounded-lg px-2 text-sm font-medium text-og-link underline underline-offset-2 hover:bg-slate-50" onClick={() => setAction(action === "history" ? null : "history")}>History</button>
       </div>
       {action === "reschedule" ? (
         <RescheduleForm shiftId={s.shiftId} localDate={s.localDate} startsAt={s.startsAt} endsAt={s.endsAt} onClose={() => setAction(null)} onDone={(t) => { setAction(null); onDone(t); }} />
+      ) : action === "makeup" ? (
+        <MakeupForm shiftId={s.shiftId} caregiverRecordId={s.caregiverRecordId} defaultDate={s.localDate} onClose={() => setAction(null)} onDone={(t) => { setAction(null); onDone(t); }} />
       ) : action ? <ShiftActions s={s} action={action} onClose={() => setAction(null)} onDone={(t) => { setAction(null); onDone(t); }} /> : null}
     </li>
   );
@@ -281,6 +288,7 @@ export function SchedulePage() {
   const [adding, setAdding] = useState(false);
   const [repeating, setRepeating] = useState(false);
   const [showSeries, setShowSeries] = useState(false);
+  const [showLimits, setShowLimits] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   const canManage = hasPermission("shifts.manage");
   const to = addDays(from, 6);
@@ -302,19 +310,21 @@ export function SchedulePage() {
   return (
     <div className="max-w-3xl space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <h1 className="text-xl font-semibold text-slate-950">Schedule</h1>
+        <h1 className="text-xl font-semibold text-slate-950">Scheduling</h1>
         {canManage ? (
           <div className="flex flex-wrap gap-2">
             <Button type="button" onClick={() => { setAdding((x) => !x); setRepeating(false); setNotice(null); }} aria-expanded={adding}>{adding ? "Close" : "Add shift"}</Button>
-            <Button type="button" variant="secondary" onClick={() => { setRepeating((x) => !x); setAdding(false); setNotice(null); }} aria-expanded={repeating}>{repeating ? "Close" : "Repeat weekly"}</Button>
+            <Button type="button" variant="secondary" onClick={() => { setRepeating((x) => !x); setAdding(false); setNotice(null); }} aria-expanded={repeating}>{repeating ? "Close" : "Repeat visits"}</Button>
             <Button type="button" variant="secondary" onClick={() => setShowSeries((x) => !x)} aria-expanded={showSeries}>Manage repeating shifts</Button>
+            <Button type="button" variant="secondary" onClick={() => setShowLimits((x) => !x)} aria-expanded={showLimits}>Hours and limits</Button>
           </div>
         ) : null}
       </div>
       {needs > 0 ? <p className="text-base font-bold uppercase text-red-700">{needs} shift{needs === 1 ? "" : "s"} need{needs === 1 ? "s" : ""} coverage this week</p> : null}
       {adding ? <Card className="p-3"><AddShiftForm onDone={(t) => { setAdding(false); setNotice(t); }} /></Card> : null}
-      {repeating ? <Card className="p-3"><h2 className="text-base font-semibold text-slate-950">Repeat weekly</h2><RecurringSeriesForm today={today} onDone={(t) => { setRepeating(false); setNotice(t); }} /></Card> : null}
+      {repeating ? <Card className="p-3"><h2 className="text-base font-semibold text-slate-950">Repeat visits</h2><RecurringSeriesForm today={today} onDone={(t) => { setRepeating(false); setNotice(t); }} /></Card> : null}
       {showSeries && canManage ? <Card className="space-y-2 p-3"><h2 className="text-base font-semibold text-slate-950">Manage repeating shifts</h2><SeriesList today={today} onDone={setNotice} /></Card> : null}
+      {showLimits ? <Card className="p-3"><h2 className="mb-2 text-base font-semibold text-slate-950">Hours and limits</h2><HourLimitsPanel from={from} to={to} canManage={canManage} /></Card> : null}
       {notice ? <p role="status" className="text-sm text-emerald-800">{notice}</p> : null}
       <div className="flex flex-wrap items-end gap-3">
         <Button type="button" variant="secondary" onClick={() => setFrom(addDays(from, -7))}>← Previous week</Button>

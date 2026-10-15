@@ -11,7 +11,7 @@ import { formatDateOnly, formatDuration, formatWeekdayDate } from "@/lib/service
 import { newIdempotencyKey } from "@/lib/sv-backend";
 import { useOrganization } from "@/providers/organization-provider";
 import { useAwsApi } from "./aws-workspace";
-import { hhmm, monthLabel, OUTCOME_LABEL, patternText, summarizeOccurrences, WEEKDAY_SHORT, type Occurrence, type SeriesRow } from "./recurring-format";
+import { buildPattern, describePattern, hhmm, monthLabel, OUTCOME_LABEL, patternText, PLAIN_PATTERN, summarizeOccurrences, WEEKDAY_SHORT, type Occurrence, type PatternForm, type SeriesRow } from "./recurring-format";
 
 const inputClass = "mt-1 block w-full rounded-lg border border-slate-200 px-3 py-2 text-base";
 const message = (cause: unknown, fallback: string) => (cause instanceof Error ? cause.message : fallback);
@@ -63,10 +63,20 @@ export function RecurringSeriesForm({ today, series, onDone }: { today: string; 
     ? { clientId: series.clientId, serviceId: "", caregiverRecordId: series.caregiverRecordId ?? "", weekdays: series.weekdays, startTime: hhmm(series.startTime), endTime: hhmm(series.endTime), startsOn: today > series.startsOn ? today : series.startsOn, endsOn: series.endsOn ?? "" }
     : { clientId: "", serviceId: "", caregiverRecordId: "", weekdays: [], startTime: "09:00", endTime: "11:00", startsOn: today, endsOn: "" });
   const [reason, setReason] = useState("");
+  const [rule, setRule] = useState<PatternForm>(() => {
+    const p = series?.pattern;
+    return p ? { everyWeeks: p.every_weeks ?? 1, weekOffset: 0, dates: p.nth?.length ? "only" : p.except_nth?.length ? "except" : "all", nth: p.nth ?? p.except_nth ?? [], excludeDates: p.exclude_dates ?? [] } : PLAIN_PATTERN;
+  });
+  const [skipDate, setSkipDate] = useState("");
   const [preview, setPreview] = useState<Occurrence[] | null>(null);
   const [state, setState] = useState<{ busy: boolean; error: string | null }>({ busy: false, error: null });
   const key = useRef(newIdempotencyKey());
   const set = <K extends keyof SeriesForm>(k: K, v: SeriesForm[K]) => { setForm((f) => ({ ...f, [k]: v })); setPreview(null); key.current = newIdempotencyKey(); };
+  const setRuleField = <K extends keyof PatternForm>(k: K, v: PatternForm[K]) => { setRule((r) => ({ ...r, [k]: v })); setPreview(null); key.current = newIdempotencyKey(); };
+  /** An existing series keeps its own weeks unless the person changes "Repeats"; its anchor is not re-derived from the new date. */
+  const pattern = () => (series?.pattern && rule.everyWeeks === (series.pattern.every_weeks ?? 1) && rule.weekOffset === 0 && rule.everyWeeks > 1
+    ? buildPattern({ ...rule, weekOffset: 0 }, series.pattern.anchor ?? form.startsOn)
+    : buildPattern(rule, form.startsOn));
   const flagged = (preview ?? []).filter((r) => r.outcome !== "ok");
   const serviceId = series ? null : form.serviceId;
 
@@ -80,7 +90,7 @@ export function RecurringSeriesForm({ today, series, onDone }: { today: string; 
         organizationId: activeOrganizationId, clientId: series ? series.clientId : form.clientId,
         serviceId: series ? series.serviceId : serviceId,
         caregiverRecordId: form.caregiverRecordId || null, weekdays: form.weekdays.join(","), startTime: form.startTime, endTime: form.endTime,
-        startsOn: form.startsOn, endsOn: form.endsOn || null,
+        startsOn: form.startsOn, endsOn: form.endsOn || null, pattern: pattern() ? JSON.stringify(pattern()) : null,
       };
       const r = await api.get<{ occurrences: Occurrence[] }>("/v1/shift-series/preview", params);
       setPreview(r.occurrences);
@@ -97,13 +107,13 @@ export function RecurringSeriesForm({ today, series, onDone }: { today: string; 
         const r = await api.post<{ result: { cancelled: number; created: number; skipped: number; kept: number } }>(
           `/v1/shift-series/${encodeURIComponent(series.seriesId)}/change`,
           { organizationId: activeOrganizationId, fromDate: form.startsOn, caregiverRecordId: form.caregiverRecordId || null, weekdays: form.weekdays,
-            startTime: form.startTime, endTime: form.endTime, endsOn: form.endsOn || null, onConflict, reason: reason.trim() },
+            startTime: form.startTime, endTime: form.endTime, endsOn: form.endsOn || null, onConflict, reason: reason.trim(), pattern: pattern(), clearPattern: pattern() === null },
           { idempotencyKey: key.current });
         onDone(`Series changed from ${formatDateOnly(form.startsOn)}: ${r.result.cancelled} earlier-planned dates cancelled, ${r.result.created} scheduled${r.result.skipped ? `, ${r.result.skipped} skipped as listed` : ""}${r.result.kept ? `; ${r.result.kept} kept because a visit is linked or it has started` : ""}.`);
       } else {
         const r = await api.post<{ series: { created: number; skipped: number; reservedMinutes: number; generatedThrough: string } }>("/v1/shift-series",
           { organizationId: activeOrganizationId, clientId: form.clientId, serviceId: form.serviceId, caregiverRecordId: form.caregiverRecordId || null,
-            weekdays: form.weekdays, startTime: form.startTime, endTime: form.endTime, startsOn: form.startsOn, endsOn: form.endsOn || null, onConflict },
+            weekdays: form.weekdays, startTime: form.startTime, endTime: form.endTime, startsOn: form.startsOn, endsOn: form.endsOn || null, onConflict, pattern: pattern() },
           { idempotencyKey: key.current });
         onDone(`Series created: ${r.series.created} shifts scheduled through ${formatDateOnly(r.series.generatedThrough)} (${formatDuration(r.series.reservedMinutes)} reserved)${r.series.skipped ? `; ${r.series.skipped} dates skipped as listed` : ""}.`);
       }
@@ -160,6 +170,56 @@ export function RecurringSeriesForm({ today, series, onDone }: { today: string; 
               {label}
             </label>
           ))}
+        </div>
+      </fieldset>
+      <fieldset className="grid gap-2 sm:col-span-2 sm:grid-cols-2">
+        <legend className="text-sm font-medium text-slate-700">Which weeks and dates</legend>
+        <div>
+          <label htmlFor={`${id}-weeks`} className="block text-xs font-medium text-slate-600">Weeks</label>
+          <select id={`${id}-weeks`} value={rule.everyWeeks} onChange={(e) => setRuleField("everyWeeks", Number(e.target.value))} className={inputClass}>
+            <option value={1}>Every week</option><option value={2}>Every other week</option><option value={3}>Every 3rd week</option><option value={4}>Every 4th week</option>
+          </select>
+        </div>
+        {rule.everyWeeks > 1 ? (
+          <div>
+            <label htmlFor={`${id}-offset`} className="block text-xs font-medium text-slate-600">Start with</label>
+            <select id={`${id}-offset`} value={rule.weekOffset} onChange={(e) => setRuleField("weekOffset", Number(e.target.value) as 0 | 1)} className={inputClass}>
+              <option value={0}>The week of the first date</option><option value={1}>The following week</option>
+            </select>
+          </div>
+        ) : null}
+        <div>
+          <label htmlFor={`${id}-dates`} className="block text-xs font-medium text-slate-600">Dates in the month</label>
+          <select id={`${id}-dates`} value={rule.dates} onChange={(e) => setRuleField("dates", e.target.value as PatternForm["dates"])} className={inputClass}>
+            <option value="all">Every matching day</option><option value="only">Only certain ones (1st, 2nd…)</option><option value="except">Every one except certain ones</option>
+          </select>
+        </div>
+        {rule.dates !== "all" ? (
+          <div className="flex flex-wrap items-end gap-2" role="group" aria-label="Which of the month's matching days">
+            {[1, 2, 3, 4, 5].map((n) => (
+              <label key={n} className="flex min-h-[40px] items-center gap-1 rounded-lg border border-slate-200 bg-white px-2 text-sm">
+                <input type="checkbox" checked={rule.nth.includes(n)} onChange={(e) => setRuleField("nth", e.target.checked ? [...rule.nth, n] : rule.nth.filter((x) => x !== n))} />
+                {["1st", "2nd", "3rd", "4th", "5th"][n - 1]}
+              </label>
+            ))}
+          </div>
+        ) : null}
+        <div className="sm:col-span-2">
+          <label htmlFor={`${id}-skip`} className="block text-xs font-medium text-slate-600">Skip a date (holiday)</label>
+          <div className="flex gap-2">
+            <input id={`${id}-skip`} type="date" value={skipDate} min={form.startsOn} onChange={(e) => setSkipDate(e.target.value)} className={inputClass} />
+            <Button type="button" variant="secondary" disabled={!skipDate || rule.excludeDates.includes(skipDate)}
+              onClick={() => { setRuleField("excludeDates", [...rule.excludeDates, skipDate]); setSkipDate(""); }}>Add</Button>
+          </div>
+          {rule.excludeDates.length ? (
+            <ul className="mt-1 flex flex-wrap gap-2 text-sm" aria-label="Skipped dates">
+              {rule.excludeDates.map((d) => (
+                <li key={d} className="rounded-full bg-slate-100 px-2 py-0.5">
+                  {formatDateOnly(d)} <button type="button" aria-label={`Remove ${formatDateOnly(d)}`} className="ml-1 font-semibold" onClick={() => setRuleField("excludeDates", rule.excludeDates.filter((x) => x !== d))}>×</button>
+                </li>
+              ))}
+            </ul>
+          ) : null}
         </div>
       </fieldset>
       <div className="grid grid-cols-2 gap-2 sm:col-span-2">
@@ -231,7 +291,7 @@ function SeriesItem({ s, today, onDone }: { s: SeriesRow; today: string; onDone:
   return (
     <li className="rounded-xl border border-slate-200 bg-white p-3 text-sm">
       <p className="font-semibold text-slate-950">{s.clientName ?? s.clientCode} · {s.serviceName}</p>
-      <p className="text-slate-800">{patternText(s.weekdays, s.startTime, s.endTime)} · {s.caregiverName ?? "Open — no caregiver"}</p>
+      <p className="text-slate-800">{patternText(s.weekdays, s.startTime, s.endTime)}{describePattern(s.pattern) ? ` · ${describePattern(s.pattern)}` : ""} · {s.caregiverName ?? "Open — no caregiver"}</p>
       <p className="text-xs text-slate-600">
         From {formatDateOnly(s.startsOn)}{s.endsOn ? ` to ${formatDateOnly(s.endsOn)}` : " (no end date)"} · scheduled through {formatDateOnly(s.generatedThrough)} · {s.upcomingOccurrences} upcoming
         {s.status === "ended" ? " · ended" : ""}

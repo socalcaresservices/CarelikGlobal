@@ -172,6 +172,17 @@ function weekdayList(value: unknown): number[] {
   return list as number[];
 }
 
+/** A repeat pattern (0053): an object, or a JSON string of one in a query string. PostgreSQL validates every key and value. */
+function patternValue(value: unknown): string | null {
+  if (value === undefined || value === null || value === "") return null;
+  let parsed: unknown = value;
+  if (typeof value === "string") {
+    try { parsed = JSON.parse(value); } catch { throw new ApiError(400, "bad_request", "pattern must be a JSON object."); }
+  }
+  if (parsed === null || typeof parsed !== "object" || Array.isArray(parsed)) throw new ApiError(400, "bad_request", "pattern must be a JSON object.");
+  return JSON.stringify(parsed);
+}
+
 export const ROUTES: Record<string, Route> = {
   "GET /v1/me": {
     mutating: false,
@@ -698,10 +709,11 @@ export const ROUTES: Record<string, Route> = {
       const end = clockTime(query.endTime, "endTime");
       const startsOn = date(query.startsOn, "startsOn");
       const endsOn = optionalDate(query.endsOn, "endsOn");
+      const pattern = patternValue(query.pattern);
       return {
         occurrences: await tx((db) => rows(db,
-          "select *, local_date::text as local_date, month_start::text as month_start from ogevia_api.preview_shift_series($1, $2, $3, $4, $5::smallint[], $6::time, $7::time, $8, $9)",
-          [org, client, service, caregiver, days, start, end, startsOn, endsOn])),
+          "select *, local_date::text as local_date, month_start::text as month_start from ogevia_api.preview_shift_series($1, $2, $3, $4, $5::smallint[], $6::time, $7::time, $8, $9, $10::jsonb)",
+          [org, client, service, caregiver, days, start, end, startsOn, endsOn, pattern])),
       };
     },
   },
@@ -729,9 +741,10 @@ export const ROUTES: Record<string, Route> = {
       const startsOn = date(body.startsOn, "startsOn");
       const endsOn = optionalDate(body.endsOn, "endsOn");
       const onConflict = oneOf(body.onConflict ?? "refuse", "onConflict", ["refuse", "skip_flagged"]);
+      const pattern = patternValue(body.pattern);
       const [series] = await tx((db) => rows(db,
-        "select * from ogevia_api.create_shift_series($1, $2, $3, $4, $5::smallint[], $6::time, $7::time, $8, $9, $10, $11)",
-        [org, client, service, caregiver, days, start, end, startsOn, endsOn, onConflict, key]));
+        "select * from ogevia_api.create_shift_series($1, $2, $3, $4, $5::smallint[], $6::time, $7::time, $8, $9, $10, $11, $12::jsonb)",
+        [org, client, service, caregiver, days, start, end, startsOn, endsOn, onConflict, key, pattern]));
       return { series };
     },
   },
@@ -751,9 +764,11 @@ export const ROUTES: Record<string, Route> = {
       const endsOn = optionalDate(body.endsOn, "endsOn");
       const onConflict = oneOf(body.onConflict ?? "refuse", "onConflict", ["refuse", "skip_flagged"]);
       const reason = text(body.reason, "reason", 500, { required: true });
+      const pattern = patternValue(body.pattern);
+      const clearPattern = body.clearPattern === undefined ? false : booleanValue(body.clearPattern, "clearPattern");
       const [result] = await tx((db) => rows(db,
-        "select * from ogevia_api.change_shift_series_from($1, $2, $3, $4, $5::smallint[], $6::time, $7::time, $8, $9, $10, $11)",
-        [org, series, from, caregiver, days, start, end, endsOn, onConflict, reason, key]));
+        "select * from ogevia_api.change_shift_series_from($1, $2, $3, $4, $5::smallint[], $6::time, $7::time, $8, $9, $10, $11, $12::jsonb, $13)",
+        [org, series, from, caregiver, days, start, end, endsOn, onConflict, reason, key, pattern, clearPattern]));
       return { result };
     },
   },
@@ -783,6 +798,61 @@ export const ROUTES: Record<string, Route> = {
       const onConflict = oneOf(body.onConflict ?? "refuse", "onConflict", ["refuse", "skip_flagged"]);
       const [result] = await tx((db) => rows(db, "select * from ogevia_api.extend_shift_series($1, $2, $3, $4, $5)", [org, series, through, onConflict, key]));
       return { result };
+    },
+  },
+
+  // Caregiver hour limits, caregiver load and make-up visits (0053).
+  "GET /v1/hour-limits": {
+    mutating: false,
+    handle: async ({ event, tx }) => ({
+      limits: await tx((db) => rows(db, "select * from ogevia_api.list_hour_limits($1)", [orgParam(event)])),
+    }),
+  },
+
+  "POST /v1/hour-limits": {
+    mutating: true,
+    handle: async ({ event, tx }) => {
+      const body = parseBody(event.body, event.isBase64Encoded);
+      const org = uuid(body.organizationId, "organizationId");
+      const caregiver = optionalUuid(body.caregiverRecordId, "caregiverRecordId");
+      const daily = body.maxDailyMinutes === null || body.maxDailyMinutes === undefined ? null : wholeNumber(body.maxDailyMinutes, "maxDailyMinutes", 60, 1440);
+      const weekly = body.maxWeeklyMinutes === null || body.maxWeeklyMinutes === undefined ? null : wholeNumber(body.maxWeeklyMinutes, "maxWeeklyMinutes", 60, 10080);
+      const mode = oneOf(body.mode ?? "report", "mode", ["report", "block"]);
+      const reason = text(body.reason, "reason", 500, { required: true });
+      await tx((db) => db.query("select ogevia_api.set_hour_limit($1, $2, $3, $4, $5, $6)", [org, caregiver, daily, weekly, mode, reason]));
+      return { ok: true };
+    },
+  },
+
+  "GET /v1/caregiver-load": {
+    mutating: false,
+    handle: async ({ event, tx }) => {
+      const query = q(event);
+      const org = orgParam(event);
+      const from = date(query.from, "from");
+      const to = date(query.to, "to");
+      return {
+        load: await tx((db) => rows(db,
+          "select *, week_start::text as week_start, busiest_day::text as busiest_day from ogevia_api.list_caregiver_load($1, $2, $3)", [org, from, to])),
+      };
+    },
+  },
+
+  "POST /v1/shifts/{shiftId}/makeup": {
+    status: 201,
+    mutating: true,
+    handle: async ({ event, tx }) => {
+      const shift = uuid(p(event).shiftId, "shiftId");
+      const body = parseBody(event.body, event.isBase64Encoded);
+      const key = idempotencyKey(event.headers);
+      const org = uuid(body.organizationId, "organizationId");
+      const day = date(body.localDate, "localDate");
+      const start = clockTime(body.startTime, "startTime");
+      const end = clockTime(body.endTime, "endTime");
+      const caregiver = optionalUuid(body.caregiverRecordId, "caregiverRecordId");
+      const [makeup] = await tx((db) => rows(db,
+        "select * from ogevia_api.schedule_makeup_shift($1, $2, $3, $4::time, $5::time, $6, $7)", [org, shift, day, start, end, caregiver, key]));
+      return { makeup };
     },
   },
 

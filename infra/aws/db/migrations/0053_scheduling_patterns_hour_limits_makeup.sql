@@ -95,8 +95,8 @@ create function ogevia.series_occurrences(p_tz text, p_weekdays smallint[], p_st
  RETURNS TABLE(local_date date, starts_at timestamp with time zone, ends_at timestamp with time zone, minutes integer)
  LANGUAGE sql
  STABLE
- SET search_path TO 'ogevia', 'pg_temp'
-AS $function$
+ set search_path = ogevia, pg_temp
+AS $$
   select d::date,
          (d::date + p_start) at time zone p_tz,
          (case when p_end <= p_start then d::date + 1 else d::date end + p_end) at time zone p_tz,
@@ -107,7 +107,7 @@ AS $function$
   where extract(dow from d)::smallint = any (p_weekdays)
     and ogevia.pattern_matches(p_pattern, d::date)
   order by 1;
-$function$;
+$$;
 
 
 -- ---------------------------------------------------------------------------
@@ -196,8 +196,8 @@ create or replace function ogevia.readiness_checks(p_organization_id uuid, p_car
  RETURNS TABLE(check_name text, status text, code text, message text, enforced boolean)
  LANGUAGE plpgsql
  STABLE
- SET search_path TO 'ogevia', 'pg_temp'
-AS $function$
+ set search_path = ogevia, pg_temp
+AS $$
 declare
   v_rec ogevia.caregiver_records%rowtype;
   v_st text;
@@ -292,14 +292,14 @@ begin
     end loop;
   end if;
 end;
-$function$;
+$$;
 
 create or replace function ogevia.readiness_message(p_check text, p_code text)
  RETURNS text
  LANGUAGE sql
  IMMUTABLE
- SET search_path TO 'ogevia', 'pg_temp'
-AS $function$
+ set search_path = ogevia, pg_temp
+AS $$
   select case
     when p_check in ('cpr', 'tb') then
       upper(p_check) || case p_code
@@ -329,14 +329,14 @@ AS $function$
     when p_check = 'caregiver' then 'Caregiver is not active.'
     when p_check = 'client' then 'A mandatory client requirement is not met.'
     else 'Not ready.' end;
-$function$;
+$$;
 
 create or replace function ogevia.readiness_outcome(p_organization_id uuid, p_caregiver_record_id uuid, p_service_id uuid, p_starts timestamp with time zone, p_ends timestamp with time zone)
  RETURNS text
  LANGUAGE sql
  STABLE
- SET search_path TO 'ogevia', 'pg_temp'
-AS $function$
+ set search_path = ogevia, pg_temp
+AS $$
   select case
     when bool_or(c.check_name in ('cpr', 'tb')) then 'documents_not_current'
     when bool_or(c.check_name = 'service') then 'service_not_approved'
@@ -346,7 +346,7 @@ AS $function$
   end
   from ogevia.readiness_checks(p_organization_id, p_caregiver_record_id, p_service_id, p_starts, p_ends, 'series') c
   where c.status = 'blocked' and c.enforced and c.check_name <> 'caregiver';
-$function$;
+$$;
 
 
 -- series_evaluate: the pattern, and the hour limit with the series' own earlier dates counted.
@@ -355,8 +355,8 @@ create function ogevia.series_evaluate(p_organization_id uuid, p_client_id uuid,
  RETURNS TABLE(local_date date, starts_at timestamp with time zone, ends_at timestamp with time zone, minutes integer, month_start date, authorization_lineage_id uuid, authorized_minutes integer, used_minutes bigint, reserved_minutes bigint, series_minutes_before integer, outcome text)
  LANGUAGE plpgsql
  STABLE
- SET search_path TO 'ogevia', 'pg_temp'
-AS $function$
+ set search_path = ogevia, pg_temp
+AS $$
 declare
   v_tz text;
   v_today date;
@@ -445,15 +445,15 @@ begin
       v_used, v_reserved, v_series, v_outcome;
   end loop;
 end;
-$function$;
+$$;
 
 drop function ogevia.series_validate(uuid, uuid, uuid, uuid, smallint[], time, time, date, date);
 create function ogevia.series_validate(p_organization_id uuid, p_client_id uuid, p_service_id uuid, p_caregiver_record_id uuid, p_weekdays smallint[], p_start time without time zone, p_end time without time zone, p_from date, p_ends_on date, p_pattern jsonb DEFAULT NULL::jsonb)
  RETURNS date
  LANGUAGE plpgsql
  STABLE
- SET search_path TO 'ogevia', 'pg_temp'
-AS $function$
+ set search_path = ogevia, pg_temp
+AS $$
 declare
   v_today date := ogevia.organization_local_date(p_organization_id, now());
   v_minutes integer;
@@ -502,13 +502,13 @@ begin
   return least(coalesce(p_ends_on, 'infinity'::date),
                (date_trunc('month', p_from) + interval '3 months' - interval '1 day')::date);
 end;
-$function$;
+$$;
 
 create or replace function ogevia.series_materialize(p_series ogevia.shift_series, p_from date, p_through date, p_on_conflict text, p_exclude_series uuid, p_exclude_from date, p_actor uuid)
  RETURNS TABLE(created integer, skipped integer, reserved_minutes integer)
  LANGUAGE plpgsql
- SET search_path TO 'ogevia', 'pg_temp'
-AS $function$
+ set search_path = ogevia, pg_temp
+AS $$
 declare
   e record;
   v_rec ogevia.caregiver_records%rowtype;
@@ -551,7 +551,7 @@ begin
   end loop;
   return query select v_created, v_skipped, v_minutes;
 end;
-$function$;
+$$;
 
 drop function ogevia.series_occurrences(text, smallint[], time, time, date, date);
 
@@ -561,8 +561,8 @@ create function ogevia_api.preview_shift_series(p_organization_id uuid, p_client
  RETURNS TABLE(local_date date, starts_at timestamp with time zone, ends_at timestamp with time zone, minutes integer, month_start date, authorization_lineage_id uuid, authorized_minutes integer, used_minutes bigint, reserved_minutes bigint, series_minutes_before integer, outcome text)
  LANGUAGE plpgsql
  STABLE SECURITY DEFINER
- SET search_path TO 'ogevia', 'pg_temp'
-AS $function$
+ set search_path = ogevia, pg_temp
+AS $$
 declare v_through date;
 begin
   perform ogevia.shift_admin_guard(p_organization_id);
@@ -571,15 +571,15 @@ begin
   return query select * from ogevia.series_evaluate(p_organization_id, p_client_id, p_service_id, p_caregiver_record_id,
     p_weekdays, p_start, p_end, p_starts_on, v_through, null, null, p_pattern);
 end;
-$function$;
+$$;
 
 drop function ogevia_api.create_shift_series(uuid, uuid, uuid, uuid, smallint[], time, time, date, date, text, uuid);
 create function ogevia_api.create_shift_series(p_organization_id uuid, p_client_id uuid, p_service_id uuid, p_caregiver_record_id uuid, p_weekdays smallint[], p_start time without time zone, p_end time without time zone, p_starts_on date, p_ends_on date, p_on_conflict text DEFAULT 'refuse'::text, p_idempotency_key uuid DEFAULT NULL::uuid, p_pattern jsonb DEFAULT NULL::jsonb)
  RETURNS TABLE(series_id uuid, created integer, skipped integer, reserved_minutes integer, generated_through date)
  LANGUAGE plpgsql
  SECURITY DEFINER
- SET search_path TO 'ogevia', 'pg_temp'
-AS $function$
+ set search_path = ogevia, pg_temp
+AS $$
 #variable_conflict use_column
 declare
   v_actor uuid := ogevia.shift_admin_guard(p_organization_id);
@@ -621,15 +621,15 @@ begin
       'reserved_minutes', v_r.reserved_minutes, 'generated_through', v_through));
   return query select v_series.id, v_r.created, v_r.skipped, v_r.reserved_minutes, v_through;
 end;
-$function$;
+$$;
 
 drop function ogevia_api.change_shift_series_from(uuid, uuid, date, uuid, smallint[], time, time, date, text, text, uuid);
 create function ogevia_api.change_shift_series_from(p_organization_id uuid, p_series_id uuid, p_from date, p_caregiver_record_id uuid, p_weekdays smallint[], p_start time without time zone, p_end time without time zone, p_ends_on date, p_on_conflict text, p_reason text, p_idempotency_key uuid DEFAULT NULL::uuid, p_pattern jsonb DEFAULT NULL::jsonb, p_clear_pattern boolean DEFAULT false)
  RETURNS TABLE(series_id uuid, cancelled integer, created integer, skipped integer, kept integer)
  LANGUAGE plpgsql
  SECURITY DEFINER
- SET search_path TO 'ogevia', 'pg_temp'
-AS $function$
+ set search_path = ogevia, pg_temp
+AS $$
 #variable_conflict use_column
 declare
   v_actor uuid := ogevia.shift_admin_guard(p_organization_id);
@@ -690,15 +690,15 @@ begin
     jsonb_build_object('series_id', v_new.id, 'cancelled', v_c.cancelled, 'created', v_m.created, 'skipped', v_m.skipped, 'kept', v_c.kept));
   return query select v_new.id, v_c.cancelled, v_m.created, v_m.skipped, v_c.kept;
 end;
-$function$;
+$$;
 
 drop function ogevia_api.list_shift_series(uuid);
 create function ogevia_api.list_shift_series(p_organization_id uuid)
  RETURNS TABLE(series_id uuid, status text, client_id uuid, client_code text, client_name text, service_id uuid, service_code text, service_name text, caregiver_record_id uuid, caregiver_name text, weekdays smallint[], start_time time without time zone, end_time time without time zone, starts_on date, ends_on date, generated_through date, replaces_series_id uuid, upcoming_occurrences integer, skipped_dates jsonb, pattern jsonb)
  LANGUAGE sql
  STABLE SECURITY DEFINER
- SET search_path TO 'ogevia', 'pg_temp'
-AS $function$
+ set search_path = ogevia, pg_temp
+AS $$
   select ss.id, ss.status, c.id, c.client_code,
          case when ogevia.has_permission(p_organization_id, 'clients.names.read')
               then nullif(btrim(coalesce(n.legal_first_name, '') || ' ' || coalesce(n.legal_last_name, '')), '') end,
@@ -719,15 +719,15 @@ AS $function$
     and ogevia.is_active_member(p_organization_id)
     and (ogevia.has_permission(p_organization_id, 'shifts.manage') or ogevia.has_permission(p_organization_id, 'visits.manage'))
   order by ss.status, ss.starts_on desc;
-$function$;
+$$;
 
 drop function ogevia_api.list_shifts(uuid, date, date, uuid);
 create function ogevia_api.list_shifts(p_organization_id uuid, p_from date, p_to date, p_client_id uuid DEFAULT NULL::uuid)
  RETURNS TABLE(shift_id uuid, starts_at timestamp with time zone, ends_at timestamp with time zone, local_date date, coverage_state text, shift_status text, client_id uuid, client_code text, client_name text, service_id uuid, service_code text, service_name text, caregiver_record_id uuid, caregiver_code text, caregiver_name text, has_sign_in boolean, reserved_minutes integer, from_care_request boolean, has_visit boolean, last_callout_reason text, series_id uuid, availability_override boolean, availability_override_reason text, makeup_for_shift_id uuid)
  LANGUAGE sql
  STABLE SECURITY DEFINER
- SET search_path TO 'ogevia', 'pg_temp'
-AS $function$
+ set search_path = ogevia, pg_temp
+AS $$
   with ctx as (
     select ogevia.require_actor() as actor,
            ogevia.is_active_member(p_organization_id)
@@ -763,7 +763,7 @@ AS $function$
     and (s.starts_at at time zone ctx.tz)::date between p_from and p_to
     and (p_client_id is null or s.client_id = p_client_id)
   order by s.starts_at, c.client_code;
-$function$;
+$$;
 
 
 -- ---------------------------------------------------------------------------
