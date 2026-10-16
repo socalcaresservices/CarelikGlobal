@@ -13,7 +13,7 @@ rm -rf "$STAGE" && mkdir -p "$STAGE"
   npx cdk synth --quiet --no-notices -c env=prod -c mode=deploy >/dev/null)
 (cd "$HERE" && npx tsx scripts/synth-inventory.ts | grep -q "Scanner violations: \*\*0\*\*") || { echo "template scanner found violations"; exit 1; }
 cp -r "$HERE/cdk.out" "$STAGE/cdk.out"
-(cd "$REPO/apps/web" && VITE_APP_ENV=production VITE_AUTH_PROVIDER=cognito npx vite build --outDir "$STAGE/web" --emptyOutDir >/dev/null)
+(cd "$REPO/apps/web" && VITE_APP_ENV=test VITE_AUTH_PROVIDER=cognito npx vite build --outDir "$STAGE/web" --emptyOutDir >/dev/null)
 cp "$HERE/slice/finish.sh" "$HERE/slice/smoke.py" "$STAGE/"
 mkdir -p "$STAGE/db"
 cp "$HERE/db/migrations/0010_reporting_acceptance_improvements.sql" "$STAGE/db/"

@@ -12,9 +12,9 @@ const read = (rel: string) => readFileSync(new URL(`../${rel}`, import.meta.url)
 const code = (rel: string) => read(rel).split("\n").filter((l) => !/^\s*#/.test(l)).join("\n");
 
 /** Scripts that build the web app AND publish it to TEST: they must label it test and check the result before publishing. */
-const PUBLISHING_SCRIPTS = ["slice/increment-deploy.sh"];
+const PUBLISHING_SCRIPTS = ["slice/increment-deploy.sh", "slice/release-0026-deploy.sh", "slice/release-0036-deploy.sh"];
 /** Scripts that only build for TEST (they write their own fresh config.json): label only. */
-const BUILD_ONLY_SCRIPTS = [];
+const BUILD_ONLY_SCRIPTS = ["slice/pilot-deploy.sh", "scripts/build-slice-bundle.sh"];
 
 describe("TEST web builds carry the TEST label", () => {
   it.each(PUBLISHING_SCRIPTS)("%s builds with VITE_APP_ENV=test and checks the build and the live config before publishing", (rel) => {
