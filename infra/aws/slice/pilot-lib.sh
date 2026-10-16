@@ -46,6 +46,25 @@ die() {
   [[ -n "${LOG:-}" ]] && printf '%s\n' "$msg" >> "$LOG"
   exit 1
 }
+
+# --- web label guard (begin) -------------------------------------------------------------------------------------------
+# A web build published to the TEST environment (stacks Ogevia-prod-*) must carry the label "test". The live /config.json of
+# TEST has no VITE_APP_ENV key (it was written before 2026-10-07), so the BUILD value decides whether the "TEST - synthetic data
+# only" banner shows; a build labelled "production" shows no banner and looks like production. The banner TEXT is in the code of
+# every build, so searching for it proves nothing; the baked-in value does (verified 2026-10-16 by building both).
+assert_test_web_label() {   # <build dir>
+  local d=$1
+  grep -rqE 'VITE_APP_ENV:[[:space:]]*"test"' "$d/assets" 2>/dev/null \
+    || die "the web build in $d is not labelled test (VITE_APP_ENV:\"test\" not found). Refusing to publish it to the TEST environment."
+  if grep -rqE 'VITE_APP_ENV:[[:space:]]*"production"' "$d/assets" 2>/dev/null; then
+    die "the web build in $d is labelled production. Refusing to publish it to the TEST environment."; fi
+}
+assert_live_config_label() {   # <web origin>: read-only GET of the live /config.json
+  local v
+  v=$(curl -fsS -m 20 "${1%/}/config.json" | jq -r '.VITE_APP_ENV // empty') || die "cannot read ${1%/}/config.json"
+  [[ -z "$v" || "$v" == test || "$v" == development ]] || die "the live config.json says VITE_APP_ENV=$v; a TEST site must not claim to be production."
+}
+# --- web label guard (end) ---------------------------------------------------------------------------------------------
 # An exit that did not go through die() (for example a killed child that took
 # the shell's pipeline down) still says so, with the exit code.
 on_exit() {

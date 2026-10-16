@@ -156,9 +156,11 @@ else
 fi
 export OGEVIA_DEPLOY_APPROVAL="$TAG_REF"
 (cd "$HERE" && npx cdk synth --quiet --no-notices -c env=prod -c mode=deploy >/dev/null) || die "cdk synth (deploy mode) failed"
-(cd "$REPO/apps/web" && VITE_APP_ENV=production VITE_AUTH_PROVIDER=cognito npx vite build --outDir "$RUN/web-build" --emptyOutDir >/dev/null) \
+# TEST label: the live config.json has no VITE_APP_ENV key, so the BUILD value decides the banner (see pilot-lib.sh).
+(cd "$REPO/apps/web" && VITE_APP_ENV=test VITE_AUTH_PROVIDER=cognito npx vite build --outDir "$RUN/web-build" --emptyOutDir >/dev/null) \
   || die "web build failed"
 rm -f "$RUN/web-build/config.json"   # the live config.json is kept as it is
+assert_test_web_label "$RUN/web-build"
 echo "Lint, typecheck, unit tests, build, synth, web build: OK"
 
 # ----------------------------------------------------------------------------
@@ -325,6 +327,7 @@ PEAKPY
 fi
 if ! is_done web-deployed; then
   W="$RUN/web-build"
+  assert_test_web_label "$W"; assert_live_config_label "$WEB"
   aws s3 sync "$W/assets" "s3://$BUCKET/assets" --only-show-errors --cache-control "public,max-age=31536000,immutable"
   aws s3 sync "$W" "s3://$BUCKET" --only-show-errors --exclude "assets/*" --exclude "index.html" --exclude "config.json"
   aws s3 cp "$W/index.html" "s3://$BUCKET/index.html" --only-show-errors --content-type "text/html; charset=utf-8" --cache-control "no-cache"
