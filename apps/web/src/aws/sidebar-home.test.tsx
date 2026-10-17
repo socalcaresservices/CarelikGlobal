@@ -291,7 +291,7 @@ describe("Home layout", () => {
     expect(within(table).getAllByRole("columnheader").map((c) => c.textContent)).toEqual(["Service", "Authorized", "Worked", "Billable", "In review", "Approved", "Scheduled ahead", "Held for confirmation or review", "To reconcile", "Committed", "Left", "Over limit"]);
     const row = within(table).getAllByRole("row")[1]!;
     expect(row).toHaveTextContent("Respite Care");
-    expect(within(row).getAllByRole("cell").map((c) => c.textContent)).toEqual(["100 h", "26.5 h", "24.5 h", "2 h", "10 h", "4 h", "24.5 h", "75.5 h", "0 h"]);
+    expect(within(row).getAllByRole("cell").map((c) => c.textContent)).toEqual(["100 h", "26.5 h", "24.5 h", "2 h", "10 h", "4 h", "0 h", "0 h", "24.5 h", "75.5 h", "0 h"]);
     for (const c of within(row).getAllByRole("cell")) expect(c.className).toMatch(/text-right/);
     const scroller = within(hours).getByRole("region", { name: /scrolls sideways/ });
     expect(scroller.className).toMatch(/overflow-x-auto/);

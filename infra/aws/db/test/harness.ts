@@ -502,6 +502,9 @@ export const api = {
           new_version_number: number;
           affected_visit_id: string | null;
           impact_kind: string | null;
+          affected_shift_id: string | null;
+          impact_id: string | null;
+          impact_minutes: number | null;
         }>,
     );
   },
