@@ -1046,6 +1046,7 @@ export const ROUTES: Record<string, Route> = {
     handle: async ({ event, tx }) => ({ shifts: await tx((db) => rows(db, "select * from ogevia_api.list_open_shifts($1)", [orgParam(event)])) }),
   },
 
+  // 0063: asking for an open shift only records a request; the shift is not assigned until an administrator confirms (confirm below).
   "POST /v1/shifts/{shiftId}/pickup": {
     mutating: true,
     handle: async ({ event, tx }) => {
@@ -1055,7 +1056,52 @@ export const ROUTES: Record<string, Route> = {
       const org = uuid(body.organizationId, "organizationId");
       const state = await tx(async (db) =>
         ((await db.query("select ogevia_api.pickup_open_shift($1, $2, $3) as s", [org, shift, key])).rows[0] as { s: string }).s);
+      return { pickupState: state };
+    },
+  },
+
+  "POST /v1/shifts/{shiftId}/pickup/withdraw": {
+    mutating: true,
+    handle: async ({ event, tx }) => {
+      const shift = uuid(p(event).shiftId, "shiftId");
+      const body = parseBody(event.body, event.isBase64Encoded);
+      const org = uuid(body.organizationId, "organizationId");
+      const state = await tx(async (db) =>
+        ((await db.query("select ogevia_api.withdraw_my_shift_pickup($1, $2) as s", [org, shift])).rows[0] as { s: string }).s);
+      return { pickupState: state };
+    },
+  },
+
+  // The administrator's queue (shifts.manage): each waiting request with what would block it now.
+  "GET /v1/shift-pickups": {
+    mutating: false,
+    handle: async ({ event, tx }) => ({ requests: await tx((db) => rows(db, "select * from ogevia_api.list_shift_pickup_requests($1)", [orgParam(event)])) }),
+  },
+
+  "POST /v1/shift-pickups/{requestId}/confirm": {
+    mutating: true,
+    handle: async ({ event, tx }) => {
+      const request = uuid(p(event).requestId, "requestId");
+      const body = parseBody(event.body, event.isBase64Encoded);
+      const key = idempotencyKey(event.headers);
+      const org = uuid(body.organizationId, "organizationId");
+      const state = await tx(async (db) =>
+        ((await db.query("select ogevia_api.confirm_shift_pickup($1, $2, $3) as s", [org, request, key])).rows[0] as { s: string }).s);
       return { coverageState: state };
+    },
+  },
+
+  "POST /v1/shift-pickups/{requestId}/decline": {
+    mutating: true,
+    handle: async ({ event, tx }) => {
+      const request = uuid(p(event).requestId, "requestId");
+      const body = parseBody(event.body, event.isBase64Encoded);
+      const key = idempotencyKey(event.headers);
+      const org = uuid(body.organizationId, "organizationId");
+      const reason = text(body.reason, "reason", 500, { required: true });
+      const state = await tx(async (db) =>
+        ((await db.query("select ogevia_api.decline_shift_pickup($1, $2, $3, $4) as s", [org, request, reason, key])).rows[0] as { s: string }).s);
+      return { pickupState: state };
     },
   },
 

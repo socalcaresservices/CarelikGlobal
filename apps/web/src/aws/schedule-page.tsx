@@ -10,6 +10,7 @@ import { clientName, useClients, useServices } from "./client-admin";
 import { formatDuration } from "@/lib/service-verification";
 import { useAgencyClock } from "./agency-clock";
 import { RecurringSeriesForm, RejectedDates, RescheduleForm, SeriesList } from "./recurring-schedule";
+import { PickupRequestsPanel } from "./pickup-requests";
 import type { RejectedDate } from "./recurring-format";
 import { AssignmentChecks } from "./readiness/assignment-checks";
 import { HourLimitsPanel, MakeupForm } from "./scheduling-extras";
@@ -326,6 +327,7 @@ export function SchedulePage() {
       {showLimits ? <Card className="p-3"><h2 className="mb-2 text-base font-semibold text-slate-950">Hours and limits</h2><HourLimitsPanel from={from} to={to} canManage={canManage} /></Card> : null}
       {notice ? <p role="status" className="text-sm text-emerald-800">{notice}</p> : null}
       <RejectedDates items={rejectedDates} />
+      {canManage ? <PickupRequestsPanel onDone={showNotice} /> : null}
       <div className="flex flex-wrap items-end gap-3">
         <Button type="button" variant="secondary" onClick={() => setFrom(addDays(from, -7))}>← Previous week</Button>
         <div><label htmlFor="sh-from" className="block text-sm font-medium text-slate-700">Week starting</label><input id="sh-from" type="date" value={from} onChange={(e) => e.target.value && setFrom(e.target.value)} className={inputClass} /></div>
@@ -345,9 +347,9 @@ export function SchedulePage() {
   );
 }
 
-interface OpenShift { shiftId: string; startsAt: string; endsAt: string; minutes: number; clientCode: string; serviceName: string | null; coverageState: string }
+interface OpenShift { shiftId: string; startsAt: string; endsAt: string; minutes: number; clientCode: string; serviceName: string | null; coverageState: string; myRequestStatus?: "requested" | null }
 
-/** Wave 1 (G09): open shifts the caregiver is assigned to. One person gets the shift; the office is not asked. */
+/** Wave 1 (G09), changed by 0063: open shifts the caregiver is assigned to. Asking sends a request; the office confirms one caregiver. */
 function OpenShiftsSection({ onPicked }: { onPicked: (text: string) => void }) {
   const api = useAwsApi();
   const queryClient = useQueryClient();
@@ -370,32 +372,53 @@ function OpenShiftsSection({ onPicked }: { onPicked: (text: string) => void }) {
     try {
       await api.post(`/v1/shifts/${encodeURIComponent(shiftId)}/pickup`, { organizationId: activeOrganizationId }, { idempotencyKey: keys.current.get(shiftId)! });
       keys.current.delete(shiftId);
-      onPicked("You have the shift. It is now in your list below.");
+      onPicked("Request sent. The office will confirm it. The shift is not yours until they do.");
     } catch (cause) {
       keys.current.delete(shiftId);
-      setError({ shiftId, text: message(cause, "The shift was not picked up. Check your connection and try again.") });
+      setError({ shiftId, text: message(cause, "The request was not sent. Check your connection and try again.") });
     } finally {
       setBusyId(null);
-      // Whatever happened, show the true state: someone else may have filled it.
+      // Whatever happened, show the true state: someone else may have been confirmed.
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ["aws-open-shifts"] }),
         queryClient.invalidateQueries({ queryKey: ["aws-my-shifts"] }),
       ]);
     }
   }
+  async function withdraw(shiftId: string) {
+    if (busyId) return;
+    setBusyId(shiftId);
+    setError(null);
+    try {
+      await api.post(`/v1/shifts/${encodeURIComponent(shiftId)}/pickup/withdraw`, { organizationId: activeOrganizationId });
+      onPicked("Request withdrawn.");
+    } catch (cause) {
+      setError({ shiftId, text: message(cause, "The request was not withdrawn. Try again.") });
+    } finally {
+      setBusyId(null);
+      await queryClient.invalidateQueries({ queryKey: ["aws-open-shifts"] });
+    }
+  }
   if (open.isError) return <p role="alert" className="text-sm text-red-700">Open shifts could not be loaded. Refresh the page.</p>;
   if (!open.data || open.data.length === 0) return null;
   return (
     <section aria-labelledby="open-shifts-heading" className="space-y-2">
-      <h2 id="open-shifts-heading" className="text-base font-semibold text-slate-950">Open shifts you can pick up</h2>
-      <p className="text-sm text-slate-600">If someone else picks one up first, it will disappear from this list.</p>
+      <h2 id="open-shifts-heading" className="text-base font-semibold text-slate-950">Open shifts you can ask for</h2>
+      <p className="text-sm text-slate-600">Asking does not give you the shift. The office confirms one caregiver, and the shift appears in your list once it does.</p>
       <ul className="space-y-2">
         {open.data.map((s) => (
           <li key={s.shiftId} className="rounded-xl border border-sky-200 bg-sky-50 p-3">
             <p className="font-semibold text-slate-950">{when(s.startsAt)}–{time(s.endsAt)}</p>
             <p className="text-sm text-slate-800">Client {s.clientCode}{s.serviceName ? ` · ${s.serviceName}` : ""} · {formatDuration(s.minutes)}</p>
             {error?.shiftId === s.shiftId ? <p role="alert" className="mt-1 text-sm text-red-700">{error.text}</p> : null}
-            <Button type="button" className="mt-2 min-h-11" disabled={busyId !== null} loading={busyId === s.shiftId} onClick={() => void pickUp(s.shiftId)}>Pick up this shift</Button>
+            {s.myRequestStatus === "requested" ? (
+              <div className="mt-2 flex flex-wrap items-center gap-3">
+                <span data-testid="requested-badge" className="rounded-full bg-amber-100 px-3 py-1 text-sm font-semibold text-amber-900">Requested — waiting for the office</span>
+                <Button type="button" variant="secondary" className="min-h-11" disabled={busyId !== null} loading={busyId === s.shiftId} onClick={() => void withdraw(s.shiftId)}>Withdraw request</Button>
+              </div>
+            ) : (
+              <Button type="button" className="mt-2 min-h-11" disabled={busyId !== null} loading={busyId === s.shiftId} onClick={() => void pickUp(s.shiftId)}>Request this shift</Button>
+            )}
           </li>
         ))}
       </ul>

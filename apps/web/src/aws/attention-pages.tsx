@@ -96,6 +96,12 @@ export function UpcomingStaffingPage() {
       <PageHeader title="Upcoming staffing" lead={`Shifts more than ${q.data?.urgentWindowHours ?? URGENT_WINDOW_HOURS} hours away that still need a caregiver, or whose caregiver is blocked. Shifts ${q.data?.urgentWindowHours ?? URGENT_WINDOW_HOURS} hours away or less are under Needs attention now.`}
         action={<Link className="inline-flex min-h-[44px] items-center rounded-lg bg-og-accent px-4 text-sm font-semibold text-og-on-accent hover:opacity-90 md:min-h-[40px]" to="/schedule">Open schedule</Link>} />
       <Loading q={q} />
+      {q.data?.pickups && q.data.pickups.count > 0 ? (
+        <p data-testid="pickup-requests-link" className="rounded-og border border-og-line bg-og-card p-3 text-sm text-og-ink">
+          {plural(q.data.pickups.count, "caregiver request")} for open shifts {q.data.pickups.count === 1 ? "is" : "are"} waiting for you to confirm. Nobody is assigned until you do.{" "}
+          <Link className="font-semibold underline" to="/schedule">Review requests</Link>
+        </p>
+      ) : null}
       {q.data && !u ? <p className="text-sm text-og-sub">Your role does not include this list.</p> : null}
       {u ? (
         u.shifts.length === 0 ? <p className="rounded-og border border-og-line bg-og-card p-4 text-sm text-og-sub">Every upcoming shift has a caregiver who may work it.</p> : (

@@ -70,8 +70,11 @@ function fakeApi(role: Role, opts: Opts = {}) {
         return json(200, { shifts: openShifts });
       case `POST /v1/shifts/${SHIFT}/pickup`:
         if (opts.pickup === "filled") { openShifts = []; return json(409, { error: { code: "conflict", message: "This shift was just filled." } }); }
-        openShifts = [];
-        return json(200, { coverageState: "covered" });
+        openShifts = openShifts.map((o: any) => ({ ...o, myRequestStatus: "requested" })); // 0063: the shift stays open; the caregiver has asked
+        return json(200, { pickupState: "requested" });
+      case `POST /v1/shifts/${SHIFT}/pickup/withdraw`:
+        openShifts = openShifts.map((o: any) => ({ ...o, myRequestStatus: null }));
+        return json(200, { pickupState: "withdrawn" });
       case "GET /v1/visit-rules":
         return json(200, { rules });
       case "POST /v1/visit-rules":
@@ -223,24 +226,31 @@ describe("confirmation choices and attestation (G05, G06)", () => {
 });
 
 describe("open shifts (G09)", () => {
-  it("lists open shifts by client code, picks one up with an idempotency key, and shows the shift in the list", async () => {
+  it("lists open shifts by client code; asking sends a request (with an idempotency key) and does NOT claim the shift; the caregiver can withdraw it", async () => {
     const api = renderAws("/my-shifts", "caregiver", { pickup: "ok" });
-    expect(await screen.findByText(/Open shifts you can pick up/, undefined, { timeout: COLD })).toBeInTheDocument();
-    const region = screen.getByRole("heading", { name: /Open shifts you can pick up/ }).closest("section")!;
+    expect(await screen.findByText(/Open shifts you can ask for/, undefined, { timeout: COLD })).toBeInTheDocument();
+    const region = screen.getByRole("heading", { name: /Open shifts you can ask for/ }).closest("section")!;
     expect(within(region).getByText(/Client C-104 · Respite Care · 2 hr/)).toBeInTheDocument();
-    fireEvent.click(within(region).getByRole("button", { name: "Pick up this shift" }));
-    expect(await screen.findByText(/You have the shift/)).toBeInTheDocument();
+    expect(within(region).getByText(/Asking does not give you the shift/)).toBeInTheDocument();
+    expect(within(region).queryByText(/disappear/)).toBeNull();
+    fireEvent.click(within(region).getByRole("button", { name: "Request this shift" }));
+    expect(await screen.findByText(/Request sent\. The office will confirm it\. The shift is not yours until they do/)).toBeInTheDocument();
+    expect(screen.queryByText(/You have the shift/)).toBeNull();
     const call = api.calls.find((c) => c.path === `/v1/shifts/${SHIFT}/pickup`)!;
     expect(call.body).toEqual({ organizationId: ORG });
     expect(call.headers["idempotency-key"]).toMatch(/^[0-9a-f-]{36}$/);
-    await waitFor(() => expect(screen.queryByRole("heading", { name: /Open shifts you can pick up/ })).not.toBeInTheDocument());
+    expect(await screen.findByTestId("requested-badge")).toHaveTextContent("Requested — waiting for the office");
+    expect(screen.queryByRole("button", { name: "Request this shift" })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Withdraw request" }));
+    expect(await screen.findByRole("button", { name: "Request this shift" })).toBeInTheDocument();
+    expect(api.calls.some((c) => c.path === `/v1/shifts/${SHIFT}/pickup/withdraw`)).toBe(true);
   }, T);
 
   it("when someone else got there first, the caregiver is told and the shift leaves the list", async () => {
     renderAws("/my-shifts", "caregiver", { pickup: "filled" });
-    fireEvent.click(await screen.findByRole("button", { name: "Pick up this shift" }, { timeout: COLD }));
+    fireEvent.click(await screen.findByRole("button", { name: "Request this shift" }, { timeout: COLD }));
     expect(await screen.findByRole("alert")).toHaveTextContent("This shift was just filled.");
-    await waitFor(() => expect(screen.queryByRole("button", { name: "Pick up this shift" })).not.toBeInTheDocument());
+    await waitFor(() => expect(screen.queryByRole("button", { name: "Request this shift" })).not.toBeInTheDocument());
   }, T);
 });
 

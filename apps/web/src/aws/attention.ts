@@ -37,6 +37,8 @@ export interface AttentionOverview {
   /** reviewRoutine = awaiting review inside the deadline; reviewOverdue = escalated (48 h after upload, expired, or blocking care). */
   documents: { overdue?: number; dueSoon?: number; awaitingReview?: number; reviewRoutine?: number; reviewOverdue?: number; rejected?: number; caregiversOnHold?: number; caregiversWithPendingRequirements?: number } | null;
   /** visitsNeedingAttention = needsReview + lateResponses + confirmationOverdue. pendingConfirmation and readyForApproval are routine and never added to it. */
+  /** 0063: caregivers' requests for open shifts waiting for an administrator. Routine; never added to the urgent total. Null without shifts.manage. */
+  pickups?: { count: number; oldestRequestedAt: string | null } | null;
   visitReview: { visitsNeedingAttention: number; pendingConfirmation?: number; confirmationOverdue?: number; awaitingConfirmation: number; needsReview: number; reviewOverdue?: number; lateResponses: number; readyForApproval: number | null; reviewIssues: number; awaitingResponse: number } | null;
 }
 
