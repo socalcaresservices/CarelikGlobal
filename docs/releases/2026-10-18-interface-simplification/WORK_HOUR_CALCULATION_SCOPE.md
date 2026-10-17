@@ -16,6 +16,7 @@ The database enforces **8 hours a day and 40 hours a week on SCHEDULED time**. I
 | Week boundary | Monday 00:00 agency-local through the following Monday |
 | When it is checked | Create, reschedule, reassign, call-out replacement, open-shift pickup confirmation, care-request assignment, make-up, every date of a recurring series; plus a database trigger on `shifts` (insert and update of a scheduled, unfinished shift with a caregiver) under the caregiver lock |
 | Can anyone override it | No API, role or screen. A manager's looser limit or report mode changes nothing (the stricter limit always wins, block mode). A change is a reviewed migration |
+| Exact boundaries (tested) | Weekly 2400 minutes (40 h) accepted, 2401 refused. Daily 480 accepted, 481 refused. The scheduling API's shortest shift is 15 minutes, so the boundary is tested as 2385 + 15 and 2385 + 16; a direct 1-minute insert at 2400 is refused by the database trigger. |
 | Which agency | Policy rows are keyed by slug: `socal-care-services` (migration 0060). The synthetic pilot gets its own row only through `db/deploy/06_pilot_work_hour_policy_synthetic.sql`; nothing else is affected |
 
 ## Scheduled hours versus actual worked hours
