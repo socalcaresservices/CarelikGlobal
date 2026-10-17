@@ -240,5 +240,10 @@ Supervised TEST-only run (only after you approve it):
 6. On `NOT RESTORED`, exit 3, or a lost session: run the section 10.3 recovery from the recovery session (the row with cidr `10.20.132.179/32`, tcp 5432; revoke by rule id).
 Production is not approved. No stack update or deployment should run during the window.
 
-## 12. Outcome of the TEST run (owner-reported; recorded 2026-10-17)
-The TEST ledger check passed: 52 migrations, latest 0052, no rows with version ≥ 0053. The script reported the security group fully restored, and a separate read-only check showed that only the original rule `sgr-088d9ee71c4b0244d` remains on the RDS group. Not recorded because not supplied: the time of the run, the exact script commit and mode used, and the raw output. The window was not applied by this session; the evidence is the operator's report. Production was not run and is not approved. The retained limitation (total session loss or SIGKILL leaves the rule open until revoked) did not occur in this run and is unchanged. Recorded in the release README under "Migration edited in place".
+## 12. Outcome of the TEST run (OPERATOR-SUPPLIED evidence from the actual CloudShell output; not executed or observed by this session)
+- Script extracted from commit `4881611c7b25431368c3ccd7c05357bbdbc2dbbf`; SHA-256 verified `f96c06f2c4f20d4c85871baad84cdc8726fb2183e138cd1ac7cd6d15bef85f6f`.
+- Command `OGEVIA_EXPECT_HOST_IP=10.20.132.179 bash ~/ledger-check-temp-access.sh test --host-ip`, run 2026-10-17T16:29:27Z.
+- Connected database `ogevia_sv_test`, `read_only=on`. Result: 52 migrations, latest 0052, no rows >= 0053.
+- Both `ogevia_sv_test` and `ogevia_prd` were reported present: production exists; its ledger remains unchecked and no production window is approved.
+- Cleanup reported RESTORED with the original full rule-set hash restored. A follow-up listing showed only `sgr-088d9ee71c4b0244d`, source `sg-064ffce3bcbe8eb3b`, TCP 5432, no CIDR rule.
+- Not supplied: the raw output itself (not attached to the repository). The retained limitation (total session loss or SIGKILL leaves the rule open until revoked) did not occur in this run and is unchanged. First real-AWS evidence for the v3 `--host-ip` path on TEST only; the `prod` path has not run. Recorded in the release README under "Migration edited in place".
