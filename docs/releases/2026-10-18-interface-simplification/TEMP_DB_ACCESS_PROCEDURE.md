@@ -39,19 +39,22 @@ The rule applies only to members of `sg-00e01e2ca80442c1f`; the script refuses t
 4. **Open.** Writes a marker `~/.ogevia-ledger-window/OPEN` (atomically; a second run cannot open another window), adds the single rule (description `TEMP-ledger-check-<UTC stamp>`), and checks that the group minus that rule equals the original hash. Anything else changed: abort.
 5. **Query (seconds).** Session Manager port-forward to RDS; reads the master secret into memory (never printed or saved); proves `current_database()` equals the expected name and the session is read-only; runs only the ledger selects in a read-only transaction.
 6. **Close and verify, on every exit.** Removes the rule (retrying up to 4 times), re-describes the group, and requires the rule to be absent **and** the complete rule-set hash to equal the original. Prints `RESTORED (verified)`, or `NOT RESTORED` with the exact manual revoke command.
-Cleanup is attached to normal exit, any `stop`, and INT/TERM/HUP. The 300 s figure is NOT a hard limit: see section 5A.
+Cleanup is attached to normal exit, any `stop`, and INT/TERM/HUP. Every command that can hang is bounded by `timeout`; the 300 s figure is a between-steps check, not a hard timer: see section 5A.
 
 ## 5. If the session dies or restoration fails
 The marker survives. A new run refuses to start and tells you to run `bash ledger-check-temp-access.sh --restore-only`, which removes the rule idempotently and clears the marker **only after verification**. Only the run that opened the window, or `--restore-only`, ever removes the rule; a refused or concurrent run does not touch it. Manual fallback command is printed by the script.
 
-## 5A. What the 300-second limit is, and what independently removes the rule (corrected)
-**The script's 300 s limit is a soft, in-process check, not a hard limit.** `OGEVIA_WINDOW_MAX_SECONDS` is compared with the clock at two points only: once after the tunnel opens (before the secret is read) and once after the queries finish. It does not interrupt a step that hangs. The only bounded steps are the database connection (15 s) and each statement (20 s); the AWS CLI calls and the Session Manager tunnel have no timeout. The earlier wording "hard limit" in this document and in the script header overstated it. The script file is unchanged, so its hash is unchanged; the header comment still says "hard limit" and is inaccurate.
+## 5A. Time bounds (script v2) and what independently removes the rule
+**Script v2 (commit `2bdc8ea51ca0071f4cdaa4cce839f573dd4a9dbe`, sha256 `f7af146e5b5ce738d23aaa40d37774b85bef7d3c335e81d9fcaf8d88f456e970`) bounds every command that can hang.** Run under GNU `timeout --foreground` (so Ctrl+C still reaches the command): every `aws` call 30 s (`OGEVIA_AWS_TIMEOUT`), every `psql` 45 s (`OGEVIA_PSQL_TIMEOUT`), the Session Manager tunnel `OGEVIA_WINDOW_MAX_SECONDS + 30` s, and every call made by the cleanup 20 s (`OGEVIA_CLEANUP_AWS_TIMEOUT`); each gets a 5 s kill grace. Database statements are also capped at 20 s and the connection at 15 s. A timeout is a failure: it prints `[TIMED OUT]`, goes through the same cleanup as any other failure, and the cleanup verifies restoration. If the cleanup's own check times out, the state is reported as UNKNOWN, never assumed restored, and the exit code is 3.
+`OGEVIA_WINDOW_MAX_SECONDS` (default 300) is **not a timer that fires during a step.** It is compared with the clock before each step after the rule is added (before the tunnel, the secret read and each query); when exceeded the run stops into cleanup. A single step can run past it only up to that step's own timeout.
 
-**Nothing independent of the CloudShell session removes the rule.** Every cleanup mechanism is inside, or on the disk of, the process that opened it: the EXIT/INT/TERM/HUP traps, the re-entrant `close_window`, the retries, and the marker file. If CloudShell is terminated completely, the process is SIGKILLed, the session is torn down, or the network drops at the wrong moment, no trap runs and **the rule stays until a person revokes it**. The marker file only prevents a second run from starting; it removes nothing. Security groups have no expiry for a rule, and this design creates no scheduled job, Lambda or alarm, because that would be a new AWS resource and was not proposed.
+Analysis, not measured against real AWS: a hang ends the run within about 35 s (an AWS call) or 50 s (a query) of starting. A cleanup in which every call times out takes at most roughly 6 minutes (4 attempts of up to 3 calls at 25 s, plus the final checks), then exits 3 with the recovery text. Normal runs take seconds.
+
+**Retained limitation: nothing independent of the CloudShell session removes the rule.** The timeouts, traps, retries and marker file all live in, or on the disk of, the process that opened the window. If CloudShell is terminated completely, the session is destroyed, the process receives SIGKILL, or the network drops at the wrong moment, no trap runs and **the rule stays open until a person revokes it.** The marker file only blocks a second run; it removes nothing. Security groups have no expiry for a rule, and no scheduled job, Lambda or alarm exists because that would be a new AWS resource that has not been approved. Removal after a total session loss depends on a person running the recovery below.
 
 **What the exposure is while a rule is left in place (analysis, not tested):** the admin host (no inbound ports; reachable only through Session Manager) could open TCP 5432 to both databases on the RDS instance. Using it still needs the master credential and a Session Manager session. It is a standing broader path, not a harmless one, and it would show as drift on the `ogevia-prod-data-layer` stack.
 
-**Separate-session recovery (read-only to identify; one write to remove). Run in a NEW CloudShell session, region us-west-2:**
+**Separate-session recovery (read-only to identify; one write to remove). Run in a NEW CloudShell session, region us-west-2. The script prints the same text if cleanup fails:**
 ```
 # 1. Identify. Read-only. Expected ORIGINAL state: exactly ONE inbound rule on this group, source sg-064ffce3bcbe8eb3b.
 aws ec2 describe-security-group-rules --region us-west-2 --filters Name=group-id,Values=sg-00530a1f4f7648e65 \
@@ -70,10 +73,12 @@ The marker `~/.ogevia-ledger-window/OPEN` lives in the home directory of the Clo
 
 **Detecting a left-open rule:** CloudTrail records `AuthorizeSecurityGroupIngress` and `RevokeSecurityGroupIngress` on `sg-00530a1f4f7648e65`. An authorize without a later revoke means the window is still open. Step 1 above is the direct check, and it should be run after every window regardless of what the script printed.
 
-**Options to add independence (NOT built, NOT proposed for approval unless you ask):** (a) wrap the tunnel and AWS calls in `timeout` so a hang ends in cleanup (improves the in-process limit; still dies with the session); (b) a second, separate CloudShell session opened beforehand that runs a delayed revoke (an independent process, but still manual and still only as reliable as that second session); (c) an EventBridge Scheduler one-shot that revokes the rule at a fixed time (independent of CloudShell, but a new AWS resource with its own IAM role and a write permission; needs your approval). Without (c) the honest position is: **removal after a total session loss depends on a person running the recovery above.**
+**Not built (needs your approval if wanted):** an EventBridge Scheduler one-shot revoke, which would be independent of CloudShell but is a new AWS resource with its own IAM role and a write permission. A second CloudShell running a delayed revoke is possible but manual and only as reliable as that session.
 
 ## 6. Rehearsal evidence (fake AWS, not real AWS)
 Success restores and verifies the identical rule set; a ledger with 0053+ rows is reported and still restored; a missing database is reported and restored; the wrong database stops and restores; a database failure after opening restores; an authorize failure leaves the group unchanged; SIGTERM mid-query restores; a revoke failing twice is retried; a revoke that always fails exits 3 with `NOT RESTORED`, leaves the marker, blocks the next run without touching the rule, and `--restore-only` then restores; an unrelated rule change during the window is detected by the hash; wrong environment, different admin-host groups, a shared interface, a different RDS group and a declined phrase all change nothing; the queries are read-only; the credential never appears in output or files; the script contains no host, instance, stack, Lambda or secret write and no CIDR rule.
+
+**v2 additions (31 tests in the temp-access file; 47 with the two read-only/preflight files; all passed):** a hung authorize, secret read, query or tunnel ends as `TIMED OUT` or `tunnel did not open`, goes through cleanup, and ends `RESTORED (verified)` with the group identical to the original; a slow step past the time limit makes the next step refuse and run cleanup; a revoke that hangs on all four attempts returns exit 3, `NOT RESTORED`, keeps the marker, and a later `--restore-only` restores; cleanup checks that hang report UNKNOWN, exit 3, never `RESTORED`; the printed recovery text names the one rule by the admin-group source and rule id and never the application group; no Session Manager tunnel process remains after a run (the test fails without the fix); a SIGTERM test showed that plain `timeout` blocked Ctrl+C handling, hence `--foreground`. All against a fake AWS CLI. Not run against real AWS.
 
 ## 7. NOT established (do not treat as verified)
 - Real AWS behaviour: that `authorize`/`revoke` with this shorthand and description succeeds with the operator's permissions; that the Session Manager path works once the rule exists; that the live RDS group has no rules beyond those recorded (the script prints them and the hash).
@@ -87,22 +92,26 @@ Success restores and verifies the identical rule set; a ledger with 0053+ rows i
 3. Run TEST first, then production in a separate window, as before?
 4. Operator and time window (no deployment or stack update should run during it).
 
-## 9. Exact commands for the operator after approval (CloudShell, us-west-2)
+## 9. Exact commands for the operator after approval (CloudShell, us-west-2) — uses the existing `~/CarelikGlobal` checkout and its working `origin`; no new checkout, no HTTPS URL
+Fetch and verify (each is a separate step; nothing is checked out or merged):
 ```
-# Reviewed script: commit 3432c10f9dc7edfa08f7e47ac462955f681d0d25 (branch claude/ogevia-test-deployment-verify-5xqjsa).
-# Byte-identical copy on the integration branch at f690e42b61723b7c6b8295f696ba23c9b247643c. Fetch by the commit, not the branch name.
-# Needs read access to the private repository from CloudShell; that access is not established here.
-git init -q ~/ogevia-review && cd ~/ogevia-review
-git fetch --depth 1 https://github.com/socalcaresservices/CarelikGlobal.git 3432c10f9dc7edfa08f7e47ac462955f681d0d25
-git rev-parse FETCH_HEAD                       # must print 3432c10f9dc7edfa08f7e47ac462955f681d0d25
-git show FETCH_HEAD:infra/aws/slice/ledger-check-temp-access.sh > ~/ledger-check-temp-access.sh
-sha256sum ~/ledger-check-temp-access.sh        # must print 2cb5c982d1ad0041d7d96f951e4ee1696e17f7130040132b8e8329be41174b4e
-less ~/ledger-check-temp-access.sh            # read it
-bash ~/ledger-check-temp-access.sh test       # type OPEN-5432-WINDOW only after reading the printed original configuration
-# only if a run was interrupted:  bash ~/ledger-check-temp-access.sh --restore-only
+cd ~/CarelikGlobal
+git fetch origin claude/ogevia-test-deployment-verify-5xqjsa
+git cat-file -t 2bdc8ea51ca0071f4cdaa4cce839f573dd4a9dbe                       # must print: commit
+git merge-base --is-ancestor 2bdc8ea51ca0071f4cdaa4cce839f573dd4a9dbe FETCH_HEAD && echo REVIEWED-COMMIT-IS-ON-THE-FETCHED-BRANCH
+git show 2bdc8ea51ca0071f4cdaa4cce839f573dd4a9dbe:infra/aws/slice/ledger-check-temp-access.sh > ~/ledger-check-temp-access.sh
+sha256sum ~/ledger-check-temp-access.sh   # must print f7af146e5b5ce738d23aaa40d37774b85bef7d3c335e81d9fcaf8d88f456e970
+less ~/ledger-check-temp-access.sh        # read it before running
 ```
+Supervised TEST-only run (do not start until approved):
+1. Open a SECOND CloudShell session first (the recovery session). In it, run recovery step 1 above (read-only) and confirm exactly one inbound rule, source `sg-064ffce3bcbe8eb3b`. Leave it open.
+2. In the first session: `bash ~/ledger-check-temp-access.sh test`. Read the printed original configuration and rule-set hash. Type `OPEN-5432-WINDOW` only if they match section 2.
+3. The script must end with `RESTORED (verified)` and exit 0. Check the exit code: `echo $?`.
+4. In the recovery session re-run step 1: one inbound rule, source `sg-064ffce3bcbe8eb3b`, nothing from `sg-00e01e2ca80442c1f`.
+5. If the script prints `NOT RESTORED`, exits 3, or the first session is lost: run recovery steps 2-4 in the recovery session immediately. `bash ~/ledger-check-temp-access.sh --restore-only` is the alternative only if the first session's home directory survives.
+Production (`prod`) is not approved. No stack update or deployment should run during the window.
 
 ## 9A. Branch naming
-- `claude/ogevia-test-deployment-verify-5xqjsa`: the session's designated branch (its name reflects the original TEST-verification task; it now also carries the redesign and these procedures). The script was committed here at `3432c10f9dc7edfa08f7e47ac462955f681d0d25`.
-- `integration/compliance-attention-onto-scheduling-recruiting`: the unmerged, undeployed combination branch. It carries the same script file in commit `f690e42b61723b7c6b8295f696ba23c9b247643c` (a different commit; `3432c10` is not its ancestor). The file hashes are identical (`2cb5c982d1ad0041d7d96f951e4ee1696e17f7130040132b8e8329be41174b4e` on both, compared with sha256sum).
-- Either source gives the same bytes. Review and fetch from `3432c10` so the command does not depend on a branch name. Neither branch is merged or deployed. A documentation-only commit may sit above these SHAs; it does not change the script.
+- `claude/ogevia-test-deployment-verify-5xqjsa` is the session's designated branch. Its name reflects the original TEST-verification task; it now also carries the redesign and these procedures. **Fetch from this branch** (command above).
+- `integration/compliance-attention-onto-scheduling-recruiting` is the unmerged, undeployed combination branch. It carries the same script file under a different commit id (a cherry-pick; see the commit table in the hand-off message). It is not needed for the fetch and is not merged or deployed.
+- Commit ids differ between the branches, the script's sha256 does not: compare the checksum, not the commit id, across branches.
