@@ -301,3 +301,7 @@ Nothing was added: no state, column, permission, label or report column for subm
 ### 17.9 One-way compliance switch and the EventBridge rule
 Not activated. Recovery implications and the separate deployment requirement are in `ACTIVATION_CHECKLIST_SOCAL_CARE_SERVICES.md` sections 6 and 7.
 
+
+### 17.10 Test results for this batch (local, synthetic data)
+`pnpm lint`, `pnpm typecheck`, `pnpm build` pass. Database suite 75 files / 782 tests; sv-api database 10 files / 101 and unit 72; infra static 13 files / 195; web 107 files / 1045 (plus `packages/shared` 118); browser: desktop 59 of 59 and phone 59 of 59. Two existing tests were changed on purpose and are named here: `access-roles` now allow-lists exactly the two audit-ledger functions that contain the word "export" (they send nothing); `shift-access` writes the reservation the real path writes.
+**Remaining gaps, plainly:** nothing here is on TEST or production; a delivered service with no verification record has no billing path (owner decision); the three older CSVs are browser-assembled; the Schedule still shows a reconciled past shift as it was; the retroactive-decrease rule D-A, legacy attention-summary defects F2 and F4, notifications, ranked replacements, real-device and screen-reader testing, and the one-way switch recovery path are untested or open; a reconcile racing a late-confirmation acceptance was not tested; per-row `reservation_bucket` cost at large volume was not measured.
