@@ -1,6 +1,6 @@
 // F7 (docs/product/SCHEDULING_DASHBOARD_REVIEW_PACKAGE_2026-10-12.md): the month Home opens on must come from
 // the AGENCY's time zone, never the browser clock. Monthly authorization figures follow the agency's calendar.
-// The known defect is recorded with `it.fails` (remove `.fails` when Home uses the agency time zone). SYNTHETIC data only.
+// FIXED (2026-10-17): Home and the client balance month use the agency time zone (the defect was pinned with `it.fails`). SYNTHETIC data only.
 import { render, screen } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter } from "react-router-dom";
@@ -42,15 +42,9 @@ describe("Home month uses the agency time zone", () => {
     else process.env.TZ = realTz;
   });
 
-  // OBSERVED FAILURE: Home builds the month from `new Date()` in the browser, so it opens on 2026-11.
-  it.fails("opens on the agency's current month (2026-10), not the browser's (2026-11)", () => {
+  it("opens on the agency's current month (2026-10), not the browser's (2026-11)", () => {
     render(<QueryClientProvider client={new QueryClient()}><MemoryRouter><AwsHomePage /></MemoryRouter></QueryClientProvider>);
     expect((screen.getByLabelText("Month") as HTMLInputElement).value).toBe("2026-10");
     expect(monthsRequested.at(-1)).toBe("2026-10-01");
-  });
-
-  it("CONTROL (passes today): the browser-clock month is what Home uses", () => {
-    render(<QueryClientProvider client={new QueryClient()}><MemoryRouter><AwsHomePage /></MemoryRouter></QueryClientProvider>);
-    expect((screen.getByLabelText("Month") as HTMLInputElement).value).toBe("2026-11");
   });
 });

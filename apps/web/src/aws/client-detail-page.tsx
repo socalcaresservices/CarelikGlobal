@@ -1,6 +1,7 @@
 import { useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef, useState } from "react";
 import { Link, useParams } from "react-router-dom";
+import { agencyMonth, useAgencyClock } from "./agency-clock";
 import { Button, Card } from "@carelik/ui";
 import { formatDuration, TIER_LABEL, TIER_SYMBOL } from "@/lib/service-verification";
 import { newIdempotencyKey } from "@/lib/sv-backend";
@@ -20,7 +21,6 @@ const message = (cause: unknown, fallback: string) => (cause instanceof Error ? 
 const inputClass = "mt-1 block w-full rounded-lg border border-slate-200 px-3 py-2 text-base";
 const fmtDate = (d: string | null) => formatDateOnly(d);
 const minutesAsHours = (m: number) => (m % 60 === 0 ? String(m / 60) : (m / 60).toFixed(2));
-const thisMonth = () => new Date().toISOString().slice(0, 7);
 
 function useRefreshClient() {
   const queryClient = useQueryClient();
@@ -314,7 +314,8 @@ function AuthorizationsCard({ clientId }: { clientId: string }) {
   const canUpdate = hasPermission("authorizations.update");
   const showRate = hasPermission("billing.read");
   const versions = useClientAuthorizations(clientId);
-  const [month, setMonth] = useState(thisMonth());
+  const { tz } = useAgencyClock();
+  const [month, setMonth] = useState(() => agencyMonth(tz));
   const balances = useMonthlyBalances(clientId, `${month}-01`);
   const [adding, setAdding] = useState(false);
   const lineages = groupByLineage(versions.data ?? []);
@@ -327,7 +328,7 @@ function AuthorizationsCard({ clientId }: { clientId: string }) {
       {adding ? <AddAuthorizationForm clientId={clientId} onDone={() => setAdding(false)} /> : null}
       <div className="mt-3">
         <label htmlFor="balance-month" className="block text-sm font-medium text-slate-700">Balance for month</label>
-        <input id="balance-month" type="month" value={month} onChange={(e) => setMonth(e.target.value || thisMonth())} className="mt-1 rounded-lg border border-slate-200 px-3 py-2 text-base" />
+        <input id="balance-month" type="month" value={month} onChange={(e) => setMonth(e.target.value || agencyMonth(tz))} className="mt-1 rounded-lg border border-slate-200 px-3 py-2 text-base" />
       </div>
       {balances.isError ? <p role="alert" className="mt-2 text-sm text-red-700">{(balances.error as Error).message}</p> : null}
       {balances.data && balances.data.length === 0 ? <p className="mt-2 text-sm text-slate-600">No authorization covers this month.</p> : null}

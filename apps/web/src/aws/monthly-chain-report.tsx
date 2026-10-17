@@ -17,6 +17,34 @@ export interface ChainRow {
   reservedOk: boolean; visitsOk: boolean | null; balanceOk: boolean; differenceMinutes: number;
 }
 
+interface ExportRow { exportId: string; exportedAt: string; reportKey: string; params: Record<string, unknown>; rowCount: number; delivery: string; exportedByName: string | null }
+const REPORT_LABEL: Record<string, string> = {
+  client_service_calendar: "Client service calendar", monthly_service_reconciliation: "Monthly hours & billing", correction_history: "Correction history", monthly_chain: "Full chain for the month",
+};
+
+/** The export ledger (0069), for the organization owner: who exported what, when, how many rows, and whether the server or the browser made the file. */
+function ExportHistory() {
+  const api = useAwsApi();
+  const { activeOrganizationId, hasPermission } = useOrganization();
+  const allowed = hasPermission("organization.update");
+  const q = useQuery({
+    queryKey: ["report-exports", activeOrganizationId],
+    queryFn: async () => (await api.get<{ exports: ExportRow[] }>("/v1/exports", { organizationId: activeOrganizationId })).exports,
+    enabled: !!activeOrganizationId && allowed,
+  });
+  if (!allowed || !q.data || q.data.length === 0) return null;
+  return (
+    <details className="print:hidden" data-testid="export-history">
+      <summary className="cursor-pointer text-sm font-semibold text-slate-800">Export history ({q.data.length})</summary>
+      <ul className="mt-1 space-y-1 text-sm text-slate-700">
+        {q.data.slice(0, 20).map((e) => (
+          <li key={e.exportId}>{new Date(e.exportedAt).toLocaleString()} · {e.exportedByName ?? "Someone"} · {REPORT_LABEL[e.reportKey] ?? e.reportKey} · {e.rowCount} row{e.rowCount === 1 ? "" : "s"} · {e.delivery === "server_generated" ? "made by the server" : "made in the browser"}</li>
+        ))}
+      </ul>
+    </details>
+  );
+}
+
 const m = (v: number | null | undefined) => (v === null || v === undefined ? "—" : formatDuration(v));
 const signed = (v: number) => (v < 0 ? `−${formatDuration(-v)}` : formatDuration(v));
 
@@ -72,6 +100,7 @@ export function MonthlyChainReport({ month }: { month: string }) {
           <p className="text-xs text-slate-600 print:hidden">Your role can read this report but not export it.</p>
         )}
       </div>
+      <ExportHistory />
       {done ? <p role="status" className="text-sm text-emerald-800">{done}</p> : null}
       {error ? <p role="alert" className="text-sm text-red-700">{error}</p> : null}
       {q.isLoading ? <p className="text-sm text-slate-500">Loading…</p> : null}

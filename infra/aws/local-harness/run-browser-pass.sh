@@ -6,7 +6,8 @@ set -u
 label=$1; out=$2
 here=$(cd "$(dirname "$0")" && pwd)
 cd "$here/.."
-[ -f /tmp/ogevia-serve.pid ] && kill "$(cat /tmp/ogevia-serve.pid)" 2>/dev/null; sleep 1
+# stop whatever is serving the harness (the pid of `pnpm` is not the pid of the server, so stop by port)
+fuser -k 443/tcp 2>/dev/null; sleep 1
 log=/tmp/ogevia-setup-$label.log
 pnpm harness:setup >"$log" 2>&1 || { echo "setup failed"; tail "$log"; exit 2; }
 pnpm harness:seed-extra >>"$log" 2>&1 || { echo "seed-extra failed"; tail "$log"; exit 2; }

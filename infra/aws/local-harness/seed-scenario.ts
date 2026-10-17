@@ -110,6 +110,26 @@ async function main() {
   await q(`update ogevia.document_versions set expires_on = (now() at time zone 'America/Los_Angeles')::date - 1
            where document_id in (select d.id from ogevia.staff_documents d join ogevia.document_types t on t.id = d.document_type_id where d.caregiver_record_id = $1 and t.work_requirement = 'cpr' and d.closed_at is null)`, [blairRec]);
   await c.query("reset session_replication_role");
+  // 7. Accounting (0067, 0068): a shift that ended with no visit record (to reconcile), and a client whose authorization is amended below what is reserved (impacts).
+  await c.query("set session_replication_role = replica");
+  const endedShift = await one(
+    `insert into ogevia.shifts (organization_id, client_id, service_id, caregiver_user_id, caregiver_record_id, starts_at, ends_at, status, authorization_lineage_id)
+     select $1,$2,$3,$4,$5, now() - interval '8 hours', now() - interval '6 hours', 'scheduled', a.lineage_id from ogevia.client_authorizations a where a.client_id = $2 and a.is_current returning id`,
+    [org, scenario, respite, alexUser, alexRec]);
+  await q(`insert into ogevia.authorization_reservations (organization_id, authorization_lineage_id, care_request_id, shift_id, service_date, reserved_minutes)
+           select $1, a.lineage_id, null, $2, (now() at time zone 'America/Los_Angeles')::date, 120 from ogevia.client_authorizations a where a.client_id = $3 and a.is_current`, [org, endedShift, scenario]);
+  await c.query("reset session_replication_role");
+  const amendClient = await one("insert into ogevia.clients (organization_id) values ($1) returning id", [org]);
+  await as(owner.sub, () => c.query("select ogevia_api.set_client_legal_name($1,$2,'Demo','Amend',null)", [org, amendClient]));
+  const amendAuth = await one(`insert into ogevia.client_authorizations (organization_id, client_id, service_id, payer, monthly_authorized_minutes, period_start, period_end, hourly_rate_cents)
+           values ($1,$2,$3,'Synthetic Regional Center', 1000, (date_trunc('month', now()) - interval '1 month')::date, (date_trunc('month', now()) + interval '6 months')::date, 3200) returning id`, [org, amendClient, respite]);
+  // only Alex: Blair's CPR has expired by now and the compliance hold refuses a new assignment for Blair
+  await q("insert into ogevia.caregiver_assignments (organization_id, caregiver_user_id, client_id, service_id, effective_start) values ($1,$2,$3,$4,(now() - interval '60 days')::date)", [org, alexUser, amendClient, respite]);
+  const sameDay = await firstDow(3, 12); // a Wednesday 12-18 days ahead: three 4-hour open shifts in one agency month
+  for (const [a, b] of [["06:00", "10:00"], ["11:00", "15:00"], ["16:00", "20:00"]] as const)
+    await as(manager.sub, async () => c.query("select * from ogevia_api.create_shift($1,$2,$3,$4::date,$5::time,$6::time,null,null)", [org, amendClient, respite, await day(sameDay), a, b]));
+  await as(manager.sub, () => c.query("select * from ogevia_api.amend_client_authorization($1,400,(date_trunc('month', now()) - interval '1 month')::date,(date_trunc('month', now()) + interval '6 months')::date,'Synthetic Regional Center','Payer lowered the month (synthetic)')", [amendAuth]));
+
   // LAST: the agency policy for THIS local organization, so the browser runs under the same 8 h / 40 h rule. It is written after the fixture visits because the base seed
   // already gives the caregiver more than 40 hours in one week, and the rule (correctly) refuses to put any further scheduled shift on that caregiver (append-only table: a second run adds nothing).
   await c.query(
@@ -123,4 +143,4 @@ async function main() {
   console.log(`scenario seed done: ${s!.holds} open hold(s), ${s!.open_shifts} open shift(s)`);
   await c.end();
 }
-main().catch((e) => { console.error(e instanceof Error ? e.message : e); process.exit(1); });
+main().catch((e) => { console.error(e instanceof Error ? (process.env.HARNESS_TRACE ? e.stack : e.message) : e); process.exit(1); });

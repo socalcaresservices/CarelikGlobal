@@ -128,7 +128,66 @@ const ht = await text(mp);
 rec("Home keeps the four streams and Today's Visits and quick actions", /Needs attention now/.test(ht) && /Upcoming staffing/.test(ht) && /Today's visits|Today.s Visits/i.test(ht) && /Schedule Visit|Schedule visit/.test(ht));
 rec("Home: no sideways scroll", await noOverflow(mp));
 await mp.screenshot({ path: `${out}/home-${label}.png`, fullPage: true });
+
+// ---------------- accounting (0067-0070): one ledger on every screen, reconciliation by a person, amendment impacts, recorded exports
+const homeNeeds = mp.getByTestId("needs-reconciliation");
+rec("Home says 2 hr are reserved on a shift that ended with no visit record", (await homeNeeds.count()) === 1 && /2 h/.test(await homeNeeds.innerText()), (await homeNeeds.count()) ? await homeNeeds.innerText() : "none");
+await mp.goto("https://localhost/service-verification/reports?view=reconciliation"); await settle(mp, 1500);
+const chain = mp.getByTestId("monthly-chain");
+rec("full-chain report is shown with every check passing", (await chain.count()) === 1 && /All checks pass/.test(await mp.getByTestId("chain-checks").innerText()), (await mp.getByTestId("chain-checks").count()) ? await mp.getByTestId("chain-checks").innerText() : "no checks line");
+const toReconcileCell = chain.getByRole("row").filter({ hasText: /Demo Scenario|Respite/ }).filter({ hasText: /2 hr/ });
+rec("full-chain report shows the 2 hr to reconcile on the same client row as Home", (await toReconcileCell.count()) >= 1);
+rec("full-chain report: no sideways page scroll", await noOverflow(mp));
+await mp.screenshot({ path: `${out}/chain-${label}.png`, fullPage: true });
+const [download] = await Promise.all([mp.waitForEvent("download", { timeout: 15000 }), chain.getByRole("button", { name: "Export CSV (recorded)" }).click()]);
+rec("manager's Export CSV downloads a server-made file named for the month", /^monthly-chain-\d{4}-\d{2}\.csv$/.test(download.suggestedFilename()), download.suggestedFilename());
+await mp.waitForTimeout(800);
+rec("export is acknowledged as recorded", /The export is recorded/.test(await text(mp)));
+
+await mp.goto("https://localhost/schedule"); await settle(mp, 1000);
+const recon = mp.getByTestId("shifts-to-reconcile");
+rec("schedule lists the shift that ended with no visit record", (await recon.count()) === 1 && /Nothing is released automatically|still reserved and counted/.test(await recon.innerText()));
+await recon.getByRole("button", { name: "No service was delivered" }).first().click();
+await recon.getByRole("button", { name: "Release the reserved time" }).click(); await mp.waitForTimeout(500);
+rec("releasing without a note is refused on screen", /Write at least a short sentence/.test(await recon.innerText()));
+await recon.getByRole("textbox").fill("Called the caregiver and the family; nobody went (synthetic)");
+await recon.getByRole("button", { name: "Release the reserved time" }).click(); await mp.waitForTimeout(1500);
+rec("after the person records it, the shift leaves the list", (await mp.getByTestId("shifts-to-reconcile").count()) === 0);
+await mp.goto("https://localhost/"); await settle(mp, 1200);
+rec("Home no longer shows reserved-with-no-visit time", (await mp.getByTestId("needs-reconciliation").count()) === 0);
+await mp.goto("https://localhost/service-verification/reports?view=reconciliation"); await settle(mp, 1500);
+rec("the full-chain report agrees with Home: nothing left to reconcile, checks still pass", /All checks pass/.test(await mp.getByTestId("chain-checks").innerText()) && (await mp.getByTestId("monthly-chain").getByRole("row").filter({ hasText: /2 hr/ }).filter({ hasText: /amber/ }).count()) === 0);
+
+await mp.goto("https://localhost/staffing"); await settle(mp, 900);
+const impLink = mp.getByTestId("amendment-impacts-link");
+rec("staffing page links to the 2 authorization changes to review", (await impLink.count()) === 1 && /2 items/.test(await impLink.innerText()), (await impLink.count()) ? await impLink.innerText() : "none");
+await impLink.getByRole("link", { name: "Review changes" }).click(); await settle(mp, 900);
+const items = mp.getByTestId("amendment-impact");
+rec("the authorization-changes page lists two reserved shifts that no longer fit", (await items.count()) === 2 && /no longer fits the new monthly limit/.test(await items.first().innerText()));
+rec("authorization-changes page: no sideways scroll", await noOverflow(mp));
+await mp.screenshot({ path: `${out}/impacts-${label}.png`, fullPage: true });
+await items.first().getByRole("button", { name: "Acknowledge…" }).click();
+await items.first().getByRole("textbox").fill("Moved the later shift to next month (synthetic)");
+await items.first().getByRole("button", { name: "Acknowledge" }).click(); await mp.waitForTimeout(1200);
+rec("acknowledging with a note removes it from the open list", (await mp.getByTestId("amendment-impact").count()) === 1);
 await mctx.close();
+
+// owner: the export ledger; scheduler: can read the chain but not export
+const octx = await browser.newContext({ viewport: vp, ignoreHTTPSErrors: true }); const op = await octx.newPage();
+await login(op, "Olivia Owner");
+await op.goto("https://localhost/service-verification/reports?view=reconciliation"); await settle(op, 1500);
+const hist = op.getByTestId("export-history");
+rec("owner sees the export history", (await hist.count()) === 1);
+await hist.locator("summary").click(); await op.waitForTimeout(300);
+const histText = await hist.innerText();
+rec("export history names who, which report and that the server made the file", /Morgan Manager/.test(histText) && /Full chain for the month/.test(histText) && /made by the server/.test(histText), histText.slice(0, 200));
+await octx.close();
+const sctx = await browser.newContext({ viewport: vp, ignoreHTTPSErrors: true }); const sp = await sctx.newPage();
+await login(sp, "Sam Scheduler");
+await sp.goto("https://localhost/service-verification/reports?view=reconciliation"); await settle(sp, 1500);
+rec("scheduler reads the full-chain report but has no export button and is told why", (await sp.getByTestId("monthly-chain").count()) === 1 && (await sp.getByRole("button", { name: "Export CSV (recorded)" }).count()) === 0 && /not export it/.test(await sp.getByTestId("monthly-chain").innerText()));
+rec("scheduler has no CSV button on the older reports either", (await sp.getByRole("button", { name: "CSV", exact: true }).count()) === 0);
+await sctx.close();
 console.log(`[${label}] ${n - fail}/${n} checks pass, ${fail} fail`);
 await browser.close();
 process.exit(fail ? 1 : 0);

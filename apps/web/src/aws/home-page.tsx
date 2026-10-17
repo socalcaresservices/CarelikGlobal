@@ -8,14 +8,10 @@ import { hoursLabel, useUtilisation, type UtilisationRow } from "./aws-workspace
 import { financeView } from "./finance-view";
 import { Chart } from "./ui/chart";
 import { QuickActions, RefreshStatus, TodaysVisits } from "./home-extras";
+import { agencyMonth, useAgencyClock } from "./agency-clock";
 import { Disclosure } from "./ui/disclosure";
 import { PageHeader } from "./ui/page-header";
 import { StatusChip } from "./ui/status-chip";
-
-function thisMonth(): string {
-  const now = new Date();
-  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
-}
 
 const sum = (rows: UtilisationRow[], key: keyof UtilisationRow) => rows.reduce((t, r) => t + Number(r[key] ?? 0), 0);
 
@@ -58,7 +54,8 @@ function Stat({ label, value, tone }: { label: string; value: string; tone?: "re
  */
 export function AwsHomePage() {
   const { hasPermission } = useOrganization();
-  const [month, setMonth] = useState(thisMonth);
+  const { tz } = useAgencyClock();
+  const [month, setMonth] = useState(() => agencyMonth(tz)); // the AGENCY's month, not the browser's (F7)
   const overview = useAttentionOverview();
   const utilisation = useUtilisation(`${month}-01`);
   const queryClient = useQueryClient();
