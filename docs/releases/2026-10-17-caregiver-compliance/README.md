@@ -77,7 +77,7 @@ Scheduled run (prepared, **not deployed**): EventBridge `rate(15 minutes)` → t
 | Full gate | See section 9 |
 
 ## 9. Gate results
-**PENDING.** The combined `pnpm test:all` run had not finished when this was committed, so no final PASS line is recorded here. Results observed so far (separate runs, local, synthetic data): `pnpm lint` exit 0; `pnpm typecheck` exit 0; `pnpm build` exit 0; infra-aws unit/static 135 passed; web 806 passed; sv-api API suite 80 passed; database suite 587 of 589 passed (the 2 `prd-deploy-scripts` tests need loopback password-auth behaviour this sandbox lacks; they fail on the untouched baseline too and passed when loopback auth was `trust`). Do not treat this release as gate-complete until a full `test:all` PASS line is pasted here.
+**PASS.** `OGEVIA_TEST_DATABASE_URL=<local> pnpm test:all` exited 0 with the line "PASS  all suites ran, none skipped, all passed." (unit/static, database and API steps; local PostgreSQL 16, synthetic data, sandbox loopback authentication set to `trust` so the two `prd-deploy-scripts` tests run). Also: `pnpm lint`, `pnpm typecheck`, `pnpm build` exit 0. This is a local result only; nothing was run on TEST.
 
 ## 10. Remaining gaps (honest list)
 1. **Not deployed and not run on the pilot.** Phases C and D of `docs/TESTING_AND_RELEASE_PROCESS.md` have not been done; `PILOT_CHECKLIST.md` is the script.
