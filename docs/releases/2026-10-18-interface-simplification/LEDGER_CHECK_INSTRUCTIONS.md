@@ -49,3 +49,6 @@
 3. Whether `psql` and the Session Manager plugin are installed in your CloudShell (the script checks and tells you; it installs nothing).
 4. Whether reading the RDS master secret for this check needs your explicit approval beyond this message.
 5. The path of your CloudShell checkout of the repository.
+
+## Update
+The read-only script stops on TEST because the admin host cannot reach RDS. The reviewed temporary-access alternative is in `TEMP_DB_ACCESS_PROCEDURE.md` (not applied).
