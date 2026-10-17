@@ -170,6 +170,31 @@ function clockTime(value: unknown, name: string): string {
   return value;
 }
 const q = (event: HttpApiEvent) => event.queryStringParameters ?? {};
+
+/** CSV for the full-chain report. Text cells that start with = + - @ or a control character get a leading apostrophe so a spreadsheet never runs them as a formula. */
+const csvCell = (v: unknown): string => {
+  if (v === null || v === undefined) return "";
+  if (typeof v === "number" || typeof v === "boolean") return String(v);
+  let t = String(v);
+  if (/^[=+\-@\t\r]/.test(t)) t = `'${t}`;
+  return `"${t.replace(/"/g, '""')}"`;
+};
+const CHAIN_COLUMNS: Array<[string, string]> = [
+  ["Client code", "clientCode"], ["Service", "serviceCode"], ["Authorization version", "authorizationVersion"], ["Period start", "periodStart"], ["Period end", "periodEnd"],
+  ["Authorized (min)", "authorizedMinutes"], ["Scheduled (min)", "scheduledMinutes"], ["Held for review (min)", "heldReviewMinutes"], ["Needs reconciliation (min)", "needsReconciliationMinutes"],
+  ["Reserved total (min)", "reservedMinutes"], ["Worked (min)", "workedMinutes"], ["Confirmed (min)", "confirmedMinutes"], ["Billable (min)", "billableMinutes"],
+  ["Needs correction (min)", "needsCorrectionMinutes"], ["Waiting for client (min)", "waitingMinutes"], ["Ready for review (min)", "readyForReviewMinutes"],
+  ["Approved for billing (min)", "approvedForBillingMinutes"], ["Reviewed - not billable (min)", "reviewedNotBillableMinutes"], ["Approved by a person (min)", "humanApprovedMinutes"],
+  ["Needs correction (visits)", "needsCorrectionVisits"], ["Waiting (visits)", "waitingVisits"], ["Ready for review (visits)", "readyForReviewVisits"], ["Approved (visits)", "approvedVisits"], ["Voided approvals", "voidedApprovals"],
+  ["Rounding adjustments (min)", "adjustmentMinutes"], ["Committed (min)", "committedMinutes"], ["Remaining (min, signed)", "remainingMinutes"], ["Over limit (min)", "overLimitMinutes"],
+  ["Reserved adds up", "reservedOk"], ["Visits add up", "visitsOk"], ["Authorization adds up", "balanceOk"], ["Difference (min)", "differenceMinutes"],
+];
+export function chainCsv(data: Array<Record<string, unknown>>): string {
+  const lines = [CHAIN_COLUMNS.map(([h]) => csvCell(h)).join(",")];
+  for (const r of data) lines.push(CHAIN_COLUMNS.map(([, k]) => csvCell(r[k])).join(","));
+  lines.push(csvCell("Submitted / billed is not part of this report: approval is not submission or payment."));
+  return lines.join("\r\n");
+}
 const p = (event: HttpApiEvent) => event.pathParameters ?? {};
 const orgParam = (event: HttpApiEvent) => uuid(q(event).organizationId, "organizationId");
 
@@ -1702,6 +1727,56 @@ export const ROUTES: Record<string, Route> = {
         ),
       };
     },
+  },
+
+  // Full-chain monthly report (0070): visits.read; billing-state columns need billing.visits.read.
+  "GET /v1/reports/monthly-chain": {
+    mutating: false,
+    handle: async ({ event, tx }) => {
+      const query = q(event);
+      const client = optionalUuid(query.clientId, "clientId");
+      const monthStart = date(query.monthStart, "monthStart");
+      return { rows: await tx((db) => rows(db, "select * from ogevia_api.get_monthly_chain_report($1, $2, $3)", [orgParam(event), monthStart, client])) };
+    },
+  },
+
+  // The CSV of the full-chain report is generated HERE, and the export is authorized and recorded in the same transaction (0069): no permission, no file, no unrecorded file.
+  "POST /v1/reports/monthly-chain/export": {
+    mutating: true,
+    handle: async ({ event, tx }) => {
+      const body = parseBody(event.body, event.isBase64Encoded);
+      const org = uuid(body.organizationId, "organizationId");
+      const client = optionalUuid(body.clientId, "clientId");
+      const monthStart = date(body.monthStart, "monthStart");
+      const out = await tx(async (db) => {
+        const data = await rows(db, "select * from ogevia_api.get_monthly_chain_report($1, $2, $3)", [org, monthStart, client]);
+        const rec = (await db.query("select ogevia_api.record_report_export($1, 'monthly_chain', $2::jsonb, $3, 'server_generated') as r",
+          [org, JSON.stringify({ monthStart, clientId: client }), data.length])).rows[0] as { r: { exportId: string; exportedAt: string } };
+        return { data, rec: rec.r };
+      });
+      return { exportId: out.rec.exportId, exportedAt: out.rec.exportedAt, filename: `monthly-chain-${monthStart.slice(0, 7)}.csv`, csv: chainCsv(out.data) };
+    },
+  },
+
+  // Browser-assembled exports (0069): the server authorizes and records the export first; the browser downloads nothing if this refuses.
+  "POST /v1/exports": {
+    mutating: true,
+    handle: async ({ event, tx }) => {
+      const body = parseBody(event.body, event.isBase64Encoded);
+      const org = uuid(body.organizationId, "organizationId");
+      const report = text(body.report, "report", 60, { required: true });
+      const rowCount = Number(body.rowCount);
+      if (!Number.isInteger(rowCount) || rowCount < 0) throw new ApiError(400, "bad_request", "rowCount must be a whole number.");
+      const params = typeof body.params === "object" && body.params !== null ? body.params : {};
+      const rec = await tx(async (db) =>
+        ((await db.query("select ogevia_api.record_report_export($1, $2, $3::jsonb, $4, 'browser_assembled') as r", [org, report, JSON.stringify(params), rowCount])).rows[0] as { r: unknown }).r);
+      return { export: rec };
+    },
+  },
+
+  "GET /v1/exports": {
+    mutating: false,
+    handle: async ({ event, tx }) => ({ exports: await tx((db) => rows(db, "select * from ogevia_api.list_report_exports($1, 100)", [orgParam(event)])) }),
   },
 
   "GET /v1/reports/correction-history": {
