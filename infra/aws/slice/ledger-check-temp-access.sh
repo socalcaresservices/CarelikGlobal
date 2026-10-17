@@ -1,0 +1,212 @@
+#!/usr/bin/env bash
+# =============================================================================
+# Ogevia: migration-ledger check WITH A TEMPORARY, NARROW DATABASE-ACCESS WINDOW. FOR OWNER REVIEW. NOT YET RUN AGAINST AWS.
+#   bash ledger-check-temp-access.sh test|prod        one environment per run (same environment checks as ledger-check-readonly.sh)
+#   bash ledger-check-temp-access.sh --restore-only   after an interrupted run: remove the temporary rule and verify (idempotent)
+#
+# WHY: the read-only variant stops because the admin host's security group (ogevia-db-admin-sg) is not allowed to reach the RDS
+# security group on 5432 (the RDS group accepts 5432 from the application group only). There is no existing read path that avoids a
+# change: the API exposes no ledger route, pilot_preflight_probe.py stops at generation 0051 and says the ledger needs the database.
+#
+# THE ONLY CHANGE (and it is temporary):
+#   ADD to the RDS security group ONE inbound rule:  tcp 5432 FROM the admin host's security group (nothing else).
+#   It is REMOVED on every exit path, then the script proves the group is byte-for-byte what it was (canonical hash of ALL inbound
+#   and outbound rules before and after). It does not touch the admin host, the application group, any stack, Lambda or secret.
+#   Compared with the repository's older "DB window" (attach the application group to the admin host), this grants the host NOTHING
+#   else: the application group also carries the Secrets Manager endpoint's 443 allowance.
+#
+# SAFEGUARDS
+#   * Preconditions are READ-ONLY and must all hold or nothing is changed: right account, right environment, RDS private/available,
+#     the RDS group is the expected one, the admin host's groups are EXACTLY the expected one, no other network interface uses that
+#     group, the rule does not already exist, no earlier window is marked open.
+#   * You must type OPEN-5432-WINDOW after seeing the exact change.
+#   * Cleanup runs on success, on any failure, and on INT/TERM/HUP/EXIT. A marker file (~/.ogevia-ledger-window/OPEN) survives a killed
+#     session; this script refuses to start while it exists, and --restore-only clears it only after verified restoration.
+#   * The window lasts seconds: the rule is added after everything else is ready and removed immediately after the queries. A hard
+#     limit (OGEVIA_WINDOW_MAX_SECONDS, default 300) ends the run and triggers cleanup.
+#   * Database session: read-only, one read-only transaction, rolled back. The master credential is held in shell memory only, never
+#     printed or written. CloudTrail records the secret read, the SG authorize/revoke and the Session Manager session.
+# AWS verbs used: sts/cloudformation/lambda/rds/ec2 describe-/list-/get-; ec2 authorize-security-group-ingress and
+#   revoke-security-group-ingress (the single temporary rule); ssm start-session; secretsmanager get-secret-value.
+# =============================================================================
+set -uo pipefail
+ARG="${1:-}"
+ACCOUNT=300094796789
+REGION=us-west-2
+RDS_ID=ogevia-prod-postgres
+ADMIN_TAG=ogevia-db-admin-temp
+EXPECT_RDS_SG=sg-00530a1f4f7648e65      # ogevia-prod-data-layer-RDSSecurityGroup (infra/aws/lib/config.ts securityGroups.prodRds)
+ADMIN_SG=sg-00e01e2ca80442c1f           # ogevia-db-admin-sg (config.ts securityGroups.dbAdmin)
+MAX_SECONDS="${OGEVIA_WINDOW_MAX_SECONDS:-300}"
+STATE_DIR="${OGEVIA_LEDGER_STATE_DIR:-$HOME/.ogevia-ledger-window}"
+OPEN="$STATE_DIR/OPEN"
+LOCAL_PORT=${OGEVIA_LEDGER_PORT:-15439}
+export AWS_REGION=$REGION AWS_DEFAULT_REGION=$REGION AWS_PAGER=""
+mkdir -p "$STATE_DIR"; chmod 700 "$STATE_DIR"
+
+case "$ARG" in
+  test) LABEL="TEST / pilot (synthetic data)";         API_STACK=Ogevia-prod-ServiceVerificationApi; DB_EXPECT=ogevia_sv_test; ENV_MUST_BE_PRD=no ;;
+  prod) LABEL="PRODUCTION candidate (real-data path)";  API_STACK=Ogevia-prd-ServiceVerificationApi;  DB_EXPECT=ogevia_prd;     ENV_MUST_BE_PRD=yes ;;
+  --restore-only) LABEL="restore only" ;;
+  *) echo "usage: bash ledger-check-temp-access.sh test|prod   |   --restore-only" >&2; exit 2 ;;
+esac
+STAMP=$(date -u +%Y%m%dT%H%M%SZ)
+OUT="${OGEVIA_LEDGER_DIR:-$HOME/ogevia-ledger-window-${ARG#--}-$STAMP}"; mkdir -p "$OUT"; chmod 700 "$OUT"
+RESULT="$OUT/RESULT.txt"; : > "$RESULT"
+TUN=""; IID=""; CLOSED=0; OWNS=0; RC=0; LEDGER_TEXT=""; START_EPOCH=$(date +%s)
+say() { printf '%s\n' "$*" | tee -a "$RESULT"; }
+
+# ---- helpers -----------------------------------------------------------------------------------------------------------------
+# Canonical snapshot of ALL inbound and outbound rules of the RDS group (order-independent), optionally without the temporary rule.
+sg_canonical() {
+  aws ec2 describe-security-groups --group-ids "$1" --query 'SecurityGroups[0].{i:IpPermissions,e:IpPermissionsEgress}' --output json 2>/dev/null \
+  | jq -cS --arg drop "${2:-}" '
+      def norm: map(.UserIdGroupPairs |= (map({GroupId, UserId}) | sort_by(.GroupId)) | .IpRanges |= (map({CidrIp}) | sort_by(.CidrIp)) | .Ipv6Ranges |= (map({CidrIpv6}) | sort_by(.CidrIpv6)) | .PrefixListIds |= (map({PrefixListId}) | sort_by(.PrefixListId))) | sort_by(.IpProtocol, (.FromPort // -1), (.ToPort // -1));
+      (.i | norm) as $i
+      | { i: (if $drop == "" then $i else ($i | map(if (.IpProtocol=="tcp" and .FromPort==5432 and .ToPort==5432) then .UserIdGroupPairs |= map(select(.GroupId != $drop)) else . end) | map(select((.UserIdGroupPairs|length) > 0 or (.IpRanges|length) > 0 or (.Ipv6Ranges|length) > 0 or (.PrefixListIds|length) > 0))) end),
+          e: (.e | norm) }'
+}
+sg_hash() { sg_canonical "$@" | sha256sum | cut -d' ' -f1; }
+rule_present() {
+  aws ec2 describe-security-groups --group-ids "$1" --query 'SecurityGroups[0].IpPermissions[?FromPort==`5432` && ToPort==`5432`].UserIdGroupPairs[].GroupId' --output text 2>/dev/null | tr '\t' '\n' | grep -qx "$2"
+}
+revoke_rule() {
+  aws ec2 revoke-security-group-ingress --group-id "$1" --ip-permissions "IpProtocol=tcp,FromPort=5432,ToPort=5432,UserIdGroupPairs=[{GroupId=$2}]" >/dev/null 2>&1
+}
+# Runs on EVERY exit path. Re-entrant guarded. Restores, then VERIFIES; prints exact manual commands if it cannot.
+close_window() {
+  [[ "$CLOSED" == 1 ]] && return 0
+  CLOSED=1
+  [[ -n "$TUN" ]] && kill "$TUN" 2>/dev/null
+  [[ -n "$IID" ]] && pkill -f "session-manager-plugin.*$IID" 2>/dev/null
+  unset PGPASSWORD PGUSER SEC
+  # Only the run that opened the window (or --restore-only, on purpose) may remove its rule: a refused or concurrent run must not touch it.
+  [[ -f "$OPEN" && "$OWNS" == 1 ]] || return 0
+  local rds_sg admin_sg before i ok=0
+  rds_sg=$(jq -r .rds_sg "$OPEN"); admin_sg=$(jq -r .admin_sg "$OPEN"); before=$(jq -r .before_sha "$OPEN")
+  say ""; say "== CLEANUP: removing the temporary rule (tcp 5432 from $admin_sg on $rds_sg) and verifying"
+  for i in 1 2 3 4; do
+    if rule_present "$rds_sg" "$admin_sg"; then revoke_rule "$rds_sg" "$admin_sg"; sleep 2; fi
+    rule_present "$rds_sg" "$admin_sg" || { ok=1; break; }
+  done
+  local after; after=$(sg_hash "$rds_sg")
+  if [[ "$ok" == 1 && "$after" == "$before" ]]; then
+    say "RESTORED (verified): the temporary rule is gone and the RDS security group's complete rule set is identical to the recorded original (sha256 ${after:0:16}...)."
+    rm -f "$OPEN"
+  else
+    RC=3
+    say "NOT RESTORED. Rule still present: $(rule_present "$rds_sg" "$admin_sg" && echo YES || echo no). Rule-set hash now ${after:0:16}... vs original ${before:0:16}..."
+    say "DO THIS NOW (console or CloudShell), then re-run: bash ledger-check-temp-access.sh --restore-only"
+    say "  aws ec2 revoke-security-group-ingress --region $REGION --group-id $rds_sg --ip-permissions 'IpProtocol=tcp,FromPort=5432,ToPort=5432,UserIdGroupPairs=[{GroupId=$admin_sg}]'"
+    say "  The marker $OPEN stays in place until restoration is verified."
+  fi
+}
+on_exit() { local rc=$?; close_window; [[ $RC != 0 ]] && exit "$RC"; exit "$rc"; }
+trap on_exit EXIT
+trap 'say "Interrupted: cleaning up."; exit 130' INT TERM HUP
+stop() { say ""; say "STOPPED: $*"; say "Before any change was made nothing is different; after the window opened, the cleanup above has restored and verified it."; exit 1; }
+over_time() { (( $(date +%s) - START_EPOCH > MAX_SECONDS )); }
+for t in aws jq psql session-manager-plugin sha256sum; do
+  command -v "$t" >/dev/null 2>&1 || stop "missing tool '$t'. Install the PostgreSQL 15 client and the AWS Session Manager plugin yourself; this script installs nothing."
+done
+
+say "================================================================"
+say "MODE                   : $ARG  =  $LABEL"
+say "UTC time              : $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+say "================================================================"
+IDENT=$(aws sts get-caller-identity --output json 2>/dev/null) || stop "no valid AWS credentials: sign in again and reopen CloudShell in us-west-2"
+[[ "$(jq -r .Account <<<"$IDENT")" == "$ACCOUNT" ]] || stop "wrong AWS account $(jq -r .Account <<<"$IDENT") (expected $ACCOUNT)"
+say "account $ACCOUNT, region $REGION: OK"
+
+if [[ "$ARG" == "--restore-only" ]]; then
+  if [[ -f "$OPEN" ]]; then CLOSED=0; say "An open-window marker exists ($(jq -r .stamp "$OPEN")). Restoring."; OWNS=1; close_window; else say "No open-window marker: nothing to restore. (Nothing was changed.)"; fi
+  exit "$RC"
+fi
+[[ ! -f "$OPEN" ]] || stop "an earlier window is marked OPEN ($OPEN, started $(jq -r .stamp "$OPEN")). Run: bash ledger-check-temp-access.sh --restore-only"
+
+say ""; say "== 1. Environment (read-only): $LABEL; expected database $DB_EXPECT"
+STATUS=$(aws cloudformation describe-stacks --stack-name "$API_STACK" --query 'Stacks[0].StackStatus' --output text 2>/dev/null) || stop "stack $API_STACK not found. Missing information: the real stack name, or whether this environment exists."
+say "stack $API_STACK: $STATUS"
+FN=$(aws cloudformation list-stack-resources --stack-name "$API_STACK" --output json 2>/dev/null | jq -r '[.StackResourceSummaries[] | select(.ResourceType=="AWS::Lambda::Function" and (.LogicalResourceId|startswith("Handler")))][0].PhysicalResourceId // empty')
+[[ -n "$FN" ]] || stop "API handler Lambda not found in $API_STACK"
+CFG=$(aws lambda get-function-configuration --function-name "$FN" --output json 2>/dev/null) || stop "cannot read Lambda $FN"
+L_DB=$(jq -r '.Environment.Variables.DB_NAME // empty' <<<"$CFG"); L_ENV=$(jq -r '.Environment.Variables.OGEVIA_ENV // empty' <<<"$CFG")
+say "Lambda $FN: DB_NAME=${L_DB:-unset}  OGEVIA_ENV=${L_ENV:-unset}"
+[[ "$L_DB" == "$DB_EXPECT" ]] || stop "the Lambda serves database '${L_DB:-unset}', not '$DB_EXPECT'. Not the requested environment."
+if [[ "$ENV_MUST_BE_PRD" == yes ]]; then [[ "$L_ENV" == prd ]] || stop "production stack but OGEVIA_ENV is '$L_ENV'"; else [[ "$L_ENV" != prd ]] || stop "TEST run but OGEVIA_ENV=prd"; fi
+say "Environment identified: $LABEL."
+
+say ""; say "== 2. ORIGINAL CONFIGURATION (recorded before any change)"
+RDS=$(aws rds describe-db-instances --db-instance-identifier "$RDS_ID" --query 'DBInstances[0]' --output json 2>/dev/null) || stop "cannot describe RDS $RDS_ID"
+[[ "$(jq -r .DBInstanceStatus <<<"$RDS")" == available && "$(jq -r .PubliclyAccessible <<<"$RDS")" == false ]] || stop "RDS is not available and private"
+RDS_HOST=$(jq -r .Endpoint.Address <<<"$RDS"); RDS_SGS=$(jq -r '[.VpcSecurityGroups[].VpcSecurityGroupId] | join(" ")' <<<"$RDS")
+[[ "$RDS_SGS" == "$EXPECT_RDS_SG" ]] || stop "RDS security groups are '$RDS_SGS', expected exactly '$EXPECT_RDS_SG'. Review before changing anything."
+HOST=$(aws ec2 describe-instances --filters "Name=tag:Name,Values=$ADMIN_TAG" "Name=instance-state-name,Values=running" --query 'Reservations[0].Instances[0].[InstanceId,SecurityGroups[].GroupId]' --output json 2>/dev/null)
+[[ -n "$HOST" && "$HOST" != null && "$HOST" != "[null,null]" ]] || stop "admin host '$ADMIN_TAG' is not running (starting it is a change this script will not make)"
+IID=$(jq -r '.[0]' <<<"$HOST"); HOST_SGS=$(jq -r '.[1] | join(" ")' <<<"$HOST")
+say "admin host $IID: security groups [$HOST_SGS]  (NOT modified by this script)"
+[[ "$HOST_SGS" == "$ADMIN_SG" ]] || stop "the admin host's groups are '$HOST_SGS', expected exactly '$ADMIN_SG'. Review before changing anything."
+ENIS=$(aws ec2 describe-network-interfaces --filters "Name=group-id,Values=$ADMIN_SG" --query 'NetworkInterfaces[].[NetworkInterfaceId,Attachment.InstanceId]' --output json 2>/dev/null) || stop "cannot list network interfaces"
+[[ "$(jq 'length' <<<"$ENIS")" == 1 && "$(jq -r '.[0][1]' <<<"$ENIS")" == "$IID" ]] || stop "the group $ADMIN_SG is used by more than the admin host ($ENIS): the rule would grant others access"
+say "group $ADMIN_SG is used by exactly one network interface, on the admin host: the new rule can only ever apply to it"
+BEFORE_JSON=$(sg_canonical "$EXPECT_RDS_SG"); [[ -n "$BEFORE_JSON" && "$BEFORE_JSON" != null ]] || stop "cannot read the RDS security group rules"
+BEFORE_SHA=$(sha256sum <<<"$BEFORE_JSON" | cut -d' ' -f1)
+printf '%s\n' "$BEFORE_JSON" > "$OUT/rds-sg-before.json"; chmod 600 "$OUT/rds-sg-before.json"
+say "RDS security group $EXPECT_RDS_SG, ORIGINAL inbound rules:"
+jq -r '.i[] | "   " + .IpProtocol + " " + ((.FromPort // "all")|tostring) + "-" + ((.ToPort // "all")|tostring) + "  from " + (([.UserIdGroupPairs[].GroupId] + [.IpRanges[].CidrIp] + [.Ipv6Ranges[].CidrIpv6] + [.PrefixListIds[].PrefixListId]) | join(", "))' <<<"$BEFORE_JSON" | tee -a "$RESULT"
+say "   outbound rules: $(jq '.e | length' <<<"$BEFORE_JSON") (recorded in the hash)"
+say "ORIGINAL rule-set sha256: $BEFORE_SHA   (full copy: $OUT/rds-sg-before.json)"
+rule_present "$EXPECT_RDS_SG" "$ADMIN_SG" && stop "a rule allowing $ADMIN_SG on 5432 ALREADY exists on $EXPECT_RDS_SG. Then the read-only script should have worked; investigate instead of changing anything."
+
+say ""; say "== 3. PROPOSED CHANGE (the only one)"
+say "  ADD to $EXPECT_RDS_SG :  inbound tcp 5432 from $ADMIN_SG  (description 'TEMP ledger check $STAMP')"
+say "  REMOVE it again within seconds, then verify the complete rule set equals the original hash above."
+say "  Reaches: RDS instance $RDS_ID on 5432 from the admin host only. That instance holds BOTH ogevia_sv_test and ogevia_prd."
+read -r -p "Type OPEN-5432-WINDOW to open the window for the $ARG check (anything else stops, with nothing changed): " ans
+[[ "$ans" == OPEN-5432-WINDOW ]] || { say "Declined. Nothing was changed."; exit 0; }
+
+say ""; say "== 4. Window"
+START_EPOCH=$(date +%s)
+( set -o noclobber; jq -n --arg rds "$EXPECT_RDS_SG" --arg adm "$ADMIN_SG" --arg stamp "$STAMP" --arg sha "$BEFORE_SHA" '{rds_sg:$rds, admin_sg:$adm, stamp:$stamp, before_sha:$sha}' > "$OPEN" ) 2>/dev/null || stop "another window was opened a moment ago ($OPEN exists). Nothing was changed by this run."
+OWNS=1; chmod 600 "$OPEN"
+aws ec2 authorize-security-group-ingress --group-id "$EXPECT_RDS_SG" --ip-permissions "IpProtocol=tcp,FromPort=5432,ToPort=5432,UserIdGroupPairs=[{GroupId=$ADMIN_SG,Description=TEMP-ledger-check-$STAMP}]" >/dev/null 2>"$OUT/authorize.err" || stop "could not add the rule: $(tail -1 "$OUT/authorize.err")"
+rule_present "$EXPECT_RDS_SG" "$ADMIN_SG" || stop "the rule did not appear after adding it"
+[[ "$(sg_hash "$EXPECT_RDS_SG" "$ADMIN_SG")" == "$BEFORE_SHA" ]] || stop "the group changed in a way other than the single rule: aborting"
+say "window open: exactly one rule was added (verified: the group minus that rule equals the original)."
+
+aws ssm start-session --target "$IID" --document-name AWS-StartPortForwardingSessionToRemoteHost \
+  --parameters "host=$RDS_HOST,portNumber=5432,localPortNumber=$LOCAL_PORT" >/dev/null 2>&1 &
+TUN=$!
+for _ in $(seq 1 30); do (echo > "/dev/tcp/127.0.0.1/$LOCAL_PORT") 2>/dev/null && break; sleep 1; done
+(echo > "/dev/tcp/127.0.0.1/$LOCAL_PORT") 2>/dev/null || stop "the Session Manager tunnel did not open"
+over_time && stop "time limit ($MAX_SECONDS s) reached"
+SEC=$(aws secretsmanager get-secret-value --secret-id "$(jq -r .MasterUserSecret.SecretArn <<<"$RDS")" --query SecretString --output text 2>/dev/null) || stop "cannot read the RDS master secret (permission, or not RDS-managed)"
+export PGHOST=127.0.0.1 PGPORT=$LOCAL_PORT PGSSLMODE=require PGCONNECT_TIMEOUT=15
+export PGUSER; PGUSER=$(jq -r .username <<<"$SEC")
+export PGPASSWORD; PGPASSWORD=$(jq -r .password <<<"$SEC")
+unset SEC
+RO() { PGOPTIONS="-c default_transaction_read_only=on -c statement_timeout=20000" psql -X -q -At -F $'\t' -v ON_ERROR_STOP=1 "$@"; }
+EXISTS=$(RO -d postgres -c "select string_agg(datname, ',' order by datname) from pg_database where datname in ('ogevia_sv_test','ogevia_prd')") || stop "cannot connect to the database server"
+say "databases present (of the two Ogevia names): ${EXISTS:-none}"
+if ! grep -qw "$DB_EXPECT" <<<"${EXISTS//,/ }"; then
+  LEDGER_TEXT="RESULT: database $DB_EXPECT DOES NOT EXIST on $RDS_ID, so it has applied no migration."
+else
+  WHO=$(RO -d "$DB_EXPECT" -c "select current_database() || ' | read_only=' || current_setting('transaction_read_only')") || stop "cannot connect to $DB_EXPECT"
+  say "connected: $WHO"
+  [[ "${WHO%% |*}" == "$DB_EXPECT" ]] || stop "connected to '${WHO%% |*}', not '$DB_EXPECT'"
+  [[ "$WHO" == *"read_only=on" ]] || stop "the session is not read-only: refusing to run anything"
+  SUMMARY=$(RO -d "$DB_EXPECT" -c "select count(*) || ' migrations applied, latest ' || coalesce(max(version), 'none') from ogevia_meta.schema_migrations") || stop "the ledger cannot be read in $DB_EXPECT"
+  ROWS=$(RO -d "$DB_EXPECT" -c "begin transaction read only" -c "select version || '  ' || checksum || '  ' || name || '  applied ' || to_char(applied_at at time zone 'UTC','YYYY-MM-DD\"T\"HH24:MI:SS\"Z\"') from ogevia_meta.schema_migrations where version >= '0053' order by version" -c "rollback") || stop "the ledger query failed"
+  if [[ -z "$ROWS" ]]; then
+    LEDGER_TEXT="RESULT for $ARG ($DB_EXPECT): ledger summary: $SUMMARY. NO ROW has version >= 0053: none of the unreleased migrations is applied here. Editing the unreleased files in place is safe FOR THIS ENVIRONMENT."
+  else
+    LEDGER_TEXT="RESULT for $ARG ($DB_EXPECT): ledger summary: $SUMMARY. Migrations numbered 0053 or higher ARE APPLIED:"$'\n'"$ROWS"$'\n'"STOP: do not edit migration files in place. Send this output to Claude."
+  fi
+fi
+over_time && say "(time limit exceeded; result kept)"
+close_window
+say ""; say "================ SUMMARY ================"
+say "Environment : $LABEL ($DB_EXPECT)"
+say "$LEDGER_TEXT"
+[[ -f "$OPEN" ]] && say "SECURITY GROUP: NOT RESTORED, see the instructions above" || say "SECURITY GROUP: restored and verified identical to the original"
+exit "$RC"
