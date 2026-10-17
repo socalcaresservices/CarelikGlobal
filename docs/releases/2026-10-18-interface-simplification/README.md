@@ -147,3 +147,38 @@ A trial merge was made locally on `integration/compliance-attention-onto-schedul
 4. Home keeps Hours this month, Financial impact and Outage readiness below the new sections; Board 1 does not list them.
 5. The text after "Keep routine" in requirement 2 and requirements 3 onward are unknown.
 Open design conflicts from `FIVE_BOARD_COMPARISON.md` that this batch did **not** touch: 60-minute vs 48-hour client confirmation, the 24 h / 48 h escalation rules, remaining hours clamped at zero, the 80/95/30-day tiers, hour-limit default, recurring-series default, billing state labels, Ready for Approval in the Visit review tile, caregiver self-claim.
+
+## 13. Reconciliation batch 2 (owner direction 2026-10-17): requirements 2 (completed), 3, 4, 5
+**Status: IMPLEMENTED and TESTED LOCALLY on the integration branch (synthetic data, local harness and local PostgreSQL 16). NOT DEPLOYED. NOT RUN ON TEST/PILOT. Not merged. Not pushed** (see "Push safety" in section 11: Netlify, GitHub-app and AWS-side triggers are unverified, so this batch stays local). No AWS change, no live agency record touched. Requirements 6-10 have not been received.
+
+### Owner directive, recorded (2026-10-17; these are owner-defined rules, not verified legal or payer requirements)
+- Routine staffing, document reminders, Pending Confirmation and Ready for Approval stay separate from urgent problems.
+- Uncovered shift: Critical at or after its start, Urgent within 48 hours, Upcoming beyond 48 hours.
+- Compliance-blocked future shift follows the same timing (Upcoming beyond 48 h, Urgent within 48 h, Critical at/after start while unresolved). The caregiver's hold is enforced immediately regardless of the display severity (the migration 0055 gate is untouched).
+- Overdue documents belong under Documents & compliance and say "Overdue", not "Urgent". The affected care escalates separately when the document blocks a shift.
+- A server red status is not automatically Critical; one rule set is applied in the backend response, the counts, the filters and the screens.
+- Pending Confirmation escalates 48 h after the visit ends. Administrator review is queued immediately and escalates after 24 h. Routine document review escalates after 48 h, sooner if it blocks care or the document is expired. Routine counts do not inflate urgent totals.
+- Authorization balances are never silently clamped; the real over-limit amount is shown and reconciles across Home, client, scheduling and reports. Reservation accounting, approved adjustments and concurrency protection are preserved.
+- Tiers: Healthy below 80%, Near Limit 80% to below 95%, Critical 95% and above; a separate expiry warning within 30 days. Utilization is the approved committed definition: billable + approved rounding adjustments + reserved.
+
+### What changed (backend and web)
+- **Migration 0057** (`authorization_tiers_unclamped_balances`, with `.down.sql`): `ogevia.authorization_tier()` (integer arithmetic, so 95.0% is exactly Critical and 79.99% is Healthy); `list_monthly_service_summary` and `get_utilisation_overview` recreated with committed, over-limit, utilization, tier and expiry fields; per-authorization remaining is signed; `confirm_service_visit` stores the signed balance; `create_shift` / `reschedule_shift` say "already X over its limit" when negative. Error code OGC09 and the lineage lock are unchanged. The billable cap (`least(worked, cap - prior)`, floored at zero) is deliberately kept: you cannot bill beyond the authorization, but the excess is now visible instead of hidden.
+- **Migration 0058** (`attention_tiers_separate_queues`, with `.down.sql`): `get_attention_overview` rewritten; urgent items carry a `tier` (critical or urgent) and the counts; Upcoming includes blocked shifts beyond 48 h; Documents add `reviewRoutine` / `reviewOverdue`; Visit review adds `pendingConfirmation`, `confirmationOverdue`, `reviewOverdue`; Ready for Approval stays separate and null without billing. The legacy sidebar summary now uses the 48 h rule. Rules live in `ogevia.attention_rule_hours` (48 / 24 / 48).
+- Both are NEW migrations, not edits of 0056, because the production ledger is unchecked. Rollback order: down 0058, then 0057, before 0056.
+- **Web:** server tier preferred over the legacy fallback; Documents chip "Overdue" / "Needs action"; Visit review chip "Urgent" (admin review at 24 h) / "Overdue" (confirmation at 48 h); a "Needs a decision" list separated from "Routine follow-up (not counted above)"; "Over by X" instead of 0 on Home, client page, scheduling summary, reports (new Authorization status column and CSV columns), continuity pack; tier and expiry badges on the client page.
+
+### Evidence (local, synthetic data)
+- New DB tests: 14 (`authorization-tiers.db.test.ts`) and 17 (`attention-tiers.db.test.ts`), covering the 79/80/94/95 boundaries, zero authorization, 30/31-day expiry, 47h59/48h00/48h01 and at-start timing, hold enforcement, permissions and cross-tenant isolation. sv-api DB tests extended for tiers, signed balances and the 48 h sidebar rule.
+- Web: 105 files, 1021 tests passed. `pnpm lint`, `pnpm typecheck`, `pnpm build` passed.
+- Browser (Chromium, local harness, migration 0058): Home 98/98; appearance matrix 3456/3456; seven pages (Home, Needs attention, Upcoming staffing, Visit review, client detail, Schedule, Appearance) in White+Minimal and Dark+Standard at 1280 and 390 px, 68/68 (no sideways scroll, no error screen; client page tier and expiry badges and "Over the limit 2 hr 10 min" on synthetic balances injected in the browser only, nothing written).
+- Full DB and sv-api results: see the final report of this batch.
+
+### Ambiguities decided by me, owner to confirm
+1. A shift exactly 48 h away is Upcoming.
+2. Visit review chip words: Urgent (admin review 24 h), Overdue (confirmation 48 h).
+3. "Blocks care" for a document means the caregiver has an unresolved document flag on an upcoming scheduled shift.
+4. Time administrator review was entered: client confirmation time, else the visit's creation time (no dedicated column).
+5. Hours-left totals add unused time only; overage is reported separately (authorized - committed = hours left - over limit).
+6. The caregiver Start Visit screen's remaining-time estimate in the browser was left as is.
+7. Stricter payer or agency deadlines are not modelled.
+Not verified: real AWS behaviour, Netlify and other triggers, the production ledger.

@@ -260,5 +260,9 @@ Migration 0056; release folder `docs/releases/2026-10-18-interface-simplificatio
 | HOM-05 | R | Refresh, last updated, stale data | AUTO `home-today.test.tsx`, `attention-severity.test.ts` | Server time shown; Refresh re-reads; older than 10 minutes or a failed refresh warns, keeps the last figures, offers Retry; first-load failure shows no tiles and no zero | Fix before release |
 | HOM-06 | | Home still follows the approved interface | MANUAL at 390 px and desktop in White + Minimal and Light + Standard | Four streams, quick actions, Today's visits and hours; no sideways scroll; targets 44 px | Fix before release |
 
+| AUT-01 | R | Authorization tiers | AUTO `authorization-tiers.db.test.ts`, `authorization-display.test.tsx` | Below 80% Healthy, 80% to below 95% Near Limit, 95% and above Critical; expiry warning within 30 days | Fix before release |
+| AUT-02 | R | Over-limit balance not clamped | AUTO `authorization-tiers.db.test.ts`, `remaining-hours.db.test.ts` | Remaining is negative; Home, client, schedule and reports show the same over-limit amount; billable stays capped | Fix before release |
+| ATT-01 | R | Attention timing and separate queues | AUTO `attention-tiers.db.test.ts`, `attention-queues.test.tsx` | Uncovered or blocked shift Upcoming beyond 48 h, Urgent within 48 h, Critical at start; Pending Confirmation 48 h, admin review 24 h, document review 48 h; routine items not in urgent totals | Fix before release |
+
 ## Adding to this catalog
 Every new feature adds its rows in the same change, with all of: ID, What, How, Expected (exact), If it fails. A defect found in production or UAT adds a **permanent** regression row. When a defect marked `OPEN DEFECT` is fixed, remove `.fails` from its test, remove the tag here, and add the row's `R` mark if the area is high-risk.
