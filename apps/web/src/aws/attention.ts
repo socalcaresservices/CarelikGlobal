@@ -137,7 +137,7 @@ export function streams(o: AttentionOverview, now = Date.parse(o.asOf)): Stream[
     out.push({
       key: "staffing", label: "Upcoming staffing", count: u.count, unit: u.count === 1 ? "shift" : "shifts", to: "/staffing",
       tone: "neutral",
-      detail: u.count === 0 ? `Every shift ${o.urgentWindowHours} hours or more away has a caregiver who may work it.` : `Uncovered or blocked, ${o.urgentWindowHours} hours or more away, soonest first`,
+      detail: u.count === 0 ? `Every shift more than ${o.urgentWindowHours} hours away has a caregiver who may work it.` : `Uncovered or blocked, more than ${o.urgentWindowHours} hours away, soonest first`,
     });
   }
   if (o.documents && (o.documents.overdue !== undefined || o.documents.caregiversOnHold !== undefined)) {

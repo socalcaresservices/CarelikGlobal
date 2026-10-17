@@ -6,7 +6,7 @@ import { CognitoAuthProvider, type CognitoAuthClient } from "@carelik/auth";
 import { MemoryRouter } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { createAwsApiClient } from "@/lib/aws-api";
-import { authorizationStatus, formatBalance, formatDuration } from "@/lib/service-verification";
+import { authorizationStatus, caregiverLeftMinutes, CAREGIVER_BALANCE_NOTE, formatBalance, formatDuration } from "@/lib/service-verification";
 import { AwsRoutes } from "./aws-root";
 
 const ORG = "aaaaaaaa-0000-4000-8000-000000000001";
@@ -109,5 +109,21 @@ describe("the client page: tier, percentage, over-limit amount and the 30-day wa
     page({ committedMinutes: 200, remainingMinutes: 800, utilizationPercent: 20, authorizationTier: "healthy" });
     expect(await screen.findByTestId("authorization-tier")).toHaveTextContent("✓Healthy · 20% committed");
     expect(screen.queryByTestId("authorization-expiry")).toBeNull();
+  });
+});
+
+describe("the caregiver's left-to-record figure (Start Visit / active visit)", () => {
+  it("is signed: room left, exactly zero, and over the limit are three different readings, never a silent 0", () => {
+    expect(formatBalance(caregiverLeftMinutes(1000, 90))).toBe("15 hr 10 min");
+    expect(formatBalance(caregiverLeftMinutes(1000, 1000))).toBe("0 min");
+    expect(formatBalance(caregiverLeftMinutes(100, 140))).toBe("Over by 40 min");
+  });
+  it("converting through hours (as the API adapter does) never shifts a minute", () => {
+    for (let m = 0; m <= 6000; m += 7) expect(caregiverLeftMinutes((m / 60) * 60, 0)).toBe(m);
+    for (let used = 0; used <= 600; used += 13) expect(caregiverLeftMinutes(1000, (used / 60) * 60)).toBe(1000 - used);
+  });
+  it("the note says plainly why the office balance can be lower", () => {
+    expect(CAREGIVER_BALANCE_NOTE).toMatch(/confirmed visits only/);
+    expect(CAREGIVER_BALANCE_NOTE).toMatch(/office balance also holds time for scheduled visits/);
   });
 });

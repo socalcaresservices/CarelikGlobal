@@ -1,5 +1,5 @@
-// 0058 Attention tiers and queues that stay apart (owner directive 2026-10-17, requirements 2 and 3). SYNTHETIC data only.
-//   Shift timing (uncovered OR caregiver blocked): at/after start = Critical; inside 48 h = Urgent; 48 h or more away = Upcoming (not urgent).
+// 0058/0059 Attention tiers and queues that stay apart (owner directive 2026-10-17, requirements 2 and 3). SYNTHETIC data only.
+//   Shift timing (uncovered OR caregiver blocked): at/after start = Critical; inside 48 h = Urgent; more than 48 h away = Upcoming (not urgent); a shift exactly 48 h away is Urgent (0059).
 //   Visit review: Pending Confirmation (<48 h after visit end) and Ready for Approval are routine and never added to what needs a person;
 //   confirmation escalates 48 h after the visit end; administrator review is in the queue at once and Urgent after 24 h.
 //   Routine document review escalates 48 h after upload, sooner when expired or blocking care. The caregiver's hold is enforced immediately.
@@ -175,7 +175,7 @@ describe("visit review: routine queues never inflate what needs a person", () =>
     expect(r.reviewOverdue - b.reviewOverdue).toBe(0);
     const setAge = async (hours: number, mins = 0) => {
       await q("set session_replication_role = replica");
-      await q("update ogevia.visit_confirmations set confirmed_at = now() - make_interval(hours => $2, mins => $3) where visit_id = $1", [v, hours, mins]);
+      await q("update ogevia.service_visits set signed_at = now() - make_interval(hours => $2, mins => $3) where id = $1", [v, hours, mins]);
       await q("set session_replication_role = origin");
     };
     await setAge(23, 59);
@@ -203,6 +203,193 @@ describe("visit review: routine queues never inflate what needs a person", () =>
     await signedVisit(db, w.caregiverA1, w, 30, w.orgA, fx.client, fx.service); // ready for approval
     await endedVisit(60, "awaiting_signature"); // pending confirmation
     expect((await overview()).urgent.itemCount).toBe(before);
+  });
+});
+
+describe("0059: the 48-hour boundary, exactly (one transaction so now() is the same instant for the shift and the overview)", () => {
+  /** Offsets are seconds from the transaction's now() to the shift start. Everything is rolled back. */
+  const classify = async (offsetSeconds: number, reasonFlag: "none" | "compliance" = "none") => {
+    const c = await db.admin.connect();
+    try {
+      await c.query("begin");
+      await c.query("set local session_replication_role = replica");
+      const id = (await c.query(
+        `insert into ogevia.shifts (organization_id, client_id, service_id, caregiver_user_id, caregiver_record_id, starts_at, ends_at, status)
+         values ($1,$2,$3,null,$4, now() + make_interval(secs => $5::numeric), now() + make_interval(secs => $5::numeric + 7200), 'scheduled') returning id`,
+        [w.orgA, fx.client, fx.service, reasonFlag === "compliance" ? recA2 : null, offsetSeconds])).rows[0].id as string;
+      if (reasonFlag === "compliance") await c.query("insert into ogevia.shift_readiness_flags (organization_id, shift_id, caregiver_record_id, kind, reason_code, detail) values ($1,$2,$3,'compliance','compliance_hold','{}'::jsonb)", [w.orgA, id, recA2]);
+      await c.query("set local session_replication_role = origin");
+      await c.query("set local role ogevia_app");
+      await c.query("select ogevia_api.begin_request($1, $2)", [w.managerA.sub, randomUUID()]);
+      const o = (await c.query("select ogevia_api.get_attention_overview($1, 48) as o", [w.orgA])).rows[0].o;
+      return { urgent: urgentItem(o, id) as any, upcoming: o.upcoming.shifts.find((s: any) => s.shiftId === id) as any, o };
+    } finally {
+      await c.query("rollback");
+      c.release();
+    }
+  };
+  const H48 = 48 * 3600;
+
+  it("uncovered: 48 h minus a microsecond is Urgent, EXACTLY 48 h is Urgent, 48 h plus a microsecond is Upcoming", async () => {
+    await wipeShifts();
+    const before = await classify(H48 - 0.000001);
+    expect(before.urgent).toMatchObject({ tier: "urgent" }); expect(before.upcoming).toBeUndefined();
+    const at = await classify(H48);
+    expect(at.urgent).toMatchObject({ tier: "urgent" }); expect(at.upcoming).toBeUndefined();
+    const after = await classify(H48 + 0.000001);
+    expect(after.urgent).toBeUndefined(); expect(after.upcoming).toBeDefined();
+  });
+  it("uncovered: exactly at its start is Critical, a microsecond before is Urgent", async () => {
+    await wipeShifts();
+    expect((await classify(0)).urgent).toMatchObject({ tier: "critical", severity: "red" });
+    expect((await classify(0.000001)).urgent).toMatchObject({ tier: "urgent" });
+    expect((await classify(-1)).urgent).toMatchObject({ tier: "critical" });
+  });
+  it("compliance-blocked: the same three boundaries, and the counts agree with the lists", async () => {
+    await wipeShifts();
+    const a = await classify(H48, "compliance");
+    expect(a.urgent).toMatchObject({ tier: "urgent", reasons: ["compliance_hold"] });
+    expect(a.upcoming).toBeUndefined();
+    expect(a.o.urgent).toMatchObject({ itemCount: 1, urgent: 1, critical: 0 });
+    expect(a.o.upcoming.count).toBe(0);
+    const b = await classify(H48 + 0.000001, "compliance");
+    expect(b.upcoming).toMatchObject({ reason: "compliance_hold" });
+    expect(b.o.urgent.itemCount).toBe(0);
+    expect(b.o.upcoming.count).toBe(1);
+    expect((await classify(0, "compliance")).urgent).toMatchObject({ tier: "critical" });
+  });
+  it("every shift is in exactly one list: none is missing and none is in both", async () => {
+    await wipeShifts();
+    for (const off of [H48 - 1, H48, H48 + 1]) {
+      const r = await classify(off);
+      expect(Number(!!r.urgent) + Number(!!r.upcoming)).toBe(1);
+    }
+  });
+});
+
+describe("0059: administrator review is counted from when it really became ready for review", () => {
+  const review = async () => (await overview()).visitReview;
+  const park = async () => {
+    await q("set session_replication_role = replica");
+    await q("update ogevia.service_visits set status = 'voided', voided_at = now(), voided_by = $2, void_reason = 'Synthetic fixture' where caregiver_user_id = $1 and status in ('draft', 'awaiting_signature')", [w.caregiverA1.userId, w.managerA.userId]);
+    await q("set session_replication_role = origin");
+  };
+  const entered = async (v: string) => (await q("select ogevia.visit_review_entered_at($1) t, extract(epoch from now() - ogevia.visit_review_entered_at($1)) / 3600 as hours", [v])).rows[0] as { t: Date | null; hours: string | null };
+  const hoursAgo = (r: { hours: string | null }) => Number(r.hours);
+  const setSigned = async (v: string, hours: number, mins = 0) => {
+    await q("set session_replication_role = replica");
+    await q("update ogevia.service_visits set signed_at = now() - make_interval(hours => $2, mins => $3) where id = $1", [v, hours, mins]);
+    await q("set session_replication_role = origin");
+  };
+  /** A visit worked long ago that ONLY NOW goes to review: created 5 days ago, signed (= enters review) just now. */
+  const reviewVisit = async () => {
+    await park();
+    const v = await api.start(db, w.caregiverA1, w.orgA, fx.client, fx.service, null, "Synthetic: unscheduled");
+    await ageVisit(db, v, 30);
+    await api.end(db, w.caregiverA1, v);
+    await q("set session_replication_role = replica");
+    await q("update ogevia.service_visits set created_at = now() - interval '5 days' where id = $1", [v]);
+    await q("set session_replication_role = origin");
+    await api.confirm(db, w.caregiverA1, v, { method: "unable_to_confirm", reason: "Synthetic: client asleep" });
+    return v;
+  };
+
+  it("a visit created 5 days ago that enters review now is NOT overdue: the clock is its entry, not its creation", async () => {
+    const b = await review();
+    const v = await reviewVisit();
+    expect(hoursAgo(await entered(v))).toBeLessThan(0.1);
+    const r = await review();
+    expect(r.needsReview - b.needsReview).toBe(1);
+    expect(r.reviewOverdue - b.reviewOverdue).toBe(0);
+  });
+  it("24 h boundary: 23 h 59 m is not overdue, 24 h 01 m is", async () => {
+    const v = await reviewVisit();
+    const b = await review();
+    await setSigned(v, 23, 59);
+    expect((await review()).reviewOverdue - b.reviewOverdue).toBe(0);
+    await setSigned(v, 24, 1);
+    expect((await review()).reviewOverdue - b.reviewOverdue).toBe(1);
+  });
+  it("a manager correction creates a NEW review item whose clock starts at the correction, however old the original was", async () => {
+    const v = await reviewVisit();
+    await setSigned(v, 30); // the original has been waiting 30 h
+    const b = await review();
+    const t0 = new Date(Date.now() - 3 * 3600_000), t1 = new Date(t0.getTime() + 40 * 60_000);
+    const corrected = await api.correct(db, w.managerA, v, t0, t1, "Synthetic: client reported the right times");
+    const row = (await q("select status from ogevia.service_visits where id = $1", [corrected])).rows[0];
+    expect(row.status).toBe("administrator_review");
+    expect(hoursAgo(await entered(corrected))).toBeLessThan(0.1);
+    const r = await review();
+    expect(r.needsReview - b.needsReview).toBe(0); // the original (corrected) leaves the queue, the new row enters
+    expect(r.reviewOverdue - b.reviewOverdue).toBe(-1); // the 30 h old original no longer counts as overdue; the new one is not
+  });
+  it("a revoked review decision puts the visit back in the queue at the revocation, not at its first entry", async () => {
+    const v = await reviewVisit();
+    await setSigned(v, 40);
+    const dec = await asActor(db, w.managerA.sub, async (c) => (await c.query("select ogevia_api.decide_visit_review($1,'close_not_billable','Synthetic: reviewed') as id", [v])).rows[0].id as string);
+    const b = await review();
+    await asActor(db, w.managerA.sub, (c) => c.query("select ogevia_api.revoke_visit_review_decision($1,'Synthetic: reopened')", [dec]));
+    expect(hoursAgo(await entered(v))).toBeLessThan(0.1); // greatest(): the revocation, not the 40 h old signing
+    const r = await review();
+    expect(r.needsReview - b.needsReview).toBe(1);
+    expect(r.reviewOverdue - b.reviewOverdue).toBe(0);
+  });
+  it("while a confirmation request is open the visit is waiting on the client; when it lapses the clock starts at the lapse", async () => {
+    const v = await reviewVisit();
+    await setSigned(v, 50);
+    const req = await asActor(db, w.managerA.sub, async (c) => (await c.query("select request_id from ogevia_api.create_visit_confirmation_request($1,'paper','Synthetic Signer','client',null,null,null,7)", [v])).rows[0].request_id as string);
+    const b = await review();
+    expect(b.awaitingResponse).toBeGreaterThanOrEqual(1);
+    await q("set session_replication_role = replica");
+    await q("update ogevia.visit_confirmation_requests set created_at = now() - interval '10 days', expires_at = now() - interval '2 hours' where id = $1", [req]);
+    await q("set session_replication_role = origin");
+    const e = await entered(v);
+    expect(hoursAgo(e)).toBeGreaterThan(1.9); expect(hoursAgo(e)).toBeLessThan(2.1); // the expiry, not the 50 h old signing
+    const r = await review();
+    expect(r.reviewOverdue).toBe(b.reviewOverdue); // 2 h in the queue: not escalated
+  });
+  it("a late client confirmation is its own item: its clock is when it arrived, it escalates after 24 h, and answering it ends it", async () => {
+    const v = await reviewVisit();
+    await setSigned(v, 60);
+    const req = await asActor(db, w.managerA.sub, async (c) => (await c.query("select request_id from ogevia_api.create_visit_confirmation_request($1,'paper','Synthetic Signer','client',null,null,null,7)", [v])).rows[0].request_id as string);
+    const lc = randomUUID();
+    await q("set session_replication_role = replica");
+    await q("update ogevia.visit_confirmation_requests set responded_at = now() - interval '3 hours' where id = $1", [req]);
+    await q(`insert into ogevia.visit_late_confirmations (id, organization_id, visit_id, request_id, outcome, method, signer_name, signer_role, attestation_version, confirmed_visit_snapshot, received_at, response_key)
+             values ($1,$2,$3,$4,'confirmed','typed','Synthetic Signer','client','test','{}'::jsonb, now() - interval '3 hours', $5)`, [lc, w.orgA, v, req, randomUUID()]);
+    await q("set session_replication_role = origin");
+    const b = await review();
+    expect(b.lateResponses).toBeGreaterThanOrEqual(1);
+    const lateAt = (await q("select extract(epoch from now() - ogevia.visit_late_response_at($1)) / 3600 h", [v])).rows[0].h;
+    expect(Number(lateAt)).toBeGreaterThan(2.9); expect(Number(lateAt)).toBeLessThan(3.1);
+    const base = (await review()).reviewOverdue;
+    await q("set session_replication_role = replica");
+    await q("update ogevia.visit_late_confirmations set received_at = now() - interval '24 hours 1 minute' where id = $1", [lc]);
+    await q("set session_replication_role = origin");
+    expect((await review()).reviewOverdue - base).toBe(1);
+    // the office answers it: the late-response item ends, and the visit returns to ordinary review from the answer
+    await asActor(db, w.managerA.sub, (c) => c.query("select * from ogevia_api.review_late_visit_confirmation($1,'rejected','Synthetic: not accepted')", [lc]));
+    expect((await review()).lateResponses).toBe(b.lateResponses - 1);
+    expect(hoursAgo(await entered(v))).toBeLessThan(0.1);
+  });
+  it("a visit with no recorded timing is never escalated and no time is invented (null clock)", async () => {
+    const v = await reviewVisit();
+    const b = await review();
+    await q("set session_replication_role = replica");
+    await q("alter table ogevia.service_visits disable trigger user");
+    await q("alter table ogevia.service_visits drop constraint service_visits_locked_shape");
+    await q("update ogevia.service_visits set signed_at = null where id = $1", [v]);
+    try {
+      expect((await entered(v)).t).toBeNull();
+      const r = await review();
+      expect(r.needsReview - b.needsReview).toBe(0); // still counted, same visit
+      expect(r.reviewOverdue - b.reviewOverdue).toBe(0); // never escalated
+    } finally {
+      await q("update ogevia.service_visits set signed_at = now() where id = $1", [v]);
+      await q("alter table ogevia.service_visits add constraint service_visits_locked_shape CHECK ((status <> ALL (ARRAY['signed'::ogevia.service_visit_status, 'administrator_review'::ogevia.service_visit_status, 'corrected'::ogevia.service_visit_status])) OR verified_minutes IS NOT NULL AND billable_minutes IS NOT NULL AND authorization_status IS NOT NULL AND signed_at IS NOT NULL AND locked_at IS NOT NULL)");
+      await q("alter table ogevia.service_visits enable trigger user");
+      await q("set session_replication_role = origin");
+    }
   });
 });
 

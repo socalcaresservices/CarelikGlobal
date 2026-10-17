@@ -106,6 +106,74 @@ describe("the report carries the tier, the percentage and the signed balance", (
   });
 });
 
+describe("the caregiver's Start Visit estimate against the office balance, on identical records (0059 item 3)", () => {
+  /** Same synthetic records for both views: authorized 1000, a signed 60-minute visit, an approved 30-minute rounding adjustment, optionally a reservation. */
+  async function records(authorized: number, adjustment: number, reservedMinutes: number) {
+    const f = await freshClient(db, w, w.caregiverA1, authorized);
+    const v = await signedVisit(db, w.caregiverA1, w, 60, w.orgA, f.client, f.service);
+    const lineage = (await q("select lineage_id from ogevia.client_authorizations where id = $1", [f.auth])).rows[0].lineage_id;
+    await q("set session_replication_role = replica");
+    const policy = (await q(
+      `insert into ogevia.billing_rounding_policies (organization_id, payer_key, payer_label, service_id, version, method, effective_from, reason, created_by)
+       values ($1,$5,'None (synthetic)',$2,1,'none',$3,'Synthetic fixture',$4) returning id`, [w.orgA, f.service, monthStart, w.ownerA.userId, `none-${Math.random().toString(36).slice(2)}`])).rows[0].id;
+    if (adjustment !== 0) {
+      await q(
+        `insert into ogevia.billing_rounding_adjustments (organization_id, unit_kind, authorization_lineage_id, client_id, service_id, service_date, policy_id,
+           covered_visit_ids, base_minutes, proposed_minutes, adjustment_minutes, capped_by_authorization, approved_by)
+         values ($1,'day',$2,$3,$4,$5::date,$6,$7::uuid[],60,$8,$9,false,$10)`, [w.orgA, lineage, f.client, f.service, today, policy, [v.visit], 60 + adjustment, adjustment, w.ownerA.userId]);
+    }
+    await q("set session_replication_role = origin");
+    if (reservedMinutes > 0) await reserve(f, reservedMinutes);
+    return f;
+  }
+  const caregiverUsed = async (f: Fx) => Number((await as(w.caregiverA1, "select * from ogevia_api.list_authorized_services_for_client($1,$2)", [w.orgA, f.client]))[0].minutes_used_this_month);
+
+  it("used hours and approved adjustments: the caregiver's 'serviced' equals the office billable + adjustments, exactly", async () => {
+    const f = await records(1000, 30, 0);
+    const office = await rowFor(f.client);
+    expect(office).toMatchObject({ billable_minutes: 60, adjustment_minutes: 30 });
+    expect(await caregiverUsed(f)).toBe(office.billable_minutes + office.adjustment_minutes);
+  });
+  it("reservations: the ONLY difference is time held for scheduled visits; the caregiver figure does not subtract it, the office figure does", async () => {
+    const f = await records(1000, 30, 180);
+    const office = await rowFor(f.client);
+    const left = 1000 - (await caregiverUsed(f));
+    expect(office.reserved_minutes).toBe(180);
+    expect(left).toBe(910);
+    expect(office.remaining_minutes).toBe(730);
+    expect(left - office.remaining_minutes).toBe(office.reserved_minutes); // intentional, and explained on screen
+  });
+  it("over the limit with no reservation both views agree and both are negative (nothing is clamped to zero)", async () => {
+    const f = await records(100, 80, 0); // 60 billable + 80 approved adjustment = 140 against 100
+    const office = await rowFor(f.client);
+    const left = 100 - (await caregiverUsed(f));
+    expect(office).toMatchObject({ remaining_minutes: -40, over_limit_minutes: 40 });
+    expect(left).toBe(-40);
+  });
+  it("the active-visit screen reports the same confirmed total, excluding the visit in progress", async () => {
+    const f = await records(1000, 30, 0);
+    await q("set session_replication_role = replica");
+    await q("update ogevia.service_visits set status = 'voided', voided_at = now(), voided_by = $2, void_reason = 'Synthetic fixture' where caregiver_user_id = $1 and status in ('draft', 'awaiting_signature')", [w.caregiverA1.userId, w.managerA.userId]);
+    await q("set session_replication_role = origin");
+    await api.start(db, w.caregiverA1, w.orgA, f.client, f.service, null, "Synthetic: extra help");
+    const act = (await as(w.caregiverA1, "select * from ogevia_api.get_active_service_visit($1)", [w.orgA]))[0];
+    expect(Number(act.confirmed_minutes_this_month)).toBe(90);
+    expect(Number(act.confirmed_minutes_this_month)).toBe(await caregiverUsed(f));
+    await q("set session_replication_role = replica"); // close the fixture visit so later tests can start their own
+    await q("update ogevia.service_visits set status = 'voided', voided_at = now(), voided_by = $2, void_reason = 'Synthetic fixture' where caregiver_user_id = $1 and status in ('draft', 'awaiting_signature')", [w.caregiverA1.userId, w.managerA.userId]);
+    await q("set session_replication_role = origin");
+  });
+  it("the billable cap is unchanged: a visit cannot bill beyond authorized minus confirmed use", async () => {
+    const f = await freshClient(db, w, w.caregiverA1, 200);
+    await signedVisit(db, w.caregiverA1, w, 150, w.orgA, f.client, f.service);
+    const second = await signedVisit(db, w.caregiverA1, w, 120, w.orgA, f.client, f.service);
+    const row = (await q("select billable_minutes, worked_minutes from ogevia.service_visits where id = $1", [second.visit])).rows[0];
+    expect(row.worked_minutes).toBe(120);
+    expect(row.billable_minutes).toBe(50); // 200 - 150
+    expect(Number(second.result.remaining_minutes)).toBeLessThanOrEqual(0);
+  });
+});
+
 describe("the expiry warning is separate from the tiers: 0 to 30 days inclusive", () => {
   it("period end today, in 1 day and in 30 days warn; in 31 days does not; the tier is unaffected", async () => {
     for (const [after, warn] of [[0, true], [1, true], [30, true], [31, false]] as const) {

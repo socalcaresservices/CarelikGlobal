@@ -93,7 +93,7 @@ export function UpcomingStaffingPage() {
   const u = q.data?.upcoming;
   return (
     <div className="space-y-4">
-      <PageHeader title="Upcoming staffing" lead={`Shifts ${q.data?.urgentWindowHours ?? URGENT_WINDOW_HOURS} hours or more away that still need a caregiver, or whose caregiver is blocked.`}
+      <PageHeader title="Upcoming staffing" lead={`Shifts more than ${q.data?.urgentWindowHours ?? URGENT_WINDOW_HOURS} hours away that still need a caregiver, or whose caregiver is blocked. Shifts ${q.data?.urgentWindowHours ?? URGENT_WINDOW_HOURS} hours away or less are under Needs attention now.`}
         action={<Link className="inline-flex min-h-[44px] items-center rounded-lg bg-og-accent px-4 text-sm font-semibold text-og-on-accent hover:opacity-90 md:min-h-[40px]" to="/schedule">Open schedule</Link>} />
       <Loading q={q} />
       {q.data && !u ? <p className="text-sm text-og-sub">Your role does not include this list.</p> : null}
