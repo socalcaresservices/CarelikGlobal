@@ -310,3 +310,38 @@ describe("lifecycle transitions of one reservation", () => {
     expect((await list()).map((r) => r.shift_id)).not.toContain(s);
   });
 });
+
+describe("delivered but not verified (0071)", () => {
+  it("a person's attestation that the service was delivered keeps it reserved, counted and visible; it creates no visit, no verification and nothing billable, and releases nothing", async () => {
+    const f = await freshClient(db, w, w.caregiverA1, 20000, w.orgA, { before: 40, after: 200 });
+    const s = await reserved(f, -300, 70, null);
+    const before = await summaryFor(f);
+    const visitsBefore = (await q("select count(*)::int n from ogevia.service_visits where client_id = $1", [f.client])).rows[0].n;
+    await reconcile(w.managerA, s, "delivered_unverified", "Caregiver and family both say the visit happened; no clock record (synthetic)");
+    expect(await bucket(s)).toBe("awaiting_record");
+    const after = await summaryFor(f);
+    expect(after).toMatchObject({ reserved_minutes: before.reserved_minutes, reserved_reconcile_minutes: before.reserved_reconcile_minutes, billable_minutes: before.billable_minutes, remaining_minutes: before.remaining_minutes });
+    expect((await reservation(s)).released_at).toBeNull();
+    expect((await q("select count(*)::int n from ogevia.service_visits where client_id = $1", [f.client])).rows[0].n).toBe(visitsBefore); // no visit invented
+    expect((await q("select count(*)::int n from ogevia.billing_approvals a join ogevia.service_visits v on v.id = a.visit_id where v.client_id = $1", [f.client])).rows[0].n).toBe(0);
+    const row = (await list()).find((r) => r.shift_id === s);
+    expect(row).toMatchObject({ bucket: "awaiting_record", last_outcome: "delivered_unverified" });
+    // nothing releases it on its own: every read, the overview and the attention count leave it as it is
+    await overview(); await summaryFor(f); await as(w.managerA, "select ogevia_api.get_attention_overview($1,48)", [w.orgA]);
+    expect((await reservation(s)).released_at).toBeNull();
+    // the same attestation twice is refused; a caregiver cannot make it
+    await expectPgError(reconcile(w.managerA, s, "delivered_unverified", "Checked again and nothing changed here (synthetic)"), "OGC09", /already marked/);
+    await expectPgError(reconcile(w.caregiverA1, s, "delivered_unverified"), "OGA03");
+  });
+
+  it("releasing it later is a new, audited decision that records it superseded a delivered attestation; both decisions stay on record", async () => {
+    const f = await freshClient(db, w, w.caregiverA1, 20000, w.orgA, { before: 40, after: 200 });
+    const s = await reserved(f, -300, 40, null);
+    await reconcile(w.managerA, s, "delivered_unverified", "Caregiver says the visit happened (synthetic)");
+    await reconcile(w.ownerA, s, "no_service_delivered", "Family now says nobody came; the caregiver withdrew the claim (synthetic)");
+    expect((await q("select outcome from ogevia.shift_reconciliations where shift_id = $1 order by decided_at, id", [s])).rows.map((r) => r.outcome)).toEqual(["delivered_unverified", "no_service_delivered"]);
+    const audit = (await q("select after_state from ogevia.audit_events where action = 'authorization_reservation.reconciled_released' and (after_state ->> 'shift_id') = $1", [s])).rows[0];
+    expect(audit.after_state).toMatchObject({ supersedes_delivered_attestation: true });
+    expect(await bucket(s)).toBeNull();
+  });
+});

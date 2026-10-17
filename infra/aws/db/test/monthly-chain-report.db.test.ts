@@ -93,39 +93,53 @@ describe("the full chain for one client, and the checks that the parts add up", 
   });
 });
 
-describe("report export: its own permission, a ledger, and an audit event", () => {
-  const rec = (a: Actor, key = "monthly_chain", rows = 12, delivery = "browser_assembled", org = w?.orgA) =>
-    as(a, "select ogevia_api.record_report_export($1,$2,$3::jsonb,$4,$5) r", [org, key, JSON.stringify({ month: monthStart, client: null }), rows, delivery]).then((r) => r[0].r as Record<string, any>);
-  it("owner and manager may export; a scheduler (who can read the reports) and a caregiver may not; another agency is refused", async () => {
-    expect(await rec(w.ownerA)).toMatchObject({ exportId: expect.any(String) });
-    expect(await rec(w.managerA)).toMatchObject({ exportId: expect.any(String) });
-    await expectPgError(rec(w.schedulerA), "OGA03", /permission to export/);
-    await expectPgError(rec(w.caregiverA1), "OGA03");
-    await expectPgError(rec(w.managerB), "OGN04");
+describe("report export: permission, request, generation (0069, 0072)", () => {
+  const req = (a: Actor, key = "monthly_chain", org = w?.orgA) => as(a, "select ogevia_api.request_report_export($1,$2,$3::jsonb) r", [org, key, JSON.stringify({ monthStart })]).then((r) => r[0].r as Record<string, any>);
+  const done = (a: Actor, id: string, rows = 3, bytes = 120, hash = "a".repeat(64)) => as(a, "select ogevia_api.complete_report_export($1,$2,$3,$4,$5) r", [w.orgA, id, rows, bytes, hash]).then((r) => r[0].r);
+  const status = async (id: string) => (await as(w.ownerA, "select * from ogevia_api.list_report_exports($1,200)", [w.orgA])).find((e) => e.export_id === id);
+
+  it("owner and manager may request; a scheduler and a caregiver may not; another agency is refused; a refusal writes nothing", async () => {
+    const before = (await q("select count(*)::int n from ogevia.report_exports")).rows[0].n;
+    expect(await req(w.ownerA)).toMatchObject({ exportId: expect.any(String), requestedAt: expect.any(String) });
+    expect(await req(w.managerA)).toMatchObject({ exportId: expect.any(String) });
+    await expectPgError(req(w.schedulerA), "OGA03", /permission to export/);
+    await expectPgError(req(w.caregiverA1), "OGA03");
+    await expectPgError(req(w.managerB), "OGN04");
+    await expectPgError(req(w.managerA, "everything"), "OGV22", /Unknown report/);
+    expect((await q("select count(*)::int n from ogevia.report_exports")).rows[0].n).toBe(before + 2);
   });
-  it("the ledger records who, when, which report, the filters, the row count and the delivery; an audit event is written; the ledger cannot be edited or deleted", async () => {
-    const out = await rec(w.managerA, "monthly_service_reconciliation", 7, "server_generated");
-    const row = (await q("select * from ogevia.report_exports where id = $1", [out.exportId])).rows[0];
-    expect(row).toMatchObject({ organization_id: w.orgA, report_key: "monthly_service_reconciliation", row_count: 7, delivery: "server_generated", exported_by: w.managerA.userId });
-    expect(row.params).toEqual({ month: monthStart, client: null });
-    expect((await q("select count(*)::int n from ogevia.audit_events where entity_id = $1 and action = 'report.exported'", [out.exportId])).rows[0].n).toBe(1);
-    await expect(q("update ogevia.report_exports set row_count = 1 where id = $1", [out.exportId])).rejects.toThrow();
-    await expect(q("delete from ogevia.report_exports where id = $1", [out.exportId])).rejects.toThrow();
+
+  it("a request is only a request: it shows as 'requested' with no rows, bytes or hash until the server records generation, which is not a claim of delivery", async () => {
+    const r = await req(w.managerA);
+    expect(await status(r.exportId)).toMatchObject({ status: "requested", row_count: null, byte_count: null, sha256_hex: null, generated_at: null, delivery: "server_generated" });
+    expect((await q("select event from ogevia.report_export_events where export_id = $1", [r.exportId])).rows.map((x) => x.event)).toEqual(["requested"]);
+    await expectPgError(done(w.ownerA, r.exportId), "OGN04"); // only the person who requested it can close it
+    expect(await done(w.managerA, r.exportId, 7, 900, "b".repeat(64))).toMatchObject({ exportId: r.exportId });
+    expect(await status(r.exportId)).toMatchObject({ status: "generated", row_count: 7, byte_count: 900, sha256_hex: "b".repeat(64) });
+    await expectPgError(done(w.managerA, r.exportId), "OGC09", /already closed/);
+    await expectPgError(as(w.managerA, "select ogevia_api.fail_report_export($1,$2,'late')", [w.orgA, r.exportId]), "OGC09");
+    const audit = (await q("select action, after_state from ogevia.audit_events where entity_id = $1 order by id", [r.exportId])).rows;
+    expect(audit.map((a) => a.action)).toEqual(["report.export_requested", "report.export_generated"]);
+    expect(JSON.stringify(audit[1].after_state)).toMatch(/Delivery to the device is not recorded/);
   });
-  it("bad input is refused; only the owner can read the ledger", async () => {
-    await expectPgError(rec(w.managerA, "everything"), "OGV22", /Unknown report/);
-    await expectPgError(rec(w.managerA, "monthly_chain", -1), "OGV22");
-    await expectPgError(rec(w.managerA, "monthly_chain", 5, "email"), "OGV22");
-    const list = await as(w.ownerA, "select * from ogevia_api.list_report_exports($1,50)", [w.orgA]);
-    expect(list.length).toBeGreaterThanOrEqual(3);
-    expect(list[0]).toMatchObject({ exported_by_name: expect.any(String) });
+
+  it("a failure is its own event with an error code; the ledger and events cannot be edited or deleted; a bad hash or count is refused by the database", async () => {
+    const r = await req(w.managerA);
+    await as(w.managerA, "select ogevia_api.fail_report_export($1,$2,'generation_failed')", [w.orgA, r.exportId]);
+    expect(await status(r.exportId)).toMatchObject({ status: "failed", error_code: "generation_failed", sha256_hex: null });
+    await expect(q("update ogevia.report_export_events set error_code = 'x' where export_id = $1", [r.exportId])).rejects.toThrow();
+    await expect(q("delete from ogevia.report_export_events where export_id = $1", [r.exportId])).rejects.toThrow();
+    await expect(q("delete from ogevia.report_exports where id = $1", [r.exportId])).rejects.toThrow();
+    const r2 = await req(w.managerA);
+    await expect(done(w.managerA, r2.exportId, 1, 1, "not-a-hash")).rejects.toThrow();
+  });
+
+  it("only the owner reads the ledger; concurrent requests each leave their own row and event", async () => {
     await expectPgError(as(w.managerA, "select * from ogevia_api.list_report_exports($1,50)", [w.orgA]), "OGA03");
     await expectPgError(as(w.managerB, "select * from ogevia_api.list_report_exports($1,50)", [w.orgA]), "OGN04");
-  });
-  it("concurrent exports each leave their own row", async () => {
-    const before = (await q("select count(*)::int n from ogevia.report_exports")).rows[0].n;
-    await Promise.all([1, 2, 3, 4].map((i) => rec(i % 2 ? w.ownerA : w.managerA, "monthly_chain", i)));
-    expect((await q("select count(*)::int n from ogevia.report_exports")).rows[0].n).toBe(before + 4);
+    const before = (await q("select count(*)::int n from ogevia.report_export_events")).rows[0].n;
+    await Promise.all([1, 2, 3, 4].map((i) => req(i % 2 ? w.ownerA : w.managerA)));
+    expect((await q("select count(*)::int n from ogevia.report_export_events")).rows[0].n).toBe(before + 4);
   });
 });
 void randomUUID;

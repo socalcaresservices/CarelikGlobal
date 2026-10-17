@@ -1,12 +1,12 @@
 // Through the real Lambda handler (SYNTHETIC data only): reconciliation of ended shifts (0067), amendment impacts (0068), export permission and audit (0069), and the
 // full-chain monthly report with its server-generated CSV (0070).
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { createTestDb, freshClient, orgToday, seedWorld, signedVisit, type Actor, type TestDb, type World } from "../../../infra/aws/db/test/harness";
 import { MemoryEvidenceStore } from "../src/evidence";
 import { createHandler } from "../src/handler";
 import { MemoryIdentityAdmin } from "../src/identity";
-import { chainCsv } from "../src/routes";
+import { chainCsv } from "../src/exports";
 import { CONFIG, event } from "./fixtures";
 
 let db: TestDb;
@@ -85,22 +85,81 @@ describe("amendments report the reserved shifts", () => {
   });
 });
 
-describe("export permission and audit through the API", () => {
-  it("a manager exports and the owner reads the ledger; a scheduler and a caregiver are refused; nothing is recorded for a refusal", async () => {
-    const before = (await db.admin.query("select count(*)::int n from ogevia.report_exports")).rows[0].n;
-    const body = { organizationId: w.orgA, report: "monthly_service_reconciliation", rowCount: 4, params: { month: monthStart } };
-    expect((await call("POST /v1/exports", w.schedulerA, { body })).status).toBe(403);
-    expect((await call("POST /v1/exports", w.caregiverA1, { body })).status).toBe(403);
-    expect((await call("POST /v1/exports", w.managerB, { body })).status).toBeGreaterThanOrEqual(403);
-    expect((await db.admin.query("select count(*)::int n from ogevia.report_exports")).rows[0].n).toBe(before);
-    const ok = await call("POST /v1/exports", w.managerA, { body });
-    expect(ok.status, JSON.stringify(ok.body)).toBe(200);
-    expect(ok.body.export.exportId).toBeTruthy();
-    expect((await call("POST /v1/exports", w.managerA, { body: { ...body, report: "everything" } })).status).toBe(422);
-    expect((await call("POST /v1/exports", w.managerA, { body: { ...body, rowCount: -3 } })).status).toBe(400);
-    const ledger = await call("GET /v1/exports", w.ownerA, { query: { organizationId: w.orgA } });
-    expect(ledger.body.exports[0]).toMatchObject({ reportKey: "monthly_service_reconciliation", rowCount: 4, delivery: "browser_assembled" });
+describe("exports are server-generated: request, generation, and the permission that gates them (0069, 0072)", () => {
+  const ledger = async (a: Actor = w.ownerA) => (await call("GET /v1/exports", a, { query: { organizationId: w.orgA } })).body.exports as Array<Record<string, any>>;
+  const count = async () => Number((await db.admin.query("select count(*)::int n from ogevia.report_exports")).rows[0].n);
+  const body = (report: string, params: Record<string, unknown> = { monthStart }) => ({ organizationId: w.orgA, report, params });
+
+  it("a scheduler, a caregiver and another agency are refused with NOTHING written and no file; the browser can no longer record an export itself", async () => {
+    const before = await count();
+    const events = Number((await db.admin.query("select count(*)::int n from ogevia.report_export_events")).rows[0].n);
+    for (const who of [w.schedulerA, w.caregiverA1]) {
+      const r = await call("POST /v1/exports", who, { body: body("monthly_service_reconciliation") });
+      expect(r.status).toBe(403);
+      expect(r.body.csv).toBeUndefined();
+    }
+    expect((await call("POST /v1/exports", w.managerB, { body: body("monthly_chain") })).status).toBeGreaterThanOrEqual(403);
+    expect(await count()).toBe(before);
+    expect(Number((await db.admin.query("select count(*)::int n from ogevia.report_export_events")).rows[0].n)).toBe(events);
+    // the old claim-by-browser function is gone
+    expect((await db.admin.query("select count(*)::int n from pg_proc p join pg_namespace n on n.oid = p.pronamespace where n.nspname = 'ogevia_api' and p.proname = 'record_report_export'")).rows[0].n).toBe(0);
+  });
+
+  it("each of the four reports is built by the server; the ledger shows requested, then generated with rows, bytes and the SHA-256 of exactly the file returned", async () => {
+    const f = await freshClient(db, w, w.caregiverA1, 5000, w.orgA, { before: 40, after: 200 });
+    await signedVisit(db, w.caregiverA1, w, 30, w.orgA, f.client, f.service);
+    const cases: Array<[string, Record<string, unknown>, RegExp]> = [
+      ["client_service_calendar", { monthStart, clientId: f.client }, /^client-service-calendar-\d{4}-\d{2}\.csv$/],
+      ["monthly_service_reconciliation", { monthStart }, /^monthly-service-reconciliation-\d{4}-\d{2}\.csv$/],
+      ["correction_history", {}, /^correction-history\.csv$/],
+      ["monthly_chain", { monthStart, clientId: f.client }, /^monthly-chain-\d{4}-\d{2}\.csv$/],
+    ];
+    for (const [report, params, name] of cases) {
+      const r = await call("POST /v1/exports", w.managerA, { body: body(report, params) });
+      expect(r.status, `${report}: ${JSON.stringify(r.body)}`).toBe(200);
+      expect(r.body.filename).toMatch(name);
+      expect(r.body.exportId).toBeTruthy();
+      const csv = r.body.csv as string;
+      expect(r.body.byteCount).toBe(Buffer.byteLength(csv, "utf8"));
+      const entry = (await ledger()).find((e) => e.exportId === r.body.exportId)!;
+      expect(entry).toMatchObject({ reportKey: report, status: "generated", rowCount: r.body.rowCount, byteCount: r.body.byteCount, delivery: "server_generated", requestedByName: expect.any(String) });
+      expect(entry.sha256Hex).toBe(createHash("sha256").update(csv, "utf8").digest("hex"));
+      expect(entry.generatedAt).toBeTruthy();
+      const events = (await db.admin.query("select event from ogevia.report_export_events where export_id = $1 order by id", [r.body.exportId])).rows.map((x) => x.event);
+      expect(events).toEqual(["requested", "generated"]);
+      const audit = (await db.admin.query("select action, after_state from ogevia.audit_events where entity_id = $1 order by id", [r.body.exportId])).rows;
+      expect(audit.map((a) => a.action)).toEqual(["report.export_requested", "report.export_generated"]);
+      expect(JSON.stringify(audit[1].after_state)).toMatch(/Delivery to the device is not recorded/); // generation is not a claim of download
+    }
+    // content spot checks
+    const rec = await call("POST /v1/exports", w.managerA, { body: body("monthly_service_reconciliation", { monthStart }) });
+    const lines = (rec.body.csv as string).split("\r\n");
+    expect(lines[0]).toContain('"Approved by a person (min)"');
+    expect(lines.length).toBeGreaterThan(1);
+  });
+
+  it("a failure to build the file records FAILED, returns no file, and leaves the request visible as failed; a missing required parameter is refused before anything is requested", async () => {
+    const before = await count();
+    const bad = await call("POST /v1/exports", w.managerA, { body: body("client_service_calendar", { monthStart }) }); // no client
+    expect(bad.status).toBe(400);
+    expect(await count()).toBe(before);
+    expect((await call("POST /v1/exports", w.managerA, { body: body("everything") })).status).toBe(400);
+    // force a generation failure: a month the database function rejects after the request was accepted
+    await db.admin.query("alter function ogevia_api.get_monthly_chain_report(uuid, date, uuid) rename to get_monthly_chain_report_off");
+    let failed;
+    try { failed = await call("POST /v1/exports", w.managerA, { body: body("monthly_chain") }); }
+    finally { await db.admin.query("alter function ogevia_api.get_monthly_chain_report_off(uuid, date, uuid) rename to get_monthly_chain_report"); }
+    expect(failed.status).toBeGreaterThanOrEqual(400);
+    expect(failed.body.csv).toBeUndefined();
+    const entry = (await ledger())[0]!;
+    expect(entry).toMatchObject({ reportKey: "monthly_chain", status: "failed", errorCode: expect.any(String), sha256Hex: null });
+    expect((await db.admin.query("select action from ogevia.audit_events where entity_id = $1 order by id", [entry.exportId])).rows.map((a) => a.action)).toEqual(["report.export_requested", "report.export_failed"]);
+  });
+
+  it("only the owner reads the ledger; ledger rows and events cannot be edited or deleted; a request nobody closed stays visible as requested", async () => {
     expect((await call("GET /v1/exports", w.managerA, { query: { organizationId: w.orgA } })).status).toBe(403);
+    await expect(db.admin.query("delete from ogevia.report_export_events")).rejects.toThrow();
+    await expect(db.admin.query("update ogevia.report_exports set report_key = 'monthly_chain'")).rejects.toThrow();
   });
 });
 
@@ -115,20 +174,18 @@ describe("the full-chain monthly report and its server-generated export", () => 
     expect(rep.body.rows[0]).toMatchObject({ authorizedMinutes: 5000, billableMinutes: 30, readyForReviewMinutes: 30, scheduledMinutes: 60, reservedOk: true, visitsOk: true, balanceOk: true, differenceMinutes: 0 });
 
     const before = (await db.admin.query("select count(*)::int n from ogevia.report_exports")).rows[0].n;
-    const refused = await call("POST /v1/reports/monthly-chain/export", w.schedulerA, { body: { organizationId: w.orgA, monthStart, clientId: f.client } });
+    const refused = await call("POST /v1/exports", w.schedulerA, { body: { organizationId: w.orgA, report: "monthly_chain", params: { monthStart, clientId: f.client } } });
     expect(refused.status).toBe(403);
     expect((await db.admin.query("select count(*)::int n from ogevia.report_exports")).rows[0].n).toBe(before); // nothing recorded, nothing returned
     expect(refused.body.csv).toBeUndefined();
 
-    const ok = await call("POST /v1/reports/monthly-chain/export", w.managerA, { body: { organizationId: w.orgA, monthStart, clientId: f.client } });
+    const ok = await call("POST /v1/exports", w.managerA, { body: { organizationId: w.orgA, report: "monthly_chain", params: { monthStart, clientId: f.client } } });
     expect(ok.status, JSON.stringify(ok.body)).toBe(200);
     expect(ok.body.filename).toBe(`monthly-chain-${monthStart.slice(0, 7)}.csv`);
     const lines = (ok.body.csv as string).split("\r\n");
     expect(lines[0]).toContain('"Authorized (min)"');
     expect(lines[1]).toContain(",5000,60,0,0,60,30,30,30,"); // authorized, scheduled, held, reconcile, reserved, worked, confirmed, billable
     expect(lines.at(-1)).toContain("Submitted / billed is not part of this report");
-    const row = (await db.admin.query("select * from ogevia.report_exports where id = $1", [ok.body.exportId])).rows[0];
-    expect(row).toMatchObject({ report_key: "monthly_chain", delivery: "server_generated", row_count: 1, exported_by: w.managerA.userId });
     expect((await db.admin.query("select count(*)::int n from ogevia.report_exports")).rows[0].n).toBe(before + 1);
   });
 
