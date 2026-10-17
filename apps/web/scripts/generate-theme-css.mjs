@@ -1,4 +1,4 @@
-// Generates src/styles/theme-scales.css: the colour scales the app already uses (slate, red, amber, emerald, sky) as CSS variables.
+// Generates src/styles/theme-scales.css: the colour scales the app already uses (slate, red, amber, emerald, sky, indigo, violet, rose) as CSS variables.
 // Light = Tailwind's own values, so the default look is unchanged. Dark = the same scale mirrored (50<->950, 100<->900 ... 400<->600),
 // which keeps every "pale background + dark text" pair a "deep background + light text" pair with the same contrast.
 //   node scripts/generate-theme-css.mjs > src/styles/theme-scales.css
@@ -6,7 +6,7 @@ import { createRequire } from "node:module";
 const colors = createRequire(import.meta.url)("tailwindcss/colors");
 const steps = [50, 100, 200, 300, 400, 500, 600, 700, 800, 900, 950];
 const rgb = (hex) => [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16)).join(" ");
-const families = ["slate", "red", "amber", "emerald", "sky"];
+const families = ["slate", "red", "amber", "emerald", "sky", "indigo", "violet", "rose"];
 // slate-500 is the app's secondary-text grey. Tailwind's value (100 116 139) is 3.9:1 on tinted surfaces and on dark, so it is the one
 // step adjusted for 4.5:1 text contrast on every background (light 87 100 120, dark 139 154 175).
 const LIGHT_OVERRIDE = { "slate-500": "87 100 120" };

@@ -24,6 +24,12 @@
   --og-chart-5: 3 105 161;
   --og-accent: 11 94 91; /* teal */
   --og-accent-fg: 255 255 255;
+  /* Navigation area colours (Clients, Caregivers, Scheduling, Approvals, Reports): >= 4.5:1 as text on the sidebar tint in every background. */
+  --og-area-clients: 2 98 150;
+  --og-area-caregivers: 13 107 100;
+  --og-area-scheduling: 109 40 217;
+  --og-area-approvals: 150 68 6;
+  --og-area-reports: 71 85 105;
 }
 
 /* The shared Button (packages/ui) reads --color-accent. Set on the app wrapper, so it follows the chosen accent in the AWS build
@@ -66,6 +72,11 @@
   --og-chart-4: 249 168 212;
   --og-chart-5: 125 211 252;
   --og-accent-fg: 8 14 18;
+  --og-area-clients: 125 190 235;
+  --og-area-caregivers: 94 209 200;
+  --og-area-scheduling: 196 181 253;
+  --og-area-approvals: 253 186 116;
+  --og-area-reports: 190 200 212;
 }
 
 /* Accent: one value on light surfaces (>= 4.5:1 as text and under white button text), a lighter one on dark. */

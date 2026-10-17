@@ -1174,7 +1174,7 @@ export function ServiceVerificationReportsPage() {
                                 {correctionsQuery.isLoading ? (
                                   <p className="mt-2 text-sm text-slate-500">Loading…</p>
                                 ) : (correctionsQuery.data ?? []).length === 0 ? (
-                                  <p className="mt-2 text-sm text-slate-400">No corrections recorded for this visit.</p>
+                                  <p className="mt-2 text-sm text-slate-500">No corrections recorded for this visit.</p>
                                 ) : (
                                   <ul className="mt-2 space-y-2">
                                     {(correctionsQuery.data ?? []).map((entry, index) => (
@@ -1719,7 +1719,7 @@ export function ServiceVerificationReportsPage() {
             range
           </p>
           {caregiverSubtotals.length === 0 ? (
-            <p className="mt-4 text-sm text-slate-400">
+            <p className="mt-4 text-sm text-slate-500">
               No caregiver hours match these filters.
             </p>
           ) : (
@@ -2146,7 +2146,7 @@ export function ServiceVerificationReportsPage() {
                         <td className="py-2 pr-3"><ClientCell name={row.clientName} code={row.clientCode} /></td>
                         <td className="py-2 pr-3">
                           <p className="font-medium text-slate-800">{row.serviceCode} · {row.serviceName}</p>
-                          <p className="text-xs text-slate-400">
+                          <p className="text-xs text-slate-500">
                             {formatDateOnly(row.authorizationPeriodStart)}–{formatDateOnly(row.authorizationPeriodEnd)}
                           </p>
                         </td>
@@ -2302,11 +2302,11 @@ export function ServiceVerificationReportsPage() {
                       <td className="py-2 pr-3">{row.caregiverName}</td>
                       <td className="py-2 pr-3 whitespace-nowrap">
                         {formatTimeRange(row.beforeSnapshot.timeIn, row.beforeSnapshot.timeOut)}
-                        <span className="block text-xs text-slate-400">{formatDuration(row.beforeSnapshot.workedMinutes)}</span>
+                        <span className="block text-xs text-slate-500">{formatDuration(row.beforeSnapshot.workedMinutes)}</span>
                       </td>
                       <td className="py-2 pr-3 whitespace-nowrap">
                         {formatTimeRange(row.afterSnapshot.timeIn, row.afterSnapshot.timeOut)}
-                        <span className="block text-xs text-slate-400">{formatDuration(row.afterSnapshot.workedMinutes)}</span>
+                        <span className="block text-xs text-slate-500">{formatDuration(row.afterSnapshot.workedMinutes)}</span>
                       </td>
                       <td className="py-2 pr-3">{row.correctedByName}</td>
                       <td className="py-2 pr-3">{VISIT_STATUS_LABEL[row.correctedVisitStatus]}</td>
@@ -2342,7 +2342,7 @@ export function ServiceVerificationReportsPage() {
                     onChange={(event) => setShowSuperseded(event.target.checked)}
                   />
                   Show replaced records
-                  <span className="font-normal text-slate-400" title="A correction keeps the original visit and adds a replacement. Off by default.">(originals kept after corrections)</span>
+                  <span className="font-normal text-slate-500" title="A correction keeps the original visit and adds a replacement. Off by default.">(originals kept after corrections)</span>
                 </label>
                 <details className="relative">
                   <summary className="cursor-pointer list-none rounded-lg border border-slate-300 bg-og-card px-3 py-2 text-xs font-semibold text-slate-700">
@@ -2379,7 +2379,7 @@ export function ServiceVerificationReportsPage() {
                 Could not load service verification records.
               </p>
             ) : visibleVisitRows.length === 0 ? (
-              <p className="mt-3 text-sm text-slate-400">
+              <p className="mt-3 text-sm text-slate-500">
                 No visits match these filters.
               </p>
             ) : narrow ? (
@@ -2429,7 +2429,7 @@ export function ServiceVerificationReportsPage() {
                             <div><dt className="text-slate-500">Hours left</dt><dd className="font-medium text-slate-900">{formatDuration(row.remaining_minutes)}</dd></div>
                           </dl>
                         </details>
-                        <p className="mt-2 font-mono text-[11px] text-slate-400">Visit {row.visit_number ?? "—"}</p>
+                        <p className="mt-2 font-mono text-[11px] text-slate-500">Visit {row.visit_number ?? "—"}</p>
                         {canManage ? (
                           <div className="mt-2 flex flex-wrap gap-2 print:hidden">
                             {backend.kind === "aws" && row.status === "administrator_review" ? (
@@ -2515,8 +2515,8 @@ export function ServiceVerificationReportsPage() {
                                 <p className="font-medium text-slate-900">
                                   {row.client_legal_name ?? row.client_code}
                                 </p>
-                                {row.client_legal_name ? <p className="text-xs text-slate-400">{row.client_code}</p> : null}
-                                {!visitColumns.has("visitRef") && row.visit_number ? <p className="font-mono text-[11px] text-slate-400">{row.visit_number}</p> : null}
+                                {row.client_legal_name ? <p className="text-xs text-slate-500">{row.client_code}</p> : null}
+                                {!visitColumns.has("visitRef") && row.visit_number ? <p className="font-mono text-[11px] text-slate-500">{row.visit_number}</p> : null}
                               </td>
                             ) : null}
                             {visitColumns.has("caregiver") ? (
@@ -2533,7 +2533,7 @@ export function ServiceVerificationReportsPage() {
                             {visitColumns.has("time") ? (
                               <td className="py-2 pr-2 whitespace-nowrap font-mono text-xs text-slate-600">
                                 {formatTimeRange(row.time_in, row.time_out)}
-                                <p className="font-sans text-slate-400">
+                                <p className="font-sans text-slate-500">
                                   {row.scheduled_starts_at ? "Scheduled " : ""}
                                   {formatScheduledWindow(row.scheduled_starts_at, row.scheduled_ends_at, row.caregiver_scheduling_mode)}
                                 </p>
@@ -2675,7 +2675,7 @@ export function ServiceVerificationReportsPage() {
                   >
                     <span className="text-slate-700">
                       {entry.legalName ?? entry.code} · {entry.serviceName}
-                      <span className="text-slate-400"> · {entry.visits} {entry.visits === 1 ? "visit" : "visits"}</span>
+                      <span className="text-slate-500"> · {entry.visits} {entry.visits === 1 ? "visit" : "visits"}</span>
                     </span>
                     <span className="font-medium text-slate-900">
                       {formatDuration(entry.workedMinutes)} worked · {formatDuration(entry.billableMinutes)} billable
@@ -2705,7 +2705,7 @@ export function ServiceVerificationReportsPage() {
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <span className="text-slate-700">
                     {row.client_legal_name ?? row.client_code}{" "}
-                    <span className="text-slate-400">
+                    <span className="text-slate-500">
                       · {row.caregiver_name} · Time In {formatDateTime(row.time_in)}
                       {row.scheduled_starts_at
                         ? ` · Scheduled ${formatScheduledWindow(row.scheduled_starts_at, row.scheduled_ends_at, row.caregiver_scheduling_mode)}`
@@ -2794,7 +2794,7 @@ export function ServiceVerificationReportsPage() {
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <span className="text-slate-700">
                     {row.client_legal_name ?? row.client_code}{" "}
-                    <span className="text-slate-400">
+                    <span className="text-slate-500">
                       · {row.caregiver_name} ·{" "}
                       {formatDateOnly(row.service_date)}
                     </span>
