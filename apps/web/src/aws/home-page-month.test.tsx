@@ -9,7 +9,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 const monthsRequested: string[] = [];
 vi.mock("./attention", async (orig) => ({ ...(await orig<typeof import("./attention")>()), useAttentionOverview: () => ({ data: undefined, isLoading: true, isError: false }) }));
 vi.mock("./continuity-page", () => ({ ContinuityStatusCard: () => null }));
-vi.mock("./home-extras", () => ({ QuickActions: () => null, TodaysVisits: () => null, RefreshStatus: () => null }));
+vi.mock("./home-extras", () => ({ QuickActions: () => null, TodaysVisits: () => null, RefreshStatus: () => null, TopIssues: () => null, CollapseButton: () => null }));
 vi.mock("@/providers/organization-provider", () => ({
   useOrganization: () => ({
     hasPermission: () => false,

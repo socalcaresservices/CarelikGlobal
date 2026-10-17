@@ -7,7 +7,8 @@ import { streams, TONE, useAttentionOverview, type Stream } from "./attention";
 import { hoursLabel, useUtilisation, type UtilisationRow } from "./aws-workspace";
 import { financeView } from "./finance-view";
 import { Chart } from "./ui/chart";
-import { QuickActions, RefreshStatus, TodaysVisits } from "./home-extras";
+import { CollapseButton, QuickActions, RefreshStatus, TodaysVisits, TopIssues } from "./home-extras";
+import { useCollapsed } from "./home-data";
 import { agencyMonth, useAgencyClock } from "./agency-clock";
 import { Disclosure } from "./ui/disclosure";
 import { PageHeader } from "./ui/page-header";
@@ -57,11 +58,14 @@ export function AwsHomePage() {
   const { tz } = useAgencyClock();
   const [month, setMonth] = useState(() => agencyMonth(tz)); // the AGENCY's month, not the browser's (F7)
   const overview = useAttentionOverview();
+  const [hoursFolded, toggleHours] = useCollapsed("hours");
+  const [financeFolded, toggleFinance] = useCollapsed("finance");
   const utilisation = useUtilisation(`${month}-01`);
   const queryClient = useQueryClient();
   const refresh = () => {
     void overview.refetch();
     void utilisation.refetch();
+    void queryClient.invalidateQueries({ queryKey: ["action-issues"] });
     void queryClient.invalidateQueries({ queryKey: ["aws-shifts"] });
   };
   const rows = utilisation.data ?? [];
@@ -93,26 +97,33 @@ export function AwsHomePage() {
         {tiles.length > 0 ? <ul className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">{tiles.map((s) => <Tile key={s.key} s={s} />)}</ul> : null}
       </section>
 
+      <TopIssues />
+
       <QuickActions />
 
       <TodaysVisits />
 
       <section aria-labelledby="util-heading" className="space-y-3">
-        <h2 id="util-heading" className="text-lg font-bold text-og-ink">Hours this month</h2>
+        <div className="flex items-center justify-between gap-3">
+          <h2 id="util-heading" className="text-lg font-bold text-og-ink">Hours this month</h2>
+          {rows.length > 0 ? <CollapseButton collapsed={hoursFolded} onToggle={toggleHours} label="the hours" /> : null}
+        </div>
         {utilisation.isLoading ? <p className="text-sm text-og-sub">Loading…</p> : null}
-        {utilisation.isError ? <p role="alert" className="text-sm text-red-700">{(utilisation.error as Error).message}</p> : null}
+        {utilisation.isError ? <p role="alert" className="text-sm text-red-700" data-testid="hours-error">The hours could not be loaded. They are not shown as zero. <button type="button" className="font-semibold underline" onClick={() => void utilisation.refetch()}>Retry</button></p> : null}
         {!utilisation.isLoading && !utilisation.isError && rows.length === 0 ? <p className="text-sm text-og-sub">No authorizations cover this month.</p> : null}
         {rows.length > 0 ? (
           <div className="space-y-4 rounded-og border border-og-line bg-og-card p-4">
-            <dl className="grid grid-cols-2 gap-x-6 gap-y-3 md:grid-cols-4">
+            {!hoursFolded ? <dl className="grid grid-cols-2 gap-x-6 gap-y-3 md:grid-cols-4">
               <Stat label="Authorized" value={hoursLabel(sum(rows, "authorizedMinutes"))} />
               <Stat label="Worked" value={hoursLabel(sum(rows, "workedMinutes"))} />
               <Stat label="Billable (confirmed)" value={hoursLabel(sum(rows, "billableMinutes"))} />
               <Stat label="Hours left" value={hoursLabel(sum(rows, "remainingMinutes"))} />
               {sum(rows, "overLimitMinutes") > 0 ? <Stat label="Over the limit" value={hoursLabel(sum(rows, "overLimitMinutes"))} tone="red" /> : null}
-            </dl>
+            </dl> : null}
             {tierSummary ? (
-              <p role="status" className="text-sm font-semibold text-amber-900" data-testid="authorization-tiers">{tierSummary}</p>
+              <p role="status" className="text-sm font-semibold text-amber-900" data-testid="authorization-tiers">
+                {tierSummary}. <Link className="inline-flex min-h-[44px] items-center font-semibold text-og-link underline md:min-h-[32px]" to="/service-verification/reports?view=reconciliation" data-testid="authorization-tiers-link">See which clients</Link>
+              </p>
             ) : null}
             {sum(rows, "needsReconciliationMinutes") > 0 ? (
               <p role="status" className="text-sm font-semibold text-amber-900" data-testid="needs-reconciliation">
@@ -124,8 +135,8 @@ export function AwsHomePage() {
                 <span aria-hidden="true">● </span>Over the authorization: {over.map((r) => r.serviceName).join(", ")}. Review before billing.
               </p>
             ) : null}
-            {chartData.length > 0 ? <Chart title="Worked hours by service" data={chartData} shape="parts-of-whole" unit="worked hours" total={hoursLabel(sum(rows, "workedMinutes"))} /> : null}
-            <Disclosure summary="Hours by service, and how these are calculated">
+            {!hoursFolded && chartData.length > 0 ? <Chart title="Worked hours by service" data={chartData} shape="parts-of-whole" unit="worked hours" total={hoursLabel(sum(rows, "workedMinutes"))} /> : null}
+            {!hoursFolded ? <Disclosure summary="Hours by service, and how these are calculated">
               <div className="overflow-x-auto" tabIndex={0} role="region" aria-label="Hours by service (scrolls sideways on small screens)">
                 <table className="w-full min-w-[820px] border-collapse text-sm">
                   <caption className="sr-only">Hours by service for the selected month</caption>
@@ -171,15 +182,18 @@ export function AwsHomePage() {
               <p className="mt-1">Healthy is below 80% committed, Near Limit 80% to below 95%, Critical 95% and above. An amended authorization counts once (its latest version).</p>
               <p className="mt-1">Billable means confirmed. Approved means a person approved it for billing. Neither means submitted or paid.</p>
               <p className="mt-1"><Link className="font-semibold text-og-link underline" to="/service-verification/reports?view=reconciliation">Monthly reconciliation by client and authorization</Link></p>
-            </Disclosure>
+            </Disclosure> : null}
           </div>
         ) : null}
       </section>
 
       {isOwnerFinance && finance.showSection ? (
         <section aria-labelledby="finance-heading" className="space-y-3">
-          <h2 id="finance-heading" className="text-lg font-bold text-og-ink">Financial impact</h2>
-          <div className="space-y-3 rounded-og border border-og-line bg-og-card p-4">
+          <div className="flex items-center justify-between gap-3">
+            <h2 id="finance-heading" className="text-lg font-bold text-og-ink">Financial impact</h2>
+            <CollapseButton collapsed={financeFolded} onToggle={toggleFinance} label="the figures" />
+          </div>
+          {!financeFolded ? <div className="space-y-3 rounded-og border border-og-line bg-og-card p-4">
             <dl className="grid grid-cols-1 gap-x-6 gap-y-3 sm:grid-cols-3">
               {finance.items.map((i) => (
                 <div key={i.key}>
@@ -200,7 +214,7 @@ export function AwsHomePage() {
               <p className="mt-1">Unused hours are hours left × the rate: potential revenue not realized, not a loss.</p>
               <p className="mt-1">Caregiver cost and margin are not shown because Ogevia has no caregiver pay data.</p>
             </Disclosure>
-          </div>
+          </div> : null}
         </section>
       ) : null}
 
