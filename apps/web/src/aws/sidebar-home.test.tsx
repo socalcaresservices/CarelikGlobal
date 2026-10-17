@@ -22,7 +22,7 @@ const json = (code: number, body: unknown) => new Response(JSON.stringify(body),
 
 const SUMMARY = { missingTimeOut: 1, notConfirmed: 0, needsReview: 2, lateResponsesToReview: 0, uncoveredShifts: 0, documentsBlocking: 0, documentsToReview: 0, billingReadyUnapproved: 3, awaitingSignature: 0, documentsExpiring: 2, total: 3 };
 const OVERVIEW = {
-  asOf: "2026-10-18T12:00:00Z", urgentWindowHours: 24,
+  asOf: "2026-10-18T12:00:00Z", urgentWindowHours: 48,
   urgent: { items: [{ kind: "visit", id: "v1", startsAt: "2026-10-18T09:00:00Z", endsAt: null, reasons: ["missing_clock_out"], severity: "amber", inProgress: true, caregiverRecordId: null, caregiverCode: null, clientCode: "C-104", serviceCode: "862" }], itemCount: 1, issueCount: 1, shifts: 0, visits: 1 },
   upcoming: { count: 0, nextStartsAt: null, shifts: [] },
   documents: { overdue: 0, dueSoon: 2, awaitingReview: 0, rejected: 0 },

@@ -1,7 +1,7 @@
 // LOCAL DEVELOPMENT HARNESS: extra SYNTHETIC data for looking at the alert pages, documents and compliance screens.
 //   pnpm --filter @carelik/infra-aws harness:setup && pnpm --filter @carelik/infra-aws harness:seed-extra
 // Adds, through the real API functions where one exists: CPR/TB rules, documents in every state (due soon, overdue, awaiting review),
-// uncovered shifts at several distances (inside and outside 24 hours), approved background checks, hire dates, and a caregiver on a
+// uncovered shifts at several distances (inside and outside 48 hours), approved background checks, hire dates, and a caregiver on a
 // compliance hold. It refuses any non-local database. Never used by deployed code.
 import { randomUUID } from "node:crypto";
 import pg from "pg";
@@ -86,8 +86,8 @@ async function main() {
   };
   await shiftAt(30, 3, drew); // Drew's shift tomorrow (the hold flags it)
   await shiftAt(50, 3, drew);
-  await shiftAt(4, 4, null); // uncovered, inside 24 hours
-  await shiftAt(20, 3, null); // uncovered, inside 24 hours
+  await shiftAt(4, 4, null); // uncovered, inside 48 hours
+  await shiftAt(20, 3, null); // uncovered, inside 48 hours
   await shiftAt(60, 3, null); // uncovered, day 3
   await shiftAt(120, 4, null); // uncovered, day 5
   await shiftAt(300, 4, null); // uncovered, day 12

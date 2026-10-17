@@ -989,13 +989,13 @@ export const ROUTES: Record<string, Route> = {
   },
 
   // Attention by purpose (0054): needs attention now / upcoming staffing / documents & compliance / visit review. One read-only classification
-  // of the same records; a section is null when the viewer may not see it. The 24-hour urgent window is an implementation assumption
-  // pending owner review (default 24; 1 to 168 accepted so the owner can try another value).
+  // of the same records; a section is null when the viewer may not see it. The urgent window is 48 hours (owner decision D10;
+  // default 48; 1 to 168 accepted so a filter such as 24 or 72 hours can be tried).
   "GET /v1/attention/overview": {
     mutating: false,
     handle: async ({ event, tx }) => {
       const raw = q(event).urgentHours;
-      const hours = raw === undefined || raw === "" ? 24 : wholeNumber(Number(raw), "urgentHours", 1, 168);
+      const hours = raw === undefined || raw === "" ? 48 : wholeNumber(Number(raw), "urgentHours", 1, 168);
       return { overview: await tx(async (db) => (await first(db, "select ogevia_api.get_attention_overview($1,$2) as o", [orgParam(event), hours])).o) };
     },
   },

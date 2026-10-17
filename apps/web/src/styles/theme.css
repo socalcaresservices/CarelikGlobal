@@ -94,3 +94,16 @@
 [data-og-density="compact"] main .space-y-5 > :not([hidden]) ~ :not([hidden]) { margin-top: 0.875rem; }
 [data-og-density="compact"] main .space-y-4 > :not([hidden]) ~ :not([hidden]) { margin-top: 0.75rem; }
 [data-og-density="compact"] .og-row { min-height: 44px; }
+
+/* Form fields: native controls ignore the page colours (white field, near-black text) unless told. On dark that made light text on a white field. */
+.og-app input:not([type="checkbox"]):not([type="radio"]):not([type="file"]):not([type="color"]):not([type="range"]),
+.og-app select,
+.og-app textarea {
+  background-color: rgb(var(--og-card));
+  color: rgb(var(--og-ink));
+}
+.og-app input::placeholder,
+.og-app textarea::placeholder { color: rgb(var(--og-sub)); }
+.og-app input:disabled,
+.og-app select:disabled,
+.og-app textarea:disabled { opacity: 0.6; }

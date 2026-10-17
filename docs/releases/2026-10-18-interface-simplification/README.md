@@ -5,10 +5,10 @@
 ## 1. Baseline and what could not be compared
 The request asks for the latest approved five-board specifications as the baseline. **Those files are not in the repository or the connected Drive** (searched in earlier sessions). Nothing here is claimed to match Board 5 Reporting / Billing Readiness or any other board spec, and the older Wave 1 list was not substituted. Needed: the five-board handoff and the per-board specification files.
 
-## 2. Assumptions for owner review (not verified requirements)
+## 2. Assumptions and decisions
 | Item | Assumption |
 |---|---|
-| Urgent window | **24 hours.** A shift or visit starting or running within 24 hours that is blocked or at risk is "Needs attention now"; later uncovered shifts are "Upcoming staffing". One parameter: `get_attention_overview(p_organization_id, p_urgent_hours default 24)`. |
+| Urgent window | **48 hours** (owner decision D10, SCHEDULING_DASHBOARD_REVIEW_PACKAGE_2026-10-12.md 15.3; no later change found). A shift or visit starting or running within 48 hours that is blocked or at risk is "Needs attention now"; later uncovered shifts are "Upcoming staffing". One parameter: `get_attention_overview(p_organization_id, p_urgent_hours default 48)`. |
 | Uncovered shift vs unscheduled visit | Uncovered shift = a scheduled, not-ended `shifts` row with no caregiver or an unreplaced call-out. Unscheduled visit = a `service_visits` row with no `scheduled_shift_id`; it is a visit to review and is counted only in Visit review. |
 | Compliance and imminent work | A shift inside the window whose caregiver is blocked (hold or non-current required document) appears in Needs attention now, linked to the caregiver's compliance record. Shifts beyond the window stay reachable from Documents & compliance, then Caregiver holds. |
 
@@ -47,7 +47,7 @@ A defect found while testing and fixed: the "rust" accent failed 4.5:1 on tinted
 - Themes other than light/teal are verified by contrast calculation only, not by page-by-page screenshots; legacy pages that still use fixed colours may look uneven in dark.
 - Line chart has no data it fits. Density is CSS overrides on common spacing classes.
 - Migration numbers 0053/0054 collide with the unmerged branch `claude/determined-goodall-syvv7s`: renumber on merge.
-- The 24-hour window is not configurable per agency.
+- The 48-hour window is a parameter but not configurable per agency.
 - `/v1/attention` and `action-needed.ts` are now dead for Home.
 - Pre-existing, unchanged: Home opens on the browser-clock month (known defect F7, `it.fails`).
 

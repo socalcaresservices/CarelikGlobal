@@ -69,7 +69,7 @@ export function NeedsAttentionPage() {
         </>
       ) : null}
       <Disclosure summary="How this list is chosen">
-        <p>An item is a shift or a visit, counted once even when it has several issues. Red means care is blocked or at risk now; amber means a risk is approaching. Shifts after the first {hours} hours are under Upcoming staffing. The {hours}-hour window is a provisional setting awaiting owner review.</p>
+        <p>An item is a shift or a visit, counted once even when it has several issues. Red means care is blocked or at risk now; amber means a risk is approaching. Shifts after the first {hours} hours are under Upcoming staffing. The {hours}-hour window is the owner's decision D10.</p>
       </Disclosure>
     </div>
   );
@@ -91,7 +91,7 @@ export function UpcomingStaffingPage() {
   return (
     <div className="space-y-4">
       <PageHeader title="Upcoming staffing" lead={`Shifts after the next ${q.data?.urgentWindowHours ?? URGENT_WINDOW_HOURS} hours that still need a caregiver.`}
-        action={<Link className="inline-flex min-h-[44px] items-center rounded-lg bg-og-accent px-4 text-sm font-semibold text-white hover:opacity-90 md:min-h-[40px]" to="/schedule">Open schedule</Link>} />
+        action={<Link className="inline-flex min-h-[44px] items-center rounded-lg bg-og-accent px-4 text-sm font-semibold text-og-on-accent hover:opacity-90 md:min-h-[40px]" to="/schedule">Open schedule</Link>} />
       <Loading q={q} />
       {q.data && !u ? <p className="text-sm text-og-sub">Your role does not include this list.</p> : null}
       {u ? (

@@ -37,9 +37,9 @@ describe("GET /v1/attention/overview", () => {
     expect((await call("GET /v1/attention/overview", w.managerA, q({ urgentHours: "abc" }))).status).toBe(400);
     const ok = await call("GET /v1/attention/overview", w.managerA, q());
     expect(ok.status).toBe(200);
-    expect(ok.body.overview).toMatchObject({ urgentWindowHours: 24 });
+    expect(ok.body.overview).toMatchObject({ urgentWindowHours: 48 });
     expect(Object.keys(ok.body.overview)).toEqual(expect.arrayContaining(["urgent", "upcoming", "documents", "visitReview"]));
-    expect((await call("GET /v1/attention/overview", w.managerA, q({ urgentHours: "48" }))).body.overview.urgentWindowHours).toBe(48);
+    expect((await call("GET /v1/attention/overview", w.managerA, q({ urgentHours: "24" }))).body.overview.urgentWindowHours).toBe(24);
   });
 });
 

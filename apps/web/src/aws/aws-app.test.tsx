@@ -57,7 +57,7 @@ function fakeApi(role: "caregiver" | "manager" | "organization_owner", opts: { d
       case "GET /v1/attention":
         return json(200, { summary: role === "caregiver" ? null : { missingTimeOut: 1, notConfirmed: 0, needsReview: 2, billingReadyUnapproved: 1, uncoveredShifts: 0, documentsBlocking: 1, documentsToReview: 1, documentsExpiring: 1, total: 5 } });
       case "GET /v1/attention/overview":
-        return json(200, { overview: { asOf: "2026-10-18T12:00:00Z", urgentWindowHours: 24,
+        return json(200, { overview: { asOf: "2026-10-18T12:00:00Z", urgentWindowHours: 48,
           urgent: { items: [{ kind: "shift", id: "s1", startsAt: "2026-10-18T20:00:00Z", endsAt: "2026-10-18T23:00:00Z", reasons: ["uncovered_open"], severity: "red", inProgress: false, caregiverRecordId: null, caregiverCode: null, clientCode: "C-104", serviceCode: "862" }], itemCount: 1, issueCount: 1, shifts: 1, visits: 0 },
           upcoming: { count: 2, nextStartsAt: "2026-10-21T20:00:00Z", shifts: [] },
           documents: { overdue: 1, dueSoon: 1, awaitingReview: 1, rejected: 0 },

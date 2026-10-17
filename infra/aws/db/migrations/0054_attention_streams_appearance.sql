@@ -1,6 +1,7 @@
 -- 0054 Attention streams, appearance preferences, and the authorizations-missing-a-rate list (interface simplification).
 --
--- IMPLEMENTATION ASSUMPTION FOR OWNER REVIEW: the "urgent" window is 24 hours (get_attention_overview, p_urgent_hours, default 24).
+-- URGENT WINDOW = 48 HOURS: owner decision D10 (docs/product/SCHEDULING_DASHBOARD_REVIEW_PACKAGE_2026-10-12.md, section 15.3): an unfilled shift starting
+-- within the next 48 hours is an urgent coverage gap. It is a parameter (get_attention_overview, p_urgent_hours, default 48); no later owner decision changing it was found.
 -- A shift or visit that starts, or is already running, inside the window is "Needs attention now"; later is "Upcoming staffing".
 --
 -- WHAT THIS CHANGES, AND WHAT IT REUSES (verified in the repository at 07bc55b):
@@ -170,7 +171,7 @@ $$;
 --   upcoming  : uncovered shifts that start after the window, soonest first.
 --   documents : counts of overdue, due soon, awaiting review, rejected, requirements pending inside the 14 days, and caregivers on hold.
 --   visitReview: UNIQUE visits waiting for confirmation or for a person's review/approval, and the review issues behind them.
-create function ogevia_api.get_attention_overview(p_organization_id uuid, p_urgent_hours integer default 24)
+create function ogevia_api.get_attention_overview(p_organization_id uuid, p_urgent_hours integer default 48)
 returns jsonb
 language plpgsql
 stable

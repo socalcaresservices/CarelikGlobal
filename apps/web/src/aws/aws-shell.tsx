@@ -235,7 +235,7 @@ export function AwsShell({ children }: PropsWithChildren) {
         <div className={cn("flex items-center gap-2 px-3 pb-2 pt-4", collapsed ? "flex-col" : "justify-between")}>
           <div className="flex min-w-0 items-center gap-2">
             {/* No Ogevia logo image exists in the repository: the wordmark is text. */}
-            <span aria-hidden="true" className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-og-link text-base font-bold text-white">O</span>
+            <span aria-hidden="true" className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-og-link text-base font-bold text-og-on-accent">O</span>
             <span className={cn("truncate text-lg font-bold tracking-tight text-og-ink", collapsed && "sr-only")}>Ogevia</span>
           </div>
           {isMobile ? (
@@ -388,7 +388,7 @@ export function AwsShell({ children }: PropsWithChildren) {
               <Link
                 to="/attention"
                 className={cn(
-                  "inline-flex min-h-[40px] items-center gap-2 rounded-lg border px-3 text-sm font-semibold focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-og-link",
+                  "inline-flex min-h-[44px] items-center gap-2 rounded-lg border px-3 text-sm font-semibold md:min-h-[40px] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-og-link",
                   badge.tone === "red" && "border-red-700 bg-red-50 text-red-800 hover:bg-red-100",
                   badge.tone === "amber" && "border-amber-600 bg-amber-50 text-amber-900 hover:bg-amber-100",
                   badge.tone === "neutral" && "border-og-line text-og-ink hover:bg-og-page",

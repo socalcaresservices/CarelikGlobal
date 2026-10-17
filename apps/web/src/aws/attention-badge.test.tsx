@@ -56,7 +56,7 @@ const json = (code: number, body: unknown) => new Response(JSON.stringify(body),
 const item = (over: Partial<Record<string, unknown>> = {}) => ({ kind: "shift", id: "s1", startsAt: "2026-10-18T20:00:00Z", endsAt: "2026-10-18T23:00:00Z", reasons: ["uncovered_open"], severity: "red", inProgress: false,
   caregiverRecordId: null, caregiverCode: null, clientCode: "C-AAA111", serviceCode: "RSP", ...over });
 const overview = (o: Record<string, unknown> = {}) => ({ overview: {
-  asOf: "2026-10-18T12:00:00Z", urgentWindowHours: 24,
+  asOf: "2026-10-18T12:00:00Z", urgentWindowHours: 48,
   urgent: { items: [], itemCount: 0, issueCount: 0, shifts: 0, visits: 0 },
   upcoming: { count: 0, nextStartsAt: null, shifts: [] },
   documents: { overdue: 0, dueSoon: 0, awaitingReview: 0, rejected: 0, caregiversOnHold: 0, caregiversWithPendingRequirements: 0 },

@@ -60,6 +60,7 @@ export default {
           sub: token("sub"),
           link: token("accent"),
           accent: token("accent"),
+          "on-accent": token("accent-fg"),
           active: "rgb(var(--og-accent) / 0.16)",
           "active-ink": token("accent"),
           worked: token("worked"),

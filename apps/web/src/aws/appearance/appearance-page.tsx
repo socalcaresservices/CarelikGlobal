@@ -36,7 +36,7 @@ function ChoiceForm({ level, current, defaultLabel }: { level: "me" | "organizat
             {[null, ...g.options].map((v) => {
               const selected = (draft[g.key] ?? null) === v;
               return (
-                <label key={v ?? "default"} className={"og-row inline-flex min-h-[40px] cursor-pointer items-center gap-2 rounded-lg border px-3 text-sm focus-within:outline focus-within:outline-2 focus-within:outline-og-accent " + (selected ? "border-og-accent bg-og-active font-semibold text-og-ink" : "border-og-line bg-og-card text-og-ink")}>
+                <label key={v ?? "default"} className={"og-row inline-flex min-h-[44px] cursor-pointer md:min-h-[40px] items-center gap-2 rounded-lg border px-3 text-sm focus-within:outline focus-within:outline-2 focus-within:outline-og-accent " + (selected ? "border-og-accent bg-og-active font-semibold text-og-ink" : "border-og-line bg-og-card text-og-ink")}>
                   <input
                     type="radio"
                     className="sr-only"
@@ -56,7 +56,7 @@ function ChoiceForm({ level, current, defaultLabel }: { level: "me" | "organizat
       ))}
       {save.isError ? <p role="alert" className="text-sm text-red-700">{actionError(save.error, "The appearance could not be saved.")}</p> : null}
       <div className="flex flex-wrap items-center gap-3">
-        <Button type="submit" disabled={!dirty || save.isPending}>{save.isPending ? "Saving…" : "Save"}</Button>
+        <Button type="submit" className="min-h-[44px] md:min-h-[40px]" disabled={!dirty || save.isPending}>{save.isPending ? "Saving…" : "Save"}</Button>
         {save.isSuccess && !dirty ? <p role="status" className="text-sm text-og-sub">Saved.</p> : null}
       </div>
     </form>

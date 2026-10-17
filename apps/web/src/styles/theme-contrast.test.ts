@@ -42,6 +42,7 @@ describe.each(BACKGROUNDS.flatMap((bg) => ACCENTS.map((accent) => [bg, accent] a
     for (const surface of ["og-page", "og-card", "og-side"]) {
       expect(ratio(c("og-ink"), c(surface)), `ink on ${surface}`).toBeGreaterThanOrEqual(7);
       expect(ratio(c("og-sub"), c(surface)), `sub on ${surface}`).toBeGreaterThanOrEqual(4.5);
+      expect(ratio(c("slate-500"), c(surface)), `slate-500 (secondary grey) on ${surface}`).toBeGreaterThanOrEqual(4.5);
     }
   });
 

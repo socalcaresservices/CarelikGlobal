@@ -70,7 +70,7 @@ function UploadForm({ doc, onDone }: { doc: StaffDocument; onDone: () => void })
         </label>
       </div>
       {state.error ? <p role="alert" className="text-sm text-red-700">{state.error}</p> : null}
-      <Button type="submit" disabled={state.busy}>{state.busy ? "Uploading… keep this page open" : "Upload"}</Button>
+      <Button type="submit" className="min-h-[44px] md:min-h-[40px]" disabled={state.busy}>{state.busy ? "Uploading… keep this page open" : "Upload"}</Button>
     </form>
   );
 }
@@ -91,7 +91,7 @@ function OpenFileButton({ versionId }: { versionId: string }) {
   }
   return (
     <div>
-      <button type="button" onClick={() => void open()} disabled={state.busy} className="min-h-[40px] rounded-lg border border-slate-300 px-3 text-sm font-medium text-slate-800">
+      <button type="button" onClick={() => void open()} disabled={state.busy} className="min-h-[44px] rounded-lg border border-og-line px-3 text-sm font-medium text-og-ink hover:bg-og-page md:min-h-[40px]">
         {state.busy ? "Opening…" : "View"}
       </button>
       {state.error ? <p role="alert" className="mt-1 text-sm text-red-700">{state.error}</p> : null}
@@ -132,8 +132,8 @@ function ReviewControls({ doc, selfReview, onDone }: { doc: StaffDocument; selfR
       </label>
       {state.error ? <p role="alert" className="text-sm text-red-700">{state.error}</p> : null}
       <div className="flex flex-wrap gap-2">
-        <Button type="button" disabled={state.busy} onClick={() => void decide("verified")}>Verify</Button>
-        <Button type="button" variant="secondary" disabled={state.busy} onClick={() => void decide("rejected")}>Reject</Button>
+        <Button type="button" className="min-h-[44px] md:min-h-[40px]" disabled={state.busy} onClick={() => void decide("verified")}>Verify</Button>
+        <Button type="button" variant="secondary" className="min-h-[44px] md:min-h-[40px]" disabled={state.busy} onClick={() => void decide("rejected")}>Reject</Button>
       </div>
     </div>
   );
@@ -408,7 +408,7 @@ export function DocumentsPage() {
       {canRead ? (
         <div className="flex flex-wrap gap-2" role="group" aria-label="Show">
           {FILTERS.map((f) => (
-            <button key={f.key} type="button" aria-pressed={filter === f.key} onClick={() => setFilter(f.key)} className={`min-h-[44px] rounded-lg px-3 text-sm font-medium md:min-h-[40px] ${filter === f.key ? "bg-og-accent text-white" : "border border-og-line text-og-ink hover:bg-og-page"}`}>
+            <button key={f.key} type="button" aria-pressed={filter === f.key} onClick={() => setFilter(f.key)} className={`min-h-[44px] rounded-lg px-3 text-sm font-medium md:min-h-[40px] ${filter === f.key ? "bg-og-accent text-og-on-accent" : "border border-og-line text-og-ink hover:bg-og-page"}`}>
               {f.label} <span className="font-og-mono tabular-nums">{counts[f.key]}</span>
             </button>
           ))}

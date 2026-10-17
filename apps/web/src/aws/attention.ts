@@ -1,6 +1,6 @@
 // Attention by purpose (migration 0054). One read-only classification from the server, shown as four destinations:
 //   Needs attention now | Upcoming staffing | Documents & compliance | Visit review
-// IMPLEMENTATION ASSUMPTION FOR OWNER REVIEW: "now" means starting or running within 24 hours (the server's default window).
+// "Now" means starting or running within 48 hours: owner decision D10 (the server's default window).
 // Colour means one thing everywhere: red = care is blocked or at risk now; amber = risk is approaching; neutral = routine work.
 // Colour is never the only signal: every tone has a word and a symbol (TONE below).
 import { useQuery } from "@tanstack/react-query";
@@ -8,7 +8,7 @@ import { useOrganization } from "@/providers/organization-provider";
 import { useAwsApi } from "./aws-workspace";
 
 export type Tone = "red" | "amber" | "neutral";
-export const URGENT_WINDOW_HOURS = 24;
+export const URGENT_WINDOW_HOURS = 48;
 
 export interface UrgentItem {
   kind: "shift" | "visit";
@@ -92,7 +92,7 @@ export function streams(o: AttentionOverview, now = Date.parse(o.asOf)): Stream[
     out.push({
       key: "staffing", label: "Upcoming staffing", count: u.count, unit: u.count === 1 ? "uncovered shift" : "uncovered shifts", to: "/staffing",
       tone: u.count > 0 && soon ? "amber" : "neutral",
-      detail: u.count === 0 ? "Every shift after the next 24 hours has a caregiver." : "Later than the next 24 hours, soonest first",
+      detail: u.count === 0 ? "Every shift after the next 48 hours has a caregiver." : "Later than the next 48 hours, soonest first",
     });
   }
   if (o.documents && (o.documents.overdue !== undefined || o.documents.caregiversOnHold !== undefined)) {

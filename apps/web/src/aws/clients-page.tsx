@@ -176,7 +176,7 @@ export function ClientsPage() {
         <div role="group" aria-label="View" className="inline-flex overflow-hidden rounded-lg border border-slate-300">
           {(["list", "cards"] as const).map((v) => (
             <button key={v} type="button" aria-pressed={view === v} onClick={() => chooseView(v)}
-              className={`min-h-[44px] px-4 text-sm font-semibold ${view === v ? "bg-og-accent text-white" : "bg-og-card text-slate-800"}`}>{v === "list" ? "List" : "Cards"}</button>
+              className={`min-h-[44px] px-4 text-sm font-semibold ${view === v ? "bg-og-accent text-og-on-accent" : "bg-og-card text-slate-800"}`}>{v === "list" ? "List" : "Cards"}</button>
           ))}
         </div>
       </div>

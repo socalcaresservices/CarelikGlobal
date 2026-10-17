@@ -228,13 +228,13 @@ Today the AWS build has in-app alerts and token links; it has no SMS or push (re
 ---
 
 ## UIS: Alerts by purpose, simpler documents and financial section, appearance
-Migration 0054; release folder `docs/releases/2026-10-18-interface-simplification/`. The 24-hour urgent window is an assumption awaiting owner review. Personas: Olivia Owner, Morgan Manager, a caregiver.
+Migration 0054; release folder `docs/releases/2026-10-18-interface-simplification/`. The urgent window is 48 hours (owner decision D10). Personas: Olivia Owner, Morgan Manager, a caregiver.
 **Area rollback:** common order, then `0054_attention_streams_appearance.down.sql` (BACKUP REQUIRED: drops saved appearance choices).
 
 | ID | R | What | How | Expected | If it fails |
 |---|---|---|---|---|---|
 | UIS-01 | R | Four alert tiles with their own pages | AUTO `attention-badge.test.tsx`. PILOT: Home, click each tile | Needs attention now, Upcoming staffing, Documents & compliance, Visit review open `/attention`, `/staffing`, `/documents`, `/visit-review`; each page's row count equals its tile | Stop |
-| UIS-02 | R | 24-hour split | AUTO `attention-streams.db.test.ts`. PILOT: create an uncovered shift 5 hours out and one 3 days out | 5 hours: Needs attention now (red); 3 days: Upcoming staffing only | Stop |
+| UIS-02 | R | 48-hour split | AUTO `attention-streams.db.test.ts`. PILOT: create an uncovered shift 5 hours out and one 4 days out | 5 hours: Needs attention now (red); 4 days: Upcoming staffing only | Stop |
 | UIS-03 | R | Unscheduled visit is not an uncovered shift | AUTO `attention-streams.db.test.ts`. PILOT: caregiver starts an unscheduled visit | Counted in Visit review only, never in staffing | Stop |
 | UIS-04 | R | Unique counts and labelled issues | AUTO both test files. PILOT: a shift with a held caregiver and a non-current document | One item, "2 issues across 1 item"; Visits needing attention equals the number of visits | Stop |
 | UIS-05 | R | Held caregiver's imminent shift is not hidden | AUTO `attention-streams.db.test.ts`. PILOT: hold a caregiver with a shift tomorrow | Appears in Needs attention now with "Review compliance record"; always listed on Caregiver holds | Stop; highest severity |
