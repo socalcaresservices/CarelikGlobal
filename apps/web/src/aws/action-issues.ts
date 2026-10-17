@@ -23,14 +23,14 @@ export const KIND_LABEL: Record<string, string> = { shift: "Shift", visit: "Visi
 export function issueDestination(i: ActionIssue): { to: string; label: string } {
   const visit = i.visitId ?? i.entityId;
   switch (i.action) {
-    case "assign_caregiver": return { to: `/schedule?coverage=1&shift=${i.shiftId ?? i.entityId}`, label: "Choose a caregiver" };
+    case "assign_caregiver": return { to: `/schedule?coverage=1&shift=${i.shiftId ?? i.entityId}${i.deadline ? `&at=${encodeURIComponent(i.deadline)}` : ""}`, label: "Choose a caregiver" };
     case "review_hold": return { to: i.caregiverRecordId ? `/care-team/${i.caregiverRecordId}` : "/compliance", label: "Review the hold" };
     case "review_documents": return { to: i.caregiverRecordId ? `/care-team/${i.caregiverRecordId}` : "/documents", label: "Review the documents" };
     case "arrange_coverage": return { to: `/visits/${visit}`, label: "Open the visit" };
     case "review_visit": case "follow_up_confirmation": case "wait_or_resend": case "review_authorization": return { to: `/visits/${visit}`, label: "Open the visit" };
     case "approve_billing": return { to: "/billing-review", label: "Go to billing review" };
     case "confirm_pickup": return { to: `/schedule?pickups=1&shift=${i.shiftId ?? ""}`, label: "Review the request" };
-    case "reconcile_shift": return { to: `/schedule?reconcile=1&shift=${i.shiftId ?? i.entityId}`, label: "Reconcile the shift" };
+    case "reconcile_shift": return { to: `/schedule?reconcile=1&shift=${i.shiftId ?? i.entityId}${i.since ? `&at=${encodeURIComponent(i.since)}` : ""}`, label: "Reconcile the shift" };
     case "review_document": case "renew_document": case "request_renewal": case "follow_up_document": return { to: "/documents", label: "Open documents" };
     default: return { to: "/authorization-impacts", label: "Review the change" };
   }

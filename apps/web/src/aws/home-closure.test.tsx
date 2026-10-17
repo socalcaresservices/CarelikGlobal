@@ -23,7 +23,7 @@ describe("Needs action first", () => {
     const rows = within(panel).getAllByTestId("top-issue");
     expect(rows).toHaveLength(5);
     expect(within(rows[0]!).getByText("Critical")).toBeInTheDocument();
-    expect(within(rows[0]!).getByRole("link", { name: "Choose a caregiver" })).toHaveAttribute("href", "/schedule?coverage=1&shift=s1");
+    expect(within(rows[0]!).getByRole("link", { name: "Choose a caregiver" })).toHaveAttribute("href", expect.stringMatching(/^\/schedule\?coverage=1&shift=s1&at=.+$/));
     expect(within(panel).getByRole("link", { name: "View all (6)" })).toHaveAttribute("href", "/action-needed");
     expect(panel).not.toHaveTextContent("Routine");
   }, 30000);

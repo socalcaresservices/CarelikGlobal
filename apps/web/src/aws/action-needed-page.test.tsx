@@ -60,7 +60,7 @@ describe("Action needed", () => {
     expect(cards).toHaveLength(3);
     expect(within(cards[0]!).getByText("Critical")).toBeInTheDocument();
     expect(within(cards[0]!).getByText("Choose an eligible caregiver and confirm the assignment.")).toBeInTheDocument();
-    expect(within(cards[0]!).getByRole("link", { name: "Choose a caregiver" })).toHaveAttribute("href", `/schedule?coverage=1&shift=${SHIFT}`);
+    expect(within(cards[0]!).getByRole("link", { name: "Choose a caregiver" })).toHaveAttribute("href", expect.stringMatching(new RegExp(`^/schedule\\?coverage=1&shift=${SHIFT}&at=.+$`)));
     expect(within(cards[0]!).getByTestId("issue-deadline")).toHaveTextContent("Was due");
     expect(within(cards[1]!).getByRole("link", { name: "Open the visit" })).toHaveAttribute("href", "/visits/v1");
     expect(within(cards[1]!).getByTestId("issue-deadline")).toHaveTextContent("No deadline");

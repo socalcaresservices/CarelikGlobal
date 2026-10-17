@@ -38,7 +38,7 @@ describe("alerts, actions, next visits, caregivers", () => {
     }));
     const alert = await screen.findByTestId("client-alert", {}, { timeout: 15000 });
     expect(within(alert).getByText("Critical")).toBeInTheDocument();
-    expect(within(alert).getByRole("link", { name: "Choose a caregiver" })).toHaveAttribute("href", `/schedule?coverage=1&shift=s1&client=${CLIENT}`);
+    expect(within(alert).getByRole("link", { name: "Choose a caregiver" })).toHaveAttribute("href", expect.stringMatching(new RegExp(`^/schedule\\?coverage=1&shift=s1&at=.+&client=${CLIENT}$`)));
     const history = await screen.findByTestId("client-alert-history");
     expect(history).toHaveTextContent("Resolved alerts (1)");
     const nav = screen.getByRole("navigation", { name: "Client actions" });
