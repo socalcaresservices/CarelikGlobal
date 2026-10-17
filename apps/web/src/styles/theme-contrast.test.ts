@@ -56,7 +56,7 @@ describe.each(BACKGROUNDS.flatMap((bg) => ACCENTS.map((accent) => [bg, accent] a
 
   it("status colours keep their meaning and stay readable: red, amber, neutral, with the same pairs the chips use", () => {
     const pairs: [string, string, string][] = [
-      ["red-800", "red-100", "Urgent chip"], ["amber-900", "amber-100", "Soon chip"], ["slate-700", "slate-100", "Routine chip"],
+      ["red-800", "red-100", "Urgent chip"], ["indigo-800", "indigo-50", "indigo panel"], ["violet-800", "violet-50", "violet chip"], ["rose-800", "rose-100", "rose chip"], ["indigo-700", "og-card", "indigo text on card"], ["amber-900", "amber-100", "Soon chip"], ["slate-700", "slate-100", "Routine chip"],
       ["red-800", "red-50", "urgent badge"], ["amber-900", "amber-50", "approaching badge"], ["emerald-900", "emerald-100", "verified chip"],
       ["red-700", "og-card", "red text on card"], ["red-700", "og-page", "red text on page"], ["amber-800", "og-card", "amber text on card"], ["amber-900", "og-card", "amber note on card"],
       ["og-warn", "og-warn-bg", "warning row"],
@@ -70,6 +70,14 @@ describe.each(BACKGROUNDS.flatMap((bg) => ACCENTS.map((accent) => [bg, accent] a
     expect(hue(c("red-700"))).toBe("warm");
     expect(hue(c("amber-800"))).toBe("warm");
     expect(c("red-700")).not.toEqual(c("amber-800"));
+  });
+
+  it("navigation area colours are readable on the sidebar and on their own 8% selected tint", () => {
+    for (const area of ["clients", "caregivers", "scheduling", "approvals", "reports"]) {
+      const colour = c(`og-area-${area}`);
+      expect(ratio(colour, c("og-side")), `${area} on sidebar`).toBeGreaterThanOrEqual(4.5);
+      expect(ratio(colour, over(colour, c("og-side"), 0.08)), `${area} on its tint`).toBeGreaterThanOrEqual(4.5);
+    }
   });
 
   it("chart marks are visible against the card (3:1)", () => {

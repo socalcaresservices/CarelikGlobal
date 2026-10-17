@@ -42,7 +42,8 @@ export const EXCEPTIONS_PATH = EXCEPTIONS_ROUTE;
 const DEFAULT_ACCENT = "#0f172a"; // slate-900: the colour used before agency branding existed
 const COLLAPSE_KEY = "ogevia.sidebar.collapsed";
 /** Workflow colour per area (icon tint and selected row). Status colour is separate: amber = waiting, red = blocking. */
-const ACCENT = { clients: "#0369a1", caregivers: "#0f766e", scheduling: "#6d28d9", approvals: "#b45309", reports: "#475569" } as const;
+// Area colours are theme variables (styles/theme.css), so each stays readable on every background.
+const ACCENT = { clients: "rgb(var(--og-area-clients))", caregivers: "rgb(var(--og-area-caregivers))", scheduling: "rgb(var(--og-area-scheduling))", approvals: "rgb(var(--og-area-approvals))", reports: "rgb(var(--og-area-reports))" } as const;
 /** Which Action-needed categories each area shows as its badge (same server summary as the header count). */
 const AREA_BADGE: Record<string, readonly string[]> = {
   "/care-team": ["overdueDocuments", "documentsToReview"],
@@ -335,7 +336,7 @@ export function AwsShell({ children }: PropsWithChildren) {
                         onMouseLeave={() => setTip(null)}
                         onBlur={() => setTip(null)}
                         className={cn(itemClass(active), l.parent && !collapsed && "ml-5 min-h-[34px] py-1 text-[13px] font-normal")}
-                        style={active && l.accent ? { backgroundColor: `${l.accent}14`, color: l.accent } : undefined}
+                        style={active && l.accent ? { backgroundColor: `color-mix(in srgb, ${l.accent} 8%, transparent)`, color: l.accent } : undefined}
                       >
                         <Icon className="h-[18px] w-[18px] shrink-0" aria-hidden="true" style={l.accent ? { color: l.accent } : undefined} />
                         <span className={cn("min-w-0 flex-1 break-words", collapsed && "sr-only")}>{l.label}</span>
@@ -343,7 +344,7 @@ export function AwsShell({ children }: PropsWithChildren) {
                           <span
                             data-testid="nav-badge"
                             aria-label={`${badge.n} waiting`}
-                            className={cn("rounded-full px-1.5 text-[11px] font-bold leading-[18px] text-white", badge.blocking ? "bg-red-700" : "bg-amber-600", collapsed && "absolute -mt-5 ml-4")}
+                            className={cn("rounded-full px-1.5 text-[11px] font-bold leading-[18px] ring-1", badge.blocking ? "bg-red-100 text-red-800 ring-red-700" : "bg-amber-100 text-amber-900 ring-amber-600", collapsed && "absolute -mt-5 ml-4")}
                           >
                             {badge.n}
                           </span>

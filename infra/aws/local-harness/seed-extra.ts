@@ -39,8 +39,12 @@ async function main() {
   const day = async (n: number) => String((await q("select to_char((now() at time zone 'America/Los_Angeles')::date + $1::int, 'YYYY-MM-DD') as d", [n]))[0]!.d);
 
   // Document types and the agency's CPR/TB rules.
-  const cpr = (await as(manager, () => q("select ogevia_api.create_document_type($1,'CPR card',true,null) as id", [org])))[0]!.id as string;
-  const tb = (await as(manager, () => q("select ogevia_api.create_document_type($1,'TB test result',false,null) as id", [org])))[0]!.id as string;
+  // The base setup may already have made these types (the recruiting release does); reuse them, create them otherwise.
+  const typeId = async (name: string, requiresExpiry: boolean) =>
+    (await q("select id from ogevia.document_types where organization_id = $1 and lower(name) = lower($2) limit 1", [org, name]))[0]?.id as string | undefined
+    ?? ((await as(manager, () => q("select ogevia_api.create_document_type($1,$2,$3,null) as id", [org, name, requiresExpiry])))[0]!.id as string);
+  const cpr = await typeId("CPR card", true);
+  const tb = await typeId("TB test result", false);
   await as(owner, () => c.query("select ogevia_api.set_document_work_requirement($1,'cpr',$2,'Agency policy')", [org, cpr]));
   await as(owner, () => c.query("select ogevia_api.set_document_work_requirement($1,'tb',$2,'Agency policy')", [org, tb]));
   await as(owner, () => c.query("select ogevia_api.set_requirement_policy($1,'cpr','document_expiry',null,'Per agency policy')", [org]));

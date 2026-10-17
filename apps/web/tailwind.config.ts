@@ -51,6 +51,9 @@ export default {
         amber: scale("amber"),
         emerald: scale("emerald"),
         sky: scale("sky"),
+        indigo: scale("indigo"),
+        violet: scale("violet"),
+        rose: scale("rose"),
         og: {
           page: token("page"),
           card: token("card"),
