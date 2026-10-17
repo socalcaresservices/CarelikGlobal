@@ -232,9 +232,9 @@ describe("billing approval (0019)", () => {
   it("there is still no submission, invoice, export, payroll or revenue function (approval is not submission)", async () => {
     const { rows } = await db.admin.query(
       "select p.proname from pg_proc p join pg_namespace n on n.oid = p.pronamespace where n.nspname = 'ogevia_api' and p.proname ~ '(submit|invoice|export|payroll|revenue|margin)'");
-    // 0069 added two functions that match "export": they record WHO downloaded a report (an audit ledger) and list that ledger. They send nothing to anyone and never submit,
+    // 0069/0072 added four functions that match "export": they record that a report was requested, completed or failed (an audit ledger) and list that ledger. They send nothing to anyone and never submit,
     // invoice or pay. They are named here on purpose so any other match still fails this test.
-    expect(rows.map((r) => r.proname).sort()).toEqual(["list_report_exports", "record_report_export"]);
+    expect(rows.map((r) => r.proname).sort()).toEqual(["complete_report_export", "fail_report_export", "list_report_exports", "request_report_export"]);
   });
 
   it("the application role cannot write billing state directly (no table privileges)", async () => {

@@ -1,7 +1,7 @@
 import { createHash, randomBytes, randomInt, randomUUID } from "node:crypto";
 import type { Queryable } from "@carelik/auth/server";
 import { ApiError } from "./errors";
-import { buildReportCsv, REPORT_KEYS, sha256Hex, type ExportParams, type ReportKey } from "./exports";
+import { assertExportSize, buildReportCsv, REPORT_KEYS, sha256Hex, type ExportParams, type ReportKey } from "./exports";
 import { signatureObjectKey, validateSignaturePng, type EvidenceStore } from "./evidence";
 import { documentObjectKey, logoObjectKey, MAX_DOCUMENT_BYTES, MAX_LOGO_BYTES, validateDocumentFile, validateLogoFile } from "./documents";
 import type { HttpApiEvent } from "./http";
@@ -1773,6 +1773,7 @@ export const ROUTES: Record<string, Route> = {
       let built;
       try {
         built = await tx((db) => buildReportCsv(db, org, report, params));
+        assertExportSize(Buffer.byteLength(built.csv, "utf8"));
       } catch (cause) {
         const code = cause instanceof ApiError ? cause.code : (cause as { code?: string }).code ?? "generation_failed";
         await tx((db) => db.query("select ogevia_api.fail_report_export($1, $2, $3)", [org, requested.exportId, String(code)])).catch(() => undefined);

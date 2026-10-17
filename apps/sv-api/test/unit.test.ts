@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 import { ConfigError, loadConfig } from "../src/config";
 import { ApiError, toApiError } from "../src/errors";
 import { MemoryEvidenceStore, signatureObjectKey, validateSignaturePng } from "../src/evidence";
+import { assertExportSize, MAX_EXPORT_BYTES } from "../src/exports";
 import { createHandler, type LogRecord } from "../src/handler";
 import { ROUTE_KEYS, ROUTES, toCamel } from "../src/routes";
 import { idempotencyKey, parseBody, timestamp, uuid } from "../src/validate";
@@ -324,5 +325,15 @@ describe("GET /v1/clients/{clientId}: current authorizations embedded", () => {
     const r = await createHandler({ config: CONFIG, db: f.db as never, evidence: new MemoryEvidenceStore(), log: () => {} })(
       event("GET /v1/clients/{clientId}", { sub: null, path: { clientId: CLIENT_ID }, query: { organizationId: ORG } }));
     expect(r.statusCode).toBe(401);
+  });
+});
+
+describe("export size (0072)", () => {
+  it("a file at the limit is returned; one byte over is refused with a plain message and nothing truncated", () => {
+    expect(() => assertExportSize(MAX_EXPORT_BYTES)).not.toThrow();
+    try { assertExportSize(MAX_EXPORT_BYTES + 1); throw new Error("should have thrown"); } catch (e) {
+      expect(e).toBeInstanceOf(ApiError);
+      expect(e).toMatchObject({ status: 413, code: "export_too_large" });
+    }
   });
 });

@@ -149,3 +149,71 @@ describe("authorization changes to review", () => {
     expect(calls.some((c) => c.path === "/v1/authorization-impacts")).toBe(false);
   }, 30000);
 });
+
+describe("delivered but not verified (0071)", () => {
+  const awaiting = (outcome: string) => ({ shifts: [{ shiftId: SHIFT, reservationId: "r1", startsAt: later(-8), endsAt: later(-6), localDate: "2026-10-17", clientCode: "CL-1", serviceCode: "PCS", serviceName: "Personal care",
+    caregiverCode: "CG-1", reservedMinutes: 90, bucket: "awaiting_record", endedHours: 6, lastOutcome: outcome, lastNote: "Family says she came; no clock-in", lastDecidedAt: later(-1) }] });
+  const json = (body: unknown) => new Response(JSON.stringify(body), { status: 200, headers: { "content-type": "application/json" } });
+
+  it("offers a third outcome that sends delivered_unverified with a note and says nothing is billable", async () => {
+    const { calls } = renderAt("/schedule", ["shifts.manage", "visits.read"]);
+    const panel = await screen.findByTestId("shifts-to-reconcile", {}, { timeout: 15000 });
+    fireEvent.click(within(panel).getByRole("button", { name: "It was delivered, but there is no verified visit" }));
+    fireEvent.click(within(panel).getByRole("button", { name: "Record it as delivered, not verified" }));
+    expect(await within(panel).findByRole("alert")).toHaveTextContent("Write at least a short sentence");
+    expect(posts(calls, `/v1/shifts/${SHIFT}/reconcile`)).toHaveLength(0);
+    fireEvent.change(within(panel).getByRole("textbox"), { target: { value: "Family says she came; no clock-in" } });
+    fireEvent.click(within(panel).getByRole("button", { name: "Record it as delivered, not verified" }));
+    await waitFor(() => expect(posts(calls, `/v1/shifts/${SHIFT}/reconcile`)[0]?.body).toMatchObject({ outcome: "delivered_unverified", note: "Family says she came; no clock-in" }));
+    expect(await screen.findByText(/The time stays reserved and counted, and nothing is billable. No visit was created./)).toBeInTheDocument();
+  }, 30000);
+
+  it("a shift recorded as delivered stays listed, says it is not billable and has no visit, and cannot be recorded that way twice", async () => {
+    renderAt("/schedule", ["shifts.manage", "visits.read"], { "GET /v1/shifts-to-reconcile": () => json(awaiting("delivered_unverified")) });
+    const note = await screen.findByTestId("awaiting-note", {}, { timeout: 15000 });
+    expect(note).toHaveTextContent("Delivered — not verified");
+    expect(note).toHaveTextContent("Still reserved and counted. Not billable, and no visit exists.");
+    expect(screen.queryByRole("button", { name: "It was delivered, but there is no verified visit" })).not.toBeInTheDocument();
+  }, 30000);
+
+  it("authorization changes: an unapproved visit says it was sent back to review; an approved visit says it was not changed", async () => {
+    const row = (id: string, state: string, review: boolean) => ({ impactId: id, createdAt: later(-3), impactKind: "visit_over_cap", clientCode: "CL-1", serviceCode: "PCS", serviceName: "Personal care", newVersionNumber: 3,
+      newMonthlyMinutes: 60, shiftId: null, shiftStartsAt: null, shiftEndsAt: null, visitId: `v-${id}`, serviceDate: "2026-10-05", minutes: 90, bucket: null, stillApplicable: true,
+      acknowledgedAt: null, acknowledgedByName: null, acknowledgementNote: null, amendedByName: "Olivia Owner", visitBillingState: state, reviewOpen: review, detail: null });
+    renderAt("/authorization-impacts", ["authorizations.update", "shifts.manage"], { "GET /v1/authorization-impacts": () => json({ impacts: [row("a1", "needs_correction", true), row("a2", "approved_for_billing", false)] }) });
+    const items = await screen.findAllByTestId("amendment-impact", {}, { timeout: 15000 });
+    expect(items).toHaveLength(2);
+    expect(within(items[0]!).getByTestId("sent-back")).toHaveTextContent("sent back to review (Needs Correction)");
+    expect(within(items[1]!).getByTestId("approved-unchanged")).toHaveTextContent("already approved for billing. It was not changed");
+    expect(within(items[0]!).getByText("A confirmed visit now goes past the lowered monthly limit.")).toBeInTheDocument();
+  }, 30000);
+
+  it("the visit page shows the authorization-review card, requires a note, and confirms with one keyed request", async () => {
+    const V = "77777777-0000-4000-8000-0000000000aa";
+    let resolved = false;
+    const rev = () => ({ review: { open: !resolved, reviews: [{ reviewId: "rv1", reason: "authorization_over_cap", billableMinutes: 90, excessMinutes: 30, newMonthlyMinutes: 60, openedAt: later(-3), openedByName: "Olivia Owner",
+      resolvedAt: resolved ? later(-1) : null, resolution: resolved ? "confirmed_billable" : null, resolutionNote: resolved ? "Checked the new letter" : null, resolvedByName: resolved ? "Morgan Manager" : null }] } });
+    const { calls } = renderAt(`/visits/${V}`, ["visits.manage", "visits.read", "billing.approve"], {
+      [`GET /v1/visits/${V}/review`]: () => json({ visit: { visitId: V, organizationId: ORG, visitNumber: "CL1-PCS-001", visitStatus: "verified", clientId: "c1", clientCode: "CL-1", clientName: "Synthetic Client", caregiverName: "Pilot Caregiver",
+        serviceCode: "PCS", serviceName: "Personal care", serviceDate: "2026-10-05", timeIn: "2026-10-05T16:00:00Z", timeOut: "2026-10-05T17:30:00Z", workedMinutes: 90, verifiedMinutes: 90, billableMinutes: 90, authorizationStatus: "within_authorization",
+        scheduledStartsAt: null, scheduledEndsAt: null, caregiverSchedulingMode: "fixed", confirmationMethod: "draw", signerRole: "client", signerName: null, signerRelationship: null, confirmationReason: null, confirmedAt: "2026-10-05T17:35:00Z",
+        hasSignatureEvidence: true, isCorrection: false, reviewReasons: ["authorization_decreased"], decisionId: null, decision: null, decisionReason: null, decidedByName: null, decidedAt: null, activeBillingApprovalId: null, approvedMinutes: null,
+        canDecide: true, allowedDecisions: [], recoveryState: null, canRequestConfirmation: false, decisionAcceptedMinutes: null } }),
+      [`GET /v1/visits/${V}/confirmation-requests`]: () => json({ requests: [] }),
+      [`GET /v1/visits/${V}/authorization-review`]: () => json(rev()),
+      [`POST /v1/visits/${V}/authorization-review/resolve`]: () => { resolved = true; return json({ resolved: true }); },
+    });
+    const card = await screen.findByTestId("authorization-review", {}, { timeout: 15000 });
+    expect(card).toHaveTextContent("The authorization was lowered after this visit was confirmed");
+    expect(card).toHaveTextContent("The visit, its minutes and its signature were not changed.");
+    fireEvent.click(within(card).getByRole("button", { name: "Confirm it is still billable" }));
+    expect(await within(card).findByRole("alert")).toHaveTextContent("at least 10 characters");
+    expect(posts(calls, `/v1/visits/${V}/authorization-review/resolve`)).toHaveLength(0);
+    fireEvent.change(within(card).getByRole("textbox"), { target: { value: "Checked the new letter" } });
+    fireEvent.click(within(card).getByRole("button", { name: "Confirm it is still billable" }));
+    await waitFor(() => expect(posts(calls, `/v1/visits/${V}/authorization-review/resolve`)).toHaveLength(1));
+    expect(posts(calls, `/v1/visits/${V}/authorization-review/resolve`)[0]).toMatchObject({ body: { organizationId: ORG, note: "Checked the new letter" } });
+    expect(posts(calls, `/v1/visits/${V}/authorization-review/resolve`)[0]!.key).toMatch(/^[0-9a-f-]{36}$/);
+    expect(await screen.findByText(/Confirmed still billable by Morgan Manager/)).toBeInTheDocument();
+  }, 30000);
+});

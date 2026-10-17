@@ -2,6 +2,7 @@
 // written the request to the ledger; the ledger then records "generated" with the row count, byte count and SHA-256 of the file. Nothing here proves the file was downloaded.
 import { createHash } from "node:crypto";
 import type { Queryable } from "@carelik/auth/server";
+import { ApiError } from "./errors";
 import { toCamel } from "./routes";
 
 export const REPORT_KEYS = ["client_service_calendar", "monthly_service_reconciliation", "correction_history", "monthly_chain"] as const;
@@ -105,3 +106,9 @@ export async function buildReportCsv(db: Queryable, org: string, report: ReportK
 }
 
 export const sha256Hex = (text: string) => createHash("sha256").update(text, "utf8").digest("hex");
+
+/** The file travels in the API response (Lambda's synchronous response limit is 6 MB). A larger one is refused and recorded as failed rather than cut short or silently truncated. */
+export const MAX_EXPORT_BYTES = 4_000_000;
+export function assertExportSize(bytes: number): void {
+  if (bytes > MAX_EXPORT_BYTES) throw new ApiError(413, "export_too_large", "This export is too large to return in one file. Narrow the month or filters and try again. Nothing was returned.");
+}

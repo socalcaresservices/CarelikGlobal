@@ -123,6 +123,7 @@ describe("SCHEMA: migration chain", () => {
       "outage_visit_records",
       "permissions",
       "readiness_setting_events",
+      "report_export_events",
       "report_exports",
       "role_permissions",
       "scoring_rule_versions",

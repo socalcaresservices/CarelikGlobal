@@ -59,6 +59,34 @@ describe("reconciling a shift that ended with no visit", () => {
   });
 });
 
+describe("authorization decrease sends an unapproved visit back to review (0071) through the handler", () => {
+  it("read needs visits.read; lifting it needs visits.manage and a note; one keyed request; the visit is never changed; a repeat is refused", async () => {
+    const f = await freshClient(db, w, w.caregiverA2, 1000, w.orgA, { before: 40, after: 200 });
+    const v = await signedVisit(db, w.caregiverA2, w, 90, w.orgA, f.client, f.service);
+    const per = (await db.admin.query("select period_start::text s, period_end::text e from ogevia.client_authorizations where id = $1", [f.auth])).rows[0];
+    const before = (await db.admin.query("select status::text s, worked_minutes, billable_minutes from ogevia.service_visits where id = $1", [v.visit])).rows[0];
+    const out = await call("POST /v1/authorizations/{authorizationId}/amend", w.managerA, {
+      path: { authorizationId: f.auth }, body: { payer: "Synthetic Payer", monthlyAuthorizedMinutes: 30, periodStart: per.s, periodEnd: per.e, reason: "Payer lowered the month (synthetic)" } });
+    expect(out.status, JSON.stringify(out.body)).toBe(200);
+    const read = await call("GET /v1/visits/{visitId}/authorization-review", w.managerA, { path: { visitId: v.visit }, query: { organizationId: w.orgA } });
+    expect(read.status, JSON.stringify(read.body)).toBe(200);
+    expect(read.body.review).toMatchObject({ open: true });
+    expect(read.body.review.reviews[0]).toMatchObject({ reason: "authorization_over_cap", billableMinutes: 90, excessMinutes: 60, newMonthlyMinutes: 30 });
+    expect((await call("GET /v1/visits/{visitId}/authorization-review", w.managerB, { path: { visitId: v.visit }, query: { organizationId: w.orgB } })).body.review ?? null).toBeNull();
+    const body = { organizationId: w.orgA, note: "Payer confirmed the change does not apply (synthetic)" };
+    expect((await call("POST /v1/visits/{visitId}/authorization-review/resolve", w.caregiverA2, { path: { visitId: v.visit }, body, key: randomUUID() })).status).toBe(403);
+    expect((await call("POST /v1/visits/{visitId}/authorization-review/resolve", w.managerA, { path: { visitId: v.visit }, body: { ...body, note: "x" }, key: randomUUID() })).status).toBeGreaterThanOrEqual(400);
+    const key = randomUUID();
+    const ok = await call("POST /v1/visits/{visitId}/authorization-review/resolve", w.managerA, { path: { visitId: v.visit }, body, key });
+    expect(ok.status, JSON.stringify(ok.body)).toBe(200);
+    const retry = await call("POST /v1/visits/{visitId}/authorization-review/resolve", w.managerA, { path: { visitId: v.visit }, body, key });
+    expect(retry.status, JSON.stringify(retry.body)).toBe(200);
+    const after = (await db.admin.query("select status::text s, worked_minutes, billable_minutes from ogevia.service_visits where id = $1", [v.visit])).rows[0];
+    expect(after).toEqual(before);
+    expect((await db.admin.query("select count(*)::int n from ogevia.visit_authorization_reviews where visit_id = $1 and resolved_at is not null", [v.visit])).rows[0].n).toBe(1);
+  });
+});
+
 describe("amendments report the reserved shifts", () => {
   it("the amend response lists them, they are stored, listed and acknowledged with a note; nothing is released", async () => {
     const f = await freshClient(db, w, w.caregiverA1, 5000, w.orgA, { before: 40, after: 200 });

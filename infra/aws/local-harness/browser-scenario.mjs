@@ -139,19 +139,40 @@ const toReconcileCell = chain.getByRole("row").filter({ hasText: /Demo Scenario|
 rec("full-chain report shows the 2 hr to reconcile on the same client row as Home", (await toReconcileCell.count()) >= 1);
 rec("full-chain report: no sideways page scroll", await noOverflow(mp));
 await mp.screenshot({ path: `${out}/chain-${label}.png`, fullPage: true });
-const [download] = await Promise.all([mp.waitForEvent("download", { timeout: 15000 }), chain.getByRole("button", { name: "Export CSV (recorded)" }).click()]);
+const [download] = await Promise.all([mp.waitForEvent("download", { timeout: 15000 }), chain.getByRole("button", { name: "Export CSV (server-made, recorded)" }).click()]);
 rec("manager's Export CSV downloads a server-made file named for the month", /^monthly-chain-\d{4}-\d{2}\.csv$/.test(download.suggestedFilename()), download.suggestedFilename());
 await mp.waitForTimeout(800);
-rec("export is acknowledged as recorded", /The export is recorded/.test(await text(mp)));
+rec("export result says generated, and that delivery is not recorded", /The server generated the file and recorded the export\. Whether it reached this device is not recorded/.test(await text(mp)));
 
+// the three older reports are also made by the server (0072): the manager has a CSV button, the file arrives, and the ledger says generated, not delivered
+await mp.goto("https://localhost/service-verification/reports?view=calendar"); await settle(mp, 1500);
+await mp.locator("select").filter({ has: mp.locator("option", { hasText: "Choose a client" }) }).first().selectOption({ label: await mp.locator("option", { hasText: /Demo Scenario|SCN|Scenario/ }).first().innerText().catch(() => "") }).catch(() => {});
+await settle(mp, 1500);
+const legacyCsv = mp.getByRole("button", { name: "CSV", exact: true });
+rec("manager sees a CSV button on the older reports", (await legacyCsv.count()) >= 1, String(await legacyCsv.count()));
+if ((await legacyCsv.count()) >= 1) {
+  const [legacyDownload] = await Promise.all([mp.waitForEvent("download", { timeout: 15000 }), legacyCsv.first().click()]);
+  rec("an older report's CSV is a server-made file", /\.csv$/.test(legacyDownload.suggestedFilename()), legacyDownload.suggestedFilename());
+  await mp.waitForTimeout(800);
+}
 await mp.goto("https://localhost/schedule"); await settle(mp, 1000);
 const recon = mp.getByTestId("shifts-to-reconcile");
 rec("schedule lists the shift that ended with no visit record", (await recon.count()) === 1 && /Nothing is released automatically|still reserved and counted/.test(await recon.innerText()));
-await recon.getByRole("button", { name: "No service was delivered" }).first().click();
-await recon.getByRole("button", { name: "Release the reserved time" }).click(); await mp.waitForTimeout(500);
-rec("releasing without a note is refused on screen", /Write at least a short sentence/.test(await recon.innerText()));
-await recon.getByRole("textbox").fill("Called the caregiver and the family; nobody went (synthetic)");
-await recon.getByRole("button", { name: "Release the reserved time" }).click(); await mp.waitForTimeout(1500);
+// delivered but not verified: stays reserved and visible, is not billable, creates no visit
+await recon.getByRole("button", { name: "It was delivered, but there is no verified visit" }).first().click();
+await recon.getByRole("textbox").fill("Family says she came; no clock-in exists (synthetic)");
+await recon.getByRole("button", { name: "Record it as delivered, not verified" }).click(); await mp.waitForTimeout(1500);
+const awaitingNote = mp.getByTestId("awaiting-note");
+rec("a shift recorded as delivered-not-verified stays listed, reserved, not billable, no visit", (await awaitingNote.count()) === 1 && /Delivered — not verified/.test(await awaitingNote.innerText()) && /Not billable, and no visit exists/.test(await awaitingNote.innerText()), (await awaitingNote.count()) ? await awaitingNote.innerText() : "none");
+await mp.goto("https://localhost/"); await settle(mp, 1200);
+rec("Home still counts the delivered-not-verified time as reserved", (await mp.getByTestId("needs-reconciliation").count()) === 1);
+await mp.goto("https://localhost/schedule"); await settle(mp, 1000);
+const recon2 = mp.getByTestId("shifts-to-reconcile");
+await recon2.getByRole("button", { name: "No service was delivered" }).first().click();
+await recon2.getByRole("button", { name: "Release the reserved time" }).click(); await mp.waitForTimeout(500);
+rec("releasing without a note is refused on screen", /Write at least a short sentence/.test(await recon2.innerText()));
+await recon2.getByRole("textbox").fill("Called the caregiver and the family; nobody went (synthetic)");
+await recon2.getByRole("button", { name: "Release the reserved time" }).click(); await mp.waitForTimeout(1500);
 rec("after the person records it, the shift leaves the list", (await mp.getByTestId("shifts-to-reconcile").count()) === 0);
 await mp.goto("https://localhost/"); await settle(mp, 1200);
 rec("Home no longer shows reserved-with-no-visit time", (await mp.getByTestId("needs-reconciliation").count()) === 0);
@@ -160,16 +181,34 @@ rec("the full-chain report agrees with Home: nothing left to reconcile, checks s
 
 await mp.goto("https://localhost/staffing"); await settle(mp, 900);
 const impLink = mp.getByTestId("amendment-impacts-link");
-rec("staffing page links to the 2 authorization changes to review", (await impLink.count()) === 1 && /2 items/.test(await impLink.innerText()), (await impLink.count()) ? await impLink.innerText() : "none");
+rec("staffing page links to the 4 authorization changes to review", (await impLink.count()) === 1 && /4 items/.test(await impLink.innerText()), (await impLink.count()) ? await impLink.innerText() : "none");
 await impLink.getByRole("link", { name: "Review changes" }).click(); await settle(mp, 900);
 const items = mp.getByTestId("amendment-impact");
-rec("the authorization-changes page lists two reserved shifts that no longer fit", (await items.count()) === 2 && /no longer fits the new monthly limit/.test(await items.first().innerText()));
+rec("the authorization-changes page lists two reserved shifts and two confirmed visits", (await items.count()) === 4 && (await items.filter({ hasText: /no longer fits the new monthly limit/ }).count()) === 2 && (await items.filter({ hasText: /A confirmed visit now goes past/ }).count()) >= 1);
+rec("an approved visit is reported as unchanged and an unapproved one as sent back to review", (await mp.getByTestId("approved-unchanged").count()) >= 1 && (await mp.getByTestId("sent-back").count()) >= 1);
 rec("authorization-changes page: no sideways scroll", await noOverflow(mp));
 await mp.screenshot({ path: `${out}/impacts-${label}.png`, fullPage: true });
-await items.first().getByRole("button", { name: "Acknowledge…" }).click();
-await items.first().getByRole("textbox").fill("Moved the later shift to next month (synthetic)");
-await items.first().getByRole("button", { name: "Acknowledge" }).click(); await mp.waitForTimeout(1200);
-rec("acknowledging with a note removes it from the open list", (await mp.getByTestId("amendment-impact").count()) === 1);
+const shiftItem = items.filter({ hasText: /no longer fits the new monthly limit/ }).first();
+await shiftItem.getByRole("button", { name: "Acknowledge…" }).click();
+await shiftItem.getByRole("textbox").fill("Moved the later shift to next month (synthetic)");
+await shiftItem.getByRole("button", { name: "Acknowledge" }).click(); await mp.waitForTimeout(1200);
+rec("acknowledging with a note removes it from the open list", (await mp.getByTestId("amendment-impact").count()) === 3);
+
+// the lowered authorization sent the unapproved Billing Ready visit back to review; the approved one is untouched
+await mp.goto("https://localhost/billing-review"); await settle(mp, 1500);
+const decreased = mp.getByTestId("authorization-decreased");
+rec("billing review shows the visit that went back to review with the reason", (await decreased.count()) >= 1 && /authorization was lowered/.test(await decreased.first().innerText()), String(await decreased.count()));
+rec("billing review: no sideways scroll", await noOverflow(mp));
+await mp.screenshot({ path: `${out}/billing-decreased-${label}.png`, fullPage: true });
+await mp.getByTestId("authorization-decreased").first().locator("xpath=..").getByRole("link", { name: /Correct or resolve/ }).click(); await settle(mp, 1500);
+const arCard = mp.getByTestId("authorization-review");
+rec("the visit page shows the authorization-review card and says nothing was changed", (await arCard.count()) === 1 && /not changed/.test(await arCard.innerText()), (await arCard.count()) ? "" : "no card");
+await mp.screenshot({ path: `${out}/authorization-review-${label}.png`, fullPage: true });
+await arCard.getByRole("button", { name: "Confirm it is still billable" }).click(); await mp.waitForTimeout(500);
+rec("confirming without a note is refused on screen", /at least 10 characters/.test(await arCard.innerText()));
+await arCard.getByRole("textbox").fill("Payer letter confirms the old limit applies to this visit (synthetic)");
+await arCard.getByRole("button", { name: "Confirm it is still billable" }).click(); await mp.waitForTimeout(1500);
+rec("after confirming, the card records who confirmed and why", /Confirmed still billable by Morgan Manager/.test(await mp.getByTestId("authorization-review").innerText()));
 await mctx.close();
 
 // owner: the export ledger; scheduler: can read the chain but not export
@@ -180,12 +219,12 @@ const hist = op.getByTestId("export-history");
 rec("owner sees the export history", (await hist.count()) === 1);
 await hist.locator("summary").click(); await op.waitForTimeout(300);
 const histText = await hist.innerText();
-rec("export history names who, which report and that the server made the file", /Morgan Manager/.test(histText) && /Full chain for the month/.test(histText) && /made by the server/.test(histText), histText.slice(0, 200));
+rec("export history names who, which report and that the server generated the file without claiming delivery", /Morgan Manager/.test(histText) && /Full chain for the month/.test(histText) && /generated by the server \(delivery not recorded\)/.test(histText), histText.slice(0, 200));
 await octx.close();
 const sctx = await browser.newContext({ viewport: vp, ignoreHTTPSErrors: true }); const sp = await sctx.newPage();
 await login(sp, "Sam Scheduler");
 await sp.goto("https://localhost/service-verification/reports?view=reconciliation"); await settle(sp, 1500);
-rec("scheduler reads the full-chain report but has no export button and is told why", (await sp.getByTestId("monthly-chain").count()) === 1 && (await sp.getByRole("button", { name: "Export CSV (recorded)" }).count()) === 0 && /not export it/.test(await sp.getByTestId("monthly-chain").innerText()));
+rec("scheduler reads the full-chain report but has no export button and is told why", (await sp.getByTestId("monthly-chain").count()) === 1 && (await sp.getByRole("button", { name: "Export CSV (server-made, recorded)" }).count()) === 0 && /not export it/.test(await sp.getByTestId("monthly-chain").innerText()));
 rec("scheduler has no CSV button on the older reports either", (await sp.getByRole("button", { name: "CSV", exact: true }).count()) === 0);
 await sctx.close();
 console.log(`[${label}] ${n - fail}/${n} checks pass, ${fail} fail`);

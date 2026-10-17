@@ -55,10 +55,10 @@ async function main() {
   await open(thu, "10:00", "12:00"); // 2 h: request allowed
 
   // 4. One visit in every billing state. Visits are made through the real API functions; only the start time is moved back (seed-only replica role).
-  async function visit(minutes: number, mode: "signed" | "no_signer") {
+  async function visit(minutes: number, mode: "signed" | "no_signer", client: string = scenario) {
     await q(`insert into ogevia.shifts (organization_id, client_id, service_id, caregiver_user_id, caregiver_record_id, starts_at, ends_at)
-             values ($1,$2,$3,$4,$5, now() - interval '1 minute', now() - interval '1 minute' + make_interval(mins => $6))`, [org, scenario, respite, alexUser, alexRec, Math.max(minutes, 2)]);
-    const v = String((await as(alex.sub, () => c.query("select ogevia_api.start_ad_hoc_service_visit($1,$2,$3,'{}',null,null,null) as id", [org, scenario, respite]))).rows[0]?.id);
+             values ($1,$2,$3,$4,$5, now() - interval '1 minute', now() - interval '1 minute' + make_interval(mins => $6))`, [org, client, respite, alexUser, alexRec, Math.max(minutes, 2)]);
+    const v = String((await as(alex.sub, () => c.query("select ogevia_api.start_ad_hoc_service_visit($1,$2,$3,'{}',null,null,null) as id", [org, client, respite]))).rows[0]?.id);
     await c.query("set session_replication_role = replica");
     await c.query("update ogevia.service_visits set time_in = time_in - make_interval(mins => $2) where id = $1", [v, minutes]);
     await c.query("update ogevia.shifts sh set starts_at = v.time_in, ends_at = v.time_in + make_interval(mins => $2) from ogevia.service_visits v where v.id = $1 and sh.id = v.scheduled_shift_id", [v, minutes]);
@@ -129,6 +129,19 @@ async function main() {
   for (const [a, b] of [["06:00", "10:00"], ["11:00", "15:00"], ["16:00", "20:00"]] as const)
     await as(manager.sub, async () => c.query("select * from ogevia_api.create_shift($1,$2,$3,$4::date,$5::time,$6::time,null,null)", [org, amendClient, respite, await day(sameDay), a, b]));
   await as(manager.sub, () => c.query("select * from ogevia_api.amend_client_authorization($1,400,(date_trunc('month', now()) - interval '1 month')::date,(date_trunc('month', now()) + interval '6 months')::date,'Synthetic Regional Center','Payer lowered the month (synthetic)')", [amendAuth]));
+
+  // 8. Authorization lowered after confirmation (0071): one visit approved for billing, one confirmed but not approved, then the month is lowered below both.
+  const lowered = await one("insert into ogevia.clients (organization_id) values ($1) returning id", [org]);
+  await as(owner.sub, () => c.query("select ogevia_api.set_client_legal_name($1,$2,'Demo','Lowered',null)", [org, lowered]));
+  await q(`insert into ogevia.client_authorizations (organization_id, client_id, service_id, payer, monthly_authorized_minutes, period_start, period_end, hourly_rate_cents)
+           values ($1,$2,$3,'Synthetic Regional Center', 1000, (date_trunc('month', now()) - interval '1 month')::date, (date_trunc('month', now()) + interval '6 months')::date, 3200)`, [org, lowered, respite]);
+  await q("insert into ogevia.caregiver_assignments (organization_id, caregiver_user_id, client_id, service_id, effective_start) values ($1,$2,$3,$4,(now() - interval '60 days')::date)", [org, alexUser, lowered, respite]);
+  const loweredApproved = await visit(60, "signed", lowered);
+  const loweredOpen = await visit(90, "signed", lowered);
+  await as(manager.sub, () => c.query("select ogevia_api.approve_visit_for_billing($1,60,null,null) as id", [loweredApproved]));
+  const loweredAuth = await one("select id from ogevia.client_authorizations where client_id = $1 and is_current", [lowered]);
+  await as(owner.sub, () => c.query("select * from ogevia_api.amend_client_authorization($1,40,(date_trunc('month', now()) - interval '1 month')::date,(date_trunc('month', now()) + interval '6 months')::date,'Synthetic Regional Center','Payer lowered the month below both visits (synthetic)')", [loweredAuth]));
+  void loweredOpen;
 
   // LAST: the agency policy for THIS local organization, so the browser runs under the same 8 h / 40 h rule. It is written after the fixture visits because the base seed
   // already gives the caregiver more than 40 hours in one week, and the rule (correctly) refuses to put any further scheduled shift on that caregiver (append-only table: a second run adds nothing).

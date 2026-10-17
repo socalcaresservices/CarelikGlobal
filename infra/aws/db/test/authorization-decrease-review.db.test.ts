@@ -7,7 +7,6 @@ import { ageVisit, api, asActor, createTestDb, expectPgError, freshClient, orgTo
 let db: TestDb;
 let w: World;
 let today: string;
-let monthStart: string;
 type Fx = { client: string; service: string; auth: string };
 const q = (sql: string, params: unknown[] = []) => db.admin.query(sql, params);
 const as = <T = any>(a: Actor, sql: string, params: unknown[] = []) => asActor(db, a.sub, async (c) => (await c.query(sql, params)).rows as any[] as T[]);
@@ -24,7 +23,6 @@ beforeAll(async () => {
   db = await createTestDb();
   w = await seedWorld(db, 600);
   today = await orgToday(db);
-  monthStart = `${today.slice(0, 7)}-01`;
 });
 afterAll(async () => db?.drop());
 
@@ -189,4 +187,3 @@ describe("other situations", () => {
   });
 });
 const day = (n: number) => new Date(Date.parse(`${today}T12:00:00Z`) + n * 864e5).toISOString().slice(0, 10);
-void monthStart;
