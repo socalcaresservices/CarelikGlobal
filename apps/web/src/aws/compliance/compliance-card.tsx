@@ -1,3 +1,4 @@
+import { Disclosure } from "../ui/disclosure";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
@@ -190,9 +191,11 @@ export function CaregiverCompliance({ caregiverRecordId }: { caregiverRecordId: 
                 <div><dt className="inline text-slate-600">Hire date: </dt><dd className="inline">{c.hireDate ? formatDateOnly(c.hireDate) : "Not recorded"}</dd></div>
                 <div><dt className="inline text-slate-600">CPR and TB due: </dt><dd className="inline">{c.dueDate ? formatDateOnly(c.dueDate) : "Cannot be set without a hire date"}</dd></div>
               </dl>
-              {c.dueDate ? <p className="mt-1 text-xs text-slate-600">The due date is the last day. A hold starts at 12:00 AM on {formatDateOnly(nextDay(c.dueDate))} ({c.timezone ?? "agency time zone"}).</p> : null}
               {!c.hireDate && c.hireDateRequired ? <p className="mt-1 text-sm font-medium text-red-800">No hire date is recorded, so the {c.graceDays}-day period cannot be applied. CPR and TB must be verified now.</p> : null}
-              <p className="mt-1 text-xs text-slate-600">{c.deadlineRule}</p>
+              <Disclosure summary="How the deadline is calculated">
+                {c.dueDate ? <p>The due date is the last day. A hold starts at 12:00 AM on {formatDateOnly(nextDay(c.dueDate))} ({c.timezone ?? "agency time zone"}).</p> : null}
+                <p className="mt-1">{c.deadlineRule}</p>
+              </Disclosure>
               {canTrack && (isAdmin || !c.hireDate) ? <HireDateForm key={c.hireDate ?? "none"} c={c} /> : c.hireDate ? <p className="mt-1 text-xs text-slate-600">Only an administrator can change a recorded hire date.</p> : null}
             </section>
 

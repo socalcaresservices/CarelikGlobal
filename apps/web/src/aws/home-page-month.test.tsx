@@ -6,6 +6,7 @@ import { MemoryRouter } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const monthsRequested: string[] = [];
+vi.mock("./attention", async (orig) => ({ ...(await orig<typeof import("./attention")>()), useAttentionOverview: () => ({ data: undefined, isLoading: true, isError: false }) }));
 vi.mock("./continuity-page", () => ({ ContinuityStatusCard: () => null }));
 vi.mock("@/providers/organization-provider", () => ({
   useOrganization: () => ({
@@ -16,7 +17,6 @@ vi.mock("@/providers/organization-provider", () => ({
 }));
 vi.mock("./aws-workspace", async (orig) => ({
   ...(await orig<typeof import("./aws-workspace")>()),
-  useAttention: () => ({ data: undefined, isLoading: true, isError: false }),
   useUtilisation: (monthStart: string) => {
     monthsRequested.push(monthStart);
     return { data: [], isLoading: false, isError: false };

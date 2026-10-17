@@ -1,21 +1,21 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useRef, useState } from "react";
-import { Button, Card } from "@carelik/ui";
+import { Button } from "@carelik/ui";
 import { newIdempotencyKey } from "@/lib/sv-backend";
 import { useOrganization } from "@/providers/organization-provider";
 import { useAwsApi } from "./aws-workspace";
 import { prepareDocumentFile } from "./document-file";
-import { CURRENCY_STATUS, DOCUMENT_STATUS, documentDateLine, parseReminderDays, REVIEW_STATE, type DocumentType, type Person, type StaffDocument } from "./document-status";
+import { Link } from "react-router-dom";
+import { documentDateLine, documentStatusLabel, isDueSoon, isOverdue, isToReview, matchesFilter, parseReminderDays, type DocumentFilter, type DocumentType, type Person, type StaffDocument } from "./document-status";
+import { useAttentionOverview } from "./attention";
+import { Disclosure } from "./ui/disclosure";
+import { PageHeader } from "./ui/page-header";
+import { StatusChip } from "./ui/status-chip";
 import { formatDateTime } from "@/lib/service-verification";
 import { ShortHelp } from "./help-text";
 
 
 const message = (cause: unknown, fallback: string) => (cause instanceof Error ? cause.message : fallback);
-
-function StatusChip({ status }: { status: StaffDocument["displayStatus"] }) {
-  const s = DOCUMENT_STATUS[status];
-  return <span className={`inline-block rounded-full px-2 py-0.5 text-xs font-semibold ${s.className}`}>{s.label}</span>;
-}
 
 /** Upload form: the file is stored and recorded by the server before success is shown. */
 function UploadForm({ doc, onDone }: { doc: StaffDocument; onDone: () => void }) {
@@ -92,7 +92,7 @@ function OpenFileButton({ versionId }: { versionId: string }) {
   return (
     <div>
       <button type="button" onClick={() => void open()} disabled={state.busy} className="min-h-[40px] rounded-lg border border-slate-300 px-3 text-sm font-medium text-slate-800">
-        {state.busy ? "Opening…" : "Open file"}
+        {state.busy ? "Opening…" : "View"}
       </button>
       {state.error ? <p role="alert" className="mt-1 text-sm text-red-700">{state.error}</p> : null}
       {state.url ? (
@@ -142,45 +142,41 @@ function ReviewControls({ doc, selfReview, onDone }: { doc: StaffDocument; selfR
 function DocumentCard({ d, canManage, canUpload, canReviewOwn, canReview, refresh }: { d: StaffDocument; canManage: boolean; canUpload: boolean; canReviewOwn: boolean; canReview: boolean; refresh: () => void }) {
   const [mode, setMode] = useState<"upload" | null>(null);
   const line = documentDateLine(d);
-  const uploadLabel = d.latestVersionId ? "Upload a new version" : "Upload";
+  const status = documentStatusLabel(d);
+  const uploadLabel = d.latestVersionId ? "Replace" : canManage ? "Upload for them" : "Upload";
   return (
-    <li className="rounded-xl border border-slate-200 bg-white p-3">
-      <div className="flex flex-wrap items-start justify-between gap-2">
-        <div>
-          <p className="font-semibold text-slate-950">{d.documentTypeName}</p>
-          {canManage ? <p className="text-sm text-slate-700">{d.personName}</p> : null}
+    <li className="rounded-og border border-og-line bg-og-card p-3">
+      <div className="flex flex-wrap items-start justify-between gap-x-3 gap-y-1">
+        <div className="min-w-0">
+          <p className="font-semibold text-og-ink">{d.documentTypeName}</p>
+          {canManage ? <p className="text-sm text-og-sub">{d.personName}</p> : null}
         </div>
-        {d.reviewState ? (
-          <div className="flex flex-wrap gap-1">
-            <span className={`inline-block rounded-full px-2 py-0.5 text-xs font-semibold ${REVIEW_STATE[d.reviewState].className}`}>{REVIEW_STATE[d.reviewState].label}</span>
-            {d.currencyStatus && CURRENCY_STATUS[d.currencyStatus] ? (
-              <span className={`inline-block rounded-full px-2 py-0.5 text-xs font-semibold ${CURRENCY_STATUS[d.currencyStatus]!.className}`}>{CURRENCY_STATUS[d.currencyStatus]!.label}</span>
-            ) : null}
-          </div>
-        ) : (
-          <StatusChip status={d.displayStatus} />
-        )}
+        <StatusChip tone={status.tone}>{status.label}</StatusChip>
       </div>
-      {line ? <p className={d.daysUntil !== null && d.daysUntil < 0 ? "mt-1 text-sm font-semibold text-red-700" : "mt-1 text-sm text-slate-700"}>{line}</p> : null}
-      {d.currencyStatus === "expiring" && d.reminderStage ? <p className="mt-1 text-xs text-amber-900">Reminder: within {d.reminderStage} days of expiry</p> : null}
-      {d.currencyStatus === "no_expiry_required" ? <p className="mt-1 text-xs text-slate-500">This document type has no expiry date.</p> : null}
-      {d.reviewedByName && d.reviewedAt ? <p className="mt-1 text-xs text-slate-500">Reviewed by {d.reviewedByName} on {formatDateTime(d.reviewedAt)}</p> : null}
-      {d.latestReviewStatus === "rejected" && d.latestRejectionReason ? <p className="mt-1 text-sm text-amber-900">Rejected: {d.latestRejectionReason}</p> : null}
-      {d.latestUploadedAt ? (
-        <p className="mt-1 text-xs text-slate-500">Version {d.latestVersionNumber} uploaded {formatDateTime(d.latestUploadedAt)}</p>
-      ) : null}
-      <div className="mt-2 flex flex-wrap gap-2">
+      {d.latestReviewStatus === "rejected" && d.latestRejectionReason ? <p className="mt-1.5 text-sm text-amber-900">Rejected: {d.latestRejectionReason}</p> : null}
+      <div className="mt-2 flex flex-wrap items-center gap-2">
         {d.latestVersionId ? <OpenFileButton versionId={d.latestVersionId} /> : null}
         {canUpload ? (
-          <button type="button" onClick={() => setMode(mode === "upload" ? null : "upload")} className="min-h-[40px] rounded-lg border border-slate-300 px-3 text-sm font-medium text-slate-800">
-            {mode === "upload" ? "Cancel upload" : canManage && !d.latestVersionId ? "Upload on their behalf" : uploadLabel}
+          <button type="button" onClick={() => setMode(mode === "upload" ? null : "upload")} className="min-h-[44px] rounded-lg border border-og-line px-3 text-sm font-medium text-og-ink hover:bg-og-page md:min-h-[40px]">
+            {mode === "upload" ? "Cancel" : uploadLabel}
           </button>
         ) : null}
+        <Disclosure summary="Details" className="ml-auto">
+          <dl className="space-y-1 text-xs">
+            {line ? <div><dt className="inline font-semibold text-og-ink">Date: </dt><dd className="inline">{line}</dd></div> : null}
+            {d.latestUploadedAt ? <div><dt className="inline font-semibold text-og-ink">Uploaded: </dt><dd className="inline">Version {d.latestVersionNumber}, {formatDateTime(d.latestUploadedAt)}</dd></div> : null}
+            {d.reviewedByName && d.reviewedAt ? <div><dt className="inline font-semibold text-og-ink">Reviewed: </dt><dd className="inline">{d.reviewedByName}, {formatDateTime(d.reviewedAt)}</dd></div> : null}
+            {d.currencyStatus === "expiring" && d.reminderStage ? <div><dt className="inline font-semibold text-og-ink">Reminder: </dt><dd className="inline">within {d.reminderStage} days of expiry (shown here; Ogevia sends no email or text reminders)</dd></div> : null}
+            {d.currencyStatus === "no_expiry_required" ? <div>This document type has no expiry date.</div> : null}
+            {!d.latestUploadedAt && !line ? <div>Nothing uploaded yet.</div> : null}
+            <div>Earlier versions are kept; a replacement never overwrites them.</div>
+          </dl>
+        </Disclosure>
       </div>
       {mode === "upload" ? <UploadForm doc={d} onDone={() => { setMode(null); refresh(); }} /> : null}
       {canManage && d.latestReviewStatus === "awaiting_review" ? (
-        !canReview ? <p className="mt-3 text-sm text-slate-700">Required CPR and TB records need Administrator verification. Review controls appear only after the requirement rules are loaded.</p> : d.latestUploadedByMe && !canReviewOwn ? (
-          <p className="mt-3 rounded-lg bg-slate-50 p-3 text-sm text-slate-700">You uploaded this version, so the Administrator or another manager must review it.</p>
+        !canReview ? <p className="mt-3 text-sm text-og-sub">Required CPR and TB records need Administrator verification. Review controls appear only after the requirement rules are loaded.</p> : d.latestUploadedByMe && !canReviewOwn ? (
+          <p className="mt-3 rounded-lg bg-og-page p-3 text-sm text-og-sub">You uploaded this version, so the Administrator or another manager must review it.</p>
         ) : (
           <ReviewControls doc={d} selfReview={!!d.latestUploadedByMe} onDone={refresh} />
         )
@@ -213,14 +209,14 @@ function RequestForm({ types, people, onDone }: { types: DocumentType[]; people:
     <form onSubmit={(e) => { e.preventDefault(); void submit(); }} className="flex flex-wrap items-end gap-3">
       <div className="text-sm font-medium text-slate-700">
         <label htmlFor="doc-request-person">Person</label>
-        <select id="doc-request-person" value={person} onChange={(e) => setPerson(e.target.value)} className="mt-1 block rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm">
+        <select id="doc-request-person" value={person} onChange={(e) => setPerson(e.target.value)} className="mt-1 block rounded-lg border border-slate-200 bg-og-card px-3 py-2 text-sm">
           <option value="">Choose…</option>
           {people.map((p) => <option key={p.caregiverRecordId} value={p.caregiverRecordId}>{p.displayName}</option>)}
         </select>
       </div>
       <div className="text-sm font-medium text-slate-700">
         <label htmlFor="doc-request-type">Document</label>
-        <select id="doc-request-type" value={type} onChange={(e) => setType(e.target.value)} className="mt-1 block rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm">
+        <select id="doc-request-type" value={type} onChange={(e) => setType(e.target.value)} className="mt-1 block rounded-lg border border-slate-200 bg-og-card px-3 py-2 text-sm">
           <option value="">Choose…</option>
           {types.filter((t) => t.isActive).map((t) => <option key={t.documentTypeId} value={t.documentTypeId}>{t.name}</option>)}
         </select>
@@ -275,7 +271,7 @@ function ReminderDaysForm({ types, onDone }: { types: DocumentType[]; onDone: ()
       <form onSubmit={(e) => { e.preventDefault(); void save(); }} className="flex flex-wrap items-end gap-3">
         <label className="text-sm font-medium text-slate-700">
           Applies to
-          <select value={typeId} onChange={(e) => setTypeId(e.target.value)} className="mt-1 block rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm">
+          <select value={typeId} onChange={(e) => setTypeId(e.target.value)} className="mt-1 block rounded-lg border border-slate-200 bg-og-card px-3 py-2 text-sm">
             <option value="">Agency default</option>
             {expiring.map((t) => <option key={t.documentTypeId} value={t.documentTypeId}>{t.name}</option>)}
           </select>
@@ -317,7 +313,7 @@ function TypesForm({ types, onDone }: { types: DocumentType[]; onDone: () => voi
     <div className="space-y-3">
       <ul className="flex flex-wrap gap-2">
         {types.map((t) => (
-          <li key={t.documentTypeId} className="rounded-full border border-slate-200 bg-white px-3 py-1 text-xs text-slate-700">
+          <li key={t.documentTypeId} className="rounded-full border border-slate-200 bg-og-card px-3 py-1 text-xs text-slate-700">
             {t.name}{t.requiresExpiry ? " · expiry required" : ""}
           </li>
         ))}
@@ -371,42 +367,49 @@ export function DocumentsPage() {
     queryFn: async () => (await api.get<{ people: Person[] }>("/v1/documents/people", { organizationId: activeOrganizationId })).people,
     enabled: !!activeOrganizationId && canManage,
   });
-  const [filter, setFilter] = useState<"attention" | "all">("attention");
+  const overview = useAttentionOverview();
+  const [filter, setFilter] = useState<DocumentFilter>("all");
   const refresh = () => {
     void queryClient.invalidateQueries({ queryKey: ["aws-documents"] });
     void queryClient.invalidateQueries({ queryKey: ["aws-document-types"] });
     void queryClient.invalidateQueries({ queryKey: ["aws-document-alerts"] });
+    void queryClient.invalidateQueries({ queryKey: ["attention-overview"] });
   };
 
-  if (!canRead && !canOwn) return <p className="text-sm text-slate-600">You do not have access to documents.</p>;
+  if (!canRead && !canOwn) return <p className="text-sm text-og-sub">You do not have access to documents.</p>;
 
   const list = docs.data ?? [];
-  const needsAction = (d: StaffDocument) => d.displayStatus !== "verified";
-  const shown = canRead && filter === "attention" ? list.filter(needsAction) : list;
+  const shown = canRead ? list.filter((d) => matchesFilter(d, filter)) : list;
+  const counts = { all: list.length, overdue: list.filter(isOverdue).length, due_soon: list.filter(isDueSoon).length, to_review: list.filter(isToReview).length };
+  const FILTERS: { key: DocumentFilter; label: string }[] = [{ key: "all", label: "All" }, { key: "overdue", label: "Overdue" }, { key: "due_soon", label: "Due soon" }, ...(canManage ? [{ key: "to_review" as const, label: "To review" }] : [])];
+  const holds = overview.data?.documents?.caregiversOnHold ?? 0;
+  const pending = overview.data?.documents?.caregiversWithPendingRequirements ?? 0;
 
   return (
-    <div className="space-y-5">
-      <div>
-        <h1 className="text-xl font-semibold text-slate-950">{canRead ? "Documents" : "My documents"}</h1>
-        <p className="mt-1 text-sm text-slate-600">
-          {canRead
-            ? "Staff credentials your agency has requested. Uploaded is not verified until someone reviews it."
-            : "Documents your agency has asked for. Take a clear photo or choose a PDF, add the dates on it, and upload."}
+    <div className="space-y-4">
+      <PageHeader
+        title={canRead ? "Documents & compliance" : "My documents"}
+        lead={canRead ? "Staff credentials and their status. Uploaded is not verified until someone reviews it." : "Documents your agency has asked for. Take a clear photo or choose a PDF, add the dates on it, and upload."}
+      />
+
+      {canRead && (holds > 0 || pending > 0) ? (
+        <p role="status" className="flex flex-wrap items-center gap-x-3 rounded-og border border-amber-600 bg-amber-50 px-3 py-2 text-sm text-amber-900" data-testid="compliance-strip">
+          <span><span aria-hidden="true">▲ </span>{holds > 0 ? `${holds} ${holds === 1 ? "caregiver is" : "caregivers are"} on a compliance hold` : null}{holds > 0 && pending > 0 ? " · " : null}{pending > 0 ? `${pending} with requirements pending` : null}</span>
+          <Link className="inline-flex min-h-[44px] items-center font-semibold underline md:min-h-[32px]" to="/compliance">Review compliance</Link>
         </p>
-      </div>
+      ) : null}
 
       {canManage ? (
-        <Card className="space-y-3 p-4">
-          <h2 className="text-sm font-semibold text-slate-900">Request a document</h2>
+        <Disclosure summary="Request a document" className="rounded-og border border-og-line bg-og-card px-3">
           <RequestForm types={types.data ?? []} people={people.data ?? []} onDone={refresh} />
-        </Card>
+        </Disclosure>
       ) : null}
 
       {canRead ? (
-        <div className="flex gap-2" role="group" aria-label="Show">
-          {(["attention", "all"] as const).map((f) => (
-            <button key={f} type="button" aria-pressed={filter === f} onClick={() => setFilter(f)} className={filter === f ? "rounded-lg bg-slate-900 px-3 py-2 text-sm font-medium text-white" : "rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-700"}>
-              {f === "attention" ? "Needs action" : "All documents"}
+        <div className="flex flex-wrap gap-2" role="group" aria-label="Show">
+          {FILTERS.map((f) => (
+            <button key={f.key} type="button" aria-pressed={filter === f.key} onClick={() => setFilter(f.key)} className={`min-h-[44px] rounded-lg px-3 text-sm font-medium md:min-h-[40px] ${filter === f.key ? "bg-og-accent text-white" : "border border-og-line text-og-ink hover:bg-og-page"}`}>
+              {f.label} <span className="font-og-mono tabular-nums">{counts[f.key]}</span>
             </button>
           ))}
         </div>
@@ -415,7 +418,7 @@ export function DocumentsPage() {
       {docs.isLoading ? <p className="text-sm text-slate-500">Loading…</p> : null}
       {docs.isError ? <p role="alert" className="text-sm text-red-700">{(docs.error as Error).message}</p> : null}
       {!docs.isLoading && !docs.isError && shown.length === 0 ? (
-        <p className="text-sm text-slate-500">{canRead ? (filter === "attention" ? "Nothing needs action." : "No documents requested yet.") : "Your agency has not requested any documents."}</p>
+        <p className="text-sm text-og-sub">{canRead ? (filter === "all" ? "No documents requested yet." : "No documents match this filter.") : "Your agency has not requested any documents."}</p>
       ) : null}
       <ul className="space-y-3">
         {shown.map((d) => (
@@ -424,12 +427,13 @@ export function DocumentsPage() {
       </ul>
 
       {canManage ? (
-        <Card className="space-y-3 p-4">
-          <h2 className="text-sm font-semibold text-slate-900">Document types</h2>
-          <p className="text-xs text-slate-500">Set expiry only where the document has one. Reminder periods follow your agency's own requirements.</p>
-          <TypesForm types={types.data ?? []} onDone={refresh} />
-          <ReminderDaysForm types={types.data ?? []} onDone={refresh} />
-        </Card>
+        <Disclosure summary="Document types and reminder days" className="rounded-og border border-og-line bg-og-card px-3">
+          <div className="space-y-3 pb-2">
+            <p className="text-xs">Set expiry only where the document has one. Reminder periods follow your agency's own requirements.</p>
+            <TypesForm types={types.data ?? []} onDone={refresh} />
+            <ReminderDaysForm types={types.data ?? []} onDone={refresh} />
+          </div>
+        </Disclosure>
       ) : null}
     </div>
   );

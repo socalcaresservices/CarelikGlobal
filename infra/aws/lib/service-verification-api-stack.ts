@@ -150,6 +150,12 @@ export const SERVICE_VERIFICATION_ROUTES: ReadonlyArray<{
   { method: apigw.HttpMethod.POST, path: "/v1/caregivers/{caregiverRecordId}/background-check/verify" },
   { method: apigw.HttpMethod.GET, path: "/v1/compliance/holds" },
   { method: apigw.HttpMethod.POST, path: "/v1/compliance/sweep" },
+  // Attention by purpose, appearance preferences, authorizations missing a rate (0054). JWT like every staff route.
+  { method: apigw.HttpMethod.GET, path: "/v1/attention/overview" },
+  { method: apigw.HttpMethod.GET, path: "/v1/appearance" },
+  { method: apigw.HttpMethod.POST, path: "/v1/appearance/organization" },
+  { method: apigw.HttpMethod.POST, path: "/v1/appearance/me" },
+  { method: apigw.HttpMethod.GET, path: "/v1/authorizations/missing-rate" },
   { method: apigw.HttpMethod.POST, path: "/v1/assignments/{assignmentId}/family-relationship" },
   // Continuity pack (0027): continuity.export only; JWT like every staff route.
   { method: apigw.HttpMethod.POST, path: "/v1/continuity/pack" },

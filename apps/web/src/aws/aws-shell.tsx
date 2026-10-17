@@ -15,6 +15,7 @@ import {
   LifeBuoy,
   LogOut,
   Menu,
+  Palette,
   PanelLeftClose,
   PanelLeftOpen,
   PenLine,
@@ -29,8 +30,10 @@ import {
 import { useAuth } from "@carelik/auth";
 import { cn } from "@carelik/ui";
 import { useOrganization } from "@/providers/organization-provider";
-import { actionNeededState, EXCEPTIONS_ROUTE } from "./action-needed";
-import { useAttention, useBranding, useLogo, useMyDisplayName, viewKind, VIEW_TITLE } from "./aws-workspace";
+import { EXCEPTIONS_ROUTE } from "./action-needed";
+import { urgentBadge, useAttentionOverview } from "./attention";
+import { AppearanceApplier } from "./appearance/use-appearance";
+import { useBranding, useLogo, useMyDisplayName, viewKind, VIEW_TITLE } from "./aws-workspace";
 import { EnvironmentBanner } from "./environment-marker";
 import { currentLink, isCalendarView, isReportView, isVisitListView, linkKey, REPORTS_PATH, visibleGroups, type NavLinkDef } from "./nav-model";
 
@@ -94,7 +97,7 @@ export function AwsShell({ children }: PropsWithChildren) {
   const { displayName, loading: nameLoading } = useMyDisplayName();
   const branding = useBranding();
   const logo = useLogo();
-  const attention = useAttention();
+  const attention = useAttentionOverview();
   const location = useLocation();
   const [collapsedPref, toggleCollapsed] = useSidebarCollapsed();
   const isMobile = useIsMobile();
@@ -157,19 +160,20 @@ export function AwsShell({ children }: PropsWithChildren) {
     { to: REPORTS_PATH, label: "Visit records", group: "VISITS", icon: FileText, show: canReadVisits, matchView: isVisitListView },
     { to: "/billing-review", label: "Billing review", group: "BILLING", icon: Receipt, show: hasPermission("billing.visits.read") },
     { to: REPORTS_PATH, search: "?view=overview", label: "Reports", group: "REPORTS", icon: ChartNoAxesColumn, show: canReadVisits, matchView: isReportView },
-    { to: "/documents", label: hasPermission("documents.read") ? "Documents" : "My documents", group: "DOCUMENTS", icon: FolderOpen, show: hasPermission("documents.read") || hasPermission("documents.manage_own") },
+    { to: "/documents", label: hasPermission("documents.read") ? "Documents & compliance" : "My documents", group: "DOCUMENTS", icon: FolderOpen, show: hasPermission("documents.read") || hasPermission("documents.manage_own") },
     { to: "/services", label: "Services", group: "SETUP", icon: Stethoscope, show: !isCaregiver && hasPermission("authorizations.read") },
     { to: "/continuity", label: "Continuity pack", group: "SETUP", icon: LifeBuoy, show: !isCaregiver && hasPermission("continuity.export") },
     { to: "/outage-visits", label: "Outage records", group: "SETUP", icon: FileArchive, show: !isCaregiver && hasPermission("visits.manage") },
     { to: "/accounts", label: "Accounts", group: "SETUP", icon: UserCog, show: !isCaregiver && hasPermission("accounts.manage") },
     { to: "/settings/branding", label: "Settings", group: "SETUP", icon: Settings, show: hasPermission("organization.update") },
+    { to: "/settings/appearance", label: "Appearance", group: "SETUP", icon: Palette, show: true },
   ];
   const groups = visibleGroups(links);
   const current = currentLink(links, location.pathname, location.search);
   const agencyName = branding.data?.displayName ?? activeOrganization?.displayName ?? "Organization";
   const accent = branding.data?.accentColor ?? DEFAULT_ACCENT;
-  // The same function and the same query result as the Home banner (action-needed.ts).
-  const attentionState = actionNeededState(attention.isLoading, attention.isError, attention.data);
+  // The same classification and query result as the Home tiles (attention.ts): unique shifts and visits needing attention now.
+  const badge = urgentBadge(attention.isLoading, attention.isError, attention.data);
 
   function trapFocus(e: KeyboardEvent<HTMLElement>) {
     if (!drawerShown) return;
@@ -201,19 +205,20 @@ export function AwsShell({ children }: PropsWithChildren) {
   const itemClass = (active: boolean) =>
     cn(
       // Sidebar "Option B": 14px/500 links, 40px rows (44px for coarse pointers), 18px icons with an 8px gap, no accent bar.
-      "flex min-h-[40px] items-center gap-2 rounded-md px-3 py-1.5 text-[14px] leading-5 [@media(pointer:coarse)]:min-h-[44px] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#0F6674]",
+      "flex min-h-[40px] items-center gap-2 rounded-md px-3 py-1.5 text-[14px] leading-5 [@media(pointer:coarse)]:min-h-[44px] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-og-accent",
       collapsed && "justify-center px-0",
-      active ? "bg-[#E8F5F4] font-semibold text-[#0F6674]" : "font-medium text-[#243244] hover:bg-[#F0F7F7]",
+      active ? "bg-og-active font-semibold text-og-accent" : "font-medium text-og-ink hover:bg-og-ink/5",
     );
 
   return (
     <div
-      className="og-app min-h-screen bg-og-page font-og text-og-ink print:min-h-0 print:bg-white"
+      className="og-app min-h-screen bg-og-page font-og text-og-ink print:min-h-0 print:bg-og-card"
       style={{ "--agency-accent": accent } as CSSProperties}
       onKeyDown={(e) => {
         if (e.key === "Escape" && tip) setTip(null);
       }}
     >
+      <AppearanceApplier />
       {drawerShown ? <div aria-hidden="true" className="fixed inset-0 z-40 bg-og-ink/40 md:hidden print:hidden" onClick={closeDrawer} /> : null}
       <aside
         id="aws-sidebar"
@@ -222,7 +227,7 @@ export function AwsShell({ children }: PropsWithChildren) {
         aria-label="Sidebar"
         onKeyDown={trapFocus}
         className={cn(
-          "fixed inset-y-0 left-0 z-50 flex-col border-r border-[#E2E8EC] bg-[#FAFBFC] print:hidden",
+          "fixed inset-y-0 left-0 z-50 flex-col border-r border-og-line bg-og-side print:hidden",
           sidebarHidden ? "hidden" : "flex",
           isMobile ? "w-[min(88vw,20rem)] shadow-2xl" : collapsed ? "w-[76px]" : "w-64",
         )}
@@ -234,7 +239,7 @@ export function AwsShell({ children }: PropsWithChildren) {
             <span className={cn("truncate text-lg font-bold tracking-tight text-og-ink", collapsed && "sr-only")}>Ogevia</span>
           </div>
           {isMobile ? (
-            <button ref={closeButtonRef} type="button" aria-label="Close menu" onClick={closeDrawer} className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg text-og-ink hover:bg-[#F0F7F7] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#0F6674]">
+            <button ref={closeButtonRef} type="button" aria-label="Close menu" onClick={closeDrawer} className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg text-og-ink hover:bg-og-ink/5 focus-visible:outline focus-visible:outline-2 focus-visible:outline-og-accent">
               <X className="h-5 w-5" aria-hidden="true" />
             </button>
           ) : (
@@ -251,14 +256,14 @@ export function AwsShell({ children }: PropsWithChildren) {
               onFocus={(e) => showTip("Expand sidebar", e.currentTarget)}
               onMouseLeave={() => setTip(null)}
               onBlur={() => setTip(null)}
-              className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg text-og-ink hover:bg-[#F0F7F7] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#0F6674]"
+              className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg text-og-ink hover:bg-og-ink/5 focus-visible:outline focus-visible:outline-2 focus-visible:outline-og-accent"
             >
               {collapsed ? <PanelLeftOpen className="h-5 w-5" aria-hidden="true" /> : <PanelLeftClose className="h-5 w-5" aria-hidden="true" />}
             </button>
           )}
         </div>
 
-        <div className={cn("mx-3 mb-2 rounded-og border border-og-line bg-white p-2.5", collapsed && "flex justify-center px-0")}>
+        <div className={cn("mx-3 mb-2 rounded-og border border-og-line bg-og-card p-2.5", collapsed && "flex justify-center px-0")}>
           <div className="flex min-w-0 items-center gap-2.5">
             {logo.data ? (
               <img src={logo.data} alt={`${agencyName} logo`} className="h-9 max-w-[44px] shrink-0 object-contain" />
@@ -277,7 +282,7 @@ export function AwsShell({ children }: PropsWithChildren) {
             <div key={group} className={cn("first:mt-1", collapsed ? "mt-2" : "mt-5")}>
               {/* Headings and their dividers are hidden when collapsed; the links keep their accessible names. */}
               {group === "HOME" || collapsed ? null : (
-                <p className="mx-3 mb-2 border-b border-[#DCE5E9] pb-[10px] text-[12px] font-bold leading-[18px] tracking-[0.06em] text-[#334155]" data-testid="nav-group-heading">{group}</p>
+                <p className="mx-3 mb-2 border-b border-og-line pb-[10px] text-[12px] font-bold leading-[18px] tracking-[0.06em] text-og-sub" data-testid="nav-group-heading">{group}</p>
               )}
               <ul className="space-y-0.5">
                 {items.map((l) => {
@@ -309,7 +314,7 @@ export function AwsShell({ children }: PropsWithChildren) {
           ))}
         </nav>
 
-        <div className="border-t border-[#E2E8EC] p-3">
+        <div className="border-t border-og-line p-3">
           <div className={cn("flex items-start gap-2.5", collapsed && "justify-center")}>
             <span aria-hidden="true" className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-og-active text-xs font-bold text-og-active-ink">{displayName ? initialsOf(displayName) : <UserCircle className="h-5 w-5" />}</span>
             <div className={cn("min-w-0 flex-1", collapsed && "sr-only")}>
@@ -365,7 +370,7 @@ export function AwsShell({ children }: PropsWithChildren) {
 
       <div className={cn("print:pl-0", !isMobile && (collapsed ? "pl-[76px]" : "pl-64"))}>
         <EnvironmentBanner />
-        <header className="border-b border-og-line bg-white print:hidden" style={{ borderTop: `4px solid ${accent}` }}>
+        <header className="border-b border-og-line bg-og-card print:hidden" style={{ borderTop: `4px solid ${accent}` }}>
           <div className="flex flex-wrap items-center gap-2 px-4 py-2.5 md:px-8">
             <button
               ref={menuButtonRef}
@@ -378,23 +383,21 @@ export function AwsShell({ children }: PropsWithChildren) {
               <Menu className="h-4 w-4" aria-hidden="true" />
               Menu <span className="text-og-sub">· {current?.label ?? "Choose a section"}</span>
             </button>
-            {canSeeAttention ? (
-              // Green only when zero is CONFIRMED by the server; loading or a failed check stays neutral.
-              // Opens the Home list built from the same server summary as this count (0033).
+            {canSeeAttention && badge.kind !== "hidden" ? (
+              // Red only for care blocked or at risk now, amber for approaching risk; every state has a word and a symbol.
               <Link
-                to="/"
+                to="/attention"
                 className={cn(
-                  "inline-flex min-h-[40px] items-center gap-2 rounded-lg border-2 px-3 text-sm font-bold uppercase tracking-wide focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-og-link",
-                  attentionState.kind === "attention" && "border-red-700 text-red-700 hover:bg-red-50",
-                  attentionState.kind === "clear" && "border-emerald-700 text-emerald-800 hover:bg-emerald-50",
-                  (attentionState.kind === "checking" || attentionState.kind === "unknown") && "border-slate-400 text-slate-700 hover:bg-slate-50",
+                  "inline-flex min-h-[40px] items-center gap-2 rounded-lg border px-3 text-sm font-semibold focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-og-link",
+                  badge.tone === "red" && "border-red-700 bg-red-50 text-red-800 hover:bg-red-100",
+                  badge.tone === "amber" && "border-amber-600 bg-amber-50 text-amber-900 hover:bg-amber-100",
+                  badge.tone === "neutral" && "border-og-line text-og-ink hover:bg-og-page",
                 )}
-                aria-label={attentionState.aria}
+                aria-label={badge.aria}
+                data-testid="attention-badge"
               >
-                <span aria-hidden="true">{attentionState.icon}</span> {attentionState.label}
-                {attentionState.count !== null ? (
-                  <span className={cn("rounded-full px-2 py-0.5 text-xs text-white", attentionState.kind === "clear" ? "bg-emerald-700" : "bg-red-700")}>{attentionState.count}</span>
-                ) : null}
+                <span aria-hidden="true">{badge.icon}</span> {badge.label}
+                {badge.count !== null ? <span className="font-og-mono tabular-nums">{badge.count}</span> : null}
               </Link>
             ) : null}
             {/* A user who belongs to more than one organization switches here (unchanged behaviour). */}
@@ -403,7 +406,7 @@ export function AwsShell({ children }: PropsWithChildren) {
                 aria-label="Organization"
                 value={activeOrganizationId}
                 onChange={(e) => setActiveOrganizationId(e.target.value)}
-                className="ml-auto min-h-[40px] rounded-lg border border-og-line bg-white px-2 text-sm"
+                className="ml-auto min-h-[40px] rounded-lg border border-og-line bg-og-card px-2 text-sm"
               >
                 {organizations.map((o) => <option key={o.id} value={o.id}>{o.displayName}</option>)}
               </select>

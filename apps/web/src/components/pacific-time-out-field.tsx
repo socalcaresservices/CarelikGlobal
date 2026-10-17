@@ -39,7 +39,7 @@ export function PacificDateTimeInputs({
   onChange: (next: PacificWallTime) => void;
 }) {
   const selectClass =
-    "mt-1 block min-h-11 w-full rounded-lg border border-slate-300 bg-white px-2 text-sm text-slate-900";
+    "mt-1 block min-h-11 w-full rounded-lg border border-slate-300 bg-og-card px-2 text-sm text-slate-900";
   return (
     <fieldset className="space-y-2">
       <legend className="text-xs font-medium text-slate-700">
@@ -108,7 +108,7 @@ export function PacificDateTimeInputs({
                 "min-h-11 flex-1 rounded-lg border text-sm font-semibold",
                 value.meridiem === meridiem
                   ? "border-indigo-600 bg-indigo-600 text-white"
-                  : "border-slate-300 bg-white text-slate-700",
+                  : "border-slate-300 bg-og-card text-slate-700",
               )}
             >
               {meridiem}
@@ -139,7 +139,7 @@ export function PacificTimeOutField({
       <PacificDateTimeInputs label="Time Out" value={value} onChange={onChange} />
       <dl
         aria-label="Time Out summary"
-        className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 rounded-lg bg-white p-2 text-xs text-slate-700"
+        className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 rounded-lg bg-og-card p-2 text-xs text-slate-700"
       >
         <dt className="text-slate-500">Time In</dt>
         <dd>{describe(timeIn)}</dd>
@@ -189,7 +189,7 @@ export function PacificCorrectionFields({
       </div>
       <dl
         aria-label="Correction summary"
-        className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 rounded-lg bg-white p-2 text-xs text-slate-700"
+        className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 rounded-lg bg-og-card p-2 text-xs text-slate-700"
       >
         <dt className="text-slate-500">Original</dt>
         <dd>

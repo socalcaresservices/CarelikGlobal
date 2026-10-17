@@ -54,7 +54,7 @@ export function QuickActionMenu({ label = "Actions", children, className }: Quic
         <div
           role="menu"
           onClick={() => setOpen(false)}
-          className="absolute right-0 z-10 mt-1 min-w-[10rem] rounded-lg border border-slate-200 bg-white py-1 text-sm shadow-lg"
+          className="absolute right-0 z-10 mt-1 min-w-[10rem] rounded-lg border border-slate-200 bg-og-card py-1 text-sm shadow-lg"
         >
           {children}
         </div>

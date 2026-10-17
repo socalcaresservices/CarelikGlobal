@@ -173,7 +173,7 @@ function CreatedLink({ created, onClose }: { created: { link: string; code: stri
       <p className="font-semibold text-emerald-950">Shown only once. Copy them now.</p>
       <div>
         <p className="text-xs font-medium text-slate-600">1. Send this link (text or email, from your usual phone or email)</p>
-        <p className="break-all rounded bg-white p-2 font-mono text-xs">{created.link}</p>
+        <p className="break-all rounded bg-og-card p-2 font-mono text-xs">{created.link}</p>
         <Button type="button" variant="secondary" onClick={() => void copy("link", created.link)}>{copied === "link" ? "Link copied" : "Copy link"}</Button>
       </div>
       <div>
@@ -250,7 +250,7 @@ function RequestItem({ r, organizationId, canManage, workedMinutes, onDone, onEr
           {r.hasEvidence ? <Button type="button" variant="secondary" onClick={() => void viewEvidence()}>{r.method === "paper" ? "View form" : "View signature"}</Button> : null}
           {file ? (file.type === "application/pdf"
             ? <a href={file.url} download="paper-form.pdf" className="block text-sm underline">Download the form (PDF)</a>
-            : <img src={file.url} alt={r.method === "paper" ? "Scanned paper form" : "Signature"} className="max-h-64 max-w-full rounded border border-slate-200 bg-white" />) : null}
+            : <img src={file.url} alt={r.method === "paper" ? "Scanned paper form" : "Signature"} className="max-h-64 max-w-full rounded border border-slate-200 bg-og-card" />) : null}
           {reviewed ? (
             <p className="text-sm">
               <span className="font-medium">{r.reviewOutcome === "accepted" ? `Accepted — ${formatDuration(r.acceptedMinutes)} eligible for billing approval${r.cappedByAuthorization ? " (capped by the authorization)" : ""}` : "Rejected"}</span>

@@ -45,7 +45,7 @@ export function ScoreBadge({ kind, value, preview, className }: ScoreBadgeProps)
   return (
     <div
       className={cn(
-        "relative inline-flex min-w-[5.5rem] flex-col items-center gap-0.5 rounded-2xl border border-slate-200 bg-white px-4 py-3",
+        "relative inline-flex min-w-[5.5rem] flex-col items-center gap-0.5 rounded-2xl border border-slate-200 bg-og-card px-4 py-3",
         className
       )}
     >

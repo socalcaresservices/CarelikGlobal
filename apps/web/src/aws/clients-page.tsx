@@ -176,7 +176,7 @@ export function ClientsPage() {
         <div role="group" aria-label="View" className="inline-flex overflow-hidden rounded-lg border border-slate-300">
           {(["list", "cards"] as const).map((v) => (
             <button key={v} type="button" aria-pressed={view === v} onClick={() => chooseView(v)}
-              className={`min-h-[44px] px-4 text-sm font-semibold ${view === v ? "bg-[#0F6674] text-white" : "bg-white text-slate-800"}`}>{v === "list" ? "List" : "Cards"}</button>
+              className={`min-h-[44px] px-4 text-sm font-semibold ${view === v ? "bg-og-accent text-white" : "bg-og-card text-slate-800"}`}>{v === "list" ? "List" : "Cards"}</button>
           ))}
         </div>
       </div>
@@ -208,7 +208,7 @@ const actionLabel = (c: AdminClient) => (hasCurrentAuthorization(c) ? "View auth
 /** Compact rows: client, status, authorization, one action. The same rows and permissions as Cards. */
 function ClientList({ clients }: { clients: AdminClient[] }) {
   return (
-    <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white">
+    <div className="overflow-x-auto rounded-xl border border-slate-200 bg-og-card">
       <table className="w-full min-w-[34rem] text-left text-sm" aria-label="Clients as a list">
         <thead>
           <tr className="border-b border-slate-200 text-xs uppercase tracking-wide text-slate-600">
@@ -240,7 +240,7 @@ function ClientCard({ c }: { c: AdminClient }) {
   const name = clientName(c);
   return (
     <li>
-      <Link to={`/clients/${c.clientId}`} className="block rounded-xl border border-slate-200 bg-white p-3 hover:border-slate-400">
+      <Link to={`/clients/${c.clientId}`} className="block rounded-xl border border-slate-200 bg-og-card p-3 hover:border-slate-400">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <p className="font-semibold text-slate-950">{name ?? "Name not set"} <span className="font-normal text-slate-500">({c.clientCode})</span></p>
           <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${STATUS_BADGE[c.status]}`}>{STATUS_LABEL[c.status]}</span>

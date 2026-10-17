@@ -120,7 +120,7 @@ export function VisitRulesPage() {
           <h2 id="rule-history" className="mb-2 text-base font-semibold text-slate-950">History</h2>
           <ul className="space-y-2">
             {rules.data.map((r) => (
-              <li key={r.version} className="rounded-xl border border-slate-200 bg-white p-3 text-sm">
+              <li key={r.version} className="rounded-xl border border-slate-200 bg-og-card p-3 text-sm">
                 <p className="font-semibold text-slate-950">
                   Version {r.version}: {r.minutes} minutes{r.inEffect ? " (in effect)" : ""}
                 </p>

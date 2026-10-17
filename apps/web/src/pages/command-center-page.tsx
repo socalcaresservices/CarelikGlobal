@@ -38,7 +38,7 @@ export function CommandCenterPage() {
 
       <ActionCenter />
 
-      <details className="rounded-2xl border border-slate-200 bg-white px-5 py-4 shadow-sm">
+      <details className="rounded-2xl border border-slate-200 bg-og-card px-5 py-4 shadow-sm">
         <summary className="cursor-pointer list-none font-semibold text-slate-950">
           Analytics and trends
           <span className="ml-2 text-sm font-normal text-slate-500">Open only when you need charts and deeper analysis</span>

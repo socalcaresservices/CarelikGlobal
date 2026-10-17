@@ -226,7 +226,7 @@ function AssignmentRow({ a, side, canManage, onDone }: { a: Assignment; side: "c
     ? (a.caregiverRecordId ? <Link className="underline" to={`/care-team/${a.caregiverRecordId}`}>{a.caregiverName} ({a.caregiverCode})</Link> : "Caregiver record not found")
     : <Link className="underline" to={`/clients/${a.clientId}`}>{a.clientName ?? "Name not set"} ({a.clientCode})</Link>;
   return (
-    <li className="rounded-xl border border-slate-200 bg-white p-3">
+    <li className="rounded-xl border border-slate-200 bg-og-card p-3">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <p className="font-semibold text-slate-950">{who}</p>
         <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${STATE_BADGE[a.state]}`}>{STATE_LABEL[a.state]}</span>

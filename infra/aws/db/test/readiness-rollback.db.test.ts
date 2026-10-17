@@ -63,7 +63,7 @@ describe("readiness release rollback keeps data", () => {
       approvals: (await db.admin.query("select count(*)::int n from ogevia.caregiver_service_approvals")).rows[0].n,
       audit: (await db.admin.query("select count(*)::int n from ogevia.audit_events")).rows[0].n,
     };
-    for (const f of ["0053_caregiver_compliance_hold", "0048_account_status_enable_disable", "0047_availability_override_one_shift", "0046_visit_start_availability", "0045_manual_care_offer", "0044_readiness_review", "0043_explainable_matching", "0042_readiness_gate", "0041_required_documents", "0040_caregiver_service_approvals", "0039_availability_approval"]) {
+    for (const f of ["0054_attention_streams_appearance", "0053_caregiver_compliance_hold", "0048_account_status_enable_disable", "0047_availability_override_one_shift", "0046_visit_start_availability", "0045_manual_care_offer", "0044_readiness_review", "0043_explainable_matching", "0042_readiness_gate", "0041_required_documents", "0040_caregiver_service_approvals", "0039_availability_approval"]) {
       await runDown(`${f}.down.sql`);
     }
     // Records that existed before the release are untouched; audit history only grows.
@@ -85,7 +85,7 @@ describe("readiness release rollback keeps data", () => {
     // Re-applying the whole release works and starts clean.
     const client = await db.admin.connect();
     try {
-      expect((await migrate(client)).applied.map((x) => x.slice(0, 4))).toEqual(["0039", "0040", "0041", "0042", "0043", "0044", "0045", "0046", "0047", "0048", "0053"]);
+      expect((await migrate(client)).applied.map((x) => x.slice(0, 4))).toEqual(["0039", "0040", "0041", "0042", "0043", "0044", "0045", "0046", "0047", "0048", "0053", "0054"]);
     } finally {
       client.release();
     }

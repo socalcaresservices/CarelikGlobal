@@ -36,6 +36,9 @@ import { BrandingSettingsPage, ProfilePage } from "./workspace-settings-pages";
 import { PublicCareOfferPage, PublicCareRequestPage } from "./care-public-pages";
 import { ConfirmVisitPage } from "./confirm-visit-page";
 import { EnvironmentProvider } from "./environment-marker";
+import { NeedsAttentionPage, UpcomingStaffingPage, VisitQueuePage } from "./attention-pages";
+import { RatesReviewPage } from "./rates-review-page";
+import { AppearancePage } from "./appearance/appearance-page";
 
 function AwsBackendProvider({ api, children }: PropsWithChildren<{ api: AwsApiClient }>) {
   const { organizations } = useOrganization();
@@ -91,6 +94,11 @@ export function AwsRoutes({ api, publicApi }: { api: AwsApiClient; publicApi: Aw
                     <Route path="/my-shifts" element={<MyShiftsPage />} />
                     <Route path="/continuity" element={<ContinuityPage />} />
                     <Route path="/outage-visits" element={<OutageVisitsPage />} />
+                    <Route path="/attention" element={<NeedsAttentionPage />} />
+                    <Route path="/staffing" element={<UpcomingStaffingPage />} />
+                    <Route path="/visit-review" element={<VisitQueuePage />} />
+                    <Route path="/authorizations/rates" element={<RatesReviewPage />} />
+                    <Route path="/settings/appearance" element={<AppearancePage />} />
                     <Route path="/settings/branding" element={<BrandingSettingsPage />} />
                     <Route path="/settings/billing-rounding" element={<BillingRoundingSettingsPage />} />
                     <Route path="/settings/visit-rules" element={<VisitRulesPage />} />

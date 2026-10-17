@@ -8,6 +8,7 @@ import { useOrganization } from "@/providers/organization-provider";
 import { useAwsApi } from "../aws-workspace";
 import { actionError } from "../readiness/format";
 import { useGuardedMutate } from "../readiness/use-guarded";
+import { PageHeader } from "../ui/page-header";
 import { COMPLIANCE_KEYS, fixLink, useComplianceHolds, type ComplianceHold } from "./queries";
 
 function HoldCard({ h }: { h: ComplianceHold }) {
@@ -92,18 +93,16 @@ export function ComplianceHoldsPage() {
     },
   });
   const send = useGuardedMutate(check);
-  if (!hasPermission("readiness.read")) return <p className="p-4 text-sm text-slate-700">You do not have access to compliance holds.</p>;
+  if (!hasPermission("readiness.read")) return <p className="text-sm text-og-sub">You do not have access to compliance holds.</p>;
   return (
-    <div className="mx-auto max-w-3xl space-y-4 p-4">
-      <header>
-        <h1 className="text-xl font-semibold text-slate-950">Caregiver holds</h1>
-        <p className="mt-1 text-sm text-slate-700">Caregivers who cannot be given new work or start visits until a requirement is verified. These are the agency&apos;s own rules, not stated as legal requirements.</p>
-      </header>
-      <div className="flex flex-wrap items-center gap-3">
-        <Button type="button" variant="secondary" disabled={check.isPending} onClick={() => send()}>{check.isPending ? "Checking…" : "Check now"}</Button>
-        {check.isSuccess ? <p role="status" className="text-sm text-slate-700">Checked {check.data.result.evaluated} caregivers. {check.data.result.holdsOpened} new, {check.data.result.holdsReleased} lifted.</p> : null}
-        {check.isError ? <p role="alert" className="text-sm text-red-700">{actionError(check.error, "The check could not run.")}</p> : null}
-      </div>
+    <div className="space-y-4">
+      <PageHeader
+        title="Caregiver holds"
+        lead="Caregivers who cannot be given new work or start visits until a requirement is verified. These are the agency's own rules, not legal requirements."
+        action={<Button type="button" variant="secondary" disabled={check.isPending} onClick={() => send()}>{check.isPending ? "Checking…" : "Check now"}</Button>}
+      />
+      {check.isSuccess ? <p role="status" className="text-sm text-og-sub">Checked {check.data.result.evaluated} caregivers. {check.data.result.holdsOpened} new, {check.data.result.holdsReleased} lifted.</p> : null}
+      {check.isError ? <p role="alert" className="text-sm text-red-700">{actionError(check.error, "The check could not run.")}</p> : null}
       {q.isLoading ? <p className="text-sm text-slate-500">Loading…</p> : null}
       {q.isError ? <p role="alert" className="text-sm text-red-700">{actionError(q.error, "Holds could not be loaded.")}</p> : null}
       {q.data ? (

@@ -454,7 +454,7 @@ export function CandidatesPage() {
         description={`Recruiting and onboarding workflow${activeOrganization?.displayName ? ` for ${activeOrganization.displayName}` : ""}. Hiring stages are changed by authorized staff.`}
       />
 
-      <details className="rounded-2xl border border-slate-200 bg-white px-5 py-4 shadow-sm">
+      <details className="rounded-2xl border border-slate-200 bg-og-card px-5 py-4 shadow-sm">
         <summary className="cursor-pointer list-none font-semibold text-slate-950">
           Pipeline summary <span className="ml-2 text-sm font-normal text-slate-500">{allCandidates.length} candidates</span>
         </summary>
@@ -589,7 +589,7 @@ export function CandidatesPage() {
                   </div>
                   <div className="mt-4 max-h-72 overflow-auto rounded-lg border border-slate-200">
                     <table className="w-full text-left text-sm">
-                      <thead className="sticky top-0 bg-white"><tr><th className="px-3 py-2">Candidate</th><th className="px-3 py-2">Email</th><th className="px-3 py-2">Preview</th></tr></thead>
+                      <thead className="sticky top-0 bg-og-card"><tr><th className="px-3 py-2">Candidate</th><th className="px-3 py-2">Email</th><th className="px-3 py-2">Preview</th></tr></thead>
                       <tbody>
                         {previewRows.map((row) => (
                           <tr key={row.row_number} className="border-t border-slate-100">

@@ -77,7 +77,7 @@ function ServiceRow({ s, canManage }: { s: AgencyService; canManage: boolean }) 
   }
   const id = `svc-${s.serviceId.slice(0, 8)}`;
   return (
-    <li className="rounded-xl border border-slate-200 bg-white p-3">
+    <li className="rounded-xl border border-slate-200 bg-og-card p-3">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <p className="font-semibold text-slate-950">{s.name} <span className="font-normal text-slate-500">({s.code})</span></p>
         <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${s.isActive ? "bg-emerald-100 text-emerald-900" : "bg-slate-200 text-slate-800"}`}>{s.isActive ? "Active" : "Inactive"}</span>

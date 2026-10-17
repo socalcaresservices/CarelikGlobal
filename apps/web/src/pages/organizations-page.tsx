@@ -187,7 +187,7 @@ function SupportAccessPanel({ organizationId, currentUserId }: { organizationId:
             const isOwnOpenGrant =
               grant.grantee_user_id === currentUserId && (grant.status === "requested" || grant.status === "active") && !expired;
             return (
-              <li key={grant.id} className="flex flex-wrap items-center justify-between gap-3 rounded-lg bg-white p-3 text-sm">
+              <li key={grant.id} className="flex flex-wrap items-center justify-between gap-3 rounded-lg bg-og-card p-3 text-sm">
                 <div>
                   <p className="text-slate-800">{grant.grantee_user_id === currentUserId ? "Platform staff (you)" : "Platform staff"}</p>
                   <p className="text-xs text-slate-500">{grant.reason}</p>

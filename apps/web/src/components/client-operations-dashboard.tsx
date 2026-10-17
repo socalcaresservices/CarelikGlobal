@@ -342,7 +342,7 @@ export function ClientOperationsDashboard({
               </div>
               <Link
                 to={`/clients/${clientId}?tab=matches`}
-                className="rounded-xl border border-indigo-200 bg-white px-3 py-2 text-sm font-bold text-indigo-700 hover:bg-indigo-50"
+                className="rounded-xl border border-indigo-200 bg-og-card px-3 py-2 text-sm font-bold text-indigo-700 hover:bg-indigo-50"
               >
                 Review CareScore matches
               </Link>
@@ -500,7 +500,7 @@ export function ClientOperationsDashboard({
                               onChange={(event) =>
                                 setReason(event.target.value)
                               }
-                              className="mt-1 block w-full rounded-lg border border-indigo-200 bg-white px-3 py-2 text-sm"
+                              className="mt-1 block w-full rounded-lg border border-indigo-200 bg-og-card px-3 py-2 text-sm"
                             >
                               {GAP_REASONS.map(([value, label]) => (
                                 <option key={value} value={value}>

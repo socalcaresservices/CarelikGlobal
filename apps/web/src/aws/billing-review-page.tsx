@@ -225,7 +225,7 @@ export function BillingReviewPage() {
       </div>
       {loaded.length > 0 ? (
         // Filter records = which visits are listed. (Visit records also has Show/hide columns, which only changes what is displayed.)
-        <details open={!narrow} className="rounded-xl border border-slate-200 bg-white p-3">
+        <details open={!narrow} className="rounded-xl border border-slate-200 bg-og-card p-3">
           <summary className="cursor-pointer select-none text-sm font-medium text-slate-800">
             Filters{nFilters > 0 ? ` (${nFilters} active)` : ""}
           </summary>
@@ -261,7 +261,7 @@ export function BillingReviewPage() {
       {rows.length > 0 && narrow ? (
         <ul aria-label="Billing review visits" className="space-y-3">
           {rows.map((r) => (
-            <li key={r.visitId} className="rounded-xl border border-slate-200 bg-white p-3">
+            <li key={r.visitId} className="rounded-xl border border-slate-200 bg-og-card p-3">
               <div className="flex flex-wrap items-start justify-between gap-2">
                 {clientCell(r)}
                 {statusPill(r)}
@@ -361,7 +361,7 @@ export function BillingReviewPage() {
             <button type="button" className="text-xs text-slate-500 underline" onClick={() => setSignature(null)}>Close</button>
           </div>
           {signature.error ? <p role="alert" className="mt-2 text-sm text-red-700">{signature.error}</p> : null}
-          {signature.url ? <img src={signature.url} alt="Client signature for the selected visit" className="mt-3 max-h-48 rounded border border-slate-200 bg-white" /> : null}
+          {signature.url ? <img src={signature.url} alt="Client signature for the selected visit" className="mt-3 max-h-48 rounded border border-slate-200 bg-og-card" /> : null}
           {!signature.url && !signature.error ? <p className="mt-2 text-sm text-slate-500">Loading…</p> : null}
         </Card>
       ) : null}

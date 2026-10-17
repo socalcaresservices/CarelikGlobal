@@ -70,7 +70,7 @@ export interface SkeletonCardProps {
 
 export function SkeletonCard({ lines = 3, className }: SkeletonCardProps) {
   return (
-    <div className={cn("rounded-xl border border-slate-200 bg-white p-5", className)} aria-hidden="true">
+    <div className={cn("rounded-xl border border-slate-200 bg-og-card p-5", className)} aria-hidden="true">
       <Skeleton className="h-4 w-1/3" />
       <div className="mt-4 space-y-2">
         {Array.from({ length: lines }).map((_, index) => (

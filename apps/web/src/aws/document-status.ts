@@ -84,3 +84,32 @@ export function documentDateLine(d: StaffDocument): string | null {
   return null;
 }
 
+
+export type DocumentFilter = "all" | "overdue" | "due_soon" | "to_review";
+
+/** Blocking = the document is past its expiry or due date. These are the red items. */
+export const isOverdue = (d: StaffDocument) => d.displayStatus === "overdue" || d.displayStatus === "expired";
+/** Same definition as the server's "due soon" count (get_document_alerts.expiring): verified and inside the reminder window. */
+export const isDueSoon = (d: StaffDocument) => d.displayStatus === "expiring";
+export const isToReview = (d: StaffDocument) => d.displayStatus === "awaiting_review" || d.displayStatus === "rejected";
+
+export function matchesFilter(d: StaffDocument, f: DocumentFilter): boolean {
+  if (f === "overdue") return isOverdue(d);
+  if (f === "due_soon") return isDueSoon(d);
+  if (f === "to_review") return isToReview(d);
+  return true;
+}
+
+/** The one short status shown on a card. The exact dates are in the details (documentDateLine). Tone: red = blocking, amber = approaching or needs a fix. */
+export function documentStatusLabel(d: StaffDocument): { label: string; tone: "red" | "amber" | "neutral" } {
+  const n = d.daysUntil;
+  switch (d.displayStatus) {
+    case "expired": return { label: n !== null && n < 0 ? `Expired ${plural(-n, "day")} ago` : "Expired", tone: "red" };
+    case "overdue": return { label: n !== null && n < 0 ? `Overdue ${plural(-n, "day")}` : "Overdue", tone: "red" };
+    case "expiring": return { label: n === null ? "Expiring soon" : n === 0 ? "Expires today" : `Expires in ${plural(n, "day")}`, tone: "amber" };
+    case "rejected": return { label: "Rejected, replace", tone: "amber" };
+    case "awaiting_review": return { label: "Awaiting review", tone: "neutral" };
+    case "verified": return { label: "Current", tone: "neutral" };
+    case "requested": return { label: n !== null && n >= 0 && d.dueOn ? (n === 0 ? "Requested, due today" : `Requested, due in ${plural(n, "day")}`) : "Requested", tone: "neutral" };
+  }
+}

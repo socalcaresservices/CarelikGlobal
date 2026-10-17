@@ -26,7 +26,7 @@ function PreviewTable({ rows }: { rows: Occurrence[] }) {
     <div className="min-w-0 space-y-3">
       <ul className="grid gap-2 sm:grid-cols-2" aria-label="Hours by month">
         {months.map((m) => (
-          <li key={`${m.monthStart}-${m.authorized}`} className="rounded-lg border border-slate-200 bg-white p-2 text-sm">
+          <li key={`${m.monthStart}-${m.authorized}`} className="rounded-lg border border-slate-200 bg-og-card p-2 text-sm">
             <p className="font-semibold text-slate-900">{monthLabel(m.monthStart)}</p>
             <dl className="mt-1 grid grid-cols-2 gap-x-3 gap-y-0.5">
               <dt className="text-slate-500">Authorized</dt><dd className="tabular-nums">{m.authorized === null ? "No authorization" : formatDuration(m.authorized)}</dd>
@@ -154,7 +154,7 @@ export function RecurringSeriesForm({ today, series, onDone }: { today: string; 
         <legend className="text-sm font-medium text-slate-700">Repeats every</legend>
         <div className="mt-1 flex flex-wrap gap-2">
           {WEEKDAY_SHORT.map((label, d) => (
-            <label key={label} className="flex min-h-[40px] items-center gap-1 rounded-lg border border-slate-200 bg-white px-2 text-sm">
+            <label key={label} className="flex min-h-[40px] items-center gap-1 rounded-lg border border-slate-200 bg-og-card px-2 text-sm">
               <input type="checkbox" checked={form.weekdays.includes(d)}
                 onChange={(e) => set("weekdays", e.target.checked ? [...form.weekdays, d].sort() : form.weekdays.filter((x) => x !== d))} />
               {label}
@@ -229,7 +229,7 @@ function SeriesItem({ s, today, onDone }: { s: SeriesRow; today: string; onDone:
   }
   const nextMonthEnd = (() => { const d = new Date(`${s.generatedThrough}T12:00:00Z`); d.setUTCMonth(d.getUTCMonth() + 2, 0); return d.toISOString().slice(0, 10); })();
   return (
-    <li className="rounded-xl border border-slate-200 bg-white p-3 text-sm">
+    <li className="rounded-xl border border-slate-200 bg-og-card p-3 text-sm">
       <p className="font-semibold text-slate-950">{s.clientName ?? s.clientCode} · {s.serviceName}</p>
       <p className="text-slate-800">{patternText(s.weekdays, s.startTime, s.endTime)} · {s.caregiverName ?? "Open — no caregiver"}</p>
       <p className="text-xs text-slate-600">

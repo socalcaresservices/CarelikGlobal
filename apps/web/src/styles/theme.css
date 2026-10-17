@@ -1,0 +1,96 @@
+/* Appearance tokens. The shell sets data-og-bg / data-og-accent / data-og-density / data-og-text on <html> from the saved preferences
+   (agency default, then the person's own choice). Values are "R G B" triplets so Tailwind can add opacity. Light + teal is the default
+   and equals the look before preferences existed. Status colours (red / amber / emerald / sky) mean the same in every theme. */
+@import "./theme-scales.css";
+
+:root {
+  --og-page: 244 247 247;
+  --og-card: 255 255 255;
+  --og-line: 225 233 235;
+  --og-side: 232 245 243;
+  --og-ink: 15 36 48;
+  --og-sub: 79 100 112;
+  --og-worked: 11 94 91;
+  --og-billable: 30 58 138;
+  --og-review: 25 166 156;
+  --og-approved: 12 43 51;
+  --og-ahead: 158 217 211;
+  --og-warn-bg: 255 246 234;
+  --og-warn: 194 65 12;
+  --og-zero: 92 114 123;
+  --og-chart-2: 180 83 9;
+  --og-chart-3: 71 85 105;
+  --og-chart-4: 157 23 77;
+  --og-chart-5: 3 105 161;
+  --og-accent: 11 94 91; /* teal */
+  --og-accent-fg: 255 255 255;
+}
+
+/* The shared Button (packages/ui) reads --color-accent. Set on the app wrapper, so it follows the chosen accent in the AWS build
+   without changing the default of any page that does not use the wrapper. */
+.og-app {
+  --color-accent: rgb(var(--og-accent));
+  --color-accent-foreground: rgb(var(--og-accent-fg));
+}
+
+[data-og-bg="cream"] {
+  --og-page: 250 246 236;
+  --og-card: 255 253 247;
+  --og-line: 230 222 205;
+  --og-side: 244 238 224;
+}
+[data-og-bg="gray"] {
+  --og-page: 236 239 243;
+  --og-card: 249 250 252;
+  --og-line: 210 215 222;
+  --og-side: 228 232 238;
+}
+[data-og-bg="dark"] {
+  color-scheme: dark;
+  --og-page: 13 20 26;
+  --og-card: 20 30 38;
+  --og-line: 48 63 76;
+  --og-side: 17 26 33;
+  --og-ink: 231 239 243;
+  --og-sub: 163 181 192;
+  --og-worked: 94 209 200;
+  --og-billable: 147 187 253;
+  --og-review: 94 209 200;
+  --og-approved: 203 213 220;
+  --og-ahead: 100 150 144;
+  --og-warn-bg: 52 36 20;
+  --og-warn: 253 186 116;
+  --og-zero: 150 168 178;
+  --og-chart-2: 253 186 116;
+  --og-chart-3: 203 213 225;
+  --og-chart-4: 249 168 212;
+  --og-chart-5: 125 211 252;
+  --og-accent-fg: 8 14 18;
+}
+
+/* Accent: one value on light surfaces (>= 4.5:1 as text and under white button text), a lighter one on dark. */
+[data-og-accent="teal"] { --og-accent: 11 94 91; }
+[data-og-accent="blue"] { --og-accent: 29 78 216; }
+[data-og-accent="indigo"] { --og-accent: 67 56 202; }
+[data-og-accent="plum"] { --og-accent: 134 25 143; }
+[data-og-accent="rust"] { --og-accent: 160 72 7; }
+[data-og-bg="dark"][data-og-accent="teal"] { --og-accent: 94 209 200; }
+[data-og-bg="dark"][data-og-accent="blue"] { --og-accent: 147 187 253; }
+[data-og-bg="dark"][data-og-accent="indigo"] { --og-accent: 165 180 252; }
+[data-og-bg="dark"][data-og-accent="plum"] { --og-accent: 232 160 240; }
+[data-og-bg="dark"][data-og-accent="rust"] { --og-accent: 253 186 116; }
+
+/* Text size: everything is in rem, so one root value scales text AND the spacing built on it. */
+[data-og-text="large"] { font-size: 112.5%; }
+
+/* Density: compact trims vertical padding and row height of the content area; type size does not change. */
+[data-og-density="compact"] main .py-6 { padding-top: 1rem; padding-bottom: 1rem; }
+[data-og-density="compact"] main .py-4 { padding-top: 0.625rem; padding-bottom: 0.625rem; }
+[data-og-density="compact"] main .py-3 { padding-top: 0.5rem; padding-bottom: 0.5rem; }
+[data-og-density="compact"] main .p-5 { padding: 0.875rem; }
+[data-og-density="compact"] main .p-4 { padding: 0.75rem; }
+[data-og-density="compact"] main .p-3 { padding: 0.5rem; }
+[data-og-density="compact"] main .space-y-6 > :not([hidden]) ~ :not([hidden]) { margin-top: 1rem; }
+[data-og-density="compact"] main .space-y-5 > :not([hidden]) ~ :not([hidden]) { margin-top: 0.875rem; }
+[data-og-density="compact"] main .space-y-4 > :not([hidden]) ~ :not([hidden]) { margin-top: 0.75rem; }
+[data-og-density="compact"] .og-row { min-height: 44px; }

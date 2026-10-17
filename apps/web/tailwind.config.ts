@@ -1,6 +1,12 @@
 import type { Config } from "tailwindcss";
 import colors from "tailwindcss/colors";
 
+// Colour scales read CSS variables (src/styles/theme-scales.css, theme.css) so the saved appearance (background, accent) can change them.
+// Light + teal reproduces Tailwind's own values, so nothing changes until someone picks something else.
+const STEPS = [50, 100, 200, 300, 400, 500, 600, 700, 800, 900, 950] as const;
+const scale = (family: string) => Object.fromEntries(STEPS.map((s) => [s, `rgb(var(--${family}-${s}) / <alpha-value>)`]));
+const token = (name: string) => `rgb(var(--og-${name}) / <alpha-value>)`;
+
 // Spacing: Tailwind's default scale (1=4px, 2=8px, 3=12px, 4=16px,
 // 6=24px, 8=32px, ...) is already the 8-point grid docs/design-system.md
 // asks for (every step is a multiple of 4px, with the 8px step as the
@@ -40,25 +46,31 @@ export default {
         warning: colors.amber,
         danger: colors.red,
         info: colors.sky,
+        slate: scale("slate"),
+        red: scale("red"),
+        amber: scale("amber"),
+        emerald: scale("emerald"),
+        sky: scale("sky"),
         og: {
-          page: "#F4F7F7",
-          card: "#FFFFFF",
-          line: "#E1E9EB",
-          side: "#E8F5F3",
-          ink: "#0F2430",
-          sub: "#4F6470",
-          link: "#0B5E5B",
-          active: "#BFE7E2",
-          "active-ink": "#06262B",
-          worked: "#0B5E5B",
-          billable: "#1E3A8A",
-          review: "#19A69C",
-          approved: "#0C2B33",
-          ahead: "#9ED9D3",
-          "warn-bg": "#FFF6EA",
-          warn: "#C2410C",
-          zero: "#5C727B",
-          na: "#5C727B"
+          page: token("page"),
+          card: token("card"),
+          line: token("line"),
+          side: token("side"),
+          ink: token("ink"),
+          sub: token("sub"),
+          link: token("accent"),
+          accent: token("accent"),
+          active: "rgb(var(--og-accent) / 0.16)",
+          "active-ink": token("accent"),
+          worked: token("worked"),
+          billable: token("billable"),
+          review: token("review"),
+          approved: token("approved"),
+          ahead: token("ahead"),
+          "warn-bg": token("warn-bg"),
+          warn: token("warn"),
+          zero: token("zero"),
+          na: token("zero")
         }
       },
       // Typography scale (BUILD 001.5 foundation layer). Named sizes for

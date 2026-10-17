@@ -81,6 +81,21 @@ const publicConfirmationOrThrow = (row: Record<string, unknown> | undefined) => 
   }
 };
 
+const BACKGROUNDS = ["light", "cream", "gray", "dark"] as const;
+const ACCENTS = ["teal", "blue", "indigo", "plum", "rust"] as const;
+const DENSITIES = ["comfortable", "compact"] as const;
+const TEXT_SIZES = ["standard", "large"] as const;
+const CHART_TYPES = ["bar", "line", "donut"] as const;
+/** organizationId plus the five appearance choices; an absent or null choice means "follow the next level". */
+function appearanceArgs(body: Record<string, unknown>) {
+  const pick = <T extends string>(value: unknown, name: string, allowed: readonly T[]) => (value === undefined || value === null ? null : oneOf(value, name, allowed));
+  return [
+    uuid(body.organizationId, "organizationId"),
+    pick(body.background, "background", BACKGROUNDS), pick(body.accent, "accent", ACCENTS), pick(body.density, "density", DENSITIES),
+    pick(body.textSize, "textSize", TEXT_SIZES), pick(body.chartType, "chartType", CHART_TYPES),
+  ];
+}
+
 const camel = (key: string) => key.replace(/_([a-z0-9])/g, (_, c: string) => c.toUpperCase());
 /** snake_case DB row -> camelCase JSON. Values are passed through unchanged. */
 export function toCamel(row: unknown): Record<string, unknown> {
@@ -971,6 +986,48 @@ export const ROUTES: Record<string, Route> = {
       const compliance = await tx(async (db) => (await first(db, "select ogevia_api.get_compliance_attention($1) as a", [org])).a ?? null);
       return { summary: summary ? { ...summary, complianceHolds: compliance } : null };
     },
+  },
+
+  // Attention by purpose (0054): needs attention now / upcoming staffing / documents & compliance / visit review. One read-only classification
+  // of the same records; a section is null when the viewer may not see it. The 24-hour urgent window is an implementation assumption
+  // pending owner review (default 24; 1 to 168 accepted so the owner can try another value).
+  "GET /v1/attention/overview": {
+    mutating: false,
+    handle: async ({ event, tx }) => {
+      const raw = q(event).urgentHours;
+      const hours = raw === undefined || raw === "" ? 24 : wholeNumber(Number(raw), "urgentHours", 1, 168);
+      return { overview: await tx(async (db) => (await first(db, "select ogevia_api.get_attention_overview($1,$2) as o", [orgParam(event), hours])).o) };
+    },
+  },
+
+  // Appearance (0054): agency defaults (organization.update) and each person's own choices. A null value means "follow the next level".
+  "GET /v1/appearance": {
+    mutating: false,
+    handle: async ({ event, tx }) => ({ appearance: await tx(async (db) => (await first(db, "select ogevia_api.get_appearance($1) as a", [orgParam(event)])).a) }),
+  },
+
+  "POST /v1/appearance/organization": {
+    mutating: true,
+    handle: async ({ event, tx }) => {
+      const body = parseBody(event.body, event.isBase64Encoded);
+      return { appearance: await tx(async (db) => (await first(db, "select ogevia_api.set_organization_appearance($1,$2,$3,$4,$5,$6) as a", appearanceArgs(body))).a) };
+    },
+  },
+
+  "POST /v1/appearance/me": {
+    mutating: true,
+    handle: async ({ event, tx }) => {
+      const body = parseBody(event.body, event.isBase64Encoded);
+      return { appearance: await tx(async (db) => (await first(db, "select ogevia_api.set_my_appearance($1,$2,$3,$4,$5,$6) as a", appearanceArgs(body))).a) };
+    },
+  },
+
+  // The authorizations whose rate is missing, so a month's dollar figures leave their hours out (administrator only).
+  "GET /v1/authorizations/missing-rate": {
+    mutating: false,
+    handle: async ({ event, tx }) => ({
+      authorizations: await tx((db) => rows(db, "select * from ogevia_api.list_authorizations_missing_rate($1, $2::date)", [orgParam(event), date(q(event).monthStart, "monthStart")])),
+    }),
   },
 
   // Hire type, scheduling and family relationship (0030): separate facts; none relaxes any visit rule.

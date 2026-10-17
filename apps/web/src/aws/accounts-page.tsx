@@ -61,7 +61,7 @@ export function AccountsPage() {
           const key = a.userId ?? a.caregiverRecordId ?? a.displayName ?? "";
           const open = acting && a.userId && acting.userId === a.userId ? acting : null;
           return (
-            <li key={key} className="rounded-xl border border-slate-200 bg-white p-3">
+            <li key={key} className="rounded-xl border border-slate-200 bg-og-card p-3">
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <p className="min-w-0 break-words font-semibold text-slate-950">
                   {a.displayName ?? "Name not set"}{a.caregiverCode ? ` (${a.caregiverCode})` : ""}{a.isSelf ? " — you" : ""}

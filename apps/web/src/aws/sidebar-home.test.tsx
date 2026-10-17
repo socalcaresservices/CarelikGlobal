@@ -21,6 +21,13 @@ const PERMS: Record<Role, string[]> = {
 const json = (code: number, body: unknown) => new Response(JSON.stringify(body), { status: code, headers: { "content-type": "application/json" } });
 
 const SUMMARY = { missingTimeOut: 1, notConfirmed: 0, needsReview: 2, lateResponsesToReview: 0, uncoveredShifts: 0, documentsBlocking: 0, documentsToReview: 0, billingReadyUnapproved: 3, awaitingSignature: 0, documentsExpiring: 2, total: 3 };
+const OVERVIEW = {
+  asOf: "2026-10-18T12:00:00Z", urgentWindowHours: 24,
+  urgent: { items: [{ kind: "visit", id: "v1", startsAt: "2026-10-18T09:00:00Z", endsAt: null, reasons: ["missing_clock_out"], severity: "amber", inProgress: true, caregiverRecordId: null, caregiverCode: null, clientCode: "C-104", serviceCode: "862" }], itemCount: 1, issueCount: 1, shifts: 0, visits: 1 },
+  upcoming: { count: 0, nextStartsAt: null, shifts: [] },
+  documents: { overdue: 0, dueSoon: 2, awaitingReview: 0, rejected: 0 },
+  visitReview: { visitsNeedingAttention: 5, awaitingConfirmation: 0, needsReview: 2, lateResponses: 0, readyForApproval: 3, reviewIssues: 2, awaitingResponse: 0 },
+};
 const ROW = {
   serviceId: SERVICE, serviceCode: "862", serviceName: "Respite Care", clientCount: 2, authorizedMinutes: 6000, scheduledMinutes: 240, workedMinutes: 1590,
   billableMinutes: 1470, reviewMinutes: 120, approvedMinutes: 600, remainingMinutes: 4530, lineagesWithoutRate: 0,
@@ -37,6 +44,8 @@ function renderAt(path: string, role: Role) {
         return json(200, { branding: { organizationId: ORG, displayName: "Synthetic Care Co", accentColor: null, logoSha256: null } });
       case "/v1/attention":
         return json(200, { summary: role === "caregiver" ? null : SUMMARY });
+      case "/v1/attention/overview":
+        return json(200, { overview: OVERVIEW });
       case "/v1/reports/utilisation":
         return json(200, { services: [{ ...ROW, billableValueCents: owner ? 7350 : null, approvedValueCents: owner ? 3000 : null, unusedValueCents: owner ? 22650 : null }] });
       case "/v1/clients":
@@ -118,7 +127,7 @@ describe("sidebar: expanded", () => {
     // Workflow order: Home, then caregiver -> client -> visit -> billing -> reports -> documents -> setup.
     expect(within(nav).getAllByRole("link").map((a) => a.textContent)).toEqual([
       "Home", "Care Team", "Schedule", "Verify visit", "Clients", "Care requests", "Client monthly calendar", "Visit records",
-      "Billing review", "Reports", "Documents", "Services", "Continuity pack", "Outage records",
+      "Billing review", "Reports", "Documents & compliance", "Services", "Continuity pack", "Outage records", "Appearance",
     ]);
     // Authorizations are a section of each client's page, not a separate menu item.
     expect(within(nav).queryByRole("link", { name: /^Authorizations$/ })).toBeNull();
@@ -126,8 +135,8 @@ describe("sidebar: expanded", () => {
       "Home": "/", "Verify visit": "/service-verification", "Schedule": "/schedule", "Care requests": "/care-requests",
       "Visit records": "/service-verification/reports", "Reports": "/service-verification/reports?view=overview",
       "Client monthly calendar": "/service-verification/reports?view=calendar", "Billing review": "/billing-review",
-      "Clients": "/clients", "Care Team": "/care-team", "Documents": "/documents", "Services": "/services",
-      "Continuity pack": "/continuity", "Outage records": "/outage-visits",
+      "Clients": "/clients", "Care Team": "/care-team", "Documents & compliance": "/documents", "Services": "/services",
+      "Continuity pack": "/continuity", "Outage records": "/outage-visits", "Appearance": "/settings/appearance",
     });
     // Settings stays Administrator-only (organization.update), unchanged.
     expect(within(nav).queryByRole("link", { name: "Settings" })).toBeNull();
@@ -150,12 +159,11 @@ describe("sidebar: expanded", () => {
     expect(screen.queryByText(/synthetic data|test environment/i)).toBeNull();
   });
 
-  it("caregiver: only the caregiver links, in CAREGIVERS and DOCUMENTS", async () => {
+  it("caregiver: only the caregiver links (and Appearance, which every person may set for themselves)", async () => {
     renderAt("/service-verification", "caregiver");
     const nav = await screen.findByRole("navigation", { name: "Main" });
-    expect(Object.keys(hrefs(nav)).sort()).toEqual(["Availability", "My documents", "My shifts", "Verify visit"]);
-    expect(within(nav).queryByText("SETUP")).toBeNull();
-    expect(within(nav).getAllByText(/^(CAREGIVERS|DOCUMENTS)$/).map((e) => e.textContent)).toEqual(["CAREGIVERS", "DOCUMENTS"]);
+    expect(Object.keys(hrefs(nav)).sort()).toEqual(["Appearance", "Availability", "My documents", "My shifts", "Verify visit"]);
+    expect(within(nav).getAllByText(/^(CAREGIVERS|DOCUMENTS|SETUP)$/).map((e) => e.textContent)).toEqual(["CAREGIVERS", "DOCUMENTS", "SETUP"]);
   });
 
   it("hides the sidebar and gives the page the full width when printing", async () => {
@@ -199,22 +207,22 @@ describe("sidebar: Option B styling contract", () => {
     renderAt("/schedule", "manager");
     const nav = await screen.findByRole("navigation", { name: "Main" });
     const aside = nav.closest("aside")!;
-    expect(aside.className).toContain("bg-[#FAFBFC]");
+    expect(aside.className).toContain("bg-og-side");
     expect(aside.className).toContain("border-r");
-    expect(aside.className).toContain("border-[#E2E8EC]");
+    expect(aside.className).toContain("border-og-line");
     const heading = within(nav).getAllByTestId("nav-group-heading")[0]!;
     expect(heading.textContent).toBe("CAREGIVERS");
-    for (const c of ["text-[12px]", "font-bold", "leading-[18px]", "tracking-[0.06em]", "text-[#334155]", "border-b", "border-[#DCE5E9]", "pb-[10px]"]) {
+    for (const c of ["text-[12px]", "font-bold", "leading-[18px]", "tracking-[0.06em]", "text-og-sub", "border-b", "border-og-line", "pb-[10px]"]) {
       expect(heading.className).toContain(c);
     }
     const current = within(nav).getByRole("link", { name: "Schedule" });
     expect(current).toHaveAttribute("aria-current", "page");
-    for (const c of ["bg-[#E8F5F4]", "text-[#0F6674]", "font-semibold", "rounded-md", "min-h-[40px]", "text-[14px]", "gap-2", "[@media(pointer:coarse)]:min-h-[44px]", "focus-visible:outline-[#0F6674]"]) {
+    for (const c of ["bg-og-active", "text-og-accent", "font-semibold", "rounded-md", "min-h-[40px]", "text-[14px]", "gap-2", "[@media(pointer:coarse)]:min-h-[44px]", "focus-visible:outline-og-accent"]) {
       expect(current.className).toContain(c);
     }
     expect(current.className).not.toMatch(/border-l|before:|shadow-\[inset/); // no vertical accent bar
     const other = within(nav).getByRole("link", { name: "Care Team" });
-    for (const c of ["text-[#243244]", "font-medium", "hover:bg-[#F0F7F7]"]) expect(other.className).toContain(c);
+    for (const c of ["text-og-ink", "font-medium", "hover:bg-og-ink/5"]) expect(other.className).toContain(c);
     expect(other).not.toHaveAttribute("aria-current");
     // Icons are 18px; long labels wrap rather than clip.
     expect(other.querySelector("svg")!.getAttribute("class")).toContain("h-[18px]");
@@ -228,7 +236,7 @@ describe("sidebar: Option B styling contract", () => {
     expect(within(nav).queryAllByTestId("nav-group-heading")).toHaveLength(0);
     expect(nav.querySelector(".border-t")).toBeNull();
     expect(within(nav).getByRole("link", { name: "Care Team" })).toBeInTheDocument();
-    expect(within(nav).getAllByRole("link")).toHaveLength(14);
+    expect(within(nav).getAllByRole("link")).toHaveLength(15);
   });
 
   it("keyboard: every link is reachable by Tab order (real anchors) and the collapse control is a labelled button", async () => {
@@ -262,60 +270,55 @@ describe("sidebar: mobile drawer", () => {
 });
 
 describe("Home layout", () => {
-  it("keeps every Home element: title, count, month, KPIs, the service table, Action needed, Reminders and Outage readiness", async () => {
+  it("keeps the Home essentials: title, month, four alert tiles, hours with the service table behind details, Outage readiness", async () => {
     renderAt("/", "manager");
     expect(await screen.findByRole("heading", { name: "Home", level: 1 })).toBeInTheDocument();
-    expect(await screen.findByTestId("action-needed-banner")).toHaveTextContent("Action needed: 6");
     expect(screen.getByLabelText("Month")).toHaveAttribute("type", "month");
+    const tiles = await screen.findByRole("region", { name: "What needs attention" }).catch(() => screen.findByLabelText("What needs attention"));
+    for (const [key, label, href] of [["now", "Needs attention now", "/attention"], ["staffing", "Upcoming staffing", "/staffing"], ["documents", "Documents & compliance", "/documents"], ["visits", "Visit review", "/visit-review"]] as const) {
+      const tile = await within(tiles).findByTestId(`stream-${key}`);
+      expect(tile).toHaveTextContent(label);
+      expect(tile).toHaveAttribute("href", href);
+    }
+    // Visit review counts the unique visits (5), not the sum of unlike things.
+    expect(screen.getByTestId("stream-visits")).toHaveTextContent("5");
     const hours = (await screen.findByRole("heading", { name: "Hours this month" })).closest("section")!;
-    for (const k of ["Authorized", "Worked", "Billable (confirmed)", "Hours left"]) expect(within(hours).getAllByText(k).length).toBeGreaterThan(0);
-    expect(within(hours).getByRole("link", { name: /monthly reconciliation/ }).getAttribute("href")).toBe("/service-verification/reports?view=reconciliation");
-    const table = await within(hours).findByRole("table");
-    expect(within(table).getAllByRole("columnheader").map((c) => c.textContent)).toEqual(["Service", "Progress", "Billable", "In review", "Approved", "Scheduled ahead", "Hours left"]);
+    for (const k of ["Authorized", "Worked", "Billable (confirmed)", "Hours left"]) expect((await within(hours).findAllByText(k)).length).toBeGreaterThan(0);
+    // The per-service table is behind a native disclosure, with the same figures and a keyboard-reachable scroller.
+    const table = within(hours).getByRole("table", { name: "Hours by service for the selected month" });
+    expect(within(table).getAllByRole("columnheader").map((c) => c.textContent)).toEqual(["Service", "Authorized", "Worked", "Billable", "In review", "Approved", "Scheduled ahead", "Left"]);
     const row = within(table).getAllByRole("row")[1]!;
     expect(row).toHaveTextContent("Respite Care");
-    expect(row).toHaveTextContent("26.5 h of 100 h · 27%");
-    // Numeric cells are right-aligned; the columns hold the same values the lines did.
-    const cells = within(row).getAllByRole("cell");
-    expect(cells.map((c) => c.textContent)).toEqual(["26.5 h of 100 h · 27%", "24.5 h", "2 h", "10 h", "4 h", "75.5 h"]);
-    for (const c of cells.slice(1)) expect(c.className).toMatch(/text-right/);
-    // The table scrolls sideways instead of squeezing, and the scroller is keyboard-reachable.
+    expect(within(row).getAllByRole("cell").map((c) => c.textContent)).toEqual(["100 h", "26.5 h", "24.5 h", "2 h", "10 h", "4 h", "75.5 h"]);
+    for (const c of within(row).getAllByRole("cell")) expect(c.className).toMatch(/text-right/);
     const scroller = within(hours).getByRole("region", { name: /scrolls sideways/ });
     expect(scroller.className).toMatch(/overflow-x-auto/);
     expect(scroller).toHaveAttribute("tabindex", "0");
-    expect(screen.queryByText("Financial impact (Administrator only)")).toBeNull();
-  });
-
-  it("Action needed: one row per item, highlighted only above zero, with a text cue; Reminders dashed; Outage readiness holds the Continuity pack link", async () => {
-    renderAt("/", "manager");
-    const section = (await screen.findByRole("heading", { name: "Action needed" })).closest("section")!;
-    await within(section).findByText("Missing Clock-Out");
-    const rows = within(section).getAllByRole("link");
-    const byLabel = (label: string) => within(section).getByText(label).closest("a")!;
-    expect(byLabel("Missing Clock-Out").className).toMatch(/bg-og-warn-bg/);
-    expect(byLabel("Missing Clock-Out")).toHaveTextContent("Needs action: 1");
-    expect(byLabel("Awaiting Confirmation").className).not.toMatch(/bg-og-warn-bg/);
-    expect(byLabel("Awaiting Confirmation")).not.toHaveTextContent("Needs action");
-    // Rendered from the data: one link per category the server returned (eight for this viewer).
-    expect(rows.filter((a) => a.closest("ul")?.className.includes("divide-y"))).toHaveLength(8);
-    const reminders = within(section).getByRole("heading", { name: /Reminders/ }).parentElement!;
-    expect(reminders.className).toMatch(/border-dashed/);
-    expect(within(reminders).getByText("Documents Expiring Soon")).toBeInTheDocument();
-    const outage = within(section).getByRole("heading", { name: "Outage readiness" }).closest("section")!;
+    expect(within(hours).getByRole("link", { name: /Monthly reconciliation/ }).getAttribute("href")).toBe("/service-verification/reports?view=reconciliation");
+    expect(screen.queryByText("Financial impact")).toBeNull();
+    const outage = (await screen.findByRole("heading", { name: "Outage readiness" })).closest("section")!;
     expect(outage).toHaveTextContent("OUTAGE READINESS: Continuity pack last downloaded 30 hours ago by Synthetic Manager.");
     expect(within(outage).getByRole("link", { name: "Continuity pack" }).getAttribute("href")).toBe("/continuity");
   });
 
-  it("Financial impact: Administrator sees it with Unavailable cost and margin; the manager sees no dollar value", async () => {
+  it("no old catch-all: the removed 'Action needed' sum and its mixed list are gone from Home", async () => {
+    renderAt("/", "manager");
+    await screen.findByTestId("stream-now");
+    expect(screen.queryByText(/^Action needed/)).toBeNull();
+    expect(screen.queryByText("Reminders (not counted)")).toBeNull();
+  });
+
+  it("Financial impact: the Administrator sees values, no 'Unavailable' cards and no cost/margin tile; the manager sees no dollar value", async () => {
     renderAt("/", "organization_owner");
-    expect(await screen.findByText("Financial impact (Administrator only)")).toBeInTheDocument();
+    expect(await screen.findByText("Financial impact")).toBeInTheDocument();
     expect(screen.getByText("$74")).toBeInTheDocument();
-    expect(screen.getByText("Unavailable")).toBeInTheDocument();
+    expect(screen.queryByText("Unavailable")).toBeNull();
+    expect(screen.queryByText("Caregiver cost and margin", { selector: "dt" })).toBeNull();
     cleanup();
     renderAt("/", "manager");
-    await screen.findByText(/26\.5 h of 100 h/);
+    await screen.findByTestId("stream-now");
     expect(screen.queryByText(/\$\d/)).toBeNull();
-    expect(screen.getByText(/visible to the agency Administrator only/)).toBeInTheDocument();
+    expect(screen.queryByText("Financial impact")).toBeNull();
   });
 });
 
