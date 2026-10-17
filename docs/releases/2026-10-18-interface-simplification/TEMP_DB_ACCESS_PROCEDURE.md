@@ -198,3 +198,44 @@ Add the opt-in /32 mode with the conditions above; extend the rule-set canonical
 2. Approve option B in principle (TEST only), or name another.
 3. Confirm that the admin group's outbound rules (D) permit 5432 to the RDS address, or decide separately how to handle that.
 4. Approve the script change in 10.4. Production remains not approved.
+
+## 11. Script v3: `test --host-ip` (implemented and rehearsed against a fake AWS; NOT run against AWS)
+**Operator-reported facts this is built on (not independently verified here):** admin host private IP `10.20.132.179`; its security group is shared with two VPC endpoint interfaces; the group's outbound rules already permit 5432.
+**Script commit:** `4881611c7b25431368c3ccd7c05357bbdbc2dbbf` on `claude/ogevia-test-deployment-verify-5xqjsa`. **sha256:** `f96c06f2c4f20d4c85871baad84cdc8726fb2183e138cd1ac7cd6d15bef85f6f` (314 lines). Sections 9 and 10.4's fetch commands for the earlier script (`f7af146e…`) are superseded by 11.3.
+
+### 11.1 What `--host-ip` does
+- Accepted only as `test --host-ip`. `prod --host-ip`, `--restore-only --host-ip` and any other second argument exit 2 before any AWS call.
+- The default mode is unchanged and still refuses a shared admin group (rehearsed with the three-interface layout).
+- Live checks before any change (all read-only, all bounded): admin host running and tagged; its security groups exactly `sg-00e01e2ca80442c1f`; it appears exactly once among the group's interfaces; it has exactly **one** network interface with exactly **one** private IPv4; the address is a valid RFC 1918 address (no leading zeros, octets ≤ 255); if `OGEVIA_EXPECT_HOST_IP` is set, equal to it; the IP maps to exactly **one** interface in the VPC and that interface is the host's own, attached to the host; the `/32` rule is not already present; the RDS group and account checks of the default mode.
+- The only change: on `sg-00530a1f4f7648e65`, inbound tcp 5432, source `<live IP>/32`, description `TEMP-ledger-check-<stamp>`. Never a group, never a wider prefix, never `0.0.0.0/0`.
+- Unchanged from v2: every command bounded by `timeout --foreground`; typed phrase `OPEN-5432-WINDOW`; marker with the exact CIDR and original hash; cleanup on every exit path with up to 4 revokes; `RESTORED (verified)` only if the rule is absent **and** the complete rule-set hash equals the original; otherwise `NOT RESTORED`, exit 3, marker kept, rule-id recovery text; `--restore-only` reads the marker's kind.
+- **Retained limitation:** total CloudShell loss or SIGKILL can leave the rule open until a person revokes it. No independent cleanup exists or is proposed.
+
+### 11.2 Rehearsal results (fake AWS CLI/psql only)
+`npx vitest run test/ledger-check-temp-access.test.ts test/ledger-check-readonly.test.ts test/pilot-preflight.test.ts`: **3 files, 70 tests, all passed** (the temp-access file has 54: the 31 earlier plus 23 new). New coverage:
+- default mode still refuses the three-interface shared group; nothing changes;
+- success in `--host-ip` with the shared group: exactly one authorize call, `IpRanges=[{CidrIp=10.20.132.179/32,…}]`, no `UserIdGroupPairs`, no admin-group reference; mid-run the 5432 rules are the original application-group rule plus that one `/32` and nothing else, outbound unchanged; afterwards the rule set equals the original;
+- refusals that change nothing: second interface; second private IP; host not running; public, malformed or leading-zero address; live IP different from `OGEVIA_EXPECT_HOST_IP`; IP mapping to two interfaces or to another instance; wrong host groups; wrong RDS group; the `/32` already present; phrase not typed; `prod --host-ip` and other arguments (exit 2, zero AWS calls);
+- cleanup in `--host-ip`: database failure, SIGTERM mid-query and a hung authorize each end `RESTORED (verified)`; a revoke that always fails exits **3**, keeps a `kind: cidr` marker, prints recovery text naming only the `10.20.132.179/32` row by rule id (no `--ip-permissions`, no application group), and blocks the next run without touching the rule; `--restore-only` then removes the `/32` and verifies the original; an unrelated rule-set change is detected (exit 3);
+- static: the only CIDR source ever written is `$HOST_CIDR` (built as `"$HOST_IP/32"`) and the recorded value on revoke; no `0.0.0.0/0`; the AWS write verbs are still only authorize/revoke/start-session; psql only under `timeout`.
+**Not established:** behaviour on real AWS (permissions, the `addresses.private-ip-address` filter, Session Manager through CloudShell, the real `timeout` on CloudShell); the CLI queries were not run against AWS.
+
+### 11.3 Exact CloudShell commands (us-west-2). Nothing here has been run.
+Fetch and verify, using the existing checkout and `origin` (no new checkout; nothing is checked out):
+```
+cd ~/CarelikGlobal
+git fetch origin claude/ogevia-test-deployment-verify-5xqjsa
+git cat-file -t 4881611c7b25431368c3ccd7c05357bbdbc2dbbf        # must print: commit
+git merge-base --is-ancestor 4881611c7b25431368c3ccd7c05357bbdbc2dbbf FETCH_HEAD && echo REVIEWED-COMMIT-IS-ON-THE-FETCHED-BRANCH
+git show 4881611c7b25431368c3ccd7c05357bbdbc2dbbf:infra/aws/slice/ledger-check-temp-access.sh > ~/ledger-check-temp-access.sh
+sha256sum ~/ledger-check-temp-access.sh    # must print f96c06f2c4f20d4c85871baad84cdc8726fb2183e138cd1ac7cd6d15bef85f6f
+less ~/ledger-check-temp-access.sh         # read it before running
+```
+Supervised TEST-only run (only after you approve it):
+1. **Recovery session first.** Open a second CloudShell. Run the rule listing from section 10.3 (read-only) and confirm exactly one inbound rule, `sourceSg sg-064ffce3bcbe8eb3b`. Leave it open.
+2. **Main session:** `OGEVIA_EXPECT_HOST_IP=10.20.132.179 bash ~/ledger-check-temp-access.sh test --host-ip`
+3. Read the printed original rules, the rule-set hash, the three group interfaces, `admin host IP (live): 10.20.132.179 …`, and the proposed change `inbound tcp 5432 from 10.20.132.179/32`. Type `OPEN-5432-WINDOW` only if they match.
+4. It must end `RESTORED (verified)`; check `echo $?` prints 0.
+5. In the recovery session re-run the listing: one inbound rule, `sourceSg sg-064ffce3bcbe8eb3b`, no `cidr`.
+6. On `NOT RESTORED`, exit 3, or a lost session: run the section 10.3 recovery from the recovery session (the row with cidr `10.20.132.179/32`, tcp 5432; revoke by rule id).
+Production is not approved. No stack update or deployment should run during the window.
