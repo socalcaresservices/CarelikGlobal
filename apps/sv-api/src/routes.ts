@@ -81,18 +81,19 @@ const publicConfirmationOrThrow = (row: Record<string, unknown> | undefined) => 
   }
 };
 
-const BACKGROUNDS = ["light", "cream", "gray", "dark"] as const;
+const BACKGROUNDS = ["light", "white", "gray", "dark"] as const;
 const ACCENTS = ["teal", "blue", "indigo", "plum", "rust"] as const;
 const DENSITIES = ["comfortable", "compact"] as const;
 const TEXT_SIZES = ["standard", "large"] as const;
 const CHART_TYPES = ["bar", "line", "donut"] as const;
-/** organizationId plus the five appearance choices; an absent or null choice means "follow the next level". */
+const LAYOUTS = ["standard", "minimal"] as const;
+/** organizationId plus the six appearance choices; an absent or null choice means "follow the next level". */
 function appearanceArgs(body: Record<string, unknown>) {
   const pick = <T extends string>(value: unknown, name: string, allowed: readonly T[]) => (value === undefined || value === null ? null : oneOf(value, name, allowed));
   return [
     uuid(body.organizationId, "organizationId"),
     pick(body.background, "background", BACKGROUNDS), pick(body.accent, "accent", ACCENTS), pick(body.density, "density", DENSITIES),
-    pick(body.textSize, "textSize", TEXT_SIZES), pick(body.chartType, "chartType", CHART_TYPES),
+    pick(body.textSize, "textSize", TEXT_SIZES), pick(body.chartType, "chartType", CHART_TYPES), pick(body.layout, "layout", LAYOUTS),
   ];
 }
 
@@ -1150,7 +1151,7 @@ export const ROUTES: Record<string, Route> = {
     mutating: true,
     handle: async ({ event, tx }) => {
       const body = parseBody(event.body, event.isBase64Encoded);
-      return { appearance: await tx(async (db) => (await first(db, "select ogevia_api.set_organization_appearance($1,$2,$3,$4,$5,$6) as a", appearanceArgs(body))).a) };
+      return { appearance: await tx(async (db) => (await first(db, "select ogevia_api.set_organization_appearance($1,$2,$3,$4,$5,$6,$7) as a", appearanceArgs(body))).a) };
     },
   },
 
@@ -1158,7 +1159,7 @@ export const ROUTES: Record<string, Route> = {
     mutating: true,
     handle: async ({ event, tx }) => {
       const body = parseBody(event.body, event.isBase64Encoded);
-      return { appearance: await tx(async (db) => (await first(db, "select ogevia_api.set_my_appearance($1,$2,$3,$4,$5,$6) as a", appearanceArgs(body))).a) };
+      return { appearance: await tx(async (db) => (await first(db, "select ogevia_api.set_my_appearance($1,$2,$3,$4,$5,$6,$7) as a", appearanceArgs(body))).a) };
     },
   },
 

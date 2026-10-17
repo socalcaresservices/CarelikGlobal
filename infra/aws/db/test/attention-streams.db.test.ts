@@ -189,45 +189,51 @@ describe("permissions: a section is null, never zero, when the viewer may not se
 describe("appearance: agency defaults, personal overrides, isolation", () => {
   it("built-in defaults apply until something is set; any member reads, only an administrator sets the agency default", async () => {
     const a = (await call(w.caregiverA1, "select ogevia_api.get_appearance($1) as a", [w.orgA]))[0].a;
-    expect(a.effective).toEqual({ background: "light", accent: "teal", density: "comfortable", textSize: "standard", chartType: "bar" });
+    expect(a.effective).toEqual({ background: "light", accent: "teal", density: "comfortable", textSize: "standard", chartType: "bar", layout: "standard" });
     expect(a.canSetOrganizationDefaults).toBe(false);
-    await expectPgError(call(w.managerA, "select ogevia_api.set_organization_appearance($1,'cream','blue','compact','large','donut')", [w.orgA]), "OGA03");
-    const set = (await call(w.ownerA, "select ogevia_api.set_organization_appearance($1,'cream','blue','compact','standard','donut') as a", [w.orgA]))[0].a;
-    expect(set.organization).toEqual({ background: "cream", accent: "blue", density: "compact", textSize: "standard", chartType: "donut" });
+    await expectPgError(call(w.managerA, "select ogevia_api.set_organization_appearance($1,'white','blue','compact','large','donut',null)", [w.orgA]), "OGA03");
+    const set = (await call(w.ownerA, "select ogevia_api.set_organization_appearance($1,'white','blue','compact','standard','donut','minimal') as a", [w.orgA]))[0].a;
+    expect(set.organization).toEqual({ background: "white", accent: "blue", density: "compact", textSize: "standard", chartType: "donut", layout: "minimal" });
     expect(set.canSetOrganizationDefaults).toBe(true);
     const other = (await call(w.caregiverA2, "select ogevia_api.get_appearance($1) as a", [w.orgA]))[0].a;
-    expect(other.effective).toEqual({ background: "cream", accent: "blue", density: "compact", textSize: "standard", chartType: "donut" });
+    expect(other.effective).toEqual({ background: "white", accent: "blue", density: "compact", textSize: "standard", chartType: "donut", layout: "minimal" });
     expect((await q("select count(*)::int n from ogevia.audit_events where action = 'organization.appearance_set' and actor_user_id = $1", [w.ownerA.userId])).rows[0].n).toBe(1);
   });
 
   it("a personal choice overrides only that person; clearing it follows the agency default again", async () => {
-    const mine = (await call(w.caregiverA1, "select ogevia_api.set_my_appearance($1,'dark',null,'comfortable','large','bar') as a", [w.orgA]))[0].a;
-    expect(mine.effective).toEqual({ background: "dark", accent: "blue", density: "comfortable", textSize: "large", chartType: "bar" });
-    expect(mine.mine).toEqual({ background: "dark", accent: null, density: "comfortable", textSize: "large", chartType: "bar" });
+    const mine = (await call(w.caregiverA1, "select ogevia_api.set_my_appearance($1,'dark',null,'comfortable','large','bar','standard') as a", [w.orgA]))[0].a;
+    expect(mine.effective).toEqual({ background: "dark", accent: "blue", density: "comfortable", textSize: "large", chartType: "bar", layout: "standard" });
+    expect(mine.mine).toEqual({ background: "dark", accent: null, density: "comfortable", textSize: "large", chartType: "bar", layout: "standard" });
     const neighbour = (await call(w.caregiverA2, "select ogevia_api.get_appearance($1) as a", [w.orgA]))[0].a;
-    expect(neighbour.effective.background).toBe("cream"); // unaffected
+    expect(neighbour.effective.background).toBe("white"); // unaffected
+    expect(neighbour.effective.layout).toBe("minimal"); // the agency's layout, not the neighbour's own
     const manager = (await call(w.managerA, "select ogevia_api.get_appearance($1) as a", [w.orgA]))[0].a;
-    expect(manager.mine).toEqual({ background: null, accent: null, density: null, textSize: null, chartType: null });
-    const cleared = (await call(w.caregiverA1, "select ogevia_api.set_my_appearance($1,null,null,null,null,null) as a", [w.orgA]))[0].a;
-    expect(cleared.effective.background).toBe("cream");
+    expect(manager.mine).toEqual({ background: null, accent: null, density: null, textSize: null, chartType: null, layout: null });
+    const cleared = (await call(w.caregiverA1, "select ogevia_api.set_my_appearance($1,null,null,null,null,null,null) as a", [w.orgA]))[0].a;
+    expect(cleared.effective.background).toBe("white");
     expect((await q("select count(*)::int n from ogevia.user_appearance where organization_id = $1", [w.orgA])).rows[0].n).toBe(1); // one row, cleared
   });
 
   it("the agency default of one agency never leaks into another; invalid choices and non-members are refused", async () => {
     const b = (await call(w.managerB, "select ogevia_api.get_appearance($1) as a", [w.orgB]))[0].a;
-    expect(b.organization).toEqual({ background: null, accent: null, density: null, textSize: null, chartType: null });
+    expect(b.organization).toEqual({ background: null, accent: null, density: null, textSize: null, chartType: null, layout: null });
     expect(b.effective.background).toBe("light");
     await expectPgError(call(w.managerB, "select ogevia_api.get_appearance($1)", [w.orgA]), "OGN04");
-    await expectPgError(call(w.managerB, "select ogevia_api.set_my_appearance($1,'dark',null,null,null,null)", [w.orgA]), "OGN04");
-    await expectPgError(call(w.ownerA, "select ogevia_api.set_organization_appearance($1,'neon',null,null,null,null)", [w.orgA]), "OGV22");
-    await expectPgError(call(w.caregiverA1, "select ogevia_api.set_my_appearance($1,null,'#ff0000',null,null,null)", [w.orgA]), "OGV22");
-    await expectPgError(call(w.caregiverA1, "select ogevia_api.set_my_appearance($1,null,null,null,null,'pie')", [w.orgA]), "OGV22");
+    await expectPgError(call(w.managerB, "select ogevia_api.set_my_appearance($1,'dark',null,null,null,null,null)", [w.orgA]), "OGN04");
+    await expectPgError(call(w.ownerA, "select ogevia_api.set_organization_appearance($1,'neon',null,null,null,null,null)", [w.orgA]), "OGV22");
+    await expectPgError(call(w.caregiverA1, "select ogevia_api.set_my_appearance($1,null,'#ff0000',null,null,null,null)", [w.orgA]), "OGV22");
+    await expectPgError(call(w.caregiverA1, "select ogevia_api.set_my_appearance($1,null,null,null,null,'pie',null)", [w.orgA]), "OGV22");
+    await expectPgError(call(w.caregiverA1, "select ogevia_api.set_my_appearance($1,null,null,null,null,null,'compact')", [w.orgA]), "OGV22");
+    // Cream was replaced by White before release: the old value is refused, and Light and White are two different choices
+    await expectPgError(call(w.caregiverA1, "select ogevia_api.set_my_appearance($1,'cream',null,null,null,null,null)", [w.orgA]), "OGV22");
+    for (const bg of ["light", "white", "gray", "dark"]) await call(w.caregiverA1, "select ogevia_api.set_my_appearance($1,$2,null,null,null,null,null)", [w.orgA, bg]);
+    await call(w.caregiverA1, "select ogevia_api.set_my_appearance($1,null,null,null,null,null,null)", [w.orgA]); // back to following the agency
   });
 });
 
 describe("appearance storage: one row per person per agency, nothing shared", () => {
   it("a personal choice is stored under (agency, that person) only; it cannot name another user, and direct table access is denied to the app role", async () => {
-    await call(w.managerA, "select ogevia_api.set_my_appearance($1,'gray','plum','compact','large','line')", [w.orgA]);
+    await call(w.managerA, "select ogevia_api.set_my_appearance($1,'gray','plum','compact','large','line',null)", [w.orgA]);
     const rows = (await q("select user_id, organization_id, background from ogevia.user_appearance where organization_id = $1 and background is not null", [w.orgA])).rows;
     expect(rows).toEqual([{ user_id: w.managerA.userId, organization_id: w.orgA, background: "gray" }]);
     // the setter takes no user argument: the person is the signed-in actor
@@ -240,8 +246,8 @@ describe("appearance storage: one row per person per agency, nothing shared", ()
 
   it("changing one person or the agency default never rewrites another person's saved choice; the other agency is untouched", async () => {
     const before = (await q("select user_id, background, accent from ogevia.user_appearance where organization_id = $1 order by user_id", [w.orgA])).rows;
-    await call(w.ownerA, "select ogevia_api.set_organization_appearance($1,'light','rust',null,null,null)", [w.orgA]);
-    await call(w.caregiverA2, "select ogevia_api.set_my_appearance($1,'dark',null,null,null,null)", [w.orgA]);
+    await call(w.ownerA, "select ogevia_api.set_organization_appearance($1,'light','rust',null,null,null,null)", [w.orgA]);
+    await call(w.caregiverA2, "select ogevia_api.set_my_appearance($1,'dark',null,null,null,null,null)", [w.orgA]);
     const after = (await q("select user_id, background, accent from ogevia.user_appearance where organization_id = $1 order by user_id", [w.orgA])).rows;
     // the manager's row is unchanged by the agency default and by the caregiver's change
     expect(after.find((r) => r.user_id === w.managerA.userId)).toEqual(before.find((r) => r.user_id === w.managerA.userId));
@@ -250,8 +256,8 @@ describe("appearance storage: one row per person per agency, nothing shared", ()
     // agency B has no rows and no default, and agency A's administrator cannot write there
     expect((await q("select count(*)::int n from ogevia.user_appearance where organization_id = $1", [w.orgB])).rows[0].n).toBe(0);
     expect((await q("select count(*)::int n from ogevia.organization_appearance where organization_id = $1", [w.orgB])).rows[0].n).toBe(0);
-    await expectPgError(call(w.ownerA, "select ogevia_api.set_organization_appearance($1,'dark',null,null,null,null)", [w.orgB]), "OGN04");
-    await expectPgError(call(w.managerB, "select ogevia_api.set_organization_appearance($1,'dark',null,null,null,null)", [w.orgA]), "OGN04");
+    await expectPgError(call(w.ownerA, "select ogevia_api.set_organization_appearance($1,'dark',null,null,null,null,null)", [w.orgB]), "OGN04");
+    await expectPgError(call(w.managerB, "select ogevia_api.set_organization_appearance($1,'dark',null,null,null,null,null)", [w.orgA]), "OGN04");
   });
 });
 

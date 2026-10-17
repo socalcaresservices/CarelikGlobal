@@ -43,8 +43,8 @@ const ROW: UtilisationRow = {
 interface Setup { role: Role; rows?: UtilisationRow[]; appearance?: Record<string, unknown>; missingRate?: Record<string, unknown>[] }
 function renderApp(path: string, { role, rows = [ROW], appearance, missingRate = [] }: Setup) {
   const calls: { method: string; path: string; body: any }[] = [];
-  let state = { organization: { background: null, accent: null, density: null, textSize: null, chartType: null }, mine: { background: null, accent: null, density: null, textSize: null, chartType: null }, ...appearance } as any;
-  const system = { background: "light", accent: "teal", density: "comfortable", textSize: "standard", chartType: "bar" };
+  let state = { organization: { background: null, accent: null, density: null, textSize: null, chartType: null, layout: null }, mine: { background: null, accent: null, density: null, textSize: null, chartType: null, layout: null }, ...appearance } as any;
+  const system = { background: "light", accent: "teal", density: "comfortable", textSize: "standard", chartType: "bar", layout: "standard" };
   const view = () => {
     const effective = { ...system } as any;
     for (const level of [state.organization, state.mine]) for (const [k, v] of Object.entries(level)) if (v) effective[k] = v;
@@ -69,26 +69,32 @@ function renderApp(path: string, { role, rows = [ROW], appearance, missingRate =
       case "GET /v1/continuity/status": return json(200, { status: null });
       case "GET /v1/authorizations/missing-rate": return json(200, { authorizations: missingRate });
       case "GET /v1/appearance": return json(200, view());
-      case "POST /v1/appearance/me": state = { ...state, mine: { background: body.background ?? null, accent: body.accent ?? null, density: body.density ?? null, textSize: body.textSize ?? null, chartType: body.chartType ?? null } }; return json(200, view());
-      case "POST /v1/appearance/organization": state = { ...state, organization: { background: body.background ?? null, accent: body.accent ?? null, density: body.density ?? null, textSize: body.textSize ?? null, chartType: body.chartType ?? null } }; return json(200, view());
+      case "POST /v1/appearance/me": state = { ...state, mine: { background: body.background ?? null, accent: body.accent ?? null, density: body.density ?? null, textSize: body.textSize ?? null, chartType: body.chartType ?? null, layout: body.layout ?? null } }; return json(200, view());
+      case "POST /v1/appearance/organization": state = { ...state, organization: { background: body.background ?? null, accent: body.accent ?? null, density: body.density ?? null, textSize: body.textSize ?? null, chartType: body.chartType ?? null, layout: body.layout ?? null } }; return json(200, view());
       default: return json(404, { error: { code: "not_found", message: "No such endpoint." } });
     }
   });
   const auth = { subscribe: vi.fn(() => () => {}), getSession: vi.fn(async () => ({ user: { id: USER, email: "p@example.test", emailVerified: true }, access_token: "t", expires_at: 4_000_000_000 })),
     getAccessToken: vi.fn(async () => "t"), signIn: vi.fn(), handleCallback: vi.fn(), startPasswordReset: vi.fn(), signOut: vi.fn() };
   const client = createAwsApiClient({ baseUrl: "https://api.example.test", getAccessToken: () => auth.getAccessToken(), fetch: fetchImpl as never });
+  const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   render(
     <MemoryRouter initialEntries={[path]}>
-      <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+      <QueryClientProvider client={qc}>
         <CognitoAuthProvider client={auth as unknown as CognitoAuthClient}><AwsRoutes api={client} publicApi={client} /></CognitoAuthProvider>
       </QueryClientProvider>
     </MemoryRouter>,
   );
-  return { calls };
+  /** What a change made elsewhere (another session, the administrator's default) looks like to this page: the server answer changes, the cache is refreshed. */
+  const changeFromElsewhere = async (mine: Record<string, string | null>) => {
+    state = { ...state, mine: { background: null, accent: null, density: null, textSize: null, chartType: null, layout: null, ...mine } };
+    await qc.invalidateQueries({ queryKey: ["appearance"] });
+  };
+  return { calls, qc, changeFromElsewhere };
 }
 
 beforeEach(() => window.localStorage.clear());
-afterEach(() => { cleanup(); vi.clearAllMocks(); for (const a of ["bg", "accent", "density", "text"]) document.documentElement.removeAttribute(`data-og-${a}`); });
+afterEach(() => { cleanup(); vi.clearAllMocks(); for (const a of ["bg", "accent", "density", "text", "layout"]) document.documentElement.removeAttribute(`data-og-${a}`); });
 
 describe("document status rules", () => {
   it("one short label, with the tone that says whether it blocks", () => {
@@ -215,28 +221,29 @@ describe("appearance preferences", () => {
     expect(await screen.findByRole("heading", { name: "Appearance" })).toBeInTheDocument();
     expect(screen.queryByRole("form", { name: "Agency defaults" })).toBeNull(); // only administrators set agency defaults
     const mine = await screen.findByRole("form", { name: "My view" });
-    for (const label of ["Warm cream", "Indigo", "Compact", "Large", "Donut"]) fireEvent.click(within(mine).getByLabelText(label));
+    for (const label of ["White", "Indigo", "Compact", "Large", "Donut", "Minimal"]) fireEvent.click(within(mine).getByLabelText(label));
     fireEvent.click(within(mine).getByRole("button", { name: "Save" }));
-    await waitFor(() => expect(document.documentElement.getAttribute("data-og-bg")).toBe("cream"));
+    await waitFor(() => expect(document.documentElement.getAttribute("data-og-bg")).toBe("white"));
     const post = calls.find((c) => c.method === "POST" && c.path === "/v1/appearance/me")!;
-    expect(post.body).toMatchObject({ organizationId: ORG, background: "cream", accent: "indigo", density: "compact", textSize: "large", chartType: "donut" });
+    expect(post.body).toMatchObject({ organizationId: ORG, background: "white", accent: "indigo", density: "compact", textSize: "large", chartType: "donut", layout: "minimal" });
     expect(document.documentElement.getAttribute("data-og-accent")).toBe("indigo");
     expect(document.documentElement.getAttribute("data-og-density")).toBe("compact");
     expect(document.documentElement.getAttribute("data-og-text")).toBe("large");
-    expect(window.localStorage.getItem(`ogevia.appearance.${USER}.${ORG}`)).toContain('"background":"cream"');
+    expect(document.documentElement.getAttribute("data-og-layout")).toBe("minimal");
+    expect(window.localStorage.getItem(`ogevia.appearance.${USER}.${ORG}`)).toContain('"background":"white"');
     expect(calls.some((c) => c.path === "/v1/appearance/organization")).toBe(false);
   });
 
   it("saved choices come back after a reload (read from the server)", async () => {
-    renderApp("/", { role: "manager", appearance: { mine: { background: "dark", accent: "blue", density: null, textSize: null, chartType: null } } });
+    renderApp("/", { role: "manager", appearance: { mine: { background: "dark", accent: "blue", density: null, textSize: null, chartType: null, layout: null } } });
     await waitFor(() => expect(document.documentElement.getAttribute("data-og-bg")).toBe("dark"));
     expect(document.documentElement.getAttribute("data-og-accent")).toBe("blue");
     expect(document.documentElement.getAttribute("data-og-density")).toBe("comfortable");
   });
 
   it("agency defaults apply to everyone until a person chooses their own; the override affects only that person", async () => {
-    renderApp("/", { role: "manager", appearance: { organization: { background: "gray", accent: "plum", density: "compact", textSize: null, chartType: null }, mine: { background: "cream", accent: null, density: null, textSize: null, chartType: null } } });
-    await waitFor(() => expect(document.documentElement.getAttribute("data-og-bg")).toBe("cream")); // own choice wins
+    renderApp("/", { role: "manager", appearance: { organization: { background: "gray", accent: "plum", density: "compact", textSize: null, chartType: null, layout: null }, mine: { background: "white", accent: null, density: null, textSize: null, chartType: null, layout: null } } });
+    await waitFor(() => expect(document.documentElement.getAttribute("data-og-bg")).toBe("white")); // own choice wins
     expect(document.documentElement.getAttribute("data-og-accent")).toBe("plum"); // agency default fills the rest
     expect(document.documentElement.getAttribute("data-og-density")).toBe("compact");
   });
@@ -254,7 +261,7 @@ describe("appearance preferences", () => {
   it("choices are labelled radio inputs, reachable by keyboard", async () => {
     renderApp("/settings/appearance", { role: "manager" });
     const mine = await screen.findByRole("form", { name: "My view" });
-    expect(within(mine).getAllByRole("radio")).toHaveLength(5 + 6 + 3 + 3 + 4);
+    expect(within(mine).getAllByRole("radio")).toHaveLength(5 + 6 + 3 + 3 + 4 + 3);
     expect(within(mine).getByRole("group", { name: "Background" })).toBeInTheDocument();
   });
 });
@@ -287,5 +294,91 @@ describe("charts follow the preference only where honest, and keep data, labels,
     expect(chart).toHaveAttribute("data-chart-kind", "bar");
     expect(within(chart).getByTestId("chart-note")).toHaveTextContent("Line charts show change over time");
     expect(chart).toHaveTextContent("Total 36.5 h worked hours");
+  });
+});
+
+// ---------------------------------------------------------------------------------------------------------------------------
+// Switching background or layout is PRESENTATION ONLY. The page is NOT re-rendered or re-mounted: the saved choice reaches the page
+// through four data attributes on <html>. These tests drive the real path (the server answer changes, the cache refreshes, the applier
+// runs) on a page with typed, unsaved input, and compare what a person could read, press or be warned about before and after.
+// ---------------------------------------------------------------------------------------------------------------------------
+const COMBOS = [["light", "standard"], ["white", "standard"], ["gray", "standard"], ["dark", "standard"], ["light", "minimal"], ["white", "minimal"], ["gray", "minimal"], ["dark", "minimal"]] as const;
+const norm = (t: string | null | undefined) => (t ?? "").replace(/\s+/g, " ").trim();
+/** Everything a person can read (including text inside closed details), every control by kind and name, every alert and status. */
+function inventory(root: HTMLElement) {
+  const text = norm(root.textContent);
+  const controls = [...root.querySelectorAll<HTMLElement>("a[href], button, input, select, textarea, summary")]
+    .map((e) => [e.tagName.toLowerCase(), e.getAttribute("type") ?? "", norm(e.getAttribute("aria-label") ?? e.textContent) || e.id || e.getAttribute("name") || "", e.getAttribute("href") ?? "", e.hasAttribute("disabled") ? "disabled" : "", e.getAttribute("aria-pressed") ?? ""].join("|"));
+  const alerts = [...root.querySelectorAll<HTMLElement>('[role="alert"], [role="status"], [data-testid="compliance-strip"], [data-testid^="stream-"], [data-testid="attention-badge"]')]
+    .map((e) => `${e.getAttribute("role") ?? e.getAttribute("data-testid")}|${norm(e.textContent)}`);
+  const marks = [...root.querySelectorAll<HTMLElement>("[aria-hidden='true']")].map((e) => norm(e.textContent)).filter(Boolean); // the symbols beside status words
+  return { text, controls, alerts, marks };
+}
+
+describe("switching background or layout changes presentation only", () => {
+  it("Documents: with a typed review reason, a typed due date and a chosen filter, all 8 background and layout combinations keep every word, control, alert, symbol and every unsaved character, on the same elements", async () => {
+    const { changeFromElsewhere } = renderApp("/documents", { role: "manager" });
+    const card = (await screen.findByText("Training", { selector: "p" })).closest("li")!;
+    const reason = within(card).getByLabelText(/Reason \(required to reject\)/) as HTMLInputElement;
+    fireEvent.change(reason, { target: { value: "The scan is cut off at the right edge" } });
+    const due = screen.getByLabelText(/Due date \(optional\)/) as HTMLInputElement;
+    fireEvent.change(due, { target: { value: "2026-11-02" } });
+    fireEvent.click(screen.getByRole("button", { name: /^All 5$/ }));
+    reason.focus();
+    const before = inventory(document.body);
+    expect(before.alerts.length).toBeGreaterThan(0);
+    expect(before.marks.length).toBeGreaterThan(0);
+    for (const [bg, layout] of COMBOS) {
+      await changeFromElsewhere({ background: bg, layout });
+      await waitFor(() => expect(document.documentElement.getAttribute("data-og-layout")).toBe(layout));
+      expect(document.documentElement.getAttribute("data-og-bg")).toBe(bg);
+      const after = inventory(document.body);
+      expect(after.text, `${bg}/${layout} text`).toBe(before.text);
+      expect(after.controls, `${bg}/${layout} controls`).toEqual(before.controls);
+      expect(after.alerts, `${bg}/${layout} alerts`).toEqual(before.alerts);
+      expect(after.marks, `${bg}/${layout} symbols`).toEqual(before.marks);
+      // the very same elements, still holding what was typed
+      expect(within(screen.getByText("Training", { selector: "p" }).closest("li")!).getByLabelText(/Reason \(required to reject\)/)).toBe(reason);
+      expect(screen.getByLabelText(/Due date \(optional\)/)).toBe(due);
+      expect(reason.value).toBe("The scan is cut off at the right edge");
+      expect(due.value).toBe("2026-11-02");
+      expect(document.activeElement).toBe(reason);
+    }
+  });
+
+  it("Home: every tile, count, tone word and link survives all 8 combinations, and an urgent tile still says Urgent", async () => {
+    const { changeFromElsewhere } = renderApp("/", { role: "organization_owner", rows: [{ ...ROW, lineagesWithoutRate: 2 }] });
+    await screen.findByTestId("missing-rate-message");
+    const before = inventory(document.body);
+    for (const [bg, layout] of COMBOS) {
+      await changeFromElsewhere({ background: bg, layout });
+      await waitFor(() => expect(document.documentElement.getAttribute("data-og-layout")).toBe(layout));
+      const after = inventory(document.body);
+      expect(after.text, `${bg}/${layout}`).toBe(before.text);
+      expect(after.controls, `${bg}/${layout}`).toEqual(before.controls);
+      expect(after.alerts, `${bg}/${layout}`).toEqual(before.alerts);
+    }
+    expect(screen.getByTestId("missing-rate-message")).toHaveTextContent("2 authorizations have no hourly rate");
+  });
+
+  it("Appearance: saving My view keeps an unsaved draft in Agency defaults, and a draft in My view survives a change arriving from elsewhere", async () => {
+    const { changeFromElsewhere } = renderApp("/settings/appearance", { role: "organization_owner" });
+    const org = await screen.findByRole("form", { name: "Agency defaults" });
+    fireEvent.click(within(org).getByLabelText("Soft gray"));
+    fireEvent.click(within(org).getByLabelText("Minimal"));
+    const mine = screen.getByRole("form", { name: "My view" });
+    fireEvent.click(within(mine).getByLabelText("Dark"));
+    fireEvent.click(within(mine).getByRole("button", { name: "Save" }));
+    await waitFor(() => expect(document.documentElement.getAttribute("data-og-bg")).toBe("dark"));
+    // the agency draft is still on screen and still unsaved
+    const orgAfter = screen.getByRole("form", { name: "Agency defaults" });
+    expect(within(orgAfter).getByLabelText(/Soft gray/)).toBeChecked();
+    expect(within(orgAfter).getByLabelText(/Minimal/)).toBeChecked();
+    expect(within(orgAfter).getByRole("button", { name: "Save" })).toBeEnabled();
+    // a person's own draft: choose, then a change arrives from elsewhere for a DIFFERENT field; the draft is not discarded
+    fireEvent.click(within(screen.getByRole("form", { name: "My view" })).getByLabelText("Plum"));
+    await changeFromElsewhere({ background: "dark", layout: "minimal" });
+    await waitFor(() => expect(document.documentElement.getAttribute("data-og-layout")).toBe("minimal"));
+    expect(within(screen.getByRole("form", { name: "Agency defaults" })).getByLabelText(/Soft gray/)).toBeChecked();
   });
 });

@@ -1,17 +1,19 @@
 // Appearance preferences (migration 0056): the choices, their labels, and how a chart type is resolved for a kind of data.
 // The server stores the choices (agency default, then each person's own); this file only names them and applies them.
 
-export const BACKGROUNDS = ["light", "cream", "gray", "dark"] as const;
+export const BACKGROUNDS = ["light", "white", "gray", "dark"] as const;
 export const ACCENTS = ["teal", "blue", "indigo", "plum", "rust"] as const;
 export const DENSITIES = ["comfortable", "compact"] as const;
 export const TEXT_SIZES = ["standard", "large"] as const;
 export const CHART_TYPES = ["bar", "line", "donut"] as const;
+export const LAYOUTS = ["standard", "minimal"] as const;
 
 export type Background = (typeof BACKGROUNDS)[number];
 export type Accent = (typeof ACCENTS)[number];
 export type Density = (typeof DENSITIES)[number];
 export type TextSize = (typeof TEXT_SIZES)[number];
 export type ChartType = (typeof CHART_TYPES)[number];
+export type Layout = (typeof LAYOUTS)[number];
 
 export interface AppearanceChoices<T = string> {
   background: Background | T;
@@ -19,6 +21,8 @@ export interface AppearanceChoices<T = string> {
   density: Density | T;
   textSize: TextSize | T;
   chartType: ChartType | T;
+  /** Presentation only: the same information, actions and alerts, with flatter surfaces. */
+  layout: Layout | T;
 }
 /** What is stored at one level: a missing choice means "follow the next level". */
 export type PartialAppearance = AppearanceChoices<null>;
@@ -32,13 +36,14 @@ export interface AppearanceState {
   canSetOrganizationDefaults: boolean;
 }
 
-export const SYSTEM_DEFAULTS: EffectiveAppearance = { background: "light", accent: "teal", density: "comfortable", textSize: "standard", chartType: "bar" };
+export const SYSTEM_DEFAULTS: EffectiveAppearance = { background: "light", accent: "teal", density: "comfortable", textSize: "standard", chartType: "bar", layout: "standard" };
 
-export const BACKGROUND_LABEL: Record<Background, string> = { light: "Light", cream: "Warm cream", gray: "Soft gray", dark: "Dark" };
+export const BACKGROUND_LABEL: Record<Background, string> = { light: "Light", white: "White", gray: "Soft gray", dark: "Dark" };
 export const ACCENT_LABEL: Record<Accent, string> = { teal: "Teal", blue: "Blue", indigo: "Indigo", plum: "Plum", rust: "Rust" };
 export const DENSITY_LABEL: Record<Density, string> = { comfortable: "Comfortable", compact: "Compact" };
 export const TEXT_LABEL: Record<TextSize, string> = { standard: "Standard", large: "Large" };
 export const CHART_LABEL: Record<ChartType, string> = { bar: "Bar", line: "Line", donut: "Donut" };
+export const LAYOUT_LABEL: Record<Layout, string> = { standard: "Standard", minimal: "Minimal" };
 
 /** Swatches for the settings screen only (the live values are CSS variables in styles/theme.css; a test keeps the two in step). */
 export const ACCENT_RGB: Record<Accent, { light: [number, number, number]; dark: [number, number, number] }> = {
@@ -48,7 +53,7 @@ export const ACCENT_RGB: Record<Accent, { light: [number, number, number]; dark:
   plum: { light: [134, 25, 143], dark: [232, 160, 240] },
   rust: { light: [160, 72, 7], dark: [253, 186, 116] },
 };
-export const BACKGROUND_SWATCH: Record<Background, string> = { light: "#F4F7F7", cream: "#FAF6EC", gray: "#ECEFF3", dark: "#0D141A" };
+export const BACKGROUND_SWATCH: Record<Background, string> = { light: "#F4F7F7", white: "#FFFFFF", gray: "#ECEFF3", dark: "#0D141A" };
 
 export const rgbCss = (c: readonly [number, number, number]) => `rgb(${c[0]} ${c[1]} ${c[2]})`;
 
@@ -85,9 +90,10 @@ export function applyAppearance(root: HTMLElement, a: EffectiveAppearance) {
   root.setAttribute("data-og-accent", a.accent);
   root.setAttribute("data-og-density", a.density);
   root.setAttribute("data-og-text", a.textSize);
+  root.setAttribute("data-og-layout", a.layout);
 }
 export function clearAppearance(root: HTMLElement) {
-  for (const k of ["data-og-bg", "data-og-accent", "data-og-density", "data-og-text"]) root.removeAttribute(k);
+  for (const k of ["data-og-bg", "data-og-accent", "data-og-density", "data-og-text", "data-og-layout"]) root.removeAttribute(k);
 }
 
 const CACHE_PREFIX = "ogevia.appearance.";
@@ -99,7 +105,7 @@ export function readCachedAppearance(userId: string | undefined, orgId: string |
     if (!raw) return null;
     const v = JSON.parse(raw) as Partial<EffectiveAppearance>;
     return BACKGROUNDS.includes(v.background as Background) && ACCENTS.includes(v.accent as Accent) && DENSITIES.includes(v.density as Density)
-      && TEXT_SIZES.includes(v.textSize as TextSize) && CHART_TYPES.includes(v.chartType as ChartType) ? (v as EffectiveAppearance) : null;
+      && TEXT_SIZES.includes(v.textSize as TextSize) && CHART_TYPES.includes(v.chartType as ChartType) && LAYOUTS.includes(v.layout as Layout) ? (v as EffectiveAppearance) : null;
   } catch {
     return null; // storage blocked or damaged: the server value still applies
   }

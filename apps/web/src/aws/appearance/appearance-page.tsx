@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Button, Card } from "@carelik/ui";
 import { actionError } from "../readiness/format";
 import {
-  ACCENTS, ACCENT_LABEL, ACCENT_RGB, BACKGROUNDS, BACKGROUND_LABEL, BACKGROUND_SWATCH, CHART_LABEL, CHART_TYPES, DENSITIES, DENSITY_LABEL, TEXT_LABEL, TEXT_SIZES, rgbCss,
+  ACCENTS, ACCENT_LABEL, ACCENT_RGB, BACKGROUNDS, BACKGROUND_LABEL, BACKGROUND_SWATCH, CHART_LABEL, CHART_TYPES, DENSITIES, DENSITY_LABEL, LAYOUT_LABEL, LAYOUTS, TEXT_LABEL, TEXT_SIZES, rgbCss,
   type PartialAppearance,
 } from "./appearance";
 import { useAppearanceState, useSaveAppearance } from "./appearance-hooks";
@@ -15,6 +15,7 @@ const GROUPS: Group[] = [
   { key: "accent", legend: "Accent", options: ACCENTS, label: (v) => ACCENT_LABEL[v as keyof typeof ACCENT_LABEL], swatch: (v) => rgbCss(ACCENT_RGB[v as keyof typeof ACCENT_RGB].light) },
   { key: "density", legend: "Density", options: DENSITIES, label: (v) => DENSITY_LABEL[v as keyof typeof DENSITY_LABEL] },
   { key: "textSize", legend: "Text size", options: TEXT_SIZES, label: (v) => TEXT_LABEL[v as keyof typeof TEXT_LABEL] },
+  { key: "layout", legend: "Layout", options: LAYOUTS, label: (v) => LAYOUT_LABEL[v as keyof typeof LAYOUT_LABEL], hint: "Minimal flattens boxes and borders. Nothing is hidden or removed; every alert, action and detail stays on the page." },
   { key: "chartType", legend: "Charts", options: CHART_TYPES, label: (v) => CHART_LABEL[v as keyof typeof CHART_LABEL], hint: "Used where it fits the data: line only for change over time, donut only for parts of a whole. Otherwise bars." },
 ];
 

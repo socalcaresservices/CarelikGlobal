@@ -24,11 +24,12 @@
 
 create table ogevia.organization_appearance (
   organization_id uuid primary key references ogevia.organizations(id),
-  background text check (background is null or background in ('light', 'cream', 'gray', 'dark')),
+  background text check (background is null or background in ('light', 'white', 'gray', 'dark')),
   accent text check (accent is null or accent in ('teal', 'blue', 'indigo', 'plum', 'rust')),
   density text check (density is null or density in ('comfortable', 'compact')),
   text_size text check (text_size is null or text_size in ('standard', 'large')),
   chart_type text check (chart_type is null or chart_type in ('bar', 'line', 'donut')),
+  layout text check (layout is null or layout in ('standard', 'minimal')),
   updated_by uuid references ogevia.app_users(id),
   updated_at timestamptz not null default now()
 );
@@ -37,11 +38,12 @@ alter table ogevia.organization_appearance enable row level security;
 create table ogevia.user_appearance (
   organization_id uuid not null references ogevia.organizations(id),
   user_id uuid not null references ogevia.app_users(id),
-  background text check (background is null or background in ('light', 'cream', 'gray', 'dark')),
+  background text check (background is null or background in ('light', 'white', 'gray', 'dark')),
   accent text check (accent is null or accent in ('teal', 'blue', 'indigo', 'plum', 'rust')),
   density text check (density is null or density in ('comfortable', 'compact')),
   text_size text check (text_size is null or text_size in ('standard', 'large')),
   chart_type text check (chart_type is null or chart_type in ('bar', 'line', 'donut')),
+  layout text check (layout is null or layout in ('standard', 'minimal')),
   updated_at timestamptz not null default now(),
   primary key (organization_id, user_id)
 );
@@ -53,14 +55,14 @@ returns jsonb
 language sql
 immutable
 set search_path = ogevia, pg_temp
-as $$ select jsonb_build_object('background', 'light', 'accent', 'teal', 'density', 'comfortable', 'textSize', 'standard', 'chartType', 'bar'); $$;
+as $$ select jsonb_build_object('background', 'light', 'accent', 'teal', 'density', 'comfortable', 'textSize', 'standard', 'chartType', 'bar', 'layout', 'standard'); $$;
 
-create function ogevia.appearance_json(p_background text, p_accent text, p_density text, p_text_size text, p_chart_type text)
+create function ogevia.appearance_json(p_background text, p_accent text, p_density text, p_text_size text, p_chart_type text, p_layout text)
 returns jsonb
 language sql
 immutable
 set search_path = ogevia, pg_temp
-as $$ select jsonb_build_object('background', p_background, 'accent', p_accent, 'density', p_density, 'textSize', p_text_size, 'chartType', p_chart_type); $$;
+as $$ select jsonb_build_object('background', p_background, 'accent', p_accent, 'density', p_density, 'textSize', p_text_size, 'chartType', p_chart_type, 'layout', p_layout); $$;
 
 -- Any active member: the three levels and the effective result. Reads only.
 create function ogevia_api.get_appearance(p_organization_id uuid)
@@ -81,8 +83,8 @@ begin
   if not ogevia.is_active_member(p_organization_id) then raise exception 'Organization not found' using errcode = 'OGN04'; end if;
   select * into o from ogevia.organization_appearance x where x.organization_id = p_organization_id;
   select * into u from ogevia.user_appearance x where x.organization_id = p_organization_id and x.user_id = v_actor;
-  v_org := ogevia.appearance_json(o.background, o.accent, o.density, o.text_size, o.chart_type);
-  v_me := ogevia.appearance_json(u.background, u.accent, u.density, u.text_size, u.chart_type);
+  v_org := ogevia.appearance_json(o.background, o.accent, o.density, o.text_size, o.chart_type, o.layout);
+  v_me := ogevia.appearance_json(u.background, u.accent, u.density, u.text_size, u.chart_type, u.layout);
   return jsonb_build_object(
     'system', v_sys, 'organization', v_org, 'mine', v_me,
     'effective', jsonb_build_object(
@@ -90,14 +92,15 @@ begin
       'accent', coalesce(u.accent, o.accent, v_sys ->> 'accent'),
       'density', coalesce(u.density, o.density, v_sys ->> 'density'),
       'textSize', coalesce(u.text_size, o.text_size, v_sys ->> 'textSize'),
-      'chartType', coalesce(u.chart_type, o.chart_type, v_sys ->> 'chartType')),
+      'chartType', coalesce(u.chart_type, o.chart_type, v_sys ->> 'chartType'),
+      'layout', coalesce(u.layout, o.layout, v_sys ->> 'layout')),
     'canSetOrganizationDefaults', ogevia.has_permission(p_organization_id, 'organization.update'));
 end;
 $$;
 
 -- Agency administrator: the organization defaults. A null value clears that choice (the built-in default applies). Audited.
 create function ogevia_api.set_organization_appearance(
-  p_organization_id uuid, p_background text, p_accent text, p_density text, p_text_size text, p_chart_type text
+  p_organization_id uuid, p_background text, p_accent text, p_density text, p_text_size text, p_chart_type text, p_layout text
 )
 returns jsonb
 language plpgsql
@@ -112,29 +115,30 @@ begin
   if not ogevia.has_permission(p_organization_id, 'organization.update') then
     raise exception 'Only an administrator can set the agency appearance' using errcode = 'OGA03';
   end if;
-  if (p_background is not null and p_background not in ('light', 'cream', 'gray', 'dark'))
+  if (p_background is not null and p_background not in ('light', 'white', 'gray', 'dark'))
      or (p_accent is not null and p_accent not in ('teal', 'blue', 'indigo', 'plum', 'rust'))
      or (p_density is not null and p_density not in ('comfortable', 'compact'))
      or (p_text_size is not null and p_text_size not in ('standard', 'large'))
-     or (p_chart_type is not null and p_chart_type not in ('bar', 'line', 'donut')) then
+     or (p_chart_type is not null and p_chart_type not in ('bar', 'line', 'donut'))
+     or (p_layout is not null and p_layout not in ('standard', 'minimal')) then
     raise exception 'That appearance choice is not available' using errcode = 'OGV22';
   end if;
   select * into old from ogevia.organization_appearance x where x.organization_id = p_organization_id for update;
-  insert into ogevia.organization_appearance (organization_id, background, accent, density, text_size, chart_type, updated_by)
-  values (p_organization_id, p_background, p_accent, p_density, p_text_size, p_chart_type, v_actor)
+  insert into ogevia.organization_appearance (organization_id, background, accent, density, text_size, chart_type, layout, updated_by)
+  values (p_organization_id, p_background, p_accent, p_density, p_text_size, p_chart_type, p_layout, v_actor)
   on conflict (organization_id) do update
     set background = excluded.background, accent = excluded.accent, density = excluded.density, text_size = excluded.text_size,
-        chart_type = excluded.chart_type, updated_by = excluded.updated_by, updated_at = now();
+        chart_type = excluded.chart_type, layout = excluded.layout, updated_by = excluded.updated_by, updated_at = now();
   perform ogevia.write_audit(p_organization_id, 'organization.appearance_set', 'organization_appearance', p_organization_id,
-    ogevia.appearance_json(old.background, old.accent, old.density, old.text_size, old.chart_type),
-    ogevia.appearance_json(p_background, p_accent, p_density, p_text_size, p_chart_type), null);
+    ogevia.appearance_json(old.background, old.accent, old.density, old.text_size, old.chart_type, old.layout),
+    ogevia.appearance_json(p_background, p_accent, p_density, p_text_size, p_chart_type, p_layout), null);
   return ogevia_api.get_appearance(p_organization_id);
 end;
 $$;
 
 -- Any active member: their OWN viewing choices only. A null value follows the agency default. Never affects anyone else.
 create function ogevia_api.set_my_appearance(
-  p_organization_id uuid, p_background text, p_accent text, p_density text, p_text_size text, p_chart_type text
+  p_organization_id uuid, p_background text, p_accent text, p_density text, p_text_size text, p_chart_type text, p_layout text
 )
 returns jsonb
 language plpgsql
@@ -144,18 +148,19 @@ as $$
 declare v_actor uuid := ogevia.require_actor();
 begin
   if not ogevia.is_active_member(p_organization_id) then raise exception 'Organization not found' using errcode = 'OGN04'; end if;
-  if (p_background is not null and p_background not in ('light', 'cream', 'gray', 'dark'))
+  if (p_background is not null and p_background not in ('light', 'white', 'gray', 'dark'))
      or (p_accent is not null and p_accent not in ('teal', 'blue', 'indigo', 'plum', 'rust'))
      or (p_density is not null and p_density not in ('comfortable', 'compact'))
      or (p_text_size is not null and p_text_size not in ('standard', 'large'))
-     or (p_chart_type is not null and p_chart_type not in ('bar', 'line', 'donut')) then
+     or (p_chart_type is not null and p_chart_type not in ('bar', 'line', 'donut'))
+     or (p_layout is not null and p_layout not in ('standard', 'minimal')) then
     raise exception 'That appearance choice is not available' using errcode = 'OGV22';
   end if;
-  insert into ogevia.user_appearance (organization_id, user_id, background, accent, density, text_size, chart_type)
-  values (p_organization_id, v_actor, p_background, p_accent, p_density, p_text_size, p_chart_type)
+  insert into ogevia.user_appearance (organization_id, user_id, background, accent, density, text_size, chart_type, layout)
+  values (p_organization_id, v_actor, p_background, p_accent, p_density, p_text_size, p_chart_type, p_layout)
   on conflict (organization_id, user_id) do update
     set background = excluded.background, accent = excluded.accent, density = excluded.density, text_size = excluded.text_size,
-        chart_type = excluded.chart_type, updated_at = now();
+        chart_type = excluded.chart_type, layout = excluded.layout, updated_at = now();
   return ogevia_api.get_appearance(p_organization_id);
 end;
 $$;
@@ -376,15 +381,15 @@ as $$
 $$;
 
 revoke all on function ogevia.appearance_system_defaults() from public;
-revoke all on function ogevia.appearance_json(text, text, text, text, text) from public;
+revoke all on function ogevia.appearance_json(text, text, text, text, text, text) from public;
 revoke all on function ogevia_api.get_appearance(uuid) from public;
-revoke all on function ogevia_api.set_organization_appearance(uuid, text, text, text, text, text) from public;
-revoke all on function ogevia_api.set_my_appearance(uuid, text, text, text, text, text) from public;
+revoke all on function ogevia_api.set_organization_appearance(uuid, text, text, text, text, text, text) from public;
+revoke all on function ogevia_api.set_my_appearance(uuid, text, text, text, text, text, text) from public;
 revoke all on function ogevia_api.get_attention_overview(uuid, integer) from public;
 revoke all on function ogevia_api.list_authorizations_missing_rate(uuid, date) from public;
 grant execute on function ogevia_api.get_appearance(uuid) to ogevia_app;
-grant execute on function ogevia_api.set_organization_appearance(uuid, text, text, text, text, text) to ogevia_app;
-grant execute on function ogevia_api.set_my_appearance(uuid, text, text, text, text, text) to ogevia_app;
+grant execute on function ogevia_api.set_organization_appearance(uuid, text, text, text, text, text, text) to ogevia_app;
+grant execute on function ogevia_api.set_my_appearance(uuid, text, text, text, text, text, text) to ogevia_app;
 grant execute on function ogevia_api.get_attention_overview(uuid, integer) to ogevia_app;
 grant execute on function ogevia_api.list_authorizations_missing_rate(uuid, date) to ogevia_app;
 
