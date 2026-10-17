@@ -61,6 +61,16 @@ function fakeApi(opts: { covered: boolean }) {
       case `GET /v1/caregivers/${CG}/compliance`:
       case `GET /v1/caregivers/${CG_NO_LOGIN}/compliance`:
         return json(200, { compliance: baseCompliance() }); // 0053: the profile also shows compliance; this test is about assignments
+      case "GET /v1/action-issues":
+        return json(200, { asOf: new Date().toISOString(), matching: 0, limit: 50, offset: 0, counts: { total: 0, critical: 0, urgent: 0, routine: 0, actionNeeded: 0, byQueue: {} }, issues: [] });
+      case `GET /v1/clients/${CLIENT}/issue-history`:
+        return json(200, { history: { resolved: [] } });
+      case `GET /v1/clients/${CLIENT}/readiness`:
+        return json(200, { readiness: { clientId: CLIENT, status: "active", stage: "active", stageNote: null, canSchedule: true, ready: true, services: [] } });
+      case `GET /v1/clients/${CLIENT}/documents`:
+        return json(200, { documents: [] });
+      case "GET /v1/shifts":
+        return json(200, { shifts: [] });
       default:
         return json(404, { error: { code: "not_found", message: "No such endpoint." } });
     }
@@ -93,6 +103,7 @@ afterEach(() => vi.clearAllMocks());
 describe("assignments", () => {
   it("client page: lists the assigned caregiver; caregivers without a sign-in can be planned (0025); an uncovered assignment is flagged", async () => {
     const api = renderAt(`/clients/${CLIENT}`, { covered: false });
+    fireEvent.click(await screen.findByRole("button", { name: "Assignment details" })); // the compact summary opens the assignment tools (B2-D9)
     const card = (await screen.findByRole("heading", { name: "Caregivers assigned" })).closest("div")!.parentElement!;
     expect(await within(card).findByText(/Synthetic Caregiver One/)).toBeInTheDocument();
     fireEvent.click(within(card).getByRole("button", { name: "Assign" }));
@@ -112,6 +123,7 @@ describe("assignments", () => {
 
   it("planning for a caregiver without a sign-in says plainly that no access is given yet", async () => {
     renderAt(`/clients/${CLIENT}`, { covered: true });
+    fireEvent.click(await screen.findByRole("button", { name: "Assignment details" })); // the compact summary opens the assignment tools (B2-D9)
     const card = (await screen.findByRole("heading", { name: "Caregivers assigned" })).closest("div")!.parentElement!;
     fireEvent.click(within(card).getByRole("button", { name: "Assign" }));
     await screen.findByRole("option", { name: /Synthetic Caregiver Two/ });

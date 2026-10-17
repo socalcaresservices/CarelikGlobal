@@ -18,3 +18,8 @@ export function agencyMonth(tz: string, now: Date = new Date()): string {
   const get = (t: string) => parts.find((x) => x.type === t)?.value ?? "";
   return `${get("year")}-${get("month")}`;
 }
+
+/** A calendar date (YYYY-MM-DD) plus whole days. Calendar arithmetic on the date itself, so a daylight-saving change never moves it. */
+export function agencyDateOffset(date: string, days: number): string {
+  return new Date(Date.parse(`${date}T12:00:00Z`) + days * 864e5).toISOString().slice(0, 10);
+}

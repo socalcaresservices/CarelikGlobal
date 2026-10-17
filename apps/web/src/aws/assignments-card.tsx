@@ -1,10 +1,11 @@
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQueryClient } from "@tanstack/react-query";
 import { useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { Button, Card } from "@carelik/ui";
 import { newIdempotencyKey } from "@/lib/sv-backend";
 import { useOrganization } from "@/providers/organization-provider";
 import { useAwsApi } from "./aws-workspace";
+import { useAssignments } from "./assignments-data";
 import { caregiverName, useCaregivers } from "./care-team-admin";
 import { clientName, useClients, useServices } from "./client-admin";
 import { formatDateOnly } from "@/lib/service-verification";
@@ -79,21 +80,6 @@ function useAgencyToday() {
   const { activeOrganization } = useOrganization();
   const tz = (activeOrganization as { timezone?: string } | null)?.timezone || "America/Los_Angeles";
   return new Intl.DateTimeFormat("en-CA", { timeZone: tz }).format(new Date());
-}
-
-function useAssignments(filter: { clientId?: string | undefined; caregiverRecordId?: string | undefined }) {
-  const api = useAwsApi();
-  const { activeOrganizationId, hasPermission } = useOrganization();
-  return useQuery({
-    queryKey: ["aws-assignments", activeOrganizationId, filter.clientId ?? null, filter.caregiverRecordId ?? null],
-    queryFn: async () =>
-      (await api.get<{ assignments: Assignment[] }>("/v1/assignments", {
-        organizationId: activeOrganizationId,
-        ...(filter.clientId ? { clientId: filter.clientId } : {}),
-        ...(filter.caregiverRecordId ? { caregiverRecordId: filter.caregiverRecordId } : {}),
-      })).assignments,
-    enabled: !!activeOrganizationId && hasPermission("visits.read"),
-  });
 }
 
 function useRefreshAssignments() {

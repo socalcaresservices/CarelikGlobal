@@ -6,6 +6,8 @@ import { Button, Card } from "@carelik/ui";
 import { newIdempotencyKey } from "@/lib/sv-backend";
 import { useOrganization } from "@/providers/organization-provider";
 import { useAwsApi } from "./aws-workspace";
+import { DuplicateWarning } from "./client-extras";
+import { useDuplicateClients } from "./client-data";
 import { clientName, STATUS_BADGE, STATUS_LABEL, useClients, useClientTypes, type AdminClient, type ClientStatus } from "./client-admin";
 import { defaultView, filterClients, hasCurrentAuthorization, readViewPreference, sortClients, WIDE_SCREEN_QUERY, writeViewPreference, type AuthorizationFilter, type ClientSort, type ClientView } from "./client-view";
 
@@ -65,11 +67,15 @@ function AddClientForm({ onDone }: { onDone: (clientId: string) => void }) {
   const queryClient = useQueryClient();
   const { activeOrganizationId } = useOrganization();
   const [form, setForm] = useState({ first: "", last: "", city: "", type: "", label: "" });
+  const [draft, setDraft] = useState(false);
+  const [dupConfirmed, setDupConfirmed] = useState(false);
+  const dupes = useDuplicateClients(form.first, form.last);
   const [state, setState] = useState<{ busy: boolean; error: string | null }>({ busy: false, error: null });
   const key = useRef(newIdempotencyKey());
   const set = (k: keyof typeof form) => (v: string) => { setForm((f) => ({ ...f, [k]: v })); key.current = newIdempotencyKey(); };
   async function submit() {
     if (!form.first.trim() || !form.last.trim()) return setState({ busy: false, error: "Enter the client's first and last name." });
+    if ((dupes.data ?? []).some((m) => m.match === "same_name") && !dupConfirmed) return setState({ busy: false, error: "A client with this name already exists. Confirm it is a different person, or open the existing client." });
     if (form.label.trim() && (form.label.trim().length < 3 || form.label.trim().length > 40)) return setState({ busy: false, error: "The caregiver label must be 3 to 40 characters." });
     setState({ busy: true, error: null });
     try {
@@ -78,6 +84,7 @@ function AddClientForm({ onDone }: { onDone: (clientId: string) => void }) {
         city: form.city.trim() || null, clientTypeId: form.type || null, caregiverLabel: form.label.trim() || null,
       }, { idempotencyKey: key.current });
       key.current = newIdempotencyKey();
+      if (draft) await api.post(`/v1/clients/${encodeURIComponent(r.client.clientId)}/stage`, { organizationId: activeOrganizationId, stage: "draft", note: null }, { idempotencyKey: newIdempotencyKey() });
       await queryClient.invalidateQueries({ queryKey: ["aws-clients"] });
       await queryClient.invalidateQueries({ queryKey: ["aws-client-directory"] });
       setState({ busy: false, error: null });
@@ -96,6 +103,8 @@ function AddClientForm({ onDone }: { onDone: (clientId: string) => void }) {
         <div><label htmlFor="new-city" className="block text-sm font-medium text-slate-700">City (optional)</label><input id="new-city" value={form.city} maxLength={80} autoComplete="off" onChange={(e) => set("city")(e.target.value)} className={inputClass} /></div>
         <ClientTypeField id="new-type" value={form.type} onChange={set("type")} />
         <div className="sm:col-span-2"><label htmlFor="new-label" className="block text-sm font-medium text-slate-700">Label caregivers see instead of the code (optional)</label><input id="new-label" value={form.label} maxLength={40} autoComplete="off" onChange={(e) => set("label")(e.target.value)} className={inputClass} /></div>
+        <DuplicateWarning matches={dupes.data} confirmed={dupConfirmed} onConfirm={setDupConfirmed} />
+        <label className="flex min-h-[44px] items-center gap-2 text-sm font-medium text-slate-700 sm:col-span-2"><input type="checkbox" className="h-5 w-5" checked={draft} onChange={(e) => setDraft(e.target.checked)} />Save as a draft (it cannot be scheduled until you activate it)</label>
         {state.error ? <p role="alert" className="text-sm text-red-700 sm:col-span-2">{state.error}</p> : null}
         <div className="sm:col-span-2"><Button type="submit" disabled={state.busy}>{state.busy ? "Adding…" : "Add client"}</Button></div>
       </form>
