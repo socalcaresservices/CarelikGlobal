@@ -11,10 +11,11 @@ import { PageHeader } from "./ui/page-header";
 const message = (cause: unknown, fallback: string) => (cause instanceof Error ? cause.message : fallback);
 
 export interface AmendmentImpact {
-  impactId: string; createdAt: string; impactKind: "reserved_shift_over_cap" | "reserved_shift_outside_period" | "decrease_now_exceeds" | "increase_may_allow_more";
+  impactId: string; createdAt: string; impactKind: "reserved_shift_over_cap" | "reserved_shift_outside_period" | "decrease_now_exceeds" | "increase_may_allow_more" | "visit_over_cap" | "visit_outside_period";
   clientCode: string; serviceCode: string; serviceName: string; newVersionNumber: number; newMonthlyMinutes: number;
   shiftId: string | null; shiftStartsAt: string | null; shiftEndsAt: string | null; visitId: string | null; serviceDate: string; minutes: number | null;
   bucket: string | null; stillApplicable: boolean; acknowledgedAt: string | null; acknowledgedByName: string | null; acknowledgementNote: string | null; amendedByName: string | null;
+  visitBillingState: string | null; reviewOpen: boolean | null; detail: Record<string, unknown> | null;
 }
 
 const IMPACT_TEXT: Record<AmendmentImpact["impactKind"], string> = {
@@ -22,6 +23,8 @@ const IMPACT_TEXT: Record<AmendmentImpact["impactKind"], string> = {
   reserved_shift_outside_period: "This reserved shift is outside the new authorization period.",
   decrease_now_exceeds: "A signed or in-review visit now exceeds the lowered limit.",
   increase_may_allow_more: "The higher limit may allow minutes that were previously over.",
+  visit_over_cap: "A confirmed visit now goes past the lowered monthly limit.",
+  visit_outside_period: "A confirmed visit now falls outside the shortened authorization period.",
 };
 
 /** 0068: what authorization amendments affected. Nothing was changed, released or re-billed by the amendment; each item stays until a person acknowledges it. */
@@ -76,6 +79,9 @@ export function AuthorizationImpactsPage() {
                 {i.minutes != null ? formatDuration(i.minutes) : ""}
                 {!i.stillApplicable ? " · no longer applies (the shift was released or the visit changed)" : ""}
               </p>
+              {i.visitId && i.visitBillingState === "approved_for_billing" ? <p className="text-amber-900" data-testid="approved-unchanged">This visit is already approved for billing. It was not changed. To review it, void the approval first.</p> : null}
+              {i.visitId && i.reviewOpen ? <p className="text-amber-900" data-testid="sent-back">This visit was not yet approved, so it was sent back to review (Needs Correction). It stays there until a person confirms it is still billable or corrects it.</p> : null}
+              {i.visitId && i.visitBillingState && !i.reviewOpen && i.visitBillingState !== "approved_for_billing" ? <p className="text-slate-700">Current state: {i.visitBillingState.replace(/_/g, " ")}.</p> : null}
               <p className="text-xs text-slate-600">Amended by {i.amendedByName ?? "an administrator"} on {formatDateOnly(i.createdAt.slice(0, 10))}</p>
               {i.acknowledgedAt ? <p className="text-emerald-800">Acknowledged by {i.acknowledgedByName ?? "someone"}: “{i.acknowledgementNote}”</p> : null}
               {error?.id === i.impactId ? <p role="alert" className="text-red-700">{error.text}</p> : null}

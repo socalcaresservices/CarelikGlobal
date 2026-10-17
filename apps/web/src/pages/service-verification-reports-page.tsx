@@ -187,7 +187,11 @@ function csvQuote(value: unknown) {
 }
 
 function downloadCsvFile(filename: string, header: string[], rows: unknown[][]) {
-  const csv = [header, ...rows].map((row) => row.map(csvQuote).join(",")).join("\r\n");
+  saveTextFile(filename, [header, ...rows].map((row) => row.map(csvQuote).join(",")).join("\r\n"));
+}
+
+/** Saves text the server (or, in the older build, the page) produced. */
+function saveTextFile(filename: string, csv: string) {
   const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
   const url = URL.createObjectURL(blob);
   const anchor = document.createElement("a");
@@ -350,17 +354,26 @@ export function ServiceVerificationReportsPage() {
     useOrganization();
   const canRead = hasPermission("visits.read");
   const canManage = hasPermission("visits.manage");
-  // 0069: in the AWS build an export needs reports.export, and the server authorizes and records it BEFORE the file is made. A refusal downloads nothing.
+  // 0069/0072: in the AWS build an export needs reports.export and is MADE BY THE SERVER: it checks the permission, records the request, builds the file, records that it
+  // generated it (rows, bytes, SHA-256) and only then returns it. The browser only saves what the server returned. Delivery to this device is not recorded.
   const awsApi = useContext(AwsApiContext);
   const canExport = awsApi ? hasPermission("reports.export") : true;
   const [exportError, setExportError] = useState<string | null>(null);
+  const [exportNotice, setExportNotice] = useState<string | null>(null);
   const downloadCsv = (filename: string, header: string[], rows: unknown[][]) => {
-    const report = filename.startsWith("client-service-calendar") ? "client_service_calendar" : filename.startsWith("monthly-service-reconciliation") ? "monthly_service_reconciliation" : "correction_history";
     if (!awsApi) return downloadCsvFile(filename, header, rows);
+    const report = filename.startsWith("client-service-calendar") ? "client_service_calendar" : filename.startsWith("monthly-service-reconciliation") ? "monthly_service_reconciliation" : "correction_history";
+    const params = report === "correction_history"
+      ? { dateFrom: dateFrom || null, dateTo: dateTo || null, clientId: clientFilter || null, serviceId: serviceFilter || null, caregiverUserId: caregiverFilter || null, correctedByUserId: correctedByFilter || null, status: statusFilter || null }
+      : { monthStart: `${reportMonth}-01`, clientId: clientFilter || null };
     setExportError(null);
-    void awsApi.post("/v1/exports", { organizationId: activeOrganizationId, report, rowCount: rows.length, params: { filename } })
-      .then(() => downloadCsvFile(filename, header, rows))
-      .catch((cause: unknown) => setExportError(cause instanceof Error ? cause.message : "The export was not allowed. Nothing was downloaded."));
+    setExportNotice(null);
+    void awsApi.post<{ filename: string; csv: string; rowCount: number }>("/v1/exports", { organizationId: activeOrganizationId, report, params })
+      .then((r) => {
+        saveTextFile(r.filename, r.csv);
+        setExportNotice(`The server generated ${r.filename} (${r.rowCount} row${r.rowCount === 1 ? "" : "s"}) and recorded the export. Whether the file reached this device is not recorded.`);
+      })
+      .catch((cause: unknown) => setExportError(cause instanceof Error ? cause.message : "The export was not made. Nothing was downloaded."));
   };
   const queryClient = useQueryClient();
   const backend = useServiceVerificationBackend();
@@ -2039,6 +2052,7 @@ export function ServiceVerificationReportsPage() {
       ) : null}
 
       {exportError ? <p role="alert" className="text-sm text-red-700 print:hidden">{exportError}</p> : null}
+      {exportNotice ? <p role="status" className="text-sm text-emerald-800 print:hidden">{exportNotice}</p> : null}
       {reportView === "reconciliation" ? (
         <Card className="print:border-none print:p-0 print:shadow-none">
           <div className="flex flex-wrap items-end justify-between gap-4">

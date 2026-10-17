@@ -522,6 +522,27 @@ export const ROUTES: Record<string, Route> = {
   },
 
   // Stored amendment impacts (0068): authorizations.update or shifts.manage. Open ones by default.
+  // 0071: an authorization decrease sent this unapproved Billing Ready visit back to review. Reading needs visits.read; lifting it needs visits.manage and a note.
+  "GET /v1/visits/{visitId}/authorization-review": {
+    mutating: false,
+    handle: async ({ event, tx }) => {
+      const visit = uuid(p(event).visitId, "visitId");
+      return { review: await tx(async (db) => ((await db.query("select ogevia_api.get_visit_authorization_review($1) as r", [visit])).rows[0] as { r: unknown }).r) };
+    },
+  },
+
+  "POST /v1/visits/{visitId}/authorization-review/resolve": {
+    mutating: true,
+    handle: async ({ event, tx }) => {
+      const visit = uuid(p(event).visitId, "visitId");
+      const body = parseBody(event.body, event.isBase64Encoded);
+      const key = idempotencyKey(event.headers);
+      const note = text(body.note, "note", 1000, { required: true });
+      const result = await tx(async (db) => ((await db.query("select ogevia_api.resolve_visit_authorization_review($1, $2, $3) as r", [visit, note, key])).rows[0] as { r: unknown }).r);
+      return { resolution: result };
+    },
+  },
+
   "GET /v1/authorization-impacts": {
     mutating: false,
     handle: async ({ event, tx }) => {

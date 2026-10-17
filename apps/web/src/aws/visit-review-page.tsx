@@ -21,6 +21,7 @@ import { newIdempotencyKey, type BillingState } from "@/lib/sv-backend";
 import { APPROVAL_STATUS_LABEL } from "./billing-format";
 import { useOrganization } from "@/providers/organization-provider";
 import { useAwsApi } from "./aws-workspace";
+import { AuthorizationReviewCard } from "./authorization-review-card";
 import { SignatureRecoveryCard } from "./signature-recovery";
 
 interface VisitReview {
@@ -305,6 +306,8 @@ export function VisitReviewPage() {
           )}
         </Card>
       ) : null}
+
+      <AuthorizationReviewCard visitId={v.visitId} />
 
       {inReview && v.reviewReasons.includes("no_client_signature") && activeOrganizationId ? (
         <SignatureRecoveryCard

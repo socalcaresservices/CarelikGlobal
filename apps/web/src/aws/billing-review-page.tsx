@@ -136,9 +136,14 @@ export function BillingReviewPage() {
                       }
                       if (state !== "ready_for_review" && state !== "voided") {
                         return (
-                          <Link to={`/visits/${r.visitId}`} className="inline-flex min-h-[40px] items-center rounded-lg border border-amber-600 px-3 text-sm font-medium text-amber-900 hover:bg-amber-50">
-                            {state === "needs_correction" ? "Correct or resolve" : "Review visit"}
-                          </Link>
+                          <div className="space-y-1">
+                            {(r.reviewReasons ?? []).includes("authorization_decreased") ? (
+                              <p data-testid="authorization-decreased" className="text-xs text-amber-900">The authorization was lowered after this visit was confirmed. The visit and its minutes are unchanged; confirm it is still billable, or correct it.</p>
+                            ) : null}
+                            <Link to={`/visits/${r.visitId}`} className="inline-flex min-h-[40px] items-center rounded-lg border border-amber-600 px-3 text-sm font-medium text-amber-900 hover:bg-amber-50">
+                              {state === "needs_correction" ? "Correct or resolve" : "Review visit"}
+                            </Link>
+                          </div>
                         );
                       }
                       if (!canApprove) return <span className="text-slate-500">Not approved</span>;

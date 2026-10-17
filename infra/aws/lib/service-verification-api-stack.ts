@@ -155,6 +155,8 @@ export const SERVICE_VERIFICATION_ROUTES: ReadonlyArray<{
   { method: apigw.HttpMethod.POST, path: "/v1/shift-pickups/{requestId}/confirm" },
   { method: apigw.HttpMethod.POST, path: "/v1/shift-pickups/{requestId}/decline" },
   { method: apigw.HttpMethod.GET, path: "/v1/shifts-to-reconcile" },
+  { method: apigw.HttpMethod.GET, path: "/v1/visits/{visitId}/authorization-review" },
+  { method: apigw.HttpMethod.POST, path: "/v1/visits/{visitId}/authorization-review/resolve" },
   { method: apigw.HttpMethod.GET, path: "/v1/authorization-impacts" },
   { method: apigw.HttpMethod.POST, path: "/v1/authorization-impacts/{impactId}/acknowledge" },
   { method: apigw.HttpMethod.GET, path: "/v1/reports/monthly-chain" },

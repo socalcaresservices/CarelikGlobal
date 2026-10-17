@@ -206,7 +206,7 @@ describe("ServiceVerificationReportsPage", () => {
       const createObjectURL = vi.fn(() => "blob:x");
       Object.defineProperty(URL, "createObjectURL", { configurable: true, value: createObjectURL });
       Object.defineProperty(URL, "revokeObjectURL", { configurable: true, value: vi.fn() });
-      const post = vi.fn(async (path: string) => (path === "/v1/reports/monthly-chain/export" ? { exportId: "e9", filename: "monthly-chain-2026-10.csv", csv: "a,b" } : { export: {} })) as unknown as AwsApiClient["post"];
+      const post = vi.fn(async () => ({ exportId: "e9", filename: "monthly-chain-2026-10.csv", csv: "a,b", rowCount: 1, byteCount: 3 })) as unknown as AwsApiClient["post"];
       const getRows = vi.fn(async () => ({ rows: [chainRow()] })) as unknown as AwsApiClient["get"];
       renderAws(["visits.read", "billing.visits.read", "reports.export"], post, getRows);
       const section = await screen.findByTestId("monthly-chain");
@@ -217,10 +217,10 @@ describe("ServiceVerificationReportsPage", () => {
       expect(row).toHaveTextContent("35 min"); // to reconcile
       expect(row).toHaveTextContent("1 hr 20 min"); // Billing Ready
       expect(getRows).toHaveBeenCalledWith("/v1/reports/monthly-chain", expect.objectContaining({ organizationId: ORG_ID }));
-      fireEvent.click(within(section).getByRole("button", { name: "Export CSV (recorded)" }));
+      fireEvent.click(within(section).getByRole("button", { name: "Export CSV (server-made, recorded)" }));
       await waitFor(() => expect(createObjectURL).toHaveBeenCalledTimes(1));
-      expect(post).toHaveBeenCalledWith("/v1/reports/monthly-chain/export", expect.objectContaining({ organizationId: ORG_ID }));
-      expect(await within(section).findByText(/Exported\. The export is recorded/)).toBeInTheDocument();
+      expect(post).toHaveBeenCalledWith("/v1/exports", expect.objectContaining({ organizationId: ORG_ID, report: "monthly_chain" }));
+      expect(await within(section).findByText(/Whether it reached this device is not recorded/)).toBeInTheDocument();
     });
 
     it("a row that does not add up is called out with the difference, and a non-exporter gets no export button", async () => {
@@ -230,7 +230,7 @@ describe("ServiceVerificationReportsPage", () => {
       const section = await screen.findByTestId("monthly-chain");
       expect(await within(section).findByTestId("chain-checks")).toHaveTextContent("1 row does not add up");
       expect(within(section).getByText("Off by 15 min")).toBeInTheDocument();
-      expect(within(section).queryByRole("button", { name: "Export CSV (recorded)" })).not.toBeInTheDocument();
+      expect(within(section).queryByRole("button", { name: "Export CSV (server-made, recorded)" })).not.toBeInTheDocument();
       expect(within(section).getByText(/Your role can read this report but not export it/)).toBeInTheDocument();
     });
 
@@ -243,20 +243,24 @@ describe("ServiceVerificationReportsPage", () => {
       expect(post).not.toHaveBeenCalled();
     });
 
-    it("an exporter's click asks the server to authorize and record the export first, and the file is made only after it agrees", async () => {
-      const created: string[] = [];
-      const createObjectURL = vi.fn((b: Blob) => { created.push(String(b.size)); return "blob:x"; });
+    it("an exporter's click asks the SERVER to make the file; the browser saves exactly what the server returned and does not say it was delivered", async () => {
+      const saved: string[] = [];
+      const createObjectURL = vi.fn((b: Blob) => { saved.push(String(b.size)); return "blob:x"; });
       Object.defineProperty(URL, "createObjectURL", { configurable: true, value: createObjectURL });
       Object.defineProperty(URL, "revokeObjectURL", { configurable: true, value: vi.fn() });
-      const post = vi.fn(async () => ({ export: { exportId: "e1" } })) as unknown as AwsApiClient["post"];
+      const post = vi.fn(async () => ({ exportId: "e1", filename: "monthly-service-reconciliation-2026-10.csv", csv: "server,made", rowCount: 1, byteCount: 11 })) as unknown as AwsApiClient["post"];
       renderAws(["visits.read", "billing.visits.read", "reports.export", "clients.names.read"], post, get);
       await screen.findByRole("columnheader", { name: "Hours left" });
       fireEvent.click(screen.getAllByRole("button", { name: "CSV" })[0]!);
       await waitFor(() => expect(createObjectURL).toHaveBeenCalledTimes(1));
-      expect(post).toHaveBeenCalledWith("/v1/exports", expect.objectContaining({ organizationId: ORG_ID, report: "monthly_service_reconciliation", rowCount: 1 }));
+      expect(saved).toEqual(["11"]); // the bytes the server returned, not a file built from the page
+      expect(post).toHaveBeenCalledWith("/v1/exports", expect.objectContaining({ organizationId: ORG_ID, report: "monthly_service_reconciliation", params: expect.objectContaining({ clientId: null }) }));
+      const note = await screen.findByText(/The server generated monthly-service-reconciliation/);
+      expect(note).toHaveTextContent("The server generated monthly-service-reconciliation-2026-10.csv (1 row) and recorded the export.");
+      expect(note).toHaveTextContent("Whether the file reached this device is not recorded.");
     });
 
-    it("when the server refuses the export, nothing is downloaded and the reason is shown", async () => {
+    it("when the server refuses or fails, nothing is downloaded and the reason is shown", async () => {
       const createObjectURL = vi.fn(() => "blob:x");
       Object.defineProperty(URL, "createObjectURL", { configurable: true, value: createObjectURL });
       const post = vi.fn(async () => { throw new Error("You do not have permission to export reports"); }) as unknown as AwsApiClient["post"];
