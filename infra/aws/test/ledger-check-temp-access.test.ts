@@ -290,6 +290,152 @@ describe("a hung command is bounded, counts as a failure and goes through cleanu
   });
 });
 
+
+// ---- --host-ip mode (TEST only): the rule names ONLY the admin host's own live private IP as /32 ----
+const IP = "10.20.132.179";
+const CIDR = `${IP}/32`;
+const cidrPresent = () => sg().i.some((p: any) => p.FromPort === 5432 && (p.IpRanges ?? []).some((r: any) => r.CidrIp === CIDR));
+const authorizeCalls = () => calls().filter((c) => c.startsWith("ec2 authorize-security-group-ingress"));
+const HOSTIP = ["test", "--host-ip"];
+
+describe("--host-ip mode", () => {
+  it("the default mode STILL refuses the shared admin group (the three interfaces from the operator's report); nothing changes", async () => {
+    const r = await run(["test"], { env: { MOCK_SHARED_ENI: "endpoints" } });
+    expect(r.code).toBe(1);
+    expect(r.out).toContain("more than the admin host");
+    expect(r.out).toContain("--host-ip");
+    expect(authorizeCalls()).toHaveLength(0);
+    expect(sg()).toEqual(INITIAL_SG);
+  });
+  it("success with the shared group: ONE rule, source exactly <live IP>/32, never the group; removed and verified identical to the original", async () => {
+    const r = await run(HOSTIP, { env: { MOCK_SHARED_ENI: "endpoints", OGEVIA_EXPECT_HOST_IP: IP } });
+    expect(r.code).toBe(0);
+    expect(r.out).toContain(`admin host IP (live): ${IP} on eni-099616641dd91bcaf`);
+    expect(r.out).toContain(`inbound tcp 5432 from ${CIDR}`);
+    expect(r.out).toContain("RESTORED (verified)");
+    expect(r.out).toContain("SECURITY GROUP: restored and verified identical to the original");
+    const a = authorizeCalls();
+    expect(a).toHaveLength(1);
+    expect(a[0]).toContain(`IpRanges=[{CidrIp=${CIDR},`);
+    expect(a[0]).not.toContain("UserIdGroupPairs");
+    expect(a[0]).not.toContain("sg-00e01e2ca80442c1f");
+    expect(sg()).toEqual(INITIAL_SG);
+    expect(cidrPresent()).toBe(false);
+    expect(marker()).toBe(false);
+    expect(verbs().join("|")).not.toMatch(/modify|attach|create|delete|update|UNEXPECTED/);
+  });
+  it("the window really holds exactly the /32 and nothing else (checked mid-run)", async () => {
+    let seen: any = null;
+    await run(HOSTIP, { env: { MOCK_PSQL_SLEEP: "2" }, killWhen: () => { if (existsSync(join(dir, "psql-started")) && !seen) seen = JSON.parse(readFileSync(join(dir, "sg.json"), "utf8")); return false; } });
+    const inbound5432 = seen.i.filter((p: any) => p.FromPort === 5432);
+    expect(inbound5432).toHaveLength(1);
+    expect(inbound5432[0].IpRanges).toEqual([{ CidrIp: CIDR }]);
+    expect(inbound5432[0].UserIdGroupPairs.map((g: any) => g.GroupId)).toEqual(["sg-064ffce3bcbe8eb3b"]);
+    expect(seen.e).toEqual(INITIAL_SG.e);
+  }, 30000);
+  it("is TEST-only: prod --host-ip, --restore-only --host-ip and unknown second arguments are refused before any AWS call", async () => {
+    for (const args of [["prod", "--host-ip"], ["--restore-only", "--host-ip"], ["test", "--whatever"]]) {
+      const r = await run(args);
+      expect(r.code).toBe(2);
+    }
+    expect(calls()).toHaveLength(0);
+  });
+  const refusals: [string, Record<string, string>, RegExp][] = [
+    ["the host has a second network interface", { MOCK_HOST_SECOND_ENI: "1" }, /exactly ONE network interface/],
+    ["the host's interface has a second private IPv4 address", { MOCK_HOST_SECOND_IP: "10.20.132.180" }, /exactly ONE network interface/],
+    ["the host is not running", { MOCK_HOST_STATE: "stopping" }, /not running/],
+    ["the address is public", { MOCK_HOST_IP: "8.8.8.8" }, /not a valid private/],
+    ["the address is malformed", { MOCK_HOST_IP: "10.20.132.999" }, /not a valid private/],
+    ["the address has a leading zero", { MOCK_HOST_IP: "10.020.132.179" }, /not a valid private/],
+    ["the live IP differs from the pinned expectation", { OGEVIA_EXPECT_HOST_IP: "10.20.132.180" }, /OGEVIA_EXPECT_HOST_IP/],
+    ["the IP maps to more than one interface", { MOCK_IP_MAPS_TWO: "1" }, /does not map to exactly one interface/],
+    ["the IP maps to an interface on another instance", { MOCK_IP_MAPS_OTHER_INSTANCE: "1" }, /does not map to exactly one interface/],
+    ["the admin host's security groups are not exactly the expected one", { MOCK_HOST_SG: "sg-0123456789abcdef0" }, /expected exactly/],
+    ["the RDS group is not the expected one", { MOCK_RDS_SG: "sg-0aaaaaaaaaaaaaaaa" }, /expected exactly/],
+  ];
+  for (const [name, env, expected] of refusals) {
+    it(`refuses, changing nothing, when ${name}`, async () => {
+      const r = await run(HOSTIP, { env: { MOCK_SHARED_ENI: "endpoints", ...env } });
+      expect(r.code).toBe(1);
+      expect(r.out).toMatch(expected);
+      expect(authorizeCalls()).toHaveLength(0);
+      expect(sg()).toEqual(INITIAL_SG);
+      expect(marker()).toBe(false);
+    });
+  }
+  it("refuses when that /32 rule is already present", async () => {
+    const s = sg(); s.i[0].IpRanges.push({ CidrIp: CIDR }); writeFileSync(join(dir, "sg.json"), JSON.stringify(s));
+    const r = await run(HOSTIP, { env: { MOCK_SHARED_ENI: "endpoints" } });
+    expect(r.code).toBe(1);
+    expect(r.out).toContain("ALREADY exists");
+    expect(authorizeCalls()).toHaveLength(0);
+  });
+  it("does nothing unless the exact phrase is typed", async () => {
+    const r = await run(HOSTIP, { input: "yes\n" });
+    expect(r.code).toBe(0);
+    expect(r.out).toContain("Declined. Nothing was changed.");
+    expect(authorizeCalls()).toHaveLength(0);
+    expect(sg()).toEqual(INITIAL_SG);
+  });
+  it("a database failure after opening: the /32 rule is removed and verified", async () => {
+    const r = await run(HOSTIP, { env: { MOCK_PSQL_FAIL: "1" } });
+    expect(r.code).toBe(1);
+    expect(r.out).toContain("RESTORED (verified)");
+    expect(sg()).toEqual(INITIAL_SG);
+    expect(marker()).toBe(false);
+  });
+  it("interrupted (SIGTERM) mid-query: the /32 rule is removed and verified", async () => {
+    const r = await run(HOSTIP, { env: { MOCK_PSQL_SLEEP: "30" }, killWhen: () => existsSync(join(dir, "psql-started")) && cidrPresent() });
+    expect(r.out).toContain("Interrupted: cleaning up.");
+    expect(r.out).toContain("RESTORED (verified)");
+    expect(cidrPresent()).toBe(false);
+    expect(sg()).toEqual(INITIAL_SG);
+  }, 40000);
+  it("a hung authorize ends as TIMED OUT and the group is verified unchanged", async () => {
+    const r = await run(HOSTIP, { env: { ...FAST, MOCK_HANG: "ec2-authorize-security-group-ingress" } });
+    expect(r.code).toBe(1);
+    expect(r.out).toContain("TIMED OUT");
+    expect(r.out).toContain("RESTORED (verified)");
+    expect(sg()).toEqual(INITIAL_SG);
+  });
+  it("a revoke that always fails: NOT RESTORED, exit 3, marker kept (kind cidr), recovery text names ONLY the /32 row by rule id; the next run is refused", async () => {
+    const r = await run(HOSTIP, { env: { ...FAST, MOCK_REVOKE_ALWAYS_FAILS: "1" } });
+    expect(r.code).toBe(3);
+    expect(r.out).toContain("NOT RESTORED (exit 3; access may still be open)");
+    expect(r.out).toContain(`the ONE row with cidr ${CIDR}, tcp, 5432`);
+    const lines = r.out.split("\n").filter((l) => /aws ec2 (describe-security-group-rules|revoke-security-group-ingress)/.test(l));
+    expect(lines.some((l) => l.includes("describe-security-group-rules") && l.includes("cidr:CidrIpv4"))).toBe(true);
+    const revoke = lines.filter((l) => l.includes("revoke-security-group-ingress"));
+    expect(revoke).toHaveLength(1);
+    expect(revoke[0]).toContain("--security-group-rule-ids sgr-");
+    expect(revoke[0]).not.toContain("--ip-permissions");
+    expect(r.out).not.toMatch(/revoke[^\n]*sg-064ffce3bcbe8eb3b/);
+    expect(cidrPresent()).toBe(true);
+    expect(marker()).toBe(true);
+    expect(JSON.parse(readFileSync(join(dir, "state", "OPEN"), "utf8"))).toMatchObject({ kind: "cidr", cidr: CIDR });
+    const next = await run(HOSTIP);
+    expect(next.code).toBe(1);
+    expect(next.out).toContain("an earlier window is marked OPEN");
+    expect(cidrPresent()).toBe(true); // the refused run did not touch the open window
+  }, 60000);
+  it("--restore-only reads the marker's kind: it removes a left-over /32 rule and verifies the original", async () => {
+    const r = await run(HOSTIP, { env: { ...FAST, MOCK_REVOKE_ALWAYS_FAILS: "1" } });
+    expect(r.code).toBe(3);
+    expect(cidrPresent()).toBe(true);
+    const fixed = await run(["--restore-only"], { env: FAST }); // no failure injection now
+    expect(fixed.code).toBe(0);
+    expect(fixed.out).toContain("RESTORED (verified)");
+    expect(cidrPresent()).toBe(false);
+    expect(sg()).toEqual(INITIAL_SG);
+    expect(marker()).toBe(false);
+  }, 60000);
+  it("a rule-set change other than the single /32 is detected and the run stops", async () => {
+    const r = await run(HOSTIP, { env: { MOCK_PSQL_SLEEP: "2" }, killWhen: () => { if (existsSync(join(dir, "psql-started"))) { const s = sg(); if (!s.e.some((x: any) => x.IpProtocol === "tcp")) { s.e.push({ IpProtocol: "tcp", FromPort: 1, ToPort: 1, UserIdGroupPairs: [], IpRanges: [{ CidrIp: "10.0.0.0/8" }], Ipv6Ranges: [], PrefixListIds: [] }); writeFileSync(join(dir, "sg.json"), JSON.stringify(s)); } } return false; } });
+    expect(r.out).toContain("NOT RESTORED");
+    expect(r.code).toBe(3);
+  }, 30000);
+});
+
 describe("static properties of the script", () => {
   it("changes only the RDS group's inbound rule: no instance, host, application-group, stack, Lambda or secret write", () => {
     const calls2 = [...code.matchAll(/\baws\s+(sts|cloudformation|lambda|rds|ec2|ssm|secretsmanager)\s+([a-z0-9-]+)/g)].map((m) => `${m[1]} ${m[2]}`);
@@ -301,7 +447,13 @@ describe("static properties of the script", () => {
   it("authorizes and revokes only tcp 5432 from the admin group on the RDS group", () => {
     expect(code).toMatch(/authorize-security-group-ingress --group-id "\$EXPECT_RDS_SG" --ip-permissions "IpProtocol=tcp,FromPort=5432,ToPort=5432,UserIdGroupPairs=\[\{GroupId=\$ADMIN_SG,/);
     expect(code).toMatch(/revoke-security-group-ingress --group-id "\$1" --ip-permissions "IpProtocol=tcp,FromPort=5432,ToPort=5432,UserIdGroupPairs=\[\{GroupId=\$2\}\]"/);
-    expect(code).not.toMatch(/0\.0\.0\.0\/0|CidrIp=/);
+    expect(code).not.toMatch(/0\.0\.0\.0\/0/);
+    // the ONLY CIDR source ever written is $HOST_CIDR, which is "$HOST_IP/32" built from the live host IP; revoke takes the recorded value
+    expect(code).toContain('HOST_CIDR="$HOST_IP/32"');
+    const cidrUses = [...code.matchAll(/CidrIp=([^,}\]"]*)/g)].map((m) => m[1]);
+    expect(new Set(cidrUses)).toEqual(new Set(["$HOST_CIDR", "$2"]));
+    expect(code.match(/\/(\d+)["'\s]/g)?.filter((x) => !/\/32/.test(x) && !/\/dev\/|\/tmp|\/null/.test(x)) ?? []).toEqual([]);
+    expect(code).toMatch(/--host-ip\) \[\[ "\$ARG" == test \]\]/); // prod --host-ip is refused
   });
   it("cleans up on every exit path and uses read-only SQL", () => {
     expect(code).toContain("trap on_exit EXIT");

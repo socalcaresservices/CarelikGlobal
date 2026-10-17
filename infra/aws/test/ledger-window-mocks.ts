@@ -24,20 +24,39 @@ case "$svc $verb" in
   "cloudformation list-stack-resources") echo '{"StackResourceSummaries":[{"ResourceType":"AWS::Lambda::Function","LogicalResourceId":"HandlerAB12","PhysicalResourceId":"fn-handler"}]}' ;;
   "lambda get-function-configuration") echo "{\\"Environment\\":{\\"Variables\\":{\\"DB_NAME\\":\\"\${MOCK_LAMBDA_DB:-ogevia_sv_test}\\",\\"OGEVIA_ENV\\":\\"\${MOCK_LAMBDA_ENV:-test}\\"}}}" ;;
   "rds describe-db-instances") echo "{\\"DBInstanceStatus\\":\\"available\\",\\"PubliclyAccessible\\":false,\\"Endpoint\\":{\\"Address\\":\\"db.example.internal\\"},\\"VpcSecurityGroups\\":[{\\"VpcSecurityGroupId\\":\\"\${MOCK_RDS_SG:-sg-00530a1f4f7648e65}\\"}],\\"MasterUserSecret\\":{\\"SecretArn\\":\\"arn:aws:secretsmanager:us-west-2:300094796789:secret:rds-master\\"}}" ;;
-  "ec2 describe-instances") echo "[\\"i-0ce8db2d7e5839dd5\\",[\\"\${MOCK_HOST_SG:-sg-00e01e2ca80442c1f}\\"]]" ;;
-  "ec2 describe-network-interfaces") if [[ -n "\${MOCK_SHARED_ENI:-}" ]]; then echo '[["eni-1","i-0ce8db2d7e5839dd5"],["eni-2","i-other"]]'; else echo '[["eni-1","i-0ce8db2d7e5839dd5"]]'; fi ;;
+  "ec2 describe-instances")
+    if [[ "$*" == *"--instance-ids"* ]]; then
+      # the --host-ip mode's live read of the admin host's network details (shape of the script's --query)
+      ips="\\"\${MOCK_HOST_IP:-10.20.132.179}\\"\${MOCK_HOST_SECOND_IP:+,\\"\$MOCK_HOST_SECOND_IP\\"}"
+      second=""; [[ -n "\${MOCK_HOST_SECOND_ENI:-}" ]] && second=",{\\"eni\\":\\"eni-extra\\",\\"ips\\":[\\"10.20.132.200\\"]}"
+      echo "{\\"state\\":\\"\${MOCK_HOST_STATE:-running}\\",\\"ip\\":\\"\${MOCK_HOST_IP:-10.20.132.179}\\",\\"vpc\\":\\"vpc-0ee9df0c38297cbc1\\",\\"enis\\":[{\\"eni\\":\\"eni-099616641dd91bcaf\\",\\"ips\\":[$ips]}$second]}"
+    else echo "[\\"i-0ce8db2d7e5839dd5\\",[\\"\${MOCK_HOST_SG:-sg-00e01e2ca80442c1f}\\"]]"; fi ;;
+  "ec2 describe-network-interfaces")
+    if [[ "$*" == *"addresses.private-ip-address"* ]]; then
+      # the IP -> interface map used by --host-ip
+      if [[ -n "\${MOCK_IP_MAPS_TWO:-}" ]]; then echo '[["eni-099616641dd91bcaf","i-0ce8db2d7e5839dd5"],["eni-0b2b4b87e28db8c64",null]]'
+      elif [[ -n "\${MOCK_IP_MAPS_OTHER_INSTANCE:-}" ]]; then echo '[["eni-099616641dd91bcaf","i-other"]]'
+      else echo '[["eni-099616641dd91bcaf","i-0ce8db2d7e5839dd5"]]'; fi
+    elif [[ "\${MOCK_SHARED_ENI:-}" == endpoints ]]; then echo '[["eni-099616641dd91bcaf","i-0ce8db2d7e5839dd5"],["eni-0b2b4b87e28db8c64",null],["eni-0edeacce8b7ea403b",null]]'
+    elif [[ -n "\${MOCK_SHARED_ENI:-}" ]]; then echo '[["eni-099616641dd91bcaf","i-0ce8db2d7e5839dd5"],["eni-2","i-other"]]'
+    else echo '[["eni-099616641dd91bcaf","i-0ce8db2d7e5839dd5"]]'; fi ;;
   "ec2 describe-security-groups")
     if [[ "$*" == *"{i:IpPermissions"* ]]; then cat "$SG"
+    elif [[ "$*" == *"IpRanges[].CidrIp"* ]]; then jq -r '.i[] | select(.IpProtocol=="tcp" and .FromPort==5432 and .ToPort==5432) | .IpRanges[].CidrIp' "$SG" | tr '\\n' '\\t'; echo
     else jq -r '.i[] | select(.IpProtocol=="tcp" and .FromPort==5432 and .ToPort==5432) | .UserIdGroupPairs[].GroupId' "$SG" | tr '\\n' '\\t'; echo; fi ;;
   "ec2 authorize-security-group-ingress")
     [[ -n "\${MOCK_FAIL_AUTHORIZE:-}" ]] && { echo "An error occurred (UnauthorizedOperation)" >&2; exit 254; }
     g=$(grep -o 'GroupId=sg-[0-9a-f]*' <<<"$*" | head -1 | cut -d= -f2)
+    c=$(grep -o 'CidrIp=[0-9./]*' <<<"$*" | head -1 | cut -d= -f2)
     touch "$D/authorized"
+    if [[ -n "$c" ]]; then jq --arg c "$c" '.i |= map(if (.IpProtocol=="tcp" and .FromPort==5432 and .ToPort==5432) then .IpRanges += [{CidrIp:$c}] else . end)' "$SG" > "$SG.tmp" && mv "$SG.tmp" "$SG"; exit 0; fi
     jq --arg g "$g" '.i |= map(if (.IpProtocol=="tcp" and .FromPort==5432 and .ToPort==5432) then .UserIdGroupPairs += [{GroupId:$g,UserId:"300094796789"}] else . end)' "$SG" > "$SG.tmp" && mv "$SG.tmp" "$SG" ;;
   "ec2 revoke-security-group-ingress")
     n=$(cat "$D/revoke-count" 2>/dev/null || echo 0); echo $((n+1)) > "$D/revoke-count"
     if [[ -n "\${MOCK_REVOKE_ALWAYS_FAILS:-}" ]] || (( n < \${MOCK_REVOKE_FAILS:-0} )); then echo "An error occurred (RequestLimitExceeded)" >&2; exit 254; fi
     g=$(grep -o 'GroupId=sg-[0-9a-f]*' <<<"$*" | head -1 | cut -d= -f2)
+    c=$(grep -o 'CidrIp=[0-9./]*' <<<"$*" | head -1 | cut -d= -f2)
+    if [[ -n "$c" ]]; then jq --arg c "$c" '.i |= map(if (.IpProtocol=="tcp" and .FromPort==5432 and .ToPort==5432) then .IpRanges |= map(select(.CidrIp != $c)) else . end)' "$SG" > "$SG.tmp" && mv "$SG.tmp" "$SG"; exit 0; fi
     jq --arg g "$g" '.i |= map(if (.IpProtocol=="tcp" and .FromPort==5432 and .ToPort==5432) then .UserIdGroupPairs |= map(select(.GroupId != $g)) else . end)' "$SG" > "$SG.tmp" && mv "$SG.tmp" "$SG" ;;
   "ssm start-session")
     port=$(grep -o 'localPortNumber=[0-9]*' <<<"$*" | cut -d= -f2)
