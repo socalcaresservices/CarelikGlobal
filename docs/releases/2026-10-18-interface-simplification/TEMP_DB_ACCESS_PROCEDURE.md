@@ -239,3 +239,6 @@ Supervised TEST-only run (only after you approve it):
 5. In the recovery session re-run the listing: one inbound rule, `sourceSg sg-064ffce3bcbe8eb3b`, no `cidr`.
 6. On `NOT RESTORED`, exit 3, or a lost session: run the section 10.3 recovery from the recovery session (the row with cidr `10.20.132.179/32`, tcp 5432; revoke by rule id).
 Production is not approved. No stack update or deployment should run during the window.
+
+## 12. Outcome of the TEST run (owner-reported; recorded 2026-10-17)
+The TEST ledger check passed: 52 migrations, latest 0052, no rows with version ≥ 0053. The script reported the security group fully restored, and a separate read-only check showed that only the original rule `sgr-088d9ee71c4b0244d` remains on the RDS group. Not recorded because not supplied: the time of the run, the exact script commit and mode used, and the raw output. The window was not applied by this session; the evidence is the operator's report. Production was not run and is not approved. The retained limitation (total session loss or SIGKILL leaves the rule open until revoked) did not occur in this run and is unchanged. Recorded in the release README under "Migration edited in place".
