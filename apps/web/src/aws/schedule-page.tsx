@@ -11,6 +11,7 @@ import { formatDuration } from "@/lib/service-verification";
 import { useAgencyClock } from "./agency-clock";
 import { RecurringSeriesForm, RejectedDates, RescheduleForm, SeriesList } from "./recurring-schedule";
 import { PickupRequestsPanel } from "./pickup-requests";
+import { ReconcileShiftsPanel } from "./reconcile-shifts";
 import type { RejectedDate } from "./recurring-format";
 import { AssignmentChecks } from "./readiness/assignment-checks";
 import { HourLimitsPanel, MakeupForm } from "./scheduling-extras";
@@ -328,6 +329,7 @@ export function SchedulePage() {
       {notice ? <p role="status" className="text-sm text-emerald-800">{notice}</p> : null}
       <RejectedDates items={rejectedDates} />
       {canManage ? <PickupRequestsPanel onDone={showNotice} /> : null}
+      {canManage ? <ReconcileShiftsPanel onDone={showNotice} /> : null}
       <div className="flex flex-wrap items-end gap-3">
         <Button type="button" variant="secondary" onClick={() => setFrom(addDays(from, -7))}>← Previous week</Button>
         <div><label htmlFor="sh-from" className="block text-sm font-medium text-slate-700">Week starting</label><input id="sh-from" type="date" value={from} onChange={(e) => e.target.value && setFrom(e.target.value)} className={inputClass} /></div>

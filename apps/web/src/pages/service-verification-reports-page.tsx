@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useIsNarrow } from "@/lib/use-is-narrow";
@@ -52,6 +52,8 @@ import { useServiceVerificationBackend } from "@/lib/sv-backend-supabase";
 import { buildClientMonthSummary } from "@/lib/client-month-summary";
 import { CalendarSummary } from "@/components/calendar-summary";
 import { useEnvironmentMarker } from "@/aws/environment";
+import { AwsApiContext } from "@/aws/aws-workspace";
+import { MonthlyChainReport } from "@/aws/monthly-chain-report";
 import {
   AUTHORIZATION_STATUS_LABEL,
   classifyIncompleteVisit,
@@ -184,7 +186,7 @@ function csvQuote(value: unknown) {
   return `"${String(value ?? "").replace(/"/g, '""')}"`;
 }
 
-function downloadCsv(filename: string, header: string[], rows: unknown[][]) {
+function downloadCsvFile(filename: string, header: string[], rows: unknown[][]) {
   const csv = [header, ...rows].map((row) => row.map(csvQuote).join(",")).join("\r\n");
   const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
   const url = URL.createObjectURL(blob);
@@ -348,6 +350,18 @@ export function ServiceVerificationReportsPage() {
     useOrganization();
   const canRead = hasPermission("visits.read");
   const canManage = hasPermission("visits.manage");
+  // 0069: in the AWS build an export needs reports.export, and the server authorizes and records it BEFORE the file is made. A refusal downloads nothing.
+  const awsApi = useContext(AwsApiContext);
+  const canExport = awsApi ? hasPermission("reports.export") : true;
+  const [exportError, setExportError] = useState<string | null>(null);
+  const downloadCsv = (filename: string, header: string[], rows: unknown[][]) => {
+    const report = filename.startsWith("client-service-calendar") ? "client_service_calendar" : filename.startsWith("monthly-service-reconciliation") ? "monthly_service_reconciliation" : "correction_history";
+    if (!awsApi) return downloadCsvFile(filename, header, rows);
+    setExportError(null);
+    void awsApi.post("/v1/exports", { organizationId: activeOrganizationId, report, rowCount: rows.length, params: { filename } })
+      .then(() => downloadCsvFile(filename, header, rows))
+      .catch((cause: unknown) => setExportError(cause instanceof Error ? cause.message : "The export was not allowed. Nothing was downloaded."));
+  };
   const queryClient = useQueryClient();
   const backend = useServiceVerificationBackend();
   // Reused for retries of the same correction; renewed when the form changes.
@@ -1874,7 +1888,7 @@ export function ServiceVerificationReportsPage() {
               >
                 Print calendar / Save as PDF
               </Button>
-              {clientFilter && monthlyServiceRows.length > 0 ? (
+              {canExport && clientFilter && monthlyServiceRows.length > 0 ? (
                 <Button
                   type="button"
                   variant="secondary"
@@ -2024,6 +2038,7 @@ export function ServiceVerificationReportsPage() {
         </Card>
       ) : null}
 
+      {exportError ? <p role="alert" className="text-sm text-red-700 print:hidden">{exportError}</p> : null}
       {reportView === "reconciliation" ? (
         <Card className="print:border-none print:p-0 print:shadow-none">
           <div className="flex flex-wrap items-end justify-between gap-4">
@@ -2042,9 +2057,8 @@ export function ServiceVerificationReportsPage() {
                 authorization; <strong>Approved</strong> is what a person approved
                 for billing. Approval is not submission: Ogevia does not submit to
                 payers or track submissions. <strong>{STILL_SCHEDULED_LABEL}</strong>{" "}
-                is time held by scheduled shifts that have not been worked yet; it
-                drops to 0 once those visits are signed, because the worked time
-                then counts as worked and billable instead.
+                is time reserved by shifts that have not been signed yet (ahead, underway, held while a visit is in review, or ended with no visit record and awaiting a
+                person's decision); it drops once those visits are signed, because the worked time then counts as worked and billable instead. Nothing is released automatically.
               </p>
               {backend.kind === "aws" ? (
                 <p className="mt-1 text-xs print:hidden">
@@ -2064,7 +2078,7 @@ export function ServiceVerificationReportsPage() {
                   className="mt-1 block rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900"
                 />
               </label>
-              {monthlyServiceRows.length > 0 ? (
+              {canExport && monthlyServiceRows.length > 0 ? (
                 <Button
                   type="button"
                   variant="secondary"
@@ -2208,6 +2222,8 @@ export function ServiceVerificationReportsPage() {
         </Card>
       ) : null}
 
+      {reportView === "reconciliation" && awsApi && backend.kind === "aws" ? <MonthlyChainReport month={reportMonth} /> : null}
+
       {reportView === "corrections" ? (
         <Card className="print:border-none print:p-0 print:shadow-none">
           <div className="flex flex-wrap items-start justify-between gap-4">
@@ -2218,7 +2234,7 @@ export function ServiceVerificationReportsPage() {
                 immutable; this report shows who changed what, why, and when.
               </p>
             </div>
-            {correctionRows.length > 0 ? (
+            {canExport && correctionRows.length > 0 ? (
               <Button
                 type="button"
                 variant="secondary"

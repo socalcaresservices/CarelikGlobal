@@ -1,0 +1,151 @@
+/* eslint-disable @typescript-eslint/no-explicit-any -- a test double: request bodies are free-form JSON */
+// Accounting screens (0067-0070): shifts that ended with no visit, authorization changes to review, the full-chain report. SYNTHETIC data only.
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { CognitoAuthProvider, type CognitoAuthClient } from "@carelik/auth";
+import { MemoryRouter } from "react-router-dom";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { createAwsApiClient } from "@/lib/aws-api";
+import { AwsRoutes } from "./aws-root";
+
+const ORG = "aaaaaaaa-0000-4000-8000-000000000001";
+const SHIFT = "51515151-0000-4000-8000-000000000001";
+const IMPACT = "61616161-0000-4000-8000-000000000001";
+type Call = { method: string; path: string; body: Record<string, any> | null; key: string | null };
+const later = (h: number) => new Date(Date.now() + h * 3600e3).toISOString();
+
+function renderAt(path: string, permissions: string[], extra: Record<string, (body: any) => Response | undefined> = {}) {
+  const calls: Call[] = [];
+  const json = (code: number, body: unknown) => new Response(JSON.stringify(body), { status: code, headers: { "content-type": "application/json" } });
+  let reconciled = false;
+  let acked = false;
+  const fetchImpl = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+    const url = new URL(String(input));
+    const body = (init?.body ? JSON.parse(String(init.body)) : null) as Record<string, any> | null;
+    const key = new Headers(init?.headers).get("idempotency-key");
+    const method = init?.method ?? "GET";
+    calls.push({ method, path: url.pathname, body, key });
+    const handler = extra[`${method} ${url.pathname}`];
+    const custom = handler?.(body);
+    if (custom) return custom;
+    switch (`${method} ${url.pathname}`) {
+      case "GET /v1/me": return json(200, { memberships: [{ organizationId: ORG, organizationSlug: "org-a", organizationName: "Synthetic Care Co", organizationTimezone: "America/Los_Angeles", role: "manager", permissions }], profile: { displayName: "Morgan Manager" } });
+      case "GET /v1/branding": return json(200, { branding: { organizationId: ORG, displayName: "Synthetic Care Co", accentColor: null, logoSha256: null } });
+      case "GET /v1/attention": return json(200, { summary: null });
+      case "GET /v1/attention/overview": return json(200, { overview: { asOf: new Date().toISOString(), urgentWindowHours: 48, urgent: null, upcoming: { count: 0, nextStartsAt: null, shifts: [] }, documents: null, visitReview: null,
+        reconciliation: { count: 1, minutes: 90, oldestEndedAt: later(-5) }, amendmentImpacts: { count: 2, oldestAt: later(-30) } } });
+      case "GET /v1/shifts": return json(200, { shifts: [] });
+      case "GET /v1/clients": return json(200, { clients: [] });
+      case "GET /v1/services": return json(200, { services: [] });
+      case "GET /v1/caregivers": return json(200, { caregivers: [] });
+      case "GET /v1/shift-series": return json(200, { series: [] });
+      case "GET /v1/shift-pickups": return json(200, { requests: [] });
+      case "GET /v1/work-hour-policy": return json(200, { policy: { applies: false } });
+      case "GET /v1/hour-limits": return json(200, { limits: [] });
+      case "GET /v1/shifts-to-reconcile":
+        return json(200, { shifts: reconciled ? [] : [{ shiftId: SHIFT, reservationId: "r1", startsAt: later(-8), endsAt: later(-6), localDate: "2026-10-17", clientCode: "CL-1", serviceCode: "PCS", serviceName: "Personal care",
+          caregiverCode: "CG-1", reservedMinutes: 90, bucket: "unreconciled", endedHours: 6, lastOutcome: null, lastNote: null, lastDecidedAt: null }] });
+      case `POST /v1/shifts/${SHIFT}/reconcile`: reconciled = true; return json(200, { reconciliation: { outcome: body?.outcome, released: body?.outcome === "no_service_delivered", reservedMinutes: 90 } });
+      case "GET /v1/authorization-impacts":
+        return json(200, { impacts: acked && url.searchParams.get("includeAcknowledged") !== "true" ? [] : [{ impactId: IMPACT, createdAt: later(-3), impactKind: "reserved_shift_over_cap", clientCode: "CL-1", serviceCode: "PCS", serviceName: "Personal care", newVersionNumber: 2,
+          newMonthlyMinutes: 120, shiftId: SHIFT, shiftStartsAt: later(30), shiftEndsAt: later(32), visitId: null, serviceDate: "2026-10-20", minutes: 120, bucket: "ahead", stillApplicable: true,
+          acknowledgedAt: acked ? later(-1) : null, acknowledgedByName: acked ? "Morgan Manager" : null, acknowledgementNote: acked ? body?.note ?? "Moved it" : null, amendedByName: "Olivia Owner" }] });
+      case `POST /v1/authorization-impacts/${IMPACT}/acknowledge`: acked = true; return json(200, { acknowledgement: { impactId: IMPACT, acknowledged: true } });
+      default: return json(404, { error: { code: "not_found", message: `No such endpoint: ${method} ${url.pathname}` } });
+    }
+  });
+  const auth = {
+    subscribe: vi.fn(() => () => {}),
+    getSession: vi.fn(async () => ({ user: { id: "11111111-2222-4333-8444-555555555555", email: "m@example.test", emailVerified: true }, access_token: "t", expires_at: 4_000_000_000 })),
+    getAccessToken: vi.fn(async () => "t"), signIn: vi.fn(), handleCallback: vi.fn(), startPasswordReset: vi.fn(), signOut: vi.fn(),
+  };
+  const client = createAwsApiClient({ baseUrl: "https://api.example.test", getAccessToken: () => auth.getAccessToken(), fetch: fetchImpl as never });
+  render(
+    <MemoryRouter initialEntries={[path]}>
+      <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+        <CognitoAuthProvider client={auth as unknown as CognitoAuthClient}>
+          <AwsRoutes api={client} publicApi={client} />
+        </CognitoAuthProvider>
+      </QueryClientProvider>
+    </MemoryRouter>,
+  );
+  return { calls };
+}
+afterEach(() => { cleanup(); vi.clearAllMocks(); });
+const posts = (calls: Call[], path: string) => calls.filter((c) => c.method === "POST" && c.path === path);
+
+describe("shifts that ended with no visit record", () => {
+  it("are listed with the reserved time, and releasing needs a note, sends one keyed request, and says what happened", async () => {
+    const { calls } = renderAt("/schedule", ["shifts.manage", "visits.read", "clients.names.read"]);
+    const panel = await screen.findByTestId("shifts-to-reconcile", {}, { timeout: 15000 });
+    expect(within(panel).getByText(/Shifts that ended with no visit record \(1\)/)).toBeInTheDocument();
+    expect(within(panel).getByText(/Nothing is released automatically/)).toBeInTheDocument();
+    expect(within(panel).getByText(/1 hr 30 min reserved/)).toBeInTheDocument();
+    fireEvent.click(within(panel).getByRole("button", { name: "No service was delivered" }));
+    fireEvent.click(within(panel).getByRole("button", { name: "Release the reserved time" }));
+    expect(await within(panel).findByRole("alert")).toHaveTextContent("Write at least a short sentence");
+    expect(posts(calls, `/v1/shifts/${SHIFT}/reconcile`)).toHaveLength(0);
+    fireEvent.change(within(panel).getByRole("textbox"), { target: { value: "Called the family and the caregiver; nobody went" } });
+    fireEvent.click(within(panel).getByRole("button", { name: "Release the reserved time" }));
+    await waitFor(() => expect(posts(calls, `/v1/shifts/${SHIFT}/reconcile`)).toHaveLength(1));
+    const sent = posts(calls, `/v1/shifts/${SHIFT}/reconcile`)[0]!;
+    expect(sent.body).toMatchObject({ organizationId: ORG, outcome: "no_service_delivered", note: "Called the family and the caregiver; nobody went" });
+    expect(sent.key).toMatch(/^[0-9a-f-]{36}$/);
+    await waitFor(() => expect(screen.queryByTestId("shifts-to-reconcile")).not.toBeInTheDocument());
+    expect(await screen.findByText(/of authorization were released for that shift/)).toBeInTheDocument();
+  }, 30000);
+
+  it("'I cannot confirm yet' keeps it reserved and says so", async () => {
+    const { calls } = renderAt("/schedule", ["shifts.manage", "visits.read"]);
+    const panel = await screen.findByTestId("shifts-to-reconcile", {}, { timeout: 15000 });
+    fireEvent.click(within(panel).getByRole("button", { name: "I cannot confirm yet" }));
+    fireEvent.change(within(panel).getByRole("textbox"), { target: { value: "Caregiver says she went; waiting for the family" } });
+    fireEvent.click(within(panel).getByRole("button", { name: "Keep it reserved" }));
+    await waitFor(() => expect(posts(calls, `/v1/shifts/${SHIFT}/reconcile`)[0]?.body).toMatchObject({ outcome: "hold_service_may_have_occurred" }));
+    expect(await screen.findByText(/The time stays reserved and counted until you decide/)).toBeInTheDocument();
+  }, 30000);
+
+  it("a role without shift management never sees the panel or asks for the list", async () => {
+    const { calls } = renderAt("/schedule", ["visits.read"]);
+    await waitFor(() => expect(calls.some((c) => c.path === "/v1/branding")).toBe(true), { timeout: 15000 });
+    await new Promise((r) => setTimeout(r, 300));
+    expect(screen.queryByTestId("shifts-to-reconcile")).not.toBeInTheDocument();
+    expect(calls.some((c) => c.path === "/v1/shifts-to-reconcile")).toBe(false);
+  }, 30000);
+
+  it("the staffing page tells the office about them and about unacknowledged authorization changes, with links", async () => {
+    renderAt("/staffing", ["shifts.manage", "visits.read", "authorizations.update"]);
+    const link = await screen.findByTestId("reconcile-link", {}, { timeout: 15000 });
+    expect(link).toHaveTextContent("1 shift ended with no visit record and still holds 1 hr 30 min of authorization. Nothing is released until you decide.");
+    expect(within(link).getByRole("link", { name: "Reconcile shifts" })).toHaveAttribute("href", "/schedule");
+    expect(screen.getByTestId("amendment-impacts-link")).toHaveTextContent("2 items affected by an authorization change need your review.");
+  }, 30000);
+});
+
+describe("authorization changes to review", () => {
+  it("lists what the amendment affected, says nothing was changed, and acknowledging needs a note", async () => {
+    const { calls } = renderAt("/authorization-impacts", ["authorizations.update", "shifts.manage"]);
+    const item = await screen.findByTestId("amendment-impact", {}, { timeout: 15000 });
+    expect(item).toHaveTextContent("Client CL-1 · Personal care · version 2 (2 hr a month)");
+    expect(item).toHaveTextContent("This reserved shift no longer fits the new monthly limit.");
+    expect(item).toHaveTextContent("Amended by Olivia Owner");
+    expect(screen.getByText(/changed, released and re-billed nothing/)).toBeInTheDocument();
+    fireEvent.click(within(item).getByRole("button", { name: "Acknowledge…" }));
+    fireEvent.click(within(item).getByRole("button", { name: "Acknowledge" }));
+    expect(await within(item).findByRole("alert")).toHaveTextContent("Write what you did or decided");
+    expect(posts(calls, `/v1/authorization-impacts/${IMPACT}/acknowledge`)).toHaveLength(0);
+    fireEvent.change(within(item).getByRole("textbox"), { target: { value: "Moved the shift to next month" } });
+    fireEvent.click(within(item).getByRole("button", { name: "Acknowledge" }));
+    await waitFor(() => expect(posts(calls, `/v1/authorization-impacts/${IMPACT}/acknowledge`)[0]?.body).toMatchObject({ organizationId: ORG, note: "Moved the shift to next month" }));
+    await waitFor(() => expect(screen.queryByTestId("amendment-impact")).not.toBeInTheDocument());
+    expect(screen.getByRole("status")).toHaveTextContent("Nothing to review.");
+    fireEvent.click(screen.getByRole("checkbox"));
+    expect(await screen.findByText(/Acknowledged by Morgan Manager/)).toBeInTheDocument();
+  }, 30000);
+
+  it("a role without the permission is told so and nothing is requested", async () => {
+    const { calls } = renderAt("/authorization-impacts", ["visits.read"]);
+    expect(await screen.findByText("You do not have access to authorization changes.", {}, { timeout: 15000 })).toBeInTheDocument();
+    expect(calls.some((c) => c.path === "/v1/authorization-impacts")).toBe(false);
+  }, 30000);
+});

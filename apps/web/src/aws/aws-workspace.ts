@@ -79,7 +79,14 @@ export interface UtilisationRow {
   serviceName: string;
   clientCount: number;
   authorizedMinutes: number;
+  /** 0067: reserved time not yet delivered: shifts ahead plus shifts underway (started, or a visit still open). */
   scheduledMinutes: number;
+  /** 0067: all reserved time = scheduled + held for review + needs reconciliation. */
+  reservedMinutes?: number;
+  /** 0067: reserved while a linked visit is in review. */
+  heldReviewMinutes?: number;
+  /** 0067: reserved on shifts that ended with no visit record; released only by a person. */
+  needsReconciliationMinutes?: number;
   workedMinutes: number;
   billableMinutes: number;
   reviewMinutes: number;

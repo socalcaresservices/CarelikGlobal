@@ -39,6 +39,10 @@ export interface AttentionOverview {
   /** visitsNeedingAttention = needsReview + lateResponses + confirmationOverdue. pendingConfirmation and readyForApproval are routine and never added to it. */
   /** 0063: caregivers' requests for open shifts waiting for an administrator. Routine; never added to the urgent total. Null without shifts.manage. */
   pickups?: { count: number; oldestRequestedAt: string | null } | null;
+  /** 0067: shifts that ended with no visit record and still hold authorization time; nothing is released until a person decides. Null without shifts.manage. */
+  reconciliation?: { count: number; minutes: number; oldestEndedAt: string | null } | null;
+  /** 0068: reserved shifts and visits that an authorization amendment affected and nobody has acknowledged. */
+  amendmentImpacts?: { count: number; oldestAt: string | null } | null;
   visitReview: { visitsNeedingAttention: number; pendingConfirmation?: number; confirmationOverdue?: number; awaitingConfirmation: number; needsReview: number; reviewOverdue?: number; lateResponses: number; readyForApproval: number | null; reviewIssues: number; awaitingResponse: number } | null;
 }
 

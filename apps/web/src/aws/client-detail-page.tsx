@@ -215,7 +215,7 @@ function AddAuthorizationForm({ clientId, onDone }: { clientId: string; onDone: 
   );
 }
 
-interface AmendResult { newVersionNumber: number; affectedVisits: Array<{ visitId: string; status: string; serviceDate: string; workedMinutes: number; billableMinutes: number; impact: string }> }
+interface AmendResult { newVersionNumber: number; affectedVisits: Array<{ visitId: string; status: string; serviceDate: string; workedMinutes: number; billableMinutes: number; impact: string }>; affectedShifts?: Array<{ impactId: string; shiftId: string; serviceDate: string; reservedMinutes: number; impact: string }> }
 
 function AmendForm({ current, onDone }: { current: AuthorizationVersion; onDone: (r: AmendResult) => void }) {
   const api = useAwsApi();
@@ -278,6 +278,12 @@ function LineageCard({ versions, canUpdate, showRate }: { versions: Authorizatio
       {result ? (
         <div role="status" className="mt-2 rounded-lg bg-emerald-50 p-2 text-sm text-emerald-900">
           Saved as version {result.newVersionNumber}.{" "}
+          {(result.affectedShifts?.length ?? 0) > 0 ? (
+            <span data-testid="amend-affected-shifts" className="block">
+              {result.affectedShifts!.length} reserved shift{result.affectedShifts!.length === 1 ? "" : "s"} no longer fit the new terms ({result.affectedShifts!.map((x) => `${fmtDate(x.serviceDate)} · ${formatDuration(x.reservedMinutes)}${x.impact === "reserved_shift_outside_period" ? " (outside the period)" : ""}`).join("; ")}).
+              Nothing was cancelled or released. <Link className="underline" to="/authorization-impacts">Review and acknowledge</Link>.
+            </span>
+          ) : null}
           {result.affectedVisits.length === 0 ? "No existing visits need review." : (
             <>
               {result.affectedVisits.length} visit{result.affectedVisits.length === 1 ? "" : "s"} to review:

@@ -74,7 +74,9 @@ export const permissionSchema = z.enum([
   // Account administration (infra/aws/db migration 0048): see sign-in status, disable/enable sign-ins. Organization owner only.
   "accounts.manage",
   // Caregiver compliance (infra/aws/db migration 0055): verify background-check clearance; change a recorded hire date. Administrator only.
-  "caregivers.compliance.manage"
+  "caregivers.compliance.manage",
+  // Report export (infra/aws/db migration 0069): download report data; every export is recorded. Organization owner and manager.
+  "reports.export"
 ]);
 
 export type Permission = z.infer<typeof permissionSchema>;

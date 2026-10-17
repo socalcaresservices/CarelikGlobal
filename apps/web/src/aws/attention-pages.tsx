@@ -1,7 +1,7 @@
 // The four alert destinations (migration 0056): Needs attention now | Upcoming staffing | Documents & compliance (documents-page.tsx) | Visit review.
 // Each page reads the same server classification as the Home tiles, so a number on a tile is the number of rows here.
 import { Link } from "react-router-dom";
-import { formatClockTime, formatNumericDate } from "@/lib/service-verification";
+import { formatClockTime, formatDuration, formatNumericDate } from "@/lib/service-verification";
 import { itemTone, rankedItems, REASON_LABEL, TONE, URGENT_WINDOW_HOURS, useAttentionOverview, type Tone, type UpcomingShift, type UrgentItem } from "./attention";
 import { Disclosure } from "./ui/disclosure";
 import { PageHeader } from "./ui/page-header";
@@ -100,6 +100,18 @@ export function UpcomingStaffingPage() {
         <p data-testid="pickup-requests-link" className="rounded-og border border-og-line bg-og-card p-3 text-sm text-og-ink">
           {plural(q.data.pickups.count, "caregiver request")} for open shifts {q.data.pickups.count === 1 ? "is" : "are"} waiting for you to confirm. Nobody is assigned until you do.{" "}
           <Link className="font-semibold underline" to="/schedule">Review requests</Link>
+        </p>
+      ) : null}
+      {q.data?.reconciliation && q.data.reconciliation.count > 0 ? (
+        <p data-testid="reconcile-link" className="rounded-og border border-og-line bg-og-card p-3 text-sm text-og-ink">
+          {plural(q.data.reconciliation.count, "shift")} ended with no visit record and {q.data.reconciliation.count === 1 ? "still holds" : "still hold"} {formatDuration(q.data.reconciliation.minutes)} of authorization. Nothing is released until you decide.{" "}
+          <Link className="font-semibold underline" to="/schedule">Reconcile shifts</Link>
+        </p>
+      ) : null}
+      {q.data?.amendmentImpacts && q.data.amendmentImpacts.count > 0 ? (
+        <p data-testid="amendment-impacts-link" className="rounded-og border border-og-line bg-og-card p-3 text-sm text-og-ink">
+          {plural(q.data.amendmentImpacts.count, "item")} affected by an authorization change {q.data.amendmentImpacts.count === 1 ? "needs" : "need"} your review.{" "}
+          <Link className="font-semibold underline" to="/authorization-impacts">Review changes</Link>
         </p>
       ) : null}
       {q.data && !u ? <p className="text-sm text-og-sub">Your role does not include this list.</p> : null}
