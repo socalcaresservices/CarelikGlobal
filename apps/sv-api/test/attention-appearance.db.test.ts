@@ -46,24 +46,26 @@ describe("GET /v1/attention/overview", () => {
 describe("appearance over HTTP", () => {
   it("saves agency defaults (administrator only) and personal choices (that person only), each persisted and isolated by agency", async () => {
     const get = (a: Actor, org = w.orgA) => call("GET /v1/appearance", a, { query: { organizationId: org } });
-    expect((await get(w.caregiverA1)).body.appearance.effective).toMatchObject({ background: "light", accent: "teal", density: "comfortable", textSize: "standard", chartType: "bar" });
-    const body = { organizationId: w.orgA, background: "cream", accent: "indigo", density: "compact", textSize: "standard", chartType: "donut" };
+    expect((await get(w.caregiverA1)).body.appearance.effective).toMatchObject({ background: "light", accent: "teal", density: "comfortable", textSize: "standard", chartType: "bar", layout: "standard" });
+    const body = { organizationId: w.orgA, background: "white", accent: "indigo", density: "compact", textSize: "standard", chartType: "donut", layout: "minimal" };
     expect((await call("POST /v1/appearance/organization", w.managerA, { body })).status).toBe(403);
     expect((await call("POST /v1/appearance/organization", w.ownerA, { body, key: null })).status).toBe(200); // this route does not consume an idempotency key (it sets, it does not create)
     expect((await call("POST /v1/appearance/organization", w.ownerA, { body: { ...body, background: "neon" } })).status).toBe(400);
     expect((await call("POST /v1/appearance/organization", w.ownerA, { body: { ...body, chartType: "pie" } })).status).toBe(400);
-    expect((await get(w.caregiverA2)).body.appearance.effective).toMatchObject({ background: "cream", accent: "indigo", density: "compact", chartType: "donut" });
-    const mine = await call("POST /v1/appearance/me", w.caregiverA1, { body: { organizationId: w.orgA, background: "dark", accent: null, density: null, textSize: "large", chartType: null } });
+    expect((await call("POST /v1/appearance/organization", w.ownerA, { body: { ...body, layout: "wide" } })).status).toBe(400);
+    expect((await call("POST /v1/appearance/organization", w.ownerA, { body: { ...body, background: "cream" } })).status).toBe(400); // replaced by White before release
+    expect((await get(w.caregiverA2)).body.appearance.effective).toMatchObject({ background: "white", accent: "indigo", density: "compact", chartType: "donut", layout: "minimal" });
+    const mine = await call("POST /v1/appearance/me", w.caregiverA1, { body: { organizationId: w.orgA, background: "dark", accent: null, density: null, textSize: "large", chartType: null, layout: "standard" } });
     expect(mine.status).toBe(200);
-    expect(mine.body.appearance.effective).toMatchObject({ background: "dark", accent: "indigo", density: "compact", textSize: "large", chartType: "donut" });
-    expect((await get(w.caregiverA2)).body.appearance.effective.background).toBe("cream"); // unaffected
+    expect(mine.body.appearance.effective).toMatchObject({ background: "dark", accent: "indigo", density: "compact", textSize: "large", chartType: "donut", layout: "standard" });
+    expect((await get(w.caregiverA2)).body.appearance.effective.background).toBe("white"); // unaffected
     expect((await get(w.managerA)).body.appearance.mine.background).toBeNull();
     // another agency: its own defaults, no access to this agency's, and a person cannot save a choice into an agency they are not in
     expect((await get(w.managerB, w.orgB)).body.appearance.effective.background).toBe("light");
     expect((await get(w.managerB, w.orgA)).status).toBe(404);
     expect((await call("POST /v1/appearance/me", w.managerB, { body: { organizationId: w.orgA, background: "dark" } })).status).toBe(404);
     // a refresh (new request) returns what was saved
-    expect((await get(w.caregiverA1)).body.appearance.mine).toEqual({ background: "dark", accent: null, density: null, textSize: "large", chartType: null });
+    expect((await get(w.caregiverA1)).body.appearance.mine).toEqual({ background: "dark", accent: null, density: null, textSize: "large", chartType: null, layout: "standard" });
   });
 });
 

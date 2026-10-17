@@ -39,11 +39,13 @@
   --color-accent-foreground: rgb(var(--og-accent-fg));
 }
 
-[data-og-bg="cream"] {
-  --og-page: 250 246 236;
-  --og-card: 255 253 247;
-  --og-line: 230 222 205;
-  --og-side: 244 238 224;
+/* White: a pure white page and pure white cards, with a neutral (not teal) sidebar and slightly stronger lines so cards stay distinct.
+   Light keeps its tinted page; the two are different on page, side and line (a test keeps every background different from the others). */
+[data-og-bg="white"] {
+  --og-page: 255 255 255;
+  --og-card: 255 255 255;
+  --og-line: 208 216 222;
+  --og-side: 246 248 249;
 }
 [data-og-bg="gray"] {
   --og-page: 236 239 243;
@@ -118,3 +120,21 @@
 .og-app input:disabled,
 .og-app select:disabled,
 .og-app textarea:disabled { opacity: 0.6; }
+
+/* Minimal layout: PRESENTATION ONLY. It flattens boxes (no side or top borders, no fill, no rounding) and keeps one hairline under each,
+   so grouping is carried by space and rules. It never hides, clips, shrinks to nothing or recolours content: elements that carry a status
+   (red, amber, emerald or sky borders or fills) are excluded and keep their emphasis. A test (theme-layout.test.ts) rejects any hiding
+   property in this block. */
+[data-og-layout="minimal"] main :is(.rounded-og, .rounded-xl):not([class*="border-red"], [class*="border-amber"], [class*="border-emerald"], [class*="border-sky"], [class*="bg-red"], [class*="bg-amber"], [class*="bg-emerald"], [class*="bg-sky"], input, select, textarea, button, img) {
+  border-radius: 0;
+  border-top-width: 0;
+  border-left-width: 0;
+  border-right-width: 0;
+  background-color: transparent;
+  box-shadow: none;
+}
+[data-og-layout="minimal"] main :is(.rounded-og, .rounded-xl) :is(.rounded-og, .rounded-xl):not([class*="border-red"], [class*="border-amber"], [class*="border-emerald"], [class*="border-sky"], [class*="bg-red"], [class*="bg-amber"], [class*="bg-emerald"], [class*="bg-sky"], input, select, textarea, button, img) {
+  border-bottom-width: 0;
+}
+[data-og-layout="minimal"] main .space-y-6 > :not([hidden]) ~ :not([hidden]) { margin-top: 2rem; }
+[data-og-layout="minimal"] main .space-y-4 > :not([hidden]) ~ :not([hidden]) { margin-top: 1.25rem; }

@@ -1,0 +1,7510 @@
+{
+ "total": 1072,
+ "failures": 0,
+ "results": [
+  {
+   "page": "home",
+   "width": "desktop",
+   "name": "light/standard text",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "home",
+   "width": "desktop",
+   "name": "light/standard controls",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "home",
+   "width": "desktop",
+   "name": "light/standard alerts and symbols",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "home",
+   "width": "desktop",
+   "name": "light/standard nothing newly hidden",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "home",
+   "width": "desktop",
+   "name": "light/standard alert emphasis kept",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "home",
+   "width": "desktop",
+   "name": "light/standard contrast and no sideways scroll",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "home",
+   "width": "desktop",
+   "name": "white/standard text",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "home",
+   "width": "desktop",
+   "name": "white/standard controls",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "home",
+   "width": "desktop",
+   "name": "white/standard alerts and symbols",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "home",
+   "width": "desktop",
+   "name": "white/standard nothing newly hidden",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "home",
+   "width": "desktop",
+   "name": "white/standard alert emphasis kept",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "home",
+   "width": "desktop",
+   "name": "white/standard contrast and no sideways scroll",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "home",
+   "width": "desktop",
+   "name": "gray/standard text",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "home",
+   "width": "desktop",
+   "name": "gray/standard controls",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "home",
+   "width": "desktop",
+   "name": "gray/standard alerts and symbols",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "home",
+   "width": "desktop",
+   "name": "gray/standard nothing newly hidden",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "home",
+   "width": "desktop",
+   "name": "gray/standard alert emphasis kept",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "home",
+   "width": "desktop",
+   "name": "gray/standard contrast and no sideways scroll",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "home",
+   "width": "desktop",
+   "name": "dark/standard text",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "home",
+   "width": "desktop",
+   "name": "dark/standard controls",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "home",
+   "width": "desktop",
+   "name": "dark/standard alerts and symbols",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "home",
+   "width": "desktop",
+   "name": "dark/standard nothing newly hidden",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "home",
+   "width": "desktop",
+   "name": "dark/standard alert emphasis kept",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "home",
+   "width": "desktop",
+   "name": "dark/standard contrast and no sideways scroll",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "home",
+   "width": "desktop",
+   "name": "light/minimal text",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "home",
+   "width": "desktop",
+   "name": "light/minimal controls",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "home",
+   "width": "desktop",
+   "name": "light/minimal alerts and symbols",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "home",
+   "width": "desktop",
+   "name": "light/minimal nothing newly hidden",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "home",
+   "width": "desktop",
+   "name": "light/minimal alert emphasis kept",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "home",
+   "width": "desktop",
+   "name": "light/minimal contrast and no sideways scroll",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "home",
+   "width": "desktop",
+   "name": "white/minimal text",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "home",
+   "width": "desktop",
+   "name": "white/minimal controls",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "home",
+   "width": "desktop",
+   "name": "white/minimal alerts and symbols",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "home",
+   "width": "desktop",
+   "name": "white/minimal nothing newly hidden",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "home",
+   "width": "desktop",
+   "name": "white/minimal alert emphasis kept",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "home",
+   "width": "desktop",
+   "name": "white/minimal contrast and no sideways scroll",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "home",
+   "width": "desktop",
+   "name": "gray/minimal text",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "home",
+   "width": "desktop",
+   "name": "gray/minimal controls",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "home",
+   "width": "desktop",
+   "name": "gray/minimal alerts and symbols",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "home",
+   "width": "desktop",
+   "name": "gray/minimal nothing newly hidden",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "home",
+   "width": "desktop",
+   "name": "gray/minimal alert emphasis kept",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "home",
+   "width": "desktop",
+   "name": "gray/minimal contrast and no sideways scroll",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "home",
+   "width": "desktop",
+   "name": "dark/minimal text",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "home",
+   "width": "desktop",
+   "name": "dark/minimal controls",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "home",
+   "width": "desktop",
+   "name": "dark/minimal alerts and symbols",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "home",
+   "width": "desktop",
+   "name": "dark/minimal nothing newly hidden",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "home",
+   "width": "desktop",
+   "name": "dark/minimal alert emphasis kept",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "home",
+   "width": "desktop",
+   "name": "dark/minimal contrast and no sideways scroll",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "attention",
+   "width": "desktop",
+   "name": "light/standard text",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "attention",
+   "width": "desktop",
+   "name": "light/standard controls",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "attention",
+   "width": "desktop",
+   "name": "light/standard alerts and symbols",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "attention",
+   "width": "desktop",
+   "name": "light/standard nothing newly hidden",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "attention",
+   "width": "desktop",
+   "name": "light/standard alert emphasis kept",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "attention",
+   "width": "desktop",
+   "name": "light/standard contrast and no sideways scroll",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "attention",
+   "width": "desktop",
+   "name": "white/standard text",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "attention",
+   "width": "desktop",
+   "name": "white/standard controls",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "attention",
+   "width": "desktop",
+   "name": "white/standard alerts and symbols",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "attention",
+   "width": "desktop",
+   "name": "white/standard nothing newly hidden",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "attention",
+   "width": "desktop",
+   "name": "white/standard alert emphasis kept",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "attention",
+   "width": "desktop",
+   "name": "white/standard contrast and no sideways scroll",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "attention",
+   "width": "desktop",
+   "name": "gray/standard text",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "attention",
+   "width": "desktop",
+   "name": "gray/standard controls",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "attention",
+   "width": "desktop",
+   "name": "gray/standard alerts and symbols",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "attention",
+   "width": "desktop",
+   "name": "gray/standard nothing newly hidden",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "attention",
+   "width": "desktop",
+   "name": "gray/standard alert emphasis kept",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "attention",
+   "width": "desktop",
+   "name": "gray/standard contrast and no sideways scroll",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "attention",
+   "width": "desktop",
+   "name": "dark/standard text",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "attention",
+   "width": "desktop",
+   "name": "dark/standard controls",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "attention",
+   "width": "desktop",
+   "name": "dark/standard alerts and symbols",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "attention",
+   "width": "desktop",
+   "name": "dark/standard nothing newly hidden",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "attention",
+   "width": "desktop",
+   "name": "dark/standard alert emphasis kept",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "attention",
+   "width": "desktop",
+   "name": "dark/standard contrast and no sideways scroll",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "attention",
+   "width": "desktop",
+   "name": "light/minimal text",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "attention",
+   "width": "desktop",
+   "name": "light/minimal controls",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "attention",
+   "width": "desktop",
+   "name": "light/minimal alerts and symbols",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "attention",
+   "width": "desktop",
+   "name": "light/minimal nothing newly hidden",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "attention",
+   "width": "desktop",
+   "name": "light/minimal alert emphasis kept",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "attention",
+   "width": "desktop",
+   "name": "light/minimal contrast and no sideways scroll",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "attention",
+   "width": "desktop",
+   "name": "white/minimal text",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "attention",
+   "width": "desktop",
+   "name": "white/minimal controls",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "attention",
+   "width": "desktop",
+   "name": "white/minimal alerts and symbols",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "attention",
+   "width": "desktop",
+   "name": "white/minimal nothing newly hidden",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "attention",
+   "width": "desktop",
+   "name": "white/minimal alert emphasis kept",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "attention",
+   "width": "desktop",
+   "name": "white/minimal contrast and no sideways scroll",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "attention",
+   "width": "desktop",
+   "name": "gray/minimal text",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "attention",
+   "width": "desktop",
+   "name": "gray/minimal controls",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "attention",
+   "width": "desktop",
+   "name": "gray/minimal alerts and symbols",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "attention",
+   "width": "desktop",
+   "name": "gray/minimal nothing newly hidden",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "attention",
+   "width": "desktop",
+   "name": "gray/minimal alert emphasis kept",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "attention",
+   "width": "desktop",
+   "name": "gray/minimal contrast and no sideways scroll",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "attention",
+   "width": "desktop",
+   "name": "dark/minimal text",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "attention",
+   "width": "desktop",
+   "name": "dark/minimal controls",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "attention",
+   "width": "desktop",
+   "name": "dark/minimal alerts and symbols",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "attention",
+   "width": "desktop",
+   "name": "dark/minimal nothing newly hidden",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "attention",
+   "width": "desktop",
+   "name": "dark/minimal alert emphasis kept",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "attention",
+   "width": "desktop",
+   "name": "dark/minimal contrast and no sideways scroll",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "staffing",
+   "width": "desktop",
+   "name": "light/standard text",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "staffing",
+   "width": "desktop",
+   "name": "light/standard controls",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "staffing",
+   "width": "desktop",
+   "name": "light/standard alerts and symbols",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "staffing",
+   "width": "desktop",
+   "name": "light/standard nothing newly hidden",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "staffing",
+   "width": "desktop",
+   "name": "light/standard alert emphasis kept",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "staffing",
+   "width": "desktop",
+   "name": "light/standard contrast and no sideways scroll",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "staffing",
+   "width": "desktop",
+   "name": "white/standard text",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "staffing",
+   "width": "desktop",
+   "name": "white/standard controls",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "staffing",
+   "width": "desktop",
+   "name": "white/standard alerts and symbols",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "staffing",
+   "width": "desktop",
+   "name": "white/standard nothing newly hidden",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "staffing",
+   "width": "desktop",
+   "name": "white/standard alert emphasis kept",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "staffing",
+   "width": "desktop",
+   "name": "white/standard contrast and no sideways scroll",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "staffing",
+   "width": "desktop",
+   "name": "gray/standard text",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "staffing",
+   "width": "desktop",
+   "name": "gray/standard controls",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "staffing",
+   "width": "desktop",
+   "name": "gray/standard alerts and symbols",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "staffing",
+   "width": "desktop",
+   "name": "gray/standard nothing newly hidden",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "staffing",
+   "width": "desktop",
+   "name": "gray/standard alert emphasis kept",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "staffing",
+   "width": "desktop",
+   "name": "gray/standard contrast and no sideways scroll",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "staffing",
+   "width": "desktop",
+   "name": "dark/standard text",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "staffing",
+   "width": "desktop",
+   "name": "dark/standard controls",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "staffing",
+   "width": "desktop",
+   "name": "dark/standard alerts and symbols",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "staffing",
+   "width": "desktop",
+   "name": "dark/standard nothing newly hidden",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "staffing",
+   "width": "desktop",
+   "name": "dark/standard alert emphasis kept",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "staffing",
+   "width": "desktop",
+   "name": "dark/standard contrast and no sideways scroll",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "staffing",
+   "width": "desktop",
+   "name": "light/minimal text",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "staffing",
+   "width": "desktop",
+   "name": "light/minimal controls",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "staffing",
+   "width": "desktop",
+   "name": "light/minimal alerts and symbols",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "staffing",
+   "width": "desktop",
+   "name": "light/minimal nothing newly hidden",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "staffing",
+   "width": "desktop",
+   "name": "light/minimal alert emphasis kept",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "staffing",
+   "width": "desktop",
+   "name": "light/minimal contrast and no sideways scroll",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "staffing",
+   "width": "desktop",
+   "name": "white/minimal text",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "staffing",
+   "width": "desktop",
+   "name": "white/minimal controls",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "staffing",
+   "width": "desktop",
+   "name": "white/minimal alerts and symbols",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "staffing",
+   "width": "desktop",
+   "name": "white/minimal nothing newly hidden",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "staffing",
+   "width": "desktop",
+   "name": "white/minimal alert emphasis kept",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "staffing",
+   "width": "desktop",
+   "name": "white/minimal contrast and no sideways scroll",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "staffing",
+   "width": "desktop",
+   "name": "gray/minimal text",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "staffing",
+   "width": "desktop",
+   "name": "gray/minimal controls",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "staffing",
+   "width": "desktop",
+   "name": "gray/minimal alerts and symbols",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "staffing",
+   "width": "desktop",
+   "name": "gray/minimal nothing newly hidden",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "staffing",
+   "width": "desktop",
+   "name": "gray/minimal alert emphasis kept",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "staffing",
+   "width": "desktop",
+   "name": "gray/minimal contrast and no sideways scroll",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "staffing",
+   "width": "desktop",
+   "name": "dark/minimal text",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "staffing",
+   "width": "desktop",
+   "name": "dark/minimal controls",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "staffing",
+   "width": "desktop",
+   "name": "dark/minimal alerts and symbols",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "staffing",
+   "width": "desktop",
+   "name": "dark/minimal nothing newly hidden",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "staffing",
+   "width": "desktop",
+   "name": "dark/minimal alert emphasis kept",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "staffing",
+   "width": "desktop",
+   "name": "dark/minimal contrast and no sideways scroll",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "documents",
+   "width": "desktop",
+   "name": "light/standard text",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "documents",
+   "width": "desktop",
+   "name": "light/standard controls",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "documents",
+   "width": "desktop",
+   "name": "light/standard alerts and symbols",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "documents",
+   "width": "desktop",
+   "name": "light/standard nothing newly hidden",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "documents",
+   "width": "desktop",
+   "name": "light/standard alert emphasis kept",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "documents",
+   "width": "desktop",
+   "name": "light/standard contrast and no sideways scroll",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "documents",
+   "width": "desktop",
+   "name": "white/standard text",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "documents",
+   "width": "desktop",
+   "name": "white/standard controls",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "documents",
+   "width": "desktop",
+   "name": "white/standard alerts and symbols",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "documents",
+   "width": "desktop",
+   "name": "white/standard nothing newly hidden",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "documents",
+   "width": "desktop",
+   "name": "white/standard alert emphasis kept",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "documents",
+   "width": "desktop",
+   "name": "white/standard contrast and no sideways scroll",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "documents",
+   "width": "desktop",
+   "name": "gray/standard text",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "documents",
+   "width": "desktop",
+   "name": "gray/standard controls",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "documents",
+   "width": "desktop",
+   "name": "gray/standard alerts and symbols",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "documents",
+   "width": "desktop",
+   "name": "gray/standard nothing newly hidden",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "documents",
+   "width": "desktop",
+   "name": "gray/standard alert emphasis kept",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "documents",
+   "width": "desktop",
+   "name": "gray/standard contrast and no sideways scroll",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "documents",
+   "width": "desktop",
+   "name": "dark/standard text",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "documents",
+   "width": "desktop",
+   "name": "dark/standard controls",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "documents",
+   "width": "desktop",
+   "name": "dark/standard alerts and symbols",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "documents",
+   "width": "desktop",
+   "name": "dark/standard nothing newly hidden",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "documents",
+   "width": "desktop",
+   "name": "dark/standard alert emphasis kept",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "documents",
+   "width": "desktop",
+   "name": "dark/standard contrast and no sideways scroll",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "documents",
+   "width": "desktop",
+   "name": "light/minimal text",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "documents",
+   "width": "desktop",
+   "name": "light/minimal controls",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "documents",
+   "width": "desktop",
+   "name": "light/minimal alerts and symbols",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "documents",
+   "width": "desktop",
+   "name": "light/minimal nothing newly hidden",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "documents",
+   "width": "desktop",
+   "name": "light/minimal alert emphasis kept",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "documents",
+   "width": "desktop",
+   "name": "light/minimal contrast and no sideways scroll",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "documents",
+   "width": "desktop",
+   "name": "white/minimal text",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "documents",
+   "width": "desktop",
+   "name": "white/minimal controls",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "documents",
+   "width": "desktop",
+   "name": "white/minimal alerts and symbols",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "documents",
+   "width": "desktop",
+   "name": "white/minimal nothing newly hidden",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "documents",
+   "width": "desktop",
+   "name": "white/minimal alert emphasis kept",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "documents",
+   "width": "desktop",
+   "name": "white/minimal contrast and no sideways scroll",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "documents",
+   "width": "desktop",
+   "name": "gray/minimal text",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "documents",
+   "width": "desktop",
+   "name": "gray/minimal controls",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "documents",
+   "width": "desktop",
+   "name": "gray/minimal alerts and symbols",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "documents",
+   "width": "desktop",
+   "name": "gray/minimal nothing newly hidden",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "documents",
+   "width": "desktop",
+   "name": "gray/minimal alert emphasis kept",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "documents",
+   "width": "desktop",
+   "name": "gray/minimal contrast and no sideways scroll",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "documents",
+   "width": "desktop",
+   "name": "dark/minimal text",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "documents",
+   "width": "desktop",
+   "name": "dark/minimal controls",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "documents",
+   "width": "desktop",
+   "name": "dark/minimal alerts and symbols",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "documents",
+   "width": "desktop",
+   "name": "dark/minimal nothing newly hidden",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "documents",
+   "width": "desktop",
+   "name": "dark/minimal alert emphasis kept",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "documents",
+   "width": "desktop",
+   "name": "dark/minimal contrast and no sideways scroll",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "visit-review",
+   "width": "desktop",
+   "name": "light/standard text",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "visit-review",
+   "width": "desktop",
+   "name": "light/standard controls",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "visit-review",
+   "width": "desktop",
+   "name": "light/standard alerts and symbols",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "visit-review",
+   "width": "desktop",
+   "name": "light/standard nothing newly hidden",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "visit-review",
+   "width": "desktop",
+   "name": "light/standard alert emphasis kept",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "visit-review",
+   "width": "desktop",
+   "name": "light/standard contrast and no sideways scroll",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "visit-review",
+   "width": "desktop",
+   "name": "white/standard text",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "visit-review",
+   "width": "desktop",
+   "name": "white/standard controls",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "visit-review",
+   "width": "desktop",
+   "name": "white/standard alerts and symbols",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "visit-review",
+   "width": "desktop",
+   "name": "white/standard nothing newly hidden",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "visit-review",
+   "width": "desktop",
+   "name": "white/standard alert emphasis kept",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "visit-review",
+   "width": "desktop",
+   "name": "white/standard contrast and no sideways scroll",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "visit-review",
+   "width": "desktop",
+   "name": "gray/standard text",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "visit-review",
+   "width": "desktop",
+   "name": "gray/standard controls",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "visit-review",
+   "width": "desktop",
+   "name": "gray/standard alerts and symbols",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "visit-review",
+   "width": "desktop",
+   "name": "gray/standard nothing newly hidden",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "visit-review",
+   "width": "desktop",
+   "name": "gray/standard alert emphasis kept",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "visit-review",
+   "width": "desktop",
+   "name": "gray/standard contrast and no sideways scroll",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "visit-review",
+   "width": "desktop",
+   "name": "dark/standard text",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "visit-review",
+   "width": "desktop",
+   "name": "dark/standard controls",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "visit-review",
+   "width": "desktop",
+   "name": "dark/standard alerts and symbols",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "visit-review",
+   "width": "desktop",
+   "name": "dark/standard nothing newly hidden",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "visit-review",
+   "width": "desktop",
+   "name": "dark/standard alert emphasis kept",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "visit-review",
+   "width": "desktop",
+   "name": "dark/standard contrast and no sideways scroll",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "visit-review",
+   "width": "desktop",
+   "name": "light/minimal text",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "visit-review",
+   "width": "desktop",
+   "name": "light/minimal controls",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "visit-review",
+   "width": "desktop",
+   "name": "light/minimal alerts and symbols",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "visit-review",
+   "width": "desktop",
+   "name": "light/minimal nothing newly hidden",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "visit-review",
+   "width": "desktop",
+   "name": "light/minimal alert emphasis kept",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "visit-review",
+   "width": "desktop",
+   "name": "light/minimal contrast and no sideways scroll",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "visit-review",
+   "width": "desktop",
+   "name": "white/minimal text",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "visit-review",
+   "width": "desktop",
+   "name": "white/minimal controls",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "visit-review",
+   "width": "desktop",
+   "name": "white/minimal alerts and symbols",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "visit-review",
+   "width": "desktop",
+   "name": "white/minimal nothing newly hidden",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "visit-review",
+   "width": "desktop",
+   "name": "white/minimal alert emphasis kept",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "visit-review",
+   "width": "desktop",
+   "name": "white/minimal contrast and no sideways scroll",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "visit-review",
+   "width": "desktop",
+   "name": "gray/minimal text",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "visit-review",
+   "width": "desktop",
+   "name": "gray/minimal controls",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "visit-review",
+   "width": "desktop",
+   "name": "gray/minimal alerts and symbols",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "visit-review",
+   "width": "desktop",
+   "name": "gray/minimal nothing newly hidden",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "visit-review",
+   "width": "desktop",
+   "name": "gray/minimal alert emphasis kept",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "visit-review",
+   "width": "desktop",
+   "name": "gray/minimal contrast and no sideways scroll",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "visit-review",
+   "width": "desktop",
+   "name": "dark/minimal text",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "visit-review",
+   "width": "desktop",
+   "name": "dark/minimal controls",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "visit-review",
+   "width": "desktop",
+   "name": "dark/minimal alerts and symbols",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "visit-review",
+   "width": "desktop",
+   "name": "dark/minimal nothing newly hidden",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "visit-review",
+   "width": "desktop",
+   "name": "dark/minimal alert emphasis kept",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "visit-review",
+   "width": "desktop",
+   "name": "dark/minimal contrast and no sideways scroll",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "rates",
+   "width": "desktop",
+   "name": "light/standard text",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "rates",
+   "width": "desktop",
+   "name": "light/standard controls",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "rates",
+   "width": "desktop",
+   "name": "light/standard alerts and symbols",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "rates",
+   "width": "desktop",
+   "name": "light/standard nothing newly hidden",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "rates",
+   "width": "desktop",
+   "name": "light/standard alert emphasis kept",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "rates",
+   "width": "desktop",
+   "name": "light/standard contrast and no sideways scroll",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "rates",
+   "width": "desktop",
+   "name": "white/standard text",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "rates",
+   "width": "desktop",
+   "name": "white/standard controls",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "rates",
+   "width": "desktop",
+   "name": "white/standard alerts and symbols",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "rates",
+   "width": "desktop",
+   "name": "white/standard nothing newly hidden",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "rates",
+   "width": "desktop",
+   "name": "white/standard alert emphasis kept",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "rates",
+   "width": "desktop",
+   "name": "white/standard contrast and no sideways scroll",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "rates",
+   "width": "desktop",
+   "name": "gray/standard text",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "rates",
+   "width": "desktop",
+   "name": "gray/standard controls",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "rates",
+   "width": "desktop",
+   "name": "gray/standard alerts and symbols",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "rates",
+   "width": "desktop",
+   "name": "gray/standard nothing newly hidden",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "rates",
+   "width": "desktop",
+   "name": "gray/standard alert emphasis kept",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "rates",
+   "width": "desktop",
+   "name": "gray/standard contrast and no sideways scroll",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "rates",
+   "width": "desktop",
+   "name": "dark/standard text",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "rates",
+   "width": "desktop",
+   "name": "dark/standard controls",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "rates",
+   "width": "desktop",
+   "name": "dark/standard alerts and symbols",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "rates",
+   "width": "desktop",
+   "name": "dark/standard nothing newly hidden",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "rates",
+   "width": "desktop",
+   "name": "dark/standard alert emphasis kept",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "rates",
+   "width": "desktop",
+   "name": "dark/standard contrast and no sideways scroll",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "rates",
+   "width": "desktop",
+   "name": "light/minimal text",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "rates",
+   "width": "desktop",
+   "name": "light/minimal controls",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "rates",
+   "width": "desktop",
+   "name": "light/minimal alerts and symbols",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "rates",
+   "width": "desktop",
+   "name": "light/minimal nothing newly hidden",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "rates",
+   "width": "desktop",
+   "name": "light/minimal alert emphasis kept",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "rates",
+   "width": "desktop",
+   "name": "light/minimal contrast and no sideways scroll",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "rates",
+   "width": "desktop",
+   "name": "white/minimal text",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "rates",
+   "width": "desktop",
+   "name": "white/minimal controls",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "rates",
+   "width": "desktop",
+   "name": "white/minimal alerts and symbols",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "rates",
+   "width": "desktop",
+   "name": "white/minimal nothing newly hidden",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "rates",
+   "width": "desktop",
+   "name": "white/minimal alert emphasis kept",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "rates",
+   "width": "desktop",
+   "name": "white/minimal contrast and no sideways scroll",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "rates",
+   "width": "desktop",
+   "name": "gray/minimal text",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "rates",
+   "width": "desktop",
+   "name": "gray/minimal controls",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "rates",
+   "width": "desktop",
+   "name": "gray/minimal alerts and symbols",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "rates",
+   "width": "desktop",
+   "name": "gray/minimal nothing newly hidden",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "rates",
+   "width": "desktop",
+   "name": "gray/minimal alert emphasis kept",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "rates",
+   "width": "desktop",
+   "name": "gray/minimal contrast and no sideways scroll",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "rates",
+   "width": "desktop",
+   "name": "dark/minimal text",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "rates",
+   "width": "desktop",
+   "name": "dark/minimal controls",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "rates",
+   "width": "desktop",
+   "name": "dark/minimal alerts and symbols",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "rates",
+   "width": "desktop",
+   "name": "dark/minimal nothing newly hidden",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "rates",
+   "width": "desktop",
+   "name": "dark/minimal alert emphasis kept",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "rates",
+   "width": "desktop",
+   "name": "dark/minimal contrast and no sideways scroll",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "appearance",
+   "width": "desktop",
+   "name": "light/standard text",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "appearance",
+   "width": "desktop",
+   "name": "light/standard controls",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "appearance",
+   "width": "desktop",
+   "name": "light/standard alerts and symbols",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "appearance",
+   "width": "desktop",
+   "name": "light/standard nothing newly hidden",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "appearance",
+   "width": "desktop",
+   "name": "light/standard alert emphasis kept",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "appearance",
+   "width": "desktop",
+   "name": "light/standard contrast and no sideways scroll",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "appearance",
+   "width": "desktop",
+   "name": "white/standard text",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "appearance",
+   "width": "desktop",
+   "name": "white/standard controls",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "appearance",
+   "width": "desktop",
+   "name": "white/standard alerts and symbols",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "appearance",
+   "width": "desktop",
+   "name": "white/standard nothing newly hidden",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "appearance",
+   "width": "desktop",
+   "name": "white/standard alert emphasis kept",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "appearance",
+   "width": "desktop",
+   "name": "white/standard contrast and no sideways scroll",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "appearance",
+   "width": "desktop",
+   "name": "gray/standard text",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "appearance",
+   "width": "desktop",
+   "name": "gray/standard controls",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "appearance",
+   "width": "desktop",
+   "name": "gray/standard alerts and symbols",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "appearance",
+   "width": "desktop",
+   "name": "gray/standard nothing newly hidden",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "appearance",
+   "width": "desktop",
+   "name": "gray/standard alert emphasis kept",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "appearance",
+   "width": "desktop",
+   "name": "gray/standard contrast and no sideways scroll",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "appearance",
+   "width": "desktop",
+   "name": "dark/standard text",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "appearance",
+   "width": "desktop",
+   "name": "dark/standard controls",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "appearance",
+   "width": "desktop",
+   "name": "dark/standard alerts and symbols",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "appearance",
+   "width": "desktop",
+   "name": "dark/standard nothing newly hidden",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "appearance",
+   "width": "desktop",
+   "name": "dark/standard alert emphasis kept",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "appearance",
+   "width": "desktop",
+   "name": "dark/standard contrast and no sideways scroll",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "appearance",
+   "width": "desktop",
+   "name": "light/minimal text",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "appearance",
+   "width": "desktop",
+   "name": "light/minimal controls",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "appearance",
+   "width": "desktop",
+   "name": "light/minimal alerts and symbols",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "appearance",
+   "width": "desktop",
+   "name": "light/minimal nothing newly hidden",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "appearance",
+   "width": "desktop",
+   "name": "light/minimal alert emphasis kept",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "appearance",
+   "width": "desktop",
+   "name": "light/minimal contrast and no sideways scroll",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "appearance",
+   "width": "desktop",
+   "name": "white/minimal text",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "appearance",
+   "width": "desktop",
+   "name": "white/minimal controls",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "appearance",
+   "width": "desktop",
+   "name": "white/minimal alerts and symbols",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "appearance",
+   "width": "desktop",
+   "name": "white/minimal nothing newly hidden",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "appearance",
+   "width": "desktop",
+   "name": "white/minimal alert emphasis kept",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "appearance",
+   "width": "desktop",
+   "name": "white/minimal contrast and no sideways scroll",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "appearance",
+   "width": "desktop",
+   "name": "gray/minimal text",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "appearance",
+   "width": "desktop",
+   "name": "gray/minimal controls",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "appearance",
+   "width": "desktop",
+   "name": "gray/minimal alerts and symbols",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "appearance",
+   "width": "desktop",
+   "name": "gray/minimal nothing newly hidden",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "appearance",
+   "width": "desktop",
+   "name": "gray/minimal alert emphasis kept",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "appearance",
+   "width": "desktop",
+   "name": "gray/minimal contrast and no sideways scroll",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "appearance",
+   "width": "desktop",
+   "name": "dark/minimal text",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "appearance",
+   "width": "desktop",
+   "name": "dark/minimal controls",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "appearance",
+   "width": "desktop",
+   "name": "dark/minimal alerts and symbols",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "appearance",
+   "width": "desktop",
+   "name": "dark/minimal nothing newly hidden",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "appearance",
+   "width": "desktop",
+   "name": "dark/minimal alert emphasis kept",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "appearance",
+   "width": "desktop",
+   "name": "dark/minimal contrast and no sideways scroll",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "holds",
+   "width": "desktop",
+   "name": "light/standard text",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "holds",
+   "width": "desktop",
+   "name": "light/standard controls",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "holds",
+   "width": "desktop",
+   "name": "light/standard alerts and symbols",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "holds",
+   "width": "desktop",
+   "name": "light/standard nothing newly hidden",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "holds",
+   "width": "desktop",
+   "name": "light/standard alert emphasis kept",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "holds",
+   "width": "desktop",
+   "name": "light/standard contrast and no sideways scroll",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "holds",
+   "width": "desktop",
+   "name": "white/standard text",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "holds",
+   "width": "desktop",
+   "name": "white/standard controls",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "holds",
+   "width": "desktop",
+   "name": "white/standard alerts and symbols",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "holds",
+   "width": "desktop",
+   "name": "white/standard nothing newly hidden",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "holds",
+   "width": "desktop",
+   "name": "white/standard alert emphasis kept",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "holds",
+   "width": "desktop",
+   "name": "white/standard contrast and no sideways scroll",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "holds",
+   "width": "desktop",
+   "name": "gray/standard text",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "holds",
+   "width": "desktop",
+   "name": "gray/standard controls",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "holds",
+   "width": "desktop",
+   "name": "gray/standard alerts and symbols",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "holds",
+   "width": "desktop",
+   "name": "gray/standard nothing newly hidden",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "holds",
+   "width": "desktop",
+   "name": "gray/standard alert emphasis kept",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "holds",
+   "width": "desktop",
+   "name": "gray/standard contrast and no sideways scroll",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "holds",
+   "width": "desktop",
+   "name": "dark/standard text",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "holds",
+   "width": "desktop",
+   "name": "dark/standard controls",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "holds",
+   "width": "desktop",
+   "name": "dark/standard alerts and symbols",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "holds",
+   "width": "desktop",
+   "name": "dark/standard nothing newly hidden",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "holds",
+   "width": "desktop",
+   "name": "dark/standard alert emphasis kept",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "holds",
+   "width": "desktop",
+   "name": "dark/standard contrast and no sideways scroll",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "holds",
+   "width": "desktop",
+   "name": "light/minimal text",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "holds",
+   "width": "desktop",
+   "name": "light/minimal controls",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "holds",
+   "width": "desktop",
+   "name": "light/minimal alerts and symbols",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "holds",
+   "width": "desktop",
+   "name": "light/minimal nothing newly hidden",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "holds",
+   "width": "desktop",
+   "name": "light/minimal alert emphasis kept",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "holds",
+   "width": "desktop",
+   "name": "light/minimal contrast and no sideways scroll",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "holds",
+   "width": "desktop",
+   "name": "white/minimal text",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "holds",
+   "width": "desktop",
+   "name": "white/minimal controls",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "holds",
+   "width": "desktop",
+   "name": "white/minimal alerts and symbols",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "holds",
+   "width": "desktop",
+   "name": "white/minimal nothing newly hidden",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "holds",
+   "width": "desktop",
+   "name": "white/minimal alert emphasis kept",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "holds",
+   "width": "desktop",
+   "name": "white/minimal contrast and no sideways scroll",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "holds",
+   "width": "desktop",
+   "name": "gray/minimal text",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "holds",
+   "width": "desktop",
+   "name": "gray/minimal controls",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "holds",
+   "width": "desktop",
+   "name": "gray/minimal alerts and symbols",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "holds",
+   "width": "desktop",
+   "name": "gray/minimal nothing newly hidden",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "holds",
+   "width": "desktop",
+   "name": "gray/minimal alert emphasis kept",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "holds",
+   "width": "desktop",
+   "name": "gray/minimal contrast and no sideways scroll",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "holds",
+   "width": "desktop",
+   "name": "dark/minimal text",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "holds",
+   "width": "desktop",
+   "name": "dark/minimal controls",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "holds",
+   "width": "desktop",
+   "name": "dark/minimal alerts and symbols",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "holds",
+   "width": "desktop",
+   "name": "dark/minimal nothing newly hidden",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "holds",
+   "width": "desktop",
+   "name": "dark/minimal alert emphasis kept",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "holds",
+   "width": "desktop",
+   "name": "dark/minimal contrast and no sideways scroll",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "care-team",
+   "width": "desktop",
+   "name": "light/standard text",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "care-team",
+   "width": "desktop",
+   "name": "light/standard controls",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "care-team",
+   "width": "desktop",
+   "name": "light/standard alerts and symbols",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "care-team",
+   "width": "desktop",
+   "name": "light/standard nothing newly hidden",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "care-team",
+   "width": "desktop",
+   "name": "light/standard alert emphasis kept",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "care-team",
+   "width": "desktop",
+   "name": "light/standard contrast and no sideways scroll",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "care-team",
+   "width": "desktop",
+   "name": "white/standard text",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "care-team",
+   "width": "desktop",
+   "name": "white/standard controls",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "care-team",
+   "width": "desktop",
+   "name": "white/standard alerts and symbols",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "care-team",
+   "width": "desktop",
+   "name": "white/standard nothing newly hidden",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "care-team",
+   "width": "desktop",
+   "name": "white/standard alert emphasis kept",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "care-team",
+   "width": "desktop",
+   "name": "white/standard contrast and no sideways scroll",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "care-team",
+   "width": "desktop",
+   "name": "gray/standard text",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "care-team",
+   "width": "desktop",
+   "name": "gray/standard controls",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "care-team",
+   "width": "desktop",
+   "name": "gray/standard alerts and symbols",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "care-team",
+   "width": "desktop",
+   "name": "gray/standard nothing newly hidden",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "care-team",
+   "width": "desktop",
+   "name": "gray/standard alert emphasis kept",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "care-team",
+   "width": "desktop",
+   "name": "gray/standard contrast and no sideways scroll",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "care-team",
+   "width": "desktop",
+   "name": "dark/standard text",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "care-team",
+   "width": "desktop",
+   "name": "dark/standard controls",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "care-team",
+   "width": "desktop",
+   "name": "dark/standard alerts and symbols",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "care-team",
+   "width": "desktop",
+   "name": "dark/standard nothing newly hidden",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "care-team",
+   "width": "desktop",
+   "name": "dark/standard alert emphasis kept",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "care-team",
+   "width": "desktop",
+   "name": "dark/standard contrast and no sideways scroll",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "care-team",
+   "width": "desktop",
+   "name": "light/minimal text",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "care-team",
+   "width": "desktop",
+   "name": "light/minimal controls",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "care-team",
+   "width": "desktop",
+   "name": "light/minimal alerts and symbols",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "care-team",
+   "width": "desktop",
+   "name": "light/minimal nothing newly hidden",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "care-team",
+   "width": "desktop",
+   "name": "light/minimal alert emphasis kept",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "care-team",
+   "width": "desktop",
+   "name": "light/minimal contrast and no sideways scroll",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "care-team",
+   "width": "desktop",
+   "name": "white/minimal text",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "care-team",
+   "width": "desktop",
+   "name": "white/minimal controls",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "care-team",
+   "width": "desktop",
+   "name": "white/minimal alerts and symbols",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "care-team",
+   "width": "desktop",
+   "name": "white/minimal nothing newly hidden",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "care-team",
+   "width": "desktop",
+   "name": "white/minimal alert emphasis kept",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "care-team",
+   "width": "desktop",
+   "name": "white/minimal contrast and no sideways scroll",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "care-team",
+   "width": "desktop",
+   "name": "gray/minimal text",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "care-team",
+   "width": "desktop",
+   "name": "gray/minimal controls",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "care-team",
+   "width": "desktop",
+   "name": "gray/minimal alerts and symbols",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "care-team",
+   "width": "desktop",
+   "name": "gray/minimal nothing newly hidden",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "care-team",
+   "width": "desktop",
+   "name": "gray/minimal alert emphasis kept",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "care-team",
+   "width": "desktop",
+   "name": "gray/minimal contrast and no sideways scroll",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "care-team",
+   "width": "desktop",
+   "name": "dark/minimal text",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "care-team",
+   "width": "desktop",
+   "name": "dark/minimal controls",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "care-team",
+   "width": "desktop",
+   "name": "dark/minimal alerts and symbols",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "care-team",
+   "width": "desktop",
+   "name": "dark/minimal nothing newly hidden",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "care-team",
+   "width": "desktop",
+   "name": "dark/minimal alert emphasis kept",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "care-team",
+   "width": "desktop",
+   "name": "dark/minimal contrast and no sideways scroll",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "caregiver-detail",
+   "width": "desktop",
+   "name": "light/standard text",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "caregiver-detail",
+   "width": "desktop",
+   "name": "light/standard controls",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "caregiver-detail",
+   "width": "desktop",
+   "name": "light/standard alerts and symbols",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "caregiver-detail",
+   "width": "desktop",
+   "name": "light/standard nothing newly hidden",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "caregiver-detail",
+   "width": "desktop",
+   "name": "light/standard alert emphasis kept",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "caregiver-detail",
+   "width": "desktop",
+   "name": "light/standard contrast and no sideways scroll",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "caregiver-detail",
+   "width": "desktop",
+   "name": "white/standard text",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "caregiver-detail",
+   "width": "desktop",
+   "name": "white/standard controls",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "caregiver-detail",
+   "width": "desktop",
+   "name": "white/standard alerts and symbols",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "caregiver-detail",
+   "width": "desktop",
+   "name": "white/standard nothing newly hidden",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "caregiver-detail",
+   "width": "desktop",
+   "name": "white/standard alert emphasis kept",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "caregiver-detail",
+   "width": "desktop",
+   "name": "white/standard contrast and no sideways scroll",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "caregiver-detail",
+   "width": "desktop",
+   "name": "gray/standard text",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "caregiver-detail",
+   "width": "desktop",
+   "name": "gray/standard controls",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "caregiver-detail",
+   "width": "desktop",
+   "name": "gray/standard alerts and symbols",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "caregiver-detail",
+   "width": "desktop",
+   "name": "gray/standard nothing newly hidden",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "caregiver-detail",
+   "width": "desktop",
+   "name": "gray/standard alert emphasis kept",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "caregiver-detail",
+   "width": "desktop",
+   "name": "gray/standard contrast and no sideways scroll",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "caregiver-detail",
+   "width": "desktop",
+   "name": "dark/standard text",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "caregiver-detail",
+   "width": "desktop",
+   "name": "dark/standard controls",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "caregiver-detail",
+   "width": "desktop",
+   "name": "dark/standard alerts and symbols",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "caregiver-detail",
+   "width": "desktop",
+   "name": "dark/standard nothing newly hidden",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "caregiver-detail",
+   "width": "desktop",
+   "name": "dark/standard alert emphasis kept",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "caregiver-detail",
+   "width": "desktop",
+   "name": "dark/standard contrast and no sideways scroll",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "caregiver-detail",
+   "width": "desktop",
+   "name": "light/minimal text",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "caregiver-detail",
+   "width": "desktop",
+   "name": "light/minimal controls",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "caregiver-detail",
+   "width": "desktop",
+   "name": "light/minimal alerts and symbols",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "caregiver-detail",
+   "width": "desktop",
+   "name": "light/minimal nothing newly hidden",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "caregiver-detail",
+   "width": "desktop",
+   "name": "light/minimal alert emphasis kept",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "caregiver-detail",
+   "width": "desktop",
+   "name": "light/minimal contrast and no sideways scroll",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "caregiver-detail",
+   "width": "desktop",
+   "name": "white/minimal text",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "caregiver-detail",
+   "width": "desktop",
+   "name": "white/minimal controls",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "caregiver-detail",
+   "width": "desktop",
+   "name": "white/minimal alerts and symbols",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "caregiver-detail",
+   "width": "desktop",
+   "name": "white/minimal nothing newly hidden",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "caregiver-detail",
+   "width": "desktop",
+   "name": "white/minimal alert emphasis kept",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "caregiver-detail",
+   "width": "desktop",
+   "name": "white/minimal contrast and no sideways scroll",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "caregiver-detail",
+   "width": "desktop",
+   "name": "gray/minimal text",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "caregiver-detail",
+   "width": "desktop",
+   "name": "gray/minimal controls",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "caregiver-detail",
+   "width": "desktop",
+   "name": "gray/minimal alerts and symbols",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "caregiver-detail",
+   "width": "desktop",
+   "name": "gray/minimal nothing newly hidden",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "caregiver-detail",
+   "width": "desktop",
+   "name": "gray/minimal alert emphasis kept",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "caregiver-detail",
+   "width": "desktop",
+   "name": "gray/minimal contrast and no sideways scroll",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "caregiver-detail",
+   "width": "desktop",
+   "name": "dark/minimal text",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "caregiver-detail",
+   "width": "desktop",
+   "name": "dark/minimal controls",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "caregiver-detail",
+   "width": "desktop",
+   "name": "dark/minimal alerts and symbols",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "caregiver-detail",
+   "width": "desktop",
+   "name": "dark/minimal nothing newly hidden",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "caregiver-detail",
+   "width": "desktop",
+   "name": "dark/minimal alert emphasis kept",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "caregiver-detail",
+   "width": "desktop",
+   "name": "dark/minimal contrast and no sideways scroll",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "schedule",
+   "width": "desktop",
+   "name": "light/standard text",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "schedule",
+   "width": "desktop",
+   "name": "light/standard controls",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "schedule",
+   "width": "desktop",
+   "name": "light/standard alerts and symbols",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "schedule",
+   "width": "desktop",
+   "name": "light/standard nothing newly hidden",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "schedule",
+   "width": "desktop",
+   "name": "light/standard alert emphasis kept",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "schedule",
+   "width": "desktop",
+   "name": "light/standard contrast and no sideways scroll",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "schedule",
+   "width": "desktop",
+   "name": "white/standard text",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "schedule",
+   "width": "desktop",
+   "name": "white/standard controls",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "schedule",
+   "width": "desktop",
+   "name": "white/standard alerts and symbols",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "schedule",
+   "width": "desktop",
+   "name": "white/standard nothing newly hidden",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "schedule",
+   "width": "desktop",
+   "name": "white/standard alert emphasis kept",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "schedule",
+   "width": "desktop",
+   "name": "white/standard contrast and no sideways scroll",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "schedule",
+   "width": "desktop",
+   "name": "gray/standard text",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "schedule",
+   "width": "desktop",
+   "name": "gray/standard controls",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "schedule",
+   "width": "desktop",
+   "name": "gray/standard alerts and symbols",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "schedule",
+   "width": "desktop",
+   "name": "gray/standard nothing newly hidden",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "schedule",
+   "width": "desktop",
+   "name": "gray/standard alert emphasis kept",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "schedule",
+   "width": "desktop",
+   "name": "gray/standard contrast and no sideways scroll",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "schedule",
+   "width": "desktop",
+   "name": "dark/standard text",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "schedule",
+   "width": "desktop",
+   "name": "dark/standard controls",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "schedule",
+   "width": "desktop",
+   "name": "dark/standard alerts and symbols",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "schedule",
+   "width": "desktop",
+   "name": "dark/standard nothing newly hidden",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "schedule",
+   "width": "desktop",
+   "name": "dark/standard alert emphasis kept",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "schedule",
+   "width": "desktop",
+   "name": "dark/standard contrast and no sideways scroll",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "schedule",
+   "width": "desktop",
+   "name": "light/minimal text",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "schedule",
+   "width": "desktop",
+   "name": "light/minimal controls",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "schedule",
+   "width": "desktop",
+   "name": "light/minimal alerts and symbols",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "schedule",
+   "width": "desktop",
+   "name": "light/minimal nothing newly hidden",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "schedule",
+   "width": "desktop",
+   "name": "light/minimal alert emphasis kept",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "schedule",
+   "width": "desktop",
+   "name": "light/minimal contrast and no sideways scroll",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "schedule",
+   "width": "desktop",
+   "name": "white/minimal text",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "schedule",
+   "width": "desktop",
+   "name": "white/minimal controls",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "schedule",
+   "width": "desktop",
+   "name": "white/minimal alerts and symbols",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "schedule",
+   "width": "desktop",
+   "name": "white/minimal nothing newly hidden",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "schedule",
+   "width": "desktop",
+   "name": "white/minimal alert emphasis kept",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "schedule",
+   "width": "desktop",
+   "name": "white/minimal contrast and no sideways scroll",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "schedule",
+   "width": "desktop",
+   "name": "gray/minimal text",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "schedule",
+   "width": "desktop",
+   "name": "gray/minimal controls",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "schedule",
+   "width": "desktop",
+   "name": "gray/minimal alerts and symbols",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "schedule",
+   "width": "desktop",
+   "name": "gray/minimal nothing newly hidden",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "schedule",
+   "width": "desktop",
+   "name": "gray/minimal alert emphasis kept",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "schedule",
+   "width": "desktop",
+   "name": "gray/minimal contrast and no sideways scroll",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "schedule",
+   "width": "desktop",
+   "name": "dark/minimal text",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "schedule",
+   "width": "desktop",
+   "name": "dark/minimal controls",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "schedule",
+   "width": "desktop",
+   "name": "dark/minimal alerts and symbols",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "schedule",
+   "width": "desktop",
+   "name": "dark/minimal nothing newly hidden",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "schedule",
+   "width": "desktop",
+   "name": "dark/minimal alert emphasis kept",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "schedule",
+   "width": "desktop",
+   "name": "dark/minimal contrast and no sideways scroll",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "documents",
+   "width": "desktop",
+   "name": "light/standard unsaved input kept (value, focus, same element)",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "documents",
+   "width": "desktop",
+   "name": "white/standard unsaved input kept (value, focus, same element)",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "documents",
+   "width": "desktop",
+   "name": "gray/standard unsaved input kept (value, focus, same element)",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "documents",
+   "width": "desktop",
+   "name": "dark/standard unsaved input kept (value, focus, same element)",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "documents",
+   "width": "desktop",
+   "name": "light/minimal unsaved input kept (value, focus, same element)",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "documents",
+   "width": "desktop",
+   "name": "white/minimal unsaved input kept (value, focus, same element)",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "documents",
+   "width": "desktop",
+   "name": "gray/minimal unsaved input kept (value, focus, same element)",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "documents",
+   "width": "desktop",
+   "name": "dark/minimal unsaved input kept (value, focus, same element)",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "home",
+   "width": "phone",
+   "name": "light/standard text",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "home",
+   "width": "phone",
+   "name": "light/standard controls",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "home",
+   "width": "phone",
+   "name": "light/standard alerts and symbols",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "home",
+   "width": "phone",
+   "name": "light/standard nothing newly hidden",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "home",
+   "width": "phone",
+   "name": "light/standard alert emphasis kept",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "home",
+   "width": "phone",
+   "name": "light/standard contrast and no sideways scroll",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "home",
+   "width": "phone",
+   "name": "white/standard text",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "home",
+   "width": "phone",
+   "name": "white/standard controls",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "home",
+   "width": "phone",
+   "name": "white/standard alerts and symbols",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "home",
+   "width": "phone",
+   "name": "white/standard nothing newly hidden",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "home",
+   "width": "phone",
+   "name": "white/standard alert emphasis kept",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "home",
+   "width": "phone",
+   "name": "white/standard contrast and no sideways scroll",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "home",
+   "width": "phone",
+   "name": "gray/standard text",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "home",
+   "width": "phone",
+   "name": "gray/standard controls",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "home",
+   "width": "phone",
+   "name": "gray/standard alerts and symbols",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "home",
+   "width": "phone",
+   "name": "gray/standard nothing newly hidden",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "home",
+   "width": "phone",
+   "name": "gray/standard alert emphasis kept",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "home",
+   "width": "phone",
+   "name": "gray/standard contrast and no sideways scroll",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "home",
+   "width": "phone",
+   "name": "dark/standard text",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "home",
+   "width": "phone",
+   "name": "dark/standard controls",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "home",
+   "width": "phone",
+   "name": "dark/standard alerts and symbols",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "home",
+   "width": "phone",
+   "name": "dark/standard nothing newly hidden",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "home",
+   "width": "phone",
+   "name": "dark/standard alert emphasis kept",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "home",
+   "width": "phone",
+   "name": "dark/standard contrast and no sideways scroll",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "home",
+   "width": "phone",
+   "name": "light/minimal text",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "home",
+   "width": "phone",
+   "name": "light/minimal controls",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "home",
+   "width": "phone",
+   "name": "light/minimal alerts and symbols",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "home",
+   "width": "phone",
+   "name": "light/minimal nothing newly hidden",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "home",
+   "width": "phone",
+   "name": "light/minimal alert emphasis kept",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "home",
+   "width": "phone",
+   "name": "light/minimal contrast and no sideways scroll",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "home",
+   "width": "phone",
+   "name": "white/minimal text",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "home",
+   "width": "phone",
+   "name": "white/minimal controls",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "home",
+   "width": "phone",
+   "name": "white/minimal alerts and symbols",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "home",
+   "width": "phone",
+   "name": "white/minimal nothing newly hidden",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "home",
+   "width": "phone",
+   "name": "white/minimal alert emphasis kept",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "home",
+   "width": "phone",
+   "name": "white/minimal contrast and no sideways scroll",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "home",
+   "width": "phone",
+   "name": "gray/minimal text",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "home",
+   "width": "phone",
+   "name": "gray/minimal controls",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "home",
+   "width": "phone",
+   "name": "gray/minimal alerts and symbols",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "home",
+   "width": "phone",
+   "name": "gray/minimal nothing newly hidden",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "home",
+   "width": "phone",
+   "name": "gray/minimal alert emphasis kept",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "home",
+   "width": "phone",
+   "name": "gray/minimal contrast and no sideways scroll",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "home",
+   "width": "phone",
+   "name": "dark/minimal text",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "home",
+   "width": "phone",
+   "name": "dark/minimal controls",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "home",
+   "width": "phone",
+   "name": "dark/minimal alerts and symbols",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "home",
+   "width": "phone",
+   "name": "dark/minimal nothing newly hidden",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "home",
+   "width": "phone",
+   "name": "dark/minimal alert emphasis kept",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "home",
+   "width": "phone",
+   "name": "dark/minimal contrast and no sideways scroll",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "attention",
+   "width": "phone",
+   "name": "light/standard text",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "attention",
+   "width": "phone",
+   "name": "light/standard controls",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "attention",
+   "width": "phone",
+   "name": "light/standard alerts and symbols",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "attention",
+   "width": "phone",
+   "name": "light/standard nothing newly hidden",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "attention",
+   "width": "phone",
+   "name": "light/standard alert emphasis kept",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "attention",
+   "width": "phone",
+   "name": "light/standard contrast and no sideways scroll",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "attention",
+   "width": "phone",
+   "name": "white/standard text",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "attention",
+   "width": "phone",
+   "name": "white/standard controls",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "attention",
+   "width": "phone",
+   "name": "white/standard alerts and symbols",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "attention",
+   "width": "phone",
+   "name": "white/standard nothing newly hidden",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "attention",
+   "width": "phone",
+   "name": "white/standard alert emphasis kept",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "attention",
+   "width": "phone",
+   "name": "white/standard contrast and no sideways scroll",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "attention",
+   "width": "phone",
+   "name": "gray/standard text",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "attention",
+   "width": "phone",
+   "name": "gray/standard controls",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "attention",
+   "width": "phone",
+   "name": "gray/standard alerts and symbols",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "attention",
+   "width": "phone",
+   "name": "gray/standard nothing newly hidden",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "attention",
+   "width": "phone",
+   "name": "gray/standard alert emphasis kept",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "attention",
+   "width": "phone",
+   "name": "gray/standard contrast and no sideways scroll",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "attention",
+   "width": "phone",
+   "name": "dark/standard text",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "attention",
+   "width": "phone",
+   "name": "dark/standard controls",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "attention",
+   "width": "phone",
+   "name": "dark/standard alerts and symbols",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "attention",
+   "width": "phone",
+   "name": "dark/standard nothing newly hidden",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "attention",
+   "width": "phone",
+   "name": "dark/standard alert emphasis kept",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "attention",
+   "width": "phone",
+   "name": "dark/standard contrast and no sideways scroll",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "attention",
+   "width": "phone",
+   "name": "light/minimal text",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "attention",
+   "width": "phone",
+   "name": "light/minimal controls",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "attention",
+   "width": "phone",
+   "name": "light/minimal alerts and symbols",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "attention",
+   "width": "phone",
+   "name": "light/minimal nothing newly hidden",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "attention",
+   "width": "phone",
+   "name": "light/minimal alert emphasis kept",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "attention",
+   "width": "phone",
+   "name": "light/minimal contrast and no sideways scroll",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "attention",
+   "width": "phone",
+   "name": "white/minimal text",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "attention",
+   "width": "phone",
+   "name": "white/minimal controls",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "attention",
+   "width": "phone",
+   "name": "white/minimal alerts and symbols",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "attention",
+   "width": "phone",
+   "name": "white/minimal nothing newly hidden",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "attention",
+   "width": "phone",
+   "name": "white/minimal alert emphasis kept",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "attention",
+   "width": "phone",
+   "name": "white/minimal contrast and no sideways scroll",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "attention",
+   "width": "phone",
+   "name": "gray/minimal text",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "attention",
+   "width": "phone",
+   "name": "gray/minimal controls",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "attention",
+   "width": "phone",
+   "name": "gray/minimal alerts and symbols",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "attention",
+   "width": "phone",
+   "name": "gray/minimal nothing newly hidden",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "attention",
+   "width": "phone",
+   "name": "gray/minimal alert emphasis kept",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "attention",
+   "width": "phone",
+   "name": "gray/minimal contrast and no sideways scroll",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "attention",
+   "width": "phone",
+   "name": "dark/minimal text",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "attention",
+   "width": "phone",
+   "name": "dark/minimal controls",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "attention",
+   "width": "phone",
+   "name": "dark/minimal alerts and symbols",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "attention",
+   "width": "phone",
+   "name": "dark/minimal nothing newly hidden",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "attention",
+   "width": "phone",
+   "name": "dark/minimal alert emphasis kept",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "attention",
+   "width": "phone",
+   "name": "dark/minimal contrast and no sideways scroll",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "staffing",
+   "width": "phone",
+   "name": "light/standard text",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "staffing",
+   "width": "phone",
+   "name": "light/standard controls",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "staffing",
+   "width": "phone",
+   "name": "light/standard alerts and symbols",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "staffing",
+   "width": "phone",
+   "name": "light/standard nothing newly hidden",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "staffing",
+   "width": "phone",
+   "name": "light/standard alert emphasis kept",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "staffing",
+   "width": "phone",
+   "name": "light/standard contrast and no sideways scroll",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "staffing",
+   "width": "phone",
+   "name": "white/standard text",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "staffing",
+   "width": "phone",
+   "name": "white/standard controls",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "staffing",
+   "width": "phone",
+   "name": "white/standard alerts and symbols",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "staffing",
+   "width": "phone",
+   "name": "white/standard nothing newly hidden",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "staffing",
+   "width": "phone",
+   "name": "white/standard alert emphasis kept",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "staffing",
+   "width": "phone",
+   "name": "white/standard contrast and no sideways scroll",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "staffing",
+   "width": "phone",
+   "name": "gray/standard text",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "staffing",
+   "width": "phone",
+   "name": "gray/standard controls",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "staffing",
+   "width": "phone",
+   "name": "gray/standard alerts and symbols",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "staffing",
+   "width": "phone",
+   "name": "gray/standard nothing newly hidden",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "staffing",
+   "width": "phone",
+   "name": "gray/standard alert emphasis kept",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "staffing",
+   "width": "phone",
+   "name": "gray/standard contrast and no sideways scroll",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "staffing",
+   "width": "phone",
+   "name": "dark/standard text",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "staffing",
+   "width": "phone",
+   "name": "dark/standard controls",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "staffing",
+   "width": "phone",
+   "name": "dark/standard alerts and symbols",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "staffing",
+   "width": "phone",
+   "name": "dark/standard nothing newly hidden",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "staffing",
+   "width": "phone",
+   "name": "dark/standard alert emphasis kept",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "staffing",
+   "width": "phone",
+   "name": "dark/standard contrast and no sideways scroll",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "staffing",
+   "width": "phone",
+   "name": "light/minimal text",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "staffing",
+   "width": "phone",
+   "name": "light/minimal controls",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "staffing",
+   "width": "phone",
+   "name": "light/minimal alerts and symbols",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "staffing",
+   "width": "phone",
+   "name": "light/minimal nothing newly hidden",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "staffing",
+   "width": "phone",
+   "name": "light/minimal alert emphasis kept",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "staffing",
+   "width": "phone",
+   "name": "light/minimal contrast and no sideways scroll",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "staffing",
+   "width": "phone",
+   "name": "white/minimal text",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "staffing",
+   "width": "phone",
+   "name": "white/minimal controls",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "staffing",
+   "width": "phone",
+   "name": "white/minimal alerts and symbols",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "staffing",
+   "width": "phone",
+   "name": "white/minimal nothing newly hidden",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "staffing",
+   "width": "phone",
+   "name": "white/minimal alert emphasis kept",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "staffing",
+   "width": "phone",
+   "name": "white/minimal contrast and no sideways scroll",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "staffing",
+   "width": "phone",
+   "name": "gray/minimal text",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "staffing",
+   "width": "phone",
+   "name": "gray/minimal controls",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "staffing",
+   "width": "phone",
+   "name": "gray/minimal alerts and symbols",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "staffing",
+   "width": "phone",
+   "name": "gray/minimal nothing newly hidden",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "staffing",
+   "width": "phone",
+   "name": "gray/minimal alert emphasis kept",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "staffing",
+   "width": "phone",
+   "name": "gray/minimal contrast and no sideways scroll",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "staffing",
+   "width": "phone",
+   "name": "dark/minimal text",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "staffing",
+   "width": "phone",
+   "name": "dark/minimal controls",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "staffing",
+   "width": "phone",
+   "name": "dark/minimal alerts and symbols",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "staffing",
+   "width": "phone",
+   "name": "dark/minimal nothing newly hidden",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "staffing",
+   "width": "phone",
+   "name": "dark/minimal alert emphasis kept",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "staffing",
+   "width": "phone",
+   "name": "dark/minimal contrast and no sideways scroll",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "documents",
+   "width": "phone",
+   "name": "light/standard text",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "documents",
+   "width": "phone",
+   "name": "light/standard controls",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "documents",
+   "width": "phone",
+   "name": "light/standard alerts and symbols",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "documents",
+   "width": "phone",
+   "name": "light/standard nothing newly hidden",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "documents",
+   "width": "phone",
+   "name": "light/standard alert emphasis kept",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "documents",
+   "width": "phone",
+   "name": "light/standard contrast and no sideways scroll",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "documents",
+   "width": "phone",
+   "name": "white/standard text",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "documents",
+   "width": "phone",
+   "name": "white/standard controls",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "documents",
+   "width": "phone",
+   "name": "white/standard alerts and symbols",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "documents",
+   "width": "phone",
+   "name": "white/standard nothing newly hidden",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "documents",
+   "width": "phone",
+   "name": "white/standard alert emphasis kept",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "documents",
+   "width": "phone",
+   "name": "white/standard contrast and no sideways scroll",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "documents",
+   "width": "phone",
+   "name": "gray/standard text",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "documents",
+   "width": "phone",
+   "name": "gray/standard controls",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "documents",
+   "width": "phone",
+   "name": "gray/standard alerts and symbols",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "documents",
+   "width": "phone",
+   "name": "gray/standard nothing newly hidden",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "documents",
+   "width": "phone",
+   "name": "gray/standard alert emphasis kept",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "documents",
+   "width": "phone",
+   "name": "gray/standard contrast and no sideways scroll",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "documents",
+   "width": "phone",
+   "name": "dark/standard text",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "documents",
+   "width": "phone",
+   "name": "dark/standard controls",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "documents",
+   "width": "phone",
+   "name": "dark/standard alerts and symbols",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "documents",
+   "width": "phone",
+   "name": "dark/standard nothing newly hidden",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "documents",
+   "width": "phone",
+   "name": "dark/standard alert emphasis kept",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "documents",
+   "width": "phone",
+   "name": "dark/standard contrast and no sideways scroll",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "documents",
+   "width": "phone",
+   "name": "light/minimal text",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "documents",
+   "width": "phone",
+   "name": "light/minimal controls",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "documents",
+   "width": "phone",
+   "name": "light/minimal alerts and symbols",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "documents",
+   "width": "phone",
+   "name": "light/minimal nothing newly hidden",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "documents",
+   "width": "phone",
+   "name": "light/minimal alert emphasis kept",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "documents",
+   "width": "phone",
+   "name": "light/minimal contrast and no sideways scroll",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "documents",
+   "width": "phone",
+   "name": "white/minimal text",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "documents",
+   "width": "phone",
+   "name": "white/minimal controls",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "documents",
+   "width": "phone",
+   "name": "white/minimal alerts and symbols",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "documents",
+   "width": "phone",
+   "name": "white/minimal nothing newly hidden",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "documents",
+   "width": "phone",
+   "name": "white/minimal alert emphasis kept",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "documents",
+   "width": "phone",
+   "name": "white/minimal contrast and no sideways scroll",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "documents",
+   "width": "phone",
+   "name": "gray/minimal text",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "documents",
+   "width": "phone",
+   "name": "gray/minimal controls",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "documents",
+   "width": "phone",
+   "name": "gray/minimal alerts and symbols",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "documents",
+   "width": "phone",
+   "name": "gray/minimal nothing newly hidden",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "documents",
+   "width": "phone",
+   "name": "gray/minimal alert emphasis kept",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "documents",
+   "width": "phone",
+   "name": "gray/minimal contrast and no sideways scroll",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "documents",
+   "width": "phone",
+   "name": "dark/minimal text",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "documents",
+   "width": "phone",
+   "name": "dark/minimal controls",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "documents",
+   "width": "phone",
+   "name": "dark/minimal alerts and symbols",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "documents",
+   "width": "phone",
+   "name": "dark/minimal nothing newly hidden",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "documents",
+   "width": "phone",
+   "name": "dark/minimal alert emphasis kept",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "documents",
+   "width": "phone",
+   "name": "dark/minimal contrast and no sideways scroll",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "visit-review",
+   "width": "phone",
+   "name": "light/standard text",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "visit-review",
+   "width": "phone",
+   "name": "light/standard controls",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "visit-review",
+   "width": "phone",
+   "name": "light/standard alerts and symbols",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "visit-review",
+   "width": "phone",
+   "name": "light/standard nothing newly hidden",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "visit-review",
+   "width": "phone",
+   "name": "light/standard alert emphasis kept",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "visit-review",
+   "width": "phone",
+   "name": "light/standard contrast and no sideways scroll",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "visit-review",
+   "width": "phone",
+   "name": "white/standard text",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "visit-review",
+   "width": "phone",
+   "name": "white/standard controls",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "visit-review",
+   "width": "phone",
+   "name": "white/standard alerts and symbols",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "visit-review",
+   "width": "phone",
+   "name": "white/standard nothing newly hidden",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "visit-review",
+   "width": "phone",
+   "name": "white/standard alert emphasis kept",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "visit-review",
+   "width": "phone",
+   "name": "white/standard contrast and no sideways scroll",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "visit-review",
+   "width": "phone",
+   "name": "gray/standard text",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "visit-review",
+   "width": "phone",
+   "name": "gray/standard controls",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "visit-review",
+   "width": "phone",
+   "name": "gray/standard alerts and symbols",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "visit-review",
+   "width": "phone",
+   "name": "gray/standard nothing newly hidden",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "visit-review",
+   "width": "phone",
+   "name": "gray/standard alert emphasis kept",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "visit-review",
+   "width": "phone",
+   "name": "gray/standard contrast and no sideways scroll",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "visit-review",
+   "width": "phone",
+   "name": "dark/standard text",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "visit-review",
+   "width": "phone",
+   "name": "dark/standard controls",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "visit-review",
+   "width": "phone",
+   "name": "dark/standard alerts and symbols",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "visit-review",
+   "width": "phone",
+   "name": "dark/standard nothing newly hidden",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "visit-review",
+   "width": "phone",
+   "name": "dark/standard alert emphasis kept",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "visit-review",
+   "width": "phone",
+   "name": "dark/standard contrast and no sideways scroll",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "visit-review",
+   "width": "phone",
+   "name": "light/minimal text",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "visit-review",
+   "width": "phone",
+   "name": "light/minimal controls",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "visit-review",
+   "width": "phone",
+   "name": "light/minimal alerts and symbols",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "visit-review",
+   "width": "phone",
+   "name": "light/minimal nothing newly hidden",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "visit-review",
+   "width": "phone",
+   "name": "light/minimal alert emphasis kept",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "visit-review",
+   "width": "phone",
+   "name": "light/minimal contrast and no sideways scroll",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "visit-review",
+   "width": "phone",
+   "name": "white/minimal text",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "visit-review",
+   "width": "phone",
+   "name": "white/minimal controls",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "visit-review",
+   "width": "phone",
+   "name": "white/minimal alerts and symbols",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "visit-review",
+   "width": "phone",
+   "name": "white/minimal nothing newly hidden",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "visit-review",
+   "width": "phone",
+   "name": "white/minimal alert emphasis kept",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "visit-review",
+   "width": "phone",
+   "name": "white/minimal contrast and no sideways scroll",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "visit-review",
+   "width": "phone",
+   "name": "gray/minimal text",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "visit-review",
+   "width": "phone",
+   "name": "gray/minimal controls",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "visit-review",
+   "width": "phone",
+   "name": "gray/minimal alerts and symbols",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "visit-review",
+   "width": "phone",
+   "name": "gray/minimal nothing newly hidden",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "visit-review",
+   "width": "phone",
+   "name": "gray/minimal alert emphasis kept",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "visit-review",
+   "width": "phone",
+   "name": "gray/minimal contrast and no sideways scroll",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "visit-review",
+   "width": "phone",
+   "name": "dark/minimal text",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "visit-review",
+   "width": "phone",
+   "name": "dark/minimal controls",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "visit-review",
+   "width": "phone",
+   "name": "dark/minimal alerts and symbols",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "visit-review",
+   "width": "phone",
+   "name": "dark/minimal nothing newly hidden",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "visit-review",
+   "width": "phone",
+   "name": "dark/minimal alert emphasis kept",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "visit-review",
+   "width": "phone",
+   "name": "dark/minimal contrast and no sideways scroll",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "rates",
+   "width": "phone",
+   "name": "light/standard text",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "rates",
+   "width": "phone",
+   "name": "light/standard controls",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "rates",
+   "width": "phone",
+   "name": "light/standard alerts and symbols",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "rates",
+   "width": "phone",
+   "name": "light/standard nothing newly hidden",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "rates",
+   "width": "phone",
+   "name": "light/standard alert emphasis kept",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "rates",
+   "width": "phone",
+   "name": "light/standard contrast and no sideways scroll",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "rates",
+   "width": "phone",
+   "name": "white/standard text",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "rates",
+   "width": "phone",
+   "name": "white/standard controls",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "rates",
+   "width": "phone",
+   "name": "white/standard alerts and symbols",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "rates",
+   "width": "phone",
+   "name": "white/standard nothing newly hidden",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "rates",
+   "width": "phone",
+   "name": "white/standard alert emphasis kept",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "rates",
+   "width": "phone",
+   "name": "white/standard contrast and no sideways scroll",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "rates",
+   "width": "phone",
+   "name": "gray/standard text",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "rates",
+   "width": "phone",
+   "name": "gray/standard controls",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "rates",
+   "width": "phone",
+   "name": "gray/standard alerts and symbols",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "rates",
+   "width": "phone",
+   "name": "gray/standard nothing newly hidden",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "rates",
+   "width": "phone",
+   "name": "gray/standard alert emphasis kept",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "rates",
+   "width": "phone",
+   "name": "gray/standard contrast and no sideways scroll",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "rates",
+   "width": "phone",
+   "name": "dark/standard text",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "rates",
+   "width": "phone",
+   "name": "dark/standard controls",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "rates",
+   "width": "phone",
+   "name": "dark/standard alerts and symbols",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "rates",
+   "width": "phone",
+   "name": "dark/standard nothing newly hidden",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "rates",
+   "width": "phone",
+   "name": "dark/standard alert emphasis kept",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "rates",
+   "width": "phone",
+   "name": "dark/standard contrast and no sideways scroll",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "rates",
+   "width": "phone",
+   "name": "light/minimal text",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "rates",
+   "width": "phone",
+   "name": "light/minimal controls",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "rates",
+   "width": "phone",
+   "name": "light/minimal alerts and symbols",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "rates",
+   "width": "phone",
+   "name": "light/minimal nothing newly hidden",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "rates",
+   "width": "phone",
+   "name": "light/minimal alert emphasis kept",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "rates",
+   "width": "phone",
+   "name": "light/minimal contrast and no sideways scroll",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "rates",
+   "width": "phone",
+   "name": "white/minimal text",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "rates",
+   "width": "phone",
+   "name": "white/minimal controls",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "rates",
+   "width": "phone",
+   "name": "white/minimal alerts and symbols",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "rates",
+   "width": "phone",
+   "name": "white/minimal nothing newly hidden",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "rates",
+   "width": "phone",
+   "name": "white/minimal alert emphasis kept",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "rates",
+   "width": "phone",
+   "name": "white/minimal contrast and no sideways scroll",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "rates",
+   "width": "phone",
+   "name": "gray/minimal text",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "rates",
+   "width": "phone",
+   "name": "gray/minimal controls",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "rates",
+   "width": "phone",
+   "name": "gray/minimal alerts and symbols",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "rates",
+   "width": "phone",
+   "name": "gray/minimal nothing newly hidden",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "rates",
+   "width": "phone",
+   "name": "gray/minimal alert emphasis kept",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "rates",
+   "width": "phone",
+   "name": "gray/minimal contrast and no sideways scroll",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "rates",
+   "width": "phone",
+   "name": "dark/minimal text",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "rates",
+   "width": "phone",
+   "name": "dark/minimal controls",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "rates",
+   "width": "phone",
+   "name": "dark/minimal alerts and symbols",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "rates",
+   "width": "phone",
+   "name": "dark/minimal nothing newly hidden",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "rates",
+   "width": "phone",
+   "name": "dark/minimal alert emphasis kept",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "rates",
+   "width": "phone",
+   "name": "dark/minimal contrast and no sideways scroll",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "appearance",
+   "width": "phone",
+   "name": "light/standard text",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "appearance",
+   "width": "phone",
+   "name": "light/standard controls",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "appearance",
+   "width": "phone",
+   "name": "light/standard alerts and symbols",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "appearance",
+   "width": "phone",
+   "name": "light/standard nothing newly hidden",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "appearance",
+   "width": "phone",
+   "name": "light/standard alert emphasis kept",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "appearance",
+   "width": "phone",
+   "name": "light/standard contrast and no sideways scroll",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "appearance",
+   "width": "phone",
+   "name": "white/standard text",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "appearance",
+   "width": "phone",
+   "name": "white/standard controls",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "appearance",
+   "width": "phone",
+   "name": "white/standard alerts and symbols",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "appearance",
+   "width": "phone",
+   "name": "white/standard nothing newly hidden",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "appearance",
+   "width": "phone",
+   "name": "white/standard alert emphasis kept",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "appearance",
+   "width": "phone",
+   "name": "white/standard contrast and no sideways scroll",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "appearance",
+   "width": "phone",
+   "name": "gray/standard text",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "appearance",
+   "width": "phone",
+   "name": "gray/standard controls",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "appearance",
+   "width": "phone",
+   "name": "gray/standard alerts and symbols",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "appearance",
+   "width": "phone",
+   "name": "gray/standard nothing newly hidden",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "appearance",
+   "width": "phone",
+   "name": "gray/standard alert emphasis kept",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "appearance",
+   "width": "phone",
+   "name": "gray/standard contrast and no sideways scroll",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "appearance",
+   "width": "phone",
+   "name": "dark/standard text",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "appearance",
+   "width": "phone",
+   "name": "dark/standard controls",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "appearance",
+   "width": "phone",
+   "name": "dark/standard alerts and symbols",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "appearance",
+   "width": "phone",
+   "name": "dark/standard nothing newly hidden",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "appearance",
+   "width": "phone",
+   "name": "dark/standard alert emphasis kept",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "appearance",
+   "width": "phone",
+   "name": "dark/standard contrast and no sideways scroll",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "appearance",
+   "width": "phone",
+   "name": "light/minimal text",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "appearance",
+   "width": "phone",
+   "name": "light/minimal controls",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "appearance",
+   "width": "phone",
+   "name": "light/minimal alerts and symbols",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "appearance",
+   "width": "phone",
+   "name": "light/minimal nothing newly hidden",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "appearance",
+   "width": "phone",
+   "name": "light/minimal alert emphasis kept",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "appearance",
+   "width": "phone",
+   "name": "light/minimal contrast and no sideways scroll",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "appearance",
+   "width": "phone",
+   "name": "white/minimal text",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "appearance",
+   "width": "phone",
+   "name": "white/minimal controls",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "appearance",
+   "width": "phone",
+   "name": "white/minimal alerts and symbols",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "appearance",
+   "width": "phone",
+   "name": "white/minimal nothing newly hidden",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "appearance",
+   "width": "phone",
+   "name": "white/minimal alert emphasis kept",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "appearance",
+   "width": "phone",
+   "name": "white/minimal contrast and no sideways scroll",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "appearance",
+   "width": "phone",
+   "name": "gray/minimal text",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "appearance",
+   "width": "phone",
+   "name": "gray/minimal controls",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "appearance",
+   "width": "phone",
+   "name": "gray/minimal alerts and symbols",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "appearance",
+   "width": "phone",
+   "name": "gray/minimal nothing newly hidden",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "appearance",
+   "width": "phone",
+   "name": "gray/minimal alert emphasis kept",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "appearance",
+   "width": "phone",
+   "name": "gray/minimal contrast and no sideways scroll",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "appearance",
+   "width": "phone",
+   "name": "dark/minimal text",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "appearance",
+   "width": "phone",
+   "name": "dark/minimal controls",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "appearance",
+   "width": "phone",
+   "name": "dark/minimal alerts and symbols",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "appearance",
+   "width": "phone",
+   "name": "dark/minimal nothing newly hidden",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "appearance",
+   "width": "phone",
+   "name": "dark/minimal alert emphasis kept",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "appearance",
+   "width": "phone",
+   "name": "dark/minimal contrast and no sideways scroll",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "holds",
+   "width": "phone",
+   "name": "light/standard text",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "holds",
+   "width": "phone",
+   "name": "light/standard controls",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "holds",
+   "width": "phone",
+   "name": "light/standard alerts and symbols",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "holds",
+   "width": "phone",
+   "name": "light/standard nothing newly hidden",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "holds",
+   "width": "phone",
+   "name": "light/standard alert emphasis kept",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "holds",
+   "width": "phone",
+   "name": "light/standard contrast and no sideways scroll",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "holds",
+   "width": "phone",
+   "name": "white/standard text",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "holds",
+   "width": "phone",
+   "name": "white/standard controls",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "holds",
+   "width": "phone",
+   "name": "white/standard alerts and symbols",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "holds",
+   "width": "phone",
+   "name": "white/standard nothing newly hidden",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "holds",
+   "width": "phone",
+   "name": "white/standard alert emphasis kept",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "holds",
+   "width": "phone",
+   "name": "white/standard contrast and no sideways scroll",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "holds",
+   "width": "phone",
+   "name": "gray/standard text",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "holds",
+   "width": "phone",
+   "name": "gray/standard controls",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "holds",
+   "width": "phone",
+   "name": "gray/standard alerts and symbols",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "holds",
+   "width": "phone",
+   "name": "gray/standard nothing newly hidden",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "holds",
+   "width": "phone",
+   "name": "gray/standard alert emphasis kept",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "holds",
+   "width": "phone",
+   "name": "gray/standard contrast and no sideways scroll",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "holds",
+   "width": "phone",
+   "name": "dark/standard text",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "holds",
+   "width": "phone",
+   "name": "dark/standard controls",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "holds",
+   "width": "phone",
+   "name": "dark/standard alerts and symbols",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "holds",
+   "width": "phone",
+   "name": "dark/standard nothing newly hidden",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "holds",
+   "width": "phone",
+   "name": "dark/standard alert emphasis kept",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "holds",
+   "width": "phone",
+   "name": "dark/standard contrast and no sideways scroll",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "holds",
+   "width": "phone",
+   "name": "light/minimal text",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "holds",
+   "width": "phone",
+   "name": "light/minimal controls",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "holds",
+   "width": "phone",
+   "name": "light/minimal alerts and symbols",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "holds",
+   "width": "phone",
+   "name": "light/minimal nothing newly hidden",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "holds",
+   "width": "phone",
+   "name": "light/minimal alert emphasis kept",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "holds",
+   "width": "phone",
+   "name": "light/minimal contrast and no sideways scroll",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "holds",
+   "width": "phone",
+   "name": "white/minimal text",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "holds",
+   "width": "phone",
+   "name": "white/minimal controls",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "holds",
+   "width": "phone",
+   "name": "white/minimal alerts and symbols",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "holds",
+   "width": "phone",
+   "name": "white/minimal nothing newly hidden",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "holds",
+   "width": "phone",
+   "name": "white/minimal alert emphasis kept",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "holds",
+   "width": "phone",
+   "name": "white/minimal contrast and no sideways scroll",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "holds",
+   "width": "phone",
+   "name": "gray/minimal text",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "holds",
+   "width": "phone",
+   "name": "gray/minimal controls",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "holds",
+   "width": "phone",
+   "name": "gray/minimal alerts and symbols",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "holds",
+   "width": "phone",
+   "name": "gray/minimal nothing newly hidden",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "holds",
+   "width": "phone",
+   "name": "gray/minimal alert emphasis kept",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "holds",
+   "width": "phone",
+   "name": "gray/minimal contrast and no sideways scroll",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "holds",
+   "width": "phone",
+   "name": "dark/minimal text",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "holds",
+   "width": "phone",
+   "name": "dark/minimal controls",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "holds",
+   "width": "phone",
+   "name": "dark/minimal alerts and symbols",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "holds",
+   "width": "phone",
+   "name": "dark/minimal nothing newly hidden",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "holds",
+   "width": "phone",
+   "name": "dark/minimal alert emphasis kept",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "holds",
+   "width": "phone",
+   "name": "dark/minimal contrast and no sideways scroll",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "care-team",
+   "width": "phone",
+   "name": "light/standard text",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "care-team",
+   "width": "phone",
+   "name": "light/standard controls",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "care-team",
+   "width": "phone",
+   "name": "light/standard alerts and symbols",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "care-team",
+   "width": "phone",
+   "name": "light/standard nothing newly hidden",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "care-team",
+   "width": "phone",
+   "name": "light/standard alert emphasis kept",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "care-team",
+   "width": "phone",
+   "name": "light/standard contrast and no sideways scroll",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "care-team",
+   "width": "phone",
+   "name": "white/standard text",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "care-team",
+   "width": "phone",
+   "name": "white/standard controls",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "care-team",
+   "width": "phone",
+   "name": "white/standard alerts and symbols",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "care-team",
+   "width": "phone",
+   "name": "white/standard nothing newly hidden",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "care-team",
+   "width": "phone",
+   "name": "white/standard alert emphasis kept",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "care-team",
+   "width": "phone",
+   "name": "white/standard contrast and no sideways scroll",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "care-team",
+   "width": "phone",
+   "name": "gray/standard text",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "care-team",
+   "width": "phone",
+   "name": "gray/standard controls",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "care-team",
+   "width": "phone",
+   "name": "gray/standard alerts and symbols",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "care-team",
+   "width": "phone",
+   "name": "gray/standard nothing newly hidden",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "care-team",
+   "width": "phone",
+   "name": "gray/standard alert emphasis kept",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "care-team",
+   "width": "phone",
+   "name": "gray/standard contrast and no sideways scroll",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "care-team",
+   "width": "phone",
+   "name": "dark/standard text",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "care-team",
+   "width": "phone",
+   "name": "dark/standard controls",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "care-team",
+   "width": "phone",
+   "name": "dark/standard alerts and symbols",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "care-team",
+   "width": "phone",
+   "name": "dark/standard nothing newly hidden",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "care-team",
+   "width": "phone",
+   "name": "dark/standard alert emphasis kept",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "care-team",
+   "width": "phone",
+   "name": "dark/standard contrast and no sideways scroll",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "care-team",
+   "width": "phone",
+   "name": "light/minimal text",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "care-team",
+   "width": "phone",
+   "name": "light/minimal controls",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "care-team",
+   "width": "phone",
+   "name": "light/minimal alerts and symbols",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "care-team",
+   "width": "phone",
+   "name": "light/minimal nothing newly hidden",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "care-team",
+   "width": "phone",
+   "name": "light/minimal alert emphasis kept",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "care-team",
+   "width": "phone",
+   "name": "light/minimal contrast and no sideways scroll",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "care-team",
+   "width": "phone",
+   "name": "white/minimal text",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "care-team",
+   "width": "phone",
+   "name": "white/minimal controls",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "care-team",
+   "width": "phone",
+   "name": "white/minimal alerts and symbols",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "care-team",
+   "width": "phone",
+   "name": "white/minimal nothing newly hidden",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "care-team",
+   "width": "phone",
+   "name": "white/minimal alert emphasis kept",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "care-team",
+   "width": "phone",
+   "name": "white/minimal contrast and no sideways scroll",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "care-team",
+   "width": "phone",
+   "name": "gray/minimal text",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "care-team",
+   "width": "phone",
+   "name": "gray/minimal controls",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "care-team",
+   "width": "phone",
+   "name": "gray/minimal alerts and symbols",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "care-team",
+   "width": "phone",
+   "name": "gray/minimal nothing newly hidden",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "care-team",
+   "width": "phone",
+   "name": "gray/minimal alert emphasis kept",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "care-team",
+   "width": "phone",
+   "name": "gray/minimal contrast and no sideways scroll",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "care-team",
+   "width": "phone",
+   "name": "dark/minimal text",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "care-team",
+   "width": "phone",
+   "name": "dark/minimal controls",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "care-team",
+   "width": "phone",
+   "name": "dark/minimal alerts and symbols",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "care-team",
+   "width": "phone",
+   "name": "dark/minimal nothing newly hidden",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "care-team",
+   "width": "phone",
+   "name": "dark/minimal alert emphasis kept",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "care-team",
+   "width": "phone",
+   "name": "dark/minimal contrast and no sideways scroll",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "caregiver-detail",
+   "width": "phone",
+   "name": "light/standard text",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "caregiver-detail",
+   "width": "phone",
+   "name": "light/standard controls",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "caregiver-detail",
+   "width": "phone",
+   "name": "light/standard alerts and symbols",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "caregiver-detail",
+   "width": "phone",
+   "name": "light/standard nothing newly hidden",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "caregiver-detail",
+   "width": "phone",
+   "name": "light/standard alert emphasis kept",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "caregiver-detail",
+   "width": "phone",
+   "name": "light/standard contrast and no sideways scroll",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "caregiver-detail",
+   "width": "phone",
+   "name": "white/standard text",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "caregiver-detail",
+   "width": "phone",
+   "name": "white/standard controls",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "caregiver-detail",
+   "width": "phone",
+   "name": "white/standard alerts and symbols",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "caregiver-detail",
+   "width": "phone",
+   "name": "white/standard nothing newly hidden",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "caregiver-detail",
+   "width": "phone",
+   "name": "white/standard alert emphasis kept",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "caregiver-detail",
+   "width": "phone",
+   "name": "white/standard contrast and no sideways scroll",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "caregiver-detail",
+   "width": "phone",
+   "name": "gray/standard text",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "caregiver-detail",
+   "width": "phone",
+   "name": "gray/standard controls",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "caregiver-detail",
+   "width": "phone",
+   "name": "gray/standard alerts and symbols",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "caregiver-detail",
+   "width": "phone",
+   "name": "gray/standard nothing newly hidden",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "caregiver-detail",
+   "width": "phone",
+   "name": "gray/standard alert emphasis kept",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "caregiver-detail",
+   "width": "phone",
+   "name": "gray/standard contrast and no sideways scroll",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "caregiver-detail",
+   "width": "phone",
+   "name": "dark/standard text",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "caregiver-detail",
+   "width": "phone",
+   "name": "dark/standard controls",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "caregiver-detail",
+   "width": "phone",
+   "name": "dark/standard alerts and symbols",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "caregiver-detail",
+   "width": "phone",
+   "name": "dark/standard nothing newly hidden",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "caregiver-detail",
+   "width": "phone",
+   "name": "dark/standard alert emphasis kept",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "caregiver-detail",
+   "width": "phone",
+   "name": "dark/standard contrast and no sideways scroll",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "caregiver-detail",
+   "width": "phone",
+   "name": "light/minimal text",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "caregiver-detail",
+   "width": "phone",
+   "name": "light/minimal controls",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "caregiver-detail",
+   "width": "phone",
+   "name": "light/minimal alerts and symbols",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "caregiver-detail",
+   "width": "phone",
+   "name": "light/minimal nothing newly hidden",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "caregiver-detail",
+   "width": "phone",
+   "name": "light/minimal alert emphasis kept",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "caregiver-detail",
+   "width": "phone",
+   "name": "light/minimal contrast and no sideways scroll",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "caregiver-detail",
+   "width": "phone",
+   "name": "white/minimal text",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "caregiver-detail",
+   "width": "phone",
+   "name": "white/minimal controls",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "caregiver-detail",
+   "width": "phone",
+   "name": "white/minimal alerts and symbols",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "caregiver-detail",
+   "width": "phone",
+   "name": "white/minimal nothing newly hidden",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "caregiver-detail",
+   "width": "phone",
+   "name": "white/minimal alert emphasis kept",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "caregiver-detail",
+   "width": "phone",
+   "name": "white/minimal contrast and no sideways scroll",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "caregiver-detail",
+   "width": "phone",
+   "name": "gray/minimal text",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "caregiver-detail",
+   "width": "phone",
+   "name": "gray/minimal controls",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "caregiver-detail",
+   "width": "phone",
+   "name": "gray/minimal alerts and symbols",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "caregiver-detail",
+   "width": "phone",
+   "name": "gray/minimal nothing newly hidden",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "caregiver-detail",
+   "width": "phone",
+   "name": "gray/minimal alert emphasis kept",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "caregiver-detail",
+   "width": "phone",
+   "name": "gray/minimal contrast and no sideways scroll",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "caregiver-detail",
+   "width": "phone",
+   "name": "dark/minimal text",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "caregiver-detail",
+   "width": "phone",
+   "name": "dark/minimal controls",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "caregiver-detail",
+   "width": "phone",
+   "name": "dark/minimal alerts and symbols",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "caregiver-detail",
+   "width": "phone",
+   "name": "dark/minimal nothing newly hidden",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "caregiver-detail",
+   "width": "phone",
+   "name": "dark/minimal alert emphasis kept",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "caregiver-detail",
+   "width": "phone",
+   "name": "dark/minimal contrast and no sideways scroll",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "schedule",
+   "width": "phone",
+   "name": "light/standard text",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "schedule",
+   "width": "phone",
+   "name": "light/standard controls",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "schedule",
+   "width": "phone",
+   "name": "light/standard alerts and symbols",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "schedule",
+   "width": "phone",
+   "name": "light/standard nothing newly hidden",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "schedule",
+   "width": "phone",
+   "name": "light/standard alert emphasis kept",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "schedule",
+   "width": "phone",
+   "name": "light/standard contrast and no sideways scroll",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "schedule",
+   "width": "phone",
+   "name": "white/standard text",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "schedule",
+   "width": "phone",
+   "name": "white/standard controls",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "schedule",
+   "width": "phone",
+   "name": "white/standard alerts and symbols",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "schedule",
+   "width": "phone",
+   "name": "white/standard nothing newly hidden",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "schedule",
+   "width": "phone",
+   "name": "white/standard alert emphasis kept",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "schedule",
+   "width": "phone",
+   "name": "white/standard contrast and no sideways scroll",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "schedule",
+   "width": "phone",
+   "name": "gray/standard text",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "schedule",
+   "width": "phone",
+   "name": "gray/standard controls",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "schedule",
+   "width": "phone",
+   "name": "gray/standard alerts and symbols",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "schedule",
+   "width": "phone",
+   "name": "gray/standard nothing newly hidden",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "schedule",
+   "width": "phone",
+   "name": "gray/standard alert emphasis kept",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "schedule",
+   "width": "phone",
+   "name": "gray/standard contrast and no sideways scroll",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "schedule",
+   "width": "phone",
+   "name": "dark/standard text",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "schedule",
+   "width": "phone",
+   "name": "dark/standard controls",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "schedule",
+   "width": "phone",
+   "name": "dark/standard alerts and symbols",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "schedule",
+   "width": "phone",
+   "name": "dark/standard nothing newly hidden",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "schedule",
+   "width": "phone",
+   "name": "dark/standard alert emphasis kept",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "schedule",
+   "width": "phone",
+   "name": "dark/standard contrast and no sideways scroll",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "schedule",
+   "width": "phone",
+   "name": "light/minimal text",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "schedule",
+   "width": "phone",
+   "name": "light/minimal controls",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "schedule",
+   "width": "phone",
+   "name": "light/minimal alerts and symbols",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "schedule",
+   "width": "phone",
+   "name": "light/minimal nothing newly hidden",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "schedule",
+   "width": "phone",
+   "name": "light/minimal alert emphasis kept",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "schedule",
+   "width": "phone",
+   "name": "light/minimal contrast and no sideways scroll",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "schedule",
+   "width": "phone",
+   "name": "white/minimal text",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "schedule",
+   "width": "phone",
+   "name": "white/minimal controls",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "schedule",
+   "width": "phone",
+   "name": "white/minimal alerts and symbols",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "schedule",
+   "width": "phone",
+   "name": "white/minimal nothing newly hidden",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "schedule",
+   "width": "phone",
+   "name": "white/minimal alert emphasis kept",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "schedule",
+   "width": "phone",
+   "name": "white/minimal contrast and no sideways scroll",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "schedule",
+   "width": "phone",
+   "name": "gray/minimal text",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "schedule",
+   "width": "phone",
+   "name": "gray/minimal controls",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "schedule",
+   "width": "phone",
+   "name": "gray/minimal alerts and symbols",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "schedule",
+   "width": "phone",
+   "name": "gray/minimal nothing newly hidden",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "schedule",
+   "width": "phone",
+   "name": "gray/minimal alert emphasis kept",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "schedule",
+   "width": "phone",
+   "name": "gray/minimal contrast and no sideways scroll",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "schedule",
+   "width": "phone",
+   "name": "dark/minimal text",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "schedule",
+   "width": "phone",
+   "name": "dark/minimal controls",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "schedule",
+   "width": "phone",
+   "name": "dark/minimal alerts and symbols",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "schedule",
+   "width": "phone",
+   "name": "dark/minimal nothing newly hidden",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "schedule",
+   "width": "phone",
+   "name": "dark/minimal alert emphasis kept",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "schedule",
+   "width": "phone",
+   "name": "dark/minimal contrast and no sideways scroll",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "documents",
+   "width": "phone",
+   "name": "light/standard unsaved input kept (value, focus, same element)",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "documents",
+   "width": "phone",
+   "name": "white/standard unsaved input kept (value, focus, same element)",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "documents",
+   "width": "phone",
+   "name": "gray/standard unsaved input kept (value, focus, same element)",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "documents",
+   "width": "phone",
+   "name": "dark/standard unsaved input kept (value, focus, same element)",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "documents",
+   "width": "phone",
+   "name": "light/minimal unsaved input kept (value, focus, same element)",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "documents",
+   "width": "phone",
+   "name": "white/minimal unsaved input kept (value, focus, same element)",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "documents",
+   "width": "phone",
+   "name": "gray/minimal unsaved input kept (value, focus, same element)",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "page": "documents",
+   "width": "phone",
+   "name": "dark/minimal unsaved input kept (value, focus, same element)",
+   "ok": true,
+   "detail": ""
+  }
+ ]
+}
