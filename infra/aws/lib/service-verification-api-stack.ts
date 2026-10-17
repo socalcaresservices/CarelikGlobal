@@ -137,6 +137,7 @@ export const SERVICE_VERIFICATION_ROUTES: ReadonlyArray<{
   { method: apigw.HttpMethod.POST, path: "/v1/shift-series/{seriesId}/extend" },
   { method: apigw.HttpMethod.GET, path: "/v1/hour-limits" },
   { method: apigw.HttpMethod.POST, path: "/v1/hour-limits" },
+  { method: apigw.HttpMethod.GET, path: "/v1/work-hour-policy" },
   { method: apigw.HttpMethod.GET, path: "/v1/caregiver-load" },
   { method: apigw.HttpMethod.POST, path: "/v1/shifts/{shiftId}/makeup" },
   { method: apigw.HttpMethod.POST, path: "/v1/shifts/{shiftId}/reschedule" },

@@ -13,8 +13,11 @@ export interface Occurrence {
   reservedMinutes: number | null;
   seriesMinutesBefore: number | null;
   outcome: "ok" | "exceeds_authorization" | "no_authorization" | "caregiver_conflict" | "already_started" | "time_does_not_exist" | "time_occurs_twice"
-    | "documents_not_current" | "service_not_approved" | "availability_outside" | "availability_not_provided" | "over_hour_limit";
+    | "documents_not_current" | "service_not_approved" | "availability_outside" | "availability_not_provided" | "over_hour_limit"
+    | "compliance_hold" | "onboarding_incomplete";
 }
+/** 0061: a date that was not saved, and why. Every such date is returned (there is no cut-off). */
+export interface RejectedDate { localDate: string; reason: string; minutes: number }
 /** 0053: how a series repeats beyond "these weekdays". Absent = every selected weekday, every week. */
 export interface RepeatPattern { every_weeks?: number; anchor?: string; nth?: number[]; except_nth?: number[]; exclude_dates?: string[] }
 export interface SeriesRow {
@@ -53,6 +56,8 @@ export const OUTCOME_LABEL: Record<Occurrence["outcome"], string> = {
   availability_outside: "Outside the caregiver's approved hours",
   availability_not_provided: "Caregiver has not provided availability",
   over_hour_limit: "Over the caregiver's hour limit",
+  compliance_hold: "Caregiver is on a compliance hold",
+  onboarding_incomplete: "Caregiver's onboarding is not complete",
 };
 export const monthLabel = (iso: string) => new Date(`${iso.slice(0, 10)}T12:00:00Z`).toLocaleDateString("en-US", { month: "long", year: "numeric", timeZone: "UTC" });
 export const hhmm = (t: string) => t.slice(0, 5);

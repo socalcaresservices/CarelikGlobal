@@ -63,11 +63,19 @@ function fakeApi() {
           caregiverRecordId: CG1, caregiverName: "Synthetic Caregiver One", weekdays: [6], startTime: "09:00:00", endTime: "11:00:00", startsOn: today, endsOn: null, generatedThrough: today,
           upcomingOccurrences: 3, skippedDates: [{ date: today, reason: "over_hour_limit", minutes: 120 }], pattern: { except_nth: [1] } }] });
       case "GET /v1/shift-series/preview":
+        if (partialPreview) {
+          const row = (d: string, outcome: string) => ({ localDate: d, startsAt: later(24), endsAt: later(26), minutes: 120, monthStart: today.slice(0, 8) + "01", authorizationLineageId: "l", authorizedMinutes: 240, usedMinutes: 0, reservedMinutes: 0, seriesMinutesBefore: 0, outcome });
+          return json(200, { occurrences: [row("2026-11-02", "ok"), row("2026-11-03", "exceeds_authorization"), row("2026-11-04", "compliance_hold")] });
+        }
         return json(200, { occurrences: [{ localDate: today, startsAt: later(24), endsAt: later(26), minutes: 120, monthStart: today.slice(0, 8) + "01", authorizationLineageId: "l", authorizedMinutes: 1800, usedMinutes: 0, reservedMinutes: 0, seriesMinutesBefore: 0, outcome: "ok" }] });
       case "POST /v1/shift-series":
+        if (partialPreview) return json(201, { series: { seriesId: SERIES, created: 1, skipped: 2, reservedMinutes: 120, generatedThrough: today, rejected: [
+          { localDate: "2026-11-03", reason: "exceeds_authorization", minutes: 120 }, { localDate: "2026-11-04", reason: "compliance_hold", minutes: 120 }] } });
         return json(201, { series: { seriesId: SERIES, created: 3, skipped: 0, reservedMinutes: 360, generatedThrough: today } });
       case `POST /v1/shifts/${CANCELLED}/makeup`:
         return json(201, { makeup: { shiftId: "new", startsAt: "x", endsAt: "y", reservedMinutes: 60, remainingMinutes: "300", unmadeMinutesAfter: 60 } });
+      case "GET /v1/work-hour-policy":
+        return json(200, { policy: policyApplies ? { applies: true, maxDailyMinutes: 480, maxWeeklyMinutes: 2400, version: 1, basis: "Synthetic" } : { applies: false } });
       case "GET /v1/hour-limits":
         return json(200, { limits });
       case "POST /v1/hour-limits":
@@ -83,6 +91,8 @@ function fakeApi() {
   return { calls, fetchImpl };
 }
 
+let policyApplies = false;
+let partialPreview = false;
 function renderAt(path: string) {
   const api = fakeApi();
   const auth = {
@@ -156,5 +166,43 @@ describe("Scheduling page", () => {
     expect(api.calls.find((c) => c.method === "POST" && c.path === "/v1/hour-limits")!.body).toEqual({
       organizationId: ORG, caregiverRecordId: null, maxDailyMinutes: 480, maxWeeklyMinutes: 2400, mode: "report", reason: "Agency policy (synthetic)" });
     expect(await screen.findByText((_, el) => el?.tagName === "LI" && /Everyone \(agency default\).*8 hr a day.*40 hr a week.*warns only/.test(el.textContent ?? ""))).toBeInTheDocument();
+  });
+
+  it("states the agency's fixed limit, and says it cannot be overridden, when one applies", async () => {
+    policyApplies = true;
+    try {
+      renderAt("/schedule");
+      fireEvent.click(await screen.findByRole("button", { name: "Hours and limits" }));
+      const banner = await screen.findByTestId("work-hour-policy");
+      expect(banner).toHaveTextContent("Agency limit: 8 hr a day and 40 hr a week.");
+      expect(banner).toHaveTextContent("always enforced and cannot be overridden or loosened here");
+      expect(screen.queryByText(/No limits set/)).toBeNull();
+    } finally {
+      policyApplies = false;
+    }
+  });
+
+  it("saves the dates that fit and lists EVERY date that was not saved, with its reason", async () => {
+    partialPreview = true;
+    try {
+      const api = renderAt("/schedule");
+      fireEvent.click(await screen.findByRole("button", { name: "Repeat visits" }));
+      await screen.findByRole("option", { name: /Synthetic Client Alpha/ });
+      await screen.findByRole("option", { name: /Personal care/ });
+      fireEvent.change(screen.getByLabelText("Client"), { target: { value: CLIENT } });
+      fireEvent.change(screen.getByLabelText("Service"), { target: { value: SVC } });
+      fireEvent.click(screen.getByLabelText("Sat"));
+      fireEvent.click(screen.getByRole("button", { name: "Preview dates and hours" }));
+      expect(await screen.findByText(/2 dates do not fit/)).toBeInTheDocument();
+      fireEvent.click(await screen.findByRole("button", { name: /Create series: save the 1 that fit/ }));
+      const panel = await screen.findByTestId("rejected-dates");
+      expect(panel).toHaveTextContent("2 dates were not saved");
+      expect(panel).toHaveTextContent("Over the month's authorized hours");
+      expect(panel).toHaveTextContent("Caregiver is on a compliance hold"); // a newer reason code has a plain label
+      expect(await screen.findByText(/Series created: 1 shifts scheduled.*2 dates were not saved/)).toBeInTheDocument();
+      expect(api.calls.find((c) => c.method === "POST" && c.path === "/v1/shift-series")!.body).toMatchObject({ onConflict: "save_valid" });
+    } finally {
+      partialPreview = false;
+    }
   });
 });

@@ -9,7 +9,8 @@ import { caregiverName, useCaregivers } from "./care-team-admin";
 import { clientName, useClients, useServices } from "./client-admin";
 import { formatDuration } from "@/lib/service-verification";
 import { useAgencyClock } from "./agency-clock";
-import { RecurringSeriesForm, RescheduleForm, SeriesList } from "./recurring-schedule";
+import { RecurringSeriesForm, RejectedDates, RescheduleForm, SeriesList } from "./recurring-schedule";
+import type { RejectedDate } from "./recurring-format";
 import { AssignmentChecks } from "./readiness/assignment-checks";
 import { HourLimitsPanel, MakeupForm } from "./scheduling-extras";
 
@@ -286,6 +287,8 @@ export function SchedulePage() {
   const [showSeries, setShowSeries] = useState(false);
   const [showLimits, setShowLimits] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
+  const [rejectedDates, setRejectedDates] = useState<RejectedDate[]>([]);
+  const showNotice = (t: string, rejected: RejectedDate[] = []) => { setNotice(t); setRejectedDates(rejected); };
   const canManage = hasPermission("shifts.manage");
   const to = addDays(from, 6);
   const shifts = useQuery({
@@ -318,10 +321,11 @@ export function SchedulePage() {
       </div>
       {needs > 0 ? <p className="text-base font-bold uppercase text-red-700">{needs} shift{needs === 1 ? "" : "s"} need{needs === 1 ? "s" : ""} coverage this week</p> : null}
       {adding ? <Card className="p-3"><AddShiftForm onDone={(t) => { setAdding(false); setNotice(t); }} /></Card> : null}
-      {repeating ? <Card className="p-3"><h2 className="text-base font-semibold text-slate-950">Repeat visits</h2><RecurringSeriesForm today={today} onDone={(t) => { setRepeating(false); setNotice(t); }} /></Card> : null}
-      {showSeries && canManage ? <Card className="space-y-2 p-3"><h2 className="text-base font-semibold text-slate-950">Manage repeating shifts</h2><SeriesList today={today} onDone={setNotice} /></Card> : null}
+      {repeating ? <Card className="p-3"><h2 className="text-base font-semibold text-slate-950">Repeat visits</h2><RecurringSeriesForm today={today} onDone={(t, rej) => { setRepeating(false); showNotice(t, rej); }} /></Card> : null}
+      {showSeries && canManage ? <Card className="space-y-2 p-3"><h2 className="text-base font-semibold text-slate-950">Manage repeating shifts</h2><SeriesList today={today} onDone={showNotice} /></Card> : null}
       {showLimits ? <Card className="p-3"><h2 className="mb-2 text-base font-semibold text-slate-950">Hours and limits</h2><HourLimitsPanel from={from} to={to} canManage={canManage} /></Card> : null}
       {notice ? <p role="status" className="text-sm text-emerald-800">{notice}</p> : null}
+      <RejectedDates items={rejectedDates} />
       <div className="flex flex-wrap items-end gap-3">
         <Button type="button" variant="secondary" onClick={() => setFrom(addDays(from, -7))}>← Previous week</Button>
         <div><label htmlFor="sh-from" className="block text-sm font-medium text-slate-700">Week starting</label><input id="sh-from" type="date" value={from} onChange={(e) => e.target.value && setFrom(e.target.value)} className={inputClass} /></div>

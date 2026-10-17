@@ -811,6 +811,8 @@ export const ROUTES: Record<string, Route> = {
     }),
   },
 
+  // 0061: saves every date that fits and returns `rejected`, every other date with its reason. When no date fits, `series` has seriesId null and
+  // created 0 (nothing is saved); the status stays 201, so a caller must read `created`.
   "POST /v1/shift-series": {
     status: 201,
     mutating: true,
@@ -826,7 +828,7 @@ export const ROUTES: Record<string, Route> = {
       const end = clockTime(body.endTime, "endTime");
       const startsOn = date(body.startsOn, "startsOn");
       const endsOn = optionalDate(body.endsOn, "endsOn");
-      const onConflict = oneOf(body.onConflict ?? "refuse", "onConflict", ["refuse", "skip_flagged"]);
+      const onConflict = oneOf(body.onConflict ?? "save_valid", "onConflict", ["save_valid", "refuse", "skip_flagged"]);
       const pattern = patternValue(body.pattern);
       const [series] = await tx((db) => rows(db,
         "select * from ogevia_api.create_shift_series($1, $2, $3, $4, $5::smallint[], $6::time, $7::time, $8, $9, $10, $11, $12::jsonb)",
@@ -848,7 +850,7 @@ export const ROUTES: Record<string, Route> = {
       const start = clockTime(body.startTime, "startTime");
       const end = clockTime(body.endTime, "endTime");
       const endsOn = optionalDate(body.endsOn, "endsOn");
-      const onConflict = oneOf(body.onConflict ?? "refuse", "onConflict", ["refuse", "skip_flagged"]);
+      const onConflict = oneOf(body.onConflict ?? "save_valid", "onConflict", ["save_valid", "refuse", "skip_flagged"]);
       const reason = text(body.reason, "reason", 500, { required: true });
       const pattern = patternValue(body.pattern);
       const clearPattern = body.clearPattern === undefined ? false : booleanValue(body.clearPattern, "clearPattern");
@@ -881,7 +883,7 @@ export const ROUTES: Record<string, Route> = {
       const key = idempotencyKey(event.headers);
       const org = uuid(body.organizationId, "organizationId");
       const through = date(body.through, "through");
-      const onConflict = oneOf(body.onConflict ?? "refuse", "onConflict", ["refuse", "skip_flagged"]);
+      const onConflict = oneOf(body.onConflict ?? "save_valid", "onConflict", ["save_valid", "refuse", "skip_flagged"]);
       const [result] = await tx((db) => rows(db, "select * from ogevia_api.extend_shift_series($1, $2, $3, $4, $5)", [org, series, through, onConflict, key]));
       return { result };
     },
@@ -893,6 +895,15 @@ export const ROUTES: Record<string, Route> = {
     handle: async ({ event, tx }) => ({
       limits: await tx((db) => rows(db, "select * from ogevia_api.list_hour_limits($1)", [orgParam(event)])),
     }),
+  },
+
+  // The agency's fixed work-hour policy (0060): read-only; nothing in the API can change it.
+  "GET /v1/work-hour-policy": {
+    mutating: false,
+    handle: async ({ event, tx }) => {
+      const [policy] = await tx((db) => rows(db, "select * from ogevia_api.get_work_hour_policy($1)", [orgParam(event)]));
+      return { policy: policy ?? { applies: false } };
+    },
   },
 
   "POST /v1/hour-limits": {
