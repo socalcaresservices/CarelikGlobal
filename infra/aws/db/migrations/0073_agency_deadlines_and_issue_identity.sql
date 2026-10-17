@@ -377,6 +377,7 @@ create table ogevia.action_issue_state (
   queue text not null,
   category text not null,
   entity_id uuid not null,
+  client_id uuid,
   first_seen_at timestamptz not null default now(),
   last_seen_at timestamptz not null default now(),
   status text not null check (status in ('open', 'resolved')),
@@ -566,10 +567,10 @@ begin
     where pr.issue_key is null or pr.status = 'resolved' or pr.last_severity <> c.severity
     returning 1
   ), up as (
-    insert into ogevia.action_issue_state (organization_id, issue_key, kind, reason, queue, category, entity_id, status, last_severity)
-    select p_organization_id, c.issue_key, c.kind, c.reason, c.queue, c.category, c.entity_id, 'open', c.severity from cur c
+    insert into ogevia.action_issue_state (organization_id, issue_key, kind, reason, queue, category, entity_id, client_id, status, last_severity)
+    select p_organization_id, c.issue_key, c.kind, c.reason, c.queue, c.category, c.entity_id, c.client_id, 'open', c.severity from cur c
     on conflict (organization_id, issue_key) do update
-      set last_seen_at = now(), last_severity = excluded.last_severity, status = 'open', resolved_at = null,
+      set last_seen_at = now(), last_severity = excluded.last_severity, status = 'open', resolved_at = null, client_id = excluded.client_id,
           reopen_count = ogevia.action_issue_state.reopen_count + case when ogevia.action_issue_state.status = 'resolved' then 1 else 0 end
     returning 1
   )

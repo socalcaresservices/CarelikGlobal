@@ -543,6 +543,156 @@ export const ROUTES: Record<string, Route> = {
     },
   },
 
+  // 0074: client documents (upload is not approval), readiness stages, service holds, the client's audit timeline, issue history and the duplicate-name check.
+  "GET /v1/client-document-types": {
+    mutating: false,
+    handle: async ({ event, tx }) => ({ types: await tx((db) => rows(db, "select * from ogevia_api.list_client_document_types($1)", [orgParam(event)])) }),
+  },
+
+  "POST /v1/client-document-types": {
+    status: 201,
+    mutating: true,
+    handle: async ({ event, tx }) => {
+      const body = parseBody(event.body, event.isBase64Encoded);
+      const key = idempotencyKey(event.headers);
+      const org = uuid(body.organizationId, "organizationId");
+      const category = oneOf(body.category, "category", ["consent", "authorization", "assessment", "insurance", "identity", "other"] as const);
+      const active = body.active === undefined ? true : booleanValue(body.active, "active");
+      const documentTypeId = await tx(async (db) =>
+        ((await db.query("select ogevia_api.save_client_document_type($1,$2,$3,$4,$5,$6) as id", [org, text(body.name, "name", 80, { required: true }), category, booleanValue(body.requiresExpiry, "requiresExpiry"), active, key])).rows[0] as { id: string }).id);
+      return { documentTypeId };
+    },
+  },
+
+  "POST /v1/client-document-requirements": {
+    mutating: true,
+    handle: async ({ event, tx }) => {
+      const body = parseBody(event.body, event.isBase64Encoded);
+      const key = idempotencyKey(event.headers);
+      const required = await tx(async (db) =>
+        ((await db.query("select ogevia_api.set_client_document_requirement($1,$2,$3,$4,$5) as r", [uuid(body.organizationId, "organizationId"), uuid(body.serviceId, "serviceId"), uuid(body.documentTypeId, "documentTypeId"), booleanValue(body.required, "required"), key])).rows[0] as { r: boolean }).r);
+      return { required };
+    },
+  },
+
+  "GET /v1/clients/{clientId}/documents": {
+    mutating: false,
+    handle: async ({ event, tx }) => ({ documents: await tx((db) => rows(db, "select * from ogevia_api.list_client_documents($1,$2)", [orgParam(event), uuid(p(event).clientId, "clientId")])) }),
+  },
+
+  "POST /v1/clients/{clientId}/documents/{documentTypeId}/versions": {
+    status: 201,
+    mutating: true,
+    handle: async ({ event, tx, evidence }) => {
+      const clientId = uuid(p(event).clientId, "clientId");
+      const typeId = uuid(p(event).documentTypeId, "documentTypeId");
+      const body = parseBody(event.body, event.isBase64Encoded, 5_600_000);
+      const key = idempotencyKey(event.headers);
+      const org = uuid(body.organizationId, "organizationId");
+      const issuedOn = optionalDate(body.issuedOn, "issuedOn");
+      const expiresOn = optionalDate(body.expiresOn, "expiresOn");
+      const file = validateDocumentFile(body.fileBase64, body.contentType);
+      if (issuedOn && expiresOn && expiresOn <= issuedOn) throw new ApiError(422, "validation_failed", "The expiry date must be after the issue date.");
+      // authority first (creates the empty document record only for someone who may upload), then a retry check, then the file, then the version
+      const documentId = await tx(async (db) => ((await db.query("select ogevia_api.ensure_client_document($1,$2,$3) as id", [org, clientId, typeId])).rows[0] as { id: string }).id);
+      const [prior] = await tx((db) => rows(db, "select * from ogevia_api.get_client_document_upload_replay($1,$2)", [documentId, key]));
+      if (prior) return { version: prior };
+      const versionId = randomUUID();
+      const objectKey = `${org}/client-documents/${documentId}/${versionId}`;
+      let s3VersionId: string | null;
+      try {
+        ({ versionId: s3VersionId } = await evidence.put(objectKey, file.bytes, file.sha256, file.contentType));
+      } catch {
+        throw new ApiError(503, "storage_unavailable", "The file could not be stored. Nothing was saved; please try again.");
+      }
+      const [version] = await tx((db) =>
+        rows(db, "select * from ogevia_api.register_client_document_version($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)", [documentId, versionId, objectKey, s3VersionId, file.contentType, file.bytes.length, file.sha256Hex, issuedOn, expiresOn, key]));
+      return { version };
+    },
+  },
+
+  "POST /v1/client-document-versions/{versionId}/review": {
+    mutating: true,
+    handle: async ({ event, tx }) => {
+      const versionId = uuid(p(event).versionId, "versionId");
+      const body = parseBody(event.body, event.isBase64Encoded);
+      const key = idempotencyKey(event.headers);
+      const decision = oneOf(body.decision, "decision", ["verified", "rejected"] as const);
+      const reason = text(body.reason, "reason", 1000);
+      const result = await tx(async (db) => ((await db.query("select ogevia_api.review_client_document_version($1,$2,$3,$4) as d", [versionId, decision, reason, key])).rows[0] as { d: string }).d);
+      return { decision: result };
+    },
+  },
+
+  "GET /v1/client-document-versions/{versionId}/file": {
+    mutating: false,
+    handle: async ({ event, tx, evidence }) => {
+      const versionId = uuid(p(event).versionId, "versionId");
+      const [meta] = await tx((db) => rows(db, "select * from ogevia_api.open_client_document_version($1)", [versionId]));
+      if (!meta) throw new ApiError(404, "not_found", "Document not found.");
+      const stored = await evidence.get(meta.objectKey as string, (meta.s3VersionId as string | null) ?? null, MAX_DOCUMENT_BYTES);
+      const digest = createHash("sha256").update(stored.bytes).digest("hex");
+      if (digest !== meta.sha256) throw new ApiError(500, "integrity_error", "The stored file failed its integrity check.");
+      return { contentType: meta.contentType, fileBase64: stored.bytes.toString("base64"), sha256: digest };
+    },
+  },
+
+  "GET /v1/clients/{clientId}/readiness": {
+    mutating: false,
+    handle: async ({ event, tx }) => ({ readiness: await tx(async (db) => ((await db.query("select ogevia_api.get_client_readiness($1,$2) as r", [orgParam(event), uuid(p(event).clientId, "clientId")])).rows[0] as { r: unknown }).r) }),
+  },
+
+  "POST /v1/clients/{clientId}/stage": {
+    mutating: true,
+    handle: async ({ event, tx }) => {
+      const body = parseBody(event.body, event.isBase64Encoded);
+      const key = idempotencyKey(event.headers);
+      const stage = oneOf(body.stage, "stage", ["draft", "pending", "active"] as const);
+      return { stage: await tx(async (db) => ((await db.query("select ogevia_api.set_client_preparation($1,$2,$3,$4,$5) as r", [uuid(body.organizationId, "organizationId"), uuid(p(event).clientId, "clientId"), stage, text(body.note, "note", 500), key])).rows[0] as { r: unknown }).r) };
+    },
+  },
+
+  "POST /v1/clients/{clientId}/service-holds": {
+    status: 201,
+    mutating: true,
+    handle: async ({ event, tx }) => {
+      const body = parseBody(event.body, event.isBase64Encoded);
+      const key = idempotencyKey(event.headers);
+      const holdId = await tx(async (db) =>
+        ((await db.query("select ogevia_api.open_client_service_hold($1,$2,$3,$4,$5) as id", [uuid(body.organizationId, "organizationId"), uuid(p(event).clientId, "clientId"), uuid(body.serviceId, "serviceId"), text(body.reason, "reason", 500, { required: true }), key])).rows[0] as { id: string }).id);
+      return { holdId };
+    },
+  },
+
+  "POST /v1/client-service-holds/{holdId}/release": {
+    mutating: true,
+    handle: async ({ event, tx }) => {
+      const body = parseBody(event.body, event.isBase64Encoded);
+      const key = idempotencyKey(event.headers);
+      const holdId = await tx(async (db) =>
+        ((await db.query("select ogevia_api.release_client_service_hold($1,$2,$3,$4) as id", [uuid(body.organizationId, "organizationId"), uuid(p(event).holdId, "holdId"), text(body.note, "note", 500, { required: true }), key])).rows[0] as { id: string }).id);
+      return { holdId };
+    },
+  },
+
+  "GET /v1/clients/{clientId}/audit": {
+    mutating: false,
+    handle: async ({ event, tx }) => ({ events: await tx((db) => rows(db, "select * from ogevia_api.list_client_audit($1,$2,100)", [orgParam(event), uuid(p(event).clientId, "clientId")])) }),
+  },
+
+  "GET /v1/clients/{clientId}/issue-history": {
+    mutating: false,
+    handle: async ({ event, tx }) => ({ history: await tx(async (db) => ((await db.query("select ogevia_api.get_client_issue_history($1,$2) as r", [orgParam(event), uuid(p(event).clientId, "clientId")])).rows[0] as { r: unknown }).r) }),
+  },
+
+  "GET /v1/client-duplicates": {
+    mutating: false,
+    handle: async ({ event, tx }) => {
+      const query = q(event);
+      return { matches: await tx((db) => rows(db, "select * from ogevia_api.find_possible_duplicate_clients($1,$2,$3,$4)", [orgParam(event), text(query.firstName, "firstName", 80), text(query.lastName, "lastName", 80), optionalUuid(query.excludeClientId, "excludeClientId")])) };
+    },
+  },
+
   // 0073: the one issue list (filters, paging, stable keys), its history, and the agency's shorter deadlines.
   "GET /v1/action-issues": {
     mutating: false,
