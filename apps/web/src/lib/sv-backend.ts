@@ -271,7 +271,17 @@ export interface BillingReviewRow {
   reviewDecision?: "accept_capped_billable" | "close_not_billable" | "accept_late_confirmation" | null;
   /** AWS (0036): the most minutes a person may approve (billable, or minutes accepted from a late confirmation). */
   eligibleMinutes?: number | null;
+  /** AWS (0062): the server's billing state, and the last voided approval. Absent on older back ends. */
+  billingState?: BillingState | null;
+  activeApprovalId?: string | null;
+  lastVoidAt?: string | null;
+  lastVoidReason?: string | null;
+  lastVoidedByName?: string | null;
 }
+
+/** 0062. Approval is not submission or payment. There is deliberately no "billed" state. */
+export type BillingState =
+  | "needs_correction" | "waiting_for_signature" | "late_response_to_review" | "ready_for_review" | "approved_for_billing" | "voided" | "reviewed_not_billable";
 
 /** A human billing approval. rateCents/amountCents are null unless the caller holds billing.read (owner). */
 export interface BillingApprovalRow {

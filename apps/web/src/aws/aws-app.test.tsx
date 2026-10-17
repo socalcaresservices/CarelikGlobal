@@ -280,7 +280,8 @@ describe("AWS build: manager review and billing-review data", () => {
     // The name also appears as a Client filter option, so match every occurrence.
     expect((await screen.findAllByText("Synthetic Person")).length).toBeGreaterThan(0);
     expect(screen.getAllByText("C-104").length).toBeGreaterThan(0);
-    expect(screen.getAllByText("Awaiting approval").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Ready for Review").length).toBeGreaterThan(0);
+    expect(screen.queryByText("Awaiting approval")).toBeNull();
     expect(screen.queryByText("Billing ready")).toBeNull();
     expect(screen.getAllByText(/Synthetic Caregiver/).length).toBeGreaterThan(0);
     expect(screen.getAllByText(/Respite \(862\)/).length).toBeGreaterThan(0);
@@ -308,11 +309,11 @@ describe("AWS build: manager review and billing-review data", () => {
     expect(api.calls.some((c) => c.method === "POST" && c.path.endsWith("/billing-approval"))).toBe(false);
     fireEvent.change(minutes, { target: { value: "110" } });
     fireEvent.click(screen.getByRole("button", { name: "Approve for billing" }));
-    expect(await screen.findByText(/approved for billing \(1\.83 h\)|approved for billing/)).toBeInTheDocument();
+    expect(await screen.findByText(/Approved for Billing \(1\.83 h\)\. It has not been submitted or paid/)).toBeInTheDocument();
     const post = api.calls.find((c) => c.method === "POST" && c.path === `/v1/visits/${VISIT}/billing-approval`)!;
     expect(post.body).toEqual({ approvedMinutes: 110, notes: null });
     expect(post.headers["idempotency-key"]).toMatch(/^[0-9a-f-]{36}$/);
-    expect(await screen.findByText(/by Manager A · not submitted/)).toBeInTheDocument();
+    expect(await screen.findByText(/by Manager A · not submitted or paid/)).toBeInTheDocument();
     // No owner-only Amount column for a manager.
     expect(screen.queryByRole("columnheader", { name: "Amount" })).not.toBeInTheDocument();
   });

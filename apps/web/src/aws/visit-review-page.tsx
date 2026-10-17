@@ -17,7 +17,8 @@ import {
   VISIT_STATUS_LABEL,
   type ServiceVisitStatus,
 } from "@/lib/service-verification";
-import { newIdempotencyKey } from "@/lib/sv-backend";
+import { newIdempotencyKey, type BillingState } from "@/lib/sv-backend";
+import { APPROVAL_STATUS_LABEL } from "./billing-format";
 import { useOrganization } from "@/providers/organization-provider";
 import { useAwsApi } from "./aws-workspace";
 import { SignatureRecoveryCard } from "./signature-recovery";
@@ -64,6 +65,8 @@ interface VisitReview {
   recoveryState?: "awaiting_response" | "response_to_review" | null;
   canRequestConfirmation?: boolean;
   decisionAcceptedMinutes?: number | null;
+  /** 0062: the server's billing state; null for someone who may not see billing. */
+  billingState?: BillingState | null;
   /** Wave 1 (0050). */
   unscheduledReason?: string | null;
   ruleVersion?: number | null;
@@ -196,14 +199,14 @@ export function VisitReviewPage() {
   ];
   if (v.signerName) facts.push(["Confirmed by", `${v.signerName}${v.signerRelationship ? ` (${v.signerRelationship})` : ""}`]);
   if (v.confirmationReason) facts.push([v.confirmationMethod === "unable_to_confirm" ? "No-signer reason" : "Confirmation note", v.confirmationReason]);
-  if (v.confirmedAt) facts.push(["Submitted", formatDateTime(v.confirmedAt)]);
+  if (v.confirmedAt) facts.push(["Confirmed", formatDateTime(v.confirmedAt)]);
   if (v.unscheduledReason) facts.push(["Unscheduled reason", v.unscheduledReason]);
   if (v.ruleMinutes !== undefined && v.ruleMinutes !== null && v.ruleOutcome && v.ruleOutcome !== "not_applicable") {
     facts.push(["Schedule rule used", `${v.ruleMinutes} minutes (version ${v.ruleVersion}, ${v.ruleSource === "system_default" ? "starting value, not verified" : "set by your agency"}): ${v.ruleOutcome === "over" ? "difference over the rule" : "within the rule"}`]);
   }
   if (v.attestationVersion !== undefined) facts.push(["Caregiver attestation", v.attestationVersion ? `Recorded (${v.attestationVersion})` : "Not recorded"]);
   facts.push(["Signature on file", v.hasSignatureEvidence ? "Yes" : "No"]);
-  facts.push(["Billing approval", v.activeBillingApprovalId ? `Approved ${formatDuration(v.approvedMinutes)} — not submitted` : "Not approved"]);
+  facts.push(["Billing approval", v.activeBillingApprovalId ? `Approved for Billing: ${formatDuration(v.approvedMinutes)} — not submitted or paid` : v.billingState === "voided" ? "Voided (an earlier approval was voided; it can be approved again)" : "Not approved"]);
 
   return (
     <div className="space-y-4">
@@ -213,7 +216,9 @@ export function VisitReviewPage() {
         {v.clientName ? <p className="text-sm text-slate-500">{v.clientCode}</p> : null}
         <p className="mt-1">
           <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${inReview && !v.decision ? "bg-amber-50 text-amber-900 ring-1 ring-amber-200" : "bg-slate-100 text-slate-700"}`}>
-            {inReview
+            {v.billingState
+              ? APPROVAL_STATUS_LABEL[v.billingState]
+              : inReview
               ? v.decision
                 ? v.decision === "close_not_billable" ? "Reviewed — not billable" : v.decision === "accept_late_confirmation" ? "Late confirmation accepted — eligible for billing approval" : "Reviewed — capped minutes eligible"
                 : v.recoveryState === "awaiting_response" ? "Waiting for signature" : v.recoveryState === "response_to_review" ? "Signature received — review it" : "Needs review"

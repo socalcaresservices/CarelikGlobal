@@ -180,7 +180,7 @@ describe("billing approval (0019)", () => {
     const unconfirmed = await endedVisit(db, w.caregiverA1, w, 15, w.orgA, rated.client);
     const r = await api.confirm(db, w.caregiverA1, unconfirmed, { method: "unable_to_confirm", reason: "Client asleep" });
     expect(r.status).toBe("administrator_review");
-    await expectPgError(approve(w.managerA, unconfirmed, 0), "OGC09", /reviewed first/);
+    await expectPgError(approve(w.managerA, unconfirmed, 0), "OGC09", /must be resolved first/);
   });
 
   it("a retried approval with the same key returns the same approval and writes nothing twice", async () => {

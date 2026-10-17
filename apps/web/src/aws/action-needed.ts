@@ -56,7 +56,7 @@ export function actionCategories(a: AttentionSummary): ActionCategory[] {
     list.push({ key: "documentsToReview", label: "Documents to Review", count: a.documentsToReview ?? 0, to: "/documents", hint: "Uploaded, not yet verified" });
   }
   if (seen(a.billingReadyUnapproved)) {
-    list.push({ key: "readyForApproval", label: "Ready for Approval", count: a.billingReadyUnapproved, to: "/billing-review", hint: "Billing Ready visits waiting for a person to approve them; approval is not submission" });
+    list.push({ key: "readyForApproval", label: "Ready for Approval", count: a.billingReadyUnapproved, to: "/billing-review", hint: "Visits that are Ready for Review and waiting for a person to approve them; approval is not submission or payment" });
   }
   return list;
 }

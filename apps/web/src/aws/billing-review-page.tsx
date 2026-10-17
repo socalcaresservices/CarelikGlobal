@@ -2,7 +2,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import { RoundingSection } from "./billing-rounding";
-import { APPROVAL_STATUS_CLASS, APPROVAL_STATUS_LABEL, approvableMinutes, formatClock, formatDuration, formatUsDate, visitScheduleLabel, type ApprovalStatus } from "./billing-format";
+import { APPROVAL_STATUS_CLASS, APPROVAL_STATUS_LABEL, APPROVAL_STATUS_NOTE, approvableMinutes, billingStateOf, formatClock, formatDuration, formatUsDate, visitScheduleLabel, type ApprovalStatus } from "./billing-format";
 import { activeFilterCount, applyBillingFilters, filterOptions, NO_FILTERS, type BillingFilters } from "./billing-filters";
 import { Button, Card } from "@carelik/ui";
 import { confirmationMethodLabel, formatHours } from "@/lib/service-verification";
@@ -28,7 +28,7 @@ type Pending =
   | { kind: "void"; approval: BillingApprovalRow; reason: string; key: string; busy: boolean; error: string | null };
 
 /**
- * Billing review and human billing approval. Billing Ready means the automatic
+ * Billing review and human billing approval. Ready for Review means the automatic
  * checks passed; a person with billing.approve then approves the billable
  * minutes. Approval is not payer submission. Dollar amounts appear only for
  * holders of billing.read (owner); the server returns null to everyone else.
@@ -73,7 +73,7 @@ export function BillingReviewPage() {
       setPending({ ...pending, busy: true, error: null });
       try {
         await backend.approveVisitForBilling!({ visitId: pending.row.visitId, approvedMinutes: minutes, notes: pending.notes.trim() || null, idempotencyKey: pending.key });
-        setNotice(`Visit ${pending.row.visitNumber ?? ""} approved for billing (${formatHours(minutes)} h). It has not been submitted.`);
+        setNotice(`Visit ${pending.row.visitNumber ?? ""} is Approved for Billing (${formatHours(minutes)} h). It has not been submitted or paid.`);
         setPending(null);
       } catch (cause) {
         setPending({ ...pending, busy: false, error: cause instanceof Error ? cause.message : "Approval failed. Nothing was approved; try again." });
@@ -87,7 +87,7 @@ export function BillingReviewPage() {
       setPending({ ...pending, busy: true, error: null });
       try {
         await backend.voidBillingApproval!({ billingApprovalId: pending.approval.billingApprovalId, reason: pending.reason.trim(), idempotencyKey: pending.key });
-        setNotice(`Approval for visit ${pending.approval.visitNumber ?? ""} voided. The visit is Billing ready again.`);
+        setNotice(`Approval for visit ${pending.approval.visitNumber ?? ""} voided. The visit shows as Voided and can be approved again.`);
         setPending(null);
       } catch (cause) {
         setPending({ ...pending, busy: false, error: cause instanceof Error ? cause.message : "Void failed. The approval still stands; try again." });
@@ -121,7 +121,7 @@ export function BillingReviewPage() {
                         return (
                           <div className="space-y-1">
                             <p className="font-medium text-emerald-800">Approved {formatHours(a.approvedMinutes)} h</p>
-                            <p className="text-xs text-slate-500">by {a.approvedByName} · not submitted</p>
+                            <p className="text-xs text-slate-500">by {a.approvedByName} · not submitted or paid</p>
                             {canApprove ? (
                               <button type="button" className="text-xs text-slate-600 underline" onClick={() => { setNotice(null); setPending({ kind: "void", approval: a, reason: "", key: newIdempotencyKey(), busy: false, error: null }); }}>
                                 Void approval
@@ -130,21 +130,29 @@ export function BillingReviewPage() {
                           </div>
                         );
                       }
-                      if (r.reviewState === "reviewed_not_billable") {
+                      const state = approvalStatus(r);
+                      if (state === "reviewed_not_billable") {
                         return <span className="text-slate-600">Reviewed — not billable</span>;
                       }
-                      if (r.reviewState !== "ready" && r.reviewState !== "reviewed_eligible") {
+                      if (state !== "ready_for_review" && state !== "voided") {
                         return (
                           <Link to={`/visits/${r.visitId}`} className="inline-flex min-h-[40px] items-center rounded-lg border border-amber-600 px-3 text-sm font-medium text-amber-900 hover:bg-amber-50">
-                            Review visit
+                            {state === "needs_correction" ? "Correct or resolve" : "Review visit"}
                           </Link>
                         );
                       }
                       if (!canApprove) return <span className="text-slate-500">Not approved</span>;
                       return (
+                        <div className="space-y-1">
+                          {state === "voided" ? (
+                            <p data-testid="void-history" className="text-xs text-rose-800">
+                              Approval voided{r.lastVoidAt ? ` ${formatUsDate(r.lastVoidAt)}` : ""}{r.lastVoidedByName ? ` by ${r.lastVoidedByName}` : ""}{r.lastVoidReason ? `: ${r.lastVoidReason}` : ""}
+                            </p>
+                          ) : null}
                         <Button type="button" onClick={() => { setNotice(null); setPending({ kind: "approve", row: r, minutes: String(approvableMinutes(r)), notes: "", key: newIdempotencyKey(), busy: false, error: null }); }}>
                           Approve
                         </Button>
+                        </div>
                       );
                     })()}</>;
   }
@@ -157,15 +165,16 @@ export function BillingReviewPage() {
   }
 
   function approvalStatus(r: BillingReviewRow): ApprovalStatus {
-    if (activeApproval.get(r.visitId)) return "approved";
-    if (r.reviewState === "ready" || r.reviewState === "reviewed_eligible") return "awaiting";
-    if (r.reviewState === "awaiting_signature") return "awaiting_signature";
-    if (r.reviewState === "late_response_to_review") return "late_response";
-    return r.reviewState === "reviewed_not_billable" ? "not_billable" : "review";
+    return billingStateOf(r, !!activeApproval.get(r.visitId));
   }
   function statusPill(r: BillingReviewRow) {
     const st = approvalStatus(r);
-    return <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${APPROVAL_STATUS_CLASS[st]}`}>{APPROVAL_STATUS_LABEL[st]}</span>;
+    return (
+      <span className="inline-flex flex-col items-start gap-0.5">
+        <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${APPROVAL_STATUS_CLASS[st]}`}>{APPROVAL_STATUS_LABEL[st]}</span>
+        {APPROVAL_STATUS_NOTE[st] ? <span className="text-[11px] text-slate-600">{APPROVAL_STATUS_NOTE[st]}</span> : null}
+      </span>
+    );
   }
   function clientCell(r: BillingReviewRow) {
     const code = r.clientCode ?? null;
@@ -209,8 +218,8 @@ export function BillingReviewPage() {
       <div>
         <h1 className="text-xl font-semibold text-slate-950">Billing review</h1>
         <p className="mt-1 text-sm text-slate-600">
-          Billing ready means the visit passed the automatic checks. Approving it is a separate human step, and
-          approval is not submission: nothing is sent to a payer from this screen.
+          Ready for Review means the visit passed the automatic checks. Approved for Billing is a separate human step, and
+          approval is not submission or payment: nothing is sent to a payer from this screen.
         </p>
       </div>
       <div className="flex flex-wrap items-end gap-3">
@@ -322,7 +331,7 @@ export function BillingReviewPage() {
                 <p className="text-sm font-medium text-slate-900">Approve visit {pending.row.visitNumber ?? ""} for billing</p>
                 <p className="text-xs text-slate-600">
                   {pending.row.reviewDecision === "accept_late_confirmation" ? "Accepted from a late confirmation" : "Billable"}: {approvableMinutes(pending.row)} min ({formatHours(approvableMinutes(pending.row))} h). You can approve less, never more.
-                  Approval records your name and the time. It does not submit anything to a payer.
+                  Approval records your name and the time. It does not submit anything to a payer and does not mean it was paid.
                 </p>
                 <label className="block text-xs font-medium text-slate-600">
                   Approved minutes
@@ -336,7 +345,7 @@ export function BillingReviewPage() {
             ) : (
               <>
                 <p className="text-sm font-medium text-slate-900">Void the billing approval for visit {pending.approval.visitNumber ?? ""}</p>
-                <p className="text-xs text-slate-600">The approval stays in the record as voided, with your reason. The visit returns to Billing ready.</p>
+                <p className="text-xs text-slate-600">The approval stays in the record as voided, with your reason. The visit shows as Voided and can be approved again.</p>
                 <label className="block text-xs font-medium text-slate-600">
                   Reason (required)
                   <input value={pending.reason} maxLength={1000} onChange={(e) => setPending({ ...pending, reason: e.target.value, error: null })} className="mt-1 block w-full rounded-lg border border-slate-200 px-3 py-2 text-sm" />

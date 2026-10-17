@@ -146,9 +146,9 @@ describe("Visit review page", () => {
     expect(Object.keys(post.headers).map((h) => h.toLowerCase())).toContain("idempotency-key");
   });
 
-  it("Billing review offers 'Review visit' linking to the exact visit (no 'Review first' text)", async () => {
+  it("Billing review offers 'Correct or resolve' linking to the exact visit (no 'Review first' text)", async () => {
     renderAt("/billing-review", "no_signer");
-    const links = await screen.findAllByRole("link", { name: "Review visit" });
+    const links = await screen.findAllByRole("link", { name: "Correct or resolve" });
     expect(links[0]).toHaveAttribute("href", `/visits/${VISIT_ID}`);
     expect(screen.queryByText("Review first")).toBeNull();
   });
