@@ -181,7 +181,7 @@ const csvCell = (v: unknown): string => {
 };
 const CHAIN_COLUMNS: Array<[string, string]> = [
   ["Client code", "clientCode"], ["Service", "serviceCode"], ["Authorization version", "authorizationVersion"], ["Period start", "periodStart"], ["Period end", "periodEnd"],
-  ["Authorized (min)", "authorizedMinutes"], ["Scheduled (min)", "scheduledMinutes"], ["Held for review (min)", "heldReviewMinutes"], ["Needs reconciliation (min)", "needsReconciliationMinutes"],
+  ["Authorized (min)", "authorizedMinutes"], ["Scheduled (min)", "scheduledMinutes"], ["Held for confirmation or review (min)", "heldReviewMinutes"], ["Needs reconciliation (min)", "needsReconciliationMinutes"],
   ["Reserved total (min)", "reservedMinutes"], ["Worked (min)", "workedMinutes"], ["Confirmed (min)", "confirmedMinutes"], ["Billable (min)", "billableMinutes"],
   ["Needs correction (min)", "needsCorrectionMinutes"], ["Waiting for client (min)", "waitingMinutes"], ["Ready for review (min)", "readyForReviewMinutes"],
   ["Approved for billing (min)", "approvedForBillingMinutes"], ["Reviewed - not billable (min)", "reviewedNotBillableMinutes"], ["Approved by a person (min)", "humanApprovedMinutes"],

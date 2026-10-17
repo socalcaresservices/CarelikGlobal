@@ -288,7 +288,7 @@ describe("Home layout", () => {
     for (const k of ["Authorized", "Worked", "Billable (confirmed)", "Hours left"]) expect((await within(hours).findAllByText(k)).length).toBeGreaterThan(0);
     // The per-service table is behind a native disclosure, with the same figures and a keyboard-reachable scroller.
     const table = within(hours).getByRole("table", { name: "Hours by service for the selected month" });
-    expect(within(table).getAllByRole("columnheader").map((c) => c.textContent)).toEqual(["Service", "Authorized", "Worked", "Billable", "In review", "Approved", "Scheduled ahead", "Held for review", "To reconcile", "Committed", "Left", "Over limit"]);
+    expect(within(table).getAllByRole("columnheader").map((c) => c.textContent)).toEqual(["Service", "Authorized", "Worked", "Billable", "In review", "Approved", "Scheduled ahead", "Held for confirmation or review", "To reconcile", "Committed", "Left", "Over limit"]);
     const row = within(table).getAllByRole("row")[1]!;
     expect(row).toHaveTextContent("Respite Care");
     expect(within(row).getAllByRole("cell").map((c) => c.textContent)).toEqual(["100 h", "26.5 h", "24.5 h", "2 h", "10 h", "4 h", "24.5 h", "75.5 h", "0 h"]);

@@ -15,7 +15,8 @@
 --   A later decision supersedes an earlier one. A release is final for that reservation (history is kept, nothing is rewritten). There is deliberately no outcome
 --   for "service delivered, bill it": a delivered service without a verification record cannot become billable here. How the agency treats such time is an OWNER
 --   DECISION (see PILOT_BLOCKER_CLASSIFICATION).
--- RESERVATION BUCKETS (ogevia.reservation_bucket; NULL = not part of the reserved total): ahead | underway | held_review | awaiting_record | unreconciled.
+-- RESERVATION BUCKETS (ogevia.reservation_bucket; NULL = not part of the reserved total): ahead | underway (started, or a visit still open) | held_review (a linked visit has
+-- ended and awaits the client's confirmation, or is in review) | awaiting_record | unreconciled.
 -- list_monthly_service_summary gains reserved_ahead/underway/review/reconcile_minutes (their sum is reserved_minutes); get_utilisation_overview gains reserved_minutes,
 -- held_review_minutes and needs_reconciliation_minutes and its scheduled_minutes is ahead + underway. get_attention_overview gains a reconciliation count.
 -- Rollback (BACKUP REQUIRED: the decision table is dropped) restores the 0057/0064 definitions. Reservations released by a reconciliation stay released.

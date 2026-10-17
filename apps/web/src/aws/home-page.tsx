@@ -141,7 +141,7 @@ export function AwsHomePage() {
                       <th scope="col" className="px-3 py-2 text-right">In review</th>
                       <th scope="col" className="px-3 py-2 text-right">Approved</th>
                       <th scope="col" className="px-3 py-2 text-right">Scheduled ahead</th>
-                      <th scope="col" className="px-3 py-2 text-right">Held for review</th>
+                      <th scope="col" className="px-3 py-2 text-right">Held for confirmation or review</th>
                       <th scope="col" className="px-3 py-2 text-right">To reconcile</th>
                       <th scope="col" className="px-3 py-2 text-right">Committed</th>
                       <th scope="col" className="px-3 py-2 text-right">Left</th>
@@ -169,7 +169,7 @@ export function AwsHomePage() {
                 </table>
               </div>
               <p className="mt-2">Committed = billable + approved rounding adjustments + reserved. Authorized − committed = Left − Over limit.</p>
-              <p className="mt-1">Reserved is Scheduled ahead (including a shift that has started), Held for review, and To reconcile: ended with no visit record, released only by a person.</p>
+              <p className="mt-1">Reserved is Scheduled ahead (including a shift that has started), Held for confirmation or review (the visit has ended or is in review), and To reconcile: ended with no visit record, released only by a person.</p>
               <p className="mt-1">Left adds up each authorization's unused time only, so one over its limit never uses up another's hours.</p>
               <p className="mt-1">Healthy is below 80% committed, Near Limit 80% to below 95%, Critical 95% and above. An amended authorization counts once (its latest version).</p>
               <p className="mt-1">Billable means confirmed. Approved means a person approved it for billing. Neither means submitted or paid.</p>

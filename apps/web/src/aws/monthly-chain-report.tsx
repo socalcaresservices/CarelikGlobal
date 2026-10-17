@@ -91,7 +91,7 @@ export function MonthlyChainReport({ month }: { month: string }) {
                 <th scope="col" className="py-2 pr-3">Client · service</th>
                 <th scope="col" className="px-2 py-2 text-right">Authorized</th>
                 <th scope="col" className="px-2 py-2 text-right">Scheduled</th>
-                <th scope="col" className="px-2 py-2 text-right">Held (review)</th>
+                <th scope="col" className="px-2 py-2 text-right">Held (confirming or review)</th>
                 <th scope="col" className="px-2 py-2 text-right">To reconcile</th>
                 <th scope="col" className="px-2 py-2 text-right">Worked</th>
                 <th scope="col" className="px-2 py-2 text-right">Confirmed</th>

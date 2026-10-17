@@ -238,3 +238,75 @@ describe("month boundaries and the agency month", () => {
     expect(await summaryFor(f, month1)).toMatchObject({ reserved_minutes: 120 });
   });
 });
+
+describe("lifecycle transitions of one reservation", () => {
+  const setTimes = (shift: string, startMin: number, endMin: number) =>
+    asReplica(db, "update ogevia.shifts set starts_at = now() + make_interval(mins => $2), ends_at = now() + make_interval(mins => $3) where id = $1", [shift, startMin, endMin]);
+
+  it("ahead -> underway -> ended with no visit -> (held, then released by a person); every step is counted once and nothing releases by itself", async () => {
+    const f = await freshClient(db, w, w.caregiverA1, 20000, w.orgA, { before: 40, after: 200 });
+    const s = await reserved(f, 24 * 60, 60, null);
+    const steps: Array<[string, number, number, string]> = [["ahead", 600, 660, "ahead"], ["underway", -10, 50, "underway"], ["ended", -120, -60, "unreconciled"]];
+    for (const [, a, b, expected] of steps) {
+      await setTimes(s, a, b);
+      expect(await bucket(s)).toBe(expected);
+      const sm = await summaryFor(f);
+      expect(sm.reserved_minutes).toBe(60); // counted exactly once at every step
+      expect(sm.reserved_ahead_minutes + sm.reserved_underway_minutes + sm.reserved_review_minutes + sm.reserved_reconcile_minutes).toBe(60);
+      expect((await reservation(s)).released_at).toBeNull();
+    }
+    await reconcile(w.managerA, s, "hold_service_may_have_occurred", "Waiting to hear back from the family (synthetic)");
+    expect(await bucket(s)).toBe("awaiting_record");
+    expect((await summaryFor(f)).reserved_minutes).toBe(60);
+    await reconcile(w.managerA, s, "no_service_delivered", "Family confirmed nobody came (synthetic)");
+    expect(await bucket(s)).toBeNull();
+    expect((await summaryFor(f)).reserved_minutes).toBe(0);
+  });
+
+  it("underway shift -> visit started (open) -> ended -> signed: the reservation becomes used time exactly once", async () => {
+    const f = await freshClient(db, w, w.caregiverA3, 20000, w.orgA, { before: 40, after: 200 });
+    const s = await reserved(f, 24 * 60, 120, w.caregiverA3);
+    await setTimes(s, -5, 115);
+    expect(await bucket(s)).toBe("underway");
+    const v = await api.start(db, w.caregiverA3, w.orgA, f.client, f.service, null, null);
+    expect(await bucket(s)).toBe("underway"); // open visit: still reserved, still underway
+    await ageVisit(db, v, 45);
+    await api.end(db, w.caregiverA3, v);
+    expect(await bucket(s)).toBe("held_review"); // ended, awaiting the client's confirmation: still reserved, now held
+    const before = await summaryFor(f);
+    expect(before).toMatchObject({ billable_minutes: 0, reserved_minutes: 120, reserved_review_minutes: 120 });
+    const evidence = await api.registerEvidence(db, w.caregiverA3, w.orgA, v);
+    await api.confirm(db, w.caregiverA3, v, { evidence });
+    expect(await bucket(s)).toBeNull();
+    const after = await summaryFor(f);
+    expect(after).toMatchObject({ billable_minutes: 45, reserved_minutes: 0, reserved_reconcile_minutes: 0 });
+    expect(after.authorized_minutes).toBe(after.billable_minutes + after.adjustment_minutes + after.reserved_minutes + after.remaining_minutes);
+  });
+
+  it("cancelled shift: released by the existing rule (unchanged). A called-out shift that then ends with no visit is listed for reconciliation, not dropped", async () => {
+    const f = await freshClient(db, w, w.caregiverA1, 20000, w.orgA, { before: 40, after: 200 });
+    const gone = await reserved(f, 24 * 60, 60, null);
+    await as(w.managerA, "select ogevia_api.cancel_shift($1,$2,'Synthetic: client unwell',null)", [w.orgA, gone]);
+    expect(await bucket(gone)).toBeNull();
+    const calledOut = await reserved(f, 24 * 60, 60, w.caregiverA1);
+    await as(w.caregiverA1, "select ogevia_api.call_out_my_shift($1,$2,'Synthetic: sick',null)", [w.orgA, calledOut]);
+    expect(await bucket(calledOut)).toBe("ahead"); // still reserved: a replacement is expected
+    await setTimes(calledOut, -120, -60);
+    expect(await bucket(calledOut)).toBe("unreconciled");
+    expect((await list()).map((r) => r.shift_id)).toContain(calledOut);
+  });
+
+  it("a signed visit's correction does not bring the released reservation back (history), and the shift never re-enters the reconcile list", async () => {
+    const f = await freshClient(db, w, w.caregiverA3, 20000, w.orgA, { before: 40, after: 200 });
+    const s = await reserved(f, 24 * 60, 90, w.caregiverA3);
+    await setTimes(s, -5, 85);
+    const v = await api.start(db, w.caregiverA3, w.orgA, f.client, f.service, null, null);
+    await ageVisit(db, v, 40);
+    await api.end(db, w.caregiverA3, v);
+    await api.confirm(db, w.caregiverA3, v, { evidence: await api.registerEvidence(db, w.caregiverA3, w.orgA, v) });
+    expect(await bucket(s)).toBeNull();
+    await as(w.managerA, "select ogevia_api.correct_service_visit($1, now() - interval '300 minutes', now() - interval '250 minutes', 'Synthetic: times corrected', $2) as id", [v, randomUUID()]);
+    expect(await bucket(s)).toBeNull();
+    expect((await list()).map((r) => r.shift_id)).not.toContain(s);
+  });
+});

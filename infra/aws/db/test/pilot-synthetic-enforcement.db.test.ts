@@ -92,6 +92,46 @@ describe("the pilot enforces 8 h/day and 40 h/week with no override", () => {
   });
 });
 
+describe("the exact boundaries: 40 hours is allowed, 40 hours and one minute is not (and 8 hours / 8 hours and one minute)", () => {
+  // Wording corrected 2026-10-17: the earlier note said a sixth shift was refused "as the 41st hour". What the first test above does is: five 8-hour days = 2400 minutes
+  // (allowed), then a 1-HOUR shift on the sixth day = 2460 minutes (refused). A sixth 8-HOUR day would total 2880 minutes (48 hours) and is refused for the same weekly rule.
+  // This block states every boundary in minutes, with the week total read back from the database.
+  const monday = () => { const d = new Date(`${day(22)}T12:00:00Z`); d.setUTCDate(d.getUTCDate() + ((8 - d.getUTCDay()) % 7 || 7)); return d.toISOString().slice(0, 10); };
+  const plus = (m: string, n: number) => new Date(Date.parse(`${m}T12:00:00Z`) + n * 864e5).toISOString().slice(0, 10);
+  const weekMinutes = async (rec: string, m: string) =>
+    Number((await q(`select coalesce(sum(extract(epoch from (s.ends_at - s.starts_at)) / 60), 0)::int n from ogevia.shifts s
+                     where s.caregiver_record_id = $1 and s.status = 'scheduled' and (s.starts_at at time zone 'America/Los_Angeles')::date >= $2::date and (s.starts_at at time zone 'America/Los_Angeles')::date < $2::date + 7`, [rec, m])).rows[0].n);
+
+  it("weekly: 2400 minutes (exactly 40 h) is accepted; 2401 and 2415 are refused; a sixth 8-hour day (2880) is refused; the next Monday starts a new week", async () => {
+    // The scheduling API's shortest shift is 15 minutes, so the exact boundary is reached with 2385 + 15 = 2400 and tested with 2385 + 16 = 2401.
+    const m = monday();
+    for (let i = 0; i < 4; i++) await mkShift(w.managerA, plus(m, i), "08:00", "16:00", recA2); // 1920
+    await mkShift(w.managerA, plus(m, 4), "08:00", "15:45", recA2); // 465 -> 2385
+    expect(await weekMinutes(recA2, m)).toBe(2385);
+    await expectPgError(mkShift(w.managerA, plus(m, 5), "08:00", "08:16", recA2), "OGR30", /weekly hour limit/i); // 2385 + 16 = 2401: refused
+    expect(await weekMinutes(recA2, m)).toBe(2385);
+    await mkShift(w.managerA, plus(m, 5), "08:00", "08:15", recA2); // 2385 + 15 = 2400: exactly 40 hours, accepted
+    expect(await weekMinutes(recA2, m)).toBe(2400);
+    await expectPgError(mkShift(w.managerA, plus(m, 5), "09:00", "09:15", recA2), "OGR30", /weekly hour limit/i); // 2415
+    await expectPgError(mkShift(w.managerA, plus(m, 6), "08:00", "16:00", recA2), "OGR30", /weekly hour limit/i); // a sixth 8-hour day: 2880 minutes (48 h)
+    // below the API: a direct 1-minute insert at 2400 is refused by the database trigger (2401), whoever writes it
+    await expect(q(`insert into ogevia.shifts (organization_id, client_id, service_id, caregiver_record_id, starts_at, ends_at, status)
+       select $1,$2,$3,$4, (($5::date + time '10:00') at time zone 'America/Los_Angeles'), (($5::date + time '10:01') at time zone 'America/Los_Angeles'), 'scheduled'`, [w.orgA, fx.client, fx.service, recA2, plus(m, 6)]))
+      .rejects.toMatchObject({ code: "OGR30" });
+    expect(await weekMinutes(recA2, m)).toBe(2400);
+    await mkShift(w.managerA, plus(m, 7), "08:00", "08:15", recA2); // Monday of the next week: a new week
+  });
+
+  it("daily: 480 minutes (exactly 8 h) is accepted; 481 is refused, on that local day only", async () => {
+    const m = plus(monday(), 14);
+    await mkShift(w.managerA, m, "06:00", "13:45", recA2); // 465
+    await expectPgError(mkShift(w.managerA, m, "13:45", "14:01", recA2), "OGR30", /daily hour limit/i); // 465 + 16 = 481
+    await mkShift(w.managerA, m, "13:45", "14:00", recA2); // 465 + 15 = 480: accepted
+    await expectPgError(mkShift(w.managerA, m, "14:00", "14:15", recA2), "OGR30", /daily hour limit/i); // 495
+    await mkShift(w.managerA, plus(m, 1), "06:00", "06:15", recA2); // the next day is a new day
+  });
+});
+
 describe("compliance enforcement ENABLED in the pilot, with the read-only activation preview", () => {
   let held: string;      // caregiver with no clearance, no hire date: would be held
   let heldShift: string;
