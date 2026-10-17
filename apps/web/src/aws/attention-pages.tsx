@@ -57,7 +57,7 @@ export function NeedsAttentionPage() {
   const hours = q.data?.urgentWindowHours ?? URGENT_WINDOW_HOURS;
   return (
     <div className="space-y-4">
-      <PageHeader title="Needs attention now" lead={`Care that starts or is running within ${hours} hours and is blocked or at risk.`} />
+      <PageHeader title="Needs attention now" lead={`Care that starts or is running within ${hours} hours and is blocked or at risk.`} action={<Link className="inline-flex min-h-[44px] items-center font-semibold text-og-link underline md:min-h-[32px]" to="/action-needed" data-testid="all-actions-link">Everything that needs action</Link>} />
       <Loading q={q} />
       {q.data && !u ? <p className="text-sm text-og-sub">Your role does not include this list.</p> : null}
       {u ? (

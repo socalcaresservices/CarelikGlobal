@@ -1577,6 +1577,7 @@ export function ServiceVerificationReportsPage() {
 
       {reportView === "overview" ? (
         <>
+          {awsApi ? <p className="text-sm text-slate-700" data-testid="reporting-hub-link">Billing readiness, authorized against delivered hours, agency performance, exports and audit evidence are together on <Link className="font-semibold underline" to="/reporting">Reporting &amp; billing</Link>.</p> : null}
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
             {[
               {

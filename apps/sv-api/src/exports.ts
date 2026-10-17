@@ -5,7 +5,7 @@ import type { Queryable } from "@carelik/auth/server";
 import { ApiError } from "./errors";
 import { toCamel } from "./routes";
 
-export const REPORT_KEYS = ["client_service_calendar", "monthly_service_reconciliation", "correction_history", "monthly_chain"] as const;
+export const REPORT_KEYS = ["client_service_calendar", "monthly_service_reconciliation", "correction_history", "monthly_chain", "billing_review", "audit_report"] as const;
 export type ReportKey = (typeof REPORT_KEYS)[number];
 
 export interface ExportParams {
@@ -17,6 +17,7 @@ export interface ExportParams {
   caregiverUserId?: string | null;
   correctedByUserId?: string | null;
   status?: string | null;
+  actionPrefix?: string | null;
 }
 
 type Row = Record<string, any>;
@@ -89,6 +90,34 @@ export async function buildReportCsv(db: Queryable, org: string, report: ReportK
         mins(r.remainingMinutes), mins(r.overLimitMinutes), r.authorizationTier, mins(r.reviewMinutes), ...(recon ? [Math.max(0, Number(r.workedMinutes) - Number(r.billableMinutes))] : [])]));
     }
     return { csv: lines.join("\r\n"), rowCount: summary.length };
+  }
+  if (report === "billing_review") {
+    const from = p.monthStart!;
+    const to = new Date(Date.UTC(Number(from.slice(0, 4)), Number(from.slice(5, 7)), 0, 12)).toISOString().slice(0, 10);
+    const data = await rowsOf(db, "select * from ogevia_api.list_billing_review_visits($1, $2, $3)", [org, from, to]);
+    const names = await clientNames(db, org);
+    const n = withNames(data, names);
+    const lines = [line(["Visit ref", ...n.header, "Service", "Service date", "Caregiver", "Worked (min)", "Verified (min)", "Eligible (min)", "Billable (min)", "Billing state", "Approved by a person", "Review reasons", "Last void reason"])];
+    for (const r of data) {
+      lines.push(line([r.visitNumber, ...n.cells(r), `${r.serviceCode} ${r.serviceName}`, r.serviceDate, r.caregiverName, mins(r.workedMinutes), mins(r.verifiedMinutes), mins(r.eligibleMinutes), mins(r.billableMinutes),
+        r.billingState, r.activeApprovalId ? "Yes" : "No", Array.isArray(r.reviewReasons) ? r.reviewReasons.join("; ") : "", r.lastVoidReason]));
+    }
+    lines.push(csvCell("Approval is not submission or payment. Nothing in this file says a visit was submitted or paid."));
+    return { csv: lines.join("\r\n"), rowCount: data.length };
+  }
+  if (report === "audit_report") {
+    const from = p.dateFrom, to = p.dateTo;
+    if (!from || !to) throw new ApiError(400, "bad_request", "dateFrom and dateTo are required for the audit report.");
+    const out: Row[] = [];
+    for (let offset = 0; offset < 20000; offset += 500) {
+      const page = (await db.query("select ogevia_api.list_audit_report($1,$2,$3,$4,500,$5) as r", [org, from, to, p.actionPrefix ?? null, offset])).rows[0] as { r: { total: number; events: Row[] } };
+      out.push(...page.r.events);
+      if (out.length >= page.r.total || page.r.events.length === 0) break;
+    }
+    const lines = [line(["When (UTC)", "Action", "Actor", "Entity type", "Reason", "Fields changed (names only)"])];
+    for (const e of out) lines.push(line([iso(e.occurredAt), e.action, e.actorName, e.entityType, e.reason, Array.isArray(e.fields) ? e.fields.join("; ") : ""]));
+    lines.push(csvCell("Field names only, never values."));
+    return { csv: lines.join("\r\n"), rowCount: out.length };
   }
   const corrections = await rowsOf(db, "select * from ogevia_api.list_correction_history_report($1, $2, $3, $4, $5, $6, $7, $8)",
     [org, p.dateFrom ?? null, p.dateTo ?? null, p.clientId ?? null, p.serviceId ?? null, p.caregiverUserId ?? null, p.correctedByUserId ?? null, p.status ?? null]);

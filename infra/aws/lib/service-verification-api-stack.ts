@@ -171,6 +171,8 @@ export const SERVICE_VERIFICATION_ROUTES: ReadonlyArray<{
   { method: apigw.HttpMethod.GET, path: "/v1/clients/{clientId}/audit" },
   { method: apigw.HttpMethod.GET, path: "/v1/clients/{clientId}/issue-history" },
   { method: apigw.HttpMethod.GET, path: "/v1/client-duplicates" },
+  { method: apigw.HttpMethod.GET, path: "/v1/reports/agency-performance" },
+  { method: apigw.HttpMethod.GET, path: "/v1/reports/audit" },
   { method: apigw.HttpMethod.GET, path: "/v1/action-issues" },
   { method: apigw.HttpMethod.GET, path: "/v1/action-issues/history" },
   { method: apigw.HttpMethod.GET, path: "/v1/attention-settings" },

@@ -39,6 +39,7 @@ import { PublicCareOfferPage, PublicCareRequestPage } from "./care-public-pages"
 import { ConfirmVisitPage } from "./confirm-visit-page";
 import { EnvironmentProvider } from "./environment-marker";
 import { ActionNeededPage } from "./action-needed-page";
+import { ReportingPage } from "./reporting-page";
 import { NeedsAttentionPage, UpcomingStaffingPage, VisitQueuePage } from "./attention-pages";
 import { RatesReviewPage } from "./rates-review-page";
 import { AppearancePage } from "./appearance/appearance-page";
@@ -100,6 +101,7 @@ export function AwsRoutes({ api, publicApi }: { api: AwsApiClient; publicApi: Aw
                     <Route path="/outage-visits" element={<OutageVisitsPage />} />
                     <Route path="/attention" element={<NeedsAttentionPage />} />
                     <Route path="/action-needed" element={<ActionNeededPage />} />
+                    <Route path="/reporting" element={<ReportingPage />} />
                     <Route path="/authorization-impacts" element={<AuthorizationImpactsPage />} />
                     <Route path="/staffing" element={<UpcomingStaffingPage />} />
                     <Route path="/visit-review" element={<VisitQueuePage />} />

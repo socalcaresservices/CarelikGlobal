@@ -178,6 +178,8 @@ function exportFilename(report: ReportKey, p: ExportParams): string {
     case "monthly_chain": return `monthly-chain-${month}.csv`;
     case "client_service_calendar": return `client-service-calendar-${month}.csv`;
     case "monthly_service_reconciliation": return `monthly-service-reconciliation-${month}.csv`;
+    case "billing_review": return `billing-review-${month}.csv`;
+    case "audit_report": return `audit-report-${p.dateFrom ?? ""}-to-${p.dateTo ?? ""}.csv`;
     default: return "correction-history.csv";
   }
 }
@@ -1938,6 +1940,23 @@ export const ROUTES: Record<string, Route> = {
     },
   },
 
+  // 0076: agency performance (counts; no missed-visits metric) and the general audit report (owner only).
+  "GET /v1/reports/agency-performance": {
+    mutating: false,
+    handle: async ({ event, tx }) => ({ performance: await tx(async (db) => ((await db.query("select ogevia_api.get_agency_performance($1,$2) as r", [orgParam(event), date(q(event).monthStart, "monthStart")])).rows[0] as { r: unknown }).r) }),
+  },
+
+  "GET /v1/reports/audit": {
+    mutating: false,
+    handle: async ({ event, tx }) => {
+      const query = q(event);
+      const prefix = query.actionPrefix ?? null;
+      return { report: await tx(async (db) => ((await db.query("select ogevia_api.list_audit_report($1,$2,$3,$4,$5,$6) as r", [
+        orgParam(event), date(query.dateFrom, "dateFrom"), date(query.dateTo, "dateTo"), prefix,
+        query.limit ? Math.min(500, Math.max(1, Number.parseInt(query.limit, 10) || 100)) : 100, query.offset ? Math.max(0, Number.parseInt(query.offset, 10) || 0) : 0])).rows[0] as { r: unknown }).r) };
+    },
+  },
+
   // Server-generated exports (0072). 1) the server checks reports.export and records the REQUEST; 2) it builds the file from the report functions the caller may read;
   // 3) it records GENERATED (rows, bytes, SHA-256) and only then returns the file. If building fails it records FAILED and returns nothing. Delivery to the device is not recorded.
   "POST /v1/exports": {
@@ -1954,8 +1973,10 @@ export const ROUTES: Record<string, Route> = {
         serviceId: optionalUuid(raw.serviceId, "serviceId"),
         caregiverUserId: optionalUuid(raw.caregiverUserId, "caregiverUserId"), correctedByUserId: optionalUuid(raw.correctedByUserId, "correctedByUserId"),
         status: raw.status ? oneOf(raw.status, "status", VISIT_STATUSES) : null,
+        actionPrefix: typeof raw.actionPrefix === "string" && /^[a-z_.]{1,60}$/.test(raw.actionPrefix) ? raw.actionPrefix : null,
       };
-      if (report !== "correction_history" && !params.monthStart) throw new ApiError(400, "bad_request", "monthStart is required for this report.");
+      if (report !== "correction_history" && report !== "audit_report" && !params.monthStart) throw new ApiError(400, "bad_request", "monthStart is required for this report.");
+      if (report === "audit_report" && (!params.dateFrom || !params.dateTo)) throw new ApiError(400, "bad_request", "dateFrom and dateTo are required for the audit report.");
       if (params.dateFrom && params.dateTo && params.dateFrom > params.dateTo) throw new ApiError(400, "bad_request", "dateFrom must not be after dateTo.");
       if (report === "client_service_calendar" && !params.clientId) throw new ApiError(400, "bad_request", "clientId is required for the client service calendar.");
       const requested = await tx(async (db) =>
