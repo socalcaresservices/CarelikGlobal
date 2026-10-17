@@ -13,6 +13,10 @@ const AWS = `#!/usr/bin/env bash
 D="$MOCK_DIR"; echo "$*" >> "$D/aws-calls.log"
 svc="$1"; verb="$2"; shift 2
 SG="$D/sg.json"
+# failure injection: MOCK_HANG="ec2-revoke-security-group-ingress ..." makes that verb hang (the script's timeout must end it)
+[[ " \${MOCK_HANG:-} " == *" $svc-$verb "* ]] && { echo "$svc-$verb hung" >> "$D/hangs.log"; exec sleep 60; }
+# MOCK_HANG_DESCRIBE_WHEN_OPEN: describe-security-groups hangs once the rule has been added (the cleanup's checks)
+[[ -n "\${MOCK_HANG_DESCRIBE_WHEN_OPEN:-}" && "$svc-$verb" == "ec2-describe-security-groups" && -f "$D/authorized" ]] && { echo "describe hung" >> "$D/hangs.log"; exec sleep 60; }
 has() { [[ " $* " == *" $HAS "* ]]; }
 case "$svc $verb" in
   "sts get-caller-identity") echo '{"Account":"300094796789","Arn":"arn:aws:sts::300094796789:assumed-role/AdministratorAccess/operator"}' ;;
@@ -28,6 +32,7 @@ case "$svc $verb" in
   "ec2 authorize-security-group-ingress")
     [[ -n "\${MOCK_FAIL_AUTHORIZE:-}" ]] && { echo "An error occurred (UnauthorizedOperation)" >&2; exit 254; }
     g=$(grep -o 'GroupId=sg-[0-9a-f]*' <<<"$*" | head -1 | cut -d= -f2)
+    touch "$D/authorized"
     jq --arg g "$g" '.i |= map(if (.IpProtocol=="tcp" and .FromPort==5432 and .ToPort==5432) then .UserIdGroupPairs += [{GroupId:$g,UserId:"300094796789"}] else . end)' "$SG" > "$SG.tmp" && mv "$SG.tmp" "$SG" ;;
   "ec2 revoke-security-group-ingress")
     n=$(cat "$D/revoke-count" 2>/dev/null || echo 0); echo $((n+1)) > "$D/revoke-count"
@@ -36,6 +41,7 @@ case "$svc $verb" in
     jq --arg g "$g" '.i |= map(if (.IpProtocol=="tcp" and .FromPort==5432 and .ToPort==5432) then .UserIdGroupPairs |= map(select(.GroupId != $g)) else . end)' "$SG" > "$SG.tmp" && mv "$SG.tmp" "$SG" ;;
   "ssm start-session")
     port=$(grep -o 'localPortNumber=[0-9]*' <<<"$*" | cut -d= -f2)
+    [[ -n "\${MOCK_TUNNEL_NEVER_OPENS:-}" ]] && exec sleep 600
     exec python3 -c "import socket,time,sys
 s=socket.socket(); s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1); s.bind(('127.0.0.1', int(sys.argv[1]))); s.listen(5); time.sleep(600)" "$port" ;;
   "secretsmanager get-secret-value") echo '{"username":"mockadmin","password":"SECRET-PW-CANARY"}' ;;
@@ -48,7 +54,7 @@ const PSQL = `#!/usr/bin/env bash
 D="$MOCK_DIR"
 [[ "\${PGOPTIONS:-}" == *"default_transaction_read_only=on"* ]] || { echo "psql without the read-only option" >> "$D/psql-violations.log"; }
 args="$*"; echo "$args" >> "$D/psql-calls.log"
-[[ -n "\${MOCK_PSQL_SLEEP:-}" ]] && { touch "$D/psql-started"; sleep "$MOCK_PSQL_SLEEP"; }
+[[ -n "\${MOCK_PSQL_SLEEP:-}" ]] && { touch "$D/psql-started"; if [[ "$MOCK_PSQL_SLEEP" -ge 10 ]]; then exec sleep "$MOCK_PSQL_SLEEP"; fi; sleep "$MOCK_PSQL_SLEEP"; }
 [[ -n "\${MOCK_PSQL_FAIL:-}" ]] && { echo "psql: connection failed" >&2; exit 2; }
 case "$args" in
   *pg_database*) echo "${"$"}{MOCK_DBS:-ogevia_sv_test,ogevia_prd}" ;;

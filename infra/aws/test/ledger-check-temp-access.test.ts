@@ -164,7 +164,7 @@ describe("when restoration fails", () => {
     const r = await run(["test"], { env: { MOCK_REVOKE_ALWAYS_FAILS: "1" } });
     expect(r.code).toBe(3);
     expect(r.out).toContain("NOT RESTORED");
-    expect(r.out).toContain("aws ec2 revoke-security-group-ingress --region us-west-2 --group-id sg-00530a1f4f7648e65");
+    expect(r.out).toContain("aws ec2 revoke-security-group-ingress --region us-west-2 --group-id sg-00530a1f4f7648e65 --security-group-rule-ids sgr-");
     expect(r.out).toContain("SECURITY GROUP: NOT RESTORED");
     expect(rulePresent()).toBe(true);
     expect(marker()).toBe(true);
@@ -197,6 +197,99 @@ describe("when restoration fails", () => {
   }, 30000);
 });
 
+
+const FAST = { OGEVIA_AWS_TIMEOUT: "2", OGEVIA_PSQL_TIMEOUT: "2", OGEVIA_CLEANUP_AWS_TIMEOUT: "2", OGEVIA_TUNNEL_WAIT: "2" };
+const hangs = () => (existsSync(join(dir, "hangs.log")) ? readFileSync(join(dir, "hangs.log"), "utf8").split("\n").filter(Boolean) : []);
+
+describe("the tunnel does not outlive the run", () => {
+  it("no Session Manager tunnel process remains after a normal run or after a stop", async () => {
+    const { execSync } = await import("node:child_process");
+    const left = () => { try { return execSync(`pgrep -f '${dir}/[b]in/aws ssm start-session' || true`).toString().trim(); } catch { return ""; } };
+    await run(["test"]);
+    if (left()) console.log("LEAK", execSync(`ps -eo pid,ppid,pgid,args | grep -F '${dir}' | grep -v grep || true`).toString());
+    expect(left()).toBe("");
+    await run(["test"], { env: { MOCK_PSQL_FAIL: "1" } });
+    expect(left()).toBe("");
+  });
+});
+
+describe("a hung command is bounded, counts as a failure and goes through cleanup", () => {
+  it("authorize hangs: the run stops as TIMED OUT, the group is verified unchanged, no marker is left", async () => {
+    const r = await run(["test"], { env: { ...FAST, MOCK_HANG: "ec2-authorize-security-group-ingress" } });
+    expect(hangs()).toEqual(["ec2-authorize-security-group-ingress hung"]);
+    expect(r.code).toBe(1);
+    expect(r.out).toContain("TIMED OUT");
+    expect(r.out).toContain("RESTORED (verified)");
+    expect(sg()).toEqual(INITIAL_SG);
+    expect(marker()).toBe(false);
+  });
+  it("the Session Manager tunnel never opens: stops, removes the rule, verifies", async () => {
+    const r = await run(["test"], { env: { ...FAST, MOCK_TUNNEL_NEVER_OPENS: "1" } });
+    expect(r.code).toBe(1);
+    expect(r.out).toContain("tunnel did not open");
+    expect(r.out).toContain("RESTORED (verified)");
+    expect(sg()).toEqual(INITIAL_SG);
+    expect(marker()).toBe(false);
+  });
+  it("the secret read hangs: stops as TIMED OUT, removes the rule, verifies, and reads no secret", async () => {
+    const r = await run(["test"], { env: { ...FAST, MOCK_HANG: "secretsmanager-get-secret-value" } });
+    expect(r.code).toBe(1);
+    expect(r.out).toContain("TIMED OUT");
+    expect(r.out).toContain("RESTORED (verified)");
+    expect(existsSync(join(dir, "psql-calls.log"))).toBe(false);
+    expect(sg()).toEqual(INITIAL_SG);
+  });
+  it("psql hangs: stops as TIMED OUT, removes the rule, verifies", async () => {
+    const r = await run(["test"], { env: { ...FAST, MOCK_PSQL_SLEEP: "60" } });
+    expect(r.code).toBe(1);
+    expect(r.out).toContain("TIMED OUT");
+    expect(r.out).toContain("RESTORED (verified)");
+    expect(sg()).toEqual(INITIAL_SG);
+    expect(marker()).toBe(false);
+  });
+  it("the window time limit is checked between steps: a slow step ends the run into cleanup", async () => {
+    const r = await run(["test"], { env: { ...FAST, OGEVIA_PSQL_TIMEOUT: "6", OGEVIA_WINDOW_MAX_SECONDS: "1", MOCK_PSQL_SLEEP: "2" } });
+    // the step that crosses the limit completes; the next step refuses to start and cleanup runs
+    expect(r.out).toMatch(/time limit|result kept/);
+    expect(r.out).toContain("RESTORED (verified)");
+    expect(sg()).toEqual(INITIAL_SG);
+  });
+  it("the revoke hangs on every attempt: cleanup is bounded, says NOT RESTORED, EXITS NON-ZERO (3), keeps the marker, and a later --restore-only fixes it", async () => {
+    const r = await run(["test"], { env: { ...FAST, MOCK_HANG: "ec2-revoke-security-group-ingress" } });
+    expect(hangs().filter((h) => h.startsWith("ec2-revoke")).length).toBe(4);
+    expect(r.code).toBe(3);
+    expect(r.out).toContain("NOT RESTORED (exit 3; access may still be open)");
+    expect(r.out).toContain("SECURITY GROUP: NOT RESTORED");
+    expect(rulePresent()).toBe(true);
+    expect(marker()).toBe(true);
+    const fixed = await run(["--restore-only"], { env: FAST }); // the hang was transient: the fake is no longer told to hang
+    expect(fixed.code).toBe(0);
+    expect(fixed.out).toContain("RESTORED (verified)");
+    expect(sg()).toEqual(INITIAL_SG);
+    expect(marker()).toBe(false);
+  });
+  it("the cleanup's own checks hang: the state is UNKNOWN, never assumed restored; exit 3 and the marker stays", async () => {
+    const r = await run(["test"], { env: { ...FAST, MOCK_HANG_DESCRIBE_WHEN_OPEN: "1" } });
+    expect(r.code).toBe(3);
+    expect(r.out).toContain("NOT RESTORED");
+    expect(r.out).toContain("UNKNOWN");
+    expect(r.out).not.toContain("RESTORED (verified)");
+    expect(marker()).toBe(true);
+  });
+  it("the manual recovery text identifies ONLY the temporary rule: the admin-group source, by rule id, and never the application group", async () => {
+    const r = await run(["test"], { env: { ...FAST, MOCK_REVOKE_ALWAYS_FAILS: "1" } });
+    expect(r.code).toBe(3);
+    const lines = r.out.split("\n").filter((l) => /aws ec2 (describe-security-group-rules|revoke-security-group-ingress)/.test(l));
+    expect(lines.some((l) => l.includes("describe-security-group-rules") && l.includes("--filters Name=group-id,Values=sg-00530a1f4f7648e65"))).toBe(true);
+    const revoke = lines.filter((l) => l.includes("revoke-security-group-ingress"));
+    expect(revoke).toHaveLength(1);
+    expect(revoke[0]).toContain("--security-group-rule-ids sgr-");
+    expect(revoke[0]).not.toContain("--ip-permissions");
+    expect(r.out).toContain(`source ${ADMIN}`);
+    expect(r.out).not.toMatch(/revoke[^\n]*sg-064ffce3bcbe8eb3b/);
+  });
+});
+
 describe("static properties of the script", () => {
   it("changes only the RDS group's inbound rule: no instance, host, application-group, stack, Lambda or secret write", () => {
     const calls2 = [...code.matchAll(/\baws\s+(sts|cloudformation|lambda|rds|ec2|ssm|secretsmanager)\s+([a-z0-9-]+)/g)].map((m) => `${m[1]} ${m[2]}`);
@@ -215,6 +308,16 @@ describe("static properties of the script", () => {
     expect(code).toMatch(/trap '[^']*' INT TERM HUP/);
     expect(code).toContain("default_transaction_read_only=on");
     for (const s of [...code.matchAll(/-c "([^"]+)"/g)].map((m) => m[1]!.trim().toLowerCase())) expect(s).toMatch(/^(select|begin transaction read only|rollback)\b/);
+  });
+  it("bounds every command that can hang and no longer claims a hard limit", () => {
+    expect(source).not.toMatch(/hard\s+limit\s*\(OGEVIA/i);
+    expect(source).toMatch(/SIGKILL/);
+    expect(code).toMatch(/aws\(\) \{ timeout --foreground -k "\$KILL_AFTER" "\$AWS_T"/);
+    expect(code).toMatch(/timeout --foreground -k "\$KILL_AFTER" "\$PSQL_TMO" psql/);
+    for (const l of code.split("\n").filter((x) => /\bpsql -X/.test(x))) expect(l).toContain('timeout --foreground -k "$KILL_AFTER" "$PSQL_TMO" psql'); // psql only ever starts under timeout
+    expect(code).toContain("AWS_T=\"$CLEAN_TMO\""); // the cleanup uses its own, shorter bound
+    expect(code).toContain("TEMP-ledger-check-$STAMP"); // the prompt text matches the description actually created
+    expect(code).not.toContain("TEMP ledger check");
   });
   it("never prints or stores a credential", () => {
     expect(code).not.toMatch(/echo[^\n]*PGPASSWORD|printf[^\n]*PGPASSWORD|set -x|say[^\n]*\$SEC\b/);
