@@ -154,6 +154,10 @@ export const SERVICE_VERIFICATION_ROUTES: ReadonlyArray<{
   { method: apigw.HttpMethod.GET, path: "/v1/shift-pickups" },
   { method: apigw.HttpMethod.POST, path: "/v1/shift-pickups/{requestId}/confirm" },
   { method: apigw.HttpMethod.POST, path: "/v1/shift-pickups/{requestId}/decline" },
+  { method: apigw.HttpMethod.GET, path: "/v1/shifts-to-reconcile" },
+  { method: apigw.HttpMethod.GET, path: "/v1/authorization-impacts" },
+  { method: apigw.HttpMethod.POST, path: "/v1/authorization-impacts/{impactId}/acknowledge" },
+  { method: apigw.HttpMethod.POST, path: "/v1/shifts/{shiftId}/reconcile" },
   { method: apigw.HttpMethod.GET, path: "/v1/visit-rules" },
   { method: apigw.HttpMethod.POST, path: "/v1/visit-rules" },
   // Hire type / scheduling (caregivers.manage) and family relationship (assignments.manage), 0030.

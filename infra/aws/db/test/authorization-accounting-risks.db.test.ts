@@ -227,14 +227,17 @@ describe("F6: every reserved minute is visible somewhere on the dashboard", () =
 
 // =====================================================================================================================
 describe("F8: a retroactive decrease reports the reservations it puts over the cap", () => {
-  // OBSERVED FAILURE: amend_client_authorization returns visit impacts only; reservations over the new cap are not reported.
-  it.fails("REPRODUCTION: lowering 600 -> 300 with 480 reserved reports the affected shifts", async () => {
+  // FIXED by 0068 (was `it.fails`): the amendment reports and stores the reserved shifts it puts over the new cap.
+  it("lowering 600 -> 300 with 480 reserved reports the affected shifts", async () => {
     const f = await freshClient(db, w, w.caregiverA1, 600);
     for (const h of [24, 48, 72, 96]) await reservedShift(w.caregiverA1, f, h * 60, 120);
     expect(await summary(f)).toMatchObject({ authorized_minutes: 600, reserved_minutes: 480, remaining_minutes: 120 });
     const rows = await api.amend(db, w.managerA, f.auth, 300);
-    expect(await summary(f)).toMatchObject({ authorized_minutes: 300, reserved_minutes: 480, remaining_minutes: 0 });
-    expect(rows.some((r) => /shift|reserv/i.test(r.impact_kind ?? ""))).toBe(true);
+    expect(await summary(f)).toMatchObject({ authorized_minutes: 300, reserved_minutes: 480, remaining_minutes: -180, over_limit_minutes: 180 }); // signed, never clamped to zero (0057)
+    // 4 x 120 min reserved against 300 free: in time order the first two (240) fit, the later two are reported
+    const shifts = rows.filter((r) => /reserved_shift/.test(r.impact_kind ?? ""));
+    expect(shifts).toHaveLength(2);
+    expect(shifts.every((r) => r.impact_kind === "reserved_shift_over_cap" && r.affected_shift_id && r.impact_id && r.impact_minutes === 120)).toBe(true);
   });
 
   it("CONTROL (passes today): after the decrease no further time can be scheduled", async () => {

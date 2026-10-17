@@ -498,10 +498,36 @@ export const ROUTES: Record<string, Route> = {
         newAuthorizationId: first.newAuthorizationId ?? null,
         newVersionNumber: first.newVersionNumber ?? null,
         affectedVisits: impact.filter((r) => r.affectedVisitId).map((r) => ({
-          visitId: r.affectedVisitId, status: r.affectedVisitStatus, serviceDate: r.affectedServiceDate,
+          impactId: r.impactId, visitId: r.affectedVisitId, status: r.affectedVisitStatus, serviceDate: r.affectedServiceDate,
           workedMinutes: r.affectedWorkedMinutes, billableMinutes: r.affectedBillableMinutes, impact: r.impactKind,
         })),
+        // 0068: reserved shifts that no longer fit the new terms. Reported and stored; nothing is released or moved.
+        affectedShifts: impact.filter((r) => r.affectedShiftId).map((r) => ({
+          impactId: r.impactId, shiftId: r.affectedShiftId, serviceDate: r.affectedServiceDate, reservedMinutes: r.impactMinutes, impact: r.impactKind,
+        })),
       };
+    },
+  },
+
+  // Stored amendment impacts (0068): authorizations.update or shifts.manage. Open ones by default.
+  "GET /v1/authorization-impacts": {
+    mutating: false,
+    handle: async ({ event, tx }) => {
+      const all = (event.queryStringParameters ?? {}).includeAcknowledged === "true";
+      return { impacts: await tx((db) => rows(db, "select * from ogevia_api.list_authorization_amendment_impacts($1, $2)", [orgParam(event), all])) };
+    },
+  },
+
+  "POST /v1/authorization-impacts/{impactId}/acknowledge": {
+    mutating: true,
+    handle: async ({ event, tx }) => {
+      const impact = uuid(p(event).impactId, "impactId");
+      const body = parseBody(event.body, event.isBase64Encoded);
+      const org = uuid(body.organizationId, "organizationId");
+      const note = text(body.note, "note", 1000, { required: true });
+      const result = await tx(async (db) =>
+        ((await db.query("select ogevia_api.acknowledge_authorization_amendment_impact($1, $2, $3) as r", [org, impact, note])).rows[0] as { r: unknown }).r);
+      return { acknowledgement: result };
     },
   },
 
@@ -1102,6 +1128,27 @@ export const ROUTES: Record<string, Route> = {
       const state = await tx(async (db) =>
         ((await db.query("select ogevia_api.decline_shift_pickup($1, $2, $3, $4) as s", [org, request, reason, key])).rows[0] as { s: string }).s);
       return { pickupState: state };
+    },
+  },
+
+  // Shifts that ended with no visit record and still hold a reservation (0067). Nothing is released automatically: a person records an outcome.
+  "GET /v1/shifts-to-reconcile": {
+    mutating: false,
+    handle: async ({ event, tx }) => ({ shifts: await tx((db) => rows(db, "select * from ogevia_api.list_shifts_to_reconcile($1)", [orgParam(event)])) }),
+  },
+
+  "POST /v1/shifts/{shiftId}/reconcile": {
+    mutating: true,
+    handle: async ({ event, tx }) => {
+      const shift = uuid(p(event).shiftId, "shiftId");
+      const body = parseBody(event.body, event.isBase64Encoded);
+      const key = idempotencyKey(event.headers);
+      const org = uuid(body.organizationId, "organizationId");
+      const outcome = text(body.outcome, "outcome", 40, { required: true });
+      const note = text(body.note, "note", 1000, { required: true });
+      const result = await tx(async (db) =>
+        ((await db.query("select ogevia_api.reconcile_ended_shift($1, $2, $3, $4, $5) as r", [org, shift, outcome, note, key])).rows[0] as { r: unknown }).r);
+      return { reconciliation: result };
     },
   },
 
