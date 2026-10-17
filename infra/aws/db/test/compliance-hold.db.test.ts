@@ -2,7 +2,7 @@
 // These are OWNER-DEFINED rules, not verified legal requirements. SYNTHETIC data only.
 import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { ageVisit, api, asActor, createTestDb, expectPgError, freshClient, orgToday, seedWorld, type Actor, type TestDb, type World } from "./harness.js";
+import { ageVisit, api, asActor, createTestDb, expectPgError, freshClient, orgToday, seedWorld, type Actor, type TestDb, type World, asReplica } from "./harness.js";
 
 let db: TestDb;
 let w: World;
@@ -112,7 +112,7 @@ const resetCaregiver = async (rec: string) => {
   await clearDocs(rec); // closing a document re-evaluates the caregiver, so clear the documents FIRST and the hold after
   await q("delete from ogevia.shift_readiness_flags where caregiver_record_id = $1", [rec]);
   await q("delete from ogevia.assignment_readiness_flags where caregiver_record_id = $1", [rec]);
-  await q("delete from ogevia.caregiver_compliance_holds where caregiver_record_id = $1", [rec]);
+  await asReplica(db, "delete from ogevia.caregiver_compliance_holds where caregiver_record_id = $1", [rec]); // history may not be deleted in production code; a fixture may
 };
 
 async function configureRules() {
@@ -323,7 +323,7 @@ describe("the hold: automatic at the deadline, affects existing work, never chan
     await wipeShifts(); // earlier suites' scheduled work
     // Only A2 is meant to be held in this block: park the other fixtures (one is cleared and current, two extra records are inactive).
     await q("update ogevia.caregiver_records set status = 'inactive' where caregiver_code in ('CG-NEW', 'CG-OWNER')");
-    await q("delete from ogevia.caregiver_compliance_holds");
+    await asReplica(db, "delete from ogevia.caregiver_compliance_holds");
     await deliverCpr(recA1); await deliverTb(recA1); await hireDaysAgo(recA1, 1);
     // A2 is two days into the period: assignable with no CPR/TB yet. A3 is fully current (the reassignment target).
     await hireDaysAgo(recA2, 2);
@@ -531,7 +531,8 @@ describe("who may do what, evidence and audit", () => {
     await expectPgError(call(w.caregiverA2, "select ogevia_api.set_caregiver_hire_date($1,$2,$3::date,'Offer letter')", [w.orgA, recA1, today]), "OGA03");
     await expectPgError(call(w.managerB, "select ogevia_api.set_caregiver_hire_date($1,$2,$3::date,'Offer letter')", [w.orgA, recA1, today]), "OGN04");
     const first = await call(w.managerA, "select ogevia_api.set_caregiver_hire_date($1,$2,$3::date,'Offer letter signed') as c", [w.orgA, recA1, await add(-3)]);
-    expect(first[0].c).toMatchObject({ hireDate: await add(-3), dueDate: await add(11), inGrace: true });
+    // 0064: a hold already open because the date was missing stays sticky, so entering the date does not start a fresh 14-day period
+    expect(first[0].c).toMatchObject({ hireDate: await add(-3), dueDate: await add(11), inGrace: false });
     await expectPgError(call(w.managerA, "select ogevia_api.set_caregiver_hire_date($1,$2,$3::date,'Moved it')", [w.orgA, recA1, await add(-1)]), "OGA03", /administrator/);
     await call(w.ownerA, "select ogevia_api.set_caregiver_hire_date($1,$2,$3::date,'Start date corrected by the offer letter')", [w.orgA, recA1, await add(-5)]);
     const rows = (await q("select actor_user_id, reason, before_state, after_state, occurred_at from ogevia.audit_events where action = 'caregiver.hire_date_set' and entity_id = $1 order by id", [recA1])).rows;
@@ -562,5 +563,142 @@ describe("who may do what, evidence and audit", () => {
     await expectPgError(call(w.caregiverA2, "select ogevia_api.run_compliance_sweep($1)", [w.orgA]), "OGA03");
     // and the other agency's data is invisible to the run an agency's own staff can start
     await expect(call(w.managerA, "select ogevia_api.run_compliance_sweep($1) as r", [w.orgA])).resolves.toHaveLength(1);
+  });
+});
+
+// ------------------------------------------------------------------ 5. 0064: release only by verification, history, live alert (owner directive 2026-10-17, requirement 10)
+describe("0064: a hold is released only when verification resolves every blocker", () => {
+  beforeAll(async () => {
+    await baseline(recA3);
+    await resetCaregiver(recA3);
+    await setBackground(recA3, "approved");
+    await hireDaysAgo(recA3, null);
+  });
+
+  it("a hold opened because the hire date was MISSING is not released by entering a recent hire date: only verified CPR and TB release it", async () => {
+    await sweep();
+    const hold = await openHold(recA3);
+    expect(hold).toBeDefined();
+    expect((hold.reasons as any[]).map((r) => r.code)).toEqual(["missing_no_hire_date", "missing_no_hire_date"]);
+    expect(hold.grace_closed).toBe(true); // sticky from the start (it was false before 0064)
+    // the office enters a hire date from yesterday: before 0064 this started a fresh 14-day period and released the hold with no verification
+    await call(w.managerA, "select ogevia_api.set_caregiver_hire_date($1,$2,$3::date,'Offer letter signed')", [w.orgA, recA3, await add(-1)]);
+    expect(await openHold(recA3)).toBeDefined();
+    const c = await compliance(recA3);
+    expect(c.eligible).toBe(false);
+    expect((await blockers(recA3, new Date().toISOString())).filter((b) => b.blocking).map((b) => b.requirement)).toEqual(["cpr", "tb"]);
+    await expectPgError(createShift(w.managerA, await add(9), "09:00", "11:00", recA3), "OGR30", /CPR missing/);
+    await sweep();
+    expect(await openHold(recA3)).toBeDefined(); // the sweep does not release it either
+    // an uploaded but unverified document does not release it
+    await deliverCpr(recA3, null); await deliverTb(recA3, null);
+    await sweep();
+    expect(await openHold(recA3)).toBeDefined();
+    // verification by the authorized reviewer resolves each blocker; the last one releases
+    await deliverCpr(recA3); 
+    expect(await openHold(recA3)).toBeDefined();
+    await deliverTb(recA3);
+    expect(await openHold(recA3)).toBeUndefined();
+    expect((await compliance(recA3)).eligible).toBe(true);
+    expect(await createShift(w.managerA, await add(9), "09:00", "11:00", recA3)).toHaveLength(1);
+  });
+
+  it("a caregiver without a hold who is simply new (hire date entered first, inside the 14 days) is still allowed the 14 days", async () => {
+    await resetCaregiver(recA2);
+    await baseline(recA2);
+    await setBackground(recA2, "approved");
+    await hireDaysAgo(recA2, 2);
+    await sweep();
+    expect(await openHold(recA2)).toBeUndefined();
+    expect(await createShift(w.managerA, await add(10), "09:00", "11:00", recA2)).toHaveLength(1);
+  });
+});
+
+describe("0064: history is kept", () => {
+  it("a hold cannot be deleted, a released hold cannot change or be reopened, and a hold cannot be made less strict", async () => {
+    const released = (await q("select id from ogevia.caregiver_compliance_holds where released_at is not null limit 1")).rows[0];
+    expect(released).toBeDefined();
+    await expect(q("delete from ogevia.caregiver_compliance_holds where id = $1", [released.id])).rejects.toThrow();
+    await expect(q("update ogevia.caregiver_compliance_holds set released_at = null where id = $1", [released.id])).rejects.toMatchObject({ code: "OGC09" });
+    await expect(q("update ogevia.caregiver_compliance_holds set release_note = 'edited' where id = $1", [released.id])).rejects.toMatchObject({ code: "OGC09" });
+    // an open hold keeps who and when it was opened, and never loses its stickiness
+    await resetCaregiver(recA2);
+    await setBackground(recA2, "none");
+    await hireDaysAgo(recA2, 30);
+    await sweep();
+    const open = await openHold(recA2);
+    expect(open).toBeDefined();
+    await expect(q("update ogevia.caregiver_compliance_holds set opened_at = opened_at - interval '1 day' where id = $1", [open.id])).rejects.toMatchObject({ code: "OGC09" });
+    await expect(q("update ogevia.caregiver_compliance_holds set grace_closed = false where id = $1", [open.id])).rejects.toMatchObject({ code: "OGC09" });
+  });
+
+  it("every change to a background clearance is kept: approval, withdrawal, re-approval and removal, with who did it; the record cannot be edited or erased", async () => {
+    await resetCaregiver(recA1);
+    await asReplica(db, "delete from ogevia.caregiver_background_checks where caregiver_record_id = $1", [recA1]);
+    const events = async () => (await q("select event, actor_user_id, before_state, after_state from ogevia.caregiver_background_check_events where caregiver_record_id = $1 order by id", [recA1])).rows;
+    const base = (await events()).length;
+    await call(w.managerA, "select ogevia_api.set_background_check_status($1,$2,'submitted','Sent to the screening company')", [w.orgA, recA1]);
+    await call(w.ownerA, "select ogevia_api.verify_background_check($1,$2,'approved','Confirmed in the agency clearance record')", [w.orgA, recA1]);
+    await call(w.managerA, "select ogevia_api.set_background_check_status($1,$2,'needs_attention','Agency asked for a new report')", [w.orgA, recA1]); // withdraws the approval
+    await call(w.ownerA, "select ogevia_api.verify_background_check($1,$2,'approved','New report reviewed')", [w.orgA, recA1]);
+    const all = (await events()).slice(base);
+    expect(all.map((e) => e.event)).toEqual(["recorded", "changed", "changed", "changed"]);
+    expect(all.map((e) => e.actor_user_id)).toEqual([w.managerA.userId, w.ownerA.userId, w.managerA.userId, w.ownerA.userId]);
+    expect(all[1].after_state).toMatchObject({ result: "approved", verified_by: w.ownerA.userId });
+    expect(all[2].before_state).toMatchObject({ result: "approved" }); // the earlier approval is still on record after it was withdrawn
+    expect(all[2].after_state).toMatchObject({ result: null, verified_by: null });
+    await expect(q("update ogevia.caregiver_background_check_events set event = 'recorded' where caregiver_record_id = $1", [recA1])).rejects.toThrow();
+    await expect(q("delete from ogevia.caregiver_background_check_events where caregiver_record_id = $1", [recA1])).rejects.toThrow();
+    // erasing the current record is itself recorded
+    await q("delete from ogevia.caregiver_background_checks where caregiver_record_id = $1", [recA1]);
+    expect((await events()).at(-1)).toMatchObject({ event: "removed", before_state: { result: "approved" } });
+    // who may read the history
+    const hist = await call(w.managerA, "select * from ogevia_api.get_background_check_history($1,$2)", [w.orgA, recA1]);
+    expect(hist.map((h) => h.event).slice(-5)).toEqual(["recorded", "changed", "changed", "changed", "removed"]);
+    expect(hist.find((h) => h.event === "changed")!.actor_name).toBeTruthy();
+    await expectPgError(call(w.caregiverA2, "select * from ogevia_api.get_background_check_history($1,$2)", [w.orgA, recA1]), "OGA03");
+    await expectPgError(call(w.managerB, "select * from ogevia_api.get_background_check_history($1,$2)", [w.orgA, recA1]), "OGN04");
+  });
+});
+
+describe("0064: a visit already in progress is flagged to the office at once, and never ended by the system", () => {
+  it("when the deadline passes during a visit the alert appears before any sweep opens the hold; the visit stays open and can still be ended", async () => {
+    await resetCaregiver(recA1);
+    await baseline(recA1);
+    await setBackground(recA1, "approved");
+    await clearDocs(recA1);
+    await hireDaysAgo(recA1, 13); // CPR and TB are missing but inside the 14 days: the visit may start
+    const f = await freshClient(db, w, w.caregiverA1, 100000, w.orgA, { before: 5, after: 120 });
+    await asReplica(db, "update ogevia.service_visits set status = 'voided', voided_at = now(), voided_by = $2, void_reason = 'Synthetic fixture' where caregiver_user_id = $1 and status = 'draft'", [w.caregiverA1.userId, w.managerA.userId]);
+    const v = await api.start(db, w.caregiverA1, w.orgA, f.client, f.service, null, "Synthetic: extra help");
+    expect(await openHold(recA1)).toBeUndefined();
+    const before = (await call(w.managerA, "select ogevia_api.get_compliance_attention($1) as a", [w.orgA]))[0].a;
+    const urgentBefore = (await call(w.managerA, "select ogevia_api.get_attention_overview($1,48) o", [w.orgA]))[0].o.urgent.items.filter((i: any) => i.reasons.includes("in_progress_on_hold")).length;
+    expect(urgentBefore).toBe(0);
+    // time passes: the 14 days end while the visit is open. Nothing has evaluated the caregiver yet, so no hold row exists.
+    await hireDaysAgo(recA1, 20);
+    expect(await openHold(recA1)).toBeUndefined();
+    const after = (await call(w.managerA, "select ogevia_api.get_compliance_attention($1) as a", [w.orgA]))[0].a;
+    expect(after.inProgressVisits).toBe(before.inProgressVisits + 1); // counted live, without waiting for the sweep
+    const items = (await call(w.managerA, "select ogevia_api.get_attention_overview($1,48) o", [w.orgA]))[0].o.urgent.items.filter((i: any) => i.reasons.includes("in_progress_on_hold"));
+    expect(items.find((i: any) => i.id === v)).toMatchObject({ tier: "critical", kind: "visit" });
+    // the system did not touch the visit, before or after the sweep opens the hold
+    expect((await q("select status::text s, time_out from ogevia.service_visits where id = $1", [v])).rows[0]).toMatchObject({ s: "draft", time_out: null });
+    await sweep();
+    expect(await openHold(recA1)).toBeDefined();
+    expect((await q("select status::text s, time_out from ogevia.service_visits where id = $1", [v])).rows[0]).toMatchObject({ s: "draft", time_out: null });
+    expect((await call(w.managerA, "select ogevia_api.get_compliance_attention($1) as a", [w.orgA]))[0].a.inProgressVisits).toBe(after.inProgressVisits); // same visit, counted once
+    await ageVisit(db, v, 20);
+    await api.end(db, w.caregiverA1, v); // the caregiver can end it
+    expect((await q("select time_out is not null ended from ogevia.service_visits where id = $1", [v])).rows[0].ended).toBe(true);
+    // and the starts that follow are blocked by the hold (the ended visit is parked so the one-open-visit rule does not answer first)
+    await asReplica(db, "update ogevia.service_visits set status = 'voided', voided_at = now(), voided_by = $2, void_reason = 'Synthetic fixture' where id = $1", [v, w.managerA.userId]);
+    await expectPgError(api.start(db, w.caregiverA1, w.orgA, f.client, f.service, null, "Synthetic: another visit"), "OGR30");
+  });
+
+  it("'Check now' needs permission to manage the care team: a viewer with only readiness.read can read the holds but not run the check", async () => {
+    await expect(call(w.managerA, "select ogevia_api.run_compliance_sweep($1) as r", [w.orgA])).resolves.toHaveLength(1);
+    await expectPgError(call(w.schedulerA, "select ogevia_api.run_compliance_sweep($1)", [w.orgA]), "OGA03", /permission to re-check/);
+    expect((await call(w.schedulerA, "select ogevia_api.list_compliance_holds($1) as h", [w.orgA]))[0].h).toBeTruthy(); // reading is still allowed
   });
 });

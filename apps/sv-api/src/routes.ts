@@ -1180,7 +1180,7 @@ export const ROUTES: Record<string, Route> = {
     handle: async ({ event, tx }) => {
       const org = orgParam(event);
       const [summary] = await tx((db) => rows(db, "select * from ogevia_api.get_attention_summary($1, 12, 2880)", [org]));
-      // 0053: caregivers on a compliance hold (shifts to cover, visits in progress). null when the viewer may not see it, never a false zero.
+      // 0055: caregivers on a compliance hold (shifts to cover, visits in progress). null when the viewer may not see it, never a false zero.
       const compliance = await tx(async (db) => (await first(db, "select ogevia_api.get_compliance_attention($1) as a", [org])).a ?? null);
       return { summary: summary ? { ...summary, complianceHolds: compliance } : null };
     },
@@ -1242,7 +1242,7 @@ export const ROUTES: Record<string, Route> = {
     },
   },
 
-  // Caregiver compliance (0053): OWNER-DEFINED rules (approved background clearance; CPR/TB within 14 days of the hire date).
+  // Caregiver compliance (0055): OWNER-DEFINED rules (approved background clearance; CPR/TB within 14 days of the hire date).
   // Every decision is made in PostgreSQL; these routes only validate input and shape output. Not stated as legal requirements.
   "GET /v1/caregivers/{caregiverRecordId}/compliance": {
     mutating: false,
@@ -2676,7 +2676,7 @@ export const ROUTES: Record<string, Route> = {
       readiness: await tx(async (db) => {
         const org = orgParam(event);
         const status = (await first(db, "select ogevia_api.get_readiness_status($1) as s", [org])).s as Record<string, unknown>;
-        // 0053: who would be held (background clearance, the 14-day CPR/TB period) before the owner switches enforcement on
+        // 0055: who would be held (background clearance, the 14-day CPR/TB period) before the owner switches enforcement on
         return { ...status, compliance: (await first(db, "select ogevia_api.get_compliance_summary($1) as s", [org])).s };
       }),
     }),

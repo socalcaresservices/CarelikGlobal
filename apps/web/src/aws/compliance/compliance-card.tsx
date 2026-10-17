@@ -196,6 +196,7 @@ export function CaregiverCompliance({ caregiverRecordId }: { caregiverRecordId: 
                 {c.dueDate ? <p>The due date is the last day. A hold starts at 12:00 AM on {formatDateOnly(nextDay(c.dueDate))} ({c.timezone ?? "agency time zone"}).</p> : null}
                 <p className="mt-1">{c.deadlineRule}</p>
               </Disclosure>
+              {c.hold ? <p className="mt-1 text-xs text-slate-700">While a hold is open, entering or changing the hire date does not release it. It is released only when every requirement below is verified.</p> : null}
               {canTrack && (isAdmin || !c.hireDate) ? <HireDateForm key={c.hireDate ?? "none"} c={c} /> : c.hireDate ? <p className="mt-1 text-xs text-slate-600">Only an administrator can change a recorded hire date.</p> : null}
             </section>
 

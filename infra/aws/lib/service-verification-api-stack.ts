@@ -158,7 +158,7 @@ export const SERVICE_VERIFICATION_ROUTES: ReadonlyArray<{
   { method: apigw.HttpMethod.POST, path: "/v1/visit-rules" },
   // Hire type / scheduling (caregivers.manage) and family relationship (assignments.manage), 0030.
   { method: apigw.HttpMethod.POST, path: "/v1/caregivers/{caregiverRecordId}/employment" },
-  // Caregiver compliance (0053): administrator verification, hire date, holds. JWT like every staff route.
+  // Caregiver compliance (0055): administrator verification, hire date, holds. JWT like every staff route.
   { method: apigw.HttpMethod.GET, path: "/v1/caregivers/{caregiverRecordId}/compliance" },
   { method: apigw.HttpMethod.POST, path: "/v1/caregivers/{caregiverRecordId}/hire-date" },
   { method: apigw.HttpMethod.POST, path: "/v1/caregivers/{caregiverRecordId}/background-check/status" },
@@ -631,7 +631,7 @@ export class ServiceVerificationApiStack extends Stack {
       }
     }
 
-    // Scheduled caregiver-compliance run (0053). NOT DEPLOYED: deploying it is a YELLOW action (a new EventBridge rule and a second
+    // Scheduled caregiver-compliance run (0055). Defined here, so a deploy of this stack creates it; not deployed yet: deploying it is a YELLOW action (a new EventBridge rule and a second
     // Lambda invoke permission) and needs the owner's approval. It invokes the SAME handler with a constant payload that API Gateway can
     // never produce; the handler then calls ogevia_api.system_compliance_* and applies the 14-day CPR/TB period when it ends, whether or
     // not anyone opens a caregiver profile. Enforcement itself does not depend on this run (the gate reads the records live); the run

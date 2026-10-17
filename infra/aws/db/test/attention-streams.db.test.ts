@@ -1,7 +1,7 @@
 // 0056 Attention streams, appearance preferences and the authorizations-missing-a-rate list. SYNTHETIC data only.
 // The urgent window is 48 hours (owner decision D10; get_attention_overview, p_urgent_hours).
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { ageVisit, api, asActor, createTestDb, expectPgError, freshClient, orgToday, seedWorld, type Actor, type TestDb, type World } from "./harness.js";
+import { ageVisit, api, asActor, createTestDb, expectPgError, freshClient, orgToday, seedWorld, type Actor, type TestDb, type World, asReplica } from "./harness.js";
 
 let db: TestDb;
 let w: World;
@@ -166,7 +166,7 @@ describe("a blocked caregiver's imminent shift is urgent and linked to the compl
     const o = await overview();
     expect(o.urgent.items.find((i: any) => i.id === open)).toMatchObject({ kind: "visit", severity: "red", reasons: ["in_progress_on_hold"] });
     expect(o.documents).toMatchObject({ caregiversOnHold: 1 });
-    await q("delete from ogevia.caregiver_compliance_holds");
+    await asReplica(db, "delete from ogevia.caregiver_compliance_holds");
   });
 });
 

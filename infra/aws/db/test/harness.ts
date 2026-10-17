@@ -670,3 +670,20 @@ export async function setBaselineAvailability(
   }
   return rec;
 }
+
+/** Run one statement with triggers off, in its own transaction: a fixture-only way to remove rows that production code may never delete. */
+export async function asReplica(db: TestDb, sql: string, params: unknown[] = []) {
+  const c = await db.admin.connect();
+  try {
+    await c.query("begin");
+    await c.query("set local session_replication_role = replica");
+    const r = await c.query(sql, params);
+    await c.query("commit");
+    return r;
+  } catch (e) {
+    await c.query("rollback");
+    throw e;
+  } finally {
+    c.release();
+  }
+}

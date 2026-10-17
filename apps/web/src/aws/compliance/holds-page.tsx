@@ -99,7 +99,9 @@ export function ComplianceHoldsPage() {
       <PageHeader
         title="Caregiver holds"
         lead="Caregivers who cannot be given new work or start visits until a requirement is verified. These are the agency's own rules, not legal requirements."
-        action={<Button type="button" variant="secondary" disabled={check.isPending} onClick={() => send()}>{check.isPending ? "Checking…" : "Check now"}</Button>}
+        action={hasPermission("caregivers.manage") || hasPermission("caregivers.compliance.manage")
+          ? <Button type="button" variant="secondary" disabled={check.isPending} onClick={() => send()}>{check.isPending ? "Checking…" : "Check now"}</Button>
+          : undefined}
       />
       {check.isSuccess ? <p role="status" className="text-sm text-og-sub">Checked {check.data.result.evaluated} caregivers. {check.data.result.holdsOpened} new, {check.data.result.holdsReleased} lifted.</p> : null}
       {check.isError ? <p role="alert" className="text-sm text-red-700">{actionError(check.error, "The check could not run.")}</p> : null}
