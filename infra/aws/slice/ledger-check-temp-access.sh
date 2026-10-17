@@ -2,7 +2,10 @@
 # =============================================================================
 # Ogevia: migration-ledger check WITH A TEMPORARY, NARROW DATABASE-ACCESS WINDOW. FOR OWNER REVIEW. NOT YET RUN AGAINST AWS.
 # (v2: every command that can hang is bounded by `timeout`; a timeout is a failure and goes through cleanup.)
+# (v3: optional `test --host-ip` mode: the temporary rule names ONLY the admin host's own private IP as /32, not the shared group.)
 #   bash ledger-check-temp-access.sh test|prod        one environment per run (same environment checks as ledger-check-readonly.sh)
+#   bash ledger-check-temp-access.sh test --host-ip   TEST only. Use when the admin security group is SHARED with other interfaces (the default
+#                                                     mode refuses in that case). Rule source = the admin host's live private IP /32.
 #   bash ledger-check-temp-access.sh --restore-only   after an interrupted run: remove the temporary rule and verify (idempotent)
 #
 # WHY: the read-only variant stops because the admin host's security group (ogevia-db-admin-sg) is not allowed to reach the RDS
@@ -15,6 +18,13 @@
 #   and outbound rules before and after). It does not touch the admin host, the application group, any stack, Lambda or secret.
 #   Compared with the repository's older "DB window" (attach the application group to the admin host), this grants the host NOTHING
 #   else: the application group also carries the Secrets Manager endpoint's 443 allowance.
+#
+# --host-ip MODE (TEST only; `prod --host-ip` is refused): the shared-group guard of the default mode is NOT removed or relaxed; the default mode
+#   still refuses a shared group. In this mode the rule does not reference the group at all, so sharing cannot widen it. Instead the script reads
+#   the admin host's IP LIVE and requires: host running; exactly ONE network interface with exactly ONE private IPv4; a valid private
+#   (RFC 1918) address; (if OGEVIA_EXPECT_HOST_IP is set) equal to it; that IP maps to exactly ONE interface in the VPC and it is the host's own,
+#   attached to the host; the host's security groups still exactly the expected one; the /32 rule not already present. The only source ever
+#   written is "$HOST_IP/32" built from that live value; never a wider prefix, never 0.0.0.0/0, never a group.
 #
 # SAFEGUARDS
 #   * Preconditions are READ-ONLY and must all hold or nothing is changed: right account, right environment, RDS private/available,
@@ -38,7 +48,7 @@
 #   3 the temporary rule could NOT be verified removed (access may still be open: act on the printed command); 130 interrupted.
 # =============================================================================
 set -uo pipefail
-ARG="${1:-}"
+ARG="${1:-}"; MODE2="${2:-}"; USE_IP=0; HOST_IP=""; HOST_CIDR=""
 ACCOUNT=300094796789
 REGION=us-west-2
 RDS_ID=ogevia-prod-postgres
@@ -58,7 +68,12 @@ case "$ARG" in
   test) LABEL="TEST / pilot (synthetic data)";         API_STACK=Ogevia-prod-ServiceVerificationApi; DB_EXPECT=ogevia_sv_test; ENV_MUST_BE_PRD=no ;;
   prod) LABEL="PRODUCTION candidate (real-data path)";  API_STACK=Ogevia-prd-ServiceVerificationApi;  DB_EXPECT=ogevia_prd;     ENV_MUST_BE_PRD=yes ;;
   --restore-only) LABEL="restore only" ;;
-  *) echo "usage: bash ledger-check-temp-access.sh test|prod   |   --restore-only" >&2; exit 2 ;;
+  *) echo "usage: bash ledger-check-temp-access.sh test|prod   |   test --host-ip   |   --restore-only" >&2; exit 2 ;;
+esac
+case "$MODE2" in
+  "") ;;
+  --host-ip) [[ "$ARG" == test ]] || { echo "--host-ip is TEST-only: use it as 'test --host-ip'. Nothing was changed." >&2; exit 2; }; USE_IP=1; LABEL="TEST / pilot (synthetic data), admin-host-IP /32 rule" ;;
+  *) echo "usage: bash ledger-check-temp-access.sh test|prod   |   test --host-ip   |   --restore-only" >&2; exit 2 ;;
 esac
 STAMP=$(date -u +%Y%m%dT%H%M%SZ)
 OUT="${OGEVIA_LEDGER_DIR:-$HOME/ogevia-ledger-window-${ARG#--}-$STAMP}"; mkdir -p "$OUT"; chmod 700 "$OUT"
@@ -71,14 +86,24 @@ say() { printf '%s\n' "$*" | tee -a "$RESULT"; }
 AWS_T="$AWS_TMO"
 aws() { timeout --foreground -k "$KILL_AFTER" "$AWS_T" "$(type -P aws)" "$@"; }
 tm() { if [[ "$1" == 124 || "$1" == 137 ]]; then printf ' [TIMED OUT]'; elif [[ "$1" == 99 ]]; then printf ' [time limit reached]'; fi; return 0; }
+valid_private_ipv4() {
+  local ip="$1" a b c d
+  [[ "$ip" =~ ^(0|[1-9][0-9]{0,2})\.(0|[1-9][0-9]{0,2})\.(0|[1-9][0-9]{0,2})\.(0|[1-9][0-9]{0,2})$ ]] || return 1
+  a=${BASH_REMATCH[1]}; b=${BASH_REMATCH[2]}; c=${BASH_REMATCH[3]}; d=${BASH_REMATCH[4]}
+  (( a <= 255 && b <= 255 && c <= 255 && d <= 255 )) || return 1
+  (( a == 10 )) && return 0
+  (( a == 172 && b >= 16 && b <= 31 )) && return 0
+  (( a == 192 && b == 168 )) && return 0
+  return 1
+}
 # ---- helpers -----------------------------------------------------------------------------------------------------------------
 # Canonical snapshot of ALL inbound and outbound rules of the RDS group (order-independent), optionally without the temporary rule.
 sg_canonical() {
   aws ec2 describe-security-groups --group-ids "$1" --query 'SecurityGroups[0].{i:IpPermissions,e:IpPermissionsEgress}' --output json 2>/dev/null \
-  | jq -cS --arg drop "${2:-}" '
+  | jq -cS --arg drop "${2:-}" --arg dropc "${3:-}" '
       def norm: map(.UserIdGroupPairs |= (map({GroupId, UserId}) | sort_by(.GroupId)) | .IpRanges |= (map({CidrIp}) | sort_by(.CidrIp)) | .Ipv6Ranges |= (map({CidrIpv6}) | sort_by(.CidrIpv6)) | .PrefixListIds |= (map({PrefixListId}) | sort_by(.PrefixListId))) | sort_by(.IpProtocol, (.FromPort // -1), (.ToPort // -1));
       (.i | norm) as $i
-      | { i: (if $drop == "" then $i else ($i | map(if (.IpProtocol=="tcp" and .FromPort==5432 and .ToPort==5432) then .UserIdGroupPairs |= map(select(.GroupId != $drop)) else . end) | map(select((.UserIdGroupPairs|length) > 0 or (.IpRanges|length) > 0 or (.Ipv6Ranges|length) > 0 or (.PrefixListIds|length) > 0))) end),
+      | { i: (if ($drop == "" and $dropc == "") then $i else ($i | map(if (.IpProtocol=="tcp" and .FromPort==5432 and .ToPort==5432) then (.UserIdGroupPairs |= map(select(.GroupId != $drop))) | (.IpRanges |= map(select(.CidrIp != $dropc))) else . end) | map(select((.UserIdGroupPairs|length) > 0 or (.IpRanges|length) > 0 or (.Ipv6Ranges|length) > 0 or (.PrefixListIds|length) > 0))) end),
           e: (.e | norm) }'
 }
 sg_hash() { sg_canonical "$@" | sha256sum | cut -d' ' -f1; }
@@ -91,6 +116,17 @@ rule_present() {
 revoke_rule() {
   aws ec2 revoke-security-group-ingress --group-id "$1" --ip-permissions "IpProtocol=tcp,FromPort=5432,ToPort=5432,UserIdGroupPairs=[{GroupId=$2}]" >/dev/null 2>&1
 }
+# The /32 variant. Same tri-state: 0 present, 1 absent, 2 unknown.
+cidr_present() {
+  local out
+  out=$(aws ec2 describe-security-groups --group-ids "$1" --query 'SecurityGroups[0].IpPermissions[?FromPort==`5432` && ToPort==`5432`].IpRanges[].CidrIp' --output text 2>/dev/null) || return 2
+  tr '\t' '\n' <<<"$out" | grep -qx "$2"
+}
+revoke_cidr() {
+  aws ec2 revoke-security-group-ingress --group-id "$1" --ip-permissions "IpProtocol=tcp,FromPort=5432,ToPort=5432,IpRanges=[{CidrIp=$2}]" >/dev/null 2>&1
+}
+src_present() { if [[ "$2" == cidr ]]; then cidr_present "$1" "$3"; else rule_present "$1" "$3"; fi; }
+src_revoke() { if [[ "$2" == cidr ]]; then revoke_cidr "$1" "$3"; else revoke_rule "$1" "$3"; fi; }
 # Runs on EVERY exit path. Re-entrant guarded. Restores, then VERIFIES; prints exact manual commands if it cannot.
 close_window() {
   [[ "$CLOSED" == 1 ]] && return 0
@@ -101,14 +137,15 @@ close_window() {
   unset PGPASSWORD PGUSER SEC
   # Only the run that opened the window (or --restore-only, on purpose) may remove its rule: a refused or concurrent run must not touch it.
   [[ -f "$OPEN" && "$OWNS" == 1 ]] || return 0
-  local rds_sg admin_sg before i ok=0 rp
+  local rds_sg admin_sg before i ok=0 rp kind val
   AWS_T="$CLEAN_TMO"
   rds_sg=$(jq -r .rds_sg "$OPEN"); admin_sg=$(jq -r .admin_sg "$OPEN"); before=$(jq -r .before_sha "$OPEN")
-  say ""; say "== CLEANUP: removing the temporary rule (tcp 5432 from $admin_sg on $rds_sg) and verifying"
+  kind=$(jq -r '.kind // "sg"' "$OPEN"); val=$(jq -r 'if (.kind // "sg") == "cidr" then .cidr else .admin_sg end' "$OPEN")
+  say ""; say "== CLEANUP: removing the temporary rule (tcp 5432 from $val on $rds_sg) and verifying"
   for i in 1 2 3 4; do
-    rule_present "$rds_sg" "$admin_sg"; rp=$?
-    if [[ "$rp" != 1 ]]; then revoke_rule "$rds_sg" "$admin_sg"; sleep 2; fi   # present, or UNKNOWN: try the revoke (idempotent)
-    rule_present "$rds_sg" "$admin_sg"; [[ $? == 1 ]] && { ok=1; break; }
+    src_present "$rds_sg" "$kind" "$val"; rp=$?
+    if [[ "$rp" != 1 ]]; then src_revoke "$rds_sg" "$kind" "$val"; sleep 2; fi   # present, or UNKNOWN: try the revoke (idempotent)
+    src_present "$rds_sg" "$kind" "$val"; [[ $? == 1 ]] && { ok=1; break; }
   done
   local after; after=$(sg_hash "$rds_sg")
   if [[ "$ok" == 1 && "$after" == "$before" ]]; then
@@ -116,11 +153,17 @@ close_window() {
     rm -f "$OPEN"
   else
     RC=3
-    rule_present "$rds_sg" "$admin_sg"; rp=$?
+    src_present "$rds_sg" "$kind" "$val"; rp=$?
     say "NOT RESTORED (exit 3; access may still be open). Rule still present: $([[ $rp == 0 ]] && echo YES || { [[ $rp == 1 ]] && echo no || echo 'UNKNOWN (the check failed or timed out)'; }). Rule-set hash now ${after:0:16}... vs original ${before:0:16}..."
-    say "DO THIS NOW in a SEPARATE session. First identify (read-only); the temporary rule is the ONE row with source $admin_sg, tcp, 5432:"
-    say "  aws ec2 describe-security-group-rules --region $REGION --filters Name=group-id,Values=$rds_sg --query 'SecurityGroupRules[?IsEgress==\`false\`].{rule:SecurityGroupRuleId,proto:IpProtocol,from:FromPort,to:ToPort,source:ReferencedGroupInfo.GroupId,desc:Description}' --output table"
-    say "Then remove ONLY that rule by id (never the row whose source is the application group):"
+    if [[ "$kind" == cidr ]]; then
+      say "DO THIS NOW in a SEPARATE session. First identify (read-only); the temporary rule is the ONE row with cidr $val, tcp, 5432:"
+      say "  aws ec2 describe-security-group-rules --region $REGION --filters Name=group-id,Values=$rds_sg --query 'SecurityGroupRules[?IsEgress==\`false\`].{rule:SecurityGroupRuleId,proto:IpProtocol,from:FromPort,to:ToPort,cidr:CidrIpv4,sourceSg:ReferencedGroupInfo.GroupId,desc:Description}' --output table"
+      say "Then remove ONLY that rule by id (never the row whose sourceSg is the application group):"
+    else
+      say "DO THIS NOW in a SEPARATE session. First identify (read-only); the temporary rule is the ONE row with source $admin_sg, tcp, 5432:"
+      say "  aws ec2 describe-security-group-rules --region $REGION --filters Name=group-id,Values=$rds_sg --query 'SecurityGroupRules[?IsEgress==\`false\`].{rule:SecurityGroupRuleId,proto:IpProtocol,from:FromPort,to:ToPort,source:ReferencedGroupInfo.GroupId,desc:Description}' --output table"
+      say "Then remove ONLY that rule by id (never the row whose source is the application group):"
+    fi
     say "  aws ec2 revoke-security-group-ingress --region $REGION --group-id $rds_sg --security-group-rule-ids sgr-<id of that one row>"
     say "Then re-run: bash ledger-check-temp-access.sh --restore-only   (verifies against the recorded original)"
     say "  The marker $OPEN stays in place until restoration is verified."
@@ -172,8 +215,27 @@ IID=$(jq -r '.[0]' <<<"$HOST"); HOST_SGS=$(jq -r '.[1] | join(" ")' <<<"$HOST")
 say "admin host $IID: security groups [$HOST_SGS]  (NOT modified by this script)"
 [[ "$HOST_SGS" == "$ADMIN_SG" ]] || stop "the admin host's groups are '$HOST_SGS', expected exactly '$ADMIN_SG'. Review before changing anything."
 ENIS=$(aws ec2 describe-network-interfaces --filters "Name=group-id,Values=$ADMIN_SG" --query 'NetworkInterfaces[].[NetworkInterfaceId,Attachment.InstanceId]' --output json 2>/dev/null) || stop "cannot list network interfaces"
-[[ "$(jq 'length' <<<"$ENIS")" == 1 && "$(jq -r '.[0][1]' <<<"$ENIS")" == "$IID" ]] || stop "the group $ADMIN_SG is used by more than the admin host ($ENIS): the rule would grant others access"
+if [[ "$USE_IP" == 1 ]]; then
+  # --host-ip: the rule does not name the group, so sharing cannot widen it. The group is reported, and the host must be in it exactly once.
+  say "group $ADMIN_SG is used by $(jq 'length' <<<"$ENIS") network interface(s): $(jq -c '[.[] | {eni: .[0], instance: .[1]}]' <<<"$ENIS")"
+  say "  (not granted anything: the rule below names the admin host's own IP only, not this group)"
+  [[ "$(jq --arg i "$IID" '[.[] | select(.[1] == $i)] | length' <<<"$ENIS")" == 1 ]] || stop "the admin host $IID must appear exactly once among the group's interfaces ($ENIS)"
+  HOST_ENI=$(jq -r --arg i "$IID" '[.[] | select(.[1] == $i)][0][0]' <<<"$ENIS")
+  HD=$(aws ec2 describe-instances --instance-ids "$IID" --query 'Reservations[0].Instances[0].{state:State.Name,ip:PrivateIpAddress,vpc:VpcId,enis:NetworkInterfaces[].{eni:NetworkInterfaceId,ips:PrivateIpAddresses[].PrivateIpAddress}}' --output json 2>/dev/null) || { rc=$?; stop "cannot read the admin host's network details$(tm $rc)"; }
+  [[ "$(jq -r .state <<<"$HD")" == running ]] || stop "the admin host is not running"
+  jq -e '(.enis | length) == 1 and (.enis[0].ips | length) == 1 and .enis[0].ips[0] == .ip' <<<"$HD" >/dev/null 2>&1 || stop "the admin host must have exactly ONE network interface with exactly ONE private IPv4 address; refusing ($(jq -c '.enis' <<<"$HD"))"
+  HOST_IP=$(jq -r .ip <<<"$HD"); VPC_ID=$(jq -r .vpc <<<"$HD")
+  valid_private_ipv4 "$HOST_IP" || stop "the admin host's address '$HOST_IP' is not a valid private (RFC 1918) IPv4 address"
+  [[ -z "${OGEVIA_EXPECT_HOST_IP:-}" || "$HOST_IP" == "$OGEVIA_EXPECT_HOST_IP" ]] || stop "the admin host's live IP is $HOST_IP but OGEVIA_EXPECT_HOST_IP is ${OGEVIA_EXPECT_HOST_IP:-}. Not proceeding."
+  [[ "$(jq -r '.enis[0].eni' <<<"$HD")" == "$HOST_ENI" ]] || stop "the host's interface does not match the interface in the admin group"
+  IPMAP=$(aws ec2 describe-network-interfaces --filters "Name=addresses.private-ip-address,Values=$HOST_IP" "Name=vpc-id,Values=$VPC_ID" --query 'NetworkInterfaces[].[NetworkInterfaceId,Attachment.InstanceId]' --output json 2>/dev/null) || { rc=$?; stop "cannot map the IP to interfaces$(tm $rc)"; }
+  [[ "$(jq 'length' <<<"$IPMAP")" == 1 && "$(jq -r '.[0][0]' <<<"$IPMAP")" == "$HOST_ENI" && "$(jq -r '.[0][1]' <<<"$IPMAP")" == "$IID" ]] || stop "the IP $HOST_IP does not map to exactly one interface, the admin host's own ($IPMAP)"
+  HOST_CIDR="$HOST_IP/32"
+  say "admin host IP (live): $HOST_IP on $HOST_ENI, the only interface and the only address; it maps to no other interface in $VPC_ID"
+else
+[[ "$(jq 'length' <<<"$ENIS")" == 1 && "$(jq -r '.[0][1]' <<<"$ENIS")" == "$IID" ]] || stop "the group $ADMIN_SG is used by more than the admin host ($ENIS): the rule would grant others access. If the group is deliberately shared, the TEST-only 'test --host-ip' mode names the host's own IP instead."
 say "group $ADMIN_SG is used by exactly one network interface, on the admin host: the new rule can only ever apply to it"
+fi
 BEFORE_JSON=$(sg_canonical "$EXPECT_RDS_SG"); [[ -n "$BEFORE_JSON" && "$BEFORE_JSON" != null ]] || stop "cannot read the RDS security group rules"
 BEFORE_SHA=$(sha256sum <<<"$BEFORE_JSON" | cut -d' ' -f1)
 printf '%s\n' "$BEFORE_JSON" > "$OUT/rds-sg-before.json"; chmod 600 "$OUT/rds-sg-before.json"
@@ -181,13 +243,18 @@ say "RDS security group $EXPECT_RDS_SG, ORIGINAL inbound rules:"
 jq -r '.i[] | "   " + .IpProtocol + " " + ((.FromPort // "all")|tostring) + "-" + ((.ToPort // "all")|tostring) + "  from " + (([.UserIdGroupPairs[].GroupId] + [.IpRanges[].CidrIp] + [.Ipv6Ranges[].CidrIpv6] + [.PrefixListIds[].PrefixListId]) | join(", "))' <<<"$BEFORE_JSON" | tee -a "$RESULT"
 say "   outbound rules: $(jq '.e | length' <<<"$BEFORE_JSON") (recorded in the hash)"
 say "ORIGINAL rule-set sha256: $BEFORE_SHA   (full copy: $OUT/rds-sg-before.json)"
-rule_present "$EXPECT_RDS_SG" "$ADMIN_SG"; case $? in
-  0) stop "a rule allowing $ADMIN_SG on 5432 ALREADY exists on $EXPECT_RDS_SG. Then the read-only script should have worked; investigate instead of changing anything." ;;
+if [[ "$USE_IP" == 1 ]]; then SRC_KIND=cidr; SRC_VAL="$HOST_CIDR"; else SRC_KIND=sg; SRC_VAL="$ADMIN_SG"; fi
+src_present "$EXPECT_RDS_SG" "$SRC_KIND" "$SRC_VAL"; case $? in
+  0) stop "a rule allowing $SRC_VAL on 5432 ALREADY exists on $EXPECT_RDS_SG. Then the read-only script should have worked; investigate instead of changing anything." ;;
   2) stop "cannot read the RDS security group rules (failed or timed out). Nothing was changed." ;;
 esac
 
 say ""; say "== 3. PROPOSED CHANGE (the only one)"
-say "  ADD to $EXPECT_RDS_SG :  inbound tcp 5432 from $ADMIN_SG  (description 'TEMP-ledger-check-$STAMP')"
+if [[ "$USE_IP" == 1 ]]; then
+  say "  ADD to $EXPECT_RDS_SG :  inbound tcp 5432 from $HOST_CIDR  (the admin host's own IP only; description 'TEMP-ledger-check-$STAMP')"
+else
+  say "  ADD to $EXPECT_RDS_SG :  inbound tcp 5432 from $ADMIN_SG  (description 'TEMP-ledger-check-$STAMP')"
+fi
 say "  REMOVE it again within seconds, then verify the complete rule set equals the original hash above."
 say "  Reaches: RDS instance $RDS_ID on 5432 from the admin host only. That instance holds BOTH ogevia_sv_test and ogevia_prd."
 read -r -p "Type OPEN-5432-WINDOW to open the window for the $ARG check (anything else stops, with nothing changed). Keep a SEPARATE recovery session ready: if this session is lost the rule is NOT removed automatically: " ans
@@ -195,11 +262,17 @@ read -r -p "Type OPEN-5432-WINDOW to open the window for the $ARG check (anythin
 
 say ""; say "== 4. Window"
 START_EPOCH=$(date +%s)
-( set -o noclobber; jq -n --arg rds "$EXPECT_RDS_SG" --arg adm "$ADMIN_SG" --arg stamp "$STAMP" --arg sha "$BEFORE_SHA" '{rds_sg:$rds, admin_sg:$adm, stamp:$stamp, before_sha:$sha}' > "$OPEN" ) 2>/dev/null || stop "another window was opened a moment ago ($OPEN exists). Nothing was changed by this run."
+( set -o noclobber; jq -n --arg rds "$EXPECT_RDS_SG" --arg adm "$ADMIN_SG" --arg stamp "$STAMP" --arg sha "$BEFORE_SHA" --arg kind "$SRC_KIND" --arg cidr "$HOST_CIDR" '{rds_sg:$rds, admin_sg:$adm, stamp:$stamp, before_sha:$sha, kind:$kind, cidr:$cidr}' > "$OPEN" ) 2>/dev/null || stop "another window was opened a moment ago ($OPEN exists). Nothing was changed by this run."
 OWNS=1; chmod 600 "$OPEN"
+if [[ "$USE_IP" == 1 ]]; then
+aws ec2 authorize-security-group-ingress --group-id "$EXPECT_RDS_SG" --ip-permissions "IpProtocol=tcp,FromPort=5432,ToPort=5432,IpRanges=[{CidrIp=$HOST_CIDR,Description=TEMP-ledger-check-$STAMP}]" >/dev/null 2>"$OUT/authorize.err" || { rc=$?; stop "could not add the rule$(tm $rc): $(tail -1 "$OUT/authorize.err")"; }
+cidr_present "$EXPECT_RDS_SG" "$HOST_CIDR" || stop "the rule did not appear after adding it (or the check failed or timed out)"
+[[ "$(sg_hash "$EXPECT_RDS_SG" "" "$HOST_CIDR")" == "$BEFORE_SHA" ]] || stop "the group changed in a way other than the single rule: aborting"
+else
 aws ec2 authorize-security-group-ingress --group-id "$EXPECT_RDS_SG" --ip-permissions "IpProtocol=tcp,FromPort=5432,ToPort=5432,UserIdGroupPairs=[{GroupId=$ADMIN_SG,Description=TEMP-ledger-check-$STAMP}]" >/dev/null 2>"$OUT/authorize.err" || { rc=$?; stop "could not add the rule$(tm $rc): $(tail -1 "$OUT/authorize.err")"; }
 rule_present "$EXPECT_RDS_SG" "$ADMIN_SG" || stop "the rule did not appear after adding it (or the check failed or timed out)"
 [[ "$(sg_hash "$EXPECT_RDS_SG" "$ADMIN_SG")" == "$BEFORE_SHA" ]] || stop "the group changed in a way other than the single rule: aborting"
+fi
 say "window open: exactly one rule was added (verified: the group minus that rule equals the original)."
 
 over_time && stop "time limit ($MAX_SECONDS s) reached before the tunnel"
