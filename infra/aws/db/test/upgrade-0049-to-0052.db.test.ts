@@ -56,7 +56,7 @@ const position = async (lineage: string, day: string) =>
   (await db.admin.query("select ogevia.authorization_month_usage($1,$2::date,null)::int used, ogevia.authorization_month_reserved($1,$2::date)::int reserved", [lineage, day])).rows[0];
 
 describe("upgrade from 0049 to 0052 on a populated database", () => {
-  it("changes no existing row; old visits stay readable with correct reasons; authorization position does not move; the runner applies exactly 0050, 0051 and 0052", async () => {
+  it("changes no existing row; old visits stay readable with correct reasons; authorization position does not move; the runner applies exactly 0050, 0051, 0052 and 0053", async () => {
     const cg = w.caregiverA1;
     const f = await freshClient(db, w, cg, 600);
     // Three visits as the 0049 rules produced them: signed on a shift, in review (client could not sign), and an
@@ -77,7 +77,7 @@ describe("upgrade from 0049 to 0052 on a populated database", () => {
     await db.admin.query("set session_replication_role = origin");
     const statusBefore = Object.fromEntries((await db.admin.query("select id, status::text s, billable_minutes b from ogevia.service_visits where id = any($1)", [[signed, noSigner, unscheduled]])).rows.map((r) => [r.id, [r.s, r.b]]));
 
-    for (const file of ["0052_reservation_not_counted_when_review_visit_counted_as_used.down.sql", "0051_wave1_open_shift_pickup.down.sql", "0050_wave1_visit_review_and_variance_rule.down.sql"]) await runDown(file);
+    for (const file of ["0053_caregiver_compliance_hold.down.sql", "0052_reservation_not_counted_when_review_visit_counted_as_used.down.sql", "0051_wave1_open_shift_pickup.down.sql", "0050_wave1_visit_review_and_variance_rule.down.sql"]) await runDown(file);
     expect((await db.admin.query("select max(version) v from ogevia_meta.schema_migrations")).rows[0].v).toBe("0049");
     const day = await orgToday(db);
     const lineage = (await db.admin.query("select lineage_id from ogevia.client_authorizations where id = $1", [f.auth])).rows[0].lineage_id as string;
@@ -88,7 +88,7 @@ describe("upgrade from 0049 to 0052 on a populated database", () => {
     const client = await db.admin.connect();
     let applied: string[];
     try { applied = (await migrate(client)).applied.map((x) => x.slice(0, 4)); } finally { client.release(); }
-    expect(applied).toEqual(["0050", "0051", "0052"]);
+    expect(applied).toEqual(["0050", "0051", "0052", "0053"]);
 
     // No stored row changed or disappeared, in any table that holds visit or authorization data.
     expect(await fingerprints()).toEqual(before);

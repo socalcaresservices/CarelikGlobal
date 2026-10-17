@@ -967,7 +967,9 @@ export const ROUTES: Record<string, Route> = {
     handle: async ({ event, tx }) => {
       const org = orgParam(event);
       const [summary] = await tx((db) => rows(db, "select * from ogevia_api.get_attention_summary($1)", [org]));
-      return { summary: summary ?? null };
+      // 0053: caregivers on a compliance hold (shifts to cover, visits in progress). null when the viewer may not see it, never a false zero.
+      const compliance = await tx(async (db) => (await first(db, "select ogevia_api.get_compliance_attention($1) as a", [org])).a ?? null);
+      return { summary: summary ? { ...summary, complianceHolds: compliance } : null };
     },
   },
 
@@ -982,6 +984,69 @@ export const ROUTES: Record<string, Route> = {
       const [result] = await tx((db) => rows(db, "select * from ogevia_api.set_caregiver_employment($1, $2, $3, $4, $5, $6)",
         [uuid(body.organizationId, "organizationId"), uuid(p(event).caregiverRecordId, "caregiverRecordId"), hire, mode, text(body.reason, "reason", 500), key]));
       return { result };
+    },
+  },
+
+  // Caregiver compliance (0053): OWNER-DEFINED rules (approved background clearance; CPR/TB within 14 days of the hire date).
+  // Every decision is made in PostgreSQL; these routes only validate input and shape output. Not stated as legal requirements.
+  "GET /v1/caregivers/{caregiverRecordId}/compliance": {
+    mutating: false,
+    handle: async ({ event, tx }) => ({
+      compliance: await tx(async (db) => (await first(db, "select ogevia_api.get_caregiver_compliance($1,$2) as c", [orgParam(event), uuid(p(event).caregiverRecordId, "caregiverRecordId")])).c),
+    }),
+  },
+
+  "POST /v1/caregivers/{caregiverRecordId}/hire-date": {
+    mutating: true,
+    handle: async ({ event, tx }) => {
+      const body = parseBody(event.body, event.isBase64Encoded);
+      const key = idempotencyKey(event.headers);
+      return {
+        compliance: await tx(async (db) => (await first(db, "select ogevia_api.set_caregiver_hire_date($1,$2,$3::date,$4,$5) as c", [
+          uuid(body.organizationId, "organizationId"), uuid(p(event).caregiverRecordId, "caregiverRecordId"), date(body.hireDate, "hireDate"),
+          text(body.reason, "reason", 500, { required: true }), key])).c),
+      };
+    },
+  },
+
+  "POST /v1/caregivers/{caregiverRecordId}/background-check/status": {
+    mutating: true,
+    handle: async ({ event, tx }) => {
+      const body = parseBody(event.body, event.isBase64Encoded);
+      const key = idempotencyKey(event.headers);
+      return {
+        compliance: await tx(async (db) => (await first(db, "select ogevia_api.set_background_check_status($1,$2,$3,$4,$5) as c", [
+          uuid(body.organizationId, "organizationId"), uuid(p(event).caregiverRecordId, "caregiverRecordId"),
+          oneOf(body.status, "status", ["not_started", "requested", "submitted", "pending", "completed", "needs_attention"] as const),
+          text(body.note, "note", 500), key])).c),
+      };
+    },
+  },
+
+  "POST /v1/caregivers/{caregiverRecordId}/background-check/verify": {
+    mutating: true,
+    handle: async ({ event, tx }) => {
+      const body = parseBody(event.body, event.isBase64Encoded);
+      const key = idempotencyKey(event.headers);
+      return {
+        compliance: await tx(async (db) => (await first(db, "select ogevia_api.verify_background_check($1,$2,$3,$4,$5) as c", [
+          uuid(body.organizationId, "organizationId"), uuid(p(event).caregiverRecordId, "caregiverRecordId"),
+          oneOf(body.result, "result", ["approved", "not_approved"] as const), text(body.evidenceNote, "evidenceNote", 500, { required: true }), key])).c),
+      };
+    },
+  },
+
+  "GET /v1/compliance/holds": {
+    mutating: false,
+    handle: async ({ event, tx }) => ({ ...(await tx(async (db) => (await first(db, "select ogevia_api.list_compliance_holds($1) as h", [orgParam(event)])).h)) }),
+  },
+
+  // "Check now": re-evaluates this agency once. The scheduled run does the same for every agency.
+  "POST /v1/compliance/sweep": {
+    mutating: true,
+    handle: async ({ event, tx }) => {
+      const body = parseBody(event.body, event.isBase64Encoded);
+      return { result: await tx(async (db) => (await first(db, "select ogevia_api.run_compliance_sweep($1) as r", [uuid(body.organizationId, "organizationId")])).r) };
     },
   },
 
@@ -2300,7 +2365,7 @@ export const ROUTES: Record<string, Route> = {
     mutating: false,
     handle: async ({ event, tx }) => {
       const kind = q(event).kind;
-      return { flags: await tx((db) => rows(db, "select * from ogevia_api.list_readiness_flags($1, $2)", [orgParam(event), kind === undefined || kind === "" ? null : oneOf(kind, "kind", ["availability", "service", "document"] as const)])) };
+      return { flags: await tx((db) => rows(db, "select * from ogevia_api.list_readiness_flags($1, $2)", [orgParam(event), kind === undefined || kind === "" ? null : oneOf(kind, "kind", ["availability", "service", "document", "compliance"] as const)])) };
     },
   },
 
@@ -2352,7 +2417,14 @@ export const ROUTES: Record<string, Route> = {
 
   "GET /v1/readiness": {
     mutating: false,
-    handle: async ({ event, tx }) => ({ readiness: await tx(async (db) => (await first(db, "select ogevia_api.get_readiness_status($1) as s", [orgParam(event)])).s) }),
+    handle: async ({ event, tx }) => ({
+      readiness: await tx(async (db) => {
+        const org = orgParam(event);
+        const status = (await first(db, "select ogevia_api.get_readiness_status($1) as s", [org])).s as Record<string, unknown>;
+        // 0053: who would be held (background clearance, the 14-day CPR/TB period) before the owner switches enforcement on
+        return { ...status, compliance: (await first(db, "select ogevia_api.get_compliance_summary($1) as s", [org])).s };
+      }),
+    }),
   },
 
   "POST /v1/readiness/activate": {

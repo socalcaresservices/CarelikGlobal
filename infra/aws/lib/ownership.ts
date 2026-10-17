@@ -75,6 +75,9 @@ export const ALLOWED_RESOURCE_COST_CLASS: Readonly<Record<string, CostClass>> =
     "AWS::SNS::TopicPolicy": "FREE",
     "AWS::CloudWatch::Alarm": "FIXED",
     "AWS::CDK::Metadata": "FREE",
+    // 0053: the 15-minute caregiver-compliance run. EventBridge scheduled rules have no charge; the Lambda cost is far below any
+    // billing threshold. Deploying it is a YELLOW action that needs the owner's approval.
+    "AWS::Events::Rule": "FREE",
     // Phase 6 web hosting (static assets only; no PHI at rest in the bucket).
     "AWS::CloudFront::Distribution": "USAGE",
     "AWS::CloudFront::OriginAccessControl": "FREE",
