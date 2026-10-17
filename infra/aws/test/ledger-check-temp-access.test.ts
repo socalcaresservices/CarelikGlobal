@@ -4,6 +4,7 @@
 // the next run until --restore-only succeeds, queries are read-only, and no credential reaches the output.
 // It cannot prove what real AWS does; it proves the script's own logic.
 import { spawn } from "node:child_process";
+import { createServer } from "node:net";
 import { existsSync, mkdtempSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -26,9 +27,19 @@ beforeEach(() => {
 });
 
 interface Run { code: number | null; out: string; dir: string }
-function run(args: string[], opts: { env?: Record<string, string>; input?: string; killWhen?: () => boolean } = {}): Promise<Run> {
+/** A port the OS says is free right now. The mock tunnel binds it; a random number in 20000-40000 can land on a port some other process is using
+ *  (that range overlaps the ephemeral range 32768-60999), and then the tunnel never opens and the script exits 1: a test-harness collision, not a script defect. */
+function freePort(): Promise<number> {
+  return new Promise((resolve, reject) => {
+    const srv = createServer();
+    srv.once("error", reject);
+    srv.listen(0, "127.0.0.1", () => { const { port } = srv.address() as { port: number }; srv.close(() => resolve(port)); });
+  });
+}
+async function run(args: string[], opts: { env?: Record<string, string>; input?: string; killWhen?: () => boolean } = {}): Promise<Run> {
+  const port = await freePort();
   return new Promise((resolve) => {
-    const env = { ...process.env, PATH: `${bin}:${process.env.PATH}`, MOCK_DIR: dir, OGEVIA_LEDGER_STATE_DIR: join(dir, "state"), OGEVIA_LEDGER_DIR: join(dir, `out-${Math.random().toString(36).slice(2)}`), OGEVIA_LEDGER_PORT: String(20000 + Math.floor(Math.random() * 20000)), HOME: dir, ...(opts.env ?? {}) };
+    const env = { ...process.env, PATH: `${bin}:${process.env.PATH}`, MOCK_DIR: dir, OGEVIA_LEDGER_STATE_DIR: join(dir, "state"), OGEVIA_LEDGER_DIR: join(dir, `out-${Math.random().toString(36).slice(2)}`), OGEVIA_LEDGER_PORT: String(port), HOME: dir, ...(opts.env ?? {}) };
     const p = spawn("bash", [SCRIPT, ...args], { env, stdio: ["pipe", "pipe", "pipe"], detached: true });
     let out = "";
     p.stdout.on("data", (d) => (out += d));
