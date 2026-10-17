@@ -1,5 +1,5 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { Button, Card } from "@carelik/ui";
 import { newIdempotencyKey } from "@/lib/sv-backend";
@@ -279,7 +279,9 @@ export function SchedulePage() {
   const [params] = useSearchParams();
   const [from, setFrom] = useState(today);
   const [onlyOpen, setOnlyOpen] = useState(params.get("coverage") === "1");
-  const [adding, setAdding] = useState(params.get("add") === "1" && hasPermission("shifts.manage"));
+  const [adding, setAdding] = useState(false);
+  const canAdd = hasPermission("shifts.manage");
+  useEffect(() => { if (params.get("add") === "1" && canAdd) setAdding(true); }, [params, canAdd]);
   const [repeating, setRepeating] = useState(false);
   const [showSeries, setShowSeries] = useState(false);
   const [showLimits, setShowLimits] = useState(false);

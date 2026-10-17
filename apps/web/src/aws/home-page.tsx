@@ -79,15 +79,13 @@ export function AwsHomePage() {
       <PageHeader
         title="Home"
         action={
-          <div className="flex flex-wrap items-end gap-x-4 gap-y-2">
-            <RefreshStatus overview={overview.data} loading={overview.isLoading} failed={overview.isError} refreshing={overview.isFetching || utilisation.isFetching} onRefresh={refresh} />
-            <label className="text-xs font-semibold text-og-sub">
-              Month
-              <input type="month" value={month} onChange={(e) => e.target.value && setMonth(e.target.value)} className="mt-1 block min-h-[40px] rounded-lg border border-og-line bg-og-card px-3 text-sm text-og-ink" />
-            </label>
-          </div>
+          <label className="text-xs font-semibold text-og-sub">
+            Month
+            <input type="month" value={month} onChange={(e) => e.target.value && setMonth(e.target.value)} className="mt-1 block min-h-[40px] rounded-lg border border-og-line bg-og-card px-3 text-sm text-og-ink" />
+          </label>
         }
       />
+      <RefreshStatus overview={overview.data} loading={overview.isLoading} failed={overview.isError} refreshing={overview.isFetching || utilisation.isFetching} onRefresh={refresh} />
 
       <section aria-label="What needs attention">
         {overview.isLoading ? <p className="text-sm text-og-sub">Loading…</p> : null}

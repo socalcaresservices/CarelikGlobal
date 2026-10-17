@@ -47,7 +47,7 @@ export function TodaysVisits() {
             const started = Date.parse(s.startsAt) <= now;
             return (
               <li key={s.shiftId} className="flex flex-wrap items-center gap-x-3 gap-y-1 px-3 py-2.5 text-sm">
-                <span className="font-og-mono tabular-nums text-og-ink">{formatClockTime(s.startsAt)}–{formatClockTime(s.endsAt)}</span>
+                <span className="basis-full font-og-mono tabular-nums text-og-ink sm:basis-auto">{formatClockTime(s.startsAt)}–{formatClockTime(s.endsAt)}</span>
                 <span className="min-w-0 flex-1 text-og-ink">
                   <span className="font-semibold">{s.clientName ?? s.clientCode}</span>
                   <span className="text-og-sub"> · {open ? "No caregiver" : (s.caregiverName ?? s.caregiverCode ?? "Caregiver assigned")}</span>
