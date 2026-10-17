@@ -1122,7 +1122,7 @@ export const ROUTES: Record<string, Route> = {
     mutating: false,
     handle: async ({ event, tx }) => {
       const org = orgParam(event);
-      const [summary] = await tx((db) => rows(db, "select * from ogevia_api.get_attention_summary($1)", [org]));
+      const [summary] = await tx((db) => rows(db, "select * from ogevia_api.get_attention_summary($1, 12, 2880)", [org]));
       // 0053: caregivers on a compliance hold (shifts to cover, visits in progress). null when the viewer may not see it, never a false zero.
       const compliance = await tx(async (db) => (await first(db, "select ogevia_api.get_compliance_attention($1) as a", [org])).a ?? null);
       return { summary: summary ? { ...summary, complianceHolds: compliance } : null };

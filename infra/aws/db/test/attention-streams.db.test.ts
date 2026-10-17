@@ -62,7 +62,8 @@ describe("uncovered shifts: urgent inside the window, upcoming after it, ordered
     const urgentIds = o.urgent.items.filter((i: any) => i.kind === "shift").map((i: any) => i.id);
     expect(urgentIds.sort()).toEqual([inside, edgeIn].sort());
     expect(urgentIds).not.toContain(covered);
-    expect(o.urgent.items.every((i: any) => i.severity === "red" && i.reasons.includes("uncovered_open"))).toBe(true);
+    // 0058: nothing has started, so inside the window each is Urgent (amber); Critical is only for a shift at or after its start
+    expect(o.urgent.items.every((i: any) => i.tier === "urgent" && i.severity === "amber" && i.reasons.includes("uncovered_open"))).toBe(true);
     expect(o.upcoming.count).toBe(3);
     expect(o.upcoming.shifts.map((s: any) => s.shiftId)).toEqual([edgeOut, soon, later]); // soonest first
     expect(o.upcoming.nextStartsAt).toBe(o.upcoming.shifts[0].startsAt);
@@ -79,7 +80,7 @@ describe("uncovered shifts: urgent inside the window, upcoming after it, ordered
     const running = await shiftAt(-1, 3, null);
     const o = await overview();
     const runningItem = o.urgent.items.find((i: any) => i.id === running);
-    expect(runningItem).toMatchObject({ kind: "shift", inProgress: true, severity: "red" });
+    expect(runningItem).toMatchObject({ kind: "shift", inProgress: true, tier: "critical", severity: "red" });
     expect(o.upcoming.shifts.find((s: any) => s.shiftId === called)).toMatchObject({ reason: "called_out" });
     expect(o.urgent.items.find((i: any) => i.id === called)).toBeUndefined();
   });
@@ -122,11 +123,11 @@ describe("unscheduled visits are visits to review, never uncovered shifts", () =
   it("visit counts are UNIQUE visits: each visit is in exactly one category and the total equals the distinct ids", async () => {
     const o = await overview();
     const v = o.visitReview;
-    expect(v.visitsNeedingAttention).toBe(v.awaitingConfirmation + v.needsReview + v.lateResponses + (v.readyForApproval ?? 0));
+    // 0058: Pending Confirmation (inside 48 h) and Ready for Approval are routine and never part of the total
+    expect(v.visitsNeedingAttention).toBe(v.confirmationOverdue + v.needsReview + v.lateResponses);
     const distinct = (await q(`select count(distinct id)::int n from (
         select id from ogevia.service_visits where status = 'administrator_review' and not exists (select 1 from ogevia.visit_review_decisions d where d.visit_id = service_visits.id and d.revoked_at is null) and ogevia.visit_recovery_state(id) is null
-        union all select id from ogevia.service_visits where status = 'signed' and not exists (select 1 from ogevia.billing_approvals b where b.visit_id = service_visits.id and b.voided_at is null)
-        union all select id from ogevia.service_visits where status = 'awaiting_signature' and time_out <= now() - interval '60 minutes') u`)).rows[0].n;
+        union all select id from ogevia.service_visits where status = 'awaiting_signature' and time_out <= now() - interval '48 hours') u`)).rows[0].n;
     expect(v.visitsNeedingAttention).toBe(distinct);
   });
 });
@@ -148,9 +149,11 @@ describe("a blocked caregiver's imminent shift is urgent and linked to the compl
     }
     const o = await overview();
     const item = o.urgent.items.find((i: any) => i.id === near);
-    expect(item).toMatchObject({ kind: "shift", severity: "red", caregiverRecordId: recA2 });
+    expect(item).toMatchObject({ kind: "shift", tier: "urgent", severity: "amber", caregiverRecordId: recA2 }); // 10 hours away: Urgent, not Critical
     expect(item.reasons.sort()).toEqual(["compliance_hold", "documents_not_current"]);
     expect(o.urgent.items.find((i: any) => i.id === far)).toBeUndefined();
+    // 0058: a blocked shift beyond the window is listed under Upcoming staffing, with its reason, and is not urgent
+    expect(o.upcoming.shifts.find((s: any) => s.shiftId === far)).toMatchObject({ reason: "compliance_hold" });
     expect(o.urgent.itemCount).toBe(1);
     expect(o.urgent.issueCount).toBe(2); // one shift, two issues: the count says so
   });

@@ -71,6 +71,8 @@ import {
   VISIT_STATUS_LABEL,
   type PacificWallTime,
   type ServiceVisitStatus,
+  authorizationStatus,
+  formatBalance,
 } from "@/lib/service-verification";
 import { PacificCorrectionFields, PacificTimeOutField } from "@/components/pacific-time-out-field";
 
@@ -1890,6 +1892,7 @@ export function ServiceVerificationReportsPage() {
                         "Billable",
                         STILL_SCHEDULED_LABEL,
                         "Remaining to schedule",
+                        "Authorization status",
                         "Needs review",
                       ],
                       monthlyServiceRows.map((row) => [
@@ -1901,7 +1904,8 @@ export function ServiceVerificationReportsPage() {
                         formatDuration(row.verifiedMinutes),
                         formatDuration(row.billableMinutes),
                         formatDuration(row.reservedMinutes ?? 0),
-                        formatDuration(row.remainingMinutes),
+                        formatBalance(row.remainingMinutes),
+                        authorizationStatus(row),
                         formatDuration(row.reviewMinutes),
                       ]),
                     )
@@ -2079,6 +2083,7 @@ export function ServiceVerificationReportsPage() {
                         ...(showApproved ? ["Approved (human)", "Approved rounding adjustment"] : []),
                         STILL_SCHEDULED_LABEL,
                         "Remaining to schedule",
+                        "Authorization status",
                         "Needs review",
                         "Worked minus billable",
                       ],
@@ -2097,7 +2102,8 @@ export function ServiceVerificationReportsPage() {
                             ]
                           : []),
                         formatDuration(row.reservedMinutes ?? 0),
-                        formatDuration(row.remainingMinutes),
+                        formatBalance(row.remainingMinutes),
+                        authorizationStatus(row),
                         formatDuration(row.reviewMinutes),
                         formatDuration(Math.max(0, row.workedMinutes - row.billableMinutes)),
                       ]),
@@ -2134,6 +2140,7 @@ export function ServiceVerificationReportsPage() {
                     {showApproved ? <th className="pb-2 pr-3 font-medium">Approved</th> : null}
                     <th className="pb-2 pr-3 font-medium">{STILL_SCHEDULED_LABEL}</th>
                     <th className="pb-2 pr-3 font-medium">Hours left</th>
+                    <th className="pb-2 pr-3 font-medium">Authorization status</th>
                     <th className="pb-2 pr-3 font-medium">Needs review</th>
                     <th className="pb-2 font-medium">Difference</th>
                   </tr>
@@ -2173,7 +2180,8 @@ export function ServiceVerificationReportsPage() {
                           </td>
                         ) : null}
                         <td className="py-2 pr-3">{formatDuration(row.reservedMinutes ?? 0)}</td>
-                        <td className="py-2 pr-3">{formatDuration(row.remainingMinutes)}</td>
+                        <td className={`py-2 pr-3 ${row.remainingMinutes < 0 ? "font-semibold text-red-700" : ""}`}>{formatBalance(row.remainingMinutes)}</td>
+                        <td className="py-2 pr-3" data-testid="authorization-status">{authorizationStatus(row)}</td>
                         <td className="py-2 pr-3">{formatDuration(row.reviewMinutes)}</td>
                         <td className="py-2">
                           {difference > 0 ? (
@@ -2426,7 +2434,7 @@ export function ServiceVerificationReportsPage() {
                           <dl className="mt-1 grid grid-cols-3 gap-2 text-xs">
                             <div><dt className="text-slate-500">Monthly limit</dt><dd className="font-medium text-slate-900">{formatDuration(authorizedMinutes)}</dd></div>
                             <div><dt className="text-slate-500">Used this month</dt><dd className="font-medium text-slate-900">{formatDuration(row.month_to_date_after_minutes)}</dd></div>
-                            <div><dt className="text-slate-500">Hours left</dt><dd className="font-medium text-slate-900">{formatDuration(row.remaining_minutes)}</dd></div>
+                            <div><dt className="text-slate-500">Hours left</dt><dd className="font-medium text-slate-900">{formatBalance(row.remaining_minutes)}</dd></div>
                           </dl>
                         </details>
                         <p className="mt-2 font-mono text-[11px] text-slate-500">Visit {row.visit_number ?? "—"}</p>
@@ -2561,7 +2569,7 @@ export function ServiceVerificationReportsPage() {
                             ) : null}
                             {visitColumns.has("remaining") ? (
                               <td className="py-2 pr-2 whitespace-nowrap text-slate-700">
-                                {formatDuration(row.remaining_minutes)}
+                                {formatBalance(row.remaining_minutes)}
                               </td>
                             ) : null}
                             {showBalanceDetails ? (
@@ -2570,7 +2578,7 @@ export function ServiceVerificationReportsPage() {
                                 <dl className="hidden space-y-0.5 whitespace-nowrap text-[10px] print:block">
                                   <div><dt className="inline">Monthly limit: </dt><dd className="inline font-medium">{formatDuration(authorizedMinutes)}</dd></div>
                                   <div><dt className="inline">Used this month: </dt><dd className="inline font-medium">{formatDuration(row.month_to_date_after_minutes)}</dd></div>
-                                  <div><dt className="inline">Hours left: </dt><dd className="inline font-medium">{formatDuration(row.remaining_minutes)}</dd></div>
+                                  <div><dt className="inline">Hours left: </dt><dd className="inline font-medium">{formatBalance(row.remaining_minutes)}</dd></div>
                                 </dl>
                                 <details className="text-xs print:hidden">
                                   <summary className="inline-flex min-h-[40px] cursor-pointer list-none items-center rounded-lg border border-slate-300 bg-og-card px-3 text-sm font-medium text-slate-900 hover:bg-slate-50">
@@ -2579,7 +2587,7 @@ export function ServiceVerificationReportsPage() {
                                   <dl className="mt-1 space-y-1 whitespace-nowrap">
                                     <div><dt className="inline text-slate-500">Monthly limit: </dt><dd className="inline font-medium text-slate-900">{formatDuration(authorizedMinutes)}</dd></div>
                                     <div><dt className="inline text-slate-500">Used this month: </dt><dd className="inline font-medium text-slate-900">{formatDuration(row.month_to_date_after_minutes)}</dd></div>
-                                    <div><dt className="inline text-slate-500">Hours left: </dt><dd className="inline font-medium text-slate-900">{formatDuration(row.remaining_minutes)}</dd></div>
+                                    <div><dt className="inline text-slate-500">Hours left: </dt><dd className="inline font-medium text-slate-900">{formatBalance(row.remaining_minutes)}</dd></div>
                                   </dl>
                                 </details>
                               </td>

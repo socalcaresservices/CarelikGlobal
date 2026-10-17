@@ -84,7 +84,14 @@ export interface UtilisationRow {
   billableMinutes: number;
   reviewMinutes: number;
   approvedMinutes: number;
+  /** The sum of each authorization's UNUSED time (never negative); the overage is overLimitMinutes. authorized - committed = remaining - overLimit. */
   remainingMinutes: number;
+  /** 0057: billable + approved rounding adjustments + reserved. */
+  committedMinutes?: number;
+  overLimitMinutes?: number;
+  nearLimitAuthorizations?: number;
+  criticalAuthorizations?: number;
+  expiringAuthorizations?: number;
   lineagesWithoutRate: number;
   /** Administrator only (billing.read); null for everyone else. Values are in cents. */
   billableValueCents: number | null;

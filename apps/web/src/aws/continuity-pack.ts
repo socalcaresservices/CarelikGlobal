@@ -26,6 +26,8 @@ export interface ContinuityStatus { lastDownloadedAt: string | null; lastDownloa
 export const STALE_AFTER_HOURS = 24;
 const esc = (v: unknown) => String(v ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]!);
 const hrs = (m: number) => `${Math.floor(m / 60)} h ${String(m % 60).padStart(2, "0")} min`;
+/** A balance: an authorization over its limit reads "Over by ...", never "0 h". */
+const balance = (m: number) => (m < 0 ? `Over by ${hrs(-m)}` : hrs(m));
 export const outageNumber = (n: number) => `OUT-${String(n).padStart(6, "0")}`;
 
 export function continuityFileName(pack: Pick<ContinuityPack, "data_as_of" | "timezone">): string {
@@ -70,7 +72,7 @@ ${table(["Date", "Time", "Client", "Service", "Caregiver", "Coverage"], pack.shi
 
 <h2>Authorized hours this month</h2>
 <p class="note">"Hours left" already subtracts approved-eligible (billable) time and time reserved by scheduled shifts. Hours worked during an outage are not included until entered in Ogevia.</p>
-${table(["Client", "Service", "Period", "Authorized", "Reserved", "Billable so far", "In review", "Hours left"], pack.authorizations.map((a) => [client(a.client_code, a.client_label, nameByCode.get(a.client_code) ?? null), a.service ?? "", `${formatDateOnly(a.period_start)} to ${formatDateOnly(a.period_end)}`, hrs(a.authorized_minutes), hrs(a.reserved_minutes), hrs(a.billable_minutes), hrs(a.review_minutes), hrs(a.remaining_minutes)]))}
+${table(["Client", "Service", "Period", "Authorized", "Reserved", "Billable so far", "In review", "Hours left"], pack.authorizations.map((a) => [client(a.client_code, a.client_label, nameByCode.get(a.client_code) ?? null), a.service ?? "", `${formatDateOnly(a.period_start)} to ${formatDateOnly(a.period_end)}`, hrs(a.authorized_minutes), hrs(a.reserved_minutes), hrs(a.billable_minutes), hrs(a.review_minutes), balance(a.remaining_minutes)]))}
 
 <h2>Active clients</h2>
 ${table(["Client code", "Label", "City", "Name"], pack.clients.map((c) => [c.client_code, c.client_label ?? "", c.city ?? "", c.client_name ?? ""]))}

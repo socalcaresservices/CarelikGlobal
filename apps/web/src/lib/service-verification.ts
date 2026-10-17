@@ -38,6 +38,31 @@ export function formatDuration(minutes: number | null | undefined): string {
   return `${hours} hr ${mins} min`;
 }
 
+/**
+ * A balance that can be negative: "2 hr 30 min", or "Over by 1 hr 15 min" when more is committed than the authorization allows.
+ * formatDuration floors at zero (right for a length of time); a remaining balance must never go through it, or an over-limit month reads "0 min".
+ */
+export function formatBalance(minutes: number | null | undefined): string {
+  if (minutes === null || minutes === undefined) return "—";
+  return minutes < 0 ? `Over by ${formatDuration(-minutes)}` : formatDuration(minutes);
+}
+
+/** The approved authorization tiers (Healthy below 80%, Near Limit 80% to below 95%, Critical 95% and above). The server decides; this only names them. */
+export type AuthorizationTier = "healthy" | "near_limit" | "critical";
+export const TIER_LABEL: Record<AuthorizationTier, string> = { healthy: "Healthy", near_limit: "Near Limit", critical: "Critical" };
+export const TIER_SYMBOL: Record<AuthorizationTier, string> = { healthy: "✓", near_limit: "▲", critical: "●" };
+
+/** "● Critical (112.5%)", and an expiry warning when the authorization ends within 30 days. The server decides the tier (0057). */
+export function authorizationStatus(row: { authorizationTier?: "healthy" | "near_limit" | "critical" | null; utilizationPercent?: number | null; expiringSoon?: boolean; daysUntilExpiry?: number; overLimitMinutes?: number }): string {
+  const tier = row.authorizationTier;
+  const parts: string[] = [];
+  if (tier) parts.push(`${TIER_SYMBOL[tier]} ${TIER_LABEL[tier]}${row.utilizationPercent !== null && row.utilizationPercent !== undefined ? ` (${row.utilizationPercent}%)` : ""}`);
+  if ((row.overLimitMinutes ?? 0) > 0) parts.push(`over by ${formatDuration(row.overLimitMinutes ?? 0)}`);
+  if (row.expiringSoon) parts.push(`ends in ${row.daysUntilExpiry} day${row.daysUntilExpiry === 1 ? "" : "s"}`);
+  return parts.join(" · ") || "—";
+}
+
+
 /** MM/DD/YYYY in the agency time zone, for an instant (timestamptz). */
 export function formatNumericDate(value: string | Date): string {
   const parts = new Intl.DateTimeFormat("en-US", {

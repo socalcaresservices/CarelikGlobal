@@ -97,3 +97,52 @@ describe("freshness", () => {
     expect(freshness(false, false, undefined, NOW).kind).toBe("unavailable");
   });
 });
+
+describe("queues that stay apart (0058)", () => {
+  const docs = (over: object) => overview({ documents: { overdue: 0, dueSoon: 0, awaitingReview: 0, reviewRoutine: 0, reviewOverdue: 0, rejected: 0, caregiversOnHold: 0, caregiversWithPendingRequirements: 0, ...over } });
+  const visits = (over: object) => overview({ visitReview: { visitsNeedingAttention: 0, pendingConfirmation: 0, confirmationOverdue: 0, awaitingConfirmation: 0, needsReview: 0, reviewOverdue: 0, lateResponses: 0, readyForApproval: 0, reviewIssues: 0, awaitingResponse: 0, ...over } });
+  const tile = (o: AttentionOverview, key: string) => streams(o).find((s) => s.key === key)!;
+
+  it("routine document review is shown but never counted; overdue documents are labelled Overdue, not Urgent", () => {
+    const routine = tile(docs({ awaitingReview: 3, reviewRoutine: 3 }), "documents");
+    expect(routine.count).toBe(0);
+    expect(routine.tone).toBe("neutral");
+    expect(routine.detail).toContain("3 awaiting routine review");
+    const overdue = tile(docs({ overdue: 2, awaitingReview: 4, reviewRoutine: 3, reviewOverdue: 1 }), "documents");
+    expect(overdue.count).toBe(3); // 2 overdue + 1 escalated review; the 3 routine reviews are not added
+    expect(overdue.word).toBe("Overdue");
+    expect(overdue.word).not.toBe("Urgent");
+  });
+  it("a caregiver on hold counts, with its own words, and a rejected document needs action", () => {
+    expect(tile(docs({ caregiversOnHold: 1 }), "documents")).toMatchObject({ count: 1, word: "Needs action", tone: "amber" });
+    expect(tile(docs({ rejected: 2 }), "documents").count).toBe(2);
+  });
+  it("pending confirmation and ready for approval are routine: in the detail, never in the count", () => {
+    const t = tile(visits({ visitsNeedingAttention: 0, pendingConfirmation: 4, readyForApproval: 6 }), "visits");
+    expect(t.count).toBe(0);
+    expect(t.tone).toBe("neutral");
+    expect(t.detail).toBe("Nothing needs a decision now. · 4 pending confirmation · 6 ready for approval");
+  });
+  it("review waiting 24 h is Urgent; a confirmation overdue at 48 h is Overdue; neither is called Critical", () => {
+    expect(tile(visits({ visitsNeedingAttention: 2, needsReview: 2, reviewOverdue: 1 }), "visits")).toMatchObject({ count: 2, tone: "amber", word: "Urgent" });
+    expect(tile(visits({ visitsNeedingAttention: 1, confirmationOverdue: 1, awaitingConfirmation: 1 }), "visits")).toMatchObject({ count: 1, tone: "amber", word: "Overdue" });
+    expect(tile(visits({ visitsNeedingAttention: 1, needsReview: 1 }), "visits").word).toBeUndefined();
+  });
+  it("an older server without the new fields still gives sensible tiles", () => {
+    const old = overview({ documents: { overdue: 1, dueSoon: 0, awaitingReview: 2, rejected: 0, caregiversOnHold: 0 }, visitReview: { visitsNeedingAttention: 3, awaitingConfirmation: 1, needsReview: 2, lateResponses: 0, readyForApproval: null, reviewIssues: 2, awaitingResponse: 0 } });
+    expect(tile(old, "documents").count).toBe(1);
+    expect(tile(old, "visits").count).toBe(3);
+  });
+  it("Upcoming staffing counts blocked shifts too, and says what it lists", () => {
+    const t = tile(overview({ upcoming: { count: 2, nextStartsAt: hoursFromNow(60), shifts: [] } }), "staffing");
+    expect(t).toMatchObject({ count: 2, unit: "shifts", tone: "neutral" });
+    expect(t.detail).toContain("Uncovered or blocked");
+  });
+});
+
+describe("the server's tier wins over the old severity", () => {
+  it("tier critical is red and urgent is amber whatever the legacy field says", () => {
+    expect(itemTone(item({ tier: "critical", severity: "amber" }), NOW)).toBe("red");
+    expect(itemTone(item({ tier: "urgent", severity: "red", startsAt: hoursFromNow(-3) }), NOW)).toBe("amber");
+  });
+});

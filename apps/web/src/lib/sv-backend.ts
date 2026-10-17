@@ -194,12 +194,20 @@ export interface MonthlyServiceSummaryRow {
   workedMinutes: number;
   verifiedMinutes: number;
   billableMinutes: number;
-  // Authorized - billable - scheduled (reserved by assigned Care Requests), as the assignment cap counts it (0016).
+  // Authorized - committed (billable + adjustments + scheduled), as the assignment cap counts it (0016, 0057). Negative = over the limit.
   remainingMinutes: number;
   reviewMinutes: number;
   visitCount: number;
   // Time held by assigned Care Request shifts not yet signed (0016).
   reservedMinutes?: number;
+  // 0057: committed = billable + approved rounding adjustments + reserved; remaining = authorized - committed and is NEGATIVE when over the limit.
+  adjustmentMinutes?: number;
+  committedMinutes?: number;
+  overLimitMinutes?: number;
+  utilizationPercent?: number | null;
+  authorizationTier?: "healthy" | "near_limit" | "critical" | null;
+  daysUntilExpiry?: number;
+  expiringSoon?: boolean;
   /** AWS: legal name from the restricted directory (null without clients.names.read). */
   clientName?: string | null;
 }

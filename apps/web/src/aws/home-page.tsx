@@ -31,7 +31,7 @@ function Tile({ s }: { s: Stream }) {
       >
         <span className="flex items-start justify-between gap-2">
           <span className="text-sm font-semibold text-og-ink">{s.label}</span>
-          {hot ? <StatusChip tone={s.tone}>{t.word}</StatusChip> : null}
+          {hot ? <StatusChip tone={s.tone}>{s.word ?? t.word}</StatusChip> : null}
         </span>
         <span>
           <span className="font-og-mono text-2xl font-semibold tabular-nums text-og-ink">{s.count}</span>
@@ -43,11 +43,11 @@ function Tile({ s }: { s: Stream }) {
   );
 }
 
-function Stat({ label, value }: { label: string; value: string }) {
+function Stat({ label, value, tone }: { label: string; value: string; tone?: "red" }) {
   return (
     <div>
       <dt className="text-xs font-medium text-og-sub">{label}</dt>
-      <dd className="font-og-mono text-xl font-semibold tabular-nums text-og-ink">{value}</dd>
+      <dd className={`font-og-mono text-xl font-semibold tabular-nums ${tone === "red" ? "text-red-700" : "text-og-ink"}`}>{tone === "red" ? <span aria-hidden="true">● </span> : null}{value}</dd>
     </div>
   );
 }
@@ -72,6 +72,10 @@ export function AwsHomePage() {
   const tiles = overview.data ? streams(overview.data) : [];
   const finance = financeView(rows);
   const over = rows.filter((r) => r.authorizedMinutes > 0 && r.workedMinutes > r.authorizedMinutes);
+  // The approved tiers (0057): Critical 95% and above of committed, Near Limit 80% to below 95%; expiry within 30 days is separate.
+  const crit = sum(rows, "criticalAuthorizations"), near = sum(rows, "nearLimitAuthorizations"), ending = sum(rows, "expiringAuthorizations");
+  const tierBits = [crit ? `● ${crit} Critical` : null, near ? `▲ ${near} Near Limit` : null, ending ? `▲ ${ending} ending within 30 days` : null].filter(Boolean);
+  const tierSummary = tierBits.length ? `Authorizations: ${tierBits.join(" · ")}` : null;
   const chartData = rows.filter((r) => r.workedMinutes > 0).map((r) => ({ label: r.serviceName, value: r.workedMinutes, display: hoursLabel(r.workedMinutes) }));
 
   return (
@@ -108,7 +112,11 @@ export function AwsHomePage() {
               <Stat label="Worked" value={hoursLabel(sum(rows, "workedMinutes"))} />
               <Stat label="Billable (confirmed)" value={hoursLabel(sum(rows, "billableMinutes"))} />
               <Stat label="Hours left" value={hoursLabel(sum(rows, "remainingMinutes"))} />
+              {sum(rows, "overLimitMinutes") > 0 ? <Stat label="Over the limit" value={hoursLabel(sum(rows, "overLimitMinutes"))} tone="red" /> : null}
             </dl>
+            {tierSummary ? (
+              <p role="status" className="text-sm font-semibold text-amber-900" data-testid="authorization-tiers">{tierSummary}</p>
+            ) : null}
             {over.length > 0 ? (
               <p role="status" className="text-sm font-semibold text-red-700">
                 <span aria-hidden="true">● </span>Over the authorization: {over.map((r) => r.serviceName).join(", ")}. Review before billing.
@@ -128,7 +136,9 @@ export function AwsHomePage() {
                       <th scope="col" className="px-3 py-2 text-right">In review</th>
                       <th scope="col" className="px-3 py-2 text-right">Approved</th>
                       <th scope="col" className="px-3 py-2 text-right">Scheduled ahead</th>
-                      <th scope="col" className="py-2 pl-3 text-right">Left</th>
+                      <th scope="col" className="px-3 py-2 text-right">Committed</th>
+                      <th scope="col" className="px-3 py-2 text-right">Left</th>
+                      <th scope="col" className="py-2 pl-3 text-right">Over limit</th>
                     </tr>
                   </thead>
                   <tbody className="font-og-mono tabular-nums text-og-ink">
@@ -141,13 +151,17 @@ export function AwsHomePage() {
                         <td className="px-3 py-2 text-right">{hoursLabel(r.reviewMinutes)}</td>
                         <td className="px-3 py-2 text-right">{hoursLabel(r.approvedMinutes)}</td>
                         <td className="px-3 py-2 text-right">{hoursLabel(r.scheduledMinutes)}</td>
-                        <td className="py-2 pl-3 text-right">{hoursLabel(r.remainingMinutes)}</td>
+                        <td className="px-3 py-2 text-right">{hoursLabel(r.committedMinutes)}</td>
+                        <td className="px-3 py-2 text-right">{hoursLabel(r.remainingMinutes)}</td>
+                        <td className={`py-2 pl-3 text-right ${(r.overLimitMinutes ?? 0) > 0 ? "font-semibold text-red-700" : ""}`}>{hoursLabel(r.overLimitMinutes)}</td>
                       </tr>
                     ))}
                   </tbody>
                 </table>
               </div>
-              <p className="mt-2">Utilization is worked hours ÷ authorized hours for the same client, service and month. An amended authorization counts once (its latest version).</p>
+              <p className="mt-2">Committed is billable hours plus approved rounding adjustments plus hours already scheduled. Authorized − committed = Left − Over limit.</p>
+              <p className="mt-1">Left adds up each authorization's unused time only, so one over its limit never uses up another's hours.</p>
+              <p className="mt-1">Healthy is below 80% committed, Near Limit 80% to below 95%, Critical 95% and above. An amended authorization counts once (its latest version).</p>
               <p className="mt-1">Billable means confirmed. Approved means a person approved it for billing. Neither means submitted or paid.</p>
               <p className="mt-1"><Link className="font-semibold text-og-link underline" to="/service-verification/reports?view=reconciliation">Monthly reconciliation by client and authorization</Link></p>
             </Disclosure>

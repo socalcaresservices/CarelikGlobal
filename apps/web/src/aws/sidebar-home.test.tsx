@@ -31,6 +31,7 @@ const OVERVIEW = {
 const ROW = {
   serviceId: SERVICE, serviceCode: "862", serviceName: "Respite Care", clientCount: 2, authorizedMinutes: 6000, scheduledMinutes: 240, workedMinutes: 1590,
   billableMinutes: 1470, reviewMinutes: 120, approvedMinutes: 600, remainingMinutes: 4530, lineagesWithoutRate: 0,
+  committedMinutes: 1470, overLimitMinutes: 0, nearLimitAuthorizations: 0, criticalAuthorizations: 0, expiringAuthorizations: 0,
 };
 
 function renderAt(path: string, role: Role) {
@@ -287,10 +288,10 @@ describe("Home layout", () => {
     for (const k of ["Authorized", "Worked", "Billable (confirmed)", "Hours left"]) expect((await within(hours).findAllByText(k)).length).toBeGreaterThan(0);
     // The per-service table is behind a native disclosure, with the same figures and a keyboard-reachable scroller.
     const table = within(hours).getByRole("table", { name: "Hours by service for the selected month" });
-    expect(within(table).getAllByRole("columnheader").map((c) => c.textContent)).toEqual(["Service", "Authorized", "Worked", "Billable", "In review", "Approved", "Scheduled ahead", "Left"]);
+    expect(within(table).getAllByRole("columnheader").map((c) => c.textContent)).toEqual(["Service", "Authorized", "Worked", "Billable", "In review", "Approved", "Scheduled ahead", "Committed", "Left", "Over limit"]);
     const row = within(table).getAllByRole("row")[1]!;
     expect(row).toHaveTextContent("Respite Care");
-    expect(within(row).getAllByRole("cell").map((c) => c.textContent)).toEqual(["100 h", "26.5 h", "24.5 h", "2 h", "10 h", "4 h", "75.5 h"]);
+    expect(within(row).getAllByRole("cell").map((c) => c.textContent)).toEqual(["100 h", "26.5 h", "24.5 h", "2 h", "10 h", "4 h", "24.5 h", "75.5 h", "0 h"]);
     for (const c of within(row).getAllByRole("cell")) expect(c.className).toMatch(/text-right/);
     const scroller = within(hours).getByRole("region", { name: /scrolls sideways/ });
     expect(scroller.className).toMatch(/overflow-x-auto/);

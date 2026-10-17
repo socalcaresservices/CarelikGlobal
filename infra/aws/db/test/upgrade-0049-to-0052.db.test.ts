@@ -12,7 +12,7 @@ const DOWN = new URL("../rollback/", import.meta.url);
 let db: TestDb;
 let w: World;
 beforeAll(async () => {
-  db = await createTestDb(); // 0001-0056
+  db = await createTestDb(); // 0001-0058
   w = await seedWorld(db, 600);
 });
 afterAll(async () => db?.drop());
@@ -77,7 +77,7 @@ describe("upgrade from 0049 to 0052 on a populated database", () => {
     await db.admin.query("set session_replication_role = origin");
     const statusBefore = Object.fromEntries((await db.admin.query("select id, status::text s, billable_minutes b from ogevia.service_visits where id = any($1)", [[signed, noSigner, unscheduled]])).rows.map((r) => [r.id, [r.s, r.b]]));
 
-    for (const file of ["0056_attention_streams_appearance.down.sql", "0055_caregiver_compliance_hold.down.sql", "0054_recruiting_onboarding_checklist.down.sql", "0053_scheduling_patterns_hour_limits_makeup.down.sql", "0052_reservation_not_counted_when_review_visit_counted_as_used.down.sql", "0051_wave1_open_shift_pickup.down.sql", "0050_wave1_visit_review_and_variance_rule.down.sql"]) await runDown(file);
+    for (const file of ["0058_attention_tiers_separate_queues.down.sql", "0057_authorization_tiers_unclamped_balances.down.sql", "0056_attention_streams_appearance.down.sql", "0055_caregiver_compliance_hold.down.sql", "0054_recruiting_onboarding_checklist.down.sql", "0053_scheduling_patterns_hour_limits_makeup.down.sql", "0052_reservation_not_counted_when_review_visit_counted_as_used.down.sql", "0051_wave1_open_shift_pickup.down.sql", "0050_wave1_visit_review_and_variance_rule.down.sql"]) await runDown(file);
     expect((await db.admin.query("select max(version) v from ogevia_meta.schema_migrations")).rows[0].v).toBe("0049");
     const day = await orgToday(db);
     const lineage = (await db.admin.query("select lineage_id from ogevia.client_authorizations where id = $1", [f.auth])).rows[0].lineage_id as string;
@@ -88,7 +88,7 @@ describe("upgrade from 0049 to 0052 on a populated database", () => {
     const client = await db.admin.connect();
     let applied: string[];
     try { applied = (await migrate(client)).applied.map((x) => x.slice(0, 4)); } finally { client.release(); }
-    expect(applied).toEqual(["0050", "0051", "0052", "0053", "0054", "0055", "0056"]);
+    expect(applied).toEqual(["0050", "0051", "0052", "0053", "0054", "0055", "0056", "0057", "0058"]);
 
     // No stored row changed or disappeared, in any table that holds visit or authorization data.
     expect(await fingerprints()).toEqual(before);

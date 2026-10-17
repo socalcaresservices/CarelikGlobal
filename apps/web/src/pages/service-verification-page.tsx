@@ -37,6 +37,7 @@ import {
   formatVisitDate,
   formatScheduledTime,
   type VisitSignerRole,
+  formatBalance,
 } from "@/lib/service-verification";
 
 
@@ -1601,7 +1602,7 @@ export function ServiceVerificationPage() {
                         <dt className="text-slate-500">Billable</dt>
                         <dd className="font-semibold text-slate-950">{formatDuration(result.outcome.billable_minutes)}</dd>
                         <dt className="text-slate-500">Authorization left</dt>
-                        <dd className="font-semibold text-slate-950">{formatDuration(result.remaining_minutes)}</dd>
+                        <dd className="font-semibold text-slate-950">{formatBalance(result.remaining_minutes)}</dd>
                         <dt className="text-slate-500">Confirmed by</dt>
                         <dd className="font-semibold text-slate-950">{o.methodLabel}</dd>
                         <dt className="text-slate-500">Billing</dt>

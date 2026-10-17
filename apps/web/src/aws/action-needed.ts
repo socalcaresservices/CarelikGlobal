@@ -31,7 +31,7 @@ const seen = (n: number | null | undefined): n is number => n !== null && n !== 
 export function actionCategories(a: AttentionSummary): ActionCategory[] {
   const list: ActionCategory[] = [
     { key: "missingClockOut", label: "Missing Clock-Out", count: a.missingTimeOut, to: EXCEPTIONS_ROUTE, hint: "Still open past the shift end, or 12 h without a schedule" },
-    { key: "awaitingConfirmation", label: "Awaiting Confirmation", count: a.notConfirmed, to: EXCEPTIONS_ROUTE, hint: "Ended over 60 min ago, no client confirmation yet" },
+    { key: "awaitingConfirmation", label: "Awaiting Confirmation", count: a.notConfirmed, to: EXCEPTIONS_ROUTE, hint: "Ended over 48 hours ago, no client confirmation yet" },
     { key: "visitsToReview", label: "Visits to Review", count: a.needsReview, to: EXCEPTIONS_ROUTE, hint: "Unconfirmed, unscheduled, over the schedule rule or over the authorization; open each visit to review it" },
   ];
   if (seen(a.lateResponsesToReview)) {

@@ -2,7 +2,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { Button, Card } from "@carelik/ui";
-import { formatDuration } from "@/lib/service-verification";
+import { formatDuration, TIER_LABEL, TIER_SYMBOL } from "@/lib/service-verification";
 import { newIdempotencyKey } from "@/lib/sv-backend";
 import { useOrganization } from "@/providers/organization-provider";
 import { useAwsApi } from "./aws-workspace";
@@ -330,17 +330,31 @@ function AuthorizationsCard({ clientId }: { clientId: string }) {
           <ul className="space-y-2" aria-label="Authorized, used and remaining time for the month">
             {balances.data.map((b) => (
               <li key={b.authorizationLineageId} className="rounded-lg border border-slate-200 p-3">
-                <p className="text-sm font-semibold text-slate-900">{b.serviceName}</p>
+                <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                  <p className="text-sm font-semibold text-slate-900">{b.serviceName}</p>
+                  {b.authorizationTier ? (
+                    <span data-testid="authorization-tier" className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-semibold ${b.authorizationTier === "critical" ? "bg-red-100 text-red-800" : b.authorizationTier === "near_limit" ? "bg-amber-100 text-amber-900" : "bg-emerald-100 text-emerald-900"}`}>
+                      <span aria-hidden="true">{TIER_SYMBOL[b.authorizationTier]}</span>
+                      {TIER_LABEL[b.authorizationTier]}{b.utilizationPercent !== null && b.utilizationPercent !== undefined ? ` · ${b.utilizationPercent}% committed` : ""}
+                    </span>
+                  ) : null}
+                  {b.expiringSoon ? (
+                    <span data-testid="authorization-expiry" className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-xs font-semibold text-amber-900">
+                      <span aria-hidden="true">▲</span>Ends in {b.daysUntilExpiry} {b.daysUntilExpiry === 1 ? "day" : "days"}
+                    </span>
+                  ) : null}
+                </div>
                 <dl className="mt-2 grid grid-cols-2 gap-x-4 gap-y-1 text-sm sm:grid-cols-4">
                   <div><dt className="text-xs text-slate-600">Authorized</dt><dd>{formatDuration(b.authorizedMinutes)}</dd></div>
                   <div><dt className="text-xs text-slate-600">Billable</dt><dd>{formatDuration(b.billableMinutes)}</dd></div>
                   <div><dt className="text-xs text-slate-600">In review</dt><dd>{formatDuration(b.reviewMinutes)}</dd></div>
-                  <div><dt className="text-xs text-slate-600">Hours left</dt><dd className={`font-semibold ${b.remainingMinutes <= 0 ? "text-red-700" : "text-slate-900"}`}>{formatDuration(b.remainingMinutes)}</dd></div>
+                  <div><dt className="text-xs text-slate-600">{b.remainingMinutes < 0 ? "Over the limit" : "Hours left"}</dt><dd className={`font-semibold ${b.remainingMinutes <= 0 ? "text-red-700" : "text-slate-900"}`}>{b.remainingMinutes < 0 ? formatDuration(-b.remainingMinutes) : formatDuration(b.remainingMinutes)}</dd></div>
                 </dl>
               </li>
             ))}
           </ul>
-          <p className="mt-1 text-xs text-slate-500">Hours left = authorized − billable − time already scheduled (same calculation as the reports).</p>
+          <p className="mt-1 text-xs text-slate-500">Committed = billable + approved rounding adjustments + time already scheduled. Hours left = authorized − committed; if that is negative, the amount over the limit is shown.</p>
+          <p className="mt-1 text-xs text-slate-500">Healthy is below 80% committed, Near Limit 80% to below 95%, Critical 95% and above (same calculation as the reports).</p>
         </div>
       ) : null}
       {versions.isLoading ? <p className="mt-3 text-sm text-slate-500">Loading…</p> : null}
