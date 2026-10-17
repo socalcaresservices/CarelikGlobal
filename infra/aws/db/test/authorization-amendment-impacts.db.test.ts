@@ -52,8 +52,9 @@ describe("a decrease reports the reserved shifts that no longer fit, and changes
     // free = 300 - 100 used = 200: s1 (120) fits; s2 would make 240 > 200, so s2, s3, s4 are reported
     expect(shiftRows.map((r: any) => r.affected_shift_id).sort()).toEqual([s2, s3, s4].sort());
     expect(shiftRows.every((r: any) => r.impact_kind === "reserved_shift_over_cap" && r.impact_minutes === 120)).toBe(true);
-    const visitRows = rows.filter((r: any) => r.affected_visit_id);
-    expect(visitRows.map((r: any) => [r.affected_visit_id, r.impact_kind])).toEqual([[v.visit, "decrease_now_exceeds"]]);
+    // 0071: the 100-minute visit still fits the new 300-minute month, so it is NOT reported (before, every signed visit of the lineage was listed as "now exceeds")
+    expect(rows.filter((r: any) => r.affected_visit_id)).toEqual([]);
+    void v;
     expect(await state(f)).toEqual(before); // nothing released, cancelled, re-billed or moved
     // stored: still there when read later, with version and new cap
     const stored = (await impacts()).filter((r) => r.shift_id && [s1, s2, s3, s4].includes(r.shift_id));

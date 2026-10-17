@@ -137,6 +137,7 @@ describe("SCHEMA: migration chain", () => {
       "shifts",
       "staff_documents",
       "user_appearance",
+      "visit_authorization_reviews",
       "visit_confirmation_requests",
       "visit_confirmations",
       "visit_corrections",
