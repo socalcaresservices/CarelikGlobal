@@ -1,8 +1,5 @@
--- ROLLBACK 0076 | CLASS: SAFE AUTOMATED (functions only; restores the 0072 export request function)
--- the ledger is append-only: rows written with the new keys stay, so the old list is restored as NOT VALID (it checks new rows only)
-alter table ogevia.report_exports drop constraint report_exports_report_key_check;
-alter table ogevia.report_exports add constraint report_exports_report_key_check
-  check (report_key in ('client_service_calendar', 'monthly_service_reconciliation', 'correction_history', 'monthly_chain')) not valid;
+-- ROLLBACK 0076 | CLASS: SAFE AUTOMATED (functions only; restores the 0072 export request function; the ledger's list of report keys stays widened because the ledger is append-only)
+-- the export ledger is append-only: rows written with the new report keys stay, so the widened list of report keys is KEPT (narrowing it would make every older rollback fail on those rows)
 drop function ogevia_api.list_audit_report(uuid, date, date, text, integer, integer);
 drop function ogevia_api.get_agency_performance(uuid, date);
 create or replace function ogevia_api.request_report_export(p_organization_id uuid, p_report_key text, p_params jsonb)
