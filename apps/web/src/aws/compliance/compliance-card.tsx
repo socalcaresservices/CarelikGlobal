@@ -4,12 +4,13 @@ import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { Button, Card } from "@carelik/ui";
 import { newIdempotencyKey } from "@/lib/sv-backend";
-import { formatDateOnly, formatDateTime } from "@/lib/service-verification";
+import { formatClockTime, formatDateOnly, formatDateTime } from "@/lib/service-verification";
 import { useOrganization } from "@/providers/organization-provider";
 import { useAwsApi } from "../aws-workspace";
 import { actionError } from "../readiness/format";
 import { useGuardedMutate } from "../readiness/use-guarded";
 import {
+  riskLabel,
   BACKGROUND_STATUS_LABEL,
   COMPLIANCE_KEYS,
   fixLink,
@@ -232,6 +233,20 @@ export function CaregiverCompliance({ caregiverRecordId }: { caregiverRecordId: 
                 ))}
               </ul>
             </section>
+
+            {(c.shiftRisks ?? []).length > 0 ? (
+              <section aria-label="Shifts affected by CPR or TB expiry">
+                <h3 className="text-sm font-semibold text-slate-900">Scheduled shifts where CPR or TB expires ({new Set((c.shiftRisks ?? []).map((s) => s.shiftId)).size})</h3>
+                <ul className="mt-1 space-y-1 text-sm text-slate-800">
+                  {(c.shiftRisks ?? []).map((s) => (
+                    <li key={`${s.shiftId}-${s.requirement}`}>
+                      {formatDateTime(s.startsAt)} to {formatClockTime(s.endsAt)} · {riskLabel(s)}
+                      {s.inProgress ? <strong className="ml-1 text-red-800">· in progress now. The visit will not be ended.</strong> : null}
+                    </li>
+                  ))}
+                </ul>
+              </section>
+            ) : null}
           </div>
         ) : null}
       </section>

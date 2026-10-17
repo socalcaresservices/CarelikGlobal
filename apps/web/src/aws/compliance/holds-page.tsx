@@ -9,7 +9,32 @@ import { useAwsApi } from "../aws-workspace";
 import { actionError } from "../readiness/format";
 import { useGuardedMutate } from "../readiness/use-guarded";
 import { PageHeader } from "../ui/page-header";
-import { COMPLIANCE_KEYS, fixLink, useComplianceHolds, type ComplianceHold } from "./queries";
+import { COMPLIANCE_KEYS, fixLink, useComplianceHolds, type ComplianceHold, riskLabel, type HoldShiftRisk } from "./queries";
+
+/** Scheduled shifts whose CPR/TB is expired or expires during the shift. Shown whether or not a hold is open yet. */
+function ShiftRisks({ risks }: { risks: HoldShiftRisk[] }) {
+  if (risks.length === 0) return null;
+  return (
+    <Card className="p-4">
+      <section aria-label="Shifts with CPR or TB expiring">
+        <h2 className="text-base font-semibold text-slate-950">Shifts with CPR or TB expired or expiring ({new Set(risks.map((r) => r.shiftId)).size})</h2>
+        <p className="mt-1 text-sm text-slate-700">Scheduled work where a required CPR or TB will not be valid for the whole shift. Nothing here was cancelled or moved, and a visit in progress is never ended by the system.</p>
+        <ul className="mt-2 divide-y divide-slate-100 text-sm">
+          {risks.map((r) => (
+            <li key={`${r.shiftId}-${r.requirement}`} className="flex flex-wrap items-center justify-between gap-2 py-1">
+              <span>
+                <Link className="underline" to={`/care-team/${r.caregiverRecordId}`}>{r.caregiverName}</Link> · {formatDateTime(r.startsAt)} to {formatClockTime(r.endsAt)}{r.clientCode ? ` · client ${r.clientCode}` : ""} · {riskLabel(r)}
+                {r.inProgress ? <strong className="ml-1 text-red-800">In progress{r.visitId ? " (visit open)" : ""}</strong> : null}
+                {r.onHold ? <span className="ml-1 text-slate-600">· caregiver is on hold</span> : null}
+              </span>
+              <Link className="underline" to="/schedule">Open the schedule</Link>
+            </li>
+          ))}
+        </ul>
+      </section>
+    </Card>
+  );
+}
 
 function HoldCard({ h }: { h: ComplianceHold }) {
   return (
@@ -54,7 +79,7 @@ function HoldCard({ h }: { h: ComplianceHold }) {
             <ul className="mt-1 divide-y divide-slate-100 text-sm">
               {h.affectedShifts.map((s) => (
                 <li key={s.shiftId} className="flex flex-wrap items-center justify-between gap-2 py-1">
-                  <span>{formatDateTime(s.startsAt)} to {formatClockTime(s.endsAt)}{s.clientCode ? ` · client ${s.clientCode}` : ""}{s.seriesId ? " · recurring" : ""}</span>
+                  <span>{formatDateTime(s.startsAt)} to {formatClockTime(s.endsAt)}{s.clientCode ? ` · client ${s.clientCode}` : ""}{s.seriesId ? " · recurring" : ""}{s.inProgress ? <strong className="ml-1 text-red-800">· in progress now{s.visitId ? " (visit open)" : ""}</strong> : null}</span>
                   <Link className="underline" to="/schedule">Open the schedule</Link>
                 </li>
               ))}
@@ -109,11 +134,15 @@ export function ComplianceHoldsPage() {
       {q.isError ? <p role="alert" className="text-sm text-red-700">{actionError(q.error, "Holds could not be loaded.")}</p> : null}
       {q.data ? (
         q.data.holds.length === 0 ? (
-          <Card className="p-4"><p role="status" className="text-sm text-slate-800">No caregiver is on a compliance hold.</p></Card>
+          <>
+            <Card className="p-4"><p role="status" className="text-sm text-slate-800">No caregiver is on a compliance hold.</p></Card>
+            <ShiftRisks risks={q.data.shiftsAtRisk ?? []} />
+          </>
         ) : (
           <>
             <p className="text-sm text-slate-800">{q.data.totals.holds} on hold · {q.data.totals.affectedShifts} shift{q.data.totals.affectedShifts === 1 ? "" : "s"} to cover · {q.data.totals.inProgressVisits} visit{q.data.totals.inProgressVisits === 1 ? "" : "s"} in progress</p>
             {q.data.holds.map((h) => <HoldCard key={h.holdId} h={h} />)}
+            <ShiftRisks risks={q.data.shiftsAtRisk ?? []} />
           </>
         )
       ) : null}
