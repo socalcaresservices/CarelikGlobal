@@ -128,6 +128,7 @@ describe("SCHEMA: migration chain", () => {
       "shift_coverage_events",
       "shift_pickup_requests",
       "shift_readiness_flags",
+      "shift_reconciliations",
       "shift_series",
       "shift_series_skipped_dates",
       "shifts",

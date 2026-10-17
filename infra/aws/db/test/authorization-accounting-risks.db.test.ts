@@ -212,8 +212,8 @@ describe("F6: every reserved minute is visible somewhere on the dashboard", () =
     (await q(w.managerA, "select * from ogevia_api.get_utilisation_overview($1, $2::date)", [w.orgA, await monthStart()]))
       .find((r) => r.service_id === w.serviceA);
 
-  // OBSERVED FAILURE: a shift that began 30 min ago with no visit yet lowers "remaining" (reserved) but is not in "scheduled ahead".
-  it.fails("REPRODUCTION: authorized = billable + scheduled + remaining for a reserved shift that has already started", async () => {
+  // FIXED by 0067 (was `it.fails`): a shift that began 30 min ago with no visit yet lowers "remaining" (reserved) and is now in the scheduled figure (underway).
+  it("authorized = billable + scheduled + remaining for a reserved shift that has already started", async () => {
     const o0 = await overview();
     const f = await freshClient(db, w, w.caregiverA1, 600);
     await reservedShift(w.caregiverA1, f, -30, 60);
