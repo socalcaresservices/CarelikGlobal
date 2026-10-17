@@ -1,3 +1,4 @@
+import { useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import { ContinuityStatusCard } from "./continuity-page";
@@ -6,6 +7,7 @@ import { streams, TONE, useAttentionOverview, type Stream } from "./attention";
 import { hoursLabel, useUtilisation, type UtilisationRow } from "./aws-workspace";
 import { financeView } from "./finance-view";
 import { Chart } from "./ui/chart";
+import { QuickActions, RefreshStatus, TodaysVisits } from "./home-extras";
 import { Disclosure } from "./ui/disclosure";
 import { PageHeader } from "./ui/page-header";
 import { StatusChip } from "./ui/status-chip";
@@ -59,6 +61,12 @@ export function AwsHomePage() {
   const [month, setMonth] = useState(thisMonth);
   const overview = useAttentionOverview();
   const utilisation = useUtilisation(`${month}-01`);
+  const queryClient = useQueryClient();
+  const refresh = () => {
+    void overview.refetch();
+    void utilisation.refetch();
+    void queryClient.invalidateQueries({ queryKey: ["aws-shifts"] });
+  };
   const rows = utilisation.data ?? [];
   const isOwnerFinance = hasPermission("billing.read");
   const tiles = overview.data ? streams(overview.data) : [];
@@ -71,18 +79,24 @@ export function AwsHomePage() {
       <PageHeader
         title="Home"
         action={
-          <label className="text-xs font-semibold text-og-sub">
-            Month
-            <input type="month" value={month} onChange={(e) => e.target.value && setMonth(e.target.value)} className="mt-1 block min-h-[40px] rounded-lg border border-og-line bg-og-card px-3 text-sm text-og-ink" />
-          </label>
+          <div className="flex flex-wrap items-end gap-x-4 gap-y-2">
+            <RefreshStatus overview={overview.data} loading={overview.isLoading} failed={overview.isError} refreshing={overview.isFetching || utilisation.isFetching} onRefresh={refresh} />
+            <label className="text-xs font-semibold text-og-sub">
+              Month
+              <input type="month" value={month} onChange={(e) => e.target.value && setMonth(e.target.value)} className="mt-1 block min-h-[40px] rounded-lg border border-og-line bg-og-card px-3 text-sm text-og-ink" />
+            </label>
+          </div>
         }
       />
 
       <section aria-label="What needs attention">
         {overview.isLoading ? <p className="text-sm text-og-sub">Loading…</p> : null}
-        {overview.isError ? <p role="alert" className="text-sm text-red-700">{(overview.error as Error).message}</p> : null}
         {tiles.length > 0 ? <ul className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">{tiles.map((s) => <Tile key={s.key} s={s} />)}</ul> : null}
       </section>
+
+      <QuickActions />
+
+      <TodaysVisits />
 
       <section aria-labelledby="util-heading" className="space-y-3">
         <h2 id="util-heading" className="text-lg font-bold text-og-ink">Hours this month</h2>

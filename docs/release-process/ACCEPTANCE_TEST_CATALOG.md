@@ -249,5 +249,16 @@ Migration 0056; release folder `docs/releases/2026-10-18-interface-simplificatio
 | UIS-14 | R | White is a different background from Light | AUTO `theme-layout.test.ts`; look at Home in each | Light has a tinted page, White a pure white page; Cream is not offered | Fix before release |
 | UIS-15 | R | Large text and Compact density, every background and layout | AUTO `verification/switch-check-extended.mjs` (32 combinations, desktop and phone). MANUAL on a real phone with Large text: Home, Documents, Scheduling, Appearance | Text readable, alerts visible, controls usable, typed input kept; nothing cut off or pushed off the screen | Fix before release |
 
+## HOM: Home additions and the severity vocabulary (Board 1 / Board 4; owner direction 2026-10-17)
+
+| ID | R | Check | How | Expected | If it fails |
+|---|---|---|---|---|---|
+| HOM-01 | R | Severity words are Critical / Urgent / Routine everywhere; "Soon" is gone | AUTO `attention-severity.test.ts`, `attention-badge.test.tsx` | Tile, badge, Needs attention now rows and Today's visits use the same words, each with a symbol | Fix before release |
+| HOM-02 | R | An uncovered shift is Critical from its start time, Urgent before it (inside 48 h), and Upcoming staffing (not urgent) beyond 48 h | AUTO `attention-severity.test.ts`. PILOT: with a synthetic uncovered shift tomorrow and one that started, compare the badge, the tile and the list | Time comes from the server's `asOf`, not the browser; other items keep the server severity | Fix before release |
+| HOM-03 | R | Today's visits list | AUTO `home-today.test.tsx` | Upcoming and running visits only, soonest first, at most six, with a View all link; clear text for none / all finished; a failed load is not shown as zero | Fix before release |
+| HOM-04 | R | Three quick actions | AUTO `home-today.test.tsx` | Schedule Visit, Find Client, Resolve Coverage, each only for someone who may use it; they open the Add shift form, the client search, and Needs-coverage-only | Fix before release |
+| HOM-05 | R | Refresh, last updated, stale data | AUTO `home-today.test.tsx`, `attention-severity.test.ts` | Server time shown; Refresh re-reads; older than 10 minutes or a failed refresh warns, keeps the last figures, offers Retry; first-load failure shows no tiles and no zero | Fix before release |
+| HOM-06 | | Home still follows the approved interface | MANUAL at 390 px and desktop in White + Minimal and Light + Standard | Four streams, quick actions, Today's visits and hours; no sideways scroll; targets 44 px | Fix before release |
+
 ## Adding to this catalog
 Every new feature adds its rows in the same change, with all of: ID, What, How, Expected (exact), If it fails. A defect found in production or UAT adds a **permanent** regression row. When a defect marked `OPEN DEFECT` is fixed, remove `.fails` from its test, remove the tag here, and add the row's `R` mark if the area is high-risk.

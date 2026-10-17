@@ -227,7 +227,8 @@ describe("AWS build: manager review and billing-review data", () => {
     const attention = await screen.findByRole("link", { name: "Needs attention now: 1 item" });
     // The badge opens the Needs attention now page; Home shows the same classification as four tiles.
     expect(attention.getAttribute("href")).toBe("/attention");
-    expect(attention.className).toMatch(/red/);
+    // The uncovered shift starts 8 hours after asOf, so it is Urgent (amber); it would be Critical (red) once started.
+    expect(attention.className).toMatch(/amber/);
     expect(await screen.findByTestId("stream-now")).toHaveTextContent("1");
     expect(screen.getByTestId("stream-visits")).toHaveTextContent("3");
     // 1590 of 6000 minutes worked = 26.5 h of 100 h; the table sits behind the details control.

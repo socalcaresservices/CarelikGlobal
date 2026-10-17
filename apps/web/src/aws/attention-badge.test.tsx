@@ -64,13 +64,21 @@ const overview = (o: Record<string, unknown> = {}) => ({ overview: {
   ...o } });
 
 describe("Needs attention now badge", () => {
-  it("urgent item: red, with a symbol and the word, counting items", async () => {
-    renderAt("/", "manager", () => json(200, overview({ urgent: { items: [item()], itemCount: 1, issueCount: 1, shifts: 1, visits: 0 } })));
+  it("an uncovered shift that has started: Critical (red), with a symbol and the word, counting items", async () => {
+    renderAt("/", "manager", () => json(200, overview({ urgent: { items: [item({ startsAt: "2026-10-18T11:00:00Z", inProgress: true })], itemCount: 1, issueCount: 1, shifts: 1, visits: 0 } })));
     const badge = await screen.findByRole("link", { name: "Needs attention now: 1 item" });
     expect(badge).toHaveTextContent("●");
     expect(badge).toHaveTextContent("Needs attention now");
     expect(badge.className).toMatch(/red/);
     expect(badge).toHaveAttribute("href", "/attention");
+  });
+
+  it("an uncovered shift that has not started yet (inside the 48 h window): Urgent (amber), not red", async () => {
+    renderAt("/", "manager", () => json(200, overview({ urgent: { items: [item()], itemCount: 1, issueCount: 1, shifts: 1, visits: 0 } })));
+    const badge = await screen.findByTestId("attention-badge");
+    await waitFor(() => expect(badge).toHaveTextContent("▲"));
+    expect(badge.className).toMatch(/amber/);
+    expect(badge.className).not.toMatch(/red/);
   });
 
   it("only amber items: amber, not red", async () => {
@@ -137,9 +145,17 @@ describe("Home tiles: four purposes, each its own destination", () => {
     expect(screen.getByTestId("stream-visits")).toHaveTextContent("6");
   });
 
-  it("an urgent tile carries the word Urgent, not colour alone", async () => {
+  it("the tile carries a word, not colour alone: Urgent when nothing has started, Critical once an uncovered shift has", async () => {
     renderAt("/", "manager", () => json(200, busy));
-    expect(await screen.findByTestId("stream-now")).toHaveTextContent("Urgent");
+    const urgent = await screen.findByTestId("stream-now");
+    expect(urgent).toHaveTextContent("Urgent");
+    expect(urgent).not.toHaveTextContent("Critical");
+  });
+
+  it("an uncovered shift that has started makes the tile Critical", async () => {
+    const started = overview({ urgent: { items: [item({ startsAt: "2026-10-18T11:00:00Z", inProgress: true })], itemCount: 1, issueCount: 1, shifts: 1, visits: 0 } });
+    renderAt("/", "manager", () => json(200, started));
+    expect(await screen.findByTestId("stream-now")).toHaveTextContent("Critical");
   });
 
   it("a section the viewer may not see has no tile (never a false zero)", async () => {

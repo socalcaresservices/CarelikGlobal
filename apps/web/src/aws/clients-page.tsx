@@ -1,6 +1,6 @@
 import { useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { useAuth } from "@carelik/auth";
 import { Button, Card } from "@carelik/ui";
 import { newIdempotencyKey } from "@/lib/sv-backend";
@@ -114,6 +114,10 @@ export function ClientsPage() {
   const canManage = hasPermission("clients.manage") && hasPermission("clients.names.manage");
   const clients = useClients();
   const [search, setSearch] = useState("");
+  // Home's Find Client action arrives as ?find=1: put the cursor in the search box.
+  const [params] = useSearchParams();
+  const searchRef = useRef<HTMLInputElement>(null);
+  useEffect(() => { if (params.get("find") === "1") searchRef.current?.focus(); }, [params, clients.isSuccess]);
   const [status, setStatus] = useState<ClientStatus | "all">("active");
   const [authorization, setAuthorization] = useState<AuthorizationFilter>("all");
   const [sort, setSort] = useState<ClientSort>("name");
@@ -148,7 +152,7 @@ export function ClientsPage() {
       <div className="flex flex-wrap items-end gap-3">
         <div className="min-w-[220px] flex-1">
           <label htmlFor="client-search" className="block text-sm font-medium text-slate-700">Search</label>
-          <input id="client-search" type="search" value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Name, code, city or type" className={inputClass} />
+          <input id="client-search" ref={searchRef} type="search" value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Name, code, city or type" className={inputClass} />
         </div>
         <div>
           <label htmlFor="client-status" className="block text-sm font-medium text-slate-700">Status</label>

@@ -2,7 +2,7 @@
 // Each page reads the same server classification as the Home tiles, so a number on a tile is the number of rows here.
 import { Link } from "react-router-dom";
 import { formatClockTime, formatNumericDate } from "@/lib/service-verification";
-import { REASON_LABEL, TONE, URGENT_WINDOW_HOURS, useAttentionOverview, type UpcomingShift, type UrgentItem } from "./attention";
+import { itemTone, rankedItems, REASON_LABEL, TONE, URGENT_WINDOW_HOURS, useAttentionOverview, type UpcomingShift, type UrgentItem } from "./attention";
 import { Disclosure } from "./ui/disclosure";
 import { PageHeader } from "./ui/page-header";
 import { StatusChip } from "./ui/status-chip";
@@ -17,8 +17,8 @@ function Loading({ q }: { q: { isLoading: boolean; isError: boolean; error: unkn
   return null;
 }
 
-function UrgentRow({ item }: { item: UrgentItem }) {
-  const tone = item.severity;
+function UrgentRow({ item, asOf }: { item: UrgentItem; asOf: number }) {
+  const tone = itemTone(item, asOf);
   const t = TONE[tone];
   const what = item.kind === "shift" ? "Shift" : "Visit";
   const who = [item.clientCode, item.serviceCode].filter(Boolean).join(" · ");
@@ -64,12 +64,12 @@ export function NeedsAttentionPage() {
             {u.issueCount !== u.itemCount ? <span className="text-og-sub"> · {plural(u.issueCount, "issue")} in total</span> : null}
           </p>
           {u.items.length === 0 ? <p className="rounded-og border border-og-line bg-og-card p-4 text-sm text-og-sub">Nothing starting in the next {hours} hours is at risk.</p> : (
-            <ul className="space-y-2">{u.items.map((i) => <UrgentRow key={`${i.kind}-${i.id}`} item={i} />)}</ul>
+            <ul className="space-y-2">{rankedItems(u.items, Date.parse(q.data!.asOf)).map((i) => <UrgentRow key={`${i.kind}-${i.id}`} item={i} asOf={Date.parse(q.data!.asOf)} />)}</ul>
           )}
         </>
       ) : null}
       <Disclosure summary="How this list is chosen">
-        <p>An item is a shift or a visit, counted once even when it has several issues. Red means care is blocked or at risk now; amber means a risk is approaching. Shifts after the first {hours} hours are under Upcoming staffing. The {hours}-hour window is the owner's decision D10.</p>
+        <p>An item is a shift or a visit, counted once even when it has several issues. Critical means care is blocked or at risk now (an uncovered shift is Critical once it has started); Urgent means a risk within the next {hours} hours. Shifts after the first {hours} hours are under Upcoming staffing. The {hours}-hour window is the owner's decision D10.</p>
       </Disclosure>
     </div>
   );

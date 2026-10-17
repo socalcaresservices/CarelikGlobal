@@ -1,13 +1,14 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useMemo, useRef, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { Button, Card } from "@carelik/ui";
 import { newIdempotencyKey } from "@/lib/sv-backend";
 import { useOrganization } from "@/providers/organization-provider";
 import { useAwsApi } from "./aws-workspace";
 import { caregiverName, useCaregivers } from "./care-team-admin";
 import { clientName, useClients, useServices } from "./client-admin";
-import { formatClockTime, formatDuration, formatWeekdayDate, formatWeekdayDateTime } from "@/lib/service-verification";
+import { formatDuration } from "@/lib/service-verification";
+import { useAgencyClock } from "./agency-clock";
 import { RecurringSeriesForm, RescheduleForm, SeriesList } from "./recurring-schedule";
 import { AssignmentChecks } from "./readiness/assignment-checks";
 import { HourLimitsPanel, MakeupForm } from "./scheduling-extras";
@@ -58,15 +59,6 @@ const STATE_BADGE: Record<CoverageState, string> = {
 const inputClass = "mt-1 block w-full rounded-lg border border-slate-200 px-3 py-2 text-base";
 const message = (cause: unknown, fallback: string) => (cause instanceof Error ? cause.message : fallback);
 
-function useAgencyClock() {
-  const { activeOrganization } = useOrganization();
-  const tz = (activeOrganization as { timezone?: string } | null)?.timezone || "America/Los_Angeles";
-  const today = new Intl.DateTimeFormat("en-CA", { timeZone: tz }).format(new Date());
-  const time = (iso: string) => formatClockTime(iso);
-  const dayLabel = (d: string) => formatWeekdayDate(d);
-  const when = (iso: string) => formatWeekdayDateTime(iso);
-  return { tz, today, time, dayLabel, when };
-}
 const addDays = (d: string, n: number) => new Date(Date.parse(`${d}T12:00:00Z`) + n * 864e5).toISOString().slice(0, 10);
 const hours = (minutes: number) => `${Math.floor(minutes / 60)} h${minutes % 60 ? ` ${minutes % 60} min` : ""}`;
 
@@ -283,9 +275,11 @@ export function SchedulePage() {
   const api = useAwsApi();
   const { activeOrganizationId, hasPermission } = useOrganization();
   const { today, dayLabel } = useAgencyClock();
+  // Home's Schedule Visit and Resolve Coverage actions arrive as ?add=1 and ?coverage=1.
+  const [params] = useSearchParams();
   const [from, setFrom] = useState(today);
-  const [onlyOpen, setOnlyOpen] = useState(false);
-  const [adding, setAdding] = useState(false);
+  const [onlyOpen, setOnlyOpen] = useState(params.get("coverage") === "1");
+  const [adding, setAdding] = useState(params.get("add") === "1" && hasPermission("shifts.manage"));
   const [repeating, setRepeating] = useState(false);
   const [showSeries, setShowSeries] = useState(false);
   const [showLimits, setShowLimits] = useState(false);

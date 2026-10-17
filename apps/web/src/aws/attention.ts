@@ -1,7 +1,8 @@
 // Attention by purpose (migration 0056). One read-only classification from the server, shown as four destinations:
 //   Needs attention now | Upcoming staffing | Documents & compliance | Visit review
 // "Now" means starting or running within 48 hours: owner decision D10 (the server's default window).
-// Colour means one thing everywhere: red = care is blocked or at risk now; amber = risk is approaching; neutral = routine work.
+// One vocabulary everywhere (Board 4 D7/D8): Critical (red) = care is blocked or at risk now; Urgent (amber) = risk within the window;
+// Routine (neutral) = ordinary work. Shifts that are uncovered but more than 48 hours away are "Upcoming staffing", not urgent.
 // Colour is never the only signal: every tone has a word and a symbol (TONE below).
 import { useQuery } from "@tanstack/react-query";
 import { useOrganization } from "@/providers/organization-provider";
@@ -9,6 +10,8 @@ import { useAwsApi } from "./aws-workspace";
 
 export type Tone = "red" | "amber" | "neutral";
 export const URGENT_WINDOW_HOURS = 48;
+/** The overview is re-read this often; anything older than twice this is shown as possibly out of date. */
+export const REFRESH_MS = 5 * 60_000;
 
 export interface UrgentItem {
   kind: "shift" | "visit";
@@ -41,14 +44,14 @@ export function useAttentionOverview() {
     queryKey: ["attention-overview", activeOrganizationId],
     queryFn: async () => (await api.get<{ overview: AttentionOverview }>("/v1/attention/overview", { organizationId: activeOrganizationId })).overview,
     enabled: !!activeOrganizationId && allowed,
-    refetchInterval: 5 * 60_000,
+    refetchInterval: REFRESH_MS,
   });
 }
 
 /** Word + symbol + classes for a tone. Used by every row and tile so a status looks the same wherever it appears. */
 export const TONE: Record<Tone, { word: string; icon: string; badge: string; text: string }> = {
-  red: { word: "Urgent", icon: "●", badge: "bg-red-100 text-red-800", text: "text-red-700" },
-  amber: { word: "Soon", icon: "▲", badge: "bg-amber-100 text-amber-900", text: "text-amber-800" },
+  red: { word: "Critical", icon: "●", badge: "bg-red-100 text-red-800", text: "text-red-700" },
+  amber: { word: "Urgent", icon: "▲", badge: "bg-amber-100 text-amber-900", text: "text-amber-800" },
   neutral: { word: "Routine", icon: "○", badge: "bg-slate-100 text-slate-700", text: "text-og-sub" },
 };
 
@@ -73,14 +76,48 @@ export interface Stream {
 }
 
 const plural = (n: number, w: string) => `${n} ${w}${n === 1 ? "" : "s"}`;
-const HOURS_72 = 72 * 3_600_000;
+
+const UNCOVERED_REASONS = new Set(["uncovered_open", "uncovered_called_out"]);
+
+/**
+ * Severity of a start time for a shift nobody is covering: Critical once it has started, Urgent before that (the server only
+ * returns shifts inside the 48-hour window; later ones are Upcoming staffing). `now` is the server's own `asOf`, never the browser clock.
+ */
+export function coverageTone(startsAt: string, now: number): Tone {
+  return Date.parse(startsAt) <= now ? "red" : "amber";
+}
+
+/**
+ * The tone of one Needs-attention item. A shift whose only problem is "no caregiver" follows coverageTone. Anything else (a caregiver on a
+ * compliance hold, a document problem, a visit open past its end) keeps the server's severity: red is Critical, amber is Urgent.
+ */
+export function itemTone(item: UrgentItem, now: number): Tone {
+  if (item.kind === "shift" && item.reasons.length > 0 && item.reasons.every((r) => UNCOVERED_REASONS.has(r))) return coverageTone(item.startsAt, now);
+  return item.severity;
+}
+
+/** Critical first, then Urgent; within a tier the soonest start first (a deterministic order for equal start times). */
+export function rankedItems(items: UrgentItem[], now: number): UrgentItem[] {
+  const rank = (i: UrgentItem) => (itemTone(i, now) === "red" ? 0 : 1);
+  return [...items].sort((a, b) => rank(a) - rank(b) || Date.parse(a.startsAt) - Date.parse(b.startsAt) || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
+}
+
+/** How current the figures are. The time is the server's `asOf`; "stale" also covers a refresh that failed while older data is still shown. */
+export const STALE_AFTER_MS = 2 * REFRESH_MS;
+export type Freshness = { kind: "fresh"; asOf: string } | { kind: "stale"; asOf: string; reason: "old" | "refresh_failed" } | { kind: "unavailable" } | { kind: "loading" };
+export function freshness(loading: boolean, failed: boolean, o: AttentionOverview | null | undefined, now: number): Freshness {
+  if (!o) return loading ? { kind: "loading" } : { kind: "unavailable" };
+  if (failed) return { kind: "stale", asOf: o.asOf, reason: "refresh_failed" };
+  if (now - Date.parse(o.asOf) > STALE_AFTER_MS) return { kind: "stale", asOf: o.asOf, reason: "old" };
+  return { kind: "fresh", asOf: o.asOf };
+}
 
 /** The four streams, in the order people act on them. Pure: the same overview always gives the same tiles. */
 export function streams(o: AttentionOverview, now = Date.parse(o.asOf)): Stream[] {
   const out: Stream[] = [];
   if (o.urgent) {
     const u = o.urgent;
-    const tone: Tone = u.items.some((i) => i.severity === "red") ? "red" : u.itemCount > 0 ? "amber" : "neutral";
+    const tone: Tone = u.items.some((i) => itemTone(i, now) === "red") ? "red" : u.itemCount > 0 ? "amber" : "neutral";
     out.push({
       key: "now", label: "Needs attention now", count: u.itemCount, unit: u.itemCount === 1 ? "item" : "items", to: "/attention", tone,
       detail: u.itemCount === 0 ? `Nothing starting in the next ${o.urgentWindowHours} hours is at risk.` : u.issueCount !== u.itemCount ? `${plural(u.issueCount, "issue")} across ${plural(u.itemCount, "item")}` : `Within ${o.urgentWindowHours} hours`,
@@ -88,10 +125,9 @@ export function streams(o: AttentionOverview, now = Date.parse(o.asOf)): Stream[
   }
   if (o.upcoming) {
     const u = o.upcoming;
-    const soon = u.nextStartsAt !== null && Date.parse(u.nextStartsAt) - now <= HOURS_72;
     out.push({
       key: "staffing", label: "Upcoming staffing", count: u.count, unit: u.count === 1 ? "uncovered shift" : "uncovered shifts", to: "/staffing",
-      tone: u.count > 0 && soon ? "amber" : "neutral",
+      tone: "neutral",
       detail: u.count === 0 ? "Every shift after the next 48 hours has a caregiver." : "Later than the next 48 hours, soonest first",
     });
   }
@@ -132,6 +168,6 @@ export function urgentBadge(loading: boolean, failed: boolean, o: AttentionOverv
   if (!o.urgent) return { kind: "hidden" };
   const n = o.urgent.itemCount;
   if (n === 0) return { kind: "clear", label: "Nothing urgent", icon: "✓", count: 0, aria: "Nothing needs attention now", tone: "neutral" };
-  const tone: Tone = o.urgent.items.some((i) => i.severity === "red") ? "red" : "amber";
+  const tone: Tone = o.urgent.items.some((i) => itemTone(i, Date.parse(o.asOf)) === "red") ? "red" : "amber";
   return { kind: "urgent", label: "Needs attention now", icon: TONE[tone].icon, count: n, aria: `Needs attention now: ${n} ${n === 1 ? "item" : "items"}`, tone };
 }

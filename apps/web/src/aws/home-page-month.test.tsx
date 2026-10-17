@@ -2,12 +2,14 @@
 // the AGENCY's time zone, never the browser clock. Monthly authorization figures follow the agency's calendar.
 // The known defect is recorded with `it.fails` (remove `.fails` when Home uses the agency time zone). SYNTHETIC data only.
 import { render, screen } from "@testing-library/react";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const monthsRequested: string[] = [];
 vi.mock("./attention", async (orig) => ({ ...(await orig<typeof import("./attention")>()), useAttentionOverview: () => ({ data: undefined, isLoading: true, isError: false }) }));
 vi.mock("./continuity-page", () => ({ ContinuityStatusCard: () => null }));
+vi.mock("./home-extras", () => ({ QuickActions: () => null, TodaysVisits: () => null, RefreshStatus: () => null }));
 vi.mock("@/providers/organization-provider", () => ({
   useOrganization: () => ({
     hasPermission: () => false,
@@ -42,13 +44,13 @@ describe("Home month uses the agency time zone", () => {
 
   // OBSERVED FAILURE: Home builds the month from `new Date()` in the browser, so it opens on 2026-11.
   it.fails("opens on the agency's current month (2026-10), not the browser's (2026-11)", () => {
-    render(<MemoryRouter><AwsHomePage /></MemoryRouter>);
+    render(<QueryClientProvider client={new QueryClient()}><MemoryRouter><AwsHomePage /></MemoryRouter></QueryClientProvider>);
     expect((screen.getByLabelText("Month") as HTMLInputElement).value).toBe("2026-10");
     expect(monthsRequested.at(-1)).toBe("2026-10-01");
   });
 
   it("CONTROL (passes today): the browser-clock month is what Home uses", () => {
-    render(<MemoryRouter><AwsHomePage /></MemoryRouter>);
+    render(<QueryClientProvider client={new QueryClient()}><MemoryRouter><AwsHomePage /></MemoryRouter></QueryClientProvider>);
     expect((screen.getByLabelText("Month") as HTMLInputElement).value).toBe("2026-11");
   });
 });
