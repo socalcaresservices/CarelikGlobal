@@ -22,7 +22,8 @@
     "harness:build": "tsx local-harness/build-web.ts",
     "harness:serve": "tsx local-harness/serve.ts",
     "harness:smoke": "tsx local-harness/smoke.ts",
-    "harness:seed-extra": "tsx local-harness/seed-extra.ts"
+    "harness:seed-extra": "tsx local-harness/seed-extra.ts",
+    "harness:seed-scenario": "tsx local-harness/seed-scenario.ts"
   },
   "dependencies": {
     "aws-cdk-lib": "2.272.0",
