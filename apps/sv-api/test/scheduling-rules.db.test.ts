@@ -119,3 +119,20 @@ describe("compliance 'Check now' (requirement 10)", () => {
     expect((await call("GET /v1/compliance/holds", w.schedulerA, { query: { organizationId: w.orgA } })).status).toBe(200);
   });
 });
+
+describe("office assignment re-checks the authorization (0065)", () => {
+  it("through the API: an amendment that lowered the cap refuses the assignment (409, shift stays open); a foreign manager is refused too", async () => {
+    const f = await freshClient(db, w, w.caregiverA1, 600, w.orgA, { before: 40, after: 200 });
+    const mk = async (d: number) => (await call("POST /v1/shifts", w.managerA, { body: { organizationId: w.orgA, clientId: f.client, serviceId: f.service, date: day(d), startTime: "09:00", endTime: "13:00" } })).body.shift.shiftId as string;
+    const lowered = await mk(11);
+    const cur = (await db.admin.query("select period_start::text ps, period_end::text pe from ogevia.client_authorizations where id = $1", [f.auth])).rows[0];
+    const amend = await call("POST /v1/authorizations/{authorizationId}/amend", w.managerA, { path: { authorizationId: f.auth }, body: { organizationId: w.orgA, payer: "SYNTHETIC-PAYER", monthlyAuthorizedMinutes: 120, periodStart: cur.ps, periodEnd: cur.pe, reason: "Synthetic: lowered below what is reserved" } });
+    expect(amend.status, JSON.stringify(amend.body)).toBe(200);
+    const refused = await call("POST /v1/shifts/{shiftId}/caregiver", w.managerA, { path: { shiftId: lowered }, body: { organizationId: w.orgA, caregiverRecordId: recA1, reason: "Synthetic" }, key: randomUUID() });
+    expect(refused.status, JSON.stringify(refused.body)).toBe(409);
+    expect(refused.body.error.message).toMatch(/Authorization no longer covers|no authorization reserved/);
+    expect((await db.admin.query("select caregiver_record_id from ogevia.shifts where id = $1", [lowered])).rows[0].caregiver_record_id).toBeNull();
+    // no other route writes the caregiver: another agency's manager cannot assign it either
+    expect((await call("POST /v1/shifts/{shiftId}/caregiver", w.managerB, { path: { shiftId: lowered }, body: { organizationId: w.orgA, caregiverRecordId: recA1, reason: "x" }, key: randomUUID() })).status).toBeGreaterThanOrEqual(403);
+  });
+});

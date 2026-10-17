@@ -1,5 +1,5 @@
-// Upgrade and rollback rehearsal for 0060-0064 on a POPULATED database at 0059: shifts, a recurring series with reservations, a signed and approved visit,
-// a compliance hold and a background check already exist. The real runner applies 0060-0064; nothing stored changes; the old data reads correctly through the
+// Upgrade and rollback rehearsal for 0060-0065 on a POPULATED database at 0059: shifts, a recurring series with reservations, a signed and approved visit,
+// a compliance hold and a background check already exist. The real runner applies 0060-0065; nothing stored changes; the old data reads correctly through the
 // new functions; then the rollbacks run in reverse order and the same data is still there. SYNTHETIC data only.
 import { readFileSync } from "node:fs";
 import { randomUUID } from "node:crypto";
@@ -8,7 +8,7 @@ import { migrate } from "../scripts/migrations.js";
 import { asActor, createTestDb, freshClient, orgToday, seedWorld, signedVisit, type TestDb, type World } from "./harness.js";
 
 const DOWN = new URL("../rollback/", import.meta.url);
-const NEW = ["0060_agency_work_hour_limits", "0061_recurring_save_valid_report_rejected", "0062_billing_states", "0063_open_shift_pickup_requires_confirmation", "0064_compliance_hold_history_and_alerts"];
+const NEW = ["0060_agency_work_hour_limits", "0061_recurring_save_valid_report_rejected", "0062_billing_states", "0063_open_shift_pickup_requires_confirmation", "0064_compliance_hold_history_and_alerts", "0065_office_assignment_authorization_recheck"];
 let db: TestDb;
 let w: World;
 beforeAll(async () => {
@@ -46,8 +46,8 @@ async function fingerprints() {
   return out;
 }
 
-describe("0059 -> 0064 and back, on a populated database", () => {
-  it("applies 0060-0064 without changing a stored row, reads the old data through the new functions, and rolls back in reverse order keeping the data", async () => {
+describe("0059 -> 0065 and back, on a populated database", () => {
+  it("applies 0060-0065 without changing a stored row, reads the old data through the new functions, and rolls back in reverse order keeping the data", async () => {
     const today = await orgToday(db);
     const iso = (n: number) => new Date(Date.parse(`${today}T12:00:00Z`) + n * 864e5).toISOString().slice(0, 10);
     const iso0 = iso;
@@ -71,7 +71,7 @@ describe("0059 -> 0064 and back, on a populated database", () => {
     const c = await db.admin.connect();
     let applied: string[];
     try { applied = (await migrate(c)).applied.map((x) => x.slice(0, 4)); } finally { c.release(); }
-    expect(applied).toEqual(["0060", "0061", "0062", "0063", "0064"]);
+    expect(applied).toEqual(["0060", "0061", "0062", "0063", "0064", "0065"]);
     expect(await fingerprints()).toEqual(before); // nothing stored changed
 
     // old data reads correctly through the new functions
@@ -103,7 +103,7 @@ describe("0059 -> 0064 and back, on a populated database", () => {
     expect(open.shift_id).toBeTruthy();
     // and the upgrade can be applied again
     const c3 = await db.admin.connect();
-    try { expect((await migrate(c3)).applied.map((x) => x.slice(0, 4))).toEqual(["0060", "0061", "0062", "0063", "0064"]); } finally { c3.release(); }
+    try { expect((await migrate(c3)).applied.map((x) => x.slice(0, 4))).toEqual(["0060", "0061", "0062", "0063", "0064", "0065"]); } finally { c3.release(); }
     expect((await db.admin.query("select ogevia.visit_billing_state($1) s", [visit])).rows[0].s).toBe("approved_for_billing");
   });
 });
