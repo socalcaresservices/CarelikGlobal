@@ -112,7 +112,7 @@ export function HourLimitsPanel({ from, to, canManage }: { from: string; to: str
         {load.data && load.data.length === 0 ? <p className="text-sm text-slate-600">No caregiver is scheduled this week.</p> : null}
         <ul className="space-y-1">
           {(load.data ?? []).map((r) => (
-            <li key={`${r.caregiverRecordId}-${r.weekStart}`} className="flex flex-wrap items-baseline justify-between gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm">
+            <li key={`${r.caregiverRecordId}-${r.weekStart}`} className="flex flex-wrap items-baseline justify-between gap-2 rounded-lg border border-slate-200 bg-og-card px-3 py-2 text-sm">
               <span className="font-medium text-slate-900">{r.caregiverName}</span>
               <span className="tabular-nums text-slate-800">
                 {formatDuration(Number(r.scheduledMinutes))} this week{r.maxWeeklyMinutes ? ` of ${formatDuration(r.maxWeeklyMinutes)}` : ""} · busiest day {formatWeekdayDate(r.busiestDay, "short")} {formatDuration(Number(r.busiestDayMinutes))}{r.maxDailyMinutes ? ` of ${formatDuration(r.maxDailyMinutes)}` : ""}
@@ -131,7 +131,7 @@ export function HourLimitsPanel({ from, to, canManage }: { from: string; to: str
         {limits.data && limits.data.length === 0 ? <p className="text-sm text-slate-600">No limits set. Caregivers can be scheduled for any number of hours.</p> : null}
         <ul className="space-y-1">
           {(limits.data ?? []).map((l) => (
-            <li key={l.caregiverRecordId ?? "default"} className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm">
+            <li key={l.caregiverRecordId ?? "default"} className="rounded-lg border border-slate-200 bg-og-card px-3 py-2 text-sm">
               <span className="font-medium text-slate-900">{l.caregiverName ?? "Everyone (agency default)"}</span>
               {" · "}{hoursText(l.maxDailyMinutes)} a day · {hoursText(l.maxWeeklyMinutes)} a week · {l.mode === "block" ? "stops scheduling" : "warns only"}
             </li>

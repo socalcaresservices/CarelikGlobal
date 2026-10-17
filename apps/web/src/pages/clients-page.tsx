@@ -44,7 +44,7 @@ const statusStyles: Record<ClientRow["status"], string> = {
 };
 
 const inputClassName =
-  "mt-1 min-h-11 w-full rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-sm text-slate-900 outline-none transition focus:border-indigo-500 focus:ring-4 focus:ring-indigo-100";
+  "mt-1 min-h-11 w-full rounded-xl border border-slate-200 bg-og-card px-3.5 py-2.5 text-sm text-slate-900 outline-none transition focus:border-indigo-500 focus:ring-4 focus:ring-indigo-100";
 
 const emptyForm = {
   firstName: "",
@@ -574,7 +574,7 @@ export function ClientsPage() {
                 />
               </FormSection>
 
-              <div className="sticky bottom-4 flex flex-wrap items-center gap-3 rounded-2xl border border-slate-200 bg-white/95 p-4 shadow-lg backdrop-blur">
+              <div className="sticky bottom-4 flex flex-wrap items-center gap-3 rounded-2xl border border-slate-200 bg-og-card/95 p-4 shadow-lg backdrop-blur">
                 <Button type="submit" loading={saving}>
                   {saving
                     ? "Saving…"

@@ -69,7 +69,7 @@ export function SignaturePad({
 
   return (
     <div>
-      <div className="overflow-hidden rounded-2xl border-2 border-slate-300 bg-white focus-within:border-[var(--color-accent,#4f46e5)]">
+      <div className="overflow-hidden rounded-2xl border-2 border-slate-300 bg-og-card focus-within:border-[var(--color-accent,#4f46e5)]">
         <canvas
           ref={canvasRef}
           aria-label={label}

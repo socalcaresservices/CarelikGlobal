@@ -201,7 +201,7 @@ export function ServicesReviewPage() {
       {q.data && q.data.length === 0 ? <p className="text-sm text-slate-600">Nothing to review. Every caregiver and service pair in use has a current approval.</p> : null}
       <ul className="space-y-2">
         {(q.data ?? []).map((p) => (
-          <li key={pairKey(p)} className="rounded-lg border border-slate-200 bg-white p-3">
+          <li key={pairKey(p)} className="rounded-lg border border-slate-200 bg-og-card p-3">
             <label className="flex min-h-[44px] items-start gap-3 text-sm">
               {canApprove ? <input type="checkbox" className="mt-1 h-5 w-5" checked={picked.has(pairKey(p))} onChange={() => toggle(p)} aria-label={`Select ${p.caregiverName} for ${p.serviceName}`} /> : null}
               <span>

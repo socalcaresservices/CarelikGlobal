@@ -127,7 +127,7 @@ function ClientChoiceList({
                     "flex min-h-14 w-full items-center justify-between gap-3 rounded-2xl border px-4 py-3 text-left",
                     selected
                       ? "border-indigo-600 bg-indigo-50 ring-2 ring-indigo-200"
-                      : "border-slate-200 bg-white hover:border-slate-300",
+                      : "border-slate-200 bg-og-card hover:border-slate-300",
                   )}
                 >
                   <span className="min-w-0">
@@ -847,7 +847,7 @@ export function ServiceVerificationPage() {
                         onChange={(event) =>
                           setSelectedServiceId(event.target.value)
                         }
-                        className="mt-2 min-h-14 w-full rounded-xl border border-slate-300 bg-white px-3 text-base text-slate-950"
+                        className="mt-2 min-h-14 w-full rounded-xl border border-slate-300 bg-og-card px-3 text-base text-slate-950"
                       >
                         <option value="">Choose a service</option>
                         {(servicesQuery.data ?? []).map((service) => (
@@ -972,7 +972,7 @@ export function ServiceVerificationPage() {
                           "w-full rounded-2xl border-2 p-3 text-left transition-colors",
                           selectedShiftId === shift.shift_id
                             ? "border-indigo-600 bg-indigo-50"
-                            : "border-slate-200 bg-white hover:border-slate-300",
+                            : "border-slate-200 bg-og-card hover:border-slate-300",
                         )}
                       >
                         <p className="font-semibold text-slate-950">
@@ -1055,7 +1055,7 @@ export function ServiceVerificationPage() {
                     maxLength={500}
                     onChange={(event) => setUnscheduledReason(event.target.value)}
                     aria-describedby="unscheduled-reason-help"
-                    className="min-h-20 w-full rounded-xl border border-amber-300 bg-white p-3 text-base text-slate-950"
+                    className="min-h-20 w-full rounded-xl border border-amber-300 bg-og-card p-3 text-base text-slate-950"
                   />
                   <p id="unscheduled-reason-help" className="text-xs text-amber-900">
                     The visit is recorded, marked Unscheduled, and sent to your manager for review before it can be billed.
@@ -1221,7 +1221,7 @@ export function ServiceVerificationPage() {
                 </div>
               ) : null}
 
-              <div className="space-y-3 rounded-2xl border border-slate-200 bg-white p-4">
+              <div className="space-y-3 rounded-2xl border border-slate-200 bg-og-card p-4">
                 <div>
                   <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
                     Client
@@ -1298,7 +1298,7 @@ export function ServiceVerificationPage() {
                       onChange={(event) =>
                         setSignerRole(event.target.value as VisitSignerRole)
                       }
-                      className="mt-2 min-h-12 w-full rounded-xl border border-slate-300 bg-white px-3 text-base"
+                      className="mt-2 min-h-12 w-full rounded-xl border border-slate-300 bg-og-card px-3 text-base"
                     >
                       <option value="client">Client</option>
                       <option value="parent">Parent</option>
@@ -1328,7 +1328,7 @@ export function ServiceVerificationPage() {
                         "flex min-h-24 flex-col items-center justify-center rounded-2xl border-2 p-3 text-sm font-semibold",
                         signatureKind === "signature"
                           ? "border-indigo-600 bg-indigo-50 text-indigo-950"
-                          : "border-slate-200 bg-white text-slate-700",
+                          : "border-slate-200 bg-og-card text-slate-700",
                       )}
                     >
                       <PenLine className="mb-2 h-8 w-8" />
@@ -1346,7 +1346,7 @@ export function ServiceVerificationPage() {
                         "flex min-h-24 flex-col items-center justify-center rounded-2xl border-2 p-3 text-sm font-semibold",
                         signatureKind === "assisted_mark"
                           ? "border-indigo-600 bg-indigo-50 text-indigo-950"
-                          : "border-slate-200 bg-white text-slate-700",
+                          : "border-slate-200 bg-og-card text-slate-700",
                       )}
                     >
                       <Hand className="mb-2 h-8 w-8" />
@@ -1367,7 +1367,7 @@ export function ServiceVerificationPage() {
                           "col-span-2 flex min-h-16 flex-col items-center justify-center rounded-2xl border-2 p-3 text-sm font-semibold",
                           signatureKind === "verbal"
                             ? "border-indigo-600 bg-indigo-50 text-indigo-950"
-                            : "border-slate-200 bg-white text-slate-700",
+                            : "border-slate-200 bg-og-card text-slate-700",
                         )}
                       >
                         Verbal only (no signature)
@@ -1389,7 +1389,7 @@ export function ServiceVerificationPage() {
                           value={verbalName}
                           maxLength={200}
                           onChange={(event) => setVerbalName(event.target.value)}
-                          className="mt-2 min-h-12 w-full rounded-xl border border-amber-300 bg-white px-3 text-base text-slate-950"
+                          className="mt-2 min-h-12 w-full rounded-xl border border-amber-300 bg-og-card px-3 text-base text-slate-950"
                         />
                       </label>
                     </div>
@@ -1414,7 +1414,7 @@ export function ServiceVerificationPage() {
                   ) : null}
                   {signatureKind !== "verbal" ? (
                     <>
-                      <div className="rounded-2xl border border-slate-200 bg-white p-3 text-sm text-slate-700">
+                      <div className="rounded-2xl border border-slate-200 bg-og-card p-3 text-sm text-slate-700">
                         By signing or making a mark, I confirm that the service and
                         times shown above are correct.
                       </div>
@@ -1422,7 +1422,7 @@ export function ServiceVerificationPage() {
                     </>
                   ) : null}
                   {wave1 ? (
-                    <label className="flex min-h-12 items-start gap-3 rounded-2xl border border-slate-200 bg-white p-3 text-sm text-slate-800">
+                    <label className="flex min-h-12 items-start gap-3 rounded-2xl border border-slate-200 bg-og-card p-3 text-sm text-slate-800">
                       <input
                         type="checkbox"
                         checked={attested}
@@ -1452,7 +1452,7 @@ export function ServiceVerificationPage() {
                       setSignature(null);
                       setError(null);
                     }}
-                    className="min-h-12 w-full rounded-xl border border-slate-300 bg-white px-4 text-sm font-semibold text-slate-700"
+                    className="min-h-12 w-full rounded-xl border border-slate-300 bg-og-card px-4 text-sm font-semibold text-slate-700"
                   >
                     Unable to obtain confirmation
                   </button>
@@ -1477,7 +1477,7 @@ export function ServiceVerificationPage() {
                       onChange={(event) =>
                         setNoSignerReason(event.target.value)
                       }
-                      className="mt-2 min-h-12 w-full rounded-xl border border-amber-300 bg-white px-3 text-base text-slate-950"
+                      className="mt-2 min-h-12 w-full rounded-xl border border-amber-300 bg-og-card px-3 text-base text-slate-950"
                     >
                       <option value="">Choose a reason</option>
                       {(wave1 ? NO_SIGNER_REASONS_WAVE1 : NO_SIGNER_REASONS).map((reason) => (
@@ -1492,11 +1492,11 @@ export function ServiceVerificationPage() {
                       value={noSignerNote}
                       maxLength={500}
                       onChange={(event) => setNoSignerNote(event.target.value)}
-                      className="mt-2 min-h-20 w-full rounded-xl border border-amber-300 bg-white p-3 text-base text-slate-950"
+                      className="mt-2 min-h-20 w-full rounded-xl border border-amber-300 bg-og-card p-3 text-base text-slate-950"
                     />
                   </label>
                   {wave1 ? (
-                    <label className="flex min-h-12 items-start gap-3 rounded-xl border border-amber-300 bg-white p-3 text-sm text-slate-800">
+                    <label className="flex min-h-12 items-start gap-3 rounded-xl border border-amber-300 bg-og-card p-3 text-sm text-slate-800">
                       <input
                         type="checkbox"
                         checked={attested}

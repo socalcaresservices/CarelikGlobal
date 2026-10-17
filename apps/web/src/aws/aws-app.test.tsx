@@ -56,6 +56,12 @@ function fakeApi(role: "caregiver" | "manager" | "organization_owner", opts: { d
         return json(200, { branding: { organizationId: ORG, displayName: body?.["displayName"], accentColor: body?.["accentColor"] } });
       case "GET /v1/attention":
         return json(200, { summary: role === "caregiver" ? null : { missingTimeOut: 1, notConfirmed: 0, needsReview: 2, billingReadyUnapproved: 1, uncoveredShifts: 0, documentsBlocking: 1, documentsToReview: 1, documentsExpiring: 1, total: 5 } });
+      case "GET /v1/attention/overview":
+        return json(200, { overview: { asOf: "2026-10-18T12:00:00Z", urgentWindowHours: 48,
+          urgent: { items: [{ kind: "shift", id: "s1", startsAt: "2026-10-18T20:00:00Z", endsAt: "2026-10-18T23:00:00Z", reasons: ["uncovered_open"], severity: "red", inProgress: false, caregiverRecordId: null, caregiverCode: null, clientCode: "C-104", serviceCode: "862" }], itemCount: 1, issueCount: 1, shifts: 1, visits: 0 },
+          upcoming: { count: 2, nextStartsAt: "2026-10-21T20:00:00Z", shifts: [] },
+          documents: { overdue: 1, dueSoon: 1, awaitingReview: 1, rejected: 0 },
+          visitReview: { visitsNeedingAttention: 3, awaitingConfirmation: 0, needsReview: 2, lateResponses: 0, readyForApproval: role === "organization_owner" ? 1 : null, reviewIssues: 2, awaitingResponse: 0 } } });
       case "GET /v1/reports/utilisation":
         return json(200, { services: role === "caregiver" ? [] : [{ serviceId: SERVICE, serviceCode: "862", serviceName: "Respite Care", clientCount: 1, authorizedMinutes: 6000, scheduledMinutes: 240, workedMinutes: 1590, billableMinutes: 1470, reviewMinutes: 120, approvedMinutes: 600, remainingMinutes: 4530, lineagesWithoutRate: 0, billableValueCents: canMoney ? 73500 : null, approvedValueCents: canMoney ? 30000 : null, unusedValueCents: canMoney ? 226500 : null }] });
       case "GET /v1/visits/active":
@@ -218,30 +224,29 @@ describe("AWS build: manager review and billing-review data", () => {
     expect(await screen.findByText("MANAGER VIEW")).toBeInTheDocument();
     expect(await screen.findByText("Morgan Manager")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Sign out" })).toBeInTheDocument();
-    const attention = await screen.findByRole("link", { name: "Action needed: 6" });
-    // The badge opens Home, whose banner and list use the same summary and the same total
-    // (fixture: 1 + 0 + 2 + 0 + 1 + 1 + 1 ready for approval = 6; the expiring document is a reminder).
-    expect(attention.getAttribute("href")).toBe("/");
-    expect(attention.className).toMatch(/font-bold/);
-    expect(attention.className).toMatch(/uppercase/);
-    expect(attention.className).toMatch(/text-red-700/);
-    // 1590 of 6000 minutes worked = 26.5 h of 100 h, 27 %.
-    expect(await screen.findByText(/26\.5 h of 100 h · 27%/)).toBeInTheDocument();
-    expect(screen.queryByText("Financial impact (Administrator only)")).not.toBeInTheDocument();
-    expect(screen.getByText(/visible to the agency Administrator only/)).toBeInTheDocument();
+    const attention = await screen.findByRole("link", { name: "Needs attention now: 1 item" });
+    // The badge opens the Needs attention now page; Home shows the same classification as four tiles.
+    expect(attention.getAttribute("href")).toBe("/attention");
+    expect(attention.className).toMatch(/red/);
+    expect(await screen.findByTestId("stream-now")).toHaveTextContent("1");
+    expect(screen.getByTestId("stream-visits")).toHaveTextContent("3");
+    // 1590 of 6000 minutes worked = 26.5 h of 100 h; the table sits behind the details control.
+    expect((await screen.findAllByText("26.5 h")).length).toBeGreaterThan(0);
+    expect(screen.queryByText("Financial impact")).not.toBeInTheDocument();
     expect(screen.queryByRole("link", { name: "Settings" })).not.toBeInTheDocument();
     expect(screen.getByRole("link", { name: /^Approvals/  })).toBeInTheDocument();
-    expect(api.calls.some((c) => c.path.startsWith("/v1/attention?organizationId="))).toBe(true);
+    expect(api.calls.some((c) => c.path.startsWith("/v1/attention/overview?organizationId="))).toBe(true);
   });
 
-  it("organization_owner sees ADMINISTRATOR VIEW, the financial cards with unavailable cost/margin, and Settings", async () => {
+  it("organization_owner sees ADMINISTRATOR VIEW, the compact financial section without cost/margin, and Settings", async () => {
     renderAws("/", "organization_owner");
     expect(await screen.findByText("ADMINISTRATOR VIEW")).toBeInTheDocument();
     expect(screen.queryByText("OWNER VIEW")).not.toBeInTheDocument();
-    expect(await screen.findByText("Financial impact (Administrator only)")).toBeInTheDocument();
+    expect(await screen.findByText("Financial impact")).toBeInTheDocument();
     expect(screen.getByText("$735")).toBeInTheDocument();
-    expect(screen.getByText("Caregiver cost and margin")).toBeInTheDocument();
-    expect(screen.getByText(/no caregiver pay data/)).toBeInTheDocument();
+    // Caregiver cost and margin are not displayed as a value or as an "Unavailable" card; the reason sits in the definitions.
+    expect(screen.queryByText("Unavailable")).not.toBeInTheDocument();
+    expect(screen.queryByText(/Caregiver cost and margin$/)).not.toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Settings" })).toBeInTheDocument();
   });
 
@@ -323,7 +328,7 @@ describe("AWS build: manager review and billing-review data", () => {
     fireEvent.change(screen.getByLabelText(/Expiry date/), { target: { value: "2027-10-01" } });
     fireEvent.click(screen.getByRole("button", { name: "Upload" }));
     await waitFor(() => expect(screen.queryByRole("button", { name: /Uploading/ })).not.toBeInTheDocument());
-    expect(await screen.findByText("Uploaded – awaiting review")).toBeInTheDocument();
+    expect(await screen.findByText("Awaiting review")).toBeInTheDocument();
     const post = api.calls.find((c) => c.method === "POST" && c.path.endsWith("/versions"))!;
     expect(post.body).toMatchObject({ organizationId: ORG, contentType: "application/pdf", expiresOn: "2027-10-01", fileBase64: "JVBERi0x" });
     expect(post.headers["idempotency-key"]).toBeTruthy();
@@ -331,12 +336,12 @@ describe("AWS build: manager review and billing-review data", () => {
 
   it("manager: Documents lists people's requests; rejecting needs a reason; Home shows document counts", async () => {
     const { api } = renderAws("/", "manager");
-    expect(await screen.findByText("Documents to Review")).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("link", { name: "Documents" }));
-    expect(await screen.findByRole("heading", { name: "Documents" })).toBeInTheDocument();
+    expect(await screen.findByTestId("stream-documents")).toHaveTextContent("1 overdue");
+    fireEvent.click(screen.getByRole("link", { name: "Documents & compliance" }));
+    expect(await screen.findByRole("heading", { name: "Documents & compliance" })).toBeInTheDocument();
     const card = (await screen.findByText("TB test", { selector: "p" })).closest("li")!;
     expect(within(card).getByText("Pilot Caregiver A")).toBeInTheDocument();
-    expect(within(card).getByText("Uploaded – awaiting review")).toBeInTheDocument();
+    expect(within(card).getByText("Awaiting review")).toBeInTheDocument();
     fireEvent.click(await within(card).findByRole("button", { name: "Reject" }));
     expect(await within(card).findByRole("alert")).toHaveTextContent("Enter why it is rejected");
     expect(api.calls.some((c) => c.method === "POST" && c.path.endsWith("/review"))).toBe(false);

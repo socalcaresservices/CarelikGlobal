@@ -27,6 +27,7 @@ import { ClientDetailPage } from "./client-detail-page";
 import { ClientsPage } from "./clients-page";
 import { CareTeamPage, CaregiverDetailPage } from "./care-team-page";
 import { RecruitingPage } from "./recruiting";
+import { ComplianceHoldsPage } from "./compliance/holds-page";
 import { ServicesReviewPage } from "./readiness/service-approvals";
 import { ContinuityPage } from "./continuity-page";
 import { OutageVisitsPage } from "./outage-visits-page";
@@ -36,6 +37,9 @@ import { BrandingSettingsPage, ProfilePage } from "./workspace-settings-pages";
 import { PublicCareOfferPage, PublicCareRequestPage } from "./care-public-pages";
 import { ConfirmVisitPage } from "./confirm-visit-page";
 import { EnvironmentProvider } from "./environment-marker";
+import { NeedsAttentionPage, UpcomingStaffingPage, VisitQueuePage } from "./attention-pages";
+import { RatesReviewPage } from "./rates-review-page";
+import { AppearancePage } from "./appearance/appearance-page";
 
 function AwsBackendProvider({ api, children }: PropsWithChildren<{ api: AwsApiClient }>) {
   const { organizations } = useOrganization();
@@ -82,6 +86,7 @@ export function AwsRoutes({ api, publicApi }: { api: AwsApiClient; publicApi: Aw
                     <Route path="/documents" element={<DocumentsPage />} />
                     <Route path="/clients" element={<ClientsPage />} />
                     <Route path="/clients/:clientId" element={<ClientDetailPage />} />
+                    <Route path="/compliance" element={<ComplianceHoldsPage />} />
                     <Route path="/care-team" element={<CareTeamPage />} />
                     <Route path="/care-team/services-review" element={<ServicesReviewPage />} />
                     <Route path="/care-team/recruiting" element={<RecruitingPage />} />
@@ -91,6 +96,11 @@ export function AwsRoutes({ api, publicApi }: { api: AwsApiClient; publicApi: Aw
                     <Route path="/my-shifts" element={<MyShiftsPage />} />
                     <Route path="/continuity" element={<ContinuityPage />} />
                     <Route path="/outage-visits" element={<OutageVisitsPage />} />
+                    <Route path="/attention" element={<NeedsAttentionPage />} />
+                    <Route path="/staffing" element={<UpcomingStaffingPage />} />
+                    <Route path="/visit-review" element={<VisitQueuePage />} />
+                    <Route path="/authorizations/rates" element={<RatesReviewPage />} />
+                    <Route path="/settings/appearance" element={<AppearancePage />} />
                     <Route path="/settings/branding" element={<BrandingSettingsPage />} />
                     <Route path="/settings/billing-rounding" element={<BillingRoundingSettingsPage />} />
                     <Route path="/settings/visit-rules" element={<VisitRulesPage />} />

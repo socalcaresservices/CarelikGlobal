@@ -117,7 +117,7 @@ export function BrandingSettingsPage() {
           <p className={readable ? "text-xs text-slate-600" : "text-xs font-semibold text-red-700"}>
             {contrast === null ? "Enter a color like #1f5f8b." : `White text contrast ${contrast}:1 ${readable ? "(readable)" : "(too light: needs 4.5:1)"}`}
           </p>
-          <div aria-label="Preview" className="rounded-lg border border-slate-200 bg-white">
+          <div aria-label="Preview" className="rounded-lg border border-slate-200 bg-og-card">
             <div className="h-1 rounded-t-lg" style={{ backgroundColor: valid ? color : "#0f172a" }} />
             <div className="flex items-center justify-between gap-2 p-3">
               <span className="text-sm font-semibold text-slate-950">{name || "Agency name"}</span>

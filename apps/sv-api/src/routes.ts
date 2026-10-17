@@ -81,6 +81,21 @@ const publicConfirmationOrThrow = (row: Record<string, unknown> | undefined) => 
   }
 };
 
+const BACKGROUNDS = ["light", "cream", "gray", "dark"] as const;
+const ACCENTS = ["teal", "blue", "indigo", "plum", "rust"] as const;
+const DENSITIES = ["comfortable", "compact"] as const;
+const TEXT_SIZES = ["standard", "large"] as const;
+const CHART_TYPES = ["bar", "line", "donut"] as const;
+/** organizationId plus the five appearance choices; an absent or null choice means "follow the next level". */
+function appearanceArgs(body: Record<string, unknown>) {
+  const pick = <T extends string>(value: unknown, name: string, allowed: readonly T[]) => (value === undefined || value === null ? null : oneOf(value, name, allowed));
+  return [
+    uuid(body.organizationId, "organizationId"),
+    pick(body.background, "background", BACKGROUNDS), pick(body.accent, "accent", ACCENTS), pick(body.density, "density", DENSITIES),
+    pick(body.textSize, "textSize", TEXT_SIZES), pick(body.chartType, "chartType", CHART_TYPES),
+  ];
+}
+
 const camel = (key: string) => key.replace(/_([a-z0-9])/g, (_, c: string) => c.toUpperCase());
 /** snake_case DB row -> camelCase JSON. Values are passed through unchanged. */
 export function toCamel(row: unknown): Record<string, unknown> {
@@ -1107,8 +1122,52 @@ export const ROUTES: Record<string, Route> = {
     handle: async ({ event, tx }) => {
       const org = orgParam(event);
       const [summary] = await tx((db) => rows(db, "select * from ogevia_api.get_attention_summary($1)", [org]));
-      return { summary: summary ?? null };
+      // 0053: caregivers on a compliance hold (shifts to cover, visits in progress). null when the viewer may not see it, never a false zero.
+      const compliance = await tx(async (db) => (await first(db, "select ogevia_api.get_compliance_attention($1) as a", [org])).a ?? null);
+      return { summary: summary ? { ...summary, complianceHolds: compliance } : null };
     },
+  },
+
+  // Attention by purpose (0054): needs attention now / upcoming staffing / documents & compliance / visit review. One read-only classification
+  // of the same records; a section is null when the viewer may not see it. The urgent window is 48 hours (owner decision D10;
+  // default 48; 1 to 168 accepted so a filter such as 24 or 72 hours can be tried).
+  "GET /v1/attention/overview": {
+    mutating: false,
+    handle: async ({ event, tx }) => {
+      const raw = q(event).urgentHours;
+      const hours = raw === undefined || raw === "" ? 48 : wholeNumber(Number(raw), "urgentHours", 1, 168);
+      return { overview: await tx(async (db) => (await first(db, "select ogevia_api.get_attention_overview($1,$2) as o", [orgParam(event), hours])).o) };
+    },
+  },
+
+  // Appearance (0054): agency defaults (organization.update) and each person's own choices. A null value means "follow the next level".
+  "GET /v1/appearance": {
+    mutating: false,
+    handle: async ({ event, tx }) => ({ appearance: await tx(async (db) => (await first(db, "select ogevia_api.get_appearance($1) as a", [orgParam(event)])).a) }),
+  },
+
+  "POST /v1/appearance/organization": {
+    mutating: true,
+    handle: async ({ event, tx }) => {
+      const body = parseBody(event.body, event.isBase64Encoded);
+      return { appearance: await tx(async (db) => (await first(db, "select ogevia_api.set_organization_appearance($1,$2,$3,$4,$5,$6) as a", appearanceArgs(body))).a) };
+    },
+  },
+
+  "POST /v1/appearance/me": {
+    mutating: true,
+    handle: async ({ event, tx }) => {
+      const body = parseBody(event.body, event.isBase64Encoded);
+      return { appearance: await tx(async (db) => (await first(db, "select ogevia_api.set_my_appearance($1,$2,$3,$4,$5,$6) as a", appearanceArgs(body))).a) };
+    },
+  },
+
+  // The authorizations whose rate is missing, so a month's dollar figures leave their hours out (administrator only).
+  "GET /v1/authorizations/missing-rate": {
+    mutating: false,
+    handle: async ({ event, tx }) => ({
+      authorizations: await tx((db) => rows(db, "select * from ogevia_api.list_authorizations_missing_rate($1, $2::date)", [orgParam(event), date(q(event).monthStart, "monthStart")])),
+    }),
   },
 
   // Hire type, scheduling and family relationship (0030): separate facts; none relaxes any visit rule.
@@ -1122,6 +1181,69 @@ export const ROUTES: Record<string, Route> = {
       const [result] = await tx((db) => rows(db, "select * from ogevia_api.set_caregiver_employment($1, $2, $3, $4, $5, $6)",
         [uuid(body.organizationId, "organizationId"), uuid(p(event).caregiverRecordId, "caregiverRecordId"), hire, mode, text(body.reason, "reason", 500), key]));
       return { result };
+    },
+  },
+
+  // Caregiver compliance (0053): OWNER-DEFINED rules (approved background clearance; CPR/TB within 14 days of the hire date).
+  // Every decision is made in PostgreSQL; these routes only validate input and shape output. Not stated as legal requirements.
+  "GET /v1/caregivers/{caregiverRecordId}/compliance": {
+    mutating: false,
+    handle: async ({ event, tx }) => ({
+      compliance: await tx(async (db) => (await first(db, "select ogevia_api.get_caregiver_compliance($1,$2) as c", [orgParam(event), uuid(p(event).caregiverRecordId, "caregiverRecordId")])).c),
+    }),
+  },
+
+  "POST /v1/caregivers/{caregiverRecordId}/hire-date": {
+    mutating: true,
+    handle: async ({ event, tx }) => {
+      const body = parseBody(event.body, event.isBase64Encoded);
+      const key = idempotencyKey(event.headers);
+      return {
+        compliance: await tx(async (db) => (await first(db, "select ogevia_api.set_caregiver_hire_date($1,$2,$3::date,$4,$5) as c", [
+          uuid(body.organizationId, "organizationId"), uuid(p(event).caregiverRecordId, "caregiverRecordId"), date(body.hireDate, "hireDate"),
+          text(body.reason, "reason", 500, { required: true }), key])).c),
+      };
+    },
+  },
+
+  "POST /v1/caregivers/{caregiverRecordId}/background-check/status": {
+    mutating: true,
+    handle: async ({ event, tx }) => {
+      const body = parseBody(event.body, event.isBase64Encoded);
+      const key = idempotencyKey(event.headers);
+      return {
+        compliance: await tx(async (db) => (await first(db, "select ogevia_api.set_background_check_status($1,$2,$3,$4,$5) as c", [
+          uuid(body.organizationId, "organizationId"), uuid(p(event).caregiverRecordId, "caregiverRecordId"),
+          oneOf(body.status, "status", ["not_started", "requested", "submitted", "pending", "completed", "needs_attention"] as const),
+          text(body.note, "note", 500), key])).c),
+      };
+    },
+  },
+
+  "POST /v1/caregivers/{caregiverRecordId}/background-check/verify": {
+    mutating: true,
+    handle: async ({ event, tx }) => {
+      const body = parseBody(event.body, event.isBase64Encoded);
+      const key = idempotencyKey(event.headers);
+      return {
+        compliance: await tx(async (db) => (await first(db, "select ogevia_api.verify_background_check($1,$2,$3,$4,$5) as c", [
+          uuid(body.organizationId, "organizationId"), uuid(p(event).caregiverRecordId, "caregiverRecordId"),
+          oneOf(body.result, "result", ["approved", "not_approved"] as const), text(body.evidenceNote, "evidenceNote", 500, { required: true }), key])).c),
+      };
+    },
+  },
+
+  "GET /v1/compliance/holds": {
+    mutating: false,
+    handle: async ({ event, tx }) => ({ ...(await tx(async (db) => (await first(db, "select ogevia_api.list_compliance_holds($1) as h", [orgParam(event)])).h)) }),
+  },
+
+  // "Check now": re-evaluates this agency once. The scheduled run does the same for every agency.
+  "POST /v1/compliance/sweep": {
+    mutating: true,
+    handle: async ({ event, tx }) => {
+      const body = parseBody(event.body, event.isBase64Encoded);
+      return { result: await tx(async (db) => (await first(db, "select ogevia_api.run_compliance_sweep($1) as r", [uuid(body.organizationId, "organizationId")])).r) };
     },
   },
 
@@ -2440,7 +2562,7 @@ export const ROUTES: Record<string, Route> = {
     mutating: false,
     handle: async ({ event, tx }) => {
       const kind = q(event).kind;
-      return { flags: await tx((db) => rows(db, "select * from ogevia_api.list_readiness_flags($1, $2)", [orgParam(event), kind === undefined || kind === "" ? null : oneOf(kind, "kind", ["availability", "service", "document"] as const)])) };
+      return { flags: await tx((db) => rows(db, "select * from ogevia_api.list_readiness_flags($1, $2)", [orgParam(event), kind === undefined || kind === "" ? null : oneOf(kind, "kind", ["availability", "service", "document", "compliance"] as const)])) };
     },
   },
 
@@ -2492,7 +2614,14 @@ export const ROUTES: Record<string, Route> = {
 
   "GET /v1/readiness": {
     mutating: false,
-    handle: async ({ event, tx }) => ({ readiness: await tx(async (db) => (await first(db, "select ogevia_api.get_readiness_status($1) as s", [orgParam(event)])).s) }),
+    handle: async ({ event, tx }) => ({
+      readiness: await tx(async (db) => {
+        const org = orgParam(event);
+        const status = (await first(db, "select ogevia_api.get_readiness_status($1) as s", [org])).s as Record<string, unknown>;
+        // 0053: who would be held (background clearance, the 14-day CPR/TB period) before the owner switches enforcement on
+        return { ...status, compliance: (await first(db, "select ogevia_api.get_compliance_summary($1) as s", [org])).s };
+      }),
+    }),
   },
 
   "POST /v1/readiness/activate": {

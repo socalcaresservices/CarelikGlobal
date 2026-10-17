@@ -144,6 +144,7 @@ describe("after activation: new visit starts need approved availability", () => 
     await activate();
     expect((await status()).enforcementActive).toBe(true);
     mgrRec = (await db.admin.query("insert into ogevia.caregiver_records (organization_id, linked_user_id, caregiver_code, first_name, last_name, status) values ($1,$2,'CG-MGR','Synthetic','Manager','active') returning id", [w.orgA, w.managerA.userId])).rows[0].id as string;
+    await db.admin.query("insert into ogevia.caregiver_background_checks (caregiver_record_id, organization_id, status, result, evidence_note, verified_by, verified_at) values ($1,$2,'completed','approved','Synthetic fixture clearance',$3,now())", [mgrRec, w.orgA, w.ownerA.userId]);
     await setDocs(mgrRec, "current", "current", w.managerA);
   });
 

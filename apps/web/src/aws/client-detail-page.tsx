@@ -265,7 +265,7 @@ function LineageCard({ versions, canUpdate, showRate }: { versions: Authorizatio
   const [result, setResult] = useState<AmendResult | null>(null);
   const expired = head.periodEnd < new Date().toISOString().slice(0, 10);
   return (
-    <li className="rounded-xl border border-slate-200 bg-white p-3">
+    <li className="rounded-xl border border-slate-200 bg-og-card p-3">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <p className="font-semibold text-slate-950">{head.serviceName} <span className="font-normal text-slate-500">({head.serviceCode})</span></p>
         <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${expired ? "bg-slate-200 text-slate-800" : "bg-emerald-100 text-emerald-900"}`}>{expired ? "Ended" : "Current"} · version {head.versionNumber}</span>

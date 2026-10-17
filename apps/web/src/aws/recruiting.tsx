@@ -84,7 +84,7 @@ function ItemRow({ caregiverRecordId, item, canManage }: { caregiverRecordId: st
   }
   const satisfied = item.state === "done" || item.state === "waived";
   return (
-    <li className="rounded-lg border border-slate-200 bg-white p-3 text-sm">
+    <li className="rounded-lg border border-slate-200 bg-og-card p-3 text-sm">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <p className="font-medium text-slate-950">{item.label}{item.required ? "" : " (optional)"}</p>
         <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${STATE_STYLE[item.state]}`}>{STATE_LABEL[item.state]}</span>
@@ -98,9 +98,9 @@ function ItemRow({ caregiverRecordId, item, canManage }: { caregiverRecordId: st
         <p className="mt-1 text-xs text-slate-600">Checked from the caregiver&apos;s uploaded and approved documents. <Link className="underline" to="/documents">Open Documents</Link></p>
       ) : canManage ? (
         <div className="mt-2 flex flex-wrap gap-2">
-          {!satisfied ? <button type="button" className="inline-flex min-h-[40px] items-center rounded-lg border border-slate-300 bg-white px-3 text-sm font-medium" onClick={() => setOpen(open === "complete" ? null : "complete")}>{item.state === "expired" ? "Record renewal" : "Mark done"}</button> : null}
-          {!satisfied && item.category !== "clearance" ? <button type="button" className="inline-flex min-h-[40px] items-center rounded-lg border border-slate-300 bg-white px-3 text-sm font-medium" onClick={() => setOpen(open === "waive" ? null : "waive")}>Waive</button> : null}
-          {satisfied ? <button type="button" className="inline-flex min-h-[40px] items-center rounded-lg border border-slate-300 bg-white px-3 text-sm font-medium" onClick={() => setOpen(open === "reopen" ? null : "reopen")}>Reopen</button> : null}
+          {!satisfied ? <button type="button" className="inline-flex min-h-[40px] items-center rounded-lg border border-slate-300 bg-og-card px-3 text-sm font-medium" onClick={() => setOpen(open === "complete" ? null : "complete")}>{item.state === "expired" ? "Record renewal" : "Mark done"}</button> : null}
+          {!satisfied && item.category !== "clearance" ? <button type="button" className="inline-flex min-h-[40px] items-center rounded-lg border border-slate-300 bg-og-card px-3 text-sm font-medium" onClick={() => setOpen(open === "waive" ? null : "waive")}>Waive</button> : null}
+          {satisfied ? <button type="button" className="inline-flex min-h-[40px] items-center rounded-lg border border-slate-300 bg-og-card px-3 text-sm font-medium" onClick={() => setOpen(open === "reopen" ? null : "reopen")}>Reopen</button> : null}
         </div>
       ) : null}
       {open ? (
@@ -223,7 +223,7 @@ function PersonCard({ r, canManage }: { r: OverviewRow; canManage: boolean }) {
     }
   }
   return (
-    <li className="rounded-xl border border-slate-200 bg-white p-3 text-sm">
+    <li className="rounded-xl border border-slate-200 bg-og-card p-3 text-sm">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <Link className="font-semibold text-slate-950 underline" to={`/care-team/${r.caregiverRecordId}`}>{r.caregiverName}</Link>
         <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${CAREGIVER_STATUS_BADGE[r.status]}`}>{CAREGIVER_STATUS_LABEL[r.status]}</span>
@@ -235,7 +235,7 @@ function PersonCard({ r, canManage }: { r: OverviewRow; canManage: boolean }) {
       {r.nextExpiry ? <p className="text-xs text-slate-600">Next expiry {formatDateOnly(r.nextExpiry)}</p> : null}
       {canManage && next ? (
         <div className="mt-2">
-          <button type="button" disabled={state.busy} onClick={() => void move()} className="inline-flex min-h-[40px] items-center rounded-lg border border-slate-300 bg-white px-3 text-sm font-medium hover:bg-slate-50">
+          <button type="button" disabled={state.busy} onClick={() => void move()} className="inline-flex min-h-[40px] items-center rounded-lg border border-slate-300 bg-og-card px-3 text-sm font-medium hover:bg-slate-50">
             Move to {CAREGIVER_STATUS_LABEL[next]}
           </button>
         </div>

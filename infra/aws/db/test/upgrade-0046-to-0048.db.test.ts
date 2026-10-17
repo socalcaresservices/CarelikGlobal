@@ -39,7 +39,7 @@ const EXPECTED_NEW_ROWS = "permission_key = 'accounts.manage'";
 async function fingerprints() {
   const out: Record<string, { rows: number; hash: string }> = {};
   for (const [table, cols] of Object.entries(TABLES)) {
-    const filter = table === "permissions" ? "where key <> 'accounts.manage'" : table === "role_permissions" ? "where permission_key <> 'accounts.manage'" : "";
+    const filter = table === "permissions" ? "where key not in ('accounts.manage', 'caregivers.compliance.manage')" : table === "role_permissions" ? "where permission_key not in ('accounts.manage', 'caregivers.compliance.manage')" : "";
     const r = await db.admin.query(
       `select count(*)::int n, md5(coalesce(string_agg(x::text, '|' order by x::text), '')) h from (select ${cols} from ogevia.${table} ${filter}) x`);
     out[table] = { rows: r.rows[0].n, hash: r.rows[0].h };
@@ -48,7 +48,7 @@ async function fingerprints() {
 }
 
 beforeAll(async () => {
-  db = await createTestDb(); // migrated from zero (0001-0054)
+  db = await createTestDb(); // migrated from zero (0001-0056)
   w = await seedWorld(db, 600);
 });
 afterAll(async () => db?.drop());
@@ -56,6 +56,8 @@ afterAll(async () => db?.drop());
 describe("upgrade from 0046 to 0048 on a populated database", () => {
   it("changes no existing row; adds one permission and its owner grant; legacy overrides stay readable; the runner applies exactly 0047 and 0048", async () => {
     // Put the database back at 0046 (the state production is expected to be in), exactly as the rollback does.
+    await runDown("0056_attention_streams_appearance.down.sql");
+    await runDown("0055_caregiver_compliance_hold.down.sql");
     await runDown("0054_recruiting_onboarding_checklist.down.sql");
     await runDown("0053_scheduling_patterns_hour_limits_makeup.down.sql");
     await runDown("0052_reservation_not_counted_when_review_visit_counted_as_used.down.sql");
@@ -83,7 +85,7 @@ describe("upgrade from 0046 to 0048 on a populated database", () => {
     const client = await db.admin.connect();
     let applied: string[];
     try { applied = (await migrate(client)).applied.map((x) => x.slice(0, 4)); } finally { client.release(); }
-    expect(applied).toEqual(["0047", "0048", "0049", "0050", "0051", "0052", "0053", "0054"]); // 0049-0054 add functions, tables and nullable columns only; they change no row
+    expect(applied).toEqual(["0047", "0048", "0049", "0050", "0051", "0052", "0053", "0054", "0055", "0056"]); // 0049-0056 add functions, tables and nullable columns only; they change no row
 
     const after = await fingerprints();
     expect(after).toEqual(before); // NO existing row, in any table, changed or disappeared

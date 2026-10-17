@@ -739,7 +739,7 @@ export function ApplyPage() {
 
   return (
     <div className="min-h-screen bg-slate-50 pb-28" style={brandStyle(organizationQuery.data?.accent_color)}>
-      <div className="sticky top-0 z-10 border-b border-slate-200 bg-white/90 px-4 py-3 backdrop-blur">
+      <div className="sticky top-0 z-10 border-b border-slate-200 bg-og-card/90 px-4 py-3 backdrop-blur">
         <div className="mx-auto max-w-2xl">
           <div className="flex items-center justify-between text-xs font-medium text-slate-500">
             <span>
@@ -1122,7 +1122,7 @@ export function ApplyPage() {
                         className={`rounded-xl border px-4 py-3 text-left text-sm font-medium transition ${
                           selected
                             ? "border-transparent text-white shadow-sm"
-                            : "border-slate-200 bg-white text-slate-800 hover:border-slate-300"
+                            : "border-slate-200 bg-og-card text-slate-800 hover:border-slate-300"
                         }`}
                         style={selected ? { backgroundColor: "var(--color-accent)" } : undefined}
                       >
@@ -1496,7 +1496,7 @@ export function ApplyPage() {
         <PoweredByFooter show={organizationQuery.data?.show_powered_by} />
       </div>
 
-      <div className="fixed inset-x-0 bottom-0 border-t border-slate-200 bg-white/95 px-4 py-3 backdrop-blur">
+      <div className="fixed inset-x-0 bottom-0 border-t border-slate-200 bg-og-card/95 px-4 py-3 backdrop-blur">
         <div className="mx-auto flex max-w-2xl items-center justify-between gap-3">
           <button
             type="button"

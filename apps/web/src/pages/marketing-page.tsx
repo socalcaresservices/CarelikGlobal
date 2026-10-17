@@ -58,7 +58,7 @@ export function MarketingPage() {
   const { user } = useAuth();
 
   return (
-    <div className="min-h-screen bg-white">
+    <div className="min-h-screen bg-og-card">
       <header className="border-b border-slate-200">
         <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-5">
           <p className="text-lg font-semibold text-slate-950">Ogevia</p>

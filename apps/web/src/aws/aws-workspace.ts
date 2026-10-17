@@ -69,6 +69,8 @@ export interface AttentionSummary {
   awaitingSignature?: number | null;
   /** 0036: late confirmations received and waiting for review (counted). */
   lateResponsesToReview?: number | null;
+  /** 0055: caregivers on a compliance hold. null when the viewer may not see it (never a false zero). */
+  complianceHolds?: { holds: number; affectedShifts: number; inProgressVisits: number } | null;
 }
 
 export interface UtilisationRow {

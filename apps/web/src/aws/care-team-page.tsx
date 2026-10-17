@@ -128,7 +128,7 @@ export function CareTeamPage() {
       <ul className="space-y-2">
         {shown.map((c) => (
           <li key={c.caregiverRecordId}>
-            <Link to={`/care-team/${c.caregiverRecordId}`} className="block rounded-xl border border-slate-200 bg-white p-3 hover:border-slate-400">
+            <Link to={`/care-team/${c.caregiverRecordId}`} className="block rounded-xl border border-slate-200 bg-og-card p-3 hover:border-slate-400">
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <p className="font-semibold text-slate-950">{caregiverName(c)} <span className="font-normal text-slate-500">({c.caregiverCode})</span></p>
                 <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${CAREGIVER_STATUS_BADGE[c.status]}`}>{CAREGIVER_STATUS_LABEL[c.status]}</span>

@@ -1178,7 +1178,7 @@ export function ServiceVerificationReportsPage() {
                                 ) : (
                                   <ul className="mt-2 space-y-2">
                                     {(correctionsQuery.data ?? []).map((entry, index) => (
-                                      <li key={entry.id} className="rounded-lg border border-slate-200 bg-white p-3 text-sm">
+                                      <li key={entry.id} className="rounded-lg border border-slate-200 bg-og-card p-3 text-sm">
                                         <div className="flex flex-wrap items-center justify-between gap-2">
                                           <p className="font-medium text-slate-900">
                                             Revision {index + 1} · {entry.corrected_by_name}
@@ -1214,10 +1214,10 @@ export function ServiceVerificationReportsPage() {
                 Print / Save as PDF
               </Button>
             <details className="relative">
-              <summary className="cursor-pointer list-none rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700">
+              <summary className="cursor-pointer list-none rounded-lg border border-slate-300 bg-og-card px-3 py-2 text-sm font-medium text-slate-700">
                 More actions
               </summary>
-              <div className="absolute right-0 z-20 mt-2 flex w-64 flex-col gap-2 rounded-xl border border-slate-200 bg-white p-3 shadow-lg">
+              <div className="absolute right-0 z-20 mt-2 flex w-64 flex-col gap-2 rounded-xl border border-slate-200 bg-og-card p-3 shadow-lg">
               {canManage ? (
                 <Button
                   type="button"
@@ -1261,7 +1261,7 @@ export function ServiceVerificationReportsPage() {
                 navigate({ pathname: location.pathname, search: search ? `?${search}` : "" }, { replace: true });
                 closeExpanded();
               }}
-              className="mt-1 w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm font-semibold text-slate-950"
+              className="mt-1 w-full rounded-xl border border-slate-300 bg-og-card px-3 py-2.5 text-sm font-semibold text-slate-950"
             >
               <option value="visits">Visit records</option>
               <option value="exceptions">Action needed</option>
@@ -1365,7 +1365,7 @@ export function ServiceVerificationReportsPage() {
                 id="report-date-range"
                 value={datePreset}
                 onChange={(event) => applyDatePreset(event.target.value as DatePreset)}
-                className="mt-1 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900"
+                className="mt-1 rounded-lg border border-slate-200 bg-og-card px-3 py-2 text-sm text-slate-900"
               >
                 {DATE_PRESETS.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
               </select>
@@ -1838,7 +1838,7 @@ export function ServiceVerificationReportsPage() {
                 <select
                   value={clientFilter}
                   onChange={(event) => setClientFilter(event.target.value)}
-                  className="mt-1 block max-w-56 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900"
+                  className="mt-1 block max-w-56 rounded-lg border border-slate-200 bg-og-card px-3 py-2 text-sm text-slate-900"
                 >
                   <option value="">Choose a client…</option>
                   {clientOptions.map(([id, label]) => (
@@ -2345,10 +2345,10 @@ export function ServiceVerificationReportsPage() {
                   <span className="font-normal text-slate-400" title="A correction keeps the original visit and adds a replacement. Off by default.">(originals kept after corrections)</span>
                 </label>
                 <details className="relative">
-                  <summary className="cursor-pointer list-none rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-semibold text-slate-700">
+                  <summary className="cursor-pointer list-none rounded-lg border border-slate-300 bg-og-card px-3 py-2 text-xs font-semibold text-slate-700">
                     Columns
                   </summary>
-                  <div className="absolute right-0 z-20 mt-2 w-52 rounded-xl border border-slate-200 bg-white p-3 shadow-lg">
+                  <div className="absolute right-0 z-20 mt-2 w-52 rounded-xl border border-slate-200 bg-og-card p-3 shadow-lg">
                     <div className="space-y-2">
                       {VISIT_COLUMN_OPTIONS.map((column) => (
                         <label key={column.key} className="flex items-center gap-2 text-xs text-slate-700">
@@ -2399,7 +2399,7 @@ export function ServiceVerificationReportsPage() {
                         <StatusBadge label={VISIT_STATUS_LABEL[row.status]} tone={STATUS_TONE[row.status]} />
                       );
                     return (
-                      <li key={row.id} className="rounded-xl border border-slate-200 bg-white p-3">
+                      <li key={row.id} className="rounded-xl border border-slate-200 bg-og-card p-3">
                         <div className="flex flex-wrap items-start justify-between gap-2">
                           <div className="min-w-0">
                             <p className="font-semibold text-slate-950">{row.client_legal_name ?? row.client_code}</p>
@@ -2573,7 +2573,7 @@ export function ServiceVerificationReportsPage() {
                                   <div><dt className="inline">Hours left: </dt><dd className="inline font-medium">{formatDuration(row.remaining_minutes)}</dd></div>
                                 </dl>
                                 <details className="text-xs print:hidden">
-                                  <summary className="inline-flex min-h-[40px] cursor-pointer list-none items-center rounded-lg border border-slate-300 bg-white px-3 text-sm font-medium text-slate-900 hover:bg-slate-50">
+                                  <summary className="inline-flex min-h-[40px] cursor-pointer list-none items-center rounded-lg border border-slate-300 bg-og-card px-3 text-sm font-medium text-slate-900 hover:bg-slate-50">
                                     Hours balance
                                   </summary>
                                   <dl className="mt-1 space-y-1 whitespace-nowrap">
@@ -2616,7 +2616,7 @@ export function ServiceVerificationReportsPage() {
                                     <button
                                       type="button"
                                       onClick={() => openCorrect(row)}
-                                      className="inline-flex min-h-[40px] items-center whitespace-nowrap rounded-lg border border-slate-300 bg-white px-3 text-sm font-medium text-slate-900 hover:bg-slate-50"
+                                      className="inline-flex min-h-[40px] items-center whitespace-nowrap rounded-lg border border-slate-300 bg-og-card px-3 text-sm font-medium text-slate-900 hover:bg-slate-50"
                                     >
                                       Correct visit
                                     </button>

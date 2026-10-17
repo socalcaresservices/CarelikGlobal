@@ -10,6 +10,8 @@ import { AccessLogFormat } from "aws-cdk-lib/aws-apigateway";
 import * as apigw from "aws-cdk-lib/aws-apigatewayv2";
 import { HttpJwtAuthorizer } from "aws-cdk-lib/aws-apigatewayv2-authorizers";
 import { HttpLambdaIntegration } from "aws-cdk-lib/aws-apigatewayv2-integrations";
+import * as events from "aws-cdk-lib/aws-events";
+import * as targets from "aws-cdk-lib/aws-events-targets";
 import * as iam from "aws-cdk-lib/aws-iam";
 import type * as kms from "aws-cdk-lib/aws-kms";
 import type * as secretsmanager from "aws-cdk-lib/aws-secretsmanager";
@@ -151,6 +153,19 @@ export const SERVICE_VERIFICATION_ROUTES: ReadonlyArray<{
   { method: apigw.HttpMethod.POST, path: "/v1/visit-rules" },
   // Hire type / scheduling (caregivers.manage) and family relationship (assignments.manage), 0030.
   { method: apigw.HttpMethod.POST, path: "/v1/caregivers/{caregiverRecordId}/employment" },
+  // Caregiver compliance (0053): administrator verification, hire date, holds. JWT like every staff route.
+  { method: apigw.HttpMethod.GET, path: "/v1/caregivers/{caregiverRecordId}/compliance" },
+  { method: apigw.HttpMethod.POST, path: "/v1/caregivers/{caregiverRecordId}/hire-date" },
+  { method: apigw.HttpMethod.POST, path: "/v1/caregivers/{caregiverRecordId}/background-check/status" },
+  { method: apigw.HttpMethod.POST, path: "/v1/caregivers/{caregiverRecordId}/background-check/verify" },
+  { method: apigw.HttpMethod.GET, path: "/v1/compliance/holds" },
+  { method: apigw.HttpMethod.POST, path: "/v1/compliance/sweep" },
+  // Attention by purpose, appearance preferences, authorizations missing a rate (0054). JWT like every staff route.
+  { method: apigw.HttpMethod.GET, path: "/v1/attention/overview" },
+  { method: apigw.HttpMethod.GET, path: "/v1/appearance" },
+  { method: apigw.HttpMethod.POST, path: "/v1/appearance/organization" },
+  { method: apigw.HttpMethod.POST, path: "/v1/appearance/me" },
+  { method: apigw.HttpMethod.GET, path: "/v1/authorizations/missing-rate" },
   { method: apigw.HttpMethod.POST, path: "/v1/assignments/{assignmentId}/family-relationship" },
   // Continuity pack (0027): continuity.export only; JWT like every staff route.
   { method: apigw.HttpMethod.POST, path: "/v1/continuity/pack" },
@@ -611,6 +626,23 @@ export class ServiceVerificationApiStack extends Stack {
       }
     }
 
+    // Scheduled caregiver-compliance run (0053). NOT DEPLOYED: deploying it is a YELLOW action (a new EventBridge rule and a second
+    // Lambda invoke permission) and needs the owner's approval. It invokes the SAME handler with a constant payload that API Gateway can
+    // never produce; the handler then calls ogevia_api.system_compliance_* and applies the 14-day CPR/TB period when it ends, whether or
+    // not anyone opens a caregiver profile. Enforcement itself does not depend on this run (the gate reads the records live); the run
+    // materialises the hold, the flags on affected shifts and the audit entries. Cost: EventBridge scheduled rules are free, and
+    // 96 invocations a day are far below any Lambda charge. Remove the rule and the hold is still enforced; only the flags lag.
+    new events.Rule(this, "ComplianceSweep", {
+      description: "Applies the caregiver compliance rules (approved background check, CPR/TB within 14 days of hire) for every agency that has enforcement on.",
+      schedule: events.Schedule.rate(Duration.minutes(15)),
+      targets: [
+        new targets.LambdaFunction(this.handler, {
+          event: events.RuleTargetInput.fromObject({ "ogevia-task": "compliance-sweep" }),
+          retryAttempts: 1,
+        }),
+      ],
+    });
+
     // Exact finding IDs. lib/template-scan.ts independently fails any wildcard
     // action and any Resource "*" outside the ENI action list.
     Validations.of(policy).acknowledge({
@@ -647,7 +679,7 @@ export class ServiceVerificationApiStack extends Stack {
       {
         id: "HIPAA.Security-LambdaDLQ",
         reason:
-          "Invoked synchronously by API Gateway; DLQs apply only to asynchronous invocations. Failures surface to the caller and the LambdaErrors alarm.",
+          "Invoked synchronously by API Gateway, so a failure reaches the caller. The only asynchronous invoker is the 15-minute compliance rule: it is idempotent, retried once, and a failed run surfaces in the LambdaErrors alarm; the next run repeats it.",
       },
     ]) {
       Validations.of(this).acknowledge(ack);

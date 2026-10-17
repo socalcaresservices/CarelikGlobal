@@ -111,7 +111,7 @@ function ReadinessRow({ issue, affected, status, action, help }: { issue: string
     <tr className="border-t border-slate-200 align-top">
       <th scope="row" className="py-2 pr-3 font-medium text-slate-900">
         {issue}
-        {help ? <details className="mt-1 text-xs font-normal text-slate-700"><summary className="cursor-pointer text-[#0F6674] underline">Details</summary><div className="mt-1">{help}</div></details> : null}
+        {help ? <details className="mt-1 text-xs font-normal text-slate-700"><summary className="cursor-pointer text-og-accent underline">Details</summary><div className="mt-1">{help}</div></details> : null}
       </th>
       <td className="py-2 pr-3 text-slate-900">{affected}</td>
       <td className="py-2 pr-3"><span className={`whitespace-nowrap rounded-full px-2 py-0.5 text-xs font-semibold ${TONE[status.tone]}`}>{status.label}</span></td>
@@ -183,7 +183,7 @@ export function ReadinessCard() {
                 affected={s.setupComplete ? "None" : plural(s.setupGaps.length, "rule", "rules")}
                 status={s.setupComplete ? { label: "Set", tone: "ok" } : { label: "Setup incomplete", tone: "bad" }}
                 action={canManage || hasPermission("documents.requirements.manage")
-                  ? <button type="button" className="min-h-[44px] text-left font-medium text-[#0F6674] underline" aria-expanded={showSetup} onClick={() => setShowSetup((x) => !x)}>{showSetup ? "Close setup" : "Set up required documents"}</button>
+                  ? <button type="button" className="min-h-[44px] text-left font-medium text-og-accent underline" aria-expanded={showSetup} onClick={() => setShowSetup((x) => !x)}>{showSetup ? "Close setup" : "Set up required documents"}</button>
                   : <span className="text-slate-600">Ask an administrator</span>}
                 help={s.setupComplete ? "CPR and TB rules are set." : (
                   <ul className="list-disc pl-5">
@@ -195,32 +195,32 @@ export function ReadinessCard() {
                 issue="CPR or TB missing or expired"
                 affected={`${s.caregivers.withDocumentGaps} of ${plural(s.caregivers.readyOrActive, "caregiver", "caregivers")}`}
                 status={s.enforcementActive ? { label: "Active", tone: "ok" } : { label: "Report only", tone: "warn" }}
-                action={<Link to="/documents" className="inline-flex min-h-[44px] items-center font-medium text-[#0F6674] underline">Review documents</Link>}
+                action={<Link to="/documents" className="inline-flex min-h-[44px] items-center font-medium text-og-accent underline">Review documents</Link>}
                 help={s.enforcementActive ? "A caregiver without current CPR and TB cannot be newly assigned or start a visit." : "Current verified CPR and TB are not being required yet. A caregiver without them can still be assigned and can still start visits until the checks are activated."}
               />
               <ReadinessRow
                 issue="Availability not provided"
                 affected={plural(s.caregivers.availabilityNotProvided, "caregiver", "caregivers")}
                 status={s.enforcementActive ? { label: "Active", tone: "ok" } : { label: "Report only", tone: "warn" }}
-                action={<Link to="/care-team" className="inline-flex min-h-[44px] items-center font-medium text-[#0F6674] underline">Ask for hours</Link>}
+                action={<Link to="/care-team" className="inline-flex min-h-[44px] items-center font-medium text-og-accent underline">Ask for hours</Link>}
               />
               <ReadinessRow
                 issue="Service approvals to review"
                 affected={plural(s.caregivers.servicePairsToReview, "caregiver and service pair", "caregiver and service pairs")}
                 status={sc.state === "On" ? { label: "On", tone: "ok" } : { label: "Off", tone: "neutral" }}
-                action={<Link to="/care-team/services-review" className="inline-flex min-h-[44px] items-center font-medium text-[#0F6674] underline">{sc.action}</Link>}
+                action={<Link to="/care-team/services-review" className="inline-flex min-h-[44px] items-center font-medium text-og-accent underline">{sc.action}</Link>}
               />
               <ReadinessRow
                 issue="Booked shifts that would not pass today's document or hours checks"
                 affected={`${s.affectedShiftsCount} of ${plural(s.futureWork.scheduledShifts, "future shift", "future shifts")}`}
                 status={s.enforcementActive ? { label: "Needs attention", tone: "bad" } : { label: "Would block if activated", tone: "warn" }}
-                action={<Link to="/schedule" className="inline-flex min-h-[44px] items-center font-medium text-[#0F6674] underline">Open schedule</Link>}
+                action={<Link to="/schedule" className="inline-flex min-h-[44px] items-center font-medium text-og-accent underline">Open schedule</Link>}
               />
               <ReadinessRow
                 issue="Standing assignments that need documents"
                 affected={plural(s.futureWork.standingAssignmentsNeedingDocuments, "assignment", "assignments")}
                 status={s.enforcementActive ? { label: "Needs attention", tone: "bad" } : { label: "Report only", tone: "warn" }}
-                action={<Link to="/care-team" className="inline-flex min-h-[44px] items-center font-medium text-[#0F6674] underline">Open Care Team</Link>}
+                action={<Link to="/care-team" className="inline-flex min-h-[44px] items-center font-medium text-og-accent underline">Open Care Team</Link>}
               />
             </tbody>
           </table>

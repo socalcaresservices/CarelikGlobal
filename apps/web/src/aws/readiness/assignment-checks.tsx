@@ -62,7 +62,7 @@ export function AssignmentChecks({ input, onReady }: { input: AssignmentCheckInp
   const availability = groupOutcome(ev.checks, CHECK_GROUPS[0]!);
   const canOverride = availability.state === "blocked" && !!input?.clientId && hasPermission("availability.override");
   return (
-    <section aria-label="Assignment checks" className="space-y-2 rounded-lg border border-slate-200 bg-white p-3">
+    <section aria-label="Assignment checks" className="space-y-2 rounded-lg border border-slate-200 bg-og-card p-3">
       <ul className="space-y-2">
         {CHECK_GROUPS.map((g) => {
           const o = groupOutcome(ev.checks, g);

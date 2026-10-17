@@ -246,7 +246,7 @@ function ShiftRow({ s, canManage, onDone }: { s: Shift; canManage: boolean; onDo
   const editable = canManage && open && !s.fromCareRequest && !s.hasVisit && new Date(s.endsAt).getTime() > Date.now();
   const calledOut = s.coverageState === "needs_coverage" && !!s.caregiverRecordId;
   return (
-    <li className={`rounded-xl border bg-white p-3 ${s.coverageState === "needs_coverage" ? "border-red-300" : "border-slate-200"}`}>
+    <li className={`rounded-xl border bg-og-card p-3 ${s.coverageState === "needs_coverage" ? "border-red-300" : "border-slate-200"}`}>
       <div className="flex flex-wrap items-center justify-between gap-2">
         <p className="font-semibold text-slate-950">{time(s.startsAt)}–{time(s.endsAt)} · <Link className="underline" to={`/clients/${s.clientId}`}>{s.clientName ?? "Name not set"} ({s.clientCode})</Link></p>
         <span className={`rounded-full px-2 py-0.5 text-xs ${STATE_BADGE[s.coverageState]}`}>{STATE_LABEL[s.coverageState]}</span>
@@ -262,11 +262,11 @@ function ShiftRow({ s, canManage, onDone }: { s: Shift; canManage: boolean; onDo
       {s.seriesId ? <p className="mt-1 text-xs text-slate-600">Repeats on a schedule — changes here affect this date only; change the series under Manage repeating shifts.</p> : null}
       {s.fromCareRequest ? <p className="mt-1 text-xs text-slate-600">From a Care Request; manage it on the <Link className="underline" to="/care-requests">Care Requests</Link> page.</p> : null}
       <div className="mt-2 flex flex-wrap items-center gap-2">
-        {editable && s.coverageState === "covered" ? <button type="button" className="inline-flex min-h-[40px] items-center rounded-lg border border-slate-300 bg-white px-3 text-sm font-medium text-slate-900 hover:bg-slate-50" onClick={() => setAction("callout")}>Record call-out</button> : null}
-        {editable ? <button type="button" className="inline-flex min-h-[40px] items-center rounded-lg border border-slate-300 bg-white px-3 text-sm font-medium text-slate-900 hover:bg-slate-50" onClick={() => setAction("assign")}>{s.coverageState === "needs_coverage" ? "Assign caregiver" : "Change caregiver"}</button> : null}
-        {editable && new Date(s.startsAt).getTime() > Date.now() ? <button type="button" className="inline-flex min-h-[40px] items-center rounded-lg border border-slate-300 bg-white px-3 text-sm font-medium text-slate-900 hover:bg-slate-50" onClick={() => setAction("reschedule")}>{s.seriesId ? "Change this date only" : "Change time"}</button> : null}
-        {editable ? <button type="button" className="inline-flex min-h-[40px] items-center rounded-lg border border-red-700 bg-white px-3 text-sm font-medium text-red-800 hover:bg-red-50" onClick={() => setAction("cancel")}>{s.seriesId ? "Cancel this date" : "Cancel shift"}</button> : null}
-        {canManage && !s.makeupForShiftId && (s.coverageState === "cancelled" || s.coverageState === "completed") ? <button type="button" className="inline-flex min-h-[40px] items-center rounded-lg border border-slate-300 bg-white px-3 text-sm font-medium text-slate-900 hover:bg-slate-50" onClick={() => setAction(action === "makeup" ? null : "makeup")}>Schedule make-up</button> : null}
+        {editable && s.coverageState === "covered" ? <button type="button" className="inline-flex min-h-[40px] items-center rounded-lg border border-slate-300 bg-og-card px-3 text-sm font-medium text-slate-900 hover:bg-slate-50" onClick={() => setAction("callout")}>Record call-out</button> : null}
+        {editable ? <button type="button" className="inline-flex min-h-[40px] items-center rounded-lg border border-slate-300 bg-og-card px-3 text-sm font-medium text-slate-900 hover:bg-slate-50" onClick={() => setAction("assign")}>{s.coverageState === "needs_coverage" ? "Assign caregiver" : "Change caregiver"}</button> : null}
+        {editable && new Date(s.startsAt).getTime() > Date.now() ? <button type="button" className="inline-flex min-h-[40px] items-center rounded-lg border border-slate-300 bg-og-card px-3 text-sm font-medium text-slate-900 hover:bg-slate-50" onClick={() => setAction("reschedule")}>{s.seriesId ? "Change this date only" : "Change time"}</button> : null}
+        {editable ? <button type="button" className="inline-flex min-h-[40px] items-center rounded-lg border border-red-700 bg-og-card px-3 text-sm font-medium text-red-800 hover:bg-red-50" onClick={() => setAction("cancel")}>{s.seriesId ? "Cancel this date" : "Cancel shift"}</button> : null}
+        {canManage && !s.makeupForShiftId && (s.coverageState === "cancelled" || s.coverageState === "completed") ? <button type="button" className="inline-flex min-h-[40px] items-center rounded-lg border border-slate-300 bg-og-card px-3 text-sm font-medium text-slate-900 hover:bg-slate-50" onClick={() => setAction(action === "makeup" ? null : "makeup")}>Schedule make-up</button> : null}
         <button type="button" className="inline-flex min-h-[40px] items-center rounded-lg px-2 text-sm font-medium text-og-link underline underline-offset-2 hover:bg-slate-50" onClick={() => setAction(action === "history" ? null : "history")}>History</button>
       </div>
       {action === "reschedule" ? (
@@ -441,12 +441,12 @@ export function MyShiftsPage() {
       {shifts.data && shifts.data.length === 0 ? <p className="text-sm text-slate-600">No shifts in the next two weeks.</p> : null}
       <ul className="space-y-2">
         {(shifts.data ?? []).map((s) => (
-          <li key={s.shiftId} className="rounded-xl border border-slate-200 bg-white p-3">
+          <li key={s.shiftId} className="rounded-xl border border-slate-200 bg-og-card p-3">
             <p className="font-semibold text-slate-950">{when(s.startsAt)}–{time(s.endsAt)}</p>
             <p className="text-sm text-slate-800">Client {s.clientCode}{s.serviceName ? ` · ${s.serviceName}` : ""}</p>
             {s.coverageState === "called_out" ? <p className="mt-1 text-sm font-semibold text-amber-900">You called out. The office is finding cover.</p> : null}
             {s.canCallOut && open !== s.shiftId ? (
-              <button type="button" className="mt-2 inline-flex min-h-11 items-center rounded-lg border border-slate-300 bg-white px-4 text-sm font-medium text-slate-900 hover:bg-slate-50" onClick={() => { setOpen(s.shiftId); setState({ busy: false, error: null, done: null }); }}>I can't make it</button>
+              <button type="button" className="mt-2 inline-flex min-h-11 items-center rounded-lg border border-slate-300 bg-og-card px-4 text-sm font-medium text-slate-900 hover:bg-slate-50" onClick={() => { setOpen(s.shiftId); setState({ busy: false, error: null, done: null }); }}>I can't make it</button>
             ) : null}
             {open === s.shiftId ? (
               <form onSubmit={(e) => { e.preventDefault(); void callOut(s.shiftId); }} className="mt-2 space-y-2">

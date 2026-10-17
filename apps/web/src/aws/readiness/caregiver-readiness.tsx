@@ -5,6 +5,7 @@ import { actionError } from "./format";
 import { AvailabilityRequestForm, CurrentAvailability, RequestHistory } from "./availability-section";
 import { useAvailability } from "./queries";
 import { AvailabilityReview } from "./availability-review";
+import { CaregiverCompliance } from "../compliance/compliance-card";
 import { CaregiverDocuments } from "./documents-readiness";
 import { CaregiverServices } from "./service-approvals";
 import { CaregiverExperience, MatchingLocation } from "./matching-inputs";
@@ -22,6 +23,7 @@ export function CaregiverReadiness({ caregiverRecordId }: { caregiverRecordId: s
   const canSee = hasPermission("availability.read");
   return (
     <>
+      <CaregiverCompliance caregiverRecordId={caregiverRecordId} />
       {canSee ? (
         <Card className="p-4">
           <div className="flex flex-wrap items-center justify-between gap-2">

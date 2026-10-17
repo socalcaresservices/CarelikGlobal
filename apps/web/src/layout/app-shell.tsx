@@ -362,7 +362,7 @@ export function AppShell({ children }: PropsWithChildren) {
       className="min-h-screen bg-slate-50"
       style={brandStyle(activeOrganization?.primaryColor)}
     >
-      <aside className="fixed inset-y-0 left-0 hidden w-64 border-r border-slate-200 bg-white lg:flex lg:flex-col">
+      <aside className="fixed inset-y-0 left-0 hidden w-64 border-r border-slate-200 bg-og-card lg:flex lg:flex-col">
         <div className="border-b border-slate-200 px-6 py-5">
           <p className="mb-2 text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
             Care operations
@@ -456,7 +456,7 @@ export function AppShell({ children }: PropsWithChildren) {
             onClick={() => setMobileMenuOpen(false)}
             className="absolute inset-0 bg-slate-950/35"
           />
-          <aside className="relative flex h-full w-[min(88vw,22rem)] flex-col bg-white shadow-2xl">
+          <aside className="relative flex h-full w-[min(88vw,22rem)] flex-col bg-og-card shadow-2xl">
             <div className="flex items-center justify-between border-b border-slate-200 px-4 py-4">
               <OrganizationIdentity
                 displayName={activeOrganization?.displayName ?? "Ogevia"}
@@ -551,7 +551,7 @@ export function AppShell({ children }: PropsWithChildren) {
         </div>
       ) : null}
       <main className="lg:pl-64">
-        <header className="flex flex-wrap items-center gap-4 border-b border-slate-200 bg-white px-6 py-4">
+        <header className="flex flex-wrap items-center gap-4 border-b border-slate-200 bg-og-card px-6 py-4">
           <button
             type="button"
             aria-label="Open menu"
@@ -589,7 +589,7 @@ export function AppShell({ children }: PropsWithChildren) {
                 onChange={(event) =>
                   setActiveOrganizationId(event.target.value)
                 }
-                className="rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-sm font-medium text-slate-900"
+                className="rounded-lg border border-slate-200 bg-og-card px-2 py-1.5 text-sm font-medium text-slate-900"
               >
                 {organizations.map((org) => (
                   <option key={org.id} value={org.id}>

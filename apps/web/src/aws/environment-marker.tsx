@@ -18,7 +18,7 @@ export function EnvironmentBanner() {
       data-environment={marker.kind}
       className={
         "flex min-h-[36px] items-center justify-center gap-2 px-4 py-1.5 text-center text-sm font-bold tracking-wide print:hidden " +
-        (unverified ? "bg-slate-800 text-white" : "bg-amber-300 text-amber-950")
+        (unverified ? "bg-[#1e293b] text-white" : "bg-amber-300 text-amber-950")
       }
     >
       <span aria-hidden="true">{unverified ? "?" : "⚠"}</span>

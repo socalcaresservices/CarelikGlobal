@@ -7,6 +7,7 @@ import { MemoryRouter } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { createAwsApiClient } from "@/lib/aws-api";
 import { AwsRoutes } from "./aws-root";
+import { baseCompliance } from "./readiness/fake-api";
 
 const ORG = "aaaaaaaa-0000-4000-8000-000000000001";
 const CLIENT = "cccccccc-0000-4000-8000-000000000001";
@@ -57,6 +58,9 @@ function fakeApi(opts: { covered: boolean }) {
         return json(201, { assignment: { assignmentId: "new", hasAuthorization: opts.covered, grantsAccess: body?.caregiverRecordId !== CG_NO_LOGIN } });
       case `POST /v1/assignments/${ASG}/end`:
         return json(200, { outcome: "ended" });
+      case `GET /v1/caregivers/${CG}/compliance`:
+      case `GET /v1/caregivers/${CG_NO_LOGIN}/compliance`:
+        return json(200, { compliance: baseCompliance() }); // 0053: the profile also shows compliance; this test is about assignments
       default:
         return json(404, { error: { code: "not_found", message: "No such endpoint." } });
     }

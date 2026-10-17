@@ -179,7 +179,7 @@ export function AvailabilityRequestForm({ state, mode = "caregiver" }: { state: 
       <div role="tablist" aria-label="What to change" className="flex gap-2">
         {([["weekly", "Weekly hours"], ["date", "Specific date"]] as const).map(([k, label]) => (
           <button key={k} type="button" role="tab" aria-selected={kind === k} onClick={() => { touch(); setKind(k); }}
-            className={`min-h-[44px] rounded-md border px-3 text-sm font-medium ${kind === k ? "border-[#0F6674] bg-[#E8F5F4] text-[#0F6674]" : "border-slate-300 bg-white text-slate-800"}`}>{label}</button>
+            className={`min-h-[44px] rounded-md border px-3 text-sm font-medium ${kind === k ? "border-og-accent bg-og-active text-og-accent" : "border-slate-300 bg-og-card text-slate-800"}`}>{label}</button>
         ))}
       </div>
 
@@ -202,7 +202,7 @@ export function AvailabilityRequestForm({ state, mode = "caregiver" }: { state: 
                       {week[i]!.ranges.length > 1 ? <button type="button" className="min-h-[44px] text-sm underline" onClick={() => setDay(i, { ranges: week[i]!.ranges.filter((_, k) => k !== j) })}>Remove</button> : null}
                     </div>
                   ))}
-                  <button type="button" className="min-h-[44px] text-sm font-medium text-[#0F6674] underline" onClick={() => setDay(i, { ranges: [...week[i]!.ranges, { start: "13:00", end: "17:00" }] })}>Add another time range</button>
+                  <button type="button" className="min-h-[44px] text-sm font-medium text-og-accent underline" onClick={() => setDay(i, { ranges: [...week[i]!.ranges, { start: "13:00", end: "17:00" }] })}>Add another time range</button>
                 </div>
               ) : null}
             </div>
@@ -232,7 +232,7 @@ export function AvailabilityRequestForm({ state, mode = "caregiver" }: { state: 
               {dayRanges.length > 1 ? <button type="button" className="min-h-[44px] text-sm underline" onClick={() => { touch(); setDayRanges((x) => x.filter((_, k) => k !== j)); }}>Remove</button> : null}
             </div>
           )) : null}
-          {!unavailable ? <button type="button" className="min-h-[44px] text-sm font-medium text-[#0F6674] underline" onClick={() => { touch(); setDayRanges((x) => [...x, { start: "13:00", end: "17:00" }]); }}>Add another time range</button> : null}
+          {!unavailable ? <button type="button" className="min-h-[44px] text-sm font-medium text-og-accent underline" onClick={() => { touch(); setDayRanges((x) => [...x, { start: "13:00", end: "17:00" }]); }}>Add another time range</button> : null}
         </fieldset>
       )}
 
