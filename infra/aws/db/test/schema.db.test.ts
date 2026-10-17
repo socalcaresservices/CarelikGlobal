@@ -69,6 +69,7 @@ describe("SCHEMA: migration chain", () => {
     // Sorted comparison: membership is what matters, not the database collation.
     expect([...tables].sort()).toEqual([
       "agency_visit_rules",
+      "agency_work_hour_policies",
       "app_users",
       "assignment_readiness_flags",
       "audit_events",
@@ -86,6 +87,7 @@ describe("SCHEMA: migration chain", () => {
       "caregiver_assignments",
       "caregiver_availability_state",
       "caregiver_availability_windows",
+      "caregiver_background_check_events",
       "caregiver_background_checks",
       "caregiver_compliance_holds",
       "caregiver_experience",
@@ -124,6 +126,7 @@ describe("SCHEMA: migration chain", () => {
       "service_visits",
       "services",
       "shift_coverage_events",
+      "shift_pickup_requests",
       "shift_readiness_flags",
       "shift_series",
       "shift_series_skipped_dates",

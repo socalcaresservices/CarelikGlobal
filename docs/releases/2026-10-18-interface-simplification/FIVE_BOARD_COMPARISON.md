@@ -89,3 +89,6 @@ Batch 2 (README section 13) changed these rows, backend and web, locally tested 
 
 ## 12. Addendum: status after reconciliation batch 3 (2026-10-17, migration 0059)
 Owner decisions applied locally: the 48-hour boundary (more than 48 h Upcoming, 48 h or less Urgent, at/after start Critical) and the administrator-review clock from the real entry time (`signed_at` and the later lifecycle events), both tested at the boundary. The caregiver remaining-hours display no longer clamps at zero and is labelled as confirmed visits only; the difference from the office balance (reserved time) is intentional and explained on screen. Still open: the items listed at the end of section 11, plus the Netlify branch-deploy and AWS-side trigger facts (README section 14).
+
+## 13. Addendum: status after reconciliation batch 4 (2026-10-17, migrations 0060-0064)
+Requirements 6-10 are implemented locally (README section 15). The complete per-requirement matrix is now `FIVE_BOARD_MATRIX_88.md` (88 rows; 26 IMPLEMENTED, 45 PARTIAL, 14 MISSING, 1 CONFLICT, 2 UNVERIFIABLE). Conflicts #8 (strict work-hour limits), #9 (recurring series), #10 (billing states) and #12 (caregiver self-claim) of section 4 are resolved in code; #1 (Home cards) remains the owner's choice. Nothing here is deployed or run on TEST.

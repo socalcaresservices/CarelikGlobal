@@ -24,7 +24,7 @@ interface Opts { scheduled?: boolean; startNeedsReason?: boolean; pickup?: "ok" 
 function fakeApi(role: Role, opts: Opts = {}) {
   const calls: Call[] = [];
   let visit: Record<string, unknown> | null = null;
-  let openShifts = [{ shiftId: SHIFT, startsAt: "2026-10-20T16:00:00Z", endsAt: "2026-10-20T18:00:00Z", minutes: 120, clientCode: "C-104", serviceName: "Respite Care", coverageState: "needs_coverage" }];
+  let openShifts: Array<Record<string, unknown>> = [{ shiftId: SHIFT, startsAt: "2026-10-20T16:00:00Z", endsAt: "2026-10-20T18:00:00Z", minutes: 120, clientCode: "C-104", serviceName: "Respite Care", coverageState: "needs_coverage" }];
   let rules = [{ version: 0, minutes: 15, source: "system_default", effectiveFrom: null, changedByName: null, changedAt: null, reason: null, inEffect: true }] as Array<Record<string, unknown>>;
   const permissions = role === "organization_owner" ? ["organization.update", "visits.read", "visits.manage", "billing.visits.read"] : role === "manager" ? ["visits.read", "visits.manage", "billing.visits.read"] : ["availability.manage_own"];
   const json = (status: number, body: unknown) => new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json" } });
@@ -70,10 +70,10 @@ function fakeApi(role: Role, opts: Opts = {}) {
         return json(200, { shifts: openShifts });
       case `POST /v1/shifts/${SHIFT}/pickup`:
         if (opts.pickup === "filled") { openShifts = []; return json(409, { error: { code: "conflict", message: "This shift was just filled." } }); }
-        openShifts = openShifts.map((o: any) => ({ ...o, myRequestStatus: "requested" })); // 0063: the shift stays open; the caregiver has asked
+        openShifts = openShifts.map((o) => ({ ...o, myRequestStatus: "requested" })); // 0063: the shift stays open; the caregiver has asked
         return json(200, { pickupState: "requested" });
       case `POST /v1/shifts/${SHIFT}/pickup/withdraw`:
-        openShifts = openShifts.map((o: any) => ({ ...o, myRequestStatus: null }));
+        openShifts = openShifts.map((o) => ({ ...o, myRequestStatus: null }));
         return json(200, { pickupState: "withdrawn" });
       case "GET /v1/visit-rules":
         return json(200, { rules });
