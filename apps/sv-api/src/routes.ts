@@ -543,6 +543,46 @@ export const ROUTES: Record<string, Route> = {
     },
   },
 
+  // 0073: the one issue list (filters, paging, stable keys), its history, and the agency's shorter deadlines.
+  "GET /v1/action-issues": {
+    mutating: false,
+    handle: async ({ event, tx }) => {
+      const query = q(event);
+      const result = await tx(async (db) =>
+        ((await db.query("select ogevia_api.list_action_issues($1,$2,$3,$4,$5,$6,$7,$8,$9) as r", [
+          orgParam(event), query.queue ?? null, query.category ?? null, query.severity ?? null,
+          optionalUuid(query.clientId, "clientId"), optionalUuid(query.caregiverRecordId, "caregiverRecordId"), optionalUuid(query.serviceId, "serviceId"),
+          query.limit ? Math.min(200, Math.max(1, Number.parseInt(query.limit, 10) || 50)) : 50, query.offset ? Math.max(0, Number.parseInt(query.offset, 10) || 0) : 0,
+        ])).rows[0] as { r: unknown }).r);
+      return result;
+    },
+  },
+
+  "GET /v1/action-issues/history": {
+    mutating: false,
+    handle: async ({ event, tx }) => {
+      const key = text(q(event).issueKey, "issueKey", 200, { required: true });
+      return { history: await tx(async (db) => ((await db.query("select ogevia_api.get_action_issue_history($1,$2) as r", [orgParam(event), key])).rows[0] as { r: unknown }).r) };
+    },
+  },
+
+  "GET /v1/attention-settings": {
+    mutating: false,
+    handle: async ({ event, tx }) => ({ settings: await tx(async (db) => ((await db.query("select ogevia_api.get_attention_settings($1) as r", [orgParam(event)])).rows[0] as { r: unknown }).r) }),
+  },
+
+  "POST /v1/attention-settings": {
+    mutating: true,
+    handle: async ({ event, tx }) => {
+      const body = parseBody(event.body, event.isBase64Encoded);
+      const org = uuid(body.organizationId, "organizationId");
+      const hours = (value: unknown, name: string) => (value === null || value === undefined ? null : Number.isInteger(value) ? (value as number) : (() => { throw new ApiError(400, "bad_request", `${name} must be a whole number of hours or empty.`); })());
+      const reason = text(body.reason, "reason", 1000, { required: true });
+      return { settings: await tx(async (db) =>
+        ((await db.query("select ogevia_api.set_attention_settings($1,$2,$3,$4,$5) as r", [org, hours(body.confirmationOverdueHours, "confirmationOverdueHours"), hours(body.reviewOverdueHours, "reviewOverdueHours"), hours(body.documentReviewOverdueHours, "documentReviewOverdueHours"), reason])).rows[0] as { r: unknown }).r) };
+    },
+  },
+
   "GET /v1/authorization-impacts": {
     mutating: false,
     handle: async ({ event, tx }) => {

@@ -68,6 +68,10 @@ describe("SCHEMA: migration chain", () => {
     ).map((r) => r.t);
     // Sorted comparison: membership is what matters, not the database collation.
     expect([...tables].sort()).toEqual([
+      "action_issue_events",
+      "action_issue_state",
+      "agency_attention_setting_events",
+      "agency_attention_settings",
       "agency_visit_rules",
       "agency_work_hour_policies",
       "app_users",
