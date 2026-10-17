@@ -115,3 +115,86 @@ Production (`prod`) is not approved. No stack update or deployment should run du
 - `claude/ogevia-test-deployment-verify-5xqjsa` is the session's designated branch. Its name reflects the original TEST-verification task; it now also carries the redesign and these procedures. **Fetch from this branch** (command above).
 - `integration/compliance-attention-onto-scheduling-recruiting` is the unmerged, undeployed combination branch. It carries the same script file under a different commit id (a cherry-pick; see the commit table in the hand-off message). It is not needed for the fetch and is not merged or deployed.
 - Commit ids differ between the branches, the script's sha256 does not: compare the checksum, not the commit id, across branches.
+
+## 10. The TEST run stopped at the shared-group guard (reported by the operator). PROPOSAL ONLY. Nothing applied.
+**What happened (operator report, not independently verified here):** the script stopped before any change because the admin group `sg-00e01e2ca80442c1f` is used by three network interfaces: `eni-099616641dd91bcaf` (admin host `i-0ce8db2d7e5839dd5`), `eni-0b2b4b87e28db8c64` and `eni-0edeacce8b7ea403b` (no instance shown). **The guard is correct and is unchanged:** a rule whose source is that group would apply to all three interfaces, not only the admin host.
+
+**Working hypothesis (INFERRED, not verified):** the two interfaces with no instance are the interface-endpoint interfaces for Systems Manager (`vpce-09dff848221f90105`, `vpce-0cfe984c8b634eb0d`, both recorded in `infra/aws/lib/config.ts`), because interface endpoints create instance-less interfaces. The commands below decide this; do not act on the hypothesis.
+
+### 10.1 Read-only identification (CloudShell, us-west-2; every command is describe-/lookup only)
+The JMESPath queries below were syntax-checked with the `jmespath` library; they were not run against AWS.
+```
+export AWS_PAGER="" AWS_REGION=us-west-2
+ADMIN_SG=sg-00e01e2ca80442c1f
+
+# A. The interfaces that use the admin group: type, owner/creator, description, IPs. THE KEY OUTPUT.
+aws ec2 describe-network-interfaces --filters "Name=group-id,Values=$ADMIN_SG" --query 'NetworkInterfaces[].{eni:NetworkInterfaceId,type:InterfaceType,description:Description,status:Status,requesterManaged:RequesterManaged,requesterId:RequesterId,ownerId:OwnerId,instance:Attachment.InstanceId,attachStatus:Attachment.Status,subnet:SubnetId,az:AvailabilityZone,privateIp:PrivateIpAddress,allPrivateIps:PrivateIpAddresses[].PrivateIpAddress,publicIp:Association.PublicIp,groups:Groups[].GroupId,tags:TagSet}' --output json
+
+# B. Do the two instance-less interfaces belong to the Systems Manager interface endpoints?
+aws ec2 describe-vpc-endpoints --filters "Name=vpc-id,Values=vpc-0ee9df0c38297cbc1" --query 'VpcEndpoints[].{id:VpcEndpointId,service:ServiceName,type:VpcEndpointType,state:State,enis:NetworkInterfaceIds,groups:Groups[].GroupId}' --output json
+
+# C. The admin host itself: its interfaces, IPs, groups (the rule below would name its private IP)
+aws ec2 describe-instances --instance-ids i-0ce8db2d7e5839dd5 --query 'Reservations[0].Instances[0].{state:State.Name,privateIp:PrivateIpAddress,publicIp:PublicIpAddress,subnet:SubnetId,profile:IamInstanceProfile.Arn,enis:NetworkInterfaces[].{eni:NetworkInterfaceId,ip:PrivateIpAddress,allIps:PrivateIpAddresses[].PrivateIpAddress,groups:Groups[].GroupId}}' --output json
+
+# D. The admin group's own rules. UNKNOWN until read: its OUTBOUND rules decide whether the host may reach 5432 at all.
+aws ec2 describe-security-groups --group-ids "$ADMIN_SG" --query 'SecurityGroups[0].{name:GroupName,description:Description,inbound:IpPermissions,outbound:IpPermissionsEgress}' --output json
+
+# E. Which security groups reference the admin group (inbound / outbound)
+aws ec2 describe-security-groups --filters "Name=ip-permission.group-id,Values=$ADMIN_SG" --query 'SecurityGroups[].{id:GroupId,name:GroupName}' --output json
+aws ec2 describe-security-groups --filters "Name=egress.ip-permission.group-id,Values=$ADMIN_SG" --query 'SecurityGroups[].{id:GroupId,name:GroupName}' --output json
+
+# F. Optional: who created each instance-less interface (CloudTrail keeps 90 days of management events)
+for E in eni-0b2b4b87e28db8c64 eni-0edeacce8b7ea403b; do aws cloudtrail lookup-events --lookup-attributes AttributeKey=ResourceName,AttributeValue=$E --max-results 5 --query 'Events[].{time:EventTime,event:EventName,user:Username,source:EventSource}' --output json; done
+```
+Do not paste anything that looks like a credential. Interface descriptions, IDs and private IPs are not credentials.
+
+**How to read A and B (stop on anything not listed):**
+| Output for an instance-less interface | Meaning | Consequence |
+|---|---|---|
+| `type` = `vpc_endpoint`, description `VPC Endpoint Interface vpce-09dff…` or `vpce-0cfe…`, listed in B | The Systems Manager endpoint interfaces. They receive traffic from the host; they do not open connections to RDS. | The shared-group guard still stands. The proposal below does not depend on the group. |
+| `type` = `lambda`, or description mentioning Lambda | A Lambda function in the VPC uses the admin group. | Stop and report. Not expected. |
+| `RequesterManaged` false, or a description/owner you do not recognise | Unknown workload. | Stop and report. Do not proceed. |
+
+### 10.2 Proposal (not applied): rule on the RDS group, source = the admin host's own private IP, /32
+**Why not the group as source (current script):** it would grant the three interfaces access. The guard refuses, correctly, and stays.
+**Proposed change, TEST only, for seconds:** on the RDS group `sg-00530a1f4f7648e65`, one inbound rule: tcp 5432, **source `<admin host private IPv4>/32`**, description `TEMP-ledger-check-<stamp>`. Nothing else changes: not the admin host, not the shared admin group (which would affect all three interfaces), not the application group, not any stack. The IP is read live from the running host (command C), not typed from memory.
+
+| Option | Changes | Reaches | Assessment |
+|---|---|---|---|
+| A. Source = admin group (current script) | 1 rule on RDS group | all 3 interfaces | Refused by the guard. Not proposed. |
+| **B. Source = host private IP /32 (proposed)** | **1 rule on RDS group** | **exactly one IP, one interface** | **Narrowest; one object changed; same cleanup and hash verification.** |
+| C. Re-attach the application group to the host (the repository's old DB window) | the host's security groups, then restore | all the application group allows, including the Secrets Manager endpoint | Changes the host and grants more. Not narrower. |
+| D. New dedicated group for the host | create a group, change the host's groups, restore, delete | one host | Two or three changes instead of one. Not proposed unless B is impossible. |
+
+**Conditions that must hold before the rule is added (the new guard; the group guard is not removed):**
+1. Admin host `i-0ce8db2d7e5839dd5` is running, tagged `ogevia-db-admin-temp`, and has exactly **one** network interface with exactly one private IP (from C).
+2. That IP maps to exactly **one** interface in the VPC (`describe-network-interfaces --filters Name=addresses.private-ip-address,Values=<ip>`), and that interface is attached to the admin host.
+3. The rule is `/32`, never a wider prefix, never `0.0.0.0/0`, never a group.
+4. Everything else already in the script: right account, environment checks, RDS private and available, RDS group exactly the expected one, no earlier window marker, typed phrase, original rule-set hash recorded.
+5. In the default mode the existing guard remains: if the admin group is shared, the script still refuses. The /32 mode is a separate explicit opt-in (for example `test --host-ip`), so the shared-group refusal is not weakened.
+
+**Unknowns that can make B fail even though it is narrow:**
+- **The admin group's outbound rules are not recorded in the repository (UNKNOWN).** If they do not allow 5432 to the RDS address, the database connection times out whatever the RDS group says. Command D reads them. Fixing that would mean adding an outbound rule to the shared admin group, which affects all three interfaces: **that is not proposed here and would need a separate decision.** If D shows an unrestricted outbound rule, this does not arise.
+- The host's private IP can change if it is stopped and started or replaced; the script reads it live each run and records the exact value in the marker.
+- Not tested against real AWS.
+
+### 10.3 Cleanup and recovery for the /32 rule (same design as sections 4-5A)
+- **Cleanup on every exit path** (success, any failure or timeout, INT/TERM/HUP): revoke exactly that /32 rule (up to 4 attempts, each bounded), then require the rule absent **and** the complete rule-set hash (all inbound and outbound rules) equal to the original before printing `RESTORED (verified)`. Otherwise `NOT RESTORED`, exit 3, marker kept, recovery text printed. The marker records the exact CIDR and the original hash; a new run refuses while it exists; `--restore-only` verifies.
+- **Retained limitation:** total CloudShell loss or SIGKILL leaves the rule open until a person revokes it. No independent cleanup exists, and none is proposed without your approval.
+- **Recovery from a separate session (read-only identify, one write):**
+```
+aws ec2 describe-security-group-rules --region us-west-2 --filters Name=group-id,Values=sg-00530a1f4f7648e65 --query 'SecurityGroupRules[?IsEgress==`false`].{rule:SecurityGroupRuleId,proto:IpProtocol,from:FromPort,to:ToPort,sourceSg:ReferencedGroupInfo.GroupId,cidr:CidrIpv4,desc:Description}' --output table
+# Original state: ONE inbound rule, sourceSg sg-064ffce3bcbe8eb3b. The temporary rule is the row with cidr = <admin host IP>/32, tcp 5432,
+# description beginning TEMP-ledger-check-. Never touch the sourceSg sg-064ffce3bcbe8eb3b row.
+aws ec2 revoke-security-group-ingress --region us-west-2 --group-id sg-00530a1f4f7648e65 --security-group-rule-ids sgr-<id of that one row>
+# Re-run the first command: one inbound rule, sourceSg sg-064ffce3bcbe8eb3b, nothing with a cidr.
+```
+
+### 10.4 Script work that approval would trigger (NOT done)
+Add the opt-in /32 mode with the conditions above; extend the rule-set canonicalisation and the revoke/recovery text to the CIDR form; change the static test that currently forbids any CIDR rule so it allows only a `/32` built from the live host IP and still forbids `0.0.0.0/0`, wider prefixes and group-sourced rules in that mode; add rehearsal tests (shared group refused in default mode; /32 refused when the IP maps to more than one interface, to another instance, or when the host has more than one interface; success and failure restore; timeout and failed-cleanup exit 3); then publish a new commit and checksum. This changes the script, so it needs your review again before any run.
+
+### 10.5 Decisions needed
+1. Run commands A-E (F optional) and send the output.
+2. Approve option B in principle (TEST only), or name another.
+3. Confirm that the admin group's outbound rules (D) permit 5432 to the RDS address, or decide separately how to handle that.
+4. Approve the script change in 10.4. Production remains not approved.
