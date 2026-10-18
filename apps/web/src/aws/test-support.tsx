@@ -28,6 +28,8 @@ export function renderAws(path: string, permissions: string[], handlers: Record<
       case "GET /v1/attention": return json(200, { summary: null });
       case "GET /v1/attention/overview": return json(200, { overview: { asOf: new Date().toISOString(), urgentWindowHours: 48, urgent: null, upcoming: { count: 0, nextStartsAt: null, shifts: [] }, documents: null, visitReview: null } });
       case "GET /v1/action-issues": return json(200, { asOf: new Date().toISOString(), matching: 0, limit: 50, offset: 0, counts: { total: 0, critical: 0, urgent: 0, routine: 0, actionNeeded: 0, byQueue: {} }, issues: [] });
+      case "GET /v1/notifications": return json(200, { notifications: { asOf: new Date().toISOString(), unread: 0, items: [] } });
+      case "GET /v1/notification-settings": return json(200, { settings: { urgentInApp: true, criticalInApp: true, routine: "listed in Action needed only", outboundChannels: "none" } });
       case "GET /v1/shifts": return json(200, { shifts: [] });
       case "GET /v1/clients": return json(200, { clients: [] });
       case "GET /v1/services": return json(200, { services: [] });

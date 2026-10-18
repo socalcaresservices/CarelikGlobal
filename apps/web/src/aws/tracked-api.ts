@@ -2,7 +2,7 @@ import type { QueryClient } from "@tanstack/react-query";
 import type { AwsApiClient } from "@/lib/aws-api";
 
 /** The queries whose numbers other screens show. */
-export const REFRESHED_AFTER_CHANGE = ["attention-overview", "aws-attention", "action-issues"] as const;
+export const REFRESHED_AFTER_CHANGE = ["attention-overview", "aws-attention", "action-issues", "notifications"] as const;
 
 /**
  * After any POST that succeeds, the attention counts and the issue list are re-read, so a number never lags behind the action just taken (B1-R7).

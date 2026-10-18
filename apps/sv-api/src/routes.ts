@@ -735,6 +735,42 @@ export const ROUTES: Record<string, Route> = {
     },
   },
 
+  // 0077: the caller's own in-app notifications (Critical always, Urgent per agency setting, never Routine). Listing brings them up to date with the caller's own view.
+  "GET /v1/notifications": {
+    mutating: false,
+    handle: async ({ event, tx }) => {
+      const params = q(event);
+      const limit = params.limit === undefined || params.limit === "" ? 30 : wholeNumber(Number(params.limit), "limit", 1, 100);
+      return { notifications: await tx(async (db) => ((await db.query("select ogevia_api.list_my_notifications($1,$2,$3) as r", [orgParam(event), params.includeRead === "true", limit])).rows[0] as { r: unknown }).r) };
+    },
+  },
+
+  "POST /v1/notifications/read": {
+    mutating: true,
+    handle: async ({ event, tx }) => {
+      const body = parseBody(event.body, event.isBase64Encoded);
+      const org = uuid(body.organizationId, "organizationId");
+      const ids = body.ids === undefined || body.ids === null ? null : Array.isArray(body.ids) && body.ids.length <= 100 ? body.ids.map((id) => uuid(id, "ids")) : (() => { throw new ApiError(400, "bad_request", "ids must be a list of up to 100 notification ids."); })();
+      return { marked: await tx(async (db) => ((await db.query("select ogevia_api.mark_notifications_read($1,$2::uuid[]) as n", [org, ids])).rows[0] as { n: number }).n) };
+    },
+  },
+
+  "GET /v1/notification-settings": {
+    mutating: false,
+    handle: async ({ event, tx }) => ({ settings: await tx(async (db) => ((await db.query("select ogevia_api.get_notification_settings($1) as r", [orgParam(event)])).rows[0] as { r: unknown }).r) }),
+  },
+
+  "POST /v1/notification-settings": {
+    mutating: true,
+    handle: async ({ event, tx }) => {
+      const body = parseBody(event.body, event.isBase64Encoded);
+      const org = uuid(body.organizationId, "organizationId");
+      if (typeof body.urgentInApp !== "boolean") throw new ApiError(400, "bad_request", "urgentInApp must be true or false.");
+      const reason = text(body.reason, "reason", 1000, { required: true });
+      return { settings: await tx(async (db) => ((await db.query("select ogevia_api.set_notification_settings($1,$2,$3) as r", [org, body.urgentInApp, reason])).rows[0] as { r: unknown }).r) };
+    },
+  },
+
   "GET /v1/authorization-impacts": {
     mutating: false,
     handle: async ({ event, tx }) => {

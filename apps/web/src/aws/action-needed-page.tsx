@@ -10,6 +10,7 @@ import { CATEGORY_LABEL, issueDestination, KIND_LABEL, QUEUE_LABEL, SEVERITY_TON
 import { TONE } from "./attention";
 import { Disclosure } from "./ui/disclosure";
 import { PageHeader } from "./ui/page-header";
+import type { NotificationSettings } from "./notifications";
 import { StatusChip } from "./ui/status-chip";
 
 const PAGE = 25;
@@ -118,6 +119,52 @@ function DeadlineSettings() {
   );
 }
 
+function NotificationSettingsCard() {
+  const api = useAwsApi();
+  const queryClient = useQueryClient();
+  const { activeOrganizationId, hasPermission } = useOrganization();
+  const canEdit = hasPermission("organization.update");
+  const q = useQuery({
+    queryKey: ["notification-settings", activeOrganizationId], enabled: !!activeOrganizationId,
+    queryFn: async () => (await api.get<{ settings: NotificationSettings }>("/v1/notification-settings", { organizationId: activeOrganizationId })).settings,
+  });
+  const [reason, setReason] = useState("");
+  const [state, setState] = useState<{ busy: boolean; error: string | null; done: boolean }>({ busy: false, error: null, done: false });
+  const s = q.data;
+  if (!s) return null;
+  async function save(next: boolean) {
+    if (state.busy) return;
+    if (reason.trim().length < 3) return setState({ busy: false, error: "Write why you are changing it.", done: false });
+    setState({ busy: true, error: null, done: false });
+    try {
+      await api.post("/v1/notification-settings", { organizationId: activeOrganizationId, urgentInApp: next, reason: reason.trim() }, { idempotencyKey: newIdempotencyKey() });
+      setReason("");
+      setState({ busy: false, error: null, done: true });
+      await queryClient.invalidateQueries({ queryKey: ["notification-settings"] });
+    } catch (cause) {
+      setState({ busy: false, error: cause instanceof Error ? cause.message : "Not saved. Nothing changed.", done: false });
+    }
+  }
+  return (
+    <Disclosure summary="Notifications">
+      <div className="space-y-2" data-testid="notification-settings">
+        <p className="text-sm text-og-sub">In-app only. Critical items always notify the staff who can see them. Routine items stay listed here and never notify. No email, text or push message is sent.</p>
+        <p className="text-sm text-og-sub">Urgent items: {s.urgentInApp ? "notify" : "do not notify"}.</p>
+        {canEdit ? (
+          <>
+            <label className="block text-sm font-medium text-og-ink">Why are you changing it? (kept on record)
+              <input value={reason} maxLength={1000} onChange={(e) => setReason(e.target.value)} className="mt-1 block w-full rounded-lg border border-og-line bg-og-card px-3 py-2 text-base" />
+            </label>
+            <Button type="button" className="min-h-11" loading={state.busy} disabled={state.busy} onClick={() => void save(!s.urgentInApp)}>{s.urgentInApp ? "Stop Urgent notifications" : "Turn Urgent notifications on"}</Button>
+            {state.error ? <p role="alert" className="text-sm text-red-700">{state.error}</p> : null}
+            {state.done ? <p role="status" className="text-sm text-emerald-800">Saved.</p> : null}
+          </>
+        ) : <p className="text-sm text-og-sub">Only the owner can change this.</p>}
+      </div>
+    </Disclosure>
+  );
+}
+
 /**
  * Action Needed (Board 4): one server-defined list with the counts that equal it, Critical then Urgent then Routine, filters, paging, a recommended next action with the
  * context in the link, and each issue's history. Pending confirmation, Ready for Approval and the other routine queues are labelled by queue and are not in the Action Needed total.
@@ -174,6 +221,7 @@ export function ActionNeededPage() {
         </>
       ) : null}
       <DeadlineSettings />
+      <NotificationSettingsCard />
       <Disclosure summary="How this list is built">
         <p>Every item has one stable identity, so the same problem is the same issue on Home, Scheduling and here. Two problems on the same visit stay two issues.</p>
         <p className="mt-1">Critical: care is blocked now, or an uncovered shift has started. Urgent: inside the follow-up window or past a deadline.</p>

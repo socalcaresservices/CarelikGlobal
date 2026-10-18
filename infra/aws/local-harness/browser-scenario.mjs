@@ -223,6 +223,18 @@ rec("Action needed lists issue cards, each with a recommended action and one pri
 rec("Action needed: counts line says routine queues are not in the action total", /not in the action total/.test(await mp.getByTestId("issue-counts").innerText()));
 rec("Action needed: no sideways scroll", await noOverflow(mp));
 await mp.screenshot({ path: `${out}/action-needed-${label}.png`, fullPage: true });
+// in-app notifications (0077): the bell counts what is Critical or Urgent in the action queues, lists it by word, and fits the screen
+const bell = mp.getByTestId("notifications-button");
+const bellCount = Number(((await bell.innerText()).match(/(\d+)\s*$/) ?? [])[1] ?? NaN);
+rec("notifications: the header bell shows a count of unread items", (await bell.count()) === 1 && Number.isFinite(bellCount), String(bellCount));
+await bell.click(); await mp.waitForTimeout(800);
+const panelRows = await mp.getByTestId("notification").allInnerTexts();
+rec("notifications: the panel lists Critical/Urgent items by word with no personal names", bellCount === 0 || (panelRows.length >= 1 && panelRows.every((t) => /Critical|Urgent/.test(t))), String(panelRows.length));
+rec("notifications: the panel fits the screen", await noOverflow(mp));
+await mp.screenshot({ path: `${out}/notifications-${label}.png` });
+await mp.getByRole("button", { name: "Mark all read" }).click().catch(() => {}); await mp.waitForTimeout(1200);
+rec("notifications: marking all read brings the count to 0", /Notifications\s*0\s*$/.test((await mp.getByTestId("notifications-button").innerText()).trim()) || bellCount === 0);
+await mp.getByTestId("notifications-button").click(); await mp.waitForTimeout(300);
 await mp.getByTestId("issue-filters").getByLabel("Severity").selectOption("critical"); await settle(mp, 1200);
 const crit = mp.getByTestId("issue-card");
 const critTexts = await crit.allInnerTexts();

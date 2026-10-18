@@ -163,8 +163,8 @@ describe("F1: a minute is counted once, as used OR as reserved", () => {
 
 // =====================================================================================================================
 describe("F2: the Action Needed total has one definition", () => {
-  // OBSERVED FAILURE: the server total omits Ready for Approval; the web total (the one users see) adds it.
-  it.fails("the server total equals the total the web displays for the same row", async () => {
+  // FIXED by 0077 (was `it.fails`): the server total now includes Ready for Approval for people who may see billing, like the web total.
+  it("the server total equals the total the web displays for the same row", async () => {
     const f = await freshClient(db, w, w.caregiverA2, 600);
     await signedVisit(db, w.caregiverA2, w, 30, w.orgA, f.client, f.service); // billing ready, not approved
     const row = (await q(w.ownerA, "select * from ogevia_api.get_attention_summary($1)", [w.orgA]))[0];
@@ -197,8 +197,8 @@ describe("F4 / D10: only urgent coverage gaps (start within 48 h) count toward A
     expect(await uncovered()).toBe(before + 1);
   });
 
-  // OBSERVED FAILURE: an open shift 10 days away is counted today (no urgency window).
-  it.fails("REPRODUCTION: an open shift starting in 10 days is NOT counted", async () => {
+  // FIXED by 0077 (was `it.fails`): only shifts starting within 48 hours (or under way) count; later ones are Upcoming staffing.
+  it("an open shift starting in 10 days is NOT counted", async () => {
     const f = await freshClient(db, w, w.caregiverA1, 600);
     const before = await uncovered();
     await openShift(f, 240);
