@@ -124,10 +124,12 @@ function releaseWindow(startMin = -60, endMin = 180, snapAgo = 10) {
 interface Run { code: number | null; out: string; outDir: string }
 let f: Fix;
 beforeEach(() => { f = fixture(); });
+/** EPIPE on the child's stdin is expected when the script refuses before reading it; every other error is returned so the test fails. */
+export const stdinErrorToSurface = (e: NodeJS.ErrnoException): Error | null => (e.code === "EPIPE" ? null : e);
 async function run(args: string[], opts: { env?: Record<string, string>; input?: string; killWhen?: () => boolean } = {}): Promise<Run> {
   const port = await freePort();
   const outDir = join(f.dir, `out-${Math.random().toString(36).slice(2)}`);
-  return new Promise((resolve) => {
+  return new Promise((resolve, reject) => {
     const env = {
       ...process.env, PATH: `${f.bin}:${process.env.PATH}`, MOCK_DIR: f.dir, HOME: f.dir,
       OGEVIA_MIGRATE_STATE_DIR: join(f.dir, "state"), OGEVIA_LEDGER_STATE_DIR: join(f.dir, "ledger-state"), OGEVIA_MIGRATE_DIR: outDir, OGEVIA_MIGRATE_PORT: String(port),
@@ -136,10 +138,14 @@ async function run(args: string[], opts: { env?: Record<string, string>; input?:
     const p = spawn("bash", [f.script, ...args], { env, stdio: ["pipe", "pipe", "pipe"], detached: true });
     let out = "";
     p.stdout.on("data", (d) => (out += d)); p.stderr.on("data", (d) => (out += d));
+    // A script that refuses (usage error, failed pin) exits before it reads stdin, so writing the typed phrase can fail with EPIPE: that is expected and harmless.
+    // Any other stdin error is unexpected and fails the test instead of being swallowed.
+    let stdinError: Error | null = null;
+    p.stdin.on("error", (e: NodeJS.ErrnoException) => { stdinError = stdinErrorToSurface(e) ?? stdinError; });
     p.stdin.end(opts.input ?? PHRASE);
     let killed = false;
     const timer = opts.killWhen ? setInterval(() => { if (!killed && opts.killWhen!()) { killed = true; process.kill(-p.pid!, "SIGTERM"); } }, 50) : null;
-    p.on("close", (c) => { if (timer) clearInterval(timer); if (process.env.TRANSCRIPT_DIR) writeTranscript(join(process.env.TRANSCRIPT_DIR, `${expect.getState().currentTestName!.replace(/\W+/g, "_").slice(0, 60)}_${createHash("sha1").update(expect.getState().currentTestName!).digest("hex").slice(0, 6)}_${transcriptCount++}__${args.join("_")}.txt`), out.replace(new RegExp(f.dir, "g"), "<tmp>")); resolve({ code: c, out, outDir }); });
+    p.on("close", (c) => { if (timer) clearInterval(timer); if (process.env.TRANSCRIPT_DIR) writeTranscript(join(process.env.TRANSCRIPT_DIR, `${expect.getState().currentTestName!.replace(/\W+/g, "_").slice(0, 60)}_${createHash("sha1").update(expect.getState().currentTestName!).digest("hex").slice(0, 6)}_${transcriptCount++}__${args.join("_")}.txt`), out.replace(new RegExp(f.dir, "g"), "<tmp>")); if (stdinError) reject(stdinError); else resolve({ code: c, out, outDir }); });
   });
 }
 const sg = () => JSON.parse(readFileSync(join(f.dir, "sg.json"), "utf8"));
@@ -370,6 +376,12 @@ describe("failure and interruption (the rehearsal the owner asked for)", () => {
   });
   it("usage errors exit 2 before anything is read", async () => {
     for (const a of [[], ["prod"], ["migrate", "--force"], ["--restore-only", "x"], ["rollback", "--resume"]]) expect((await run(a as string[])).code).toBe(2);
+  });
+  it("a refusal that exits before reading stdin is not an error (EPIPE is expected), repeatedly; any other stdin error is surfaced", async () => {
+    for (let i = 0; i < 40; i++) expect((await run(["prod"])).code).toBe(2);
+    expect(stdinErrorToSurface(Object.assign(new Error("broken pipe"), { code: "EPIPE" }))).toBeNull();
+    const other = Object.assign(new Error("denied"), { code: "EACCES" });
+    expect(stdinErrorToSurface(other)).toBe(other);
   });
 });
 

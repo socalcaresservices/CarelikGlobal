@@ -7,7 +7,7 @@
 
 Pins (computed by synthesizing the two commits locally in deploy mode, no AWS; the synthesis is reproducible: two syntheses of the baseline gave identical asset hashes):
   BASELINE d82fefcd37407d837e7c94f6ac57a907ea286ed1 : the application deployed to TEST by Release 0052 (owner's Phase C statement, 2026-10-14)
-  CANDIDATE 3159e520a7b9bc7006ee82d526a907622d30d97c : this release.
+  CANDIDATE d89327600f3fc55ab9c59af0d0eaea8675d77535 : this release.
 The comparison ignores exactly what is expected to differ: the Handler's Code (its S3 key), CDKMetadata, the added resources, and the VALUE of the
 `ogevia:deployment-status` tag (it carries the approval reference, which differs between deployments). Anything else that differs is reported and fails.
 Exit 0 = all checks passed; 1 = a check failed; 2 = usage or unreadable input.
@@ -17,7 +17,7 @@ import argparse, hashlib, json, os, sys
 API_STACK = "Ogevia-prod-ServiceVerificationApi"
 TEST_STACKS = ["Ogevia-prod-EvidenceStorage", "Ogevia-prod-NetworkEgress", "Ogevia-prod-WebHosting", "Ogevia-prod-ServiceVerificationApi", "Ogevia-prod-Observability"]
 BASELINE_COMMIT = "d82fefcd37407d837e7c94f6ac57a907ea286ed1"
-CANDIDATE_COMMIT = "3159e520a7b9bc7006ee82d526a907622d30d97c"
+CANDIDATE_COMMIT = "d89327600f3fc55ab9c59af0d0eaea8675d77535"
 BASELINE_HANDLER_KEY = "2fcda02d87dfb6eb35aefa22a88b95cc36675c526cb696094a87b9d1e17b125c.zip"
 CANDIDATE_HANDLER_KEY = "929cdb1bde9bbf18025dc36f5cc61210246ca048efa6d6b51147cf4c22b24ab0.zip"
 IDENTITY_HANDLER_KEY = "7c5f8eb676c93261fd7a80f34d40ba70379c040d94bb2e9bd80f2d007ebc9759.zip"

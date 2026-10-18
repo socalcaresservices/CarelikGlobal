@@ -5,7 +5,7 @@
 # It changes nothing, calls no AWS service and checks out nothing: it only proves that what is on disk is the approved candidate and the approved toolchain.
 #   * HEAD equals the approved commit and the working tree is clean (no stray or modified file, including the tracked infra/aws/cdk.out folder);
 #   * every path listed in candidate-pins.txt (the application, packages, infrastructure code, migrations, rollbacks, deploy scripts and lockfile) has EXACTLY the git object id it
-#     had in the CI-tested release candidate 3159e520a7b9bc7006ee82d526a907622d30d97c, so the operator commit differs from the candidate only by added tooling, tests and documents;
+#     had in the CI-tested release candidate d89327600f3fc55ab9c59af0d0eaea8675d77535, so the operator commit differs from the candidate only by added tooling, tests and documents;
 #   * db/migrations hashes to the approved migration-set checksum; pnpm-lock.yaml hashes to the approved lockfile checksum;
 #   * Node is 22.x and pnpm is 9.15.4 (the versions the tests and CI ran on); the CDK CLI of the checkout is 2.1143.0;
 #   * dependencies are installed.
