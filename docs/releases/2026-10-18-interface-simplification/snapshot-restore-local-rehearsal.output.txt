@@ -18,7 +18,7 @@ PASS object owner preserved
 PASS grant preserved
 PASS new ogevia_sv_test accepts connections
 PASS damaged copy retained, connections disabled (not dropped)
-== ogevia_prd protection (catalog-only checks from the postgres database; ogevia_prd is never connected to by the swap)
+== ogevia_prd: catalog and role comparison (shows only that the database entry and roles were not altered), then a ROW COUNT that exists only in this rehearsal (the real procedure never connects to ogevia_prd)
 PASS pg_database row for ogevia_prd identical before and after
 PASS cluster roles identical
 PASS ogevia_prd keeps its post-snapshot rows (1500; an in-place restore would have reverted it to 1000)

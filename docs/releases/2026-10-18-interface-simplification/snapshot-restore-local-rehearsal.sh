@@ -73,7 +73,7 @@ swap "$DUMP" 202610180000; rc=$?
 [[ "$(q $LP ogevia_sv_test "select has_table_privilege('app_rw','visits','select')")" == t ]] && ok "grant preserved" || bad "grant"
 [[ "$(q $LP postgres "select datallowconn from pg_database where datname='ogevia_sv_test'")" == t ]] && ok "new ogevia_sv_test accepts connections" || bad "new database not connectable"
 [[ "$(q $LP postgres "select datallowconn from pg_database where datname='ogevia_sv_test_damaged_202610180000'")" == f ]] && ok "damaged copy retained, connections disabled (not dropped)" || bad "damaged copy state"
-echo "== ogevia_prd protection (catalog-only checks from the postgres database; ogevia_prd is never connected to by the swap)"
+echo "== ogevia_prd: catalog and role comparison (shows only that the database entry and roles were not altered), then a ROW COUNT that exists only in this rehearsal (the real procedure never connects to ogevia_prd)"
 [[ "$(q $LP postgres "$FP_SQL")" == "$PRD_BEFORE" ]] && ok "pg_database row for ogevia_prd identical before and after" || bad "ogevia_prd catalog row changed"
 [[ "$(q $LP postgres "select rolname, rolsuper, rolcanlogin from pg_roles where rolname not like 'pg_%' order by 1")" == "$ROLES_BEFORE" ]] && ok "cluster roles identical" || bad "roles changed"
 PRD_ROWS_AFTER=$(q $LP ogevia_prd 'select count(*) from donors')

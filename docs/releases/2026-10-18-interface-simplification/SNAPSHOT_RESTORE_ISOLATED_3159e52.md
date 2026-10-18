@@ -104,7 +104,7 @@ Then STOP and report. If the rename itself is refused (UNKNOWN: RDS master-user 
 
 Step H, verification before closing the window:
 - `ogevia_sv_test` ledger is exactly **52 / 0052**; the renamed damaged copy exists with `datallowconn = false`; it is **not** dropped (dropping needs the owner's GO).
-- From the `postgres` database: the `pg_database` row for `ogevia_prd` (oid, owner, ACL, allow-connections, limit, encoding, collation) and the role list are **identical** to `recovery-catalog-before.txt`. This is the evidence that production was untouched; it needs no connection to `ogevia_prd`.
+- From the `postgres` database: the `pg_database` row for `ogevia_prd` (oid, owner, ACL, allow-connections, limit, encoding, collation) and the role list are **identical** to `recovery-catalog-before.txt`. This shows only that the `ogevia_prd` database entry and the cluster roles were not altered by the swap statements. It is **not** evidence about `ogevia_prd`'s data, tables, grants or sessions, and it is not proof that production was unaffected; this procedure never connects to `ogevia_prd`, so it contains no check of that data. It needs no connection to `ogevia_prd`.
 - Close the window; the script verifies the security group is identical to the original. Then re-enable the TEST site and re-run the migration from the start through the wrapper, with a **new** pre-deployment snapshot and a **new** release window. The old window and snapshot are not reused.
 
 ## 9. Step I [YELLOW; deletions need the owner's GO] - clean up

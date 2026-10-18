@@ -4,6 +4,8 @@
 >
 > **Status: PROPOSED. NOTHING IN THIS DOCUMENT HAS BEEN RUN AGAINST AWS.** Every step marked **[YELLOW]** changes AWS or TEST data and is run only after the owner's explicit GO (`CLAUDE.md` section 13). TEST only, synthetic data only. Production (`Ogevia-prd-*`, database `ogevia_prd`) is never touched. No push, merge, deployment, migration window or enforcement activation has been authorized by this document.
 >
+> **Revision 4 (2026-10-18):** corrects one sentence in `SNAPSHOT_RESTORE_ISOLATED_3159e52.md` (step H). The `pg_database` row and role-list comparisons show only that the `ogevia_prd` database entry and the cluster roles were not altered; they are not evidence about `ogevia_prd`'s data. No other change to the procedure or to any script.
+>
 > **Revision 3 (2026-10-18):** adds `SNAPSHOT_RESTORE_ISOLATED_3159e52.md`, a documented isolated snapshot-restore procedure for `ogevia_sv_test` that protects `ogevia_prd` (new instance, own security group, one-database dump and swap). Its SQL steps are rehearsed locally on PostgreSQL 16 (`snapshot-restore-local-rehearsal.sh`); every AWS step is **not run and not verified**, there is no reviewed window script for it, and it is **not a proven recovery procedure**. Tier 1 remains the only prepared and rehearsed database recovery.
 >
 > **Revision 2 (2026-10-18):** (1) migrate mode now also requires a named, available pre-deployment snapshot that belongs to `ogevia-prod-postgres` and was captured inside the owner-approved release window, validated before any access is proposed or opened; (2) `AWS_REGION`, `AWS_DEFAULT_REGION` and `AWS_PAGER` are exported explicitly in section 5, and no command relies on an unexported `REGION` variable.
