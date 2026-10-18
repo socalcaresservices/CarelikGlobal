@@ -4,6 +4,8 @@
 >
 > **Status: PROPOSED. NOTHING IN THIS DOCUMENT HAS BEEN RUN AGAINST AWS.** Every step marked **[YELLOW]** changes AWS or TEST data and is run only after the owner's explicit GO (`CLAUDE.md` section 13). TEST only, synthetic data only. Production (`Ogevia-prd-*`, database `ogevia_prd`) is never touched. No push, merge, deployment, migration window or enforcement activation has been authorized by this document.
 >
+> **Revision 2 (2026-10-18):** (1) migrate mode now also requires a named, available pre-deployment snapshot that belongs to `ogevia-prod-postgres` and was captured inside the owner-approved release window, validated before any access is proposed or opened; (2) `AWS_REGION`, `AWS_DEFAULT_REGION` and `AWS_PAGER` are exported explicitly in section 5, and no command relies on an unexported `REGION` variable.
+>
 > Labels used throughout: **LOCAL VERIFIED** = executed in the development container on 2026-10-18. **NOT VERIFIED** = needs AWS, a real device or another external system.
 
 ## 1. What is being deployed, and the pins
@@ -26,7 +28,7 @@
 
 Script checksums (all in the operator commit; each also listed in `SHA256SUMS`):
 ```
-21ff52b494c63563c8f2cf69c3cc4b878ae221812ddac2284729f5e765ab00e4  infra/aws/slice/candidate-migrate-test.sh
+97b1ed095139af5bb3fee4b6866a43e2a561aafbba6aaa8abf3eea1349ccd6c8  infra/aws/slice/candidate-migrate-test.sh
 d0a06d6d4e63d705d649c406d8cfb56007da5b36336a717fc12826db69c5175a  infra/aws/slice/candidate-pin-check.sh
 e5f540f97fa66477014321403f5414fd86647d3027cb05d585aef060ca1f342c  infra/aws/slice/candidate-pins.txt
 1bb7d612c4ed0ea7e5c8e5c0a6083f93d0c7bb25f316e35981f6eac4e85bbdfc  infra/aws/slice/candidate_assembly_check.py
@@ -53,7 +55,7 @@ e5f540f97fa66477014321403f5414fd86647d3027cb05d585aef060ca1f342c  infra/aws/slic
 | | LOCAL VERIFIED | NOT VERIFIED |
 |---|---|---|
 | Candidate | CI run 361 success on the candidate head; local suites on PostgreSQL 16 and 18.4 (database 840, sv-api database 115, 369 verification checks) | the managed RDS engine; the real TEST account |
-| Migration wrapper | 42 rehearsal tests against fake AWS/psql/npx: pins, host IP, wrong database, ledger precondition, success, migration failure, interruption, failed verification, failed revoke (exit 3 and recovery), resume, rollback success, rollback failure, rollback interruption, activation state (`OPERATOR_REHEARSAL_TRANSCRIPTS.md`) | the real tunnel, secret, runner output and timing in CloudShell |
+| Migration wrapper | 86 rehearsal tests against fake AWS/psql/npx: pins, host IP, wrong database, ledger precondition, success, migration failure, interruption, failed verification, failed revoke (exit 3 and recovery), resume, rollback success, rollback failure, rollback interruption, activation state, **snapshot validation in both modes (19 refusals each: no id, wrong pattern, missing, not available, other instance, not manual, created outside the release window or in the future, name stamp outside the window, missing, malformed or impossible window, window over 12 hours, window not started; migrate refused after the window ended; each refusal opens no access)**, and the region and pager fixed by the script itself (`OPERATOR_REHEARSAL_TRANSCRIPTS.md`). Three deliberate weakenings of the snapshot checks each made tests fail | the real tunnel, secret, runner output and timing in CloudShell |
 | The SQL path of recovery | the exact `psql -1 … set local role ogevia_owner; -f down.sql; delete ledger row` command, 0077 down to 0053 then 0053-0077 up again, on a real database: PostgreSQL 16 and 18.4, ledger 52 / 0052 then 77 / 0077, verification 369 PASS | RDS |
 | Shared database preserved | two databases in one cluster: rolling one back left the other database's dump and the cluster's roles identical (PostgreSQL 16; `pg_dump` and `pg_dumpall --globals-only`, ignoring pg_dump's random `\restrict` token). `grep` finds no `create/alter/drop role`, extension, database or `alter system` in migrations or rollbacks 0053-0077 | the real `ogevia_prd` |
 | Assembly | the candidate's TEST API stack synthesized locally in deploy mode differs from the baseline `d82fefc` by exactly: 59 new routes, 1 new EventBridge rule (State ENABLED), 1 new Lambda permission, the Handler code asset, CDK metadata. No IAM, environment, output or other change. 6 tests on a real synthesis plus mutations | `cdk diff` against the live stack |
@@ -71,10 +73,13 @@ CI artifact `ogevia-test-deployment-bundle` (id 12122743587; digest `sha256:38ed
 
 ## 5. Prerequisites (before the window)
 
-- Owner GO message naming: the operator, the window, an approval reference `<REF>` (6-64 characters of `A-Za-z0-9._-`), and approving (a) the push of `claude/ogevia-operator-3159e52`, (b) the migration database-access method in section 6, (c) the API deployment including the ComplianceSweep rule in state ENABLED.
+- Owner GO message naming: the operator, the **release window as UTC start and end** (at most 12 hours; the snapshot must be taken inside it and the migration run inside it), an approval reference `<REF>` (6-64 characters of `A-Za-z0-9._-`), and approving (a) the push of `claude/ogevia-operator-3159e52`, (b) the migration database-access method in section 6, (c) the API deployment including the ComplianceSweep rule in state ENABLED.
 - AWS CloudShell, region `us-west-2`, AdministratorAccess session, account `300094796789`. Tools: section 1. **A second CloudShell session open and ready for recovery** (section 8), with `~/CarelikGlobal` fetched as in the earlier procedure.
 - Environment variables, set once per session (values are in section 1; `<OPERATOR_SHA>` and `<REF>` come from the GO message). Always set `PYTHONDONTWRITEBYTECODE=1` so Python never writes into the checkout:
 ```
+export AWS_REGION=us-west-2
+export AWS_DEFAULT_REGION=us-west-2
+export AWS_PAGER=""
 export PYTHONDONTWRITEBYTECODE=1
 export OGEVIA_EXPECT_COMMIT=<OPERATOR_SHA>
 export OGEVIA_EXPECT_MIGRATIONS_SHA=90785eaa779a0be2fc46aa7c251294c102b83d0d240b693ea9fb0d5fffc9a335
@@ -82,7 +87,10 @@ export OGEVIA_EXPECT_ROLLBACK_SHA=b03302eac1c02d29f19bbbdb2f71a13b15e22ce9b9cb63
 export OGEVIA_EXPECT_LOCKFILE_SHA=7f5964021b4dbeeebf703fda27e1a509c164c1aecb4436f9324003b7de88dcae
 export OGEVIA_DEPLOY_APPROVAL=<REF>
 export OGEVIA_APP_ENV=test
+export OGEVIA_RELEASE_WINDOW_START=<UTC start from the GO message, e.g. 2026-10-19T03:00:00Z>
+export OGEVIA_RELEASE_WINDOW_END=<UTC end from the GO message>
 ```
+The three `AWS_*` lines are exported explicitly so that every `aws` command in this procedure runs in `us-west-2` with no pager, whatever the CloudShell session had before; verify with `echo "$AWS_REGION $AWS_DEFAULT_REGION [$AWS_PAGER]"`, which must print `us-west-2 us-west-2 []`. Commands in this procedure that name a region pass the literal `us-west-2`; none uses a shell variable `REGION`. The migration wrapper also fixes these three variables itself, from its own constants, for every call it makes (test-asserted: it overrides a hostile caller environment).
 
 ## 6. Procedure
 
@@ -133,7 +141,7 @@ The approval reference is embedded as the tag `ogevia:deployment-status` on tagg
 Working directory `~/ogevia-rc`. These commands only read; they write files under `~/ogevia-before/` (outside the repository).
 ```
 mkdir -p ~/ogevia-before && cd ~/ogevia-before
-REGION=us-west-2; API_STACK=Ogevia-prod-ServiceVerificationApi; WEB_STACK=Ogevia-prod-WebHosting
+API_STACK=Ogevia-prod-ServiceVerificationApi; WEB_STACK=Ogevia-prod-WebHosting
 FN=$(aws cloudformation list-stack-resources --stack-name $API_STACK --query "StackResourceSummaries[?ResourceType=='AWS::Lambda::Function' && starts_with(LogicalResourceId,'Handler')].PhysicalResourceId" --output text); echo "handler: $FN"
 aws lambda get-function-configuration --function-name "$FN" --output json > lambda-config-before.json
 aws lambda get-function --function-name "$FN" --query 'Code.Location' --output text > code-url.txt
@@ -164,14 +172,16 @@ cd ~/ogevia-rc && bash infra/aws/slice/lambda-policy-check-readonly.sh pre
 ```
 Expected: `function: <handler> | API id: <id> | rule: none yet | mode: pre`, then `statements: N (API Gateway N, EventBridge 0) | bytes now: <size> | largest statement: <b> | projected peak: <size+2*b+2> | limit 20480 | gate 19000` and `PASS all checks (size and principals)`. The check **fails** on: any principal other than `apigateway.amazonaws.com` or `events.amazonaws.com`; any action other than `lambda:InvokeFunction`; any resource other than this function; an API Gateway statement not limited to this API's ARN; an events statement not limited to the ComplianceSweep rule; `Deny`, `NotPrincipal`, `NotAction`; a size at or above 20,480 bytes; a projected peak (size plus two new statements) at or above 19,000. With the synthesized shape the policy is about 1 KB; the earlier per-route shape (38 statements) projects to about 14 KB. Exit status 0 only if all hold.
 
-### Step 7 - Snapshot [YELLOW]
+### Step 7 - Named pre-deployment snapshot [YELLOW]
+The snapshot must be taken **inside the release window** (after `OGEVIA_RELEASE_WINDOW_START`), named exactly `ogevia-prod-postgres-pre-0077-YYYYMMDDHHMM` (the UTC minute), and be `available` before step 9. The migration wrapper refuses, before it proposes or opens any access, unless the snapshot exists, is `available`, belongs to `ogevia-prod-postgres`, is of type `manual`, was **created** inside the release window (not in the future), and its name stamp is inside the window; `migrate` also refuses if the window has ended.
 ```
-SNAP=ogevia-prod-postgres-pre-0077-$(date -u +%Y%m%d%H%M); echo "$SNAP" | tee ~/ogevia-before/snapshot-id.txt
-aws rds create-db-snapshot --db-instance-identifier ogevia-prod-postgres --db-snapshot-identifier "$SNAP"
-aws rds wait db-snapshot-available --db-snapshot-identifier "$SNAP"
-aws rds describe-db-snapshots --db-snapshot-identifier "$SNAP" --query 'DBSnapshots[0].[Status,DBInstanceIdentifier]' --output text
+date -u +%FT%TZ    # must be at or after $OGEVIA_RELEASE_WINDOW_START and before $OGEVIA_RELEASE_WINDOW_END
+export OGEVIA_PREDEPLOY_SNAPSHOT_ID=ogevia-prod-postgres-pre-0077-$(date -u +%Y%m%d%H%M); echo "$OGEVIA_PREDEPLOY_SNAPSHOT_ID" | tee ~/ogevia-before/snapshot-id.txt
+aws rds create-db-snapshot --db-instance-identifier ogevia-prod-postgres --db-snapshot-identifier "$OGEVIA_PREDEPLOY_SNAPSHOT_ID"
+aws rds wait db-snapshot-available --db-snapshot-identifier "$OGEVIA_PREDEPLOY_SNAPSHOT_ID"
+aws rds describe-db-snapshots --db-snapshot-identifier "$OGEVIA_PREDEPLOY_SNAPSHOT_ID" --query 'DBSnapshots[0].[Status,DBInstanceIdentifier,SnapshotType,SnapshotCreateTime]' --output text
 ```
-Expected last line: `available	ogevia-prod-postgres`. **STOP if it is not `available`.** The instance also holds `ogevia_prd`: this snapshot is never used to restore in place (section 8).
+Expected last line: `available	ogevia-prod-postgres	manual	<a time inside the window>`. **STOP if it is not `available`, or the time is outside the window.** In a new session, set `OGEVIA_PREDEPLOY_SNAPSHOT_ID` again from `~/ogevia-before/snapshot-id.txt`. **The snapshot is a recovery prerequisite, not a recovery procedure.** Restoring from it is not prepared or rehearsed (section 8.5, Tier 2); the instance also holds `ogevia_prd`, so a snapshot is never restored in place.
 
 ### Step 8 - Diff against the live stack (read-only)
 Working directory `~/ogevia-rc/infra/aws`:
@@ -188,7 +198,7 @@ Expected, and nothing else: `[~]` the Handler's `Code` (`S3Key` `2fcda02d…` to
 cd ~/ogevia-rc/infra/aws && date -u +%FT%TZ | tee ~/ogevia-before/M0.txt
 cd ~/ogevia-rc/infra/aws && OGEVIA_EXPECT_HOST_IP=<the admin host's private IP> bash slice/candidate-migrate-test.sh migrate
 ```
-Type `OPEN-5432-WINDOW-MIGRATE-TEST` only after reading the proposed changes. Expected lines (full rehearsal transcript: `OPERATOR_REHEARSAL_TRANSCRIPTS.md`, sections A-G): `commit <OPERATOR_SHA> (clean)`, `Environment identified: TEST.`, `window open: exactly one rule was added`, `connected: ogevia_sv_test | read_only=on`, `ledger before: 52 migrations applied, latest 0052`, `enforcement activated for 0 of N agencies before (this run never changes it)`, `applying 0053 ... applying 0077`, `applied 25, already applied 52`, `ledger after: 77 migrations applied, latest 0077`, `verification: 369 PASS, 0 FAIL`, `enforcement state unchanged: 0 of N agencies activated`, `RESTORED (verified)`, `SECURITY GROUP: restored and verified identical to the original`, exit status 0.
+Type `OPEN-5432-WINDOW-MIGRATE-TEST` only after reading the proposed changes. Expected lines (full rehearsal transcript: `OPERATOR_REHEARSAL_TRANSCRIPTS.md`, sections A-G): `commit <OPERATOR_SHA> (clean)`, `Environment identified: TEST.`, `snapshot ogevia-prod-postgres-pre-0077-<stamp>: available, manual, belongs to ogevia-prod-postgres, created <time> inside the release window <start> to <end>.` (printed **before** the proposed changes and before any rule is added), `window open: exactly one rule was added`, `connected: ogevia_sv_test | read_only=on`, `ledger before: 52 migrations applied, latest 0052`, `enforcement activated for 0 of N agencies before (this run never changes it)`, `applying 0053 ... applying 0077`, `applied 25, already applied 52`, `ledger after: 77 migrations applied, latest 0077`, `verification: 369 PASS, 0 FAIL`, `enforcement state unchanged: 0 of N agencies activated`, `RESTORED (verified)`, `SECURITY GROUP: restored and verified identical to the original`, exit status 0.
 If it stops: read the message; the three recovery situations are rehearsed (migration failure: ledger position printed and nothing else is attempted; interruption: ledger position printed, exit 130; rule not removed: exit 3 and the exact commands in section 8). A partial ledger can be continued with `... migrate --resume` only if the cause was transient (a timeout) and the owner agrees; any SQL error is a STOP.
 
 ### Step 10 - API deployment [YELLOW]
@@ -254,7 +264,7 @@ Read this before the window. **Open the second session now** and keep `~/ogevia-
 |---|---|---|
 | API | Rebuild of commit **`d82fefcd37407d837e7c94f6ac57a907ea286ed1`** (never `origin/main`), asset key `2fcda02d…` | `git rev-parse HEAD` must equal that SHA; the rebuilt template must pass `candidate_assembly_check.py --live-template <rebuilt template>` (it checks the Handler key and the whole template against the baseline fingerprint). Fallback: `~/ogevia-before/lambda-code-before.zip` (hash verified against the live `CodeSha256` in step 4) and `api-template-before.json` |
 | Web | `~/ogevia-before/web-before/` | `web-before.sha256` manifest taken before the change |
-| Database | the snapshot id in `~/ogevia-before/snapshot-id.txt`, and the pinned rollback files (rollback-set hash in section 1) | snapshot status `available` checked in step 7 |
+| Database | the pinned rollback files (rollback-set hash in section 1) are the **prepared, rehearsed** recovery. The named snapshot in `~/ogevia-before/snapshot-id.txt` is a **prerequisite only**: restoring from it is **not a prepared or proven recovery procedure** (section 8.5, Tier 2) | snapshot validated by the wrapper (exists, `available`, belongs to `ogevia-prod-postgres`, manual, created inside the release window) |
 
 ### 8.2 Order of recovery
 Reverse of the deployment: **web, then API, then database.** A database rollback while the new API is live makes the new routes call functions that no longer exist. Web and API alone are enough if the schema is fine, but the previous web on the new schema shows the false pickup message (open shifts), so keep pickups frozen until the database is also rolled back or the new web is back.
@@ -280,13 +290,13 @@ cd ~/ogevia-baseline/infra/aws && npx cdk deploy --app ~/ogevia-baseline-cdk.out
 The checker must print `PASS all checks` before the deploy line is run (it proves the rebuilt baseline equals the recorded baseline). If the rebuilt asset key differs from `2fcda02d…`, STOP: restore from `lambda-code-before.zip` instead, as an owner-approved emergency step (`aws lambda update-function-code --function-name "$FN" --zip-file fileb://~/ogevia-before/lambda-code-before.zip`; this puts CloudFormation out of step with the stack and is followed by a proper redeploy of the baseline).
 
 ### 8.5 Database only (the shared production database is preserved)
-**Tier 1 (prepared, rehearsed): the wrapper's `rollback` mode.** It applies the pinned `db/rollback/0077 ... 0053` files to `ogevia_sv_test`, newest first, one transaction per file (`set local role ogevia_owner`; the rollback file; the ledger row deleted in the same transaction), through the same reviewed /32 window. It refuses unless: the commit and clean tree hold; the migration-set and rollback-set hashes match; the named snapshot is `available` for `ogevia-prod-postgres` (several rollbacks drop tables: 0055, 0056, 0060, 0063, 0064, 0067, 0068, 0069, 0071, 0072, 0073, 0074, 0077); the connection is `ogevia_sv_test`; the ledger is contiguous between 0053 and 0077. It never names `ogevia_prd`.
+**Tier 1 (prepared, rehearsed): the wrapper's `rollback` mode.** It applies the pinned `db/rollback/0077 ... 0053` files to `ogevia_sv_test`, newest first, one transaction per file (`set local role ogevia_owner`; the rollback file; the ledger row deleted in the same transaction), through the same reviewed /32 window. It refuses unless: the commit and clean tree hold; the migration-set and rollback-set hashes match; the named pre-deployment snapshot validates exactly as in `migrate` mode (exists, `available`, belongs to `ogevia-prod-postgres`, manual, created inside the release window; for a rollback the window need only have started, so a recovery can run after it ends) because several rollbacks drop tables, so a snapshot must exist as a prerequisite ( 0055, 0056, 0060, 0063, 0064, 0067, 0068, 0069, 0071, 0072, 0073, 0074, 0077; the snapshot is not what recovers them, the pinned rollback files are); the connection is `ogevia_sv_test`; the ledger is contiguous between 0053 and 0077. It never names `ogevia_prd`.
 ```
-cd ~/ogevia-rc/infra/aws && OGEVIA_ROLLBACK_SNAPSHOT_ID=$(cat ~/ogevia-before/snapshot-id.txt) OGEVIA_EXPECT_HOST_IP=<the admin host's private IP> bash slice/candidate-migrate-test.sh rollback
+cd ~/ogevia-rc/infra/aws && OGEVIA_PREDEPLOY_SNAPSHOT_ID=$(cat ~/ogevia-before/snapshot-id.txt) OGEVIA_EXPECT_HOST_IP=<the admin host's private IP> bash slice/candidate-migrate-test.sh rollback
 ```
 Type `OPEN-5432-WINDOW-ROLLBACK-TEST`. Expected: `ledger after: 52 migrations applied, latest 0052`, `enforcement state unchanged`, `migrations 0077 to 0053 reverted`, `RESTORED (verified)`. Export the pending pickup requests first (`shift_pickup_requests`): rolling back 0063 drops that table; the shifts they asked for stay open. Why this preserves the shared instance: LOCAL VERIFIED on PostgreSQL 16 with two databases in one cluster, rolling one back left the other database's dump and the cluster's roles identical; no migration or rollback 0053-0077 contains cluster-level statements (roles, extensions, databases, `alter system`); the wrapper only ever connects to `ogevia_sv_test` (`-d ogevia_sv_test`, test-asserted). NOT VERIFIED on the real RDS.
 
-**Tier 2 (a full restore of `ogevia_sv_test` from the snapshot): NOT PREPARED, NOT REHEARSED.** The snapshot also contains `ogevia_prd` as of the snapshot time, so it is **never** restored in place and the application is **never** repointed at a restored instance. A restore would go to a NEW instance, and `ogevia_sv_test` alone would then be copied back (`pg_dump`/`pg_restore`, every command naming the database) after the owner approves; that needs its own reviewed window script. If Tier 1 fails, **stop and report**; do not improvise Tier 2.
+**Tier 2 (a full restore of `ogevia_sv_test` from the snapshot): NOT PREPARED, NOT REHEARSED. The snapshot alone is not a proven recovery procedure: it proves only that a copy exists.** The snapshot also contains `ogevia_prd` as of the snapshot time, so it is **never** restored in place and the application is **never** repointed at a restored instance. A restore would go to a NEW instance, and `ogevia_sv_test` alone would then be copied back (`pg_dump`/`pg_restore`, every command naming the database) after the owner approves; that needs its own reviewed window script. If Tier 1 fails, **stop and report**; do not improvise Tier 2.
 
 ### 8.6 If the temporary rule cannot be removed (exit 3), from the independent session
 The script prints these; they are repeated here. First identify (read-only); the temporary rule is the ONE row with cidr `<admin host IP>/32`, tcp 5432, description beginning `TEMP-migrate-`:
@@ -309,12 +319,12 @@ aws logs filter-log-events --log-group-name "/aws/lambda/$FN" --filter-pattern '
 Expected JSON log line with `"task":"compliance-sweep"`, `"organizations":0`, `"evaluated":0`, `"holdsOpened":0`, `"holdsReleased":0`, `"failedOrganizations":0`. (If the log group has another name, list it with `aws logs describe-log-groups --log-group-name-prefix /aws/lambda/Ogevia-prod-ServiceVerificationApi`.) A line with `failedOrganizations` above 0 or `level:error` is a stop. Emergency stop of the rule: `aws events disable-rule --name <rule name>` (YELLOW; enforcement does not depend on the rule).
 
 ## 10. Stop conditions (any one stops the procedure; nothing later is run)
-A pin check that does not print `PINS HOLD`; an assembly check or live-template check that fails; a ledger that is not exactly 52 / 0052 at the recheck or in the window; a snapshot that is not `available`; a `cdk diff` line outside step 8; a policy check that fails; a wrapper that exits non-zero (read its message: restoration is verified before it exits unless it says exit 3); `verify.ts` with any FAIL; an API stack not `UPDATE_COMPLETE`; a changed Lambda environment; a web `index.html` hash that differs from the local build; a TEST banner missing from the site; any step that would touch `ogevia_prd`, an `Ogevia-prd-*` stack, `config.json`, Cognito, Netlify or Supabase; enforcement activation count changing.
+A pin check that does not print `PINS HOLD`; an assembly check or live-template check that fails; a ledger that is not exactly 52 / 0052 at the recheck or in the window; a snapshot that is missing, not `available`, not manual, not of `ogevia-prod-postgres` or created outside the release window (the wrapper refuses before opening access), or a release window that has ended (`migrate`); a `cdk diff` line outside step 8; a policy check that fails; a wrapper that exits non-zero (read its message: restoration is verified before it exits unless it says exit 3); `verify.ts` with any FAIL; an API stack not `UPDATE_COMPLETE`; a changed Lambda environment; a web `index.html` hash that differs from the local build; a TEST banner missing from the site; any step that would touch `ogevia_prd`, an `Ogevia-prd-*` stack, `config.json`, Cognito, Netlify or Supabase; enforcement activation count changing.
 
 ## 11. Decisions and approvals this procedure needs
 1. Push `claude/ogevia-operator-3159e52` (new branch, no force) so CloudShell can fetch the operator commit.
 2. Approve the migration database-access method: the `--host-ip` /32 wrapper (recommended; it is the reviewed approach, rehearsed) in place of the older application-group attachment.
-3. Name the operator, window and approval reference.
+3. Name the operator, the release window (UTC start and end, at most 12 hours) and the approval reference.
 4. Accept: Tier 2 database recovery is not prepared; the live Lambda policy, the live template equality and the real tunnel are verified only at run time by the checks above.
 5. ComplianceSweep deployed ENABLED (section 9), or choose DISABLED with the extra step.
 

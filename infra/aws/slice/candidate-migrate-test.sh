@@ -7,7 +7,7 @@
 #   OGEVIA_EXPECT_MIGRATIONS_SHA=<64-hex, from the procedure> bash candidate-migrate-test.sh migrate
 #   ... same variables ...                                       bash candidate-migrate-test.sh migrate --resume
 #   OGEVIA_EXPECT_COMMIT=... OGEVIA_EXPECT_HOST_IP=... OGEVIA_EXPECT_MIGRATIONS_SHA=... OGEVIA_EXPECT_ROLLBACK_SHA=<64-hex> \
-#   OGEVIA_ROLLBACK_SNAPSHOT_ID=<available RDS snapshot id> bash candidate-migrate-test.sh rollback
+#   bash candidate-migrate-test.sh rollback            (the snapshot variables below are required in BOTH modes)
 #                                                                DATABASE-ONLY RECOVERY: apply the pinned db/rollback files 0077 ... 0053 to ogevia_sv_test, one transaction per file
 #   bash candidate-migrate-test.sh --restore-only                after an interrupted run: remove the temporary rule and verify (idempotent)
 #
@@ -18,6 +18,14 @@
 # --resume, contiguous between 0053 and 0076), (3) runs the pinned migration runner against that one database, (4) re-reads the ledger and
 # runs the read-only verification set, and only then closes the window. The shared production database (ogevia_prd) is never named, connected
 # to or queried. The RDS master credential is held in shell memory only and never printed.
+#
+# SNAPSHOT (required in both modes, checked BEFORE the access window is proposed or opened; every failure refuses and changes nothing):
+#   OGEVIA_PREDEPLOY_SNAPSHOT_ID         a manual snapshot named ogevia-prod-postgres-pre-0077-YYYYMMDDHHMM (UTC minute it was taken)
+#   OGEVIA_RELEASE_WINDOW_START / _END   the owner-approved release window, UTC, format 2026-10-19T03:00:00Z (END after START, at most 12 hours)
+#   The snapshot must exist, be `available`, belong to the instance ogevia-prod-postgres, be of type `manual`, have been CREATED inside the release window
+#   and not in the future, and carry a name stamp inside the window. `migrate` additionally requires that NOW is inside the window; `rollback` requires
+#   only that the window has started (a recovery may be run after the window ends). A snapshot is a recovery PREREQUISITE. Restoring from it is NOT a
+#   prepared or rehearsed procedure (see the procedure's Recovery section); this script never restores one.
 #
 # PRECONDITIONS it enforces before any change (all read-only):
 #   * the checkout is exactly OGEVIA_EXPECT_COMMIT with a clean tree, and db/migrations hashes to OGEVIA_EXPECT_MIGRATIONS_SHA;
@@ -137,7 +145,12 @@ close_window() {
 on_exit() { local rc=$?; close_window; [[ $RC != 0 ]] && exit "$RC"; exit "$rc"; }
 trap on_exit EXIT
 trap 'say "Interrupted: cleaning up."; exit 130' INT TERM HUP
-stop() { say ""; say "STOPPED: $*"; say "Before the window opened nothing is different; after it opened, the cleanup above has restored and verified the security group. The database may be partly migrated: see the ledger line above and the recovery section of the procedure."; exit 1; }
+stop() {
+  say ""; say "STOPPED: $*"
+  if [[ "$OWNS" == 0 ]]; then say "No access window was opened and nothing was changed."
+  else say "The window had been opened: the cleanup above restored and verified the security group. The database may be partly migrated: see the ledger line above and the recovery section of the procedure."; fi
+  exit 1
+}
 over_time() { (( $(date +%s) - START_EPOCH > MAX_SECONDS )); }
 for t in aws jq psql session-manager-plugin sha256sum timeout git node npx; do
   command -v "$t" >/dev/null 2>&1 || stop "missing tool '$t'. Install it yourself; this script installs nothing."
@@ -171,14 +184,32 @@ ls "$INFRA/db/migrations/${LAST_NEW}_"*.sql >/dev/null 2>&1 || stop "migration $
 [[ -d "$INFRA/node_modules" ]] || stop "dependencies are not installed: run 'pnpm install --frozen-lockfile' in the checkout first"
 if [[ "$ARG" == rollback ]]; then
   [[ "${OGEVIA_EXPECT_ROLLBACK_SHA:-}" =~ ^[0-9a-f]{64}$ ]] || stop "set OGEVIA_EXPECT_ROLLBACK_SHA to the 64-character checksum of the rollback set given in the procedure"
-  [[ -n "${OGEVIA_ROLLBACK_SNAPSHOT_ID:-}" && "$OGEVIA_ROLLBACK_SNAPSHOT_ID" =~ ^[A-Za-z0-9-]{1,255}$ ]] || stop "set OGEVIA_ROLLBACK_SNAPSHOT_ID to the id of the pre-migration RDS snapshot (several rollbacks drop tables: a snapshot is required)"
   ROLL_SHA=$(cd "$INFRA/db/rollback" && LC_ALL=C sha256sum -- 00[5-7][0-9]_*.down.sql | awk '$2 >= "0053"' | sha256sum | cut -d' ' -f1)
   [[ "$ROLL_SHA" == "$OGEVIA_EXPECT_ROLLBACK_SHA" ]] || stop "db/rollback (0053-0077) hashes to $ROLL_SHA, not the approved $OGEVIA_EXPECT_ROLLBACK_SHA"
   for v in $(seq 53 77); do ls "$INFRA/db/rollback/$(printf '%04d' "$v")_"*.down.sql >/dev/null 2>&1 || stop "the rollback file for $(printf '%04d' "$v") is missing"; done
-  SNAP=$(aws rds describe-db-snapshots --db-snapshot-identifier "$OGEVIA_ROLLBACK_SNAPSHOT_ID" --query 'DBSnapshots[0].[Status,DBInstanceIdentifier]' --output text 2>/dev/null) || stop "cannot read snapshot $OGEVIA_ROLLBACK_SNAPSHOT_ID"
-  [[ "$SNAP" == "available"$'\t'"$RDS_ID" ]] || stop "snapshot $OGEVIA_ROLLBACK_SNAPSHOT_ID is '$SNAP', expected 'available $RDS_ID'"
-  say "rollback set sha256 ${ROLL_SHA:0:16}...: OK; snapshot $OGEVIA_ROLLBACK_SNAPSHOT_ID is available for $RDS_ID"
+  say "rollback set sha256 ${ROLL_SHA:0:16}...: OK"
 fi
+# ---- the named, available pre-deployment snapshot (both modes), validated before access is proposed -------------------------------------------------------------
+SNAP_ID="${OGEVIA_PREDEPLOY_SNAPSHOT_ID:-}"
+[[ "$SNAP_ID" =~ ^ogevia-prod-postgres-pre-0077-[0-9]{12}$ ]] || stop "set OGEVIA_PREDEPLOY_SNAPSHOT_ID to the named pre-deployment snapshot (pattern ogevia-prod-postgres-pre-0077-YYYYMMDDHHMM, UTC)"
+TS_RE='^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$'
+[[ "${OGEVIA_RELEASE_WINDOW_START:-}" =~ $TS_RE && "${OGEVIA_RELEASE_WINDOW_END:-}" =~ $TS_RE ]] || stop "set OGEVIA_RELEASE_WINDOW_START and OGEVIA_RELEASE_WINDOW_END to the owner-approved window in UTC, format 2026-10-19T03:00:00Z"
+W_START=$(date -u -d "$OGEVIA_RELEASE_WINDOW_START" +%s 2>/dev/null) && W_END=$(date -u -d "$OGEVIA_RELEASE_WINDOW_END" +%s 2>/dev/null) || stop "the release window is not a valid date and time"
+(( W_END > W_START && W_END - W_START <= 43200 )) || stop "the release window must end after it starts and last at most 12 hours"
+NOW_EPOCH=$(date -u +%s)
+(( NOW_EPOCH >= W_START )) || stop "the release window has not started (starts $OGEVIA_RELEASE_WINDOW_START)"
+if [[ "$ARG" == migrate ]]; then (( NOW_EPOCH <= W_END )) || stop "the release window ended at $OGEVIA_RELEASE_WINDOW_END; migrating outside it is refused"; fi
+N_STAMP="${SNAP_ID: -12}"
+N_EPOCH=$(date -u -d "${N_STAMP:0:4}-${N_STAMP:4:2}-${N_STAMP:6:2} ${N_STAMP:8:2}:${N_STAMP:10:2}:00" +%s 2>/dev/null) || stop "the time stamp in the snapshot name is not a valid date"
+(( N_EPOCH + 60 >= W_START && N_EPOCH <= W_END )) || stop "the time stamp in the snapshot name ($N_STAMP) is outside the release window"
+SNAP=$(aws rds describe-db-snapshots --db-snapshot-identifier "$SNAP_ID" --query 'DBSnapshots[0].[Status,DBInstanceIdentifier,SnapshotType,SnapshotCreateTime]' --output text 2>/dev/null) || { rc=$?; stop "cannot read snapshot $SNAP_ID (it does not exist, or access failed$(tm $rc))"; }
+IFS=$'\t' read -r SNAP_STATUS SNAP_INSTANCE SNAP_TYPE SNAP_CREATED <<<"$SNAP"
+[[ "$SNAP_STATUS" == available ]] || stop "snapshot $SNAP_ID is '${SNAP_STATUS:-unknown}', not available. Wait for it to finish; nothing was changed."
+[[ "$SNAP_INSTANCE" == "$RDS_ID" ]] || stop "snapshot $SNAP_ID belongs to '${SNAP_INSTANCE:-unknown}', not $RDS_ID"
+[[ "$SNAP_TYPE" == manual ]] || stop "snapshot $SNAP_ID is of type '${SNAP_TYPE:-unknown}', not a manual pre-deployment snapshot"
+C_EPOCH=$(date -u -d "${SNAP_CREATED:-}" +%s 2>/dev/null) || stop "snapshot $SNAP_ID has no readable creation time ('${SNAP_CREATED:-}')"
+(( C_EPOCH >= W_START && C_EPOCH <= W_END && C_EPOCH <= NOW_EPOCH )) || stop "snapshot $SNAP_ID was created at $SNAP_CREATED, outside the release window $OGEVIA_RELEASE_WINDOW_START to $OGEVIA_RELEASE_WINDOW_END (or in the future); it was not captured for this release"
+say "snapshot $SNAP_ID: available, manual, belongs to $RDS_ID, created $SNAP_CREATED inside the release window $OGEVIA_RELEASE_WINDOW_START to $OGEVIA_RELEASE_WINDOW_END. (A recovery PREREQUISITE only: restoring from it is not a prepared procedure.)"
 say "commit $HEAD_SHA (clean); migration set sha256 ${MIG_SHA:0:16}...: OK"
 
 say ""; say "== 1. Environment (read-only): TEST; expected database $DB_EXPECT"
@@ -233,7 +264,7 @@ say ""; say "== 3. PROPOSED CHANGES"
 say "  1. ADD to $EXPECT_RDS_SG :  inbound tcp 5432 from $HOST_CIDR  (the admin host's own IP only; description 'TEMP-migrate-$STAMP')"
 if [[ "$ARG" == rollback ]]; then
   say "  2. Through that window, against $DB_EXPECT ONLY: check the ledger is contiguous from 0053 upward, then revert the migrations from the latest down to $FIRST_NEW with the pinned db/rollback files, one transaction per file (the ledger row is deleted in the same transaction), and re-read the ledger (expected 52 / $BASELINE)."
-  say "     DATA WARNING: several rollbacks drop tables and their history (BACKUP REQUIRED: 0055, 0056, 0060, 0063, 0064, 0067, 0068, 0069, 0071, 0072, 0073, 0074, 0077). The pre-migration snapshot is $OGEVIA_ROLLBACK_SNAPSHOT_ID."
+  say "     DATA WARNING: several rollbacks drop tables and their history (BACKUP REQUIRED: 0055, 0056, 0060, 0063, 0064, 0067, 0068, 0069, 0071, 0072, 0073, 0074, 0077). The pre-deployment snapshot is $SNAP_ID (restoring it is NOT a prepared procedure)."
 else
   say "  2. Through that window, against $DB_EXPECT ONLY: check the ledger is $([[ $RESUME == 1 ]] && echo "contiguous between $FIRST_NEW and 0076 (--resume)" || echo "exactly 52 / $BASELINE"), apply migrations $FIRST_NEW to $LAST_NEW with the pinned runner, re-read the ledger, run the read-only verification set."
 fi

@@ -17,6 +17,7 @@ vi.setConfig({ testTimeout: 90000 });
 const SCRIPT_SRC = fileURLToPath(new URL("../slice/candidate-migrate-test.sh", import.meta.url));
 const source = readFileSync(SCRIPT_SRC, "utf8");
 const code = source.split("\n").filter((l) => !/^\s*#/.test(l)).join("\n");
+let transcriptCount = 0;
 const HOST_IP = "10.20.132.179";
 const CIDR = `${HOST_IP}/32`;
 const PHRASE = "OPEN-5432-WINDOW-MIGRATE-TEST\n";
@@ -80,7 +81,14 @@ function fixture(): Fix {
   // the fake aws gains the one extra read-only verb the rollback mode uses, then delegates to the ledger-window mock
   copyFileSync(join(bin, "aws"), join(bin, "aws-base"));
   writeFileSync(join(bin, "aws"), `#!/usr/bin/env bash
-if [[ "$1 $2" == "rds describe-db-snapshots" ]]; then echo "$1 $2" >> "$MOCK_DIR/aws-calls.log"; printf '%s\\t%s\\n' "\${MOCK_SNAP_STATUS:-available}" "\${MOCK_SNAP_INSTANCE:-ogevia-prod-postgres}"; exit 0; fi
+echo "$AWS_REGION|$AWS_DEFAULT_REGION|[$AWS_PAGER]" >> "$MOCK_DIR/aws-env.log"
+if [[ "$1 $2" == "rds describe-db-snapshots" ]]; then
+  echo "$1 $2" >> "$MOCK_DIR/aws-calls.log"
+  [[ -n "\${MOCK_SNAP_MISSING:-}" ]] && { echo "An error occurred (DBSnapshotNotFound)" >&2; exit 254; }
+  created=$(date -u -d "@$(( $(date +%s) - \${MOCK_SNAP_AGE_MIN:-10} * 60 ))" +%Y-%m-%dT%H:%M:%S.123000+00:00)
+  printf '%s\\t%s\\t%s\\t%s\\n' "\${MOCK_SNAP_STATUS:-available}" "\${MOCK_SNAP_INSTANCE:-ogevia-prod-postgres}" "\${MOCK_SNAP_TYPE:-manual}" "\${MOCK_SNAP_CREATED:-$created}"
+  exit 0
+fi
 exec "$(dirname "$0")/aws-base" "$@"
 `);
   chmodSync(join(bin, "aws"), 0o755);
@@ -103,6 +111,16 @@ exec "$(dirname "$0")/aws-base" "$@"
 function freePort(): Promise<number> {
   return new Promise((resolve, reject) => { const s = createServer(); s.once("error", reject); s.listen(0, "127.0.0.1", () => { const { port } = s.address() as { port: number }; s.close(() => resolve(port)); }); });
 }
+
+// The owner-approved release window and the named snapshot, relative to now: the window started an hour ago and ends in three hours; the snapshot was taken ten minutes ago.
+const pad = (n: number) => String(n).padStart(2, "0");
+const iso = (d: Date) => `${d.getUTCFullYear()}-${pad(d.getUTCMonth() + 1)}-${pad(d.getUTCDate())}T${pad(d.getUTCHours())}:${pad(d.getUTCMinutes())}:${pad(d.getUTCSeconds())}Z`;
+const stamp = (d: Date) => `${d.getUTCFullYear()}${pad(d.getUTCMonth() + 1)}${pad(d.getUTCDate())}${pad(d.getUTCHours())}${pad(d.getUTCMinutes())}`;
+const minutesFromNow = (m: number) => new Date(Date.now() + m * 60000);
+const snapName = (minutesAgo = 10) => `ogevia-prod-postgres-pre-0077-${stamp(minutesFromNow(-minutesAgo))}`;
+function releaseWindow(startMin = -60, endMin = 180, snapAgo = 10) {
+  return { OGEVIA_RELEASE_WINDOW_START: iso(minutesFromNow(startMin)), OGEVIA_RELEASE_WINDOW_END: iso(minutesFromNow(endMin)), OGEVIA_PREDEPLOY_SNAPSHOT_ID: snapName(snapAgo), MOCK_SNAP_AGE_MIN: String(snapAgo) };
+}
 interface Run { code: number | null; out: string; outDir: string }
 let f: Fix;
 beforeEach(() => { f = fixture(); });
@@ -113,7 +131,7 @@ async function run(args: string[], opts: { env?: Record<string, string>; input?:
     const env = {
       ...process.env, PATH: `${f.bin}:${process.env.PATH}`, MOCK_DIR: f.dir, HOME: f.dir,
       OGEVIA_MIGRATE_STATE_DIR: join(f.dir, "state"), OGEVIA_LEDGER_STATE_DIR: join(f.dir, "ledger-state"), OGEVIA_MIGRATE_DIR: outDir, OGEVIA_MIGRATE_PORT: String(port),
-      OGEVIA_EXPECT_COMMIT: f.sha, OGEVIA_EXPECT_MIGRATIONS_SHA: f.migSha, OGEVIA_EXPECT_HOST_IP: HOST_IP, OGEVIA_TUNNEL_WAIT: "10", OGEVIA_EXPECT_ROLLBACK_SHA: f.rollSha, OGEVIA_ROLLBACK_SNAPSHOT_ID: "ogevia-prod-postgres-pre-0077-test", ...(opts.env ?? {}),
+      OGEVIA_EXPECT_COMMIT: f.sha, OGEVIA_EXPECT_MIGRATIONS_SHA: f.migSha, OGEVIA_EXPECT_HOST_IP: HOST_IP, OGEVIA_TUNNEL_WAIT: "10", OGEVIA_EXPECT_ROLLBACK_SHA: f.rollSha, ...releaseWindow(), ...(opts.env ?? {}),
     };
     const p = spawn("bash", [f.script, ...args], { env, stdio: ["pipe", "pipe", "pipe"], detached: true });
     let out = "";
@@ -121,7 +139,7 @@ async function run(args: string[], opts: { env?: Record<string, string>; input?:
     p.stdin.end(opts.input ?? PHRASE);
     let killed = false;
     const timer = opts.killWhen ? setInterval(() => { if (!killed && opts.killWhen!()) { killed = true; process.kill(-p.pid!, "SIGTERM"); } }, 50) : null;
-    p.on("close", (c) => { if (timer) clearInterval(timer); if (process.env.TRANSCRIPT_DIR) writeTranscript(join(process.env.TRANSCRIPT_DIR, `${expect.getState().currentTestName!.replace(/\W+/g, "_").slice(0, 90)}__${args.join("_")}.txt`), out.replace(new RegExp(f.dir, "g"), "<tmp>")); resolve({ code: c, out, outDir }); });
+    p.on("close", (c) => { if (timer) clearInterval(timer); if (process.env.TRANSCRIPT_DIR) writeTranscript(join(process.env.TRANSCRIPT_DIR, `${expect.getState().currentTestName!.replace(/\W+/g, "_").slice(0, 60)}_${createHash("sha1").update(expect.getState().currentTestName!).digest("hex").slice(0, 6)}_${transcriptCount++}__${args.join("_")}.txt`), out.replace(new RegExp(f.dir, "g"), "<tmp>")); resolve({ code: c, out, outDir }); });
   });
 }
 const sg = () => JSON.parse(readFileSync(join(f.dir, "sg.json"), "utf8"));
@@ -274,6 +292,7 @@ describe("failure and interruption (the rehearsal the owner asked for)", () => {
     expect(r.code, r.out).toBe(1);
     expect(r.out).toContain("MIGRATION FAILED (runner exit 1)");
     expect(r.out).toContain("earlier files remain applied");
+    expect(r.out).toContain("The window had been opened: the cleanup above restored and verified the security group.");
     expect(r.out).toContain("Ledger now: 59 migrations applied, latest 0059");
     expect(r.out).toContain("RESTORED (verified)");
     expect(npxCalls().map((c) => c.split(" ").pop())).toEqual(["db/scripts/migrate.ts"]);
@@ -377,14 +396,8 @@ describe("database-only recovery: rollback of the TEST database", () => {
     expect(sqlLog).not.toContain("ogevia_prd");
     expect(sqlLog).toContain("-d ogevia_sv_test");
   });
-  it("refuses without a snapshot, with a snapshot that is not available or belongs to another instance, and with a rollback set that is not the approved one", async () => {
-    for (const [env, text] of [
-      [{ OGEVIA_ROLLBACK_SNAPSHOT_ID: "" }, "OGEVIA_ROLLBACK_SNAPSHOT_ID"],
-      [{ MOCK_SNAP_STATUS: "creating" }, "expected 'available ogevia-prod-postgres'"],
-      [{ MOCK_SNAP_INSTANCE: "some-other-instance" }, "expected 'available ogevia-prod-postgres'"],
-      [{ OGEVIA_EXPECT_ROLLBACK_SHA: "e".repeat(64) }, "not the approved"],
-      [{ OGEVIA_EXPECT_ROLLBACK_SHA: "" }, "OGEVIA_EXPECT_ROLLBACK_SHA"],
-    ] as Array<[Record<string, string>, string]>) {
+  it("refuses a rollback set that is not the approved one, before any access is opened", async () => {
+    for (const [env, text] of [[{ OGEVIA_EXPECT_ROLLBACK_SHA: "e".repeat(64) }, "not the approved"], [{ OGEVIA_EXPECT_ROLLBACK_SHA: "" }, "OGEVIA_EXPECT_ROLLBACK_SHA"]] as Array<[Record<string, string>, string]>) {
       f = fixture(); writeFileSync(join(f.dir, "ledger"), "77|0077");
       const r = await rollback(env);
       expect(r.code, `${text}: ${r.out}`).toBe(1);
@@ -456,5 +469,92 @@ describe("enforcement activation is a separate approval: this script never chang
     expect(r.code, r.out).toBe(0);
     expect(r.out).toContain("enforcement activated for 1 of 2 agencies before");
     expect(r.out).toContain("enforcement state unchanged: 1 of 2 agencies activated");
+  });
+});
+
+describe("the named, available pre-deployment snapshot is required in BOTH modes and validated before any access is opened", () => {
+  const MODES: Array<["migrate" | "rollback", string]> = [["migrate", "52|0052"], ["rollback", "77|0077"]];
+  const start = (mode: string, env: Record<string, string>) => run([mode], { input: mode === "rollback" ? RPHRASE : PHRASE, env });
+  const REFUSALS: Array<[string, Record<string, string> | (() => Record<string, string>), string]> = [
+    ["no snapshot id", { OGEVIA_PREDEPLOY_SNAPSHOT_ID: "" }, "OGEVIA_PREDEPLOY_SNAPSHOT_ID"],
+    ["an id that is not the release naming pattern", { OGEVIA_PREDEPLOY_SNAPSHOT_ID: "my-snapshot" }, "OGEVIA_PREDEPLOY_SNAPSHOT_ID"],
+    ["an id naming another instance", { OGEVIA_PREDEPLOY_SNAPSHOT_ID: "some-other-instance-pre-0077-202610190312" }, "OGEVIA_PREDEPLOY_SNAPSHOT_ID"],
+    ["the old unnamed variable only", { OGEVIA_PREDEPLOY_SNAPSHOT_ID: "", OGEVIA_ROLLBACK_SNAPSHOT_ID: "ogevia-prod-postgres-pre-0077-202610190312" }, "OGEVIA_PREDEPLOY_SNAPSHOT_ID"],
+    ["a snapshot that does not exist", { MOCK_SNAP_MISSING: "1" }, "cannot read snapshot"],
+    ["a snapshot still being created", { MOCK_SNAP_STATUS: "creating" }, "not available"],
+    ["a failed snapshot", { MOCK_SNAP_STATUS: "failed" }, "not available"],
+    ["a snapshot of another instance", { MOCK_SNAP_INSTANCE: "some-other-instance" }, "belongs to 'some-other-instance'"],
+    ["an automated snapshot", { MOCK_SNAP_TYPE: "automated" }, "not a manual pre-deployment snapshot"],
+    ["a snapshot created before the release window", { MOCK_SNAP_AGE_MIN: "300" }, "outside the release window"],
+    ["a snapshot created after the release window ended or in the future", { ...releaseWindow(-60, 20), MOCK_SNAP_AGE_MIN: "-30" }, "outside the release window"],
+    ["a snapshot with an unreadable creation time", { MOCK_SNAP_CREATED: "None" }, "no readable creation time"],
+    ["a name stamp that is outside the release window", () => ({ OGEVIA_PREDEPLOY_SNAPSHOT_ID: snapName(400) }), "time stamp in the snapshot name"],
+    ["no release window", { OGEVIA_RELEASE_WINDOW_START: "", OGEVIA_RELEASE_WINDOW_END: "" }, "OGEVIA_RELEASE_WINDOW_START"],
+    ["a malformed release window", { OGEVIA_RELEASE_WINDOW_START: "yesterday" }, "OGEVIA_RELEASE_WINDOW_START"],
+    ["an impossible date in the window", { OGEVIA_RELEASE_WINDOW_START: "2026-13-45T25:61:61Z" }, "not a valid date"],
+    ["a window that ends before it starts", () => { const w = releaseWindow(); return { OGEVIA_RELEASE_WINDOW_START: w.OGEVIA_RELEASE_WINDOW_END, OGEVIA_RELEASE_WINDOW_END: w.OGEVIA_RELEASE_WINDOW_START }; }, "must end after it starts"],
+    ["a window longer than 12 hours", () => releaseWindow(-60, 800), "at most 12 hours"],
+    ["a window that has not started", () => releaseWindow(30, 200, -20), "has not started"],
+  ];
+  for (const [mode, ledgerValue] of MODES) {
+    it.each(REFUSALS)(`${mode}: refuses %s, opens no access and changes nothing`, async (_name, envOrFn, text) => {
+      writeFileSync(join(f.dir, "ledger"), ledgerValue);
+      const env = typeof envOrFn === "function" ? envOrFn() : envOrFn;
+      const r = await start(mode, env);
+      expect(r.code, r.out).toBe(1);
+      expect(r.out).toContain(text);
+      expect(r.out).toContain("No access window was opened and nothing was changed.");
+      const v = verbs();
+      expect(v).not.toContain("ec2 authorize-security-group-ingress");
+      expect(v).not.toContain("ec2 revoke-security-group-ingress");
+      expect(v).not.toContain("ssm start-session");
+      expect(v).not.toContain("secretsmanager get-secret-value");
+      expect(sg()).toEqual(INITIAL_SG);
+      expect(marker()).toBe(false);
+      expect(npxCalls()).toEqual([]);
+      expect(existsSync(join(f.dir, "psql-calls.log"))).toBe(false);
+      expect(existsSync(join(f.dir, "down-calls.log"))).toBe(false);
+      expect(ledger()).toBe(ledgerValue);
+    });
+  }
+  it("migrate is also refused after the release window has ended, even with a snapshot inside it; rollback may still run (recovery after the window)", async () => {
+    const ended = { ...releaseWindow(-300, -60, 120) }; // window ended an hour ago; the snapshot was taken two hours ago, inside it
+    writeFileSync(join(f.dir, "ledger"), "52|0052");
+    const m = await start("migrate", ended);
+    expect(m.code, m.out).toBe(1);
+    expect(m.out).toContain("migrating outside it is refused");
+    expect(verbs()).not.toContain("ec2 authorize-security-group-ingress");
+    f = fixture(); writeFileSync(join(f.dir, "ledger"), "77|0077");
+    const r = await start("rollback", ended);
+    expect(r.code, r.out).toBe(0);
+    expect(r.out).toContain("ledger after: 52 migrations applied, latest 0052");
+  });
+  it.each(MODES)("%s: a valid snapshot is validated first, reported, and described as a prerequisite only", async (mode, ledgerValue) => {
+    writeFileSync(join(f.dir, "ledger"), ledgerValue);
+    const r = await start(mode, {});
+    expect(r.code, r.out).toBe(0);
+    expect(r.out).toMatch(/snapshot ogevia-prod-postgres-pre-0077-\d{12}: available, manual, belongs to ogevia-prod-postgres, created \S+ inside the release window/);
+    expect(r.out).toContain("A recovery PREREQUISITE only: restoring from it is not a prepared procedure");
+    expect(r.out.indexOf("snapshot ogevia-prod-postgres-pre-0077-")).toBeLessThan(r.out.indexOf("== 4. Window"));
+    expect(verbs()).toContain("rds describe-db-snapshots");
+    // the snapshot check happens before the rule is proposed or added
+    expect(calls().findIndex((c) => c.startsWith("rds describe-db-snapshots"))).toBeLessThan(calls().findIndex((c) => c.startsWith("ec2 authorize-security-group-ingress")));
+  });
+  it("the script never restores a snapshot or creates one", () => {
+    expect(code).not.toMatch(/restore-db-instance|create-db-snapshot|delete-db-snapshot|copy-db-snapshot|modify-db-snapshot/);
+  });
+});
+
+describe("the AWS region and pager are fixed by the script itself, not inherited", () => {
+  it("every AWS call sees us-west-2 and an empty pager even when the caller exports other values", async () => {
+    writeFileSync(join(f.dir, "ledger"), "52|0052");
+    const r = await run(["migrate"], { env: { AWS_REGION: "eu-west-1", AWS_DEFAULT_REGION: "eu-west-1", AWS_PAGER: "less" } });
+    expect(r.code, r.out).toBe(0);
+    const seen = new Set(readFileSync(join(f.dir, "aws-env.log"), "utf8").split("\n").filter(Boolean));
+    expect([...seen]).toEqual(["us-west-2|us-west-2|[]"]);
+  });
+  it("the script sets them literally from its own constant", () => {
+    expect(code).toMatch(/^REGION=us-west-2$/m);
+    expect(code).toMatch(/^export AWS_REGION=\$REGION AWS_DEFAULT_REGION=\$REGION AWS_PAGER=""$/m);
   });
 });
