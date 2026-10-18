@@ -8,10 +8,18 @@ export class ApiError extends Error {
     readonly status: number,
     readonly code: string,
     message: string,
+    /** Logged, never returned: the AWS error NAME behind a storage failure (for example AccessDenied). No message text, so no input values. */
+    readonly storageError?: string,
   ) {
     super(message);
     this.name = "ApiError";
   }
+}
+
+/** A failed object-store write. The caller sees one safe message; the log gets the AWS error name so the cause can be found. */
+export function storageUnavailable(message: string, error: unknown): ApiError {
+  const name = (error as { name?: unknown } | null)?.name;
+  return new ApiError(503, "storage_unavailable", message, typeof name === "string" && /^[A-Za-z0-9_.]{1,64}$/.test(name) ? name : "Unknown");
 }
 
 export const badRequest = (message: string) => new ApiError(400, "bad_request", message);

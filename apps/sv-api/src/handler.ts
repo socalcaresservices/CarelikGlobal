@@ -23,6 +23,8 @@ export interface LogRecord {
   readonly durationMs: number;
   readonly errorCode?: string;
   readonly sqlState?: string;
+  /** Object-store failures only: the AWS error name (never its message). */
+  readonly storageError?: string;
 }
 
 /**
@@ -123,6 +125,7 @@ export function createHandler(deps: HandlerDeps) {
       const sqlState = (error as { code?: unknown })?.code;
       return finish(json(apiError.status, errorBody(apiError.code, apiError.message), requestId), {
         errorCode: apiError.code,
+        ...(apiError.storageError ? { storageError: apiError.storageError } : {}),
         ...(typeof sqlState === "string" && /^[0-9A-Z]{5}$/.test(sqlState) ? { sqlState } : {}),
       });
     }

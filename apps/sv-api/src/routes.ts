@@ -1,9 +1,9 @@
 import { createHash, randomBytes, randomInt, randomUUID } from "node:crypto";
 import type { Queryable } from "@carelik/auth/server";
-import { ApiError } from "./errors";
+import { ApiError, storageUnavailable } from "./errors";
 import { assertExportSize, buildReportCsv, REPORT_KEYS, sha256Hex, type ExportParams, type ReportKey } from "./exports";
 import { signatureObjectKey, validateSignaturePng, type EvidenceStore } from "./evidence";
-import { documentObjectKey, logoObjectKey, MAX_DOCUMENT_BYTES, MAX_LOGO_BYTES, validateDocumentFile, validateLogoFile } from "./documents";
+import { clientDocumentObjectKey, documentObjectKey, lateFormObjectKey, logoObjectKey, MAX_DOCUMENT_BYTES, MAX_LOGO_BYTES, validateDocumentFile, validateLogoFile } from "./documents";
 import type { HttpApiEvent } from "./http";
 import type { IdentityAdmin } from "./identity";
 import {
@@ -307,8 +307,8 @@ export const ROUTES: Record<string, Route> = {
       let s3VersionId: string | null;
       try {
         ({ versionId: s3VersionId } = await evidence.put(objectKey, file.bytes, file.sha256, file.contentType));
-      } catch {
-        throw new ApiError(503, "storage_unavailable", "The logo could not be stored. Nothing was changed; please try again.");
+      } catch (error) {
+        throw storageUnavailable("The logo could not be stored. Nothing was changed; please try again.", error);
       }
       const sha256 = await tx(async (db) => {
         const r = await db.query("select ogevia_api.set_organization_logo($1, $2, $3, $4, $5, $6, $7, $8) as s", [
@@ -600,12 +600,12 @@ export const ROUTES: Record<string, Route> = {
       const [prior] = await tx((db) => rows(db, "select * from ogevia_api.get_client_document_upload_replay($1,$2)", [documentId, key]));
       if (prior) return { version: prior };
       const versionId = randomUUID();
-      const objectKey = `${org}/client-documents/${documentId}/${versionId}`;
+      const objectKey = clientDocumentObjectKey(org, documentId, versionId);
       let s3VersionId: string | null;
       try {
         ({ versionId: s3VersionId } = await evidence.put(objectKey, file.bytes, file.sha256, file.contentType));
-      } catch {
-        throw new ApiError(503, "storage_unavailable", "The file could not be stored. Nothing was saved; please try again.");
+      } catch (error) {
+        throw storageUnavailable("The file could not be stored. Nothing was saved; please try again.", error);
       }
       const [version] = await tx((db) =>
         rows(db, "select * from ogevia_api.register_client_document_version($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)", [documentId, versionId, objectKey, s3VersionId, file.contentType, file.bytes.length, file.sha256Hex, issuedOn, expiresOn, key]));
@@ -2210,12 +2210,12 @@ export const ROUTES: Record<string, Route> = {
       await tx((db) => db.query("select ogevia_api.check_paper_confirmation_upload($1, $2)", [requestId, org]));
       // A retry with the same key uses the same id, so it stores the same object and returns the same record.
       const lateId = key ? stableUuid(`paper:${requestId}:${key}`) : randomUUID();
-      const objectKey = `${org}/documents/${lateId}/paper-form`;
+      const objectKey = lateFormObjectKey(org, lateId);
       let s3VersionId: string | null;
       try {
         ({ versionId: s3VersionId } = await evidence.put(objectKey, file.bytes, file.sha256, file.contentType));
-      } catch {
-        throw new ApiError(503, "storage_unavailable", "The form could not be stored. Nothing was saved; please try again.");
+      } catch (error) {
+        throw storageUnavailable("The form could not be stored. Nothing was saved; please try again.", error);
       }
       const id = await tx(async (db) => {
         const r = await db.query("select ogevia_api.record_paper_visit_confirmation($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) as id", [
@@ -2482,8 +2482,8 @@ export const ROUTES: Record<string, Route> = {
       let s3VersionId: string | null;
       try {
         ({ versionId: s3VersionId } = await evidence.put(objectKey, file.bytes, file.sha256, file.contentType));
-      } catch {
-        throw new ApiError(503, "storage_unavailable", "The file could not be stored. Nothing was saved; please try again.");
+      } catch (error) {
+        throw storageUnavailable("The file could not be stored. Nothing was saved; please try again.", error);
       }
       const [version] = await tx((db) =>
         rows(db, "select * from ogevia_api.register_document_version($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)", [

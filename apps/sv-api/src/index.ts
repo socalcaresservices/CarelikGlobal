@@ -11,6 +11,8 @@ import { isComplianceSweepEvent, runComplianceSweep } from "./scheduled";
 
 export { createHandler } from "./handler";
 export { ROUTE_KEYS, ROUTES } from "./routes";
+export { clientDocumentObjectKey, documentObjectKey, lateFormObjectKey, logoObjectKey } from "./documents";
+export { signatureObjectKey } from "./evidence";
 export { MemoryEvidenceStore } from "./evidence";
 export { MemoryIdentityAdmin } from "./identity";
 export { COMPLIANCE_SWEEP_TASK, isComplianceSweepEvent, runComplianceSweep } from "./scheduled";

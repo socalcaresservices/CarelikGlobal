@@ -23,6 +23,8 @@ export function signatureBucketName(config: OgeviaEnvironmentConfig): string {
 export const SIGNATURE_OBJECT_KEY_PATTERN = "*/*/client-signature.png";
 /** Staff documents (0021): {org}/documents/{document}/{version}. */
 export const DOCUMENT_OBJECT_KEY_PATTERN = "*/documents/*/*";
+/** Client documents (0074): {org}/client-documents/{document}/{version}. */
+export const CLIENT_DOCUMENT_OBJECT_KEY_PATTERN = "*/client-documents/*/*";
 /** Agency logo (0020): {org}/branding/logo/{logo}. */
 export const LOGO_OBJECT_KEY_PATTERN = "*/branding/logo/*";
 

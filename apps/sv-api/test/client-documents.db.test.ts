@@ -46,6 +46,14 @@ describe("client documents through the handler", () => {
     expect((await call("GET /v1/clients/{clientId}/documents", w.managerA, { path: { clientId: fx.client }, query: { organizationId: w.orgA } })).body.documents.find((d: any) => d.documentTypeId === typeId)).toMatchObject({ state: "pending_review", versionCount: 1 });
     expect((await call("POST /v1/client-document-versions/{versionId}/review", w.managerA, { path: { versionId }, body: { decision: "verified" }, key: randomUUID() })).status).toBe(403);
     expect((await call("POST /v1/client-document-versions/{versionId}/review", w.ownerA, { path: { versionId }, body: { decision: "verified" }, key: randomUUID() })).status).toBe(200);
+    // Approval persists: a brand-new handler (a reload) and a direct database read both show it, and the audit shows who and when.
+    const reloaded = createHandler({ config: CONFIG, db: { connect: () => db.admin.connect() }, evidence, identity: new MemoryIdentityAdmin(), log: () => {} });
+    const afterReload = await reloaded(event("GET /v1/clients/{clientId}/documents", { sub: w.managerA.sub, path: { clientId: fx.client }, query: { organizationId: w.orgA } }));
+    expect((JSON.parse(afterReload.body) as { documents: Array<Record<string, unknown>> }).documents.find((d) => d.documentTypeId === typeId)).toMatchObject({ state: "approved", versionCount: 1 });
+    const stored = await db.admin.query("select review_status, reviewed_by is not null as reviewed, reviewed_by <> uploaded_by as by_someone_else from ogevia.client_document_versions where id = $1", [versionId]);
+    expect(stored.rows[0]).toEqual({ review_status: "verified", reviewed: true, by_someone_else: true });
+    // The same version cannot be approved a second time by the uploader through the API either.
+    expect((await call("POST /v1/client-document-versions/{versionId}/review", w.managerA, { path: { versionId }, body: { decision: "verified" }, key: randomUUID() })).status).toBeGreaterThanOrEqual(400);
     const file = await call("GET /v1/client-document-versions/{versionId}/file", w.managerA, { path: { versionId } });
     expect(file.status).toBe(200);
     expect(Buffer.from(file.body.fileBase64, "base64").toString()).toContain("%PDF-");

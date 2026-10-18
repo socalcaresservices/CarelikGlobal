@@ -337,3 +337,15 @@ describe("export size (0072)", () => {
     }
   });
 });
+
+describe("storage failures keep a safe message but log the AWS error name", () => {
+  it("returns 503 storage_unavailable with the error name for the log only", async () => {
+    const { storageUnavailable } = await import("../src/errors");
+    const denied = Object.assign(new Error("User: arn:aws:sts::1:assumed-role/x is not authorized (secret detail)"), { name: "AccessDenied" });
+    const e = storageUnavailable("The file could not be stored. Nothing was saved; please try again.", denied);
+    expect([e.status, e.code, e.storageError]).toEqual([503, "storage_unavailable", "AccessDenied"]);
+    expect(e.message).not.toMatch(/arn:|secret/);
+    expect(storageUnavailable("x", new Error("boom\nwith odd name")).storageError).toBe("Error");
+    expect(storageUnavailable("x", Object.assign(new Error("m"), { name: "bad name; drop" })).storageError).toBe("Unknown");
+  });
+});

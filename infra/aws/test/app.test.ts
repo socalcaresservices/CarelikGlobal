@@ -11,6 +11,7 @@ import {
   resolveEnvironment,
 } from "../lib/config.js";
 import { scanTemplate, type CfnTemplate } from "../lib/template-scan.js";
+import { clientDocumentObjectKey, documentObjectKey, lateFormObjectKey, logoObjectKey, signatureObjectKey } from "@carelik/sv-api";
 import { newApp } from "./helpers.js";
 
 function synthAll() {
@@ -92,7 +93,42 @@ describe("plan mode: every synthesized stack", () => {
     expect(gateway.Properties!.RouteTableIds).toEqual(["rtb-0bb8bac7d607a3737", "rtb-049d4448ab6a01e48"]);
     // Signatures, staff documents and the agency logo: the same three key shapes the API role has.
     const s3Resources = JSON.stringify(gateway.Properties!.PolicyDocument);
-    for (const pattern of ["/*/*/client-signature.png", "/*/documents/*/*", "/*/branding/logo/*"]) expect(s3Resources).toContain(pattern);
+    for (const pattern of ["/*/*/client-signature.png", "/*/documents/*/*", "/*/client-documents/*/*", "/*/branding/logo/*"]) expect(s3Resources).toContain(pattern);
+  });
+
+  it("every object key the API writes is allowed by BOTH the handler role and the S3 gateway endpoint (client-document upload regression)", () => {
+    // IAM resource wildcards: * matches any run of characters (including /), ? one character.
+    const glob = (pattern: string) => new RegExp(`^${pattern.replace(/[.+^${}()|[\]\\]/g, "\\$&").replace(/\*/g, ".*").replace(/\?/g, ".")}$`);
+    const org = "11111111-1111-4111-8111-111111111111", doc = "22222222-2222-4222-8222-222222222222", ver = "33333333-3333-4333-8333-333333333333";
+    const keys = {
+      signature: signatureObjectKey(org, doc),
+      staffDocument: documentObjectKey(org, doc, ver),
+      clientDocument: clientDocumentObjectKey(org, doc, ver),
+      lateFormScan: lateFormObjectKey(org, doc),
+      agencyLogo: logoObjectKey(org, doc),
+    };
+    const resourceStrings = (value: unknown): string[] => {
+      if (typeof value === "string") return [value];
+      if (Array.isArray(value)) return value.flatMap(resourceStrings);
+      if (value && typeof value === "object") {
+        const o = value as Record<string, unknown>;
+        if ("Fn::Join" in o) return [(o["Fn::Join"] as [string, unknown[]])[1].map((p) => (typeof p === "string" ? p : "<ref>")).join("")];
+        return Object.values(o).flatMap(resourceStrings);
+      }
+      return [];
+    };
+    const api = stacks.find((s) => s.stack.stackName.endsWith("-ServiceVerificationApi"))!.template;
+    const policy = Object.values(api.Resources ?? {}).find((r) => r.Type === "AWS::IAM::ManagedPolicy" && r.Properties?.Description === "Ogevia Service Verification API handler permissions")!;
+    const roleAllows = (policy.Properties!.PolicyDocument as { Statement: Array<{ Action: string | string[]; Resource: unknown }> }).Statement
+      .filter((s) => [s.Action].flat().includes("s3:PutObject"))
+      .flatMap((s) => resourceStrings(s.Resource));
+    const egress = stacks.find((s) => s.stack.stackName.endsWith("-NetworkEgress"))!.template;
+    const gateway = Object.values(egress.Resources ?? {}).find((r) => r.Type === "AWS::EC2::VPCEndpoint" && r.Properties?.VpcEndpointType === "Gateway")!;
+    const endpointAllows = (gateway.Properties!.PolicyDocument as { Statement: Array<{ Resource: unknown }> }).Statement.flatMap((s) => resourceStrings(s.Resource));
+    for (const [name, key] of Object.entries(keys)) {
+      expect(roleAllows.some((r) => glob(r.replace(/^arn:aws:s3:::[^/]*\//, "")).test(key)), `role: ${name} ${key}`).toBe(true);
+      expect(endpointAllows.some((r) => glob(r.replace(/^arn:aws:s3:::[^/]*\//, "")).test(key)), `endpoint: ${name} ${key}`).toBe(true);
+    }
   });
 
   it("targets the verified account and region, with termination protection", () => {

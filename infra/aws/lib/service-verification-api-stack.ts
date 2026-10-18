@@ -28,6 +28,7 @@ import {
   SIGNATURE_OBJECT_KEY_PATTERN,
   signatureBucketName,
   DOCUMENT_OBJECT_KEY_PATTERN,
+  CLIENT_DOCUMENT_OBJECT_KEY_PATTERN,
   LOGO_OBJECT_KEY_PATTERN,
 } from "./evidence-storage-stack.js";
 import { ExistingFoundation } from "./existing-foundation.js";
@@ -380,6 +381,7 @@ export class ServiceVerificationApiStack extends Stack {
     const evidenceBucketName = signatureBucketName(config);
     const signatureObjectsArn = `arn:aws:s3:::${evidenceBucketName}/${SIGNATURE_OBJECT_KEY_PATTERN}`;
     const documentObjectsArn = `arn:aws:s3:::${evidenceBucketName}/${DOCUMENT_OBJECT_KEY_PATTERN}`;
+    const clientDocumentObjectsArn = `arn:aws:s3:::${evidenceBucketName}/${CLIENT_DOCUMENT_OBJECT_KEY_PATTERN}`;
     const logoObjectsArn = `arn:aws:s3:::${evidenceBucketName}/${LOGO_OBJECT_KEY_PATTERN}`;
     assertVerified(config.auth, "API auth contract");
     assertDatabaseConfig(config);
@@ -452,6 +454,14 @@ export class ServiceVerificationApiStack extends Stack {
         actions: ["s3:PutObject", "s3:GetObject", "s3:GetObjectVersion"],
         // Only {org_uuid}/documents/{document_uuid}/{version_uuid} (0021).
         resources: [documentObjectsArn],
+      }),
+    );
+    policy.addStatements(
+      new iam.PolicyStatement({
+        sid: "ClientDocumentObjects",
+        actions: ["s3:PutObject", "s3:GetObject", "s3:GetObjectVersion"],
+        // Only {org_uuid}/client-documents/{document_uuid}/{version_uuid} (0074).
+        resources: [clientDocumentObjectsArn],
       }),
     );
     policy.addStatements(
@@ -697,6 +707,11 @@ export class ServiceVerificationApiStack extends Stack {
       id: `AwsSolutions-IAM5[Resource::${logoObjectsArn}]`,
       reason:
         "Agency logo keys are per-upload UUIDs unknown at deploy time; restricted to the documented */branding/logo/* shape. Only the owner can write (checked in PostgreSQL) and only agency members can read.",
+    });
+    Validations.of(policy).acknowledge({
+      id: `AwsSolutions-IAM5[Resource::${clientDocumentObjectsArn}]`,
+      reason:
+        "Client document keys are per-document/per-version UUIDs unknown at deploy time; restricted to the documented */client-documents/*/* shape. Tenant and role access is checked in PostgreSQL before every write and read.",
     });
     Validations.of(policy).acknowledge({
       id: `AwsSolutions-IAM5[Resource::${documentObjectsArn}]`,

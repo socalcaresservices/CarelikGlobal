@@ -17,6 +17,16 @@ export function documentObjectKey(organizationId: string, documentId: string, ve
   return `${organizationId}/documents/${documentId}/${versionId}`;
 }
 
+/** Client documents (0074): {org}/client-documents/{document}/{version}. The IAM role and the S3 endpoint must allow exactly this shape (CLIENT_DOCUMENT_OBJECT_KEY_PATTERN). */
+export function clientDocumentObjectKey(organizationId: string, documentId: string, versionId: string): string {
+  return `${organizationId}/client-documents/${documentId}/${versionId}`;
+}
+
+/** The scanned paper form for a late client confirmation: {org}/documents/{request}/paper-form. */
+export function lateFormObjectKey(organizationId: string, requestId: string): string {
+  return `${organizationId}/documents/${requestId}/paper-form`;
+}
+
 export interface ValidatedDocument {
   readonly bytes: Buffer;
   readonly contentType: DocumentContentType;
