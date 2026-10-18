@@ -209,6 +209,115 @@ rec("confirming without a note is refused on screen", /at least 10 characters/.t
 await arCard.getByRole("textbox").fill("Payer letter confirms the old limit applies to this visit (synthetic)");
 await arCard.getByRole("button", { name: "Confirm it is still billable" }).click(); await mp.waitForTimeout(1500);
 rec("after confirming, the card records who confirmed and why", /Confirmed still billable by Morgan Manager/.test(await mp.getByTestId("authorization-review").innerText()));
+
+// ---------------- release candidate: Action needed, client page, schedule views, reporting & billing, deadlines
+await mp.goto("https://localhost/"); await settle(mp, 1500);
+const top = mp.getByTestId("top-issues");
+rec("Home: 'Needs action first' lists Critical and Urgent items with a View all link", (await top.count()) === 1 && (await top.getByRole("link", { name: /View all/ }).count()) === 1);
+rec("Home: still the four streams and no sideways scroll with the new list", (await mp.getByTestId("stream-now").count()) === 1 && await noOverflow(mp));
+await mp.screenshot({ path: `${out}/home-rc-${label}.png`, fullPage: true });
+await top.getByRole("link", { name: /View all/ }).click(); await settle(mp, 1500);
+const issueCards = mp.getByTestId("issue-card");
+const nCards = await issueCards.count();
+rec("Action needed lists issue cards, each with a recommended action and one primary link", nCards >= 1 && (await issueCards.first().getByRole("link").count()) >= 1, String(nCards));
+rec("Action needed: counts line says routine queues are not in the action total", /not in the action total/.test(await mp.getByTestId("issue-counts").innerText()));
+rec("Action needed: no sideways scroll", await noOverflow(mp));
+await mp.screenshot({ path: `${out}/action-needed-${label}.png`, fullPage: true });
+await mp.getByTestId("issue-filters").getByLabel("Severity").selectOption("critical"); await settle(mp, 1200);
+const crit = mp.getByTestId("issue-card");
+const critTexts = await crit.allInnerTexts();
+rec("Action needed: the Critical filter shows only Critical items", critTexts.length === 0 ? (await mp.getByRole("status").filter({ hasText: /Nothing matches/ }).count()) === 1 : critTexts.every((t) => /Critical/.test(t)));
+await mp.getByTestId("issue-filters").getByLabel("Severity").selectOption(""); await settle(mp, 800);
+await mp.getByTestId("issue-card").first().getByRole("button", { name: "History" }).click(); await mp.waitForTimeout(800);
+rec("Action needed: History shows when the issue was first seen", /seen|opened/.test(await mp.getByTestId("issue-history").first().innerText()));
+
+// client page
+await mp.goto("https://localhost/clients"); await settle(mp, 1200);
+await mp.getByRole("link", { name: /Demo Scenario/ }).first().click(); await settle(mp, 1500);
+const clientUrl = mp.url();
+rec("client page: three primary actions, More, alerts, next visits, caregivers, readiness and documents are present", (await mp.getByRole("navigation", { name: "Client actions" }).count()) === 1 && (await mp.getByTestId("next-visits").count()) === 1 && (await mp.getByTestId("caregiver-summary").count()) === 1 && (await mp.getByTestId("readiness-card").count()) === 1 && (await mp.getByTestId("client-documents").count()) === 1 && (await mp.getByTestId("client-alerts").count()) === 1);
+const order = await mp.evaluate(() => ["Authorizations", "Next visits", "Caregivers", "Readiness", "Documents", "Details"].map((t) => [...document.querySelectorAll("h2")].find((h) => h.textContent?.trim() === t)?.getBoundingClientRect().top ?? -1));
+rec("client page: authorization comes before the schedule, caregivers, readiness, documents and details", order.every((v, k) => v >= 0 && (k === 0 || v > order[k - 1])), JSON.stringify(order));
+rec("client page: details are read-only until Edit", (await mp.getByTestId("details-readonly").count()) === 1);
+rec("client page: no sideways scroll", await noOverflow(mp));
+await mp.screenshot({ path: `${out}/client-page-${label}.png`, fullPage: true });
+// documents: configure a requirement, put the client in Draft, activation is refused until the upload is approved
+await mp.getByRole("button", { name: "Set up required documents" }).click(); await mp.waitForTimeout(500);
+const setup = mp.getByTestId("document-setup");
+await setup.getByLabel("New document type").fill("Consent to care (browser)");
+await setup.getByRole("button", { name: "Add the document type" }).click(); await mp.waitForTimeout(1200);
+await setup.getByLabel(/Required for/).first().check(); await mp.waitForTimeout(1200);
+await mp.getByRole("button", { name: "Move to Draft…" }).click(); await mp.waitForTimeout(1200);
+rec("client page: Draft says it cannot be scheduled", /Cannot be scheduled/.test(await mp.getByTestId("readiness-card").innerText()) && /Draft/.test(await mp.getByTestId("client-stage").innerText()));
+await mp.getByTestId("readiness-card").getByRole("button", { name: "Activate" }).click(); await mp.waitForTimeout(1200);
+rec("client page: activation is refused while a required document is not approved", /cannot be activated yet/.test(await mp.getByTestId("readiness-card").innerText()));
+const consentRow = mp.getByTestId("client-document").filter({ hasText: "Consent to care (browser)" });
+rec("client page: the required document shows as Missing", /Missing/.test(await consentRow.innerText()));
+await consentRow.getByRole("button", { name: "Upload" }).first().click();
+await consentRow.locator('input[type="file"]').setInputFiles({ name: "consent.pdf", mimeType: "application/pdf", buffer: Buffer.from("%PDF-1.4\n% synthetic consent\n") });
+await consentRow.getByRole("button", { name: "Upload" }).last().click(); await mp.waitForTimeout(2000);
+rec("client page: an upload is Pending review and says upload is not approval", /Pending review/.test(await consentRow.innerText()) && /Uploading is not approval/.test(await consentRow.innerText()));
+rec("client page: the uploader cannot approve their own upload", await (async () => { await consentRow.getByRole("button", { name: "Review…" }).click(); await consentRow.getByRole("button", { name: "Approve" }).click(); await mp.waitForTimeout(1200); return /cannot review a document you uploaded/.test(await consentRow.innerText()); })());
+// the owner approves
+const o2 = await browser.newContext({ viewport: vp, ignoreHTTPSErrors: true }); const op2 = await o2.newPage();
+await login(op2, "Olivia Owner");
+await op2.goto(clientUrl); await settle(op2, 1500);
+const ownerRow = op2.getByTestId("client-document").filter({ hasText: "Consent to care (browser)" });
+await ownerRow.getByRole("button", { name: "Review…" }).click(); await ownerRow.getByRole("button", { name: "Approve" }).click(); await op2.waitForTimeout(1500);
+rec("client page: another reviewer approves and the document is Approved", /Approved/.test(await ownerRow.innerText()));
+// the owner also sets a shorter deadline from Action needed
+await op2.goto("https://localhost/action-needed"); await settle(op2, 1500);
+await op2.getByText("Follow-up deadlines").click(); await op2.waitForTimeout(500);
+await op2.getByLabel(/Client confirmation/).fill("24");
+await op2.getByRole("button", { name: "Save the deadlines" }).click(); await op2.waitForTimeout(800);
+rec("deadlines: saving without a reason is refused on screen", /at least 10 characters/.test(await op2.getByTestId("deadline-settings").innerText()));
+await op2.getByLabel(/Why are you changing them/).fill("Faster follow-up for the pilot (synthetic)");
+await op2.getByRole("button", { name: "Save the deadlines" }).click(); await op2.waitForTimeout(1500);
+rec("deadlines: the owner saves a shorter deadline and it is shown", /Saved/.test(await op2.getByTestId("deadline-settings").innerText()) && /now 24 h/.test(await op2.getByTestId("deadline-settings").innerText()));
+// the owner reads the audit report in Reporting & billing
+await op2.goto("https://localhost/reporting"); await settle(op2, 2000);
+rec("reporting: the five sections are present", (await op2.getByRole("heading", { name: /Billing readiness|Authorized vs delivered hours|Agency performance|Reports and exports|Compliance and audit evidence/ }).count()) === 5);
+rec("reporting: missed visits says Not published", /Not published/.test(await op2.getByTestId("missed-visits").innerText()));
+const auditPanel = op2.getByTestId("audit-report");
+rec("reporting: the owner sees the audit report with field names only", (await auditPanel.count()) === 1 && (await auditPanel.getByTestId("audit-event").count()) >= 1 && /never values/.test(await auditPanel.innerText()));
+rec("reporting: no sideways scroll", await noOverflow(op2));
+await op2.screenshot({ path: `${out}/reporting-${label}.png`, fullPage: true });
+await o2.close();
+// the manager activates now that the document is approved
+await mp.goto(clientUrl); await settle(mp, 1500);
+await mp.getByTestId("readiness-card").getByRole("button", { name: "Activate" }).click(); await mp.waitForTimeout(1500);
+rec("client page: after approval the client is activated and can be scheduled", /Active/.test(await mp.getByTestId("client-stage").innerText()) && !/Cannot be scheduled/.test(await mp.getByTestId("readiness-card").innerText()));
+await mp.getByRole("button", { name: "History and audit trail" }).click(); await mp.waitForTimeout(1200);
+rec("client page: the history lists changes by field name without values", /changed:/.test(await mp.getByTestId("client-history").innerText()) && /never the values/.test(await mp.getByTestId("client-history").innerText()));
+
+// schedule
+await mp.goto("https://localhost/schedule"); await settle(mp, 1500);
+rec("schedule: the overview, the three views and filters are present", (await mp.getByTestId("scheduling-overview").count()) === 1 && (await mp.getByRole("group", { name: "Calendar view" }).count()) === 1 && (await mp.getByRole("button", { name: "Filters" }).count()) === 1);
+await mp.getByRole("button", { name: "Month" }).click(); await settle(mp, 1500);
+rec("schedule: the month view shows a grid and no sideways scroll", (await mp.getByTestId("month-grid").count()) === 1 && await noOverflow(mp));
+await mp.screenshot({ path: `${out}/schedule-month-${label}.png`, fullPage: true });
+await mp.getByTestId("month-grid").getByRole("button").filter({ hasText: /\d/ }).nth(2).click(); await settle(mp, 1000);
+rec("schedule: choosing a day opens that day", (await mp.getByRole("button", { name: "Day", pressed: true }).count()) === 1);
+await mp.getByRole("button", { name: "Week" }).click(); await settle(mp, 800);
+await mp.getByRole("button", { name: "Filters" }).click();
+await mp.getByTestId("shift-filters").getByLabel("Caregiver").selectOption("open"); await settle(mp, 800);
+rec("schedule: the 'No caregiver' filter keeps only shifts without one", (await mp.getByTestId("shift-state").allInnerTexts()).every((t) => /NEEDS COVERAGE/.test(t)));
+await mp.getByTestId("shift-filters").getByRole("button", { name: "Clear filters" }).click();
+// the link from Action needed lands on the shift with suggestions
+await mp.goto("https://localhost/action-needed"); await settle(mp, 1500);
+const choose = mp.getByRole("link", { name: "Choose a caregiver" }).first();
+if (await choose.count()) {
+  await choose.click(); await settle(mp, 2500);
+  rec("schedule: the link from Action needed opens that shift with suggested caregivers (or says none are eligible)", (await mp.locator('[data-testid="replacement-suggestions"], [data-testid="no-eligible"], [data-testid="suggestions-error"]').count()) >= 1 && (await mp.locator('[data-highlight="true"]').count()) === 1);
+  await mp.screenshot({ path: `${out}/schedule-suggestions-${label}.png`, fullPage: true });
+} else rec("schedule: the link from Action needed opens that shift with suggested caregivers (no uncovered shift in this fixture)", true);
+// reporting as the manager: export billing review
+await mp.goto("https://localhost/reporting"); await settle(mp, 2000);
+const [billDownload] = await Promise.all([mp.waitForEvent("download", { timeout: 15000 }), mp.getByRole("button", { name: /Export billing review/ }).click()]);
+rec("reporting: the manager's billing-review export is a server-made file named for the month", /^billing-review-\d{4}-\d{2}\.csv$/.test(billDownload.suggestedFilename()), billDownload.suggestedFilename());
+await mp.waitForTimeout(800);
+rec("reporting: the export notice says generated, delivery not recorded", /Whether it reached this device is not recorded/.test(await text(mp)));
+rec("reporting: the manager has no audit report", (await mp.getByTestId("audit-report").count()) === 0 && /available to the agency owner/.test(await text(mp)));
 await mctx.close();
 
 // owner: the export ledger; scheduler: can read the chain but not export

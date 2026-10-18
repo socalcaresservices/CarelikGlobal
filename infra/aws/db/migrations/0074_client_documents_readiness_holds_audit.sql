@@ -70,7 +70,8 @@ create table ogevia.client_document_versions (
   expires_on date,
   uploaded_by uuid not null references ogevia.app_users(id),
   uploaded_at timestamptz not null default now(),
-  review_status ogevia.document_review_status not null default 'awaiting_review',
+  -- text with a check, not the staff-document enum, so this table does not tie the older document module's type to this release
+  review_status text not null default 'awaiting_review' check (review_status in ('awaiting_review', 'verified', 'rejected')),
   reviewed_by uuid references ogevia.app_users(id),
   reviewed_at timestamptz,
   rejection_reason text,
@@ -396,7 +397,7 @@ begin
   if v_self and not ogevia.has_permission(v.organization_id, 'documents.review_own') then raise exception 'You cannot review a document you uploaded; ask the Administrator or another manager' using errcode = 'OGA03'; end if;
   if v.review_status <> 'awaiting_review' then raise exception 'This document version has already been reviewed' using errcode = 'OGC09'; end if;
   if exists (select 1 from ogevia.client_document_versions n where n.document_id = v.document_id and n.version_number > v.version_number) then raise exception 'A newer version was uploaded; review that one' using errcode = 'OGC09'; end if;
-  update ogevia.client_document_versions set review_status = p_decision::ogevia.document_review_status, reviewed_by = v_actor, reviewed_at = now(), rejection_reason = case when p_decision = 'rejected' then btrim(p_reason) end where id = v.id;
+  update ogevia.client_document_versions set review_status = p_decision, reviewed_by = v_actor, reviewed_at = now(), rejection_reason = case when p_decision = 'rejected' then btrim(p_reason) end where id = v.id;
   select d.client_id into v_client from ogevia.client_documents d where d.id = v.document_id;
   perform ogevia.write_audit(v.organization_id, 'client_document.' || p_decision, 'client_document_versions', v.id, jsonb_build_object('review_status', 'awaiting_review'),
     jsonb_build_object('review_status', p_decision, 'client_id', v_client, 'self_review', v_self), nullif(btrim(coalesce(p_reason, '')), ''));

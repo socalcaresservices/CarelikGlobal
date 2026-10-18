@@ -120,7 +120,8 @@ export function ReportingPage() {
               <div><dt className="text-xs text-og-sub">Missed visits</dt><dd data-testid="missed-visits" className="text-sm font-semibold text-og-ink">Not published</dd></div>
             </dl>
             <Disclosure summary="Definitions and what is not measured">
-              <p>Shifts are counted by their start date in the agency&apos;s time zone. Uncovered means a scheduled shift that has not ended and has no caregiver, including one whose caregiver called out. Utilization is committed time (billable + approved rounding adjustments + reserved) divided by authorized time, rounded down.</p>
+              <p>Shifts are counted by their start date in the agency&apos;s time zone. Uncovered means a scheduled shift that has not ended and has no caregiver, including one whose caregiver called out.</p>
+              <p className="mt-1">Utilization is committed time (billable + approved rounding adjustments + reserved) divided by authorized time, rounded down.</p>
               <p className="mt-1" data-testid="missed-note">{perf.data.missedVisitsNote}</p>
               <p className="mt-1">{perf.data.cancellationNote}</p>
               <p className="mt-1">{perf.data.noShowNote}</p>

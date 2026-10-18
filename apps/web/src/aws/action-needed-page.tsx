@@ -97,7 +97,8 @@ function DeadlineSettings() {
   return (
     <Disclosure summary="Follow-up deadlines" >
       <div className="space-y-2" data-testid="deadline-settings">
-        <p className="text-sm text-og-sub">These only decide when an item moves to the urgent view. A deadline can be shorter than the default, never longer. Nothing is approved, signed or billed by a deadline. A stricter payer or regulatory deadline is not set up here.</p>
+        <p className="text-sm text-og-sub">These only decide when an item moves to the urgent view. A deadline can be shorter than the default, never longer.</p>
+        <p className="text-sm text-og-sub">A deadline never approves, signs or bills anything. A stricter payer or regulatory deadline is not set up here.</p>
         {canEdit ? (
           <>
             {field("Client confirmation", "c", s.confirmationOverdueHours, s.defaults.confirmationOverdueHours)}
@@ -174,7 +175,10 @@ export function ActionNeededPage() {
       ) : null}
       <DeadlineSettings />
       <Disclosure summary="How this list is built">
-        <p>Every item has one stable identity, so the same problem is the same issue on Home, Scheduling and here, and two problems on the same visit stay two issues. Critical: care is blocked now or an uncovered shift has started. Urgent: inside the follow-up window or past a deadline. Routine: waiting inside its deadline, and never added to the action total. Nothing here assigns anyone, approves a visit or sends a bill; you decide on the next screen.</p>
+        <p>Every item has one stable identity, so the same problem is the same issue on Home, Scheduling and here. Two problems on the same visit stay two issues.</p>
+        <p className="mt-1">Critical: care is blocked now, or an uncovered shift has started. Urgent: inside the follow-up window or past a deadline.</p>
+        <p className="mt-1">Routine: waiting inside its deadline. Routine items are separate queues and are never added to the action total.</p>
+        <p className="mt-1">Nothing here assigns anyone, approves a visit or sends a bill. You decide on the next screen.</p>
       </Disclosure>
     </div>
   );
