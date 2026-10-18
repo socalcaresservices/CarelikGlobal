@@ -1,11 +1,12 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useRef, useState } from "react";
-import { Button, Card } from "@carelik/ui";
+import { Button } from "@carelik/ui";
 import { newIdempotencyKey } from "@/lib/sv-backend";
 import { formatDuration } from "@/lib/service-verification";
 import { useOrganization } from "@/providers/organization-provider";
 import { useAwsApi } from "./aws-workspace";
 import { useAgencyClock } from "./agency-clock";
+import { ShortHelp } from "./help-text";
 
 const message = (cause: unknown, fallback: string) => (cause instanceof Error ? cause.message : fallback);
 
@@ -35,7 +36,7 @@ export function PickupRequestsPanel({ onDone }: { onDone: (text: string) => void
   });
   async function act(r: PickupRequest, kind: "confirm" | "decline") {
     if (busy) return;
-    if (kind === "decline" && reason.trim().length < 3) return setError({ id: r.requestId, text: "Give the reason for declining." });
+    if (kind === "decline" && reason.trim().length < 3) return setError({ id: r.requestId, text: "Reason missing. Say why you are declining." });
     setBusy(r.requestId);
     setError(null);
     try {
@@ -60,38 +61,43 @@ export function PickupRequestsPanel({ onDone }: { onDone: (text: string) => void
   }
   if (!canManage || !list.data || list.data.length === 0) return null;
   return (
-    <Card className="space-y-2 p-3" data-testid="pickup-requests">
-      <h2 className="text-base font-semibold text-slate-950">Caregiver requests for open shifts ({list.data.length})</h2>
-      <p className="text-sm text-slate-600">Nobody is assigned until you confirm. Confirming checks the shift again: compliance, availability, other shifts, hour limits and the authorization.</p>
-      <ul className="space-y-2">
+    <section className="space-y-2" data-testid="pickup-requests" aria-labelledby="pickup-heading">
+      <h2 id="pickup-heading" className="text-base font-semibold text-slate-950">Caregiver requests for open shifts ({list.data.length})</h2>
+      <ShortHelp details="Confirming checks the shift again: compliance, availability, other shifts, hour limits and the authorization.">Nobody is assigned until you confirm.</ShortHelp>
+      <ul className="divide-y divide-slate-200 rounded-lg border border-slate-200 bg-og-card">
         {list.data.map((r) => (
-          <li key={r.requestId} className="rounded-xl border border-slate-200 bg-og-card p-3 text-sm">
-            <p className="font-semibold text-slate-950">{when(r.startsAt)}–{time(r.endsAt)} · Client {r.clientCode}{r.serviceName ? ` · ${r.serviceName}` : ""} · {formatDuration(r.minutes)}</p>
-            <p className="text-slate-800">Asked by {r.caregiverName ?? r.caregiverCode} ({r.caregiverCode})</p>
+          <li key={r.requestId} className="p-2 text-sm">
+            <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
+              <div className="min-w-0">
+                <p className="font-semibold text-slate-950">{when(r.startsAt)}–{time(r.endsAt)} · Client {r.clientCode}{r.serviceName ? ` · ${r.serviceName}` : ""} · {formatDuration(r.minutes)}</p>
+                <p className="text-slate-800">Asked by {r.caregiverName ?? r.caregiverCode} ({r.caregiverCode})</p>
+              </div>
+              {declining !== r.requestId ? (
+                <div className="flex items-center gap-3">
+                  <Button type="button" className="min-h-11" disabled={busy !== null} loading={busy === r.requestId} onClick={() => void act(r, "confirm")}>Confirm assignment</Button>
+                  <button type="button" className="inline-flex min-h-11 items-center px-1 text-sm font-medium text-og-link underline underline-offset-2 disabled:opacity-50" disabled={busy !== null} onClick={() => { setDeclining(r.requestId); setReason(""); setError(null); }}>Decline</button>
+                </div>
+              ) : null}
+            </div>
             {r.blockers.length > 0 ? (
               <p role="note" className="mt-1 text-red-800">Would be refused now: {r.blockers.join(" ")}</p>
             ) : (
-              <p className="mt-1 text-emerald-800">No problem found right now. It is checked again when you confirm.</p>
+              <p className="mt-1 text-emerald-800">No problem found right now.</p>
             )}
             {error?.id === r.requestId ? <p role="alert" className="mt-1 text-red-700">{error.text}</p> : null}
             {declining === r.requestId ? (
               <div className="mt-2 flex flex-wrap items-end gap-2">
                 <label className="text-xs font-medium text-slate-600">
                   Reason for declining
-                  <input value={reason} maxLength={500} onChange={(e) => setReason(e.target.value)} className="mt-1 block w-64 max-w-full rounded-lg border border-slate-200 px-3 py-2 text-sm" />
+                  <input value={reason} maxLength={500} onChange={(e) => setReason(e.target.value)} className="mt-1 block w-64 max-w-full rounded-lg border border-slate-200 px-3 py-2 text-base" />
                 </label>
                 <Button type="button" variant="secondary" className="min-h-11" disabled={busy !== null} loading={busy === r.requestId} onClick={() => void act(r, "decline")}>Decline request</Button>
-                <button type="button" className="text-sm underline" onClick={() => { setDeclining(null); setError(null); }}>Cancel</button>
+                <button type="button" className="inline-flex min-h-11 items-center text-sm underline" onClick={() => { setDeclining(null); setError(null); }}>Cancel</button>
               </div>
-            ) : (
-              <div className="mt-2 flex flex-wrap gap-2">
-                <Button type="button" className="min-h-11" disabled={busy !== null} loading={busy === r.requestId} onClick={() => void act(r, "confirm")}>Confirm assignment</Button>
-                <Button type="button" variant="secondary" className="min-h-11" disabled={busy !== null} onClick={() => { setDeclining(r.requestId); setReason(""); setError(null); }}>Decline</Button>
-              </div>
-            )}
+            ) : null}
           </li>
         ))}
       </ul>
-    </Card>
+    </section>
   );
 }

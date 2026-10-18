@@ -2,12 +2,13 @@ import { Disclosure } from "../ui/disclosure";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
-import { Button, Card } from "@carelik/ui";
+import { Button } from "@carelik/ui";
 import { newIdempotencyKey } from "@/lib/sv-backend";
 import { formatClockTime, formatDateOnly, formatDateTime } from "@/lib/service-verification";
 import { useOrganization } from "@/providers/organization-provider";
 import { useAwsApi } from "../aws-workspace";
 import { actionError } from "../readiness/format";
+import { SummarySection } from "../ui/summary-section";
 import { useGuardedMutate } from "../readiness/use-guarded";
 import {
   riskLabel,
@@ -145,13 +146,13 @@ export function CaregiverCompliance({ caregiverRecordId }: { caregiverRecordId: 
   const canTrack = isAdmin || hasPermission("caregivers.manage");
   const c = q.data;
   const head = c ? headline(c) : null;
+  const anchored = typeof window !== "undefined" && ["compliance", "background-check", "hire-date"].includes(window.location.hash.slice(1));
   return (
-    <Card className="p-4" >
+    <SummarySection title="Compliance" defaultOpen={anchored || (!!c && (!!c.hold || !c.eligible))}
+      status={head ? <Pill tone={head.tone}>{head.label}</Pill> : undefined}
+      summary={c ? (c.hold ? `${c.hold.reasons.length} item${c.hold.reasons.length === 1 ? "" : "s"} to fix` : c.eligible ? undefined : "Fix the items inside") : undefined}>
       <section aria-labelledby="compliance-heading" id="compliance">
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <h2 id="compliance-heading" className="text-base font-semibold text-slate-950">Compliance</h2>
-          {head ? <Pill tone={head.tone}>{head.label}</Pill> : null}
-        </div>
+        <h3 id="compliance-heading" className="sr-only">Compliance details</h3>
         {q.isLoading ? <p className="mt-2 text-sm text-slate-500">Loading…</p> : null}
         {q.isError ? <p role="alert" className="mt-2 text-sm text-red-700">{actionError(q.error, "Compliance could not be loaded.")}</p> : null}
         {c ? (
@@ -250,6 +251,6 @@ export function CaregiverCompliance({ caregiverRecordId }: { caregiverRecordId: 
           </div>
         ) : null}
       </section>
-    </Card>
+    </SummarySection>
   );
 }

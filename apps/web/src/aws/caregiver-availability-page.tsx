@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Button, Card } from "@carelik/ui";
+import { Button } from "@carelik/ui";
 import type { AwsApiClient } from "@/lib/aws-api";
 import { useOrganization } from "@/providers/organization-provider";
 import { formatClockTime, formatDateTime } from "@/lib/service-verification";
@@ -24,16 +24,32 @@ export function CaregiverAvailabilityPage({ api }: { api: AwsApiClient }) {
     onSuccess: () => void qc.invalidateQueries({ queryKey: ["my-care-opportunities", activeOrganizationId] }),
   });
 
-  return <section className="max-w-3xl space-y-6">
+  const offers = opportunities.data?.opportunities ?? [];
+  return <section className="max-w-3xl space-y-4">
     <div>
-      <h1 className="text-2xl font-semibold text-slate-950">Availability</h1>
-      <ShortHelp className="mt-1 text-sm text-slate-600">Your approved hours decide what work you are offered. To change them, send a request; your current hours stay until an administrator approves it. A response is not an assignment.</ShortHelp>
+      <h1 className="text-xl font-semibold text-slate-950">Availability</h1>
+      <ShortHelp className="mt-1 text-sm text-slate-600" details="To change your hours, send a request; your current hours stay until an administrator approves it. A response to an opportunity is not an assignment.">Your approved hours decide what work you are offered.</ShortHelp>
     </div>
     <MyAvailability />
-    <Card>
-      <h2 className="font-semibold text-slate-950">Care opportunities</h2>
-      <div className="mt-3 space-y-3">{(opportunities.data?.opportunities ?? []).map((o)=><div key={o.offerId} className="rounded-lg border border-slate-100 p-3"><div className="flex flex-wrap items-start justify-between gap-3"><div><p className="font-medium text-slate-900">{o.serviceName} · {o.clientLabel}</p><p className="text-sm text-slate-600">{when(o.startsAt)}–{formatClockTime(o.endsAt)}</p><p className="text-xs capitalize text-slate-500">{o.status.replaceAll("_"," ")}</p></div>{o.status==="sent"?<div className="flex gap-2"><Button size="sm" className="min-h-[40px]" loading={respond.isPending} onClick={()=>respond.mutate({offerId:o.offerId,available:true})}>Available</Button><Button size="sm" variant="secondary" className="min-h-[40px]" loading={respond.isPending} onClick={()=>respond.mutate({offerId:o.offerId,available:false})}>Not available</Button></div>:null}</div></div>)}
-      {!opportunities.isLoading && (opportunities.data?.opportunities ?? []).length===0?<p className="text-sm text-slate-500">No open opportunities.</p>:null}</div>
-    </Card>
+    <section aria-labelledby="care-opps-heading" className="space-y-2">
+      <h2 id="care-opps-heading" className="text-base font-semibold text-slate-950">Care opportunities</h2>
+      {!opportunities.isLoading && offers.length === 0 ? <p className="text-sm text-slate-500">No open opportunities.</p> : null}
+      <ul className="space-y-1.5">
+        {offers.map((o) => (
+          <li key={o.offerId} className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 rounded-lg border border-slate-200 bg-og-card p-2">
+            <div className="min-w-0">
+              <p className="font-medium text-slate-900">{o.serviceName} · {o.clientLabel}</p>
+              <p className="text-sm text-slate-600">{when(o.startsAt)}–{formatClockTime(o.endsAt)}{o.status === "sent" ? "" : <span className="capitalize"> · {o.status.replaceAll("_", " ")}</span>}</p>
+            </div>
+            {o.status === "sent" ? (
+              <div className="flex items-center gap-3">
+                <Button className="min-h-11" loading={respond.isPending} onClick={() => respond.mutate({ offerId: o.offerId, available: true })}>Available</Button>
+                <button type="button" className="inline-flex min-h-11 items-center px-1 text-sm font-medium text-og-link underline underline-offset-2 disabled:opacity-50" disabled={respond.isPending} onClick={() => respond.mutate({ offerId: o.offerId, available: false })}>Not available</button>
+              </div>
+            ) : null}
+          </li>
+        ))}
+      </ul>
+    </section>
   </section>;
 }

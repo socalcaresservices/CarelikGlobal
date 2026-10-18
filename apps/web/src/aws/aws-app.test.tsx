@@ -224,12 +224,13 @@ describe("AWS build: manager review and billing-review data", () => {
     expect(await screen.findByText("MANAGER VIEW")).toBeInTheDocument();
     expect(await screen.findByText("Morgan Manager")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Sign out" })).toBeInTheDocument();
-    const attention = await screen.findByRole("link", { name: "Needs attention now: 1 item" });
-    // The badge opens the Needs attention now page; Home shows the same classification as four tiles.
+    // Home shows the count once, as its first tile (the header badge is not repeated on Home); the tile opens the Needs attention now page.
+    const attention = await screen.findByTestId("stream-now");
     expect(attention.getAttribute("href")).toBe("/attention");
     // The uncovered shift starts 8 hours after asOf, so it is Urgent (amber); it would be Critical (red) once started.
     expect(attention.className).toMatch(/amber/);
-    expect(await screen.findByTestId("stream-now")).toHaveTextContent("1");
+    expect(attention).toHaveTextContent("1");
+    expect(screen.queryByTestId("attention-badge")).toBeNull();
     expect(screen.getByTestId("stream-visits")).toHaveTextContent("3");
     // 1590 of 6000 minutes worked = 26.5 h of 100 h; the table sits behind the details control.
     expect((await screen.findAllByText("26.5 h")).length).toBeGreaterThan(0);
@@ -341,13 +342,18 @@ describe("AWS build: manager review and billing-review data", () => {
     expect(await screen.findByTestId("stream-documents")).toHaveTextContent("1 overdue");
     fireEvent.click(screen.getByRole("link", { name: "Documents & compliance" }));
     expect(await screen.findByRole("heading", { name: "Documents & compliance" })).toBeInTheDocument();
-    const card = (await screen.findByText("TB test", { selector: "p" })).closest("li")!;
+    const card = (await screen.findByText("TB test", { selector: "p" })).closest("tbody")!;
     expect(within(card).getByText("Pilot Caregiver A")).toBeInTheDocument();
     expect(within(card).getByText("Awaiting review")).toBeInTheDocument();
-    fireEvent.click(await within(card).findByRole("button", { name: "Reject" }));
+    fireEvent.click(await within(card).findByRole("button", { name: "Review" }));
+    fireEvent.click(within(card).getByRole("button", { name: "Save decision" }));
+    expect(await within(card).findByRole("alert")).toHaveTextContent("Choose Verify or Reject");
+    fireEvent.click(within(card).getByRole("radio", { name: "Reject" }));
+    fireEvent.click(within(card).getByRole("button", { name: "Save decision" }));
     expect(await within(card).findByRole("alert")).toHaveTextContent("Enter why it is rejected");
     expect(api.calls.some((c) => c.method === "POST" && c.path.endsWith("/review"))).toBe(false);
-    fireEvent.click(within(card).getByRole("button", { name: "Verify" }));
+    fireEvent.click(within(card).getByRole("radio", { name: "Verify" }));
+    fireEvent.click(within(card).getByRole("button", { name: "Save decision" }));
     await waitFor(() => expect(api.calls.some((c) => c.method === "POST" && c.path.endsWith("/review"))).toBe(true));
     expect(screen.getByRole("button", { name: "Request document" })).toBeInTheDocument();
     expect(api.calls.some((c) => c.path.startsWith("/v1/documents/people"))).toBe(true);
@@ -357,8 +363,9 @@ describe("AWS build: manager review and billing-review data", () => {
     const { api } = renderAws("/documents", "manager", true, { requiredTb: true });
     expect(await screen.findByText(/Required CPR and TB records need Administrator verification/)).toBeInTheDocument();
     await waitFor(() => expect(api.calls.some((c) => c.path.startsWith("/v1/document-requirements"))).toBe(true));
-    expect(screen.queryByRole("button", { name: "Verify" })).not.toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "Reject" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Review" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("radio", { name: "Verify" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Save decision" })).not.toBeInTheDocument();
     expect(api.calls.some((c) => c.method === "POST" && c.path.endsWith("/review"))).toBe(false);
   });
 

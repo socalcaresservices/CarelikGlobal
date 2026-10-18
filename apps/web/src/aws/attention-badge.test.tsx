@@ -64,8 +64,14 @@ const overview = (o: Record<string, unknown> = {}) => ({ overview: {
   ...o } });
 
 describe("Needs attention now badge", () => {
+  it("on Home the header badge is not repeated: the first row of Home shows the same count once", async () => {
+    renderAt("/", "manager", () => json(200, overview({ urgent: { items: [item()], itemCount: 1, issueCount: 1, shifts: 1, visits: 0 } })));
+    expect(await screen.findByTestId("stream-now")).toHaveTextContent("1");
+    expect(screen.queryByTestId("attention-badge")).toBeNull();
+  });
+
   it("an uncovered shift that has started: Critical (red), with a symbol and the word, counting items", async () => {
-    renderAt("/", "manager", () => json(200, overview({ urgent: { items: [item({ startsAt: "2026-10-18T11:00:00Z", inProgress: true })], itemCount: 1, issueCount: 1, shifts: 1, visits: 0 } })));
+    renderAt("/profile", "manager", () => json(200, overview({ urgent: { items: [item({ startsAt: "2026-10-18T11:00:00Z", inProgress: true })], itemCount: 1, issueCount: 1, shifts: 1, visits: 0 } })));
     const badge = await screen.findByRole("link", { name: "Needs attention now: 1 item" });
     expect(badge).toHaveTextContent("●");
     expect(badge).toHaveTextContent("Needs attention now");
@@ -74,7 +80,7 @@ describe("Needs attention now badge", () => {
   });
 
   it("an uncovered shift that has not started yet (inside the 48 h window): Urgent (amber), not red", async () => {
-    renderAt("/", "manager", () => json(200, overview({ urgent: { items: [item()], itemCount: 1, issueCount: 1, shifts: 1, visits: 0 } })));
+    renderAt("/profile", "manager", () => json(200, overview({ urgent: { items: [item()], itemCount: 1, issueCount: 1, shifts: 1, visits: 0 } })));
     const badge = await screen.findByTestId("attention-badge");
     await waitFor(() => expect(badge).toHaveTextContent("▲"));
     expect(badge.className).toMatch(/amber/);
@@ -82,7 +88,7 @@ describe("Needs attention now badge", () => {
   });
 
   it("only amber items: amber, not red", async () => {
-    renderAt("/", "manager", () => json(200, overview({ urgent: { items: [item({ severity: "amber", reasons: ["missing_clock_out"] })], itemCount: 1, issueCount: 1, shifts: 0, visits: 1 } })));
+    renderAt("/profile", "manager", () => json(200, overview({ urgent: { items: [item({ severity: "amber", reasons: ["missing_clock_out"] })], itemCount: 1, issueCount: 1, shifts: 0, visits: 1 } })));
     const badge = await screen.findByTestId("attention-badge");
     await waitFor(() => expect(badge).toHaveTextContent("▲"));
     expect(badge.className).toMatch(/amber/);
@@ -90,20 +96,20 @@ describe("Needs attention now badge", () => {
   });
 
   it("confirmed zero: calm text with a check, no alarm colour", async () => {
-    renderAt("/", "manager", () => json(200, overview()));
+    renderAt("/profile", "manager", () => json(200, overview()));
     const badge = await screen.findByRole("link", { name: "Nothing needs attention now" });
     expect(badge).toHaveTextContent("✓");
     expect(badge.className).not.toMatch(/red|amber|emerald/);
   });
 
   it("while loading: neutral Checking…", async () => {
-    renderAt("/", "manager", () => new Promise<Response>(() => {}));
+    renderAt("/profile", "manager", () => new Promise<Response>(() => {}));
     const badge = await screen.findByRole("link", { name: "Checking what needs attention now" });
     expect(badge).toHaveTextContent("Checking…");
   });
 
   it("failed check: Unable to check, never a zero", async () => {
-    renderAt("/", "manager", () => json(500, { error: { code: "internal", message: "Synthetic failure" } }));
+    renderAt("/profile", "manager", () => json(500, { error: { code: "internal", message: "Synthetic failure" } }));
     const badge = await screen.findByRole("link", { name: "Unable to check what needs attention now" });
     expect(badge).toHaveTextContent("Unable to check");
     await waitFor(() => expect(screen.queryByText("Nothing urgent")).toBeNull());

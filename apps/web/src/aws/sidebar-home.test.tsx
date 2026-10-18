@@ -285,6 +285,10 @@ describe("Home layout", () => {
     // Visit review counts the unique visits (5), not the sum of unlike things.
     expect(screen.getByTestId("stream-visits")).toHaveTextContent("5");
     const hours = (await screen.findByRole("heading", { name: "Hours this month" })).closest("section")!;
+    // folded: the summary line shows Worked and Hours left; opening the section adds Authorized, Billable, the chart and the table
+    for (const k of ["Worked", "Hours left"]) expect(within(hours).getByText(k)).toBeInTheDocument();
+    expect(within(hours).queryByText("Billable (confirmed)")).toBeNull();
+    fireEvent.click(within(hours).getByRole("button", { name: "Show the hours" }));
     for (const k of ["Authorized", "Worked", "Billable (confirmed)", "Hours left"]) expect((await within(hours).findAllByText(k)).length).toBeGreaterThan(0);
     // The per-service table is behind a native disclosure, with the same figures and a keyboard-reachable scroller.
     const table = within(hours).getByRole("table", { name: "Hours by service for the selected month" });
@@ -299,7 +303,7 @@ describe("Home layout", () => {
     expect(within(hours).getByRole("link", { name: /Monthly reconciliation/ }).getAttribute("href")).toBe("/service-verification/reports?view=reconciliation");
     expect(screen.queryByText("Financial impact")).toBeNull();
     const outage = (await screen.findByRole("heading", { name: "Outage readiness" })).closest("section")!;
-    expect(outage).toHaveTextContent("OUTAGE READINESS: Continuity pack last downloaded 30 hours ago by Synthetic Manager.");
+    expect(outage).toHaveTextContent("Continuity pack last downloaded 30 hours ago by Synthetic Manager.");
     expect(within(outage).getByRole("link", { name: "Continuity pack" }).getAttribute("href")).toBe("/continuity");
   });
 
@@ -333,12 +337,15 @@ describe("Clearer actions and records (presentation only)", () => {
     expect(link.closest("tr")).toHaveTextContent("2 current authorizations");
   });
 
-  it("Schedule: shift actions are buttons at least 40px tall, and Cancel shift is visibly different from the others", async () => {
+  it("Schedule: the covered-shift row offers one primary action, and Cancel shift in the menu is visibly different and at least 40px tall", async () => {
     renderAt("/schedule", "organization_owner");
-    const cancel = await screen.findByRole("button", { name: "Cancel shift" });
-    const change = screen.getByRole("button", { name: "Change time" });
-    for (const b of [cancel, change, screen.getByRole("button", { name: "Record call-out" })]) expect(b.className).toMatch(/min-h-\[40px\]/);
-    expect(cancel.className).toMatch(/border-red-700/);
-    expect(change.className).not.toMatch(/border-red-700/);
+    const menus = await screen.findAllByRole("button", { name: "More actions" });
+    expect(screen.getAllByRole("button", { name: /Record call-out|Assign caregiver/ })[0]!.className).toMatch(/min-h-11/);
+    fireEvent.click(menus[0]!);
+    const cancel = await screen.findByRole("button", { name: /Cancel (shift|this date)/ });
+    const change = screen.getByRole("button", { name: /Change (time|this date only)/ });
+    for (const b of [cancel, change]) expect(b.className).toMatch(/min-h-10|min-h-11/);
+    expect(cancel.className).toMatch(/text-red-800/);
+    expect(change.className).not.toMatch(/text-red-800/);
   });
 });

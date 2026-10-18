@@ -6,7 +6,7 @@ import { useOrganization } from "@/providers/organization-provider";
 import { useAwsApi } from "./aws-workspace";
 import { prepareDocumentFile } from "./document-file";
 import { Link } from "react-router-dom";
-import { documentDateLine, documentStatusLabel, isDueSoon, isOverdue, isToReview, matchesFilter, parseReminderDays, type DocumentFilter, type DocumentType, type Person, type StaffDocument } from "./document-status";
+import { documentDateLine, documentStatusLabel, isDueSoon, isOverdue, isToReview, matchesFilter, parseReminderDays, uploadFailureMessage, type DocumentFilter, type DocumentType, type Person, type StaffDocument } from "./document-status";
 import { useAttentionOverview } from "./attention";
 import { Disclosure } from "./ui/disclosure";
 import { PageHeader } from "./ui/page-header";
@@ -31,7 +31,7 @@ function UploadForm({ doc, onDone }: { doc: StaffDocument; onDone: () => void })
   async function submit() {
     if (!file) return setState({ busy: false, error: "Choose a photo or PDF of the document." });
     if (doc.requiresExpiry && !expiresOn) return setState({ busy: false, error: "Enter the expiry date shown on the document." });
-    if (issuedOn && expiresOn && expiresOn <= issuedOn) return setState({ busy: false, error: "The expiry date must be after the issue date." });
+    if (issuedOn && expiresOn && expiresOn <= issuedOn) return setState({ busy: false, error: "The expiry date is before the issue date. Correct one of the dates." });
     setState({ busy: true, error: null });
     try {
       const prepared = await prepareDocumentFile(file);
@@ -44,7 +44,7 @@ function UploadForm({ doc, onDone }: { doc: StaffDocument; onDone: () => void })
       setState({ busy: false, error: null });
       onDone();
     } catch (cause) {
-      setState({ busy: false, error: message(cause, "The upload did not finish. Nothing was saved; try again.") });
+      setState({ busy: false, error: uploadFailureMessage(cause) });
     }
   }
 
@@ -108,80 +108,87 @@ function OpenFileButton({ versionId }: { versionId: string }) {
 function ReviewControls({ doc, selfReview, onDone }: { doc: StaffDocument; selfReview: boolean; onDone: () => void }) {
   const api = useAwsApi();
   const [reason, setReason] = useState("");
+  const [choice, setChoice] = useState<"verified" | "rejected" | null>(null);
   const [state, setState] = useState<{ busy: boolean; error: string | null }>({ busy: false, error: null });
   const key = useRef(newIdempotencyKey());
-  async function decide(decision: "verified" | "rejected") {
-    if (decision === "rejected" && !reason.trim()) return setState({ busy: false, error: "Enter why it is rejected, so the person knows what to fix." });
+  async function decide() {
+    if (!choice) return setState({ busy: false, error: "No decision chosen. Choose Verify or Reject." });
+    if (choice === "rejected" && !reason.trim()) return setState({ busy: false, error: "Reason missing. Enter why it is rejected, so the person knows what to fix." });
     setState({ busy: true, error: null });
     try {
-      await api.post(`/v1/document-versions/${encodeURIComponent(doc.latestVersionId!)}/review`, { decision, reason: reason.trim() || null }, { idempotencyKey: key.current });
+      await api.post(`/v1/document-versions/${encodeURIComponent(doc.latestVersionId!)}/review`, { decision: choice, reason: reason.trim() || null }, { idempotencyKey: key.current });
       key.current = newIdempotencyKey();
       setState({ busy: false, error: null });
       onDone();
     } catch (cause) {
-      setState({ busy: false, error: message(cause, "The review was not saved.") });
+      setState({ busy: false, error: message(cause, "The review was not saved. Try again.") });
     }
   }
+  const name = `decision-${doc.documentId}`;
   return (
-    <div className="mt-3 space-y-2 rounded-lg bg-slate-50 p-3">
-      <p className="text-xs text-slate-600">Check the file and its dates. Verifying records your name and the time; it is an administrative check, not legal clearance.</p>
+    <div className="space-y-2 rounded-lg bg-slate-50 p-3">
+      <ShortHelp className="text-xs text-slate-600" details="Verifying records your name and the time; it is an administrative check, not legal clearance.">Check the file and its dates, then choose.</ShortHelp>
       {selfReview ? <p className="text-xs font-semibold text-amber-900">You uploaded this version. Your review is recorded as an Administrator self-review.</p> : null}
+      <fieldset className="flex flex-wrap gap-x-5">
+        <legend className="text-sm font-medium text-slate-700">Decision</legend>
+        <label className="flex min-h-[44px] items-center gap-2 text-sm"><input type="radio" name={name} className="h-5 w-5" checked={choice === "verified"} onChange={() => setChoice("verified")} />Verify</label>
+        <label className="flex min-h-[44px] items-center gap-2 text-sm"><input type="radio" name={name} className="h-5 w-5" checked={choice === "rejected"} onChange={() => setChoice("rejected")} />Reject</label>
+      </fieldset>
       <label className="block text-sm font-medium text-slate-700">
         Reason (required to reject)
         <input value={reason} maxLength={1000} onChange={(e) => setReason(e.target.value)} className="mt-1 block w-full rounded-lg border border-slate-200 px-3 py-2 text-sm" />
       </label>
       {state.error ? <p role="alert" className="text-sm text-red-700">{state.error}</p> : null}
-      <div className="flex flex-wrap gap-2">
-        <Button type="button" className="min-h-[44px] md:min-h-[40px]" disabled={state.busy} onClick={() => void decide("verified")}>Verify</Button>
-        <Button type="button" variant="secondary" className="min-h-[44px] md:min-h-[40px]" disabled={state.busy} onClick={() => void decide("rejected")}>Reject</Button>
-      </div>
+      <Button type="button" className="min-h-[44px] md:min-h-[40px]" disabled={state.busy} onClick={() => void decide()}>Save decision</Button>
     </div>
   );
 }
 
-function DocumentCard({ d, canManage, canUpload, canReviewOwn, canReview, refresh }: { d: StaffDocument; canManage: boolean; canUpload: boolean; canReviewOwn: boolean; canReview: boolean; refresh: () => void }) {
-  const [mode, setMode] = useState<"upload" | null>(null);
+function DocumentRows({ d, canManage, canUpload, canReviewOwn, canReview, refresh }: { d: StaffDocument; canManage: boolean; canUpload: boolean; canReviewOwn: boolean; canReview: boolean; refresh: () => void }) {
+  const [mode, setMode] = useState<"upload" | "review" | null>(null);
   const line = documentDateLine(d);
   const status = documentStatusLabel(d);
   const uploadLabel = d.latestVersionId ? "Replace" : canManage ? "Upload for them" : "Upload";
+  const awaiting = canManage && d.latestReviewStatus === "awaiting_review";
+  const reviewable = awaiting && canReview && !(d.latestUploadedByMe && !canReviewOwn);
+  const btn = "min-h-[44px] rounded-lg border border-og-line px-3 text-sm font-medium text-og-ink hover:bg-og-page md:min-h-[36px]";
   return (
-    <li className="rounded-og border border-og-line bg-og-card p-3">
-      <div className="flex flex-wrap items-start justify-between gap-x-3 gap-y-1">
-        <div className="min-w-0">
+    <tbody className="border-t border-og-line">
+      <tr className="align-top">
+        <th scope="row" className="py-2 pr-2 text-left font-normal">
           <p className="font-semibold text-og-ink">{d.documentTypeName}</p>
           {canManage ? <p className="text-sm text-og-sub">{d.personName}</p> : null}
-        </div>
-        <StatusChip tone={status.tone}>{status.label}</StatusChip>
-      </div>
-      {d.latestReviewStatus === "rejected" && d.latestRejectionReason ? <p className="mt-1.5 text-sm text-amber-900">Rejected: {d.latestRejectionReason}</p> : null}
-      <div className="mt-2 flex flex-wrap items-center gap-2">
-        {d.latestVersionId ? <OpenFileButton versionId={d.latestVersionId} /> : null}
-        {canUpload ? (
-          <button type="button" onClick={() => setMode(mode === "upload" ? null : "upload")} className="min-h-[44px] rounded-lg border border-og-line px-3 text-sm font-medium text-og-ink hover:bg-og-page md:min-h-[40px]">
-            {mode === "upload" ? "Cancel" : uploadLabel}
-          </button>
-        ) : null}
-        <Disclosure summary="Details" className="ml-auto">
-          <dl className="space-y-1 text-xs">
-            {line ? <div><dt className="inline font-semibold text-og-ink">Date: </dt><dd className="inline">{line}</dd></div> : null}
-            {d.latestUploadedAt ? <div><dt className="inline font-semibold text-og-ink">Uploaded: </dt><dd className="inline">Version {d.latestVersionNumber}, {formatDateTime(d.latestUploadedAt)}</dd></div> : null}
-            {d.reviewedByName && d.reviewedAt ? <div><dt className="inline font-semibold text-og-ink">Reviewed: </dt><dd className="inline">{d.reviewedByName}, {formatDateTime(d.reviewedAt)}</dd></div> : null}
-            {d.currencyStatus === "expiring" && d.reminderStage ? <div><dt className="inline font-semibold text-og-ink">Reminder: </dt><dd className="inline">within {d.reminderStage} days of expiry (shown here; Ogevia sends no email or text reminders)</dd></div> : null}
-            {d.currencyStatus === "no_expiry_required" ? <div>This document type has no expiry date.</div> : null}
-            {!d.latestUploadedAt && !line ? <div>Nothing uploaded yet.</div> : null}
-            <div>Earlier versions are kept; a replacement never overwrites them.</div>
-          </dl>
-        </Disclosure>
-      </div>
-      {mode === "upload" ? <UploadForm doc={d} onDone={() => { setMode(null); refresh(); }} /> : null}
-      {canManage && d.latestReviewStatus === "awaiting_review" ? (
-        !canReview ? <p className="mt-3 text-sm text-og-sub">Required CPR and TB records need Administrator verification. Review controls appear only after the requirement rules are loaded.</p> : d.latestUploadedByMe && !canReviewOwn ? (
-          <p className="mt-3 rounded-lg bg-og-page p-3 text-sm text-og-sub">You uploaded this version, so the Administrator or another manager must review it.</p>
-        ) : (
-          <ReviewControls doc={d} selfReview={!!d.latestUploadedByMe} onDone={refresh} />
-        )
-      ) : null}
-    </li>
+        </th>
+        <td className="py-2 pr-2"><StatusChip tone={status.tone}>{status.label}</StatusChip></td>
+        <td className="py-2">
+          <div className="flex flex-wrap items-center justify-end gap-2">
+            {reviewable ? <button type="button" aria-expanded={mode === "review"} onClick={() => setMode(mode === "review" ? null : "review")} className={`${btn} bg-og-accent text-og-on-accent`}>{mode === "review" ? "Close" : "Review"}</button> : null}
+            {d.latestVersionId ? <OpenFileButton versionId={d.latestVersionId} /> : null}
+            {canUpload ? <button type="button" aria-expanded={mode === "upload"} onClick={() => setMode(mode === "upload" ? null : "upload")} className={btn}>{mode === "upload" ? "Cancel" : uploadLabel}</button> : null}
+          </div>
+        </td>
+      </tr>
+      <tr>
+        <td colSpan={3} className="pb-2">
+          {d.latestReviewStatus === "rejected" && d.latestRejectionReason ? <p className="text-sm text-amber-900">Rejected: {d.latestRejectionReason}</p> : null}
+          {awaiting && !canReview ? <p className="text-sm text-og-sub">Required CPR and TB records need Administrator verification. Review controls appear only after the requirement rules are loaded.</p> : null}
+          {awaiting && canReview && d.latestUploadedByMe && !canReviewOwn ? <p className="rounded-lg bg-og-page p-2 text-sm text-og-sub">You uploaded this version, so the Administrator or another manager must review it.</p> : null}
+          <Disclosure summary="Details">
+            <dl className="space-y-1 text-xs">
+              {line ? <div><dt className="inline font-semibold text-og-ink">Date: </dt><dd className="inline">{line}</dd></div> : null}
+              {d.latestUploadedAt ? <div><dt className="inline font-semibold text-og-ink">Uploaded: </dt><dd className="inline">Version {d.latestVersionNumber}, {formatDateTime(d.latestUploadedAt)}</dd></div> : null}
+              {d.reviewedByName && d.reviewedAt ? <div><dt className="inline font-semibold text-og-ink">Reviewed: </dt><dd className="inline">{d.reviewedByName}, {formatDateTime(d.reviewedAt)}</dd></div> : null}
+              {d.currencyStatus === "expiring" && d.reminderStage ? <div><dt className="inline font-semibold text-og-ink">Reminder: </dt><dd className="inline">within {d.reminderStage} days of expiry (shown here; Ogevia sends no email or text reminders)</dd></div> : null}
+              {d.currencyStatus === "no_expiry_required" ? <div>This document type has no expiry date.</div> : null}
+              {!d.latestUploadedAt && !line ? <div>Nothing uploaded yet.</div> : null}
+              <div>Earlier versions are kept; a replacement never overwrites them.</div>
+            </dl>
+          </Disclosure>
+          {mode === "upload" ? <UploadForm doc={d} onDone={() => { setMode(null); refresh(); }} /> : null}
+          {mode === "review" && reviewable ? <ReviewControls doc={d} selfReview={!!d.latestUploadedByMe} onDone={() => { setMode(null); refresh(); }} /> : null}
+        </td>
+      </tr>
+    </tbody>
   );
 }
 
@@ -420,11 +427,20 @@ export function DocumentsPage() {
       {!docs.isLoading && !docs.isError && shown.length === 0 ? (
         <p className="text-sm text-og-sub">{canRead ? (filter === "all" ? "No documents requested yet." : "No documents match this filter.") : "Your agency has not requested any documents."}</p>
       ) : null}
-      <ul className="space-y-3">
+      {shown.length > 0 ? (
+      <table className="w-full text-sm" aria-label="Documents">
+        <thead>
+          <tr className="text-left text-xs uppercase tracking-wide text-og-sub">
+            <th scope="col" className="py-1 pr-2 font-semibold">Document</th>
+            <th scope="col" className="py-1 pr-2 font-semibold">Status</th>
+            <th scope="col" className="py-1 text-right font-semibold">Action</th>
+          </tr>
+        </thead>
         {shown.map((d) => (
-          <DocumentCard key={d.documentId} d={d} canManage={canManage} canUpload={canManage || canOwn} canReviewOwn={hasPermission("documents.review_own")} canReview={canVerifyRequired || (!!requirementRules.data && !requirementRules.data.some((r) => r.documentTypeId === d.documentTypeId))} refresh={refresh} />
+          <DocumentRows key={d.documentId} d={d} canManage={canManage} canUpload={canManage || canOwn} canReviewOwn={hasPermission("documents.review_own")} canReview={canVerifyRequired || (!!requirementRules.data && !requirementRules.data.some((r) => r.documentTypeId === d.documentTypeId))} refresh={refresh} />
         ))}
-      </ul>
+      </table>
+      ) : null}
 
       {canManage ? (
         <Disclosure summary="Document types and reminder days" className="rounded-og border border-og-line bg-og-card px-3">

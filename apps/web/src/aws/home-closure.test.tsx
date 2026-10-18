@@ -23,6 +23,8 @@ describe("Needs action first", () => {
     const rows = within(panel).getAllByTestId("top-issue");
     expect(rows).toHaveLength(5);
     expect(within(rows[0]!).getByText("Critical")).toBeInTheDocument();
+    expect(rows[0]).toHaveTextContent("Was due"); // due is its own short column
+    expect(within(rows[0]!).getAllByRole("link")).toHaveLength(1); // one action per row
     expect(within(rows[0]!).getByRole("link", { name: "Choose a caregiver" })).toHaveAttribute("href", expect.stringMatching(/^\/schedule\?coverage=1&shift=s1&at=.+$/));
     expect(within(panel).getByRole("link", { name: "View all (6)" })).toHaveAttribute("href", "/action-needed");
     expect(panel).not.toHaveTextContent("Routine");
@@ -49,10 +51,13 @@ describe("Today's visits marks a blocked caregiver, not only an uncovered shift"
 });
 
 describe("hours this month: an alert with a link, folding that never hides alerts, curated failure", () => {
-  it("the authorization alert links to the clients; folding hides the figures but keeps the alert and survives a reload of the saved choice", async () => {
+  it("the authorization alert links to the clients; the section starts folded with its alert and key figures visible; opening and folding it is remembered", async () => {
     renderAws("/", PERMS, { "GET /v1/reports/utilisation": () => json(200, util()) });
     const tiers = await screen.findByTestId("authorization-tiers", {}, { timeout: 15000 });
     expect(within(tiers).getByTestId("authorization-tiers-link")).toHaveAttribute("href", "/service-verification/reports?view=reconciliation");
+    expect(screen.queryByText("Billable (confirmed)")).not.toBeInTheDocument(); // starts folded
+    expect(tiers).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Show the hours" }));
     expect(screen.getByText("Billable (confirmed)")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Hide the hours" }));
     expect(screen.queryByText("Billable (confirmed)")).not.toBeInTheDocument();
@@ -60,6 +65,7 @@ describe("hours this month: an alert with a link, folding that never hides alert
     expect(window.localStorage.getItem(`ogevia.home.collapsed.aaaaaaaa-0000-4000-8000-000000000001.hours`)).toBe("1");
     fireEvent.click(screen.getByRole("button", { name: "Show the hours" }));
     expect(screen.getByText("Billable (confirmed)")).toBeInTheDocument();
+    expect(window.localStorage.getItem(`ogevia.home.collapsed.aaaaaaaa-0000-4000-8000-000000000001.hours`)).toBe("0");
   }, 30000);
 
   it("a failed load prints a fixed message with Retry, not the raw error, and is not zero", async () => {

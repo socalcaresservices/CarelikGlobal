@@ -32,7 +32,7 @@ export function AuthorizationReviewCard({ visitId }: { visitId: string }) {
   if (!data || data.reviews.length === 0) return null;
   async function resolve() {
     if (state.busy) return;
-    if (note.trim().length < 10) return setState({ busy: false, error: "Write what you checked, at least 10 characters." });
+    if (note.trim().length < 10) return setState({ busy: false, error: "Note too short. Write what you checked, at least 10 characters." });
     setState({ busy: true, error: null });
     try {
       await api.post(`/v1/visits/${encodeURIComponent(visitId)}/authorization-review/resolve`, { organizationId: activeOrganizationId, note: note.trim() }, { idempotencyKey: key.current });
@@ -67,7 +67,7 @@ export function AuthorizationReviewCard({ visitId }: { visitId: string }) {
             <textarea value={note} rows={2} maxLength={1000} onChange={(e) => setNote(e.target.value)} className="mt-1 block w-full rounded-lg border border-slate-200 px-3 py-2 text-base" />
           </label>
           <Button type="button" className="min-h-11" loading={state.busy} disabled={state.busy} onClick={() => void resolve()}>Confirm it is still billable</Button>
-          <p className="text-xs text-slate-600">If the minutes are wrong, use Correct visit instead: it keeps the original and links the corrected record. Billing approval is a separate step.</p>
+          <p className="text-xs text-slate-600">If the minutes are wrong, use Correct visit instead. Billing approval is a separate step.</p>
         </div>
       ) : open ? <p className="text-sm text-slate-600">A person who manages visits has to review this before it can be approved.</p> : null}
       {state.error ? <p role="alert" className="text-sm text-red-700">{state.error}</p> : null}

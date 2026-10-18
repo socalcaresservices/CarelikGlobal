@@ -132,9 +132,7 @@ export function RecurringSeriesForm({ today, series, onDone }: { today: string; 
   return (
     <form onSubmit={(e) => { e.preventDefault(); void runPreview(); }} className="mt-3 grid min-w-0 gap-3 rounded-xl border border-slate-200 bg-slate-50 p-3 sm:grid-cols-2 [&>*]:min-w-0">
       {series ? (
-        <p className="text-sm text-slate-800 sm:col-span-2">
-          {series.clientName ?? series.clientCode} · {series.serviceName}. Dates before the change date stay as they are; visits already done are never changed.
-        </p>
+        <ShortHelp className="text-sm text-slate-800 sm:col-span-2" details="Dates before the change date stay as they are; visits already done are never changed.">{series.clientName ?? series.clientCode} · {series.serviceName}</ShortHelp>
       ) : (
         <>
           <div className="sm:col-span-2">
@@ -236,18 +234,19 @@ export function RecurringSeriesForm({ today, series, onDone }: { today: string; 
           <input id={`${id}-reason`} value={reason} maxLength={500} onChange={(e) => { setReason(e.target.value); key.current = newIdempotencyKey(); }} className={inputClass} />
         </div>
       ) : null}
-      <ShortHelp className="text-xs text-slate-600 sm:col-span-2" details="Each month is checked against that month's authorized hours, counting time already used and reserved.">Agency local time. Shifts are created through the end of the second month; add later months from the series list.</ShortHelp>
+      <ShortHelp className="text-xs text-slate-600 sm:col-span-2" details="Shifts are created through the end of the second month; add later months from the series list. Each month is checked against that month's authorized hours, counting time already used and reserved.">Times are the agency's local time.</ShortHelp>
       {state.error ? <p role="alert" className="text-sm text-red-700 sm:col-span-2">{state.error}</p> : null}
       <div className="sm:col-span-2"><Button type="submit" variant="secondary" disabled={state.busy}>Preview dates and hours</Button></div>
       {preview ? (
         <div className="min-w-0 space-y-3 sm:col-span-2">
           <PreviewTable rows={preview} />
           {flagged.length > 0 ? (
-            <p role="alert" className="text-sm font-semibold text-red-800">
-              {flagged.length} {flagged.length === 1 ? "date does" : "dates do"} not fit (listed in red). {preview.length - flagged.length > 0
-                ? `Saving keeps the ${preview.length - flagged.length} that fit and lists every date that was not saved with its reason. Nothing is shortened or moved.`
-                : "None fits, so nothing can be saved. Change the times, days or dates."}
-            </p>
+            <div role="alert" className="text-sm text-red-800">
+              <p className="font-semibold">{flagged.length} {flagged.length === 1 ? "date does" : "dates do"} not fit (listed in red). {preview.length - flagged.length > 0
+                ? `Saving keeps the ${preview.length - flagged.length} that fit.`
+                : "None fits, so nothing can be saved. Change the times, days or dates."}</p>
+              {preview.length - flagged.length > 0 ? <ShortHelp className="text-xs text-slate-700" details="Every date that was not saved is listed with its reason. Nothing is shortened or moved.">Dates that do not fit are skipped, not changed.</ShortHelp> : null}
+            </div>
           ) : (
             <p className="text-sm text-emerald-800">Every date fits.</p>
           )}

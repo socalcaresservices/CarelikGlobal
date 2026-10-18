@@ -13,6 +13,8 @@ import { useAssignments } from "./assignments-data";
 import { STAGE_LABEL, useClientReadiness, type DuplicateMatch, type ReadinessService } from "./client-data";
 import { useAwsApi } from "./aws-workspace";
 import { prepareDocumentFile } from "./document-file";
+import { uploadFailureMessage } from "./document-status";
+import { SummarySection } from "./ui/summary-section";
 import type { Shift } from "./schedule-page";
 import { TONE } from "./attention";
 import { StatusChip } from "./ui/status-chip";
@@ -62,7 +64,7 @@ export function ReadinessCard({ clientId }: { clientId: string }) {
   const [releaseNote, setReleaseNote] = useState("");
   const key = useRef(newIdempotencyKey());
   const r = q.data;
-  if (q.isError) return <Card className="p-4"><p role="alert" className="text-sm text-red-700">Readiness could not be loaded. It is not shown as ready. <button type="button" className="underline" onClick={() => void q.refetch()}>Retry</button></p></Card>;
+  if (q.isError) return <Card className="p-4"><p role="alert" className="text-sm text-red-700">Readiness could not be loaded, so it is not shown as ready. <button type="button" className="underline" onClick={() => void q.refetch()}>Retry</button></p></Card>;
   if (!r) return null;
   async function act(path: string, body: Record<string, unknown>, done: string) {
     if (state.busy) return;
@@ -74,19 +76,17 @@ export function ReadinessCard({ clientId }: { clientId: string }) {
       await refresh();
       setState({ busy: false, error: null, done });
     } catch (cause) {
-      setState({ busy: false, error: msg(cause, "Not saved. Nothing changed."), done: null });
+      setState({ busy: false, error: msg(cause, "Not saved. Nothing changed; try again."), done: null });
     }
   }
   const preparing = r.stage === "draft" || r.stage === "pending";
+  const notReady = r.services.filter((x) => x.state !== "ready").length;
   return (
-    <Card className="p-4" data-testid="readiness-card">
-      <div className="flex flex-wrap items-center gap-2">
-        <h2 className="text-base font-semibold text-slate-950">Readiness</h2>
-        <span data-testid="client-stage" className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-semibold text-slate-800">{STAGE_LABEL[r.stage]}</span>
-        {!r.canSchedule ? <span className="text-xs text-slate-600">Cannot be scheduled{preparing ? " until it is activated" : ""}.</span> : null}
-      </div>
+    <SummarySection title="Readiness" testId="readiness-card" defaultOpen={!r.canSchedule || notReady > 0}
+      status={<span data-testid="client-stage" className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-semibold text-slate-800">{STAGE_LABEL[r.stage]}</span>}
+      summary={!r.canSchedule ? `Cannot be scheduled${preparing ? " until it is activated" : ""}.` : notReady > 0 ? `${notReady} service${notReady === 1 ? "" : "s"} to fix` : "Ready for scheduling"}>
       {r.stageNote ? <p className="mt-1 text-sm text-slate-700">{r.stageNote}</p> : null}
-      {r.services.length === 0 ? <p className="mt-2 text-sm text-slate-600">No service has an authorization yet, so there is nothing to check.</p> : (
+      {r.services.length === 0 ? <p className="mt-2 text-sm text-slate-600">No service has an authorization yet. Add one under Authorizations.</p> : (
         <ul className="mt-2 space-y-2">
           {r.services.map((s) => (
             <li key={s.serviceId} className="rounded-lg border border-slate-200 p-3" data-testid="readiness-service">
@@ -128,10 +128,10 @@ export function ReadinessCard({ clientId }: { clientId: string }) {
           <label className="min-w-[200px] flex-1 text-xs font-medium text-slate-600">Note (optional)<input value={note} maxLength={500} onChange={(e) => setNote(e.target.value)} className={field} /></label>
         </div>
       ) : null}
-      {preparing ? <p className="mt-1 text-xs text-slate-600">Activation is refused until every document the client&apos;s services require is approved and no service is on hold.</p> : null}
+      {preparing ? <p className="mt-1 text-xs text-slate-600">Activation needs every required document approved and no service on hold.</p> : null}
       {state.error ? <p role="alert" className="mt-2 text-sm text-red-700">{state.error}</p> : null}
       {state.done ? <p role="status" className="mt-2 text-sm text-emerald-800">{state.done}</p> : null}
-    </Card>
+    </SummarySection>
   );
 }
 
@@ -153,6 +153,7 @@ function DocRow({ d, clientId, canManage }: { d: ClientDoc; clientId: string; ca
   const [issued, setIssued] = useState("");
   const [expires, setExpires] = useState("");
   const [reason, setReason] = useState("");
+  const [choice, setChoice] = useState<"verified" | "rejected" | null>(null);
   const [state, setState] = useState<{ busy: boolean; error: string | null }>({ busy: false, error: null });
   const key = useRef(newIdempotencyKey());
   async function upload() {
@@ -169,40 +170,42 @@ function DocRow({ d, clientId, canManage }: { d: ClientDoc; clientId: string; ca
       await refresh();
       setState({ busy: false, error: null });
     } catch (cause) {
-      setState({ busy: false, error: msg(cause, "The upload did not finish. Nothing was saved; try again.") });
+      setState({ busy: false, error: uploadFailureMessage(cause) });
     }
   }
-  async function decide(decision: "verified" | "rejected") {
+  async function decide() {
+    const decision = choice;
+    if (!decision) return setState({ busy: false, error: "No decision chosen. Choose Approve or Reject." });
     if (decision === "rejected" && !reason.trim()) return setState({ busy: false, error: "Write why it is rejected." });
     setState({ busy: true, error: null });
     try {
       await api.post(`/v1/client-document-versions/${encodeURIComponent(d.latestVersionId!)}/review`, { decision, reason: reason.trim() || null }, { idempotencyKey: key.current });
       key.current = newIdempotencyKey();
-      setMode(null); setReason("");
+      setMode(null); setReason(""); setChoice(null);
       await refresh();
       setState({ busy: false, error: null });
     } catch (cause) {
-      setState({ busy: false, error: msg(cause, "Not saved.") });
+      setState({ busy: false, error: msg(cause, "The decision was not saved. Try again.") });
     }
   }
   const tone = d.state === "approved" ? "neutral" : d.state === "pending_review" ? "neutral" : "amber";
+  const required = d.requiredFor.length > 0;
   return (
-    <li className="rounded-lg border border-slate-200 p-3" data-testid="client-document" data-state={d.state}>
-      <div className="flex flex-wrap items-center gap-2">
-        <p className="text-sm font-semibold text-slate-900">{d.name}</p>
-        <span className="text-xs text-slate-500">{CATEGORY[d.category] ?? d.category}</span>
+    <li className="py-2" data-testid="client-document" data-state={d.state}>
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+        <p className="min-w-0 flex-1 text-sm font-semibold text-slate-900">{d.name} <span className="font-normal text-slate-600">{required ? `· for ${d.requiredFor.map((x) => x.serviceName).join(", ")}` : "· not required"}</span></p>
         <StatusChip tone={tone}>{DOC_STATE[d.state]}</StatusChip>
-        {d.requiredFor.length > 0 ? <span className="text-xs text-slate-600">Required for {d.requiredFor.map((x) => x.serviceName).join(", ")}</span> : <span className="text-xs text-slate-500">Not required</span>}
+        <span className="text-xs text-slate-600 md:w-32">{d.expiresOn ? `Expires ${formatNumericDate(d.expiresOn)}` : d.requiresExpiry ? "No expiry set" : ""}</span>
+        {canManage ? (
+          <span className="flex gap-x-3">
+            {d.state === "pending_review" ? <button type="button" className={linkCls} aria-expanded={mode === "review"} onClick={() => setMode(mode === "review" ? null : "review")}>Review…</button> : null}
+            <button type="button" className={linkCls} aria-expanded={mode === "upload"} onClick={() => setMode(mode === "upload" ? null : "upload")}>{d.versionNumber ? "Upload a new version" : "Upload"}</button>
+          </span>
+        ) : null}
       </div>
-      {d.versionNumber ? <p className="mt-0.5 text-xs text-slate-600">Version {d.versionNumber} of {d.versionCount} · uploaded {d.uploadedAt ? formatNumericDate(d.uploadedAt) : ""}{d.uploadedByName ? ` by ${d.uploadedByName}` : ""}{d.expiresOn ? ` · expires ${formatNumericDate(d.expiresOn)}` : ""}{d.reviewedByName ? ` · reviewed by ${d.reviewedByName}` : ""}</p> : null}
+      {d.versionNumber ? <p className="text-xs text-slate-600">Version {d.versionNumber} of {d.versionCount} · uploaded {d.uploadedAt ? formatNumericDate(d.uploadedAt) : ""}{d.uploadedByName ? ` by ${d.uploadedByName}` : ""}{d.reviewedByName ? ` · reviewed by ${d.reviewedByName}` : ""}</p> : null}
       {d.state === "rejected" && d.rejectionReason ? <p className="text-xs text-amber-900">Rejected: {d.rejectionReason}</p> : null}
       {d.state === "pending_review" ? <p className="text-xs text-slate-600">Uploading is not approval. It stays pending until a reviewer decides.</p> : null}
-      {canManage ? (
-        <div className="mt-1 flex flex-wrap gap-x-4">
-          <button type="button" className={linkCls} aria-expanded={mode === "upload"} onClick={() => setMode(mode === "upload" ? null : "upload")}>{d.versionNumber ? "Upload a new version" : "Upload"}</button>
-          {d.state === "pending_review" ? <button type="button" className={linkCls} aria-expanded={mode === "review"} onClick={() => setMode(mode === "review" ? null : "review")}>Review…</button> : null}
-        </div>
-      ) : null}
       {mode === "upload" ? (
         <div className="mt-2 grid gap-2 sm:grid-cols-2">
           <label className="text-sm font-medium text-slate-700 sm:col-span-2">File (PDF, JPEG or PNG, up to 4 MB)<input type="file" accept="application/pdf,image/jpeg,image/png" onChange={(e) => setFile(e.target.files?.[0] ?? null)} className={field} /></label>
@@ -213,8 +216,13 @@ function DocRow({ d, clientId, canManage }: { d: ClientDoc; clientId: string; ca
       ) : null}
       {mode === "review" ? (
         <div className="mt-2 space-y-2">
+          <fieldset className="flex flex-wrap gap-x-5">
+            <legend className="text-sm font-medium text-slate-700">Decision</legend>
+            <label className="flex min-h-[44px] items-center gap-2 text-sm"><input type="radio" name={`decision-${d.documentTypeId}`} className="h-5 w-5" checked={choice === "verified"} onChange={() => setChoice("verified")} />Approve</label>
+            <label className="flex min-h-[44px] items-center gap-2 text-sm"><input type="radio" name={`decision-${d.documentTypeId}`} className="h-5 w-5" checked={choice === "rejected"} onChange={() => setChoice("rejected")} />Reject</label>
+          </fieldset>
           <label className="block text-sm font-medium text-slate-700">Reason (required to reject)<input value={reason} maxLength={1000} onChange={(e) => setReason(e.target.value)} className={field} /></label>
-          <div className="flex gap-2"><Button type="button" className="min-h-11" disabled={state.busy} onClick={() => void decide("verified")}>Approve</Button><Button type="button" variant="secondary" className="min-h-11" disabled={state.busy} onClick={() => void decide("rejected")}>Reject</Button></div>
+          <Button type="button" className="min-h-11" disabled={state.busy} onClick={() => void decide()}>Save decision</Button>
         </div>
       ) : null}
       {state.error ? <p role="alert" className="mt-1 text-sm text-red-700">{state.error}</p> : null}
@@ -255,7 +263,7 @@ function DocumentSetup({ onDone }: { onDone: () => void }) {
   }
   return (
     <div className="mt-2 space-y-3 rounded-lg bg-slate-50 p-3" data-testid="document-setup">
-      <p className="text-sm text-slate-700">Choose which documents each service requires. A client cannot be activated until every document its services require is approved.</p>
+      <p className="text-sm text-slate-700">Choose which documents each service requires.</p>
       <ul className="space-y-2">
         {(types.data ?? []).map((t) => (
           <li key={t.documentTypeId} className="text-sm">
@@ -293,22 +301,23 @@ export function ClientDocumentsCard({ clientId }: { clientId: string }) {
   });
   if (!canRead) return null;
   const docs = q.data ?? [];
+  const todo = docs.filter((d) => d.state !== "approved" && d.requiredFor.length > 0).length;
   return (
-    <Card className="p-4" data-testid="client-documents">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <h2 className="text-base font-semibold text-slate-950">Documents</h2>
-        {canManage ? <button type="button" className={linkCls} aria-expanded={setup} onClick={() => setSetup((v) => !v)}>{setup ? "Close setup" : "Set up required documents"}</button> : null}
-      </div>
+    <SummarySection title="Documents" testId="client-documents" defaultOpen={todo > 0}
+      status={q.data ? <StatusChip tone={todo > 0 ? "amber" : "neutral"}>{todo > 0 ? `${todo} to fix` : "All approved"}</StatusChip> : undefined}
+      summary={q.data ? `${docs.length} document${docs.length === 1 ? "" : "s"}` : undefined}>
+      {canManage ? <div className="mb-1 text-right"><button type="button" className={linkCls} aria-expanded={setup} onClick={() => setSetup((v) => !v)}>{setup ? "Close setup" : "Set up required documents"}</button></div> : null}
       {setup ? <DocumentSetup onDone={() => void queryClient.invalidateQueries({ queryKey: ["client-documents", clientId] })} /> : null}
-      {q.isLoading ? <p className="mt-2 text-sm text-slate-500">Loading…</p> : null}
-      {q.isError ? <p role="alert" className="mt-2 text-sm text-red-700">The documents could not be loaded. <button type="button" className="underline" onClick={() => void q.refetch()}>Retry</button></p> : null}
-      {q.data && docs.length === 0 ? <p className="mt-2 text-sm text-slate-600">No documents are required for this client&apos;s services, and none have been uploaded.</p> : null}
-      <ul className="mt-2 space-y-2">{docs.map((d) => <DocRow key={d.documentTypeId} d={d} clientId={clientId} canManage={canManage} />)}</ul>
-    </Card>
+      {q.isLoading ? <p className="text-sm text-slate-500">Loading…</p> : null}
+      {q.isError ? <p role="alert" className="text-sm text-red-700">The documents could not be loaded. <button type="button" className="underline" onClick={() => void q.refetch()}>Retry</button></p> : null}
+      {q.data && docs.length === 0 ? <p className="text-sm text-slate-600">No documents are required or uploaded yet.</p> : null}
+      <ul className="divide-y divide-slate-100">{docs.map((d) => <DocRow key={d.documentTypeId} d={d} clientId={clientId} canManage={canManage} />)}</ul>
+    </SummarySection>
   );
 }
 
 // ---------------------------------------------------------------- alerts (6, 7), next visits (9, 10), history (12)
+/** The overall outcome first ("Ready for scheduling" / "Not ready: 2 items to fix"), then each item to fix with its one action. */
 export function ClientAlertsCard({ clientId }: { clientId: string }) {
   const api = useAwsApi();
   const { activeOrganizationId, hasPermission } = useOrganization();
@@ -321,13 +330,19 @@ export function ClientAlertsCard({ clientId }: { clientId: string }) {
     queryKey: ["client-issue-history", clientId], enabled: !!activeOrganizationId && allowed,
     queryFn: async () => (await api.get<{ history: { resolved: Array<{ issueKey: string; kind: string; reason: string; firstSeenAt: string; resolvedAt: string }> } }>(`/v1/clients/${encodeURIComponent(clientId)}/issue-history`, { organizationId: activeOrganizationId })).history.resolved,
   });
+  const readiness = useClientReadiness(clientId);
   if (!allowed) return null;
-  if (q.isError) return <p role="alert" className="text-sm text-red-700">This client&apos;s alerts could not be loaded. They are not shown as empty.</p>;
+  if (q.isError) return <p role="alert" className="text-sm text-red-700">This client&apos;s alerts could not be loaded, so they are not shown as empty. Reload the page.</p>;
   const open = q.data?.issues ?? [];
   if (!q.data) return null;
+  const blocked = readiness.data ? !readiness.data.canSchedule : false;
+  const ready = open.length === 0 && !blocked;
   return (
     <section aria-label="Client alerts" data-testid="client-alerts" className="space-y-2">
-      {open.length === 0 ? <p className="text-sm text-slate-600">Nothing needs action for this client.</p> : (
+      <p data-testid="client-outcome" className={`text-base font-semibold ${ready ? "text-emerald-800" : "text-amber-900"}`}>
+        {ready ? "Ready for scheduling" : open.length > 0 ? `Not ready: ${open.length} item${open.length === 1 ? "" : "s"} to fix` : "Not ready: activate this client to schedule"}
+      </p>
+      {open.length > 0 ? (
         <ul className="space-y-2">
           {open.map((i) => {
             const dest = issueDestination(i);
@@ -341,7 +356,7 @@ export function ClientAlertsCard({ clientId }: { clientId: string }) {
             );
           })}
         </ul>
-      )}
+      ) : null}
       {(hist.data ?? []).length > 0 ? (
         <details data-testid="client-alert-history">
           <summary className="cursor-pointer text-sm text-slate-700">Resolved alerts ({hist.data!.length})</summary>
@@ -355,15 +370,15 @@ export function ClientAlertsCard({ clientId }: { clientId: string }) {
 export function ClientQuickActions({ clientId, canEdit }: { clientId: string; canEdit: boolean }) {
   const { hasPermission } = useOrganization();
   const manage = hasPermission("shifts.manage");
-  const primary = "inline-flex min-h-[44px] items-center justify-center rounded-lg px-4 text-sm font-semibold hover:opacity-90";
+  const btn = "inline-flex min-h-[44px] items-center justify-center rounded-lg px-4 text-sm font-semibold hover:opacity-90";
   return (
     <nav aria-label="Client actions" className="flex flex-wrap items-center gap-2">
-      {manage ? <Link to={`/schedule?add=1&client=${encodeURIComponent(clientId)}`} className={`${primary} bg-og-accent text-og-on-accent`}>Schedule Visit</Link> : null}
-      <a href="#authorizations" className={`${primary} border border-og-line bg-og-card text-og-ink`}>View Authorization</a>
-      {hasPermission("visits.read") ? <Link to={`/visit-review?client=${encodeURIComponent(clientId)}`} className={`${primary} border border-og-line bg-og-card text-og-ink`}>Verify Visit</Link> : null}
+      {manage ? <Link to={`/schedule?add=1&client=${encodeURIComponent(clientId)}`} className={`${btn} bg-og-accent text-og-on-accent`}>Schedule Visit</Link> : null}
       <details className="relative">
-        <summary className="inline-flex min-h-[44px] cursor-pointer items-center rounded-lg border border-og-line bg-og-card px-4 text-sm font-semibold text-og-ink">More</summary>
+        <summary className={`${btn} cursor-pointer list-none border border-og-line bg-og-card text-og-ink [&::-webkit-details-marker]:hidden`}>More</summary>
         <ul className="mt-1 min-w-[200px] space-y-0.5 rounded-lg border border-og-line bg-og-card p-2 text-sm md:absolute md:z-10">
+          <li><a className={linkCls} href="#authorizations">View Authorization</a></li>
+          {hasPermission("visits.read") ? <li><Link className={linkCls} to={`/visit-review?client=${encodeURIComponent(clientId)}`}>Verify Visit</Link></li> : null}
           <li><a className={linkCls} href="#readiness">Readiness and holds</a></li>
           {hasPermission("documents.read") ? <li><a className={linkCls} href="#documents">Documents</a></li> : null}
           <li><a className={linkCls} href="#history">History</a></li>
@@ -388,24 +403,22 @@ export function NextVisitsCard({ clientId }: { clientId: string }) {
   if (!allowed) return null;
   const upcoming = (q.data ?? []).filter((s) => Date.parse(s.endsAt) > Date.now() && s.coverageState !== ("cancelled" as string)).sort((a, b) => Date.parse(a.startsAt) - Date.parse(b.startsAt)).slice(0, 3);
   return (
-    <Card className="p-4" data-testid="next-visits">
-      <div className="flex items-center justify-between gap-2">
-        <h2 className="text-base font-semibold text-slate-950">Next visits</h2>
-        <Link className={linkCls} to={`/schedule?client=${encodeURIComponent(clientId)}`}>Full schedule</Link>
-      </div>
-      {q.isLoading ? <p className="mt-2 text-sm text-slate-500">Loading…</p> : null}
-      {q.isError ? <p role="alert" className="mt-2 text-sm text-red-700">The visits could not be loaded. They are not shown as none.</p> : null}
-      {q.data && upcoming.length === 0 ? <p className="mt-2 text-sm text-slate-600">No visits are scheduled in the next 60 days.</p> : null}
-      <ul className="mt-2 space-y-1">
+    <SummarySection title="Next visits" testId="next-visits" defaultOpen={q.data !== undefined && upcoming.length > 0 && upcoming.some((s) => s.coverageState === "needs_coverage")}
+      summary={q.data ? (upcoming.length === 0 ? "None in the next 60 days" : `Next: ${formatNumericDate(upcoming[0]!.startsAt)} ${formatClockTime(upcoming[0]!.startsAt)}`) : undefined}>
+      <div className="mb-1 text-right"><Link className={linkCls} to={`/schedule?client=${encodeURIComponent(clientId)}`}>Full schedule</Link></div>
+      {q.isLoading ? <p className="text-sm text-slate-500">Loading…</p> : null}
+      {q.isError ? <p role="alert" className="text-sm text-red-700">The visits could not be loaded, so they are not shown as none. Reload the page.</p> : null}
+      {q.data && upcoming.length === 0 ? <p className="text-sm text-slate-600">No visits are scheduled in the next 60 days.</p> : null}
+      <ul className="space-y-1">
         {upcoming.map((s) => (
           <li key={s.shiftId} className="flex flex-wrap items-center gap-x-3 text-sm" data-testid="next-visit">
             <span className="font-og-mono tabular-nums text-slate-900">{formatNumericDate(s.startsAt)} {formatClockTime(s.startsAt)}–{formatClockTime(s.endsAt)}</span>
             <span className="text-slate-700">{s.coverageState === "needs_coverage" ? "No caregiver" : (s.caregiverName ?? s.caregiverCode ?? "Caregiver assigned")}</span>
-            <span className="text-slate-500">{STATE_WORD[s.coverageState] ?? s.coverageState}</span>
+            <span className="text-slate-600">{STATE_WORD[s.coverageState] ?? s.coverageState}</span>
           </li>
         ))}
       </ul>
-    </Card>
+    </SummarySection>
   );
 }
 
@@ -420,8 +433,8 @@ export function ClientHistoryCard({ clientId }: { clientId: string }) {
   });
   if (!allowed) return null;
   return (
-    <Card className="p-4" data-testid="client-history">
-      <button type="button" className="text-base font-semibold text-slate-950" aria-expanded={open} onClick={() => setOpen((v) => !v)}>{open ? "Hide history" : "History and audit trail"}</button>
+    <Card className="px-4 py-1" data-testid="client-history">
+      <button type="button" className="min-h-[44px] text-base font-semibold text-slate-950" aria-expanded={open} onClick={() => setOpen((v) => !v)}>{open ? "Hide history" : "History and audit trail"}</button>
       {open ? (
         <div className="mt-2">
           {q.isLoading ? <p className="text-sm text-slate-500">Loading…</p> : null}
@@ -430,7 +443,7 @@ export function ClientHistoryCard({ clientId }: { clientId: string }) {
             {(q.data ?? []).map((e, n) => <li key={n} className="text-slate-800">{formatNumericDate(e.occurredAt)} {formatClockTime(e.occurredAt)} · {e.action.replace(/[._]/g, " ")}{e.actorName ? ` · ${e.actorName}` : ""}{e.fields.length ? ` · changed: ${e.fields.join(", ").replace(/_/g, " ")}` : ""}{e.reason ? ` · ${e.reason}` : ""}</li>)}
           </ul>
           {q.data && q.data.length === 0 ? <p className="text-sm text-slate-600">No history yet.</p> : null}
-          <p className="mt-2 text-xs text-slate-500">The timeline shows what changed and who changed it, never the values.</p>
+          <p className="mt-2 text-xs text-slate-600">Shows what changed and who changed it, never the values.</p>
         </div>
       ) : null}
     </Card>
@@ -453,16 +466,15 @@ export function CaregiverSummary({ clientId, children }: { clientId: string; chi
   const current = (assignments.data ?? []).filter((a) => a.state !== "ended");
   const byCaregiver = new Map<string, typeof current>();
   for (const a of current) byCaregiver.set(a.caregiverRecordId ?? a.assignmentId, [...(byCaregiver.get(a.caregiverRecordId ?? a.assignmentId) ?? []), a]);
+  const groups = [...byCaregiver.values()];
   return (
-    <Card className="p-4" data-testid="caregiver-summary">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <h2 className="text-base font-semibold text-slate-950">Caregivers</h2>
-        <button type="button" className={linkCls} aria-expanded={open} onClick={() => setOpen((v) => !v)}>{open ? "Hide assignment details" : "Assignment details"}</button>
-      </div>
-      {assignments.isError ? <p role="alert" className="mt-2 text-sm text-red-700">The caregivers could not be loaded.</p> : null}
-      {assignments.data && current.length === 0 ? <p className="mt-2 text-sm text-slate-600">No caregiver is assigned yet.</p> : null}
-      <ul className="mt-2 space-y-1">
-        {[...byCaregiver.values()].map((list) => {
+    <SummarySection title="Caregivers" testId="caregiver-summary" defaultOpen={assignments.data !== undefined && current.length === 0}
+      summary={assignments.data ? (current.length === 0 ? "None assigned" : `${groups.length} assigned`) : undefined}>
+      <div className="mb-1 text-right"><button type="button" className={linkCls} aria-expanded={open} onClick={() => setOpen((v) => !v)}>{open ? "Hide assignment details" : "Assignment details"}</button></div>
+      {assignments.isError ? <p role="alert" className="text-sm text-red-700">The caregivers could not be loaded. Reload the page.</p> : null}
+      {assignments.data && current.length === 0 ? <p className="text-sm text-slate-600">No caregiver is assigned yet.</p> : null}
+      <ul className="space-y-1">
+        {groups.map((list) => {
           const a = list[0]!;
           const n = next(a.caregiverRecordId);
           return (
@@ -475,7 +487,6 @@ export function CaregiverSummary({ clientId, children }: { clientId: string; chi
         })}
       </ul>
       {open ? <div className="mt-3">{children}</div> : null}
-    </Card>
+    </SummarySection>
   );
 }
-

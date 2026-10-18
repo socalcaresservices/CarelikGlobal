@@ -16,8 +16,10 @@ import { AssignmentsCard } from "./assignments-card";
 import { ClientExperience, MatchingLocation } from "./readiness/matching-inputs";
 import { ClientTypeField } from "./clients-page";
 import { CaregiverSummary, ClientAlertsCard, ClientDocumentsCard, ClientHistoryCard, ClientQuickActions, DuplicateWarning, NextVisitsCard, ReadinessCard } from "./client-extras";
-import { STAGE_LABEL, useClientReadiness, useDuplicateClients } from "./client-data";
+import { useDuplicateClients } from "./client-data";
 import { formatDateOnly } from "@/lib/service-verification";
+import { ShortHelp } from "./help-text";
+import { SummarySection } from "./ui/summary-section";
 
 const message = (cause: unknown, fallback: string) => (cause instanceof Error ? cause.message : fallback);
 const inputClass = "mt-1 block w-full rounded-lg border border-slate-200 px-3 py-2 text-base";
@@ -68,32 +70,29 @@ function DetailsCard({ c, canManage }: { c: AdminClient; canManage: boolean }) {
   }
   if (!canManage) {
     return (
-      <Card className="p-4 text-sm text-slate-700">
-        <p>City: {c.city ?? "—"} · Type: {c.clientTypeName ?? "—"} · Caregivers see: {c.caregiverDisplayCode ?? c.clientCode}</p>
-      </Card>
+      <SummarySection title="Details" summary={`City: ${c.city ?? "—"} · Type: ${c.clientTypeName ?? "—"} · Caregivers see: ${c.caregiverDisplayCode ?? c.clientCode}`}>
+        <p className="text-sm text-slate-700">Name and contact changes are made by the office.</p>
+      </SummarySection>
     );
   }
   if (!editing) {
     return (
-      <Card className="p-4" id="details" data-testid="details-readonly">
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <h2 className="text-base font-semibold text-slate-950">Details</h2>
-          <button type="button" className="text-sm font-semibold text-slate-900 underline" onClick={() => { setEditing(true); setState({ busy: false, error: null, done: false }); }}>Edit details</button>
-        </div>
-        <dl className="mt-2 grid gap-x-6 gap-y-1 text-sm sm:grid-cols-2">
+      <SummarySection title="Details" id="details" testId="details-readonly" summary={[c.city, c.clientTypeName].filter(Boolean).join(" · ") || "No city or type"}>
+        <dl className="grid gap-x-6 gap-y-1 text-sm sm:grid-cols-2">
           <div><dt className="text-xs text-slate-600">Name</dt><dd>{clientName(c) ?? "Not set"}</dd></div>
           <div><dt className="text-xs text-slate-600">City</dt><dd>{c.city ?? "—"}</dd></div>
           <div><dt className="text-xs text-slate-600">Type</dt><dd>{c.clientTypeName ?? "—"}</dd></div>
           <div><dt className="text-xs text-slate-600">Caregivers see</dt><dd>{c.caregiverDisplayCode ?? c.clientCode}</dd></div>
         </dl>
+        <button type="button" className="mt-2 inline-flex min-h-[44px] items-center text-sm font-semibold text-slate-900 underline" onClick={() => { setEditing(true); setState({ busy: false, error: null, done: false }); }}>Edit details</button>
         {state.done ? <p role="status" className="mt-2 text-sm text-emerald-800">Saved. The change is in the client&apos;s history.</p> : null}
-      </Card>
+      </SummarySection>
     );
   }
   return (
     <Card className="p-4" id="details">
       <h2 className="text-base font-semibold text-slate-950">Edit details</h2>
-      <p className="mt-1 text-xs text-slate-600" data-testid="edit-impact">Changes are recorded in the client&apos;s history. The label caregivers see changes on their next load. Changing the type can change which caregivers match a care request.</p>
+      <p className="mt-1 text-xs text-slate-600" data-testid="edit-impact">Changes are recorded in the client&apos;s history. Changing the type can change which caregivers match a care request.</p>
       <form onSubmit={(e) => { e.preventDefault(); void save(); }} className="mt-3 grid gap-3 sm:grid-cols-2">
         <div><label htmlFor="edit-first" className="block text-sm font-medium text-slate-700">First name</label><input id="edit-first" value={form.first} maxLength={80} autoComplete="off" onChange={(e) => set("first")(e.target.value)} className={inputClass} /></div>
         <div><label htmlFor="edit-last" className="block text-sm font-medium text-slate-700">Last name</label><input id="edit-last" value={form.last} maxLength={80} autoComplete="off" onChange={(e) => set("last")(e.target.value)} className={inputClass} /></div>
@@ -130,18 +129,20 @@ function StatusCard({ c }: { c: AdminClient }) {
       setState({ busy: false, error: message(cause, "Status not changed."), done: false });
     }
   }
+  const options = (["active", "inactive", "discharged"] as const).filter((x) => x !== c.status);
   return (
-    <Card className="p-4">
-      <h2 className="text-base font-semibold text-slate-950">Status</h2>
-      <p className="mt-1 text-sm text-slate-600">Inactive and discharged clients cannot be scheduled or visited. Their records and history are kept.</p>
-      <form onSubmit={(e) => { e.preventDefault(); void save(); }} className="mt-3 flex flex-wrap items-end gap-3">
+    <SummarySection title="Status" status={<span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${STATUS_BADGE[c.status]}`}>{STATUS_LABEL[c.status]}</span>}>
+      <ShortHelp className="text-sm text-slate-600" details="Their records and history are kept.">Inactive and discharged clients cannot be scheduled or visited.</ShortHelp>
+      <form onSubmit={(e) => { e.preventDefault(); void save(); }} className="mt-3 space-y-3">
+        <fieldset>
+          <legend className="text-sm font-medium text-slate-700">Change to</legend>
+          <div className="flex flex-wrap gap-x-5">
+            {options.map((o) => (
+              <label key={o} className="flex min-h-[44px] items-center gap-2 text-sm"><input type="radio" name="status-new" className="h-5 w-5" checked={status === o} onChange={() => { setStatus(o); key.current = newIdempotencyKey(); }} />{STATUS_LABEL[o]}</label>
+            ))}
+          </div>
+        </fieldset>
         <div>
-          <label htmlFor="status-new" className="block text-sm font-medium text-slate-700">Change to</label>
-          <select id="status-new" value={status} onChange={(e) => { setStatus(e.target.value as ClientStatus); key.current = newIdempotencyKey(); }} className="mt-1 rounded-lg border border-slate-200 px-3 py-2 text-base">
-            {(["active", "inactive", "discharged"] as const).filter((s) => s !== c.status).map((s) => <option key={s} value={s}>{STATUS_LABEL[s]}</option>)}
-          </select>
-        </div>
-        <div className="min-w-[220px] flex-1">
           <label htmlFor="status-reason" className="block text-sm font-medium text-slate-700">Reason</label>
           <input id="status-reason" value={reason} maxLength={500} onChange={(e) => { setReason(e.target.value); key.current = newIdempotencyKey(); }} className={inputClass} />
         </div>
@@ -149,7 +150,7 @@ function StatusCard({ c }: { c: AdminClient }) {
       </form>
       {state.error ? <p role="alert" className="mt-2 text-sm text-red-700">{state.error}</p> : null}
       {state.done ? <p role="status" className="mt-2 text-sm text-emerald-800">Status changed.</p> : null}
-    </Card>
+    </SummarySection>
   );
 }
 
@@ -275,7 +276,7 @@ function AmendForm({ current, onDone, renewal = false }: { current: Authorizatio
   return (
     <form onSubmit={(e) => { e.preventDefault(); void submit(); }} className="mt-3 grid gap-3 rounded-xl border border-slate-200 bg-slate-50 p-3 sm:grid-cols-2">
       {renewal ? <p data-testid="renewal-steps" className="text-sm text-slate-700 sm:col-span-2"><strong>Renewal.</strong> Step 1: enter the new terms (the dates start the day after this authorization ends). Step 2: after you save, review every reserved shift and visit it affects on Authorization changes. Nothing that was held or scheduled is restored or released automatically; a person decides each one.</p> : null}
-      <p className="text-sm text-slate-700 sm:col-span-2">An amendment creates version {current.versionNumber + 1}. Version {current.versionNumber} is kept unchanged in the history. Visits already billed are not changed automatically.</p>
+      <p className="text-sm text-slate-700 sm:col-span-2">Saves version {current.versionNumber + 1}; version {current.versionNumber} stays in the history. Visits already billed are not changed.</p>
       <TermsFields t={t} set={set} idPrefix={idp} />
       <div className="sm:col-span-2"><label htmlFor={`${idp}-reason`} className="block text-sm font-medium text-slate-700">Reason for the amendment</label><input id={`${idp}-reason`} value={reason} maxLength={500} onChange={(e) => { setReason(e.target.value); key.current = newIdempotencyKey(); }} className={inputClass} /></div>
       {state.error ? <p role="alert" className="text-sm text-red-700 sm:col-span-2">{state.error}</p> : null}
@@ -352,14 +353,18 @@ function AuthorizationsCard({ clientId }: { clientId: string }) {
   const balances = useMonthlyBalances(clientId, `${month}-01`);
   const [adding, setAdding] = useState(false);
   const lineages = groupByLineage(versions.data ?? []);
+  const rows = balances.data ?? [];
+  const worst = rows.some((b) => b.authorizationTier === "critical" || b.remainingMinutes < 0) ? "critical" : rows.some((b) => b.authorizationTier === "near_limit") ? "near_limit" : null;
+  const none = versions.data !== undefined && lineages.length === 0;
+  const attention = none || worst !== null || rows.some((b) => b.expiringSoon);
+  const left = (b: (typeof rows)[number]) => (b.remainingMinutes < 0 ? `${formatDuration(-b.remainingMinutes)} over` : `${formatDuration(b.remainingMinutes)} left`);
   return (
-    <Card className="p-4">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <h2 className="text-base font-semibold text-slate-950">Authorizations</h2>
-        {canUpdate ? <Button type="button" variant="secondary" onClick={() => setAdding((a) => !a)} aria-expanded={adding}>{adding ? "Close" : "Add authorization"}</Button> : null}
-      </div>
+    <SummarySection title="Authorizations" defaultOpen hideSummaryWhenOpen
+      status={none ? <span className="rounded-full bg-red-100 px-2 py-0.5 text-xs font-semibold text-red-800">None</span> : worst ? <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${worst === "critical" ? "bg-red-100 text-red-800" : "bg-amber-100 text-amber-900"}`}>{worst === "critical" ? "Critical" : "Near limit"}</span> : rows.length > 0 ? <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-semibold text-emerald-900">{attention ? "Ending soon" : "Healthy"}</span> : undefined}
+      summary={rows.length > 0 ? rows.map((b) => `${b.serviceName}: ${left(b)}`).join(" · ") : undefined}>
+      {canUpdate ? <div className="mb-2 text-right"><Button type="button" variant="secondary" onClick={() => setAdding((a) => !a)} aria-expanded={adding}>{adding ? "Close" : "Add authorization"}</Button></div> : null}
       {adding ? <AddAuthorizationForm clientId={clientId} onDone={() => setAdding(false)} /> : null}
-      <div className="mt-3">
+      <div className="mt-1">
         <label htmlFor="balance-month" className="block text-sm font-medium text-slate-700">Balance for month</label>
         <input id="balance-month" type="month" value={month} onChange={(e) => setMonth(e.target.value || agencyMonth(tz))} className="mt-1 rounded-lg border border-slate-200 px-3 py-2 text-base" />
       </div>
@@ -393,17 +398,18 @@ function AuthorizationsCard({ clientId }: { clientId: string }) {
               </li>
             ))}
           </ul>
-          <p className="mt-1 text-xs text-slate-500">Committed = billable + approved rounding adjustments + time already scheduled. Hours left = authorized − committed; if that is negative, the amount over the limit is shown.</p>
-          <p className="mt-1 text-xs text-slate-500">Healthy is below 80% committed, Near Limit 80% to below 95%, Critical 95% and above (same calculation as the reports).</p>
+          <ShortHelp className="mt-1 text-xs text-slate-600" details="Committed = billable + approved rounding adjustments + time already scheduled. Healthy is below 80% committed, Near Limit 80% to below 95%, Critical 95% and above (same calculation as the reports).">
+            Hours left = authorized − committed; if negative, the amount over the limit is shown.
+          </ShortHelp>
         </div>
       ) : null}
       {versions.isLoading ? <p className="mt-3 text-sm text-slate-500">Loading…</p> : null}
       {versions.isError ? <p role="alert" className="mt-3 text-sm text-red-700">{(versions.error as Error).message}</p> : null}
-      {versions.data && lineages.length === 0 ? <p className="mt-3 text-sm font-semibold text-red-700">No authorization yet. Visits cannot be scheduled or verified for this client until one is added.</p> : null}
+      {none ? <p className="mt-3 text-sm font-semibold text-red-700">No authorization yet. Visits cannot be scheduled or verified until one is added.</p> : null}
       <ul className="mt-3 space-y-2">
         {lineages.map((l) => <LineageCard key={l[0]!.lineageId} versions={l} canUpdate={canUpdate} showRate={showRate} />)}
       </ul>
-    </Card>
+    </SummarySection>
   );
 }
 
@@ -425,7 +431,6 @@ export function ClientDetailPage() {
         <h1 className="text-xl font-semibold text-slate-950">{clientName(c) ?? "Name not set"}</h1>
         <span className="text-sm text-slate-500">{c.clientCode}</span>
         <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${STATUS_BADGE[c.status]}`}>{STATUS_LABEL[c.status]}</span>
-        <StageChip clientId={c.clientId} />
       </div>
       <ClientAlertsCard clientId={c.clientId} />
       <ClientQuickActions clientId={c.clientId} canEdit={canManage} />
@@ -441,10 +446,4 @@ export function ClientDetailPage() {
       <div id="history"><ClientHistoryCard clientId={c.clientId} /></div>
     </div>
   );
-}
-
-function StageChip({ clientId }: { clientId: string }) {
-  const q = useClientReadiness(clientId);
-  if (!q.data) return null;
-  return <span data-testid="stage-chip" className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-semibold text-slate-800">{STAGE_LABEL[q.data.stage]}</span>;
 }

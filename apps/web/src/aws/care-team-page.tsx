@@ -15,6 +15,9 @@ import { CaregiverReadiness } from "./readiness/caregiver-readiness";
 import { OnboardingCard } from "./recruiting";
 import { ReadinessCard } from "./readiness/readiness-card";
 import { AvailabilityReview } from "./readiness/availability-review";
+import { useCaregiverCompliance } from "./compliance/queries";
+import { ShortHelp } from "./help-text";
+import { SummarySection } from "./ui/summary-section";
 
 const message = (cause: unknown, fallback: string) => (cause instanceof Error ? cause.message : fallback);
 const inputClass = "mt-1 block w-full rounded-lg border border-slate-200 px-3 py-2 text-base";
@@ -98,10 +101,7 @@ export function CareTeamPage() {
   return (
     <div className="max-w-4xl space-y-4">
       <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h1 className="text-xl font-semibold text-slate-950">Care Team</h1>
-          <p className="mt-1 text-sm text-slate-600">Caregiver records, their status and whether they can sign in.</p>
-        </div>
+        <h1 className="text-xl font-semibold text-slate-950">Care Team</h1>
         {canManage ? <Button type="button" onClick={() => setAdding((a) => !a)} aria-expanded={adding}>{adding ? "Close" : "Add caregiver"}</Button> : null}
       </div>
       <ReadinessCard />
@@ -125,21 +125,33 @@ export function CareTeamPage() {
       {caregivers.isLoading ? <p className="text-sm text-slate-500">Loading…</p> : null}
       {caregivers.isError ? <p role="alert" className="text-sm text-red-700">{(caregivers.error as Error).message}</p> : null}
       {caregivers.data && shown.length === 0 ? <p className="text-sm text-slate-600">No caregivers match.</p> : null}
-      <ul className="space-y-2">
-        {shown.map((c) => (
-          <li key={c.caregiverRecordId}>
-            <Link to={`/care-team/${c.caregiverRecordId}`} className="block rounded-xl border border-slate-200 bg-og-card p-3 hover:border-slate-400">
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <p className="font-semibold text-slate-950">{caregiverName(c)} <span className="font-normal text-slate-500">({c.caregiverCode})</span></p>
-                <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${CAREGIVER_STATUS_BADGE[c.status]}`}>{CAREGIVER_STATUS_LABEL[c.status]}</span>
-              </div>
-              <p className={`mt-1 text-sm ${c.hasSignIn ? "text-slate-700" : "text-amber-900"}`}>
-                {signInLabel(c)} · {c.activeAssignments} active assignment{c.activeAssignments === 1 ? "" : "s"}{c.openVisits > 0 ? ` · ${c.openVisits} visit in progress` : ""}
-              </p>
-            </Link>
-          </li>
-        ))}
-      </ul>
+      {shown.length > 0 ? (
+        <div className="rounded-xl border border-slate-200 bg-og-card">
+          <table className="w-full text-left text-sm" aria-label="Caregivers">
+            <thead>
+              <tr className="border-b border-slate-200 text-xs uppercase tracking-wide text-slate-600">
+                <th scope="col" className="px-3 py-2 font-semibold">Caregiver</th>
+                <th scope="col" className="px-3 py-2 font-semibold">Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              {shown.map((c) => (
+                <tr key={c.caregiverRecordId} className="border-b border-slate-100 last:border-0">
+                  <th scope="row" className="px-3 py-1.5 font-normal">
+                    <Link to={`/care-team/${c.caregiverRecordId}`} className="inline-flex min-h-[44px] flex-col justify-center md:min-h-[32px]">
+                      <span className="font-semibold text-slate-950 underline">{caregiverName(c)} <span className="font-normal text-slate-600">({c.caregiverCode})</span></span>
+                      <span className={`text-sm font-normal ${c.hasSignIn ? "text-slate-700" : "text-amber-900"}`}>
+                        {signInLabel(c)} · {c.activeAssignments} active assignment{c.activeAssignments === 1 ? "" : "s"}{c.openVisits > 0 ? ` · ${c.openVisits} visit in progress` : ""}
+                      </span>
+                    </Link>
+                  </th>
+                  <td className="px-3 py-1.5 align-middle"><span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${CAREGIVER_STATUS_BADGE[c.status]}`}>{CAREGIVER_STATUS_LABEL[c.status]}</span></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -168,16 +180,15 @@ function CaregiverDetails({ c }: { c: Caregiver }) {
     }
   }
   return (
-    <Card className="p-4">
-      <h2 className="text-base font-semibold text-slate-950">Name</h2>
-      <p className="mt-1 text-xs text-slate-600">Past visits keep the name they were recorded with.</p>
+    <SummarySection title="Name" summary={caregiverName(c)}>
+      <p className="text-xs text-slate-600">Past visits keep the name they were recorded with.</p>
       <form onSubmit={(e) => { e.preventDefault(); void save(); }} className="mt-3 grid gap-3 sm:grid-cols-2">
         <NameFields v={v} set={set} idPrefix="edit-cg" />
         {state.error ? <p role="alert" className="text-sm text-red-700 sm:col-span-2">{state.error}</p> : null}
         {state.done ? <p role="status" className="text-sm text-emerald-800 sm:col-span-2">Saved. The change is in the record's history.</p> : null}
         <div className="sm:col-span-2"><Button type="submit" disabled={state.busy}>{state.busy ? "Saving…" : "Save name"}</Button></div>
       </form>
-    </Card>
+    </SummarySection>
   );
 }
 
@@ -210,11 +221,8 @@ function CaregiverStatusCard({ c }: { c: Caregiver }) {
     }
   }
   return (
-    <Card className="p-4">
-      <h2 className="text-base font-semibold text-slate-950">Status</h2>
-      <p className="mt-1 text-sm text-slate-600">
-        Making a caregiver inactive ends their active assignments and suspends their sign-in for this agency straight away. It is refused while they have a visit in progress.
-      </p>
+    <SummarySection title="Status" id="status" status={<span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${CAREGIVER_STATUS_BADGE[c.status]}`}>{CAREGIVER_STATUS_LABEL[c.status]}</span>}>
+      <p className="text-sm font-medium text-amber-950">Making a caregiver inactive ends their assignments and suspends their sign-in at once. It is refused during a visit.</p>
       <form onSubmit={(e) => { e.preventDefault(); void save(); }} className="mt-3 flex flex-wrap items-end gap-3">
         <div>
           <label htmlFor="cg-status-new" className="block text-sm font-medium text-slate-700">Change to</label>
@@ -230,7 +238,7 @@ function CaregiverStatusCard({ c }: { c: Caregiver }) {
       </form>
       {state.error ? <p role="alert" className="mt-2 text-sm text-red-700">{state.error}</p> : null}
       {state.done ? <p role="status" className="mt-2 text-sm text-emerald-800">{state.done}</p> : null}
-    </Card>
+    </SummarySection>
   );
 }
 
@@ -277,9 +285,10 @@ function SignInCard({ c, canManage }: { c: Caregiver; canManage: boolean }) {
   }
   const pending = !!c.invitedAt && !c.firstSignedInAt;
   return (
-    <Card className="p-4 text-sm text-slate-800">
-      <h2 className="text-base font-semibold text-slate-950">Sign-in</h2>
-      <p className={`mt-1 font-semibold ${c.hasSignIn && !pending ? "text-slate-900" : "text-amber-900"}`}>{signInLabel(c)}.</p>
+    <SummarySection title="Sign-in" id="sign-in" defaultOpen={!c.hasSignIn || pending}
+      summary={`${c.activeAssignments} active assignment${c.activeAssignments === 1 ? "" : "s"}${c.openVisits > 0 ? ` · ${c.openVisits} visit in progress` : ""}`}
+      status={<span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${c.hasSignIn && !pending ? "bg-emerald-100 text-emerald-900" : "bg-amber-100 text-amber-900"}`}>{signInLabel(c)}</span>}>
+      <div className="text-sm text-slate-800">
       {c.invitedAt ? (
         <ul className="mt-1 space-y-0.5 text-slate-700">
           <li>Invited {fmtWhen(c.invitedAt)} to <span className="break-all">{c.invitationEmail}</span></li>
@@ -287,7 +296,7 @@ function SignInCard({ c, canManage }: { c: Caregiver; canManage: boolean }) {
           <li>{c.firstSignedInAt ? `First signed in ${fmtWhen(c.firstSignedInAt)}` : "Has not signed in yet"}</li>
         </ul>
       ) : null}
-      <p className="mt-1">{c.activeAssignments} active assignment{c.activeAssignments === 1 ? "" : "s"}{c.plannedAssignments ? ` (${c.plannedAssignments} planned, no access yet)` : ""}{c.openVisits > 0 ? ` · ${c.openVisits} visit in progress` : ""}</p>
+      {c.plannedAssignments ? <p className="mt-1">{c.plannedAssignments} planned, no access yet</p> : null}
       {c.hasSignIn && (c.status === "onboarding") ? <p className="mt-1 text-amber-900">Still onboarding: they can sign in but see no clients until they are Approved or Active.</p> : null}
       {canManage && !c.hasSignIn && c.status !== "inactive" ? (
         <form onSubmit={(e) => { e.preventDefault(); void invite(); }} className="mt-3 grid gap-2 sm:grid-cols-[1fr_auto] sm:items-end">
@@ -296,18 +305,19 @@ function SignInCard({ c, canManage }: { c: Caregiver; canManage: boolean }) {
             <input id="invite-email" type="email" autoComplete="off" inputMode="email" value={email} maxLength={254} onChange={(e) => setEmail(e.target.value)} className="mt-1 block w-full rounded-lg border border-slate-200 px-3 py-2 text-base" />
           </div>
           <Button type="submit" disabled={state.busy}>{state.busy ? "Sending…" : "Send invitation"}</Button>
-          <p className="text-xs text-slate-600 sm:col-span-2">Use the caregiver's own email. They get a caregiver sign-in for this agency only. Ogevia never shows or stores the temporary password.</p>
+          <ShortHelp className="text-xs text-slate-600 sm:col-span-2" details="They get a caregiver sign-in for this agency only. Ogevia never shows or stores the temporary password.">Use the caregiver&apos;s own email.</ShortHelp>
         </form>
       ) : null}
       {canManage && pending ? (
         <div className="mt-3">
           <Button type="button" variant="secondary" disabled={state.busy} onClick={() => void resend()}>{state.busy ? "Sending…" : "Resend invitation"}</Button>
-          <p className="mt-1 text-xs text-slate-600">Temporary passwords expire; resend if the caregiver did not sign in in time or cannot find the email.</p>
+          <p className="mt-1 text-xs text-slate-600">Temporary passwords expire. Resend if the caregiver cannot find the email.</p>
         </div>
       ) : null}
       {state.error ? <p role="alert" className="mt-2 text-red-700">{state.error}</p> : null}
       {state.done ? <p role="status" className="mt-2 text-emerald-800">{state.done}</p> : null}
-    </Card>
+      </div>
+    </SummarySection>
   );
 }
 
@@ -335,8 +345,7 @@ function EmploymentCard({ c, canManage }: { c: Caregiver; canManage: boolean }) 
     } catch (cause) { setState({ busy: false, error: cause instanceof Error ? cause.message : "Not saved.", done: null }); }
   }
   return (
-    <Card className="p-4">
-      <h2 className="text-base font-semibold text-slate-950">Hire type and scheduling</h2>
+    <SummarySection title="Hire type and scheduling" summary={`${c.hireType ? HIRE_LABEL[c.hireType] : "Hire type not recorded"} · ${c.schedulingMode === "flexible" ? "Flexible" : "Fixed"}`}>
       {!canManage ? (
         <p className="mt-1 text-sm text-slate-700">{c.hireType ? HIRE_LABEL[c.hireType] : "Hire type not recorded"} · {SCHEDULING_LABEL[c.schedulingMode ?? "fixed"]}</p>
       ) : (
@@ -349,13 +358,46 @@ function EmploymentCard({ c, canManage }: { c: Caregiver; canManage: boolean }) 
             <select id="emp-mode" value={mode} onChange={(e) => { setMode(e.target.value); key.current = newIdempotencyKey(); }} className="mt-1 block w-full rounded-lg border border-slate-200 px-3 py-2 text-base">
               <option value="fixed">{SCHEDULING_LABEL.fixed}</option><option value="flexible">{SCHEDULING_LABEL.flexible}</option>
             </select></div>
-          <p className="text-xs text-slate-600 sm:col-span-2">Family relationship is recorded per client on each assignment below. EOR does not mean family, and Direct Hire does not require fixed shifts.</p>
+          <ShortHelp className="text-xs text-slate-600 sm:col-span-2" details="EOR does not mean family, and Direct Hire does not require fixed shifts.">Family relationship is recorded per client on each assignment.</ShortHelp>
           {state.error ? <p role="alert" className="text-sm text-red-700 sm:col-span-2">{state.error}</p> : null}
           {state.done ? <p role="status" className="text-sm text-emerald-800 sm:col-span-2">{state.done}</p> : null}
           <div className="sm:col-span-2"><Button type="submit" variant="secondary" disabled={state.busy}>{state.busy ? "Saving…" : "Save hire type and scheduling"}</Button></div>
         </form>
       )}
-    </Card>
+    </SummarySection>
+  );
+}
+
+/** The overall outcome first, then each item to fix with its action. Everything shown here comes from data the sections below already load. */
+function CaregiverOutcome({ c, canManage }: { c: Caregiver; canManage: boolean }) {
+  const { hasPermission } = useOrganization();
+  const canRead = hasPermission("readiness.read") || hasPermission("caregivers.manage") || hasPermission("caregivers.compliance.manage");
+  const comp = useCaregiverCompliance(c.caregiverRecordId, canRead);
+  const pending = !!c.invitedAt && !c.firstSignedInAt;
+  const items: Array<{ text: string; to: string; label: string }> = [];
+  if (c.status === "inactive") items.push({ text: "Inactive: cannot be scheduled", to: "#status", label: "Change status" });
+  else if (c.status !== "ready" && c.status !== "active") items.push({ text: `Status is ${CAREGIVER_STATUS_LABEL[c.status]}; it must be Approved or Active`, to: "#status", label: "Change status" });
+  if (c.status !== "inactive" && (!c.hasSignIn || pending)) items.push({ text: pending ? "Invited, but has not signed in" : "Cannot sign in until invited", to: "#sign-in", label: canManage ? (pending ? "Resend invitation" : "Send invitation") : "See sign-in" });
+  const hold = comp.data?.hold ?? null;
+  if (hold) items.push({ text: `On compliance hold: ${hold.reasons.map((r) => r.message).join("; ")}`, to: "#compliance", label: "Fix" });
+  else if (comp.data && !comp.data.eligible && comp.data.enforcementActive) items.push({ text: "Not eligible for new work", to: "#compliance", label: "Fix" });
+  const unknown = canRead && comp.isError;
+  const ready = items.length === 0 && !unknown && (comp.data !== undefined || !canRead);
+  const headline = ready ? "Ready to schedule" : hold ? `On hold: ${hold.reasons[0]?.message ?? "compliance"}` : items.length > 0 ? `Not ready: ${items.length} item${items.length === 1 ? "" : "s"} to fix` : unknown ? "Compliance could not be checked, so readiness is unknown. Reload the page." : "Checking…";
+  return (
+    <section aria-label="Caregiver outcome" data-testid="caregiver-outcome" className="space-y-2">
+      <p className={`text-base font-semibold ${ready ? "text-emerald-800" : hold ? "text-red-800" : "text-amber-900"}`}>{headline}</p>
+      {items.length > 0 ? (
+        <ul className="space-y-2">
+          {items.map((i) => (
+            <li key={i.text} className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-lg border border-slate-200 bg-og-card p-3 text-sm">
+              <span className="min-w-0 flex-1 text-slate-900">{i.text}</span>
+              <a className="inline-flex min-h-[44px] items-center font-semibold text-slate-900 underline md:min-h-[32px]" href={i.to}>{i.label}</a>
+            </li>
+          ))}
+        </ul>
+      ) : null}
+    </section>
   );
 }
 
@@ -377,11 +419,12 @@ export function CaregiverDetailPage() {
         <span className="text-sm text-slate-500">{c.caregiverCode}</span>
         <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${CAREGIVER_STATUS_BADGE[c.status]}`}>{CAREGIVER_STATUS_LABEL[c.status]}</span>
       </div>
+      <CaregiverOutcome c={c} canManage={canManage} />
       {canManage ? <OnboardingCard caregiverRecordId={c.caregiverRecordId} status={c.status} canManage={canManage} /> : null}
-      <EmploymentCard c={c} canManage={canManage} />
       <SignInCard c={c} canManage={canManage} />
       <AssignmentsCard caregiverRecordId={c.caregiverRecordId} />
       <CaregiverReadiness caregiverRecordId={c.caregiverRecordId} />
+      <EmploymentCard c={c} canManage={canManage} />
       {canManage ? <CaregiverDetails c={c} /> : null}
       {canManage ? <CaregiverStatusCard c={c} /> : null}
     </div>

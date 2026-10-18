@@ -1,7 +1,7 @@
 // Authorization balances and tiers on Home and the client page (0057): the real over-limit amount, the approved tiers, the 30-day expiry warning,
 // totals that reconcile. SYNTHETIC data only.
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { render, screen, within } from "@testing-library/react";
+import { fireEvent, render, screen, within } from "@testing-library/react";
 import { CognitoAuthProvider, type CognitoAuthClient } from "@carelik/auth";
 import { MemoryRouter } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -66,18 +66,26 @@ describe("the status text used in the reports", () => {
   });
 });
 
+/** The hours section starts folded; open it unless an earlier test already saved it open. */
+function expandHours(hours: HTMLElement) {
+  const show = within(hours).queryByRole("button", { name: "Show the hours" });
+  if (show) fireEvent.click(show);
+}
+
 describe("Home: the over-limit amount and the tiers", () => {
   it("shows Over the limit, an Over limit column, and the tier line; Left stays the unused time only", async () => {
     renderAt("/", { "/v1/reports/utilisation": () => json(200, { services: [{ ...SERVICE_ROW, remainingMinutes: 3000, overLimitMinutes: 300, committedMinutes: 3300, nearLimitAuthorizations: 1, criticalAuthorizations: 2, expiringAuthorizations: 1 }] }) });
     const hours = (await screen.findByRole("heading", { name: "Hours this month" })).closest("section")!;
     const stat = (await within(hours).findByText("Over the limit")).closest("div")!;
-    expect(stat).toHaveTextContent("5 h");
+    expect(stat).toHaveTextContent("5 h"); // in the summary line: visible while the section is folded
+    expandHours(hours);
     expect(within(hours).getByRole("columnheader", { name: "Over limit", hidden: true })).toBeInTheDocument();
     expect(await within(hours).findByTestId("authorization-tiers")).toHaveTextContent("Authorizations: ● 2 Critical · ▲ 1 Near Limit · ▲ 1 ending within 30 days");
   });
   it("nothing over and every authorization Healthy: no over-limit stat and no tier line", async () => {
     renderAt("/", { "/v1/reports/utilisation": () => json(200, { services: [SERVICE_ROW] }) });
     const hours = (await screen.findByRole("heading", { name: "Hours this month" })).closest("section")!;
+    expandHours(hours);
     await within(hours).findAllByText("Authorized");
     expect(within(hours).queryByText("Over the limit")).toBeNull();
     expect(within(hours).queryByTestId("authorization-tiers")).toBeNull();

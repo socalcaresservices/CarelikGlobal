@@ -67,10 +67,10 @@ export function ReportingPage() {
   }
   return (
     <div className="max-w-4xl space-y-6">
-      <PageHeader title="Reporting & billing" lead="Billing readiness, authorized against delivered hours, agency performance, reports and exports, and audit evidence in one place."
+      <PageHeader title="Reporting & billing" lead="Billing, hours, performance, exports and audit."
         action={<label className="text-xs font-semibold text-og-sub">Month<input type="month" value={month} onChange={(e) => e.target.value && setMonth(e.target.value)} className="mt-1 block min-h-[40px] rounded-lg border border-og-line bg-og-card px-3 text-sm text-og-ink" /></label>} />
 
-      <Section id="billing-readiness" title="Billing readiness" lead="Visits by billing state for the month. Approval is a person's decision and is not submission or payment.">
+      <Section id="billing-readiness" title="Billing readiness" lead="Visits by billing state this month.">
         {!hasPermission("visits.read") ? <p className="text-sm text-og-sub">Your role does not include this section.</p> : chain.isError ? unavailable("Billing readiness") : chain.isLoading ? <p className="text-sm text-og-sub">Loading…</p> : (
           <Card className="space-y-2 p-4" data-testid="billing-readiness">
             <dl className="grid grid-cols-2 gap-x-6 gap-y-3 md:grid-cols-5">
@@ -81,13 +81,15 @@ export function ReportingPage() {
               {canBill ? <Fig label="Voided approvals" value={sum(rows, "voidedApprovals")} /> : null}
             </dl>
             {!canBill ? <p className="text-xs text-og-sub">Ready-for-review and approved counts need billing access.</p> : null}
-            <p className="text-xs text-og-sub">“Reviewed, not billable” visits are a separate outcome ({formatDuration(sum(rows, "reviewedNotBillableMinutes"))}) and are never counted as ready or approved. There is no submitted or billed state.</p>
+            <Disclosure summary="About these counts">
+              <p>Approval is a person&apos;s decision and is not submission or payment. “Reviewed, not billable” visits are a separate outcome ({formatDuration(sum(rows, "reviewedNotBillableMinutes"))}) and are never counted as ready or approved. There is no submitted or billed state.</p>
+            </Disclosure>
             {canBill ? <Link className="inline-flex min-h-[44px] items-center font-semibold text-og-link underline md:min-h-[32px]" to="/billing-review">Open billing review</Link> : null}
           </Card>
         )}
       </Section>
 
-      <Section id="authorized-delivered" title="Authorized vs delivered hours" lead="Worked, confirmed and billable are different things; reserved time is counted once. Over-limit time is shown, never hidden.">
+      <Section id="authorized-delivered" title="Authorized vs delivered hours" lead="Worked, confirmed and billable hours against authorization.">
         {!hasPermission("visits.read") ? null : chain.isError ? unavailable("Authorized and delivered hours") : chain.isLoading ? <p className="text-sm text-og-sub">Loading…</p> : (
           <Card className="space-y-2 p-4" data-testid="authorized-delivered">
             <dl className="grid grid-cols-2 gap-x-6 gap-y-3 md:grid-cols-4">

@@ -7,6 +7,7 @@ import { useOrganization } from "@/providers/organization-provider";
 import { LETTERHEAD_FIELDS, EMPTY_LETTERHEAD, letterheadProblem, type LetterheadForm } from "./letterhead-validation";
 import { contrastWithWhite } from "./contrast";
 import { prepareLogoFile } from "./document-file";
+import { ShortHelp } from "./help-text";
 import { MyReadiness } from "./readiness/caregiver-readiness";
 import { useLogo, useAwsApi, useBranding, useMyDisplayName, useSetMyDisplayName, type Branding } from "./aws-workspace";
 
@@ -97,7 +98,7 @@ export function BrandingSettingsPage() {
     <div className="max-w-lg space-y-4">
       <h1 className="text-xl font-semibold text-slate-950">Agency branding</h1>
       <p className="text-sm"><Link to="/settings/visit-rules" className="font-medium underline">Visit rules</Link> · schedule difference that sends a visit to review</p>
-      <p className="text-sm text-slate-600">Shown to every role in your agency, on phones and desktop. Warning colors (such as ACTION NEEDED) stay red.</p>
+      <ShortHelp className="text-sm text-slate-600" details="Warning colors (such as ACTION NEEDED) stay red.">Shown to every role in your agency.</ShortHelp>
       <Card className="p-4">
         <form onSubmit={(e) => { e.preventDefault(); void submit(); }} className="space-y-4">
           <label className="block text-sm font-medium text-slate-700">
@@ -173,7 +174,7 @@ function LetterheadSettings() {
   return (
     <Card className="space-y-3 p-4">
       <h2 className="text-sm font-semibold text-slate-900">Print letterhead</h2>
-      <p className="text-sm text-slate-600">Printed at the top of reports with your logo. Only what you enter is printed; leave a field blank to leave it off. Agency business details only: never enter client or caregiver information.</p>
+      <ShortHelp className="text-sm text-slate-600" details="Printed at the top of reports with your logo. Only what you enter is printed; leave a field blank to leave it off.">Agency business details only: never enter client or caregiver information.</ShortHelp>
       <form onSubmit={(e) => { e.preventDefault(); void submit(); }} className="space-y-3">
         {LETTERHEAD_FIELDS.map((f) => (
           <label key={f.id} className="block text-sm font-medium text-slate-700">

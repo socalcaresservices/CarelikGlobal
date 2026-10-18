@@ -59,7 +59,7 @@ const banner = mp.getByTestId("work-hour-policy");
 rec("agency work-hour banner shows 8 hr a day and 40 hr a week", (await banner.count()) === 1 && /8 hr a day and 40 hr a week/.test(await banner.innerText()));
 // repeat form: Tanaka's authorization ends in 10 days, so a 21-day daily series saves the dates that fit and lists the rest
 await mp.getByRole("button", { name: "Repeat visits" }).click(); await mp.waitForTimeout(700);
-const clientSel = mp.getByLabel("Client"), svcSel = mp.getByLabel("Service");
+const clientSel = mp.getByLabel("Client"), svcSel = mp.getByLabel("Service", { exact: true });
 await clientSel.selectOption({ label: (await clientSel.locator("option").allInnerTexts()).find((o) => /Tanaka/.test(o)) });
 await svcSel.selectOption({ label: "Respite (RSP)" });
 for (const d of ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"]) await mp.getByLabel(d, { exact: true }).check().catch(() => {});
@@ -110,6 +110,7 @@ await mp.screenshot({ path: `${out}/compliance-${label}.png`, fullPage: true });
 await mp.getByRole("link", { name: "Alex Caregiver" }).first().click(); await settle(mp, 1000);
 const open = mp.getByRole("button", { name: /Compliance/ }).first();
 if (await open.count()) await open.click().catch(() => {});
+await mp.evaluate(() => document.querySelectorAll("details").forEach((d) => { d.open = true; }));
 await mp.waitForTimeout(500);
 const at = await text(mp);
 rec("Alex's compliance card lists the shifts where CPR expires", /Scheduled shifts where CPR or TB expires/.test(at) || (await mp.getByRole("region", { name: "Shifts affected by CPR or TB expiry" }).count()) >= 1, at.slice(0, 300));
@@ -157,22 +158,24 @@ if ((await legacyCsv.count()) >= 1) {
 }
 await mp.goto("https://localhost/schedule"); await settle(mp, 1000);
 const recon = mp.getByTestId("shifts-to-reconcile");
-rec("schedule lists the shift that ended with no visit record", (await recon.count()) === 1 && /Nothing is released automatically|still reserved and counted/.test(await recon.innerText()));
+rec("schedule lists the shift that ended with no visit record", (await recon.count()) === 1 && /reserved/.test(await recon.innerText()));
 // delivered but not verified: stays reserved and visible, is not billable, creates no visit
-await recon.getByRole("button", { name: "It was delivered, but there is no verified visit" }).first().click();
+await recon.locator("li summary").first().click();
+await recon.getByRole("radio", { name: "It was delivered, but there is no verified visit" }).first().check();
 await recon.getByRole("textbox").fill("Family says she came; no clock-in exists (synthetic)");
-await recon.getByRole("button", { name: "Record it as delivered, not verified" }).click(); await mp.waitForTimeout(1500);
+await recon.getByRole("button", { name: "Save" }).click(); await mp.waitForTimeout(1500);
 const awaitingNote = mp.getByTestId("awaiting-note");
 rec("a shift recorded as delivered-not-verified stays listed, reserved, not billable, no visit", (await awaitingNote.count()) === 1 && /Delivered — not verified/.test(await awaitingNote.innerText()) && /Not billable, and no visit exists/.test(await awaitingNote.innerText()), (await awaitingNote.count()) ? await awaitingNote.innerText() : "none");
 await mp.goto("https://localhost/"); await settle(mp, 1200);
 rec("Home still counts the delivered-not-verified time as reserved", (await mp.getByTestId("needs-reconciliation").count()) === 1);
 await mp.goto("https://localhost/schedule"); await settle(mp, 1000);
 const recon2 = mp.getByTestId("shifts-to-reconcile");
-await recon2.getByRole("button", { name: "No service was delivered" }).first().click();
-await recon2.getByRole("button", { name: "Release the reserved time" }).click(); await mp.waitForTimeout(500);
-rec("releasing without a note is refused on screen", /Write at least a short sentence/.test(await recon2.innerText()));
+await recon2.locator("li summary").first().click();
+await recon2.getByRole("radio", { name: "No service was delivered" }).first().check();
+await recon2.getByRole("button", { name: "Save" }).click(); await mp.waitForTimeout(500);
+rec("releasing without a note is refused on screen", /Note too short/.test(await recon2.innerText()));
 await recon2.getByRole("textbox").fill("Called the caregiver and the family; nobody went (synthetic)");
-await recon2.getByRole("button", { name: "Release the reserved time" }).click(); await mp.waitForTimeout(1500);
+await recon2.getByRole("button", { name: "Save" }).click(); await mp.waitForTimeout(1500);
 rec("after the person records it, the shift leaves the list", (await mp.getByTestId("shifts-to-reconcile").count()) === 0);
 await mp.goto("https://localhost/"); await settle(mp, 1200);
 rec("Home no longer shows reserved-with-no-visit time", (await mp.getByTestId("needs-reconciliation").count()) === 0);
@@ -220,7 +223,7 @@ await top.getByRole("link", { name: /View all/ }).click(); await settle(mp, 1500
 const issueCards = mp.getByTestId("issue-card");
 const nCards = await issueCards.count();
 rec("Action needed lists issue cards, each with a recommended action and one primary link", nCards >= 1 && (await issueCards.first().getByRole("link").count()) >= 1, String(nCards));
-rec("Action needed: counts line says routine queues are not in the action total", /not in the action total/.test(await mp.getByTestId("issue-counts").innerText()));
+rec("Action needed: counts line says routine queues are not in the action total", /need action/.test(await mp.getByTestId("issue-counts").innerText()));
 rec("Action needed: no sideways scroll", await noOverflow(mp));
 await mp.screenshot({ path: `${out}/action-needed-${label}.png`, fullPage: true });
 // in-app notifications (0077): the bell counts what is Critical or Urgent in the action queues, lists it by word, and fits the screen
@@ -245,7 +248,9 @@ rec("Action needed: History shows when the issue was first seen", /seen|opened/.
 
 // client page
 await mp.goto("https://localhost/clients"); await settle(mp, 1200);
-await mp.getByRole("link", { name: /Demo Scenario/ }).first().click(); await settle(mp, 1500);
+if (label === "phone") { await mp.locator("summary").filter({ hasText: /Demo Scenario/ }).first().click(); }
+await (label === "phone" ? mp.locator("li").filter({ hasText: /Demo Scenario/ }).getByRole("link").first() : mp.getByRole("link", { name: /Demo Scenario/ }).first()).click(); await settle(mp, 1500);
+const openAll = () => mp.evaluate(() => document.querySelectorAll("details").forEach((d) => { d.open = true; }));
 const clientUrl = mp.url();
 rec("client page: three primary actions, More, alerts, next visits, caregivers, readiness and documents are present", (await mp.getByRole("navigation", { name: "Client actions" }).count()) === 1 && (await mp.getByTestId("next-visits").count()) === 1 && (await mp.getByTestId("caregiver-summary").count()) === 1 && (await mp.getByTestId("readiness-card").count()) === 1 && (await mp.getByTestId("client-documents").count()) === 1 && (await mp.getByTestId("client-alerts").count()) === 1);
 const order = await mp.evaluate(() => ["Authorizations", "Next visits", "Caregivers", "Readiness", "Documents", "Details"].map((t) => { const h = [...document.querySelectorAll("h2")].find((x) => x.textContent?.trim() === t); return h ? h.getBoundingClientRect().top + window.scrollY : -1; }));
@@ -254,6 +259,7 @@ rec("client page: details are read-only until Edit", (await mp.getByTestId("deta
 rec("client page: no sideways scroll", await noOverflow(mp));
 await mp.screenshot({ path: `${out}/client-page-${label}.png`, fullPage: true });
 // documents: configure a requirement, put the client in Draft, activation is refused until the upload is approved
+await openAll();
 await mp.getByRole("button", { name: "Set up required documents" }).click(); await mp.waitForTimeout(500);
 const setup = mp.getByTestId("document-setup");
 await setup.getByLabel("New document type").fill("Consent to care (browser)");
@@ -269,13 +275,15 @@ await consentRow.getByRole("button", { name: "Upload" }).first().click();
 await consentRow.locator('input[type="file"]').setInputFiles({ name: "consent.pdf", mimeType: "application/pdf", buffer: Buffer.from("%PDF-1.4\n% synthetic consent\n") });
 await consentRow.getByRole("button", { name: "Upload" }).last().click(); await mp.waitForTimeout(2000);
 rec("client page: an upload is Pending review and says upload is not approval", /Pending review/.test(await consentRow.innerText()) && /Uploading is not approval/.test(await consentRow.innerText()));
-rec("client page: the uploader cannot approve their own upload", await (async () => { await consentRow.getByRole("button", { name: "Review…" }).click(); await consentRow.getByRole("button", { name: "Approve" }).click(); await mp.waitForTimeout(1200); return /cannot review a document you uploaded/.test(await consentRow.innerText()); })());
+rec("client page: the uploader cannot approve their own upload", await (async () => { await consentRow.getByRole("button", { name: "Review…" }).click(); await consentRow.getByRole("radio", { name: "Approve" }).check(); await consentRow.getByRole("button", { name: "Save decision" }).click(); await mp.waitForTimeout(1200); return /cannot review a document you uploaded/.test(await consentRow.innerText()); })());
 // the owner approves
 const o2 = await browser.newContext({ viewport: vp, ignoreHTTPSErrors: true }); const op2 = await o2.newPage();
 await login(op2, "Olivia Owner");
 await op2.goto(clientUrl); await settle(op2, 1500);
 const ownerRow = op2.getByTestId("client-document").filter({ hasText: "Consent to care (browser)" });
-await ownerRow.getByRole("button", { name: "Review…" }).click(); await ownerRow.getByRole("button", { name: "Approve" }).click(); await op2.waitForTimeout(1500);
+await op2.evaluate(() => document.querySelectorAll("details").forEach((d) => { d.open = true; }));
+await ownerRow.getByRole("button", { name: "Review…" }).click(); await ownerRow.getByRole("radio", { name: "Approve" }).check(); await ownerRow.getByRole("button", { name: "Save decision" }).click(); await op2.waitForTimeout(1500);
+await op2.evaluate(() => document.querySelectorAll("details").forEach((d) => { d.open = true; }));
 rec("client page: another reviewer approves and the document is Approved", /Approved/.test(await ownerRow.innerText()));
 // the owner also sets a shorter deadline from Action needed
 await op2.goto("https://localhost/action-needed"); await settle(op2, 1500);

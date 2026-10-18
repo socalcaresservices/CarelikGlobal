@@ -1302,9 +1302,6 @@ export function ServiceVerificationReportsPage() {
               {canManage ? <option value="staff-access">Staff access</option> : null}
             </select>
           </div>
-          <p className="max-w-xl pb-2 text-sm text-slate-500">
-            Aggregate reports stay here; the visit list is the first choice.
-          </p>
         </div>
       </Card>
 
@@ -1569,15 +1566,16 @@ export function ServiceVerificationReportsPage() {
             ) : null}
           </div>
           </details>
-          <p className="mt-3 text-xs text-slate-500">
-            Use Custom for a pay period or any other range. These reports use actual signed visit time, not the schedule.
-          </p>
+          <details className="mt-3 text-xs text-slate-500">
+            <summary className="inline-flex min-h-[32px] cursor-pointer items-center text-og-accent underline">Details</summary>
+            <p>Use Custom for a pay period or any other range. These reports use actual signed visit time, not the schedule.</p>
+          </details>
         </Card>
       ) : null}
 
       {reportView === "overview" ? (
         <>
-          {awsApi ? <p className="text-sm text-slate-700" data-testid="reporting-hub-link">Billing readiness, authorized against delivered hours, agency performance, exports and audit evidence are together on <Link className="font-semibold underline" to="/reporting">Reporting &amp; billing</Link>.</p> : null}
+          {awsApi ? <p className="text-sm text-slate-700" data-testid="reporting-hub-link">More reports: <Link className="font-semibold underline" to="/reporting">Reporting &amp; billing</Link>.</p> : null}
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
             {[
               {
@@ -2449,10 +2447,19 @@ export function ServiceVerificationReportsPage() {
                             {row.time_out_entered_by_manager ? <StatusBadge label="Time Out entered by manager" tone="warning" /> : null}
                           </div>
                         </div>
-                        <p className="mt-1 text-sm text-slate-700">{row.caregiver_name} · {row.service_name}</p>
                         <p className="mt-1 text-sm text-slate-700">
                           {formatDateOnly(row.service_date)} · <span className="font-mono">{formatTimeRange(row.time_in, row.time_out)}</span>
                         </p>
+                        {canManage && backend.kind === "aws" && row.status === "administrator_review" ? (
+                          <div className="mt-2 print:hidden">
+                            <Link to={`/visits/${row.id}`} className="inline-flex min-h-[44px] items-center rounded-lg border border-amber-600 px-4 text-sm font-medium text-amber-900">
+                              Review visit
+                            </Link>
+                          </div>
+                        ) : null}
+                        <details className="mt-2 text-sm" open={expandedVisitId === row.id}>
+                          <summary className="inline-flex min-h-[44px] cursor-pointer items-center text-sm font-medium text-og-link underline">Details</summary>
+                        <p className="text-sm text-slate-700">{row.caregiver_name} · {row.service_name}</p>
                         <p className="text-xs text-slate-500">
                           {row.scheduled_starts_at ? "Scheduled " : ""}
                           {formatScheduledWindow(row.scheduled_starts_at, row.scheduled_ends_at, row.caregiver_scheduling_mode)}
@@ -2471,11 +2478,6 @@ export function ServiceVerificationReportsPage() {
                         <p className="mt-2 font-mono text-[11px] text-slate-500">Visit {row.visit_number ?? "—"}</p>
                         {canManage ? (
                           <div className="mt-2 flex flex-wrap gap-2 print:hidden">
-                            {backend.kind === "aws" && row.status === "administrator_review" ? (
-                              <Link to={`/visits/${row.id}`} className="inline-flex min-h-[40px] items-center rounded-lg border border-amber-600 px-3 text-sm font-medium text-amber-900">
-                                Review visit
-                              </Link>
-                            ) : null}
                             {row.status === "signed" || row.status === "administrator_review" ? (
                               <button type="button" onClick={() => openCorrect(row)} className="min-h-[40px] rounded-lg border border-slate-300 px-3 text-sm font-medium text-slate-800">
                                 Correct visit
@@ -2492,6 +2494,7 @@ export function ServiceVerificationReportsPage() {
                         {expandedVisitId === row.id && expandedMode === "history" ? (
                           <div className="mt-3 rounded-lg bg-slate-50 p-3">{renderHistoryPanel()}</div>
                         ) : null}
+                        </details>
                       </li>
                     );
                   })}
@@ -2612,7 +2615,7 @@ export function ServiceVerificationReportsPage() {
                                   <div><dt className="inline">Hours left: </dt><dd className="inline font-medium">{formatBalance(row.remaining_minutes)}</dd></div>
                                 </dl>
                                 <details className="text-xs print:hidden">
-                                  <summary className="inline-flex min-h-[40px] cursor-pointer list-none items-center rounded-lg border border-slate-300 bg-og-card px-3 text-sm font-medium text-slate-900 hover:bg-slate-50">
+                                  <summary className="inline-flex min-h-[32px] cursor-pointer list-none items-center text-sm font-medium text-og-link underline underline-offset-2">
                                     Hours balance
                                   </summary>
                                   <dl className="mt-1 space-y-1 whitespace-nowrap">
@@ -2655,7 +2658,7 @@ export function ServiceVerificationReportsPage() {
                                     <button
                                       type="button"
                                       onClick={() => openCorrect(row)}
-                                      className="inline-flex min-h-[40px] items-center whitespace-nowrap rounded-lg border border-slate-300 bg-og-card px-3 text-sm font-medium text-slate-900 hover:bg-slate-50"
+                                      className="inline-flex min-h-[32px] items-center whitespace-nowrap px-1 text-sm font-medium text-og-link underline underline-offset-2 hover:bg-slate-50"
                                     >
                                       Correct visit
                                     </button>
@@ -2732,12 +2735,15 @@ export function ServiceVerificationReportsPage() {
           <h3 className="font-semibold text-slate-950">
             Incomplete visits ({incompleteVisits.length})
           </h3>
-          <p className="mt-1 text-xs text-slate-500">
+          <details className="mt-1 text-xs text-slate-500">
+          <summary className="inline-flex min-h-[32px] cursor-pointer items-center text-og-accent underline">What these mean</summary>
+          <p>
             Missing Time Out: still open past the scheduled shift end (or open{" "}
             {UNSCHEDULED_OPEN_VISIT_ALERT_HOURS}+ hours with no scheduled shift). Not confirmed: signed out over an
             hour ago without a client confirmation or a no-signer reason. Ask
             the caregiver to finish the visit on their phone.
           </p>
+          </details>
           <ul className="mt-3 divide-y divide-slate-100">
             {incompleteVisits.map(({ row, issue }) => (
               <li key={row.id} className="py-2 text-sm">
@@ -2822,11 +2828,10 @@ export function ServiceVerificationReportsPage() {
       {reportView === "exceptions" && exceptionVisits.length > 0 ? (
         <Card>
           <h3 className="font-semibold text-slate-950">Exception visits</h3>
-          <p className="mt-1 text-xs text-slate-500">
-            Visits that needed a human to look at them: flagged for
-            administrator review, an authorization status other than
-            within-authorization, or already corrected.
-          </p>
+          <details className="mt-1 text-xs text-slate-500">
+            <summary className="inline-flex min-h-[32px] cursor-pointer items-center text-og-accent underline">What counts as an exception</summary>
+            <p>Visits that needed a human to look at them: flagged for administrator review, an authorization status other than within-authorization, or already corrected.</p>
+          </details>
           <ul className="mt-3 divide-y divide-slate-100">
             {exceptionVisits.map((row) => (
               <li key={row.id} className="py-2 text-sm">
@@ -2846,7 +2851,7 @@ export function ServiceVerificationReportsPage() {
                       />
                     ) : null}
                     {backend.kind === "aws" && row.status === "administrator_review" ? (
-                      <Link to={`/visits/${row.id}`} className="inline-flex min-h-[32px] items-center rounded-lg border border-amber-600 px-2 text-xs font-medium text-amber-900">
+                      <Link to={`/visits/${row.id}`} className="inline-flex min-h-[44px] items-center rounded-lg border border-amber-600 px-3 text-sm font-medium text-amber-900 md:min-h-[32px]">
                         Review visit
                       </Link>
                     ) : null}

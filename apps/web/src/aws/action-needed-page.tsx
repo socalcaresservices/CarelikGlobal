@@ -9,6 +9,7 @@ import { useAwsApi } from "./aws-workspace";
 import { CATEGORY_LABEL, issueDestination, KIND_LABEL, QUEUE_LABEL, SEVERITY_TONE, type ActionIssue, type IssueList } from "./action-issues";
 import { TONE } from "./attention";
 import { Disclosure } from "./ui/disclosure";
+import { ShortHelp } from "./help-text";
 import { PageHeader } from "./ui/page-header";
 import type { NotificationSettings } from "./notifications";
 import { StatusChip } from "./ui/status-chip";
@@ -19,6 +20,9 @@ const NONE: Filters = { queue: "", category: "", severity: "", client: "", careg
 interface History { state: { status: string; firstSeenAt: string; resolvedAt: string | null; reopenCount: number } | null; events: Array<{ event: string; severity: string | null; occurredAt: string; observedByName: string | null }> }
 interface Settings { confirmationOverdueHours: number; reviewOverdueHours: number; documentReviewOverdueHours: number; defaults: { confirmationOverdueHours: number; reviewOverdueHours: number; documentReviewOverdueHours: number }; history: Array<{ changedAt: string; changedByName: string | null; reason: string }> }
 
+const linkClass = "inline-flex min-h-[44px] items-center font-semibold text-og-link underline md:min-h-[32px]";
+
+/** One compact row: severity, what and what to do, when it is due, one action link; History is a quiet second control. The queue is the group heading, not repeated here. */
 function IssueCard({ issue }: { issue: ActionIssue }) {
   const api = useAwsApi();
   const { activeOrganizationId } = useOrganization();
@@ -31,24 +35,25 @@ function IssueCard({ issue }: { issue: ActionIssue }) {
   });
   const who = [issue.clientCode, issue.serviceCode, issue.caregiverCode].filter(Boolean).join(" · ");
   return (
-    <li data-testid="issue-card" data-issue-key={issue.issueKey} className={`rounded-og border border-og-line border-l-4 bg-og-card p-3 ${tone === "red" ? "border-l-red-700" : tone === "amber" ? "border-l-amber-600" : "border-l-slate-400"}`}>
-      <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-        <StatusChip tone={tone}>{TONE[tone].word}</StatusChip>
-        <p className="text-sm font-semibold text-og-ink">{KIND_LABEL[issue.kind] ?? issue.kind}{who ? ` · ${who}` : ""}</p>
-        <p className="text-xs text-og-sub">{QUEUE_LABEL[issue.queue] ?? issue.queue}</p>
-      </div>
-      <p className="mt-1 text-sm text-og-ink">{issue.recommendedAction}</p>
-      <p className="mt-0.5 text-xs text-og-sub" data-testid="issue-deadline">
-        {issue.deadline ? `${issue.severity === "critical" ? "Was due" : "Due"} ${formatNumericDate(issue.deadline)} ${formatClockTime(issue.deadline)}` : "No deadline"}
-        {issue.reopenCount ? ` · reopened ${issue.reopenCount} time${issue.reopenCount === 1 ? "" : "s"}` : ""}
-      </p>
-      <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1">
-        <Link className="inline-flex min-h-[44px] items-center rounded-lg bg-og-accent px-4 text-sm font-semibold text-og-on-accent hover:opacity-90 md:min-h-[40px]" to={dest.to}>{dest.label}</Link>
-        <button type="button" className="inline-flex min-h-[44px] items-center text-sm font-semibold text-og-link underline md:min-h-[32px]" aria-expanded={open} onClick={() => setOpen((v) => !v)}>{open ? "Hide history" : "History"}</button>
+    <li data-testid="issue-card" data-issue-key={issue.issueKey} className={`border-l-4 px-3 py-2 ${tone === "red" ? "border-l-red-700" : tone === "amber" ? "border-l-amber-600" : "border-l-slate-400"}`}>
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-0 md:grid md:grid-cols-[6.5rem_minmax(0,1fr)_11rem_auto]">
+        <span><StatusChip tone={tone}>{TONE[tone].word}</StatusChip></span>
+        <div className="min-w-0 flex-1 basis-[10rem]">
+          <p className="text-sm font-semibold text-og-ink">{KIND_LABEL[issue.kind] ?? issue.kind}{who ? ` · ${who}` : ""}</p>
+          <p className="text-sm text-og-sub">{issue.recommendedAction}</p>
+        </div>
+        <p className="basis-full text-xs text-og-sub md:basis-auto" data-testid="issue-deadline">
+          {issue.deadline ? `${issue.severity === "critical" ? "Was due" : "Due"} ${formatNumericDate(issue.deadline)} ${formatClockTime(issue.deadline)}` : "No deadline"}
+          {issue.reopenCount ? ` · reopened ${issue.reopenCount} time${issue.reopenCount === 1 ? "" : "s"}` : ""}
+        </p>
+        <div className="flex items-center gap-x-4 md:justify-end">
+          <Link className={linkClass} to={dest.to}>{dest.label}</Link>
+          <button type="button" className="inline-flex min-h-[44px] items-center text-sm text-og-sub underline md:min-h-[32px]" aria-expanded={open} onClick={() => setOpen((v) => !v)}>{open ? "Hide history" : "History"}</button>
+        </div>
       </div>
       {open ? (
-        <div className="mt-2 rounded-lg bg-og-bg p-2 text-xs text-og-sub" data-testid="issue-history">
-          {history.isLoading ? "Loading…" : history.isError ? "The history could not be loaded." : (
+        <div className="mt-1 rounded-lg bg-og-bg p-2 text-xs text-og-sub" data-testid="issue-history">
+          {history.isLoading ? "Loading…" : history.isError ? "The history could not be loaded. Close it and open it again." : (
             <ul className="space-y-0.5">
               {(history.data?.events ?? []).map((e, n) => <li key={n}>{formatNumericDate(e.occurredAt)} {formatClockTime(e.occurredAt)} · {e.event.replace(/_/g, " ")}{e.severity ? ` (${e.severity})` : ""}{e.observedByName ? ` · seen by ${e.observedByName}` : ""}</li>)}
               <li>Times are when the change was first seen by the system, not necessarily when it happened.</li>
@@ -98,8 +103,7 @@ function DeadlineSettings() {
   return (
     <Disclosure summary="Follow-up deadlines" >
       <div className="space-y-2" data-testid="deadline-settings">
-        <p className="text-sm text-og-sub">These only decide when an item moves to the urgent view. A deadline can be shorter than the default, never longer.</p>
-        <p className="text-sm text-og-sub">A deadline never approves, signs or bills anything. A stricter payer or regulatory deadline is not set up here.</p>
+        <ShortHelp className="text-sm text-og-sub" details="These only decide when an item moves to the urgent view. A deadline never approves, signs or bills anything. A stricter payer or regulatory deadline is not set up here.">A deadline can be shorter than the default, never longer.</ShortHelp>
         {canEdit ? (
           <>
             {field("Client confirmation", "c", s.confirmationOverdueHours, s.defaults.confirmationOverdueHours)}
@@ -148,8 +152,7 @@ function NotificationSettingsCard() {
   return (
     <Disclosure summary="Notifications">
       <div className="space-y-2" data-testid="notification-settings">
-        <p className="text-sm text-og-sub">In-app only. Critical items always notify the staff who can see them. Routine items stay listed here and never notify. No email, text or push message is sent.</p>
-        <p className="text-sm text-og-sub">Urgent items: {s.urgentInApp ? "notify" : "do not notify"}.</p>
+        <ShortHelp className="text-sm text-og-sub" details="In-app only. Critical items always notify the staff who can see them. Routine items stay listed here and never notify. No email, text or push message is sent.">Urgent items: {s.urgentInApp ? "notify" : "do not notify"}.</ShortHelp>
         {canEdit ? (
           <>
             <label className="block text-sm font-medium text-og-ink">Why are you changing it? (kept on record)
@@ -194,17 +197,19 @@ export function ActionNeededPage() {
     </label>
   );
   const data = q.data;
+  const filtered = Object.values(f).some((v) => !!v);
+  // One group per queue, in the order the server first lists them (most urgent first). Each heading carries its count once.
+  const groups = (() => {
+    const m = new Map<string, ActionIssue[]>();
+    for (const i of data?.issues ?? []) m.set(i.queue, [...(m.get(i.queue) ?? []), i]);
+    return [...m.entries()].map(([queue, issues]) => ({ queue, issues, count: !filtered ? (data?.counts.byQueue[queue] ?? issues.length) : issues.length, routine: issues.every((i) => i.severity === "routine") }));
+  })();
   return (
-    <div className="space-y-4">
-      <PageHeader title="Action needed" lead="One list of what needs a person, most urgent first. Each item says what to do next and takes you there." />
+    <div className="space-y-3">
+      <PageHeader title="Action needed" lead="Most urgent first. Each item links to its next step." />
       {q.isLoading ? <p className="text-sm text-og-sub">Loading…</p> : null}
-      {q.isError ? <p role="alert" className="text-sm text-red-700">{(q.error as Error).message} <button type="button" className="underline" onClick={() => void q.refetch()}>Retry</button></p> : null}
-      {data ? (
-        <p className="text-sm text-og-ink" data-testid="issue-counts">
-          <span className="font-semibold">{data.counts.actionNeeded} need action</span>
-          <span className="text-og-sub"> · {data.counts.critical} critical · {data.counts.urgent} urgent · {data.counts.routine} routine (routine items are separate queues and are not in the action total)</span>
-        </p>
-      ) : null}
+      {q.isError ? <p role="alert" className="text-sm text-red-700">The list could not be loaded. Check your connection, then <button type="button" className="font-semibold underline" onClick={() => void q.refetch()}>Retry</button>.</p> : null}
+      {data ? <p className="text-sm font-semibold text-og-ink" data-testid="issue-counts">{data.counts.actionNeeded} need action</p> : null}
       <div className="grid grid-cols-2 gap-2 md:grid-cols-6" data-testid="issue-filters">
         {sel("Queue", "queue", Object.entries(QUEUE_LABEL))}
         {sel("Category", "category", Object.entries(CATEGORY_LABEL))}
@@ -213,10 +218,15 @@ export function ActionNeededPage() {
         {sel("Caregiver", "caregiver", options.caregivers)}
         {sel("Service", "service", options.services)}
       </div>
-      {data && data.issues.length === 0 ? <p role="status" className="rounded-og border border-og-line bg-og-card p-4 text-sm text-og-sub">{f === NONE || Object.values(f).every((v) => !v) ? "Nothing needs action right now." : "Nothing matches these filters."}</p> : null}
+      {data && data.issues.length === 0 ? <p role="status" className="rounded-og border border-og-line bg-og-card p-3 text-sm text-og-sub">{!filtered ? "Nothing needs action right now." : "Nothing matches these filters. Clear a filter to see more."}</p> : null}
       {data && data.issues.length > 0 ? (
         <>
-          <ul className="space-y-2">{data.issues.map((i) => <IssueCard key={i.issueKey} issue={i} />)}</ul>
+          {groups.map((g) => (
+            <section key={g.queue} aria-label={QUEUE_LABEL[g.queue] ?? g.queue} className="space-y-1">
+              <h2 className="text-sm font-bold text-og-ink">{QUEUE_LABEL[g.queue] ?? g.queue} <span className="font-og-mono tabular-nums">{g.count}</span>{g.routine ? <span className="font-normal text-og-sub"> · routine, not in the total</span> : null}</h2>
+              <ul className="divide-y divide-og-line rounded-og border border-og-line bg-og-card">{g.issues.map((i) => <IssueCard key={i.issueKey} issue={i} />)}</ul>
+            </section>
+          ))}
           {data.matching > data.issues.length ? <Button type="button" variant="secondary" className="min-h-11" onClick={() => setPages(pages + 1)}>Show more ({data.matching - data.issues.length} left)</Button> : null}
         </>
       ) : null}

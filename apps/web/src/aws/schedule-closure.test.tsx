@@ -54,8 +54,8 @@ describe("views, overview and states", () => {
     });
     const overview = await screen.findByTestId("scheduling-overview", {}, { timeout: 15000 });
     await waitFor(() => expect(overview).toHaveTextContent(/Today\s*2\s*visits/));
-    await waitFor(() => expect(overview).toHaveTextContent("Uncovered, critical or urgent1"));
-    expect(overview).toHaveTextContent("Urgent exceptions2");
+    await waitFor(() => expect(overview).toHaveTextContent("Urgent exceptions 2"));
+    expect(overview).toHaveTextContent("Today, no caregiver 1");
     expect(within(overview).getByRole("link", { name: "See all" })).toHaveAttribute("href", "/action-needed");
     expect(screen.getByRole("button", { name: "Week", pressed: true })).toBeInTheDocument();
     expect(screen.getByLabelText("Week starting")).toBeInTheDocument();

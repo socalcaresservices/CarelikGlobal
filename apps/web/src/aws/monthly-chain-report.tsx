@@ -93,9 +93,7 @@ export function MonthlyChainReport({ month }: { month: string }) {
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h3 className="font-semibold text-slate-950">Full chain for the month</h3>
-          <p className="mt-1 max-w-3xl text-sm text-slate-600">
-            One row per client, service and authorization: authorized, scheduled, worked, confirmed, billable, Billing Ready and approved, with checks that the parts add up.
-            Approval is not submission or payment.</p>
+          <p className="mt-1 max-w-3xl text-sm text-slate-600">One row per client, service and authorization. Approval is not submission or payment.</p>
         </div>
         {canExport ? (
           <Button type="button" variant="secondary" className="min-h-11 print:hidden" disabled={busy || rows.length === 0} loading={busy} onClick={() => void exportCsv()}>Export CSV (server-made, recorded)</Button>

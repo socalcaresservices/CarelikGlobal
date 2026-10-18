@@ -5,6 +5,7 @@ import { RoundingSection } from "./billing-rounding";
 import { APPROVAL_STATUS_CLASS, APPROVAL_STATUS_LABEL, APPROVAL_STATUS_NOTE, approvableMinutes, billingStateOf, formatClock, formatDuration, formatUsDate, visitScheduleLabel, type ApprovalStatus } from "./billing-format";
 import { activeFilterCount, applyBillingFilters, filterOptions, NO_FILTERS, type BillingFilters } from "./billing-filters";
 import { Button, Card } from "@carelik/ui";
+import { ShortHelp } from "./help-text";
 import { confirmationMethodLabel, formatHours } from "@/lib/service-verification";
 import { useIsNarrow } from "@/lib/use-is-narrow";
 import { newIdempotencyKey, type BillingApprovalRow, type BillingReviewRow } from "@/lib/sv-backend";
@@ -177,7 +178,7 @@ export function BillingReviewPage() {
     return (
       <span className="inline-flex flex-col items-start gap-0.5">
         <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${APPROVAL_STATUS_CLASS[st]}`}>{APPROVAL_STATUS_LABEL[st]}</span>
-        {APPROVAL_STATUS_NOTE[st] ? <span className="text-[11px] text-slate-600">{APPROVAL_STATUS_NOTE[st]}</span> : null}
+        {APPROVAL_STATUS_NOTE[st] && st !== "ready_for_review" && st !== "approved_for_billing" ? <span className="text-[11px] text-slate-600">{APPROVAL_STATUS_NOTE[st]}</span> : null}
       </span>
     );
   }
@@ -193,6 +194,8 @@ export function BillingReviewPage() {
   const serviceText = (r: BillingReviewRow) => (r.serviceName ? `${r.serviceName} (${r.serviceCode})` : r.serviceCode);
   const timesText = (r: BillingReviewRow) => (r.timeIn ? `${formatClock(r.timeIn, tz)} – ${formatClock(r.timeOut, tz)}` : "");
   const whenText = (r: BillingReviewRow) => `${formatUsDate(r.serviceDate)}${r.timeIn ? `, ${timesText(r)}` : ""}`;
+  const minutesText = (r: BillingReviewRow) =>
+    r.billableMinutes === r.workedMinutes ? `${formatDuration(r.workedMinutes)} worked and billable` : `${formatDuration(r.workedMinutes)} worked, ${formatDuration(r.billableMinutes)} billable`;
   function detailsCell(r: BillingReviewRow) {
     return (
       <details className="mt-2 text-xs text-slate-600">
@@ -222,10 +225,12 @@ export function BillingReviewPage() {
     <div className="space-y-4">
       <div>
         <h1 className="text-xl font-semibold text-slate-950">Billing review</h1>
-        <p className="mt-1 text-sm text-slate-600">
-          Ready for Review means the visit passed the automatic checks. Approved for Billing is a separate human step, and
-          approval is not submission or payment: nothing is sent to a payer from this screen.
-        </p>
+        <ShortHelp
+          className="mt-1 text-sm text-slate-600"
+          details="Ready for Review means the visit passed the automatic checks. Approved for Billing is a separate human step. Nothing is sent to a payer from this screen."
+        >
+          Approve each Ready for Review visit; approval is not submission or payment.
+        </ShortHelp>
       </div>
       <div className="flex flex-wrap items-end gap-3">
         <label className="text-xs font-medium text-slate-600">
@@ -280,14 +285,17 @@ export function BillingReviewPage() {
                 {clientCell(r)}
                 {statusPill(r)}
               </div>
-              <p className="mt-2 text-sm text-slate-800"><span className="text-slate-500">Caregiver:</span> {r.caregiverName ?? "—"}</p>
-              <p className="text-sm text-slate-800"><span className="text-slate-500">Service:</span> {serviceText(r)}</p>
-              <p className="text-sm text-slate-800"><span className="text-slate-500">Visit:</span> {whenText(r)}</p>
-              <p className="text-sm text-slate-800"><span className="text-slate-500">Worked:</span> {formatDuration(r.workedMinutes)} · <span className="text-slate-500">Billable:</span> {formatDuration(r.billableMinutes)}</p>
-              <div className="mt-2 text-sm">{evidenceCell(r)}</div>
+              <p className="mt-1 text-sm text-slate-800">{r.caregiverName ?? "—"} · {serviceText(r)}</p>
+              <p className="text-sm text-slate-800">{whenText(r)} · {minutesText(r)}</p>
               <div className="mt-2 text-sm">{approvalCell(r)}</div>
-              {canSeeMoney ? <p className="mt-1 text-sm text-slate-700">Amount: {amountCell(r)}</p> : null}
-              {detailsCell(r)}
+              <details className="mt-2 text-sm">
+                <summary className="inline-flex min-h-[44px] cursor-pointer items-center text-og-accent underline">More</summary>
+                <div className="space-y-2">
+                  <div>{evidenceCell(r)}</div>
+                  {canSeeMoney ? <p className="text-slate-700">Amount: {amountCell(r)}</p> : null}
+                  {detailsCell(r)}
+                </div>
+              </details>
             </li>
           ))}
         </ul>
@@ -301,27 +309,23 @@ export function BillingReviewPage() {
                 <th scope="col" className="px-3 py-2">Caregiver</th>
                 <th scope="col" className="px-3 py-2">Service</th>
                 <th scope="col" className="px-3 py-2">Date and time</th>
-                <th scope="col" className="px-3 py-2">Worked</th>
-                <th scope="col" className="px-3 py-2">Billable</th>
+                <th scope="col" className="px-3 py-2">Worked / billable</th>
                 <th scope="col" className="px-3 py-2">Evidence</th>
                 <th scope="col" className="px-3 py-2">Approval</th>
                 {canSeeMoney ? <th scope="col" className="px-3 py-2">Amount</th> : null}
-                <th scope="col" className="px-3 py-2">Details</th>
               </tr>
             </thead>
             <tbody>
               {rows.map((r) => (
                 <tr key={r.visitId} className="border-t border-slate-100 align-top">
-                  <td className="px-3 py-2">{clientCell(r)}<div className="mt-1">{statusPill(r)}</div></td>
+                  <td className="px-3 py-2">{clientCell(r)}<div className="mt-1">{statusPill(r)}</div>{detailsCell(r)}</td>
                   <td className="px-3 py-2">{r.caregiverName ?? "—"}</td>
                   <td className="px-3 py-2">{serviceText(r)}</td>
                   <td className="px-3 py-2 whitespace-nowrap">{formatUsDate(r.serviceDate)}<br /><span className="text-slate-600">{timesText(r)}</span></td>
-                  <td className="px-3 py-2 whitespace-nowrap">{formatDuration(r.workedMinutes)}</td>
-                  <td className="px-3 py-2 whitespace-nowrap">{formatDuration(r.billableMinutes)}</td>
+                  <td className="px-3 py-2 whitespace-nowrap">{formatDuration(r.workedMinutes)}{r.billableMinutes !== r.workedMinutes ? <><br /><span className="text-slate-600">billable {formatDuration(r.billableMinutes)}</span></> : null}</td>
                   <td className="px-3 py-2">{evidenceCell(r)}</td>
                   <td className="px-3 py-2">{approvalCell(r)}</td>
                   {canSeeMoney ? <td className="px-3 py-2">{amountCell(r)}</td> : null}
-                  <td className="px-3 py-2">{detailsCell(r)}</td>
                 </tr>
               ))}
             </tbody>
@@ -334,10 +338,12 @@ export function BillingReviewPage() {
             {pending.kind === "approve" ? (
               <>
                 <p className="text-sm font-medium text-slate-900">Approve visit {pending.row.visitNumber ?? ""} for billing</p>
-                <p className="text-xs text-slate-600">
+                <ShortHelp
+                  className="text-xs text-slate-600"
+                  details="Approval records your name and the time. It does not submit anything to a payer and does not mean it was paid."
+                >
                   {pending.row.reviewDecision === "accept_late_confirmation" ? "Accepted from a late confirmation" : "Billable"}: {approvableMinutes(pending.row)} min ({formatHours(approvableMinutes(pending.row))} h). You can approve less, never more.
-                  Approval records your name and the time. It does not submit anything to a payer and does not mean it was paid.
-                </p>
+                </ShortHelp>
                 <label className="block text-xs font-medium text-slate-600">
                   Approved minutes
                   <input inputMode="numeric" value={pending.minutes} onChange={(e) => setPending({ ...pending, minutes: e.target.value, error: null })} className="mt-1 block w-32 rounded-lg border border-slate-200 px-3 py-2 text-sm" />

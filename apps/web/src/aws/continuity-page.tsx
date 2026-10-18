@@ -21,13 +21,12 @@ export function ContinuityStatusCard() {
   const status = useContinuityStatus();
   if (!hasPermission("continuity.export") || status.isLoading) return null;
   const s = continuityState(status.data);
-  // Home's "Outage readiness" panel: the former continuity banner's text and link, unchanged,
-  // now with a heading. Amber (with text, not colour alone) when the pack is stale.
+  // Home's "Outage readiness" notice: one line (heading, status, link). Amber, with a symbol and words (not colour alone), when the pack is stale.
   return (
-    <section aria-labelledby="outage-readiness-heading" className={`flex flex-wrap items-center justify-between gap-x-4 gap-y-1 rounded-og border px-3 py-2 ${s.stale ? "border-amber-600 bg-amber-50" : "border-og-line bg-og-card"}`}>
-      <div className="min-w-0">
-        <h3 id="outage-readiness-heading" className="text-sm font-semibold text-og-ink">Outage readiness</h3>
-        <p className={`text-sm ${s.stale ? "font-semibold text-amber-900" : "text-og-sub"}`}>{s.stale ? "OUTAGE READINESS: " : ""}{s.text}.</p>
+    <section aria-labelledby="outage-readiness-heading" className={`flex flex-wrap items-center justify-between gap-x-4 gap-y-0 rounded-og border px-3 py-1 ${s.stale ? "border-amber-600 bg-amber-50" : "border-og-line bg-og-card"}`}>
+      <div className="min-w-0 py-1 text-sm">
+        <h3 id="outage-readiness-heading" className="inline font-semibold text-og-ink">Outage readiness</h3>
+        <span className={s.stale ? "font-semibold text-amber-900" : "text-og-sub"}> · {s.stale ? <span aria-hidden="true">▲ </span> : null}{s.text}.</span>
       </div>
       <Link to="/continuity" className="inline-flex min-h-[44px] items-center text-sm font-semibold text-og-link underline md:min-h-[32px]">Continuity pack</Link>
     </section>

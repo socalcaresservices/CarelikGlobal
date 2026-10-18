@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Button, Card } from "@carelik/ui";
+import { Button } from "@carelik/ui";
 import { useOrganization } from "@/providers/organization-provider";
 import { actionError } from "./format";
 import { AvailabilityRequestForm, CurrentAvailability, RequestHistory } from "./availability-section";
@@ -10,6 +10,7 @@ import { CaregiverDocuments } from "./documents-readiness";
 import { CaregiverServices } from "./service-approvals";
 import { CaregiverExperience, MatchingLocation } from "./matching-inputs";
 import { MyExperience } from "./my-experience";
+import { SummarySection } from "../ui/summary-section";
 
 /**
  * The caregiver record's readiness sections, each kept separate: Availability, Approved services, Documents.
@@ -25,21 +26,19 @@ export function CaregiverReadiness({ caregiverRecordId }: { caregiverRecordId: s
     <>
       <CaregiverCompliance caregiverRecordId={caregiverRecordId} />
       {canSee ? (
-        <Card className="p-4">
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <h2 className="text-base font-semibold text-slate-950">Availability</h2>
-            {hasPermission("availability.review") ? <Button type="button" variant="secondary" aria-expanded={editing} onClick={() => setEditing((e) => !e)}>{editing ? "Close" : "Edit availability"}</Button> : null}
-          </div>
-          {q.isLoading ? <p className="mt-2 text-sm text-slate-500">Loading…</p> : null}
-          {q.isError ? <p role="alert" className="mt-2 text-sm text-red-700">{actionError(q.error, "Availability could not be loaded.")}</p> : null}
+        <SummarySection title="Availability" defaultOpen={(q.data?.pending.length ?? 0) > 0}
+          status={q.data && q.data.pending.length > 0 ? <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-semibold text-amber-950">{q.data.pending.length} pending</span> : undefined}>
+          {hasPermission("availability.review") ? <div className="mb-2 text-right"><Button type="button" variant="secondary" aria-expanded={editing} onClick={() => setEditing((e) => !e)}>{editing ? "Close" : "Edit availability"}</Button></div> : null}
+          {q.isLoading ? <p className="text-sm text-slate-500">Loading…</p> : null}
+          {q.isError ? <p role="alert" className="text-sm text-red-700">{actionError(q.error, "Availability could not be loaded.")}</p> : null}
           {q.data ? (
-            <div className="mt-2 space-y-4">
+            <div className="space-y-4">
               <section aria-label="Approved hours"><h3 className="text-sm font-semibold text-slate-900">Approved</h3><div className="mt-1"><CurrentAvailability state={q.data} /></div></section>
               <section aria-label="Pending changes"><h3 className="text-sm font-semibold text-slate-900">Pending</h3><div className="mt-1"><RequestHistory rows={q.data.pending} /></div></section>
               {editing ? <div className="border-t border-slate-200 pt-3"><p className="mb-2 text-xs text-slate-600">An administrator edit takes effect immediately and is recorded with your reason.</p><AvailabilityRequestForm state={q.data} mode="administrator" /></div> : null}
             </div>
           ) : null}
-        </Card>
+        </SummarySection>
       ) : null}
       <AvailabilityReview caregiverRecordId={caregiverRecordId} />
       {hasPermission("caregiver_services.read") ? <CaregiverServices caregiverRecordId={caregiverRecordId} /> : null}

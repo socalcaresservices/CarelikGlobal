@@ -7,6 +7,7 @@ import { newIdempotencyKey } from "@/lib/sv-backend";
 import { useOrganization } from "@/providers/organization-provider";
 import { useAwsApi } from "./aws-workspace";
 import { DuplicateWarning } from "./client-extras";
+import { ShortHelp } from "./help-text";
 import { useDuplicateClients } from "./client-data";
 import { clientName, STATUS_BADGE, STATUS_LABEL, useClients, useClientTypes, type AdminClient, type ClientStatus } from "./client-admin";
 import { defaultView, filterClients, hasCurrentAuthorization, readViewPreference, sortClients, WIDE_SCREEN_QUERY, writeViewPreference, type AuthorizationFilter, type ClientSort, type ClientView } from "./client-view";
@@ -96,7 +97,7 @@ function AddClientForm({ onDone }: { onDone: (clientId: string) => void }) {
   return (
     <Card className="p-4">
       <h2 className="text-base font-semibold text-slate-950">Add a client</h2>
-      <p className="mt-1 text-xs text-slate-600">Ogevia gives every client a random code. Caregivers see the code (or the label below), never the name.</p>
+      <ShortHelp className="mt-1 text-xs text-slate-600" details="Ogevia gives every client a random code. Caregivers see the code (or the label below), never the name.">Caregivers see a code or label, never the name.</ShortHelp>
       <form onSubmit={(e) => { e.preventDefault(); void submit(); }} className="mt-3 grid gap-3 sm:grid-cols-2">
         <div><label htmlFor="new-first" className="block text-sm font-medium text-slate-700">First name</label><input id="new-first" value={form.first} maxLength={80} autoComplete="off" onChange={(e) => set("first")(e.target.value)} className={inputClass} /></div>
         <div><label htmlFor="new-last" className="block text-sm font-medium text-slate-700">Last name</label><input id="new-last" value={form.last} maxLength={80} autoComplete="off" onChange={(e) => set("last")(e.target.value)} className={inputClass} /></div>
@@ -150,14 +151,11 @@ export function ClientsPage() {
   return (
     <div className="max-w-5xl space-y-4">
       <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h1 className="text-xl font-semibold text-slate-950">Clients</h1>
-          <p className="mt-1 text-sm text-slate-600">Details, status and authorized hours.</p>
-        </div>
+        <h1 className="text-xl font-semibold text-slate-950">Clients</h1>
         {canManage ? <Button type="button" onClick={() => setAdding((a) => !a)} aria-expanded={adding}>{adding ? "Close" : "Add client"}</Button> : null}
       </div>
       {adding ? <AddClientForm onDone={(id) => { setAdding(false); setAdded(id); }} /> : null}
-      {added ? <p role="status" className="text-sm text-emerald-800">Client added. <Link className="underline" to={`/clients/${added}`}>Open it to add authorized hours</Link>.</p> : null}
+      {added ? <p role="status" className="text-sm text-emerald-800">Client added. <Link className="underline" to={`/clients/${added}`}>Add authorized hours</Link>.</p> : null}
       <div className="flex flex-wrap items-end gap-3">
         <div className="min-w-[220px] flex-1">
           <label htmlFor="client-search" className="block text-sm font-medium text-slate-700">Search</label>
@@ -221,8 +219,8 @@ const actionLabel = (c: AdminClient) => (hasCurrentAuthorization(c) ? "View auth
 /** Compact rows: client, status, authorization, one action. The same rows and permissions as Cards. */
 function ClientList({ clients }: { clients: AdminClient[] }) {
   return (
-    <div className="overflow-x-auto rounded-xl border border-slate-200 bg-og-card">
-      <table className="w-full min-w-[34rem] text-left text-sm" aria-label="Clients as a list">
+    <div className="rounded-xl border border-slate-200 bg-og-card">
+      <table className="w-full text-left text-sm" aria-label="Clients as a list">
         <thead>
           <tr className="border-b border-slate-200 text-xs uppercase tracking-wide text-slate-600">
             <th scope="col" className="px-3 py-2 font-semibold">Client</th>
@@ -234,13 +232,13 @@ function ClientList({ clients }: { clients: AdminClient[] }) {
         <tbody>
           {clients.map((c) => (
             <tr key={c.clientId} className="border-b border-slate-100 last:border-0">
-              <th scope="row" className="px-3 py-2 font-medium text-slate-950">
+              <th scope="row" className="px-3 py-1 font-medium text-slate-950">
                 {clientName(c) ?? "Name not set"} <span className="font-normal text-slate-500">({c.clientCode})</span>
                 {c.openVisits > 0 ? <span className="ml-2 text-xs font-normal text-slate-600">visit in progress</span> : null}
               </th>
-              <td className="px-3 py-2"><span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${STATUS_BADGE[c.status]}`}>{STATUS_LABEL[c.status]}</span></td>
-              <td className={`px-3 py-2 ${!hasCurrentAuthorization(c) && c.status === "active" ? "font-semibold text-red-700" : "text-slate-800"}`}>{authLabel(c)}</td>
-              <td className="px-3 py-2"><Link to={`/clients/${c.clientId}`} className="inline-flex min-h-[44px] items-center font-medium text-og-link underline" aria-label={`${actionLabel(c)} for ${clientName(c) ?? c.clientCode}`}>{actionLabel(c)}</Link></td>
+              <td className="px-3 py-1"><span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${STATUS_BADGE[c.status]}`}>{STATUS_LABEL[c.status]}</span></td>
+              <td className={`px-3 py-1 ${!hasCurrentAuthorization(c) && c.status === "active" ? "font-semibold text-red-700" : "text-slate-800"}`}>{authLabel(c)}</td>
+              <td className="px-3 py-1"><Link to={`/clients/${c.clientId}`} className="inline-flex min-h-[44px] items-center font-medium text-og-link underline md:min-h-[32px]" aria-label={`${actionLabel(c)} for ${clientName(c) ?? c.clientCode}`}>{actionLabel(c)}</Link></td>
             </tr>
           ))}
         </tbody>
@@ -249,25 +247,30 @@ function ClientList({ clients }: { clients: AdminClient[] }) {
   );
 }
 
+/** Phone and Cards view: a compact expandable row; the key line and status show, details and the one action open on tap. */
 function ClientCard({ c }: { c: AdminClient }) {
   const name = clientName(c);
+  const missing = !hasCurrentAuthorization(c) && c.status === "active";
   return (
-    <li>
-      <Link to={`/clients/${c.clientId}`} className="block rounded-xl border border-slate-200 bg-og-card p-3 hover:border-slate-400">
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <p className="font-semibold text-slate-950">{name ?? "Name not set"} <span className="font-normal text-slate-500">({c.clientCode})</span></p>
-          <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${STATUS_BADGE[c.status]}`}>{STATUS_LABEL[c.status]}</span>
+    <li className="rounded-xl border border-slate-200 bg-og-card">
+      <details>
+        <summary className="flex min-h-[44px] cursor-pointer list-none flex-wrap items-center justify-between gap-x-2 gap-y-1 px-3 py-2 [&::-webkit-details-marker]:hidden">
+          <span className="min-w-0 font-semibold text-slate-950">{name ?? "Name not set"} <span className="font-normal text-slate-600">({c.clientCode})</span></span>
+          <span className="flex items-center gap-2">
+            {missing ? <span className="text-xs font-semibold text-red-700">No authorization</span> : null}
+            <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${STATUS_BADGE[c.status]}`}>{STATUS_LABEL[c.status]}</span>
+          </span>
+        </summary>
+        <div className="space-y-1 border-t border-slate-100 px-3 py-2 text-sm">
+          <p className="text-slate-700">
+            {[c.city, c.clientTypeName, c.caregiverDisplayCode ? `caregivers see "${c.caregiverDisplayCode}"` : null].filter(Boolean).join(" · ") || "No city or type"}
+          </p>
+          <p className={missing ? "font-semibold text-red-700" : "text-slate-700"}>
+            Authorization: {authLabel(c)}{c.openVisits > 0 ? ` · ${c.openVisits} visit in progress` : ""}
+          </p>
+          <Link to={`/clients/${c.clientId}`} className="inline-flex min-h-[44px] items-center font-medium text-og-link underline">{actionLabel(c)}</Link>
         </div>
-        <p className="mt-1 text-sm text-slate-600">
-          {[c.city, c.clientTypeName, c.caregiverDisplayCode ? `caregivers see "${c.caregiverDisplayCode}"` : null].filter(Boolean).join(" · ") || "No city or type"}
-        </p>
-        <p className={`mt-1 text-sm ${c.currentAuthorizations === 0 && c.status === "active" ? "font-semibold text-red-700" : "text-slate-700"}`}>
-          Authorization: {authLabel(c)}
-          {c.openVisits > 0 ? ` · ${c.openVisits} visit in progress` : ""}
-          {/* The whole card opens the client page, whose first card is Authorizations (months, balances, versions). */}
-          <span className="ml-2 font-medium text-og-link underline">{actionLabel(c)}</span>
-        </p>
-      </Link>
+      </details>
     </li>
   );
 }

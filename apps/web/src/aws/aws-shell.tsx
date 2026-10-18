@@ -206,6 +206,8 @@ export function AwsShell({ children }: PropsWithChildren) {
   const accent = branding.data?.accentColor ?? DEFAULT_ACCENT;
   // The same classification and query result as the Home tiles (attention.ts): unique shifts and visits needing attention now.
   const badge = urgentBadge(overview.isLoading, overview.isError, overview.data);
+  // Home's own first row shows this same count (and its loading / unavailable state), so the header badge appears everywhere else.
+  const showBadge = canSeeAttention && badge.kind !== "hidden" && location.pathname !== "/";
 
   function trapFocus(e: KeyboardEvent<HTMLElement>) {
     if (!drawerShown) return;
@@ -430,7 +432,7 @@ export function AwsShell({ children }: PropsWithChildren) {
               <Menu className="h-4 w-4" aria-hidden="true" />
               Menu <span className="text-og-sub">· {current?.label ?? "Choose a section"}</span>
             </button>
-            {canSeeAttention && badge.kind !== "hidden" ? (
+            {showBadge ? (
               // Red only for care blocked or at risk now, amber for approaching risk; every state has a word and a symbol.
               <Link
                 to="/attention"

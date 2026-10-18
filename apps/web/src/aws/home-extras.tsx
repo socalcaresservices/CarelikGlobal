@@ -63,26 +63,28 @@ export function TodaysVisits() {
           })}
         </ul>
       ) : null}
-      {list.length > LIMIT ? <p className="text-xs text-og-sub">Showing {LIMIT} of {list.length}. <Link className="font-semibold text-og-link underline" to="/schedule">View all</Link></p> : null}
+      {list.length > LIMIT ? <p className="text-xs text-og-sub">Showing {LIMIT} of {list.length}.</p> : null}
     </section>
   );
 }
 
 const primary = "inline-flex min-h-[44px] items-center justify-center rounded-lg bg-og-accent px-4 text-sm font-semibold text-og-on-accent hover:opacity-90 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-og-link md:min-h-[40px]";
-const secondary = "inline-flex min-h-[44px] items-center justify-center rounded-lg border border-og-line bg-og-card px-4 text-sm font-semibold text-og-ink hover:bg-og-page focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-og-link md:min-h-[40px]";
 
-/** Exactly three actions, each shown only to someone who may use it. Each opens an existing workflow; none creates anything itself. */
+/**
+ * One primary action (Schedule visit) and two plain links, each shown only to someone who may use it. Each opens an existing workflow; none creates anything itself.
+ * Someone who cannot schedule still gets Find client as a link, never as a competing button.
+ */
 export function QuickActions() {
   const { hasPermission } = useOrganization();
   const manage = hasPermission("shifts.manage");
   const actions = [
-    manage ? { label: "Schedule Visit", to: "/schedule?add=1", cls: primary } : null,
-    hasPermission("clients.names.read") ? { label: "Find Client", to: "/clients?find=1", cls: secondary } : null,
-    manage ? { label: "Resolve Coverage", to: "/schedule?coverage=1", cls: secondary } : null,
+    manage ? { label: "Schedule visit", to: "/schedule?add=1", cls: primary } : null,
+    hasPermission("clients.names.read") ? { label: "Find client", to: "/clients?find=1", cls: linkClass } : null,
+    manage ? { label: "Resolve coverage", to: "/schedule?coverage=1", cls: linkClass } : null,
   ].filter((a): a is { label: string; to: string; cls: string } => a !== null);
   if (actions.length === 0) return null;
   return (
-    <nav aria-label="Quick actions" className="flex flex-wrap gap-2">
+    <nav aria-label="Quick actions" className="flex flex-wrap items-center gap-x-5 gap-y-0">
       {actions.map((a) => <Link key={a.label} to={a.to} className={a.cls}>{a.label}</Link>)}
     </nav>
   );
@@ -109,7 +111,10 @@ export function RefreshStatus({ overview, loading, failed, refreshing, onRefresh
 }
 
 
-/** A compact Critical-then-Urgent list: what, why it is on the list, when it is due, one direct action, and View all. Routine queues are not listed here. */
+/**
+ * A compact Critical-then-Urgent list: severity, what and why, when it is due, and ONE action link; View all opens the full list.
+ * Rows line up as a table from 768px up and stack as two short lines on a phone. Routine queues are not listed here.
+ */
 export function TopIssues() {
   const q = useHomeIssues();
   if (q.isLoading || (!q.data && !q.isError)) return null;
@@ -125,17 +130,21 @@ export function TopIssues() {
       </div>
       {shown.length === 0 ? <p className="text-sm text-og-sub">Nothing is critical or urgent right now.</p> : (
         <ul className="divide-y divide-og-line rounded-og border border-og-line bg-og-card">
+          <li aria-hidden="true" className="hidden px-3 py-1.5 text-xs font-semibold text-og-sub md:grid md:grid-cols-[6.5rem_minmax(0,1fr)_9rem_11rem] md:gap-x-3">
+            <span>Status</span><span>Item</span><span>Due</span><span className="text-right">Action</span>
+          </li>
           {shown.map((i) => {
             const dest = issueDestination(i);
             const tone = SEVERITY_TONE[i.severity];
             return (
-              <li key={i.issueKey} className="flex flex-wrap items-center gap-x-3 gap-y-1 px-3 py-2.5 text-sm" data-testid="top-issue">
-                <StatusChip tone={tone}>{tone === "red" ? "Critical" : "Urgent"}</StatusChip>
-                <span className="min-w-0 flex-1 text-og-ink">
+              <li key={i.issueKey} className="flex flex-wrap items-center gap-x-3 gap-y-0 px-3 py-2 text-sm md:grid md:grid-cols-[6.5rem_minmax(0,1fr)_9rem_11rem]" data-testid="top-issue">
+                <span><StatusChip tone={tone}>{tone === "red" ? "Critical" : "Urgent"}</StatusChip></span>
+                <span className="min-w-0 flex-1 basis-[10rem] text-og-ink">
                   <span className="font-semibold">{KIND_LABEL[i.kind] ?? i.kind}{i.clientCode ? ` · ${i.clientCode}` : ""}</span>
-                  <span className="text-og-sub"> · {REASON_SHORT[i.reason] ?? i.recommendedAction}{i.deadline ? ` · ${i.severity === "critical" ? "was due" : "due"} ${formatClockTime(i.deadline)}` : ""}</span>
+                  <span className="text-og-sub"> · {REASON_SHORT[i.reason] ?? i.recommendedAction}</span>
                 </span>
-                <Link className={linkClass} to={dest.to}>{dest.label}</Link>
+                <span className="basis-full text-xs text-og-sub md:basis-auto md:text-sm">{i.deadline ? `${i.severity === "critical" ? "Was due" : "Due"} ${formatClockTime(i.deadline)}` : "No deadline"}</span>
+                <Link className={`${linkClass} md:justify-self-end`} to={dest.to}>{dest.label}</Link>
               </li>
             );
           })}

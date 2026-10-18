@@ -8,6 +8,7 @@ import { useAgencyClock } from "./agency-clock";
 import { useHomeIssues } from "./home-data";
 import { DISPLAY_LABEL, filterOptions, monthGrid, NO_FILTERS, stateOfShift, type CalendarView, type ShiftFilters } from "./schedule-model";
 import type { Shift } from "./schedule-page";
+import { ShortHelp } from "./help-text";
 import { eligibleReplacements, type Candidate, type Matches } from "./replacement-model";
 
 export function ViewTabs({ view, onChange }: { view: CalendarView; onChange: (v: CalendarView) => void }) {
@@ -69,15 +70,14 @@ export function SchedulingOverview() {
   const list = (todays.data ?? []).filter((s) => stateOfShift(s) !== "cancelled");
   const uncoveredToday = list.filter((s) => stateOfShift(s) === "needs_coverage").length;
   const rows = issues.data?.issues ?? [];
-  const coverage = rows.filter((i) => i.category === "coverage" && i.severity !== "routine");
   const urgent = rows.filter((i) => i.severity !== "routine");
+  const num = "font-og-mono font-semibold tabular-nums";
   return (
-    <section aria-label="Scheduling overview" data-testid="scheduling-overview" className="grid grid-cols-2 gap-3 rounded-lg border border-slate-200 bg-og-card p-3 sm:grid-cols-4">
-      <div><p className="text-xs text-slate-600">Today</p><p className="font-og-mono text-xl font-semibold tabular-nums text-slate-950">{todays.isError ? "—" : list.length}<span className="ml-1 text-sm font-normal text-slate-600">visits</span></p></div>
-      <div><p className="text-xs text-slate-600">Today, no caregiver</p><p className={`font-og-mono text-xl font-semibold tabular-nums ${uncoveredToday ? "text-red-700" : "text-slate-950"}`}>{todays.isError ? "—" : uncoveredToday}</p></div>
-      <div><p className="text-xs text-slate-600">Uncovered, critical or urgent</p><p className={`font-og-mono text-xl font-semibold tabular-nums ${coverage.length ? "text-red-700" : "text-slate-950"}`}>{issues.isError ? "—" : coverage.length}</p></div>
-      <div><p className="text-xs text-slate-600">Urgent exceptions</p><p className="font-og-mono text-xl font-semibold tabular-nums text-slate-950">{issues.isError ? "—" : urgent.length}</p><Link className="inline-flex min-h-[44px] items-center text-sm font-semibold underline md:min-h-[32px]" to="/action-needed">See all</Link></div>
-      {todays.isError || issues.isError ? <p role="status" className="col-span-2 text-sm text-red-700 sm:col-span-4">Some figures could not be loaded. They are shown as — and are not zero.</p> : null}
+    <section aria-label="Scheduling overview" data-testid="scheduling-overview" className="flex flex-wrap items-center gap-x-6 gap-y-1 rounded-lg border border-slate-200 bg-og-card px-3 py-2 text-sm">
+      <p><span className="text-slate-600">Today </span><span className={`${num} text-slate-950`}>{todays.isError ? "—" : list.length}</span><span className="text-slate-600"> visits</span></p>
+      <p><span className="text-slate-600">Today, no caregiver </span><span className={`${num} ${uncoveredToday ? "text-red-700" : "text-slate-950"}`}>{todays.isError ? "—" : uncoveredToday}</span></p>
+      <p><span className="text-slate-600">Urgent exceptions </span><span className={`${num} text-slate-950`}>{issues.isError ? "—" : urgent.length}</span> <Link className="ml-1 inline-flex min-h-11 items-center font-semibold underline md:min-h-8" to="/action-needed">See all</Link></p>
+      {todays.isError || issues.isError ? <p role="status" className="basis-full text-red-700">Some figures could not be loaded. They show — and are not zero.</p> : null}
     </section>
   );
 }
@@ -94,7 +94,7 @@ export function FilterBar({ shifts, filters, onChange }: { shifts: Shift[]; filt
     </label>
   );
   return (
-    <div className="space-y-2" data-testid="shift-filters">
+    <div className={open ? "basis-full space-y-2" : "space-y-2"} data-testid="shift-filters">
       <div className="flex flex-wrap items-center gap-3">
         <button type="button" aria-expanded={open} onClick={() => setOpen((v) => !v)} className="inline-flex min-h-[44px] items-center text-sm font-semibold text-slate-900 underline md:min-h-[32px]">{open ? "Hide filters" : active ? `Filters (${active} on)` : "Filters"}</button>
         {active > 0 ? <Button type="button" variant="secondary" className="min-h-11" onClick={() => onChange(NO_FILTERS)}>Clear filters</Button> : null}
@@ -127,7 +127,7 @@ export function ReplacementSuggestions({ shift, onChoose }: { shift: Shift; onCh
   return (
     <div className="space-y-1 rounded-lg border border-slate-200 bg-og-card p-2" data-testid="replacement-suggestions">
       <p className="text-sm font-semibold text-slate-900">Suggested caregivers</p>
-      <p className="text-xs text-slate-600">Eligible caregivers only, in the order of the agency&apos;s matching rule ({q.data.ruleVersion}, {q.data.ruleStatus}). Choosing one fills the box below; you still confirm the assignment.</p>
+      <ShortHelp className="text-xs text-slate-600" details={`Eligible caregivers only, in the order of the agency's matching rule (${q.data.ruleVersion}, ${q.data.ruleStatus}).`}>Choosing one fills the box below; you still confirm the assignment.</ShortHelp>
       {eligible.length === 0 ? <p className="text-sm text-slate-700" data-testid="no-eligible">No eligible caregiver was found for this time. The shift stays flagged until one is assigned.</p> : (
         <ul className="space-y-1">
           {eligible.slice(0, 5).map((c: Candidate, n) => (

@@ -26,6 +26,9 @@ describe("notifications bell", () => {
     expect(rows[1]!.textContent).toMatch(/Urgent/);
     expect(rows[2]!.textContent).toMatch(/Resolved/);
     expect(screen.getByRole("link", { name: "Open Action needed" }).getAttribute("href")).toBe("/action-needed");
+    expect(screen.getAllByRole("button", { name: "Mark all read" })).toHaveLength(1); // one action, and the agency setting is one line with Details
+    expect(screen.getByTestId("notifications-panel")).toHaveTextContent("Urgent items follow your agency");
+    expect(screen.getByText("Details")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Mark all read" }));
     await waitFor(() => expect(screen.getByTestId("notifications-button").getAttribute("aria-label")).toBe("Notifications: 0 unread"));
     const post = calls.find((c) => c.method === "POST" && c.path === "/v1/notifications/read")!;

@@ -116,18 +116,21 @@ describe("Today's visits", () => {
 });
 
 describe("Quick actions", () => {
-  it("exactly three, each to its workflow", async () => {
+  it("one primary action and two plain links, each to its workflow", async () => {
     renderAt("/", FULL);
     const nav = await screen.findByRole("navigation", { name: "Quick actions" });
     const links = within(nav).getAllByRole("link");
     expect(links.map((l) => [l.textContent, l.getAttribute("href")])).toEqual([
-      ["Schedule Visit", "/schedule?add=1"], ["Find Client", "/clients?find=1"], ["Resolve Coverage", "/schedule?coverage=1"],
+      ["Schedule visit", "/schedule?add=1"], ["Find client", "/clients?find=1"], ["Resolve coverage", "/schedule?coverage=1"],
     ]);
+    expect(links[0]!.className).toMatch(/bg-og-accent/); // the one primary button
+    expect(links[1]!.className).not.toMatch(/bg-og-accent/);
+    expect(links[2]!.className).not.toMatch(/bg-og-accent/);
   });
   it("shows only what the person may use", async () => {
     renderAt("/", ["visits.read", "clients.names.read", "readiness.read"]);
     const nav = await screen.findByRole("navigation", { name: "Quick actions" });
-    expect(within(nav).getAllByRole("link").map((l) => l.textContent)).toEqual(["Find Client"]);
+    expect(within(nav).getAllByRole("link").map((l) => l.textContent)).toEqual(["Find client"]);
   });
   it("none at all for a role with none of the permissions", async () => {
     renderAt("/", ["visits.read", "documents.read", "readiness.read"]);

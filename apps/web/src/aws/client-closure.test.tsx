@@ -27,6 +27,22 @@ const base = (extra: Record<string, ReturnType<typeof Object>> = {}) => ({
 }) as Record<string, (c: { url: URL; body: Record<string, any> | null }) => Response | undefined>;
 const readiness = (over: Record<string, unknown> = {}) => ({ readiness: { clientId: CLIENT, status: "active", stage: "active", stageNote: null, canSchedule: true, ready: true, services: [], ...over } });
 
+describe("overall outcome first", () => {
+  it("a client with nothing to fix reads 'Ready for scheduling'; an unready client says how many items to fix, with each action", async () => {
+    renderAws(`/clients/${CLIENT}`, OWNER, base({ [`GET /v1/clients/${CLIENT}/readiness`]: () => json(200, readiness()), "GET /v1/action-issues": () => json(200, { asOf: new Date().toISOString(), matching: 0, limit: 50, offset: 0, counts: { total: 0, critical: 0, urgent: 0, routine: 0, actionNeeded: 0, byQueue: {} }, issues: [] }) }));
+    expect(await screen.findByTestId("client-outcome", {}, { timeout: 15000 })).toHaveTextContent("Ready for scheduling");
+    cleanup();
+    renderAws(`/clients/${CLIENT}`, OWNER, base({
+      [`GET /v1/clients/${CLIENT}/readiness`]: () => json(200, readiness({ stage: "draft", canSchedule: false, ready: false })),
+      "GET /v1/action-issues": () => json(200, { asOf: new Date().toISOString(), matching: 1, limit: 50, offset: 0, counts: { total: 1, critical: 0, urgent: 1, routine: 0, actionNeeded: 1, byQueue: {} },
+        issues: [{ issueKey: "k1", kind: "shift", reason: "uncovered_open", queue: "needs_attention_now", category: "coverage", severity: "urgent", deadline: soon(5), since: null, shiftId: "s1", visitId: null, entityId: "s1", caregiverRecordId: null, clientId: CLIENT, serviceId: SERVICE,
+          clientCode: "CL-1", caregiverCode: null, serviceCode: "862", status: "open", firstSeenAt: null, reopenCount: 0, action: "assign_caregiver", recommendedAction: "Choose an eligible caregiver and confirm the assignment." }] }),
+    }));
+    expect(await screen.findByTestId("client-outcome", {}, { timeout: 15000 })).toHaveTextContent("Not ready: 1 item to fix");
+    expect(await screen.findByTestId("client-alert")).toHaveTextContent("Choose an eligible caregiver");
+  }, 30000);
+});
+
 describe("alerts, actions, next visits, caregivers", () => {
   it("authorization comes first; alerts link to the workflow with the client; resolved alerts stay as history; three primary actions and the rest under More", async () => {
     renderAws(`/clients/${CLIENT}`, OWNER, base({
@@ -156,9 +172,13 @@ describe("readiness, holds and documents", () => {
     fireEvent.click(within(rows[3]!).getByRole("button", { name: "Upload" }));
     expect(await within(rows[3]!).findByRole("alert")).toHaveTextContent("Choose a photo or PDF");
     fireEvent.click(within(rows[1]!).getByRole("button", { name: "Review…" }));
-    fireEvent.click(within(rows[1]!).getByRole("button", { name: "Reject" }));
+    fireEvent.click(within(rows[1]!).getByRole("button", { name: "Save decision" }));
+    expect(await within(rows[1]!).findByRole("alert")).toHaveTextContent("Choose Approve or Reject");
+    fireEvent.click(within(rows[1]!).getByRole("radio", { name: "Reject" }));
+    fireEvent.click(within(rows[1]!).getByRole("button", { name: "Save decision" }));
     expect(await within(rows[1]!).findByRole("alert")).toHaveTextContent("Write why it is rejected");
-    fireEvent.click(within(rows[1]!).getByRole("button", { name: "Approve" }));
+    fireEvent.click(within(rows[1]!).getByRole("radio", { name: "Approve" }));
+    fireEvent.click(within(rows[1]!).getByRole("button", { name: "Save decision" }));
     await waitFor(() => expect(calls.some((c) => c.path === "/v1/client-document-versions/v-pending_review/review" && c.body?.decision === "verified")).toBe(true));
   }, 30000);
 

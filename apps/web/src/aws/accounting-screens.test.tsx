@@ -78,15 +78,17 @@ describe("shifts that ended with no visit record", () => {
   it("are listed with the reserved time, and releasing needs a note, sends one keyed request, and says what happened", async () => {
     const { calls } = renderAt("/schedule", ["shifts.manage", "visits.read", "clients.names.read"]);
     const panel = await screen.findByTestId("shifts-to-reconcile", {}, { timeout: 15000 });
-    expect(within(panel).getByText(/Shifts that ended with no visit record \(1\)/)).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Past: need review (1)" })).toBeInTheDocument();
     expect(within(panel).getByText(/Nothing is released automatically/)).toBeInTheDocument();
     expect(within(panel).getByText(/1 hr 30 min reserved/)).toBeInTheDocument();
-    fireEvent.click(within(panel).getByRole("button", { name: "No service was delivered" }));
-    fireEvent.click(within(panel).getByRole("button", { name: "Release the reserved time" }));
-    expect(await within(panel).findByRole("alert")).toHaveTextContent("Write at least a short sentence");
+    expect(within(panel).getByRole("button", { name: "Save" })).toBeDisabled(); // nothing chosen yet
+    fireEvent.click(within(panel).getByRole("radio", { name: "No service was delivered" }));
+    expect(within(panel).getByText("Releases the reserved authorization time.")).toBeInTheDocument();
+    fireEvent.click(within(panel).getByRole("button", { name: "Save" }));
+    expect(await within(panel).findByRole("alert")).toHaveTextContent("Note too short");
     expect(posts(calls, `/v1/shifts/${SHIFT}/reconcile`)).toHaveLength(0);
     fireEvent.change(within(panel).getByRole("textbox"), { target: { value: "Called the family and the caregiver; nobody went" } });
-    fireEvent.click(within(panel).getByRole("button", { name: "Release the reserved time" }));
+    fireEvent.click(within(panel).getByRole("button", { name: "Save" }));
     await waitFor(() => expect(posts(calls, `/v1/shifts/${SHIFT}/reconcile`)).toHaveLength(1));
     const sent = posts(calls, `/v1/shifts/${SHIFT}/reconcile`)[0]!;
     expect(sent.body).toMatchObject({ organizationId: ORG, outcome: "no_service_delivered", note: "Called the family and the caregiver; nobody went" });
@@ -98,9 +100,9 @@ describe("shifts that ended with no visit record", () => {
   it("'I cannot confirm yet' keeps it reserved and says so", async () => {
     const { calls } = renderAt("/schedule", ["shifts.manage", "visits.read"]);
     const panel = await screen.findByTestId("shifts-to-reconcile", {}, { timeout: 15000 });
-    fireEvent.click(within(panel).getByRole("button", { name: "I cannot confirm yet" }));
+    fireEvent.click(within(panel).getByRole("radio", { name: "I cannot confirm yet" }));
     fireEvent.change(within(panel).getByRole("textbox"), { target: { value: "Caregiver says she went; waiting for the family" } });
-    fireEvent.click(within(panel).getByRole("button", { name: "Keep it reserved" }));
+    fireEvent.click(within(panel).getByRole("button", { name: "Save" }));
     await waitFor(() => expect(posts(calls, `/v1/shifts/${SHIFT}/reconcile`)[0]?.body).toMatchObject({ outcome: "hold_service_may_have_occurred" }));
     expect(await screen.findByText(/The time stays reserved and counted until you decide/)).toBeInTheDocument();
   }, 30000);
@@ -158,12 +160,12 @@ describe("delivered but not verified (0071)", () => {
   it("offers a third outcome that sends delivered_unverified with a note and says nothing is billable", async () => {
     const { calls } = renderAt("/schedule", ["shifts.manage", "visits.read"]);
     const panel = await screen.findByTestId("shifts-to-reconcile", {}, { timeout: 15000 });
-    fireEvent.click(within(panel).getByRole("button", { name: "It was delivered, but there is no verified visit" }));
-    fireEvent.click(within(panel).getByRole("button", { name: "Record it as delivered, not verified" }));
-    expect(await within(panel).findByRole("alert")).toHaveTextContent("Write at least a short sentence");
+    fireEvent.click(within(panel).getByRole("radio", { name: "It was delivered, but there is no verified visit" }));
+    fireEvent.click(within(panel).getByRole("button", { name: "Save" }));
+    expect(await within(panel).findByRole("alert")).toHaveTextContent("Note too short");
     expect(posts(calls, `/v1/shifts/${SHIFT}/reconcile`)).toHaveLength(0);
     fireEvent.change(within(panel).getByRole("textbox"), { target: { value: "Family says she came; no clock-in" } });
-    fireEvent.click(within(panel).getByRole("button", { name: "Record it as delivered, not verified" }));
+    fireEvent.click(within(panel).getByRole("button", { name: "Save" }));
     await waitFor(() => expect(posts(calls, `/v1/shifts/${SHIFT}/reconcile`)[0]?.body).toMatchObject({ outcome: "delivered_unverified", note: "Family says she came; no clock-in" }));
     expect(await screen.findByText(/The time stays reserved and counted, and nothing is billable. No visit was created./)).toBeInTheDocument();
   }, 30000);
@@ -173,7 +175,7 @@ describe("delivered but not verified (0071)", () => {
     const note = await screen.findByTestId("awaiting-note", {}, { timeout: 15000 });
     expect(note).toHaveTextContent("Delivered — not verified");
     expect(note).toHaveTextContent("Still reserved and counted. Not billable, and no visit exists.");
-    expect(screen.queryByRole("button", { name: "It was delivered, but there is no verified visit" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("radio", { name: "It was delivered, but there is no verified visit" })).not.toBeInTheDocument();
   }, 30000);
 
   it("authorization changes: an unapproved visit says it was sent back to review; an approved visit says it was not changed", async () => {

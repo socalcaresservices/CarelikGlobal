@@ -250,10 +250,10 @@ export function VisitReviewPage() {
             {v.reviewReasons.map((r) => <li key={r}>{reasonText(r, v)}</li>)}
           </ul>
           {v.reviewReasons.includes("no_client_signature") && !v.decision ? (
-            <p className="text-xs text-slate-600">
-              The original visit record and its confirmation are never changed. A signature obtained later is kept as a
-              separate record and reviewed by a person (see “Get the missing signature” below).
-            </p>
+            <details className="text-xs text-slate-600">
+              <summary className="inline-flex min-h-[32px] cursor-pointer items-center text-og-accent underline">About the missing signature</summary>
+              <p>The original visit record and its confirmation are never changed. A signature obtained later is kept as a separate record and reviewed by a person (see “Get the missing signature” below).</p>
+            </details>
           ) : null}
 
           {v.decision ? (
@@ -284,16 +284,21 @@ export function VisitReviewPage() {
                     <input type="radio" name="decision" value={d} checked={choice === d} onChange={() => setChoice(d)} className="mt-1" />
                     <span>
                       <span className="font-medium text-slate-900">{decisionLabel(d, v)}</span>
-                      <span className="block text-xs text-slate-600">{decisionExplain(d, v)}</span>
                     </span>
                   </label>
                 ))}
               </fieldset>
+              <details className="text-xs text-slate-600">
+                <summary className="inline-flex min-h-[32px] cursor-pointer items-center text-og-accent underline">What each choice does</summary>
+                <ul className="mt-1 list-disc space-y-1 pl-5">
+                  {v.allowedDecisions.map((d) => <li key={d}>{decisionExplain(d, v)}</li>)}
+                </ul>
+              </details>
               <label className="block text-sm font-medium text-slate-700">
                 Reason (required, kept in the audit trail)
                 <textarea value={reason} onChange={(e) => setReason(e.target.value)} maxLength={1000} rows={2} className="mt-1 block w-full rounded-lg border border-slate-200 px-3 py-2 text-sm" />
               </label>
-              <Button type="submit" disabled={state.busy}>Record decision</Button>
+              <Button type="submit" disabled={state.busy} className="min-h-[44px]">Record decision</Button>
             </form>
           ) : v.recoveryState ? (
             <p className="text-sm text-slate-600">
@@ -323,14 +328,14 @@ export function VisitReviewPage() {
       {state.error ? <p role="alert" className="text-sm text-red-700">{state.error}</p> : null}
       {state.done ? <p role="status" className="text-sm text-emerald-800">{state.done}</p> : null}
 
-      <Card className="space-y-2 p-4 text-sm">
-        <h2 className="text-base font-semibold text-slate-950">Other actions</h2>
-        <p className="text-slate-700">
-          Wrong times? <Link className="font-medium underline" to={`/service-verification/reports?view=visits&correct=${encodeURIComponent(v.visitId)}`}>Correct visit</Link>{" "}
-          creates a corrected record and keeps the original; it is separate from review.
-        </p>
-        <p className="text-slate-700"><Link className="font-medium underline" to="/billing-review">Billing review</Link> is where billable minutes are approved.</p>
-      </Card>
+      <p className="flex flex-wrap gap-x-4 gap-y-1 text-sm text-slate-700">
+        <Link className="font-medium underline" to={`/service-verification/reports?view=visits&correct=${encodeURIComponent(v.visitId)}`}>Correct visit</Link>
+        <Link className="font-medium underline" to="/billing-review">Billing review</Link>
+      </p>
+      <details className="text-xs text-slate-600">
+        <summary className="inline-flex min-h-[32px] cursor-pointer items-center text-og-accent underline">What these links do</summary>
+        <p>Correct visit creates a corrected record and keeps the original; it is separate from review. Billing review is where billable minutes are approved.</p>
+      </details>
     </div>
   );
 }

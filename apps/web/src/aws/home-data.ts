@@ -48,11 +48,14 @@ export function shiftIssueLabel(issues: ActionIssue[] | undefined, shiftId: stri
   return hit ? { tone: SEVERITY_TONE[hit.severity] as "red" | "amber", label: REASON_SHORT[hit.reason] ?? "Blocked" } : null;
 }
 
-/** A section a person can fold away on this device. Alerts are never inside one: they stay visible whatever the saved choice. */
-export function useCollapsed(key: string): [boolean, () => void] {
+/**
+ * A section a person can fold away on this device. Alerts are never inside one: they stay visible whatever the saved choice.
+ * Without a saved choice the section starts folded (`startFolded`), so Home opens on what needs attention.
+ */
+export function useCollapsed(key: string, startFolded = false): [boolean, () => void] {
   const { activeOrganizationId } = useOrganization();
   const storageKey = `ogevia.home.collapsed.${activeOrganizationId ?? "none"}.${key}`;
-  const read = () => { try { return window.localStorage.getItem(storageKey) === "1"; } catch { return false; } };
+  const read = () => { try { const v = window.localStorage.getItem(storageKey); return v === null ? startFolded : v === "1"; } catch { return startFolded; } };
   const [collapsed, setCollapsed] = useState(read);
   useEffect(() => { setCollapsed(read()); }, [storageKey]); // eslint-disable-line react-hooks/exhaustive-deps
   return [collapsed, () => {

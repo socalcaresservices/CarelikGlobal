@@ -46,7 +46,7 @@ export function AuthorizationImpactsPage() {
   });
   async function acknowledge(i: AmendmentImpact) {
     if (busy) return;
-    if (note.trim().length < 5) return setError({ id: i.impactId, text: "Write what you did or decided." });
+    if (note.trim().length < 5) return setError({ id: i.impactId, text: "Note missing. Write what you did or decided." });
     setBusy(i.impactId);
     setError(null);
     try {
@@ -54,7 +54,7 @@ export function AuthorizationImpactsPage() {
       setOpen(null);
       setNote("");
     } catch (cause) {
-      setError({ id: i.impactId, text: message(cause, "Not saved.") });
+      setError({ id: i.impactId, text: message(cause, "Not saved. Try again.") });
     } finally {
       setBusy(null);
       await Promise.all(["authorization-impacts", "attention-overview"].map((k) => queryClient.invalidateQueries({ queryKey: [k] })));
@@ -63,7 +63,7 @@ export function AuthorizationImpactsPage() {
   if (!allowed) return <p className="text-sm text-og-sub">You do not have access to authorization changes.</p>;
   return (
     <div className="space-y-4">
-      <PageHeader title="Authorization changes to review" lead="When an authorization is lowered or its period is shortened, this lists the reserved shifts and visits it affected. The amendment itself changed, released and re-billed nothing." />
+      <PageHeader title="Authorization changes to review" lead="Shifts and visits affected by a lowered or shortened authorization. The amendment changed, released and re-billed nothing." />
       <label className="flex items-center gap-2 text-sm text-og-ink"><input type="checkbox" checked={showAll} onChange={(e) => setShowAll(e.target.checked)} /> Show items already acknowledged</label>
       {q.isLoading ? <p className="text-sm text-og-sub">Loading…</p> : null}
       {q.isError ? <p role="alert" className="text-sm text-red-700">{message(q.error, "Could not load.")}</p> : null}
@@ -80,7 +80,7 @@ export function AuthorizationImpactsPage() {
                 {!i.stillApplicable ? " · no longer applies (the shift was released or the visit changed)" : ""}
               </p>
               {i.visitId && i.visitBillingState === "approved_for_billing" ? <p className="text-amber-900" data-testid="approved-unchanged">This visit is already approved for billing. It was not changed. To review it, void the approval first.</p> : null}
-              {i.visitId && i.reviewOpen ? <p className="text-amber-900" data-testid="sent-back">This visit was not yet approved, so it was sent back to review (Needs Correction). It stays there until a person confirms it is still billable or corrects it.</p> : null}
+              {i.visitId && i.reviewOpen ? <p className="text-amber-900" data-testid="sent-back">This visit was sent back to review (Needs Correction) and stays there until a person confirms it is still billable or corrects it.</p> : null}
               {i.visitId && i.visitBillingState && !i.reviewOpen && i.visitBillingState !== "approved_for_billing" ? <p className="text-slate-700">Current state: {i.visitBillingState.replace(/_/g, " ")}.</p> : null}
               <p className="text-xs text-slate-600">Amended by {i.amendedByName ?? "an administrator"} on {formatDateOnly(i.createdAt.slice(0, 10))}</p>
               {i.acknowledgedAt ? <p className="text-emerald-800">Acknowledged by {i.acknowledgedByName ?? "someone"}: “{i.acknowledgementNote}”</p> : null}

@@ -132,7 +132,7 @@ describe("Continuity page", () => {
     vi.spyOn(URL, "revokeObjectURL").mockImplementation(() => {});
     const click = vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => {});
     const api = renderAt("/", "manager");
-    expect(await screen.findByText(/OUTAGE READINESS: Continuity pack last downloaded 30 hours ago by Synthetic Manager/)).toBeInTheDocument();
+    expect(await screen.findByText(/Continuity pack last downloaded 30 hours ago by Synthetic Manager/)).toBeInTheDocument();
     fireEvent.click(within(screen.getByRole("heading", { name: "Outage readiness" }).closest("section")!).getByRole("link", { name: "Continuity pack" }));
     fireEvent.click(await screen.findByRole("button", { name: "Download continuity pack" }));
     expect(await screen.findByText(/Downloaded: data as of .*; outage numbers OUT-000026 to OUT-000050\./)).toBeInTheDocument();

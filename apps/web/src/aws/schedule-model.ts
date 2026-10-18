@@ -18,7 +18,7 @@ export function stepAnchor(view: CalendarView, anchor: string, direction: 1 | -1
 }
 
 export const DISPLAY_LABEL: Record<string, string> = {
-  covered: "Covered", needs_coverage: "NEEDS COVERAGE", in_progress: "In progress", verification_pending: "Verification pending", in_review: "In review", partial: "Partial visit",
+  covered: "Covered", needs_coverage: "Needs coverage", in_progress: "In progress", verification_pending: "Verification pending", in_review: "In review", partial: "Partial visit",
   completed: "Completed", missed: "Missed: no visit record", not_delivered: "Not delivered", delivered_not_verified: "Delivered: not verified", awaiting_record: "Awaiting a decision",
   cancelled: "Cancelled", no_show: "No-show",
 };

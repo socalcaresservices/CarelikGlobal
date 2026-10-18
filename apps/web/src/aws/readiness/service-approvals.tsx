@@ -10,6 +10,8 @@ import { useServices } from "../client-admin";
 import { SERVICE_STATE_LABEL, actionError } from "./format";
 import { useGuardedMutate } from "./use-guarded";
 import { useServiceApprovals } from "./queries";
+import { ShortHelp } from "../help-text";
+import { SummarySection } from "../ui/summary-section";
 
 export interface ServiceApproval {
   approvalId: string;
@@ -52,7 +54,7 @@ function RevokeForm({ approval, onDone }: { approval: ServiceApproval; onDone: (
       <label className="block text-sm font-medium text-slate-800">Reason for revoking
         <textarea value={reason} onChange={(e) => { setReason(e.target.value); key.current = newIdempotencyKey(); }} rows={2} maxLength={500} className={inputClass} />
       </label>
-      <p className="text-xs text-slate-600">Past visits, booked shifts and billing approvals are not changed. Future work that is affected is flagged for review.</p>
+      <p className="text-xs text-slate-600">Past visits, shifts and billing approvals are unchanged. Affected future work is flagged for review.</p>
       {revoke.isError ? <p role="alert" className="text-sm text-red-700">{actionError(revoke.error, "The approval could not be revoked.")}</p> : null}
       <Button type="submit" variant="danger" disabled={revoke.isPending || reason.trim().length < 3}>{revoke.isPending ? "Revoking…" : "Revoke approval"}</Button>
     </form>
@@ -110,24 +112,25 @@ export function CaregiverServices({ caregiverRecordId, own = false }: { caregive
   const [message, setMessage] = useState<string | null>(null);
   const canApprove = !own && hasPermission("caregiver_services.approve");
   const refresh = () => void qc.invalidateQueries({ queryKey: ["caregiver-services"] });
+  const list = q.data ?? [];
+  const current = list.filter((a) => a.state === "approved").length;
   return (
-    <Card className="p-4">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <h2 className="text-base font-semibold text-slate-950">Approved services</h2>
-        {canApprove ? <Button type="button" onClick={() => setAdding((a) => !a)} aria-expanded={adding}>{adding ? "Close" : "Approve a service"}</Button> : null}
-      </div>
-      {message ? <p role="status" className="mt-2 text-sm text-emerald-900">{message}</p> : null}
-      {q.isLoading ? <p className="mt-2 text-sm text-slate-500">Loading…</p> : null}
-      {q.isError ? <p role="alert" className="mt-2 text-sm text-red-700">{actionError(q.error, "Approvals could not be loaded.")}</p> : null}
-      {q.data && q.data.length === 0 ? <p className="mt-2 text-sm text-slate-600">{own ? "You have no approved services yet." : "No approved services. A caregiver cannot be committed to a service until it is approved (when Service checks are on)."}</p> : null}
-      <ul className="mt-2 space-y-2">
-        {(q.data ?? []).map((a) => (
-          <li key={a.approvalId} className="rounded-lg border border-slate-200 p-3 text-sm">
+    <SummarySection title="Approved services" defaultOpen={own || (q.data !== undefined && current === 0)}
+      status={q.data ? <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${current > 0 ? STATE_BADGE.approved : STATE_BADGE.not_started}`}>{current > 0 ? `${current} approved` : "None approved"}</span> : undefined}
+      summary={q.data && list.length > current ? `${list.length} on record` : undefined}>
+      {canApprove ? <div className="mb-2 text-right"><Button type="button" onClick={() => setAdding((a) => !a)} aria-expanded={adding}>{adding ? "Close" : "Approve a service"}</Button></div> : null}
+      {message ? <p role="status" className="text-sm text-emerald-900">{message}</p> : null}
+      {q.isLoading ? <p className="text-sm text-slate-500">Loading…</p> : null}
+      {q.isError ? <p role="alert" className="text-sm text-red-700">{actionError(q.error, "Approvals could not be loaded.")}</p> : null}
+      {q.data && q.data.length === 0 ? <p className="text-sm text-slate-600">{own ? "You have no approved services yet." : "No approved services. With Service checks on, a caregiver cannot be committed to a service until it is approved."}</p> : null}
+      <ul className="mt-1 divide-y divide-slate-100">
+        {list.map((a) => (
+          <li key={a.approvalId} className="py-2 text-sm">
             <div className="flex flex-wrap items-center justify-between gap-2">
-              <p className="font-medium text-slate-900">{a.serviceName} <span className="font-normal text-slate-500">({a.serviceCode})</span></p>
+              <p className="font-medium text-slate-900">{a.serviceName} <span className="font-normal text-slate-600">({a.serviceCode})</span></p>
               <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${STATE_BADGE[a.state]}`}>{SERVICE_STATE_LABEL[a.state]}</span>
             </div>
-            <p className="mt-1 text-slate-700">From {formatDateOnly(a.effectiveFrom)}{a.effectiveUntil ? ` to ${formatDateOnly(a.effectiveUntil)}` : ""}{a.approvedByName ? ` · approved by ${a.approvedByName}` : ""}</p>
+            <p className="text-slate-700">From {formatDateOnly(a.effectiveFrom)}{a.effectiveUntil ? ` to ${formatDateOnly(a.effectiveUntil)}` : ""}{a.approvedByName ? ` · approved by ${a.approvedByName}` : ""}</p>
             {a.state === "revoked" ? <p className="text-slate-800">Revoked from {formatDateOnly(a.revokedEffectiveOn)}{a.revocationReason ? `: ${a.revocationReason}` : ""}. Visits before that date keep their approval.</p> : null}
             {canApprove && (a.state === "approved" || a.state === "not_started") ? (
               revoking === a.approvalId
@@ -138,7 +141,7 @@ export function CaregiverServices({ caregiverRecordId, own = false }: { caregive
         ))}
       </ul>
       {adding && caregiverRecordId ? <div className="mt-4 border-t border-slate-200 pt-4"><ApproveForm caregiverRecordId={caregiverRecordId} onDone={() => { setAdding(false); setMessage("Service approved."); refresh(); }} /></div> : null}
-    </Card>
+    </SummarySection>
   );
 }
 
@@ -193,7 +196,7 @@ export function ServicesReviewPage() {
       <Link to="/care-team" className="text-sm text-slate-700 underline">← Care Team</Link>
       <div>
         <h1 className="text-xl font-semibold text-slate-950">Review services</h1>
-        <p className="mt-1 text-sm text-slate-600">These caregiver and service pairs already have an assignment, a booked shift or past visits, but no current approval. Being on this list is not an approval. Nothing is approved unless you tick it.</p>
+        <ShortHelp className="mt-1 text-sm text-slate-600" details="These pairs already have an assignment, a booked shift or past visits, but no current approval.">Being on this list is not an approval. Nothing is approved unless you tick it.</ShortHelp>
       </div>
       {done ? <p role="status" className="text-sm font-medium text-emerald-900">{done}</p> : null}
       {q.isLoading ? <p className="text-sm text-slate-500">Loading…</p> : null}
@@ -201,7 +204,7 @@ export function ServicesReviewPage() {
       {q.data && q.data.length === 0 ? <p className="text-sm text-slate-600">Nothing to review. Every caregiver and service pair in use has a current approval.</p> : null}
       <ul className="space-y-2">
         {(q.data ?? []).map((p) => (
-          <li key={pairKey(p)} className="rounded-lg border border-slate-200 bg-og-card p-3">
+          <li key={pairKey(p)} className="rounded-lg border border-slate-200 bg-og-card px-3 py-1">
             <label className="flex min-h-[44px] items-start gap-3 text-sm">
               {canApprove ? <input type="checkbox" className="mt-1 h-5 w-5" checked={picked.has(pairKey(p))} onChange={() => toggle(p)} aria-label={`Select ${p.caregiverName} for ${p.serviceName}`} /> : null}
               <span>

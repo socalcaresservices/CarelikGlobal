@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Button } from "@carelik/ui";
 import { newIdempotencyKey } from "@/lib/sv-backend";
 import { useOrganization } from "@/providers/organization-provider";
@@ -27,12 +27,23 @@ interface Evaluation { startsAt: string; endsAt: string; ready: boolean; wouldBl
 
 const STATE_TEXT = { ok: "OK", blocked: "", would_block: "", overridden: "", not_checked: "Not checked" } as const;
 
+/** The overall caregiver-check result as one line: passed, passed with warnings, or the first blocking reason. */
+function checksOutcome(ev: Evaluation): { tone: "ok" | "warn" | "bad"; text: string } {
+  if (!ev.ready) {
+    const first = CHECK_GROUPS.map((g) => groupOutcome(ev.checks, g)).find((o) => o.state === "blocked")?.messages[0];
+    return { tone: "bad", text: `Cannot be assigned: ${first ?? "a required check failed."}` };
+  }
+  return ev.wouldBlockAfterActivation ? { tone: "warn", text: "Caregiver checks passed with warnings" } : { tone: "ok", text: "Caregiver checks passed" };
+}
+const OUTCOME_TONE = { ok: "text-emerald-900", warn: "text-amber-950", bad: "text-red-800" } as const;
+
 /**
  * The four separate checks before a caregiver is committed: Availability, Approved services, Documents, Conflicts.
- * Messages are the server's exact words. "Ready to assign" appears only when every check that is enforced passes,
- * and the parent is told (onReady) so it can keep a blocked caregiver from being assigned.
+ * One outcome line comes first; a failing or warning check is listed under it in the server's exact words, and the full list sits behind Details.
+ * `outcome` (a refusal from the server) replaces the headline; the caregiver-check result then becomes supporting text. `note` is a short fixed line under the outcome.
+ * The parent is told (onReady) so it can keep a blocked caregiver from being assigned.
  */
-export function AssignmentChecks({ input, onReady }: { input: AssignmentCheckInput | null; onReady?: (ready: boolean | null) => void }) {
+export function AssignmentChecks({ input, onReady, outcome, note }: { input: AssignmentCheckInput | null; onReady?: (ready: boolean | null) => void; outcome?: ReactNode; note?: string }) {
   const api = useAwsApi();
   const qc = useQueryClient();
   const { activeOrganizationId, hasPermission } = useOrganization();
@@ -61,27 +72,34 @@ export function AssignmentChecks({ input, onReady }: { input: AssignmentCheckInp
   const ev = q.data;
   const availability = groupOutcome(ev.checks, CHECK_GROUPS[0]!);
   const canOverride = availability.state === "blocked" && !!input?.clientId && hasPermission("availability.override");
+  const result = checksOutcome(ev);
+  const rows = CHECK_GROUPS.map((g) => ({ g, o: groupOutcome(ev.checks, g) }));
+  const shown = rows.filter(({ o }) => o.state !== "ok" && o.state !== "not_checked");
+  const row = ({ g, o }: (typeof rows)[number]) => {
+    const tone = o.state === "blocked" ? "text-red-800" : o.state === "would_block" ? "text-amber-900" : "text-slate-800";
+    return (
+      <li key={g.key} className="text-sm">
+        <span className="font-medium text-slate-900">{g.title}: </span>
+        {o.state === "ok" || o.state === "not_checked" ? <span className={tone}>{STATE_TEXT[o.state]}</span> : (
+          <span className={tone}>
+            {o.messages.join(" ")}
+            {o.state === "would_block" ? <span className="block text-xs text-slate-600">{g.key === "documents" ? "Report-only: this does NOT meet the requirement for current, verified CPR and TB." : "Not blocking yet."}</span> : null}
+            {o.state === "overridden" ? <span className="block text-xs text-slate-600">Approved by an administrator for this assignment only.</span> : null}
+          </span>
+        )}
+      </li>
+    );
+  };
   return (
-    <section aria-label="Assignment checks" className="space-y-2 rounded-lg border border-slate-200 bg-og-card p-3">
-      <ul className="space-y-2">
-        {CHECK_GROUPS.map((g) => {
-          const o = groupOutcome(ev.checks, g);
-          const tone = o.state === "blocked" ? "text-red-800" : o.state === "would_block" ? "text-amber-900" : "text-slate-800";
-          return (
-            <li key={g.key} className="text-sm">
-              <span className="font-medium text-slate-900">{g.title}: </span>
-              {o.state === "ok" || o.state === "not_checked" ? <span className={tone}>{STATE_TEXT[o.state]}</span> : (
-                <span className={tone}>
-                  {o.messages.join(" ")}
-                  {o.state === "would_block" ? <span className="block text-xs text-slate-600">{g.key === "documents" ? "Report-only: this does NOT meet the requirement for current, verified CPR and TB. It will block assignment and new visits once readiness checks are activated." : `Not blocking yet. This will be required after readiness checks are activated${g.key === "service" ? " and Service checks are On" : ""}.`}</span> : null}
-                  {o.state === "overridden" ? <span className="block text-xs text-slate-600">Approved by an administrator for this assignment only.</span> : null}
-                </span>
-              )}
-            </li>
-          );
-        })}
-      </ul>
-      {ev.ready ? <p className={`text-sm font-semibold ${ev.wouldBlockAfterActivation ? "text-amber-950" : "text-emerald-900"}`} role="status">{ev.wouldBlockAfterActivation ? "Assignment allowed with unenforced checks. Review the warnings above." : "Ready to assign"}</p> : <p className="text-sm font-semibold text-red-800" role="status">Cannot be assigned yet</p>}
+    <section aria-label="Assignment checks" className="space-y-1 rounded-lg border border-slate-200 bg-og-card p-3">
+      {outcome ? <div role="alert" data-testid="assignment-outcome" className="text-sm font-semibold text-red-800">{outcome}</div> : <p role="status" data-testid="assignment-outcome" className={`text-sm font-semibold ${OUTCOME_TONE[result.tone]}`}>{result.text}</p>}
+      {outcome ? <p className={`text-xs ${OUTCOME_TONE[result.tone]}`}>{result.text}</p> : note ? <p className="text-xs text-slate-600">{note}</p> : null}
+      {shown.length > 0 ? <ul className="space-y-1">{shown.map(row)}</ul> : null}
+      <details>
+        <summary className="inline-flex min-h-[32px] cursor-pointer items-center text-sm text-og-accent underline">Details</summary>
+        <ul className="mt-1 space-y-1">{rows.filter((r) => !shown.includes(r)).map(row)}</ul>
+        {ev.wouldBlockAfterActivation ? <p className="mt-1 text-xs text-slate-600">Warnings do not block today. They will block assignment and new visits once readiness checks are activated{rows.some((r) => r.g.key === "service" && r.o.state === "would_block") ? " and Service checks are On" : ""}.</p> : null}
+      </details>
       {canOverride ? (
         overriding ? (
           <div role="group" className="space-y-2" aria-label="Override availability">

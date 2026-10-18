@@ -113,3 +113,10 @@ export function documentStatusLabel(d: StaffDocument): { label: string; tone: "r
     case "requested": return { label: n !== null && n >= 0 && d.dueOn ? (n === 0 ? "Requested, due today" : `Requested, due in ${plural(n, "day")}`) : "Requested", tone: "neutral" };
   }
 }
+
+/** The visible wording when an upload fails: what failed and how to fix it, and that nothing was saved. Display only; the request is unchanged. */
+export function uploadFailureMessage(cause: unknown): string {
+  const raw = cause instanceof Error ? cause.message.trim() : "";
+  if (!raw || /failed to fetch|networkerror|load failed|network request failed/i.test(raw)) return "Upload failed: no connection. Nothing was saved; try again.";
+  return `${/[.!?]$/.test(raw) ? raw : `${raw}.`} Nothing was saved.`;
+}

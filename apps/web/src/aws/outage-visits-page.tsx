@@ -171,7 +171,6 @@ export function OutageVisitsPage() {
       <h1 className="text-xl font-semibold">Outage records</h1>
       <p className="text-sm text-slate-700">Enter each paper outage record once, after Ogevia is back. <Link to="/continuity" className="underline">Continuity pack</Link></p>
       {done ? <p role="status" className="rounded-lg bg-emerald-50 p-3 text-sm text-emerald-900">{done}</p> : null}
-      <Card className="p-4"><h2 className="mb-2 text-base font-semibold">Enter a record</h2><EntryForm onDone={setDone} /></Card>
       <Card className="p-4">
         <h2 className="text-base font-semibold">Reconciliation</h2>
         {recon.isLoading ? <p className="text-sm text-slate-500">Loading…</p> : null}
@@ -198,7 +197,11 @@ export function OutageVisitsPage() {
           </>
         ) : null}
       </Card>
-      <Card className="p-4"><h2 className="mb-2 text-base font-semibold">Close a number that was not used</h2><NotUsedForm onDone={setDone} /></Card>
+      <Card className="p-4"><h2 className="mb-2 text-base font-semibold">Enter a record</h2><EntryForm onDone={setDone} /></Card>
+      <details className="rounded-xl border border-slate-200 bg-og-card p-4">
+        <summary className="min-h-[32px] cursor-pointer text-base font-semibold">Close a number that was not used</summary>
+        <div className="mt-2"><NotUsedForm onDone={setDone} /></div>
+      </details>
     </div>
   );
 }

@@ -113,10 +113,10 @@ describe("document status rules", () => {
 });
 
 describe("Documents & compliance page", () => {
-  it("each card keeps the name, caregiver, one status label, View and Replace; the rest is behind Details", async () => {
+  it("each row keeps the name, caregiver, one status label, View and Replace; the rest is behind Details", async () => {
     renderApp("/documents", { role: "manager" });
     expect(await screen.findByRole("heading", { name: "Documents & compliance" })).toBeInTheDocument();
-    const card = (await screen.findByText("TB test", { selector: "p" })).closest("li")!;
+    const card = (await screen.findByText("TB test", { selector: "p" })).closest("tbody")!;
     expect(within(card).getByText("Pilot Caregiver A")).toBeInTheDocument();
     expect(within(card).getByText("Expires in 12 days")).toBeInTheDocument();
     expect(within(card).getByRole("button", { name: "View" })).toBeInTheDocument();
@@ -139,7 +139,7 @@ describe("Documents & compliance page", () => {
 
   it("the Details control is a native keyboard-operable summary, not hover", async () => {
     renderApp("/documents", { role: "manager" });
-    const card = (await screen.findByText("TB test", { selector: "p" })).closest("li")!;
+    const card = (await screen.findByText("TB test", { selector: "p" })).closest("tbody")!;
     const summary = card.querySelector("summary")!;
     expect(summary.tagName).toBe("SUMMARY");
     expect(summary.className).toMatch(/min-h-\[44px\]/);
@@ -153,7 +153,7 @@ describe("Documents & compliance page", () => {
     expect(within(group).getByRole("button", { name: /^All 5$/ })).toHaveAttribute("aria-pressed", "true");
     expect(within(group).queryByRole("button", { name: /Needs action/ })).toBeNull();
     fireEvent.click(within(group).getByRole("button", { name: /^Overdue 2$/ }));
-    expect(screen.getAllByRole("listitem").filter((li) => li.tagName === "LI" && li.querySelector("p.font-semibold")).map((li) => li.querySelector("p.font-semibold")!.textContent)).toEqual(["First aid", "Driver license"]);
+    expect([...document.querySelectorAll("tbody p.font-semibold")].map((p) => p.textContent)).toEqual(["First aid", "Driver license"]);
     fireEvent.click(within(group).getByRole("button", { name: /^Due soon 1$/ }));
     expect(screen.queryByText("First aid", { selector: "p" })).toBeNull();
     expect(screen.getByText("TB test", { selector: "p" })).toBeInTheDocument();
@@ -163,7 +163,7 @@ describe("Documents & compliance page", () => {
 
   it("blocking compliance is never hidden: an overdue card shows a red status with a word and symbol, and the strip links to the holds", async () => {
     renderApp("/documents", { role: "manager" });
-    const card = (await screen.findByText("Driver license", { selector: "p" })).closest("li")!;
+    const card = (await screen.findByText("Driver license", { selector: "p" })).closest("tbody")!;
     const chip = within(card).getByText("Overdue 5 days").closest("span")!;
     expect(chip.className).toMatch(/red/);
     expect(chip).toHaveTextContent("●");
@@ -197,6 +197,8 @@ describe("financial section", () => {
     expect(within(msg).getByRole("link", { name: "Review authorizations" }).getAttribute("href")).toMatch(/^\/authorizations\/rates\?month=\d{4}-\d{2}$/);
     expect(screen.queryByText("Unavailable")).toBeNull();
     expect(screen.queryByText(/^\$0$/)).toBeNull();
+    const show = screen.queryByRole("button", { name: "Show the figures" }); // the secondary figures start folded; the warning above does not
+    if (show) fireEvent.click(show);
     expect(screen.getByText("Nothing approved yet")).toBeInTheDocument();
   });
 
@@ -270,6 +272,9 @@ describe("charts follow the preference only where honest, and keep data, labels,
   const rows = [ROW, { ...ROW, serviceId: "s2", serviceName: "Personal Care", serviceCode: "PC", workedMinutes: 600 }];
   const kinds = async (chartType: string) => {
     renderApp("/", { role: "manager", rows, appearance: { mine: { background: null, accent: null, density: null, textSize: null, chartType } } });
+    await screen.findByTestId("hours-summary");
+    const show = screen.queryByRole("button", { name: "Show the hours" }); // the hours section starts folded; a choice saved by an earlier test stays
+    if (show) fireEvent.click(show);
     return screen.findByLabelText("Worked hours by service");
   };
 
@@ -318,7 +323,8 @@ function inventory(root: HTMLElement) {
 describe("switching background or layout changes presentation only", () => {
   it("Documents: with a typed review reason, a typed due date and a chosen filter, all 8 background and layout combinations keep every word, control, alert, symbol and every unsaved character, on the same elements", async () => {
     const { changeFromElsewhere } = renderApp("/documents", { role: "manager" });
-    const card = (await screen.findByText("Training", { selector: "p" })).closest("li")!;
+    const card = (await screen.findByText("Training", { selector: "p" })).closest("tbody")!;
+    fireEvent.click(within(card).getByRole("button", { name: "Review" }));
     const reason = within(card).getByLabelText(/Reason \(required to reject\)/) as HTMLInputElement;
     fireEvent.change(reason, { target: { value: "The scan is cut off at the right edge" } });
     const due = screen.getByLabelText(/Due date \(optional\)/) as HTMLInputElement;
@@ -338,7 +344,7 @@ describe("switching background or layout changes presentation only", () => {
       expect(after.alerts, `${bg}/${layout} alerts`).toEqual(before.alerts);
       expect(after.marks, `${bg}/${layout} symbols`).toEqual(before.marks);
       // the very same elements, still holding what was typed
-      expect(within(screen.getByText("Training", { selector: "p" }).closest("li")!).getByLabelText(/Reason \(required to reject\)/)).toBe(reason);
+      expect(within(screen.getByText("Training", { selector: "p" }).closest("tbody")!).getByLabelText(/Reason \(required to reject\)/)).toBe(reason);
       expect(screen.getByLabelText(/Due date \(optional\)/)).toBe(due);
       expect(reason.value).toBe("The scan is cut off at the right edge");
       expect(due.value).toBe("2026-11-02");

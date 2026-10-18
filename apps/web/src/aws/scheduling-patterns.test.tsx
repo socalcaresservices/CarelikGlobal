@@ -154,7 +154,8 @@ describe("Scheduling page", () => {
 
   it("offers a make-up on a cancelled shift and reports what is still owed", async () => {
     const api = renderAt("/schedule");
-    const row = (await screen.findByText(/Synthetic Caregiver One/)).closest("li")!;
+    const row = (await screen.findByText(/Synthetic Caregiver One/)).closest("tbody")!;
+    fireEvent.click(within(row).getByRole("button", { name: "More actions" }));
     fireEvent.click(within(row).getByRole("button", { name: "Schedule make-up" }));
     fireEvent.click(within(row).getAllByRole("button", { name: "Schedule make-up" }).at(-1)!);
     expect(await screen.findByText(/Make-up scheduled: 1 hr reserved.*1 hr of the missed time is still not made up/s)).toBeInTheDocument();
@@ -227,7 +228,7 @@ describe("Scheduling page", () => {
       expect(within(panel).getByRole("note")).toHaveTextContent("Would be refused now: Over the daily hour limit.");
       fireEvent.click(within(panel).getByRole("button", { name: "Decline" }));
       fireEvent.click(within(panel).getByRole("button", { name: "Decline request" }));
-      expect(await within(panel).findByRole("alert")).toHaveTextContent("Give the reason for declining.");
+      expect(await within(panel).findByRole("alert")).toHaveTextContent("Reason missing. Say why you are declining.");
       fireEvent.change(within(panel).getByLabelText("Reason for declining"), { target: { value: "Synthetic: someone closer" } });
       fireEvent.click(within(panel).getByRole("button", { name: "Decline request" }));
       expect(await screen.findByText("Request declined. The shift is still open.")).toBeInTheDocument();

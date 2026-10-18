@@ -16,7 +16,7 @@ const weekday = (iso: string) => new Intl.DateTimeFormat("en-US", { weekday: "lo
 
 function Loading({ q }: { q: { isLoading: boolean; isError: boolean; error: unknown } }) {
   if (q.isLoading) return <p className="text-sm text-og-sub">Loading…</p>;
-  if (q.isError) return <p role="alert" className="text-sm text-red-700">{(q.error as Error).message}</p>;
+  if (q.isError) return <p role="alert" className="text-sm text-red-700">This list could not be loaded. Reload the page to try again.</p>;
   return null;
 }
 
@@ -26,22 +26,23 @@ function UrgentRow({ item, asOf }: { item: UrgentItem; asOf: number }) {
   const what = item.kind === "shift" ? "Shift" : "Visit";
   const who = [item.clientCode, item.serviceCode].filter(Boolean).join(" · ");
   const compliance = item.reasons.some((r) => COMPLIANCE_REASONS.has(r));
+  const link = "inline-flex min-h-[44px] items-center font-semibold text-og-link underline md:min-h-[32px]";
   return (
-    <li className={`rounded-og border border-og-line border-l-4 bg-og-card p-3 ${tone === "red" ? "border-l-red-700" : "border-l-amber-600"}`}>
-      <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+    <li className={`rounded-og border border-og-line border-l-4 bg-og-card px-3 py-2 ${tone === "red" ? "border-l-red-700" : "border-l-amber-600"}`}>
+      <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
         <StatusChip tone={tone}>{t.word}</StatusChip>
         <p className="text-sm font-semibold text-og-ink">{what}{who ? ` · ${who}` : ""}</p>
         <p className="text-sm text-og-sub">{item.inProgress ? "Running now" : `${formatNumericDate(item.startsAt)} ${formatClockTime(item.startsAt)}`}</p>
       </div>
-      <ul className="mt-1.5 list-disc space-y-0.5 pl-5 text-sm text-og-ink">
-        {item.reasons.map((r) => <li key={r}>{REASON_LABEL[r] ?? r}</li>)}
-      </ul>
-      <p className="mt-1.5 flex flex-wrap gap-x-4 text-sm">
-        <Link className="inline-flex min-h-[44px] items-center font-semibold text-og-link underline md:min-h-[32px]" to={item.kind === "visit" ? `/visits/${item.id}` : "/schedule"}>
+      <p className="mt-0.5 text-sm text-og-ink">
+        {item.reasons.map((r, n) => <span key={r}>{n > 0 ? " · " : ""}<span>{REASON_LABEL[r] ?? r}</span></span>)}
+      </p>
+      <p className="flex flex-wrap gap-x-4 text-sm">
+        <Link className={link} to={item.kind === "visit" ? `/visits/${item.id}` : "/schedule"}>
           {item.kind === "visit" ? "Open visit" : "Open schedule"}
         </Link>
         {compliance ? (
-          <Link className="inline-flex min-h-[44px] items-center font-semibold text-og-link underline md:min-h-[32px]" to={item.caregiverRecordId ? `/care-team/${item.caregiverRecordId}` : "/compliance"}>
+          <Link className={link} to={item.caregiverRecordId ? `/care-team/${item.caregiverRecordId}` : "/compliance"}>
             Review compliance record
           </Link>
         ) : null}
@@ -93,7 +94,7 @@ export function UpcomingStaffingPage() {
   const u = q.data?.upcoming;
   return (
     <div className="space-y-4">
-      <PageHeader title="Upcoming staffing" lead={`Shifts more than ${q.data?.urgentWindowHours ?? URGENT_WINDOW_HOURS} hours away that still need a caregiver, or whose caregiver is blocked. Shifts ${q.data?.urgentWindowHours ?? URGENT_WINDOW_HOURS} hours away or less are under Needs attention now.`}
+      <PageHeader title="Upcoming staffing" lead={`Shifts more than ${q.data?.urgentWindowHours ?? URGENT_WINDOW_HOURS} hours away that need a caregiver or have a blocked one.`}
         action={<Link className="inline-flex min-h-[44px] items-center rounded-lg bg-og-accent px-4 text-sm font-semibold text-og-on-accent hover:opacity-90 md:min-h-[40px]" to="/schedule">Open schedule</Link>} />
       <Loading q={q} />
       {q.data?.pickups && q.data.pickups.count > 0 ? (
@@ -136,6 +137,9 @@ export function UpcomingStaffingPage() {
           </div>
         )
       ) : null}
+      <Disclosure summary="About this list">
+        <p>Shifts {q.data?.urgentWindowHours ?? URGENT_WINDOW_HOURS} hours away or less are under Needs attention now.</p>
+      </Disclosure>
     </div>
   );
 }

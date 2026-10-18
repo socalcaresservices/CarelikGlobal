@@ -174,7 +174,7 @@ describe("confirmation choices and attestation (G05, G06)", () => {
   it("offers Verbal only; it needs the person's name and the attestation, and is sent as method verbal with no image", async () => {
     const api = renderAws("/", "caregiver", { scheduled: true });
     await startAndEnd(api);
-    fireEvent.click(screen.getByRole("button", { name: /Verbal only/ }));
+    fireEvent.click(screen.getByRole("radio", { name: /Verbal only/ }));
     expect(screen.queryByLabelText("Client or guardian signature")).not.toBeInTheDocument();
     const confirm = screen.getByRole("button", { name: /Confirm visit/ });
     expect(confirm).toBeDisabled();

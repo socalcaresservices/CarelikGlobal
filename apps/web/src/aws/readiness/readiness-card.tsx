@@ -8,6 +8,7 @@ import { useAwsApi } from "../aws-workspace";
 import { useReadiness } from "./queries";
 import { actionError } from "./format";
 import { ShortHelp } from "../help-text";
+import { SummarySection } from "../ui/summary-section";
 
 
 export interface ReadinessStatus {
@@ -108,14 +109,14 @@ const TONE: Record<Tone, string> = {
 /** One readiness issue: what it is, how many are affected, whether it is active, and the one next step. Detail sits in "Details". */
 function ReadinessRow({ issue, affected, status, action, help }: { issue: string; affected: string; status: { label: string; tone: Tone }; action: React.ReactNode; help?: React.ReactNode }) {
   return (
-    <tr className="border-t border-slate-200 align-top">
-      <th scope="row" className="py-2 pr-3 font-medium text-slate-900">
+    <tr className="border-t border-slate-200 align-top max-md:flex max-md:flex-wrap max-md:items-center max-md:gap-x-3 max-md:py-1.5">
+      <th scope="row" className="py-1.5 pr-3 font-medium text-slate-900 max-md:w-full max-md:pb-0">
         {issue}
         {help ? <details className="mt-1 text-xs font-normal text-slate-700"><summary className="cursor-pointer text-og-accent underline">Details</summary><div className="mt-1">{help}</div></details> : null}
       </th>
-      <td className="py-2 pr-3 text-slate-900">{affected}</td>
-      <td className="py-2 pr-3"><span className={`whitespace-nowrap rounded-full px-2 py-0.5 text-xs font-semibold ${TONE[status.tone]}`}>{status.label}</span></td>
-      <td className="py-2">{action}</td>
+      <td className="py-2 pr-3 text-slate-900 max-md:py-1">{affected}</td>
+      <td className="py-2 pr-3 max-md:py-1"><span className={`whitespace-nowrap rounded-full px-2 py-0.5 text-xs font-semibold ${TONE[status.tone]}`}>{status.label}</span></td>
+      <td className="py-2 max-md:py-0">{action}</td>
     </tr>
   );
 }
@@ -148,8 +149,10 @@ export function ReadinessCard() {
   const s = q.data;
   const sc = s.serviceChecks;
   return (
-    <Card className="space-y-4 p-4" aria-label="Caregiver readiness">
-      <h2 className="text-base font-semibold text-slate-950">Caregiver readiness</h2>
+    <SummarySection title="Caregiver readiness" defaultOpen={!s.setupComplete || s.affectedShiftsCount > 0}
+      status={<span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${s.enforcementActive ? "bg-emerald-100 text-emerald-950" : "bg-amber-100 text-amber-950"}`}>{s.enforcementActive ? "Checks active" : "Report only"}</span>}
+      summary={!s.setupComplete ? `Setup incomplete: ${plural(s.setupGaps.length, "rule", "rules")}` : `${s.caregivers.withDocumentGaps} of ${plural(s.caregivers.readyOrActive, "caregiver", "caregivers")} with document gaps`}>
+    <div className="space-y-4">
 
       <section aria-label="Service checks" className="space-y-1">
         <p className={`text-sm font-semibold ${sc.state === "Off" ? "text-amber-950" : "text-slate-900"}`}>{sc.state === "Off" ? sc.offHeadline : `${sc.label}: ${sc.state}`}</p>
@@ -166,10 +169,10 @@ export function ReadinessCard() {
         {!s.enforcementActive ? (
           <p className="text-sm text-slate-800">Nothing is blocked yet. Caregivers can still be assigned and can still start visits.</p>
         ) : null}
-        <div className="overflow-x-auto">
-          <table className="w-full min-w-[34rem] text-left text-sm">
+        <div>
+          <table className="w-full text-left text-sm max-md:block">
             <caption className="sr-only">Readiness by issue: affected count, status and next action</caption>
-            <thead>
+            <thead className="max-md:hidden">
               <tr className="text-xs uppercase tracking-wide text-slate-600">
                 <th scope="col" className="py-2 pr-3 font-semibold">Issue</th>
                 <th scope="col" className="py-2 pr-3 font-semibold">Affected</th>
@@ -177,7 +180,7 @@ export function ReadinessCard() {
                 <th scope="col" className="py-2 font-semibold">Next action</th>
               </tr>
             </thead>
-            <tbody>
+            <tbody className="max-md:block">
               <ReadinessRow
                 issue="Document setup (CPR and TB rules)"
                 affected={s.setupComplete ? "None" : plural(s.setupGaps.length, "rule", "rules")}
@@ -249,6 +252,7 @@ export function ReadinessCard() {
           {!s.enforcementActive && !s.setupComplete ? <p className="text-xs text-slate-600">Finish the required documents setup before activating.</p> : null}
         </section>
       ) : null}
-    </Card>
+    </div>
+    </SummarySection>
   );
 }

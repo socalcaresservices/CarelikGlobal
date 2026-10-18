@@ -9,7 +9,8 @@ import { formatDateOnly } from "@/lib/service-verification";
 import { newIdempotencyKey } from "@/lib/sv-backend";
 import { useOrganization } from "@/providers/organization-provider";
 import { useAwsApi } from "./aws-workspace";
-import { CAREGIVER_STATUS_BADGE, CAREGIVER_STATUS_LABEL, PIPELINE_STAGES, type CaregiverStatus } from "./care-team-admin";
+import { CAREGIVER_STATUS_LABEL, PIPELINE_STAGES, type CaregiverStatus } from "./care-team-admin";
+import { SummarySection } from "./ui/summary-section";
 
 const inputClass = "mt-1 block w-full rounded-lg border border-slate-200 px-3 py-2 text-base";
 const message = (cause: unknown, fallback: string) => (cause instanceof Error ? cause.message : fallback);
@@ -95,12 +96,12 @@ function ItemRow({ caregiverRecordId, item, canManage }: { caregiverRecordId: st
         {item.note ? ` · ${item.note}` : ""}
       </p>
       {item.category === "document" ? (
-        <p className="mt-1 text-xs text-slate-600">Checked from the caregiver&apos;s uploaded and approved documents. <Link className="underline" to="/documents">Open Documents</Link></p>
+        <p className="mt-1 text-xs text-slate-600">Checked from approved documents. <Link className="inline-flex min-h-[44px] items-center underline md:min-h-[32px]" to="/documents">Open Documents</Link></p>
       ) : canManage ? (
         <div className="mt-2 flex flex-wrap gap-2">
-          {!satisfied ? <button type="button" className="inline-flex min-h-[40px] items-center rounded-lg border border-slate-300 bg-og-card px-3 text-sm font-medium" onClick={() => setOpen(open === "complete" ? null : "complete")}>{item.state === "expired" ? "Record renewal" : "Mark done"}</button> : null}
-          {!satisfied && item.category !== "clearance" ? <button type="button" className="inline-flex min-h-[40px] items-center rounded-lg border border-slate-300 bg-og-card px-3 text-sm font-medium" onClick={() => setOpen(open === "waive" ? null : "waive")}>Waive</button> : null}
-          {satisfied ? <button type="button" className="inline-flex min-h-[40px] items-center rounded-lg border border-slate-300 bg-og-card px-3 text-sm font-medium" onClick={() => setOpen(open === "reopen" ? null : "reopen")}>Reopen</button> : null}
+          {!satisfied ? <button type="button" className="inline-flex min-h-[44px] items-center rounded-lg border border-slate-300 bg-og-card px-3 text-sm font-medium md:min-h-[36px]" onClick={() => setOpen(open === "complete" ? null : "complete")}>{item.state === "expired" ? "Record renewal" : "Mark done"}</button> : null}
+          {!satisfied && item.category !== "clearance" ? <button type="button" className="inline-flex min-h-[44px] items-center rounded-lg border border-slate-300 bg-og-card px-3 text-sm font-medium md:min-h-[36px]" onClick={() => setOpen(open === "waive" ? null : "waive")}>Waive</button> : null}
+          {satisfied ? <button type="button" className="inline-flex min-h-[44px] items-center rounded-lg border border-slate-300 bg-og-card px-3 text-sm font-medium md:min-h-[36px]" onClick={() => setOpen(open === "reopen" ? null : "reopen")}>Reopen</button> : null}
         </div>
       ) : null}
       {open ? (
@@ -147,26 +148,19 @@ export function OnboardingCard({ caregiverRecordId, status, canManage }: { careg
     }
   }
   return (
-    <Card className="p-4">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <h2 className="text-base font-semibold text-slate-950">Onboarding</h2>
-        {o.onboardingRequired ? <ProgressBar done={o.done} total={o.total} /> : null}
-      </div>
+    <SummarySection title="Onboarding" defaultOpen={o.onboardingRequired && !o.complete}
+      status={o.onboardingRequired ? <ProgressBar done={o.done} total={o.total} /> : undefined}
+      summary={o.onboardingRequired ? (o.complete ? "Every required item is satisfied." : `Cannot be Approved or assigned yet. Still outstanding: ${outstanding.map((i) => i.label).join(", ")}.`) : "Not required for this caregiver"}>
       {!o.onboardingRequired ? (
-        <div className="mt-2 text-sm text-slate-700">
-          <p>This caregiver was added before the onboarding checklist, so it is not required of them. Nothing about their scheduling changes.</p>
+        <div className="text-sm text-slate-700">
+          <p>Added before the onboarding checklist, so it is not required. Their scheduling is unchanged.</p>
           {canManage && status !== "inactive" ? <Button className="mt-2" type="button" variant="secondary" disabled={state.busy} onClick={() => void start()}>Start the checklist</Button> : null}
         </div>
       ) : (
-        <>
-          <p className={`mt-1 text-sm ${o.complete ? "text-emerald-800" : "text-amber-900"}`}>
-            {o.complete ? "Every required item is satisfied." : `Cannot be Approved or assigned yet. Still outstanding: ${outstanding.map((i) => i.label).join(", ")}.`}
-          </p>
-          <ul className="mt-3 space-y-2" aria-label="Onboarding checklist">{o.items.map((i) => <ItemRow key={i.key} caregiverRecordId={caregiverRecordId} item={i} canManage={canManage} />)}</ul>
-        </>
+        <ul className="space-y-2" aria-label="Onboarding checklist">{o.items.map((i) => <ItemRow key={i.key} caregiverRecordId={caregiverRecordId} item={i} canManage={canManage} />)}</ul>
       )}
       {state.error ? <p role="alert" className="mt-2 text-sm text-red-700">{state.error}</p> : null}
-    </Card>
+    </SummarySection>
   );
 }
 
@@ -223,19 +217,18 @@ function PersonCard({ r, canManage }: { r: OverviewRow; canManage: boolean }) {
     }
   }
   return (
-    <li className="rounded-xl border border-slate-200 bg-og-card p-3 text-sm">
+    <li className="rounded-xl border border-slate-200 bg-og-card px-3 py-2 text-sm">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <Link className="font-semibold text-slate-950 underline" to={`/care-team/${r.caregiverRecordId}`}>{r.caregiverName}</Link>
-        <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${CAREGIVER_STATUS_BADGE[r.status]}`}>{CAREGIVER_STATUS_LABEL[r.status]}</span>
+        <Link className="inline-flex min-h-[44px] items-center font-semibold text-slate-950 underline md:min-h-[32px]" to={`/care-team/${r.caregiverRecordId}`}>{r.caregiverName}</Link>
+        <ProgressBar done={r.done} total={r.total} />
       </div>
-      <div className="mt-1"><ProgressBar done={r.done} total={r.total} /></div>
       {r.outstanding.length > 0 ? (
         <p className="mt-1 text-amber-900">Outstanding: {r.outstanding.map((o) => (o.state === "expired" ? `${o.label} (expired)` : o.label)).join(", ")}</p>
       ) : <p className="mt-1 text-emerald-800">Every required item is satisfied.</p>}
       {r.nextExpiry ? <p className="text-xs text-slate-600">Next expiry {formatDateOnly(r.nextExpiry)}</p> : null}
       {canManage && next ? (
         <div className="mt-2">
-          <button type="button" disabled={state.busy} onClick={() => void move()} className="inline-flex min-h-[40px] items-center rounded-lg border border-slate-300 bg-og-card px-3 text-sm font-medium hover:bg-slate-50">
+          <button type="button" disabled={state.busy} onClick={() => void move()} className="inline-flex min-h-[44px] items-center rounded-lg border border-slate-300 bg-og-card px-3 text-sm font-medium md:min-h-[36px] hover:bg-slate-50">
             Move to {CAREGIVER_STATUS_LABEL[next]}
           </button>
         </div>
@@ -263,13 +256,13 @@ export function RecruitingPage() {
       <div>
         <Link to="/care-team" className="text-sm text-slate-700 underline">← Caregivers</Link>
         <h1 className="mt-1 text-xl font-semibold text-slate-950">Recruiting</h1>
-        <p className="mt-1 text-sm text-slate-600">Applicants through onboarding. Nobody can be Approved, assigned or scheduled until every required item is satisfied.</p>
+        <p className="mt-1 text-sm text-slate-700">Nobody can be Approved, assigned or scheduled until every required item is satisfied.</p>
       </div>
       {canManage ? <AddApplicant onDone={setAdded} /> : null}
       {added ? <p role="status" className="text-sm text-emerald-800">Applicant added. <Link className="underline" to={`/care-team/${added}`}>Open the record</Link>.</p> : null}
       {overview.isLoading ? <p className="text-sm text-slate-500">Loading…</p> : null}
       {overview.isError ? <p role="alert" className="text-sm text-red-700">{(overview.error as Error).message}</p> : null}
-      {overview.data && rows.length === 0 ? <p className="text-sm text-slate-600">Nobody is in the pipeline.</p> : null}
+      {overview.data && rows.length === 0 ? <p className="text-sm text-slate-600">Nobody is in the pipeline. Add an applicant above.</p> : null}
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
         {PIPELINE_STAGES.map((stage) => {
           const list = rows.filter((r) => r.status === stage);

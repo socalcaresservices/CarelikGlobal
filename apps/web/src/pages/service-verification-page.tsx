@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   AlertTriangle,
@@ -992,44 +992,6 @@ export function ServiceVerificationPage() {
                 </div>
               ) : null}
 
-              {selectedService && !shiftsQuery.isLoading ? (
-                <div className="rounded-3xl border border-indigo-100 bg-gradient-to-br from-indigo-50 via-white to-sky-50 p-4 text-sm text-indigo-950 shadow-sm">
-                  <p className="font-semibold">
-                    {selectedService.service_code} ·{" "}
-                    {selectedService.service_name}
-                  </p>
-                  <div className="mt-3 space-y-2">
-                    <div className="flex items-center justify-between rounded-2xl border border-indigo-100 bg-indigo-100/70 p-2">
-                      <p className="text-xs text-indigo-800">Authorized</p>
-                      <p className="text-sm font-bold text-indigo-950">
-                        {formatDuration(
-                          Number(selectedService.max_monthly_hours) * 60,
-                        )}
-                      </p>
-                    </div>
-                    <div className="flex items-center justify-between rounded-2xl border border-sky-100 bg-sky-100/80 p-2">
-                      <p className="text-xs text-sky-800">Used this month</p>
-                      <p className="text-sm font-bold text-sky-950">
-                        {formatDuration(
-                          Number(selectedService.hours_used_this_month) * 60,
-                        )}
-                      </p>
-                    </div>
-                    <div className="flex items-center justify-between rounded-2xl border border-emerald-100 bg-emerald-100/80 p-2">
-                      <p className="text-xs text-emerald-800">Left to record</p>
-                      <p className="text-sm font-bold text-emerald-950">
-                        {formatBalance(
-                          caregiverLeftMinutes(
-                            Number(selectedService.max_monthly_hours) * 60,
-                            Number(selectedService.hours_used_this_month) * 60,
-                          ),
-                        )}
-                      </p>
-                    </div>
-                  </div>
-                </div>
-              ) : null}
-
               <div className="rounded-2xl bg-slate-50 p-4 text-center">
                 <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
                   Current Pacific time
@@ -1038,8 +1000,7 @@ export function ServiceVerificationPage() {
                   {formatClockTime(new Date(nowTick).toISOString())}
                 </p>
                 <p className="mt-1 text-xs text-slate-500">
-                  {formatVisitDate(new Date(nowTick).toISOString())} · automatic
-                  server timestamp
+                  Time In is recorded by the server when you tap Start.
                 </p>
               </div>
 
@@ -1079,9 +1040,6 @@ export function ServiceVerificationPage() {
               >
                 Start visit · Iniciar visita
               </Button>
-              <p className="text-center text-xs text-slate-500">
-                Time In is recorded by the server when you tap Start.
-              </p>
             </section>
           ) : null}
 
@@ -1125,19 +1083,6 @@ export function ServiceVerificationPage() {
                     {active.service_code} · {active.service_name}
                   </p>
                 </div>
-                {active.scheduled_starts_at && active.scheduled_ends_at ? (
-                  <div>
-                    <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-                      Scheduled shift
-                    </p>
-                    <p className="mt-1 text-lg font-bold text-slate-950">
-                      {formatScheduledTime(
-                        active.scheduled_starts_at,
-                        active.scheduled_ends_at,
-                      )}
-                    </p>
-                  </div>
-                ) : null}
               </div>
 
               <div className="mx-auto flex h-56 w-56 flex-col items-center justify-center rounded-full border-8 border-sky-100 bg-gradient-to-br from-white to-sky-50 text-center shadow-xl shadow-sky-100/70 ring-4 ring-sky-50">
@@ -1178,9 +1123,10 @@ export function ServiceVerificationPage() {
                   <p className="mt-1 text-sm font-semibold text-emerald-900">
                     Authorized time left to record this month
                   </p>
-                  <p className="mt-1 text-xs text-emerald-900">
-                    {CAREGIVER_BALANCE_NOTE}
-                  </p>
+                  <details className="mt-1 text-xs text-emerald-900">
+                    <summary className="inline-flex min-h-[32px] cursor-pointer items-center underline">Details</summary>
+                    <p>{CAREGIVER_BALANCE_NOTE}</p>
+                  </details>
                 </div>
               )}
 
@@ -1193,8 +1139,7 @@ export function ServiceVerificationPage() {
                 End visit · Terminar visita
               </Button>
               <p className="text-center text-xs text-slate-500">
-                The sign-in sheet records Time Out automatically. A manager can
-                correct a mistake without deleting the original.
+                Time Out is recorded by the server when you tap End.
               </p>
             </section>
           ) : null}
@@ -1226,72 +1171,38 @@ export function ServiceVerificationPage() {
                 </div>
               ) : null}
 
-              <div className="space-y-3 rounded-2xl border border-slate-200 bg-og-card p-4">
-                <div>
-                  <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-                    Client
-                  </p>
-                  <p className="mt-1 text-sm font-semibold text-slate-950">
-                    {endedVisit.clientCode}
-                  </p>
-                </div>
-                <div>
-                  <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-                    Service
-                  </p>
-                  <p className="mt-1 text-sm font-semibold text-slate-950">
-                    {endedVisit.serviceCode} · {endedVisit.serviceName}
-                  </p>
-                </div>
-                <div>
-                  <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-                    Date
-                  </p>
-                  <p className="mt-1 text-sm font-semibold text-slate-950">
-                    {formatVisitDate(endedVisit.timeIn)}
-                  </p>
-                </div>
+              <dl
+                aria-label="Visit to confirm"
+                className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-2 rounded-2xl border border-slate-200 bg-og-card p-4 text-sm"
+              >
+                <dt className="text-slate-500">Client</dt>
+                <dd className="font-semibold text-slate-950">{endedVisit.clientCode}</dd>
+                <dt className="text-slate-500">Service</dt>
+                <dd className="font-semibold text-slate-950">
+                  {endedVisit.serviceCode} · {endedVisit.serviceName}
+                </dd>
+                <dt className="text-slate-500">Date</dt>
+                <dd className="font-semibold text-slate-950">{formatVisitDate(endedVisit.timeIn)}</dd>
                 {endedVisit.scheduledStartsAt && endedVisit.scheduledEndsAt ? (
-                  <div>
-                    <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-                      Scheduled shift
-                    </p>
-                    <p className="mt-1 text-sm font-semibold text-slate-950">
+                  <>
+                    <dt className="text-slate-500">Scheduled shift</dt>
+                    <dd className="font-semibold text-slate-950">
                       {formatScheduledWindow(
                         endedVisit.scheduledStartsAt,
                         endedVisit.scheduledEndsAt,
                       )}
-                    </p>
-                  </div>
+                    </dd>
+                  </>
                 ) : null}
-              </div>
-
-              <div className="space-y-3 rounded-2xl border border-slate-200 bg-slate-50 p-4">
-                <div className="flex items-center justify-between">
-                  <span className="text-xs font-semibold uppercase tracking-wide text-slate-600">
-                    Actual time in
-                  </span>
-                  <span className="text-sm font-semibold text-slate-950">
-                    {formatClockTime(endedVisit.timeIn)}
-                  </span>
-                </div>
-                <div className="flex items-center justify-between">
-                  <span className="text-xs font-semibold uppercase tracking-wide text-slate-600">
-                    Actual time out
-                  </span>
-                  <span className="text-sm font-semibold text-slate-950">
-                    {formatClockTime(endedVisit.timeOut)}
-                  </span>
-                </div>
-                <div className="flex items-center justify-between border-t border-slate-200 pt-3">
-                  <span className="text-xs font-semibold uppercase tracking-wide text-slate-600">
-                    Total worked
-                  </span>
-                  <span className="text-sm font-bold text-slate-950">
-                    {formatDuration(endedVisit.workedMinutes)}
-                  </span>
-                </div>
-              </div>
+                <dt className="text-slate-500">Actual time in</dt>
+                <dd className="font-semibold text-slate-950">{formatClockTime(endedVisit.timeIn)}</dd>
+                <dt className="text-slate-500">Actual time out</dt>
+                <dd className="font-semibold text-slate-950">{formatClockTime(endedVisit.timeOut)}</dd>
+                <dt className="border-t border-slate-200 pt-2 text-slate-500">Total worked</dt>
+                <dd className="border-t border-slate-200 pt-2 font-bold text-slate-950">
+                  {formatDuration(endedVisit.workedMinutes)}
+                </dd>
+              </dl>
 
               {confirmationMode === "signature" ? (
                 <div className="space-y-4">
@@ -1321,66 +1232,38 @@ export function ServiceVerificationPage() {
                       Elija la forma más fácil de confirmar.
                     </p>
                   </div>
-                  <div className="grid grid-cols-2 gap-3">
-                    <button
-                      type="button"
-                      aria-pressed={signatureKind === "signature"}
-                      onClick={() => {
-                        setSignatureKind("signature");
-                        setSignature(null);
-                      }}
-                      className={cn(
-                        "flex min-h-24 flex-col items-center justify-center rounded-2xl border-2 p-3 text-sm font-semibold",
-                        signatureKind === "signature"
-                          ? "border-indigo-600 bg-indigo-50 text-indigo-950"
-                          : "border-slate-200 bg-og-card text-slate-700",
-                      )}
-                    >
-                      <PenLine className="mb-2 h-8 w-8" />
-                      Sign name
-                      <span className="text-xs font-normal">Firmar</span>
-                    </button>
-                    <button
-                      type="button"
-                      aria-pressed={signatureKind === "assisted_mark"}
-                      onClick={() => {
-                        setSignatureKind("assisted_mark");
-                        setSignature(null);
-                      }}
-                      className={cn(
-                        "flex min-h-24 flex-col items-center justify-center rounded-2xl border-2 p-3 text-sm font-semibold",
-                        signatureKind === "assisted_mark"
-                          ? "border-indigo-600 bg-indigo-50 text-indigo-950"
-                          : "border-slate-200 bg-og-card text-slate-700",
-                      )}
-                    >
-                      <Hand className="mb-2 h-8 w-8" />
-                      Make a mark
-                      <span className="text-xs font-normal">
-                        Hacer una marca
-                      </span>
-                    </button>
-                    {wave1 ? (
-                      <button
-                        type="button"
-                        aria-pressed={signatureKind === "verbal"}
-                        onClick={() => {
-                          setSignatureKind("verbal");
-                          setSignature(null);
-                        }}
+                  <div role="radiogroup" aria-label="How the person confirms" className="grid grid-cols-2 gap-3">
+                    {([
+                      ["signature", "Sign name", "Firmar", <PenLine key="p" className="mb-2 h-8 w-8" />, "min-h-24"],
+                      ["assisted_mark", "Make a mark", "Hacer una marca", <Hand key="h" className="mb-2 h-8 w-8" />, "min-h-24"],
+                      ...(wave1 ? [["verbal", "Verbal only (no signature)", "Solo verbal (sin firma)", null, "col-span-2 min-h-16"]] : []),
+                    ] as Array<[SignatureKind, string, string, ReactNode, string]>).map(([kind, label, es, icon, size]) => (
+                      <label
+                        key={kind}
                         className={cn(
-                          "col-span-2 flex min-h-16 flex-col items-center justify-center rounded-2xl border-2 p-3 text-sm font-semibold",
-                          signatureKind === "verbal"
+                          "flex cursor-pointer flex-col items-center justify-center rounded-2xl border-2 p-3 text-sm font-semibold focus-within:ring-2 focus-within:ring-indigo-500",
+                          size,
+                          signatureKind === kind
                             ? "border-indigo-600 bg-indigo-50 text-indigo-950"
                             : "border-slate-200 bg-og-card text-slate-700",
                         )}
                       >
-                        Verbal only (no signature)
-                        <span className="text-xs font-normal">
-                          Solo verbal (sin firma)
-                        </span>
-                      </button>
-                    ) : null}
+                        <input
+                          type="radio"
+                          name="confirmation-method"
+                          value={kind}
+                          checked={signatureKind === kind}
+                          onChange={() => {
+                            setSignatureKind(kind);
+                            setSignature(null);
+                          }}
+                          className="sr-only"
+                        />
+                        {icon}
+                        {label}
+                        <span className="text-xs font-normal">{es}</span>
+                      </label>
+                    ))}
                   </div>
                   {signatureKind === "verbal" ? (
                     <div className="space-y-3 rounded-2xl border border-amber-200 bg-amber-50 p-4">

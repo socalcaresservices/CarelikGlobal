@@ -1,6 +1,7 @@
 import { useQueryClient } from "@tanstack/react-query";
 import { useRef, useState } from "react";
 import { Button, Card } from "@carelik/ui";
+import { ShortHelp } from "./help-text";
 import { newIdempotencyKey } from "@/lib/sv-backend";
 import { useOrganization } from "@/providers/organization-provider";
 import { useAwsApi } from "./aws-workspace";
@@ -40,8 +41,9 @@ function AddServiceForm() {
   }
   return (
     <Card className="p-4">
-      <h2 className="text-base font-semibold text-slate-950">Add a service</h2>
-      <p className="mt-1 text-xs text-slate-600">The code cannot be changed later because payer records refer to it. Use the code your payer uses.</p>
+      <details open={state.done || undefined}>
+      <summary className="min-h-[32px] cursor-pointer text-base font-semibold text-slate-950">Add a service</summary>
+      <p className="mt-1 text-xs text-slate-600">The code cannot be changed later. Use the code your payer uses.</p>
       <form onSubmit={(e) => { e.preventDefault(); void submit(); }} className="mt-3 grid gap-3 sm:grid-cols-3">
         <div><label htmlFor="svc-code" className="block text-sm font-medium text-slate-700">Code</label><input id="svc-code" value={code} maxLength={20} autoComplete="off" onChange={(e) => { setCode(e.target.value); key.current = newIdempotencyKey(); }} className={inputClass} /></div>
         <div className="sm:col-span-2"><label htmlFor="svc-name" className="block text-sm font-medium text-slate-700">Name</label><input id="svc-name" value={name} maxLength={80} onChange={(e) => { setName(e.target.value); key.current = newIdempotencyKey(); }} className={inputClass} /></div>
@@ -49,6 +51,7 @@ function AddServiceForm() {
         {state.done ? <p role="status" className="text-sm text-emerald-800 sm:col-span-3">Service added.</p> : null}
         <div className="sm:col-span-3"><Button type="submit" disabled={state.busy}>{state.busy ? "Adding…" : "Add service"}</Button></div>
       </form>
+      </details>
     </Card>
   );
 }
@@ -118,10 +121,12 @@ export function ServicesPage() {
     <div className="max-w-3xl space-y-4">
       <div>
         <h1 className="text-xl font-semibold text-slate-950">Services</h1>
-        <p className="mt-1 text-sm text-slate-600">
-          The services your agency provides. Deactivating one is refused while clients still have current authorizations for it.
-          {canManage ? "" : " Only the agency Administrator can change this list."}
-        </p>
+        <ShortHelp
+          className="mt-1 text-sm text-slate-600"
+          details="Deactivating a service is refused while clients still have current authorizations for it."
+        >
+          The services your agency provides.{canManage ? "" : " Only the agency Administrator can change this list."}
+        </ShortHelp>
       </div>
       {canManage ? <AddServiceForm /> : null}
       {services.isLoading ? <p className="text-sm text-slate-500">Loading…</p> : null}
