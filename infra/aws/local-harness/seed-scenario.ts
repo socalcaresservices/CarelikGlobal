@@ -49,7 +49,9 @@ async function main() {
 
   // 3. Open shifts the caregiver can ask for: a 9-hour shift (always over the 8-hour day) and a 2-hour shift in a week with no other work.
   // both inside the next 16 days: before Alex's CPR runs out (valid through today + 20), so the office can confirm the request that the policy allows
-  const tue = await firstDow(2, 10); const thu = await firstDow(4, 10);
+  // the open-shift list only shows the next 14 days, so a day found 10+ days out (run on a Sunday: Tuesday is day 16) is searched again from day 3
+  const inWindow = async (want: number) => { const n = await firstDow(want, 10); return n <= 13 ? n : firstDow(want, 3); };
+  const tue = await inWindow(2); const thu = await inWindow(4);
   const open = (n: number, s: string, e: string) => as(manager.sub, async () => (await c.query("select * from ogevia_api.create_shift($1,$2,$3,$4::date,$5::time,$6::time,null,null)", [org, scenario, respite, await day(n), s, e])).rows[0]);
   await open(tue, "07:00", "16:00"); // 9 h: request refused
   await open(thu, "10:00", "12:00"); // 2 h: request allowed

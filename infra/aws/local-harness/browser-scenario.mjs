@@ -34,7 +34,7 @@ const refusedText = await long.innerText().catch(() => "");
 const short = cardFor(/10:00 AM.*12:00 PM|10:00 AM to 12:00 PM/s);
 rec("the 2-hour open shift is listed", (await short.count()) === 1);
 await short.getByRole("button", { name: "Request this shift" }).click(); await cp.waitForTimeout(1200);
-rec("a request that would exceed the 8-hour day is refused with a plain reason, on that shift", /Over the daily hour limit/.test(refusedText), refusedText);
+rec("a request that would exceed the 8-hour day is refused with a plain reason, on that shift", /Daily limit exceeded: [\d.]+ of [\d.]+ h/.test(refusedText), refusedText);
 rec("a request the policy allows shows 'Requested' and says the shift is not theirs yet", (await cp.getByTestId("requested-badge").count()) >= 1 && /not yours until they do/.test(await text(cp)));
 rec("caregiver page: no sideways scroll", await noOverflow(cp));
 const b0 = await cp.getByRole("button").first().boundingBox().catch(() => null);

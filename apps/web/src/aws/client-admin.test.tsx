@@ -178,8 +178,11 @@ describe("Clients screens", () => {
   });
 
   it("amend: needs a reason, saves a new version and lists the visits to review", async () => {
-    renderAt(`/clients/${CLIENT}`, "manager");
+    const api = renderAt(`/clients/${CLIENT}`, "manager");
     fireEvent.click(await screen.findByRole("button", { name: "Amend" }));
+    const readinessReads = () => api.calls.filter((c) => c.method === "GET" && c.path === `/v1/clients/${CLIENT}/readiness`).length;
+    await waitFor(() => expect(readinessReads()).toBeGreaterThan(0));
+    const before = readinessReads();
     fireEvent.change(screen.getByLabelText("Authorized hours per month"), { target: { value: "24" } });
     fireEvent.click(screen.getByRole("button", { name: "Save version 2" }));
     expect(await screen.findByRole("alert")).toHaveTextContent("reason");
@@ -187,6 +190,8 @@ describe("Clients screens", () => {
     fireEvent.click(screen.getByRole("button", { name: "Save version 2" }));
     expect(await screen.findByText(/Saved as version 2/)).toBeInTheDocument();
     expect(screen.getByText(/may now exceed the new limit/)).toBeInTheDocument();
+    // The readiness card and alerts are read again after an authorization changes (end-to-end finding D1: they stayed stale until a reload).
+    await waitFor(() => expect(readinessReads()).toBeGreaterThan(before));
     await waitFor(() => expect(screen.getByText(/History \(1 earlier version\)/)).toBeInTheDocument());
     expect(screen.getByText(/Latest change: Reduced by the payer/)).toBeInTheDocument();
   });

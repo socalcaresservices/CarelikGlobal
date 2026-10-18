@@ -97,6 +97,8 @@ function AddShiftForm({ onDone, initialClientId = "" }: { onDone: (text: string)
   const caregivers = useCaregivers();
   const [form, setForm] = useState({ clientId: initialClientId, serviceId: "", caregiverRecordId: "", date: today, startTime: "09:00", endTime: "12:00" });
   const [prefilled, setPrefilled] = useState<string[]>([]);
+  // Once the person has chosen a caregiver (or chosen "Open shift"), the record is never allowed to choose again for that client.
+  const [caregiverChosen, setCaregiverChosen] = useState(false);
   const auths = useClientAuthorizations(form.clientId || undefined);
   const assigned = useAssignments({ clientId: form.clientId || undefined });
   // Prefill from the client's record (B3-R3): the services the client is authorized for, the one service when there is only one, and the caregiver when exactly one is assigned to it.
@@ -107,11 +109,11 @@ function AddShiftForm({ onDone, initialClientId = "" }: { onDone: (text: string)
     let serviceId = form.serviceId, caregiverRecordId = form.caregiverRecordId;
     if (!serviceId && authorizedServices.length === 1) { serviceId = authorizedServices[0]!; filled.push("service"); }
     const candidates = [...new Set((assigned.data ?? []).filter((a) => a.state === "current" && a.caregiverRecordId && (!serviceId || a.serviceId === serviceId)).map((a) => a.caregiverRecordId!))];
-    if (serviceId && !caregiverRecordId && candidates.length === 1) { caregiverRecordId = candidates[0]!; filled.push("caregiver"); }
+    if (serviceId && !caregiverChosen && !caregiverRecordId && candidates.length === 1) { caregiverRecordId = candidates[0]!; filled.push("caregiver"); }
     if (filled.length === 0) return;
     setForm((f) => ({ ...f, serviceId: f.serviceId || serviceId, caregiverRecordId: f.caregiverRecordId || caregiverRecordId }));
     setPrefilled((p) => [...new Set([...p, ...filled])]);
-  }, [form.clientId, form.serviceId, form.caregiverRecordId, authorizedServices, assigned.data]);
+  }, [form.clientId, form.serviceId, form.caregiverRecordId, caregiverChosen, authorizedServices, assigned.data]);
   const [state, setState] = useState<{ busy: boolean; error: string | null }>({ busy: false, error: null });
   const [ready, setReady] = useState<boolean | null>(null);
   const key = useRef(newIdempotencyKey());
@@ -141,7 +143,7 @@ function AddShiftForm({ onDone, initialClientId = "" }: { onDone: (text: string)
     <form onSubmit={(e) => { e.preventDefault(); void submit(); }} className="mt-3 grid gap-3 rounded-xl border border-slate-200 bg-slate-50 p-3 sm:grid-cols-2">
       <div className="sm:col-span-2">
         <label htmlFor="sh-client" className="block text-sm font-medium text-slate-700">Client</label>
-        <select id="sh-client" value={form.clientId} onChange={(e) => set("clientId", e.target.value)} className={inputClass}>
+        <select id="sh-client" value={form.clientId} onChange={(e) => { setCaregiverChosen(false); set("clientId", e.target.value); }} className={inputClass}>
           <option value="">Choose a client</option>
           {(clients.data ?? []).filter((c) => c.status === "active").map((c) => <option key={c.clientId} value={c.clientId}>{nameWithCode(clientName(c), c.clientCode, c.duplicateName)}</option>)}
         </select>
@@ -155,7 +157,7 @@ function AddShiftForm({ onDone, initialClientId = "" }: { onDone: (text: string)
       </div>
       <div>
         <label htmlFor="sh-caregiver" className="block text-sm font-medium text-slate-700">Caregiver (optional)</label>
-        <select id="sh-caregiver" value={form.caregiverRecordId} onChange={(e) => set("caregiverRecordId", e.target.value)} className={inputClass}>
+        <select id="sh-caregiver" value={form.caregiverRecordId} onChange={(e) => { setCaregiverChosen(true); set("caregiverRecordId", e.target.value); }} className={inputClass}>
           <option value="">Open shift — fill later</option>
           {(caregivers.data ?? []).filter((c) => c.status === "ready" || c.status === "active").map((c) => (
             <option key={c.caregiverRecordId} value={c.caregiverRecordId}>{nameWithCode(caregiverName(c), c.caregiverCode, c.duplicateName)}{c.hasSignIn ? "" : " — no sign-in yet"}</option>

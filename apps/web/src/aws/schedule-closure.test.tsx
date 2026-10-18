@@ -148,5 +148,10 @@ describe("links from Action needed, prefill and suggested replacements", () => {
     expect((screen.getByLabelText(/Caregiver \(optional\)/) as HTMLSelectElement).value).toBe("r1");
     const options = within(screen.getByLabelText("Service")).getAllByRole("option").map((o) => o.textContent);
     expect(options).not.toContain("Respite (RSP)"); // only what the client is authorized for
+    // Choosing "Open shift" afterwards sticks: the one assigned caregiver is not filled in again (found in the end-to-end browser run).
+    const caregiver = screen.getByLabelText(/Caregiver \(optional\)/) as HTMLSelectElement;
+    fireEvent.change(caregiver, { target: { value: "" } });
+    await new Promise((r) => setTimeout(r, 300));
+    expect(caregiver.value).toBe("");
   }, 30000);
 });

@@ -7,3 +7,6 @@ Baseline VERIFIED 2026-10-18: HEAD `4029176795264bf9c0532d8d2029910e493b3c02`, b
 | C. End-to-end workflow runs on the local harness; browser form-state test | engineer C | active |
 | D. Security/ops evidence from repository configuration; release and environment plans | engineer D | active |
 | E. Consolidated report, evidence matrix, defect register, go/no-go | lead | after A to D |
+
+## Closure (2026-10-18, local)
+A, B, C, D complete (C stopped on instruction; its workflows script is partly proven). Integrated and committed in two local commits. Fixes found by the end-to-end run (R4 open-shift snap-back, R5 stale readiness) were corrected with failing-first regression tests. Final integrated checks are listed in CONSOLIDATED_REPORT.md. Remaining: owner decisions (section G) and every item needing live TEST, Production, device, AWS, Netlify, GitHub or contract evidence.

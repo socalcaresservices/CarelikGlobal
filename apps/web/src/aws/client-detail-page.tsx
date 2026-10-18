@@ -30,7 +30,7 @@ const minutesAsHours = (m: number) => (m % 60 === 0 ? String(m / 60) : (m / 60).
 function useRefreshClient() {
   const queryClient = useQueryClient();
   return async () => {
-    for (const k of ["aws-clients", "aws-client-directory", "aws-client-authorizations", "aws-client-balances", "service-visit-report", "service-visit-report-calendar"]) {
+    for (const k of ["aws-clients", "aws-client-directory", "aws-client-authorizations", "aws-client-balances", "service-visit-report", "service-visit-report-calendar", "client-readiness", "client-issues", "client-audit", "action-issues"]) {
       await queryClient.invalidateQueries({ queryKey: [k] });
     }
   };

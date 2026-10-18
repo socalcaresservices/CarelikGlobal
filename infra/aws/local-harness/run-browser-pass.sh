@@ -15,4 +15,4 @@ pnpm harness:seed-scenario >>"$log" 2>&1 || { echo "seed-scenario failed"; tail 
 nohup pnpm harness:serve >/tmp/ogevia-serve-$label.log 2>&1 &
 echo $! > /tmp/ogevia-serve.pid
 for _ in $(seq 1 40); do curl -sk -o /dev/null https://localhost/ && break; sleep 1; done
-cd "$here" && node browser-scenario.mjs "$label" "$out"
+cd "$here" && node "${3:-browser-scenario.mjs}" "$label" "$out"
