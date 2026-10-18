@@ -1,0 +1,27 @@
+== step D: restored copy ledger (expect 52)
+PASS restored copy ledger 52
+== step E: dump ONLY ogevia_sv_test from the restored copy
+PASS dump written
+PASS dump TOC names ogevia_sv_test
+PASS dump contains no ogevia_prd table
+PASS forensic dump of the damaged live ogevia_sv_test
+== failure rehearsal: a restore that fails midway puts the original back
+PASS failing restore refused (rc 13)
+PASS original (damaged) ogevia_sv_test is back and intact (ledger 77)
+PASS connections re-enabled on the original
+PASS no leftover databases
+== steps G-H: the real swap
+PASS swap completed
+PASS ogevia_sv_test ledger is 52 / 0052
+PASS visits table restored (200 rows)
+PASS object owner preserved
+PASS grant preserved
+PASS new ogevia_sv_test accepts connections
+PASS damaged copy retained, connections disabled (not dropped)
+== ogevia_prd protection (catalog-only checks from the postgres database; ogevia_prd is never connected to by the swap)
+PASS pg_database row for ogevia_prd identical before and after
+PASS cluster roles identical
+PASS ogevia_prd keeps its post-snapshot rows (1500; an in-place restore would have reverted it to 1000)
+PASS the restored copy holds the OLD ogevia_prd (1000 rows): proof that the snapshot must never be restored in place
+
+REHEARSAL PASSED (local, PostgreSQL 16, two throwaway clusters)
