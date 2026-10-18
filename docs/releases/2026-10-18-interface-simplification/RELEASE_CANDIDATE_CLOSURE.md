@@ -1,6 +1,8 @@
+> **FINAL (2026-10-18, after CI run 361).** Corrected closure checklist for release candidate `3159e520a7b9bc7006ee82d526a907622d30d97c`. It supersedes the earlier version of this file in the candidate and the first attachment, which said CI had not yet run on the candidate and called the TEST ledger unverified. The 88 requirement rows are unchanged. Deployment procedure: `OPERATOR_PROCEDURE_3159e52.md` (supersedes every earlier runbook).
+
 # Release candidate closure checklist (one list: five-board handoff, owner directives, 88-row matrix, known defects)
 
-Branch `integration/compliance-attention-onto-scheduling-recruiting`. **Final code commit `64515dd`**; the commit that carries this document and the screenshots (the exact final SHA) is stated in the review message and in the bundle. **Implemented and tested locally on synthetic data. Not pushed, merged, deployed, activated or run on TEST. No AWS call was made.** Later explicit owner decisions govern; White, Minimal, the simplified four-stream Home and the authorization-decrease behaviour are preserved. Migrations: 0001 to 0077.
+Branch `integration/compliance-attention-onto-scheduling-recruiting`. **Candidate commit `3159e520a7b9bc7006ee82d526a907622d30d97c`** (final code commit `64515dd`; the candidate adds only the closure document and screenshots). This copy is the corrected attachment prepared after the candidate was bundled; the in-repository copy at the candidate is the earlier wording. **Implemented and tested locally on synthetic data. Not pushed, merged, deployed, activated or run on TEST. No AWS call was made.** Later explicit owner decisions govern; White, Minimal, the simplified four-stream Home and the authorization-decrease behaviour are preserved. Migrations: 0001 to 0077.
 
 Evidence classes: LOCAL VERIFIED = executed here (section 1). NOT VERIFIED = needs AWS, a real device or an external system (sections 4 and 6). A row says COMPLETE only where code exists and a named test or browser check exercises it; a passing test alone does not make a row complete, so each row also states its limit.
 
@@ -27,6 +29,8 @@ Evidence classes: LOCAL VERIFIED = executed here (section 1). NOT VERIFIED = nee
 | Browser, phone 390 px, freshly reset database | 106 / 106 checks |
 | Fresh database migrated 0001 to 0077, `db:verify` | 369 checks PASS, 0 FAIL |
 | Previous API code (origin/main, 0052) on the new schema | 73 of 75 API database tests pass; the 2 failures assert behaviour that 0055 and 0063 intentionally changed |
+| CI on the candidate head (GitHub Actions run 361, PR 100): jobs `validate`, `postgres` (postgres:18 image) and `harness` | all success. GitHub's generated merge commit has the identical tree to the candidate, so the content tested is the candidate's |
+| PostgreSQL 18.4 (community binary), run locally | database suite 840 of 840, sv-api database 115 of 115, fresh migration 0001 to 0077 then `db:verify` 369 PASS 0 FAIL |
 | Unresolved failures | none. No `it.fails` marker remains for these defects. Note: database tests skip silently when `OGEVIA_TEST_DATABASE_URL` is unset; every count above was run with it set |
 
 ## 2. Row-by-row closure (all 88; ID, code location, status, evidence and remaining limitation)
@@ -149,7 +153,7 @@ Authorization-decrease behaviour is unchanged (worked service preserved, impacts
 
 | Verified locally (this session, synthetic data, PostgreSQL 16) | NOT verified: needs the real thing |
 |---|---|
-| Migrations 0001 to 0077 from empty; populated upgrade 0052 to 0077 and rollback in reverse and re-apply (`upgrade-0052-to-final.db.test.ts`) | **PostgreSQL 18.** RDS and CI use 18; this machine has only 16. The CI `postgres` job (postgres:18) runs on a pull request or on main, not on a plain branch push. Until it is green, engine-version behaviour is UNKNOWN. |
+| Migrations 0001 to 0077 from empty; populated upgrade 0052 to 0077 and rollback in reverse and re-apply (`upgrade-0052-to-final.db.test.ts`) | **The managed RDS engine itself** (parameter group, extensions, collation). PostgreSQL 18 behaviour is covered by CI run 361 (`postgres`, postgres:18 image, success) and by local runs on 18.4. |
 | Enforcement enabled on synthetic fixtures (`final-enforcement.db.test.ts`) | Enforcement on the real tenant (owner action, separate GO) |
 | The previous API code (origin/main, migration 0052) against the new schema: 73 of 75 API database tests pass; the two that fail assert behaviour 0055 and 0063 intentionally changed (background-check wording; caregiver pickup now needs office confirmation) | The deployed API and web on TEST, CloudFront, Cognito sign-in, API Gateway authorizer, Lambda, VPC reach to RDS |
 | Counts reconciled with lists (summary categories vs issue-list rows, shorter agency deadline, 48 h coverage window, total) | Real-device phone and tablet run; screen reader; performance on realistic volume |
@@ -160,116 +164,15 @@ Authorization-decrease behaviour is unchanged (worked service preserved, impacts
 
 Task tracker against code (corrected): tasks 1 to 4 match code and tests. Task 5 said "in-app notifications logic" was complete; it was not. Only Reporting was built then, and notifications were deferred in the earlier closure. They are built now (0077). The sidebar badge-count defect was recorded as two expected-failure tests (F2, F4); both are fixed in 0077 and are ordinary passing tests. While reconciling every summary category with the list I found and fixed a third mismatch: an agency's shorter confirmation deadline moved a visit in the list but not in the sidebar summary.
 
-## 6. External triggers checked before any push
+## 6. External triggers
 
-| Trigger | Finding (from the repository) | Effect of pushing this branch |
-|---|---|---|
-| GitHub Actions `ci.yml` | Runs on `pull_request` and on `push` to `main` only. `permissions: contents: read`; no AWS credentials; builds and uploads a TEST bundle artifact (retention 7 days); contains no deploy step. | A plain push of this branch starts no workflow. Opening a pull request starts the `validate` (Node 22), `postgres` (postgres:18) and `harness` jobs. A merge to main would also run them. None deploys. |
-| Netlify | `netlify.toml` builds with `pnpm typecheck && pnpm lint && pnpm test && web build` and publishes the Supabase-mode site; deploy previews use the demo Supabase project. | A pull request normally produces a Netlify deploy preview of the web app (Supabase demo mode, not TEST). Whether branch deploys are enabled for non-production branches is a Netlify site setting that cannot be read from the repository: UNKNOWN. Merging to the production branch would publish through Netlify (still the live host; CLAUDE.md: Netlify stays during migration). |
-| AWS | No workflow or webhook in the repository calls AWS. TEST changes happen only from an operator's CloudShell. | None. |
-| Supabase | `supabase/` holds reference code only; no push hook found. | None found. |
+Evidence read from GitHub on 2026-10-18: a plain push of a new branch started no GitHub Actions workflow (every one of 146 recorded push-triggered runs is on `main`); a pull request starts CI (PR 99, PR 88 and now PR 100 all ran `validate`, `postgres`, `harness`); a pull request against `main` gets a Netlify deploy preview (PR 99); PR 88 (non-`main` base) and PR 100 (non-`main` base) showed no Netlify status or check. Netlify branch deploys on a plain push, GitHub webhooks and Apps, and AWS-side triggers outside the repository remain UNVERIFIED (settings not readable from here). Nothing in the repository calls AWS on push or pull request.
 
-Recommendation: to let the CI PostgreSQL 18 job run, open a pull request into a non-production base and do NOT merge it. That is the shortest way to close the PostgreSQL 18 gap. It needs the owner's explicit instruction; nothing was pushed.
+## 7. Release recommendation, procedure and deployment gates
 
-## 7. GO / NO-GO
+See `OPERATOR_PROCEDURE_3159e52.md` (supersedes all earlier runbooks): pins, corrected statements, copyable commands with working directories and expected output, the migration-access wrapper, pinned recovery artifacts, database-only recovery, ComplianceSweep state, the Lambda-policy check and stop conditions.
 
-**Recommendation: CONDITIONAL GO for a TEST-only deployment (synthetic data). NOT a production GO, and not a claim of release readiness beyond local verification.** The code, migrations and tests are complete for the approved scope. TEST deployment can proceed only after these gates, each with the action that clears it:
-
-| # | Blocker | Why it matters | Action that resolves it | Who |
-|---|---|---|---|---|
-| 1 | The branch is not on GitHub. Every existing TEST procedure downloads a pinned commit from GitHub into CloudShell. | Nothing can be deployed from this container. | Authorise a push of this branch (no merge). Section 6 shows a plain push triggers nothing. | Owner |
-| 2 | PostgreSQL 18 (RDS and CI) was never run here. | Engine differences are UNKNOWN. | Authorise a pull request that is not merged; the CI `postgres` job (postgres:18) runs `pnpm test:all`. Deploy only if it is green. | Owner |
-| 3 | TEST's ledger is owner-reported at 0052 (2026-10-16), not verified. | Migrations apply contiguously; a higher or different ledger changes the plan. | Step 3 of the runbook (read-only ledger check). Stop if it is not exactly 52. | Operator |
-| 4 | Operator, window, approval reference and temporary database access (TEMP_DB_ACCESS_PROCEDURE.md). | Required by CLAUDE.md section 13 (yellow actions). | Owner names them in the GO message. | Owner |
-| 5 | There is no scripted release gate for this release (earlier releases had `release-0036-*` style scripts with a scope gate). The runbook is manual, with stop conditions and a `db:verify` query set. | More reliance on the operator reading the `cdk diff`. | Accept the manual runbook for TEST, or ask for a scripted gate (adds time; recommended before production, not before TEST). | Owner |
-
-Not blockers for TEST, but required before production: real-device run, screen-reader pass, performance measurement, the PostgreSQL 18 result, and the owner answers in section 9. Production (`Ogevia-prd-*`, `ogevia_prd`) is not part of this request and is not touched by any step below.
-
-## 8. TEST-only deployment runbook
-
-**Status: PROPOSED. Nothing here has been run on AWS. Every step marked YELLOW changes AWS or TEST data and waits for the owner's explicit GO.**
-
-### 8.1 Targets (from `infra/aws/scripts/deploy-test-slice.sh`, `slice/pilot-lib.sh`, LEDGER_CHECK_INSTRUCTIONS.md)
-
-| Item | Value |
-|---|---|
-| Account / region | 300094796789 / us-west-2 |
-| TEST stacks | `Ogevia-prod-*` (the word "prod" means the pilot slice). Only `Ogevia-prod-ServiceVerificationApi` and the web files in `Ogevia-prod-WebHosting`'s bucket change. |
-| TEST database | `ogevia_sv_test` on RDS instance `ogevia-prod-postgres` |
-| **Never touched** | `Ogevia-prd-*`, database `ogevia_prd` (same RDS instance, same master credential: always name the database), Netlify, Supabase, DNS, Cognito users or clients, the other four stacks |
-| Cognito pool | `us-west-2_849AYz5J7` (shared with production; no Cognito change here) |
-
-### 8.2 What changes, and compatibility
-
-| Layer | Change | Compatibility |
-|---|---|---|
-| Database | Migrations 0053 to 0077 (25 files), applied contiguously by `db/scripts/migrate.ts`, each in its own transaction | Additive: new tables, functions, nullable columns. Previous API code (origin/main, 0052) passes 73 of 75 API database tests on the new schema; the two differences are intended (0055 background-check wording, 0063 pickup needs office confirmation). A few existing functions are replaced with the same signature. |
-| API | 59 new routes; Lambda code; one EventBridge rule `ComplianceSweep` (15 minutes, free) and its invoke permission | Old web calls only old routes; responses gain fields only. Deploy API immediately after the database. |
-| Web | New build with Action needed, notifications bell, client documents, schedule views, Reporting & billing | Needs the new API. Deploy last. |
-| Runtime configuration | No new Lambda environment variable, secret, IAM action or Cognito setting. Web build variables are those of the `web` step (`VITE_APP_ENV=test`, Cognito pool/client, API URL). Enforcement stays OFF. | If `cdk diff` shows anything else: STOP. |
-
-Expected `cdk diff` for `Ogevia-prod-ServiceVerificationApi` (read it before answering y): 59 new `AWS::ApiGatewayV2::Route`; a changed `AWS::Lambda::Function` code asset; one `AWS::Events::Rule`; one `AWS::Lambda::Permission` for `events.amazonaws.com`; nothing deleted; no IAM policy statement added to the role. The Lambda resource policy was once near its 20 480-byte limit (increment 2026-10-04); this release adds a single small statement, so check the live size after deploy (stop condition).
-
-### 8.3 Steps
-
-1. **Pin (owner).** Approve the full 40-character SHA from the review message and an `OGEVIA_DEPLOY_APPROVAL` reference. In CloudShell: clone the branch, `git checkout <SHA>`, confirm `git rev-parse HEAD` equals the approved SHA, `corepack enable && pnpm install --frozen-lockfile`.
-2. **Local gate in CloudShell.** `pnpm lint && pnpm typecheck && pnpm build`. `npx cdk synth --quiet -c env=prod -c mode=plan` (no AWS change). STOP on any failure.
-3. **Read-only baseline (no change).** (a) Identify the environment: the API Lambda's `DB_NAME` must be `ogevia_sv_test` and `OGEVIA_ENV` must not be `prd`. (b) Ledger: follow `TEMP_DB_ACCESS_PROCEDURE.md` (temporary, owner-approved, always restored) and `LEDGER_CHECK_INSTRUCTIONS.md`; expected `52|0052`, contiguous, checksums equal the repository files. (c) Record: Lambda `CodeSha256`, `aws cloudformation get-template` for the API stack, a copy of the current web bucket (`aws s3 sync s3://<SiteBucketName> ./web-before`), and for both agencies `select enforcement_active_from from ogevia.organization_readiness_settings` (expected null). **STOP if the ledger is not exactly 52, the database name is wrong, or anything is unreadable.**
-4. **Snapshot (YELLOW).** `aws rds create-db-snapshot --db-instance-identifier ogevia-prod-postgres --db-snapshot-identifier ogevia-prod-postgres-pre-0077-<date>`; wait for `available`. The instance also holds `ogevia_prd`: a restore always goes to a NEW instance, never in place. **STOP if the snapshot does not reach `available`.**
-5. **Diff (read-only).** `npx cdk diff Ogevia-prod-ServiceVerificationApi -c env=prod -c mode=deploy`. Compare with section 8.2. **STOP on any difference from the expected list.**
-6. **Migrations (YELLOW).** Through the temporary tunnel, with `OGEVIA_ALLOW_REMOTE_MIGRATION=approved-by-owner` and the URL naming `ogevia_sv_test`: `npx tsx db/scripts/migrate.ts`. Expect "applying 0053 ... 0077" and "applied 25, already applied 52". Then `npx tsx db/scripts/verify.ts` (read-only): expect all checks PASS and none FAIL (369 passed on a fresh local database, including `01_schema_version` = 0077 and `08_release_objects`). **STOP at the first failed migration (that file is rolled back; the rest are not applied) and go to 8.5.**
-7. **API (YELLOW).** `npx cdk deploy Ogevia-prod-ServiceVerificationApi -c env=prod -c mode=deploy --require-approval broadening` (interactive). Then confirm stack `UPDATE_COMPLETE`, Lambda environment unchanged, resource-policy size below 20 480 bytes, rule `ComplianceSweep` ENABLED.
-8. **Web (YELLOW).** The `web` step of `deploy-test-slice.sh` (builds with `VITE_APP_ENV=test`, uploads, invalidates `/index.html` and `/`).
-9. **Smoke (read-only, plus signed-in checks with synthetic users).** `deploy-test-slice.sh smoke` (anonymous API call returns 401, CSP header, SPA route). Then the table in 8.4.
-10. **Report.** Operator sends the terminal output: ledger before/after, `verify.ts` output, `cdk diff`, smoke results.
-
-### 8.4 Smoke tests after deployment (synthetic users only)
-
-| # | Action | Expected |
-|---|---|---|
-| 1 | Sign in as the owner. Home loads: four streams, "Needs action first", refresh status | No false zero; sidebar badge numbers equal the Action needed page counts |
-| 2 | Open Action needed; open one item | Lands on the right page with context; severity words shown |
-| 3 | Notifications button | Count equals the unread Critical/Urgent items; "Mark all read" sets 0 |
-| 4 | Owner: Action needed > Notifications > switch Urgent off with a reason, then back on | Saved; audit event present |
-| 5 | Client page: documents, readiness, authorization first | Missing document listed; activation refused until requirements are met |
-| 6 | Upload a synthetic document; approve as a second user | Approved; the uploader cannot approve their own |
-| 7 | Schedule beyond remaining authorization | Refused with the shortage reason |
-| 8 | Schedule Day, Week, Month; filter by caregiver; open a shift's replacement suggestions | Same shifts in each view; suggestions listed, office confirms |
-| 9 | Cancel a shift | Hours released, delivered hours kept |
-| 10 | Reporting & billing: export billing review as owner; try as scheduler | Owner downloads CSV; scheduler refused |
-| 11 | Owner audit report | Field names only |
-| 12 | Caregiver on a phone: start and end a visit, confirm | Server times; locked afterwards; no horizontal scroll |
-| 13 | Read-only: `enforcement_active_from` still null for both agencies | Unchanged |
-
-### 8.5 Stop conditions and recovery
-
-| Situation | Action |
-|---|---|
-| Step 3, 4 or 5 does not match | Nothing has changed. Stop and send the output. |
-| A migration fails | The runner stops; that file's transaction is rolled back; earlier files stay applied. Do not edit applied files. Fix forward in a new migration, or restore (below). |
-| API or web misbehaves, schema fine | Redeploy the previous API (`cdk deploy` at the previous commit, or the captured template and Lambda code) and re-upload `web-before`. The previous API works on the new schema (73 of 75 tests; two intended differences). |
-| Return the schema to 0052 | Preferred: restore the snapshot to a NEW instance and repoint only after the owner approves. Alternative: apply `db/rollback/0077 ... 0053_*.down.sql` in reverse, each with `psql -v ON_ERROR_STOP=1 --single-transaction -f`. Rehearsed on a populated local database by `upgrade-0052-to-final.db.test.ts` (data preserved, applied again). Classes: BACKUP REQUIRED for 0055, 0056, 0060, 0063, 0064, 0067, 0068, 0069, 0071, 0072, 0073, 0074, 0077; the rest SAFE AUTOMATED. |
-| `ComplianceSweep` errors | `aws events disable-rule` (yellow) stops it; enforcement does not depend on the sweep. |
-| Anything touching `ogevia_prd` or an `Ogevia-prd-*` stack | Stop immediately; do not continue. |
-
-### 8.6 Enforcement activation (separate GO, never on deployment day)
-
-Follow `ACTIVATION_CHECKLIST_SOCAL_CARE_SERVICES.md`: read-only preview first, owner reviews, then one `activate_readiness_enforcement` call. One way by design.
-
-## 9. Short real-device test script (phone, about 10 minutes, after TEST deployment)
-
-Use the TEST site with a synthetic caregiver account and a synthetic office account on a second device.
-
-1. Caregiver signs in. No sideways scrolling; the main button is visible.
-2. Start a visit, lock the screen for a minute, reopen: the timer is still correct.
-3. Airplane mode on, tap End visit, airplane mode off, retry: one visit, one end time.
-4. Confirm with a finger-drawn signature: the visit shows locked.
-5. Office phone: Home shows four streams and the top-issues list without sideways scrolling; the Notifications button opens and closes.
-6. Action needed: tap an item, return with Back.
-7. Client page: authorization is first; the document upload uses the phone camera or file picker.
-8. Schedule: switch Day, Week, Month; open Filters; the keyboard does not hide the Apply control.
-9. Rotate to landscape and back; nothing is cut off.
-10. Write down anything wrong with the screen name. Do not include real names.
+**CONDITIONAL GO for a TEST-only deployment (synthetic data); not a production GO.** CI is green on the candidate. Remaining gates: the owner's authorization to push the operator commit; the owner's approval of the migration database-access method; operator, window and approval reference named; the ledger recheck, snapshot, assembly, live-template and Lambda-policy checks passing at run time.
 
 ## 10. Questions for the owner (asked once; none blocks the TEST deployment)
 
