@@ -186,11 +186,11 @@ begin
    where n.organization_id = p_organization_id and n.recipient_user_id = v_actor and n.read_at is null and n.resolved_at is null;
   select coalesce(jsonb_agg(jsonb_build_object('id', t.id, 'issueKey', t.issue_key, 'severity', t.severity, 'kind', t.kind, 'reason', t.reason, 'queue', t.queue,
            'clientCode', t.client_code, 'createdAt', t.created_at, 'readAt', t.read_at, 'resolvedAt', t.resolved_at,
-           'state', case when t.resolved_at is not null then 'resolved' when t.read_at is not null then 'read' else 'unread' end) order by t.created_at desc, t.id), '[]'::jsonb)
+           'state', case when t.resolved_at is not null then 'resolved' when t.read_at is not null then 'read' else 'unread' end) order by t.severity, t.created_at desc, t.id), '[]'::jsonb)
     into v_items
   from (select n.* from ogevia.issue_notifications n
          where n.organization_id = p_organization_id and n.recipient_user_id = v_actor and (p_include_read or (n.read_at is null and n.resolved_at is null))
-         order by n.created_at desc, n.id limit p_limit) t;
+         order by n.severity, n.created_at desc, n.id limit p_limit) t;
   return jsonb_build_object('asOf', now(), 'unread', v_unread, 'items', v_items);
 end;
 $$;

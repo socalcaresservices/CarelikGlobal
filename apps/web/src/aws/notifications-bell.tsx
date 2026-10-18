@@ -5,8 +5,8 @@ import { newIdempotencyKey } from "@/lib/sv-backend";
 import { formatClockTime, formatNumericDate } from "@/lib/service-verification";
 import { useOrganization } from "@/providers/organization-provider";
 import { useAwsApi } from "./aws-workspace";
-import { REASON_LABEL, TONE } from "./attention";
-import { useNotifications } from "./notifications";
+import { TONE } from "./attention";
+import { notificationLabel, useNotifications } from "./notifications";
 
 /** The header's notifications: unread count by word and number, and a short list. Opening an item's page is done from Action needed; nothing here changes an issue. */
 export function NotificationsBell() {
@@ -41,7 +41,7 @@ export function NotificationsBell() {
         Notifications{q.isError ? " ?" : <span className="font-og-mono tabular-nums">{unread}</span>}
       </button>
       {open ? (
-        <section id="notifications-panel" aria-label="Notifications" className="absolute left-0 z-30 mt-2 w-[min(22rem,calc(100vw-2rem))] rounded-xl border border-og-line bg-og-card p-3 shadow-lg" data-testid="notifications-panel">
+        <section id="notifications-panel" aria-label="Notifications" className="fixed left-4 right-4 z-30 mt-2 rounded-xl border border-og-line bg-og-card p-3 shadow-lg md:absolute md:left-0 md:right-auto md:w-[22rem]" data-testid="notifications-panel">
           {q.isError ? <p role="alert" className="text-sm text-red-700">Notifications could not be loaded. Action needed still shows everything.</p> : null}
           {q.data && q.data.items.length === 0 ? <p className="text-sm text-og-sub">Nothing new. Critical items appear here when they start; Urgent items follow your agency&rsquo;s setting.</p> : null}
           <ul className="max-h-80 space-y-2 overflow-y-auto">
@@ -49,7 +49,7 @@ export function NotificationsBell() {
               const tone = TONE[n.severity === "critical" ? "red" : "amber"];
               return (
                 <li key={n.id} className={n.state === "unread" ? "rounded-lg border border-og-line p-2" : "rounded-lg p-2 text-og-sub"} data-testid="notification">
-                  <p className="text-sm"><span className={`rounded px-1.5 py-0.5 text-xs font-semibold ${tone.badge}`}>{tone.icon} {tone.word}</span> {REASON_LABEL[n.reason] ?? n.reason.replace(/_/g, " ")}</p>
+                  <p className="text-sm"><span className={`rounded px-1.5 py-0.5 text-xs font-semibold ${tone.badge}`}>{tone.icon} {tone.word}</span> {notificationLabel(n.reason)}</p>
                   <p className="mt-1 text-xs text-og-sub">
                     {n.clientCode ? `Client ${n.clientCode} · ` : ""}{formatNumericDate(n.createdAt)} {formatClockTime(n.createdAt)} · {n.state === "resolved" ? "Resolved" : n.state === "read" ? "Read" : "New"}
                   </p>
