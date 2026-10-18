@@ -1,6 +1,6 @@
 // 0077 Counts agree with the issue list, and the approved in-app notifications (Board 4 decision 11, in-app part). SYNTHETIC data only.
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { api, asActor, asReplica, createTestDb, expectPgError, freshClient, seedWorld, signedVisit, type Actor, type TestDb, type World } from "./harness.js";
+import { ageVisit, api, asActor, asReplica, createTestDb, expectPgError, freshClient, seedWorld, signedVisit, type Actor, type TestDb, type World } from "./harness.js";
 
 let db: TestDb;
 let w: World;
@@ -10,7 +10,8 @@ const q = (sql: string, params: unknown[] = []) => db.admin.query(sql, params);
 const call = <T = any>(a: Actor, sql: string, params: unknown[] = []) => asActor(db, a.sub, async (c) => (await c.query(sql, params)).rows as any[] as T[]);
 const notes = (a: Actor, org = w.orgA, includeRead = true) => call(a, "select ogevia_api.list_my_notifications($1,$2,100) as r", [org, includeRead]).then((r) => r[0].r);
 const issues = (a: Actor) => call(a, "select ogevia_api.list_action_issues($1,null,null,null,null,null,null,200,0) as r", [w.orgA]).then((r) => r[0].r);
-const summary = (a: Actor) => call(a, "select * from ogevia_api.get_attention_summary($1)", [w.orgA]).then((r) => r[0]);
+// the same arguments the API route passes (12 h unscheduled, 48 h to confirm)
+const summary = (a: Actor) => call(a, "select * from ogevia_api.get_attention_summary($1, 12, 2880)", [w.orgA]).then((r) => r[0]);
 const forShift = (list: any, id: string) => list.items.filter((i: any) => i.issueKey.endsWith(":" + id));
 
 async function shiftAt(startHoursFromNow: number, hours: number) {
@@ -61,6 +62,44 @@ describe("counts agree with the issue list (the sidebar and Action-needed totals
       const sw = ["missing_time_out", "not_confirmed", "needs_review", "late_responses_to_review", "uncovered_shifts", "documents_blocking", "documents_to_review"].reduce((s, k) => s + Number(sch[k] ?? 0), 0);
       expect(Number(sch.total)).toBe(sw);
     }
+  });
+});
+
+describe("every summary category equals its rows in the issue list (the sidebar badges and the Action-needed total)", () => {
+  const countReason = (list: any, reason: string) => list.issues.filter((i: any) => i.reason === reason).length;
+  const compare = async () => {
+    const [row, list] = await Promise.all([summary(w.ownerA), issues(w.ownerA)]);
+    return {
+      missing_time_out: [Number(row.missing_time_out), countReason(list, "missing_clock_out")],
+      not_confirmed: [Number(row.not_confirmed), countReason(list, "confirmation_overdue")],
+      needs_review: [Number(row.needs_review), countReason(list, "needs_review")],
+      late_responses: [Number(row.late_responses_to_review), countReason(list, "late_response")],
+      ready_for_approval: [Number(row.billing_ready_unapproved), countReason(list, "ready_for_approval")],
+    } as Record<string, number[]>;
+  };
+  const expectEqual = (c: Record<string, number[]>) => { for (const [k, [a, b]] of Object.entries(c)) expect(a, k).toBe(b); };
+
+  it("with the default deadlines, over a mixed set of visits", async () => {
+    const f1 = await freshClient(db, w, w.caregiverA3, 600);
+    const open = await api.start(db, w.caregiverA3, w.orgA, f1.client, f1.service, null, "Synthetic unscheduled visit");
+    await ageVisit(db, open, 20 * 60); // open 20 h with no schedule: missing clock-out
+    const f2 = await freshClient(db, w, w.caregiverA2, 600);
+    await signedVisit(db, w.caregiverA2, w, 30, w.orgA, f2.client, f2.service); // ready for approval
+    expectEqual(await compare());
+  });
+
+  it("a shorter agency confirmation deadline moves the same visit in the list and in the summary", async () => {
+    const f = await freshClient(db, w, w.caregiverA1, 600);
+    const v = await api.start(db, w.caregiverA1, w.orgA, f.client, f.service, null, "Synthetic: awaiting confirmation");
+    await ageVisit(db, v, 120);
+    await api.end(db, w.caregiverA1, v);
+    await asReplica(db, "update ogevia.service_visits set status = 'awaiting_signature', time_in = now() - interval '32 hours', time_out = now() - interval '30 hours' where id = $1", [v]);
+    const before = await compare();
+    expectEqual(before); // 30 h is inside the 48 h default: pending, in neither
+    await call(w.ownerA, "select ogevia_api.set_attention_settings($1,24,null,null,'Faster follow-up (synthetic)')", [w.orgA]);
+    const after = await compare();
+    expectEqual(after);
+    expect(after.not_confirmed![0]).toBe(before.not_confirmed![0]! + 1);
   });
 });
 

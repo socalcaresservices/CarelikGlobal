@@ -1,7 +1,7 @@
 -- 0077 | Sidebar and Action-needed counts agree with the issue list; approved in-app notifications (Board 4 decision 11, in-app part only)
 --
 -- 1. get_attention_summary: (a) total now includes Ready for approval for people who may see billing, so the server total equals the sum the web displays (was F2);
---    (b) unfilled shifts count only when they start within 48 hours or are under way, matching the Needs attention now queue (was F4).
+--    (b) the not-confirmed count uses the agency's own (shorter) confirmation deadline, like the list; (c) unfilled shifts count only when they start within 48 hours or are under way, matching the Needs attention now queue (was F4).
 -- 2. In-app notifications. Critical issues always notify the staff member who can see them; Urgent issues notify according to the agency setting (default on); Routine
 --    issues never notify. One notification per person, issue and severity step (and per reopening), so an unchanged issue never repeats. A notification stops being
 --    pending when the issue is no longer in that person's list. Rows are never deleted. Content carries the random client code, never a name. No outbound channel
@@ -46,7 +46,7 @@ as $$
       )::integer as missing_time_out,
       count(*) filter (
         where v.status = 'awaiting_signature' and v.time_out is not null
-          and v.time_out <= now() - make_interval(mins => p_unconfirmed_minutes)
+          and v.time_out <= now() - make_interval(mins => least(p_unconfirmed_minutes, ogevia.attention_rule_hours(p_organization_id, 'confirmation_overdue') * 60))
       )::integer as not_confirmed,
       -- 0036: a visit waiting for a late confirmation is a reminder, not an action;
       -- a received response is its own action item.

@@ -10,11 +10,11 @@ const note = (over: Record<string, unknown>) => ({ id: "n1", issueKey: "shift:un
 
 describe("notifications bell", () => {
   it("shows the unread count, lists items with a word and the client code only, and marks all read through the server", async () => {
-    let items = [note({}), note({ id: "n2", severity: "urgent", reason: "confirmation_overdue", kind: "visit", queue: "visit_review", clientCode: "CL-8" }), note({ id: "n3", state: "resolved", resolvedAt: new Date().toISOString() })];
+    let items: Array<Record<string, unknown>> = [note({}), note({ id: "n2", severity: "urgent", reason: "confirmation_overdue", kind: "visit", queue: "visit_review", clientCode: "CL-8" }), note({ id: "n3", state: "resolved", resolvedAt: new Date().toISOString() })];
     let unread = 2;
     const { calls } = renderAws("/", PERMS, {
       "GET /v1/notifications": () => json(200, { notifications: { asOf: new Date().toISOString(), unread, items } }),
-      "POST /v1/notifications/read": () => { unread = 0; items = items.map((i) => (i.state === "unread" ? { ...i, state: "read", readAt: new Date().toISOString() } : i)); return json(200, { marked: 2 }); },
+      "POST /v1/notifications/read": () => { unread = 0; items = items.map((i) => (i["state"] === "unread" ? { ...i, state: "read", readAt: new Date().toISOString() } : i)); return json(200, { marked: 2 }); },
     });
     const button = await screen.findByTestId("notifications-button");
     expect(button.getAttribute("aria-label")).toBe("Notifications: 2 unread");
