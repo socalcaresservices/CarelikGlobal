@@ -331,8 +331,8 @@ function TypesForm({ types, onDone }: { types: DocumentType[]; onDone: () => voi
           New type
           <input value={name} maxLength={80} onChange={(e) => setName(e.target.value)} placeholder="e.g. CPR card" className="mt-1 block rounded-lg border border-slate-200 px-3 py-2 text-sm" />
         </label>
-        <label className="flex items-center gap-2 text-sm text-slate-700">
-          <input type="checkbox" checked={requiresExpiry} onChange={(e) => setRequiresExpiry(e.target.checked)} />
+        <label className="flex min-h-[44px] items-center gap-2 text-sm text-slate-700">
+          <input type="checkbox" className="h-5 w-5" checked={requiresExpiry} onChange={(e) => setRequiresExpiry(e.target.checked)} />
           Has an expiry date (use the date on the certificate)
         </label>
         <Button type="submit" variant="secondary" disabled={state.busy}>Add type</Button>

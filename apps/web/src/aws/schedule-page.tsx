@@ -284,7 +284,7 @@ type MenuItem = { label: string; action: Exclude<Action, null>; danger?: boolean
 const COLS = 6;
 
 /** One shift: desktop = a row of a compact table, phone = a compact row that opens. One primary action inline; the rest are in "More actions". */
-function ShiftRow({ s, canManage, onDone, highlight = false, autoAssign = false }: { s: Shift; canManage: boolean; onDone: (text: string) => void; highlight?: boolean; autoAssign?: boolean }) {
+function ShiftRow({ s, canManage, onDone, highlight = false, autoAssign = false, withDate = true }: { s: Shift; canManage: boolean; onDone: (text: string) => void; highlight?: boolean; autoAssign?: boolean; withDate?: boolean }) {
   const [action, setAction] = useState<Action>(null);
   const [expanded, setExpanded] = useState(stateOfShift(s) === "needs_coverage" || highlight);
   const narrow = useIsNarrow();
@@ -344,11 +344,11 @@ function ShiftRow({ s, canManage, onDone, highlight = false, autoAssign = false 
       <li ref={rowRef as RefObject<HTMLLIElement>} id={`shift-${s.shiftId}`} data-highlight={highlight ? "true" : undefined} className={`rounded-lg border bg-og-card ${tone} ${stateOfShift(s) === "needs_coverage" ? "border-red-300" : "border-slate-200"}`}>
         <details open={expanded || action !== null} onToggle={(e) => setExpanded(e.currentTarget.open)}>
           <summary className="flex min-h-11 cursor-pointer items-center justify-between gap-2 px-3 py-1">
-            <span className="min-w-0 text-sm"><span className="font-semibold text-slate-950">{when(s.startsAt)}</span> · {nameWithCode(s.clientName, s.clientCode, s.duplicateName)}</span>
+            <span className="min-w-0 text-sm"><span className="font-semibold text-slate-950">{withDate ? when(s.startsAt) : time(s.startsAt)}</span> · {nameWithCode(s.clientName, s.clientCode, s.duplicateName)}</span>
             {chip}
           </summary>
           <div className="space-y-1 px-3 pb-3 text-sm text-slate-800">
-            <p>{time(s.startsAt)}–{time(s.endsAt)} · <Link className="underline" to={`/clients/${s.clientId}`}>{clientText}</Link></p>
+            <p>{time(s.startsAt)}–{time(s.endsAt)} · <Link className="underline [@media(pointer:coarse)]:inline-flex [@media(pointer:coarse)]:min-h-[44px] [@media(pointer:coarse)]:items-center" to={`/clients/${s.clientId}`}>{clientText}</Link></p>
             <p>{s.serviceName ?? "Service"} · {who}</p>
             {hasNotes ? <div className="space-y-0.5 text-xs">{notes}</div> : null}
             {rowActions}
@@ -362,7 +362,7 @@ function ShiftRow({ s, canManage, onDone, highlight = false, autoAssign = false 
     <tbody ref={rowRef as RefObject<HTMLTableSectionElement>} id={`shift-${s.shiftId}`} data-highlight={highlight ? "true" : undefined} className={stateOfShift(s) === "needs_coverage" ? "bg-red-50/40" : ""}>
       <tr className={`border-t border-slate-200 align-top ${tone}`}>
         <td className="whitespace-nowrap py-1.5 pl-2 pr-3 font-semibold text-slate-950">{time(s.startsAt)}–{time(s.endsAt)}</td>
-        <td className="py-1.5 pr-3"><Link className="underline" to={`/clients/${s.clientId}`}>{clientText}</Link></td>
+        <td className="py-1.5 pr-3"><Link className="underline [@media(pointer:coarse)]:inline-flex [@media(pointer:coarse)]:min-h-[44px] [@media(pointer:coarse)]:items-center" to={`/clients/${s.clientId}`}>{clientText}</Link></td>
         <td className="py-1.5 pr-3 text-slate-800">{s.serviceName ?? "Service"}</td>
         <td className="py-1.5 pr-3 text-slate-800">{who}</td>
         <td className="py-1.5 pr-3">{chip}</td>
@@ -377,7 +377,7 @@ function ShiftRow({ s, canManage, onDone, highlight = false, autoAssign = false 
 /** A list of shifts: a compact table on desktop, compact rows on a phone. */
 function ShiftList({ shifts, canManage, onDone, focusShift, autoAssign, withDate = false, label }: { shifts: Shift[]; canManage: boolean; onDone: (text: string) => void; focusShift: string | null; autoAssign: boolean; withDate?: boolean; label: string }) {
   const narrow = useIsNarrow();
-  const rows = shifts.map((s) => <ShiftRow key={s.shiftId} s={s} canManage={canManage} onDone={onDone} highlight={s.shiftId === focusShift} autoAssign={s.shiftId === focusShift && autoAssign} />);
+  const rows = shifts.map((s) => <ShiftRow key={s.shiftId} s={s} canManage={canManage} onDone={onDone} highlight={s.shiftId === focusShift} autoAssign={s.shiftId === focusShift && autoAssign} withDate={withDate} />);
   if (narrow) return <ul aria-label={label} className="space-y-1.5">{rows}</ul>;
   return (
     <table aria-label={label} className="w-full border-collapse text-left text-sm">
@@ -481,7 +481,7 @@ export function SchedulePage() {
           ? <input id="sh-from" type="month" value={from.slice(0, 7)} onChange={(e) => e.target.value && setFrom(`${e.target.value}-01`)} className="mt-0.5 block min-h-11 rounded-lg border border-slate-200 px-3 text-base md:min-h-9 md:text-sm" />
           : <input id="sh-from" type="date" value={from} onChange={(e) => e.target.value && setFrom(e.target.value)} className="mt-0.5 block min-h-11 rounded-lg border border-slate-200 px-3 text-base md:min-h-9 md:text-sm" />}</div>
         <Button type="button" variant="secondary" className="min-h-11 md:min-h-9" onClick={() => setFrom(stepAnchor(view, from, 1))}>Next {unit} →</Button>
-        <label className="flex min-h-11 items-center gap-2 text-sm text-slate-800 md:min-h-9"><input type="checkbox" checked={onlyOpen} onChange={(e) => setOnlyOpen(e.target.checked)} /> Unfilled only</label>
+        <label className="flex min-h-11 items-center gap-2 text-sm text-slate-800 md:min-h-9"><input type="checkbox" className="h-5 w-5" checked={onlyOpen} onChange={(e) => setOnlyOpen(e.target.checked)} /> Unfilled only</label>
         <FilterBar shifts={shifts.data ?? []} filters={filters} onChange={setFilters} />
       </div>
       {view === "month" && shifts.data ? <MonthGrid anchor={from} shifts={filtered.filter((s) => !onlyOpen || stateOfShift(s) === "needs_coverage")} onPickDay={(d) => { setView("day"); setFrom(d); }} /> : null}

@@ -136,7 +136,7 @@ export function AwsHomePage() {
             ) : null}
             {sum(rows, "needsReconciliationMinutes") > 0 ? (
               <p role="status" className="text-sm font-semibold text-amber-900" data-testid="needs-reconciliation">
-                {hoursLabel(sum(rows, "needsReconciliationMinutes"))} are reserved on shifts that ended with no visit record, until a person decides. <Link className="underline" to="/schedule">Reconcile shifts</Link>
+                {hoursLabel(sum(rows, "needsReconciliationMinutes"))} are reserved on shifts that ended with no visit record, until a person decides. <Link className="underline [@media(pointer:coarse)]:inline-flex [@media(pointer:coarse)]:min-h-[44px] [@media(pointer:coarse)]:items-center" to="/schedule">Reconcile shifts</Link>
               </p>
             ) : null}
             {over.length > 0 ? (

@@ -1,0 +1,4870 @@
+[
+ {
+  "viewport": "desktop",
+  "profile": "large-text",
+  "background": "light",
+  "layout": "standard",
+  "screen": "/",
+  "applied": true,
+  "overflow": false,
+  "checked": 117,
+  "lowContrast": 0,
+  "lowContrastSample": [],
+  "alerts": 3,
+  "alertsHidden": 0,
+  "tinyControls": 1,
+  "tinySample": [
+   "a[Reconcile shifts] 120x19"
+  ],
+  "coarse": false,
+  "attrs": {
+   "bg": "light",
+   "layout": "standard",
+   "density": "comfortable",
+   "text": "large"
+  }
+ },
+ {
+  "viewport": "desktop",
+  "profile": "large-text",
+  "background": "light",
+  "layout": "standard",
+  "screen": "/documents",
+  "applied": true,
+  "overflow": false,
+  "checked": 181,
+  "lowContrast": 0,
+  "lowContrastSample": [],
+  "alerts": 1,
+  "alertsHidden": 0,
+  "tinyControls": 0,
+  "tinySample": [],
+  "coarse": false,
+  "attrs": {
+   "bg": "light",
+   "layout": "standard",
+   "density": "comfortable",
+   "text": "large"
+  }
+ },
+ {
+  "viewport": "desktop",
+  "profile": "large-text",
+  "background": "light",
+  "layout": "standard",
+  "screen": "/schedule",
+  "applied": true,
+  "overflow": false,
+  "checked": 265,
+  "lowContrast": 0,
+  "lowContrastSample": [],
+  "alerts": 0,
+  "alertsHidden": 0,
+  "tinyControls": 53,
+  "tinySample": [
+   "a[Demo Vega] 87x19",
+   "a[Demo Vega] 87x19",
+   "a[Demo Okafor] 102x19"
+  ],
+  "coarse": false,
+  "attrs": {
+   "bg": "light",
+   "layout": "standard",
+   "density": "comfortable",
+   "text": "large"
+  }
+ },
+ {
+  "viewport": "desktop",
+  "profile": "large-text",
+  "background": "light",
+  "layout": "standard",
+  "screen": "/settings/appearance",
+  "applied": true,
+  "overflow": false,
+  "checked": 111,
+  "lowContrast": 0,
+  "lowContrastSample": [],
+  "alerts": 0,
+  "alertsHidden": 0,
+  "tinyControls": 0,
+  "tinySample": [],
+  "coarse": false,
+  "attrs": {
+   "bg": "light",
+   "layout": "standard",
+   "density": "comfortable",
+   "text": "large"
+  }
+ },
+ {
+  "viewport": "desktop",
+  "profile": "large-text",
+  "background": "light",
+  "layout": "standard",
+  "screen": "/clients",
+  "applied": true,
+  "overflow": false,
+  "checked": 92,
+  "lowContrast": 0,
+  "lowContrastSample": [],
+  "alerts": 0,
+  "alertsHidden": 0,
+  "tinyControls": 0,
+  "tinySample": [],
+  "coarse": false,
+  "attrs": {
+   "bg": "light",
+   "layout": "standard",
+   "density": "comfortable",
+   "text": "large"
+  }
+ },
+ {
+  "viewport": "desktop",
+  "profile": "large-text",
+  "background": "light",
+  "layout": "standard",
+  "screen": "/care-team",
+  "applied": true,
+  "overflow": false,
+  "checked": 112,
+  "lowContrast": 1,
+  "lowContrastSample": [
+   {
+    "text": "Turn Service checks On",
+    "ratio": 2.56,
+    "size": 15.75
+   }
+  ],
+  "alerts": 0,
+  "alertsHidden": 0,
+  "tinyControls": 2,
+  "tinySample": [
+   "summary[Details] 428x18",
+   "summary[Details] 428x18"
+  ],
+  "coarse": false,
+  "attrs": {
+   "bg": "light",
+   "layout": "standard",
+   "density": "comfortable",
+   "text": "large"
+  }
+ },
+ {
+  "viewport": "desktop",
+  "profile": "large-text",
+  "background": "light",
+  "layout": "minimal",
+  "screen": "/",
+  "applied": true,
+  "overflow": false,
+  "checked": 117,
+  "lowContrast": 0,
+  "lowContrastSample": [],
+  "alerts": 3,
+  "alertsHidden": 0,
+  "tinyControls": 1,
+  "tinySample": [
+   "a[Reconcile shifts] 120x19"
+  ],
+  "coarse": false,
+  "attrs": {
+   "bg": "light",
+   "layout": "minimal",
+   "density": "comfortable",
+   "text": "large"
+  }
+ },
+ {
+  "viewport": "desktop",
+  "profile": "large-text",
+  "background": "light",
+  "layout": "minimal",
+  "screen": "/documents",
+  "applied": true,
+  "overflow": false,
+  "checked": 181,
+  "lowContrast": 0,
+  "lowContrastSample": [],
+  "alerts": 1,
+  "alertsHidden": 0,
+  "tinyControls": 0,
+  "tinySample": [],
+  "coarse": false,
+  "attrs": {
+   "bg": "light",
+   "layout": "minimal",
+   "density": "comfortable",
+   "text": "large"
+  }
+ },
+ {
+  "viewport": "desktop",
+  "profile": "large-text",
+  "background": "light",
+  "layout": "minimal",
+  "screen": "/schedule",
+  "applied": true,
+  "overflow": false,
+  "checked": 265,
+  "lowContrast": 0,
+  "lowContrastSample": [],
+  "alerts": 0,
+  "alertsHidden": 0,
+  "tinyControls": 53,
+  "tinySample": [
+   "a[Demo Vega] 87x19",
+   "a[Demo Vega] 87x19",
+   "a[Demo Okafor] 102x19"
+  ],
+  "coarse": false,
+  "attrs": {
+   "bg": "light",
+   "layout": "minimal",
+   "density": "comfortable",
+   "text": "large"
+  }
+ },
+ {
+  "viewport": "desktop",
+  "profile": "large-text",
+  "background": "light",
+  "layout": "minimal",
+  "screen": "/settings/appearance",
+  "applied": true,
+  "overflow": false,
+  "checked": 111,
+  "lowContrast": 0,
+  "lowContrastSample": [],
+  "alerts": 0,
+  "alertsHidden": 0,
+  "tinyControls": 0,
+  "tinySample": [],
+  "coarse": false,
+  "attrs": {
+   "bg": "light",
+   "layout": "minimal",
+   "density": "comfortable",
+   "text": "large"
+  }
+ },
+ {
+  "viewport": "desktop",
+  "profile": "large-text",
+  "background": "light",
+  "layout": "minimal",
+  "screen": "/clients",
+  "applied": true,
+  "overflow": false,
+  "checked": 92,
+  "lowContrast": 0,
+  "lowContrastSample": [],
+  "alerts": 0,
+  "alertsHidden": 0,
+  "tinyControls": 0,
+  "tinySample": [],
+  "coarse": false,
+  "attrs": {
+   "bg": "light",
+   "layout": "minimal",
+   "density": "comfortable",
+   "text": "large"
+  }
+ },
+ {
+  "viewport": "desktop",
+  "profile": "large-text",
+  "background": "light",
+  "layout": "minimal",
+  "screen": "/care-team",
+  "applied": true,
+  "overflow": false,
+  "checked": 112,
+  "lowContrast": 1,
+  "lowContrastSample": [
+   {
+    "text": "Turn Service checks On",
+    "ratio": 2.56,
+    "size": 15.75
+   }
+  ],
+  "alerts": 0,
+  "alertsHidden": 0,
+  "tinyControls": 2,
+  "tinySample": [
+   "summary[Details] 429x18",
+   "summary[Details] 429x18"
+  ],
+  "coarse": false,
+  "attrs": {
+   "bg": "light",
+   "layout": "minimal",
+   "density": "comfortable",
+   "text": "large"
+  }
+ },
+ {
+  "viewport": "desktop",
+  "profile": "large-text",
+  "background": "white",
+  "layout": "standard",
+  "screen": "/",
+  "applied": true,
+  "overflow": false,
+  "checked": 117,
+  "lowContrast": 0,
+  "lowContrastSample": [],
+  "alerts": 3,
+  "alertsHidden": 0,
+  "tinyControls": 1,
+  "tinySample": [
+   "a[Reconcile shifts] 120x19"
+  ],
+  "coarse": false,
+  "attrs": {
+   "bg": "white",
+   "layout": "standard",
+   "density": "comfortable",
+   "text": "large"
+  }
+ },
+ {
+  "viewport": "desktop",
+  "profile": "large-text",
+  "background": "white",
+  "layout": "standard",
+  "screen": "/documents",
+  "applied": true,
+  "overflow": false,
+  "checked": 181,
+  "lowContrast": 0,
+  "lowContrastSample": [],
+  "alerts": 1,
+  "alertsHidden": 0,
+  "tinyControls": 0,
+  "tinySample": [],
+  "coarse": false,
+  "attrs": {
+   "bg": "white",
+   "layout": "standard",
+   "density": "comfortable",
+   "text": "large"
+  }
+ },
+ {
+  "viewport": "desktop",
+  "profile": "large-text",
+  "background": "white",
+  "layout": "standard",
+  "screen": "/schedule",
+  "applied": true,
+  "overflow": false,
+  "checked": 265,
+  "lowContrast": 0,
+  "lowContrastSample": [],
+  "alerts": 0,
+  "alertsHidden": 0,
+  "tinyControls": 53,
+  "tinySample": [
+   "a[Demo Vega] 87x19",
+   "a[Demo Vega] 87x19",
+   "a[Demo Okafor] 102x19"
+  ],
+  "coarse": false,
+  "attrs": {
+   "bg": "white",
+   "layout": "standard",
+   "density": "comfortable",
+   "text": "large"
+  }
+ },
+ {
+  "viewport": "desktop",
+  "profile": "large-text",
+  "background": "white",
+  "layout": "standard",
+  "screen": "/settings/appearance",
+  "applied": true,
+  "overflow": false,
+  "checked": 111,
+  "lowContrast": 0,
+  "lowContrastSample": [],
+  "alerts": 0,
+  "alertsHidden": 0,
+  "tinyControls": 0,
+  "tinySample": [],
+  "coarse": false,
+  "attrs": {
+   "bg": "white",
+   "layout": "standard",
+   "density": "comfortable",
+   "text": "large"
+  }
+ },
+ {
+  "viewport": "desktop",
+  "profile": "large-text",
+  "background": "white",
+  "layout": "standard",
+  "screen": "/clients",
+  "applied": true,
+  "overflow": false,
+  "checked": 92,
+  "lowContrast": 0,
+  "lowContrastSample": [],
+  "alerts": 0,
+  "alertsHidden": 0,
+  "tinyControls": 0,
+  "tinySample": [],
+  "coarse": false,
+  "attrs": {
+   "bg": "white",
+   "layout": "standard",
+   "density": "comfortable",
+   "text": "large"
+  }
+ },
+ {
+  "viewport": "desktop",
+  "profile": "large-text",
+  "background": "white",
+  "layout": "standard",
+  "screen": "/care-team",
+  "applied": true,
+  "overflow": false,
+  "checked": 112,
+  "lowContrast": 1,
+  "lowContrastSample": [
+   {
+    "text": "Turn Service checks On",
+    "ratio": 2.56,
+    "size": 15.75
+   }
+  ],
+  "alerts": 0,
+  "alertsHidden": 0,
+  "tinyControls": 2,
+  "tinySample": [
+   "summary[Details] 428x18",
+   "summary[Details] 428x18"
+  ],
+  "coarse": false,
+  "attrs": {
+   "bg": "white",
+   "layout": "standard",
+   "density": "comfortable",
+   "text": "large"
+  }
+ },
+ {
+  "viewport": "desktop",
+  "profile": "large-text",
+  "background": "white",
+  "layout": "minimal",
+  "screen": "/",
+  "applied": true,
+  "overflow": false,
+  "checked": 117,
+  "lowContrast": 0,
+  "lowContrastSample": [],
+  "alerts": 3,
+  "alertsHidden": 0,
+  "tinyControls": 1,
+  "tinySample": [
+   "a[Reconcile shifts] 120x19"
+  ],
+  "coarse": false,
+  "attrs": {
+   "bg": "white",
+   "layout": "minimal",
+   "density": "comfortable",
+   "text": "large"
+  }
+ },
+ {
+  "viewport": "desktop",
+  "profile": "large-text",
+  "background": "white",
+  "layout": "minimal",
+  "screen": "/documents",
+  "applied": true,
+  "overflow": false,
+  "checked": 181,
+  "lowContrast": 0,
+  "lowContrastSample": [],
+  "alerts": 1,
+  "alertsHidden": 0,
+  "tinyControls": 0,
+  "tinySample": [],
+  "coarse": false,
+  "attrs": {
+   "bg": "white",
+   "layout": "minimal",
+   "density": "comfortable",
+   "text": "large"
+  }
+ },
+ {
+  "viewport": "desktop",
+  "profile": "large-text",
+  "background": "white",
+  "layout": "minimal",
+  "screen": "/schedule",
+  "applied": true,
+  "overflow": false,
+  "checked": 265,
+  "lowContrast": 0,
+  "lowContrastSample": [],
+  "alerts": 0,
+  "alertsHidden": 0,
+  "tinyControls": 53,
+  "tinySample": [
+   "a[Demo Vega] 87x19",
+   "a[Demo Vega] 87x19",
+   "a[Demo Okafor] 102x19"
+  ],
+  "coarse": false,
+  "attrs": {
+   "bg": "white",
+   "layout": "minimal",
+   "density": "comfortable",
+   "text": "large"
+  }
+ },
+ {
+  "viewport": "desktop",
+  "profile": "large-text",
+  "background": "white",
+  "layout": "minimal",
+  "screen": "/settings/appearance",
+  "applied": true,
+  "overflow": false,
+  "checked": 111,
+  "lowContrast": 0,
+  "lowContrastSample": [],
+  "alerts": 0,
+  "alertsHidden": 0,
+  "tinyControls": 0,
+  "tinySample": [],
+  "coarse": false,
+  "attrs": {
+   "bg": "white",
+   "layout": "minimal",
+   "density": "comfortable",
+   "text": "large"
+  }
+ },
+ {
+  "viewport": "desktop",
+  "profile": "large-text",
+  "background": "white",
+  "layout": "minimal",
+  "screen": "/clients",
+  "applied": true,
+  "overflow": false,
+  "checked": 92,
+  "lowContrast": 0,
+  "lowContrastSample": [],
+  "alerts": 0,
+  "alertsHidden": 0,
+  "tinyControls": 0,
+  "tinySample": [],
+  "coarse": false,
+  "attrs": {
+   "bg": "white",
+   "layout": "minimal",
+   "density": "comfortable",
+   "text": "large"
+  }
+ },
+ {
+  "viewport": "desktop",
+  "profile": "large-text",
+  "background": "white",
+  "layout": "minimal",
+  "screen": "/care-team",
+  "applied": true,
+  "overflow": false,
+  "checked": 112,
+  "lowContrast": 1,
+  "lowContrastSample": [
+   {
+    "text": "Turn Service checks On",
+    "ratio": 2.56,
+    "size": 15.75
+   }
+  ],
+  "alerts": 0,
+  "alertsHidden": 0,
+  "tinyControls": 2,
+  "tinySample": [
+   "summary[Details] 429x18",
+   "summary[Details] 429x18"
+  ],
+  "coarse": false,
+  "attrs": {
+   "bg": "white",
+   "layout": "minimal",
+   "density": "comfortable",
+   "text": "large"
+  }
+ },
+ {
+  "viewport": "desktop",
+  "profile": "large-text",
+  "background": "gray",
+  "layout": "standard",
+  "screen": "/",
+  "applied": true,
+  "overflow": false,
+  "checked": 117,
+  "lowContrast": 0,
+  "lowContrastSample": [],
+  "alerts": 3,
+  "alertsHidden": 0,
+  "tinyControls": 1,
+  "tinySample": [
+   "a[Reconcile shifts] 120x19"
+  ],
+  "coarse": false,
+  "attrs": {
+   "bg": "gray",
+   "layout": "standard",
+   "density": "comfortable",
+   "text": "large"
+  }
+ },
+ {
+  "viewport": "desktop",
+  "profile": "large-text",
+  "background": "gray",
+  "layout": "standard",
+  "screen": "/documents",
+  "applied": true,
+  "overflow": false,
+  "checked": 181,
+  "lowContrast": 0,
+  "lowContrastSample": [],
+  "alerts": 1,
+  "alertsHidden": 0,
+  "tinyControls": 0,
+  "tinySample": [],
+  "coarse": false,
+  "attrs": {
+   "bg": "gray",
+   "layout": "standard",
+   "density": "comfortable",
+   "text": "large"
+  }
+ },
+ {
+  "viewport": "desktop",
+  "profile": "large-text",
+  "background": "gray",
+  "layout": "standard",
+  "screen": "/schedule",
+  "applied": true,
+  "overflow": false,
+  "checked": 265,
+  "lowContrast": 0,
+  "lowContrastSample": [],
+  "alerts": 0,
+  "alertsHidden": 0,
+  "tinyControls": 53,
+  "tinySample": [
+   "a[Demo Vega] 87x19",
+   "a[Demo Vega] 87x19",
+   "a[Demo Okafor] 102x19"
+  ],
+  "coarse": false,
+  "attrs": {
+   "bg": "gray",
+   "layout": "standard",
+   "density": "comfortable",
+   "text": "large"
+  }
+ },
+ {
+  "viewport": "desktop",
+  "profile": "large-text",
+  "background": "gray",
+  "layout": "standard",
+  "screen": "/settings/appearance",
+  "applied": true,
+  "overflow": false,
+  "checked": 111,
+  "lowContrast": 0,
+  "lowContrastSample": [],
+  "alerts": 0,
+  "alertsHidden": 0,
+  "tinyControls": 0,
+  "tinySample": [],
+  "coarse": false,
+  "attrs": {
+   "bg": "gray",
+   "layout": "standard",
+   "density": "comfortable",
+   "text": "large"
+  }
+ },
+ {
+  "viewport": "desktop",
+  "profile": "large-text",
+  "background": "gray",
+  "layout": "standard",
+  "screen": "/clients",
+  "applied": true,
+  "overflow": false,
+  "checked": 92,
+  "lowContrast": 0,
+  "lowContrastSample": [],
+  "alerts": 0,
+  "alertsHidden": 0,
+  "tinyControls": 0,
+  "tinySample": [],
+  "coarse": false,
+  "attrs": {
+   "bg": "gray",
+   "layout": "standard",
+   "density": "comfortable",
+   "text": "large"
+  }
+ },
+ {
+  "viewport": "desktop",
+  "profile": "large-text",
+  "background": "gray",
+  "layout": "standard",
+  "screen": "/care-team",
+  "applied": true,
+  "overflow": false,
+  "checked": 112,
+  "lowContrast": 1,
+  "lowContrastSample": [
+   {
+    "text": "Turn Service checks On",
+    "ratio": 2.46,
+    "size": 15.75
+   }
+  ],
+  "alerts": 0,
+  "alertsHidden": 0,
+  "tinyControls": 2,
+  "tinySample": [
+   "summary[Details] 428x18",
+   "summary[Details] 428x18"
+  ],
+  "coarse": false,
+  "attrs": {
+   "bg": "gray",
+   "layout": "standard",
+   "density": "comfortable",
+   "text": "large"
+  }
+ },
+ {
+  "viewport": "desktop",
+  "profile": "large-text",
+  "background": "gray",
+  "layout": "minimal",
+  "screen": "/",
+  "applied": true,
+  "overflow": false,
+  "checked": 117,
+  "lowContrast": 0,
+  "lowContrastSample": [],
+  "alerts": 3,
+  "alertsHidden": 0,
+  "tinyControls": 1,
+  "tinySample": [
+   "a[Reconcile shifts] 120x19"
+  ],
+  "coarse": false,
+  "attrs": {
+   "bg": "gray",
+   "layout": "minimal",
+   "density": "comfortable",
+   "text": "large"
+  }
+ },
+ {
+  "viewport": "desktop",
+  "profile": "large-text",
+  "background": "gray",
+  "layout": "minimal",
+  "screen": "/documents",
+  "applied": true,
+  "overflow": false,
+  "checked": 181,
+  "lowContrast": 0,
+  "lowContrastSample": [],
+  "alerts": 1,
+  "alertsHidden": 0,
+  "tinyControls": 0,
+  "tinySample": [],
+  "coarse": false,
+  "attrs": {
+   "bg": "gray",
+   "layout": "minimal",
+   "density": "comfortable",
+   "text": "large"
+  }
+ },
+ {
+  "viewport": "desktop",
+  "profile": "large-text",
+  "background": "gray",
+  "layout": "minimal",
+  "screen": "/schedule",
+  "applied": true,
+  "overflow": false,
+  "checked": 265,
+  "lowContrast": 0,
+  "lowContrastSample": [],
+  "alerts": 0,
+  "alertsHidden": 0,
+  "tinyControls": 53,
+  "tinySample": [
+   "a[Demo Vega] 87x19",
+   "a[Demo Vega] 87x19",
+   "a[Demo Okafor] 102x19"
+  ],
+  "coarse": false,
+  "attrs": {
+   "bg": "gray",
+   "layout": "minimal",
+   "density": "comfortable",
+   "text": "large"
+  }
+ },
+ {
+  "viewport": "desktop",
+  "profile": "large-text",
+  "background": "gray",
+  "layout": "minimal",
+  "screen": "/settings/appearance",
+  "applied": true,
+  "overflow": false,
+  "checked": 111,
+  "lowContrast": 0,
+  "lowContrastSample": [],
+  "alerts": 0,
+  "alertsHidden": 0,
+  "tinyControls": 0,
+  "tinySample": [],
+  "coarse": false,
+  "attrs": {
+   "bg": "gray",
+   "layout": "minimal",
+   "density": "comfortable",
+   "text": "large"
+  }
+ },
+ {
+  "viewport": "desktop",
+  "profile": "large-text",
+  "background": "gray",
+  "layout": "minimal",
+  "screen": "/clients",
+  "applied": true,
+  "overflow": false,
+  "checked": 92,
+  "lowContrast": 0,
+  "lowContrastSample": [],
+  "alerts": 0,
+  "alertsHidden": 0,
+  "tinyControls": 0,
+  "tinySample": [],
+  "coarse": false,
+  "attrs": {
+   "bg": "gray",
+   "layout": "minimal",
+   "density": "comfortable",
+   "text": "large"
+  }
+ },
+ {
+  "viewport": "desktop",
+  "profile": "large-text",
+  "background": "gray",
+  "layout": "minimal",
+  "screen": "/care-team",
+  "applied": true,
+  "overflow": false,
+  "checked": 112,
+  "lowContrast": 1,
+  "lowContrastSample": [
+   {
+    "text": "Turn Service checks On",
+    "ratio": 2.46,
+    "size": 15.75
+   }
+  ],
+  "alerts": 0,
+  "alertsHidden": 0,
+  "tinyControls": 2,
+  "tinySample": [
+   "summary[Details] 429x18",
+   "summary[Details] 429x18"
+  ],
+  "coarse": false,
+  "attrs": {
+   "bg": "gray",
+   "layout": "minimal",
+   "density": "comfortable",
+   "text": "large"
+  }
+ },
+ {
+  "viewport": "desktop",
+  "profile": "large-text",
+  "background": "dark",
+  "layout": "standard",
+  "screen": "/",
+  "applied": true,
+  "overflow": false,
+  "checked": 117,
+  "lowContrast": 0,
+  "lowContrastSample": [],
+  "alerts": 3,
+  "alertsHidden": 0,
+  "tinyControls": 1,
+  "tinySample": [
+   "a[Reconcile shifts] 120x19"
+  ],
+  "coarse": false,
+  "attrs": {
+   "bg": "dark",
+   "layout": "standard",
+   "density": "comfortable",
+   "text": "large"
+  }
+ },
+ {
+  "viewport": "desktop",
+  "profile": "large-text",
+  "background": "dark",
+  "layout": "standard",
+  "screen": "/documents",
+  "applied": true,
+  "overflow": false,
+  "checked": 181,
+  "lowContrast": 0,
+  "lowContrastSample": [],
+  "alerts": 1,
+  "alertsHidden": 0,
+  "tinyControls": 0,
+  "tinySample": [],
+  "coarse": false,
+  "attrs": {
+   "bg": "dark",
+   "layout": "standard",
+   "density": "comfortable",
+   "text": "large"
+  }
+ },
+ {
+  "viewport": "desktop",
+  "profile": "large-text",
+  "background": "dark",
+  "layout": "standard",
+  "screen": "/schedule",
+  "applied": true,
+  "overflow": false,
+  "checked": 265,
+  "lowContrast": 0,
+  "lowContrastSample": [],
+  "alerts": 0,
+  "alertsHidden": 0,
+  "tinyControls": 53,
+  "tinySample": [
+   "a[Demo Vega] 87x19",
+   "a[Demo Vega] 87x19",
+   "a[Demo Okafor] 102x19"
+  ],
+  "coarse": false,
+  "attrs": {
+   "bg": "dark",
+   "layout": "standard",
+   "density": "comfortable",
+   "text": "large"
+  }
+ },
+ {
+  "viewport": "desktop",
+  "profile": "large-text",
+  "background": "dark",
+  "layout": "standard",
+  "screen": "/settings/appearance",
+  "applied": true,
+  "overflow": false,
+  "checked": 111,
+  "lowContrast": 0,
+  "lowContrastSample": [],
+  "alerts": 0,
+  "alertsHidden": 0,
+  "tinyControls": 0,
+  "tinySample": [],
+  "coarse": false,
+  "attrs": {
+   "bg": "dark",
+   "layout": "standard",
+   "density": "comfortable",
+   "text": "large"
+  }
+ },
+ {
+  "viewport": "desktop",
+  "profile": "large-text",
+  "background": "dark",
+  "layout": "standard",
+  "screen": "/clients",
+  "applied": true,
+  "overflow": false,
+  "checked": 92,
+  "lowContrast": 0,
+  "lowContrastSample": [],
+  "alerts": 0,
+  "alertsHidden": 0,
+  "tinyControls": 0,
+  "tinySample": [],
+  "coarse": false,
+  "attrs": {
+   "bg": "dark",
+   "layout": "standard",
+   "density": "comfortable",
+   "text": "large"
+  }
+ },
+ {
+  "viewport": "desktop",
+  "profile": "large-text",
+  "background": "dark",
+  "layout": "standard",
+  "screen": "/care-team",
+  "applied": true,
+  "overflow": false,
+  "checked": 112,
+  "lowContrast": 1,
+  "lowContrastSample": [
+   {
+    "text": "Turn Service checks On",
+    "ratio": 2.23,
+    "size": 15.75
+   }
+  ],
+  "alerts": 0,
+  "alertsHidden": 0,
+  "tinyControls": 2,
+  "tinySample": [
+   "summary[Details] 428x18",
+   "summary[Details] 428x18"
+  ],
+  "coarse": false,
+  "attrs": {
+   "bg": "dark",
+   "layout": "standard",
+   "density": "comfortable",
+   "text": "large"
+  }
+ },
+ {
+  "viewport": "desktop",
+  "profile": "large-text",
+  "background": "dark",
+  "layout": "minimal",
+  "screen": "/",
+  "applied": true,
+  "overflow": false,
+  "checked": 117,
+  "lowContrast": 0,
+  "lowContrastSample": [],
+  "alerts": 3,
+  "alertsHidden": 0,
+  "tinyControls": 1,
+  "tinySample": [
+   "a[Reconcile shifts] 120x19"
+  ],
+  "coarse": false,
+  "attrs": {
+   "bg": "dark",
+   "layout": "minimal",
+   "density": "comfortable",
+   "text": "large"
+  }
+ },
+ {
+  "viewport": "desktop",
+  "profile": "large-text",
+  "background": "dark",
+  "layout": "minimal",
+  "screen": "/documents",
+  "applied": true,
+  "overflow": false,
+  "checked": 181,
+  "lowContrast": 0,
+  "lowContrastSample": [],
+  "alerts": 1,
+  "alertsHidden": 0,
+  "tinyControls": 0,
+  "tinySample": [],
+  "coarse": false,
+  "attrs": {
+   "bg": "dark",
+   "layout": "minimal",
+   "density": "comfortable",
+   "text": "large"
+  }
+ },
+ {
+  "viewport": "desktop",
+  "profile": "large-text",
+  "background": "dark",
+  "layout": "minimal",
+  "screen": "/schedule",
+  "applied": true,
+  "overflow": false,
+  "checked": 265,
+  "lowContrast": 0,
+  "lowContrastSample": [],
+  "alerts": 0,
+  "alertsHidden": 0,
+  "tinyControls": 53,
+  "tinySample": [
+   "a[Demo Vega] 87x19",
+   "a[Demo Vega] 87x19",
+   "a[Demo Okafor] 102x19"
+  ],
+  "coarse": false,
+  "attrs": {
+   "bg": "dark",
+   "layout": "minimal",
+   "density": "comfortable",
+   "text": "large"
+  }
+ },
+ {
+  "viewport": "desktop",
+  "profile": "large-text",
+  "background": "dark",
+  "layout": "minimal",
+  "screen": "/settings/appearance",
+  "applied": true,
+  "overflow": false,
+  "checked": 111,
+  "lowContrast": 0,
+  "lowContrastSample": [],
+  "alerts": 0,
+  "alertsHidden": 0,
+  "tinyControls": 0,
+  "tinySample": [],
+  "coarse": false,
+  "attrs": {
+   "bg": "dark",
+   "layout": "minimal",
+   "density": "comfortable",
+   "text": "large"
+  }
+ },
+ {
+  "viewport": "desktop",
+  "profile": "large-text",
+  "background": "dark",
+  "layout": "minimal",
+  "screen": "/clients",
+  "applied": true,
+  "overflow": false,
+  "checked": 92,
+  "lowContrast": 0,
+  "lowContrastSample": [],
+  "alerts": 0,
+  "alertsHidden": 0,
+  "tinyControls": 0,
+  "tinySample": [],
+  "coarse": false,
+  "attrs": {
+   "bg": "dark",
+   "layout": "minimal",
+   "density": "comfortable",
+   "text": "large"
+  }
+ },
+ {
+  "viewport": "desktop",
+  "profile": "large-text",
+  "background": "dark",
+  "layout": "minimal",
+  "screen": "/care-team",
+  "applied": true,
+  "overflow": false,
+  "checked": 112,
+  "lowContrast": 1,
+  "lowContrastSample": [
+   {
+    "text": "Turn Service checks On",
+    "ratio": 2.23,
+    "size": 15.75
+   }
+  ],
+  "alerts": 0,
+  "alertsHidden": 0,
+  "tinyControls": 2,
+  "tinySample": [
+   "summary[Details] 429x18",
+   "summary[Details] 429x18"
+  ],
+  "coarse": false,
+  "attrs": {
+   "bg": "dark",
+   "layout": "minimal",
+   "density": "comfortable",
+   "text": "large"
+  }
+ },
+ {
+  "viewport": "desktop",
+  "profile": "compact-density",
+  "background": "light",
+  "layout": "standard",
+  "screen": "/",
+  "applied": true,
+  "overflow": false,
+  "checked": 117,
+  "lowContrast": 0,
+  "lowContrastSample": [],
+  "alerts": 3,
+  "alertsHidden": 0,
+  "tinyControls": 1,
+  "tinySample": [
+   "a[Reconcile shifts] 107x18"
+  ],
+  "coarse": false,
+  "attrs": {
+   "bg": "light",
+   "layout": "standard",
+   "density": "compact",
+   "text": "standard"
+  }
+ },
+ {
+  "viewport": "desktop",
+  "profile": "compact-density",
+  "background": "light",
+  "layout": "standard",
+  "screen": "/documents",
+  "applied": true,
+  "overflow": false,
+  "checked": 181,
+  "lowContrast": 0,
+  "lowContrastSample": [],
+  "alerts": 1,
+  "alertsHidden": 0,
+  "tinyControls": 0,
+  "tinySample": [],
+  "coarse": false,
+  "attrs": {
+   "bg": "light",
+   "layout": "standard",
+   "density": "compact",
+   "text": "standard"
+  }
+ },
+ {
+  "viewport": "desktop",
+  "profile": "compact-density",
+  "background": "light",
+  "layout": "standard",
+  "screen": "/schedule",
+  "applied": true,
+  "overflow": false,
+  "checked": 265,
+  "lowContrast": 0,
+  "lowContrastSample": [],
+  "alerts": 0,
+  "alertsHidden": 0,
+  "tinyControls": 53,
+  "tinySample": [
+   "a[Demo Vega] 78x18",
+   "a[Demo Vega] 78x18",
+   "a[Demo Okafor] 90x18"
+  ],
+  "coarse": false,
+  "attrs": {
+   "bg": "light",
+   "layout": "standard",
+   "density": "compact",
+   "text": "standard"
+  }
+ },
+ {
+  "viewport": "desktop",
+  "profile": "compact-density",
+  "background": "light",
+  "layout": "standard",
+  "screen": "/settings/appearance",
+  "applied": true,
+  "overflow": false,
+  "checked": 111,
+  "lowContrast": 0,
+  "lowContrastSample": [],
+  "alerts": 0,
+  "alertsHidden": 0,
+  "tinyControls": 0,
+  "tinySample": [],
+  "coarse": false,
+  "attrs": {
+   "bg": "light",
+   "layout": "standard",
+   "density": "compact",
+   "text": "standard"
+  }
+ },
+ {
+  "viewport": "desktop",
+  "profile": "compact-density",
+  "background": "light",
+  "layout": "standard",
+  "screen": "/clients",
+  "applied": true,
+  "overflow": false,
+  "checked": 92,
+  "lowContrast": 0,
+  "lowContrastSample": [],
+  "alerts": 0,
+  "alertsHidden": 0,
+  "tinyControls": 0,
+  "tinySample": [],
+  "coarse": false,
+  "attrs": {
+   "bg": "light",
+   "layout": "standard",
+   "density": "compact",
+   "text": "standard"
+  }
+ },
+ {
+  "viewport": "desktop",
+  "profile": "compact-density",
+  "background": "light",
+  "layout": "standard",
+  "screen": "/care-team",
+  "applied": true,
+  "overflow": false,
+  "checked": 112,
+  "lowContrast": 1,
+  "lowContrastSample": [
+   {
+    "text": "Turn Service checks On",
+    "ratio": 2.56,
+    "size": 14
+   }
+  ],
+  "alerts": 0,
+  "alertsHidden": 0,
+  "tinyControls": 2,
+  "tinySample": [
+   "summary[Details] 389x16",
+   "summary[Details] 389x16"
+  ],
+  "coarse": false,
+  "attrs": {
+   "bg": "light",
+   "layout": "standard",
+   "density": "compact",
+   "text": "standard"
+  }
+ },
+ {
+  "viewport": "desktop",
+  "profile": "compact-density",
+  "background": "light",
+  "layout": "minimal",
+  "screen": "/",
+  "applied": true,
+  "overflow": false,
+  "checked": 117,
+  "lowContrast": 0,
+  "lowContrastSample": [],
+  "alerts": 3,
+  "alertsHidden": 0,
+  "tinyControls": 1,
+  "tinySample": [
+   "a[Reconcile shifts] 107x18"
+  ],
+  "coarse": false,
+  "attrs": {
+   "bg": "light",
+   "layout": "minimal",
+   "density": "compact",
+   "text": "standard"
+  }
+ },
+ {
+  "viewport": "desktop",
+  "profile": "compact-density",
+  "background": "light",
+  "layout": "minimal",
+  "screen": "/documents",
+  "applied": true,
+  "overflow": false,
+  "checked": 181,
+  "lowContrast": 0,
+  "lowContrastSample": [],
+  "alerts": 1,
+  "alertsHidden": 0,
+  "tinyControls": 0,
+  "tinySample": [],
+  "coarse": false,
+  "attrs": {
+   "bg": "light",
+   "layout": "minimal",
+   "density": "compact",
+   "text": "standard"
+  }
+ },
+ {
+  "viewport": "desktop",
+  "profile": "compact-density",
+  "background": "light",
+  "layout": "minimal",
+  "screen": "/schedule",
+  "applied": true,
+  "overflow": false,
+  "checked": 265,
+  "lowContrast": 0,
+  "lowContrastSample": [],
+  "alerts": 0,
+  "alertsHidden": 0,
+  "tinyControls": 53,
+  "tinySample": [
+   "a[Demo Vega] 78x18",
+   "a[Demo Vega] 78x18",
+   "a[Demo Okafor] 90x18"
+  ],
+  "coarse": false,
+  "attrs": {
+   "bg": "light",
+   "layout": "minimal",
+   "density": "compact",
+   "text": "standard"
+  }
+ },
+ {
+  "viewport": "desktop",
+  "profile": "compact-density",
+  "background": "light",
+  "layout": "minimal",
+  "screen": "/settings/appearance",
+  "applied": true,
+  "overflow": false,
+  "checked": 111,
+  "lowContrast": 0,
+  "lowContrastSample": [],
+  "alerts": 0,
+  "alertsHidden": 0,
+  "tinyControls": 0,
+  "tinySample": [],
+  "coarse": false,
+  "attrs": {
+   "bg": "light",
+   "layout": "minimal",
+   "density": "compact",
+   "text": "standard"
+  }
+ },
+ {
+  "viewport": "desktop",
+  "profile": "compact-density",
+  "background": "light",
+  "layout": "minimal",
+  "screen": "/clients",
+  "applied": true,
+  "overflow": false,
+  "checked": 92,
+  "lowContrast": 0,
+  "lowContrastSample": [],
+  "alerts": 0,
+  "alertsHidden": 0,
+  "tinyControls": 0,
+  "tinySample": [],
+  "coarse": false,
+  "attrs": {
+   "bg": "light",
+   "layout": "minimal",
+   "density": "compact",
+   "text": "standard"
+  }
+ },
+ {
+  "viewport": "desktop",
+  "profile": "compact-density",
+  "background": "light",
+  "layout": "minimal",
+  "screen": "/care-team",
+  "applied": true,
+  "overflow": false,
+  "checked": 112,
+  "lowContrast": 1,
+  "lowContrastSample": [
+   {
+    "text": "Turn Service checks On",
+    "ratio": 2.56,
+    "size": 14
+   }
+  ],
+  "alerts": 0,
+  "alertsHidden": 0,
+  "tinyControls": 2,
+  "tinySample": [
+   "summary[Details] 391x16",
+   "summary[Details] 391x16"
+  ],
+  "coarse": false,
+  "attrs": {
+   "bg": "light",
+   "layout": "minimal",
+   "density": "compact",
+   "text": "standard"
+  }
+ },
+ {
+  "viewport": "desktop",
+  "profile": "compact-density",
+  "background": "white",
+  "layout": "standard",
+  "screen": "/",
+  "applied": true,
+  "overflow": false,
+  "checked": 117,
+  "lowContrast": 0,
+  "lowContrastSample": [],
+  "alerts": 3,
+  "alertsHidden": 0,
+  "tinyControls": 1,
+  "tinySample": [
+   "a[Reconcile shifts] 107x18"
+  ],
+  "coarse": false,
+  "attrs": {
+   "bg": "white",
+   "layout": "standard",
+   "density": "compact",
+   "text": "standard"
+  }
+ },
+ {
+  "viewport": "desktop",
+  "profile": "compact-density",
+  "background": "white",
+  "layout": "standard",
+  "screen": "/documents",
+  "applied": true,
+  "overflow": false,
+  "checked": 181,
+  "lowContrast": 0,
+  "lowContrastSample": [],
+  "alerts": 1,
+  "alertsHidden": 0,
+  "tinyControls": 0,
+  "tinySample": [],
+  "coarse": false,
+  "attrs": {
+   "bg": "white",
+   "layout": "standard",
+   "density": "compact",
+   "text": "standard"
+  }
+ },
+ {
+  "viewport": "desktop",
+  "profile": "compact-density",
+  "background": "white",
+  "layout": "standard",
+  "screen": "/schedule",
+  "applied": true,
+  "overflow": false,
+  "checked": 265,
+  "lowContrast": 0,
+  "lowContrastSample": [],
+  "alerts": 0,
+  "alertsHidden": 0,
+  "tinyControls": 53,
+  "tinySample": [
+   "a[Demo Vega] 78x18",
+   "a[Demo Vega] 78x18",
+   "a[Demo Okafor] 90x18"
+  ],
+  "coarse": false,
+  "attrs": {
+   "bg": "white",
+   "layout": "standard",
+   "density": "compact",
+   "text": "standard"
+  }
+ },
+ {
+  "viewport": "desktop",
+  "profile": "compact-density",
+  "background": "white",
+  "layout": "standard",
+  "screen": "/settings/appearance",
+  "applied": true,
+  "overflow": false,
+  "checked": 111,
+  "lowContrast": 0,
+  "lowContrastSample": [],
+  "alerts": 0,
+  "alertsHidden": 0,
+  "tinyControls": 0,
+  "tinySample": [],
+  "coarse": false,
+  "attrs": {
+   "bg": "white",
+   "layout": "standard",
+   "density": "compact",
+   "text": "standard"
+  }
+ },
+ {
+  "viewport": "desktop",
+  "profile": "compact-density",
+  "background": "white",
+  "layout": "standard",
+  "screen": "/clients",
+  "applied": true,
+  "overflow": false,
+  "checked": 92,
+  "lowContrast": 0,
+  "lowContrastSample": [],
+  "alerts": 0,
+  "alertsHidden": 0,
+  "tinyControls": 0,
+  "tinySample": [],
+  "coarse": false,
+  "attrs": {
+   "bg": "white",
+   "layout": "standard",
+   "density": "compact",
+   "text": "standard"
+  }
+ },
+ {
+  "viewport": "desktop",
+  "profile": "compact-density",
+  "background": "white",
+  "layout": "standard",
+  "screen": "/care-team",
+  "applied": true,
+  "overflow": false,
+  "checked": 112,
+  "lowContrast": 1,
+  "lowContrastSample": [
+   {
+    "text": "Turn Service checks On",
+    "ratio": 2.45,
+    "size": 14
+   }
+  ],
+  "alerts": 0,
+  "alertsHidden": 0,
+  "tinyControls": 2,
+  "tinySample": [
+   "summary[Details] 389x16",
+   "summary[Details] 389x16"
+  ],
+  "coarse": false,
+  "attrs": {
+   "bg": "white",
+   "layout": "standard",
+   "density": "compact",
+   "text": "standard"
+  }
+ },
+ {
+  "viewport": "desktop",
+  "profile": "compact-density",
+  "background": "white",
+  "layout": "minimal",
+  "screen": "/",
+  "applied": true,
+  "overflow": false,
+  "checked": 117,
+  "lowContrast": 0,
+  "lowContrastSample": [],
+  "alerts": 3,
+  "alertsHidden": 0,
+  "tinyControls": 1,
+  "tinySample": [
+   "a[Reconcile shifts] 107x18"
+  ],
+  "coarse": false,
+  "attrs": {
+   "bg": "white",
+   "layout": "minimal",
+   "density": "compact",
+   "text": "standard"
+  }
+ },
+ {
+  "viewport": "desktop",
+  "profile": "compact-density",
+  "background": "white",
+  "layout": "minimal",
+  "screen": "/documents",
+  "applied": true,
+  "overflow": false,
+  "checked": 181,
+  "lowContrast": 0,
+  "lowContrastSample": [],
+  "alerts": 1,
+  "alertsHidden": 0,
+  "tinyControls": 0,
+  "tinySample": [],
+  "coarse": false,
+  "attrs": {
+   "bg": "white",
+   "layout": "minimal",
+   "density": "compact",
+   "text": "standard"
+  }
+ },
+ {
+  "viewport": "desktop",
+  "profile": "compact-density",
+  "background": "white",
+  "layout": "minimal",
+  "screen": "/schedule",
+  "applied": true,
+  "overflow": false,
+  "checked": 265,
+  "lowContrast": 0,
+  "lowContrastSample": [],
+  "alerts": 0,
+  "alertsHidden": 0,
+  "tinyControls": 53,
+  "tinySample": [
+   "a[Demo Vega] 78x18",
+   "a[Demo Vega] 78x18",
+   "a[Demo Okafor] 90x18"
+  ],
+  "coarse": false,
+  "attrs": {
+   "bg": "white",
+   "layout": "minimal",
+   "density": "compact",
+   "text": "standard"
+  }
+ },
+ {
+  "viewport": "desktop",
+  "profile": "compact-density",
+  "background": "white",
+  "layout": "minimal",
+  "screen": "/settings/appearance",
+  "applied": true,
+  "overflow": false,
+  "checked": 111,
+  "lowContrast": 0,
+  "lowContrastSample": [],
+  "alerts": 0,
+  "alertsHidden": 0,
+  "tinyControls": 0,
+  "tinySample": [],
+  "coarse": false,
+  "attrs": {
+   "bg": "white",
+   "layout": "minimal",
+   "density": "compact",
+   "text": "standard"
+  }
+ },
+ {
+  "viewport": "desktop",
+  "profile": "compact-density",
+  "background": "white",
+  "layout": "minimal",
+  "screen": "/clients",
+  "applied": true,
+  "overflow": false,
+  "checked": 92,
+  "lowContrast": 0,
+  "lowContrastSample": [],
+  "alerts": 0,
+  "alertsHidden": 0,
+  "tinyControls": 0,
+  "tinySample": [],
+  "coarse": false,
+  "attrs": {
+   "bg": "white",
+   "layout": "minimal",
+   "density": "compact",
+   "text": "standard"
+  }
+ },
+ {
+  "viewport": "desktop",
+  "profile": "compact-density",
+  "background": "white",
+  "layout": "minimal",
+  "screen": "/care-team",
+  "applied": true,
+  "overflow": false,
+  "checked": 112,
+  "lowContrast": 1,
+  "lowContrastSample": [
+   {
+    "text": "Turn Service checks On",
+    "ratio": 2.56,
+    "size": 14
+   }
+  ],
+  "alerts": 0,
+  "alertsHidden": 0,
+  "tinyControls": 2,
+  "tinySample": [
+   "summary[Details] 391x16",
+   "summary[Details] 391x16"
+  ],
+  "coarse": false,
+  "attrs": {
+   "bg": "white",
+   "layout": "minimal",
+   "density": "compact",
+   "text": "standard"
+  }
+ },
+ {
+  "viewport": "desktop",
+  "profile": "compact-density",
+  "background": "gray",
+  "layout": "standard",
+  "screen": "/",
+  "applied": true,
+  "overflow": false,
+  "checked": 117,
+  "lowContrast": 0,
+  "lowContrastSample": [],
+  "alerts": 3,
+  "alertsHidden": 0,
+  "tinyControls": 1,
+  "tinySample": [
+   "a[Reconcile shifts] 107x18"
+  ],
+  "coarse": false,
+  "attrs": {
+   "bg": "gray",
+   "layout": "standard",
+   "density": "compact",
+   "text": "standard"
+  }
+ },
+ {
+  "viewport": "desktop",
+  "profile": "compact-density",
+  "background": "gray",
+  "layout": "standard",
+  "screen": "/documents",
+  "applied": true,
+  "overflow": false,
+  "checked": 181,
+  "lowContrast": 0,
+  "lowContrastSample": [],
+  "alerts": 1,
+  "alertsHidden": 0,
+  "tinyControls": 0,
+  "tinySample": [],
+  "coarse": false,
+  "attrs": {
+   "bg": "gray",
+   "layout": "standard",
+   "density": "compact",
+   "text": "standard"
+  }
+ },
+ {
+  "viewport": "desktop",
+  "profile": "compact-density",
+  "background": "gray",
+  "layout": "standard",
+  "screen": "/schedule",
+  "applied": true,
+  "overflow": false,
+  "checked": 265,
+  "lowContrast": 0,
+  "lowContrastSample": [],
+  "alerts": 0,
+  "alertsHidden": 0,
+  "tinyControls": 53,
+  "tinySample": [
+   "a[Demo Vega] 78x18",
+   "a[Demo Vega] 78x18",
+   "a[Demo Okafor] 90x18"
+  ],
+  "coarse": false,
+  "attrs": {
+   "bg": "gray",
+   "layout": "standard",
+   "density": "compact",
+   "text": "standard"
+  }
+ },
+ {
+  "viewport": "desktop",
+  "profile": "compact-density",
+  "background": "gray",
+  "layout": "standard",
+  "screen": "/settings/appearance",
+  "applied": true,
+  "overflow": false,
+  "checked": 111,
+  "lowContrast": 0,
+  "lowContrastSample": [],
+  "alerts": 0,
+  "alertsHidden": 0,
+  "tinyControls": 0,
+  "tinySample": [],
+  "coarse": false,
+  "attrs": {
+   "bg": "gray",
+   "layout": "standard",
+   "density": "compact",
+   "text": "standard"
+  }
+ },
+ {
+  "viewport": "desktop",
+  "profile": "compact-density",
+  "background": "gray",
+  "layout": "standard",
+  "screen": "/clients",
+  "applied": true,
+  "overflow": false,
+  "checked": 92,
+  "lowContrast": 0,
+  "lowContrastSample": [],
+  "alerts": 0,
+  "alertsHidden": 0,
+  "tinyControls": 0,
+  "tinySample": [],
+  "coarse": false,
+  "attrs": {
+   "bg": "gray",
+   "layout": "standard",
+   "density": "compact",
+   "text": "standard"
+  }
+ },
+ {
+  "viewport": "desktop",
+  "profile": "compact-density",
+  "background": "gray",
+  "layout": "standard",
+  "screen": "/care-team",
+  "applied": true,
+  "overflow": false,
+  "checked": 112,
+  "lowContrast": 1,
+  "lowContrastSample": [
+   {
+    "text": "Turn Service checks On",
+    "ratio": 2.45,
+    "size": 14
+   }
+  ],
+  "alerts": 0,
+  "alertsHidden": 0,
+  "tinyControls": 2,
+  "tinySample": [
+   "summary[Details] 389x16",
+   "summary[Details] 389x16"
+  ],
+  "coarse": false,
+  "attrs": {
+   "bg": "gray",
+   "layout": "standard",
+   "density": "compact",
+   "text": "standard"
+  }
+ },
+ {
+  "viewport": "desktop",
+  "profile": "compact-density",
+  "background": "gray",
+  "layout": "minimal",
+  "screen": "/",
+  "applied": true,
+  "overflow": false,
+  "checked": 117,
+  "lowContrast": 0,
+  "lowContrastSample": [],
+  "alerts": 3,
+  "alertsHidden": 0,
+  "tinyControls": 1,
+  "tinySample": [
+   "a[Reconcile shifts] 107x18"
+  ],
+  "coarse": false,
+  "attrs": {
+   "bg": "gray",
+   "layout": "minimal",
+   "density": "compact",
+   "text": "standard"
+  }
+ },
+ {
+  "viewport": "desktop",
+  "profile": "compact-density",
+  "background": "gray",
+  "layout": "minimal",
+  "screen": "/documents",
+  "applied": true,
+  "overflow": false,
+  "checked": 181,
+  "lowContrast": 0,
+  "lowContrastSample": [],
+  "alerts": 1,
+  "alertsHidden": 0,
+  "tinyControls": 0,
+  "tinySample": [],
+  "coarse": false,
+  "attrs": {
+   "bg": "gray",
+   "layout": "minimal",
+   "density": "compact",
+   "text": "standard"
+  }
+ },
+ {
+  "viewport": "desktop",
+  "profile": "compact-density",
+  "background": "gray",
+  "layout": "minimal",
+  "screen": "/schedule",
+  "applied": true,
+  "overflow": false,
+  "checked": 265,
+  "lowContrast": 0,
+  "lowContrastSample": [],
+  "alerts": 0,
+  "alertsHidden": 0,
+  "tinyControls": 53,
+  "tinySample": [
+   "a[Demo Vega] 78x18",
+   "a[Demo Vega] 78x18",
+   "a[Demo Okafor] 90x18"
+  ],
+  "coarse": false,
+  "attrs": {
+   "bg": "gray",
+   "layout": "minimal",
+   "density": "compact",
+   "text": "standard"
+  }
+ },
+ {
+  "viewport": "desktop",
+  "profile": "compact-density",
+  "background": "gray",
+  "layout": "minimal",
+  "screen": "/settings/appearance",
+  "applied": true,
+  "overflow": false,
+  "checked": 111,
+  "lowContrast": 0,
+  "lowContrastSample": [],
+  "alerts": 0,
+  "alertsHidden": 0,
+  "tinyControls": 0,
+  "tinySample": [],
+  "coarse": false,
+  "attrs": {
+   "bg": "gray",
+   "layout": "minimal",
+   "density": "compact",
+   "text": "standard"
+  }
+ },
+ {
+  "viewport": "desktop",
+  "profile": "compact-density",
+  "background": "gray",
+  "layout": "minimal",
+  "screen": "/clients",
+  "applied": true,
+  "overflow": false,
+  "checked": 92,
+  "lowContrast": 0,
+  "lowContrastSample": [],
+  "alerts": 0,
+  "alertsHidden": 0,
+  "tinyControls": 0,
+  "tinySample": [],
+  "coarse": false,
+  "attrs": {
+   "bg": "gray",
+   "layout": "minimal",
+   "density": "compact",
+   "text": "standard"
+  }
+ },
+ {
+  "viewport": "desktop",
+  "profile": "compact-density",
+  "background": "gray",
+  "layout": "minimal",
+  "screen": "/care-team",
+  "applied": true,
+  "overflow": false,
+  "checked": 112,
+  "lowContrast": 1,
+  "lowContrastSample": [
+   {
+    "text": "Turn Service checks On",
+    "ratio": 2.46,
+    "size": 14
+   }
+  ],
+  "alerts": 0,
+  "alertsHidden": 0,
+  "tinyControls": 2,
+  "tinySample": [
+   "summary[Details] 391x16",
+   "summary[Details] 391x16"
+  ],
+  "coarse": false,
+  "attrs": {
+   "bg": "gray",
+   "layout": "minimal",
+   "density": "compact",
+   "text": "standard"
+  }
+ },
+ {
+  "viewport": "desktop",
+  "profile": "compact-density",
+  "background": "dark",
+  "layout": "standard",
+  "screen": "/",
+  "applied": true,
+  "overflow": false,
+  "checked": 117,
+  "lowContrast": 0,
+  "lowContrastSample": [],
+  "alerts": 3,
+  "alertsHidden": 0,
+  "tinyControls": 1,
+  "tinySample": [
+   "a[Reconcile shifts] 107x18"
+  ],
+  "coarse": false,
+  "attrs": {
+   "bg": "dark",
+   "layout": "standard",
+   "density": "compact",
+   "text": "standard"
+  }
+ },
+ {
+  "viewport": "desktop",
+  "profile": "compact-density",
+  "background": "dark",
+  "layout": "standard",
+  "screen": "/documents",
+  "applied": true,
+  "overflow": false,
+  "checked": 181,
+  "lowContrast": 0,
+  "lowContrastSample": [],
+  "alerts": 1,
+  "alertsHidden": 0,
+  "tinyControls": 0,
+  "tinySample": [],
+  "coarse": false,
+  "attrs": {
+   "bg": "dark",
+   "layout": "standard",
+   "density": "compact",
+   "text": "standard"
+  }
+ },
+ {
+  "viewport": "desktop",
+  "profile": "compact-density",
+  "background": "dark",
+  "layout": "standard",
+  "screen": "/schedule",
+  "applied": true,
+  "overflow": false,
+  "checked": 265,
+  "lowContrast": 0,
+  "lowContrastSample": [],
+  "alerts": 0,
+  "alertsHidden": 0,
+  "tinyControls": 53,
+  "tinySample": [
+   "a[Demo Vega] 78x18",
+   "a[Demo Vega] 78x18",
+   "a[Demo Okafor] 90x18"
+  ],
+  "coarse": false,
+  "attrs": {
+   "bg": "dark",
+   "layout": "standard",
+   "density": "compact",
+   "text": "standard"
+  }
+ },
+ {
+  "viewport": "desktop",
+  "profile": "compact-density",
+  "background": "dark",
+  "layout": "standard",
+  "screen": "/settings/appearance",
+  "applied": true,
+  "overflow": false,
+  "checked": 111,
+  "lowContrast": 0,
+  "lowContrastSample": [],
+  "alerts": 0,
+  "alertsHidden": 0,
+  "tinyControls": 0,
+  "tinySample": [],
+  "coarse": false,
+  "attrs": {
+   "bg": "dark",
+   "layout": "standard",
+   "density": "compact",
+   "text": "standard"
+  }
+ },
+ {
+  "viewport": "desktop",
+  "profile": "compact-density",
+  "background": "dark",
+  "layout": "standard",
+  "screen": "/clients",
+  "applied": true,
+  "overflow": false,
+  "checked": 92,
+  "lowContrast": 0,
+  "lowContrastSample": [],
+  "alerts": 0,
+  "alertsHidden": 0,
+  "tinyControls": 0,
+  "tinySample": [],
+  "coarse": false,
+  "attrs": {
+   "bg": "dark",
+   "layout": "standard",
+   "density": "compact",
+   "text": "standard"
+  }
+ },
+ {
+  "viewport": "desktop",
+  "profile": "compact-density",
+  "background": "dark",
+  "layout": "standard",
+  "screen": "/care-team",
+  "applied": true,
+  "overflow": false,
+  "checked": 112,
+  "lowContrast": 1,
+  "lowContrastSample": [
+   {
+    "text": "Turn Service checks On",
+    "ratio": 2.66,
+    "size": 14
+   }
+  ],
+  "alerts": 0,
+  "alertsHidden": 0,
+  "tinyControls": 2,
+  "tinySample": [
+   "summary[Details] 389x16",
+   "summary[Details] 389x16"
+  ],
+  "coarse": false,
+  "attrs": {
+   "bg": "dark",
+   "layout": "standard",
+   "density": "compact",
+   "text": "standard"
+  }
+ },
+ {
+  "viewport": "desktop",
+  "profile": "compact-density",
+  "background": "dark",
+  "layout": "minimal",
+  "screen": "/",
+  "applied": true,
+  "overflow": false,
+  "checked": 117,
+  "lowContrast": 0,
+  "lowContrastSample": [],
+  "alerts": 3,
+  "alertsHidden": 0,
+  "tinyControls": 1,
+  "tinySample": [
+   "a[Reconcile shifts] 107x18"
+  ],
+  "coarse": false,
+  "attrs": {
+   "bg": "dark",
+   "layout": "minimal",
+   "density": "compact",
+   "text": "standard"
+  }
+ },
+ {
+  "viewport": "desktop",
+  "profile": "compact-density",
+  "background": "dark",
+  "layout": "minimal",
+  "screen": "/documents",
+  "applied": true,
+  "overflow": false,
+  "checked": 181,
+  "lowContrast": 0,
+  "lowContrastSample": [],
+  "alerts": 1,
+  "alertsHidden": 0,
+  "tinyControls": 0,
+  "tinySample": [],
+  "coarse": false,
+  "attrs": {
+   "bg": "dark",
+   "layout": "minimal",
+   "density": "compact",
+   "text": "standard"
+  }
+ },
+ {
+  "viewport": "desktop",
+  "profile": "compact-density",
+  "background": "dark",
+  "layout": "minimal",
+  "screen": "/schedule",
+  "applied": true,
+  "overflow": false,
+  "checked": 265,
+  "lowContrast": 0,
+  "lowContrastSample": [],
+  "alerts": 0,
+  "alertsHidden": 0,
+  "tinyControls": 53,
+  "tinySample": [
+   "a[Demo Vega] 78x18",
+   "a[Demo Vega] 78x18",
+   "a[Demo Okafor] 90x18"
+  ],
+  "coarse": false,
+  "attrs": {
+   "bg": "dark",
+   "layout": "minimal",
+   "density": "compact",
+   "text": "standard"
+  }
+ },
+ {
+  "viewport": "desktop",
+  "profile": "compact-density",
+  "background": "dark",
+  "layout": "minimal",
+  "screen": "/settings/appearance",
+  "applied": true,
+  "overflow": false,
+  "checked": 111,
+  "lowContrast": 0,
+  "lowContrastSample": [],
+  "alerts": 0,
+  "alertsHidden": 0,
+  "tinyControls": 0,
+  "tinySample": [],
+  "coarse": false,
+  "attrs": {
+   "bg": "dark",
+   "layout": "minimal",
+   "density": "compact",
+   "text": "standard"
+  }
+ },
+ {
+  "viewport": "desktop",
+  "profile": "compact-density",
+  "background": "dark",
+  "layout": "minimal",
+  "screen": "/clients",
+  "applied": true,
+  "overflow": false,
+  "checked": 92,
+  "lowContrast": 0,
+  "lowContrastSample": [],
+  "alerts": 0,
+  "alertsHidden": 0,
+  "tinyControls": 0,
+  "tinySample": [],
+  "coarse": false,
+  "attrs": {
+   "bg": "dark",
+   "layout": "minimal",
+   "density": "compact",
+   "text": "standard"
+  }
+ },
+ {
+  "viewport": "desktop",
+  "profile": "compact-density",
+  "background": "dark",
+  "layout": "minimal",
+  "screen": "/care-team",
+  "applied": true,
+  "overflow": false,
+  "checked": 112,
+  "lowContrast": 1,
+  "lowContrastSample": [
+   {
+    "text": "Turn Service checks On",
+    "ratio": 2.23,
+    "size": 14
+   }
+  ],
+  "alerts": 0,
+  "alertsHidden": 0,
+  "tinyControls": 2,
+  "tinySample": [
+   "summary[Details] 391x16",
+   "summary[Details] 391x16"
+  ],
+  "coarse": false,
+  "attrs": {
+   "bg": "dark",
+   "layout": "minimal",
+   "density": "compact",
+   "text": "standard"
+  }
+ },
+ {
+  "viewport": "desktop",
+  "formPreserved": true,
+  "afterChange": {
+   "bg": "white",
+   "layout": "standard",
+   "text": "standard",
+   "density": "comfortable"
+  }
+ },
+ {
+  "viewport": "phone",
+  "profile": "large-text",
+  "background": "light",
+  "layout": "standard",
+  "screen": "/",
+  "applied": true,
+  "overflow": false,
+  "checked": 84,
+  "lowContrast": 0,
+  "lowContrastSample": [],
+  "alerts": 3,
+  "alertsHidden": 0,
+  "tinyControls": 0,
+  "tinySample": [],
+  "coarse": true,
+  "attrs": {
+   "bg": "light",
+   "layout": "standard",
+   "density": "comfortable",
+   "text": "large"
+  }
+ },
+ {
+  "viewport": "phone",
+  "profile": "large-text",
+  "background": "light",
+  "layout": "standard",
+  "screen": "/documents",
+  "applied": true,
+  "overflow": false,
+  "checked": 148,
+  "lowContrast": 0,
+  "lowContrastSample": [],
+  "alerts": 1,
+  "alertsHidden": 0,
+  "tinyControls": 1,
+  "tinySample": [
+   "input[] 18x23"
+  ],
+  "coarse": true,
+  "attrs": {
+   "bg": "light",
+   "layout": "standard",
+   "density": "comfortable",
+   "text": "large"
+  }
+ },
+ {
+  "viewport": "phone",
+  "profile": "large-text",
+  "background": "light",
+  "layout": "standard",
+  "screen": "/schedule",
+  "applied": true,
+  "overflow": false,
+  "checked": 258,
+  "lowContrast": 0,
+  "lowContrastSample": [],
+  "alerts": 0,
+  "alertsHidden": 0,
+  "tinyControls": 25,
+  "tinySample": [
+   "input[] 13x13",
+   "input[] 13x13",
+   "input[] 13x13"
+  ],
+  "coarse": true,
+  "attrs": {
+   "bg": "light",
+   "layout": "standard",
+   "density": "comfortable",
+   "text": "large"
+  }
+ },
+ {
+  "viewport": "phone",
+  "profile": "large-text",
+  "background": "light",
+  "layout": "standard",
+  "screen": "/settings/appearance",
+  "applied": true,
+  "overflow": false,
+  "checked": 78,
+  "lowContrast": 0,
+  "lowContrastSample": [],
+  "alerts": 0,
+  "alertsHidden": 0,
+  "tinyControls": 0,
+  "tinySample": [],
+  "coarse": true,
+  "attrs": {
+   "bg": "light",
+   "layout": "standard",
+   "density": "comfortable",
+   "text": "large"
+  }
+ },
+ {
+  "viewport": "phone",
+  "profile": "large-text",
+  "background": "light",
+  "layout": "standard",
+  "screen": "/clients",
+  "applied": true,
+  "overflow": false,
+  "checked": 67,
+  "lowContrast": 0,
+  "lowContrastSample": [],
+  "alerts": 0,
+  "alertsHidden": 0,
+  "tinyControls": 0,
+  "tinySample": [],
+  "coarse": true,
+  "attrs": {
+   "bg": "light",
+   "layout": "standard",
+   "density": "comfortable",
+   "text": "large"
+  }
+ },
+ {
+  "viewport": "phone",
+  "profile": "large-text",
+  "background": "light",
+  "layout": "standard",
+  "screen": "/care-team",
+  "applied": true,
+  "overflow": false,
+  "checked": 75,
+  "lowContrast": 1,
+  "lowContrastSample": [
+   {
+    "text": "Turn Service checks On",
+    "ratio": 2.56,
+    "size": 15.75
+   }
+  ],
+  "alerts": 0,
+  "alertsHidden": 0,
+  "tinyControls": 0,
+  "tinySample": [],
+  "coarse": true,
+  "attrs": {
+   "bg": "light",
+   "layout": "standard",
+   "density": "comfortable",
+   "text": "large"
+  }
+ },
+ {
+  "viewport": "phone",
+  "profile": "large-text",
+  "background": "light",
+  "layout": "minimal",
+  "screen": "/",
+  "applied": true,
+  "overflow": false,
+  "checked": 84,
+  "lowContrast": 0,
+  "lowContrastSample": [],
+  "alerts": 3,
+  "alertsHidden": 0,
+  "tinyControls": 0,
+  "tinySample": [],
+  "coarse": true,
+  "attrs": {
+   "bg": "light",
+   "layout": "minimal",
+   "density": "comfortable",
+   "text": "large"
+  }
+ },
+ {
+  "viewport": "phone",
+  "profile": "large-text",
+  "background": "light",
+  "layout": "minimal",
+  "screen": "/documents",
+  "applied": true,
+  "overflow": false,
+  "checked": 148,
+  "lowContrast": 0,
+  "lowContrastSample": [],
+  "alerts": 1,
+  "alertsHidden": 0,
+  "tinyControls": 1,
+  "tinySample": [
+   "input[] 18x23"
+  ],
+  "coarse": true,
+  "attrs": {
+   "bg": "light",
+   "layout": "minimal",
+   "density": "comfortable",
+   "text": "large"
+  }
+ },
+ {
+  "viewport": "phone",
+  "profile": "large-text",
+  "background": "light",
+  "layout": "minimal",
+  "screen": "/schedule",
+  "applied": true,
+  "overflow": false,
+  "checked": 258,
+  "lowContrast": 0,
+  "lowContrastSample": [],
+  "alerts": 0,
+  "alertsHidden": 0,
+  "tinyControls": 25,
+  "tinySample": [
+   "input[] 13x13",
+   "input[] 13x13",
+   "input[] 13x13"
+  ],
+  "coarse": true,
+  "attrs": {
+   "bg": "light",
+   "layout": "minimal",
+   "density": "comfortable",
+   "text": "large"
+  }
+ },
+ {
+  "viewport": "phone",
+  "profile": "large-text",
+  "background": "light",
+  "layout": "minimal",
+  "screen": "/settings/appearance",
+  "applied": true,
+  "overflow": false,
+  "checked": 78,
+  "lowContrast": 0,
+  "lowContrastSample": [],
+  "alerts": 0,
+  "alertsHidden": 0,
+  "tinyControls": 0,
+  "tinySample": [],
+  "coarse": true,
+  "attrs": {
+   "bg": "light",
+   "layout": "minimal",
+   "density": "comfortable",
+   "text": "large"
+  }
+ },
+ {
+  "viewport": "phone",
+  "profile": "large-text",
+  "background": "light",
+  "layout": "minimal",
+  "screen": "/clients",
+  "applied": true,
+  "overflow": false,
+  "checked": 67,
+  "lowContrast": 0,
+  "lowContrastSample": [],
+  "alerts": 0,
+  "alertsHidden": 0,
+  "tinyControls": 0,
+  "tinySample": [],
+  "coarse": true,
+  "attrs": {
+   "bg": "light",
+   "layout": "minimal",
+   "density": "comfortable",
+   "text": "large"
+  }
+ },
+ {
+  "viewport": "phone",
+  "profile": "large-text",
+  "background": "light",
+  "layout": "minimal",
+  "screen": "/care-team",
+  "applied": true,
+  "overflow": false,
+  "checked": 75,
+  "lowContrast": 1,
+  "lowContrastSample": [
+   {
+    "text": "Turn Service checks On",
+    "ratio": 2.56,
+    "size": 15.75
+   }
+  ],
+  "alerts": 0,
+  "alertsHidden": 0,
+  "tinyControls": 0,
+  "tinySample": [],
+  "coarse": true,
+  "attrs": {
+   "bg": "light",
+   "layout": "minimal",
+   "density": "comfortable",
+   "text": "large"
+  }
+ },
+ {
+  "viewport": "phone",
+  "profile": "large-text",
+  "background": "white",
+  "layout": "standard",
+  "screen": "/",
+  "applied": true,
+  "overflow": false,
+  "checked": 84,
+  "lowContrast": 0,
+  "lowContrastSample": [],
+  "alerts": 3,
+  "alertsHidden": 0,
+  "tinyControls": 0,
+  "tinySample": [],
+  "coarse": true,
+  "attrs": {
+   "bg": "white",
+   "layout": "standard",
+   "density": "comfortable",
+   "text": "large"
+  }
+ },
+ {
+  "viewport": "phone",
+  "profile": "large-text",
+  "background": "white",
+  "layout": "standard",
+  "screen": "/documents",
+  "applied": true,
+  "overflow": false,
+  "checked": 148,
+  "lowContrast": 0,
+  "lowContrastSample": [],
+  "alerts": 1,
+  "alertsHidden": 0,
+  "tinyControls": 1,
+  "tinySample": [
+   "input[] 18x23"
+  ],
+  "coarse": true,
+  "attrs": {
+   "bg": "white",
+   "layout": "standard",
+   "density": "comfortable",
+   "text": "large"
+  }
+ },
+ {
+  "viewport": "phone",
+  "profile": "large-text",
+  "background": "white",
+  "layout": "standard",
+  "screen": "/schedule",
+  "applied": true,
+  "overflow": false,
+  "checked": 258,
+  "lowContrast": 0,
+  "lowContrastSample": [],
+  "alerts": 0,
+  "alertsHidden": 0,
+  "tinyControls": 25,
+  "tinySample": [
+   "input[] 13x13",
+   "input[] 13x13",
+   "input[] 13x13"
+  ],
+  "coarse": true,
+  "attrs": {
+   "bg": "white",
+   "layout": "standard",
+   "density": "comfortable",
+   "text": "large"
+  }
+ },
+ {
+  "viewport": "phone",
+  "profile": "large-text",
+  "background": "white",
+  "layout": "standard",
+  "screen": "/settings/appearance",
+  "applied": true,
+  "overflow": false,
+  "checked": 78,
+  "lowContrast": 0,
+  "lowContrastSample": [],
+  "alerts": 0,
+  "alertsHidden": 0,
+  "tinyControls": 0,
+  "tinySample": [],
+  "coarse": true,
+  "attrs": {
+   "bg": "white",
+   "layout": "standard",
+   "density": "comfortable",
+   "text": "large"
+  }
+ },
+ {
+  "viewport": "phone",
+  "profile": "large-text",
+  "background": "white",
+  "layout": "standard",
+  "screen": "/clients",
+  "applied": true,
+  "overflow": false,
+  "checked": 67,
+  "lowContrast": 0,
+  "lowContrastSample": [],
+  "alerts": 0,
+  "alertsHidden": 0,
+  "tinyControls": 0,
+  "tinySample": [],
+  "coarse": true,
+  "attrs": {
+   "bg": "white",
+   "layout": "standard",
+   "density": "comfortable",
+   "text": "large"
+  }
+ },
+ {
+  "viewport": "phone",
+  "profile": "large-text",
+  "background": "white",
+  "layout": "standard",
+  "screen": "/care-team",
+  "applied": true,
+  "overflow": false,
+  "checked": 75,
+  "lowContrast": 1,
+  "lowContrastSample": [
+   {
+    "text": "Turn Service checks On",
+    "ratio": 2.56,
+    "size": 15.75
+   }
+  ],
+  "alerts": 0,
+  "alertsHidden": 0,
+  "tinyControls": 0,
+  "tinySample": [],
+  "coarse": true,
+  "attrs": {
+   "bg": "white",
+   "layout": "standard",
+   "density": "comfortable",
+   "text": "large"
+  }
+ },
+ {
+  "viewport": "phone",
+  "profile": "large-text",
+  "background": "white",
+  "layout": "minimal",
+  "screen": "/",
+  "applied": true,
+  "overflow": false,
+  "checked": 84,
+  "lowContrast": 0,
+  "lowContrastSample": [],
+  "alerts": 3,
+  "alertsHidden": 0,
+  "tinyControls": 0,
+  "tinySample": [],
+  "coarse": true,
+  "attrs": {
+   "bg": "white",
+   "layout": "minimal",
+   "density": "comfortable",
+   "text": "large"
+  }
+ },
+ {
+  "viewport": "phone",
+  "profile": "large-text",
+  "background": "white",
+  "layout": "minimal",
+  "screen": "/documents",
+  "applied": true,
+  "overflow": false,
+  "checked": 148,
+  "lowContrast": 0,
+  "lowContrastSample": [],
+  "alerts": 1,
+  "alertsHidden": 0,
+  "tinyControls": 1,
+  "tinySample": [
+   "input[] 18x23"
+  ],
+  "coarse": true,
+  "attrs": {
+   "bg": "white",
+   "layout": "minimal",
+   "density": "comfortable",
+   "text": "large"
+  }
+ },
+ {
+  "viewport": "phone",
+  "profile": "large-text",
+  "background": "white",
+  "layout": "minimal",
+  "screen": "/schedule",
+  "applied": true,
+  "overflow": false,
+  "checked": 258,
+  "lowContrast": 0,
+  "lowContrastSample": [],
+  "alerts": 0,
+  "alertsHidden": 0,
+  "tinyControls": 25,
+  "tinySample": [
+   "input[] 13x13",
+   "input[] 13x13",
+   "input[] 13x13"
+  ],
+  "coarse": true,
+  "attrs": {
+   "bg": "white",
+   "layout": "minimal",
+   "density": "comfortable",
+   "text": "large"
+  }
+ },
+ {
+  "viewport": "phone",
+  "profile": "large-text",
+  "background": "white",
+  "layout": "minimal",
+  "screen": "/settings/appearance",
+  "applied": true,
+  "overflow": false,
+  "checked": 78,
+  "lowContrast": 0,
+  "lowContrastSample": [],
+  "alerts": 0,
+  "alertsHidden": 0,
+  "tinyControls": 0,
+  "tinySample": [],
+  "coarse": true,
+  "attrs": {
+   "bg": "white",
+   "layout": "minimal",
+   "density": "comfortable",
+   "text": "large"
+  }
+ },
+ {
+  "viewport": "phone",
+  "profile": "large-text",
+  "background": "white",
+  "layout": "minimal",
+  "screen": "/clients",
+  "applied": true,
+  "overflow": false,
+  "checked": 67,
+  "lowContrast": 0,
+  "lowContrastSample": [],
+  "alerts": 0,
+  "alertsHidden": 0,
+  "tinyControls": 0,
+  "tinySample": [],
+  "coarse": true,
+  "attrs": {
+   "bg": "white",
+   "layout": "minimal",
+   "density": "comfortable",
+   "text": "large"
+  }
+ },
+ {
+  "viewport": "phone",
+  "profile": "large-text",
+  "background": "white",
+  "layout": "minimal",
+  "screen": "/care-team",
+  "applied": true,
+  "overflow": false,
+  "checked": 75,
+  "lowContrast": 1,
+  "lowContrastSample": [
+   {
+    "text": "Turn Service checks On",
+    "ratio": 2.56,
+    "size": 15.75
+   }
+  ],
+  "alerts": 0,
+  "alertsHidden": 0,
+  "tinyControls": 0,
+  "tinySample": [],
+  "coarse": true,
+  "attrs": {
+   "bg": "white",
+   "layout": "minimal",
+   "density": "comfortable",
+   "text": "large"
+  }
+ },
+ {
+  "viewport": "phone",
+  "profile": "large-text",
+  "background": "gray",
+  "layout": "standard",
+  "screen": "/",
+  "applied": true,
+  "overflow": false,
+  "checked": 84,
+  "lowContrast": 0,
+  "lowContrastSample": [],
+  "alerts": 3,
+  "alertsHidden": 0,
+  "tinyControls": 0,
+  "tinySample": [],
+  "coarse": true,
+  "attrs": {
+   "bg": "gray",
+   "layout": "standard",
+   "density": "comfortable",
+   "text": "large"
+  }
+ },
+ {
+  "viewport": "phone",
+  "profile": "large-text",
+  "background": "gray",
+  "layout": "standard",
+  "screen": "/documents",
+  "applied": true,
+  "overflow": false,
+  "checked": 148,
+  "lowContrast": 0,
+  "lowContrastSample": [],
+  "alerts": 1,
+  "alertsHidden": 0,
+  "tinyControls": 1,
+  "tinySample": [
+   "input[] 18x23"
+  ],
+  "coarse": true,
+  "attrs": {
+   "bg": "gray",
+   "layout": "standard",
+   "density": "comfortable",
+   "text": "large"
+  }
+ },
+ {
+  "viewport": "phone",
+  "profile": "large-text",
+  "background": "gray",
+  "layout": "standard",
+  "screen": "/schedule",
+  "applied": true,
+  "overflow": false,
+  "checked": 258,
+  "lowContrast": 0,
+  "lowContrastSample": [],
+  "alerts": 0,
+  "alertsHidden": 0,
+  "tinyControls": 25,
+  "tinySample": [
+   "input[] 13x13",
+   "input[] 13x13",
+   "input[] 13x13"
+  ],
+  "coarse": true,
+  "attrs": {
+   "bg": "gray",
+   "layout": "standard",
+   "density": "comfortable",
+   "text": "large"
+  }
+ },
+ {
+  "viewport": "phone",
+  "profile": "large-text",
+  "background": "gray",
+  "layout": "standard",
+  "screen": "/settings/appearance",
+  "applied": true,
+  "overflow": false,
+  "checked": 78,
+  "lowContrast": 0,
+  "lowContrastSample": [],
+  "alerts": 0,
+  "alertsHidden": 0,
+  "tinyControls": 0,
+  "tinySample": [],
+  "coarse": true,
+  "attrs": {
+   "bg": "gray",
+   "layout": "standard",
+   "density": "comfortable",
+   "text": "large"
+  }
+ },
+ {
+  "viewport": "phone",
+  "profile": "large-text",
+  "background": "gray",
+  "layout": "standard",
+  "screen": "/clients",
+  "applied": true,
+  "overflow": false,
+  "checked": 67,
+  "lowContrast": 0,
+  "lowContrastSample": [],
+  "alerts": 0,
+  "alertsHidden": 0,
+  "tinyControls": 0,
+  "tinySample": [],
+  "coarse": true,
+  "attrs": {
+   "bg": "gray",
+   "layout": "standard",
+   "density": "comfortable",
+   "text": "large"
+  }
+ },
+ {
+  "viewport": "phone",
+  "profile": "large-text",
+  "background": "gray",
+  "layout": "standard",
+  "screen": "/care-team",
+  "applied": true,
+  "overflow": false,
+  "checked": 75,
+  "lowContrast": 1,
+  "lowContrastSample": [
+   {
+    "text": "Turn Service checks On",
+    "ratio": 2.46,
+    "size": 15.75
+   }
+  ],
+  "alerts": 0,
+  "alertsHidden": 0,
+  "tinyControls": 0,
+  "tinySample": [],
+  "coarse": true,
+  "attrs": {
+   "bg": "gray",
+   "layout": "standard",
+   "density": "comfortable",
+   "text": "large"
+  }
+ },
+ {
+  "viewport": "phone",
+  "profile": "large-text",
+  "background": "gray",
+  "layout": "minimal",
+  "screen": "/",
+  "applied": true,
+  "overflow": false,
+  "checked": 84,
+  "lowContrast": 0,
+  "lowContrastSample": [],
+  "alerts": 3,
+  "alertsHidden": 0,
+  "tinyControls": 0,
+  "tinySample": [],
+  "coarse": true,
+  "attrs": {
+   "bg": "gray",
+   "layout": "minimal",
+   "density": "comfortable",
+   "text": "large"
+  }
+ },
+ {
+  "viewport": "phone",
+  "profile": "large-text",
+  "background": "gray",
+  "layout": "minimal",
+  "screen": "/documents",
+  "applied": true,
+  "overflow": false,
+  "checked": 148,
+  "lowContrast": 0,
+  "lowContrastSample": [],
+  "alerts": 1,
+  "alertsHidden": 0,
+  "tinyControls": 1,
+  "tinySample": [
+   "input[] 18x23"
+  ],
+  "coarse": true,
+  "attrs": {
+   "bg": "gray",
+   "layout": "minimal",
+   "density": "comfortable",
+   "text": "large"
+  }
+ },
+ {
+  "viewport": "phone",
+  "profile": "large-text",
+  "background": "gray",
+  "layout": "minimal",
+  "screen": "/schedule",
+  "applied": true,
+  "overflow": false,
+  "checked": 258,
+  "lowContrast": 0,
+  "lowContrastSample": [],
+  "alerts": 0,
+  "alertsHidden": 0,
+  "tinyControls": 25,
+  "tinySample": [
+   "input[] 13x13",
+   "input[] 13x13",
+   "input[] 13x13"
+  ],
+  "coarse": true,
+  "attrs": {
+   "bg": "gray",
+   "layout": "minimal",
+   "density": "comfortable",
+   "text": "large"
+  }
+ },
+ {
+  "viewport": "phone",
+  "profile": "large-text",
+  "background": "gray",
+  "layout": "minimal",
+  "screen": "/settings/appearance",
+  "applied": true,
+  "overflow": false,
+  "checked": 78,
+  "lowContrast": 0,
+  "lowContrastSample": [],
+  "alerts": 0,
+  "alertsHidden": 0,
+  "tinyControls": 0,
+  "tinySample": [],
+  "coarse": true,
+  "attrs": {
+   "bg": "gray",
+   "layout": "minimal",
+   "density": "comfortable",
+   "text": "large"
+  }
+ },
+ {
+  "viewport": "phone",
+  "profile": "large-text",
+  "background": "gray",
+  "layout": "minimal",
+  "screen": "/clients",
+  "applied": true,
+  "overflow": false,
+  "checked": 67,
+  "lowContrast": 0,
+  "lowContrastSample": [],
+  "alerts": 0,
+  "alertsHidden": 0,
+  "tinyControls": 0,
+  "tinySample": [],
+  "coarse": true,
+  "attrs": {
+   "bg": "gray",
+   "layout": "minimal",
+   "density": "comfortable",
+   "text": "large"
+  }
+ },
+ {
+  "viewport": "phone",
+  "profile": "large-text",
+  "background": "gray",
+  "layout": "minimal",
+  "screen": "/care-team",
+  "applied": true,
+  "overflow": false,
+  "checked": 75,
+  "lowContrast": 1,
+  "lowContrastSample": [
+   {
+    "text": "Turn Service checks On",
+    "ratio": 2.46,
+    "size": 15.75
+   }
+  ],
+  "alerts": 0,
+  "alertsHidden": 0,
+  "tinyControls": 0,
+  "tinySample": [],
+  "coarse": true,
+  "attrs": {
+   "bg": "gray",
+   "layout": "minimal",
+   "density": "comfortable",
+   "text": "large"
+  }
+ },
+ {
+  "viewport": "phone",
+  "profile": "large-text",
+  "background": "dark",
+  "layout": "standard",
+  "screen": "/",
+  "applied": true,
+  "overflow": false,
+  "checked": 84,
+  "lowContrast": 0,
+  "lowContrastSample": [],
+  "alerts": 3,
+  "alertsHidden": 0,
+  "tinyControls": 0,
+  "tinySample": [],
+  "coarse": true,
+  "attrs": {
+   "bg": "dark",
+   "layout": "standard",
+   "density": "comfortable",
+   "text": "large"
+  }
+ },
+ {
+  "viewport": "phone",
+  "profile": "large-text",
+  "background": "dark",
+  "layout": "standard",
+  "screen": "/documents",
+  "applied": true,
+  "overflow": false,
+  "checked": 148,
+  "lowContrast": 0,
+  "lowContrastSample": [],
+  "alerts": 1,
+  "alertsHidden": 0,
+  "tinyControls": 1,
+  "tinySample": [
+   "input[] 18x23"
+  ],
+  "coarse": true,
+  "attrs": {
+   "bg": "dark",
+   "layout": "standard",
+   "density": "comfortable",
+   "text": "large"
+  }
+ },
+ {
+  "viewport": "phone",
+  "profile": "large-text",
+  "background": "dark",
+  "layout": "standard",
+  "screen": "/schedule",
+  "applied": true,
+  "overflow": false,
+  "checked": 258,
+  "lowContrast": 0,
+  "lowContrastSample": [],
+  "alerts": 0,
+  "alertsHidden": 0,
+  "tinyControls": 25,
+  "tinySample": [
+   "input[] 13x13",
+   "input[] 13x13",
+   "input[] 13x13"
+  ],
+  "coarse": true,
+  "attrs": {
+   "bg": "dark",
+   "layout": "standard",
+   "density": "comfortable",
+   "text": "large"
+  }
+ },
+ {
+  "viewport": "phone",
+  "profile": "large-text",
+  "background": "dark",
+  "layout": "standard",
+  "screen": "/settings/appearance",
+  "applied": true,
+  "overflow": false,
+  "checked": 78,
+  "lowContrast": 0,
+  "lowContrastSample": [],
+  "alerts": 0,
+  "alertsHidden": 0,
+  "tinyControls": 0,
+  "tinySample": [],
+  "coarse": true,
+  "attrs": {
+   "bg": "dark",
+   "layout": "standard",
+   "density": "comfortable",
+   "text": "large"
+  }
+ },
+ {
+  "viewport": "phone",
+  "profile": "large-text",
+  "background": "dark",
+  "layout": "standard",
+  "screen": "/clients",
+  "applied": true,
+  "overflow": false,
+  "checked": 67,
+  "lowContrast": 0,
+  "lowContrastSample": [],
+  "alerts": 0,
+  "alertsHidden": 0,
+  "tinyControls": 0,
+  "tinySample": [],
+  "coarse": true,
+  "attrs": {
+   "bg": "dark",
+   "layout": "standard",
+   "density": "comfortable",
+   "text": "large"
+  }
+ },
+ {
+  "viewport": "phone",
+  "profile": "large-text",
+  "background": "dark",
+  "layout": "standard",
+  "screen": "/care-team",
+  "applied": true,
+  "overflow": false,
+  "checked": 75,
+  "lowContrast": 1,
+  "lowContrastSample": [
+   {
+    "text": "Turn Service checks On",
+    "ratio": 2.23,
+    "size": 15.75
+   }
+  ],
+  "alerts": 0,
+  "alertsHidden": 0,
+  "tinyControls": 0,
+  "tinySample": [],
+  "coarse": true,
+  "attrs": {
+   "bg": "dark",
+   "layout": "standard",
+   "density": "comfortable",
+   "text": "large"
+  }
+ },
+ {
+  "viewport": "phone",
+  "profile": "large-text",
+  "background": "dark",
+  "layout": "minimal",
+  "screen": "/",
+  "applied": true,
+  "overflow": false,
+  "checked": 84,
+  "lowContrast": 0,
+  "lowContrastSample": [],
+  "alerts": 3,
+  "alertsHidden": 0,
+  "tinyControls": 0,
+  "tinySample": [],
+  "coarse": true,
+  "attrs": {
+   "bg": "dark",
+   "layout": "minimal",
+   "density": "comfortable",
+   "text": "large"
+  }
+ },
+ {
+  "viewport": "phone",
+  "profile": "large-text",
+  "background": "dark",
+  "layout": "minimal",
+  "screen": "/documents",
+  "applied": true,
+  "overflow": false,
+  "checked": 148,
+  "lowContrast": 0,
+  "lowContrastSample": [],
+  "alerts": 1,
+  "alertsHidden": 0,
+  "tinyControls": 1,
+  "tinySample": [
+   "input[] 18x23"
+  ],
+  "coarse": true,
+  "attrs": {
+   "bg": "dark",
+   "layout": "minimal",
+   "density": "comfortable",
+   "text": "large"
+  }
+ },
+ {
+  "viewport": "phone",
+  "profile": "large-text",
+  "background": "dark",
+  "layout": "minimal",
+  "screen": "/schedule",
+  "applied": true,
+  "overflow": false,
+  "checked": 258,
+  "lowContrast": 0,
+  "lowContrastSample": [],
+  "alerts": 0,
+  "alertsHidden": 0,
+  "tinyControls": 25,
+  "tinySample": [
+   "input[] 13x13",
+   "input[] 13x13",
+   "input[] 13x13"
+  ],
+  "coarse": true,
+  "attrs": {
+   "bg": "dark",
+   "layout": "minimal",
+   "density": "comfortable",
+   "text": "large"
+  }
+ },
+ {
+  "viewport": "phone",
+  "profile": "large-text",
+  "background": "dark",
+  "layout": "minimal",
+  "screen": "/settings/appearance",
+  "applied": true,
+  "overflow": false,
+  "checked": 78,
+  "lowContrast": 0,
+  "lowContrastSample": [],
+  "alerts": 0,
+  "alertsHidden": 0,
+  "tinyControls": 0,
+  "tinySample": [],
+  "coarse": true,
+  "attrs": {
+   "bg": "dark",
+   "layout": "minimal",
+   "density": "comfortable",
+   "text": "large"
+  }
+ },
+ {
+  "viewport": "phone",
+  "profile": "large-text",
+  "background": "dark",
+  "layout": "minimal",
+  "screen": "/clients",
+  "applied": true,
+  "overflow": false,
+  "checked": 67,
+  "lowContrast": 0,
+  "lowContrastSample": [],
+  "alerts": 0,
+  "alertsHidden": 0,
+  "tinyControls": 0,
+  "tinySample": [],
+  "coarse": true,
+  "attrs": {
+   "bg": "dark",
+   "layout": "minimal",
+   "density": "comfortable",
+   "text": "large"
+  }
+ },
+ {
+  "viewport": "phone",
+  "profile": "large-text",
+  "background": "dark",
+  "layout": "minimal",
+  "screen": "/care-team",
+  "applied": true,
+  "overflow": false,
+  "checked": 75,
+  "lowContrast": 1,
+  "lowContrastSample": [
+   {
+    "text": "Turn Service checks On",
+    "ratio": 2.23,
+    "size": 15.75
+   }
+  ],
+  "alerts": 0,
+  "alertsHidden": 0,
+  "tinyControls": 0,
+  "tinySample": [],
+  "coarse": true,
+  "attrs": {
+   "bg": "dark",
+   "layout": "minimal",
+   "density": "comfortable",
+   "text": "large"
+  }
+ },
+ {
+  "viewport": "phone",
+  "profile": "compact-density",
+  "background": "light",
+  "layout": "standard",
+  "screen": "/",
+  "applied": true,
+  "overflow": false,
+  "checked": 84,
+  "lowContrast": 0,
+  "lowContrastSample": [],
+  "alerts": 3,
+  "alertsHidden": 0,
+  "tinyControls": 0,
+  "tinySample": [],
+  "coarse": true,
+  "attrs": {
+   "bg": "light",
+   "layout": "standard",
+   "density": "compact",
+   "text": "standard"
+  }
+ },
+ {
+  "viewport": "phone",
+  "profile": "compact-density",
+  "background": "light",
+  "layout": "standard",
+  "screen": "/documents",
+  "applied": true,
+  "overflow": false,
+  "checked": 148,
+  "lowContrast": 0,
+  "lowContrastSample": [],
+  "alerts": 1,
+  "alertsHidden": 0,
+  "tinyControls": 1,
+  "tinySample": [
+   "input[] 19x20"
+  ],
+  "coarse": true,
+  "attrs": {
+   "bg": "light",
+   "layout": "standard",
+   "density": "compact",
+   "text": "standard"
+  }
+ },
+ {
+  "viewport": "phone",
+  "profile": "compact-density",
+  "background": "light",
+  "layout": "standard",
+  "screen": "/schedule",
+  "applied": true,
+  "overflow": false,
+  "checked": 258,
+  "lowContrast": 0,
+  "lowContrastSample": [],
+  "alerts": 0,
+  "alertsHidden": 0,
+  "tinyControls": 25,
+  "tinySample": [
+   "input[] 13x13",
+   "input[] 13x13",
+   "input[] 13x13"
+  ],
+  "coarse": true,
+  "attrs": {
+   "bg": "light",
+   "layout": "standard",
+   "density": "compact",
+   "text": "standard"
+  }
+ },
+ {
+  "viewport": "phone",
+  "profile": "compact-density",
+  "background": "light",
+  "layout": "standard",
+  "screen": "/settings/appearance",
+  "applied": true,
+  "overflow": false,
+  "checked": 78,
+  "lowContrast": 0,
+  "lowContrastSample": [],
+  "alerts": 0,
+  "alertsHidden": 0,
+  "tinyControls": 0,
+  "tinySample": [],
+  "coarse": true,
+  "attrs": {
+   "bg": "light",
+   "layout": "standard",
+   "density": "compact",
+   "text": "standard"
+  }
+ },
+ {
+  "viewport": "phone",
+  "profile": "compact-density",
+  "background": "light",
+  "layout": "standard",
+  "screen": "/clients",
+  "applied": true,
+  "overflow": false,
+  "checked": 67,
+  "lowContrast": 0,
+  "lowContrastSample": [],
+  "alerts": 0,
+  "alertsHidden": 0,
+  "tinyControls": 0,
+  "tinySample": [],
+  "coarse": true,
+  "attrs": {
+   "bg": "light",
+   "layout": "standard",
+   "density": "compact",
+   "text": "standard"
+  }
+ },
+ {
+  "viewport": "phone",
+  "profile": "compact-density",
+  "background": "light",
+  "layout": "standard",
+  "screen": "/care-team",
+  "applied": true,
+  "overflow": false,
+  "checked": 75,
+  "lowContrast": 1,
+  "lowContrastSample": [
+   {
+    "text": "Turn Service checks On",
+    "ratio": 2.56,
+    "size": 14
+   }
+  ],
+  "alerts": 0,
+  "alertsHidden": 0,
+  "tinyControls": 0,
+  "tinySample": [],
+  "coarse": true,
+  "attrs": {
+   "bg": "light",
+   "layout": "standard",
+   "density": "compact",
+   "text": "standard"
+  }
+ },
+ {
+  "viewport": "phone",
+  "profile": "compact-density",
+  "background": "light",
+  "layout": "minimal",
+  "screen": "/",
+  "applied": true,
+  "overflow": false,
+  "checked": 84,
+  "lowContrast": 0,
+  "lowContrastSample": [],
+  "alerts": 3,
+  "alertsHidden": 0,
+  "tinyControls": 0,
+  "tinySample": [],
+  "coarse": true,
+  "attrs": {
+   "bg": "light",
+   "layout": "minimal",
+   "density": "compact",
+   "text": "standard"
+  }
+ },
+ {
+  "viewport": "phone",
+  "profile": "compact-density",
+  "background": "light",
+  "layout": "minimal",
+  "screen": "/documents",
+  "applied": true,
+  "overflow": false,
+  "checked": 148,
+  "lowContrast": 0,
+  "lowContrastSample": [],
+  "alerts": 1,
+  "alertsHidden": 0,
+  "tinyControls": 1,
+  "tinySample": [
+   "input[] 19x20"
+  ],
+  "coarse": true,
+  "attrs": {
+   "bg": "light",
+   "layout": "minimal",
+   "density": "compact",
+   "text": "standard"
+  }
+ },
+ {
+  "viewport": "phone",
+  "profile": "compact-density",
+  "background": "light",
+  "layout": "minimal",
+  "screen": "/schedule",
+  "applied": true,
+  "overflow": false,
+  "checked": 258,
+  "lowContrast": 0,
+  "lowContrastSample": [],
+  "alerts": 0,
+  "alertsHidden": 0,
+  "tinyControls": 25,
+  "tinySample": [
+   "input[] 13x13",
+   "input[] 13x13",
+   "input[] 13x13"
+  ],
+  "coarse": true,
+  "attrs": {
+   "bg": "light",
+   "layout": "minimal",
+   "density": "compact",
+   "text": "standard"
+  }
+ },
+ {
+  "viewport": "phone",
+  "profile": "compact-density",
+  "background": "light",
+  "layout": "minimal",
+  "screen": "/settings/appearance",
+  "applied": true,
+  "overflow": false,
+  "checked": 78,
+  "lowContrast": 0,
+  "lowContrastSample": [],
+  "alerts": 0,
+  "alertsHidden": 0,
+  "tinyControls": 0,
+  "tinySample": [],
+  "coarse": true,
+  "attrs": {
+   "bg": "light",
+   "layout": "minimal",
+   "density": "compact",
+   "text": "standard"
+  }
+ },
+ {
+  "viewport": "phone",
+  "profile": "compact-density",
+  "background": "light",
+  "layout": "minimal",
+  "screen": "/clients",
+  "applied": true,
+  "overflow": false,
+  "checked": 67,
+  "lowContrast": 0,
+  "lowContrastSample": [],
+  "alerts": 0,
+  "alertsHidden": 0,
+  "tinyControls": 0,
+  "tinySample": [],
+  "coarse": true,
+  "attrs": {
+   "bg": "light",
+   "layout": "minimal",
+   "density": "compact",
+   "text": "standard"
+  }
+ },
+ {
+  "viewport": "phone",
+  "profile": "compact-density",
+  "background": "light",
+  "layout": "minimal",
+  "screen": "/care-team",
+  "applied": true,
+  "overflow": false,
+  "checked": 75,
+  "lowContrast": 1,
+  "lowContrastSample": [
+   {
+    "text": "Turn Service checks On",
+    "ratio": 2.56,
+    "size": 14
+   }
+  ],
+  "alerts": 0,
+  "alertsHidden": 0,
+  "tinyControls": 0,
+  "tinySample": [],
+  "coarse": true,
+  "attrs": {
+   "bg": "light",
+   "layout": "minimal",
+   "density": "compact",
+   "text": "standard"
+  }
+ },
+ {
+  "viewport": "phone",
+  "profile": "compact-density",
+  "background": "white",
+  "layout": "standard",
+  "screen": "/",
+  "applied": true,
+  "overflow": false,
+  "checked": 84,
+  "lowContrast": 0,
+  "lowContrastSample": [],
+  "alerts": 3,
+  "alertsHidden": 0,
+  "tinyControls": 0,
+  "tinySample": [],
+  "coarse": true,
+  "attrs": {
+   "bg": "white",
+   "layout": "standard",
+   "density": "compact",
+   "text": "standard"
+  }
+ },
+ {
+  "viewport": "phone",
+  "profile": "compact-density",
+  "background": "white",
+  "layout": "standard",
+  "screen": "/documents",
+  "applied": true,
+  "overflow": false,
+  "checked": 148,
+  "lowContrast": 0,
+  "lowContrastSample": [],
+  "alerts": 1,
+  "alertsHidden": 0,
+  "tinyControls": 1,
+  "tinySample": [
+   "input[] 19x20"
+  ],
+  "coarse": true,
+  "attrs": {
+   "bg": "white",
+   "layout": "standard",
+   "density": "compact",
+   "text": "standard"
+  }
+ },
+ {
+  "viewport": "phone",
+  "profile": "compact-density",
+  "background": "white",
+  "layout": "standard",
+  "screen": "/schedule",
+  "applied": true,
+  "overflow": false,
+  "checked": 258,
+  "lowContrast": 0,
+  "lowContrastSample": [],
+  "alerts": 0,
+  "alertsHidden": 0,
+  "tinyControls": 25,
+  "tinySample": [
+   "input[] 13x13",
+   "input[] 13x13",
+   "input[] 13x13"
+  ],
+  "coarse": true,
+  "attrs": {
+   "bg": "white",
+   "layout": "standard",
+   "density": "compact",
+   "text": "standard"
+  }
+ },
+ {
+  "viewport": "phone",
+  "profile": "compact-density",
+  "background": "white",
+  "layout": "standard",
+  "screen": "/settings/appearance",
+  "applied": true,
+  "overflow": false,
+  "checked": 78,
+  "lowContrast": 0,
+  "lowContrastSample": [],
+  "alerts": 0,
+  "alertsHidden": 0,
+  "tinyControls": 0,
+  "tinySample": [],
+  "coarse": true,
+  "attrs": {
+   "bg": "white",
+   "layout": "standard",
+   "density": "compact",
+   "text": "standard"
+  }
+ },
+ {
+  "viewport": "phone",
+  "profile": "compact-density",
+  "background": "white",
+  "layout": "standard",
+  "screen": "/clients",
+  "applied": true,
+  "overflow": false,
+  "checked": 67,
+  "lowContrast": 0,
+  "lowContrastSample": [],
+  "alerts": 0,
+  "alertsHidden": 0,
+  "tinyControls": 0,
+  "tinySample": [],
+  "coarse": true,
+  "attrs": {
+   "bg": "white",
+   "layout": "standard",
+   "density": "compact",
+   "text": "standard"
+  }
+ },
+ {
+  "viewport": "phone",
+  "profile": "compact-density",
+  "background": "white",
+  "layout": "standard",
+  "screen": "/care-team",
+  "applied": true,
+  "overflow": false,
+  "checked": 75,
+  "lowContrast": 1,
+  "lowContrastSample": [
+   {
+    "text": "Turn Service checks On",
+    "ratio": 2.56,
+    "size": 14
+   }
+  ],
+  "alerts": 0,
+  "alertsHidden": 0,
+  "tinyControls": 0,
+  "tinySample": [],
+  "coarse": true,
+  "attrs": {
+   "bg": "white",
+   "layout": "standard",
+   "density": "compact",
+   "text": "standard"
+  }
+ },
+ {
+  "viewport": "phone",
+  "profile": "compact-density",
+  "background": "white",
+  "layout": "minimal",
+  "screen": "/",
+  "applied": true,
+  "overflow": false,
+  "checked": 84,
+  "lowContrast": 0,
+  "lowContrastSample": [],
+  "alerts": 3,
+  "alertsHidden": 0,
+  "tinyControls": 0,
+  "tinySample": [],
+  "coarse": true,
+  "attrs": {
+   "bg": "white",
+   "layout": "minimal",
+   "density": "compact",
+   "text": "standard"
+  }
+ },
+ {
+  "viewport": "phone",
+  "profile": "compact-density",
+  "background": "white",
+  "layout": "minimal",
+  "screen": "/documents",
+  "applied": true,
+  "overflow": false,
+  "checked": 148,
+  "lowContrast": 0,
+  "lowContrastSample": [],
+  "alerts": 1,
+  "alertsHidden": 0,
+  "tinyControls": 1,
+  "tinySample": [
+   "input[] 19x20"
+  ],
+  "coarse": true,
+  "attrs": {
+   "bg": "white",
+   "layout": "minimal",
+   "density": "compact",
+   "text": "standard"
+  }
+ },
+ {
+  "viewport": "phone",
+  "profile": "compact-density",
+  "background": "white",
+  "layout": "minimal",
+  "screen": "/schedule",
+  "applied": true,
+  "overflow": false,
+  "checked": 258,
+  "lowContrast": 0,
+  "lowContrastSample": [],
+  "alerts": 0,
+  "alertsHidden": 0,
+  "tinyControls": 25,
+  "tinySample": [
+   "input[] 13x13",
+   "input[] 13x13",
+   "input[] 13x13"
+  ],
+  "coarse": true,
+  "attrs": {
+   "bg": "white",
+   "layout": "minimal",
+   "density": "compact",
+   "text": "standard"
+  }
+ },
+ {
+  "viewport": "phone",
+  "profile": "compact-density",
+  "background": "white",
+  "layout": "minimal",
+  "screen": "/settings/appearance",
+  "applied": true,
+  "overflow": false,
+  "checked": 78,
+  "lowContrast": 0,
+  "lowContrastSample": [],
+  "alerts": 0,
+  "alertsHidden": 0,
+  "tinyControls": 0,
+  "tinySample": [],
+  "coarse": true,
+  "attrs": {
+   "bg": "white",
+   "layout": "minimal",
+   "density": "compact",
+   "text": "standard"
+  }
+ },
+ {
+  "viewport": "phone",
+  "profile": "compact-density",
+  "background": "white",
+  "layout": "minimal",
+  "screen": "/clients",
+  "applied": true,
+  "overflow": false,
+  "checked": 67,
+  "lowContrast": 0,
+  "lowContrastSample": [],
+  "alerts": 0,
+  "alertsHidden": 0,
+  "tinyControls": 0,
+  "tinySample": [],
+  "coarse": true,
+  "attrs": {
+   "bg": "white",
+   "layout": "minimal",
+   "density": "compact",
+   "text": "standard"
+  }
+ },
+ {
+  "viewport": "phone",
+  "profile": "compact-density",
+  "background": "white",
+  "layout": "minimal",
+  "screen": "/care-team",
+  "applied": true,
+  "overflow": false,
+  "checked": 75,
+  "lowContrast": 1,
+  "lowContrastSample": [
+   {
+    "text": "Turn Service checks On",
+    "ratio": 2.56,
+    "size": 14
+   }
+  ],
+  "alerts": 0,
+  "alertsHidden": 0,
+  "tinyControls": 0,
+  "tinySample": [],
+  "coarse": true,
+  "attrs": {
+   "bg": "white",
+   "layout": "minimal",
+   "density": "compact",
+   "text": "standard"
+  }
+ },
+ {
+  "viewport": "phone",
+  "profile": "compact-density",
+  "background": "gray",
+  "layout": "standard",
+  "screen": "/",
+  "applied": true,
+  "overflow": false,
+  "checked": 84,
+  "lowContrast": 0,
+  "lowContrastSample": [],
+  "alerts": 3,
+  "alertsHidden": 0,
+  "tinyControls": 0,
+  "tinySample": [],
+  "coarse": true,
+  "attrs": {
+   "bg": "gray",
+   "layout": "standard",
+   "density": "compact",
+   "text": "standard"
+  }
+ },
+ {
+  "viewport": "phone",
+  "profile": "compact-density",
+  "background": "gray",
+  "layout": "standard",
+  "screen": "/documents",
+  "applied": true,
+  "overflow": false,
+  "checked": 148,
+  "lowContrast": 0,
+  "lowContrastSample": [],
+  "alerts": 1,
+  "alertsHidden": 0,
+  "tinyControls": 1,
+  "tinySample": [
+   "input[] 19x20"
+  ],
+  "coarse": true,
+  "attrs": {
+   "bg": "gray",
+   "layout": "standard",
+   "density": "compact",
+   "text": "standard"
+  }
+ },
+ {
+  "viewport": "phone",
+  "profile": "compact-density",
+  "background": "gray",
+  "layout": "standard",
+  "screen": "/schedule",
+  "applied": true,
+  "overflow": false,
+  "checked": 258,
+  "lowContrast": 0,
+  "lowContrastSample": [],
+  "alerts": 0,
+  "alertsHidden": 0,
+  "tinyControls": 25,
+  "tinySample": [
+   "input[] 13x13",
+   "input[] 13x13",
+   "input[] 13x13"
+  ],
+  "coarse": true,
+  "attrs": {
+   "bg": "gray",
+   "layout": "standard",
+   "density": "compact",
+   "text": "standard"
+  }
+ },
+ {
+  "viewport": "phone",
+  "profile": "compact-density",
+  "background": "gray",
+  "layout": "standard",
+  "screen": "/settings/appearance",
+  "applied": true,
+  "overflow": false,
+  "checked": 78,
+  "lowContrast": 0,
+  "lowContrastSample": [],
+  "alerts": 0,
+  "alertsHidden": 0,
+  "tinyControls": 0,
+  "tinySample": [],
+  "coarse": true,
+  "attrs": {
+   "bg": "gray",
+   "layout": "standard",
+   "density": "compact",
+   "text": "standard"
+  }
+ },
+ {
+  "viewport": "phone",
+  "profile": "compact-density",
+  "background": "gray",
+  "layout": "standard",
+  "screen": "/clients",
+  "applied": true,
+  "overflow": false,
+  "checked": 67,
+  "lowContrast": 0,
+  "lowContrastSample": [],
+  "alerts": 0,
+  "alertsHidden": 0,
+  "tinyControls": 0,
+  "tinySample": [],
+  "coarse": true,
+  "attrs": {
+   "bg": "gray",
+   "layout": "standard",
+   "density": "compact",
+   "text": "standard"
+  }
+ },
+ {
+  "viewport": "phone",
+  "profile": "compact-density",
+  "background": "gray",
+  "layout": "standard",
+  "screen": "/care-team",
+  "applied": true,
+  "overflow": false,
+  "checked": 75,
+  "lowContrast": 1,
+  "lowContrastSample": [
+   {
+    "text": "Turn Service checks On",
+    "ratio": 2.46,
+    "size": 14
+   }
+  ],
+  "alerts": 0,
+  "alertsHidden": 0,
+  "tinyControls": 0,
+  "tinySample": [],
+  "coarse": true,
+  "attrs": {
+   "bg": "gray",
+   "layout": "standard",
+   "density": "compact",
+   "text": "standard"
+  }
+ },
+ {
+  "viewport": "phone",
+  "profile": "compact-density",
+  "background": "gray",
+  "layout": "minimal",
+  "screen": "/",
+  "applied": true,
+  "overflow": false,
+  "checked": 84,
+  "lowContrast": 0,
+  "lowContrastSample": [],
+  "alerts": 3,
+  "alertsHidden": 0,
+  "tinyControls": 0,
+  "tinySample": [],
+  "coarse": true,
+  "attrs": {
+   "bg": "gray",
+   "layout": "minimal",
+   "density": "compact",
+   "text": "standard"
+  }
+ },
+ {
+  "viewport": "phone",
+  "profile": "compact-density",
+  "background": "gray",
+  "layout": "minimal",
+  "screen": "/documents",
+  "applied": true,
+  "overflow": false,
+  "checked": 148,
+  "lowContrast": 0,
+  "lowContrastSample": [],
+  "alerts": 1,
+  "alertsHidden": 0,
+  "tinyControls": 1,
+  "tinySample": [
+   "input[] 19x20"
+  ],
+  "coarse": true,
+  "attrs": {
+   "bg": "gray",
+   "layout": "minimal",
+   "density": "compact",
+   "text": "standard"
+  }
+ },
+ {
+  "viewport": "phone",
+  "profile": "compact-density",
+  "background": "gray",
+  "layout": "minimal",
+  "screen": "/schedule",
+  "applied": true,
+  "overflow": false,
+  "checked": 258,
+  "lowContrast": 0,
+  "lowContrastSample": [],
+  "alerts": 0,
+  "alertsHidden": 0,
+  "tinyControls": 25,
+  "tinySample": [
+   "input[] 13x13",
+   "input[] 13x13",
+   "input[] 13x13"
+  ],
+  "coarse": true,
+  "attrs": {
+   "bg": "gray",
+   "layout": "minimal",
+   "density": "compact",
+   "text": "standard"
+  }
+ },
+ {
+  "viewport": "phone",
+  "profile": "compact-density",
+  "background": "gray",
+  "layout": "minimal",
+  "screen": "/settings/appearance",
+  "applied": true,
+  "overflow": false,
+  "checked": 78,
+  "lowContrast": 0,
+  "lowContrastSample": [],
+  "alerts": 0,
+  "alertsHidden": 0,
+  "tinyControls": 0,
+  "tinySample": [],
+  "coarse": true,
+  "attrs": {
+   "bg": "gray",
+   "layout": "minimal",
+   "density": "compact",
+   "text": "standard"
+  }
+ },
+ {
+  "viewport": "phone",
+  "profile": "compact-density",
+  "background": "gray",
+  "layout": "minimal",
+  "screen": "/clients",
+  "applied": true,
+  "overflow": false,
+  "checked": 67,
+  "lowContrast": 0,
+  "lowContrastSample": [],
+  "alerts": 0,
+  "alertsHidden": 0,
+  "tinyControls": 0,
+  "tinySample": [],
+  "coarse": true,
+  "attrs": {
+   "bg": "gray",
+   "layout": "minimal",
+   "density": "compact",
+   "text": "standard"
+  }
+ },
+ {
+  "viewport": "phone",
+  "profile": "compact-density",
+  "background": "gray",
+  "layout": "minimal",
+  "screen": "/care-team",
+  "applied": true,
+  "overflow": false,
+  "checked": 75,
+  "lowContrast": 1,
+  "lowContrastSample": [
+   {
+    "text": "Turn Service checks On",
+    "ratio": 2.46,
+    "size": 14
+   }
+  ],
+  "alerts": 0,
+  "alertsHidden": 0,
+  "tinyControls": 0,
+  "tinySample": [],
+  "coarse": true,
+  "attrs": {
+   "bg": "gray",
+   "layout": "minimal",
+   "density": "compact",
+   "text": "standard"
+  }
+ },
+ {
+  "viewport": "phone",
+  "profile": "compact-density",
+  "background": "dark",
+  "layout": "standard",
+  "screen": "/",
+  "applied": true,
+  "overflow": false,
+  "checked": 84,
+  "lowContrast": 0,
+  "lowContrastSample": [],
+  "alerts": 3,
+  "alertsHidden": 0,
+  "tinyControls": 0,
+  "tinySample": [],
+  "coarse": true,
+  "attrs": {
+   "bg": "dark",
+   "layout": "standard",
+   "density": "compact",
+   "text": "standard"
+  }
+ },
+ {
+  "viewport": "phone",
+  "profile": "compact-density",
+  "background": "dark",
+  "layout": "standard",
+  "screen": "/documents",
+  "applied": true,
+  "overflow": false,
+  "checked": 148,
+  "lowContrast": 0,
+  "lowContrastSample": [],
+  "alerts": 1,
+  "alertsHidden": 0,
+  "tinyControls": 1,
+  "tinySample": [
+   "input[] 19x20"
+  ],
+  "coarse": true,
+  "attrs": {
+   "bg": "dark",
+   "layout": "standard",
+   "density": "compact",
+   "text": "standard"
+  }
+ },
+ {
+  "viewport": "phone",
+  "profile": "compact-density",
+  "background": "dark",
+  "layout": "standard",
+  "screen": "/schedule",
+  "applied": true,
+  "overflow": false,
+  "checked": 258,
+  "lowContrast": 0,
+  "lowContrastSample": [],
+  "alerts": 0,
+  "alertsHidden": 0,
+  "tinyControls": 25,
+  "tinySample": [
+   "input[] 13x13",
+   "input[] 13x13",
+   "input[] 13x13"
+  ],
+  "coarse": true,
+  "attrs": {
+   "bg": "dark",
+   "layout": "standard",
+   "density": "compact",
+   "text": "standard"
+  }
+ },
+ {
+  "viewport": "phone",
+  "profile": "compact-density",
+  "background": "dark",
+  "layout": "standard",
+  "screen": "/settings/appearance",
+  "applied": true,
+  "overflow": false,
+  "checked": 78,
+  "lowContrast": 0,
+  "lowContrastSample": [],
+  "alerts": 0,
+  "alertsHidden": 0,
+  "tinyControls": 0,
+  "tinySample": [],
+  "coarse": true,
+  "attrs": {
+   "bg": "dark",
+   "layout": "standard",
+   "density": "compact",
+   "text": "standard"
+  }
+ },
+ {
+  "viewport": "phone",
+  "profile": "compact-density",
+  "background": "dark",
+  "layout": "standard",
+  "screen": "/clients",
+  "applied": true,
+  "overflow": false,
+  "checked": 67,
+  "lowContrast": 0,
+  "lowContrastSample": [],
+  "alerts": 0,
+  "alertsHidden": 0,
+  "tinyControls": 0,
+  "tinySample": [],
+  "coarse": true,
+  "attrs": {
+   "bg": "dark",
+   "layout": "standard",
+   "density": "compact",
+   "text": "standard"
+  }
+ },
+ {
+  "viewport": "phone",
+  "profile": "compact-density",
+  "background": "dark",
+  "layout": "standard",
+  "screen": "/care-team",
+  "applied": true,
+  "overflow": false,
+  "checked": 75,
+  "lowContrast": 1,
+  "lowContrastSample": [
+   {
+    "text": "Turn Service checks On",
+    "ratio": 2.23,
+    "size": 14
+   }
+  ],
+  "alerts": 0,
+  "alertsHidden": 0,
+  "tinyControls": 0,
+  "tinySample": [],
+  "coarse": true,
+  "attrs": {
+   "bg": "dark",
+   "layout": "standard",
+   "density": "compact",
+   "text": "standard"
+  }
+ },
+ {
+  "viewport": "phone",
+  "profile": "compact-density",
+  "background": "dark",
+  "layout": "minimal",
+  "screen": "/",
+  "applied": true,
+  "overflow": false,
+  "checked": 84,
+  "lowContrast": 0,
+  "lowContrastSample": [],
+  "alerts": 3,
+  "alertsHidden": 0,
+  "tinyControls": 0,
+  "tinySample": [],
+  "coarse": true,
+  "attrs": {
+   "bg": "dark",
+   "layout": "minimal",
+   "density": "compact",
+   "text": "standard"
+  }
+ },
+ {
+  "viewport": "phone",
+  "profile": "compact-density",
+  "background": "dark",
+  "layout": "minimal",
+  "screen": "/documents",
+  "applied": true,
+  "overflow": false,
+  "checked": 148,
+  "lowContrast": 0,
+  "lowContrastSample": [],
+  "alerts": 1,
+  "alertsHidden": 0,
+  "tinyControls": 1,
+  "tinySample": [
+   "input[] 19x20"
+  ],
+  "coarse": true,
+  "attrs": {
+   "bg": "dark",
+   "layout": "minimal",
+   "density": "compact",
+   "text": "standard"
+  }
+ },
+ {
+  "viewport": "phone",
+  "profile": "compact-density",
+  "background": "dark",
+  "layout": "minimal",
+  "screen": "/schedule",
+  "applied": true,
+  "overflow": false,
+  "checked": 258,
+  "lowContrast": 0,
+  "lowContrastSample": [],
+  "alerts": 0,
+  "alertsHidden": 0,
+  "tinyControls": 25,
+  "tinySample": [
+   "input[] 13x13",
+   "input[] 13x13",
+   "input[] 13x13"
+  ],
+  "coarse": true,
+  "attrs": {
+   "bg": "dark",
+   "layout": "minimal",
+   "density": "compact",
+   "text": "standard"
+  }
+ },
+ {
+  "viewport": "phone",
+  "profile": "compact-density",
+  "background": "dark",
+  "layout": "minimal",
+  "screen": "/settings/appearance",
+  "applied": true,
+  "overflow": false,
+  "checked": 78,
+  "lowContrast": 0,
+  "lowContrastSample": [],
+  "alerts": 0,
+  "alertsHidden": 0,
+  "tinyControls": 0,
+  "tinySample": [],
+  "coarse": true,
+  "attrs": {
+   "bg": "dark",
+   "layout": "minimal",
+   "density": "compact",
+   "text": "standard"
+  }
+ },
+ {
+  "viewport": "phone",
+  "profile": "compact-density",
+  "background": "dark",
+  "layout": "minimal",
+  "screen": "/clients",
+  "applied": true,
+  "overflow": false,
+  "checked": 67,
+  "lowContrast": 0,
+  "lowContrastSample": [],
+  "alerts": 0,
+  "alertsHidden": 0,
+  "tinyControls": 0,
+  "tinySample": [],
+  "coarse": true,
+  "attrs": {
+   "bg": "dark",
+   "layout": "minimal",
+   "density": "compact",
+   "text": "standard"
+  }
+ },
+ {
+  "viewport": "phone",
+  "profile": "compact-density",
+  "background": "dark",
+  "layout": "minimal",
+  "screen": "/care-team",
+  "applied": true,
+  "overflow": false,
+  "checked": 75,
+  "lowContrast": 1,
+  "lowContrastSample": [
+   {
+    "text": "Turn Service checks On",
+    "ratio": 2.23,
+    "size": 14
+   }
+  ],
+  "alerts": 0,
+  "alertsHidden": 0,
+  "tinyControls": 0,
+  "tinySample": [],
+  "coarse": true,
+  "attrs": {
+   "bg": "dark",
+   "layout": "minimal",
+   "density": "compact",
+   "text": "standard"
+  }
+ },
+ {
+  "viewport": "phone",
+  "formPreserved": true,
+  "afterChange": {
+   "bg": "white",
+   "layout": "standard",
+   "text": "standard",
+   "density": "comfortable"
+  }
+ }
+]

@@ -135,7 +135,7 @@ async function independent(f: Fx) {
 const summaryRow = async (f: Fx) => (await q(w.managerA, "select * from ogevia_api.list_monthly_service_summary($1, $2::date, $3)", [w.orgA, await monthStart(), f.client]))[0];
 
 /** The server's buckets must equal the independent ones, the equation must hold, and the caregiver cap usage must be Billable + Rounding + Pending-in-review. */
-async function check(f: Fx, expected?: Partial<Record<"billable" | "rounding" | "pending" | "reserved" | "left" | "over" | "wnb", number>>) {
+async function check(f: Fx, expected?: Partial<Record<"billable" | "rounding" | "pending" | "reserved" | "left" | "over" | "wnb" | "closedHeld" | "closedWorked", number>>) {
   const i = await independent(f);
   const s = await summaryRow(f);
   expect({

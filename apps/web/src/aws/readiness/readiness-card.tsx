@@ -112,7 +112,7 @@ function ReadinessRow({ issue, affected, status, action, help }: { issue: string
     <tr className="border-t border-slate-200 align-top max-md:flex max-md:flex-wrap max-md:items-center max-md:gap-x-3 max-md:py-1.5">
       <th scope="row" className="py-1.5 pr-3 font-medium text-slate-900 max-md:w-full max-md:pb-0">
         {issue}
-        {help ? <details className="mt-1 text-xs font-normal text-slate-700"><summary className="cursor-pointer text-og-accent underline">Details</summary><div className="mt-1">{help}</div></details> : null}
+        {help ? <details className="mt-1 text-xs font-normal text-slate-700"><summary className="cursor-pointer text-og-accent underline [@media(pointer:coarse)]:inline-flex [@media(pointer:coarse)]:min-h-[44px] [@media(pointer:coarse)]:items-center">Details</summary><div className="mt-1">{help}</div></details> : null}
       </th>
       <td className="py-2 pr-3 text-slate-900 max-md:py-1">{affected}</td>
       <td className="py-2 pr-3 max-md:py-1"><span className={`whitespace-nowrap rounded-full px-2 py-0.5 text-xs font-semibold ${TONE[status.tone]}`}>{status.label}</span></td>

@@ -49,3 +49,6 @@ New migrations only (0078, 0079, 0080; functions only, each with a rollback; 000
 | 2.5 | Counts | VERIFIED locally | One definition each in `COUNT_DEFINITIONS.md`; `GET /v1/attention` returns `counts` computed from the same rows as the lists; Approvals badge no longer mixes exception review with Ready for Approval; Caregivers badge counts only Urgent staff-document issues; Scheduling includes caregiver-blocked shifts. | Count-versus-list tests for owner, manager and scheduler; web `attention-counts-badges.test.tsx` 7. | "1 needs coverage" beside two past shifts: a WEB GROUPING error (the server counted correctly). A running unfilled shift fell between "Upcoming" and "Past", and "Needs coverage only" and the grid used the raw state; all now use the server display state. Not reproduced on the owner's real data. Client-document issues are in no badge (no Clients badge definition). |
 
 Batch 2 test runs (this tree): infra DB 87 files / 903 tests; sv-api DB 16 / 119; infra default 14 / 206; sv-api unit 3 / 74; web 116 / 1111; typecheck clean for web, sv-api, infra, ui; web eslint clean; web build OK. eslint is not configured for infra or sv-api. Local only: not run against TEST or Production.
+
+## Corrections, Batches 3 to 5
+See FINAL_CHECKLIST.md (requirement-by-requirement) and HOURS_ACCOUNTING.md (corrections 1 to 4, migration 0081).
