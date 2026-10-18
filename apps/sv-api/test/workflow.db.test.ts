@@ -864,7 +864,11 @@ describe("schedule (0026) through the API", () => {
   it("manager schedules, records a call-out and a replacement; the caregiver sees and calls out of their own shift", async () => {
     const recs = Object.fromEntries((await db.admin.query("select caregiver_code, id from ogevia.caregiver_records where organization_id = $1", [w.orgA])).rows.map((r) => [r.caregiver_code, r.id]));
     const tomorrow = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Los_Angeles" }).format(new Date(Date.now() + 864e5));
-    const body = { organizationId: w.orgA, clientId: fresh.client, serviceId: w.serviceA, date: tomorrow, startTime: "09:00", endTime: "11:00", caregiverRecordId: recs["CG-A1"] };
+    // 0081: completed work awaiting a decision with no reservation now counts against the authorization when more work is scheduled. Earlier tests in this file leave
+    // such visits on `fresh` (visits in review whose helper shifts have no reservation: 90 + 90 + 75 pending minutes); this test is about scheduling, so it uses a
+    // client of its own with the full 600 minutes.
+    const sched = await freshClient(db, w, w.caregiverA1, 600, w.orgA, { before: 40, after: 40 });
+    const body = { organizationId: w.orgA, clientId: sched.client, serviceId: w.serviceA, date: tomorrow, startTime: "09:00", endTime: "11:00", caregiverRecordId: recs["CG-A1"] };
     expect((await call("POST /v1/shifts", w.managerA, { body: { ...body, startTime: "9am" } })).status).toBe(400);
     expect((await call("POST /v1/shifts", w.caregiverA1, { body })).status).toBe(403);
     const created = await call("POST /v1/shifts", w.managerA, { body });

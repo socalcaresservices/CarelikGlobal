@@ -96,18 +96,21 @@ async function independent(f: Fx) {
             (select x.status from ogevia.service_visits x where x.scheduled_shift_id = r.shift_id and x.status not in ('voided','corrected') order by x.created_at desc limit 1) vstatus,
             (select coalesce(x.billable_minutes,0) from ogevia.service_visits x where x.scheduled_shift_id = r.shift_id and x.status not in ('voided','corrected') order by x.created_at desc limit 1) vbill,
             (select coalesce(sum(d.accepted_minutes),0) from ogevia.service_visits x join ogevia.visit_review_decisions d on d.visit_id = x.id and d.revoked_at is null and d.decision = 'accept_late_confirmation'
-              where x.scheduled_shift_id = r.shift_id and x.status = 'administrator_review') vlate
+              where x.scheduled_shift_id = r.shift_id and x.status = 'administrator_review') vlate,
+            exists (select 1 from ogevia.service_visits x join ogevia.visit_review_decisions d on d.visit_id = x.id and d.revoked_at is null and d.decision = 'close_not_billable'
+              where x.scheduled_shift_id = r.shift_id and x.status = 'administrator_review') vclosed
        from ogevia.authorization_reservations r join ogevia.shifts s on s.id = r.shift_id
       where r.authorization_lineage_id = $1 and r.released_at is null and ${inMonth}`, [f.lineage, m0])).rows as any[];
   const rounding = Number((await db.admin.query(
     "select coalesce(sum(adjustment_minutes),0) n from ogevia.billing_rounding_adjustments r where r.authorization_lineage_id = $1 and r.voided_at is null and " + inMonth, [f.lineage, m0])).rows[0].n);
 
-  let billable = 0, carried = 0, unreserved = 0, wnb = 0;
+  let billable = 0, carried = 0, unreserved = 0, wnb = 0, closedHeld = 0, closedCarried = 0, closedWorked = 0;
   for (const v of visits) {
     if (v.status === "signed") { billable += v.b; wnb += Math.max(v.w - v.b, 0); continue; }
     if (v.status === "administrator_review") {
-      billable += v.late; carried += v.b;
-      if (v.b === 0 && v.late === 0) { if (!v.has_res) { if (v.closed) wnb += v.w; else unreserved += v.w; } /* else its minutes are inside the shift's held reservation */ }
+      billable += v.late;
+      if (v.closed) { closedCarried += v.b; closedWorked += v.w; } else carried += v.b; // 0081: a closed review's carried minutes are counted, on their own line, not Pending
+      if (v.b === 0 && v.late === 0) { if (!v.has_res) { if (v.closed) wnb += v.w; else unreserved += v.w; } else if (v.closed) wnb += v.w; /* else its minutes are inside the shift's held reservation */ }
       else wnb += Math.max(v.w - v.b - v.late, 0);
       continue;
     }
@@ -117,17 +120,17 @@ async function independent(f: Fx) {
   for (const r of res) {
     if (r.vstatus === "draft") underway += r.m;
     else if (r.vstatus === "signed") { /* already Billable */ }
-    else if (r.vstatus === "administrator_review") { if (r.vbill === 0 && Number(r.vlate) === 0) held += r.m; /* else the visit's own minutes count: never both */ }
+    else if (r.vstatus === "administrator_review") { if (r.vbill === 0 && Number(r.vlate) === 0) { if (r.vclosed) closedHeld += r.m; else held += r.m; } /* else the visit's own minutes count: never both */ }
     else if (r.vstatus === "awaiting_signature") held += r.m;
     else if (r.sstatus === "scheduled" && r.future) ahead += r.m;
     else if (r.sstatus === "scheduled" && r.notended) underway += r.m;
     else reconcile += r.m;
   }
   const pending = carried + held + unreserved;
-  const reserved = ahead + underway + reconcile;
+  const reserved = ahead + underway + reconcile + closedHeld + closedCarried; // 0081: what a closed-not-billable review still holds is counted in Reserved, with its own line
   const left = f.authorized - (billable + rounding + pending + reserved);
   const usage = Number((await db.admin.query("select ogevia.authorization_month_usage($1, $2::date) n", [f.lineage, await orgToday(db)])).rows[0].n);
-  return { billable, rounding, carried, held, unreserved, pending, ahead, underway, reconcile, reserved, left, over: Math.max(-left, 0), wnb, usage };
+  return { billable, rounding, carried, held, unreserved, pending, ahead, underway, reconcile, reserved, left, over: Math.max(-left, 0), wnb, usage, closedHeld: closedHeld + closedCarried, closedCarried, closedWorked };
 }
 const summaryRow = async (f: Fx) => (await q(w.managerA, "select * from ogevia_api.list_monthly_service_summary($1, $2::date, $3)", [w.orgA, await monthStart(), f.client]))[0];
 
@@ -138,11 +141,14 @@ async function check(f: Fx, expected?: Partial<Record<"billable" | "rounding" | 
   expect({
     billable: s.hours_billable_minutes, rounding: s.hours_rounding_minutes, pending: s.hours_pending_minutes, review: s.hours_pending_review_minutes,
     held: s.hours_pending_held_minutes, unreserved: s.hours_pending_unreserved_minutes, reserved: s.hours_reserved_minutes, left: s.hours_left_minutes,
-    over: s.hours_over_limit_minutes, wnb: s.hours_worked_not_billable_minutes,
-  }).toEqual({ billable: i.billable, rounding: i.rounding, pending: i.pending, review: i.carried, held: i.held, unreserved: i.unreserved, reserved: i.reserved, left: i.left, over: i.over, wnb: i.wnb });
-  expect(s.reserved_ahead_minutes + s.reserved_underway_minutes + s.reserved_reconcile_minutes).toBe(i.reserved);
+    over: s.hours_over_limit_minutes, wnb: s.hours_worked_not_billable_minutes, closedHeld: s.hours_closed_not_billable_held_minutes, closedWorked: s.hours_closed_not_billable_worked_minutes,
+  }).toEqual({ billable: i.billable, rounding: i.rounding, pending: i.pending, review: i.carried, held: i.held, unreserved: i.unreserved, reserved: i.reserved, left: i.left, over: i.over, wnb: i.wnb, closedHeld: i.closedHeld, closedWorked: i.closedWorked });
+  expect(s.reserved_ahead_minutes + s.reserved_underway_minutes + s.reserved_reconcile_minutes + s.hours_closed_not_billable_held_minutes).toBe(i.reserved);
   expect(s.hours_billable_minutes + s.hours_rounding_minutes + s.hours_pending_minutes + s.hours_reserved_minutes + s.hours_left_minutes).toBe(s.authorized_minutes); // the equation
-  expect(i.usage).toBe(i.billable + i.rounding + i.carried); // the caregiver's cap usage and the office figures use the same records
+  expect(i.usage).toBe(i.billable + i.rounding + i.carried + i.closedCarried); // the caregiver's cap usage and the office figures use the same records
+  // 0081: the scheduling guard (usage + reserved total, which now includes unreserved Pending) and the displayed Hours left describe the same consumption
+  const guard = Number((await db.admin.query("select ogevia.authorization_month_usage($1, $2::date) + ogevia.authorization_month_reserved($1, $2::date) n", [f.lineage, await orgToday(db)])).rows[0].n);
+  expect(f.authorized - guard).toBe(s.hours_left_minutes);
   expect(s.billable_minutes + s.adjustment_minutes + s.reserved_minutes).toBe(i.billable + i.rounding + i.carried + i.held + i.reserved); // old fields: unchanged meaning
   if (expected) for (const [k, v] of Object.entries(expected)) expect((i as any)[k], k).toBe(v);
   return { i, s };
@@ -206,12 +212,14 @@ describe("every minute is in exactly one bucket (recomputed from the raw tables,
     await check(f, { reserved: 130, pending: 0, left: 470 });
   });
 
-  it("CHARACTERIZATION (owner decision open): a review closed as not billable on a scheduled visit still holds its shift's reservation, so it stays Pending; nothing is double counted", async () => {
+  it("0081 (was: stays Pending): a review closed as not billable on a scheduled visit still holds its shift's reservation (policy open), but it is no longer Pending: it is counted in Reserved on its own 'Closed, not billable' line and its 60 worked minutes are visible; nothing is double counted", async () => {
     const f = await fx(600);
     await reservedShift(f, 130);
     const v = await visit(f, 60, { confirm: "unable_to_confirm" });
+    await check(f, { pending: 130, reserved: 0, left: 470, closedHeld: 0 });
     await q(w.managerA, "select ogevia_api.decide_visit_review($1, 'close_not_billable', 'Not a valid visit (synthetic)', null) as id", [v]);
-    await check(f, { pending: 130, reserved: 0, left: 470 });
+    const { s } = await check(f, { pending: 0, reserved: 130, left: 470, closedHeld: 130, closedWorked: 60, wnb: 60 });
+    expect(s).toMatchObject({ hours_reserved_minutes: 130, hours_closed_not_billable_held_minutes: 130, hours_closed_not_billable_worked_minutes: 60, reserved_minutes: 130 });
   });
 
   it("reservations: ahead 90 + under way 60 + ended without a record 30 + awaiting a record 120 = Reserved 300; Hours left 300", async () => {

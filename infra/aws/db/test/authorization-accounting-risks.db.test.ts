@@ -155,7 +155,9 @@ describe("F1: a minute is counted once, as used OR as reserved", () => {
     await api.end(db, cg, visit);
     await api.confirm(db, cg, visit, { method: "unable_to_confirm", reason: "Client asleep; parent not home (synthetic)" });
     expect((await db.admin.query("select scheduled_shift_id from ogevia.service_visits where id = $1", [visit])).rows[0].scheduled_shift_id).toBeNull();
-    expect(await counted(f)).toEqual({ used: 0, reserved: 90 });
+    // 0081 (deliberate): the 30 worked minutes of this unscheduled visit awaiting a decision are unreserved Pending time and now count in the reserved total (90 + 30);
+    // accepting the late confirmation moves them to used, so the total is 30 used + 90 reserved, as before.
+    expect(await counted(f)).toEqual({ used: 0, reserved: 120 });
     await acceptLateConfirmation(visit);
     expect(await counted(f)).toEqual({ used: 30, reserved: 90 }); // unrelated reservation still counts
   });

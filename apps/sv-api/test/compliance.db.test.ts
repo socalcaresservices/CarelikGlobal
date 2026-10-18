@@ -154,9 +154,13 @@ describe("direct API bypass attempts on a caregiver on hold", () => {
     expect(Number(after.s)).toBe(Number(before.s) + 1); // only the open shift made above
     expect(after.a).toBe(before.a);
     expect(after.v).toBe(before.v);
-    // the caregiver who is inside the period and cleared is not affected
+    // 0081 (was: "the caregiver who is inside the period and cleared is not affected" -> 201): a caregiver inside the 14 days with approved background clearance but no
+    // VERIFIED CPR/TB is refused too; the period only delays the automatic hold, it no longer lets work go ahead
     const ok = await call("POST /v1/shifts", w.managerA, { body: { ...shiftBody, caregiverRecordId: rec2, date: await day(7) } });
-    expect(ok.status).toBe(201);
+    expect(ok.status).toBe(422);
+    expect(ok.body.error).toMatchObject({ code: "not_ready" });
+    expect(ok.body.error.message).toMatch(/CPR missing\.\s+TB missing\./);
+    expect(ok.body.error.message).not.toMatch(/Background check/);
   });
 
   it("the office sees the hold and the Action Needed numbers after the run; reasons are plain; no signature, name or payer data is returned", async () => {

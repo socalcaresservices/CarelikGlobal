@@ -231,7 +231,10 @@ describe("enforcement on the backend (after the owner activates it)", () => {
       await setBackground(recA1, s);
       await expectPgError(createShift(w.managerA, await add(3), "09:00", "11:00", recA1), "OGR30", /Background check/);
     }
-    await setBackground(recA1, "approved"); // CPR/TB are pending inside the period, so approved clearance is the only thing needed
+    await setBackground(recA1, "approved"); // 0081: approved clearance is necessary but no longer sufficient: CPR/TB are missing and the 14-day period does not allow work
+    await expectPgError(createShift(w.managerA, await add(3), "09:00", "11:00", recA1), "OGR30", /^CPR missing\.\s+TB missing\.$/);
+    await deliverCpr(recA1);
+    await deliverTb(recA1);
     expect(await createShift(w.managerA, await add(3), "09:00", "11:00", recA1)).toHaveLength(1);
     await wipeShifts();
   });
@@ -247,13 +250,18 @@ describe("enforcement on the backend (after the owner activates it)", () => {
     await expectPgError(call(w.managerA, "select ogevia_api.create_assignment($1,$2,$3,$4,$5::date,null)", [w.orgA, rec, fx.client, fx.service, today]), "OGR30", /Background check/);
   });
 
-  it("CPR/TB: assigned inside the 14 days, blocked from the day after the due date (day 14 inclusive); stricter statuses block at once", async () => {
+  it("CPR/TB (0081 changed): a missing or only-uploaded document blocks assignment on EVERY day, including day 1 and the due date; the 14-day period no longer allows work, it only delays the automatic hold", async () => {
     await setBackground(recA1, "approved");
     await clearDocs(recA1);
-    await hireDaysAgo(recA1, 14); // today IS the due date
-    const ok = await createShift(w.managerA, await add(3), "09:00", "11:00", recA1);
-    expect(ok).toHaveLength(1);
-    await wipeShifts();
+    await hireDaysAgo(recA1, 14); // today IS the due date: before 0081 the shift was created; the period no longer lets work go ahead
+    await expectPgError(createShift(w.managerA, await add(3), "09:00", "11:00", recA1), "OGR30", /CPR missing\.\s+TB missing\./);
+    await hireDaysAgo(recA1, 1);
+    await expectPgError(createShift(w.managerA, await add(3), "09:00", "11:00", recA1), "OGR30", /CPR missing\.\s+TB missing\./);
+    await deliverCpr(recA1, null);
+    await deliverTb(recA1, null); // uploaded, not verified
+    await expectPgError(createShift(w.managerA, await add(3), "09:00", "11:00", recA1), "OGR30", /CPR needs review\.\s+TB needs review\./);
+    await clearDocs(recA1);
+    await hireDaysAgo(recA1, 14);
     await hireDaysAgo(recA1, 15); // the period ended at 00:00 today
     await expectPgError(createShift(w.managerA, await add(3), "09:00", "11:00", recA1), "OGR30", /CPR missing\.\s+TB missing\./);
     await hireDaysAgo(recA1, null);
@@ -272,6 +280,7 @@ describe("enforcement on the backend (after the owner activates it)", () => {
     await expectPgError(createShift(w.managerA, day, "09:00", "11:00", recA1), "OGR30", /CPR missing/);
     // reassignment of an existing shift (made for A2, who is current) onto A1
     await resetCaregiver(recA2); await setBackground(recA2, "approved"); await hireDaysAgo(recA2, 2);
+    await deliverCpr(recA2); await deliverTb(recA2); // 0081: A2 needs VERIFIED documents to be assignable, even as a new hire
     const s2 = (await createShift(w.managerA, await add(6), "09:00", "11:00", recA2))[0].shift_id ?? (await q("select id from ogevia.shifts where caregiver_record_id=$1 and status='scheduled'", [recA2])).rows[0].id;
     await expectPgError(call(w.managerA, "select ogevia_api.assign_shift_caregiver($1,$2,$3,'Coverage')", [w.orgA, s2, recA1]), "OGR30", /CPR missing/);
     // open-shift pickup by the held caregiver themself
@@ -325,8 +334,10 @@ describe("the hold: automatic at the deadline, affects existing work, never chan
     await q("update ogevia.caregiver_records set status = 'inactive' where caregiver_code in ('CG-NEW', 'CG-OWNER')");
     await asReplica(db, "delete from ogevia.caregiver_compliance_holds");
     await deliverCpr(recA1); await deliverTb(recA1); await hireDaysAgo(recA1, 1);
-    // A2 is two days into the period: assignable with no CPR/TB yet. A3 is fully current (the reassignment target).
+    // A2 is two days into the period. 0081: the period no longer lets anyone be assigned without VERIFIED CPR/TB, so A2's work is created while the documents are verified
+    // and they lapse (are closed) afterwards, before the deadline: the hold then has existing work to flag. A3 is fully current (the reassignment target).
     await hireDaysAgo(recA2, 2);
+    await deliverCpr(recA2); await deliverTb(recA2);
     await deliverCpr(recA3); await deliverTb(recA3); await hireDaysAgo(recA3, 1);
     standing = (await call(w.managerA, "select assignment_id as id from ogevia_api.create_assignment($1,$2,$3,$4,$5::date,null)", [w.orgA, recA2, fx.client, fx.service, today]))[0].id;
     await createShift(w.managerA, await add(3), "09:00", "11:00", recA2);
@@ -345,6 +356,7 @@ describe("the hold: automatic at the deadline, affects existing work, never chan
     await api.end(db, w.caregiverA2, completedVisit);
     await api.confirm(db, w.caregiverA2, completedVisit, { evidence: await api.registerEvidence(db, w.caregiverA2, w.orgA, completedVisit) });
     inProgressVisit = await api.start(db, w.caregiverA2, w.orgA, fx.client, fx.service, null, "Synthetic: second visit");
+    await clearDocs(recA2); // the documents lapse inside the period: no hold yet; the existing work stays as it was
     snapshotBefore = {
       coverage: (await q("select count(*)::int n from ogevia.shift_coverage_events")).rows[0].n,
       assignmentActive: (await q("select is_active from ogevia.caregiver_assignments where id=$1", [standing])).rows[0].is_active,
@@ -471,8 +483,10 @@ describe("the hold: automatic at the deadline, affects existing work, never chan
     await resetCaregiver(recA2); await resetCaregiver(recA3);
     await wipeShifts();
     await setBackground(recA2, "approved"); await hireDaysAgo(recA2, 2);
+    await deliverCpr(recA2); await deliverTb(recA2); // 0081: assignable only with VERIFIED documents; they lapse before the deadline
     await createShift(w.managerA, await add(3), "09:00", "11:00", recA2);
     const sh = (await q("select id from ogevia.shifts where caregiver_record_id = $1", [recA2])).rows[0].id;
+    await clearDocs(recA2);
     await hireDaysAgo(recA2, 20);
     await sweep();
     expect(await openFlags(recA2, "shift")).toHaveLength(1);
@@ -603,13 +617,16 @@ describe("0064: a hold is released only when verification resolves every blocker
     expect(await createShift(w.managerA, await add(9), "09:00", "11:00", recA3)).toHaveLength(1);
   });
 
-  it("a caregiver without a hold who is simply new (hire date entered first, inside the 14 days) is still allowed the 14 days", async () => {
+  it("a caregiver without a hold who is simply new (hire date entered first, inside the 14 days) is still allowed the 14 days WITHOUT A HOLD, but (0081) cannot be assigned until CPR and TB are verified", async () => {
     await resetCaregiver(recA2);
     await baseline(recA2);
     await setBackground(recA2, "approved");
     await hireDaysAgo(recA2, 2);
     await sweep();
     expect(await openHold(recA2)).toBeUndefined();
+    await expectPgError(createShift(w.managerA, await add(10), "09:00", "11:00", recA2), "OGR30", /CPR missing\.\s+TB missing\./);
+    await deliverCpr(recA2);
+    await deliverTb(recA2);
     expect(await createShift(w.managerA, await add(10), "09:00", "11:00", recA2)).toHaveLength(1);
   });
 });
@@ -667,10 +684,13 @@ describe("0064: a visit already in progress is flagged to the office at once, an
     await baseline(recA1);
     await setBackground(recA1, "approved");
     await clearDocs(recA1);
-    await hireDaysAgo(recA1, 13); // CPR and TB are missing but inside the 14 days: the visit may start
+    await hireDaysAgo(recA1, 13); // inside the 14 days
+    await deliverCpr(recA1); await deliverTb(recA1); // 0081: a visit can only START with VERIFIED current CPR/TB (the period no longer lets it start without them); they lapse during the visit
     const f = await freshClient(db, w, w.caregiverA1, 100000, w.orgA, { before: 5, after: 120 });
     await asReplica(db, "update ogevia.service_visits set status = 'voided', voided_at = now(), voided_by = $2, void_reason = 'Synthetic fixture' where caregiver_user_id = $1 and status = 'draft'", [w.caregiverA1.userId, w.managerA.userId]);
     const v = await api.start(db, w.caregiverA1, w.orgA, f.client, f.service, null, "Synthetic: extra help");
+    expect(await openHold(recA1)).toBeUndefined();
+    await clearDocs(recA1); // the documents lapse while the visit is open (still inside the 14 days: no hold yet)
     expect(await openHold(recA1)).toBeUndefined();
     const before = (await call(w.managerA, "select ogevia_api.get_compliance_attention($1) as a", [w.orgA]))[0].a;
     const urgentBefore = (await call(w.managerA, "select ogevia_api.get_attention_overview($1,48) o", [w.orgA]))[0].o.urgent.items.filter((i: any) => i.reasons.includes("in_progress_on_hold")).length;

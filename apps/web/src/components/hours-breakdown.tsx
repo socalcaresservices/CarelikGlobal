@@ -6,6 +6,8 @@ export function HoursBreakdown({ row, label = "Details" }: { row: HoursFields; l
   if (!hasHours(row)) return null;
   const lines = hoursEquation(row);
   const worked = Number(row.hoursWorkedNotBillableMinutes ?? 0);
+  const closedHeld = Number(row.hoursClosedNotBillableHeldMinutes ?? 0);
+  const closedWorked = Number(row.hoursClosedNotBillableWorkedMinutes ?? 0);
   const pending = {
     review: Number(row.hoursPendingReviewMinutes ?? 0),
     held: Number(row.hoursPendingHeldMinutes ?? 0),
@@ -30,6 +32,7 @@ export function HoursBreakdown({ row, label = "Details" }: { row: HoursFields; l
           pending.unreserved ? `${formatDuration(pending.unreserved)} worked on visits with no scheduled shift, awaiting confirmation or review` : null,
         ].filter(Boolean).join(", ")}.</p>
       ) : null}
+      {closedHeld > 0 ? <p className="mt-1" data-testid="closed-not-billable">Closed, not billable: {formatDuration(closedHeld)} of shift time is still held inside {HOURS_NAMES.reserved}{closedWorked > 0 ? `; ${formatDuration(closedWorked)} worked is kept on record` : ""}. It stays held until a person decides whether to release it.</p> : null}
       {worked > 0 ? <p className="mt-1 font-semibold text-amber-900" data-testid="worked-not-billable">{HOURS_NAMES.workedNotBillable}: {formatDuration(worked)}. {HOURS_DEFINITIONS.workedNotBillable}</p> : null}
     </details>
   );

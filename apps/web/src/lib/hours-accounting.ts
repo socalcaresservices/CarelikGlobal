@@ -22,6 +22,9 @@ export interface HoursFields {
   hoursLeftMinutes?: number | null;
   hoursOverLimitMinutes?: number | null;
   hoursWorkedNotBillableMinutes?: number | null;
+  /** Shift time still held for a visit whose review was closed as not billable (counted inside Reserved; whether to release it is a billing-policy decision). */
+  hoursClosedNotBillableHeldMinutes?: number | null;
+  hoursClosedNotBillableWorkedMinutes?: number | null;
 }
 
 export const HOURS_NAMES = {
