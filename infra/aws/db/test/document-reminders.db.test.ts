@@ -108,7 +108,9 @@ describe("one Needs attention definition", () => {
   it("total includes uncovered upcoming shifts and blocking/review documents, only for people allowed to see them; expiring is informational", async () => {
     const before = await attention();
     const fresh = await freshClient(db, w, w.caregiverA1, 6000, w.orgA, { before: 40, after: 40 });
-    const date = addDays(today, 2);
+    // 0077 counts a shift as uncovered Action needed only when it starts within 48 hours. Tomorrow at 09:00 (agency time) is between 9 and 33 hours away whatever the time of day;
+    // the day after tomorrow is inside 48 hours only after 09:00, which made this test pass or fail with the clock.
+    const date = addDays(today, 1);
     await call(w.managerA, "select * from ogevia_api.create_shift($1, $2, $3, $4::date, '09:00'::time, '10:00'::time, null, null)", [w.orgA, fresh.client, fresh.service, date]);
     const after = await attention();
     expect(after.uncovered_shifts).toBe(before.uncovered_shifts + 1);

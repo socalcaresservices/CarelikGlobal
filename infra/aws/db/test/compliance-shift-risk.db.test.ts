@@ -107,8 +107,10 @@ describe("a shift already under way when the CPR expires: visible as in progress
     for (const r of (await q("select id from ogevia.shifts where status = 'scheduled'")).rows) await call(w.managerA, "select ogevia_api.cancel_shift($1,$2,'Synthetic: fixture reset')", [w.orgA, r.id]); // earlier block's shifts
     const f2 = await freshClient(db, w, w.caregiverA1, 100000, w.orgA, { before: 5, after: 120 });
     fx = f2;
-    const s = await shift(today, "23:00", "23:30", rec);
-    await asReplica(db, "update ogevia.shifts set starts_at = now() - interval '30 minutes', ends_at = now() + interval '3 hours' where id = $1", [s]);
+    // created for tomorrow (a shift cannot be created once it is over, which is the case for a 23:00 shift after 23:30), then moved to the in-progress window below
+    const s = await shift(await add(1), "09:00", "09:30", rec);
+    // started 30 minutes ago, but never before the start of the agency's day: shortly after midnight 30 minutes ago is YESTERDAY, a shift spanning midnight, and a document whose last valid day was yesterday then correctly reads expires_during, not expired
+    await asReplica(db, "update ogevia.shifts set starts_at = greatest(now() - interval '30 minutes', date_trunc('day', now() at time zone 'America/Los_Angeles') at time zone 'America/Los_Angeles'), ends_at = now() + interval '3 hours' where id = $1", [s]);
     const visit = await api.start(db, w.caregiverA1, w.orgA, f2.client, f2.service, s, "Synthetic: scheduled visit");
     // the document expires while the visit is open: its last valid day was yesterday
     await q("update ogevia.document_versions set expires_on = $2::date - 1 where document_id in (select id from ogevia.staff_documents where caregiver_record_id = $1 and document_type_id = $3)", [rec, today, cpr]).catch(async () => {
