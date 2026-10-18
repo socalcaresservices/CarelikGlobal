@@ -4,6 +4,8 @@
 >
 > **Status: PROPOSED. NOTHING IN THIS DOCUMENT HAS BEEN RUN AGAINST AWS.** Every step marked **[YELLOW]** changes AWS or TEST data and is run only after the owner's explicit GO (`CLAUDE.md` section 13). TEST only, synthetic data only. Production (`Ogevia-prd-*`, database `ogevia_prd`) is never touched. No push, merge, deployment, migration window or enforcement activation has been authorized by this document.
 >
+> **Revision 6 (2026-10-18):** (1) the script checksum list in section 1 and the CI references in section 3 were stale after revision 5 and are corrected (`candidate-pin-check.sh`, `candidate-pins.txt`, `candidate_assembly_check.py`; CI runs 364 and 365); (2) section 8.3 now verifies, before `index.html` is restored, that every file in the web capture (including every asset `index.html` references) is still in the bucket with the same size, and restores any that is not, assets first. Nothing else changed; no script changed.
+>
 > **Revision 5 (2026-10-18):** the candidate baseline is now `d89327600f3fc55ab9c59af0d0eaea8675d77535` (was `3159e52`). The only change is two repaired database-test fixtures: the unmodified tests failed between 00:00 and 09:00 Pacific (document-reminders line 114; compliance-shift-risk line 118, and a third clock dependency after 23:30 Pacific). Pins: only `infra/aws/db` changed (`cb2ae05c` to `37105583`); the other 12 pins, the migration-set hash, the rollback-set hash, the lockfile hash and the synthesized TEST stacks (Handler asset keys) are unchanged. The wrapper test helper now ignores the expected EPIPE when a script refuses before reading stdin and fails on any other stdin error. No operator script changed except the SHA text in `candidate-pin-check.sh` and `candidate_assembly_check.py`.
 >
 > **Revision 4 (2026-10-18):** corrects one sentence in `SNAPSHOT_RESTORE_ISOLATED_3159e52.md` (step H). The `pg_database` row and role-list comparisons show only that the `ogevia_prd` database entry and the cluster roles were not altered; they are not evidence about `ogevia_prd`'s data. No other change to the procedure or to any script.
@@ -35,13 +37,13 @@
 Script checksums (all in the operator commit; each also listed in `SHA256SUMS`):
 ```
 97b1ed095139af5bb3fee4b6866a43e2a561aafbba6aaa8abf3eea1349ccd6c8  infra/aws/slice/candidate-migrate-test.sh
-d0a06d6d4e63d705d649c406d8cfb56007da5b36336a717fc12826db69c5175a  infra/aws/slice/candidate-pin-check.sh
-e5f540f97fa66477014321403f5414fd86647d3027cb05d585aef060ca1f342c  infra/aws/slice/candidate-pins.txt
-1bb7d612c4ed0ea7e5c8e5c0a6083f93d0c7bb25f316e35981f6eac4e85bbdfc  infra/aws/slice/candidate_assembly_check.py
+0b7fdf4b21589643aef5673a843729e209592ea43499acd33da55e4f6c8caa87  infra/aws/slice/candidate-pin-check.sh
+ad17439e12f96d3396bbdf926096070c8ead65195057685141159ce850ebd68e  infra/aws/slice/candidate-pins.txt
+c479dbeaf29da621d1efba9927ec26547597f69440061e806b45bed2f7999687  infra/aws/slice/candidate_assembly_check.py
 71680ddf0930fef71d30b97dba84ee098f2d18899c2425db29d46ad43e1126d9  infra/aws/slice/lambda-policy-check-readonly.sh
 70f320ea3dde2aeb5cb9faabd955a1a3eaa6d33a8e767765314bad886374e9f3  infra/aws/slice/lambda_policy_check.py
 ```
-(If `candidate-migrate-test.sh` is edited after this list was written, `SHA256SUMS` in the covering message is the authoritative list.)
+(`SHA256SUMS` in the covering message is the authoritative list; this list was corrected in revision 6 and equals it for these six scripts. `ledger-check-temp-access.sh` is `f96c06f2…` as in the table above.)
 
 ## 2. Corrections to earlier statements (stale text withdrawn)
 
@@ -60,8 +62,8 @@ e5f540f97fa66477014321403f5414fd86647d3027cb05d585aef060ca1f342c  infra/aws/slic
 
 | | LOCAL VERIFIED | NOT VERIFIED |
 |---|---|---|
-| Candidate | CI run 361 success on the candidate head; local suites on PostgreSQL 16 and 18.4 (database 840, sv-api database 115, 369 verification checks) | the managed RDS engine; the real TEST account |
-| Migration wrapper | 86 rehearsal tests against fake AWS/psql/npx: pins, host IP, wrong database, ledger precondition, success, migration failure, interruption, failed verification, failed revoke (exit 3 and recovery), resume, rollback success, rollback failure, rollback interruption, activation state, **snapshot validation in both modes (19 refusals each: no id, wrong pattern, missing, not available, other instance, not manual, created outside the release window or in the future, name stamp outside the window, missing, malformed or impossible window, window over 12 hours, window not started; migrate refused after the window ended; each refusal opens no access)**, and the region and pager fixed by the script itself (`OPERATOR_REHEARSAL_TRANSCRIPTS.md`). Three deliberate weakenings of the snapshot checks each made tests fail | the real tunnel, secret, runner output and timing in CloudShell |
+| Candidate | CI run 364 success on the candidate head `d893276` (`validate`, `postgres`, `harness`; run 361 on the earlier `3159e52`; the operator head `d34df78` also passed, run 365); local suites on PostgreSQL 16 and 18.4 (database 840, sv-api database 115, 369 verification checks) | the managed RDS engine; the real TEST account |
+| Migration wrapper | 87 rehearsal tests against fake AWS/psql/npx: pins, host IP, wrong database, ledger precondition, success, migration failure, interruption, failed verification, failed revoke (exit 3 and recovery), resume, rollback success, rollback failure, rollback interruption, activation state, **snapshot validation in both modes (19 refusals each: no id, wrong pattern, missing, not available, other instance, not manual, created outside the release window or in the future, name stamp outside the window, missing, malformed or impossible window, window over 12 hours, window not started; migrate refused after the window ended; each refusal opens no access)**, and the region and pager fixed by the script itself (`OPERATOR_REHEARSAL_TRANSCRIPTS.md`). Three deliberate weakenings of the snapshot checks each made tests fail | the real tunnel, secret, runner output and timing in CloudShell |
 | The SQL path of recovery | the exact `psql -1 … set local role ogevia_owner; -f down.sql; delete ledger row` command, 0077 down to 0053 then 0053-0077 up again, on a real database: PostgreSQL 16 and 18.4, ledger 52 / 0052 then 77 / 0077, verification 369 PASS | RDS |
 | Shared database preserved | two databases in one cluster: rolling one back left the other database's dump and the cluster's roles identical (PostgreSQL 16; `pg_dump` and `pg_dumpall --globals-only`, ignoring pg_dump's random `\restrict` token). `grep` finds no `create/alter/drop role`, extension, database or `alter system` in migrations or rollbacks 0053-0077 | the real `ogevia_prd` |
 | Assembly | the candidate's TEST API stack synthesized locally in deploy mode differs from the baseline `d82fefc` by exactly: 59 new routes, 1 new EventBridge rule (State ENABLED), 1 new Lambda permission, the Handler code asset, CDK metadata. No IAM, environment, output or other change. 6 tests on a real synthesis plus mutations | `cdk diff` against the live stack |
@@ -269,21 +271,36 @@ Read this before the window. **Open the second session now** and keep `~/ogevia-
 | Layer | Recovery artifact | How it is pinned |
 |---|---|---|
 | API | Rebuild of commit **`d82fefcd37407d837e7c94f6ac57a907ea286ed1`** (never `origin/main`), asset key `2fcda02d…` | `git rev-parse HEAD` must equal that SHA; the rebuilt template must pass `candidate_assembly_check.py --live-template <rebuilt template>` (it checks the Handler key and the whole template against the baseline fingerprint). Fallback: `~/ogevia-before/lambda-code-before.zip` (hash verified against the live `CodeSha256` in step 4) and `api-template-before.json` |
-| Web | `~/ogevia-before/web-before/` | `web-before.sha256` manifest taken before the change |
+| Web | `~/ogevia-before/web-before/` (the whole bucket, assets included) | `web-before.sha256` manifest taken before the change; section 8.3 re-checks every captured file against the bucket before restoring `index.html` |
 | Database | the pinned rollback files (rollback-set hash in section 1) are the **prepared, rehearsed** recovery. The named snapshot in `~/ogevia-before/snapshot-id.txt` is a **prerequisite only**: restoring from it is **not a prepared or proven recovery procedure** (section 8.5, Tier 2; documented, unrehearsed on AWS, in `SNAPSHOT_RESTORE_ISOLATED_3159e52.md`) | snapshot validated by the wrapper (exists, `available`, belongs to `ogevia-prod-postgres`, manual, created inside the release window) |
 
 ### 8.2 Order of recovery
 Reverse of the deployment: **web, then API, then database.** A database rollback while the new API is live makes the new routes call functions that no longer exist. Web and API alone are enough if the schema is fine, but the previous web on the new schema shows the false pickup message (open shifts), so keep pickups frozen until the database is also rolled back or the new web is back.
 
 ### 8.3 Web (restore the captured files)
+**Why the old assets are still there (VERIFIED from the code):** the web deployment (`deploy-test-slice.sh web`) never deletes (`aws s3 sync` without `--delete`), the build names every asset by content hash (`assets/index-<hash>.js`), and `index.html` references only `assets/` files, so a deployment adds assets and cannot overwrite or remove the captured ones; the bucket is versioned. Step 4 captured the whole bucket (`aws s3 sync` to `web-before`) with a hash manifest. This was **not verifiable against the real bucket**, so the restore checks it and repairs it before it puts the old `index.html` back (assets first, so the restored page never points at a missing file).
 ```
+# CLOUDSHELL (changes AWS only when it restores a missing asset; nothing is ever deleted)
 BUCKET=$(aws cloudformation describe-stacks --stack-name Ogevia-prod-WebHosting --query "Stacks[0].Outputs[?OutputKey=='SiteBucketName'].OutputValue" --output text)
 DIST=$(aws cloudformation describe-stacks --stack-name Ogevia-prod-WebHosting --query "Stacks[0].Outputs[?OutputKey=='DistributionId'].OutputValue" --output text)
 cd ~/ogevia-before && (cd web-before && sha256sum -c ../web-before.sha256 --quiet) && echo "capture intact"
+# web-rollback-asset-check
+rm -f restore-assets.txt; touch restore-assets.txt
+for a in $(grep -o 'assets/[A-Za-z0-9._-]*' web-before/index.html | sort -u); do [ -f "web-before/$a" ] || echo "STOP: $a is referenced by the captured index.html but is not in the capture"; done
+(cd web-before && find . -type f ! -name index.html ! -name config.json -printf '%P\t%s\n') | while IFS=$'\t' read -r key size; do
+  live=$(aws s3api head-object --bucket "$BUCKET" --key "$key" --query ContentLength --output text 2>/dev/null || echo missing)
+  [ "$live" = "$size" ] || echo "$key" >> restore-assets.txt
+done
+echo "files to restore from the capture: $(wc -l < restore-assets.txt)"
+while read -r key; do
+  case "$key" in assets/*) CC="public,max-age=31536000,immutable";; *) CC="no-cache";; esac
+  aws s3 cp "web-before/$key" "s3://$BUCKET/$key" --cache-control "$CC" --only-show-errors && echo "restored $key"
+done < restore-assets.txt
+# end web-rollback-asset-check
 aws s3 cp web-before/index.html "s3://$BUCKET/index.html" --cache-control no-cache
 aws cloudfront create-invalidation --distribution-id "$DIST" --paths "/index.html" "/"
 ```
-(New hashed assets stay in the bucket; that is harmless and nothing is deleted. `config.json` is never touched.)
+Expected: `capture intact`; `files to restore from the capture: 0` (normal case); no `STOP:` line. Any `STOP:` line means the capture itself is incomplete: do not restore the page, report. After the restore, `curl -sS "$SITE/index.html" | sha256sum` must equal the `index.html` line of `web-before.sha256`. (`config.json` is never touched.)
 
 ### 8.4 API (pinned baseline, then fallback)
 Use a separate clone so the operator checkout is unchanged:
