@@ -260,7 +260,7 @@ describe("everything is re-checked at the moment of confirmation", () => {
     const r = await ask(w.caregiverA1, rec["CG-A1"]!, s);
     // after the request the office gives the caregiver 6 h that day elsewhere: 3 + 6 = 9 > 8
     await q(w.managerA, "select * from ogevia_api.create_shift($1,$2,$3,$4::date,'11:00','17:00',$5,null)", [w.orgA, f.client, f.service, d, rec["CG-A1"]]);
-    await expectPgError(confirm(w.managerA, r), "OGR30", /daily hour limit/i);
+    await expectPgError(confirm(w.managerA, r), "OGR30", /Daily limit exceeded: [\d.]+ of [\d.]+ h/);
     expect(await shiftRow(s)).toMatchObject({ caregiver_record_id: null });
     expect(await requestOf(s, rec["CG-A1"]!)).toBeTruthy(); // still waiting; nothing changed
     expect(await events(s)).toHaveLength(0);

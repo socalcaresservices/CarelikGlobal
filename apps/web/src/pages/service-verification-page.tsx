@@ -12,6 +12,7 @@ import {
 } from "lucide-react";
 import { useAuth } from "@carelik/auth";
 import { Button, Card, StatusBadge, cn } from "@carelik/ui";
+import { caregiverDifferenceNote } from "@/lib/hours-accounting";
 import { useOrganization } from "@/providers/organization-provider";
 import { SignaturePad } from "@/components/signature-pad";
 import {
@@ -392,10 +393,10 @@ export function ServiceVerificationPage() {
   const authorizationMinutes = Math.round(
     Number(active?.max_monthly_hours ?? 0) * 60,
   );
-  const remainingMinutes = caregiverLeftMinutes(
-    authorizationMinutes,
-    active?.confirmed_minutes_this_month ?? 0,
-  );
+  // 0079: the server computes the balance (the same records as the office figure); the local arithmetic is only the fallback for an older server.
+  const remainingMinutes =
+    active?.left_to_record_minutes ??
+    caregiverLeftMinutes(authorizationMinutes, active?.confirmed_minutes_this_month ?? 0);
   const willExceed = !!active && projectedMinutes > authorizationMinutes;
 
   useEffect(() => {
@@ -896,22 +897,30 @@ export function ServiceVerificationPage() {
                             Number(selectedService.hours_used_this_month) * 60,
                           )}
                         </p>
-                        <p className="text-[11px] text-indigo-800">Serviced</p>
+                        <p className="text-[11px] text-indigo-800">Confirmed</p>
                       </div>
                       <div className="rounded-2xl border border-emerald-100 bg-emerald-100/80 p-2 text-emerald-950">
                         <p className="text-base font-bold">
                           {formatBalance(
-                            caregiverLeftMinutes(
-                              Number(selectedService.max_monthly_hours) * 60,
-                              Number(selectedService.hours_used_this_month) * 60,
-                            ),
+                            selectedService.left_to_record_minutes ??
+                              caregiverLeftMinutes(
+                                Number(selectedService.max_monthly_hours) * 60,
+                                Number(selectedService.hours_used_this_month) * 60,
+                              ),
                           )}
                         </p>
                         <p className="text-[11px] text-indigo-800">Left to record</p>
                       </div>
                     </div>
-                    <p className="mt-2 text-center text-[11px] text-slate-600">
-                      {CAREGIVER_BALANCE_NOTE}
+                    <p className="mt-2 text-center text-[11px] text-slate-600" data-testid="caregiver-balance-note">
+                      {selectedService.hours_left_minutes !== undefined && selectedService.hours_left_minutes !== null
+                        ? caregiverDifferenceNote({
+                            leftToRecordMinutes: selectedService.left_to_record_minutes ?? 0,
+                            hoursLeftMinutes: selectedService.hours_left_minutes,
+                            officePendingMinutes: selectedService.office_pending_minutes ?? 0,
+                            officeReservedMinutes: selectedService.office_reserved_minutes ?? 0,
+                          })
+                        : CAREGIVER_BALANCE_NOTE}
                     </p>
                     </>
                   ) : null}

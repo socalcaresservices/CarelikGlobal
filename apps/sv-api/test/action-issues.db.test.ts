@@ -42,6 +42,20 @@ describe("action issues and agency deadlines through the handler", () => {
     expect(hist.body.history.events.map((e: any) => e.event)).toEqual(["opened"]);
   });
 
+  it("GET /v1/attention returns the 0080 counts: each equals the list the same caller opens, and a caregiver or another agency gets none", async () => {
+    const r = await call("GET /v1/attention", w.managerA, { query: { organizationId: w.orgA } });
+    expect(r.status, JSON.stringify(r.body)).toBe(200);
+    const list = await call("GET /v1/action-issues", w.managerA, { query: { organizationId: w.orgA, limit: "200" } });
+    const now = await call("GET /v1/action-issues", w.managerA, { query: { organizationId: w.orgA, queue: "needs_attention_now", limit: "200" } });
+    expect(r.body.counts.needsAction.count).toBe(list.body.counts.actionNeeded);
+    expect(r.body.counts.scheduling.count).toBe(new Set(now.body.issues.filter((i: any) => i.shiftId).map((i: any) => i.shiftId)).size);
+    expect(r.body.counts.scheduling.count).toBeGreaterThanOrEqual(1); // the running unfilled shift of this file: Critical
+    expect(r.body.counts.scheduling.critical).toBeGreaterThanOrEqual(1);
+    const nobody = await call("GET /v1/attention", w.caregiverA1, { query: { organizationId: w.orgA } });
+    expect(nobody.status === 200 ? nobody.body.counts ?? null : null).toBeNull();
+    expect((await call("GET /v1/attention", w.managerB, { query: { organizationId: w.orgA } })).status).toBeGreaterThanOrEqual(403);
+  });
+
   it("the owner sets shorter deadlines with a reason; the manager cannot; a longer one is refused; one keyed request", async () => {
     const body = { organizationId: w.orgA, confirmationOverdueHours: 24, reviewOverdueHours: null, documentReviewOverdueHours: null, reason: "Faster follow-up for the pilot (synthetic)" };
     expect((await call("POST /v1/attention-settings", w.managerA, { body, key: randomUUID() })).status).toBe(403);

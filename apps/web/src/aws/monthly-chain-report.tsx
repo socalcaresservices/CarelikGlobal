@@ -2,10 +2,12 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { Button, Card } from "@carelik/ui";
 import { formatDuration } from "@/lib/service-verification";
+import { hoursLeftText, type HoursFields } from "@/lib/hours-accounting";
+import { HoursBreakdown } from "@/components/hours-breakdown";
 import { useOrganization } from "@/providers/organization-provider";
 import { useAwsApi } from "./aws-workspace";
 
-export interface ChainRow {
+export interface ChainRow extends HoursFields {
   clientId: string; clientCode: string; serviceId: string; serviceCode: string; serviceName: string; authorizationLineageId: string; authorizationVersion: number | null;
   periodStart: string; periodEnd: string; authorizedMinutes: number;
   scheduledMinutes: number; heldReviewMinutes: number; needsReconciliationMinutes: number; reservedMinutes: number;
@@ -15,6 +17,8 @@ export interface ChainRow {
   needsCorrectionVisits: number; waitingVisits: number; readyForReviewVisits: number | null; approvedVisits: number | null; voidedApprovals: number | null;
   adjustmentMinutes: number; committedMinutes: number; remainingMinutes: number; overLimitMinutes: number;
   reservedOk: boolean; visitsOk: boolean | null; balanceOk: boolean; differenceMinutes: number;
+  /** 0079: Authorized = Billable + Rounding + Pending + Reserved + Hours left. */
+  hoursBalanceOk?: boolean;
 }
 
 interface ExportRow { exportId: string; requestedAt: string; reportKey: string; params: Record<string, unknown>; requestedByName: string | null; status: "requested" | "generated" | "failed" | "recorded"; generatedAt: string | null; rowCount: number | null; delivery: string }
@@ -129,8 +133,13 @@ export function MonthlyChainReport({ month }: { month: string }) {
                 <th scope="col" className="px-2 py-2 text-right">Needs correction</th>
                 <th scope="col" className="px-2 py-2 text-right">Billing Ready</th>
                 <th scope="col" className="px-2 py-2 text-right">Approved</th>
-                <th scope="col" className="px-2 py-2 text-right">Left</th>
-                <th scope="col" className="py-2 pl-2 text-right">Checks</th>
+                <th scope="col" className="px-2 py-2 text-right">Rounding</th>
+                <th scope="col" className="px-2 py-2 text-right">Pending</th>
+                <th scope="col" className="px-2 py-2 text-right">Reserved</th>
+                <th scope="col" className="px-2 py-2 text-right">Hours left</th>
+                <th scope="col" className="px-2 py-2 text-right">Worked, not billable</th>
+                <th scope="col" className="px-2 py-2 text-right">Checks</th>
+                <th scope="col" className="py-2 pl-2 text-right">Details</th>
               </tr>
             </thead>
             <tbody className="tabular-nums text-slate-900">
@@ -147,8 +156,13 @@ export function MonthlyChainReport({ month }: { month: string }) {
                   <td className="px-2 py-2 text-right">{m(r.needsCorrectionMinutes)}{r.needsCorrectionVisits > 0 ? ` (${r.needsCorrectionVisits})` : ""}</td>
                   <td className="px-2 py-2 text-right">{m(r.readyForReviewMinutes)}</td>
                   <td className="px-2 py-2 text-right">{m(r.humanApprovedMinutes)}</td>
-                  <td className={`px-2 py-2 text-right ${r.remainingMinutes < 0 ? "font-semibold text-red-700" : ""}`}>{signed(r.remainingMinutes)}</td>
-                  <td className="py-2 pl-2 text-right">{r.reservedOk && r.visitsOk !== false && r.balanceOk ? <span>Adds up</span> : <span className="font-semibold text-red-700">Off by {formatDuration(Math.abs(r.differenceMinutes))}</span>}</td>
+                  <td className="px-2 py-2 text-right">{signed(r.hoursRoundingMinutes ?? r.adjustmentMinutes)}</td>
+                  <td className="px-2 py-2 text-right">{m(r.hoursPendingMinutes ?? 0)}</td>
+                  <td className="px-2 py-2 text-right">{m(r.hoursReservedMinutes ?? r.reservedMinutes)}</td>
+                  <td className={`px-2 py-2 text-right ${(r.hoursLeftMinutes ?? r.remainingMinutes) < 0 ? "font-semibold text-red-700" : ""}`}>{hoursLeftText(r.hoursLeftMinutes ?? r.remainingMinutes)}</td>
+                  <td className={`px-2 py-2 text-right ${(r.hoursWorkedNotBillableMinutes ?? 0) > 0 ? "font-semibold text-amber-900" : ""}`}>{m(r.hoursWorkedNotBillableMinutes ?? 0)}</td>
+                  <td className="px-2 py-2 text-right">{r.reservedOk && r.visitsOk !== false && r.balanceOk && r.hoursBalanceOk !== false ? <span>Adds up</span> : <span className="font-semibold text-red-700">Off by {formatDuration(Math.abs(r.differenceMinutes))}</span>}</td>
+                  <td className="py-2 pl-2 text-right"><HoursBreakdown row={r} /></td>
                 </tr>
               ))}
             </tbody>

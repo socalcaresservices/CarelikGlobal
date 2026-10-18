@@ -60,7 +60,7 @@ describe("Add shift shows one overall outcome", () => {
     "GET /v1/clients": () => json(200, { clients: [{ clientId: "c1", clientCode: "CL-1", caregiverDisplayCode: null, status: "active", legalFirstName: "Client", legalLastName: "One", city: null, clientTypeId: null, clientTypeName: null, currentAuthorizations: 1, openVisits: 0 }] }),
     "GET /v1/services": () => json(200, { services: [{ serviceId: "sv1", code: "PCS", name: "Personal care", isActive: true }] }),
     "GET /v1/caregivers": () => json(200, { caregivers: [{ caregiverRecordId: "r1", caregiverCode: "CG-1", firstName: "Alex", lastName: "Caregiver", preferredName: null, status: "active", hasSignIn: true }] }),
-    "POST /v1/readiness/evaluate": () => json(200, { evaluation: { startsAt: "2026-10-20T16:00:00Z", endsAt: "2026-10-20T19:00:00Z", ready: true, wouldBlockAfterActivation: true, checks } }),
+    "POST /v1/readiness/evaluate": () => json(200, { evaluation: { startsAt: "2026-10-20T16:00:00Z", endsAt: "2026-10-20T19:00:00Z", ready: true, wouldBlockAfterActivation: true, outcome: "warning", summary: "Warning: CPR missing.", checks } }),
     "POST /v1/shifts": () => refuse ? json(422, { error: { code: "authorization_exhausted", message: "Not enough authorized time remains this month for this shift: 2 hr available, this shift needs 3 hr" } }) : json(201, { shift: { shiftId: "n", reservedMinutes: 180, remainingMinutes: "60" } }),
   });
   async function fill() {
@@ -72,11 +72,11 @@ describe("Add shift shows one overall outcome", () => {
     fireEvent.change(screen.getByLabelText(/Caregiver \(optional\)/), { target: { value: "r1" } });
   }
 
-  it("before submitting: caregiver checks passed with warnings, and authorized time is confirmed when you schedule", async () => {
+  it("before submitting: the server outcome is a Warning, shown first, and authorized time is confirmed when you schedule", async () => {
     renderAws("/schedule", PERMS, handlers(false));
     await fill();
     const panel = await screen.findByRole("region", { name: "Assignment checks" });
-    expect(within(panel).getByTestId("assignment-outcome")).toHaveTextContent("Caregiver checks passed with warnings");
+    expect(within(panel).getByTestId("assignment-outcome")).toHaveTextContent("Warning: CPR missing.");
     expect(within(panel).getByText("Authorized time is confirmed when you schedule.")).toBeInTheDocument();
     expect(within(panel).queryByText(/Assignment allowed/)).toBeNull();
     expect(screen.getByRole("button", { name: "Schedule shift" })).toBeEnabled();
@@ -85,13 +85,15 @@ describe("Add shift shows one overall outcome", () => {
   it("when the hour limit blocks, the outcome names it instead of a generic failed check, and the report-only warning is not the reason", async () => {
     const hoursBlocked = [
       ...checks.filter((c) => c.check !== "cpr" && c.check !== "service"),
-      { check: "hours", status: "blocked", code: "daily_hour_limit", message: "Over the daily hour limit.", enforced: true, blocking: true },
-      { check: "service", status: "blocked", code: "service_not_approved", message: "Not approved for this service.", enforced: false, blocking: false },
+      { check: "hours", status: "blocked", code: "daily_hour_limit", message: "Daily limit exceeded: 10.5 of 9 h", enforced: true, blocking: true },
+      { check: "service", status: "blocked", code: "service_not_approved", message: "Service not approved", enforced: false, blocking: false },
     ];
-    renderAws("/schedule", PERMS, { ...handlers(false), "POST /v1/readiness/evaluate": () => json(200, { evaluation: { startsAt: "2026-10-20T16:00:00Z", endsAt: "2026-10-20T19:00:00Z", ready: false, wouldBlockAfterActivation: true, checks: hoursBlocked } }) });
+    renderAws("/schedule", PERMS, { ...handlers(false), "POST /v1/readiness/evaluate": () => json(200, { evaluation: { startsAt: "2026-10-20T16:00:00Z", endsAt: "2026-10-20T19:00:00Z", ready: false, wouldBlockAfterActivation: true, outcome: "blocked", summary: "Blocked: Daily limit exceeded: 10.5 of 9 h", checks: hoursBlocked } }) });
     await fill();
     const panel = await screen.findByRole("region", { name: "Assignment checks" });
-    expect(within(panel).getByTestId("assignment-outcome")).toHaveTextContent("Cannot be assigned: Over the daily hour limit.");
+    expect(within(panel).getByTestId("assignment-outcome")).toHaveTextContent("Blocked: Daily limit exceeded: 10.5 of 9 h");
+    expect(within(panel).queryByText(/Assignment allowed/)).toBeNull();
+    expect(within(panel).queryByText("Not blocking yet.")).toBeNull(); // the note belongs to a Warning only
     expect(within(panel).getByText("Hours and limits:")).toBeInTheDocument();
   }, 30000);
 

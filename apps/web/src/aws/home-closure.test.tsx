@@ -55,16 +55,16 @@ describe("hours this month: an alert with a link, folding that never hides alert
     renderAws("/", PERMS, { "GET /v1/reports/utilisation": () => json(200, util()) });
     const tiers = await screen.findByTestId("authorization-tiers", {}, { timeout: 15000 });
     expect(within(tiers).getByTestId("authorization-tiers-link")).toHaveAttribute("href", "/service-verification/reports?view=reconciliation");
-    expect(screen.queryByText("Billable (confirmed)")).not.toBeInTheDocument(); // starts folded
+    expect(screen.queryAllByText("Billable")).toHaveLength(0); // starts folded
     expect(tiers).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Show the hours" }));
-    expect(screen.getByText("Billable (confirmed)")).toBeInTheDocument();
+    expect(screen.getAllByText("Billable").length).toBeGreaterThan(0);
     fireEvent.click(screen.getByRole("button", { name: "Hide the hours" }));
-    expect(screen.queryByText("Billable (confirmed)")).not.toBeInTheDocument();
+    expect(screen.queryAllByText("Billable")).toHaveLength(0);
     expect(screen.getByTestId("authorization-tiers")).toBeInTheDocument(); // the alert stays
     expect(window.localStorage.getItem(`ogevia.home.collapsed.aaaaaaaa-0000-4000-8000-000000000001.hours`)).toBe("1");
     fireEvent.click(screen.getByRole("button", { name: "Show the hours" }));
-    expect(screen.getByText("Billable (confirmed)")).toBeInTheDocument();
+    expect(screen.getAllByText("Billable").length).toBeGreaterThan(0);
     expect(window.localStorage.getItem(`ogevia.home.collapsed.aaaaaaaa-0000-4000-8000-000000000001.hours`)).toBe("0");
   }, 30000);
 

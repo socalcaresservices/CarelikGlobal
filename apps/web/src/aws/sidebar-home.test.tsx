@@ -287,15 +287,15 @@ describe("Home layout", () => {
     const hours = (await screen.findByRole("heading", { name: "Hours this month" })).closest("section")!;
     // folded: the summary line shows Worked and Hours left; opening the section adds Authorized, Billable, the chart and the table
     for (const k of ["Worked", "Hours left"]) expect(within(hours).getByText(k)).toBeInTheDocument();
-    expect(within(hours).queryByText("Billable (confirmed)")).toBeNull();
+    expect(within(hours).queryAllByText("Billable")).toHaveLength(0);
     fireEvent.click(within(hours).getByRole("button", { name: "Show the hours" }));
-    for (const k of ["Authorized", "Worked", "Billable (confirmed)", "Hours left"]) expect((await within(hours).findAllByText(k)).length).toBeGreaterThan(0);
+    for (const k of ["Authorized", "Worked", "Billable", "Hours left"]) expect((await within(hours).findAllByText(k)).length).toBeGreaterThan(0);
     // The per-service table is behind a native disclosure, with the same figures and a keyboard-reachable scroller.
     const table = within(hours).getByRole("table", { name: "Hours by service for the selected month" });
-    expect(within(table).getAllByRole("columnheader").map((c) => c.textContent)).toEqual(["Service", "Authorized", "Worked", "Billable", "In review", "Approved", "Scheduled ahead", "Held for confirmation or review", "To reconcile", "Committed", "Left", "Over limit"]);
+    expect(within(table).getAllByRole("columnheader").map((c) => c.textContent)).toEqual(["Service", "Authorized", "Billable", "Rounding", "Pending", "Reserved", "Hours left", "Over limit", "Worked", "Worked, not billable", "Approved"]);
     const row = within(table).getAllByRole("row")[1]!;
     expect(row).toHaveTextContent("Respite Care");
-    expect(within(row).getAllByRole("cell").map((c) => c.textContent)).toEqual(["100 h", "26.5 h", "24.5 h", "2 h", "10 h", "4 h", "0 h", "0 h", "24.5 h", "75.5 h", "0 h"]);
+    expect(within(row).getAllByRole("cell").map((c) => c.textContent)).toEqual(["100 h", "24.5 h", "0 h", "2 h", "4 h", "75.5 h", "0 h", "26.5 h", "0 h", "10 h"]);
     for (const c of within(row).getAllByRole("cell")) expect(c.className).toMatch(/text-right/);
     const scroller = within(hours).getByRole("region", { name: /scrolls sideways/ });
     expect(scroller.className).toMatch(/overflow-x-auto/);

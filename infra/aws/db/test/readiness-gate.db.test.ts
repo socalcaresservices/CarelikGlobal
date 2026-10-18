@@ -229,7 +229,7 @@ describe("once active: every commit path checks, with messages that match the fa
 });
 
 describe("Service checks (separate, audited, never touching CPR/TB)", () => {
-  it("defaults Off with the required wording; On blocks 'Not approved for this service.'; Off again never disables CPR/TB", async () => {
+  it("defaults Off with the required wording; On blocks 'Service not approved'; Off again never disables CPR/TB", async () => {
     await reset();
     await makeDocsCurrent(recA1, w.caregiverA1).catch(() => undefined);
     await baseline(w.caregiverA1, allWeek());
@@ -241,7 +241,7 @@ describe("Service checks (separate, audited, never touching CPR/TB)", () => {
     await expectPgError(serviceChecks(w.ownerA, true, " "), "OGV22", /reason/i);
     const on = await serviceChecks(w.ownerA, true);
     expect(on.serviceChecks).toMatchObject({ state: "On", offHeadline: null, offMessage: null });
-    await expectPgError(createShift(w.managerA, await add(9), "09:00", "11:00", recA1), "OGR30", /^Not approved for this service\.$/);
+    await expectPgError(createShift(w.managerA, await add(9), "09:00", "11:00", recA1), "OGR30", /^Service not approved$/);
     await approveService(recA1, fx.service);
     expect(await createShift(w.managerA, await add(9), "09:00", "11:00", recA1)).toHaveLength(1);
     await expectPgError(serviceChecks(w.ownerA, true), "OGC09", /already On/);

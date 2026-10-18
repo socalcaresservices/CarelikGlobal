@@ -3,6 +3,7 @@ import { useState } from "react";
 import { Link } from "react-router-dom";
 import { Button, Card } from "@carelik/ui";
 import { formatDuration, formatNumericDate, formatClockTime } from "@/lib/service-verification";
+import { HOURS_EQUATION_TEXT, HOURS_TOTAL_NOTE } from "@/lib/hours-accounting";
 import { useOrganization } from "@/providers/organization-provider";
 import { agencyMonth, useAgencyClock } from "./agency-clock";
 import { useAwsApi } from "./aws-workspace";
@@ -52,6 +53,9 @@ export function ReportingPage() {
   const perf = useQuery({ queryKey: ["agency-performance", activeOrganizationId, monthStart], enabled: enabled && (hasPermission("shifts.manage") || hasPermission("visits.manage")),
     queryFn: async () => (await api.get<{ performance: Performance }>("/v1/reports/agency-performance", { organizationId: activeOrganizationId, monthStart })).performance });
   const rows = chain.data ?? [];
+  // 0079: per-authorization buckets from the server; Over limit adds only the authorizations that are over (never offset against unused time).
+  const hasHours = rows.length > 0 && rows.every((r) => r.hoursLeftMinutes !== undefined && r.hoursLeftMinutes !== null);
+  const overTotal = rows.reduce((t, r) => t + Math.max(-Number(r.hoursLeftMinutes ?? r.remainingMinutes), 0), 0);
   const [exp, setExp] = useState<{ busy: boolean; error: string | null; done: string | null }>({ busy: false, error: null, done: null });
   async function exportReport(report: "billing_review" | "audit_report", params: Record<string, unknown>) {
     if (exp.busy) return;
@@ -94,14 +98,17 @@ export function ReportingPage() {
           <Card className="space-y-2 p-4" data-testid="authorized-delivered">
             <dl className="grid grid-cols-2 gap-x-6 gap-y-3 md:grid-cols-4">
               <Fig label="Authorized" value={formatDuration(sum(rows, "authorizedMinutes"))} />
-              <Fig label="Reserved" value={formatDuration(sum(rows, "reservedMinutes"))} />
+              <Fig label="Billable" value={formatDuration(hasHours ? sum(rows, "hoursBillableMinutes") : sum(rows, "billableMinutes"))} />
+              {sum(rows, "hoursRoundingMinutes") !== 0 ? <Fig label="Rounding" value={formatDuration(Math.abs(sum(rows, "hoursRoundingMinutes")))} /> : null}
+              {hasHours ? <Fig label="Pending" value={formatDuration(sum(rows, "hoursPendingMinutes"))} /> : null}
+              <Fig label="Reserved" value={formatDuration(hasHours ? sum(rows, "hoursReservedMinutes") : sum(rows, "reservedMinutes"))} />
+              <Fig label="Hours left" value={formatDuration(rows.reduce((t, r) => t + Math.max(Number(r.hoursLeftMinutes ?? r.remainingMinutes), 0), 0))} />
+              {overTotal > 0 ? <Fig label="Over limit" value={formatDuration(overTotal)} tone="red" /> : null}
               <Fig label="Worked" value={formatDuration(sum(rows, "workedMinutes"))} />
               <Fig label="Confirmed" value={formatDuration(sum(rows, "confirmedMinutes"))} />
-              <Fig label="Billable" value={formatDuration(sum(rows, "billableMinutes"))} />
-              <Fig label="Committed" value={formatDuration(sum(rows, "committedMinutes"))} />
-              <Fig label="Left (signed)" value={formatDuration(sum(rows, "remainingMinutes"))} />
-              {sum(rows, "overLimitMinutes") > 0 ? <Fig label="Over the limit" value={formatDuration(sum(rows, "overLimitMinutes"))} tone="red" /> : null}
+              {sum(rows, "hoursWorkedNotBillableMinutes") > 0 ? <Fig label="Worked, not billable" value={formatDuration(sum(rows, "hoursWorkedNotBillableMinutes"))} /> : null}
             </dl>
+            <p className="text-xs text-og-sub">{HOURS_EQUATION_TEXT} {HOURS_TOTAL_NOTE}</p>
             {rows.some((r) => !r.reservedOk || r.visitsOk === false || !r.balanceOk) ? <p role="status" className="text-sm font-semibold text-amber-900">A check on the full-chain report did not add up. Open it to see the difference.</p> : null}
             <Link className="inline-flex min-h-[44px] items-center font-semibold text-og-link underline md:min-h-[32px]" to="/service-verification/reports?view=reconciliation">Full chain by client and authorization</Link>
           </Card>

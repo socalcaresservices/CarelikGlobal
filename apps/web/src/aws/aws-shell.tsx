@@ -31,11 +31,11 @@ import {
 import { useAuth } from "@carelik/auth";
 import { cn } from "@carelik/ui";
 import { useOrganization } from "@/providers/organization-provider";
-import { actionCategories, EXCEPTIONS_ROUTE } from "./action-needed";
+import { EXCEPTIONS_ROUTE } from "./action-needed";
 import { urgentBadge, useAttentionOverview } from "./attention";
 import { NotificationsBell } from "./notifications-bell";
 import { AppearanceApplier } from "./appearance/use-appearance";
-import { useAttention, useBranding, useLogo, useMyDisplayName, viewKind, VIEW_TITLE } from "./aws-workspace";
+import { useAttentionCounts, useBranding, useLogo, useMyDisplayName, viewKind, VIEW_TITLE } from "./aws-workspace";
 import { EnvironmentBanner } from "./environment-marker";
 import { currentLink, isCalendarView, isExceptionsView, isReportView, isVisitListView, linkKey, REPORTS_PATH, visibleGroups, type NavLinkDef } from "./nav-model";
 
@@ -45,13 +45,6 @@ const COLLAPSE_KEY = "ogevia.sidebar.collapsed";
 /** Workflow colour per area (icon tint and selected row). Status colour is separate: amber = waiting, red = blocking. */
 // Area colours are theme variables (styles/theme.css), so each stays readable on every background.
 const ACCENT = { clients: "rgb(var(--og-area-clients))", caregivers: "rgb(var(--og-area-caregivers))", scheduling: "rgb(var(--og-area-scheduling))", approvals: "rgb(var(--og-area-approvals))", reports: "rgb(var(--og-area-reports))" } as const;
-/** Which Action-needed categories each area shows as its badge (same server summary as the header count). */
-const AREA_BADGE: Record<string, readonly string[]> = {
-  "/care-team": ["overdueDocuments", "documentsToReview"],
-  "/schedule": ["unfilledShifts"],
-  Approvals: ["missingClockOut", "awaitingConfirmation", "visitsToReview", "signaturesToReview", "readyForApproval"],
-};
-const BLOCKING = new Set(["missingClockOut", "overdueDocuments"]);
 const MOBILE_QUERY = "(max-width: 767px)";
 
 /** The remembered sidebar choice. Storage can be blocked (private windows), so every access is guarded. */
@@ -109,7 +102,7 @@ export function AwsShell({ children }: PropsWithChildren) {
   const { displayName, loading: nameLoading } = useMyDisplayName();
   const branding = useBranding();
   const logo = useLogo();
-  const attention = useAttention(); // per-area work-waiting badges in the navigation
+  const attention = useAttentionCounts(); // per-area work-waiting badges in the navigation (server counts; the web never recomputes them)
   const overview = useAttentionOverview(); // the header badge: what needs attention now
   const location = useLocation();
   const [collapsedPref, toggleCollapsed] = useSidebarCollapsed();
@@ -193,13 +186,21 @@ export function AwsShell({ children }: PropsWithChildren) {
     { to: "/settings/appearance", label: "Appearance", group: "SETUP", icon: Palette, show: true },
   ];
   const groups = visibleGroups(links);
-  const cats = attention.data ? actionCategories(attention.data) : [];
+  // Each badge is ONE server count (COUNT_DEFINITIONS.md). Approvals keeps exception review and billing approval apart: the Approvals link shows what it opens
+  // (Ready for Approval for someone who may bill, exception review otherwise) and "Visits to review" shows exception review. Red only when the server says Critical.
+  const counts = attention.data ?? null;
+  const countOf = (l: NavLinkDef): { count: number; critical: number } | null => {
+    if (!counts) return null;
+    if (l.parent === "/approvals" && l.label === "Visits to review") return counts.approvals.exceptions;
+    if (l.parent) return null;
+    if (l.to === "/care-team") return counts.caregivers;
+    if (l.to === "/schedule") return counts.scheduling;
+    if (l.label === "Approvals") return canBill ? (counts.approvals.readyForApproval === null ? null : { count: counts.approvals.readyForApproval, critical: 0 }) : counts.approvals.exceptions;
+    return null;
+  };
   const badgeOf = (l: NavLinkDef): { n: number; blocking: boolean } | null => {
-    const keys = AREA_BADGE[l.to] ?? (l.label === "Approvals" ? AREA_BADGE.Approvals : undefined);
-    if (!keys || l.parent) return null;
-    const hit = cats.filter((c) => keys.includes(c.key));
-    const n = hit.reduce((sum, c) => sum + c.count, 0);
-    return n > 0 ? { n, blocking: hit.some((c) => c.count > 0 && BLOCKING.has(c.key)) } : null;
+    const c = countOf(l);
+    return c && c.count > 0 ? { n: c.count, blocking: c.critical > 0 } : null;
   };
   const current = currentLink(links, location.pathname, location.search);
   const agencyName = branding.data?.displayName ?? activeOrganization?.displayName ?? "Organization";

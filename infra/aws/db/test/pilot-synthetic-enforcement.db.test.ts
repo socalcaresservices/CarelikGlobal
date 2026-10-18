@@ -82,11 +82,11 @@ describe("the pilot enforces 8 h/day and 40 h/week with no override", () => {
     expect((await call(w.managerB, "select * from ogevia_api.get_work_hour_policy($1)", [w.orgB]))[0]).toMatchObject({ applies: false });
   });
   it("a 9-hour shift is refused; an 8-hour shift is accepted; the 41st weekly hour is refused even when no day exceeds 8", async () => {
-    await expectPgError(mkShift(w.managerA, day(3), "06:00", "15:00", recA1), "OGR30", /daily hour limit/i);
+    await expectPgError(mkShift(w.managerA, day(3), "06:00", "15:00", recA1), "OGR30", /Daily limit exceeded: [\d.]+ of [\d.]+ h/);
     // five 8-hour days = 40 h in one local week, then one more hour in the same week
     const monday = (() => { const d = new Date(`${day(10)}T12:00:00Z`); d.setUTCDate(d.getUTCDate() + ((8 - d.getUTCDay()) % 7 || 7)); return d.toISOString().slice(0, 10); })();
     for (let i = 0; i < 5; i++) await mkShift(w.managerA, new Date(Date.parse(`${monday}T12:00:00Z`) + i * 864e5).toISOString().slice(0, 10), "08:00", "16:00", recA1);
-    await expectPgError(mkShift(w.managerA, new Date(Date.parse(`${monday}T12:00:00Z`) + 5 * 864e5).toISOString().slice(0, 10), "08:00", "09:00", recA1), "OGR30", /weekly hour limit/i);
+    await expectPgError(mkShift(w.managerA, new Date(Date.parse(`${monday}T12:00:00Z`) + 5 * 864e5).toISOString().slice(0, 10), "08:00", "09:00", recA1), "OGR30", /Weekly limit exceeded: [\d.]+ of [\d.]+ h/);
     // a different caregiver in the same week is unaffected
     await mkShift(w.managerA, new Date(Date.parse(`${monday}T12:00:00Z`) + 5 * 864e5).toISOString().slice(0, 10), "08:00", "09:00", recA2);
   });
@@ -108,12 +108,12 @@ describe("the exact boundaries: 40 hours is allowed, 40 hours and one minute is 
     for (let i = 0; i < 4; i++) await mkShift(w.managerA, plus(m, i), "08:00", "16:00", recA2); // 1920
     await mkShift(w.managerA, plus(m, 4), "08:00", "15:45", recA2); // 465 -> 2385
     expect(await weekMinutes(recA2, m)).toBe(2385);
-    await expectPgError(mkShift(w.managerA, plus(m, 5), "08:00", "08:16", recA2), "OGR30", /weekly hour limit/i); // 2385 + 16 = 2401: refused
+    await expectPgError(mkShift(w.managerA, plus(m, 5), "08:00", "08:16", recA2), "OGR30", /Weekly limit exceeded: [\d.]+ of [\d.]+ h/); // 2385 + 16 = 2401: refused
     expect(await weekMinutes(recA2, m)).toBe(2385);
     await mkShift(w.managerA, plus(m, 5), "08:00", "08:15", recA2); // 2385 + 15 = 2400: exactly 40 hours, accepted
     expect(await weekMinutes(recA2, m)).toBe(2400);
-    await expectPgError(mkShift(w.managerA, plus(m, 5), "09:00", "09:15", recA2), "OGR30", /weekly hour limit/i); // 2415
-    await expectPgError(mkShift(w.managerA, plus(m, 6), "08:00", "16:00", recA2), "OGR30", /weekly hour limit/i); // a sixth 8-hour day: 2880 minutes (48 h)
+    await expectPgError(mkShift(w.managerA, plus(m, 5), "09:00", "09:15", recA2), "OGR30", /Weekly limit exceeded: [\d.]+ of [\d.]+ h/); // 2415
+    await expectPgError(mkShift(w.managerA, plus(m, 6), "08:00", "16:00", recA2), "OGR30", /Weekly limit exceeded: [\d.]+ of [\d.]+ h/); // a sixth 8-hour day: 2880 minutes (48 h)
     // below the API: a direct 1-minute insert at 2400 is refused by the database trigger (2401), whoever writes it
     await expect(q(`insert into ogevia.shifts (organization_id, client_id, service_id, caregiver_record_id, starts_at, ends_at, status)
        select $1,$2,$3,$4, (($5::date + time '10:00') at time zone 'America/Los_Angeles'), (($5::date + time '10:01') at time zone 'America/Los_Angeles'), 'scheduled'`, [w.orgA, fx.client, fx.service, recA2, plus(m, 6)]))
@@ -125,9 +125,9 @@ describe("the exact boundaries: 40 hours is allowed, 40 hours and one minute is 
   it("daily: 480 minutes (exactly 8 h) is accepted; 481 is refused, on that local day only", async () => {
     const m = plus(monday(), 14);
     await mkShift(w.managerA, m, "06:00", "13:45", recA2); // 465
-    await expectPgError(mkShift(w.managerA, m, "13:45", "14:01", recA2), "OGR30", /daily hour limit/i); // 465 + 16 = 481
+    await expectPgError(mkShift(w.managerA, m, "13:45", "14:01", recA2), "OGR30", /Daily limit exceeded: [\d.]+ of [\d.]+ h/); // 465 + 16 = 481
     await mkShift(w.managerA, m, "13:45", "14:00", recA2); // 465 + 15 = 480: accepted
-    await expectPgError(mkShift(w.managerA, m, "14:00", "14:15", recA2), "OGR30", /daily hour limit/i); // 495
+    await expectPgError(mkShift(w.managerA, m, "14:00", "14:15", recA2), "OGR30", /Daily limit exceeded: [\d.]+ of [\d.]+ h/); // 495
     await mkShift(w.managerA, plus(m, 1), "06:00", "06:15", recA2); // the next day is a new day
   });
 });
@@ -191,7 +191,7 @@ describe("compliance enforcement ENABLED in the pilot, with the read-only activa
   });
 
   it("with enforcement on, the pilot still refuses a 9-hour shift for a caregiver who is not on hold, and the hold blocks new work for the held caregiver", async () => {
-    await expectPgError(mkShift(w.managerA, day(5), "06:00", "15:00", recA2), "OGR30", /daily hour limit/i);
+    await expectPgError(mkShift(w.managerA, day(5), "06:00", "15:00", recA2), "OGR30", /Daily limit exceeded: [\d.]+ of [\d.]+ h/);
     await expect(mkShift(w.managerA, day(5), "09:00", "10:00", held)).rejects.toThrow();
   });
 

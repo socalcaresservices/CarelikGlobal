@@ -38,8 +38,11 @@ const CHAIN_COLUMNS: Array<[string, string]> = [
   ["Needs correction (min)", "needsCorrectionMinutes"], ["Waiting for client (min)", "waitingMinutes"], ["Ready for review (min)", "readyForReviewMinutes"],
   ["Approved for billing (min)", "approvedForBillingMinutes"], ["Reviewed - not billable (min)", "reviewedNotBillableMinutes"], ["Approved by a person (min)", "humanApprovedMinutes"],
   ["Needs correction (visits)", "needsCorrectionVisits"], ["Waiting (visits)", "waitingVisits"], ["Ready for review (visits)", "readyForReviewVisits"], ["Approved (visits)", "approvedVisits"], ["Voided approvals", "voidedApprovals"],
-  ["Rounding adjustments (min)", "adjustmentMinutes"], ["Committed (min)", "committedMinutes"], ["Remaining (min, signed)", "remainingMinutes"], ["Over limit (min)", "overLimitMinutes"],
-  ["Reserved adds up", "reservedOk"], ["Visits add up", "visitsOk"], ["Authorization adds up", "balanceOk"], ["Difference (min)", "differenceMinutes"],
+  ["Rounding adjustments (min)", "adjustmentMinutes"], ["Committed (min)", "committedMinutes"],
+  // 0079 hours accounting: Authorized = Billable + Rounding + Pending + Reserved + Hours left (per authorization; Over limit is the amount when Hours left is negative).
+  ["Billable - confirmed (min)", "hoursBillableMinutes"], ["Rounding (min)", "hoursRoundingMinutes"], ["Pending (min)", "hoursPendingMinutes"], ["Reserved (min)", "hoursReservedMinutes"],
+  ["Hours left (min, signed)", "hoursLeftMinutes"], ["Over limit (min)", "hoursOverLimitMinutes"], ["Worked, not billable (min)", "hoursWorkedNotBillableMinutes"],
+  ["Reserved adds up", "reservedOk"], ["Visits add up", "visitsOk"], ["Authorization adds up", "balanceOk"], ["Hours accounting adds up", "hoursBalanceOk"], ["Difference (min)", "differenceMinutes"],
 ];
 export function chainCsv(data: Array<Record<string, unknown>>): string {
   const lines = [CHAIN_COLUMNS.map(([h]) => csvCell(h)).join(",")];
@@ -79,15 +82,16 @@ export async function buildReportCsv(db: Queryable, org: string, report: ReportK
     const approvals = recon ? new Map((await rowsOf(db, "select * from ogevia_api.list_monthly_approval_summary($1, $2, $3)", [org, p.monthStart, p.clientId ?? null])).map((a) => [String(a.authorizationLineageId), a])) : new Map<string, Row>();
     const header = [...n.header, "Service", "Authorization period start", "Authorization period end", "Authorized (min)", "Worked (min)", "Confirmed (min)", "Billable (min)",
       ...(recon ? ["Approved by a person (min)", "Approved rounding adjustment (min)"] : []),
-      "Reserved - not yet worked or signed (min)", "Scheduled ahead or underway (min)", "Held for confirmation or review (min)", "Needs reconciliation (min)",
-      "Remaining (min, signed)", "Over limit (min)", "Authorization tier", "In review (min worked)", ...(recon ? ["Worked minus billable (min)"] : [])];
+      "Scheduled, held and to reconcile together (min)", "Scheduled ahead or underway (min)", "Held for confirmation or review (min)", "Needs reconciliation (min)",
+      "Billable - confirmed (min)", "Rounding (min)", "Pending (min)", "Reserved (min)", "Hours left (min, signed)", "Over limit (min)", "Worked, not billable (min)", "Authorization tier", "In review (min worked)", ...(recon ? ["Worked minus billable (min)"] : [])];
     const lines = [line(header)];
     for (const r of summary) {
       const a = approvals.get(String(r.authorizationLineageId));
       lines.push(line([...n.cells(r), `${r.serviceCode} ${r.serviceName}`, r.authorizationPeriodStart, r.authorizationPeriodEnd, mins(r.authorizedMinutes), mins(r.workedMinutes), mins(r.verifiedMinutes), mins(r.billableMinutes),
         ...(recon ? [mins(a?.approvedMinutes ?? 0), mins(a?.roundingAdjustmentMinutes ?? 0)] : []),
         mins(r.reservedMinutes), mins(Number(r.reservedAheadMinutes ?? 0) + Number(r.reservedUnderwayMinutes ?? 0)), mins(r.reservedReviewMinutes), mins(r.reservedReconcileMinutes),
-        mins(r.remainingMinutes), mins(r.overLimitMinutes), r.authorizationTier, mins(r.reviewMinutes), ...(recon ? [Math.max(0, Number(r.workedMinutes) - Number(r.billableMinutes))] : [])]));
+        mins(r.hoursBillableMinutes), mins(r.hoursRoundingMinutes), mins(r.hoursPendingMinutes), mins(r.hoursReservedMinutes), mins(r.hoursLeftMinutes), mins(r.hoursOverLimitMinutes), mins(r.hoursWorkedNotBillableMinutes),
+        r.authorizationTier, mins(r.reviewMinutes), ...(recon ? [Math.max(0, Number(r.workedMinutes) - Number(r.billableMinutes))] : [])]));
     }
     return { csv: lines.join("\r\n"), rowCount: summary.length };
   }

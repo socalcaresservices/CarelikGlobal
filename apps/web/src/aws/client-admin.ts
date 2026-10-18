@@ -1,6 +1,7 @@
 // Client and authorization administration (0022): shared types, queries and
 // pure helpers. All rules are enforced again by the server; these only make
 // the screens clear.
+import type { HoursFields } from "@/lib/hours-accounting";
 import { useQuery } from "@tanstack/react-query";
 import type { AuthorizationTier } from "@/lib/service-verification";
 import { useOrganization } from "@/providers/organization-provider";
@@ -57,7 +58,7 @@ export interface AuthorizationVersion {
   hourlyRateCents: number | null;
 }
 
-export interface MonthlyBalance {
+export interface MonthlyBalance extends HoursFields {
   serviceId: string;
   serviceName: string;
   authorizationLineageId: string;

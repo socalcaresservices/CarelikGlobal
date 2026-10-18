@@ -3,7 +3,7 @@ import { useState } from "react";
 import { Link } from "react-router-dom";
 import { Button } from "@carelik/ui";
 import { useOrganization } from "@/providers/organization-provider";
-import { useAwsApi } from "./aws-workspace";
+import { useAttentionCounts, useAwsApi } from "./aws-workspace";
 import { useAgencyClock } from "./agency-clock";
 import { useHomeIssues } from "./home-data";
 import { DISPLAY_LABEL, filterOptions, monthGrid, NO_FILTERS, stateOfShift, type CalendarView, type ShiftFilters } from "./schedule-model";
@@ -62,6 +62,7 @@ export function SchedulingOverview() {
   const { activeOrganizationId } = useOrganization();
   const { today } = useAgencyClock();
   const issues = useHomeIssues();
+  const counts = useAttentionCounts(); // the Scheduling badge's own number (server count)
   const todays = useQuery({
     queryKey: ["aws-shifts", activeOrganizationId, today, today],
     queryFn: async () => (await api.get<{ shifts: Shift[] }>("/v1/shifts", { organizationId: activeOrganizationId, from: today, to: today })).shifts,
@@ -76,6 +77,7 @@ export function SchedulingOverview() {
     <section aria-label="Scheduling overview" data-testid="scheduling-overview" className="flex flex-wrap items-center gap-x-6 gap-y-1 rounded-lg border border-slate-200 bg-og-card px-3 py-2 text-sm">
       <p><span className="text-slate-600">Today </span><span className={`${num} text-slate-950`}>{todays.isError ? "—" : list.length}</span><span className="text-slate-600"> visits</span></p>
       <p><span className="text-slate-600">Today, no caregiver </span><span className={`${num} ${uncoveredToday ? "text-red-700" : "text-slate-950"}`}>{todays.isError ? "—" : uncoveredToday}</span></p>
+      {counts.data?.scheduling ? <p data-testid="scheduling-now"><span className="text-slate-600">Need action now (start within 48 hours or started) </span><span className={`${num} ${counts.data.scheduling.critical ? "text-red-700" : "text-slate-950"}`}>{counts.data.scheduling.count}</span></p> : null}
       <p><span className="text-slate-600">Urgent exceptions </span><span className={`${num} text-slate-950`}>{issues.isError ? "—" : urgent.length}</span> <Link className="ml-1 inline-flex min-h-11 items-center font-semibold underline md:min-h-8" to="/action-needed">See all</Link></p>
       {todays.isError || issues.isError ? <p role="status" className="basis-full text-red-700">Some figures could not be loaded. They show — and are not zero.</p> : null}
     </section>

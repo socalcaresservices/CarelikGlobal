@@ -90,7 +90,7 @@ export function fakeApi(opts: FakeOptions) {
   const state = {
     availability: { ...baseAvailability(), ...(opts.availability ?? {}) } as Record<string, any>,
     readiness: { ...baseReadiness(), ...(opts.readiness ?? {}) } as Record<string, any>,
-    evaluation: { startsAt: "2026-10-14T16:00:00+00:00", endsAt: "2026-10-14T18:00:00+00:00", ready: true, wouldBlockAfterActivation: false, checks: okChecks(), ...(opts.evaluation ?? {}) } as Record<string, any>,
+    evaluation: { startsAt: "2026-10-14T16:00:00+00:00", endsAt: "2026-10-14T18:00:00+00:00", ready: true, wouldBlockAfterActivation: false, outcome: "allowed", summary: "Allowed", checks: okChecks(), ...(opts.evaluation ?? {}) } as Record<string, any>,
     failNext: opts.failNextRequestWith ?? null,
     shiftOverride: opts.shiftOverride === true,
     compliance: { ...baseCompliance(), ...(opts.compliance ?? {}) } as Record<string, any>,
@@ -196,7 +196,7 @@ export function fakeApi(opts: FakeOptions) {
       case "POST /v1/readiness/evaluate":
         return json(200, { evaluation: state.evaluation });
       case "POST /v1/availability/overrides":
-        state.evaluation = { ...state.evaluation, ready: true, checks: (state.evaluation.checks as any[]).map((c) => (c.check === "availability" ? { ...c, status: "overridden", blocking: false, code: "availability_override", message: "Availability overridden by an administrator." } : c)) };
+        state.evaluation = { ...state.evaluation, ready: true, outcome: "allowed", summary: "Allowed", checks: (state.evaluation.checks as any[]).map((c) => (c.check === "availability" ? { ...c, status: "overridden", blocking: false, code: "availability_override", message: "Availability overridden by an administrator." } : c)) };
         return json(201, { overrideId: "ov1" });
       case "GET /v1/shifts":
         return json(200, { shifts: [{ shiftId: SHIFT, startsAt: "2026-10-14T16:00:00Z", endsAt: "2026-10-14T18:00:00Z", localDate: "2026-10-14", coverageState: "needs_coverage", clientId: CLIENT, clientCode: "C-104", clientName: "Synthetic Client", serviceId: SVC, serviceCode: "PCS", serviceName: "Personal care", caregiverRecordId: null, caregiverCode: null, caregiverName: null, hasSignIn: false, reservedMinutes: 120, fromCareRequest: false, hasVisit: false, lastCalloutReason: null, seriesId: null, availabilityOverride: state.shiftOverride === true, availabilityOverrideReason: state.shiftOverride === true ? "Caregiver agreed by phone" : null }] });

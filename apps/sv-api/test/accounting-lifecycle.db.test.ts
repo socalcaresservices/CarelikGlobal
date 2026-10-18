@@ -218,7 +218,7 @@ describe("the full-chain monthly report and its server-generated export", () => 
   });
 
   it("CSV cells that start with a formula character cannot run in a spreadsheet; numbers stay numbers", () => {
-    const csv = chainCsv([{ clientCode: "=HYPERLINK(\"http://x\")", serviceCode: "+SUM(A1)", remainingMinutes: -85, reservedOk: true, authorizedMinutes: 100 }]);
+    const csv = chainCsv([{ clientCode: "=HYPERLINK(\"http://x\")", serviceCode: "+SUM(A1)", hoursLeftMinutes: -85, reservedOk: true, authorizedMinutes: 100 }]);
     const row = csv.split("\r\n")[1]!;
     expect(row).toContain(`"'=HYPERLINK(""http://x"")"`);
     expect(row).toContain(`"'+SUM(A1)"`);

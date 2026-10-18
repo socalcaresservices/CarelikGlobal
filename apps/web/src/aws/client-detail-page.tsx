@@ -1,3 +1,4 @@
+import { HoursBreakdown } from "@/components/hours-breakdown";
 import { useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef, useState } from "react";
 import { Link, useParams } from "react-router-dom";
@@ -354,10 +355,12 @@ function AuthorizationsCard({ clientId }: { clientId: string }) {
   const [adding, setAdding] = useState(false);
   const lineages = groupByLineage(versions.data ?? []);
   const rows = balances.data ?? [];
-  const worst = rows.some((b) => b.authorizationTier === "critical" || b.remainingMinutes < 0) ? "critical" : rows.some((b) => b.authorizationTier === "near_limit") ? "near_limit" : null;
+  // 0079: Hours left is per authorization and signed (negative = Over limit); the server's figure, with the older field as the fallback.
+  const leftOf = (b: (typeof rows)[number]) => b.hoursLeftMinutes ?? b.remainingMinutes;
+  const worst = rows.some((b) => b.authorizationTier === "critical" || leftOf(b) < 0) ? "critical" : rows.some((b) => b.authorizationTier === "near_limit") ? "near_limit" : null;
   const none = versions.data !== undefined && lineages.length === 0;
   const attention = none || worst !== null || rows.some((b) => b.expiringSoon);
-  const left = (b: (typeof rows)[number]) => (b.remainingMinutes < 0 ? `${formatDuration(-b.remainingMinutes)} over` : `${formatDuration(b.remainingMinutes)} left`);
+  const left = (b: (typeof rows)[number]) => (leftOf(b) < 0 ? `Over limit ${formatDuration(-leftOf(b))}` : `Hours left ${formatDuration(leftOf(b))}`);
   return (
     <SummarySection title="Authorizations" defaultOpen hideSummaryWhenOpen
       status={none ? <span className="rounded-full bg-red-100 px-2 py-0.5 text-xs font-semibold text-red-800">None</span> : worst ? <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${worst === "critical" ? "bg-red-100 text-red-800" : "bg-amber-100 text-amber-900"}`}>{worst === "critical" ? "Critical" : "Near limit"}</span> : rows.length > 0 ? <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-semibold text-emerald-900">{attention ? "Ending soon" : "Healthy"}</span> : undefined}
@@ -365,7 +368,7 @@ function AuthorizationsCard({ clientId }: { clientId: string }) {
       {canUpdate ? <div className="mb-2 text-right"><Button type="button" variant="secondary" onClick={() => setAdding((a) => !a)} aria-expanded={adding}>{adding ? "Close" : "Add authorization"}</Button></div> : null}
       {adding ? <AddAuthorizationForm clientId={clientId} onDone={() => setAdding(false)} /> : null}
       <div className="mt-1">
-        <label htmlFor="balance-month" className="block text-sm font-medium text-slate-700">Balance for month</label>
+        <label htmlFor="balance-month" className="block text-sm font-medium text-slate-700">Hours for month</label>
         <input id="balance-month" type="month" value={month} onChange={(e) => setMonth(e.target.value || agencyMonth(tz))} className="mt-1 rounded-lg border border-slate-200 px-3 py-2 text-base" />
       </div>
       {balances.isError ? <p role="alert" className="mt-2 text-sm text-red-700">{(balances.error as Error).message}</p> : null}
@@ -391,15 +394,16 @@ function AuthorizationsCard({ clientId }: { clientId: string }) {
                 </div>
                 <dl className="mt-2 grid grid-cols-2 gap-x-4 gap-y-1 text-sm sm:grid-cols-4">
                   <div><dt className="text-xs text-slate-600">Authorized</dt><dd>{formatDuration(b.authorizedMinutes)}</dd></div>
-                  <div><dt className="text-xs text-slate-600">Billable</dt><dd>{formatDuration(b.billableMinutes)}</dd></div>
-                  <div><dt className="text-xs text-slate-600">In review</dt><dd>{formatDuration(b.reviewMinutes)}</dd></div>
-                  <div><dt className="text-xs text-slate-600">{b.remainingMinutes < 0 ? "Over the limit" : "Hours left"}</dt><dd className={`font-semibold ${b.remainingMinutes <= 0 ? "text-red-700" : "text-slate-900"}`}>{b.remainingMinutes < 0 ? formatDuration(-b.remainingMinutes) : formatDuration(b.remainingMinutes)}</dd></div>
+                  <div><dt className="text-xs text-slate-600">Billable</dt><dd>{formatDuration(b.hoursBillableMinutes ?? b.billableMinutes)}</dd></div>
+                  <div><dt className="text-xs text-slate-600">Pending</dt><dd>{formatDuration(b.hoursPendingMinutes ?? b.reviewMinutes)}</dd></div>
+                  <div><dt className="text-xs text-slate-600">{leftOf(b) < 0 ? "Over limit" : "Hours left"}</dt><dd className={`font-semibold ${leftOf(b) <= 0 ? "text-red-700" : "text-slate-900"}`}>{leftOf(b) < 0 ? formatDuration(-leftOf(b)) : formatDuration(leftOf(b))}</dd></div>
                 </dl>
+                <HoursBreakdown row={b} />
               </li>
             ))}
           </ul>
-          <ShortHelp className="mt-1 text-xs text-slate-600" details="Committed = billable + approved rounding adjustments + time already scheduled. Healthy is below 80% committed, Near Limit 80% to below 95%, Critical 95% and above (same calculation as the reports).">
-            Hours left = authorized − committed; if negative, the amount over the limit is shown.
+          <ShortHelp className="mt-1 text-xs text-slate-600" details="Hours left is worked out for each authorization on its own. Pending is worked time not yet billable (awaiting confirmation or review) and Reserved is scheduled time not yet delivered; open Details for the full equation. Healthy is below 80% of the authorization counted, Near Limit 80% to below 95%, Critical 95% and above (same calculation as the reports).">
+            Authorized = Billable + Rounding + Pending + Reserved + Hours left. If Hours left is negative, that amount is shown as Over limit.
           </ShortHelp>
         </div>
       ) : null}

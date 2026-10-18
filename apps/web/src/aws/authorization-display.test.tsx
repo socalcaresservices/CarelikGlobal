@@ -6,6 +6,8 @@ import { CognitoAuthProvider, type CognitoAuthClient } from "@carelik/auth";
 import { MemoryRouter } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { createAwsApiClient } from "@/lib/aws-api";
+import { buildContinuityHtml, type ContinuityPack } from "./continuity-pack";
+import { caregiverDifferenceNote, hoursEquation, hoursLeftFigure } from "@/lib/hours-accounting";
 import { authorizationStatus, caregiverLeftMinutes, CAREGIVER_BALANCE_NOTE, formatBalance, formatDuration } from "@/lib/service-verification";
 import { AwsRoutes } from "./aws-root";
 
@@ -73,10 +75,10 @@ function expandHours(hours: HTMLElement) {
 }
 
 describe("Home: the over-limit amount and the tiers", () => {
-  it("shows Over the limit, an Over limit column, and the tier line; Left stays the unused time only", async () => {
+  it("shows Over limit in the summary line, an Over limit column, and the tier line; Hours left stays the unused time only", async () => {
     renderAt("/", { "/v1/reports/utilisation": () => json(200, { services: [{ ...SERVICE_ROW, remainingMinutes: 3000, overLimitMinutes: 300, committedMinutes: 3300, nearLimitAuthorizations: 1, criticalAuthorizations: 2, expiringAuthorizations: 1 }] }) });
     const hours = (await screen.findByRole("heading", { name: "Hours this month" })).closest("section")!;
-    const stat = (await within(hours).findByText("Over the limit")).closest("div")!;
+    const stat = within(await within(hours).findByTestId("hours-summary")).getByText("Over limit").closest("div")!;
     expect(stat).toHaveTextContent("5 h"); // in the summary line: visible while the section is folded
     expandHours(hours);
     expect(within(hours).getByRole("columnheader", { name: "Over limit", hidden: true })).toBeInTheDocument();
@@ -87,7 +89,7 @@ describe("Home: the over-limit amount and the tiers", () => {
     const hours = (await screen.findByRole("heading", { name: "Hours this month" })).closest("section")!;
     expandHours(hours);
     await within(hours).findAllByText("Authorized");
-    expect(within(hours).queryByText("Over the limit")).toBeNull();
+    expect(within(hours).queryByTestId("hours-summary")).not.toHaveTextContent("Over limit");
     expect(within(hours).queryByTestId("authorization-tiers")).toBeNull();
   });
 });
@@ -102,10 +104,10 @@ describe("the client page: tier, percentage, over-limit amount and the 30-day wa
     expect(await screen.findByTestId("authorization-tier")).toHaveTextContent("Critical · 100% committed");
     expect(screen.getByText("Hours left")).toBeInTheDocument();
   });
-  it("over the limit: the label becomes Over the limit and the real amount is shown, not 0", async () => {
+  it("over the limit: the label becomes Over limit and the real amount is shown, not 0", async () => {
     page({ committedMinutes: 1360, remainingMinutes: -360, overLimitMinutes: 360, utilizationPercent: 136 });
     expect(await screen.findByTestId("authorization-tier")).toHaveTextContent("Critical · 136% committed");
-    expect(screen.getByText("Over the limit")).toBeInTheDocument();
+    expect(screen.getByText("Over limit")).toBeInTheDocument();
     expect(screen.getByText("6 hr")).toBeInTheDocument();
   });
   it("Near Limit and Healthy carry their own words and symbols; the expiry warning is separate", async () => {
@@ -131,7 +133,51 @@ describe("the caregiver's left-to-record figure (Start Visit / active visit)", (
     for (let used = 0; used <= 600; used += 13) expect(caregiverLeftMinutes(1000, (used / 60) * 60)).toBe(1000 - used);
   });
   it("the note says plainly why the office balance can be lower", () => {
-    expect(CAREGIVER_BALANCE_NOTE).toMatch(/confirmed visits only/);
-    expect(CAREGIVER_BALANCE_NOTE).toMatch(/office balance also holds time for scheduled visits/);
+    expect(CAREGIVER_BALANCE_NOTE).toMatch(/confirmed time only/);
+    expect(CAREGIVER_BALANCE_NOTE).toMatch(/office Hours left also deducts time that is Pending and Reserved for scheduled visits/);
+  });
+});
+
+// 0079 hours accounting: Authorized = Billable + Rounding + Pending + Reserved + Hours left, per authorization. The server computes it; these tests pin what is shown.
+const HOURS = { hoursBillableMinutes: 300, hoursRoundingMinutes: 15, hoursPendingMinutes: 130, hoursPendingReviewMinutes: 0, hoursPendingHeldMinutes: 130, hoursPendingUnreservedMinutes: 0,
+  hoursReservedMinutes: 90, hoursLeftMinutes: 465, hoursOverLimitMinutes: 0, hoursWorkedNotBillableMinutes: 40 };
+describe("hours accounting: the equation is visible and adds up", () => {
+  it("lists Authorized, Billable, Rounding (only when not zero), Pending, Reserved and Hours left, and they add up", () => {
+    const lines = hoursEquation({ authorizedMinutes: 1000, ...HOURS });
+    expect(lines.map((l) => l.label)).toEqual(["Authorized", "Billable", "Rounding", "Pending", "Reserved", "Hours left"]);
+    const by = Object.fromEntries(lines.map((l) => [l.key, l.minutes])) as Record<string, number>;
+    expect(by.billable! + by.rounding! + by.pending! + by.reserved! + by.left!).toBe(by.authorized);
+    expect(hoursEquation({ authorizedMinutes: 1000, ...HOURS, hoursRoundingMinutes: 0 }).map((l) => l.label)).not.toContain("Rounding");
+  });
+  it("a negative Hours left is shown as Over limit, with the amount over, for that authorization only", () => {
+    expect(hoursLeftFigure(-60)).toEqual({ label: "Over limit", value: "1 hr", over: true });
+    expect(hoursLeftFigure(90)).toEqual({ label: "Hours left", value: "1 hr 30 min", over: false });
+    expect(hoursEquation({ authorizedMinutes: 100, ...HOURS, hoursLeftMinutes: -60 }).at(-1)).toMatchObject({ label: "Over limit", minutes: 60 });
+  });
+  it("the client page shows the equation under Details, with Worked, not billable as its own line", async () => {
+    renderAt(`/clients/${CLIENT}`, {
+      "/v1/clients": () => json(200, { clients: [CLIENT_ROW] }),
+      "/v1/reports/monthly-service-summary": () => json(200, { services: [{ ...BALANCE, authorizedMinutes: 1000, remainingMinutes: 465, ...HOURS }] }),
+    });
+    const details = await screen.findByTestId("hours-breakdown");
+    fireEvent.click(within(details).getByText("Details"));
+    for (const label of ["Authorized", "Billable", "Rounding", "Pending", "Reserved", "Hours left"]) expect(within(details).getAllByText(new RegExp(`^${label}`)).length).toBeGreaterThan(0);
+    expect(within(details).getByTestId("worked-not-billable")).toHaveTextContent("Worked, not billable: 40 min");
+    expect(details).toHaveTextContent("Authorized = Billable + Rounding + Pending + Reserved + Hours left");
+  });
+  it("the caregiver note names the intentional difference: what the office also deducts", () => {
+    expect(caregiverDifferenceNote({ leftToRecordMinutes: 600, hoursLeftMinutes: 380, officePendingMinutes: 130, officeReservedMinutes: 90 })).toMatch(/lower by 1 hr 30 min Reserved for scheduled visits and 2 hr 10 min Pending/);
+    expect(caregiverDifferenceNote({ leftToRecordMinutes: 600, hoursLeftMinutes: 600, officePendingMinutes: 0, officeReservedMinutes: 0 })).toMatch(/the same today/);
+    expect(caregiverDifferenceNote(null)).toMatch(/Pending and Reserved/);
+  });
+  it("the continuity pack prints the same buckets, with Over limit shown instead of a negative", () => {
+    const pack = { agency: "Synthetic Agency", timezone: "America/Los_Angeles", data_as_of: "2026-10-19T17:00:00Z", export_id: "e", exported_by: "Synthetic", includes_client_names: false, outage_numbers: { first: 1, last: 25 }, shifts: [], clients: [], caregivers: [],
+      authorizations: [{ client_code: "C-1", client_label: null, service: "Respite", period_start: "2026-10-01", period_end: "2026-10-31", authorized_minutes: 100, reserved_minutes: 160, billable_minutes: 100, review_minutes: 0, remaining_minutes: -160,
+        hours_billable_minutes: 0, hours_rounding_minutes: 0, hours_pending_minutes: 100, hours_reserved_minutes: 60, hours_left_minutes: -60, hours_over_limit_minutes: 60 }] } as unknown as ContinuityPack;
+    const html = buildContinuityHtml(pack);
+    expect(html).toContain("<th>Pending</th>");
+    expect(html).toContain("<th>Over limit</th>");
+    expect(html).toContain("<td>1 h 00 min</td>"); // the Over limit amount (60 minutes)
+    expect(html).toContain("Authorized = Billable + Rounding + Pending + Reserved + Hours left");
   });
 });

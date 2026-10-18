@@ -9,7 +9,7 @@ import { asActor, createTestDb, freshClient, orgToday, seedWorld, setBaselineAva
 
 const RESTORE = readFileSync(new URL("../restore/readiness_restore_from_archives.sql", import.meta.url), "utf8");
 const LIST = readFileSync(new URL("../restore/readiness_list_recovery_sets.sql", import.meta.url), "utf8");
-const ALL = ["0039", "0040", "0041", "0042", "0043", "0044", "0045", "0046", "0047", "0048", "0049", "0050", "0051", "0052", "0053", "0054", "0055", "0056", "0057", "0058", "0059", "0060", "0061", "0062", "0063", "0064", "0065", "0066", "0067", "0068", "0069", "0070", "0071", "0072", "0073", "0074", "0075", "0076", "0077"];
+const ALL = ["0039", "0040", "0041", "0042", "0043", "0044", "0045", "0046", "0047", "0048", "0049", "0050", "0051", "0052", "0053", "0054", "0055", "0056", "0057", "0058", "0059", "0060", "0061", "0062", "0063", "0064", "0065", "0066", "0067", "0068", "0069", "0070", "0071", "0072", "0073", "0074", "0075", "0076", "0077", "0078", "0079", "0080"];
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 let db: TestDb;
@@ -113,7 +113,7 @@ describe("two rollbacks seconds apart: the first holds a service approval, the s
 
   it("the rollback runner refuses a target below 0039 and a target that is not applied", async () => {
     await expect(rollback("0038")).rejects.toThrow(/0039 or later/);
-    await expect(rollback("0078")).rejects.toThrow(/no applied migration at or above 0078/);
+    await expect(rollback("0081")).rejects.toThrow(/no applied migration at or above 0081/);
   });
 
   it("attempt 2 (seconds later, same 10-minute window) holds NO service approval: its manifest records that slot with zero rows", async () => {

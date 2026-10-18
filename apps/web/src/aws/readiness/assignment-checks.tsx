@@ -23,20 +23,17 @@ export interface AssignmentCheckInput {
   excludeShiftId?: string;
 }
 
-interface Evaluation { startsAt: string; endsAt: string; ready: boolean; wouldBlockAfterActivation: boolean; checks: CheckRow[] }
+/** `outcome` and `summary` are the server's single eligibility decision, computed from the same rows as `checks`. The screen never derives them. */
+interface Evaluation { startsAt: string; endsAt: string; ready: boolean; wouldBlockAfterActivation: boolean; outcome: "allowed" | "warning" | "blocked"; summary: string; checks: CheckRow[] }
 
 /** The four checks, plus hours: the server can refuse on the hour limits, and that refusal must be named, not summarized as "a required check". */
 const GROUPS = [...CHECK_GROUPS, { key: "hours", title: "Hours and limits", checks: ["hours"] }];
 
 const STATE_TEXT = { ok: "OK", blocked: "", would_block: "", overridden: "", not_checked: "Not checked" } as const;
 
-/** The overall caregiver-check result as one line: passed, passed with warnings, or the first blocking reason. */
+/** The overall result is the server's own words ('Allowed', 'Warning: ...', 'Blocked: ...'); only the colour is chosen here. */
 function checksOutcome(ev: Evaluation): { tone: "ok" | "warn" | "bad"; text: string } {
-  if (!ev.ready) {
-    const first = GROUPS.map((g) => groupOutcome(ev.checks, g)).find((o) => o.state === "blocked")?.messages[0] ?? ev.checks.find((c) => c.blocking)?.message;
-    return { tone: "bad", text: `Cannot be assigned: ${first ?? "a required check failed."}` };
-  }
-  return ev.wouldBlockAfterActivation ? { tone: "warn", text: "Caregiver checks passed with warnings" } : { tone: "ok", text: "Caregiver checks passed" };
+  return { tone: ev.outcome === "blocked" ? "bad" : ev.outcome === "warning" ? "warn" : "ok", text: ev.summary };
 }
 const OUTCOME_TONE = { ok: "text-emerald-900", warn: "text-amber-950", bad: "text-red-800" } as const;
 
@@ -86,7 +83,7 @@ export function AssignmentChecks({ input, onReady, outcome, note }: { input: Ass
         {o.state === "ok" || o.state === "not_checked" ? <span className={tone}>{STATE_TEXT[o.state]}</span> : (
           <span className={tone}>
             {o.messages.join(" ")}
-            {o.state === "would_block" ? <span className="block text-xs text-slate-600">{g.key === "documents" ? "Report-only: this does NOT meet the requirement for current, verified CPR and TB." : "Not blocking yet."}</span> : null}
+            {o.state === "would_block" && ev.outcome === "warning" ? <span className="block text-xs text-slate-600">{g.key === "documents" ? "Report-only: this does NOT meet the requirement for current, verified CPR and TB." : "Not blocking yet."}</span> : null}
             {o.state === "overridden" ? <span className="block text-xs text-slate-600">Approved by an administrator for this assignment only.</span> : null}
           </span>
         )}
@@ -101,7 +98,7 @@ export function AssignmentChecks({ input, onReady, outcome, note }: { input: Ass
       <details>
         <summary className="inline-flex min-h-[32px] cursor-pointer items-center text-sm text-og-accent underline">Details</summary>
         <ul className="mt-1 space-y-1">{rows.filter((r) => !shown.includes(r)).map(row)}</ul>
-        {ev.wouldBlockAfterActivation ? <p className="mt-1 text-xs text-slate-600">Warnings do not block today. They will block assignment and new visits once readiness checks are activated{rows.some((r) => r.g.key === "service" && r.o.state === "would_block") ? " and Service checks are On" : ""}.</p> : null}
+        {ev.outcome === "warning" && ev.wouldBlockAfterActivation ? <p className="mt-1 text-xs text-slate-600">Warnings do not block today. They will block assignment and new visits once readiness checks are activated{rows.some((r) => r.g.key === "service" && r.o.state === "would_block") ? " and Service checks are On" : ""}.</p> : null}
       </details>
       {canOverride ? (
         overriding ? (

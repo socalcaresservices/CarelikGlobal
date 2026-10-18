@@ -1490,7 +1490,10 @@ export const ROUTES: Record<string, Route> = {
       const [summary] = await tx((db) => rows(db, "select * from ogevia_api.get_attention_summary($1, 12, 2880)", [org]));
       // 0055: caregivers on a compliance hold (shifts to cover, visits in progress). null when the viewer may not see it, never a false zero.
       const compliance = await tx(async (db) => (await first(db, "select ogevia_api.get_compliance_attention($1) as a", [org])).a ?? null);
-      return { summary: summary ? { ...summary, complianceHolds: compliance } : null };
+      // 0080: the badge numbers (Needs attention, Needs action, Scheduling, Caregivers, Approvals exceptions, Ready for Approval), each computed by the database from the same rows as the issue list.
+      // null when this person may see none of them. The web shows these; it never recomputes them.
+      const counts = await tx(async (db) => (await first(db, "select ogevia_api.get_attention_counts($1) as c", [org])).c ?? null);
+      return { summary: summary ? { ...summary, complianceHolds: compliance } : null, counts };
     },
   },
 
@@ -1703,8 +1706,13 @@ export const ROUTES: Record<string, Route> = {
     mutating: false,
     handle: async ({ event, tx }) => {
       const org = orgParam(event);
-      const [visit] = await tx((db) => rows(db, "select * from ogevia_api.get_active_service_visit($1)", [org]));
-      return { visit: visit ?? null };
+      // 0079: the caregiver's Left to record, computed by the database from the same records as the office figure (additive field); one transaction.
+      const [visit, balance] = await tx(async (db) => {
+        const [v] = await rows(db, "select * from ogevia_api.get_active_service_visit($1)", [org]);
+        const [b] = v ? await rows(db, "select * from ogevia_api.get_active_visit_balance($1)", [org]) : [];
+        return [v, b];
+      });
+      return { visit: visit ? { ...visit, leftToRecordMinutes: balance?.leftToRecordMinutes ?? null } : null };
     },
   },
 
@@ -1721,8 +1729,17 @@ export const ROUTES: Record<string, Route> = {
     handle: async ({ event, tx }) => {
       const org = orgParam(event);
       const client = uuid(p(event).clientId, "clientId");
+      // 0079: Left to record (caregiver), Hours left (office) and the Pending/Reserved time the office also deducts; computed by the database (additive fields); one transaction.
+      const [services, balances] = await tx(async (db) => [
+        await rows(db, "select * from ogevia_api.list_authorized_services_for_client($1, $2)", [org, client]),
+        await rows(db, "select * from ogevia_api.list_caregiver_hours_balances($1, $2)", [org, client]),
+      ]);
+      const byService = new Map(balances.map((b) => [String(b.serviceId), b]));
       return {
-        services: await tx((db) => rows(db, "select * from ogevia_api.list_authorized_services_for_client($1, $2)", [org, client])),
+        services: services.map((svc) => {
+          const b = byService.get(String(svc.serviceId));
+          return { ...svc, leftToRecordMinutes: b?.leftToRecordMinutes ?? null, hoursLeftMinutes: b?.hoursLeftMinutes ?? null, officePendingMinutes: b?.officePendingMinutes ?? null, officeReservedMinutes: b?.officeReservedMinutes ?? null };
+        }),
       };
     },
   },

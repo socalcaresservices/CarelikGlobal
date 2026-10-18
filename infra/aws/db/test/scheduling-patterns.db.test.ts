@@ -113,11 +113,11 @@ describe("caregiver hour limits", () => {
     expect(b.filter((x) => x.outcome === "over_hour_limit").map((x) => x.local_date)).toEqual(week.slice(3));
     // single shift: 5 h in one day is over the 4 h daily limit
     await expectPgError(q(w.managerA, "select * from ogevia_api.create_shift($1,$2,$3,$4::date,'08:00'::time,'13:00'::time,$5,null)",
-      [w.orgA, fresh.client, fresh.service, week[0], rec["CG-A1"]]), "OGR30", /daily hour limit/i);
+      [w.orgA, fresh.client, fresh.service, week[0], rec["CG-A1"]]), "OGR30", /Daily limit exceeded: [\d.]+ of [\d.]+ h/);
     // a caregiver with no limit of their own follows the agency default
     await setLimit(w.managerA, null, 120, null, "block");
     await expectPgError(q(w.managerA, "select * from ogevia_api.create_shift($1,$2,$3,$4::date,'08:00'::time,'11:00'::time,$5,null)",
-      [w.orgA, fresh.client, fresh.service, week[0], rec["CG-A3"]]), "OGR30", /daily hour limit/i);
+      [w.orgA, fresh.client, fresh.service, week[0], rec["CG-A3"]]), "OGR30", /Daily limit exceeded: [\d.]+ of [\d.]+ h/);
     await setLimit(w.managerA, null, null, null, "block"); // removes the default
     await setLimit(w.managerA, rec["CG-A1"]!, null, null, "block");
     expect(await q(w.managerA, "select * from ogevia_api.list_hour_limits($1)", [w.orgA])).toEqual([]);

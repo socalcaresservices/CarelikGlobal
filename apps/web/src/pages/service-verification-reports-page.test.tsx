@@ -670,7 +670,7 @@ describe("ServiceVerificationReportsPage", () => {
     const headers = within(table).getAllByRole("columnheader").map((th) => th.textContent);
     const row = within(table).getAllByRole("row")[1]!;
     const cells = within(row).getAllByRole("cell").map((td) => td.textContent);
-    expect(cells[headers.indexOf("Still scheduled (not yet worked)")]).toBe("7 hr");
+    expect(cells[headers.indexOf("Reserved")]).toBe("7 hr");
     expect(cells[headers.indexOf("Hours left")]).toBe("2 hr 50 min");
     // Client name first with the code; billable (eligible) and human-approved stay separate.
     expect(cells[headers.indexOf("Client")]).toBe("Synthetic PersonTEST-C01");
@@ -1059,10 +1059,10 @@ describe("ServiceVerificationReportsPage", () => {
 
     expect(await screen.findByText("SCS-V-20260801-4F7K")).toBeInTheDocument();
     const visitTable = screen.getByRole("table", { name: "Visit details" });
-    // Shown under the row's Hours balance control (and, for a printout, written out in full).
+    // Shown under the row's Hours left control (and, for a printout, written out in full).
     const row = within(visitTable).getByText("SCS-V-20260801-4F7K").closest("tr")!;
-    expect(row).toHaveTextContent("Monthly limit: 40 hr");
-    expect(row).toHaveTextContent("Used this month: 11 hr");
+    expect(row).toHaveTextContent("Authorized: 40 hr");
+    expect(row).toHaveTextContent("Billable this month: 11 hr");
     expect(row).toHaveTextContent("Hours left: 29 hr");
   });
 
@@ -1218,21 +1218,21 @@ describe("ServiceVerificationReportsPage", () => {
     expect(printSpy).toHaveBeenCalled();
   });
 
-  it("hides the three authorization columns by default behind each row's Hours balance, and Columns brings them back", async () => {
+  it("hides the three authorization columns by default behind each row's Hours left, and Columns brings them back", async () => {
     window.localStorage.clear();
     allowEverything();
     renderPage();
     await openReport(/^Visit records$/);
     const table = await screen.findByRole("table", { name: "Visit details" });
     const headers = within(table).getAllByRole("columnheader").map((h) => h.textContent);
-    expect(headers).toEqual(expect.arrayContaining(["Hours balance", "Status", "Actions"]));
-    expect(headers).not.toContain("Monthly limit");
-    expect(headers).not.toContain("Used this month");
-    // The same three values sit under the row's Hours balance control.
+    expect(headers).toEqual(expect.arrayContaining(["Hours left", "Status", "Actions"]));
+    expect(headers).not.toContain("Authorized");
+    expect(headers).not.toContain("Billable this month");
+    // The same three values sit under the row's Hours left control.
     const row = within(table).getByText("Jamie Smith").closest("tr")!;
-    expect(within(row).getByText("Hours balance")).toBeInTheDocument();
+    expect(within(row).getByText("Hours left")).toBeInTheDocument();
     expect(row).toHaveTextContent("Hours left: 29 hr");
-    expect(row).toHaveTextContent("Used this month: 11 hr");
+    expect(row).toHaveTextContent("Billable this month: 11 hr");
     fireEvent.click(screen.getByLabelText("Hours left"));
     expect(within(table).getAllByRole("columnheader").map((h) => h.textContent)).toContain("Hours left");
   });
@@ -1243,7 +1243,7 @@ describe("ServiceVerificationReportsPage", () => {
     const first = renderPage();
     await openReport(/^Visit records$/);
     let table = await screen.findByRole("table", { name: "Visit details" });
-    expect(within(table).getAllByRole("columnheader").map((h) => h.textContent)).toContain("Hours balance");
+    expect(within(table).getAllByRole("columnheader").map((h) => h.textContent)).toContain("Hours left");
     first.unmount();
     window.localStorage.setItem("ogevia.visit-report-columns", JSON.stringify(["client", "worked", "remaining", "status"]));
     renderPage();
@@ -1251,7 +1251,8 @@ describe("ServiceVerificationReportsPage", () => {
     table = await screen.findByRole("table", { name: "Visit details" });
     const headers = within(table).getAllByRole("columnheader").map((h) => h.textContent);
     expect(headers).toContain("Hours left");
-    expect(headers).not.toContain("Hours balance");
+    // The "Hours left" column replaces the row control of the same name; it is never shown twice.
+    expect(headers.filter((h) => h === "Hours left")).toHaveLength(1);
   });
 
   it("keeps the address in step with the Report selection, so the sidebar highlight follows", async () => {

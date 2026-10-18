@@ -3,6 +3,7 @@
 // the AWS build (VITE_AUTH_PROVIDER=cognito) provides the AWS API one.
 // Business rules (identity, tenant, assignment, authorization, timestamps,
 // locking) are enforced by the backend in both cases, never here.
+import type { HoursFields } from "@/lib/hours-accounting";
 import { createContext } from "react";
 import type {
   ServiceVisitStatus,
@@ -29,6 +30,13 @@ export interface AuthorizedService {
   max_monthly_hours: number;
   hours_used_this_month: number;
   hours_scheduled_this_month: number;
+  /** 0079: authorized minus the time already counted toward the cap (server-computed); signed. */
+  left_to_record_minutes?: number | null;
+  /** 0079: the office Hours left for the same authorization (signed). */
+  hours_left_minutes?: number | null;
+  /** 0079: what the office also deducts: Pending and Reserved time. */
+  office_pending_minutes?: number | null;
+  office_reserved_minutes?: number | null;
 }
 
 export interface ActiveVisit {
@@ -45,6 +53,8 @@ export interface ActiveVisit {
   visit_status: "draft" | "awaiting_signature";
   max_monthly_hours: number;
   confirmed_minutes_this_month: number;
+  /** 0079: authorized minus the confirmed time counted toward the cap, computed on the server; signed. */
+  left_to_record_minutes?: number | null;
   // Time Out entered by a manager closing a missed clock-out (0015).
   time_out_entered_by_manager?: boolean | null;
 }
@@ -181,7 +191,7 @@ export interface CloseMissedVisitInput {
   idempotencyKey: string;
 }
 
-export interface MonthlyServiceSummaryRow {
+export interface MonthlyServiceSummaryRow extends HoursFields {
   clientId: string;
   clientCode: string;
   serviceId: string;

@@ -1,3 +1,5 @@
+import { HoursBreakdown } from "@/components/hours-breakdown";
+import { hoursLeftText } from "@/lib/hours-accounting";
 import { Fragment, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useLocation, useNavigate } from "react-router-dom";
@@ -133,13 +135,13 @@ const VISIT_COLUMN_OPTIONS: Array<{ key: VisitColumn; label: string }> = [
   { key: "time", label: "Time" },
   { key: "worked", label: "Worked" },
   { key: "billable", label: "Billable" },
-  { key: "authorized", label: "Monthly limit" },
-  { key: "usedMtd", label: "Used this month" },
+  { key: "authorized", label: "Authorized" },
+  { key: "usedMtd", label: "Billable this month" },
   { key: "remaining", label: "Hours left" },
   { key: "status", label: "Status" },
 ];
 
-// The three authorization columns are off by default: each row's "Hours balance" control shows the
+// The three authorization columns are off by default: each row's "Hours left" control shows the
 // same three values, so the table keeps Status and Actions in view. They stay available in Columns.
 const BALANCE_COLUMNS: VisitColumn[] = ["authorized", "usedMtd", "remaining"];
 const ALL_VISIT_COLUMNS = VISIT_COLUMN_OPTIONS.map((column) => column.key);
@@ -222,7 +224,6 @@ function clientCsvCells(rows: Array<{ clientName?: string | null | undefined }>,
   return rows.some((r) => r.clientName) ? [row.clientName ?? "", row.clientCode] : [row.clientCode];
 }
 
-const STILL_SCHEDULED_LABEL = "Still scheduled (not yet worked)";
 const formatSignedDuration = (minutes: number) =>
   minutes === 0 ? "0 min" : `${minutes > 0 ? "+" : "−"}${formatDuration(Math.abs(minutes))}`;
 
@@ -1916,8 +1917,10 @@ export function ServiceVerificationReportsPage() {
                         "Worked",
                         "Confirmed",
                         "Billable",
-                        STILL_SCHEDULED_LABEL,
-                        "Remaining to schedule",
+                        "Rounding",
+                        "Pending",
+                        "Reserved",
+                        "Hours left or Over limit",
                         "Authorization status",
                         "Needs review",
                       ],
@@ -1929,8 +1932,10 @@ export function ServiceVerificationReportsPage() {
                         formatDuration(row.workedMinutes),
                         formatDuration(row.verifiedMinutes),
                         formatDuration(row.billableMinutes),
-                        formatDuration(row.reservedMinutes ?? 0),
-                        formatBalance(row.remainingMinutes),
+                        formatSignedDuration(row.hoursRoundingMinutes ?? row.adjustmentMinutes ?? 0),
+                        formatDuration(row.hoursPendingMinutes ?? 0),
+                        formatDuration(row.hoursReservedMinutes ?? row.reservedMinutes ?? 0),
+                        hoursLeftText(row.hoursLeftMinutes ?? row.remainingMinutes),
                         authorizationStatus(row),
                         formatDuration(row.reviewMinutes),
                       ]),
@@ -2069,9 +2074,10 @@ export function ServiceVerificationReportsPage() {
                 <strong>Billable (eligible)</strong> is confirmed time within the
                 authorization; <strong>Approved</strong> is what a person approved
                 for billing. Approval is not submission: Ogevia does not submit to
-                payers or track submissions. <strong>{STILL_SCHEDULED_LABEL}</strong>{" "}
-                is time reserved by shifts that have not been signed yet (ahead, underway, held while a visit is in review, or ended with no visit record and awaiting a
-                person's decision); it drops once those visits are signed, because the worked time then counts as worked and billable instead. Nothing is released automatically.
+                payers or track submissions.{" "}
+                <strong>Reserved</strong> is scheduled time not yet delivered (ahead, underway, or ended with no visit record and awaiting a person's decision); nothing is released automatically.
+                <strong> Pending</strong> is worked time not yet billable (awaiting confirmation or in review) and the shift time held for it. Open Details on a row for the full equation:
+                Authorized = Billable + Rounding + Pending + Reserved + Hours left, where Hours left below zero is shown as Over limit and is never offset against another authorization.
               </p>
               {backend.kind === "aws" ? (
                 <p className="mt-1 text-xs print:hidden">
@@ -2108,11 +2114,14 @@ export function ServiceVerificationReportsPage() {
                         "Verified",
                         "Billable (eligible)",
                         ...(showApproved ? ["Approved (human)", "Approved rounding adjustment"] : []),
-                        STILL_SCHEDULED_LABEL,
-                        "Remaining to schedule",
+                        "Rounding",
+                        "Pending",
+                        "Reserved",
+                        "Hours left or Over limit",
                         "Authorization status",
                         "Needs review",
                         "Worked minus billable",
+                        "Worked, not billable (hours accounting)",
                       ],
                       monthlyServiceRows.map((row) => [
                         ...clientCsvCells(monthlyServiceRows, row),
@@ -2128,11 +2137,14 @@ export function ServiceVerificationReportsPage() {
                               formatSignedDuration(approvedByLineage.get(row.authorizationLineageId)?.roundingAdjustmentMinutes ?? 0),
                             ]
                           : []),
-                        formatDuration(row.reservedMinutes ?? 0),
-                        formatBalance(row.remainingMinutes),
+                        formatSignedDuration(row.hoursRoundingMinutes ?? row.adjustmentMinutes ?? 0),
+                        formatDuration(row.hoursPendingMinutes ?? 0),
+                        formatDuration(row.hoursReservedMinutes ?? row.reservedMinutes ?? 0),
+                        hoursLeftText(row.hoursLeftMinutes ?? row.remainingMinutes),
                         authorizationStatus(row),
                         formatDuration(row.reviewMinutes),
                         formatDuration(Math.max(0, row.workedMinutes - row.billableMinutes)),
+                        formatDuration(row.hoursWorkedNotBillableMinutes ?? 0),
                       ]),
                     )
                   }
@@ -2165,11 +2177,14 @@ export function ServiceVerificationReportsPage() {
                     <th className="pb-2 pr-3 font-medium">Verified</th>
                     <th className="pb-2 pr-3 font-medium">Billable (eligible)</th>
                     {showApproved ? <th className="pb-2 pr-3 font-medium">Approved</th> : null}
-                    <th className="pb-2 pr-3 font-medium">{STILL_SCHEDULED_LABEL}</th>
+                    <th className="pb-2 pr-3 font-medium">Rounding</th>
+                    <th className="pb-2 pr-3 font-medium">Pending</th>
+                    <th className="pb-2 pr-3 font-medium">Reserved</th>
                     <th className="pb-2 pr-3 font-medium">Hours left</th>
                     <th className="pb-2 pr-3 font-medium">Authorization status</th>
                     <th className="pb-2 pr-3 font-medium">Needs review</th>
-                    <th className="pb-2 font-medium">Difference</th>
+                    <th className="pb-2 pr-3 font-medium">Difference</th>
+                    <th className="pb-2 font-medium">Hours accounting</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -2206,11 +2221,13 @@ export function ServiceVerificationReportsPage() {
                             )}
                           </td>
                         ) : null}
-                        <td className="py-2 pr-3">{formatDuration(row.reservedMinutes ?? 0)}</td>
-                        <td className={`py-2 pr-3 ${row.remainingMinutes < 0 ? "font-semibold text-red-700" : ""}`}>{formatBalance(row.remainingMinutes)}</td>
+                        <td className="py-2 pr-3">{formatSignedDuration(row.hoursRoundingMinutes ?? row.adjustmentMinutes ?? 0)}</td>
+                        <td className="py-2 pr-3">{formatDuration(row.hoursPendingMinutes ?? 0)}</td>
+                        <td className="py-2 pr-3">{formatDuration(row.hoursReservedMinutes ?? row.reservedMinutes ?? 0)}</td>
+                        <td className={`py-2 pr-3 ${(row.hoursLeftMinutes ?? row.remainingMinutes) < 0 ? "font-semibold text-red-700" : ""}`}>{hoursLeftText(row.hoursLeftMinutes ?? row.remainingMinutes)}</td>
                         <td className="py-2 pr-3" data-testid="authorization-status">{authorizationStatus(row)}</td>
                         <td className="py-2 pr-3">{formatDuration(row.reviewMinutes)}</td>
-                        <td className="py-2">
+                        <td className="py-2 pr-3">
                           {difference > 0 ? (
                             <StatusBadge
                               label={`${formatDuration(difference)} worked not billable`}
@@ -2220,6 +2237,7 @@ export function ServiceVerificationReportsPage() {
                             <StatusBadge label="Matched" tone="success" />
                           )}
                         </td>
+                        <td className="py-2"><HoursBreakdown row={row} /></td>
                       </tr>
                     );
                   })}
@@ -2468,10 +2486,10 @@ export function ServiceVerificationReportsPage() {
                           Worked {formatDuration(row.worked_minutes)} · Billable {formatDuration(row.billable_minutes)}
                         </p>
                         <details className="mt-2 text-sm">
-                          <summary className="cursor-pointer text-xs font-medium text-slate-600">Hours balance</summary>
+                          <summary className="cursor-pointer text-xs font-medium text-slate-600">Hours left</summary>
                           <dl className="mt-1 grid grid-cols-3 gap-2 text-xs">
-                            <div><dt className="text-slate-500">Monthly limit</dt><dd className="font-medium text-slate-900">{formatDuration(authorizedMinutes)}</dd></div>
-                            <div><dt className="text-slate-500">Used this month</dt><dd className="font-medium text-slate-900">{formatDuration(row.month_to_date_after_minutes)}</dd></div>
+                            <div><dt className="text-slate-500">Authorized</dt><dd className="font-medium text-slate-900">{formatDuration(authorizedMinutes)}</dd></div>
+                            <div><dt className="text-slate-500">Billable this month</dt><dd className="font-medium text-slate-900">{formatDuration(row.month_to_date_after_minutes)}</dd></div>
                             <div><dt className="text-slate-500">Hours left</dt><dd className="font-medium text-slate-900">{formatBalance(row.remaining_minutes)}</dd></div>
                           </dl>
                         </details>
@@ -2529,10 +2547,10 @@ export function ServiceVerificationReportsPage() {
                       {visitColumns.has("time") ? <th className="pb-2 pr-2 font-medium">Time</th> : null}
                       {visitColumns.has("worked") ? <th className="pb-2 pr-2 font-medium">Worked</th> : null}
                       {visitColumns.has("billable") ? <th className="pb-2 pr-2 font-medium">Billable</th> : null}
-                      {visitColumns.has("authorized") ? <th className="pb-2 pr-2 font-medium">Monthly limit</th> : null}
-                      {visitColumns.has("usedMtd") ? <th className="pb-2 pr-2 font-medium">Used this month</th> : null}
+                      {visitColumns.has("authorized") ? <th className="pb-2 pr-2 font-medium">Authorized</th> : null}
+                      {visitColumns.has("usedMtd") ? <th className="pb-2 pr-2 font-medium">Billable this month</th> : null}
                       {visitColumns.has("remaining") ? <th className="pb-2 pr-2 font-medium">Hours left</th> : null}
-                      {showBalanceDetails ? <th className="pb-2 pr-2 font-medium">Hours balance</th> : null}
+                      {showBalanceDetails ? <th className="pb-2 pr-2 font-medium">Hours left</th> : null}
                       {visitColumns.has("status") ? <th className="pb-2 pr-2 font-medium">Status</th> : null}
                       {canManage ? <th className="pb-2 font-medium print:hidden">Actions</th> : null}
                     </tr>
@@ -2610,17 +2628,17 @@ export function ServiceVerificationReportsPage() {
                               <td className="py-2 pr-2 align-top">
                                 {/* A printout cannot open a control, so print shows the same three values in full. */}
                                 <dl className="hidden space-y-0.5 whitespace-nowrap text-[10px] print:block">
-                                  <div><dt className="inline">Monthly limit: </dt><dd className="inline font-medium">{formatDuration(authorizedMinutes)}</dd></div>
-                                  <div><dt className="inline">Used this month: </dt><dd className="inline font-medium">{formatDuration(row.month_to_date_after_minutes)}</dd></div>
+                                  <div><dt className="inline">Authorized: </dt><dd className="inline font-medium">{formatDuration(authorizedMinutes)}</dd></div>
+                                  <div><dt className="inline">Billable this month: </dt><dd className="inline font-medium">{formatDuration(row.month_to_date_after_minutes)}</dd></div>
                                   <div><dt className="inline">Hours left: </dt><dd className="inline font-medium">{formatBalance(row.remaining_minutes)}</dd></div>
                                 </dl>
                                 <details className="text-xs print:hidden">
                                   <summary className="inline-flex min-h-[32px] cursor-pointer list-none items-center text-sm font-medium text-og-link underline underline-offset-2">
-                                    Hours balance
+                                    Hours left
                                   </summary>
                                   <dl className="mt-1 space-y-1 whitespace-nowrap">
-                                    <div><dt className="inline text-slate-500">Monthly limit: </dt><dd className="inline font-medium text-slate-900">{formatDuration(authorizedMinutes)}</dd></div>
-                                    <div><dt className="inline text-slate-500">Used this month: </dt><dd className="inline font-medium text-slate-900">{formatDuration(row.month_to_date_after_minutes)}</dd></div>
+                                    <div><dt className="inline text-slate-500">Authorized: </dt><dd className="inline font-medium text-slate-900">{formatDuration(authorizedMinutes)}</dd></div>
+                                    <div><dt className="inline text-slate-500">Billable this month: </dt><dd className="inline font-medium text-slate-900">{formatDuration(row.month_to_date_after_minutes)}</dd></div>
                                     <div><dt className="inline text-slate-500">Hours left: </dt><dd className="inline font-medium text-slate-900">{formatBalance(row.remaining_minutes)}</dd></div>
                                   </dl>
                                 </details>

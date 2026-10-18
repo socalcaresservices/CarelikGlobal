@@ -23,6 +23,8 @@ function toSnake<T>(row: Json): T {
   return Object.fromEntries(Object.entries(row).map(([k, v]) => [snake(k), v])) as T;
 }
 const hours = (minutes: unknown) => Number(minutes ?? 0) / 60;
+/** A server minutes figure that may be missing (an older server): null, never a false zero. */
+const num = (value: unknown): number | null => (value === null || value === undefined ? null : Number(value));
 const enc = encodeURIComponent;
 
 export interface AwsMembership {
@@ -71,6 +73,7 @@ export function createAwsServiceVerificationBackend(
         ...(row as unknown as ActiveVisit),
         max_monthly_hours: hours(row.monthly_authorized_minutes),
         confirmed_minutes_this_month: Number(row.confirmed_minutes_this_month ?? 0),
+        left_to_record_minutes: row.left_to_record_minutes === null || row.left_to_record_minutes === undefined ? null : Number(row.left_to_record_minutes),
       };
     },
     async listAssignedClients(organizationId) {
@@ -86,6 +89,10 @@ export function createAwsServiceVerificationBackend(
           max_monthly_hours: hours(row.monthly_authorized_minutes),
           hours_used_this_month: hours(row.minutes_used_this_month),
           hours_scheduled_this_month: hours(row.minutes_scheduled_this_month),
+          left_to_record_minutes: num(row.left_to_record_minutes),
+          hours_left_minutes: num(row.hours_left_minutes),
+          office_pending_minutes: num(row.office_pending_minutes),
+          office_reserved_minutes: num(row.office_reserved_minutes),
         };
       });
     },

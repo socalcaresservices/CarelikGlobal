@@ -279,7 +279,7 @@ const COLS = 6;
 /** One shift: desktop = a row of a compact table, phone = a compact row that opens. One primary action inline; the rest are in "More actions". */
 function ShiftRow({ s, canManage, onDone, highlight = false, autoAssign = false }: { s: Shift; canManage: boolean; onDone: (text: string) => void; highlight?: boolean; autoAssign?: boolean }) {
   const [action, setAction] = useState<Action>(null);
-  const [expanded, setExpanded] = useState(s.coverageState === "needs_coverage" || highlight);
+  const [expanded, setExpanded] = useState(stateOfShift(s) === "needs_coverage" || highlight);
   const narrow = useIsNarrow();
   const rowRef = useRef<HTMLElement>(null);
   useEffect(() => { if (highlight) rowRef.current?.scrollIntoView?.({ block: "center" }); }, [highlight]);
@@ -333,7 +333,7 @@ function ShiftRow({ s, canManage, onDone, highlight = false, autoAssign = false 
 
   if (narrow) {
     return (
-      <li ref={rowRef as RefObject<HTMLLIElement>} id={`shift-${s.shiftId}`} data-highlight={highlight ? "true" : undefined} className={`rounded-lg border bg-og-card ${tone} ${s.coverageState === "needs_coverage" ? "border-red-300" : "border-slate-200"}`}>
+      <li ref={rowRef as RefObject<HTMLLIElement>} id={`shift-${s.shiftId}`} data-highlight={highlight ? "true" : undefined} className={`rounded-lg border bg-og-card ${tone} ${stateOfShift(s) === "needs_coverage" ? "border-red-300" : "border-slate-200"}`}>
         <details open={expanded || action !== null} onToggle={(e) => setExpanded(e.currentTarget.open)}>
           <summary className="flex min-h-11 cursor-pointer items-center justify-between gap-2 px-3 py-1">
             <span className="min-w-0 text-sm"><span className="font-semibold text-slate-950">{when(s.startsAt)}</span> · {s.clientName ?? s.clientCode}</span>
@@ -351,7 +351,7 @@ function ShiftRow({ s, canManage, onDone, highlight = false, autoAssign = false 
     );
   }
   return (
-    <tbody ref={rowRef as RefObject<HTMLTableSectionElement>} id={`shift-${s.shiftId}`} data-highlight={highlight ? "true" : undefined} className={s.coverageState === "needs_coverage" ? "bg-red-50/40" : ""}>
+    <tbody ref={rowRef as RefObject<HTMLTableSectionElement>} id={`shift-${s.shiftId}`} data-highlight={highlight ? "true" : undefined} className={stateOfShift(s) === "needs_coverage" ? "bg-red-50/40" : ""}>
       <tr className={`border-t border-slate-200 align-top ${tone}`}>
         <td className="whitespace-nowrap py-1.5 pl-2 pr-3 font-semibold text-slate-950">{time(s.startsAt)}–{time(s.endsAt)}</td>
         <td className="py-1.5 pr-3"><Link className="underline" to={`/clients/${s.clientId}`}>{clientText}</Link></td>
@@ -414,12 +414,14 @@ export function SchedulePage() {
   const past = useShiftsToReconcile();
   const filtered = useMemo(() => applyFilters(shifts.data ?? [], filters), [shifts.data, filters]);
   // Upcoming shifts without a caregiver, by start time. They are listed once, in the first group; the day lists below hold everything else.
-  const uncovered = useMemo(() => filtered.filter((s) => s.coverageState === "needs_coverage" && new Date(s.startsAt).getTime() > Date.now()).sort((a, b) => a.startsAt.localeCompare(b.startsAt)), [filtered]);
+  // "Needs coverage" is the SERVER's decision (display state, 0075): a shift that has not ended and has nobody to work it. A running shift is included (it is Critical);
+  // an ended shift is never included (it is a past shift to review). The browser clock is not used.
+  const uncovered = useMemo(() => filtered.filter((s) => stateOfShift(s) === "needs_coverage").sort((a, b) => a.startsAt.localeCompare(b.startsAt)), [filtered]);
   const byDay = useMemo(() => {
     const out = new Map<string, Shift[]>();
     for (const s of filtered) {
       if (uncovered.includes(s)) continue;
-      if (onlyOpen && s.coverageState !== "needs_coverage") continue;
+      if (onlyOpen && stateOfShift(s) !== "needs_coverage") continue;
       out.set(s.localDate, [...(out.get(s.localDate) ?? []), s]);
     }
     return out;
@@ -474,7 +476,7 @@ export function SchedulePage() {
         <label className="flex min-h-11 items-center gap-2 text-sm text-slate-800 md:min-h-9"><input type="checkbox" checked={onlyOpen} onChange={(e) => setOnlyOpen(e.target.checked)} /> Needs coverage only</label>
         <FilterBar shifts={shifts.data ?? []} filters={filters} onChange={setFilters} />
       </div>
-      {view === "month" && shifts.data ? <MonthGrid anchor={from} shifts={filtered.filter((s) => !onlyOpen || s.coverageState === "needs_coverage")} onPickDay={(d) => { setView("day"); setFrom(d); }} /> : null}
+      {view === "month" && shifts.data ? <MonthGrid anchor={from} shifts={filtered.filter((s) => !onlyOpen || stateOfShift(s) === "needs_coverage")} onPickDay={(d) => { setView("day"); setFrom(d); }} /> : null}
       {view !== "month" && shifts.data && byDay.size === 0 ? <p className="text-sm text-slate-600">{onlyOpen ? `No other shift needs coverage this ${unit}.` : Object.values(filters).some(Boolean) ? "No other shifts match these filters." : uncovered.length > 0 ? `No other shifts this ${unit}.` : `No shifts this ${unit}.`}</p> : null}
       {view !== "month" ? [...byDay.entries()].map(([d, list]) => (
         <section key={d} aria-label={dayLabel(d)}>

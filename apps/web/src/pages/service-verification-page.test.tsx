@@ -245,6 +245,20 @@ describe("ServiceVerificationPage v3", () => {
     );
   });
 
+  it("shows the server's Left to record and names how the office Hours left differs (0079)", async () => {
+    mockRpcImplementation({
+      list_authorized_services_for_client: {
+        data: [{ ...authorizedService, hours_used_this_month: 24.5, left_to_record_minutes: 3330, hours_left_minutes: 3120, office_pending_minutes: 130, office_reserved_minutes: 80 }],
+        error: null,
+      },
+    });
+    renderPage();
+    fireEvent.click(await screen.findByRole("button", { name: /Client C-104/ }));
+    const note = await screen.findByTestId("caregiver-balance-note");
+    expect(note).toHaveTextContent("The office Hours left is lower by 1 hr 20 min Reserved for scheduled visits and 2 hr 10 min Pending.");
+    expect(screen.getByText("Left to record").previousElementSibling).toHaveTextContent("55 hr 30 min"); // the server's figure, not recomputed here
+  });
+
   it("requires an explicit choice when a client has nine services", async () => {
     const services = Array.from({ length: 9 }, (_, index) => ({
       ...authorizedService,

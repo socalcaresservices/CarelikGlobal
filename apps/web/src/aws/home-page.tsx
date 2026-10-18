@@ -1,3 +1,4 @@
+import { HOURS_DEFINITIONS, HOURS_EQUATION_TEXT, HOURS_TOTAL_NOTE } from "@/lib/hours-accounting";
 import { useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { Link } from "react-router-dom";
@@ -83,7 +84,10 @@ export function AwsHomePage() {
   const chartData = rows.filter((r) => r.workedMinutes > 0).map((r) => ({ label: r.serviceName, value: r.workedMinutes, display: hoursLabel(r.workedMinutes) }));
 
   const workedLabel = hoursLabel(sum(rows, "workedMinutes"));
-  const overLimit = sum(rows, "overLimitMinutes");
+  // 0079: the server's per-authorization buckets summed by service. Hours left adds only authorizations with time left and Over limit only those over (never netted).
+  const hasHoursData = rows.length > 0 && rows.every((r) => r.hoursLeftMinutes !== undefined && r.hoursLeftMinutes !== null);
+  const overLimit = hasHoursData ? sum(rows, "hoursOverLimitMinutes") : sum(rows, "overLimitMinutes");
+  const leftTotal = hasHoursData ? sum(rows, "hoursLeftMinutes") : sum(rows, "remainingMinutes");
   const billable = finance.items[0];
   return (
     <div className="space-y-5">
@@ -122,8 +126,8 @@ export function AwsHomePage() {
             {/* The summary line: the key figures and every warning stay visible whether the section is open or folded. */}
             <dl className="flex flex-wrap gap-x-8 gap-y-2" data-testid="hours-summary">
               <Stat label="Worked" value={workedLabel} />
-              <Stat label="Hours left" value={hoursLabel(sum(rows, "remainingMinutes"))} />
-              {overLimit > 0 ? <Stat label="Over the limit" value={hoursLabel(overLimit)} tone="red" /> : null}
+              <Stat label="Hours left" value={hoursLabel(leftTotal)} />
+              {overLimit > 0 ? <Stat label="Over limit" value={hoursLabel(overLimit)} tone="red" /> : null}
             </dl>
             {tierSummary ? (
               <p role="status" className="text-sm font-semibold text-amber-900" data-testid="authorization-tiers">
@@ -142,7 +146,7 @@ export function AwsHomePage() {
             ) : null}
             {!hoursFolded ? <dl className="grid grid-cols-2 gap-x-6 gap-y-3 border-t border-og-line pt-3">
               <Stat label="Authorized" value={hoursLabel(sum(rows, "authorizedMinutes"))} />
-              <Stat label="Billable (confirmed)" value={hoursLabel(sum(rows, "billableMinutes"))} />
+              <Stat label="Billable" value={hoursLabel(hasHoursData ? sum(rows, "hoursBillableMinutes") : sum(rows, "billableMinutes"))} />
             </dl> : null}
             {!hoursFolded && chartData.length > 0 ? <Chart title="Worked hours by service" data={chartData} shape="parts-of-whole" unit="worked hours" total={workedLabel} /> : null}
             {!hoursFolded ? <Disclosure summary="Hours by service, and how these are calculated">
@@ -153,16 +157,15 @@ export function AwsHomePage() {
                     <tr className="border-b border-og-line text-left text-xs font-semibold text-og-sub">
                       <th scope="col" className="py-2 pr-3">Service</th>
                       <th scope="col" className="px-3 py-2 text-right">Authorized</th>
-                      <th scope="col" className="px-3 py-2 text-right">Worked</th>
                       <th scope="col" className="px-3 py-2 text-right">Billable</th>
-                      <th scope="col" className="px-3 py-2 text-right">In review</th>
-                      <th scope="col" className="px-3 py-2 text-right">Approved</th>
-                      <th scope="col" className="px-3 py-2 text-right">Scheduled ahead</th>
-                      <th scope="col" className="px-3 py-2 text-right">Held for confirmation or review</th>
-                      <th scope="col" className="px-3 py-2 text-right">To reconcile</th>
-                      <th scope="col" className="px-3 py-2 text-right">Committed</th>
-                      <th scope="col" className="px-3 py-2 text-right">Left</th>
-                      <th scope="col" className="py-2 pl-3 text-right">Over limit</th>
+                      <th scope="col" className="px-3 py-2 text-right">Rounding</th>
+                      <th scope="col" className="px-3 py-2 text-right">Pending</th>
+                      <th scope="col" className="px-3 py-2 text-right">Reserved</th>
+                      <th scope="col" className="px-3 py-2 text-right">Hours left</th>
+                      <th scope="col" className="px-3 py-2 text-right">Over limit</th>
+                      <th scope="col" className="px-3 py-2 text-right">Worked</th>
+                      <th scope="col" className="px-3 py-2 text-right">Worked, not billable</th>
+                      <th scope="col" className="py-2 pl-3 text-right">Approved</th>
                     </tr>
                   </thead>
                   <tbody className="font-og-mono tabular-nums text-og-ink">
@@ -170,24 +173,24 @@ export function AwsHomePage() {
                       <tr key={r.serviceId} className="border-b border-og-line last:border-0">
                         <th scope="row" className="py-2 pr-3 text-left font-sans font-semibold">{r.serviceName} <span className="font-normal text-og-sub">({r.serviceCode} · {r.clientCount} {r.clientCount === 1 ? "client" : "clients"})</span></th>
                         <td className="px-3 py-2 text-right">{hoursLabel(r.authorizedMinutes)}</td>
+                        <td className="px-3 py-2 text-right">{hoursLabel(hasHoursData ? r.hoursBillableMinutes : r.billableMinutes)}</td>
+                        <td className="px-3 py-2 text-right">{hoursLabel(r.hoursRoundingMinutes ?? 0)}</td>
+                        <td className="px-3 py-2 text-right">{hoursLabel(hasHoursData ? r.hoursPendingMinutes : r.reviewMinutes)}</td>
+                        <td className={`px-3 py-2 text-right ${(r.needsReconciliationMinutes ?? 0) > 0 ? "font-semibold text-amber-900" : ""}`}>{hoursLabel(hasHoursData ? r.hoursReservedMinutes : (r.reservedMinutes ?? r.scheduledMinutes))}</td>
+                        <td className="px-3 py-2 text-right">{hoursLabel(hasHoursData ? r.hoursLeftMinutes : r.remainingMinutes)}</td>
+                        <td className={`px-3 py-2 text-right ${(hasHoursData ? r.hoursOverLimitMinutes : r.overLimitMinutes) ? "font-semibold text-red-700" : ""}`}>{hoursLabel(hasHoursData ? r.hoursOverLimitMinutes : r.overLimitMinutes)}</td>
                         <td className="px-3 py-2 text-right">{hoursLabel(r.workedMinutes)}</td>
-                        <td className="px-3 py-2 text-right">{hoursLabel(r.billableMinutes)}</td>
-                        <td className="px-3 py-2 text-right">{hoursLabel(r.reviewMinutes)}</td>
-                        <td className="px-3 py-2 text-right">{hoursLabel(r.approvedMinutes)}</td>
-                        <td className="px-3 py-2 text-right">{hoursLabel(r.scheduledMinutes)}</td>
-                        <td className="px-3 py-2 text-right">{hoursLabel(r.heldReviewMinutes ?? 0)}</td>
-                        <td className={`px-3 py-2 text-right ${(r.needsReconciliationMinutes ?? 0) > 0 ? "font-semibold text-amber-900" : ""}`}>{hoursLabel(r.needsReconciliationMinutes ?? 0)}</td>
-                        <td className="px-3 py-2 text-right">{hoursLabel(r.committedMinutes)}</td>
-                        <td className="px-3 py-2 text-right">{hoursLabel(r.remainingMinutes)}</td>
-                        <td className={`py-2 pl-3 text-right ${(r.overLimitMinutes ?? 0) > 0 ? "font-semibold text-red-700" : ""}`}>{hoursLabel(r.overLimitMinutes)}</td>
+                        <td className={`px-3 py-2 text-right ${(r.hoursWorkedNotBillableMinutes ?? 0) > 0 ? "font-semibold text-amber-900" : ""}`}>{hoursLabel(r.hoursWorkedNotBillableMinutes ?? 0)}</td>
+                        <td className="py-2 pl-3 text-right">{hoursLabel(r.approvedMinutes)}</td>
                       </tr>
                     ))}
                   </tbody>
                 </table>
               </div>
-              <p className="mt-2">Committed = billable + approved rounding adjustments + reserved. Authorized − committed = Left − Over limit.</p>
-              <p className="mt-1">Reserved is Scheduled ahead (including a shift that has started), Held for confirmation or review (the visit has ended or is in review), and To reconcile: ended with no visit record, released only by a person.</p>
-              <p className="mt-1">Left adds up each authorization's unused time only, so one over its limit never uses up another's hours.</p>
+              <p className="mt-2">{HOURS_EQUATION_TEXT}</p>
+              <p className="mt-1">Across authorizations: Authorized − Billable − Rounding − Pending − Reserved = Hours left − Over limit. {HOURS_TOTAL_NOTE}</p>
+              <p className="mt-1">Billable is confirmed time. Pending is {HOURS_DEFINITIONS.pending.charAt(0).toLowerCase()}{HOURS_DEFINITIONS.pending.slice(1)} Reserved is {HOURS_DEFINITIONS.reserved.charAt(0).toLowerCase()}{HOURS_DEFINITIONS.reserved.slice(1)} Rounding is shown only when an approved adjustment exists.</p>
+              <p className="mt-1">Worked, not billable is outside the equation: time worked beyond what counts as Billable or Pending (the billing cap, or a review closed as not billable). It is shown so no worked time is hidden.</p>
               <p className="mt-1">Healthy is below 80% committed, Near Limit 80% to below 95%, Critical 95% and above. An amended authorization counts once (its latest version).</p>
               <p className="mt-1">Billable means confirmed. Approved means a person approved it for billing. Neither means submitted or paid.</p>
               <p className="mt-1"><Link className="font-semibold text-og-link underline" to="/service-verification/reports?view=reconciliation">Monthly reconciliation by client and authorization</Link></p>

@@ -50,13 +50,14 @@ export function formatBalance(minutes: number | null | undefined): string {
 /**
  * The caregiver's "left to record": authorized minus time already confirmed this month (billable visits, approved rounding adjustments and
  * accepted late confirmations: the server's authorization_month_usage). It is SIGNED, so an over-limit month reads "Over by X", never 0.
+ * 0079: the server now returns this figure itself (left_to_record_minutes); this function is only the fallback for an older server.
  * It is deliberately NOT the office balance: the office also subtracts time held for scheduled visits (reservations), so the office figure
  * can be lower. This one is the room this visit's billable time is capped against (confirm_service_visit uses the same usage).
  */
 export function caregiverLeftMinutes(authorizedMinutes: number, confirmedMinutes: number): number {
   return Math.round(authorizedMinutes) - Math.round(confirmedMinutes);
 }
-export const CAREGIVER_BALANCE_NOTE = "Counts confirmed visits only. The office balance also holds time for scheduled visits, so it can be lower.";
+export const CAREGIVER_BALANCE_NOTE = "Counts confirmed time only. The office Hours left also deducts time that is Pending and Reserved for scheduled visits, so it can be lower.";
 
 /** The approved authorization tiers (Healthy below 80%, Near Limit 80% to below 95%, Critical 95% and above). The server decides; this only names them. */
 export type AuthorizationTier = "healthy" | "near_limit" | "critical";

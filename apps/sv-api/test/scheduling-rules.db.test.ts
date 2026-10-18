@@ -48,7 +48,7 @@ describe("work-hour policy (requirement 6)", () => {
     const nine = await call("POST /v1/shifts", w.managerA, { body: { organizationId: w.orgA, clientId: f.client, serviceId: f.service, date: day(4), startTime: "06:00", endTime: "15:00", caregiverRecordId: recA1 } });
     expect(nine.status, JSON.stringify(nine.body)).toBe(422);
     expect(nine.body.error.code).toBe("not_ready");
-    expect(nine.body.error.message).toMatch(/daily hour limit/i);
+    expect(nine.body.error.message).toMatch(/Daily limit exceeded: [\d.]+ of [\d.]+ h/);
     const eight = await call("POST /v1/shifts", w.managerA, { body: { organizationId: w.orgA, clientId: f.client, serviceId: f.service, date: day(4), startTime: "06:00", endTime: "14:00", caregiverRecordId: recA1 } });
     expect(eight.status, JSON.stringify(eight.body)).toBe(201);
     // the same limit applies to a series, the assignment of an open shift, and rescheduling

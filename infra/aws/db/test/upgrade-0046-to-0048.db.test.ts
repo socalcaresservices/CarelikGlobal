@@ -48,7 +48,7 @@ async function fingerprints() {
 }
 
 beforeAll(async () => {
-  db = await createTestDb(); // migrated from zero (0001-0077)
+  db = await createTestDb(); // migrated from zero (0001-0080)
   w = await seedWorld(db, 600);
 });
 afterAll(async () => db?.drop());
@@ -56,6 +56,9 @@ afterAll(async () => db?.drop());
 describe("upgrade from 0046 to 0048 on a populated database", () => {
   it("changes no existing row; adds one permission and its owner grant; legacy overrides stay readable; the runner applies exactly 0047 and 0048", async () => {
     // Put the database back at 0046 (the state production is expected to be in), exactly as the rollback does.
+    await runDown("0080_attention_counts_one_definition.down.sql");
+    await runDown("0079_hours_accounting_one_bucket.down.sql");
+    await runDown("0078_assignment_outcome_and_limit_messages.down.sql");
     await runDown("0077_attention_counts_and_in_app_notifications.down.sql");
     await runDown("0076_agency_performance_audit_report.down.sql");
     await runDown("0075_shift_display_states.down.sql");
@@ -106,7 +109,7 @@ describe("upgrade from 0046 to 0048 on a populated database", () => {
     const client = await db.admin.connect();
     let applied: string[];
     try { applied = (await migrate(client)).applied.map((x) => x.slice(0, 4)); } finally { client.release(); }
-    expect(applied).toEqual(["0047", "0048", "0049", "0050", "0051", "0052", "0053", "0054", "0055", "0056", "0057", "0058", "0059", "0060", "0061", "0062", "0063", "0064", "0065", "0066", "0067", "0068", "0069", "0070", "0071", "0072", "0073", "0074", "0075", "0076", "0077"]); // 0049-0076 add functions, tables and nullable columns only; they change no row
+    expect(applied).toEqual(["0047", "0048", "0049", "0050", "0051", "0052", "0053", "0054", "0055", "0056", "0057", "0058", "0059", "0060", "0061", "0062", "0063", "0064", "0065", "0066", "0067", "0068", "0069", "0070", "0071", "0072", "0073", "0074", "0075", "0076", "0077", "0078", "0079", "0080"]); // 0049-0076 add functions, tables and nullable columns only; they change no row
 
     const after = await fingerprints();
     expect(after).toEqual(before); // NO existing row, in any table, changed or disappeared

@@ -73,11 +73,11 @@ describe("the daily limit: exactly 8 hours passes, one minute over fails", () =>
     await shift(w.managerA, w.orgA, fx2, day(0), "16:00", "17:00", recA2); // +60 = 480: allowed
     const fx3 = await world(w.caregiverA3);
     await shift(w.managerA, w.orgA, fx3, day(0), "08:00", "15:00", recA3); // 420
-    await expectPgError(shift(w.managerA, w.orgA, fx3, day(0), "16:00", "17:01", recA3), "OGR30", /daily hour limit/i); // 481
+    await expectPgError(shift(w.managerA, w.orgA, fx3, day(0), "16:00", "17:01", recA3), "OGR30", /Daily limit exceeded: [\d.]+ of [\d.]+ h/); // 481
   });
   it("a single 8 h 01 min shift is refused", async () => {
     const fx = await world();
-    await expectPgError(shift(w.managerA, w.orgA, fx, day(1), "08:00", "16:01", recA1), "OGR30", /daily hour limit/i);
+    await expectPgError(shift(w.managerA, w.orgA, fx, day(1), "08:00", "16:01", recA1), "OGR30", /Daily limit exceeded: [\d.]+ of [\d.]+ h/);
   });
 });
 
@@ -85,7 +85,7 @@ describe("the weekly limit: exactly 40 hours passes, one minute over fails", () 
   it("five 8 h days pass; a further 1 minute in the same week is refused; the next Monday is a new week", async () => {
     const fx = await world(w.caregiverA2);
     for (let i = 0; i < 5; i++) await shift(w.managerA, w.orgA, fx, day(7 + i), "08:00", "16:00", recA2); // Mon-Fri = 2400
-    await expectPgError(shift(w.managerA, w.orgA, fx, day(12), "08:00", "08:15", recA2), "OGR30", /weekly hour limit/i); // Saturday
+    await expectPgError(shift(w.managerA, w.orgA, fx, day(12), "08:00", "08:15", recA2), "OGR30", /Weekly limit exceeded: [\d.]+ of [\d.]+ h/); // Saturday
     await shift(w.managerA, w.orgA, fx, day(14), "08:00", "16:00", recA2); // next Monday: a new week
   });
 });
@@ -96,10 +96,10 @@ describe("no manager override", () => {
     const set = (cg: string | null, d: number | null, wk: number | null, mode: string) => q(w.managerA, "select ogevia_api.set_hour_limit($1,$2,$3,$4,$5,'Synthetic attempt to loosen')", [w.orgA, cg, d, wk, mode]);
     await set(recA3, 1440, 10080, "report"); // the loosest a manager can write
     await set(null, 1440, 10080, "report");
-    await expectPgError(shift(w.managerA, w.orgA, fx, day(21), "06:00", "15:01", recA3), "OGR30", /daily hour limit/i); // 9 h 01
+    await expectPgError(shift(w.managerA, w.orgA, fx, day(21), "06:00", "15:01", recA3), "OGR30", /Daily limit exceeded: [\d.]+ of [\d.]+ h/); // 9 h 01
     await set(recA3, null, null, "report"); // delete the per-caregiver row
     await set(null, null, null, "report");
-    await expectPgError(shift(w.managerA, w.orgA, fx, day(21), "06:00", "15:01", recA3), "OGR30", /daily hour limit/i);
+    await expectPgError(shift(w.managerA, w.orgA, fx, day(21), "06:00", "15:01", recA3), "OGR30", /Daily limit exceeded: [\d.]+ of [\d.]+ h/);
     // no function that creates or moves a shift takes an override of any kind
     const risky = (await admin(
       `select p.proname from pg_proc p join pg_namespace n on n.oid = p.pronamespace
@@ -110,12 +110,12 @@ describe("no manager override", () => {
   it("a stricter manager-set limit still applies on top of the policy", async () => {
     const fx = await world(w.caregiverA3);
     await q(w.managerA, "select ogevia_api.set_hour_limit($1,$2,240,null,'block','Synthetic stricter limit')", [w.orgA, recA3]);
-    await expectPgError(shift(w.managerA, w.orgA, fx, day(28), "08:00", "13:00", recA3), "OGR30", /daily hour limit/i); // 5 h > 4 h
+    await expectPgError(shift(w.managerA, w.orgA, fx, day(28), "08:00", "13:00", recA3), "OGR30", /Daily limit exceeded: [\d.]+ of [\d.]+ h/); // 5 h > 4 h
     await q(w.managerA, "select ogevia_api.set_hour_limit($1,$2,null,null,'block','Synthetic removal')", [w.orgA, recA3]);
     // a per-caregiver row with only a daily value does not drop the weekly limit
     await q(w.managerA, "select ogevia_api.set_hour_limit($1,$2,480,null,'block','Synthetic daily only')", [w.orgA, recA3]);
     for (let i = 0; i < 5; i++) await shift(w.managerA, w.orgA, fx, day(35 + i), "08:00", "16:00", recA3);
-    await expectPgError(shift(w.managerA, w.orgA, fx, day(40), "08:00", "09:00", recA3), "OGR30", /weekly hour limit/i);
+    await expectPgError(shift(w.managerA, w.orgA, fx, day(40), "08:00", "09:00", recA3), "OGR30", /Weekly limit exceeded: [\d.]+ of [\d.]+ h/);
   });
 });
 
@@ -132,17 +132,17 @@ describe("hours are counted across midnight and the week boundary (shifts writte
     const fx = await world(w.caregiverA1);
     await direct(fx, recA1, day(49), "22:00", "06:00", true); // 8 h: 2 h on day 49, 6 h on day 50
     await shift(w.managerA, w.orgA, fx, day(50), "06:00", "08:00", recA1); // 6 + 2 = 8: allowed
-    await expectPgError(shift(w.managerA, w.orgA, fx, day(50), "08:00", "08:15", recA1), "OGR30", /daily hour limit/i); // 8 h 15 on day 50
+    await expectPgError(shift(w.managerA, w.orgA, fx, day(50), "08:00", "08:15", recA1), "OGR30", /Daily limit exceeded: [\d.]+ of [\d.]+ h/); // 8 h 15 on day 50
     await expect(direct(fx, recA1, day(50), "23:00", "03:00", true)).rejects.toMatchObject({ code: "OGR30" }); // 1 h on day 50 would make 9 h
   });
   it("a shift that crosses Sunday midnight counts its Monday part in the next week", async () => {
     const fx = await world(w.caregiverA2);
     for (let i = 0; i < 5; i++) await shift(w.managerA, w.orgA, fx, day(56 + i), "08:00", "16:00", recA2); // Mon-Fri = 2400, the week is full
-    await expect(direct(fx, recA2, day(62), "20:00", "04:00", true)).rejects.toMatchObject({ code: "OGR30", message: /weekly hour limit/i }); // 4 h of it falls in this week
+    await expect(direct(fx, recA2, day(62), "20:00", "04:00", true)).rejects.toMatchObject({ code: "OGR30", message: /Weekly limit exceeded: [\d.]+ of [\d.]+ h/ }); // 4 h of it falls in this week
     const fx3 = await world(w.caregiverA3);
     for (let i = 0; i < 4; i++) await shift(w.managerA, w.orgA, fx3, day(63 + i), "08:00", "16:00", recA3); // Mon-Thu = 1920
     await direct(fx3, recA3, day(69), "20:00", "04:00", true); // Sun 20:00 - Mon 04:00: 4 h here (2160), 4 h next week
-    await expectPgError(shift(w.managerA, w.orgA, fx3, day(70), "08:00", "13:00", recA3), "OGR30", /daily hour limit/i); // Monday already holds 4 h of the spill: 9 h
+    await expectPgError(shift(w.managerA, w.orgA, fx3, day(70), "08:00", "13:00", recA3), "OGR30", /Daily limit exceeded: [\d.]+ of [\d.]+ h/); // Monday already holds 4 h of the spill: 9 h
     await shift(w.managerA, w.orgA, fx3, day(70), "08:00", "12:00", recA3); // 4 + 4 = 8 h on Monday
   });
 });
@@ -153,7 +153,7 @@ describe("rescheduling does not count the shift's own old time", () => {
     const s = await shift(w.managerA, w.orgA, fx, day(77), "08:00", "16:00", recA1);
     const move = (date: string, a: string, b: string) => q(w.managerA, "select * from ogevia_api.reschedule_shift($1,$2,$3::date,$4::time,$5::time,'Synthetic move',$6)", [w.orgA, s.shift_id, date, a, b, randomUUID()]);
     await move(day(77), "09:00", "17:00");
-    await expectPgError(move(day(77), "09:00", "18:00"), "OGR30", /daily hour limit/i);
+    await expectPgError(move(day(77), "09:00", "18:00"), "OGR30", /Daily limit exceeded: [\d.]+ of [\d.]+ h/);
   });
 });
 
@@ -181,7 +181,7 @@ describe("assigning an open shift or a replacement is held to the limit too", ()
     const fx = await world(w.caregiverA1);
     await shift(w.managerA, w.orgA, fx, day(105), "08:00", "16:00", recA1);
     const open = await shift(w.managerA, w.orgA, fx, day(105), "17:00", "18:00", null);
-    await expectPgError(q(w.managerA, "select ogevia_api.assign_shift_caregiver($1,$2,$3,'Synthetic fill',$4)", [w.orgA, open.shift_id, recA1, randomUUID()]), "OGR30", /daily hour limit/i);
+    await expectPgError(q(w.managerA, "select ogevia_api.assign_shift_caregiver($1,$2,$3,'Synthetic fill',$4)", [w.orgA, open.shift_id, recA1, randomUUID()]), "OGR30", /Daily limit exceeded: [\d.]+ of [\d.]+ h/);
     const s = (await admin("select caregiver_record_id from ogevia.shifts where id = $1", [open.shift_id])).rows[0];
     expect(s.caregiver_record_id).toBeNull();
   });

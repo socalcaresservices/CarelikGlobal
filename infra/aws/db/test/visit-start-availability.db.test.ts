@@ -233,7 +233,7 @@ describe("after activation: new visit starts need approved availability", () => 
     // Enforced service approval
     await serviceChecks(w.ownerA, true);
     await db.admin.query("delete from ogevia.caregiver_service_approvals where caregiver_record_id = $1 and service_id = $2", [recA1, f2.service]);
-    expect(await attemptOv(w.caregiverA1, f2, recA1)).toMatch(/^OGR30: Not approved for this service\./);
+    expect(await attemptOv(w.caregiverA1, f2, recA1)).toMatch(/^OGR30: Service not approved/);
     await serviceChecks(w.ownerA, false);
     // Caregiver status
     await db.admin.query("delete from ogevia.availability_overrides where consumed_at is null");
