@@ -290,3 +290,16 @@ Migration 0056; release folder `docs/releases/2026-10-18-interface-simplificatio
 
 ## Adding to this catalog
 Every new feature adds its rows in the same change, with all of: ID, What, How, Expected (exact), If it fails. A defect found in production or UAT adds a **permanent** regression row. When a defect marked `OPEN DEFECT` is fixed, remove `.fails` from its test, remove the tag here, and add the row's `R` mark if the area is high-risk.
+
+
+## Release candidate additions (2026-10-18)
+
+| ID | Area | Test |
+|---|---|---|
+| ISS | Stable issue identity, queues, history | `action-issues.db.test.ts`, sv-api `action-issues`, web `action-needed-page.test.tsx` |
+| DLN | Agency-set shorter deadlines | `action-issues.db.test.ts` |
+| CLD | Client documents, readiness, holds, audit, duplicates | `client-readiness.db.test.ts`, sv-api `client-documents`, web `client-closure.test.tsx` |
+| SDS | Shift display states | `shift-display-states.db.test.ts`, web `schedule-closure.test.tsx` |
+| PRF | Agency performance, audit report, billing-review export | `agency-performance-audit.db.test.ts`, `reporting-closure` (sv-api, web) |
+| UPG | Populated upgrade 0052 to final and back | `upgrade-0052-to-final.db.test.ts` |
+| ENF | Enforcement enabled on synthetic fixtures | `final-enforcement.db.test.ts` |
