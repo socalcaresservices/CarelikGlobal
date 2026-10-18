@@ -236,7 +236,7 @@ await mp.goto("https://localhost/clients"); await settle(mp, 1200);
 await mp.getByRole("link", { name: /Demo Scenario/ }).first().click(); await settle(mp, 1500);
 const clientUrl = mp.url();
 rec("client page: three primary actions, More, alerts, next visits, caregivers, readiness and documents are present", (await mp.getByRole("navigation", { name: "Client actions" }).count()) === 1 && (await mp.getByTestId("next-visits").count()) === 1 && (await mp.getByTestId("caregiver-summary").count()) === 1 && (await mp.getByTestId("readiness-card").count()) === 1 && (await mp.getByTestId("client-documents").count()) === 1 && (await mp.getByTestId("client-alerts").count()) === 1);
-const order = await mp.evaluate(() => ["Authorizations", "Next visits", "Caregivers", "Readiness", "Documents", "Details"].map((t) => [...document.querySelectorAll("h2")].find((h) => h.textContent?.trim() === t)?.getBoundingClientRect().top ?? -1));
+const order = await mp.evaluate(() => ["Authorizations", "Next visits", "Caregivers", "Readiness", "Documents", "Details"].map((t) => { const h = [...document.querySelectorAll("h2")].find((x) => x.textContent?.trim() === t); return h ? h.getBoundingClientRect().top + window.scrollY : -1; }));
 rec("client page: authorization comes before the schedule, caregivers, readiness, documents and details", order.every((v, k) => v >= 0 && (k === 0 || v > order[k - 1])), JSON.stringify(order));
 rec("client page: details are read-only until Edit", (await mp.getByTestId("details-readonly").count()) === 1);
 rec("client page: no sideways scroll", await noOverflow(mp));
@@ -246,7 +246,7 @@ await mp.getByRole("button", { name: "Set up required documents" }).click(); awa
 const setup = mp.getByTestId("document-setup");
 await setup.getByLabel("New document type").fill("Consent to care (browser)");
 await setup.getByRole("button", { name: "Add the document type" }).click(); await mp.waitForTimeout(1200);
-await setup.getByLabel(/Required for/).first().check(); await mp.waitForTimeout(1200);
+await setup.getByLabel("Required for Respite").first().click(); await mp.waitForTimeout(1500);
 await mp.getByRole("button", { name: "Move to Draft…" }).click(); await mp.waitForTimeout(1200);
 rec("client page: Draft says it cannot be scheduled", /Cannot be scheduled/.test(await mp.getByTestId("readiness-card").innerText()) && /Draft/.test(await mp.getByTestId("client-stage").innerText()));
 await mp.getByTestId("readiness-card").getByRole("button", { name: "Activate" }).click(); await mp.waitForTimeout(1200);
