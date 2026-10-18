@@ -82,6 +82,19 @@ describe("Add shift shows one overall outcome", () => {
     expect(screen.getByRole("button", { name: "Schedule shift" })).toBeEnabled();
   }, 30000);
 
+  it("when the hour limit blocks, the outcome names it instead of a generic failed check, and the report-only warning is not the reason", async () => {
+    const hoursBlocked = [
+      ...checks.filter((c) => c.check !== "cpr" && c.check !== "service"),
+      { check: "hours", status: "blocked", code: "daily_hour_limit", message: "Over the daily hour limit.", enforced: true, blocking: true },
+      { check: "service", status: "blocked", code: "service_not_approved", message: "Not approved for this service.", enforced: false, blocking: false },
+    ];
+    renderAws("/schedule", PERMS, { ...handlers(false), "POST /v1/readiness/evaluate": () => json(200, { evaluation: { startsAt: "2026-10-20T16:00:00Z", endsAt: "2026-10-20T19:00:00Z", ready: false, wouldBlockAfterActivation: true, checks: hoursBlocked } }) });
+    await fill();
+    const panel = await screen.findByRole("region", { name: "Assignment checks" });
+    expect(within(panel).getByTestId("assignment-outcome")).toHaveTextContent("Cannot be assigned: Over the daily hour limit.");
+    expect(within(panel).getByText("Hours and limits:")).toBeInTheDocument();
+  }, 30000);
+
   it("after an authorization refusal the outcome says Not scheduled, with how to fix it, and the caregiver checks no longer read as the result", async () => {
     const { calls } = renderAws("/schedule", PERMS, handlers(true));
     await fill();

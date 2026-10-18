@@ -25,12 +25,15 @@ export interface AssignmentCheckInput {
 
 interface Evaluation { startsAt: string; endsAt: string; ready: boolean; wouldBlockAfterActivation: boolean; checks: CheckRow[] }
 
+/** The four checks, plus hours: the server can refuse on the hour limits, and that refusal must be named, not summarized as "a required check". */
+const GROUPS = [...CHECK_GROUPS, { key: "hours", title: "Hours and limits", checks: ["hours"] }];
+
 const STATE_TEXT = { ok: "OK", blocked: "", would_block: "", overridden: "", not_checked: "Not checked" } as const;
 
 /** The overall caregiver-check result as one line: passed, passed with warnings, or the first blocking reason. */
 function checksOutcome(ev: Evaluation): { tone: "ok" | "warn" | "bad"; text: string } {
   if (!ev.ready) {
-    const first = CHECK_GROUPS.map((g) => groupOutcome(ev.checks, g)).find((o) => o.state === "blocked")?.messages[0];
+    const first = GROUPS.map((g) => groupOutcome(ev.checks, g)).find((o) => o.state === "blocked")?.messages[0] ?? ev.checks.find((c) => c.blocking)?.message;
     return { tone: "bad", text: `Cannot be assigned: ${first ?? "a required check failed."}` };
   }
   return ev.wouldBlockAfterActivation ? { tone: "warn", text: "Caregiver checks passed with warnings" } : { tone: "ok", text: "Caregiver checks passed" };
@@ -73,7 +76,7 @@ export function AssignmentChecks({ input, onReady, outcome, note }: { input: Ass
   const availability = groupOutcome(ev.checks, CHECK_GROUPS[0]!);
   const canOverride = availability.state === "blocked" && !!input?.clientId && hasPermission("availability.override");
   const result = checksOutcome(ev);
-  const rows = CHECK_GROUPS.map((g) => ({ g, o: groupOutcome(ev.checks, g) }));
+  const rows = GROUPS.map((g) => ({ g, o: groupOutcome(ev.checks, g) }));
   const shown = rows.filter(({ o }) => o.state !== "ok" && o.state !== "not_checked");
   const row = ({ g, o }: (typeof rows)[number]) => {
     const tone = o.state === "blocked" ? "text-red-800" : o.state === "would_block" ? "text-amber-900" : "text-slate-800";
