@@ -303,3 +303,5 @@ Every new feature adds its rows in the same change, with all of: ID, What, How, 
 | PRF | Agency performance, audit report, billing-review export | `agency-performance-audit.db.test.ts`, `reporting-closure` (sv-api, web) |
 | UPG | Populated upgrade 0052 to final and back | `upgrade-0052-to-final.db.test.ts` |
 | ENF | Enforcement enabled on synthetic fixtures | `final-enforcement.db.test.ts` |
+| NTF | In-app notifications | `attention-counts-notifications.db.test.ts`, sv-api `notifications`, web `notifications-bell.test.tsx` |
+| CNT | Sidebar and Action-needed counts equal the list | `attention-counts-notifications.db.test.ts`, `authorization-accounting-risks.db.test.ts` F2/F4 |

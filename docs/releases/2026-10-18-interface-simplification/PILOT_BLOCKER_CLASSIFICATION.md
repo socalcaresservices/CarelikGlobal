@@ -1,6 +1,6 @@
 # Pilot-blocker classification of the open matrix rows
 
-**Update 2026-10-18 (release candidate, migrations through 0076): this matrix is superseded as the status record by `RELEASE_CANDIDATE_CLOSURE.md`, which closes all 88 rows against the final code (64 complete with no open item, 18 complete with a stated limit/decision/external step, 2 external checks, 2 deferred pending owner decision, 1 open owner decision, 1 superseded). The row text and "Status now" cells below are as of the earlier HEAD and are kept as history.**
+**Update 2026-10-18 (release candidate, migrations through 0076): this matrix is superseded as the status record by `RELEASE_CANDIDATE_CLOSURE.md`, which closes all 88 rows against the final code (see the summary line in that document). The row text and "Status now" cells below are as of the earlier HEAD and are kept as history.**
 
 Local, 2026-10-17, updated after batch 7 (migrations through 0072). Source: `FIVE_BOARD_MATRIX_88.md` (88 requirement IDs). **54 rows are not IMPLEMENTED** (38 PARTIAL, 14 MISSING, 2 UNVERIFIABLE; B1-R2 was decided by the owner and is SUPERSEDED). Every one is classified below. Nothing is silently dropped.
 

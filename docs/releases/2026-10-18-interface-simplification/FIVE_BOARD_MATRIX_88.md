@@ -1,6 +1,6 @@
 # Ogevia five-board evidence matrix (88 requirement IDs)
 
-**Update 2026-10-18 (release candidate, migrations through 0076): this matrix is superseded as the status record by `RELEASE_CANDIDATE_CLOSURE.md`, which closes all 88 rows against the final code (64 complete with no open item, 18 complete with a stated limit/decision/external step, 2 external checks, 2 deferred pending owner decision, 1 open owner decision, 1 superseded). The row text and "Status now" cells below are as of the earlier HEAD and are kept as history.**
+**Update 2026-10-18 (release candidate, migrations through 0076): this matrix is superseded as the status record by `RELEASE_CANDIDATE_CLOSURE.md`, which closes all 88 rows against the final code (see the summary line in that document). The row text and "Status now" cells below are as of the earlier HEAD and are kept as history.**
 
 Read-only analysis. Repository: /home/user/CarelikGlobal, branch `integration/compliance-attention-onto-scheduling-recruiting`, HEAD `510c287` (migrations up to 0064). Approved requirements: handoff pages at /tmp/claude-0/handoff/x/*.md. Earlier comparison: `docs/releases/2026-10-18-interface-simplification/FIVE_BOARD_COMPARISON.md` (commit a9a7d2ee) with its addenda 10-12 and README sections 12-14.
 
