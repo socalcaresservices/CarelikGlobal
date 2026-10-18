@@ -102,7 +102,7 @@ export function RefreshStatus({ overview, loading, failed, refreshing, onRefresh
   return (
     <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
       <p className="text-xs text-og-sub" data-testid="updated-at">{time ? `Updated ${time}` : f.kind === "loading" ? "Checking…" : "Not updated"}</p>
-      <button type="button" onClick={onRefresh} disabled={refreshing} className="inline-flex min-h-[44px] items-center rounded-lg border border-og-line bg-og-card px-3 text-sm font-semibold text-og-ink hover:bg-og-page disabled:opacity-60 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-og-link md:min-h-[40px]">
+      <button type="button" onClick={onRefresh} disabled={refreshing} className="inline-flex min-h-[44px] items-center rounded-lg border border-og-line bg-og-card px-3 text-sm font-semibold text-og-ink hover:bg-og-page disabled:bg-slate-100 disabled:text-slate-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-og-link md:min-h-[40px]">
         {refreshing ? "Refreshing…" : f.kind === "unavailable" || (f.kind === "stale" && f.reason === "refresh_failed") ? "Retry" : "Refresh"}
       </button>
       {warn ? <p role="status" className="basis-full text-sm font-semibold text-amber-900"><span aria-hidden="true">▲ </span>{warn}</p> : null}

@@ -128,9 +128,11 @@ describe("authorization changes to review", () => {
   it("lists what the amendment affected, says nothing was changed, and acknowledging needs a note", async () => {
     const { calls } = renderAt("/authorization-impacts", ["authorizations.update", "shifts.manage"]);
     const item = await screen.findByTestId("amendment-impact", {}, { timeout: 15000 });
-    expect(item).toHaveTextContent("Client CL-1 · Personal care · version 2 (2 hr a month)");
+    const group = screen.getByTestId("amendment-group");
+    expect(within(group).getByRole("heading", { level: 2 })).toHaveTextContent("Client CL-1 · Personal care · version 2 (2 hr a month)");
+    expect(group).toHaveTextContent("Amended by Olivia Owner");
     expect(item).toHaveTextContent("This reserved shift no longer fits the new monthly limit.");
-    expect(item).toHaveTextContent("Amended by Olivia Owner");
+    expect(item).not.toHaveTextContent("Amended by");
     expect(screen.getByText(/changed, released and re-billed nothing/)).toBeInTheDocument();
     fireEvent.click(within(item).getByRole("button", { name: "Acknowledge…" }));
     fireEvent.click(within(item).getByRole("button", { name: "Acknowledge" }));

@@ -42,7 +42,7 @@ function ExportHistory() {
   if (!allowed || !q.data || q.data.length === 0) return null;
   return (
     <details className="print:hidden" data-testid="export-history">
-      <summary className="cursor-pointer text-sm font-semibold text-slate-800">Export history ({q.data.length})</summary>
+      <summary className="inline-flex min-h-6 cursor-pointer items-center [@media(pointer:coarse)]:min-h-[44px] text-sm font-semibold text-slate-800">Export history ({q.data.length})</summary>
       <ul className="mt-1 space-y-1 text-sm text-slate-700">
         {q.data.slice(0, 20).map((e) => (
           <li key={e.exportId}>{new Date(e.requestedAt).toLocaleString()} · {e.requestedByName ?? "Someone"} · {REPORT_LABEL[e.reportKey] ?? e.reportKey} · {e.rowCount === null ? "" : `${e.rowCount} row${e.rowCount === 1 ? "" : "s"} · `} {STATUS_TEXT[e.status] ?? e.status}</li>

@@ -307,8 +307,8 @@ function LineageCard({ versions, canUpdate, showRate }: { versions: Authorizatio
       <p className="mt-1 text-sm text-slate-800">{formatDuration(head.monthlyAuthorizedMinutes)} per month · {fmtDate(head.periodStart)} to {fmtDate(head.periodEnd)}</p>
       <p className="text-sm text-slate-600">{head.payer}{head.authorizationNumber ? ` · No. ${head.authorizationNumber}` : ""}{showRate && head.hourlyRateCents !== null ? ` · ${formatRate(head.hourlyRateCents)}` : ""}</p>
       {head.versionNumber > 1 && head.changeReason ? <p className="text-xs text-slate-500">Latest change: {head.changeReason}{head.createdByName ? ` (${head.createdByName})` : ""}</p> : null}
-      {canUpdate && head.isCurrent && !amending ? <button type="button" className="mt-2 text-sm font-medium text-slate-800 underline" onClick={() => { setAmending("amend"); setResult(null); }}>Amend</button> : null}
-      {canUpdate && head.isCurrent && !amending && (expired || endingSoon) ? <button type="button" data-testid="renew-authorization" className="ml-3 mt-2 text-sm font-semibold text-slate-900 underline" onClick={() => { setAmending("renew"); setResult(null); }}>Renew…</button> : null}
+      {canUpdate && head.isCurrent && !amending ? <button type="button" className="mt-2 inline-flex min-h-6 items-center text-sm font-medium text-slate-800 underline [@media(pointer:coarse)]:min-h-[44px]" onClick={() => { setAmending("amend"); setResult(null); }}>Amend</button> : null}
+      {canUpdate && head.isCurrent && !amending && (expired || endingSoon) ? <button type="button" data-testid="renew-authorization" className="ml-3 mt-2 inline-flex min-h-6 items-center text-sm font-semibold text-slate-900 underline [@media(pointer:coarse)]:min-h-[44px]" onClick={() => { setAmending("renew"); setResult(null); }}>Renew…</button> : null}
       {amending ? <AmendForm current={head} renewal={amending === "renew"} onDone={(r) => { setAmending(false); setResult(r); }} /> : null}
       {result ? (
         <div role="status" className="mt-2 rounded-lg bg-emerald-50 p-2 text-sm text-emerald-900">
@@ -329,7 +329,7 @@ function LineageCard({ versions, canUpdate, showRate }: { versions: Authorizatio
       ) : null}
       {versions.length > 1 ? (
         <details className="mt-2">
-          <summary className="cursor-pointer text-sm text-slate-700">History ({versions.length - 1} earlier version{versions.length === 2 ? "" : "s"})</summary>
+          <summary className="inline-flex min-h-6 cursor-pointer items-center [@media(pointer:coarse)]:min-h-[44px] text-sm text-slate-700">History ({versions.length - 1} earlier version{versions.length === 2 ? "" : "s"})</summary>
           <ul className="mt-1 space-y-1">
             {versions.slice(1).map((v) => (
               <li key={v.authorizationId} className="text-sm text-slate-600">

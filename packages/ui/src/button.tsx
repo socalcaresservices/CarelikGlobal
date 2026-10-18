@@ -24,10 +24,10 @@ export type ButtonSize = "sm" | "md";
 // on.
 const variantClasses: Record<ButtonVariant, string> = {
   primary:
-    "bg-[var(--color-accent,#0f172a)] text-[var(--color-accent-foreground,#ffffff)] hover:opacity-90 disabled:opacity-40",
-  secondary: "border border-slate-200 bg-og-card text-slate-900 hover:bg-slate-50 disabled:text-slate-400",
-  ghost: "text-slate-600 hover:bg-slate-100 disabled:text-slate-300",
-  danger: "bg-red-600 text-white hover:bg-red-700 disabled:bg-red-300"
+    "bg-[var(--color-accent,#0f172a)] text-[var(--color-accent-foreground,#ffffff)] hover:opacity-90 disabled:bg-slate-200 disabled:text-slate-600 disabled:hover:opacity-100",
+  secondary: "border border-slate-200 bg-og-card text-slate-900 hover:bg-slate-50 disabled:bg-slate-100 disabled:text-slate-500 disabled:hover:bg-slate-100",
+  ghost: "text-slate-600 hover:bg-slate-100 disabled:text-slate-500 disabled:hover:bg-transparent",
+  danger: "bg-red-600 text-white hover:bg-red-700 disabled:bg-slate-200 disabled:text-slate-600 disabled:hover:bg-slate-200"
 };
 
 const sizeClasses: Record<ButtonSize, string> = {

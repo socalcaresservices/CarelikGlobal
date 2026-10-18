@@ -166,7 +166,7 @@ export function RecurringSeriesForm({ today, series, onDone }: { today: string; 
         <div className="mt-1 flex flex-wrap gap-2">
           {WEEKDAY_SHORT.map((label, d) => (
             <label key={label} className="flex min-h-[40px] items-center gap-1 rounded-lg border border-slate-200 bg-og-card px-2 text-sm">
-              <input type="checkbox" checked={form.weekdays.includes(d)}
+              <input type="checkbox" className="h-5 w-5" checked={form.weekdays.includes(d)}
                 onChange={(e) => set("weekdays", e.target.checked ? [...form.weekdays, d].sort() : form.weekdays.filter((x) => x !== d))} />
               {label}
             </label>
@@ -199,7 +199,7 @@ export function RecurringSeriesForm({ today, series, onDone }: { today: string; 
           <div className="flex flex-wrap items-end gap-2" role="group" aria-label="Which of the month's matching days">
             {[1, 2, 3, 4, 5].map((n) => (
               <label key={n} className="flex min-h-[40px] items-center gap-1 rounded-lg border border-slate-200 bg-og-card px-2 text-sm">
-                <input type="checkbox" checked={rule.nth.includes(n)} onChange={(e) => setRuleField("nth", e.target.checked ? [...rule.nth, n] : rule.nth.filter((x) => x !== n))} />
+                <input type="checkbox" className="h-5 w-5" checked={rule.nth.includes(n)} onChange={(e) => setRuleField("nth", e.target.checked ? [...rule.nth, n] : rule.nth.filter((x) => x !== n))} />
                 {["1st", "2nd", "3rd", "4th", "5th"][n - 1]}
               </label>
             ))}
@@ -296,7 +296,7 @@ function SeriesItem({ s, today, onDone }: { s: SeriesRow; today: string; onDone:
       </p>
       {s.skippedDates.length > 0 ? (
         <details className="mt-1 text-xs text-red-800">
-          <summary className="cursor-pointer">{s.skippedDates.length} skipped {s.skippedDates.length === 1 ? "date" : "dates"}</summary>
+          <summary className="inline-flex min-h-6 cursor-pointer items-center [@media(pointer:coarse)]:min-h-[44px]">{s.skippedDates.length} skipped {s.skippedDates.length === 1 ? "date" : "dates"}</summary>
           <ul>{s.skippedDates.map((k) => <li key={k.date}>{formatDateOnly(k.date)} — {OUTCOME_LABEL[k.reason as Occurrence["outcome"]] ?? k.reason}</li>)}</ul>
         </details>
       ) : null}

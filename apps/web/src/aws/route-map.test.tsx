@@ -129,7 +129,7 @@ describe("route map: the menu shows each destination only to the roles that hold
   it("manager: main order Home, Schedule, Visits, Approvals, Clients, Caregivers, Documents, Reports, Settings with the moved items under their parents", async () => {
     renderAt("/", "manager");
     expect(await linkNames()).toEqual([
-      "Home", "Schedule", "Shift requests", "Monthly calendar", "Visit records", "Verify visit", "Approvals", "Visits to review", "Clients", "Authorizations",
+      "Home", "Schedule", "Shift requests", "Monthly calendar", "Visit records", "Verify visit", "Approvals", "Visits to review", "Clients", "Authorization changes",
       "Caregivers", "Recruiting", "Documents", "Reports", "Services", "Continuity pack", "Outage records", "Appearance",
     ]);
     expect(await sectionNames(screen.getByRole("navigation", { name: "Main" }))).toEqual(["Visits", "Settings"]);
@@ -140,7 +140,7 @@ describe("route map: the menu shows each destination only to the roles that hold
     const names = await linkNames();
     expect(names).toContain("Schedule");
     expect(names).toContain("Shift requests");
-    expect(names).toContain("Authorizations"); // shifts.manage may open the Authorization changes screen
+    expect(names).toContain("Authorization changes"); // shifts.manage may open the Authorization changes screen
     for (const hidden of ["Services", "Accounts", "Documents", "Recruiting", "Continuity pack", "Approvals", "Caregivers"]) expect(names).not.toContain(hidden);
   });
 
@@ -173,7 +173,7 @@ describe("route map: the menu shows each destination only to the roles that hold
     const href = (name: string) => within(nav).getByRole("link", { name }).getAttribute("href");
     expect(href("Shift requests")).toBe("/schedule/shift-requests");
     expect(href("Services")).toBe("/settings/services");
-    expect(href("Authorizations")).toBe("/authorization-impacts");
+    expect(href("Authorization changes")).toBe("/authorization-impacts");
     expect(href("Monthly calendar")).toBe("/service-verification/reports?view=calendar");
     fireEvent.click(within(nav).getByRole("link", { name: "Services" }));
     await waitFor(() => expect(screen.getByTestId("page")).toHaveTextContent("services"));

@@ -199,7 +199,7 @@ export function BillingReviewPage() {
   function detailsCell(r: BillingReviewRow) {
     return (
       <details className="mt-2 text-xs text-slate-600">
-        <summary className="cursor-pointer select-none text-slate-700 underline">Visit details</summary>
+        <summary className="inline-flex min-h-6 cursor-pointer items-center [@media(pointer:coarse)]:min-h-[44px] select-none text-slate-700 underline">Visit details</summary>
         <p className="mt-1 font-mono break-all">Visit {r.visitNumber ?? "—"}{r.isCorrection ? " (corrected)" : ""}</p>
         <p>{visitScheduleLabel(r.caregiverSchedulingMode, r.scheduledShiftId)}</p>
         {r.authorizationVersion ? <p>Authorization version {r.authorizationVersion}</p> : null}

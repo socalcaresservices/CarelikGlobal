@@ -64,7 +64,7 @@ describe("main menu: one current item", () => {
     ["/service-verification/reports?view=calendar", "Monthly calendar"],
     ["/care-team/recruiting", "Recruiting"],
     ["/documents", "Documents"],
-    ["/authorization-impacts", "Authorizations"],
+    ["/authorization-impacts", "Authorization changes"],
     ["/services", "Services"],
     ["/settings/services", "Services"],
     ["/settings/appearance", "Appearance"],

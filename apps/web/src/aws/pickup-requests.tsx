@@ -75,7 +75,7 @@ export function PickupRequestsPanel({ onDone }: { onDone: (text: string) => void
               {declining !== r.requestId ? (
                 <div className="flex items-center gap-3">
                   <Button type="button" className="min-h-11" disabled={busy !== null} loading={busy === r.requestId} onClick={() => void act(r, "confirm")}>Confirm assignment</Button>
-                  <button type="button" className="inline-flex min-h-11 items-center px-1 text-sm font-medium text-og-link underline underline-offset-2 disabled:opacity-50" disabled={busy !== null} onClick={() => { setDeclining(r.requestId); setReason(""); setError(null); }}>Decline</button>
+                  <button type="button" className="inline-flex min-h-11 items-center px-1 text-sm font-medium text-og-link underline underline-offset-2 disabled:text-slate-500 disabled:no-underline" disabled={busy !== null} onClick={() => { setDeclining(r.requestId); setReason(""); setError(null); }}>Decline</button>
                 </div>
               ) : null}
             </div>

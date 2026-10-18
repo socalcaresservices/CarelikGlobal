@@ -192,7 +192,7 @@ export function OutageVisitsPage() {
                 ))}
               </ul>
             ) : null}
-            <details className="mt-2 text-sm"><summary className="cursor-pointer">Show the missing numbers</summary>
+            <details className="mt-2 text-sm"><summary className="inline-flex min-h-6 cursor-pointer items-center [@media(pointer:coarse)]:min-h-[44px]">Show the missing numbers</summary>
               <p className="mt-1 font-mono text-xs leading-6">{missing.map((r) => outageNumber(r.outageNumber)).join(" · ") || "None"}</p>
             </details>
           </>

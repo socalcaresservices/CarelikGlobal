@@ -238,7 +238,7 @@ export function VisitReviewPage() {
           ))}
         </dl>
         <details className="mt-3 text-xs text-slate-500">
-          <summary className="cursor-pointer">Visit reference</summary>
+          <summary className="inline-flex min-h-6 cursor-pointer items-center [@media(pointer:coarse)]:min-h-[44px]">Visit reference</summary>
           <p className="mt-1 font-mono">{v.visitNumber ?? v.visitId}</p>
         </details>
       </Card>

@@ -40,7 +40,7 @@ function ExperienceForm({ caregiverRecordId, tags, current, onDone }: { caregive
   const send = useGuardedMutate(save);
   return <form className="space-y-3" aria-label="Review caregiver experience" onSubmit={(e) => { e.preventDefault(); if (note.trim().length >= 3) send(); }}>
     <fieldset><legend className="text-sm font-medium">Confirmed experience</legend>
-      {tags.length === 0 ? <p className="text-sm text-slate-600">No experience tags yet.</p> : tags.map((t) => <label key={t.tagId} className="flex min-h-[44px] items-center gap-2 text-sm"><input type="checkbox" checked={selected.has(t.tagId)} onChange={(e) => setSelected((old) => { const next = new Set(old); if (e.target.checked) next.add(t.tagId); else next.delete(t.tagId); return next; })} />{t.label}</label>)}
+      {tags.length === 0 ? <p className="text-sm text-slate-600">No experience tags yet.</p> : tags.map((t) => <label key={t.tagId} className="flex min-h-[44px] items-center gap-2 text-sm"><input type="checkbox" className="h-5 w-5" checked={selected.has(t.tagId)} onChange={(e) => setSelected((old) => { const next = new Set(old); if (e.target.checked) next.add(t.tagId); else next.delete(t.tagId); return next; })} />{t.label}</label>)}
     </fieldset>
     <p className="text-xs text-slate-600">Saving with no tags records a review with no confirmed experience. Experience tags do not establish certification.</p>
     <label className="block text-sm">Review note<textarea value={note} onChange={(e) => setNote(e.target.value)} maxLength={500} rows={2} className={inputClass} /></label>

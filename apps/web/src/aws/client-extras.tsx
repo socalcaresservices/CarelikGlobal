@@ -370,7 +370,7 @@ export function ClientAlertsCard({ clientId }: { clientId: string }) {
       ) : null}
       {(hist.data ?? []).length > 0 ? (
         <details data-testid="client-alert-history">
-          <summary className="cursor-pointer text-sm text-slate-700">Resolved alerts ({hist.data!.length})</summary>
+          <summary className="inline-flex min-h-6 cursor-pointer items-center [@media(pointer:coarse)]:min-h-[44px] text-sm text-slate-700">Resolved alerts ({hist.data!.length})</summary>
           <ul className="mt-1 space-y-0.5 text-xs text-slate-600">{hist.data!.map((h) => <li key={h.issueKey}>{formatNumericDate(h.firstSeenAt)} to {formatNumericDate(h.resolvedAt)} · {h.reason.replace(/_/g, " ")}</li>)}</ul>
         </details>
       ) : null}

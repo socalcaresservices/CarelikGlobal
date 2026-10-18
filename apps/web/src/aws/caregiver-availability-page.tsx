@@ -44,7 +44,7 @@ export function CaregiverAvailabilityPage({ api }: { api: AwsApiClient }) {
             {o.status === "sent" ? (
               <div className="flex items-center gap-3">
                 <Button className="min-h-11" loading={respond.isPending} onClick={() => respond.mutate({ offerId: o.offerId, available: true })}>Available</Button>
-                <button type="button" className="inline-flex min-h-11 items-center px-1 text-sm font-medium text-og-link underline underline-offset-2 disabled:opacity-50" disabled={respond.isPending} onClick={() => respond.mutate({ offerId: o.offerId, available: false })}>Not available</button>
+                <button type="button" className="inline-flex min-h-11 items-center px-1 text-sm font-medium text-og-link underline underline-offset-2 disabled:text-slate-500 disabled:no-underline" disabled={respond.isPending} onClick={() => respond.mutate({ offerId: o.offerId, available: false })}>Not available</button>
               </div>
             ) : null}
           </li>

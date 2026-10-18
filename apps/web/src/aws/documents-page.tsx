@@ -266,7 +266,7 @@ function ReminderDaysForm({ types, onDone }: { types: DocumentType[]; onDone: ()
   }
   return (
     <div className="space-y-2 border-t border-slate-100 pt-3">
-      <h3 className="text-sm font-semibold text-slate-900">Reminder days before expiry</h3>
+      <h2 className="text-sm font-semibold text-slate-900">Reminder days before expiry</h2>
       <ShortHelp className="text-xs text-slate-500" details="A verified document shows as Expiring once it is within the largest number of days.">These days decide when a document shows as Expiring and what Action needed shows. Ogevia does not send email or text reminders.</ShortHelp>
       {expiring.length > 0 ? (
         <ul className="space-y-1 text-xs text-slate-700">

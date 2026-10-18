@@ -283,7 +283,7 @@ function RequestItem({ r, organizationId, canManage, workedMinutes, onDone, onEr
         <div className="space-y-2">
           <PaperUpload requestId={r.requestId} organizationId={organizationId} defaultName={r.recipientName} defaultRole={r.recipientRole} onDone={onDone} onError={onError} />
           <details>
-            <summary className="cursor-pointer text-xs text-slate-600 underline">Revoke this request</summary>
+            <summary className="inline-flex min-h-6 cursor-pointer items-center [@media(pointer:coarse)]:min-h-[44px] text-xs text-slate-600 underline">Revoke this request</summary>
             <label className="mt-2 block text-sm font-medium text-slate-700">Reason
               <input value={reason} onChange={(e) => setReason(e.target.value)} maxLength={500} className={input} />
             </label>

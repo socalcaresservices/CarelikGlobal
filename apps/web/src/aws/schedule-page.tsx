@@ -348,7 +348,7 @@ function ShiftRow({ s, canManage, onDone, highlight = false, autoAssign = false,
             {chip}
           </summary>
           <div className="space-y-1 px-3 pb-3 text-sm text-slate-800">
-            <p>{time(s.startsAt)}–{time(s.endsAt)} · <Link className="underline [@media(pointer:coarse)]:inline-flex [@media(pointer:coarse)]:min-h-[44px] [@media(pointer:coarse)]:items-center" to={`/clients/${s.clientId}`}>{clientText}</Link></p>
+            <p>{time(s.startsAt)}–{time(s.endsAt)} · <Link className="inline-flex min-h-6 items-center underline [@media(pointer:coarse)]:min-h-[44px]" to={`/clients/${s.clientId}`}>Open client<span className="sr-only"> {clientText}</span></Link></p>
             <p>{s.serviceName ?? "Service"} · {who}</p>
             {hasNotes ? <div className="space-y-0.5 text-xs">{notes}</div> : null}
             {rowActions}
