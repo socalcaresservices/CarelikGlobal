@@ -2,6 +2,7 @@
 // pure helpers. All rules are enforced again by the server; these only make
 // the screens clear.
 import { useQuery } from "@tanstack/react-query";
+import type { AuthorizationTier } from "@/lib/service-verification";
 import { useOrganization } from "@/providers/organization-provider";
 import { useAwsApi } from "./aws-workspace";
 
@@ -63,8 +64,19 @@ export interface MonthlyBalance {
   authorizedMinutes: number;
   workedMinutes: number;
   billableMinutes: number;
+  /** Authorized - committed, SIGNED: negative when over the limit (0057). */
   remainingMinutes: number;
   reviewMinutes: number;
+  reservedMinutes?: number;
+  adjustmentMinutes?: number;
+  /** Billable + approved rounding adjustments + reserved: the approved definition of utilization. */
+  committedMinutes?: number;
+  overLimitMinutes?: number;
+  utilizationPercent?: number | null;
+  authorizationTier?: AuthorizationTier | null;
+  authorizationPeriodEnd?: string;
+  daysUntilExpiry?: number;
+  expiringSoon?: boolean;
 }
 
 export const STATUS_LABEL: Record<ClientStatus, string> = { active: "Active", inactive: "Inactive", discharged: "Discharged" };

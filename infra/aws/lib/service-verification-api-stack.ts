@@ -137,6 +137,7 @@ export const SERVICE_VERIFICATION_ROUTES: ReadonlyArray<{
   { method: apigw.HttpMethod.POST, path: "/v1/shift-series/{seriesId}/extend" },
   { method: apigw.HttpMethod.GET, path: "/v1/hour-limits" },
   { method: apigw.HttpMethod.POST, path: "/v1/hour-limits" },
+  { method: apigw.HttpMethod.GET, path: "/v1/work-hour-policy" },
   { method: apigw.HttpMethod.GET, path: "/v1/caregiver-load" },
   { method: apigw.HttpMethod.POST, path: "/v1/shifts/{shiftId}/makeup" },
   { method: apigw.HttpMethod.POST, path: "/v1/shifts/{shiftId}/reschedule" },
@@ -149,11 +150,48 @@ export const SERVICE_VERIFICATION_ROUTES: ReadonlyArray<{
   // Wave 1 (0050, 0051): open-shift pick-up and the agency's versioned schedule-variance rule. JWT like every staff route.
   { method: apigw.HttpMethod.GET, path: "/v1/open-shifts" },
   { method: apigw.HttpMethod.POST, path: "/v1/shifts/{shiftId}/pickup" },
+  { method: apigw.HttpMethod.POST, path: "/v1/shifts/{shiftId}/pickup/withdraw" },
+  { method: apigw.HttpMethod.GET, path: "/v1/shift-pickups" },
+  { method: apigw.HttpMethod.POST, path: "/v1/shift-pickups/{requestId}/confirm" },
+  { method: apigw.HttpMethod.POST, path: "/v1/shift-pickups/{requestId}/decline" },
+  { method: apigw.HttpMethod.GET, path: "/v1/shifts-to-reconcile" },
+  { method: apigw.HttpMethod.GET, path: "/v1/visits/{visitId}/authorization-review" },
+  { method: apigw.HttpMethod.POST, path: "/v1/visits/{visitId}/authorization-review/resolve" },
+  { method: apigw.HttpMethod.GET, path: "/v1/client-document-types" },
+  { method: apigw.HttpMethod.POST, path: "/v1/client-document-types" },
+  { method: apigw.HttpMethod.POST, path: "/v1/client-document-requirements" },
+  { method: apigw.HttpMethod.GET, path: "/v1/clients/{clientId}/documents" },
+  { method: apigw.HttpMethod.POST, path: "/v1/clients/{clientId}/documents/{documentTypeId}/versions" },
+  { method: apigw.HttpMethod.POST, path: "/v1/client-document-versions/{versionId}/review" },
+  { method: apigw.HttpMethod.GET, path: "/v1/client-document-versions/{versionId}/file" },
+  { method: apigw.HttpMethod.GET, path: "/v1/clients/{clientId}/readiness" },
+  { method: apigw.HttpMethod.POST, path: "/v1/clients/{clientId}/stage" },
+  { method: apigw.HttpMethod.POST, path: "/v1/clients/{clientId}/service-holds" },
+  { method: apigw.HttpMethod.POST, path: "/v1/client-service-holds/{holdId}/release" },
+  { method: apigw.HttpMethod.GET, path: "/v1/clients/{clientId}/audit" },
+  { method: apigw.HttpMethod.GET, path: "/v1/clients/{clientId}/issue-history" },
+  { method: apigw.HttpMethod.GET, path: "/v1/client-duplicates" },
+  { method: apigw.HttpMethod.GET, path: "/v1/reports/agency-performance" },
+  { method: apigw.HttpMethod.GET, path: "/v1/reports/audit" },
+  { method: apigw.HttpMethod.GET, path: "/v1/action-issues" },
+  { method: apigw.HttpMethod.GET, path: "/v1/action-issues/history" },
+  { method: apigw.HttpMethod.GET, path: "/v1/attention-settings" },
+  { method: apigw.HttpMethod.POST, path: "/v1/attention-settings" },
+  { method: apigw.HttpMethod.GET, path: "/v1/notifications" },
+  { method: apigw.HttpMethod.POST, path: "/v1/notifications/read" },
+  { method: apigw.HttpMethod.GET, path: "/v1/notification-settings" },
+  { method: apigw.HttpMethod.POST, path: "/v1/notification-settings" },
+  { method: apigw.HttpMethod.GET, path: "/v1/authorization-impacts" },
+  { method: apigw.HttpMethod.POST, path: "/v1/authorization-impacts/{impactId}/acknowledge" },
+  { method: apigw.HttpMethod.GET, path: "/v1/reports/monthly-chain" },
+  { method: apigw.HttpMethod.POST, path: "/v1/exports" },
+  { method: apigw.HttpMethod.GET, path: "/v1/exports" },
+  { method: apigw.HttpMethod.POST, path: "/v1/shifts/{shiftId}/reconcile" },
   { method: apigw.HttpMethod.GET, path: "/v1/visit-rules" },
   { method: apigw.HttpMethod.POST, path: "/v1/visit-rules" },
   // Hire type / scheduling (caregivers.manage) and family relationship (assignments.manage), 0030.
   { method: apigw.HttpMethod.POST, path: "/v1/caregivers/{caregiverRecordId}/employment" },
-  // Caregiver compliance (0053): administrator verification, hire date, holds. JWT like every staff route.
+  // Caregiver compliance (0055): administrator verification, hire date, holds. JWT like every staff route.
   { method: apigw.HttpMethod.GET, path: "/v1/caregivers/{caregiverRecordId}/compliance" },
   { method: apigw.HttpMethod.POST, path: "/v1/caregivers/{caregiverRecordId}/hire-date" },
   { method: apigw.HttpMethod.POST, path: "/v1/caregivers/{caregiverRecordId}/background-check/status" },
@@ -626,7 +664,7 @@ export class ServiceVerificationApiStack extends Stack {
       }
     }
 
-    // Scheduled caregiver-compliance run (0053). NOT DEPLOYED: deploying it is a YELLOW action (a new EventBridge rule and a second
+    // Scheduled caregiver-compliance run (0055). Defined here, so a deploy of this stack creates it; not deployed yet: deploying it is a YELLOW action (a new EventBridge rule and a second
     // Lambda invoke permission) and needs the owner's approval. It invokes the SAME handler with a constant payload that API Gateway can
     // never produce; the handler then calls ogevia_api.system_compliance_* and applies the 14-day CPR/TB period when it ends, whether or
     // not anyone opens a caregiver profile. Enforcement itself does not depend on this run (the gate reads the records live); the run

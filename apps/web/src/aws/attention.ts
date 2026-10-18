@@ -19,6 +19,8 @@ export interface UrgentItem {
   startsAt: string;
   endsAt: string | null;
   reasons: string[];
+  /** The server's tier (migration 0058). Older servers omit it; then `severity` is used (red = critical, amber = urgent). */
+  tier?: "critical" | "urgent";
   severity: "red" | "amber";
   inProgress: boolean;
   caregiverRecordId: string | null;
@@ -26,14 +28,22 @@ export interface UrgentItem {
   clientCode: string | null;
   serviceCode: string | null;
 }
-export interface UpcomingShift { shiftId: string; startsAt: string; endsAt: string; reason: "open" | "called_out"; clientCode: string | null; serviceCode: string | null; serviceName: string | null }
+export interface UpcomingShift { shiftId: string; startsAt: string; endsAt: string; reason: "open" | "called_out" | "compliance_hold" | "documents_not_current"; clientCode: string | null; serviceCode: string | null; serviceName: string | null }
 export interface AttentionOverview {
   asOf: string;
   urgentWindowHours: number;
-  urgent: { items: UrgentItem[]; itemCount: number; issueCount: number; shifts: number; visits: number } | null;
+  urgent: { items: UrgentItem[]; itemCount: number; issueCount: number; shifts: number; visits: number; critical?: number; urgent?: number } | null;
   upcoming: { count: number; nextStartsAt: string | null; shifts: UpcomingShift[] } | null;
-  documents: { overdue?: number; dueSoon?: number; awaitingReview?: number; rejected?: number; caregiversOnHold?: number; caregiversWithPendingRequirements?: number } | null;
-  visitReview: { visitsNeedingAttention: number; awaitingConfirmation: number; needsReview: number; lateResponses: number; readyForApproval: number | null; reviewIssues: number; awaitingResponse: number } | null;
+  /** reviewRoutine = awaiting review inside the deadline; reviewOverdue = escalated (48 h after upload, expired, or blocking care). */
+  documents: { overdue?: number; dueSoon?: number; awaitingReview?: number; reviewRoutine?: number; reviewOverdue?: number; rejected?: number; caregiversOnHold?: number; caregiversWithPendingRequirements?: number } | null;
+  /** visitsNeedingAttention = needsReview + lateResponses + confirmationOverdue. pendingConfirmation and readyForApproval are routine and never added to it. */
+  /** 0063: caregivers' requests for open shifts waiting for an administrator. Routine; never added to the urgent total. Null without shifts.manage. */
+  pickups?: { count: number; oldestRequestedAt: string | null } | null;
+  /** 0067: shifts that ended with no visit record and still hold authorization time; nothing is released until a person decides. Null without shifts.manage. */
+  reconciliation?: { count: number; minutes: number; oldestEndedAt: string | null } | null;
+  /** 0068: reserved shifts and visits that an authorization amendment affected and nobody has acknowledged. */
+  amendmentImpacts?: { count: number; oldestAt: string | null } | null;
+  visitReview: { visitsNeedingAttention: number; pendingConfirmation?: number; confirmationOverdue?: number; awaitingConfirmation: number; needsReview: number; reviewOverdue?: number; lateResponses: number; readyForApproval: number | null; reviewIssues: number; awaitingResponse: number } | null;
 }
 
 export function useAttentionOverview() {
@@ -58,6 +68,8 @@ export const TONE: Record<Tone, { word: string; icon: string; badge: string; tex
 export const REASON_LABEL: Record<string, string> = {
   uncovered_open: "No caregiver assigned",
   uncovered_called_out: "Caregiver called out, not replaced",
+  called_out: "Caregiver called out, not replaced",
+  open: "No caregiver assigned",
   compliance_hold: "Caregiver is on a compliance hold",
   documents_not_current: "A required document is not current",
   missing_clock_out: "Still open past the shift end",
@@ -72,6 +84,8 @@ export interface Stream {
   unit: string;
   to: string;
   tone: Tone;
+  /** A chip word of its own where Critical / Urgent would claim too much (for example Overdue). Defaults to the tone's word. */
+  word?: string | undefined;
   detail: string;
 }
 
@@ -88,10 +102,11 @@ export function coverageTone(startsAt: string, now: number): Tone {
 }
 
 /**
- * The tone of one Needs-attention item. A shift whose only problem is "no caregiver" follows coverageTone. Anything else (a caregiver on a
- * compliance hold, a document problem, a visit open past its end) keeps the server's severity: red is Critical, amber is Urgent.
+ * The tone of one Needs-attention item: the server's tier (red = Critical, amber = Urgent). For a response without a tier (an older server)
+ * a shift whose only problem is "no caregiver" follows coverageTone and anything else keeps the old severity.
  */
 export function itemTone(item: UrgentItem, now: number): Tone {
+  if (item.tier) return item.tier === "critical" ? "red" : "amber"; // the server's answer (0058)
   if (item.kind === "shift" && item.reasons.length > 0 && item.reasons.every((r) => UNCOVERED_REASONS.has(r))) return coverageTone(item.startsAt, now);
   return item.severity;
 }
@@ -126,26 +141,46 @@ export function streams(o: AttentionOverview, now = Date.parse(o.asOf)): Stream[
   if (o.upcoming) {
     const u = o.upcoming;
     out.push({
-      key: "staffing", label: "Upcoming staffing", count: u.count, unit: u.count === 1 ? "uncovered shift" : "uncovered shifts", to: "/staffing",
+      key: "staffing", label: "Upcoming staffing", count: u.count, unit: u.count === 1 ? "shift" : "shifts", to: "/staffing",
       tone: "neutral",
-      detail: u.count === 0 ? "Every shift after the next 48 hours has a caregiver." : "Later than the next 48 hours, soonest first",
+      detail: u.count === 0 ? `Every shift more than ${o.urgentWindowHours} hours away has a caregiver who may work it.` : `Uncovered or blocked, more than ${o.urgentWindowHours} hours away, soonest first`,
     });
   }
   if (o.documents && (o.documents.overdue !== undefined || o.documents.caregiversOnHold !== undefined)) {
     const d = o.documents;
-    const needs = (d.overdue ?? 0) + (d.rejected ?? 0) + (d.awaitingReview ?? 0) + (d.caregiversOnHold ?? 0);
-    const bits = [d.overdue ? `${d.overdue} overdue` : null, d.caregiversOnHold ? `${plural(d.caregiversOnHold, "caregiver")} on hold` : null, d.dueSoon ? `${d.dueSoon} due soon` : null, d.caregiversWithPendingRequirements ? `${d.caregiversWithPendingRequirements} pending` : null].filter(Boolean);
+    // Routine review (inside its deadline) is shown but never counted. Escalated review (48 h, expired, or blocking care) is counted.
+    const escalated = d.reviewOverdue ?? 0;
+    const routine = d.reviewRoutine ?? (d.reviewOverdue === undefined ? (d.awaitingReview ?? 0) : Math.max((d.awaitingReview ?? 0) - escalated, 0));
+    const needs = (d.overdue ?? 0) + (d.rejected ?? 0) + escalated + (d.caregiversOnHold ?? 0);
+    const bits = [
+      d.overdue ? `${d.overdue} overdue` : null,
+      escalated ? `${escalated} review overdue` : null,
+      d.caregiversOnHold ? `${plural(d.caregiversOnHold, "caregiver")} on hold` : null,
+      routine ? `${routine} awaiting routine review` : null,
+      d.dueSoon ? `${d.dueSoon} due soon` : null,
+      d.caregiversWithPendingRequirements ? `${d.caregiversWithPendingRequirements} with requirements coming due` : null,
+    ].filter(Boolean) as string[];
     out.push({
-      key: "documents", label: "Documents & compliance", count: needs, unit: needs === 1 ? "to act on" : "to act on", to: "/documents",
-      tone: (d.overdue ?? 0) + (d.rejected ?? 0) + (d.caregiversOnHold ?? 0) > 0 ? "amber" : "neutral",
+      key: "documents", label: "Documents & compliance", count: needs, unit: "to act on", to: "/documents",
+      tone: needs > 0 ? "amber" : "neutral",
+      word: (d.overdue ?? 0) + escalated > 0 ? "Overdue" : needs > 0 ? "Needs action" : undefined,
       detail: bits.length ? bits.join(" · ") : "Nothing overdue or due soon.",
     });
   }
   if (o.visitReview) {
     const v = o.visitReview;
+    const pending = v.pendingConfirmation ?? 0;
+    const ready = v.readyForApproval ?? 0;
+    // What needs a person is the count. Pending Confirmation and Ready for Approval are routine: listed in the detail, never added.
+    const routine = [pending ? `${pending} pending confirmation` : null, ready ? `${ready} ready for approval` : null].filter(Boolean) as string[];
+    const base = v.visitsNeedingAttention === 0 ? "Nothing needs a decision now." : "Needs a review or a decision";
+    const review = v.reviewOverdue ?? 0;
+    const late = v.confirmationOverdue ?? 0;
     out.push({
-      key: "visits", label: "Visit review", count: v.visitsNeedingAttention, unit: v.visitsNeedingAttention === 1 ? "visit" : "visits", to: "/visit-review", tone: "neutral",
-      detail: v.visitsNeedingAttention === 0 ? "No visit is waiting for confirmation or approval." : "Waiting for confirmation or approval",
+      key: "visits", label: "Visit review", count: v.visitsNeedingAttention, unit: v.visitsNeedingAttention === 1 ? "visit" : "visits", to: "/visit-review",
+      tone: review + late > 0 ? "amber" : "neutral",
+      word: review > 0 ? "Urgent" : late > 0 ? "Overdue" : undefined,
+      detail: [base, ...routine].join(" · "),
     });
   }
   return out;

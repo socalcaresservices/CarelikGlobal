@@ -39,7 +39,7 @@ const EXPECTED_NEW_ROWS = "permission_key = 'accounts.manage'";
 async function fingerprints() {
   const out: Record<string, { rows: number; hash: string }> = {};
   for (const [table, cols] of Object.entries(TABLES)) {
-    const filter = table === "permissions" ? "where key not in ('accounts.manage', 'caregivers.compliance.manage')" : table === "role_permissions" ? "where permission_key not in ('accounts.manage', 'caregivers.compliance.manage')" : "";
+    const filter = table === "permissions" ? "where key not in ('accounts.manage', 'caregivers.compliance.manage', 'reports.export')" : table === "role_permissions" ? "where permission_key not in ('accounts.manage', 'caregivers.compliance.manage', 'reports.export')" : "";
     const r = await db.admin.query(
       `select count(*)::int n, md5(coalesce(string_agg(x::text, '|' order by x::text), '')) h from (select ${cols} from ogevia.${table} ${filter}) x`);
     out[table] = { rows: r.rows[0].n, hash: r.rows[0].h };
@@ -48,7 +48,7 @@ async function fingerprints() {
 }
 
 beforeAll(async () => {
-  db = await createTestDb(); // migrated from zero (0001-0056)
+  db = await createTestDb(); // migrated from zero (0001-0077)
   w = await seedWorld(db, 600);
 });
 afterAll(async () => db?.drop());
@@ -56,6 +56,27 @@ afterAll(async () => db?.drop());
 describe("upgrade from 0046 to 0048 on a populated database", () => {
   it("changes no existing row; adds one permission and its owner grant; legacy overrides stay readable; the runner applies exactly 0047 and 0048", async () => {
     // Put the database back at 0046 (the state production is expected to be in), exactly as the rollback does.
+    await runDown("0077_attention_counts_and_in_app_notifications.down.sql");
+    await runDown("0076_agency_performance_audit_report.down.sql");
+    await runDown("0075_shift_display_states.down.sql");
+    await runDown("0074_client_documents_readiness_holds_audit.down.sql");
+    await runDown("0073_agency_deadlines_and_issue_identity.down.sql");
+    await runDown("0072_export_request_and_generation.down.sql");
+    await runDown("0071_authorization_decrease_review_and_delivered_unverified.down.sql");
+    await runDown("0070_monthly_chain_report.down.sql");
+    await runDown("0069_report_export_permission_and_audit.down.sql");
+    await runDown("0068_authorization_amendment_impacts.down.sql");
+    await runDown("0067_reservation_buckets_and_reconciliation.down.sql");
+    await runDown("0066_compliance_shift_document_risks.down.sql");
+    await runDown("0065_office_assignment_authorization_recheck.down.sql");
+    await runDown("0064_compliance_hold_history_and_alerts.down.sql");
+    await runDown("0063_open_shift_pickup_requires_confirmation.down.sql");
+    await runDown("0062_billing_states.down.sql");
+    await runDown("0061_recurring_save_valid_report_rejected.down.sql");
+    await runDown("0060_agency_work_hour_limits.down.sql");
+    await runDown("0059_attention_boundary_review_clock.down.sql");
+    await runDown("0058_attention_tiers_separate_queues.down.sql");
+    await runDown("0057_authorization_tiers_unclamped_balances.down.sql");
     await runDown("0056_attention_streams_appearance.down.sql");
     await runDown("0055_caregiver_compliance_hold.down.sql");
     await runDown("0054_recruiting_onboarding_checklist.down.sql");
@@ -85,7 +106,7 @@ describe("upgrade from 0046 to 0048 on a populated database", () => {
     const client = await db.admin.connect();
     let applied: string[];
     try { applied = (await migrate(client)).applied.map((x) => x.slice(0, 4)); } finally { client.release(); }
-    expect(applied).toEqual(["0047", "0048", "0049", "0050", "0051", "0052", "0053", "0054", "0055", "0056"]); // 0049-0056 add functions, tables and nullable columns only; they change no row
+    expect(applied).toEqual(["0047", "0048", "0049", "0050", "0051", "0052", "0053", "0054", "0055", "0056", "0057", "0058", "0059", "0060", "0061", "0062", "0063", "0064", "0065", "0066", "0067", "0068", "0069", "0070", "0071", "0072", "0073", "0074", "0075", "0076", "0077"]); // 0049-0076 add functions, tables and nullable columns only; they change no row
 
     const after = await fingerprints();
     expect(after).toEqual(before); // NO existing row, in any table, changed or disappeared

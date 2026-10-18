@@ -13,6 +13,8 @@ import { supabase } from "@/lib/supabase";
 import { ServiceVerificationBackendContext, type ServiceVerificationBackend } from "@/lib/sv-backend";
 import { ServiceVerificationReportsPage } from "./service-verification-reports-page";
 import { EnvironmentProvider } from "@/aws/environment-marker";
+import { AwsApiContext } from "@/aws/aws-workspace";
+import type { AwsApiClient } from "@/lib/aws-api";
 import { resolveEnvironmentMarker } from "@/aws/environment";
 import { formatClockTime, formatVisitDate, toPacificWallTime } from "@/lib/service-verification";
 
@@ -152,6 +154,122 @@ describe("ServiceVerificationReportsPage", () => {
 
     expect(screen.getByText("Not available")).toBeInTheDocument();
     expect(mockedRpc).not.toHaveBeenCalled();
+  });
+
+  describe("export permission and audit (0069)", () => {
+    const summaryRow = {
+      clientId: "c1", clientCode: "TEST-C01", serviceId: "s1", serviceCode: "RSP", serviceName: "Respite",
+      authorizationLineageId: "l1", authorizationPeriodStart: "2026-10-01", authorizationPeriodEnd: "2026-12-31",
+      authorizedMinutes: 600, workedMinutes: 10, verifiedMinutes: 10, billableMinutes: 10,
+      reservedMinutes: 420, remainingMinutes: 170, reviewMinutes: 0, visitCount: 1, clientName: "Synthetic Person",
+    };
+    function renderAws(permissions: string[], post: AwsApiClient["post"], get: AwsApiClient["get"]) {
+      mockedUseOrganization.mockReturnValue({
+        activeOrganizationId: ORG_ID,
+        activeOrganization: { displayName: "Acme Care" },
+        hasPermission: vi.fn((key: string) => permissions.includes(key)),
+      } as never);
+      const backend = {
+        kind: "aws",
+        listVisits: vi.fn().mockResolvedValue([]),
+        getLetterhead: vi.fn().mockResolvedValue({ legal_name: "Acme Care LLC", display_name: "Acme Care" }),
+        listClientLocations: vi.fn().mockResolvedValue([]),
+        listCorrections: vi.fn().mockResolvedValue([]),
+        listMonthlyServiceSummary: vi.fn().mockResolvedValue([summaryRow]),
+        listMonthlyApprovalSummary: vi.fn().mockResolvedValue([]),
+      } as unknown as ServiceVerificationBackend;
+      const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+      render(
+        <MemoryRouter initialEntries={["/service-verification/reports?view=reconciliation"]}>
+          <QueryClientProvider client={queryClient}>
+            <AwsApiContext.Provider value={{ get, post }}>
+              <ServiceVerificationBackendContext.Provider value={backend}>
+                <ServiceVerificationReportsPage />
+              </ServiceVerificationBackendContext.Provider>
+            </AwsApiContext.Provider>
+          </QueryClientProvider>
+        </MemoryRouter>,
+      );
+    }
+    const get = vi.fn(async () => ({ rows: [] })) as unknown as AwsApiClient["get"];
+    void get;
+
+    const chainRow = (o: Record<string, unknown> = {}) => ({
+      clientId: "c1", clientCode: "TEST-C01", serviceId: "s1", serviceCode: "RSP", serviceName: "Respite", authorizationLineageId: "l1", authorizationVersion: 2, periodStart: "2026-10-01", periodEnd: "2026-12-31",
+      authorizedMinutes: 600, scheduledMinutes: 60, heldReviewMinutes: 0, needsReconciliationMinutes: 35, reservedMinutes: 95, workedMinutes: 140, confirmedMinutes: 120, billableMinutes: 120,
+      needsCorrectionMinutes: 0, waitingMinutes: 0, readyForReviewMinutes: 80, approvedForBillingMinutes: 40, reviewedNotBillableMinutes: 0, humanApprovedMinutes: 40,
+      needsCorrectionVisits: 1, waitingVisits: 0, readyForReviewVisits: 2, approvedVisits: 1, voidedApprovals: 1, adjustmentMinutes: 0, committedMinutes: 215, remainingMinutes: 385, overLimitMinutes: 0,
+      reservedOk: true, visitsOk: true, balanceOk: true, differenceMinutes: 0, ...o,
+    });
+
+    it("the full-chain report shows every stage and a passing check; Export CSV is the server's own recorded export", async () => {
+      const createObjectURL = vi.fn(() => "blob:x");
+      Object.defineProperty(URL, "createObjectURL", { configurable: true, value: createObjectURL });
+      Object.defineProperty(URL, "revokeObjectURL", { configurable: true, value: vi.fn() });
+      const post = vi.fn(async () => ({ exportId: "e9", filename: "monthly-chain-2026-10.csv", csv: "a,b", rowCount: 1, byteCount: 3 })) as unknown as AwsApiClient["post"];
+      const getRows = vi.fn(async () => ({ rows: [chainRow()] })) as unknown as AwsApiClient["get"];
+      renderAws(["visits.read", "billing.visits.read", "reports.export"], post, getRows);
+      const section = await screen.findByTestId("monthly-chain");
+      expect(await within(section).findByText("Client TEST-C01 · Respite")).toBeInTheDocument();
+      expect(within(section).getByTestId("chain-checks")).toHaveTextContent("All checks pass");
+      expect(within(section).getByText(/Approval is not submission or payment/)).toBeInTheDocument();
+      const row = within(section).getByRole("row", { name: /TEST-C01/ });
+      expect(row).toHaveTextContent("35 min"); // to reconcile
+      expect(row).toHaveTextContent("1 hr 20 min"); // Billing Ready
+      expect(getRows).toHaveBeenCalledWith("/v1/reports/monthly-chain", expect.objectContaining({ organizationId: ORG_ID }));
+      fireEvent.click(within(section).getByRole("button", { name: "Export CSV (server-made, recorded)" }));
+      await waitFor(() => expect(createObjectURL).toHaveBeenCalledTimes(1));
+      expect(post).toHaveBeenCalledWith("/v1/exports", expect.objectContaining({ organizationId: ORG_ID, report: "monthly_chain" }));
+      expect(await within(section).findByText(/Whether it reached this device is not recorded/)).toBeInTheDocument();
+    });
+
+    it("a row that does not add up is called out with the difference, and a non-exporter gets no export button", async () => {
+      const post = vi.fn() as unknown as AwsApiClient["post"];
+      const getRows = vi.fn(async () => ({ rows: [chainRow({ balanceOk: false, differenceMinutes: 15 })] })) as unknown as AwsApiClient["get"];
+      renderAws(["visits.read"], post, getRows);
+      const section = await screen.findByTestId("monthly-chain");
+      expect(await within(section).findByTestId("chain-checks")).toHaveTextContent("1 row does not add up");
+      expect(within(section).getByText("Off by 15 min")).toBeInTheDocument();
+      expect(within(section).queryByRole("button", { name: "Export CSV (server-made, recorded)" })).not.toBeInTheDocument();
+      expect(within(section).getByText(/Your role can read this report but not export it/)).toBeInTheDocument();
+    });
+
+    it("a person who can read but not export sees no CSV button and the page says so", async () => {
+      const post = vi.fn() as unknown as AwsApiClient["post"];
+      renderAws(["visits.read", "billing.visits.read"], post, get);
+      await screen.findByRole("columnheader", { name: "Hours left" });
+      expect(screen.queryByRole("button", { name: "CSV" })).not.toBeInTheDocument();
+      expect(await screen.findByText(/Your role can read this report but not export it\./)).toBeInTheDocument();
+      expect(post).not.toHaveBeenCalled();
+    });
+
+    it("an exporter's click asks the SERVER to make the file; the browser saves exactly what the server returned and does not say it was delivered", async () => {
+      const saved: string[] = [];
+      const createObjectURL = vi.fn((b: Blob) => { saved.push(String(b.size)); return "blob:x"; });
+      Object.defineProperty(URL, "createObjectURL", { configurable: true, value: createObjectURL });
+      Object.defineProperty(URL, "revokeObjectURL", { configurable: true, value: vi.fn() });
+      const post = vi.fn(async () => ({ exportId: "e1", filename: "monthly-service-reconciliation-2026-10.csv", csv: "server,made", rowCount: 1, byteCount: 11 })) as unknown as AwsApiClient["post"];
+      renderAws(["visits.read", "billing.visits.read", "reports.export", "clients.names.read"], post, get);
+      await screen.findByRole("columnheader", { name: "Hours left" });
+      fireEvent.click(screen.getAllByRole("button", { name: "CSV" })[0]!);
+      await waitFor(() => expect(createObjectURL).toHaveBeenCalledTimes(1));
+      expect(saved).toEqual(["11"]); // the bytes the server returned, not a file built from the page
+      expect(post).toHaveBeenCalledWith("/v1/exports", expect.objectContaining({ organizationId: ORG_ID, report: "monthly_service_reconciliation", params: expect.objectContaining({ clientId: null }) }));
+      const note = await screen.findByText(/The server generated monthly-service-reconciliation/);
+      expect(note).toHaveTextContent("The server generated monthly-service-reconciliation-2026-10.csv (1 row) and recorded the export.");
+      expect(note).toHaveTextContent("Whether the file reached this device is not recorded.");
+    });
+
+    it("when the server refuses or fails, nothing is downloaded and the reason is shown", async () => {
+      const createObjectURL = vi.fn(() => "blob:x");
+      Object.defineProperty(URL, "createObjectURL", { configurable: true, value: createObjectURL });
+      const post = vi.fn(async () => { throw new Error("You do not have permission to export reports"); }) as unknown as AwsApiClient["post"];
+      renderAws(["visits.read", "reports.export"], post, get);
+      await screen.findByRole("columnheader", { name: "Hours left" });
+      fireEvent.click(screen.getAllByRole("button", { name: "CSV" })[0]!);
+      expect(await screen.findByRole("alert")).toHaveTextContent("You do not have permission to export reports");
+      expect(createObjectURL).not.toHaveBeenCalled();
+    });
   });
 
   it("shows each visit's scheduled shift next to the actual times, or that it has none", async () => {

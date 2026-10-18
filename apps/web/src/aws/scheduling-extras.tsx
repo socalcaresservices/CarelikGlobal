@@ -78,6 +78,11 @@ export function HourLimitsPanel({ from, to, canManage }: { from: string; to: str
     queryFn: async () => (await api.get<{ limits: LimitRow[] }>("/v1/hour-limits", { organizationId: activeOrganizationId })).limits,
     enabled: !!activeOrganizationId,
   });
+  const policy = useQuery({
+    queryKey: ["aws-work-hour-policy", activeOrganizationId],
+    queryFn: async () => (await api.get<{ policy: { applies: boolean; maxDailyMinutes?: number; maxWeeklyMinutes?: number } }>("/v1/work-hour-policy", { organizationId: activeOrganizationId })).policy,
+    enabled: !!activeOrganizationId,
+  });
   const load = useQuery({
     queryKey: ["aws-caregiver-load", activeOrganizationId, from, to],
     queryFn: async () => (await api.get<{ load: LoadRow[] }>("/v1/caregiver-load", { organizationId: activeOrganizationId, from, to })).load,
@@ -128,7 +133,13 @@ export function HourLimitsPanel({ from, to, canManage }: { from: string; to: str
       </section>
       <section aria-label="Hour limits">
         <h3 className="text-sm font-semibold text-slate-900">Limits</h3>
-        {limits.data && limits.data.length === 0 ? <p className="text-sm text-slate-600">No limits set. Caregivers can be scheduled for any number of hours.</p> : null}
+        {policy.data?.applies ? (
+          <p data-testid="work-hour-policy" className="mb-2 rounded-lg border border-slate-300 bg-og-card px-3 py-2 text-sm text-slate-900">
+            <span className="font-semibold">Agency limit: {formatDuration(policy.data.maxDailyMinutes ?? 0)} a day and {formatDuration(policy.data.maxWeeklyMinutes ?? 0)} a week.</span>{" "}
+            It is always enforced and cannot be overridden or loosened here. A stricter limit below still applies on top of it.
+          </p>
+        ) : null}
+        {limits.data && limits.data.length === 0 && !policy.data?.applies ? <p className="text-sm text-slate-600">No limits set. Caregivers can be scheduled for any number of hours.</p> : null}
         <ul className="space-y-1">
           {(limits.data ?? []).map((l) => (
             <li key={l.caregiverRecordId ?? "default"} className="rounded-lg border border-slate-200 bg-og-card px-3 py-2 text-sm">

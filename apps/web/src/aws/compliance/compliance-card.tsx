@@ -4,12 +4,13 @@ import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { Button, Card } from "@carelik/ui";
 import { newIdempotencyKey } from "@/lib/sv-backend";
-import { formatDateOnly, formatDateTime } from "@/lib/service-verification";
+import { formatClockTime, formatDateOnly, formatDateTime } from "@/lib/service-verification";
 import { useOrganization } from "@/providers/organization-provider";
 import { useAwsApi } from "../aws-workspace";
 import { actionError } from "../readiness/format";
 import { useGuardedMutate } from "../readiness/use-guarded";
 import {
+  riskLabel,
   BACKGROUND_STATUS_LABEL,
   COMPLIANCE_KEYS,
   fixLink,
@@ -196,6 +197,7 @@ export function CaregiverCompliance({ caregiverRecordId }: { caregiverRecordId: 
                 {c.dueDate ? <p>The due date is the last day. A hold starts at 12:00 AM on {formatDateOnly(nextDay(c.dueDate))} ({c.timezone ?? "agency time zone"}).</p> : null}
                 <p className="mt-1">{c.deadlineRule}</p>
               </Disclosure>
+              {c.hold ? <p className="mt-1 text-xs text-slate-700">While a hold is open, entering or changing the hire date does not release it. It is released only when every requirement below is verified.</p> : null}
               {canTrack && (isAdmin || !c.hireDate) ? <HireDateForm key={c.hireDate ?? "none"} c={c} /> : c.hireDate ? <p className="mt-1 text-xs text-slate-600">Only an administrator can change a recorded hire date.</p> : null}
             </section>
 
@@ -231,6 +233,20 @@ export function CaregiverCompliance({ caregiverRecordId }: { caregiverRecordId: 
                 ))}
               </ul>
             </section>
+
+            {(c.shiftRisks ?? []).length > 0 ? (
+              <section aria-label="Shifts affected by CPR or TB expiry">
+                <h3 className="text-sm font-semibold text-slate-900">Scheduled shifts where CPR or TB expires ({new Set((c.shiftRisks ?? []).map((s) => s.shiftId)).size})</h3>
+                <ul className="mt-1 space-y-1 text-sm text-slate-800">
+                  {(c.shiftRisks ?? []).map((s) => (
+                    <li key={`${s.shiftId}-${s.requirement}`}>
+                      {formatDateTime(s.startsAt)} to {formatClockTime(s.endsAt)} · {riskLabel(s)}
+                      {s.inProgress ? <strong className="ml-1 text-red-800">· in progress now. The visit will not be ended.</strong> : null}
+                    </li>
+                  ))}
+                </ul>
+              </section>
+            ) : null}
           </div>
         ) : null}
       </section>

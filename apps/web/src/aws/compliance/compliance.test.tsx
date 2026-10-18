@@ -60,6 +60,15 @@ describe("the profile's Compliance card", () => {
     expect(screen.getByText(/Hire date is day 0/)).toBeInTheDocument();
   }, TEST_TIMEOUT_MS);
 
+  it("an eligible caregiver whose CPR expires during a scheduled shift sees that shift on the card, marked in progress, with the visit-not-ended note", async () => {
+    renderAt(`/care-team/${CG}`, { role: "organization_owner", compliance: { shiftRisks: [
+      { shiftId: "s1", startsAt: "2026-10-27T05:00:00Z", endsAt: "2026-10-27T13:00:00Z", requirement: "cpr", documentStatus: "expires_during", validUntil: "2026-10-27", inProgress: true, visitId: "v9" },
+    ] } });
+    const section = await screen.findByRole("region", { name: "Shifts affected by CPR or TB expiry" }, { timeout: COLD_RENDER_MS });
+    expect(within(section).getByText(/CPR expires during this shift \(valid through/)).toBeInTheDocument();
+    expect(within(section).getByText(/in progress now\. The visit will not be ended\./)).toBeInTheDocument();
+  }, TEST_TIMEOUT_MS);
+
   it("a caregiver on hold sees the exact reasons, a link to each missing requirement, and the release rule", async () => {
     renderAt(`/care-team/${CG}`, { role: "organization_owner", compliance: held });
     const alert = await screen.findByRole("alert", {}, { timeout: COLD_RENDER_MS });
@@ -168,6 +177,21 @@ describe("Caregiver holds page (the Action needed destination)", () => {
     expect(within(article).getAllByRole("link", { name: "Open the schedule" })).toHaveLength(2);
     expect(within(article).getByRole("heading", { name: "Standing assignments (1)" })).toBeInTheDocument();
     expect(within(article).getByText(/Nothing here was cancelled, moved or ended/)).toBeInTheDocument();
+  }, TEST_TIMEOUT_MS);
+
+  it("lists scheduled shifts whose CPR/TB is expired or expires during the shift even when nobody is on hold, and marks a shift already under way", async () => {
+    const risk = (shiftId: string, documentStatus: string, inProgress: boolean) => ({
+      caregiverRecordId: CG, caregiverCode: "CG-A1", caregiverName: "Synthetic Alpha", shiftId, startsAt: "2026-10-27T05:00:00Z", endsAt: "2026-10-27T13:00:00Z",
+      clientCode: "C-104", requirement: "cpr", documentStatus, validUntil: "2026-10-27", inProgress, visitId: inProgress ? "v9" : null, onHold: false,
+    });
+    renderAt("/compliance", { role: "manager", holds: { holds: [], totals: { holds: 0, affectedShifts: 0, affectedAssignments: 0, inProgressVisits: 0, shiftsAtRisk: 2, shiftsAtRiskInProgress: 1 }, shiftsAtRisk: [risk("s1", "expires_during", false), risk("s2", "expired", true)] } });
+    expect(await screen.findByText("No caregiver is on a compliance hold.", {}, { timeout: COLD_RENDER_MS })).toBeInTheDocument();
+    const section = screen.getByRole("region", { name: "Shifts with CPR or TB expiring" });
+    expect(within(section).getByRole("heading", { name: "Shifts with CPR or TB expired or expiring (2)" })).toBeInTheDocument();
+    expect(within(section).getByText(/CPR expires during this shift/)).toBeInTheDocument();
+    expect(within(section).getByText(/CPR is expired for this shift/)).toBeInTheDocument();
+    expect(within(section).getByText(/In progress \(visit open\)/)).toBeInTheDocument();
+    expect(within(section).getByText(/a visit in progress is never ended by the system/)).toBeInTheDocument();
   }, TEST_TIMEOUT_MS);
 
   it("with no holds it says so; 'Check now' asks the server to re-evaluate and reports the counts", async () => {

@@ -4,6 +4,7 @@
 // the next run until --restore-only succeeds, queries are read-only, and no credential reaches the output.
 // It cannot prove what real AWS does; it proves the script's own logic.
 import { spawn } from "node:child_process";
+import { createServer } from "node:net";
 import { existsSync, mkdtempSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -26,9 +27,19 @@ beforeEach(() => {
 });
 
 interface Run { code: number | null; out: string; dir: string }
-function run(args: string[], opts: { env?: Record<string, string>; input?: string; killWhen?: () => boolean } = {}): Promise<Run> {
+/** A port the OS says is free right now. The mock tunnel binds it; a random number in 20000-40000 can land on a port some other process is using
+ *  (that range overlaps the ephemeral range 32768-60999), and then the tunnel never opens and the script exits 1: a test-harness collision, not a script defect. */
+function freePort(): Promise<number> {
+  return new Promise((resolve, reject) => {
+    const srv = createServer();
+    srv.once("error", reject);
+    srv.listen(0, "127.0.0.1", () => { const { port } = srv.address() as { port: number }; srv.close(() => resolve(port)); });
+  });
+}
+async function run(args: string[], opts: { env?: Record<string, string>; input?: string; killWhen?: () => boolean } = {}): Promise<Run> {
+  const port = await freePort();
   return new Promise((resolve) => {
-    const env = { ...process.env, PATH: `${bin}:${process.env.PATH}`, MOCK_DIR: dir, OGEVIA_LEDGER_STATE_DIR: join(dir, "state"), OGEVIA_LEDGER_DIR: join(dir, `out-${Math.random().toString(36).slice(2)}`), OGEVIA_LEDGER_PORT: String(20000 + Math.floor(Math.random() * 20000)), HOME: dir, ...(opts.env ?? {}) };
+    const env = { ...process.env, PATH: `${bin}:${process.env.PATH}`, MOCK_DIR: dir, OGEVIA_LEDGER_STATE_DIR: join(dir, "state"), OGEVIA_LEDGER_DIR: join(dir, `out-${Math.random().toString(36).slice(2)}`), OGEVIA_LEDGER_PORT: String(port), HOME: dir, ...(opts.env ?? {}) };
     const p = spawn("bash", [SCRIPT, ...args], { env, stdio: ["pipe", "pipe", "pipe"], detached: true });
     let out = "";
     p.stdout.on("data", (d) => (out += d));
@@ -48,31 +59,31 @@ const verbs = () => calls().map((c) => c.split(" ").slice(0, 2).join(" "));
 describe("preconditions change nothing", () => {
   it("refuses a wrong environment: the Lambda serves another database", async () => {
     const r = await run(["test"], { env: { MOCK_LAMBDA_DB: "ogevia_prd", MOCK_LAMBDA_ENV: "prd" } });
-    expect(r.code).toBe(1);
+    expect(r.code, r.out).toBe(1);
     expect(r.out).toContain("Not the requested environment");
     expect(verbs()).not.toContain("ec2 authorize-security-group-ingress");
     expect(sg()).toEqual(INITIAL_SG);
   });
   it("refuses when the admin host's groups are not exactly the expected one", async () => {
     const r = await run(["test"], { env: { MOCK_HOST_SG: "sg-0123456789abcdef0" } });
-    expect(r.code).toBe(1);
+    expect(r.code, r.out).toBe(1);
     expect(r.out).toContain("expected exactly");
     expect(verbs()).not.toContain("ec2 authorize-security-group-ingress");
   });
   it("refuses when the admin group is used by another network interface (the rule would grant others)", async () => {
     const r = await run(["test"], { env: { MOCK_SHARED_ENI: "1" } });
-    expect(r.code).toBe(1);
+    expect(r.code, r.out).toBe(1);
     expect(r.out).toContain("more than the admin host");
     expect(verbs()).not.toContain("ec2 authorize-security-group-ingress");
   });
   it("refuses when the RDS group is not the expected one", async () => {
     const r = await run(["test"], { env: { MOCK_RDS_SG: "sg-0aaaaaaaaaaaaaaaa" } });
-    expect(r.code).toBe(1);
+    expect(r.code, r.out).toBe(1);
     expect(verbs()).not.toContain("ec2 authorize-security-group-ingress");
   });
   it("does nothing unless the exact phrase is typed", async () => {
     const r = await run(["test"], { input: "yes\n" });
-    expect(r.code).toBe(0);
+    expect(r.code, r.out).toBe(0);
     expect(r.out).toContain("Declined. Nothing was changed.");
     expect(verbs()).not.toContain("ec2 authorize-security-group-ingress");
     expect(sg()).toEqual(INITIAL_SG);
@@ -91,7 +102,7 @@ describe("preconditions change nothing", () => {
 describe("the window", () => {
   it("success: the single rule is added, queried through, removed, and restoration is verified; the output holds no credential", async () => {
     const r = await run(["test"]);
-    expect(r.code).toBe(0);
+    expect(r.code, r.out).toBe(0);
     expect(r.out).toContain("exactly one rule was added");
     expect(r.out).toContain("RESTORED (verified)");
     expect(r.out).toContain("connected: ogevia_sv_test | read_only=on");
@@ -111,7 +122,7 @@ describe("the window", () => {
   });
   it("ledger rows 0053+: reported with a STOP, and the group is still restored", async () => {
     const r = await run(["test"], { env: { MOCK_LEDGER_ROWS: "0053  abc  0053_x.sql  applied 2026-10-17T12:00:00Z" } });
-    expect(r.code).toBe(0);
+    expect(r.code, r.out).toBe(0);
     expect(r.out).toContain("ARE APPLIED");
     expect(r.out).toContain("do not edit migration files in place");
     expect(r.out).toContain("RESTORED (verified)");
@@ -125,21 +136,21 @@ describe("the window", () => {
   });
   it("connected to the wrong database: stops, and restores", async () => {
     const r = await run(["test"], { env: { MOCK_CURRENT_DB: "ogevia_prd" } });
-    expect(r.code).toBe(1);
+    expect(r.code, r.out).toBe(1);
     expect(r.out).toContain("connected to 'ogevia_prd', not 'ogevia_sv_test'");
     expect(r.out).toContain("RESTORED (verified)");
     expect(sg()).toEqual(INITIAL_SG);
   });
   it("failure after the window opened (the database connection fails): restored and verified", async () => {
     const r = await run(["test"], { env: { MOCK_PSQL_FAIL: "1" } });
-    expect(r.code).toBe(1);
+    expect(r.code, r.out).toBe(1);
     expect(r.out).toContain("RESTORED (verified)");
     expect(sg()).toEqual(INITIAL_SG);
     expect(marker()).toBe(false);
   });
   it("the rule cannot be added: stops, nothing to restore, group unchanged", async () => {
     const r = await run(["test"], { env: { MOCK_FAIL_AUTHORIZE: "1" } });
-    expect(r.code).toBe(1);
+    expect(r.code, r.out).toBe(1);
     expect(r.out).toContain("could not add the rule");
     expect(sg()).toEqual(INITIAL_SG);
     expect(marker()).toBe(false);
@@ -153,7 +164,7 @@ describe("the window", () => {
   }, 30000);
   it("a revoke that fails twice is retried and succeeds", async () => {
     const r = await run(["test"], { env: { MOCK_REVOKE_FAILS: "2" } });
-    expect(r.code).toBe(0);
+    expect(r.code, r.out).toBe(0);
     expect(r.out).toContain("RESTORED (verified)");
     expect(sg()).toEqual(INITIAL_SG);
   });
@@ -162,7 +173,7 @@ describe("the window", () => {
 describe("when restoration fails", () => {
   it("says NOT RESTORED loudly with the exact command, exits 3, leaves the marker, blocks the next run, and --restore-only fixes it", async () => {
     const r = await run(["test"], { env: { MOCK_REVOKE_ALWAYS_FAILS: "1" } });
-    expect(r.code).toBe(3);
+    expect(r.code, r.out).toBe(3);
     expect(r.out).toContain("NOT RESTORED");
     expect(r.out).toContain("aws ec2 revoke-security-group-ingress --region us-west-2 --group-id sg-00530a1f4f7648e65 --security-group-rule-ids sgr-");
     expect(r.out).toContain("SECURITY GROUP: NOT RESTORED");
@@ -185,7 +196,7 @@ describe("when restoration fails", () => {
   });
   it("--restore-only with no marker changes nothing", async () => {
     const r = await run(["--restore-only"]);
-    expect(r.code).toBe(0);
+    expect(r.code, r.out).toBe(0);
     expect(r.out).toContain("nothing to restore");
     expect(verbs()).not.toContain("ec2 revoke-security-group-ingress");
   });
@@ -193,7 +204,7 @@ describe("when restoration fails", () => {
     // simulate an unrelated change made while the window was open: the verification hash must not match
     const r = await run(["test"], { env: { MOCK_PSQL_SLEEP: "2" }, killWhen: () => { if (existsSync(join(dir, "psql-started"))) { const s = sg(); if (!s.e.some((x: any) => x.IpProtocol === "tcp")) { s.e.push({ IpProtocol: "tcp", FromPort: 1, ToPort: 1, UserIdGroupPairs: [], IpRanges: [{ CidrIp: "10.0.0.0/8" }], Ipv6Ranges: [], PrefixListIds: [] }); writeFileSync(join(dir, "sg.json"), JSON.stringify(s)); } } return false; } });
     expect(r.out).toContain("NOT RESTORED");
-    expect(r.code).toBe(3);
+    expect(r.code, r.out).toBe(3);
   }, 30000);
 });
 
@@ -217,7 +228,7 @@ describe("a hung command is bounded, counts as a failure and goes through cleanu
   it("authorize hangs: the run stops as TIMED OUT, the group is verified unchanged, no marker is left", async () => {
     const r = await run(["test"], { env: { ...FAST, MOCK_HANG: "ec2-authorize-security-group-ingress" } });
     expect(hangs()).toEqual(["ec2-authorize-security-group-ingress hung"]);
-    expect(r.code).toBe(1);
+    expect(r.code, r.out).toBe(1);
     expect(r.out).toContain("TIMED OUT");
     expect(r.out).toContain("RESTORED (verified)");
     expect(sg()).toEqual(INITIAL_SG);
@@ -225,7 +236,7 @@ describe("a hung command is bounded, counts as a failure and goes through cleanu
   });
   it("the Session Manager tunnel never opens: stops, removes the rule, verifies", async () => {
     const r = await run(["test"], { env: { ...FAST, MOCK_TUNNEL_NEVER_OPENS: "1" } });
-    expect(r.code).toBe(1);
+    expect(r.code, r.out).toBe(1);
     expect(r.out).toContain("tunnel did not open");
     expect(r.out).toContain("RESTORED (verified)");
     expect(sg()).toEqual(INITIAL_SG);
@@ -233,7 +244,7 @@ describe("a hung command is bounded, counts as a failure and goes through cleanu
   });
   it("the secret read hangs: stops as TIMED OUT, removes the rule, verifies, and reads no secret", async () => {
     const r = await run(["test"], { env: { ...FAST, MOCK_HANG: "secretsmanager-get-secret-value" } });
-    expect(r.code).toBe(1);
+    expect(r.code, r.out).toBe(1);
     expect(r.out).toContain("TIMED OUT");
     expect(r.out).toContain("RESTORED (verified)");
     expect(existsSync(join(dir, "psql-calls.log"))).toBe(false);
@@ -241,7 +252,7 @@ describe("a hung command is bounded, counts as a failure and goes through cleanu
   });
   it("psql hangs: stops as TIMED OUT, removes the rule, verifies", async () => {
     const r = await run(["test"], { env: { ...FAST, MOCK_PSQL_SLEEP: "60" } });
-    expect(r.code).toBe(1);
+    expect(r.code, r.out).toBe(1);
     expect(r.out).toContain("TIMED OUT");
     expect(r.out).toContain("RESTORED (verified)");
     expect(sg()).toEqual(INITIAL_SG);
@@ -257,7 +268,7 @@ describe("a hung command is bounded, counts as a failure and goes through cleanu
   it("the revoke hangs on every attempt: cleanup is bounded, says NOT RESTORED, EXITS NON-ZERO (3), keeps the marker, and a later --restore-only fixes it", async () => {
     const r = await run(["test"], { env: { ...FAST, MOCK_HANG: "ec2-revoke-security-group-ingress" } });
     expect(hangs().filter((h) => h.startsWith("ec2-revoke")).length).toBe(4);
-    expect(r.code).toBe(3);
+    expect(r.code, r.out).toBe(3);
     expect(r.out).toContain("NOT RESTORED (exit 3; access may still be open)");
     expect(r.out).toContain("SECURITY GROUP: NOT RESTORED");
     expect(rulePresent()).toBe(true);
@@ -270,7 +281,7 @@ describe("a hung command is bounded, counts as a failure and goes through cleanu
   });
   it("the cleanup's own checks hang: the state is UNKNOWN, never assumed restored; exit 3 and the marker stays", async () => {
     const r = await run(["test"], { env: { ...FAST, MOCK_HANG_DESCRIBE_WHEN_OPEN: "1" } });
-    expect(r.code).toBe(3);
+    expect(r.code, r.out).toBe(3);
     expect(r.out).toContain("NOT RESTORED");
     expect(r.out).toContain("UNKNOWN");
     expect(r.out).not.toContain("RESTORED (verified)");
@@ -278,7 +289,7 @@ describe("a hung command is bounded, counts as a failure and goes through cleanu
   });
   it("the manual recovery text identifies ONLY the temporary rule: the admin-group source, by rule id, and never the application group", async () => {
     const r = await run(["test"], { env: { ...FAST, MOCK_REVOKE_ALWAYS_FAILS: "1" } });
-    expect(r.code).toBe(3);
+    expect(r.code, r.out).toBe(3);
     const lines = r.out.split("\n").filter((l) => /aws ec2 (describe-security-group-rules|revoke-security-group-ingress)/.test(l));
     expect(lines.some((l) => l.includes("describe-security-group-rules") && l.includes("--filters Name=group-id,Values=sg-00530a1f4f7648e65"))).toBe(true);
     const revoke = lines.filter((l) => l.includes("revoke-security-group-ingress"));
@@ -301,7 +312,7 @@ const HOSTIP = ["test", "--host-ip"];
 describe("--host-ip mode", () => {
   it("the default mode STILL refuses the shared admin group (the three interfaces from the operator's report); nothing changes", async () => {
     const r = await run(["test"], { env: { MOCK_SHARED_ENI: "endpoints" } });
-    expect(r.code).toBe(1);
+    expect(r.code, r.out).toBe(1);
     expect(r.out).toContain("more than the admin host");
     expect(r.out).toContain("--host-ip");
     expect(authorizeCalls()).toHaveLength(0);
@@ -309,7 +320,7 @@ describe("--host-ip mode", () => {
   });
   it("success with the shared group: ONE rule, source exactly <live IP>/32, never the group; removed and verified identical to the original", async () => {
     const r = await run(HOSTIP, { env: { MOCK_SHARED_ENI: "endpoints", OGEVIA_EXPECT_HOST_IP: IP } });
-    expect(r.code).toBe(0);
+    expect(r.code, r.out).toBe(0);
     expect(r.out).toContain(`admin host IP (live): ${IP} on eni-099616641dd91bcaf`);
     expect(r.out).toContain(`inbound tcp 5432 from ${CIDR}`);
     expect(r.out).toContain("RESTORED (verified)");
@@ -336,7 +347,7 @@ describe("--host-ip mode", () => {
   it("is TEST-only: prod --host-ip, --restore-only --host-ip and unknown second arguments are refused before any AWS call", async () => {
     for (const args of [["prod", "--host-ip"], ["--restore-only", "--host-ip"], ["test", "--whatever"]]) {
       const r = await run(args);
-      expect(r.code).toBe(2);
+      expect(r.code, r.out).toBe(2);
     }
     expect(calls()).toHaveLength(0);
   });
@@ -356,7 +367,7 @@ describe("--host-ip mode", () => {
   for (const [name, env, expected] of refusals) {
     it(`refuses, changing nothing, when ${name}`, async () => {
       const r = await run(HOSTIP, { env: { MOCK_SHARED_ENI: "endpoints", ...env } });
-      expect(r.code).toBe(1);
+      expect(r.code, r.out).toBe(1);
       expect(r.out).toMatch(expected);
       expect(authorizeCalls()).toHaveLength(0);
       expect(sg()).toEqual(INITIAL_SG);
@@ -366,20 +377,20 @@ describe("--host-ip mode", () => {
   it("refuses when that /32 rule is already present", async () => {
     const s = sg(); s.i[0].IpRanges.push({ CidrIp: CIDR }); writeFileSync(join(dir, "sg.json"), JSON.stringify(s));
     const r = await run(HOSTIP, { env: { MOCK_SHARED_ENI: "endpoints" } });
-    expect(r.code).toBe(1);
+    expect(r.code, r.out).toBe(1);
     expect(r.out).toContain("ALREADY exists");
     expect(authorizeCalls()).toHaveLength(0);
   });
   it("does nothing unless the exact phrase is typed", async () => {
     const r = await run(HOSTIP, { input: "yes\n" });
-    expect(r.code).toBe(0);
+    expect(r.code, r.out).toBe(0);
     expect(r.out).toContain("Declined. Nothing was changed.");
     expect(authorizeCalls()).toHaveLength(0);
     expect(sg()).toEqual(INITIAL_SG);
   });
   it("a database failure after opening: the /32 rule is removed and verified", async () => {
     const r = await run(HOSTIP, { env: { MOCK_PSQL_FAIL: "1" } });
-    expect(r.code).toBe(1);
+    expect(r.code, r.out).toBe(1);
     expect(r.out).toContain("RESTORED (verified)");
     expect(sg()).toEqual(INITIAL_SG);
     expect(marker()).toBe(false);
@@ -393,14 +404,14 @@ describe("--host-ip mode", () => {
   }, 40000);
   it("a hung authorize ends as TIMED OUT and the group is verified unchanged", async () => {
     const r = await run(HOSTIP, { env: { ...FAST, MOCK_HANG: "ec2-authorize-security-group-ingress" } });
-    expect(r.code).toBe(1);
+    expect(r.code, r.out).toBe(1);
     expect(r.out).toContain("TIMED OUT");
     expect(r.out).toContain("RESTORED (verified)");
     expect(sg()).toEqual(INITIAL_SG);
   });
   it("a revoke that always fails: NOT RESTORED, exit 3, marker kept (kind cidr), recovery text names ONLY the /32 row by rule id; the next run is refused", async () => {
     const r = await run(HOSTIP, { env: { ...FAST, MOCK_REVOKE_ALWAYS_FAILS: "1" } });
-    expect(r.code).toBe(3);
+    expect(r.code, r.out).toBe(3);
     expect(r.out).toContain("NOT RESTORED (exit 3; access may still be open)");
     expect(r.out).toContain(`the ONE row with cidr ${CIDR}, tcp, 5432`);
     const lines = r.out.split("\n").filter((l) => /aws ec2 (describe-security-group-rules|revoke-security-group-ingress)/.test(l));
@@ -420,7 +431,7 @@ describe("--host-ip mode", () => {
   }, 60000);
   it("--restore-only reads the marker's kind: it removes a left-over /32 rule and verifies the original", async () => {
     const r = await run(HOSTIP, { env: { ...FAST, MOCK_REVOKE_ALWAYS_FAILS: "1" } });
-    expect(r.code).toBe(3);
+    expect(r.code, r.out).toBe(3);
     expect(cidrPresent()).toBe(true);
     const fixed = await run(["--restore-only"], { env: FAST }); // no failure injection now
     expect(fixed.code).toBe(0);
@@ -432,7 +443,7 @@ describe("--host-ip mode", () => {
   it("a rule-set change other than the single /32 is detected and the run stops", async () => {
     const r = await run(HOSTIP, { env: { MOCK_PSQL_SLEEP: "2" }, killWhen: () => { if (existsSync(join(dir, "psql-started"))) { const s = sg(); if (!s.e.some((x: any) => x.IpProtocol === "tcp")) { s.e.push({ IpProtocol: "tcp", FromPort: 1, ToPort: 1, UserIdGroupPairs: [], IpRanges: [{ CidrIp: "10.0.0.0/8" }], Ipv6Ranges: [], PrefixListIds: [] }); writeFileSync(join(dir, "sg.json"), JSON.stringify(s)); } } return false; } });
     expect(r.out).toContain("NOT RESTORED");
-    expect(r.code).toBe(3);
+    expect(r.code, r.out).toBe(3);
   }, 30000);
 });
 

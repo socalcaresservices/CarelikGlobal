@@ -83,7 +83,7 @@ describe("outage visit records", () => {
     expect(r.authorization_status).toBe("exceeds_authorization");
     expect((await visit(r.visit_id)).billable_minutes).toBe(0);
     await expectPgError(asActor(db, w.ownerA.sub, (c) => c.query("select * from ogevia_api.approve_visit_for_billing($1, 60, null, null)", [r.visit_id])),
-      "OGC09", /Only a Billing Ready visit can be approved/);
+      "OGC09", /Only a visit that is Ready for Review can be approved for billing/);
   });
 
   it("closes an unused number with a reason; reconciliation shows every issued number: entered, not used or MISSING", async () => {

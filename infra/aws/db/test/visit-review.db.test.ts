@@ -63,7 +63,7 @@ describe("no-signer visit", () => {
     expect(await visitRow(v)).toEqual(before);
     expect((await attention()).needs_review).toBe(att.needs_review - 1);
     expect(await billingRow(v)).toMatchObject({ review_state: "reviewed_not_billable", billable_minutes: 0, review_decision: "close_not_billable" });
-    await expectPgError(approve(w.managerA, v, 0), "OGC09", /must be reviewed first/);
+    await expectPgError(approve(w.managerA, v, 0), "OGC09", /must be resolved first/);
     const audit = (await db.admin.query("select action, reason from ogevia.audit_events where entity_id = $1", [id])).rows;
     expect(audit).toEqual([{ action: "visit.review_decided", reason: "Parent could not be reached; not billable (synthetic)" }]);
     await expectPgError(decide(w.managerA, v, "close_not_billable"), "OGC09", /already has a review decision/);
@@ -83,7 +83,7 @@ describe("over-authorization visit with a signature", () => {
     const before = await visitRow(v);
     expect(before).toMatchObject({ worked_minutes: 50, billable_minutes: 30, authorization_status: "exceeds_authorization" });
     expect(await review(w.managerA, v)).toMatchObject({ review_reasons: ["over_authorization"], allowed_decisions: ["accept_capped_billable", "close_not_billable"] });
-    await expectPgError(approve(w.managerA, v, 30), "OGC09", /reviewed first/);
+    await expectPgError(approve(w.managerA, v, 30), "OGC09", /must be resolved first/);
     const key = randomUUID();
     const id = await decide(w.managerA, v, "accept_capped_billable", "Signed; the 20 minutes over the authorization are not billable (synthetic)", key);
     expect(await decide(w.managerA, v, "accept_capped_billable", "Signed; the 20 minutes over the authorization are not billable (synthetic)", key)).toBe(id);
@@ -94,7 +94,7 @@ describe("over-authorization visit with a signature", () => {
     await expectPgError(revoke(w.managerA, id), "OGC09", /void the approval first/);
     await q(w.managerA, "select ogevia_api.void_billing_approval($1, 'Synthetic void', null)", [approval]);
     await revoke(w.managerA, id);
-    await expectPgError(approve(w.managerA, v, 30), "OGC09", /reviewed first/);
+    await expectPgError(approve(w.managerA, v, 30), "OGC09", /must be resolved first/);
   });
 });
 

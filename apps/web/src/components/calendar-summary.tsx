@@ -4,7 +4,7 @@
 // cross-check, work not yet complete, and an optional visit detail page.
 import type { ClientMonthSummary } from "@/lib/client-month-summary";
 import type { MonthlyServiceSummaryRow } from "@/lib/sv-backend";
-import { formatDateOnly, formatDuration, formatTimeRange, VISIT_STATUS_LABEL } from "@/lib/service-verification";
+import { formatBalance, formatDateOnly, formatDuration, formatTimeRange, VISIT_STATUS_LABEL } from "@/lib/service-verification";
 
 type LoadState = "loading" | "error" | "ready";
 
@@ -31,9 +31,11 @@ export function CalendarSummary({
       worked: t.worked + r.workedMinutes,
       billable: t.billable + r.billableMinutes,
       reserved: t.reserved + (r.reservedMinutes ?? 0),
-      remaining: t.remaining + r.remainingMinutes,
+      // A total counts each authorization's unused time only; one that is over its limit never uses up another's, and the overage is shown beside it.
+      remaining: t.remaining + Math.max(r.remainingMinutes, 0),
+      over: t.over + Math.max(-r.remainingMinutes, 0),
     }),
-    { authorized: 0, worked: 0, billable: 0, reserved: 0, remaining: 0 },
+    { authorized: 0, worked: 0, billable: 0, reserved: 0, remaining: 0, over: 0 },
   );
   const ready = serviceRowsState === "ready" && visitsState === "ready";
 
@@ -108,7 +110,7 @@ export function CalendarSummary({
                     <td className={td}>{formatDuration(r.workedMinutes)}</td>
                     <td className={td}>{formatDuration(r.billableMinutes)}</td>
                     <td className={td}>{formatDuration(r.reservedMinutes ?? 0)}</td>
-                    <td className={td}>{formatDuration(r.remainingMinutes)}</td>
+                    <td className={`${td} ${r.remainingMinutes < 0 ? "font-semibold text-red-700" : ""}`}>{formatBalance(r.remainingMinutes)}</td>
                   </tr>
                 ))}
                 {serviceRows.length > 1 ? (
@@ -118,7 +120,7 @@ export function CalendarSummary({
                     <td className={td}>{formatDuration(totals.worked)}</td>
                     <td className={td}>{formatDuration(totals.billable)}</td>
                     <td className={td}>{formatDuration(totals.reserved)}</td>
-                    <td className={td}>{formatDuration(totals.remaining)}</td>
+                    <td className={td}>{formatDuration(totals.remaining)}{totals.over > 0 ? <span className="block text-xs text-red-700">Over by {formatDuration(totals.over)}</span> : null}</td>
                   </tr>
                 ) : null}
               </tbody>

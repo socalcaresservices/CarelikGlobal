@@ -194,12 +194,20 @@ export interface MonthlyServiceSummaryRow {
   workedMinutes: number;
   verifiedMinutes: number;
   billableMinutes: number;
-  // Authorized - billable - scheduled (reserved by assigned Care Requests), as the assignment cap counts it (0016).
+  // Authorized - committed (billable + adjustments + scheduled), as the assignment cap counts it (0016, 0057). Negative = over the limit.
   remainingMinutes: number;
   reviewMinutes: number;
   visitCount: number;
   // Time held by assigned Care Request shifts not yet signed (0016).
   reservedMinutes?: number;
+  // 0057: committed = billable + approved rounding adjustments + reserved; remaining = authorized - committed and is NEGATIVE when over the limit.
+  adjustmentMinutes?: number;
+  committedMinutes?: number;
+  overLimitMinutes?: number;
+  utilizationPercent?: number | null;
+  authorizationTier?: "healthy" | "near_limit" | "critical" | null;
+  daysUntilExpiry?: number;
+  expiringSoon?: boolean;
   /** AWS: legal name from the restricted directory (null without clients.names.read). */
   clientName?: string | null;
 }
@@ -263,7 +271,17 @@ export interface BillingReviewRow {
   reviewDecision?: "accept_capped_billable" | "close_not_billable" | "accept_late_confirmation" | null;
   /** AWS (0036): the most minutes a person may approve (billable, or minutes accepted from a late confirmation). */
   eligibleMinutes?: number | null;
+  /** AWS (0062): the server's billing state, and the last voided approval. Absent on older back ends. */
+  billingState?: BillingState | null;
+  activeApprovalId?: string | null;
+  lastVoidAt?: string | null;
+  lastVoidReason?: string | null;
+  lastVoidedByName?: string | null;
 }
+
+/** 0062. Approval is not submission or payment. There is deliberately no "billed" state. */
+export type BillingState =
+  | "needs_correction" | "waiting_for_signature" | "late_response_to_review" | "ready_for_review" | "approved_for_billing" | "voided" | "reviewed_not_billable";
 
 /** A human billing approval. rateCents/amountCents are null unless the caller holds billing.read (owner). */
 export interface BillingApprovalRow {

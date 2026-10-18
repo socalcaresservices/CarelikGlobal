@@ -33,6 +33,7 @@ import { cn } from "@carelik/ui";
 import { useOrganization } from "@/providers/organization-provider";
 import { actionCategories, EXCEPTIONS_ROUTE } from "./action-needed";
 import { urgentBadge, useAttentionOverview } from "./attention";
+import { NotificationsBell } from "./notifications-bell";
 import { AppearanceApplier } from "./appearance/use-appearance";
 import { useAttention, useBranding, useLogo, useMyDisplayName, viewKind, VIEW_TITLE } from "./aws-workspace";
 import { EnvironmentBanner } from "./environment-marker";
@@ -446,6 +447,7 @@ export function AwsShell({ children }: PropsWithChildren) {
                 {badge.count !== null ? <span className="font-og-mono tabular-nums">{badge.count}</span> : null}
               </Link>
             ) : null}
+            {canSeeAttention ? <NotificationsBell /> : null}
             {/* A user who belongs to more than one organization switches here (unchanged behaviour). */}
             {organizations.length > 1 ? (
               <select

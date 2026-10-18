@@ -163,8 +163,8 @@ describe("F1: a minute is counted once, as used OR as reserved", () => {
 
 // =====================================================================================================================
 describe("F2: the Action Needed total has one definition", () => {
-  // OBSERVED FAILURE: the server total omits Ready for Approval; the web total (the one users see) adds it.
-  it.fails("the server total equals the total the web displays for the same row", async () => {
+  // FIXED by 0077 (was `it.fails`): the server total now includes Ready for Approval for people who may see billing, like the web total.
+  it("the server total equals the total the web displays for the same row", async () => {
     const f = await freshClient(db, w, w.caregiverA2, 600);
     await signedVisit(db, w.caregiverA2, w, 30, w.orgA, f.client, f.service); // billing ready, not approved
     const row = (await q(w.ownerA, "select * from ogevia_api.get_attention_summary($1)", [w.orgA]))[0];
@@ -197,8 +197,8 @@ describe("F4 / D10: only urgent coverage gaps (start within 48 h) count toward A
     expect(await uncovered()).toBe(before + 1);
   });
 
-  // OBSERVED FAILURE: an open shift 10 days away is counted today (no urgency window).
-  it.fails("REPRODUCTION: an open shift starting in 10 days is NOT counted", async () => {
+  // FIXED by 0077 (was `it.fails`): only shifts starting within 48 hours (or under way) count; later ones are Upcoming staffing.
+  it("an open shift starting in 10 days is NOT counted", async () => {
     const f = await freshClient(db, w, w.caregiverA1, 600);
     const before = await uncovered();
     await openShift(f, 240);
@@ -212,8 +212,8 @@ describe("F6: every reserved minute is visible somewhere on the dashboard", () =
     (await q(w.managerA, "select * from ogevia_api.get_utilisation_overview($1, $2::date)", [w.orgA, await monthStart()]))
       .find((r) => r.service_id === w.serviceA);
 
-  // OBSERVED FAILURE: a shift that began 30 min ago with no visit yet lowers "remaining" (reserved) but is not in "scheduled ahead".
-  it.fails("REPRODUCTION: authorized = billable + scheduled + remaining for a reserved shift that has already started", async () => {
+  // FIXED by 0067 (was `it.fails`): a shift that began 30 min ago with no visit yet lowers "remaining" (reserved) and is now in the scheduled figure (underway).
+  it("authorized = billable + scheduled + remaining for a reserved shift that has already started", async () => {
     const o0 = await overview();
     const f = await freshClient(db, w, w.caregiverA1, 600);
     await reservedShift(w.caregiverA1, f, -30, 60);
@@ -227,14 +227,17 @@ describe("F6: every reserved minute is visible somewhere on the dashboard", () =
 
 // =====================================================================================================================
 describe("F8: a retroactive decrease reports the reservations it puts over the cap", () => {
-  // OBSERVED FAILURE: amend_client_authorization returns visit impacts only; reservations over the new cap are not reported.
-  it.fails("REPRODUCTION: lowering 600 -> 300 with 480 reserved reports the affected shifts", async () => {
+  // FIXED by 0068 (was `it.fails`): the amendment reports and stores the reserved shifts it puts over the new cap.
+  it("lowering 600 -> 300 with 480 reserved reports the affected shifts", async () => {
     const f = await freshClient(db, w, w.caregiverA1, 600);
     for (const h of [24, 48, 72, 96]) await reservedShift(w.caregiverA1, f, h * 60, 120);
     expect(await summary(f)).toMatchObject({ authorized_minutes: 600, reserved_minutes: 480, remaining_minutes: 120 });
     const rows = await api.amend(db, w.managerA, f.auth, 300);
-    expect(await summary(f)).toMatchObject({ authorized_minutes: 300, reserved_minutes: 480, remaining_minutes: 0 });
-    expect(rows.some((r) => /shift|reserv/i.test(r.impact_kind ?? ""))).toBe(true);
+    expect(await summary(f)).toMatchObject({ authorized_minutes: 300, reserved_minutes: 480, remaining_minutes: -180, over_limit_minutes: 180 }); // signed, never clamped to zero (0057)
+    // 4 x 120 min reserved against 300 free: in time order the first two (240) fit, the later two are reported
+    const shifts = rows.filter((r) => /reserved_shift/.test(r.impact_kind ?? ""));
+    expect(shifts).toHaveLength(2);
+    expect(shifts.every((r) => r.impact_kind === "reserved_shift_over_cap" && r.affected_shift_id && r.impact_id && r.impact_minutes === 120)).toBe(true);
   });
 
   it("CONTROL (passes today): after the decrease no further time can be scheduled", async () => {

@@ -1,6 +1,7 @@
 // Caregiver compliance (migration 0055). OWNER-DEFINED rules, not verified legal requirements. The database decides everything;
 // these hooks only fetch and refresh. Kept out of the component files so hot reload keeps working.
 import { useQuery } from "@tanstack/react-query";
+import { formatDateOnly } from "@/lib/service-verification";
 import { useOrganization } from "@/providers/organization-provider";
 import { useAwsApi } from "../aws-workspace";
 
@@ -48,9 +49,22 @@ export interface CaregiverComplianceState {
   hold: { id: string; openedAt: string; automatic: boolean; reasons: ComplianceReason[]; graceClosed: boolean } | null;
   eligible: boolean;
   hireDateRequired: boolean;
+  shiftRisks?: ShiftRisk[];
 }
 
-export interface HoldShift { flagId: string; shiftId: string; startsAt: string; endsAt: string; clientCode: string | null; seriesId: string | null }
+export interface HoldShift { flagId: string; shiftId: string; startsAt: string; endsAt: string; clientCode: string | null; seriesId: string | null; inProgress?: boolean; visitId?: string | null }
+/** 0066: a scheduled shift whose CPR/TB is expired, or expires during the shift. Read live; nothing here changes the shift or ends a visit. */
+export interface ShiftRisk {
+  shiftId: string;
+  startsAt: string;
+  endsAt: string;
+  requirement: "cpr" | "tb";
+  documentStatus: "expired" | "expires_during";
+  validUntil: string | null;
+  inProgress: boolean;
+  visitId: string | null;
+}
+export interface HoldShiftRisk extends ShiftRisk { caregiverRecordId: string; caregiverCode: string; caregiverName: string; clientCode: string | null; onHold: boolean }
 export interface HoldAssignment { flagId: string; assignmentId: string; clientCode: string | null; effectiveStart: string; effectiveEnd: string | null }
 export interface HoldVisit { visitId: string; timeIn: string; clientCode: string | null; shiftId: string | null }
 export interface ComplianceHold {
@@ -67,7 +81,8 @@ export interface ComplianceHold {
 }
 export interface ComplianceHolds {
   holds: ComplianceHold[];
-  totals: { holds: number; affectedShifts: number; affectedAssignments: number; inProgressVisits: number };
+  totals: { holds: number; affectedShifts: number; affectedAssignments: number; inProgressVisits: number; shiftsAtRisk?: number; shiftsAtRiskInProgress?: number };
+  shiftsAtRisk?: HoldShiftRisk[];
 }
 
 export const COMPLIANCE_KEYS = ["caregiver-compliance", "compliance-holds", "aws-attention", "readiness", "document-readiness"] as const;
@@ -117,3 +132,6 @@ export function fixLink(reason: Pick<ComplianceReason, "requirement" | "code">, 
   if (reason.code.endsWith("_no_hire_date")) return { to: `/care-team/${caregiverRecordId}#hire-date`, label: "Enter the hire date" };
   return { to: "/documents", label: `Open ${reason.requirement.toUpperCase()} documents` };
 }
+
+export const riskLabel = (r: { requirement: string; documentStatus: string; validUntil: string | null }) =>
+  `${r.requirement.toUpperCase()} ${r.documentStatus === "expires_during" ? "expires during this shift" : "is expired for this shift"}${r.validUntil ? ` (valid through ${formatDateOnly(r.validUntil)})` : ""}`;

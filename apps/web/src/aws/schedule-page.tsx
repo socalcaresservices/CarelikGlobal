@@ -9,9 +9,16 @@ import { caregiverName, useCaregivers } from "./care-team-admin";
 import { clientName, useClients, useServices } from "./client-admin";
 import { formatDuration } from "@/lib/service-verification";
 import { useAgencyClock } from "./agency-clock";
-import { RecurringSeriesForm, RescheduleForm, SeriesList } from "./recurring-schedule";
+import { RecurringSeriesForm, RejectedDates, RescheduleForm, SeriesList } from "./recurring-schedule";
+import { PickupRequestsPanel } from "./pickup-requests";
+import { ReconcileShiftsPanel } from "./reconcile-shifts";
+import type { RejectedDate } from "./recurring-format";
 import { AssignmentChecks } from "./readiness/assignment-checks";
 import { HourLimitsPanel, MakeupForm } from "./scheduling-extras";
+import { useClientAuthorizations } from "./client-admin";
+import { useAssignments } from "./assignments-data";
+import { applyFilters, DISPLAY_BADGE, DISPLAY_LABEL, NO_FILTERS, stateOfShift, stepAnchor, viewRange, type CalendarView, type ShiftFilters } from "./schedule-model";
+import { FilterBar, MonthGrid, ReplacementSuggestions, SchedulingOverview, ViewTabs } from "./schedule-views";
 
 /**
  * Schedule (0026): staff-scheduled shifts, call-outs, replacements and
@@ -47,6 +54,12 @@ export interface Shift {
   availabilityOverrideReason?: string | null;
   /** 0053: the missed shift this one makes up for. */
   makeupForShiftId?: string | null;
+  /** 0075: what happened to the shift (verification pending, partial, missed, not delivered ...), decided once by the database. */
+  displayState?: string | null;
+  visitStatus?: string | null;
+  visitWorkedMinutes?: number | null;
+  scheduledMinutes?: number | null;
+  reconciliationOutcome?: string | null;
 }
 interface CoverageEvent { eventType: "called_out" | "reassigned"; createdAt: string; reason: string | null; originalCaregiverName: string | null; replacementCaregiverName: string | null; recordedBy: string }
 interface MyShift { shiftId: string; startsAt: string; endsAt: string; clientCode: string; serviceName: string | null; coverageState: string; canCallOut: boolean }
@@ -59,7 +72,6 @@ const STATE_BADGE: Record<CoverageState, string> = {
 const inputClass = "mt-1 block w-full rounded-lg border border-slate-200 px-3 py-2 text-base";
 const message = (cause: unknown, fallback: string) => (cause instanceof Error ? cause.message : fallback);
 
-const addDays = (d: string, n: number) => new Date(Date.parse(`${d}T12:00:00Z`) + n * 864e5).toISOString().slice(0, 10);
 const hours = (minutes: number) => `${Math.floor(minutes / 60)} h${minutes % 60 ? ` ${minutes % 60} min` : ""}`;
 
 function useRefreshSchedule() {
@@ -67,7 +79,7 @@ function useRefreshSchedule() {
   return () => queryClient.invalidateQueries({ queryKey: ["aws-shifts"] });
 }
 
-function AddShiftForm({ onDone }: { onDone: (text: string) => void }) {
+function AddShiftForm({ onDone, initialClientId = "" }: { onDone: (text: string) => void; initialClientId?: string }) {
   const api = useAwsApi();
   const refresh = useRefreshSchedule();
   const { today } = useAgencyClock();
@@ -75,7 +87,23 @@ function AddShiftForm({ onDone }: { onDone: (text: string) => void }) {
   const clients = useClients();
   const services = useServices();
   const caregivers = useCaregivers();
-  const [form, setForm] = useState({ clientId: "", serviceId: "", caregiverRecordId: "", date: today, startTime: "09:00", endTime: "12:00" });
+  const [form, setForm] = useState({ clientId: initialClientId, serviceId: "", caregiverRecordId: "", date: today, startTime: "09:00", endTime: "12:00" });
+  const [prefilled, setPrefilled] = useState<string[]>([]);
+  const auths = useClientAuthorizations(form.clientId || undefined);
+  const assigned = useAssignments({ clientId: form.clientId || undefined });
+  // Prefill from the client's record (B3-R3): the services the client is authorized for, the one service when there is only one, and the caregiver when exactly one is assigned to it.
+  const authorizedServices = useMemo(() => [...new Set((auths.data ?? []).filter((a) => a.isCurrent && a.periodEnd >= today).map((a) => a.serviceId))], [auths.data, today]);
+  useEffect(() => {
+    if (!form.clientId) return;
+    const filled: string[] = [];
+    let serviceId = form.serviceId, caregiverRecordId = form.caregiverRecordId;
+    if (!serviceId && authorizedServices.length === 1) { serviceId = authorizedServices[0]!; filled.push("service"); }
+    const candidates = [...new Set((assigned.data ?? []).filter((a) => a.state === "current" && a.caregiverRecordId && (!serviceId || a.serviceId === serviceId)).map((a) => a.caregiverRecordId!))];
+    if (serviceId && !caregiverRecordId && candidates.length === 1) { caregiverRecordId = candidates[0]!; filled.push("caregiver"); }
+    if (filled.length === 0) return;
+    setForm((f) => ({ ...f, serviceId: f.serviceId || serviceId, caregiverRecordId: f.caregiverRecordId || caregiverRecordId }));
+    setPrefilled((p) => [...new Set([...p, ...filled])]);
+  }, [form.clientId, form.serviceId, form.caregiverRecordId, authorizedServices, assigned.data]);
   const [state, setState] = useState<{ busy: boolean; error: string | null }>({ busy: false, error: null });
   const [ready, setReady] = useState<boolean | null>(null);
   const key = useRef(newIdempotencyKey());
@@ -111,7 +139,7 @@ function AddShiftForm({ onDone }: { onDone: (text: string) => void }) {
         <label htmlFor="sh-service" className="block text-sm font-medium text-slate-700">Service</label>
         <select id="sh-service" value={form.serviceId} onChange={(e) => set("serviceId", e.target.value)} className={inputClass}>
           <option value="">Choose a service</option>
-          {(services.data ?? []).filter((s) => s.isActive).map((s) => <option key={s.serviceId} value={s.serviceId}>{s.name} ({s.code})</option>)}
+          {(services.data ?? []).filter((s) => s.isActive && (authorizedServices.length === 0 || authorizedServices.includes(s.serviceId))).map((s) => <option key={s.serviceId} value={s.serviceId}>{s.name} ({s.code})</option>)}
         </select>
       </div>
       <div>
@@ -133,6 +161,7 @@ function AddShiftForm({ onDone }: { onDone: (text: string) => void }) {
           <AssignmentChecks onReady={setReady} input={{ caregiverRecordId: form.caregiverRecordId, serviceId: form.serviceId, ...(form.clientId ? { clientId: form.clientId } : {}), date: form.date, startTime: form.startTime, endTime: form.endTime }} />
         </div>
       ) : null}
+      {prefilled.length > 0 ? <p data-testid="prefill-note" className="text-xs text-slate-700 sm:col-span-2">Filled in from the client&apos;s record: {prefilled.join(" and ")}. Change anything you need to.</p> : null}
       <p className="text-xs text-slate-600 sm:col-span-2">Times are the agency's local time. An end time earlier than the start means the next day. The hours are reserved against the client's current authorization and refused if not enough time is left this month.</p>
       {state.error ? <p role="alert" className="text-sm text-red-700 sm:col-span-2">{state.error}</p> : null}
       <div className="sm:col-span-2"><Button type="submit" disabled={state.busy || (!!form.caregiverRecordId && ready === false)}>{state.busy ? "Scheduling…" : "Schedule shift"}</Button></div>
@@ -145,7 +174,7 @@ type Action = "callout" | "assign" | "cancel" | "history" | "reschedule" | "make
 function ShiftActions({ s, action, onClose, onDone }: { s: Shift; action: Exclude<Action, null | "reschedule" | "makeup">; onClose: () => void; onDone: (text: string) => void }) {
   const api = useAwsApi();
   const refresh = useRefreshSchedule();
-  const { activeOrganizationId } = useOrganization();
+  const { activeOrganizationId, hasPermission } = useOrganization();
   const caregivers = useCaregivers();
   const [reason, setReason] = useState("");
   const [pick, setPick] = useState("");
@@ -198,6 +227,9 @@ function ShiftActions({ s, action, onClose, onDone }: { s: Shift; action: Exclud
   }
   return (
     <form onSubmit={(e) => { e.preventDefault(); void submit(); }} className="mt-2 grid gap-2 rounded-lg bg-slate-50 p-2 sm:grid-cols-2">
+      {action === "assign" && s.serviceId && (hasPermission("matching.read") || hasPermission("shifts.manage")) ? (
+        <div className="sm:col-span-2"><ReplacementSuggestions shift={s} onChoose={(rec) => { setPick(rec); key.current = newIdempotencyKey(); }} /></div>
+      ) : null}
       {action === "assign" ? (
         <div className="sm:col-span-2">
           <label htmlFor={`${id}-cg`} className="block text-xs font-medium text-slate-600">Caregiver</label>
@@ -231,17 +263,20 @@ function ShiftActions({ s, action, onClose, onDone }: { s: Shift; action: Exclud
   );
 }
 
-function ShiftRow({ s, canManage, onDone }: { s: Shift; canManage: boolean; onDone: (text: string) => void }) {
+function ShiftRow({ s, canManage, onDone, highlight = false, autoAssign = false }: { s: Shift; canManage: boolean; onDone: (text: string) => void; highlight?: boolean; autoAssign?: boolean }) {
   const [action, setAction] = useState<Action>(null);
+  const rowRef = useRef<HTMLLIElement>(null);
+  useEffect(() => { if (highlight) rowRef.current?.scrollIntoView?.({ block: "center" }); }, [highlight]);
   const { time } = useAgencyClock();
   const open = s.coverageState === "covered" || s.coverageState === "needs_coverage";
   const editable = canManage && open && !s.fromCareRequest && !s.hasVisit && new Date(s.endsAt).getTime() > Date.now();
   const calledOut = s.coverageState === "needs_coverage" && !!s.caregiverRecordId;
+  useEffect(() => { if (highlight && autoAssign && editable) setAction((a) => a ?? "assign"); }, [highlight, autoAssign, editable]);
   return (
-    <li className={`rounded-xl border bg-og-card p-3 ${s.coverageState === "needs_coverage" ? "border-red-300" : "border-slate-200"}`}>
+    <li ref={rowRef} id={`shift-${s.shiftId}`} data-highlight={highlight ? "true" : undefined} className={`rounded-xl border bg-og-card p-3 ${highlight ? "ring-2 ring-slate-900" : ""} ${s.coverageState === "needs_coverage" ? "border-red-300" : "border-slate-200"}`}>
       <div className="flex flex-wrap items-center justify-between gap-2">
         <p className="font-semibold text-slate-950">{time(s.startsAt)}–{time(s.endsAt)} · <Link className="underline" to={`/clients/${s.clientId}`}>{s.clientName ?? "Name not set"} ({s.clientCode})</Link></p>
-        <span className={`rounded-full px-2 py-0.5 text-xs ${STATE_BADGE[s.coverageState]}`}>{STATE_LABEL[s.coverageState]}</span>
+        <span data-testid="shift-state" className={`rounded-full px-2 py-0.5 text-xs ${DISPLAY_BADGE[stateOfShift(s)] ?? STATE_BADGE[s.coverageState]}`}>{DISPLAY_LABEL[stateOfShift(s)] ?? STATE_LABEL[s.coverageState]}</span>
       </div>
       <p className="mt-1 text-sm text-slate-800">
         {s.serviceName ?? "Service"}{s.reservedMinutes ? ` · ${hours(s.reservedMinutes)} reserved` : ""} · {s.caregiverRecordId
@@ -270,39 +305,48 @@ function ShiftRow({ s, canManage, onDone }: { s: Shift; canManage: boolean; onDo
   );
 }
 
-/** Staff schedule: one week at a time, shifts needing coverage first in each day. */
+/** Staff schedule: a day, a week (the default) or a month; shifts needing coverage first in each day. Links from Action needed arrive with ?shift=, ?at=, ?client=, ?coverage=1, ?pickups=1 or ?reconcile=1. */
 export function SchedulePage() {
   const api = useAwsApi();
   const { activeOrganizationId, hasPermission } = useOrganization();
-  const { today, dayLabel } = useAgencyClock();
-  // Home's Schedule Visit and Resolve Coverage actions arrive as ?add=1 and ?coverage=1.
+  const { today, dayLabel, tz } = useAgencyClock();
   const [params] = useSearchParams();
-  const [from, setFrom] = useState(today);
+  const focusShift = params.get("shift");
+  const at = params.get("at");
+  const atDate = at && !Number.isNaN(Date.parse(at)) ? new Intl.DateTimeFormat("en-CA", { timeZone: tz }).format(new Date(at)) : null;
+  const [view, setView] = useState<CalendarView>("week");
+  const [from, setFrom] = useState(atDate ?? today);
   const [onlyOpen, setOnlyOpen] = useState(params.get("coverage") === "1");
+  const [filters, setFilters] = useState<ShiftFilters>({ ...NO_FILTERS, client: params.get("client") ?? "" });
   const [adding, setAdding] = useState(false);
   const canAdd = hasPermission("shifts.manage");
   useEffect(() => { if (params.get("add") === "1" && canAdd) setAdding(true); }, [params, canAdd]);
+  useEffect(() => { for (const id of ["pickups", "reconcile"]) if (params.get(id) === "1") document.getElementById(id)?.scrollIntoView?.({ block: "start" }); }, [params]);
   const [repeating, setRepeating] = useState(false);
   const [showSeries, setShowSeries] = useState(false);
   const [showLimits, setShowLimits] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
+  const [rejectedDates, setRejectedDates] = useState<RejectedDate[]>([]);
+  const showNotice = (t: string, rejected: RejectedDate[] = []) => { setNotice(t); setRejectedDates(rejected); };
   const canManage = hasPermission("shifts.manage");
-  const to = addDays(from, 6);
+  const { from: rangeFrom, to } = viewRange(view, from);
   const shifts = useQuery({
-    queryKey: ["aws-shifts", activeOrganizationId, from, to],
-    queryFn: async () => (await api.get<{ shifts: Shift[] }>("/v1/shifts", { organizationId: activeOrganizationId, from, to })).shifts,
+    queryKey: ["aws-shifts", activeOrganizationId, rangeFrom, to],
+    queryFn: async () => (await api.get<{ shifts: Shift[] }>("/v1/shifts", { organizationId: activeOrganizationId, from: rangeFrom, to })).shifts,
     enabled: !!activeOrganizationId && (canManage || hasPermission("visits.manage")),
   });
+  const filtered = useMemo(() => applyFilters(shifts.data ?? [], filters), [shifts.data, filters]);
   const byDay = useMemo(() => {
     const out = new Map<string, Shift[]>();
-    for (const s of shifts.data ?? []) {
+    for (const s of filtered) {
       if (onlyOpen && s.coverageState !== "needs_coverage") continue;
       out.set(s.localDate, [...(out.get(s.localDate) ?? []), s]);
     }
     return out;
-  }, [shifts.data, onlyOpen]);
+  }, [filtered, onlyOpen]);
   if (!canManage && !hasPermission("visits.manage")) return <p className="text-sm text-slate-600">You do not have access to the schedule.</p>;
   const needs = (shifts.data ?? []).filter((s) => s.coverageState === "needs_coverage").length;
+  const unit = view === "day" ? "day" : view === "week" ? "week" : "month";
   return (
     <div className="max-w-3xl space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
@@ -316,34 +360,43 @@ export function SchedulePage() {
           </div>
         ) : null}
       </div>
-      {needs > 0 ? <p className="text-base font-bold uppercase text-red-700">{needs} shift{needs === 1 ? "" : "s"} need{needs === 1 ? "s" : ""} coverage this week</p> : null}
-      {adding ? <Card className="p-3"><AddShiftForm onDone={(t) => { setAdding(false); setNotice(t); }} /></Card> : null}
-      {repeating ? <Card className="p-3"><h2 className="text-base font-semibold text-slate-950">Repeat visits</h2><RecurringSeriesForm today={today} onDone={(t) => { setRepeating(false); setNotice(t); }} /></Card> : null}
-      {showSeries && canManage ? <Card className="space-y-2 p-3"><h2 className="text-base font-semibold text-slate-950">Manage repeating shifts</h2><SeriesList today={today} onDone={setNotice} /></Card> : null}
-      {showLimits ? <Card className="p-3"><h2 className="mb-2 text-base font-semibold text-slate-950">Hours and limits</h2><HourLimitsPanel from={from} to={to} canManage={canManage} /></Card> : null}
+      <SchedulingOverview />
+      {needs > 0 ? <p className="text-base font-bold uppercase text-red-700">{needs} shift{needs === 1 ? "" : "s"} need{needs === 1 ? "s" : ""} coverage this {unit}</p> : null}
+      {adding ? <Card className="p-3"><AddShiftForm initialClientId={params.get("client") ?? ""} onDone={(t) => { setAdding(false); setNotice(t); }} /></Card> : null}
+      {repeating ? <Card className="p-3"><h2 className="text-base font-semibold text-slate-950">Repeat visits</h2><RecurringSeriesForm today={today} onDone={(t, rej) => { setRepeating(false); showNotice(t, rej); }} /></Card> : null}
+      {showSeries && canManage ? <Card className="space-y-2 p-3"><h2 className="text-base font-semibold text-slate-950">Manage repeating shifts</h2><SeriesList today={today} onDone={showNotice} /></Card> : null}
+      {showLimits ? <Card className="p-3"><h2 className="mb-2 text-base font-semibold text-slate-950">Hours and limits</h2><HourLimitsPanel from={rangeFrom} to={to} canManage={canManage} /></Card> : null}
       {notice ? <p role="status" className="text-sm text-emerald-800">{notice}</p> : null}
+      <RejectedDates items={rejectedDates} />
+      {canManage ? <div id="pickups"><PickupRequestsPanel onDone={showNotice} /></div> : null}
+      {canManage ? <div id="reconcile"><ReconcileShiftsPanel onDone={showNotice} /></div> : null}
       <div className="flex flex-wrap items-end gap-3">
-        <Button type="button" variant="secondary" onClick={() => setFrom(addDays(from, -7))}>← Previous week</Button>
-        <div><label htmlFor="sh-from" className="block text-sm font-medium text-slate-700">Week starting</label><input id="sh-from" type="date" value={from} onChange={(e) => e.target.value && setFrom(e.target.value)} className={inputClass} /></div>
-        <Button type="button" variant="secondary" onClick={() => setFrom(addDays(from, 7))}>Next week →</Button>
+        <ViewTabs view={view} onChange={(v) => { setView(v); if (v === "week") setFrom((f) => (view === "month" ? (f.slice(0, 7) === today.slice(0, 7) ? today : `${f.slice(0, 7)}-01`) : f)); }} />
+        <Button type="button" variant="secondary" onClick={() => setFrom(stepAnchor(view, from, -1))}>← Previous {unit}</Button>
+        <div><label htmlFor="sh-from" className="block text-sm font-medium text-slate-700">{view === "day" ? "Day" : view === "week" ? "Week starting" : "Month"}</label>{view === "month"
+          ? <input id="sh-from" type="month" value={from.slice(0, 7)} onChange={(e) => e.target.value && setFrom(`${e.target.value}-01`)} className={inputClass} />
+          : <input id="sh-from" type="date" value={from} onChange={(e) => e.target.value && setFrom(e.target.value)} className={inputClass} />}</div>
+        <Button type="button" variant="secondary" onClick={() => setFrom(stepAnchor(view, from, 1))}>Next {unit} →</Button>
         <label className="flex items-center gap-2 text-sm text-slate-800"><input type="checkbox" checked={onlyOpen} onChange={(e) => setOnlyOpen(e.target.checked)} /> Needs coverage only</label>
       </div>
+      <FilterBar shifts={shifts.data ?? []} filters={filters} onChange={setFilters} />
       {shifts.isLoading ? <p className="text-sm text-slate-500">Loading…</p> : null}
       {shifts.isError ? <p role="alert" className="text-sm text-red-700">{(shifts.error as Error).message}</p> : null}
-      {shifts.data && byDay.size === 0 ? <p className="text-sm text-slate-600">{onlyOpen ? "Every shift this week is covered." : "No shifts this week."}</p> : null}
-      {[...byDay.entries()].map(([d, list]) => (
+      {view === "month" && shifts.data ? <MonthGrid anchor={from} shifts={filtered.filter((s) => !onlyOpen || s.coverageState === "needs_coverage")} onPickDay={(d) => { setView("day"); setFrom(d); }} /> : null}
+      {view !== "month" && shifts.data && byDay.size === 0 ? <p className="text-sm text-slate-600">{onlyOpen ? `Every shift this ${unit} is covered.` : Object.values(filters).some(Boolean) ? "No shifts match these filters." : `No shifts this ${unit}.`}</p> : null}
+      {view !== "month" ? [...byDay.entries()].map(([d, list]) => (
         <section key={d}>
           <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-slate-700">{dayLabel(d)}</h2>
-          <ul className="space-y-2">{list.map((s) => <ShiftRow key={s.shiftId} s={s} canManage={canManage} onDone={setNotice} />)}</ul>
+          <ul className="space-y-2">{list.map((s) => <ShiftRow key={s.shiftId} s={s} canManage={canManage} onDone={setNotice} highlight={s.shiftId === focusShift} autoAssign={s.shiftId === focusShift && params.get("coverage") === "1"} />)}</ul>
         </section>
-      ))}
+      )) : null}
     </div>
   );
 }
 
-interface OpenShift { shiftId: string; startsAt: string; endsAt: string; minutes: number; clientCode: string; serviceName: string | null; coverageState: string }
+interface OpenShift { shiftId: string; startsAt: string; endsAt: string; minutes: number; clientCode: string; serviceName: string | null; coverageState: string; myRequestStatus?: "requested" | null }
 
-/** Wave 1 (G09): open shifts the caregiver is assigned to. One person gets the shift; the office is not asked. */
+/** Wave 1 (G09), changed by 0063: open shifts the caregiver is assigned to. Asking sends a request; the office confirms one caregiver. */
 function OpenShiftsSection({ onPicked }: { onPicked: (text: string) => void }) {
   const api = useAwsApi();
   const queryClient = useQueryClient();
@@ -366,32 +419,53 @@ function OpenShiftsSection({ onPicked }: { onPicked: (text: string) => void }) {
     try {
       await api.post(`/v1/shifts/${encodeURIComponent(shiftId)}/pickup`, { organizationId: activeOrganizationId }, { idempotencyKey: keys.current.get(shiftId)! });
       keys.current.delete(shiftId);
-      onPicked("You have the shift. It is now in your list below.");
+      onPicked("Request sent. The office will confirm it. The shift is not yours until they do.");
     } catch (cause) {
       keys.current.delete(shiftId);
-      setError({ shiftId, text: message(cause, "The shift was not picked up. Check your connection and try again.") });
+      setError({ shiftId, text: message(cause, "The request was not sent. Check your connection and try again.") });
     } finally {
       setBusyId(null);
-      // Whatever happened, show the true state: someone else may have filled it.
+      // Whatever happened, show the true state: someone else may have been confirmed.
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ["aws-open-shifts"] }),
         queryClient.invalidateQueries({ queryKey: ["aws-my-shifts"] }),
       ]);
     }
   }
+  async function withdraw(shiftId: string) {
+    if (busyId) return;
+    setBusyId(shiftId);
+    setError(null);
+    try {
+      await api.post(`/v1/shifts/${encodeURIComponent(shiftId)}/pickup/withdraw`, { organizationId: activeOrganizationId });
+      onPicked("Request withdrawn.");
+    } catch (cause) {
+      setError({ shiftId, text: message(cause, "The request was not withdrawn. Try again.") });
+    } finally {
+      setBusyId(null);
+      await queryClient.invalidateQueries({ queryKey: ["aws-open-shifts"] });
+    }
+  }
   if (open.isError) return <p role="alert" className="text-sm text-red-700">Open shifts could not be loaded. Refresh the page.</p>;
   if (!open.data || open.data.length === 0) return null;
   return (
     <section aria-labelledby="open-shifts-heading" className="space-y-2">
-      <h2 id="open-shifts-heading" className="text-base font-semibold text-slate-950">Open shifts you can pick up</h2>
-      <p className="text-sm text-slate-600">If someone else picks one up first, it will disappear from this list.</p>
+      <h2 id="open-shifts-heading" className="text-base font-semibold text-slate-950">Open shifts you can ask for</h2>
+      <p className="text-sm text-slate-600">Asking does not give you the shift. The office confirms one caregiver, and the shift appears in your list once it does.</p>
       <ul className="space-y-2">
         {open.data.map((s) => (
           <li key={s.shiftId} className="rounded-xl border border-sky-200 bg-sky-50 p-3">
             <p className="font-semibold text-slate-950">{when(s.startsAt)}–{time(s.endsAt)}</p>
             <p className="text-sm text-slate-800">Client {s.clientCode}{s.serviceName ? ` · ${s.serviceName}` : ""} · {formatDuration(s.minutes)}</p>
             {error?.shiftId === s.shiftId ? <p role="alert" className="mt-1 text-sm text-red-700">{error.text}</p> : null}
-            <Button type="button" className="mt-2 min-h-11" disabled={busyId !== null} loading={busyId === s.shiftId} onClick={() => void pickUp(s.shiftId)}>Pick up this shift</Button>
+            {s.myRequestStatus === "requested" ? (
+              <div className="mt-2 flex flex-wrap items-center gap-3">
+                <span data-testid="requested-badge" className="rounded-full bg-amber-100 px-3 py-1 text-sm font-semibold text-amber-900">Requested — waiting for the office</span>
+                <Button type="button" variant="secondary" className="min-h-11" disabled={busyId !== null} loading={busyId === s.shiftId} onClick={() => void withdraw(s.shiftId)}>Withdraw request</Button>
+              </div>
+            ) : (
+              <Button type="button" className="mt-2 min-h-11" disabled={busyId !== null} loading={busyId === s.shiftId} onClick={() => void pickUp(s.shiftId)}>Request this shift</Button>
+            )}
           </li>
         ))}
       </ul>

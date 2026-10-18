@@ -8,6 +8,7 @@ import type { AwsApiClient } from "@/lib/aws-api";
 import type { AwsRuntime } from "./aws-runtime";
 import { ServiceVerificationBackendContext } from "@/lib/sv-backend";
 import { createAwsServiceVerificationBackend } from "@/lib/sv-backend-aws";
+import { AuthorizationImpactsPage } from "./amendment-impacts";
 import { ServiceVerificationPage } from "@/pages/service-verification-page";
 import { ServiceVerificationReportsPage } from "@/pages/service-verification-reports-page";
 import { useOrganization } from "@/providers/organization-provider";
@@ -37,6 +38,8 @@ import { BrandingSettingsPage, ProfilePage } from "./workspace-settings-pages";
 import { PublicCareOfferPage, PublicCareRequestPage } from "./care-public-pages";
 import { ConfirmVisitPage } from "./confirm-visit-page";
 import { EnvironmentProvider } from "./environment-marker";
+import { ActionNeededPage } from "./action-needed-page";
+import { ReportingPage } from "./reporting-page";
 import { NeedsAttentionPage, UpcomingStaffingPage, VisitQueuePage } from "./attention-pages";
 import { RatesReviewPage } from "./rates-review-page";
 import { AppearancePage } from "./appearance/appearance-page";
@@ -97,6 +100,9 @@ export function AwsRoutes({ api, publicApi }: { api: AwsApiClient; publicApi: Aw
                     <Route path="/continuity" element={<ContinuityPage />} />
                     <Route path="/outage-visits" element={<OutageVisitsPage />} />
                     <Route path="/attention" element={<NeedsAttentionPage />} />
+                    <Route path="/action-needed" element={<ActionNeededPage />} />
+                    <Route path="/reporting" element={<ReportingPage />} />
+                    <Route path="/authorization-impacts" element={<AuthorizationImpactsPage />} />
                     <Route path="/staffing" element={<UpcomingStaffingPage />} />
                     <Route path="/visit-review" element={<VisitQueuePage />} />
                     <Route path="/authorizations/rates" element={<RatesReviewPage />} />

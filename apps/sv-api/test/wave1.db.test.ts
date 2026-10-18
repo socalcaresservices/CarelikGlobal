@@ -115,12 +115,32 @@ describe("open shifts (G09)", () => {
     expect(listed.status, JSON.stringify(listed.body)).toBe(200);
     expect(listed.body.shifts.find((s: any) => s.shiftId === shiftId)).toBeTruthy();
 
-    const win = await call("POST /v1/shifts/{shiftId}/pickup", w.caregiverA2, { path: { shiftId }, body: { organizationId: w.orgA }, key: randomUUID() });
-    expect(win.status, JSON.stringify(win.body)).toBe(200);
-    expect(win.body).toEqual({ coverageState: "covered" });
-    const late = await call("POST /v1/shifts/{shiftId}/pickup", w.caregiverA1, { path: { shiftId }, body: { organizationId: w.orgA }, key: randomUUID() });
+    // 0063: asking does not assign; the administrator confirms.
+    const asked = await call("POST /v1/shifts/{shiftId}/pickup", w.caregiverA2, { path: { shiftId }, body: { organizationId: w.orgA }, key: randomUUID() });
+    expect(asked.status, JSON.stringify(asked.body)).toBe(200);
+    expect(asked.body).toEqual({ pickupState: "requested" });
+    expect((await db.admin.query("select caregiver_user_id from ogevia.shifts where id = $1", [shiftId])).rows[0].caregiver_user_id).toBeNull();
+    const askedToo = await call("POST /v1/shifts/{shiftId}/pickup", w.caregiverA1, { path: { shiftId }, body: { organizationId: w.orgA }, key: randomUUID() });
+    expect(askedToo.status).toBe(200); // two caregivers may ask; the office chooses
+
+    const asCaregiver = await call("GET /v1/shift-pickups", w.caregiverA2, { query: { organizationId: w.orgA } });
+    expect(asCaregiver.body.requests).toEqual([]); // the queue is the office's
+    const queue = await call("GET /v1/shift-pickups", w.managerA, { query: { organizationId: w.orgA } });
+    expect(queue.status).toBe(200);
+    const mine = queue.body.requests.find((r: any) => r.shiftId === shiftId && r.caregiverCode === "CG-A2");
+    expect(mine).toBeTruthy();
+    expect(mine.blockers).toEqual([]);
+    const refused = await call("POST /v1/shift-pickups/{requestId}/confirm", w.caregiverA2, { path: { requestId: mine.requestId }, body: { organizationId: w.orgA }, key: randomUUID() });
+    expect(refused.status).toBe(403);
+    const won = await call("POST /v1/shift-pickups/{requestId}/confirm", w.managerA, { path: { requestId: mine.requestId }, body: { organizationId: w.orgA }, key: randomUUID() });
+    expect(won.status, JSON.stringify(won.body)).toBe(200);
+    expect(won.body).toEqual({ coverageState: "covered" });
+    const theirs = queue.body.requests.find((r: any) => r.shiftId === shiftId && r.caregiverCode === "CG-A1");
+    const late = await call("POST /v1/shift-pickups/{requestId}/confirm", w.managerA, { path: { requestId: theirs.requestId }, body: { organizationId: w.orgA }, key: randomUUID() });
     expect(late.status).toBeGreaterThanOrEqual(400);
-    expect(late.body.error.message).toMatch(/just filled/);
+    expect(late.body.error.message).toMatch(/closed|just filled|already/);
     expect((await db.admin.query("select caregiver_user_id from ogevia.shifts where id = $1", [shiftId])).rows[0].caregiver_user_id).toBe(w.caregiverA2.userId);
+    const declined = await call("POST /v1/shift-pickups/{requestId}/decline", w.managerA, { path: { requestId: theirs.requestId }, body: { organizationId: w.orgA, reason: "Synthetic" }, key: randomUUID() });
+    expect(declined.status).toBeGreaterThanOrEqual(400); // already closed when the shift was filled
   });
 });

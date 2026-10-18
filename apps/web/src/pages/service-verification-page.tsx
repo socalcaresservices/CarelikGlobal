@@ -37,6 +37,9 @@ import {
   formatVisitDate,
   formatScheduledTime,
   type VisitSignerRole,
+  formatBalance,
+  caregiverLeftMinutes,
+  CAREGIVER_BALANCE_NOTE,
 } from "@/lib/service-verification";
 
 
@@ -389,9 +392,9 @@ export function ServiceVerificationPage() {
   const authorizationMinutes = Math.round(
     Number(active?.max_monthly_hours ?? 0) * 60,
   );
-  const remainingMinutes = Math.max(
-    0,
-    authorizationMinutes - (active?.confirmed_minutes_this_month ?? 0),
+  const remainingMinutes = caregiverLeftMinutes(
+    authorizationMinutes,
+    active?.confirmed_minutes_this_month ?? 0,
   );
   const willExceed = !!active && projectedMinutes > authorizationMinutes;
 
@@ -875,6 +878,7 @@ export function ServiceVerificationPage() {
                   ) : null}
 
                   {selectedService ? (
+                    <>
                     <div className="mt-4 grid grid-cols-3 gap-2 text-center">
                       <div className="rounded-2xl border border-indigo-100 bg-indigo-100/70 p-2 text-indigo-950">
                         <p className="text-base font-bold">
@@ -896,19 +900,20 @@ export function ServiceVerificationPage() {
                       </div>
                       <div className="rounded-2xl border border-emerald-100 bg-emerald-100/80 p-2 text-emerald-950">
                         <p className="text-base font-bold">
-                          {formatDuration(
-                            Math.max(
-                              0,
-                              Number(
-                                selectedService.max_monthly_hours -
-                                  selectedService.hours_used_this_month,
-                              ),
-                            ) * 60,
+                          {formatBalance(
+                            caregiverLeftMinutes(
+                              Number(selectedService.max_monthly_hours) * 60,
+                              Number(selectedService.hours_used_this_month) * 60,
+                            ),
                           )}
                         </p>
-                        <p className="text-[11px] text-indigo-800">Remaining</p>
+                        <p className="text-[11px] text-indigo-800">Left to record</p>
                       </div>
                     </div>
+                    <p className="mt-2 text-center text-[11px] text-slate-600">
+                      {CAREGIVER_BALANCE_NOTE}
+                    </p>
+                    </>
                   ) : null}
                 </div>
               ) : null}
@@ -1011,16 +1016,13 @@ export function ServiceVerificationPage() {
                       </p>
                     </div>
                     <div className="flex items-center justify-between rounded-2xl border border-emerald-100 bg-emerald-100/80 p-2">
-                      <p className="text-xs text-emerald-800">Remaining</p>
+                      <p className="text-xs text-emerald-800">Left to record</p>
                       <p className="text-sm font-bold text-emerald-950">
-                        {formatDuration(
-                          Math.max(
-                            0,
-                            Number(
-                              selectedService.max_monthly_hours -
-                                selectedService.hours_used_this_month,
-                            ),
-                          ) * 60,
+                        {formatBalance(
+                          caregiverLeftMinutes(
+                            Number(selectedService.max_monthly_hours) * 60,
+                            Number(selectedService.hours_used_this_month) * 60,
+                          ),
                         )}
                       </p>
                     </div>
@@ -1171,10 +1173,13 @@ export function ServiceVerificationPage() {
               ) : (
                 <div className="rounded-3xl border border-emerald-200 bg-emerald-50 p-4 text-center shadow-sm">
                   <p className="text-3xl font-extrabold tabular-nums text-emerald-800">
-                    {formatDuration(remainingMinutes)}
+                    {formatBalance(remainingMinutes)}
                   </p>
                   <p className="mt-1 text-sm font-semibold text-emerald-900">
-                    Authorized time remaining this month
+                    Authorized time left to record this month
+                  </p>
+                  <p className="mt-1 text-xs text-emerald-900">
+                    {CAREGIVER_BALANCE_NOTE}
                   </p>
                 </div>
               )}
@@ -1601,7 +1606,7 @@ export function ServiceVerificationPage() {
                         <dt className="text-slate-500">Billable</dt>
                         <dd className="font-semibold text-slate-950">{formatDuration(result.outcome.billable_minutes)}</dd>
                         <dt className="text-slate-500">Authorization left</dt>
-                        <dd className="font-semibold text-slate-950">{formatDuration(result.remaining_minutes)}</dd>
+                        <dd className="font-semibold text-slate-950">{formatBalance(result.remaining_minutes)}</dd>
                         <dt className="text-slate-500">Confirmed by</dt>
                         <dd className="font-semibold text-slate-950">{o.methodLabel}</dd>
                         <dt className="text-slate-500">Billing</dt>

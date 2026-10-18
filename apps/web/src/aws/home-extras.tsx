@@ -7,8 +7,9 @@ import { useOrganization } from "@/providers/organization-provider";
 import { coverageTone, freshness, REFRESH_MS, type AttentionOverview } from "./attention";
 import { useAwsApi } from "./aws-workspace";
 import { useAgencyClock } from "./agency-clock";
-import { todaysVisits, useNow } from "./home-data";
+import { REASON_SHORT, shiftIssueLabel, todaysVisits, useHomeIssues, useNow } from "./home-data";
 import type { Shift } from "./schedule-page";
+import { issueDestination, KIND_LABEL, SEVERITY_TONE } from "./action-issues";
 import { StatusChip } from "./ui/status-chip";
 
 const LIMIT = 6;
@@ -20,6 +21,7 @@ export function TodaysVisits() {
   const { today } = useAgencyClock();
   const allowed = hasPermission("shifts.manage") || hasPermission("visits.manage");
   const now = useNow();
+  const homeIssues = useHomeIssues();
   const q = useQuery({
     queryKey: ["aws-shifts", activeOrganizationId, today, today],
     queryFn: async () => (await api.get<{ shifts: Shift[] }>("/v1/shifts", { organizationId: activeOrganizationId, from: today, to: today })).shifts,
@@ -45,6 +47,7 @@ export function TodaysVisits() {
           {shown.map((s) => {
             const open = s.coverageState === "needs_coverage";
             const started = Date.parse(s.startsAt) <= now;
+            const blocked = open ? null : shiftIssueLabel(homeIssues.data?.issues, s.shiftId);
             return (
               <li key={s.shiftId} className="flex flex-wrap items-center gap-x-3 gap-y-1 px-3 py-2.5 text-sm">
                 <span className="basis-full font-og-mono tabular-nums text-og-ink sm:basis-auto">{formatClockTime(s.startsAt)}–{formatClockTime(s.endsAt)}</span>
@@ -53,6 +56,7 @@ export function TodaysVisits() {
                   <span className="text-og-sub"> · {open ? "No caregiver" : (s.caregiverName ?? s.caregiverCode ?? "Caregiver assigned")}</span>
                 </span>
                 {open ? <StatusChip tone={coverageTone(s.startsAt, now)}>{coverageTone(s.startsAt, now) === "red" ? "Critical" : "Urgent"}</StatusChip>
+                  : blocked ? <StatusChip tone={blocked.tone} className="" >{blocked.label}</StatusChip>
                   : <span className="text-og-sub">{started && s.hasVisit ? "In progress" : "Scheduled"}</span>}
               </li>
             );
@@ -104,3 +108,47 @@ export function RefreshStatus({ overview, loading, failed, refreshing, onRefresh
   );
 }
 
+
+/** A compact Critical-then-Urgent list: what, why it is on the list, when it is due, one direct action, and View all. Routine queues are not listed here. */
+export function TopIssues() {
+  const q = useHomeIssues();
+  if (q.isLoading || (!q.data && !q.isError)) return null;
+  if (q.isError) return <p role="alert" className="text-sm text-red-700" data-testid="top-issues-error">The list of items that need action could not be loaded. It is not shown as empty. Use Refresh to try again.</p>;
+  const urgent = (q.data?.issues ?? []).filter((i) => i.severity !== "routine");
+  const total = q.data?.counts?.actionNeeded ?? urgent.length;
+  const shown = urgent.slice(0, 5);
+  return (
+    <section aria-labelledby="top-issues-heading" className="space-y-2" data-testid="top-issues">
+      <div className="flex items-center justify-between gap-3">
+        <h2 id="top-issues-heading" className="text-lg font-bold text-og-ink">Needs action first</h2>
+        <Link className={linkClass} to="/action-needed">View all{total > shown.length ? ` (${total})` : ""}</Link>
+      </div>
+      {shown.length === 0 ? <p className="text-sm text-og-sub">Nothing is critical or urgent right now.</p> : (
+        <ul className="divide-y divide-og-line rounded-og border border-og-line bg-og-card">
+          {shown.map((i) => {
+            const dest = issueDestination(i);
+            const tone = SEVERITY_TONE[i.severity];
+            return (
+              <li key={i.issueKey} className="flex flex-wrap items-center gap-x-3 gap-y-1 px-3 py-2.5 text-sm" data-testid="top-issue">
+                <StatusChip tone={tone}>{tone === "red" ? "Critical" : "Urgent"}</StatusChip>
+                <span className="min-w-0 flex-1 text-og-ink">
+                  <span className="font-semibold">{KIND_LABEL[i.kind] ?? i.kind}{i.clientCode ? ` · ${i.clientCode}` : ""}</span>
+                  <span className="text-og-sub"> · {REASON_SHORT[i.reason] ?? i.recommendedAction}{i.deadline ? ` · ${i.severity === "critical" ? "was due" : "due"} ${formatClockTime(i.deadline)}` : ""}</span>
+                </span>
+                <Link className={linkClass} to={dest.to}>{dest.label}</Link>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+    </section>
+  );
+}
+
+export function CollapseButton({ collapsed, onToggle, label }: { collapsed: boolean; onToggle: () => void; label: string }) {
+  return (
+    <button type="button" aria-expanded={!collapsed} onClick={onToggle} className="inline-flex min-h-[44px] items-center text-sm font-semibold text-og-link underline md:min-h-[32px]">
+      {collapsed ? `Show ${label}` : `Hide ${label}`}
+    </button>
+  );
+}

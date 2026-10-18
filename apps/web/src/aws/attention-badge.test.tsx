@@ -184,7 +184,7 @@ describe("destination pages", () => {
 
   it("Upcoming staffing: grouped by date, called-out and open shown with words", async () => {
     renderAt("/staffing", "manager", () => json(200, data));
-    expect(await screen.findByTestId("staffing-summary")).toHaveTextContent("2 uncovered shifts");
+    expect(await screen.findByTestId("staffing-summary")).toHaveTextContent("2 shifts");
     expect(screen.getByText("No caregiver")).toBeInTheDocument();
     expect(screen.getByText("Called out")).toBeInTheDocument();
   });

@@ -72,7 +72,7 @@ describe("D-U: unscheduled visits (G01)", () => {
     const row = (await db.admin.query("select scheduled_shift_id, unscheduled_reason from ogevia.service_visits where id = $1", [visit])).rows[0];
     expect(row).toEqual({ scheduled_shift_id: null, unscheduled_reason: "Client asked me to come (synthetic)" });
     // Approval waits for a review decision.
-    await expectPgError(approve(w.managerA, visit, 45), "OGC09", /must be reviewed first/);
+    await expectPgError(approve(w.managerA, visit, 45), "OGC09", /must be resolved first/);
     expect((await q(w.managerA, "select * from ogevia_api.get_visit_review($1)", [visit]))[0]).toMatchObject({
       review_reasons: ["unscheduled"], allowed_decisions: ["accept_capped_billable", "close_not_billable"], can_decide: true });
   });

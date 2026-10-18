@@ -11,7 +11,7 @@ import { formatDateOnly, formatDuration, formatWeekdayDate } from "@/lib/service
 import { newIdempotencyKey } from "@/lib/sv-backend";
 import { useOrganization } from "@/providers/organization-provider";
 import { useAwsApi } from "./aws-workspace";
-import { buildPattern, describePattern, hhmm, monthLabel, OUTCOME_LABEL, patternText, PLAIN_PATTERN, summarizeOccurrences, WEEKDAY_SHORT, type Occurrence, type PatternForm, type SeriesRow } from "./recurring-format";
+import { buildPattern, describePattern, hhmm, monthLabel, OUTCOME_LABEL, patternText, PLAIN_PATTERN, summarizeOccurrences, WEEKDAY_SHORT, type Occurrence, type PatternForm, type SeriesRow, type RejectedDate } from "./recurring-format";
 
 const inputClass = "mt-1 block w-full rounded-lg border border-slate-200 px-3 py-2 text-base";
 const message = (cause: unknown, fallback: string) => (cause instanceof Error ? cause.message : fallback);
@@ -52,7 +52,7 @@ function PreviewTable({ rows }: { rows: Occurrence[] }) {
 type SeriesForm = { clientId: string; serviceId: string; caregiverRecordId: string; weekdays: number[]; startTime: string; endTime: string; startsOn: string; endsOn: string };
 
 /** Create a series, or (with `series`) change an existing one from a date ("this and future"). */
-export function RecurringSeriesForm({ today, series, onDone }: { today: string; series?: SeriesRow; onDone: (text: string) => void }) {
+export function RecurringSeriesForm({ today, series, onDone }: { today: string; series?: SeriesRow; onDone: (text: string, rejected?: RejectedDate[]) => void }) {
   const api = useAwsApi();
   const queryClient = useQueryClient();
   const { activeOrganizationId } = useOrganization();
@@ -100,22 +100,24 @@ export function RecurringSeriesForm({ today, series, onDone }: { today: string; 
     }
   }
 
-  async function save(onConflict: "refuse" | "skip_flagged") {
+  async function save(onConflict: "save_valid" | "refuse") {
     setState({ busy: true, error: null });
     try {
       if (series) {
-        const r = await api.post<{ result: { cancelled: number; created: number; skipped: number; kept: number } }>(
+        const r = await api.post<{ result: { cancelled: number; created: number; skipped: number; kept: number; rejected?: RejectedDate[] } }>(
           `/v1/shift-series/${encodeURIComponent(series.seriesId)}/change`,
           { organizationId: activeOrganizationId, fromDate: form.startsOn, caregiverRecordId: form.caregiverRecordId || null, weekdays: form.weekdays,
             startTime: form.startTime, endTime: form.endTime, endsOn: form.endsOn || null, onConflict, reason: reason.trim(), pattern: pattern(), clearPattern: pattern() === null },
           { idempotencyKey: key.current });
-        onDone(`Series changed from ${formatDateOnly(form.startsOn)}: ${r.result.cancelled} earlier-planned dates cancelled, ${r.result.created} scheduled${r.result.skipped ? `, ${r.result.skipped} skipped as listed` : ""}${r.result.kept ? `; ${r.result.kept} kept because a visit is linked or it has started` : ""}.`);
+        onDone(`Series changed from ${formatDateOnly(form.startsOn)}: ${r.result.cancelled} earlier-planned dates cancelled, ${r.result.created} scheduled${r.result.skipped ? `, ${r.result.skipped} not saved (listed below)` : ""}${r.result.kept ? `; ${r.result.kept} kept because a visit is linked or it has started` : ""}.`, r.result.rejected);
       } else {
-        const r = await api.post<{ series: { created: number; skipped: number; reservedMinutes: number; generatedThrough: string } }>("/v1/shift-series",
+        const r = await api.post<{ series: { seriesId: string | null; created: number; skipped: number; reservedMinutes: number; generatedThrough: string; rejected?: RejectedDate[] } }>("/v1/shift-series",
           { organizationId: activeOrganizationId, clientId: form.clientId, serviceId: form.serviceId, caregiverRecordId: form.caregiverRecordId || null,
             weekdays: form.weekdays, startTime: form.startTime, endTime: form.endTime, startsOn: form.startsOn, endsOn: form.endsOn || null, onConflict, pattern: pattern() },
           { idempotencyKey: key.current });
-        onDone(`Series created: ${r.series.created} shifts scheduled through ${formatDateOnly(r.series.generatedThrough)} (${formatDuration(r.series.reservedMinutes)} reserved)${r.series.skipped ? `; ${r.series.skipped} dates skipped as listed` : ""}.`);
+        onDone(r.series.created === 0
+          ? `Nothing was saved: none of the ${r.series.skipped} dates fits (listed below).`
+          : `Series created: ${r.series.created} shifts scheduled through ${formatDateOnly(r.series.generatedThrough)} (${formatDuration(r.series.reservedMinutes)} reserved)${r.series.skipped ? `; ${r.series.skipped} dates were not saved (listed below)` : ""}.`, r.series.rejected);
       }
       key.current = newIdempotencyKey();
       await queryClient.invalidateQueries({ queryKey: ["aws-shifts"] });
@@ -242,21 +244,17 @@ export function RecurringSeriesForm({ today, series, onDone }: { today: string; 
           <PreviewTable rows={preview} />
           {flagged.length > 0 ? (
             <p role="alert" className="text-sm font-semibold text-red-800">
-              {flagged.length} {flagged.length === 1 ? "date does" : "dates do"} not fit (listed in red). Change the times, days or dates, or
-              choose to skip exactly these dates. Nothing is shortened or moved.
+              {flagged.length} {flagged.length === 1 ? "date does" : "dates do"} not fit (listed in red). {preview.length - flagged.length > 0
+                ? `Saving keeps the ${preview.length - flagged.length} that fit and lists every date that was not saved with its reason. Nothing is shortened or moved.`
+                : "None fits, so nothing can be saved. Change the times, days or dates."}
             </p>
           ) : (
             <p className="text-sm text-emerald-800">Every date fits.</p>
           )}
           <div className="flex flex-wrap gap-2">
-            <Button type="button" disabled={state.busy || flagged.length > 0 || preview.length === 0} onClick={() => void save("refuse")}>
-              {series ? "Save the change" : "Create series"}
+            <Button type="button" disabled={state.busy || preview.length - flagged.length === 0} onClick={() => void save("save_valid")}>
+              {series ? "Save the change" : "Create series"}{flagged.length > 0 && preview.length - flagged.length > 0 ? `: save the ${preview.length - flagged.length} that fit` : ""}
             </Button>
-            {flagged.length > 0 && flagged.length < preview.length ? (
-              <Button type="button" variant="secondary" disabled={state.busy} onClick={() => void save("skip_flagged")}>
-                {series ? "Save and skip" : "Create and skip"} the {flagged.length} listed {flagged.length === 1 ? "date" : "dates"}
-              </Button>
-            ) : null}
           </div>
         </div>
       ) : null}
@@ -264,7 +262,7 @@ export function RecurringSeriesForm({ today, series, onDone }: { today: string; 
   );
 }
 
-function SeriesItem({ s, today, onDone }: { s: SeriesRow; today: string; onDone: (text: string) => void }) {
+function SeriesItem({ s, today, onDone }: { s: SeriesRow; today: string; onDone: (text: string, rejected?: RejectedDate[]) => void }) {
   const api = useAwsApi();
   const queryClient = useQueryClient();
   const { activeOrganizationId } = useOrganization();
@@ -282,7 +280,7 @@ function SeriesItem({ s, today, onDone }: { s: SeriesRow; today: string; onDone:
       await queryClient.invalidateQueries({ queryKey: ["aws-shift-series"] });
       setState({ busy: false, error: null });
       setMode(null);
-      onDone(done(r.result));
+      onDone(done(r.result), (r.result as { rejected?: RejectedDate[] }).rejected);
     } catch (cause) {
       setState({ busy: false, error: message(cause, "Not saved.") });
     }
@@ -308,14 +306,14 @@ function SeriesItem({ s, today, onDone }: { s: SeriesRow; today: string; onDone:
           <button type="button" className="underline" onClick={() => setMode(mode === "end" ? null : "end")}>End from a date</button>
           {!s.endsOn || s.endsOn > s.generatedThrough ? (
             <button type="button" className="underline" disabled={state.busy}
-              onClick={() => void post(`/v1/shift-series/${encodeURIComponent(s.seriesId)}/extend`, { through: s.endsOn && s.endsOn < nextMonthEnd ? s.endsOn : nextMonthEnd, onConflict: "refuse" },
-                (r: { created: number; generatedThrough: string }) => `${r.created} more shifts scheduled through ${formatDateOnly(r.generatedThrough)}.`)}>
+              onClick={() => void post(`/v1/shift-series/${encodeURIComponent(s.seriesId)}/extend`, { through: s.endsOn && s.endsOn < nextMonthEnd ? s.endsOn : nextMonthEnd, onConflict: "save_valid" },
+                (r: { created: number; skipped?: number; generatedThrough: string }) => `${r.created} more shifts scheduled through ${formatDateOnly(r.generatedThrough)}${r.skipped ? `; ${r.skipped} dates were not saved (listed below)` : ""}.`)}>
               Schedule the next month
             </button>
           ) : null}
         </div>
       ) : null}
-      {mode === "change" ? <RecurringSeriesForm today={today} series={s} onDone={(t) => { setMode(null); onDone(t); }} /> : null}
+      {mode === "change" ? <RecurringSeriesForm today={today} series={s} onDone={(t, rej) => { setMode(null); onDone(t, rej); }} /> : null}
       {mode === "end" ? (
         <form onSubmit={(e) => { e.preventDefault();
           if (reason.trim().length < 3) return setState({ busy: false, error: "Give the reason." });
@@ -332,7 +330,7 @@ function SeriesItem({ s, today, onDone }: { s: SeriesRow; today: string; onDone:
   );
 }
 
-export function SeriesList({ today, onDone }: { today: string; onDone: (text: string) => void }) {
+export function SeriesList({ today, onDone }: { today: string; onDone: (text: string, rejected?: RejectedDate[]) => void }) {
   const api = useAwsApi();
   const { activeOrganizationId } = useOrganization();
   const series = useQuery({
@@ -382,5 +380,18 @@ export function RescheduleForm({ shiftId, localDate, startsAt, endsAt, onClose, 
       {state.error ? <p role="alert" className="text-sm text-red-700 sm:col-span-3">{state.error}</p> : null}
       <div className="flex gap-2 sm:col-span-3"><Button type="submit" disabled={state.busy}>Change this date only</Button><button type="button" className="text-sm underline" onClick={onClose}>Close</button></div>
     </form>
+  );
+}
+
+/** Every date that was not saved, with its reason (0061). Nothing is cut off. */
+export function RejectedDates({ items }: { items: RejectedDate[] }) {
+  if (items.length === 0) return null;
+  return (
+    <section data-testid="rejected-dates" aria-label="Dates that were not saved" className="rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-900">
+      <h3 className="font-semibold">{items.length} {items.length === 1 ? "date was" : "dates were"} not saved</h3>
+      <ul className="mt-1 space-y-0.5">
+        {items.map((r) => <li key={r.localDate}>{formatDateOnly(r.localDate)} — {OUTCOME_LABEL[r.reason as Occurrence["outcome"]] ?? r.reason}</li>)}
+      </ul>
+    </section>
   );
 }

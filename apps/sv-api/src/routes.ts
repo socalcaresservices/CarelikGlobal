@@ -1,6 +1,7 @@
 import { createHash, randomBytes, randomInt, randomUUID } from "node:crypto";
 import type { Queryable } from "@carelik/auth/server";
 import { ApiError } from "./errors";
+import { assertExportSize, buildReportCsv, REPORT_KEYS, sha256Hex, type ExportParams, type ReportKey } from "./exports";
 import { signatureObjectKey, validateSignaturePng, type EvidenceStore } from "./evidence";
 import { documentObjectKey, logoObjectKey, MAX_DOCUMENT_BYTES, MAX_LOGO_BYTES, validateDocumentFile, validateLogoFile } from "./documents";
 import type { HttpApiEvent } from "./http";
@@ -170,6 +171,19 @@ function clockTime(value: unknown, name: string): string {
   return value;
 }
 const q = (event: HttpApiEvent) => event.queryStringParameters ?? {};
+
+function exportFilename(report: ReportKey, p: ExportParams): string {
+  const month = p.monthStart ? p.monthStart.slice(0, 7) : "";
+  switch (report) {
+    case "monthly_chain": return `monthly-chain-${month}.csv`;
+    case "client_service_calendar": return `client-service-calendar-${month}.csv`;
+    case "monthly_service_reconciliation": return `monthly-service-reconciliation-${month}.csv`;
+    case "billing_review": return `billing-review-${month}.csv`;
+    case "audit_report": return `audit-report-${p.dateFrom ?? ""}-to-${p.dateTo ?? ""}.csv`;
+    default: return "correction-history.csv";
+  }
+}
+
 const p = (event: HttpApiEvent) => event.pathParameters ?? {};
 const orgParam = (event: HttpApiEvent) => uuid(q(event).organizationId, "organizationId");
 
@@ -498,10 +512,283 @@ export const ROUTES: Record<string, Route> = {
         newAuthorizationId: first.newAuthorizationId ?? null,
         newVersionNumber: first.newVersionNumber ?? null,
         affectedVisits: impact.filter((r) => r.affectedVisitId).map((r) => ({
-          visitId: r.affectedVisitId, status: r.affectedVisitStatus, serviceDate: r.affectedServiceDate,
+          impactId: r.impactId, visitId: r.affectedVisitId, status: r.affectedVisitStatus, serviceDate: r.affectedServiceDate,
           workedMinutes: r.affectedWorkedMinutes, billableMinutes: r.affectedBillableMinutes, impact: r.impactKind,
         })),
+        // 0068: reserved shifts that no longer fit the new terms. Reported and stored; nothing is released or moved.
+        affectedShifts: impact.filter((r) => r.affectedShiftId).map((r) => ({
+          impactId: r.impactId, shiftId: r.affectedShiftId, serviceDate: r.affectedServiceDate, reservedMinutes: r.impactMinutes, impact: r.impactKind,
+        })),
       };
+    },
+  },
+
+  // Stored amendment impacts (0068): authorizations.update or shifts.manage. Open ones by default.
+  // 0071: an authorization decrease sent this unapproved Billing Ready visit back to review. Reading needs visits.read; lifting it needs visits.manage and a note.
+  "GET /v1/visits/{visitId}/authorization-review": {
+    mutating: false,
+    handle: async ({ event, tx }) => {
+      const visit = uuid(p(event).visitId, "visitId");
+      return { review: await tx(async (db) => ((await db.query("select ogevia_api.get_visit_authorization_review($1) as r", [visit])).rows[0] as { r: unknown }).r) };
+    },
+  },
+
+  "POST /v1/visits/{visitId}/authorization-review/resolve": {
+    mutating: true,
+    handle: async ({ event, tx }) => {
+      const visit = uuid(p(event).visitId, "visitId");
+      const body = parseBody(event.body, event.isBase64Encoded);
+      const key = idempotencyKey(event.headers);
+      const note = text(body.note, "note", 1000, { required: true });
+      const result = await tx(async (db) => ((await db.query("select ogevia_api.resolve_visit_authorization_review($1, $2, $3) as r", [visit, note, key])).rows[0] as { r: unknown }).r);
+      return { resolution: result };
+    },
+  },
+
+  // 0074: client documents (upload is not approval), readiness stages, service holds, the client's audit timeline, issue history and the duplicate-name check.
+  "GET /v1/client-document-types": {
+    mutating: false,
+    handle: async ({ event, tx }) => ({ types: await tx((db) => rows(db, "select * from ogevia_api.list_client_document_types($1)", [orgParam(event)])) }),
+  },
+
+  "POST /v1/client-document-types": {
+    status: 201,
+    mutating: true,
+    handle: async ({ event, tx }) => {
+      const body = parseBody(event.body, event.isBase64Encoded);
+      const key = idempotencyKey(event.headers);
+      const org = uuid(body.organizationId, "organizationId");
+      const category = oneOf(body.category, "category", ["consent", "authorization", "assessment", "insurance", "identity", "other"] as const);
+      const active = body.active === undefined ? true : booleanValue(body.active, "active");
+      const documentTypeId = await tx(async (db) =>
+        ((await db.query("select ogevia_api.save_client_document_type($1,$2,$3,$4,$5,$6) as id", [org, text(body.name, "name", 80, { required: true }), category, booleanValue(body.requiresExpiry, "requiresExpiry"), active, key])).rows[0] as { id: string }).id);
+      return { documentTypeId };
+    },
+  },
+
+  "POST /v1/client-document-requirements": {
+    mutating: true,
+    handle: async ({ event, tx }) => {
+      const body = parseBody(event.body, event.isBase64Encoded);
+      const key = idempotencyKey(event.headers);
+      const required = await tx(async (db) =>
+        ((await db.query("select ogevia_api.set_client_document_requirement($1,$2,$3,$4,$5) as r", [uuid(body.organizationId, "organizationId"), uuid(body.serviceId, "serviceId"), uuid(body.documentTypeId, "documentTypeId"), booleanValue(body.required, "required"), key])).rows[0] as { r: boolean }).r);
+      return { required };
+    },
+  },
+
+  "GET /v1/clients/{clientId}/documents": {
+    mutating: false,
+    handle: async ({ event, tx }) => ({ documents: await tx((db) => rows(db, "select * from ogevia_api.list_client_documents($1,$2)", [orgParam(event), uuid(p(event).clientId, "clientId")])) }),
+  },
+
+  "POST /v1/clients/{clientId}/documents/{documentTypeId}/versions": {
+    status: 201,
+    mutating: true,
+    handle: async ({ event, tx, evidence }) => {
+      const clientId = uuid(p(event).clientId, "clientId");
+      const typeId = uuid(p(event).documentTypeId, "documentTypeId");
+      const body = parseBody(event.body, event.isBase64Encoded, 5_600_000);
+      const key = idempotencyKey(event.headers);
+      const org = uuid(body.organizationId, "organizationId");
+      const issuedOn = optionalDate(body.issuedOn, "issuedOn");
+      const expiresOn = optionalDate(body.expiresOn, "expiresOn");
+      const file = validateDocumentFile(body.fileBase64, body.contentType);
+      if (issuedOn && expiresOn && expiresOn <= issuedOn) throw new ApiError(422, "validation_failed", "The expiry date must be after the issue date.");
+      // authority first (creates the empty document record only for someone who may upload), then a retry check, then the file, then the version
+      const documentId = await tx(async (db) => ((await db.query("select ogevia_api.ensure_client_document($1,$2,$3) as id", [org, clientId, typeId])).rows[0] as { id: string }).id);
+      const [prior] = await tx((db) => rows(db, "select * from ogevia_api.get_client_document_upload_replay($1,$2)", [documentId, key]));
+      if (prior) return { version: prior };
+      const versionId = randomUUID();
+      const objectKey = `${org}/client-documents/${documentId}/${versionId}`;
+      let s3VersionId: string | null;
+      try {
+        ({ versionId: s3VersionId } = await evidence.put(objectKey, file.bytes, file.sha256, file.contentType));
+      } catch {
+        throw new ApiError(503, "storage_unavailable", "The file could not be stored. Nothing was saved; please try again.");
+      }
+      const [version] = await tx((db) =>
+        rows(db, "select * from ogevia_api.register_client_document_version($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)", [documentId, versionId, objectKey, s3VersionId, file.contentType, file.bytes.length, file.sha256Hex, issuedOn, expiresOn, key]));
+      return { version };
+    },
+  },
+
+  "POST /v1/client-document-versions/{versionId}/review": {
+    mutating: true,
+    handle: async ({ event, tx }) => {
+      const versionId = uuid(p(event).versionId, "versionId");
+      const body = parseBody(event.body, event.isBase64Encoded);
+      const key = idempotencyKey(event.headers);
+      const decision = oneOf(body.decision, "decision", ["verified", "rejected"] as const);
+      const reason = text(body.reason, "reason", 1000);
+      const result = await tx(async (db) => ((await db.query("select ogevia_api.review_client_document_version($1,$2,$3,$4) as d", [versionId, decision, reason, key])).rows[0] as { d: string }).d);
+      return { decision: result };
+    },
+  },
+
+  "GET /v1/client-document-versions/{versionId}/file": {
+    mutating: false,
+    handle: async ({ event, tx, evidence }) => {
+      const versionId = uuid(p(event).versionId, "versionId");
+      const [meta] = await tx((db) => rows(db, "select * from ogevia_api.open_client_document_version($1)", [versionId]));
+      if (!meta) throw new ApiError(404, "not_found", "Document not found.");
+      const stored = await evidence.get(meta.objectKey as string, (meta.s3VersionId as string | null) ?? null, MAX_DOCUMENT_BYTES);
+      const digest = createHash("sha256").update(stored.bytes).digest("hex");
+      if (digest !== meta.sha256) throw new ApiError(500, "integrity_error", "The stored file failed its integrity check.");
+      return { contentType: meta.contentType, fileBase64: stored.bytes.toString("base64"), sha256: digest };
+    },
+  },
+
+  "GET /v1/clients/{clientId}/readiness": {
+    mutating: false,
+    handle: async ({ event, tx }) => ({ readiness: await tx(async (db) => ((await db.query("select ogevia_api.get_client_readiness($1,$2) as r", [orgParam(event), uuid(p(event).clientId, "clientId")])).rows[0] as { r: unknown }).r) }),
+  },
+
+  "POST /v1/clients/{clientId}/stage": {
+    mutating: true,
+    handle: async ({ event, tx }) => {
+      const body = parseBody(event.body, event.isBase64Encoded);
+      const key = idempotencyKey(event.headers);
+      const stage = oneOf(body.stage, "stage", ["draft", "pending", "active"] as const);
+      return { stage: await tx(async (db) => ((await db.query("select ogevia_api.set_client_preparation($1,$2,$3,$4,$5) as r", [uuid(body.organizationId, "organizationId"), uuid(p(event).clientId, "clientId"), stage, text(body.note, "note", 500), key])).rows[0] as { r: unknown }).r) };
+    },
+  },
+
+  "POST /v1/clients/{clientId}/service-holds": {
+    status: 201,
+    mutating: true,
+    handle: async ({ event, tx }) => {
+      const body = parseBody(event.body, event.isBase64Encoded);
+      const key = idempotencyKey(event.headers);
+      const holdId = await tx(async (db) =>
+        ((await db.query("select ogevia_api.open_client_service_hold($1,$2,$3,$4,$5) as id", [uuid(body.organizationId, "organizationId"), uuid(p(event).clientId, "clientId"), uuid(body.serviceId, "serviceId"), text(body.reason, "reason", 500, { required: true }), key])).rows[0] as { id: string }).id);
+      return { holdId };
+    },
+  },
+
+  "POST /v1/client-service-holds/{holdId}/release": {
+    mutating: true,
+    handle: async ({ event, tx }) => {
+      const body = parseBody(event.body, event.isBase64Encoded);
+      const key = idempotencyKey(event.headers);
+      const holdId = await tx(async (db) =>
+        ((await db.query("select ogevia_api.release_client_service_hold($1,$2,$3,$4) as id", [uuid(body.organizationId, "organizationId"), uuid(p(event).holdId, "holdId"), text(body.note, "note", 500, { required: true }), key])).rows[0] as { id: string }).id);
+      return { holdId };
+    },
+  },
+
+  "GET /v1/clients/{clientId}/audit": {
+    mutating: false,
+    handle: async ({ event, tx }) => ({ events: await tx((db) => rows(db, "select * from ogevia_api.list_client_audit($1,$2,100)", [orgParam(event), uuid(p(event).clientId, "clientId")])) }),
+  },
+
+  "GET /v1/clients/{clientId}/issue-history": {
+    mutating: false,
+    handle: async ({ event, tx }) => ({ history: await tx(async (db) => ((await db.query("select ogevia_api.get_client_issue_history($1,$2) as r", [orgParam(event), uuid(p(event).clientId, "clientId")])).rows[0] as { r: unknown }).r) }),
+  },
+
+  "GET /v1/client-duplicates": {
+    mutating: false,
+    handle: async ({ event, tx }) => {
+      const query = q(event);
+      return { matches: await tx((db) => rows(db, "select * from ogevia_api.find_possible_duplicate_clients($1,$2,$3,$4)", [orgParam(event), text(query.firstName, "firstName", 80), text(query.lastName, "lastName", 80), optionalUuid(query.excludeClientId, "excludeClientId")])) };
+    },
+  },
+
+  // 0073: the one issue list (filters, paging, stable keys), its history, and the agency's shorter deadlines.
+  "GET /v1/action-issues": {
+    mutating: false,
+    handle: async ({ event, tx }) => {
+      const query = q(event);
+      const result = await tx(async (db) =>
+        ((await db.query("select ogevia_api.list_action_issues($1,$2,$3,$4,$5,$6,$7,$8,$9) as r", [
+          orgParam(event), query.queue ?? null, query.category ?? null, query.severity ?? null,
+          optionalUuid(query.clientId, "clientId"), optionalUuid(query.caregiverRecordId, "caregiverRecordId"), optionalUuid(query.serviceId, "serviceId"),
+          query.limit ? Math.min(200, Math.max(1, Number.parseInt(query.limit, 10) || 50)) : 50, query.offset ? Math.max(0, Number.parseInt(query.offset, 10) || 0) : 0,
+        ])).rows[0] as { r: unknown }).r);
+      return result;
+    },
+  },
+
+  "GET /v1/action-issues/history": {
+    mutating: false,
+    handle: async ({ event, tx }) => {
+      const key = text(q(event).issueKey, "issueKey", 200, { required: true });
+      return { history: await tx(async (db) => ((await db.query("select ogevia_api.get_action_issue_history($1,$2) as r", [orgParam(event), key])).rows[0] as { r: unknown }).r) };
+    },
+  },
+
+  "GET /v1/attention-settings": {
+    mutating: false,
+    handle: async ({ event, tx }) => ({ settings: await tx(async (db) => ((await db.query("select ogevia_api.get_attention_settings($1) as r", [orgParam(event)])).rows[0] as { r: unknown }).r) }),
+  },
+
+  "POST /v1/attention-settings": {
+    mutating: true,
+    handle: async ({ event, tx }) => {
+      const body = parseBody(event.body, event.isBase64Encoded);
+      const org = uuid(body.organizationId, "organizationId");
+      const hours = (value: unknown, name: string) => (value === null || value === undefined ? null : Number.isInteger(value) ? (value as number) : (() => { throw new ApiError(400, "bad_request", `${name} must be a whole number of hours or empty.`); })());
+      const reason = text(body.reason, "reason", 1000, { required: true });
+      return { settings: await tx(async (db) =>
+        ((await db.query("select ogevia_api.set_attention_settings($1,$2,$3,$4,$5) as r", [org, hours(body.confirmationOverdueHours, "confirmationOverdueHours"), hours(body.reviewOverdueHours, "reviewOverdueHours"), hours(body.documentReviewOverdueHours, "documentReviewOverdueHours"), reason])).rows[0] as { r: unknown }).r) };
+    },
+  },
+
+  // 0077: the caller's own in-app notifications (Critical always, Urgent per agency setting, never Routine). Listing brings them up to date with the caller's own view.
+  "GET /v1/notifications": {
+    mutating: false,
+    handle: async ({ event, tx }) => {
+      const params = q(event);
+      const limit = params.limit === undefined || params.limit === "" ? 30 : wholeNumber(Number(params.limit), "limit", 1, 100);
+      return { notifications: await tx(async (db) => ((await db.query("select ogevia_api.list_my_notifications($1,$2,$3) as r", [orgParam(event), params.includeRead === "true", limit])).rows[0] as { r: unknown }).r) };
+    },
+  },
+
+  "POST /v1/notifications/read": {
+    mutating: true,
+    handle: async ({ event, tx }) => {
+      const body = parseBody(event.body, event.isBase64Encoded);
+      const org = uuid(body.organizationId, "organizationId");
+      const ids = body.ids === undefined || body.ids === null ? null : Array.isArray(body.ids) && body.ids.length <= 100 ? body.ids.map((id) => uuid(id, "ids")) : (() => { throw new ApiError(400, "bad_request", "ids must be a list of up to 100 notification ids."); })();
+      return { marked: await tx(async (db) => ((await db.query("select ogevia_api.mark_notifications_read($1,$2::uuid[]) as n", [org, ids])).rows[0] as { n: number }).n) };
+    },
+  },
+
+  "GET /v1/notification-settings": {
+    mutating: false,
+    handle: async ({ event, tx }) => ({ settings: await tx(async (db) => ((await db.query("select ogevia_api.get_notification_settings($1) as r", [orgParam(event)])).rows[0] as { r: unknown }).r) }),
+  },
+
+  "POST /v1/notification-settings": {
+    mutating: true,
+    handle: async ({ event, tx }) => {
+      const body = parseBody(event.body, event.isBase64Encoded);
+      const org = uuid(body.organizationId, "organizationId");
+      if (typeof body.urgentInApp !== "boolean") throw new ApiError(400, "bad_request", "urgentInApp must be true or false.");
+      const reason = text(body.reason, "reason", 1000, { required: true });
+      return { settings: await tx(async (db) => ((await db.query("select ogevia_api.set_notification_settings($1,$2,$3) as r", [org, body.urgentInApp, reason])).rows[0] as { r: unknown }).r) };
+    },
+  },
+
+  "GET /v1/authorization-impacts": {
+    mutating: false,
+    handle: async ({ event, tx }) => {
+      const all = (event.queryStringParameters ?? {}).includeAcknowledged === "true";
+      return { impacts: await tx((db) => rows(db, "select * from ogevia_api.list_authorization_amendment_impacts($1, $2)", [orgParam(event), all])) };
+    },
+  },
+
+  "POST /v1/authorization-impacts/{impactId}/acknowledge": {
+    mutating: true,
+    handle: async ({ event, tx }) => {
+      const impact = uuid(p(event).impactId, "impactId");
+      const body = parseBody(event.body, event.isBase64Encoded);
+      const org = uuid(body.organizationId, "organizationId");
+      const note = text(body.note, "note", 1000, { required: true });
+      const result = await tx(async (db) =>
+        ((await db.query("select ogevia_api.acknowledge_authorization_amendment_impact($1, $2, $3) as r", [org, impact, note])).rows[0] as { r: unknown }).r);
+      return { acknowledgement: result };
     },
   },
 
@@ -811,6 +1098,8 @@ export const ROUTES: Record<string, Route> = {
     }),
   },
 
+  // 0061: saves every date that fits and returns `rejected`, every other date with its reason. When no date fits, `series` has seriesId null and
+  // created 0 (nothing is saved); the status stays 201, so a caller must read `created`.
   "POST /v1/shift-series": {
     status: 201,
     mutating: true,
@@ -826,7 +1115,7 @@ export const ROUTES: Record<string, Route> = {
       const end = clockTime(body.endTime, "endTime");
       const startsOn = date(body.startsOn, "startsOn");
       const endsOn = optionalDate(body.endsOn, "endsOn");
-      const onConflict = oneOf(body.onConflict ?? "refuse", "onConflict", ["refuse", "skip_flagged"]);
+      const onConflict = oneOf(body.onConflict ?? "save_valid", "onConflict", ["save_valid", "refuse", "skip_flagged"]);
       const pattern = patternValue(body.pattern);
       const [series] = await tx((db) => rows(db,
         "select * from ogevia_api.create_shift_series($1, $2, $3, $4, $5::smallint[], $6::time, $7::time, $8, $9, $10, $11, $12::jsonb)",
@@ -848,7 +1137,7 @@ export const ROUTES: Record<string, Route> = {
       const start = clockTime(body.startTime, "startTime");
       const end = clockTime(body.endTime, "endTime");
       const endsOn = optionalDate(body.endsOn, "endsOn");
-      const onConflict = oneOf(body.onConflict ?? "refuse", "onConflict", ["refuse", "skip_flagged"]);
+      const onConflict = oneOf(body.onConflict ?? "save_valid", "onConflict", ["save_valid", "refuse", "skip_flagged"]);
       const reason = text(body.reason, "reason", 500, { required: true });
       const pattern = patternValue(body.pattern);
       const clearPattern = body.clearPattern === undefined ? false : booleanValue(body.clearPattern, "clearPattern");
@@ -881,7 +1170,7 @@ export const ROUTES: Record<string, Route> = {
       const key = idempotencyKey(event.headers);
       const org = uuid(body.organizationId, "organizationId");
       const through = date(body.through, "through");
-      const onConflict = oneOf(body.onConflict ?? "refuse", "onConflict", ["refuse", "skip_flagged"]);
+      const onConflict = oneOf(body.onConflict ?? "save_valid", "onConflict", ["save_valid", "refuse", "skip_flagged"]);
       const [result] = await tx((db) => rows(db, "select * from ogevia_api.extend_shift_series($1, $2, $3, $4, $5)", [org, series, through, onConflict, key]));
       return { result };
     },
@@ -893,6 +1182,15 @@ export const ROUTES: Record<string, Route> = {
     handle: async ({ event, tx }) => ({
       limits: await tx((db) => rows(db, "select * from ogevia_api.list_hour_limits($1)", [orgParam(event)])),
     }),
+  },
+
+  // The agency's fixed work-hour policy (0060): read-only; nothing in the API can change it.
+  "GET /v1/work-hour-policy": {
+    mutating: false,
+    handle: async ({ event, tx }) => {
+      const [policy] = await tx((db) => rows(db, "select * from ogevia_api.get_work_hour_policy($1)", [orgParam(event)]));
+      return { policy: policy ?? { applies: false } };
+    },
   },
 
   "POST /v1/hour-limits": {
@@ -1035,6 +1333,7 @@ export const ROUTES: Record<string, Route> = {
     handle: async ({ event, tx }) => ({ shifts: await tx((db) => rows(db, "select * from ogevia_api.list_open_shifts($1)", [orgParam(event)])) }),
   },
 
+  // 0063: asking for an open shift only records a request; the shift is not assigned until an administrator confirms (confirm below).
   "POST /v1/shifts/{shiftId}/pickup": {
     mutating: true,
     handle: async ({ event, tx }) => {
@@ -1044,7 +1343,73 @@ export const ROUTES: Record<string, Route> = {
       const org = uuid(body.organizationId, "organizationId");
       const state = await tx(async (db) =>
         ((await db.query("select ogevia_api.pickup_open_shift($1, $2, $3) as s", [org, shift, key])).rows[0] as { s: string }).s);
+      return { pickupState: state };
+    },
+  },
+
+  "POST /v1/shifts/{shiftId}/pickup/withdraw": {
+    mutating: true,
+    handle: async ({ event, tx }) => {
+      const shift = uuid(p(event).shiftId, "shiftId");
+      const body = parseBody(event.body, event.isBase64Encoded);
+      const org = uuid(body.organizationId, "organizationId");
+      const state = await tx(async (db) =>
+        ((await db.query("select ogevia_api.withdraw_my_shift_pickup($1, $2) as s", [org, shift])).rows[0] as { s: string }).s);
+      return { pickupState: state };
+    },
+  },
+
+  // The administrator's queue (shifts.manage): each waiting request with what would block it now.
+  "GET /v1/shift-pickups": {
+    mutating: false,
+    handle: async ({ event, tx }) => ({ requests: await tx((db) => rows(db, "select * from ogevia_api.list_shift_pickup_requests($1)", [orgParam(event)])) }),
+  },
+
+  "POST /v1/shift-pickups/{requestId}/confirm": {
+    mutating: true,
+    handle: async ({ event, tx }) => {
+      const request = uuid(p(event).requestId, "requestId");
+      const body = parseBody(event.body, event.isBase64Encoded);
+      const key = idempotencyKey(event.headers);
+      const org = uuid(body.organizationId, "organizationId");
+      const state = await tx(async (db) =>
+        ((await db.query("select ogevia_api.confirm_shift_pickup($1, $2, $3) as s", [org, request, key])).rows[0] as { s: string }).s);
       return { coverageState: state };
+    },
+  },
+
+  "POST /v1/shift-pickups/{requestId}/decline": {
+    mutating: true,
+    handle: async ({ event, tx }) => {
+      const request = uuid(p(event).requestId, "requestId");
+      const body = parseBody(event.body, event.isBase64Encoded);
+      const key = idempotencyKey(event.headers);
+      const org = uuid(body.organizationId, "organizationId");
+      const reason = text(body.reason, "reason", 500, { required: true });
+      const state = await tx(async (db) =>
+        ((await db.query("select ogevia_api.decline_shift_pickup($1, $2, $3, $4) as s", [org, request, reason, key])).rows[0] as { s: string }).s);
+      return { pickupState: state };
+    },
+  },
+
+  // Shifts that ended with no visit record and still hold a reservation (0067). Nothing is released automatically: a person records an outcome.
+  "GET /v1/shifts-to-reconcile": {
+    mutating: false,
+    handle: async ({ event, tx }) => ({ shifts: await tx((db) => rows(db, "select * from ogevia_api.list_shifts_to_reconcile($1)", [orgParam(event)])) }),
+  },
+
+  "POST /v1/shifts/{shiftId}/reconcile": {
+    mutating: true,
+    handle: async ({ event, tx }) => {
+      const shift = uuid(p(event).shiftId, "shiftId");
+      const body = parseBody(event.body, event.isBase64Encoded);
+      const key = idempotencyKey(event.headers);
+      const org = uuid(body.organizationId, "organizationId");
+      const outcome = text(body.outcome, "outcome", 40, { required: true });
+      const note = text(body.note, "note", 1000, { required: true });
+      const result = await tx(async (db) =>
+        ((await db.query("select ogevia_api.reconcile_ended_shift($1, $2, $3, $4, $5) as r", [org, shift, outcome, note, key])).rows[0] as { r: unknown }).r);
+      return { reconciliation: result };
     },
   },
 
@@ -1122,8 +1487,8 @@ export const ROUTES: Record<string, Route> = {
     mutating: false,
     handle: async ({ event, tx }) => {
       const org = orgParam(event);
-      const [summary] = await tx((db) => rows(db, "select * from ogevia_api.get_attention_summary($1)", [org]));
-      // 0053: caregivers on a compliance hold (shifts to cover, visits in progress). null when the viewer may not see it, never a false zero.
+      const [summary] = await tx((db) => rows(db, "select * from ogevia_api.get_attention_summary($1, 12, 2880)", [org]));
+      // 0055: caregivers on a compliance hold (shifts to cover, visits in progress). null when the viewer may not see it, never a false zero.
       const compliance = await tx(async (db) => (await first(db, "select ogevia_api.get_compliance_attention($1) as a", [org])).a ?? null);
       return { summary: summary ? { ...summary, complianceHolds: compliance } : null };
     },
@@ -1185,7 +1550,7 @@ export const ROUTES: Record<string, Route> = {
     },
   },
 
-  // Caregiver compliance (0053): OWNER-DEFINED rules (approved background clearance; CPR/TB within 14 days of the hire date).
+  // Caregiver compliance (0055): OWNER-DEFINED rules (approved background clearance; CPR/TB within 14 days of the hire date).
   // Every decision is made in PostgreSQL; these routes only validate input and shape output. Not stated as legal requirements.
   "GET /v1/caregivers/{caregiverRecordId}/compliance": {
     mutating: false,
@@ -1598,6 +1963,83 @@ export const ROUTES: Record<string, Route> = {
         ),
       };
     },
+  },
+
+  // Full-chain monthly report (0070): visits.read; billing-state columns need billing.visits.read.
+  "GET /v1/reports/monthly-chain": {
+    mutating: false,
+    handle: async ({ event, tx }) => {
+      const query = q(event);
+      const client = optionalUuid(query.clientId, "clientId");
+      const monthStart = date(query.monthStart, "monthStart");
+      return { rows: await tx((db) => rows(db, "select * from ogevia_api.get_monthly_chain_report($1, $2, $3)", [orgParam(event), monthStart, client])) };
+    },
+  },
+
+  // 0076: agency performance (counts; no missed-visits metric) and the general audit report (owner only).
+  "GET /v1/reports/agency-performance": {
+    mutating: false,
+    handle: async ({ event, tx }) => ({ performance: await tx(async (db) => ((await db.query("select ogevia_api.get_agency_performance($1,$2) as r", [orgParam(event), date(q(event).monthStart, "monthStart")])).rows[0] as { r: unknown }).r) }),
+  },
+
+  "GET /v1/reports/audit": {
+    mutating: false,
+    handle: async ({ event, tx }) => {
+      const query = q(event);
+      const prefix = query.actionPrefix ?? null;
+      return { report: await tx(async (db) => ((await db.query("select ogevia_api.list_audit_report($1,$2,$3,$4,$5,$6) as r", [
+        orgParam(event), date(query.dateFrom, "dateFrom"), date(query.dateTo, "dateTo"), prefix,
+        query.limit ? Math.min(500, Math.max(1, Number.parseInt(query.limit, 10) || 100)) : 100, query.offset ? Math.max(0, Number.parseInt(query.offset, 10) || 0) : 0])).rows[0] as { r: unknown }).r) };
+    },
+  },
+
+  // Server-generated exports (0072). 1) the server checks reports.export and records the REQUEST; 2) it builds the file from the report functions the caller may read;
+  // 3) it records GENERATED (rows, bytes, SHA-256) and only then returns the file. If building fails it records FAILED and returns nothing. Delivery to the device is not recorded.
+  "POST /v1/exports": {
+    mutating: true,
+    handle: async ({ event, tx }) => {
+      const body = parseBody(event.body, event.isBase64Encoded);
+      const org = uuid(body.organizationId, "organizationId");
+      const report = oneOf(body.report, "report", REPORT_KEYS) as ReportKey;
+      const raw = (typeof body.params === "object" && body.params !== null ? body.params : {}) as Record<string, unknown>;
+      const params: ExportParams = {
+        ...(raw.monthStart !== undefined ? { monthStart: date(raw.monthStart, "monthStart") } : {}),
+        clientId: optionalUuid(raw.clientId, "clientId"),
+        dateFrom: optionalDate(raw.dateFrom, "dateFrom"), dateTo: optionalDate(raw.dateTo, "dateTo"),
+        serviceId: optionalUuid(raw.serviceId, "serviceId"),
+        caregiverUserId: optionalUuid(raw.caregiverUserId, "caregiverUserId"), correctedByUserId: optionalUuid(raw.correctedByUserId, "correctedByUserId"),
+        status: raw.status ? oneOf(raw.status, "status", VISIT_STATUSES) : null,
+        actionPrefix: typeof raw.actionPrefix === "string" && /^[a-z_.]{1,60}$/.test(raw.actionPrefix) ? raw.actionPrefix : null,
+      };
+      if (report !== "correction_history" && report !== "audit_report" && !params.monthStart) throw new ApiError(400, "bad_request", "monthStart is required for this report.");
+      if (report === "audit_report" && (!params.dateFrom || !params.dateTo)) throw new ApiError(400, "bad_request", "dateFrom and dateTo are required for the audit report.");
+      if (params.dateFrom && params.dateTo && params.dateFrom > params.dateTo) throw new ApiError(400, "bad_request", "dateFrom must not be after dateTo.");
+      if (report === "client_service_calendar" && !params.clientId) throw new ApiError(400, "bad_request", "clientId is required for the client service calendar.");
+      const requested = await tx(async (db) =>
+        ((await db.query("select ogevia_api.request_report_export($1, $2, $3::jsonb) as r", [org, report, JSON.stringify(params)])).rows[0] as { r: { exportId: string; requestedAt: string } }).r);
+      let built;
+      try {
+        built = await tx((db) => buildReportCsv(db, org, report, params));
+        assertExportSize(Buffer.byteLength(built.csv, "utf8"));
+      } catch (cause) {
+        const code = cause instanceof ApiError ? cause.code : (cause as { code?: string }).code ?? "generation_failed";
+        await tx((db) => db.query("select ogevia_api.fail_report_export($1, $2, $3)", [org, requested.exportId, String(code)])).catch(() => undefined);
+        throw cause;
+      }
+      const bytes = Buffer.byteLength(built.csv, "utf8");
+      // Fail closed: the file is returned only after the ledger has recorded that the server generated it.
+      const done = await tx(async (db) =>
+        ((await db.query("select ogevia_api.complete_report_export($1, $2, $3, $4, $5) as r", [org, requested.exportId, built.rowCount, bytes, sha256Hex(built.csv)])).rows[0] as { r: { generatedAt: string } }).r);
+      return {
+        exportId: requested.exportId, requestedAt: requested.requestedAt, generatedAt: done.generatedAt, rowCount: built.rowCount, byteCount: bytes,
+        filename: exportFilename(report, params), csv: built.csv,
+      };
+    },
+  },
+
+  "GET /v1/exports": {
+    mutating: false,
+    handle: async ({ event, tx }) => ({ exports: await tx((db) => rows(db, "select * from ogevia_api.list_report_exports($1, 100)", [orgParam(event)])) }),
   },
 
   "GET /v1/reports/correction-history": {
@@ -2619,7 +3061,7 @@ export const ROUTES: Record<string, Route> = {
       readiness: await tx(async (db) => {
         const org = orgParam(event);
         const status = (await first(db, "select ogevia_api.get_readiness_status($1) as s", [org])).s as Record<string, unknown>;
-        // 0053: who would be held (background clearance, the 14-day CPR/TB period) before the owner switches enforcement on
+        // 0055: who would be held (background clearance, the 14-day CPR/TB period) before the owner switches enforcement on
         return { ...status, compliance: (await first(db, "select ogevia_api.get_compliance_summary($1) as s", [org])).s };
       }),
     }),

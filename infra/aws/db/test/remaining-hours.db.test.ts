@@ -88,11 +88,13 @@ describe("0016 remaining hours count scheduled (reserved) time", () => {
     expect(await capAllows(f)).toBe(360);
   });
 
-  it("never reports negative remaining time when reservations exceed the month", async () => {
+  it("0057: reports the real, negative balance when reservations exceed the month (it was floored at 0)", async () => {
     const f = await freshClient(db, w, w.caregiverA1, 200);
     await reservedShift(f, 72, 180);
     await reservedShift(f, 96, 180);
-    expect(await summary(f)).toMatchObject({ reserved_minutes: 360, remaining_minutes: 0 });
+    expect(await summary(f)).toMatchObject({
+      reserved_minutes: 360, committed_minutes: 360, remaining_minutes: -160, over_limit_minutes: 160, authorization_tier: "critical",
+    });
   });
 
   it("keeps the report readable only through the app role", async () => {

@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useIsNarrow } from "@/lib/use-is-narrow";
@@ -52,6 +52,8 @@ import { useServiceVerificationBackend } from "@/lib/sv-backend-supabase";
 import { buildClientMonthSummary } from "@/lib/client-month-summary";
 import { CalendarSummary } from "@/components/calendar-summary";
 import { useEnvironmentMarker } from "@/aws/environment";
+import { AwsApiContext } from "@/aws/aws-workspace";
+import { MonthlyChainReport } from "@/aws/monthly-chain-report";
 import {
   AUTHORIZATION_STATUS_LABEL,
   classifyIncompleteVisit,
@@ -71,6 +73,8 @@ import {
   VISIT_STATUS_LABEL,
   type PacificWallTime,
   type ServiceVisitStatus,
+  authorizationStatus,
+  formatBalance,
 } from "@/lib/service-verification";
 import { PacificCorrectionFields, PacificTimeOutField } from "@/components/pacific-time-out-field";
 
@@ -182,8 +186,12 @@ function csvQuote(value: unknown) {
   return `"${String(value ?? "").replace(/"/g, '""')}"`;
 }
 
-function downloadCsv(filename: string, header: string[], rows: unknown[][]) {
-  const csv = [header, ...rows].map((row) => row.map(csvQuote).join(",")).join("\r\n");
+function downloadCsvFile(filename: string, header: string[], rows: unknown[][]) {
+  saveTextFile(filename, [header, ...rows].map((row) => row.map(csvQuote).join(",")).join("\r\n"));
+}
+
+/** Saves text the server (or, in the older build, the page) produced. */
+function saveTextFile(filename: string, csv: string) {
   const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
   const url = URL.createObjectURL(blob);
   const anchor = document.createElement("a");
@@ -346,6 +354,27 @@ export function ServiceVerificationReportsPage() {
     useOrganization();
   const canRead = hasPermission("visits.read");
   const canManage = hasPermission("visits.manage");
+  // 0069/0072: in the AWS build an export needs reports.export and is MADE BY THE SERVER: it checks the permission, records the request, builds the file, records that it
+  // generated it (rows, bytes, SHA-256) and only then returns it. The browser only saves what the server returned. Delivery to this device is not recorded.
+  const awsApi = useContext(AwsApiContext);
+  const canExport = awsApi ? hasPermission("reports.export") : true;
+  const [exportError, setExportError] = useState<string | null>(null);
+  const [exportNotice, setExportNotice] = useState<string | null>(null);
+  const downloadCsv = (filename: string, header: string[], rows: unknown[][]) => {
+    if (!awsApi) return downloadCsvFile(filename, header, rows);
+    const report = filename.startsWith("client-service-calendar") ? "client_service_calendar" : filename.startsWith("monthly-service-reconciliation") ? "monthly_service_reconciliation" : "correction_history";
+    const params = report === "correction_history"
+      ? { dateFrom: dateFrom || null, dateTo: dateTo || null, clientId: clientFilter || null, serviceId: serviceFilter || null, caregiverUserId: caregiverFilter || null, correctedByUserId: correctedByFilter || null, status: statusFilter || null }
+      : { monthStart: `${reportMonth}-01`, clientId: clientFilter || null };
+    setExportError(null);
+    setExportNotice(null);
+    void awsApi.post<{ filename: string; csv: string; rowCount: number }>("/v1/exports", { organizationId: activeOrganizationId, report, params })
+      .then((r) => {
+        saveTextFile(r.filename, r.csv);
+        setExportNotice(`The server generated ${r.filename} (${r.rowCount} row${r.rowCount === 1 ? "" : "s"}) and recorded the export. Whether the file reached this device is not recorded.`);
+      })
+      .catch((cause: unknown) => setExportError(cause instanceof Error ? cause.message : "The export was not made. Nothing was downloaded."));
+  };
   const queryClient = useQueryClient();
   const backend = useServiceVerificationBackend();
   // Reused for retries of the same correction; renewed when the form changes.
@@ -1548,6 +1577,7 @@ export function ServiceVerificationReportsPage() {
 
       {reportView === "overview" ? (
         <>
+          {awsApi ? <p className="text-sm text-slate-700" data-testid="reporting-hub-link">Billing readiness, authorized against delivered hours, agency performance, exports and audit evidence are together on <Link className="font-semibold underline" to="/reporting">Reporting &amp; billing</Link>.</p> : null}
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
             {[
               {
@@ -1872,7 +1902,7 @@ export function ServiceVerificationReportsPage() {
               >
                 Print calendar / Save as PDF
               </Button>
-              {clientFilter && monthlyServiceRows.length > 0 ? (
+              {canExport && clientFilter && monthlyServiceRows.length > 0 ? (
                 <Button
                   type="button"
                   variant="secondary"
@@ -1890,6 +1920,7 @@ export function ServiceVerificationReportsPage() {
                         "Billable",
                         STILL_SCHEDULED_LABEL,
                         "Remaining to schedule",
+                        "Authorization status",
                         "Needs review",
                       ],
                       monthlyServiceRows.map((row) => [
@@ -1901,7 +1932,8 @@ export function ServiceVerificationReportsPage() {
                         formatDuration(row.verifiedMinutes),
                         formatDuration(row.billableMinutes),
                         formatDuration(row.reservedMinutes ?? 0),
-                        formatDuration(row.remainingMinutes),
+                        formatBalance(row.remainingMinutes),
+                        authorizationStatus(row),
                         formatDuration(row.reviewMinutes),
                       ]),
                     )
@@ -2020,6 +2052,8 @@ export function ServiceVerificationReportsPage() {
         </Card>
       ) : null}
 
+      {exportError ? <p role="alert" className="text-sm text-red-700 print:hidden">{exportError}</p> : null}
+      {exportNotice ? <p role="status" className="text-sm text-emerald-800 print:hidden">{exportNotice}</p> : null}
       {reportView === "reconciliation" ? (
         <Card className="print:border-none print:p-0 print:shadow-none">
           <div className="flex flex-wrap items-end justify-between gap-4">
@@ -2038,9 +2072,8 @@ export function ServiceVerificationReportsPage() {
                 authorization; <strong>Approved</strong> is what a person approved
                 for billing. Approval is not submission: Ogevia does not submit to
                 payers or track submissions. <strong>{STILL_SCHEDULED_LABEL}</strong>{" "}
-                is time held by scheduled shifts that have not been worked yet; it
-                drops to 0 once those visits are signed, because the worked time
-                then counts as worked and billable instead.
+                is time reserved by shifts that have not been signed yet (ahead, underway, held while a visit is in review, or ended with no visit record and awaiting a
+                person's decision); it drops once those visits are signed, because the worked time then counts as worked and billable instead. Nothing is released automatically.
               </p>
               {backend.kind === "aws" ? (
                 <p className="mt-1 text-xs print:hidden">
@@ -2060,7 +2093,7 @@ export function ServiceVerificationReportsPage() {
                   className="mt-1 block rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900"
                 />
               </label>
-              {monthlyServiceRows.length > 0 ? (
+              {canExport && monthlyServiceRows.length > 0 ? (
                 <Button
                   type="button"
                   variant="secondary"
@@ -2079,6 +2112,7 @@ export function ServiceVerificationReportsPage() {
                         ...(showApproved ? ["Approved (human)", "Approved rounding adjustment"] : []),
                         STILL_SCHEDULED_LABEL,
                         "Remaining to schedule",
+                        "Authorization status",
                         "Needs review",
                         "Worked minus billable",
                       ],
@@ -2097,7 +2131,8 @@ export function ServiceVerificationReportsPage() {
                             ]
                           : []),
                         formatDuration(row.reservedMinutes ?? 0),
-                        formatDuration(row.remainingMinutes),
+                        formatBalance(row.remainingMinutes),
+                        authorizationStatus(row),
                         formatDuration(row.reviewMinutes),
                         formatDuration(Math.max(0, row.workedMinutes - row.billableMinutes)),
                       ]),
@@ -2134,6 +2169,7 @@ export function ServiceVerificationReportsPage() {
                     {showApproved ? <th className="pb-2 pr-3 font-medium">Approved</th> : null}
                     <th className="pb-2 pr-3 font-medium">{STILL_SCHEDULED_LABEL}</th>
                     <th className="pb-2 pr-3 font-medium">Hours left</th>
+                    <th className="pb-2 pr-3 font-medium">Authorization status</th>
                     <th className="pb-2 pr-3 font-medium">Needs review</th>
                     <th className="pb-2 font-medium">Difference</th>
                   </tr>
@@ -2173,7 +2209,8 @@ export function ServiceVerificationReportsPage() {
                           </td>
                         ) : null}
                         <td className="py-2 pr-3">{formatDuration(row.reservedMinutes ?? 0)}</td>
-                        <td className="py-2 pr-3">{formatDuration(row.remainingMinutes)}</td>
+                        <td className={`py-2 pr-3 ${row.remainingMinutes < 0 ? "font-semibold text-red-700" : ""}`}>{formatBalance(row.remainingMinutes)}</td>
+                        <td className="py-2 pr-3" data-testid="authorization-status">{authorizationStatus(row)}</td>
                         <td className="py-2 pr-3">{formatDuration(row.reviewMinutes)}</td>
                         <td className="py-2">
                           {difference > 0 ? (
@@ -2200,6 +2237,8 @@ export function ServiceVerificationReportsPage() {
         </Card>
       ) : null}
 
+      {reportView === "reconciliation" && awsApi && backend.kind === "aws" ? <MonthlyChainReport month={reportMonth} /> : null}
+
       {reportView === "corrections" ? (
         <Card className="print:border-none print:p-0 print:shadow-none">
           <div className="flex flex-wrap items-start justify-between gap-4">
@@ -2210,7 +2249,7 @@ export function ServiceVerificationReportsPage() {
                 immutable; this report shows who changed what, why, and when.
               </p>
             </div>
-            {correctionRows.length > 0 ? (
+            {canExport && correctionRows.length > 0 ? (
               <Button
                 type="button"
                 variant="secondary"
@@ -2426,7 +2465,7 @@ export function ServiceVerificationReportsPage() {
                           <dl className="mt-1 grid grid-cols-3 gap-2 text-xs">
                             <div><dt className="text-slate-500">Monthly limit</dt><dd className="font-medium text-slate-900">{formatDuration(authorizedMinutes)}</dd></div>
                             <div><dt className="text-slate-500">Used this month</dt><dd className="font-medium text-slate-900">{formatDuration(row.month_to_date_after_minutes)}</dd></div>
-                            <div><dt className="text-slate-500">Hours left</dt><dd className="font-medium text-slate-900">{formatDuration(row.remaining_minutes)}</dd></div>
+                            <div><dt className="text-slate-500">Hours left</dt><dd className="font-medium text-slate-900">{formatBalance(row.remaining_minutes)}</dd></div>
                           </dl>
                         </details>
                         <p className="mt-2 font-mono text-[11px] text-slate-500">Visit {row.visit_number ?? "—"}</p>
@@ -2561,7 +2600,7 @@ export function ServiceVerificationReportsPage() {
                             ) : null}
                             {visitColumns.has("remaining") ? (
                               <td className="py-2 pr-2 whitespace-nowrap text-slate-700">
-                                {formatDuration(row.remaining_minutes)}
+                                {formatBalance(row.remaining_minutes)}
                               </td>
                             ) : null}
                             {showBalanceDetails ? (
@@ -2570,7 +2609,7 @@ export function ServiceVerificationReportsPage() {
                                 <dl className="hidden space-y-0.5 whitespace-nowrap text-[10px] print:block">
                                   <div><dt className="inline">Monthly limit: </dt><dd className="inline font-medium">{formatDuration(authorizedMinutes)}</dd></div>
                                   <div><dt className="inline">Used this month: </dt><dd className="inline font-medium">{formatDuration(row.month_to_date_after_minutes)}</dd></div>
-                                  <div><dt className="inline">Hours left: </dt><dd className="inline font-medium">{formatDuration(row.remaining_minutes)}</dd></div>
+                                  <div><dt className="inline">Hours left: </dt><dd className="inline font-medium">{formatBalance(row.remaining_minutes)}</dd></div>
                                 </dl>
                                 <details className="text-xs print:hidden">
                                   <summary className="inline-flex min-h-[40px] cursor-pointer list-none items-center rounded-lg border border-slate-300 bg-og-card px-3 text-sm font-medium text-slate-900 hover:bg-slate-50">
@@ -2579,7 +2618,7 @@ export function ServiceVerificationReportsPage() {
                                   <dl className="mt-1 space-y-1 whitespace-nowrap">
                                     <div><dt className="inline text-slate-500">Monthly limit: </dt><dd className="inline font-medium text-slate-900">{formatDuration(authorizedMinutes)}</dd></div>
                                     <div><dt className="inline text-slate-500">Used this month: </dt><dd className="inline font-medium text-slate-900">{formatDuration(row.month_to_date_after_minutes)}</dd></div>
-                                    <div><dt className="inline text-slate-500">Hours left: </dt><dd className="inline font-medium text-slate-900">{formatDuration(row.remaining_minutes)}</dd></div>
+                                    <div><dt className="inline text-slate-500">Hours left: </dt><dd className="inline font-medium text-slate-900">{formatBalance(row.remaining_minutes)}</dd></div>
                                   </dl>
                                 </details>
                               </td>

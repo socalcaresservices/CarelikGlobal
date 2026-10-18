@@ -62,6 +62,16 @@ function fakeApi(role: Role) {
         return json(200, { newAuthorizationId: "a2", newVersionNumber: 2, affectedVisits: [{ visitId: "v1", status: "signed", serviceDate: "2026-10-02", workedMinutes: 120, billableMinutes: 120, impact: "decrease_now_exceeds" }] });
       case "GET /v1/assignments":
         return json(200, { assignments: [] });
+      case "GET /v1/action-issues":
+        return json(200, { asOf: new Date().toISOString(), matching: 0, limit: 50, offset: 0, counts: { total: 0, critical: 0, urgent: 0, routine: 0, actionNeeded: 0, byQueue: {} }, issues: [] });
+      case `GET /v1/clients/${CLIENT}/issue-history`:
+        return json(200, { history: { resolved: [] } });
+      case `GET /v1/clients/${CLIENT}/readiness`:
+        return json(200, { readiness: { clientId: CLIENT, status: "active", stage: "active", stageNote: null, canSchedule: true, ready: true, services: [] } });
+      case `GET /v1/clients/${CLIENT}/documents`:
+        return json(200, { documents: [] });
+      case "GET /v1/shifts":
+        return json(200, { shifts: [] });
       default:
         return json(404, { error: { code: "not_found", message: "No such endpoint." } });
     }

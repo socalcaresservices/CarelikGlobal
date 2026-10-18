@@ -453,7 +453,8 @@ describe("concurrency and unprotected paths", () => {
       assign_shift_caregiver: /check_shift_caregiver\([^)]*v_s\.service_id\)/,
       create_shift: /check_shift_caregiver\([^)]*p_service_id\)/,
       reschedule_shift: /check_shift_caregiver\([^)]*v_s\.service_id\)/,
-      pickup_open_shift: /check_shift_caregiver\(/, // Wave 1 (0051): the same readiness gate as an office assignment
+      pickup_open_shift: /check_shift_caregiver\(/, // Wave 1 (0051): the same readiness gate as an office assignment (since 0063 it only records a request)
+      confirm_shift_pickup: /assert_ready_for_work\(/, // 0063: the administrator's confirmation re-runs the whole gate, with the client
       series_materialize: /series_evaluate/, // outcomes come from series_evaluate, which includes readiness_outcome
     };
     // Paths that write the caregiver column but do not newly commit a person to work (documented):

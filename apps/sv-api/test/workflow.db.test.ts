@@ -1013,8 +1013,8 @@ describe("recurring shifts (0034) through the API", () => {
     expect(typeof pv.body.occurrences[0].localDate).toBe("string");
     expect((await call("GET /v1/shift-series/preview", w.managerA, { query: { organizationId: w.orgA, clientId: small.client, serviceId: small.service, weekdays: "1,8", startTime: "09:00", endTime: "11:00", startsOn } })).status).toBe(400);
     expect((await call("POST /v1/shift-series", w.caregiverA1, { body: { organizationId: w.orgA, clientId: small.client, serviceId: small.service, weekdays: [1], startTime: "09:00", endTime: "10:00", startsOn, endsOn } })).status).toBe(403);
-    const refused = await call("POST /v1/shift-series", w.managerA, { body: { organizationId: w.orgA, clientId: small.client, serviceId: small.service, weekdays: [1, 3, 5], startTime: "09:00", endTime: "11:00", startsOn, endsOn } });
-    expect(refused.status).toBe(409);
+    const refused = await call("POST /v1/shift-series", w.managerA, { body: { organizationId: w.orgA, clientId: small.client, serviceId: small.service, weekdays: [1, 3, 5], startTime: "09:00", endTime: "11:00", startsOn, endsOn, onConflict: "refuse" } });
+    expect(refused.status).toBe(409); // 0061: refuse is now explicit; the default saves the dates that fit
     const made = await call("POST /v1/shift-series", w.managerA, { body: { organizationId: w.orgA, clientId: small.client, serviceId: small.service, weekdays: [1, 3, 5], startTime: "09:00", endTime: "11:00", startsOn, endsOn, onConflict: "skip_flagged" } });
     expect(made.status, JSON.stringify(made.body)).toBe(201);
     // The range spans two months: the limit applies to each month separately.
