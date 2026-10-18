@@ -96,7 +96,7 @@ describe("links from Action needed, prefill and suggested replacements", () => {
     { caregiverRecordId: "r3", caregiverCode: "CG-3", name: "Casey Caregiver", eligibility: "eligible", assignedToClient: false, scheduledMinutesThatWeek: 600, score: { ruleVersion: "v0", ruleStatus: "provisional", complete: false, label: "Score incomplete", total: null, components: [] } },
     { caregiverRecordId: "r4", caregiverCode: "CG-4", name: "Dana Caregiver", eligibility: "not_eligible", assignedToClient: false, scheduledMinutesThatWeek: 0, score: { ruleVersion: "v0", ruleStatus: "provisional", complete: true, label: null, total: 0, components: [] } },
     { caregiverRecordId: "r1", caregiverCode: "CG-1", name: "Alex Caregiver", eligibility: "eligible", assignedToClient: true, scheduledMinutesThatWeek: 0, score: { ruleVersion: "v0", ruleStatus: "provisional", complete: true, label: null, total: 90, components: [] } }] } };
-  it("?shift= highlights that shift and with coverage=1 opens the assignment; the suggestions list only eligible caregivers in the server's order, never the one being replaced, and Choose only fills the box", async () => {
+  it("?shift= highlights that shift and with coverage=1 opens the assignment; the suggestions list only eligible caregivers in the server's order, never the one being replaced, and Select only fills the box", async () => {
     const open = shift("open1", { coverageState: "needs_coverage", caregiverRecordId: "r1", caregiverName: "Alex Caregiver", lastCalloutReason: "Sick" });
     const { calls } = renderAws(`/schedule?coverage=1&shift=open1&at=${encodeURIComponent(open.startsAt)}`, PERMS, {
       "GET /v1/shifts": () => json(200, { shifts: [open, shift("other")] }),
@@ -107,11 +107,12 @@ describe("links from Action needed, prefill and suggested replacements", () => {
     expect(document.getElementById("shift-open1")).toHaveAttribute("data-highlight", "true");
     const items = within(row).getAllByTestId("suggestion");
     expect(items.map((i) => i.textContent)).toEqual([expect.stringContaining("Blair Caregiver"), expect.stringContaining("Casey Caregiver")]);
-    expect(items[1]).toHaveTextContent("score incomplete");
-    expect(row).toHaveTextContent("you still confirm the assignment");
+    expect(row).toHaveTextContent("Casey Caregiver: score incomplete"); // score completeness lives in Details
+    expect(row).not.toHaveTextContent("you still confirm the assignment");
+    expect(row).toHaveTextContent("Suggested");
     const match = calls.find((c) => c.path === "/v1/matching/candidates")!;
     expect(match.body).toMatchObject({ organizationId: expect.any(String), serviceId: "sv1", clientId: "c1", intervals: [{ startsAt: open.startsAt, endsAt: open.endsAt }] });
-    fireEvent.click(within(items[0]!).getByRole("button", { name: "Choose" }));
+    fireEvent.click(within(items[0]!).getByRole("button", { name: /^Select Blair/ }));
     expect((screen.getByLabelText("Caregiver") as HTMLSelectElement).value).toBe("r2");
     expect(calls.filter((c) => c.method === "POST" && c.path.endsWith("/caregiver"))).toHaveLength(0); // nothing is assigned until the office confirms
     fireEvent.click(within(items[0]!).getByRole("button", { name: "Why" }));

@@ -137,7 +137,7 @@ describe("assignments", () => {
   it("caregiver page: ending an assignment needs a reason and reports that access stopped", async () => {
     const api = renderAt(`/care-team/${CG}`);
     expect(await screen.findByRole("heading", { name: "Clients assigned" })).toBeInTheDocument();
-    expect(await screen.findByRole("link", { name: /Synthetic Client Alpha \(CL-1\)/ })).toBeInTheDocument();
+    expect(await screen.findByRole("link", { name: "Synthetic Client Alpha" })).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "End" }));
     fireEvent.click(screen.getByRole("button", { name: "End assignment" }));
     expect(await screen.findByRole("alert")).toHaveTextContent("Give a reason");

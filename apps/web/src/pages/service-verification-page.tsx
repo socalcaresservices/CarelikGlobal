@@ -145,8 +145,7 @@ function ClientChoiceList({
                             client.next_scheduled_ends_at,
                           )
                         : "Not scheduled today"}
-                      {" · "}
-                      {serviceCountLabel(client.active_service_count)}
+                      {client.active_service_count === 1 ? null : ` · ${serviceCountLabel(client.active_service_count)}`}
                     </span>
                   </span>
                   {selected ? (

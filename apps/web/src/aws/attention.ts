@@ -135,7 +135,7 @@ export function streams(o: AttentionOverview, now = Date.parse(o.asOf)): Stream[
     const tone: Tone = u.items.some((i) => itemTone(i, now) === "red") ? "red" : u.itemCount > 0 ? "amber" : "neutral";
     out.push({
       key: "now", label: "Needs attention now", count: u.itemCount, unit: u.itemCount === 1 ? "item" : "items", to: "/attention", tone,
-      detail: u.itemCount === 0 ? `Nothing starting in the next ${o.urgentWindowHours} hours is at risk.` : u.issueCount !== u.itemCount ? `${plural(u.issueCount, "issue")} across ${plural(u.itemCount, "item")}` : `Within ${o.urgentWindowHours} hours`,
+      detail: u.itemCount === 0 ? `Nothing starting in the next ${o.urgentWindowHours} hours is at risk.` : u.issueCount !== u.itemCount ? `${plural(u.issueCount, "issue")} in all` : `Within ${o.urgentWindowHours} hours`,
     });
   }
   if (o.upcoming) {
@@ -152,14 +152,19 @@ export function streams(o: AttentionOverview, now = Date.parse(o.asOf)): Stream[
     const escalated = d.reviewOverdue ?? 0;
     const routine = d.reviewRoutine ?? (d.reviewOverdue === undefined ? (d.awaitingReview ?? 0) : Math.max((d.awaitingReview ?? 0) - escalated, 0));
     const needs = (d.overdue ?? 0) + (d.rejected ?? 0) + escalated + (d.caregiversOnHold ?? 0);
-    const bits = [
+    // The count is the first group only; reminders and routine review are shown after it and never counted.
+    const counted = [
       d.overdue ? `${d.overdue} overdue` : null,
+      d.rejected ? `${d.rejected} rejected` : null,
       escalated ? `${escalated} review overdue` : null,
       d.caregiversOnHold ? `${plural(d.caregiversOnHold, "caregiver")} on hold` : null,
+    ].filter(Boolean) as string[];
+    const reminders = [
       routine ? `${routine} awaiting routine review` : null,
       d.dueSoon ? `${d.dueSoon} due soon` : null,
       d.caregiversWithPendingRequirements ? `${d.caregiversWithPendingRequirements} with requirements coming due` : null,
     ].filter(Boolean) as string[];
+    const bits = [counted.join(" · "), reminders.length ? `Not counted: ${reminders.join(", ")}` : ""].filter(Boolean);
     out.push({
       key: "documents", label: "Documents & compliance", count: needs, unit: "to act on", to: "/documents",
       tone: needs > 0 ? "amber" : "neutral",

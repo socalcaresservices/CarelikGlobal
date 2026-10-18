@@ -141,7 +141,7 @@ describe("Home tiles: four purposes, each its own destination", () => {
     const now = await screen.findByTestId("stream-now");
     expect(now).toHaveTextContent("Needs attention now");
     expect(now).toHaveTextContent("2");
-    expect(now).toHaveTextContent("3 issues across 2 items");
+    expect(now).toHaveTextContent("3 issues in all");
     expect(now).toHaveAttribute("href", "/attention");
     expect(screen.getByTestId("stream-staffing")).toHaveAttribute("href", "/staffing");
     expect(screen.getByTestId("stream-staffing")).toHaveTextContent("5");

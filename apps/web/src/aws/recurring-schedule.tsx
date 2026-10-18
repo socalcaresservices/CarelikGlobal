@@ -4,6 +4,7 @@
 // for one occurrence. Every check runs on the server again; nothing is
 // shortened, moved or skipped unless the person explicitly chooses to skip the
 // listed dates.
+import { nameWithCode } from "./name-label";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useMemo, useRef, useState } from "react";
 import { Button } from "@carelik/ui";
@@ -139,7 +140,7 @@ export function RecurringSeriesForm({ today, series, onDone }: { today: string; 
             <label htmlFor={`${id}-client`} className="block text-sm font-medium text-slate-700">Client</label>
             <select id={`${id}-client`} value={form.clientId} onChange={(e) => set("clientId", e.target.value)} className={inputClass}>
               <option value="">Choose a client</option>
-              {(clients.data ?? []).filter((c) => c.status === "active").map((c) => <option key={c.clientId} value={c.clientId}>{clientName(c) ?? "Name not set"} ({c.clientCode})</option>)}
+              {(clients.data ?? []).filter((c) => c.status === "active").map((c) => <option key={c.clientId} value={c.clientId}>{nameWithCode(clientName(c), c.clientCode, c.duplicateName)}</option>)}
             </select>
           </div>
           <div>
@@ -156,7 +157,7 @@ export function RecurringSeriesForm({ today, series, onDone }: { today: string; 
         <select id={`${id}-cg`} value={form.caregiverRecordId} onChange={(e) => set("caregiverRecordId", e.target.value)} className={inputClass}>
           <option value="">Open shifts — fill later</option>
           {(caregivers.data ?? []).filter((c) => c.status === "ready" || c.status === "active").map((c) => (
-            <option key={c.caregiverRecordId} value={c.caregiverRecordId}>{caregiverName(c)} ({c.caregiverCode})</option>
+            <option key={c.caregiverRecordId} value={c.caregiverRecordId}>{nameWithCode(caregiverName(c), c.caregiverCode, c.duplicateName)}</option>
           ))}
         </select>
       </div>

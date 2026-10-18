@@ -1,4 +1,5 @@
 import { useQueryClient } from "@tanstack/react-query";
+import { nameWithCode } from "./name-label";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { Button, Card } from "@carelik/ui";
@@ -139,13 +140,13 @@ export function CareTeamPage() {
                 <tr key={c.caregiverRecordId} className="border-b border-slate-100 last:border-0">
                   <th scope="row" className="px-3 py-1.5 font-normal">
                     <Link to={`/care-team/${c.caregiverRecordId}`} className="inline-flex min-h-[44px] flex-col justify-center md:min-h-[32px]">
-                      <span className="font-semibold text-slate-950 underline">{caregiverName(c)} <span className="font-normal text-slate-600">({c.caregiverCode})</span></span>
+                      <span className="font-semibold text-slate-950 underline">{nameWithCode(caregiverName(c), c.caregiverCode, c.duplicateName)}</span>
                       <span className={`text-sm font-normal ${c.hasSignIn ? "text-slate-700" : "text-amber-900"}`}>
                         {signInLabel(c)} · {c.activeAssignments} active assignment{c.activeAssignments === 1 ? "" : "s"}{c.openVisits > 0 ? ` · ${c.openVisits} visit in progress` : ""}
                       </span>
                     </Link>
                   </th>
-                  <td className="px-3 py-1.5 align-middle"><span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${CAREGIVER_STATUS_BADGE[c.status]}`}>{CAREGIVER_STATUS_LABEL[c.status]}</span></td>
+                  <td className="px-3 py-1.5 align-middle"><span className={`inline-block whitespace-nowrap rounded-full px-2 py-0.5 text-xs font-semibold ${CAREGIVER_STATUS_BADGE[c.status]}`}>{CAREGIVER_STATUS_LABEL[c.status]}</span></td>
                 </tr>
               ))}
             </tbody>
@@ -221,7 +222,7 @@ function CaregiverStatusCard({ c }: { c: Caregiver }) {
     }
   }
   return (
-    <SummarySection title="Status" id="status" status={<span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${CAREGIVER_STATUS_BADGE[c.status]}`}>{CAREGIVER_STATUS_LABEL[c.status]}</span>}>
+    <SummarySection title="Status" id="status" status={<span className={`inline-block whitespace-nowrap rounded-full px-2 py-0.5 text-xs font-semibold ${CAREGIVER_STATUS_BADGE[c.status]}`}>{CAREGIVER_STATUS_LABEL[c.status]}</span>}>
       <p className="text-sm font-medium text-amber-950">Making a caregiver inactive ends their assignments and suspends their sign-in at once. It is refused during a visit.</p>
       <form onSubmit={(e) => { e.preventDefault(); void save(); }} className="mt-3 flex flex-wrap items-end gap-3">
         <div>
@@ -287,7 +288,7 @@ function SignInCard({ c, canManage }: { c: Caregiver; canManage: boolean }) {
   return (
     <SummarySection title="Sign-in" id="sign-in" defaultOpen={!c.hasSignIn || pending}
       summary={`${c.activeAssignments} active assignment${c.activeAssignments === 1 ? "" : "s"}${c.openVisits > 0 ? ` · ${c.openVisits} visit in progress` : ""}`}
-      status={<span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${c.hasSignIn && !pending ? "bg-emerald-100 text-emerald-900" : "bg-amber-100 text-amber-900"}`}>{signInLabel(c)}</span>}>
+      status={<span className={`inline-block whitespace-nowrap rounded-full px-2 py-0.5 text-xs font-semibold ${c.hasSignIn && !pending ? "bg-emerald-100 text-emerald-900" : "bg-amber-100 text-amber-900"}`}>{signInLabel(c)}</span>}>
       <div className="text-sm text-slate-800">
       {c.invitedAt ? (
         <ul className="mt-1 space-y-0.5 text-slate-700">
@@ -417,7 +418,7 @@ export function CaregiverDetailPage() {
       <div className="flex flex-wrap items-center gap-3">
         <h1 className="text-xl font-semibold text-slate-950">{caregiverName(c)}</h1>
         <span className="text-sm text-slate-500">{c.caregiverCode}</span>
-        <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${CAREGIVER_STATUS_BADGE[c.status]}`}>{CAREGIVER_STATUS_LABEL[c.status]}</span>
+        <span className={`inline-block whitespace-nowrap rounded-full px-2 py-0.5 text-xs font-semibold ${CAREGIVER_STATUS_BADGE[c.status]}`}>{CAREGIVER_STATUS_LABEL[c.status]}</span>
       </div>
       <CaregiverOutcome c={c} canManage={canManage} />
       {canManage ? <OnboardingCard caregiverRecordId={c.caregiverRecordId} status={c.status} canManage={canManage} /> : null}

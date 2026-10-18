@@ -117,7 +117,7 @@ export function formatClockTime(value: string | Date): string {
 // visit recorded before the link existed - have no scheduled window.
 export const UNLINKED_VISIT_LABEL = "Unscheduled visit";
 
-export const FLEXIBLE_VISIT_LABEL = "Flexible visit — no shift required";
+export const FLEXIBLE_VISIT_LABEL = "Unscheduled";
 
 export function formatScheduledWindow(
   startsAt: string | null | undefined,
@@ -245,7 +245,7 @@ export const VISIT_STATUS_LABEL: Record<ServiceVisitStatus, string> = {
   draft: "In progress",
   awaiting_signature: "Awaiting signature",
   signed: "Signed",
-  administrator_review: "Needs review",
+  administrator_review: "In review",
   corrected: "Corrected",
   voided: "Voided"
 };

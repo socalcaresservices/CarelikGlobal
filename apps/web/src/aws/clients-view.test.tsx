@@ -137,11 +137,11 @@ describe("Clients page views", () => {
     fireEvent.change(screen.getByLabelText("Authorization"), { target: { value: "none" } });
     fireEvent.change(screen.getByLabelText("Sort by"), { target: { value: "name" } });
     const list = screen.getByRole("table", { name: "Clients as a list" });
-    const inList = within(list).getAllByRole("row").slice(1).map((r) => r.querySelector("th")?.textContent?.match(/CL-\d+/)?.[0]);
-    expect(inList).toEqual(["CL-2222222222", "CL-4444444444"]);
+    const inList = within(list).getAllByRole("row").slice(1).map((r) => r.querySelector("th")?.textContent?.match(/Alpha|Bravo|Charlie|Delta/)?.[0]); // names, not codes, in the administrator list
+    expect(inList).toEqual(["Alpha", "Delta"]);
     fireEvent.click(screen.getByRole("button", { name: "Cards" }));
     const cards = await screen.findByRole("list", { name: "Clients as cards" });
-    const inCards = within(cards).getAllByRole("listitem").map((r) => r.textContent?.match(/CL-\d+/)?.[0]);
+    const inCards = within(cards).getAllByRole("listitem").map((r) => r.textContent?.match(/Alpha|Bravo|Charlie|Delta/)?.[0]);
     expect(inCards).toEqual(inList);
     fireEvent.change(screen.getByLabelText("Search"), { target: { value: "delta" } });
     expect(within(await screen.findByRole("list", { name: "Clients as cards" })).getAllByRole("listitem")).toHaveLength(1);

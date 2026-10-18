@@ -1,4 +1,5 @@
 import { useQueryClient } from "@tanstack/react-query";
+import { nameWithCode } from "./name-label";
 import { useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { Button } from "@carelik/ui";
@@ -25,6 +26,8 @@ export interface Assignment {
   clientId: string;
   clientCode: string;
   clientName: string | null;
+  duplicateName?: boolean;
+  caregiverDuplicateName?: boolean;
   serviceId: string;
   serviceCode: string;
   serviceName: string;
@@ -140,7 +143,7 @@ function AddAssignmentForm({ clientId, caregiverRecordId, onDone }: { clientId?:
             <option value="">Choose a caregiver</option>
             {eligibleCaregivers.map((c) => (
               <option key={c.caregiverRecordId} value={c.caregiverRecordId}>
-                {caregiverName(c)} ({c.caregiverCode}){!c.hasSignIn ? " — planned: no sign-in yet" : c.status === "onboarding" ? " — planned: still onboarding" : ""}
+                {nameWithCode(caregiverName(c), c.caregiverCode, c.duplicateName)}{!c.hasSignIn ? " — planned: no sign-in yet" : c.status === "onboarding" ? " — planned: still onboarding" : ""}
               </option>
             ))}
           </select>
@@ -151,7 +154,7 @@ function AddAssignmentForm({ clientId, caregiverRecordId, onDone }: { clientId?:
           <select id="asg-client" value={pick} onChange={(e) => { setPick(e.target.value); touch(); }} className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-base">
             <option value="">Choose a client</option>
             {(clients.data ?? []).filter((c) => c.status === "active").map((c) => (
-              <option key={c.clientId} value={c.clientId}>{clientName(c) ?? "Name not set"} ({c.clientCode})</option>
+              <option key={c.clientId} value={c.clientId}>{nameWithCode(clientName(c), c.clientCode, c.duplicateName)}</option>
             ))}
           </select>
         </div>
@@ -211,8 +214,8 @@ function EndForm({ a, onDone }: { a: Assignment; onDone: (text: string) => void 
 function AssignmentRow({ a, side, canManage, onDone }: { a: Assignment; side: "client" | "caregiver"; canManage: boolean; onDone?: (text: string) => void }) {
   const [ending, setEnding] = useState(false);
   const who = side === "client"
-    ? (a.caregiverRecordId ? <Link className="underline" to={`/care-team/${a.caregiverRecordId}`}>{a.caregiverName} ({a.caregiverCode})</Link> : "Caregiver record not found")
-    : <Link className="underline" to={`/clients/${a.clientId}`}>{a.clientName ?? "Name not set"} ({a.clientCode})</Link>;
+    ? (a.caregiverRecordId ? <Link className="underline" to={`/care-team/${a.caregiverRecordId}`}>{nameWithCode(a.caregiverName, a.caregiverCode, a.caregiverDuplicateName)}</Link> : "Caregiver record not found")
+    : <Link className="underline" to={`/clients/${a.clientId}`}>{nameWithCode(a.clientName, a.clientCode, a.duplicateName)}</Link>;
   return (
     <li className="rounded-lg border border-slate-200 bg-og-card p-3">
       <div className="flex flex-wrap items-center justify-between gap-2">

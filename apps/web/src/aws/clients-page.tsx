@@ -9,6 +9,7 @@ import { useAwsApi } from "./aws-workspace";
 import { DuplicateWarning } from "./client-extras";
 import { ShortHelp } from "./help-text";
 import { useDuplicateClients } from "./client-data";
+import { nameWithCode } from "./name-label";
 import { clientName, STATUS_BADGE, STATUS_LABEL, useClients, useClientTypes, type AdminClient, type ClientStatus } from "./client-admin";
 import { defaultView, filterClients, hasCurrentAuthorization, readViewPreference, sortClients, WIDE_SCREEN_QUERY, writeViewPreference, type AuthorizationFilter, type ClientSort, type ClientView } from "./client-view";
 
@@ -233,10 +234,10 @@ function ClientList({ clients }: { clients: AdminClient[] }) {
           {clients.map((c) => (
             <tr key={c.clientId} className="border-b border-slate-100 last:border-0">
               <th scope="row" className="px-3 py-1 font-medium text-slate-950">
-                {clientName(c) ?? "Name not set"} <span className="font-normal text-slate-500">({c.clientCode})</span>
+                {nameWithCode(clientName(c), c.clientCode, c.duplicateName)}
                 {c.openVisits > 0 ? <span className="ml-2 text-xs font-normal text-slate-600">visit in progress</span> : null}
               </th>
-              <td className="px-3 py-1"><span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${STATUS_BADGE[c.status]}`}>{STATUS_LABEL[c.status]}</span></td>
+              <td className="px-3 py-1"><span className={`inline-block whitespace-nowrap rounded-full px-2 py-0.5 text-xs font-semibold ${STATUS_BADGE[c.status]}`}>{STATUS_LABEL[c.status]}</span></td>
               <td className={`px-3 py-1 ${!hasCurrentAuthorization(c) && c.status === "active" ? "font-semibold text-red-700" : "text-slate-800"}`}>{authLabel(c)}</td>
               <td className="px-3 py-1"><Link to={`/clients/${c.clientId}`} className="inline-flex min-h-[44px] items-center font-medium text-og-link underline md:min-h-[32px]" aria-label={`${actionLabel(c)} for ${clientName(c) ?? c.clientCode}`}>{actionLabel(c)}</Link></td>
             </tr>
@@ -255,15 +256,15 @@ function ClientCard({ c }: { c: AdminClient }) {
     <li className="rounded-xl border border-slate-200 bg-og-card">
       <details>
         <summary className="flex min-h-[44px] cursor-pointer list-none flex-wrap items-center justify-between gap-x-2 gap-y-1 px-3 py-2 [&::-webkit-details-marker]:hidden">
-          <span className="min-w-0 font-semibold text-slate-950">{name ?? "Name not set"} <span className="font-normal text-slate-600">({c.clientCode})</span></span>
+          <span className="min-w-0 font-semibold text-slate-950">{nameWithCode(name, c.clientCode, c.duplicateName)}</span>
           <span className="flex items-center gap-2">
             {missing ? <span className="text-xs font-semibold text-red-700">No authorization</span> : null}
-            <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${STATUS_BADGE[c.status]}`}>{STATUS_LABEL[c.status]}</span>
+            <span className={`inline-block whitespace-nowrap rounded-full px-2 py-0.5 text-xs font-semibold ${STATUS_BADGE[c.status]}`}>{STATUS_LABEL[c.status]}</span>
           </span>
         </summary>
         <div className="space-y-1 border-t border-slate-100 px-3 py-2 text-sm">
           <p className="text-slate-700">
-            {[c.city, c.clientTypeName, c.caregiverDisplayCode ? `caregivers see "${c.caregiverDisplayCode}"` : null].filter(Boolean).join(" · ") || "No city or type"}
+            {[`Code ${c.clientCode}`, c.city, c.clientTypeName, c.caregiverDisplayCode ? `caregivers see "${c.caregiverDisplayCode}"` : null].filter(Boolean).join(" · ") || "No city or type"}
           </p>
           <p className={missing ? "font-semibold text-red-700" : "text-slate-700"}>
             Authorization: {authLabel(c)}{c.openVisits > 0 ? ` · ${c.openVisits} visit in progress` : ""}

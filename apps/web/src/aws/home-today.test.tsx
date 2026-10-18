@@ -175,14 +175,14 @@ describe("where the actions land", () => {
   });
   it("?coverage=1 shows only shifts that need coverage", async () => {
     renderAt("/schedule?coverage=1", FULL, { shifts: () => json(200, { shifts: [shift("ok", 60, 120), shift("open", 90, 150, { coverageState: "needs_coverage", caregiverRecordId: null, caregiverName: null, caregiverCode: null })] }) });
-    await screen.findByText(/need.* coverage this week/);
-    expect(screen.getByLabelText("Needs coverage only")).toBeChecked();
+    await screen.findByText(/unfilled this week/);
+    expect(screen.getByLabelText("Unfilled only")).toBeChecked();
     expect(screen.queryByText("Client ok")).toBeNull();
   });
   it("without the parameters the schedule opens as before", async () => {
     renderAt("/schedule", FULL);
     expect(await screen.findByRole("button", { name: "Add shift" })).toHaveAttribute("aria-expanded", "false");
-    expect(screen.getByLabelText("Needs coverage only")).not.toBeChecked();
+    expect(screen.getByLabelText("Unfilled only")).not.toBeChecked();
   });
   it("?find=1 puts the cursor in the client search", async () => {
     renderAt("/clients?find=1", FULL);

@@ -68,7 +68,7 @@ export function AccountsPage() {
                 </p>
                 <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${status ? ACCOUNT_STATUS_BADGE[status] : "bg-slate-100 text-slate-800"}`}>{status ? ACCOUNT_STATUS_LABEL[status] : a.accountStatus}</span>
               </div>
-              <p className="mt-1 text-sm text-slate-700">{roleLabel(a.role)}{status ? ` · ${ACCOUNT_STATUS_HELP[status]}` : ""}</p>
+              <p className="mt-1 text-sm text-slate-700">{roleLabel(a.role)}{status && ACCOUNT_STATUS_HELP[status] ? ` · ${ACCOUNT_STATUS_HELP[status]}` : ""}</p>
               {status === "setup_required" && a.caregiverRecordId ? <Link className="mt-2 inline-block text-sm font-medium underline" to={`/care-team/${a.caregiverRecordId}`}>Open in Care Team</Link> : null}
               {a.userId && !a.isSelf && (status === "active" || status === "invitation_pending") && !open ? (
                 <Button type="button" variant="secondary" className="mt-2" onClick={() => { setActing({ userId: a.userId!, kind: "disable" }); setDone(null); change.reset(); }}>Disable account…</Button>

@@ -188,6 +188,7 @@ export function VisitReviewPage() {
     ? `${formatClockTime(v.scheduledStartsAt)}–${formatClockTime(v.scheduledEndsAt)}`
     : v.caregiverSchedulingMode === "flexible" ? FLEXIBLE_VISIT_LABEL : UNLINKED_VISIT_LABEL;
   const facts: Array<[string, string]> = [
+    ...(v.clientName ? [["Client code", v.clientCode] as [string, string]] : []),
     ["Caregiver", v.caregiverName],
     ["Service", `${v.serviceName} (${v.serviceCode})`],
     ["Date", formatDateOnly(v.serviceDate)],
@@ -214,7 +215,6 @@ export function VisitReviewPage() {
       <div>
         <Link to="/service-verification/reports" className="text-sm text-slate-600 underline">Visit records</Link>
         <h1 className="mt-1 text-xl font-semibold text-slate-950">{v.clientName ?? v.clientCode}</h1>
-        {v.clientName ? <p className="text-sm text-slate-500">{v.clientCode}</p> : null}
         <p className="mt-1">
           <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${inReview && !v.decision ? "bg-amber-50 text-amber-900 ring-1 ring-amber-200" : "bg-slate-100 text-slate-700"}`}>
             {v.billingState
@@ -222,7 +222,7 @@ export function VisitReviewPage() {
               : inReview
               ? v.decision
                 ? v.decision === "close_not_billable" ? "Reviewed — not billable" : v.decision === "accept_late_confirmation" ? "Late confirmation accepted — eligible for billing approval" : "Reviewed — capped minutes eligible"
-                : v.recoveryState === "awaiting_response" ? "Waiting for signature" : v.recoveryState === "response_to_review" ? "Signature received — review it" : "Needs review"
+                : v.recoveryState === "awaiting_response" ? "Waiting for signature" : v.recoveryState === "response_to_review" ? "Signature received — review it" : "In review"
               : VISIT_STATUS_LABEL[v.visitStatus]}
           </span>
         </p>
@@ -329,12 +329,12 @@ export function VisitReviewPage() {
       {state.done ? <p role="status" className="text-sm text-emerald-800">{state.done}</p> : null}
 
       <p className="flex flex-wrap gap-x-4 gap-y-1 text-sm text-slate-700">
-        <Link className="font-medium underline" to={`/service-verification/reports?view=visits&correct=${encodeURIComponent(v.visitId)}`}>Correct visit</Link>
+        <Link className="font-medium underline" to={`/service-verification/reports?view=visits&correct=${encodeURIComponent(v.visitId)}`}>Correct</Link>
         <Link className="font-medium underline" to="/billing-review">Billing review</Link>
       </p>
       <details className="text-xs text-slate-600">
         <summary className="inline-flex min-h-[32px] cursor-pointer items-center text-og-accent underline">What these links do</summary>
-        <p>Correct visit creates a corrected record and keeps the original; it is separate from review. Billing review is where billable minutes are approved.</p>
+        <p>Correct creates a corrected record and keeps the original; it is separate from review. Billing review is where billable minutes are approved.</p>
       </details>
     </div>
   );

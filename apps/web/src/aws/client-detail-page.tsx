@@ -363,7 +363,7 @@ function AuthorizationsCard({ clientId }: { clientId: string }) {
   const left = (b: (typeof rows)[number]) => (leftOf(b) < 0 ? `Over limit ${formatDuration(-leftOf(b))}` : `Hours left ${formatDuration(leftOf(b))}`);
   return (
     <SummarySection title="Authorizations" defaultOpen hideSummaryWhenOpen
-      status={none ? <span className="rounded-full bg-red-100 px-2 py-0.5 text-xs font-semibold text-red-800">None</span> : worst ? <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${worst === "critical" ? "bg-red-100 text-red-800" : "bg-amber-100 text-amber-900"}`}>{worst === "critical" ? "Critical" : "Near limit"}</span> : rows.length > 0 ? <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-semibold text-emerald-900">{attention ? "Ending soon" : "Healthy"}</span> : undefined}
+      status={none ? <span className="rounded-full bg-red-100 px-2 py-0.5 text-xs font-semibold text-red-800">None</span> : worst ? <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${worst === "critical" ? "bg-red-100 text-red-800" : "bg-amber-100 text-amber-900"}`}>{worst === "critical" ? "Critical" : "Near limit"}</span> : rows.length > 0 && attention ? <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-semibold text-emerald-900">Ending soon</span> : undefined}
       summary={rows.length > 0 ? rows.map((b) => `${b.serviceName}: ${left(b)}`).join(" · ") : undefined}>
       {canUpdate ? <div className="mb-2 text-right"><Button type="button" variant="secondary" onClick={() => setAdding((a) => !a)} aria-expanded={adding}>{adding ? "Close" : "Add authorization"}</Button></div> : null}
       {adding ? <AddAuthorizationForm clientId={clientId} onDone={() => setAdding(false)} /> : null}
@@ -402,8 +402,8 @@ function AuthorizationsCard({ clientId }: { clientId: string }) {
               </li>
             ))}
           </ul>
-          <ShortHelp className="mt-1 text-xs text-slate-600" details="Hours left is worked out for each authorization on its own. Pending is worked time not yet billable (awaiting confirmation or review) and Reserved is scheduled time not yet delivered; open Details for the full equation. Healthy is below 80% of the authorization counted, Near Limit 80% to below 95%, Critical 95% and above (same calculation as the reports).">
-            Authorized = Billable + Rounding + Pending + Reserved + Hours left. If Hours left is negative, that amount is shown as Over limit.
+          <ShortHelp className="mt-1 text-xs text-slate-600" details="Hours left is worked out for each authorization on its own. Pending is worked time not yet billable (awaiting confirmation or review) and Reserved is scheduled time not yet delivered; the full equation Authorized = Billable + Rounding + Pending + Reserved + Hours left is under each authorization's Details. Healthy is below 80% of the authorization counted, Near Limit 80% to below 95%, Critical 95% and above (same calculation as the reports).">
+            If Hours left is negative, that amount is shown as Over limit.
           </ShortHelp>
         </div>
       ) : null}
@@ -430,7 +430,10 @@ export function ClientDetailPage() {
   const canManage = hasPermission("clients.manage") && hasPermission("clients.names.manage");
   return (
     <div className="max-w-4xl space-y-4">
-      <Link to="/clients" className="text-sm text-slate-700 underline">← All clients</Link>
+      <div className="flex flex-wrap items-center gap-x-4">
+        <Link to="/clients" className="text-sm text-slate-700 underline">← All clients</Link>
+        {hasPermission("care_requests.read") ? <Link to="/schedule/shift-requests" className="text-sm text-slate-700 underline">Care requests</Link> : null}
+      </div>
       <div className="flex flex-wrap items-center gap-3">
         <h1 className="text-xl font-semibold text-slate-950">{clientName(c) ?? "Name not set"}</h1>
         <span className="text-sm text-slate-500">{c.clientCode}</span>

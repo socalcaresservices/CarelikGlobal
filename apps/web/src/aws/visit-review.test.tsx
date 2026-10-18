@@ -115,8 +115,8 @@ describe("Visit review page", () => {
     expect(post.body).toEqual({ organizationId: ORG, decision: "close_not_billable", reason: "Parent unreachable (synthetic)" });
     expect(Object.keys(post.headers).map((h) => h.toLowerCase())).toContain("idempotency-key");
     expect(await screen.findByText("Reviewed — not billable")).toBeInTheDocument();
-    // Correct visit is a separate action.
-    expect(screen.getByRole("link", { name: "Correct visit" })).toHaveAttribute("href", `/service-verification/reports?view=visits&correct=${VISIT_ID}`);
+    // Correct is a separate action.
+    expect(screen.getByRole("link", { name: "Correct" })).toHaveAttribute("href", `/service-verification/reports?view=visits&correct=${VISIT_ID}`);
   });
 
   it("over-authorization visit with a signature: both decisions offered, with the over minutes explained", async () => {

@@ -317,6 +317,17 @@ export function ClientDocumentsCard({ clientId }: { clientId: string }) {
 }
 
 // ---------------------------------------------------------------- alerts (6, 7), next visits (9, 10), history (12)
+/** One row per identical action and severity, with a count, so the same sentence is not repeated down the page. */
+function groupAlerts<T extends { severity: string; recommendedAction: string; issueKey: string }>(items: T[]): Array<[T, number]> {
+  const out = new Map<string, [T, number]>();
+  for (const i of items) {
+    const k = `${i.severity}|${i.recommendedAction}`;
+    const e = out.get(k);
+    if (e) e[1] += 1; else out.set(k, [i, 1]);
+  }
+  return [...out.values()];
+}
+
 /** The overall outcome first ("Ready for scheduling" / "Not ready: 2 items to fix"), then each item to fix with its one action. */
 export function ClientAlertsCard({ clientId }: { clientId: string }) {
   const api = useAwsApi();
@@ -344,13 +355,13 @@ export function ClientAlertsCard({ clientId }: { clientId: string }) {
       </p>
       {open.length > 0 ? (
         <ul className="space-y-2">
-          {open.map((i) => {
+          {groupAlerts(open).map(([i, n]) => {
             const dest = issueDestination(i);
             const tone = i.severity === "critical" ? "red" : i.severity === "urgent" ? "amber" : "neutral";
             return (
               <li key={i.issueKey} data-testid="client-alert" className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-lg border border-slate-200 bg-og-card p-3 text-sm">
                 <StatusChip tone={tone}>{TONE[tone].word}</StatusChip>
-                <span className="min-w-0 flex-1 text-slate-900">{i.recommendedAction}</span>
+                <span className="min-w-0 flex-1 text-slate-900">{i.recommendedAction}{n > 1 ? ` (${n} items)` : ""}</span>
                 <Link className={linkCls} to={`${dest.to}${dest.to.includes("?") ? "&" : "?"}client=${encodeURIComponent(clientId)}`}>{dest.label}</Link>
               </li>
             );

@@ -1,6 +1,7 @@
 // Scheduling (0053): make-up visits for lost time, and caregiver hour limits with the week's load. Every rule is enforced
 // again by the server (same month as the missed visit, never more than the time still owed, the same authorization,
 // readiness and conflict checks as any other shift); these forms only make the result clear.
+import { nameWithCode } from "./name-label";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useRef, useState } from "react";
 import { Button } from "@carelik/ui";
@@ -50,7 +51,7 @@ export function MakeupForm({ shiftId, caregiverRecordId, defaultDate, onClose, o
         <label htmlFor={`${id}-c`} className="block text-xs font-medium text-slate-600">Caregiver</label>
         <select id={`${id}-c`} value={form.caregiverRecordId} onChange={(e) => change({ caregiverRecordId: e.target.value })} className={inputClass}>
           <option value="">Open shift — fill later</option>
-          {(caregivers.data ?? []).filter((c) => c.status === "ready" || c.status === "active").map((c) => <option key={c.caregiverRecordId} value={c.caregiverRecordId}>{caregiverName(c)} ({c.caregiverCode})</option>)}
+          {(caregivers.data ?? []).filter((c) => c.status === "ready" || c.status === "active").map((c) => <option key={c.caregiverRecordId} value={c.caregiverRecordId}>{nameWithCode(caregiverName(c), c.caregiverCode, c.duplicateName)}</option>)}
         </select>
       </div>
       <div><label htmlFor={`${id}-s`} className="block text-xs font-medium text-slate-600">Start time</label><input id={`${id}-s`} type="time" value={form.startTime} onChange={(e) => change({ startTime: e.target.value })} className={inputClass} /></div>
@@ -155,7 +156,7 @@ export function HourLimitsPanel({ from, to, canManage }: { from: string; to: str
               <label htmlFor="hl-cg" className="block text-xs font-medium text-slate-600">Applies to</label>
               <select id="hl-cg" value={form.caregiverRecordId} onChange={(e) => setForm({ ...form, caregiverRecordId: e.target.value })} className={inputClass}>
                 <option value="">Everyone (agency default)</option>
-                {(caregivers.data ?? []).filter((c) => c.status !== "inactive").map((c) => <option key={c.caregiverRecordId} value={c.caregiverRecordId}>{caregiverName(c)} ({c.caregiverCode})</option>)}
+                {(caregivers.data ?? []).filter((c) => c.status !== "inactive").map((c) => <option key={c.caregiverRecordId} value={c.caregiverRecordId}>{nameWithCode(caregiverName(c), c.caregiverCode, c.duplicateName)}</option>)}
               </select>
             </div>
             <div>

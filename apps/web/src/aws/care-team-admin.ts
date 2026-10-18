@@ -21,6 +21,8 @@ export interface Caregiver {
   signInStatus: string | null;
   activeAssignments: number;
   openVisits: number;
+  /** Server flag: another caregiver in this agency has the same name. */
+  duplicateName?: boolean;
   /** Invitation (0025); null when never invited through Ogevia. */
   invitationEmail?: string | null;
   invitedAt?: string | null;

@@ -115,6 +115,45 @@ async function rows(db: Queryable, sql: string, params: unknown[]) {
   return (await db.query(sql, params)).rows.map(toCamel);
 }
 
+/** Lower-case, single-spaced, accent-free name part so "  Ana  " and "ana" compare equal. */
+const nameKey = (...parts: unknown[]) =>
+  parts.filter((x): x is string => typeof x === "string" && x.trim() !== "").join(" ").normalize("NFKD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/\s+/g, " ").trim();
+
+/** Ids whose normalized name (first+last, or preferred+last) is shared with another record in the same list. Names stay inside the API; only the boolean leaves. */
+export function duplicateNameIds(people: ReadonlyArray<{ id: string; names: string[] }>): Set<string> {
+  const owners = new Map<string, Set<string>>();
+  for (const p of people) for (const k of new Set(p.names.filter(Boolean))) (owners.get(k) ?? owners.set(k, new Set()).get(k)!).add(p.id);
+  const out = new Set<string>();
+  for (const ids of owners.values()) if (ids.size > 1) for (const id of ids) out.add(id);
+  return out;
+}
+
+/** Per-agency duplicate-name sets for clients (legal names; empty unless the caller may read names) and caregivers. Failure to read means no flag, never an error. */
+async function duplicateNames(db: Queryable, org: string, which: { clients?: boolean; caregivers?: boolean }) {
+  const safe = async (sql: string) => {
+    await db.query("savepoint dup_names");
+    try {
+      const r = await rows(db, sql, [org]);
+      await db.query("release savepoint dup_names");
+      return r;
+    } catch {
+      await db.query("rollback to savepoint dup_names");
+      return [];
+    }
+  };
+  const clients = which.clients ? duplicateNameIds((await safe("select * from ogevia_api.list_clients($1)")).map((c) => ({ id: String(c.clientId), names: [nameKey(c.legalFirstName, c.legalLastName)] }))) : new Set<string>();
+  const caregivers = which.caregivers ? duplicateNameIds((await safe("select * from ogevia_api.list_caregivers($1)")).map((c) => ({ id: String(c.caregiverRecordId), names: [nameKey(c.firstName, c.lastName), nameKey(c.preferredName, c.lastName)] }))) : new Set<string>();
+  return { clients, caregivers };
+}
+/** Adds duplicateName (client) and caregiverDuplicateName to rows that show a name; ids come from the row. */
+function flagDuplicates<T extends Record<string, unknown>>(list: T[], d: { clients: Set<string>; caregivers: Set<string> }, o: { client?: boolean; caregiver?: boolean }) {
+  return list.map((r) => ({
+    ...r,
+    ...(o.client ? { duplicateName: r.clientName != null && typeof r.clientId === "string" && d.clients.has(r.clientId) } : {}),
+    ...(o.caregiver ? { caregiverDuplicateName: r.caregiverName != null && typeof r.caregiverRecordId === "string" && d.caregivers.has(r.caregiverRecordId) } : {}),
+  }));
+}
+
 /** The first row of a one-row result (a jsonb or uuid scalar), typed loosely because the database already shaped it. */
 async function first(db: Queryable, sql: string, params: unknown[]): Promise<Record<string, any>> {
   return (await db.query(sql, params)).rows[0] as Record<string, any>;
@@ -347,7 +386,11 @@ export const ROUTES: Record<string, Route> = {
   "GET /v1/clients/directory": {
     mutating: false,
     handle: async ({ event, tx }) => ({
-      clients: await tx((db) => rows(db, "select * from ogevia_api.list_client_directory($1)", [orgParam(event)])),
+      clients: await tx(async (db) => {
+        const list = await rows(db, "select * from ogevia_api.list_client_directory($1)", [orgParam(event)]);
+        const dup = duplicateNameIds(list.map((c) => ({ id: String(c.clientId), names: [nameKey(c.legalFirstName, c.legalLastName)] })));
+        return list.map((c) => ({ ...c, duplicateName: nameKey(c.legalFirstName, c.legalLastName) !== "" && dup.has(String(c.clientId)) }));
+      }),
     }),
   },
 
@@ -400,7 +443,11 @@ export const ROUTES: Record<string, Route> = {
   "GET /v1/clients": {
     mutating: false,
     handle: async ({ event, tx }) => ({
-      clients: await tx((db) => rows(db, "select * from ogevia_api.list_clients($1)", [orgParam(event)])),
+      clients: await tx(async (db) => {
+        const list = await rows(db, "select * from ogevia_api.list_clients($1)", [orgParam(event)]);
+        const dup = duplicateNameIds(list.map((c) => ({ id: String(c.clientId), names: [nameKey(c.legalFirstName, c.legalLastName)] })));
+        return list.map((c) => ({ ...c, duplicateName: nameKey(c.legalFirstName, c.legalLastName) !== "" && dup.has(String(c.clientId)) }));
+      }),
     }),
   },
 
@@ -797,7 +844,11 @@ export const ROUTES: Record<string, Route> = {
   "GET /v1/caregivers": {
     mutating: false,
     handle: async ({ event, tx }) => ({
-      caregivers: await tx((db) => rows(db, "select * from ogevia_api.list_caregivers($1)", [orgParam(event)])),
+      caregivers: await tx(async (db) => {
+        const list = await rows(db, "select * from ogevia_api.list_caregivers($1)", [orgParam(event)]);
+        const dup = duplicateNameIds(list.map((c) => ({ id: String(c.caregiverRecordId), names: [nameKey(c.firstName, c.lastName), nameKey(c.preferredName, c.lastName)] })));
+        return list.map((c) => ({ ...c, duplicateName: dup.has(String(c.caregiverRecordId)) }));
+      }),
     }),
   },
 
@@ -976,7 +1027,13 @@ export const ROUTES: Record<string, Route> = {
       const from = date(query.from, "from");
       const to = date(query.to, "to");
       const client = optionalUuid(query.clientId, "clientId");
-      return { shifts: await tx((db) => rows(db, "select * from ogevia_api.list_shifts($1, $2, $3, $4)", [orgParam(event), from, to, client])) };
+      return {
+        shifts: await tx(async (db) => {
+          const org = orgParam(event);
+          const list = await rows(db, "select * from ogevia_api.list_shifts($1, $2, $3, $4)", [org, from, to, client]);
+          return flagDuplicates(list, await duplicateNames(db, org, { clients: true, caregivers: true }), { client: true, caregiver: true });
+        }),
+      };
     },
   },
 
@@ -1444,7 +1501,11 @@ export const ROUTES: Record<string, Route> = {
       const client = optionalUuid(query.clientId, "clientId");
       const caregiver = optionalUuid(query.caregiverRecordId, "caregiverRecordId");
       return {
-        assignments: await tx((db) => rows(db, "select * from ogevia_api.list_assignments($1, $2, $3)", [orgParam(event), client, caregiver])),
+        assignments: await tx(async (db) => {
+          const org = orgParam(event);
+          const list = await rows(db, "select * from ogevia_api.list_assignments($1, $2, $3)", [org, client, caregiver]);
+          return flagDuplicates(list, await duplicateNames(db, org, { clients: true, caregivers: true }), { client: true, caregiver: true });
+        }),
       };
     },
   },

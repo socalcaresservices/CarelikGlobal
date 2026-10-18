@@ -1,4 +1,5 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { nameWithCode } from "./name-label";
 import { useEffect, useMemo, useRef, useState, type RefObject } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { Button, Card, QuickActionMenu } from "@carelik/ui";
@@ -17,6 +18,7 @@ import { ShortHelp } from "./help-text";
 import { useIsNarrow } from "@/lib/use-is-narrow";
 import type { RejectedDate } from "./recurring-format";
 import { AssignmentChecks } from "./readiness/assignment-checks";
+import { ShiftAuthorizationContext } from "./shift-authorization-context";
 import { HourLimitsPanel, MakeupForm } from "./scheduling-extras";
 import { useClientAuthorizations } from "./client-admin";
 import { useAssignments } from "./assignments-data";
@@ -45,6 +47,9 @@ export interface Shift {
   caregiverRecordId: string | null;
   caregiverCode: string | null;
   caregiverName: string | null;
+  /** Server flags: another client / caregiver in this agency has the same name. */
+  duplicateName?: boolean;
+  caregiverDuplicateName?: boolean;
   hasSignIn: boolean;
   reservedMinutes: number | null;
   fromCareRequest: boolean;
@@ -67,7 +72,7 @@ export interface Shift {
 interface CoverageEvent { eventType: "called_out" | "reassigned"; createdAt: string; reason: string | null; originalCaregiverName: string | null; replacementCaregiverName: string | null; recordedBy: string }
 interface MyShift { shiftId: string; startsAt: string; endsAt: string; clientCode: string; serviceName: string | null; coverageState: string; canCallOut: boolean }
 
-const STATE_LABEL: Record<CoverageState, string> = { covered: "Covered", needs_coverage: "Needs coverage", completed: "Completed", cancelled: "Cancelled", no_show: "No-show" };
+const STATE_LABEL: Record<CoverageState, string> = { covered: "Covered", needs_coverage: "Unfilled", completed: "Completed", cancelled: "Cancelled", no_show: "No-show" };
 const STATE_BADGE: Record<CoverageState, string> = {
   covered: "bg-emerald-100 text-emerald-900", needs_coverage: "bg-red-100 text-red-900 font-bold",
   completed: "bg-slate-200 text-slate-800", cancelled: "bg-slate-200 text-slate-700", no_show: "bg-amber-100 text-amber-900",
@@ -138,7 +143,7 @@ function AddShiftForm({ onDone, initialClientId = "" }: { onDone: (text: string)
         <label htmlFor="sh-client" className="block text-sm font-medium text-slate-700">Client</label>
         <select id="sh-client" value={form.clientId} onChange={(e) => set("clientId", e.target.value)} className={inputClass}>
           <option value="">Choose a client</option>
-          {(clients.data ?? []).filter((c) => c.status === "active").map((c) => <option key={c.clientId} value={c.clientId}>{clientName(c) ?? "Name not set"} ({c.clientCode})</option>)}
+          {(clients.data ?? []).filter((c) => c.status === "active").map((c) => <option key={c.clientId} value={c.clientId}>{nameWithCode(clientName(c), c.clientCode, c.duplicateName)}</option>)}
         </select>
       </div>
       <div>
@@ -153,7 +158,7 @@ function AddShiftForm({ onDone, initialClientId = "" }: { onDone: (text: string)
         <select id="sh-caregiver" value={form.caregiverRecordId} onChange={(e) => set("caregiverRecordId", e.target.value)} className={inputClass}>
           <option value="">Open shift — fill later</option>
           {(caregivers.data ?? []).filter((c) => c.status === "ready" || c.status === "active").map((c) => (
-            <option key={c.caregiverRecordId} value={c.caregiverRecordId}>{caregiverName(c)} ({c.caregiverCode}){c.hasSignIn ? "" : " — no sign-in yet"}</option>
+            <option key={c.caregiverRecordId} value={c.caregiverRecordId}>{nameWithCode(caregiverName(c), c.caregiverCode, c.duplicateName)}{c.hasSignIn ? "" : " — no sign-in yet"}</option>
           ))}
         </select>
       </div>
@@ -162,6 +167,7 @@ function AddShiftForm({ onDone, initialClientId = "" }: { onDone: (text: string)
         <div><label htmlFor="sh-start" className="block text-sm font-medium text-slate-700">Start time</label><input id="sh-start" type="time" value={form.startTime} onChange={(e) => set("startTime", e.target.value)} className={inputClass} /></div>
         <div><label htmlFor="sh-end" className="block text-sm font-medium text-slate-700">End time</label><input id="sh-end" type="time" value={form.endTime} onChange={(e) => set("endTime", e.target.value)} className={inputClass} /></div>
       </div>
+      {form.clientId && form.serviceId ? <div className="sm:col-span-2"><ShiftAuthorizationContext clientId={form.clientId} serviceId={form.serviceId} date={form.date} /></div> : null}
       {form.caregiverRecordId && form.serviceId ? (
         <div className="sm:col-span-2">
           <AssignmentChecks onReady={setReady} outcome={refusal} note="Authorized time is confirmed when you schedule." input={{ caregiverRecordId: form.caregiverRecordId, serviceId: form.serviceId, ...(form.clientId ? { clientId: form.clientId } : {}), date: form.date, startTime: form.startTime, endTime: form.endTime }} />
@@ -240,13 +246,14 @@ function ShiftActions({ s, action, onClose, onDone }: { s: Shift; action: Exclud
       {action === "assign" && s.serviceId && (hasPermission("matching.read") || hasPermission("shifts.manage")) ? (
         <div className="sm:col-span-2"><ReplacementSuggestions shift={s} onChoose={(rec) => { setPick(rec); key.current = newIdempotencyKey(); }} /></div>
       ) : null}
+      {action === "assign" && s.serviceId ? <div className="sm:col-span-2"><ShiftAuthorizationContext clientId={s.clientId} serviceId={s.serviceId} date={s.localDate} /></div> : null}
       {action === "assign" ? (
         <div className="sm:col-span-2">
           <label htmlFor={`${id}-cg`} className="block text-xs font-medium text-slate-600">Caregiver</label>
           <select id={`${id}-cg`} value={pick} onChange={(e) => { setPick(e.target.value); key.current = newIdempotencyKey(); }} className={inputClass}>
             <option value="">Choose a caregiver</option>
             {(caregivers.data ?? []).filter((c) => (c.status === "ready" || c.status === "active") && c.caregiverRecordId !== s.caregiverRecordId).map((c) => (
-              <option key={c.caregiverRecordId} value={c.caregiverRecordId}>{caregiverName(c)} ({c.caregiverCode})</option>
+              <option key={c.caregiverRecordId} value={c.caregiverRecordId}>{nameWithCode(caregiverName(c), c.caregiverCode, c.duplicateName)}</option>
             ))}
           </select>
         </div>
@@ -265,7 +272,7 @@ function ShiftActions({ s, action, onClose, onDone }: { s: Shift; action: Exclud
       {state.error ? <p role="alert" className="text-sm text-red-700 sm:col-span-2">{state.error}</p> : null}
       <div className="flex gap-2 sm:col-span-2">
         <Button type="submit" className="min-h-11" variant={action === "cancel" ? "secondary" : "primary"} disabled={state.busy || (action === "assign" && !!pick && ready === false)}>
-          {action === "callout" ? "Record call-out" : action === "cancel" ? "Cancel shift" : "Assign caregiver"}
+          {action === "callout" ? "Record call-out" : action === "cancel" ? "Cancel shift" : "Assign"}
         </Button>
         <button type="button" className="text-sm underline" onClick={onClose}>Close</button>
       </div>
@@ -289,7 +296,7 @@ function ShiftRow({ s, canManage, onDone, highlight = false, autoAssign = false 
   const calledOut = s.coverageState === "needs_coverage" && !!s.caregiverRecordId;
   const future = new Date(s.startsAt).getTime() > Date.now();
   useEffect(() => { if (highlight && autoAssign && editable) setAction((a) => a ?? "assign"); }, [highlight, autoAssign, editable]);
-  const primary: MenuItem | null = editable ? (s.coverageState === "needs_coverage" ? { label: "Assign caregiver", action: "assign" } : { label: "Record call-out", action: "callout" }) : null;
+  const primary: MenuItem | null = editable ? (s.coverageState === "needs_coverage" ? { label: "Assign", action: "assign" } : { label: "Record call-out", action: "callout" }) : null;
   const items: MenuItem[] = [
     ...(editable && s.coverageState === "covered" ? [{ label: "Change caregiver", action: "assign" as const }] : []),
     ...(editable && future ? [{ label: s.seriesId ? "Change this date only" : "Change time", action: "reschedule" as const }] : []),
@@ -300,13 +307,14 @@ function ShiftRow({ s, canManage, onDone, highlight = false, autoAssign = false 
   const pick = (a: Exclude<Action, null>) => setAction(action === a && (a === "history" || a === "makeup") ? null : a);
   const stateKey = stateOfShift(s);
   const chip = <span data-testid="shift-state" className={`inline-block whitespace-nowrap rounded-full px-2 py-0.5 text-xs ${DISPLAY_BADGE[stateKey] ?? STATE_BADGE[s.coverageState]}`}>{DISPLAY_LABEL[stateKey] ?? STATE_LABEL[s.coverageState]}</span>;
-  const clientText = `${s.clientName ?? "Name not set"} (${s.clientCode})`;
+  const clientText = nameWithCode(s.clientName, s.clientCode, s.duplicateName);
+  const shiftLabel = `${clientText}, ${when(s.startsAt)}`;
   const who = s.caregiverRecordId
-    ? <>{calledOut ? "Called out: " : ""}<Link className="underline" to={`/care-team/${s.caregiverRecordId}`}>{s.caregiverName} ({s.caregiverCode})</Link>{!s.hasSignIn ? " — no sign-in yet" : ""}</>
-    : <span className="font-semibold text-red-800">Open: no caregiver</span>;
+    ? <>{calledOut ? "Called out: " : ""}<Link className="underline" to={`/care-team/${s.caregiverRecordId}`}>{nameWithCode(s.caregiverName, s.caregiverCode, s.caregiverDuplicateName)}</Link>{!s.hasSignIn ? " — no sign-in yet" : ""}</>
+    : <span className="text-slate-600" aria-label="No caregiver">—</span>;
   const rowActions = (
     <div className="flex items-center justify-end gap-1">
-      {primary && !action ? <Button type="button" size="sm" variant={primary.action === "assign" ? "primary" : "secondary"} className="min-h-11 md:min-h-8" onClick={() => pick(primary.action)}>{primary.label}</Button> : null}
+      {primary && !action ? <Button type="button" size="sm" variant={primary.action === "assign" ? "primary" : "secondary"} className="min-h-11 whitespace-nowrap md:min-h-8" {...(primary.action === "assign" ? { "aria-label": `Assign caregiver to shift for ${shiftLabel}` } : {})} onClick={() => pick(primary.action)}>{primary.label}</Button> : null}
       {items.length === 1 && !primary ? <button type="button" className="inline-flex min-h-11 items-center px-2 text-sm font-medium text-og-link underline underline-offset-2 md:min-h-8" onClick={() => pick(items[0]!.action)}>{items[0]!.label}</button> : (
         <QuickActionMenu label="More actions" className="[&>button]:min-h-11 [&>button]:min-w-11 md:[&>button]:min-h-8 md:[&>button]:min-w-8">
           {items.map((i) => <button key={i.action} type="button" className={`block min-h-11 w-full px-3 text-left hover:bg-slate-50 md:min-h-10 ${i.danger ? "text-red-800" : "text-slate-900"}`} onClick={() => pick(i.action)}>{i.label}</button>)}
@@ -320,7 +328,7 @@ function ShiftRow({ s, canManage, onDone, highlight = false, autoAssign = false 
       {s.availabilityOverride ? <p className="font-medium text-amber-900">Assigned with Admin override (availability was No Match){s.availabilityOverrideReason ? `: ${s.availabilityOverrideReason}` : ""}</p> : null}
       {s.makeupForShiftId ? <p className="font-medium text-violet-900">Make-up visit for missed time</p> : null}
       {s.seriesId ? <p className="text-slate-600">Repeats on a schedule. Changes here affect this date only; change the series under Manage repeating shifts.</p> : null}
-      {s.fromCareRequest ? <p className="text-slate-600">From a Care Request; manage it on the <Link className="underline" to="/care-requests">Care Requests</Link> page.</p> : null}
+      {s.fromCareRequest ? <p className="text-slate-600">From a Care Request; manage it on the <Link className="underline" to="/schedule/shift-requests">Care Requests</Link> page.</p> : null}
     </>
   );
   const hasNotes = (calledOut && !!s.lastCalloutReason) || !!s.availabilityOverride || !!s.makeupForShiftId || !!s.seriesId || s.fromCareRequest;
@@ -336,7 +344,7 @@ function ShiftRow({ s, canManage, onDone, highlight = false, autoAssign = false 
       <li ref={rowRef as RefObject<HTMLLIElement>} id={`shift-${s.shiftId}`} data-highlight={highlight ? "true" : undefined} className={`rounded-lg border bg-og-card ${tone} ${stateOfShift(s) === "needs_coverage" ? "border-red-300" : "border-slate-200"}`}>
         <details open={expanded || action !== null} onToggle={(e) => setExpanded(e.currentTarget.open)}>
           <summary className="flex min-h-11 cursor-pointer items-center justify-between gap-2 px-3 py-1">
-            <span className="min-w-0 text-sm"><span className="font-semibold text-slate-950">{when(s.startsAt)}</span> · {s.clientName ?? s.clientCode}</span>
+            <span className="min-w-0 text-sm"><span className="font-semibold text-slate-950">{when(s.startsAt)}</span> · {nameWithCode(s.clientName, s.clientCode, s.duplicateName)}</span>
             {chip}
           </summary>
           <div className="space-y-1 px-3 pb-3 text-sm text-slate-800">
@@ -452,11 +460,11 @@ export function SchedulePage() {
       <RejectedDates items={rejectedDates} />
       {canManage ? <div id="pickups"><PickupRequestsPanel onDone={showNotice} /></div> : null}
       <section aria-labelledby="upcoming-heading" className="space-y-2">
-        <h2 id="upcoming-heading" className="text-base font-semibold text-slate-950">Upcoming: need coverage ({uncovered.length})</h2>
+        <h2 id="upcoming-heading" className="text-base font-semibold text-slate-950">Unfilled ({uncovered.length})</h2>
         {shifts.isLoading ? <p className="text-sm text-slate-500">Loading…</p> : null}
         {shifts.isError ? <p role="alert" className="text-sm text-red-700">Shifts could not be loaded. {(shifts.error as Error).message}</p> : null}
         {shifts.data && uncovered.length === 0 ? <p className="text-sm text-slate-600">Every upcoming shift this {unit} has a caregiver.</p> : null}
-        {uncovered.length > 0 ? <ShiftList label="Upcoming shifts that need coverage" shifts={uncovered} canManage={canManage} onDone={setNotice} focusShift={focusShift} autoAssign={params.get("coverage") === "1"} withDate /> : null}
+        {uncovered.length > 0 ? <ShiftList label="Unfilled shifts" shifts={uncovered} canManage={canManage} onDone={setNotice} focusShift={focusShift} autoAssign={params.get("coverage") === "1"} withDate /> : null}
       </section>
       {canManage ? (
         <section id="reconcile" aria-labelledby="past-heading" className="space-y-2">
@@ -473,11 +481,11 @@ export function SchedulePage() {
           ? <input id="sh-from" type="month" value={from.slice(0, 7)} onChange={(e) => e.target.value && setFrom(`${e.target.value}-01`)} className="mt-0.5 block min-h-11 rounded-lg border border-slate-200 px-3 text-base md:min-h-9 md:text-sm" />
           : <input id="sh-from" type="date" value={from} onChange={(e) => e.target.value && setFrom(e.target.value)} className="mt-0.5 block min-h-11 rounded-lg border border-slate-200 px-3 text-base md:min-h-9 md:text-sm" />}</div>
         <Button type="button" variant="secondary" className="min-h-11 md:min-h-9" onClick={() => setFrom(stepAnchor(view, from, 1))}>Next {unit} →</Button>
-        <label className="flex min-h-11 items-center gap-2 text-sm text-slate-800 md:min-h-9"><input type="checkbox" checked={onlyOpen} onChange={(e) => setOnlyOpen(e.target.checked)} /> Needs coverage only</label>
+        <label className="flex min-h-11 items-center gap-2 text-sm text-slate-800 md:min-h-9"><input type="checkbox" checked={onlyOpen} onChange={(e) => setOnlyOpen(e.target.checked)} /> Unfilled only</label>
         <FilterBar shifts={shifts.data ?? []} filters={filters} onChange={setFilters} />
       </div>
       {view === "month" && shifts.data ? <MonthGrid anchor={from} shifts={filtered.filter((s) => !onlyOpen || stateOfShift(s) === "needs_coverage")} onPickDay={(d) => { setView("day"); setFrom(d); }} /> : null}
-      {view !== "month" && shifts.data && byDay.size === 0 ? <p className="text-sm text-slate-600">{onlyOpen ? `No other shift needs coverage this ${unit}.` : Object.values(filters).some(Boolean) ? "No other shifts match these filters." : uncovered.length > 0 ? `No other shifts this ${unit}.` : `No shifts this ${unit}.`}</p> : null}
+      {view !== "month" && shifts.data && byDay.size === 0 ? <p className="text-sm text-slate-600">{onlyOpen ? `No other shift is unfilled this ${unit}.` : Object.values(filters).some(Boolean) ? "No other shifts match these filters." : uncovered.length > 0 ? `No other shifts this ${unit}.` : `No shifts this ${unit}.`}</p> : null}
       {view !== "month" ? [...byDay.entries()].map(([d, list]) => (
         <section key={d} aria-label={dayLabel(d)}>
           <h2 className="mb-1 text-sm font-semibold text-slate-800">{dayLabel(d)}</h2>

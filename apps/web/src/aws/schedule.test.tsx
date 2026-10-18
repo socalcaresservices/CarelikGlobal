@@ -103,8 +103,9 @@ afterEach(() => vi.clearAllMocks());
 describe("Schedule (staff)", () => {
   it("shows what needs coverage, records a call-out with a reason, and fills the open shift", async () => {
     const api = renderAt("/schedule", "manager");
-    expect(await screen.findByText("Upcoming: need coverage (1)")).toBeInTheDocument();
-    expect(screen.getByText("Open: no caregiver")).toBeInTheDocument();
+    expect(await screen.findByText("Unfilled (1)")).toBeInTheDocument();
+    expect(screen.queryByText("Open: no caregiver")).toBeNull(); // one Unfilled badge, not a second line
+    expect(screen.getAllByTestId("shift-state").map((e) => e.textContent)).toContain("Unfilled");
     const coveredRow = screen.getByText(/Synthetic Caregiver One/).closest("tbody")!;
     fireEvent.click(within(coveredRow).getByRole("button", { name: "Record call-out" }));
     fireEvent.click(within(coveredRow).getAllByRole("button", { name: "Record call-out" }).at(-1)!);
@@ -112,15 +113,15 @@ describe("Schedule (staff)", () => {
     fireEvent.change(within(coveredRow).getByLabelText("Reason for the call-out"), { target: { value: "Sick (synthetic)" } });
     fireEvent.click(within(coveredRow).getAllByRole("button", { name: "Record call-out" }).at(-1)!);
     expect(await screen.findByText(/Call-out recorded\. The shift now needs coverage/)).toBeInTheDocument();
-    expect(await screen.findByText("Upcoming: need coverage (2)")).toBeInTheDocument();
+    expect(await screen.findByText("Unfilled (2)")).toBeInTheDocument();
     const callout = api.calls.find((c) => c.path.endsWith("/callout"))!;
     expect(callout.body).toEqual({ organizationId: ORG, reason: "Sick (synthetic)" });
     expect(Object.keys(callout.headers).map((h) => h.toLowerCase())).toContain("idempotency-key");
 
-    const openRow = screen.getByText("Open: no caregiver").closest("tbody")!;
-    fireEvent.click(within(openRow).getByRole("button", { name: "Assign caregiver" }));
+    const openRow = screen.getAllByTestId("shift-state").find((e) => e.textContent === "Unfilled")!.closest("tbody")!;
+    fireEvent.click(within(openRow).getByRole("button", { name: /^Assign caregiver to shift for / }));
     fireEvent.change(within(openRow).getByLabelText("Caregiver"), { target: { value: CG2 } });
-    fireEvent.click(within(openRow).getAllByRole("button", { name: "Assign caregiver" }).at(-1)!);
+    fireEvent.click(within(openRow).getByRole("button", { name: "Assign" }));
     expect(await screen.findByText("Caregiver assigned. The shift is covered.")).toBeInTheDocument();
     expect(api.calls.find((c) => c.path.endsWith("/caregiver"))!.body).toMatchObject({ caregiverRecordId: CG2, reason: null });
   });

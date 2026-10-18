@@ -149,7 +149,7 @@ export function ReadinessCard() {
   const s = q.data;
   const sc = s.serviceChecks;
   return (
-    <SummarySection title="Caregiver readiness" defaultOpen={!s.setupComplete || s.affectedShiftsCount > 0}
+    <SummarySection title="Caregiver readiness" hideSummaryWhenOpen defaultOpen={!s.setupComplete || s.affectedShiftsCount > 0}
       status={<span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${s.enforcementActive ? "bg-emerald-100 text-emerald-950" : "bg-amber-100 text-amber-950"}`}>{s.enforcementActive ? "Checks active" : "Report only"}</span>}
       summary={!s.setupComplete ? `Setup incomplete: ${plural(s.setupGaps.length, "rule", "rules")}` : `${s.caregivers.withDocumentGaps} of ${plural(s.caregivers.readyOrActive, "caregiver", "caregivers")} with document gaps`}>
     <div className="space-y-4">
@@ -163,11 +163,11 @@ export function ReadinessCard() {
       </section>
 
       <section aria-label="Checks status" className="space-y-3">
-        <p className={`inline-block rounded-md px-3 py-1.5 text-sm font-semibold ${s.enforcementActive ? "bg-emerald-100 text-emerald-950" : "bg-amber-100 text-amber-950"}`}>
-          {s.enforcementActive ? "Readiness checks are active" : "Report-only. Readiness checks are NOT active."}
-        </p>
         {!s.enforcementActive ? (
-          <p className="text-sm text-slate-800">Nothing is blocked yet. Caregivers can still be assigned and can still start visits.</p>
+          <>
+            <p className="inline-block rounded-md bg-amber-100 px-3 py-1.5 text-sm font-semibold text-amber-950">Report-only. Readiness checks are NOT active.</p>
+            <p className="text-sm text-slate-800">Nothing is blocked yet. Caregivers can still be assigned and can still start visits.</p>
+          </>
         ) : null}
         <div>
           <table className="w-full text-left text-sm max-md:block">

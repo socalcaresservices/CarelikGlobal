@@ -49,7 +49,7 @@ describe("Visit review keeps routine follow-up apart", () => {
     renderAt("/visit-review", { ...base, visitReview: visits });
     expect(await screen.findByTestId("visit-summary")).toHaveTextContent("Visits needing attention: 4");
     const decide = screen.getByRole("region", { name: "Needs a decision" });
-    expect(within(decide).getByText("Needs review").closest("a")).toHaveTextContent("2");
+    expect(within(decide).getByText("In review").closest("a")).toHaveTextContent("2");
     expect(within(decide).getByText("Review waiting 24 hours or more").closest("a")).toHaveTextContent("Urgent");
     expect(within(decide).getByText(/Client confirmation overdue/).closest("a")).toHaveTextContent("Overdue");
     expect(within(decide).queryByText(/Pending client confirmation/)).toBeNull();

@@ -18,11 +18,11 @@ describe("the schedule groups what needs attention", () => {
       "GET /v1/shifts": () => json(200, { shifts: [open("a"), open("b"), shift("c")] }),
       "GET /v1/shifts-to-reconcile": () => json(200, { shifts: [reconcile] }),
     });
-    expect(await screen.findByRole("heading", { name: "Upcoming: need coverage (2)" }, { timeout: 15000 })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Unfilled (2)" }, { timeout: 15000 })).toBeInTheDocument();
     expect(await screen.findByRole("heading", { name: "Past: need review (1)" })).toBeInTheDocument();
     expect(screen.queryByText(/shifts? needs? coverage this/i)).toBeNull(); // the old red headline repeated the count
-    const upcoming = screen.getByRole("table", { name: "Upcoming shifts that need coverage" });
-    expect(within(upcoming).getAllByRole("button", { name: "Assign caregiver" })).toHaveLength(2);
+    const upcoming = screen.getByRole("table", { name: "Unfilled shifts" });
+    expect(within(upcoming).getAllByRole("button", { name: /^Assign caregiver to shift for / })).toHaveLength(2);
     expect(screen.getAllByTestId("shift-state")).toHaveLength(3); // 2 uncovered + 1 covered, none twice
     // One primary action per row: the covered shift offers Record call-out, the rest is behind More actions.
     const coveredRow = screen.getByText(/Alex Caregiver/).closest("tbody")!;
@@ -40,11 +40,11 @@ describe("the schedule groups what needs attention", () => {
   it("on a phone each shift is a compact row that opens, with the same actions inside", async () => {
     vi.stubGlobal("matchMedia", (query: string) => ({ matches: /max-width/.test(query), media: query, addEventListener: () => {}, removeEventListener: () => {}, addListener: () => {}, removeListener: () => {}, onchange: null, dispatchEvent: () => false }));
     renderAws("/schedule", PERMS, { "GET /v1/shifts": () => json(200, { shifts: [open("a"), shift("c")] }) });
-    const list = await screen.findByRole("list", { name: "Upcoming shifts that need coverage" }, { timeout: 15000 });
+    const list = await screen.findByRole("list", { name: "Unfilled shifts" }, { timeout: 15000 });
     expect(screen.queryByRole("table")).toBeNull();
     const row = within(list).getAllByRole("listitem")[0]!;
     expect(row.querySelector("details summary")).not.toBeNull();
-    expect(within(row).getByRole("button", { name: "Assign caregiver" })).toBeInTheDocument();
+    expect(within(row).getByRole("button", { name: /^Assign caregiver to shift for / })).toBeInTheDocument();
   }, 30000);
 });
 

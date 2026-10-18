@@ -124,22 +124,21 @@ describe("sidebar: expanded", () => {
     renderAt("/", "manager");
     const nav = await screen.findByRole("navigation", { name: "Main" });
     expect(within(nav).getAllByText(/^(HOME|MY WORK|WORK|SETUP)$/).map((e) => e.textContent)).toEqual(["WORK", "SETUP"]);
-    // Five areas in workflow order, each with its related pages beneath it; administration last.
+    // Main order: Home, Schedule, Visits, Approvals, Clients, Caregivers, Documents, Reports, Settings; related pages beneath their parent.
     expect(within(nav).getAllByRole("link").map((a) => a.textContent?.replace(/\d+$/, ""))).toEqual([
-      "Home", "Clients", "Care requests", "Monthly calendar", "Caregivers", "Recruiting", "Documents & compliance", "Scheduling", "Approvals", "Visits to review", "Visit records",
-      "Verify visit", "Reports", "Services", "Continuity pack", "Outage records", "Appearance",
+      "Home", "Schedule", "Shift requests", "Monthly calendar", "Visit records", "Verify visit", "Approvals", "Visits to review", "Clients", "Authorizations",
+      "Caregivers", "Recruiting", "Documents", "Reports", "Services", "Continuity pack", "Outage records", "Appearance",
     ]);
-    // Authorizations are a section of each client's page, not a separate menu item.
-    expect(within(nav).queryByRole("link", { name: /^Authorizations$/ })).toBeNull();
     expect(hrefs(nav)).toEqual({
-      "Home": "/", "Verify visit": "/service-verification", "Scheduling": "/schedule", "Care requests": "/care-requests",
+      "Home": "/", "Verify visit": "/service-verification", "Schedule": "/schedule", "Shift requests": "/schedule/shift-requests", "Authorizations": "/authorization-impacts",
       "Visit records": "/service-verification/reports", "Reports": "/service-verification/reports?view=overview",
       "Visits to review": "/service-verification/reports?view=exceptions", "Monthly calendar": "/service-verification/reports?view=calendar",
-      "Approvals": "/billing-review", "Clients": "/clients", "Caregivers": "/care-team", "Recruiting": "/care-team/recruiting", "Documents & compliance": "/documents", "Services": "/services",
+      "Approvals": "/billing-review", "Clients": "/clients", "Caregivers": "/care-team", "Recruiting": "/care-team/recruiting", "Documents": "/documents", "Services": "/settings/services",
       "Continuity pack": "/continuity", "Outage records": "/outage-visits", "Appearance": "/settings/appearance",
     });
-    // Settings stays Administrator-only (organization.update), unchanged.
+    // Settings is a link only for someone with organization.update (unchanged); for everyone else it is a section label over Services, Appearance ...
     expect(within(nav).queryByRole("link", { name: "Settings" })).toBeNull();
+    expect(within(nav).getAllByTestId("nav-section").map((e) => e.textContent)).toEqual(["Visits", "Settings"]);
   });
 
   it("owner also sees Settings; the footer shows the view, name, email, Profile and Sign out", async () => {
@@ -171,7 +170,7 @@ describe("sidebar: expanded", () => {
     const aside = (await screen.findByRole("navigation", { name: "Main" })).closest("aside")!;
     expect(aside.className).toMatch(/print:hidden/);
     expect(document.querySelector("header")!.className).toMatch(/print:hidden/);
-    expect(document.querySelector("main")!.parentElement!.className).toMatch(/print:pr-0/);
+    expect(document.querySelector("main")!.parentElement!.className).toMatch(/print:pl-0/);
   });
 });
 
@@ -185,12 +184,12 @@ describe("sidebar: collapse", () => {
     expect(aside.className).toMatch(/w-\[76px\]/);
     expect(window.localStorage.getItem("ogevia.sidebar.collapsed")).toBe("1");
     // Icon-only, but every control still has its name.
-    expect(within(nav).getByRole("link", { name: "Scheduling" })).toBeInTheDocument();
+    expect(within(nav).getByRole("link", { name: "Schedule" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Sign out" })).toBeInTheDocument();
-    fireEvent.mouseEnter(within(nav).getByRole("link", { name: "Scheduling" }));
-    expect(screen.getByText("Scheduling", { selector: "div[role=presentation]" })).toBeInTheDocument();
-    fireEvent.keyDown(within(nav).getByRole("link", { name: "Scheduling" }), { key: "Escape" });
-    expect(screen.queryByText("Scheduling", { selector: "div[role=presentation]" })).toBeNull();
+    fireEvent.mouseEnter(within(nav).getByRole("link", { name: "Schedule" }));
+    expect(screen.getByText("Schedule", { selector: "div[role=presentation]" })).toBeInTheDocument();
+    fireEvent.keyDown(within(nav).getByRole("link", { name: "Schedule" }), { key: "Escape" });
+    expect(screen.queryByText("Schedule", { selector: "div[role=presentation]" })).toBeNull();
 
     first.unmount();
     renderAt("/", "manager");
@@ -208,15 +207,15 @@ describe("sidebar: Option B styling contract", () => {
     const nav = await screen.findByRole("navigation", { name: "Main" });
     const aside = nav.closest("aside")!;
     expect(aside.className).toContain("bg-og-side");
-    expect(aside.className).toContain("border-l");
-    expect(aside.className).toContain("right-0");
+    expect(aside.className).toContain("border-r");
+    expect(aside.className).toContain("left-0");
     expect(aside.className).toContain("border-og-line");
     const heading = within(nav).getAllByTestId("nav-group-heading")[0]!;
     expect(heading.textContent).toBe("WORK");
     for (const c of ["text-[11px]", "font-semibold", "leading-[18px]", "tracking-[0.08em]", "text-og-sub"]) {
       expect(heading.className).toContain(c);
     }
-    const current = within(nav).getByRole("link", { name: "Scheduling" });
+    const current = within(nav).getByRole("link", { name: "Schedule" });
     expect(current).toHaveAttribute("aria-current", "page");
     for (const c of ["bg-og-active", "text-og-accent", "font-semibold", "rounded-md", "min-h-[40px]", "text-[14px]", "gap-2", "[@media(pointer:coarse)]:min-h-[44px]", "focus-visible:outline-og-accent"]) {
       expect(current.className).toContain(c);
@@ -237,8 +236,10 @@ describe("sidebar: Option B styling contract", () => {
     expect(within(nav).queryAllByTestId("nav-group-heading")).toHaveLength(0);
     expect(nav.querySelector(".border-t")).toBeNull();
     expect(within(nav).getByRole("link", { name: "Caregivers" })).toBeInTheDocument();
-    // Collapsed: the five areas, Home, Setup and Appearance only; the smaller related links appear when expanded.
-    expect(within(nav).getAllByRole("link")).toHaveLength(10);
+    // Collapsed: the areas and Home only; the smaller related links appear when expanded, except under a section label (Visits, Settings), whose children stay reachable.
+    expect(within(nav).getAllByRole("link").map((a) => a.textContent?.replace(/\d+$/, ""))).toEqual([
+      "Home", "Schedule", "Visit records", "Verify visit", "Approvals", "Clients", "Caregivers", "Documents", "Reports", "Services", "Continuity pack", "Outage records", "Appearance",
+    ]);
   });
 
   it("keyboard: every link is reachable by Tab order (real anchors) and the collapse control is a labelled button", async () => {
@@ -266,8 +267,23 @@ describe("sidebar: mobile drawer", () => {
     await waitFor(() => expect(screen.queryByRole("navigation", { name: "Main" })).toBeNull());
     expect(menu).toHaveFocus();
     fireEvent.click(menu);
-    fireEvent.click(await screen.findByRole("link", { name: "Scheduling" }));
+    fireEvent.click(await screen.findByRole("link", { name: "Schedule" }));
     await waitFor(() => expect(screen.queryByRole("navigation", { name: "Main" })).toBeNull());
+  });
+
+  it("the drawer has a scrim; clicking it closes the drawer and keeps the route (the Menu button still names the current section)", async () => {
+    mockMobile(true);
+    renderAt("/schedule", "manager");
+    const menu = await screen.findByRole("button", { name: /^Menu/ });
+    expect(menu).toHaveTextContent("Schedule");
+    fireEvent.click(menu);
+    await screen.findByRole("navigation", { name: "Main" });
+    const scrim = document.querySelector('div[aria-hidden="true"].fixed.inset-0')!;
+    expect(scrim).not.toBeNull();
+    fireEvent.click(scrim);
+    await waitFor(() => expect(screen.queryByRole("navigation", { name: "Main" })).toBeNull());
+    expect(menu).toHaveTextContent("Schedule");
+    expect(menu).toHaveFocus();
   });
 });
 

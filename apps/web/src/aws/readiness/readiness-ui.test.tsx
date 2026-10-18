@@ -305,7 +305,7 @@ describe("Service checks and readiness on the Care Team page", () => {
     fireEvent.click(activate);
     await waitFor(() => expect(posts(calls, "/v1/readiness/activate")).toHaveLength(1));
     expect(posts(calls, "/v1/readiness/activate")[0]!.body).toMatchObject({ expectedAffectedShifts: 3, reason: "Reviewed the report" });
-    expect(await screen.findByText("Readiness checks are active")).toBeInTheDocument();
+    expect(await screen.findByText("Checks active")).toBeInTheDocument();
   });
 
   it("with setup incomplete, activation stays disabled and says why", async () => {
@@ -364,10 +364,10 @@ describe("Readiness table: issue, affected count, status, next action", () => {
     expect(within(setup).getByText("Ask an administrator")).toBeInTheDocument(); // a manager cannot set it up
   });
 
-  it("active: the same rows say Active / Needs attention and the banner says the checks are active", async () => {
+  it("active: the same rows say Active / Needs attention and the header says Checks active", async () => {
     renderAt("/care-team", { role: "organization_owner", readiness: { enforcementActive: true, setupComplete: true, setupGaps: [] } });
     const table = await screen.findByRole("table", { name: /Readiness by issue/ });
-    expect(screen.getByText("Readiness checks are active")).toBeInTheDocument();
+    expect(screen.getByText("Checks active")).toBeInTheDocument();
     expect(within(rowOf(/CPR or TB missing or expired/)).getByText("Active")).toBeInTheDocument();
     expect(within(rowOf(/Booked shifts/)).getByText("Needs attention")).toBeInTheDocument();
     expect(within(table).queryByText("Report only")).toBeNull();
@@ -389,7 +389,7 @@ describe("Readiness table: issue, affected count, status, next action", () => {
 describe("Assignment checks on the schedule", () => {
   async function chooseAll() {
     fireEvent.click(await screen.findByRole("button", { name: /Add shift|Schedule a shift|New shift/ }));
-    await screen.findByRole("option", { name: /C-104/ }); // the client list has loaded, so choosing it really sets the client
+    await screen.findByRole("option", { name: /Synthetic Client/ }); // the client list has loaded, so choosing it really sets the client
     fireEvent.change(await screen.findByLabelText("Client"), { target: { value: "cccccccc-0000-4000-8000-000000000001" } });
     fireEvent.change(screen.getByLabelText("Service"), { target: { value: SVC } });
     fireEvent.change(screen.getByLabelText(/Caregiver/), { target: { value: CG } });

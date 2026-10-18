@@ -67,6 +67,6 @@ export const approvableMinutes = (r: { eligibleMinutes?: number | null; billable
 
 export function visitScheduleLabel(mode: "fixed" | "flexible" | null | undefined, shiftId: string | null | undefined): string {
   if (shiftId) return "From a scheduled shift";
-  if (mode === "flexible") return "Flexible visit — no shift required";
+  if (mode === "flexible") return "Unscheduled";
   return "Unscheduled visit";
 }

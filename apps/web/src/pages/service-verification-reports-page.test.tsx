@@ -464,7 +464,7 @@ describe("ServiceVerificationReportsPage", () => {
 
     renderPage();
     await openReport(/^Visit records$/);
-    fireEvent.click(await screen.findByRole("button", { name: "Correct visit" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Correct" }));
 
     // Pre-filled from the original record in Pacific time (13:00Z = 6:00 AM PDT),
     // whatever the device timezone.
@@ -516,7 +516,7 @@ describe("ServiceVerificationReportsPage", () => {
     );
     renderPage();
     await openReport(/^Visit records$/);
-    fireEvent.click(await screen.findByRole("button", { name: "Correct visit" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Correct" }));
     fireEvent.change(screen.getByLabelText("Reason (required)"), { target: { value: "Left later (synthetic)" } });
     fireEvent.change(screen.getByLabelText("Corrected Time Out minute"), { target: { value: "20" } });
     fireEvent.click(screen.getByRole("button", { name: "Save correction" }));
@@ -542,7 +542,7 @@ describe("ServiceVerificationReportsPage", () => {
     );
     renderPage();
     await openReport(/^Visit records$/);
-    fireEvent.click(await screen.findByRole("button", { name: "Correct visit" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Correct" }));
     fireEvent.change(screen.getByLabelText("Reason (required)"), { target: { value: "x" } });
     fireEvent.change(screen.getByLabelText("Corrected Time In minute"), { target: { value: "" } });
     fireEvent.click(screen.getByRole("button", { name: "Save correction" }));
@@ -673,7 +673,7 @@ describe("ServiceVerificationReportsPage", () => {
     expect(cells[headers.indexOf("Reserved")]).toBe("7 hr");
     expect(cells[headers.indexOf("Hours left")]).toBe("2 hr 50 min");
     // Client name first with the code; billable (eligible) and human-approved stay separate.
-    expect(cells[headers.indexOf("Client")]).toBe("Synthetic PersonTEST-C01");
+    expect(cells[headers.indexOf("Client")]).toBe("Synthetic Person");
     expect(cells[headers.indexOf("Billable (eligible)")]).toBe("10 min");
     await waitFor(() => expect(within(within(table).getAllByRole("row")[1]!).getAllByRole("cell")[headers.indexOf("Approved")]).toHaveTextContent("5 min"));
     expect(headers).not.toContain("Submitted");
@@ -718,7 +718,7 @@ describe("ServiceVerificationReportsPage", () => {
     expect(screen.getByText("Worked: 1 hr")).toBeInTheDocument();
     expect(screen.getByText("Billable: 1 hr")).toBeInTheDocument();
     expect(screen.queryByText("Replaced by a correction")).not.toBeInTheDocument();
-    fireEvent.click(screen.getByLabelText(/Show replaced records/));
+    fireEvent.click(screen.getByLabelText("Replaced"));
     expect(await screen.findByText("Replaced by a correction")).toBeInTheDocument();
   });
 
@@ -879,7 +879,7 @@ describe("ServiceVerificationReportsPage", () => {
       expect(screen.getByText("Exception visits")).toBeInTheDocument(),
     );
     const exceptionCard = screen.getByText("Exception visits").closest("div")!;
-    expect(within(exceptionCard).getByText("Needs review")).toBeInTheDocument();
+    expect(within(exceptionCard).getByText("In review")).toBeInTheDocument();
     expect(
       within(exceptionCard).getByText("Exceeds authorization"),
     ).toBeInTheDocument();
@@ -1085,7 +1085,7 @@ describe("ServiceVerificationReportsPage", () => {
     await openReport(/^Visit records$/);
     await screen.findByText("SCS-V-20260801-4F7K");
 
-    fireEvent.click(screen.getByRole("button", { name: "Correct visit" }));
+    fireEvent.click(screen.getByRole("button", { name: "Correct" }));
     fireEvent.change(screen.getByLabelText("Reason (required)"), {
       target: { value: "Forgot to clock out on time" },
     });
@@ -1115,7 +1115,7 @@ describe("ServiceVerificationReportsPage", () => {
     await openReport(/^Visit records$/);
     await screen.findByText("SCS-V-20260801-4F7K");
 
-    fireEvent.click(screen.getByRole("button", { name: "Correct visit" }));
+    fireEvent.click(screen.getByRole("button", { name: "Correct" }));
     fireEvent.click(screen.getByRole("button", { name: "Save correction" }));
 
     await waitFor(() =>
@@ -1167,7 +1167,7 @@ describe("ServiceVerificationReportsPage", () => {
     await openReport(/^Visit records$/);
     await screen.findByText("SCS-V-20260801-4F7K");
 
-    fireEvent.click(screen.getByRole("button", { name: "Correction history" }));
+    fireEvent.click(screen.getByRole("button", { name: "History" }));
 
     await waitFor(() =>
       expect(
@@ -1193,10 +1193,10 @@ describe("ServiceVerificationReportsPage", () => {
     await screen.findByText("SCS-V-20260801-4F7K");
 
     expect(
-      screen.queryByRole("button", { name: "Correct visit" }),
+      screen.queryByRole("button", { name: "Correct" }),
     ).not.toBeInTheDocument();
     expect(
-      screen.queryByRole("button", { name: "Correction history" }),
+      screen.queryByRole("button", { name: "History" }),
     ).not.toBeInTheDocument();
   });
 

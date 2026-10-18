@@ -280,7 +280,7 @@ describe("AWS build: manager review and billing-review data", () => {
     // Client name first, short code beneath; caregiver; service name and code; MM/DD/YYYY with AM/PM; readable durations.
     // The name also appears as a Client filter option, so match every occurrence.
     expect((await screen.findAllByText("Synthetic Person")).length).toBeGreaterThan(0);
-    expect(screen.getAllByText("C-104").length).toBeGreaterThan(0);
+    expect(screen.queryByText("C-104")).toBeNull(); // the code appears only where the server flags a shared name
     expect(screen.getAllByText("Ready for Review").length).toBeGreaterThan(0);
     expect(screen.queryByText("Awaiting approval")).toBeNull();
     expect(screen.queryByText("Billing ready")).toBeNull();
@@ -291,7 +291,7 @@ describe("AWS build: manager review and billing-review data", () => {
     expect(screen.getAllByText(/2 h \(2\.00 hr\)/).length).toBeGreaterThan(0);
     // The long visit reference sits in the expandable details, with the schedule basis.
     expect(screen.getAllByText("Visit details").length).toBeGreaterThan(0);
-    expect(screen.getAllByText("Flexible visit — no shift required").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Unscheduled").length).toBeGreaterThan(0);
     expect(screen.getByText(/approval is not submission/)).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "View signature" }));
     const img = await screen.findByAltText("Client signature for the selected visit");
@@ -340,7 +340,7 @@ describe("AWS build: manager review and billing-review data", () => {
   it("manager: Documents lists people's requests; rejecting needs a reason; Home shows document counts", async () => {
     const { api } = renderAws("/", "manager");
     expect(await screen.findByTestId("stream-documents")).toHaveTextContent("1 overdue");
-    fireEvent.click(screen.getByRole("link", { name: "Documents & compliance" }));
+    fireEvent.click(screen.getByRole("link", { name: "Documents" }));
     expect(await screen.findByRole("heading", { name: "Documents & compliance" })).toBeInTheDocument();
     const card = (await screen.findByText("TB test", { selector: "p" })).closest("tbody")!;
     expect(within(card).getByText("Pilot Caregiver A")).toBeInTheDocument();
@@ -381,7 +381,7 @@ describe("AWS build: manager review and billing-review data", () => {
     expect(await screen.findByAltText("Synthetic Care Co logo")).toBeInTheDocument();
     const table = await screen.findByRole("table", { name: "Visit details" });
     expect(await within(table).findByText("Synthetic Person")).toBeInTheDocument();
-    expect(within(table).getByText("C-104")).toBeInTheDocument();
+    expect(within(table).queryByText("C-104")).toBeNull(); // code only beside a shared name
   });
 
   it("a caregiver sees no billing or records navigation", async () => {

@@ -154,7 +154,7 @@ export function VisitQueuePage() {
   const exceptions = "/service-verification/reports?view=exceptions";
   type Row = { label: string; count: number; to: string; chip?: { tone: Tone; word: string } | undefined };
   const decide: Row[] = v ? [
-    { label: "Needs review", count: v.needsReview, to: exceptions },
+    { label: "In review", count: v.needsReview, to: exceptions },
     ...((v.reviewOverdue ?? 0) > 0 ? [{ label: "Review waiting 24 hours or more", count: v.reviewOverdue ?? 0, to: exceptions, chip: { tone: "amber" as Tone, word: "Urgent" } }] : []),
     { label: "Late answers to accept or reject", count: v.lateResponses, to: "/billing-review" },
     { label: "Client confirmation overdue (over 48 hours)", count: v.confirmationOverdue ?? 0, to: exceptions, chip: (v.confirmationOverdue ?? 0) > 0 ? { tone: "amber" as Tone, word: "Overdue" } : undefined },

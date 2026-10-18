@@ -1,4 +1,5 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { nameWithCode } from "./name-label";
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import { RoundingSection } from "./billing-rounding";
@@ -142,7 +143,7 @@ export function BillingReviewPage() {
                               <p data-testid="authorization-decreased" className="text-xs text-amber-900">The authorization was lowered after this visit was confirmed. The visit and its minutes are unchanged; confirm it is still billable, or correct it.</p>
                             ) : null}
                             <Link to={`/visits/${r.visitId}`} className="inline-flex min-h-[40px] items-center rounded-lg border border-amber-600 px-3 text-sm font-medium text-amber-900 hover:bg-amber-50">
-                              {state === "needs_correction" ? "Correct or resolve" : "Review visit"}
+                              {state === "needs_correction" ? "Correct or resolve" : "Review"}
                             </Link>
                           </div>
                         );
@@ -186,8 +187,7 @@ export function BillingReviewPage() {
     const code = r.clientCode ?? null;
     return (
       <div>
-        <p className="font-semibold text-slate-950">{r.clientName ?? code ?? "Client"}</p>
-        {r.clientName && code ? <p className="text-xs text-slate-500">{code}</p> : null}
+        <p className="font-semibold text-slate-950">{r.clientName ? nameWithCode(r.clientName, code, r.clientNameDuplicate) : code ?? "Client"}</p>
       </div>
     );
   }

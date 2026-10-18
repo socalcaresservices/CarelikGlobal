@@ -128,7 +128,7 @@ describe("Clients screens", () => {
   it("manager: list with name, code and status; adding a client sends an idempotency key and shows the next step", async () => {
     const api = renderAt("/clients", "manager");
     expect(await screen.findByText(/Synthetic Client Alpha/)).toBeInTheDocument();
-    expect(screen.getByText("(CL-ABCDEF1234)")).toBeInTheDocument();
+    expect(screen.queryByText("(CL-ABCDEF1234)")).toBeNull(); // the code appears only where the name is shared (duplicateName)
     fireEvent.click(screen.getByRole("button", { name: "Add client" }));
     expect(screen.getByRole("button", { name: "Close" })).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Add client" }));

@@ -21,6 +21,7 @@ import {
   PanelRightOpen,
   PenLine,
   Settings,
+  ShieldCheck,
   Stethoscope,
   UserCircle,
   UserCog,
@@ -35,9 +36,9 @@ import { EXCEPTIONS_ROUTE } from "./action-needed";
 import { urgentBadge, useAttentionOverview } from "./attention";
 import { NotificationsBell } from "./notifications-bell";
 import { AppearanceApplier } from "./appearance/use-appearance";
-import { useAttentionCounts, useBranding, useLogo, useMyDisplayName, viewKind, VIEW_TITLE } from "./aws-workspace";
+import { useAttentionCounts, useBranding, useLogo, useMyDisplayName, viewKind } from "./aws-workspace";
 import { EnvironmentBanner } from "./environment-marker";
-import { currentLink, isCalendarView, isExceptionsView, isReportView, isVisitListView, linkKey, REPORTS_PATH, visibleGroups, type NavLinkDef } from "./nav-model";
+import { AUTHORIZATIONS_PATH, currentLink, isCalendarView, isExceptionsView, isReportView, isVisitListView, linkKey, REPORTS_PATH, SERVICES_PATH, SHIFT_REQUESTS_PATH, shownWhenCollapsed, visibleGroups, type NavLinkDef } from "./nav-model";
 
 export const EXCEPTIONS_PATH = EXCEPTIONS_ROUTE;
 const DEFAULT_ACCENT = "#0f172a"; // slate-900: the colour used before agency branding existed
@@ -93,7 +94,7 @@ function initialsOf(name: string): string {
 /**
  * Shell for the AWS build: agency identity, the signed-in person and their view
  * (ADMINISTRATOR / MANAGER / CAREGIVER VIEW), ACTION NEEDED, and role-appropriate
- * navigation in a collapsible right-hand menu (a drawer below 768px). Navigation only decides what is
+ * navigation in a collapsible left-hand sidebar (a drawer below 768px). Navigation only decides what is
  * shown; every screen's data is authorized again in PostgreSQL.
  */
 export function AwsShell({ children }: PropsWithChildren) {
@@ -127,6 +128,11 @@ export function AwsShell({ children }: PropsWithChildren) {
     if (!isMobile) setDrawerOpen(false);
   }, [isMobile]);
 
+  // Going back or forward (or any route change) closes the drawer; the route itself is never changed by opening or closing it.
+  useEffect(() => {
+    setDrawerOpen(false);
+  }, [location.pathname, location.search]);
+
   useEffect(() => {
     if (drawerShown) closeButtonRef.current?.focus();
   }, [drawerShown]);
@@ -155,35 +161,43 @@ export function AwsShell({ children }: PropsWithChildren) {
   // and administration last. Colour = area (see ACCENT); badges = work waiting, from the same server summary as ACTION NEEDED.
   const canManageVisits = hasPermission("visits.manage");
   const canBill = hasPermission("billing.visits.read");
+  const canSettings = hasPermission("organization.update");
+  const staff = !isCaregiver;
   const links: NavLinkDef[] = [
-    { to: "/", label: "Home", group: "HOME", icon: LayoutDashboard, show: !isCaregiver },
-    // The caregiver's own day.
+    { to: "/", label: "Home", group: "HOME", icon: LayoutDashboard, show: staff },
+    // The caregiver's own day (unchanged).
     { to: "/service-verification", label: "Verify visit", group: "MY WORK", icon: PenLine, show: isCaregiver },
     { to: "/my-shifts", label: "My shifts", group: "MY WORK", icon: CalendarClock, show: isCaregiver },
     { to: "/availability", label: "Availability", group: "MY WORK", icon: Clock, show: isCaregiver },
     { to: "/documents", label: "My documents", group: "MY WORK", icon: FolderOpen, show: isCaregiver && hasPermission("documents.manage_own") },
-    // The five areas.
-    { to: "/clients", label: "Clients", group: "WORK", icon: Users, accent: ACCENT.clients, show: hasPermission("clients.names.read") },
-    { to: "/care-requests", label: "Care requests", group: "WORK", parent: "/clients", icon: HandHeart, show: hasPermission("care_requests.read") },
-    { to: REPORTS_PATH, search: "?view=calendar", label: "Monthly calendar", group: "WORK", parent: "/clients", icon: CalendarHeart, show: canReadVisits, matchView: isCalendarView },
-    { to: "/care-team", label: "Caregivers", group: "WORK", icon: HeartHandshake, accent: ACCENT.caregivers, show: hasPermission("caregivers.manage") || canManageVisits },
-    { to: "/care-team/recruiting", label: "Recruiting", group: "WORK", parent: "/care-team", icon: UserPlus, show: hasPermission("caregivers.manage") },
-    { to: "/documents", label: "Documents & compliance", group: "WORK", parent: "/care-team", icon: FolderOpen, show: !isCaregiver && hasPermission("documents.read") },
-    { to: "/schedule", label: "Scheduling", group: "WORK", icon: CalendarDays, accent: ACCENT.scheduling, show: hasPermission("shifts.manage") || (!isCaregiver && canManageVisits) },
+    // Main order: Schedule, Visits, Approvals, Clients, Caregivers, Documents, Reports (Home first, Settings last).
+    { to: "/schedule", label: "Schedule", group: "WORK", icon: CalendarDays, accent: ACCENT.scheduling, show: hasPermission("shifts.manage") || (staff && canManageVisits) },
+    { to: SHIFT_REQUESTS_PATH, label: "Shift requests", group: "WORK", parent: "Schedule", icon: HandHeart, show: hasPermission("care_requests.read") },
+    { to: REPORTS_PATH, search: "?view=calendar", label: "Monthly calendar", group: "WORK", parent: "Schedule", icon: CalendarHeart, show: canReadVisits, matchView: isCalendarView },
+    // Visits = records of care delivered and the caregiver-side verification entry points (a section label: it has no page of its own).
+    { to: REPORTS_PATH, label: "Visits", group: "WORK", icon: FileText, heading: true, show: staff && (canReadVisits || canManageVisits) },
+    { to: REPORTS_PATH, label: "Visit records", group: "WORK", parent: "Visits", icon: FileText, show: canReadVisits, matchView: isVisitListView },
+    { to: "/service-verification", label: "Verify visit", group: "WORK", parent: "Visits", icon: PenLine, show: staff && canManageVisits },
+    // Approvals = decisions a person must make. The Approvals link opens Ready for Approval (billing) or, for someone who may not bill, exception review; exception review is never listed twice.
     canBill
       ? { to: "/billing-review", label: "Approvals", group: "WORK", icon: ClipboardCheck, accent: ACCENT.approvals, show: true }
-      : { to: REPORTS_PATH, search: "?view=exceptions", label: "Approvals", group: "WORK", icon: ClipboardCheck, accent: ACCENT.approvals, show: !isCaregiver && canManageVisits, matchView: isExceptionsView },
-    { to: REPORTS_PATH, search: "?view=exceptions", label: "Visits to review", group: "WORK", parent: "/approvals", icon: ClipboardCheck, show: canBill && canReadVisits, matchView: isExceptionsView },
-    { to: REPORTS_PATH, label: "Visit records", group: "WORK", parent: "/approvals", icon: FileText, show: canReadVisits, matchView: isVisitListView },
-    { to: "/service-verification", label: "Verify visit", group: "WORK", parent: "/approvals", icon: PenLine, show: !isCaregiver && canManageVisits },
+      : { to: REPORTS_PATH, search: "?view=exceptions", label: "Approvals", group: "WORK", icon: ClipboardCheck, accent: ACCENT.approvals, show: staff && canManageVisits, matchView: isExceptionsView },
+    { to: REPORTS_PATH, search: "?view=exceptions", label: "Visits to review", group: "WORK", parent: "Approvals", icon: ClipboardCheck, show: canBill && canReadVisits, matchView: isExceptionsView },
+    { to: "/clients", label: "Clients", group: "WORK", icon: Users, accent: ACCENT.clients, show: hasPermission("clients.names.read") },
+    { to: AUTHORIZATIONS_PATH, label: "Authorizations", group: "WORK", parent: "Clients", icon: ShieldCheck, show: hasPermission("authorizations.update") || hasPermission("shifts.manage") },
+    { to: "/care-team", label: "Caregivers", group: "WORK", icon: HeartHandshake, accent: ACCENT.caregivers, show: hasPermission("caregivers.manage") || canManageVisits },
+    { to: "/care-team/recruiting", label: "Recruiting", group: "WORK", parent: "Caregivers", icon: UserPlus, show: hasPermission("caregivers.manage") },
+    { to: "/documents", label: "Documents", group: "WORK", icon: FolderOpen, show: staff && hasPermission("documents.read") },
     { to: REPORTS_PATH, search: "?view=overview", label: "Reports", group: "WORK", icon: ChartNoAxesColumn, accent: ACCENT.reports, show: canReadVisits, matchView: isReportView },
-    // Administration and settings, last.
-    { to: "/services", label: "Services", group: "SETUP", icon: Stethoscope, show: !isCaregiver && hasPermission("authorizations.read") },
-    { to: "/continuity", label: "Continuity pack", group: "SETUP", icon: LifeBuoy, show: !isCaregiver && hasPermission("continuity.export") },
-    { to: "/outage-visits", label: "Outage records", group: "SETUP", icon: FileArchive, show: !isCaregiver && canManageVisits },
-    { to: "/accounts", label: "Accounts", group: "SETUP", icon: UserCog, show: !isCaregiver && hasPermission("accounts.manage") },
-    { to: "/settings/branding", label: "Settings", group: "SETUP", icon: Settings, show: hasPermission("organization.update") },
-    { to: "/settings/appearance", label: "Appearance", group: "SETUP", icon: Palette, show: true },
+    // Settings, last. A person who may change agency settings opens Branding from it; everyone else sees it as a section label over their own pages.
+    canSettings
+      ? { to: "/settings/branding", label: "Settings", group: "SETUP", icon: Settings, show: staff }
+      : { to: "/settings/branding", label: "Settings", group: "SETUP", icon: Settings, heading: true, show: staff },
+    { to: SERVICES_PATH, label: "Services", group: "SETUP", parent: "Settings", icon: Stethoscope, show: staff && hasPermission("authorizations.read") },
+    { to: "/continuity", label: "Continuity pack", group: "SETUP", parent: "Settings", icon: LifeBuoy, show: staff && hasPermission("continuity.export") },
+    { to: "/outage-visits", label: "Outage records", group: "SETUP", parent: "Settings", icon: FileArchive, show: staff && canManageVisits },
+    { to: "/accounts", label: "Accounts", group: "SETUP", parent: "Settings", icon: UserCog, show: staff && hasPermission("accounts.manage") },
+    { to: "/settings/appearance", label: "Appearance", group: "SETUP", ...(staff ? { parent: "Settings" } : {}), icon: Palette, show: true },
   ];
   const groups = visibleGroups(links);
   // Each badge is ONE server count (COUNT_DEFINITIONS.md). Approvals keeps exception review and billing approval apart: the Approvals link shows what it opens
@@ -191,7 +205,7 @@ export function AwsShell({ children }: PropsWithChildren) {
   const counts = attention.data ?? null;
   const countOf = (l: NavLinkDef): { count: number; critical: number } | null => {
     if (!counts) return null;
-    if (l.parent === "/approvals" && l.label === "Visits to review") return counts.approvals.exceptions;
+    if (l.parent === "Approvals" && l.label === "Visits to review") return counts.approvals.exceptions;
     if (l.parent) return null;
     if (l.to === "/care-team") return counts.caregivers;
     if (l.to === "/schedule") return counts.scheduling;
@@ -262,7 +276,7 @@ export function AwsShell({ children }: PropsWithChildren) {
         aria-label="Menu"
         onKeyDown={trapFocus}
         className={cn(
-          "fixed inset-y-0 right-0 z-50 flex-col border-l border-og-line bg-og-side print:hidden",
+          "fixed inset-y-0 left-0 z-50 flex-col border-r border-og-line bg-og-side print:hidden",
           sidebarHidden ? "hidden" : "flex",
           isMobile ? "w-[min(88vw,20rem)] shadow-2xl" : collapsed ? "w-[76px]" : "w-64",
         )}
@@ -322,10 +336,19 @@ export function AwsShell({ children }: PropsWithChildren) {
                 <p className="mx-3 mb-1.5 text-[11px] font-semibold leading-[18px] tracking-[0.08em] text-og-sub" data-testid="nav-group-heading">{group}</p>
               )}
               <ul className="space-y-0.5">
-                {items.filter((l) => !l.parent || !collapsed).map((l) => {
+                {items.filter((l) => !collapsed || shownWhenCollapsed(l, links)).map((l) => {
                   const active = current !== null && linkKey(l) === linkKey(current);
                   const Icon = l.icon;
                   const badge = badgeOf(l);
+                  if (l.heading) {
+                    // A section label, not a page: text only (children keep their own links). Hidden when collapsed.
+                    return collapsed ? null : (
+                      <li key={`h-${l.label}`} className="mt-2 flex min-h-[32px] items-center gap-2 px-3 text-[14px] font-medium leading-5 text-og-ink" data-testid="nav-section">
+                        <Icon className="h-[18px] w-[18px] shrink-0" aria-hidden="true" />
+                        <span className="min-w-0 flex-1 break-words">{l.label}</span>
+                      </li>
+                    );
+                  }
                   return (
                     <li key={linkKey(l)}>
                       <Link
@@ -370,7 +393,6 @@ export function AwsShell({ children }: PropsWithChildren) {
             <div className={cn("min-w-0 flex-1", collapsed && "sr-only")}>
               <p className="text-[11px] font-bold uppercase tracking-wide text-og-link" data-testid="view-label">{view} VIEW</p>
               <p className="text-sm text-og-ink">
-                {VIEW_TITLE[view]}:{" "}
                 {displayName ? (
                   <span className="font-semibold">{displayName}</span>
                 ) : nameLoading ? (
@@ -413,12 +435,12 @@ export function AwsShell({ children }: PropsWithChildren) {
         </div>
       </aside>
       {collapsed && tip ? (
-        <div role="presentation" aria-hidden="true" className="pointer-events-none fixed z-[60] -translate-y-1/2 whitespace-nowrap rounded-lg bg-og-ink px-3 py-1.5 text-sm font-medium text-white shadow-lg" style={{ right: 84, top: tip.top }}>
+        <div role="presentation" aria-hidden="true" className="pointer-events-none fixed z-[60] -translate-y-1/2 whitespace-nowrap rounded-lg bg-og-ink px-3 py-1.5 text-sm font-medium text-white shadow-lg" style={{ left: 84, top: tip.top }}>
           {tip.label}
         </div>
       ) : null}
 
-      <div className={cn("print:pr-0", !isMobile && (collapsed ? "pr-[76px]" : "pr-64"))}>
+      <div className={cn("print:pl-0", !isMobile && (collapsed ? "pl-[76px]" : "pl-64"))}>
         <EnvironmentBanner />
         <header className="border-b border-og-line bg-og-card print:hidden" style={{ borderTop: `4px solid ${accent}` }}>
           <div className="flex flex-wrap items-center gap-2 px-4 py-2.5 md:px-8">

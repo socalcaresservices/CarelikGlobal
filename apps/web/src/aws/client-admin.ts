@@ -21,6 +21,8 @@ export interface AdminClient {
   clientTypeName: string | null;
   currentAuthorizations: number;
   openVisits: number;
+  /** Server flag: another client in this agency has the same name. */
+  duplicateName?: boolean;
 }
 
 export interface ClientType {

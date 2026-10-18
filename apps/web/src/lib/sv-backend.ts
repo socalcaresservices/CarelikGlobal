@@ -114,6 +114,8 @@ export interface VisitReportRow {
   client_id: string;
   client_code: string;
   client_legal_name: string | null;
+  /** Server flag: another client in this agency has the same name (the code is then shown beside it). */
+  client_name_duplicate?: boolean;
   caregiver_user_id: string;
   caregiver_name: string;
   service_id: string;
@@ -220,6 +222,7 @@ export interface MonthlyServiceSummaryRow extends HoursFields {
   expiringSoon?: boolean;
   /** AWS: legal name from the restricted directory (null without clients.names.read). */
   clientName?: string | null;
+  clientNameDuplicate?: boolean;
 }
 
 /** AWS (0030): human-approved minutes per authorization lineage for a month. Minutes only. */
@@ -246,6 +249,7 @@ export interface CorrectionHistoryReportRow {
   correctedVisitStatus: ServiceVisitStatus;
   /** AWS: legal name from the restricted directory (null without clients.names.read). */
   clientName?: string | null;
+  clientNameDuplicate?: boolean;
   reason: string;
   beforeSnapshot: { timeIn: string; timeOut: string; workedMinutes: number; billableMinutes: number };
   afterSnapshot: { timeIn: string; timeOut: string; workedMinutes: number; billableMinutes: number };
@@ -270,6 +274,7 @@ export interface BillingReviewRow {
   /** AWS (0030); absent on older back ends. clientName is null without clients.names.read. */
   clientCode?: string | null;
   clientName?: string | null;
+  clientNameDuplicate?: boolean;
   caregiverName?: string | null;
   serviceName?: string | null;
   timeIn?: string | null;

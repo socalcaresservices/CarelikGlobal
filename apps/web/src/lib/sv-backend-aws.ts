@@ -51,11 +51,14 @@ export function createAwsServiceVerificationBackend(
   api: AwsApiClient,
   lookupOrganizationName: (organizationId: string) => string | null,
 ): ServiceVerificationBackend {
+  const duplicateClients = new Set<string>();
   async function clientNames(organizationId: string): Promise<Map<string, string>> {
-    const { clients } = await api.get<{ clients: Array<{ clientId: string; legalFirstName: string | null; legalLastName: string | null }> }>(
+    const { clients } = await api.get<{ clients: Array<{ clientId: string; legalFirstName: string | null; legalLastName: string | null; duplicateName?: boolean }> }>(
       "/v1/clients/directory",
       { organizationId },
     );
+    duplicateClients.clear();
+    for (const c of clients) if (c.duplicateName) duplicateClients.add(c.clientId);
     return new Map(
       clients
         .filter((c) => c.legalFirstName && c.legalLastName)
@@ -140,7 +143,7 @@ export function createAwsServiceVerificationBackend(
       const names = await clientNames(organizationId);
       return visits.map((v) => {
         const row = toSnake<VisitReportRow>(v);
-        return { ...row, client_legal_name: names.get(row.client_id) ?? null };
+        return { ...row, client_legal_name: names.get(row.client_id) ?? null, client_name_duplicate: duplicateClients.has(row.client_id) };
       });
     },
     async getLetterhead(organizationId) {
@@ -189,7 +192,7 @@ export function createAwsServiceVerificationBackend(
         monthStart,
       });
       const names = await clientNames(organizationId);
-      return services.map((row) => ({ ...row, clientName: names.get(row.clientId) ?? null }));
+      return services.map((row) => ({ ...row, clientName: names.get(row.clientId) ?? null, clientNameDuplicate: duplicateClients.has(row.clientId) }));
     },
     async listMonthlyApprovalSummary(organizationId, clientId, monthStart) {
       const { lineages } = await api.get<{ lineages: MonthlyApprovalSummaryRow[] }>("/v1/reports/monthly-approval-summary", {
@@ -220,7 +223,7 @@ export function createAwsServiceVerificationBackend(
         status,
       });
       const names = await clientNames(organizationId);
-      return corrections.map((row) => ({ ...row, clientName: names.get(row.clientId) ?? null }));
+      return corrections.map((row) => ({ ...row, clientName: names.get(row.clientId) ?? null, clientNameDuplicate: duplicateClients.has(row.clientId) }));
     },
     async listBillingReview(organizationId, dateFrom, dateTo) {
       const { visits } = await api.get<{ visits: BillingReviewRow[] }>("/v1/billing-review", { organizationId, dateFrom, dateTo });

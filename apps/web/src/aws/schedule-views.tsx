@@ -9,6 +9,8 @@ import { useHomeIssues } from "./home-data";
 import { DISPLAY_LABEL, filterOptions, monthGrid, NO_FILTERS, stateOfShift, type CalendarView, type ShiftFilters } from "./schedule-model";
 import type { Shift } from "./schedule-page";
 import { ShortHelp } from "./help-text";
+import { useCaregivers } from "./care-team-admin";
+import { nameWithCode } from "./name-label";
 import { eligibleReplacements, type Candidate, type Matches } from "./replacement-model";
 
 export function ViewTabs({ view, onChange }: { view: CalendarView; onChange: (v: CalendarView) => void }) {
@@ -118,6 +120,7 @@ export function ReplacementSuggestions({ shift, onChoose }: { shift: Shift; onCh
   const api = useAwsApi();
   const { activeOrganizationId } = useOrganization();
   const [why, setWhy] = useState<string | null>(null);
+  const roster = useCaregivers();
   const q = useQuery({
     queryKey: ["shift-matches", activeOrganizationId, shift.shiftId, shift.startsAt, shift.endsAt],
     enabled: !!activeOrganizationId && !!shift.serviceId,
@@ -126,19 +129,21 @@ export function ReplacementSuggestions({ shift, onChoose }: { shift: Shift; onCh
   if (q.isLoading) return <p role="status" className="text-sm text-slate-500">Looking for caregivers who could cover this…</p>;
   if (q.isError || !q.data) return <p role="alert" className="text-sm text-slate-700" data-testid="suggestions-error">Suggestions could not be loaded. You can still choose a caregiver below.</p>;
   const eligible = eligibleReplacements(q.data, shift.caregiverRecordId);
+  const shown = eligible.slice(0, 5);
+  const dup = new Set((roster.data ?? []).filter((c) => c.duplicateName).map((c) => c.caregiverRecordId));
+  const more = shown.map((c) => `${c.name}: ${c.assignedToClient ? "already works with this client; " : ""}${c.score.complete ? `score ${c.score.total}` : "score incomplete"}`).join(" · ");
   return (
     <div className="space-y-1 rounded-lg border border-slate-200 bg-og-card p-2" data-testid="replacement-suggestions">
-      <p className="text-sm font-semibold text-slate-900">Suggested caregivers</p>
-      <ShortHelp className="text-xs text-slate-600" details={`Eligible caregivers only, in the order of the agency's matching rule (${q.data.ruleVersion}, ${q.data.ruleStatus}).`}>Choosing one fills the box below; you still confirm the assignment.</ShortHelp>
+      <p className="text-sm font-semibold text-slate-900">Suggested</p>
+      {shown.length > 0 ? <ShortHelp className="text-xs text-slate-600" details={`Eligible caregivers only, in the order of the agency's matching rule (${q.data.ruleVersion}, ${q.data.ruleStatus}). ${more}`}>Best match first.</ShortHelp> : null}
       {eligible.length === 0 ? <p className="text-sm text-slate-700" data-testid="no-eligible">No eligible caregiver was found for this time. The shift stays flagged until one is assigned.</p> : (
         <ul className="space-y-1">
-          {eligible.slice(0, 5).map((c: Candidate, n) => (
+          {shown.map((c: Candidate, n) => (
             <li key={c.caregiverRecordId} className="flex flex-wrap items-center gap-x-3 text-sm" data-testid="suggestion">
               <span className="font-og-mono text-xs text-slate-500">{n + 1}</span>
-              <span className="font-semibold text-slate-900">{c.name} <span className="font-normal text-slate-500">({c.caregiverCode})</span></span>
-              <span className="text-xs text-slate-600">{c.assignedToClient ? "Already works with this client · " : ""}{c.score.complete ? `score ${c.score.total}` : "score incomplete"}</span>
+              <span className="font-semibold text-slate-900">{nameWithCode(c.name, c.caregiverCode, dup.has(c.caregiverRecordId))}</span>
               <button type="button" className="min-h-[44px] text-sm font-semibold underline md:min-h-[32px]" aria-expanded={why === c.caregiverRecordId} onClick={() => setWhy(why === c.caregiverRecordId ? null : c.caregiverRecordId)}>Why</button>
-              <Button type="button" variant="secondary" className="min-h-11" onClick={() => onChoose(c.caregiverRecordId)}>Choose</Button>
+              <Button type="button" variant="secondary" className="min-h-11" aria-label={`Select ${c.name}`} onClick={() => onChoose(c.caregiverRecordId)}>Select</Button>
               {why === c.caregiverRecordId ? <ul className="basis-full list-disc pl-8 text-xs text-slate-700">{c.score.components.map((k) => <li key={k.name}>{k.name}: {k.status === "scored" ? `${k.points} of ${k.weight}` : k.status}: {k.reason}</li>)}</ul> : null}
             </li>
           ))}

@@ -1,4 +1,5 @@
 import type { BillingReviewRow } from "@/lib/sv-backend";
+import { nameWithCode } from "./name-label";
 import { VISIT_STATUS_LABEL } from "@/lib/service-verification";
 import { APPROVAL_STATUS_LABEL, type ApprovalStatus } from "./billing-format";
 
@@ -20,7 +21,7 @@ export interface BillingFilters {
 export const NO_FILTERS: BillingFilters = { client: "", caregiver: "", service: "", visitStatus: "", approval: "" };
 
 export const clientKey = (r: BillingReviewRow) => r.clientCode ?? r.clientName ?? "";
-export const clientLabel = (r: BillingReviewRow) => r.clientName ?? r.clientCode ?? "Client";
+export const clientLabel = (r: BillingReviewRow) => (r.clientName ? nameWithCode(r.clientName, r.clientCode, r.clientNameDuplicate) : r.clientCode) ?? "Client";
 export const caregiverKey = (r: BillingReviewRow) => r.caregiverName ?? "";
 export const serviceKey = (r: BillingReviewRow) => (r.serviceName ? `${r.serviceName} (${r.serviceCode})` : r.serviceCode);
 

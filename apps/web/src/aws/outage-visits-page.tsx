@@ -1,4 +1,5 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { nameWithCode } from "./name-label";
 import { useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { Button, Card } from "@carelik/ui";
@@ -86,7 +87,7 @@ function EntryForm({ onDone }: { onDone: (text: string) => void }) {
       <div><label htmlFor="ov-client" className="block text-sm font-medium text-slate-700">Client</label>
         <select id="ov-client" value={f.clientId} onChange={(e) => set("clientId", e.target.value)} className={inputClass}>
           <option value="">Choose a client</option>
-          {(clients.data ?? []).map((c) => <option key={c.clientId} value={c.clientId}>{clientName(c) ?? "Name not set"} ({c.clientCode})</option>)}
+          {(clients.data ?? []).map((c) => <option key={c.clientId} value={c.clientId}>{nameWithCode(clientName(c), c.clientCode, c.duplicateName)}</option>)}
         </select></div>
       <div><label htmlFor="ov-service" className="block text-sm font-medium text-slate-700">Service</label>
         <select id="ov-service" value={f.serviceId} onChange={(e) => set("serviceId", e.target.value)} className={inputClass}>
@@ -96,7 +97,7 @@ function EntryForm({ onDone }: { onDone: (text: string) => void }) {
       <div className="sm:col-span-2"><label htmlFor="ov-caregiver" className="block text-sm font-medium text-slate-700">Caregiver</label>
         <select id="ov-caregiver" value={f.caregiverRecordId} onChange={(e) => set("caregiverRecordId", e.target.value)} className={inputClass}>
           <option value="">Choose the caregiver</option>
-          {(caregivers.data ?? []).map((c) => <option key={c.caregiverRecordId} value={c.caregiverRecordId}>{caregiverName(c)} ({c.caregiverCode})</option>)}
+          {(caregivers.data ?? []).map((c) => <option key={c.caregiverRecordId} value={c.caregiverRecordId}>{nameWithCode(caregiverName(c), c.caregiverCode, c.duplicateName)}</option>)}
         </select></div>
       <div><label htmlFor="ov-in" className="block text-sm font-medium text-slate-700">Time In (as written)</label>
         <input id="ov-in" type="time" value={f.timeIn} onChange={(e) => set("timeIn", e.target.value)} className={inputClass} /></div>
@@ -191,7 +192,7 @@ export function OutageVisitsPage() {
                 ))}
               </ul>
             ) : null}
-            <details className="mt-2 text-sm"><summary className="cursor-pointer">Numbers not yet entered ({missing.length})</summary>
+            <details className="mt-2 text-sm"><summary className="cursor-pointer">Show the missing numbers</summary>
               <p className="mt-1 font-mono text-xs leading-6">{missing.map((r) => outageNumber(r.outageNumber)).join(" · ") || "None"}</p>
             </details>
           </>

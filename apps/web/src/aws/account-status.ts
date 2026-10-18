@@ -10,10 +10,10 @@ export const ACCOUNT_STATUS_LABEL: Record<AccountStatus, string> = {
 };
 
 export const ACCOUNT_STATUS_HELP: Record<AccountStatus, string> = {
-  active: "Can sign in.",
+  active: "",
   invitation_pending: "Invited; has not signed in yet. Must set a password at the first sign-in.",
   disabled: "Cannot sign in. Records, shifts and visit history are kept.",
-  setup_required: "No sign-in yet. Send an invitation from Care Team.",
+  setup_required: "No sign-in yet. Invite from Care Team.",
 };
 
 export const ACCOUNT_STATUS_BADGE: Record<AccountStatus, string> = {
