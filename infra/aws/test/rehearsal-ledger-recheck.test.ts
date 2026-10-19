@@ -63,7 +63,7 @@ describe("the ledger verdict", () => {
     ["76 rows, latest 0076", { MOCK_SUMMARY: "76 migrations applied, latest 0076" }, "requires exactly '77 migrations applied, latest 0077'"],
     ["the old ledger 52 / 0052", { MOCK_SUMMARY: "52 migrations applied, latest 0052" }, "requires exactly"],
     ["78 rows, latest 0078 (one of the new migrations is already there)", { MOCK_SUMMARY: "78 migrations applied, latest 0078", MOCK_ROWS: "0078  abc  assignment_outcome  applied 2026-10-19T01:00:00Z" }, "ARE ALREADY APPLIED"],
-    ["84 rows, latest 0084 (already migrated)", { MOCK_SUMMARY: "84 migrations applied, latest 0084", MOCK_ROWS: "0078  a  x  applied t\n0084  b  y  applied t" }, "do not continue"],
+    ["85 rows, latest 0085 (already migrated)", { MOCK_SUMMARY: "85 migrations applied, latest 0085", MOCK_ROWS: "0078  a  x  applied t\n0085  b  y  applied t" }, "do not continue"],
     ["77 rows but a row above 0077 (a gap in the ledger)", { MOCK_ROWS: "0081  abc  x  applied 2026-10-19T01:00:00Z" }, "ARE ALREADY APPLIED"],
     ["enforcement ACTIVE for one agency", { MOCK_ACT: "1" }, "0 activated agencies"],
     ["the TEST database missing", { MOCK_DBS: "" }, "DOES NOT EXIST"],
@@ -77,16 +77,16 @@ describe("the ledger verdict", () => {
     expect(marker()).toBe(false);
   });
   it("the expected values are required and checked for consistency before anything is opened (usage exit 2)", async () => {
-    for (const env of <Array<Record<string, string>>>[{ OGEVIA_EXPECT_LEDGER_COUNT: "" }, { OGEVIA_EXPECT_LEDGER_LATEST: "" }, { OGEVIA_EXPECT_LEDGER_COUNT: "77", OGEVIA_EXPECT_LEDGER_LATEST: "0084" }, { OGEVIA_EXPECT_LEDGER_COUNT: "x7", OGEVIA_EXPECT_LEDGER_LATEST: "0077" }]) {
+    for (const env of <Array<Record<string, string>>>[{ OGEVIA_EXPECT_LEDGER_COUNT: "" }, { OGEVIA_EXPECT_LEDGER_LATEST: "" }, { OGEVIA_EXPECT_LEDGER_COUNT: "77", OGEVIA_EXPECT_LEDGER_LATEST: "0085" }, { OGEVIA_EXPECT_LEDGER_COUNT: "x7", OGEVIA_EXPECT_LEDGER_LATEST: "0077" }]) {
       const r = await run(["test", "--host-ip"], env);
       expect(r.code, r.out).toBe(2);
     }
     expect(calls()).not.toContain("authorize");
   });
-  it("84 / 0084 is accepted as the AFTER state with the same script", async () => {
-    const r = await run(["test", "--host-ip"], { OGEVIA_EXPECT_LEDGER_COUNT: "84", OGEVIA_EXPECT_LEDGER_LATEST: "0084", MOCK_SUMMARY: "84 migrations applied, latest 0084" });
+  it("85 / 0085 is accepted as the AFTER state with the same script", async () => {
+    const r = await run(["test", "--host-ip"], { OGEVIA_EXPECT_LEDGER_COUNT: "85", OGEVIA_EXPECT_LEDGER_LATEST: "0085", MOCK_SUMMARY: "85 migrations applied, latest 0085" });
     expect(r.code, r.out).toBe(0);
-    expect(r.out).toContain("exactly the expected 84 / 0084");
+    expect(r.out).toContain("exactly the expected 85 / 0085");
   });
   it("a wrong host IP, the production mode, and a wrong database stop; nothing is changed", async () => {
     expect((await run(["test", "--host-ip"], { OGEVIA_EXPECT_HOST_IP: "10.20.132.180" })).code).toBe(1);

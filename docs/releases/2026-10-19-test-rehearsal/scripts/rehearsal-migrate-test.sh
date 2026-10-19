@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 # =============================================================================
-# Ogevia TEST rehearsal (release 0b593e5): APPLY MIGRATIONS 0078-0084 TO THE TEST DATABASE through a temporary, narrow database-access window.
+# Ogevia TEST rehearsal (release f6dd9b7): APPLY MIGRATIONS 0078-0085 TO THE TEST DATABASE through a temporary, narrow database-access window.
 # TEST ONLY (database ogevia_sv_test). YELLOW: run only after the owner's explicit GO. Not run against AWS by anyone yet.
-# Adapted from the reviewed candidate-migrate-test.sh of the 2026-10-18 operation. DIFFERENCES: (1) range 0078-0084 on top of a ledger of exactly 77 / 0077 (rollback 0084
-# down to 0078); (2) the snapshot is named ogevia-prod-postgres-pre-0084-YYYYMMDDHHMM; (3) there is NO git in CloudShell: the package is proven by BUILD_INFO.json (code
+# Adapted from the reviewed candidate-migrate-test.sh of the 2026-10-18 operation. DIFFERENCES: (1) range 0078-0085 on top of a ledger of exactly 77 / 0077 (rollback 0085
+# down to 0078); (2) the snapshot is named ogevia-prod-postgres-pre-0085-YYYYMMDDHHMM; (3) there is NO git in CloudShell: the package is proven by BUILD_INFO.json (code
 # commit), PACKAGE_MANIFEST.sha256 (every file), no file outside the manifest, and the migration-set hash (scripts/pkg-lib.sh); (4) the script lives in the package under
 # docs/releases/2026-10-19-test-rehearsal/scripts. Everything else (the /32 rule, timeouts, cleanup with a rule-set hash, marker, phrase, wrong-database refusals) is unchanged.
 #
@@ -14,11 +14,11 @@
 #
 # Window: one inbound rule on the RDS security group, tcp 5432, source = the admin host's own private IP as /32 (never a group, never a range). Inside it the script
 # (1) proves the connection is to ogevia_sv_test and read-only, (2) proves the ledger is exactly 77 / 0077 (with --resume: contiguous between 0078 and 0083), (3) runs the
-# pinned runner against that one database (one transaction per file), (4) re-reads the ledger (84 / 0084) and runs the read-only verification set (infra/aws/db/verification),
+# pinned runner against that one database (one transaction per file), (4) re-reads the ledger (85 / 0085) and runs the read-only verification set (infra/aws/db/verification),
 # and only then closes the window. ogevia_prd is never named, connected to or queried. The RDS master credential is held in shell memory only and never printed.
 #
 # SNAPSHOT (required in both modes, checked BEFORE the access window is proposed or opened; every failure refuses and changes nothing):
-#   OGEVIA_PREDEPLOY_SNAPSHOT_ID         a manual snapshot named ogevia-prod-postgres-pre-0084-YYYYMMDDHHMM (UTC minute it was taken)
+#   OGEVIA_PREDEPLOY_SNAPSHOT_ID         a manual snapshot named ogevia-prod-postgres-pre-0085-YYYYMMDDHHMM (UTC minute it was taken)
 #   OGEVIA_RELEASE_WINDOW_START / _END   the owner-approved release window, UTC, format 2026-10-19T03:00:00Z (END after START, at most 12 hours)
 #   It must exist, be `available`, belong to ogevia-prod-postgres, be `manual`, have been CREATED inside the window and not in the future, and carry a name stamp inside
 #   the window. `migrate` also requires NOW inside the window; `rollback` only that the window has started. A snapshot is a recovery PREREQUISITE; this script never restores one.
@@ -37,7 +37,7 @@ EXPECT_RDS_SG=sg-00530a1f4f7648e65      # ogevia-prod-data-layer-RDSSecurityGrou
 ADMIN_SG=sg-00e01e2ca80442c1f           # ogevia-db-admin-sg
 API_STACK=Ogevia-prod-ServiceVerificationApi
 DB_EXPECT=ogevia_sv_test
-FIRST_NEW=0078; LAST_NEW=0084; BASELINE=0077
+FIRST_NEW=0078; LAST_NEW=0085; BASELINE=0077
 PHRASE=OPEN-5432-WINDOW-MIGRATE-TEST
 [[ "$ARG" == rollback ]] && PHRASE=OPEN-5432-WINDOW-ROLLBACK-TEST
 DOWN_TMO="${OGEVIA_ROLLBACK_FILE_TIMEOUT:-120}"
@@ -179,13 +179,13 @@ ls "$INFRA/db/migrations/${LAST_NEW}_"*.sql >/dev/null 2>&1 || stop "migration $
 if [[ "$ARG" == rollback ]]; then
   [[ "${OGEVIA_EXPECT_ROLLBACK_SHA:-}" =~ ^[0-9a-f]{64}$ ]] || stop "set OGEVIA_EXPECT_ROLLBACK_SHA to the 64-character checksum of the rollback set given in the procedure"
   ROLL_SHA=$(pkg_rollback_set_sha)
-  [[ "$ROLL_SHA" == "$OGEVIA_EXPECT_ROLLBACK_SHA" ]] || stop "db/rollback (0078-0084) hashes to $ROLL_SHA, not the approved $OGEVIA_EXPECT_ROLLBACK_SHA"
-  for v in $(seq 78 84); do ls "$INFRA/db/rollback/$(printf '%04d' "$v")_"*.down.sql >/dev/null 2>&1 || stop "the rollback file for $(printf '%04d' "$v") is missing"; done
+  [[ "$ROLL_SHA" == "$OGEVIA_EXPECT_ROLLBACK_SHA" ]] || stop "db/rollback (0078-0085) hashes to $ROLL_SHA, not the approved $OGEVIA_EXPECT_ROLLBACK_SHA"
+  for v in $(seq 78 85); do ls "$INFRA/db/rollback/$(printf '%04d' "$v")_"*.down.sql >/dev/null 2>&1 || stop "the rollback file for $(printf '%04d' "$v") is missing"; done
   say "rollback set sha256 ${ROLL_SHA:0:16}...: OK"
 fi
 # ---- the named, available pre-deployment snapshot (both modes), validated before access is proposed -------------------------------------------------------------
 SNAP_ID="${OGEVIA_PREDEPLOY_SNAPSHOT_ID:-}"
-[[ "$SNAP_ID" =~ ^ogevia-prod-postgres-pre-0084-[0-9]{12}$ ]] || stop "set OGEVIA_PREDEPLOY_SNAPSHOT_ID to the named pre-deployment snapshot (pattern ogevia-prod-postgres-pre-0084-YYYYMMDDHHMM, UTC)"
+[[ "$SNAP_ID" =~ ^ogevia-prod-postgres-pre-0085-[0-9]{12}$ ]] || stop "set OGEVIA_PREDEPLOY_SNAPSHOT_ID to the named pre-deployment snapshot (pattern ogevia-prod-postgres-pre-0085-YYYYMMDDHHMM, UTC)"
 TS_RE='^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$'
 [[ "${OGEVIA_RELEASE_WINDOW_START:-}" =~ $TS_RE && "${OGEVIA_RELEASE_WINDOW_END:-}" =~ $TS_RE ]] || stop "set OGEVIA_RELEASE_WINDOW_START and OGEVIA_RELEASE_WINDOW_END to the owner-approved window in UTC, format 2026-10-19T03:00:00Z"
 W_START=$(date -u -d "$OGEVIA_RELEASE_WINDOW_START" +%s 2>/dev/null) && W_END=$(date -u -d "$OGEVIA_RELEASE_WINDOW_END" +%s 2>/dev/null) || stop "the release window is not a valid date and time"
@@ -258,7 +258,7 @@ say ""; say "== 3. PROPOSED CHANGES"
 say "  1. ADD to $EXPECT_RDS_SG :  inbound tcp 5432 from $HOST_CIDR  (the admin host's own IP only; description 'TEMP-migrate-$STAMP')"
 if [[ "$ARG" == rollback ]]; then
   say "  2. Through that window, against $DB_EXPECT ONLY: check the ledger is contiguous from 0078 upward, then revert the migrations from the latest down to $FIRST_NEW with the pinned db/rollback files, one transaction per file (the ledger row is deleted in the same transaction), and re-read the ledger (expected 77 / $BASELINE)."
-  say "     NOTE: 0078-0084 are FUNCTIONS ONLY (no table, column or stored row is dropped or changed); each rollback restores the earlier function definitions. The pre-deployment snapshot is $SNAP_ID (restoring it is NOT a prepared procedure)."
+  say "     NOTE: 0078-0085 are FUNCTIONS ONLY (no table, column or stored row is dropped or changed); each rollback restores the earlier function definitions. The pre-deployment snapshot is $SNAP_ID (restoring it is NOT a prepared procedure)."
 else
   say "  2. Through that window, against $DB_EXPECT ONLY: check the ledger is $([[ $RESUME == 1 ]] && echo "contiguous between $FIRST_NEW and 0083 (--resume)" || echo "exactly 77 / $BASELINE"), apply migrations $FIRST_NEW to $LAST_NEW with the pinned runner, re-read the ledger, run the read-only verification set."
 fi
@@ -300,7 +300,7 @@ LEDGER=$(RO -d "$DB_EXPECT" -c "select count(*) || '|' || coalesce(max(version),
 L_COUNT="${LEDGER%%|*}"; L_LATEST="${LEDGER##*|}"
 say "ledger before: $L_COUNT migrations applied, latest $L_LATEST"
 if [[ "$ARG" == rollback ]]; then
-  [[ "$L_LATEST" =~ ^00[0-9]{2}$ && "$L_COUNT" == "$((10#$L_LATEST))" && "$L_LATEST" > "$BASELINE" && "$L_LATEST" < "0085" ]] || stop "rollback needs a contiguous ledger between 0078 and 0084; found $L_COUNT / $L_LATEST. Nothing was reverted."
+  [[ "$L_LATEST" =~ ^00[0-9]{2}$ && "$L_COUNT" == "$((10#$L_LATEST))" && "$L_LATEST" > "$BASELINE" && "$L_LATEST" < "0086" ]] || stop "rollback needs a contiguous ledger between 0078 and 0085; found $L_COUNT / $L_LATEST. Nothing was reverted."
 elif [[ "$RESUME" == 1 ]]; then
   [[ "$L_LATEST" =~ ^00[0-9]{2}$ && "$L_COUNT" == "$((10#$L_LATEST))" && "$L_LATEST" > "$BASELINE" && "$L_LATEST" < "$LAST_NEW" ]] || stop "--resume needs a contiguous ledger between 0078 and 0083; found $L_COUNT / $L_LATEST"
 else
@@ -335,7 +335,7 @@ if [[ "$ARG" == rollback ]]; then
   close_window
   say ""; say "================ SUMMARY ================"
   say "Environment : TEST ($DB_EXPECT)   package commit $HEAD_SHA"
-  say "RESULT: migrations 0084 to 0078 reverted; ledger 77 / $BASELINE. The API and web must be rolled back too (procedure, Recovery)."
+  say "RESULT: migrations 0085 to 0078 reverted; ledger 77 / $BASELINE. The API and web must be rolled back too (procedure, Recovery)."
   [[ -f "$OPEN" ]] && say "SECURITY GROUP: NOT RESTORED, see the instructions above" || say "SECURITY GROUP: restored and verified identical to the original"
   exit "$RC"
 fi
@@ -352,7 +352,7 @@ if [[ "$MRC" != 0 ]]; then
 fi
 LEDGER=$(RO -d "$DB_EXPECT" -c "select count(*) || '|' || coalesce(max(version), 'none') from ogevia_meta.schema_migrations") || { rc=$?; stop "the ledger cannot be re-read$(tm $rc)"; }
 say "ledger after: ${LEDGER%%|*} migrations applied, latest ${LEDGER##*|}"
-[[ "${LEDGER%%|*}" == 84 && "${LEDGER##*|}" == "$LAST_NEW" ]] || stop "the ledger is not 84 / $LAST_NEW after the runner reported success"
+[[ "${LEDGER%%|*}" == 85 && "${LEDGER##*|}" == "$LAST_NEW" ]] || stop "the ledger is not 85 / $LAST_NEW after the runner reported success"
 
 say ""; say "== 7. Verification set (read-only transactions; the runner's own db:verify)"
 ( cd "$INFRA" && OGEVIA_DATABASE_URL="$DBURL" timeout --foreground -k "$KILL_AFTER" "$VERIFY_TMO" npx tsx db/scripts/verify.ts ) > "$OUT/verify.txt" 2>&1
@@ -366,6 +366,6 @@ MIGRATING=0
 close_window
 say ""; say "================ SUMMARY ================"
 say "Environment : TEST ($DB_EXPECT)   package commit $HEAD_SHA"
-say "RESULT: migrations $FIRST_NEW to $LAST_NEW applied; ledger 84 / $LAST_NEW; verification $P PASS, 0 FAIL."
+say "RESULT: migrations $FIRST_NEW to $LAST_NEW applied; ledger 85 / $LAST_NEW; verification $P PASS, 0 FAIL."
 [[ -f "$OPEN" ]] && say "SECURITY GROUP: NOT RESTORED, see the instructions above" || say "SECURITY GROUP: restored and verified identical to the original"
 exit "$RC"

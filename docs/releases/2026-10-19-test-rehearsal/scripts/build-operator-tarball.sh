@@ -59,7 +59,7 @@ for bad in .git _backup node_modules infra/aws/cdk.out; do [[ ! -e "$STAGE/$bad"
 [[ -z "$(find "$STAGE" -type l | head -1)" ]] || die "the staging tree contains a symbolic link: $(find "$STAGE" -type l | head -1)"
 [[ -z "$(find "$STAGE" -type f -regextype posix-extended -iregex '.*\.(png|jpe?g|gif|webp|mp4|mov|pdf)$' | grep -v '/node_modules/' | head -1)" ]] || die "an image, video or PDF is in the staging tree (screenshots are excluded): $(find "$STAGE" -type f -regextype posix-extended -iregex '.*\.(png|jpe?g|gif|webp|mp4|mov|pdf)$' | head -1)"
 [[ -z "$(cd "$STAGE" && find . -type f | grep -E '[[:space:]]' | head -1)" ]] || die "a file name contains whitespace"
-for need in infra/aws/db/migrations/0084_action_needed_over_limit.sql infra/aws/db/rollback/0084_action_needed_over_limit.down.sql infra/aws/bin/ogevia.ts apps/sv-api apps/web pnpm-lock.yaml; do [[ -e "$STAGE/$need" ]] || die "$need is missing from the package"; done
+for need in infra/aws/db/migrations/0085_create_caregiver_gate_no_service_void.sql infra/aws/db/rollback/0085_create_caregiver_gate_no_service_void.down.sql infra/aws/bin/ogevia.ts apps/sv-api apps/web pnpm-lock.yaml; do [[ -e "$STAGE/$need" ]] || die "$need is missing from the package"; done
 # 4. BUILD_INFO.json then the manifest of every file (the manifest does not list itself)
 FILES=$(cd "$STAGE" && find . -type f ! -name BUILD_INFO.json | wc -l)
 jq -n --arg commit "$SHA" --arg tree "$TREE" --arg time "$BUILD_TIME" --arg ref "$APPROVAL_REF" --arg pkg "$PKG_REL" --argjson files "$((FILES + 1))" \
@@ -87,7 +87,7 @@ echo "files in manifest  : $(wc -l < "$STAGE/PACKAGE_MANIFEST.sha256")"
 echo "tarball            : $TAR ($(stat -c %s "$TAR") bytes)"
 echo "tarball sha256     : $TARSHA"
 echo "manifest sha256    : $(sha256sum "$STAGE/PACKAGE_MANIFEST.sha256" | cut -d' ' -f1)"
-echo "migration set 0001-0084 sha256 : $(cd "$STAGE/infra/aws/db/migrations" && LC_ALL=C sha256sum -- *.sql | sha256sum | cut -d' ' -f1)"
-echo "rollback set 0078-0084 sha256  : $(cd "$STAGE/infra/aws/db/rollback" && LC_ALL=C sha256sum -- 00[7-8][0-9]_*.down.sql | awk '$2 >= "0078"' | sha256sum | cut -d' ' -f1)"
+echo "migration set 0001-0085 sha256 : $(cd "$STAGE/infra/aws/db/migrations" && LC_ALL=C sha256sum -- *.sql | sha256sum | cut -d' ' -f1)"
+echo "rollback set 0078-0085 sha256  : $(cd "$STAGE/infra/aws/db/rollback" && LC_ALL=C sha256sum -- 00[7-8][0-9]_*.down.sql | awk '$2 >= "0078"' | sha256sum | cut -d' ' -f1)"
 echo "pnpm-lock.yaml sha256          : $(sha256sum "$STAGE/pnpm-lock.yaml" | cut -d' ' -f1)"
 echo "BUILT AND SELF-VERIFIED"

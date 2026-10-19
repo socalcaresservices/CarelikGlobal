@@ -8,8 +8,8 @@ import { PKG_REL, REPO_ROOT, build, buildAndExtract, makeRepo, sh, sha256, type 
 import { vi } from "vitest";
 
 vi.setConfig({ testTimeout: 120000 });
-const REAL_MIGRATION_SET = "272afa6078efc61df3a87a198ec13b20e8b3eed8b301b8c9afd01a389ae17145";
-const REAL_ROLLBACK_SET = "52b9b8735e0f4e2c025a24bbc98a447cdc5ac3154ae4e042b0382ebda7cdb799";
+const REAL_MIGRATION_SET = "de0c8abbe12023ba6b7291661f592c7636ef0912827fb5ca57ccf12dac5608ef";
+const REAL_ROLLBACK_SET = "29ca0330d71dbb124eb32d4584421486debd1e4253eda03d75678780e024e875";
 const APPLIED_0077 = "90785eaa779a0be2fc46aa7c251294c102b83d0d240b693ea9fb0d5fffc9a335";
 let r: SynthRepo;
 beforeAll(() => { r = makeRepo(); });
@@ -25,8 +25,8 @@ describe("build-operator-tarball.sh", () => {
     expect(b.code, b.out).toBe(0);
     expect(b.out).toContain("BUILT AND SELF-VERIFIED");
     expect(b.out).toContain(`code commit        : ${r.sha}`);
-    expect(b.out).toContain(`migration set 0001-0084 sha256 : ${REAL_MIGRATION_SET}`);
-    expect(b.out).toContain(`rollback set 0078-0084 sha256  : ${REAL_ROLLBACK_SET}`);
+    expect(b.out).toContain(`migration set 0001-0085 sha256 : ${REAL_MIGRATION_SET}`);
+    expect(b.out).toContain(`rollback set 0078-0085 sha256  : ${REAL_ROLLBACK_SET}`);
     const tar = join(out, `ogevia-operator-${r.short}.tar.gz`);
     expect(readFileSync(tar + ".sha256", "utf8")).toBe(`${sha256(readFileSync(tar))}  ogevia-operator-${r.short}.tar.gz\n`);
     expect(b.out).toContain(`tarball sha256     : ${sha256(readFileSync(tar))}`);
@@ -42,7 +42,7 @@ describe("build-operator-tarball.sh", () => {
     const names = listed.join("\n");
     expect(names).toContain(`${PKG_REL}/scripts/tarball-pin-check.sh`);
     expect(names).toContain(`${PKG_REL}/OPERATOR_PROCEDURE_${r.short}.md`);
-    expect(names).toContain("infra/aws/db/migrations/0084_action_needed_over_limit.sql");
+    expect(names).toContain("infra/aws/db/migrations/0085_create_caregiver_gate_no_service_void.sql");
     expect(names).toContain("docs/TESTING_AND_RELEASE_PROCESS.md");
     for (const bad of ["cdk.out", "_backup", "docs/releases/other", "shot.png", "node_modules", ".git/"]) expect(names).not.toContain(bad);
   });
@@ -105,7 +105,7 @@ describe("tarball-pin-check.sh (no git): PINS HOLD only for the approved package
     const e = buildAndExtract(r);
     const p = pin(e);
     expect(p.code, p.out).toBe(0);
-    for (const line of [`PASS BUILD_INFO code commit ${r.sha}`, "PASS PACKAGE_MANIFEST verifies", "PASS no file outside the manifest", `PASS migration set (0001-0084) sha256 ${REAL_MIGRATION_SET.slice(0, 16)}`, `PASS migrations 0001-0077 equal the set applied to TEST on 2026-10-18 (${APPLIED_0077.slice(0, 16)}`, "PASS pnpm-lock.yaml", "PASS node v22.22.0", "PASS pnpm 9.15.4", "PASS dependencies installed", "PASS cdk 2.1143.0", "PINS HOLD"]) expect(p.out).toContain(line);
+    for (const line of [`PASS BUILD_INFO code commit ${r.sha}`, "PASS PACKAGE_MANIFEST verifies", "PASS no file outside the manifest", `PASS migration set (0001-0085) sha256 ${REAL_MIGRATION_SET.slice(0, 16)}`, `PASS migrations 0001-0077 equal the set applied to TEST on 2026-10-18 (${APPLIED_0077.slice(0, 16)}`, "PASS pnpm-lock.yaml", "PASS node v22.22.0", "PASS pnpm 9.15.4", "PASS dependencies installed", "PASS cdk 2.1143.0", "PINS HOLD"]) expect(p.out).toContain(line);
     expect(p.out).toContain("NOTE BUILD_INFO approval_ref is the placeholder");
   });
   it.each([

@@ -28,7 +28,7 @@ else ok "BUILD_INFO approval_ref $REF"; fi
 if MSG=$(pkg_manifest_ok); then ok "PACKAGE_MANIFEST verifies: $MSG"; else nope "package manifest: $MSG"; fi
 if STR=$(pkg_strays); then [[ -z "$STR" ]] && ok "no file outside the manifest" || nope "files not in the manifest: $(head -3 <<<"$STR" | tr '\n' ';')"; else nope "cannot list the package files"; fi
 MIG=$(pkg_migration_set_sha 2>/dev/null) || MIG=""
-[[ -n "$MIG" && "$MIG" == "$OGEVIA_EXPECT_MIGRATIONS_SHA" ]] && ok "migration set (0001-0084) sha256 ${MIG:0:16}..." || nope "db/migrations hashes to '${MIG:-nothing}', not the approved value"
+[[ -n "$MIG" && "$MIG" == "$OGEVIA_EXPECT_MIGRATIONS_SHA" ]] && ok "migration set (0001-0085) sha256 ${MIG:0:16}..." || nope "db/migrations hashes to '${MIG:-nothing}', not the approved value"
 M77=$(pkg_migration_first77_sha 2>/dev/null) || M77=""
 [[ -n "$M77" && "$M77" == "$PKG_APPLIED_0077_SHA" ]] && ok "migrations 0001-0077 equal the set applied to TEST on 2026-10-18 (${M77:0:16}...)" || nope "migrations 0001-0077 hash to '${M77:-nothing}', not the set applied to TEST ($PKG_APPLIED_0077_SHA): an applied migration was edited"
 LOCK=$(sha256sum "$PKG_ROOT/pnpm-lock.yaml" 2>/dev/null | cut -d' ' -f1) || LOCK=""

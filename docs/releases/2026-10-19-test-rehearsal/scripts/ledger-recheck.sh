@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # =============================================================================
-# TEST REHEARSAL (release 0b593e5) COPY of slice/ledger-check-temp-access.sh v3 (sha256 f96c06f2... as reviewed). Changes from v3, and ONLY these:
-#   1. the expected ledger is given by OGEVIA_EXPECT_LEDGER_COUNT and OGEVIA_EXPECT_LEDGER_LATEST (77 / 0077 before the rehearsal, 84 / 0084 after it) and the rows
+# TEST REHEARSAL (release f6dd9b7) COPY of slice/ledger-check-temp-access.sh v3 (sha256 f96c06f2... as reviewed). Changes from v3, and ONLY these:
+#   1. the expected ledger is given by OGEVIA_EXPECT_LEDGER_COUNT and OGEVIA_EXPECT_LEDGER_LATEST (77 / 0077 before the rehearsal, 85 / 0085 after it) and the rows
 #      listed are those ABOVE that version (v3 listed everything from 0053);
 #   2. the result is a VERDICT: exit 0 only when the ledger summary is exactly "<count> migrations applied, latest <latest>" AND no row is above it AND the number of
 #      agencies with enforcement activated equals OGEVIA_EXPECT_ENFORCEMENT_ACTIVE (default 0; read-only select); any other ledger (or a missing database) is reported with STOP

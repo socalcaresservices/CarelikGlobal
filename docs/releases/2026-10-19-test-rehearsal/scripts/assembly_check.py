@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Read-only check that a synthesized CDK assembly IS the approved TEST rehearsal release (commit 0b593e5) and, optionally, that the LIVE TEST stacks are the recorded
+"""Read-only check that a synthesized CDK assembly IS the approved TEST rehearsal release (commit f6dd9b7) and, optionally, that the LIVE TEST stacks are the recorded
 baseline (the earlier candidate d89327600f3fc55ab9c59af0d0eaea8675d77535, deployed to TEST on 2026-10-18).
 
   python3 assembly_check.py --assembly DIR           # the assembly the operator is about to deploy from (cdk synth -o DIR)
@@ -14,10 +14,10 @@ import argparse, hashlib, json, os, sys
 
 STACKS = ["Ogevia-prod-EvidenceStorage", "Ogevia-prod-NetworkEgress", "Ogevia-prod-WebHosting", "Ogevia-prod-ServiceVerificationApi", "Ogevia-prod-Observability"]
 API = "Ogevia-prod-ServiceVerificationApi"
-RELEASE_COMMIT = "0b593e5"
+RELEASE_COMMIT = "f6dd9b7"
 BASELINE_COMMIT = "d89327600f3fc55ab9c59af0d0eaea8675d77535"
 BASELINE_HANDLER_KEY = "929cdb1bde9bbf18025dc36f5cc61210246ca048efa6d6b51147cf4c22b24ab0.zip"
-RELEASE_HANDLER_KEY = "6f37bc5510d14ec7db6c3630712e06dc89613dac2d595ff01fa687760c2a3c1f.zip"
+RELEASE_HANDLER_KEY = "162b7a43d10dbded0cd0222c1f2603c21725e6a5cd9a192477d7b36d3320f01f.zip"
 IDENTITY_HANDLER_KEY = "7c5f8eb676c93261fd7a80f34d40ba70379c040d94bb2e9bd80f2d007ebc9759.zip"
 ROUTES = 228
 # fingerprints of the five stacks as synthesized from the baseline commit and from the release commit (local synthesis in deploy mode)

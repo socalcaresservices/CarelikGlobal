@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""EXPECTED-ONLY gate for the two stack deployments of the TEST rehearsal (release 0b593e5). Read-only: it compares two CloudFormation templates (or two endpoint
+"""EXPECTED-ONLY gate for the two stack deployments of the TEST rehearsal (release f6dd9b7). Read-only: it compares two CloudFormation templates (or two endpoint
 policies) as JSON files and prints every difference. Exit 0 only if EVERY difference is on the allow-list below; anything else exits 1 and the operator STOPS.
 
   python3 diff_gate.py template --stack Ogevia-prod-NetworkEgress|Ogevia-prod-ServiceVerificationApi --live LIVE.json --new NEW.json

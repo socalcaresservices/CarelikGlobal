@@ -1,4 +1,4 @@
-// Shared fixtures for the TEST-rehearsal package tests (release 0b593e5). Builds a SYNTHETIC git repository that carries the REAL migrations and rollbacks (so the pinned
+// Shared fixtures for the TEST-rehearsal package tests (release f6dd9b7). Builds a SYNTHETIC git repository that carries the REAL migrations and rollbacks (so the pinned
 // hashes are the real ones), then runs the REAL build-operator-tarball.sh on it. No AWS, no network, synthetic data only.
 import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
@@ -10,7 +10,7 @@ import { fileURLToPath } from "node:url";
 export const REPO_ROOT = fileURLToPath(new URL("../../../", import.meta.url));
 export const PKG_REL = "docs/releases/2026-10-19-test-rehearsal";
 export const SCRIPTS_SRC = join(REPO_ROOT, PKG_REL, "scripts");
-export const FIXTURES = fileURLToPath(new URL("./fixtures/rehearsal-0b593e5/", import.meta.url));
+export const FIXTURES = fileURLToPath(new URL("./fixtures/rehearsal-f6dd9b7/", import.meta.url));
 export const sha256 = (s: string | Buffer) => createHash("sha256").update(s).digest("hex");
 
 export function sh(cmd: string, args: string[], opts: { cwd?: string; env?: Record<string, string | undefined>; input?: string } = {}) {

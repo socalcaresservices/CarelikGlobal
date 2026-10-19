@@ -1,5 +1,5 @@
-// diff_gate.py and assembly_check.py (TEST rehearsal, release 0b593e5) against REAL synthesized templates (test/fixtures/rehearsal-0b593e5: the baseline d893276 and the release
-// 0b593e5, deploy mode). The gate must pass ONLY the release's expected change and fail on anything extra, anything removed, anything altered.
+// diff_gate.py and assembly_check.py (TEST rehearsal, release f6dd9b7) against REAL synthesized templates (test/fixtures/rehearsal-f6dd9b7: the baseline d893276 and the release
+// f6dd9b7, deploy mode). The gate must pass ONLY the release's expected change and fail on anything extra, anything removed, anything altered.
 import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -40,7 +40,7 @@ describe("the real release difference is exactly what the gate allows", () => {
   it("ServiceVerificationApi: only the Handler code asset and the single ClientDocumentObjects statement (TEST bucket only)", () => {
     const r = gate(API, base[API], rel[API]);
     ok(r);
-    expect(r.out).toMatch(/ALLOWED Lambda Handler\w+ code asset 929cdb1bde9b\.\.\. -> 6f37bc5510d1\.\.\./);
+    expect(r.out).toMatch(/ALLOWED Lambda Handler\w+ code asset 929cdb1bde9b\.\.\. -> 162b7a43d10d\.\.\./);
     expect(r.out).toContain("gains the single statement ClientDocumentObjects");
     const [, hb] = handlerOf(base[API]), [, hr] = handlerOf(rel[API]);
     expect(hr.Properties.Environment).toEqual(hb.Properties.Environment);

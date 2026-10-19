@@ -1,4 +1,4 @@
-// Rehearsal of rehearsal-migrate-test.sh (TEST rehearsal 0b593e5: migrations 0078-0084 on a ledger of exactly 77 / 0077) against a FAKE aws, psql and npx and a synthetic extracted PACKAGE
+// Rehearsal of rehearsal-migrate-test.sh (TEST rehearsal f6dd9b7: migrations 0078-0085 on a ledger of exactly 77 / 0077) against a FAKE aws, psql and npx and a synthetic extracted PACKAGE
 // (BUILD_INFO.json + PACKAGE_MANIFEST.sha256, no git): no AWS, no network, synthetic. Adapted from candidate-migrate-test.test.ts of the 2026-10-18 operation.
 // Proves the control flow the owner is asked to approve: the pins (package commit, manifest, no stray file, migration-set hash, host IP) are checked before any change; the single /32 rule is
 // added and removed on success, on a migration failure, on interruption mid-migration and on a failed verification; the ledger precondition stops before any migration;
@@ -60,16 +60,16 @@ case "$*" in
   *migrate.ts)
     read -r n latest < <(tr '|' ' ' < "$D/ledger")
     start=$((10#$latest + 1))
-    for v in $(seq "$start" 84); do
+    for v in $(seq "$start" 85); do
       ver=$(printf '%04d' "$v")
       if [[ "\${MOCK_MIGRATE_SLEEP_AT:-}" == "$ver" ]]; then touch "$D/migrate-sleeping"; echo "applying \${ver}_x.sql"; exec sleep 60; fi
       if [[ "\${MOCK_MIGRATE_FAIL_AT:-}" == "$ver" ]]; then echo "applying \${ver}_x.sql"; echo "error: syntax error in \${ver}_x.sql" >&2; exit 1; fi
       echo "applying \${ver}_x.sql"; echo "$v|$ver" > "$D/ledger"
     done
-    echo "applied $((84 - start + 1)), already applied $n" ;;
+    echo "applied $((85 - start + 1)), already applied $n" ;;
   *verify.ts)
-    if [[ -n "\${MOCK_VERIFY_FAIL:-}" ]]; then echo "FAIL 08_release_objects.sql release_table_x"; echo "PASS 01_schema_version.sql latest_migration_is_0084"; exit 1; fi
-    echo "PASS 01_schema_version.sql latest_migration_is_0084"; for i in $(seq 1 120); do echo "PASS 0$((i % 7 + 2))_x.sql check_$i"; done ;;
+    if [[ -n "\${MOCK_VERIFY_FAIL:-}" ]]; then echo "FAIL 08_release_objects.sql release_table_x"; echo "PASS 01_schema_version.sql latest_migration_is_0085"; exit 1; fi
+    echo "PASS 01_schema_version.sql latest_migration_is_0085"; for i in $(seq 1 120); do echo "PASS 0$((i % 7 + 2))_x.sql check_$i"; done ;;
   *) echo "mock npx: unexpected: $*" >&2; exit 97 ;;
 esac
 `;
@@ -111,20 +111,20 @@ fi
 exec "$(dirname "$0")/aws-base" "$@"
 `);
   chmodSync(join(bin, "aws"), 0o755);
-  // the extracted package: infra/aws with synthetic migrations 0001-0084 and rollbacks 0078-0084, node_modules (installed), the scripts, BUILD_INFO.json and the manifest
+  // the extracted package: infra/aws with synthetic migrations 0001-0085 and rollbacks 0078-0085, node_modules (installed), the scripts, BUILD_INFO.json and the manifest
   const repo = join(dir, "pkg");
   const infra = join(repo, "infra", "aws");
   const scriptsDir = join(repo, PKG_REL, "scripts");
   mkdirSync(scriptsDir, { recursive: true }); mkdirSync(join(infra, "db", "migrations"), { recursive: true }); mkdirSync(join(infra, "node_modules"), { recursive: true }); mkdirSync(join(repo, "node_modules"), { recursive: true });
   mkdirSync(join(infra, "db", "rollback"), { recursive: true });
-  for (let i = 78; i <= 84; i++) writeFileSync(join(infra, "db", "rollback", `${String(i).padStart(4, "0")}_m${i}.down.sql`), `-- synthetic rollback ${i}\n`);
-  for (let i = 1; i <= 84; i++) writeFileSync(join(infra, "db", "migrations", `${String(i).padStart(4, "0")}_m${i}.sql`), `-- synthetic ${i}\n`);
+  for (let i = 78; i <= 85; i++) writeFileSync(join(infra, "db", "rollback", `${String(i).padStart(4, "0")}_m${i}.down.sql`), `-- synthetic rollback ${i}\n`);
+  for (let i = 1; i <= 85; i++) writeFileSync(join(infra, "db", "migrations", `${String(i).padStart(4, "0")}_m${i}.sql`), `-- synthetic ${i}\n`);
   const script = join(scriptsDir, "rehearsal-migrate-test.sh");
   copyFileSync(SCRIPT_SRC, script); copyFileSync(join(SCRIPTS_DIR, "pkg-lib.sh"), join(scriptsDir, "pkg-lib.sh"));
   const sha = createHash("sha1").update(dir).digest("hex");
   sealPackage(repo, sha);
-  const lines = Array.from({ length: 84 }, (_, i) => { const n = `${String(i + 1).padStart(4, "0")}_m${i + 1}.sql`; return `${createHash("sha256").update(`-- synthetic ${i + 1}\n`).digest("hex")}  ${n}\n`; }).join("");
-  const rlines = Array.from({ length: 7 }, (_, i) => { const n = `${String(i + 78).padStart(4, "0")}_m${i + 78}.down.sql`; return `${createHash("sha256").update(`-- synthetic rollback ${i + 78}\n`).digest("hex")}  ${n}\n`; }).join("");
+  const lines = Array.from({ length: 85 }, (_, i) => { const n = `${String(i + 1).padStart(4, "0")}_m${i + 1}.sql`; return `${createHash("sha256").update(`-- synthetic ${i + 1}\n`).digest("hex")}  ${n}\n`; }).join("");
+  const rlines = Array.from({ length: 8 }, (_, i) => { const n = `${String(i + 78).padStart(4, "0")}_m${i + 78}.down.sql`; return `${createHash("sha256").update(`-- synthetic rollback ${i + 78}\n`).digest("hex")}  ${n}\n`; }).join("");
   return { dir, bin, repo, infra, script, sha, migSha: createHash("sha256").update(lines).digest("hex"), rollSha: createHash("sha256").update(rlines).digest("hex") };
 }
 function freePort(): Promise<number> {
@@ -136,7 +136,7 @@ const pad = (n: number) => String(n).padStart(2, "0");
 const iso = (d: Date) => `${d.getUTCFullYear()}-${pad(d.getUTCMonth() + 1)}-${pad(d.getUTCDate())}T${pad(d.getUTCHours())}:${pad(d.getUTCMinutes())}:${pad(d.getUTCSeconds())}Z`;
 const stamp = (d: Date) => `${d.getUTCFullYear()}${pad(d.getUTCMonth() + 1)}${pad(d.getUTCDate())}${pad(d.getUTCHours())}${pad(d.getUTCMinutes())}`;
 const minutesFromNow = (m: number) => new Date(Date.now() + m * 60000);
-const snapName = (minutesAgo = 10) => `ogevia-prod-postgres-pre-0084-${stamp(minutesFromNow(-minutesAgo))}`;
+const snapName = (minutesAgo = 10) => `ogevia-prod-postgres-pre-0085-${stamp(minutesFromNow(-minutesAgo))}`;
 function releaseWindow(startMin = -60, endMin = 180, snapAgo = 10) {
   return { OGEVIA_RELEASE_WINDOW_START: iso(minutesFromNow(startMin)), OGEVIA_RELEASE_WINDOW_END: iso(minutesFromNow(endMin)), OGEVIA_PREDEPLOY_SNAPSHOT_ID: snapName(snapAgo), MOCK_SNAP_AGE_MIN: String(snapAgo) };
 }
@@ -257,7 +257,7 @@ describe("pins and preconditions change nothing", () => {
     expect(sg()).toEqual(INITIAL_SG);
   });
   it("the ledger precondition: anything but exactly 77 / 0077 stops before any migration, and the group is restored", async () => {
-    for (const bad of ["76|0076", "78|0078", "80|0080", "77|0078", "52|0052", "84|0084"]) {
+    for (const bad of ["76|0076", "78|0078", "80|0080", "77|0078", "52|0052", "85|0085"]) {
       f = fixture(); writeFileSync(join(f.dir, "ledger"), bad);
       const r = await run(["migrate"]);
       expect(r.code, `${bad}: ${r.out}`).toBe(1);
@@ -278,13 +278,13 @@ describe("pins and preconditions change nothing", () => {
 });
 
 describe("success", () => {
-  it("one /32 rule added and removed; the runner is pointed at ogevia_sv_test only; ledger 84 / 0084; verification passes; nothing secret printed; ogevia_prd never touched", async () => {
+  it("one /32 rule added and removed; the runner is pointed at ogevia_sv_test only; ledger 85 / 0085; verification passes; nothing secret printed; ogevia_prd never touched", async () => {
     const r = await run(["migrate"]);
     expect(r.code, r.out).toBe(0);
     expect(r.out).toContain("window open: exactly one rule was added");
     expect(r.out).toContain("connected: ogevia_sv_test | read_only=on");
     expect(r.out).toContain("ledger before: 77 migrations applied, latest 0077");
-    expect(r.out).toContain("ledger after: 84 migrations applied, latest 0084");
+    expect(r.out).toContain("ledger after: 85 migrations applied, latest 0085");
     expect(r.out).toContain("verification: 121 PASS, 0 FAIL");
     expect(r.out).toContain("enforcement activated for 0 of 2 agencies before (this run never changes it)");
     expect(r.out).toContain("enforcement state unchanged: 0 of 2 agencies activated");
@@ -293,7 +293,7 @@ describe("success", () => {
     expect(sg()).toEqual(INITIAL_SG);
     expect(cidrPresent()).toBe(false);
     expect(marker()).toBe(false);
-    expect(ledger()).toBe("84|0084");
+    expect(ledger()).toBe("85|0085");
     const v = verbs();
     expect(v.filter((x) => x === "ec2 authorize-security-group-ingress")).toHaveLength(1);
     expect(v.join("|")).not.toMatch(/modify|attach|create|delete|update|UNEXPECTED/);
@@ -316,8 +316,8 @@ describe("success", () => {
     expect(npxCalls()).toEqual([]);
     const ok = await run(["migrate", "--resume"]);
     expect(ok.code, ok.out).toBe(0);
-    expect(ledger()).toBe("84|0084");
-    expect((await run(["migrate", "--resume"], { })).code).toBe(1); // 84 is not resumable
+    expect(ledger()).toBe("85|0085");
+    expect((await run(["migrate", "--resume"], { })).code).toBe(1); // 85 is not resumable
     f = fixture(); expect((await run(["migrate", "--resume"])).code).toBe(1); // 77 (nothing applied yet) is not resumable either: use plain migrate
   });
 });
@@ -351,7 +351,7 @@ describe("failure and interruption (the rehearsal the owner asked for)", () => {
     expect(r.code, r.out).toBe(1);
     expect(r.out).toContain("The migrations ARE applied; do not deploy the API or web");
     expect(r.out).toContain("RESTORED (verified)");
-    expect(ledger()).toBe("84|0084");
+    expect(ledger()).toBe("85|0085");
     expect(sg()).toEqual(INITIAL_SG);
   });
   it("the database connection fails: nothing is migrated and the group is restored", async () => {
@@ -418,16 +418,16 @@ describe("failure and interruption (the rehearsal the owner asked for)", () => {
 describe("database-only recovery: rollback of the TEST database", () => {
   const downs = () => (existsSync(join(f.dir, "down-calls.log")) ? readFileSync(join(f.dir, "down-calls.log"), "utf8").split("\n").filter(Boolean) : []);
   const rollback = (env: Record<string, string> = {}, extra: Parameters<typeof run>[1] = {}) => run(["rollback"], { input: RPHRASE, ...extra, env });
-  beforeEach(() => { writeFileSync(join(f.dir, "ledger"), "84|0084"); });
+  beforeEach(() => { writeFileSync(join(f.dir, "ledger"), "85|0085"); });
 
-  it("reverts 0084 down to 0078, one transaction per file, only in ogevia_sv_test; ledger back to 77 / 0077; the single /32 rule is added and removed; no migration or verification runs", async () => {
+  it("reverts 0085 down to 0078, one transaction per file, only in ogevia_sv_test; ledger back to 77 / 0077; the single /32 rule is added and removed; no migration or verification runs", async () => {
     const r = await rollback();
     expect(r.code, r.out).toBe(0);
-    expect(r.out).toContain("0078-0084 are FUNCTIONS ONLY");
+    expect(r.out).toContain("0078-0085 are FUNCTIONS ONLY");
     expect(r.out).toContain("ledger after: 77 migrations applied, latest 0077");
-    expect(r.out).toContain("migrations 0084 to 0078 reverted");
+    expect(r.out).toContain("migrations 0085 to 0078 reverted");
     expect(r.out).toContain("RESTORED (verified)");
-    expect(downs().map((d) => d.split(" ")[1])).toEqual(Array.from({ length: 7 }, (_, i) => String(84 - i).padStart(4, "0")));
+    expect(downs().map((d) => d.split(" ")[1])).toEqual(Array.from({ length: 8 }, (_, i) => String(85 - i).padStart(4, "0")));
     expect(ledger()).toBe("77|0077");
     expect(sg()).toEqual(INITIAL_SG);
     expect(npxCalls()).toEqual([]);
@@ -440,7 +440,7 @@ describe("database-only recovery: rollback of the TEST database", () => {
   });
   it("refuses a rollback set that is not the approved one, before any access is opened", async () => {
     for (const [env, text] of [[{ OGEVIA_EXPECT_ROLLBACK_SHA: "e".repeat(64) }, "not the approved"], [{ OGEVIA_EXPECT_ROLLBACK_SHA: "" }, "OGEVIA_EXPECT_ROLLBACK_SHA"]] as Array<[Record<string, string>, string]>) {
-      f = fixture(); writeFileSync(join(f.dir, "ledger"), "84|0084");
+      f = fixture(); writeFileSync(join(f.dir, "ledger"), "85|0085");
       const r = await rollback(env);
       expect(r.code, `${text}: ${r.out}`).toBe(1);
       expect(r.out).toContain(text);
@@ -450,11 +450,11 @@ describe("database-only recovery: rollback of the TEST database", () => {
     }
   });
   it("stops, reverting nothing, when there is nothing to revert or the ledger is not contiguous", async () => {
-    for (const bad of ["77|0077", "80|0084", "76|0076", "52|0052"]) {
+    for (const bad of ["77|0077", "80|0085", "76|0076", "52|0052"]) {
       f = fixture(); writeFileSync(join(f.dir, "ledger"), bad);
       const r = await rollback();
       expect(r.code, `${bad}: ${r.out}`).toBe(1);
-      expect(r.out).toContain("rollback needs a contiguous ledger between 0078 and 0084");
+      expect(r.out).toContain("rollback needs a contiguous ledger between 0078 and 0085");
       expect(downs()).toEqual([]);
       expect(r.out).toContain("RESTORED (verified)");
       expect(ledger()).toBe(bad);
@@ -499,7 +499,7 @@ describe("database-only recovery: rollback of the TEST database", () => {
 describe("enforcement activation is a separate approval: this script never changes it and proves it did not change", () => {
   it("reports the state before and after; a state that changes during the run stops it with the migrations reported as applied", async () => {
     // the fake npx's migrate step flips the activation count, as if something activated enforcement during the window
-    writeFileSync(join(f.bin, "npx"), readFileSync(join(f.bin, "npx"), "utf8").replace("echo \"applied $((84 - start + 1)), already applied $n\" ;;", "echo 1 > \"$D/act-count\"; echo \"applied $((84 - start + 1)), already applied $n\" ;;"));
+    writeFileSync(join(f.bin, "npx"), readFileSync(join(f.bin, "npx"), "utf8").replace("echo \"applied $((85 - start + 1)), already applied $n\" ;;", "echo 1 > \"$D/act-count\"; echo \"applied $((85 - start + 1)), already applied $n\" ;;"));
     const r = await run(["migrate"]);
     expect(r.code, r.out).toBe(1);
     expect(r.out).toContain("the enforcement activation state changed during the migration");
@@ -515,13 +515,13 @@ describe("enforcement activation is a separate approval: this script never chang
 });
 
 describe("the named, available pre-deployment snapshot is required in BOTH modes and validated before any access is opened", () => {
-  const MODES: Array<["migrate" | "rollback", string]> = [["migrate", "77|0077"], ["rollback", "84|0084"]];
+  const MODES: Array<["migrate" | "rollback", string]> = [["migrate", "77|0077"], ["rollback", "85|0085"]];
   const start = (mode: string, env: Record<string, string>) => run([mode], { input: mode === "rollback" ? RPHRASE : PHRASE, env });
   const REFUSALS: Array<[string, Record<string, string> | (() => Record<string, string>), string]> = [
     ["no snapshot id", { OGEVIA_PREDEPLOY_SNAPSHOT_ID: "" }, "OGEVIA_PREDEPLOY_SNAPSHOT_ID"],
     ["an id that is not the release naming pattern", { OGEVIA_PREDEPLOY_SNAPSHOT_ID: "my-snapshot" }, "OGEVIA_PREDEPLOY_SNAPSHOT_ID"],
-    ["an id naming another instance", { OGEVIA_PREDEPLOY_SNAPSHOT_ID: "some-other-instance-pre-0084-202610190312" }, "OGEVIA_PREDEPLOY_SNAPSHOT_ID"],
-    ["the old unnamed variable only", { OGEVIA_PREDEPLOY_SNAPSHOT_ID: "", OGEVIA_ROLLBACK_SNAPSHOT_ID: "ogevia-prod-postgres-pre-0084-202610190312" }, "OGEVIA_PREDEPLOY_SNAPSHOT_ID"],
+    ["an id naming another instance", { OGEVIA_PREDEPLOY_SNAPSHOT_ID: "some-other-instance-pre-0085-202610190312" }, "OGEVIA_PREDEPLOY_SNAPSHOT_ID"],
+    ["the old unnamed variable only", { OGEVIA_PREDEPLOY_SNAPSHOT_ID: "", OGEVIA_ROLLBACK_SNAPSHOT_ID: "ogevia-prod-postgres-pre-0085-202610190312" }, "OGEVIA_PREDEPLOY_SNAPSHOT_ID"],
     ["a snapshot that does not exist", { MOCK_SNAP_MISSING: "1" }, "cannot read snapshot"],
     ["a snapshot still being created", { MOCK_SNAP_STATUS: "creating" }, "not available"],
     ["a failed snapshot", { MOCK_SNAP_STATUS: "failed" }, "not available"],
@@ -566,7 +566,7 @@ describe("the named, available pre-deployment snapshot is required in BOTH modes
     expect(m.code, m.out).toBe(1);
     expect(m.out).toContain("migrating outside it is refused");
     expect(verbs()).not.toContain("ec2 authorize-security-group-ingress");
-    f = fixture(); writeFileSync(join(f.dir, "ledger"), "84|0084");
+    f = fixture(); writeFileSync(join(f.dir, "ledger"), "85|0085");
     const r = await start("rollback", ended);
     expect(r.code, r.out).toBe(0);
     expect(r.out).toContain("ledger after: 77 migrations applied, latest 0077");
@@ -575,9 +575,9 @@ describe("the named, available pre-deployment snapshot is required in BOTH modes
     writeFileSync(join(f.dir, "ledger"), ledgerValue);
     const r = await start(mode, {});
     expect(r.code, r.out).toBe(0);
-    expect(r.out).toMatch(/snapshot ogevia-prod-postgres-pre-0084-\d{12}: available, manual, belongs to ogevia-prod-postgres, created \S+ inside the release window/);
+    expect(r.out).toMatch(/snapshot ogevia-prod-postgres-pre-0085-\d{12}: available, manual, belongs to ogevia-prod-postgres, created \S+ inside the release window/);
     expect(r.out).toContain("A recovery PREREQUISITE only: restoring from it is not a prepared procedure");
-    expect(r.out.indexOf("snapshot ogevia-prod-postgres-pre-0084-")).toBeLessThan(r.out.indexOf("== 4. Window"));
+    expect(r.out.indexOf("snapshot ogevia-prod-postgres-pre-0085-")).toBeLessThan(r.out.indexOf("== 4. Window"));
     expect(verbs()).toContain("rds describe-db-snapshots");
     // the snapshot check happens before the rule is proposed or added
     expect(calls().findIndex((c) => c.startsWith("rds describe-db-snapshots"))).toBeLessThan(calls().findIndex((c) => c.startsWith("ec2 authorize-security-group-ingress")));
