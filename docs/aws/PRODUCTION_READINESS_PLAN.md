@@ -162,3 +162,8 @@ Pass: the first command prints `zk527zk4ua.execute-api.us-west-2.amazonaws.com` 
 - B5: bucket protections VERIFIED (owner-pasted), pool MFA ON, CloudTrail, budget exist. Still open: administrator MFA sign-in, tenant isolation and caregiver restriction on prd, signature stored in the prd bucket, restore test, Multi-AZ, budget limit and alerts, secret rotation.
 - B4: a single Cognito pool exists, so production shares TEST's pool (INFERRED).
 - B1: web wiring (API host) and the web/Lambda commit remain open.
+
+## 10. P1 prepared: production ledger read script (prepared 2026-10-19; NOT RUN)
+`docs/releases/2026-10-19-prd-readiness/scripts/ledger-prd-read.sh`, tested by `infra/aws/test/prd-ledger-read.test.ts` (10 tests, mocks, no AWS). Derived from the TEST rehearsal's `ledger-recheck.sh` with four stated changes (header of the script). Report only: no expected version, exit 0 on a successful read with the rule removed and verified.
+YELLOW at run time: it adds ONE temporary inbound rule (tcp 5432 from the admin host's /32) to the RDS security group `sg-00530a1f4f7648e65`, which is SHARED by TEST and production, then removes it and compares the complete rule set with the recorded original. It needs the typed phrase `OPEN-5432-WINDOW` and a second CloudShell session ready for `--restore-only`. It uses the RDS master secret in memory only and runs read-only transactions (`default_transaction_read_only=on`). Not approved to run until the owner says so.
+It reports: whether `ogevia_prd` exists, whether the ledger table exists, count and latest version, the five newest ledger rows, and the enforcement count if that table exists.
