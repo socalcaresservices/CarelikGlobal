@@ -142,7 +142,7 @@ describe("Documents & compliance page", () => {
     const card = (await screen.findByText("TB test", { selector: "p" })).closest("tbody")!;
     const summary = card.querySelector("summary")!;
     expect(summary.tagName).toBe("SUMMARY");
-    expect(summary.className).toMatch(/min-h-\[44px\]/);
+    expect(summary.className).toMatch(/min-h-\[44px\]|pointer:coarse\)\]:min-h-11/); // 44 px target (always, or on touch screens)
     expect(card.innerHTML).not.toMatch(/onmouse|title=/);
   });
 

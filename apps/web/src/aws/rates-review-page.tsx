@@ -18,7 +18,7 @@ export function RatesReviewPage() {
       <PageHeader title="Authorizations without a rate" lead={`Add the hourly rate so ${month} dollar values include these hours.`} />
       {q.isLoading ? <p className="text-sm text-og-sub">Loading…</p> : null}
       {q.isError ? <p role="alert" className="text-sm text-red-700">{(q.error as Error).message}</p> : null}
-      {q.data && rows.length === 0 ? <p className="rounded-og border border-og-line bg-og-card p-4 text-sm text-og-sub">Every authorization for this month has a rate.</p> : null}
+      {q.data && rows.length === 0 ? <p className="rounded-og border border-og-line bg-og-card p-3 text-sm text-og-sub">Every authorization for this month has a rate.</p> : null}
       {rows.length > 0 ? (
         <>
           <p className="text-sm font-semibold text-og-ink" data-testid="missing-rate-count">{rows.length} {rows.length === 1 ? "authorization" : "authorizations"} to review</p>

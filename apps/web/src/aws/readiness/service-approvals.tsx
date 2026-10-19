@@ -10,8 +10,8 @@ import { useServices } from "../client-admin";
 import { SERVICE_STATE_LABEL, actionError } from "./format";
 import { useGuardedMutate } from "./use-guarded";
 import { useServiceApprovals } from "./queries";
-import { ShortHelp } from "../help-text";
 import { SummarySection } from "../ui/summary-section";
+import { InfoTip } from "../ui/info-tip";
 
 export interface ServiceApproval {
   approvalId: string;
@@ -30,7 +30,7 @@ export interface ServiceApproval {
   revocationReason: string | null;
 }
 
-const inputClass = "mt-1 block w-full rounded-md border border-slate-300 px-3 py-2 text-base";
+const inputClass = "mt-1 block w-full rounded-md border border-slate-300 px-2.5 py-1.5 text-sm";
 const STATE_BADGE: Record<string, string> = {
   approved: "bg-emerald-100 text-emerald-950",
   revoked: "bg-red-100 text-red-950",
@@ -78,7 +78,7 @@ function ApproveForm({ caregiverRecordId, onDone }: { caregiverRecordId: string;
   const send = useGuardedMutate(approve);
   const disabled = approve.isPending || !serviceId || !from || reason.trim().length < 3;
   return (
-    <form className="space-y-3" aria-label="Approve a service" onSubmit={(e) => { e.preventDefault(); if (!disabled) send(); }}>
+    <form className="space-y-2" aria-label="Approve a service" onSubmit={(e) => { e.preventDefault(); if (!disabled) send(); }}>
       <label className="block text-sm font-medium text-slate-800">Service
         <select value={serviceId} onChange={(e) => { setServiceId(e.target.value); touch(); }} className={inputClass}>
           <option value="">Choose a service</option>
@@ -115,7 +115,7 @@ export function CaregiverServices({ caregiverRecordId, own = false }: { caregive
   const list = q.data ?? [];
   const current = list.filter((a) => a.state === "approved").length;
   return (
-    <SummarySection title="Approved services" defaultOpen={own || (q.data !== undefined && current === 0)}
+    <SummarySection title="Approved services" defaultOpen={own}
       status={q.data ? <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${current > 0 ? STATE_BADGE.approved : STATE_BADGE.not_started}`}>{current > 0 ? `${current} approved` : "None approved"}</span> : undefined}
       summary={q.data && list.length > current ? `${list.length} on record` : undefined}>
       {canApprove ? <div className="mb-2 text-right"><Button type="button" onClick={() => setAdding((a) => !a)} aria-expanded={adding}>{adding ? "Close" : "Approve a service"}</Button></div> : null}
@@ -125,7 +125,7 @@ export function CaregiverServices({ caregiverRecordId, own = false }: { caregive
       {q.data && q.data.length === 0 ? <p className="text-sm text-slate-600">{own ? "You have no approved services yet." : "No approved services. With Service checks on, a caregiver cannot be committed to a service until it is approved."}</p> : null}
       <ul className="mt-1 divide-y divide-slate-100">
         {list.map((a) => (
-          <li key={a.approvalId} className="py-2 text-sm">
+          <li key={a.approvalId} className="py-1 text-sm">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <p className="font-medium text-slate-900">{a.serviceName} <span className="font-normal text-slate-600">({a.serviceCode})</span></p>
               <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${STATE_BADGE[a.state]}`}>{SERVICE_STATE_LABEL[a.state]}</span>
@@ -140,7 +140,7 @@ export function CaregiverServices({ caregiverRecordId, own = false }: { caregive
           </li>
         ))}
       </ul>
-      {adding && caregiverRecordId ? <div className="mt-4 border-t border-slate-200 pt-4"><ApproveForm caregiverRecordId={caregiverRecordId} onDone={() => { setAdding(false); setMessage("Service approved."); refresh(); }} /></div> : null}
+      {adding && caregiverRecordId ? <div className="mt-2 border-t border-slate-200 pt-2"><ApproveForm caregiverRecordId={caregiverRecordId} onDone={() => { setAdding(false); setMessage("Service approved."); refresh(); }} /></div> : null}
     </SummarySection>
   );
 }
@@ -192,17 +192,17 @@ export function ServicesReviewPage() {
   if (!hasPermission("caregiver_services.read")) return <p className="text-sm text-slate-600">You do not have access to service approvals.</p>;
   const toggle = (p: ReviewPair) => { key.current = newIdempotencyKey(); setConfirming(false); setPicked((s) => { const n = new Set(s); if (n.has(pairKey(p))) n.delete(pairKey(p)); else n.add(pairKey(p)); return n; }); };
   return (
-    <div className="max-w-4xl space-y-4">
+    <div className="max-w-4xl space-y-3">
       <Link to="/care-team" className="text-sm text-slate-700 underline">← Care Team</Link>
-      <div>
-        <h1 className="text-xl font-semibold text-slate-950">Review services</h1>
-        <ShortHelp className="mt-1 text-sm text-slate-600" details="These pairs already have an assignment, a booked shift or past visits, but no current approval.">Being on this list is not an approval. Nothing is approved unless you tick it.</ShortHelp>
+      <div className="flex items-center gap-1.5">
+        <h1 className="text-xl font-bold tracking-tight text-slate-950">Review services</h1>
+        <InfoTip label="About Review services">Being on this list is not an approval. Nothing is approved unless you tick it. These pairs already have an assignment, a booked shift or past visits, but no current approval.</InfoTip>
       </div>
       {done ? <p role="status" className="text-sm font-medium text-emerald-900">{done}</p> : null}
       {q.isLoading ? <p className="text-sm text-slate-500">Loading…</p> : null}
       {q.isError ? <p role="alert" className="text-sm text-red-700">{actionError(q.error, "The list could not be loaded.")}</p> : null}
       {q.data && q.data.length === 0 ? <p className="text-sm text-slate-600">Nothing to review. Every caregiver and service pair in use has a current approval.</p> : null}
-      <ul className="space-y-2">
+      <ul className="space-y-1">
         {(q.data ?? []).map((p) => (
           <li key={pairKey(p)} className="rounded-lg border border-slate-200 bg-og-card px-3 py-1">
             <label className="flex min-h-[44px] items-start gap-3 text-sm">
@@ -217,8 +217,8 @@ export function ServicesReviewPage() {
         ))}
       </ul>
       {canApprove && picked.size > 0 ? (
-        <Card className="space-y-3 p-4">
-          <h2 className="text-base font-semibold text-slate-950">Approve {picked.size} selected</h2>
+        <Card className="space-y-2">
+          <h2 className="text-sm font-semibold text-slate-950">Approve {picked.size} selected</h2>
           <div className="grid gap-3 sm:grid-cols-2">
             <label className="block text-sm font-medium text-slate-800">Starts<input type="date" value={from} onChange={(e) => { setFrom(e.target.value); key.current = newIdempotencyKey(); }} className={inputClass} /></label>
           </div>

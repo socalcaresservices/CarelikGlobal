@@ -1,14 +1,14 @@
 import { useQueryClient } from "@tanstack/react-query";
 import { useRef, useState } from "react";
 import { Button, Card } from "@carelik/ui";
-import { ShortHelp } from "./help-text";
 import { newIdempotencyKey } from "@/lib/sv-backend";
 import { useOrganization } from "@/providers/organization-provider";
 import { useAwsApi } from "./aws-workspace";
 import { useServices, type AgencyService } from "./client-admin";
+import { InfoTip } from "./ui/info-tip";
 
 const message = (cause: unknown, fallback: string) => (cause instanceof Error ? cause.message : fallback);
-const inputClass = "mt-1 block w-full rounded-lg border border-slate-200 px-3 py-2 text-base";
+const inputClass = "mt-1 block w-full rounded-lg border border-slate-200 px-2.5 py-1.5 text-sm";
 
 function useRefreshServices() {
   const queryClient = useQueryClient();
@@ -40,11 +40,11 @@ function AddServiceForm() {
     }
   }
   return (
-    <Card className="p-4">
+    <Card>
       <details open={state.done || undefined}>
       <summary className="min-h-[32px] cursor-pointer text-base font-semibold text-slate-950">Add a service</summary>
       <p className="mt-1 text-xs text-slate-600">The code cannot be changed later. Use the code your payer uses.</p>
-      <form onSubmit={(e) => { e.preventDefault(); void submit(); }} className="mt-3 grid gap-3 sm:grid-cols-3">
+      <form onSubmit={(e) => { e.preventDefault(); void submit(); }} className="mt-2 grid gap-2 sm:grid-cols-3">
         <div><label htmlFor="svc-code" className="block text-sm font-medium text-slate-700">Code</label><input id="svc-code" value={code} maxLength={20} autoComplete="off" onChange={(e) => { setCode(e.target.value); key.current = newIdempotencyKey(); }} className={inputClass} /></div>
         <div className="sm:col-span-2"><label htmlFor="svc-name" className="block text-sm font-medium text-slate-700">Name</label><input id="svc-name" value={name} maxLength={80} onChange={(e) => { setName(e.target.value); key.current = newIdempotencyKey(); }} className={inputClass} /></div>
         {state.error ? <p role="alert" className="text-sm text-red-700 sm:col-span-3">{state.error}</p> : null}
@@ -80,7 +80,7 @@ function ServiceRow({ s, canManage }: { s: AgencyService; canManage: boolean }) 
   }
   const id = `svc-${s.serviceId.slice(0, 8)}`;
   return (
-    <li className="rounded-xl border border-slate-200 bg-og-card p-3">
+    <li className="rounded-lg border border-slate-200 bg-og-card px-2 py-1.5">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <p className="font-semibold text-slate-950">{s.name} <span className="font-normal text-slate-500">({s.code})</span></p>
         <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${s.isActive ? "bg-emerald-100 text-emerald-900" : "bg-slate-200 text-slate-800"}`}>{s.isActive ? "Active" : "Inactive"}</span>
@@ -118,20 +118,15 @@ export function ServicesPage() {
   const services = useServices();
   if (!hasPermission("authorizations.read")) return <p className="text-sm text-slate-600">You do not have access to services.</p>;
   return (
-    <div className="max-w-3xl space-y-4">
-      <div>
-        <h1 className="text-xl font-semibold text-slate-950">Services</h1>
-        <ShortHelp
-          className="mt-1 text-sm text-slate-600"
-          details="Deactivating a service is refused while clients still have current authorizations for it."
-        >
-          The services your agency provides.{canManage ? "" : " Only the agency Administrator can change this list."}
-        </ShortHelp>
+    <div className="max-w-3xl space-y-3">
+      <div className="flex items-center gap-1.5">
+        <h1 className="text-xl font-bold tracking-tight text-slate-950">Services</h1>
+        <InfoTip label="About Services">The services your agency provides.{canManage ? "" : " Only the agency Administrator can change this list."} Deactivating a service is refused while clients still have current authorizations for it.</InfoTip>
       </div>
       {canManage ? <AddServiceForm /> : null}
       {services.isLoading ? <p className="text-sm text-slate-500">Loading…</p> : null}
       {services.isError ? <p role="alert" className="text-sm text-red-700">{(services.error as Error).message}</p> : null}
-      <ul className="space-y-2">
+      <ul className="space-y-1">
         {(services.data ?? []).map((s) => <ServiceRow key={s.serviceId} s={s} canManage={canManage} />)}
       </ul>
     </div>

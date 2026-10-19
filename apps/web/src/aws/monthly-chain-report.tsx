@@ -3,6 +3,7 @@ import { useState } from "react";
 import { Button, Card } from "@carelik/ui";
 import { formatDuration } from "@/lib/service-verification";
 import { hoursLeftText, type HoursFields } from "@/lib/hours-accounting";
+import { InfoTip } from "./ui/info-tip";
 import { HoursBreakdown } from "@/components/hours-breakdown";
 import { useOrganization } from "@/providers/organization-provider";
 import { useAwsApi } from "./aws-workspace";
@@ -94,11 +95,11 @@ export function MonthlyChainReport({ month }: { month: string }) {
   const rows = q.data ?? [];
   const failing = rows.filter((r) => !r.reservedOk || r.visitsOk === false || !r.balanceOk);
   return (
-    <Card className="mt-4 space-y-3 p-4 print:border-none print:p-0" data-testid="monthly-chain">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
+    <Card className="mt-2 space-y-2 print:border-none print:p-0" data-testid="monthly-chain">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="flex items-center gap-1.5">
           <h3 className="font-semibold text-slate-950">Full chain for the month</h3>
-          <p className="mt-1 max-w-3xl text-sm text-slate-600">One row per client, service and authorization. Approval is not submission or payment.</p>
+          <InfoTip label="About the full chain">One row per client, service and authorization. Approval is not submission or payment.</InfoTip>
         </div>
         {canExport ? (
           <Button type="button" variant="secondary" className="min-h-11 print:hidden" disabled={busy || rows.length === 0} loading={busy} onClick={() => void exportCsv()}>Export CSV (server-made, recorded)</Button>
@@ -123,47 +124,47 @@ export function MonthlyChainReport({ month }: { month: string }) {
             <caption className="sr-only">Full chain by client, service and authorization for the selected month</caption>
             <thead>
               <tr className="border-b border-slate-200 text-left text-xs font-semibold text-slate-600">
-                <th scope="col" className="py-2 pr-3">Client · service</th>
-                <th scope="col" className="px-2 py-2 text-right">Authorized</th>
-                <th scope="col" className="px-2 py-2 text-right">Scheduled</th>
-                <th scope="col" className="px-2 py-2 text-right">Held (confirming or review)</th>
-                <th scope="col" className="px-2 py-2 text-right">To reconcile</th>
-                <th scope="col" className="px-2 py-2 text-right">Worked</th>
-                <th scope="col" className="px-2 py-2 text-right">Confirmed</th>
-                <th scope="col" className="px-2 py-2 text-right">Billable</th>
-                <th scope="col" className="px-2 py-2 text-right">Needs correction</th>
-                <th scope="col" className="px-2 py-2 text-right">Billing Ready</th>
-                <th scope="col" className="px-2 py-2 text-right">Approved</th>
-                <th scope="col" className="px-2 py-2 text-right">Rounding</th>
-                <th scope="col" className="px-2 py-2 text-right">Pending</th>
-                <th scope="col" className="px-2 py-2 text-right">Reserved</th>
-                <th scope="col" className="px-2 py-2 text-right">Hours left</th>
-                <th scope="col" className="px-2 py-2 text-right">Worked, not billable</th>
-                <th scope="col" className="px-2 py-2 text-right">Checks</th>
-                <th scope="col" className="py-2 pl-2 text-right">Details</th>
+                <th scope="col" className="py-1 pr-2">Client · service</th>
+                <th scope="col" className="px-2 py-1 text-right">Authorized</th>
+                <th scope="col" className="px-2 py-1 text-right">Scheduled</th>
+                <th scope="col" className="px-2 py-1 text-right">Held (confirming or review)</th>
+                <th scope="col" className="px-2 py-1 text-right">To reconcile</th>
+                <th scope="col" className="px-2 py-1 text-right">Worked</th>
+                <th scope="col" className="px-2 py-1 text-right">Confirmed</th>
+                <th scope="col" className="px-2 py-1 text-right">Billable</th>
+                <th scope="col" className="px-2 py-1 text-right">Needs correction</th>
+                <th scope="col" className="px-2 py-1 text-right">Billing Ready</th>
+                <th scope="col" className="px-2 py-1 text-right">Approved</th>
+                <th scope="col" className="px-2 py-1 text-right">Rounding</th>
+                <th scope="col" className="px-2 py-1 text-right">Pending</th>
+                <th scope="col" className="px-2 py-1 text-right">Reserved</th>
+                <th scope="col" className="px-2 py-1 text-right">Hours left</th>
+                <th scope="col" className="px-2 py-1 text-right">Worked, not billable</th>
+                <th scope="col" className="px-2 py-1 text-right">Checks</th>
+                <th scope="col" className="py-1 pl-2 text-right">Details</th>
               </tr>
             </thead>
             <tbody className="tabular-nums text-slate-900">
               {rows.map((r) => (
                 <tr key={r.authorizationLineageId} className="border-b border-slate-100 last:border-0">
-                  <th scope="row" className="py-2 pr-3 text-left font-semibold">{clientLabel(r, true)} · {r.serviceName}</th>
-                  <td className="px-2 py-2 text-right">{m(r.authorizedMinutes)}</td>
-                  <td className="px-2 py-2 text-right">{m(r.scheduledMinutes)}</td>
-                  <td className="px-2 py-2 text-right">{m(r.heldReviewMinutes)}</td>
-                  <td className={`px-2 py-2 text-right ${r.needsReconciliationMinutes > 0 ? "font-semibold text-amber-900" : ""}`}>{m(r.needsReconciliationMinutes)}</td>
-                  <td className="px-2 py-2 text-right">{m(r.workedMinutes)}</td>
-                  <td className="px-2 py-2 text-right">{m(r.confirmedMinutes)}</td>
-                  <td className="px-2 py-2 text-right">{m(r.billableMinutes)}</td>
-                  <td className="px-2 py-2 text-right">{m(r.needsCorrectionMinutes)}{r.needsCorrectionVisits > 0 ? ` (${r.needsCorrectionVisits})` : ""}</td>
-                  <td className="px-2 py-2 text-right">{m(r.readyForReviewMinutes)}</td>
-                  <td className="px-2 py-2 text-right">{m(r.humanApprovedMinutes)}</td>
-                  <td className="px-2 py-2 text-right">{signed(r.hoursRoundingMinutes ?? r.adjustmentMinutes)}</td>
-                  <td className="px-2 py-2 text-right">{m(r.hoursPendingMinutes ?? 0)}</td>
-                  <td className="px-2 py-2 text-right">{m(r.hoursReservedMinutes ?? r.reservedMinutes)}</td>
-                  <td className={`px-2 py-2 text-right ${(r.hoursLeftMinutes ?? r.remainingMinutes) < 0 ? "font-semibold text-red-700" : ""}`}>{hoursLeftText(r.hoursLeftMinutes ?? r.remainingMinutes)}</td>
-                  <td className={`px-2 py-2 text-right ${(r.hoursWorkedNotBillableMinutes ?? 0) > 0 ? "font-semibold text-amber-900" : ""}`}>{m(r.hoursWorkedNotBillableMinutes ?? 0)}</td>
-                  <td className="px-2 py-2 text-right">{r.reservedOk && r.visitsOk !== false && r.balanceOk && r.hoursBalanceOk !== false ? <span>Adds up</span> : <span className="font-semibold text-red-700">Off by {formatDuration(Math.abs(r.differenceMinutes))}</span>}</td>
-                  <td className="py-2 pl-2 text-right"><HoursBreakdown row={r} /></td>
+                  <th scope="row" className="py-1 pr-2 text-left font-semibold">{clientLabel(r, true)} · {r.serviceName}</th>
+                  <td className="px-2 py-1 text-right">{m(r.authorizedMinutes)}</td>
+                  <td className="px-2 py-1 text-right">{m(r.scheduledMinutes)}</td>
+                  <td className="px-2 py-1 text-right">{m(r.heldReviewMinutes)}</td>
+                  <td className={`px-2 py-1 text-right ${r.needsReconciliationMinutes > 0 ? "font-semibold text-amber-900" : ""}`}>{m(r.needsReconciliationMinutes)}</td>
+                  <td className="px-2 py-1 text-right">{m(r.workedMinutes)}</td>
+                  <td className="px-2 py-1 text-right">{m(r.confirmedMinutes)}</td>
+                  <td className="px-2 py-1 text-right">{m(r.billableMinutes)}</td>
+                  <td className="px-2 py-1 text-right">{m(r.needsCorrectionMinutes)}{r.needsCorrectionVisits > 0 ? ` (${r.needsCorrectionVisits})` : ""}</td>
+                  <td className="px-2 py-1 text-right">{m(r.readyForReviewMinutes)}</td>
+                  <td className="px-2 py-1 text-right">{m(r.humanApprovedMinutes)}</td>
+                  <td className="px-2 py-1 text-right">{signed(r.hoursRoundingMinutes ?? r.adjustmentMinutes)}</td>
+                  <td className="px-2 py-1 text-right">{m(r.hoursPendingMinutes ?? 0)}</td>
+                  <td className="px-2 py-1 text-right">{m(r.hoursReservedMinutes ?? r.reservedMinutes)}</td>
+                  <td className={`px-2 py-1 text-right ${(r.hoursLeftMinutes ?? r.remainingMinutes) < 0 ? "font-semibold text-red-700" : ""}`}>{hoursLeftText(r.hoursLeftMinutes ?? r.remainingMinutes)}</td>
+                  <td className={`px-2 py-1 text-right ${(r.hoursWorkedNotBillableMinutes ?? 0) > 0 ? "font-semibold text-amber-900" : ""}`}>{m(r.hoursWorkedNotBillableMinutes ?? 0)}</td>
+                  <td className="px-2 py-1 text-right">{r.reservedOk && r.visitsOk !== false && r.balanceOk && r.hoursBalanceOk !== false ? <span>Adds up</span> : <span className="font-semibold text-red-700">Off by {formatDuration(Math.abs(r.differenceMinutes))}</span>}</td>
+                  <td className="py-1 pl-2 text-right"><HoursBreakdown row={r} /></td>
                 </tr>
               ))}
             </tbody>

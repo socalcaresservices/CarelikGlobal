@@ -7,7 +7,7 @@ import { useOrganization } from "@/providers/organization-provider";
 import { useAwsApi } from "./aws-workspace";
 import { buildContinuityHtml, continuityFileName, continuityState, outageNumber, useContinuityStatus, type ContinuityPack } from "./continuity-pack";
 import { formatDateTime } from "@/lib/service-verification";
-import { ShortHelp } from "./help-text";
+import { Hint } from "./hint";
 
 
 /**
@@ -44,7 +44,7 @@ export function ContinuityPage() {
   const [done, setDone] = useState<string | null>(null);
 
   if (!hasPermission("continuity.export")) {
-    return <Card className="p-4"><p className="text-sm">Only an Administrator or a manager can download the continuity pack.</p></Card>;
+    return <Card className="p-3"><p className="text-sm">Only an Administrator or a manager can download the continuity pack.</p></Card>;
   }
   const s = continuityState(status.data);
 
@@ -70,16 +70,16 @@ export function ContinuityPage() {
   return (
     <div className="space-y-4">
       <h1 className="text-xl font-semibold">Continuity pack</h1>
-      <Card className={`p-4 ${s.stale ? "border-2 border-amber-500 bg-amber-50" : ""}`}>
+      <Card className={`p-3 ${s.stale ? "border-2 border-amber-500 bg-amber-50" : ""}`}>
         <p className={`text-base ${s.stale ? "font-bold text-amber-900" : ""}`}>{status.isError ? "Status could not be loaded." : `${s.text}.`}</p>
-        <ShortHelp className="mt-2 text-sm text-slate-700" details="Hours are this month's authorized and remaining hours; clients are the active ones; outage records are the numbered visit records. It shows the exact time its data was taken.">One file with the next 14 days of shifts, hours, clients, the Care Team and outage records. It opens in any browser without Ogevia.</ShortHelp>
+        <Hint details="Hours are this month's authorized and remaining hours; clients are the active ones; outage records are the numbered visit records. It shows the exact time its data was taken.">One file with the next 14 days of shifts, hours, clients, the Care Team and outage records. It opens in any browser without Ogevia.</Hint>
         <Button className="mt-3 min-h-11 w-full sm:w-auto" disabled={busy} onClick={() => void download()}>
           {busy ? "Preparing…" : "Download continuity pack"}
         </Button>
         {done ? <p role="status" className="mt-2 text-sm text-emerald-800">{done}</p> : null}
         {error ? <p role="alert" className="mt-2 text-sm text-red-700">{error}</p> : null}
       </Card>
-      <Card className="p-4 text-sm text-slate-700">
+      <Card className="p-3 text-sm text-slate-700">
         <p className="font-semibold text-slate-900">Your agency must</p>
         <ul className="mt-1 list-disc pl-5">
           <li>keep the file only on agency-approved encrypted storage, and only for authorized staff;</li>

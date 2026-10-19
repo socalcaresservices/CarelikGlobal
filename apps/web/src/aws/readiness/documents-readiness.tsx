@@ -30,7 +30,7 @@ export function CaregiverDocuments({ caregiverRecordId }: { caregiverRecordId?: 
       {q.isError ? <p role="alert" className="text-sm text-red-700">{actionError(q.error, "Document status could not be loaded.")}</p> : null}
       <ul className="divide-y divide-slate-100">
         {rows.map(({ r, s }) => (
-          <li key={r.requirement} className="flex flex-wrap items-start justify-between gap-2 py-2 text-sm">
+          <li key={r.requirement} className="flex flex-wrap items-start justify-between gap-2 py-1 text-sm">
             <div>
               <p className="font-medium text-slate-900">{r.requirement.toUpperCase()}</p>
               {s.detail ? <p className="text-slate-700">{s.detail}</p> : null}

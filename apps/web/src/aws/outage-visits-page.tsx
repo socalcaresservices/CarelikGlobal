@@ -10,7 +10,7 @@ import { caregiverName, useCaregivers } from "./care-team-admin";
 import { clientName, useClients, useServices } from "./client-admin";
 import { outageNumber } from "./continuity-pack";
 import { formatDateOnly } from "@/lib/service-verification";
-import { ShortHelp } from "./help-text";
+import { Hint } from "./hint";
 
 
 /**
@@ -115,7 +115,7 @@ function EntryForm({ onDone }: { onDone: (text: string) => void }) {
         <input id="ov-signer" value={f.signer} onChange={(e) => set("signer", e.target.value)} className={inputClass} /></div>
       <div><label htmlFor="ov-notes" className="block text-sm font-medium text-slate-700">Notes (optional)</label>
         <input id="ov-notes" value={f.notes} onChange={(e) => set("notes", e.target.value)} className={inputClass} /></div>
-      <ShortHelp className="text-xs text-slate-600 sm:col-span-2" details="A Time Out earlier than the Time In means the next day. The visit is stored as written on the form, marked as entered by you, in administrator review with 0 billable minutes.">Enter times in the agency's local time. Review the paper form before any billing.</ShortHelp>
+      <Hint details="A Time Out earlier than the Time In means the next day. The visit is stored as written on the form, marked as entered by you, in administrator review with 0 billable minutes." className="sm:col-span-2">Enter times in the agency's local time. Review the paper form before any billing.</Hint>
       {state.error ? <p role="alert" className="text-sm text-red-700 sm:col-span-2">{state.error}</p> : null}
       <div className="sm:col-span-2"><Button type="submit" className="min-h-11 w-full sm:w-auto" disabled={state.busy}>{state.busy ? "Entering…" : "Enter outage record"}</Button></div>
     </form>
@@ -162,7 +162,7 @@ export function OutageVisitsPage() {
   const recon = useReconciliation();
   const [done, setDone] = useState<string | null>(null);
   if (!hasPermission("visits.manage")) {
-    return <Card className="p-4"><p className="text-sm">Only a visit manager can enter outage visit records.</p></Card>;
+    return <Card className="p-3"><p className="text-sm">Only a visit manager can enter outage visit records.</p></Card>;
   }
   const rows = recon.data ?? [];
   const missing = rows.filter((r) => r.state === "missing");
@@ -172,7 +172,7 @@ export function OutageVisitsPage() {
       <h1 className="text-xl font-semibold">Outage records</h1>
       <p className="text-sm text-slate-700">Enter each paper outage record once, after Ogevia is back. <Link to="/continuity" className="underline">Continuity pack</Link></p>
       {done ? <p role="status" className="rounded-lg bg-emerald-50 p-3 text-sm text-emerald-900">{done}</p> : null}
-      <Card className="p-4">
+      <Card className="p-3">
         <h2 className="text-base font-semibold">Reconciliation</h2>
         {recon.isLoading ? <p className="text-sm text-slate-500">Loading…</p> : null}
         {recon.isError ? <p role="alert" className="text-sm text-red-700">Reconciliation could not be loaded.</p> : null}
@@ -198,8 +198,8 @@ export function OutageVisitsPage() {
           </>
         ) : null}
       </Card>
-      <Card className="p-4"><h2 className="mb-2 text-base font-semibold">Enter a record</h2><EntryForm onDone={setDone} /></Card>
-      <details className="rounded-xl border border-slate-200 bg-og-card p-4">
+      <Card className="p-3"><h2 className="mb-2 text-base font-semibold">Enter a record</h2><EntryForm onDone={setDone} /></Card>
+      <details className="rounded-xl border border-slate-200 bg-og-card p-3">
         <summary className="min-h-[32px] cursor-pointer text-base font-semibold">Close a number that was not used</summary>
         <div className="mt-2"><NotUsedForm onDone={setDone} /></div>
       </details>

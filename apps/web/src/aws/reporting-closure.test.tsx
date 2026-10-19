@@ -67,6 +67,7 @@ describe("Reporting & billing", () => {
     URL.createObjectURL = () => "blob:y"; URL.revokeObjectURL = () => undefined;
     const panel = await screen.findByTestId("audit-report", {}, { timeout: 15000 });
     const ev = await within(panel).findByTestId("audit-event");
+    expect(within(panel).getByRole("list", { name: "Audit events" })).toBeInTheDocument();
     expect(ev).toHaveTextContent("client stage changed · Morgan Manager · client preparation · changed: stage · Preparing");
     expect(panel).toHaveTextContent("30 events");
     expect(panel).toHaveTextContent("Field names only, never values");

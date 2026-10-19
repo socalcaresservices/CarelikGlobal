@@ -76,11 +76,11 @@ export function SchedulingOverview() {
   const urgent = rows.filter((i) => i.severity !== "routine");
   const num = "font-og-mono font-semibold tabular-nums";
   return (
-    <section aria-label="Scheduling overview" data-testid="scheduling-overview" className="flex flex-wrap items-center gap-x-6 gap-y-1 rounded-lg border border-slate-200 bg-og-card px-3 py-2 text-sm">
+    <section aria-label="Scheduling overview" data-testid="scheduling-overview" className="flex flex-wrap items-center gap-x-5 gap-y-0 rounded-lg border border-slate-200 bg-og-card px-3 py-1 text-sm">
       <p><span className="text-slate-600">Today </span><span className={`${num} text-slate-950`}>{todays.isError ? "—" : list.length}</span><span className="text-slate-600"> visits</span></p>
       <p><span className="text-slate-600">Today, no caregiver </span><span className={`${num} ${uncoveredToday ? "text-red-700" : "text-slate-950"}`}>{todays.isError ? "—" : uncoveredToday}</span></p>
-      {counts.data?.scheduling ? <p data-testid="scheduling-now"><span className="text-slate-600">Need action now (start within 48 hours or started) </span><span className={`${num} ${counts.data.scheduling.critical ? "text-red-700" : "text-slate-950"}`}>{counts.data.scheduling.count}</span></p> : null}
-      <p><span className="text-slate-600">Urgent exceptions </span><span className={`${num} text-slate-950`}>{issues.isError ? "—" : urgent.length}</span> <Link className="ml-1 inline-flex min-h-11 items-center font-semibold underline md:min-h-8" to="/action-needed">See all</Link></p>
+      {counts.data?.scheduling ? <p data-testid="scheduling-now"><span className="text-slate-600" title="Shifts that start within 48 hours or have already started and still need staffing action">Need action now </span><span className={`${num} ${counts.data.scheduling.critical ? "text-red-700" : "text-slate-950"}`}>{counts.data.scheduling.count}</span></p> : null}
+      <p><span className="text-slate-600">Urgent exceptions </span><span className={`${num} text-slate-950`}>{issues.isError ? "—" : urgent.length}</span> <Link className="ml-1 inline-flex min-h-11 items-center font-semibold underline md:min-h-6 md:min-h-8" to="/action-needed">See all</Link></p>
       {todays.isError || issues.isError ? <p role="status" className="basis-full text-red-700">Some figures could not be loaded. They show — and are not zero.</p> : null}
     </section>
   );

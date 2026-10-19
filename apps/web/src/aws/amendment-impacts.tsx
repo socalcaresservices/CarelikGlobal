@@ -8,6 +8,7 @@ import { useOrganization } from "@/providers/organization-provider";
 import { useAwsApi } from "./aws-workspace";
 import { useAgencyClock } from "./agency-clock";
 import { PageHeader } from "./ui/page-header";
+import { CompactAlert } from "./ui/compact-alert";
 import { clientLabel } from "./name-label";
 
 const message = (cause: unknown, fallback: string) => (cause instanceof Error ? cause.message : fallback);
@@ -84,8 +85,8 @@ export function AuthorizationImpactsPage() {
       stale: !i.stillApplicable ? "No longer applies (the shift was released or the visit changed)." : null,
       notes: (
         <>
-          {i.visitId && i.visitBillingState === "approved_for_billing" ? <p className="text-amber-900" data-testid="approved-unchanged">This visit is already approved for billing. It was not changed. To review it, void the approval first.</p> : null}
-          {i.visitId && i.reviewOpen ? <p className="text-amber-900" data-testid="sent-back">This visit was sent back to review (Needs Correction) and stays there until a person confirms it is still billable or corrects it.</p> : null}
+          {i.visitId && i.visitBillingState === "approved_for_billing" ? <CompactAlert testId="approved-unchanged" summary="Already approved for billing">This visit is already approved for billing. It was not changed. To review it, void the approval first.</CompactAlert> : null}
+          {i.visitId && i.reviewOpen ? <CompactAlert testId="sent-back" summary="Sent back to review (Needs Correction)">This visit was sent back to review (Needs Correction) and stays there until a person confirms it is still billable or corrects it.</CompactAlert> : null}
           {i.visitId && i.visitBillingState && !i.reviewOpen && i.visitBillingState !== "approved_for_billing" ? <p className="text-slate-700">Current state: {i.visitBillingState.replace(/_/g, " ")}.</p> : null}
           {i.acknowledgedAt ? <p className="text-emerald-800">Acknowledged by {i.acknowledgedByName ?? "someone"}: “{i.acknowledgementNote}”</p> : null}
           {error?.id === i.impactId ? <p role="alert" className="text-red-700">{error.text}</p> : null}
@@ -148,7 +149,7 @@ export function AuthorizationImpactsPage() {
       <label className="flex min-h-6 items-center gap-2 text-sm text-og-ink [@media(pointer:coarse)]:min-h-[44px]"><input type="checkbox" className="h-5 w-5" checked={showAll} onChange={(e) => setShowAll(e.target.checked)} /> Show items already acknowledged</label>
       {q.isLoading ? <p className="text-sm text-og-sub">Loading…</p> : null}
       {q.isError ? <p role="alert" className="text-sm text-red-700">{message(q.error, "Could not load.")}</p> : null}
-      {q.data && q.data.length === 0 ? <p className="rounded-og border border-og-line bg-og-card p-4 text-sm text-og-sub" role="status">Nothing to review.</p> : null}
+      {q.data && q.data.length === 0 ? <p className="rounded-og border border-og-line bg-og-card p-3 text-sm text-og-sub" role="status">Nothing to review.</p> : null}
       <ul className="space-y-3" aria-label="Authorization changes">
         {groups.map((g) => (
           <li key={g.key} data-testid="amendment-group">

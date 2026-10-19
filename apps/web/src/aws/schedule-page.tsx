@@ -14,7 +14,7 @@ import { RecurringSeriesForm, RejectedDates, RescheduleForm, SeriesList } from "
 import { PickupRequestsPanel } from "./pickup-requests";
 import { ReconcileShiftsPanel } from "./reconcile-shifts";
 import { useShiftsToReconcile } from "./reconcile-data";
-import { ShortHelp } from "./help-text";
+import { Hint } from "./hint";
 import { useIsNarrow } from "@/lib/use-is-narrow";
 import type { RejectedDate } from "./recurring-format";
 import { AssignmentChecks } from "./readiness/assignment-checks";
@@ -180,7 +180,7 @@ function AddShiftForm({ onDone, initialClientId = "" }: { onDone: (text: string)
         </>
       )}
       {prefilled.length > 0 ? <p data-testid="prefill-note" className="text-xs text-slate-700 sm:col-span-2">Filled in from the client&apos;s record: {prefilled.join(" and ")}. Change anything you need to.</p> : null}
-      <ShortHelp className="text-xs text-slate-600 sm:col-span-2" details="An end time earlier than the start means the next day. The hours are reserved against the client's current authorization and refused if not enough time is left this month.">Times are the agency&apos;s local time.</ShortHelp>
+      <Hint details="An end time earlier than the start means the next day. The hours are reserved against the client's current authorization and refused if not enough time is left this month." className="sm:col-span-2">Times are the agency&apos;s local time.</Hint>
       {state.error && !authRefusal ? <p role="alert" className="text-sm text-red-700 sm:col-span-2">{state.error}</p> : null}
       <div className="sm:col-span-2"><Button type="submit" className="min-h-11" disabled={state.busy || (!!form.caregiverRecordId && ready === false)}>{state.busy ? "Scheduling…" : "Schedule shift"}</Button></div>
     </form>
@@ -316,9 +316,9 @@ function ShiftRow({ s, canManage, onDone, highlight = false, autoAssign = false,
     : <span className="text-slate-600" aria-label="No caregiver">—</span>;
   const rowActions = (
     <div className="flex items-center justify-end gap-1">
-      {primary && !action ? <Button type="button" size="sm" variant={primary.action === "assign" ? "primary" : "secondary"} className="min-h-11 whitespace-nowrap md:min-h-8" {...(primary.action === "assign" ? { "aria-label": `Assign caregiver to shift for ${shiftLabel}` } : {})} onClick={() => pick(primary.action)}>{primary.label}</Button> : null}
+      {primary && !action ? <Button type="button" size="sm" variant={primary.action === "assign" ? "primary" : "secondary"} className="min-h-11 whitespace-nowrap md:min-h-7 md:py-0" {...(primary.action === "assign" ? { "aria-label": `Assign caregiver to shift for ${shiftLabel}` } : {})} onClick={() => pick(primary.action)}>{primary.label}</Button> : null}
       {items.length === 1 && !primary ? <button type="button" className="inline-flex min-h-11 items-center px-2 text-sm font-medium text-og-link underline underline-offset-2 md:min-h-8" onClick={() => pick(items[0]!.action)}>{items[0]!.label}</button> : (
-        <QuickActionMenu label="More actions" className="[&>button]:min-h-11 [&>button]:min-w-11 md:[&>button]:min-h-8 md:[&>button]:min-w-8">
+        <QuickActionMenu label="More actions" className="[&>button]:min-h-11 [&>button]:min-w-11 md:[&>button]:min-h-7 md:[&>button]:min-w-7">
           {items.map((i) => <button key={i.action} type="button" className={`block min-h-11 w-full px-3 text-left hover:bg-slate-50 md:min-h-10 ${i.danger ? "text-red-800" : "text-slate-900"}`} onClick={() => pick(i.action)}>{i.label}</button>)}
         </QuickActionMenu>
       )}
@@ -363,27 +363,28 @@ function ShiftRow({ s, canManage, onDone, highlight = false, autoAssign = false,
   return (
     <tbody ref={rowRef as RefObject<HTMLTableSectionElement>} id={`shift-${s.shiftId}`} data-highlight={highlight ? "true" : undefined} className={stateOfShift(s) === "needs_coverage" ? "bg-red-50/40" : ""}>
       <tr className={`border-t border-slate-200 align-top ${tone}`}>
-        <td className="whitespace-nowrap py-1.5 pl-2 pr-3 font-semibold text-slate-950">{time(s.startsAt)}–{time(s.endsAt)}</td>
-        <td className="py-1.5 pr-3"><Link className="underline [@media(pointer:coarse)]:inline-flex [@media(pointer:coarse)]:min-h-[44px] [@media(pointer:coarse)]:items-center" to={`/clients/${s.clientId}`}>{clientText}</Link></td>
-        <td className="py-1.5 pr-3 text-slate-800">{s.serviceName ?? "Service"}</td>
-        <td className="py-1.5 pr-3 text-slate-800">{who}</td>
-        <td className="py-1.5 pr-3">{chip}</td>
-        <td className="py-1 pr-2 text-right">{rowActions}</td>
+        <td className="whitespace-nowrap py-1 pl-2 pr-3 font-semibold text-slate-950">{time(s.startsAt)}–{time(s.endsAt)}</td>
+        <td className="py-1 pr-3"><Link className="underline [@media(pointer:coarse)]:inline-flex [@media(pointer:coarse)]:min-h-[44px] [@media(pointer:coarse)]:items-center" to={`/clients/${s.clientId}`}>{clientText}</Link></td>
+        <td className="py-1 pr-3 text-slate-800">{s.serviceName ?? "Service"}</td>
+        <td className="py-1 pr-3 text-slate-800">{who}</td>
+        <td className="py-1 pr-3">{chip}</td>
+        <td className="py-0.5 pr-2 text-right">{rowActions}</td>
       </tr>
-      {hasNotes ? <tr><td colSpan={COLS} className="space-y-0.5 pb-1.5 pl-2 text-xs">{notes}</td></tr> : null}
+      {hasNotes ? <tr><td colSpan={COLS} className="space-y-0 pb-0.5 pl-2 text-xs">{notes}</td></tr> : null}
       {forms ? <tr><td colSpan={COLS} className="pb-2 pl-2 pr-2">{forms}</td></tr> : null}
     </tbody>
   );
 }
 
 /** A list of shifts: a compact table on desktop, compact rows on a phone. */
-function ShiftList({ shifts, canManage, onDone, focusShift, autoAssign, withDate = false, label }: { shifts: Shift[]; canManage: boolean; onDone: (text: string) => void; focusShift: string | null; autoAssign: boolean; withDate?: boolean; label: string }) {
+/** hideHeader: a later day table keeps its column headers for screen readers but does not repeat them on screen (one visible header per page section). */
+function ShiftList({ shifts, canManage, onDone, focusShift, autoAssign, withDate = false, label, hideHeader = false }: { shifts: Shift[]; canManage: boolean; onDone: (text: string) => void; focusShift: string | null; autoAssign: boolean; withDate?: boolean; label: string; hideHeader?: boolean }) {
   const narrow = useIsNarrow();
   const rows = shifts.map((s) => <ShiftRow key={s.shiftId} s={s} canManage={canManage} onDone={onDone} highlight={s.shiftId === focusShift} autoAssign={s.shiftId === focusShift && autoAssign} withDate={withDate} />);
   if (narrow) return <ul aria-label={label} className="space-y-1.5">{rows}</ul>;
   return (
     <table aria-label={label} className="w-full border-collapse text-left text-sm">
-      <thead className="text-xs font-semibold uppercase tracking-wide text-slate-600">
+      <thead className={hideHeader ? "sr-only" : "text-xs font-semibold uppercase tracking-wide text-slate-600"}>
         <tr><th scope="col" className="py-1 pl-2 pr-3">{withDate ? "When" : "Time"}</th><th scope="col" className="py-1 pr-3">Client</th><th scope="col" className="py-1 pr-3">Service</th><th scope="col" className="py-1 pr-3">Caregiver</th><th scope="col" className="py-1 pr-3">Status</th><th scope="col" className="py-1 pr-2 text-right"><span className="sr-only">Actions</span></th></tr>
       </thead>
       {rows}
@@ -441,7 +442,7 @@ export function SchedulePage() {
   const link = "inline-flex min-h-11 items-center px-1 text-sm font-medium text-og-link underline underline-offset-2 md:min-h-8";
   const pastCount = past.data?.length ?? 0;
   return (
-    <div className="max-w-5xl space-y-4">
+    <div className="max-w-5xl space-y-3">
       <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
         <h1 className="text-xl font-semibold text-slate-950">Scheduling</h1>
         {canManage ? (
@@ -461,37 +462,41 @@ export function SchedulePage() {
       {notice ? <p role="status" className="text-sm text-emerald-800">{notice}</p> : null}
       <RejectedDates items={rejectedDates} />
       {canManage ? <div id="pickups"><PickupRequestsPanel onDone={showNotice} /></div> : null}
-      <section aria-labelledby="upcoming-heading" className="space-y-2">
-        <h2 id="upcoming-heading" className="text-base font-semibold text-slate-950">Unfilled ({uncovered.length})</h2>
-        {shifts.isLoading ? <p className="text-sm text-slate-500">Loading…</p> : null}
+      <section aria-labelledby="upcoming-heading" className="space-y-1">
+        <div className="flex flex-wrap items-baseline gap-x-3">
+          <h2 id="upcoming-heading" className="text-sm font-semibold text-slate-950">Unfilled ({uncovered.length})</h2>
+          {shifts.isLoading ? <p className="text-sm text-slate-500">Loading…</p> : null}
+          {shifts.data && uncovered.length === 0 ? <p className="text-sm text-slate-600">All shifts this {unit} are covered.</p> : null}
+        </div>
         {shifts.isError ? <p role="alert" className="text-sm text-red-700">Shifts could not be loaded. {(shifts.error as Error).message}</p> : null}
-        {shifts.data && uncovered.length === 0 ? <p className="text-sm text-slate-600">Every upcoming shift this {unit} has a caregiver.</p> : null}
         {uncovered.length > 0 ? <ShiftList label="Unfilled shifts" shifts={uncovered} canManage={canManage} onDone={setNotice} focusShift={focusShift} autoAssign={params.get("coverage") === "1"} withDate /> : null}
       </section>
       {canManage ? (
-        <section id="reconcile" aria-labelledby="past-heading" className="space-y-2">
-          <h2 id="past-heading" className="text-base font-semibold text-slate-950">Past: need review {past.data ? `(${pastCount})` : ""}</h2>
-          {past.isError ? <p role="status" className="text-sm text-red-700">Past shifts could not be loaded. Refresh the page.</p> : null}
-          {past.data && pastCount === 0 ? <p className="text-sm text-slate-600">No past shift is waiting for a visit record.</p> : null}
+        <section id="reconcile" aria-labelledby="past-heading" className="space-y-1">
+          <div className="flex flex-wrap items-baseline gap-x-3">
+            <h2 id="past-heading" className="text-sm font-semibold text-slate-950">Past: need review {past.data ? `(${pastCount})` : ""}</h2>
+            {past.isError ? <p role="status" className="text-sm text-red-700">Past shifts could not be loaded. Refresh the page.</p> : null}
+            {past.data && pastCount === 0 ? <p className="text-sm text-slate-600">No past shifts to review.</p> : null}
+          </div>
           <ReconcileShiftsPanel onDone={showNotice} />
         </section>
       ) : null}
-      <div className="flex flex-wrap items-end gap-x-3 gap-y-2">
+      <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
         <ViewTabs view={view} onChange={(v) => { setView(v); if (v === "week") setFrom((f) => (view === "month" ? (f.slice(0, 7) === today.slice(0, 7) ? today : `${f.slice(0, 7)}-01`) : f)); }} />
-        <Button type="button" variant="secondary" className="min-h-11 md:min-h-9" onClick={() => setFrom(stepAnchor(view, from, -1))}>← Previous {unit}</Button>
-        <div><label htmlFor="sh-from" className="block text-xs font-medium text-slate-700">{view === "day" ? "Day" : view === "week" ? "Week starting" : "Month"}</label>{view === "month"
-          ? <input id="sh-from" type="month" value={from.slice(0, 7)} onChange={(e) => e.target.value && setFrom(`${e.target.value}-01`)} className="mt-0.5 block min-h-11 rounded-lg border border-slate-200 px-3 text-base md:min-h-9 md:text-sm" />
-          : <input id="sh-from" type="date" value={from} onChange={(e) => e.target.value && setFrom(e.target.value)} className="mt-0.5 block min-h-11 rounded-lg border border-slate-200 px-3 text-base md:min-h-9 md:text-sm" />}</div>
-        <Button type="button" variant="secondary" className="min-h-11 md:min-h-9" onClick={() => setFrom(stepAnchor(view, from, 1))}>Next {unit} →</Button>
-        <label className="flex min-h-11 items-center gap-2 text-sm text-slate-800 md:min-h-9"><input type="checkbox" className="h-5 w-5" checked={onlyOpen} onChange={(e) => setOnlyOpen(e.target.checked)} /> Unfilled only</label>
+        <Button type="button" variant="secondary" className="min-h-11 md:min-h-8 md:py-0" onClick={() => setFrom(stepAnchor(view, from, -1))}>← Previous {unit}</Button>
+        <div className="flex items-center gap-1.5"><label htmlFor="sh-from" className="text-xs font-medium text-slate-700">{view === "day" ? "Day" : view === "week" ? "Week starting" : "Month"}</label>{view === "month"
+          ? <input id="sh-from" type="month" value={from.slice(0, 7)} onChange={(e) => e.target.value && setFrom(`${e.target.value}-01`)} className="block min-h-11 rounded-lg border border-slate-200 px-2 text-base md:min-h-8 md:py-0 md:text-sm" />
+          : <input id="sh-from" type="date" value={from} onChange={(e) => e.target.value && setFrom(e.target.value)} className="block min-h-11 rounded-lg border border-slate-200 px-2 text-base md:min-h-8 md:py-0 md:text-sm" />}</div>
+        <Button type="button" variant="secondary" className="min-h-11 md:min-h-8 md:py-0" onClick={() => setFrom(stepAnchor(view, from, 1))}>Next {unit} →</Button>
+        <label className="flex min-h-11 items-center gap-1.5 text-sm text-slate-800 md:min-h-8"><input type="checkbox" className="h-4 w-4" checked={onlyOpen} onChange={(e) => setOnlyOpen(e.target.checked)} /> Unfilled only</label>
         <FilterBar shifts={shifts.data ?? []} filters={filters} onChange={setFilters} />
       </div>
       {view === "month" && shifts.data ? <MonthGrid anchor={from} shifts={filtered.filter((s) => !onlyOpen || stateOfShift(s) === "needs_coverage")} onPickDay={(d) => { setView("day"); setFrom(d); }} /> : null}
       {view !== "month" && shifts.data && byDay.size === 0 ? <p className="text-sm text-slate-600">{onlyOpen ? `No other shift is unfilled this ${unit}.` : Object.values(filters).some(Boolean) ? "No other shifts match these filters." : uncovered.length > 0 ? `No other shifts this ${unit}.` : `No shifts this ${unit}.`}</p> : null}
-      {view !== "month" ? [...byDay.entries()].map(([d, list]) => (
+      {view !== "month" ? [...byDay.entries()].map(([d, list], i) => (
         <section key={d} aria-label={dayLabel(d)}>
-          <h2 className="mb-1 text-sm font-semibold text-slate-800">{dayLabel(d)}</h2>
-          <ShiftList label={`Shifts on ${dayLabel(d)}`} shifts={list} canManage={canManage} onDone={setNotice} focusShift={focusShift} autoAssign={params.get("coverage") === "1"} />
+          <h2 className="mt-1 rounded-sm bg-slate-100 px-2 py-0.5 text-xs font-semibold text-slate-800">{dayLabel(d)}</h2>
+          <ShiftList label={`Shifts on ${dayLabel(d)}`} shifts={list} canManage={canManage} onDone={setNotice} focusShift={focusShift} autoAssign={params.get("coverage") === "1"} hideHeader={i > 0} />
         </section>
       )) : null}
     </div>
@@ -555,7 +560,7 @@ function OpenShiftsSection({ onPicked }: { onPicked: (text: string) => void }) {
   return (
     <section aria-labelledby="open-shifts-heading" className="space-y-2">
       <h2 id="open-shifts-heading" className="text-base font-semibold text-slate-950">Open shifts you can ask for</h2>
-      <ShortHelp details="The office confirms one caregiver, and the shift appears in your list once it does.">Asking does not give you the shift.</ShortHelp>
+      <Hint details="The office confirms one caregiver, and the shift appears in your list once it does." show>Asking does not give you the shift.</Hint>
       <ul className="space-y-1.5">
         {open.data.map((s) => (
           <li key={s.shiftId} className="rounded-lg border border-sky-200 bg-sky-50 p-2">

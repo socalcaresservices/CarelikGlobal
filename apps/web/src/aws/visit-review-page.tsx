@@ -211,7 +211,7 @@ export function VisitReviewPage() {
   facts.push(["Billing approval", v.activeBillingApprovalId ? `Approved for Billing: ${formatDuration(v.approvedMinutes)} — not submitted or paid` : v.billingState === "voided" ? "Voided (an earlier approval was voided; it can be approved again)" : "Not approved"]);
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-3">
       <div>
         <Link to="/service-verification/reports" className="text-sm text-slate-600 underline">Visit records</Link>
         <h1 className="mt-1 text-xl font-semibold text-slate-950">{v.clientName ?? v.clientCode}</h1>
@@ -228,7 +228,7 @@ export function VisitReviewPage() {
         </p>
       </div>
 
-      <Card className="p-4">
+      <Card className="p-3">
         <dl className="grid grid-cols-1 gap-x-4 gap-y-2 text-sm sm:grid-cols-[auto_1fr]">
           {facts.map(([k, val]) => (
             <div key={k} className="contents">
@@ -244,7 +244,7 @@ export function VisitReviewPage() {
       </Card>
 
       {inReview ? (
-        <Card className="space-y-3 p-4">
+        <Card className="space-y-3 p-3">
           <h2 className="text-base font-semibold text-slate-950">Why this visit needs review</h2>
           <ul className="list-disc space-y-1 pl-5 text-sm text-slate-800">
             {v.reviewReasons.map((r) => <li key={r}>{reasonText(r, v)}</li>)}
@@ -280,7 +280,7 @@ export function VisitReviewPage() {
               <fieldset className="space-y-2">
                 <legend className="text-sm font-medium text-slate-700">Record a review decision</legend>
                 {v.allowedDecisions.map((d) => (
-                  <label key={d} className="flex gap-2 rounded-lg border border-slate-200 p-3 text-sm">
+                  <label key={d} className="flex gap-2 rounded-lg border border-slate-200 p-2 text-sm">
                     <input type="radio" name="decision" value={d} checked={choice === d} onChange={() => setChoice(d)} className="mt-1" />
                     <span>
                       <span className="font-medium text-slate-900">{decisionLabel(d, v)}</span>

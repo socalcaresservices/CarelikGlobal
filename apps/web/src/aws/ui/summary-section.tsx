@@ -9,14 +9,14 @@ export function SummarySection({ title, status, summary, defaultOpen = false, hi
   title: string; status?: ReactNode; summary?: ReactNode; defaultOpen?: boolean; hideSummaryWhenOpen?: boolean; id?: string; testId?: string; children: ReactNode;
 }) {
   return (
-    <details open={defaultOpen} id={id} data-testid={testId} className="group rounded-xl border border-slate-200 bg-og-card">
-      <summary className="flex min-h-[44px] cursor-pointer list-none flex-wrap items-center gap-x-3 gap-y-1 px-4 py-2 [&::-webkit-details-marker]:hidden">
-        <h2 className="text-base font-semibold text-slate-950">{title}</h2>
+    <details open={defaultOpen} id={id} data-testid={testId} className="group rounded-lg border border-slate-200 bg-og-card">
+      <summary className="flex min-h-[36px] cursor-pointer list-none flex-wrap items-center gap-x-2 gap-y-0.5 px-3 py-1.5 [@media(pointer:coarse)]:min-h-[44px] [&::-webkit-details-marker]:hidden">
+        <h2 className="text-sm font-semibold text-slate-950">{title}</h2>
         {status}
         {summary ? <span className={`min-w-0 flex-1 max-md:order-last max-md:basis-full text-sm text-slate-800${hideSummaryWhenOpen ? " group-open:hidden" : ""}`}>{summary}</span> : <span className="flex-1" />}
         <span aria-hidden="true" className="ml-auto text-slate-600 transition-transform group-open:rotate-180">▾</span>
       </summary>
-      <div className="border-t border-slate-100 p-4">{children}</div>
+      <div className="border-t border-slate-100 p-3">{children}</div>
     </details>
   );
 }

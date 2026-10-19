@@ -20,7 +20,9 @@ import { ClientTypeField } from "./clients-page";
 import { CaregiverSummary, ClientAlertsCard, ClientDocumentsCard, ClientHistoryCard, ClientQuickActions, DuplicateWarning, NextVisitsCard, ReadinessCard } from "./client-extras";
 import { useDuplicateClients } from "./client-data";
 import { formatDateOnly } from "@/lib/service-verification";
-import { ShortHelp } from "./help-text";
+import { Hint } from "./hint";
+import { linkClass } from "./ui-classes";
+import { CompactAlert } from "./ui/compact-alert";
 import { SummarySection } from "./ui/summary-section";
 import { actionBtn, actionBtnPrimary } from "./ui-classes";
 
@@ -94,7 +96,7 @@ function DetailsCard({ c, canManage }: { c: AdminClient; canManage: boolean }) {
     );
   }
   return (
-    <Card className="p-4" id="details">
+    <Card className="p-3" id="details">
       <h2 className="text-base font-semibold text-slate-950">Edit details</h2>
       <p className="mt-1 text-xs text-slate-600" data-testid="edit-impact">Changes are recorded in the client&apos;s history. Changing the type can change which caregivers match a care request.</p>
       <form onSubmit={(e) => { e.preventDefault(); void save(); }} className="mt-3 grid gap-3 sm:grid-cols-2">
@@ -136,7 +138,7 @@ function StatusCard({ c }: { c: AdminClient }) {
   const options = (["active", "inactive", "discharged"] as const).filter((x) => x !== c.status);
   return (
     <SummarySection title="Status" status={<span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${STATUS_BADGE[c.status]}`}>{STATUS_LABEL[c.status]}</span>}>
-      <ShortHelp className="text-sm text-slate-600" details="Their records and history are kept.">Inactive and discharged clients cannot be scheduled or visited.</ShortHelp>
+      <Hint details="Their records and history are kept." show>Inactive and discharged clients cannot be scheduled or visited.</Hint>
       <form onSubmit={(e) => { e.preventDefault(); void save(); }} className="mt-3 space-y-3">
         <fieldset>
           <legend className="text-sm font-medium text-slate-700">Change to</legend>
@@ -302,16 +304,16 @@ function LineageCard({ versions, canUpdate, showRate }: { versions: Authorizatio
   const expired = head.periodEnd < todayIso;
   const endingSoon = !expired && head.periodEnd <= addDays(todayIso, 30);
   return (
-    <li className="rounded-xl border border-slate-200 bg-og-card p-3">
-      <div className="flex flex-wrap items-center justify-between gap-2">
+    <li className="rounded-lg border border-slate-200 bg-og-card px-3 py-2">
+      <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
         <p className="font-semibold text-slate-950">{head.serviceName} <span className="font-normal text-slate-500">({head.serviceCode})</span></p>
         <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${expired ? "bg-slate-200 text-slate-800" : "bg-emerald-100 text-emerald-900"}`}>{expired ? "Ended" : "Current"} · version {head.versionNumber}</span>
+        <span className="flex-1" />
+        {canUpdate && head.isCurrent && !amending ? <button type="button" className={`${actionBtn} md:min-h-7 md:py-0`} onClick={() => { setAmending("amend"); setResult(null); }}>Amend</button> : null}
+        {canUpdate && head.isCurrent && !amending && (expired || endingSoon) ? <button type="button" data-testid="renew-authorization" className={`${actionBtnPrimary} md:min-h-7 md:py-0`} onClick={() => { setAmending("renew"); setResult(null); }}>Renew</button> : null}
       </div>
-      <p className="mt-1 text-sm text-slate-800">{formatDuration(head.monthlyAuthorizedMinutes)} per month · {fmtDate(head.periodStart)} to {fmtDate(head.periodEnd)}</p>
-      <p className="text-sm text-slate-600">{head.payer}{head.authorizationNumber ? ` · No. ${head.authorizationNumber}` : ""}{showRate && head.hourlyRateCents !== null ? ` · ${formatRate(head.hourlyRateCents)}` : ""}</p>
+      <p className="text-sm text-slate-800">{formatDuration(head.monthlyAuthorizedMinutes)} per month · {fmtDate(head.periodStart)} to {fmtDate(head.periodEnd)} <span className="text-slate-600">· {head.payer}{head.authorizationNumber ? ` · No. ${head.authorizationNumber}` : ""}{showRate && head.hourlyRateCents !== null ? ` · ${formatRate(head.hourlyRateCents)}` : ""}</span></p>
       {head.versionNumber > 1 && head.changeReason ? <p className="text-xs text-slate-500">Latest change: {head.changeReason}{head.createdByName ? ` (${head.createdByName})` : ""}</p> : null}
-      {canUpdate && head.isCurrent && !amending ? <button type="button" className={`mt-2 ${actionBtn}`} onClick={() => { setAmending("amend"); setResult(null); }}>Amend</button> : null}
-      {canUpdate && head.isCurrent && !amending && (expired || endingSoon) ? <button type="button" data-testid="renew-authorization" className={`ml-2 mt-2 ${actionBtnPrimary}`} onClick={() => { setAmending("renew"); setResult(null); }}>Renew…</button> : null}
       {amending ? <AmendForm current={head} renewal={amending === "renew"} onDone={(r) => { setAmending(false); setResult(r); }} /> : null}
       {result ? (
         <div role="status" className="mt-2 rounded-lg bg-emerald-50 p-2 text-sm text-emerald-900">
@@ -368,20 +370,22 @@ function AuthorizationsCard({ clientId }: { clientId: string }) {
     <SummarySection title="Authorizations" defaultOpen hideSummaryWhenOpen
       status={none ? <span className="rounded-full bg-red-100 px-2 py-0.5 text-xs font-semibold text-red-800">None</span> : worst ? <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${worst === "critical" ? "bg-red-100 text-red-800" : "bg-amber-100 text-amber-900"}`}>{worst === "critical" ? "Critical" : "Near limit"}</span> : rows.length > 0 && attention ? <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-semibold text-emerald-900">Ending soon</span> : undefined}
       summary={rows.length > 0 ? rows.map((b) => `${b.serviceName}: ${left(b)}`).join(" · ") : undefined}>
-      {canUpdate ? <div className="mb-2 text-right"><Button type="button" variant="secondary" onClick={() => setAdding((a) => !a)} aria-expanded={adding}>{adding ? "Close" : "Add authorization"}</Button></div> : null}
-      {adding ? <AddAuthorizationForm clientId={clientId} onDone={() => setAdding(false)} /> : null}
-      <div className="mt-1">
-        <label htmlFor="balance-month" className="block text-sm font-medium text-slate-700">Hours for month</label>
-        <input id="balance-month" type="month" value={month} onChange={(e) => setMonth(e.target.value || agencyMonth(tz))} className="mt-1 rounded-lg border border-slate-200 px-3 py-2 text-base" />
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="flex items-center gap-2">
+          <label htmlFor="balance-month" className="text-sm font-medium text-slate-700">Hours for month</label>
+          <input id="balance-month" type="month" value={month} onChange={(e) => setMonth(e.target.value || agencyMonth(tz))} className="rounded-lg border border-slate-200 px-2 py-1 text-sm md:min-h-8" />
+        </div>
+        {canUpdate ? <Button type="button" variant="secondary" className="md:min-h-8 md:py-0" onClick={() => setAdding((a) => !a)} aria-expanded={adding}>{adding ? "Close" : "Add authorization"}</Button> : null}
       </div>
+      {adding ? <AddAuthorizationForm clientId={clientId} onDone={() => setAdding(false)} /> : null}
       {balances.isError ? <p role="alert" className="mt-2 text-sm text-red-700">{(balances.error as Error).message}</p> : null}
       {balances.data && balances.data.length === 0 ? <p className="mt-2 text-sm text-slate-600">No authorization covers this month.</p> : null}
       {balances.data && balances.data.length > 0 ? (
-        <div className="mt-2">
-          <ul className="space-y-2" aria-label="Authorized, used and remaining time for the month">
+        <div className="mt-1.5">
+          <ul className="space-y-1" aria-label="Authorized, used and remaining time for the month">
             {balances.data.map((b) => (
-              <li key={b.authorizationLineageId} className="rounded-lg border border-slate-200 p-3">
-                <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+              <li key={b.authorizationLineageId} className="flex flex-wrap items-center gap-x-4 gap-y-0.5 rounded-lg border border-slate-200 px-3 py-1.5">
+                <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
                   <p className="text-sm font-semibold text-slate-900">{b.serviceName}</p>
                   {b.authorizationTier ? (
                     <span data-testid="authorization-tier" className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-semibold ${b.authorizationTier === "critical" ? "bg-red-100 text-red-800" : b.authorizationTier === "near_limit" ? "bg-amber-100 text-amber-900" : "bg-emerald-100 text-emerald-900"}`}>
@@ -395,11 +399,11 @@ function AuthorizationsCard({ clientId }: { clientId: string }) {
                     </span>
                   ) : null}
                 </div>
-                <p className="mt-2 flex flex-wrap gap-x-6 gap-y-1 text-sm">
+                <p className="flex flex-wrap gap-x-4 gap-y-0 text-sm">
                   <span>Authorized: {formatHours(b.authorizedMinutes)}</span>
                   <span data-testid="hours-left-figure" className={`font-semibold ${leftOf(b) <= 0 ? "text-red-700" : "text-slate-900"}`}>{hoursLeftLine(leftOf(b)).label}: {hoursLeftLine(leftOf(b)).value}</span>
                 </p>
-                <HoursBreakdown row={b} />
+                <div className="ml-auto"><HoursBreakdown row={b} /></div>
               </li>
             ))}
           </ul>
@@ -407,7 +411,7 @@ function AuthorizationsCard({ clientId }: { clientId: string }) {
       ) : null}
       {versions.isLoading ? <p className="mt-3 text-sm text-slate-500">Loading…</p> : null}
       {versions.isError ? <p role="alert" className="mt-3 text-sm text-red-700">{(versions.error as Error).message}</p> : null}
-      {none ? <p className="mt-3 text-sm font-semibold text-red-700">No authorization yet. Visits cannot be scheduled or verified until one is added.</p> : null}
+      {none ? <CompactAlert tone="danger" className="mt-2" summary="No authorization yet">Visits cannot be scheduled or verified until one is added.</CompactAlert> : null}
       <ul className="mt-3 space-y-2">
         {lineages.map((l) => <LineageCard key={l[0]!.lineageId} versions={l} canUpdate={canUpdate} showRate={showRate} />)}
       </ul>
@@ -427,18 +431,17 @@ export function ClientDetailPage() {
   if (!c) return <p className="text-sm text-slate-600">Client not found. <Link to="/clients" className="underline">Back to clients</Link></p>;
   const canManage = hasPermission("clients.manage") && hasPermission("clients.names.manage");
   return (
-    <div className="max-w-4xl space-y-4">
-      <div className="flex flex-wrap items-center gap-x-4">
-        <Link to="/clients" className="text-sm text-slate-700 underline">← All clients</Link>
-        {hasPermission("care_requests.read") ? <Link to="/schedule/shift-requests" className="text-sm text-slate-700 underline">Care requests</Link> : null}
-      </div>
-      <div className="flex flex-wrap items-center gap-3">
-        <h1 className="text-xl font-semibold text-slate-950">{clientName(c) ?? "Name not set"}</h1>
+    <div className="max-w-4xl space-y-3">
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+        <Link to="/clients" className={linkClass}>← All clients</Link>
+        <h1 className="text-xl font-bold text-slate-950">{clientName(c) ?? "Name not set"}</h1>
         {c.duplicateName ? <span className="text-sm text-slate-500" data-testid="client-code-shared-name">{c.clientCode}</span> : null}
         <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${STATUS_BADGE[c.status]}`}>{STATUS_LABEL[c.status]}</span>
+        <span className="flex-1" />
+        {hasPermission("care_requests.read") ? <Link to="/schedule/shift-requests" className={linkClass}>Care requests</Link> : null}
+        <ClientQuickActions clientId={c.clientId} canEdit={canManage} />
       </div>
       <ClientAlertsCard clientId={c.clientId} />
-      <ClientQuickActions clientId={c.clientId} canEdit={canManage} />
       <div id="authorizations"><AuthorizationsCard clientId={c.clientId} /></div>
       <NextVisitsCard clientId={c.clientId} />
       <CaregiverSummary clientId={c.clientId}><AssignmentsCard clientId={c.clientId} /></CaregiverSummary>

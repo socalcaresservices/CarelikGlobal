@@ -118,9 +118,11 @@ describe("shifts that ended with no visit record", () => {
   it("the staffing page tells the office about them and about unacknowledged authorization changes, with links", async () => {
     renderAt("/staffing", ["shifts.manage", "visits.read", "authorizations.update"]);
     const link = await screen.findByTestId("reconcile-link", {}, { timeout: 15000 });
-    expect(link).toHaveTextContent("1 shift ended with no visit record and still holds 1 hr 30 min of authorization. Nothing is released until you decide.");
+    expect(link).toHaveTextContent("1 shift ended with no visit record");
+    expect(link).toHaveTextContent("It still holds 1 hr 30 min of authorization. Nothing is released until you decide.");
     expect(within(link).getByRole("link", { name: "Reconcile shifts" })).toHaveAttribute("href", "/schedule");
-    expect(screen.getByTestId("amendment-impacts-link")).toHaveTextContent("2 items affected by an authorization change need your review.");
+    expect(screen.getByTestId("amendment-impacts-link")).toHaveTextContent("2 items affected by an authorization change");
+    expect(screen.getByTestId("amendment-impacts-link")).toHaveTextContent("They need your review.");
   }, 30000);
 });
 

@@ -1,5 +1,5 @@
 // In-app notifications (0077): the header bell and the agency setting. SYNTHETIC data only.
-import { cleanup, fireEvent, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
 import { json, ORG, renderAws } from "./test-support";
 
@@ -28,7 +28,7 @@ describe("notifications bell", () => {
     expect(screen.getByRole("link", { name: "Open Action needed" }).getAttribute("href")).toBe("/action-needed");
     expect(screen.getAllByRole("button", { name: "Mark all read" })).toHaveLength(1); // one action, and the agency setting is one line with Details
     expect(screen.getByTestId("notifications-panel")).toHaveTextContent("Urgent items follow your agency");
-    expect(screen.getByText("Details")).toBeInTheDocument();
+    expect(within(screen.getByTestId("notifications-panel")).getByRole("button", { name: "More information" })).toBeInTheDocument(); // the agency setting is one line with an info icon
     fireEvent.click(screen.getByRole("button", { name: "Mark all read" }));
     await waitFor(() => expect(screen.getByTestId("notifications-button").getAttribute("aria-label")).toBe("Notifications: 0 unread"));
     const post = calls.find((c) => c.method === "POST" && c.path === "/v1/notifications/read")!;

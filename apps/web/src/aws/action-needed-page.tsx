@@ -6,14 +6,15 @@ import { newIdempotencyKey } from "@/lib/sv-backend";
 import { formatClockTime, formatNumericDate } from "@/lib/service-verification";
 import { useOrganization } from "@/providers/organization-provider";
 import { useAwsApi } from "./aws-workspace";
-import { CATEGORY_LABEL, issueCaregiver, issueClient, issueDestination, KIND_LABEL, QUEUE_LABEL, SEVERITY_TONE, type ActionIssue, type IssueList } from "./action-issues";
+import { CATEGORY_LABEL, issueCaregiver, issueClient, issueDestination, KIND_LABEL, QUEUE_LABEL, reasonPhrase, SEVERITY_TONE, type ActionIssue, type IssueList } from "./action-issues";
 import { TONE } from "./attention";
 import { Disclosure } from "./ui/disclosure";
 import { ShortHelp } from "./help-text";
+import { AuditList } from "./ui/audit-list";
 import { PageHeader } from "./ui/page-header";
 import type { NotificationSettings } from "./notifications";
 import { StatusChip } from "./ui/status-chip";
-import { linkClass } from "./ui-classes";
+import { InfoTip } from "./ui/info-tip";
 
 const PAGE = 25;
 interface Filters { queue: string; category: string; severity: string; client: string; caregiver: string; service: string }
@@ -34,30 +35,35 @@ function IssueCard({ issue }: { issue: ActionIssue }) {
     queryFn: async () => (await api.get<{ history: History }>("/v1/action-issues/history", { organizationId: activeOrganizationId, issueKey: issue.issueKey })).history,
   });
   const who = [issueClient(issue), issue.serviceCode, issueCaregiver(issue)].filter(Boolean).join(" · ");
+  const phrase = reasonPhrase(issue);
+  const rowLink = "inline-flex min-h-[44px] items-center whitespace-nowrap text-sm font-semibold text-og-link underline md:min-h-[28px]";
   return (
-    <li data-testid="issue-card" data-issue-key={issue.issueKey} className={`border-l-4 px-3 py-2 ${tone === "red" ? "border-l-red-700" : tone === "amber" ? "border-l-amber-600" : "border-l-slate-400"}`}>
-      <div className="flex flex-wrap items-center gap-x-3 gap-y-0 md:grid md:grid-cols-[6.5rem_minmax(0,1fr)_11rem_auto]">
+    <li data-testid="issue-card" data-issue-key={issue.issueKey} title={issue.recommendedAction} className={`border-l-4 px-2 py-0 ${tone === "red" ? "border-l-red-700" : tone === "amber" ? "border-l-amber-600" : "border-l-slate-400"}`}>
+      <div className="flex flex-wrap items-center gap-x-2 gap-y-0 md:grid md:min-h-[32px] md:grid-cols-[5.5rem_minmax(0,1fr)_9.5rem_auto]">
         <span><StatusChip tone={tone}>{TONE[tone].word}</StatusChip></span>
-        <div className="min-w-0 flex-1 basis-[10rem]">
-          <p className="text-sm font-semibold text-og-ink">{KIND_LABEL[issue.kind] ?? issue.kind}{who ? ` · ${who}` : ""}</p>
-          <p className="text-sm text-og-sub">{issue.recommendedAction}</p>
-        </div>
+        <p className="min-w-0 flex-1 basis-[10rem] truncate text-sm font-semibold text-og-ink">
+          {KIND_LABEL[issue.kind] ?? issue.kind}{who ? ` · ${who}` : ""}{phrase ? <span className="font-normal text-og-sub"> · {phrase}</span> : null}
+          <span className="sr-only"> {issue.recommendedAction}</span>
+        </p>
         <p className="basis-full text-xs text-og-sub md:basis-auto" data-testid="issue-deadline">
           {issue.deadline ? `${issue.severity === "critical" ? "Was due" : "Due"} ${formatNumericDate(issue.deadline)} ${formatClockTime(issue.deadline)}` : "No deadline"}
           {issue.reopenCount ? ` · reopened ${issue.reopenCount} time${issue.reopenCount === 1 ? "" : "s"}` : ""}
         </p>
-        <div className="flex items-center gap-x-4 md:justify-end">
-          <Link className={linkClass} to={dest.to}>{dest.label}</Link>
-          <button type="button" className="inline-flex min-h-[44px] items-center text-sm text-og-sub underline md:min-h-[32px]" aria-expanded={open} onClick={() => setOpen((v) => !v)}>{open ? "Hide history" : "History"}</button>
+        <div className="flex items-center gap-x-3 md:justify-end">
+          <Link className={rowLink} to={dest.to}>{dest.label}</Link>
+          <button type="button" className="inline-flex min-h-[44px] items-center text-sm text-og-sub underline md:min-h-[28px]" aria-expanded={open} onClick={() => setOpen((v) => !v)}>{open ? "Hide history" : "History"}</button>
         </div>
       </div>
       {open ? (
-        <div className="mt-1 rounded-lg bg-og-bg p-2 text-xs text-og-sub" data-testid="issue-history">
+        <div className="mt-1 text-xs text-og-sub" data-testid="issue-history">
           {history.isLoading ? "Loading…" : history.isError ? "The history could not be loaded. Close it and open it again." : (
-            <ul className="space-y-0.5">
-              {(history.data?.events ?? []).map((e, n) => <li key={n}>{formatNumericDate(e.occurredAt)} {formatClockTime(e.occurredAt)} · {e.event.replace(/_/g, " ")}{e.severity ? ` (${e.severity})` : ""}{e.observedByName ? ` · seen by ${e.observedByName}` : ""}</li>)}
-              <li>Times are when the change was first seen by the system, not necessarily when it happened.</li>
-            </ul>
+            <>
+              <AuditList label="Issue history" maxHeightClass="max-h-40" rows={(history.data?.events ?? []).map((e, n) => ({
+                id: String(n), when: `${formatNumericDate(e.occurredAt)} ${formatClockTime(e.occurredAt)}`, who: e.observedByName,
+                summary: `${e.event.replace(/_/g, " ")}${e.severity ? ` (${e.severity})` : ""}`,
+              }))} />
+              <p className="mt-0.5">Times are when the change was first seen by the system, not necessarily when it happened.</p>
+            </>
           )}
         </div>
       ) : null}
@@ -97,12 +103,12 @@ function DeadlineSettings() {
   const field = (label: string, name: "c" | "r" | "d", current: number, max: number) => (
     <label className="block text-sm font-medium text-og-ink">
       {label} (now {current} h; at most {max} h)
-      <input inputMode="numeric" value={vals[name]} onChange={(e) => setVals({ ...vals, [name]: e.target.value })} placeholder={`Leave empty for ${max}`} className="mt-1 block w-full rounded-lg border border-og-line bg-og-card px-3 py-2 text-base" />
+      <input inputMode="numeric" value={vals[name]} onChange={(e) => setVals({ ...vals, [name]: e.target.value })} placeholder={`Leave empty for ${max}`} className="mt-0.5 block w-full rounded-md border border-og-line bg-og-card px-2 py-1 text-sm" />
     </label>
   );
   return (
     <Disclosure summary="Follow-up deadlines" >
-      <div className="space-y-2" data-testid="deadline-settings">
+      <div className="space-y-1.5" data-testid="deadline-settings">
         <ShortHelp className="text-sm text-og-sub" details="These only decide when an item moves to the urgent view. A deadline never approves, signs or bills anything. A stricter payer or regulatory deadline is not set up here.">A deadline can be shorter than the default, never longer.</ShortHelp>
         {canEdit ? (
           <>
@@ -110,7 +116,7 @@ function DeadlineSettings() {
             {field("Administrator review", "r", s.reviewOverdueHours, s.defaults.reviewOverdueHours)}
             {field("Document review", "d", s.documentReviewOverdueHours, s.defaults.documentReviewOverdueHours)}
             <label className="block text-sm font-medium text-og-ink">Why are you changing them? (kept on record)
-              <textarea rows={2} maxLength={1000} value={vals.reason} onChange={(e) => setVals({ ...vals, reason: e.target.value })} className="mt-1 block w-full rounded-lg border border-og-line bg-og-card px-3 py-2 text-base" />
+              <textarea rows={2} maxLength={1000} value={vals.reason} onChange={(e) => setVals({ ...vals, reason: e.target.value })} className="mt-0.5 block w-full rounded-md border border-og-line bg-og-card px-2 py-1 text-sm" />
             </label>
             <Button type="button" className="min-h-11" loading={state.busy} disabled={state.busy} onClick={() => void save()}>Save the deadlines</Button>
             {state.error ? <p role="alert" className="text-sm text-red-700">{state.error}</p> : null}
@@ -151,12 +157,12 @@ function NotificationSettingsCard() {
   }
   return (
     <Disclosure summary="Notifications">
-      <div className="space-y-2" data-testid="notification-settings">
+      <div className="space-y-1.5" data-testid="notification-settings">
         <ShortHelp className="text-sm text-og-sub" details="In-app only. Critical items always notify the staff who can see them. Routine items stay listed here and never notify. No email, text or push message is sent.">Urgent items: {s.urgentInApp ? "notify" : "do not notify"}.</ShortHelp>
         {canEdit ? (
           <>
             <label className="block text-sm font-medium text-og-ink">Why are you changing it? (kept on record)
-              <input value={reason} maxLength={1000} onChange={(e) => setReason(e.target.value)} className="mt-1 block w-full rounded-lg border border-og-line bg-og-card px-3 py-2 text-base" />
+              <input value={reason} maxLength={1000} onChange={(e) => setReason(e.target.value)} className="mt-0.5 block w-full rounded-md border border-og-line bg-og-card px-2 py-1 text-sm" />
             </label>
             <Button type="button" className="min-h-11" loading={state.busy} disabled={state.busy} onClick={() => void save(!s.urgentInApp)}>{s.urgentInApp ? "Stop Urgent notifications" : "Turn Urgent notifications on"}</Button>
             {state.error ? <p role="alert" className="text-sm text-red-700">{state.error}</p> : null}
@@ -190,11 +196,9 @@ export function ActionNeededPage() {
   }, [all.data]);
   const set = (k: keyof Filters, v: string) => { setF({ ...f, [k]: v }); setPages(1); };
   const sel = (label: string, k: keyof Filters, opts: Array<[string, string]>) => (
-    <label className="text-xs font-medium text-og-sub">{label}
-      <select value={f[k]} onChange={(e) => set(k, e.target.value)} className="mt-1 block min-h-11 w-full rounded-lg border border-og-line bg-og-card px-2 py-1 text-sm text-og-ink md:min-h-9">
-        <option value="">All</option>{opts.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
-      </select>
-    </label>
+    <select aria-label={label} value={f[k]} onChange={(e) => set(k, e.target.value)} className="block min-h-11 w-full rounded-md border border-og-line bg-og-card px-2 text-sm text-og-ink md:min-h-8">
+      <option value="">{label}: All</option>{opts.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+    </select>
   );
   const data = q.data;
   const filtered = Object.values(f).some((v) => !!v);
@@ -206,10 +210,9 @@ export function ActionNeededPage() {
   })();
   return (
     <div className="space-y-3">
-      <PageHeader title="Action needed" lead="Most urgent first. Each item links to its next step." />
+      <PageHeader title="Action needed" lead="Most urgent first. Each item links to its next step. Hover or focus a row for the full recommended action." action={data ? <span className="text-sm font-semibold text-og-ink" data-testid="issue-counts">{data.counts.actionNeeded} need action</span> : undefined} />
       {q.isLoading ? <p className="text-sm text-og-sub">Loading…</p> : null}
       {q.isError ? <p role="alert" className="text-sm text-red-700">The list could not be loaded. Check your connection, then <button type="button" className="font-semibold underline" onClick={() => void q.refetch()}>Retry</button>.</p> : null}
-      {data ? <p className="text-sm font-semibold text-og-ink" data-testid="issue-counts">{data.counts.actionNeeded} need action</p> : null}
       <div className="grid grid-cols-2 gap-2 md:grid-cols-6" data-testid="issue-filters">
         {sel("Queue", "queue", Object.entries(QUEUE_LABEL))}
         {sel("Category", "category", Object.entries(CATEGORY_LABEL))}
@@ -218,26 +221,41 @@ export function ActionNeededPage() {
         {sel("Caregiver", "caregiver", options.caregivers)}
         {sel("Service", "service", options.services)}
       </div>
-      {data && data.issues.length === 0 ? <p role="status" className="rounded-og border border-og-line bg-og-card p-3 text-sm text-og-sub">{!filtered ? "Nothing needs action right now." : "Nothing matches these filters. Clear a filter to see more."}</p> : null}
+      {data && data.issues.length === 0 ? <p role="status" className="rounded-og border border-og-line bg-og-card px-3 py-2 text-sm text-og-sub">{!filtered ? "Nothing needs action right now." : "Nothing matches these filters. Clear a filter to see more."}</p> : null}
       {data && data.issues.length > 0 ? (
         <>
-          {groups.map((g) => (
-            <section key={g.queue} aria-label={QUEUE_LABEL[g.queue] ?? g.queue} className="space-y-1">
-              <h2 className="text-sm font-bold text-og-ink">{QUEUE_LABEL[g.queue] ?? g.queue} <span className="font-og-mono tabular-nums">{g.count}</span>{g.routine ? <span className="font-normal text-og-sub"> · routine, not in the total</span> : null}</h2>
-              <ul className="divide-y divide-og-line rounded-og border border-og-line bg-og-card">{g.issues.map((i) => <IssueCard key={i.issueKey} issue={i} />)}</ul>
-            </section>
-          ))}
+          {groups.map((g) => {
+            const head = (
+              <>
+                <h2 className="text-sm font-semibold text-og-ink">{QUEUE_LABEL[g.queue] ?? g.queue} <span className="font-og-mono tabular-nums">{g.count}</span></h2>
+                {g.routine ? <InfoTip label="About this group">Routine: waiting inside its deadline. Not in the Action needed total.</InfoTip> : null}
+              </>
+            );
+            const list = <ul className="divide-y divide-og-line rounded-og border border-og-line bg-og-card">{g.issues.map((i) => <IssueCard key={i.issueKey} issue={i} />)}</ul>;
+            // Exceptions (Critical and Urgent) first and open; a group that is all routine is one summary row until opened.
+            return g.routine ? (
+              <section key={g.queue} aria-label={QUEUE_LABEL[g.queue] ?? g.queue}>
+                <details data-testid={`routine-group-${g.queue}`}>
+                  <summary className="flex min-h-[32px] cursor-pointer items-center gap-1.5 [@media(pointer:coarse)]:min-h-[44px]">{head}<span className="text-xs text-og-link underline">Show</span></summary>
+                  <div className="pt-0.5">{list}</div>
+                </details>
+              </section>
+            ) : (
+              <section key={g.queue} aria-label={QUEUE_LABEL[g.queue] ?? g.queue} className="space-y-0.5">
+                <div className="flex items-center gap-1.5">{head}</div>
+                {list}
+              </section>
+            );
+          })}
           {data.matching > data.issues.length ? <Button type="button" variant="secondary" className="min-h-11" onClick={() => setPages(pages + 1)}>Show more ({data.matching - data.issues.length} left)</Button> : null}
         </>
       ) : null}
       <DeadlineSettings />
       <NotificationSettingsCard />
       <Disclosure summary="How this list is built">
-        <p>Every item has one stable identity, so the same problem is the same issue on Home, Scheduling and here. Two problems on the same visit stay two issues.</p>
-        <p className="mt-1">Critical: care is blocked now, or an uncovered shift has started. Urgent: inside the follow-up window or past a deadline.</p>
-        <p className="mt-1">Over the monthly authorization is Urgent, never Critical by itself: all worked time is kept and paid, and the time over the limit is not billed. It clears when the hours are back within the authorization.</p>
-        <p className="mt-1">Routine: waiting inside its deadline. Routine items are separate queues and are never added to the action total.</p>
-        <p className="mt-1">Nothing here assigns anyone, approves a visit or sends a bill. You decide on the next screen.</p>
+        <p>Each problem has one stable identity, so it is the same issue on Home, Scheduling and here; two problems on one visit stay two issues. Nothing here assigns anyone, approves a visit or sends a bill.</p>
+        <p className="mt-1">Critical: care is blocked now, or an uncovered shift has started. Urgent: inside the follow-up window or past a deadline. Routine: waiting inside its deadline; routine queues are never added to the action total.</p>
+        <p className="mt-1">Over the monthly authorization is Urgent, never Critical by itself: all worked time is kept and paid, the time over the limit is not billed, and it clears when hours are back within the authorization.</p>
       </Disclosure>
     </div>
   );

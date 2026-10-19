@@ -7,7 +7,7 @@ import { newIdempotencyKey } from "@/lib/sv-backend";
 import { useOrganization } from "@/providers/organization-provider";
 import { useAwsApi } from "./aws-workspace";
 import { DuplicateWarning } from "./client-extras";
-import { ShortHelp } from "./help-text";
+import { Hint } from "./hint";
 import { useDuplicateClients } from "./client-data";
 import { nameWithCode } from "./name-label";
 import { clientName, STATUS_BADGE, STATUS_LABEL, useClients, useClientTypes, type AdminClient, type ClientStatus } from "./client-admin";
@@ -97,9 +97,9 @@ function AddClientForm({ onDone }: { onDone: (clientId: string) => void }) {
     }
   }
   return (
-    <Card className="p-4">
+    <Card className="p-3">
       <h2 className="text-base font-semibold text-slate-950">Add a client</h2>
-      <ShortHelp className="mt-1 text-xs text-slate-600" details="Ogevia gives every client a random code. Caregivers see the code (or the label below), never the name.">Caregivers see a code or label, never the name.</ShortHelp>
+      <Hint details="Ogevia gives every client a random code. Caregivers see the code (or the label below), never the name." show>Caregivers see a code or label, never the name.</Hint>
       <form onSubmit={(e) => { e.preventDefault(); void submit(); }} className="mt-3 grid gap-3 sm:grid-cols-2">
         <div><label htmlFor="new-first" className="block text-sm font-medium text-slate-700">First name</label><input id="new-first" value={form.first} maxLength={80} autoComplete="off" onChange={(e) => set("first")(e.target.value)} className={inputClass} /></div>
         <div><label htmlFor="new-last" className="block text-sm font-medium text-slate-700">Last name</label><input id="new-last" value={form.last} maxLength={80} autoComplete="off" onChange={(e) => set("last")(e.target.value)} className={inputClass} /></div>
@@ -225,10 +225,10 @@ function ClientList({ clients }: { clients: AdminClient[] }) {
       <table className="w-full text-left text-sm" aria-label="Clients as a list">
         <thead>
           <tr className="border-b border-slate-200 text-xs uppercase tracking-wide text-slate-600">
-            <th scope="col" className="px-3 py-2 font-semibold">Client</th>
-            <th scope="col" className="px-3 py-2 font-semibold">Status</th>
-            <th scope="col" className="px-3 py-2 font-semibold">Authorization</th>
-            <th scope="col" className="px-3 py-2 font-semibold"><span className="sr-only">Action</span></th>
+            <th scope="col" className="px-3 py-1.5 font-semibold">Client</th>
+            <th scope="col" className="px-3 py-1.5 font-semibold">Status</th>
+            <th scope="col" className="px-3 py-1.5 font-semibold">Authorization</th>
+            <th scope="col" className="px-3 py-1.5 font-semibold"><span className="sr-only">Action</span></th>
           </tr>
         </thead>
         <tbody>

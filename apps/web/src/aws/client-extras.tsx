@@ -4,6 +4,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { Button, Card } from "@carelik/ui";
+import { AuditList } from "./ui/audit-list";
 import { formatClockTime, formatNumericDate } from "@/lib/service-verification";
 import { newIdempotencyKey } from "@/lib/sv-backend";
 import { useOrganization } from "@/providers/organization-provider";
@@ -15,12 +16,13 @@ import { useAwsApi } from "./aws-workspace";
 import { prepareDocumentFile } from "./document-file";
 import { uploadFailureMessage } from "./document-status";
 import { SummarySection } from "./ui/summary-section";
+import { InfoTip } from "./ui/info-tip";
 import type { Shift } from "./schedule-page";
 import { TONE } from "./attention";
 import { StatusChip } from "./ui/status-chip";
 
 const msg = (cause: unknown, fallback: string) => (cause instanceof Error ? cause.message : fallback);
-const field = "mt-1 block w-full rounded-lg border border-slate-200 px-3 py-2 text-base";
+const field = "mt-0.5 block w-full rounded-lg border border-slate-200 px-2.5 py-1 text-sm";
 const linkCls = "inline-flex min-h-[44px] items-center font-semibold text-slate-900 underline md:min-h-[32px]";
 
 // ---------------------------------------------------------------- duplicate names (13)
@@ -62,6 +64,7 @@ export function ReadinessCard({ clientId }: { clientId: string }) {
   const [holdReason, setHoldReason] = useState("");
   const [releaseFor, setReleaseFor] = useState<string | null>(null);
   const [releaseNote, setReleaseNote] = useState("");
+  const [draftOpen, setDraftOpen] = useState(false);
   const key = useRef(newIdempotencyKey());
   const r = q.data;
   if (q.isError) return <Card className="p-4"><p role="alert" className="text-sm text-red-700">Readiness could not be loaded, so it is not shown as ready. <button type="button" className="underline" onClick={() => void q.refetch()}>Retry</button></p></Card>;
@@ -72,7 +75,7 @@ export function ReadinessCard({ clientId }: { clientId: string }) {
     try {
       await api.post(path, { organizationId: activeOrganizationId, ...body }, { idempotencyKey: key.current });
       key.current = newIdempotencyKey();
-      setNote(""); setHoldFor(null); setHoldReason(""); setReleaseFor(null); setReleaseNote("");
+      setNote(""); setDraftOpen(false); setHoldFor(null); setHoldReason(""); setReleaseFor(null); setReleaseNote("");
       await refresh();
       setState({ busy: false, error: null, done });
     } catch (cause) {
@@ -87,15 +90,24 @@ export function ReadinessCard({ clientId }: { clientId: string }) {
       summary={!r.canSchedule ? `Cannot be scheduled${preparing ? " until it is activated" : ""}.` : notReady > 0 ? `${notReady} service${notReady === 1 ? "" : "s"} to fix` : "Ready for scheduling"}>
       {r.stageNote ? <p className="mt-1 text-sm text-slate-700">{r.stageNote}</p> : null}
       {r.services.length === 0 ? <p className="mt-2 text-sm text-slate-600">No service has an authorization yet. Add one under Authorizations.</p> : (
-        <ul className="mt-2 space-y-2">
+        <ul className="mt-1 divide-y divide-slate-100">
           {r.services.map((s) => (
-            <li key={s.serviceId} className="rounded-lg border border-slate-200 p-3" data-testid="readiness-service">
-              <div className="flex flex-wrap items-center gap-2">
+            <li key={s.serviceId} className="py-1.5" data-testid="readiness-service">
+              <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
                 <p className="text-sm font-semibold text-slate-900">{s.serviceName}</p>
                 <StatusChip tone={s.state === "ready" ? "neutral" : "amber"}>{SERVICE_STATE[s.state]}</StatusChip>
+                {s.authorization.state !== "valid" ? (
+                  <span className="inline-flex items-center gap-1 text-xs text-amber-900">
+                    Authorization {s.authorization.state === "expired" ? "ended" : "starts"} {formatNumericDate(s.authorization.state === "expired" ? s.authorization.periodEnd : s.authorization.periodStart)}
+                    {s.authorization.state === "expired" ? <InfoTip>New scheduling is refused. Renew it under Authorizations; nothing already scheduled is deleted.</InfoTip> : null}
+                  </span>
+                ) : null}
+                <span className="ml-auto flex flex-wrap items-center gap-x-3">
+                  {s.authorization.state === "expired" && canManage ? <a href="#authorizations" className="inline-flex min-h-8 items-center text-sm font-semibold text-slate-900 underline [@media(pointer:coarse)]:min-h-[44px]">Renew</a> : null}
+                  {!s.hold && canManage && r.status === "active" && holdFor !== s.serviceId ? <button type="button" className={linkCls} onClick={() => setHoldFor(s.serviceId)}>Place this service on hold…</button> : null}
+                </span>
               </div>
-              {s.authorization.state !== "valid" ? <p className="text-xs text-amber-900">Authorization {s.authorization.state === "expired" ? "ended" : "starts"} {formatNumericDate(s.authorization.state === "expired" ? s.authorization.periodEnd : s.authorization.periodStart)}.{s.authorization.state === "expired" ? " New scheduling is refused. Renew it under Authorizations; nothing already scheduled is deleted." : ""}</p> : null}
-              {s.requirements.length > 0 ? <ul className="mt-1 text-xs text-slate-700">{s.requirements.map((x) => <li key={x.documentTypeId}>{x.state === "approved" ? "✓" : "○"} {x.name}: {x.state.replace(/_/g, " ")}</li>)}</ul> : null}
+              {s.requirements.length > 0 ? <ul className="mt-0.5 flex flex-wrap gap-x-4 text-xs text-slate-700">{s.requirements.map((x) => <li key={x.documentTypeId}>{x.state === "approved" ? "✓" : "○"} {x.name}: {x.state.replace(/_/g, " ")}</li>)}</ul> : null}
               {s.hold ? (
                 <div className="mt-1 text-sm text-amber-900" data-testid="service-hold">
                   <p>On hold since {formatNumericDate(s.hold.openedAt)}{s.hold.openedByName ? ` by ${s.hold.openedByName}` : ""}: {s.hold.reason}</p>
@@ -103,7 +115,7 @@ export function ReadinessCard({ clientId }: { clientId: string }) {
                   {canManage && releaseFor === s.hold.holdId ? (
                     <div className="mt-1 space-y-1">
                       <label className="block text-sm font-medium text-slate-700">What did you check? (kept on record)<input value={releaseNote} maxLength={500} onChange={(e) => setReleaseNote(e.target.value)} className={field} /></label>
-                      <Button type="button" variant="secondary" className="min-h-11" disabled={state.busy} onClick={() => releaseNote.trim().length < 10 ? setState({ busy: false, error: "Write what was checked (at least 10 characters).", done: null }) : void act(`/v1/client-service-holds/${encodeURIComponent(s.hold!.holdId)}/release`, { note: releaseNote.trim() }, "The hold was released.")}>Release</Button>
+                      <Button type="button" variant="secondary" className="min-h-8 [@media(pointer:coarse)]:min-h-11" disabled={state.busy} onClick={() => releaseNote.trim().length < 10 ? setState({ busy: false, error: "Write what was checked (at least 10 characters).", done: null }) : void act(`/v1/client-service-holds/${encodeURIComponent(s.hold!.holdId)}/release`, { note: releaseNote.trim() }, "The hold was released.")}>Release</Button>
                     </div>
                   ) : null}
                 </div>
@@ -111,21 +123,24 @@ export function ReadinessCard({ clientId }: { clientId: string }) {
                 holdFor === s.serviceId ? (
                   <div className="mt-1 space-y-1">
                     <label className="block text-sm font-medium text-slate-700">Why is this service on hold?<input value={holdReason} maxLength={500} onChange={(e) => setHoldReason(e.target.value)} className={field} /></label>
-                    <Button type="button" variant="secondary" className="min-h-11" disabled={state.busy} onClick={() => holdReason.trim().length < 10 ? setState({ busy: false, error: "Write the reason (at least 10 characters).", done: null }) : void act(`/v1/clients/${encodeURIComponent(clientId)}/service-holds`, { serviceId: s.serviceId, reason: holdReason.trim() }, "The service is on hold. New scheduling for it is refused; other services are not affected.")}>Place on hold</Button>
+                    <Button type="button" variant="secondary" className="min-h-8 [@media(pointer:coarse)]:min-h-11" disabled={state.busy} onClick={() => holdReason.trim().length < 10 ? setState({ busy: false, error: "Write the reason (at least 10 characters).", done: null }) : void act(`/v1/clients/${encodeURIComponent(clientId)}/service-holds`, { serviceId: s.serviceId, reason: holdReason.trim() }, "The service is on hold. New scheduling for it is refused; other services are not affected.")}>Place on hold</Button>
                   </div>
-                ) : <button type="button" className={linkCls} onClick={() => setHoldFor(s.serviceId)}>Place this service on hold…</button>
+                ) : null
               ) : null}
             </li>
           ))}
         </ul>
       )}
       {canManage && r.status === "active" ? (
-        <div className="mt-3 flex flex-wrap items-end gap-2">
+        <div className="mt-2 flex flex-wrap items-end gap-2">
           {preparing ? <>
-            {r.stage === "draft" ? <Button type="button" variant="secondary" className="min-h-11" disabled={state.busy} onClick={() => void act(`/v1/clients/${encodeURIComponent(clientId)}/stage`, { stage: "pending", note: note.trim() || null }, "Saved as Pending.")}>Mark as Pending</Button> : null}
-            <Button type="button" className="min-h-11" disabled={state.busy} onClick={() => void act(`/v1/clients/${encodeURIComponent(clientId)}/stage`, { stage: "active" }, "The client is active and can be scheduled.")}>Activate</Button>
-          </> : <Button type="button" variant="secondary" className="min-h-11" disabled={state.busy} onClick={() => void act(`/v1/clients/${encodeURIComponent(clientId)}/stage`, { stage: "draft", note: note.trim() || null }, "Saved as a draft. It cannot be scheduled until you activate it.")}>Move to Draft…</Button>}
-          <label className="min-w-[200px] flex-1 text-xs font-medium text-slate-600">Note (optional)<input value={note} maxLength={500} onChange={(e) => setNote(e.target.value)} className={field} /></label>
+            {r.stage === "draft" ? <Button type="button" variant="secondary" className="min-h-8 [@media(pointer:coarse)]:min-h-11" disabled={state.busy} onClick={() => void act(`/v1/clients/${encodeURIComponent(clientId)}/stage`, { stage: "pending", note: note.trim() || null }, "Saved as Pending.")}>Mark as Pending</Button> : null}
+            <Button type="button" className="min-h-8 [@media(pointer:coarse)]:min-h-11" disabled={state.busy} onClick={() => void act(`/v1/clients/${encodeURIComponent(clientId)}/stage`, { stage: "active" }, "The client is active and can be scheduled.")}>Activate</Button>
+          </> : !draftOpen ? <Button type="button" variant="secondary" className="min-h-8 [@media(pointer:coarse)]:min-h-11" onClick={() => setDraftOpen(true)}>Move to Draft…</Button> : <>
+            <Button type="button" variant="secondary" className="min-h-8 [@media(pointer:coarse)]:min-h-11" disabled={state.busy} onClick={() => void act(`/v1/clients/${encodeURIComponent(clientId)}/stage`, { stage: "draft", note: note.trim() || null }, "Saved as a draft. It cannot be scheduled until you activate it.")}>Move to Draft</Button>
+            <Button type="button" variant="secondary" className="min-h-8 [@media(pointer:coarse)]:min-h-11" onClick={() => { setDraftOpen(false); setNote(""); }}>Cancel</Button>
+          </>}
+          {preparing || draftOpen ? <label className="min-w-[200px] flex-1 text-xs font-medium text-slate-600">Note (optional)<input value={note} maxLength={500} onChange={(e) => setNote(e.target.value)} className={field} /></label> : null}
         </div>
       ) : null}
       {preparing ? <p className="mt-1 text-xs text-slate-600">Activation needs every required document approved and no service on hold.</p> : null}
@@ -349,17 +364,17 @@ export function ClientAlertsCard({ clientId }: { clientId: string }) {
   const blocked = readiness.data ? !readiness.data.canSchedule : false;
   const ready = open.length === 0 && !blocked;
   return (
-    <section aria-label="Client alerts" data-testid="client-alerts" className="space-y-2">
-      <p data-testid="client-outcome" className={`text-base font-semibold ${ready ? "text-emerald-800" : "text-amber-900"}`}>
+    <section aria-label="Client alerts" data-testid="client-alerts" className="space-y-1">
+      <p data-testid="client-outcome" className={`text-sm font-semibold ${ready ? "text-emerald-800" : "text-amber-900"}`}>
         {ready ? "Ready for scheduling" : open.length > 0 ? `Not ready: ${open.length} item${open.length === 1 ? "" : "s"} to fix` : "Not ready: activate this client to schedule"}
       </p>
       {open.length > 0 ? (
-        <ul className="space-y-2">
+        <ul className="divide-y divide-slate-200 rounded-md border border-slate-200 bg-og-card">
           {groupAlerts(open).map(([i, n]) => {
             const dest = issueDestination(i);
             const tone = i.severity === "critical" ? "red" : i.severity === "urgent" ? "amber" : "neutral";
             return (
-              <li key={i.issueKey} data-testid="client-alert" className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-lg border border-slate-200 bg-og-card p-3 text-sm">
+              <li key={i.issueKey} data-testid="client-alert" className="flex flex-wrap items-center gap-x-2 gap-y-0.5 px-2 py-1 text-sm">
                 <StatusChip tone={tone}>{TONE[tone].word}</StatusChip>
                 <span className="min-w-0 flex-1 text-slate-900">{i.recommendedAction}{n > 1 ? ` (${n} items)` : ""}</span>
                 <Link className={linkCls} to={`${dest.to}${dest.to.includes("?") ? "&" : "?"}client=${encodeURIComponent(clientId)}`}>{dest.label}</Link>
@@ -381,9 +396,9 @@ export function ClientAlertsCard({ clientId }: { clientId: string }) {
 export function ClientQuickActions({ clientId, canEdit }: { clientId: string; canEdit: boolean }) {
   const { hasPermission } = useOrganization();
   const manage = hasPermission("shifts.manage");
-  const btn = "inline-flex min-h-[44px] items-center justify-center rounded-lg px-4 text-sm font-semibold hover:opacity-90";
+  const btn = "inline-flex min-h-[44px] items-center justify-center rounded-lg px-3 text-sm font-semibold hover:opacity-90 md:min-h-8";
   return (
-    <nav aria-label="Client actions" className="flex flex-wrap items-center gap-2">
+    <nav aria-label="Client actions" className="flex flex-wrap items-center gap-1.5">
       {manage ? <Link to={`/schedule?add=1&client=${encodeURIComponent(clientId)}`} className={`${btn} bg-og-accent text-og-on-accent`}>Schedule Visit</Link> : null}
       <details className="relative">
         <summary className={`${btn} cursor-pointer list-none border border-og-line bg-og-card text-og-ink [&::-webkit-details-marker]:hidden`}>More</summary>
@@ -444,17 +459,18 @@ export function ClientHistoryCard({ clientId }: { clientId: string }) {
   });
   if (!allowed) return null;
   return (
-    <Card className="px-4 py-1" data-testid="client-history">
-      <button type="button" className="min-h-[44px] text-base font-semibold text-slate-950" aria-expanded={open} onClick={() => setOpen((v) => !v)}>{open ? "Hide history" : "History and audit trail"}</button>
+    <Card className="px-3 py-0.5" data-testid="client-history">
+      <button type="button" className="min-h-[36px] text-sm font-semibold text-slate-950 [@media(pointer:coarse)]:min-h-[44px]" aria-expanded={open} onClick={() => setOpen((v) => !v)}>{open ? "Hide history" : "History and audit trail"}</button>
       {open ? (
         <div className="mt-2">
           {q.isLoading ? <p className="text-sm text-slate-500">Loading…</p> : null}
           {q.isError ? <p role="alert" className="text-sm text-red-700">The history could not be loaded.</p> : null}
-          <ul className="space-y-1 text-sm">
-            {(q.data ?? []).map((e, n) => <li key={n} className="text-slate-800">{formatNumericDate(e.occurredAt)} {formatClockTime(e.occurredAt)} · {e.action.replace(/[._]/g, " ")}{e.actorName ? ` · ${e.actorName}` : ""}{e.fields.length ? ` · changed: ${e.fields.join(", ").replace(/_/g, " ")}` : ""}{e.reason ? ` · ${e.reason}` : ""}</li>)}
-          </ul>
+          <AuditList label="Client history" maxHeightClass="max-h-60" empty="" rows={(q.data ?? []).map((e, n) => {
+            const what = `${e.action.replace(/[._]/g, " ")}${e.fields.length ? ` · changed: ${e.fields.join(", ").replace(/_/g, " ")}` : ""}`;
+            return { id: String(n), when: `${formatNumericDate(e.occurredAt)} ${formatClockTime(e.occurredAt)}`, who: e.actorName, summary: what, detail: e.reason ? <>{what} · Reason: {e.reason}</> : undefined };
+          })} />
           {q.data && q.data.length === 0 ? <p className="text-sm text-slate-600">No history yet.</p> : null}
-          <p className="mt-2 text-xs text-slate-600">Shows what changed and who changed it, never the values.</p>
+          <p className="mt-1 text-xs text-slate-600">What changed and who changed it, never the values.</p>
         </div>
       ) : null}
     </Card>

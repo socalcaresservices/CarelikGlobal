@@ -6,7 +6,7 @@ import { formatDuration } from "@/lib/service-verification";
 import { useOrganization } from "@/providers/organization-provider";
 import { useAwsApi } from "./aws-workspace";
 import { useAgencyClock } from "./agency-clock";
-import { ShortHelp } from "./help-text";
+import { Hint } from "./hint";
 import { clientLabel } from "./name-label";
 
 const message = (cause: unknown, fallback: string) => (cause instanceof Error ? cause.message : fallback);
@@ -64,7 +64,7 @@ export function PickupRequestsPanel({ onDone }: { onDone: (text: string) => void
   return (
     <section className="space-y-2" data-testid="pickup-requests" aria-labelledby="pickup-heading">
       <h2 id="pickup-heading" className="text-base font-semibold text-slate-950">Caregiver requests for open shifts ({list.data.length})</h2>
-      <ShortHelp details="Confirming checks the shift again: compliance, availability, other shifts, hour limits and the authorization.">Nobody is assigned until you confirm.</ShortHelp>
+      <Hint details="Confirming checks the shift again: compliance, availability, other shifts, hour limits and the authorization." show>Nobody is assigned until you confirm.</Hint>
       <ul className="divide-y divide-slate-200 rounded-lg border border-slate-200 bg-og-card">
         {list.data.map((r) => (
           <li key={r.requestId} className="p-2 text-sm">

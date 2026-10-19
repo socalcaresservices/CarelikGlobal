@@ -5,7 +5,7 @@ import type { AwsApiClient } from "@/lib/aws-api";
 import { useOrganization } from "@/providers/organization-provider";
 import { formatDateTime } from "@/lib/service-verification";
 import { MatchingPanel } from "./readiness/matching-panel";
-import { ShortHelp } from "./help-text";
+import { Hint } from "./hint";
 import { SummarySection } from "./ui/summary-section";
 import { clientLabel } from "./name-label";
 
@@ -100,7 +100,7 @@ export function CareRequestsPage({ api }: { api: AwsApiClient }) {
     <section className="space-y-4">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-semibold text-slate-950">Care requests</h1>
+          <h1 className="text-xl font-semibold text-slate-950">Care requests</h1>
           {requests.data ? <p className="mt-1 text-sm text-slate-700">{queue.length === 0 ? "No open requests." : `${queue.length} open request${queue.length === 1 ? "" : "s"}${shortNotice > 0 ? `, ${shortNotice} short notice` : ""}.`}</p> : null}
         </div>
         {alertCount > 0 ? <span className="rounded-full bg-amber-100 px-3 py-1 text-sm font-semibold text-amber-900">{alertCount} new alert{alertCount === 1 ? "" : "s"}</span> : null}
@@ -113,11 +113,11 @@ export function CareRequestsPage({ api }: { api: AwsApiClient }) {
           <tbody>
             {queue.map((r) => (
               <tr key={r.requestId} className="border-t border-slate-100 align-top">
-                <th scope="row" className="py-2 pr-2 text-left font-normal">
+                <th scope="row" className="py-1.5 pr-2 text-left font-normal">
                   <span className="block font-semibold text-slate-950">{clientLabel(r)} · {r.serviceName}</span>
                   <span className="block text-slate-700">{when(r.startsAt)} · {duration(r.requestedMinutes)}{r.shortNotice ? <span className="ml-1 font-semibold text-amber-900">short notice</span> : null}</span>
                 </th>
-                <td className="py-2 pr-2"><span className="block capitalize text-slate-900">{r.status.replaceAll("_", " ")}</span><span className="block text-slate-700">{r.availableCount} available · {r.awaitingCount} waiting</span></td>
+                <td className="py-1.5 pr-2"><span className="block capitalize text-slate-900">{r.status.replaceAll("_", " ")}</span><span className="block text-slate-700">{r.availableCount} available · {r.awaitingCount} waiting</span></td>
                 <td className="py-2"><Button size="sm" variant="secondary" className="min-h-[44px] md:min-h-[36px]" onClick={() => setSelectedRequestId(r.requestId)}>Open</Button></td>
               </tr>
             ))}
@@ -125,10 +125,10 @@ export function CareRequestsPage({ api }: { api: AwsApiClient }) {
         </table>
       ) : null}
 
-      {selectedRequestId ? <div className="grid gap-6 lg:grid-cols-2">
+      {selectedRequestId ? <div className="grid gap-3 lg:grid-cols-2">
         <Card>
           <h2 className="font-semibold text-slate-950">Matches</h2>
-          <ShortHelp className="mt-1 text-xs text-slate-500" details="Checks: approved hours, documents, conflicts, and services where required.">Caregivers are checked first, then ranked. A score never makes a blocked caregiver assignable.</ShortHelp>
+          <Hint details="Checks: approved hours, documents, conflicts, and services where required.">Caregivers are checked first, then ranked. A score never makes a blocked caregiver assignable.</Hint>
           <div className="mt-3"><MatchingPanel requestId={selectedRequestId} onOffer={(id) => sendOffer.mutate(id)} offering={sendOffer.isPending} /></div>
           {offerLink ? <div className="mt-3 rounded-lg bg-slate-50 p-3"><p className="text-xs text-slate-500">Secure fallback link. Caregivers with Ogevia access also see the opportunity in-app.</p><div className="mt-2 flex gap-2"><input readOnly value={offerLink} className="min-w-0 flex-1 rounded-lg border border-slate-200 px-2 py-1 text-xs" /><Button size="sm" variant="secondary" onClick={() => void navigator.clipboard.writeText(offerLink)}>Copy</Button></div></div> : null}
         </Card>
@@ -139,7 +139,7 @@ export function CareRequestsPage({ api }: { api: AwsApiClient }) {
       </div> : null}
 
       <SummarySection title="Client request link" summary="Create or revoke a family's link">
-        <ShortHelp className="text-sm text-slate-600">Create once per family. They bookmark it and request care without calling.</ShortHelp>
+        <Hint>Create once per family. They bookmark it and request care without calling.</Hint>
         <div className="mt-3 flex flex-wrap gap-2">
           <select aria-label="Client" value={clientId} onChange={(e) => setClientId(e.target.value)} className="min-w-56 rounded-lg border border-slate-200 px-3 py-2 text-base">
             <option value="">Select client</option>{(clients.data?.clients ?? []).map((c) => <option key={c.clientId} value={c.clientId}>{clientLabel(c)}</option>)}

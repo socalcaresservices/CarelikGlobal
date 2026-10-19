@@ -32,7 +32,7 @@ export function CaregiverReadiness({ caregiverRecordId }: { caregiverRecordId: s
           {q.isLoading ? <p className="text-sm text-slate-500">Loading…</p> : null}
           {q.isError ? <p role="alert" className="text-sm text-red-700">{actionError(q.error, "Availability could not be loaded.")}</p> : null}
           {q.data ? (
-            <div className="space-y-4">
+            <div className="space-y-3">
               <section aria-label="Approved hours"><h3 className="text-sm font-semibold text-slate-900">Approved</h3><div className="mt-1"><CurrentAvailability state={q.data} /></div></section>
               <section aria-label="Pending changes"><h3 className="text-sm font-semibold text-slate-900">Pending</h3><div className="mt-1"><RequestHistory rows={q.data.pending} /></div></section>
               {editing ? <div className="border-t border-slate-200 pt-3"><p className="mb-2 text-xs text-slate-600">An administrator edit takes effect immediately and is recorded with your reason.</p><AvailabilityRequestForm state={q.data} mode="administrator" /></div> : null}

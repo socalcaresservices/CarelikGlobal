@@ -5,7 +5,7 @@ import { newIdempotencyKey } from "@/lib/sv-backend";
 import { useOrganization } from "@/providers/organization-provider";
 import { useAwsApi } from "../aws-workspace";
 import { CHECK_GROUPS, actionError, groupOutcome, type CheckRow } from "./format";
-import { ShortHelp } from "../help-text";
+import { InfoTip } from "../ui/info-tip";
 
 
 export interface AssignmentCheckInput {
@@ -91,7 +91,7 @@ export function AssignmentChecks({ input, onReady, outcome, note }: { input: Ass
     );
   };
   return (
-    <section aria-label="Assignment checks" className="space-y-1 rounded-lg border border-slate-200 bg-og-card p-3">
+    <section aria-label="Assignment checks" className="space-y-1 rounded-md border border-slate-200 bg-og-card px-2 py-1.5">
       {outcome ? <div role="alert" data-testid="assignment-outcome" className="text-sm font-semibold text-red-800">{outcome}</div> : <p role="status" data-testid="assignment-outcome" className={`text-sm font-semibold ${OUTCOME_TONE[result.tone]}`}>{result.text}</p>}
       {outcome ? <p className={`text-xs ${OUTCOME_TONE[result.tone]}`}>{result.text}</p> : note ? <p className="text-xs text-slate-600">{note}</p> : null}
       {shown.length > 0 ? <ul className="space-y-1">{shown.map(row)}</ul> : null}
@@ -104,9 +104,9 @@ export function AssignmentChecks({ input, onReady, outcome, note }: { input: Ass
         overriding ? (
           <div role="group" className="space-y-2" aria-label="Override availability">
             <label className="block text-sm font-medium text-slate-800">Reason for the override
-              <textarea value={reason} onChange={(e) => { setReason(e.target.value); key.current = newIdempotencyKey(); }} rows={2} maxLength={500} className="mt-1 block w-full rounded-md border border-slate-300 px-3 py-2 text-base" />
+              <textarea value={reason} onChange={(e) => { setReason(e.target.value); key.current = newIdempotencyKey(); }} rows={2} maxLength={500} className="mt-1 block w-full rounded-md border border-slate-300 px-2.5 py-1.5 text-sm" />
             </label>
-            <ShortHelp className="text-xs text-slate-600" details="It does not change the caregiver's recorded availability, service approval, documents or bookings. To change their ongoing availability, use Edit Availability.">One-time override of the availability check for this caregiver, this client and this one shift. It can be used once, within 30 minutes.</ShortHelp>
+            <p className="flex items-center gap-1.5 text-xs text-slate-600">One-time override of the availability check for this caregiver, this client and this one shift. It can be used once, within 30 minutes.<InfoTip>It does not change the caregiver's recorded availability, service approval, documents or bookings. To change their ongoing availability, use Edit Availability.</InfoTip></p>
             {override.isError ? <p role="alert" className="text-sm text-red-700">{actionError(override.error, "The override could not be saved.")}</p> : null}
             <Button type="button" variant="secondary" disabled={override.isPending || reason.trim().length < 3} onClick={() => override.mutate()}>{override.isPending ? "Saving…" : "Override availability"}</Button>
           </div>

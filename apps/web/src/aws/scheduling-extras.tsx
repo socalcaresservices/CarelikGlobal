@@ -10,7 +10,7 @@ import { newIdempotencyKey } from "@/lib/sv-backend";
 import { useOrganization } from "@/providers/organization-provider";
 import { useAwsApi } from "./aws-workspace";
 import { caregiverName, useCaregivers } from "./care-team-admin";
-import { ShortHelp } from "./help-text";
+import { Hint } from "./hint";
 
 const inputClass = "mt-1 block w-full rounded-lg border border-slate-200 px-3 py-2 text-base";
 const message = (cause: unknown, fallback: string) => (cause instanceof Error ? cause.message : fallback);
@@ -45,7 +45,7 @@ export function MakeupForm({ shiftId, caregiverRecordId, defaultDate, onClose, o
   }
   return (
     <form onSubmit={(e) => { e.preventDefault(); void submit(); }} className="mt-2 grid gap-2 rounded-lg bg-slate-50 p-2 sm:grid-cols-2">
-      <ShortHelp className="text-xs text-slate-600 sm:col-span-2" details="It uses the month's authorized hours like any other shift.">Same month as the missed visit, and no longer than the time still owed.</ShortHelp>
+      <Hint details="It uses the month's authorized hours like any other shift." className="sm:col-span-2">Same month as the missed visit, and no longer than the time still owed.</Hint>
       <div><label htmlFor={`${id}-d`} className="block text-xs font-medium text-slate-600">Date</label><input id={`${id}-d`} type="date" value={form.date} onChange={(e) => change({ date: e.target.value })} className={inputClass} /></div>
       <div>
         <label htmlFor={`${id}-c`} className="block text-xs font-medium text-slate-600">Caregiver</label>
@@ -138,7 +138,7 @@ export function HourLimitsPanel({ from, to, canManage }: { from: string; to: str
         {policy.data?.applies ? (
           <div data-testid="work-hour-policy" className="mb-2 rounded-lg border border-slate-300 bg-og-card px-3 py-2 text-sm text-slate-900">
             <p className="font-semibold">Agency limit: {formatDuration(policy.data.maxDailyMinutes ?? 0)} a day and {formatDuration(policy.data.maxWeeklyMinutes ?? 0)} a week.</p>
-            <ShortHelp className="text-sm text-slate-900" details="A stricter limit below still applies on top of it.">It is always enforced and cannot be overridden or loosened here.</ShortHelp>
+            <Hint details="A stricter limit below still applies on top of it." show>It is always enforced and cannot be overridden or loosened here.</Hint>
           </div>
         ) : null}
         {limits.data && limits.data.length === 0 && !policy.data?.applies ? <p className="text-sm text-slate-600">No limits set. Caregivers can be scheduled for any number of hours.</p> : null}

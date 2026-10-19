@@ -1,5 +1,7 @@
 import { useState } from "react";
 import { Button, Card } from "@carelik/ui";
+import { InfoTip } from "../ui/info-tip";
+import { SummarySection } from "../ui/summary-section";
 import { actionError } from "../readiness/format";
 import {
   ACCENTS, ACCENT_LABEL, ACCENT_RGB, BACKGROUNDS, BACKGROUND_LABEL, BACKGROUND_SWATCH, CHART_LABEL, CHART_TYPES, DENSITIES, DENSITY_LABEL, LAYOUT_LABEL, LAYOUTS, TEXT_LABEL, TEXT_SIZES, rgbCss,
@@ -26,18 +28,18 @@ function ChoiceForm({ level, current, defaultLabel }: { level: "me" | "organizat
   const dirty = GROUPS.some((g) => draft[g.key] !== current[g.key]);
   return (
     <form
-      className="space-y-4"
+      className="space-y-1"
       aria-label={level === "me" ? "My view" : "Agency defaults"}
       onSubmit={(e) => { e.preventDefault(); if (dirty && !save.isPending) save.mutate(draft); }}
     >
       {GROUPS.map((g) => (
-        <fieldset key={g.key} className="min-w-0">
-          <legend className="text-sm font-semibold text-og-ink">{g.legend}</legend>
-          <div className="mt-1.5 flex flex-wrap gap-2">
+        <fieldset key={g.key} className="min-w-0 md:flex md:items-start md:gap-3">
+          <legend className="text-sm font-semibold text-og-ink md:float-left md:w-24 md:pt-1">{g.legend}</legend>
+          <div className="flex flex-wrap gap-1.5 md:flex-1">
             {[null, ...g.options].map((v) => {
               const selected = (draft[g.key] ?? null) === v;
               return (
-                <label key={v ?? "default"} className={"og-row inline-flex min-h-[44px] cursor-pointer md:min-h-[40px] items-center gap-2 rounded-lg border px-3 text-sm focus-within:outline focus-within:outline-2 focus-within:outline-og-accent " + (selected ? "border-og-accent bg-og-active font-semibold text-og-ink" : "border-og-line bg-og-card text-og-ink")}>
+                <label key={v ?? "default"} className={"og-row inline-flex min-h-[44px] cursor-pointer md:min-h-[28px] items-center gap-1 rounded-md border px-2 text-sm focus-within:outline focus-within:outline-2 focus-within:outline-og-accent " + (selected ? "border-og-accent bg-og-active font-semibold text-og-ink" : "border-og-line bg-og-card text-og-ink")}>
                   <input
                     type="radio"
                     className="sr-only"
@@ -51,13 +53,13 @@ function ChoiceForm({ level, current, defaultLabel }: { level: "me" | "organizat
                 </label>
               );
             })}
+            {g.hint ? <InfoTip label={`About ${g.legend}`} className="self-center">{g.hint}</InfoTip> : null}
           </div>
-          {g.hint ? <p className="mt-1 text-xs text-og-sub">{g.hint}</p> : null}
         </fieldset>
       ))}
       {save.isError ? <p role="alert" className="text-sm text-red-700">{actionError(save.error, "The appearance could not be saved.")}</p> : null}
       <div className="flex flex-wrap items-center gap-3">
-        <Button type="submit" className="min-h-[44px] md:min-h-[40px]" disabled={!dirty || save.isPending}>{save.isPending ? "Saving…" : "Save"}</Button>
+        <Button type="submit" className="min-h-[44px] md:min-h-[32px]" disabled={!dirty || save.isPending}>{save.isPending ? "Saving…" : "Save"}</Button>
         {save.isSuccess && !dirty ? <p role="status" className="text-sm text-og-sub">Saved.</p> : null}
       </div>
     </form>
@@ -68,27 +70,23 @@ function ChoiceForm({ level, current, defaultLabel }: { level: "me" | "organizat
 export function AppearancePage() {
   const q = useAppearanceState();
   return (
-    <div className="mx-auto max-w-3xl space-y-6">
-      <h1 className="text-2xl font-bold tracking-tight text-og-ink">Appearance</h1>
+    <div className="mx-auto max-w-3xl space-y-3">
+      <h1 className="text-xl font-bold tracking-tight text-og-ink">Appearance</h1>
       {q.isLoading ? <p className="text-sm text-og-sub">Loading…</p> : null}
       {q.isError ? <p role="alert" className="text-sm text-red-700">{actionError(q.error, "Appearance could not be loaded.")}</p> : null}
       {q.data ? (
         <>
-          <Card className="space-y-3">
-            <div>
-              <h2 className="text-base font-semibold text-og-ink">My view</h2>
-              <p className="text-sm text-og-sub">Only you see these choices. “Agency default” follows your agency&apos;s setting.</p>
+          <Card className="space-y-1.5">
+            <div className="flex flex-wrap items-baseline gap-x-2">
+              <h2 className="text-sm font-semibold text-og-ink">My view</h2>
+              <p className="text-xs text-og-sub">Only you see these. “Agency default” follows your agency&apos;s setting.</p>
             </div>
             <ChoiceForm key={JSON.stringify(q.data.mine)} level="me" current={q.data.mine} defaultLabel="Agency default" />
           </Card>
           {q.data.canSetOrganizationDefaults ? (
-            <Card className="space-y-3">
-              <div>
-                <h2 className="text-base font-semibold text-og-ink">Agency defaults</h2>
-                <p className="text-sm text-og-sub">What everyone sees until they choose their own.</p>
-              </div>
+            <SummarySection title="Agency defaults" summary="What everyone sees until they choose their own.">
               <ChoiceForm key={JSON.stringify(q.data.organization)} level="organization" current={q.data.organization} defaultLabel="Built-in" />
-            </Card>
+            </SummarySection>
           ) : null}
         </>
       ) : null}

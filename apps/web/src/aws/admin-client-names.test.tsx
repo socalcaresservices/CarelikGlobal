@@ -93,7 +93,7 @@ describe("administrator rows show the name, not the code", () => {
   it("Compliance holds: shifts at risk name the client", async () => {
     renderAt("/compliance", { "/v1/compliance/holds": { holds: [], totals: { holds: 0, shiftsAtRisk: 1, shiftsAtRiskInProgress: 0 }, shiftsAtRisk: [{ shiftId: "sh1", requirement: "cpr", caregiverRecordId: "g1", caregiverCode: "CG-1", caregiverName: "Alex Lee", clientCode: "CL-ROBIN1", clientName: "Robin Unique", duplicateName: false, startsAt: at(20), endsAt: at(24), inProgress: false, onHold: false, visitId: null, validUntil: null }] } });
     const text = await screen.findByText(/Alex Lee/, { exact: false });
-    await waitFor(() => expect(text.closest("li")).toHaveTextContent("· Robin Unique ·"));
+    await waitFor(() => expect(text.closest("li")).toHaveTextContent("· Robin Unique"));
     expect(text.closest("li")).not.toHaveTextContent("CL-ROBIN1");
   });
 

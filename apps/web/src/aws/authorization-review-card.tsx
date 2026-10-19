@@ -47,7 +47,7 @@ export function AuthorizationReviewCard({ visitId }: { visitId: string }) {
   }
   const open = data.reviews.find((r) => !r.resolvedAt);
   return (
-    <Card className="space-y-2 p-4" data-testid="authorization-review">
+    <Card className="space-y-2 p-3" data-testid="authorization-review">
       <h2 className="text-base font-semibold text-slate-950">{open ? "The authorization was lowered after this visit was confirmed" : "Authorization review (resolved)"}</h2>
       {data.reviews.map((r) => (
         <div key={r.reviewId} className="rounded-lg bg-slate-50 p-3 text-sm text-slate-800">

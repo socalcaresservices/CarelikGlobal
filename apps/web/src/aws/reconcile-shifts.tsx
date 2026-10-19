@@ -6,7 +6,7 @@ import { formatDuration } from "@/lib/service-verification";
 import { useOrganization } from "@/providers/organization-provider";
 import { useAwsApi } from "./aws-workspace";
 import { useAgencyClock } from "./agency-clock";
-import { ShortHelp } from "./help-text";
+import { Hint } from "./hint";
 import { nameWithCode } from "./name-label";
 import { useShiftsToReconcile, type ShiftToReconcile } from "./reconcile-data";
 
@@ -61,7 +61,7 @@ export function ReconcileShiftsPanel({ onDone }: { onDone: (text: string) => voi
   if (!canManage || !list.data || list.data.length === 0) return null;
   return (
     <div className="space-y-2" data-testid="shifts-to-reconcile">
-      <ShortHelp details="This authorization time is still reserved and counted. Nothing is released automatically: a missing visit record does not prove no one came. Check, then record what you found.">These shifts ended with no visit record. Choose what you found and save.</ShortHelp>
+      <Hint details="This authorization time is still reserved and counted. Nothing is released automatically: a missing visit record does not prove no one came. Check, then record what you found.">These shifts ended with no visit record. Choose what you found and save.</Hint>
       <ul className="divide-y divide-slate-200 rounded-lg border border-slate-200 bg-og-card">
         {list.data.map((s) => {
           const choices = CHOICES.filter((c) => (c.outcome !== "delivered_unverified" || s.lastOutcome !== "delivered_unverified") && (c.outcome !== "hold_service_may_have_occurred" || s.bucket === "unreconciled"));

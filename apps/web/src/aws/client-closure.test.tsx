@@ -198,7 +198,8 @@ describe("history and renewal", () => {
     }));
     fireEvent.click(await screen.findByRole("button", { name: "History and audit trail" }, { timeout: 15000 }));
     const hist = await screen.findByTestId("client-history");
-    await waitFor(() => expect(hist).toHaveTextContent("client updated · Morgan Manager · changed: city, client type id"));
+    await waitFor(() => expect(hist).toHaveTextContent("Morgan Manager"));
+    expect(hist).toHaveTextContent("client updated · changed: city, client type id");
     expect(hist).toHaveTextContent("never the values");
     fireEvent.click(await screen.findByTestId("renew-authorization"));
     expect(await screen.findByTestId("renewal-steps")).toHaveTextContent("Nothing that was held or scheduled is restored or released automatically");

@@ -4,7 +4,7 @@ import type { AwsApiClient } from "@/lib/aws-api";
 import { useOrganization } from "@/providers/organization-provider";
 import { formatClockTime, formatDateTime } from "@/lib/service-verification";
 import { MyAvailability } from "./readiness/availability-section";
-import { ShortHelp } from "./help-text";
+import { InfoTip } from "./ui/info-tip";
 
 
 type Opportunity = { offerId: string; status: string; serviceCode: string; serviceName: string; startsAt: string; endsAt: string; clientLabel: string };
@@ -25,14 +25,14 @@ export function CaregiverAvailabilityPage({ api }: { api: AwsApiClient }) {
   });
 
   const offers = opportunities.data?.opportunities ?? [];
-  return <section className="max-w-3xl space-y-4">
-    <div>
-      <h1 className="text-xl font-semibold text-slate-950">Availability</h1>
-      <ShortHelp className="mt-1 text-sm text-slate-600" details="To change your hours, send a request; your current hours stay until an administrator approves it. A response to an opportunity is not an assignment.">Your approved hours decide what work you are offered.</ShortHelp>
+  return <section className="max-w-3xl space-y-3">
+    <div className="flex items-center gap-1.5">
+      <h1 className="text-xl font-bold tracking-tight text-slate-950">Availability</h1>
+      <InfoTip label="About Availability">Your approved hours decide what work you are offered. To change your hours, send a request; your current hours stay until an administrator approves it. A response to an opportunity is not an assignment.</InfoTip>
     </div>
     <MyAvailability />
     <section aria-labelledby="care-opps-heading" className="space-y-2">
-      <h2 id="care-opps-heading" className="text-base font-semibold text-slate-950">Care opportunities</h2>
+      <h2 id="care-opps-heading" className="text-sm font-semibold text-slate-950">Care opportunities</h2>
       {!opportunities.isLoading && offers.length === 0 ? <p className="text-sm text-slate-500">No open opportunities.</p> : null}
       <ul className="space-y-1.5">
         {offers.map((o) => (

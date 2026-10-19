@@ -64,7 +64,7 @@ function ReviewPanel({ row, canDecide, onDone }: { row: Row; canDecide: boolean;
   const currentWindows = Array.isArray(p.current) ? p.current : p.current.windows;
   const currentUnavailable = !Array.isArray(p.current) && p.current.unavailable;
   return (
-    <div className="mt-3 space-y-3 border-t border-slate-200 pt-3">
+    <div className="mt-2 space-y-2 border-t border-slate-200 pt-2">
       <div className="grid gap-4 sm:grid-cols-2">
         <section aria-label="Current hours"><h4 className="text-sm font-semibold text-slate-900">Current</h4><Hours kind={row.kind} windows={currentWindows} unavailable={currentUnavailable} /></section>
         <section aria-label="Proposed hours"><h4 className="text-sm font-semibold text-slate-900">Proposed</h4><Hours kind={row.kind} windows={p.proposed} unavailable={row.kind === "date" && p.proposed.length === 0} /></section>
@@ -88,7 +88,7 @@ function ReviewPanel({ row, canDecide, onDone }: { row: Row; canDecide: boolean;
           </fieldset>
           {choice === "decline" ? (
             <label className="block text-sm font-medium text-slate-800">Note to the caregiver (required)
-              <textarea value={note} onChange={(e) => { setNote(e.target.value); key.current = newIdempotencyKey(); }} rows={2} maxLength={500} className="mt-1 block w-full rounded-md border border-slate-300 px-3 py-2 text-base" />
+              <textarea value={note} onChange={(e) => { setNote(e.target.value); key.current = newIdempotencyKey(); }} rows={2} maxLength={500} className="mt-1 block w-full rounded-md border border-slate-300 px-2.5 py-1.5 text-sm" />
             </label>
           ) : null}
           {decide.isError ? <p role="alert" className="text-sm text-red-700">{actionError(decide.error, "The decision was not saved. Try again.")}</p> : null}
@@ -123,7 +123,7 @@ export function AvailabilityReview({ caregiverRecordId }: { caregiverRecordId?: 
       {q.data && rows.length === 0 ? <p className="text-sm text-slate-600">No pending requests.</p> : null}
       <ul className="space-y-2">
         {rows.map((r) => (
-          <li key={r.requestId} className="rounded-lg border border-slate-200 p-3">
+          <li key={r.requestId} className="rounded-md border border-slate-200 px-2 py-1.5">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <p className="text-sm font-medium text-slate-900">{r.caregiverName} <span className="font-normal text-slate-500">({r.caregiverCode})</span></p>
               <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${REQUEST_STATUS_BADGE[r.status] ?? ""}`}>{REQUEST_STATUS_LABEL[r.status] ?? r.status}</span>

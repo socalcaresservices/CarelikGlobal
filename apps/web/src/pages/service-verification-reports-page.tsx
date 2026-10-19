@@ -36,7 +36,6 @@ import {
 import {
   Button,
   Card,
-  PageHeader,
   StatusBadge,
   type StatusTone,
 } from "@carelik/ui";
@@ -54,6 +53,7 @@ import {
 import { useServiceVerificationBackend } from "@/lib/sv-backend-supabase";
 import { buildClientMonthSummary } from "@/lib/client-month-summary";
 import { CalendarAuthorizedHours, CalendarSummary } from "@/components/calendar-summary";
+import { PageHeader } from "@/aws/ui/page-header";
 import { useEnvironmentMarker } from "@/aws/environment";
 import { AwsApiContext } from "@/aws/aws-workspace";
 import { MonthlyChainReport } from "@/aws/monthly-chain-report";
@@ -1126,7 +1126,7 @@ export function ServiceVerificationReportsPage() {
           <h2 className="mt-1 text-2xl font-semibold text-slate-950">
             Not available
           </h2>
-          <p className="mt-3 text-slate-600">
+          <p className="mt-2 text-slate-600">
             You don&apos;t have permission to view service verification reports.
           </p>
         </Card>
@@ -1170,7 +1170,7 @@ export function ServiceVerificationReportsPage() {
                                   The signed record is never overwritten. The correction creates a
                                   linked revision and preserves the original in History.
                                 </p>
-                                <div className="mt-3 space-y-3">
+                                <div className="mt-2 space-y-3">
                                   <PacificCorrectionFields
                                     originalTimeIn={correctionForm.originalTimeIn}
                                     originalTimeOut={correctionForm.originalTimeOut}
@@ -1196,7 +1196,7 @@ export function ServiceVerificationReportsPage() {
                                       onChange={(event) =>
                                         setCorrectionForm({ ...correctionForm, reason: event.target.value })
                                       }
-                                      className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900"
+                                      className="mt-1 w-full rounded-lg border border-slate-200 px-2 py-1.5 text-sm text-slate-900"
                                     />
                                   </div>
                                 </div>
@@ -1205,7 +1205,7 @@ export function ServiceVerificationReportsPage() {
                                     {correctionError}
                                   </p>
                                 ) : null}
-                                <div className="mt-3 flex gap-3">
+                                <div className="mt-2 flex gap-3">
                                   <Button type="button" loading={correctionSaving} onClick={() => handleSubmitCorrection(row.id)}>
                                     {correctionSaving ? "Saving…" : "Save correction"}
                                   </Button>
@@ -1257,19 +1257,18 @@ export function ServiceVerificationReportsPage() {
   }
 
   return (
-    <section className="mx-auto max-w-6xl space-y-6 pb-12 print:max-w-none print:space-y-2 print:pb-0">
+    <section className="mx-auto max-w-6xl space-y-3 pb-6 print:max-w-none print:space-y-2 print:pb-0">
       <div className="print:hidden">
         <PageHeader
-          eyebrow="Service Verification"
           title={reportView === "visits" ? "Visit records" : reportView === "exceptions" ? "Action needed" : "Reports"}
-          {...(reportView === "calendar" ? { description: "The calendar always covers the chosen client's whole month." } : {})}
-          actions={
+          {...(reportView === "calendar" ? { lead: "The calendar always covers the chosen client's whole month." } : {})}
+          action={
             <div className="flex flex-wrap items-center gap-2">
               <Button type="button" variant="secondary" icon={<Printer className="h-4 w-4" />} onClick={handlePrint}>
                 Print / Save as PDF
               </Button>
             <details className="relative">
-              <summary className="cursor-pointer list-none rounded-lg border border-slate-300 bg-og-card px-3 py-2 text-sm font-medium text-slate-700">
+              <summary className="cursor-pointer list-none rounded-lg border border-slate-300 bg-og-card px-2 py-1.5 text-sm font-medium text-slate-700">
                 More actions
               </summary>
               <div className="absolute right-0 z-20 mt-2 flex w-64 flex-col gap-2 rounded-xl border border-slate-200 bg-og-card p-3 shadow-lg">
@@ -1296,10 +1295,9 @@ export function ServiceVerificationReportsPage() {
         />
       </div>
 
-      <Card className="print:hidden">
-        <div className="flex flex-wrap items-end gap-4">
-          <div className="min-w-64 flex-1">
-            <label htmlFor="report-view" className="block text-xs font-bold uppercase tracking-wide text-slate-500">
+      <div className="flex flex-wrap items-center gap-2 print:hidden">
+        <div className="flex min-w-64 max-w-md flex-1 items-center gap-2">
+            <label htmlFor="report-view" className="shrink-0 text-xs font-bold uppercase tracking-wide text-slate-500">
               Report
             </label>
             <select
@@ -1316,7 +1314,7 @@ export function ServiceVerificationReportsPage() {
                 navigate({ pathname: location.pathname, search: search ? `?${search}` : "" }, { replace: true });
                 closeExpanded();
               }}
-              className="mt-1 w-full rounded-xl border border-slate-300 bg-og-card px-3 py-2.5 text-sm font-semibold text-slate-950"
+              className="min-h-[32px] w-full rounded-md border border-slate-300 bg-og-card px-2 py-1 text-sm font-semibold text-slate-950 [@media(pointer:coarse)]:min-h-[44px]"
             >
               <option value="visits">Visit records</option>
               <option value="exceptions">Action needed</option>
@@ -1327,9 +1325,8 @@ export function ServiceVerificationReportsPage() {
               {viewAvailable("corrections") ? <option value="corrections">Correction history</option> : null}
               {canManage ? <option value="staff-access">Staff access</option> : null}
             </select>
-          </div>
         </div>
-      </Card>
+      </div>
 
       {canManage && reportView === "staff-access" ? (
         <Card className="border-emerald-200 bg-gradient-to-r from-emerald-50 via-white to-sky-50 print:hidden">
@@ -1350,7 +1347,7 @@ export function ServiceVerificationReportsPage() {
               </p>
               <a
                 href="/clients"
-                className="mt-3 inline-flex rounded-lg bg-emerald-700 px-3 py-2 text-sm font-bold text-white hover:bg-emerald-800"
+                className="mt-2 inline-flex rounded-lg bg-emerald-700 px-2 py-1.5 text-sm font-bold text-white hover:bg-emerald-800"
               >
                 Manage client assignments
               </a>
@@ -1381,13 +1378,13 @@ export function ServiceVerificationReportsPage() {
               </button>
             ) : null}
           </div>
-          <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          <div className="mt-2 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
             {caregiverOptions.map(([id, name]) => (
               <button
                 key={id}
                 type="button"
                 onClick={() => selectCaregiverFolder(id)}
-                className="flex items-center gap-3 rounded-xl border border-slate-200 p-4 text-left hover:border-sky-400 hover:bg-sky-50"
+                className="flex items-center gap-3 rounded-xl border border-slate-200 p-3 text-left hover:border-sky-400 hover:bg-sky-50"
               >
                 <Folder className="h-6 w-6 text-sky-700" />
                 <span>
@@ -1417,7 +1414,7 @@ export function ServiceVerificationReportsPage() {
                 id="report-date-range"
                 value={datePreset}
                 onChange={(event) => applyDatePreset(event.target.value as DatePreset)}
-                className="mt-1 rounded-lg border border-slate-200 bg-og-card px-3 py-2 text-sm text-slate-900"
+                className="mt-0.5 min-h-[32px] rounded-md border border-slate-200 bg-og-card px-2 py-1 text-sm text-slate-900 [@media(pointer:coarse)]:min-h-[44px]"
               >
                 {DATE_PRESETS.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
               </select>
@@ -1432,7 +1429,7 @@ export function ServiceVerificationReportsPage() {
                     value={dateFrom}
                     max={dateTo || undefined}
                     onChange={(event) => setDateFrom(event.target.value)}
-                    className="mt-1 rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900"
+                    className="mt-0.5 min-h-[32px] rounded-md border border-slate-200 px-2 py-1 text-sm text-slate-900 [@media(pointer:coarse)]:min-h-[44px]"
                   />
                 </div>
                 <div>
@@ -1443,7 +1440,7 @@ export function ServiceVerificationReportsPage() {
                     value={dateTo}
                     min={dateFrom || undefined}
                     onChange={(event) => setDateTo(event.target.value)}
-                    className="mt-1 rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900"
+                    className="mt-0.5 min-h-[32px] rounded-md border border-slate-200 px-2 py-1 text-sm text-slate-900 [@media(pointer:coarse)]:min-h-[44px]"
                   />
                 </div>
               </>
@@ -1452,8 +1449,8 @@ export function ServiceVerificationReportsPage() {
           {datePreset === "custom" && dateFrom && dateTo && dateFrom > dateTo ? (
             <p role="alert" className="mt-2 text-sm text-red-700">From must be on or before To.</p>
           ) : null}
-          <details className="mt-3" open={!narrow}>
-            <summary className="cursor-pointer text-sm font-medium text-slate-800">
+          <details className="mt-1" open={activeFilterCount > 0}>
+            <summary className="flex min-h-[28px] cursor-pointer items-center text-sm font-medium text-slate-800 [@media(pointer:coarse)]:min-h-[44px]">
               Filters{activeFilterCount > 0 ? ` (${activeFilterCount} active)` : ""}
             </summary>
             {activeFilterCount > 0 ? (
@@ -1461,7 +1458,7 @@ export function ServiceVerificationReportsPage() {
                 Clear filters
               </button>
             ) : null}
-          <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="mt-2 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
             <div>
               <label
                 htmlFor="report-client"
@@ -1473,7 +1470,7 @@ export function ServiceVerificationReportsPage() {
                 id="report-client"
                 value={clientFilter}
                 onChange={(event) => setClientFilter(event.target.value)}
-                className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900"
+                className="mt-1 w-full rounded-lg border border-slate-200 px-2 py-1.5 text-sm text-slate-900"
               >
                 <option value="">All clients</option>
                 {clientOptions.map(([id, label]) => (
@@ -1494,7 +1491,7 @@ export function ServiceVerificationReportsPage() {
                 id="report-location"
                 value={locationFilter}
                 onChange={(event) => setLocationFilter(event.target.value)}
-                className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900"
+                className="mt-1 w-full rounded-lg border border-slate-200 px-2 py-1.5 text-sm text-slate-900"
               >
                 <option value="">All locations</option>
                 {locationOptions.map((location) => (
@@ -1515,7 +1512,7 @@ export function ServiceVerificationReportsPage() {
                 id="report-caregiver"
                 value={caregiverFilter}
                 onChange={(event) => selectCaregiverFolder(event.target.value)}
-                className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900"
+                className="mt-1 w-full rounded-lg border border-slate-200 px-2 py-1.5 text-sm text-slate-900"
               >
                 <option value="">All caregivers</option>
                 {caregiverOptions.map(([id, label]) => (
@@ -1536,7 +1533,7 @@ export function ServiceVerificationReportsPage() {
                 id="report-service"
                 value={serviceFilter}
                 onChange={(event) => setServiceFilter(event.target.value)}
-                className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900"
+                className="mt-1 w-full rounded-lg border border-slate-200 px-2 py-1.5 text-sm text-slate-900"
               >
                 <option value="">All services</option>
                 {serviceOptions.map(([id, label]) => (
@@ -1557,7 +1554,7 @@ export function ServiceVerificationReportsPage() {
                 id="report-status"
                 value={statusFilter}
                 onChange={(event) => setStatusFilter(event.target.value)}
-                className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900"
+                className="mt-1 w-full rounded-lg border border-slate-200 px-2 py-1.5 text-sm text-slate-900"
               >
                 <option value="">All statuses</option>
                 {Object.entries(VISIT_STATUS_LABEL).map(([value, label]) => (
@@ -1579,7 +1576,7 @@ export function ServiceVerificationReportsPage() {
                   id="report-corrected-by"
                   value={correctedByFilter}
                   onChange={(event) => setCorrectedByFilter(event.target.value)}
-                  className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900"
+                  className="mt-1 w-full rounded-lg border border-slate-200 px-2 py-1.5 text-sm text-slate-900"
                 >
                   <option value="">All correctors</option>
                   {correctedByOptions.map(([id, label]) => (
@@ -1592,7 +1589,7 @@ export function ServiceVerificationReportsPage() {
             ) : null}
           </div>
           </details>
-          <details className="mt-3 text-xs text-slate-500">
+          <details className="mt-2 text-xs text-slate-500">
             <summary className="inline-flex min-h-[32px] cursor-pointer items-center text-og-accent underline">Details</summary>
             <p>Use Custom for a pay period or any other range. These reports use actual signed visit time, not the schedule.</p>
           </details>
@@ -1602,7 +1599,7 @@ export function ServiceVerificationReportsPage() {
       {reportView === "overview" ? (
         <>
           {awsApi ? <p className="text-sm text-slate-700" data-testid="reporting-hub-link">More reports: <Link className="font-semibold underline" to="/reporting">Reporting &amp; billing</Link>.</p> : null}
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
             {[
               {
                 label: "Worked hours",
@@ -1632,17 +1629,17 @@ export function ServiceVerificationReportsPage() {
               <Card key={metric.label} className={`border ${metric.color}`}>
                 <div className="flex items-center justify-between">
                   <span>{metric.icon}</span>
-                  <span className="text-3xl font-extrabold tabular-nums">
+                  <span className="text-xl font-bold tabular-nums">
                     {metric.value}
                   </span>
                 </div>
-                <p className="mt-2 text-sm font-bold">{metric.label}</p>
+                <p className="text-sm font-semibold">{metric.label}</p>
               </Card>
             ))}
           </div>
 
           <Card>
-            <div className="flex flex-wrap items-start justify-between gap-4">
+            <div className="flex flex-wrap items-start justify-between gap-3">
               <div>
                 <h3 className="font-bold text-slate-950">Hours chart</h3>
               </div>
@@ -1682,11 +1679,11 @@ export function ServiceVerificationReportsPage() {
               </div>
             </div>
             {chartData.length === 0 ? (
-              <p className="mt-6 rounded-2xl bg-slate-50 p-8 text-center text-sm text-slate-500">
+              <p className="mt-2 rounded-lg bg-slate-50 p-3 text-center text-sm text-slate-500">
                 No signed visit hours match these filters.
               </p>
             ) : (
-              <div className="mt-5 h-80" aria-label="Filtered hours chart">
+              <div className="mt-2 h-56" aria-label="Filtered hours chart">
                 <ResponsiveContainer width="100%" height="100%">
                   {chartType === "pie" ? (
                     <PieChart>
@@ -1769,11 +1766,11 @@ export function ServiceVerificationReportsPage() {
             range
           </p>
           {caregiverSubtotals.length === 0 ? (
-            <p className="mt-4 text-sm text-slate-500">
+            <p className="mt-2 text-sm text-slate-500">
               No caregiver hours match these filters.
             </p>
           ) : (
-            <div className="mt-4 overflow-x-auto">
+            <div className="mt-2 overflow-x-auto">
               <table
                 aria-label="Caregiver hours summary"
                 className="w-full text-left text-sm"
@@ -1789,16 +1786,16 @@ export function ServiceVerificationReportsPage() {
                 <tbody>
                   {caregiverSubtotals.map((entry) => (
                     <tr key={entry.name} className="border-b border-slate-100">
-                      <td className="py-2 font-semibold text-slate-900">
+                      <td className="py-1 font-semibold text-slate-900">
                         {entry.name}
                       </td>
-                      <td className="py-2 text-indigo-700">
+                      <td className="py-1 text-indigo-700">
                         {formatDuration(entry.workedMinutes)}
                       </td>
-                      <td className="py-2 text-emerald-700">
+                      <td className="py-1 text-emerald-700">
                         {formatDuration(entry.billableMinutes)}
                       </td>
-                      <td className="py-2 text-slate-600">{entry.visits}</td>
+                      <td className="py-1 text-slate-600">{entry.visits}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -1859,7 +1856,7 @@ export function ServiceVerificationReportsPage() {
 
       {reportView === "calendar" ? (
         <Card className="print:border-none print:p-0 print:shadow-none">
-          <div className="flex flex-wrap items-end justify-between gap-4">
+          <div className="flex flex-wrap items-end justify-between gap-3">
             <div className="flex items-start gap-3">
               <CalendarDays className="mt-0.5 h-5 w-5 text-sky-700 print:hidden" />
               <div>
@@ -1886,7 +1883,7 @@ export function ServiceVerificationReportsPage() {
                 <select
                   value={clientFilter}
                   onChange={(event) => setClientFilter(event.target.value)}
-                  className="mt-1 block max-w-56 rounded-lg border border-slate-200 bg-og-card px-3 py-2 text-sm text-slate-900"
+                  className="mt-1 block max-w-56 rounded-lg border border-slate-200 bg-og-card px-2 py-1.5 text-sm text-slate-900"
                 >
                   <option value="">Choose a client…</option>
                   {clientOptions.map(([id, label]) => (
@@ -1901,7 +1898,7 @@ export function ServiceVerificationReportsPage() {
                   aria-label="Calendar month"
                   value={reportMonth}
                   onChange={(event) => setReportMonth(event.target.value)}
-                  className="mt-1 block rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900"
+                  className="mt-1 block rounded-lg border border-slate-200 px-2 py-1.5 text-sm text-slate-900"
                 />
               </label>
               <label className="flex items-center gap-2 self-center text-xs font-medium text-slate-600">
@@ -1968,12 +1965,12 @@ export function ServiceVerificationReportsPage() {
           </div>
 
           {!clientFilter ? (
-            <div className="mt-5 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-950">
+            <div className="mt-2 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-950">
               Choose a client to see its calendar.
             </div>
           ) : (
             <>
-              <div className="mt-4 border-b border-slate-200 pb-3 print:hidden">
+              <div className="mt-2 border-b border-slate-200 pb-3 print:hidden">
                 <p className="font-semibold text-slate-950">
                   {selectedClientName ?? "Selected client"}
                   {selectedClientCode && selectedClientDuplicate ? <span className="ml-1 text-sm font-normal text-slate-500">({selectedClientCode})</span> : null}
@@ -1991,7 +1988,7 @@ export function ServiceVerificationReportsPage() {
                   <p role="alert" className="mt-1 text-sm text-red-700">Could not load this month's visits.</p>
                 ) : null}
               </div>
-              <div className="mt-4 overflow-x-auto print:mt-1 print:overflow-visible">
+              <div className="mt-2 overflow-x-auto print:mt-1 print:overflow-visible">
                 <div
                   role="grid"
                   aria-label={`Service hours for ${selectedClientName ?? "selected client"} in ${reportMonth}`}
@@ -2006,7 +2003,7 @@ export function ServiceVerificationReportsPage() {
                         <div
                           key={day}
                           role="columnheader"
-                          className="px-2 py-2 text-center text-xs font-semibold uppercase tracking-wide text-slate-500 print:py-0.5 print:text-[9px]"
+                          className="px-2 py-1.5 text-center text-xs font-semibold uppercase tracking-wide text-slate-500 print:py-0.5 print:text-[9px]"
                         >
                           {day}
                         </div>
@@ -2085,7 +2082,7 @@ export function ServiceVerificationReportsPage() {
       {exportNotice ? <p role="status" className="text-sm text-emerald-800 print:hidden">{exportNotice}</p> : null}
       {reportView === "reconciliation" ? (
         <Card className="print:border-none print:p-0 print:shadow-none">
-          <div className="flex flex-wrap items-end justify-between gap-4">
+          <div className="flex flex-wrap items-end justify-between gap-3">
             <div>
               <h3 className="font-semibold text-slate-950">
                 Monthly hours & billing
@@ -2120,7 +2117,7 @@ export function ServiceVerificationReportsPage() {
                   type="month"
                   value={reportMonth}
                   onChange={(event) => setReportMonth(event.target.value)}
-                  className="mt-1 block rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900"
+                  className="mt-1 block rounded-lg border border-slate-200 px-2 py-1.5 text-sm text-slate-900"
                 />
               </label>
               {canExport && monthlyServiceRows.length > 0 ? (
@@ -2182,17 +2179,17 @@ export function ServiceVerificationReportsPage() {
           </div>
 
           {monthlyServiceSummaryQuery.isLoading ? (
-            <p className="mt-4 text-sm text-slate-500">Loading reconciliation…</p>
+            <p className="mt-2 text-sm text-slate-500">Loading reconciliation…</p>
           ) : monthlyServiceSummaryQuery.isError ? (
-            <p className="mt-4 text-sm text-red-700">
+            <p className="mt-2 text-sm text-red-700">
               Could not load monthly reconciliation.
             </p>
           ) : monthlyServiceRows.length === 0 ? (
-            <p className="mt-4 text-sm text-slate-500">
+            <p className="mt-2 text-sm text-slate-500">
               No client/service authorizations match this month and filter.
             </p>
           ) : (
-            <div className="mt-4 overflow-x-auto">
+            <div className="mt-2 overflow-x-auto">
               <table className="w-full text-left text-sm" aria-label="Monthly hours and billing reconciliation">
                 <thead>
                   <tr className="border-b border-slate-200 text-xs uppercase tracking-wide text-slate-500">
@@ -2218,19 +2215,19 @@ export function ServiceVerificationReportsPage() {
                     const difference = Math.max(0, row.workedMinutes - row.billableMinutes);
                     return (
                       <tr key={row.authorizationLineageId} className="border-b border-slate-100">
-                        <td className="py-2 pr-3"><ClientCell name={row.clientName} code={row.clientCode} duplicate={row.clientNameDuplicate} /></td>
-                        <td className="py-2 pr-3">
+                        <td className="py-1 pr-3"><ClientCell name={row.clientName} code={row.clientCode} duplicate={row.clientNameDuplicate} /></td>
+                        <td className="py-1 pr-3">
                           <p className="font-medium text-slate-800">{row.serviceCode} · {row.serviceName}</p>
                           <p className="text-xs text-slate-500">
                             {formatDateOnly(row.authorizationPeriodStart)}–{formatDateOnly(row.authorizationPeriodEnd)}
                           </p>
                         </td>
-                        <td className="py-2 pr-3">{formatDuration(row.authorizedMinutes)}</td>
-                        <td className="py-2 pr-3">{formatDuration(row.workedMinutes)}</td>
-                        <td className="py-2 pr-3">{formatDuration(row.verifiedMinutes)}</td>
-                        <td className="py-2 pr-3 font-medium">{formatDuration(row.billableMinutes)}</td>
+                        <td className="py-1 pr-3">{formatDuration(row.authorizedMinutes)}</td>
+                        <td className="py-1 pr-3">{formatDuration(row.workedMinutes)}</td>
+                        <td className="py-1 pr-3">{formatDuration(row.verifiedMinutes)}</td>
+                        <td className="py-1 pr-3 font-medium">{formatDuration(row.billableMinutes)}</td>
                         {showApproved ? (
-                          <td className="py-2 pr-3">
+                          <td className="py-1 pr-3">
                             {monthlyApprovalSummaryQuery.isError ? (
                               "Unable to load"
                             ) : monthlyApprovalSummaryQuery.isLoading ? (
@@ -2247,13 +2244,13 @@ export function ServiceVerificationReportsPage() {
                             )}
                           </td>
                         ) : null}
-                        <td className="py-2 pr-3">{formatSignedDuration(row.hoursRoundingMinutes ?? row.adjustmentMinutes ?? 0)}</td>
-                        <td className="py-2 pr-3">{formatDuration(row.hoursPendingMinutes ?? 0)}</td>
-                        <td className="py-2 pr-3">{formatDuration(row.hoursReservedMinutes ?? row.reservedMinutes ?? 0)}</td>
+                        <td className="py-1 pr-3">{formatSignedDuration(row.hoursRoundingMinutes ?? row.adjustmentMinutes ?? 0)}</td>
+                        <td className="py-1 pr-3">{formatDuration(row.hoursPendingMinutes ?? 0)}</td>
+                        <td className="py-1 pr-3">{formatDuration(row.hoursReservedMinutes ?? row.reservedMinutes ?? 0)}</td>
                         <td className={`py-2 pr-3 ${(row.hoursLeftMinutes ?? row.remainingMinutes) < 0 ? "font-semibold text-red-700" : ""}`}>{hoursLeftText(row.hoursLeftMinutes ?? row.remainingMinutes)}</td>
-                        <td className="py-2 pr-3" data-testid="authorization-status">{authorizationStatus(row)}</td>
-                        <td className="py-2 pr-3">{formatDuration(row.reviewMinutes)}</td>
-                        <td className="py-2 pr-3">
+                        <td className="py-1 pr-3" data-testid="authorization-status">{authorizationStatus(row)}</td>
+                        <td className="py-1 pr-3">{formatDuration(row.reviewMinutes)}</td>
+                        <td className="py-1 pr-3">
                           {difference > 0 ? (
                             <StatusBadge
                               label={`${formatDuration(difference)} worked not billable`}
@@ -2263,7 +2260,7 @@ export function ServiceVerificationReportsPage() {
                             <StatusBadge label="Matched" tone="success" />
                           )}
                         </td>
-                        <td className="py-2"><HoursBreakdown row={row} /></td>
+                        <td className="py-1"><HoursBreakdown row={row} /></td>
                       </tr>
                     );
                   })}
@@ -2271,7 +2268,7 @@ export function ServiceVerificationReportsPage() {
               </table>
             </div>
           )}
-          <p className="mt-4 text-xs text-slate-500">
+          <p className="mt-2 text-xs text-slate-500">
             “Billable” means eligible to bill after visit verification and
             authorization controls. Actual submitted/billed totals will remain a
             separate ledger value; they must never be inferred from billable time.
@@ -2283,7 +2280,7 @@ export function ServiceVerificationReportsPage() {
 
       {reportView === "corrections" ? (
         <Card className="print:border-none print:p-0 print:shadow-none">
-          <div className="flex flex-wrap items-start justify-between gap-4">
+          <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
               <h3 className="font-semibold text-slate-950">Correction history</h3>
               <p className="mt-1 max-w-3xl text-sm text-slate-500">
@@ -2338,11 +2335,11 @@ export function ServiceVerificationReportsPage() {
             ) : null}
           </div>
           {!correctionHistoryReportQuery.isLoading && !correctionHistoryReportQuery.isError ? (
-            <div className="mt-4 flex flex-wrap gap-3 text-sm">
-              <span className="rounded-lg bg-slate-100 px-3 py-2 font-semibold text-slate-700">
+            <div className="mt-2 flex flex-wrap gap-3 text-sm">
+              <span className="rounded-lg bg-slate-100 px-3 py-1.5 font-semibold text-slate-700">
                 Corrections: {correctionRows.length}
               </span>
-              <span className="rounded-lg bg-slate-100 px-3 py-2 font-semibold text-slate-700">
+              <span className="rounded-lg bg-slate-100 px-3 py-1.5 font-semibold text-slate-700">
                 Net worked-time change: {correctionNetMinutes === 0
                   ? "No change"
                   : `${correctionNetMinutes > 0 ? "+" : "−"}${formatDuration(Math.abs(correctionNetMinutes))}`}
@@ -2350,13 +2347,13 @@ export function ServiceVerificationReportsPage() {
             </div>
           ) : null}
           {correctionHistoryReportQuery.isLoading ? (
-            <p className="mt-4 text-sm text-slate-500">Loading correction history…</p>
+            <p className="mt-2 text-sm text-slate-500">Loading correction history…</p>
           ) : correctionHistoryReportQuery.isError ? (
-            <p className="mt-4 text-sm text-red-700">Could not load correction history.</p>
+            <p className="mt-2 text-sm text-red-700">Could not load correction history.</p>
           ) : correctionRows.length === 0 ? (
-            <p className="mt-4 text-sm text-slate-500">No corrections match these filters.</p>
+            <p className="mt-2 text-sm text-slate-500">No corrections match these filters.</p>
           ) : (
-            <div className="mt-4 overflow-x-auto">
+            <div className="mt-2 overflow-x-auto">
               <table className="w-full text-left text-sm" aria-label="Correction history report">
                 <thead>
                   <tr className="border-b border-slate-200 text-xs uppercase tracking-wide text-slate-500">
@@ -2376,23 +2373,23 @@ export function ServiceVerificationReportsPage() {
                 <tbody>
                   {correctionRows.map((row) => (
                     <tr key={row.correctionId} className="border-b border-slate-100 align-top">
-                      <td className="py-2 pr-3 whitespace-nowrap font-mono text-xs">{row.visitNumber ?? "—"}</td>
-                      <td className="py-2 pr-3"><ClientCell name={row.clientName} code={row.clientCode} duplicate={row.clientNameDuplicate} /></td>
-                      <td className="py-2 pr-3">{row.serviceCode} · {row.serviceName}</td>
-                      <td className="py-2 pr-3 whitespace-nowrap">{formatDateOnly(row.serviceDate)}</td>
-                      <td className="py-2 pr-3">{row.caregiverName}</td>
-                      <td className="py-2 pr-3 whitespace-nowrap">
+                      <td className="py-1 pr-3 whitespace-nowrap font-mono text-xs">{row.visitNumber ?? "—"}</td>
+                      <td className="py-1 pr-3"><ClientCell name={row.clientName} code={row.clientCode} duplicate={row.clientNameDuplicate} /></td>
+                      <td className="py-1 pr-3">{row.serviceCode} · {row.serviceName}</td>
+                      <td className="py-1 pr-3 whitespace-nowrap">{formatDateOnly(row.serviceDate)}</td>
+                      <td className="py-1 pr-3">{row.caregiverName}</td>
+                      <td className="py-1 pr-3 whitespace-nowrap">
                         {formatTimeRange(row.beforeSnapshot.timeIn, row.beforeSnapshot.timeOut)}
                         <span className="block text-xs text-slate-500">{formatDuration(row.beforeSnapshot.workedMinutes)}</span>
                       </td>
-                      <td className="py-2 pr-3 whitespace-nowrap">
+                      <td className="py-1 pr-3 whitespace-nowrap">
                         {formatTimeRange(row.afterSnapshot.timeIn, row.afterSnapshot.timeOut)}
                         <span className="block text-xs text-slate-500">{formatDuration(row.afterSnapshot.workedMinutes)}</span>
                       </td>
-                      <td className="py-2 pr-3">{row.correctedByName}</td>
-                      <td className="py-2 pr-3">{VISIT_STATUS_LABEL[row.correctedVisitStatus]}</td>
-                      <td className="py-2 pr-3">{row.reason}</td>
-                      <td className="py-2 whitespace-nowrap">{formatDateTime(row.createdAt)}</td>
+                      <td className="py-1 pr-3">{row.correctedByName}</td>
+                      <td className="py-1 pr-3">{VISIT_STATUS_LABEL[row.correctedVisitStatus]}</td>
+                      <td className="py-1 pr-3">{row.reason}</td>
+                      <td className="py-1 whitespace-nowrap">{formatDateTime(row.createdAt)}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -2427,7 +2424,7 @@ export function ServiceVerificationReportsPage() {
                   </label>
                 </ShortHelp>
                 <details className="relative">
-                  <summary className="cursor-pointer list-none rounded-lg border border-slate-300 bg-og-card px-3 py-2 text-xs font-semibold text-slate-700">
+                  <summary className="cursor-pointer list-none rounded-lg border border-slate-300 bg-og-card px-3 py-1.5 text-xs font-semibold text-slate-700">
                     Columns
                   </summary>
                   <div className="absolute right-0 z-20 mt-2 w-52 rounded-xl border border-slate-200 bg-og-card p-3 shadow-lg">
@@ -2446,7 +2443,7 @@ export function ServiceVerificationReportsPage() {
                     <button
                       type="button"
                       onClick={resetVisitColumns}
-                      className="mt-3 text-xs font-medium text-slate-600 underline"
+                      className="mt-2 text-xs font-medium text-slate-600 underline"
                     >
                       Reset columns
                     </button>
@@ -2455,18 +2452,18 @@ export function ServiceVerificationReportsPage() {
               </div>
             </div>
             {visitsQuery.isLoading ? (
-              <p className="mt-3 text-sm text-slate-500">Loading…</p>
+              <p className="mt-2 text-sm text-slate-500">Loading…</p>
             ) : visitsQuery.isError ? (
-              <p className="mt-3 text-sm text-red-700">
+              <p className="mt-2 text-sm text-red-700">
                 Could not load service verification records.
               </p>
             ) : visibleVisitRows.length === 0 ? (
-              <p className="mt-3 text-sm text-slate-500">
+              <p className="mt-2 text-sm text-slate-500">
                 No visits match these filters.
               </p>
             ) : narrow ? (
               <>
-                <ul aria-label="Visit records" className="mt-4 space-y-3">
+                <ul aria-label="Visit records" className="mt-2 space-y-3">
                   {visibleVisitRows.map((row) => {
                     const authorizedMinutes =
                       row.month_to_date_after_minutes !== null && row.remaining_minutes !== null
@@ -2533,24 +2530,24 @@ export function ServiceVerificationReportsPage() {
                           </div>
                         ) : null}
                         {expandedVisitId === row.id && expandedMode === "correct" ? (
-                          <div className="mt-3 rounded-lg bg-slate-50 p-3">{renderCorrectionPanel(row)}</div>
+                          <div className="mt-2 rounded-lg bg-slate-50 p-3">{renderCorrectionPanel(row)}</div>
                         ) : null}
                         {expandedVisitId === row.id && expandedMode === "history" ? (
-                          <div className="mt-3 rounded-lg bg-slate-50 p-3">{renderHistoryPanel()}</div>
+                          <div className="mt-2 rounded-lg bg-slate-50 p-3">{renderHistoryPanel()}</div>
                         ) : null}
                         </details>
                       </li>
                     );
                   })}
                 </ul>
-                <div className="mt-3 flex flex-wrap gap-4 border-t border-slate-200 pt-3 text-sm font-medium text-slate-800">
+                <div className="mt-2 flex flex-wrap gap-3 border-t border-slate-200 pt-3 text-sm font-medium text-slate-800">
                   <span>Worked: {formatDuration(totalWorkedMinutes)}</span>
                   <span>Billable: {formatDuration(totalBillableMinutes)}</span>
                 </div>
               </>
             ) : (
               <div
-                className="mt-4 overflow-x-auto print:overflow-visible"
+                className="mt-2 overflow-x-auto print:overflow-visible"
                 role="region"
                 aria-label="Visit records table (scrolls sideways when the window is narrow)"
                 tabIndex={0}
@@ -2592,65 +2589,67 @@ export function ServiceVerificationReportsPage() {
                         <Fragment key={row.id}>
                           <tr className="border-b border-slate-100 last:border-0">
                             {visitColumns.has("visitRef") ? (
-                              <td className="py-2 pr-2 whitespace-nowrap font-mono text-xs text-slate-500">
+                              <td className="py-1 pr-2 whitespace-nowrap font-mono text-xs text-slate-500">
                                 {row.visit_number ?? "—"}
                               </td>
                             ) : null}
                             {visitColumns.has("client") ? (
-                              <td className="min-w-[9rem] print:min-w-0 py-2 pr-2">
-                                <p className="font-medium text-slate-900">
+                              <td className="min-w-[9rem] print:min-w-0 whitespace-nowrap py-0.5 pr-2" title={!visitColumns.has("visitRef") && row.visit_number ? `Visit ${row.visit_number}` : undefined}>
+                                <span className="font-medium text-slate-900">
                                   {visitClientLabel(row)}
-                                </p>
-                                {!visitColumns.has("visitRef") && row.visit_number ? <p className="font-mono text-[11px] text-slate-500">{row.visit_number}</p> : null}
+                                </span>
+                                {/* The visit reference stays in the page (search, screen readers, print) and as a hover title; it is not a second line. */}
+                                {!visitColumns.has("visitRef") && row.visit_number ? <span className="sr-only print:not-sr-only print:ml-1 print:font-mono print:text-[8px]"> {row.visit_number}</span> : null}
                               </td>
                             ) : null}
                             {visitColumns.has("caregiver") ? (
-                              <td className="min-w-[7.5rem] print:min-w-0 py-2 pr-2 text-slate-700">{row.caregiver_name}</td>
+                              <td className="min-w-[7.5rem] print:min-w-0 whitespace-nowrap py-0.5 pr-2 text-slate-700">{row.caregiver_name}</td>
                             ) : null}
                             {visitColumns.has("service") ? (
-                              <td className="min-w-[7rem] print:min-w-0 py-2 pr-2 text-slate-700">{row.service_name}</td>
+                              <td className="min-w-[7rem] print:min-w-0 whitespace-nowrap py-0.5 pr-2 text-slate-700">{row.service_name}</td>
                             ) : null}
                             {visitColumns.has("date") ? (
-                              <td className="py-2 pr-2 whitespace-nowrap text-slate-600">
+                              <td className="py-1 pr-2 whitespace-nowrap text-slate-600">
                                 {formatDateOnly(row.service_date)}
                               </td>
                             ) : null}
                             {visitColumns.has("time") ? (
-                              <td className="py-2 pr-2 whitespace-nowrap font-mono text-xs text-slate-600">
+                              <td className="py-0.5 pr-2 whitespace-nowrap font-mono text-xs text-slate-600" title={`${row.scheduled_starts_at ? "Scheduled " : ""}${formatScheduledWindow(row.scheduled_starts_at, row.scheduled_ends_at, row.caregiver_scheduling_mode)}`}>
                                 {formatTimeRange(row.time_in, row.time_out)}
-                                <p className="font-sans text-slate-500">
+                                {/* The scheduled window is the hover title; it stays in the page for screen readers and print. */}
+                                <span className="sr-only print:not-sr-only print:block print:font-sans">
                                   {row.scheduled_starts_at ? "Scheduled " : ""}
                                   {formatScheduledWindow(row.scheduled_starts_at, row.scheduled_ends_at, row.caregiver_scheduling_mode)}
-                                </p>
+                                </span>
                               </td>
                             ) : null}
                             {visitColumns.has("worked") ? (
-                              <td className="py-2 pr-2 whitespace-nowrap text-slate-700">
+                              <td className="py-1 pr-2 whitespace-nowrap text-slate-700">
                                 {formatDuration(row.worked_minutes)}
                               </td>
                             ) : null}
                             {visitColumns.has("billable") ? (
-                              <td className="py-2 pr-2 whitespace-nowrap text-slate-700">
+                              <td className="py-1 pr-2 whitespace-nowrap text-slate-700">
                                 {formatDuration(row.billable_minutes)}
                               </td>
                             ) : null}
                             {visitColumns.has("authorized") ? (
-                              <td className="py-2 pr-2 whitespace-nowrap text-slate-700">
+                              <td className="py-1 pr-2 whitespace-nowrap text-slate-700">
                                 {formatDuration(authorizedMinutes)}
                               </td>
                             ) : null}
                             {visitColumns.has("usedMtd") ? (
-                              <td className="py-2 pr-2 whitespace-nowrap text-slate-700">
+                              <td className="py-1 pr-2 whitespace-nowrap text-slate-700">
                                 {formatDuration(row.month_to_date_after_minutes)}
                               </td>
                             ) : null}
                             {visitColumns.has("remaining") ? (
-                              <td className="py-2 pr-2 whitespace-nowrap text-slate-700">
+                              <td className="py-1 pr-2 whitespace-nowrap text-slate-700">
                                 {formatBalance(row.remaining_minutes)}
                               </td>
                             ) : null}
                             {showBalanceDetails ? (
-                              <td className="py-2 pr-2 align-top">
+                              <td className="py-0.5 pr-2 align-middle whitespace-nowrap">
                                 {/* A printout cannot open a control, so print shows the same three values in full. */}
                                 <dl className="hidden space-y-0.5 whitespace-nowrap text-[10px] print:block">
                                   <div><dt className="inline">Authorized: </dt><dd className="inline font-medium">{formatDuration(authorizedMinutes)}</dd></div>
@@ -2658,8 +2657,8 @@ export function ServiceVerificationReportsPage() {
                                   <div><dt className="inline">Hours left: </dt><dd className="inline font-medium">{formatBalance(row.remaining_minutes)}</dd></div>
                                 </dl>
                                 <details className="text-xs print:hidden">
-                                  <summary className="inline-flex min-h-[32px] cursor-pointer list-none items-center text-sm font-medium text-og-link underline underline-offset-2">
-                                    Hours left
+                                  <summary className="inline-flex min-h-[24px] cursor-pointer list-none items-center whitespace-nowrap text-sm font-medium text-og-link underline underline-offset-2 [@media(pointer:coarse)]:min-h-[44px]">
+                                    <span className="sr-only">Hours left </span>{formatBalance(row.remaining_minutes)}
                                   </summary>
                                   <dl className="mt-1 space-y-1 whitespace-nowrap">
                                     <div><dt className="inline text-slate-500">Authorized: </dt><dd className="inline font-medium text-slate-900">{formatDuration(authorizedMinutes)}</dd></div>
@@ -2670,7 +2669,7 @@ export function ServiceVerificationReportsPage() {
                               </td>
                             ) : null}
                             {visitColumns.has("status") ? (
-                              <td className="py-2 pr-2">
+                              <td className="py-0.5 pr-2 whitespace-nowrap">
                                 {row.status === "corrected" ? (
                                   <StatusBadge label="Replaced by a correction" tone="neutral" />
                                 ) : row.is_corrected && row.status === "signed" ? (
@@ -2689,10 +2688,10 @@ export function ServiceVerificationReportsPage() {
                               </td>
                             ) : null}
                             {canManage ? (
-                              <td className="py-2 print:hidden">
-                                <div className="flex flex-col items-start gap-1.5">
+                              <td className="py-0.5 print:hidden">
+                                <div className="flex flex-nowrap items-center gap-1">
                                   {backend.kind === "aws" && row.status === "administrator_review" ? (
-                                    <Link to={`/visits/${row.id}`} className="inline-flex min-h-[40px] items-center whitespace-nowrap rounded-lg border border-amber-600 px-3 text-sm font-medium text-amber-900 hover:bg-amber-50">
+                                    <Link to={`/visits/${row.id}`} className="inline-flex min-h-[28px] items-center whitespace-nowrap rounded-md border border-amber-600 px-2 text-xs font-medium text-amber-900 hover:bg-amber-50 [@media(pointer:coarse)]:min-h-[44px]">
                                       Review
                                     </Link>
                                   ) : null}
@@ -2701,7 +2700,7 @@ export function ServiceVerificationReportsPage() {
                                     <button
                                       type="button"
                                       onClick={() => openCorrect(row)}
-                                      className="inline-flex min-h-[32px] items-center whitespace-nowrap px-1 text-sm font-medium text-og-link underline underline-offset-2 hover:bg-slate-50"
+                                      className="inline-flex min-h-[28px] items-center whitespace-nowrap px-1.5 text-xs font-medium text-og-link underline underline-offset-2 hover:bg-slate-50 [@media(pointer:coarse)]:min-h-[44px]"
                                     >
                                       Correct
                                     </button>
@@ -2709,7 +2708,7 @@ export function ServiceVerificationReportsPage() {
                                   <button
                                     type="button"
                                     onClick={() => openHistory(row)}
-                                    className="inline-flex min-h-[40px] items-center whitespace-nowrap rounded-lg px-2 text-sm font-medium text-og-link underline underline-offset-2 hover:bg-slate-50"
+                                    className="inline-flex min-h-[28px] items-center whitespace-nowrap px-1.5 text-xs font-medium text-og-link underline underline-offset-2 hover:bg-slate-50 [@media(pointer:coarse)]:min-h-[44px]"
                                   >
                                     History
                                   </button>
@@ -2719,14 +2718,14 @@ export function ServiceVerificationReportsPage() {
                           </tr>
                           {expandedVisitId === row.id && expandedMode === "correct" ? (
                             <tr className="border-b border-slate-100 bg-slate-50 print:hidden">
-                              <td colSpan={visibleVisitColumnCount} className="p-4">
+                              <td colSpan={visibleVisitColumnCount} className="p-3">
                                 {renderCorrectionPanel(row)}
                               </td>
                             </tr>
                           ) : null}
                           {expandedVisitId === row.id && expandedMode === "history" ? (
                             <tr className="border-b border-slate-100 bg-slate-50 print:hidden">
-                              <td colSpan={visibleVisitColumnCount} className="p-4">
+                              <td colSpan={visibleVisitColumnCount} className="p-3">
                                 {renderHistoryPanel()}
                               </td>
                             </tr>
@@ -2736,7 +2735,7 @@ export function ServiceVerificationReportsPage() {
                     })}
                   </tbody>
                 </table>
-                <div className="mt-3 flex flex-wrap gap-4 border-t border-slate-200 pt-3 text-sm font-medium text-slate-800">
+                <div className="mt-2 flex flex-wrap gap-3 border-t border-slate-200 pt-3 text-sm font-medium text-slate-800">
                   <span>Worked: {formatDuration(totalWorkedMinutes)}</span>
                   <span>Billable: {formatDuration(totalBillableMinutes)}</span>
                 </div>
@@ -2752,11 +2751,11 @@ export function ServiceVerificationReportsPage() {
               <p className="mt-1 text-xs text-slate-500">
                 Service totals remain separate even when one client has multiple services.
               </p>
-              <ul className="mt-3 divide-y divide-slate-100">
+              <ul className="mt-2 divide-y divide-slate-100">
                 {clientServiceSubtotals.map((entry) => (
                   <li
                     key={entry.key}
-                    className="flex flex-wrap items-center justify-between gap-3 py-2 text-sm"
+                    className="flex flex-wrap items-center justify-between gap-3 py-1.5 text-sm"
                   >
                     <span className="text-slate-700">
                       {entry.legalName ?? entry.code} · {entry.serviceName}
@@ -2787,9 +2786,9 @@ export function ServiceVerificationReportsPage() {
             the caregiver to finish the visit on their phone.
           </p>
           </details>
-          <ul className="mt-3 divide-y divide-slate-100">
+          <ul className="mt-2 divide-y divide-slate-100">
             {incompleteVisits.map(({ row, issue }) => (
-              <li key={row.id} className="py-2 text-sm">
+              <li key={row.id} className="py-1.5 text-sm">
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <span className="text-slate-700">
                     {visitClientLabel(row)}{" "}
@@ -2858,7 +2857,7 @@ export function ServiceVerificationReportsPage() {
                         value={closeForm.reason}
                         onChange={(event) => setCloseForm({ ...closeForm, reason: event.target.value })}
                         rows={2}
-                        className="mt-1 block w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+                        className="mt-1 block w-full rounded-lg border border-slate-300 px-2 py-1.5 text-sm"
                       />
                     </label>
                     {closeError ? (
@@ -2889,9 +2888,9 @@ export function ServiceVerificationReportsPage() {
             <summary className="inline-flex min-h-[32px] cursor-pointer items-center text-og-accent underline">What counts as an exception</summary>
             <p>Visits that needed a human to look at them: flagged for administrator review, an authorization status other than within-authorization, or already corrected.</p>
           </details>
-          <ul className="mt-3 divide-y divide-slate-100">
+          <ul className="mt-2 divide-y divide-slate-100">
             {exceptionVisits.map((row) => (
-              <li key={row.id} className="py-2 text-sm">
+              <li key={row.id} className="py-1.5 text-sm">
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <span className="text-slate-700">
                     {visitClientLabel(row)}{" "}
@@ -2933,7 +2932,7 @@ export function ServiceVerificationReportsPage() {
       ) : reportView === "exceptions" && incompleteVisits.length === 0 ? (
         <Card>
           <h3 className="font-semibold text-slate-950">Exceptions</h3>
-          <p className="mt-3 text-sm text-emerald-700">
+          <p className="mt-2 text-sm text-emerald-700">
             No visits currently need manager attention for these filters.
           </p>
         </Card>

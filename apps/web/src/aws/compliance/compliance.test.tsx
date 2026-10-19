@@ -98,7 +98,8 @@ describe("the profile's Compliance card", () => {
       requirements: ["cpr", "tb"].map((r) => ({ requirement: r, documentStatus: "missing", validUntil: null, documentId: null, blocking: true, pending: false, current: false, code: "missing_no_hire_date", message: `${r.toUpperCase()} missing. Hire date is not recorded, so the 14-day period cannot be applied.`, dueDate: null })),
     } });
     expect(await screen.findByText(/No hire date is recorded, so the 14-day period cannot be applied\. CPR and TB must be verified now\./, {}, { timeout: COLD_RENDER_MS })).toBeInTheDocument();
-    expect(screen.getByText("Cannot be set without a hire date")).toBeInTheDocument();
+    expect(screen.getByText(/Cannot be set without a hire date/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Set hire date" })); // the form opens on demand
     const save = screen.getByRole("button", { name: "Save hire date" });
     expect(save).toBeDisabled();
     fireEvent.change(screen.getByLabelText("Hire date"), { target: { value: "2026-10-12" } });
@@ -113,7 +114,8 @@ describe("the profile's Compliance card", () => {
 
   it("a manager can track status but cannot verify, and cannot change a recorded hire date", async () => {
     renderAt(`/care-team/${CG}`, { role: "manager" });
-    expect(await screen.findByLabelText("Background check status", {}, { timeout: COLD_RENDER_MS })).toBeInTheDocument();
+    fireEvent.click(await screen.findByRole("button", { name: "Update status" }, { timeout: COLD_RENDER_MS })); // the form opens on demand
+    expect(await screen.findByLabelText("Background check status")).toBeInTheDocument();
     expect(screen.queryByLabelText("Verify background check")).toBeNull();
     expect(screen.getByText("Only an administrator can record the verified result.")).toBeInTheDocument();
     expect(screen.queryByLabelText("Hire date")).toBeNull();
@@ -127,6 +129,7 @@ describe("the profile's Compliance card", () => {
     } });
     expect(await screen.findByText("Not cleared", {}, { timeout: COLD_RENDER_MS })).toBeInTheDocument();
     expect(screen.getByText(/completed but no approved result is verified yet, so the caregiver cannot be assigned/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Update or verify" })); // the forms open on demand
     expect(screen.getByText(/“Completed” does not clear the caregiver/)).toBeInTheDocument();
     const record = screen.getByRole("button", { name: "Record verified result" });
     expect(record).toBeDisabled(); // an evidence note is required
@@ -192,6 +195,19 @@ describe("Caregiver holds page (the Action needed destination)", () => {
     expect(within(section).getByText(/CPR is expired for this shift/)).toBeInTheDocument();
     expect(within(section).getByText(/In progress \(visit open\)/)).toBeInTheDocument();
     expect(within(section).getByText(/a visit in progress is never ended by the system/)).toBeInTheDocument();
+  }, TEST_TIMEOUT_MS);
+
+  it("shifts at risk are grouped by caregiver and reason: one row with a count, the shifts open under it, every link is kept", async () => {
+    const risk = (shiftId: string, day: string) => ({
+      caregiverRecordId: CG, caregiverCode: "CG-A1", caregiverName: "Synthetic Alpha", shiftId, startsAt: `2026-11-${day}T20:00:00Z`, endsAt: `2026-11-${day}T22:00:00Z`,
+      clientCode: "C-104", requirement: "cpr", documentStatus: "expired", validUntil: "2026-11-07", inProgress: false, visitId: null, onHold: false,
+    });
+    renderAt("/compliance", { role: "manager", holds: { holds: [], totals: { holds: 0, affectedShifts: 0, affectedAssignments: 0, inProgressVisits: 0, shiftsAtRisk: 3, shiftsAtRiskInProgress: 0 }, shiftsAtRisk: [risk("s1", "09"), risk("s2", "11"), risk("s3", "13")] } });
+    const section = await screen.findByRole("region", { name: "Shifts with CPR or TB expiring" }, { timeout: COLD_RENDER_MS });
+    expect(within(section).getByRole("heading", { name: "Shifts with CPR or TB expired or expiring (3)" })).toBeInTheDocument();
+    expect(within(section).getAllByText(/CPR is expired for this shift/)).toHaveLength(1); // one row, not three
+    expect(within(section).getByText("3 shifts")).toBeInTheDocument();
+    expect(within(section).getAllByRole("link", { name: "Open the schedule" })).toHaveLength(3); // the shifts are listed under the row
   }, TEST_TIMEOUT_MS);
 
   it("with no holds it says so; 'Check now' asks the server to re-evaluate and reports the counts", async () => {

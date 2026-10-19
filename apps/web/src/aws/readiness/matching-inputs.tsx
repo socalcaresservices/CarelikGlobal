@@ -1,6 +1,7 @@
+import { SummarySection } from "../ui/summary-section";
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Button, Card } from "@carelik/ui";
+import { Button } from "@carelik/ui";
 import { useOrganization } from "@/providers/organization-provider";
 import { useAwsApi } from "../aws-workspace";
 import { actionError } from "./format";
@@ -9,7 +10,7 @@ import { useGuardedMutate } from "./use-guarded";
 type Tag = { tagId: string; label: string };
 type Experience = { reviewed: boolean; reviewedAt: string | null; tags: { tagId: string; label: string; status: string }[] };
 type Requirement = { tagId: string; label: string; mandatory: boolean };
-const inputClass = "mt-1 block w-full rounded-md border border-slate-300 px-3 py-2 text-base";
+const inputClass = "mt-1 block w-full rounded-md border border-slate-300 px-2.5 py-1.5 text-sm";
 
 function useTags() {
   const api = useAwsApi();
@@ -38,7 +39,7 @@ function ExperienceForm({ caregiverRecordId, tags, current, onDone }: { caregive
   const [note, setNote] = useState("");
   const save = useMutation({ mutationFn: () => api.post(`/v1/caregivers/${caregiverRecordId}/experience/review`, { organizationId: activeOrganizationId, confirmedTagIds: [...selected], note: note.trim() }), onSuccess: onDone });
   const send = useGuardedMutate(save);
-  return <form className="space-y-3" aria-label="Review caregiver experience" onSubmit={(e) => { e.preventDefault(); if (note.trim().length >= 3) send(); }}>
+  return <form className="space-y-2" aria-label="Review caregiver experience" onSubmit={(e) => { e.preventDefault(); if (note.trim().length >= 3) send(); }}>
     <fieldset><legend className="text-sm font-medium">Confirmed experience</legend>
       {tags.length === 0 ? <p className="text-sm text-slate-600">No experience tags yet.</p> : tags.map((t) => <label key={t.tagId} className="flex min-h-[44px] items-center gap-2 text-sm"><input type="checkbox" className="h-5 w-5" checked={selected.has(t.tagId)} onChange={(e) => setSelected((old) => { const next = new Set(old); if (e.target.checked) next.add(t.tagId); else next.delete(t.tagId); return next; })} />{t.label}</label>)}
     </fieldset>
@@ -57,16 +58,20 @@ export function CaregiverExperience({ caregiverRecordId }: { caregiverRecordId: 
   const [editing, setEditing] = useState(false);
   const [saved, setSaved] = useState(false);
   const q = useQuery({ queryKey: ["caregiver-experience", activeOrganizationId, caregiverRecordId], queryFn: async () => (await api.get<{ experience: Experience }>(`/v1/caregivers/${caregiverRecordId}/experience`, { organizationId: activeOrganizationId })).experience, enabled: !!activeOrganizationId });
-  return <Card className="space-y-3 p-4"><h2 className="text-base font-semibold text-slate-950">Experience</h2>
+  const reviewed = q.data?.reviewed;
+  const summaryText = q.data ? (q.data.tags.length ? q.data.tags.map((t) => t.label).join(", ") : "Not provided") : undefined;
+  return <SummarySection title="Experience" testId="caregiver-experience"
+    status={q.data ? <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${reviewed ? "bg-emerald-100 text-emerald-900" : "bg-amber-100 text-amber-900"}`}>{reviewed ? "Reviewed" : "Needs review"}</span> : undefined}
+    summary={summaryText}><div className="space-y-2">
     {q.isLoading ? <p role="status">Loading…</p> : null}
     {q.isError || tags.isError ? <p role="alert">{actionError(q.error ?? tags.error, "Experience could not be loaded.")}</p> : null}
-    {q.data ? <><p className="text-sm">{q.data.reviewed ? "Reviewed" : "Needs review"}</p>
+    {q.data ? <>
       {q.data.tags.length ? <ul className="text-sm">{q.data.tags.map((t) => <li key={t.tagId}>{t.label} · {t.status === "reported" ? "Caregiver-reported" : t.status === "confirmed" ? "Confirmed" : "Not confirmed"}</li>)}</ul> : <p className="text-sm text-slate-600">Not provided</p>}
       {hasPermission("matching.manage") && tags.data ? <><Button type="button" variant="secondary" aria-expanded={editing} onClick={() => { setEditing((v) => !v); setSaved(false); }}>{editing ? "Close review" : "Review experience"}</Button>
         {editing ? <><ExperienceForm caregiverRecordId={caregiverRecordId} tags={tags.data} current={q.data} onDone={() => { setEditing(false); setSaved(true); void qc.invalidateQueries({ queryKey: ["caregiver-experience"] }); void qc.invalidateQueries({ queryKey: ["care-matches"] }); }} /><NewTag /></> : null}</> : null}
     </> : null}
     {saved ? <p role="status" className="text-sm">Experience review saved.</p> : null}
-  </Card>;
+  </div></SummarySection>;
 }
 
 function RequirementsForm({ clientId, tags, current, onDone }: { clientId: string; tags: Tag[]; current: Requirement[]; onDone: () => void }) {
@@ -76,7 +81,7 @@ function RequirementsForm({ clientId, tags, current, onDone }: { clientId: strin
   const [reason, setReason] = useState("");
   const save = useMutation({ mutationFn: () => api.post(`/v1/clients/${clientId}/experience-requirements`, { organizationId: activeOrganizationId, requirements: Object.entries(values).filter(([, v]) => v !== "none").map(([tagId, v]) => ({ tagId, mandatory: v === "mandatory" })), reason: reason.trim() }), onSuccess: onDone });
   const send = useGuardedMutate(save);
-  return <form className="space-y-3" aria-label="Client experience preferences" onSubmit={(e) => { e.preventDefault(); if (reason.trim().length >= 3) send(); }}>
+  return <form className="space-y-2" aria-label="Client experience preferences" onSubmit={(e) => { e.preventDefault(); if (reason.trim().length >= 3) send(); }}>
     <p className="text-xs text-slate-600">Optional preferences affect matching only. Mandatory requirements block assignments until confirmed.</p>
     {tags.map((t) => <label key={t.tagId} className="block text-sm">{t.label}<select className={inputClass} value={values[t.tagId] ?? "none"} onChange={(e) => setValues((old) => ({ ...old, [t.tagId]: e.target.value as "optional" | "mandatory" | "none" }))}><option value="none">Not requested</option><option value="optional">Optional preference</option><option value="mandatory">Mandatory requirement</option></select></label>)}
     <label className="block text-sm">Reason for preferences<textarea value={reason} onChange={(e) => setReason(e.target.value)} rows={2} maxLength={500} className={inputClass} /></label>
@@ -93,7 +98,7 @@ export function ClientExperience({ clientId }: { clientId: string }) {
   const [editing, setEditing] = useState(false);
   const [saved, setSaved] = useState(false);
   const q = useQuery({ queryKey: ["client-experience", activeOrganizationId, clientId], queryFn: async () => (await api.get<{ requirements: Requirement[] }>(`/v1/clients/${clientId}/experience-requirements`, { organizationId: activeOrganizationId })).requirements, enabled: !!activeOrganizationId });
-  return <Card className="space-y-3 p-4"><h2 className="text-base font-semibold text-slate-950">Experience preferences</h2>
+  return <SummarySection title="Experience preferences" summary={q.data ? (q.data.length ? `${q.data.length} requirement${q.data.length === 1 ? "" : "s"}` : "Not provided") : undefined}><div className="space-y-2">
     {q.isLoading ? <p role="status">Loading…</p> : null}
     {q.isError || tags.isError ? <p role="alert">{actionError(q.error ?? tags.error, "Preferences could not be loaded.")}</p> : null}
     {q.data ? <>{q.data.length ? <ul className="text-sm">{q.data.map((r) => <li key={r.tagId}>{r.label} · {r.mandatory ? "Mandatory" : "Optional"}</li>)}</ul> : <p className="text-sm">Not provided</p>}
@@ -101,7 +106,7 @@ export function ClientExperience({ clientId }: { clientId: string }) {
         {editing ? <><RequirementsForm clientId={clientId} tags={tags.data} current={q.data} onDone={() => { setEditing(false); setSaved(true); void qc.invalidateQueries({ queryKey: ["client-experience"] }); void qc.invalidateQueries({ queryKey: ["care-matches"] }); }} /><NewTag /></> : null}</> : null}
     </> : null}
     {saved ? <p role="status">Preferences saved. Future assignments use the current requirements.</p> : null}
-  </Card>;
+  </div></SummarySection>;
 }
 
 function LocationForm({ path, current, onDone }: { path: string; current: string | null; onDone: () => void }) {
@@ -127,12 +132,12 @@ export function MatchingLocation({ caregiverRecordId, clientId }: { caregiverRec
   const [saved, setSaved] = useState(false);
   const q = useQuery({ queryKey: ["matching-location", activeOrganizationId, path], queryFn: async () => (await api.get<{ location: { zip: string | null } }>(path, { organizationId: activeOrganizationId })).location, enabled: !!activeOrganizationId });
   const status = useQuery({ queryKey: ["location-data", activeOrganizationId], queryFn: async () => (await api.get<{ status: { distanceDataLoaded: boolean } }>("/v1/location-data", { organizationId: activeOrganizationId })).status, enabled: !!activeOrganizationId });
-  return <Card className="space-y-3 p-4"><h2 className="text-base font-semibold text-slate-950">Location</h2>
+  return <SummarySection title="Location" summary={q.data ? `ZIP: ${q.data.zip ?? "Not provided"}` : undefined}><div className="space-y-2">
     {q.isLoading ? <p role="status">Loading…</p> : null}
     {q.isError || status.isError ? <p role="alert">{actionError(q.error ?? status.error, "Location could not be loaded.")}</p> : null}
-    {q.data ? <><p className="text-sm">ZIP: {q.data.zip ?? "Not provided"}</p><Button type="button" variant="secondary" aria-expanded={editing} onClick={() => { setEditing((v) => !v); setSaved(false); }}>{editing ? "Close location" : "Edit location"}</Button>
+    {q.data ? <><Button type="button" variant="secondary" aria-expanded={editing} onClick={() => { setEditing((v) => !v); setSaved(false); }}>{editing ? "Close location" : "Edit location"}</Button>
       {editing ? <LocationForm path={path} current={q.data.zip} onDone={() => { setEditing(false); setSaved(true); void qc.invalidateQueries({ queryKey: ["matching-location"] }); void qc.invalidateQueries({ queryKey: ["location-data"] }); void qc.invalidateQueries({ queryKey: ["care-matches"] }); }} /> : null}</> : null}
     <p className="text-xs text-slate-600">{status.data ? status.data.distanceDataLoaded ? "Approx. distance uses ZIP centres and is not a travel limit." : "Approx. distance unavailable. No distance dataset is loaded; a ZIP alone does not provide distance." : "Distance data has not been verified."}</p>
     {saved ? <p role="status">Location saved.</p> : null}
-  </Card>;
+  </div></SummarySection>;
 }

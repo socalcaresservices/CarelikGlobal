@@ -5,6 +5,8 @@ import { formatClockTime, formatDuration, formatNumericDate } from "@/lib/servic
 import { itemTone, rankedItems, REASON_LABEL, TONE, URGENT_WINDOW_HOURS, useAttentionOverview, type Tone, type UpcomingShift, type UrgentItem } from "./attention";
 import { Disclosure } from "./ui/disclosure";
 import { PageHeader } from "./ui/page-header";
+import { CompactAlert } from "./ui/compact-alert";
+import { linkClass } from "./ui-classes";
 import { StatusChip } from "./ui/status-chip";
 import { actionBtnPrimary } from "./ui-classes";
 import { clientLabel } from "./name-label";
@@ -14,6 +16,15 @@ const COMPLIANCE_REASONS = new Set(["compliance_hold", "documents_not_current", 
 const UPCOMING_REASON: Record<UpcomingShift["reason"], string> = {
   open: "No caregiver", called_out: "Called out", compliance_hold: "Caregiver on a compliance hold", documents_not_current: "A required document is not current",
 };
+/** A one-line notice with its link on the same row; the full explanation opens under it. */
+function Notice({ testId, summary, details, to, label }: { testId: string; summary: string; details: string; to: string; label: string }) {
+  return (
+    <div data-testid={testId} className="flex flex-wrap items-start gap-x-3 gap-y-1">
+      <CompactAlert className="min-w-0 flex-1" tone="info" summary={summary}>{details}</CompactAlert>
+      <Link className={linkClass} to={to}>{label}</Link>
+    </div>
+  );
+}
 const weekday = (iso: string) => new Intl.DateTimeFormat("en-US", { weekday: "long", timeZone: "America/Los_Angeles" }).format(new Date(iso));
 
 function Loading({ q }: { q: { isLoading: boolean; isError: boolean; error: unknown } }) {
@@ -28,9 +39,9 @@ function UrgentRow({ item, asOf }: { item: UrgentItem; asOf: number }) {
   const what = item.kind === "shift" ? "Shift" : "Visit";
   const who = [clientLabel(item), item.serviceCode].filter(Boolean).join(" · ");
   const compliance = item.reasons.some((r) => COMPLIANCE_REASONS.has(r));
-  const link = "inline-flex min-h-[44px] items-center font-semibold text-og-link underline md:min-h-[32px]";
+  const link = linkClass;
   return (
-    <li className={`rounded-og border border-og-line border-l-4 bg-og-card px-3 py-2 ${tone === "red" ? "border-l-red-700" : "border-l-amber-600"}`}>
+    <li className={`rounded-og border border-og-line border-l-4 bg-og-card px-3 py-1 ${tone === "red" ? "border-l-red-700" : "border-l-amber-600"}`}>
       <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
         <StatusChip tone={tone}>{t.word}</StatusChip>
         <p className="text-sm font-semibold text-og-ink">{what}{who ? ` · ${who}` : ""}</p>
@@ -59,7 +70,7 @@ export function NeedsAttentionPage() {
   const u = q.data?.urgent;
   const hours = q.data?.urgentWindowHours ?? URGENT_WINDOW_HOURS;
   return (
-    <div className="space-y-4">
+    <div className="space-y-3">
       <PageHeader title="Needs attention now" lead={`Care that starts or is running within ${hours} hours and is blocked or at risk.`} action={<Link className="inline-flex min-h-[44px] items-center font-semibold text-og-link underline md:min-h-[32px]" to="/action-needed" data-testid="all-actions-link">Everything that needs action</Link>} />
       <Loading q={q} />
       {q.data && !u ? <p className="text-sm text-og-sub">Your role does not include this list.</p> : null}
@@ -69,8 +80,8 @@ export function NeedsAttentionPage() {
             <span className="font-semibold">{plural(u.itemCount, "item")}</span>
             {u.issueCount !== u.itemCount ? <span className="text-og-sub"> · {plural(u.issueCount, "issue")} in total</span> : null}
           </p>
-          {u.items.length === 0 ? <p className="rounded-og border border-og-line bg-og-card p-4 text-sm text-og-sub">Nothing starting in the next {hours} hours is at risk.</p> : (
-            <ul className="space-y-2">{rankedItems(u.items, Date.parse(q.data!.asOf)).map((i) => <UrgentRow key={`${i.kind}-${i.id}`} item={i} asOf={Date.parse(q.data!.asOf)} />)}</ul>
+          {u.items.length === 0 ? <p className="rounded-og border border-og-line bg-og-card px-3 py-1 text-sm text-og-sub">Nothing starting in the next {hours} hours is at risk.</p> : (
+            <ul className="space-y-1">{rankedItems(u.items, Date.parse(q.data!.asOf)).map((i) => <UrgentRow key={`${i.kind}-${i.id}`} item={i} asOf={Date.parse(q.data!.asOf)} />)}</ul>
           )}
         </>
       ) : null}
@@ -95,39 +106,30 @@ export function UpcomingStaffingPage() {
   const q = useAttentionOverview();
   const u = q.data?.upcoming;
   return (
-    <div className="space-y-4">
+    <div className="space-y-3">
       <PageHeader title="Upcoming staffing" lead={`Shifts more than ${q.data?.urgentWindowHours ?? URGENT_WINDOW_HOURS} hours away that need a caregiver or have a blocked one.`}
         action={<Link className={actionBtnPrimary} to="/schedule">Open schedule</Link>} />
       <Loading q={q} />
       {q.data?.pickups && q.data.pickups.count > 0 ? (
-        <p data-testid="pickup-requests-link" className="rounded-og border border-og-line bg-og-card p-3 text-sm text-og-ink">
-          {plural(q.data.pickups.count, "caregiver request")} for open shifts {q.data.pickups.count === 1 ? "is" : "are"} waiting for you to confirm. Nobody is assigned until you do.{" "}
-          <Link className="font-semibold underline" to="/schedule">Review requests</Link>
-        </p>
+        <Notice testId="pickup-requests-link" summary={`${plural(q.data.pickups.count, "caregiver request")} for open shifts`} details={`${q.data.pickups.count === 1 ? "It is" : "They are"} waiting for you to confirm. Nobody is assigned until you do.`} to="/schedule" label="Review requests" />
       ) : null}
       {q.data?.reconciliation && q.data.reconciliation.count > 0 ? (
-        <p data-testid="reconcile-link" className="rounded-og border border-og-line bg-og-card p-3 text-sm text-og-ink">
-          {plural(q.data.reconciliation.count, "shift")} ended with no visit record and {q.data.reconciliation.count === 1 ? "still holds" : "still hold"} {formatDuration(q.data.reconciliation.minutes)} of authorization. Nothing is released until you decide.{" "}
-          <Link className="font-semibold underline" to="/schedule">Reconcile shifts</Link>
-        </p>
+        <Notice testId="reconcile-link" summary={`${plural(q.data.reconciliation.count, "shift")} ended with no visit record`} details={`${q.data.reconciliation.count === 1 ? "It still holds" : "They still hold"} ${formatDuration(q.data.reconciliation.minutes)} of authorization. Nothing is released until you decide.`} to="/schedule" label="Reconcile shifts" />
       ) : null}
       {q.data?.amendmentImpacts && q.data.amendmentImpacts.count > 0 ? (
-        <p data-testid="amendment-impacts-link" className="rounded-og border border-og-line bg-og-card p-3 text-sm text-og-ink">
-          {plural(q.data.amendmentImpacts.count, "item")} affected by an authorization change {q.data.amendmentImpacts.count === 1 ? "needs" : "need"} your review.{" "}
-          <Link className="font-semibold underline" to="/authorization-impacts">Review changes</Link>
-        </p>
+        <Notice testId="amendment-impacts-link" summary={`${plural(q.data.amendmentImpacts.count, "item")} affected by an authorization change`} details={`${q.data.amendmentImpacts.count === 1 ? "It needs" : "They need"} your review.`} to="/authorization-impacts" label="Review changes" />
       ) : null}
       {q.data && !u ? <p className="text-sm text-og-sub">Your role does not include this list.</p> : null}
       {u ? (
-        u.shifts.length === 0 ? <p className="rounded-og border border-og-line bg-og-card p-4 text-sm text-og-sub">Every upcoming shift has a caregiver who may work it.</p> : (
-          <div className="space-y-4">
+        u.shifts.length === 0 ? <p className="rounded-og border border-og-line bg-og-card px-3 py-1 text-sm text-og-sub">Every upcoming shift has a caregiver who may work it.</p> : (
+          <div className="space-y-3">
             <p className="text-sm font-semibold text-og-ink" data-testid="staffing-summary">{plural(u.count, "shift")}</p>
             {byDay(u.shifts).map(([day, items]) => (
               <section key={day} aria-label={day}>
-                <h2 className="text-sm font-bold text-og-ink">{weekday(items[0]!.startsAt)} {day}</h2>
+                <h2 className="text-sm font-semibold text-og-ink">{weekday(items[0]!.startsAt)} {day}</h2>
                 <ul className="mt-1 divide-y divide-og-line rounded-og border border-og-line bg-og-card">
                   {items.map((s) => (
-                    <li key={s.shiftId} className="flex flex-wrap items-center justify-between gap-2 px-3 py-2.5 text-sm">
+                    <li key={s.shiftId} className="flex flex-wrap items-center justify-between gap-2 px-3 py-1.5 text-sm">
                       <span className="text-og-ink">{formatClockTime(s.startsAt)}–{formatClockTime(s.endsAt)} · {[clientLabel(s), s.serviceName ?? s.serviceCode].filter(Boolean).join(" · ")}</span>
                       <StatusChip tone="neutral">{UPCOMING_REASON[s.reason] ?? s.reason}</StatusChip>
                     </li>
@@ -171,7 +173,7 @@ export function VisitQueuePage() {
     <ul className="divide-y divide-og-line rounded-og border border-og-line bg-og-card">
       {rows.map((r) => (
         <li key={r.label}>
-          <Link to={r.to} className="flex min-h-[48px] items-center justify-between gap-3 px-3 py-2 text-sm hover:bg-og-page focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-og-link">
+          <Link to={r.to} className="flex min-h-[32px] items-center justify-between gap-3 px-3 py-1 text-sm [@media(pointer:coarse)]:min-h-[44px] hover:bg-og-page focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-og-link">
             <span className="text-og-ink">{r.label}</span>
             <span className="flex items-center gap-2">
               {r.chip && r.count > 0 ? <StatusChip tone={r.chip.tone}>{r.chip.word}</StatusChip> : null}
@@ -183,7 +185,7 @@ export function VisitQueuePage() {
     </ul>
   );
   return (
-    <div className="space-y-4">
+    <div className="space-y-3">
       <PageHeader title="Visit review" lead="Visits waiting for a person's decision, and routine follow-up kept apart." />
       <Loading q={q} />
       {q.data && !v ? <p className="text-sm text-og-sub">Your role does not include this list.</p> : null}
@@ -193,12 +195,12 @@ export function VisitQueuePage() {
             <span className="font-semibold">Visits needing attention: {v.visitsNeedingAttention}</span>
             {v.reviewIssues > 0 ? <span className="text-og-sub"> · Issues: {v.reviewIssues}</span> : null}
           </p>
-          <section aria-label="Needs a decision" className="space-y-1.5">
-            <h2 className="text-sm font-bold text-og-ink">Needs a decision</h2>
+          <section aria-label="Needs a decision" className="space-y-1">
+            <h2 className="text-sm font-semibold text-og-ink">Needs a decision</h2>
             {list(decide)}
           </section>
-          <section aria-label="Routine follow-up" className="space-y-1.5">
-            <h2 className="text-sm font-bold text-og-ink">Routine follow-up <span className="font-normal text-og-sub">(not counted above)</span></h2>
+          <section aria-label="Routine follow-up" className="space-y-1">
+            <h2 className="text-sm font-semibold text-og-ink">Routine follow-up <span className="font-normal text-og-sub">(not counted above)</span></h2>
             {list(routine)}
           </section>
           <Disclosure summary="About these counts">

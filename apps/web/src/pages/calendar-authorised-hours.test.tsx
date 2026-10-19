@@ -105,9 +105,26 @@ describe("Authorised hours above the calendar", () => {
     expect(screen.queryByText(/Authorised: 0/)).toBeNull();
   });
 
-  it("two authorizations of ONE service in the month are added into one line for that service (an amended authorization is already one row)", async () => {
-    setup(vi.fn(async () => [row(C1, "s-resp", "Respite", "l1", 1200), row(C1, "s-resp", "Respite", "l9", 1200)]) as never);
+  it("only the CURRENT authorization counts: an earlier authorization of the same service is history, never added or listed as authorized time", async () => {
+    const earlier = { ...row(C1, "s-resp", "Respite", "l-old", 6000), authorizationPeriodStart: "2026-01-01", authorizationPeriodEnd: "2026-08-31" };
+    const current = { ...row(C1, "s-resp", "Respite", "l-new", 1200), authorizationPeriodStart: "2026-08-01", authorizationPeriodEnd: "2026-12-31" };
+    setup(vi.fn(async () => [earlier, current]) as never);
     await choose(C1);
-    expect(await screen.findByText(line("Respite — Authorised: 40 h"))).toBeInTheDocument();
+    expect(await screen.findByText(line("Respite — Authorised: 20 h"))).toBeInTheDocument();
+    expect(screen.queryByText(/100 h/)).not.toBeInTheDocument();
+    // the totals table does not list the earlier authorization (it carries no activity)
+    const table = await screen.findByRole("table", { name: "Monthly service totals" });
+    expect(within(table).queryByText(/Earlier authorization/)).not.toBeInTheDocument();
+    expect(within(table).getAllByRole("row")).toHaveLength(2); // header + the current authorization
+  });
+
+  it("worked time under an earlier authorization stays visible as history with no authorized time", async () => {
+    const earlier = { ...row(C1, "s-resp", "Respite", "l-old", 6000), authorizationPeriodStart: "2026-01-01", authorizationPeriodEnd: "2026-08-31", workedMinutes: 90, billableMinutes: 90, visitCount: 1 };
+    const current = { ...row(C1, "s-resp", "Respite", "l-new", 1200), authorizationPeriodStart: "2026-08-01", authorizationPeriodEnd: "2026-12-31" };
+    setup(vi.fn(async () => [earlier, current]) as never);
+    await choose(C1);
+    expect(await screen.findByText(line("Respite — Authorised: 20 h"))).toBeInTheDocument();
+    const table = await screen.findByRole("table", { name: "Monthly service totals" });
+    expect(within(table).getByText(/Earlier authorization \(history\)/)).toBeInTheDocument();
   });
 });

@@ -444,7 +444,7 @@ export function AwsShell({ children }: PropsWithChildren) {
       <div className={cn("print:pl-0", !isMobile && (collapsed ? "pl-[76px]" : "pl-64"))}>
         <EnvironmentBanner />
         <header className="border-b border-og-line bg-og-card print:hidden" style={{ borderTop: `4px solid ${accent}` }}>
-          <div className="flex flex-wrap items-center gap-2 px-4 py-2.5 md:px-8">
+          <div className="flex flex-wrap items-center gap-2 px-3 py-1.5 md:px-6">
             <button
               ref={menuButtonRef}
               type="button"
@@ -487,7 +487,7 @@ export function AwsShell({ children }: PropsWithChildren) {
             ) : null}
           </div>
         </header>
-        <main className="mx-auto max-w-[1180px] px-4 py-6 md:px-8 print:max-w-none print:p-0">{children}</main>
+        <main className="mx-auto max-w-[1240px] px-3 py-3 md:px-6 print:max-w-none print:p-0">{children}</main>
       </div>
     </div>
   );

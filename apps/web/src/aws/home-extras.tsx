@@ -33,9 +33,9 @@ export function TodaysVisits() {
   const list = todaysVisits(all, now);
   const shown = list.slice(0, LIMIT);
   return (
-    <section aria-labelledby="today-heading" className="space-y-2">
+    <section aria-labelledby="today-heading" className="space-y-1">
       <div className="flex items-center justify-between gap-3">
-        <h2 id="today-heading" className="text-lg font-bold text-og-ink">Today&apos;s visits</h2>
+        <h2 id="today-heading" className="text-sm font-semibold text-og-ink">Today&apos;s visits</h2>
         <Link className={linkClass} to="/schedule">View all</Link>
       </div>
       {q.isLoading ? <p className="text-sm text-og-sub">Loading…</p> : null}
@@ -49,7 +49,7 @@ export function TodaysVisits() {
             const started = Date.parse(s.startsAt) <= now;
             const blocked = open ? null : shiftIssueLabel(homeIssues.data?.issues, s.shiftId);
             return (
-              <li key={s.shiftId} className="flex flex-wrap items-center gap-x-3 gap-y-1 px-3 py-2.5 text-sm">
+              <li key={s.shiftId} className="flex flex-wrap items-center gap-x-3 gap-y-1 px-3 py-1 text-sm md:min-h-[32px]">
                 <span className="basis-full font-og-mono tabular-nums text-og-ink sm:basis-auto">{formatClockTime(s.startsAt)}–{formatClockTime(s.endsAt)}</span>
                 <span className="min-w-0 flex-1 text-og-ink">
                   <span className="font-semibold">{s.clientName ?? s.clientCode}</span>
@@ -68,7 +68,7 @@ export function TodaysVisits() {
   );
 }
 
-const primary = "inline-flex min-h-[44px] items-center justify-center rounded-lg bg-og-accent px-4 text-sm font-semibold text-og-on-accent hover:opacity-90 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-og-link md:min-h-[40px]";
+const primary = "inline-flex min-h-[44px] items-center justify-center rounded-lg bg-og-accent px-3 text-sm md:min-h-[36px] font-semibold text-og-on-accent hover:opacity-90 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-og-link md:min-h-[40px]";
 
 /**
  * One primary action (Schedule visit) and two plain links, each shown only to someone who may use it. Each opens an existing workflow; none creates anything itself.
@@ -100,9 +100,9 @@ export function RefreshStatus({ overview, loading, failed, refreshing, onRefresh
   const warn = f.kind === "stale" ? (f.reason === "refresh_failed" ? `Could not refresh. These figures are from ${time} and may be out of date.` : `These figures are from ${time} and may be out of date.`)
     : f.kind === "unavailable" ? "These figures could not be loaded. They are not zero. Try again." : null;
   return (
-    <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+    <div className="flex flex-wrap items-center gap-x-2 gap-y-0">
       <p className="text-xs text-og-sub" data-testid="updated-at">{time ? `Updated ${time}` : f.kind === "loading" ? "Checking…" : "Not updated"}</p>
-      <button type="button" onClick={onRefresh} disabled={refreshing} className="inline-flex min-h-[44px] items-center rounded-lg border border-og-line bg-og-card px-3 text-sm font-semibold text-og-ink hover:bg-og-page disabled:bg-slate-100 disabled:text-slate-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-og-link md:min-h-[40px]">
+      <button type="button" onClick={onRefresh} disabled={refreshing} className="inline-flex min-h-[44px] items-center rounded-md border border-og-line bg-og-card px-2 text-xs font-semibold md:min-h-[28px] text-og-ink hover:bg-og-page disabled:bg-slate-100 disabled:text-slate-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-og-link md:min-h-[40px]">
         {refreshing ? "Refreshing…" : f.kind === "unavailable" || (f.kind === "stale" && f.reason === "refresh_failed") ? "Retry" : "Refresh"}
       </button>
       {warn ? <p role="status" className="basis-full text-sm font-semibold text-amber-900"><span aria-hidden="true">▲ </span>{warn}</p> : null}
@@ -123,28 +123,25 @@ export function TopIssues() {
   const total = q.data?.counts?.actionNeeded ?? urgent.length;
   const shown = urgent.slice(0, 5);
   return (
-    <section aria-labelledby="top-issues-heading" className="space-y-2" data-testid="top-issues">
+    <section aria-labelledby="top-issues-heading" className="space-y-1" data-testid="top-issues">
       <div className="flex items-center justify-between gap-3">
-        <h2 id="top-issues-heading" className="text-lg font-bold text-og-ink">Needs action first</h2>
+        <h2 id="top-issues-heading" className="text-sm font-semibold text-og-ink">Needs action first</h2>
         <Link className={linkClass} to="/action-needed">View all{total > shown.length ? ` (${total})` : ""}</Link>
       </div>
       {shown.length === 0 ? <p className="text-sm text-og-sub">Nothing is critical or urgent right now.</p> : (
         <ul className="divide-y divide-og-line rounded-og border border-og-line bg-og-card">
-          <li aria-hidden="true" className="hidden px-3 py-1.5 text-xs font-semibold text-og-sub md:grid md:grid-cols-[6.5rem_minmax(0,1fr)_9rem_11rem] md:gap-x-3">
-            <span>Status</span><span>Item</span><span>Due</span><span className="text-right">Action</span>
-          </li>
-          {shown.map((i) => {
+                    {shown.map((i) => {
             const dest = issueDestination(i);
             const tone = SEVERITY_TONE[i.severity];
             return (
-              <li key={i.issueKey} className="flex flex-wrap items-center gap-x-3 gap-y-0 px-3 py-2 text-sm md:grid md:grid-cols-[6.5rem_minmax(0,1fr)_9rem_11rem]" data-testid="top-issue">
+              <li key={i.issueKey} className="flex flex-wrap items-center gap-x-3 gap-y-0 px-3 py-0.5 text-sm md:grid md:min-h-[32px] md:grid-cols-[5.5rem_minmax(0,1fr)_8rem_11rem]" data-testid="top-issue">
                 <span><StatusChip tone={tone}>{tone === "red" ? "Critical" : "Urgent"}</StatusChip></span>
-                <span className="min-w-0 flex-1 basis-[10rem] text-og-ink">
+                <span className="min-w-0 flex-1 basis-[10rem] truncate text-og-ink">
                   <span className="font-semibold">{KIND_LABEL[i.kind] ?? i.kind}{issueClient(i) ? ` · ${issueClient(i)}` : ""}</span>
                   <span className="text-og-sub"> · {REASON_SHORT[i.reason] ?? i.recommendedAction}</span>
                 </span>
                 <span className="basis-full text-xs text-og-sub md:basis-auto md:text-sm">{i.deadline ? `${i.severity === "critical" ? "Was due" : "Due"} ${formatClockTime(i.deadline)}` : "No deadline"}</span>
-                <Link className={`${linkClass} md:justify-self-end`} to={dest.to}>{dest.label}</Link>
+                <Link className="inline-flex min-h-[44px] items-center whitespace-nowrap font-semibold text-og-link underline md:min-h-[28px] md:justify-self-end" to={dest.to}>{dest.label}</Link>
               </li>
             );
           })}
@@ -156,7 +153,7 @@ export function TopIssues() {
 
 export function CollapseButton({ collapsed, onToggle, label }: { collapsed: boolean; onToggle: () => void; label: string }) {
   return (
-    <button type="button" aria-expanded={!collapsed} onClick={onToggle} className="inline-flex min-h-[44px] items-center text-sm font-semibold text-og-link underline md:min-h-[32px]">
+    <button type="button" aria-expanded={!collapsed} onClick={onToggle} className="inline-flex min-h-[44px] items-center text-sm font-semibold text-og-link underline md:min-h-[28px]">
       {collapsed ? `Show ${label}` : `Hide ${label}`}
     </button>
   );

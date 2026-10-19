@@ -87,10 +87,12 @@ describe("Action needed", () => {
     renderPage(["visits.read", "shifts.manage", "visits.manage", "billing.visits.read"]);
     const counts = await screen.findByTestId("issue-counts", {}, { timeout: 15000 });
     expect(counts).toHaveTextContent("2 need action");
-    // each group heading carries its own count once; a group of routine items says it is not in the total
+    // each group heading carries its own count once; a group of routine items says (behind an info icon) it is not in the total
     expect(screen.getByRole("heading", { name: /^Needs attention now 1$/ })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: /^Visit review 1$/ })).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: /^Ready for approval 1 · routine, not in the total$/ })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: /^Ready for approval 1$/ })).toBeInTheDocument();
+    // routine groups are one summary row until opened (exceptions first)
+    expect(screen.getByTestId("routine-group-ready_for_approval")).not.toHaveAttribute("open");
     const cards = await screen.findAllByTestId("issue-card");
     expect(cards).toHaveLength(3);
     expect(within(cards[0]!).getByText("Critical")).toBeInTheDocument();

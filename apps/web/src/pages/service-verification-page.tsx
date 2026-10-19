@@ -128,7 +128,7 @@ function ClientChoiceList({
                   aria-pressed={selected}
                   onClick={() => onChoose(client.client_id)}
                   className={cn(
-                    "flex min-h-14 w-full items-center justify-between gap-3 rounded-2xl border px-4 py-3 text-left",
+                    "flex min-h-14 w-full items-center justify-between gap-3 rounded-2xl border px-4 py-2 text-left",
                     selected
                       ? "border-indigo-600 bg-indigo-50 ring-2 ring-indigo-200"
                       : "border-slate-200 bg-og-card hover:border-slate-300",
@@ -672,7 +672,7 @@ export function ServiceVerificationPage() {
 
   if (activeVisitQuery.isError) {
     return (
-      <Card className="mx-auto max-w-md rounded-3xl p-5">
+      <Card className="mx-auto max-w-md rounded-3xl p-3">
         <BrandHeader
           agencyName={activeOrganization?.displayName ?? "SoCal Care Services"}
           logoUrl={activeOrganization?.logoUrl}
@@ -680,7 +680,7 @@ export function ServiceVerificationPage() {
         />
         <div
           role="alert"
-          className="mt-5 rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-800"
+          className="mt-3 rounded-2xl border border-red-200 bg-red-50 p-3 text-sm text-red-800"
         >
           <p className="font-semibold">
             The sign-in sheet could not safely check for an open visit.
@@ -705,8 +705,8 @@ export function ServiceVerificationPage() {
 
   return (
     <div className="mx-auto max-w-md pb-20">
-      <Card className="overflow-hidden rounded-3xl border-slate-200 p-5 shadow-sm sm:p-6">
-        <div className="space-y-5">
+      <Card className="overflow-hidden rounded-3xl border-slate-200 p-3 shadow-sm sm:p-3">
+        <div className="space-y-4">
           <BrandHeader
             agencyName={
               activeOrganization?.displayName ?? "SoCal Care Services"
@@ -719,7 +719,7 @@ export function ServiceVerificationPage() {
           {error ? (
             <div
               role="alert"
-              className="rounded-2xl border border-red-200 bg-red-50 p-4 text-sm font-medium text-red-800"
+              className="rounded-2xl border border-red-200 bg-red-50 p-3 text-sm font-medium text-red-800"
             >
               {error}
             </div>
@@ -733,7 +733,7 @@ export function ServiceVerificationPage() {
 
           {phase === "select" ? (
             <section
-              className="space-y-5"
+              className="space-y-4"
               aria-labelledby="select-visit-heading"
             >
               <div>
@@ -755,14 +755,14 @@ export function ServiceVerificationPage() {
               {clientsQuery.isError ? (
                 <p
                   role="alert"
-                  className="rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-800"
+                  className="rounded-2xl border border-red-200 bg-red-50 p-3 text-sm text-red-800"
                 >
                   Your visits could not be loaded. Refresh the page or contact
                   your agency manager.
                 </p>
               ) : null}
               {clientsQuery.isSuccess && clientsQuery.data.length === 0 ? (
-                <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
+                <div className="rounded-2xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
                   <p className="font-semibold">
                     No assigned clients are available.
                   </p>
@@ -795,7 +795,7 @@ export function ServiceVerificationPage() {
 
               {selectedClient ? (
                 <div
-                  className="rounded-3xl border border-indigo-100 bg-gradient-to-br from-indigo-50 via-white to-sky-50 p-4 text-sm text-indigo-950 shadow-sm"
+                  className="rounded-3xl border border-indigo-100 bg-gradient-to-br from-indigo-50 via-white to-sky-50 p-3 text-sm text-indigo-950 shadow-sm"
                   aria-label="Visit details"
                   role="group"
                 >
@@ -837,7 +837,7 @@ export function ServiceVerificationPage() {
                   ) : null}
 
                   {(servicesQuery.data?.length ?? 0) > 1 ? (
-                    <label className="mt-4 block text-sm font-semibold text-slate-700">
+                    <label className="mt-3 block text-sm font-semibold text-slate-700">
                       Service for this visit
                       <span className="mt-1 block text-xs font-normal text-slate-500">
                         {scheduledService
@@ -879,7 +879,7 @@ export function ServiceVerificationPage() {
 
                   {selectedService ? (
                     <>
-                    <div className="mt-4 grid grid-cols-3 gap-2 text-center">
+                    <div className="mt-3 grid grid-cols-3 gap-2 text-center">
                       <div className="rounded-2xl border border-indigo-100 bg-indigo-100/70 p-2 text-indigo-950">
                         <p className="text-base font-bold">
                           {formatDuration(
@@ -929,7 +929,7 @@ export function ServiceVerificationPage() {
               {servicesQuery.isError ? (
                 <p
                   role="alert"
-                  className="rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-800"
+                  className="rounded-2xl border border-red-200 bg-red-50 p-3 text-sm text-red-800"
                 >
                   Services could not be loaded. Contact your agency manager.
                 </p>
@@ -937,7 +937,7 @@ export function ServiceVerificationPage() {
               {selectedClient &&
               servicesQuery.isSuccess &&
               servicesQuery.data.length === 0 ? (
-                <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
+                <div className="rounded-2xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
                   <p className="font-semibold">
                     No active service authorization is available for Client{" "}
                     {selectedClient.client_code}.
@@ -955,7 +955,7 @@ export function ServiceVerificationPage() {
                 </p>
               ) : null}
               {shiftsQuery.isError ? (
-                <p className="rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-800">
+                <p className="rounded-2xl border border-red-200 bg-red-50 p-3 text-sm text-red-800">
                   Scheduled shifts could not be loaded. Contact your agency
                   manager.
                 </p>
@@ -1000,7 +1000,7 @@ export function ServiceVerificationPage() {
                 </div>
               ) : null}
 
-              <div className="rounded-2xl bg-slate-50 p-4 text-center">
+              <div className="rounded-2xl bg-slate-50 p-3 text-center">
                 <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
                   Current Pacific time
                 </p>
@@ -1013,7 +1013,7 @@ export function ServiceVerificationPage() {
               </div>
 
               {needsUnscheduledReason && selectedClient && selectedService ? (
-                <div className="space-y-2 rounded-2xl border border-amber-200 bg-amber-50 p-4">
+                <div className="space-y-2 rounded-2xl border border-amber-200 bg-amber-50 p-3">
                   <label
                     htmlFor="unscheduled-reason"
                     className="block text-sm font-semibold text-amber-950"
@@ -1053,7 +1053,7 @@ export function ServiceVerificationPage() {
 
           {phase === "active" && active ? (
             <section
-              className="space-y-5"
+              className="space-y-4"
               aria-labelledby="active-visit-heading"
             >
               <div className="flex items-center justify-between gap-3">
@@ -1074,7 +1074,7 @@ export function ServiceVerificationPage() {
                 </span>
               </div>
 
-              <div className="space-y-3 rounded-2xl border border-slate-200 bg-slate-50 p-4">
+              <div className="space-y-3 rounded-2xl border border-slate-200 bg-slate-50 p-3">
                 <div>
                   <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
                     Client
@@ -1116,7 +1116,7 @@ export function ServiceVerificationPage() {
               </p>
 
               {willExceed ? (
-                <div className="flex gap-3 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
+                <div className="flex gap-3 rounded-2xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
                   <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0" />
                   <p>
                     This visit is projected to exceed the authorization. The
@@ -1124,7 +1124,7 @@ export function ServiceVerificationPage() {
                   </p>
                 </div>
               ) : (
-                <div className="rounded-3xl border border-emerald-200 bg-emerald-50 p-4 text-center shadow-sm">
+                <div className="rounded-3xl border border-emerald-200 bg-emerald-50 p-3 text-center shadow-sm">
                   <p className="text-3xl font-extrabold tabular-nums text-emerald-800">
                     {formatBalance(remainingMinutes)}
                   </p>
@@ -1154,7 +1154,7 @@ export function ServiceVerificationPage() {
 
           {phase === "confirm" && endedVisit ? (
             <section
-              className="space-y-5"
+              className="space-y-4"
               aria-labelledby="confirm-visit-heading"
             >
               <div>
@@ -1170,7 +1170,7 @@ export function ServiceVerificationPage() {
               </div>
 
               {endedVisit.timeOutEnteredByManager ? (
-                <div className="flex gap-3 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
+                <div className="flex gap-3 rounded-2xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
                   <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0" />
                   <p>
                     The Time Out below was entered by your agency because the visit
@@ -1181,7 +1181,7 @@ export function ServiceVerificationPage() {
 
               <dl
                 aria-label="Visit to confirm"
-                className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-2 rounded-2xl border border-slate-200 bg-og-card p-4 text-sm"
+                className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-2 rounded-2xl border border-slate-200 bg-og-card p-3 text-sm"
               >
                 <dt className="text-slate-500">Client</dt>
                 <dd className="font-semibold text-slate-950">{endedVisit.clientCode}</dd>
@@ -1274,7 +1274,7 @@ export function ServiceVerificationPage() {
                     ))}
                   </div>
                   {signatureKind === "verbal" ? (
-                    <div className="space-y-3 rounded-2xl border border-amber-200 bg-amber-50 p-4">
+                    <div className="space-y-3 rounded-2xl border border-amber-200 bg-amber-50 p-3">
                       <p className="text-sm text-amber-950">
                         The person confirmed out loud and no signature or mark was collected. This goes to your manager for review and is not billable until they review it.
                       </p>
@@ -1291,7 +1291,7 @@ export function ServiceVerificationPage() {
                     </div>
                   ) : null}
                   {signatureKind !== "verbal" ? (
-                  <div className="rounded-2xl bg-slate-50 p-4 text-center">
+                  <div className="rounded-2xl bg-slate-50 p-3 text-center">
                     <Hand
                       className="mx-auto h-9 w-9 text-indigo-600"
                       aria-hidden="true"
@@ -1354,7 +1354,7 @@ export function ServiceVerificationPage() {
                   </button>
                 </div>
               ) : (
-                <div className="space-y-4 rounded-2xl border border-amber-200 bg-amber-50 p-4">
+                <div className="space-y-4 rounded-2xl border border-amber-200 bg-amber-50 p-3">
                   <div className="flex gap-3 text-amber-950">
                     <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0" />
                     <div>
@@ -1429,14 +1429,14 @@ export function ServiceVerificationPage() {
 
           {phase === "success" && result && endedVisit ? (
             <section
-              className="space-y-5 text-center"
+              className="space-y-4 text-center"
               aria-labelledby="visit-saved-heading"
             >
               <CheckCircle2 className="mx-auto h-12 w-12 text-emerald-600" />
               <div>
                 <h1
                   id="visit-saved-heading"
-                  className="text-2xl font-semibold text-slate-950"
+                  className="text-xl font-semibold text-slate-950"
                 >
                   {confirmationMode === "exception" ||
                   (wave1 && result.status === "administrator_review")
@@ -1453,7 +1453,7 @@ export function ServiceVerificationPage() {
                       : "Included in the weekly report and monthly hours calendar."}
                 </p>
               </div>
-              <div className="rounded-2xl bg-slate-50 p-4 text-left text-sm">
+              <div className="rounded-2xl bg-slate-50 p-3 text-left text-sm">
                 <p className="font-semibold text-slate-950">
                   Client {endedVisit.clientCode} · {endedVisit.serviceName}
                 </p>
@@ -1488,7 +1488,7 @@ export function ServiceVerificationPage() {
                     <>
                       <dl
                         aria-label="Visit result"
-                        className="grid grid-cols-2 gap-2 rounded-2xl border border-slate-200 p-4 text-left text-sm"
+                        className="grid grid-cols-2 gap-2 rounded-2xl border border-slate-200 p-3 text-left text-sm"
                       >
                         <dt className="text-slate-500">Worked</dt>
                         <dd className="font-semibold text-slate-950">{formatDuration(result.worked_minutes)}</dd>
@@ -1511,7 +1511,7 @@ export function ServiceVerificationPage() {
                       {o.reasons.length > 0 ? (
                         <ul
                           aria-label="Why a manager will review this visit"
-                          className="space-y-2 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-left text-sm text-amber-950"
+                          className="space-y-2 rounded-2xl border border-amber-200 bg-amber-50 p-3 text-left text-sm text-amber-950"
                         >
                           {o.reasons.map((text) => (
                             <li key={text}>{text}</li>
@@ -1524,7 +1524,7 @@ export function ServiceVerificationPage() {
               ) : (
               <dl
                 aria-label="Visit result"
-                className="grid grid-cols-2 gap-2 rounded-2xl border border-slate-200 p-4 text-left text-sm"
+                className="grid grid-cols-2 gap-2 rounded-2xl border border-slate-200 p-3 text-left text-sm"
               >
                 <dt className="text-slate-500">Worked</dt>
                 <dd className="font-semibold text-slate-950">
@@ -1547,7 +1547,7 @@ export function ServiceVerificationPage() {
                 </dd>
               </dl>
               )}
-              <div className="flex items-start gap-3 rounded-2xl border border-slate-200 p-4 text-left text-xs text-slate-600">
+              <div className="flex items-start gap-3 rounded-2xl border border-slate-200 p-3 text-left text-xs text-slate-600">
                 <LockKeyhole className="mt-0.5 h-4 w-4 shrink-0" />
                 <p>
                   The caregiver cannot edit this record. A manager correction

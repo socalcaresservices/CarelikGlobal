@@ -11,8 +11,10 @@ import { useOrganization } from "@/providers/organization-provider";
 import { useAwsApi } from "./aws-workspace";
 import { CAREGIVER_STATUS_LABEL, PIPELINE_STAGES, type CaregiverStatus } from "./care-team-admin";
 import { SummarySection } from "./ui/summary-section";
+import { InfoTip } from "./ui/info-tip";
+import { actionBtn } from "./ui-classes";
 
-const inputClass = "mt-1 block w-full rounded-lg border border-slate-200 px-3 py-2 text-base";
+const inputClass = "mt-0.5 block w-full rounded-lg border border-slate-200 px-2.5 py-1.5 text-sm";
 const message = (cause: unknown, fallback: string) => (cause instanceof Error ? cause.message : fallback);
 
 export interface OnboardingItem {
@@ -85,27 +87,26 @@ function ItemRow({ caregiverRecordId, item, canManage }: { caregiverRecordId: st
   }
   const satisfied = item.state === "done" || item.state === "waived";
   return (
-    <li className="rounded-lg border border-slate-200 bg-og-card p-3 text-sm">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <p className="font-medium text-slate-950">{item.label}{item.required ? "" : " (optional)"}</p>
+    <li className="px-2 py-1 text-sm">
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5">
+        <p className="font-medium text-slate-950 md:w-52">{item.label}{item.required ? "" : " (optional)"}</p>
         <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${STATE_STYLE[item.state]}`}>{STATE_LABEL[item.state]}</span>
+        <p className="min-w-0 flex-1 text-xs text-slate-700">
+          {item.completedOn ? `Recorded ${formatDateOnly(item.completedOn)}` : item.detail ?? "Not recorded"}
+          {item.expiresOn ? ` · ${item.state === "expired" ? "expired" : "expires"} ${formatDateOnly(item.expiresOn)}${item.expiringSoon ? " — soon" : ""}` : ""}
+          {item.note ? ` · ${item.note}` : ""}
+          {item.category === "document" ? <> · Checked from approved documents. <Link className="inline-flex min-h-[44px] items-center underline md:min-h-[28px]" to="/documents">Open Documents</Link></> : null}
+        </p>
+        {item.category !== "document" && canManage ? (
+          <div className="flex flex-wrap gap-1.5">
+            {!satisfied ? <button type="button" className={`${actionBtn} md:min-h-7 md:py-0`} onClick={() => setOpen(open === "complete" ? null : "complete")}>{item.state === "expired" ? "Record renewal" : "Mark done"}</button> : null}
+            {!satisfied && item.category !== "clearance" ? <button type="button" className={`${actionBtn} md:min-h-7 md:py-0`} onClick={() => setOpen(open === "waive" ? null : "waive")}>Waive</button> : null}
+            {satisfied ? <button type="button" className={`${actionBtn} md:min-h-7 md:py-0`} onClick={() => setOpen(open === "reopen" ? null : "reopen")}>Reopen</button> : null}
+          </div>
+        ) : null}
       </div>
-      <p className="mt-0.5 text-slate-700">
-        {item.completedOn ? `Recorded ${formatDateOnly(item.completedOn)}` : item.detail ?? "Not recorded"}
-        {item.expiresOn ? ` · ${item.state === "expired" ? "expired" : "expires"} ${formatDateOnly(item.expiresOn)}${item.expiringSoon ? " — soon" : ""}` : ""}
-        {item.note ? ` · ${item.note}` : ""}
-      </p>
-      {item.category === "document" ? (
-        <p className="mt-1 text-xs text-slate-600">Checked from approved documents. <Link className="inline-flex min-h-[44px] items-center underline md:min-h-[32px]" to="/documents">Open Documents</Link></p>
-      ) : canManage ? (
-        <div className="mt-2 flex flex-wrap gap-2">
-          {!satisfied ? <button type="button" className="inline-flex min-h-[44px] items-center rounded-lg border border-slate-300 bg-og-card px-3 text-sm font-medium md:min-h-[36px]" onClick={() => setOpen(open === "complete" ? null : "complete")}>{item.state === "expired" ? "Record renewal" : "Mark done"}</button> : null}
-          {!satisfied && item.category !== "clearance" ? <button type="button" className="inline-flex min-h-[44px] items-center rounded-lg border border-slate-300 bg-og-card px-3 text-sm font-medium md:min-h-[36px]" onClick={() => setOpen(open === "waive" ? null : "waive")}>Waive</button> : null}
-          {satisfied ? <button type="button" className="inline-flex min-h-[44px] items-center rounded-lg border border-slate-300 bg-og-card px-3 text-sm font-medium md:min-h-[36px]" onClick={() => setOpen(open === "reopen" ? null : "reopen")}>Reopen</button> : null}
-        </div>
-      ) : null}
       {open ? (
-        <form onSubmit={(e) => { e.preventDefault(); void submit(open); }} className="mt-2 grid gap-2 rounded-lg bg-slate-50 p-2 sm:grid-cols-2">
+        <form onSubmit={(e) => { e.preventDefault(); void submit(open); }} className="mt-1 grid gap-2 rounded-md bg-slate-50 p-2 sm:grid-cols-2">
           {open === "complete" ? (
             <>
               <div><label htmlFor={`${id}-on`} className="block text-xs font-medium text-slate-600">Date completed (today if blank)</label><input id={`${id}-on`} type="date" value={form.completedOn} onChange={(e) => setForm({ ...form, completedOn: e.target.value })} className={inputClass} /></div>
@@ -153,11 +154,11 @@ export function OnboardingCard({ caregiverRecordId, status, canManage }: { careg
       summary={o.onboardingRequired ? (o.complete ? "Every required item is satisfied." : `Cannot be Approved or assigned yet. Still outstanding: ${outstanding.map((i) => i.label).join(", ")}.`) : "Not required for this caregiver"}>
       {!o.onboardingRequired ? (
         <div className="text-sm text-slate-700">
-          <p>Added before the onboarding checklist, so it is not required. Their scheduling is unchanged.</p>
-          {canManage && status !== "inactive" ? <Button className="mt-2" type="button" variant="secondary" disabled={state.busy} onClick={() => void start()}>Start the checklist</Button> : null}
+          <p className="flex items-center gap-1.5">Not required (added before the checklist).<InfoTip>Added before the onboarding checklist, so it is not required. Their scheduling is unchanged.</InfoTip></p>
+          {canManage && status !== "inactive" ? <Button className="mt-1" type="button" variant="secondary" disabled={state.busy} onClick={() => void start()}>Start the checklist</Button> : null}
         </div>
       ) : (
-        <ul className="space-y-2" aria-label="Onboarding checklist">{o.items.map((i) => <ItemRow key={i.key} caregiverRecordId={caregiverRecordId} item={i} canManage={canManage} />)}</ul>
+        <ul className="divide-y divide-slate-200 rounded-md border border-slate-200 bg-og-card" aria-label="Onboarding checklist">{o.items.map((i) => <ItemRow key={i.key} caregiverRecordId={caregiverRecordId} item={i} canManage={canManage} />)}</ul>
       )}
       {state.error ? <p role="alert" className="mt-2 text-sm text-red-700">{state.error}</p> : null}
     </SummarySection>
@@ -187,9 +188,9 @@ function AddApplicant({ onDone }: { onDone: (id: string) => void }) {
     }
   }
   return (
-    <form onSubmit={(e) => { e.preventDefault(); void submit(); }} className="grid gap-2 rounded-xl border border-slate-200 bg-slate-50 p-3 sm:grid-cols-[1fr_1fr_auto] sm:items-end">
-      <div><label htmlFor="ap-first" className="block text-sm font-medium text-slate-700">First name</label><input id="ap-first" autoComplete="off" value={v.first} maxLength={80} onChange={(e) => { setV({ ...v, first: e.target.value }); key.current = newIdempotencyKey(); }} className={inputClass} /></div>
-      <div><label htmlFor="ap-last" className="block text-sm font-medium text-slate-700">Last name</label><input id="ap-last" autoComplete="off" value={v.last} maxLength={80} onChange={(e) => { setV({ ...v, last: e.target.value }); key.current = newIdempotencyKey(); }} className={inputClass} /></div>
+    <form onSubmit={(e) => { e.preventDefault(); void submit(); }} className="grid gap-2 rounded-lg border border-slate-200 bg-slate-50 p-2 sm:grid-cols-[1fr_1fr_auto] sm:items-end">
+      <div><label htmlFor="ap-first" className="block text-xs font-medium text-slate-700">First name</label><input id="ap-first" autoComplete="off" value={v.first} maxLength={80} onChange={(e) => { setV({ ...v, first: e.target.value }); key.current = newIdempotencyKey(); }} className={inputClass} /></div>
+      <div><label htmlFor="ap-last" className="block text-xs font-medium text-slate-700">Last name</label><input id="ap-last" autoComplete="off" value={v.last} maxLength={80} onChange={(e) => { setV({ ...v, last: e.target.value }); key.current = newIdempotencyKey(); }} className={inputClass} /></div>
       <Button type="submit" disabled={state.busy}>{state.busy ? "Adding…" : "Add applicant"}</Button>
       {state.error ? <p role="alert" className="text-sm text-red-700 sm:col-span-3">{state.error}</p> : null}
     </form>
@@ -217,18 +218,18 @@ function PersonCard({ r, canManage }: { r: OverviewRow; canManage: boolean }) {
     }
   }
   return (
-    <li className="rounded-xl border border-slate-200 bg-og-card px-3 py-2 text-sm">
+    <li className="rounded-lg border border-slate-200 bg-og-card px-2 py-1.5 text-sm">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <Link className="inline-flex min-h-[44px] items-center font-semibold text-slate-950 underline md:min-h-[32px]" to={`/care-team/${r.caregiverRecordId}`}>{r.caregiverName}</Link>
         <ProgressBar done={r.done} total={r.total} />
       </div>
       {r.outstanding.length > 0 ? (
-        <p className="mt-1 text-amber-900">Outstanding: {r.outstanding.map((o) => (o.state === "expired" ? `${o.label} (expired)` : o.label)).join(", ")}</p>
-      ) : <p className="mt-1 text-emerald-800">Every required item is satisfied.</p>}
+        <p className="text-xs text-amber-900">Outstanding: {r.outstanding.map((o) => (o.state === "expired" ? `${o.label} (expired)` : o.label)).join(", ")}</p>
+      ) : <p className="text-xs text-emerald-800">Every required item is satisfied.</p>}
       {r.nextExpiry ? <p className="text-xs text-slate-600">Next expiry {formatDateOnly(r.nextExpiry)}</p> : null}
       {canManage && next ? (
-        <div className="mt-2">
-          <button type="button" disabled={state.busy} onClick={() => void move()} className="inline-flex min-h-[44px] items-center rounded-lg border border-slate-300 bg-og-card px-3 text-sm font-medium md:min-h-[36px] hover:bg-slate-50">
+        <div className="mt-1">
+          <button type="button" disabled={state.busy} onClick={() => void move()} className={actionBtn}>
             Move to {CAREGIVER_STATUS_LABEL[next]}
           </button>
         </div>
@@ -252,26 +253,26 @@ export function RecruitingPage() {
   if (!canSee) return <p className="text-sm text-slate-600">You do not have access to recruiting.</p>;
   const rows = overview.data ?? [];
   return (
-    <div className="max-w-5xl space-y-4">
-      <div>
+    <div className="max-w-5xl space-y-3">
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
         <Link to="/care-team" className="text-sm text-slate-700 underline">← Caregivers</Link>
-        <h1 className="mt-1 text-xl font-semibold text-slate-950">Recruiting</h1>
-        <p className="mt-1 text-sm text-slate-700">Nobody can be Approved, assigned or scheduled until every required item is satisfied.</p>
+        <h1 className="text-xl font-bold tracking-tight text-slate-950">Recruiting</h1>
+        <InfoTip label="About Recruiting">Nobody can be Approved, assigned or scheduled until every required item is satisfied.</InfoTip>
       </div>
       {canManage ? <AddApplicant onDone={setAdded} /> : null}
       {added ? <p role="status" className="text-sm text-emerald-800">Applicant added. <Link className="underline" to={`/care-team/${added}`}>Open the record</Link>.</p> : null}
       {overview.isLoading ? <p className="text-sm text-slate-500">Loading…</p> : null}
       {overview.isError ? <p role="alert" className="text-sm text-red-700">{(overview.error as Error).message}</p> : null}
       {overview.data && rows.length === 0 ? <p className="text-sm text-slate-600">Nobody is in the pipeline. Add an applicant above.</p> : null}
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
         {PIPELINE_STAGES.map((stage) => {
           const list = rows.filter((r) => r.status === stage);
           return (
             <section key={stage} aria-label={CAREGIVER_STATUS_LABEL[stage]} className="min-w-0">
-              <h2 className="mb-2 flex items-center justify-between text-sm font-semibold uppercase tracking-wide text-slate-700">
+              <h2 className="mb-1 flex items-center justify-between text-xs font-semibold uppercase tracking-wide text-slate-700">
                 <span>{CAREGIVER_STATUS_LABEL[stage]}</span><span className="rounded-full bg-slate-100 px-2 text-xs normal-case text-slate-700">{list.length}</span>
               </h2>
-              <ul className="space-y-2">{list.map((r) => <PersonCard key={r.caregiverRecordId} r={r} canManage={canManage} />)}</ul>
+              <ul className="space-y-1">{list.map((r) => <PersonCard key={r.caregiverRecordId} r={r} canManage={canManage} />)}</ul>
               {list.length === 0 ? <p className="text-xs text-slate-500">None</p> : null}
             </section>
           );

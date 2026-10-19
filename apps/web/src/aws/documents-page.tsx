@@ -50,28 +50,28 @@ function UploadForm({ doc, onDone }: { doc: StaffDocument; onDone: (savedMessage
   }
 
   return (
-    <form onSubmit={(e) => { e.preventDefault(); void submit(); }} className="mt-3 space-y-3 rounded-lg bg-slate-50 p-3">
-      <label className="block text-sm font-medium text-slate-700">
+    <form onSubmit={(e) => { e.preventDefault(); void submit(); }} className="mt-1 space-y-2 rounded-md bg-slate-50 p-2">
+      <label className="block text-xs font-medium text-slate-700">
         Photo or PDF of the {doc.documentTypeName}
         <input
           type="file"
           accept="application/pdf,image/jpeg,image/png"
           onChange={(e) => { setFile(e.target.files?.[0] ?? null); key.current = newIdempotencyKey(); }}
-          className="mt-1 block w-full text-sm"
+          className="mt-0.5 block w-full text-sm"
         />
       </label>
-      <div className="flex flex-wrap gap-3">
-        <label className="text-sm font-medium text-slate-700">
+      <div className="flex flex-wrap gap-2">
+        <label className="text-xs font-medium text-slate-700">
           Issue / completion date
-          <input type="date" value={issuedOn} onChange={(e) => setIssuedOn(e.target.value)} className="mt-1 block rounded-lg border border-slate-200 px-3 py-2 text-sm" />
+          <input type="date" value={issuedOn} onChange={(e) => setIssuedOn(e.target.value)} className="mt-0.5 block rounded-lg border border-slate-200 px-2.5 py-1.5 text-sm" />
         </label>
-        <label className="text-sm font-medium text-slate-700">
+        <label className="text-xs font-medium text-slate-700">
           Expiry date{doc.requiresExpiry ? " (required)" : " (if any)"}
-          <input type="date" value={expiresOn} onChange={(e) => setExpiresOn(e.target.value)} className="mt-1 block rounded-lg border border-slate-200 px-3 py-2 text-sm" />
+          <input type="date" value={expiresOn} onChange={(e) => setExpiresOn(e.target.value)} className="mt-0.5 block rounded-lg border border-slate-200 px-2.5 py-1.5 text-sm" />
         </label>
       </div>
       {state.error ? <p role="alert" className="text-sm text-red-700">{state.error}</p> : null}
-      <Button type="submit" className="min-h-[44px] md:min-h-[40px]" disabled={state.busy}>{state.busy ? "Saving… keep this page open" : "Save document"}</Button>
+      <Button type="submit" className="min-h-[44px] md:min-h-[32px]" disabled={state.busy}>{state.busy ? "Saving… keep this page open" : "Save document"}</Button>
     </form>
   );
 }
@@ -145,11 +145,13 @@ function DocumentRows({ d, canManage, canUpload, canReviewOwn, canReview, refres
   return (
     <tbody className="border-t border-og-line">
       <tr className="block align-top md:table-row">
-        <th scope="row" className="block py-2 pr-2 text-left font-normal md:table-cell">
-          <p className="font-semibold text-og-ink">{d.documentTypeName}</p>
-          {canManage ? <p className="text-sm text-og-sub">{d.personName}</p> : null}
-          <Disclosure summary="Details">
-            <dl className="space-y-1 text-xs">
+        <th scope="row" className="block py-0.5 pr-2 text-left font-normal md:table-cell">
+          <div className="flex flex-wrap items-baseline gap-x-2">
+            <p className="font-semibold text-og-ink">{d.documentTypeName}</p>
+            {canManage ? <p className="text-sm text-og-sub">{d.personName}</p> : null}
+            <details className="group min-w-0 text-xs">
+              <summary className="inline-flex min-h-6 cursor-pointer list-none items-center font-semibold text-og-link underline [@media(pointer:coarse)]:min-h-11 [&::-webkit-details-marker]:hidden focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-og-accent">Details</summary>
+            <dl className="mt-1 space-y-0.5 text-xs text-og-sub">
               {line ? <div><dt className="inline font-semibold text-og-ink">Date: </dt><dd className="inline">{line}</dd></div> : null}
               {d.latestUploadedAt ? <div><dt className="inline font-semibold text-og-ink">Uploaded: </dt><dd className="inline">Version {d.latestVersionNumber}, {formatDateTime(d.latestUploadedAt)}</dd></div> : null}
               {d.reviewedByName && d.reviewedAt ? <div><dt className="inline font-semibold text-og-ink">Reviewed: </dt><dd className="inline">{d.reviewedByName}, {formatDateTime(d.reviewedAt)}</dd></div> : null}
@@ -159,10 +161,11 @@ function DocumentRows({ d, canManage, canUpload, canReviewOwn, canReview, refres
               <div>Earlier versions are kept; a replacement never overwrites them.</div>
               <div>Approving records your name and the time; it is an administrative check, not legal clearance.</div>
             </dl>
-          </Disclosure>
+            </details>
+          </div>
         </th>
-        <td className="block pb-1 md:table-cell md:py-2 md:pr-2"><StatusChip tone={status.tone}>{status.label}</StatusChip></td>
-        <td className="block pb-2 md:table-cell md:py-2">
+        <td className="block pb-1 md:table-cell md:py-1 md:pr-2"><StatusChip tone={status.tone}>{status.label}</StatusChip></td>
+        <td className="block pb-1 md:table-cell md:py-1">
           <div className="flex flex-wrap items-center gap-2 md:justify-end">
             {reviewable && !review.rejecting ? <button type="button" disabled={review.busy} onClick={() => { setSaved(null); void review.approve(); }} className={actionBtnPrimary}>{review.busy ? "Saving…" : "Approve"}</button> : null}
             {reviewable && !review.rejecting ? <button type="button" disabled={review.busy} onClick={() => { setSaved(null); review.setRejecting(true); }} className={btn}>Reject</button> : null}
@@ -172,19 +175,19 @@ function DocumentRows({ d, canManage, canUpload, canReviewOwn, canReview, refres
         </td>
       </tr>
       {hasExtra ? <tr>
-        <td colSpan={3} className="pb-2">
+        <td colSpan={3} className="pb-1">
           {d.latestReviewStatus === "rejected" && d.latestRejectionReason ? <p className="text-sm text-amber-900">Rejected: {d.latestRejectionReason}</p> : null}
           {awaiting && !canReview ? <p className="text-sm text-og-sub">Required CPR and TB records need Administrator verification. Review controls appear only after the requirement rules are loaded.</p> : null}
           {reviewable && d.latestUploadedByMe ? <p className="text-xs font-semibold text-amber-900">You uploaded this version. Your approval is recorded as an Administrator self-review.</p> : null}
           {awaiting && canReview && d.latestUploadedByMe && !canReviewOwn ? <p className="rounded-lg bg-og-page p-2 text-sm text-og-sub">You uploaded this version, so the Administrator or another manager must review it.</p> : null}
           {mode === "upload" ? <UploadForm doc={d} onDone={(m) => { setMode(null); setSaved(m); refresh(); }} /> : null}
           {reviewable && review.rejecting ? (
-            <form onSubmit={(e) => { e.preventDefault(); void review.reject(); }} className="mt-2 flex flex-wrap items-end gap-2 rounded-lg bg-slate-50 p-3">
+            <form onSubmit={(e) => { e.preventDefault(); void review.reject(); }} className="mt-1 flex flex-wrap items-end gap-2 rounded-md bg-slate-50 p-2">
               <label className="min-w-[12rem] flex-1 text-sm font-medium text-slate-700">
                 Reason for rejecting (required)
-                <input value={review.reason} maxLength={1000} onChange={(e) => review.setReason(e.target.value)} className="mt-1 block w-full rounded-lg border border-slate-200 px-3 py-2 text-sm" />
+                <input value={review.reason} maxLength={1000} onChange={(e) => review.setReason(e.target.value)} className="mt-0.5 block w-full rounded-lg border border-slate-200 px-2.5 py-1.5 text-sm" />
               </label>
-              <Button type="submit" className="min-h-[44px] md:min-h-[40px]" disabled={review.busy}>{review.busy ? "Saving…" : "Save rejection"}</Button>
+              <Button type="submit" className="min-h-[44px] md:min-h-[32px]" disabled={review.busy}>{review.busy ? "Saving…" : "Save rejection"}</Button>
               <button type="button" className={btn} onClick={() => { review.setRejecting(false); review.setReason(""); }}>Cancel</button>
             </form>
           ) : null}
@@ -217,24 +220,24 @@ function RequestForm({ types, people, onDone }: { types: DocumentType[]; people:
     }
   }
   return (
-    <form onSubmit={(e) => { e.preventDefault(); void submit(); }} className="flex flex-wrap items-end gap-3">
+    <form onSubmit={(e) => { e.preventDefault(); void submit(); }} className="flex flex-wrap items-end gap-2">
       <div className="text-sm font-medium text-slate-700">
         <label htmlFor="doc-request-person">Person</label>
-        <select id="doc-request-person" value={person} onChange={(e) => setPerson(e.target.value)} className="mt-1 block rounded-lg border border-slate-200 bg-og-card px-3 py-2 text-sm">
+        <select id="doc-request-person" value={person} onChange={(e) => setPerson(e.target.value)} className="mt-0.5 block rounded-lg border border-slate-200 bg-og-card px-2.5 py-1.5 text-sm">
           <option value="">Choose…</option>
           {people.map((p) => <option key={p.caregiverRecordId} value={p.caregiverRecordId}>{p.displayName}</option>)}
         </select>
       </div>
       <div className="text-sm font-medium text-slate-700">
         <label htmlFor="doc-request-type">Document</label>
-        <select id="doc-request-type" value={type} onChange={(e) => setType(e.target.value)} className="mt-1 block rounded-lg border border-slate-200 bg-og-card px-3 py-2 text-sm">
+        <select id="doc-request-type" value={type} onChange={(e) => setType(e.target.value)} className="mt-0.5 block rounded-lg border border-slate-200 bg-og-card px-2.5 py-1.5 text-sm">
           <option value="">Choose…</option>
           {types.filter((t) => t.isActive).map((t) => <option key={t.documentTypeId} value={t.documentTypeId}>{t.name}</option>)}
         </select>
       </div>
-      <label className="text-sm font-medium text-slate-700">
+      <label className="text-xs font-medium text-slate-700">
         Due date (optional)
-        <input type="date" value={due} onChange={(e) => setDue(e.target.value)} className="mt-1 block rounded-lg border border-slate-200 px-3 py-2 text-sm" />
+        <input type="date" value={due} onChange={(e) => setDue(e.target.value)} className="mt-0.5 block rounded-lg border border-slate-200 px-2.5 py-1.5 text-sm" />
       </label>
       <Button type="submit" disabled={state.busy}>{state.busy ? "Saving…" : "Request document"}</Button>
       {state.error ? <p role="alert" className="w-full text-sm text-red-700">{state.error}</p> : null}
@@ -279,17 +282,17 @@ function ReminderDaysForm({ types, onDone }: { types: DocumentType[]; onDone: ()
           ))}
         </ul>
       ) : null}
-      <form onSubmit={(e) => { e.preventDefault(); void save(); }} className="flex flex-wrap items-end gap-3">
-        <label className="text-sm font-medium text-slate-700">
+      <form onSubmit={(e) => { e.preventDefault(); void save(); }} className="flex flex-wrap items-end gap-2">
+        <label className="text-xs font-medium text-slate-700">
           Applies to
-          <select value={typeId} onChange={(e) => setTypeId(e.target.value)} className="mt-1 block rounded-lg border border-slate-200 bg-og-card px-3 py-2 text-sm">
+          <select value={typeId} onChange={(e) => setTypeId(e.target.value)} className="mt-0.5 block rounded-lg border border-slate-200 bg-og-card px-2.5 py-1.5 text-sm">
             <option value="">Agency default</option>
             {expiring.map((t) => <option key={t.documentTypeId} value={t.documentTypeId}>{t.name}</option>)}
           </select>
         </label>
-        <label className="text-sm font-medium text-slate-700">
+        <label className="text-xs font-medium text-slate-700">
           Days (e.g. 90, 60, 30, 14, 7)
-          <input value={text} onChange={(e) => setText(e.target.value)} placeholder={typeId ? "blank = agency default" : "90, 60, 30, 14, 7"} className="mt-1 block rounded-lg border border-slate-200 px-3 py-2 text-sm" />
+          <input value={text} onChange={(e) => setText(e.target.value)} placeholder={typeId ? "blank = agency default" : "90, 60, 30, 14, 7"} className="mt-0.5 block rounded-lg border border-slate-200 px-2.5 py-1.5 text-sm" />
         </label>
         <Button type="submit" variant="secondary" disabled={state.busy}>Save reminder days</Button>
       </form>
@@ -330,10 +333,10 @@ function TypesForm({ types, onDone }: { types: DocumentType[]; onDone: () => voi
         ))}
         {types.length === 0 ? <li className="text-sm text-slate-500">No document types yet.</li> : null}
       </ul>
-      <form onSubmit={(e) => { e.preventDefault(); void submit(); }} className="flex flex-wrap items-end gap-3">
-        <label className="text-sm font-medium text-slate-700">
+      <form onSubmit={(e) => { e.preventDefault(); void submit(); }} className="flex flex-wrap items-end gap-2">
+        <label className="text-xs font-medium text-slate-700">
           New type
-          <input value={name} maxLength={80} onChange={(e) => setName(e.target.value)} placeholder="e.g. CPR card" className="mt-1 block rounded-lg border border-slate-200 px-3 py-2 text-sm" />
+          <input value={name} maxLength={80} onChange={(e) => setName(e.target.value)} placeholder="e.g. CPR card" className="mt-0.5 block rounded-lg border border-slate-200 px-2.5 py-1.5 text-sm" />
         </label>
         <label className="flex min-h-[44px] items-center gap-2 text-sm text-slate-700">
           <input type="checkbox" className="h-5 w-5" checked={requiresExpiry} onChange={(e) => setRequiresExpiry(e.target.checked)} />
@@ -397,14 +400,14 @@ export function DocumentsPage() {
   const pending = overview.data?.documents?.caregiversWithPendingRequirements ?? 0;
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-3">
       <PageHeader
         title={canRead ? "Documents & compliance" : "My documents"}
         lead={canRead ? "Staff credentials and their status. Uploaded is not verified until someone reviews it." : "Documents your agency has asked for. Take a clear photo or choose a PDF, add the dates on it, and upload."}
       />
 
       {canRead && (holds > 0 || pending > 0) ? (
-        <p role="status" className="flex flex-wrap items-center gap-x-3 rounded-og border border-amber-600 bg-amber-50 px-3 py-2 text-sm text-amber-900" data-testid="compliance-strip">
+        <p role="status" className="flex flex-wrap items-center gap-x-3 rounded-og border border-amber-600 bg-amber-50 px-2.5 py-1.5 text-sm text-amber-900" data-testid="compliance-strip">
           <span><span aria-hidden="true">▲ </span>{holds > 0 ? `${holds} ${holds === 1 ? "caregiver is" : "caregivers are"} on a compliance hold` : null}{holds > 0 && pending > 0 ? " · " : null}{pending > 0 ? `${pending} with requirements pending` : null}</span>
           <Link className="inline-flex min-h-[44px] items-center font-semibold underline md:min-h-[32px]" to="/compliance">Review compliance</Link>
         </p>
@@ -419,7 +422,7 @@ export function DocumentsPage() {
       {canRead ? (
         <div className="flex flex-wrap gap-2" role="group" aria-label="Show">
           {FILTERS.map((f) => (
-            <button key={f.key} type="button" aria-pressed={filter === f.key} onClick={() => setFilter(f.key)} className={`min-h-[44px] rounded-lg px-3 text-sm font-medium md:min-h-[40px] ${filter === f.key ? "bg-og-accent text-og-on-accent" : "border border-og-line text-og-ink hover:bg-og-page"}`}>
+            <button key={f.key} type="button" aria-pressed={filter === f.key} onClick={() => setFilter(f.key)} className={`min-h-[44px] rounded-lg px-3 text-sm font-medium md:min-h-[32px] ${filter === f.key ? "bg-og-accent text-og-on-accent" : "border border-og-line text-og-ink hover:bg-og-page"}`}>
               {f.label} <span className="font-og-mono tabular-nums">{counts[f.key]}</span>
             </button>
           ))}
