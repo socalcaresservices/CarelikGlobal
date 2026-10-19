@@ -22,3 +22,10 @@ Recorded 2026-10-19 from operator-pasted CloudShell output. TEST only. No produc
 - BUILD_INFO `approval_ref` is `APPROVAL-REF-PENDING-OWNER` while the stack tag carries `approved-owner-go-test-20261019-02`. Owner to confirm the reference.
 - Extra manual snapshot ogevia-prod-postgres-pre-0085-202610190330 (origin unknown) left untouched.
 - NOT VERIFIED on TEST: calendar current-authorization rule, UX density changes, Billing Review Approve visibility, Care Team, Compliance chips, Schedule header, document upload/approve, caregiver visit flow. Production NO-GO; real PHI NO-GO (BAA).
+
+## Step 14 acceptance (OWNER-REPORTED 2026-10-19; not independently observed by the engineer)
+Workflow rows 1-8: PASS (upload; self-approval blocked; second-user approval; download/open; approval survives sign-out/in; badge counts match; shift limit validation; visit start/end/client confirmation).
+UI checks 1-6: PASS (calendar current-authorization rule; Home density; Billing Review Approve visible; Care Team list before add form; Compliance status chips; Schedule single header).
+Observation (not a blocker): Reports still feel somewhat crowded.
+Owner decision: TEST accepted; Step 14 signed off. Production remains NO-GO (no production GO requested or given).
+Steps 15, 16 and 17 completed as recorded above (Step 17's script FAIL is the web-verify.sh defect).
