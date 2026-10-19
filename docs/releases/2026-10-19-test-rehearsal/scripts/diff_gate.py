@@ -1,8 +1,10 @@
 #!/usr/bin/env python3
-"""EXPECTED-ONLY gate for the two stack deployments of the TEST rehearsal (release f6dd9b7). Read-only: it compares two CloudFormation templates (or two endpoint
+"""EXPECTED-ONLY gate for the two stack deployments of the TEST rehearsal (release e80b770). Read-only: it compares two CloudFormation templates (or two endpoint
 policies) as JSON files and prints every difference. Exit 0 only if EVERY difference is on the allow-list below; anything else exits 1 and the operator STOPS.
 
-  python3 diff_gate.py template --stack Ogevia-prod-NetworkEgress|Ogevia-prod-ServiceVerificationApi --live LIVE.json --new NEW.json
+  python3 diff_gate.py template --stack Ogevia-prod-NetworkEgress|Ogevia-prod-ServiceVerificationApi --live LIVE.json --new NEW.json [--path A|B]
+      PATH A (default) = live TEST is the recorded baseline (ledger 77/0077): the full release change below. PATH B = live TEST already runs the earlier package
+      (ledger 85/0085): NetworkEgress must be IDENTICAL to live, and the API stack may change ONLY its Handler code asset (S3Key and asset path); no policy change.
       LIVE.json = `aws cloudformation get-template --stack-name S --template-stage Original --query TemplateBody --output json`; NEW.json = the synthesized template.
   python3 diff_gate.py endpoint-policy --before BEFORE.json --after AFTER.json
       BEFORE/AFTER = the S3 gateway endpoint's PolicyDocument as captured from `aws ec2 describe-vpc-endpoints` before and after the NetworkEgress deployment.
@@ -130,7 +132,9 @@ def blank(obj, path):
         cur[parts[-1]] = "<ALLOWED>"
 
 
-def gate_template(stack, live, new):
+def gate_template(stack, live, new, path="A"):
+    """path A: live TEST is the recorded baseline (the full release change). path B: live TEST already runs the earlier package, so the ONLY allowed change is the Handler code
+    asset of the API stack and NetworkEgress must not differ at all."""
     v, ok_notes = [], []
     if stack not in (NET, API):
         return ["no allow-list exists for stack '%s': only %s and %s may be deployed by this procedure" % (stack, NET, API)], []
@@ -152,7 +156,7 @@ def gate_template(stack, live, new):
             v.append("resource %s changes TYPE (replacement): %s -> %s" % (k, a.get("Type"), b.get("Type")))
             continue
         t = a.get("Type")
-        if stack == NET and t == "AWS::EC2::VPCEndpoint" and a.get("Properties", {}).get("VpcEndpointType") == "Gateway" and "s3" in json.dumps(a["Properties"].get("ServiceName")):
+        if path == "A" and stack == NET and t == "AWS::EC2::VPCEndpoint" and a.get("Properties", {}).get("VpcEndpointType") == "Gateway" and "s3" in json.dumps(a["Properties"].get("ServiceName")):
             a2, b2 = copy.deepcopy(a), copy.deepcopy(b)
             blank(a2, "Properties.PolicyDocument"); blank(b2, "Properties.PolicyDocument")
             if a2 != b2:
@@ -185,7 +189,7 @@ def gate_template(stack, live, new):
                 else:
                     ok_notes.append("Lambda %s code asset %s... -> %s..." % (k, a["Properties"]["Code"]["S3Key"][:12], nk[:12]))
             continue
-        if stack == API and t == "AWS::IAM::ManagedPolicy" and k.startswith("HandlerPolicy"):
+        if path == "A" and stack == API and t == "AWS::IAM::ManagedPolicy" and k.startswith("HandlerPolicy"):
             a2, b2 = copy.deepcopy(a), copy.deepcopy(b)
             blank(a2, "Properties.PolicyDocument"); blank(b2, "Properties.PolicyDocument")
             if a2 != b2:
@@ -204,8 +208,10 @@ def gate_template(stack, live, new):
                 ok_notes.append("handler managed policy %s gains the single statement ClientDocumentObjects (Allow s3:GetObject/GetObjectVersion/PutObject on the TEST bucket */client-documents/*/* only)" % k)
             continue
         v.append("resource CHANGED outside the allow-list: %s (%s)" % (k, t))
+    if not v and path == "B" and stack == NET:
+        ok_notes.append("NetworkEgress has NO difference from the live stack (path B: the client-documents entries are already live; nothing to deploy)")
     if not v:
-        wanted = 1 if stack == NET else 2
+        wanted = (1 if stack == NET else 2) if path == "A" else (1 if stack == NET else 1)
         if len(ok_notes) != wanted:
             v.append("expected exactly %d allowed change(s) for %s, found %d: the template pair is not the release's difference" % (wanted, stack, len(ok_notes)))
     return v, ok_notes
@@ -235,12 +241,12 @@ def gate_endpoint(before, after):
 def main(argv=None):
     ap = argparse.ArgumentParser()
     sub = ap.add_subparsers(dest="mode", required=True)
-    t = sub.add_parser("template"); t.add_argument("--stack", required=True); t.add_argument("--live", required=True); t.add_argument("--new", required=True)
+    t = sub.add_parser("template"); t.add_argument("--stack", required=True); t.add_argument("--live", required=True); t.add_argument("--new", required=True); t.add_argument("--path", choices=["A", "B"], default="A")
     e = sub.add_parser("endpoint-policy"); e.add_argument("--before", required=True); e.add_argument("--after", required=True)
     a = ap.parse_args(argv)
     try:
         if a.mode == "template":
-            v, notes = gate_template(a.stack, load(a.live), load(a.new))
+            v, notes = gate_template(a.stack, load(a.live), load(a.new), a.path)
             for n in notes:
                 print("ALLOWED " + n)
             for x in v:

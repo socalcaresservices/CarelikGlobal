@@ -88,6 +88,19 @@ describe("the ledger verdict", () => {
     expect(r.code, r.out).toBe(0);
     expect(r.out).toContain("exactly the expected 85 / 0085");
   });
+  it("PATH selection: path A (expected 77/0077) accepts 77/0077; path B (expected 85/0085) accepts 85/0085 and STOPS on 77/0077; anything else stops on either path", async () => {
+    const A = await run(["test", "--host-ip"], { OGEVIA_EXPECT_LEDGER_COUNT: "77", OGEVIA_EXPECT_LEDGER_LATEST: "0077" });
+    expect(A.code, A.out).toBe(0); expect(A.out).toContain("exactly the expected 77 / 0077");
+    const B = await run(["test", "--host-ip"], { OGEVIA_EXPECT_LEDGER_COUNT: "85", OGEVIA_EXPECT_LEDGER_LATEST: "0085", MOCK_SUMMARY: "85 migrations applied, latest 0085" });
+    expect(B.code, B.out).toBe(0); expect(B.out).toContain("exactly the expected 85 / 0085");
+    // a path B TEST whose ledger is still 77/0077 (Step 5 and the database disagree): stop, rule removed
+    const bad = await run(["test", "--host-ip"], { OGEVIA_EXPECT_LEDGER_COUNT: "85", OGEVIA_EXPECT_LEDGER_LATEST: "0085" });
+    expect(bad.code, bad.out).toBe(1); expect(bad.out).toContain("STOP"); expect(bad.out).toContain("requires exactly"); expect(bad.out).toContain("RESTORED (verified)");
+    // neither 77/0077 nor 85/0085 (84/0084) stops on path B too
+    const mid = await run(["test", "--host-ip"], { OGEVIA_EXPECT_LEDGER_COUNT: "85", OGEVIA_EXPECT_LEDGER_LATEST: "0085", MOCK_SUMMARY: "84 migrations applied, latest 0084" });
+    expect(mid.code, mid.out).toBe(1); expect(mid.out).toContain("STOP");
+    expect(sg()).toEqual(INITIAL_SG);
+  });
   it("a wrong host IP, the production mode, and a wrong database stop; nothing is changed", async () => {
     expect((await run(["test", "--host-ip"], { OGEVIA_EXPECT_HOST_IP: "10.20.132.180" })).code).toBe(1);
     expect((await run(["prod"])).code).toBe(2);

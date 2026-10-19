@@ -1,5 +1,5 @@
 // deploy-guard.sh (TEST rehearsal): the only deployment path. Fake aws and npx, REAL release templates as the assembly and the baseline as the "live" stacks. No AWS.
-import { chmodSync, cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { chmodSync, cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -50,6 +50,7 @@ function fixture(): Fix {
   writeFileSync(join(dir, `live-${NET}.json`), JSON.stringify(fx("baseline", NET)));
   writeFileSync(join(dir, `live-${API}.json`), JSON.stringify(fx("baseline", API)));
   const before = join(dir, "before"); mkdirSync(before);
+  writeFileSync(join(before, "path.txt"), "A\n"); // Step 5 writes the path (A: TEST is the recorded baseline; B: TEST already runs the earlier package)
   writeFileSync(join(before, "endpoint-id.txt"), "vpce-0abc123\n"); writeFileSync(join(before, "handler-function-name.txt"), "fn-handler\n");
   writeFileSync(join(before, "endpoint-policy-before.json"), JSON.stringify(epOf(fx("baseline", NET)).Properties.PolicyDocument));
   const env = { Variables: { OGEVIA_ENV: "prod", DB_NAME: "ogevia_sv_test" } };
@@ -186,4 +187,72 @@ describe("post: read-only checks after each deployment", () => {
     const r = guard(["post", API]); expect(r.code, r.out).toBe(1); expect(r.out).toContain(text as string);
   });
   it("API: ComplianceSweep not ENABLED fails", () => { const r = guard(["post", API], { env: { MOCK_SWEEP_STATE: "DISABLED" } }); expect(r.code, r.out).toBe(1); expect(r.out).toContain("ComplianceSweep is not ENABLED"); });
+});
+
+
+// PATH B: TEST already runs the earlier package (ledger 85/0085). The "live" stacks are the previous release templates; the new assembly differs ONLY in the Handler code asset.
+describe("PATH B: no migration, NetworkEgress must not differ, only the Handler code asset changes", () => {
+  const asPathB = () => {
+    writeFileSync(join(f.before, "path.txt"), "B\n");
+    writeFileSync(join(f.dir, `live-${NET}.json`), JSON.stringify(fx("previous", NET)));
+    writeFileSync(join(f.dir, `live-${API}.json`), JSON.stringify(fx("previous", API)));
+  };
+  it("NetworkEgress: the live (already updated) template equals the assembly: check passes with NO difference, and nothing is deployed", () => {
+    asPathB();
+    const r = guard(["check", NET]);
+    expect(r.code, r.out).toBe(0);
+    expect(r.out).toMatch(/ALLOWED NetworkEgress has NO difference from the live stack/);
+    expect(r.out).toMatch(/EXPECTED-ONLY: YES/);
+    expect(deploys()).toHaveLength(0);
+  });
+  it("ServiceVerificationApi: exactly ONE allowed change, the Handler code asset 162b7a43 -> eab95a80; no policy change", () => {
+    asPathB();
+    const r = guard(["check", API]);
+    expect(r.code, r.out).toBe(0);
+    expect(r.out).toMatch(/ALLOWED Lambda Handler\w+ code asset 162b7a43d10d\.\.\. -> eab95a809b3b\.\.\./);
+    expect((r.out.match(/^ALLOWED /gm) ?? []).length).toBe(1);
+    expect(r.out).toMatch(/EXPECTED-ONLY: YES/);
+  });
+  it("NetworkEgress can only be CHECKED: deploy and post are refused in path B, even with the typed phrase", () => {
+    asPathB();
+    for (const mode of ["deploy", "post"]) {
+      const r = guard([mode, NET], { input: `DEPLOY-${NET}\n` });
+      expect(r.code).toBe(1);
+      expect(r.out).toMatch(/PATH B: Ogevia-prod-NetworkEgress is never deployed/);
+    }
+    expect(deploys()).toHaveLength(0);
+  });
+  it("the API stack deploys exactly once on the typed phrase, as in path A", () => {
+    asPathB();
+    const r = guard(["deploy", API], { input: `DEPLOY-${API}\n` });
+    expect(r.code, r.out).toBe(0);
+    expect(deploys()).toHaveLength(1);
+    expect(deploys()[0]).toContain(`--exclusively ${API}`);
+  });
+  it("STOPS when a path B TEST is not really on the earlier package (live stacks are the old baseline): NetworkEgress and the API policy would change", () => {
+    writeFileSync(join(f.before, "path.txt"), "B\n"); // live stays the baseline fixtures
+    const n = guard(["check", NET]);
+    expect(n.code).toBe(1);
+    expect(n.out).toMatch(/VIOLATION/);
+    const a = guard(["check", API]);
+    expect(a.code).toBe(1);
+    expect(deploys()).toHaveLength(0);
+  });
+  it("STOPS when the assembly changes anything besides the Handler asset (a changed Lambda environment)", () => {
+    asPathB();
+    const t = fx("release", API); const h = Object.entries<any>(t.Resources).find(([k, r]) => r.Type === "AWS::Lambda::Function" && k.startsWith("Handler") && !k.startsWith("IdentityHandler"))![1];
+    h.Properties.Environment.Variables.EXTRA = "1";
+    writeFileSync(join(f.asm, `${API}.template.json`), JSON.stringify(t));
+    const r = guard(["check", API]);
+    expect(r.code).toBe(1);
+  });
+  it("without a path file nothing runs", () => {
+    rmSync(join(f.before, "path.txt"));
+    for (const mode of ["check", "deploy", "post"]) {
+      const r = guard([mode, API]);
+      expect(r.code).toBe(1);
+      expect(r.out).toMatch(/no valid .*path\.txt/);
+    }
+    expect(deploys()).toHaveLength(0);
+  });
 });

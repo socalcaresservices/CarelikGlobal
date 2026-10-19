@@ -1,4 +1,4 @@
-// Rehearsal of rehearsal-migrate-test.sh (TEST rehearsal f6dd9b7: migrations 0078-0085 on a ledger of exactly 77 / 0077) against a FAKE aws, psql and npx and a synthetic extracted PACKAGE
+// Rehearsal of rehearsal-migrate-test.sh (TEST rehearsal e80b770: migrations 0078-0085 on a ledger of exactly 77 / 0077) against a FAKE aws, psql and npx and a synthetic extracted PACKAGE
 // (BUILD_INFO.json + PACKAGE_MANIFEST.sha256, no git): no AWS, no network, synthetic. Adapted from candidate-migrate-test.test.ts of the 2026-10-18 operation.
 // Proves the control flow the owner is asked to approve: the pins (package commit, manifest, no stray file, migration-set hash, host IP) are checked before any change; the single /32 rule is
 // added and removed on success, on a migration failure, on interruption mid-migration and on a failed verification; the ledger precondition stops before any migration;
@@ -559,6 +559,20 @@ describe("the named, available pre-deployment snapshot is required in BOTH modes
       expect(ledger()).toBe(ledgerValue);
     });
   }
+  it("PATH B (the baseline capture found the earlier package on TEST): migrate is refused before anything is opened; rollback is not affected by the path file", async () => {
+    mkdirSync(join(f.dir, "ogevia-before"), { recursive: true });
+    writeFileSync(join(f.dir, "ogevia-before", "path.txt"), "B\n");
+    const r = await run(["migrate"]);
+    expect(r.code, r.out).toBe(1);
+    expect(r.out).toContain("PATH B: the migrations 0078-0085 are already applied");
+    expect(calls().some((c) => /authorize|modify|revoke/.test(c))).toBe(false);
+    expect(cidrPresent()).toBe(false);
+    expect(marker()).toBe(false);
+    // path A (or no path file) behaves as before
+    writeFileSync(join(f.dir, "ogevia-before", "path.txt"), "A\n");
+    const a = await run(["migrate"]);
+    expect(a.out).not.toContain("PATH B:");
+  });
   it("migrate is also refused after the release window has ended, even with a snapshot inside it; rollback may still run (recovery after the window)", async () => {
     const ended = { ...releaseWindow(-300, -60, 120) }; // window ended an hour ago; the snapshot was taken two hours ago, inside it
     writeFileSync(join(f.dir, "ledger"), "77|0077");

@@ -1,5 +1,5 @@
-// diff_gate.py and assembly_check.py (TEST rehearsal, release f6dd9b7) against REAL synthesized templates (test/fixtures/rehearsal-f6dd9b7: the baseline d893276 and the release
-// f6dd9b7, deploy mode). The gate must pass ONLY the release's expected change and fail on anything extra, anything removed, anything altered.
+// diff_gate.py and assembly_check.py (TEST rehearsal, release e80b770) against REAL synthesized templates (test/fixtures/rehearsal-e80b770: the baseline d893276 and the release
+// e80b770, deploy mode). The gate must pass ONLY the release's expected change and fail on anything extra, anything removed, anything altered.
 import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -40,7 +40,7 @@ describe("the real release difference is exactly what the gate allows", () => {
   it("ServiceVerificationApi: only the Handler code asset and the single ClientDocumentObjects statement (TEST bucket only)", () => {
     const r = gate(API, base[API], rel[API]);
     ok(r);
-    expect(r.out).toMatch(/ALLOWED Lambda Handler\w+ code asset 929cdb1bde9b\.\.\. -> 162b7a43d10d\.\.\./);
+    expect(r.out).toMatch(/ALLOWED Lambda Handler\w+ code asset 929cdb1bde9b\.\.\. -> eab95a809b3b\.\.\./);
     expect(r.out).toContain("gains the single statement ClientDocumentObjects");
     const [, hb] = handlerOf(base[API]), [, hr] = handlerOf(rel[API]);
     expect(hr.Properties.Environment).toEqual(hb.Properties.Environment);
@@ -181,3 +181,57 @@ describe("assembly_check.py pins the release synthesis", () => {
     r = sh("python3", ["-I", "-B", ASSEMBLY, "--live-dir", dir]); expect(r.code, r.out).toBe(0); expect(r.out).toContain("WARN LIVE Ogevia-prod-Observability differs");
   });
 });
+
+
+// PATH B: TEST already runs the earlier package (previous fixtures = the f6dd9b7 release synthesis). The new release differs from it ONLY in the Handler code asset.
+describe("PATH B (live TEST already runs the earlier package): NetworkEgress identical, API only the Handler code asset", () => {
+  const prev = { [NET]: load("previous", NET), [API]: load("previous", API) };
+  const gateB = (stack: string, live: T, next: T) => sh("python3", ["-I", "-B", GATE, "template", "--stack", stack, "--live", put(live), "--new", put(next), "--path", "B"]);
+  it("the real previous -> release pair: NetworkEgress has NO difference (accepted), the API stack changes ONLY its Handler asset 162b7a43 -> eab95a80", () => {
+    const n = gateB(NET, prev[NET], rel[NET]); ok(n); expect(n.out).toContain("NetworkEgress has NO difference from the live stack");
+    const a = gateB(API, prev[API], rel[API]); ok(a);
+    expect(a.out).toMatch(/ALLOWED Lambda Handler\w+ code asset 162b7a43d10d\.\.\. -> eab95a809b3b\.\.\./);
+    expect((a.out.match(/^ALLOWED /gm) ?? []).length).toBe(1);
+    expect(a.out).not.toContain("ClientDocumentObjects");
+  });
+  it("the previous fixtures differ from the new release ONLY in the Handler code key and asset path (nothing else moved; the approval-tag value is ignored)", () => {
+    const sortKeys = (x: T): T => (Array.isArray(x) ? x.map(sortKeys) : x && typeof x === "object" ? Object.fromEntries(Object.keys(x).sort().map((k) => [k, sortKeys(x[k])])) : x);
+    const canon = (t: T) => JSON.stringify(sortKeys(t)).replace(/("Key":"ogevia:deployment-status","Value":")[^"]*/g, "$1X");
+    const strip = (t: T) => { const c = clone(t); const h = handlerOf(c)[1]; delete h.Properties.Code; delete h.Metadata; return canon(c); };
+    expect(strip(prev[API])).toBe(strip(rel[API]));
+    expect(canon(prev[NET])).toBe(canon(rel[NET]));
+  });
+  it("a path B TEST that is NOT on the earlier package STOPS: the old baseline would change NetworkEgress and the API policy", () => {
+    stop(gateB(NET, base[NET], rel[NET]), /VIOLATION|expected exactly/);
+    stop(gateB(API, base[API], rel[API]), /VIOLATION|expected exactly/);
+  });
+  it("path B refuses ANY NetworkEgress difference and any API change beyond the asset", () => {
+    const net = clone(rel[NET]); epOf(net).Properties.PolicyDocument.Statement[0].Resource.push(`arn:aws:s3:::${PRD_B}/*/extra/*`);
+    stop(gateB(NET, prev[NET], net), /VIOLATION/);
+    const api = clone(rel[API]); handlerOf(api)[1].Properties.Environment.Variables.OGEVIA_ENV = "prd";
+    stop(gateB(API, prev[API], api), /changed beyond its code asset/);
+    const pol = clone(rel[API]); policyOf(pol)[1].Properties.PolicyDocument.Statement.push({ Effect: "Allow", Action: "s3:*", Resource: "*" });
+    stop(gateB(API, prev[API], pol), /outside the allow-list/);
+  });
+  it("path B with nothing to deploy (the live Handler asset already equals the new one) is not accepted", () => {
+    stop(gateB(API, rel[API], rel[API]), /expected exactly 1 allowed change/);
+  });
+  it("path A still rejects the previous -> release pair (it would not be the baseline change): the paths cannot be confused", () => {
+    stop(gate(NET, prev[NET], rel[NET]), /expected exactly 1 allowed change/);
+    stop(gate(API, prev[API], rel[API]), /VIOLATION|expected exactly/);
+  });
+  it("assembly_check --live-dir --path B: the earlier package passes; the old baseline and a changed Handler fail; path A on the earlier package fails", () => {
+    const dir = mkdtempSync(join(tmpdir(), "liveB-"));
+    for (const s of ["EvidenceStorage", "NetworkEgress", "WebHosting", "ServiceVerificationApi", "Observability"]) {
+      const kind = s === "NetworkEgress" || s === "ServiceVerificationApi" ? "previous" : "release";
+      writeFileSync(join(dir, `Ogevia-prod-${s}.json`), JSON.stringify(load(kind, `Ogevia-prod-${s}`)));
+    }
+    let r = sh("python3", ["-I", "-B", ASSEMBLY, "--live-dir", dir, "--path", "B"]); expect(r.code, r.out).toBe(0); expect(r.out).toContain("PATH B");
+    r = sh("python3", ["-I", "-B", ASSEMBLY, "--live-dir", dir, "--path", "A"]); expect(r.code, r.out).toBe(1);
+    writeFileSync(join(dir, `${API}.json`), JSON.stringify(base[API]));
+    r = sh("python3", ["-I", "-B", ASSEMBLY, "--live-dir", dir, "--path", "B"]); expect(r.code, r.out).toBe(1);
+    const t = clone(prev[API]); handlerOf(t)[1].Properties.Code.S3Key = rel_key(); writeFileSync(join(dir, `${API}.json`), JSON.stringify(t));
+    r = sh("python3", ["-I", "-B", ASSEMBLY, "--live-dir", dir, "--path", "B"]); expect(r.code, r.out).toBe(1); expect(r.out).toContain("FAIL LIVE Handler code asset");
+  });
+});
+const rel_key = () => handlerOf(rel[API])[1].Properties.Code.S3Key as string;

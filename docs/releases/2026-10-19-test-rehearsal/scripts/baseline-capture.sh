@@ -39,9 +39,14 @@ echo "TEST API url: ${API_URL:-UNKNOWN}"; echo "TEST web url: ${WEB_URL:-UNKNOWN
 [[ -n "$API_URL" && -n "$WEB_URL" && -n "$BUCKET" && -n "$DIST" ]] || nope "an output (ApiUrl, WebOrigin, SiteBucketName, DistributionId) is missing"
 printf '%s\n' "$API_URL" > api-url-before.txt; printf '%s\n' "$WEB_URL" > web-url-before.txt
 
-echo "-- live stacks equal the recorded baseline (the earlier candidate d893276)?"
-python3 -I -B "$HERE/assembly_check.py" --live-dir "$B/live" > baseline-check.txt; BRC=$?; cat baseline-check.txt
-[[ $BRC == 0 ]] && ok "live baseline check" || nope "the live stacks are not the recorded baseline"
+echo "-- which release is TEST running? PATH A = the recorded baseline (the earlier candidate d893276, ledger 77/0077); PATH B = the earlier package f6dd9b7 (ledger 85/0085)"
+rm -f path.txt
+python3 -I -B "$HERE/assembly_check.py" --live-dir "$B/live" --path A > baseline-check-A.txt; BRC_A=$?
+python3 -I -B "$HERE/assembly_check.py" --live-dir "$B/live" --path B > baseline-check-B.txt; BRC_B=$?
+if [[ $BRC_A == 0 && $BRC_B != 0 ]]; then echo A > path.txt; cat baseline-check-A.txt; ok "live TEST is the recorded baseline: PATH A (full release: migrations 0078-0085, NetworkEgress and ServiceVerificationApi deploys, web)"
+elif [[ $BRC_B == 0 && $BRC_A != 0 ]]; then echo B > path.txt; cat baseline-check-B.txt; ok "live TEST already runs the earlier package f6dd9b7: PATH B (no migration, NetworkEgress must show no difference; ServiceVerificationApi code asset and web only)"
+else echo "A:"; cat baseline-check-A.txt; echo "B:"; cat baseline-check-B.txt; nope "the live stacks are neither the recorded baseline (A) nor the earlier package (B): STOP"; fi
+cp -f "$( [[ -f path.txt && "$(cat path.txt)" == B ]] && echo baseline-check-B.txt || echo baseline-check-A.txt )" baseline-check.txt 2>/dev/null
 
 echo "-- Lambda"
 FN=$(A cloudformation list-stack-resources --stack-name "$API" --query "StackResourceSummaries[?ResourceType=='AWS::Lambda::Function' && starts_with(LogicalResourceId,'Handler')].PhysicalResourceId" --output text 2>/dev/null)

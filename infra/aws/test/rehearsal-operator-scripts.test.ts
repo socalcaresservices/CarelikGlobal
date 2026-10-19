@@ -1,4 +1,4 @@
-// baseline-capture.sh, snapshot-verify.sh, web-verify.sh, record-deployed.sh and the operator procedure document itself (TEST rehearsal, release f6dd9b7).
+// baseline-capture.sh, snapshot-verify.sh, web-verify.sh, record-deployed.sh and the operator procedure document itself (TEST rehearsal, release e80b770).
 // Fake aws and curl; real release/baseline templates; no AWS, no network, synthetic.
 import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
@@ -10,8 +10,8 @@ import { FIXTURES, PKG_REL, REPO_ROOT, SCRIPTS_SRC, sh } from "./rehearsal-fixtu
 
 vi.setConfig({ testTimeout: 60000 });
 const NET = "Ogevia-prod-NetworkEgress", API = "Ogevia-prod-ServiceVerificationApi";
-const SHA = "f6dd9b7f007034ae8d9c010c2ef87e550d93f510";
-const RELEASE_KEY = "162b7a43d10dbded0cd0222c1f2603c21725e6a5cd9a192477d7b36d3320f01f.zip";
+const SHA = "e80b770210c54e423d28ecf48e00f1dda9506cec";
+const RELEASE_KEY = "eab95a809b3b95b7479cfe6a572e1be0ea068ef6f12751419669443397fe7eda.zip";
 type T = any;
 const fx = (kind: string, stack: string): T => JSON.parse(readFileSync(join(FIXTURES, kind, `${stack}.template.json`), "utf8"));
 const epOf = (t: T) => Object.values<any>(t.Resources).find((r) => r.Type === "AWS::EC2::VPCEndpoint" && r.Properties.VpcEndpointType === "Gateway");
@@ -102,6 +102,21 @@ describe("baseline-capture.sh: read-only, and it stops unless TEST is exactly th
     expect(r.code, r.out).toBe(0);
     for (const t of ["PASS account 300094796789", "TEST API url: https://s0epy5rgzb.execute-api.us-west-2.amazonaws.com", "TEST web url: https://d2xumch5w0izfg.cloudfront.net", "PASS all checks", "live CodeSha256 (before):", "PASS the Lambda serves ogevia_sv_test", "PASS captured code zip hash equals the live CodeSha256", "previous API code asset", "endpoint vpce-0abc123 policy: 6 resources (3 for the TEST bucket, 3 for the PRODUCTION bucket)", "PASS RDS available, not publicly accessible, encrypted", "web files captured: 3", "PASS ComplianceSweep is ENABLED", "BASELINE CAPTURED"]) expect(r.out).toContain(t);
     for (const file of ["lambda-config-before.json", "lambda-code-before.zip", "endpoint-policy-before.json", "endpoint-id.txt", "handler-function-name.txt", "web-before/index.html", "web-before.sha256", "web-url-before.txt", "api-url-before.txt", "web-index-sha256-before.txt", "previous-api-asset.txt", `live/${NET}.json`, `live/${API}.json`]) expect(existsSync(join(f.before, file)), file).toBe(true);
+  });
+  it("PATH detection: the recorded baseline writes path.txt = A; the earlier package (f6dd9b7) writes B; anything else stops and writes no path", () => {
+    let r = run("baseline-capture.sh");
+    expect(r.code, r.out).toBe(0); expect(r.out).toContain("PATH A"); expect(readFileSync(join(f.before, "path.txt"), "utf8").trim()).toBe("A");
+    // TEST already runs the earlier package: its NetworkEgress and API stacks equal the previous-release synthesis, with the previous Handler asset
+    f = fixture();
+    writeFileSync(join(f.dir, "live", `${NET}.json`), JSON.stringify(fx("previous", NET)));
+    writeFileSync(join(f.dir, "live", `${API}.json`), JSON.stringify(fx("previous", API)));
+    r = run("baseline-capture.sh");
+    expect(r.code, r.out).toBe(0); expect(r.out).toContain("PATH B"); expect(readFileSync(join(f.before, "path.txt"), "utf8").trim()).toBe("B");
+    // neither: the live API stack already carries the NEW Handler asset
+    f = fixture();
+    writeFileSync(join(f.dir, "live", `${API}.json`), JSON.stringify(fx("release", API)));
+    r = run("baseline-capture.sh");
+    expect(r.code, r.out).toBe(1); expect(r.out).toContain("neither the recorded baseline (A) nor the earlier package (B)"); expect(existsSync(join(f.before, "path.txt"))).toBe(false);
   });
   it("calls only read verbs (describe, list, get, head, sync-from-bucket)", () => {
     run("baseline-capture.sh");
@@ -247,7 +262,7 @@ describe("record-deployed.sh: every deployed artifact must map to the commit", (
   });
   it.each([
     ["the Lambda code did not change", () => prepare({ sameSha: true }), {}, "empty or equals the one before"],
-    ["the deployed Handler asset is not the pinned build", () => prepare({ key: "0".repeat(64) + ".zip" }), {}, "not 162b7a43"],
+    ["the deployed Handler asset is not the pinned build", () => prepare({ key: "0".repeat(64) + ".zip" }), {}, "not eab95a80"],
     ["BUILD_INFO names another commit", () => { prepare(); writeFileSync(join(f.pkg, "BUILD_INFO.json"), JSON.stringify({ code_commit: "2".repeat(40) })); }, {}, "BUILD_INFO commit"],
     ["the expected commit is another one", () => prepare(), { OGEVIA_EXPECT_COMMIT: "3".repeat(40) }, "FAIL"],
   ])("stops when %s", (_n, setup, e, text) => {
@@ -261,7 +276,7 @@ describe("record-deployed.sh: every deployed artifact must map to the commit", (
 });
 
 describe("the operator procedure document", () => {
-  const doc = readFileSync(join(REPO_ROOT, PKG_REL, "OPERATOR_PROCEDURE_f6dd9b7.md"), "utf8");
+  const doc = readFileSync(join(REPO_ROOT, PKG_REL, "OPERATOR_PROCEDURE_e80b770.md"), "utf8");
   const sha = (cmd: string) => sh("bash", ["-c", cmd], { cwd: REPO_ROOT }).stdout.trim();
   it("pins the values that the files actually have (the document cannot drift from the code)", () => {
     expect(doc).toContain(sha("cd infra/aws/db/migrations && LC_ALL=C sha256sum -- *.sql | sha256sum | cut -d' ' -f1"));
@@ -270,7 +285,7 @@ describe("the operator procedure document", () => {
     expect(doc).toContain(sha("cd infra/aws/db/migrations && LC_ALL=C sha256sum -- $(ls *.sql | LC_ALL=C sort | head -77) | sha256sum | cut -d' ' -f1"));
     expect(sha("ls infra/aws/db/migrations | wc -l")).toBe("85");
     expect(doc).toContain(SHA);
-    for (const m of doc.matchAll(/\bf6dd9b7[0-9a-f]{33}\b/g)) expect(m[0]).toBe(SHA);
+    for (const m of doc.matchAll(/\be80b770[0-9a-f]{33}\b/g)) expect(m[0]).toBe(SHA);
     for (const key of [RELEASE_KEY, "929cdb1bde9bbf18025dc36f5cc61210246ca048efa6d6b51147cf4c22b24ab0", "7c5f8eb676c93261fd7a80f34d40ba70379c040d94bb2e9bd80f2d007ebc9759"]) expect(doc).toContain(key);
   });
   const steps = [...doc.matchAll(/### Step (\d+) - ([^\n]*)\n([\s\S]*?)(?=\n### |\n## )/g)].map((m) => ({ n: Number(m[1]), title: m[2]!, body: m[3]! }));
@@ -311,7 +326,7 @@ describe("the operator procedure document", () => {
 });
 
 describe("R1 web rollback block (extracted from the procedure): captured assets are verified and repaired before index.html is restored", () => {
-  const doc = readFileSync(join(REPO_ROOT, PKG_REL, "OPERATOR_PROCEDURE_f6dd9b7.md"), "utf8");
+  const doc = readFileSync(join(REPO_ROOT, PKG_REL, "OPERATOR_PROCEDURE_e80b770.md"), "utf8");
   const block = /# web-rollback-asset-check\n([\s\S]*?)# end web-rollback-asset-check/.exec(doc)?.[1] ?? "";
   const FAKE_AWS = `#!/usr/bin/env bash
 echo "$*" >> "$MOCK_DIR/aws-calls.log"

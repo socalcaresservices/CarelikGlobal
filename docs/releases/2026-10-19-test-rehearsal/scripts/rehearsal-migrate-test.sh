@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # =============================================================================
-# Ogevia TEST rehearsal (release f6dd9b7): APPLY MIGRATIONS 0078-0085 TO THE TEST DATABASE through a temporary, narrow database-access window.
+# Ogevia TEST rehearsal (release e80b770): APPLY MIGRATIONS 0078-0085 TO THE TEST DATABASE through a temporary, narrow database-access window.
 # TEST ONLY (database ogevia_sv_test). YELLOW: run only after the owner's explicit GO. Not run against AWS by anyone yet.
 # Adapted from the reviewed candidate-migrate-test.sh of the 2026-10-18 operation. DIFFERENCES: (1) range 0078-0085 on top of a ledger of exactly 77 / 0077 (rollback 0085
 # down to 0078); (2) the snapshot is named ogevia-prod-postgres-pre-0085-YYYYMMDDHHMM; (3) there is NO git in CloudShell: the package is proven by BUILD_INFO.json (code
@@ -52,6 +52,10 @@ KILL_AFTER=5
 . "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/pkg-lib.sh"
 INFRA="$PKG_INFRA"
 export AWS_REGION=$REGION AWS_DEFAULT_REGION=$REGION AWS_PAGER=""
+# PATH B (the baseline capture found that TEST already runs the earlier package and the ledger is 85/0085): there is nothing to migrate. Refuse before any window opens.
+if [[ "$ARG" == migrate && "$(tr -d '[:space:]' < "${OGEVIA_BEFORE:-$HOME/ogevia-before}/path.txt" 2>/dev/null)" == B ]]; then
+  echo "PATH B: the migrations 0078-0085 are already applied (the baseline capture found the earlier package on TEST). Skip this step; nothing was opened or changed."; exit 1
+fi
 case "$ARG" in
   migrate) case "$MODE2" in "") ;; --resume) RESUME=1 ;; *) echo "usage: bash rehearsal-migrate-test.sh migrate [--resume] | rollback | --restore-only" >&2; exit 2 ;; esac ;;
   rollback|--restore-only) [[ -z "$MODE2" ]] || { echo "usage: bash rehearsal-migrate-test.sh migrate [--resume] | rollback | --restore-only" >&2; exit 2; } ;;

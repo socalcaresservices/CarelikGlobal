@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
-"""Read-only check that a synthesized CDK assembly IS the approved TEST rehearsal release (commit f6dd9b7) and, optionally, that the LIVE TEST stacks are the recorded
+"""Read-only check that a synthesized CDK assembly IS the approved TEST rehearsal release (commit e80b770) and, optionally, that the LIVE TEST stacks are the recorded
 baseline (the earlier candidate d89327600f3fc55ab9c59af0d0eaea8675d77535, deployed to TEST on 2026-10-18).
 
   python3 assembly_check.py --assembly DIR           # the assembly the operator is about to deploy from (cdk synth -o DIR)
-  python3 assembly_check.py --live-dir DIR           # DIR holds <Stack>.json = `aws cloudformation get-template --template-stage Original` of each live TEST stack
+  python3 assembly_check.py --live-dir DIR [--path A|B]   # DIR holds <Stack>.json = `aws cloudformation get-template --template-stage Original` of each live TEST stack
   python3 assembly_check.py --print-fingerprints DIR # maintenance: print the fingerprints of an assembly (used to refresh the pins below)
 
 Fingerprint = sha256 of the canonical template with CDK::Metadata removed, the VALUE of the `ogevia:deployment-status` tag normalised (it carries the approval
@@ -14,10 +14,14 @@ import argparse, hashlib, json, os, sys
 
 STACKS = ["Ogevia-prod-EvidenceStorage", "Ogevia-prod-NetworkEgress", "Ogevia-prod-WebHosting", "Ogevia-prod-ServiceVerificationApi", "Ogevia-prod-Observability"]
 API = "Ogevia-prod-ServiceVerificationApi"
-RELEASE_COMMIT = "f6dd9b7"
+RELEASE_COMMIT = "e80b770"
 BASELINE_COMMIT = "d89327600f3fc55ab9c59af0d0eaea8675d77535"
 BASELINE_HANDLER_KEY = "929cdb1bde9bbf18025dc36f5cc61210246ca048efa6d6b51147cf4c22b24ab0.zip"
-RELEASE_HANDLER_KEY = "162b7a43d10dbded0cd0222c1f2603c21725e6a5cd9a192477d7b36d3320f01f.zip"
+RELEASE_HANDLER_KEY = "eab95a809b3b95b7479cfe6a572e1be0ea068ef6f12751419669443397fe7eda.zip"
+# PATH B only: TEST already runs the earlier package (code commit f6dd9b7f007034ae8d9c010c2ef87e550d93f510, migrations 0001-0085 applied, NetworkEgress and the handler policy
+# already carry the client-documents entries). Its five stacks have the same fingerprints as this release (no infrastructure lib change since); only the Handler asset differs.
+PREVIOUS_RELEASE_COMMIT = "f6dd9b7f007034ae8d9c010c2ef87e550d93f510"
+PREVIOUS_HANDLER_KEY = "162b7a43d10dbded0cd0222c1f2603c21725e6a5cd9a192477d7b36d3320f01f.zip"
 IDENTITY_HANDLER_KEY = "7c5f8eb676c93261fd7a80f34d40ba70379c040d94bb2e9bd80f2d007ebc9759.zip"
 ROUTES = 228
 # fingerprints of the five stacks as synthesized from the baseline commit and from the release commit (local synthesis in deploy mode)
@@ -89,6 +93,7 @@ def main(argv=None):
     ap.add_argument("--assembly")
     ap.add_argument("--live-dir")
     ap.add_argument("--print-fingerprints")
+    ap.add_argument("--path", choices=["A", "B"], default="A", help="A: live TEST is the recorded baseline d893276 (ledger 77/0077). B: live TEST already runs the earlier package f6dd9b7 (ledger 85/0085)")
     a = ap.parse_args(argv)
     if a.print_fingerprints:
         for s in STACKS:
@@ -125,6 +130,10 @@ def main(argv=None):
             fp = fingerprint(templates[s], s)
             need(fp == RELEASE_FP.get(s), "%s equals the release %s synthesis (fingerprint %s...)" % (s, RELEASE_COMMIT, fp[:12]))
     if a.live_dir:
+        path_b = a.path == "B"
+        want_fp = RELEASE_FP if path_b else BASELINE_FP
+        want_key = PREVIOUS_HANDLER_KEY if path_b else BASELINE_HANDLER_KEY
+        label = ("the earlier package %s (PATH B)" % PREVIOUS_RELEASE_COMMIT[:7]) if path_b else ("the recorded baseline %s (PATH A)" % BASELINE_COMMIT[:7])
         for s in STACKS:
             p = os.path.join(a.live_dir, s + ".json")
             deployed = s in CHANGED  # only the two stacks this procedure deploys must equal the baseline; the others are reported (they are not touched)
@@ -135,18 +144,18 @@ def main(argv=None):
                 else: print("WARN cannot read the live template %s (%s); this stack is not deployed by the procedure" % (p, e))
                 continue
             fp = fingerprint(live, s)
-            if deployed or fp == BASELINE_FP.get(s):
-                need(fp == BASELINE_FP.get(s), "LIVE %s equals the recorded baseline %s (fingerprint %s...)" % (s, BASELINE_COMMIT[:7], fp[:12]))
+            if deployed or fp == want_fp.get(s):
+                need(fp == want_fp.get(s), "LIVE %s equals %s (fingerprint %s...)" % (s, label, fp[:12]))
             else:
-                print("WARN LIVE %s differs from the recorded baseline (fingerprint %s...); the procedure does not deploy this stack, so it is reported, not a stop" % (s, fp[:12]))
+                print("WARN LIVE %s differs from %s (fingerprint %s...); the procedure does not deploy this stack, so it is reported, not a stop" % (s, label, fp[:12]))
         try:
             keys = lambda_keys(load(os.path.join(a.live_dir, API + ".json")))
             handler = [v for k, v in keys.items() if k.startswith("Handler")]
-            need(handler == [BASELINE_HANDLER_KEY], "LIVE Handler code asset is the baseline build (%s...), found %s" % (BASELINE_HANDLER_KEY[:12], [h[:12] if h else h for h in handler]))
+            need(handler == [want_key], "LIVE Handler code asset is %s's build (%s...), found %s" % ("the earlier package" if path_b else "the baseline", want_key[:12], [h[:12] if h else h for h in handler]))
         except (OSError, ValueError):
             pass
         if problems:
-            print("NOTE the live stacks are not the recorded baseline. Do NOT proceed; rely on the captured live artifacts (procedure, Recovery) and report.")
+            print("NOTE the live stacks are not %s. Do NOT proceed; rely on the captured live artifacts (procedure, Recovery) and report." % label)
     print("PASS all checks" if not problems else "STOP: %d check(s) failed" % len(problems))
     return 1 if problems else 0
 

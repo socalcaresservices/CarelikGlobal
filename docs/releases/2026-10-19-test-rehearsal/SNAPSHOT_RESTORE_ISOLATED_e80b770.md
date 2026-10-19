@@ -1,4 +1,4 @@
-# Isolated snapshot restore of `ogevia_sv_test` (TEST rehearsal f6dd9b7, TEST only)
+# Isolated snapshot restore of `ogevia_sv_test` (TEST rehearsal e80b770, TEST only)
 
 > **ADAPTED COPY** of `SNAPSHOT_RESTORE_ISOLATED_3159e52.md` (2026-10-18; kept in the operator package `_backup`, not tracked). Only the ledger numbers (52 / 0052 became 77 / 0077, the state a snapshot taken before this rehearsal holds) and names changed. The local rehearsal `snapshot-restore-local-rehearsal.sh` it cites was **NOT re-run for this release** and is not in this package; the statements marked LOCAL REHEARSED below are the earlier release's evidence. Nothing here was run on AWS.
 

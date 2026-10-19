@@ -5,6 +5,7 @@
 #                                          (diff_gate.py) and shows the read-only `cdk diff`. Exit 0 only if the difference is exactly the release's allowed change.
 #   bash deploy-guard.sh deploy <stack>    [YELLOW] repeats `check`, asks you to type DEPLOY-<stack>, then runs exactly
 #                                          npx cdk deploy --app $ASSEMBLY --exclusively <stack> --require-approval broadening --no-notices
+#                                          PATH B (read from $OGEVIA_BEFORE/path.txt): NetworkEgress may only be checked, and must show NO difference; the API stack may change only its Handler code asset.
 #   bash deploy-guard.sh post   <stack>    READ-ONLY checks after the deployment (stack status; NetworkEgress: the endpoint policy is ADDITIVE-ONLY against the capture,
 #                                          production's entries intact; API: Lambda environment unchanged, new CodeSha256, ClientDocumentObjects present, sweep ENABLED).
 # Environment: ASSEMBLY (the verified synth output, default /tmp/ogevia-cdk.out), OGEVIA_BEFORE (default ~/ogevia-before), OGEVIA_DEPLOY_APPROVAL (deploy only).
@@ -39,6 +40,11 @@ deploy_argv_ok || refuse "the deploy command line failed its own check: ${DEPLOY
 [[ -f "$ASSEMBLY/$STACK.template.json" ]] || refuse "no synthesized template $ASSEMBLY/$STACK.template.json (run the synthesis step first)"
 ID=$(A sts get-caller-identity --output json 2>/dev/null) || refuse "no valid AWS credentials"
 [[ "$(jq -r .Account <<<"$ID")" == "$ACCOUNT" ]] || refuse "wrong AWS account"
+# PATH A (live TEST is the recorded baseline, ledger 77/0077) or PATH B (TEST already runs the earlier package, ledger 85/0085): decided by the read-only baseline capture
+# (Step 5 writes $B/path.txt) and confirmed by the ledger recheck (Step 6). No path file, no guard.
+RPATH="$(tr -d '[:space:]' < "$B/path.txt" 2>/dev/null)"
+[[ "$RPATH" == A || "$RPATH" == B ]] || refuse "no valid $B/path.txt (A or B): run the baseline capture (Step 5) first"
+[[ "$RPATH" == B && "$STACK" == Ogevia-prod-NetworkEgress && "$MODE" != check ]] && refuse "PATH B: Ogevia-prod-NetworkEgress is never deployed or post-checked here (TEST already carries the client-documents entries); only 'check' is allowed and it must show NO difference"
 status() { A cloudformation describe-stacks --stack-name "$STACK" --query 'Stacks[0].StackStatus' --output text 2>/dev/null; }
 
 gate() {
@@ -52,7 +58,7 @@ gate() {
   echo "-- cdk diff (read-only; for the human reader)"
   (cd "$HERE/../../../../infra/aws" && timeout --foreground -k 5 300 npx --no-install cdk diff --app "$ASSEMBLY" "$STACK" --no-notices 2>&1 | tail -60)
   echo "-- EXPECTED-ONLY gate (machine check of live template vs synthesized template)"
-  python3 -I -B "$HERE/diff_gate.py" template --stack "$STACK" --live "$live" --new "$ASSEMBLY/$STACK.template.json" || refuse "the difference is NOT the release's expected change. STOP and report; nothing was deployed."
+  python3 -I -B "$HERE/diff_gate.py" template --stack "$STACK" --live "$live" --new "$ASSEMBLY/$STACK.template.json" --path "$RPATH" || refuse "the difference is NOT the release's expected change. STOP and report; nothing was deployed."
 }
 
 case "$MODE" in
