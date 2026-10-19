@@ -66,6 +66,48 @@ describe("pending hours and closed reviews over HTTP", () => {
   });
 });
 
+describe("owner decisions D1 and D3 over HTTP (0083): the refusal text reaches the caller", () => {
+  it("reopening a closed review that would exceed the authorization is 409 with the numbers and writes nothing; correcting a visit with an active close is 409 'Revoke the close first'; after a cancel, the reopening and the correction succeed", async (ctx) => {
+    if (tomorrow.slice(0, 7) !== today.slice(0, 7)) return ctx.skip();
+    const cg = w.caregiverA1;
+    const f = await freshClient(db, w, cg, 600);
+    const started = await call("POST /v1/visits", cg, { body: { organizationId: w.orgA, clientId: f.client, serviceId: f.service, unscheduledReason: "Client asked for extra help (synthetic)" } });
+    const visitId = started.body.visitId as string;
+    await ageVisit(db, visitId, 45);
+    expect((await call("POST /v1/visits/{visitId}/end", cg, { path: { visitId } })).status).toBe(200);
+    await api.confirm(db, cg, visitId, { method: "unable_to_confirm", reason: "Client asleep; parent not home (synthetic)" });
+    const closed = await call("POST /v1/visits/{visitId}/review-decision", w.managerA, { path: { visitId }, body: { decision: "close_not_billable", reason: "Not a valid visit (synthetic)" } });
+    expect(closed.status, JSON.stringify(closed.body)).toBe(201);
+    const decisionId = closed.body.decisionId as string;
+    const made = await shift(f.client, f.service, 600);
+    expect(made.status, JSON.stringify(made.body)).toBe(201);
+
+    // D1: reopening would be 645 of 600
+    const reopen = await call("POST /v1/visit-review-decisions/{decisionId}/revoke", w.managerA, { path: { decisionId }, body: { reason: "Synthetic: look again" } });
+    expect(reopen.status, JSON.stringify(reopen.body)).toBe(409);
+    expect(reopen.body.error).toMatchObject({ code: "conflict" });
+    expect(reopen.body.error.message).toBe("Reopening would put this authorization 45 min over its monthly limit (10 hr 45 min committed of 10 hr authorized). Over-limit time cannot be billed.");
+    expect((await db.admin.query("select revoked_at from ogevia.visit_review_decisions where id = $1", [decisionId])).rows[0].revoked_at).toBeNull();
+    expect(await summary(f.client)).toMatchObject({ hoursPendingMinutes: 0, hoursReservedMinutes: 600, hoursLeftMinutes: 0, hoursOverLimitMinutes: 0 });
+
+    // D3: a correction is refused while the close is active
+    const t = (await db.admin.query("select time_in, time_out from ogevia.service_visits where id = $1", [visitId])).rows[0];
+    const body = { timeIn: new Date(new Date(t.time_in).getTime() + 60000).toISOString(), timeOut: new Date(t.time_out).toISOString(), reason: "Time in was entered early (synthetic)" };
+    const corrected = await call("POST /v1/visits/{visitId}/corrections", w.managerA, { path: { visitId }, body });
+    expect(corrected.status, JSON.stringify(corrected.body)).toBe(409);
+    expect(corrected.body.error.message).toBe("This visit's review is closed as not billable. Revoke the close first, then correct the visit.");
+
+    // free the room (the shift is cancelled): the reopening now fits and works, and so does the correction afterwards
+    const shiftId = (await db.admin.query("select id from ogevia.shifts where client_id = $1", [f.client])).rows[0].id as string;
+    await db.admin.query("update ogevia.authorization_reservations set released_at = now(), release_reason = 'cancelled' where shift_id = $1", [shiftId]);
+    const ok = await call("POST /v1/visit-review-decisions/{decisionId}/revoke", w.managerA, { path: { decisionId }, body: { reason: "Synthetic: look again" } });
+    expect(ok.status, JSON.stringify(ok.body)).toBe(200);
+    expect(await summary(f.client)).toMatchObject({ hoursPendingMinutes: 45, hoursLeftMinutes: 555 });
+    const corrected2 = await call("POST /v1/visits/{visitId}/corrections", w.managerA, { path: { visitId }, body });
+    expect(corrected2.status, JSON.stringify(corrected2.body)).toBe(201);
+  });
+});
+
 describe("pending CPR/TB over HTTP", () => {
   it("with enforcement active a caregiver whose CPR/TB are uploaded but not verified cannot be assigned (422 not_ready 'CPR needs review.') and cannot start a visit", async () => {
     const cg = w.caregiverA3;

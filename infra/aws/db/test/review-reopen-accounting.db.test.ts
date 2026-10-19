@@ -317,7 +317,7 @@ describe("correction after approval / after a close", () => {
     expect(ev.actor_user_id).toBe(w.managerA.userId);
   });
 
-  it("an UNSCHEDULED review closed as not billable, then corrected: observed result (see the assertions) - the corrected visit is a new record and the close stays on the original", async (ctx) => {
+  it("D3 (owner decision, 0083): an UNSCHEDULED review closed as not billable is NOT corrected until the close is revoked: refused with a clear message, nothing moves; after revoking the close the correction works", async (ctx) => {
     skipUnlessSameMonth(ctx);
     const f = await fx(600);
     const v = await visit(f, 45, { confirm: "unable_to_confirm" });
@@ -325,14 +325,19 @@ describe("correction after approval / after a close", () => {
     await inv(f, "closed", { pending: 0, left: 600, closedWorked: 45 });
     const t = (await db.admin.query("select time_in, time_out from ogevia.service_visits where id = $1", [v])).rows[0];
     const newOut = new Date(new Date(t.time_in).getTime() + 40 * 60000 + 1000);
+    // CHANGED DELIBERATELY (0083, owner decision D3): before, the correction succeeded and the close stayed on the superseded original (Pending 40 on a new record).
+    await expectPgError(api.correct(db, w.managerA, v, t.time_in, newOut, "Time out was entered late (synthetic)"), "OGC09", /closed as not billable.*Revoke the close first/i);
+    await inv(f, "refused: nothing moved", { pending: 0, billable: 0, left: 600, closedWorked: 45, closedHeld: 0 });
+    expect(Number((await db.admin.query("select count(*) n from ogevia.service_visits where original_visit_id = $1", [v])).rows[0].n)).toBe(0);
+    expect((await db.admin.query("select status::text s from ogevia.service_visits where id = $1", [v])).rows[0].s).toBe("administrator_review");
+    const dec = (await db.admin.query("select id from ogevia.visit_review_decisions where visit_id = $1 and revoked_at is null", [v])).rows[0].id as string;
+    await revoke(dec);
     const corrected = await api.correct(db, w.managerA, v, t.time_in, newOut, "Time out was entered late (synthetic)");
-    // OBSERVED CURRENT BEHAVIOUR (owner question raised in the report): the correction is a NEW record that is back in review (Pending, no decision); the close stays on the
-    // superseded original. Nothing becomes billable, nothing is counted twice (the original's 45 are not counted), and the equation holds.
-    await inv(f, "corrected after close", { pending: 40, billable: 0, left: 560, closedWorked: 0, closedHeld: 0 });
-    const rows = (await db.admin.query("select id, status::text s, billable_minutes b, worked_minutes wk, (select count(*)::int from ogevia.visit_review_decisions d where d.visit_id = sv.id and d.revoked_at is null) active from ogevia.service_visits sv where id = any($1)", [[v, corrected]])).rows;
-    expect(rows.find((r) => r.id === v)).toMatchObject({ s: "corrected", wk: 45, active: 1 });
-    expect(rows.find((r) => r.id === corrected)).toMatchObject({ s: "administrator_review", b: 0, wk: 40, active: 0 });
-    await guardRefusesBeyond(f, "corrected after close");
+    await inv(f, "corrected after the close was revoked", { pending: 40, billable: 0, left: 560, closedWorked: 0, closedHeld: 0 });
+    const rows = (await db.admin.query("select id, status::text s, wk from (select id, status, worked_minutes wk from ogevia.service_visits) x where id = any($1)", [[v, corrected]])).rows;
+    expect(rows.find((r) => r.id === v)).toMatchObject({ s: "corrected", wk: 45 });
+    expect(rows.find((r) => r.id === corrected)).toMatchObject({ s: "administrator_review", wk: 40 });
+    await guardRefusesBeyond(f, "corrected after revoke");
   });
 });
 

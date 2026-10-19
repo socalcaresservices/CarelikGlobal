@@ -54,7 +54,8 @@ describe("duplicate names", () => {
     const shift = (await db.admin.query(
       `insert into ogevia.shifts (organization_id, client_id, service_id, starts_at, ends_at, status)
        values ($1,$2,$3, now() + interval '1 day', now() + interval '1 day 2 hours', 'scheduled') returning id`, [w.orgA, clients[0], w.serviceA])).rows[0].id as string;
-    const day = new Date(Date.now() + 86400000).toISOString().slice(0, 10);
+    // The shift's agency-local day (not the UTC date: they differ for part of every day).
+    const day = (await db.admin.query("select to_char((now() + interval '1 day') at time zone (select timezone from ogevia.organizations where id = $1), 'YYYY-MM-DD') d", [w.orgA])).rows[0].d as string;
     const s = await call("GET /v1/shifts", w.ownerA, { query: { organizationId: w.orgA, from: day, to: day } });
     expect(s.status, JSON.stringify(s.body)).toBe(200);
     const row = s.body.shifts.find((x: any) => x.shiftId === shift);

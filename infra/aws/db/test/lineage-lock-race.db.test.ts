@@ -260,6 +260,23 @@ describe("a writer that has already changed consumed minutes (not yet committed)
     expect(equation(s)).toBe(600);
   });
 
+  it("0083 (owner decision D1): a 600-minute shift is in flight (uncommitted) when a closed 45-minute review is reopened: the reopening WAITS for the lineage lock and is then REFUSED (645 of 600), nothing is written; committed total stays 600", async (ctx) => {
+    skipUnlessSameMonth(ctx);
+    const f = await fx(600);
+    const v = await unscheduledEnded(f, 45, "review");
+    await q(w.managerA, SQL.close, [v]);
+    const d = await decisionOf(v);
+    const r = await schedulerThenWriter(f, { actor: w.managerA, sql: SQL.revoke, params: [d] }, 600);
+    expect(r.rb.ok, r.rb.ok ? "" : (r.rb as any).error.message).toBe(true);
+    expect(r.blocked).toBe(true); // the reopening queued behind the scheduling operation
+    expect(r.ra.ok).toBe(false);
+    expect((r.ra as any).error.code).toBe("OGC09");
+    expect((r.ra as any).error.message).toMatch(/^Reopening would put this authorization 45 min over its monthly limit/);
+    expect(await decisionOf(v)).toBe(d); // still closed
+    expect(await consumed(f)).toBe(600);
+    expect(await summary(f)).toMatchObject({ hours_pending_minutes: 0, hours_reserved_minutes: 600, hours_left_minutes: 0, hours_over_limit_minutes: 0 });
+  });
+
   it("work that was already under way is never refused: a 600-minute shift commits first, then the unscheduled visit ends: the visit is recorded and the agency reads Over limit 45 (not a guard failure)", async (ctx) => {
     skipUnlessSameMonth(ctx);
     const f = await fx(600);
