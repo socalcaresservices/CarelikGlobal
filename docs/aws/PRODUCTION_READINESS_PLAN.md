@@ -11,7 +11,7 @@ Evidence classes: REPO (read from this repository), OWNER-AWS (pasted by the own
 | Shared with TEST | RDS instance, VPC, Cognito user pool and `ogevia-web` client, and `Ogevia-prod-NetworkEgress` (its endpoint policies admit the prd secret, bucket and identity function) | REPO |
 | Production candidate URLs | app `https://d3l4psdkokkvnb.cloudfront.net`, API `https://zk527zk4ua.execute-api.us-west-2.amazonaws.com`; `app.ogevia.com` is not repointed | OWNER-AWS 2026-10-10 |
 | Deployed on 2026-10-10 | Lambda `Ogevia-prd-ServiceVerificationApi-Handler886CB40B-KQ2l1HsdGkhR`, `DB_NAME=ogevia_prd`, `OGEVIA_ENV=prd`, LastModified 2026-10-10T06:11:29Z; `Ogevia-prd-WebHosting` and `-ServiceVerificationApi` UPDATE_COMPLETE | OWNER-AWS 2026-10-10 |
-| Production version | **UNKNOWN.** The runbook was written for `7ddda43` (migrations 0001-0038). The deployed commit has not been recorded (`URL_REGISTRY_AND_LAUNCH_CHECKLIST.md` item 7 OPEN). It is 9 days and many releases behind e80b770. | REPO |
+| Production version | **Code build not mapped to a commit.** Lambda `CodeSha256 ffiawXVEQlhnBniTJouSjqgvvux5QrjsNSSyDIIuEpc=` last modified 2026-10-10T06:11:29Z (OWNER-AWS summary 2026-10-19, section 7). It equals neither TEST's pre-e80b770 hash (`oOxpTnBs...`) nor the e80b770 hash (`eVI1Zdrl...`), so production has not received any release since 2026-10-10. The commit it was built from remains UNKNOWN. | OWNER-AWS (summary) |
 | Production migration status | **UNKNOWN.** Expected 38 / 0038 if the `7ddda43` release was applied; the ledger was never read. TEST is now 85 / 0085. | REPO |
 | BAA | Owner-confirmed 2026-10-10 (agreement not in the repository, not reviewed). I earlier said the BAA gate was unmet; the repo records it as owner-confirmed. Other gates (MFA, tenant isolation on prd, backup restore) are unverified on prd. | OWNER-STATED |
 
@@ -85,3 +85,25 @@ Stop and report if any command errors; do not run Part B or anything else withou
 
 ## 6. Recommendation
 Start P0 now (read-only). Do not schedule a production deployment until P0 and P1 are in and B2-B5 have owner decisions. The most likely finding is that production is several releases behind with a ledger below 0085, which makes this a multi-migration upgrade, not a repeat of the TEST PATH B.
+
+## 7. Inventory results, Part 1 (OWNER-REPORTED SUMMARY, 2026-10-19)
+The owner pasted a summary, not the raw CloudShell output (the saved file `~/prd-inventory-part1.txt` was not attached). Values below are as reported and are NOT independently verified by the engineer. Part 2 (outputs, resources, served web bundle, secret metadata, buckets, Cognito MFA, CloudTrail, budgets) has NOT been run or pasted.
+
+| Item | Reported value | Meaning |
+|---|---|---|
+| Account / role | 300094796789, `AWSReservedSSO_AdministratorAccess.../ogevia-admin` | Correct account |
+| Stacks | Observability, ServiceVerificationApi, WebHosting, EvidenceStorage, DatabaseSecret: all `UPDATE_COMPLETE`, all with termination protection | All five prd stacks exist and are healthy; stack update times not reported |
+| Handler Lambda | `Ogevia-prd-ServiceVerificationApi-Handler886CB40B-KQ2l1HsdGkhR`, nodejs24.x, `DB_NAME=ogevia_prd`, `OGEVIA_ENV=prd`, LastModified 2026-10-10T06:11:29Z, CodeSha256 `ffiawXVEQlhnBniTJouSjqgvvux5QrjsNSSyDIIuEpc=` | Production code is unchanged for 9 days while TEST received many releases; it is older than every TEST package |
+| Identity Lambda | CodeSha256 `aA/+A8uXtCZ1E4zwJm/XUiBENc3CPSKEzFu9m7mY4xA=` | TEST's IdentityHandler hash is `7c5f8eb676c9...` (asset prefix, not comparable directly); mapping not done |
+| RDS `ogevia-prod-postgres` | available, PostgreSQL 18.3, db.t4g.micro, MultiAZ false, not public, encrypted, deletion protection on, backup retention 7 days | Shared with TEST; single-AZ confirmed; latest restorable time not reported |
+| Manual snapshots | `...pre-0085-202610192111`, `...pre-0085-202610190330`, `...pre-0077-202610180858`, `...pre-0052-20261015` | **No `...pre-prd-<date>` snapshot is listed**, so the rollback anchor that `deploy-production.sh snapshot` would create for the production deployment is not recorded as existing (the report lists four snapshots; whether automated snapshots were omitted is not stated) |
+
+### Effect on the blockers
+- **B1 (state unknown): narrowed, not closed.** Confirmed (reported): stacks healthy and protected; Lambda wired to `ogevia_prd`/`prd`; code not updated since 2026-10-10. Still UNKNOWN: the commit, the `ogevia_prd` migration ledger, whether the database exists and the Lambda connects, what the production frontend serves and calls.
+- **B2 (version gap): strengthened.** Production has not moved since 2026-10-10; TEST has been migrated through 0085 and redeployed several times since. The production upgrade is therefore a multi-release catch-up, not a repeat of TEST PATH B.
+- **B3 (shared instance): confirmed.** One RDS instance, single-AZ, db.t4g.micro; rollback granularity is the instance and it is shared with TEST.
+- **New B10: no `pre-prd` snapshot recorded.** Before any production change a fresh named, verified manual snapshot is required; existing snapshots are TEST-rollout anchors.
+- B4-B9: unchanged. Cognito MFA setting, bucket protections, CloudTrail and budgets stay UNKNOWN until Part 2.
+
+### Next
+Run Part 2 and attach both saved files (`~/prd-inventory-part1.txt`, `~/prd-inventory-part2.txt`) or paste raw output, so this section can be replaced with verified values. Then P1 (a separate, owner-approved read of the `ogevia_prd` ledger).
