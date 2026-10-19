@@ -64,7 +64,8 @@ describe("assignments", () => {
   });
 
   it("refuses inactive clients, already-ended dates and people without assignments.manage", async () => {
-    const [noLogin] = await q<{ caregiver_record_id: string }>(w.managerA, "select * from ogevia_api.create_caregiver($1, 'Synthetic', 'No Login', null, 'active')", [w.orgA]);
+    const [noLogin] = await q<{ caregiver_record_id: string }>(w.managerA, "select * from ogevia_api.create_caregiver($1, 'Synthetic', 'No Login', null, 'onboarding')", [w.orgA]);
+    await db.admin.query("update ogevia.caregiver_records set status = 'active', onboarding_required = false where id = $1", [noLogin!.caregiver_record_id]); // an already-approved record (0085 refuses creating one directly)
     // Since 0025 a caregiver without a sign-in can be assigned (planned, no access).
     expect(await assign(w.managerA, noLogin!.caregiver_record_id, w.clientA1, w.serviceA, today)).toMatchObject({ grants_access: false });
     const cg = await caregiver();

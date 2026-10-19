@@ -59,6 +59,14 @@ describe("Visit review keeps routine follow-up apart", () => {
     expect(within(routine).getByText("Ready for billing approval").closest("a")).toHaveTextContent("7");
     expect(routine).toHaveTextContent("not counted above");
   });
+  it("every Needs a decision row opens the list that holds the counted visits, and none opens billing review (a visits-only reviewer would be refused there)", async () => {
+    renderAt("/visit-review", { ...base, visitReview: { ...visits, readyForApproval: null } });
+    const decide = await screen.findByRole("region", { name: "Needs a decision" });
+    const links = within(decide).getAllByRole("link");
+    expect(links.length).toBe(4);
+    for (const a of links) expect(a.getAttribute("href")).toBe("/service-verification/reports?view=exceptions");
+    expect(within(decide).getByText("Late answers to accept or reject").closest("a")).toHaveAttribute("href", "/service-verification/reports?view=exceptions");
+  });
   it("a role without billing sees no Ready for approval row", async () => {
     renderAt("/visit-review", { ...base, visitReview: { ...visits, readyForApproval: null } });
     const routine = await screen.findByRole("region", { name: "Routine follow-up" });

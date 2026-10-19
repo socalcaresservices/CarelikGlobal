@@ -51,6 +51,23 @@ export interface CognitoClientDeps {
   readonly refreshStore?: KeyValueStore;
   readonly navigate?: (url: string) => void;
   readonly now?: () => number;
+  /** Same-origin tab messaging; defaults to a BroadcastChannel when the browser has one. */
+  readonly broadcast?: SignOutChannel;
+}
+
+/** Tells the other tabs of this browser that the person signed out. Carries no token or identity. */
+export interface SignOutChannel {
+  post(message: unknown): void;
+  onMessage(listener: (message: unknown) => void): void;
+}
+
+const SIGN_OUT_CHANNEL = "ogevia.auth.signout";
+const SIGN_OUT_MESSAGE = "signed_out";
+
+function defaultSignOutChannel(): SignOutChannel | null {
+  if (typeof BroadcastChannel === "undefined") return null;
+  const channel = new BroadcastChannel(SIGN_OUT_CHANNEL);
+  return { post: (message) => channel.postMessage(message), onMessage: (listener) => { channel.onmessage = (event) => listener(event.data); } };
 }
 
 /** Refresh this many seconds before the access token expires. */
@@ -63,6 +80,7 @@ export class CognitoAuthClient {
   private readonly navigate: (url: string) => void;
   private readonly now: () => number;
   private readonly issuer: string;
+  private readonly channel: SignOutChannel | null;
   private session: CognitoSession | null = null;
   private idToken: string | null = null;
   private refreshToken: string | null = null;
@@ -83,6 +101,22 @@ export class CognitoAuthClient {
     this.now = deps.now ?? (() => Date.now());
     this.issuer = cognitoIssuer(config);
     this.refreshToken = this.refreshStore.getItem(REFRESH_KEY);
+    // Refresh tokens are tab-scoped, so another tab holds its own login. Signing out here must end those too: on a shared
+    // device a tab left open would otherwise stay signed in after the person pressed Sign out.
+    this.channel = deps.broadcast ?? defaultSignOutChannel();
+    this.channel?.onMessage((message) => {
+      if (message === SIGN_OUT_MESSAGE) void this.endSessionFromOtherTab();
+    });
+  }
+
+  /** Another tab signed out: drop this tab's tokens and revoke its own refresh token. No redirect to /logout, no re-broadcast. */
+  private async endSessionFromOtherTab(): Promise<void> {
+    const token = this.refreshToken;
+    const held = this.session !== null || token !== null;
+    this.clear();
+    if (!held) return;
+    if (token) await revokeRefreshToken(this.fetchImpl, this.config, token).catch(() => undefined);
+    this.emit({ type: "signed_out" });
   }
 
   subscribe(listener: (event: CognitoAuthEvent) => void): () => void {
@@ -221,6 +255,7 @@ export class CognitoAuthClient {
   async signOut(): Promise<void> {
     const token = this.refreshToken;
     this.clear();
+    this.channel?.post(SIGN_OUT_MESSAGE);
     if (token) await revokeRefreshToken(this.fetchImpl, this.config, token);
     this.emit({ type: "signed_out" });
     this.navigate(logoutUrl(this.config));

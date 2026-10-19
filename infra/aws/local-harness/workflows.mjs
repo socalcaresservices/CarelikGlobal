@@ -727,8 +727,10 @@ if (run("W9")) {
   rec("reload mid-confirmation: the visit is still waiting for its confirmation after a reload (nothing lost on the server)", /Verify visit details|Person confirming/.test(await text(ap)));
   note(`reload mid-confirmation: typed explanation survives = ${(await ap.getByLabel("Brief explanation").count()) ? await ap.getByLabel("Brief explanation").inputValue() : "(form closed)"}`);
   // sign out in another tab, then try to confirm in the first
-  const tab2 = await ap.context().newPage(); await tab2.goto("https://localhost/"); await settle(tab2, 800);
-  await tab2.getByRole("button", { name: /Sign out/ }).first().click().catch(async () => { await tab2.getByText("Sign out").first().click(); }); await tab2.waitForTimeout(1500);
+  // The session is tab-scoped (sessionStorage): a fresh tab starts signed OUT and has no Sign out button (H07: the earlier version timed out here, a script defect).
+  // So the second tab signs in as the same person first, then signs out; since H07 the first tab must be signed out too.
+  const tab2 = await ap.context().newPage(); await login(tab2, "Alex Caregiver"); await settle(tab2, 800);
+  await tab2.getByRole("button", { name: /Sign out/ }).first().click(); await tab2.waitForTimeout(1500);
   await ap.getByRole("button", { name: /Unable to obtain confirmation/ }).click().catch(() => {});
   await ap.getByLabel("Why is manager review needed?").selectOption({ label: "Technical problem prevented signing" }).catch(() => {});
   await ap.getByLabel("Brief explanation").fill("Typed after the other tab signed out (synthetic)").catch(() => {});

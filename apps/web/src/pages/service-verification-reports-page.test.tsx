@@ -414,6 +414,78 @@ describe("ServiceVerificationReportsPage", () => {
     );
   });
 
+  // 0085 (D10): a visit that never happened is kept apart from actual work with a missing clock-out.
+  describe("No service delivered (visit that never happened)", () => {
+    const base = new Date(); base.setSeconds(0, 0);
+    const ago = (minutes: number) => new Date(base.getTime() - minutes * 60_000).toISOString();
+    const missed = () => ({
+      ...visitRow, id: "missed-2", caregiver_name: "Started In Error", status: "draft" as const, time_out: null, worked_minutes: null, billable_minutes: null, signed_at: null,
+      time_in: ago(300), scheduled_starts_at: ago(300), scheduled_ends_at: ago(90),
+    });
+    function renderAws(markNoService: ReturnType<typeof vi.fn> | undefined) {
+      mockedUseOrganization.mockReturnValue({ activeOrganizationId: ORG_ID, activeOrganization: { displayName: "Acme Care" }, hasPermission: vi.fn(() => true) } as never);
+      const backend = {
+        kind: "aws",
+        listVisits: vi.fn().mockResolvedValue([missed()]),
+        getLetterhead: vi.fn().mockResolvedValue({ legal_name: "Acme Care LLC", display_name: "Acme Care" }),
+        listClientLocations: vi.fn().mockResolvedValue([]),
+        listCorrections: vi.fn().mockResolvedValue([]),
+        closeMissedVisit: vi.fn().mockResolvedValue(undefined),
+        ...(markNoService ? { markNoServiceDelivered: markNoService } : {}),
+      } as unknown as ServiceVerificationBackend;
+      const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+      render(
+        <MemoryRouter initialEntries={["/service-verification/reports?view=exceptions"]}>
+          <QueryClientProvider client={queryClient}>
+            <ServiceVerificationBackendContext.Provider value={backend}><ServiceVerificationReportsPage /></ServiceVerificationBackendContext.Provider>
+          </QueryClientProvider>
+        </MemoryRouter>,
+      );
+      return backend;
+    }
+
+    it("offers it beside Close visit, needs a reason, asks for no Time Out, and sends the visit and reason once", async () => {
+      const mark = vi.fn().mockResolvedValue(undefined);
+      const backend = renderAws(mark);
+      fireEvent.click(await screen.findByRole("button", { name: "No service delivered" }));
+      expect(screen.getByText(/Use this only when the visit never happened/)).toBeInTheDocument();
+      expect(screen.getByText(/did work and only forgot to clock out, cancel and use Close visit/)).toBeInTheDocument();
+      expect(screen.queryByLabelText("Time Out date")).not.toBeInTheDocument();
+      fireEvent.click(screen.getByRole("button", { name: "Record: no service delivered" }));
+      expect(await screen.findByRole("alert")).toHaveTextContent("A reason is required to record that no service was delivered.");
+      expect(mark).not.toHaveBeenCalled();
+      fireEvent.change(screen.getByLabelText("Reason"), { target: { value: "Started by mistake; caregiver never went (synthetic)" } });
+      fireEvent.click(screen.getByRole("button", { name: "Record: no service delivered" }));
+      await waitFor(() => expect(mark).toHaveBeenCalledTimes(1));
+      expect(mark).toHaveBeenCalledWith(expect.objectContaining({ visitId: "missed-2", reason: "Started by mistake; caregiver never went (synthetic)" }));
+      expect((backend as unknown as { closeMissedVisit: ReturnType<typeof vi.fn> }).closeMissedVisit).not.toHaveBeenCalled();
+    });
+
+    it("Close visit still enters a Time Out and keeps the worked time (actual work, missing clock-out); the two actions are different forms", async () => {
+      renderAws(vi.fn());
+      fireEvent.click(await screen.findByRole("button", { name: "Close visit" }));
+      expect(screen.getByLabelText("Time Out date")).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: "Save Time Out" })).toBeInTheDocument();
+      expect(screen.queryByText(/Use this only when the visit never happened/)).not.toBeInTheDocument();
+    });
+
+    it("shows the server's refusal and does not hide the form; a backend without the action (the older one) shows no such button", async () => {
+      const mark = vi.fn().mockRejectedValue(new Error("A signed visit cannot be voided - use a correction instead"));
+      renderAws(mark);
+      fireEvent.click(await screen.findByRole("button", { name: "No service delivered" }));
+      fireEvent.change(screen.getByLabelText("Reason"), { target: { value: "Never happened (synthetic)" } });
+      fireEvent.click(screen.getByRole("button", { name: "Record: no service delivered" }));
+      expect(await screen.findByRole("alert")).toHaveTextContent(/cannot be voided/);
+      expect(screen.getByLabelText("Reason")).toHaveValue("Never happened (synthetic)");
+    });
+
+    it("an older backend without markNoServiceDelivered shows only Close visit", async () => {
+      renderAws(undefined);
+      expect(await screen.findByRole("button", { name: "Close visit" })).toBeInTheDocument();
+      expect(screen.queryByRole("button", { name: "No service delivered" })).not.toBeInTheDocument();
+    });
+  });
+
   it("shows the server's message when it refuses a Time Out (e.g. an overlap)", async () => {
     mockedUseOrganization.mockReturnValue({
       activeOrganizationId: ORG_ID,

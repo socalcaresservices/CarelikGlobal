@@ -30,6 +30,16 @@ describe("Needs action first", () => {
     expect(panel).not.toHaveTextContent("Routine");
   }, 30000);
 
+  it("shows the client by NAME (F01/I07); the code appears beside it only when the server flags a shared name, and a row with no visible name keeps its code", async () => {
+    const issues = [issue({ issueKey: "a", clientName: "Dana Sample", duplicateName: false }), issue({ issueKey: "b", shiftId: "s2", entityId: "s2", clientName: "Dana Twin", duplicateName: true, clientCode: "CL-7" }), issue({ issueKey: "c", shiftId: "s3", entityId: "s3", clientCode: "CL-3" })];
+    renderAws("/", PERMS, { "GET /v1/action-issues": () => json(200, list(issues)) });
+    const rows = within(await screen.findByTestId("top-issues", {}, { timeout: 15000 })).getAllByTestId("top-issue");
+    expect(rows[0]).toHaveTextContent("Dana Sample");
+    expect(rows[0]).not.toHaveTextContent("CL-1");
+    expect(rows[1]).toHaveTextContent("Dana Twin (CL-7)");
+    expect(rows[2]).toHaveTextContent("CL-3");
+  }, 30000);
+
   it("a failed list says so and is never shown as empty", async () => {
     renderAws("/", PERMS, { "GET /v1/action-issues": () => json(500, { error: { code: "internal_error", message: "Something went wrong. Please try again." } }) });
     expect(await screen.findByTestId("top-issues-error", {}, { timeout: 15000 })).toHaveTextContent("could not be loaded. It is not shown as empty");

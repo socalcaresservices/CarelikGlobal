@@ -1,4 +1,5 @@
 // The one issue list (0073): types and the destination of each recommended action. Context (shift, visit, caregiver) travels in the link so nothing is re-entered.
+import { nameWithCode } from "./name-label";
 export type IssueSeverity = "critical" | "urgent" | "routine";
 export interface ActionIssue {
   issueKey: string; kind: string; reason: string; queue: string; category: string; severity: IssueSeverity;
@@ -7,7 +8,15 @@ export interface ActionIssue {
   action: string; recommendedAction: string;
   /** reason over_limit only (0084): minutes committed above the monthly authorization, and the authorization, for the agency-local month. */
   overLimitMinutes?: number | null; authorizedMinutes?: number | null;
+  /** Names-first (F01/I07): present only when the server says this caller may see them. The codes above stay on the row for support. */
+  clientName?: string; duplicateName?: boolean; caregiverName?: string; caregiverDuplicateName?: boolean;
 }
+
+/** Client shown by name (code beside it only when the name is shared); the code alone when no name is visible to this role. */
+export const issueClient = (i: Pick<ActionIssue, "clientName" | "clientCode" | "duplicateName">): string | null =>
+  i.clientName ? nameWithCode(i.clientName, i.clientCode, i.duplicateName) : i.clientCode;
+export const issueCaregiver = (i: Pick<ActionIssue, "caregiverName" | "caregiverCode" | "caregiverDuplicateName">): string | null =>
+  i.caregiverName ? nameWithCode(i.caregiverName, i.caregiverCode, i.caregiverDuplicateName) : i.caregiverCode;
 export interface IssueList {
   asOf: string; matching: number; limit: number; offset: number;
   counts: { total: number; critical: number; urgent: number; routine: number; actionNeeded: number; byQueue: Record<string, number> };

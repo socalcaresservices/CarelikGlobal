@@ -181,6 +181,9 @@ export function createAwsServiceVerificationBackend(
     async closeMissedVisit({ visitId, timeOut, reason, idempotencyKey }) {
       await api.post(`/v1/visits/${enc(visitId)}/close`, { timeOut, reason }, { idempotencyKey });
     },
+    async markNoServiceDelivered({ visitId, reason, idempotencyKey }) {
+      await api.post(`/v1/visits/${enc(visitId)}/close`, { outcome: "no_service", reason }, { idempotencyKey });
+    },
     async getSignatureDataUrl(visitId) {
       const { pngBase64 } = await api.get<{ pngBase64: string }>(`/v1/visits/${enc(visitId)}/signature`);
       return `data:image/png;base64,${pngBase64}`;

@@ -76,6 +76,7 @@ function AddCaregiverForm({ onDone }: { onDone: (id: string) => void }) {
             {(["applicant", "onboarding", "ready", "active"] as const).map((s) => <option key={s} value={s}>{CAREGIVER_STATUS_LABEL[s]}</option>)}
           </select>
         </div>
+        <p className="text-sm text-slate-600 sm:col-span-2">Approved and Active need the onboarding checklist complete. Start a new person as an Applicant or Onboarding, then approve them when the checklist is done.</p>
         {state.error ? <p role="alert" className="text-sm text-red-700 sm:col-span-2">{state.error}</p> : null}
         <div className="sm:col-span-2"><Button type="submit" disabled={state.busy}>{state.busy ? "Adding…" : "Add caregiver"}</Button></div>
       </form>

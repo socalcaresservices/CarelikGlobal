@@ -193,6 +193,12 @@ export interface CloseMissedVisitInput {
   idempotencyKey: string;
 }
 
+export interface NoServiceDeliveredInput {
+  visitId: string;
+  reason: string;
+  idempotencyKey: string;
+}
+
 export interface MonthlyServiceSummaryRow extends HoursFields {
   clientId: string;
   clientCode: string;
@@ -351,6 +357,8 @@ export interface ServiceVerificationBackend {
   correctVisit(input: CorrectVisitInput): Promise<void>;
   /** Manager close-out of a missed clock-out: enters the actual Time Out. */
   closeMissedVisit(input: CloseMissedVisitInput): Promise<void>;
+  /** AWS only (0085): the visit never happened. Voids it with a reason: zero worked, zero billable. Not for actual work with a missing clock-out (use closeMissedVisit). */
+  markNoServiceDelivered?(input: NoServiceDeliveredInput): Promise<void>;
   /** AWS only: the locked signature as a PNG data URL (permission-checked, audited). */
   getSignatureDataUrl?(visitId: string): Promise<string>;
   /** AWS reporting: one row per client + service + authorization lineage for a month. */

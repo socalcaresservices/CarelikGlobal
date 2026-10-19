@@ -145,6 +145,60 @@ async function duplicateNames(db: Queryable, org: string, which: { clients?: boo
   const caregivers = which.caregivers ? duplicateNameIds((await safe("select * from ogevia_api.list_caregivers($1)")).map((c) => ({ id: String(c.caregiverRecordId), names: [nameKey(c.firstName, c.lastName), nameKey(c.preferredName, c.lastName)] }))) : new Set<string>();
   return { clients, caregivers };
 }
+/**
+ * Names for administrator rows that carry only ids and codes (the issue list, shifts to reconcile). Built from the SAME permission-checked functions the
+ * client directory and the care team use: a caller without clients.names.read gets no client names (the directory returns null), and a caller who may not
+ * open the care team gets no caregiver names (the guard refuses and the savepoint turns that into "no names"). Nothing here widens who sees a name; rows
+ * keep their codes. Look-ups are by id, or by the agency-unique code where the source row has no id.
+ */
+async function nameDirectory(db: Queryable, org: string) {
+  const safe = async (sql: string) => {
+    await db.query("savepoint name_dir");
+    try {
+      const r = await rows(db, sql, [org]);
+      await db.query("release savepoint name_dir");
+      return r;
+    } catch {
+      await db.query("rollback to savepoint name_dir");
+      return [];
+    }
+  };
+  const clientRows = await safe("select * from ogevia_api.list_client_directory($1)");
+  const cgRows = await safe("select * from ogevia_api.list_caregivers($1)");
+  const clientDup = duplicateNameIds(clientRows.map((c) => ({ id: String(c.clientId), names: [nameKey(c.legalFirstName, c.legalLastName)] })));
+  const cgDup = duplicateNameIds(cgRows.map((c) => ({ id: String(c.caregiverRecordId), names: [nameKey(c.firstName, c.lastName), nameKey(c.preferredName, c.lastName)] })));
+  type Named = { name: string; duplicate: boolean };
+  const clientsById = new Map<string, Named>();
+  const clientsByCode = new Map<string, Named>();
+  for (const c of clientRows) {
+    const name = [c.legalFirstName, c.legalLastName].filter((x) => typeof x === "string" && x !== "").join(" ");
+    if (!name) continue;
+    const named = { name, duplicate: clientDup.has(String(c.clientId)) };
+    clientsById.set(String(c.clientId), named);
+    clientsByCode.set(String(c.clientCode), named);
+  }
+  const cgById = new Map<string, Named>();
+  const cgByCode = new Map<string, Named>();
+  for (const c of cgRows) {
+    const name = `${c.firstName} ${c.lastName}${c.preferredName ? ` ("${c.preferredName}")` : ""}`;
+    const named = { name, duplicate: cgDup.has(String(c.caregiverRecordId)) };
+    cgById.set(String(c.caregiverRecordId), named);
+    cgByCode.set(String(c.caregiverCode), named);
+  }
+  return {
+    client: (id: unknown, code: unknown) => (typeof id === "string" && clientsById.get(id)) || (typeof code === "string" && clientsByCode.get(code)) || null,
+    caregiver: (id: unknown, code: unknown) => (typeof id === "string" && cgById.get(id)) || (typeof code === "string" && cgByCode.get(code)) || null,
+  };
+}
+/** Adds clientName / duplicateName / caregiverName / caregiverDuplicateName where the caller may see them; the codes stay on the row. */
+function withNames<T extends Record<string, unknown>>(list: T[], dir: Awaited<ReturnType<typeof nameDirectory>>) {
+  return list.map((r) => {
+    const c = dir.client(r.clientId, r.clientCode);
+    const g = dir.caregiver(r.caregiverRecordId, r.caregiverCode);
+    return { ...r, ...(c ? { clientName: c.name, duplicateName: c.duplicate } : {}), ...(g ? { caregiverName: g.name, caregiverDuplicateName: g.duplicate } : {}) };
+  });
+}
+
 /** Adds duplicateName (client) and caregiverDuplicateName to rows that show a name; ids come from the row. */
 function flagDuplicates<T extends Record<string, unknown>>(list: T[], d: { clients: Set<string>; caregivers: Set<string> }, o: { client?: boolean; caregiver?: boolean }) {
   return list.map((r) => ({
@@ -747,13 +801,17 @@ export const ROUTES: Record<string, Route> = {
     mutating: false,
     handle: async ({ event, tx }) => {
       const query = q(event);
-      const result = await tx(async (db) =>
-        ((await db.query("select ogevia_api.list_action_issues($1,$2,$3,$4,$5,$6,$7,$8,$9) as r", [
+      return tx(async (db) => {
+        const result = ((await db.query("select ogevia_api.list_action_issues($1,$2,$3,$4,$5,$6,$7,$8,$9) as r", [
           orgParam(event), query.queue ?? null, query.category ?? null, query.severity ?? null,
           optionalUuid(query.clientId, "clientId"), optionalUuid(query.caregiverRecordId, "caregiverRecordId"), optionalUuid(query.serviceId, "serviceId"),
           query.limit ? Math.min(200, Math.max(1, Number.parseInt(query.limit, 10) || 50)) : 50, query.offset ? Math.max(0, Number.parseInt(query.offset, 10) || 0) : 0,
-        ])).rows[0] as { r: unknown }).r);
-      return result;
+        ])).rows[0] as { r: Record<string, unknown> }).r;
+        // Names-first for administrators (F01/I07): added beside the codes, only what this caller may already see.
+        const issues = result.issues;
+        if (!Array.isArray(issues) || issues.length === 0) return result;
+        return { ...result, issues: withNames(issues as Array<Record<string, unknown>>, await nameDirectory(db, orgParam(event))) };
+      });
     },
   },
 
@@ -1452,7 +1510,12 @@ export const ROUTES: Record<string, Route> = {
   // Shifts that ended with no visit record and still hold a reservation (0067). Nothing is released automatically: a person records an outcome.
   "GET /v1/shifts-to-reconcile": {
     mutating: false,
-    handle: async ({ event, tx }) => ({ shifts: await tx((db) => rows(db, "select * from ogevia_api.list_shifts_to_reconcile($1)", [orgParam(event)])) }),
+    handle: async ({ event, tx }) => ({
+      shifts: await tx(async (db) => {
+        const list = await rows(db, "select * from ogevia_api.list_shifts_to_reconcile($1)", [orgParam(event)]);
+        return list.length === 0 ? list : withNames(list, await nameDirectory(db, orgParam(event)));
+      }),
+    }),
   },
 
   "POST /v1/shifts/{shiftId}/reconcile": {
@@ -1838,14 +1901,23 @@ export const ROUTES: Record<string, Route> = {
 
   // Manager close-out of a missed clock-out (0015): enters the actual Time
   // Out; the visit goes back to the caregiver for client confirmation.
+  //
+  // 0085 (D10): `outcome` separates a visit that never happened from actual work with a missing clock-out. "no_service" voids the visit (zero worked, zero billable, audited
+  // with service_delivered=false; a repeat is a no-op) and needs no Time Out; the default "worked" is the behaviour above and keeps the real worked time. It rides on this route
+  // so the API Gateway route set is unchanged.
   "POST /v1/visits/{visitId}/close": {
     mutating: true,
     handle: async ({ event, tx }) => {
       const visit = uuid(p(event).visitId, "visitId");
       const body = parseBody(event.body, event.isBase64Encoded);
       const key = idempotencyKey(event.headers);
-      const timeOut = timestamp(body.timeOut, "timeOut");
+      const outcome = oneOf(body.outcome ?? "worked", "outcome", ["worked", "no_service"] as const);
       const reason = text(body.reason, "reason", 1000, { required: true });
+      if (outcome === "no_service") {
+        await tx((db) => rows(db, "select ogevia_api.void_service_visit($1, $2)", [visit, reason]));
+        return { visit: { visitId: visit, serviceDelivered: false, workedMinutes: 0 } };
+      }
+      const timeOut = timestamp(body.timeOut, "timeOut");
       const [closed] = await tx((db) =>
         rows(db, "select * from ogevia_api.close_missed_service_visit($1, $2, $3, $4)", [visit, timeOut, reason, key]),
       );

@@ -12,6 +12,22 @@ const shift = (id: string, over: Record<string, unknown> = {}) => ({ shiftId: id
 const open = (id: string) => shift(id, { coverageState: "needs_coverage", caregiverRecordId: null, caregiverName: null, caregiverCode: null });
 const reconcile = { shiftId: "p1", reservationId: "r1", startsAt: at(-8).toISOString(), endsAt: at(-6).toISOString(), localDate: today, clientCode: "CL-1", serviceCode: "PCS", serviceName: "Personal care", caregiverCode: "CG-1", reservedMinutes: 120, bucket: "unreconciled", endedHours: 6, lastOutcome: null, lastNote: null, lastDecidedAt: null };
 
+describe("shifts to reconcile are names-first (F01/I07)", () => {
+  it("shows client and caregiver by name (code only for a shared name); without a visible name the codes stay", async () => {
+    renderAws("/schedule", PERMS, {
+      "GET /v1/shifts": () => json(200, { shifts: [] }),
+      "GET /v1/shifts-to-reconcile": () => json(200, { shifts: [
+        { ...reconcile, shiftId: "p1", clientName: "Dana Sample", duplicateName: true, caregiverName: "Alex Lee", caregiverDuplicateName: false },
+        { ...reconcile, shiftId: "p2", reservationId: "r2" },
+      ] }),
+    });
+    expect(await screen.findByRole("heading", { name: "Past: need review (2)" }, { timeout: 15000 })).toBeInTheDocument();
+    const rows = (await screen.findAllByText(/reserved$/)).map((e) => e.textContent ?? "");
+    expect(rows.some((t) => t.includes("Dana Sample (CL-1)") && t.includes("Alex Lee") && !t.includes("CG-1"))).toBe(true);
+    expect(rows.some((t) => t.includes("Client CL-1") && t.includes("Caregiver CG-1"))).toBe(true);
+  }, 30000);
+});
+
 describe("the schedule groups what needs attention", () => {
   it("counts upcoming shifts that need coverage and past shifts that need review separately, and lists each shift once", async () => {
     renderAws("/schedule", PERMS, {

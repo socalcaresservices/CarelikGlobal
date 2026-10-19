@@ -405,6 +405,8 @@ export function ServiceVerificationReportsPage() {
   const [correctionError, setCorrectionError] = useState<string | null>(null);
   // Manager close-out of a missed clock-out (closeMissedVisit).
   const [closeForm, setCloseForm] = useState<{
+    /** "worked": actual work with a missing clock-out (enter the Time Out). "none": the visit never happened (zero worked time). */
+    mode: "worked" | "none";
     visitId: string;
     timeIn: string;
     timeOut: PacificWallTime;
@@ -1008,11 +1010,12 @@ export function ServiceVerificationReportsPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [correctFromUrl, rows]);
 
-  function openClose(row: VisitReportRow) {
+  function openClose(row: VisitReportRow, mode: "worked" | "none" = "worked") {
     setCloseError(null);
     // Only the date is pre-filled: the actual end time must be entered, not
     // assumed from the schedule.
     setCloseForm({
+      mode,
       visitId: row.id,
       timeIn: row.time_in,
       timeOut: { date: toPacificWallTime(row.time_in).date, hour: null, minute: null, meridiem: null },
@@ -1024,7 +1027,21 @@ export function ServiceVerificationReportsPage() {
     if (!closeForm) return;
     setCloseError(null);
     if (!closeForm.reason.trim()) {
-      setCloseError("A reason is required to close a missed visit.");
+      setCloseError(closeForm.mode === "none" ? "A reason is required to record that no service was delivered." : "A reason is required to close a missed visit.");
+      return;
+    }
+    if (closeForm.mode === "none") {
+      setCloseSaving(true);
+      try {
+        await backend.markNoServiceDelivered?.({ visitId: closeForm.visitId, reason: closeForm.reason.trim(), idempotencyKey: closeKey.current });
+        closeKey.current = newIdempotencyKey();
+        setCloseForm(null);
+        void queryClient.invalidateQueries({ queryKey: ["service-visit-report"] });
+      } catch (cause) {
+        setCloseError(errorMessage(cause, "Could not record that no service was delivered."));
+      } finally {
+        setCloseSaving(false);
+      }
       return;
     }
     const parsed = pacificWallTimeToDate(closeForm.timeOut);
@@ -2790,27 +2807,41 @@ export function ServiceVerificationReportsPage() {
                         Close visit
                       </Button>
                     ) : null}
+                    {canManage && issue.kind === "missing_time_out" && closeForm?.visitId !== row.id && backend.markNoServiceDelivered ? (
+                      <Button type="button" variant="secondary" onClick={() => openClose(row, "none")}>
+                        No service delivered
+                      </Button>
+                    ) : null}
                   </span>
                 </div>
                 {closeForm?.visitId === row.id ? (
                   <div className="mt-2 space-y-2 rounded-lg border border-slate-200 bg-slate-50 p-3">
-                    <p className="text-xs text-slate-600">
-                      Enter when the visit actually ended. The caregiver&apos;s app then
-                      asks for the client&apos;s confirmation, marked as entered by the agency.
-                    </p>
-                    {row.scheduled_ends_at ? (
-                      <p className="text-xs text-slate-500">
-                        Scheduled end: {formatVisitDate(row.scheduled_ends_at)}, {formatClockTime(row.scheduled_ends_at)}
+                    {closeForm.mode === "none" ? (
+                      <p className="text-xs text-slate-600">
+                        Use this only when the visit never happened (started in error, or the caregiver did not go). The visit is voided: no worked time and nothing billable.
+                        If the caregiver did work and only forgot to clock out, cancel and use Close visit instead.
                       </p>
-                    ) : null}
-                    <PacificTimeOutField
-                      timeIn={closeForm.timeIn}
-                      value={closeForm.timeOut}
-                      onChange={(timeOut) => {
-                        setCloseError(null);
-                        setCloseForm({ ...closeForm, timeOut });
-                      }}
-                    />
+                    ) : (
+                      <>
+                        <p className="text-xs text-slate-600">
+                          Enter when the visit actually ended. The caregiver&apos;s app then
+                          asks for the client&apos;s confirmation, marked as entered by the agency.
+                        </p>
+                        {row.scheduled_ends_at ? (
+                          <p className="text-xs text-slate-500">
+                            Scheduled end: {formatVisitDate(row.scheduled_ends_at)}, {formatClockTime(row.scheduled_ends_at)}
+                          </p>
+                        ) : null}
+                        <PacificTimeOutField
+                          timeIn={closeForm.timeIn}
+                          value={closeForm.timeOut}
+                          onChange={(timeOut) => {
+                            setCloseError(null);
+                            setCloseForm({ ...closeForm, timeOut });
+                          }}
+                        />
+                      </>
+                    )}
                     <label className="block text-xs font-medium text-slate-700">
                       Reason
                       <textarea
@@ -2827,7 +2858,7 @@ export function ServiceVerificationReportsPage() {
                     ) : null}
                     <div className="flex gap-2">
                       <Button type="button" loading={closeSaving} onClick={() => void handleSubmitClose()}>
-                        Save Time Out
+                        {closeForm.mode === "none" ? "Record: no service delivered" : "Save Time Out"}
                       </Button>
                       <Button type="button" variant="secondary" onClick={() => setCloseForm(null)}>
                         Cancel

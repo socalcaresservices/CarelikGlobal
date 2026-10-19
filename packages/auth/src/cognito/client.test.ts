@@ -339,6 +339,45 @@ describe("CognitoAuthClient — sign-out", () => {
     expect(h.navigations.at(-1)).toContain("/logout");
   });
 
+  it("H07: signing out in one tab ends the session held by another tab of the same browser (no token stays usable on a shared device)", async () => {
+    const listeners = new Set<(m: unknown) => void>();
+    const bus = { post: (m: unknown) => { for (const l of [...listeners]) l(m); }, onMessage: (l: (m: unknown) => void) => { listeners.add(l); } };
+    const tab = async () => {
+      const config = parseCognitoConfig({ ...TEST_ENV, VITE_COGNITO_REFRESH_PERSISTENCE: "session" });
+      const calls: Array<{ url: string; body: URLSearchParams }> = [];
+      const navigations: string[] = [];
+      const responses: Array<() => Promise<Response> | Response> = [];
+      const store = new MemoryStore();
+      const client = new CognitoAuthClient(config, {
+        fetch: vi.fn(async (url: string, init: RequestInit) => { calls.push({ url, body: new URLSearchParams(String(init.body)) }); const n = responses.shift(); if (!n) throw new Error("unexpected fetch"); return n(); }),
+        transactionStore: new MemoryStore(), refreshStore: store, navigate: (u) => navigations.push(u), broadcast: bus,
+      });
+      const events: CognitoAuthEvent["type"][] = [];
+      client.subscribe((e) => events.push(e.type));
+      await client.signIn("/service-verification");
+      const url = new URL(navigations.at(-1)!);
+      responses.push(async () => json(await tokenResponse(url.searchParams.get("nonce")!)));
+      await client.handleCallback(`${TEST_ENV.VITE_COGNITO_REDIRECT_URI}?code=abc&state=${url.searchParams.get("state")!}`);
+      return { client, calls, navigations, responses, store, events };
+    };
+    const tabA = await tab();
+    const tabB = await tab();
+    expect((await tabB.client.getSession())?.access_token).toBeTruthy();
+    tabA.responses.push(() => new Response(null, { status: 200 }));
+    tabB.responses.push(() => new Response(null, { status: 200 }));
+    await tabA.client.signOut();
+    await new Promise((r) => setTimeout(r, 0));
+    expect(tabA.events.at(-1)).toBe("signed_out");
+    // Tab B was told: its tokens are gone, its own refresh token is revoked, and the app is told to show the sign-in screen.
+    expect(tabB.events.at(-1)).toBe("signed_out");
+    expect(tabB.store.getItem(REFRESH_KEY)).toBeNull();
+    expect(await tabB.client.getSession()).toBeNull();
+    expect(tabB.calls.at(-1)!.url).toMatch(/\/oauth2\/revoke$/);
+    // No loop and no second managed-login logout redirect from the receiving tab.
+    expect(tabB.navigations.filter((u) => u.includes("/logout"))).toHaveLength(0);
+    expect(tabA.calls.filter((c) => c.url.endsWith("/oauth2/revoke"))).toHaveLength(1);
+  });
+
   it("password reset goes to managed login's forgotPassword", () => {
     const h = harness();
     h.client.startPasswordReset();

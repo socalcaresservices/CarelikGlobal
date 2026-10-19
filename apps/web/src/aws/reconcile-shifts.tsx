@@ -7,6 +7,7 @@ import { useOrganization } from "@/providers/organization-provider";
 import { useAwsApi } from "./aws-workspace";
 import { useAgencyClock } from "./agency-clock";
 import { ShortHelp } from "./help-text";
+import { nameWithCode } from "./name-label";
 import { useShiftsToReconcile, type ShiftToReconcile } from "./reconcile-data";
 
 const message = (cause: unknown, fallback: string) => (cause instanceof Error ? cause.message : fallback);
@@ -70,7 +71,7 @@ export function ReconcileShiftsPanel({ onDone }: { onDone: (text: string) => voi
               <details>
                 <summary className="flex min-h-11 cursor-pointer flex-wrap items-center gap-x-2 gap-y-0.5 md:min-h-9">
                   <span className="font-semibold text-slate-950">{when(s.startsAt)}–{time(s.endsAt)}</span>
-                  <span className="text-slate-800">Client {s.clientCode ?? "?"}{s.serviceName ? ` · ${s.serviceName}` : ""} · {s.caregiverCode ? `Caregiver ${s.caregiverCode}` : "No caregiver"} · {formatDuration(s.reservedMinutes)} reserved</span>
+                  <span className="text-slate-800">{s.clientName ? nameWithCode(s.clientName, s.clientCode, s.duplicateName) : `Client ${s.clientCode ?? "?"}`}{s.serviceName ? ` · ${s.serviceName}` : ""} · {s.caregiverCode ? (s.caregiverName ? nameWithCode(s.caregiverName, s.caregiverCode, s.caregiverDuplicateName) : `Caregiver ${s.caregiverCode}`) : "No caregiver"} · {formatDuration(s.reservedMinutes)} reserved</span>
                   <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs text-amber-900">Ended {s.endedHours < 1 ? "<1 hr" : `${s.endedHours} hr`} ago</span>
                   <span className="ml-auto text-sm font-medium text-og-link underline underline-offset-2">Record what happened</span>
                 </summary>

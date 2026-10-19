@@ -156,7 +156,9 @@ export function VisitQueuePage() {
   const decide: Row[] = v ? [
     { label: "In review", count: v.needsReview, to: exceptions },
     ...((v.reviewOverdue ?? 0) > 0 ? [{ label: "Review waiting 24 hours or more", count: v.reviewOverdue ?? 0, to: exceptions, chip: { tone: "amber" as Tone, word: "Urgent" } }] : []),
-    { label: "Late answers to accept or reject", count: v.lateResponses, to: "/billing-review" },
+    // A late answer is a visit in administrator review (visits.read counts it), so it opens the exceptions list that lists it. /billing-review needs billing.visits.read,
+    // which the people who see this count may not have, and it lists only a date range of billing states.
+    { label: "Late answers to accept or reject", count: v.lateResponses, to: exceptions },
     { label: "Client confirmation overdue (over 48 hours)", count: v.confirmationOverdue ?? 0, to: exceptions, chip: (v.confirmationOverdue ?? 0) > 0 ? { tone: "amber" as Tone, word: "Overdue" } : undefined },
   ] : [];
   const routine: Row[] = v ? [

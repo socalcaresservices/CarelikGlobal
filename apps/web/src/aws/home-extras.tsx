@@ -9,7 +9,7 @@ import { useAwsApi } from "./aws-workspace";
 import { useAgencyClock } from "./agency-clock";
 import { REASON_SHORT, shiftIssueLabel, todaysVisits, useHomeIssues, useNow } from "./home-data";
 import type { Shift } from "./schedule-page";
-import { issueDestination, KIND_LABEL, SEVERITY_TONE } from "./action-issues";
+import { issueClient, issueDestination, KIND_LABEL, SEVERITY_TONE } from "./action-issues";
 import { StatusChip } from "./ui/status-chip";
 
 const LIMIT = 6;
@@ -140,7 +140,7 @@ export function TopIssues() {
               <li key={i.issueKey} className="flex flex-wrap items-center gap-x-3 gap-y-0 px-3 py-2 text-sm md:grid md:grid-cols-[6.5rem_minmax(0,1fr)_9rem_11rem]" data-testid="top-issue">
                 <span><StatusChip tone={tone}>{tone === "red" ? "Critical" : "Urgent"}</StatusChip></span>
                 <span className="min-w-0 flex-1 basis-[10rem] text-og-ink">
-                  <span className="font-semibold">{KIND_LABEL[i.kind] ?? i.kind}{i.clientCode ? ` · ${i.clientCode}` : ""}</span>
+                  <span className="font-semibold">{KIND_LABEL[i.kind] ?? i.kind}{issueClient(i) ? ` · ${issueClient(i)}` : ""}</span>
                   <span className="text-og-sub"> · {REASON_SHORT[i.reason] ?? i.recommendedAction}</span>
                 </span>
                 <span className="basis-full text-xs text-og-sub md:basis-auto md:text-sm">{i.deadline ? `${i.severity === "critical" ? "Was due" : "Due"} ${formatClockTime(i.deadline)}` : "No deadline"}</span>

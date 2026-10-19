@@ -70,6 +70,19 @@ describe("Action needed", () => {
     expect(within(screen.getByTestId("issue-filters")).getByLabelText("Category")).toHaveTextContent("Authorization");
   }, 30000);
 
+  it("rows are names-first (F01/I07): client and caregiver by name, the code only for a shared name, the Over limit item included; a role with no visible name keeps codes", async () => {
+    const over = issue({ issueKey: "authorization:over_limit:o2", kind: "authorization", reason: "over_limit", queue: "visit_review", category: "authorization", severity: "urgent", deadline: null, shiftId: null, visitId: null, entityId: "o2",
+      clientId: "c8", clientCode: "CL-8", clientName: "Dana Sample", duplicateName: true, serviceCode: "PCS", action: "review_authorization_limit", recommendedAction: "0.75 h over the monthly authorization (10 h authorized)." });
+    const staffed = issue({ issueKey: "shift:uncovered_called_out:n1", reason: "uncovered_called_out", clientId: "c5", clientCode: "CL-5", clientName: "Robin Unique", duplicateName: false, caregiverRecordId: "r5", caregiverCode: "CG-5", caregiverName: "Alex Lee", caregiverDuplicateName: false });
+    renderPage(["visits.read", "shifts.manage", "visits.manage", "billing.visits.read", "clients.names.read"], [over, staffed]);
+    const cards = await screen.findAllByTestId("issue-card", {}, { timeout: 15000 });
+    const byKey = (k: string) => cards.find((c) => c.getAttribute("data-issue-key") === k)!;
+    expect(byKey("authorization:over_limit:o2")).toHaveTextContent("Over limit · Dana Sample (CL-8) · PCS");
+    expect(byKey("shift:uncovered_called_out:n1")).toHaveTextContent("Robin Unique · PCS · Alex Lee");
+    expect(byKey("shift:uncovered_called_out:n1")).not.toHaveTextContent("CL-5");
+    expect(byKey("visit:confirmation_overdue:v1")).toHaveTextContent("CL-2"); // no name visible: the code stays
+  }, 30000);
+
   it("shows the counts the server returns, cards in server order with a recommended action and a link carrying the context, and keeps routine queues out of the action total", async () => {
     renderPage(["visits.read", "shifts.manage", "visits.manage", "billing.visits.read"]);
     const counts = await screen.findByTestId("issue-counts", {}, { timeout: 15000 });

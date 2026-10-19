@@ -208,6 +208,26 @@ describe("caregiver workflow: login → client → service → start → end →
     expect(active.body.visit).toMatchObject({ visitId: openId, visitStatus: "awaiting_signature", timeOutEnteredByManager: true });
   });
 
+  it("0085 D10: outcome no_service on /close voids a visit that never happened (zero worked), needs a visit manager and a reason, is safe to repeat, and an unknown outcome is a 400", async () => {
+    const own = await freshClient(db, w, w.caregiverA2, 600, w.orgA, { before: 40, after: 40 });
+    const start = await call("POST /v1/visits", w.caregiverA2, { body: { organizationId: w.orgA, clientId: own.client, serviceId: own.service, unscheduledReason: "Client asked for extra help (synthetic)" } });
+    expect(start.status, JSON.stringify(start.body)).toBe(201);
+    const id = start.body.visitId;
+    await ageVisit(db, id, 15);
+    const body = { outcome: "no_service", reason: "Started by mistake; nobody went (synthetic)" };
+    expect((await call("POST /v1/visits/{visitId}/close", w.caregiverA2, { path: { visitId: id }, body })).status).toBe(403);
+    expect((await call("POST /v1/visits/{visitId}/close", w.managerA, { path: { visitId: id }, body: { outcome: "no_service" } })).status).toBe(400);
+    expect((await call("POST /v1/visits/{visitId}/close", w.managerA, { path: { visitId: id }, body: { outcome: "whatever", reason: "x", timeOut: new Date().toISOString() } })).status).toBe(400);
+    const r = await call("POST /v1/visits/{visitId}/close", w.managerA, { path: { visitId: id }, body });
+    expect(r.status, JSON.stringify(r.body)).toBe(200);
+    expect(r.body.visit).toMatchObject({ visitId: id, serviceDelivered: false, workedMinutes: 0 });
+    expect((await call("POST /v1/visits/{visitId}/close", w.managerA, { path: { visitId: id }, body })).status).toBe(200); // lost response, retried
+    expect((await db.admin.query("select status::text s, worked_minutes wk from ogevia.service_visits where id = $1", [id])).rows[0]).toMatchObject({ s: "voided" });
+    expect((await db.admin.query("select count(*) n from ogevia.audit_events where entity_id = $1 and action = 'service_visit.voided'", [id])).rows[0].n).toBe("1");
+    // another agency's manager cannot reach it
+    expect((await call("POST /v1/visits/{visitId}/close", w.managerB, { path: { visitId: id }, body })).status).toBe(404);
+  });
+
   it("a caregiver cannot correct a visit", async () => {
     const r = await call("POST /v1/visits/{visitId}/corrections", w.caregiverA1, {
       path: { visitId },
@@ -750,9 +770,15 @@ describe("client and authorization administration (0022) through the API", () =>
 
 describe("Care Team and services (0023) through the API", () => {
   it("manager adds and renames a caregiver; status needs a reason; caregivers and other agencies cannot", async () => {
-    const created = await call("POST /v1/caregivers", w.managerA, { body: { organizationId: w.orgA, firstName: "Synthetic", lastName: "Api Caregiver", status: "ready" } });
+    // 0085: Approved/Active cannot be created around the onboarding gate while a required item is outstanding (409, items named, nothing created).
+    const direct = await call("POST /v1/caregivers", w.managerA, { body: { organizationId: w.orgA, firstName: "Synthetic", lastName: "Api Direct", status: "ready" } });
+    expect(direct.status, JSON.stringify(direct.body)).toBe(409);
+    expect(JSON.stringify(direct.body)).toMatch(/Onboarding is not complete/);
+    expect((await db.admin.query("select count(*) n from ogevia.caregiver_records where last_name = 'Api Direct'")).rows[0].n).toBe("0");
+    const created = await call("POST /v1/caregivers", w.managerA, { body: { organizationId: w.orgA, firstName: "Synthetic", lastName: "Api Caregiver", status: "onboarding" } });
     expect(created.status, JSON.stringify(created.body)).toBe(201);
     const id = created.body.caregiver.caregiverRecordId as string;
+    await db.admin.query("update ogevia.caregiver_records set status = 'ready', onboarding_required = false where id = $1", [id]); // an already-approved record, as existed before the gate
     expect(created.body.caregiver.caregiverCode).toMatch(/^CG-/);
     expect((await call("POST /v1/caregivers", w.managerA, { body: { organizationId: w.orgA, firstName: "X", lastName: "Y", status: "inactive" } })).status).toBe(400);
     expect((await call("POST /v1/caregivers/{caregiverRecordId}/details", w.managerA, { path: { caregiverRecordId: id }, body: { organizationId: w.orgA, firstName: "Synthetic", lastName: "Api Caregiver 2", preferredName: "Sam" } })).status).toBe(200);
@@ -809,7 +835,8 @@ describe("assignments (0024) through the API", () => {
 describe("caregiver invitations and planned assignments (0025) through the API", () => {
   it("plan before sign-in, invite, resend, first sign-in; no password or email in responses or logs", async () => {
     const today = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Los_Angeles" }).format(new Date());
-    const created = await call("POST /v1/caregivers", w.managerA, { body: { organizationId: w.orgA, firstName: "Synthetic", lastName: "Invitee", status: "ready" } });
+    const created = await call("POST /v1/caregivers", w.managerA, { body: { organizationId: w.orgA, firstName: "Synthetic", lastName: "Invitee", status: "onboarding" } });
+    await db.admin.query("update ogevia.caregiver_records set status = 'ready', onboarding_required = false where id = $1", [created.body.caregiver.caregiverRecordId]); // already approved (0085 refuses creating one directly)
     expect(created.status, JSON.stringify(created.body)).toBe(201);
     const record = created.body.caregiver.caregiverRecordId as string;
 
@@ -851,7 +878,8 @@ describe("caregiver invitations and planned assignments (0025) through the API",
 
   it("an identity-service failure changes nothing and says so", async () => {
     const failing = createHandler({ config: CONFIG, db: { connect: () => db.admin.connect() }, evidence, log: () => {} });
-    const created = await call("POST /v1/caregivers", w.managerA, { body: { organizationId: w.orgA, firstName: "Synthetic", lastName: "Unsent", status: "ready" } });
+    const created = await call("POST /v1/caregivers", w.managerA, { body: { organizationId: w.orgA, firstName: "Synthetic", lastName: "Unsent", status: "onboarding" } });
+    await db.admin.query("update ogevia.caregiver_records set status = 'ready', onboarding_required = false where id = $1", [created.body.caregiver.caregiverRecordId]); // already approved (0085 refuses creating one directly)
     const record = created.body.caregiver.caregiverRecordId as string;
     const r = await failing(event("POST /v1/caregivers/{caregiverRecordId}/invitation", { sub: w.managerA.sub, path: { caregiverRecordId: record }, body: { organizationId: w.orgA, email: "unsent@example.test" } }));
     expect(r.statusCode).toBe(503);

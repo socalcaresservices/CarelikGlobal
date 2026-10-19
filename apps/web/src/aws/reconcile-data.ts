@@ -5,7 +5,7 @@ import { useAwsApi } from "./aws-workspace";
 /** 0067: a shift that ended with no visit record and still holds authorization time. */
 export interface ShiftToReconcile {
   shiftId: string; reservationId: string; startsAt: string; endsAt: string; localDate: string; clientCode: string | null; serviceCode: string | null; serviceName: string | null;
-  caregiverCode: string | null; reservedMinutes: number; bucket: "unreconciled" | "awaiting_record"; endedHours: number;
+  caregiverCode: string | null; clientName?: string; duplicateName?: boolean; caregiverName?: string; caregiverDuplicateName?: boolean; reservedMinutes: number; bucket: "unreconciled" | "awaiting_record"; endedHours: number;
   lastOutcome: "no_service_delivered" | "hold_service_may_have_occurred" | "delivered_unverified" | null; lastNote: string | null; lastDecidedAt: string | null;
 }
 

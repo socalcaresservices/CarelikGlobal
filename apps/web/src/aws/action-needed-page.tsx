@@ -6,7 +6,7 @@ import { newIdempotencyKey } from "@/lib/sv-backend";
 import { formatClockTime, formatNumericDate } from "@/lib/service-verification";
 import { useOrganization } from "@/providers/organization-provider";
 import { useAwsApi } from "./aws-workspace";
-import { CATEGORY_LABEL, issueDestination, KIND_LABEL, QUEUE_LABEL, SEVERITY_TONE, type ActionIssue, type IssueList } from "./action-issues";
+import { CATEGORY_LABEL, issueCaregiver, issueClient, issueDestination, KIND_LABEL, QUEUE_LABEL, SEVERITY_TONE, type ActionIssue, type IssueList } from "./action-issues";
 import { TONE } from "./attention";
 import { Disclosure } from "./ui/disclosure";
 import { ShortHelp } from "./help-text";
@@ -33,7 +33,7 @@ function IssueCard({ issue }: { issue: ActionIssue }) {
     queryKey: ["action-issue-history", issue.issueKey], enabled: open && !!activeOrganizationId,
     queryFn: async () => (await api.get<{ history: History }>("/v1/action-issues/history", { organizationId: activeOrganizationId, issueKey: issue.issueKey })).history,
   });
-  const who = [issue.clientCode, issue.serviceCode, issue.caregiverCode].filter(Boolean).join(" · ");
+  const who = [issueClient(issue), issue.serviceCode, issueCaregiver(issue)].filter(Boolean).join(" · ");
   return (
     <li data-testid="issue-card" data-issue-key={issue.issueKey} className={`border-l-4 px-3 py-2 ${tone === "red" ? "border-l-red-700" : tone === "amber" ? "border-l-amber-600" : "border-l-slate-400"}`}>
       <div className="flex flex-wrap items-center gap-x-3 gap-y-0 md:grid md:grid-cols-[6.5rem_minmax(0,1fr)_11rem_auto]">
@@ -186,7 +186,7 @@ export function ActionNeededPage() {
       for (const i of all.data?.issues ?? []) { const k = id(i); const l = label(i); if (k && l) m.set(k, l); }
       return [...m.entries()].sort((a, b) => a[1].localeCompare(b[1]));
     };
-    return { clients: pick((i) => i.clientId, (i) => i.clientCode), caregivers: pick((i) => i.caregiverRecordId, (i) => i.caregiverCode), services: pick((i) => i.serviceId, (i) => i.serviceCode) };
+    return { clients: pick((i) => i.clientId, issueClient), caregivers: pick((i) => i.caregiverRecordId, issueCaregiver), services: pick((i) => i.serviceId, (i) => i.serviceCode) };
   }, [all.data]);
   const set = (k: keyof Filters, v: string) => { setF({ ...f, [k]: v }); setPages(1); };
   const sel = (label: string, k: keyof Filters, opts: Array<[string, string]>) => (
