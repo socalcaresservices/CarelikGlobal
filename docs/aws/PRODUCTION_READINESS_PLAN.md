@@ -135,3 +135,30 @@ Again a summary, not raw output; `~/prd-inventory-part2.txt` was not attached. N
    - B6 script/approval_ref defects, B7 untested accessibility and phone items, B8 release checklist and owner GO, B9 DNS and reports density: open.
    - B10 no recorded `pre-prd` snapshot: open.
 4. **Readiness status: NOT READY. NO-GO.** Infrastructure exists and is protected, but production's version, schema, frontend wiring and security gates are unverified and it is far behind the accepted TEST release.
+
+## 9. Inventory results, raw lines pasted by the owner (2026-10-19)
+| Item | Pasted value | Status |
+|---|---|---|
+| Web origin / main script | `https://d3l4psdkokkvnb.cloudfront.net`, `assets/index-DewFCiEF.js` | OWNER-AWS |
+| `VITE_APP_ENV` | `"production"` | OWNER-AWS |
+| `VITE_APP_VERSION` | **No line was returned** by the grep (only `VITE_APP_ENV` printed). INFERRED: the production bundle carries no version string (older build); NOT VERIFIED (the owner did not state it was absent). The production web build cannot be mapped to a commit from the bundle. | INFERRED |
+| API host in the bundle | The grep returned only `execute-api.us-west-2.amazonaws.com`. **The inventory command was defective:** its pattern starts at `execute-api` and drops the API id that precedes it. The pasted `https://zk527zk4ua...` is the stack output, not a bundle read. **The question "does the production web call the production API" is therefore still NOT VERIFIED.** | NOT VERIFIED |
+| Secret `ogevia/prd/database/app` | LastChanged 2026-10-10T06:00:17Z, rotation none, not deleted | OWNER-AWS (known follow-up: no rotation) |
+| Buckets (4) | access-log, signature-evidence, web-log, website: versioning Enabled, public-access block all four True; encryption AES256 except signature-evidence `aws:kms` | OWNER-AWS (closes the bucket part of B5) |
+| Cognito | one pool listed: `us-west-2_849AYz5J7`, MFA `ON` | OWNER-AWS. A single pool in the account means production and TEST share it (INFERRED; confirm from configuration) |
+| CloudTrail | `ogevia-audit-trail`, multi-region true, validation true | OWNER-AWS |
+| Budget | `ogevia phase 1 Budget` (limit and alert recipients not reported) | OWNER-AWS |
+
+### Corrected read-only check for the API host (run in CloudShell)
+```
+APP=https://d3l4psdkokkvnb.cloudfront.net
+curl -fsS "$APP/assets/index-DewFCiEF.js" | grep -o '[a-z0-9]*\.execute-api\.[a-z0-9.-]*' | sort -u
+curl -fsS "$APP/assets/index-DewFCiEF.js" | grep -c 'VITE_APP_VERSION'
+curl -sS -o /dev/null -w 'config.json HTTP %{http_code}\n' "$APP/config.json"
+```
+Pass: the first command prints `zk527zk4ua.execute-api.us-west-2.amazonaws.com` and not `s0epy5rgzb...`.
+
+### Blocker changes
+- B5: bucket protections VERIFIED (owner-pasted), pool MFA ON, CloudTrail, budget exist. Still open: administrator MFA sign-in, tenant isolation and caregiver restriction on prd, signature stored in the prd bucket, restore test, Multi-AZ, budget limit and alerts, secret rotation.
+- B4: a single Cognito pool exists, so production shares TEST's pool (INFERRED).
+- B1: web wiring (API host) and the web/Lambda commit remain open.
