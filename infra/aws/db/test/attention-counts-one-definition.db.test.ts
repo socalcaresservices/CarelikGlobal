@@ -283,6 +283,11 @@ describe("2.5 every count equals the list opened under the same agency and permi
     await ageVisit(db, v, 30);
     await api.end(db, w.caregiverA3, v);
     await api.confirm(db, w.caregiverA3, v, { method: "unable_to_confirm", reason: "Synthetic: client asleep" });
+    // 0084: an authorization of 20 minutes with a 30-minute visit ended -> Over limit 10, one Urgent 'over_limit' item in Visit review
+    const o = await freshClient(db, w, w.caregiverA3, 20);
+    const ov = await api.start(db, w.caregiverA3, w.orgA, o.client, o.service, null, "Synthetic: unscheduled");
+    await ageVisit(db, ov, 30);
+    await api.end(db, w.caregiverA3, ov);
   });
 
   for (const who of ["ownerA", "managerA", "schedulerA"] as const) {
@@ -298,6 +303,12 @@ describe("2.5 every count equals the list opened under the same agency and permi
       }
       // Needs action = Critical + Urgent issues in the three action queues = the Action needed page number
       expect(c.needsAction.count).toBe(all.counts.actionNeeded);
+      // 0084: the Over limit item is one of those Urgent issues (counted once, in Visit review), and it is not a Needs attention / exception item
+      const over = all.issues.filter((i: any) => i.reason === "over_limit");
+      expect(over).toHaveLength(1);
+      expect(over[0]).toMatchObject({ severity: "urgent", queue: "visit_review", overLimitMinutes: 10 });
+      expect(all.issues.filter((i: any) => i.severity !== "routine" && ["needs_attention_now", "documents_compliance", "visit_review"].includes(i.queue)).length).toBe(c.needsAction.count);
+      expect(nowList.some((i: any) => i.reason === "over_limit")).toBe(false);
       // Scheduling = unique shifts in Needs attention now (unfilled or blocked)
       if (c.scheduling) {
         expect(c.scheduling.count).toBe(new Set(nowList.filter((i: any) => i.shiftId).map((i: any) => i.shiftId)).size);

@@ -19,7 +19,7 @@ const ISSUES = [
   issue({ issueKey: "visit:confirmation_overdue:v1", kind: "visit", reason: "confirmation_overdue", queue: "visit_review", category: "visits", severity: "urgent", shiftId: null, visitId: "v1", entityId: "v1", clientCode: "CL-2", clientId: "c2", action: "follow_up_confirmation", recommendedAction: "No confirmation yet: contact the client or representative, or record why it cannot be obtained.", deadline: null }),
   issue({ issueKey: "visit:ready_for_approval:v2", kind: "visit", reason: "ready_for_approval", queue: "ready_for_approval", category: "visits", severity: "routine", shiftId: null, visitId: "v2", entityId: "v2", action: "approve_billing", recommendedAction: "Approve the billable minutes, or send it back.", deadline: null, reopenCount: 2 }),
 ];
-function renderPage(permissions: string[]) {
+function renderPage(permissions: string[], extra: Array<ReturnType<typeof issue>> = []) {
   const calls: Call[] = [];
   const json = (code: number, body: unknown) => new Response(JSON.stringify(body), { status: code, headers: { "content-type": "application/json" } });
   const fetchImpl = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
@@ -34,7 +34,7 @@ function renderPage(permissions: string[]) {
       case "GET /v1/attention/overview": return json(200, { overview: { asOf: new Date().toISOString(), urgentWindowHours: 48, urgent: null, upcoming: { count: 0, nextStartsAt: null, shifts: [] }, documents: null, visitReview: null } });
       case "GET /v1/action-issues": {
         const sev = url.searchParams.get("severity"); const limit = Number(url.searchParams.get("limit") ?? 50);
-        const filtered = ISSUES.filter((i) => !sev || i.severity === sev);
+        const filtered = [...ISSUES, ...extra].filter((i) => !sev || i.severity === sev);
         return json(200, { asOf: new Date().toISOString(), matching: filtered.length, limit, offset: 0, counts: { total: 3, critical: 1, urgent: 1, routine: 1, actionNeeded: 2, byQueue: { needs_attention_now: 1, visit_review: 1, ready_for_approval: 1 } }, issues: filtered.slice(0, limit) });
       }
       case "GET /v1/action-issues/history": return json(200, { history: { state: { status: "open", firstSeenAt: new Date().toISOString(), resolvedAt: null, reopenCount: 0 }, events: [{ event: "opened", severity: "urgent", occurredAt: new Date().toISOString(), observedByName: "Morgan Manager" }, { event: "severity_changed", severity: "critical", occurredAt: new Date().toISOString(), observedByName: "Morgan Manager" }] } });
@@ -51,6 +51,25 @@ function renderPage(permissions: string[]) {
 afterEach(() => { cleanup(); vi.clearAllMocks(); });
 
 describe("Action needed", () => {
+  it("shows the Over limit item (0084): the numbers in the server text, the Authorization category, the Urgent word (not Critical), and a link to the client's authorizations; the category filter offers Authorization", async () => {
+    const over = issue({
+      issueKey: "authorization:over_limit:o1", kind: "authorization", reason: "over_limit", queue: "visit_review", category: "authorization", severity: "urgent", deadline: null,
+      shiftId: null, visitId: null, entityId: "o1", clientId: "c9", clientCode: "CL-9", serviceCode: "PCS", action: "review_authorization_limit", overLimitMinutes: 45, authorizedMinutes: 600,
+      recommendedAction: "0.75 h over the monthly authorization (10 h authorized). Over-limit time cannot be billed; worked time is kept.",
+    });
+    renderPage(["visits.read", "shifts.manage", "visits.manage", "billing.visits.read"], [over]);
+    const cards = await screen.findAllByTestId("issue-card", {}, { timeout: 15000 });
+    const card = cards.find((c) => c.getAttribute("data-issue-key") === "authorization:over_limit:o1")!;
+    expect(card).toBeTruthy();
+    expect(within(card).getByText("Urgent")).toBeInTheDocument();
+    expect(within(card).queryByText("Critical")).toBeNull();
+    expect(card).toHaveTextContent("Over limit · CL-9 · PCS");
+    expect(card).toHaveTextContent("0.75 h over the monthly authorization (10 h authorized). Over-limit time cannot be billed; worked time is kept.");
+    expect(within(card).getByRole("link", { name: "Amend or add an authorization" })).toHaveAttribute("href", "/clients/c9#authorizations");
+    expect(within(card).getByTestId("issue-deadline")).toHaveTextContent("No deadline");
+    expect(within(screen.getByTestId("issue-filters")).getByLabelText("Category")).toHaveTextContent("Authorization");
+  }, 30000);
+
   it("shows the counts the server returns, cards in server order with a recommended action and a link carrying the context, and keeps routine queues out of the action total", async () => {
     renderPage(["visits.read", "shifts.manage", "visits.manage", "billing.visits.read"]);
     const counts = await screen.findByTestId("issue-counts", {}, { timeout: 15000 });

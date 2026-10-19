@@ -1,5 +1,5 @@
-// Upgrade and rollback rehearsal for 0060-0083 on a POPULATED database at 0059: shifts, a recurring series with reservations, a signed and approved visit,
-// a compliance hold and a background check already exist. The real runner applies 0060-0083; nothing stored changes; the old data reads correctly through the
+// Upgrade and rollback rehearsal for 0060-0084 on a POPULATED database at 0059: shifts, a recurring series with reservations, a signed and approved visit,
+// a compliance hold and a background check already exist. The real runner applies 0060-0084; nothing stored changes; the old data reads correctly through the
 // new functions; then the rollbacks run in reverse order and the same data is still there. SYNTHETIC data only.
 import { readFileSync } from "node:fs";
 import { randomUUID } from "node:crypto";
@@ -8,7 +8,7 @@ import { migrate } from "../scripts/migrations.js";
 import { asActor, createTestDb, freshClient, orgToday, seedWorld, signedVisit, type TestDb, type World } from "./harness.js";
 
 const DOWN = new URL("../rollback/", import.meta.url);
-const NEW = ["0060_agency_work_hour_limits", "0061_recurring_save_valid_report_rejected", "0062_billing_states", "0063_open_shift_pickup_requires_confirmation", "0064_compliance_hold_history_and_alerts", "0065_office_assignment_authorization_recheck", "0066_compliance_shift_document_risks", "0067_reservation_buckets_and_reconciliation", "0068_authorization_amendment_impacts", "0069_report_export_permission_and_audit", "0070_monthly_chain_report", "0071_authorization_decrease_review_and_delivered_unverified", "0072_export_request_and_generation", "0073_agency_deadlines_and_issue_identity", "0074_client_documents_readiness_holds_audit", "0075_shift_display_states", "0076_agency_performance_audit_report", "0077_attention_counts_and_in_app_notifications", "0078_assignment_outcome_and_limit_messages", "0079_hours_accounting_one_bucket", "0080_attention_counts_one_definition", "0081_review_corrections_pending_closed_cpr_tb", "0082_lineage_lock_all_consumption_paths_review_audit", "0083_owner_hours_reopen_guard_correct_closed"];
+const NEW = ["0060_agency_work_hour_limits", "0061_recurring_save_valid_report_rejected", "0062_billing_states", "0063_open_shift_pickup_requires_confirmation", "0064_compliance_hold_history_and_alerts", "0065_office_assignment_authorization_recheck", "0066_compliance_shift_document_risks", "0067_reservation_buckets_and_reconciliation", "0068_authorization_amendment_impacts", "0069_report_export_permission_and_audit", "0070_monthly_chain_report", "0071_authorization_decrease_review_and_delivered_unverified", "0072_export_request_and_generation", "0073_agency_deadlines_and_issue_identity", "0074_client_documents_readiness_holds_audit", "0075_shift_display_states", "0076_agency_performance_audit_report", "0077_attention_counts_and_in_app_notifications", "0078_assignment_outcome_and_limit_messages", "0079_hours_accounting_one_bucket", "0080_attention_counts_one_definition", "0081_review_corrections_pending_closed_cpr_tb", "0082_lineage_lock_all_consumption_paths_review_audit", "0083_owner_hours_reopen_guard_correct_closed", "0084_action_needed_over_limit"];
 let db: TestDb;
 let w: World;
 beforeAll(async () => {
@@ -46,8 +46,8 @@ async function fingerprints() {
   return out;
 }
 
-describe("0059 -> 0083 and back, on a populated database", () => {
-  it("applies 0060-0083 without changing a stored row, reads the old data through the new functions, and rolls back in reverse order keeping the data", async () => {
+describe("0059 -> 0084 and back, on a populated database", () => {
+  it("applies 0060-0084 without changing a stored row, reads the old data through the new functions, and rolls back in reverse order keeping the data", async () => {
     const today = await orgToday(db);
     const iso = (n: number) => new Date(Date.parse(`${today}T12:00:00Z`) + n * 864e5).toISOString().slice(0, 10);
     const iso0 = iso;
@@ -71,7 +71,7 @@ describe("0059 -> 0083 and back, on a populated database", () => {
     const c = await db.admin.connect();
     let applied: string[];
     try { applied = (await migrate(c)).applied.map((x) => x.slice(0, 4)); } finally { c.release(); }
-    expect(applied).toEqual(["0060", "0061", "0062", "0063", "0064", "0065", "0066", "0067", "0068", "0069", "0070", "0071", "0072", "0073", "0074", "0075", "0076", "0077", "0078", "0079", "0080", "0081", "0082", "0083"]);
+    expect(applied).toEqual(["0060", "0061", "0062", "0063", "0064", "0065", "0066", "0067", "0068", "0069", "0070", "0071", "0072", "0073", "0074", "0075", "0076", "0077", "0078", "0079", "0080", "0081", "0082", "0083", "0084"]);
     expect(await fingerprints()).toEqual(before); // nothing stored changed
 
     // old data reads correctly through the new functions
@@ -103,7 +103,7 @@ describe("0059 -> 0083 and back, on a populated database", () => {
     expect(open.shift_id).toBeTruthy();
     // and the upgrade can be applied again
     const c3 = await db.admin.connect();
-    try { expect((await migrate(c3)).applied.map((x) => x.slice(0, 4))).toEqual(["0060", "0061", "0062", "0063", "0064", "0065", "0066", "0067", "0068", "0069", "0070", "0071", "0072", "0073", "0074", "0075", "0076", "0077", "0078", "0079", "0080", "0081", "0082", "0083"]); } finally { c3.release(); }
+    try { expect((await migrate(c3)).applied.map((x) => x.slice(0, 4))).toEqual(["0060", "0061", "0062", "0063", "0064", "0065", "0066", "0067", "0068", "0069", "0070", "0071", "0072", "0073", "0074", "0075", "0076", "0077", "0078", "0079", "0080", "0081", "0082", "0083", "0084"]); } finally { c3.release(); }
     expect((await db.admin.query("select ogevia.visit_billing_state($1) s", [visit])).rows[0].s).toBe("approved_for_billing");
   });
 });

@@ -154,10 +154,11 @@ describe("RULE (c): an overage is WARNED on the server figures every screen read
     expect(Number(home.critical_authorizations)).toBeGreaterThanOrEqual(1);
     const chain = (await q(w.managerA, "select * from ogevia_api.get_monthly_chain_report($1, $2::date, $3)", [w.orgA, monthStart(), f.client]))[0];
     expect(chain).toMatchObject({ hours_over_limit_minutes: 45, hours_left_minutes: -45 });
-    // GAP reported (not built): the Action needed list has no 'over limit' item of its own (only amendment impacts, lowered-authorization reviews and reconciliation)
+    // CHANGED DELIBERATELY (0084, owner decision 2026-10-18): the Action needed list now carries one Urgent 'over_limit' item for this authorization (before 0084 the test pinned that none existed)
     const issues = (await q(w.managerA, "select ogevia_api.list_action_issues($1,null,null,null,$2,null,null,200,0) as r", [w.orgA, f.client]))[0].r;
-    expect(issues).toBeTruthy();
-    expect(JSON.stringify(issues)).not.toMatch(/over_?limit/i);
+    const item = issues.issues.filter((i: any) => i.reason === "over_limit");
+    expect(item).toHaveLength(1);
+    expect(item[0]).toMatchObject({ severity: "urgent", queue: "visit_review", category: "authorization", overLimitMinutes: 45, authorizedMinutes: 600 });
   });
 });
 

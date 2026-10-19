@@ -235,6 +235,7 @@ export function ActionNeededPage() {
       <Disclosure summary="How this list is built">
         <p>Every item has one stable identity, so the same problem is the same issue on Home, Scheduling and here. Two problems on the same visit stay two issues.</p>
         <p className="mt-1">Critical: care is blocked now, or an uncovered shift has started. Urgent: inside the follow-up window or past a deadline.</p>
+        <p className="mt-1">Over the monthly authorization is Urgent, never Critical by itself: all worked time is kept and paid, and the time over the limit is not billed. It clears when the hours are back within the authorization.</p>
         <p className="mt-1">Routine: waiting inside its deadline. Routine items are separate queues and are never added to the action total.</p>
         <p className="mt-1">Nothing here assigns anyone, approves a visit or sends a bill. You decide on the next screen.</p>
       </Disclosure>

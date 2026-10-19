@@ -74,6 +74,7 @@ export const REASON_LABEL: Record<string, string> = {
   documents_not_current: "A required document is not current",
   missing_clock_out: "Still open past the shift end",
   in_progress_on_hold: "Visit in progress for a caregiver on hold",
+  over_limit: "Over the monthly authorization",
 };
 
 export interface Stream {

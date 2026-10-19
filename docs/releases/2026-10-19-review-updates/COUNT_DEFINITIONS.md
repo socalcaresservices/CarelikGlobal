@@ -77,3 +77,21 @@ Web (`apps/web/src/aws/attention-counts-badges.test.tsx`): sidebar badges show t
 - The Pending Confirmation, review and document hint texts name 48 h and 24 h as words. The numbers that decide are server-side.
 - Row actions in the shift list (`editable`, `future`) still compare the shift end and start with the browser clock to decide which buttons to offer. They do not change any count or group.
 - The header badge and the Home tiles read `GET /v1/attention/overview` (their own request); the sidebar badges read `counts`. Both are produced by the server from the same rows and are tested equal; they are two requests, so after a change they can differ for up to one refresh interval (5 minutes), not by definition.
+
+## 8. Over limit in Action needed (migration 0084, owner decision 2026-10-18; implemented and tested locally, NOT deployed)
+Owner hours rule: pay all actual hours worked, warn about overages, never bill beyond the monthly authorized hours. Worked time is kept; the warning is this item.
+| Item | Definition |
+|---|---|
+| What | One issue per authorization lineage, for the agency-local CURRENT month, when committed minutes (Billable + Rounding + Pending + Reserved, the per-authorization Over limit figure of `ogevia.hours_breakdown` / `list_monthly_service_summary`) are greater than Authorized. Never netted across authorizations; exactly at the limit is not an item. Only the current month is listed (an overage in a past month is read in the reports, not here). |
+| Text | `N h over the monthly authorization (A h authorized). Over-limit time cannot be billed; worked time is kept.` The row shows the client and service codes (the issue list is code-only for every kind). The list also returns `overLimitMinutes` and `authorizedMinutes`. |
+| Severity | Urgent. Never Critical by itself (red must not automatically mean Critical). Not to be confused with the authorization tier word "critical" on the client page and in utilisation (a utilisation level, not an issue severity). No deadline, so it has no "Due" time. |
+| Queue and category | Queue Visit review, category Authorization (the existing category and filter; no new queue). |
+| Who sees it | Holders of `visits.read` (owner, manager, scheduler): the permission behind the hours surfaces. Nobody else; a caregiver cannot open the list; another agency never sees it. |
+| Action | "Amend or add an authorization": `/clients/<client>#authorizations` (the client page, Authorizations card). Nothing is changed for the person. |
+| Identity and resolution | Issue key `authorization:over_limit:<stable id of lineage and month>`. Acknowledge/History work as for every issue. It resolves on its own when Over limit returns to 0 (the next list read records it as resolved) and reappears as the SAME issue (reopened) if it recurs. A new month is a new issue. |
+| Counts | Included in Needs action (`get_attention_counts.needsAction` and `list_action_issues.counts.actionNeeded`, Urgent, `byQueue.visit_review`, `urgent`). NOT in Needs attention now, Scheduling, Caregivers or the Approvals exception count (kind authorization, queue Visit review); the legacy `/v1/attention` summary and the overview are unchanged. |
+| Home | "Needs action first" lists it (it is a non-routine issue); "View all (n)" uses the same count. |
+| Notifications | No new mechanism: the existing in-app rule already covers every Urgent issue in Visit review (Urgent notifies per the agency setting, default on; Critical always; routine never). Text is the label "Over the monthly authorization", with the client code. No email, text or push. |
+| Tests | `infra/aws/db/test/over-limit-action-needed.db.test.ts` (item and numbers, boundary, per authorization, identity and reopening, counts equal the list, permissions, notifications), `attention-counts-one-definition.db.test.ts` (needsAction equals the list with the item present), `apps/web/src/aws/action-needed-page.test.tsx` (label, Urgent word, link, category filter). |
+Not done: names instead of codes on this row (the whole issue list is code-only today); an Over limit tile on the Visit review page (that page counts visits).
+

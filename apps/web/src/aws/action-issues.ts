@@ -5,6 +5,8 @@ export interface ActionIssue {
   deadline: string | null; since: string | null; shiftId: string | null; visitId: string | null; entityId: string; caregiverRecordId: string | null; clientId: string | null; serviceId: string | null;
   clientCode: string | null; caregiverCode: string | null; serviceCode: string | null; status: "open"; firstSeenAt: string | null; reopenCount: number | null;
   action: string; recommendedAction: string;
+  /** reason over_limit only (0084): minutes committed above the monthly authorization, and the authorization, for the agency-local month. */
+  overLimitMinutes?: number | null; authorizedMinutes?: number | null;
 }
 export interface IssueList {
   asOf: string; matching: number; limit: number; offset: number;
@@ -17,7 +19,7 @@ export const QUEUE_LABEL: Record<string, string> = {
   ready_for_approval: "Ready for approval", pickup_requests: "Pickup requests", reconciliation: "Shifts to reconcile", authorization_changes: "Authorization changes",
 };
 export const CATEGORY_LABEL: Record<string, string> = { coverage: "Coverage", visits: "Visits", documents: "Documents", compliance: "Compliance", authorization: "Authorization", staffing: "Staffing" };
-export const KIND_LABEL: Record<string, string> = { shift: "Shift", visit: "Visit", document: "Document", caregiver: "Caregiver", pickup_request: "Pickup request", impact: "Authorization change" };
+export const KIND_LABEL: Record<string, string> = { authorization: "Over limit", shift: "Shift", visit: "Visit", document: "Document", caregiver: "Caregiver", pickup_request: "Pickup request", impact: "Authorization change" };
 
 /** Where the primary action goes, with the issue's context in the link. Permissions are still enforced by the server on every request. */
 export function issueDestination(i: ActionIssue): { to: string; label: string } {
@@ -28,6 +30,7 @@ export function issueDestination(i: ActionIssue): { to: string; label: string } 
     case "review_documents": return { to: i.caregiverRecordId ? `/care-team/${i.caregiverRecordId}` : "/documents", label: "Review the documents" };
     case "arrange_coverage": return { to: `/visits/${visit}`, label: "Open the visit" };
     case "review_visit": case "follow_up_confirmation": case "wait_or_resend": case "review_authorization": return { to: `/visits/${visit}`, label: "Open the visit" };
+    case "review_authorization_limit": return { to: i.clientId ? `/clients/${i.clientId}#authorizations` : "/clients", label: "Amend or add an authorization" };
     case "approve_billing": return { to: "/billing-review", label: "Go to billing review" };
     case "confirm_pickup": return { to: `/schedule?pickups=1&shift=${i.shiftId ?? ""}`, label: "Review the request" };
     case "reconcile_shift": return { to: `/schedule?reconcile=1&shift=${i.shiftId ?? i.entityId}${i.since ? `&at=${encodeURIComponent(i.since)}` : ""}`, label: "Reconcile the shift" };
