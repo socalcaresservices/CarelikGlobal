@@ -107,3 +107,31 @@ The owner pasted a summary, not the raw CloudShell output (the saved file `~/prd
 
 ### Next
 Run Part 2 and attach both saved files (`~/prd-inventory-part1.txt`, `~/prd-inventory-part2.txt`) or paste raw output, so this section can be replaced with verified values. Then P1 (a separate, owner-approved read of the `ogevia_prd` ledger).
+
+## 8. Inventory results, Part 2 (OWNER-REPORTED SUMMARY, 2026-10-19)
+Again a summary, not raw output; `~/prd-inventory-part2.txt` was not attached. NOT independently verified.
+
+| Item | Reported | Not reported (still UNKNOWN) |
+|---|---|---|
+| Production web | `https://d3l4psdkokkvnb.cloudfront.net`, `VITE_APP_ENV="production"` | **`VITE_APP_VERSION`; the `execute-api` host the bundle calls** (the two lines that decide "which commit" and "which API") |
+| Lambda | `DB_NAME=ogevia_prd`, `OGEVIA_ENV=prd` | |
+| Stacks | all `UPDATE_COMPLETE`, termination protection on | stack outputs and resources |
+| RDS | available, encrypted, deletion protection, not public | |
+| Cognito | MFA `ON` (pool setting) | which pool/client the production app uses; whether prd shares the TEST pool |
+| CloudTrail | `ogevia-audit-trail`, multi-region true, log validation true | |
+| Budgets | `ogevia phase 1 Budget` | its limit and alert recipients |
+| Secret `ogevia/prd/database/app` metadata | | not reported |
+| Buckets `ogevia-prd-*` (versioning, encryption, public-access block) | | not reported |
+
+### Answers
+1. **Behind TEST.** Code: production Lambda unchanged since 2026-10-10; TEST has since received migrations through 0085 and several handler builds (f6dd9b7, e80b770). Exact distance NOT VERIFIED: the commit and the `ogevia_prd` ledger are unknown. If prd is at the runbook's 38 / 0038 it is 47 migrations behind; if at 46 / 0046, 39 behind. The web build version is not reported.
+2. **Web to production API.** NOT DETERMINED. The bundle's API host was not reported. Pass condition: it contains `zk527zk4ua`; fail: `s0epy5rgzb` (the TEST API).
+3. **Blockers**
+   - B1 state unknown: narrowed. Still open: commit, ledger, DB existence/connectivity, web version and API host, bucket and secret protections.
+   - B2 version gap: open (confirmed direction, size unknown).
+   - B3 shared RDS instance: open (confirmed shared, single-AZ).
+   - B4 shared Cognito pool/client: open (pool unreported).
+   - B5 security gates: partly narrowed. Pool MFA `ON`, CloudTrail multi-region with validation, budget exists (all reported). Still open: administrator MFA sign-in test, tenant isolation and caregiver restriction on prd, signature in prd bucket, restore test, Multi-AZ, bucket protections, budget limit and alerts.
+   - B6 script/approval_ref defects, B7 untested accessibility and phone items, B8 release checklist and owner GO, B9 DNS and reports density: open.
+   - B10 no recorded `pre-prd` snapshot: open.
+4. **Readiness status: NOT READY. NO-GO.** Infrastructure exists and is protected, but production's version, schema, frontend wiring and security gates are unverified and it is far behind the accepted TEST release.
