@@ -10,6 +10,7 @@ import { actionError } from "../readiness/format";
 import { useGuardedMutate } from "../readiness/use-guarded";
 import { PageHeader } from "../ui/page-header";
 import { COMPLIANCE_KEYS, fixLink, useComplianceHolds, type ComplianceHold, riskLabel, type HoldShiftRisk } from "./queries";
+import { clientLabel } from "../name-label";
 
 /** Scheduled shifts whose CPR/TB is expired or expires during the shift. Shown whether or not a hold is open yet. */
 function ShiftRisks({ risks }: { risks: HoldShiftRisk[] }) {
@@ -23,7 +24,7 @@ function ShiftRisks({ risks }: { risks: HoldShiftRisk[] }) {
           {risks.map((r) => (
             <li key={`${r.shiftId}-${r.requirement}`} className="flex flex-wrap items-center justify-between gap-2 py-1">
               <span>
-                <Link className="underline" to={`/care-team/${r.caregiverRecordId}`}>{r.caregiverName}</Link> · {formatDateTime(r.startsAt)} to {formatClockTime(r.endsAt)}{r.clientCode ? ` · client ${r.clientCode}` : ""} · {riskLabel(r)}
+                <Link className="underline" to={`/care-team/${r.caregiverRecordId}`}>{r.caregiverName}</Link> · {formatDateTime(r.startsAt)} to {formatClockTime(r.endsAt)}{clientLabel(r, true) ? ` · ${clientLabel(r, true)}` : ""} · {riskLabel(r)}
                 {r.inProgress ? <strong className="ml-1 text-red-800">In progress{r.visitId ? " (visit open)" : ""}</strong> : null}
                 {r.onHold ? <span className="ml-1 text-slate-600">· caregiver is on hold</span> : null}
               </span>
@@ -53,7 +54,7 @@ function HoldCard({ h }: { h: ComplianceHold }) {
             <p className="font-semibold">A visit is in progress. Arrange safe coverage now.</p>
             <ul className="mt-1 list-disc pl-5">
               {h.inProgressVisits.map((v) => (
-                <li key={v.visitId}>Started {formatDateTime(v.timeIn)}{v.clientCode ? ` · client ${v.clientCode}` : ""}. The visit has not been ended and will not be.</li>
+                <li key={v.visitId}>Started {formatDateTime(v.timeIn)}{clientLabel(v, true) ? ` · ${clientLabel(v, true)}` : ""}. The visit has not been ended and will not be.</li>
               ))}
             </ul>
           </div>
@@ -79,7 +80,7 @@ function HoldCard({ h }: { h: ComplianceHold }) {
             <ul className="mt-1 divide-y divide-slate-100 text-sm">
               {h.affectedShifts.map((s) => (
                 <li key={s.shiftId} className="flex flex-wrap items-center justify-between gap-2 py-1">
-                  <span>{formatDateTime(s.startsAt)} to {formatClockTime(s.endsAt)}{s.clientCode ? ` · client ${s.clientCode}` : ""}{s.seriesId ? " · recurring" : ""}{s.inProgress ? <strong className="ml-1 text-red-800">· in progress now{s.visitId ? " (visit open)" : ""}</strong> : null}</span>
+                  <span>{formatDateTime(s.startsAt)} to {formatClockTime(s.endsAt)}{clientLabel(s, true) ? ` · ${clientLabel(s, true)}` : ""}{s.seriesId ? " · recurring" : ""}{s.inProgress ? <strong className="ml-1 text-red-800">· in progress now{s.visitId ? " (visit open)" : ""}</strong> : null}</span>
                   <Link className="underline" to="/schedule">Open the schedule</Link>
                 </li>
               ))}
@@ -92,7 +93,7 @@ function HoldCard({ h }: { h: ComplianceHold }) {
             <h3 className="text-sm font-semibold text-slate-900">Standing assignments ({h.affectedAssignments.length})</h3>
             <ul className="mt-1 text-sm text-slate-800">
               {h.affectedAssignments.map((a) => (
-                <li key={a.assignmentId}>{a.clientCode ? `Client ${a.clientCode}` : "Client"} · from {formatDateOnly(a.effectiveStart)}{a.effectiveEnd ? ` to ${formatDateOnly(a.effectiveEnd)}` : ""}</li>
+                <li key={a.assignmentId}>{clientLabel(a, true) ?? "Client"} · from {formatDateOnly(a.effectiveStart)}{a.effectiveEnd ? ` to ${formatDateOnly(a.effectiveEnd)}` : ""}</li>
               ))}
             </ul>
           </section>

@@ -99,25 +99,27 @@ describe("the client page: tier, percentage, over-limit amount and the 30-day wa
     "/v1/clients": () => json(200, { clients: [CLIENT_ROW] }),
     "/v1/reports/monthly-service-summary": () => json(200, { services: [{ ...BALANCE, ...b }] }),
   });
-  it("Critical with 100% committed, nothing over: Hours left reads 0 min", async () => {
+  it("Critical with 100% committed, nothing over: ONE figure, 'Hours left' 0 h; the tier badge carries no second balance", async () => {
     page({});
-    expect(await screen.findByTestId("authorization-tier")).toHaveTextContent("Critical · 100% committed");
-    expect(screen.getByText("Hours left")).toBeInTheDocument();
+    expect(await screen.findByTestId("authorization-tier")).toHaveTextContent(/^●Critical$/);
+    expect(screen.getAllByTestId("hours-left-figure")).toHaveLength(1);
+    expect(screen.getByTestId("hours-left-figure")).toHaveTextContent("Hours left: 0 h");
   });
   it("over the limit: the label becomes Over limit and the real amount is shown, not 0", async () => {
     page({ committedMinutes: 1360, remainingMinutes: -360, overLimitMinutes: 360, utilizationPercent: 136 });
-    expect(await screen.findByTestId("authorization-tier")).toHaveTextContent("Critical · 136% committed");
-    expect(screen.getByText("Over limit")).toBeInTheDocument();
-    expect(screen.getByText("6 hr")).toBeInTheDocument();
+    expect(await screen.findByTestId("authorization-tier")).toHaveTextContent(/Critical$/);
+    expect(screen.getAllByTestId("hours-left-figure")).toHaveLength(1);
+    expect(screen.getByTestId("hours-left-figure")).toHaveTextContent("Over limit: 6 h");
+    expect(screen.queryByText("Hours left")).toBeNull();
   });
   it("Near Limit and Healthy carry their own words and symbols; the expiry warning is separate", async () => {
     page({ committedMinutes: 850, remainingMinutes: 150, utilizationPercent: 85, authorizationTier: "near_limit", expiringSoon: true, daysUntilExpiry: 12 });
-    expect(await screen.findByTestId("authorization-tier")).toHaveTextContent("▲Near Limit · 85% committed");
+    expect(await screen.findByTestId("authorization-tier")).toHaveTextContent(/^▲Near Limit$/);
     expect(screen.getByTestId("authorization-expiry")).toHaveTextContent("Ends in 12 days");
   });
   it("Healthy, far from expiry: no warning", async () => {
     page({ committedMinutes: 200, remainingMinutes: 800, utilizationPercent: 20, authorizationTier: "healthy" });
-    expect(await screen.findByTestId("authorization-tier")).toHaveTextContent("✓Healthy · 20% committed");
+    expect(await screen.findByTestId("authorization-tier")).toHaveTextContent(/^✓Healthy$/);
     expect(screen.queryByTestId("authorization-expiry")).toBeNull();
   });
 });

@@ -6,6 +6,8 @@ import { itemTone, rankedItems, REASON_LABEL, TONE, URGENT_WINDOW_HOURS, useAtte
 import { Disclosure } from "./ui/disclosure";
 import { PageHeader } from "./ui/page-header";
 import { StatusChip } from "./ui/status-chip";
+import { actionBtnPrimary } from "./ui-classes";
+import { clientLabel } from "./name-label";
 
 const plural = (n: number, w: string) => `${n} ${w}${n === 1 ? "" : "s"}`;
 const COMPLIANCE_REASONS = new Set(["compliance_hold", "documents_not_current", "in_progress_on_hold"]);
@@ -24,7 +26,7 @@ function UrgentRow({ item, asOf }: { item: UrgentItem; asOf: number }) {
   const tone = itemTone(item, asOf);
   const t = TONE[tone];
   const what = item.kind === "shift" ? "Shift" : "Visit";
-  const who = [item.clientCode, item.serviceCode].filter(Boolean).join(" · ");
+  const who = [clientLabel(item), item.serviceCode].filter(Boolean).join(" · ");
   const compliance = item.reasons.some((r) => COMPLIANCE_REASONS.has(r));
   const link = "inline-flex min-h-[44px] items-center font-semibold text-og-link underline md:min-h-[32px]";
   return (
@@ -95,7 +97,7 @@ export function UpcomingStaffingPage() {
   return (
     <div className="space-y-4">
       <PageHeader title="Upcoming staffing" lead={`Shifts more than ${q.data?.urgentWindowHours ?? URGENT_WINDOW_HOURS} hours away that need a caregiver or have a blocked one.`}
-        action={<Link className="inline-flex min-h-[44px] items-center rounded-lg bg-og-accent px-4 text-sm font-semibold text-og-on-accent hover:opacity-90 md:min-h-[40px]" to="/schedule">Open schedule</Link>} />
+        action={<Link className={actionBtnPrimary} to="/schedule">Open schedule</Link>} />
       <Loading q={q} />
       {q.data?.pickups && q.data.pickups.count > 0 ? (
         <p data-testid="pickup-requests-link" className="rounded-og border border-og-line bg-og-card p-3 text-sm text-og-ink">
@@ -126,7 +128,7 @@ export function UpcomingStaffingPage() {
                 <ul className="mt-1 divide-y divide-og-line rounded-og border border-og-line bg-og-card">
                   {items.map((s) => (
                     <li key={s.shiftId} className="flex flex-wrap items-center justify-between gap-2 px-3 py-2.5 text-sm">
-                      <span className="text-og-ink">{formatClockTime(s.startsAt)}–{formatClockTime(s.endsAt)} · {[s.clientCode, s.serviceName ?? s.serviceCode].filter(Boolean).join(" · ")}</span>
+                      <span className="text-og-ink">{formatClockTime(s.startsAt)}–{formatClockTime(s.endsAt)} · {[clientLabel(s), s.serviceName ?? s.serviceCode].filter(Boolean).join(" · ")}</span>
                       <StatusChip tone="neutral">{UPCOMING_REASON[s.reason] ?? s.reason}</StatusChip>
                     </li>
                   ))}

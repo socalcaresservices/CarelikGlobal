@@ -25,6 +25,7 @@ export function HoursBreakdown({ row, label = "Details" }: { row: HoursFields; l
         ))}
       </dl>
       <p className="mt-1">{HOURS_EQUATION_TEXT}</p>
+      <p className="mt-1">Hours left is worked out for each authorization on its own, for the selected month. Healthy is below 80% of the authorization counted, Near Limit 80% to below 95%, Critical 95% and above (same calculation as the reports).</p>
       {pending.review + pending.held + pending.unreserved > 0 ? (
         <p className="mt-1">{HOURS_NAMES.pending} is {[
           pending.review ? `${formatDuration(pending.review)} counted on visits in review` : null,

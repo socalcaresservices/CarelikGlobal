@@ -5,6 +5,7 @@ import { Link, useParams } from "react-router-dom";
 import { agencyMonth, useAgencyClock } from "./agency-clock";
 import { Button, Card } from "@carelik/ui";
 import { formatDuration, TIER_LABEL, TIER_SYMBOL } from "@/lib/service-verification";
+import { formatHours, hoursLeftLine } from "@/lib/hours-accounting";
 import { newIdempotencyKey } from "@/lib/sv-backend";
 import { useOrganization } from "@/providers/organization-provider";
 import { useAwsApi } from "./aws-workspace";
@@ -21,6 +22,7 @@ import { useDuplicateClients } from "./client-data";
 import { formatDateOnly } from "@/lib/service-verification";
 import { ShortHelp } from "./help-text";
 import { SummarySection } from "./ui/summary-section";
+import { actionBtn, actionBtnPrimary } from "./ui-classes";
 
 const message = (cause: unknown, fallback: string) => (cause instanceof Error ? cause.message : fallback);
 const inputClass = "mt-1 block w-full rounded-lg border border-slate-200 px-3 py-2 text-base";
@@ -71,7 +73,7 @@ function DetailsCard({ c, canManage }: { c: AdminClient; canManage: boolean }) {
   }
   if (!canManage) {
     return (
-      <SummarySection title="Details" summary={`City: ${c.city ?? "—"} · Type: ${c.clientTypeName ?? "—"} · Caregivers see: ${c.caregiverDisplayCode ?? c.clientCode}`}>
+      <SummarySection title="Details" summary={`City: ${c.city ?? "—"} · Type: ${c.clientTypeName ?? "—"} · Code: ${c.clientCode} · Caregivers see: ${c.caregiverDisplayCode ?? c.clientCode}`}>
         <p className="text-sm text-slate-700">Name and contact changes are made by the office.</p>
       </SummarySection>
     );
@@ -83,9 +85,10 @@ function DetailsCard({ c, canManage }: { c: AdminClient; canManage: boolean }) {
           <div><dt className="text-xs text-slate-600">Name</dt><dd>{clientName(c) ?? "Not set"}</dd></div>
           <div><dt className="text-xs text-slate-600">City</dt><dd>{c.city ?? "—"}</dd></div>
           <div><dt className="text-xs text-slate-600">Type</dt><dd>{c.clientTypeName ?? "—"}</dd></div>
+          <div><dt className="text-xs text-slate-600">Client code</dt><dd>{c.clientCode}</dd></div>
           <div><dt className="text-xs text-slate-600">Caregivers see</dt><dd>{c.caregiverDisplayCode ?? c.clientCode}</dd></div>
         </dl>
-        <button type="button" className="mt-2 inline-flex min-h-[44px] items-center text-sm font-semibold text-slate-900 underline" onClick={() => { setEditing(true); setState({ busy: false, error: null, done: false }); }}>Edit details</button>
+        <button type="button" className={`mt-2 ${actionBtn}`} onClick={() => { setEditing(true); setState({ busy: false, error: null, done: false }); }}>Edit details</button>
         {state.done ? <p role="status" className="mt-2 text-sm text-emerald-800">Saved. The change is in the client&apos;s history.</p> : null}
       </SummarySection>
     );
@@ -307,8 +310,8 @@ function LineageCard({ versions, canUpdate, showRate }: { versions: Authorizatio
       <p className="mt-1 text-sm text-slate-800">{formatDuration(head.monthlyAuthorizedMinutes)} per month · {fmtDate(head.periodStart)} to {fmtDate(head.periodEnd)}</p>
       <p className="text-sm text-slate-600">{head.payer}{head.authorizationNumber ? ` · No. ${head.authorizationNumber}` : ""}{showRate && head.hourlyRateCents !== null ? ` · ${formatRate(head.hourlyRateCents)}` : ""}</p>
       {head.versionNumber > 1 && head.changeReason ? <p className="text-xs text-slate-500">Latest change: {head.changeReason}{head.createdByName ? ` (${head.createdByName})` : ""}</p> : null}
-      {canUpdate && head.isCurrent && !amending ? <button type="button" className="mt-2 inline-flex min-h-6 items-center text-sm font-medium text-slate-800 underline [@media(pointer:coarse)]:min-h-[44px]" onClick={() => { setAmending("amend"); setResult(null); }}>Amend</button> : null}
-      {canUpdate && head.isCurrent && !amending && (expired || endingSoon) ? <button type="button" data-testid="renew-authorization" className="ml-3 mt-2 inline-flex min-h-6 items-center text-sm font-semibold text-slate-900 underline [@media(pointer:coarse)]:min-h-[44px]" onClick={() => { setAmending("renew"); setResult(null); }}>Renew…</button> : null}
+      {canUpdate && head.isCurrent && !amending ? <button type="button" className={`mt-2 ${actionBtn}`} onClick={() => { setAmending("amend"); setResult(null); }}>Amend</button> : null}
+      {canUpdate && head.isCurrent && !amending && (expired || endingSoon) ? <button type="button" data-testid="renew-authorization" className={`ml-2 mt-2 ${actionBtnPrimary}`} onClick={() => { setAmending("renew"); setResult(null); }}>Renew…</button> : null}
       {amending ? <AmendForm current={head} renewal={amending === "renew"} onDone={(r) => { setAmending(false); setResult(r); }} /> : null}
       {result ? (
         <div role="status" className="mt-2 rounded-lg bg-emerald-50 p-2 text-sm text-emerald-900">
@@ -360,7 +363,7 @@ function AuthorizationsCard({ clientId }: { clientId: string }) {
   const worst = rows.some((b) => b.authorizationTier === "critical" || leftOf(b) < 0) ? "critical" : rows.some((b) => b.authorizationTier === "near_limit") ? "near_limit" : null;
   const none = versions.data !== undefined && lineages.length === 0;
   const attention = none || worst !== null || rows.some((b) => b.expiringSoon);
-  const left = (b: (typeof rows)[number]) => (leftOf(b) < 0 ? `Over limit ${formatDuration(-leftOf(b))}` : `Hours left ${formatDuration(leftOf(b))}`);
+  const left = (b: (typeof rows)[number]) => hoursLeftLine(leftOf(b)).text;
   return (
     <SummarySection title="Authorizations" defaultOpen hideSummaryWhenOpen
       status={none ? <span className="rounded-full bg-red-100 px-2 py-0.5 text-xs font-semibold text-red-800">None</span> : worst ? <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${worst === "critical" ? "bg-red-100 text-red-800" : "bg-amber-100 text-amber-900"}`}>{worst === "critical" ? "Critical" : "Near limit"}</span> : rows.length > 0 && attention ? <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-semibold text-emerald-900">Ending soon</span> : undefined}
@@ -383,7 +386,7 @@ function AuthorizationsCard({ clientId }: { clientId: string }) {
                   {b.authorizationTier ? (
                     <span data-testid="authorization-tier" className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-semibold ${b.authorizationTier === "critical" ? "bg-red-100 text-red-800" : b.authorizationTier === "near_limit" ? "bg-amber-100 text-amber-900" : "bg-emerald-100 text-emerald-900"}`}>
                       <span aria-hidden="true">{TIER_SYMBOL[b.authorizationTier]}</span>
-                      {TIER_LABEL[b.authorizationTier]}{b.utilizationPercent !== null && b.utilizationPercent !== undefined ? ` · ${b.utilizationPercent}% committed` : ""}
+                      {TIER_LABEL[b.authorizationTier]}
                     </span>
                   ) : null}
                   {b.expiringSoon ? (
@@ -392,19 +395,14 @@ function AuthorizationsCard({ clientId }: { clientId: string }) {
                     </span>
                   ) : null}
                 </div>
-                <dl className="mt-2 grid grid-cols-2 gap-x-4 gap-y-1 text-sm sm:grid-cols-4">
-                  <div><dt className="text-xs text-slate-600">Authorized</dt><dd>{formatDuration(b.authorizedMinutes)}</dd></div>
-                  <div><dt className="text-xs text-slate-600">Billable</dt><dd>{formatDuration(b.hoursBillableMinutes ?? b.billableMinutes)}</dd></div>
-                  <div><dt className="text-xs text-slate-600">Pending</dt><dd>{formatDuration(b.hoursPendingMinutes ?? b.reviewMinutes)}</dd></div>
-                  <div><dt className="text-xs text-slate-600">{leftOf(b) < 0 ? "Over limit" : "Hours left"}</dt><dd className={`font-semibold ${leftOf(b) <= 0 ? "text-red-700" : "text-slate-900"}`}>{leftOf(b) < 0 ? formatDuration(-leftOf(b)) : formatDuration(leftOf(b))}</dd></div>
-                </dl>
+                <p className="mt-2 flex flex-wrap gap-x-6 gap-y-1 text-sm">
+                  <span>Authorized: {formatHours(b.authorizedMinutes)}</span>
+                  <span data-testid="hours-left-figure" className={`font-semibold ${leftOf(b) <= 0 ? "text-red-700" : "text-slate-900"}`}>{hoursLeftLine(leftOf(b)).label}: {hoursLeftLine(leftOf(b)).value}</span>
+                </p>
                 <HoursBreakdown row={b} />
               </li>
             ))}
           </ul>
-          <ShortHelp className="mt-1 text-xs text-slate-600" details="Hours left is worked out for each authorization on its own. Pending is worked time not yet billable (awaiting confirmation or review) and Reserved is scheduled time not yet delivered; the full equation Authorized = Billable + Rounding + Pending + Reserved + Hours left is under each authorization's Details. Healthy is below 80% of the authorization counted, Near Limit 80% to below 95%, Critical 95% and above (same calculation as the reports).">
-            If Hours left is negative, that amount is shown as Over limit.
-          </ShortHelp>
         </div>
       ) : null}
       {versions.isLoading ? <p className="mt-3 text-sm text-slate-500">Loading…</p> : null}
@@ -436,7 +434,7 @@ export function ClientDetailPage() {
       </div>
       <div className="flex flex-wrap items-center gap-3">
         <h1 className="text-xl font-semibold text-slate-950">{clientName(c) ?? "Name not set"}</h1>
-        <span className="text-sm text-slate-500">{c.clientCode}</span>
+        {c.duplicateName ? <span className="text-sm text-slate-500" data-testid="client-code-shared-name">{c.clientCode}</span> : null}
         <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${STATUS_BADGE[c.status]}`}>{STATUS_LABEL[c.status]}</span>
       </div>
       <ClientAlertsCard clientId={c.clientId} />

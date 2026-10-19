@@ -103,3 +103,24 @@ describe("main menu: one current item", () => {
     expect(within(nav).getByRole("link", { name: "My shifts" })).toBeInTheDocument();
   });
 });
+
+describe("main menu hierarchy", () => {
+  it("every item is marked parent or child; parents are bold and aligned, children are indented, regular weight and sit on their own rows under a parent; routes are unchanged", async () => {
+    renderAt("/", "manager");
+    const nav = await screen.findByRole("navigation", { name: "Main" });
+    const levelled = Array.from(nav.querySelectorAll<HTMLElement>("[data-nav-level]"));
+    expect(levelled.length).toBeGreaterThan(8);
+    const parents = levelled.filter((e) => e.dataset.navLevel === "parent");
+    const children = levelled.filter((e) => e.dataset.navLevel === "child");
+    expect(parents.length).toBeGreaterThan(4);
+    expect(children.length).toBeGreaterThan(4);
+    for (const p of parents) { expect(p.className).toMatch(/font-semibold/); expect(p.className).not.toMatch(/\bml-\d/); }
+    for (const c of children) { expect(c.className).toMatch(/ml-6/); expect(c.className).toMatch(/font-normal/); expect(c.className).not.toMatch(/font-medium/); }
+    // a child is its own row: its own list item, after a parent in document order
+    const order = levelled.map((e) => e.dataset.navLevel);
+    expect(order[0]).toBe("parent");
+    for (const c of children) expect(c.closest("li")?.querySelectorAll("a").length).toBe(1);
+    const hrefs = Array.from(nav.querySelectorAll("a")).map((a) => a.getAttribute("href"));
+    for (const h of ["/schedule", "/schedule/shift-requests", "/service-verification/reports?view=exceptions", "/documents", "/clients", "/authorization-impacts", "/care-team/recruiting"]) expect(hrefs).toContain(h);
+  });
+});

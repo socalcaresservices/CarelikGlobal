@@ -11,9 +11,9 @@ import { REASON_SHORT, shiftIssueLabel, todaysVisits, useHomeIssues, useNow } fr
 import type { Shift } from "./schedule-page";
 import { issueClient, issueDestination, KIND_LABEL, SEVERITY_TONE } from "./action-issues";
 import { StatusChip } from "./ui/status-chip";
+import { linkClass } from "./ui-classes";
 
 const LIMIT = 6;
-const linkClass = "inline-flex min-h-[44px] items-center font-semibold text-og-link underline md:min-h-[32px]";
 
 export function TodaysVisits() {
   const api = useAwsApi();

@@ -170,13 +170,19 @@ async function nameDirectory(db: Queryable, org: string) {
   type Named = { name: string; duplicate: boolean };
   const clientsById = new Map<string, Named>();
   const clientsByCode = new Map<string, Named>();
+  const clientsByAlias = new Map<string, Named>();
+  const aliasCount = new Map<string, number>();
   for (const c of clientRows) {
     const name = [c.legalFirstName, c.legalLastName].filter((x) => typeof x === "string" && x !== "").join(" ");
     if (!name) continue;
     const named = { name, duplicate: clientDup.has(String(c.clientId)) };
     clientsById.set(String(c.clientId), named);
     clientsByCode.set(String(c.clientCode), named);
+    // Some rows carry the alias caregivers see (caregiver_display_code) in place of the real code; it identifies a client only when no other client shares it.
+    if (typeof c.caregiverDisplayCode === "string" && c.caregiverDisplayCode) aliasCount.set(c.caregiverDisplayCode, (aliasCount.get(c.caregiverDisplayCode) ?? 0) + 1);
+    if (typeof c.caregiverDisplayCode === "string" && c.caregiverDisplayCode) clientsByAlias.set(c.caregiverDisplayCode, named);
   }
+  for (const [alias, n] of aliasCount) if (n > 1 || clientsByCode.has(alias)) clientsByAlias.delete(alias);
   const cgById = new Map<string, Named>();
   const cgByCode = new Map<string, Named>();
   for (const c of cgRows) {
@@ -186,7 +192,7 @@ async function nameDirectory(db: Queryable, org: string) {
     cgByCode.set(String(c.caregiverCode), named);
   }
   return {
-    client: (id: unknown, code: unknown) => (typeof id === "string" && clientsById.get(id)) || (typeof code === "string" && clientsByCode.get(code)) || null,
+    client: (id: unknown, code: unknown) => (typeof id === "string" && clientsById.get(id)) || (typeof code === "string" && (clientsByCode.get(code) ?? clientsByAlias.get(code))) || null,
     caregiver: (id: unknown, code: unknown) => (typeof id === "string" && cgById.get(id)) || (typeof code === "string" && cgByCode.get(code)) || null,
   };
 }
@@ -197,6 +203,25 @@ function withNames<T extends Record<string, unknown>>(list: T[], dir: Awaited<Re
     const g = dir.caregiver(r.caregiverRecordId, r.caregiverCode);
     return { ...r, ...(c ? { clientName: c.name, duplicateName: c.duplicate } : {}), ...(g ? { caregiverName: g.name, caregiverDuplicateName: g.duplicate } : {}) };
   });
+}
+
+/** Walks a response and adds clientName / duplicateName beside every object that carries a clientCode (or clientId), for administrator lists; the codes stay. */
+function withClientNames<T>(value: T, dir: Awaited<ReturnType<typeof nameDirectory>>): T {
+  const walk = (v: unknown): unknown => {
+    if (Array.isArray(v)) return v.map(walk);
+    if (v && typeof v === "object") {
+      const o = v as Record<string, unknown>;
+      const out: Record<string, unknown> = {};
+      for (const [k, x] of Object.entries(o)) out[k] = walk(x);
+      if (typeof o.clientCode === "string" || typeof o.clientId === "string") {
+        const c = dir.client(o.clientId, o.clientCode);
+        if (c) { out.clientName = c.name; out.duplicateName = c.duplicate; }
+      }
+      return out;
+    }
+    return v;
+  };
+  return walk(value) as T;
 }
 
 /** Adds duplicateName (client) and caregiverDuplicateName to rows that show a name; ids come from the row. */
@@ -880,7 +905,10 @@ export const ROUTES: Record<string, Route> = {
     mutating: false,
     handle: async ({ event, tx }) => {
       const all = (event.queryStringParameters ?? {}).includeAcknowledged === "true";
-      return { impacts: await tx((db) => rows(db, "select * from ogevia_api.list_authorization_amendment_impacts($1, $2)", [orgParam(event), all])) };
+      return { impacts: await tx(async (db) => {
+        const list = await rows(db, "select * from ogevia_api.list_authorization_amendment_impacts($1, $2)", [orgParam(event), all]);
+        return list.length === 0 ? list : withClientNames(list, await nameDirectory(db, orgParam(event)));
+      }) };
     },
   },
 
@@ -1477,7 +1505,12 @@ export const ROUTES: Record<string, Route> = {
   // The administrator's queue (shifts.manage): each waiting request with what would block it now.
   "GET /v1/shift-pickups": {
     mutating: false,
-    handle: async ({ event, tx }) => ({ requests: await tx((db) => rows(db, "select * from ogevia_api.list_shift_pickup_requests($1)", [orgParam(event)])) }),
+    handle: async ({ event, tx }) => ({
+      requests: await tx(async (db) => {
+        const list = await rows(db, "select * from ogevia_api.list_shift_pickup_requests($1)", [orgParam(event)]);
+        return list.length === 0 ? list : withClientNames(list, await nameDirectory(db, orgParam(event)));
+      }),
+    }),
   },
 
   "POST /v1/shift-pickups/{requestId}/confirm": {
@@ -1629,7 +1662,10 @@ export const ROUTES: Record<string, Route> = {
     handle: async ({ event, tx }) => {
       const raw = q(event).urgentHours;
       const hours = raw === undefined || raw === "" ? 48 : wholeNumber(Number(raw), "urgentHours", 1, 168);
-      return { overview: await tx(async (db) => (await first(db, "select ogevia_api.get_attention_overview($1,$2) as o", [orgParam(event), hours])).o) };
+      return { overview: await tx(async (db) => {
+        const o = (await first(db, "select ogevia_api.get_attention_overview($1,$2) as o", [orgParam(event), hours])).o;
+        return o && typeof o === "object" ? withClientNames(o, await nameDirectory(db, orgParam(event))) : o;
+      }) };
     },
   },
 
@@ -1728,7 +1764,12 @@ export const ROUTES: Record<string, Route> = {
 
   "GET /v1/compliance/holds": {
     mutating: false,
-    handle: async ({ event, tx }) => ({ ...(await tx(async (db) => (await first(db, "select ogevia_api.list_compliance_holds($1) as h", [orgParam(event)])).h)) }),
+    handle: async ({ event, tx }) => ({
+      ...(await tx(async (db) => {
+        const h = (await first(db, "select ogevia_api.list_compliance_holds($1) as h", [orgParam(event)])).h;
+        return h && typeof h === "object" ? withClientNames(h, await nameDirectory(db, orgParam(event))) : h;
+      })),
+    }),
   },
 
   // "Check now": re-evaluates this agency once. The scheduled run does the same for every agency.
@@ -2122,7 +2163,10 @@ export const ROUTES: Record<string, Route> = {
       const query = q(event);
       const client = optionalUuid(query.clientId, "clientId");
       const monthStart = date(query.monthStart, "monthStart");
-      return { rows: await tx((db) => rows(db, "select * from ogevia_api.get_monthly_chain_report($1, $2, $3)", [orgParam(event), monthStart, client])) };
+      return { rows: await tx(async (db) => {
+        const list = await rows(db, "select * from ogevia_api.get_monthly_chain_report($1, $2, $3)", [orgParam(event), monthStart, client]);
+        return list.length === 0 ? list : withClientNames(list, await nameDirectory(db, orgParam(event)));
+      }) };
     },
   },
 
@@ -2459,8 +2503,10 @@ export const ROUTES: Record<string, Route> = {
     mutating: false,
     handle: async ({ event, tx }) => {
       const query = q(event);
-      return { units: await tx((db) => rows(db, "select * from ogevia_api.list_billing_rounding_preview($1, $2, $3)",
-        [orgParam(event), date(query.from, "from"), date(query.to, "to")])) };
+      return { units: await tx(async (db) => {
+        const list = await rows(db, "select * from ogevia_api.list_billing_rounding_preview($1, $2, $3)", [orgParam(event), date(query.from, "from"), date(query.to, "to")]);
+        return list.length === 0 ? list : withClientNames(list, await nameDirectory(db, orgParam(event)));
+      }) };
     },
   },
 
@@ -2843,7 +2889,10 @@ export const ROUTES: Record<string, Route> = {
     handle: async ({ event, tx }) => {
       const query = q(event);
       const status = query.status ? oneOf(query.status, "status", CARE_REQUEST_STATUSES) : null;
-      return { requests: await tx((db) => rows(db, "select * from ogevia_api.list_care_requests($1,$2)", [orgParam(event), status])) };
+      return { requests: await tx(async (db) => {
+        const list = await rows(db, "select * from ogevia_api.list_care_requests($1,$2)", [orgParam(event), status]);
+        return list.length === 0 ? list : withClientNames(list, await nameDirectory(db, orgParam(event)));
+      }) };
     },
   },
 
@@ -2903,7 +2952,10 @@ export const ROUTES: Record<string, Route> = {
   "GET /v1/care-portals/clients": {
     mutating: false,
     handle: async ({ event, tx }) => ({
-      clients: await tx((db) => rows(db, "select * from ogevia_api.list_client_portal_options($1)", [orgParam(event)])),
+      clients: await tx(async (db) => {
+        const list = await rows(db, "select * from ogevia_api.list_client_portal_options($1)", [orgParam(event)]);
+        return list.length === 0 ? list : withClientNames(list, await nameDirectory(db, orgParam(event)));
+      }),
     }),
   },
 

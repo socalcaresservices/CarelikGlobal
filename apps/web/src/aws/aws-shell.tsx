@@ -254,9 +254,9 @@ export function AwsShell({ children }: PropsWithChildren) {
   const itemClass = (active: boolean) =>
     cn(
       // Sidebar "Option B": 14px/500 links, 40px rows (44px for coarse pointers), 18px icons with an 8px gap, no accent bar.
-      "flex min-h-[40px] items-center gap-2 rounded-md px-3 py-1.5 text-[14px] leading-5 [@media(pointer:coarse)]:min-h-[44px] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-og-accent",
+      "flex min-h-[36px] items-center gap-2 rounded-md px-3 py-1 text-[14px] leading-5 [@media(pointer:coarse)]:min-h-[44px] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-og-accent",
       collapsed && "justify-center px-0",
-      active ? "bg-og-active font-semibold text-og-accent" : "font-medium text-og-ink hover:bg-og-ink/5",
+      active ? "bg-og-active font-semibold text-og-accent" : "font-semibold text-og-ink hover:bg-og-ink/5",
     );
 
   return (
@@ -330,7 +330,7 @@ export function AwsShell({ children }: PropsWithChildren) {
         <nav id="aws-main-nav" aria-label="Main" className="flex flex-1 flex-col overflow-y-auto px-3 pb-8">
           {groups.map(({ group, links: items }) => (
             // SETUP is pinned to the bottom of the menu.
-            <div key={group} className={cn("first:mt-1", collapsed ? "mt-2" : "mt-4", group === "SETUP" && "mt-auto pt-2")}>
+            <div key={group} className={cn("first:mt-1", collapsed ? "mt-2" : "mt-5", group === "SETUP" && "mt-auto pt-2")}>
               {/* Headings are hidden when collapsed; the links keep their accessible names. */}
               {group === "HOME" || collapsed ? null : (
                 <p className="mx-3 mb-1.5 text-[11px] font-semibold leading-[18px] tracking-[0.08em] text-og-sub" data-testid="nav-group-heading">{group}</p>
@@ -343,7 +343,7 @@ export function AwsShell({ children }: PropsWithChildren) {
                   if (l.heading) {
                     // A section label, not a page: text only (children keep their own links). Hidden when collapsed.
                     return collapsed ? null : (
-                      <li key={`h-${l.label}`} className="mt-2 flex min-h-[32px] items-center gap-2 px-3 text-[14px] font-medium leading-5 text-og-ink" data-testid="nav-section">
+                      <li key={`h-${l.label}`} className="flex min-h-[36px] items-center gap-2 px-3 text-[14px] font-semibold leading-5 text-og-ink" data-testid="nav-section" data-nav-level="parent">
                         <Icon className="h-[18px] w-[18px] shrink-0" aria-hidden="true" />
                         <span className="min-w-0 flex-1 break-words">{l.label}</span>
                       </li>
@@ -362,7 +362,8 @@ export function AwsShell({ children }: PropsWithChildren) {
                         onFocus={(e) => showTip(l.label, e.currentTarget)}
                         onMouseLeave={() => setTip(null)}
                         onBlur={() => setTip(null)}
-                        className={cn(itemClass(active), l.parent && !collapsed && "ml-5 min-h-[34px] py-1 text-[13px] font-normal")}
+                        data-nav-level={l.parent ? "child" : "parent"}
+                        className={cn(itemClass(active), l.parent && !collapsed && "ml-6 min-h-[30px] py-0.5 text-[13px] font-normal [@media(pointer:coarse)]:min-h-[44px]", l.parent && !collapsed && active && "font-semibold")}
                         style={active && l.accent ? { backgroundColor: `color-mix(in srgb, ${l.accent} 8%, transparent)`, color: l.accent } : undefined}
                       >
                         <Icon className="h-[18px] w-[18px] shrink-0" aria-hidden="true" style={l.accent ? { color: l.accent } : undefined} />

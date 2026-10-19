@@ -53,6 +53,20 @@ export const HOURS_TOTAL_NOTE = "On a total, Hours left adds only the authorizat
 
 export const hasHours = (r: HoursFields): boolean => r.hoursLeftMinutes !== undefined && r.hoursLeftMinutes !== null;
 
+/** Hours with one decimal, e.g. 750 min -> "12.5 h", 2400 min -> "40 h". Display only; the exact hours and minutes stay in each Details. */
+export function formatHours(minutes: number): string {
+  const h = Math.round((Math.abs(minutes) / 60) * 10) / 10;
+  return `${Number.isInteger(h) ? h.toFixed(0) : h.toFixed(1)} h`;
+}
+
+/** ONE label and ONE value for one authorization: "Hours left: 12.5 h", or "Over limit: 2.5 h" when negative (never offset against another authorization). */
+export function hoursLeftLine(leftMinutes: number): { label: string; value: string; text: string; over: boolean } {
+  const over = leftMinutes < 0;
+  const label = over ? HOURS_NAMES.over : HOURS_NAMES.left;
+  const value = formatHours(leftMinutes);
+  return { label, value, text: `${label}: ${value}`, over };
+}
+
 /** "Hours left" with its amount, or "Over limit" with the amount over, for ONE authorization. */
 export function hoursLeftFigure(leftMinutes: number): { label: string; value: string; over: boolean } {
   return leftMinutes < 0

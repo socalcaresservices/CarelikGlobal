@@ -6,9 +6,10 @@ import { hoursLeftText, type HoursFields } from "@/lib/hours-accounting";
 import { HoursBreakdown } from "@/components/hours-breakdown";
 import { useOrganization } from "@/providers/organization-provider";
 import { useAwsApi } from "./aws-workspace";
+import { clientLabel } from "./name-label";
 
 export interface ChainRow extends HoursFields {
-  clientId: string; clientCode: string; serviceId: string; serviceCode: string; serviceName: string; authorizationLineageId: string; authorizationVersion: number | null;
+  clientId: string; clientCode: string; clientName?: string | null; duplicateName?: boolean; serviceId: string; serviceCode: string; serviceName: string; authorizationLineageId: string; authorizationVersion: number | null;
   periodStart: string; periodEnd: string; authorizedMinutes: number;
   scheduledMinutes: number; heldReviewMinutes: number; needsReconciliationMinutes: number; reservedMinutes: number;
   workedMinutes: number; confirmedMinutes: number; billableMinutes: number;
@@ -145,7 +146,7 @@ export function MonthlyChainReport({ month }: { month: string }) {
             <tbody className="tabular-nums text-slate-900">
               {rows.map((r) => (
                 <tr key={r.authorizationLineageId} className="border-b border-slate-100 last:border-0">
-                  <th scope="row" className="py-2 pr-3 text-left font-semibold">Client {r.clientCode} · {r.serviceName}</th>
+                  <th scope="row" className="py-2 pr-3 text-left font-semibold">{clientLabel(r, true)} · {r.serviceName}</th>
                   <td className="px-2 py-2 text-right">{m(r.authorizedMinutes)}</td>
                   <td className="px-2 py-2 text-right">{m(r.scheduledMinutes)}</td>
                   <td className="px-2 py-2 text-right">{m(r.heldReviewMinutes)}</td>

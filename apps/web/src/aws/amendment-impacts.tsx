@@ -8,12 +8,13 @@ import { useOrganization } from "@/providers/organization-provider";
 import { useAwsApi } from "./aws-workspace";
 import { useAgencyClock } from "./agency-clock";
 import { PageHeader } from "./ui/page-header";
+import { clientLabel } from "./name-label";
 
 const message = (cause: unknown, fallback: string) => (cause instanceof Error ? cause.message : fallback);
 
 export interface AmendmentImpact {
   impactId: string; createdAt: string; impactKind: "reserved_shift_over_cap" | "reserved_shift_outside_period" | "decrease_now_exceeds" | "increase_may_allow_more" | "visit_over_cap" | "visit_outside_period";
-  clientCode: string; serviceCode: string; serviceName: string; newVersionNumber: number; newMonthlyMinutes: number;
+  clientCode: string; clientName?: string | null; duplicateName?: boolean; serviceCode: string; serviceName: string; newVersionNumber: number; newMonthlyMinutes: number;
   shiftId: string | null; shiftStartsAt: string | null; shiftEndsAt: string | null; visitId: string | null; serviceDate: string; minutes: number | null;
   bucket: string | null; stillApplicable: boolean; acknowledgedAt: string | null; acknowledgedByName: string | null; acknowledgementNote: string | null; amendedByName: string | null;
   visitBillingState: string | null; reviewOpen: boolean | null; detail: Record<string, unknown> | null;
@@ -153,14 +154,14 @@ export function AuthorizationImpactsPage() {
           <li key={g.key} data-testid="amendment-group">
             <Card className="space-y-2 p-3 text-sm">
               <div>
-                <h2 className="text-base font-semibold text-slate-950">Client {g.first.clientCode} · {g.first.serviceName} · version {g.first.newVersionNumber} ({formatDuration(g.first.newMonthlyMinutes)} a month)</h2>
+                <h2 className="text-base font-semibold text-slate-950">{clientLabel(g.first, true)} · {g.first.serviceName} · version {g.first.newVersionNumber} ({formatDuration(g.first.newMonthlyMinutes)} a month)</h2>
                 <p className="text-xs text-slate-600">Amended by {g.first.amendedByName ?? "an administrator"} on {formatDateOnly(g.first.createdAt.slice(0, 10))}. {g.items.length} {g.items.length === 1 ? "item" : "items"} affected.</p>
               </div>
               {narrow ? (
-                <ul className="space-y-2" aria-label={`Items affected, client ${g.first.clientCode} version ${g.first.newVersionNumber}`}>{g.items.map((i) => itemRows(i))}</ul>
+                <ul className="space-y-2" aria-label={`Items affected, ${clientLabel(g.first, true)} version ${g.first.newVersionNumber}`}>{g.items.map((i) => itemRows(i))}</ul>
               ) : (
                 <table className="w-full text-left text-sm">
-                  <caption className="sr-only">Items affected, client {g.first.clientCode} version {g.first.newVersionNumber}</caption>
+                  <caption className="sr-only">Items affected, {clientLabel(g.first, true)} version {g.first.newVersionNumber}</caption>
                   <thead className="text-xs text-slate-600"><tr><th scope="col" className="py-1 pl-2 pr-3 font-medium">Affected</th><th scope="col" className="py-1 pr-3 font-medium">What happened</th><th scope="col" className="py-1 pr-2 text-right font-medium">Action</th></tr></thead>
                   {g.items.map((i) => itemRows(i))}
                 </table>

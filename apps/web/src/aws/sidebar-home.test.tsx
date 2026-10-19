@@ -217,12 +217,12 @@ describe("sidebar: Option B styling contract", () => {
     }
     const current = within(nav).getByRole("link", { name: "Schedule" });
     expect(current).toHaveAttribute("aria-current", "page");
-    for (const c of ["bg-og-active", "text-og-accent", "font-semibold", "rounded-md", "min-h-[40px]", "text-[14px]", "gap-2", "[@media(pointer:coarse)]:min-h-[44px]", "focus-visible:outline-og-accent"]) {
+    for (const c of ["bg-og-active", "text-og-accent", "font-semibold", "rounded-md", "min-h-[36px]", "text-[14px]", "gap-2", "[@media(pointer:coarse)]:min-h-[44px]", "focus-visible:outline-og-accent"]) {
       expect(current.className).toContain(c);
     }
     expect(current.className).not.toMatch(/border-l|before:|shadow-\[inset/); // no vertical accent bar
     const other = within(nav).getByRole("link", { name: "Caregivers" });
-    for (const c of ["text-og-ink", "font-medium", "hover:bg-og-ink/5"]) expect(other.className).toContain(c);
+    for (const c of ["text-og-ink", "font-semibold", "hover:bg-og-ink/5"]) expect(other.className).toContain(c);
     expect(other).not.toHaveAttribute("aria-current");
     // Icons are 18px; long labels wrap rather than clip.
     expect(other.querySelector("svg")!.getAttribute("class")).toContain("h-[18px]");

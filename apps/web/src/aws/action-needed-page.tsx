@@ -13,6 +13,7 @@ import { ShortHelp } from "./help-text";
 import { PageHeader } from "./ui/page-header";
 import type { NotificationSettings } from "./notifications";
 import { StatusChip } from "./ui/status-chip";
+import { linkClass } from "./ui-classes";
 
 const PAGE = 25;
 interface Filters { queue: string; category: string; severity: string; client: string; caregiver: string; service: string }
@@ -20,7 +21,6 @@ const NONE: Filters = { queue: "", category: "", severity: "", client: "", careg
 interface History { state: { status: string; firstSeenAt: string; resolvedAt: string | null; reopenCount: number } | null; events: Array<{ event: string; severity: string | null; occurredAt: string; observedByName: string | null }> }
 interface Settings { confirmationOverdueHours: number; reviewOverdueHours: number; documentReviewOverdueHours: number; defaults: { confirmationOverdueHours: number; reviewOverdueHours: number; documentReviewOverdueHours: number }; history: Array<{ changedAt: string; changedByName: string | null; reason: string }> }
 
-const linkClass = "inline-flex min-h-[44px] items-center font-semibold text-og-link underline md:min-h-[32px]";
 
 /** One compact row: severity, what and what to do, when it is due, one action link; History is a quiet second control. The queue is the group heading, not repeated here. */
 function IssueCard({ issue }: { issue: ActionIssue }) {

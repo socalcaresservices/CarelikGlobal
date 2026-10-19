@@ -1,4 +1,4 @@
-import { formatDuration } from "@/lib/service-verification";
+import { hoursLeftLine } from "@/lib/hours-accounting";
 import { useMonthlyBalances } from "./client-admin";
 
 /**
@@ -19,7 +19,7 @@ export function ShiftAuthorizationContext({ clientId, serviceId, date }: { clien
         const left = b.hoursLeftMinutes ?? b.remainingMinutes;
         return (
           <li key={b.authorizationLineageId}>
-            <span className="font-medium">Authorization:</span> {b.serviceName}, {left < 0 ? `Over limit ${formatDuration(-left)}` : `Hours left ${formatDuration(left)}`} this month
+            <span className="font-medium">{b.serviceName}</span> · <span data-testid="hours-left-figure">{hoursLeftLine(left).text}</span>
           </li>
         );
       })}

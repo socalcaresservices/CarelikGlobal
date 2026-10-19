@@ -8,6 +8,7 @@ import { useAwsApi } from "./aws-workspace";
 import { useServices } from "./client-admin";
 import { formatDateOnly, formatDateTime } from "@/lib/service-verification";
 import { ShortHelp } from "./help-text";
+import { clientLabel } from "./name-label";
 
 
 /**
@@ -27,7 +28,7 @@ type Method = "none" | "nearest" | "up" | "down";
 type Basis = "per_visit" | "daily_total";
 interface Unit {
   unitKind: "visit" | "day"; unitKey: string; visitId: string | null; visitNumber: string | null; visitCount: number; authorizationLineageId: string;
-  clientCode: string; serviceName: string; payer: string; serviceDate: string; workedMinutes: number; billableMinutes: number;
+  clientCode: string; clientName?: string | null; duplicateName?: boolean; serviceName: string; payer: string; serviceDate: string; workedMinutes: number; billableMinutes: number;
   approvedMinutes: number | null; allApproved: boolean; policyVersion: number | null; method: Method; incrementMinutes: number | null; basis: Basis | null;
   proposedMinutes: number; adjustmentMinutes: number; proposedUnits: string | null; cappedByAuthorization: boolean;
   adjustmentId: string | null; adjustedBaseMinutes: number | null; adjustedProposedMinutes: number | null; adjustedMinutes: number | null;
@@ -105,7 +106,7 @@ export function RoundingSection({ from, to, refreshKey }: { from: string; to: st
               <Card className="p-3">
                 <div className="flex flex-wrap items-baseline justify-between gap-2">
                   <p className="text-sm font-medium text-slate-900">
-                    {formatDateOnly(u.serviceDate)} · {u.clientCode} · {u.serviceName} · {u.unitKind === "day" ? `daily total of ${u.visitCount} visit${u.visitCount === 1 ? "" : "s"}` : `visit ${u.visitNumber}`}
+                    {formatDateOnly(u.serviceDate)} · {clientLabel(u)} · {u.serviceName} · {u.unitKind === "day" ? `daily total of ${u.visitCount} visit${u.visitCount === 1 ? "" : "s"}` : `visit ${u.visitNumber}`}
                   </p>
                   <span className="text-xs font-medium text-slate-700">{STATE_LABEL[u.state]}</span>
                 </div>

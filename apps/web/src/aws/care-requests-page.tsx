@@ -7,11 +7,12 @@ import { formatDateTime } from "@/lib/service-verification";
 import { MatchingPanel } from "./readiness/matching-panel";
 import { ShortHelp } from "./help-text";
 import { SummarySection } from "./ui/summary-section";
+import { clientLabel } from "./name-label";
 
 
-type RequestRow = { requestId: string; clientCode: string; serviceCode: string; serviceName: string; startsAt: string; endsAt: string; requestedMinutes: number; status: string; shortNotice: boolean; availableCount: number; awaitingCount: number; assignedCaregiverName: string | null };
+type RequestRow = { requestId: string; clientCode: string; clientName?: string | null; duplicateName?: boolean; serviceCode: string; serviceName: string; startsAt: string; endsAt: string; requestedMinutes: number; status: string; shortNotice: boolean; availableCount: number; awaitingCount: number; assignedCaregiverName: string | null };
 type Offer = { offerId: string; caregiverRecordId: string; caregiverName: string; status: string; respondedAt: string | null };
-type ClientOption = { clientId: string; clientCode: string };
+type ClientOption = { clientId: string; clientCode: string; clientName?: string | null; duplicateName?: boolean };
 type AlertStaff = { userId: string; displayName: string; selected: boolean };
 
 const when = (value: string) => formatDateTime(value);
@@ -113,7 +114,7 @@ export function CareRequestsPage({ api }: { api: AwsApiClient }) {
             {queue.map((r) => (
               <tr key={r.requestId} className="border-t border-slate-100 align-top">
                 <th scope="row" className="py-2 pr-2 text-left font-normal">
-                  <span className="block font-semibold text-slate-950">{r.clientCode} · {r.serviceName}</span>
+                  <span className="block font-semibold text-slate-950">{clientLabel(r)} · {r.serviceName}</span>
                   <span className="block text-slate-700">{when(r.startsAt)} · {duration(r.requestedMinutes)}{r.shortNotice ? <span className="ml-1 font-semibold text-amber-900">short notice</span> : null}</span>
                 </th>
                 <td className="py-2 pr-2"><span className="block capitalize text-slate-900">{r.status.replaceAll("_", " ")}</span><span className="block text-slate-700">{r.availableCount} available · {r.awaitingCount} waiting</span></td>
@@ -141,7 +142,7 @@ export function CareRequestsPage({ api }: { api: AwsApiClient }) {
         <ShortHelp className="text-sm text-slate-600">Create once per family. They bookmark it and request care without calling.</ShortHelp>
         <div className="mt-3 flex flex-wrap gap-2">
           <select aria-label="Client" value={clientId} onChange={(e) => setClientId(e.target.value)} className="min-w-56 rounded-lg border border-slate-200 px-3 py-2 text-base">
-            <option value="">Select client</option>{(clients.data?.clients ?? []).map((c) => <option key={c.clientId} value={c.clientId}>{c.clientCode}</option>)}
+            <option value="">Select client</option>{(clients.data?.clients ?? []).map((c) => <option key={c.clientId} value={c.clientId}>{clientLabel(c)}</option>)}
           </select>
           <Button disabled={!clientId} loading={createPortal.isPending} onClick={() => createPortal.mutate()}>Create request link</Button>
           <Button variant="secondary" disabled={!clientId} loading={revokePortals.isPending} onClick={() => revokePortals.mutate()}>Revoke this client's links</Button>

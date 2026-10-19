@@ -1,6 +1,6 @@
 // The shift's authorization context (service and Hours left from the server's monthly summary) stays visible while a shift is
 // scheduled, and the client page links to Shift requests. SYNTHETIC data only.
-import { screen, waitFor } from "@testing-library/react";
+import { screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup } from "@testing-library/react";
 import { json, renderAws } from "./test-support";
@@ -22,14 +22,15 @@ describe("authorization context in scheduling", () => {
     const { calls } = renderAws(`/schedule?add=1&client=${CLIENT}`, PERMS, handlers(4530));
     const line = await screen.findByTestId("shift-authorization");
     expect(line).toHaveTextContent("Respite Care");
-    expect(line).toHaveTextContent("Hours left 75 hr 30 min");
+    expect(line).toHaveTextContent("Hours left: 75.5 h");
+    expect(within(line).getAllByTestId("hours-left-figure")).toHaveLength(1);
     // The figure is the server's: the request is the monthly summary for the client, not a local calculation.
     expect(calls.some((c) => c.path === "/v1/reports/monthly-service-summary" && c.query.get("clientId") === CLIENT)).toBe(true);
   });
 
   it("an over-limit authorization is named, not shown as zero", async () => {
     renderAws(`/schedule?add=1&client=${CLIENT}`, PERMS, handlers(-90));
-    expect(await screen.findByTestId("shift-authorization")).toHaveTextContent("Over limit 1 hr 30 min");
+    expect(await screen.findByTestId("shift-authorization")).toHaveTextContent("Over limit: 1.5 h");
   });
 
   it("without visits.read there is no figure and no request for it", async () => {

@@ -5,11 +5,12 @@
 import type { ClientMonthSummary } from "@/lib/client-month-summary";
 import type { MonthlyServiceSummaryRow } from "@/lib/sv-backend";
 import { formatDateOnly, formatDuration, formatTimeRange, VISIT_STATUS_LABEL } from "@/lib/service-verification";
+import { formatHours } from "@/lib/hours-accounting";
 
 type LoadState = "loading" | "error" | "ready";
 
 /** One authorization: "Hours left" as a time, or "Over limit" with the amount over (0079); never offset against another authorization. */
-const overOrLeft = (minutes: number) => (minutes < 0 ? `Over limit ${formatDuration(-minutes)}` : formatDuration(minutes));
+const overOrLeft = (minutes: number) => (minutes < 0 ? `Over limit: ${formatHours(-minutes)}` : formatHours(minutes));
 const th = "pb-1 pr-3 font-medium print:pb-0.5 print:pr-2";
 const td = "whitespace-nowrap py-1 pr-3 tabular-nums print:py-0 print:pr-2";
 
@@ -126,7 +127,7 @@ export function CalendarSummary({
                     <td className={td}>{formatDuration(totals.billable)}</td>
                     <td className={td}>{formatDuration(totals.pending)}</td>
                     <td className={td}>{formatDuration(totals.reserved)}</td>
-                    <td className={td}>{formatDuration(totals.remaining)}{totals.over > 0 ? <span className="block text-xs text-red-700">Over limit {formatDuration(totals.over)} (not offset against the hours left)</span> : null}</td>
+                    <td className={td}>{formatHours(totals.remaining)}{totals.over > 0 ? <span className="block text-xs text-red-700">Over limit: {formatHours(totals.over)}</span> : null}</td>
                   </tr>
                 ) : null}
               </tbody>
@@ -207,5 +208,29 @@ export function CalendarSummary({
         </section>
       ) : null}
     </div>
+  );
+}
+
+/**
+ * Above the client monthly calendar: the month's AUTHORISED hours for each service of the selected client, one line per service ("Respite — Authorised: 40 h").
+ * The figures are the server's monthly summary (one row per authorization, an amended authorization counted once); nothing is recomputed here beyond adding the
+ * rows of one service. It is shown once for the month, never inside a day or a shift, and it is not the Hours left breakdown (that stays in Details elsewhere).
+ */
+export function CalendarAuthorizedHours({ rows, state }: { rows: MonthlyServiceSummaryRow[]; state: LoadState }) {
+  if (state === "loading") return <p role="status" className="text-sm text-slate-500 print:hidden" data-testid="authorised-hours-loading">Loading authorised hours…</p>;
+  if (state === "error") return <p role="alert" className="text-sm text-red-700 print:hidden" data-testid="authorised-hours-error">Authorised hours could not be loaded. They are not shown as zero.</p>;
+  const byService = new Map<string, { name: string; minutes: number }>();
+  for (const r of rows) {
+    const cur = byService.get(r.serviceId) ?? { name: r.serviceName, minutes: 0 };
+    byService.set(r.serviceId, { name: cur.name, minutes: cur.minutes + r.authorizedMinutes });
+  }
+  const list = [...byService.values()].sort((a, b) => a.name.localeCompare(b.name));
+  if (list.length === 0) return <p className="text-sm text-slate-600 print:hidden" data-testid="authorised-hours-none">No authorization this month</p>;
+  return (
+    <ul aria-label="Authorised hours by service for the month" className="flex flex-wrap gap-x-6 gap-y-0.5 text-sm text-slate-900 print:hidden" data-testid="authorised-hours">
+      {list.map((s) => (
+        <li key={s.name}><span className="font-medium">{s.name}</span> — Authorised: {formatHours(s.minutes)}</li>
+      ))}
+    </ul>
   );
 }

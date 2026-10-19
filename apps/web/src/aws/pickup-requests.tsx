@@ -7,12 +7,13 @@ import { useOrganization } from "@/providers/organization-provider";
 import { useAwsApi } from "./aws-workspace";
 import { useAgencyClock } from "./agency-clock";
 import { ShortHelp } from "./help-text";
+import { clientLabel } from "./name-label";
 
 const message = (cause: unknown, fallback: string) => (cause instanceof Error ? cause.message : fallback);
 
 /** 0063: a caregiver's request for an open shift. Nothing is assigned until this person confirms; the server re-checks everything at that moment. */
 export interface PickupRequest {
-  requestId: string; shiftId: string; requestedAt: string; startsAt: string; endsAt: string; minutes: number; clientCode: string; serviceName: string | null;
+  requestId: string; shiftId: string; requestedAt: string; startsAt: string; endsAt: string; minutes: number; clientCode: string; clientName?: string | null; duplicateName?: boolean; serviceName: string | null;
   caregiverRecordId: string; caregiverCode: string; caregiverName: string | null; blockers: string[];
 }
 
@@ -69,7 +70,7 @@ export function PickupRequestsPanel({ onDone }: { onDone: (text: string) => void
           <li key={r.requestId} className="p-2 text-sm">
             <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
               <div className="min-w-0">
-                <p className="font-semibold text-slate-950">{when(r.startsAt)}–{time(r.endsAt)} · Client {r.clientCode}{r.serviceName ? ` · ${r.serviceName}` : ""} · {formatDuration(r.minutes)}</p>
+                <p className="font-semibold text-slate-950">{when(r.startsAt)}–{time(r.endsAt)} · {clientLabel(r, true)}{r.serviceName ? ` · ${r.serviceName}` : ""} · {formatDuration(r.minutes)}</p>
                 <p className="text-slate-800">Asked by {r.caregiverName ?? r.caregiverCode} ({r.caregiverCode})</p>
               </div>
               {declining !== r.requestId ? (

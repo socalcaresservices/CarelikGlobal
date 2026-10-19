@@ -53,7 +53,7 @@ import {
 } from "@/lib/sv-backend";
 import { useServiceVerificationBackend } from "@/lib/sv-backend-supabase";
 import { buildClientMonthSummary } from "@/lib/client-month-summary";
-import { CalendarSummary } from "@/components/calendar-summary";
+import { CalendarAuthorizedHours, CalendarSummary } from "@/components/calendar-summary";
 import { useEnvironmentMarker } from "@/aws/environment";
 import { AwsApiContext } from "@/aws/aws-workspace";
 import { MonthlyChainReport } from "@/aws/monthly-chain-report";
@@ -750,6 +750,8 @@ export function ServiceVerificationReportsPage() {
     const row = rows.find((r) => r.client_id === clientFilter);
     return row && row.client_legal_name ? row.client_code : null;
   }, [clientFilter, rows]);
+  // The code is shown beside the name only when another client in the agency has the same name.
+  const selectedClientDuplicate = useMemo(() => !!rows.find((r) => r.client_id === clientFilter)?.client_name_duplicate, [clientFilter, rows]);
   const selectedServiceName = useMemo(
     () => serviceOptions.find(([id]) => id === serviceFilter)?.[1] ?? null,
     [serviceFilter, serviceOptions],
@@ -1974,9 +1976,17 @@ export function ServiceVerificationReportsPage() {
               <div className="mt-4 border-b border-slate-200 pb-3 print:hidden">
                 <p className="font-semibold text-slate-950">
                   {selectedClientName ?? "Selected client"}
-                  {selectedClientCode ? <span className="ml-1 text-sm font-normal text-slate-500">({selectedClientCode})</span> : null}
+                  {selectedClientCode && selectedClientDuplicate ? <span className="ml-1 text-sm font-normal text-slate-500">({selectedClientCode})</span> : null}
                   {" "}· {calendarMonthLabel}
                 </p>
+                {backend.listMonthlyServiceSummary ? (
+                  <div className="mt-1" data-testid="calendar-authorised-hours">
+                    <CalendarAuthorizedHours
+                      rows={monthlyServiceSummaryQuery.data ?? []}
+                      state={monthlyServiceSummaryQuery.isLoading ? "loading" : monthlyServiceSummaryQuery.isError ? "error" : "ready"}
+                    />
+                  </div>
+                ) : null}
                 {calendarVisitsQuery.isError ? (
                   <p role="alert" className="mt-1 text-sm text-red-700">Could not load this month's visits.</p>
                 ) : null}

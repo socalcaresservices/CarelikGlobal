@@ -81,3 +81,24 @@ describe("names-first rows", () => {
     expect(JSON.stringify(other.body)).not.toMatch(/Robin|Alex Lee/);
   });
 });
+
+describe("names on the other administrator lists (route layer, no SQL)", () => {
+  it("the attention overview and the monthly chain report carry client names beside the codes for a manager; a scheduler (no client-name permission) gets none", async () => {
+    const o = await call("GET /v1/attention/overview", w.managerA, { query: { organizationId: w.orgA } });
+    expect(o.status, JSON.stringify(o.body)).toBe(200);
+    const named = JSON.stringify(o.body.overview);
+    expect(named).toMatch(/"clientName":"Dana Sample"/);
+    expect(named).toMatch(/"duplicateName":true/);
+    const month = `${(await orgToday(db)).slice(0, 7)}-01`;
+    const chain = await call("GET /v1/reports/monthly-chain", w.managerA, { query: { organizationId: w.orgA, monthStart: month, clientId: clientA } });
+    expect(chain.status, JSON.stringify(chain.body)).toBe(200);
+    expect(chain.body.rows.length).toBeGreaterThan(0);
+    expect(chain.body.rows[0]).toMatchObject({ clientName: "Robin Unique", duplicateName: false });
+    expect(typeof chain.body.rows[0].clientCode).toBe("string");
+    const s = await call("GET /v1/attention/overview", w.schedulerA, { query: { organizationId: w.orgA } });
+    expect(s.status).toBe(200);
+    expect(JSON.stringify(s.body)).not.toMatch(/Dana|Sample|Robin|Unique/);
+    const other = await call("GET /v1/reports/monthly-chain", w.managerB, { query: { organizationId: w.orgA, monthStart: month, clientId: clientA } });
+    expect(JSON.stringify(other.body)).not.toMatch(/Robin|Unique/);
+  });
+});

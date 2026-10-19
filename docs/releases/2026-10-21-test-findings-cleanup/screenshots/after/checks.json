@@ -1,0 +1,63 @@
+{
+ "desktop-1360-calendar-35cd2a": {
+  "expected": "Respite — Authorised: 50 h",
+  "shown": [
+   "Respite — Authorised: 50 h"
+  ],
+  "match": true
+ },
+ "desktop-1360-calendar-8d5e9d": {
+  "expected": "Personal care — Authorised: 40 h",
+  "shown": [
+   "Personal care — Authorised: 40 h"
+  ],
+  "match": true
+ },
+ "desktop-1360-calendar-8dc8e5": {
+  "expected": "Respite — Authorised: 30 h",
+  "shown": [
+   "Respite — Authorised: 30 h"
+  ],
+  "match": true
+ },
+ "desktop-1360-calendar-6d8254": {
+  "expected": "Respite — Authorised: 25 h",
+  "shown": [
+   "Respite — Authorised: 25 h"
+  ],
+  "match": true
+ },
+ "desktop-1360-before-approve": "○\nAwaiting review",
+ "desktop-1360-saved-message": "Saved. Approved: your name and the time are recorded.",
+ "desktop-1360-after-reload-status": "CPR card\n\nCasey Caregiver\n\nDetails\n\t\n○\nCurrent\t\nView\nReplace\n\n",
+ "desktop-1360-approve-still-offered": 0,
+ "phone-390-emulated-calendar-35cd2a": {
+  "expected": "Respite — Authorised: 50 h",
+  "shown": [
+   "Respite — Authorised: 50 h"
+  ],
+  "match": true
+ },
+ "phone-390-emulated-calendar-8d5e9d": {
+  "expected": "Personal care — Authorised: 40 h",
+  "shown": [
+   "Personal care — Authorised: 40 h"
+  ],
+  "match": true
+ },
+ "phone-390-emulated-calendar-8dc8e5": {
+  "expected": "Respite — Authorised: 30 h",
+  "shown": [
+   "Respite — Authorised: 30 h"
+  ],
+  "match": true
+ },
+ "phone-390-emulated-calendar-6d8254": {
+  "expected": "Respite — Authorised: 25 h",
+  "shown": [
+   "Respite — Authorised: 25 h"
+  ],
+  "match": true
+ },
+ "phone-390-emulated-before-approve": "○\nCurrent"
+}

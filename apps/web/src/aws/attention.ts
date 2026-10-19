@@ -26,9 +26,12 @@ export interface UrgentItem {
   caregiverRecordId: string | null;
   caregiverCode: string | null;
   clientCode: string | null;
+  /** Added by the API for roles that may see client names (route layer); the code stays. */
+  clientName?: string | null;
+  duplicateName?: boolean;
   serviceCode: string | null;
 }
-export interface UpcomingShift { shiftId: string; startsAt: string; endsAt: string; reason: "open" | "called_out" | "compliance_hold" | "documents_not_current"; clientCode: string | null; serviceCode: string | null; serviceName: string | null }
+export interface UpcomingShift { shiftId: string; startsAt: string; endsAt: string; reason: "open" | "called_out" | "compliance_hold" | "documents_not_current"; clientCode: string | null; clientName?: string | null; duplicateName?: boolean; serviceCode: string | null; serviceName: string | null }
 export interface AttentionOverview {
   asOf: string;
   urgentWindowHours: number;

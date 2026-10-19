@@ -52,7 +52,7 @@ export interface CaregiverComplianceState {
   shiftRisks?: ShiftRisk[];
 }
 
-export interface HoldShift { flagId: string; shiftId: string; startsAt: string; endsAt: string; clientCode: string | null; seriesId: string | null; inProgress?: boolean; visitId?: string | null }
+export interface HoldShift { flagId: string; shiftId: string; startsAt: string; endsAt: string; clientCode: string | null; clientName?: string | null; duplicateName?: boolean; seriesId: string | null; inProgress?: boolean; visitId?: string | null }
 /** 0066: a scheduled shift whose CPR/TB is expired, or expires during the shift. Read live; nothing here changes the shift or ends a visit. */
 export interface ShiftRisk {
   shiftId: string;
@@ -64,9 +64,9 @@ export interface ShiftRisk {
   inProgress: boolean;
   visitId: string | null;
 }
-export interface HoldShiftRisk extends ShiftRisk { caregiverRecordId: string; caregiverCode: string; caregiverName: string; clientCode: string | null; onHold: boolean }
-export interface HoldAssignment { flagId: string; assignmentId: string; clientCode: string | null; effectiveStart: string; effectiveEnd: string | null }
-export interface HoldVisit { visitId: string; timeIn: string; clientCode: string | null; shiftId: string | null }
+export interface HoldShiftRisk extends ShiftRisk { caregiverRecordId: string; caregiverCode: string; caregiverName: string; clientCode: string | null; clientName?: string | null; duplicateName?: boolean; onHold: boolean }
+export interface HoldAssignment { flagId: string; assignmentId: string; clientCode: string | null; clientName?: string | null; duplicateName?: boolean; effectiveStart: string; effectiveEnd: string | null }
+export interface HoldVisit { visitId: string; timeIn: string; clientCode: string | null; clientName?: string | null; duplicateName?: boolean; shiftId: string | null }
 export interface ComplianceHold {
   holdId: string;
   caregiverRecordId: string;

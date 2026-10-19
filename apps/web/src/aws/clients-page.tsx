@@ -12,6 +12,7 @@ import { useDuplicateClients } from "./client-data";
 import { nameWithCode } from "./name-label";
 import { clientName, STATUS_BADGE, STATUS_LABEL, useClients, useClientTypes, type AdminClient, type ClientStatus } from "./client-admin";
 import { defaultView, filterClients, hasCurrentAuthorization, readViewPreference, sortClients, WIDE_SCREEN_QUERY, writeViewPreference, type AuthorizationFilter, type ClientSort, type ClientView } from "./client-view";
+import { actionBtn } from "./ui-classes";
 
 const message = (cause: unknown, fallback: string) => (cause instanceof Error ? cause.message : fallback);
 const inputClass = "mt-1 block w-full rounded-lg border border-slate-200 px-3 py-2 text-base";
@@ -48,7 +49,7 @@ export function ClientTypeField({ value, onChange, id }: { value: string; onChan
           <option value="">No type</option>
           {(types.data ?? []).filter((t) => t.isActive || t.clientTypeId === value).map((t) => <option key={t.clientTypeId} value={t.clientTypeId}>{t.name}</option>)}
         </select>
-        <button type="button" className="mt-1 text-sm font-medium text-slate-700 underline" onClick={() => setAdding((a) => !a)}>{adding ? "Cancel" : "Add a type"}</button>
+        <button type="button" className={`mt-1 ${actionBtn}`} onClick={() => setAdding((a) => !a)}>{adding ? "Cancel" : "Add a type"}</button>
       </div>
       {adding ? (
         <div className="mt-2 flex flex-wrap items-end gap-2">

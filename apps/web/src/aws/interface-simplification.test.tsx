@@ -324,8 +324,8 @@ describe("switching background or layout changes presentation only", () => {
   it("Documents: with a typed review reason, a typed due date and a chosen filter, all 8 background and layout combinations keep every word, control, alert, symbol and every unsaved character, on the same elements", async () => {
     const { changeFromElsewhere } = renderApp("/documents", { role: "manager" });
     const card = (await screen.findByText("Training", { selector: "p" })).closest("tbody")!;
-    fireEvent.click(within(card).getByRole("button", { name: "Review" }));
-    const reason = within(card).getByLabelText(/Reason \(required to reject\)/) as HTMLInputElement;
+    fireEvent.click(within(card).getByRole("button", { name: "Reject" }));
+    const reason = within(card).getByLabelText(/Reason for rejecting/) as HTMLInputElement;
     fireEvent.change(reason, { target: { value: "The scan is cut off at the right edge" } });
     const due = screen.getByLabelText(/Due date \(optional\)/) as HTMLInputElement;
     fireEvent.change(due, { target: { value: "2026-11-02" } });
@@ -344,7 +344,7 @@ describe("switching background or layout changes presentation only", () => {
       expect(after.alerts, `${bg}/${layout} alerts`).toEqual(before.alerts);
       expect(after.marks, `${bg}/${layout} symbols`).toEqual(before.marks);
       // the very same elements, still holding what was typed
-      expect(within(screen.getByText("Training", { selector: "p" }).closest("tbody")!).getByLabelText(/Reason \(required to reject\)/)).toBe(reason);
+      expect(within(screen.getByText("Training", { selector: "p" }).closest("tbody")!).getByLabelText(/Reason for rejecting/)).toBe(reason);
       expect(screen.getByLabelText(/Due date \(optional\)/)).toBe(due);
       expect(reason.value).toBe("The scan is cut off at the right edge");
       expect(due.value).toBe("2026-11-02");

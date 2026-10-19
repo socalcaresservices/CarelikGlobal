@@ -13,12 +13,13 @@ import { PageHeader } from "./ui/page-header";
 import { StatusChip } from "./ui/status-chip";
 import { formatDateTime } from "@/lib/service-verification";
 import { ShortHelp } from "./help-text";
+import { actionBtn, actionBtnPrimary, linkClass } from "./ui-classes";
 
 
 const message = (cause: unknown, fallback: string) => (cause instanceof Error ? cause.message : fallback);
 
 /** Upload form: the file is stored and recorded by the server before success is shown. */
-function UploadForm({ doc, onDone }: { doc: StaffDocument; onDone: () => void }) {
+function UploadForm({ doc, onDone }: { doc: StaffDocument; onDone: (savedMessage: string) => void }) {
   const api = useAwsApi();
   const { activeOrganizationId } = useOrganization();
   const [file, setFile] = useState<File | null>(null);
@@ -42,7 +43,7 @@ function UploadForm({ doc, onDone }: { doc: StaffDocument; onDone: () => void })
       );
       key.current = newIdempotencyKey();
       setState({ busy: false, error: null });
-      onDone();
+      onDone("Saved. The file and its dates were stored and recorded by the server.");
     } catch (cause) {
       setState({ busy: false, error: uploadFailureMessage(cause) });
     }
@@ -70,7 +71,7 @@ function UploadForm({ doc, onDone }: { doc: StaffDocument; onDone: () => void })
         </label>
       </div>
       {state.error ? <p role="alert" className="text-sm text-red-700">{state.error}</p> : null}
-      <Button type="submit" className="min-h-[44px] md:min-h-[40px]" disabled={state.busy}>{state.busy ? "Uploading… keep this page open" : "Upload"}</Button>
+      <Button type="submit" className="min-h-[44px] md:min-h-[40px]" disabled={state.busy}>{state.busy ? "Saving… keep this page open" : "Save document"}</Button>
     </form>
   );
 }
@@ -91,88 +92,62 @@ function OpenFileButton({ versionId }: { versionId: string }) {
   }
   return (
     <div>
-      <button type="button" onClick={() => void open()} disabled={state.busy} className="min-h-[44px] rounded-lg border border-og-line px-3 text-sm font-medium text-og-ink hover:bg-og-page md:min-h-[40px]">
+      <button type="button" onClick={() => void open()} disabled={state.busy} className={actionBtn}>
         {state.busy ? "Opening…" : "View"}
       </button>
       {state.error ? <p role="alert" className="mt-1 text-sm text-red-700">{state.error}</p> : null}
       {state.url ? (
         <p className="mt-1 text-sm">
           {state.type?.startsWith("image/") ? <img src={state.url} alt="Uploaded document" className="mt-1 max-h-64 rounded border border-slate-200" /> : null}
-          <a href={state.url} target="_blank" rel="noreferrer" className="text-sky-700 underline">Open in a new tab</a>
+          <a href={state.url} target="_blank" rel="noreferrer" className={linkClass}>Open in a new tab</a>
         </p>
       ) : null}
     </div>
   );
 }
 
-function ReviewControls({ doc, selfReview, onDone }: { doc: StaffDocument; selfReview: boolean; onDone: () => void }) {
+/** Approve / Reject for an authorised reviewer. Approve saves at once; Reject asks for the reason first. The server still decides who may review (self-review, CPR/TB). */
+function useReviewDecision(doc: StaffDocument, onSaved: (savedMessage: string) => void) {
   const api = useAwsApi();
   const [reason, setReason] = useState("");
-  const [choice, setChoice] = useState<"verified" | "rejected" | null>(null);
+  const [rejecting, setRejecting] = useState(false);
   const [state, setState] = useState<{ busy: boolean; error: string | null }>({ busy: false, error: null });
   const key = useRef(newIdempotencyKey());
-  async function decide() {
-    if (!choice) return setState({ busy: false, error: "No decision chosen. Choose Verify or Reject." });
+  async function decide(choice: "verified" | "rejected") {
     if (choice === "rejected" && !reason.trim()) return setState({ busy: false, error: "Reason missing. Enter why it is rejected, so the person knows what to fix." });
     setState({ busy: true, error: null });
     try {
       await api.post(`/v1/document-versions/${encodeURIComponent(doc.latestVersionId!)}/review`, { decision: choice, reason: reason.trim() || null }, { idempotencyKey: key.current });
       key.current = newIdempotencyKey();
       setState({ busy: false, error: null });
-      onDone();
+      setRejecting(false);
+      setReason("");
+      onSaved(choice === "verified" ? "Saved. Approved: your name and the time are recorded." : "Saved. Rejected: the reason is recorded and the person can upload a replacement.");
     } catch (cause) {
       setState({ busy: false, error: message(cause, "The review was not saved. Try again.") });
     }
   }
-  const name = `decision-${doc.documentId}`;
-  return (
-    <div className="space-y-2 rounded-lg bg-slate-50 p-3">
-      <ShortHelp className="text-xs text-slate-600" details="Verifying records your name and the time; it is an administrative check, not legal clearance.">Check the file and its dates, then choose.</ShortHelp>
-      {selfReview ? <p className="text-xs font-semibold text-amber-900">You uploaded this version. Your review is recorded as an Administrator self-review.</p> : null}
-      <fieldset className="flex flex-wrap gap-x-5">
-        <legend className="text-sm font-medium text-slate-700">Decision</legend>
-        <label className="flex min-h-[44px] items-center gap-2 text-sm"><input type="radio" name={name} className="h-5 w-5" checked={choice === "verified"} onChange={() => setChoice("verified")} />Verify</label>
-        <label className="flex min-h-[44px] items-center gap-2 text-sm"><input type="radio" name={name} className="h-5 w-5" checked={choice === "rejected"} onChange={() => setChoice("rejected")} />Reject</label>
-      </fieldset>
-      <label className="block text-sm font-medium text-slate-700">
-        Reason (required to reject)
-        <input value={reason} maxLength={1000} onChange={(e) => setReason(e.target.value)} className="mt-1 block w-full rounded-lg border border-slate-200 px-3 py-2 text-sm" />
-      </label>
-      {state.error ? <p role="alert" className="text-sm text-red-700">{state.error}</p> : null}
-      <Button type="button" className="min-h-[44px] md:min-h-[40px]" disabled={state.busy} onClick={() => void decide()}>Save decision</Button>
-    </div>
-  );
+  return { reason, setReason, rejecting, setRejecting, busy: state.busy, error: state.error, approve: () => decide("verified"), reject: () => decide("rejected") };
 }
 
 function DocumentRows({ d, canManage, canUpload, canReviewOwn, canReview, refresh }: { d: StaffDocument; canManage: boolean; canUpload: boolean; canReviewOwn: boolean; canReview: boolean; refresh: () => void }) {
-  const [mode, setMode] = useState<"upload" | "review" | null>(null);
+  const [mode, setMode] = useState<"upload" | null>(null);
+  // Shown until the next action so a saved upload or decision is never silent (the status chip also changes on refresh).
+  const [saved, setSaved] = useState<string | null>(null);
+  const review = useReviewDecision(d, (m) => { setSaved(m); refresh(); });
   const line = documentDateLine(d);
   const status = documentStatusLabel(d);
   const uploadLabel = d.latestVersionId ? "Replace" : canManage ? "Upload for them" : "Upload";
   const awaiting = canManage && d.latestReviewStatus === "awaiting_review";
   const reviewable = awaiting && canReview && !(d.latestUploadedByMe && !canReviewOwn);
-  const btn = "min-h-[44px] rounded-lg border border-og-line px-3 text-sm font-medium text-og-ink hover:bg-og-page md:min-h-[36px]";
+  const btn = actionBtn;
+  const hasExtra = !!(saved || review.error || mode || (reviewable && review.rejecting) || (d.latestReviewStatus === "rejected" && d.latestRejectionReason) || (awaiting && (!canReview || d.latestUploadedByMe)));
   return (
     <tbody className="border-t border-og-line">
-      <tr className="align-top">
-        <th scope="row" className="py-2 pr-2 text-left font-normal">
+      <tr className="block align-top md:table-row">
+        <th scope="row" className="block py-2 pr-2 text-left font-normal md:table-cell">
           <p className="font-semibold text-og-ink">{d.documentTypeName}</p>
           {canManage ? <p className="text-sm text-og-sub">{d.personName}</p> : null}
-        </th>
-        <td className="py-2 pr-2"><StatusChip tone={status.tone}>{status.label}</StatusChip></td>
-        <td className="py-2">
-          <div className="flex flex-wrap items-center justify-end gap-2">
-            {reviewable ? <button type="button" aria-expanded={mode === "review"} onClick={() => setMode(mode === "review" ? null : "review")} className={`${btn} bg-og-accent text-og-on-accent`}>{mode === "review" ? "Close" : "Review"}</button> : null}
-            {d.latestVersionId ? <OpenFileButton versionId={d.latestVersionId} /> : null}
-            {canUpload ? <button type="button" aria-expanded={mode === "upload"} onClick={() => setMode(mode === "upload" ? null : "upload")} className={btn}>{mode === "upload" ? "Cancel" : uploadLabel}</button> : null}
-          </div>
-        </td>
-      </tr>
-      <tr>
-        <td colSpan={3} className="pb-2">
-          {d.latestReviewStatus === "rejected" && d.latestRejectionReason ? <p className="text-sm text-amber-900">Rejected: {d.latestRejectionReason}</p> : null}
-          {awaiting && !canReview ? <p className="text-sm text-og-sub">Required CPR and TB records need Administrator verification. Review controls appear only after the requirement rules are loaded.</p> : null}
-          {awaiting && canReview && d.latestUploadedByMe && !canReviewOwn ? <p className="rounded-lg bg-og-page p-2 text-sm text-og-sub">You uploaded this version, so the Administrator or another manager must review it.</p> : null}
           <Disclosure summary="Details">
             <dl className="space-y-1 text-xs">
               {line ? <div><dt className="inline font-semibold text-og-ink">Date: </dt><dd className="inline">{line}</dd></div> : null}
@@ -182,12 +157,41 @@ function DocumentRows({ d, canManage, canUpload, canReviewOwn, canReview, refres
               {d.currencyStatus === "no_expiry_required" ? <div>This document type has no expiry date.</div> : null}
               {!d.latestUploadedAt && !line ? <div>Nothing uploaded yet.</div> : null}
               <div>Earlier versions are kept; a replacement never overwrites them.</div>
+              <div>Approving records your name and the time; it is an administrative check, not legal clearance.</div>
             </dl>
           </Disclosure>
-          {mode === "upload" ? <UploadForm doc={d} onDone={() => { setMode(null); refresh(); }} /> : null}
-          {mode === "review" && reviewable ? <ReviewControls doc={d} selfReview={!!d.latestUploadedByMe} onDone={() => { setMode(null); refresh(); }} /> : null}
+        </th>
+        <td className="block pb-1 md:table-cell md:py-2 md:pr-2"><StatusChip tone={status.tone}>{status.label}</StatusChip></td>
+        <td className="block pb-2 md:table-cell md:py-2">
+          <div className="flex flex-wrap items-center gap-2 md:justify-end">
+            {reviewable && !review.rejecting ? <button type="button" disabled={review.busy} onClick={() => { setSaved(null); void review.approve(); }} className={actionBtnPrimary}>{review.busy ? "Saving…" : "Approve"}</button> : null}
+            {reviewable && !review.rejecting ? <button type="button" disabled={review.busy} onClick={() => { setSaved(null); review.setRejecting(true); }} className={btn}>Reject</button> : null}
+            {d.latestVersionId ? <OpenFileButton versionId={d.latestVersionId} /> : null}
+            {canUpload ? <button type="button" aria-expanded={mode === "upload"} onClick={() => { setSaved(null); setMode(mode === "upload" ? null : "upload"); }} className={btn}>{mode === "upload" ? "Cancel" : uploadLabel}</button> : null}
+          </div>
         </td>
       </tr>
+      {hasExtra ? <tr>
+        <td colSpan={3} className="pb-2">
+          {d.latestReviewStatus === "rejected" && d.latestRejectionReason ? <p className="text-sm text-amber-900">Rejected: {d.latestRejectionReason}</p> : null}
+          {awaiting && !canReview ? <p className="text-sm text-og-sub">Required CPR and TB records need Administrator verification. Review controls appear only after the requirement rules are loaded.</p> : null}
+          {reviewable && d.latestUploadedByMe ? <p className="text-xs font-semibold text-amber-900">You uploaded this version. Your approval is recorded as an Administrator self-review.</p> : null}
+          {awaiting && canReview && d.latestUploadedByMe && !canReviewOwn ? <p className="rounded-lg bg-og-page p-2 text-sm text-og-sub">You uploaded this version, so the Administrator or another manager must review it.</p> : null}
+          {mode === "upload" ? <UploadForm doc={d} onDone={(m) => { setMode(null); setSaved(m); refresh(); }} /> : null}
+          {reviewable && review.rejecting ? (
+            <form onSubmit={(e) => { e.preventDefault(); void review.reject(); }} className="mt-2 flex flex-wrap items-end gap-2 rounded-lg bg-slate-50 p-3">
+              <label className="min-w-[12rem] flex-1 text-sm font-medium text-slate-700">
+                Reason for rejecting (required)
+                <input value={review.reason} maxLength={1000} onChange={(e) => review.setReason(e.target.value)} className="mt-1 block w-full rounded-lg border border-slate-200 px-3 py-2 text-sm" />
+              </label>
+              <Button type="submit" className="min-h-[44px] md:min-h-[40px]" disabled={review.busy}>{review.busy ? "Saving…" : "Save rejection"}</Button>
+              <button type="button" className={btn} onClick={() => { review.setRejecting(false); review.setReason(""); }}>Cancel</button>
+            </form>
+          ) : null}
+          {review.error ? <p role="alert" className="mt-1 text-sm text-red-700">{review.error}</p> : null}
+          {saved ? <p role="status" className="mt-1 text-sm font-medium text-emerald-800" data-testid="document-saved">{saved}</p> : null}
+        </td>
+      </tr> : null}
     </tbody>
   );
 }
@@ -430,7 +434,7 @@ export function DocumentsPage() {
       {shown.length > 0 ? (
       <table className="w-full text-sm" aria-label="Documents">
         <thead>
-          <tr className="text-left text-xs uppercase tracking-wide text-og-sub">
+          <tr className="hidden text-left text-xs uppercase tracking-wide text-og-sub md:table-row">
             <th scope="col" className="py-1 pr-2 font-semibold">Document</th>
             <th scope="col" className="py-1 pr-2 font-semibold">Status</th>
             <th scope="col" className="py-1 text-right font-semibold">Action</th>

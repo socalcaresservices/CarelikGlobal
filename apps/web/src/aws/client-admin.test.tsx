@@ -152,7 +152,7 @@ describe("Clients screens", () => {
     renderAt(`/clients/${CLIENT}`, "manager");
     expect(await screen.findByRole("heading", { name: "Synthetic Client Alpha" })).toBeInTheDocument();
     const balances = await screen.findByRole("list", { name: /Authorized, used and remaining/ });
-    expect(within(balances).getByText("17 hr")).toBeInTheDocument();
+    expect(within(balances).getByTestId("hours-left-figure")).toHaveTextContent("Hours left: 17 h");
     expect(await screen.findByText(/30 hr per month/)).toBeInTheDocument();
     expect(screen.queryByText(/\/hr/)).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Add authorization" }));
