@@ -65,3 +65,18 @@ Scripts: R0 preflight (read-only, also checks the CLI knows the 11 restore param
 Tests (14, all passing on PostgreSQL 16 with a mocked aws): package manifest and counts; R0 read-only; R1 window, phrase, wrong instance, unencrypted; R2 own group, no production change, endpoint and tag guards; R3 login failure, baseline, drift detection; R4 hash, tamper, phrase and resume refusals, failure at 0050 leaves the ledger at 0049 and `--resume` finishes; psql-applied schema equals the repository runner's (all keys and digests) and the SQL fingerprint equals the TypeScript one; R5 pass and detection of a changed row count and an extra column; R6 hash and phrase refusals and a full rollback to 46|0046 with the schema equal to the baseline except the 11 kept objects; R8 plan, tag and phrase refusals, deletion only of the tagged copy and its group; across the run no call touched production, the shared security group, or any service outside rds/ec2/ssm/secretsmanager/sts.
 Defects the tests caught and fixed: the master-secret ARN check rejected `!` (RDS-managed secret ARNs look like `rds!db-...`).
 NOT verified: any AWS run; the master credential on a restored copy; the fingerprint SQL on PostgreSQL 18.3; password rejection (the sandbox accepts any password); eslint of the new TypeScript and shell files.
+
+## 8. R0 preflight result (OWNER-PASTED RAW OUTPUT, 2026-10-20 01:22Z)
+Package verified in CloudShell first: tarball sha256 `ce4bf51c...a2b8` matched, `MANIFEST OK`, BUILD_INFO source commit `20835646...` tree clean. R0 then printed `R0 PASSED ... Nothing was changed.`
+| Fact | Value |
+|---|---|
+| Account / region | 300094796789, us-west-2 |
+| Production instance | `ogevia-prod-postgres`: db.t4g.micro, PostgreSQL 18.3, 20 GB gp3, single-AZ, subnet group `ogevia-prod-data-layer-dbsubnetgroup-brcfuj6jmuzg`, parameter group `default.postgres18` |
+| Preconditions checked by the script | available, not public, encrypted, only security group `sg-00530a1f4f7648e65` (all passed; the script stops otherwise) |
+| Admin host | `i-0ce8db2d7e5839dd5` at 10.20.132.179 in `vpc-0ee9df0c38297cbc1`, one interface, one private IP, same VPC as the database |
+| Manual snapshots of the instance | **11** |
+| Leftover rehearsal instances | none reported |
+| AWS CLI | knows all 11 restore parameters the package uses (the flags are now checked against the live CLI) |
+| Cost | 0.528 USD per day of instance time at the cost-model rate; 20 GB storage and snapshot charges not computed (pricing not checked) |
+Correction: the 2026-10-19 inventory summary listed four manual snapshots and led to blocker B10 ("no `pre-prd` snapshot recorded"). R0 counts eleven. The earlier summary was incomplete, so B10 is NOT established either way until the eleven snapshot names are listed.
+Still unknown before R2: whether the restored copy accepts the source master credential; the live storage/snapshot prices; the release window for R1.

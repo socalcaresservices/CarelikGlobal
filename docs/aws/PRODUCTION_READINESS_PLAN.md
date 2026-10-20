@@ -230,3 +230,6 @@ See "Update 2026-10-20" in `ROLLBACK_SCRIPTS_REVIEW_0047_0085.md`. New: `rollbac
 
 ## 17. Rehearsal package built (2026-10-20; local only)
 `docs/releases/2026-10-19-prd-readiness/package/ogevia-prd-rehearsal.tar.gz`; details in section 7 of `REHEARSAL_PLAN.md`. 14 mock-AWS tests with real local PostgreSQL passed. Nothing has run against AWS. Approvals still needed to use it: the R1 snapshot, the R2 restore (cost), the rollback rehearsal, and the R8 deletion (RED), each at the time; also the non-PHI row-count read from R0 is not part of the package.
+
+## 18. R0 run (2026-10-20): passed; blocker B10 corrected
+See section 8 of `REHEARSAL_PLAN.md`. R0 passed in CloudShell with the verified package (read-only, nothing changed). The production instance facts are now owner-pasted raw output (db.t4g.micro, PostgreSQL 18.3, 20 GB gp3, single-AZ, default.postgres18). R0 counts 11 manual snapshots, not the 4 reported on 2026-10-19, so the statement that no `pre-prd` snapshot exists is withdrawn until the names are listed. Next gates: owner decisions (release window, rollback rehearsal, row-count read, snapshot retention) and approval of R1.
