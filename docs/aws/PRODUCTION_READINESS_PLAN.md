@@ -239,3 +239,6 @@ A `pre-prd` snapshot exists: `ogevia-prod-postgres-pre-prd-20261010` (2026-10-10
 
 ## 20. Snapshot inventory completed (2026-10-20)
 Eleven manual snapshots listed in full (section 10 of `REHEARSAL_PLAN.md`). Two `pre-prd` snapshots exist (2026-10-08, 2026-10-10), both pre-deployment. B10 (no snapshot of the current production state) stands. Open owner decision: a retention rule for the eleven snapshots.
+
+## 21. R1 done (2026-10-20)
+Rehearsal snapshot `ogevia-prod-postgres-pre-rehearsal-202610200131` created and verified (owner-reported summary; see section 11 of `REHEARSAL_PLAN.md`). One new manual snapshot is the only AWS change so far in the rehearsal. Next: R2 restore, awaiting approval.
