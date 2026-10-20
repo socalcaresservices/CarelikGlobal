@@ -237,6 +237,71 @@ describe("D1 production migration executor (real PostgreSQL, mocked AWS)", () =>
   });
 });
 
+describe("F1 owner transition (real PostgreSQL, mocked AWS)", () => {
+  const OLD = "bbbbbbbb-1111-4111-8111-bbbbbbbbbbbb", NEW = "aaaaaaaa-2222-4222-8222-aaaaaaaaaaaa", MGR = "cccccccc-3333-4333-8333-cccccccccccc";
+  const f1 = (extra: Record<string, string> = {}) => ({ OGEVIA_DEPLOY_APPROVAL: REF, OGEVIA_EXPECT_HOST_IP: HOSTIP, OGEVIA_NEW_OWNER_EMAIL: "new@example.org", OGEVIA_OLD_OWNER_EMAIL: "old@example.org", OGEVIA_NEW_OWNER_NAME: "New Admin", ...extra });
+  const setCog = (o: Record<string, unknown>) => writeFileSync(join(MOCK, "cognito-users.json"), JSON.stringify(o));
+  const users = (newStatus = "CONFIRMED", newEnabled = true) => ({ "new@example.org": { sub: NEW, status: newStatus, enabled: newEnabled }, "old@example.org": { sub: OLD, status: "CONFIRMED", enabled: true }, "mgr@example.org": { sub: MGR, status: "CONFIRMED", enabled: true } });
+  async function q(sql: string): Promise<any[]> { const c = await dbClient("ogevia_prd"); try { return (await c.query(sql)).rows; } finally { await c.end(); } }
+  it("refuses bad input before opening any window, and stops (window restored) when the organization is absent", async () => {
+    setCog(users()); clearLogs(); const sg0 = sgFile();
+    for (const [env, text] of [[{ OGEVIA_NEW_OWNER_EMAIL: "nope" }, "new owner's email"], [{ OGEVIA_DEPLOY_APPROVAL: "x" }, "approval reference"], [{ OGEVIA_NEW_OWNER_EMAIL: "old@example.org" }, "same"]] as [Record<string, string>, string][]) { const r = await run("f1-owner-transition-prd.sh", ["grant"], f1(env), "OPEN-5432-WINDOW-OWNER-GRANT\n"); expect(r.code, `${text}: ${r.out}`).toBe(1); expect(r.out).toContain(text); }
+    const u = await run("f1-owner-transition-prd.sh", ["retire"], f1({ OGEVIA_OLD_OWNER_EMAIL: "" })); expect(u.code).toBe(1); expect(u.out).toContain("OGEVIA_OLD_OWNER_EMAIL");
+    expect((await run("f1-owner-transition-prd.sh", [])).code).toBe(2); expect(writes()).toBe("");
+    const r = await run("f1-owner-transition-prd.sh", ["inspect"], f1(), "OPEN-5432-WINDOW-OWNER-INSPECT\n"); expect(r.code, r.out).toBe(1); expect(r.out).toContain("not present exactly once"); expect(r.out).toContain("RESTORED (verified)"); expect(sgFile()).toBe(sg0);
+  });
+  it("inspect shows memberships and the NEW/OLD markers and changes nothing", async () => {
+    const c = await dbClient("ogevia_prd");
+    try {
+      await c.query("insert into ogevia.organizations (slug, display_name, timezone) values ('socal-care-services', 'SoCal Care Services', 'America/Los_Angeles')");
+      await c.query("insert into ogevia.app_users (cognito_sub, display_name) values ($1, 'Old Admin'), ($2, 'A Manager')", [OLD, MGR]);
+      await c.query("insert into ogevia.organization_memberships (organization_id, user_id, role, status) select o.id, u.id, case when u.cognito_sub = $1 then 'organization_owner'::ogevia.system_role else 'manager'::ogevia.system_role end, 'active' from ogevia.organizations o, ogevia.app_users u where o.slug = 'socal-care-services' and u.cognito_sub in ($1, $2)", [OLD, MGR]);
+    } finally { await c.end(); }
+    clearLogs(); const before = JSON.stringify(await q("select * from ogevia.organization_memberships order by id")); const sg0 = sgFile();
+    const r = await run("f1-owner-transition-prd.sh", ["inspect"], f1(), "OPEN-5432-WINDOW-OWNER-INSPECT\n"); expect(r.code, r.out).toBe(0);
+    expect(r.out).toContain("organization_owner\tactive\tOld Admin"); expect(r.out).toContain("OLD"); expect(r.out).toContain("active owners: 1"); expect(r.out).toContain("INSPECT DONE. New owner membership: none");
+    expect(JSON.stringify(await q("select * from ogevia.organization_memberships order by id"))).toBe(before); expect(sgFile()).toBe(sg0);
+    expect(writes()).not.toContain("secret read\nsecret read"); expect(calls()).toContain("cognito-idp admin-get-user");
+  });
+  it("grant refuses an unconfirmed or disabled Cognito account, a wrong phrase, and a new sign-in that already has a non-owner membership", async () => {
+    clearLogs(); setCog(users("FORCE_CHANGE_PASSWORD")); const a = await run("f1-owner-transition-prd.sh", ["grant"], f1(), "OPEN-5432-WINDOW-OWNER-GRANT\n"); expect(a.code).toBe(1); expect(a.out).toContain("CONFIRMED and enabled");
+    setCog(users("CONFIRMED", false)); const b = await run("f1-owner-transition-prd.sh", ["grant"], f1(), "OPEN-5432-WINDOW-OWNER-GRANT\n"); expect(b.code).toBe(1); expect(b.out).toContain("CONFIRMED and enabled");
+    setCog(users()); const d = await run("f1-owner-transition-prd.sh", ["grant"], f1(), "yes\n"); expect(d.code).toBe(0); expect(d.out).toContain("Declined"); expect(writes()).toBe("");
+    const m = await run("f1-owner-transition-prd.sh", ["grant"], f1({ OGEVIA_NEW_OWNER_EMAIL: "mgr@example.org" }), "OPEN-5432-WINDOW-OWNER-GRANT\n"); expect(m.code).toBe(1); expect(m.out).toContain("already has a membership (manager|active)");
+    expect(await q("select 1 from ogevia.app_users where cognito_sub = '" + NEW + "'")).toHaveLength(0);
+  });
+  it("retire refuses while the NEW sign-in is not an active owner (nothing changes)", async () => {
+    clearLogs(); const r = await run("f1-owner-transition-prd.sh", ["retire"], f1(), "OPEN-5432-WINDOW-OWNER-RETIRE\n"); expect(r.code).toBe(1); expect(r.out).toContain("not an ACTIVE owner");
+    expect((await q("select m.status::text s from ogevia.organization_memberships m join ogevia.app_users u on u.id = m.user_id where u.cognito_sub = '" + OLD + "'"))[0].s).toBe("active");
+  });
+  it("grant adds the new owner (app user, active organization_owner, audit event), restores the group, and is idempotent", async () => {
+    clearLogs(); const sg0 = sgFile();
+    const r = await run("f1-owner-transition-prd.sh", ["grant"], f1(), "OPEN-5432-WINDOW-OWNER-GRANT\n"); expect(r.code, r.out).toBe(0);
+    expect(r.out).toContain("GRANTED"); expect(r.out).toContain("active owners: 2"); expect(r.out).toContain("RESTORED (verified)"); expect(sgFile()).toBe(sg0);
+    const m = await q("select m.role::text r, m.status::text s, u.display_name n from ogevia.organization_memberships m join ogevia.app_users u on u.id = m.user_id where u.cognito_sub = '" + NEW + "'"); expect(m).toEqual([{ r: "organization_owner", s: "active", n: "New Admin" }]);
+    const a = await q("select action, after_state->>'approval' ap from ogevia.audit_events where action = 'organization.owner_added'"); expect(a).toEqual([{ action: "organization.owner_added", ap: REF }]);
+    const again = await run("f1-owner-transition-prd.sh", ["grant"], f1(), "OPEN-5432-WINDOW-OWNER-GRANT\n"); expect(again.code).toBe(0); expect(again.out).toContain("already an ACTIVE organization_owner");
+    expect(await q("select 1 from ogevia.audit_events where action = 'organization.owner_added'")).toHaveLength(1);
+  });
+  it("retire suspends only the old membership (reversible, Cognito untouched), audits it, and is idempotent; the new owner remains active", async () => {
+    clearLogs(); const sg0 = sgFile();
+    const r = await run("f1-owner-transition-prd.sh", ["retire"], f1(), "OPEN-5432-WINDOW-OWNER-RETIRE\n"); expect(r.code, r.out).toBe(0);
+    expect(r.out).toContain("RETIRED"); expect(r.out).toContain("active owners: 1"); expect(sgFile()).toBe(sg0);
+    const rows = await q("select u.cognito_sub sub, m.status::text s from ogevia.organization_memberships m join ogevia.app_users u on u.id = m.user_id order by u.cognito_sub"); expect(rows).toEqual([{ sub: NEW, s: "active" }, { sub: OLD, s: "suspended" }, { sub: MGR, s: "active" }]);
+    expect((await q("select status from ogevia.app_users where cognito_sub = '" + OLD + "'"))[0].status).toBe("active");
+    expect((await q("select after_state->>'status' st from ogevia.audit_events where action = 'organization.owner_retired'"))).toEqual([{ st: "suspended" }]);
+    const again = await run("f1-owner-transition-prd.sh", ["retire"], f1(), "OPEN-5432-WINDOW-OWNER-RETIRE\n"); expect(again.code).toBe(0); expect(again.out).toContain("already suspended");
+    for (const l of calls().split("\n").filter(Boolean)) expect(l.split(" ").slice(0, 2).join(" "), l).toMatch(/^(sts get-caller-identity|cloudformation (describe-stacks|list-stack-resources)|lambda get-function-configuration|rds describe-db-instances|ec2 (describe-instances|describe-network-interfaces|describe-security-groups|authorize-security-group-ingress|revoke-security-group-ingress)|ssm start-session|secretsmanager get-secret-value|cognito-idp admin-get-user)$/);
+    expect(await ledger()).toBe("85|0085");
+  });
+  it("retire refuses when no other active owner would remain", async () => {
+    clearLogs(); const c = await dbClient("ogevia_prd"); await c.query("update ogevia.organization_memberships set status = 'active' where user_id = (select id from ogevia.app_users where cognito_sub = '" + OLD + "')"); await c.end();
+    const r = await run("f1-owner-transition-prd.sh", ["retire"], f1({ OGEVIA_NEW_OWNER_EMAIL: "old@example.org", OGEVIA_OLD_OWNER_EMAIL: "new@example.org" }), "OPEN-5432-WINDOW-OWNER-RETIRE\n"); expect(r.code, r.out).toBe(0); // old is now an active owner too, so retiring "new" leaves one: allowed
+    expect(r.out).toContain("RETIRED");
+    const last = await run("f1-owner-transition-prd.sh", ["retire"], f1({ OGEVIA_NEW_OWNER_EMAIL: "new@example.org", OGEVIA_OLD_OWNER_EMAIL: "old@example.org" }), "OPEN-5432-WINDOW-OWNER-RETIRE\n"); expect(last.code).toBe(1); expect(last.out).toContain("not an ACTIVE owner");
+  });
+});
+
 describe("D2 deploy-mode assembly workflow", () => {
   const OP = join(work, "opkg"), ASM = join(work, "asm-out");
   const fakeCdk = `#!/usr/bin/env bash
