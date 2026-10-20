@@ -19,7 +19,7 @@ Recorded 2026-10-19 from operator-pasted CloudShell output. TEST only. No produc
 2. Step 15 assumed log group `/aws/lambda/<function>`; the Handler uses an explicit CDK log group. The group is read from `LoggingConfig.LogGroup`.
 
 ## Warnings
-- BUILD_INFO `approval_ref` is `APPROVAL-REF-PENDING-OWNER` while the stack tag carries `approved-owner-go-test-20261019-02`. Owner to confirm the reference.
+- BUILD_INFO `approval_ref` is `APPROVAL-REF-PENDING-OWNER` while the stack tag carries `approved-owner-go-test-20261019-02`. **RESOLVED (owner statement, 2026-10-20):** the authoritative TEST approval reference is `owner-go-test-20261019-02`; the `APPROVAL-REF-PENDING-OWNER` value in the TEST tarball's BUILD_INFO is a placeholder and is NOT authoritative. The tarball (sha256 `8e65487e...cbd3e`) is left unchanged so its hash and this record stay valid. The production reference is separate: `owner-go-prd-20261020-01`.
 - Extra manual snapshot ogevia-prod-postgres-pre-0085-202610190330 (origin unknown) left untouched.
 - NOT VERIFIED on TEST: calendar current-authorization rule, UX density changes, Billing Review Approve visibility, Care Team, Compliance chips, Schedule header, document upload/approve, caregiver visit flow. Production NO-GO; real PHI NO-GO (BAA).
 
