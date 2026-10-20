@@ -1,0 +1,1 @@
+const net=require("net");const port=Number(process.argv[2]);net.createServer((c)=>{const u=net.connect(5432,"127.0.0.1");c.pipe(u);u.pipe(c);c.on("error",()=>u.destroy());u.on("error",()=>c.destroy());}).listen(port,"127.0.0.1");
