@@ -242,3 +242,6 @@ Eleven manual snapshots listed in full (section 10 of `REHEARSAL_PLAN.md`). Two 
 
 ## 21. R1 done (2026-10-20)
 Rehearsal snapshot `ogevia-prod-postgres-pre-rehearsal-202610200131` created and verified (owner-reported summary; see section 11 of `REHEARSAL_PLAN.md`). One new manual snapshot is the only AWS change so far in the rehearsal. Next: R2 restore, awaiting approval.
+
+## 22. R2 done (2026-10-20)
+Rehearsal copy `ogevia-prd-rehearsal-20261020` restored in its own security group `sg-02430ba691bb25ea6` (owner-reported summary; section 13 of `REHEARSAL_PLAN.md`). AWS changes so far in the rehearsal: one snapshot, one security group with one rule, one RDS instance. Production, the shared security group, stacks, TEST, Cognito and DNS untouched. Deletion of the copy (R8) is a RED step needing its own instruction.
