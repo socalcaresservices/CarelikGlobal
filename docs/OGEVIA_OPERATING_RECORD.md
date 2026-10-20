@@ -5,6 +5,8 @@
 **Confidence Level:** High (infrastructure verified, workflow tested)  
 **Classification:** VERIFIED FINDINGS + OUTSTANDING ITEMS
 
+> **2026-10-20 warning:** this record is dated 2026-10-07 and is partly superseded. Its statements that `app.ogevia.com` is an "active production environment" and that the Go-Live items "PASS" are not supported by later evidence. Use `docs/aws/URL_REGISTRY_AND_LAUNCH_CHECKLIST.md` (sections 1-3 and 5) for URLs, environments, accounts, roles, email and cost status.
+
 ---
 
 ## Public Platform Status
