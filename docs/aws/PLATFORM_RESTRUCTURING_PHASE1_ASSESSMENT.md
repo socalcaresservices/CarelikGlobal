@@ -94,6 +94,8 @@ Status key: Implemented (in code and tested locally), In Progress, Planned, Unve
 ## 4. Confirmed defects, evidence gaps, dependencies
 
 ### Confirmed (CODE) defects or hazards
+
+> **Erratum (2026-10-20, see `AUTH_SEPARATION_PHASE2_DESIGN.md` section 0):** defect 1 below is stated too narrowly. Tokens from the pilot's own web client are *not* in the production audience. The exposure is the legacy `ogevia-web` client (accepted by both APIs) and the fact that any user of the shared pool can sign in through the production client. The conclusion (separate pools) is unchanged.
 1. **Shared identity across test and production.** One Cognito pool; the prd API's JWT audience still includes the legacy `ogevia-web` client
    (`service-verification-api-stack.ts:541`), so any pilot/test user obtains a token the prd API accepts; only the lack of a prd membership stops them. Acknowledged in `PRODUCTION_DEPLOYMENT.md` section 8.
 2. **No guard against real outbound email from non-production.** The identity Lambda can email any address in any environment where it is configured.

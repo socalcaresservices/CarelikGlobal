@@ -20,8 +20,8 @@ Evidence classes: **CODE** (read in this checkout, file:line), **TEST** (run thi
 
 So the audience list alone does **not** let a pilot-client token into production. The real exposure is wider and is caused by the shared pool, not the list:
 
-1. **Legacy client in both audiences.** A token from `ogevia-web` is valid at both APIs. That client allows `ALLOW_USER_SRP_AUTH` and `ALLOW_USER_AUTH` (DOC `PHASE_3_COGNITO_CURRENT_TARGET_MATRIX.md`; CODE `cognito-target.ts:29-35`), so a script can sign in without the broken callback URL.
-2. **Any pool user can sign in through any client of the pool.** A Cognito user pool authenticates its users for every app client it hosts. A pilot user can use the **production** client id (it is public: it is in the production site's `/config.json`, `aws-runtime.ts:163-174`) with SRP, obtain a genuine production-audience token, and present it to the production API. That is how a "Pilot token" reaches Production.
+1. **Legacy client in both audiences.** A token from `ogevia-web` is valid at both APIs. That client allows `ALLOW_USER_SRP_AUTH` and `ALLOW_USER_AUTH` (CODE `cognito-target.ts:29-35`, a model of the live settings read on 2026-10-01), so a script can sign in without the broken callback URL.
+2. **Any pool user can sign in through any client of the pool.** A Cognito user pool authenticates its users for every app client it hosts. A pilot user can use the **production** client id (it is public: it is in the production site's `/config.json`, `aws-runtime.ts:33-45`) with SRP, obtain a genuine production-audience token, and present it to the production API. That is how a "Pilot token" reaches Production.
 3. **What stops them today** is the database, not authentication: `ogevia_api.begin_request` looks the `sub` up in the **production** database's `app_users` and raises `Not authenticated` when absent (CODE `0002_identity_tenancy.sql`, `begin_request`). That is a good last line of defence but it is the only one. It fails if the same person (same `sub`) exists in both databases, which is likely for the owner/administrator and any tester who was also given a production membership. Whether that overlap exists is UNVERIFIED.
 4. The reverse direction is the same: a real production user's pool credentials work at the pilot sign-in page.
 
@@ -52,7 +52,7 @@ CDK does not own P1 (`PHASE_1_RESOURCE_OWNERSHIP.md`); it is imported by id.
 | # | Client | Defined at | Callback / logout | Notes |
 |---|---|---|---|---|
 | C1 | `ogevia-web` `1i27abbina08fvg1i9u8vprgo9` (legacy, manual, in P1) | `config.ts:158`; `cognito-target.ts:24`; `slice/smoke.py:43` | callback `https://d84l1y8p4kdic.cloudfront.net` (a distribution this account does not own, DOC D-P1-2); logout none (`cognito-target.ts:27-29`) | Flows: code, `ALLOW_REFRESH_TOKEN_AUTH`, `ALLOW_USER_AUTH`, `ALLOW_USER_SRP_AUTH`; refresh 5 days; **in the audience of both APIs**. A model target exists (`OGEVIA_WEB_TARGET`, `cognito-target.ts:41-55`: `https://app.ogevia.com/auth/callback`, logout `https://app.ogevia.com/`) but is not applied. |
-| C2 | `ogevia-web-prod-test-slice` (CDK, in P1) | `lib/web-hosting-stack.ts:132-151` (name at :135) | callback `<pilot CloudFront origin>/auth/callback`; logout `<origin>/`; plus `config.testSlice.localDevOrigins` (currently `[]`, `config.ts:236`) | public, code+PKCE, SRP+refresh only, access/id 60 min, refresh 12 h, revocation on |
+| C2 | `ogevia-web-prod-test-slice` (CDK, in P1) | `lib/web-hosting-stack.ts:132-151` (name at :135) | callback `<pilot CloudFront origin>/auth/callback`; logout `<origin>/`; plus `config.testSlice.localDevOrigins` (currently `[]`, `config.ts:237`) | public, code+PKCE, SRP+refresh only, access/id 60 min, refresh 12 h, revocation on |
 | C3 | `ogevia-web-prd` (CDK, in P1) | same construct, `clientName` branch at :135 | callback `<prd CloudFront origin>/auth/callback` | same settings; live ids DOC `URL_REGISTRY...`: app `d3l4psdkokkvnb.cloudfront.net` |
 | C4 | `ogevia-prd-web` (never created) | `docs/deployment/ogevia-prd-config-required.txt:20-30` | `https://app.ogevia.com/auth/callback`, `http://localhost:5173/auth/callback` | Older plan; superseded by C3 |
 | C5 | Test fixtures | `testclient0000000000000000` (`packages/auth/src/test/tokens.ts:6-7`), `someotherclient00000000000` (`principal.test.ts:41`, `unit.test.ts:126`), `localregressionclient000000` (`slice/pilot-regression-local.sh:20`) | | Synthetic |
@@ -78,7 +78,7 @@ Pilot CloudFront `d2xumch5w0izfg.cloudfront.net`, API `s0epy5rgzb`; production c
 | `VITE_AUTH_PROVIDER` (`cognito` or `supabase`; unset = supabase) | `packages/auth/src/auth-provider.tsx:~229-233`, `apps/web/src/main.tsx:12`, `env.ts:42` | pilot: `deploy-test-slice.sh:190`; prd: `deploy-production.sh:331`; Netlify: not set in `netlify.toml` (UNVERIFIED) |
 | `VITE_COGNITO_REGION`, `_USER_POOL_ID`, `_CLIENT_ID`, `_DOMAIN`, `_REDIRECT_URI`, `_LOGOUT_URI`, `_SCOPES`, `_REFRESH_PERSISTENCE` | `packages/auth/src/cognito/config.ts:22-77` (fails closed on malformed value, pool/region mismatch, non-https redirect) | pilot `deploy-test-slice.sh:190-193`; prd `deploy-production.sh:331-334` (pool from `print-prd-config.ts:27`, client from stack output `TestAppClientId`, domain read from the pool at build time) |
 | `VITE_SV_API_BASE_URL`, `VITE_APP_ENV` | `apps/web/src/aws/aws-runtime.ts:13-27` | same scripts |
-| Runtime override `/config.json` (same origin; keys listed at `aws-runtime.ts:163-174`) | `aws-runtime.ts:47-60`; local `serve.ts:185` | deployment; **not validated against the environment**, so a mis-copied client id is accepted by the browser and only rejected later by the API |
+| Runtime override `/config.json` (same origin; keys listed at `aws-runtime.ts:33-45`) | `aws-runtime.ts:47-60`; local `serve.ts:185` | deployment; **not validated against the environment**, so a mis-copied client id is accepted by the browser and only rejected later by the API |
 | Cross-environment guard in the browser | `apps/web/src/aws/environment.ts:18-23` shows a label only (TEST banner / "not verified"); it does not compare pool or client with `VITE_APP_ENV` | gap |
 
 ### A.5 Backend authentication configuration
@@ -139,7 +139,7 @@ Pilot CloudFront `d2xumch5w0izfg.cloudfront.net`, API `s0epy5rgzb`; production c
 | Sign-in surface (who may obtain a production token) | Every user in the shared pool | **Not a boundary** |
 | Token to tenant data | Database membership per request | Strong |
 | Token to production database | `sub` must exist in `ogevia_prd.app_users` | Effective only while subs do not overlap between databases |
-| Configuration fail-closed | DB name checked for prd (`config.ts:52-56` of sv-api); pool/client not checked | Gap |
+| Configuration fail-closed | DB name checked for prd (`apps/sv-api/src/config.ts:60`); pool/client not checked | Gap |
 | Identity Lambda scope | One pool ARN; the pilot and production functions both point at P1 | Not isolated |
 
 ---
