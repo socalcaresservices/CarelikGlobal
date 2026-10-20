@@ -11,7 +11,7 @@ Status words: **proposed, implemented, tested, deployed, accepted** (never inter
 | Database | `ogevia_prd` 46/0046 to 85/0085 (39 migrations, rehearsed on a restored copy: forward, verify, rollback all PASS) |
 | Data | all existing production records are owner-confirmed synthetic (readiness plan section 29); no real client, caregiver or PHI |
 | Approval reference (owner-supplied 2026-10-20) | `owner-go-prd-20261020-01` (becomes the tag value `approved-owner-go-prd-20261020-01`; the placeholder `APPROVAL-REF-PENDING-OWNER` is refused). The TEST reference `owner-go-test-20261019-02` is not used for production. |
-| Release window (UTC, at most 12 h) | **owner to confirm** (recommended: 2026-10-21T17:00:00Z to 2026-10-21T21:00:00Z, see the readiness plan section 36) |
+| Release window (UTC, at most 12 h) | **GO given for** (recommended window, assumed: 2026-10-21T17:00:00Z to 2026-10-21T21:00:00Z, see the readiness plan section 36) |
 
 ## 1. Evidence already in hand (all tested; none deployed)
 | Item | Evidence |
@@ -26,7 +26,7 @@ Status words: **proposed, implemented, tested, deployed, accepted** (never inter
 ## 2. Mandatory before GO (owner or operator; none can be done by the package)
 | # | Action | Why | Command / artifact |
 |---|---|---|---|
-| M1 | ~~approval reference~~ supplied: `owner-go-prd-20261020-01`. STILL OPEN: the **release window** (UTC) and the written GO | every YELLOW script requires them; the approval reference becomes the `ogevia:deployment-status` tag | GO message |
+| M1 | ~~approval reference~~ supplied: `owner-go-prd-20261020-01`. **GO recorded 2026-10-20 (owner: "GO for the 2026-10-21 window; operator preparation starts now")** for the recommended window 2026-10-21T17:00:00Z to 2026-10-21T21:00:00Z (assumed to be that window; owner to say if different). The GO opens the window and preparation; every YELLOW step still stops at its typed phrase | every YELLOW script requires them; the approval reference becomes the `ogevia:deployment-status` tag | GO message |
 | M2 | **RESOLVED 2026-10-20 (owner statement):** TEST authoritative reference `owner-go-test-20261019-02`; `APPROVAL-REF-PENDING-OWNER` in the TEST tarball is a placeholder and not authoritative; production uses `owner-go-prd-20261020-01`. No script or tarball change needed (the production scripts read the reference only from `OGEVIA_DEPLOY_APPROVAL`). | one agreed reference per environment | closed |
 | M3 | Operator confirms **the admin host is running** and gives its private IP | the migration rule names that /32 only | `OGEVIA_EXPECT_HOST_IP` |
 | M4 | Operator extracts both tarballs in CloudShell, verifies both manifests and the release tarball sha256, installs dependencies in the operator package (`pnpm install --frozen-lockfile --store-dir /tmp/pnpm-store`) | the assembly and the web build run from that package | README setup |

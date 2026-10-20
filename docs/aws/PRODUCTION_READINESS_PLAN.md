@@ -345,3 +345,6 @@ The migration executor (D1), snapshot step (C1), deploy-mode assembly workflow (
 **Open before GO:** the release window and written GO (owner); operator preparation (below); a person for the manual sign-in check; acceptance of the 1-2 minute migrate-to-API gap (estimate). **Technical blockers in the package: none known.**
 **Recommended window:** 2026-10-21T17:00:00Z to 2026-10-21T21:00:00Z (10:00-14:00 PDT; a daytime slot with 4 h of margin for an estimated 45-75 min of work; production data is synthetic).
 **Assessment:** NO-GO until the window and written GO exist and the operator preparation passes; then conditional GO, each YELLOW step individually typed. Nothing is deployed.
+
+## 37. GO recorded (2026-10-20)
+Owner: "GO for the 2026-10-21 window; operator preparation starts now." Recorded as GO for the recommended window 2026-10-21T17:00:00Z to 21:00:00Z (assumption: no other window was named) with approval reference `owner-go-prd-20261020-01`. Preparation (read-only/local steps 1-4) may run now; the changing steps (snapshot, migration, API deploy, web publish) may run only inside the window and each stops at its typed phrase. Nothing is deployed.
