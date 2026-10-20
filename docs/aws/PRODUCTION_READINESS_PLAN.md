@@ -218,3 +218,6 @@ Full review: `docs/releases/2026-10-19-prd-readiness/MIGRATION_REVIEW_OTHER_31_F
 - 35 function drops, all recreated except the intentional removal of `record_report_export` (0072). The caregiver visit start and confirmation functions are among them (0050), so the old production API cannot start an unscheduled visit or confirm a visit between the migration and the API deploy.
 - Correction to section 12: 0072 removes `record_report_export`; it does not recreate it.
 - B2: the unreviewed-files part is closed (static). B2 stays open for the rehearsal, snapshot, production gate scripts and a quiet window.
+
+## 14. Rehearsal plan designed (2026-10-20; design only)
+`docs/releases/2026-10-19-prd-readiness/REHEARSAL_PLAN.md`: restore a fresh snapshot of the shared instance to a new, dedicated-security-group instance, apply 0047-0085 with the pinned runner, verify ledger, checksums, the repository verification set, schema parity with TEST and unchanged existing data, record timings, optionally rehearse rollback, then delete the copy. Does not touch the shared security group, production or TEST. Nothing approved or run. API compatibility during the migration-to-deploy gap remains untested (stated residual risk). Next: owner decisions in section 5 of that file, then the R0 read-only questions.

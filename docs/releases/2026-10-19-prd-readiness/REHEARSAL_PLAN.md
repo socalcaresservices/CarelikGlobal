@@ -1,0 +1,60 @@
+# Rehearsal plan: upgrade a copy of ogevia_prd from 0046 to 0085
+
+Designed 2026-10-20. **Design only: nothing here has been run, no AWS change has been made, and no step is approved.** Every YELLOW or RED step needs the owner's explicit approval at the time it is run.
+Evidence classes: REPO (read from this repository), OWNER-AWS (owner-reported from CloudShell), UNKNOWN (must be established in R0).
+
+## 1. Purpose and what it must prove
+Production (`ogevia_prd`) is at 46 / 0046 (OWNER-AWS); the accepted TEST release is 85 / 0085. The static reviews (`MIGRATION_REVIEW_*`) found no migration-time data loss but could not test the upgrade. The rehearsal applies 0047-0085 to a **restored copy** and proves, with evidence:
+
+| # | Claim | Pass condition |
+|---|---|---|
+| C1 | A snapshot of the shared instance restores to a new instance | New instance `available`, same engine/encryption/privacy, `ogevia_prd` present at 46 / 0046 |
+| C2 | The 39 migrations apply cleanly to production-shaped data | Ledger 85 / 0085; every applied file's checksum equals the package manifest; no error; 0061's duplicate guard passes |
+| C3 | The result is the TEST schema | Schema-only comparison of the copy's `ogevia_prd` against `ogevia_sv_test` shows no difference (or each difference explained) |
+| C4 | Existing data is untouched | Per-table row counts and content hashes before and after are identical for every table that existed at 0046, except the rows the migrations are documented to add (permission rows 0048/0055/0069, policy row 0060) |
+| C5 | The repository's verification set passes | `infra/aws/db/verification/01-08` all pass on the copy |
+| C6 | Duration is known | Per-file and total migration time recorded, to size the production window |
+| C7 | (Optional) rollback works | Down scripts return the copy to 46 / 0046 with baseline hashes equal, or the documented exceptions are listed |
+
+Non-goals: no change to production (`ogevia-prod-postgres`), the shared security group `sg-00530a1f4f7648e65`, any `Ogevia-prd-*` or `Ogevia-prod-*` stack, TEST, Cognito, DNS, or any deploy.
+
+## 2. Design decisions
+| Decision | Choice | Why |
+|---|---|---|
+| Where the copy lives | A **new RDS instance restored from a fresh manual snapshot**, never the production instance | The only way to test without touching production; the production instance is shared with TEST, so any in-place trial would risk both |
+| Network | New dedicated security group for the copy: tcp 5432 only from the admin host's own IP as /32; private, not publicly accessible; same VPC and subnet group | **Avoids touching the shared RDS security group at all.** Creating a security group and instance are YELLOW actions |
+| Encryption and size | Same KMS encryption and the same instance class (db.t4g.micro) | Timing and behavior comparable; encryption is a security control that must not be weakened |
+| Data handling | Treat the copy as production data. Output only counts, hashes, timings and object names; never row contents. No exports off the admin host. | Production may hold PHI (unverified); `CLAUDE.md` s.8 |
+| Runner | The same pinned migration runner and file set as TEST (`infra/aws/db/scripts/migrate.ts`: one transaction per file, SHA-256 ledger, advisory lock, refuses drift), run from the admin host through an SSM tunnel to the copy. The runner refuses non-local targets unless `OGEVIA_ALLOW_REMOTE_MIGRATION=approved-by-owner`, so that variable is set deliberately for the copy only | Rehearse the exact mechanism that production will use |
+| Order | Migrations only. The API and web are NOT deployed against the copy | See R7 residual risk |
+| Lifetime | Delete the copy when done (RED action, separate explicit instruction naming the exact identifier) | Cost and data exposure |
+| Naming | Snapshot `ogevia-prod-postgres-pre-rehearsal-YYYYMMDDHHMM`; instance `ogevia-prd-rehearsal-YYYYMMDD`; tag `purpose=rehearsal-delete-after` | The name must make a mistaken target impossible |
+
+Cost (REPO: `docs/aws/COST_MODEL.md` lists db.t4g.micro on-demand at $0.022/hour): about $0.53 per day of instance time (0.022 x 24). Storage and snapshot charges are NOT computed here; compute them from the live allocated size in R0. Treat all as needing owner approval before creation (`CLAUDE.md` s.11).
+
+## 3. Phases
+| Phase | Action | Class | Evidence produced | Stop condition |
+|---|---|---|---|---|
+| R0 | Establish unknowns, read-only: allocated storage and KMS key of `ogevia-prod-postgres`; subnet group and parameter group; whether the restored instance can use the source master credential or needs a new password (restore behaviour of the RDS-managed secret: confirm against AWS documentation before R2, NOT verified); whether `pg_dump` and `psql` exist on the admin host; admin host outbound reachability to a new security group; non-PHI row counts of `ogevia_prd` (organizations, users, clients, shifts, visits); build the production rehearsal package pinned to commit e80b770 and the 0047-0085 set hash | Read-only (row counts need a read script and the temporary rule: separate approval) | R0 record with every answer | Any unknown unresolved |
+| R1 | Take a fresh named manual snapshot of `ogevia-prod-postgres`; verify available, manual, encrypted, created inside the window (reuse `snapshot-verify.sh`) | YELLOW | Snapshot id | Not available / not encrypted |
+| R2 | Create the dedicated security group; restore the snapshot to `ogevia-prd-rehearsal-<date>` (private, same class, encrypted, deletion protection off, tagged); wait until available; verify | YELLOW (cost) | Instance description | Public, unencrypted, wrong class, shares the production security group |
+| R3 | Baseline on the copy (read-only): databases present, ledger summary and the list of (version, checksum) rows, database size, per-table row counts and content hash for every table, counts of functions/triggers/policies/indexes; connection proven read-only and to the copy's endpoint (never the production endpoint) | Read-only on the copy | `baseline.txt` | Ledger is not 46 / 0046 |
+| R4 | Apply 0047-0085 to `ogevia_prd` on the copy with the pinned runner; record start/end per file and total; stop at the first error; applied files are never edited (fix forward only) | Mutates the copy only | `migrate.log`, timings | Any error: stop, record, do not retry blindly |
+| R5 | Verify: ledger 85 / 0085 and file checksums equal the manifest; run `infra/aws/db/verification/01-08`; schema-only dump of the copy's `ogevia_prd` versus TEST's `ogevia_sv_test` (normalized), differences listed; per-table row counts and hashes versus R3 (C4); object counts versus TEST | Read-only on the copy and on TEST (TEST read uses its own approved window) | `verify.txt`, `schema-diff.txt` | Any unexplained difference |
+| R6 | Optional rollback rehearsal. First review the 39+ down scripts in `infra/aws/db/rollback/` (names checked for the eight reviewed files; content NOT reviewed; whether a down script also removes the ledger row is NOT verified). Then run them 0085 down to 0047 on the copy and compare to R3 | Mutates the copy only | `rollback.log`, comparison | A down script that cannot be explained |
+| R7 | Window sizing: total migration time + API deploy (TEST measured: CDK deploy 46 s, 89.8 s total) + web publish + CloudFront settle (60 s used on TEST) + smoke. Output the minimum quiet window and the exact order | Document | Window recommendation | |
+| R8 | Teardown: delete the rehearsal instance, its security group, and (owner's choice) the rehearsal snapshot; verify none remain; keep the evidence files | **RED**: needs a separate instruction naming the exact identifiers | Deletion record | The identifier is not the rehearsal instance |
+
+## 4. Residual risk the rehearsal does not remove
+- **API compatibility is not tested.** The copy has no application; the old API's behaviour during the migration-to-deploy gap (35 dropped functions, including the caregiver start and confirm functions in 0050) is known from reading, not from running. Mitigation: schema parity with TEST (C3) plus TEST's accepted workflow results; and the production run must go migrations, then API, then web without pause in a window with no users. Optional, not recommended: deploy a temporary API stack against the copy (extra cost and exposure).
+- The copy proves behaviour on **today's** production data. If production data changes before the real run, the real run's pre-checks (ledger exactly 46 / 0046, the 0061 guard, a fresh snapshot) must still pass.
+- Row counts may show production has no tenant data; then C4 is trivially met and the rehearsal mostly proves the mechanics, the schema parity and the timing. That is still worth knowing before the real window.
+
+## 5. Open decisions for the owner (recommended defaults)
+1. Run the optional rollback rehearsal (R6)? Recommended yes, after the down scripts are reviewed.
+2. Keep the rehearsal snapshot after teardown? Recommended: delete both instance and snapshot within 7 days of use.
+3. Approve a read of non-PHI row counts of `ogevia_prd` (R0)? Recommended yes; it decides whether C4 is meaningful.
+4. Who signs the restore and deletion approvals, and the target dates? Not set.
+
+## 6. Deliverables to build before R1 (all GREEN, local, nothing deployed)
+Production rehearsal package (one tarball with checksum, same pattern as `ogevia-prd-ledger-read.tar.gz`) containing: pin check for commit e80b770 and the 0047-0085 set hash; snapshot-verify (reused); restore-and-verify script (describe-only checks plus the YELLOW create steps behind typed phrases); baseline, migrate, verify and compare scripts that refuse any host except the rehearsal endpoint; mock tests for each; and a README with the stop rules. Tests use mocks only; nothing touches AWS until the owner runs it.
