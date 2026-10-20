@@ -248,3 +248,6 @@ Rehearsal copy `ogevia-prd-rehearsal-20261020` restored in its own security grou
 
 ## 23. R3 baseline done (2026-10-20)
 Raw output in section 14 of `REHEARSAL_PLAN.md`. The restored copy accepts the source master credential. Production `ogevia_prd` is 14 MB at 46|0046 with no ledger drift against the repository, 448 rows across 28 non-empty tables. Per-table counts (to decide whether production holds any tenant data) can be read from the local baseline file with no database access. Next: R4 migrate, which mutates the copy only.
+
+## 24. R4 done on the rehearsal copy (2026-10-20)
+Raw output in section 15 of `REHEARSAL_PLAN.md`: 0047-0085 applied to the copy of `ogevia_prd` with no error, ledger 85|0085, total 11 s. B2 (version gap) is now partly demonstrated: the upgrade applies cleanly to a restored copy of production, including the 0061 guard. Still required: R5 verification (ledger checksums, verification set, schema parity with the TEST copy, data unchanged), the optional rollback rehearsal, and production versions of the gate scripts. The compatibility gap between migration and API deploy is estimated at 1-2 minutes (sized from the TEST deploy), not yet tested.
