@@ -1,0 +1,28 @@
+# Ogevia production release package, stage A: DISCOVERY (read-only)
+
+Source commit @COMMIT@. **Every AWS call in this stage is a read** (describe, get, list, head), plus a download of the production web bucket and curl GETs of the production web origin. Nothing in AWS is created, changed or deleted. It is not a deployment and does not authorise one.
+
+## Why a discovery stage first
+The production stacks (`Ogevia-prd-*`) were last deployed on 2026-10-10. What they run today (the Lambda's build, the web's version and API host, the live templates) was never recorded. A gate that allows "only the expected difference" cannot be written until the live templates are read. This stage captures them, reports how they differ from the release templates bundled here, and makes the recovery copies a release needs (the Lambda code zip, the previous code asset, the whole web bucket). The next stage (gate, window, deploy, verify) is written from this report.
+
+## Release under review
+- Handler Lambda code asset of the release: `@HANDLER_KEY@`
+- Identity Lambda code asset of the release: `@IDENTITY_KEY@`
+- Six release templates (`release-templates/`): the five `Ogevia-prd-*` stacks and the shared `Ogevia-prod-NetworkEgress`.
+
+## Run (CloudShell, us-west-2)
+```
+tar -xzf ogevia-prd-release-discovery.tar.gz && cd ogevia-prd-release-discovery && sha256sum -c --quiet MANIFEST.sha256 && echo MANIFEST OK && cat BUILD_INFO.json
+bash scripts/p0-baseline-capture.sh      # read-only; writes ~/ogevia-prd-before
+bash scripts/p1-diff-report.sh           # local files only; compares live vs release templates
+```
+Needs `aws`, `jq`, `curl`, `python3`, `sha256sum`, `openssl`, `base64`. Output goes to `~/ogevia-prd-before/` (mode 700).
+
+## Paste back
+The whole terminal output of both scripts. The lines that matter most: the Lambda's CodeSha256, last-modified date and code-asset key; `version string` and `API host(s)` of the production web; the route count (the release has 228); the endpoint-policy line; and the `SUMMARY` line of every stack in p1.
+
+## Stop rules
+Any `STOP:` or `FAIL` line: paste the output; do not work around it. A `FAIL` in p0 means a read failed or a precondition (for example the Lambda serving ogevia_prd) did not hold; the report is still useful but the gate cannot be written until it is understood.
+
+## What this stage does not do
+It does not take a snapshot, open the database, migrate, deploy the API or web, change the shared security group, or touch TEST. Those belong to later stages and each needs its own approval.

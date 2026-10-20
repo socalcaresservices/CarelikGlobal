@@ -320,3 +320,6 @@ Owner statement, recorded as given (not independently verifiable by the engineer
 - One residual: the synthetic label rests on the owner's word. If any real person's data has ever been entered (for example in a trial), the earlier statements in sections 26-27 apply again; a quick way to confirm without reading values is for the owner to state how the existing rows were created.
 ### Revised go-live view
 Two separate decisions now exist: (1) upgrade the pre-launch production environment to the accepted release (a deployment, still needing the production gate scripts, the checklist and the owner's GO); (2) admit real customer data (needs the security gates and the BAA check). The first is lower risk than the earlier sections assumed; the second is unchanged and not scheduled.
+
+## 30. Production release package, stage A built (2026-10-20; local only)
+Plan and design: `docs/releases/2026-10-19-prd-readiness/RELEASE_PACKAGE_PLAN.md`. Stage A (discovery, read-only) is built and tested locally with a mocked aws (8 tests); it has not run against AWS. Stages B-E (gate and guard, window, execute, verify) do not exist yet and are written from stage A's output. No deployment is authorised.
