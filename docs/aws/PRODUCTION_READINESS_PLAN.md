@@ -323,3 +323,6 @@ Two separate decisions now exist: (1) upgrade the pre-launch production environm
 
 ## 30. Production release package, stage A built (2026-10-20; local only)
 Plan and design: `docs/releases/2026-10-19-prd-readiness/RELEASE_PACKAGE_PLAN.md`. Stage A (discovery, read-only) is built and tested locally with a mocked aws (8 tests); it has not run against AWS. Stages B-E (gate and guard, window, execute, verify) do not exist yet and are written from stage A's output. No deployment is authorised.
+
+## 31. Stage A p1 result (2026-10-20)
+Five of six stacks (including the shared NetworkEgress) equal the release templates; only `Ogevia-prd-ServiceVerificationApi` differs (68 routes added, 31 properties changed, nothing removed). The release therefore needs: migrations 0047-0085, one stack deployment (the API stack), and a web content publish; no change to the web, secret, evidence, observability or network stacks. p0 facts (Lambda build, web version and API host) still to be pasted. See section 7 of `RELEASE_PACKAGE_PLAN.md`.

@@ -32,3 +32,18 @@ Every script was tested against a mocked aws only; none has run against AWS. The
 
 ## 6. Next
 The owner runs stage A in CloudShell (read-only) and pastes the output. Stage B is written from it.
+
+## 7. Stage A result, part 1: p1 diff report (OWNER-PASTED RAW OUTPUT, 2026-10-20 04:03Z)
+`p1-diff-report.sh` compared the captured live templates with the release templates (package built from `7cbf61a`):
+| Stack | Live resources | Release resources | Result |
+|---|---|---|---|
+| Ogevia-prd-DatabaseSecret | 1 | 1 | **equals the release template** |
+| Ogevia-prd-EvidenceStorage | 6 | 6 | **equals** |
+| Ogevia-prd-WebHosting | 10 | 10 | **equals** |
+| Ogevia-prd-Observability | 8 | 8 | **equals** |
+| Ogevia-prod-NetworkEgress (shared) | 5 | 5 | **equals** (the client-documents endpoint entries are already live) |
+| Ogevia-prd-ServiceVerificationApi | 176 | 244 | **differs:** 68 resources added, 0 removed, 31 changed properties, 0 section changes (99 difference lines in total) |
+The 25 lines shown are all `RESOURCE-ADDED AWS::ApiGatewayV2::Route ...` (for example `/v1/accounts`, `/v1/action-issues`, `/v1/appearance`, `/v1/attention-overview`, `/v1/client-document-types`, `/v1/exports`, `/v1/notifications`); the remaining 43 added resources and the 31 changed properties were not pasted.
+**What this tells us.** Five of the six stacks need no deployment. The release changes ONE stack, `Ogevia-prd-ServiceVerificationApi`: new API routes (the release has 228; 68 more than live, so live has about 160, consistent with a build from before the TEST releases) and 31 changed properties (expected: the Handler's code asset key, the Handler's managed policy, and similar; not yet seen). The web stack and the shared network stack are unchanged. The web CONTENT in the bucket is separate from the CloudFormation template and must still be published.
+**Not yet seen:** part 2, the `p0-baseline-capture.sh` output (the Lambda's current build and asset key, the web's version string and API host, the live route count, snapshots, MFA, bucket protections). The paste began after the end of p0 (`BASELINE CAPTURED ... Nothing was changed in AWS.`), which indicates p0 finished without a failed check, but its facts have not been seen.
+Needed to write stage B: the 31 `CHANGED` lines (`grep ^CHANGED ~/ogevia-prd-before/diff-Ogevia-prd-ServiceVerificationApi.txt`) and the p0 output (`cat ~/ogevia-prd-before/log.txt`).
