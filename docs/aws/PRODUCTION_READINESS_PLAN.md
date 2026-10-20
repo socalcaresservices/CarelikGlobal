@@ -210,3 +210,11 @@ Full review: `docs/releases/2026-10-19-prd-readiness/MIGRATION_REVIEW_EIGHT_FILE
 - Rollback files exist for all eight in `infra/aws/db/rollback/` (names checked, content not reviewed).
 - Not reviewed: the other 31 files of 0047-0085. Not executed: nothing was run against a production-like copy.
 B2 therefore stays open, with its risk restated as ordering and compatibility plus 31 unreviewed files, not unknown data loss.
+
+## 13. Review of the other 31 migrations (2026-10-20; static, repository only)
+Full review: `docs/releases/2026-10-19-prd-readiness/MIGRATION_REVIEW_OTHER_31_FILES.md`. With section 12, all 39 pending migrations (0047-0085) have been read.
+- No UPDATE, DELETE, TRUNCATE, DROP TABLE, DROP COLUMN or constraint change on existing data at migration time. Data written: permission rows (0048, 0069) and the SoCal Care Services work-hour policy row (0060).
+- Only 0061 can refuse to run on existing data (unique index on live recurring shifts), and it checks first and rolls back cleanly.
+- 35 function drops, all recreated except the intentional removal of `record_report_export` (0072). The caregiver visit start and confirmation functions are among them (0050), so the old production API cannot start an unscheduled visit or confirm a visit between the migration and the API deploy.
+- Correction to section 12: 0072 removes `record_report_export`; it does not recreate it.
+- B2: the unreviewed-files part is closed (static). B2 stays open for the rehearsal, snapshot, production gate scripts and a quiet window.

@@ -13,7 +13,7 @@ The earlier text scan flagged these files on words such as UPDATE and DELETE. Mo
 | 0054 recruiting/onboarding | replaces `caregiver_records_status_check` (old: onboarding, ready, active, inactive; new adds applicant, interview, offer, pending_documents) and the skipped-dates check; adds `onboarding_required boolean not null default false` | none | Widening only. NOT NULL with a constant default: no table rewrite on PostgreSQL 11+ (instance is 18.3). Drops and recreates `list_caregivers(uuid)`. |
 | 0055 compliance hold | adds nullable `hire_date` with a range check; replaces three check constraints | INSERT of one permission key and one owner role grant | Widening only; inserts only into the global permission tables. |
 | 0071 authorization decrease review | replaces two check constraints | none | Widening only (adds visit_outside_period, visit_over_cap, delivered_unverified). Drops and recreates `list_authorization_amendment_impacts`. |
-| 0072 export request/generation | `alter column row_count drop not null` | none | Relaxation; cannot reject rows. Drops and recreates two export functions. |
+| 0072 export request/generation | `alter column row_count drop not null` | none | Relaxation; cannot reject rows. Recreates `list_report_exports`; **removes `record_report_export` for good** (the browser-assembled export path is replaced by `request_report_export`, `complete_report_export`, `fail_report_export`; stated in the file header). |
 | 0074 client documents, holds | new tables only; row-level security on new tables | none | No change to existing rows. |
 | 0076 agency performance audit report | replaces `report_exports_report_key_check` | none | Widening only (adds audit_report, billing_review). |
 
@@ -37,3 +37,6 @@ Every replacement only widens the allowed set, so existing rows cannot violate i
 
 ## What this changes in the plan
 B2 stays open, but its risk is reduced from "unknown data risk" to "ordering and compatibility risk plus 31 unreviewed files". Still required before any production run: fresh named snapshot (B10), rehearsal of 0047-0085 on a copy of `ogevia_prd` restored to a NEW instance, a production version of the TEST gates, review of the remaining 31 files, and the fix of the two procedure defects.
+
+## Correction (2026-10-20)
+The row for 0072 originally said it drops and recreates two export functions. `record_report_export` is removed by design and replaced by three new functions; only `list_report_exports` is recreated. The 2026-10-10 production web predates the export feature (0069), so it does not call the removed function.
