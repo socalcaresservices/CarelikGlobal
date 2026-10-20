@@ -180,3 +180,21 @@ Stated by the owner in the session; not independently verified by the engineer (
 Instructions recorded with it: preserve the existing records during testing; run R6 on the verified, isolated rehearsal copy only; report the results; **this does not authorise a production deployment or any change to the live database.**
 Effects: (1) the rehearsal copy is owner-confirmed synthetic data, so the PHI concern in section 17 is withdrawn for the existing rows; the conservative handling is kept anyway (short life, no exports, files deleted with the copy). (2) The operational concern in section 17 (existing real users affected by the compatibility gap) is withdrawn for the existing accounts; the window checks stay (open visits, shifts in the window, fresh snapshot) because the accounts and records are the ones the owner tests with. (3) "Preserve them" is satisfied by design: the rehearsal acts on a restored copy, the production instance is never written to, and the existing production rows were unchanged by R1-R5 (a snapshot and a copy only).
 This does not change the readiness verdict: first real customer data and the BAA/security gates (MFA sign-in, tenant isolation, signature storage on production) remain separate gates.
+
+## 19. R6 and R8 results; rehearsal complete (OWNER-REPORTED, 2026-10-20)
+The owner reported R6 and R8 as completed and pasted the result lines (not the full raw output).
+**R6 (rollback on the isolated copy):** 39 migrations rolled back from 0085 to 0047; final ledger 46 migrations, latest 0046; `PASS schema equals the baseline except the objects 0047 keeps by design: schema keys compared: 2256; differences: 11; unexpected: 0; allowed-but-absent: 0`; `PASS existing data counts and content: tables compared: 62; problems: 0`; `ROLLED BACK: ... is at 46|0046 and matches the baseline (C7)`. The 11 differences are the objects the 0047 down script keeps by design (the five `availability_overrides` columns, their five constraints and one index).
+**R8 (teardown, RED, executed by the owner):** instance `ogevia-prd-rehearsal-20261020` deleted; security group `sg-02430ba691bb25ea6` deleted; snapshot `ogevia-prod-postgres-pre-rehearsal-202610200131` KEPT. Post-teardown lines: `instance ... not found (already deleted?)`, `security group sg-02430ba691bb25ea6: not found`, `snapshot ... is KEPT`.
+| Step | Result |
+|---|---|
+| R0 preflight | PASS |
+| R1 snapshot | PASS (`ogevia-prod-postgres-pre-rehearsal-202610200131`) |
+| R2 restore | PASS |
+| R3 baseline | PASS (login accepted; 46|0046; no drift) |
+| R4 migrate | PASS (39 files, 11 s, 85|0085) |
+| R5 verify | PASS (C2-C5) |
+| R6 rollback | PASS (C7) |
+| R8 teardown | PASS (instance and group gone; snapshot kept) |
+Claims: C1-C7 all supported by output from the restored copy.
+**Remaining AWS footprint from the rehearsal:** one manual snapshot (`...pre-rehearsal-202610200131`, storage cost; the recommended retention is deletion within 7 days, i.e. by 2026-10-27, which is a RED action needing its own instruction) and the local working files in the owner's CloudShell (`~/ogevia-prd-rehearsal/`, `~/prd-rehearsal-pkg/`), which hold counts, hashes, timings and tunnel/state values but no row contents (all existing production data is owner-confirmed synthetic).
+**Not established:** that nothing else remains from the rehearsal (automated backups of the deleted instance, other snapshots): a read-only listing of instances, security groups and snapshots would confirm it. Raw output of R6 and R8 beyond the quoted result lines was not seen.

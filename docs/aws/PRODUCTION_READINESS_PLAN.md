@@ -272,3 +272,33 @@ Open owner questions (affect access, users and data handling): Are the existing 
 
 ## 27. Owner confirmation: existing production data is synthetic (2026-10-20)
 OWNER-CONFIRMED (not independently verified): every existing record in `ogevia_prd` is fake/synthetic test data. Updates section 26: the "real or synthetic" question is answered; PHI concern for the existing rows withdrawn (handling kept conservative); the operational-impact concern applies to the owner's own test accounts, not to real customers. Readiness verdict unchanged: NOT READY / NO-GO for production deployment, which was not authorised. R6 (rollback rehearsal) authorised on the isolated copy only.
+
+## 28. Readiness assessment after the completed rehearsal (2026-10-20)
+Evidence: sections 11-19 of `REHEARSAL_PLAN.md` (R0-R6 and R8 PASS, owner-pasted raw output for R0-R5 and result lines for R6/R8).
+| Capability | Result | Evidence strength |
+|---|---|---|
+| Snapshot of the shared instance restores to a separate private encrypted copy | **Demonstrated** (the backup-restore part of B5) | Raw output |
+| Forward migration 46 to 85 on a restored copy of production | **PASS:** 39 files, no error, 11 s, ledger 85|0085, 0061 guard passed | Raw output |
+| Verification | **PASS:** 85 ledger checksums equal the repository; 375 verification check rows pass; schema equals the TEST copy (3283 keys, 0 differences); existing data (62 tables, including the synthetic organization, users, clients, caregivers, shifts and audit trail) preserved | Raw output |
+| Rollback 85 to 46 on the copy | **PASS:** ledger 46|0046; schema equals the baseline except the 11 objects 0047 keeps by design; data counts and content equal | Result lines |
+| Cleanup | **PASS:** copy and its security group deleted; rehearsal snapshot kept | Result lines |
+| Production, TEST, the shared security group, stacks, DNS | **Untouched** by the rehearsal | By design; one new snapshot, one temporary group (deleted) and one temporary instance (deleted) were the only AWS changes |
+| Compatibility during the migration-to-API-deploy gap | **Not tested** (estimated 1-2 minutes from the TEST deploy) | Estimate |
+| Production deployment | **Not authorised and not performed** | Owner instruction |
+### Blockers after the rehearsal
+| # | Blocker | Status |
+|---|---|---|
+| B1 | Production state unknown | Narrowed: ledger, data profile and (owner-confirmed) synthetic data known. Still unknown: the commit of the production Lambda; the production web's API host and version |
+| B2 | Version gap 46 to 85 | **Largely retired for the data layer** (forward and rollback rehearsed, verified). Remaining: production versions of the TEST gate scripts (pin check, diff gate against the live `Ogevia-prd-*` templates, baseline capture), the API/web deploy plan and order, the untested compatibility gap |
+| B3 | Shared RDS instance | Open (rollback granularity is the instance; a snapshot restore creates a separate copy, now shown to work) |
+| B4 | Shared Cognito pool | Open |
+| B5 | Security gates | Restore demonstrated. Open: administrator MFA sign-in, tenant isolation and caregiver restriction on production, signature stored in the production bucket, Multi-AZ, budget limit and alerts, secret rotation |
+| B6 | Script defects and `approval_ref` | Open |
+| B7 | Appearance, accessibility, phone tests | Open |
+| B8 | Release checklist and the owner's GO | Open |
+| B9 | DNS and Reports density | Open (owner decisions) |
+| B10 | Fresh snapshot of the current state | Required at the real window; today's rehearsal snapshot is not that anchor |
+**Verdict: still NOT READY / NO-GO for production deployment.** The data-layer question ("does it migrate and roll back safely?") is answered by evidence on a restored copy. What stands between this and a deployment is the application layer and process: production gate scripts, the API/web deploy and its compatibility gap, the security-gate checks on production, the release checklist, and the owner's explicit GO.
+### Recommended next step
+Build the production release package (P4 of section 5): pins for the chosen commit, a read-only `cdk diff` gate against the live `Ogevia-prd-*` stacks, a production baseline capture, a deploy guard for the `Ogevia-prd-*` stacks only, the rehearsed migrate and rollback steps adapted to the production database with a fresh snapshot and the temporary-access window used for the ledger read, and a window plan (migrate then API then web back to back). Then the security-gate checks on production, then the release checklist. All of it preparation until the owner gives an explicit GO.
+Open owner items: retention of the rehearsal snapshot; the `approval_ref` mismatch; the production Lambda's commit; fixing the two procedure script defects.
