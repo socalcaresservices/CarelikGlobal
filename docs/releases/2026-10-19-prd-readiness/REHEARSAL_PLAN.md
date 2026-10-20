@@ -122,3 +122,17 @@ It also showed `r2-restore.sh verify` and `r8-teardown.sh plan` both answering "
 ## 13. R2 result (OWNER-REPORTED SUMMARY, 2026-10-20)
 `r2-restore.sh restore` run in CloudShell with the typed phrase. Reported: security group `sg-02430ba691bb25ea6` created; instance `ogevia-prd-rehearsal-20261020` status available, class db.t4g.micro, not public, encrypted; `RESTORE VERIFIED ... production untouched`. The script's own checks (own security group only, KMS key equal to production's, endpoint different from production's, tag purpose=rehearsal-delete-after, single-AZ) are part of that verdict. The owner pasted a summary, not the raw output.
 **From this point a billed copy of production data exists** (about 0.53 USD per day of instance time plus storage). It must be deleted with R8 when the rehearsal ends. Next: R3 baseline (read-only); it also answers whether the copy accepts the source master credential.
+
+## 14. R3 baseline result (OWNER-PASTED RAW OUTPUT, 2026-10-20 02:18Z)
+`r3-baseline.sh` on `ogevia-prd-rehearsal-20261020` (endpoint `ogevia-prd-rehearsal-20261020.c50cageec7mv.us-west-2.rds.amazonaws.com`), tunnel via admin host `i-0ce8db2d7e5839dd5` on 127.0.0.1:15441. Read-only session.
+| Fact | Value |
+|---|---|
+| Login with the source master credential | **Accepted.** The open question from R0/R2 is answered: the restored copy accepts it. |
+| Databases on the copy | `ogevia_prd`, `ogevia_sv_test` |
+| `ogevia_prd` ledger | 46 migrations applied, latest 0046 (confirms the production ledger read) |
+| Ledger checksums 0001-0046 | equal the repository's files (no drift: the real runner would not refuse) |
+| `ogevia_prd` size | 14 MB |
+| Fingerprint of `ogevia_prd` | 2307 keys; 28 of 62 `ogevia` tables non-empty; **448 rows in total** |
+| Fingerprint of `ogevia_sv_test` (copy of TEST) | 3375 keys; ledger 85|0085 |
+| Result | `BASELINE RECORDED ... Nothing was changed.` |
+448 rows in 28 tables is small and is consistent with seed and reference data plus little or no tenant data. That is INFERRED, not verified: the per-table counts are in `~/ogevia-prd-rehearsal/baseline-fp.tsv` on the owner's CloudShell and can be read from that file without any new database access.

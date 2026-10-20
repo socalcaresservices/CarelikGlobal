@@ -245,3 +245,6 @@ Rehearsal snapshot `ogevia-prod-postgres-pre-rehearsal-202610200131` created and
 
 ## 22. R2 done (2026-10-20)
 Rehearsal copy `ogevia-prd-rehearsal-20261020` restored in its own security group `sg-02430ba691bb25ea6` (owner-reported summary; section 13 of `REHEARSAL_PLAN.md`). AWS changes so far in the rehearsal: one snapshot, one security group with one rule, one RDS instance. Production, the shared security group, stacks, TEST, Cognito and DNS untouched. Deletion of the copy (R8) is a RED step needing its own instruction.
+
+## 23. R3 baseline done (2026-10-20)
+Raw output in section 14 of `REHEARSAL_PLAN.md`. The restored copy accepts the source master credential. Production `ogevia_prd` is 14 MB at 46|0046 with no ledger drift against the repository, 448 rows across 28 non-empty tables. Per-table counts (to decide whether production holds any tenant data) can be read from the local baseline file with no database access. Next: R4 migrate, which mutates the copy only.
