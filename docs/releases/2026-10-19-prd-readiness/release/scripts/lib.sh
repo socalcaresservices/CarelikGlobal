@@ -26,6 +26,6 @@ check_account() {
 operator_pkg_ok() {
   local pkg="$1" strays
   (cd "$pkg" && sha256sum -c --quiet PACKAGE_MANIFEST.sha256) >/dev/null 2>&1 || { echo "the operator package does not match its PACKAGE_MANIFEST.sha256"; return 1; }
-  strays=$(cd "$pkg" && find . -type f -not -path '*/node_modules/*' -not -path '*/dist/*' -not -path '*/dist-aws/*' -not -path '*/.turbo/*' -not -path '*/__pycache__/*' -not -name '*.tsbuildinfo' -print | sed 's|^\./||' | LC_ALL=C sort | comm -23 - <(sed 's/^[0-9a-f]\{64\}  //' "$pkg/PACKAGE_MANIFEST.sha256" | { cat; echo PACKAGE_MANIFEST.sha256; } | LC_ALL=C sort))
+  strays=$(cd "$pkg" && find . -type f -not -path '*/node_modules/*' -not -path '*/dist/*' -not -path '*/dist-aws/*' -not -path '*/.turbo/*' -not -path '*/__pycache__/*' -not -name '*.tsbuildinfo' -print | sed 's|^\./||' | LC_ALL=C sort | LC_ALL=C comm -23 - <(sed 's/^[0-9a-f]\{64\}  //' "$pkg/PACKAGE_MANIFEST.sha256" | { cat; echo PACKAGE_MANIFEST.sha256; } | LC_ALL=C sort))
   [[ -z "$strays" ]] || { echo "the operator package has files that are not in its manifest: $(head -3 <<<"$strays" | tr '\n' ';')"; return 1; }
 }

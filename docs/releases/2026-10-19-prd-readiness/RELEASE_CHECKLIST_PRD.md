@@ -37,6 +37,9 @@ Status words: **proposed, implemented, tested, deployed, accepted** (never inter
 | M9 | A person is ready to **sign in on the production web** and run the acceptance checks after step 10 | the package cannot prove Cognito sign-in, MFA or the screens | manual |
 | M10 | A second CloudShell/session is open for recovery during the migration window | if the first session is lost the temporary rule is NOT removed automatically | `--restore-only` |
 
+## 3a. Defect found during operator preparation (2026-10-20)
+In package `a6bd0613…` (commit `af70a8b`), the stray-file check (`lib.sh operator_pkg_ok`, and the same check at the start of `d1-migrate-prd.sh`) runs `comm` without `LC_ALL=C`. In CloudShell's UTF-8 locale it can falsely report files that ARE in the manifest (d2 stopped on `infra/aws/slice/candidate-pin-check.sh`, `finish.sh`, `increment-bootstrap.sh`; a fresh rebuild of the operator package at e80b770 lists all three in its manifest). Cause UNVERIFIED in a UTF-8 locale (not reproducible in the development container). **Workaround for this package: `export LC_ALL=C` in the shell and in `session-env.sh` before d2, d3 and d1.** Fixed in the repository (commit after `e11ad5a`); the delivered package is not rebuilt unless the owner asks.
+
 ## 3. Known gaps (not blockers; stated so nobody assumes otherwise)
 - No script performs the API quick rollback (previous asset exists and is documented); the DB rollback drops tables with rows and the snapshot restore is not a prepared procedure.
 - The AWS side of every YELLOW step has never run (mocks emulate the calls). The first real run is the real test; each step stops on any unexpected result.

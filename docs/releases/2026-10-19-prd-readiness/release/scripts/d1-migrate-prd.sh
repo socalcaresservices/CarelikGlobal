@@ -50,7 +50,7 @@ PKG_COMMIT=$(jq -er .source_commit "$PKG_ROOT/BUILD_INFO.json" 2>/dev/null) || s
 [[ "$PKG_COMMIT" == "$OGEVIA_EXPECT_COMMIT" ]] || stop "the package is built from $PKG_COMMIT, not the approved $OGEVIA_EXPECT_COMMIT"
 [[ "$(jq -r .source_tree "$PKG_ROOT/BUILD_INFO.json")" == clean ]] || stop "the package was built from a DIRTY source tree"
 (cd "$PKG_ROOT" && sha256sum -c --quiet MANIFEST.sha256) || stop "the package files do not match MANIFEST.sha256"
-STRAYS=$(cd "$PKG_ROOT" && find . -type f -print | sed 's|^\./||' | LC_ALL=C sort | comm -23 - <(sed 's/^[0-9a-f]\{64\}  //' MANIFEST.sha256 | { cat; echo MANIFEST.sha256; } | LC_ALL=C sort))
+STRAYS=$(cd "$PKG_ROOT" && find . -type f -print | sed 's|^\./||' | LC_ALL=C sort | LC_ALL=C comm -23 - <(sed 's/^[0-9a-f]\{64\}  //' MANIFEST.sha256 | { cat; echo MANIFEST.sha256; } | LC_ALL=C sort))
 [[ -z "$STRAYS" ]] || stop "the package has files that are not in the manifest: $(head -3 <<<"$STRAYS" | tr '\n' ';')"
 setsha() { (cd "$1" && for f in $2; do printf '%s  %s\n' "$(sha256sum "$f" | cut -d' ' -f1)" "$f"; done | sha256sum | cut -d' ' -f1); }
 [[ "${OGEVIA_EXPECT_MIGRATIONS_SHA:-}" =~ ^[0-9a-f]{64}$ ]] || stop "set OGEVIA_EXPECT_MIGRATIONS_SHA to the 64-character migration-set hash in the README"

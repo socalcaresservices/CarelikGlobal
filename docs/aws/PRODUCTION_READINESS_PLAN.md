@@ -351,3 +351,6 @@ Owner: "GO for the 2026-10-21 window; operator preparation starts now." The owne
 
 ## 38. Preparation evidence status (2026-10-20)
 No preparation output has been pasted into this session. The owner's message "Preparation output pasted: all four checks passed" is an OWNER-REPORTED summary without the output: NOT VERIFIED. Missing results are listed in the session reply; no deployment step may start until they are pasted, the exact UTC window is confirmed, and a written GO that names that window exists.
+
+## 39. Preparation finding: locale-sensitive stray check (2026-10-20)
+d2 stopped in CloudShell reporting three tracked files as "not in the manifest". A fresh rebuild of the operator tarball at e80b770 lists them (981 manifest lines); the operator package is not stale. The false report most likely comes from `comm` running in CloudShell's UTF-8 collation (my defect; TEST's equivalent check sets `LC_ALL=C comm`). Workaround: `export LC_ALL=C`. Source fixed in the repository; delivered package `a6bd0613…` unchanged.
