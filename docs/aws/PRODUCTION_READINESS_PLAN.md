@@ -255,3 +255,17 @@ Raw output in section 15 of `REHEARSAL_PLAN.md`: 0047-0085 applied to the copy o
 ## 25. Rehearsal R1-R5 complete (2026-10-20)
 Raw R5 output in section 16 of `REHEARSAL_PLAN.md`. A restored copy of production upgrades 46 to 85 in 11 seconds and then equals the TEST schema exactly (3283 keys, 0 differences), passes all 375 repository verification checks, keeps its 62 tables' existing data and has all 85 ledger checksums equal to the repository.
 Blocker status: B2 (version gap): the migration risk is retired for the data that exists today (to be re-confirmed by a fresh snapshot and the pre-checks at the real window); remaining parts are the production gate scripts, the window plan, the API/web deploy order and the compatibility gap (estimated 1-2 minutes, untested). B10 (fresh snapshot of the current state) stands until the real window. B1 still lacks the production Lambda commit and the web's API host. B3-B9 unchanged. Open now: R6 rollback rehearsal (optional), R8 deletion of the copy (RED), snapshot retention, and per-table row counts from the local baseline file.
+
+## 26. Readiness assessment updated for existing production data (2026-10-20)
+Source: owner-pasted counts (section 17 of `REHEARSAL_PLAN.md`): 1 organization, 5 users and memberships, 4 clients, 5 client authorizations, 4 caregiver records, 36 shifts, 89 audit events (8 of 28 non-empty tables shown; 448 rows in total).
+| Item | Before | Now |
+|---|---|---|
+| Does production hold tenant data? | INFERRED no ("0 of 0 agencies", 448 rows) | **Yes (owner-pasted counts).** Whether it is real or synthetic is NOT established. |
+| Upgrade risk to data | Reviewed statically; rehearsal on a copy with seed data | The 39 migrations preserved the existing rows on a restored copy (counts, and content where columns are unchanged). Still one moment, small data. |
+| Operational impact of the compatibility gap | Assumed negligible (no users) | **Real:** at least 5 user accounts and 4 caregivers can be affected; the window needs notice and quiet pre-checks |
+| Data handling of the rehearsal copy | Assumed little data | Treat as production data that may contain PHI; shortest possible life; delete files with the copy |
+| B1 (state unknown) | narrowed | narrowed further (data profile known); still lacks the Lambda commit and the web's API host |
+| B2 (version gap) | migration risk retired for the data that existed | migration risk retired for this data set; operational window and compatibility gap remain |
+| B5 (security gates) | unverified on production | unchanged, and more important: a production organization with accounts exists, so MFA sign-in, tenant isolation and signature storage on production are real gates |
+| Readiness | NOT READY / NO-GO | **NOT READY / NO-GO** (unchanged); the blockers that remain are now operational rather than "does it migrate" |
+Open owner questions (affect access, users and data handling): Are the existing rows real? If so, who uses production today and when is a quiet window? Recommended default until answered: treat the data as real, schedule the production upgrade only in a window agreed with the organization's users, and run the pre-window checks (no open visit, no shift in the window, fresh snapshot).

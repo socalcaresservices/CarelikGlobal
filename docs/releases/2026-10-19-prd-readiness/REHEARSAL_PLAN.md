@@ -154,3 +154,23 @@ Next: R5 verify (read-only on the copy), which has not run yet.
 | C4: existing data | 62 tables compared; 0 problems (row counts and content unchanged, except permission rows the migrations add) |
 Claims C1, C2, C3, C4, C5 and C6 are now supported by raw output on the restored copy: C1 restore (R2/R3), C2 (R4/R5), C3 and C5 (R5), C4 (R5), C6 duration (R4: 11 s). C7 (rollback) has not been run.
 What this does NOT establish: API compatibility during the migration-to-deploy gap (no application ran against the copy); behavior with real tenant data (the copy holds 448 rows in 28 tables, so C4 is satisfied but is a weak test of data preservation; the per-table counts that would show whether any tenant data exists are still unread); the production run itself (different moment, different data); the BACKUP REQUIRED rollback scripts with data.
+
+## 17. Per-table counts from the baseline file (OWNER-PASTED, 2026-10-20): CORRECTION of earlier inferences
+Read from `~/ogevia-prd-rehearsal/baseline-fp.tsv` (a local file; counts only; the copy was taken from the snapshot of 2026-10-20 01:32Z). The owner pasted 8 of the 28 non-empty tables:
+| Table | Rows |
+|---|---|
+| `ogevia.organizations` | 1 |
+| `ogevia.app_users` | 5 |
+| `ogevia.organization_memberships` | 5 |
+| `ogevia.clients` | 4 |
+| `ogevia.client_authorizations` | 5 |
+| `ogevia.caregiver_records` | 4 |
+| `ogevia.shifts` | 36 |
+| `ogevia.audit_events` | 89 |
+These eight tables hold 149 of the 448 rows; the other 20 non-empty tables were not pasted.
+**Corrections.** (1) Section 14 inferred "little or no tenant data" and the readiness plan (sections 11, 23) read "enforcement activated for 0 of 0 agencies" as suggesting no tenant: both inferences are WRONG. Production holds one organization with users, clients, caregivers, authorizations, shifts and an audit trail. "0 of 0 agencies" counts rows of the readiness-settings table, not organizations; that table is empty. (2) Section 4's remark that C4 would be "trivially met" does not apply: the data-unchanged check ran against real rows (see below).
+**Not established:** whether these rows are real people and real service records or synthetic acceptance-test data. The production configuration says "real data only here" and the production deployment documents describe creating labelled synthetic records for smoke tests; 4 clients, 4 caregivers, 36 shifts and 89 audit events could be either. Until the owner states which, the copy and its fingerprint files are to be treated as production data that may contain PHI.
+**Effect on what the rehearsal proves.** R5's C4 (62 tables, 0 problems) now has weight: the 1 organization, 5 users, 5 memberships, 4 clients, 5 authorizations, 4 caregivers, 36 shifts and 89 audit events survived the 39 migrations with unchanged counts, and unchanged content for every table whose columns the migrations did not change (for tables that gained columns, such as `shifts`, only the count is compared). It is still a small data set and a snapshot of one moment.
+**Effect on the production window.** There is at least one existing organization with 5 user accounts. During the migration-to-API-deploy gap (estimated 1-2 minutes) the old API cannot start an unscheduled visit or confirm a visit; the window must be agreed with those users, with no visit in progress and no confirmation pending. Pre-window checks to add: no open (started, not ended) visit; no shift starting inside the window; a fresh snapshot (B10) at the window start.
+**Effect on R6.** Rolling back now acts on a copy that has real rows in the tables the old schema had; the new tables are empty, so the guards should not trigger, but the 13 BACKUP REQUIRED scripts and the down scripts that touch existing tables are exercised against real rows for the first time. R6 remains optional and recommended.
+**Effect on the copy.** It holds production data that may be PHI. Keep its life short, export nothing, and delete the baseline and fingerprint files in `~/ogevia-prd-rehearsal/` and `~/prd-rehearsal-pkg/` together with the copy (R8). The fingerprint files contain md5 digests of whole tables, not values.
