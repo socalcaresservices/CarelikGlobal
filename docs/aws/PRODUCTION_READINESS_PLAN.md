@@ -354,3 +354,6 @@ No preparation output has been pasted into this session. The owner's message "Pr
 
 ## 39. Preparation finding: locale-sensitive stray check (2026-10-20)
 d2 stopped in CloudShell reporting three tracked files as "not in the manifest". A fresh rebuild of the operator tarball at e80b770 lists them (981 manifest lines); the operator package is not stale. The false report most likely comes from `comm` running in CloudShell's UTF-8 collation (my defect; TEST's equivalent check sets `LC_ALL=C comm`). Workaround: `export LC_ALL=C`. Source fixed in the repository; delivered package `a6bd0613…` unchanged.
+
+## 40. Written GO and window approved (2026-10-20)
+Owner: "GO. Window 2026-10-21T17:00:00Z to 2026-10-21T21:00:00Z. Reference owner-go-prd-20261020-01. Gap accepted. MFA tester: Ogechi Okereke." The window is APPROVED (section 37/38 labels superseded). Preparation was reported complete by the owner (hash a6bd0613..., both manifests, Node 22.22.0, pnpm 9.15.4, CDK 2.1143.0, BASELINE OK, GATE PASSED, EXPECTED-ONLY YES, ASSEMBLY READY, CHECK PASSED, WEB BUILD READY; with `LC_ALL=C`); that report came as a summary, not pasted output. Execution has not started; nothing in production has changed. Assessment: GO for execution inside the window, each changing step individually typed.

@@ -48,3 +48,11 @@ In package `a6bd0613…` (commit `af70a8b`), the stray-file check (`lib.sh opera
 
 ## 4. Sign-off
 Prepared (implemented and tested locally): Claude Code, 2026-10-20. Owner GO: ____________ date ____________ approval reference ____________ window ____________ to ____________
+
+## 5. Written GO (owner, 2026-10-20)
+"GO. Window 2026-10-21T17:00:00Z to 2026-10-21T21:00:00Z. Reference owner-go-prd-20261020-01. Gap accepted. MFA tester: Ogechi Okereke."
+- Window: **APPROVED** 2026-10-21T17:00:00Z to 2026-10-21T21:00:00Z (supersedes the PROPOSED label above).
+- Approval reference: `owner-go-prd-20261020-01`. M1 closed. M2 closed.
+- M7 (1-2 minute migrate-to-API gap): **accepted** by the owner.
+- M9 (manual sign-in validation): tester **Ogechi Okereke** (the account must have MFA).
+- Still the operator's: a second recovery session open during the window (M10). Execution order: README sequence, steps 5-10, then the manual sign-in check.
