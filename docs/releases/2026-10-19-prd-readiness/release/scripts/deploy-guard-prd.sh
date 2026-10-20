@@ -56,6 +56,7 @@ case "$MODE" in
     [[ $RC == 0 ]] || { say "STOP: cdk deploy exited $RC. Read the message; see recovery. Do not continue."; exit 1; }
     say "deploy command finished; now run: bash deploy-guard-prd.sh post $STACK" ;;
   post)
+    rm -f "$B/api-at-release.ok"
     st=$(status); [[ "$st" == UPDATE_COMPLETE ]] && ok "$STACK is UPDATE_COMPLETE" || nope "$STACK is '${st:-unreadable}', not UPDATE_COMPLETE"
     mkdir -p "$B/after"
     A cloudformation get-template --stack-name "$STACK" --template-stage Original --output json 2>/dev/null | jq '.TemplateBody // .' > "$B/after/$STACK.json"
@@ -70,5 +71,5 @@ case "$MODE" in
     NR=$(A apigatewayv2 get-routes --api-id "$APIID" --output json 2>/dev/null | jq '.Items | length'); [[ "$NR" == 228 ]] && ok "the API has 228 routes" || nope "the API has '${NR:-?}' routes, expected 228"
     RULE=$(A cloudformation list-stack-resources --stack-name "$STACK" --output json 2>/dev/null | jq -r '[.StackResourceSummaries[] | select(.ResourceType=="AWS::Events::Rule")][0].PhysicalResourceId // empty')
     [[ -n "$RULE" && "$(A events describe-rule --name "$RULE" --output json 2>/dev/null | jq -r .State)" == ENABLED ]] && ok "the production ComplianceSweep rule exists and is ENABLED" || nope "no ENABLED ComplianceSweep rule in $STACK"
-    [[ $bad == 0 ]] && { say "POST-CHECK PASSED for $STACK"; exit 0; } || { say "STOP: a post-deployment check failed. See recovery."; exit 1; } ;;
+    [[ $bad == 0 ]] && { printf '%s\n' "$NEW" > "$B/api-at-release.ok"; say "POST-CHECK PASSED for $STACK (marker $B/api-at-release.ok written: the web publish requires it)"; exit 0; } || { say "STOP: a post-deployment check failed. See recovery."; exit 1; } ;;
 esac

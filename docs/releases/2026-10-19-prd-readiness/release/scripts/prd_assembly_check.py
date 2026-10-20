@@ -12,7 +12,7 @@ STACKS = ["Ogevia-prd-DatabaseSecret", "Ogevia-prd-EvidenceStorage", "Ogevia-prd
 ASSETS = ["eab95a809b3b95b7479cfe6a572e1be0ea068ef6f12751419669443397fe7eda", "7c5f8eb676c93261fd7a80f34d40ba70379c040d94bb2e9bd80f2d007ebc9759"]
 
 def main():
-    ap = argparse.ArgumentParser(); ap.add_argument("--assembly", required=True); ap.add_argument("--release-templates", required=True)
+    ap = argparse.ArgumentParser(); ap.add_argument("--assembly", required=True); ap.add_argument("--release-templates", required=True); ap.add_argument("--approval", default=None)
     a = ap.parse_args()
     bad = []
     try:
@@ -36,6 +36,29 @@ def main():
             print(f"PASS code asset {h[:12]}... present")
         else:
             bad.append(f"code asset directory asset.{h} is missing")
+    if a.approval:
+        n = 0
+        for s in STACKS:
+            try:
+                t = load(os.path.join(a.assembly, f"{s}.template.json"))
+            except (OSError, ValueError, json.JSONDecodeError):
+                continue
+            vals = []
+            for r in t.get("Resources", {}).values():
+                tg = r.get("Properties", {}).get("Tags")
+                if isinstance(tg, list):
+                    vals += [x.get("Value") for x in tg if isinstance(x, dict) and x.get("Key") == "ogevia:deployment-status"]
+                elif isinstance(tg, dict) and "ogevia:deployment-status" in tg:
+                    vals.append(tg["ogevia:deployment-status"])
+            n += len(vals)
+            want = f"approved-{a.approval}"  # what infra/aws/lib writes in deploy mode (observed in a real synth)
+            wrong = sorted({str(v) for v in vals if v != want})
+            if wrong:
+                bad.append(f"{s}: ogevia:deployment-status tag value(s) {wrong} are not 'approved-{a.approval}' (the deploy-mode tag for approval reference {a.approval})")
+        if n == 0:
+            bad.append("no ogevia:deployment-status tag was found in the assembly")
+        elif not any(b.startswith(tuple(STACKS)) and "deployment-status" in b for b in bad):
+            print(f"PASS every ogevia:deployment-status tag ({n}) carries approved-{a.approval}")
     if not os.path.isfile(os.path.join(a.assembly, "manifest.json")):
         bad.append("manifest.json is missing")
     for b in bad:

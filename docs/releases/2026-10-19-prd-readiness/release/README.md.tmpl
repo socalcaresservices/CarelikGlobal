@@ -1,6 +1,6 @@
-# Ogevia production release package, stages A (discovery) and B (gate and guard)
+# Ogevia production release package (stages A, B, C1, D1-D3, E1)
 
-Source commit @COMMIT@. **Every AWS call in stages A and B is a read, except the deploy guard's `deploy` mode, which is not usable until later stages exist** (describe, get, list, head), plus a download of the production web bucket and curl GETs of the production web origin. Nothing in AWS is created, changed or deleted. It is not a deployment and does not authorise one.
+Source commit @COMMIT@. **Nothing in this package has been run against AWS.** It was tested locally against a mocked `aws`, a real PostgreSQL 16 (the 46 to 85 migration and its rollback), fake `cdk`/`vite` programs, and a real `cdk synth` and `vite build`. **Stages A, B and E1 are read-only. C1, D1, D2 (local), D3 and the guard `deploy` mode are the YELLOW steps below: each needs the owner's explicit GO for the window, and each stops at a typed phrase.**
 
 ## Why a discovery stage first
 The production stacks (`Ogevia-prd-*`) were last deployed on 2026-10-10. What they run today (the Lambda's build, the web's version and API host, the live templates) was never recorded. A gate that allows "only the expected difference" cannot be written until the live templates are read. This stage captures them, reports how they differ from the release templates bundled here, and makes the recovery copies a release needs (the Lambda code zip, the previous code asset, the whole web bucket). The next stage (gate, window, deploy, verify) is written from this report.
@@ -36,3 +36,41 @@ bash scripts/deploy-guard-prd.sh check Ogevia-prd-ServiceVerificationApi     # s
 The gate (`scripts/prd_gate.py`) allows ONLY: the two pinned Lambda asset changes (from the observed live keys), the pinned description changes, one added statement `ClientDocumentObjects` (S3 get/get-version/put on the production evidence bucket's `*/client-documents/*/*`), one added statement `SwitchSignInsOnOff` (Cognito disable/enable on the single user pool), exactly 66 added routes (each JWT-authorized with an existing authorizer and an existing integration; a new public route is refused unless `OGEVIA_ALLOW_PUBLIC_ROUTES` names it after review), and the ComplianceSweep rule (rate(15 minutes), enabled, target the Handler) with its invoke permission. Anything else, or production not being in the recorded baseline state, prints `VIOLATION` lines and exits 1.
 `deploy-guard-prd.sh deploy` exists but cannot run yet: it needs a deploy-mode synthesis made with the owner's approval reference, a pinned CDK CLI, a fresh snapshot named `ogevia-prod-postgres-pre-prdrelease-YYYYMMDDHHMM`, and a marker written by the migration stage after the database reaches 85/0085. Those stages are not part of this package. **Nothing in this package authorises or performs a deployment.**
 Paste back: the output of `p2-gate.sh` (it prints every VIOLATION).
+
+
+## Pinned values (every script refuses anything else)
+- Migration set 0047-0085 sha256: `@MIGRATIONS_SHA@` (export as `OGEVIA_EXPECT_MIGRATIONS_SHA`)
+- Rollback set 0047-0085 sha256: `@ROLLBACK_SHA@` (export as `OGEVIA_EXPECT_ROLLBACK_SHA`; only for a rollback)
+- Release code commit (the TEST operator tarball `ogevia-operator-e80b770`): `e80b770210c54e423d28ecf48e00f1dda9506cec` (export as `OGEVIA_EXPECT_COMMIT` for D3 and E1). This package's own commit (above) is `OGEVIA_EXPECT_COMMIT` for D1.
+- CDK CLI 2.1143.0 (from the operator package's own `node_modules`); Handler asset `@HANDLER_KEY@`; Identity asset `@IDENTITY_KEY@`.
+
+## Exact sequence (CloudShell, us-west-2). One approval reference `REF` (6-64 chars of `A-Za-z0-9._-`, not the placeholder) and one release window (UTC, at most 12 h) from the owner's GO message.
+Setup (read-only/local): extract this package and the operator tarball (`tar -xzf ... -C /tmp/x`), verify both manifests, `pnpm install --frozen-lockfile --store-dir /tmp/pnpm-store` in the operator package (everything large goes to `/tmp`). Keep `~/ogevia-prd-before` (the recovery captures).
+
+| # | Command | Class | Typed phrase | What it proves or does |
+|---|---|---|---|---|
+| 1 | `bash scripts/p2-gate.sh` | read-only | none | production is still the recorded baseline; the whole API-stack difference is the release's. If it says CHANGED: rerun `p0-baseline-capture.sh` (this also refreshes the web recovery copy) and review |
+| 2 | `OGEVIA_DEPLOY_APPROVAL=REF OGEVIA_OPERATOR_PKG=<dir> bash scripts/d2-assemble-prd.sh` | local (cdk synth, no AWS call) | none | deploy-mode assembly with the approval reference; exactly the 5 Ogevia-prd stacks equal to the release templates, both Lambda assets, every `ogevia:deployment-status` tag = `approved-REF`. Writes `~/ogevia-prd-before/assembly.env` |
+| 3 | `source ~/ogevia-prd-before/assembly.env; bash scripts/deploy-guard-prd.sh check Ogevia-prd-ServiceVerificationApi` | read-only | none | the gate again, plus the assembly check |
+| 4 | `OGEVIA_OPERATOR_PKG=<dir> OGEVIA_EXPECT_COMMIT=e80b770210c54e423d28ecf48e00f1dda9506cec bash scripts/d3-web-prd.sh build` | local | none | builds the web with `VITE_APP_VERSION=<commit>`, reusing production's own embedded Cognito/API values; refuses any other difference |
+| 5 | `OGEVIA_DEPLOY_APPROVAL=REF OGEVIA_RELEASE_WINDOW_START=... OGEVIA_RELEASE_WINDOW_END=... bash scripts/c1-snapshot-prd.sh create` | **YELLOW** (billable snapshot) | `SNAPSHOT-NOW` | `ogevia-prod-postgres-pre-prdrelease-<UTC YYYYMMDDHHMM>`: manual, encrypted, available. Export the id it prints as `OGEVIA_PREDEPLOY_SNAPSHOT_ID` |
+| 6 | `OGEVIA_DEPLOY_APPROVAL=REF OGEVIA_EXPECT_COMMIT=<this package's commit> OGEVIA_EXPECT_HOST_IP=<admin host IP> OGEVIA_EXPECT_MIGRATIONS_SHA=... OGEVIA_PREDEPLOY_SNAPSHOT_ID=... OGEVIA_RELEASE_WINDOW_START=... OGEVIA_RELEASE_WINDOW_END=... bash scripts/d1-migrate-prd.sh migrate` | **YELLOW/RED** (production database) | `OPEN-5432-WINDOW-MIGRATE-PRD` | the temporary /32 rule on the shared RDS security group, ledger 46/0046 and checksums, fingerprint, 39 files (one transaction each), ledger 85/0085, 85 checksums, 8 verification files, data unchanged, rule removed and the group verified identical. Writes `db-at-0085.ok`. **Go straight to step 7: between 6 and 7 the old API fails against the new schema (about 1-2 minutes estimated; not measured)** |
+| 7 | `source ~/ogevia-prd-before/assembly.env; OGEVIA_PREDEPLOY_SNAPSHOT_ID=... bash scripts/deploy-guard-prd.sh deploy Ogevia-prd-ServiceVerificationApi` | **YELLOW** (production API stack) | `DEPLOY-Ogevia-prd-ServiceVerificationApi` | repeats the gate and the assembly check; CDK asks to approve IAM broadening: answer yes ONLY if it lists exactly ClientDocumentObjects, SwitchSignInsOnOff and the ComplianceSweep rule and permission |
+| 8 | `bash scripts/deploy-guard-prd.sh post Ogevia-prd-ServiceVerificationApi` | read-only | none | live template equals the release, Lambda code changed and still serves ogevia_prd, 228 routes, sweep rule ENABLED; writes `api-at-release.ok` |
+| 9 | `OGEVIA_DEPLOY_APPROVAL=REF OGEVIA_OPERATOR_PKG=<dir> OGEVIA_EXPECT_COMMIT=e80b770210c54e423d28ecf48e00f1dda9506cec bash scripts/d3-web-prd.sh publish` | **YELLOW** (production web) | `PUBLISH-WEB-Ogevia-prd` | uploads without `--delete`, `index.html` last, invalidates, verifies the served page byte for byte, the version string, `VITE_APP_ENV:"production"` and the production API host only |
+| 10 | `OGEVIA_EXPECT_COMMIT=e80b770210c54e423d28ecf48e00f1dda9506cec OGEVIA_TARBALL_SHA256=<sha of this tarball> OGEVIA_DEPLOY_APPROVAL=REF bash scripts/e1-record-deployed-prd.sh` | read-only | none | maps every deployed artifact to the commit, checks the sweep log group for ERROR events, writes `DEPLOYED_RECORD.txt` |
+Then the owner signs in at the production web address with a real account (manual; the package cannot prove Cognito sign-in, MFA, or the browser flows).
+
+## Recovery (each is YELLOW and needs its own GO)
+- Window left open / session lost: `bash scripts/d1-migrate-prd.sh --restore-only` (verifies the security group equals the recorded original).
+- Migration failed part-way: STOP; do not deploy. The failing file rolled back; earlier files stay applied. Fix forward (never edit an applied file), then `migrate --resume`. Or roll back (below).
+- Web wrong: `bash scripts/d3-web-prd.sh rollback-verify` then `rollback` (phrase `RESTORE-WEB-Ogevia-prd`): restores the captured files and `index.html`, verifies against the capture.
+- API wrong: quick rollback `aws lambda update-function-code --function-name <handler> --s3-bucket <bucket> --s3-key <previous key>` from `~/ogevia-prd-before/previous-api-asset.txt`, then reconcile the CloudFormation drift with a reviewed redeploy. (This is NOT scripted here; the previous asset was verified to exist at baseline.)
+- Database: `bash scripts/d1-migrate-prd.sh rollback` (phrases `OPEN-5432-WINDOW-ROLLBACK-PRD` and `ROLLBACK-DROPS-DATA-ogevia_prd`). 13 of the 39 down scripts DROP TABLES WITH THEIR ROWS; the pre-release snapshot is the only backup and **restoring a snapshot is not a prepared procedure**. Roll the API and web back as well (the old API needs the old schema).
+
+## Not verified before the first real run (be ready for these)
+- Everything in AWS: the security-group edit, the Session Manager tunnel, the RDS-managed secret read, the CDK deploy, the S3 upload and CloudFront invalidation have never run; the mocks emulate the calls the scripts make, not AWS's behavior.
+- The migrations ran against PostgreSQL 16 (local), not the RDS instance's PostgreSQL 18.3; they ran on a restored copy of production (rehearsal R4-R6, PostgreSQL 18.3) with the same files.
+- Whether a CloudShell `cdk synth` reproduces the pinned asset hashes (it did in the development container; the assembly check stops the release if not).
+- Whether the live production bundle embeds the same Cognito/API values the build reuses (the build stops and prints any difference).
+- The 1-2 minute window between the migration and the API deploy is an estimate.
