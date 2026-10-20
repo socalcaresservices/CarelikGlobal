@@ -233,3 +233,6 @@ See "Update 2026-10-20" in `ROLLBACK_SCRIPTS_REVIEW_0047_0085.md`. New: `rollbac
 
 ## 18. R0 run (2026-10-20): passed; blocker B10 corrected
 See section 8 of `REHEARSAL_PLAN.md`. R0 passed in CloudShell with the verified package (read-only, nothing changed). The production instance facts are now owner-pasted raw output (db.t4g.micro, PostgreSQL 18.3, 20 GB gp3, single-AZ, default.postgres18). R0 counts 11 manual snapshots, not the 4 reported on 2026-10-19, so the statement that no `pre-prd` snapshot exists is withdrawn until the names are listed. Next gates: owner decisions (release window, rollback rehearsal, row-count read, snapshot retention) and approval of R1.
+
+## 19. Blocker B10 corrected (2026-10-20)
+A `pre-prd` snapshot exists: `ogevia-prod-postgres-pre-prd-20261010` (2026-10-10 05:44Z, available, encrypted), taken before the original production deployment. B10 is re-stated: no snapshot of the CURRENT production state exists; a fresh named snapshot is still the first action of any production sequence. Six of eleven snapshot names remain unseen (pager cut the paste off).

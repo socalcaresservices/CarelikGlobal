@@ -80,3 +80,14 @@ Package verified in CloudShell first: tarball sha256 `ce4bf51c...a2b8` matched, 
 | Cost | 0.528 USD per day of instance time at the cost-model rate; 20 GB storage and snapshot charges not computed (pricing not checked) |
 Correction: the 2026-10-19 inventory summary listed four manual snapshots and led to blocker B10 ("no `pre-prd` snapshot recorded"). R0 counts eleven. The earlier summary was incomplete, so B10 is NOT established either way until the eleven snapshot names are listed.
 Still unknown before R2: whether the restored copy accepts the source master credential; the live storage/snapshot prices; the release window for R1.
+
+## 9. Snapshot listing (OWNER-PASTED RAW OUTPUT, 2026-10-20; INCOMPLETE)
+The paste shows five rows and ends at a pager prompt (`:`), so six of the eleven manual snapshots counted by R0 were not seen. All five seen are `available` and encrypted:
+| Snapshot | Created (UTC) |
+|---|---|
+| `ogevia-prod-postgres-pre-0085-202610192111` | 2026-10-19 21:11:34 |
+| `ogevia-prod-postgres-pre-0085-202610190330` | 2026-10-19 03:30:19 |
+| `ogevia-prod-postgres-pre-0077-202610180858` | 2026-10-18 08:58:34 |
+| `ogevia-prod-postgres-pre-0052-20261015` | 2026-10-15 01:41:18 |
+| `ogevia-prod-postgres-pre-prd-20261010` | 2026-10-10 05:44:48 |
+Blocker B10 as first written ("no `pre-prd` snapshot recorded") was wrong: `ogevia-prod-postgres-pre-prd-20261010` exists. It was taken 2026-10-10 05:44Z, before the production secret (06:00Z) and Lambda (06:11Z) were created, so it is the anchor of the original production deployment, not a pre-upgrade anchor for the current state; it is ten days old. It is not a substitute for the fresh snapshot R1 takes. The other six snapshots are not yet seen.
