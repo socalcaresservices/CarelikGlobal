@@ -198,3 +198,6 @@ The owner reported R6 and R8 as completed and pasted the result lines (not the f
 Claims: C1-C7 all supported by output from the restored copy.
 **Remaining AWS footprint from the rehearsal:** one manual snapshot (`...pre-rehearsal-202610200131`, storage cost; the recommended retention is deletion within 7 days, i.e. by 2026-10-27, which is a RED action needing its own instruction) and the local working files in the owner's CloudShell (`~/ogevia-prd-rehearsal/`, `~/prd-rehearsal-pkg/`), which hold counts, hashes, timings and tunnel/state values but no row contents (all existing production data is owner-confirmed synthetic).
 **Not established:** that nothing else remains from the rehearsal (automated backups of the deleted instance, other snapshots): a read-only listing of instances, security groups and snapshots would confirm it. Raw output of R6 and R8 beyond the quoted result lines was not seen.
+
+## 20. Classification restated (2026-10-20)
+OWNER-CONFIRMED: the production records are synthetic test data only; no real clients, caregivers, schedules, users or PHI use production. See section 29 of `docs/aws/PRODUCTION_READINESS_PLAN.md`. Sections 17 and 18 are read with that classification: the rehearsal copy contained synthetic data only.
