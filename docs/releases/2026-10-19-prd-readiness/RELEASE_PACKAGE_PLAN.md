@@ -47,3 +47,32 @@ The 25 lines shown are all `RESOURCE-ADDED AWS::ApiGatewayV2::Route ...` (for ex
 **What this tells us.** Five of the six stacks need no deployment. The release changes ONE stack, `Ogevia-prd-ServiceVerificationApi`: new API routes (the release has 228; 68 more than live, so live has about 160, consistent with a build from before the TEST releases) and 31 changed properties (expected: the Handler's code asset key, the Handler's managed policy, and similar; not yet seen). The web stack and the shared network stack are unchanged. The web CONTENT in the bucket is separate from the CloudFormation template and must still be published.
 **Not yet seen:** part 2, the `p0-baseline-capture.sh` output (the Lambda's current build and asset key, the web's version string and API host, the live route count, snapshots, MFA, bucket protections). The paste began after the end of p0 (`BASELINE CAPTURED ... Nothing was changed in AWS.`), which indicates p0 finished without a failed check, but its facts have not been seen.
 Needed to write stage B: the 31 `CHANGED` lines (`grep ^CHANGED ~/ogevia-prd-before/diff-Ogevia-prd-ServiceVerificationApi.txt`) and the p0 output (`cat ~/ogevia-prd-before/log.txt`).
+
+## 8. Stage A result, part 2: the 31 changed properties and the p0 facts (OWNER-PASTED RAW OUTPUT, 2026-10-20)
+### The 31 CHANGED lines, decoded (all in `Ogevia-prd-ServiceVerificationApi`)
+| Change | Detail |
+|---|---|
+| Handler Lambda code | asset key `4832b6ba4f8ff1b8706697326b0d76d3d96d5031265c0d6024ee10c1e194817c.zip` -> `eab95a809b3b95b7479cfe6a572e1be0ea068ef6f12751419669443397fe7eda.zip` |
+| Identity Lambda code | `e345075a65c98ef8fae929be46fb48be5c3c268702af0f409df509fb3634791b.zip` -> `7c5f8eb676c93261fd7a80f34d40ba70379c040d94bb2e9bd80f2d007ebc9759.zip` |
+| Identity Lambda and role descriptions | wording only ("caregiver invitations: Cognito AdminCreateUser/AdminGetUser only" -> "identity: create/get/disable/enable of sign-ins on one pool"; role text likewise) |
+| Handler managed policy | **one statement is ADDED**, `ClientDocumentObjects`: `s3:GetObject`, `s3:GetObjectVersion`, `s3:PutObject` on `arn:aws:s3:::ogevia-prd-signature-evidence-300094796789-us-west-2/*/client-documents/*/*` only. The other 22 CHANGED lines on this policy are the later statements shifting down one position (AgencyLogoObjects, EvidenceKeyForSignatureObjects, InvokeIdentityAdmin); their content is unchanged. |
+| Identity managed policy | **one statement is ADDED**, `SwitchSignInsOnOff`: Allow `cognito-idp:AdminDisableUser` and `cognito-idp:AdminEnableUser` on `arn:aws:cognito-idp:us-west-2:300094796789:userpool/us-west-2_849AYz5J7` (the single user pool in the account, shared with TEST) |
+Count check: 1 (handler asset) + 22 (handler policy) + 2 (identity asset, description) + 5 (identity policy statement) + 1 (role description) = 31.
+**Two IAM permissions are added.** CDK classes both as broadening and will ask for approval at deploy (`CLAUDE.md` s.13: changing IAM policies is a YELLOW action). The same release change is already live in TEST.
+### Added resources: 68, not all seen
+Live has 162 routes (p0, counted from the API itself) and the release has 228: that is 66 more routes, but 68 resources are added, so **two added resources are not routes**. Strongest candidate (INFERRED, not seen): the `ComplianceSweep` EventBridge rule and its Lambda invoke permission, because p0 found exactly one `ComplianceSweep` rule in the account and it belongs to the TEST stack (`Ogevia-prod-ServiceVerifica-ComplianceSweep51D1109D-oAlBozy5Hiaa`, ENABLED); production has none today. Needed: `grep '^RESOURCE' diff-Ogevia-prd-ServiceVerificationApi.txt | grep -v 'ApiGatewayV2::Route'`.
+### p0 facts (raw, from `grep` of the log; the grep did not show the PASS lines, but it included FAIL and STOP and none appeared, and `BASELINE CAPTURED` was printed, which requires zero failures)
+| Fact | Value |
+|---|---|
+| Production Lambda | `Ogevia-prd-ServiceVerificationApi-Handler886CB40B-KQ2l1HsdGkhR`, CodeSha256 `ffiawXVEQlhnBniTJouSjqgvvux5QrjsNSSyDIIuEpc=`, last modified 2026-10-10T06:11:29Z, nodejs24.x; live code asset key `4832b6ba...817c.zip` (from the diff) |
+| p0 checks that passed (no FAIL) | Lambda serves `ogevia_prd` with `OGEVIA_ENV=prd`; the downloaded code zip equals the live hash; the previous code asset exists in the asset bucket; every stack settled |
+| Production web | `https://d3l4psdkokkvnb.cloudfront.net`; served `index.html` equals the bucket's (direct byte hash); main bundle `assets/index-DewFCiEF.js`; **no version string** (an older build); environment `production`; the only API host in the bundle is `zk527zk4ua.execute-api.us-west-2.amazonaws.com`, the production API |
+| API routes | 162 live; the release has 228 |
+| Shared S3 endpoint | `vpce-091d94b7ec23278e7`: 4 entries for the TEST bucket, 4 for the production bucket, 2 client-documents entries (matches the release NetworkEgress, as p1 showed) |
+| RDS | available, private, encrypted; 12 manual snapshots (newest: the rehearsal snapshot) |
+| Cognito | pool `us-west-2_849AYz5J7`, MFA ON |
+| Evidence and web buckets | all four `ogevia-prd-*` buckets: versioning Enabled, public-access block on |
+### What this closes and opens
+- B1 narrowed: the web DOES call the production API (answers the question open since 2026-10-10); the production Lambda's build is identified by its asset key (the commit is still not known); the web is an older build without a version string.
+- The release is: one stack deployment (the API stack: new routes, two new code assets, two added IAM statements, probably the ComplianceSweep rule), a web content publish, and migrations 0047-0085. No other stack changes.
+- Stage B gate allow-list (written from this): exactly the Handler and Identity asset changes, the two description changes, the two added statements (nothing else in either policy), added `AWS::ApiGatewayV2::Route` resources only (68 minus the non-route ones), and the non-route additions once seen; no removal, no replacement, no change to any other stack.

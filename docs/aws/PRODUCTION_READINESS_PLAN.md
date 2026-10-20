@@ -326,3 +326,6 @@ Plan and design: `docs/releases/2026-10-19-prd-readiness/RELEASE_PACKAGE_PLAN.md
 
 ## 31. Stage A p1 result (2026-10-20)
 Five of six stacks (including the shared NetworkEgress) equal the release templates; only `Ogevia-prd-ServiceVerificationApi` differs (68 routes added, 31 properties changed, nothing removed). The release therefore needs: migrations 0047-0085, one stack deployment (the API stack), and a web content publish; no change to the web, secret, evidence, observability or network stacks. p0 facts (Lambda build, web version and API host) still to be pasted. See section 7 of `RELEASE_PACKAGE_PLAN.md`.
+
+## 32. Stage A complete except two unseen lists (2026-10-20)
+Raw p0/p1 facts recorded in section 8 of `RELEASE_PACKAGE_PLAN.md`. The production web calls the production API (VERIFIED, raw). The release adds two IAM statements (ClientDocumentObjects on the handler; SwitchSignInsOnOff on the identity function, for the shared user pool) and probably creates the ComplianceSweep rule in production (production has none today; INFERRED). Remaining to see: the two non-route added resources. B1: Lambda build identified by asset key; commit still unknown.
