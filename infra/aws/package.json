@@ -17,6 +17,7 @@
     "db:migrate": "tsx db/scripts/migrate.ts",
     "db:verify": "tsx db/scripts/verify.ts",
     "db:rollback-readiness": "tsx db/scripts/rollback.ts",
+    "db:rollback-to": "tsx db/scripts/rollback-to.ts",
     "user-migration:plan": "tsx scripts/user-migration-plan.ts",
     "harness:setup": "tsx local-harness/setup.ts",
     "harness:build": "tsx local-harness/build-web.ts",
