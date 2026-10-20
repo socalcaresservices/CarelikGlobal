@@ -142,3 +142,15 @@ R2 raw output: plan as designed (own group `ogevia-prd-rehearsal-20261020-sg` in
 R4 raw output (mutates the copy only): the phrase `MIGRATE-ogevia-prd-rehearsal-20261020` was typed; 39 migrations 0047-0085 applied one transaction each with no error; `ledger after: 85 migrations applied, latest 0085; total 11 s`; `MIGRATED`. Per-file times: sum 9678 ms, mean 248 ms, slowest 0074 (630 ms), 0055 (598 ms), 0054 (529 ms), 0053 (525 ms). (One earlier attempt in the owner's shell used a command with a trailing dot and failed with "No such file"; nothing ran.)
 Consequences: the 0061 duplicate-shift guard passed on this data; no migration failed; the whole 39-file upgrade of a 14 MB database took 11 seconds on a db.t4g.micro. Window sizing input (R7): migration about 11 s; the TEST API deploy took 46 s (CDK deployment 46.07 s, 89.81 s total); the old production API cannot start or confirm a visit (0050 drops those functions) between the end of the migration and the end of the API deploy, so the compatibility gap is roughly 1 to 2 minutes plus the web publish, if the steps run back to back. Real production timings will depend on its data at the time.
 Next: R5 verify (read-only on the copy), which has not run yet.
+
+## 16. R5 verification result (OWNER-PASTED RAW OUTPUT, 2026-10-20)
+`r5-verify.sh` on the migrated copy (read-only session): `VERIFIED: the copy passes C2-C5.`
+| Check | Result |
+|---|---|
+| Ledger | 85|0085 |
+| C2: ledger checksums | all 85 equal the repository's files |
+| C5: repository verification set | 01_schema_version 3 rows, 02_required_objects 95, 03_constraints_indexes 26, 04_roles_grants 9, 05_tenant_boundaries 11, 06_authorization_invariants 6, 07_visit_invariants 11, 08_release_objects 214: 375 check rows, none failed |
+| C3: schema parity with the copy of TEST (`ogevia_sv_test`) | 3283 schema keys compared; 0 differences |
+| C4: existing data | 62 tables compared; 0 problems (row counts and content unchanged, except permission rows the migrations add) |
+Claims C1, C2, C3, C4, C5 and C6 are now supported by raw output on the restored copy: C1 restore (R2/R3), C2 (R4/R5), C3 and C5 (R5), C4 (R5), C6 duration (R4: 11 s). C7 (rollback) has not been run.
+What this does NOT establish: API compatibility during the migration-to-deploy gap (no application ran against the copy); behavior with real tenant data (the copy holds 448 rows in 28 tables, so C4 is satisfied but is a weak test of data preservation; the per-table counts that would show whether any tenant data exists are still unread); the production run itself (different moment, different data); the BACKUP REQUIRED rollback scripts with data.
