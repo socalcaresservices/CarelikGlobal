@@ -236,3 +236,6 @@ See section 8 of `REHEARSAL_PLAN.md`. R0 passed in CloudShell with the verified 
 
 ## 19. Blocker B10 corrected (2026-10-20)
 A `pre-prd` snapshot exists: `ogevia-prod-postgres-pre-prd-20261010` (2026-10-10 05:44Z, available, encrypted), taken before the original production deployment. B10 is re-stated: no snapshot of the CURRENT production state exists; a fresh named snapshot is still the first action of any production sequence. Six of eleven snapshot names remain unseen (pager cut the paste off).
+
+## 20. Snapshot inventory completed (2026-10-20)
+Eleven manual snapshots listed in full (section 10 of `REHEARSAL_PLAN.md`). Two `pre-prd` snapshots exist (2026-10-08, 2026-10-10), both pre-deployment. B10 (no snapshot of the current production state) stands. Open owner decision: a retention rule for the eleven snapshots.

@@ -91,3 +91,21 @@ The paste shows five rows and ends at a pager prompt (`:`), so six of the eleven
 | `ogevia-prod-postgres-pre-0052-20261015` | 2026-10-15 01:41:18 |
 | `ogevia-prod-postgres-pre-prd-20261010` | 2026-10-10 05:44:48 |
 Blocker B10 as first written ("no `pre-prd` snapshot recorded") was wrong: `ogevia-prod-postgres-pre-prd-20261010` exists. It was taken 2026-10-10 05:44Z, before the production secret (06:00Z) and Lambda (06:11Z) were created, so it is the anchor of the original production deployment, not a pre-upgrade anchor for the current state; it is ten days old. It is not a substitute for the fresh snapshot R1 takes. The other six snapshots are not yet seen.
+
+## 10. Full snapshot listing (OWNER-PASTED RAW OUTPUT, 2026-10-20) - completes section 9
+Eleven manual snapshots of `ogevia-prod-postgres`, matching the count R0 reported (sorted newest first):
+| Snapshot | Created (UTC) |
+|---|---|
+| `ogevia-prod-postgres-pre-0085-202610192111` | 2026-10-19 21:11:34 |
+| `ogevia-prod-postgres-pre-0085-202610190330` | 2026-10-19 03:30:19 |
+| `ogevia-prod-postgres-pre-0077-202610180858` | 2026-10-18 08:58:34 |
+| `ogevia-prod-postgres-pre-0052-20261015` | 2026-10-15 01:41:18 |
+| `ogevia-prod-postgres-pre-prd-20261010` | 2026-10-10 05:44:48 |
+| `ogevia-prod-postgres-pre-prd-20261008` | 2026-10-08 19:29:51 |
+| `ogevia-prod-postgres-pre-0036-20261005` | 2026-10-05 09:49:08 |
+| `ogevia-prod-postgres-pre-0026-20261005` | 2026-10-05 02:51:02 |
+| `ogevia-prod-postgres-at-0021-v2-20261005` | 2026-10-05 00:20:27 |
+| `ogevia-prod-postgres-pre-0021-20261004` | 2026-10-04 23:09:11 |
+| `ogevia-prod-postgres-pre-pilot-20261004` | 2026-10-04 00:10:51 |
+(Encryption and status were shown only for the first five in the earlier paste: all available and encrypted. The remaining six were not shown with those columns; R1 verifies only the snapshot it creates.)
+Findings: there are two `pre-prd` snapshots (2026-10-08 and 2026-10-10), both taken before production was created, neither of the current state. No snapshot is named `pre-rehearsal`, so the rehearsal naming `ogevia-prod-postgres-pre-rehearsal-YYYYMMDDHHMM` cannot clash. Eleven manual snapshots of a 20 GB instance are accumulating storage charges; a retention rule for them is an owner decision (deleting any is a RED action and is not proposed here). B10 stands as re-stated: a fresh snapshot of the current production state is required and does not yet exist.
