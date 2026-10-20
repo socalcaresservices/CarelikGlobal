@@ -201,3 +201,12 @@ Gap: 39 migrations (0047-0085) and every API/web release since 2026-10-10 (handl
 1. Raw ledger rows with applied times (rerun the same report; read-only, same temporary rule: a separate approval).
 2. Non-PHI row counts to decide whether production holds real data (needs a new read script; not prepared).
 3. The corrected API-host check against the production web (CloudShell `curl`, no rule needed).
+
+## 12. Review of the eight flagged migrations (2026-10-20; static, repository only)
+Full review: `docs/releases/2026-10-19-prd-readiness/MIGRATION_REVIEW_EIGHT_FILES.md`.
+- The earlier scan over-flagged: most UPDATE and DELETE matches are inside function bodies. At migration time, the eight files contain no UPDATE, DELETE, DROP TABLE or DROP COLUMN on existing data; the only data statements are two permission inserts in 0055.
+- Every check-constraint replacement only widens the allowed values (static parse), and every new check on an existing table passes for existing rows (new nullable columns; `valid_series_pattern(NULL)` is true).
+- **Main risk: dropped and recreated functions** (0047, 0053, 0054, 0071, 0072). The production API (2026-10-10 build) calls the old signatures, so API calls fail between the migration run and the API deploy. The upgrade must run migrations then deploy API and web back to back, in a quiet window.
+- Rollback files exist for all eight in `infra/aws/db/rollback/` (names checked, content not reviewed).
+- Not reviewed: the other 31 files of 0047-0085. Not executed: nothing was run against a production-like copy.
+B2 therefore stays open, with its risk restated as ordering and compatibility plus 31 unreviewed files, not unknown data loss.
