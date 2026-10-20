@@ -167,3 +167,37 @@ Pass: the first command prints `zk527zk4ua.execute-api.us-west-2.amazonaws.com` 
 `docs/releases/2026-10-19-prd-readiness/scripts/ledger-prd-read.sh`, tested by `infra/aws/test/prd-ledger-read.test.ts` (10 tests, mocks, no AWS). Derived from the TEST rehearsal's `ledger-recheck.sh` with four stated changes (header of the script). Report only: no expected version, exit 0 on a successful read with the rule removed and verified.
 YELLOW at run time: it adds ONE temporary inbound rule (tcp 5432 from the admin host's /32) to the RDS security group `sg-00530a1f4f7648e65`, which is SHARED by TEST and production, then removes it and compares the complete rule set with the recorded original. It needs the typed phrase `OPEN-5432-WINDOW` and a second CloudShell session ready for `--restore-only`. It uses the RDS master secret in memory only and runs read-only transactions (`default_transaction_read_only=on`). Not approved to run until the owner says so.
 It reports: whether `ogevia_prd` exists, whether the ledger table exists, count and latest version, the five newest ledger rows, and the enforcement count if that table exists.
+
+## 11. Production ledger read (OWNER-REPORTED SUMMARY, 2026-10-20) and reassessment of B1 and B2
+Run of `ledger-prd-read.sh prd --host-ip` (package sha256 `50c1b341...af62d`, verified in CloudShell). Reported: `ogevia_prd` exists and is reachable; **46 migrations applied, latest 0046**; enforcement activated for 0 of 0 agencies; newest rows 0046 visit_start_availability, 0045 manual_care_offer, 0044 readiness_review, 0043 explainable_matching, 0042 readiness_gate; security group RESTORED and verified identical to the original. The owner pasted a summary, not the raw output (applied times and the script's RESULT line were not included).
+
+### What this establishes
+| Fact | Status |
+|---|---|
+| `ogevia_prd` exists, is reachable from the admin host, and has a ledger | OWNER-REPORTED |
+| Production is at 46 / 0046 | OWNER-REPORTED |
+| This is the caregiver-readiness release, not the 38-migration release (`URL_REGISTRY_AND_LAUNCH_CHECKLIST.md` item 6 predicted 46 / 0046 for exactly that release). Consistent with the code: migration 0046 was committed 2026-10-10 00:38Z and the production Lambda was last modified 2026-10-10 06:11Z. | INFERRED (consistent, not proven; no commit recorded) |
+| TEST is at 85 / 0085. **Production is 39 migrations behind: 0047 to 0085** (39 migration files in the repository for 0047-0085, contiguous). My earlier "up to 47 behind" estimate is replaced by 39. | Count VERIFIED against the repository; production side owner-reported |
+| 0 of 0 agencies means the readiness-settings table has no rows. INFERRED: no organization is configured in production yet (no real tenant data). NOT VERIFIED: needs row counts. | INFERRED |
+
+### The 39 pending migrations (repository analysis, heuristic grep, not a review)
+Statement classes across 0047-0085: CREATE TABLE in 16 files, ALTER TABLE in 18, DROP in 18, UPDATE in 25, DELETE FROM in 3, INSERT in 29, CREATE OR REPLACE FUNCTION in 30, CREATE INDEX in 14, CREATE POLICY in 15. Files matching drop-table/drop-column, delete-from, UPDATE, alter-column or drop-constraint patterns (need manual review before any production run): 0047, 0053, 0054, 0055, 0071, 0072, 0074, 0076. A broad "UPDATE" match can be a false positive (for example `ON UPDATE` or a function body), so this list is a review queue, not a finding of data loss. These migrations have been applied to TEST in sequence (52, 77, 85) with synthetic data; none has been applied to a production-like data set.
+
+### B1 (state unknown): NARROWED, not closed
+Now known (owner-reported): database exists, ledger 46 / 0046, Lambda wired to `ogevia_prd`, stacks healthy and protected, buckets protected, MFA on the pool, CloudTrail and a budget exist.
+Still unknown: the commit the production Lambda was built from (no record); the web bundle's API host (my first command was defective; corrected command issued, no output received); whether the production web carries a version string; applied-at times of ledger rows; row counts (organizations, users, clients, visits) to say whether production holds real data.
+
+### B2 (version gap): QUANTIFIED, open
+Gap: 39 migrations (0047-0085) and every API/web release since 2026-10-10 (handler builds f6dd9b7 and e80b770 on TEST). The upgrade is a forward migration of an existing installation, not a bootstrap, so `deploy-production.sh database` and `all` must NOT be used (`RELEASE_HANDOFF.md` says the same). Mitigations required before a production run: (1) fresh named manual snapshot of the shared instance (B10); (2) rehearsal of 0047-0085 on a copy of `ogevia_prd` restored from that snapshot to a NEW instance; (3) manual review of the eight queued files; (4) production copy of the TEST gate set (pin check, diff gate against the live `Ogevia-prd-*` templates, baseline capture) because the TEST package scripts are TEST-only; (5) fix of the two procedure defects and the `approval_ref` item.
+
+### Updated blocker table
+| # | Status |
+|---|---|
+| B1 | Narrowed (ledger and database known); open items listed above |
+| B2 | Quantified: 39 migrations; open until the rehearsal, review and package exist |
+| B3-B10 | Unchanged from section 9; B10 (no `pre-prd` snapshot) is now the first action in any production sequence |
+
+### Next reads that need no production change
+1. Raw ledger rows with applied times (rerun the same report; read-only, same temporary rule: a separate approval).
+2. Non-PHI row counts to decide whether production holds real data (needs a new read script; not prepared).
+3. The corrected API-host check against the production web (CloudShell `curl`, no rule needed).
