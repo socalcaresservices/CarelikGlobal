@@ -329,3 +329,6 @@ Five of six stacks (including the shared NetworkEgress) equal the release templa
 
 ## 32. Stage A complete except two unseen lists (2026-10-20)
 Raw p0/p1 facts recorded in section 8 of `RELEASE_PACKAGE_PLAN.md`. The production web calls the production API (VERIFIED, raw). The release adds two IAM statements (ClientDocumentObjects on the handler; SwitchSignInsOnOff on the identity function, for the shared user pool) and probably creates the ComplianceSweep rule in production (production has none today; INFERRED). Remaining to see: the two non-route added resources. B1: Lambda build identified by asset key; commit still unknown.
+
+## 33. Stage B built (2026-10-20; local only)
+Expected-only gate, fresh-state check, assembly check and a one-stack deploy guard for `Ogevia-prd-ServiceVerificationApi`, 30 mock-AWS tests passing; see sections 9-10 of `RELEASE_PACKAGE_PLAN.md`. The 68 added resources are verified (66 routes + ComplianceSweep rule and permission). Nothing is deployed and no deployment is authorised. Stage C-E (window, migration of the production database, deploy-mode assembly, web publish, verification) remain to be built.

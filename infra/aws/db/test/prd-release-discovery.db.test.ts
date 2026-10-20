@@ -13,7 +13,7 @@ const BUILD = join(REPO, "docs/releases/2026-10-19-prd-readiness/release/build-p
 const MOCKSRC = fileURLToPath(new URL("./prd-release-aws-mock.sh", import.meta.url));
 const work = mkdtempSync(join(tmpdir(), "prdrel-"));
 const BIN = join(work, "bin"), MOCK = join(work, "mock"), PKGDIR = join(work, "pkg"), OUT = join(work, "before");
-const ROOT = join(PKGDIR, "ogevia-prd-release-discovery");
+const ROOT = join(PKGDIR, "ogevia-prd-release");
 const STACKS = ["Ogevia-prd-DatabaseSecret", "Ogevia-prd-EvidenceStorage", "Ogevia-prd-WebHosting", "Ogevia-prd-ServiceVerificationApi", "Ogevia-prd-Observability", "Ogevia-prod-NetworkEgress"];
 const PRD_API = "zk527zk4ua";
 let handlerKey = "";
@@ -56,7 +56,7 @@ describe("the package", () => {
     const r = spawnSync("bash", ["-c", `cd ${ROOT} && sha256sum -c --quiet MANIFEST.sha256 && ls release-templates | wc -l && cat ASSETS.txt | wc -l`], { encoding: "utf8" });
     expect(r.status, r.stdout + r.stderr).toBe(0); expect(r.stdout.trim().split("\n")).toEqual(["6", "2"]);
     const info = JSON.parse(readFileSync(join(ROOT, "BUILD_INFO.json"), "utf8"));
-    expect(info.release_handler_asset).toBe(handlerKey); expect(info.stage).toContain("discovery");
+    expect(info.release_handler_asset).toBe(handlerKey); expect(info.stage).toContain("A+B");
     expect(readFileSync(join(ROOT, "README.md"), "utf8")).toContain(handlerKey);
   });
 });
@@ -119,5 +119,146 @@ describe("p1 diff report", () => {
     spawnSync("rm", ["-f", join(OUT, "live", "Ogevia-prd-Observability.json")]);
     const r = await run("p1-diff-report.sh"); expect(r.code).toBe(1); expect(r.out).toContain("no captured live template for Ogevia-prd-Observability");
     const t = spawnSync("python3", ["-I", "-B", join(ROOT, "scripts/tpl_diff.py"), "/nonexistent", "/nonexistent"], { encoding: "utf8" }); expect(t.status).toBe(2);
+  });
+});
+
+// ---------------------------------------------------------------- stage B ---------------------------------------------------------------
+const API = "Ogevia-prd-ServiceVerificationApi";
+const LIVE_HK = "4832b6ba4f8ff1b8706697326b0d76d3d96d5031265c0d6024ee10c1e194817c.zip";
+const LIVE_IK = "e345075a65c98ef8fae929be46fb48be5c3c268702af0f409df509fb3634791b.zip";
+/** The production API template as the baseline described it (66 JWT routes, the ComplianceSweep pair, both IAM statements, both older assets and descriptions missing), derived from the release template. */
+function modelLive(mutate?: (r: Record<string, any>) => void): Record<string, any> {
+  const t = JSON.parse(readFileSync(join(ROOT, "release-templates", `${API}.json`), "utf8")); const R = t.Resources;
+  const jwt = Object.keys(R).filter((k) => R[k].Type === "AWS::ApiGatewayV2::Route" && R[k].Properties.AuthorizationType === "JWT").sort();
+  let seed = 7; const pick = new Set<string>(); while (pick.size < 66) { seed = (seed * 1103515245 + 12345) & 0x7fffffff; pick.add(jwt[seed % jwt.length]!); }
+  for (const k of pick) delete R[k];
+  delete R.ComplianceSweep51D1109D; for (const k of Object.keys(R)) if (k.startsWith("ComplianceSweepAllow")) delete R[k];
+  R.Handler886CB40B.Properties.Code.S3Key = LIVE_HK; R.IdentityHandler6F0A3417.Properties.Code.S3Key = LIVE_IK;
+  R.IdentityHandler6F0A3417.Properties.Description = "Ogevia caregiver invitations: Cognito AdminCreateUser/AdminGetUser only";
+  R.IdentityRole07BDF020.Properties.Description = "Ogevia caregiver invitation identity function (Cognito create/resend only)";
+  for (const [pol, sid] of [["HandlerPolicy7544C855", "ClientDocumentObjects"], ["IdentityPolicyF3EE534F", "SwitchSignInsOnOff"]] as const) { const d = R[pol].Properties.PolicyDocument; d.Statement = d.Statement.filter((x: any) => x.Sid !== sid); }
+  mutate?.(R); return t;
+}
+const setProductionState = (mut?: (s: string, t: Record<string, any>) => void) => setLive((s, t) => { if (s === API) { const m = modelLive(); t.Resources = m.Resources; } mut?.(s, t); });
+function gate(live: Record<string, any>, newMut?: (r: Record<string, any>) => void, extra: string[] = []) {
+  const lp = join(work, "gate-live.json"), np = join(work, "gate-new.json");
+  const nw = JSON.parse(readFileSync(join(ROOT, "release-templates", `${API}.json`), "utf8")); newMut?.(nw.Resources);
+  writeFileSync(lp, JSON.stringify(live)); writeFileSync(np, JSON.stringify(nw));
+  const r = spawnSync("python3", ["-I", "-B", join(ROOT, "scripts/prd_gate.py"), "--live", lp, "--new", np, ...extra], { encoding: "utf8" });
+  return { code: r.status, out: r.stdout + r.stderr };
+}
+
+describe("stage B: the expected-only gate (prd_gate.py)", () => {
+  it("passes the production state the baseline described, and reports the counts", () => {
+    const r = gate(modelLive()); expect(r.code, r.out).toBe(0);
+    expect(r.out).toContain("live 176, release 244; added 68 (66 routes, 2 other); removed 0; changed 5"); expect(r.out).toContain("EXPECTED-ONLY: YES");
+  });
+  it.each([
+    ["a resource other than the five changed", (R: any) => { const k = Object.keys(R).find((x) => R[x].Type === "AWS::ApiGatewayV2::Stage")!; R[k].Properties.AutoDeploy = !R[k].Properties.AutoDeploy; }, "CHANGED and is not on the allow-list"],
+    ["a live Lambda asset that is not the pinned one", (R: any) => { R.Handler886CB40B.Properties.Code.S3Key = "someone-deployed-this.zip"; }, "the LIVE code asset key is someone-deployed-this.zip"],
+    ["a changed Lambda environment", (R: any) => { R.Handler886CB40B.Properties.Environment = { Variables: { DB_NAME: "ogevia_sv_test" } }; }, "something other than Properties.Code.S3Key differs"],
+    ["a removed resource (live has one the release lacks)", (R: any) => { R.ExtraLiveResource = { Type: "AWS::SQS::Queue", Properties: {} }; }, "resources REMOVED"],
+    ["production already identical on a changed resource", (R: any) => { const n = JSON.parse(readFileSync(join(ROOT, "release-templates", `${API}.json`), "utf8")); R.IdentityRole07BDF020 = n.Resources.IdentityRole07BDF020; }, "expected to change but is identical"],
+  ])("refuses %s", (_n, mut, text) => { const r = gate(modelLive(mut as any)); expect(r.code, r.out).toBe(1); expect(r.out).toContain(text); expect(r.out).toContain("EXPECTED-ONLY: NO"); });
+  it.each([
+    ["an IAM statement wider than ClientDocumentObjects", (R: any) => { R.HandlerPolicy7544C855.Properties.PolicyDocument.Statement.find((x: any) => x.Sid === "ClientDocumentObjects").Resource = "arn:aws:s3:::ogevia-prd-signature-evidence-300094796789-us-west-2/*"; }, "added statement ClientDocumentObjects is not exactly the expected one"],
+    ["an extra added IAM statement", (R: any) => { R.HandlerPolicy7544C855.Properties.PolicyDocument.Statement.push({ Sid: "Surprise", Effect: "Allow", Action: "s3:*", Resource: "*" }); }, "the statements added are"],
+    ["a widened identity permission", (R: any) => { R.IdentityPolicyF3EE534F.Properties.PolicyDocument.Statement.find((x: any) => x.Sid === "SwitchSignInsOnOff").Action.push("cognito-idp:AdminDeleteUser"); }, "added statement SwitchSignInsOnOff is not exactly the expected one"],
+    ["a changed existing IAM statement", (R: any) => { R.HandlerPolicy7544C855.Properties.PolicyDocument.Statement.find((x: any) => x.Sid === "SignatureObjects").Action.push("s3:DeleteObject"); }, "statement SignatureObjects CHANGED"],
+    ["a disabled ComplianceSweep rule", (R: any) => { R.ComplianceSweep51D1109D.Properties.State = "DISABLED"; }, "ComplianceSweep rule is not rate(15 minutes), ENABLED"],
+    ["a route short of the pinned count", (R: any) => { const k = Object.keys(R).find((x) => R[x].Type === "AWS::ApiGatewayV2::Route" && R[x].Properties.AuthorizationType === "JWT" && !(x in modelLive().Resources))!; delete R[k]; }, "routes added, expected exactly 66"],
+  ])("refuses (release side) %s", (_n, mut, text) => {
+    const r = gate(modelLive(), mut as any); expect(r.code, r.out).toBe(1); expect(r.out).toContain(text);
+  });
+  it("refuses a new public route unless it is named, and a new route with a missing authorizer or an unknown integration", () => {
+    const r = gate(modelLive(), (R) => { const k = Object.keys(R).find((x) => R[x].Type === "AWS::ApiGatewayV2::Route" && R[x].Properties.AuthorizationType === "JWT" && !(x in modelLive().Resources))!; R[k].Properties.AuthorizationType = "NONE"; delete R[k].Properties.AuthorizerId; });
+    expect(r.code, r.out).toBe(1); expect(r.out).toContain("WITHOUT authorization");
+    const key = /route (.+?) is added WITHOUT/.exec(r.out)![1]!;
+    const ok = gate(modelLive(), (R) => { const k = Object.keys(R).find((x) => R[x].Type === "AWS::ApiGatewayV2::Route" && R[x].Properties.RouteKey === key)!; R[k].Properties.AuthorizationType = "NONE"; delete R[k].Properties.AuthorizerId; }, ["--allow-public-route", key]);
+    expect(ok.code, ok.out).toBe(0);
+    const noAuth = gate(modelLive(), (R) => { const k = Object.keys(R).find((x) => R[x].Type === "AWS::ApiGatewayV2::Route" && R[x].Properties.AuthorizationType === "JWT" && !(x in modelLive().Resources))!; R[k].Properties.AuthorizerId = { Ref: "NoSuchAuthorizer" }; });
+    expect(noAuth.code, noAuth.out).toBe(1); expect(noAuth.out).toContain("not an existing live authorizer");
+    const noInt = gate(modelLive(), (R) => { const k = Object.keys(R).find((x) => R[x].Type === "AWS::ApiGatewayV2::Route" && R[x].Properties.AuthorizationType === "JWT" && !(x in modelLive().Resources))!; R[k].Properties.Target = { "Fn::Join": ["", ["integrations/", { Ref: "NoSuchIntegration" }]] }; });
+    expect(noInt.code, noInt.out).toBe(1); expect(noInt.out).toContain("not an integration that already exists live");
+  });
+  it("exits 2 on unreadable input", () => { const r = spawnSync("python3", ["-I", "-B", join(ROOT, "scripts/prd_gate.py"), "--live", "/nonexistent", "--new", "/nonexistent"], { encoding: "utf8" }); expect(r.status).toBe(2); });
+});
+
+describe("stage B: p2-gate.sh (fresh re-read, other stacks equal, API gate) with the mock", () => {
+  it("passes when production is the baseline state and the other five stacks equal the release", async () => {
+    setProductionState(); await run("p0-baseline-capture.sh"); const r = await run("p2-gate.sh");
+    expect(r.code, r.out).toBe(0); expect(r.out).toContain("GATE PASSED"); expect(r.out).toContain("EXPECTED-ONLY: YES"); expect((r.out.match(/is unchanged since the p0 baseline/g) ?? []).length).toBe(6);
+  });
+  it("stops when production changes after the baseline, when another stack differs from the release, and when the API stack is not the baseline state", async () => {
+    setProductionState(); await run("p0-baseline-capture.sh");
+    setProductionState((s, t) => { if (s === "Ogevia-prd-WebHosting") t.Description = "changed after the baseline"; });
+    const a = await run("p2-gate.sh"); expect(a.code).toBe(1); expect(a.out).toContain("CHANGED since the p0 baseline");
+    setProductionState((s, t) => { if (s === "Ogevia-prd-Observability") t.Description = "differs from the release"; }); await run("p0-baseline-capture.sh");
+    const b = await run("p2-gate.sh"); expect(b.code).toBe(1); expect(b.out).toContain("Ogevia-prd-Observability differs from the release template");
+    setLive(); await run("p0-baseline-capture.sh");
+    const c = await run("p2-gate.sh"); expect(c.code).toBe(1); expect(c.out).toContain("expected to change but is identical");
+    setProductionState((s, t) => { if (s === API) t.Resources.Handler886CB40B.Properties.Code.S3Key = "other.zip"; }); await run("p0-baseline-capture.sh");
+    const d = await run("p2-gate.sh"); expect(d.code).toBe(1); expect(d.out).toContain("the LIVE code asset key is other.zip");
+  });
+});
+
+describe("stage B: the deploy guard", () => {
+  const fakeCdk = join(work, "cdk"); const cdkLog = join(work, "cdk-args.log");
+  const asm = join(work, "assembly");
+  const deployEnv = (extra: Record<string, string> = {}) => ({ OGEVIA_DEPLOY_APPROVAL: "owner-go-20261021-01", OGEVIA_PRD_ASSEMBLY: asm, OGEVIA_CDK_BIN: fakeCdk, OGEVIA_PREDEPLOY_SNAPSHOT_ID: "ogevia-prod-postgres-pre-prdrelease-202610210100", ...extra });
+  const guard = async (args: string[], env: Record<string, string> = {}, input = "") => new Promise<{ code: number | null; out: string }>((resolve) => {
+    const e = { ...process.env, PATH: `${BIN}:${process.env.PATH}`, MOCK_DIR: MOCK, HOME: work, OGEVIA_PRD_BEFORE: OUT, ...env };
+    const p = spawn("bash", [join(ROOT, "scripts/deploy-guard-prd.sh"), ...args], { env: e, stdio: ["pipe", "pipe", "pipe"], detached: true });
+    let out = ""; p.stdout.on("data", (d) => (out += d)); p.stderr.on("data", (d) => (out += d)); p.stdin.on("error", () => undefined); p.stdin.end(input);
+    p.on("close", (c) => { try { process.kill(-p.pid!, "SIGKILL"); } catch { /* gone */ } resolve({ code: c, out }); });
+  });
+  beforeAll(() => {
+    writeFileSync(fakeCdk, `#!/usr/bin/env bash\nif [[ "$1" == --version ]]; then echo "2.1143.0 (build x)"; exit 0; fi\necho "$*" >> ${cdkLog}\nexit \${FAKE_CDK_RC:-0}\n`); chmodSync(fakeCdk, 0o755);
+    mkdirSync(asm, { recursive: true });
+    for (const s of ["Ogevia-prd-DatabaseSecret", "Ogevia-prd-EvidenceStorage", "Ogevia-prd-WebHosting", "Ogevia-prd-ServiceVerificationApi", "Ogevia-prd-Observability"]) copyFileSync(join(ROOT, "release-templates", `${s}.json`), join(asm, `${s}.template.json`));
+    for (const h of ["eab95a809b3b95b7479cfe6a572e1be0ea068ef6f12751419669443397fe7eda", "7c5f8eb676c93261fd7a80f34d40ba70379c040d94bb2e9bd80f2d007ebc9759"]) mkdirSync(join(asm, `asset.${h}`), { recursive: true });
+    writeFileSync(join(asm, "manifest.json"), "{}");
+    setLive((s, t) => { if (s === API) t.Resources = modelLive().Resources; }); 
+  });
+  it("accepts only the API stack, in all three modes", async () => {
+    for (const bad of ["Ogevia-prd-WebHosting", "Ogevia-prod-NetworkEgress", "Ogevia-prod-ServiceVerificationApi", "Ogevia-prd-*", "--all"]) for (const mode of ["check", "deploy", "post"]) { const r = await guard([mode, bad], deployEnv()); expect(r.code, `${mode} ${bad}: ${r.out}`).toBe(1); expect(r.out).toContain("REFUSED"); }
+    expect((await guard(["deploy"])).code).toBe(2); expect((await guard(["nonsense", API])).code).toBe(2);
+  });
+  it("check passes on the baseline state (with and without an assembly) and fails on an assembly that is not the release", async () => {
+    await run("p0-baseline-capture.sh");
+    const a = await guard(["check", API]); expect(a.code, a.out).toBe(0); expect(a.out).toContain("CHECK PASSED"); expect(a.out).toContain("no assembly given");
+    const b = await guard(["check", API], { OGEVIA_PRD_ASSEMBLY: asm }); expect(b.code, b.out).toBe(0); expect(b.out).toContain("ASSEMBLY OK");
+    writeFileSync(join(asm, "Ogevia-prod-Extra.template.json"), "{}"); const c = await guard(["check", API], { OGEVIA_PRD_ASSEMBLY: asm }); expect(c.code).toBe(1); expect(c.out).toContain("the assembly holds"); spawnSync("rm", ["-f", join(asm, "Ogevia-prod-Extra.template.json")]);
+    spawnSync("mv", [join(asm, `asset.eab95a809b3b95b7479cfe6a572e1be0ea068ef6f12751419669443397fe7eda`), join(work, "moved-asset")]); const d = await guard(["check", API], { OGEVIA_PRD_ASSEMBLY: asm }); expect(d.code).toBe(1); expect(d.out).toContain("is missing"); spawnSync("mv", [join(work, "moved-asset"), join(asm, `asset.eab95a809b3b95b7479cfe6a572e1be0ea068ef6f12751419669443397fe7eda`)]);
+    const t = JSON.parse(readFileSync(join(asm, `${API}.template.json`), "utf8")); t.Resources.ExtraBucket = { Type: "AWS::S3::Bucket", Properties: {} }; const orig = readFileSync(join(asm, `${API}.template.json`), "utf8"); writeFileSync(join(asm, `${API}.template.json`), JSON.stringify(t));
+    const e = await guard(["check", API], { OGEVIA_PRD_ASSEMBLY: asm }); expect(e.code).toBe(1); expect(e.out).toContain("differs from the approved release template"); writeFileSync(join(asm, `${API}.template.json`), orig);
+  });
+  it("deploy refuses without each prerequisite and runs nothing", async () => {
+    writeFileSync(join(OUT, "db-at-0085.ok"), "85|0085\n");
+    for (const [env, text] of [[{ OGEVIA_DEPLOY_APPROVAL: "x" }, "approval reference"], [{ OGEVIA_PRD_ASSEMBLY: "" }, "OGEVIA_PRD_ASSEMBLY"], [{ OGEVIA_CDK_BIN: "" }, "OGEVIA_CDK_BIN"], [{ OGEVIA_PREDEPLOY_SNAPSHOT_ID: "ogevia-prod-postgres-pre-0085-202610192111" }, "named ogevia-prod-postgres-pre-prdrelease"], [{ MOCK_SNAP_AGE: "90000" }, "old (limit"], [{ MOCK_SNAP_ENC: "false" }, "not available, manual, encrypted"]] as const) {
+      const r = await guard(["deploy", API], deployEnv(env as any), `DEPLOY-${API}\n`); expect(r.code, r.out).toBe(1); expect(r.out).toContain(text);
+    }
+    writeFileSync(join(OUT, "db-at-0085.ok"), "46|0046\n"); const m = await guard(["deploy", API], deployEnv(), `DEPLOY-${API}\n`); expect(m.code).toBe(1); expect(m.out).toContain("migrated to 0085 BEFORE the API");
+    writeFileSync(join(OUT, "db-at-0085.ok"), "85|0085\n");
+    writeFileSync(fakeCdk + "2", `#!/usr/bin/env bash\necho "2.1000.0"\n`); chmodSync(fakeCdk + "2", 0o755); const v = await guard(["deploy", API], deployEnv({ OGEVIA_CDK_BIN: fakeCdk + "2" }), `DEPLOY-${API}\n`); expect(v.code).toBe(1); expect(v.out).toContain("not version 2.1143.0");
+    expect(existsSync(cdkLog)).toBe(false);
+  });
+  it("deploy needs the typed phrase, then runs exactly one cdk deploy for the one stack", async () => {
+    const no = await guard(["deploy", API], deployEnv(), "no\n"); expect(no.code, no.out).toBe(0); expect(no.out).toContain("Declined"); expect(existsSync(cdkLog)).toBe(false);
+    const r = await guard(["deploy", API], deployEnv(), `DEPLOY-${API}\n`); expect(r.code, r.out).toBe(0); expect(r.out).toContain("ABOUT TO RUN"); expect(r.out).toContain("approve ONLY if it lists exactly");
+    expect(readFileSync(cdkLog, "utf8").trim()).toBe(`deploy --app ${asm} --exclusively ${API} --require-approval broadening --no-notices`);
+    const f = await guard(["deploy", API], deployEnv({ FAKE_CDK_RC: "1" }), `DEPLOY-${API}\n`); expect(f.code).toBe(1); expect(f.out).toContain("cdk deploy exited 1");
+  });
+  it("post passes when the live template equals the release and the runtime checks hold, and fails otherwise", async () => {
+    setLive(); writeFileSync(join(MOCK, "code.zip"), "PK new lambda zip bytes");
+    const ok = await guard(["post", API]); expect(ok.code, ok.out).toBe(0); expect(ok.out).toContain("POST-CHECK PASSED"); expect(ok.out).toContain("the API has 228 routes"); expect(ok.out).toContain("ComplianceSweep rule exists and is ENABLED");
+    const r1 = await guard(["post", API], { MOCK_ROUTES: "200" }); expect(r1.code).toBe(1); expect(r1.out).toContain("expected 228");
+    const r2 = await guard(["post", API], { MOCK_RULE_STATE: "DISABLED" }); expect(r2.code).toBe(1);
+    const r3 = await guard(["post", API], { MOCK_LAMBDA_DB: "ogevia_sv_test" }); expect(r3.code).toBe(1); expect(r3.out).toContain("DB_NAME/OGEVIA_ENV changed");
+    writeFileSync(join(MOCK, "code.zip"), "PK mock lambda zip bytes"); const r4 = await guard(["post", API]); expect(r4.code).toBe(1); expect(r4.out).toContain("did not change");
+    setProductionState();
+  });
+  it("never calls anything outside read verbs, snapshot reads and the CDK it was handed", () => {
+    expect(calls()).not.toMatch(/(create|delete|modify|update|put|authorize|revoke|restore)-/); expect(existsSync(join(MOCK, "unexpected.log"))).toBe(false);
   });
 });

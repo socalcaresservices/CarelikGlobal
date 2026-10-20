@@ -1,6 +1,6 @@
-# Ogevia production release package, stage A: DISCOVERY (read-only)
+# Ogevia production release package, stages A (discovery) and B (gate and guard)
 
-Source commit @COMMIT@. **Every AWS call in this stage is a read** (describe, get, list, head), plus a download of the production web bucket and curl GETs of the production web origin. Nothing in AWS is created, changed or deleted. It is not a deployment and does not authorise one.
+Source commit @COMMIT@. **Every AWS call in stages A and B is a read, except the deploy guard's `deploy` mode, which is not usable until later stages exist** (describe, get, list, head), plus a download of the production web bucket and curl GETs of the production web origin. Nothing in AWS is created, changed or deleted. It is not a deployment and does not authorise one.
 
 ## Why a discovery stage first
 The production stacks (`Ogevia-prd-*`) were last deployed on 2026-10-10. What they run today (the Lambda's build, the web's version and API host, the live templates) was never recorded. A gate that allows "only the expected difference" cannot be written until the live templates are read. This stage captures them, reports how they differ from the release templates bundled here, and makes the recovery copies a release needs (the Lambda code zip, the previous code asset, the whole web bucket). The next stage (gate, window, deploy, verify) is written from this report.
@@ -26,3 +26,13 @@ Any `STOP:` or `FAIL` line: paste the output; do not work around it. A `FAIL` in
 
 ## What this stage does not do
 It does not take a snapshot, open the database, migrate, deploy the API or web, change the shared security group, or touch TEST. Those belong to later stages and each needs its own approval.
+
+## Stage B: the gate and the guard (added)
+Stage A showed that five of the six stacks equal the release and that ONLY `Ogevia-prd-ServiceVerificationApi` differs (68 resources added: 66 routes and the ComplianceSweep rule and permission; 5 resources changed: both Lambda code assets, two role/function descriptions, and two IAM managed policies that each gain exactly one statement). Stage B turns that into checks:
+```
+bash scripts/p2-gate.sh          # read-only: re-reads production now, requires it to equal the p0 baseline, requires the other five stacks to equal the release, runs the expected-only gate on the API stack
+bash scripts/deploy-guard-prd.sh check Ogevia-prd-ServiceVerificationApi     # same gate (+ the assembly check when OGEVIA_PRD_ASSEMBLY is set)
+```
+The gate (`scripts/prd_gate.py`) allows ONLY: the two pinned Lambda asset changes (from the observed live keys), the pinned description changes, one added statement `ClientDocumentObjects` (S3 get/get-version/put on the production evidence bucket's `*/client-documents/*/*`), one added statement `SwitchSignInsOnOff` (Cognito disable/enable on the single user pool), exactly 66 added routes (each JWT-authorized with an existing authorizer and an existing integration; a new public route is refused unless `OGEVIA_ALLOW_PUBLIC_ROUTES` names it after review), and the ComplianceSweep rule (rate(15 minutes), enabled, target the Handler) with its invoke permission. Anything else, or production not being in the recorded baseline state, prints `VIOLATION` lines and exits 1.
+`deploy-guard-prd.sh deploy` exists but cannot run yet: it needs a deploy-mode synthesis made with the owner's approval reference, a pinned CDK CLI, a fresh snapshot named `ogevia-prod-postgres-pre-prdrelease-YYYYMMDDHHMM`, and a marker written by the migration stage after the database reaches 85/0085. Those stages are not part of this package. **Nothing in this package authorises or performs a deployment.**
+Paste back: the output of `p2-gate.sh` (it prints every VIOLATION).

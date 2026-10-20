@@ -18,7 +18,7 @@ case "$svc $verb" in
   "cloudformation list-stack-resources")
     S=$(arg --stack-name "$@")
     case "$S" in
-      Ogevia-prd-ServiceVerificationApi) echo "{\"StackResourceSummaries\":[{\"ResourceType\":\"AWS::Lambda::Function\",\"LogicalResourceId\":\"Handler886CB40B\",\"PhysicalResourceId\":\"$FN\"},{\"ResourceType\":\"AWS::Lambda::Function\",\"LogicalResourceId\":\"IdentityHandler6F0A3417\",\"PhysicalResourceId\":\"$IDFN\"},{\"ResourceType\":\"AWS::ApiGatewayV2::Api\",\"LogicalResourceId\":\"ApiF70053CD\",\"PhysicalResourceId\":\"zk527zk4ua\"}]}" ;;
+      Ogevia-prd-ServiceVerificationApi) echo "{\"StackResourceSummaries\":[{\"ResourceType\":\"AWS::Events::Rule\",\"LogicalResourceId\":\"ComplianceSweep51D1109D\",\"PhysicalResourceId\":\"Ogevia-prd-ServiceVerifica-ComplianceSweep-MOCK\"},{\"ResourceType\":\"AWS::Lambda::Function\",\"LogicalResourceId\":\"Handler886CB40B\",\"PhysicalResourceId\":\"$FN\"},{\"ResourceType\":\"AWS::Lambda::Function\",\"LogicalResourceId\":\"IdentityHandler6F0A3417\",\"PhysicalResourceId\":\"$IDFN\"},{\"ResourceType\":\"AWS::ApiGatewayV2::Api\",\"LogicalResourceId\":\"ApiF70053CD\",\"PhysicalResourceId\":\"zk527zk4ua\"}]}" ;;
       Ogevia-prod-NetworkEgress) echo '{"StackResourceSummaries":[{"ResourceType":"AWS::EC2::VPCEndpoint","LogicalResourceId":"S3GatewayEndpointE8BAF1BC","PhysicalResourceId":"vpce-0abc1234def567890"}]}' ;;
       *) echo '{"StackResourceSummaries":[]}' ;;
     esac ;;
@@ -27,12 +27,17 @@ case "$svc $verb" in
     echo "{\"FunctionName\":\"$N\",\"Runtime\":\"nodejs24.x\",\"Handler\":\"index.handler\",\"MemorySize\":512,\"Timeout\":30,\"LastModified\":\"2026-10-10T06:11:29.031+0000\",\"LastUpdateStatus\":\"Successful\",\"State\":\"Active\",\"CodeSha256\":\"$SHA\",\"CodeSize\":1234,\"LoggingConfig\":{\"LogGroup\":\"mock-log-group\"},\"Architectures\":[\"arm64\"],\"Environment\":{\"Variables\":{\"DB_NAME\":\"${MOCK_LAMBDA_DB:-ogevia_prd}\",\"OGEVIA_ENV\":\"${MOCK_LAMBDA_ENV:-prd}\",\"SOME_SECRET_ARN\":\"arn:aws:secretsmanager:us-west-2:300094796789:secret:x\"}}}" ;;
   "lambda get-function") echo "{\"Code\":{\"Location\":\"file://$D/code.zip\"}}" ;;
   "s3api head-object") [[ -n "${MOCK_NO_ASSET:-}" ]] && { echo "Not Found" >&2; exit 254; }; echo '{"ContentLength":123456}' ;;
-  "apigatewayv2 get-routes") jq -n '{Items: [range(0;228) | {RouteKey: ("GET /r" + tostring)}]}' ;;
+  "apigatewayv2 get-routes") jq -n --argjson n "${MOCK_ROUTES:-228}" '{Items: [range(0;$n) | {RouteKey: ("GET /r" + tostring)}]}' ;;
+  "events describe-rule") echo "{\"Name\":\"$(arg --name "$@")\",\"State\":\"${MOCK_RULE_STATE:-ENABLED}\"}" ;;
   "events list-rules") echo '{"Rules":[{"Name":"Ogevia-prd-ServiceVerifica-ComplianceSweep51D1109D-MOCK","State":"ENABLED"},{"Name":"unrelated","State":"ENABLED"}]}' ;;
   "s3 sync") if [[ "$1" == s3://* ]]; then mkdir -p "$2"; cp -r "$D/web/." "$2"; else echo "mock aws: upload refused" >&2; echo "UNEXPECTED s3 sync upload" >> "$D/unexpected.log"; exit 98; fi ;;
   "ec2 describe-vpc-endpoints") jq -n --slurpfile p "$D/endpoint-policy.json" '{VpcEndpoints:[{PolicyDocument: ($p[0]|tostring)}]}' ;;
   "rds describe-db-instances") echo '{"DBInstances":[{"DBInstanceStatus":"available","PubliclyAccessible":false,"StorageEncrypted":true,"EngineVersion":"18.3","DBInstanceClass":"db.t4g.micro","MultiAZ":false,"BackupRetentionPeriod":7,"LatestRestorableTime":"2026-10-20T03:00:00Z","DeletionProtection":true,"VpcSecurityGroups":[{"VpcSecurityGroupId":"sg-00530a1f4f7648e65"}]}]}' ;;
-  "rds describe-db-snapshots") echo '{"DBSnapshots":[{"DBSnapshotIdentifier":"ogevia-prod-postgres-pre-rehearsal-202610200131","SnapshotCreateTime":"2026-10-20T01:32:01Z"},{"DBSnapshotIdentifier":"ogevia-prod-postgres-pre-prd-20261010","SnapshotCreateTime":"2026-10-10T05:44:48Z"}]}' ;;
+  "rds describe-db-snapshots")
+    if [[ -n "$(arg --db-snapshot-identifier "$@")" ]]; then
+      T=$(date -u -d "${MOCK_SNAP_AGE:-300} seconds ago" +%Y-%m-%dT%H:%M:%SZ)
+      echo "{\"DBSnapshots\":[{\"DBSnapshotIdentifier\":\"$(arg --db-snapshot-identifier "$@")\",\"Status\":\"available\",\"DBInstanceIdentifier\":\"ogevia-prod-postgres\",\"SnapshotType\":\"manual\",\"Encrypted\":${MOCK_SNAP_ENC:-true},\"SnapshotCreateTime\":\"$T\"}]}"
+    else echo '{"DBSnapshots":[{"DBSnapshotIdentifier":"ogevia-prod-postgres-pre-rehearsal-202610200131","SnapshotCreateTime":"2026-10-20T01:32:01Z"},{"DBSnapshotIdentifier":"ogevia-prod-postgres-pre-prd-20261010","SnapshotCreateTime":"2026-10-10T05:44:48Z"}]}'; fi ;;
   "cognito-idp list-user-pools") echo '{"UserPools":[{"Id":"us-west-2_MOCKPOOL"}]}' ;;
   "cognito-idp describe-user-pool") echo '{"UserPool":{"MfaConfiguration":"ON"}}' ;;
   "secretsmanager describe-secret") echo '{"Name":"ogevia/prd/database/app","LastChangedDate":"2026-10-10T06:00:17Z","RotationEnabled":false}' ;;
