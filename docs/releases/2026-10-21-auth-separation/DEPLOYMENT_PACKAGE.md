@@ -223,3 +223,24 @@ Expected: production token to production API **200**; pilot token to production 
 | Real CDK CLI | `cdk synth -c env=prd` in plan and deploy mode produced all six production stacks including `Ogevia-prd-Auth` |
 
 **Not proven (needs your live run):** CloudFormation's own validation of the new pool and domain at deploy time; managed login v2 and TOTP enrolment behaviour; Cognito email delivery; the real Systems Manager tunnel; the gate against your actual live templates (it uses the code-synthesized proxy and refuses on any difference); the API Gateway authorizer behaviour with the new issuer. A failed deploy rolls back automatically; the post-checks and token checks are the live proof.
+
+## 11. Test totals (actual run, local PostgreSQL 16 scratch cluster, candidate commit `a03f43e` plus this document)
+
+Command: `OGEVIA_TEST_DATABASE_URL=postgres://… node scripts/test-all.mjs`; also `pnpm typecheck` (7/7 tasks) and `pnpm lint` (6/6 tasks), both passing.
+
+| Suite | Result |
+|---|---|
+| `@carelik/shared` | 118 passed |
+| `@carelik/auth` | 150 passed |
+| `@carelik/sv-api` unit | 96 passed |
+| `@carelik/ui` | 73 passed |
+| `@carelik/web` | 1219 passed |
+| `@carelik/infra-aws` (CDK, gate, config) | 534 passed |
+| infra-aws database / script suites | 1162 passed, **1 failed** |
+| sv-api database suite | 147 passed |
+
+**The one failure is not caused by this change.** `db/test/lineage-lock-race.db.test.ts` ("end_service_visit twice … wrong-state errors are unchanged") fails identically on the unmodified readiness commit `fa3ca07` (checked in a separate worktree, same database). It is pure SQL; this change adds no migration. It needs its own look; it was not "fixed" here.
+
+**One side-effect found and fixed.** The earlier production-readiness release package builds its templates from the working tree, so after this change 16 of its tests failed (it correctly noticed that the production API stack now differs). Its builder now accepts `OGEVIA_RELEASE_SOURCE_COMMIT` and the two suites pin it to `fa3ca07`, so that package keeps describing the release it was approved for. They pass again (62/62). This needs `fa3ca07` in the clone (it is an ancestor of this branch).
+
+**Operator package.** `build-package.sh <out> fa3ca07` was run on the committed HEAD: manifest verifies (`sha256sum -c`), previous commit confirmed to lack the dedicated pool, candidate confirmed to have it. Two builds differ only in the `built_at` stamp in `BUILD_INFO.json`.
