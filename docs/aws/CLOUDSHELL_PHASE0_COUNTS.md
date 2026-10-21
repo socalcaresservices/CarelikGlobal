@@ -8,7 +8,7 @@ Run in this order. **Stop at any step that says STOP and tell me.**
 | Step | What | Reads | Needs a decision from you |
 |---|---|---|---|
 | 1 | Infrastructure inventory (already written) | AWS metadata | No: `CLOUDSHELL_READONLY_INVENTORY.md` |
-| 2 | Cognito user counts and sign-in hashes | counts only; sub hashes stay in your shell | No |
+| 2 | Cognito user counts | counts only | No |
 | 3 | Database counts for `ogevia_prd` and `ogevia_sv_test` | counts, dates, agency slugs/names | **Yes: it reads the database master password into your shell (see 3.0)** |
 | 4 | Overlap of sign-ins between the two databases and Cognito | counts only | No |
 
@@ -18,7 +18,7 @@ Run the block in `docs/aws/CLOUDSHELL_READONLY_INVENTORY.md` unchanged. Return t
 
 ## Step 2: Cognito counts (no emails, no names)
 
-`list-users` normally returns emails, so the command below keeps only the status flags and the `sub` (which you hash locally). Nothing is printed except counts.
+`list-users` normally returns emails, so the command below keeps only the status flags. Nothing is printed except counts.
 
 ```bash
 export AWS_PAGER="" AWS_DEFAULT_REGION=us-west-2
@@ -28,15 +28,9 @@ aws cognito-idp describe-user-pool --user-pool-id $POOL --query "UserPool.{Estim
 echo "== users by status / enabled (count) =="
 aws cognito-idp list-users --user-pool-id $POOL --attributes-to-get sub \
   --query "Users[].[UserStatus,Enabled]" --output text | sort | uniq -c
-
-# hashes of subs, kept in a local file; never print or paste them
-aws cognito-idp list-users --user-pool-id $POOL --attributes-to-get sub \
-  --query "Users[].Attributes[?Name=='sub'].Value | []" --output text | tr '\t' '\n' \
-  | while read -r s; do printf '%s' "$s" | sha256sum | cut -c1-16; done | sort -u > ~/h_cognito.txt
-echo "cognito sub hashes: $(wc -l < ~/h_cognito.txt)"
 ```
 
-## Step 3: database counts
+## Step 3: database counts (ON HOLD: do not run until the owner approves the access method in 3.0)
 
 ### 3.0 What this step does, and what it needs from you
 
@@ -156,7 +150,7 @@ kill $TUNNEL 2>/dev/null; unset PGPASSWORD PGUSER PGHOST PGPORT PGSSLMODE
 echo done; wc -l ~/counts_*.txt ~/h_*.txt
 ```
 
-## Step 4: overlap counts (numbers only)
+## Step 4: overlap counts (ON HOLD with Step 3; it uses locally computed one-way sign-in hashes that are never printed or sent; the owner may veto this step separately)
 
 ```bash
 echo "prd subs:   $(wc -l < ~/h_ogevia_prd.txt)"
@@ -169,8 +163,8 @@ rm -f ~/h_*.txt        # hashes are no longer needed
 
 ## 5. What to send back (and what not to)
 
-Send: the Step 1 output file, the Step 2 counts, `~/counts_ogevia_prd.txt`, `~/counts_ogevia_sv_test.txt`, and the five Step 4 numbers.
-**Do not send** emails, names, subs, tokens, secrets, or screenshots of client records. The count files contain none by construction; read them once before sending. They do contain agency names and slugs (business names).
+Send: the Step 1 output file and the Step 2 counts. (After approval of Steps 3-4 only: the two count files and the five overlap numbers. Hash files are never sent.)
+**Do not send** emails, names, sign-in ids or their hashes, tokens, passwords, secrets, or screenshots of client records. The count files contain none by construction; read them once before sending. They do contain agency names and slugs (business names).
 
 ### How I will interpret the results (and what counts cannot prove)
 
@@ -184,7 +178,7 @@ Send: the Step 1 output file, the Step 2 counts, `~/counts_ogevia_prd.txt`, `~/c
 
 ### Decision rules I will apply
 
-- Production has only the bootstrap tenant and one active owner, no visits: treat as **no real customer yet** (cutover style: short switch).
+- **Production records are treated as potentially real until the owner confirms otherwise, even if there is only one agency and one owner.** A short-switch cutover is chosen only after the owner confirms in writing who the production people and agencies are.
 - Production has any visit with a signature, more than the bootstrap owner, or agencies without the seed marker beyond the bootstrap tenant: treat as **possibly real** until you confirm each, then **parallel stack** per the Phase 2 design.
 - Any overlap count above 0: the shared-pool exposure is live for those people; prioritize the cutover.
 
