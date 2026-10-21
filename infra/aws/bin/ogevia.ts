@@ -12,4 +12,7 @@ const config = resolveEnvironment(app.node.tryGetContext("env"));
 const approval = process.env.OGEVIA_DEPLOY_APPROVAL;
 const mode = resolveMode(app.node.tryGetContext("mode"), approval);
 assertAccount(config, process.env.CDK_DEFAULT_ACCOUNT);
-buildOgeviaApp(app, config, mode, approval);
+// Optional, never committed: when set, the alarm topic gets one email subscription (see ObservabilityStack).
+// Synthesize with `--output <temp dir>` when it is set, so the address is not written into the tracked infra/aws/cdk.out.
+const alarmEmail = process.env.OGEVIA_ALARM_EMAIL?.trim() || undefined;
+buildOgeviaApp(app, config, mode, approval, { alarmEmail });

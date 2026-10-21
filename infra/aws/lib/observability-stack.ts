@@ -11,6 +11,21 @@ export interface ObservabilityStackProps extends StackProps {
   readonly config: OgeviaEnvironmentConfig;
   readonly handler: lambda.IFunction;
   readonly api: apigw.IHttpApi;
+  /**
+   * Optional address that receives alarm emails. OFF by default so existing templates are unchanged. Supplied at deploy time from
+   * OGEVIA_ALARM_EMAIL (bin/ogevia.ts), never committed. The recipient must confirm the subscription from the email SNS sends.
+   */
+  readonly alarmEmail?: string | undefined;
+}
+
+/** Same address shape the identity function accepts (apps/sv-api/src/identity-handler.ts). */
+const ALARM_EMAIL = /^[a-z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)+$/;
+
+/** Normalises and validates an alarm address; throws without echoing it. */
+export function normaliseAlarmEmail(value: string): string {
+  const email = value.trim().toLowerCase();
+  if (email.length > 254 || !ALARM_EMAIL.test(email)) throw new Error("OGEVIA_ALARM_EMAIL is not a valid email address.");
+  return email;
 }
 
 /**
@@ -23,9 +38,10 @@ export interface ObservabilityStackProps extends StackProps {
  * RDS alarms read metrics of the EXISTING CloudFormation-owned instance by its
  * identifier. Reading metrics does not modify the instance.
  *
- * The SNS topic has no subscriptions: who gets paged, and how, is a Phase 7
- * owner decision. Alarm messages carry metric names and thresholds only.
- * NOT DEPLOYED.
+ * The SNS topic has no subscriptions unless props.alarmEmail is given: who gets
+ * paged, and how, is an owner decision. Live check 2026-10-21: the pilot topic has
+ * one email subscription (created outside CDK) and the production topic has none.
+ * Alarm messages carry metric names and thresholds only. NOT DEPLOYED.
  */
 export class ObservabilityStack extends Stack {
   public readonly alarmTopic: sns.Topic;
@@ -48,6 +64,13 @@ export class ObservabilityStack extends Stack {
       reason:
         "Alarm notifications carry metric names and thresholds only, never PHI. CloudWatch cannot publish to a topic using the AWS-managed SNS key, so encryption needs a customer-managed key: an owner cost decision.",
     });
+    if (props.alarmEmail !== undefined && props.alarmEmail.trim() !== "") {
+      new sns.Subscription(this, "AlarmEmail", {
+        topic: this.alarmTopic,
+        protocol: sns.SubscriptionProtocol.EMAIL,
+        endpoint: normaliseAlarmEmail(props.alarmEmail),
+      });
+    }
     const notify = new cwActions.SnsAction(this.alarmTopic);
 
     const add = (

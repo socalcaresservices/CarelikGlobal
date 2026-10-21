@@ -53,6 +53,7 @@ export function buildOgeviaApp(
   config: OgeviaEnvironmentConfig,
   mode: OgeviaMode = "plan",
   approvalRef?: string,
+  options: { readonly alarmEmail?: string | undefined } = {},
 ): PlannedStack[] {
   assertDatabaseConfig(config);
   const env = { account: config.account, region: config.region };
@@ -107,6 +108,7 @@ export function buildOgeviaApp(
     env,
     handler: api.handler,
     api: api.api,
+    alarmEmail: options.alarmEmail,
     description: `Ogevia ${config.envName} - operational alarms (FUTURE, Phase 4/7; not deployed)`,
   });
 
