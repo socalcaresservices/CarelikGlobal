@@ -6,6 +6,13 @@ Date: 2026-10-20. Repository `socalcaresservices/CarelikGlobal`, branch `claude/
 
 Evidence classes: **CODE** (read in this checkout, file:line), **TEST** (run this session), **DOC** (a repository document says so), **UNVERIFIED**.
 
+> **Live inventory update (2026-10-21):** the owner's CloudShell output **confirms** this design's facts about the pool, the three clients, both API
+> authorizers (issuer = the one pool; audiences `{legacy, test-slice}` and `{legacy, prd}`) and both identity functions (both on the one pool). It adds:
+> the pool has an estimated **8 users**; no domain, certificate or alias exists for `app.ogevia.com` / `demo.ogevia.com` in this account; production alarms
+> have no subscriber; the live account appears to run a build from the branch `claude/ogevia-prd-readiness` with a production release in flight (window
+> 2026-10-21 17:00-21:00 UTC per its plan). The authentication files are identical on that branch, so the design stands, but **Phases 2-3 of the
+> migration (provisioning, cutover) must wait until the owner closes that release.** Details: `INVENTORY_RECONCILIATION_2026-10-21.md`.
+
 ## 0. Corrections and key findings first
 
 **Correction to the Phase 1 assessment (section 4, defect 1).** Phase 1 said any pilot user obtains a token the production API accepts "via the legacy client". More precisely, from the code:
@@ -320,6 +327,10 @@ Rating = severity if it occurs (probability noted). "Current" rows describe the 
 | R15 | New pools add cost | Cost | **Low** | Essentials tier billed per monthly active user above a free allowance (DOC, **not re-verified**); about 20 users now | Verify current AWS pricing before Phase 2; cost model update |
 | R16 | Conflicting older plans (`ogevia-prd-config-required.txt`, `docs/deployment/*`) reintroduce a shared pool | Process | **Low** | Medium | Mark superseded in Phase 1 documentation fix |
 | R17 | Tests/scripts encoding the shared audience (`slice-contract.test.ts`, `smoke.py:640`) fail or are weakened | Process | **Low** | Certain | Update them as part of the change, never skip |
+| R18 | The account **root** principal was used to run the inventory | Security | **Medium** | Observed (`arn:aws:iam::300094796789:root`, inventory section 0) | Use the IAM Identity Center administrator role for routine work; reserve root for account-level tasks; confirm root MFA; no change made by this work |
+| R19 | Production alarm topic has no subscriber, so production failures page nobody | Operational | **High** until closed | Observed live 2026-10-21 | Subscribe a named recipient (console now, or the opt-in CDK subscription later); see `INVENTORY_RECONCILIATION_2026-10-21.md` section 5 |
+| R20 | The temporary database admin host `ogevia-db-admin-temp` is running | Operational / cost | **Low-Medium** | Observed live | Owner decision on when to stop it; not touched by this work |
+| R21 | Separation work colliding with the open production release window | Operational | **High** (mitigated by sequencing) | Release plan window 2026-10-21 17:00-21:00 UTC; API stack tagged 2026-10-20 | Phases 2-3 only after the owner closes the release; Phase 1 is code and tests only |
 
 ---
 
@@ -362,6 +373,8 @@ Rating = severity if it occurs (probability noted). "Current" rows describe the 
 2. Confirm whether any real person already signs in to the AWS production environment (decides cutover style, gate G1).
 3. Choose the sender for production invitation emails (Cognito default is limited to about 50 a day; SES is a separate decision).
 4. Approve running the CloudShell inventory, including the user and `sub` overlap counts, so Phase 0 can close.
+
+**Sequencing note (2026-10-21):** production is mid-release. Do not touch any `Ogevia-prd-*` stack, the shared RDS instance or the shared pool until the owner closes the release. The prepared code-and-tests batch is safe to review now (it changes no deployed behaviour).
 
 **Recommended smallest next step:** run the CloudShell inventory plus the count-only overlap checks (Phase 0). It is read-only, free, and determines the cutover style. Then Phase 1 (code and tests only, no deployment) for owner review.
 

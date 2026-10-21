@@ -20,6 +20,7 @@ Nothing here creates, changes or deletes anything. Run it in AWS CloudShell, reg
 ```bash
 # ---- Ogevia read-only inventory. Safe: describe/list/get only. ----
 export AWS_PAGER="" AWS_DEFAULT_REGION=us-west-2
+set +H   # interactive bash treats "!" in double quotes as history expansion and silently skips the line (it skipped Secrets Manager and SES on 2026-10-21)
 OUT=~/ogevia-inventory-$(date -u +%Y%m%d-%H%M).txt
 sec(){ printf '\n===== %s =====\n' "$1" >> "$OUT"; }
 run(){ printf '\n$ %s\n' "$*" >> "$OUT"; "$@" >> "$OUT" 2>&1 || echo "(command failed or not permitted)" >> "$OUT"; }
@@ -65,7 +66,7 @@ run aws apigatewayv2 get-domain-names --output json
 sec "6 Lambda: functions, runtime, last modified, VPC, env var NAMES and five non-secret values"
 run aws lambda list-functions --query "Functions[?contains(FunctionName,'Ogevia') || contains(FunctionName,'ogevia')].{Name:FunctionName,Runtime:Runtime,Modified:LastModified,Mem:MemorySize,Timeout:Timeout,CodeSha:CodeSha256,Vpc:VpcConfig.VpcId,Role:Role}" --output json
 for f in $(aws lambda list-functions --query "Functions[?contains(FunctionName,'Ogevia') || contains(FunctionName,'ogevia')].FunctionName" --output text); do
-  run aws lambda get-function-configuration --function-name "$f" --query "{Name:FunctionName,EnvNames:keys(Environment.Variables),OGEVIA_ENV:Environment.Variables.OGEVIA_ENV,DB_NAME:Environment.Variables.DB_NAME,COGNITO_USER_POOL_ID:Environment.Variables.COGNITO_USER_POOL_ID,AppClientIds:Environment.Variables.COGNITO_APP_CLIENT_IDS,DbSetRole:Environment.Variables.DB_SET_ROLE,ReservedConcurrency:ReservedConcurrentExecutions}" --output json
+  run aws lambda get-function-configuration --function-name "$f" --query "{Name:FunctionName,EnvNames:keys(Environment.Variables),OGEVIA_ENV:Environment.Variables.OGEVIA_ENV,DB_NAME:Environment.Variables.DB_NAME,COGNITO_USER_POOL_ID:Environment.Variables.COGNITO_USER_POOL_ID,AppClientIds:Environment.Variables.COGNITO_APP_CLIENT_ID,DbSetRole:Environment.Variables.DB_SET_ROLE,ReservedConcurrency:ReservedConcurrentExecutions}" --output json
   run aws lambda get-function-concurrency --function-name "$f"
 done
 

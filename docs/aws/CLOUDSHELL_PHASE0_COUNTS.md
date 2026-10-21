@@ -119,7 +119,7 @@ grep -ciE "insert|update|delete|drop|alter|create|grant|truncate" ~/read_only_co
 ### 3.3 Open the tunnel, run the counts for both databases, close everything
 
 ```bash
-set +x; export AWS_PAGER="" AWS_DEFAULT_REGION=us-west-2
+set +x +H; export AWS_PAGER="" AWS_DEFAULT_REGION=us-west-2
 IID=$(aws ec2 describe-instances --filters "Name=tag:Name,Values=ogevia-db-admin-temp" "Name=instance-state-name,Values=running" \
       --query 'Reservations[0].Instances[0].InstanceId' --output text)
 [[ "$IID" == i-* ]] || { echo "STOP: admin host is not running. Do not start it; tell Claude."; return 2>/dev/null || exit 2; }

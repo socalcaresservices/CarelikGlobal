@@ -7,6 +7,13 @@ this file is the only change. Nothing was deployed, migrated, pushed, or modifie
 Evidence classes: **CODE** (read in this checkout), **TEST** (run in this session), **DOC** (a repository document says so;
 not independently confirmed), **UNVERIFIED** (no evidence either way). "Implemented" never means "deployed".
 
+> **Live inventory update (2026-10-21):** the owner's CloudShell output is reconciled in `INVENTORY_RECONCILIATION_2026-10-21.md`. Corrections to this
+> document: (1) the pilot alarm topic **has** one email subscriber and the production topic has none; (2) a GuardDuty detector exists; (3) the master-secret
+> question is resolved in favour of `config.ts`; (4) a second RDS instance, `ogevia-postgres`, exists, is unmanaged and is referenced by no code; (5) this
+> assessment was written on `main`, while production appears to run a build from the branch `claude/ogevia-prd-readiness` (228 routes, a scheduled job,
+> migrations to 0085); the authentication, alarm and environment files are identical on both; (6) `app.ogevia.com` and `demo.ogevia.com` do not exist in
+> this AWS account's Route 53, ACM or CloudFront.
+
 ## 0. Limits of this assessment
 
 | Limit | Effect |
@@ -71,7 +78,7 @@ Status key: Implemented (in code and tested locally), In Progress, Planned, Unve
 | Multi-agency membership and switching | Implemented (UI + `get_my_context`) | `aws-organization-provider.tsx`, `aws-shell.tsx:400-410`, `0009`; unique(org,user) |
 | Cross-tenant file access (evidence, documents, logos) | Implemented; API-level isolation tests present, **live** untested | `apps/sv-api/src/evidence.ts`, `documents.ts`; `get_visit_signature_evidence` org check; TEST sv-api API suite 75 pass |
 | Reports/exports isolation | Implemented in DB functions (org param + permission); no S3 report generation exists | `routes.ts` reports; DOC CONTINUITY_AND_RECOVERY section 3 |
-| Background jobs | Not applicable: none exist | No EventBridge/schedulers in `infra/aws/lib` |
+| Background jobs | None **on `main`**; the release branch adds a 15-minute EventBridge compliance rule (`apps/sv-api/src/scheduled.ts`) | No EventBridge/schedulers in `infra/aws/lib` on `main` |
 | Agency creation | Unverified/Planned: SQL bootstrap only | `db/deploy/12_prd_bootstrap_tenant.sql` |
 | Agency suspend/reactivate | Planned (status column + enforcement only); `update organizations set status` appears only in tests | grep of migrations: no mutator |
 | Agency invitation/activation of first admin | Partial: Cognito `AdminCreateUser` + `13_prd_bootstrap_admin.sql`; no route | `PRODUCTION_DEPLOYMENT.md` section 3 |
@@ -88,7 +95,7 @@ Status key: Implemented (in code and tested locally), In Progress, Planned, Unve
 | Outbound notification safeguards | Not present | Only outbound path is Cognito default email (DOC matrix; CODE identity-handler.ts) |
 | CDK stacks per env | Implemented for 2 envs | `infra/aws/lib/app.ts`, 134 CDK tests pass (TEST) |
 | Deployment gates and rollback | Implemented (pilot scripts, `deploy-production.sh`, 52 `.down.sql`) | `infra/aws/slice/*`; not exercised in this session |
-| Alarm delivery | Not working as designed: no SNS subscriber | `observability-stack.ts`; DOC PHASE7 section 4 |
+| Alarm delivery | **Production: no subscriber. Pilot: one email subscriber, created outside CDK** (LIVE 2026-10-21) | owner inventory section 13 |
 | Restore | Partially evidenced | DOC: one drill (4 min 15 s) to a new instance at 0001-0012; full-system recovery never drilled |
 
 ## 4. Confirmed defects, evidence gaps, dependencies
@@ -99,7 +106,7 @@ Status key: Implemented (in code and tested locally), In Progress, Planned, Unve
 1. **Shared identity across test and production.** One Cognito pool; the prd API's JWT audience still includes the legacy `ogevia-web` client
    (`service-verification-api-stack.ts:541`), so any pilot/test user obtains a token the prd API accepts; only the lack of a prd membership stops them. Acknowledged in `PRODUCTION_DEPLOYMENT.md` section 8.
 2. **No guard against real outbound email from non-production.** The identity Lambda can email any address in any environment where it is configured.
-3. **Alarms notify nobody** (SNS topic has no subscription); the AWS Budget ($50) is below the documented estimated spend ($55-84) (DOC).
+3. **Production alarms notify nobody** (its SNS topic has no subscription; the pilot's has one, LIVE 2026-10-21); the AWS Budget ($50) is below the documented estimated spend ($55-84) (DOC).
 4. **No mutating path for agency status**; any suspension today is a manual SQL edit, which bypasses the audit trail.
 5. **Administrator disable depends on a two-step DB-then-Cognito sequence** (safe direction). Cognito-side failure leaves the sign-in enabled but blocked by the DB; token refresh behaviour after disable is not tested live.
 6. `db:rollback-readiness` defective for targets >= 0044 (BLOCKER_REGISTER B-15). A committed `infra/aws/cdk.out/` contains an `Ogevia-prd-NetworkEgress` template that current code no longer defines (appears stale).
