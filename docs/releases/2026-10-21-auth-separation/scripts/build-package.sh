@@ -10,8 +10,9 @@ OUT="${1:-}"; PREV="${2:-}"
 REPO="$(git rev-parse --show-toplevel)"; cd "$REPO"
 CAND=$(git rev-parse --verify HEAD^{commit}); PREV=$(git rev-parse --verify "$PREV^{commit}")
 [[ "$CAND" != "$PREV" ]] || { echo "STOP: the previous commit equals the candidate" >&2; exit 1; }
-git show "$CAND:infra/aws/lib/config.ts" | grep -q dedicatedUserPool || { echo "STOP: the candidate does not define the dedicated production pool" >&2; exit 1; }
-if git show "$PREV:infra/aws/lib/config.ts" | grep -q dedicatedUserPool; then echo "STOP: the previous commit already defines the dedicated pool (it must be the code BEFORE this change)" >&2; exit 1; fi
+CAND_CFG=$(git show "$CAND:infra/aws/lib/config.ts"); PREV_CFG=$(git show "$PREV:infra/aws/lib/config.ts")   # captured first: "git show | grep -q" can fail under pipefail (SIGPIPE) on a large file
+grep -q dedicatedUserPool <<<"$CAND_CFG" || { echo "STOP: the candidate does not define the dedicated production pool" >&2; exit 1; }
+if grep -q dedicatedUserPool <<<"$PREV_CFG"; then echo "STOP: the previous commit already defines the dedicated pool (it must be the code BEFORE this change)" >&2; exit 1; fi
 PATHS=(infra/aws apps packages package.json pnpm-lock.yaml pnpm-workspace.yaml turbo.json tsconfig.base.json)
 REL=docs/releases/2026-10-21-auth-separation; VEND=docs/releases/2026-10-19-prd-readiness/release/scripts
 STAGE=$(mktemp -d); trap 'rm -rf "$STAGE"' EXIT
