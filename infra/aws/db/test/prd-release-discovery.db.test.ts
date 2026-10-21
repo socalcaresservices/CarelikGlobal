@@ -9,6 +9,8 @@ import { beforeAll, describe, expect, it, vi } from "vitest";
 
 vi.setConfig({ testTimeout: 300000, hookTimeout: 300000 });
 const REPO = fileURLToPath(new URL("../../../../", import.meta.url));
+// This package describes the readiness release, so it is built from that release's commit (later work changes the production stacks).
+const RELEASE_SOURCE = "fa3ca07";
 const BUILD = join(REPO, "docs/releases/2026-10-19-prd-readiness/release/build-package.sh");
 const MOCKSRC = fileURLToPath(new URL("./prd-release-aws-mock.sh", import.meta.url));
 const work = mkdtempSync(join(tmpdir(), "prdrel-"));
@@ -45,7 +47,7 @@ beforeAll(() => {
   copyFileSync(MOCKSRC, join(BIN, "aws")); chmodSync(join(BIN, "aws"), 0o755);
   writeFileSync(join(MOCK, "code.zip"), "PK mock lambda zip bytes");
   writeFileSync(join(MOCK, "endpoint-policy.json"), JSON.stringify({ Version: "2012-10-17", Statement: [{ Effect: "Allow", Principal: "*", Action: "s3:GetObject", Resource: ["arn:aws:s3:::ogevia-prod-signature-evidence-300094796789-us-west-2/*", "arn:aws:s3:::ogevia-prd-signature-evidence-300094796789-us-west-2/*"] }] }));
-  const b = spawnSync("bash", [BUILD, PKGDIR], { encoding: "utf8" });
+  const b = spawnSync("bash", [BUILD, PKGDIR], { encoding: "utf8", env: { ...process.env, OGEVIA_RELEASE_SOURCE_COMMIT: RELEASE_SOURCE } });
   expect(b.status, b.stdout + b.stderr).toBe(0);
   handlerKey = /handler asset: (\S+)/.exec(b.stdout)![1]!;
   setLive(); setWeb(PRD_API);

@@ -68,6 +68,7 @@ describe("production deployment (Ogevia-prd-*)", () => {
   it("synthesizes separate stacks and does not create a second NetworkEgress", () => {
     const names = prdStacks.map((p) => p.stack.stackName).sort();
     expect(names).toEqual([
+      "Ogevia-prd-Auth",
       "Ogevia-prd-DatabaseSecret",
       "Ogevia-prd-EvidenceStorage",
       "Ogevia-prd-Observability",

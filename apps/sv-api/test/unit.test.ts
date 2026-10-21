@@ -250,9 +250,11 @@ describe("opaque-token care links (public routes)", () => {
 
 describe("production (OGEVIA_ENV=prd) fails closed on the database name", () => {
   it("requires DB_NAME=ogevia_prd; a missing, test or other name stops cold start", () => {
-    expect(loadConfig({ ...ENV, OGEVIA_ENV: "prd", DB_NAME: "ogevia_prd" }).dbName).toBe("ogevia_prd");
+    // Production also fails closed on its sign-in (test/auth-separation.test.ts); the valid case carries that setting.
+    const prd = { ...ENV, OGEVIA_ENV: "prd", OGEVIA_FORBIDDEN_POOL_IDS: "us-west-2_SHAREDPOOL" };
+    expect(loadConfig({ ...prd, DB_NAME: "ogevia_prd" }).dbName).toBe("ogevia_prd");
     for (const DB_NAME of [undefined, "", "ogevia_sv_test", "postgres"]) {
-      expect(() => loadConfig({ ...ENV, OGEVIA_ENV: "prd", DB_NAME })).toThrow(ConfigError);
+      expect(() => loadConfig({ ...prd, DB_NAME })).toThrow(ConfigError);
     }
   });
   it("leaves the pilot environment unchanged", () => {

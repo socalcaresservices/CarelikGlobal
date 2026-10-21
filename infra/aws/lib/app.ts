@@ -1,5 +1,6 @@
 import { Tags, type App, type Stack } from "aws-cdk-lib";
-import { assertDatabaseConfig, ENVIRONMENTS, type OgeviaEnvironmentConfig } from "./config.js";
+import { ProductionAuthStack } from "./auth-stack.js";
+import { assertAuthConfig, assertDatabaseConfig, ENVIRONMENTS, forbiddenUserPoolIdsFor, type OgeviaEnvironmentConfig } from "./config.js";
 import { DatabaseSecretStack } from "./database-secret-stack.js";
 import { EvidenceStorageStack } from "./evidence-storage-stack.js";
 import { NetworkEgressStack } from "./network-egress-stack.js";
@@ -56,6 +57,7 @@ export function buildOgeviaApp(
   options: { readonly alarmEmail?: string | undefined } = {},
 ): PlannedStack[] {
   assertDatabaseConfig(config);
+  assertAuthConfig(config);
   const env = { account: config.account, region: config.region };
   const production = config.database.purpose === "production";
   const name = (suffix: string) => `Ogevia-${config.envName}-${suffix}`;
@@ -90,6 +92,15 @@ export function buildOgeviaApp(
     env,
     description: `Ogevia ${config.envName} - CloudFront + private S3 web hosting and test-slice Cognito app client (Phase 6; not deployed)`,
   });
+  // Production's own sign-in (dedicated user pool and client). Created from the web origin only; the web stack itself is unchanged.
+  const auth = config.auth.dedicatedUserPool
+    ? new ProductionAuthStack(app, name("Auth"), {
+        config,
+        env,
+        webOrigin: web.webOrigin,
+        description: `Ogevia ${config.envName} - dedicated Cognito user pool, domain and web app client (separate from the pilot sign-in)`,
+      })
+    : undefined;
   const api = new ServiceVerificationApiStack(
     app,
     name("ServiceVerificationApi"),
@@ -98,7 +109,16 @@ export function buildOgeviaApp(
       env,
       evidenceKey: evidence.dataKey,
       extraAllowedOrigins: [web.webOrigin],
-      extraAppClientIds: [web.testAppClient.ref],
+      ...(auth
+        ? {
+            authority: {
+              userPoolId: auth.userPoolId,
+              userPoolArn: auth.userPoolArn,
+              appClientIds: [auth.appClientId],
+              forbiddenUserPoolIds: forbiddenUserPoolIdsFor(config),
+            },
+          }
+        : { extraAppClientIds: [web.testAppClient.ref] }),
       appDatabaseSecret: databaseSecret?.appSecret,
       description: `Ogevia ${config.envName} - Service Verification API Gateway + Lambda tier (FUTURE, Phase 4; not deployed)`,
     },
@@ -124,6 +144,7 @@ export function buildOgeviaApp(
     ...(egress ? [{ stack: egress, plannedPhase: 4 }] : []),
     { stack: web, plannedPhase: 6 },
     ...(databaseSecret ? [{ stack: databaseSecret, plannedPhase: 2 }] : []),
+    ...(auth ? [{ stack: auth, plannedPhase: 3 }] : []),
   ];
 
   Tags.of(app).add("project", "ogevia");

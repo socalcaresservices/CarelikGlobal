@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { findSharedAuth } from "../lib/auth-separation.js";
-import { ENVIRONMENTS, type OgeviaEnvironmentConfig } from "../lib/config.js";
+import { assertAuthConfig, ENVIRONMENTS, forbiddenUserPoolIdsFor, type OgeviaEnvironmentConfig } from "../lib/config.js";
 
 // Live values read on 2026-10-21 from the owner's CloudShell inventory (docs/aws/INVENTORY_RECONCILIATION_2026-10-21.md).
 const LIVE_POOL = "us-west-2_849AYz5J7";
@@ -27,19 +27,37 @@ describe("authentication identifiers shared between environments", () => {
     }
   });
 
-  // KNOWN EXCEPTION, recorded so it cannot grow unnoticed. When the separation is deployed, delete this test and remove `.fails`
-  // from the target test below in the same change.
-  it("today pilot (prod) and production (prd) share exactly the pool, its domain and the legacy client", () => {
-    expect(findSharedAuth(configs)).toEqual([
-      { kind: "cognitoDomain", value: LIVE_DOMAIN, environments: ["prd", "prod"] },
-      { kind: "legacyClient", value: LIVE_LEGACY_CLIENT, environments: ["prd", "prod"] },
-      { kind: "userPool", value: LIVE_POOL, environments: ["prd", "prod"] },
-    ]);
+  // The separation is implemented in code: production owns a dedicated pool, domain and client. (Before this change the shared pool,
+  // its domain and the legacy client were shared; this test failed `it.fails` until then. It is now a hard rule.)
+  it("no pool, domain or client identifier is shared between environments", () => {
+    expect(findSharedAuth(configs)).toEqual([]);
   });
 
-  // TARGET (docs/aws/AUTH_SEPARATION_PHASE2_DESIGN.md part C). Expected to fail until each environment has its own pool.
-  it.fails("target: no pool, domain or client identifier is shared between environments", () => {
-    expect(findSharedAuth(configs)).toEqual([]);
+  it("production has a dedicated pool and the pilot keeps the shared one", () => {
+    expect(ENVIRONMENTS.prd.auth.dedicatedUserPool?.domainPrefix).toMatch(/^ogevia-prd-/);
+    expect(ENVIRONMENTS.prod.auth.dedicatedUserPool).toBeUndefined();
+    expect(ENVIRONMENTS.prod.existing.cognitoUserPoolId).toBe(LIVE_POOL);
+  });
+
+  it("production's inherited shared-pool identifiers are only ever used to FORBID that pool", () => {
+    expect(forbiddenUserPoolIdsFor(ENVIRONMENTS.prd)).toEqual([LIVE_POOL]);
+    expect(forbiddenUserPoolIdsFor(ENVIRONMENTS.prod)).toEqual([]);
+  });
+
+  describe("configuration guards", () => {
+    const prd = ENVIRONMENTS.prd;
+    it("production without a dedicated pool is refused", () => {
+      expect(() => assertAuthConfig({ ...prd, auth: { ...prd.auth, dedicatedUserPool: undefined } } as OgeviaEnvironmentConfig)).toThrow(/dedicated Cognito user pool/);
+    });
+    it("the pilot may not acquire a dedicated pool", () => {
+      expect(() => assertAuthConfig({ ...ENVIRONMENTS.prod, auth: { ...ENVIRONMENTS.prod.auth, dedicatedUserPool: { domainPrefix: "ogevia-x-1234" } } } as OgeviaEnvironmentConfig)).toThrow(/only production/);
+    });
+    it.each(["x", "UPPER-case-1", "has_underscore", "my-cognito-pool", "aws-pool-001"])("a malformed or reserved domain prefix %s is refused", (domainPrefix) => {
+      expect(() => assertAuthConfig({ ...prd, auth: { ...prd.auth, dedicatedUserPool: { domainPrefix } } } as OgeviaEnvironmentConfig)).toThrow(/domain prefix is malformed/);
+    });
+    it("the shared pool's domain prefix is refused for production", () => {
+      expect(() => assertAuthConfig({ ...prd, auth: { ...prd.auth, dedicatedUserPool: { domainPrefix: "us-west-2849ayz5j7" } } } as OgeviaEnvironmentConfig)).toThrow(/must differ/);
+    });
   });
 
   describe("the checker", () => {

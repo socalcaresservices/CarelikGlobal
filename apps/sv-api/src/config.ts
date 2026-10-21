@@ -9,6 +9,8 @@ export interface ApiConfig {
   readonly region: string;
   readonly userPoolId: string;
   readonly appClientIds: readonly string[];
+  /** OGEVIA_FORBIDDEN_POOL_IDS: user pools this deployment must never run on (production names the shared pilot pool). */
+  readonly forbiddenUserPoolIds: readonly string[];
   readonly issuer: string;
   readonly dbHost: string;
   readonly dbPort: number;
@@ -47,6 +49,19 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
   if (appClientIds.length === 0 || appClientIds.some((id) => !/^[a-z0-9]{26}$/.test(id))) {
     throw new ConfigError("COGNITO_APP_CLIENT_ID is malformed");
   }
+  const forbiddenUserPoolIds = (env.OGEVIA_FORBIDDEN_POOL_IDS ?? "").split(",").map((s) => s.trim()).filter(Boolean);
+  if (forbiddenUserPoolIds.some((id) => !new RegExp(`^${region}_[A-Za-z0-9]+$`).test(id))) {
+    throw new ConfigError("OGEVIA_FORBIDDEN_POOL_IDS is malformed");
+  }
+  if (forbiddenUserPoolIds.includes(userPoolId)) {
+    throw new ConfigError("COGNITO_USER_POOL_ID is a user pool this environment must not use");
+  }
+  // Production has its OWN sign-in: exactly one app client, and the shared pilot pool must be named forbidden. A missing list stops
+  // cold start instead of letting production trust the pilot's sign-in.
+  if (env.OGEVIA_ENV?.trim() === "prd") {
+    if (forbiddenUserPoolIds.length === 0) throw new ConfigError("OGEVIA_ENV=prd requires OGEVIA_FORBIDDEN_POOL_IDS (the shared pilot pool)");
+    if (appClientIds.length !== 1) throw new ConfigError("OGEVIA_ENV=prd requires exactly one COGNITO_APP_CLIENT_ID");
+  }
   const dbPort = Number(required(env, "DB_PORT"));
   if (!Number.isInteger(dbPort) || dbPort < 1 || dbPort > 65535) throw new ConfigError("DB_PORT is malformed");
   const dbSecretArn = required(env, "DB_SECRET_ARN");
@@ -72,6 +87,7 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
     identityFunctionName,
     userPoolId,
     appClientIds,
+    forbiddenUserPoolIds,
     issuer: `https://cognito-idp.${region}.amazonaws.com/${userPoolId}`,
     dbHost: required(env, "DB_HOST"),
     dbPort,

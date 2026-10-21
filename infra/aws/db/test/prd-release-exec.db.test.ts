@@ -13,6 +13,8 @@ import { ADMIN_URL } from "./harness.js";
 
 vi.setConfig({ testTimeout: 600000, hookTimeout: 600000 });
 const REPO = fileURLToPath(new URL("../../../../", import.meta.url));
+// This package describes the readiness release, so it is built from that release's commit (later work changes the production stacks).
+const RELEASE_SOURCE = "fa3ca07";
 const BUILD = join(REPO, "docs/releases/2026-10-19-prd-readiness/release/build-package.sh");
 const MOCKSRC = fileURLToPath(new URL("./prd-release-exec-aws-mock.sh", import.meta.url));
 const PROXY = readFileSync(new URL("./prd-rehearsal-proxy.cjs", import.meta.url), "utf8");
@@ -93,7 +95,7 @@ beforeAll(async () => {
   writeFileSync(join(MOCK, "nic-by-group.json"), JSON.stringify({ NetworkInterfaces: [{ NetworkInterfaceId: "eni-0aaa", Attachment: { InstanceId: "i-0ce8db2d7e5839dd5" } }, { NetworkInterfaceId: "eni-0bbb", Attachment: { InstanceId: "i-other" } }] }));
   writeFileSync(join(MOCK, "nic-by-ip.json"), JSON.stringify({ NetworkInterfaces: [{ NetworkInterfaceId: "eni-0aaa", Attachment: { InstanceId: "i-0ce8db2d7e5839dd5" } }] }));
   resetSecurityGroup(); writeFileSync(join(MOCK, "snaps.txt"), `${SNAP} ${Math.floor(Date.now() / 1000)}\n`);
-  const b = spawnSync("bash", [BUILD, PKGDIR], { encoding: "utf8" });
+  const b = spawnSync("bash", [BUILD, PKGDIR], { encoding: "utf8", env: { ...process.env, OGEVIA_RELEASE_SOURCE_COMMIT: RELEASE_SOURCE } });
   expect(b.status, b.stdout + b.stderr).toBe(0);
   srcCommit = /source commit: ([0-9a-f]{40})/.exec(b.stdout)![1]!;
   // the working tree has uncommitted edits while the package is under development, so BUILD_INFO says DIRTY (d1 refuses that, and a test below proves it). Re-sign a CLEAN copy for the rest of the tests.

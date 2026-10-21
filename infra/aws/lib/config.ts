@@ -103,6 +103,15 @@ export interface OgeviaEnvironmentConfig {
     readonly appClientId: string;
     /** Browser origins allowed by API CORS. */
     readonly allowedOrigins: readonly string[];
+    /**
+     * Production only: this environment gets its OWN Cognito user pool, created by CDK (lib/auth-stack.ts), and its API accepts ONLY
+     * that pool's app client. The legacy shared pool (`existing.cognitoUserPoolId`) and the legacy `appClientId` above are then never
+     * accepted by this environment's API. Absent = the environment uses the shared pool (the pilot/test slice).
+     */
+    readonly dedicatedUserPool?: {
+      /** Managed-login domain prefix, globally unique in the region: https://<prefix>.auth.<region>.amazoncognito.com */
+      readonly domainPrefix: string;
+    };
   };
   readonly existing: ExistingFoundationIds;
   /**
@@ -251,6 +260,9 @@ const PROD: OgeviaEnvironmentConfig = {
 const PRD: OgeviaEnvironmentConfig = {
   ...PROD,
   envName: "prd",
+  // Separate sign-in from the pilot: a dedicated user pool and client (lib/auth-stack.ts). `existing.cognitoUserPoolId` and
+  // `auth.appClientId` are inherited from PROD only so they can be NAMED as forbidden for production; its API never accepts them.
+  auth: { ...PROD.auth, dedicatedUserPool: { domainPrefix: `ogevia-prd-${OGEVIA_ACCOUNT}` } },
   database: {
     purpose: "production",
     name: PRODUCTION_DATABASE_NAME,
@@ -310,6 +322,31 @@ export function assertDatabaseConfig(config: OgeviaEnvironmentConfig): void {
 }
 
 /**
+ * Fails closed on authentication misconfiguration: production owns a dedicated pool whose domain differs from the shared one;
+ * the pilot/test slice must keep using the shared pool and never acquire a dedicated one by accident.
+ */
+export function assertAuthConfig(config: OgeviaEnvironmentConfig): void {
+  const dedicated = config.auth.dedicatedUserPool;
+  if (config.envName !== "prd") {
+    if (dedicated) throw new Error(`env "${config.envName}": only production (prd) may have a dedicated user pool`);
+    return;
+  }
+  if (!dedicated) throw new Error("Production (prd) must have its own dedicated Cognito user pool (config.auth.dedicatedUserPool)");
+  const prefix = dedicated.domainPrefix;
+  if (!/^[a-z0-9][a-z0-9-]{2,62}$/.test(prefix) || /aws|amazon|cognito/.test(prefix)) {
+    throw new Error("Production's user pool domain prefix is malformed (lowercase letters, digits, hyphens; must not contain aws, amazon or cognito)");
+  }
+  if (config.testSlice.cognitoDomain.includes(`//${prefix}.auth.`)) {
+    throw new Error("Production's user pool domain must differ from the shared pool's domain");
+  }
+}
+
+/** The shared (pilot/test) pool id: production's API and Lambda must refuse it. */
+export function forbiddenUserPoolIdsFor(config: OgeviaEnvironmentConfig): readonly string[] {
+  return config.auth.dedicatedUserPool ? [PROD.existing.cognitoUserPoolId] : [];
+}
+
+/**
  * Resolves the target environment from `-c env=<name>`. There is no default:
  * every synth/diff must name its target explicitly.
  */
@@ -321,6 +358,7 @@ export function resolveEnvironment(value: unknown): OgeviaEnvironmentConfig {
   if (name === "prod" || name === "prd") {
     const config = ENVIRONMENTS[name];
     assertDatabaseConfig(config);
+    assertAuthConfig(config);
     return config;
   }
   throw new Error(

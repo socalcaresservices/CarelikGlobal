@@ -38,8 +38,19 @@ export interface ServiceVerificationApiStackProps extends StackProps {
   readonly evidenceKey: kms.IKey;
   /** Extra browser origins (e.g. the CloudFront test-slice origin). */
   readonly extraAllowedOrigins?: readonly string[];
-  /** Extra approved app clients (e.g. the test-slice client) for the JWT audience. */
+  /** Extra approved app clients (e.g. the test-slice client) for the JWT audience. Ignored when `authority` is given. */
   readonly extraAppClientIds?: readonly string[];
+  /**
+   * A DEDICATED user pool (production, lib/auth-stack.ts). When given, the JWT authorizer's issuer, its audience (exactly these clients),
+   * the Lambda's COGNITO_* settings and both identity-function permissions come from it, and the legacy shared pool and legacy client
+   * are NOT accepted. `forbiddenUserPoolIds` (the shared pilot pool) is passed to the Lambda, which refuses to start on one of them.
+   */
+  readonly authority?: {
+    readonly userPoolId: string;
+    readonly userPoolArn: string;
+    readonly appClientIds: readonly string[];
+    readonly forbiddenUserPoolIds: readonly string[];
+  };
   /**
    * The application database secret this API reads. Production passes the secret
    * created by DatabaseSecretStack. Omitted ONLY for the pilot/test slice, which
@@ -346,6 +357,9 @@ export const LAMBDA_ENVIRONMENT_KEYS = [
   "IDENTITY_FUNCTION_NAME",
 ] as const;
 
+/** Set ONLY when the API trusts a dedicated pool (production): the pilot pool(s) the Lambda must refuse at cold start. */
+export const FORBIDDEN_POOLS_ENVIRONMENT_KEY = "OGEVIA_FORBIDDEN_POOL_IDS";
+
 
 /**
  * B. NEW FUTURE INFRASTRUCTURE - FUTURE/PLANNED (Phase 4).
@@ -386,6 +400,10 @@ export class ServiceVerificationApiStack extends Stack {
     assertVerified(config.auth, "API auth contract");
     assertDatabaseConfig(config);
     const existing = new ExistingFoundation(this, "Existing", config.existing);
+    // The pool and clients this API trusts: a dedicated pool when given, otherwise the shared pool plus the legacy client.
+    const trustedUserPoolId = props.authority?.userPoolId ?? existing.userPool.userPoolId;
+    const trustedUserPoolArn = props.authority?.userPoolArn ?? `arn:aws:cognito-idp:${config.region}:${config.account}:userpool/${existing.userPool.userPoolId}`;
+    const trustedClientIds = props.authority ? props.authority.appClientIds : [config.auth.appClientId, ...(props.extraAppClientIds ?? [])];
     if (config.database.purpose === "production" && !props.appDatabaseSecret) {
       throw new Error("Production API requires its dedicated database secret; it never falls back to the test slice's");
     }
@@ -512,14 +530,14 @@ export class ServiceVerificationApiStack extends Stack {
       new iam.PolicyStatement({
         sid: "CreateCaregiverSignIns",
         actions: ["cognito-idp:AdminCreateUser", "cognito-idp:AdminGetUser"],
-        resources: [`arn:aws:cognito-idp:${config.region}:${config.account}:userpool/${existing.userPool.userPoolId}`],
+        resources: [trustedUserPoolArn],
       }),
       // 0048: an Admin can switch a person's sign-in off and on. These two actions cannot read or set a password, change an email,
       // assign a group, or delete anyone. The same one pool ARN; the database decides who may ask and for whom.
       new iam.PolicyStatement({
         sid: "SwitchSignInsOnOff",
         actions: ["cognito-idp:AdminDisableUser", "cognito-idp:AdminEnableUser"],
-        resources: [`arn:aws:cognito-idp:${config.region}:${config.account}:userpool/${existing.userPool.userPoolId}`],
+        resources: [trustedUserPoolArn],
       }),
     );
     this.identityHandler = new nodejs.NodejsFunction(this, "IdentityHandler", {
@@ -536,7 +554,7 @@ export class ServiceVerificationApiStack extends Stack {
       timeout: Duration.seconds(8),
       role: identityRole,
       logGroup: this.identityLogGroup,
-      environment: { COGNITO_USER_POOL_ID: existing.userPool.userPoolId },
+      environment: { COGNITO_USER_POOL_ID: trustedUserPoolId },
     });
     this.identityHandler.node.addDependency(identityPolicy);
     // Scoped to this one function; the API handler is still checked by the rule.
@@ -585,8 +603,10 @@ export class ServiceVerificationApiStack extends Stack {
         DB_SECRET_ARN: appDatabaseSecret.secretArn,
         EVIDENCE_BUCKET: evidenceBucketName,
         EVIDENCE_KEY_ARN: props.evidenceKey.keyArn,
-        COGNITO_USER_POOL_ID: existing.userPool.userPoolId,
-        COGNITO_APP_CLIENT_ID: [config.auth.appClientId, ...(props.extraAppClientIds ?? [])].join(","),
+        COGNITO_USER_POOL_ID: trustedUserPoolId,
+        COGNITO_APP_CLIENT_ID: trustedClientIds.join(","),
+        // Fail-closed at cold start (apps/sv-api/src/config.ts): production refuses to run on the shared pilot pool.
+        ...(props.authority ? { [FORBIDDEN_POOLS_ENVIRONMENT_KEY]: props.authority.forbiddenUserPoolIds.join(",") } : {}),
         LOG_LEVEL: "info",
         // The ONLY source of the database name (config.database.name): ogevia_sv_test
         // for env=prod, ogevia_prd for env=prd. Never set by hand outside CDK.
@@ -610,8 +630,8 @@ export class ServiceVerificationApiStack extends Stack {
 
     const authorizer = new HttpJwtAuthorizer(
       "CognitoJwt",
-      cognitoIssuer(config.region, existing.userPool.userPoolId),
-      { jwtAudience: [config.auth.appClientId, ...(props.extraAppClientIds ?? [])] },
+      cognitoIssuer(config.region, trustedUserPoolId),
+      { jwtAudience: [...trustedClientIds] },
     );
 
     this.api = new apigw.HttpApi(this, "Api", {

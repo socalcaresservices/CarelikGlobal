@@ -9,6 +9,14 @@ NAME=ogevia-prd-release; ROOT="$OUTDIR/$NAME"; mkdir -p "$OUTDIR"; rm -rf "$ROOT
 if [[ "${2:-}" == --use-synth ]]; then PRD_OUT="${3:?}"; PROD_OUT="${4:?}"
 else
   WORK="$(mktemp -d)"; PRD_OUT="$WORK/prd"; PROD_OUT="$WORK/prod"
+  # OGEVIA_RELEASE_SOURCE_COMMIT: synthesize the templates from THAT commit's tree (git archive; the working tree's node_modules are linked in)
+  # instead of the working tree. Used once later work (the authentication-separation release) changed the production stacks, so this package
+  # keeps describing the release it was approved for.
+  if [[ -n "${OGEVIA_RELEASE_SOURCE_COMMIT:-}" ]]; then
+    SRC="$WORK/src"; mkdir -p "$SRC"; git -C "$REPO" archive "$OGEVIA_RELEASE_SOURCE_COMMIT" | tar -x -C "$SRC" || { echo "cannot archive $OGEVIA_RELEASE_SOURCE_COMMIT" >&2; exit 1; }
+    while IFS= read -r nm; do rel="${nm#"$REPO"/}"; mkdir -p "$SRC/$(dirname "$rel")"; ln -s "$nm" "$SRC/$rel"; done < <(find "$REPO" -maxdepth 4 -name node_modules -prune -not -path "*/node_modules/*")
+    INFRA="$SRC/infra/aws"
+  fi
   (cd "$INFRA" && npx --no-install cdk synth --quiet --no-notices -c env=prd -c mode=plan -o "$PRD_OUT" >/dev/null 2>&1 && npx --no-install cdk synth --quiet --no-notices -c env=prod -c mode=plan -o "$PROD_OUT" >/dev/null 2>&1) || { echo "cdk synth failed" >&2; exit 1; }
 fi
 for S in Ogevia-prd-DatabaseSecret Ogevia-prd-EvidenceStorage Ogevia-prd-WebHosting Ogevia-prd-ServiceVerificationApi Ogevia-prd-Observability; do cp "$PRD_OUT/$S.template.json" "$ROOT/release-templates/$S.json"; done
