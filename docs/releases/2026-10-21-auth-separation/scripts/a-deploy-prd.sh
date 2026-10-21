@@ -19,6 +19,8 @@ MODE="${1:-}"
 need aws jq python3 timeout
 STACKS=(Ogevia-prd-DatabaseSecret Ogevia-prd-EvidenceStorage Ogevia-prd-WebHosting Ogevia-prd-ServiceVerificationApi Ogevia-prd-Observability Ogevia-prod-NetworkEgress)
 GATE="$HERE/auth_cutover_gate.py"; MARK="$AB/gate.ok"; PHRASE=DEPLOY-Ogevia-prd-Auth-and-Api
+# templates synthesized when the package was built (pkg/templates/{new,previous}); the environment variables override them
+PKG_TEMPLATES="$HERE/../../../../../templates"
 CDK_DIR="${OGEVIA_CDK_DIR:-$HERE/../../../../infra/aws}"; CDK="${OGEVIA_CDK_BIN:-npx cdk}"
 
 capture_live() {   # $1 = absent (before the change) | present (rollback check). Saves every live template and the facts the post-checks compare with
@@ -40,7 +42,7 @@ capture_live() {   # $1 = absent (before the change) | present (rollback check).
 case "$MODE" in
 check)
   say "== A check $(date -u +%FT%TZ) =="; check_account
-  NEW="${OGEVIA_AUTH_NEW_TEMPLATES:-}"; [[ -d "$NEW" && -s "$NEW/$API_STACK.json" && -s "$NEW/$AUTH_STACK.json" ]] || stop "set OGEVIA_AUTH_NEW_TEMPLATES to the directory made by 'npx tsx test/dump-templates.ts <dir>' at the approved commit"
+  NEW="${OGEVIA_AUTH_NEW_TEMPLATES:-$PKG_TEMPLATES/new}"; [[ -d "$NEW" && -s "$NEW/$API_STACK.json" && -s "$NEW/$AUTH_STACK.json" ]] || stop "set OGEVIA_AUTH_NEW_TEMPLATES to the directory made by 'npx tsx test/dump-templates.ts <dir>' at the approved commit"
   capture_live
   [[ $bad == 0 ]] || stop "the live account is not in the state this package expects (see FAIL lines). Nothing was changed."
   if python3 -I -B "$GATE" --live-dir "$AB/live" --new-dir "$NEW" --shared-pool "$SHARED_POOL" | tee -a "$LOG"; then ok "expected-only gate"; else nope "expected-only gate"; fi
@@ -57,7 +59,7 @@ deploy)
   [[ "$(jq -r .Status <<<"$S")" == available && "$(jq -r .DBInstanceIdentifier <<<"$S")" == ogevia-prod-postgres ]] || stop "snapshot $SNAP is not an available snapshot of ogevia-prod-postgres"
   SNAP_AGE=$(( $(date +%s) - $(date -u -d "$(jq -r .SnapshotCreateTime <<<"$S")" +%s) )); (( SNAP_AGE <= 86400 )) || stop "snapshot $SNAP is $((SNAP_AGE/3600)) hours old (limit 24)"
   ok "snapshot $SNAP is available and fresh"
-  NEW="${OGEVIA_AUTH_NEW_TEMPLATES:-}"; capture_live; python3 -I -B "$GATE" --live-dir "$AB/live" --new-dir "$NEW" --shared-pool "$SHARED_POOL" | tee -a "$LOG" || nope "gate repeated"
+  NEW="${OGEVIA_AUTH_NEW_TEMPLATES:-$PKG_TEMPLATES/new}"; capture_live; python3 -I -B "$GATE" --live-dir "$AB/live" --new-dir "$NEW" --shared-pool "$SHARED_POOL" | tee -a "$LOG" || nope "gate repeated"
   [[ $bad == 0 ]] || stop "the repeated check failed. Nothing was changed."
   ARGV=($CDK deploy -c env=prd -c mode=deploy --exclusively "$AUTH_STACK" "$API_STACK" --require-approval broadening --no-notices)
   for a in "${ARGV[@]}"; do case "$a" in --all|--force|--hotswap|--no-rollback|'*') stop "refused argument $a" ;; esac; done
@@ -101,7 +103,7 @@ post)
   [[ $bad == 0 ]] && say "POST-CHECKS PASSED. Next: b-admin-prd.sh, then c-web-prd.sh." || { say "POST-CHECKS FAILED: see FAIL lines; do not continue. Rollback: e-rollback-prd.sh."; exit 1; } ;;
 rollback-check)
   say "== A rollback-check $(date -u +%FT%TZ) =="; check_account
-  PREV="${OGEVIA_AUTH_PREVIOUS_TEMPLATES:-}"; [[ -d "$PREV" && -s "$PREV/$API_STACK.json" ]] || stop "set OGEVIA_AUTH_PREVIOUS_TEMPLATES to templates synthesized from the PREVIOUS commit"
+  PREV="${OGEVIA_AUTH_PREVIOUS_TEMPLATES:-$PKG_TEMPLATES/previous}"; [[ -d "$PREV" && -s "$PREV/$API_STACK.json" ]] || stop "set OGEVIA_AUTH_PREVIOUS_TEMPLATES to templates synthesized from the PREVIOUS commit"
   capture_live present
   python3 -I -B "$GATE" --reverse --live-dir "$AB/live" --new-dir "$PREV" --shared-pool "$SHARED_POOL" | tee -a "$LOG" && ok "reverse gate" || nope "reverse gate"
   [[ $bad == 0 ]] || { say "ROLLBACK CHECK FAILED."; exit 1; }

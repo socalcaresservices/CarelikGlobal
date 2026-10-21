@@ -102,11 +102,12 @@ bash docs/releases/2026-10-21-auth-separation/scripts/build-package.sh ./out <pr
 cd ~ && sha256sum -c ogevia-prd-auth-package-*.tar.gz.sha256
 tar -xzf ogevia-prd-auth-package-*.tar.gz && cd pkg && sha256sum -c --quiet MANIFEST.sha256 && cat BUILD_INFO.json
 # the candidate_commit must equal the commit you approved
-cd new && pnpm install --frozen-lockfile --store-dir /tmp/pnpm-store
-cd infra/aws && npx tsx test/dump-templates.ts ~/auth-new-templates
-export OGEVIA_AUTH_NEW_TEMPLATES=~/auth-new-templates
+ls templates/new templates/previous      # pre-synthesized in the package (local build, no AWS call); a-deploy-prd.sh uses them by default
 cd ~/pkg/new/docs/releases/2026-10-21-auth-separation/scripts
+export OGEVIA_DEPLOY_APPROVAL=<your approval reference>
 ```
+
+The read-only `check` and `rollback-check` need nothing installed. **Before step A3 (deploy) only**, install the tools `cdk deploy` needs: `corepack enable && cd ~/pkg/new && pnpm install --frozen-lockfile --store-dir /tmp/pnpm-store` (the lockfile pins pnpm 9.15.4). `OGEVIA_AUTH_NEW_TEMPLATES` / `OGEVIA_AUTH_PREVIOUS_TEMPLATES` remain as overrides if you ever regenerate them (`cd infra/aws && npx tsx test/dump-templates.ts <dir>`, which does need the install).
 
 **Step A1: read-only gate** (saves the live templates; proves the live account is exactly as expected and the difference is only section 3)
 
@@ -190,7 +191,7 @@ Expected: production token to production API **200**; pilot token to production 
 | If | Do |
 |---|---|
 | Step A3 fails or is interrupted | CloudFormation rolls the stack update back by itself. Run `bash a-deploy-prd.sh post`, send me the output. Production stays on the old pool. |
-| After A, you want to go back | 1) `b-admin-prd.sh undo` for each relinked person; 2) `c-web-prd.sh rollback` if the web was published; 3) with the previous commit's templates: `OGEVIA_AUTH_PREVIOUS_TEMPLATES=<dir> bash a-deploy-prd.sh rollback-check` (read-only proof that the previous commit restores exactly the pre-change state); 4) `OGEVIA_PREVIOUS_CDK_DIR=<previous/infra/aws> bash e-rollback-prd.sh api` (type `ROLLBACK-Ogevia-prd-Api`); 5) `bash e-rollback-prd.sh post`. |
+| After A, you want to go back | 1) `b-admin-prd.sh undo` for each relinked person; 2) `c-web-prd.sh rollback` if the web was published; 3) with the previous commit's templates: `bash a-deploy-prd.sh rollback-check` (read-only proof that the previous commit restores exactly the pre-change state); 4) `OGEVIA_PREVIOUS_CDK_DIR=<previous/infra/aws> bash e-rollback-prd.sh api` (type `ROLLBACK-Ogevia-prd-Api`); 5) `bash e-rollback-prd.sh post`. |
 | The administrator is locked out | `b-admin-prd.sh undo` returns the person to the old sign-in; the old pool user was never removed. |
 | Anything unexpected in the data | The only data change is the sign-in id of the named people, with before/after in the audit trail; the snapshot from A2 is the full-database anchor. |
 
