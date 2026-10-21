@@ -167,8 +167,10 @@ describe("ServiceVerificationApiStack (FUTURE, Phase 4)", () => {
       "logs:PutLogEvents",
     ]);
     expect(JSON.stringify(bySid.AgencyLogoObjects?.Resource)).toContain("/*/branding/logo/*");
+    expect(JSON.stringify(bySid.ClientDocumentObjects?.Resource)).toContain("/*/client-documents/*/*");
     expect(statements.map((s) => s.Sid).sort()).toEqual([
       "AgencyLogoObjects",
+      "ClientDocumentObjects",
       "EvidenceKeyForSignatureObjects",
       "InvokeIdentityAdmin",
       "ReadAppDatabaseSecret",
@@ -227,16 +229,29 @@ describe("ServiceVerificationApiStack (FUTURE, Phase 4)", () => {
 describe("Lambda invoke permission (policy-size fix, 2026-10-04)", () => {
   const t = Template.fromStack(buildOgeviaApp(newApp(), ENVIRONMENTS.prod, "plan").find((s) => s.stack.stackName.endsWith("-ServiceVerificationApi"))!.stack);
   const perms = Object.values(t.findResources("AWS::Lambda::Permission"));
-  it("exactly one permission, for API Gateway, limited to this API", () => {
-    expect(perms).toHaveLength(1);
-    const p = perms[0]!.Properties as Record<string, any>;
-    expect(p.Action).toBe("lambda:InvokeFunction");
-    expect(p.Principal).toBe("apigateway.amazonaws.com");
-    const arn = JSON.stringify(p.SourceArn);
+  it("exactly two permissions: API Gateway (limited to this API) and the one compliance rule (limited to that rule)", () => {
+    expect(perms).toHaveLength(2);
+    const gw = perms.map((x) => x.Properties as Record<string, any>).find((p) => p.Principal === "apigateway.amazonaws.com")!;
+    expect(gw.Action).toBe("lambda:InvokeFunction");
+    const arn = JSON.stringify(gw.SourceArn);
     expect(arn).toContain("arn:");
     expect(arn).toContain(":execute-api:us-west-2:300094796789:");
     expect(arn).toMatch(/"Ref":"Api[0-9A-F]{8}"/);
     expect(arn).toContain("/*/*/*");
+    const ev = perms.map((x) => x.Properties as Record<string, any>).find((p) => p.Principal === "events.amazonaws.com")!;
+    expect(ev.Action).toBe("lambda:InvokeFunction");
+    expect(JSON.stringify(ev.SourceArn)).toMatch(/"Fn::GetAtt":\["ComplianceSweep[0-9A-F]+","Arn"\]/);
+  });
+  it("the compliance run: one rule, every 15 minutes, the same handler, a constant payload with no identity, retried once", () => {
+    t.resourceCountIs("AWS::Events::Rule", 1);
+    const rule = Object.values(t.findResources("AWS::Events::Rule"))[0]!.Properties as Record<string, any>;
+    expect(rule.ScheduleExpression).toBe("rate(15 minutes)");
+    expect(rule.State).toBe("ENABLED");
+    expect(rule.Targets).toHaveLength(1);
+    expect(JSON.parse(rule.Targets[0].Input)).toEqual({ "ogevia-task": "compliance-sweep" });
+    expect(rule.Targets[0].RetryPolicy).toEqual({ MaximumRetryAttempts: 1 });
+    expect(rule.Targets[0].DeadLetterConfig).toBeUndefined();
+    expect(JSON.stringify(rule.Targets[0].Arn)).toMatch(/Handler/);
   });
   it("route authentication is unchanged: every non-public route still uses the JWT authorizer", () => {
     const routes = Object.values(t.findResources("AWS::ApiGatewayV2::Route")).map((r) => r.Properties as Record<string, any>);

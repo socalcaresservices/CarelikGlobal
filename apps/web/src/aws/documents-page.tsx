@@ -1,24 +1,25 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useRef, useState } from "react";
-import { Button, Card } from "@carelik/ui";
+import { Button } from "@carelik/ui";
 import { newIdempotencyKey } from "@/lib/sv-backend";
 import { useOrganization } from "@/providers/organization-provider";
 import { useAwsApi } from "./aws-workspace";
 import { prepareDocumentFile } from "./document-file";
-import { CURRENCY_STATUS, DOCUMENT_STATUS, documentDateLine, parseReminderDays, REVIEW_STATE, type DocumentType, type Person, type StaffDocument } from "./document-status";
+import { Link } from "react-router-dom";
+import { documentDateLine, documentStatusLabel, isDueSoon, isOverdue, isToReview, matchesFilter, parseReminderDays, uploadFailureMessage, type DocumentFilter, type DocumentType, type Person, type StaffDocument } from "./document-status";
+import { useAttentionOverview } from "./attention";
+import { Disclosure } from "./ui/disclosure";
+import { PageHeader } from "./ui/page-header";
+import { StatusChip } from "./ui/status-chip";
 import { formatDateTime } from "@/lib/service-verification";
 import { ShortHelp } from "./help-text";
+import { actionBtn, actionBtnPrimary, linkClass } from "./ui-classes";
 
 
 const message = (cause: unknown, fallback: string) => (cause instanceof Error ? cause.message : fallback);
 
-function StatusChip({ status }: { status: StaffDocument["displayStatus"] }) {
-  const s = DOCUMENT_STATUS[status];
-  return <span className={`inline-block rounded-full px-2 py-0.5 text-xs font-semibold ${s.className}`}>{s.label}</span>;
-}
-
 /** Upload form: the file is stored and recorded by the server before success is shown. */
-function UploadForm({ doc, onDone }: { doc: StaffDocument; onDone: () => void }) {
+function UploadForm({ doc, onDone }: { doc: StaffDocument; onDone: (savedMessage: string) => void }) {
   const api = useAwsApi();
   const { activeOrganizationId } = useOrganization();
   const [file, setFile] = useState<File | null>(null);
@@ -31,7 +32,7 @@ function UploadForm({ doc, onDone }: { doc: StaffDocument; onDone: () => void })
   async function submit() {
     if (!file) return setState({ busy: false, error: "Choose a photo or PDF of the document." });
     if (doc.requiresExpiry && !expiresOn) return setState({ busy: false, error: "Enter the expiry date shown on the document." });
-    if (issuedOn && expiresOn && expiresOn <= issuedOn) return setState({ busy: false, error: "The expiry date must be after the issue date." });
+    if (issuedOn && expiresOn && expiresOn <= issuedOn) return setState({ busy: false, error: "The expiry date is before the issue date. Correct one of the dates." });
     setState({ busy: true, error: null });
     try {
       const prepared = await prepareDocumentFile(file);
@@ -42,35 +43,35 @@ function UploadForm({ doc, onDone }: { doc: StaffDocument; onDone: () => void })
       );
       key.current = newIdempotencyKey();
       setState({ busy: false, error: null });
-      onDone();
+      onDone("Saved. The file and its dates were stored and recorded by the server.");
     } catch (cause) {
-      setState({ busy: false, error: message(cause, "The upload did not finish. Nothing was saved; try again.") });
+      setState({ busy: false, error: uploadFailureMessage(cause) });
     }
   }
 
   return (
-    <form onSubmit={(e) => { e.preventDefault(); void submit(); }} className="mt-3 space-y-3 rounded-lg bg-slate-50 p-3">
-      <label className="block text-sm font-medium text-slate-700">
+    <form onSubmit={(e) => { e.preventDefault(); void submit(); }} className="mt-1 space-y-2 rounded-md bg-slate-50 p-2">
+      <label className="block text-xs font-medium text-slate-700">
         Photo or PDF of the {doc.documentTypeName}
         <input
           type="file"
           accept="application/pdf,image/jpeg,image/png"
           onChange={(e) => { setFile(e.target.files?.[0] ?? null); key.current = newIdempotencyKey(); }}
-          className="mt-1 block w-full text-sm"
+          className="mt-0.5 block w-full text-sm"
         />
       </label>
-      <div className="flex flex-wrap gap-3">
-        <label className="text-sm font-medium text-slate-700">
+      <div className="flex flex-wrap gap-2">
+        <label className="text-xs font-medium text-slate-700">
           Issue / completion date
-          <input type="date" value={issuedOn} onChange={(e) => setIssuedOn(e.target.value)} className="mt-1 block rounded-lg border border-slate-200 px-3 py-2 text-sm" />
+          <input type="date" value={issuedOn} onChange={(e) => setIssuedOn(e.target.value)} className="mt-0.5 block rounded-lg border border-slate-200 px-2.5 py-1.5 text-sm" />
         </label>
-        <label className="text-sm font-medium text-slate-700">
+        <label className="text-xs font-medium text-slate-700">
           Expiry date{doc.requiresExpiry ? " (required)" : " (if any)"}
-          <input type="date" value={expiresOn} onChange={(e) => setExpiresOn(e.target.value)} className="mt-1 block rounded-lg border border-slate-200 px-3 py-2 text-sm" />
+          <input type="date" value={expiresOn} onChange={(e) => setExpiresOn(e.target.value)} className="mt-0.5 block rounded-lg border border-slate-200 px-2.5 py-1.5 text-sm" />
         </label>
       </div>
       {state.error ? <p role="alert" className="text-sm text-red-700">{state.error}</p> : null}
-      <Button type="submit" disabled={state.busy}>{state.busy ? "Uploading… keep this page open" : "Upload"}</Button>
+      <Button type="submit" className="min-h-[44px] md:min-h-[32px]" disabled={state.busy}>{state.busy ? "Saving… keep this page open" : "Save document"}</Button>
     </form>
   );
 }
@@ -91,101 +92,110 @@ function OpenFileButton({ versionId }: { versionId: string }) {
   }
   return (
     <div>
-      <button type="button" onClick={() => void open()} disabled={state.busy} className="min-h-[40px] rounded-lg border border-slate-300 px-3 text-sm font-medium text-slate-800">
-        {state.busy ? "Opening…" : "Open file"}
+      <button type="button" onClick={() => void open()} disabled={state.busy} className={actionBtn}>
+        {state.busy ? "Opening…" : "View"}
       </button>
       {state.error ? <p role="alert" className="mt-1 text-sm text-red-700">{state.error}</p> : null}
       {state.url ? (
         <p className="mt-1 text-sm">
           {state.type?.startsWith("image/") ? <img src={state.url} alt="Uploaded document" className="mt-1 max-h-64 rounded border border-slate-200" /> : null}
-          <a href={state.url} target="_blank" rel="noreferrer" className="text-sky-700 underline">Open in a new tab</a>
+          <a href={state.url} target="_blank" rel="noreferrer" className={linkClass}>Open in a new tab</a>
         </p>
       ) : null}
     </div>
   );
 }
 
-function ReviewControls({ doc, selfReview, onDone }: { doc: StaffDocument; selfReview: boolean; onDone: () => void }) {
+/** Approve / Reject for an authorised reviewer. Approve saves at once; Reject asks for the reason first. The server still decides who may review (self-review, CPR/TB). */
+function useReviewDecision(doc: StaffDocument, onSaved: (savedMessage: string) => void) {
   const api = useAwsApi();
   const [reason, setReason] = useState("");
+  const [rejecting, setRejecting] = useState(false);
   const [state, setState] = useState<{ busy: boolean; error: string | null }>({ busy: false, error: null });
   const key = useRef(newIdempotencyKey());
-  async function decide(decision: "verified" | "rejected") {
-    if (decision === "rejected" && !reason.trim()) return setState({ busy: false, error: "Enter why it is rejected, so the person knows what to fix." });
+  async function decide(choice: "verified" | "rejected") {
+    if (choice === "rejected" && !reason.trim()) return setState({ busy: false, error: "Reason missing. Enter why it is rejected, so the person knows what to fix." });
     setState({ busy: true, error: null });
     try {
-      await api.post(`/v1/document-versions/${encodeURIComponent(doc.latestVersionId!)}/review`, { decision, reason: reason.trim() || null }, { idempotencyKey: key.current });
+      await api.post(`/v1/document-versions/${encodeURIComponent(doc.latestVersionId!)}/review`, { decision: choice, reason: reason.trim() || null }, { idempotencyKey: key.current });
       key.current = newIdempotencyKey();
       setState({ busy: false, error: null });
-      onDone();
+      setRejecting(false);
+      setReason("");
+      onSaved(choice === "verified" ? "Saved. Approved: your name and the time are recorded." : "Saved. Rejected: the reason is recorded and the person can upload a replacement.");
     } catch (cause) {
-      setState({ busy: false, error: message(cause, "The review was not saved.") });
+      setState({ busy: false, error: message(cause, "The review was not saved. Try again.") });
     }
   }
-  return (
-    <div className="mt-3 space-y-2 rounded-lg bg-slate-50 p-3">
-      <p className="text-xs text-slate-600">Check the file and its dates. Verifying records your name and the time; it is an administrative check, not legal clearance.</p>
-      {selfReview ? <p className="text-xs font-semibold text-amber-900">You uploaded this version. Your review is recorded as an Administrator self-review.</p> : null}
-      <label className="block text-sm font-medium text-slate-700">
-        Reason (required to reject)
-        <input value={reason} maxLength={1000} onChange={(e) => setReason(e.target.value)} className="mt-1 block w-full rounded-lg border border-slate-200 px-3 py-2 text-sm" />
-      </label>
-      {state.error ? <p role="alert" className="text-sm text-red-700">{state.error}</p> : null}
-      <div className="flex flex-wrap gap-2">
-        <Button type="button" disabled={state.busy} onClick={() => void decide("verified")}>Verify</Button>
-        <Button type="button" variant="secondary" disabled={state.busy} onClick={() => void decide("rejected")}>Reject</Button>
-      </div>
-    </div>
-  );
+  return { reason, setReason, rejecting, setRejecting, busy: state.busy, error: state.error, approve: () => decide("verified"), reject: () => decide("rejected") };
 }
 
-function DocumentCard({ d, canManage, canUpload, canReviewOwn, canReview, refresh }: { d: StaffDocument; canManage: boolean; canUpload: boolean; canReviewOwn: boolean; canReview: boolean; refresh: () => void }) {
+function DocumentRows({ d, canManage, canUpload, canReviewOwn, canReview, refresh }: { d: StaffDocument; canManage: boolean; canUpload: boolean; canReviewOwn: boolean; canReview: boolean; refresh: () => void }) {
   const [mode, setMode] = useState<"upload" | null>(null);
+  // Shown until the next action so a saved upload or decision is never silent (the status chip also changes on refresh).
+  const [saved, setSaved] = useState<string | null>(null);
+  const review = useReviewDecision(d, (m) => { setSaved(m); refresh(); });
   const line = documentDateLine(d);
-  const uploadLabel = d.latestVersionId ? "Upload a new version" : "Upload";
+  const status = documentStatusLabel(d);
+  const uploadLabel = d.latestVersionId ? "Replace" : canManage ? "Upload for them" : "Upload";
+  const awaiting = canManage && d.latestReviewStatus === "awaiting_review";
+  const reviewable = awaiting && canReview && !(d.latestUploadedByMe && !canReviewOwn);
+  const btn = actionBtn;
+  const hasExtra = !!(saved || review.error || mode || (reviewable && review.rejecting) || (d.latestReviewStatus === "rejected" && d.latestRejectionReason) || (awaiting && (!canReview || d.latestUploadedByMe)));
   return (
-    <li className="rounded-xl border border-slate-200 bg-white p-3">
-      <div className="flex flex-wrap items-start justify-between gap-2">
-        <div>
-          <p className="font-semibold text-slate-950">{d.documentTypeName}</p>
-          {canManage ? <p className="text-sm text-slate-700">{d.personName}</p> : null}
-        </div>
-        {d.reviewState ? (
-          <div className="flex flex-wrap gap-1">
-            <span className={`inline-block rounded-full px-2 py-0.5 text-xs font-semibold ${REVIEW_STATE[d.reviewState].className}`}>{REVIEW_STATE[d.reviewState].label}</span>
-            {d.currencyStatus && CURRENCY_STATUS[d.currencyStatus] ? (
-              <span className={`inline-block rounded-full px-2 py-0.5 text-xs font-semibold ${CURRENCY_STATUS[d.currencyStatus]!.className}`}>{CURRENCY_STATUS[d.currencyStatus]!.label}</span>
-            ) : null}
+    <tbody className="border-t border-og-line">
+      <tr className="block align-top md:table-row">
+        <th scope="row" className="block py-0.5 pr-2 text-left font-normal md:table-cell">
+          <div className="flex flex-wrap items-baseline gap-x-2">
+            <p className="font-semibold text-og-ink">{d.documentTypeName}</p>
+            {canManage ? <p className="text-sm text-og-sub">{d.personName}</p> : null}
+            <details className="group min-w-0 text-xs">
+              <summary className="inline-flex min-h-6 cursor-pointer list-none items-center font-semibold text-og-link underline [@media(pointer:coarse)]:min-h-11 [&::-webkit-details-marker]:hidden focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-og-accent">Details</summary>
+            <dl className="mt-1 space-y-0.5 text-xs text-og-sub">
+              {line ? <div><dt className="inline font-semibold text-og-ink">Date: </dt><dd className="inline">{line}</dd></div> : null}
+              {d.latestUploadedAt ? <div><dt className="inline font-semibold text-og-ink">Uploaded: </dt><dd className="inline">Version {d.latestVersionNumber}, {formatDateTime(d.latestUploadedAt)}</dd></div> : null}
+              {d.reviewedByName && d.reviewedAt ? <div><dt className="inline font-semibold text-og-ink">Reviewed: </dt><dd className="inline">{d.reviewedByName}, {formatDateTime(d.reviewedAt)}</dd></div> : null}
+              {d.currencyStatus === "expiring" && d.reminderStage ? <div><dt className="inline font-semibold text-og-ink">Reminder: </dt><dd className="inline">within {d.reminderStage} days of expiry (shown here; Ogevia sends no email or text reminders)</dd></div> : null}
+              {d.currencyStatus === "no_expiry_required" ? <div>This document type has no expiry date.</div> : null}
+              {!d.latestUploadedAt && !line ? <div>Nothing uploaded yet.</div> : null}
+              <div>Earlier versions are kept; a replacement never overwrites them.</div>
+              <div>Approving records your name and the time; it is an administrative check, not legal clearance.</div>
+            </dl>
+            </details>
           </div>
-        ) : (
-          <StatusChip status={d.displayStatus} />
-        )}
-      </div>
-      {line ? <p className={d.daysUntil !== null && d.daysUntil < 0 ? "mt-1 text-sm font-semibold text-red-700" : "mt-1 text-sm text-slate-700"}>{line}</p> : null}
-      {d.currencyStatus === "expiring" && d.reminderStage ? <p className="mt-1 text-xs text-amber-900">Reminder: within {d.reminderStage} days of expiry</p> : null}
-      {d.currencyStatus === "no_expiry_required" ? <p className="mt-1 text-xs text-slate-500">This document type has no expiry date.</p> : null}
-      {d.reviewedByName && d.reviewedAt ? <p className="mt-1 text-xs text-slate-500">Reviewed by {d.reviewedByName} on {formatDateTime(d.reviewedAt)}</p> : null}
-      {d.latestReviewStatus === "rejected" && d.latestRejectionReason ? <p className="mt-1 text-sm text-amber-900">Rejected: {d.latestRejectionReason}</p> : null}
-      {d.latestUploadedAt ? (
-        <p className="mt-1 text-xs text-slate-500">Version {d.latestVersionNumber} uploaded {formatDateTime(d.latestUploadedAt)}</p>
-      ) : null}
-      <div className="mt-2 flex flex-wrap gap-2">
-        {d.latestVersionId ? <OpenFileButton versionId={d.latestVersionId} /> : null}
-        {canUpload ? (
-          <button type="button" onClick={() => setMode(mode === "upload" ? null : "upload")} className="min-h-[40px] rounded-lg border border-slate-300 px-3 text-sm font-medium text-slate-800">
-            {mode === "upload" ? "Cancel upload" : canManage && !d.latestVersionId ? "Upload on their behalf" : uploadLabel}
-          </button>
-        ) : null}
-      </div>
-      {mode === "upload" ? <UploadForm doc={d} onDone={() => { setMode(null); refresh(); }} /> : null}
-      {canManage && d.latestReviewStatus === "awaiting_review" ? (
-        !canReview ? <p className="mt-3 text-sm text-slate-700">Required CPR and TB records need Administrator verification. Review controls appear only after the requirement rules are loaded.</p> : d.latestUploadedByMe && !canReviewOwn ? (
-          <p className="mt-3 rounded-lg bg-slate-50 p-3 text-sm text-slate-700">You uploaded this version, so the Administrator or another manager must review it.</p>
-        ) : (
-          <ReviewControls doc={d} selfReview={!!d.latestUploadedByMe} onDone={refresh} />
-        )
-      ) : null}
-    </li>
+        </th>
+        <td className="block pb-1 md:table-cell md:py-1 md:pr-2"><StatusChip tone={status.tone}>{status.label}</StatusChip></td>
+        <td className="block pb-1 md:table-cell md:py-1">
+          <div className="flex flex-wrap items-center gap-2 md:justify-end">
+            {reviewable && !review.rejecting ? <button type="button" disabled={review.busy} onClick={() => { setSaved(null); void review.approve(); }} className={actionBtnPrimary}>{review.busy ? "Saving…" : "Approve"}</button> : null}
+            {reviewable && !review.rejecting ? <button type="button" disabled={review.busy} onClick={() => { setSaved(null); review.setRejecting(true); }} className={btn}>Reject</button> : null}
+            {d.latestVersionId ? <OpenFileButton versionId={d.latestVersionId} /> : null}
+            {canUpload ? <button type="button" aria-expanded={mode === "upload"} onClick={() => { setSaved(null); setMode(mode === "upload" ? null : "upload"); }} className={btn}>{mode === "upload" ? "Cancel" : uploadLabel}</button> : null}
+          </div>
+        </td>
+      </tr>
+      {hasExtra ? <tr>
+        <td colSpan={3} className="pb-1">
+          {d.latestReviewStatus === "rejected" && d.latestRejectionReason ? <p className="text-sm text-amber-900">Rejected: {d.latestRejectionReason}</p> : null}
+          {awaiting && !canReview ? <p className="text-sm text-og-sub">Required CPR and TB records need Administrator verification. Review controls appear only after the requirement rules are loaded.</p> : null}
+          {reviewable && d.latestUploadedByMe ? <p className="text-xs font-semibold text-amber-900">You uploaded this version. Your approval is recorded as an Administrator self-review.</p> : null}
+          {awaiting && canReview && d.latestUploadedByMe && !canReviewOwn ? <p className="rounded-lg bg-og-page p-2 text-sm text-og-sub">You uploaded this version, so the Administrator or another manager must review it.</p> : null}
+          {mode === "upload" ? <UploadForm doc={d} onDone={(m) => { setMode(null); setSaved(m); refresh(); }} /> : null}
+          {reviewable && review.rejecting ? (
+            <form onSubmit={(e) => { e.preventDefault(); void review.reject(); }} className="mt-1 flex flex-wrap items-end gap-2 rounded-md bg-slate-50 p-2">
+              <label className="min-w-[12rem] flex-1 text-sm font-medium text-slate-700">
+                Reason for rejecting (required)
+                <input value={review.reason} maxLength={1000} onChange={(e) => review.setReason(e.target.value)} className="mt-0.5 block w-full rounded-lg border border-slate-200 px-2.5 py-1.5 text-sm" />
+              </label>
+              <Button type="submit" className="min-h-[44px] md:min-h-[32px]" disabled={review.busy}>{review.busy ? "Saving…" : "Save rejection"}</Button>
+              <button type="button" className={btn} onClick={() => { review.setRejecting(false); review.setReason(""); }}>Cancel</button>
+            </form>
+          ) : null}
+          {review.error ? <p role="alert" className="mt-1 text-sm text-red-700">{review.error}</p> : null}
+          {saved ? <p role="status" className="mt-1 text-sm font-medium text-emerald-800" data-testid="document-saved">{saved}</p> : null}
+        </td>
+      </tr> : null}
+    </tbody>
   );
 }
 
@@ -210,24 +220,24 @@ function RequestForm({ types, people, onDone }: { types: DocumentType[]; people:
     }
   }
   return (
-    <form onSubmit={(e) => { e.preventDefault(); void submit(); }} className="flex flex-wrap items-end gap-3">
+    <form onSubmit={(e) => { e.preventDefault(); void submit(); }} className="flex flex-wrap items-end gap-2">
       <div className="text-sm font-medium text-slate-700">
         <label htmlFor="doc-request-person">Person</label>
-        <select id="doc-request-person" value={person} onChange={(e) => setPerson(e.target.value)} className="mt-1 block rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm">
+        <select id="doc-request-person" value={person} onChange={(e) => setPerson(e.target.value)} className="mt-0.5 block rounded-lg border border-slate-200 bg-og-card px-2.5 py-1.5 text-sm">
           <option value="">Choose…</option>
           {people.map((p) => <option key={p.caregiverRecordId} value={p.caregiverRecordId}>{p.displayName}</option>)}
         </select>
       </div>
       <div className="text-sm font-medium text-slate-700">
         <label htmlFor="doc-request-type">Document</label>
-        <select id="doc-request-type" value={type} onChange={(e) => setType(e.target.value)} className="mt-1 block rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm">
+        <select id="doc-request-type" value={type} onChange={(e) => setType(e.target.value)} className="mt-0.5 block rounded-lg border border-slate-200 bg-og-card px-2.5 py-1.5 text-sm">
           <option value="">Choose…</option>
           {types.filter((t) => t.isActive).map((t) => <option key={t.documentTypeId} value={t.documentTypeId}>{t.name}</option>)}
         </select>
       </div>
-      <label className="text-sm font-medium text-slate-700">
+      <label className="text-xs font-medium text-slate-700">
         Due date (optional)
-        <input type="date" value={due} onChange={(e) => setDue(e.target.value)} className="mt-1 block rounded-lg border border-slate-200 px-3 py-2 text-sm" />
+        <input type="date" value={due} onChange={(e) => setDue(e.target.value)} className="mt-0.5 block rounded-lg border border-slate-200 px-2.5 py-1.5 text-sm" />
       </label>
       <Button type="submit" disabled={state.busy}>{state.busy ? "Saving…" : "Request document"}</Button>
       {state.error ? <p role="alert" className="w-full text-sm text-red-700">{state.error}</p> : null}
@@ -263,7 +273,7 @@ function ReminderDaysForm({ types, onDone }: { types: DocumentType[]; onDone: ()
   }
   return (
     <div className="space-y-2 border-t border-slate-100 pt-3">
-      <h3 className="text-sm font-semibold text-slate-900">Reminder days before expiry</h3>
+      <h2 className="text-sm font-semibold text-slate-900">Reminder days before expiry</h2>
       <ShortHelp className="text-xs text-slate-500" details="A verified document shows as Expiring once it is within the largest number of days.">These days decide when a document shows as Expiring and what Action needed shows. Ogevia does not send email or text reminders.</ShortHelp>
       {expiring.length > 0 ? (
         <ul className="space-y-1 text-xs text-slate-700">
@@ -272,17 +282,17 @@ function ReminderDaysForm({ types, onDone }: { types: DocumentType[]; onDone: ()
           ))}
         </ul>
       ) : null}
-      <form onSubmit={(e) => { e.preventDefault(); void save(); }} className="flex flex-wrap items-end gap-3">
-        <label className="text-sm font-medium text-slate-700">
+      <form onSubmit={(e) => { e.preventDefault(); void save(); }} className="flex flex-wrap items-end gap-2">
+        <label className="text-xs font-medium text-slate-700">
           Applies to
-          <select value={typeId} onChange={(e) => setTypeId(e.target.value)} className="mt-1 block rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm">
+          <select value={typeId} onChange={(e) => setTypeId(e.target.value)} className="mt-0.5 block rounded-lg border border-slate-200 bg-og-card px-2.5 py-1.5 text-sm">
             <option value="">Agency default</option>
             {expiring.map((t) => <option key={t.documentTypeId} value={t.documentTypeId}>{t.name}</option>)}
           </select>
         </label>
-        <label className="text-sm font-medium text-slate-700">
+        <label className="text-xs font-medium text-slate-700">
           Days (e.g. 90, 60, 30, 14, 7)
-          <input value={text} onChange={(e) => setText(e.target.value)} placeholder={typeId ? "blank = agency default" : "90, 60, 30, 14, 7"} className="mt-1 block rounded-lg border border-slate-200 px-3 py-2 text-sm" />
+          <input value={text} onChange={(e) => setText(e.target.value)} placeholder={typeId ? "blank = agency default" : "90, 60, 30, 14, 7"} className="mt-0.5 block rounded-lg border border-slate-200 px-2.5 py-1.5 text-sm" />
         </label>
         <Button type="submit" variant="secondary" disabled={state.busy}>Save reminder days</Button>
       </form>
@@ -317,19 +327,19 @@ function TypesForm({ types, onDone }: { types: DocumentType[]; onDone: () => voi
     <div className="space-y-3">
       <ul className="flex flex-wrap gap-2">
         {types.map((t) => (
-          <li key={t.documentTypeId} className="rounded-full border border-slate-200 bg-white px-3 py-1 text-xs text-slate-700">
+          <li key={t.documentTypeId} className="rounded-full border border-slate-200 bg-og-card px-3 py-1 text-xs text-slate-700">
             {t.name}{t.requiresExpiry ? " · expiry required" : ""}
           </li>
         ))}
         {types.length === 0 ? <li className="text-sm text-slate-500">No document types yet.</li> : null}
       </ul>
-      <form onSubmit={(e) => { e.preventDefault(); void submit(); }} className="flex flex-wrap items-end gap-3">
-        <label className="text-sm font-medium text-slate-700">
+      <form onSubmit={(e) => { e.preventDefault(); void submit(); }} className="flex flex-wrap items-end gap-2">
+        <label className="text-xs font-medium text-slate-700">
           New type
-          <input value={name} maxLength={80} onChange={(e) => setName(e.target.value)} placeholder="e.g. CPR card" className="mt-1 block rounded-lg border border-slate-200 px-3 py-2 text-sm" />
+          <input value={name} maxLength={80} onChange={(e) => setName(e.target.value)} placeholder="e.g. CPR card" className="mt-0.5 block rounded-lg border border-slate-200 px-2.5 py-1.5 text-sm" />
         </label>
-        <label className="flex items-center gap-2 text-sm text-slate-700">
-          <input type="checkbox" checked={requiresExpiry} onChange={(e) => setRequiresExpiry(e.target.checked)} />
+        <label className="flex min-h-[44px] items-center gap-2 text-sm text-slate-700">
+          <input type="checkbox" className="h-5 w-5" checked={requiresExpiry} onChange={(e) => setRequiresExpiry(e.target.checked)} />
           Has an expiry date (use the date on the certificate)
         </label>
         <Button type="submit" variant="secondary" disabled={state.busy}>Add type</Button>
@@ -371,42 +381,49 @@ export function DocumentsPage() {
     queryFn: async () => (await api.get<{ people: Person[] }>("/v1/documents/people", { organizationId: activeOrganizationId })).people,
     enabled: !!activeOrganizationId && canManage,
   });
-  const [filter, setFilter] = useState<"attention" | "all">("attention");
+  const overview = useAttentionOverview();
+  const [filter, setFilter] = useState<DocumentFilter>("all");
   const refresh = () => {
     void queryClient.invalidateQueries({ queryKey: ["aws-documents"] });
     void queryClient.invalidateQueries({ queryKey: ["aws-document-types"] });
     void queryClient.invalidateQueries({ queryKey: ["aws-document-alerts"] });
+    void queryClient.invalidateQueries({ queryKey: ["attention-overview"] });
   };
 
-  if (!canRead && !canOwn) return <p className="text-sm text-slate-600">You do not have access to documents.</p>;
+  if (!canRead && !canOwn) return <p className="text-sm text-og-sub">You do not have access to documents.</p>;
 
   const list = docs.data ?? [];
-  const needsAction = (d: StaffDocument) => d.displayStatus !== "verified";
-  const shown = canRead && filter === "attention" ? list.filter(needsAction) : list;
+  const shown = canRead ? list.filter((d) => matchesFilter(d, filter)) : list;
+  const counts = { all: list.length, overdue: list.filter(isOverdue).length, due_soon: list.filter(isDueSoon).length, to_review: list.filter(isToReview).length };
+  const FILTERS: { key: DocumentFilter; label: string }[] = [{ key: "all", label: "All" }, { key: "overdue", label: "Overdue" }, { key: "due_soon", label: "Due soon" }, ...(canManage ? [{ key: "to_review" as const, label: "To review" }] : [])];
+  const holds = overview.data?.documents?.caregiversOnHold ?? 0;
+  const pending = overview.data?.documents?.caregiversWithPendingRequirements ?? 0;
 
   return (
-    <div className="space-y-5">
-      <div>
-        <h1 className="text-xl font-semibold text-slate-950">{canRead ? "Documents" : "My documents"}</h1>
-        <p className="mt-1 text-sm text-slate-600">
-          {canRead
-            ? "Staff credentials your agency has requested. Uploaded is not verified until someone reviews it."
-            : "Documents your agency has asked for. Take a clear photo or choose a PDF, add the dates on it, and upload."}
+    <div className="space-y-3">
+      <PageHeader
+        title={canRead ? "Documents & compliance" : "My documents"}
+        lead={canRead ? "Staff credentials and their status. Uploaded is not verified until someone reviews it." : "Documents your agency has asked for. Take a clear photo or choose a PDF, add the dates on it, and upload."}
+      />
+
+      {canRead && (holds > 0 || pending > 0) ? (
+        <p role="status" className="flex flex-wrap items-center gap-x-3 rounded-og border border-amber-600 bg-amber-50 px-2.5 py-1.5 text-sm text-amber-900" data-testid="compliance-strip">
+          <span><span aria-hidden="true">▲ </span>{holds > 0 ? `${holds} ${holds === 1 ? "caregiver is" : "caregivers are"} on a compliance hold` : null}{holds > 0 && pending > 0 ? " · " : null}{pending > 0 ? `${pending} with requirements pending` : null}</span>
+          <Link className="inline-flex min-h-[44px] items-center font-semibold underline md:min-h-[32px]" to="/compliance">Review compliance</Link>
         </p>
-      </div>
+      ) : null}
 
       {canManage ? (
-        <Card className="space-y-3 p-4">
-          <h2 className="text-sm font-semibold text-slate-900">Request a document</h2>
+        <Disclosure summary="Request a document" className="rounded-og border border-og-line bg-og-card px-3">
           <RequestForm types={types.data ?? []} people={people.data ?? []} onDone={refresh} />
-        </Card>
+        </Disclosure>
       ) : null}
 
       {canRead ? (
-        <div className="flex gap-2" role="group" aria-label="Show">
-          {(["attention", "all"] as const).map((f) => (
-            <button key={f} type="button" aria-pressed={filter === f} onClick={() => setFilter(f)} className={filter === f ? "rounded-lg bg-slate-900 px-3 py-2 text-sm font-medium text-white" : "rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-700"}>
-              {f === "attention" ? "Needs action" : "All documents"}
+        <div className="flex flex-wrap gap-2" role="group" aria-label="Show">
+          {FILTERS.map((f) => (
+            <button key={f.key} type="button" aria-pressed={filter === f.key} onClick={() => setFilter(f.key)} className={`min-h-[44px] rounded-lg px-3 text-sm font-medium md:min-h-[32px] ${filter === f.key ? "bg-og-accent text-og-on-accent" : "border border-og-line text-og-ink hover:bg-og-page"}`}>
+              {f.label} <span className="font-og-mono tabular-nums">{counts[f.key]}</span>
             </button>
           ))}
         </div>
@@ -415,21 +432,31 @@ export function DocumentsPage() {
       {docs.isLoading ? <p className="text-sm text-slate-500">Loading…</p> : null}
       {docs.isError ? <p role="alert" className="text-sm text-red-700">{(docs.error as Error).message}</p> : null}
       {!docs.isLoading && !docs.isError && shown.length === 0 ? (
-        <p className="text-sm text-slate-500">{canRead ? (filter === "attention" ? "Nothing needs action." : "No documents requested yet.") : "Your agency has not requested any documents."}</p>
+        <p className="text-sm text-og-sub">{canRead ? (filter === "all" ? "No documents requested yet." : "No documents match this filter.") : "Your agency has not requested any documents."}</p>
       ) : null}
-      <ul className="space-y-3">
+      {shown.length > 0 ? (
+      <table className="w-full text-sm" aria-label="Documents">
+        <thead>
+          <tr className="hidden text-left text-xs uppercase tracking-wide text-og-sub md:table-row">
+            <th scope="col" className="py-1 pr-2 font-semibold">Document</th>
+            <th scope="col" className="py-1 pr-2 font-semibold">Status</th>
+            <th scope="col" className="py-1 text-right font-semibold">Action</th>
+          </tr>
+        </thead>
         {shown.map((d) => (
-          <DocumentCard key={d.documentId} d={d} canManage={canManage} canUpload={canManage || canOwn} canReviewOwn={hasPermission("documents.review_own")} canReview={canVerifyRequired || (!!requirementRules.data && !requirementRules.data.some((r) => r.documentTypeId === d.documentTypeId))} refresh={refresh} />
+          <DocumentRows key={d.documentId} d={d} canManage={canManage} canUpload={canManage || canOwn} canReviewOwn={hasPermission("documents.review_own")} canReview={canVerifyRequired || (!!requirementRules.data && !requirementRules.data.some((r) => r.documentTypeId === d.documentTypeId))} refresh={refresh} />
         ))}
-      </ul>
+      </table>
+      ) : null}
 
       {canManage ? (
-        <Card className="space-y-3 p-4">
-          <h2 className="text-sm font-semibold text-slate-900">Document types</h2>
-          <p className="text-xs text-slate-500">Set expiry only where the document has one. Reminder periods follow your agency's own requirements.</p>
-          <TypesForm types={types.data ?? []} onDone={refresh} />
-          <ReminderDaysForm types={types.data ?? []} onDone={refresh} />
-        </Card>
+        <Disclosure summary="Document types and reminder days" className="rounded-og border border-og-line bg-og-card px-3">
+          <div className="space-y-3 pb-2">
+            <p className="text-xs">Set expiry only where the document has one. Reminder periods follow your agency's own requirements.</p>
+            <TypesForm types={types.data ?? []} onDone={refresh} />
+            <ReminderDaysForm types={types.data ?? []} onDone={refresh} />
+          </div>
+        </Disclosure>
       ) : null}
     </div>
   );

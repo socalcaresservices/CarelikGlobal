@@ -7,6 +7,7 @@ import { MemoryRouter } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { createAwsApiClient } from "@/lib/aws-api";
 import { AwsRoutes } from "./aws-root";
+import { baseCompliance } from "./readiness/fake-api";
 
 const ORG = "aaaaaaaa-0000-4000-8000-000000000001";
 const CLIENT = "cccccccc-0000-4000-8000-000000000001";
@@ -35,6 +36,9 @@ function fakeApi(opts: { covered: boolean }) {
         return json(200, { summary: null });
       case "GET /v1/clients":
         return json(200, { clients: [{ clientId: CLIENT, clientCode: "CL-1", caregiverDisplayCode: null, status: "active", legalFirstName: "Synthetic", legalLastName: "Client Alpha", city: null, clientTypeId: null, clientTypeName: null, currentAuthorizations: 1, openVisits: 0 }] });
+      case `GET /v1/caregivers/${CG}/onboarding`:
+      case `GET /v1/caregivers/${CG_NO_LOGIN}/onboarding`:
+        return json(200, { onboarding: { caregiverRecordId: CG, status: "active", onboardingRequired: false, done: 0, total: 0, complete: true, items: [] } });
       case "GET /v1/caregivers":
         return json(200, { caregivers: [
           { caregiverRecordId: CG, caregiverCode: "CG-1", firstName: "Synthetic", lastName: "Caregiver One", preferredName: null, status: "active", hasSignIn: true, signInStatus: "active", activeAssignments: 1, openVisits: 0 },
@@ -54,6 +58,19 @@ function fakeApi(opts: { covered: boolean }) {
         return json(201, { assignment: { assignmentId: "new", hasAuthorization: opts.covered, grantsAccess: body?.caregiverRecordId !== CG_NO_LOGIN } });
       case `POST /v1/assignments/${ASG}/end`:
         return json(200, { outcome: "ended" });
+      case `GET /v1/caregivers/${CG}/compliance`:
+      case `GET /v1/caregivers/${CG_NO_LOGIN}/compliance`:
+        return json(200, { compliance: baseCompliance() }); // 0053: the profile also shows compliance; this test is about assignments
+      case "GET /v1/action-issues":
+        return json(200, { asOf: new Date().toISOString(), matching: 0, limit: 50, offset: 0, counts: { total: 0, critical: 0, urgent: 0, routine: 0, actionNeeded: 0, byQueue: {} }, issues: [] });
+      case `GET /v1/clients/${CLIENT}/issue-history`:
+        return json(200, { history: { resolved: [] } });
+      case `GET /v1/clients/${CLIENT}/readiness`:
+        return json(200, { readiness: { clientId: CLIENT, status: "active", stage: "active", stageNote: null, canSchedule: true, ready: true, services: [] } });
+      case `GET /v1/clients/${CLIENT}/documents`:
+        return json(200, { documents: [] });
+      case "GET /v1/shifts":
+        return json(200, { shifts: [] });
       default:
         return json(404, { error: { code: "not_found", message: "No such endpoint." } });
     }
@@ -86,6 +103,7 @@ afterEach(() => vi.clearAllMocks());
 describe("assignments", () => {
   it("client page: lists the assigned caregiver; caregivers without a sign-in can be planned (0025); an uncovered assignment is flagged", async () => {
     const api = renderAt(`/clients/${CLIENT}`, { covered: false });
+    fireEvent.click(await screen.findByRole("button", { name: "Assignment details" })); // the compact summary opens the assignment tools (B2-D9)
     const card = (await screen.findByRole("heading", { name: "Caregivers assigned" })).closest("div")!.parentElement!;
     expect(await within(card).findByText(/Synthetic Caregiver One/)).toBeInTheDocument();
     fireEvent.click(within(card).getByRole("button", { name: "Assign" }));
@@ -105,6 +123,7 @@ describe("assignments", () => {
 
   it("planning for a caregiver without a sign-in says plainly that no access is given yet", async () => {
     renderAt(`/clients/${CLIENT}`, { covered: true });
+    fireEvent.click(await screen.findByRole("button", { name: "Assignment details" })); // the compact summary opens the assignment tools (B2-D9)
     const card = (await screen.findByRole("heading", { name: "Caregivers assigned" })).closest("div")!.parentElement!;
     fireEvent.click(within(card).getByRole("button", { name: "Assign" }));
     await screen.findByRole("option", { name: /Synthetic Caregiver Two/ });
@@ -118,7 +137,7 @@ describe("assignments", () => {
   it("caregiver page: ending an assignment needs a reason and reports that access stopped", async () => {
     const api = renderAt(`/care-team/${CG}`);
     expect(await screen.findByRole("heading", { name: "Clients assigned" })).toBeInTheDocument();
-    expect(await screen.findByRole("link", { name: /Synthetic Client Alpha \(CL-1\)/ })).toBeInTheDocument();
+    expect(await screen.findByRole("link", { name: "Synthetic Client Alpha" })).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "End" }));
     fireEvent.click(screen.getByRole("button", { name: "End assignment" }));
     expect(await screen.findByRole("alert")).toHaveTextContent("Give a reason");

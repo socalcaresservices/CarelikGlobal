@@ -5,6 +5,7 @@ import {
   CalendarDays,
   CalendarHeart,
   ChartNoAxesColumn,
+  ClipboardCheck,
   Clock,
   FileArchive,
   FileText,
@@ -15,28 +16,36 @@ import {
   LifeBuoy,
   LogOut,
   Menu,
-  PanelLeftClose,
-  PanelLeftOpen,
+  Palette,
+  PanelRightClose,
+  PanelRightOpen,
   PenLine,
-  Receipt,
   Settings,
+  ShieldCheck,
   Stethoscope,
   UserCircle,
   UserCog,
+  UserPlus,
   Users,
   X,
 } from "lucide-react";
 import { useAuth } from "@carelik/auth";
 import { cn } from "@carelik/ui";
 import { useOrganization } from "@/providers/organization-provider";
-import { actionNeededState, EXCEPTIONS_ROUTE } from "./action-needed";
-import { useAttention, useBranding, useLogo, useMyDisplayName, viewKind, VIEW_TITLE } from "./aws-workspace";
+import { EXCEPTIONS_ROUTE } from "./action-needed";
+import { urgentBadge, useAttentionOverview } from "./attention";
+import { NotificationsBell } from "./notifications-bell";
+import { AppearanceApplier } from "./appearance/use-appearance";
+import { useAttentionCounts, useBranding, useLogo, useMyDisplayName, viewKind } from "./aws-workspace";
 import { EnvironmentBanner } from "./environment-marker";
-import { currentLink, isCalendarView, isReportView, isVisitListView, linkKey, REPORTS_PATH, visibleGroups, type NavLinkDef } from "./nav-model";
+import { AUTHORIZATIONS_PATH, currentLink, isCalendarView, isExceptionsView, isReportView, isVisitListView, linkKey, REPORTS_PATH, SERVICES_PATH, SHIFT_REQUESTS_PATH, shownWhenCollapsed, visibleGroups, type NavLinkDef } from "./nav-model";
 
 export const EXCEPTIONS_PATH = EXCEPTIONS_ROUTE;
 const DEFAULT_ACCENT = "#0f172a"; // slate-900: the colour used before agency branding existed
 const COLLAPSE_KEY = "ogevia.sidebar.collapsed";
+/** Workflow colour per area (icon tint and selected row). Status colour is separate: amber = waiting, red = blocking. */
+// Area colours are theme variables (styles/theme.css), so each stays readable on every background.
+const ACCENT = { clients: "rgb(var(--og-area-clients))", caregivers: "rgb(var(--og-area-caregivers))", scheduling: "rgb(var(--og-area-scheduling))", approvals: "rgb(var(--og-area-approvals))", reports: "rgb(var(--og-area-reports))" } as const;
 const MOBILE_QUERY = "(max-width: 767px)";
 
 /** The remembered sidebar choice. Storage can be blocked (private windows), so every access is guarded. */
@@ -85,7 +94,7 @@ function initialsOf(name: string): string {
 /**
  * Shell for the AWS build: agency identity, the signed-in person and their view
  * (ADMINISTRATOR / MANAGER / CAREGIVER VIEW), ACTION NEEDED, and role-appropriate
- * navigation in a left sidebar (a drawer below 768px). Navigation only decides what is
+ * navigation in a collapsible left-hand sidebar (a drawer below 768px). Navigation only decides what is
  * shown; every screen's data is authorized again in PostgreSQL.
  */
 export function AwsShell({ children }: PropsWithChildren) {
@@ -94,7 +103,8 @@ export function AwsShell({ children }: PropsWithChildren) {
   const { displayName, loading: nameLoading } = useMyDisplayName();
   const branding = useBranding();
   const logo = useLogo();
-  const attention = useAttention();
+  const attention = useAttentionCounts(); // per-area work-waiting badges in the navigation (server counts; the web never recomputes them)
+  const overview = useAttentionOverview(); // the header badge: what needs attention now
   const location = useLocation();
   const [collapsedPref, toggleCollapsed] = useSidebarCollapsed();
   const isMobile = useIsMobile();
@@ -117,6 +127,11 @@ export function AwsShell({ children }: PropsWithChildren) {
   useEffect(() => {
     if (!isMobile) setDrawerOpen(false);
   }, [isMobile]);
+
+  // Going back or forward (or any route change) closes the drawer; the route itself is never changed by opening or closing it.
+  useEffect(() => {
+    setDrawerOpen(false);
+  }, [location.pathname, location.search]);
 
   useEffect(() => {
     if (drawerShown) closeButtonRef.current?.focus();
@@ -141,35 +156,73 @@ export function AwsShell({ children }: PropsWithChildren) {
   const isCaregiver = view === "CAREGIVER";
   const canSeeAttention = hasPermission("visits.read");
   const canReadVisits = hasPermission("visits.read");
-  // Same destinations and the same permission conditions as the horizontal menu had.
-  // Reports and Client monthly calendar are two views of the existing reports route.
+  // Same destinations and the same permission conditions as before; only the grouping and the labels changed.
+  // Five areas (Clients, Caregivers, Scheduling, Approvals, Reports), their related pages as smaller links,
+  // and administration last. Colour = area (see ACCENT); badges = work waiting, from the same server summary as ACTION NEEDED.
+  const canManageVisits = hasPermission("visits.manage");
+  const canBill = hasPermission("billing.visits.read");
+  const canSettings = hasPermission("organization.update");
+  const staff = !isCaregiver;
   const links: NavLinkDef[] = [
-    { to: "/", label: "Home", group: "HOME", icon: LayoutDashboard, show: !isCaregiver },
-    { to: "/care-team", label: "Care Team", group: "CAREGIVERS", icon: HeartHandshake, show: hasPermission("caregivers.manage") || hasPermission("visits.manage") },
-    { to: "/schedule", label: "Schedule", group: "CAREGIVERS", icon: CalendarDays, show: hasPermission("shifts.manage") || (!isCaregiver && hasPermission("visits.manage")) },
-    { to: "/service-verification", label: "Verify visit", group: "CAREGIVERS", icon: PenLine, show: isCaregiver || hasPermission("visits.manage") },
-    { to: "/my-shifts", label: "My shifts", group: "CAREGIVERS", icon: CalendarClock, show: isCaregiver },
-    { to: "/availability", label: "Availability", group: "CAREGIVERS", icon: Clock, show: isCaregiver },
-    // Authorizations are a section of each client's page (Clients > a client > Authorizations); there is no separate page.
-    { to: "/clients", label: "Clients", group: "CLIENTS", icon: Users, show: hasPermission("clients.names.read") },
-    { to: "/care-requests", label: "Care requests", group: "CLIENTS", icon: HandHeart, show: hasPermission("care_requests.read") },
-    { to: REPORTS_PATH, search: "?view=calendar", label: "Client monthly calendar", group: "CLIENTS", icon: CalendarHeart, show: canReadVisits, matchView: isCalendarView },
-    { to: REPORTS_PATH, label: "Visit records", group: "VISITS", icon: FileText, show: canReadVisits, matchView: isVisitListView },
-    { to: "/billing-review", label: "Billing review", group: "BILLING", icon: Receipt, show: hasPermission("billing.visits.read") },
-    { to: REPORTS_PATH, search: "?view=overview", label: "Reports", group: "REPORTS", icon: ChartNoAxesColumn, show: canReadVisits, matchView: isReportView },
-    { to: "/documents", label: hasPermission("documents.read") ? "Documents" : "My documents", group: "DOCUMENTS", icon: FolderOpen, show: hasPermission("documents.read") || hasPermission("documents.manage_own") },
-    { to: "/services", label: "Services", group: "SETUP", icon: Stethoscope, show: !isCaregiver && hasPermission("authorizations.read") },
-    { to: "/continuity", label: "Continuity pack", group: "SETUP", icon: LifeBuoy, show: !isCaregiver && hasPermission("continuity.export") },
-    { to: "/outage-visits", label: "Outage records", group: "SETUP", icon: FileArchive, show: !isCaregiver && hasPermission("visits.manage") },
-    { to: "/accounts", label: "Accounts", group: "SETUP", icon: UserCog, show: !isCaregiver && hasPermission("accounts.manage") },
-    { to: "/settings/branding", label: "Settings", group: "SETUP", icon: Settings, show: hasPermission("organization.update") },
+    { to: "/", label: "Home", group: "HOME", icon: LayoutDashboard, show: staff },
+    // The caregiver's own day (unchanged).
+    { to: "/service-verification", label: "Verify visit", group: "MY WORK", icon: PenLine, show: isCaregiver },
+    { to: "/my-shifts", label: "My shifts", group: "MY WORK", icon: CalendarClock, show: isCaregiver },
+    { to: "/availability", label: "Availability", group: "MY WORK", icon: Clock, show: isCaregiver },
+    { to: "/documents", label: "My documents", group: "MY WORK", icon: FolderOpen, show: isCaregiver && hasPermission("documents.manage_own") },
+    // Main order: Schedule, Visits, Approvals, Clients, Caregivers, Documents, Reports (Home first, Settings last).
+    { to: "/schedule", label: "Schedule", group: "WORK", icon: CalendarDays, accent: ACCENT.scheduling, show: hasPermission("shifts.manage") || (staff && canManageVisits) },
+    { to: SHIFT_REQUESTS_PATH, label: "Shift requests", group: "WORK", parent: "Schedule", icon: HandHeart, show: hasPermission("care_requests.read") },
+    { to: REPORTS_PATH, search: "?view=calendar", label: "Monthly calendar", group: "WORK", parent: "Schedule", icon: CalendarHeart, show: canReadVisits, matchView: isCalendarView },
+    // Visits = records of care delivered and the caregiver-side verification entry points (a section label: it has no page of its own).
+    { to: REPORTS_PATH, label: "Visits", group: "WORK", icon: FileText, heading: true, show: staff && (canReadVisits || canManageVisits) },
+    { to: REPORTS_PATH, label: "Visit records", group: "WORK", parent: "Visits", icon: FileText, show: canReadVisits, matchView: isVisitListView },
+    { to: "/service-verification", label: "Verify visit", group: "WORK", parent: "Visits", icon: PenLine, show: staff && canManageVisits },
+    // Approvals = decisions a person must make. The Approvals link opens Ready for Approval (billing) or, for someone who may not bill, exception review; exception review is never listed twice.
+    canBill
+      ? { to: "/billing-review", label: "Approvals", group: "WORK", icon: ClipboardCheck, accent: ACCENT.approvals, show: true }
+      : { to: REPORTS_PATH, search: "?view=exceptions", label: "Approvals", group: "WORK", icon: ClipboardCheck, accent: ACCENT.approvals, show: staff && canManageVisits, matchView: isExceptionsView },
+    { to: REPORTS_PATH, search: "?view=exceptions", label: "Visits to review", group: "WORK", parent: "Approvals", icon: ClipboardCheck, show: canBill && canReadVisits, matchView: isExceptionsView },
+    { to: "/clients", label: "Clients", group: "WORK", icon: Users, accent: ACCENT.clients, show: hasPermission("clients.names.read") },
+    { to: AUTHORIZATIONS_PATH, label: "Authorization changes", group: "WORK", parent: "Clients", icon: ShieldCheck, show: hasPermission("authorizations.update") || hasPermission("shifts.manage") },
+    { to: "/care-team", label: "Caregivers", group: "WORK", icon: HeartHandshake, accent: ACCENT.caregivers, show: hasPermission("caregivers.manage") || canManageVisits },
+    { to: "/care-team/recruiting", label: "Recruiting", group: "WORK", parent: "Caregivers", icon: UserPlus, show: hasPermission("caregivers.manage") },
+    { to: "/documents", label: "Documents", group: "WORK", icon: FolderOpen, show: staff && hasPermission("documents.read") },
+    { to: REPORTS_PATH, search: "?view=overview", label: "Reports", group: "WORK", icon: ChartNoAxesColumn, accent: ACCENT.reports, show: canReadVisits, matchView: isReportView },
+    // Settings, last. A person who may change agency settings opens Branding from it; everyone else sees it as a section label over their own pages.
+    canSettings
+      ? { to: "/settings/branding", label: "Settings", group: "SETUP", icon: Settings, show: staff }
+      : { to: "/settings/branding", label: "Settings", group: "SETUP", icon: Settings, heading: true, show: staff },
+    { to: SERVICES_PATH, label: "Services", group: "SETUP", parent: "Settings", icon: Stethoscope, show: staff && hasPermission("authorizations.read") },
+    { to: "/continuity", label: "Continuity pack", group: "SETUP", parent: "Settings", icon: LifeBuoy, show: staff && hasPermission("continuity.export") },
+    { to: "/outage-visits", label: "Outage records", group: "SETUP", parent: "Settings", icon: FileArchive, show: staff && canManageVisits },
+    { to: "/accounts", label: "Accounts", group: "SETUP", parent: "Settings", icon: UserCog, show: staff && hasPermission("accounts.manage") },
+    { to: "/settings/appearance", label: "Appearance", group: "SETUP", ...(staff ? { parent: "Settings" } : {}), icon: Palette, show: true },
   ];
   const groups = visibleGroups(links);
+  // Each badge is ONE server count (COUNT_DEFINITIONS.md). Approvals keeps exception review and billing approval apart: the Approvals link shows what it opens
+  // (Ready for Approval for someone who may bill, exception review otherwise) and "Visits to review" shows exception review. Red only when the server says Critical.
+  const counts = attention.data ?? null;
+  const countOf = (l: NavLinkDef): { count: number; critical: number } | null => {
+    if (!counts) return null;
+    if (l.parent === "Approvals" && l.label === "Visits to review") return counts.approvals.exceptions;
+    if (l.parent) return null;
+    if (l.to === "/care-team") return counts.caregivers;
+    if (l.to === "/schedule") return counts.scheduling;
+    if (l.label === "Approvals") return canBill ? (counts.approvals.readyForApproval === null ? null : { count: counts.approvals.readyForApproval, critical: 0 }) : counts.approvals.exceptions;
+    return null;
+  };
+  const badgeOf = (l: NavLinkDef): { n: number; blocking: boolean } | null => {
+    const c = countOf(l);
+    return c && c.count > 0 ? { n: c.count, blocking: c.critical > 0 } : null;
+  };
   const current = currentLink(links, location.pathname, location.search);
   const agencyName = branding.data?.displayName ?? activeOrganization?.displayName ?? "Organization";
   const accent = branding.data?.accentColor ?? DEFAULT_ACCENT;
-  // The same function and the same query result as the Home banner (action-needed.ts).
-  const attentionState = actionNeededState(attention.isLoading, attention.isError, attention.data);
+  // The same classification and query result as the Home tiles (attention.ts): unique shifts and visits needing attention now.
+  const badge = urgentBadge(overview.isLoading, overview.isError, overview.data);
+  // Home's own first row shows this same count (and its loading / unavailable state), so the header badge appears everywhere else.
+  const showBadge = canSeeAttention && badge.kind !== "hidden" && location.pathname !== "/";
 
   function trapFocus(e: KeyboardEvent<HTMLElement>) {
     if (!drawerShown) return;
@@ -201,9 +254,9 @@ export function AwsShell({ children }: PropsWithChildren) {
   const itemClass = (active: boolean) =>
     cn(
       // Sidebar "Option B": 14px/500 links, 40px rows (44px for coarse pointers), 18px icons with an 8px gap, no accent bar.
-      "flex min-h-[40px] items-center gap-2 rounded-md px-3 py-1.5 text-[14px] leading-5 [@media(pointer:coarse)]:min-h-[44px] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#0F6674]",
+      "flex min-h-[36px] items-center gap-2 rounded-md px-3 py-1 text-[14px] leading-5 [@media(pointer:coarse)]:min-h-[44px] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-og-accent",
       collapsed && "justify-center px-0",
-      active ? "bg-[#E8F5F4] font-semibold text-[#0F6674]" : "font-medium text-[#243244] hover:bg-[#F0F7F7]",
+      active ? "bg-og-active font-semibold text-og-accent" : "font-semibold text-og-ink hover:bg-og-ink/5",
     );
 
   return (
@@ -215,14 +268,15 @@ export function AwsShell({ children }: PropsWithChildren) {
       }}
     >
       {drawerShown ? <div aria-hidden="true" className="fixed inset-0 z-40 bg-og-ink/40 md:hidden print:hidden" onClick={closeDrawer} /> : null}
+      <AppearanceApplier />
       <aside
         id="aws-sidebar"
         ref={asideRef}
         hidden={sidebarHidden}
-        aria-label="Sidebar"
+        aria-label="Menu"
         onKeyDown={trapFocus}
         className={cn(
-          "fixed inset-y-0 left-0 z-50 flex-col border-r border-[#E2E8EC] bg-[#FAFBFC] print:hidden",
+          "fixed inset-y-0 left-0 z-50 flex-col border-r border-og-line bg-og-side print:hidden",
           sidebarHidden ? "hidden" : "flex",
           isMobile ? "w-[min(88vw,20rem)] shadow-2xl" : collapsed ? "w-[76px]" : "w-64",
         )}
@@ -230,35 +284,35 @@ export function AwsShell({ children }: PropsWithChildren) {
         <div className={cn("flex items-center gap-2 px-3 pb-2 pt-4", collapsed ? "flex-col" : "justify-between")}>
           <div className="flex min-w-0 items-center gap-2">
             {/* No Ogevia logo image exists in the repository: the wordmark is text. */}
-            <span aria-hidden="true" className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-og-link text-base font-bold text-white">O</span>
+            <span aria-hidden="true" className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-og-link text-base font-bold text-og-on-accent">O</span>
             <span className={cn("truncate text-lg font-bold tracking-tight text-og-ink", collapsed && "sr-only")}>Ogevia</span>
           </div>
           {isMobile ? (
-            <button ref={closeButtonRef} type="button" aria-label="Close menu" onClick={closeDrawer} className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg text-og-ink hover:bg-[#F0F7F7] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#0F6674]">
+            <button ref={closeButtonRef} type="button" aria-label="Close menu" onClick={closeDrawer} className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg text-og-ink hover:bg-og-ink/5 focus-visible:outline focus-visible:outline-2 focus-visible:outline-og-accent">
               <X className="h-5 w-5" aria-hidden="true" />
             </button>
           ) : (
             <button
               type="button"
-              aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+              aria-label={collapsed ? "Expand menu" : "Collapse menu"}
               aria-expanded={!collapsed}
               aria-controls="aws-sidebar"
               onClick={() => {
                 setTip(null);
                 toggleCollapsed();
               }}
-              onMouseEnter={(e) => showTip("Expand sidebar", e.currentTarget)}
-              onFocus={(e) => showTip("Expand sidebar", e.currentTarget)}
+              onMouseEnter={(e) => showTip("Expand menu", e.currentTarget)}
+              onFocus={(e) => showTip("Expand menu", e.currentTarget)}
               onMouseLeave={() => setTip(null)}
               onBlur={() => setTip(null)}
-              className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg text-og-ink hover:bg-[#F0F7F7] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#0F6674]"
+              className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg text-og-ink hover:bg-og-ink/5 focus-visible:outline focus-visible:outline-2 focus-visible:outline-og-accent"
             >
-              {collapsed ? <PanelLeftOpen className="h-5 w-5" aria-hidden="true" /> : <PanelLeftClose className="h-5 w-5" aria-hidden="true" />}
+              {collapsed ? <PanelRightOpen className="h-5 w-5" aria-hidden="true" /> : <PanelRightClose className="h-5 w-5" aria-hidden="true" />}
             </button>
           )}
         </div>
 
-        <div className={cn("mx-3 mb-2 rounded-og border border-og-line bg-white p-2.5", collapsed && "flex justify-center px-0")}>
+        <div className={cn("mx-3 mb-2 rounded-og border border-og-line bg-og-card p-2.5", collapsed && "flex justify-center px-0")}>
           <div className="flex min-w-0 items-center gap-2.5">
             {logo.data ? (
               <img src={logo.data} alt={`${agencyName} logo`} className="h-9 max-w-[44px] shrink-0 object-contain" />
@@ -272,17 +326,29 @@ export function AwsShell({ children }: PropsWithChildren) {
           </div>
         </div>
 
-        <nav id="aws-main-nav" aria-label="Main" className="flex-1 overflow-y-auto px-3 pb-3">
+        <div className="relative flex min-h-0 flex-1 flex-col">
+        <nav id="aws-main-nav" aria-label="Main" className="flex flex-1 flex-col overflow-y-auto px-3 pb-8">
           {groups.map(({ group, links: items }) => (
-            <div key={group} className={cn("first:mt-1", collapsed ? "mt-2" : "mt-5")}>
-              {/* Headings and their dividers are hidden when collapsed; the links keep their accessible names. */}
+            // SETUP is pinned to the bottom of the menu.
+            <div key={group} className={cn("first:mt-1", collapsed ? "mt-2" : "mt-5", group === "SETUP" && "mt-auto pt-2")}>
+              {/* Headings are hidden when collapsed; the links keep their accessible names. */}
               {group === "HOME" || collapsed ? null : (
-                <p className="mx-3 mb-2 border-b border-[#DCE5E9] pb-[10px] text-[12px] font-bold leading-[18px] tracking-[0.06em] text-[#334155]" data-testid="nav-group-heading">{group}</p>
+                <p className="mx-3 mb-1.5 text-[11px] font-semibold leading-[18px] tracking-[0.08em] text-og-sub" data-testid="nav-group-heading">{group}</p>
               )}
               <ul className="space-y-0.5">
-                {items.map((l) => {
+                {items.filter((l) => !collapsed || shownWhenCollapsed(l, links)).map((l) => {
                   const active = current !== null && linkKey(l) === linkKey(current);
                   const Icon = l.icon;
+                  const badge = badgeOf(l);
+                  if (l.heading) {
+                    // A section label, not a page: text only (children keep their own links). Hidden when collapsed.
+                    return collapsed ? null : (
+                      <li key={`h-${l.label}`} className="flex min-h-[36px] items-center gap-2 px-3 text-[14px] font-semibold leading-5 text-og-ink" data-testid="nav-section" data-nav-level="parent">
+                        <Icon className="h-[18px] w-[18px] shrink-0" aria-hidden="true" />
+                        <span className="min-w-0 flex-1 break-words">{l.label}</span>
+                      </li>
+                    );
+                  }
                   return (
                     <li key={linkKey(l)}>
                       <Link
@@ -296,10 +362,21 @@ export function AwsShell({ children }: PropsWithChildren) {
                         onFocus={(e) => showTip(l.label, e.currentTarget)}
                         onMouseLeave={() => setTip(null)}
                         onBlur={() => setTip(null)}
-                        className={itemClass(active)}
+                        data-nav-level={l.parent ? "child" : "parent"}
+                        className={cn(itemClass(active), l.parent && !collapsed && "ml-6 min-h-[30px] py-0.5 text-[13px] font-normal [@media(pointer:coarse)]:min-h-[44px]", l.parent && !collapsed && active && "font-semibold")}
+                        style={active && l.accent ? { backgroundColor: `color-mix(in srgb, ${l.accent} 8%, transparent)`, color: l.accent } : undefined}
                       >
-                        <Icon className="h-[18px] w-[18px] shrink-0" aria-hidden="true" />
-                        <span className={cn("min-w-0 break-words", collapsed && "sr-only")}>{l.label}</span>
+                        <Icon className="h-[18px] w-[18px] shrink-0" aria-hidden="true" style={l.accent ? { color: l.accent } : undefined} />
+                        <span className={cn("min-w-0 flex-1 break-words", collapsed && "sr-only")}>{l.label}</span>
+                        {badge ? (
+                          <span
+                            data-testid="nav-badge"
+                            aria-label={`${badge.n} waiting`}
+                            className={cn("rounded-full px-1.5 text-[11px] font-bold leading-[18px] ring-1", badge.blocking ? "bg-red-100 text-red-800 ring-red-700" : "bg-amber-100 text-amber-900 ring-amber-600", collapsed && "absolute -mt-5 ml-4")}
+                          >
+                            {badge.n}
+                          </span>
+                        ) : null}
                       </Link>
                     </li>
                   );
@@ -308,14 +385,15 @@ export function AwsShell({ children }: PropsWithChildren) {
             </div>
           ))}
         </nav>
+        <div aria-hidden="true" className="pointer-events-none absolute inset-x-0 bottom-0 h-8 bg-gradient-to-t from-og-side to-transparent" />
+        </div>
 
-        <div className="border-t border-[#E2E8EC] p-3">
+        <div className="border-t border-og-line p-3">
           <div className={cn("flex items-start gap-2.5", collapsed && "justify-center")}>
             <span aria-hidden="true" className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-og-active text-xs font-bold text-og-active-ink">{displayName ? initialsOf(displayName) : <UserCircle className="h-5 w-5" />}</span>
             <div className={cn("min-w-0 flex-1", collapsed && "sr-only")}>
               <p className="text-[11px] font-bold uppercase tracking-wide text-og-link" data-testid="view-label">{view} VIEW</p>
               <p className="text-sm text-og-ink">
-                {VIEW_TITLE[view]}:{" "}
                 {displayName ? (
                   <span className="font-semibold">{displayName}</span>
                 ) : nameLoading ? (
@@ -365,8 +443,8 @@ export function AwsShell({ children }: PropsWithChildren) {
 
       <div className={cn("print:pl-0", !isMobile && (collapsed ? "pl-[76px]" : "pl-64"))}>
         <EnvironmentBanner />
-        <header className="border-b border-og-line bg-white print:hidden" style={{ borderTop: `4px solid ${accent}` }}>
-          <div className="flex flex-wrap items-center gap-2 px-4 py-2.5 md:px-8">
+        <header className="border-b border-og-line bg-og-card print:hidden" style={{ borderTop: `4px solid ${accent}` }}>
+          <div className="flex flex-wrap items-center gap-2 px-3 py-1.5 md:px-6">
             <button
               ref={menuButtonRef}
               type="button"
@@ -378,39 +456,38 @@ export function AwsShell({ children }: PropsWithChildren) {
               <Menu className="h-4 w-4" aria-hidden="true" />
               Menu <span className="text-og-sub">· {current?.label ?? "Choose a section"}</span>
             </button>
-            {canSeeAttention ? (
-              // Green only when zero is CONFIRMED by the server; loading or a failed check stays neutral.
-              // Opens the Home list built from the same server summary as this count (0033).
+            {showBadge ? (
+              // Red only for care blocked or at risk now, amber for approaching risk; every state has a word and a symbol.
               <Link
-                to="/"
+                to="/attention"
                 className={cn(
-                  "inline-flex min-h-[40px] items-center gap-2 rounded-lg border-2 px-3 text-sm font-bold uppercase tracking-wide focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-og-link",
-                  attentionState.kind === "attention" && "border-red-700 text-red-700 hover:bg-red-50",
-                  attentionState.kind === "clear" && "border-emerald-700 text-emerald-800 hover:bg-emerald-50",
-                  (attentionState.kind === "checking" || attentionState.kind === "unknown") && "border-slate-400 text-slate-700 hover:bg-slate-50",
+                  "inline-flex min-h-[44px] items-center gap-2 rounded-lg border px-3 text-sm font-semibold md:min-h-[40px] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-og-link",
+                  badge.tone === "red" && "border-red-700 bg-red-50 text-red-800 hover:bg-red-100",
+                  badge.tone === "amber" && "border-amber-600 bg-amber-50 text-amber-900 hover:bg-amber-100",
+                  badge.tone === "neutral" && "border-og-line text-og-ink hover:bg-og-page",
                 )}
-                aria-label={attentionState.aria}
+                aria-label={badge.aria}
+                data-testid="attention-badge"
               >
-                <span aria-hidden="true">{attentionState.icon}</span> {attentionState.label}
-                {attentionState.count !== null ? (
-                  <span className={cn("rounded-full px-2 py-0.5 text-xs text-white", attentionState.kind === "clear" ? "bg-emerald-700" : "bg-red-700")}>{attentionState.count}</span>
-                ) : null}
+                <span aria-hidden="true">{badge.icon}</span> {badge.label}
+                {badge.count !== null ? <span className="font-og-mono tabular-nums">{badge.count}</span> : null}
               </Link>
             ) : null}
+            {canSeeAttention ? <NotificationsBell /> : null}
             {/* A user who belongs to more than one organization switches here (unchanged behaviour). */}
             {organizations.length > 1 ? (
               <select
                 aria-label="Organization"
                 value={activeOrganizationId}
                 onChange={(e) => setActiveOrganizationId(e.target.value)}
-                className="ml-auto min-h-[40px] rounded-lg border border-og-line bg-white px-2 text-sm"
+                className="ml-auto min-h-[40px] rounded-lg border border-og-line bg-og-card px-2 text-sm"
               >
                 {organizations.map((o) => <option key={o.id} value={o.id}>{o.displayName}</option>)}
               </select>
             ) : null}
           </div>
         </header>
-        <main className="mx-auto max-w-[1180px] px-4 py-6 md:px-8 print:max-w-none print:p-0">{children}</main>
+        <main className="mx-auto max-w-[1240px] px-3 py-3 md:px-6 print:max-w-none print:p-0">{children}</main>
       </div>
     </div>
   );

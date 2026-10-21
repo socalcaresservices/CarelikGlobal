@@ -12,8 +12,14 @@ export interface Occurrence {
   usedMinutes: number | null;
   reservedMinutes: number | null;
   seriesMinutesBefore: number | null;
-  outcome: "ok" | "exceeds_authorization" | "no_authorization" | "caregiver_conflict" | "already_started" | "time_does_not_exist" | "time_occurs_twice";
+  outcome: "ok" | "exceeds_authorization" | "no_authorization" | "caregiver_conflict" | "already_started" | "time_does_not_exist" | "time_occurs_twice"
+    | "documents_not_current" | "service_not_approved" | "availability_outside" | "availability_not_provided" | "over_hour_limit"
+    | "compliance_hold" | "onboarding_incomplete";
 }
+/** 0061: a date that was not saved, and why. Every such date is returned (there is no cut-off). */
+export interface RejectedDate { localDate: string; reason: string; minutes: number }
+/** 0053: how a series repeats beyond "these weekdays". Absent = every selected weekday, every week. */
+export interface RepeatPattern { every_weeks?: number; anchor?: string; nth?: number[]; except_nth?: number[]; exclude_dates?: string[] }
 export interface SeriesRow {
   seriesId: string;
   status: "active" | "ended";
@@ -33,6 +39,7 @@ export interface SeriesRow {
   generatedThrough: string;
   upcomingOccurrences: number;
   skippedDates: Array<{ date: string; reason: string; minutes: number }>;
+  pattern?: RepeatPattern | null;
 }
 
 export const WEEKDAY_SHORT = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
@@ -44,6 +51,13 @@ export const OUTCOME_LABEL: Record<Occurrence["outcome"], string> = {
   already_started: "Already started",
   time_does_not_exist: "This time does not exist that day (clocks move forward)",
   time_occurs_twice: "This time happens twice that day (clocks move back)",
+  documents_not_current: "Caregiver's required documents are not current",
+  service_not_approved: "Caregiver is not approved for this service",
+  availability_outside: "Outside the caregiver's approved hours",
+  availability_not_provided: "Caregiver has not provided availability",
+  over_hour_limit: "Over the caregiver's hour limit",
+  compliance_hold: "Caregiver is on a compliance hold",
+  onboarding_incomplete: "Caregiver's onboarding is not complete",
 };
 export const monthLabel = (iso: string) => new Date(`${iso.slice(0, 10)}T12:00:00Z`).toLocaleDateString("en-US", { month: "long", year: "numeric", timeZone: "UTC" });
 export const hhmm = (t: string) => t.slice(0, 5);
@@ -79,3 +93,31 @@ export function patternText(weekdays: number[], start: string, end: string) {
   return `Every ${weekdays.map((d) => WEEKDAY_SHORT[d]).join(", ")} · ${formatWallClock(hhmm(start))}–${formatWallClock(hhmm(end))}`;
 }
 
+
+const ORDINAL = ["", "first", "second", "third", "fourth", "fifth"];
+const listOf = (items: string[]) => (items.length <= 2 ? items.join(" and ") : `${items.slice(0, -1).join(", ")} and ${items[items.length - 1]}`);
+
+/** Plain-language rule, e.g. "Every other week · except the first of the month · skips 2 dates". "" for a plain weekly series. */
+export function describePattern(p: RepeatPattern | null | undefined): string {
+  if (!p) return "";
+  const out: string[] = [];
+  if (p.every_weeks && p.every_weeks > 1) out.push(p.every_weeks === 2 ? "every other week" : `every ${p.every_weeks}${p.every_weeks === 3 ? "rd" : "th"} week`);
+  if (p.nth?.length) out.push(`only the ${listOf(p.nth.map((n) => ORDINAL[n] ?? String(n)))} of the month`);
+  if (p.except_nth?.length) out.push(`except the ${listOf(p.except_nth.map((n) => ORDINAL[n] ?? String(n)))} of the month`);
+  if (p.exclude_dates?.length) out.push(`skips ${p.exclude_dates.length} ${p.exclude_dates.length === 1 ? "date" : "dates"}`);
+  return out.join(" · ");
+}
+
+export interface PatternForm { everyWeeks: number; weekOffset: 0 | 1; dates: "all" | "only" | "except"; nth: number[]; excludeDates: string[] }
+export const PLAIN_PATTERN: PatternForm = { everyWeeks: 1, weekOffset: 0, dates: "all", nth: [], excludeDates: [] };
+const addDaysIso = (iso: string, n: number) => { const d = new Date(`${iso}T12:00:00Z`); d.setUTCDate(d.getUTCDate() + n); return d.toISOString().slice(0, 10); };
+
+/** The pattern to send, or null when the form says "every week, every date". `startsOn` fixes which week is week 1. */
+export function buildPattern(f: PatternForm, startsOn: string): RepeatPattern | null {
+  const out: RepeatPattern = {};
+  if (f.everyWeeks > 1) { out.every_weeks = f.everyWeeks; out.anchor = addDaysIso(startsOn, f.weekOffset * 7); }
+  if (f.dates === "only" && f.nth.length) out.nth = [...f.nth].sort();
+  if (f.dates === "except" && f.nth.length) out.except_nth = [...f.nth].sort();
+  if (f.excludeDates.length) out.exclude_dates = [...f.excludeDates].sort();
+  return Object.keys(out).length ? out : null;
+}

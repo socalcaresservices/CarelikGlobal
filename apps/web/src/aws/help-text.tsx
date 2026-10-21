@@ -10,7 +10,7 @@ export function ShortHelp({ children, details, className = "text-sm text-slate-6
       <p>{children}</p>
       {details ? (
         <details className="mt-1">
-          <summary className="inline-flex min-h-[32px] cursor-pointer items-center text-[#0F6674] underline">Details</summary>
+          <summary className="inline-flex min-h-[32px] cursor-pointer items-center text-og-accent underline [@media(pointer:coarse)]:min-h-[44px]">Details</summary>
           <p className="mt-1">{details}</p>
         </details>
       ) : null}

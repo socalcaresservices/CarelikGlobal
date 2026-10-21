@@ -208,6 +208,26 @@ describe("caregiver workflow: login → client → service → start → end →
     expect(active.body.visit).toMatchObject({ visitId: openId, visitStatus: "awaiting_signature", timeOutEnteredByManager: true });
   });
 
+  it("0085 D10: outcome no_service on /close voids a visit that never happened (zero worked), needs a visit manager and a reason, is safe to repeat, and an unknown outcome is a 400", async () => {
+    const own = await freshClient(db, w, w.caregiverA2, 600, w.orgA, { before: 40, after: 40 });
+    const start = await call("POST /v1/visits", w.caregiverA2, { body: { organizationId: w.orgA, clientId: own.client, serviceId: own.service, unscheduledReason: "Client asked for extra help (synthetic)" } });
+    expect(start.status, JSON.stringify(start.body)).toBe(201);
+    const id = start.body.visitId;
+    await ageVisit(db, id, 15);
+    const body = { outcome: "no_service", reason: "Started by mistake; nobody went (synthetic)" };
+    expect((await call("POST /v1/visits/{visitId}/close", w.caregiverA2, { path: { visitId: id }, body })).status).toBe(403);
+    expect((await call("POST /v1/visits/{visitId}/close", w.managerA, { path: { visitId: id }, body: { outcome: "no_service" } })).status).toBe(400);
+    expect((await call("POST /v1/visits/{visitId}/close", w.managerA, { path: { visitId: id }, body: { outcome: "whatever", reason: "x", timeOut: new Date().toISOString() } })).status).toBe(400);
+    const r = await call("POST /v1/visits/{visitId}/close", w.managerA, { path: { visitId: id }, body });
+    expect(r.status, JSON.stringify(r.body)).toBe(200);
+    expect(r.body.visit).toMatchObject({ visitId: id, serviceDelivered: false, workedMinutes: 0 });
+    expect((await call("POST /v1/visits/{visitId}/close", w.managerA, { path: { visitId: id }, body })).status).toBe(200); // lost response, retried
+    expect((await db.admin.query("select status::text s, worked_minutes wk from ogevia.service_visits where id = $1", [id])).rows[0]).toMatchObject({ s: "voided" });
+    expect((await db.admin.query("select count(*) n from ogevia.audit_events where entity_id = $1 and action = 'service_visit.voided'", [id])).rows[0].n).toBe("1");
+    // another agency's manager cannot reach it
+    expect((await call("POST /v1/visits/{visitId}/close", w.managerB, { path: { visitId: id }, body })).status).toBe(404);
+  });
+
   it("a caregiver cannot correct a visit", async () => {
     const r = await call("POST /v1/visits/{visitId}/corrections", w.caregiverA1, {
       path: { visitId },
@@ -750,9 +770,15 @@ describe("client and authorization administration (0022) through the API", () =>
 
 describe("Care Team and services (0023) through the API", () => {
   it("manager adds and renames a caregiver; status needs a reason; caregivers and other agencies cannot", async () => {
-    const created = await call("POST /v1/caregivers", w.managerA, { body: { organizationId: w.orgA, firstName: "Synthetic", lastName: "Api Caregiver", status: "ready" } });
+    // 0085: Approved/Active cannot be created around the onboarding gate while a required item is outstanding (409, items named, nothing created).
+    const direct = await call("POST /v1/caregivers", w.managerA, { body: { organizationId: w.orgA, firstName: "Synthetic", lastName: "Api Direct", status: "ready" } });
+    expect(direct.status, JSON.stringify(direct.body)).toBe(409);
+    expect(JSON.stringify(direct.body)).toMatch(/Onboarding is not complete/);
+    expect((await db.admin.query("select count(*) n from ogevia.caregiver_records where last_name = 'Api Direct'")).rows[0].n).toBe("0");
+    const created = await call("POST /v1/caregivers", w.managerA, { body: { organizationId: w.orgA, firstName: "Synthetic", lastName: "Api Caregiver", status: "onboarding" } });
     expect(created.status, JSON.stringify(created.body)).toBe(201);
     const id = created.body.caregiver.caregiverRecordId as string;
+    await db.admin.query("update ogevia.caregiver_records set status = 'ready', onboarding_required = false where id = $1", [id]); // an already-approved record, as existed before the gate
     expect(created.body.caregiver.caregiverCode).toMatch(/^CG-/);
     expect((await call("POST /v1/caregivers", w.managerA, { body: { organizationId: w.orgA, firstName: "X", lastName: "Y", status: "inactive" } })).status).toBe(400);
     expect((await call("POST /v1/caregivers/{caregiverRecordId}/details", w.managerA, { path: { caregiverRecordId: id }, body: { organizationId: w.orgA, firstName: "Synthetic", lastName: "Api Caregiver 2", preferredName: "Sam" } })).status).toBe(200);
@@ -809,7 +835,8 @@ describe("assignments (0024) through the API", () => {
 describe("caregiver invitations and planned assignments (0025) through the API", () => {
   it("plan before sign-in, invite, resend, first sign-in; no password or email in responses or logs", async () => {
     const today = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Los_Angeles" }).format(new Date());
-    const created = await call("POST /v1/caregivers", w.managerA, { body: { organizationId: w.orgA, firstName: "Synthetic", lastName: "Invitee", status: "ready" } });
+    const created = await call("POST /v1/caregivers", w.managerA, { body: { organizationId: w.orgA, firstName: "Synthetic", lastName: "Invitee", status: "onboarding" } });
+    await db.admin.query("update ogevia.caregiver_records set status = 'ready', onboarding_required = false where id = $1", [created.body.caregiver.caregiverRecordId]); // already approved (0085 refuses creating one directly)
     expect(created.status, JSON.stringify(created.body)).toBe(201);
     const record = created.body.caregiver.caregiverRecordId as string;
 
@@ -851,7 +878,8 @@ describe("caregiver invitations and planned assignments (0025) through the API",
 
   it("an identity-service failure changes nothing and says so", async () => {
     const failing = createHandler({ config: CONFIG, db: { connect: () => db.admin.connect() }, evidence, log: () => {} });
-    const created = await call("POST /v1/caregivers", w.managerA, { body: { organizationId: w.orgA, firstName: "Synthetic", lastName: "Unsent", status: "ready" } });
+    const created = await call("POST /v1/caregivers", w.managerA, { body: { organizationId: w.orgA, firstName: "Synthetic", lastName: "Unsent", status: "onboarding" } });
+    await db.admin.query("update ogevia.caregiver_records set status = 'ready', onboarding_required = false where id = $1", [created.body.caregiver.caregiverRecordId]); // already approved (0085 refuses creating one directly)
     const record = created.body.caregiver.caregiverRecordId as string;
     const r = await failing(event("POST /v1/caregivers/{caregiverRecordId}/invitation", { sub: w.managerA.sub, path: { caregiverRecordId: record }, body: { organizationId: w.orgA, email: "unsent@example.test" } }));
     expect(r.statusCode).toBe(503);
@@ -864,7 +892,11 @@ describe("schedule (0026) through the API", () => {
   it("manager schedules, records a call-out and a replacement; the caregiver sees and calls out of their own shift", async () => {
     const recs = Object.fromEntries((await db.admin.query("select caregiver_code, id from ogevia.caregiver_records where organization_id = $1", [w.orgA])).rows.map((r) => [r.caregiver_code, r.id]));
     const tomorrow = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Los_Angeles" }).format(new Date(Date.now() + 864e5));
-    const body = { organizationId: w.orgA, clientId: fresh.client, serviceId: w.serviceA, date: tomorrow, startTime: "09:00", endTime: "11:00", caregiverRecordId: recs["CG-A1"] };
+    // 0081: completed work awaiting a decision with no reservation now counts against the authorization when more work is scheduled. Earlier tests in this file leave
+    // such visits on `fresh` (visits in review whose helper shifts have no reservation: 90 + 90 + 75 pending minutes); this test is about scheduling, so it uses a
+    // client of its own with the full 600 minutes.
+    const sched = await freshClient(db, w, w.caregiverA1, 600, w.orgA, { before: 40, after: 40 });
+    const body = { organizationId: w.orgA, clientId: sched.client, serviceId: w.serviceA, date: tomorrow, startTime: "09:00", endTime: "11:00", caregiverRecordId: recs["CG-A1"] };
     expect((await call("POST /v1/shifts", w.managerA, { body: { ...body, startTime: "9am" } })).status).toBe(400);
     expect((await call("POST /v1/shifts", w.caregiverA1, { body })).status).toBe(403);
     const created = await call("POST /v1/shifts", w.managerA, { body });
@@ -1013,8 +1045,8 @@ describe("recurring shifts (0034) through the API", () => {
     expect(typeof pv.body.occurrences[0].localDate).toBe("string");
     expect((await call("GET /v1/shift-series/preview", w.managerA, { query: { organizationId: w.orgA, clientId: small.client, serviceId: small.service, weekdays: "1,8", startTime: "09:00", endTime: "11:00", startsOn } })).status).toBe(400);
     expect((await call("POST /v1/shift-series", w.caregiverA1, { body: { organizationId: w.orgA, clientId: small.client, serviceId: small.service, weekdays: [1], startTime: "09:00", endTime: "10:00", startsOn, endsOn } })).status).toBe(403);
-    const refused = await call("POST /v1/shift-series", w.managerA, { body: { organizationId: w.orgA, clientId: small.client, serviceId: small.service, weekdays: [1, 3, 5], startTime: "09:00", endTime: "11:00", startsOn, endsOn } });
-    expect(refused.status).toBe(409);
+    const refused = await call("POST /v1/shift-series", w.managerA, { body: { organizationId: w.orgA, clientId: small.client, serviceId: small.service, weekdays: [1, 3, 5], startTime: "09:00", endTime: "11:00", startsOn, endsOn, onConflict: "refuse" } });
+    expect(refused.status).toBe(409); // 0061: refuse is now explicit; the default saves the dates that fit
     const made = await call("POST /v1/shift-series", w.managerA, { body: { organizationId: w.orgA, clientId: small.client, serviceId: small.service, weekdays: [1, 3, 5], startTime: "09:00", endTime: "11:00", startsOn, endsOn, onConflict: "skip_flagged" } });
     expect(made.status, JSON.stringify(made.body)).toBe(201);
     // The range spans two months: the limit applies to each month separately.

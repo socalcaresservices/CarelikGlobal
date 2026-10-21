@@ -707,7 +707,7 @@ export function SchedulePage() {
                   setRepeatEnabled(true);
                   setBatchResult(null);
                 }}
-                className={repeatEnabled ? "rounded-lg bg-white px-3 py-2 text-sm font-semibold text-indigo-700 shadow-sm" : "rounded-lg px-3 py-2 text-sm font-medium text-slate-600"}
+                className={repeatEnabled ? "rounded-lg bg-og-card px-3 py-2 text-sm font-semibold text-indigo-700 shadow-sm" : "rounded-lg px-3 py-2 text-sm font-medium text-slate-600"}
               >
                 Fixed weekly
               </button>
@@ -718,7 +718,7 @@ export function SchedulePage() {
                   setRepeatEnabled(false);
                   setBatchResult(null);
                 }}
-                className={!repeatEnabled ? "rounded-lg bg-white px-3 py-2 text-sm font-semibold text-indigo-700 shadow-sm" : "rounded-lg px-3 py-2 text-sm font-medium text-slate-600"}
+                className={!repeatEnabled ? "rounded-lg bg-og-card px-3 py-2 text-sm font-semibold text-indigo-700 shadow-sm" : "rounded-lg px-3 py-2 text-sm font-medium text-slate-600"}
               >
                 One-time
               </button>

@@ -1,0 +1,202 @@
+{
+ "desktop-1360:home": {
+  "height": 927,
+  "mainHeight": 834,
+  "visibleChars": 1185
+ },
+ "desktop-1360:documents": {
+  "height": 900,
+  "mainHeight": 687,
+  "visibleChars": 587
+ },
+ "desktop-1360:action-needed": {
+  "height": 900,
+  "mainHeight": 708,
+  "visibleChars": 1174
+ },
+ "desktop-1360:schedule": {
+  "height": 965,
+  "mainHeight": 872,
+  "visibleChars": 1547
+ },
+ "desktop-1360:clients": {
+  "height": 900,
+  "mainHeight": 477,
+  "visibleChars": 579
+ },
+ "desktop-1360:client-detail": {
+  "height": 1005,
+  "mainHeight": 912,
+  "visibleChars": 580
+ },
+ "desktop-1360:care-team": {
+  "height": 900,
+  "mainHeight": 556,
+  "visibleChars": 743
+ },
+ "desktop-1360:caregiver-detail": {
+  "height": 1178,
+  "mainHeight": 1085,
+  "visibleChars": 1284
+ },
+ "desktop-1360:recruiting": {
+  "height": 900,
+  "mainHeight": 466,
+  "visibleChars": 745
+ },
+ "desktop-1360:compliance": {
+  "height": 900,
+  "mainHeight": 515,
+  "visibleChars": 517
+ },
+ "desktop-1360:reports": {
+  "height": 1239,
+  "mainHeight": 1146,
+  "visibleChars": 2409
+ },
+ "desktop-1360:reports-calendar": {
+  "height": 900,
+  "mainHeight": 384,
+  "visibleChars": 312
+ },
+ "desktop-1360:reporting": {
+  "height": 1477,
+  "mainHeight": 1384,
+  "visibleChars": 2382
+ },
+ "desktop-1360:settings-appearance": {
+  "height": 900,
+  "mainHeight": 404,
+  "visibleChars": 223
+ },
+ "desktop-1360:settings-branding": {
+  "height": 1143,
+  "mainHeight": 1050,
+  "visibleChars": 414
+ },
+ "desktop-1360:billing-review": {
+  "height": 944,
+  "mainHeight": 851,
+  "visibleChars": 1812
+ },
+ "desktop-1360:authorization-impacts": {
+  "height": 900,
+  "mainHeight": 206,
+  "visibleChars": 56
+ },
+ "desktop-1360:visit-review": {
+  "height": 900,
+  "mainHeight": 387,
+  "visibleChars": 279
+ },
+ "desktop-1360:shift-requests": {
+  "height": 900,
+  "mainHeight": 184,
+  "visibleChars": 129
+ },
+ "desktop-1360:attention": {
+  "height": 900,
+  "mainHeight": 668,
+  "visibleChars": 685
+ },
+ "phone-390-emulated:home": {
+  "height": 1711,
+  "mainHeight": 1614,
+  "visibleChars": 1185
+ },
+ "phone-390-emulated:documents": {
+  "height": 1684,
+  "mainHeight": 1539,
+  "visibleChars": 564
+ },
+ "phone-390-emulated:action-needed": {
+  "height": 1461,
+  "mainHeight": 1316,
+  "visibleChars": 1174
+ },
+ "phone-390-emulated:schedule": {
+  "height": 2184,
+  "mainHeight": 2039,
+  "visibleChars": 869
+ },
+ "phone-390-emulated:clients": {
+  "height": 915,
+  "mainHeight": 766,
+  "visibleChars": 260
+ },
+ "phone-390-emulated:client-detail": {
+  "height": 1459,
+  "mainHeight": 1310,
+  "visibleChars": 580
+ },
+ "phone-390-emulated:care-team": {
+  "height": 1011,
+  "mainHeight": 866,
+  "visibleChars": 743
+ },
+ "phone-390-emulated:caregiver-detail": {
+  "height": 1884,
+  "mainHeight": 1739,
+  "visibleChars": 1284
+ },
+ "phone-390-emulated:recruiting": {
+  "height": 1177,
+  "mainHeight": 1032,
+  "visibleChars": 745
+ },
+ "phone-390-emulated:compliance": {
+  "height": 970,
+  "mainHeight": 825,
+  "visibleChars": 517
+ },
+ "phone-390-emulated:reports": {
+  "height": 3022,
+  "mainHeight": 2877,
+  "visibleChars": 1032
+ },
+ "phone-390-emulated:reports-calendar": {
+  "height": 844,
+  "mainHeight": 648,
+  "visibleChars": 312
+ },
+ "phone-390-emulated:reporting": {
+  "height": 2245,
+  "mainHeight": 2100,
+  "visibleChars": 2382
+ },
+ "phone-390-emulated:settings-appearance": {
+  "height": 1017,
+  "mainHeight": 872,
+  "visibleChars": 223
+ },
+ "phone-390-emulated:settings-branding": {
+  "height": 1539,
+  "mainHeight": 1394,
+  "visibleChars": 414
+ },
+ "phone-390-emulated:billing-review": {
+  "height": 3151,
+  "mainHeight": 3006,
+  "visibleChars": 2014
+ },
+ "phone-390-emulated:authorization-impacts": {
+  "height": 844,
+  "mainHeight": 282,
+  "visibleChars": 56
+ },
+ "phone-390-emulated:visit-review": {
+  "height": 844,
+  "mainHeight": 455,
+  "visibleChars": 279
+ },
+ "phone-390-emulated:shift-requests": {
+  "height": 844,
+  "mainHeight": 228,
+  "visibleChars": 129
+ },
+ "phone-390-emulated:attention": {
+  "height": 1089,
+  "mainHeight": 944,
+  "visibleChars": 685
+ }
+}

@@ -2,6 +2,7 @@
 // view, agency branding, NEEDS ATTENTION counts and the utilisation
 // overview. Every value is authorized again in PostgreSQL; the UI only
 // decides what to show.
+import type { HoursFields } from "@/lib/hours-accounting";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@carelik/auth";
 import { createContext, useContext } from "react";
@@ -69,20 +70,36 @@ export interface AttentionSummary {
   awaitingSignature?: number | null;
   /** 0036: late confirmations received and waiting for review (counted). */
   lateResponsesToReview?: number | null;
+  /** 0055: caregivers on a compliance hold. null when the viewer may not see it (never a false zero). */
+  complianceHolds?: { holds: number; affectedShifts: number; inProgressVisits: number } | null;
 }
 
-export interface UtilisationRow {
+export interface UtilisationRow extends HoursFields {
   serviceId: string;
   serviceCode: string;
   serviceName: string;
   clientCount: number;
   authorizedMinutes: number;
+  /** 0067: reserved time not yet delivered: shifts ahead plus shifts underway (started, or a visit still open). */
   scheduledMinutes: number;
+  /** 0067: all reserved time = scheduled + held for review + needs reconciliation. */
+  reservedMinutes?: number;
+  /** 0067: reserved while a linked visit is in review. */
+  heldReviewMinutes?: number;
+  /** 0067: reserved on shifts that ended with no visit record; released only by a person. */
+  needsReconciliationMinutes?: number;
   workedMinutes: number;
   billableMinutes: number;
   reviewMinutes: number;
   approvedMinutes: number;
+  /** The sum of each authorization's UNUSED time (never negative); the overage is overLimitMinutes. authorized - committed = remaining - overLimit. */
   remainingMinutes: number;
+  /** 0057: billable + approved rounding adjustments + reserved. */
+  committedMinutes?: number;
+  overLimitMinutes?: number;
+  nearLimitAuthorizations?: number;
+  criticalAuthorizations?: number;
+  expiringAuthorizations?: number;
   lineagesWithoutRate: number;
   /** Administrator only (billing.read); null for everyone else. Values are in cents. */
   billableValueCents: number | null;
@@ -148,16 +165,36 @@ export function useBranding() {
   });
 }
 
-export function useAttention() {
+/** A count with how many of its items the server says are Critical. Red styling follows `critical`, never the colour of an individual item. */
+export interface CountWithCritical { count: number; critical: number }
+/**
+ * 0080: the badge numbers, each computed by the database from the same rows as the issue list (docs/releases/2026-10-19-review-updates/COUNT_DEFINITIONS.md).
+ * A value is null when this person may not see it (never a false zero). The web displays these numbers; it does not recompute them.
+ */
+export interface AttentionCounts {
+  asOf: string;
+  needsAttention: CountWithCritical | null;
+  needsAction: CountWithCritical;
+  scheduling: CountWithCritical | null;
+  caregivers: CountWithCritical | null;
+  approvals: { exceptions: CountWithCritical | null; readyForApproval: number | null };
+}
+interface AttentionResponse { summary: AttentionSummary | null; counts?: AttentionCounts | null }
+
+function useAttentionResponse<T>(select: (r: AttentionResponse) => T) {
   const api = useAwsApi();
   const { activeOrganizationId, hasPermission } = useOrganization();
   return useQuery({
     queryKey: ["aws-attention", activeOrganizationId],
-    queryFn: async () => (await api.get<{ summary: AttentionSummary | null }>("/v1/attention", { organizationId: activeOrganizationId })).summary,
+    queryFn: async () => api.get<AttentionResponse>("/v1/attention", { organizationId: activeOrganizationId }),
+    select,
     enabled: !!activeOrganizationId && hasPermission("visits.read"),
     refetchInterval: 5 * 60_000,
   });
 }
+export const useAttention = () => useAttentionResponse((r) => r.summary);
+/** The badge counts; the same request (and refresh) as useAttention. */
+export const useAttentionCounts = () => useAttentionResponse((r) => r.counts ?? null);
 
 export function useUtilisation(monthStart: string) {
   const api = useAwsApi();

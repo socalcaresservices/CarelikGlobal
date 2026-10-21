@@ -1,0 +1,54 @@
+# Ogevia production-upgrade rehearsal (46 to 85) on a RESTORED COPY
+
+Source commit @COMMIT@. **Nothing in this package has been run against AWS.** Mock-tested locally against a real PostgreSQL 16 only. Every YELLOW or RED step needs the owner's explicit approval at the time.
+
+## What it does
+Restores a fresh snapshot of the shared instance `ogevia-prod-postgres` to a NEW instance `ogevia-prd-rehearsal-YYYYMMDD` with its OWN security group, applies migrations 0047-0085 to the copy's `ogevia_prd`, proves the result, optionally rolls back, and deletes the copy.
+It never writes to `ogevia-prod-postgres`, never changes the shared security group `sg-00530a1f4f7648e65`, and touches no stack, TEST, Cognito or DNS. Output is counts, versions, hashes, timings and object names; never row contents.
+
+## Pinned values (the scripts refuse anything else)
+- Migration set 0047-0085 sha256: `@MIGRATIONS_SHA@` (export as `OGEVIA_EXPECT_MIGRATIONS_SHA` for R4)
+- Rollback set 0047-0085 sha256: `@ROLLBACK_SHA@` (export as `OGEVIA_EXPECT_ROLLBACK_SHA` for R6)
+
+## Setup (CloudShell, us-west-2)
+```
+tar -xzf ogevia-prd-rehearsal.tar.gz && cd ogevia-prd-rehearsal && sha256sum -c --quiet MANIFEST.sha256 && echo MANIFEST OK
+cat BUILD_INFO.json
+```
+Needs `aws`, `jq`, `psql`, `python3`, `sha256sum`, the Session Manager plugin, and the admin host `ogevia-db-admin-temp` running. State and evidence go to `~/ogevia-prd-rehearsal/` (mode 700).
+
+## Steps
+| Step | Command | Class | Typed phrase |
+|---|---|---|---|
+| R0 preflight | `bash scripts/r0-preflight.sh` | read-only | none |
+| R1 snapshot | `OGEVIA_RELEASE_WINDOW_START=... OGEVIA_RELEASE_WINDOW_END=... bash scripts/r1-snapshot.sh create` (then `verify`) | YELLOW | `SNAPSHOT-NOW` |
+| R2 restore | `bash scripts/r2-restore.sh restore` (then `verify`) | YELLOW, costs money | `RESTORE-ogevia-prd-rehearsal-YYYYMMDD` |
+| R3 baseline | `bash scripts/r3-baseline.sh` | read-only on the copy | none |
+| R4 migrate | `OGEVIA_EXPECT_MIGRATIONS_SHA=... bash scripts/r4-migrate.sh [--resume]` | mutates the copy | `MIGRATE-ogevia-prd-rehearsal-YYYYMMDD` |
+| R5 verify | `bash scripts/r5-verify.sh` | read-only on the copy | none |
+| R6 rollback (optional) | `OGEVIA_EXPECT_ROLLBACK_SHA=... bash scripts/r6-rollback.sh` | mutates the copy | `ROLLBACK-ogevia-prd-rehearsal-YYYYMMDD` |
+| R8 teardown | `bash scripts/r8-teardown.sh plan`, then `execute [--also-snapshot]` | **RED** (deletes the copy) | `DELETE-ogevia-prd-rehearsal-YYYYMMDD` (and `DELETE-SNAPSHOT-...`) |
+After R5 you may run R6; R6 returns the copy to 46/0046 (the 0047 down script keeps 11 availability-override objects by design; the check expects exactly those).
+
+## What passes
+- R3: copy at exactly 46/0046 and its ledger checksums equal the repository's files (otherwise STOP: the real runner would refuse).
+- R4: 39 files applied, one transaction each, ledger 85/0085. Timings in `~/ogevia-prd-rehearsal/migrate.log`.
+- R5: all 85 ledger checksums equal the repository; the verification set passes; schema equals the copy of TEST (`ogevia_sv_test` on the same copy); existing data counts and content unchanged (permission rows may grow).
+- R6: ledger 46/0046; schema equals the baseline except the 11 kept objects; data counts equal.
+
+## Stop rules
+Any `STOP:` line: do not retry blindly; paste the whole output. A failed migration or rollback file rolls back its own transaction; fix forward, never edit an applied file. If a step is interrupted, the log and state file show what exists; `r8-teardown.sh plan` lists every rehearsal resource.
+If R3 says it cannot log in to the copy: the restored instance did not accept the source master credential. Setting a new master password is a separate YELLOW step not in this package; ask first.
+
+## Evidence to paste back
+R0 output; R1 `SNAPSHOT VERIFIED`; R2 `RESTORE VERIFIED`; R3 summary; R4 timings and ledger line; R5 PASS/FAIL lines; R6 summary (if run); R8 plan before and after.
+
+## Cost and exposure
+About 0.53 USD per day of instance time (cost model rate 0.022 USD/hour for db.t4g.micro) plus storage and snapshot charges (not computed here). The copy holds production data (possibly PHI): keep it for the shortest time, no exports, delete it when finished.
+
+## Not verified before the first real run (be ready for these)
+- Every script was tested with a MOCKED aws and a real PostgreSQL 16 on a local sandbox (14 tests); none has run against AWS or against the RDS instance (PostgreSQL 18.3). R0 checks that the installed AWS CLI knows every restore parameter used.
+- Whether the restored copy accepts the source instance's master credential. If not, R3 stops with a clear message; no password is changed by this package.
+- The local test cluster allowed any password, so password rejection was tested with an unknown login name, not a wrong password.
+- The fingerprint SQL uses `query_to_xml`/`xpath`; it was tested on PostgreSQL 16, not 18.3.
+- Timings, storage and cost of the real copy are unknown until R0 and R2 run.

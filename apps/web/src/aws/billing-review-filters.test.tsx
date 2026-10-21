@@ -91,7 +91,7 @@ describe("Billing review filters", () => {
     pick("Visit status", "administrator_review");
     await waitFor(() => expect(tableRows()).toHaveLength(1));
     pick("Visit status", "");
-    pick("Approval status", "approved");
+    pick("Approval status", "approved_for_billing");
     await waitFor(() => expect(tableRows()).toHaveLength(1));
     expect(within(tableRows()[0]!).getByText(/Approved 1 h/)).toBeInTheDocument();
 
@@ -117,12 +117,12 @@ describe("Billing review filters", () => {
 });
 
 describe("applyBillingFilters (pure)", () => {
-  const approvalOf = (r: { visitId: string }) => (r.visitId === ROWS[3]!.visitId ? ("approved" as const) : ("awaiting" as const));
+  const approvalOf = (r: { visitId: string }) => (r.visitId === ROWS[3]!.visitId ? ("approved_for_billing" as const) : ("ready_for_review" as const));
   it("combines filters with AND and offers only values that exist in the loaded rows", () => {
     const rows = ROWS as never[];
     expect(applyBillingFilters(rows, { ...NO_FILTERS, client: "C-2", visitStatus: "signed" }, approvalOf as never)).toHaveLength(1);
     const o = filterOptions(rows, approvalOf as never);
     expect(o.clients.map(([k]) => k)).toEqual(["C-1", "C-2"]);
-    expect(o.approvals.map(([k]) => k).sort()).toEqual(["approved", "awaiting"]);
+    expect(o.approvals.map(([k]) => k).sort()).toEqual(["approved_for_billing", "ready_for_review"]);
   });
 });

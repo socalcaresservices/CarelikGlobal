@@ -62,6 +62,16 @@ function fakeApi(role: Role) {
         return json(200, { newAuthorizationId: "a2", newVersionNumber: 2, affectedVisits: [{ visitId: "v1", status: "signed", serviceDate: "2026-10-02", workedMinutes: 120, billableMinutes: 120, impact: "decrease_now_exceeds" }] });
       case "GET /v1/assignments":
         return json(200, { assignments: [] });
+      case "GET /v1/action-issues":
+        return json(200, { asOf: new Date().toISOString(), matching: 0, limit: 50, offset: 0, counts: { total: 0, critical: 0, urgent: 0, routine: 0, actionNeeded: 0, byQueue: {} }, issues: [] });
+      case `GET /v1/clients/${CLIENT}/issue-history`:
+        return json(200, { history: { resolved: [] } });
+      case `GET /v1/clients/${CLIENT}/readiness`:
+        return json(200, { readiness: { clientId: CLIENT, status: "active", stage: "active", stageNote: null, canSchedule: true, ready: true, services: [] } });
+      case `GET /v1/clients/${CLIENT}/documents`:
+        return json(200, { documents: [] });
+      case "GET /v1/shifts":
+        return json(200, { shifts: [] });
       default:
         return json(404, { error: { code: "not_found", message: "No such endpoint." } });
     }
@@ -118,7 +128,7 @@ describe("Clients screens", () => {
   it("manager: list with name, code and status; adding a client sends an idempotency key and shows the next step", async () => {
     const api = renderAt("/clients", "manager");
     expect(await screen.findByText(/Synthetic Client Alpha/)).toBeInTheDocument();
-    expect(screen.getByText("(CL-ABCDEF1234)")).toBeInTheDocument();
+    expect(screen.queryByText("(CL-ABCDEF1234)")).toBeNull(); // the code appears only where the name is shared (duplicateName)
     fireEvent.click(screen.getByRole("button", { name: "Add client" }));
     expect(screen.getByRole("button", { name: "Close" })).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Add client" }));
@@ -142,7 +152,7 @@ describe("Clients screens", () => {
     renderAt(`/clients/${CLIENT}`, "manager");
     expect(await screen.findByRole("heading", { name: "Synthetic Client Alpha" })).toBeInTheDocument();
     const balances = await screen.findByRole("list", { name: /Authorized, used and remaining/ });
-    expect(within(balances).getByText("17 hr")).toBeInTheDocument();
+    expect(within(balances).getByTestId("hours-left-figure")).toHaveTextContent("Hours left: 17 h");
     expect(await screen.findByText(/30 hr per month/)).toBeInTheDocument();
     expect(screen.queryByText(/\/hr/)).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Add authorization" }));
@@ -168,8 +178,11 @@ describe("Clients screens", () => {
   });
 
   it("amend: needs a reason, saves a new version and lists the visits to review", async () => {
-    renderAt(`/clients/${CLIENT}`, "manager");
+    const api = renderAt(`/clients/${CLIENT}`, "manager");
     fireEvent.click(await screen.findByRole("button", { name: "Amend" }));
+    const readinessReads = () => api.calls.filter((c) => c.method === "GET" && c.path === `/v1/clients/${CLIENT}/readiness`).length;
+    await waitFor(() => expect(readinessReads()).toBeGreaterThan(0));
+    const before = readinessReads();
     fireEvent.change(screen.getByLabelText("Authorized hours per month"), { target: { value: "24" } });
     fireEvent.click(screen.getByRole("button", { name: "Save version 2" }));
     expect(await screen.findByRole("alert")).toHaveTextContent("reason");
@@ -177,6 +190,8 @@ describe("Clients screens", () => {
     fireEvent.click(screen.getByRole("button", { name: "Save version 2" }));
     expect(await screen.findByText(/Saved as version 2/)).toBeInTheDocument();
     expect(screen.getByText(/may now exceed the new limit/)).toBeInTheDocument();
+    // The readiness card and alerts are read again after an authorization changes (end-to-end finding D1: they stayed stale until a reload).
+    await waitFor(() => expect(readinessReads()).toBeGreaterThan(before));
     await waitFor(() => expect(screen.getByText(/History \(1 earlier version\)/)).toBeInTheDocument());
     expect(screen.getByText(/Latest change: Reduced by the payer/)).toBeInTheDocument();
   });

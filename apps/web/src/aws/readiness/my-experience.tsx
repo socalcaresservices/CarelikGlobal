@@ -6,6 +6,7 @@ import { useOrganization } from "@/providers/organization-provider";
 import { useAwsApi } from "../aws-workspace";
 import { actionError } from "./format";
 import { useGuardedMutate } from "./use-guarded";
+import { InfoTip } from "../ui/info-tip";
 
 type Tag = { tagId: string; label: string };
 type Mine = { tags: { tagId: string; label: string; status: "reported" | "confirmed" | "not_confirmed" }[] };
@@ -44,9 +45,11 @@ export function MyExperience() {
   const failed = tags.isError || mine.isError;
   const retry = () => { if (tags.isError) void tags.refetch(); if (mine.isError) void mine.refetch(); };
   return (
-    <Card role="region" className="space-y-2 p-4" aria-label="My experience">
-      <h2 className="text-base font-semibold text-slate-950">My experience</h2>
-      <p className="text-sm text-slate-800">Tell the agency what you have experience with. An administrator confirms it; until then it is only a note.</p>
+    <Card role="region" className="space-y-1.5" aria-label="My experience">
+      <div className="flex items-center gap-1.5">
+        <h2 className="text-sm font-semibold text-slate-950">My experience</h2>
+        <InfoTip>Tell the agency what you have experience with. An administrator confirms it; until then it is only a note.</InfoTip>
+      </div>
       {!ready && !failed ? <p role="status" className="text-sm text-slate-500">Loading…</p> : null}
       {failed ? (
         <div className="space-y-2">

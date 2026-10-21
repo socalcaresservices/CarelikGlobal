@@ -74,7 +74,13 @@ describe("0014 clock-in from a scheduled shift without a standing assignment", (
     await refused(w.caregiverA2, f);
     expect((await pickerClients(w.caregiverA2)).map((r) => r.client_id)).not.toContain(f.client);
 
-    // Agency reassigns the shift (as assign_care_request does on replacement).
+    // Agency reassigns the shift (as assign_care_request does on replacement). A care-request shift always holds its authorization reservation, and since 0065 a
+    // caregiver cannot be put on a shift whose authorization is not reserved, so the fixture carries the reservation the real path writes.
+    await db.admin.query(
+      `insert into ogevia.authorization_reservations (organization_id, authorization_lineage_id, care_request_id, shift_id, service_date, reserved_minutes)
+       select $1, a.lineage_id, null, $2, (now() at time zone 'America/Los_Angeles')::date, 210 from ogevia.client_authorizations a where a.id = $3`,
+      [w.orgA, s, f.auth],
+    );
     await db.admin.query(
       "update ogevia.shifts set caregiver_user_id = $2, caregiver_record_id = $3 where id = $1",
       [s, w.caregiverA2.userId, await recordOf(w.caregiverA2)],

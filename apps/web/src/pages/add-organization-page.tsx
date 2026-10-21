@@ -960,7 +960,7 @@ export function AddOrganizationPage() {
         {currentStep === "review" && submitError ? <p className="text-sm text-red-700">{submitError}</p> : null}
       </div>
 
-      <div className="fixed inset-x-0 bottom-0 border-t border-slate-200 bg-white/95 px-4 py-3 backdrop-blur">
+      <div className="fixed inset-x-0 bottom-0 border-t border-slate-200 bg-og-card/95 px-4 py-3 backdrop-blur">
         <div className="mx-auto flex max-w-2xl items-center justify-between gap-3">
           <button
             type="button"

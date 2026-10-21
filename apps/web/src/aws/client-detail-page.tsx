@@ -1,8 +1,11 @@
+import { HoursBreakdown } from "@/components/hours-breakdown";
 import { useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef, useState } from "react";
 import { Link, useParams } from "react-router-dom";
+import { agencyMonth, useAgencyClock } from "./agency-clock";
 import { Button, Card } from "@carelik/ui";
-import { formatDuration } from "@/lib/service-verification";
+import { formatDuration, TIER_LABEL, TIER_SYMBOL } from "@/lib/service-verification";
+import { formatHours, hoursLeftLine } from "@/lib/hours-accounting";
 import { newIdempotencyKey } from "@/lib/sv-backend";
 import { useOrganization } from "@/providers/organization-provider";
 import { useAwsApi } from "./aws-workspace";
@@ -14,18 +17,24 @@ import {
 import { AssignmentsCard } from "./assignments-card";
 import { ClientExperience, MatchingLocation } from "./readiness/matching-inputs";
 import { ClientTypeField } from "./clients-page";
+import { CaregiverSummary, ClientAlertsCard, ClientDocumentsCard, ClientHistoryCard, ClientQuickActions, DuplicateWarning, NextVisitsCard, ReadinessCard } from "./client-extras";
+import { useDuplicateClients } from "./client-data";
 import { formatDateOnly } from "@/lib/service-verification";
+import { Hint } from "./hint";
+import { linkClass } from "./ui-classes";
+import { CompactAlert } from "./ui/compact-alert";
+import { SummarySection } from "./ui/summary-section";
+import { actionBtn, actionBtnPrimary } from "./ui-classes";
 
 const message = (cause: unknown, fallback: string) => (cause instanceof Error ? cause.message : fallback);
 const inputClass = "mt-1 block w-full rounded-lg border border-slate-200 px-3 py-2 text-base";
 const fmtDate = (d: string | null) => formatDateOnly(d);
 const minutesAsHours = (m: number) => (m % 60 === 0 ? String(m / 60) : (m / 60).toFixed(2));
-const thisMonth = () => new Date().toISOString().slice(0, 7);
 
 function useRefreshClient() {
   const queryClient = useQueryClient();
   return async () => {
-    for (const k of ["aws-clients", "aws-client-directory", "aws-client-authorizations", "aws-client-balances", "service-visit-report", "service-visit-report-calendar"]) {
+    for (const k of ["aws-clients", "aws-client-directory", "aws-client-authorizations", "aws-client-balances", "service-visit-report", "service-visit-report-calendar", "client-readiness", "client-issues", "client-audit", "action-issues"]) {
       await queryClient.invalidateQueries({ queryKey: [k] });
     }
   };
@@ -37,6 +46,10 @@ function DetailsCard({ c, canManage }: { c: AdminClient; canManage: boolean }) {
   const { activeOrganizationId } = useOrganization();
   const initial = { first: c.legalFirstName ?? "", last: c.legalLastName ?? "", city: c.city ?? "", type: c.clientTypeId ?? "", label: c.caregiverDisplayCode ?? "" };
   const [form, setForm] = useState(initial);
+  const [editing, setEditing] = useState(false);
+  const [dupConfirmed, setDupConfirmed] = useState(false);
+  const nameChanged = form.first.trim().toLowerCase() !== (c.legalFirstName ?? "").trim().toLowerCase() || form.last.trim().toLowerCase() !== (c.legalLastName ?? "").trim().toLowerCase();
+  const dupes = useDuplicateClients(nameChanged && editing ? form.first : "", nameChanged && editing ? form.last : "", c.clientId);
   const [state, setState] = useState<{ busy: boolean; error: string | null; done: boolean }>({ busy: false, error: null, done: false });
   const key = useRef(newIdempotencyKey());
   useEffect(() => setForm({ first: c.legalFirstName ?? "", last: c.legalLastName ?? "", city: c.city ?? "", type: c.clientTypeId ?? "", label: c.caregiverDisplayCode ?? "" }),
@@ -44,6 +57,7 @@ function DetailsCard({ c, canManage }: { c: AdminClient; canManage: boolean }) {
   const set = (k: keyof typeof form) => (v: string) => { setForm((f) => ({ ...f, [k]: v })); key.current = newIdempotencyKey(); setState((s) => ({ ...s, done: false })); };
   async function save() {
     if (!form.first.trim() || !form.last.trim()) return setState({ busy: false, error: "Enter the client's first and last name.", done: false });
+    if (nameChanged && (dupes.data ?? []).some((m) => m.match === "same_name") && !dupConfirmed) return setState({ busy: false, error: "A client with this name already exists. Confirm it is a different person, or change the name.", done: false });
     setState({ busy: true, error: null, done: false });
     try {
       await api.post(`/v1/clients/${encodeURIComponent(c.clientId)}/details`, {
@@ -52,6 +66,8 @@ function DetailsCard({ c, canManage }: { c: AdminClient; canManage: boolean }) {
       }, { idempotencyKey: key.current });
       key.current = newIdempotencyKey();
       await refresh();
+      setEditing(false);
+      setDupConfirmed(false);
       setState({ busy: false, error: null, done: true });
     } catch (cause) {
       setState({ busy: false, error: message(cause, "Not saved."), done: false });
@@ -59,23 +75,39 @@ function DetailsCard({ c, canManage }: { c: AdminClient; canManage: boolean }) {
   }
   if (!canManage) {
     return (
-      <Card className="p-4 text-sm text-slate-700">
-        <p>City: {c.city ?? "—"} · Type: {c.clientTypeName ?? "—"} · Caregivers see: {c.caregiverDisplayCode ?? c.clientCode}</p>
-      </Card>
+      <SummarySection title="Details" summary={`City: ${c.city ?? "—"} · Type: ${c.clientTypeName ?? "—"} · Code: ${c.clientCode} · Caregivers see: ${c.caregiverDisplayCode ?? c.clientCode}`}>
+        <p className="text-sm text-slate-700">Name and contact changes are made by the office.</p>
+      </SummarySection>
+    );
+  }
+  if (!editing) {
+    return (
+      <SummarySection title="Details" id="details" testId="details-readonly" summary={[c.city, c.clientTypeName].filter(Boolean).join(" · ") || "No city or type"}>
+        <dl className="grid gap-x-6 gap-y-1 text-sm sm:grid-cols-2">
+          <div><dt className="text-xs text-slate-600">Name</dt><dd>{clientName(c) ?? "Not set"}</dd></div>
+          <div><dt className="text-xs text-slate-600">City</dt><dd>{c.city ?? "—"}</dd></div>
+          <div><dt className="text-xs text-slate-600">Type</dt><dd>{c.clientTypeName ?? "—"}</dd></div>
+          <div><dt className="text-xs text-slate-600">Client code</dt><dd>{c.clientCode}</dd></div>
+          <div><dt className="text-xs text-slate-600">Caregivers see</dt><dd>{c.caregiverDisplayCode ?? c.clientCode}</dd></div>
+        </dl>
+        <button type="button" className={`mt-2 ${actionBtn}`} onClick={() => { setEditing(true); setState({ busy: false, error: null, done: false }); }}>Edit details</button>
+        {state.done ? <p role="status" className="mt-2 text-sm text-emerald-800">Saved. The change is in the client&apos;s history.</p> : null}
+      </SummarySection>
     );
   }
   return (
-    <Card className="p-4">
-      <h2 className="text-base font-semibold text-slate-950">Details</h2>
+    <Card className="p-3" id="details">
+      <h2 className="text-base font-semibold text-slate-950">Edit details</h2>
+      <p className="mt-1 text-xs text-slate-600" data-testid="edit-impact">Changes are recorded in the client&apos;s history. Changing the type can change which caregivers match a care request.</p>
       <form onSubmit={(e) => { e.preventDefault(); void save(); }} className="mt-3 grid gap-3 sm:grid-cols-2">
         <div><label htmlFor="edit-first" className="block text-sm font-medium text-slate-700">First name</label><input id="edit-first" value={form.first} maxLength={80} autoComplete="off" onChange={(e) => set("first")(e.target.value)} className={inputClass} /></div>
         <div><label htmlFor="edit-last" className="block text-sm font-medium text-slate-700">Last name</label><input id="edit-last" value={form.last} maxLength={80} autoComplete="off" onChange={(e) => set("last")(e.target.value)} className={inputClass} /></div>
         <div><label htmlFor="edit-city" className="block text-sm font-medium text-slate-700">City (optional)</label><input id="edit-city" value={form.city} maxLength={80} autoComplete="off" onChange={(e) => set("city")(e.target.value)} className={inputClass} /></div>
         <ClientTypeField id="edit-type" value={form.type} onChange={set("type")} />
         <div className="sm:col-span-2"><label htmlFor="edit-label" className="block text-sm font-medium text-slate-700">Label caregivers see instead of {c.clientCode} (optional)</label><input id="edit-label" value={form.label} maxLength={40} autoComplete="off" onChange={(e) => set("label")(e.target.value)} className={inputClass} /></div>
+        {nameChanged ? <DuplicateWarning matches={dupes.data} confirmed={dupConfirmed} onConfirm={setDupConfirmed} /> : null}
         {state.error ? <p role="alert" className="text-sm text-red-700 sm:col-span-2">{state.error}</p> : null}
-        {state.done ? <p role="status" className="text-sm text-emerald-800 sm:col-span-2">Saved. The change is in the client's history.</p> : null}
-        <div className="sm:col-span-2"><Button type="submit" disabled={state.busy}>{state.busy ? "Saving…" : "Save details"}</Button></div>
+        <div className="flex gap-2 sm:col-span-2"><Button type="submit" disabled={state.busy}>{state.busy ? "Saving…" : "Save details"}</Button><Button type="button" variant="secondary" disabled={state.busy} onClick={() => { setEditing(false); setForm(initial); setDupConfirmed(false); setState({ busy: false, error: null, done: false }); }}>Cancel</Button></div>
       </form>
     </Card>
   );
@@ -103,18 +135,20 @@ function StatusCard({ c }: { c: AdminClient }) {
       setState({ busy: false, error: message(cause, "Status not changed."), done: false });
     }
   }
+  const options = (["active", "inactive", "discharged"] as const).filter((x) => x !== c.status);
   return (
-    <Card className="p-4">
-      <h2 className="text-base font-semibold text-slate-950">Status</h2>
-      <p className="mt-1 text-sm text-slate-600">Inactive and discharged clients cannot be scheduled or visited. Their records and history are kept.</p>
-      <form onSubmit={(e) => { e.preventDefault(); void save(); }} className="mt-3 flex flex-wrap items-end gap-3">
+    <SummarySection title="Status" status={<span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${STATUS_BADGE[c.status]}`}>{STATUS_LABEL[c.status]}</span>}>
+      <Hint details="Their records and history are kept." show>Inactive and discharged clients cannot be scheduled or visited.</Hint>
+      <form onSubmit={(e) => { e.preventDefault(); void save(); }} className="mt-3 space-y-3">
+        <fieldset>
+          <legend className="text-sm font-medium text-slate-700">Change to</legend>
+          <div className="flex flex-wrap gap-x-5">
+            {options.map((o) => (
+              <label key={o} className="flex min-h-[44px] items-center gap-2 text-sm"><input type="radio" name="status-new" className="h-5 w-5" checked={status === o} onChange={() => { setStatus(o); key.current = newIdempotencyKey(); }} />{STATUS_LABEL[o]}</label>
+            ))}
+          </div>
+        </fieldset>
         <div>
-          <label htmlFor="status-new" className="block text-sm font-medium text-slate-700">Change to</label>
-          <select id="status-new" value={status} onChange={(e) => { setStatus(e.target.value as ClientStatus); key.current = newIdempotencyKey(); }} className="mt-1 rounded-lg border border-slate-200 px-3 py-2 text-base">
-            {(["active", "inactive", "discharged"] as const).filter((s) => s !== c.status).map((s) => <option key={s} value={s}>{STATUS_LABEL[s]}</option>)}
-          </select>
-        </div>
-        <div className="min-w-[220px] flex-1">
           <label htmlFor="status-reason" className="block text-sm font-medium text-slate-700">Reason</label>
           <input id="status-reason" value={reason} maxLength={500} onChange={(e) => { setReason(e.target.value); key.current = newIdempotencyKey(); }} className={inputClass} />
         </div>
@@ -122,7 +156,7 @@ function StatusCard({ c }: { c: AdminClient }) {
       </form>
       {state.error ? <p role="alert" className="mt-2 text-sm text-red-700">{state.error}</p> : null}
       {state.done ? <p role="status" className="mt-2 text-sm text-emerald-800">Status changed.</p> : null}
-    </Card>
+    </SummarySection>
   );
 }
 
@@ -215,14 +249,16 @@ function AddAuthorizationForm({ clientId, onDone }: { clientId: string; onDone: 
   );
 }
 
-interface AmendResult { newVersionNumber: number; affectedVisits: Array<{ visitId: string; status: string; serviceDate: string; workedMinutes: number; billableMinutes: number; impact: string }> }
+interface AmendResult { newVersionNumber: number; affectedVisits: Array<{ visitId: string; status: string; serviceDate: string; workedMinutes: number; billableMinutes: number; impact: string }>; affectedShifts?: Array<{ impactId: string; shiftId: string; serviceDate: string; reservedMinutes: number; impact: string }> }
 
-function AmendForm({ current, onDone }: { current: AuthorizationVersion; onDone: (r: AmendResult) => void }) {
+const addDays = (d: string, n: number) => new Date(Date.parse(`${d}T12:00:00Z`) + n * 864e5).toISOString().slice(0, 10);
+
+function AmendForm({ current, onDone, renewal = false }: { current: AuthorizationVersion; onDone: (r: AmendResult) => void; renewal?: boolean }) {
   const api = useAwsApi();
   const refresh = useRefreshClient();
   const [t, setT] = useState<Terms>({
     payer: current.payer, number: current.authorizationNumber ?? "", hours: minutesAsHours(current.monthlyAuthorizedMinutes),
-    start: current.periodStart, end: current.periodEnd, received: current.receivedDate ?? "", source: current.sourceReference ?? "",
+    start: renewal ? addDays(current.periodEnd, 1) : current.periodStart, end: renewal ? addDays(current.periodEnd, 365) : current.periodEnd, received: renewal ? "" : (current.receivedDate ?? ""), source: renewal ? "" : (current.sourceReference ?? ""),
   });
   const [reason, setReason] = useState("");
   const [state, setState] = useState<{ busy: boolean; error: string | null }>({ busy: false, error: null });
@@ -245,7 +281,8 @@ function AmendForm({ current, onDone }: { current: AuthorizationVersion; onDone:
   }
   return (
     <form onSubmit={(e) => { e.preventDefault(); void submit(); }} className="mt-3 grid gap-3 rounded-xl border border-slate-200 bg-slate-50 p-3 sm:grid-cols-2">
-      <p className="text-sm text-slate-700 sm:col-span-2">An amendment creates version {current.versionNumber + 1}. Version {current.versionNumber} is kept unchanged in the history. Visits already billed are not changed automatically.</p>
+      {renewal ? <p data-testid="renewal-steps" className="text-sm text-slate-700 sm:col-span-2"><strong>Renewal.</strong> Step 1: enter the new terms (the dates start the day after this authorization ends). Step 2: after you save, review every reserved shift and visit it affects on Authorization changes. Nothing that was held or scheduled is restored or released automatically; a person decides each one.</p> : null}
+      <p className="text-sm text-slate-700 sm:col-span-2">Saves version {current.versionNumber + 1}; version {current.versionNumber} stays in the history. Visits already billed are not changed.</p>
       <TermsFields t={t} set={set} idPrefix={idp} />
       <div className="sm:col-span-2"><label htmlFor={`${idp}-reason`} className="block text-sm font-medium text-slate-700">Reason for the amendment</label><input id={`${idp}-reason`} value={reason} maxLength={500} onChange={(e) => { setReason(e.target.value); key.current = newIdempotencyKey(); }} className={inputClass} /></div>
       {state.error ? <p role="alert" className="text-sm text-red-700 sm:col-span-2">{state.error}</p> : null}
@@ -261,23 +298,32 @@ const IMPACT_LABEL: Record<string, string> = {
 
 function LineageCard({ versions, canUpdate, showRate }: { versions: AuthorizationVersion[]; canUpdate: boolean; showRate: boolean }) {
   const head = versions[0]!;
-  const [amending, setAmending] = useState(false);
+  const [amending, setAmending] = useState<false | "amend" | "renew">(false);
   const [result, setResult] = useState<AmendResult | null>(null);
-  const expired = head.periodEnd < new Date().toISOString().slice(0, 10);
+  const todayIso = new Date().toISOString().slice(0, 10);
+  const expired = head.periodEnd < todayIso;
+  const endingSoon = !expired && head.periodEnd <= addDays(todayIso, 30);
   return (
-    <li className="rounded-xl border border-slate-200 bg-white p-3">
-      <div className="flex flex-wrap items-center justify-between gap-2">
+    <li className="rounded-lg border border-slate-200 bg-og-card px-3 py-2">
+      <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
         <p className="font-semibold text-slate-950">{head.serviceName} <span className="font-normal text-slate-500">({head.serviceCode})</span></p>
         <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${expired ? "bg-slate-200 text-slate-800" : "bg-emerald-100 text-emerald-900"}`}>{expired ? "Ended" : "Current"} · version {head.versionNumber}</span>
+        <span className="flex-1" />
+        {canUpdate && head.isCurrent && !amending ? <button type="button" className={`${actionBtn} md:min-h-7 md:py-0`} onClick={() => { setAmending("amend"); setResult(null); }}>Amend</button> : null}
+        {canUpdate && head.isCurrent && !amending && (expired || endingSoon) ? <button type="button" data-testid="renew-authorization" className={`${actionBtnPrimary} md:min-h-7 md:py-0`} onClick={() => { setAmending("renew"); setResult(null); }}>Renew</button> : null}
       </div>
-      <p className="mt-1 text-sm text-slate-800">{formatDuration(head.monthlyAuthorizedMinutes)} per month · {fmtDate(head.periodStart)} to {fmtDate(head.periodEnd)}</p>
-      <p className="text-sm text-slate-600">{head.payer}{head.authorizationNumber ? ` · No. ${head.authorizationNumber}` : ""}{showRate && head.hourlyRateCents !== null ? ` · ${formatRate(head.hourlyRateCents)}` : ""}</p>
+      <p className="text-sm text-slate-800">{formatDuration(head.monthlyAuthorizedMinutes)} per month · {fmtDate(head.periodStart)} to {fmtDate(head.periodEnd)} <span className="text-slate-600">· {head.payer}{head.authorizationNumber ? ` · No. ${head.authorizationNumber}` : ""}{showRate && head.hourlyRateCents !== null ? ` · ${formatRate(head.hourlyRateCents)}` : ""}</span></p>
       {head.versionNumber > 1 && head.changeReason ? <p className="text-xs text-slate-500">Latest change: {head.changeReason}{head.createdByName ? ` (${head.createdByName})` : ""}</p> : null}
-      {canUpdate && head.isCurrent && !amending ? <button type="button" className="mt-2 text-sm font-medium text-slate-800 underline" onClick={() => { setAmending(true); setResult(null); }}>Amend</button> : null}
-      {amending ? <AmendForm current={head} onDone={(r) => { setAmending(false); setResult(r); }} /> : null}
+      {amending ? <AmendForm current={head} renewal={amending === "renew"} onDone={(r) => { setAmending(false); setResult(r); }} /> : null}
       {result ? (
         <div role="status" className="mt-2 rounded-lg bg-emerald-50 p-2 text-sm text-emerald-900">
           Saved as version {result.newVersionNumber}.{" "}
+          {(result.affectedShifts?.length ?? 0) > 0 ? (
+            <span data-testid="amend-affected-shifts" className="block">
+              {result.affectedShifts!.length} reserved shift{result.affectedShifts!.length === 1 ? "" : "s"} no longer fit the new terms ({result.affectedShifts!.map((x) => `${fmtDate(x.serviceDate)} · ${formatDuration(x.reservedMinutes)}${x.impact === "reserved_shift_outside_period" ? " (outside the period)" : ""}`).join("; ")}).
+              Nothing was cancelled or released. <Link className="underline" to="/authorization-impacts">Review and acknowledge</Link>.
+            </span>
+          ) : null}
           {result.affectedVisits.length === 0 ? "No existing visits need review." : (
             <>
               {result.affectedVisits.length} visit{result.affectedVisits.length === 1 ? "" : "s"} to review:
@@ -288,7 +334,7 @@ function LineageCard({ versions, canUpdate, showRate }: { versions: Authorizatio
       ) : null}
       {versions.length > 1 ? (
         <details className="mt-2">
-          <summary className="cursor-pointer text-sm text-slate-700">History ({versions.length - 1} earlier version{versions.length === 2 ? "" : "s"})</summary>
+          <summary className="inline-flex min-h-6 cursor-pointer items-center [@media(pointer:coarse)]:min-h-[44px] text-sm text-slate-700">History ({versions.length - 1} earlier version{versions.length === 2 ? "" : "s"})</summary>
           <ul className="mt-1 space-y-1">
             {versions.slice(1).map((v) => (
               <li key={v.authorizationId} className="text-sm text-slate-600">
@@ -308,48 +354,68 @@ function AuthorizationsCard({ clientId }: { clientId: string }) {
   const canUpdate = hasPermission("authorizations.update");
   const showRate = hasPermission("billing.read");
   const versions = useClientAuthorizations(clientId);
-  const [month, setMonth] = useState(thisMonth());
+  const { tz } = useAgencyClock();
+  const [month, setMonth] = useState(() => agencyMonth(tz));
   const balances = useMonthlyBalances(clientId, `${month}-01`);
   const [adding, setAdding] = useState(false);
   const lineages = groupByLineage(versions.data ?? []);
+  const rows = balances.data ?? [];
+  // 0079: Hours left is per authorization and signed (negative = Over limit); the server's figure, with the older field as the fallback.
+  const leftOf = (b: (typeof rows)[number]) => b.hoursLeftMinutes ?? b.remainingMinutes;
+  const worst = rows.some((b) => b.authorizationTier === "critical" || leftOf(b) < 0) ? "critical" : rows.some((b) => b.authorizationTier === "near_limit") ? "near_limit" : null;
+  const none = versions.data !== undefined && lineages.length === 0;
+  const attention = none || worst !== null || rows.some((b) => b.expiringSoon);
+  const left = (b: (typeof rows)[number]) => hoursLeftLine(leftOf(b)).text;
   return (
-    <Card className="p-4">
+    <SummarySection title="Authorizations" defaultOpen hideSummaryWhenOpen
+      status={none ? <span className="rounded-full bg-red-100 px-2 py-0.5 text-xs font-semibold text-red-800">None</span> : worst ? <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${worst === "critical" ? "bg-red-100 text-red-800" : "bg-amber-100 text-amber-900"}`}>{worst === "critical" ? "Critical" : "Near limit"}</span> : rows.length > 0 && attention ? <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-semibold text-emerald-900">Ending soon</span> : undefined}
+      summary={rows.length > 0 ? rows.map((b) => `${b.serviceName}: ${left(b)}`).join(" · ") : undefined}>
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <h2 className="text-base font-semibold text-slate-950">Authorizations</h2>
-        {canUpdate ? <Button type="button" variant="secondary" onClick={() => setAdding((a) => !a)} aria-expanded={adding}>{adding ? "Close" : "Add authorization"}</Button> : null}
+        <div className="flex items-center gap-2">
+          <label htmlFor="balance-month" className="text-sm font-medium text-slate-700">Hours for month</label>
+          <input id="balance-month" type="month" value={month} onChange={(e) => setMonth(e.target.value || agencyMonth(tz))} className="rounded-lg border border-slate-200 px-2 py-1 text-sm md:min-h-8" />
+        </div>
+        {canUpdate ? <Button type="button" variant="secondary" className="md:min-h-8 md:py-0" onClick={() => setAdding((a) => !a)} aria-expanded={adding}>{adding ? "Close" : "Add authorization"}</Button> : null}
       </div>
       {adding ? <AddAuthorizationForm clientId={clientId} onDone={() => setAdding(false)} /> : null}
-      <div className="mt-3">
-        <label htmlFor="balance-month" className="block text-sm font-medium text-slate-700">Balance for month</label>
-        <input id="balance-month" type="month" value={month} onChange={(e) => setMonth(e.target.value || thisMonth())} className="mt-1 rounded-lg border border-slate-200 px-3 py-2 text-base" />
-      </div>
       {balances.isError ? <p role="alert" className="mt-2 text-sm text-red-700">{(balances.error as Error).message}</p> : null}
       {balances.data && balances.data.length === 0 ? <p className="mt-2 text-sm text-slate-600">No authorization covers this month.</p> : null}
       {balances.data && balances.data.length > 0 ? (
-        <div className="mt-2">
-          <ul className="space-y-2" aria-label="Authorized, used and remaining time for the month">
+        <div className="mt-1.5">
+          <ul className="space-y-1" aria-label="Authorized, used and remaining time for the month">
             {balances.data.map((b) => (
-              <li key={b.authorizationLineageId} className="rounded-lg border border-slate-200 p-3">
-                <p className="text-sm font-semibold text-slate-900">{b.serviceName}</p>
-                <dl className="mt-2 grid grid-cols-2 gap-x-4 gap-y-1 text-sm sm:grid-cols-4">
-                  <div><dt className="text-xs text-slate-600">Authorized</dt><dd>{formatDuration(b.authorizedMinutes)}</dd></div>
-                  <div><dt className="text-xs text-slate-600">Billable</dt><dd>{formatDuration(b.billableMinutes)}</dd></div>
-                  <div><dt className="text-xs text-slate-600">In review</dt><dd>{formatDuration(b.reviewMinutes)}</dd></div>
-                  <div><dt className="text-xs text-slate-600">Hours left</dt><dd className={`font-semibold ${b.remainingMinutes <= 0 ? "text-red-700" : "text-slate-900"}`}>{formatDuration(b.remainingMinutes)}</dd></div>
-                </dl>
+              <li key={b.authorizationLineageId} className="flex flex-wrap items-center gap-x-4 gap-y-0.5 rounded-lg border border-slate-200 px-3 py-1.5">
+                <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
+                  <p className="text-sm font-semibold text-slate-900">{b.serviceName}</p>
+                  {b.authorizationTier ? (
+                    <span data-testid="authorization-tier" className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-semibold ${b.authorizationTier === "critical" ? "bg-red-100 text-red-800" : b.authorizationTier === "near_limit" ? "bg-amber-100 text-amber-900" : "bg-emerald-100 text-emerald-900"}`}>
+                      <span aria-hidden="true">{TIER_SYMBOL[b.authorizationTier]}</span>
+                      {TIER_LABEL[b.authorizationTier]}
+                    </span>
+                  ) : null}
+                  {b.expiringSoon ? (
+                    <span data-testid="authorization-expiry" className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-xs font-semibold text-amber-900">
+                      <span aria-hidden="true">▲</span>Ends in {b.daysUntilExpiry} {b.daysUntilExpiry === 1 ? "day" : "days"}
+                    </span>
+                  ) : null}
+                </div>
+                <p className="flex flex-wrap gap-x-4 gap-y-0 text-sm">
+                  <span>Authorized: {formatHours(b.authorizedMinutes)}</span>
+                  <span data-testid="hours-left-figure" className={`font-semibold ${leftOf(b) <= 0 ? "text-red-700" : "text-slate-900"}`}>{hoursLeftLine(leftOf(b)).label}: {hoursLeftLine(leftOf(b)).value}</span>
+                </p>
+                <div className="ml-auto"><HoursBreakdown row={b} /></div>
               </li>
             ))}
           </ul>
-          <p className="mt-1 text-xs text-slate-500">Hours left = authorized − billable − time already scheduled (same calculation as the reports).</p>
         </div>
       ) : null}
       {versions.isLoading ? <p className="mt-3 text-sm text-slate-500">Loading…</p> : null}
       {versions.isError ? <p role="alert" className="mt-3 text-sm text-red-700">{(versions.error as Error).message}</p> : null}
-      {versions.data && lineages.length === 0 ? <p className="mt-3 text-sm font-semibold text-red-700">No authorization yet. Visits cannot be scheduled or verified for this client until one is added.</p> : null}
+      {none ? <CompactAlert tone="danger" className="mt-2" summary="No authorization yet">Visits cannot be scheduled or verified until one is added.</CompactAlert> : null}
       <ul className="mt-3 space-y-2">
         {lineages.map((l) => <LineageCard key={l[0]!.lineageId} versions={l} canUpdate={canUpdate} showRate={showRate} />)}
       </ul>
-    </Card>
+    </SummarySection>
   );
 }
 
@@ -365,19 +431,27 @@ export function ClientDetailPage() {
   if (!c) return <p className="text-sm text-slate-600">Client not found. <Link to="/clients" className="underline">Back to clients</Link></p>;
   const canManage = hasPermission("clients.manage") && hasPermission("clients.names.manage");
   return (
-    <div className="max-w-4xl space-y-4">
-      <Link to="/clients" className="text-sm text-slate-700 underline">← All clients</Link>
-      <div className="flex flex-wrap items-center gap-3">
-        <h1 className="text-xl font-semibold text-slate-950">{clientName(c) ?? "Name not set"}</h1>
-        <span className="text-sm text-slate-500">{c.clientCode}</span>
+    <div className="max-w-4xl space-y-3">
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+        <Link to="/clients" className={linkClass}>← All clients</Link>
+        <h1 className="text-xl font-bold text-slate-950">{clientName(c) ?? "Name not set"}</h1>
+        {c.duplicateName ? <span className="text-sm text-slate-500" data-testid="client-code-shared-name">{c.clientCode}</span> : null}
         <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${STATUS_BADGE[c.status]}`}>{STATUS_LABEL[c.status]}</span>
+        <span className="flex-1" />
+        {hasPermission("care_requests.read") ? <Link to="/schedule/shift-requests" className={linkClass}>Care requests</Link> : null}
+        <ClientQuickActions clientId={c.clientId} canEdit={canManage} />
       </div>
-      <AuthorizationsCard clientId={c.clientId} />
-      <AssignmentsCard clientId={c.clientId} />
+      <ClientAlertsCard clientId={c.clientId} />
+      <div id="authorizations"><AuthorizationsCard clientId={c.clientId} /></div>
+      <NextVisitsCard clientId={c.clientId} />
+      <CaregiverSummary clientId={c.clientId}><AssignmentsCard clientId={c.clientId} /></CaregiverSummary>
+      <div id="readiness"><ReadinessCard clientId={c.clientId} /></div>
+      <div id="documents"><ClientDocumentsCard clientId={c.clientId} /></div>
       <DetailsCard c={c} canManage={canManage} />
       {hasPermission("matching.read") ? <ClientExperience clientId={c.clientId} /> : null}
       {hasPermission("matching.manage") ? <MatchingLocation clientId={c.clientId} /> : null}
       {canManage ? <StatusCard c={c} /> : null}
+      <div id="history"><ClientHistoryCard clientId={c.clientId} /></div>
     </div>
   );
 }

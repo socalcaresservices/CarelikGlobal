@@ -18,7 +18,8 @@ export interface ContinuityPack {
   outage_numbers: { first: number; last: number };
   shifts: Array<{ local_date: string; start: string; end: string; client_code: string; client_label: string | null; client_name: string | null; service: string | null; caregiver: string | null; caregiver_code: string | null; coverage: string }>;
   clients: Array<{ client_code: string; client_label: string | null; city: string | null; client_name: string | null }>;
-  authorizations: Array<{ client_code: string; client_label: string | null; service: string | null; period_start: string; period_end: string; authorized_minutes: number; reserved_minutes: number; billable_minutes: number; review_minutes: number; remaining_minutes: number }>;
+  authorizations: Array<{ client_code: string; client_label: string | null; service: string | null; period_start: string; period_end: string; authorized_minutes: number; reserved_minutes: number; billable_minutes: number; review_minutes: number; remaining_minutes: number;
+    hours_billable_minutes?: number; hours_rounding_minutes?: number; hours_pending_minutes?: number; hours_reserved_minutes?: number; hours_left_minutes?: number; hours_over_limit_minutes?: number; hours_worked_not_billable_minutes?: number }>;
   caregivers: Array<{ caregiver_code: string; name: string; status: string }>;
 }
 export interface ContinuityStatus { lastDownloadedAt: string | null; lastDownloadedBy: string | null; hoursSince: number | string | null; downloadsLast7Days: number; outageNumbersIssued: number }
@@ -26,6 +27,7 @@ export interface ContinuityStatus { lastDownloadedAt: string | null; lastDownloa
 export const STALE_AFTER_HOURS = 24;
 const esc = (v: unknown) => String(v ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]!);
 const hrs = (m: number) => `${Math.floor(m / 60)} h ${String(m % 60).padStart(2, "0")} min`;
+const signedHrs = (m: number) => (m === 0 ? "None" : `${m < 0 ? "−" : "+"}${hrs(Math.abs(m))}`);
 export const outageNumber = (n: number) => `OUT-${String(n).padStart(6, "0")}`;
 
 export function continuityFileName(pack: Pick<ContinuityPack, "data_as_of" | "timezone">): string {
@@ -69,8 +71,8 @@ Keep it only on agency-approved encrypted storage; delete or shred it when a new
 ${table(["Date", "Time", "Client", "Service", "Caregiver", "Coverage"], pack.shifts.map((s) => [formatDateOnly(s.local_date), `${formatWallClock(s.start)}–${formatWallClock(s.end)}`, client(s.client_code, s.client_label, s.client_name), s.service ?? "", s.caregiver ? `${s.caregiver} (${s.caregiver_code ?? ""})` : "OPEN", s.coverage === "needs_coverage" ? "NEEDS COVERAGE" : s.coverage]))}
 
 <h2>Authorized hours this month</h2>
-<p class="note">"Hours left" already subtracts approved-eligible (billable) time and time reserved by scheduled shifts. Hours worked during an outage are not included until entered in Ogevia.</p>
-${table(["Client", "Service", "Period", "Authorized", "Reserved", "Billable so far", "In review", "Hours left"], pack.authorizations.map((a) => [client(a.client_code, a.client_label, nameByCode.get(a.client_code) ?? null), a.service ?? "", `${formatDateOnly(a.period_start)} to ${formatDateOnly(a.period_end)}`, hrs(a.authorized_minutes), hrs(a.reserved_minutes), hrs(a.billable_minutes), hrs(a.review_minutes), hrs(a.remaining_minutes)]))}
+<p class="note">Authorized = Billable + Rounding + Pending + Reserved + Hours left, worked out for each authorization on its own. If Hours left is below zero the amount is shown as Over limit and is not offset against any other authorization. Billable is confirmed time; Pending is worked time not yet billable (awaiting confirmation or in review) and the shift time held for it; Reserved is scheduled time not yet delivered. Hours worked during an outage are not included until entered in Ogevia.</p>
+${table(["Client", "Service", "Period", "Authorized", "Billable", "Rounding", "Pending", "Reserved", "Hours left", "Over limit"], pack.authorizations.map((a) => [client(a.client_code, a.client_label, nameByCode.get(a.client_code) ?? null), a.service ?? "", `${formatDateOnly(a.period_start)} to ${formatDateOnly(a.period_end)}`, hrs(a.authorized_minutes), hrs(a.hours_billable_minutes ?? a.billable_minutes), signedHrs(a.hours_rounding_minutes ?? 0), hrs(a.hours_pending_minutes ?? a.review_minutes), hrs(a.hours_reserved_minutes ?? a.reserved_minutes), hrs(Math.max(a.hours_left_minutes ?? a.remaining_minutes, 0)), (a.hours_over_limit_minutes ?? Math.max(-a.remaining_minutes, 0)) > 0 ? hrs(a.hours_over_limit_minutes ?? Math.max(-a.remaining_minutes, 0)) : "None"]))}
 
 <h2>Active clients</h2>
 ${table(["Client code", "Label", "City", "Name"], pack.clients.map((c) => [c.client_code, c.client_label ?? "", c.city ?? "", c.client_name ?? ""]))}

@@ -27,7 +27,7 @@ const SUB = "11111111-2222-4333-8444-555555555555";
 type Call = { method: string; path: string; headers: Record<string, string>; body: Record<string, unknown> | null };
 type FakeVisit = Record<string, unknown>;
 
-function fakeApi(role: "caregiver" | "manager" | "organization_owner", opts: { displayName?: string | null; requiredTb?: boolean } = {}) {
+function fakeApi(role: "caregiver" | "manager" | "organization_owner", opts: { displayName?: string | null; requiredTb?: boolean; uploadedByMe?: boolean } = {}) {
   const calls: Call[] = [];
   let visit: FakeVisit | null = null;
   let approvals: Record<string, unknown>[] = [];
@@ -56,6 +56,12 @@ function fakeApi(role: "caregiver" | "manager" | "organization_owner", opts: { d
         return json(200, { branding: { organizationId: ORG, displayName: body?.["displayName"], accentColor: body?.["accentColor"] } });
       case "GET /v1/attention":
         return json(200, { summary: role === "caregiver" ? null : { missingTimeOut: 1, notConfirmed: 0, needsReview: 2, billingReadyUnapproved: 1, uncoveredShifts: 0, documentsBlocking: 1, documentsToReview: 1, documentsExpiring: 1, total: 5 } });
+      case "GET /v1/attention/overview":
+        return json(200, { overview: { asOf: "2026-10-18T12:00:00Z", urgentWindowHours: 48,
+          urgent: { items: [{ kind: "shift", id: "s1", startsAt: "2026-10-18T20:00:00Z", endsAt: "2026-10-18T23:00:00Z", reasons: ["uncovered_open"], severity: "red", inProgress: false, caregiverRecordId: null, caregiverCode: null, clientCode: "C-104", serviceCode: "862" }], itemCount: 1, issueCount: 1, shifts: 1, visits: 0 },
+          upcoming: { count: 2, nextStartsAt: "2026-10-21T20:00:00Z", shifts: [] },
+          documents: { overdue: 1, dueSoon: 1, awaitingReview: 1, rejected: 0 },
+          visitReview: { visitsNeedingAttention: 3, awaitingConfirmation: 0, needsReview: 2, lateResponses: 0, readyForApproval: role === "organization_owner" ? 1 : null, reviewIssues: 2, awaitingResponse: 0 } } });
       case "GET /v1/reports/utilisation":
         return json(200, { services: role === "caregiver" ? [] : [{ serviceId: SERVICE, serviceCode: "862", serviceName: "Respite Care", clientCount: 1, authorizedMinutes: 6000, scheduledMinutes: 240, workedMinutes: 1590, billableMinutes: 1470, reviewMinutes: 120, approvedMinutes: 600, remainingMinutes: 4530, lineagesWithoutRate: 0, billableValueCents: canMoney ? 73500 : null, approvedValueCents: canMoney ? 30000 : null, unusedValueCents: canMoney ? 226500 : null }] });
       case "GET /v1/visits/active":
@@ -86,7 +92,7 @@ function fakeApi(role: "caregiver" | "manager" | "organization_owner", opts: { d
       case "GET /v1/documents":
         return json(200, { documents: [{ documentId: DOC, caregiverRecordId: "r1", personName: "Pilot Caregiver A", documentTypeId: "t1", documentTypeName: "TB test", requiresExpiry: true, dueOn: "2026-10-20", requestedAt: "2026-10-01T00:00:00Z",
           latestVersionId: docStatus === "requested" ? null : "eeeeeeee-0000-4000-8000-00000000d0c2", latestVersionNumber: docStatus === "requested" ? null : 1, latestContentType: null, latestUploadedAt: docStatus === "requested" ? null : "2026-10-02T00:00:00Z",
-          latestReviewStatus: docStatus === "requested" ? null : "awaiting_review", latestRejectionReason: null, issuedOn: null, expiresOn: null, verifiedExpiresOn: null, displayStatus: docStatus, daysUntil: 16 }] });
+          latestReviewStatus: docStatus === "requested" ? null : "awaiting_review", latestRejectionReason: null, latestUploadedByMe: !!opts.uploadedByMe, issuedOn: null, expiresOn: null, verifiedExpiresOn: null, displayStatus: docStatus, daysUntil: 16 }] });
       case "GET /v1/document-types":
         return json(200, { types: [{ documentTypeId: "t1", name: "TB test", requiresExpiry: true, isActive: true }] });
       case "GET /v1/document-requirements":
@@ -129,7 +135,7 @@ function fakeAuth(signedIn = true) {
   };
 }
 
-function renderAws(path: string, role: "caregiver" | "manager" | "organization_owner", signedIn = true, opts: { displayName?: string | null; requiredTb?: boolean } = {}) {
+function renderAws(path: string, role: "caregiver" | "manager" | "organization_owner", signedIn = true, opts: { displayName?: string | null; requiredTb?: boolean; uploadedByMe?: boolean } = {}) {
   const api = fakeApi(role, opts);
   const auth = fakeAuth(signedIn);
   const client = createAwsApiClient({ baseUrl: "https://api.example.test", getAccessToken: () => auth.getAccessToken(), fetch: api.fetchImpl as never });
@@ -218,30 +224,31 @@ describe("AWS build: manager review and billing-review data", () => {
     expect(await screen.findByText("MANAGER VIEW")).toBeInTheDocument();
     expect(await screen.findByText("Morgan Manager")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Sign out" })).toBeInTheDocument();
-    const attention = await screen.findByRole("link", { name: "Action needed: 6" });
-    // The badge opens Home, whose banner and list use the same summary and the same total
-    // (fixture: 1 + 0 + 2 + 0 + 1 + 1 + 1 ready for approval = 6; the expiring document is a reminder).
-    expect(attention.getAttribute("href")).toBe("/");
-    expect(attention.className).toMatch(/font-bold/);
-    expect(attention.className).toMatch(/uppercase/);
-    expect(attention.className).toMatch(/text-red-700/);
-    // 1590 of 6000 minutes worked = 26.5 h of 100 h, 27 %.
-    expect(await screen.findByText(/26\.5 h of 100 h · 27%/)).toBeInTheDocument();
-    expect(screen.queryByText("Financial impact (Administrator only)")).not.toBeInTheDocument();
-    expect(screen.getByText(/visible to the agency Administrator only/)).toBeInTheDocument();
+    // Home shows the count once, as its first tile (the header badge is not repeated on Home); the tile opens the Needs attention now page.
+    const attention = await screen.findByTestId("stream-now");
+    expect(attention.getAttribute("href")).toBe("/attention");
+    // The uncovered shift starts 8 hours after asOf, so it is Urgent (amber); it would be Critical (red) once started.
+    expect(attention.className).toMatch(/amber/);
+    expect(attention).toHaveTextContent("1");
+    expect(screen.queryByTestId("attention-badge")).toBeNull();
+    expect(screen.getByTestId("stream-visits")).toHaveTextContent("3");
+    // 1590 of 6000 minutes worked = 26.5 h of 100 h; the table sits behind the details control.
+    expect((await screen.findAllByText("26.5 h")).length).toBeGreaterThan(0);
+    expect(screen.queryByText("Financial impact")).not.toBeInTheDocument();
     expect(screen.queryByRole("link", { name: "Settings" })).not.toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "Billing review" })).toBeInTheDocument();
-    expect(api.calls.some((c) => c.path.startsWith("/v1/attention?organizationId="))).toBe(true);
+    expect(screen.getByRole("link", { name: /^Approvals/  })).toBeInTheDocument();
+    expect(api.calls.some((c) => c.path.startsWith("/v1/attention/overview?organizationId="))).toBe(true);
   });
 
-  it("organization_owner sees ADMINISTRATOR VIEW, the financial cards with unavailable cost/margin, and Settings", async () => {
+  it("organization_owner sees ADMINISTRATOR VIEW, the compact financial section without cost/margin, and Settings", async () => {
     renderAws("/", "organization_owner");
     expect(await screen.findByText("ADMINISTRATOR VIEW")).toBeInTheDocument();
     expect(screen.queryByText("OWNER VIEW")).not.toBeInTheDocument();
-    expect(await screen.findByText("Financial impact (Administrator only)")).toBeInTheDocument();
+    expect(await screen.findByText("Financial impact")).toBeInTheDocument();
     expect(screen.getByText("$735")).toBeInTheDocument();
-    expect(screen.getByText("Caregiver cost and margin")).toBeInTheDocument();
-    expect(screen.getByText(/no caregiver pay data/)).toBeInTheDocument();
+    // Caregiver cost and margin are not displayed as a value or as an "Unavailable" card; the reason sits in the definitions.
+    expect(screen.queryByText("Unavailable")).not.toBeInTheDocument();
+    expect(screen.queryByText(/Caregiver cost and margin$/)).not.toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Settings" })).toBeInTheDocument();
   });
 
@@ -273,8 +280,9 @@ describe("AWS build: manager review and billing-review data", () => {
     // Client name first, short code beneath; caregiver; service name and code; MM/DD/YYYY with AM/PM; readable durations.
     // The name also appears as a Client filter option, so match every occurrence.
     expect((await screen.findAllByText("Synthetic Person")).length).toBeGreaterThan(0);
-    expect(screen.getAllByText("C-104").length).toBeGreaterThan(0);
-    expect(screen.getAllByText("Awaiting approval").length).toBeGreaterThan(0);
+    expect(screen.queryByText("C-104")).toBeNull(); // the code appears only where the server flags a shared name
+    expect(screen.getAllByText("Ready for Review").length).toBeGreaterThan(0);
+    expect(screen.queryByText("Awaiting approval")).toBeNull();
     expect(screen.queryByText("Billing ready")).toBeNull();
     expect(screen.getAllByText(/Synthetic Caregiver/).length).toBeGreaterThan(0);
     expect(screen.getAllByText(/Respite \(862\)/).length).toBeGreaterThan(0);
@@ -283,7 +291,7 @@ describe("AWS build: manager review and billing-review data", () => {
     expect(screen.getAllByText(/2 h \(2\.00 hr\)/).length).toBeGreaterThan(0);
     // The long visit reference sits in the expandable details, with the schedule basis.
     expect(screen.getAllByText("Visit details").length).toBeGreaterThan(0);
-    expect(screen.getAllByText("Flexible visit — no shift required").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Unscheduled").length).toBeGreaterThan(0);
     expect(screen.getByText(/approval is not submission/)).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "View signature" }));
     const img = await screen.findByAltText("Client signature for the selected visit");
@@ -302,11 +310,11 @@ describe("AWS build: manager review and billing-review data", () => {
     expect(api.calls.some((c) => c.method === "POST" && c.path.endsWith("/billing-approval"))).toBe(false);
     fireEvent.change(minutes, { target: { value: "110" } });
     fireEvent.click(screen.getByRole("button", { name: "Approve for billing" }));
-    expect(await screen.findByText(/approved for billing \(1\.83 h\)|approved for billing/)).toBeInTheDocument();
+    expect(await screen.findByText(/Approved for Billing \(1\.83 h\)\. It has not been submitted or paid/)).toBeInTheDocument();
     const post = api.calls.find((c) => c.method === "POST" && c.path === `/v1/visits/${VISIT}/billing-approval`)!;
     expect(post.body).toEqual({ approvedMinutes: 110, notes: null });
     expect(post.headers["idempotency-key"]).toMatch(/^[0-9a-f-]{36}$/);
-    expect(await screen.findByText(/by Manager A · not submitted/)).toBeInTheDocument();
+    expect(await screen.findByText(/by Manager A · not submitted or paid/)).toBeInTheDocument();
     // No owner-only Amount column for a manager.
     expect(screen.queryByRole("columnheader", { name: "Amount" })).not.toBeInTheDocument();
   });
@@ -318,12 +326,14 @@ describe("AWS build: manager review and billing-review data", () => {
     fireEvent.click(screen.getByRole("button", { name: "Upload" }));
     const file = new File([new Uint8Array([0x25, 0x50, 0x44, 0x46, 0x2d, 0x31])], "tb.pdf", { type: "application/pdf" });
     fireEvent.change(screen.getByLabelText(/Photo or PDF/), { target: { files: [file] } });
-    fireEvent.click(screen.getByRole("button", { name: "Upload" }));
+    fireEvent.click(screen.getByRole("button", { name: "Save document" }));
     expect(await screen.findByRole("alert")).toHaveTextContent("Enter the expiry date");
     fireEvent.change(screen.getByLabelText(/Expiry date/), { target: { value: "2027-10-01" } });
-    fireEvent.click(screen.getByRole("button", { name: "Upload" }));
-    await waitFor(() => expect(screen.queryByRole("button", { name: /Uploading/ })).not.toBeInTheDocument());
-    expect(await screen.findByText("Uploaded – awaiting review")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Save document" }));
+    await waitFor(() => expect(screen.queryByRole("button", { name: /Saving/ })).not.toBeInTheDocument());
+    // A clear saved confirmation, not silence (the file is stored and recorded by the server before this shows).
+    expect(await screen.findByTestId("document-saved")).toHaveTextContent(/^Saved\./);
+    expect(await screen.findByText("Awaiting review")).toBeInTheDocument();
     const post = api.calls.find((c) => c.method === "POST" && c.path.endsWith("/versions"))!;
     expect(post.body).toMatchObject({ organizationId: ORG, contentType: "application/pdf", expiresOn: "2027-10-01", fileBase64: "JVBERi0x" });
     expect(post.headers["idempotency-key"]).toBeTruthy();
@@ -331,26 +341,52 @@ describe("AWS build: manager review and billing-review data", () => {
 
   it("manager: Documents lists people's requests; rejecting needs a reason; Home shows document counts", async () => {
     const { api } = renderAws("/", "manager");
-    expect(await screen.findByText("Documents to Review")).toBeInTheDocument();
+    expect(await screen.findByTestId("stream-documents")).toHaveTextContent("1 overdue");
     fireEvent.click(screen.getByRole("link", { name: "Documents" }));
-    expect(await screen.findByRole("heading", { name: "Documents" })).toBeInTheDocument();
-    const card = (await screen.findByText("TB test", { selector: "p" })).closest("li")!;
+    expect(await screen.findByRole("heading", { name: "Documents & compliance" })).toBeInTheDocument();
+    const card = (await screen.findByText("TB test", { selector: "p" })).closest("tbody")!;
     expect(within(card).getByText("Pilot Caregiver A")).toBeInTheDocument();
-    expect(within(card).getByText("Uploaded – awaiting review")).toBeInTheDocument();
+    expect(within(card).getByText("Awaiting review")).toBeInTheDocument();
+    // Approve and Reject are visible on the row (no "Review" step); Reject asks for the reason, Approve saves at once.
+    expect(within(card).queryByRole("button", { name: "Review" })).not.toBeInTheDocument();
     fireEvent.click(await within(card).findByRole("button", { name: "Reject" }));
+    fireEvent.click(within(card).getByRole("button", { name: "Save rejection" }));
     expect(await within(card).findByRole("alert")).toHaveTextContent("Enter why it is rejected");
     expect(api.calls.some((c) => c.method === "POST" && c.path.endsWith("/review"))).toBe(false);
-    fireEvent.click(within(card).getByRole("button", { name: "Verify" }));
+    fireEvent.click(within(card).getByRole("button", { name: "Cancel" }));
+    fireEvent.click(within(card).getByRole("button", { name: "Approve" }));
     await waitFor(() => expect(api.calls.some((c) => c.method === "POST" && c.path.endsWith("/review"))).toBe(true));
+    expect(api.calls.find((c) => c.method === "POST" && c.path.endsWith("/review"))!.body).toMatchObject({ decision: "verified" });
+    expect(await within(card).findByTestId("document-saved")).toHaveTextContent(/^Saved\. Approved/);
     expect(screen.getByRole("button", { name: "Request document" })).toBeInTheDocument();
     expect(api.calls.some((c) => c.path.startsWith("/v1/documents/people"))).toBe(true);
+  });
+
+  it("rejecting saves the reason and shows it was saved; the decision goes to the server once", async () => {
+    const { api } = renderAws("/documents", "manager");
+    const card = (await screen.findByText("TB test", { selector: "p" })).closest("tbody")!;
+    fireEvent.click(await within(card).findByRole("button", { name: "Reject" }));
+    fireEvent.change(within(card).getByLabelText(/Reason for rejecting/), { target: { value: "Photo is blurry; upload a clear one (synthetic)" } });
+    fireEvent.click(within(card).getByRole("button", { name: "Save rejection" }));
+    expect(await within(card).findByTestId("document-saved")).toHaveTextContent(/^Saved\. Rejected/);
+    const posts = api.calls.filter((c) => c.method === "POST" && c.path.endsWith("/review"));
+    expect(posts).toHaveLength(1);
+    expect(posts[0]!.body).toEqual({ decision: "rejected", reason: "Photo is blurry; upload a clear one (synthetic)" });
+  });
+
+  it("self-approval is prevented: a manager who uploaded the version without the self-review permission sees no Approve or Reject, and is told who must review", async () => {
+    const { api } = renderAws("/documents", "manager", true, { uploadedByMe: true });
+    expect(await screen.findByText(/You uploaded this version, so the Administrator or another manager must review it/)).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Approve" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Reject" })).not.toBeInTheDocument();
+    expect(api.calls.some((c) => c.method === "POST" && c.path.endsWith("/review"))).toBe(false);
   });
 
   it("manager cannot verify a document designated as mandatory TB", async () => {
     const { api } = renderAws("/documents", "manager", true, { requiredTb: true });
     expect(await screen.findByText(/Required CPR and TB records need Administrator verification/)).toBeInTheDocument();
     await waitFor(() => expect(api.calls.some((c) => c.path.startsWith("/v1/document-requirements"))).toBe(true));
-    expect(screen.queryByRole("button", { name: "Verify" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Approve" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Reject" })).not.toBeInTheDocument();
     expect(api.calls.some((c) => c.method === "POST" && c.path.endsWith("/review"))).toBe(false);
   });
@@ -367,7 +403,7 @@ describe("AWS build: manager review and billing-review data", () => {
     expect(await screen.findByAltText("Synthetic Care Co logo")).toBeInTheDocument();
     const table = await screen.findByRole("table", { name: "Visit details" });
     expect(await within(table).findByText("Synthetic Person")).toBeInTheDocument();
-    expect(within(table).getByText("C-104")).toBeInTheDocument();
+    expect(within(table).queryByText("C-104")).toBeNull(); // code only beside a shared name
   });
 
   it("a caregiver sees no billing or records navigation", async () => {
@@ -375,7 +411,7 @@ describe("AWS build: manager review and billing-review data", () => {
     await screen.findByRole("heading", { name: "Today's visits" });
     expect(screen.getByText("CAREGIVER VIEW")).toBeInTheDocument();
     expect(screen.queryByRole("link", { name: /Action needed/i })).not.toBeInTheDocument();
-    expect(screen.queryByRole("link", { name: "Billing review" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "Approvals" })).not.toBeInTheDocument();
     expect(screen.queryByRole("link", { name: "Visit records" })).not.toBeInTheDocument();
   });
 });

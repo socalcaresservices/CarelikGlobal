@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   AlertTriangle,
@@ -12,6 +12,7 @@ import {
 } from "lucide-react";
 import { useAuth } from "@carelik/auth";
 import { Button, Card, StatusBadge, cn } from "@carelik/ui";
+import { caregiverDifferenceNote } from "@/lib/hours-accounting";
 import { useOrganization } from "@/providers/organization-provider";
 import { SignaturePad } from "@/components/signature-pad";
 import {
@@ -37,6 +38,9 @@ import {
   formatVisitDate,
   formatScheduledTime,
   type VisitSignerRole,
+  formatBalance,
+  caregiverLeftMinutes,
+  CAREGIVER_BALANCE_NOTE,
 } from "@/lib/service-verification";
 
 
@@ -124,10 +128,10 @@ function ClientChoiceList({
                   aria-pressed={selected}
                   onClick={() => onChoose(client.client_id)}
                   className={cn(
-                    "flex min-h-14 w-full items-center justify-between gap-3 rounded-2xl border px-4 py-3 text-left",
+                    "flex min-h-14 w-full items-center justify-between gap-3 rounded-2xl border px-4 py-2 text-left",
                     selected
                       ? "border-indigo-600 bg-indigo-50 ring-2 ring-indigo-200"
-                      : "border-slate-200 bg-white hover:border-slate-300",
+                      : "border-slate-200 bg-og-card hover:border-slate-300",
                   )}
                 >
                   <span className="min-w-0">
@@ -141,8 +145,7 @@ function ClientChoiceList({
                             client.next_scheduled_ends_at,
                           )
                         : "Not scheduled today"}
-                      {" · "}
-                      {serviceCountLabel(client.active_service_count)}
+                      {client.active_service_count === 1 ? null : ` · ${serviceCountLabel(client.active_service_count)}`}
                     </span>
                   </span>
                   {selected ? (
@@ -389,10 +392,10 @@ export function ServiceVerificationPage() {
   const authorizationMinutes = Math.round(
     Number(active?.max_monthly_hours ?? 0) * 60,
   );
-  const remainingMinutes = Math.max(
-    0,
-    authorizationMinutes - (active?.confirmed_minutes_this_month ?? 0),
-  );
+  // 0079: the server computes the balance (the same records as the office figure); the local arithmetic is only the fallback for an older server.
+  const remainingMinutes =
+    active?.left_to_record_minutes ??
+    caregiverLeftMinutes(authorizationMinutes, active?.confirmed_minutes_this_month ?? 0);
   const willExceed = !!active && projectedMinutes > authorizationMinutes;
 
   useEffect(() => {
@@ -669,7 +672,7 @@ export function ServiceVerificationPage() {
 
   if (activeVisitQuery.isError) {
     return (
-      <Card className="mx-auto max-w-md rounded-3xl p-5">
+      <Card className="mx-auto max-w-md rounded-3xl p-3">
         <BrandHeader
           agencyName={activeOrganization?.displayName ?? "SoCal Care Services"}
           logoUrl={activeOrganization?.logoUrl}
@@ -677,7 +680,7 @@ export function ServiceVerificationPage() {
         />
         <div
           role="alert"
-          className="mt-5 rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-800"
+          className="mt-3 rounded-2xl border border-red-200 bg-red-50 p-3 text-sm text-red-800"
         >
           <p className="font-semibold">
             The sign-in sheet could not safely check for an open visit.
@@ -702,8 +705,8 @@ export function ServiceVerificationPage() {
 
   return (
     <div className="mx-auto max-w-md pb-20">
-      <Card className="overflow-hidden rounded-3xl border-slate-200 p-5 shadow-sm sm:p-6">
-        <div className="space-y-5">
+      <Card className="overflow-hidden rounded-3xl border-slate-200 p-3 shadow-sm sm:p-3">
+        <div className="space-y-4">
           <BrandHeader
             agencyName={
               activeOrganization?.displayName ?? "SoCal Care Services"
@@ -716,7 +719,7 @@ export function ServiceVerificationPage() {
           {error ? (
             <div
               role="alert"
-              className="rounded-2xl border border-red-200 bg-red-50 p-4 text-sm font-medium text-red-800"
+              className="rounded-2xl border border-red-200 bg-red-50 p-3 text-sm font-medium text-red-800"
             >
               {error}
             </div>
@@ -730,7 +733,7 @@ export function ServiceVerificationPage() {
 
           {phase === "select" ? (
             <section
-              className="space-y-5"
+              className="space-y-4"
               aria-labelledby="select-visit-heading"
             >
               <div>
@@ -752,14 +755,14 @@ export function ServiceVerificationPage() {
               {clientsQuery.isError ? (
                 <p
                   role="alert"
-                  className="rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-800"
+                  className="rounded-2xl border border-red-200 bg-red-50 p-3 text-sm text-red-800"
                 >
                   Your visits could not be loaded. Refresh the page or contact
                   your agency manager.
                 </p>
               ) : null}
               {clientsQuery.isSuccess && clientsQuery.data.length === 0 ? (
-                <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
+                <div className="rounded-2xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
                   <p className="font-semibold">
                     No assigned clients are available.
                   </p>
@@ -792,7 +795,7 @@ export function ServiceVerificationPage() {
 
               {selectedClient ? (
                 <div
-                  className="rounded-3xl border border-indigo-100 bg-gradient-to-br from-indigo-50 via-white to-sky-50 p-4 text-sm text-indigo-950 shadow-sm"
+                  className="rounded-3xl border border-indigo-100 bg-gradient-to-br from-indigo-50 via-white to-sky-50 p-3 text-sm text-indigo-950 shadow-sm"
                   aria-label="Visit details"
                   role="group"
                 >
@@ -834,7 +837,7 @@ export function ServiceVerificationPage() {
                   ) : null}
 
                   {(servicesQuery.data?.length ?? 0) > 1 ? (
-                    <label className="mt-4 block text-sm font-semibold text-slate-700">
+                    <label className="mt-3 block text-sm font-semibold text-slate-700">
                       Service for this visit
                       <span className="mt-1 block text-xs font-normal text-slate-500">
                         {scheduledService
@@ -847,7 +850,7 @@ export function ServiceVerificationPage() {
                         onChange={(event) =>
                           setSelectedServiceId(event.target.value)
                         }
-                        className="mt-2 min-h-14 w-full rounded-xl border border-slate-300 bg-white px-3 text-base text-slate-950"
+                        className="mt-2 min-h-14 w-full rounded-xl border border-slate-300 bg-og-card px-3 text-base text-slate-950"
                       >
                         <option value="">Choose a service</option>
                         {(servicesQuery.data ?? []).map((service) => (
@@ -875,7 +878,8 @@ export function ServiceVerificationPage() {
                   ) : null}
 
                   {selectedService ? (
-                    <div className="mt-4 grid grid-cols-3 gap-2 text-center">
+                    <>
+                    <div className="mt-3 grid grid-cols-3 gap-2 text-center">
                       <div className="rounded-2xl border border-indigo-100 bg-indigo-100/70 p-2 text-indigo-950">
                         <p className="text-base font-bold">
                           {formatDuration(
@@ -892,23 +896,32 @@ export function ServiceVerificationPage() {
                             Number(selectedService.hours_used_this_month) * 60,
                           )}
                         </p>
-                        <p className="text-[11px] text-indigo-800">Serviced</p>
+                        <p className="text-[11px] text-indigo-800">Confirmed</p>
                       </div>
                       <div className="rounded-2xl border border-emerald-100 bg-emerald-100/80 p-2 text-emerald-950">
                         <p className="text-base font-bold">
-                          {formatDuration(
-                            Math.max(
-                              0,
-                              Number(
-                                selectedService.max_monthly_hours -
-                                  selectedService.hours_used_this_month,
+                          {formatBalance(
+                            selectedService.left_to_record_minutes ??
+                              caregiverLeftMinutes(
+                                Number(selectedService.max_monthly_hours) * 60,
+                                Number(selectedService.hours_used_this_month) * 60,
                               ),
-                            ) * 60,
                           )}
                         </p>
-                        <p className="text-[11px] text-indigo-800">Remaining</p>
+                        <p className="text-[11px] text-indigo-800">Left to record</p>
                       </div>
                     </div>
+                    <p className="mt-2 text-center text-[11px] text-slate-600" data-testid="caregiver-balance-note">
+                      {selectedService.hours_left_minutes !== undefined && selectedService.hours_left_minutes !== null
+                        ? caregiverDifferenceNote({
+                            leftToRecordMinutes: selectedService.left_to_record_minutes ?? 0,
+                            hoursLeftMinutes: selectedService.hours_left_minutes,
+                            officePendingMinutes: selectedService.office_pending_minutes ?? 0,
+                            officeReservedMinutes: selectedService.office_reserved_minutes ?? 0,
+                          })
+                        : CAREGIVER_BALANCE_NOTE}
+                    </p>
+                    </>
                   ) : null}
                 </div>
               ) : null}
@@ -916,7 +929,7 @@ export function ServiceVerificationPage() {
               {servicesQuery.isError ? (
                 <p
                   role="alert"
-                  className="rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-800"
+                  className="rounded-2xl border border-red-200 bg-red-50 p-3 text-sm text-red-800"
                 >
                   Services could not be loaded. Contact your agency manager.
                 </p>
@@ -924,7 +937,7 @@ export function ServiceVerificationPage() {
               {selectedClient &&
               servicesQuery.isSuccess &&
               servicesQuery.data.length === 0 ? (
-                <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
+                <div className="rounded-2xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
                   <p className="font-semibold">
                     No active service authorization is available for Client{" "}
                     {selectedClient.client_code}.
@@ -942,7 +955,7 @@ export function ServiceVerificationPage() {
                 </p>
               ) : null}
               {shiftsQuery.isError ? (
-                <p className="rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-800">
+                <p className="rounded-2xl border border-red-200 bg-red-50 p-3 text-sm text-red-800">
                   Scheduled shifts could not be loaded. Contact your agency
                   manager.
                 </p>
@@ -972,7 +985,7 @@ export function ServiceVerificationPage() {
                           "w-full rounded-2xl border-2 p-3 text-left transition-colors",
                           selectedShiftId === shift.shift_id
                             ? "border-indigo-600 bg-indigo-50"
-                            : "border-slate-200 bg-white hover:border-slate-300",
+                            : "border-slate-200 bg-og-card hover:border-slate-300",
                         )}
                       >
                         <p className="font-semibold text-slate-950">
@@ -987,48 +1000,7 @@ export function ServiceVerificationPage() {
                 </div>
               ) : null}
 
-              {selectedService && !shiftsQuery.isLoading ? (
-                <div className="rounded-3xl border border-indigo-100 bg-gradient-to-br from-indigo-50 via-white to-sky-50 p-4 text-sm text-indigo-950 shadow-sm">
-                  <p className="font-semibold">
-                    {selectedService.service_code} ·{" "}
-                    {selectedService.service_name}
-                  </p>
-                  <div className="mt-3 space-y-2">
-                    <div className="flex items-center justify-between rounded-2xl border border-indigo-100 bg-indigo-100/70 p-2">
-                      <p className="text-xs text-indigo-800">Authorized</p>
-                      <p className="text-sm font-bold text-indigo-950">
-                        {formatDuration(
-                          Number(selectedService.max_monthly_hours) * 60,
-                        )}
-                      </p>
-                    </div>
-                    <div className="flex items-center justify-between rounded-2xl border border-sky-100 bg-sky-100/80 p-2">
-                      <p className="text-xs text-sky-800">Used this month</p>
-                      <p className="text-sm font-bold text-sky-950">
-                        {formatDuration(
-                          Number(selectedService.hours_used_this_month) * 60,
-                        )}
-                      </p>
-                    </div>
-                    <div className="flex items-center justify-between rounded-2xl border border-emerald-100 bg-emerald-100/80 p-2">
-                      <p className="text-xs text-emerald-800">Remaining</p>
-                      <p className="text-sm font-bold text-emerald-950">
-                        {formatDuration(
-                          Math.max(
-                            0,
-                            Number(
-                              selectedService.max_monthly_hours -
-                                selectedService.hours_used_this_month,
-                            ),
-                          ) * 60,
-                        )}
-                      </p>
-                    </div>
-                  </div>
-                </div>
-              ) : null}
-
-              <div className="rounded-2xl bg-slate-50 p-4 text-center">
+              <div className="rounded-2xl bg-slate-50 p-3 text-center">
                 <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
                   Current Pacific time
                 </p>
@@ -1036,13 +1008,12 @@ export function ServiceVerificationPage() {
                   {formatClockTime(new Date(nowTick).toISOString())}
                 </p>
                 <p className="mt-1 text-xs text-slate-500">
-                  {formatVisitDate(new Date(nowTick).toISOString())} · automatic
-                  server timestamp
+                  Time In is recorded by the server when you tap Start.
                 </p>
               </div>
 
               {needsUnscheduledReason && selectedClient && selectedService ? (
-                <div className="space-y-2 rounded-2xl border border-amber-200 bg-amber-50 p-4">
+                <div className="space-y-2 rounded-2xl border border-amber-200 bg-amber-50 p-3">
                   <label
                     htmlFor="unscheduled-reason"
                     className="block text-sm font-semibold text-amber-950"
@@ -1055,7 +1026,7 @@ export function ServiceVerificationPage() {
                     maxLength={500}
                     onChange={(event) => setUnscheduledReason(event.target.value)}
                     aria-describedby="unscheduled-reason-help"
-                    className="min-h-20 w-full rounded-xl border border-amber-300 bg-white p-3 text-base text-slate-950"
+                    className="min-h-20 w-full rounded-xl border border-amber-300 bg-og-card p-3 text-base text-slate-950"
                   />
                   <p id="unscheduled-reason-help" className="text-xs text-amber-900">
                     The visit is recorded, marked Unscheduled, and sent to your manager for review before it can be billed.
@@ -1077,15 +1048,12 @@ export function ServiceVerificationPage() {
               >
                 Start visit · Iniciar visita
               </Button>
-              <p className="text-center text-xs text-slate-500">
-                Time In is recorded by the server when you tap Start.
-              </p>
             </section>
           ) : null}
 
           {phase === "active" && active ? (
             <section
-              className="space-y-5"
+              className="space-y-4"
               aria-labelledby="active-visit-heading"
             >
               <div className="flex items-center justify-between gap-3">
@@ -1106,7 +1074,7 @@ export function ServiceVerificationPage() {
                 </span>
               </div>
 
-              <div className="space-y-3 rounded-2xl border border-slate-200 bg-slate-50 p-4">
+              <div className="space-y-3 rounded-2xl border border-slate-200 bg-slate-50 p-3">
                 <div>
                   <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
                     Client
@@ -1123,19 +1091,6 @@ export function ServiceVerificationPage() {
                     {active.service_code} · {active.service_name}
                   </p>
                 </div>
-                {active.scheduled_starts_at && active.scheduled_ends_at ? (
-                  <div>
-                    <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-                      Scheduled shift
-                    </p>
-                    <p className="mt-1 text-lg font-bold text-slate-950">
-                      {formatScheduledTime(
-                        active.scheduled_starts_at,
-                        active.scheduled_ends_at,
-                      )}
-                    </p>
-                  </div>
-                ) : null}
               </div>
 
               <div className="mx-auto flex h-56 w-56 flex-col items-center justify-center rounded-full border-8 border-sky-100 bg-gradient-to-br from-white to-sky-50 text-center shadow-xl shadow-sky-100/70 ring-4 ring-sky-50">
@@ -1161,7 +1116,7 @@ export function ServiceVerificationPage() {
               </p>
 
               {willExceed ? (
-                <div className="flex gap-3 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
+                <div className="flex gap-3 rounded-2xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
                   <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0" />
                   <p>
                     This visit is projected to exceed the authorization. The
@@ -1169,13 +1124,17 @@ export function ServiceVerificationPage() {
                   </p>
                 </div>
               ) : (
-                <div className="rounded-3xl border border-emerald-200 bg-emerald-50 p-4 text-center shadow-sm">
+                <div className="rounded-3xl border border-emerald-200 bg-emerald-50 p-3 text-center shadow-sm">
                   <p className="text-3xl font-extrabold tabular-nums text-emerald-800">
-                    {formatDuration(remainingMinutes)}
+                    {formatBalance(remainingMinutes)}
                   </p>
                   <p className="mt-1 text-sm font-semibold text-emerald-900">
-                    Authorized time remaining this month
+                    Authorized time left to record this month
                   </p>
+                  <details className="mt-1 text-xs text-emerald-900">
+                    <summary className="inline-flex min-h-[32px] cursor-pointer items-center underline">Details</summary>
+                    <p>{CAREGIVER_BALANCE_NOTE}</p>
+                  </details>
                 </div>
               )}
 
@@ -1188,15 +1147,14 @@ export function ServiceVerificationPage() {
                 End visit · Terminar visita
               </Button>
               <p className="text-center text-xs text-slate-500">
-                The sign-in sheet records Time Out automatically. A manager can
-                correct a mistake without deleting the original.
+                Time Out is recorded by the server when you tap End.
               </p>
             </section>
           ) : null}
 
           {phase === "confirm" && endedVisit ? (
             <section
-              className="space-y-5"
+              className="space-y-4"
               aria-labelledby="confirm-visit-heading"
             >
               <div>
@@ -1212,7 +1170,7 @@ export function ServiceVerificationPage() {
               </div>
 
               {endedVisit.timeOutEnteredByManager ? (
-                <div className="flex gap-3 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
+                <div className="flex gap-3 rounded-2xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
                   <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0" />
                   <p>
                     The Time Out below was entered by your agency because the visit
@@ -1221,72 +1179,38 @@ export function ServiceVerificationPage() {
                 </div>
               ) : null}
 
-              <div className="space-y-3 rounded-2xl border border-slate-200 bg-white p-4">
-                <div>
-                  <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-                    Client
-                  </p>
-                  <p className="mt-1 text-sm font-semibold text-slate-950">
-                    {endedVisit.clientCode}
-                  </p>
-                </div>
-                <div>
-                  <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-                    Service
-                  </p>
-                  <p className="mt-1 text-sm font-semibold text-slate-950">
-                    {endedVisit.serviceCode} · {endedVisit.serviceName}
-                  </p>
-                </div>
-                <div>
-                  <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-                    Date
-                  </p>
-                  <p className="mt-1 text-sm font-semibold text-slate-950">
-                    {formatVisitDate(endedVisit.timeIn)}
-                  </p>
-                </div>
+              <dl
+                aria-label="Visit to confirm"
+                className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-2 rounded-2xl border border-slate-200 bg-og-card p-3 text-sm"
+              >
+                <dt className="text-slate-500">Client</dt>
+                <dd className="font-semibold text-slate-950">{endedVisit.clientCode}</dd>
+                <dt className="text-slate-500">Service</dt>
+                <dd className="font-semibold text-slate-950">
+                  {endedVisit.serviceCode} · {endedVisit.serviceName}
+                </dd>
+                <dt className="text-slate-500">Date</dt>
+                <dd className="font-semibold text-slate-950">{formatVisitDate(endedVisit.timeIn)}</dd>
                 {endedVisit.scheduledStartsAt && endedVisit.scheduledEndsAt ? (
-                  <div>
-                    <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-                      Scheduled shift
-                    </p>
-                    <p className="mt-1 text-sm font-semibold text-slate-950">
+                  <>
+                    <dt className="text-slate-500">Scheduled shift</dt>
+                    <dd className="font-semibold text-slate-950">
                       {formatScheduledWindow(
                         endedVisit.scheduledStartsAt,
                         endedVisit.scheduledEndsAt,
                       )}
-                    </p>
-                  </div>
+                    </dd>
+                  </>
                 ) : null}
-              </div>
-
-              <div className="space-y-3 rounded-2xl border border-slate-200 bg-slate-50 p-4">
-                <div className="flex items-center justify-between">
-                  <span className="text-xs font-semibold uppercase tracking-wide text-slate-600">
-                    Actual time in
-                  </span>
-                  <span className="text-sm font-semibold text-slate-950">
-                    {formatClockTime(endedVisit.timeIn)}
-                  </span>
-                </div>
-                <div className="flex items-center justify-between">
-                  <span className="text-xs font-semibold uppercase tracking-wide text-slate-600">
-                    Actual time out
-                  </span>
-                  <span className="text-sm font-semibold text-slate-950">
-                    {formatClockTime(endedVisit.timeOut)}
-                  </span>
-                </div>
-                <div className="flex items-center justify-between border-t border-slate-200 pt-3">
-                  <span className="text-xs font-semibold uppercase tracking-wide text-slate-600">
-                    Total worked
-                  </span>
-                  <span className="text-sm font-bold text-slate-950">
-                    {formatDuration(endedVisit.workedMinutes)}
-                  </span>
-                </div>
-              </div>
+                <dt className="text-slate-500">Actual time in</dt>
+                <dd className="font-semibold text-slate-950">{formatClockTime(endedVisit.timeIn)}</dd>
+                <dt className="text-slate-500">Actual time out</dt>
+                <dd className="font-semibold text-slate-950">{formatClockTime(endedVisit.timeOut)}</dd>
+                <dt className="border-t border-slate-200 pt-2 text-slate-500">Total worked</dt>
+                <dd className="border-t border-slate-200 pt-2 font-bold text-slate-950">
+                  {formatDuration(endedVisit.workedMinutes)}
+                </dd>
+              </dl>
 
               {confirmationMode === "signature" ? (
                 <div className="space-y-4">
@@ -1298,7 +1222,7 @@ export function ServiceVerificationPage() {
                       onChange={(event) =>
                         setSignerRole(event.target.value as VisitSignerRole)
                       }
-                      className="mt-2 min-h-12 w-full rounded-xl border border-slate-300 bg-white px-3 text-base"
+                      className="mt-2 min-h-12 w-full rounded-xl border border-slate-300 bg-og-card px-3 text-base"
                     >
                       <option value="client">Client</option>
                       <option value="parent">Parent</option>
@@ -1316,69 +1240,41 @@ export function ServiceVerificationPage() {
                       Elija la forma más fácil de confirmar.
                     </p>
                   </div>
-                  <div className="grid grid-cols-2 gap-3">
-                    <button
-                      type="button"
-                      aria-pressed={signatureKind === "signature"}
-                      onClick={() => {
-                        setSignatureKind("signature");
-                        setSignature(null);
-                      }}
-                      className={cn(
-                        "flex min-h-24 flex-col items-center justify-center rounded-2xl border-2 p-3 text-sm font-semibold",
-                        signatureKind === "signature"
-                          ? "border-indigo-600 bg-indigo-50 text-indigo-950"
-                          : "border-slate-200 bg-white text-slate-700",
-                      )}
-                    >
-                      <PenLine className="mb-2 h-8 w-8" />
-                      Sign name
-                      <span className="text-xs font-normal">Firmar</span>
-                    </button>
-                    <button
-                      type="button"
-                      aria-pressed={signatureKind === "assisted_mark"}
-                      onClick={() => {
-                        setSignatureKind("assisted_mark");
-                        setSignature(null);
-                      }}
-                      className={cn(
-                        "flex min-h-24 flex-col items-center justify-center rounded-2xl border-2 p-3 text-sm font-semibold",
-                        signatureKind === "assisted_mark"
-                          ? "border-indigo-600 bg-indigo-50 text-indigo-950"
-                          : "border-slate-200 bg-white text-slate-700",
-                      )}
-                    >
-                      <Hand className="mb-2 h-8 w-8" />
-                      Make a mark
-                      <span className="text-xs font-normal">
-                        Hacer una marca
-                      </span>
-                    </button>
-                    {wave1 ? (
-                      <button
-                        type="button"
-                        aria-pressed={signatureKind === "verbal"}
-                        onClick={() => {
-                          setSignatureKind("verbal");
-                          setSignature(null);
-                        }}
+                  <div role="radiogroup" aria-label="How the person confirms" className="grid grid-cols-2 gap-3">
+                    {([
+                      ["signature", "Sign name", "Firmar", <PenLine key="p" className="mb-2 h-8 w-8" />, "min-h-24"],
+                      ["assisted_mark", "Make a mark", "Hacer una marca", <Hand key="h" className="mb-2 h-8 w-8" />, "min-h-24"],
+                      ...(wave1 ? [["verbal", "Verbal only (no signature)", "Solo verbal (sin firma)", null, "col-span-2 min-h-16"]] : []),
+                    ] as Array<[SignatureKind, string, string, ReactNode, string]>).map(([kind, label, es, icon, size]) => (
+                      <label
+                        key={kind}
                         className={cn(
-                          "col-span-2 flex min-h-16 flex-col items-center justify-center rounded-2xl border-2 p-3 text-sm font-semibold",
-                          signatureKind === "verbal"
+                          "flex cursor-pointer flex-col items-center justify-center rounded-2xl border-2 p-3 text-sm font-semibold focus-within:ring-2 focus-within:ring-indigo-500",
+                          size,
+                          signatureKind === kind
                             ? "border-indigo-600 bg-indigo-50 text-indigo-950"
-                            : "border-slate-200 bg-white text-slate-700",
+                            : "border-slate-200 bg-og-card text-slate-700",
                         )}
                       >
-                        Verbal only (no signature)
-                        <span className="text-xs font-normal">
-                          Solo verbal (sin firma)
-                        </span>
-                      </button>
-                    ) : null}
+                        <input
+                          type="radio"
+                          name="confirmation-method"
+                          value={kind}
+                          checked={signatureKind === kind}
+                          onChange={() => {
+                            setSignatureKind(kind);
+                            setSignature(null);
+                          }}
+                          className="sr-only"
+                        />
+                        {icon}
+                        {label}
+                        <span className="text-xs font-normal">{es}</span>
+                      </label>
+                    ))}
                   </div>
                   {signatureKind === "verbal" ? (
-                    <div className="space-y-3 rounded-2xl border border-amber-200 bg-amber-50 p-4">
+                    <div className="space-y-3 rounded-2xl border border-amber-200 bg-amber-50 p-3">
                       <p className="text-sm text-amber-950">
                         The person confirmed out loud and no signature or mark was collected. This goes to your manager for review and is not billable until they review it.
                       </p>
@@ -1389,13 +1285,13 @@ export function ServiceVerificationPage() {
                           value={verbalName}
                           maxLength={200}
                           onChange={(event) => setVerbalName(event.target.value)}
-                          className="mt-2 min-h-12 w-full rounded-xl border border-amber-300 bg-white px-3 text-base text-slate-950"
+                          className="mt-2 min-h-12 w-full rounded-xl border border-amber-300 bg-og-card px-3 text-base text-slate-950"
                         />
                       </label>
                     </div>
                   ) : null}
                   {signatureKind !== "verbal" ? (
-                  <div className="rounded-2xl bg-slate-50 p-4 text-center">
+                  <div className="rounded-2xl bg-slate-50 p-3 text-center">
                     <Hand
                       className="mx-auto h-9 w-9 text-indigo-600"
                       aria-hidden="true"
@@ -1414,7 +1310,7 @@ export function ServiceVerificationPage() {
                   ) : null}
                   {signatureKind !== "verbal" ? (
                     <>
-                      <div className="rounded-2xl border border-slate-200 bg-white p-3 text-sm text-slate-700">
+                      <div className="rounded-2xl border border-slate-200 bg-og-card p-3 text-sm text-slate-700">
                         By signing or making a mark, I confirm that the service and
                         times shown above are correct.
                       </div>
@@ -1422,7 +1318,7 @@ export function ServiceVerificationPage() {
                     </>
                   ) : null}
                   {wave1 ? (
-                    <label className="flex min-h-12 items-start gap-3 rounded-2xl border border-slate-200 bg-white p-3 text-sm text-slate-800">
+                    <label className="flex min-h-12 items-start gap-3 rounded-2xl border border-slate-200 bg-og-card p-3 text-sm text-slate-800">
                       <input
                         type="checkbox"
                         checked={attested}
@@ -1452,13 +1348,13 @@ export function ServiceVerificationPage() {
                       setSignature(null);
                       setError(null);
                     }}
-                    className="min-h-12 w-full rounded-xl border border-slate-300 bg-white px-4 text-sm font-semibold text-slate-700"
+                    className="min-h-12 w-full rounded-xl border border-slate-300 bg-og-card px-4 text-sm font-semibold text-slate-700"
                   >
                     Unable to obtain confirmation
                   </button>
                 </div>
               ) : (
-                <div className="space-y-4 rounded-2xl border border-amber-200 bg-amber-50 p-4">
+                <div className="space-y-4 rounded-2xl border border-amber-200 bg-amber-50 p-3">
                   <div className="flex gap-3 text-amber-950">
                     <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0" />
                     <div>
@@ -1477,7 +1373,7 @@ export function ServiceVerificationPage() {
                       onChange={(event) =>
                         setNoSignerReason(event.target.value)
                       }
-                      className="mt-2 min-h-12 w-full rounded-xl border border-amber-300 bg-white px-3 text-base text-slate-950"
+                      className="mt-2 min-h-12 w-full rounded-xl border border-amber-300 bg-og-card px-3 text-base text-slate-950"
                     >
                       <option value="">Choose a reason</option>
                       {(wave1 ? NO_SIGNER_REASONS_WAVE1 : NO_SIGNER_REASONS).map((reason) => (
@@ -1492,11 +1388,11 @@ export function ServiceVerificationPage() {
                       value={noSignerNote}
                       maxLength={500}
                       onChange={(event) => setNoSignerNote(event.target.value)}
-                      className="mt-2 min-h-20 w-full rounded-xl border border-amber-300 bg-white p-3 text-base text-slate-950"
+                      className="mt-2 min-h-20 w-full rounded-xl border border-amber-300 bg-og-card p-3 text-base text-slate-950"
                     />
                   </label>
                   {wave1 ? (
-                    <label className="flex min-h-12 items-start gap-3 rounded-xl border border-amber-300 bg-white p-3 text-sm text-slate-800">
+                    <label className="flex min-h-12 items-start gap-3 rounded-xl border border-amber-300 bg-og-card p-3 text-sm text-slate-800">
                       <input
                         type="checkbox"
                         checked={attested}
@@ -1533,14 +1429,14 @@ export function ServiceVerificationPage() {
 
           {phase === "success" && result && endedVisit ? (
             <section
-              className="space-y-5 text-center"
+              className="space-y-4 text-center"
               aria-labelledby="visit-saved-heading"
             >
               <CheckCircle2 className="mx-auto h-12 w-12 text-emerald-600" />
               <div>
                 <h1
                   id="visit-saved-heading"
-                  className="text-2xl font-semibold text-slate-950"
+                  className="text-xl font-semibold text-slate-950"
                 >
                   {confirmationMode === "exception" ||
                   (wave1 && result.status === "administrator_review")
@@ -1557,7 +1453,7 @@ export function ServiceVerificationPage() {
                       : "Included in the weekly report and monthly hours calendar."}
                 </p>
               </div>
-              <div className="rounded-2xl bg-slate-50 p-4 text-left text-sm">
+              <div className="rounded-2xl bg-slate-50 p-3 text-left text-sm">
                 <p className="font-semibold text-slate-950">
                   Client {endedVisit.clientCode} · {endedVisit.serviceName}
                 </p>
@@ -1592,7 +1488,7 @@ export function ServiceVerificationPage() {
                     <>
                       <dl
                         aria-label="Visit result"
-                        className="grid grid-cols-2 gap-2 rounded-2xl border border-slate-200 p-4 text-left text-sm"
+                        className="grid grid-cols-2 gap-2 rounded-2xl border border-slate-200 p-3 text-left text-sm"
                       >
                         <dt className="text-slate-500">Worked</dt>
                         <dd className="font-semibold text-slate-950">{formatDuration(result.worked_minutes)}</dd>
@@ -1601,7 +1497,7 @@ export function ServiceVerificationPage() {
                         <dt className="text-slate-500">Billable</dt>
                         <dd className="font-semibold text-slate-950">{formatDuration(result.outcome.billable_minutes)}</dd>
                         <dt className="text-slate-500">Authorization left</dt>
-                        <dd className="font-semibold text-slate-950">{formatDuration(result.remaining_minutes)}</dd>
+                        <dd className="font-semibold text-slate-950">{formatBalance(result.remaining_minutes)}</dd>
                         <dt className="text-slate-500">Confirmed by</dt>
                         <dd className="font-semibold text-slate-950">{o.methodLabel}</dd>
                         <dt className="text-slate-500">Billing</dt>
@@ -1615,7 +1511,7 @@ export function ServiceVerificationPage() {
                       {o.reasons.length > 0 ? (
                         <ul
                           aria-label="Why a manager will review this visit"
-                          className="space-y-2 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-left text-sm text-amber-950"
+                          className="space-y-2 rounded-2xl border border-amber-200 bg-amber-50 p-3 text-left text-sm text-amber-950"
                         >
                           {o.reasons.map((text) => (
                             <li key={text}>{text}</li>
@@ -1628,7 +1524,7 @@ export function ServiceVerificationPage() {
               ) : (
               <dl
                 aria-label="Visit result"
-                className="grid grid-cols-2 gap-2 rounded-2xl border border-slate-200 p-4 text-left text-sm"
+                className="grid grid-cols-2 gap-2 rounded-2xl border border-slate-200 p-3 text-left text-sm"
               >
                 <dt className="text-slate-500">Worked</dt>
                 <dd className="font-semibold text-slate-950">
@@ -1651,7 +1547,7 @@ export function ServiceVerificationPage() {
                 </dd>
               </dl>
               )}
-              <div className="flex items-start gap-3 rounded-2xl border border-slate-200 p-4 text-left text-xs text-slate-600">
+              <div className="flex items-start gap-3 rounded-2xl border border-slate-200 p-3 text-left text-xs text-slate-600">
                 <LockKeyhole className="mt-0.5 h-4 w-4 shrink-0" />
                 <p>
                   The caregiver cannot edit this record. A manager correction

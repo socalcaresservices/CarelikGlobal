@@ -180,7 +180,7 @@ describe("billing approval (0019)", () => {
     const unconfirmed = await endedVisit(db, w.caregiverA1, w, 15, w.orgA, rated.client);
     const r = await api.confirm(db, w.caregiverA1, unconfirmed, { method: "unable_to_confirm", reason: "Client asleep" });
     expect(r.status).toBe("administrator_review");
-    await expectPgError(approve(w.managerA, unconfirmed, 0), "OGC09", /reviewed first/);
+    await expectPgError(approve(w.managerA, unconfirmed, 0), "OGC09", /must be resolved first/);
   });
 
   it("a retried approval with the same key returns the same approval and writes nothing twice", async () => {
@@ -232,7 +232,9 @@ describe("billing approval (0019)", () => {
   it("there is still no submission, invoice, export, payroll or revenue function (approval is not submission)", async () => {
     const { rows } = await db.admin.query(
       "select p.proname from pg_proc p join pg_namespace n on n.oid = p.pronamespace where n.nspname = 'ogevia_api' and p.proname ~ '(submit|invoice|export|payroll|revenue|margin)'");
-    expect(rows).toEqual([]);
+    // 0069/0072 added four functions that match "export": they record that a report was requested, completed or failed (an audit ledger) and list that ledger. They send nothing to anyone and never submit,
+    // invoice or pay. They are named here on purpose so any other match still fails this test.
+    expect(rows.map((r) => r.proname).sort()).toEqual(["complete_report_export", "fail_report_export", "list_report_exports", "request_report_export"]);
   });
 
   it("the application role cannot write billing state directly (no table privileges)", async () => {

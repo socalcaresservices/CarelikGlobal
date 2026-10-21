@@ -59,7 +59,7 @@ export function PlatformShell({ children }: PropsWithChildren) {
 
   return (
     <div className="min-h-screen bg-slate-50">
-      <aside className="fixed inset-y-0 left-0 hidden w-64 border-r border-slate-200 bg-white lg:flex lg:flex-col">
+      <aside className="fixed inset-y-0 left-0 hidden w-64 border-r border-slate-200 bg-og-card lg:flex lg:flex-col">
         {/* Header */}
         <div className="border-b border-slate-200 px-6 py-5">
           <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">

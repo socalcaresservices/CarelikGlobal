@@ -23,6 +23,8 @@ function toSnake<T>(row: Json): T {
   return Object.fromEntries(Object.entries(row).map(([k, v]) => [snake(k), v])) as T;
 }
 const hours = (minutes: unknown) => Number(minutes ?? 0) / 60;
+/** A server minutes figure that may be missing (an older server): null, never a false zero. */
+const num = (value: unknown): number | null => (value === null || value === undefined ? null : Number(value));
 const enc = encodeURIComponent;
 
 export interface AwsMembership {
@@ -49,11 +51,14 @@ export function createAwsServiceVerificationBackend(
   api: AwsApiClient,
   lookupOrganizationName: (organizationId: string) => string | null,
 ): ServiceVerificationBackend {
+  const duplicateClients = new Set<string>();
   async function clientNames(organizationId: string): Promise<Map<string, string>> {
-    const { clients } = await api.get<{ clients: Array<{ clientId: string; legalFirstName: string | null; legalLastName: string | null }> }>(
+    const { clients } = await api.get<{ clients: Array<{ clientId: string; legalFirstName: string | null; legalLastName: string | null; duplicateName?: boolean }> }>(
       "/v1/clients/directory",
       { organizationId },
     );
+    duplicateClients.clear();
+    for (const c of clients) if (c.duplicateName) duplicateClients.add(c.clientId);
     return new Map(
       clients
         .filter((c) => c.legalFirstName && c.legalLastName)
@@ -71,6 +76,7 @@ export function createAwsServiceVerificationBackend(
         ...(row as unknown as ActiveVisit),
         max_monthly_hours: hours(row.monthly_authorized_minutes),
         confirmed_minutes_this_month: Number(row.confirmed_minutes_this_month ?? 0),
+        left_to_record_minutes: row.left_to_record_minutes === null || row.left_to_record_minutes === undefined ? null : Number(row.left_to_record_minutes),
       };
     },
     async listAssignedClients(organizationId) {
@@ -86,6 +92,10 @@ export function createAwsServiceVerificationBackend(
           max_monthly_hours: hours(row.monthly_authorized_minutes),
           hours_used_this_month: hours(row.minutes_used_this_month),
           hours_scheduled_this_month: hours(row.minutes_scheduled_this_month),
+          left_to_record_minutes: num(row.left_to_record_minutes),
+          hours_left_minutes: num(row.hours_left_minutes),
+          office_pending_minutes: num(row.office_pending_minutes),
+          office_reserved_minutes: num(row.office_reserved_minutes),
         };
       });
     },
@@ -133,7 +143,7 @@ export function createAwsServiceVerificationBackend(
       const names = await clientNames(organizationId);
       return visits.map((v) => {
         const row = toSnake<VisitReportRow>(v);
-        return { ...row, client_legal_name: names.get(row.client_id) ?? null };
+        return { ...row, client_legal_name: names.get(row.client_id) ?? null, client_name_duplicate: duplicateClients.has(row.client_id) };
       });
     },
     async getLetterhead(organizationId) {
@@ -171,6 +181,9 @@ export function createAwsServiceVerificationBackend(
     async closeMissedVisit({ visitId, timeOut, reason, idempotencyKey }) {
       await api.post(`/v1/visits/${enc(visitId)}/close`, { timeOut, reason }, { idempotencyKey });
     },
+    async markNoServiceDelivered({ visitId, reason, idempotencyKey }) {
+      await api.post(`/v1/visits/${enc(visitId)}/close`, { outcome: "no_service", reason }, { idempotencyKey });
+    },
     async getSignatureDataUrl(visitId) {
       const { pngBase64 } = await api.get<{ pngBase64: string }>(`/v1/visits/${enc(visitId)}/signature`);
       return `data:image/png;base64,${pngBase64}`;
@@ -182,7 +195,7 @@ export function createAwsServiceVerificationBackend(
         monthStart,
       });
       const names = await clientNames(organizationId);
-      return services.map((row) => ({ ...row, clientName: names.get(row.clientId) ?? null }));
+      return services.map((row) => ({ ...row, clientName: names.get(row.clientId) ?? null, clientNameDuplicate: duplicateClients.has(row.clientId) }));
     },
     async listMonthlyApprovalSummary(organizationId, clientId, monthStart) {
       const { lineages } = await api.get<{ lineages: MonthlyApprovalSummaryRow[] }>("/v1/reports/monthly-approval-summary", {
@@ -213,7 +226,7 @@ export function createAwsServiceVerificationBackend(
         status,
       });
       const names = await clientNames(organizationId);
-      return corrections.map((row) => ({ ...row, clientName: names.get(row.clientId) ?? null }));
+      return corrections.map((row) => ({ ...row, clientName: names.get(row.clientId) ?? null, clientNameDuplicate: duplicateClients.has(row.clientId) }));
     },
     async listBillingReview(organizationId, dateFrom, dateTo) {
       const { visits } = await api.get<{ visits: BillingReviewRow[] }>("/v1/billing-review", { organizationId, dateFrom, dateTo });

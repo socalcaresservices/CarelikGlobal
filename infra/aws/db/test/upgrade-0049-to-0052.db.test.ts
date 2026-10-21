@@ -12,7 +12,7 @@ const DOWN = new URL("../rollback/", import.meta.url);
 let db: TestDb;
 let w: World;
 beforeAll(async () => {
-  db = await createTestDb(); // 0001-0052
+  db = await createTestDb(); // 0001-0085
   w = await seedWorld(db, 600);
 });
 afterAll(async () => db?.drop());
@@ -39,7 +39,7 @@ const TABLES: Record<string, string> = {
   service_visits: "to_jsonb(t) - 'unscheduled_reason'",
   visit_confirmations: "to_jsonb(t) - 'attestation_version'",
   visit_evidence: "to_jsonb(t)",
-  shifts: "to_jsonb(t)",
+  shifts: "to_jsonb(t) - 'makeup_for_shift_id'",
   authorization_reservations: "to_jsonb(t)",
   client_authorizations: "to_jsonb(t)",
   audit_events: "to_jsonb(t)",
@@ -56,7 +56,7 @@ const position = async (lineage: string, day: string) =>
   (await db.admin.query("select ogevia.authorization_month_usage($1,$2::date,null)::int used, ogevia.authorization_month_reserved($1,$2::date)::int reserved", [lineage, day])).rows[0];
 
 describe("upgrade from 0049 to 0052 on a populated database", () => {
-  it("changes no existing row; old visits stay readable with correct reasons; authorization position does not move; the runner applies exactly 0050, 0051 and 0052", async () => {
+  it("changes no existing row; old visits stay readable with correct reasons; authorization position does not move; the runner applies exactly 0050, 0051, 0052, 0053, 0054, 0055 and 0056", async () => {
     const cg = w.caregiverA1;
     const f = await freshClient(db, w, cg, 600);
     // Three visits as the 0049 rules produced them: signed on a shift, in review (client could not sign), and an
@@ -77,7 +77,7 @@ describe("upgrade from 0049 to 0052 on a populated database", () => {
     await db.admin.query("set session_replication_role = origin");
     const statusBefore = Object.fromEntries((await db.admin.query("select id, status::text s, billable_minutes b from ogevia.service_visits where id = any($1)", [[signed, noSigner, unscheduled]])).rows.map((r) => [r.id, [r.s, r.b]]));
 
-    for (const file of ["0052_reservation_not_counted_when_review_visit_counted_as_used.down.sql", "0051_wave1_open_shift_pickup.down.sql", "0050_wave1_visit_review_and_variance_rule.down.sql"]) await runDown(file);
+    for (const file of ["0085_create_caregiver_gate_no_service_void.down.sql", "0084_action_needed_over_limit.down.sql", "0083_owner_hours_reopen_guard_correct_closed.down.sql", "0082_lineage_lock_all_consumption_paths_review_audit.down.sql", "0081_review_corrections_pending_closed_cpr_tb.down.sql", "0080_attention_counts_one_definition.down.sql", "0079_hours_accounting_one_bucket.down.sql", "0078_assignment_outcome_and_limit_messages.down.sql", "0077_attention_counts_and_in_app_notifications.down.sql", "0076_agency_performance_audit_report.down.sql", "0075_shift_display_states.down.sql", "0074_client_documents_readiness_holds_audit.down.sql", "0073_agency_deadlines_and_issue_identity.down.sql", "0072_export_request_and_generation.down.sql", "0071_authorization_decrease_review_and_delivered_unverified.down.sql", "0070_monthly_chain_report.down.sql", "0069_report_export_permission_and_audit.down.sql", "0068_authorization_amendment_impacts.down.sql", "0067_reservation_buckets_and_reconciliation.down.sql", "0066_compliance_shift_document_risks.down.sql", "0065_office_assignment_authorization_recheck.down.sql", "0064_compliance_hold_history_and_alerts.down.sql", "0063_open_shift_pickup_requires_confirmation.down.sql", "0062_billing_states.down.sql", "0061_recurring_save_valid_report_rejected.down.sql", "0060_agency_work_hour_limits.down.sql", "0059_attention_boundary_review_clock.down.sql", "0058_attention_tiers_separate_queues.down.sql", "0057_authorization_tiers_unclamped_balances.down.sql", "0056_attention_streams_appearance.down.sql", "0055_caregiver_compliance_hold.down.sql", "0054_recruiting_onboarding_checklist.down.sql", "0053_scheduling_patterns_hour_limits_makeup.down.sql", "0052_reservation_not_counted_when_review_visit_counted_as_used.down.sql", "0051_wave1_open_shift_pickup.down.sql", "0050_wave1_visit_review_and_variance_rule.down.sql"]) await runDown(file);
     expect((await db.admin.query("select max(version) v from ogevia_meta.schema_migrations")).rows[0].v).toBe("0049");
     const day = await orgToday(db);
     const lineage = (await db.admin.query("select lineage_id from ogevia.client_authorizations where id = $1", [f.auth])).rows[0].lineage_id as string;
@@ -88,13 +88,17 @@ describe("upgrade from 0049 to 0052 on a populated database", () => {
     const client = await db.admin.connect();
     let applied: string[];
     try { applied = (await migrate(client)).applied.map((x) => x.slice(0, 4)); } finally { client.release(); }
-    expect(applied).toEqual(["0050", "0051", "0052"]);
+    expect(applied).toEqual(["0050", "0051", "0052", "0053", "0054", "0055", "0056", "0057", "0058", "0059", "0060", "0061", "0062", "0063", "0064", "0065", "0066", "0067", "0068", "0069", "0070", "0071", "0072", "0073", "0074", "0075", "0076", "0077", "0078", "0079", "0080", "0081", "0082", "0083", "0084", "0085"]);
 
     // No stored row changed or disappeared, in any table that holds visit or authorization data.
     expect(await fingerprints()).toEqual(before);
     expect(Object.fromEntries((await db.admin.query("select id, status::text s, billable_minutes b from ogevia.service_visits where id = any($1)", [[signed, noSigner, unscheduled]])).rows.map((r) => [r.id, [r.s, r.b]]))).toEqual(statusBefore);
-    // The authorization position of the client does not move (no visit here is a review visit with billable minutes).
-    expect(await position(lineage, day)).toEqual(positionBefore);
+    // The authorization position of the client does not move (no visit here is a review visit with billable minutes), with ONE deliberate exception (0081, owner
+    // correction): the 30-minute visit in review with no signer and no shift is unreserved Pending time and now counts in the reserved total the scheduling guards read.
+    const positionAfter = await position(lineage, day);
+    expect(positionAfter.used).toBe(positionBefore.used);
+    expect(positionAfter.reserved).toBe(positionBefore.reserved + 30);
+    expect(Number((await db.admin.query("select ogevia.visit_unreserved_pending_minutes($1) n", [noSigner])).rows[0].n)).toBe(30);
 
     // Old visits are readable through the new outcome function with correct, derived reasons; nothing is invented for them.
     const outcome = async (v: string) => (await asActor(db, cg.sub, async (c) => (await c.query("select * from ogevia_api.get_visit_outcome($1)", [v])).rows))[0];

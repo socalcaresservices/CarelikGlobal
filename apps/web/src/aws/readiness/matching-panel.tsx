@@ -4,7 +4,7 @@ import { Button } from "@carelik/ui";
 import { useOrganization } from "@/providers/organization-provider";
 import { useAwsApi } from "../aws-workspace";
 import { ELIGIBILITY_LABEL, actionError, scoreLabel } from "./format";
-import { ShortHelp } from "../help-text";
+import { InfoTip } from "../ui/info-tip";
 
 
 export interface Candidate {
@@ -63,7 +63,7 @@ export function MatchingPanel({ requestId, onOffer, offering }: { requestId: str
       {eligible.length === 0 ? <p className="text-sm text-slate-600">No caregiver is eligible for this time. Eligibility needs approved availability, current documents and no conflicts.</p> : null}
       <ul className="space-y-2">
         {eligible.map((c) => (
-          <li key={c.caregiverRecordId} className="rounded-lg border border-slate-200 p-3">
+          <li key={c.caregiverRecordId} className="rounded-md border border-slate-200 px-2 py-1.5">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <div>
                 <p className="text-sm font-medium text-slate-900">{c.name} <span className="font-normal text-slate-500">({c.caregiverCode})</span></p>
@@ -80,7 +80,7 @@ export function MatchingPanel({ requestId, onOffer, offering }: { requestId: str
         ))}
       </ul>
       {others.length ? (
-        <details className="rounded-lg border border-slate-200 p-3">
+        <details className="rounded-md border border-slate-200 px-2 py-1.5">
           <summary className="min-h-[44px] cursor-pointer text-sm font-medium text-slate-900">Not available ({others.length})</summary>
           <ul className="mt-2 space-y-2">
             {others.map((c) => (
@@ -89,7 +89,7 @@ export function MatchingPanel({ requestId, onOffer, offering }: { requestId: str
                 <ul className="text-xs text-slate-700">{c.blockedChecks.map((b) => <li key={b.check}>{b.message}{c.coverage.total > 1 ? ` (${b.occurrences} of ${c.coverage.total} dates)` : ""}</li>)}</ul>
                 {c.blockedChecks.length > 0 && c.blockedChecks.every((b) => b.check === "availability") ? (
                   <div className="mt-1 space-y-1">
-                    <ShortHelp className="text-xs text-slate-600" details="At assignment the hours must be approved or covered by a recorded availability override; documents, bookings and client requirements are still checked.">Excluded from Matches, but an administrator may still offer this work.</ShortHelp>
+                    <p className="flex items-center gap-1.5 text-xs text-slate-600">Excluded from Matches, but an administrator may still offer this work.<InfoTip>At assignment the hours must be approved or covered by a recorded availability override; documents, bookings and client requirements are still checked.</InfoTip></p>
                     <Button type="button" variant="secondary" disabled={offering} onClick={() => onOffer(c.caregiverRecordId)}>Offer manually</Button>
                   </div>
                 ) : <p className="mt-1 text-xs text-slate-600">Cannot be offered this work until the item above is resolved.</p>}

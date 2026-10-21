@@ -7,6 +7,7 @@ import { useOrganization } from "@/providers/organization-provider";
 import { LETTERHEAD_FIELDS, EMPTY_LETTERHEAD, letterheadProblem, type LetterheadForm } from "./letterhead-validation";
 import { contrastWithWhite } from "./contrast";
 import { prepareLogoFile } from "./document-file";
+import { HelpLine } from "./ui/help-line";
 import { MyReadiness } from "./readiness/caregiver-readiness";
 import { useLogo, useAwsApi, useBranding, useMyDisplayName, useSetMyDisplayName, type Branding } from "./aws-workspace";
 
@@ -36,13 +37,13 @@ export function ProfilePage() {
   }
 
   return (
-    <div className="max-w-md space-y-4">
+    <div className="max-w-md space-y-3">
       <h1 className="text-xl font-semibold text-slate-950">Your profile</h1>
-      <Card className="p-4">
+      <Card>
         <form onSubmit={(e) => { e.preventDefault(); void submit(); }} className="space-y-3">
           <label className="block text-sm font-medium text-slate-700">
             Your name, as your agency sees it
-            <input value={name} maxLength={80} onChange={(e) => setName(e.target.value)} autoComplete="name" className="mt-1 block w-full rounded-lg border border-slate-200 px-3 py-2 text-base" />
+            <input value={name} maxLength={80} onChange={(e) => setName(e.target.value)} autoComplete="name" className="mt-0.5 block w-full rounded-md border border-slate-200 px-2 py-1.5 text-sm" />
           </label>
           {state.error ? <p role="alert" className="text-sm text-red-700">{state.error}</p> : null}
           {state.done ? <p role="status" className="text-sm text-emerald-800">Saved.</p> : null}
@@ -94,32 +95,32 @@ export function BrandingSettingsPage() {
   }
 
   return (
-    <div className="max-w-lg space-y-4">
+    <div className="max-w-lg space-y-3">
       <h1 className="text-xl font-semibold text-slate-950">Agency branding</h1>
-      <p className="text-sm"><Link to="/settings/visit-rules" className="font-medium underline">Visit rules</Link> · schedule difference that sends a visit to review</p>
-      <p className="text-sm text-slate-600">Shown to every role in your agency, on phones and desktop. Warning colors (such as ACTION NEEDED) stay red.</p>
-      <Card className="p-4">
-        <form onSubmit={(e) => { e.preventDefault(); void submit(); }} className="space-y-4">
+      <p className="text-sm"><Link to="/settings/visit-rules" className="font-medium underline">Visit rules</Link></p>
+      <HelpLine details="Warning colors (such as ACTION NEEDED) stay red.">Shown to every role in your agency.</HelpLine>
+      <Card>
+        <form onSubmit={(e) => { e.preventDefault(); void submit(); }} className="space-y-2">
           <label className="block text-sm font-medium text-slate-700">
             Agency name
-            <input value={name} maxLength={120} onChange={(e) => { setName(e.target.value); setState((s) => ({ ...s, done: false })); }} className="mt-1 block w-full rounded-lg border border-slate-200 px-3 py-2 text-base" />
+            <input value={name} maxLength={120} onChange={(e) => { setName(e.target.value); setState((s) => ({ ...s, done: false })); }} className="mt-0.5 block w-full rounded-md border border-slate-200 px-2 py-1.5 text-sm" />
           </label>
           <div className="flex flex-wrap items-end gap-3">
             <label className="text-sm font-medium text-slate-700">
               Accent color
-              <input type="color" value={valid ? color : "#0f172a"} onChange={(e) => setColor(e.target.value)} className="mt-1 block h-10 w-16 rounded border border-slate-200" />
+              <input type="color" value={valid ? color : "#0f172a"} onChange={(e) => setColor(e.target.value)} className="mt-0.5 block h-8 w-14 rounded border border-slate-200" />
             </label>
             <label className="text-sm font-medium text-slate-700">
               Hex
-              <input value={color} onChange={(e) => setColor(e.target.value.trim())} maxLength={7} className="mt-1 block w-28 rounded-lg border border-slate-200 px-3 py-2 font-mono text-sm" />
+              <input value={color} onChange={(e) => setColor(e.target.value.trim())} maxLength={7} className="mt-1 block w-28 rounded-md border border-slate-200 px-2 py-1.5 font-mono text-sm" />
             </label>
           </div>
           <p className={readable ? "text-xs text-slate-600" : "text-xs font-semibold text-red-700"}>
             {contrast === null ? "Enter a color like #1f5f8b." : `White text contrast ${contrast}:1 ${readable ? "(readable)" : "(too light: needs 4.5:1)"}`}
           </p>
-          <div aria-label="Preview" className="rounded-lg border border-slate-200 bg-white">
+          <div aria-label="Preview" className="rounded-lg border border-slate-200 bg-og-card">
             <div className="h-1 rounded-t-lg" style={{ backgroundColor: valid ? color : "#0f172a" }} />
-            <div className="flex items-center justify-between gap-2 p-3">
+            <div className="flex items-center justify-between gap-2 px-3 py-2">
               <span className="text-sm font-semibold text-slate-950">{name || "Agency name"}</span>
               <span className="rounded-lg px-3 py-1.5 text-sm font-medium text-white" style={{ backgroundColor: valid ? color : "#0f172a" }}>Visit records</span>
             </div>
@@ -171,10 +172,10 @@ function LetterheadSettings() {
     }
   }
   return (
-    <Card className="space-y-3 p-4">
+    <Card className="space-y-2">
       <h2 className="text-sm font-semibold text-slate-900">Print letterhead</h2>
-      <p className="text-sm text-slate-600">Printed at the top of reports with your logo. Only what you enter is printed; leave a field blank to leave it off. Agency business details only: never enter client or caregiver information.</p>
-      <form onSubmit={(e) => { e.preventDefault(); void submit(); }} className="space-y-3">
+      <HelpLine details="Printed at the top of reports with your logo. Only what you enter is printed; leave a field blank to leave it off.">Agency business details only: never enter client or caregiver information.</HelpLine>
+      <form onSubmit={(e) => { e.preventDefault(); void submit(); }} className="grid gap-x-3 gap-y-2 md:grid-cols-2">
         {LETTERHEAD_FIELDS.map((f) => (
           <label key={f.id} className="block text-sm font-medium text-slate-700">
             {f.label}
@@ -183,13 +184,15 @@ function LetterheadSettings() {
               maxLength={f.max}
               autoComplete={f.autoComplete}
               onChange={(e) => { setForm((x) => ({ ...x, [f.id]: e.target.value })); setState((s) => ({ ...s, done: false })); }}
-              className="mt-1 block min-h-[40px] w-full rounded-lg border border-slate-200 px-3 py-2 text-base"
+              className="mt-0.5 block min-h-[44px] w-full rounded-md border border-slate-200 px-2 py-1.5 text-sm md:min-h-8"
             />
           </label>
         ))}
+        <div className="md:col-span-2">
         {state.error ? <p role="alert" className="text-sm text-red-700">{state.error}</p> : null}
         {state.done ? <p role="status" className="text-sm text-emerald-800">Letterhead saved. It prints on the next report.</p> : null}
         <Button type="submit" disabled={state.busy}>{state.busy ? "Saving…" : "Save letterhead"}</Button>
+        </div>
       </form>
     </Card>
   );
@@ -232,7 +235,7 @@ function LogoSettings() {
     }
   }
   return (
-    <Card className="space-y-3 p-4">
+    <Card className="space-y-2">
       <h2 className="text-sm font-semibold text-slate-900">Agency logo</h2>
       {logo.data ? <img src={logo.data} alt="Current agency logo" className="h-14 max-w-[200px] object-contain" /> : <p className="text-sm text-slate-500">No logo yet.</p>}
       <label className="block text-sm font-medium text-slate-700">

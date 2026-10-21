@@ -3,7 +3,7 @@ import * as ec2 from "aws-cdk-lib/aws-ec2";
 import * as iam from "aws-cdk-lib/aws-iam";
 import { Construct } from "constructs";
 import { ENVIRONMENTS, secretArnPattern, type OgeviaEnvironmentConfig } from "./config.js";
-import { DOCUMENT_OBJECT_KEY_PATTERN, LOGO_OBJECT_KEY_PATTERN, SIGNATURE_OBJECT_KEY_PATTERN, signatureBucketName } from "./evidence-storage-stack.js";
+import { CLIENT_DOCUMENT_OBJECT_KEY_PATTERN, DOCUMENT_OBJECT_KEY_PATTERN, LOGO_OBJECT_KEY_PATTERN, SIGNATURE_OBJECT_KEY_PATTERN, signatureBucketName } from "./evidence-storage-stack.js";
 import { ExistingFoundation } from "./existing-foundation.js";
 import { identityFunctionName } from "./service-verification-api-stack.js";
 
@@ -92,10 +92,10 @@ export class NetworkEgressStack extends Stack {
       new iam.PolicyStatement({
         principals: [new iam.AnyPrincipal()],
         actions: ["s3:GetObject", "s3:GetObjectVersion", "s3:PutObject"],
-        // Signatures, staff documents (0021) and the agency logo (0020): the API
-        // role allows exactly these three key shapes, so the endpoint must too.
+        // Signatures, staff documents (0021), client documents (0074) and the agency logo (0020): the API
+        // role allows exactly these four key shapes, so the endpoint must too.
         resources: [config, ...peers].flatMap((env) =>
-          [SIGNATURE_OBJECT_KEY_PATTERN, DOCUMENT_OBJECT_KEY_PATTERN, LOGO_OBJECT_KEY_PATTERN]
+          [SIGNATURE_OBJECT_KEY_PATTERN, DOCUMENT_OBJECT_KEY_PATTERN, CLIENT_DOCUMENT_OBJECT_KEY_PATTERN, LOGO_OBJECT_KEY_PATTERN]
             .map((pattern) => `arn:aws:s3:::${signatureBucketName(env)}/${pattern}`)),
         conditions: { StringEquals: { "aws:PrincipalAccount": config.account } },
       }),

@@ -30,10 +30,10 @@ describe("readiness words", () => {
 
   it("groups checks separately and reports a would-block as different from a block", () => {
     const row = (check: string, status: CheckRow["status"], message: string | null, enforced: boolean): CheckRow => ({ check, status, code: null, message, enforced, blocking: status === "blocked" && enforced });
-    const rows = [row("availability", "blocked", "Outside approved hours.", true), row("service", "blocked", "Not approved for this service.", false), row("cpr", "ok", null, true), row("tb", "ok", null, true), row("conflict", "ok", null, true)];
+    const rows = [row("availability", "blocked", "Outside approved hours.", true), row("service", "blocked", "Service not approved", false), row("cpr", "ok", null, true), row("tb", "ok", null, true), row("conflict", "ok", null, true)];
     const by = Object.fromEntries(CHECK_GROUPS.map((g) => [g.key, groupOutcome(rows, g)]));
     expect(by.availability).toEqual({ state: "blocked", messages: ["Outside approved hours."] });
-    expect(by.service).toEqual({ state: "would_block", messages: ["Not approved for this service."] });
+    expect(by.service).toEqual({ state: "would_block", messages: ["Service not approved"] });
     expect(by.documents!.state).toBe("ok");
     expect(by.conflicts!.state).toBe("ok");
     expect(groupOutcome([row("service", "not_checked", null, false)], CHECK_GROUPS[1]!).state).toBe("not_checked");

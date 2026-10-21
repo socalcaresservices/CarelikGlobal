@@ -144,6 +144,7 @@ describe("after activation: new visit starts need approved availability", () => 
     await activate();
     expect((await status()).enforcementActive).toBe(true);
     mgrRec = (await db.admin.query("insert into ogevia.caregiver_records (organization_id, linked_user_id, caregiver_code, first_name, last_name, status) values ($1,$2,'CG-MGR','Synthetic','Manager','active') returning id", [w.orgA, w.managerA.userId])).rows[0].id as string;
+    await db.admin.query("insert into ogevia.caregiver_background_checks (caregiver_record_id, organization_id, status, result, evidence_note, verified_by, verified_at) values ($1,$2,'completed','approved','Synthetic fixture clearance',$3,now())", [mgrRec, w.orgA, w.ownerA.userId]);
     await setDocs(mgrRec, "current", "current", w.managerA);
   });
 
@@ -232,7 +233,7 @@ describe("after activation: new visit starts need approved availability", () => 
     // Enforced service approval
     await serviceChecks(w.ownerA, true);
     await db.admin.query("delete from ogevia.caregiver_service_approvals where caregiver_record_id = $1 and service_id = $2", [recA1, f2.service]);
-    expect(await attemptOv(w.caregiverA1, f2, recA1)).toMatch(/^OGR30: Not approved for this service\./);
+    expect(await attemptOv(w.caregiverA1, f2, recA1)).toMatch(/^OGR30: Service not approved/);
     await serviceChecks(w.ownerA, false);
     // Caregiver status
     await db.admin.query("delete from ogevia.availability_overrides where consumed_at is null");

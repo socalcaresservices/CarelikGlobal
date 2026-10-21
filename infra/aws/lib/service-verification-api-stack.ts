@@ -10,6 +10,8 @@ import { AccessLogFormat } from "aws-cdk-lib/aws-apigateway";
 import * as apigw from "aws-cdk-lib/aws-apigatewayv2";
 import { HttpJwtAuthorizer } from "aws-cdk-lib/aws-apigatewayv2-authorizers";
 import { HttpLambdaIntegration } from "aws-cdk-lib/aws-apigatewayv2-integrations";
+import * as events from "aws-cdk-lib/aws-events";
+import * as targets from "aws-cdk-lib/aws-events-targets";
 import * as iam from "aws-cdk-lib/aws-iam";
 import type * as kms from "aws-cdk-lib/aws-kms";
 import type * as secretsmanager from "aws-cdk-lib/aws-secretsmanager";
@@ -26,6 +28,7 @@ import {
   SIGNATURE_OBJECT_KEY_PATTERN,
   signatureBucketName,
   DOCUMENT_OBJECT_KEY_PATTERN,
+  CLIENT_DOCUMENT_OBJECT_KEY_PATTERN,
   LOGO_OBJECT_KEY_PATTERN,
 } from "./evidence-storage-stack.js";
 import { ExistingFoundation } from "./existing-foundation.js";
@@ -116,6 +119,12 @@ export const SERVICE_VERIFICATION_ROUTES: ReadonlyArray<{
   { method: apigw.HttpMethod.POST, path: "/v1/caregivers/{caregiverRecordId}/status" },
   { method: apigw.HttpMethod.POST, path: "/v1/caregivers/{caregiverRecordId}/invitation" },
   { method: apigw.HttpMethod.POST, path: "/v1/caregivers/{caregiverRecordId}/invitation/resend" },
+  { method: apigw.HttpMethod.GET, path: "/v1/onboarding/overview" },
+  { method: apigw.HttpMethod.GET, path: "/v1/onboarding/requirements" },
+  { method: apigw.HttpMethod.POST, path: "/v1/onboarding/requirements" },
+  { method: apigw.HttpMethod.GET, path: "/v1/caregivers/{caregiverRecordId}/onboarding" },
+  { method: apigw.HttpMethod.POST, path: "/v1/caregivers/{caregiverRecordId}/onboarding/start" },
+  { method: apigw.HttpMethod.POST, path: "/v1/caregivers/{caregiverRecordId}/onboarding/items" },
   { method: apigw.HttpMethod.GET, path: "/v1/accounts" },
   { method: apigw.HttpMethod.POST, path: "/v1/accounts/{userId}/disable" },
   { method: apigw.HttpMethod.POST, path: "/v1/accounts/{userId}/enable" },
@@ -127,6 +136,11 @@ export const SERVICE_VERIFICATION_ROUTES: ReadonlyArray<{
   { method: apigw.HttpMethod.POST, path: "/v1/shift-series/{seriesId}/change" },
   { method: apigw.HttpMethod.POST, path: "/v1/shift-series/{seriesId}/end" },
   { method: apigw.HttpMethod.POST, path: "/v1/shift-series/{seriesId}/extend" },
+  { method: apigw.HttpMethod.GET, path: "/v1/hour-limits" },
+  { method: apigw.HttpMethod.POST, path: "/v1/hour-limits" },
+  { method: apigw.HttpMethod.GET, path: "/v1/work-hour-policy" },
+  { method: apigw.HttpMethod.GET, path: "/v1/caregiver-load" },
+  { method: apigw.HttpMethod.POST, path: "/v1/shifts/{shiftId}/makeup" },
   { method: apigw.HttpMethod.POST, path: "/v1/shifts/{shiftId}/reschedule" },
   { method: apigw.HttpMethod.POST, path: "/v1/shifts/{shiftId}/callout" },
   { method: apigw.HttpMethod.POST, path: "/v1/shifts/{shiftId}/caregiver" },
@@ -137,10 +151,60 @@ export const SERVICE_VERIFICATION_ROUTES: ReadonlyArray<{
   // Wave 1 (0050, 0051): open-shift pick-up and the agency's versioned schedule-variance rule. JWT like every staff route.
   { method: apigw.HttpMethod.GET, path: "/v1/open-shifts" },
   { method: apigw.HttpMethod.POST, path: "/v1/shifts/{shiftId}/pickup" },
+  { method: apigw.HttpMethod.POST, path: "/v1/shifts/{shiftId}/pickup/withdraw" },
+  { method: apigw.HttpMethod.GET, path: "/v1/shift-pickups" },
+  { method: apigw.HttpMethod.POST, path: "/v1/shift-pickups/{requestId}/confirm" },
+  { method: apigw.HttpMethod.POST, path: "/v1/shift-pickups/{requestId}/decline" },
+  { method: apigw.HttpMethod.GET, path: "/v1/shifts-to-reconcile" },
+  { method: apigw.HttpMethod.GET, path: "/v1/visits/{visitId}/authorization-review" },
+  { method: apigw.HttpMethod.POST, path: "/v1/visits/{visitId}/authorization-review/resolve" },
+  { method: apigw.HttpMethod.GET, path: "/v1/client-document-types" },
+  { method: apigw.HttpMethod.POST, path: "/v1/client-document-types" },
+  { method: apigw.HttpMethod.POST, path: "/v1/client-document-requirements" },
+  { method: apigw.HttpMethod.GET, path: "/v1/clients/{clientId}/documents" },
+  { method: apigw.HttpMethod.POST, path: "/v1/clients/{clientId}/documents/{documentTypeId}/versions" },
+  { method: apigw.HttpMethod.POST, path: "/v1/client-document-versions/{versionId}/review" },
+  { method: apigw.HttpMethod.GET, path: "/v1/client-document-versions/{versionId}/file" },
+  { method: apigw.HttpMethod.GET, path: "/v1/clients/{clientId}/readiness" },
+  { method: apigw.HttpMethod.POST, path: "/v1/clients/{clientId}/stage" },
+  { method: apigw.HttpMethod.POST, path: "/v1/clients/{clientId}/service-holds" },
+  { method: apigw.HttpMethod.POST, path: "/v1/client-service-holds/{holdId}/release" },
+  { method: apigw.HttpMethod.GET, path: "/v1/clients/{clientId}/audit" },
+  { method: apigw.HttpMethod.GET, path: "/v1/clients/{clientId}/issue-history" },
+  { method: apigw.HttpMethod.GET, path: "/v1/client-duplicates" },
+  { method: apigw.HttpMethod.GET, path: "/v1/reports/agency-performance" },
+  { method: apigw.HttpMethod.GET, path: "/v1/reports/audit" },
+  { method: apigw.HttpMethod.GET, path: "/v1/action-issues" },
+  { method: apigw.HttpMethod.GET, path: "/v1/action-issues/history" },
+  { method: apigw.HttpMethod.GET, path: "/v1/attention-settings" },
+  { method: apigw.HttpMethod.POST, path: "/v1/attention-settings" },
+  { method: apigw.HttpMethod.GET, path: "/v1/notifications" },
+  { method: apigw.HttpMethod.POST, path: "/v1/notifications/read" },
+  { method: apigw.HttpMethod.GET, path: "/v1/notification-settings" },
+  { method: apigw.HttpMethod.POST, path: "/v1/notification-settings" },
+  { method: apigw.HttpMethod.GET, path: "/v1/authorization-impacts" },
+  { method: apigw.HttpMethod.POST, path: "/v1/authorization-impacts/{impactId}/acknowledge" },
+  { method: apigw.HttpMethod.GET, path: "/v1/reports/monthly-chain" },
+  { method: apigw.HttpMethod.POST, path: "/v1/exports" },
+  { method: apigw.HttpMethod.GET, path: "/v1/exports" },
+  { method: apigw.HttpMethod.POST, path: "/v1/shifts/{shiftId}/reconcile" },
   { method: apigw.HttpMethod.GET, path: "/v1/visit-rules" },
   { method: apigw.HttpMethod.POST, path: "/v1/visit-rules" },
   // Hire type / scheduling (caregivers.manage) and family relationship (assignments.manage), 0030.
   { method: apigw.HttpMethod.POST, path: "/v1/caregivers/{caregiverRecordId}/employment" },
+  // Caregiver compliance (0055): administrator verification, hire date, holds. JWT like every staff route.
+  { method: apigw.HttpMethod.GET, path: "/v1/caregivers/{caregiverRecordId}/compliance" },
+  { method: apigw.HttpMethod.POST, path: "/v1/caregivers/{caregiverRecordId}/hire-date" },
+  { method: apigw.HttpMethod.POST, path: "/v1/caregivers/{caregiverRecordId}/background-check/status" },
+  { method: apigw.HttpMethod.POST, path: "/v1/caregivers/{caregiverRecordId}/background-check/verify" },
+  { method: apigw.HttpMethod.GET, path: "/v1/compliance/holds" },
+  { method: apigw.HttpMethod.POST, path: "/v1/compliance/sweep" },
+  // Attention by purpose, appearance preferences, authorizations missing a rate (0054). JWT like every staff route.
+  { method: apigw.HttpMethod.GET, path: "/v1/attention/overview" },
+  { method: apigw.HttpMethod.GET, path: "/v1/appearance" },
+  { method: apigw.HttpMethod.POST, path: "/v1/appearance/organization" },
+  { method: apigw.HttpMethod.POST, path: "/v1/appearance/me" },
+  { method: apigw.HttpMethod.GET, path: "/v1/authorizations/missing-rate" },
   { method: apigw.HttpMethod.POST, path: "/v1/assignments/{assignmentId}/family-relationship" },
   // Continuity pack (0027): continuity.export only; JWT like every staff route.
   { method: apigw.HttpMethod.POST, path: "/v1/continuity/pack" },
@@ -317,6 +381,7 @@ export class ServiceVerificationApiStack extends Stack {
     const evidenceBucketName = signatureBucketName(config);
     const signatureObjectsArn = `arn:aws:s3:::${evidenceBucketName}/${SIGNATURE_OBJECT_KEY_PATTERN}`;
     const documentObjectsArn = `arn:aws:s3:::${evidenceBucketName}/${DOCUMENT_OBJECT_KEY_PATTERN}`;
+    const clientDocumentObjectsArn = `arn:aws:s3:::${evidenceBucketName}/${CLIENT_DOCUMENT_OBJECT_KEY_PATTERN}`;
     const logoObjectsArn = `arn:aws:s3:::${evidenceBucketName}/${LOGO_OBJECT_KEY_PATTERN}`;
     assertVerified(config.auth, "API auth contract");
     assertDatabaseConfig(config);
@@ -389,6 +454,14 @@ export class ServiceVerificationApiStack extends Stack {
         actions: ["s3:PutObject", "s3:GetObject", "s3:GetObjectVersion"],
         // Only {org_uuid}/documents/{document_uuid}/{version_uuid} (0021).
         resources: [documentObjectsArn],
+      }),
+    );
+    policy.addStatements(
+      new iam.PolicyStatement({
+        sid: "ClientDocumentObjects",
+        actions: ["s3:PutObject", "s3:GetObject", "s3:GetObjectVersion"],
+        // Only {org_uuid}/client-documents/{document_uuid}/{version_uuid} (0074).
+        resources: [clientDocumentObjectsArn],
       }),
     );
     policy.addStatements(
@@ -601,6 +674,23 @@ export class ServiceVerificationApiStack extends Stack {
       }
     }
 
+    // Scheduled caregiver-compliance run (0055). Defined here, so a deploy of this stack creates it; not deployed yet: deploying it is a YELLOW action (a new EventBridge rule and a second
+    // Lambda invoke permission) and needs the owner's approval. It invokes the SAME handler with a constant payload that API Gateway can
+    // never produce; the handler then calls ogevia_api.system_compliance_* and applies the 14-day CPR/TB period when it ends, whether or
+    // not anyone opens a caregiver profile. Enforcement itself does not depend on this run (the gate reads the records live); the run
+    // materialises the hold, the flags on affected shifts and the audit entries. Cost: EventBridge scheduled rules are free, and
+    // 96 invocations a day are far below any Lambda charge. Remove the rule and the hold is still enforced; only the flags lag.
+    new events.Rule(this, "ComplianceSweep", {
+      description: "Applies the caregiver compliance rules (approved background check, CPR/TB within 14 days of hire) for every agency that has enforcement on.",
+      schedule: events.Schedule.rate(Duration.minutes(15)),
+      targets: [
+        new targets.LambdaFunction(this.handler, {
+          event: events.RuleTargetInput.fromObject({ "ogevia-task": "compliance-sweep" }),
+          retryAttempts: 1,
+        }),
+      ],
+    });
+
     // Exact finding IDs. lib/template-scan.ts independently fails any wildcard
     // action and any Resource "*" outside the ENI action list.
     Validations.of(policy).acknowledge({
@@ -617,6 +707,11 @@ export class ServiceVerificationApiStack extends Stack {
       id: `AwsSolutions-IAM5[Resource::${logoObjectsArn}]`,
       reason:
         "Agency logo keys are per-upload UUIDs unknown at deploy time; restricted to the documented */branding/logo/* shape. Only the owner can write (checked in PostgreSQL) and only agency members can read.",
+    });
+    Validations.of(policy).acknowledge({
+      id: `AwsSolutions-IAM5[Resource::${clientDocumentObjectsArn}]`,
+      reason:
+        "Client document keys are per-document/per-version UUIDs unknown at deploy time; restricted to the documented */client-documents/*/* shape. Tenant and role access is checked in PostgreSQL before every write and read.",
     });
     Validations.of(policy).acknowledge({
       id: `AwsSolutions-IAM5[Resource::${documentObjectsArn}]`,
@@ -637,7 +732,7 @@ export class ServiceVerificationApiStack extends Stack {
       {
         id: "HIPAA.Security-LambdaDLQ",
         reason:
-          "Invoked synchronously by API Gateway; DLQs apply only to asynchronous invocations. Failures surface to the caller and the LambdaErrors alarm.",
+          "Invoked synchronously by API Gateway, so a failure reaches the caller. The only asynchronous invoker is the 15-minute compliance rule: it is idempotent, retried once, and a failed run surfaces in the LambdaErrors alarm; the next run repeats it.",
       },
     ]) {
       Validations.of(this).acknowledge(ack);

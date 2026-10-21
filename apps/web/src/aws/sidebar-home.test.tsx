@@ -21,9 +21,17 @@ const PERMS: Record<Role, string[]> = {
 const json = (code: number, body: unknown) => new Response(JSON.stringify(body), { status: code, headers: { "content-type": "application/json" } });
 
 const SUMMARY = { missingTimeOut: 1, notConfirmed: 0, needsReview: 2, lateResponsesToReview: 0, uncoveredShifts: 0, documentsBlocking: 0, documentsToReview: 0, billingReadyUnapproved: 3, awaitingSignature: 0, documentsExpiring: 2, total: 3 };
+const OVERVIEW = {
+  asOf: "2026-10-18T12:00:00Z", urgentWindowHours: 48,
+  urgent: { items: [{ kind: "visit", id: "v1", startsAt: "2026-10-18T09:00:00Z", endsAt: null, reasons: ["missing_clock_out"], severity: "amber", inProgress: true, caregiverRecordId: null, caregiverCode: null, clientCode: "C-104", serviceCode: "862" }], itemCount: 1, issueCount: 1, shifts: 0, visits: 1 },
+  upcoming: { count: 0, nextStartsAt: null, shifts: [] },
+  documents: { overdue: 0, dueSoon: 2, awaitingReview: 0, rejected: 0 },
+  visitReview: { visitsNeedingAttention: 5, awaitingConfirmation: 0, needsReview: 2, lateResponses: 0, readyForApproval: 3, reviewIssues: 2, awaitingResponse: 0 },
+};
 const ROW = {
   serviceId: SERVICE, serviceCode: "862", serviceName: "Respite Care", clientCount: 2, authorizedMinutes: 6000, scheduledMinutes: 240, workedMinutes: 1590,
   billableMinutes: 1470, reviewMinutes: 120, approvedMinutes: 600, remainingMinutes: 4530, lineagesWithoutRate: 0,
+  committedMinutes: 1470, overLimitMinutes: 0, nearLimitAuthorizations: 0, criticalAuthorizations: 0, expiringAuthorizations: 0,
 };
 
 function renderAt(path: string, role: Role) {
@@ -37,6 +45,8 @@ function renderAt(path: string, role: Role) {
         return json(200, { branding: { organizationId: ORG, displayName: "Synthetic Care Co", accentColor: null, logoSha256: null } });
       case "/v1/attention":
         return json(200, { summary: role === "caregiver" ? null : SUMMARY });
+      case "/v1/attention/overview":
+        return json(200, { overview: OVERVIEW });
       case "/v1/reports/utilisation":
         return json(200, { services: [{ ...ROW, billableValueCents: owner ? 7350 : null, approvedValueCents: owner ? 3000 : null, unusedValueCents: owner ? 22650 : null }] });
       case "/v1/clients":
@@ -84,14 +94,14 @@ afterEach(() => {
   vi.clearAllMocks();
 });
 
-const hrefs = (nav: HTMLElement) => Object.fromEntries(within(nav).getAllByRole("link").map((a) => [a.textContent, a.getAttribute("href")]));
+const hrefs = (nav: HTMLElement) => Object.fromEntries(within(nav).getAllByRole("link").map((a) => [(a.textContent ?? "").replace(/\d+$/, ""), a.getAttribute("href")]));
 
 describe("navigation model", () => {
   const icon = (() => null) as never;
   const link = (over: Partial<NavLinkDef>): NavLinkDef => ({ to: "/x", label: "X", group: "HOME", show: true, icon, ...over });
 
   it("keeps the group order and drops groups with nothing visible", () => {
-    const groups = visibleGroups([link({ label: "A", group: "SETUP" }), link({ label: "B", group: "HOME" }), link({ label: "C", group: "BILLING", show: false })]);
+    const groups = visibleGroups([link({ label: "A", group: "SETUP" }), link({ label: "B", group: "HOME" }), link({ label: "C", group: "WORK", show: false })]);
     expect(groups.map((g) => g.group)).toEqual(["HOME", "SETUP"]);
   });
 
@@ -113,24 +123,22 @@ describe("sidebar: expanded", () => {
   it("manager: grouped links, every earlier destination kept, Reports and Client monthly calendar added on the existing reports route", async () => {
     renderAt("/", "manager");
     const nav = await screen.findByRole("navigation", { name: "Main" });
-    expect(within(nav).getAllByText(/^(HOME|CAREGIVERS|CLIENTS|VISITS|BILLING|REPORTS|DOCUMENTS|SETUP)$/).map((e) => e.textContent))
-      .toEqual(["CAREGIVERS", "CLIENTS", "VISITS", "BILLING", "REPORTS", "DOCUMENTS", "SETUP"]);
-    // Workflow order: Home, then caregiver -> client -> visit -> billing -> reports -> documents -> setup.
-    expect(within(nav).getAllByRole("link").map((a) => a.textContent)).toEqual([
-      "Home", "Care Team", "Schedule", "Verify visit", "Clients", "Care requests", "Client monthly calendar", "Visit records",
-      "Billing review", "Reports", "Documents", "Services", "Continuity pack", "Outage records",
+    expect(within(nav).getAllByText(/^(HOME|MY WORK|WORK|SETUP)$/).map((e) => e.textContent)).toEqual(["WORK", "SETUP"]);
+    // Main order: Home, Schedule, Visits, Approvals, Clients, Caregivers, Documents, Reports, Settings; related pages beneath their parent.
+    expect(within(nav).getAllByRole("link").map((a) => a.textContent?.replace(/\d+$/, ""))).toEqual([
+      "Home", "Schedule", "Shift requests", "Monthly calendar", "Visit records", "Verify visit", "Approvals", "Visits to review", "Clients", "Authorization changes",
+      "Caregivers", "Recruiting", "Documents", "Reports", "Services", "Continuity pack", "Outage records", "Appearance",
     ]);
-    // Authorizations are a section of each client's page, not a separate menu item.
-    expect(within(nav).queryByRole("link", { name: /^Authorizations$/ })).toBeNull();
     expect(hrefs(nav)).toEqual({
-      "Home": "/", "Verify visit": "/service-verification", "Schedule": "/schedule", "Care requests": "/care-requests",
+      "Home": "/", "Verify visit": "/service-verification", "Schedule": "/schedule", "Shift requests": "/schedule/shift-requests", "Authorization changes": "/authorization-impacts",
       "Visit records": "/service-verification/reports", "Reports": "/service-verification/reports?view=overview",
-      "Client monthly calendar": "/service-verification/reports?view=calendar", "Billing review": "/billing-review",
-      "Clients": "/clients", "Care Team": "/care-team", "Documents": "/documents", "Services": "/services",
-      "Continuity pack": "/continuity", "Outage records": "/outage-visits",
+      "Visits to review": "/service-verification/reports?view=exceptions", "Monthly calendar": "/service-verification/reports?view=calendar",
+      "Approvals": "/billing-review", "Clients": "/clients", "Caregivers": "/care-team", "Recruiting": "/care-team/recruiting", "Documents": "/documents", "Services": "/settings/services",
+      "Continuity pack": "/continuity", "Outage records": "/outage-visits", "Appearance": "/settings/appearance",
     });
-    // Settings stays Administrator-only (organization.update), unchanged.
+    // Settings is a link only for someone with organization.update (unchanged); for everyone else it is a section label over Services, Appearance ...
     expect(within(nav).queryByRole("link", { name: "Settings" })).toBeNull();
+    expect(within(nav).getAllByTestId("nav-section").map((e) => e.textContent)).toEqual(["Visits", "Settings"]);
   });
 
   it("owner also sees Settings; the footer shows the view, name, email, Profile and Sign out", async () => {
@@ -150,12 +158,11 @@ describe("sidebar: expanded", () => {
     expect(screen.queryByText(/synthetic data|test environment/i)).toBeNull();
   });
 
-  it("caregiver: only the caregiver links, in CAREGIVERS and DOCUMENTS", async () => {
+  it("caregiver: only the caregiver links under MY WORK (and Appearance, which every person may set for themselves)", async () => {
     renderAt("/service-verification", "caregiver");
     const nav = await screen.findByRole("navigation", { name: "Main" });
-    expect(Object.keys(hrefs(nav)).sort()).toEqual(["Availability", "My documents", "My shifts", "Verify visit"]);
-    expect(within(nav).queryByText("SETUP")).toBeNull();
-    expect(within(nav).getAllByText(/^(CAREGIVERS|DOCUMENTS)$/).map((e) => e.textContent)).toEqual(["CAREGIVERS", "DOCUMENTS"]);
+    expect(Object.keys(hrefs(nav)).sort()).toEqual(["Appearance", "Availability", "My documents", "My shifts", "Verify visit"]);
+    expect(within(nav).getAllByText(/^(MY WORK|WORK|SETUP)$/).map((e) => e.textContent)).toEqual(["MY WORK", "SETUP"]);
   });
 
   it("hides the sidebar and gives the page the full width when printing", async () => {
@@ -173,7 +180,7 @@ describe("sidebar: collapse", () => {
     const nav = await screen.findByRole("navigation", { name: "Main" });
     const aside = nav.closest("aside")!;
     expect(aside.className).toMatch(/w-64/);
-    fireEvent.click(screen.getByRole("button", { name: "Collapse sidebar" }));
+    fireEvent.click(screen.getByRole("button", { name: "Collapse menu" }));
     expect(aside.className).toMatch(/w-\[76px\]/);
     expect(window.localStorage.getItem("ogevia.sidebar.collapsed")).toBe("1");
     // Icon-only, but every control still has its name.
@@ -188,7 +195,7 @@ describe("sidebar: collapse", () => {
     renderAt("/", "manager");
     const again = (await screen.findByRole("navigation", { name: "Main" })).closest("aside")!;
     expect(again.className).toMatch(/w-\[76px\]/);
-    fireEvent.click(screen.getByRole("button", { name: "Expand sidebar" }));
+    fireEvent.click(screen.getByRole("button", { name: "Expand menu" }));
     expect(again.className).toMatch(/w-64/);
     expect(window.localStorage.getItem("ogevia.sidebar.collapsed")).toBe("0");
   });
@@ -199,22 +206,23 @@ describe("sidebar: Option B styling contract", () => {
     renderAt("/schedule", "manager");
     const nav = await screen.findByRole("navigation", { name: "Main" });
     const aside = nav.closest("aside")!;
-    expect(aside.className).toContain("bg-[#FAFBFC]");
+    expect(aside.className).toContain("bg-og-side");
     expect(aside.className).toContain("border-r");
-    expect(aside.className).toContain("border-[#E2E8EC]");
+    expect(aside.className).toContain("left-0");
+    expect(aside.className).toContain("border-og-line");
     const heading = within(nav).getAllByTestId("nav-group-heading")[0]!;
-    expect(heading.textContent).toBe("CAREGIVERS");
-    for (const c of ["text-[12px]", "font-bold", "leading-[18px]", "tracking-[0.06em]", "text-[#334155]", "border-b", "border-[#DCE5E9]", "pb-[10px]"]) {
+    expect(heading.textContent).toBe("WORK");
+    for (const c of ["text-[11px]", "font-semibold", "leading-[18px]", "tracking-[0.08em]", "text-og-sub"]) {
       expect(heading.className).toContain(c);
     }
     const current = within(nav).getByRole("link", { name: "Schedule" });
     expect(current).toHaveAttribute("aria-current", "page");
-    for (const c of ["bg-[#E8F5F4]", "text-[#0F6674]", "font-semibold", "rounded-md", "min-h-[40px]", "text-[14px]", "gap-2", "[@media(pointer:coarse)]:min-h-[44px]", "focus-visible:outline-[#0F6674]"]) {
+    for (const c of ["bg-og-active", "text-og-accent", "font-semibold", "rounded-md", "min-h-[36px]", "text-[14px]", "gap-2", "[@media(pointer:coarse)]:min-h-[44px]", "focus-visible:outline-og-accent"]) {
       expect(current.className).toContain(c);
     }
     expect(current.className).not.toMatch(/border-l|before:|shadow-\[inset/); // no vertical accent bar
-    const other = within(nav).getByRole("link", { name: "Care Team" });
-    for (const c of ["text-[#243244]", "font-medium", "hover:bg-[#F0F7F7]"]) expect(other.className).toContain(c);
+    const other = within(nav).getByRole("link", { name: "Caregivers" });
+    for (const c of ["text-og-ink", "font-semibold", "hover:bg-og-ink/5"]) expect(other.className).toContain(c);
     expect(other).not.toHaveAttribute("aria-current");
     // Icons are 18px; long labels wrap rather than clip.
     expect(other.querySelector("svg")!.getAttribute("class")).toContain("h-[18px]");
@@ -227,15 +235,18 @@ describe("sidebar: Option B styling contract", () => {
     const nav = await screen.findByRole("navigation", { name: "Main" });
     expect(within(nav).queryAllByTestId("nav-group-heading")).toHaveLength(0);
     expect(nav.querySelector(".border-t")).toBeNull();
-    expect(within(nav).getByRole("link", { name: "Care Team" })).toBeInTheDocument();
-    expect(within(nav).getAllByRole("link")).toHaveLength(14);
+    expect(within(nav).getByRole("link", { name: "Caregivers" })).toBeInTheDocument();
+    // Collapsed: the areas and Home only; the smaller related links appear when expanded, except under a section label (Visits, Settings), whose children stay reachable.
+    expect(within(nav).getAllByRole("link").map((a) => a.textContent?.replace(/\d+$/, ""))).toEqual([
+      "Home", "Schedule", "Visit records", "Verify visit", "Approvals", "Clients", "Caregivers", "Documents", "Reports", "Services", "Continuity pack", "Outage records", "Appearance",
+    ]);
   });
 
   it("keyboard: every link is reachable by Tab order (real anchors) and the collapse control is a labelled button", async () => {
     renderAt("/", "manager");
     const nav = await screen.findByRole("navigation", { name: "Main" });
     for (const a of within(nav).getAllByRole("link")) expect(a).toHaveAttribute("href");
-    expect(screen.getByRole("button", { name: "Collapse sidebar" })).toHaveAttribute("aria-expanded", "true");
+    expect(screen.getByRole("button", { name: "Collapse menu" })).toHaveAttribute("aria-expanded", "true");
   });
 });
 
@@ -259,63 +270,77 @@ describe("sidebar: mobile drawer", () => {
     fireEvent.click(await screen.findByRole("link", { name: "Schedule" }));
     await waitFor(() => expect(screen.queryByRole("navigation", { name: "Main" })).toBeNull());
   });
+
+  it("the drawer has a scrim; clicking it closes the drawer and keeps the route (the Menu button still names the current section)", async () => {
+    mockMobile(true);
+    renderAt("/schedule", "manager");
+    const menu = await screen.findByRole("button", { name: /^Menu/ });
+    expect(menu).toHaveTextContent("Schedule");
+    fireEvent.click(menu);
+    await screen.findByRole("navigation", { name: "Main" });
+    const scrim = document.querySelector('div[aria-hidden="true"].fixed.inset-0')!;
+    expect(scrim).not.toBeNull();
+    fireEvent.click(scrim);
+    await waitFor(() => expect(screen.queryByRole("navigation", { name: "Main" })).toBeNull());
+    expect(menu).toHaveTextContent("Schedule");
+    expect(menu).toHaveFocus();
+  });
 });
 
 describe("Home layout", () => {
-  it("keeps every Home element: title, count, month, KPIs, the service table, Action needed, Reminders and Outage readiness", async () => {
+  it("keeps the Home essentials: title, month, four alert tiles, hours with the service table behind details, Outage readiness", async () => {
     renderAt("/", "manager");
     expect(await screen.findByRole("heading", { name: "Home", level: 1 })).toBeInTheDocument();
-    expect(await screen.findByTestId("action-needed-banner")).toHaveTextContent("Action needed: 6");
     expect(screen.getByLabelText("Month")).toHaveAttribute("type", "month");
+    const tiles = await screen.findByRole("region", { name: "What needs attention" }).catch(() => screen.findByLabelText("What needs attention"));
+    for (const [key, label, href] of [["now", "Needs attention now", "/attention"], ["staffing", "Upcoming staffing", "/staffing"], ["documents", "Documents & compliance", "/documents"], ["visits", "Visit review", "/visit-review"]] as const) {
+      const tile = await within(tiles).findByTestId(`stream-${key}`);
+      expect(tile).toHaveTextContent(label);
+      expect(tile).toHaveAttribute("href", href);
+    }
+    // Visit review counts the unique visits (5), not the sum of unlike things.
+    expect(screen.getByTestId("stream-visits")).toHaveTextContent("5");
     const hours = (await screen.findByRole("heading", { name: "Hours this month" })).closest("section")!;
-    for (const k of ["Authorized", "Worked", "Billable (confirmed)", "Hours left"]) expect(within(hours).getAllByText(k).length).toBeGreaterThan(0);
-    expect(within(hours).getByRole("link", { name: /monthly reconciliation/ }).getAttribute("href")).toBe("/service-verification/reports?view=reconciliation");
-    const table = await within(hours).findByRole("table");
-    expect(within(table).getAllByRole("columnheader").map((c) => c.textContent)).toEqual(["Service", "Progress", "Billable", "In review", "Approved", "Scheduled ahead", "Hours left"]);
+    // folded: the summary line shows Worked and Hours left; opening the section adds Authorized, Billable, the chart and the table
+    for (const k of ["Worked", "Hours left"]) expect(within(hours).getByText(k)).toBeInTheDocument();
+    expect(within(hours).queryAllByText("Billable")).toHaveLength(0);
+    fireEvent.click(within(hours).getByRole("button", { name: "Show the hours" }));
+    for (const k of ["Authorized", "Worked", "Billable", "Hours left"]) expect((await within(hours).findAllByText(k)).length).toBeGreaterThan(0);
+    // The per-service table is behind a native disclosure, with the same figures and a keyboard-reachable scroller.
+    const table = within(hours).getByRole("table", { name: "Hours by service for the selected month" });
+    expect(within(table).getAllByRole("columnheader").map((c) => c.textContent)).toEqual(["Service", "Authorized", "Billable", "Rounding", "Pending", "Reserved", "Hours left", "Over limit", "Worked", "Worked, not billable", "Approved"]);
     const row = within(table).getAllByRole("row")[1]!;
     expect(row).toHaveTextContent("Respite Care");
-    expect(row).toHaveTextContent("26.5 h of 100 h · 27%");
-    // Numeric cells are right-aligned; the columns hold the same values the lines did.
-    const cells = within(row).getAllByRole("cell");
-    expect(cells.map((c) => c.textContent)).toEqual(["26.5 h of 100 h · 27%", "24.5 h", "2 h", "10 h", "4 h", "75.5 h"]);
-    for (const c of cells.slice(1)) expect(c.className).toMatch(/text-right/);
-    // The table scrolls sideways instead of squeezing, and the scroller is keyboard-reachable.
+    expect(within(row).getAllByRole("cell").map((c) => c.textContent)).toEqual(["100 h", "24.5 h", "0 h", "2 h", "4 h", "75.5 h", "0 h", "26.5 h", "0 h", "10 h"]);
+    for (const c of within(row).getAllByRole("cell")) expect(c.className).toMatch(/text-right/);
     const scroller = within(hours).getByRole("region", { name: /scrolls sideways/ });
     expect(scroller.className).toMatch(/overflow-x-auto/);
     expect(scroller).toHaveAttribute("tabindex", "0");
-    expect(screen.queryByText("Financial impact (Administrator only)")).toBeNull();
-  });
-
-  it("Action needed: one row per item, highlighted only above zero, with a text cue; Reminders dashed; Outage readiness holds the Continuity pack link", async () => {
-    renderAt("/", "manager");
-    const section = (await screen.findByRole("heading", { name: "Action needed" })).closest("section")!;
-    await within(section).findByText("Missing Clock-Out");
-    const rows = within(section).getAllByRole("link");
-    const byLabel = (label: string) => within(section).getByText(label).closest("a")!;
-    expect(byLabel("Missing Clock-Out").className).toMatch(/bg-og-warn-bg/);
-    expect(byLabel("Missing Clock-Out")).toHaveTextContent("Needs action: 1");
-    expect(byLabel("Awaiting Confirmation").className).not.toMatch(/bg-og-warn-bg/);
-    expect(byLabel("Awaiting Confirmation")).not.toHaveTextContent("Needs action");
-    // Rendered from the data: one link per category the server returned (eight for this viewer).
-    expect(rows.filter((a) => a.closest("ul")?.className.includes("divide-y"))).toHaveLength(8);
-    const reminders = within(section).getByRole("heading", { name: /Reminders/ }).parentElement!;
-    expect(reminders.className).toMatch(/border-dashed/);
-    expect(within(reminders).getByText("Documents Expiring Soon")).toBeInTheDocument();
-    const outage = within(section).getByRole("heading", { name: "Outage readiness" }).closest("section")!;
-    expect(outage).toHaveTextContent("OUTAGE READINESS: Continuity pack last downloaded 30 hours ago by Synthetic Manager.");
+    expect(within(hours).getByRole("link", { name: /Monthly reconciliation/ }).getAttribute("href")).toBe("/service-verification/reports?view=reconciliation");
+    expect(screen.queryByText("Financial impact")).toBeNull();
+    const outage = (await screen.findByRole("heading", { name: "Outage readiness" })).closest("section")!;
+    expect(outage).toHaveTextContent("Continuity pack last downloaded 30 hours ago by Synthetic Manager.");
     expect(within(outage).getByRole("link", { name: "Continuity pack" }).getAttribute("href")).toBe("/continuity");
   });
 
-  it("Financial impact: Administrator sees it with Unavailable cost and margin; the manager sees no dollar value", async () => {
+  it("no old catch-all: the removed 'Action needed' sum and its mixed list are gone from Home", async () => {
+    renderAt("/", "manager");
+    await screen.findByTestId("stream-now");
+    expect(screen.queryByText(/^Action needed/)).toBeNull();
+    expect(screen.queryByText("Reminders (not counted)")).toBeNull();
+  });
+
+  it("Financial impact: the Administrator sees values, no 'Unavailable' cards and no cost/margin tile; the manager sees no dollar value", async () => {
     renderAt("/", "organization_owner");
-    expect(await screen.findByText("Financial impact (Administrator only)")).toBeInTheDocument();
+    expect(await screen.findByText("Financial impact")).toBeInTheDocument();
     expect(screen.getByText("$74")).toBeInTheDocument();
-    expect(screen.getByText("Unavailable")).toBeInTheDocument();
+    expect(screen.queryByText("Unavailable")).toBeNull();
+    expect(screen.queryByText("Caregiver cost and margin", { selector: "dt" })).toBeNull();
     cleanup();
     renderAt("/", "manager");
-    await screen.findByText(/26\.5 h of 100 h/);
+    await screen.findByTestId("stream-now");
     expect(screen.queryByText(/\$\d/)).toBeNull();
-    expect(screen.getByText(/visible to the agency Administrator only/)).toBeInTheDocument();
+    expect(screen.queryByText("Financial impact")).toBeNull();
   });
 });
 
@@ -328,12 +353,15 @@ describe("Clearer actions and records (presentation only)", () => {
     expect(link.closest("tr")).toHaveTextContent("2 current authorizations");
   });
 
-  it("Schedule: shift actions are buttons at least 40px tall, and Cancel shift is visibly different from the others", async () => {
+  it("Schedule: the covered-shift row offers one primary action, and Cancel shift in the menu is visibly different and at least 40px tall", async () => {
     renderAt("/schedule", "organization_owner");
-    const cancel = await screen.findByRole("button", { name: "Cancel shift" });
-    const change = screen.getByRole("button", { name: "Change time" });
-    for (const b of [cancel, change, screen.getByRole("button", { name: "Record call-out" })]) expect(b.className).toMatch(/min-h-\[40px\]/);
-    expect(cancel.className).toMatch(/border-red-700/);
-    expect(change.className).not.toMatch(/border-red-700/);
+    const menus = await screen.findAllByRole("button", { name: "More actions" });
+    expect(screen.getAllByRole("button", { name: /Record call-out|Assign caregiver/ })[0]!.className).toMatch(/min-h-11/);
+    fireEvent.click(menus[0]!);
+    const cancel = await screen.findByRole("button", { name: /Cancel (shift|this date)/ });
+    const change = screen.getByRole("button", { name: /Change (time|this date only)/ });
+    for (const b of [cancel, change]) expect(b.className).toMatch(/min-h-10|min-h-11/);
+    expect(cancel.className).toMatch(/text-red-800/);
+    expect(change.className).not.toMatch(/text-red-800/);
   });
 });

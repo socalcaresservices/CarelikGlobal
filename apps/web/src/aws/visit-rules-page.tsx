@@ -9,6 +9,10 @@ import { newIdempotencyKey } from "@/lib/sv-backend";
 import { formatDateOnly, formatDateTime } from "@/lib/service-verification";
 import { useOrganization } from "@/providers/organization-provider";
 import { useAwsApi } from "./aws-workspace";
+import { AuditList } from "./ui/audit-list";
+import { CompactAlert } from "./ui/compact-alert";
+import { HelpLine } from "./ui/help-line";
+import { InfoTip } from "./ui/info-tip";
 
 interface Rule {
   version: number;
@@ -61,14 +65,13 @@ export function VisitRulesPage() {
 
   const current = rules.data?.find((r) => r.inEffect);
   return (
-    <div className="max-w-xl space-y-4">
-      <div>
+    <div className="max-w-xl space-y-3">
+      <div className="flex flex-wrap items-center gap-x-2">
         <Link to="/settings/branding" className="text-sm text-slate-600 underline">Settings</Link>
-        <h1 className="mt-1 text-xl font-semibold text-slate-950">Visit rules</h1>
-        <p className="mt-1 text-sm text-slate-600">
-          When a caregiver works more or less than the scheduled shift by more than this many minutes, the visit goes to review before it can be billed.
-          Visits with no scheduled shift always go to review.
-        </p>
+        <h1 className="text-xl font-semibold text-slate-950">Visit rules</h1>
+        <InfoTip label="About visit rules">
+          When a caregiver works more or less than the scheduled shift by more than this many minutes, the visit goes to review before it can be billed. Visits with no scheduled shift always go to review.
+        </InfoTip>
       </div>
 
       {rules.isLoading ? <p className="text-sm text-slate-500">Loading…</p> : null}
@@ -76,36 +79,40 @@ export function VisitRulesPage() {
       {rules.data && rules.data.length === 0 ? <p className="text-sm text-slate-600">You do not have access to these rules.</p> : null}
 
       {current ? (
-        <Card className="space-y-1 p-4">
-          <p className="text-sm text-slate-600">In effect now</p>
-          <p className="text-2xl font-semibold text-slate-950">{current.minutes} minutes</p>
+        <Card className="space-y-1">
+          <div className="flex flex-wrap items-baseline gap-x-3">
+            <span className="text-sm text-slate-600">In effect now</span>
+            <span className="text-lg font-semibold text-slate-950">{current.minutes} minutes</span>
+          </div>
           {current.source === "system_default" ? (
-            <p className="text-sm text-amber-900">
+            <CompactAlert summary="Starting value, not verified">
               This is the product’s starting value. It has <strong>not been verified</strong> against your payer’s or regional center’s rules. Set your agency’s own value below.
-            </p>
+            </CompactAlert>
           ) : (
-            <p className="text-sm text-slate-700">Version {current.version}, set by your agency. Confirm that it matches your payer’s rules; Ogevia does not verify it.</p>
+            <p className="text-xs text-slate-700">Version {current.version}, set by your agency. Confirm that it matches your payer’s rules; Ogevia does not verify it.</p>
           )}
         </Card>
       ) : null}
 
       {canChange ? (
-        <Card className="p-4">
-          <form onSubmit={(e) => { e.preventDefault(); void save(); }} className="space-y-3">
+        <Card>
+          <form onSubmit={(e) => { e.preventDefault(); void save(); }} className="space-y-2">
             <h2 className="text-base font-semibold text-slate-950">Change the rule</h2>
+            <div className="flex flex-wrap gap-x-4 gap-y-2">
             <label className="block text-sm font-medium text-slate-700">
               Allowed difference (minutes)
-              <input inputMode="numeric" value={minutes} onChange={(e) => setMinutes(e.target.value.replace(/[^0-9]/g, ""))} maxLength={3} className="mt-1 block w-32 rounded-lg border border-slate-200 px-3 py-2 text-base" />
+              <input inputMode="numeric" value={minutes} onChange={(e) => setMinutes(e.target.value.replace(/[^0-9]/g, ""))} maxLength={3} className="mt-0.5 block w-28 rounded-md border border-slate-200 px-2 py-1.5 text-sm" />
             </label>
             <label className="block text-sm font-medium text-slate-700">
               Starts on (optional; today if empty)
-              <input type="date" value={effectiveFrom} onChange={(e) => setEffectiveFrom(e.target.value)} className="mt-1 block rounded-lg border border-slate-200 px-3 py-2 text-base" />
+              <input type="date" value={effectiveFrom} onChange={(e) => setEffectiveFrom(e.target.value)} className="mt-0.5 block rounded-md border border-slate-200 px-2 py-1.5 text-sm" />
             </label>
+            </div>
             <label className="block text-sm font-medium text-slate-700">
               Reason (required, kept with the rule)
-              <textarea value={reason} maxLength={500} rows={2} onChange={(e) => setReason(e.target.value)} className="mt-1 block w-full rounded-lg border border-slate-200 px-3 py-2 text-base" />
+              <textarea value={reason} maxLength={500} rows={2} onChange={(e) => setReason(e.target.value)} className="mt-0.5 block w-full rounded-md border border-slate-200 px-2 py-1.5 text-sm" />
             </label>
-            <p className="text-xs text-slate-600">A change never applies to a past date and never changes a visit that was already checked.</p>
+            <HelpLine details="A change never applies to a past date and never changes a visit that was already checked.">Applies from the start date.</HelpLine>
             {state.error ? <p role="alert" className="text-sm text-red-700">{state.error}</p> : null}
             {state.done ? <p role="status" className="text-sm text-emerald-800">{state.done}</p> : null}
             <Button type="submit" disabled={state.busy}>{state.busy ? "Saving…" : "Save as a new version"}</Button>
@@ -117,22 +124,14 @@ export function VisitRulesPage() {
 
       {rules.data && rules.data.length > 0 ? (
         <section aria-labelledby="rule-history">
-          <h2 id="rule-history" className="mb-2 text-base font-semibold text-slate-950">History</h2>
-          <ul className="space-y-2">
-            {rules.data.map((r) => (
-              <li key={r.version} className="rounded-xl border border-slate-200 bg-white p-3 text-sm">
-                <p className="font-semibold text-slate-950">
-                  Version {r.version}: {r.minutes} minutes{r.inEffect ? " (in effect)" : ""}
-                </p>
-                <p className="text-slate-700">
-                  {r.source === "system_default"
-                    ? "Product starting value, not verified"
-                    : `From ${formatDateOnly(r.effectiveFrom)} · ${r.changedByName ?? "—"} · ${r.changedAt ? formatDateTime(r.changedAt) : ""}`}
-                </p>
-                {r.reason ? <p className="text-slate-700">“{r.reason}”</p> : null}
-              </li>
-            ))}
-          </ul>
+          <h2 id="rule-history" className="mb-1 text-base font-semibold text-slate-950">History</h2>
+          <AuditList label="Rule versions" maxHeightClass="max-h-48" rows={rules.data.map((r) => ({
+            id: String(r.version),
+            when: r.source === "system_default" ? "Starting value" : formatDateOnly(r.effectiveFrom),
+            who: r.source === "system_default" ? null : (r.changedByName ?? "—"),
+            summary: `Version ${r.version}: ${r.minutes} minutes${r.inEffect ? " (in effect)" : ""}`,
+            detail: <>{r.source === "system_default" ? "Product starting value, not verified" : `Changed ${r.changedAt ? formatDateTime(r.changedAt) : ""}`}{r.reason ? ` · “${r.reason}”` : ""}</>,
+          }))} />
         </section>
       ) : null}
     </div>

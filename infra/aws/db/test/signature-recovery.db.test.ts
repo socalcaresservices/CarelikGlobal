@@ -183,7 +183,7 @@ describe("response, review and billing eligibility", () => {
     expect(after.awaiting_signature).toBe(before.awaiting_signature - 1);
     expect(await billingRow(v.visit)).toMatchObject({ review_state: "late_response_to_review", eligible_minutes: 0 });
     // Not approvable before review.
-    await expectPgError(q(w.managerA, "select ogevia_api.approve_visit_for_billing($1, 45, null, null)", [v.visit]), "OGC09", /reviewed first/);
+    await expectPgError(q(w.managerA, "select ogevia_api.approve_visit_for_billing($1, 45, null, null)", [v.visit]), "OGC09", /must be resolved first/);
 
     const usageBefore = await usage(v.lineage, v.visit);
     const rv = await review(w.managerA, res.late_confirmation_id, "accepted");

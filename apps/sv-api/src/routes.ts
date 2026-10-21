@@ -1,8 +1,9 @@
 import { createHash, randomBytes, randomInt, randomUUID } from "node:crypto";
 import type { Queryable } from "@carelik/auth/server";
-import { ApiError } from "./errors";
+import { ApiError, storageUnavailable } from "./errors";
+import { assertExportSize, buildReportCsv, REPORT_KEYS, sha256Hex, type ExportParams, type ReportKey } from "./exports";
 import { signatureObjectKey, validateSignaturePng, type EvidenceStore } from "./evidence";
-import { documentObjectKey, logoObjectKey, MAX_DOCUMENT_BYTES, MAX_LOGO_BYTES, validateDocumentFile, validateLogoFile } from "./documents";
+import { clientDocumentObjectKey, documentObjectKey, lateFormObjectKey, logoObjectKey, MAX_DOCUMENT_BYTES, MAX_LOGO_BYTES, validateDocumentFile, validateLogoFile } from "./documents";
 import type { HttpApiEvent } from "./http";
 import type { IdentityAdmin } from "./identity";
 import {
@@ -81,6 +82,22 @@ const publicConfirmationOrThrow = (row: Record<string, unknown> | undefined) => 
   }
 };
 
+const BACKGROUNDS = ["light", "white", "gray", "dark"] as const;
+const ACCENTS = ["teal", "blue", "indigo", "plum", "rust"] as const;
+const DENSITIES = ["comfortable", "compact"] as const;
+const TEXT_SIZES = ["standard", "large"] as const;
+const CHART_TYPES = ["bar", "line", "donut"] as const;
+const LAYOUTS = ["standard", "minimal"] as const;
+/** organizationId plus the six appearance choices; an absent or null choice means "follow the next level". */
+function appearanceArgs(body: Record<string, unknown>) {
+  const pick = <T extends string>(value: unknown, name: string, allowed: readonly T[]) => (value === undefined || value === null ? null : oneOf(value, name, allowed));
+  return [
+    uuid(body.organizationId, "organizationId"),
+    pick(body.background, "background", BACKGROUNDS), pick(body.accent, "accent", ACCENTS), pick(body.density, "density", DENSITIES),
+    pick(body.textSize, "textSize", TEXT_SIZES), pick(body.chartType, "chartType", CHART_TYPES), pick(body.layout, "layout", LAYOUTS),
+  ];
+}
+
 const camel = (key: string) => key.replace(/_([a-z0-9])/g, (_, c: string) => c.toUpperCase());
 /** snake_case DB row -> camelCase JSON. Values are passed through unchanged. */
 export function toCamel(row: unknown): Record<string, unknown> {
@@ -98,14 +115,133 @@ async function rows(db: Queryable, sql: string, params: unknown[]) {
   return (await db.query(sql, params)).rows.map(toCamel);
 }
 
+/** Lower-case, single-spaced, accent-free name part so "  Ana  " and "ana" compare equal. */
+const nameKey = (...parts: unknown[]) =>
+  parts.filter((x): x is string => typeof x === "string" && x.trim() !== "").join(" ").normalize("NFKD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/\s+/g, " ").trim();
+
+/** Ids whose normalized name (first+last, or preferred+last) is shared with another record in the same list. Names stay inside the API; only the boolean leaves. */
+export function duplicateNameIds(people: ReadonlyArray<{ id: string; names: string[] }>): Set<string> {
+  const owners = new Map<string, Set<string>>();
+  for (const p of people) for (const k of new Set(p.names.filter(Boolean))) (owners.get(k) ?? owners.set(k, new Set()).get(k)!).add(p.id);
+  const out = new Set<string>();
+  for (const ids of owners.values()) if (ids.size > 1) for (const id of ids) out.add(id);
+  return out;
+}
+
+/** Per-agency duplicate-name sets for clients (legal names; empty unless the caller may read names) and caregivers. Failure to read means no flag, never an error. */
+async function duplicateNames(db: Queryable, org: string, which: { clients?: boolean; caregivers?: boolean }) {
+  const safe = async (sql: string) => {
+    await db.query("savepoint dup_names");
+    try {
+      const r = await rows(db, sql, [org]);
+      await db.query("release savepoint dup_names");
+      return r;
+    } catch {
+      await db.query("rollback to savepoint dup_names");
+      return [];
+    }
+  };
+  const clients = which.clients ? duplicateNameIds((await safe("select * from ogevia_api.list_clients($1)")).map((c) => ({ id: String(c.clientId), names: [nameKey(c.legalFirstName, c.legalLastName)] }))) : new Set<string>();
+  const caregivers = which.caregivers ? duplicateNameIds((await safe("select * from ogevia_api.list_caregivers($1)")).map((c) => ({ id: String(c.caregiverRecordId), names: [nameKey(c.firstName, c.lastName), nameKey(c.preferredName, c.lastName)] }))) : new Set<string>();
+  return { clients, caregivers };
+}
+/**
+ * Names for administrator rows that carry only ids and codes (the issue list, shifts to reconcile). Built from the SAME permission-checked functions the
+ * client directory and the care team use: a caller without clients.names.read gets no client names (the directory returns null), and a caller who may not
+ * open the care team gets no caregiver names (the guard refuses and the savepoint turns that into "no names"). Nothing here widens who sees a name; rows
+ * keep their codes. Look-ups are by id, or by the agency-unique code where the source row has no id.
+ */
+async function nameDirectory(db: Queryable, org: string) {
+  const safe = async (sql: string) => {
+    await db.query("savepoint name_dir");
+    try {
+      const r = await rows(db, sql, [org]);
+      await db.query("release savepoint name_dir");
+      return r;
+    } catch {
+      await db.query("rollback to savepoint name_dir");
+      return [];
+    }
+  };
+  const clientRows = await safe("select * from ogevia_api.list_client_directory($1)");
+  const cgRows = await safe("select * from ogevia_api.list_caregivers($1)");
+  const clientDup = duplicateNameIds(clientRows.map((c) => ({ id: String(c.clientId), names: [nameKey(c.legalFirstName, c.legalLastName)] })));
+  const cgDup = duplicateNameIds(cgRows.map((c) => ({ id: String(c.caregiverRecordId), names: [nameKey(c.firstName, c.lastName), nameKey(c.preferredName, c.lastName)] })));
+  type Named = { name: string; duplicate: boolean };
+  const clientsById = new Map<string, Named>();
+  const clientsByCode = new Map<string, Named>();
+  const clientsByAlias = new Map<string, Named>();
+  const aliasCount = new Map<string, number>();
+  for (const c of clientRows) {
+    const name = [c.legalFirstName, c.legalLastName].filter((x) => typeof x === "string" && x !== "").join(" ");
+    if (!name) continue;
+    const named = { name, duplicate: clientDup.has(String(c.clientId)) };
+    clientsById.set(String(c.clientId), named);
+    clientsByCode.set(String(c.clientCode), named);
+    // Some rows carry the alias caregivers see (caregiver_display_code) in place of the real code; it identifies a client only when no other client shares it.
+    if (typeof c.caregiverDisplayCode === "string" && c.caregiverDisplayCode) aliasCount.set(c.caregiverDisplayCode, (aliasCount.get(c.caregiverDisplayCode) ?? 0) + 1);
+    if (typeof c.caregiverDisplayCode === "string" && c.caregiverDisplayCode) clientsByAlias.set(c.caregiverDisplayCode, named);
+  }
+  for (const [alias, n] of aliasCount) if (n > 1 || clientsByCode.has(alias)) clientsByAlias.delete(alias);
+  const cgById = new Map<string, Named>();
+  const cgByCode = new Map<string, Named>();
+  for (const c of cgRows) {
+    const name = `${c.firstName} ${c.lastName}${c.preferredName ? ` ("${c.preferredName}")` : ""}`;
+    const named = { name, duplicate: cgDup.has(String(c.caregiverRecordId)) };
+    cgById.set(String(c.caregiverRecordId), named);
+    cgByCode.set(String(c.caregiverCode), named);
+  }
+  return {
+    client: (id: unknown, code: unknown) => (typeof id === "string" && clientsById.get(id)) || (typeof code === "string" && (clientsByCode.get(code) ?? clientsByAlias.get(code))) || null,
+    caregiver: (id: unknown, code: unknown) => (typeof id === "string" && cgById.get(id)) || (typeof code === "string" && cgByCode.get(code)) || null,
+  };
+}
+/** Adds clientName / duplicateName / caregiverName / caregiverDuplicateName where the caller may see them; the codes stay on the row. */
+function withNames<T extends Record<string, unknown>>(list: T[], dir: Awaited<ReturnType<typeof nameDirectory>>) {
+  return list.map((r) => {
+    const c = dir.client(r.clientId, r.clientCode);
+    const g = dir.caregiver(r.caregiverRecordId, r.caregiverCode);
+    return { ...r, ...(c ? { clientName: c.name, duplicateName: c.duplicate } : {}), ...(g ? { caregiverName: g.name, caregiverDuplicateName: g.duplicate } : {}) };
+  });
+}
+
+/** Walks a response and adds clientName / duplicateName beside every object that carries a clientCode (or clientId), for administrator lists; the codes stay. */
+function withClientNames<T>(value: T, dir: Awaited<ReturnType<typeof nameDirectory>>): T {
+  const walk = (v: unknown): unknown => {
+    if (Array.isArray(v)) return v.map(walk);
+    if (v && typeof v === "object") {
+      const o = v as Record<string, unknown>;
+      const out: Record<string, unknown> = {};
+      for (const [k, x] of Object.entries(o)) out[k] = walk(x);
+      if (typeof o.clientCode === "string" || typeof o.clientId === "string") {
+        const c = dir.client(o.clientId, o.clientCode);
+        if (c) { out.clientName = c.name; out.duplicateName = c.duplicate; }
+      }
+      return out;
+    }
+    return v;
+  };
+  return walk(value) as T;
+}
+
+/** Adds duplicateName (client) and caregiverDuplicateName to rows that show a name; ids come from the row. */
+function flagDuplicates<T extends Record<string, unknown>>(list: T[], d: { clients: Set<string>; caregivers: Set<string> }, o: { client?: boolean; caregiver?: boolean }) {
+  return list.map((r) => ({
+    ...r,
+    ...(o.client ? { duplicateName: r.clientName != null && typeof r.clientId === "string" && d.clients.has(r.clientId) } : {}),
+    ...(o.caregiver ? { caregiverDuplicateName: r.caregiverName != null && typeof r.caregiverRecordId === "string" && d.caregivers.has(r.caregiverRecordId) } : {}),
+  }));
+}
+
 /** The first row of a one-row result (a jsonb or uuid scalar), typed loosely because the database already shaped it. */
 async function first(db: Queryable, sql: string, params: unknown[]): Promise<Record<string, any>> {
   return (await db.query(sql, params)).rows[0] as Record<string, any>;
 }
 
 const CLIENT_STATUSES = ["active", "inactive", "discharged"] as const;
-const CAREGIVER_STATUSES = ["onboarding", "ready", "active", "inactive"] as const;
-const NEW_CAREGIVER_STATUSES = ["onboarding", "ready", "active"] as const;
+/** 0054: Applicant, Interview, Offer, Onboarding, Pending documents, Approved ("ready"), Active, Inactive. */
+const CAREGIVER_STATUSES = ["applicant", "interview", "offer", "onboarding", "pending_documents", "ready", "active", "inactive"] as const;
+const NEW_CAREGIVER_STATUSES = ["applicant", "onboarding", "ready", "active"] as const;
 function caregiverNames(body: Record<string, unknown>) {
   return {
     first: text(body.firstName, "firstName", 80, { required: true }),
@@ -153,6 +289,19 @@ function clockTime(value: unknown, name: string): string {
   return value;
 }
 const q = (event: HttpApiEvent) => event.queryStringParameters ?? {};
+
+function exportFilename(report: ReportKey, p: ExportParams): string {
+  const month = p.monthStart ? p.monthStart.slice(0, 7) : "";
+  switch (report) {
+    case "monthly_chain": return `monthly-chain-${month}.csv`;
+    case "client_service_calendar": return `client-service-calendar-${month}.csv`;
+    case "monthly_service_reconciliation": return `monthly-service-reconciliation-${month}.csv`;
+    case "billing_review": return `billing-review-${month}.csv`;
+    case "audit_report": return `audit-report-${p.dateFrom ?? ""}-to-${p.dateTo ?? ""}.csv`;
+    default: return "correction-history.csv";
+  }
+}
+
 const p = (event: HttpApiEvent) => event.pathParameters ?? {};
 const orgParam = (event: HttpApiEvent) => uuid(q(event).organizationId, "organizationId");
 
@@ -170,6 +319,17 @@ function weekdayList(value: unknown): number[] {
     throw new ApiError(400, "bad_request", "weekdays must be 1 to 7 different days, 0 (Sunday) to 6 (Saturday).");
   }
   return list as number[];
+}
+
+/** A repeat pattern (0053): an object, or a JSON string of one in a query string. PostgreSQL validates every key and value. */
+function patternValue(value: unknown): string | null {
+  if (value === undefined || value === null || value === "") return null;
+  let parsed: unknown = value;
+  if (typeof value === "string") {
+    try { parsed = JSON.parse(value); } catch { throw new ApiError(400, "bad_request", "pattern must be a JSON object."); }
+  }
+  if (parsed === null || typeof parsed !== "object" || Array.isArray(parsed)) throw new ApiError(400, "bad_request", "pattern must be a JSON object.");
+  return JSON.stringify(parsed);
 }
 
 export const ROUTES: Record<string, Route> = {
@@ -265,8 +425,8 @@ export const ROUTES: Record<string, Route> = {
       let s3VersionId: string | null;
       try {
         ({ versionId: s3VersionId } = await evidence.put(objectKey, file.bytes, file.sha256, file.contentType));
-      } catch {
-        throw new ApiError(503, "storage_unavailable", "The logo could not be stored. Nothing was changed; please try again.");
+      } catch (error) {
+        throw storageUnavailable("The logo could not be stored. Nothing was changed; please try again.", error);
       }
       const sha256 = await tx(async (db) => {
         const r = await db.query("select ogevia_api.set_organization_logo($1, $2, $3, $4, $5, $6, $7, $8) as s", [
@@ -305,7 +465,11 @@ export const ROUTES: Record<string, Route> = {
   "GET /v1/clients/directory": {
     mutating: false,
     handle: async ({ event, tx }) => ({
-      clients: await tx((db) => rows(db, "select * from ogevia_api.list_client_directory($1)", [orgParam(event)])),
+      clients: await tx(async (db) => {
+        const list = await rows(db, "select * from ogevia_api.list_client_directory($1)", [orgParam(event)]);
+        const dup = duplicateNameIds(list.map((c) => ({ id: String(c.clientId), names: [nameKey(c.legalFirstName, c.legalLastName)] })));
+        return list.map((c) => ({ ...c, duplicateName: nameKey(c.legalFirstName, c.legalLastName) !== "" && dup.has(String(c.clientId)) }));
+      }),
     }),
   },
 
@@ -358,7 +522,11 @@ export const ROUTES: Record<string, Route> = {
   "GET /v1/clients": {
     mutating: false,
     handle: async ({ event, tx }) => ({
-      clients: await tx((db) => rows(db, "select * from ogevia_api.list_clients($1)", [orgParam(event)])),
+      clients: await tx(async (db) => {
+        const list = await rows(db, "select * from ogevia_api.list_clients($1)", [orgParam(event)]);
+        const dup = duplicateNameIds(list.map((c) => ({ id: String(c.clientId), names: [nameKey(c.legalFirstName, c.legalLastName)] })));
+        return list.map((c) => ({ ...c, duplicateName: nameKey(c.legalFirstName, c.legalLastName) !== "" && dup.has(String(c.clientId)) }));
+      }),
     }),
   },
 
@@ -470,10 +638,290 @@ export const ROUTES: Record<string, Route> = {
         newAuthorizationId: first.newAuthorizationId ?? null,
         newVersionNumber: first.newVersionNumber ?? null,
         affectedVisits: impact.filter((r) => r.affectedVisitId).map((r) => ({
-          visitId: r.affectedVisitId, status: r.affectedVisitStatus, serviceDate: r.affectedServiceDate,
+          impactId: r.impactId, visitId: r.affectedVisitId, status: r.affectedVisitStatus, serviceDate: r.affectedServiceDate,
           workedMinutes: r.affectedWorkedMinutes, billableMinutes: r.affectedBillableMinutes, impact: r.impactKind,
         })),
+        // 0068: reserved shifts that no longer fit the new terms. Reported and stored; nothing is released or moved.
+        affectedShifts: impact.filter((r) => r.affectedShiftId).map((r) => ({
+          impactId: r.impactId, shiftId: r.affectedShiftId, serviceDate: r.affectedServiceDate, reservedMinutes: r.impactMinutes, impact: r.impactKind,
+        })),
       };
+    },
+  },
+
+  // Stored amendment impacts (0068): authorizations.update or shifts.manage. Open ones by default.
+  // 0071: an authorization decrease sent this unapproved Billing Ready visit back to review. Reading needs visits.read; lifting it needs visits.manage and a note.
+  "GET /v1/visits/{visitId}/authorization-review": {
+    mutating: false,
+    handle: async ({ event, tx }) => {
+      const visit = uuid(p(event).visitId, "visitId");
+      return { review: await tx(async (db) => ((await db.query("select ogevia_api.get_visit_authorization_review($1) as r", [visit])).rows[0] as { r: unknown }).r) };
+    },
+  },
+
+  "POST /v1/visits/{visitId}/authorization-review/resolve": {
+    mutating: true,
+    handle: async ({ event, tx }) => {
+      const visit = uuid(p(event).visitId, "visitId");
+      const body = parseBody(event.body, event.isBase64Encoded);
+      const key = idempotencyKey(event.headers);
+      const note = text(body.note, "note", 1000, { required: true });
+      const result = await tx(async (db) => ((await db.query("select ogevia_api.resolve_visit_authorization_review($1, $2, $3) as r", [visit, note, key])).rows[0] as { r: unknown }).r);
+      return { resolution: result };
+    },
+  },
+
+  // 0074: client documents (upload is not approval), readiness stages, service holds, the client's audit timeline, issue history and the duplicate-name check.
+  "GET /v1/client-document-types": {
+    mutating: false,
+    handle: async ({ event, tx }) => ({ types: await tx((db) => rows(db, "select * from ogevia_api.list_client_document_types($1)", [orgParam(event)])) }),
+  },
+
+  "POST /v1/client-document-types": {
+    status: 201,
+    mutating: true,
+    handle: async ({ event, tx }) => {
+      const body = parseBody(event.body, event.isBase64Encoded);
+      const key = idempotencyKey(event.headers);
+      const org = uuid(body.organizationId, "organizationId");
+      const category = oneOf(body.category, "category", ["consent", "authorization", "assessment", "insurance", "identity", "other"] as const);
+      const active = body.active === undefined ? true : booleanValue(body.active, "active");
+      const documentTypeId = await tx(async (db) =>
+        ((await db.query("select ogevia_api.save_client_document_type($1,$2,$3,$4,$5,$6) as id", [org, text(body.name, "name", 80, { required: true }), category, booleanValue(body.requiresExpiry, "requiresExpiry"), active, key])).rows[0] as { id: string }).id);
+      return { documentTypeId };
+    },
+  },
+
+  "POST /v1/client-document-requirements": {
+    mutating: true,
+    handle: async ({ event, tx }) => {
+      const body = parseBody(event.body, event.isBase64Encoded);
+      const key = idempotencyKey(event.headers);
+      const required = await tx(async (db) =>
+        ((await db.query("select ogevia_api.set_client_document_requirement($1,$2,$3,$4,$5) as r", [uuid(body.organizationId, "organizationId"), uuid(body.serviceId, "serviceId"), uuid(body.documentTypeId, "documentTypeId"), booleanValue(body.required, "required"), key])).rows[0] as { r: boolean }).r);
+      return { required };
+    },
+  },
+
+  "GET /v1/clients/{clientId}/documents": {
+    mutating: false,
+    handle: async ({ event, tx }) => ({ documents: await tx((db) => rows(db, "select * from ogevia_api.list_client_documents($1,$2)", [orgParam(event), uuid(p(event).clientId, "clientId")])) }),
+  },
+
+  "POST /v1/clients/{clientId}/documents/{documentTypeId}/versions": {
+    status: 201,
+    mutating: true,
+    handle: async ({ event, tx, evidence }) => {
+      const clientId = uuid(p(event).clientId, "clientId");
+      const typeId = uuid(p(event).documentTypeId, "documentTypeId");
+      const body = parseBody(event.body, event.isBase64Encoded, 5_600_000);
+      const key = idempotencyKey(event.headers);
+      const org = uuid(body.organizationId, "organizationId");
+      const issuedOn = optionalDate(body.issuedOn, "issuedOn");
+      const expiresOn = optionalDate(body.expiresOn, "expiresOn");
+      const file = validateDocumentFile(body.fileBase64, body.contentType);
+      if (issuedOn && expiresOn && expiresOn <= issuedOn) throw new ApiError(422, "validation_failed", "The expiry date must be after the issue date.");
+      // authority first (creates the empty document record only for someone who may upload), then a retry check, then the file, then the version
+      const documentId = await tx(async (db) => ((await db.query("select ogevia_api.ensure_client_document($1,$2,$3) as id", [org, clientId, typeId])).rows[0] as { id: string }).id);
+      const [prior] = await tx((db) => rows(db, "select * from ogevia_api.get_client_document_upload_replay($1,$2)", [documentId, key]));
+      if (prior) return { version: prior };
+      const versionId = randomUUID();
+      const objectKey = clientDocumentObjectKey(org, documentId, versionId);
+      let s3VersionId: string | null;
+      try {
+        ({ versionId: s3VersionId } = await evidence.put(objectKey, file.bytes, file.sha256, file.contentType));
+      } catch (error) {
+        throw storageUnavailable("The file could not be stored. Nothing was saved; please try again.", error);
+      }
+      const [version] = await tx((db) =>
+        rows(db, "select * from ogevia_api.register_client_document_version($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)", [documentId, versionId, objectKey, s3VersionId, file.contentType, file.bytes.length, file.sha256Hex, issuedOn, expiresOn, key]));
+      return { version };
+    },
+  },
+
+  "POST /v1/client-document-versions/{versionId}/review": {
+    mutating: true,
+    handle: async ({ event, tx }) => {
+      const versionId = uuid(p(event).versionId, "versionId");
+      const body = parseBody(event.body, event.isBase64Encoded);
+      const key = idempotencyKey(event.headers);
+      const decision = oneOf(body.decision, "decision", ["verified", "rejected"] as const);
+      const reason = text(body.reason, "reason", 1000);
+      const result = await tx(async (db) => ((await db.query("select ogevia_api.review_client_document_version($1,$2,$3,$4) as d", [versionId, decision, reason, key])).rows[0] as { d: string }).d);
+      return { decision: result };
+    },
+  },
+
+  "GET /v1/client-document-versions/{versionId}/file": {
+    mutating: false,
+    handle: async ({ event, tx, evidence }) => {
+      const versionId = uuid(p(event).versionId, "versionId");
+      const [meta] = await tx((db) => rows(db, "select * from ogevia_api.open_client_document_version($1)", [versionId]));
+      if (!meta) throw new ApiError(404, "not_found", "Document not found.");
+      const stored = await evidence.get(meta.objectKey as string, (meta.s3VersionId as string | null) ?? null, MAX_DOCUMENT_BYTES);
+      const digest = createHash("sha256").update(stored.bytes).digest("hex");
+      if (digest !== meta.sha256) throw new ApiError(500, "integrity_error", "The stored file failed its integrity check.");
+      return { contentType: meta.contentType, fileBase64: stored.bytes.toString("base64"), sha256: digest };
+    },
+  },
+
+  "GET /v1/clients/{clientId}/readiness": {
+    mutating: false,
+    handle: async ({ event, tx }) => ({ readiness: await tx(async (db) => ((await db.query("select ogevia_api.get_client_readiness($1,$2) as r", [orgParam(event), uuid(p(event).clientId, "clientId")])).rows[0] as { r: unknown }).r) }),
+  },
+
+  "POST /v1/clients/{clientId}/stage": {
+    mutating: true,
+    handle: async ({ event, tx }) => {
+      const body = parseBody(event.body, event.isBase64Encoded);
+      const key = idempotencyKey(event.headers);
+      const stage = oneOf(body.stage, "stage", ["draft", "pending", "active"] as const);
+      return { stage: await tx(async (db) => ((await db.query("select ogevia_api.set_client_preparation($1,$2,$3,$4,$5) as r", [uuid(body.organizationId, "organizationId"), uuid(p(event).clientId, "clientId"), stage, text(body.note, "note", 500), key])).rows[0] as { r: unknown }).r) };
+    },
+  },
+
+  "POST /v1/clients/{clientId}/service-holds": {
+    status: 201,
+    mutating: true,
+    handle: async ({ event, tx }) => {
+      const body = parseBody(event.body, event.isBase64Encoded);
+      const key = idempotencyKey(event.headers);
+      const holdId = await tx(async (db) =>
+        ((await db.query("select ogevia_api.open_client_service_hold($1,$2,$3,$4,$5) as id", [uuid(body.organizationId, "organizationId"), uuid(p(event).clientId, "clientId"), uuid(body.serviceId, "serviceId"), text(body.reason, "reason", 500, { required: true }), key])).rows[0] as { id: string }).id);
+      return { holdId };
+    },
+  },
+
+  "POST /v1/client-service-holds/{holdId}/release": {
+    mutating: true,
+    handle: async ({ event, tx }) => {
+      const body = parseBody(event.body, event.isBase64Encoded);
+      const key = idempotencyKey(event.headers);
+      const holdId = await tx(async (db) =>
+        ((await db.query("select ogevia_api.release_client_service_hold($1,$2,$3,$4) as id", [uuid(body.organizationId, "organizationId"), uuid(p(event).holdId, "holdId"), text(body.note, "note", 500, { required: true }), key])).rows[0] as { id: string }).id);
+      return { holdId };
+    },
+  },
+
+  "GET /v1/clients/{clientId}/audit": {
+    mutating: false,
+    handle: async ({ event, tx }) => ({ events: await tx((db) => rows(db, "select * from ogevia_api.list_client_audit($1,$2,100)", [orgParam(event), uuid(p(event).clientId, "clientId")])) }),
+  },
+
+  "GET /v1/clients/{clientId}/issue-history": {
+    mutating: false,
+    handle: async ({ event, tx }) => ({ history: await tx(async (db) => ((await db.query("select ogevia_api.get_client_issue_history($1,$2) as r", [orgParam(event), uuid(p(event).clientId, "clientId")])).rows[0] as { r: unknown }).r) }),
+  },
+
+  "GET /v1/client-duplicates": {
+    mutating: false,
+    handle: async ({ event, tx }) => {
+      const query = q(event);
+      return { matches: await tx((db) => rows(db, "select * from ogevia_api.find_possible_duplicate_clients($1,$2,$3,$4)", [orgParam(event), text(query.firstName, "firstName", 80), text(query.lastName, "lastName", 80), optionalUuid(query.excludeClientId, "excludeClientId")])) };
+    },
+  },
+
+  // 0073: the one issue list (filters, paging, stable keys), its history, and the agency's shorter deadlines.
+  "GET /v1/action-issues": {
+    mutating: false,
+    handle: async ({ event, tx }) => {
+      const query = q(event);
+      return tx(async (db) => {
+        const result = ((await db.query("select ogevia_api.list_action_issues($1,$2,$3,$4,$5,$6,$7,$8,$9) as r", [
+          orgParam(event), query.queue ?? null, query.category ?? null, query.severity ?? null,
+          optionalUuid(query.clientId, "clientId"), optionalUuid(query.caregiverRecordId, "caregiverRecordId"), optionalUuid(query.serviceId, "serviceId"),
+          query.limit ? Math.min(200, Math.max(1, Number.parseInt(query.limit, 10) || 50)) : 50, query.offset ? Math.max(0, Number.parseInt(query.offset, 10) || 0) : 0,
+        ])).rows[0] as { r: Record<string, unknown> }).r;
+        // Names-first for administrators (F01/I07): added beside the codes, only what this caller may already see.
+        const issues = result.issues;
+        if (!Array.isArray(issues) || issues.length === 0) return result;
+        return { ...result, issues: withNames(issues as Array<Record<string, unknown>>, await nameDirectory(db, orgParam(event))) };
+      });
+    },
+  },
+
+  "GET /v1/action-issues/history": {
+    mutating: false,
+    handle: async ({ event, tx }) => {
+      const key = text(q(event).issueKey, "issueKey", 200, { required: true });
+      return { history: await tx(async (db) => ((await db.query("select ogevia_api.get_action_issue_history($1,$2) as r", [orgParam(event), key])).rows[0] as { r: unknown }).r) };
+    },
+  },
+
+  "GET /v1/attention-settings": {
+    mutating: false,
+    handle: async ({ event, tx }) => ({ settings: await tx(async (db) => ((await db.query("select ogevia_api.get_attention_settings($1) as r", [orgParam(event)])).rows[0] as { r: unknown }).r) }),
+  },
+
+  "POST /v1/attention-settings": {
+    mutating: true,
+    handle: async ({ event, tx }) => {
+      const body = parseBody(event.body, event.isBase64Encoded);
+      const org = uuid(body.organizationId, "organizationId");
+      const hours = (value: unknown, name: string) => (value === null || value === undefined ? null : Number.isInteger(value) ? (value as number) : (() => { throw new ApiError(400, "bad_request", `${name} must be a whole number of hours or empty.`); })());
+      const reason = text(body.reason, "reason", 1000, { required: true });
+      return { settings: await tx(async (db) =>
+        ((await db.query("select ogevia_api.set_attention_settings($1,$2,$3,$4,$5) as r", [org, hours(body.confirmationOverdueHours, "confirmationOverdueHours"), hours(body.reviewOverdueHours, "reviewOverdueHours"), hours(body.documentReviewOverdueHours, "documentReviewOverdueHours"), reason])).rows[0] as { r: unknown }).r) };
+    },
+  },
+
+  // 0077: the caller's own in-app notifications (Critical always, Urgent per agency setting, never Routine). Listing brings them up to date with the caller's own view.
+  "GET /v1/notifications": {
+    mutating: false,
+    handle: async ({ event, tx }) => {
+      const params = q(event);
+      const limit = params.limit === undefined || params.limit === "" ? 30 : wholeNumber(Number(params.limit), "limit", 1, 100);
+      return { notifications: await tx(async (db) => ((await db.query("select ogevia_api.list_my_notifications($1,$2,$3) as r", [orgParam(event), params.includeRead === "true", limit])).rows[0] as { r: unknown }).r) };
+    },
+  },
+
+  "POST /v1/notifications/read": {
+    mutating: true,
+    handle: async ({ event, tx }) => {
+      const body = parseBody(event.body, event.isBase64Encoded);
+      const org = uuid(body.organizationId, "organizationId");
+      const ids = body.ids === undefined || body.ids === null ? null : Array.isArray(body.ids) && body.ids.length <= 100 ? body.ids.map((id) => uuid(id, "ids")) : (() => { throw new ApiError(400, "bad_request", "ids must be a list of up to 100 notification ids."); })();
+      return { marked: await tx(async (db) => ((await db.query("select ogevia_api.mark_notifications_read($1,$2::uuid[]) as n", [org, ids])).rows[0] as { n: number }).n) };
+    },
+  },
+
+  "GET /v1/notification-settings": {
+    mutating: false,
+    handle: async ({ event, tx }) => ({ settings: await tx(async (db) => ((await db.query("select ogevia_api.get_notification_settings($1) as r", [orgParam(event)])).rows[0] as { r: unknown }).r) }),
+  },
+
+  "POST /v1/notification-settings": {
+    mutating: true,
+    handle: async ({ event, tx }) => {
+      const body = parseBody(event.body, event.isBase64Encoded);
+      const org = uuid(body.organizationId, "organizationId");
+      if (typeof body.urgentInApp !== "boolean") throw new ApiError(400, "bad_request", "urgentInApp must be true or false.");
+      const reason = text(body.reason, "reason", 1000, { required: true });
+      return { settings: await tx(async (db) => ((await db.query("select ogevia_api.set_notification_settings($1,$2,$3) as r", [org, body.urgentInApp, reason])).rows[0] as { r: unknown }).r) };
+    },
+  },
+
+  "GET /v1/authorization-impacts": {
+    mutating: false,
+    handle: async ({ event, tx }) => {
+      const all = (event.queryStringParameters ?? {}).includeAcknowledged === "true";
+      return { impacts: await tx(async (db) => {
+        const list = await rows(db, "select * from ogevia_api.list_authorization_amendment_impacts($1, $2)", [orgParam(event), all]);
+        return list.length === 0 ? list : withClientNames(list, await nameDirectory(db, orgParam(event)));
+      }) };
+    },
+  },
+
+  "POST /v1/authorization-impacts/{impactId}/acknowledge": {
+    mutating: true,
+    handle: async ({ event, tx }) => {
+      const impact = uuid(p(event).impactId, "impactId");
+      const body = parseBody(event.body, event.isBase64Encoded);
+      const org = uuid(body.organizationId, "organizationId");
+      const note = text(body.note, "note", 1000, { required: true });
+      const result = await tx(async (db) =>
+        ((await db.query("select ogevia_api.acknowledge_authorization_amendment_impact($1, $2, $3) as r", [org, impact, note])).rows[0] as { r: unknown }).r);
+      return { acknowledgement: result };
     },
   },
 
@@ -482,7 +930,11 @@ export const ROUTES: Record<string, Route> = {
   "GET /v1/caregivers": {
     mutating: false,
     handle: async ({ event, tx }) => ({
-      caregivers: await tx((db) => rows(db, "select * from ogevia_api.list_caregivers($1)", [orgParam(event)])),
+      caregivers: await tx(async (db) => {
+        const list = await rows(db, "select * from ogevia_api.list_caregivers($1)", [orgParam(event)]);
+        const dup = duplicateNameIds(list.map((c) => ({ id: String(c.caregiverRecordId), names: [nameKey(c.firstName, c.lastName), nameKey(c.preferredName, c.lastName)] })));
+        return list.map((c) => ({ ...c, duplicateName: dup.has(String(c.caregiverRecordId)) }));
+      }),
     }),
   },
 
@@ -661,7 +1113,13 @@ export const ROUTES: Record<string, Route> = {
       const from = date(query.from, "from");
       const to = date(query.to, "to");
       const client = optionalUuid(query.clientId, "clientId");
-      return { shifts: await tx((db) => rows(db, "select * from ogevia_api.list_shifts($1, $2, $3, $4)", [orgParam(event), from, to, client])) };
+      return {
+        shifts: await tx(async (db) => {
+          const org = orgParam(event);
+          const list = await rows(db, "select * from ogevia_api.list_shifts($1, $2, $3, $4)", [org, from, to, client]);
+          return flagDuplicates(list, await duplicateNames(db, org, { clients: true, caregivers: true }), { client: true, caregiver: true });
+        }),
+      };
     },
   },
 
@@ -684,6 +1142,75 @@ export const ROUTES: Record<string, Route> = {
     },
   },
 
+  // Recruiting and onboarding (0054). Every rule (the checklist, the approval gate, the assignment gate) runs in PostgreSQL.
+  "GET /v1/onboarding/overview": {
+    mutating: false,
+    handle: async ({ event, tx }) => ({
+      caregivers: await tx((db) => rows(db, "select *, next_expiry::text as next_expiry from ogevia_api.list_onboarding_overview($1)", [orgParam(event)])),
+    }),
+  },
+
+  "GET /v1/onboarding/requirements": {
+    mutating: false,
+    handle: async ({ event, tx }) => ({
+      requirements: await tx((db) => rows(db, "select * from ogevia_api.list_onboarding_requirements($1)", [orgParam(event)])),
+    }),
+  },
+
+  "POST /v1/onboarding/requirements": {
+    mutating: true,
+    handle: async ({ event, tx }) => {
+      const body = parseBody(event.body, event.isBase64Encoded);
+      const org = uuid(body.organizationId, "organizationId");
+      const key = text(body.requirementKey, "requirementKey", 41, { required: true });
+      const label = text(body.label, "label", 80);
+      const category = body.category === undefined || body.category === null ? null : oneOf(body.category, "category", ["background_check", "training", "clearance", "other"]);
+      const required = body.required === undefined ? null : booleanValue(body.required, "required");
+      const validity = body.validityMonths === undefined || body.validityMonths === null ? null : wholeNumber(body.validityMonths, "validityMonths", 1, 120);
+      const hireType = body.hireType === undefined || body.hireType === null ? null : oneOf(body.hireType, "hireType", ["direct_hire", "eor"]);
+      const active = body.isActive === undefined ? null : booleanValue(body.isActive, "isActive");
+      const reason = text(body.reason, "reason", 500, { required: true });
+      await tx((db) => db.query("select ogevia_api.set_onboarding_requirement($1, $2, $3, $4, $5, $6, $7, $8, $9)", [org, key, label, category, required, validity, hireType, active, reason]));
+      return { ok: true };
+    },
+  },
+
+  "GET /v1/caregivers/{caregiverRecordId}/onboarding": {
+    mutating: false,
+    handle: async ({ event, tx }) => {
+      const record = uuid(p(event).caregiverRecordId, "caregiverRecordId");
+      const org = orgParam(event);
+      return { onboarding: (await tx((db) => first(db, "select ogevia_api.get_onboarding($1, $2) as o", [org, record]))).o };
+    },
+  },
+
+  "POST /v1/caregivers/{caregiverRecordId}/onboarding/start": {
+    mutating: true,
+    handle: async ({ event, tx }) => {
+      const record = uuid(p(event).caregiverRecordId, "caregiverRecordId");
+      const org = uuid(parseBody(event.body, event.isBase64Encoded).organizationId, "organizationId");
+      await tx((db) => db.query("select ogevia_api.start_onboarding($1, $2)", [org, record]));
+      return { onboarding: (await tx((db) => first(db, "select ogevia_api.get_onboarding($1, $2) as o", [org, record]))).o };
+    },
+  },
+
+  "POST /v1/caregivers/{caregiverRecordId}/onboarding/items": {
+    mutating: true,
+    handle: async ({ event, tx }) => {
+      const record = uuid(p(event).caregiverRecordId, "caregiverRecordId");
+      const body = parseBody(event.body, event.isBase64Encoded);
+      const org = uuid(body.organizationId, "organizationId");
+      const key = text(body.requirementKey, "requirementKey", 41, { required: true });
+      const action = oneOf(body.action, "action", ["complete", "waive", "reopen"]);
+      const completedOn = optionalDate(body.completedOn, "completedOn");
+      const expiresOn = optionalDate(body.expiresOn, "expiresOn");
+      const note = text(body.note, "note", 200);
+      const reason = text(body.reason, "reason", 500);
+      return { onboarding: (await tx((db) => first(db,
+        "select ogevia_api.record_onboarding_item($1, $2, $3, $4, $5, $6, $7, $8) as o", [org, record, key, action, completedOn, expiresOn, note, reason]))).o };
+    },
+  },
+
   // Recurring shifts (0034). Occurrences are ordinary shifts; every check runs in PostgreSQL.
   "GET /v1/shift-series/preview": {
     mutating: false,
@@ -698,10 +1225,11 @@ export const ROUTES: Record<string, Route> = {
       const end = clockTime(query.endTime, "endTime");
       const startsOn = date(query.startsOn, "startsOn");
       const endsOn = optionalDate(query.endsOn, "endsOn");
+      const pattern = patternValue(query.pattern);
       return {
         occurrences: await tx((db) => rows(db,
-          "select *, local_date::text as local_date, month_start::text as month_start from ogevia_api.preview_shift_series($1, $2, $3, $4, $5::smallint[], $6::time, $7::time, $8, $9)",
-          [org, client, service, caregiver, days, start, end, startsOn, endsOn])),
+          "select *, local_date::text as local_date, month_start::text as month_start from ogevia_api.preview_shift_series($1, $2, $3, $4, $5::smallint[], $6::time, $7::time, $8, $9, $10::jsonb)",
+          [org, client, service, caregiver, days, start, end, startsOn, endsOn, pattern])),
       };
     },
   },
@@ -713,6 +1241,8 @@ export const ROUTES: Record<string, Route> = {
     }),
   },
 
+  // 0061: saves every date that fits and returns `rejected`, every other date with its reason. When no date fits, `series` has seriesId null and
+  // created 0 (nothing is saved); the status stays 201, so a caller must read `created`.
   "POST /v1/shift-series": {
     status: 201,
     mutating: true,
@@ -728,10 +1258,11 @@ export const ROUTES: Record<string, Route> = {
       const end = clockTime(body.endTime, "endTime");
       const startsOn = date(body.startsOn, "startsOn");
       const endsOn = optionalDate(body.endsOn, "endsOn");
-      const onConflict = oneOf(body.onConflict ?? "refuse", "onConflict", ["refuse", "skip_flagged"]);
+      const onConflict = oneOf(body.onConflict ?? "save_valid", "onConflict", ["save_valid", "refuse", "skip_flagged"]);
+      const pattern = patternValue(body.pattern);
       const [series] = await tx((db) => rows(db,
-        "select * from ogevia_api.create_shift_series($1, $2, $3, $4, $5::smallint[], $6::time, $7::time, $8, $9, $10, $11)",
-        [org, client, service, caregiver, days, start, end, startsOn, endsOn, onConflict, key]));
+        "select * from ogevia_api.create_shift_series($1, $2, $3, $4, $5::smallint[], $6::time, $7::time, $8, $9, $10, $11, $12::jsonb)",
+        [org, client, service, caregiver, days, start, end, startsOn, endsOn, onConflict, key, pattern]));
       return { series };
     },
   },
@@ -749,11 +1280,13 @@ export const ROUTES: Record<string, Route> = {
       const start = clockTime(body.startTime, "startTime");
       const end = clockTime(body.endTime, "endTime");
       const endsOn = optionalDate(body.endsOn, "endsOn");
-      const onConflict = oneOf(body.onConflict ?? "refuse", "onConflict", ["refuse", "skip_flagged"]);
+      const onConflict = oneOf(body.onConflict ?? "save_valid", "onConflict", ["save_valid", "refuse", "skip_flagged"]);
       const reason = text(body.reason, "reason", 500, { required: true });
+      const pattern = patternValue(body.pattern);
+      const clearPattern = body.clearPattern === undefined ? false : booleanValue(body.clearPattern, "clearPattern");
       const [result] = await tx((db) => rows(db,
-        "select * from ogevia_api.change_shift_series_from($1, $2, $3, $4, $5::smallint[], $6::time, $7::time, $8, $9, $10, $11)",
-        [org, series, from, caregiver, days, start, end, endsOn, onConflict, reason, key]));
+        "select * from ogevia_api.change_shift_series_from($1, $2, $3, $4, $5::smallint[], $6::time, $7::time, $8, $9, $10, $11, $12::jsonb, $13)",
+        [org, series, from, caregiver, days, start, end, endsOn, onConflict, reason, key, pattern, clearPattern]));
       return { result };
     },
   },
@@ -780,9 +1313,73 @@ export const ROUTES: Record<string, Route> = {
       const key = idempotencyKey(event.headers);
       const org = uuid(body.organizationId, "organizationId");
       const through = date(body.through, "through");
-      const onConflict = oneOf(body.onConflict ?? "refuse", "onConflict", ["refuse", "skip_flagged"]);
+      const onConflict = oneOf(body.onConflict ?? "save_valid", "onConflict", ["save_valid", "refuse", "skip_flagged"]);
       const [result] = await tx((db) => rows(db, "select * from ogevia_api.extend_shift_series($1, $2, $3, $4, $5)", [org, series, through, onConflict, key]));
       return { result };
+    },
+  },
+
+  // Caregiver hour limits, caregiver load and make-up visits (0053).
+  "GET /v1/hour-limits": {
+    mutating: false,
+    handle: async ({ event, tx }) => ({
+      limits: await tx((db) => rows(db, "select * from ogevia_api.list_hour_limits($1)", [orgParam(event)])),
+    }),
+  },
+
+  // The agency's fixed work-hour policy (0060): read-only; nothing in the API can change it.
+  "GET /v1/work-hour-policy": {
+    mutating: false,
+    handle: async ({ event, tx }) => {
+      const [policy] = await tx((db) => rows(db, "select * from ogevia_api.get_work_hour_policy($1)", [orgParam(event)]));
+      return { policy: policy ?? { applies: false } };
+    },
+  },
+
+  "POST /v1/hour-limits": {
+    mutating: true,
+    handle: async ({ event, tx }) => {
+      const body = parseBody(event.body, event.isBase64Encoded);
+      const org = uuid(body.organizationId, "organizationId");
+      const caregiver = optionalUuid(body.caregiverRecordId, "caregiverRecordId");
+      const daily = body.maxDailyMinutes === null || body.maxDailyMinutes === undefined ? null : wholeNumber(body.maxDailyMinutes, "maxDailyMinutes", 60, 1440);
+      const weekly = body.maxWeeklyMinutes === null || body.maxWeeklyMinutes === undefined ? null : wholeNumber(body.maxWeeklyMinutes, "maxWeeklyMinutes", 60, 10080);
+      const mode = oneOf(body.mode ?? "report", "mode", ["report", "block"]);
+      const reason = text(body.reason, "reason", 500, { required: true });
+      await tx((db) => db.query("select ogevia_api.set_hour_limit($1, $2, $3, $4, $5, $6)", [org, caregiver, daily, weekly, mode, reason]));
+      return { ok: true };
+    },
+  },
+
+  "GET /v1/caregiver-load": {
+    mutating: false,
+    handle: async ({ event, tx }) => {
+      const query = q(event);
+      const org = orgParam(event);
+      const from = date(query.from, "from");
+      const to = date(query.to, "to");
+      return {
+        load: await tx((db) => rows(db,
+          "select *, week_start::text as week_start, busiest_day::text as busiest_day from ogevia_api.list_caregiver_load($1, $2, $3)", [org, from, to])),
+      };
+    },
+  },
+
+  "POST /v1/shifts/{shiftId}/makeup": {
+    status: 201,
+    mutating: true,
+    handle: async ({ event, tx }) => {
+      const shift = uuid(p(event).shiftId, "shiftId");
+      const body = parseBody(event.body, event.isBase64Encoded);
+      const key = idempotencyKey(event.headers);
+      const org = uuid(body.organizationId, "organizationId");
+      const day = date(body.localDate, "localDate");
+      const start = clockTime(body.startTime, "startTime");
+      const end = clockTime(body.endTime, "endTime");
+      const caregiver = optionalUuid(body.caregiverRecordId, "caregiverRecordId");
+      const [makeup] = await tx((db) => rows(db,
+        "select * from ogevia_api.schedule_makeup_shift($1, $2, $3, $4::time, $5::time, $6, $7)", [org, shift, day, start, end, caregiver, key]));
+      return { makeup };
     },
   },
 
@@ -879,6 +1476,7 @@ export const ROUTES: Record<string, Route> = {
     handle: async ({ event, tx }) => ({ shifts: await tx((db) => rows(db, "select * from ogevia_api.list_open_shifts($1)", [orgParam(event)])) }),
   },
 
+  // 0063: asking for an open shift only records a request; the shift is not assigned until an administrator confirms (confirm below).
   "POST /v1/shifts/{shiftId}/pickup": {
     mutating: true,
     handle: async ({ event, tx }) => {
@@ -888,7 +1486,83 @@ export const ROUTES: Record<string, Route> = {
       const org = uuid(body.organizationId, "organizationId");
       const state = await tx(async (db) =>
         ((await db.query("select ogevia_api.pickup_open_shift($1, $2, $3) as s", [org, shift, key])).rows[0] as { s: string }).s);
+      return { pickupState: state };
+    },
+  },
+
+  "POST /v1/shifts/{shiftId}/pickup/withdraw": {
+    mutating: true,
+    handle: async ({ event, tx }) => {
+      const shift = uuid(p(event).shiftId, "shiftId");
+      const body = parseBody(event.body, event.isBase64Encoded);
+      const org = uuid(body.organizationId, "organizationId");
+      const state = await tx(async (db) =>
+        ((await db.query("select ogevia_api.withdraw_my_shift_pickup($1, $2) as s", [org, shift])).rows[0] as { s: string }).s);
+      return { pickupState: state };
+    },
+  },
+
+  // The administrator's queue (shifts.manage): each waiting request with what would block it now.
+  "GET /v1/shift-pickups": {
+    mutating: false,
+    handle: async ({ event, tx }) => ({
+      requests: await tx(async (db) => {
+        const list = await rows(db, "select * from ogevia_api.list_shift_pickup_requests($1)", [orgParam(event)]);
+        return list.length === 0 ? list : withClientNames(list, await nameDirectory(db, orgParam(event)));
+      }),
+    }),
+  },
+
+  "POST /v1/shift-pickups/{requestId}/confirm": {
+    mutating: true,
+    handle: async ({ event, tx }) => {
+      const request = uuid(p(event).requestId, "requestId");
+      const body = parseBody(event.body, event.isBase64Encoded);
+      const key = idempotencyKey(event.headers);
+      const org = uuid(body.organizationId, "organizationId");
+      const state = await tx(async (db) =>
+        ((await db.query("select ogevia_api.confirm_shift_pickup($1, $2, $3) as s", [org, request, key])).rows[0] as { s: string }).s);
       return { coverageState: state };
+    },
+  },
+
+  "POST /v1/shift-pickups/{requestId}/decline": {
+    mutating: true,
+    handle: async ({ event, tx }) => {
+      const request = uuid(p(event).requestId, "requestId");
+      const body = parseBody(event.body, event.isBase64Encoded);
+      const key = idempotencyKey(event.headers);
+      const org = uuid(body.organizationId, "organizationId");
+      const reason = text(body.reason, "reason", 500, { required: true });
+      const state = await tx(async (db) =>
+        ((await db.query("select ogevia_api.decline_shift_pickup($1, $2, $3, $4) as s", [org, request, reason, key])).rows[0] as { s: string }).s);
+      return { pickupState: state };
+    },
+  },
+
+  // Shifts that ended with no visit record and still hold a reservation (0067). Nothing is released automatically: a person records an outcome.
+  "GET /v1/shifts-to-reconcile": {
+    mutating: false,
+    handle: async ({ event, tx }) => ({
+      shifts: await tx(async (db) => {
+        const list = await rows(db, "select * from ogevia_api.list_shifts_to_reconcile($1)", [orgParam(event)]);
+        return list.length === 0 ? list : withNames(list, await nameDirectory(db, orgParam(event)));
+      }),
+    }),
+  },
+
+  "POST /v1/shifts/{shiftId}/reconcile": {
+    mutating: true,
+    handle: async ({ event, tx }) => {
+      const shift = uuid(p(event).shiftId, "shiftId");
+      const body = parseBody(event.body, event.isBase64Encoded);
+      const key = idempotencyKey(event.headers);
+      const org = uuid(body.organizationId, "organizationId");
+      const outcome = text(body.outcome, "outcome", 40, { required: true });
+      const note = text(body.note, "note", 1000, { required: true });
+      const result = await tx(async (db) =>
+        ((await db.query("select ogevia_api.reconcile_ended_shift($1, $2, $3, $4, $5) as r", [org, shift, outcome, note, key])).rows[0] as { r: unknown }).r);
+      return { reconciliation: result };
     },
   },
 
@@ -923,7 +1597,11 @@ export const ROUTES: Record<string, Route> = {
       const client = optionalUuid(query.clientId, "clientId");
       const caregiver = optionalUuid(query.caregiverRecordId, "caregiverRecordId");
       return {
-        assignments: await tx((db) => rows(db, "select * from ogevia_api.list_assignments($1, $2, $3)", [orgParam(event), client, caregiver])),
+        assignments: await tx(async (db) => {
+          const org = orgParam(event);
+          const list = await rows(db, "select * from ogevia_api.list_assignments($1, $2, $3)", [org, client, caregiver]);
+          return flagDuplicates(list, await duplicateNames(db, org, { clients: true, caregivers: true }), { client: true, caregiver: true });
+        }),
       };
     },
   },
@@ -966,9 +1644,59 @@ export const ROUTES: Record<string, Route> = {
     mutating: false,
     handle: async ({ event, tx }) => {
       const org = orgParam(event);
-      const [summary] = await tx((db) => rows(db, "select * from ogevia_api.get_attention_summary($1)", [org]));
-      return { summary: summary ?? null };
+      const [summary] = await tx((db) => rows(db, "select * from ogevia_api.get_attention_summary($1, 12, 2880)", [org]));
+      // 0055: caregivers on a compliance hold (shifts to cover, visits in progress). null when the viewer may not see it, never a false zero.
+      const compliance = await tx(async (db) => (await first(db, "select ogevia_api.get_compliance_attention($1) as a", [org])).a ?? null);
+      // 0080: the badge numbers (Needs attention, Needs action, Scheduling, Caregivers, Approvals exceptions, Ready for Approval), each computed by the database from the same rows as the issue list.
+      // null when this person may see none of them. The web shows these; it never recomputes them.
+      const counts = await tx(async (db) => (await first(db, "select ogevia_api.get_attention_counts($1) as c", [org])).c ?? null);
+      return { summary: summary ? { ...summary, complianceHolds: compliance } : null, counts };
     },
+  },
+
+  // Attention by purpose (0054): needs attention now / upcoming staffing / documents & compliance / visit review. One read-only classification
+  // of the same records; a section is null when the viewer may not see it. The urgent window is 48 hours (owner decision D10;
+  // default 48; 1 to 168 accepted so a filter such as 24 or 72 hours can be tried).
+  "GET /v1/attention/overview": {
+    mutating: false,
+    handle: async ({ event, tx }) => {
+      const raw = q(event).urgentHours;
+      const hours = raw === undefined || raw === "" ? 48 : wholeNumber(Number(raw), "urgentHours", 1, 168);
+      return { overview: await tx(async (db) => {
+        const o = (await first(db, "select ogevia_api.get_attention_overview($1,$2) as o", [orgParam(event), hours])).o;
+        return o && typeof o === "object" ? withClientNames(o, await nameDirectory(db, orgParam(event))) : o;
+      }) };
+    },
+  },
+
+  // Appearance (0054): agency defaults (organization.update) and each person's own choices. A null value means "follow the next level".
+  "GET /v1/appearance": {
+    mutating: false,
+    handle: async ({ event, tx }) => ({ appearance: await tx(async (db) => (await first(db, "select ogevia_api.get_appearance($1) as a", [orgParam(event)])).a) }),
+  },
+
+  "POST /v1/appearance/organization": {
+    mutating: true,
+    handle: async ({ event, tx }) => {
+      const body = parseBody(event.body, event.isBase64Encoded);
+      return { appearance: await tx(async (db) => (await first(db, "select ogevia_api.set_organization_appearance($1,$2,$3,$4,$5,$6,$7) as a", appearanceArgs(body))).a) };
+    },
+  },
+
+  "POST /v1/appearance/me": {
+    mutating: true,
+    handle: async ({ event, tx }) => {
+      const body = parseBody(event.body, event.isBase64Encoded);
+      return { appearance: await tx(async (db) => (await first(db, "select ogevia_api.set_my_appearance($1,$2,$3,$4,$5,$6,$7) as a", appearanceArgs(body))).a) };
+    },
+  },
+
+  // The authorizations whose rate is missing, so a month's dollar figures leave their hours out (administrator only).
+  "GET /v1/authorizations/missing-rate": {
+    mutating: false,
+    handle: async ({ event, tx }) => ({
+      authorizations: await tx((db) => rows(db, "select * from ogevia_api.list_authorizations_missing_rate($1, $2::date)", [orgParam(event), date(q(event).monthStart, "monthStart")])),
+    }),
   },
 
   // Hire type, scheduling and family relationship (0030): separate facts; none relaxes any visit rule.
@@ -982,6 +1710,74 @@ export const ROUTES: Record<string, Route> = {
       const [result] = await tx((db) => rows(db, "select * from ogevia_api.set_caregiver_employment($1, $2, $3, $4, $5, $6)",
         [uuid(body.organizationId, "organizationId"), uuid(p(event).caregiverRecordId, "caregiverRecordId"), hire, mode, text(body.reason, "reason", 500), key]));
       return { result };
+    },
+  },
+
+  // Caregiver compliance (0055): OWNER-DEFINED rules (approved background clearance; CPR/TB within 14 days of the hire date).
+  // Every decision is made in PostgreSQL; these routes only validate input and shape output. Not stated as legal requirements.
+  "GET /v1/caregivers/{caregiverRecordId}/compliance": {
+    mutating: false,
+    handle: async ({ event, tx }) => ({
+      compliance: await tx(async (db) => (await first(db, "select ogevia_api.get_caregiver_compliance($1,$2) as c", [orgParam(event), uuid(p(event).caregiverRecordId, "caregiverRecordId")])).c),
+    }),
+  },
+
+  "POST /v1/caregivers/{caregiverRecordId}/hire-date": {
+    mutating: true,
+    handle: async ({ event, tx }) => {
+      const body = parseBody(event.body, event.isBase64Encoded);
+      const key = idempotencyKey(event.headers);
+      return {
+        compliance: await tx(async (db) => (await first(db, "select ogevia_api.set_caregiver_hire_date($1,$2,$3::date,$4,$5) as c", [
+          uuid(body.organizationId, "organizationId"), uuid(p(event).caregiverRecordId, "caregiverRecordId"), date(body.hireDate, "hireDate"),
+          text(body.reason, "reason", 500, { required: true }), key])).c),
+      };
+    },
+  },
+
+  "POST /v1/caregivers/{caregiverRecordId}/background-check/status": {
+    mutating: true,
+    handle: async ({ event, tx }) => {
+      const body = parseBody(event.body, event.isBase64Encoded);
+      const key = idempotencyKey(event.headers);
+      return {
+        compliance: await tx(async (db) => (await first(db, "select ogevia_api.set_background_check_status($1,$2,$3,$4,$5) as c", [
+          uuid(body.organizationId, "organizationId"), uuid(p(event).caregiverRecordId, "caregiverRecordId"),
+          oneOf(body.status, "status", ["not_started", "requested", "submitted", "pending", "completed", "needs_attention"] as const),
+          text(body.note, "note", 500), key])).c),
+      };
+    },
+  },
+
+  "POST /v1/caregivers/{caregiverRecordId}/background-check/verify": {
+    mutating: true,
+    handle: async ({ event, tx }) => {
+      const body = parseBody(event.body, event.isBase64Encoded);
+      const key = idempotencyKey(event.headers);
+      return {
+        compliance: await tx(async (db) => (await first(db, "select ogevia_api.verify_background_check($1,$2,$3,$4,$5) as c", [
+          uuid(body.organizationId, "organizationId"), uuid(p(event).caregiverRecordId, "caregiverRecordId"),
+          oneOf(body.result, "result", ["approved", "not_approved"] as const), text(body.evidenceNote, "evidenceNote", 500, { required: true }), key])).c),
+      };
+    },
+  },
+
+  "GET /v1/compliance/holds": {
+    mutating: false,
+    handle: async ({ event, tx }) => ({
+      ...(await tx(async (db) => {
+        const h = (await first(db, "select ogevia_api.list_compliance_holds($1) as h", [orgParam(event)])).h;
+        return h && typeof h === "object" ? withClientNames(h, await nameDirectory(db, orgParam(event))) : h;
+      })),
+    }),
+  },
+
+  // "Check now": re-evaluates this agency once. The scheduled run does the same for every agency.
+  "POST /v1/compliance/sweep": {
+    mutating: true,
+    handle: async ({ event, tx }) => {
+      const body = parseBody(event.body, event.isBase64Encoded);
+      return { result: await tx(async (db) => (await first(db, "select ogevia_api.run_compliance_sweep($1) as r", [uuid(body.organizationId, "organizationId")])).r) };
     },
   },
 
@@ -1075,8 +1871,13 @@ export const ROUTES: Record<string, Route> = {
     mutating: false,
     handle: async ({ event, tx }) => {
       const org = orgParam(event);
-      const [visit] = await tx((db) => rows(db, "select * from ogevia_api.get_active_service_visit($1)", [org]));
-      return { visit: visit ?? null };
+      // 0079: the caregiver's Left to record, computed by the database from the same records as the office figure (additive field); one transaction.
+      const [visit, balance] = await tx(async (db) => {
+        const [v] = await rows(db, "select * from ogevia_api.get_active_service_visit($1)", [org]);
+        const [b] = v ? await rows(db, "select * from ogevia_api.get_active_visit_balance($1)", [org]) : [];
+        return [v, b];
+      });
+      return { visit: visit ? { ...visit, leftToRecordMinutes: balance?.leftToRecordMinutes ?? null } : null };
     },
   },
 
@@ -1093,8 +1894,17 @@ export const ROUTES: Record<string, Route> = {
     handle: async ({ event, tx }) => {
       const org = orgParam(event);
       const client = uuid(p(event).clientId, "clientId");
+      // 0079: Left to record (caregiver), Hours left (office) and the Pending/Reserved time the office also deducts; computed by the database (additive fields); one transaction.
+      const [services, balances] = await tx(async (db) => [
+        await rows(db, "select * from ogevia_api.list_authorized_services_for_client($1, $2)", [org, client]),
+        await rows(db, "select * from ogevia_api.list_caregiver_hours_balances($1, $2)", [org, client]),
+      ]);
+      const byService = new Map(balances.map((b) => [String(b.serviceId), b]));
       return {
-        services: await tx((db) => rows(db, "select * from ogevia_api.list_authorized_services_for_client($1, $2)", [org, client])),
+        services: services.map((svc) => {
+          const b = byService.get(String(svc.serviceId));
+          return { ...svc, leftToRecordMinutes: b?.leftToRecordMinutes ?? null, hoursLeftMinutes: b?.hoursLeftMinutes ?? null, officePendingMinutes: b?.officePendingMinutes ?? null, officeReservedMinutes: b?.officeReservedMinutes ?? null };
+        }),
       };
     },
   },
@@ -1132,14 +1942,23 @@ export const ROUTES: Record<string, Route> = {
 
   // Manager close-out of a missed clock-out (0015): enters the actual Time
   // Out; the visit goes back to the caregiver for client confirmation.
+  //
+  // 0085 (D10): `outcome` separates a visit that never happened from actual work with a missing clock-out. "no_service" voids the visit (zero worked, zero billable, audited
+  // with service_delivered=false; a repeat is a no-op) and needs no Time Out; the default "worked" is the behaviour above and keeps the real worked time. It rides on this route
+  // so the API Gateway route set is unchanged.
   "POST /v1/visits/{visitId}/close": {
     mutating: true,
     handle: async ({ event, tx }) => {
       const visit = uuid(p(event).visitId, "visitId");
       const body = parseBody(event.body, event.isBase64Encoded);
       const key = idempotencyKey(event.headers);
-      const timeOut = timestamp(body.timeOut, "timeOut");
+      const outcome = oneOf(body.outcome ?? "worked", "outcome", ["worked", "no_service"] as const);
       const reason = text(body.reason, "reason", 1000, { required: true });
+      if (outcome === "no_service") {
+        await tx((db) => rows(db, "select ogevia_api.void_service_visit($1, $2)", [visit, reason]));
+        return { visit: { visitId: visit, serviceDelivered: false, workedMinutes: 0 } };
+      }
+      const timeOut = timestamp(body.timeOut, "timeOut");
       const [closed] = await tx((db) =>
         rows(db, "select * from ogevia_api.close_missed_service_visit($1, $2, $3, $4)", [visit, timeOut, reason, key]),
       );
@@ -1337,6 +2156,86 @@ export const ROUTES: Record<string, Route> = {
     },
   },
 
+  // Full-chain monthly report (0070): visits.read; billing-state columns need billing.visits.read.
+  "GET /v1/reports/monthly-chain": {
+    mutating: false,
+    handle: async ({ event, tx }) => {
+      const query = q(event);
+      const client = optionalUuid(query.clientId, "clientId");
+      const monthStart = date(query.monthStart, "monthStart");
+      return { rows: await tx(async (db) => {
+        const list = await rows(db, "select * from ogevia_api.get_monthly_chain_report($1, $2, $3)", [orgParam(event), monthStart, client]);
+        return list.length === 0 ? list : withClientNames(list, await nameDirectory(db, orgParam(event)));
+      }) };
+    },
+  },
+
+  // 0076: agency performance (counts; no missed-visits metric) and the general audit report (owner only).
+  "GET /v1/reports/agency-performance": {
+    mutating: false,
+    handle: async ({ event, tx }) => ({ performance: await tx(async (db) => ((await db.query("select ogevia_api.get_agency_performance($1,$2) as r", [orgParam(event), date(q(event).monthStart, "monthStart")])).rows[0] as { r: unknown }).r) }),
+  },
+
+  "GET /v1/reports/audit": {
+    mutating: false,
+    handle: async ({ event, tx }) => {
+      const query = q(event);
+      const prefix = query.actionPrefix ?? null;
+      return { report: await tx(async (db) => ((await db.query("select ogevia_api.list_audit_report($1,$2,$3,$4,$5,$6) as r", [
+        orgParam(event), date(query.dateFrom, "dateFrom"), date(query.dateTo, "dateTo"), prefix,
+        query.limit ? Math.min(500, Math.max(1, Number.parseInt(query.limit, 10) || 100)) : 100, query.offset ? Math.max(0, Number.parseInt(query.offset, 10) || 0) : 0])).rows[0] as { r: unknown }).r) };
+    },
+  },
+
+  // Server-generated exports (0072). 1) the server checks reports.export and records the REQUEST; 2) it builds the file from the report functions the caller may read;
+  // 3) it records GENERATED (rows, bytes, SHA-256) and only then returns the file. If building fails it records FAILED and returns nothing. Delivery to the device is not recorded.
+  "POST /v1/exports": {
+    mutating: true,
+    handle: async ({ event, tx }) => {
+      const body = parseBody(event.body, event.isBase64Encoded);
+      const org = uuid(body.organizationId, "organizationId");
+      const report = oneOf(body.report, "report", REPORT_KEYS) as ReportKey;
+      const raw = (typeof body.params === "object" && body.params !== null ? body.params : {}) as Record<string, unknown>;
+      const params: ExportParams = {
+        ...(raw.monthStart !== undefined ? { monthStart: date(raw.monthStart, "monthStart") } : {}),
+        clientId: optionalUuid(raw.clientId, "clientId"),
+        dateFrom: optionalDate(raw.dateFrom, "dateFrom"), dateTo: optionalDate(raw.dateTo, "dateTo"),
+        serviceId: optionalUuid(raw.serviceId, "serviceId"),
+        caregiverUserId: optionalUuid(raw.caregiverUserId, "caregiverUserId"), correctedByUserId: optionalUuid(raw.correctedByUserId, "correctedByUserId"),
+        status: raw.status ? oneOf(raw.status, "status", VISIT_STATUSES) : null,
+        actionPrefix: typeof raw.actionPrefix === "string" && /^[a-z_.]{1,60}$/.test(raw.actionPrefix) ? raw.actionPrefix : null,
+      };
+      if (report !== "correction_history" && report !== "audit_report" && !params.monthStart) throw new ApiError(400, "bad_request", "monthStart is required for this report.");
+      if (report === "audit_report" && (!params.dateFrom || !params.dateTo)) throw new ApiError(400, "bad_request", "dateFrom and dateTo are required for the audit report.");
+      if (params.dateFrom && params.dateTo && params.dateFrom > params.dateTo) throw new ApiError(400, "bad_request", "dateFrom must not be after dateTo.");
+      if (report === "client_service_calendar" && !params.clientId) throw new ApiError(400, "bad_request", "clientId is required for the client service calendar.");
+      const requested = await tx(async (db) =>
+        ((await db.query("select ogevia_api.request_report_export($1, $2, $3::jsonb) as r", [org, report, JSON.stringify(params)])).rows[0] as { r: { exportId: string; requestedAt: string } }).r);
+      let built;
+      try {
+        built = await tx((db) => buildReportCsv(db, org, report, params));
+        assertExportSize(Buffer.byteLength(built.csv, "utf8"));
+      } catch (cause) {
+        const code = cause instanceof ApiError ? cause.code : (cause as { code?: string }).code ?? "generation_failed";
+        await tx((db) => db.query("select ogevia_api.fail_report_export($1, $2, $3)", [org, requested.exportId, String(code)])).catch(() => undefined);
+        throw cause;
+      }
+      const bytes = Buffer.byteLength(built.csv, "utf8");
+      // Fail closed: the file is returned only after the ledger has recorded that the server generated it.
+      const done = await tx(async (db) =>
+        ((await db.query("select ogevia_api.complete_report_export($1, $2, $3, $4, $5) as r", [org, requested.exportId, built.rowCount, bytes, sha256Hex(built.csv)])).rows[0] as { r: { generatedAt: string } }).r);
+      return {
+        exportId: requested.exportId, requestedAt: requested.requestedAt, generatedAt: done.generatedAt, rowCount: built.rowCount, byteCount: bytes,
+        filename: exportFilename(report, params), csv: built.csv,
+      };
+    },
+  },
+
+  "GET /v1/exports": {
+    mutating: false,
+    handle: async ({ event, tx }) => ({ exports: await tx((db) => rows(db, "select * from ogevia_api.list_report_exports($1, 100)", [orgParam(event)])) }),
+  },
+
   "GET /v1/reports/correction-history": {
     mutating: false,
     handle: async ({ event, tx }) => {
@@ -1505,12 +2404,12 @@ export const ROUTES: Record<string, Route> = {
       await tx((db) => db.query("select ogevia_api.check_paper_confirmation_upload($1, $2)", [requestId, org]));
       // A retry with the same key uses the same id, so it stores the same object and returns the same record.
       const lateId = key ? stableUuid(`paper:${requestId}:${key}`) : randomUUID();
-      const objectKey = `${org}/documents/${lateId}/paper-form`;
+      const objectKey = lateFormObjectKey(org, lateId);
       let s3VersionId: string | null;
       try {
         ({ versionId: s3VersionId } = await evidence.put(objectKey, file.bytes, file.sha256, file.contentType));
-      } catch {
-        throw new ApiError(503, "storage_unavailable", "The form could not be stored. Nothing was saved; please try again.");
+      } catch (error) {
+        throw storageUnavailable("The form could not be stored. Nothing was saved; please try again.", error);
       }
       const id = await tx(async (db) => {
         const r = await db.query("select ogevia_api.record_paper_visit_confirmation($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) as id", [
@@ -1604,8 +2503,10 @@ export const ROUTES: Record<string, Route> = {
     mutating: false,
     handle: async ({ event, tx }) => {
       const query = q(event);
-      return { units: await tx((db) => rows(db, "select * from ogevia_api.list_billing_rounding_preview($1, $2, $3)",
-        [orgParam(event), date(query.from, "from"), date(query.to, "to")])) };
+      return { units: await tx(async (db) => {
+        const list = await rows(db, "select * from ogevia_api.list_billing_rounding_preview($1, $2, $3)", [orgParam(event), date(query.from, "from"), date(query.to, "to")]);
+        return list.length === 0 ? list : withClientNames(list, await nameDirectory(db, orgParam(event)));
+      }) };
     },
   },
 
@@ -1777,8 +2678,8 @@ export const ROUTES: Record<string, Route> = {
       let s3VersionId: string | null;
       try {
         ({ versionId: s3VersionId } = await evidence.put(objectKey, file.bytes, file.sha256, file.contentType));
-      } catch {
-        throw new ApiError(503, "storage_unavailable", "The file could not be stored. Nothing was saved; please try again.");
+      } catch (error) {
+        throw storageUnavailable("The file could not be stored. Nothing was saved; please try again.", error);
       }
       const [version] = await tx((db) =>
         rows(db, "select * from ogevia_api.register_document_version($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)", [
@@ -1988,7 +2889,10 @@ export const ROUTES: Record<string, Route> = {
     handle: async ({ event, tx }) => {
       const query = q(event);
       const status = query.status ? oneOf(query.status, "status", CARE_REQUEST_STATUSES) : null;
-      return { requests: await tx((db) => rows(db, "select * from ogevia_api.list_care_requests($1,$2)", [orgParam(event), status])) };
+      return { requests: await tx(async (db) => {
+        const list = await rows(db, "select * from ogevia_api.list_care_requests($1,$2)", [orgParam(event), status]);
+        return list.length === 0 ? list : withClientNames(list, await nameDirectory(db, orgParam(event)));
+      }) };
     },
   },
 
@@ -2048,7 +2952,10 @@ export const ROUTES: Record<string, Route> = {
   "GET /v1/care-portals/clients": {
     mutating: false,
     handle: async ({ event, tx }) => ({
-      clients: await tx((db) => rows(db, "select * from ogevia_api.list_client_portal_options($1)", [orgParam(event)])),
+      clients: await tx(async (db) => {
+        const list = await rows(db, "select * from ogevia_api.list_client_portal_options($1)", [orgParam(event)]);
+        return list.length === 0 ? list : withClientNames(list, await nameDirectory(db, orgParam(event)));
+      }),
     }),
   },
 
@@ -2300,7 +3207,7 @@ export const ROUTES: Record<string, Route> = {
     mutating: false,
     handle: async ({ event, tx }) => {
       const kind = q(event).kind;
-      return { flags: await tx((db) => rows(db, "select * from ogevia_api.list_readiness_flags($1, $2)", [orgParam(event), kind === undefined || kind === "" ? null : oneOf(kind, "kind", ["availability", "service", "document"] as const)])) };
+      return { flags: await tx((db) => rows(db, "select * from ogevia_api.list_readiness_flags($1, $2)", [orgParam(event), kind === undefined || kind === "" ? null : oneOf(kind, "kind", ["availability", "service", "document", "compliance"] as const)])) };
     },
   },
 
@@ -2352,7 +3259,14 @@ export const ROUTES: Record<string, Route> = {
 
   "GET /v1/readiness": {
     mutating: false,
-    handle: async ({ event, tx }) => ({ readiness: await tx(async (db) => (await first(db, "select ogevia_api.get_readiness_status($1) as s", [orgParam(event)])).s) }),
+    handle: async ({ event, tx }) => ({
+      readiness: await tx(async (db) => {
+        const org = orgParam(event);
+        const status = (await first(db, "select ogevia_api.get_readiness_status($1) as s", [org])).s as Record<string, unknown>;
+        // 0055: who would be held (background clearance, the 14-day CPR/TB period) before the owner switches enforcement on
+        return { ...status, compliance: (await first(db, "select ogevia_api.get_compliance_summary($1) as s", [org])).s };
+      }),
+    }),
   },
 
   "POST /v1/readiness/activate": {

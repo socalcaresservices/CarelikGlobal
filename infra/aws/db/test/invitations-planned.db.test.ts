@@ -15,8 +15,13 @@ afterAll(async () => db?.drop());
 
 const q = async <T = any>(a: Actor, sql: string, params: unknown[] = []) =>
   asActor(db, a.sub, async (c) => (await c.query(sql, params)).rows as any[] as T[]);
-const newRecord = async (a: Actor, last: string, status = "ready") =>
-  (await q<{ caregiver_record_id: string }>(a, "select * from ogevia_api.create_caregiver($1, 'Synthetic', $2, null, $3)", [w.orgA, last, status]))[0]!.caregiver_record_id;
+// Since 0085 the API refuses to create an Approved/Active caregiver around the onboarding gate, so a fixture that needs an already-approved record (as records that existed
+// before the gate do) creates it through the API as onboarding and then sets the status directly.
+const newRecord = async (a: Actor, last: string, status = "ready") => {
+  const id = (await q<{ caregiver_record_id: string }>(a, "select * from ogevia_api.create_caregiver($1, 'Synthetic', $2, null, $3)", [w.orgA, last, status === "ready" || status === "active" ? "onboarding" : status]))[0]!.caregiver_record_id;
+  if (status === "ready" || status === "active") await db.admin.query("update ogevia.caregiver_records set status = $2, onboarding_required = false where id = $1", [id, status]);
+  return id;
+};
 const begin = (a: Actor, record: string, email: string, org = w.orgA) =>
   q<{ begin_caregiver_invitation: string }>(a, "select ogevia_api.begin_caregiver_invitation($1, $2, $3)", [org, record, email]).then((r) => r[0]!.begin_caregiver_invitation);
 const complete = (a: Actor, record: string, email: string, sub: string, existing = false, org = w.orgA) =>

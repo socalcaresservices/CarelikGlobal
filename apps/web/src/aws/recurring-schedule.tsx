@@ -4,6 +4,7 @@
 // for one occurrence. Every check runs on the server again; nothing is
 // shortened, moved or skipped unless the person explicitly chooses to skip the
 // listed dates.
+import { nameWithCode } from "./name-label";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useMemo, useRef, useState } from "react";
 import { Button } from "@carelik/ui";
@@ -11,7 +12,7 @@ import { formatDateOnly, formatDuration, formatWeekdayDate } from "@/lib/service
 import { newIdempotencyKey } from "@/lib/sv-backend";
 import { useOrganization } from "@/providers/organization-provider";
 import { useAwsApi } from "./aws-workspace";
-import { hhmm, monthLabel, OUTCOME_LABEL, patternText, summarizeOccurrences, WEEKDAY_SHORT, type Occurrence, type SeriesRow } from "./recurring-format";
+import { buildPattern, describePattern, hhmm, monthLabel, OUTCOME_LABEL, patternText, PLAIN_PATTERN, summarizeOccurrences, WEEKDAY_SHORT, type Occurrence, type PatternForm, type SeriesRow, type RejectedDate } from "./recurring-format";
 
 const inputClass = "mt-1 block w-full rounded-lg border border-slate-200 px-3 py-2 text-base";
 const message = (cause: unknown, fallback: string) => (cause instanceof Error ? cause.message : fallback);
@@ -26,7 +27,7 @@ function PreviewTable({ rows }: { rows: Occurrence[] }) {
     <div className="min-w-0 space-y-3">
       <ul className="grid gap-2 sm:grid-cols-2" aria-label="Hours by month">
         {months.map((m) => (
-          <li key={`${m.monthStart}-${m.authorized}`} className="rounded-lg border border-slate-200 bg-white p-2 text-sm">
+          <li key={`${m.monthStart}-${m.authorized}`} className="rounded-lg border border-slate-200 bg-og-card p-2 text-sm">
             <p className="font-semibold text-slate-900">{monthLabel(m.monthStart)}</p>
             <dl className="mt-1 grid grid-cols-2 gap-x-3 gap-y-0.5">
               <dt className="text-slate-500">Authorized</dt><dd className="tabular-nums">{m.authorized === null ? "No authorization" : formatDuration(m.authorized)}</dd>
@@ -52,7 +53,7 @@ function PreviewTable({ rows }: { rows: Occurrence[] }) {
 type SeriesForm = { clientId: string; serviceId: string; caregiverRecordId: string; weekdays: number[]; startTime: string; endTime: string; startsOn: string; endsOn: string };
 
 /** Create a series, or (with `series`) change an existing one from a date ("this and future"). */
-export function RecurringSeriesForm({ today, series, onDone }: { today: string; series?: SeriesRow; onDone: (text: string) => void }) {
+export function RecurringSeriesForm({ today, series, onDone }: { today: string; series?: SeriesRow; onDone: (text: string, rejected?: RejectedDate[]) => void }) {
   const api = useAwsApi();
   const queryClient = useQueryClient();
   const { activeOrganizationId } = useOrganization();
@@ -63,10 +64,20 @@ export function RecurringSeriesForm({ today, series, onDone }: { today: string; 
     ? { clientId: series.clientId, serviceId: "", caregiverRecordId: series.caregiverRecordId ?? "", weekdays: series.weekdays, startTime: hhmm(series.startTime), endTime: hhmm(series.endTime), startsOn: today > series.startsOn ? today : series.startsOn, endsOn: series.endsOn ?? "" }
     : { clientId: "", serviceId: "", caregiverRecordId: "", weekdays: [], startTime: "09:00", endTime: "11:00", startsOn: today, endsOn: "" });
   const [reason, setReason] = useState("");
+  const [rule, setRule] = useState<PatternForm>(() => {
+    const p = series?.pattern;
+    return p ? { everyWeeks: p.every_weeks ?? 1, weekOffset: 0, dates: p.nth?.length ? "only" : p.except_nth?.length ? "except" : "all", nth: p.nth ?? p.except_nth ?? [], excludeDates: p.exclude_dates ?? [] } : PLAIN_PATTERN;
+  });
+  const [skipDate, setSkipDate] = useState("");
   const [preview, setPreview] = useState<Occurrence[] | null>(null);
   const [state, setState] = useState<{ busy: boolean; error: string | null }>({ busy: false, error: null });
   const key = useRef(newIdempotencyKey());
   const set = <K extends keyof SeriesForm>(k: K, v: SeriesForm[K]) => { setForm((f) => ({ ...f, [k]: v })); setPreview(null); key.current = newIdempotencyKey(); };
+  const setRuleField = <K extends keyof PatternForm>(k: K, v: PatternForm[K]) => { setRule((r) => ({ ...r, [k]: v })); setPreview(null); key.current = newIdempotencyKey(); };
+  /** An existing series keeps its own weeks unless the person changes "Repeats"; its anchor is not re-derived from the new date. */
+  const pattern = () => (series?.pattern && rule.everyWeeks === (series.pattern.every_weeks ?? 1) && rule.weekOffset === 0 && rule.everyWeeks > 1
+    ? buildPattern({ ...rule, weekOffset: 0 }, series.pattern.anchor ?? form.startsOn)
+    : buildPattern(rule, form.startsOn));
   const flagged = (preview ?? []).filter((r) => r.outcome !== "ok");
   const serviceId = series ? null : form.serviceId;
 
@@ -80,7 +91,7 @@ export function RecurringSeriesForm({ today, series, onDone }: { today: string; 
         organizationId: activeOrganizationId, clientId: series ? series.clientId : form.clientId,
         serviceId: series ? series.serviceId : serviceId,
         caregiverRecordId: form.caregiverRecordId || null, weekdays: form.weekdays.join(","), startTime: form.startTime, endTime: form.endTime,
-        startsOn: form.startsOn, endsOn: form.endsOn || null,
+        startsOn: form.startsOn, endsOn: form.endsOn || null, pattern: pattern() ? JSON.stringify(pattern()) : null,
       };
       const r = await api.get<{ occurrences: Occurrence[] }>("/v1/shift-series/preview", params);
       setPreview(r.occurrences);
@@ -90,22 +101,24 @@ export function RecurringSeriesForm({ today, series, onDone }: { today: string; 
     }
   }
 
-  async function save(onConflict: "refuse" | "skip_flagged") {
+  async function save(onConflict: "save_valid" | "refuse") {
     setState({ busy: true, error: null });
     try {
       if (series) {
-        const r = await api.post<{ result: { cancelled: number; created: number; skipped: number; kept: number } }>(
+        const r = await api.post<{ result: { cancelled: number; created: number; skipped: number; kept: number; rejected?: RejectedDate[] } }>(
           `/v1/shift-series/${encodeURIComponent(series.seriesId)}/change`,
           { organizationId: activeOrganizationId, fromDate: form.startsOn, caregiverRecordId: form.caregiverRecordId || null, weekdays: form.weekdays,
-            startTime: form.startTime, endTime: form.endTime, endsOn: form.endsOn || null, onConflict, reason: reason.trim() },
+            startTime: form.startTime, endTime: form.endTime, endsOn: form.endsOn || null, onConflict, reason: reason.trim(), pattern: pattern(), clearPattern: pattern() === null },
           { idempotencyKey: key.current });
-        onDone(`Series changed from ${formatDateOnly(form.startsOn)}: ${r.result.cancelled} earlier-planned dates cancelled, ${r.result.created} scheduled${r.result.skipped ? `, ${r.result.skipped} skipped as listed` : ""}${r.result.kept ? `; ${r.result.kept} kept because a visit is linked or it has started` : ""}.`);
+        onDone(`Series changed from ${formatDateOnly(form.startsOn)}: ${r.result.cancelled} earlier-planned dates cancelled, ${r.result.created} scheduled${r.result.skipped ? `, ${r.result.skipped} not saved (listed below)` : ""}${r.result.kept ? `; ${r.result.kept} kept because a visit is linked or it has started` : ""}.`, r.result.rejected);
       } else {
-        const r = await api.post<{ series: { created: number; skipped: number; reservedMinutes: number; generatedThrough: string } }>("/v1/shift-series",
+        const r = await api.post<{ series: { seriesId: string | null; created: number; skipped: number; reservedMinutes: number; generatedThrough: string; rejected?: RejectedDate[] } }>("/v1/shift-series",
           { organizationId: activeOrganizationId, clientId: form.clientId, serviceId: form.serviceId, caregiverRecordId: form.caregiverRecordId || null,
-            weekdays: form.weekdays, startTime: form.startTime, endTime: form.endTime, startsOn: form.startsOn, endsOn: form.endsOn || null, onConflict },
+            weekdays: form.weekdays, startTime: form.startTime, endTime: form.endTime, startsOn: form.startsOn, endsOn: form.endsOn || null, onConflict, pattern: pattern() },
           { idempotencyKey: key.current });
-        onDone(`Series created: ${r.series.created} shifts scheduled through ${formatDateOnly(r.series.generatedThrough)} (${formatDuration(r.series.reservedMinutes)} reserved)${r.series.skipped ? `; ${r.series.skipped} dates skipped as listed` : ""}.`);
+        onDone(r.series.created === 0
+          ? `Nothing was saved: none of the ${r.series.skipped} dates fits (listed below).`
+          : `Series created: ${r.series.created} shifts scheduled through ${formatDateOnly(r.series.generatedThrough)} (${formatDuration(r.series.reservedMinutes)} reserved)${r.series.skipped ? `; ${r.series.skipped} dates were not saved (listed below)` : ""}.`, r.series.rejected);
       }
       key.current = newIdempotencyKey();
       await queryClient.invalidateQueries({ queryKey: ["aws-shifts"] });
@@ -120,16 +133,14 @@ export function RecurringSeriesForm({ today, series, onDone }: { today: string; 
   return (
     <form onSubmit={(e) => { e.preventDefault(); void runPreview(); }} className="mt-3 grid min-w-0 gap-3 rounded-xl border border-slate-200 bg-slate-50 p-3 sm:grid-cols-2 [&>*]:min-w-0">
       {series ? (
-        <p className="text-sm text-slate-800 sm:col-span-2">
-          {series.clientName ?? series.clientCode} · {series.serviceName}. Dates before the change date stay as they are; visits already done are never changed.
-        </p>
+        <ShortHelp className="text-sm text-slate-800 sm:col-span-2" details="Dates before the change date stay as they are; visits already done are never changed.">{series.clientName ?? series.clientCode} · {series.serviceName}</ShortHelp>
       ) : (
         <>
           <div className="sm:col-span-2">
             <label htmlFor={`${id}-client`} className="block text-sm font-medium text-slate-700">Client</label>
             <select id={`${id}-client`} value={form.clientId} onChange={(e) => set("clientId", e.target.value)} className={inputClass}>
               <option value="">Choose a client</option>
-              {(clients.data ?? []).filter((c) => c.status === "active").map((c) => <option key={c.clientId} value={c.clientId}>{clientName(c) ?? "Name not set"} ({c.clientCode})</option>)}
+              {(clients.data ?? []).filter((c) => c.status === "active").map((c) => <option key={c.clientId} value={c.clientId}>{nameWithCode(clientName(c), c.clientCode, c.duplicateName)}</option>)}
             </select>
           </div>
           <div>
@@ -146,7 +157,7 @@ export function RecurringSeriesForm({ today, series, onDone }: { today: string; 
         <select id={`${id}-cg`} value={form.caregiverRecordId} onChange={(e) => set("caregiverRecordId", e.target.value)} className={inputClass}>
           <option value="">Open shifts — fill later</option>
           {(caregivers.data ?? []).filter((c) => c.status === "ready" || c.status === "active").map((c) => (
-            <option key={c.caregiverRecordId} value={c.caregiverRecordId}>{caregiverName(c)} ({c.caregiverCode})</option>
+            <option key={c.caregiverRecordId} value={c.caregiverRecordId}>{nameWithCode(caregiverName(c), c.caregiverCode, c.duplicateName)}</option>
           ))}
         </select>
       </div>
@@ -154,12 +165,62 @@ export function RecurringSeriesForm({ today, series, onDone }: { today: string; 
         <legend className="text-sm font-medium text-slate-700">Repeats every</legend>
         <div className="mt-1 flex flex-wrap gap-2">
           {WEEKDAY_SHORT.map((label, d) => (
-            <label key={label} className="flex min-h-[40px] items-center gap-1 rounded-lg border border-slate-200 bg-white px-2 text-sm">
-              <input type="checkbox" checked={form.weekdays.includes(d)}
+            <label key={label} className="flex min-h-[40px] items-center gap-1 rounded-lg border border-slate-200 bg-og-card px-2 text-sm">
+              <input type="checkbox" className="h-5 w-5" checked={form.weekdays.includes(d)}
                 onChange={(e) => set("weekdays", e.target.checked ? [...form.weekdays, d].sort() : form.weekdays.filter((x) => x !== d))} />
               {label}
             </label>
           ))}
+        </div>
+      </fieldset>
+      <fieldset className="grid gap-2 sm:col-span-2 sm:grid-cols-2">
+        <legend className="text-sm font-medium text-slate-700">Which weeks and dates</legend>
+        <div>
+          <label htmlFor={`${id}-weeks`} className="block text-xs font-medium text-slate-600">Weeks</label>
+          <select id={`${id}-weeks`} value={rule.everyWeeks} onChange={(e) => setRuleField("everyWeeks", Number(e.target.value))} className={inputClass}>
+            <option value={1}>Every week</option><option value={2}>Every other week</option><option value={3}>Every 3rd week</option><option value={4}>Every 4th week</option>
+          </select>
+        </div>
+        {rule.everyWeeks > 1 ? (
+          <div>
+            <label htmlFor={`${id}-offset`} className="block text-xs font-medium text-slate-600">Start with</label>
+            <select id={`${id}-offset`} value={rule.weekOffset} onChange={(e) => setRuleField("weekOffset", Number(e.target.value) as 0 | 1)} className={inputClass}>
+              <option value={0}>The week of the first date</option><option value={1}>The following week</option>
+            </select>
+          </div>
+        ) : null}
+        <div>
+          <label htmlFor={`${id}-dates`} className="block text-xs font-medium text-slate-600">Dates in the month</label>
+          <select id={`${id}-dates`} value={rule.dates} onChange={(e) => setRuleField("dates", e.target.value as PatternForm["dates"])} className={inputClass}>
+            <option value="all">Every matching day</option><option value="only">Only certain ones (1st, 2nd…)</option><option value="except">Every one except certain ones</option>
+          </select>
+        </div>
+        {rule.dates !== "all" ? (
+          <div className="flex flex-wrap items-end gap-2" role="group" aria-label="Which of the month's matching days">
+            {[1, 2, 3, 4, 5].map((n) => (
+              <label key={n} className="flex min-h-[40px] items-center gap-1 rounded-lg border border-slate-200 bg-og-card px-2 text-sm">
+                <input type="checkbox" className="h-5 w-5" checked={rule.nth.includes(n)} onChange={(e) => setRuleField("nth", e.target.checked ? [...rule.nth, n] : rule.nth.filter((x) => x !== n))} />
+                {["1st", "2nd", "3rd", "4th", "5th"][n - 1]}
+              </label>
+            ))}
+          </div>
+        ) : null}
+        <div className="sm:col-span-2">
+          <label htmlFor={`${id}-skip`} className="block text-xs font-medium text-slate-600">Skip a date (holiday)</label>
+          <div className="flex gap-2">
+            <input id={`${id}-skip`} type="date" value={skipDate} min={form.startsOn} onChange={(e) => setSkipDate(e.target.value)} className={inputClass} />
+            <Button type="button" variant="secondary" disabled={!skipDate || rule.excludeDates.includes(skipDate)}
+              onClick={() => { setRuleField("excludeDates", [...rule.excludeDates, skipDate]); setSkipDate(""); }}>Add</Button>
+          </div>
+          {rule.excludeDates.length ? (
+            <ul className="mt-1 flex flex-wrap gap-2 text-sm" aria-label="Skipped dates">
+              {rule.excludeDates.map((d) => (
+                <li key={d} className="rounded-full bg-slate-100 px-2 py-0.5">
+                  {formatDateOnly(d)} <button type="button" aria-label={`Remove ${formatDateOnly(d)}`} className="ml-1 font-semibold" onClick={() => setRuleField("excludeDates", rule.excludeDates.filter((x) => x !== d))}>×</button>
+                </li>
+              ))}
+            </ul>
+          ) : null}
         </div>
       </fieldset>
       <div className="grid grid-cols-2 gap-2 sm:col-span-2">
@@ -174,29 +235,26 @@ export function RecurringSeriesForm({ today, series, onDone }: { today: string; 
           <input id={`${id}-reason`} value={reason} maxLength={500} onChange={(e) => { setReason(e.target.value); key.current = newIdempotencyKey(); }} className={inputClass} />
         </div>
       ) : null}
-      <ShortHelp className="text-xs text-slate-600 sm:col-span-2" details="Each month is checked against that month's authorized hours, counting time already used and reserved.">Agency local time. Shifts are created through the end of the second month; add later months from the series list.</ShortHelp>
+      <ShortHelp className="text-xs text-slate-600 sm:col-span-2" details="Shifts are created through the end of the second month; add later months from the series list. Each month is checked against that month's authorized hours, counting time already used and reserved.">Times are the agency's local time.</ShortHelp>
       {state.error ? <p role="alert" className="text-sm text-red-700 sm:col-span-2">{state.error}</p> : null}
       <div className="sm:col-span-2"><Button type="submit" variant="secondary" disabled={state.busy}>Preview dates and hours</Button></div>
       {preview ? (
         <div className="min-w-0 space-y-3 sm:col-span-2">
           <PreviewTable rows={preview} />
           {flagged.length > 0 ? (
-            <p role="alert" className="text-sm font-semibold text-red-800">
-              {flagged.length} {flagged.length === 1 ? "date does" : "dates do"} not fit (listed in red). Change the times, days or dates, or
-              choose to skip exactly these dates. Nothing is shortened or moved.
-            </p>
+            <div role="alert" className="text-sm text-red-800">
+              <p className="font-semibold">{flagged.length} {flagged.length === 1 ? "date does" : "dates do"} not fit (listed in red). {preview.length - flagged.length > 0
+                ? `Saving keeps the ${preview.length - flagged.length} that fit.`
+                : "None fits, so nothing can be saved. Change the times, days or dates."}</p>
+              {preview.length - flagged.length > 0 ? <ShortHelp className="text-xs text-slate-700" details="Every date that was not saved is listed with its reason. Nothing is shortened or moved.">Dates that do not fit are skipped, not changed.</ShortHelp> : null}
+            </div>
           ) : (
             <p className="text-sm text-emerald-800">Every date fits.</p>
           )}
           <div className="flex flex-wrap gap-2">
-            <Button type="button" disabled={state.busy || flagged.length > 0 || preview.length === 0} onClick={() => void save("refuse")}>
-              {series ? "Save the change" : "Create series"}
+            <Button type="button" disabled={state.busy || preview.length - flagged.length === 0} onClick={() => void save("save_valid")}>
+              {series ? "Save the change" : "Create series"}{flagged.length > 0 && preview.length - flagged.length > 0 ? `: save the ${preview.length - flagged.length} that fit` : ""}
             </Button>
-            {flagged.length > 0 && flagged.length < preview.length ? (
-              <Button type="button" variant="secondary" disabled={state.busy} onClick={() => void save("skip_flagged")}>
-                {series ? "Save and skip" : "Create and skip"} the {flagged.length} listed {flagged.length === 1 ? "date" : "dates"}
-              </Button>
-            ) : null}
           </div>
         </div>
       ) : null}
@@ -204,7 +262,7 @@ export function RecurringSeriesForm({ today, series, onDone }: { today: string; 
   );
 }
 
-function SeriesItem({ s, today, onDone }: { s: SeriesRow; today: string; onDone: (text: string) => void }) {
+function SeriesItem({ s, today, onDone }: { s: SeriesRow; today: string; onDone: (text: string, rejected?: RejectedDate[]) => void }) {
   const api = useAwsApi();
   const queryClient = useQueryClient();
   const { activeOrganizationId } = useOrganization();
@@ -222,23 +280,23 @@ function SeriesItem({ s, today, onDone }: { s: SeriesRow; today: string; onDone:
       await queryClient.invalidateQueries({ queryKey: ["aws-shift-series"] });
       setState({ busy: false, error: null });
       setMode(null);
-      onDone(done(r.result));
+      onDone(done(r.result), (r.result as { rejected?: RejectedDate[] }).rejected);
     } catch (cause) {
       setState({ busy: false, error: message(cause, "Not saved.") });
     }
   }
   const nextMonthEnd = (() => { const d = new Date(`${s.generatedThrough}T12:00:00Z`); d.setUTCMonth(d.getUTCMonth() + 2, 0); return d.toISOString().slice(0, 10); })();
   return (
-    <li className="rounded-xl border border-slate-200 bg-white p-3 text-sm">
+    <li className="rounded-xl border border-slate-200 bg-og-card p-3 text-sm">
       <p className="font-semibold text-slate-950">{s.clientName ?? s.clientCode} · {s.serviceName}</p>
-      <p className="text-slate-800">{patternText(s.weekdays, s.startTime, s.endTime)} · {s.caregiverName ?? "Open — no caregiver"}</p>
+      <p className="text-slate-800">{patternText(s.weekdays, s.startTime, s.endTime)}{describePattern(s.pattern) ? ` · ${describePattern(s.pattern)}` : ""} · {s.caregiverName ?? "Open — no caregiver"}</p>
       <p className="text-xs text-slate-600">
         From {formatDateOnly(s.startsOn)}{s.endsOn ? ` to ${formatDateOnly(s.endsOn)}` : " (no end date)"} · scheduled through {formatDateOnly(s.generatedThrough)} · {s.upcomingOccurrences} upcoming
         {s.status === "ended" ? " · ended" : ""}
       </p>
       {s.skippedDates.length > 0 ? (
         <details className="mt-1 text-xs text-red-800">
-          <summary className="cursor-pointer">{s.skippedDates.length} skipped {s.skippedDates.length === 1 ? "date" : "dates"}</summary>
+          <summary className="inline-flex min-h-6 cursor-pointer items-center [@media(pointer:coarse)]:min-h-[44px]">{s.skippedDates.length} skipped {s.skippedDates.length === 1 ? "date" : "dates"}</summary>
           <ul>{s.skippedDates.map((k) => <li key={k.date}>{formatDateOnly(k.date)} — {OUTCOME_LABEL[k.reason as Occurrence["outcome"]] ?? k.reason}</li>)}</ul>
         </details>
       ) : null}
@@ -248,14 +306,14 @@ function SeriesItem({ s, today, onDone }: { s: SeriesRow; today: string; onDone:
           <button type="button" className="underline" onClick={() => setMode(mode === "end" ? null : "end")}>End from a date</button>
           {!s.endsOn || s.endsOn > s.generatedThrough ? (
             <button type="button" className="underline" disabled={state.busy}
-              onClick={() => void post(`/v1/shift-series/${encodeURIComponent(s.seriesId)}/extend`, { through: s.endsOn && s.endsOn < nextMonthEnd ? s.endsOn : nextMonthEnd, onConflict: "refuse" },
-                (r: { created: number; generatedThrough: string }) => `${r.created} more shifts scheduled through ${formatDateOnly(r.generatedThrough)}.`)}>
+              onClick={() => void post(`/v1/shift-series/${encodeURIComponent(s.seriesId)}/extend`, { through: s.endsOn && s.endsOn < nextMonthEnd ? s.endsOn : nextMonthEnd, onConflict: "save_valid" },
+                (r: { created: number; skipped?: number; generatedThrough: string }) => `${r.created} more shifts scheduled through ${formatDateOnly(r.generatedThrough)}${r.skipped ? `; ${r.skipped} dates were not saved (listed below)` : ""}.`)}>
               Schedule the next month
             </button>
           ) : null}
         </div>
       ) : null}
-      {mode === "change" ? <RecurringSeriesForm today={today} series={s} onDone={(t) => { setMode(null); onDone(t); }} /> : null}
+      {mode === "change" ? <RecurringSeriesForm today={today} series={s} onDone={(t, rej) => { setMode(null); onDone(t, rej); }} /> : null}
       {mode === "end" ? (
         <form onSubmit={(e) => { e.preventDefault();
           if (reason.trim().length < 3) return setState({ busy: false, error: "Give the reason." });
@@ -272,7 +330,7 @@ function SeriesItem({ s, today, onDone }: { s: SeriesRow; today: string; onDone:
   );
 }
 
-export function SeriesList({ today, onDone }: { today: string; onDone: (text: string) => void }) {
+export function SeriesList({ today, onDone }: { today: string; onDone: (text: string, rejected?: RejectedDate[]) => void }) {
   const api = useAwsApi();
   const { activeOrganizationId } = useOrganization();
   const series = useQuery({
@@ -322,5 +380,18 @@ export function RescheduleForm({ shiftId, localDate, startsAt, endsAt, onClose, 
       {state.error ? <p role="alert" className="text-sm text-red-700 sm:col-span-3">{state.error}</p> : null}
       <div className="flex gap-2 sm:col-span-3"><Button type="submit" disabled={state.busy}>Change this date only</Button><button type="button" className="text-sm underline" onClick={onClose}>Close</button></div>
     </form>
+  );
+}
+
+/** Every date that was not saved, with its reason (0061). Nothing is cut off. */
+export function RejectedDates({ items }: { items: RejectedDate[] }) {
+  if (items.length === 0) return null;
+  return (
+    <section data-testid="rejected-dates" aria-label="Dates that were not saved" className="rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-900">
+      <h3 className="font-semibold">{items.length} {items.length === 1 ? "date was" : "dates were"} not saved</h3>
+      <ul className="mt-1 space-y-0.5">
+        {items.map((r) => <li key={r.localDate}>{formatDateOnly(r.localDate)} — {OUTCOME_LABEL[r.reason as Occurrence["outcome"]] ?? r.reason}</li>)}
+      </ul>
+    </section>
   );
 }

@@ -198,6 +198,54 @@ async function main() {
   const calledOut = await shift(okafor, personal, 4, "09:00", "12:00", alexRec);
   await asActor(manager.sub, () => c.query("select ogevia_api.record_shift_callout($1,$2,'Caregiver unwell (synthetic)',null)", [org, calledOut]));
 
+  // ---- Scheduling patterns, hour limits and a make-up (0053) ---------------------------------------------------
+  const firstOn = async (dow: number, from: number) => { for (let n = from; n < from + 7; n++) { const d = await day(n); if (new Date(`${d}T12:00:00Z`).getUTCDay() === dow) return d; } throw new Error("no such weekday"); };
+  const series = async (client: string, service: string, record: string | null, weekdays: number[], start: string, end: string, from: string, to: string, pattern: object | null) =>
+    asActor(manager.sub, () => c.query("select * from ogevia_api.create_shift_series($1,$2,$3,$4,$5::smallint[],$6::time,$7::time,$8::date,$9::date,'skip_flagged',null,$10::jsonb)",
+      [org, client, service, record, weekdays, start, end, from, to, pattern ? JSON.stringify(pattern) : null]));
+  // "Every Saturday except the first Saturday of the month" (Vega, Casey).
+  await series(vega, respite, casey, [6], "09:00", "13:00", await day(1), await day(60), { except_nth: [1] });
+  // Week A / week B for one client with two caregivers (Okafor): Alex Mon+Wed on odd weeks, Blair Tue+Thu on even weeks.
+  const monday = await firstOn(1, 7);
+  await series(okafor, personal, alexRec, [1, 3], "14:00", "16:00", monday, await day(60), { every_weeks: 2, anchor: monday });
+  await series(okafor, personal, blairRec, [2, 4], "14:00", "16:00", await day(Math.round((Date.parse(`${monday}T12:00:00Z`) - Date.parse(`${await day(0)}T12:00:00Z`)) / 864e5) + 1), await day(60),
+    { every_weeks: 2, anchor: await day(Math.round((Date.parse(`${monday}T12:00:00Z`) - Date.parse(`${await day(0)}T12:00:00Z`)) / 864e5) + 7) });
+  // Two caregivers for one client at the same time (Lindqvist, Fridays).
+  const friday = await firstOn(5, 7);
+  await series(lindqvist, respite, alexRec, [5], "10:00", "12:00", friday, await day(45), null);
+  await series(lindqvist, respite, casey, [5], "10:00", "12:00", friday, await day(45), null);
+  // Hour limits: an agency default that warns, and a stricter limit for Blair that stops the assignment.
+  await asActor(manager.sub, () => c.query("select ogevia_api.set_hour_limit($1,null,480,2400,'report','Agency default (synthetic)')", [org]));
+  await asActor(manager.sub, () => c.query("select ogevia_api.set_hour_limit($1,$2,300,null,'block','Part-time agreement (synthetic)')", [org, blairRec]));
+  // A cancelled shift with time still owed: the make-up button appears on it.
+  const missed = await shift(tanaka, respite, 5, "09:00", "12:00", casey);
+  await asActor(manager.sub, () => c.query("select * from ogevia_api.cancel_shift($1,$2,'Client in hospital (synthetic)',null)", [org, missed]));
+
+  // ---- Recruiting and onboarding (0054) -----------------------------------------------------------------------------
+  const cprType = String((await asActor(owner.sub, () => c.query("select ogevia_api.create_document_type($1,'CPR card',true,null) as id", [org]))).rows[0]?.id);
+  const tbType = String((await asActor(owner.sub, () => c.query("select ogevia_api.create_document_type($1,'TB result',false,null) as id", [org]))).rows[0]?.id);
+  for (const [req, type] of [["cpr", cprType], ["tb", tbType]] as const) {
+    await asActor(owner.sub, () => c.query("select ogevia_api.set_document_work_requirement($1,$2,$3,'Agency policy (synthetic)')", [org, req, type]));
+    await asActor(owner.sub, () => c.query("select ogevia_api.set_requirement_policy($1,$2,'document_expiry',null,'Per agency policy (synthetic)')", [org, req]));
+  }
+  const person = async (first: string, last: string) =>
+    String((await asActor(owner.sub, () => c.query("select * from ogevia_api.create_caregiver($1,$2,$3,null,'applicant',null)", [org, first, last]))).rows[0]?.caregiver_record_id);
+  const stage = (rec: string, status: string) => asActor(owner.sub, () => c.query("select * from ogevia_api.set_caregiver_status($1,$2,$3,'Moved on the Recruiting board (synthetic)',null)", [org, rec, status]));
+  const item = (rec: string, key: string, expiresInDays: number | null = null) =>
+    asActor(owner.sub, () => c.query("select ogevia_api.record_onboarding_item($1,$2,$3,'complete',null,(now() + make_interval(days => $4::int))::date,null,null)", [org, rec, key, expiresInDays]));
+  async function document(rec: string, type: string) {
+    const doc = String((await asActor(owner.sub, () => c.query("select ogevia_api.request_staff_document($1,$2,$3,null,null) as id", [org, rec, type]))).rows[0]?.id);
+    const version = randomUUID();
+    const v = (await asActor(owner.sub, () => c.query("select * from ogevia_api.register_document_version($1,$2,$3,'v1','application/pdf',1234,$4,null,(now() + interval '300 days')::date,null)", [doc, version, `${org}/documents/${doc}/${version}`, "d".repeat(64)]))).rows[0] as Row;
+    await asActor(owner.sub, () => c.query("select ogevia_api.review_document_version($1,'verified',null)", [v.document_version_id]));
+  }
+  await person("Jordan", "Applicant");
+  const riley = await person("Riley", "Interviewee"); await stage(riley, "interview");
+  const taylor = await person("Taylor", "Onboarding"); await stage(taylor, "interview"); await stage(taylor, "offer"); await stage(taylor, "onboarding");
+  await item(taylor, "background_check"); await item(taylor, "training", 20);
+  const avery = await person("Avery", "Paperwork"); for (const s of ["interview", "offer", "onboarding", "pending_documents"]) await stage(avery, s);
+  await item(avery, "background_check"); await item(avery, "training", 300); await document(avery, cprType); await document(avery, tbType);
+
   const [summary] = await q("select count(*)::int as clients, (select count(*)::int from ogevia.shifts) as shifts, (select count(*)::int from ogevia.service_visits) as visits from ogevia.clients");
   console.log(`seeded: ${summary?.clients} clients, ${summary?.shifts} shifts, ${summary?.visits} visits`);
   await c.end();

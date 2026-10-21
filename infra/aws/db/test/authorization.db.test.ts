@@ -247,8 +247,9 @@ describe("AUTHORIZATION versioning (Phase 0 defect M-1 regression)", () => {
       up[0]!.new_authorization_id,
       50,
     );
+    // 0071 names the decrease impact on a confirmed visit "visit_over_cap" (it also sends an unapproved Billing Ready visit back to review). The visit is still reported.
     expect(down.find((r) => r.affected_visit_id === over)?.impact_kind).toBe(
-      "decrease_now_exceeds",
+      "visit_over_cap",
     );
   });
 });

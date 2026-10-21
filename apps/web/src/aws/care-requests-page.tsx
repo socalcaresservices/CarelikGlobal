@@ -5,12 +5,14 @@ import type { AwsApiClient } from "@/lib/aws-api";
 import { useOrganization } from "@/providers/organization-provider";
 import { formatDateTime } from "@/lib/service-verification";
 import { MatchingPanel } from "./readiness/matching-panel";
-import { ShortHelp } from "./help-text";
+import { Hint } from "./hint";
+import { SummarySection } from "./ui/summary-section";
+import { clientLabel } from "./name-label";
 
 
-type RequestRow = { requestId: string; clientCode: string; serviceCode: string; serviceName: string; startsAt: string; endsAt: string; requestedMinutes: number; status: string; shortNotice: boolean; availableCount: number; awaitingCount: number; assignedCaregiverName: string | null };
+type RequestRow = { requestId: string; clientCode: string; clientName?: string | null; duplicateName?: boolean; serviceCode: string; serviceName: string; startsAt: string; endsAt: string; requestedMinutes: number; status: string; shortNotice: boolean; availableCount: number; awaitingCount: number; assignedCaregiverName: string | null };
 type Offer = { offerId: string; caregiverRecordId: string; caregiverName: string; status: string; respondedAt: string | null };
-type ClientOption = { clientId: string; clientCode: string };
+type ClientOption = { clientId: string; clientCode: string; clientName?: string | null; duplicateName?: boolean };
 type AlertStaff = { userId: string; displayName: string; selected: boolean };
 
 const when = (value: string) => formatDateTime(value);
@@ -91,42 +93,42 @@ export function CareRequestsPage({ api }: { api: AwsApiClient }) {
     }
   }, [staff.data, alertsInitialized]);
 
+  const queue = requests.data?.requests ?? [];
+  const alertCount = notifications.data?.notifications.length ?? 0;
+  const shortNotice = queue.filter((r) => r.shortNotice).length;
   return (
-    <section className="space-y-6">
-      <div className="flex flex-wrap items-start justify-between gap-3"><div><h1 className="text-2xl font-semibold text-slate-950">Care requests</h1><p className="mt-1 text-sm text-slate-600">Client requests, caregiver availability, assignment, and replacement coverage in one queue.</p></div>{(notifications.data?.notifications.length ?? 0) > 0 ? <span className="rounded-full bg-amber-100 px-3 py-1 text-sm font-semibold text-amber-800">{notifications.data!.notifications.length} new alert{notifications.data!.notifications.length === 1 ? "" : "s"}</span> : null}</div>
-
-      <Card>
-        <h2 className="font-semibold text-slate-950">Client request link</h2>
-        <p className="mt-1 text-sm text-slate-600">Create once for a client/family. They can bookmark it and request care without calling.</p>
-        <div className="mt-3 flex flex-wrap gap-2">
-          <select value={clientId} onChange={(e) => setClientId(e.target.value)} className="min-w-56 rounded-lg border border-slate-200 px-3 py-2 text-sm">
-            <option value="">Select client</option>{(clients.data?.clients ?? []).map((c) => <option key={c.clientId} value={c.clientId}>{c.clientCode}</option>)}
-          </select>
-          <Button disabled={!clientId} loading={createPortal.isPending} onClick={() => createPortal.mutate()}>Create request link</Button>
-          <Button variant="secondary" disabled={!clientId} loading={revokePortals.isPending} onClick={() => revokePortals.mutate()}>Revoke this client's links</Button>
+    <section className="space-y-4">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h1 className="text-xl font-semibold text-slate-950">Care requests</h1>
+          {requests.data ? <p className="mt-1 text-sm text-slate-700">{queue.length === 0 ? "No open requests." : `${queue.length} open request${queue.length === 1 ? "" : "s"}${shortNotice > 0 ? `, ${shortNotice} short notice` : ""}.`}</p> : null}
         </div>
-        {revokePortals.isSuccess ? <p role="status" className="mt-3 text-sm text-slate-700">{revokePortals.data.revoked} link(s) revoked. Old links no longer work; create a new link if needed.</p> : null}
-        {revokePortals.isError ? <p role="alert" className="mt-3 text-sm text-red-700">{revokePortals.error instanceof Error ? revokePortals.error.message : "Could not revoke links."}</p> : null}
-        {portalLink ? <div className="mt-3 flex items-center gap-2"><input readOnly value={portalLink} className="min-w-0 flex-1 rounded-lg border border-slate-200 px-3 py-2 text-sm" /><Button variant="secondary" onClick={() => void navigator.clipboard.writeText(portalLink)}>Copy</Button></div> : null}
-      </Card>
+        {alertCount > 0 ? <span className="rounded-full bg-amber-100 px-3 py-1 text-sm font-semibold text-amber-900">{alertCount} new alert{alertCount === 1 ? "" : "s"}</span> : null}
+      </div>
 
-      <Card>
-        <h2 className="font-semibold text-slate-950">Who gets new-request alerts</h2>
-        <div className="mt-3 flex flex-wrap gap-3">{staffRows.map((s) => <label key={s.userId} className="flex items-center gap-2 text-sm"><input type="checkbox" checked={selectedAlertUsers.has(s.userId)} onChange={(e) => setSelectedAlertUsers((current) => { const next=new Set(current); if(e.target.checked) next.add(s.userId); else next.delete(s.userId); return next; })} />{s.displayName}</label>)}</div>
-        <Button className="mt-3" variant="secondary" loading={saveAlerts.isPending} onClick={() => saveAlerts.mutate()}>Save alert recipients</Button>
-      </Card>
+      {requests.isError ? <p role="alert" className="text-sm text-red-700">The request queue could not be loaded. Reload the page.</p> : null}
+      {queue.length > 0 ? (
+        <table className="w-full text-left text-sm" aria-label="Request queue">
+          <thead><tr className="text-xs uppercase tracking-wide text-slate-600"><th scope="col" className="pb-1 pr-2 font-semibold">Request</th><th scope="col" className="pb-1 pr-2 font-semibold">Status</th><th scope="col" className="pb-1"><span className="sr-only">Action</span></th></tr></thead>
+          <tbody>
+            {queue.map((r) => (
+              <tr key={r.requestId} className="border-t border-slate-100 align-top">
+                <th scope="row" className="py-1.5 pr-2 text-left font-normal">
+                  <span className="block font-semibold text-slate-950">{clientLabel(r)} · {r.serviceName}</span>
+                  <span className="block text-slate-700">{when(r.startsAt)} · {duration(r.requestedMinutes)}{r.shortNotice ? <span className="ml-1 font-semibold text-amber-900">short notice</span> : null}</span>
+                </th>
+                <td className="py-1.5 pr-2"><span className="block capitalize text-slate-900">{r.status.replaceAll("_", " ")}</span><span className="block text-slate-700">{r.availableCount} available · {r.awaitingCount} waiting</span></td>
+                <td className="py-2"><Button size="sm" variant="secondary" className="min-h-[44px] md:min-h-[36px]" onClick={() => setSelectedRequestId(r.requestId)}>Open</Button></td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      ) : null}
 
-      <Card>
-        <h2 className="font-semibold text-slate-950">Request queue</h2>
-        <div className="mt-3 overflow-x-auto"><table className="w-full text-left text-sm"><thead className="text-xs text-slate-500"><tr><th className="pb-2">Client</th><th>Service</th><th>When</th><th>Hours</th><th>Status</th><th>Responses</th><th></th></tr></thead><tbody>
-          {(requests.data?.requests ?? []).map((r) => <tr key={r.requestId} className="border-t border-slate-100"><td className="py-3">{r.clientCode}</td><td title={r.serviceCode}>{r.serviceName}</td><td>{when(r.startsAt)}{r.shortNotice ? <span className="ml-1 text-amber-700">short notice</span> : null}</td><td>{duration(r.requestedMinutes)}</td><td className="capitalize">{r.status.replaceAll("_"," ")}</td><td>{r.availableCount} available · {r.awaitingCount} waiting</td><td><Button size="sm" variant="secondary" className="min-h-[40px]" onClick={() => setSelectedRequestId(r.requestId)}>Open</Button></td></tr>)}
-        </tbody></table></div>
-      </Card>
-
-      {selectedRequestId ? <div className="grid gap-6 lg:grid-cols-2">
+      {selectedRequestId ? <div className="grid gap-3 lg:grid-cols-2">
         <Card>
           <h2 className="font-semibold text-slate-950">Matches</h2>
-          <ShortHelp className="mt-1 text-xs text-slate-500" details="Checks: approved hours, documents, conflicts, and services where required.">Caregivers are checked first, then ranked. A score never makes a blocked caregiver assignable.</ShortHelp>
+          <Hint details="Checks: approved hours, documents, conflicts, and services where required.">Caregivers are checked first, then ranked. A score never makes a blocked caregiver assignable.</Hint>
           <div className="mt-3"><MatchingPanel requestId={selectedRequestId} onOffer={(id) => sendOffer.mutate(id)} offering={sendOffer.isPending} /></div>
           {offerLink ? <div className="mt-3 rounded-lg bg-slate-50 p-3"><p className="text-xs text-slate-500">Secure fallback link. Caregivers with Ogevia access also see the opportunity in-app.</p><div className="mt-2 flex gap-2"><input readOnly value={offerLink} className="min-w-0 flex-1 rounded-lg border border-slate-200 px-2 py-1 text-xs" /><Button size="sm" variant="secondary" onClick={() => void navigator.clipboard.writeText(offerLink)}>Copy</Button></div></div> : null}
         </Card>
@@ -135,6 +137,25 @@ export function CareRequestsPage({ api }: { api: AwsApiClient }) {
           <div className="mt-3 space-y-2">{(offers.data?.offers ?? []).map((o) => <div key={o.offerId} className="flex items-center justify-between rounded-lg border border-slate-100 p-3"><div><p className="text-sm font-medium">{o.caregiverName}</p><p className="text-xs text-slate-500">{o.status.replaceAll("_"," ")}</p></div>{o.status==="available" ? <Button size="sm" loading={assign.isPending} onClick={() => assign.mutate(o.offerId)}>Assign</Button> : null}</div>)}</div>
         </Card>
       </div> : null}
+
+      <SummarySection title="Client request link" summary="Create or revoke a family's link">
+        <Hint>Create once per family. They bookmark it and request care without calling.</Hint>
+        <div className="mt-3 flex flex-wrap gap-2">
+          <select aria-label="Client" value={clientId} onChange={(e) => setClientId(e.target.value)} className="min-w-56 rounded-lg border border-slate-200 px-3 py-2 text-base">
+            <option value="">Select client</option>{(clients.data?.clients ?? []).map((c) => <option key={c.clientId} value={c.clientId}>{clientLabel(c)}</option>)}
+          </select>
+          <Button disabled={!clientId} loading={createPortal.isPending} onClick={() => createPortal.mutate()}>Create request link</Button>
+          <Button variant="secondary" disabled={!clientId} loading={revokePortals.isPending} onClick={() => revokePortals.mutate()}>Revoke this client's links</Button>
+        </div>
+        {revokePortals.isSuccess ? <p role="status" className="mt-3 text-sm text-slate-700">{revokePortals.data.revoked} link(s) revoked. Old links no longer work; create a new link if needed.</p> : null}
+        {revokePortals.isError ? <p role="alert" className="mt-3 text-sm text-red-700">{revokePortals.error instanceof Error ? revokePortals.error.message : "Links were not revoked. Try again."}</p> : null}
+        {portalLink ? <div className="mt-3 flex items-center gap-2"><input readOnly aria-label="Request link" value={portalLink} className="min-w-0 flex-1 rounded-lg border border-slate-200 px-3 py-2 text-sm" /><Button variant="secondary" onClick={() => void navigator.clipboard.writeText(portalLink)}>Copy</Button></div> : null}
+      </SummarySection>
+
+      <SummarySection title="New-request alerts" summary={staff.data ? `${selectedAlertUsers.size} of ${staffRows.length} staff selected` : undefined}>
+        <div className="flex flex-wrap gap-x-4">{staffRows.map((s) => <label key={s.userId} className="flex min-h-[44px] items-center gap-2 text-sm"><input type="checkbox" className="h-5 w-5" checked={selectedAlertUsers.has(s.userId)} onChange={(e) => setSelectedAlertUsers((current) => { const next=new Set(current); if(e.target.checked) next.add(s.userId); else next.delete(s.userId); return next; })} />{s.displayName}</label>)}</div>
+        <Button className="mt-3" variant="secondary" loading={saveAlerts.isPending} onClick={() => saveAlerts.mutate()}>Save alert recipients</Button>
+      </SummarySection>
     </section>
   );
 }

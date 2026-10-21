@@ -5,15 +5,23 @@
 import type { ClientMonthSummary } from "@/lib/client-month-summary";
 import type { MonthlyServiceSummaryRow } from "@/lib/sv-backend";
 import { formatDateOnly, formatDuration, formatTimeRange, VISIT_STATUS_LABEL } from "@/lib/service-verification";
+import { formatHours } from "@/lib/hours-accounting";
+import { currentAuthorizationIds } from "@/lib/current-authorization";
 
 type LoadState = "loading" | "error" | "ready";
 
+const hasActivity = (r: MonthlyServiceSummaryRow) =>
+  r.workedMinutes > 0 || r.billableMinutes > 0 || (r.hoursPendingMinutes ?? 0) > 0 || (r.hoursReservedMinutes ?? r.reservedMinutes ?? 0) > 0 || r.reviewMinutes > 0 || r.visitCount > 0;
+
+
+/** One authorization: "Hours left" as a time, or "Over limit" with the amount over (0079); never offset against another authorization. */
+const overOrLeft = (minutes: number) => (minutes < 0 ? `Over limit: ${formatHours(-minutes)}` : formatHours(minutes));
 const th = "pb-1 pr-3 font-medium print:pb-0.5 print:pr-2";
 const td = "whitespace-nowrap py-1 pr-3 tabular-nums print:py-0 print:pr-2";
 
 export function CalendarSummary({
   summary,
-  serviceRows,
+  serviceRows: allRows,
   serviceRowsState,
   visitsState,
   detailPage,
@@ -25,15 +33,22 @@ export function CalendarSummary({
   detailPage: boolean;
 }) {
   const { services, caregivers } = summary;
+  const currentIds = currentAuthorizationIds(allRows);
+  const isCurrent = (r: MonthlyServiceSummaryRow) => currentIds.has(r.authorizationLineageId);
+  // An earlier (replaced) authorization is listed only when time was worked, scheduled or reviewed under it.
+  const serviceRows = allRows.filter((r) => isCurrent(r) || hasActivity(r));
   const totals = serviceRows.reduce(
     (t, r) => ({
-      authorized: t.authorized + r.authorizedMinutes,
+      authorized: t.authorized + (isCurrent(r) ? r.authorizedMinutes : 0),
       worked: t.worked + r.workedMinutes,
       billable: t.billable + r.billableMinutes,
-      reserved: t.reserved + (r.reservedMinutes ?? 0),
-      remaining: t.remaining + r.remainingMinutes,
+      reserved: t.reserved + (r.hoursReservedMinutes ?? r.reservedMinutes ?? 0),
+      pending: t.pending + (r.hoursPendingMinutes ?? 0),
+      // A total counts each authorization's unused time only; one that is over its limit never uses up another's, and the overage is shown beside it.
+      remaining: t.remaining + Math.max(r.hoursLeftMinutes ?? r.remainingMinutes, 0),
+      over: t.over + Math.max(-(r.hoursLeftMinutes ?? r.remainingMinutes), 0),
     }),
-    { authorized: 0, worked: 0, billable: 0, reserved: 0, remaining: 0 },
+    { authorized: 0, worked: 0, billable: 0, reserved: 0, pending: 0, remaining: 0, over: 0 },
   );
   const ready = serviceRowsState === "ready" && visitsState === "ready";
 
@@ -82,7 +97,7 @@ export function CalendarSummary({
             <p className="mt-1 text-slate-500">Loading totals…</p>
           ) : serviceRowsState === "error" ? (
             <p role="alert" className="mt-1 text-red-700">Could not load the service totals.</p>
-          ) : serviceRows.length === 0 ? (
+          ) : allRows.length === 0 ? (
             <p className="mt-1 text-slate-500">No authorization covers this client and month.</p>
           ) : (
             <div className="mt-1 overflow-x-auto print:overflow-visible">
@@ -93,7 +108,8 @@ export function CalendarSummary({
                   <th className={th}>Authorized</th>
                   <th className={th}>Worked</th>
                   <th className={th}>Billable</th>
-                  <th className={th}>Still scheduled</th>
+                  <th className={th}>Pending</th>
+                  <th className={th}>Reserved</th>
                   <th className={th}>Hours left</th>
                 </tr>
               </thead>
@@ -102,13 +118,15 @@ export function CalendarSummary({
                   <tr key={r.authorizationLineageId} className="border-b border-slate-100">
                     <td className="py-1 pr-3 font-medium text-slate-800 print:py-0 print:pr-2">
                       {r.serviceCode} · {r.serviceName}
+                      {isCurrent(r) ? null : <span className="block text-xs font-normal text-slate-600 print:text-[8px]">Earlier authorization (history)</span>}
                       {r.reviewMinutes > 0 ? <span className="block text-xs text-amber-800 print:text-[8px]">In review {formatDuration(r.reviewMinutes)}</span> : null}
                     </td>
-                    <td className={td}>{formatDuration(r.authorizedMinutes)}</td>
+                    <td className={td}>{isCurrent(r) ? formatDuration(r.authorizedMinutes) : "—"}</td>
                     <td className={td}>{formatDuration(r.workedMinutes)}</td>
-                    <td className={td}>{formatDuration(r.billableMinutes)}</td>
-                    <td className={td}>{formatDuration(r.reservedMinutes ?? 0)}</td>
-                    <td className={td}>{formatDuration(r.remainingMinutes)}</td>
+                    <td className={td}>{formatDuration(r.hoursBillableMinutes ?? r.billableMinutes)}</td>
+                    <td className={td}>{formatDuration(r.hoursPendingMinutes ?? 0)}</td>
+                    <td className={td}>{formatDuration(r.hoursReservedMinutes ?? r.reservedMinutes ?? 0)}</td>
+                    <td className={`${td} ${(r.hoursLeftMinutes ?? r.remainingMinutes) < 0 ? "font-semibold text-red-700" : ""}`}>{overOrLeft(r.hoursLeftMinutes ?? r.remainingMinutes)}</td>
                   </tr>
                 ))}
                 {serviceRows.length > 1 ? (
@@ -117,8 +135,9 @@ export function CalendarSummary({
                     <td className={td}>{formatDuration(totals.authorized)}</td>
                     <td className={td}>{formatDuration(totals.worked)}</td>
                     <td className={td}>{formatDuration(totals.billable)}</td>
+                    <td className={td}>{formatDuration(totals.pending)}</td>
                     <td className={td}>{formatDuration(totals.reserved)}</td>
-                    <td className={td}>{formatDuration(totals.remaining)}</td>
+                    <td className={td}>{formatHours(totals.remaining)}{totals.over > 0 ? <span className="block text-xs text-red-700">Over limit: {formatHours(totals.over)}</span> : null}</td>
                   </tr>
                 ) : null}
               </tbody>
@@ -199,5 +218,26 @@ export function CalendarSummary({
         </section>
       ) : null}
     </div>
+  );
+}
+
+/**
+ * Above the client monthly calendar: the month's AUTHORISED hours for each service of the selected client, one line per service ("Respite — Authorised: 40 h").
+ * The figures are the server's monthly summary (one row per authorization, an amended authorization counted once); nothing is recomputed here beyond adding the
+ * rows of one service. It is shown once for the month, never inside a day or a shift, and it is not the Hours left breakdown (that stays in Details elsewhere).
+ */
+export function CalendarAuthorizedHours({ rows, state }: { rows: MonthlyServiceSummaryRow[]; state: LoadState }) {
+  if (state === "loading") return <p role="status" className="text-sm text-slate-500 print:hidden" data-testid="authorised-hours-loading">Loading authorised hours…</p>;
+  if (state === "error") return <p role="alert" className="text-sm text-red-700 print:hidden" data-testid="authorised-hours-error">Authorised hours could not be loaded. They are not shown as zero.</p>;
+  // One line per service, from the CURRENT authorization only (a replaced one is history and is never added).
+  const currentIds = currentAuthorizationIds(rows);
+  const list = rows.filter((r) => currentIds.has(r.authorizationLineageId)).map((r) => ({ name: r.serviceName, minutes: r.authorizedMinutes })).sort((a, b) => a.name.localeCompare(b.name));
+  if (list.length === 0) return <p className="text-sm text-slate-600 print:hidden" data-testid="authorised-hours-none">No authorization this month</p>;
+  return (
+    <ul aria-label="Authorised hours by service for the month" className="flex flex-wrap gap-x-6 gap-y-0.5 text-sm text-slate-900 print:hidden" data-testid="authorised-hours">
+      {list.map((s) => (
+        <li key={s.name}><span className="font-medium">{s.name}</span> — Authorised: {formatHours(s.minutes)}</li>
+      ))}
+    </ul>
   );
 }

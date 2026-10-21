@@ -8,6 +8,7 @@ import { useAwsApi } from "../aws-workspace";
 import { useGuardedMutate } from "./use-guarded";
 import { useAvailability } from "./queries";
 import { DAY_NAMES, REQUEST_STATUS_BADGE, REQUEST_STATUS_LABEL, actionError, rangeLabel, weeklySummary, type HoursRange } from "./format";
+import { AuditList } from "../ui/audit-list";
 
 export interface AvailabilityRequestRow {
   requestId: string;
@@ -36,18 +37,18 @@ export interface AvailabilityState {
   recent: AvailabilityRequestRow[];
 }
 
-const inputClass = "mt-1 block w-full rounded-md border border-slate-300 px-3 py-2 text-base";
+const inputClass = "mt-1 block w-full rounded-md border border-slate-300 px-2.5 py-1.5 text-sm";
 export const SENT_MESSAGE = "Request sent. Your current hours stay in place until approved.";
 
 /** The APPROVED hours, with the agency time zone. "Not provided" when nothing has ever been approved or entered. */
 export function CurrentAvailability({ state }: { state: AvailabilityState }) {
   return (
-    <div className="space-y-3 text-sm text-slate-800">
-      <p className="text-slate-600">All times are in agency time ({state.timezone}).</p>
+    <div className="space-y-1.5 text-sm text-slate-800">
+      <p className="text-xs text-slate-600">All times are in agency time ({state.timezone}).</p>
       {!state.provided ? (
         <p className="font-medium text-amber-900">Not provided</p>
       ) : (
-        <dl className="grid grid-cols-[7rem_1fr] gap-x-3 gap-y-1">
+        <dl className="grid grid-cols-[6rem_1fr] gap-x-3 gap-y-0.5">
           {weeklySummary(state.weekly).map((d) => (
             <div key={d.weekday} className="contents">
               <dt className="font-medium text-slate-700">{d.name}</dt>
@@ -64,7 +65,7 @@ export function CurrentAvailability({ state }: { state: AvailabilityState }) {
       {state.exceptions.length ? (
         <div>
           <p className="font-medium text-slate-700">Specific dates</p>
-          <ul className="mt-1 space-y-0.5">
+          <ul className="space-y-0.5">
             {state.exceptions.map((e) => (
               <li key={e.date}>{formatDateOnly(e.date)}: {e.hours.unavailable ? "Not available" : e.hours.windows.map(rangeLabel).join(", ")}</li>
             ))}
@@ -77,20 +78,29 @@ export function CurrentAvailability({ state }: { state: AvailabilityState }) {
 
 export function RequestHistory({ rows, canWithdraw, onWithdraw, busyId }: { rows: AvailabilityRequestRow[]; canWithdraw?: boolean; onWithdraw?: (id: string) => void; busyId?: string | null }) {
   if (!rows.length) return <p className="text-sm text-slate-500">No requests yet.</p>;
+  const title = (r: AvailabilityRequestRow) => `${r.kind === "weekly" ? "Weekly hours" : "Specific date"} · from ${formatDateOnly(r.effectiveFrom)}${r.kind === "weekly" && r.effectiveUntil ? ` to ${formatDateOnly(r.effectiveUntil)}` : ""}`;
+  if (!canWithdraw) {
+    // Decided requests are history: one compact row each (when, outcome, what), the reason and any decline note on expanding.
+    return (
+      <AuditList label="Availability decisions" maxHeightClass="max-h-48"
+        rows={rows.map((r) => ({
+          id: r.requestId, when: formatDateOnly(r.effectiveFrom), who: REQUEST_STATUS_LABEL[r.status] ?? r.status, summary: `${title(r)} · Reason: ${r.reason}`,
+          detail: r.status === "declined" && r.reviewNote ? <p>Declined: {r.reviewNote}</p> : undefined,
+        }))} />
+    );
+  }
   return (
-    <ul className="space-y-2">
+    <ul className="space-y-1">
       {rows.map((r) => (
-        <li key={r.requestId} className="rounded-lg border border-slate-200 p-3 text-sm">
+        <li key={r.requestId} className="rounded-md border border-slate-200 px-2 py-1 text-sm">
           <div className="flex flex-wrap items-center justify-between gap-2">
-            <p className="font-medium text-slate-900">
-              {r.kind === "weekly" ? "Weekly hours" : "Specific date"} · from {formatDateOnly(r.effectiveFrom)}{r.kind === "weekly" && r.effectiveUntil ? ` to ${formatDateOnly(r.effectiveUntil)}` : ""}
-            </p>
+            <p className="font-medium text-slate-900">{title(r)}</p>
             <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${REQUEST_STATUS_BADGE[r.status] ?? "bg-slate-100"}`}>{REQUEST_STATUS_LABEL[r.status] ?? r.status}</span>
           </div>
-          <p className="mt-1 text-slate-700">Reason: {r.reason}</p>
-          {r.status === "declined" && r.reviewNote ? <p className="mt-1 text-slate-800">Declined: {r.reviewNote}</p> : null}
-          {canWithdraw && r.status === "pending" ? (
-            <Button type="button" variant="secondary" className="mt-2" disabled={busyId === r.requestId} onClick={() => onWithdraw?.(r.requestId)}>
+          <p className="text-xs text-slate-700">Reason: {r.reason}</p>
+          {r.status === "declined" && r.reviewNote ? <p className="text-xs text-slate-800">Declined: {r.reviewNote}</p> : null}
+          {r.status === "pending" ? (
+            <Button type="button" variant="secondary" className="mt-1" disabled={busyId === r.requestId} onClick={() => onWithdraw?.(r.requestId)}>
               {busyId === r.requestId ? "Withdrawing…" : "Withdraw request"}
             </Button>
           ) : null}
@@ -172,14 +182,14 @@ export function AvailabilityRequestForm({ state, mode = "caregiver" }: { state: 
 
   return (
     <form
-      className="space-y-4"
+      className="space-y-3"
       aria-label={direct ? "Edit availability" : "Request change"}
       onSubmit={(e) => { e.preventDefault(); if (!disabled) send(); }}
     >
       <div role="tablist" aria-label="What to change" className="flex gap-2">
         {([["weekly", "Weekly hours"], ["date", "Specific date"]] as const).map(([k, label]) => (
           <button key={k} type="button" role="tab" aria-selected={kind === k} onClick={() => { touch(); setKind(k); }}
-            className={`min-h-[44px] rounded-md border px-3 text-sm font-medium ${kind === k ? "border-[#0F6674] bg-[#E8F5F4] text-[#0F6674]" : "border-slate-300 bg-white text-slate-800"}`}>{label}</button>
+            className={`min-h-[44px] rounded-md border px-3 text-sm font-medium ${kind === k ? "border-og-accent bg-og-active text-og-accent" : "border-slate-300 bg-og-card text-slate-800"}`}>{label}</button>
         ))}
       </div>
 
@@ -202,7 +212,7 @@ export function AvailabilityRequestForm({ state, mode = "caregiver" }: { state: 
                       {week[i]!.ranges.length > 1 ? <button type="button" className="min-h-[44px] text-sm underline" onClick={() => setDay(i, { ranges: week[i]!.ranges.filter((_, k) => k !== j) })}>Remove</button> : null}
                     </div>
                   ))}
-                  <button type="button" className="min-h-[44px] text-sm font-medium text-[#0F6674] underline" onClick={() => setDay(i, { ranges: [...week[i]!.ranges, { start: "13:00", end: "17:00" }] })}>Add another time range</button>
+                  <button type="button" className="min-h-[44px] text-sm font-medium text-og-accent underline" onClick={() => setDay(i, { ranges: [...week[i]!.ranges, { start: "13:00", end: "17:00" }] })}>Add another time range</button>
                 </div>
               ) : null}
             </div>
@@ -232,7 +242,7 @@ export function AvailabilityRequestForm({ state, mode = "caregiver" }: { state: 
               {dayRanges.length > 1 ? <button type="button" className="min-h-[44px] text-sm underline" onClick={() => { touch(); setDayRanges((x) => x.filter((_, k) => k !== j)); }}>Remove</button> : null}
             </div>
           )) : null}
-          {!unavailable ? <button type="button" className="min-h-[44px] text-sm font-medium text-[#0F6674] underline" onClick={() => { touch(); setDayRanges((x) => [...x, { start: "13:00", end: "17:00" }]); }}>Add another time range</button> : null}
+          {!unavailable ? <button type="button" className="min-h-[44px] text-sm font-medium text-og-accent underline" onClick={() => { touch(); setDayRanges((x) => [...x, { start: "13:00", end: "17:00" }]); }}>Add another time range</button> : null}
         </fieldset>
       )}
 
@@ -266,22 +276,22 @@ export function MyAvailability() {
     } catch (e) { setError(actionError(e, "The request could not be withdrawn.")); } finally { setBusy(null); }
   };
   return (
-    <div className="space-y-4">
-      <Card className="p-4">
-        <h2 className="text-base font-semibold text-slate-950">Approved hours</h2>
+    <div className="space-y-3">
+      <Card>
+        <h2 className="text-sm font-semibold text-slate-950">Approved hours</h2>
         <div className="mt-2"><CurrentAvailability state={state} /></div>
       </Card>
-      <Card className="p-4">
+      <Card>
         <div className="flex flex-wrap items-center justify-between gap-2">
-          <h2 className="text-base font-semibold text-slate-950">Pending changes</h2>
+          <h2 className="text-sm font-semibold text-slate-950">Pending changes</h2>
           <Button type="button" onClick={() => setOpen((o) => !o)} aria-expanded={open}>{open ? "Close" : "Request change"}</Button>
         </div>
         {error ? <p role="alert" className="mt-2 text-sm text-red-700">{error}</p> : null}
-        <div className="mt-3"><RequestHistory rows={state.pending} canWithdraw onWithdraw={withdraw} busyId={busy} /></div>
-        {open ? <div className="mt-4 border-t border-slate-200 pt-4"><AvailabilityRequestForm state={state} /></div> : null}
+        <div className="mt-2"><RequestHistory rows={state.pending} canWithdraw onWithdraw={withdraw} busyId={busy} /></div>
+        {open ? <div className="mt-2 border-t border-slate-200 pt-2"><AvailabilityRequestForm state={state} /></div> : null}
       </Card>
-      <Card className="p-4">
-        <h2 className="text-base font-semibold text-slate-950">Recent decisions</h2>
+      <Card>
+        <h2 className="text-sm font-semibold text-slate-950">Recent decisions</h2>
         <div className="mt-2"><RequestHistory rows={state.recent} /></div>
       </Card>
     </div>

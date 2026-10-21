@@ -7,7 +7,8 @@ import { useOrganization } from "@/providers/organization-provider";
 import { useAwsApi } from "./aws-workspace";
 import { useServices } from "./client-admin";
 import { formatDateOnly, formatDateTime } from "@/lib/service-verification";
-import { ShortHelp } from "./help-text";
+import { HelpLine } from "./ui/help-line";
+import { clientLabel } from "./name-label";
 
 
 /**
@@ -27,7 +28,7 @@ type Method = "none" | "nearest" | "up" | "down";
 type Basis = "per_visit" | "daily_total";
 interface Unit {
   unitKind: "visit" | "day"; unitKey: string; visitId: string | null; visitNumber: string | null; visitCount: number; authorizationLineageId: string;
-  clientCode: string; serviceName: string; payer: string; serviceDate: string; workedMinutes: number; billableMinutes: number;
+  clientCode: string; clientName?: string | null; duplicateName?: boolean; serviceName: string; payer: string; serviceDate: string; workedMinutes: number; billableMinutes: number;
   approvedMinutes: number | null; allApproved: boolean; policyVersion: number | null; method: Method; incrementMinutes: number | null; basis: Basis | null;
   proposedMinutes: number; adjustmentMinutes: number; proposedUnits: string | null; cappedByAuthorization: boolean;
   adjustmentId: string | null; adjustedBaseMinutes: number | null; adjustedProposedMinutes: number | null; adjustedMinutes: number | null;
@@ -44,7 +45,7 @@ const STATE_LABEL: Record<State, string> = {
 };
 const signed = (n: number) => (n > 0 ? `+${n}` : `${n}`);
 const message = (cause: unknown, fallback: string) => (cause instanceof Error ? cause.message : fallback);
-const inputClass = "mt-1 block w-full rounded-lg border border-slate-200 px-3 py-2 text-base";
+const inputClass = "mt-0.5 block w-full rounded-md border border-slate-200 px-2 py-1.5 text-sm";
 
 export function RoundingSection({ from, to, refreshKey }: { from: string; to: string; refreshKey: number }) {
   const api = useAwsApi();
@@ -92,12 +93,12 @@ export function RoundingSection({ from, to, refreshKey }: { from: string; to: st
         <h2 id="rounding-heading" className="text-base font-semibold text-slate-950">Billing rounding</h2>
         {hasPermission("billing.rounding.manage") ? <Link to="/settings/billing-rounding" className="text-sm underline">Rounding policies</Link> : null}
       </div>
-      <ShortHelp className="text-sm text-slate-600" details="It is computed from the approved visit minutes under the payer's policy in effect that day.">Actual times and worked minutes never change. A rounding adjustment is a separate line, billed only when approved here.</ShortHelp>
+      <HelpLine details="It is computed from the approved visit minutes under the payer's policy in effect that day.">Actual times and worked minutes never change. A rounding adjustment is a separate line, billed only when approved here.</HelpLine>
       {preview.isLoading ? <p className="text-sm text-slate-500">Loading…</p> : null}
       {preview.isError ? <p role="alert" className="text-sm text-red-700">{message(preview.error, "Rounding could not be loaded.")}</p> : null}
       {note ? <p role={note.ok ? "status" : "alert"} className={`text-sm ${note.ok ? "text-emerald-800" : "text-red-700"}`}>{note.text}</p> : null}
       {preview.data && units.length === 0 ? <p className="text-sm text-slate-500">No rounding policy applies to visits in this range (default: no rounding).</p> : null}
-      <ul aria-label="Rounding by visit or day" className="space-y-2">
+      <ul aria-label="Rounding by visit or day" className="space-y-1">
         {units.map((u) => {
           const approved = u.state === "approved" || u.state === "approved_under_earlier_policy";
           return (
@@ -105,12 +106,12 @@ export function RoundingSection({ from, to, refreshKey }: { from: string; to: st
               <Card className="p-3">
                 <div className="flex flex-wrap items-baseline justify-between gap-2">
                   <p className="text-sm font-medium text-slate-900">
-                    {formatDateOnly(u.serviceDate)} · {u.clientCode} · {u.serviceName} · {u.unitKind === "day" ? `daily total of ${u.visitCount} visit${u.visitCount === 1 ? "" : "s"}` : `visit ${u.visitNumber}`}
+                    {formatDateOnly(u.serviceDate)} · {clientLabel(u)} · {u.serviceName} · {u.unitKind === "day" ? `daily total of ${u.visitCount} visit${u.visitCount === 1 ? "" : "s"}` : `visit ${u.visitNumber}`}
                   </p>
                   <span className="text-xs font-medium text-slate-700">{STATE_LABEL[u.state]}</span>
                 </div>
                 <p className="mt-1 text-xs text-slate-600">{u.payer} · {u.policyVersion ? `policy v${u.policyVersion}: ${METHOD_LABEL[u.method]}${u.incrementMinutes ? `, ${u.incrementMinutes} min` : ""}, ${u.basis ? BASIS_LABEL[u.basis] : ""}` : "no policy"}</p>
-                <dl className="mt-2 grid grid-cols-2 gap-x-4 gap-y-1 text-sm sm:grid-cols-4">
+                <dl className="mt-1 grid grid-cols-2 gap-x-4 gap-y-0.5 text-sm sm:grid-cols-4">
                   <div><dt className="text-xs text-slate-500">Actual duration</dt><dd>{u.workedMinutes} min</dd></div>
                   <div><dt className="text-xs text-slate-500">Approved (visit)</dt><dd>{u.approvedMinutes ?? "—"}{u.approvedMinutes !== null ? " min" : ""}</dd></div>
                   <div><dt className="text-xs text-slate-500">Billing adjustment</dt><dd>{approved ? `${signed(u.adjustedMinutes ?? 0)} min` : `${signed(u.adjustmentMinutes)} min`}</dd></div>
@@ -119,7 +120,7 @@ export function RoundingSection({ from, to, refreshKey }: { from: string; to: st
                 {u.cappedByAuthorization && !approved ? <p className="mt-1 text-xs font-medium text-amber-800">Limited by the authorization: rounding may not exceed the authorized minutes.</p> : null}
                 {u.state === "approved_under_earlier_policy" ? <p className="mt-1 text-xs text-slate-600">Approved under policy v{u.adjustedPolicyVersion}. It is not recalculated; void it to apply the current policy.</p> : null}
                 {canApprove ? (
-                  <div className="mt-2">
+                  <div className="mt-1">
                     {u.state === "ready_to_approve" ? <Button className="min-h-11" disabled={busy === u.unitKey} onClick={() => void approve(u)}>Approve adjustment</Button> : null}
                     {approved ? <Button className="min-h-11" variant="secondary" disabled={busy === u.unitKey} onClick={() => void voidIt(u)}>Void adjustment</Button> : null}
                   </div>
@@ -149,7 +150,7 @@ export function BillingRoundingSettingsPage() {
   const key = useRef(newIdempotencyKey());
   const set = (k: keyof typeof f, v: string) => { setF((x) => ({ ...x, [k]: v })); key.current = newIdempotencyKey(); };
 
-  if (!canManage && !hasPermission("billing.visits.read")) return <Card className="p-4"><p className="text-sm">You do not have access to billing rounding.</p></Card>;
+  if (!canManage && !hasPermission("billing.visits.read")) return <Card><p className="text-sm">You do not have access to billing rounding.</p></Card>;
 
   async function submit() {
     if (!f.payer.trim() || !f.serviceId) return setState({ busy: false, error: "Enter the payer and choose the service.", done: null });
@@ -171,11 +172,11 @@ export function BillingRoundingSettingsPage() {
   }
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-2">
       <h1 className="text-xl font-semibold">Billing rounding policies</h1>
-      <ShortHelp className="text-sm text-slate-700" details="Set rounding only as the payer's own rules allow: your choice configures Ogevia; it does not change what the payer accepts. Rounding never exceeds authorized minutes.">No rounding unless you add a rule. Clock times, worked minutes and payroll never change.</ShortHelp>
+      <HelpLine details="Set rounding only as the payer's own rules allow: your choice configures Ogevia; it does not change what the payer accepts. Rounding never exceeds authorized minutes.">No rounding unless you add a rule. Clock times, worked minutes and payroll never change.</HelpLine>
       {canManage ? (
-        <Card className="p-4">
+        <Card>
           <h2 className="mb-2 text-base font-semibold">New policy version</h2>
           <form onSubmit={(e) => { e.preventDefault(); void submit(); }} className="grid gap-3 sm:grid-cols-2">
             <div><label htmlFor="rp-payer" className="block text-sm font-medium text-slate-700">Payer (as on the authorizations)</label>
@@ -219,7 +220,7 @@ export function BillingRoundingSettingsPage() {
           </form>
         </Card>
       ) : null}
-      <Card className="p-4">
+      <Card>
         <h2 className="text-base font-semibold">History</h2>
         {policies.isLoading ? <p className="text-sm text-slate-500">Loading…</p> : null}
         {policies.isError ? <p role="alert" className="text-sm text-red-700">{message(policies.error, "Policies could not be loaded.")}</p> : null}

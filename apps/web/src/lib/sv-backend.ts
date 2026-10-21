@@ -3,6 +3,7 @@
 // the AWS build (VITE_AUTH_PROVIDER=cognito) provides the AWS API one.
 // Business rules (identity, tenant, assignment, authorization, timestamps,
 // locking) are enforced by the backend in both cases, never here.
+import type { HoursFields } from "@/lib/hours-accounting";
 import { createContext } from "react";
 import type {
   ServiceVisitStatus,
@@ -29,6 +30,13 @@ export interface AuthorizedService {
   max_monthly_hours: number;
   hours_used_this_month: number;
   hours_scheduled_this_month: number;
+  /** 0079: authorized minus the time already counted toward the cap (server-computed); signed. */
+  left_to_record_minutes?: number | null;
+  /** 0079: the office Hours left for the same authorization (signed). */
+  hours_left_minutes?: number | null;
+  /** 0079: what the office also deducts: Pending and Reserved time. */
+  office_pending_minutes?: number | null;
+  office_reserved_minutes?: number | null;
 }
 
 export interface ActiveVisit {
@@ -45,6 +53,8 @@ export interface ActiveVisit {
   visit_status: "draft" | "awaiting_signature";
   max_monthly_hours: number;
   confirmed_minutes_this_month: number;
+  /** 0079: authorized minus the confirmed time counted toward the cap, computed on the server; signed. */
+  left_to_record_minutes?: number | null;
   // Time Out entered by a manager closing a missed clock-out (0015).
   time_out_entered_by_manager?: boolean | null;
 }
@@ -104,6 +114,8 @@ export interface VisitReportRow {
   client_id: string;
   client_code: string;
   client_legal_name: string | null;
+  /** Server flag: another client in this agency has the same name (the code is then shown beside it). */
+  client_name_duplicate?: boolean;
   caregiver_user_id: string;
   caregiver_name: string;
   service_id: string;
@@ -181,7 +193,13 @@ export interface CloseMissedVisitInput {
   idempotencyKey: string;
 }
 
-export interface MonthlyServiceSummaryRow {
+export interface NoServiceDeliveredInput {
+  visitId: string;
+  reason: string;
+  idempotencyKey: string;
+}
+
+export interface MonthlyServiceSummaryRow extends HoursFields {
   clientId: string;
   clientCode: string;
   serviceId: string;
@@ -194,14 +212,23 @@ export interface MonthlyServiceSummaryRow {
   workedMinutes: number;
   verifiedMinutes: number;
   billableMinutes: number;
-  // Authorized - billable - scheduled (reserved by assigned Care Requests), as the assignment cap counts it (0016).
+  // Authorized - committed (billable + adjustments + scheduled), as the assignment cap counts it (0016, 0057). Negative = over the limit.
   remainingMinutes: number;
   reviewMinutes: number;
   visitCount: number;
   // Time held by assigned Care Request shifts not yet signed (0016).
   reservedMinutes?: number;
+  // 0057: committed = billable + approved rounding adjustments + reserved; remaining = authorized - committed and is NEGATIVE when over the limit.
+  adjustmentMinutes?: number;
+  committedMinutes?: number;
+  overLimitMinutes?: number;
+  utilizationPercent?: number | null;
+  authorizationTier?: "healthy" | "near_limit" | "critical" | null;
+  daysUntilExpiry?: number;
+  expiringSoon?: boolean;
   /** AWS: legal name from the restricted directory (null without clients.names.read). */
   clientName?: string | null;
+  clientNameDuplicate?: boolean;
 }
 
 /** AWS (0030): human-approved minutes per authorization lineage for a month. Minutes only. */
@@ -228,6 +255,7 @@ export interface CorrectionHistoryReportRow {
   correctedVisitStatus: ServiceVisitStatus;
   /** AWS: legal name from the restricted directory (null without clients.names.read). */
   clientName?: string | null;
+  clientNameDuplicate?: boolean;
   reason: string;
   beforeSnapshot: { timeIn: string; timeOut: string; workedMinutes: number; billableMinutes: number };
   afterSnapshot: { timeIn: string; timeOut: string; workedMinutes: number; billableMinutes: number };
@@ -252,6 +280,7 @@ export interface BillingReviewRow {
   /** AWS (0030); absent on older back ends. clientName is null without clients.names.read. */
   clientCode?: string | null;
   clientName?: string | null;
+  clientNameDuplicate?: boolean;
   caregiverName?: string | null;
   serviceName?: string | null;
   timeIn?: string | null;
@@ -263,7 +292,17 @@ export interface BillingReviewRow {
   reviewDecision?: "accept_capped_billable" | "close_not_billable" | "accept_late_confirmation" | null;
   /** AWS (0036): the most minutes a person may approve (billable, or minutes accepted from a late confirmation). */
   eligibleMinutes?: number | null;
+  /** AWS (0062): the server's billing state, and the last voided approval. Absent on older back ends. */
+  billingState?: BillingState | null;
+  activeApprovalId?: string | null;
+  lastVoidAt?: string | null;
+  lastVoidReason?: string | null;
+  lastVoidedByName?: string | null;
 }
+
+/** 0062. Approval is not submission or payment. There is deliberately no "billed" state. */
+export type BillingState =
+  | "needs_correction" | "waiting_for_signature" | "late_response_to_review" | "ready_for_review" | "approved_for_billing" | "voided" | "reviewed_not_billable";
 
 /** A human billing approval. rateCents/amountCents are null unless the caller holds billing.read (owner). */
 export interface BillingApprovalRow {
@@ -318,6 +357,8 @@ export interface ServiceVerificationBackend {
   correctVisit(input: CorrectVisitInput): Promise<void>;
   /** Manager close-out of a missed clock-out: enters the actual Time Out. */
   closeMissedVisit(input: CloseMissedVisitInput): Promise<void>;
+  /** AWS only (0085): the visit never happened. Voids it with a reason: zero worked, zero billable. Not for actual work with a missing clock-out (use closeMissedVisit). */
+  markNoServiceDelivered?(input: NoServiceDeliveredInput): Promise<void>;
   /** AWS only: the locked signature as a PNG data URL (permission-checked, audited). */
   getSignatureDataUrl?(visitId: string): Promise<string>;
   /** AWS reporting: one row per client + service + authorization lineage for a month. */

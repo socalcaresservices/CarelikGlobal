@@ -115,8 +115,8 @@ describe("Visit review page", () => {
     expect(post.body).toEqual({ organizationId: ORG, decision: "close_not_billable", reason: "Parent unreachable (synthetic)" });
     expect(Object.keys(post.headers).map((h) => h.toLowerCase())).toContain("idempotency-key");
     expect(await screen.findByText("Reviewed — not billable")).toBeInTheDocument();
-    // Correct visit is a separate action.
-    expect(screen.getByRole("link", { name: "Correct visit" })).toHaveAttribute("href", `/service-verification/reports?view=visits&correct=${VISIT_ID}`);
+    // Correct is a separate action.
+    expect(screen.getByRole("link", { name: "Correct" })).toHaveAttribute("href", `/service-verification/reports?view=visits&correct=${VISIT_ID}`);
   });
 
   it("over-authorization visit with a signature: both decisions offered, with the over minutes explained", async () => {
@@ -146,9 +146,9 @@ describe("Visit review page", () => {
     expect(Object.keys(post.headers).map((h) => h.toLowerCase())).toContain("idempotency-key");
   });
 
-  it("Billing review offers 'Review visit' linking to the exact visit (no 'Review first' text)", async () => {
+  it("Billing review offers 'Correct or resolve' linking to the exact visit (no 'Review first' text)", async () => {
     renderAt("/billing-review", "no_signer");
-    const links = await screen.findAllByRole("link", { name: "Review visit" });
+    const links = await screen.findAllByRole("link", { name: "Correct or resolve" });
     expect(links[0]).toHaveAttribute("href", `/visits/${VISIT_ID}`);
     expect(screen.queryByText("Review first")).toBeNull();
   });

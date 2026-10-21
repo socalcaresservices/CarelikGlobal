@@ -15,8 +15,13 @@ const q = async <T = any>(a: Actor, sql: string, params: unknown[] = []) =>
   asActor(db, a.sub, async (c) => (await c.query(sql, params)).rows as any[] as T[]);
 const audit = (entity: string, action: string) =>
   db.admin.query("select * from ogevia.audit_events where entity_id = $1 and action = $2 order by id", [entity, action]).then((r) => r.rows);
-const createCaregiver = (a: Actor, first: string, last: string, status = "onboarding", key: string | null = null, org = w.orgA) =>
-  q<{ caregiver_record_id: string; caregiver_code: string }>(a, "select * from ogevia_api.create_caregiver($1, $2, $3, null, $4, $5)", [org, first, last, status, key]).then((r) => r[0]!);
+// Since 0085 the API refuses to create an Approved/Active caregiver around the onboarding gate; a fixture that needs one creates it as onboarding and sets the status directly.
+const createCaregiver = async (a: Actor, first: string, last: string, status = "onboarding", key: string | null = null, org = w.orgA) => {
+  const direct = status === "ready" || status === "active";
+  const row = await q<{ caregiver_record_id: string; caregiver_code: string }>(a, "select * from ogevia_api.create_caregiver($1, $2, $3, null, $4, $5)", [org, first, last, direct ? "onboarding" : status, key]).then((r) => r[0]!);
+  if (direct) await db.admin.query("update ogevia.caregiver_records set status = $2, onboarding_required = false where id = $1", [row.caregiver_record_id, status]);
+  return row;
+};
 
 /** A synthetic caregiver with a sign-in, a record and an active assignment to clientA1 (authorized for serviceA). */
 async function linkedCaregiver(): Promise<Actor & { record: string }> {

@@ -17,7 +17,7 @@ export const PERMISSIONS: Record<Role, string[]> = {
     "documents.read", "documents.manage", "availability.read", "caregiver_services.read", "readiness.read", "matching.read", "matching.manage"],
   organization_owner: ["visits.read", "visits.manage", "caregivers.manage", "authorizations.read", "clients.names.read", "shifts.manage", "care_requests.read", "care_requests.manage",
     "documents.read", "documents.manage", "organization.update", "availability.read", "availability.review", "availability.override", "caregiver_services.read", "caregiver_services.approve",
-    "readiness.read", "readiness.manage", "documents.requirements.manage", "matching.read", "matching.manage"],
+    "readiness.read", "readiness.manage", "documents.requirements.manage", "caregivers.compliance.manage", "matching.read", "matching.manage"],
 };
 
 export interface Call { method: string; path: string; body: any; key: string | null; query: Record<string, string> }
@@ -41,7 +41,23 @@ export interface FakeOptions {
   documents?: { requirement: string; status: string; validUntil: string | null }[];
   approvals?: Record<string, unknown>[];
   reviewPairs?: Record<string, unknown>[];
+  /** 0055: what GET /v1/caregivers/{id}/compliance answers (merged over an eligible caregiver). */
+  compliance?: Record<string, any>;
+  /** 0055: what GET /v1/compliance/holds answers. */
+  holds?: Record<string, any>;
 }
+
+export const baseCompliance = (): Record<string, any> => ({
+  caregiverRecordId: CG, caregiverStatus: "active", enforcementActive: true, timezone: "America/Los_Angeles", graceDays: 14,
+  hireDate: "2026-10-01", dueDate: "2026-10-15", graceEndsAt: "2026-10-16T07:00:00Z", inGrace: false,
+  deadlineRule: "Hire date is day 0. The last day is the hire date plus 14 calendar days in the agency time zone (America/Los_Angeles). A hold starts at 00:00 the next day.",
+  background: { state: "approved", qualifies: true, status: "completed", result: "approved", evidenceNote: "Confirmed in the agency clearance record", verifiedAt: "2026-10-02T17:00:00Z", verifiedByName: "Synthetic Owner" },
+  requirements: [
+    { requirement: "cpr", documentStatus: "ok", validUntil: "2027-10-01", documentId: "d1", blocking: false, pending: false, current: true, code: null, message: null, dueDate: null },
+    { requirement: "tb", documentStatus: "ok", validUntil: "2027-10-01", documentId: "d2", blocking: false, pending: false, current: true, code: null, message: null, dueDate: null },
+  ],
+  hold: null, eligible: true, hireDateRequired: false,
+});
 
 export const baseAvailability = () => ({
   caregiverRecordId: CG, timezone: "America/Los_Angeles", version: 2, provided: true, asOf: "2026-10-12",
@@ -74,9 +90,11 @@ export function fakeApi(opts: FakeOptions) {
   const state = {
     availability: { ...baseAvailability(), ...(opts.availability ?? {}) } as Record<string, any>,
     readiness: { ...baseReadiness(), ...(opts.readiness ?? {}) } as Record<string, any>,
-    evaluation: { startsAt: "2026-10-14T16:00:00+00:00", endsAt: "2026-10-14T18:00:00+00:00", ready: true, wouldBlockAfterActivation: false, checks: okChecks(), ...(opts.evaluation ?? {}) } as Record<string, any>,
+    evaluation: { startsAt: "2026-10-14T16:00:00+00:00", endsAt: "2026-10-14T18:00:00+00:00", ready: true, wouldBlockAfterActivation: false, outcome: "allowed", summary: "Allowed", checks: okChecks(), ...(opts.evaluation ?? {}) } as Record<string, any>,
     failNext: opts.failNextRequestWith ?? null,
     shiftOverride: opts.shiftOverride === true,
+    compliance: { ...baseCompliance(), ...(opts.compliance ?? {}) } as Record<string, any>,
+    holds: (opts.holds ?? { holds: [], totals: { holds: 0, affectedShifts: 0, affectedAssignments: 0, inProgressVisits: 0 } }) as Record<string, any>,
   };
   const fetchImpl = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = new URL(String(input));
@@ -178,7 +196,7 @@ export function fakeApi(opts: FakeOptions) {
       case "POST /v1/readiness/evaluate":
         return json(200, { evaluation: state.evaluation });
       case "POST /v1/availability/overrides":
-        state.evaluation = { ...state.evaluation, ready: true, checks: (state.evaluation.checks as any[]).map((c) => (c.check === "availability" ? { ...c, status: "overridden", blocking: false, code: "availability_override", message: "Availability overridden by an administrator." } : c)) };
+        state.evaluation = { ...state.evaluation, ready: true, outcome: "allowed", summary: "Allowed", checks: (state.evaluation.checks as any[]).map((c) => (c.check === "availability" ? { ...c, status: "overridden", blocking: false, code: "availability_override", message: "Availability overridden by an administrator." } : c)) };
         return json(201, { overrideId: "ov1" });
       case "GET /v1/shifts":
         return json(200, { shifts: [{ shiftId: SHIFT, startsAt: "2026-10-14T16:00:00Z", endsAt: "2026-10-14T18:00:00Z", localDate: "2026-10-14", coverageState: "needs_coverage", clientId: CLIENT, clientCode: "C-104", clientName: "Synthetic Client", serviceId: SVC, serviceCode: "PCS", serviceName: "Personal care", caregiverRecordId: null, caregiverCode: null, caregiverName: null, hasSignIn: false, reservedMinutes: 120, fromCareRequest: false, hasVisit: false, lastCalloutReason: null, seriesId: null, availabilityOverride: state.shiftOverride === true, availabilityOverrideReason: state.shiftOverride === true ? "Caregiver agreed by phone" : null }] });
@@ -196,6 +214,21 @@ export function fakeApi(opts: FakeOptions) {
         return json(200, { clients: [] });
       case "GET /v1/care-alert-staff":
         return json(200, { staff: [] });
+      case `GET /v1/caregivers/${CG}/compliance`:
+        return json(200, { compliance: state.compliance });
+      case `POST /v1/caregivers/${CG}/hire-date`:
+        state.compliance = { ...state.compliance, hireDate: body.hireDate };
+        return json(200, { compliance: state.compliance });
+      case `POST /v1/caregivers/${CG}/background-check/status`:
+        state.compliance = { ...state.compliance, background: { ...state.compliance.background, status: body.status, qualifies: false, result: null, verifiedAt: null } };
+        return json(200, { compliance: state.compliance });
+      case `POST /v1/caregivers/${CG}/background-check/verify`:
+        state.compliance = { ...state.compliance, background: { ...state.compliance.background, status: "completed", result: body.result, qualifies: body.result === "approved", state: body.result === "approved" ? "approved" : "not_approved", verifiedAt: "2026-10-17T18:00:00Z", verifiedByName: "Synthetic Owner", evidenceNote: body.evidenceNote } };
+        return json(200, { compliance: state.compliance });
+      case "GET /v1/compliance/holds":
+        return json(200, state.holds);
+      case "POST /v1/compliance/sweep":
+        return json(200, { result: { evaluated: 4, holdsOpened: 1, holdsReleased: 0 } });
       default:
         return json(404, { error: { code: "not_found", message: `No such endpoint: ${route}` } });
     }

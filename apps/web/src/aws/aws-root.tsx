@@ -3,11 +3,12 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { CognitoAuthProvider } from "@carelik/auth";
 import { useMemo, type PropsWithChildren } from "react";
-import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
+import { BrowserRouter, Navigate, Route, Routes, useLocation } from "react-router-dom";
 import type { AwsApiClient } from "@/lib/aws-api";
 import type { AwsRuntime } from "./aws-runtime";
 import { ServiceVerificationBackendContext } from "@/lib/sv-backend";
 import { createAwsServiceVerificationBackend } from "@/lib/sv-backend-aws";
+import { AuthorizationImpactsPage } from "./amendment-impacts";
 import { ServiceVerificationPage } from "@/pages/service-verification-page";
 import { ServiceVerificationReportsPage } from "@/pages/service-verification-reports-page";
 import { useOrganization } from "@/providers/organization-provider";
@@ -26,6 +27,8 @@ import { DocumentsPage } from "./documents-page";
 import { ClientDetailPage } from "./client-detail-page";
 import { ClientsPage } from "./clients-page";
 import { CareTeamPage, CaregiverDetailPage } from "./care-team-page";
+import { RecruitingPage } from "./recruiting";
+import { ComplianceHoldsPage } from "./compliance/holds-page";
 import { ServicesReviewPage } from "./readiness/service-approvals";
 import { ContinuityPage } from "./continuity-page";
 import { OutageVisitsPage } from "./outage-visits-page";
@@ -35,6 +38,18 @@ import { BrandingSettingsPage, ProfilePage } from "./workspace-settings-pages";
 import { PublicCareOfferPage, PublicCareRequestPage } from "./care-public-pages";
 import { ConfirmVisitPage } from "./confirm-visit-page";
 import { EnvironmentProvider } from "./environment-marker";
+import { ActionNeededPage } from "./action-needed-page";
+import { ReportingPage } from "./reporting-page";
+import { NeedsAttentionPage, UpcomingStaffingPage, VisitQueuePage } from "./attention-pages";
+import { RatesReviewPage } from "./rates-review-page";
+import { AppearancePage } from "./appearance/appearance-page";
+import { SERVICES_PATH, SHIFT_REQUESTS_PATH } from "./nav-model";
+
+/** A moved screen keeps its old address working: same query string and fragment, history replaced. */
+function MovedTo({ to }: { to: string }) {
+  const { search, hash } = useLocation();
+  return <Navigate to={`${to}${search}${hash}`} replace />;
+}
 
 function AwsBackendProvider({ api, children }: PropsWithChildren<{ api: AwsApiClient }>) {
   const { organizations } = useOrganization();
@@ -74,21 +89,33 @@ export function AwsRoutes({ api, publicApi }: { api: AwsApiClient; publicApi: Aw
                     <Route path="/service-verification/reports" element={<ServiceVerificationReportsPage />} />
                     <Route path="/billing-review" element={<BillingReviewPage />} />
                     <Route path="/visits/:visitId" element={<VisitReviewPage />} />
-                    <Route path="/care-requests" element={<CareRequestsPage api={api} />} />
+                    <Route path={SHIFT_REQUESTS_PATH} element={<CareRequestsPage api={api} />} />
+                    <Route path="/care-requests" element={<MovedTo to={SHIFT_REQUESTS_PATH} />} />
                     <Route path="/accounts" element={<AccountsPage />} />
                     <Route path="/availability" element={<CaregiverAvailabilityPage api={api} />} />
                     <Route path="/profile" element={<ProfilePage />} />
                     <Route path="/documents" element={<DocumentsPage />} />
                     <Route path="/clients" element={<ClientsPage />} />
                     <Route path="/clients/:clientId" element={<ClientDetailPage />} />
+                    <Route path="/compliance" element={<ComplianceHoldsPage />} />
                     <Route path="/care-team" element={<CareTeamPage />} />
                     <Route path="/care-team/services-review" element={<ServicesReviewPage />} />
+                    <Route path="/care-team/recruiting" element={<RecruitingPage />} />
                     <Route path="/care-team/:caregiverRecordId" element={<CaregiverDetailPage />} />
-                    <Route path="/services" element={<ServicesPage />} />
+                    <Route path={SERVICES_PATH} element={<ServicesPage />} />
+                    <Route path="/services" element={<MovedTo to={SERVICES_PATH} />} />
                     <Route path="/schedule" element={<SchedulePage />} />
                     <Route path="/my-shifts" element={<MyShiftsPage />} />
                     <Route path="/continuity" element={<ContinuityPage />} />
                     <Route path="/outage-visits" element={<OutageVisitsPage />} />
+                    <Route path="/attention" element={<NeedsAttentionPage />} />
+                    <Route path="/action-needed" element={<ActionNeededPage />} />
+                    <Route path="/reporting" element={<ReportingPage />} />
+                    <Route path="/authorization-impacts" element={<AuthorizationImpactsPage />} />
+                    <Route path="/staffing" element={<UpcomingStaffingPage />} />
+                    <Route path="/visit-review" element={<VisitQueuePage />} />
+                    <Route path="/authorizations/rates" element={<RatesReviewPage />} />
+                    <Route path="/settings/appearance" element={<AppearancePage />} />
                     <Route path="/settings/branding" element={<BrandingSettingsPage />} />
                     <Route path="/settings/billing-rounding" element={<BillingRoundingSettingsPage />} />
                     <Route path="/settings/visit-rules" element={<VisitRulesPage />} />

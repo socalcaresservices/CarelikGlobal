@@ -17,9 +17,11 @@ import {
   VISIT_STATUS_LABEL,
   type ServiceVisitStatus,
 } from "@/lib/service-verification";
-import { newIdempotencyKey } from "@/lib/sv-backend";
+import { newIdempotencyKey, type BillingState } from "@/lib/sv-backend";
+import { APPROVAL_STATUS_LABEL } from "./billing-format";
 import { useOrganization } from "@/providers/organization-provider";
 import { useAwsApi } from "./aws-workspace";
+import { AuthorizationReviewCard } from "./authorization-review-card";
 import { SignatureRecoveryCard } from "./signature-recovery";
 
 interface VisitReview {
@@ -64,6 +66,8 @@ interface VisitReview {
   recoveryState?: "awaiting_response" | "response_to_review" | null;
   canRequestConfirmation?: boolean;
   decisionAcceptedMinutes?: number | null;
+  /** 0062: the server's billing state; null for someone who may not see billing. */
+  billingState?: BillingState | null;
   /** Wave 1 (0050). */
   unscheduledReason?: string | null;
   ruleVersion?: number | null;
@@ -184,6 +188,7 @@ export function VisitReviewPage() {
     ? `${formatClockTime(v.scheduledStartsAt)}–${formatClockTime(v.scheduledEndsAt)}`
     : v.caregiverSchedulingMode === "flexible" ? FLEXIBLE_VISIT_LABEL : UNLINKED_VISIT_LABEL;
   const facts: Array<[string, string]> = [
+    ...(v.clientName ? [["Client code", v.clientCode] as [string, string]] : []),
     ["Caregiver", v.caregiverName],
     ["Service", `${v.serviceName} (${v.serviceCode})`],
     ["Date", formatDateOnly(v.serviceDate)],
@@ -196,33 +201,34 @@ export function VisitReviewPage() {
   ];
   if (v.signerName) facts.push(["Confirmed by", `${v.signerName}${v.signerRelationship ? ` (${v.signerRelationship})` : ""}`]);
   if (v.confirmationReason) facts.push([v.confirmationMethod === "unable_to_confirm" ? "No-signer reason" : "Confirmation note", v.confirmationReason]);
-  if (v.confirmedAt) facts.push(["Submitted", formatDateTime(v.confirmedAt)]);
+  if (v.confirmedAt) facts.push(["Confirmed", formatDateTime(v.confirmedAt)]);
   if (v.unscheduledReason) facts.push(["Unscheduled reason", v.unscheduledReason]);
   if (v.ruleMinutes !== undefined && v.ruleMinutes !== null && v.ruleOutcome && v.ruleOutcome !== "not_applicable") {
     facts.push(["Schedule rule used", `${v.ruleMinutes} minutes (version ${v.ruleVersion}, ${v.ruleSource === "system_default" ? "starting value, not verified" : "set by your agency"}): ${v.ruleOutcome === "over" ? "difference over the rule" : "within the rule"}`]);
   }
   if (v.attestationVersion !== undefined) facts.push(["Caregiver attestation", v.attestationVersion ? `Recorded (${v.attestationVersion})` : "Not recorded"]);
   facts.push(["Signature on file", v.hasSignatureEvidence ? "Yes" : "No"]);
-  facts.push(["Billing approval", v.activeBillingApprovalId ? `Approved ${formatDuration(v.approvedMinutes)} — not submitted` : "Not approved"]);
+  facts.push(["Billing approval", v.activeBillingApprovalId ? `Approved for Billing: ${formatDuration(v.approvedMinutes)} — not submitted or paid` : v.billingState === "voided" ? "Voided (an earlier approval was voided; it can be approved again)" : "Not approved"]);
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-3">
       <div>
         <Link to="/service-verification/reports" className="text-sm text-slate-600 underline">Visit records</Link>
         <h1 className="mt-1 text-xl font-semibold text-slate-950">{v.clientName ?? v.clientCode}</h1>
-        {v.clientName ? <p className="text-sm text-slate-500">{v.clientCode}</p> : null}
         <p className="mt-1">
           <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${inReview && !v.decision ? "bg-amber-50 text-amber-900 ring-1 ring-amber-200" : "bg-slate-100 text-slate-700"}`}>
-            {inReview
+            {v.billingState
+              ? APPROVAL_STATUS_LABEL[v.billingState]
+              : inReview
               ? v.decision
                 ? v.decision === "close_not_billable" ? "Reviewed — not billable" : v.decision === "accept_late_confirmation" ? "Late confirmation accepted — eligible for billing approval" : "Reviewed — capped minutes eligible"
-                : v.recoveryState === "awaiting_response" ? "Waiting for signature" : v.recoveryState === "response_to_review" ? "Signature received — review it" : "Needs review"
+                : v.recoveryState === "awaiting_response" ? "Waiting for signature" : v.recoveryState === "response_to_review" ? "Signature received — review it" : "In review"
               : VISIT_STATUS_LABEL[v.visitStatus]}
           </span>
         </p>
       </div>
 
-      <Card className="p-4">
+      <Card className="p-3">
         <dl className="grid grid-cols-1 gap-x-4 gap-y-2 text-sm sm:grid-cols-[auto_1fr]">
           {facts.map(([k, val]) => (
             <div key={k} className="contents">
@@ -232,22 +238,22 @@ export function VisitReviewPage() {
           ))}
         </dl>
         <details className="mt-3 text-xs text-slate-500">
-          <summary className="cursor-pointer">Visit reference</summary>
+          <summary className="inline-flex min-h-6 cursor-pointer items-center [@media(pointer:coarse)]:min-h-[44px]">Visit reference</summary>
           <p className="mt-1 font-mono">{v.visitNumber ?? v.visitId}</p>
         </details>
       </Card>
 
       {inReview ? (
-        <Card className="space-y-3 p-4">
+        <Card className="space-y-3 p-3">
           <h2 className="text-base font-semibold text-slate-950">Why this visit needs review</h2>
           <ul className="list-disc space-y-1 pl-5 text-sm text-slate-800">
             {v.reviewReasons.map((r) => <li key={r}>{reasonText(r, v)}</li>)}
           </ul>
           {v.reviewReasons.includes("no_client_signature") && !v.decision ? (
-            <p className="text-xs text-slate-600">
-              The original visit record and its confirmation are never changed. A signature obtained later is kept as a
-              separate record and reviewed by a person (see “Get the missing signature” below).
-            </p>
+            <details className="text-xs text-slate-600">
+              <summary className="inline-flex min-h-[32px] cursor-pointer items-center text-og-accent underline">About the missing signature</summary>
+              <p>The original visit record and its confirmation are never changed. A signature obtained later is kept as a separate record and reviewed by a person (see “Get the missing signature” below).</p>
+            </details>
           ) : null}
 
           {v.decision ? (
@@ -274,20 +280,25 @@ export function VisitReviewPage() {
               <fieldset className="space-y-2">
                 <legend className="text-sm font-medium text-slate-700">Record a review decision</legend>
                 {v.allowedDecisions.map((d) => (
-                  <label key={d} className="flex gap-2 rounded-lg border border-slate-200 p-3 text-sm">
+                  <label key={d} className="flex gap-2 rounded-lg border border-slate-200 p-2 text-sm">
                     <input type="radio" name="decision" value={d} checked={choice === d} onChange={() => setChoice(d)} className="mt-1" />
                     <span>
                       <span className="font-medium text-slate-900">{decisionLabel(d, v)}</span>
-                      <span className="block text-xs text-slate-600">{decisionExplain(d, v)}</span>
                     </span>
                   </label>
                 ))}
               </fieldset>
+              <details className="text-xs text-slate-600">
+                <summary className="inline-flex min-h-[32px] cursor-pointer items-center text-og-accent underline">What each choice does</summary>
+                <ul className="mt-1 list-disc space-y-1 pl-5">
+                  {v.allowedDecisions.map((d) => <li key={d}>{decisionExplain(d, v)}</li>)}
+                </ul>
+              </details>
               <label className="block text-sm font-medium text-slate-700">
                 Reason (required, kept in the audit trail)
                 <textarea value={reason} onChange={(e) => setReason(e.target.value)} maxLength={1000} rows={2} className="mt-1 block w-full rounded-lg border border-slate-200 px-3 py-2 text-sm" />
               </label>
-              <Button type="submit" disabled={state.busy}>Record decision</Button>
+              <Button type="submit" disabled={state.busy} className="min-h-[44px]">Record decision</Button>
             </form>
           ) : v.recoveryState ? (
             <p className="text-sm text-slate-600">
@@ -300,6 +311,8 @@ export function VisitReviewPage() {
           )}
         </Card>
       ) : null}
+
+      <AuthorizationReviewCard visitId={v.visitId} />
 
       {inReview && v.reviewReasons.includes("no_client_signature") && activeOrganizationId ? (
         <SignatureRecoveryCard
@@ -315,14 +328,14 @@ export function VisitReviewPage() {
       {state.error ? <p role="alert" className="text-sm text-red-700">{state.error}</p> : null}
       {state.done ? <p role="status" className="text-sm text-emerald-800">{state.done}</p> : null}
 
-      <Card className="space-y-2 p-4 text-sm">
-        <h2 className="text-base font-semibold text-slate-950">Other actions</h2>
-        <p className="text-slate-700">
-          Wrong times? <Link className="font-medium underline" to={`/service-verification/reports?view=visits&correct=${encodeURIComponent(v.visitId)}`}>Correct visit</Link>{" "}
-          creates a corrected record and keeps the original; it is separate from review.
-        </p>
-        <p className="text-slate-700"><Link className="font-medium underline" to="/billing-review">Billing review</Link> is where billable minutes are approved.</p>
-      </Card>
+      <p className="flex flex-wrap gap-x-4 gap-y-1 text-sm text-slate-700">
+        <Link className="font-medium underline" to={`/service-verification/reports?view=visits&correct=${encodeURIComponent(v.visitId)}`}>Correct</Link>
+        <Link className="font-medium underline" to="/billing-review">Billing review</Link>
+      </p>
+      <details className="text-xs text-slate-600">
+        <summary className="inline-flex min-h-[32px] cursor-pointer items-center text-og-accent underline">What these links do</summary>
+        <p>Correct creates a corrected record and keeps the original; it is separate from review. Billing review is where billable minutes are approved.</p>
+      </details>
     </div>
   );
 }

@@ -237,6 +237,19 @@ export async function seedWorld(
   await record(orgA, w.caregiverA3, "CG-A3");
   await record(orgB, w.caregiverB1, "CG-B1");
 
+  // 0055: a caregiver needs VERIFIED APPROVED background-check clearance before they can be committed to work. Every synthetic
+  // caregiver starts cleared so the suites written before 0055 keep testing what they were written to test; the compliance suite
+  // resets this on purpose. (Skipped on databases migrated only part way, for the upgrade tests.)
+  if ((await q("select to_regclass('ogevia.caregiver_background_checks') as t")).rows[0].t) {
+    await q(
+      `insert into ogevia.caregiver_background_checks (caregiver_record_id, organization_id, status, result, evidence_note, verified_by, verified_at)
+       select r.id, r.organization_id, 'completed', 'approved', 'Synthetic fixture clearance',
+              case when r.organization_id = $1 then $2::uuid else $3::uuid end, now()
+       from ogevia.caregiver_records r`,
+      [orgA, w.ownerA.userId, w.managerB.userId],
+    );
+  }
+
   w.clientA1 = await one(
     "insert into ogevia.clients (organization_id) values ($1) returning id",
     [orgA],
@@ -489,6 +502,9 @@ export const api = {
           new_version_number: number;
           affected_visit_id: string | null;
           impact_kind: string | null;
+          affected_shift_id: string | null;
+          impact_id: string | null;
+          impact_minutes: number | null;
         }>,
     );
   },
@@ -586,10 +602,19 @@ export async function freshClient(
       [org],
     )
   ).rows[0]!.id;
-  await db.admin.query(
-    "insert into ogevia.caregiver_assignments (organization_id, caregiver_user_id, client_id, service_id, effective_start) values ($1,$2,$3,$4,$5::date)",
-    [org, caregiver.userId, client, service, today],
-  );
+  // A fixture row, not a product path: written with triggers off so a test that has deliberately left the caregiver without CPR or a
+  // hire date (to test the gate) can still set up a client. Product paths go through ogevia_api.create_assignment, which is gated.
+  const fx = await db.admin.connect();
+  try {
+    await fx.query("set session_replication_role = replica");
+    await fx.query(
+      "insert into ogevia.caregiver_assignments (organization_id, caregiver_user_id, client_id, service_id, effective_start) values ($1,$2,$3,$4,$5::date)",
+      [org, caregiver.userId, client, service, today],
+    );
+  } finally {
+    await fx.query("set session_replication_role = origin");
+    fx.release();
+  }
   const auth = (
     await db.admin.query<{ id: string }>(
       `insert into ogevia.client_authorizations
@@ -647,4 +672,21 @@ export async function setBaselineAvailability(
     );
   }
   return rec;
+}
+
+/** Run one statement with triggers off, in its own transaction: a fixture-only way to remove rows that production code may never delete. */
+export async function asReplica(db: TestDb, sql: string, params: unknown[] = []) {
+  const c = await db.admin.connect();
+  try {
+    await c.query("begin");
+    await c.query("set local session_replication_role = replica");
+    const r = await c.query(sql, params);
+    await c.query("commit");
+    return r;
+  } catch (e) {
+    await c.query("rollback");
+    throw e;
+  } finally {
+    c.release();
+  }
 }

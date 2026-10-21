@@ -15,9 +15,10 @@ import type { AttentionSummary } from "./aws-workspace";
 // expiring soon stay under REMINDERS on Home.
 
 export const EXCEPTIONS_ROUTE = "/service-verification/reports?view=exceptions";
+export const COMPLIANCE_ROUTE = "/compliance";
 
 export interface ActionCategory {
-  key: "missingClockOut" | "awaitingConfirmation" | "visitsToReview" | "signaturesToReview" | "unfilledShifts" | "overdueDocuments" | "documentsToReview" | "readyForApproval";
+  key: "missingClockOut" | "awaitingConfirmation" | "visitsToReview" | "signaturesToReview" | "unfilledShifts" | "caregiverHolds" | "overdueDocuments" | "documentsToReview" | "readyForApproval";
   label: string;
   count: number;
   to: string;
@@ -26,11 +27,11 @@ export interface ActionCategory {
 
 const seen = (n: number | null | undefined): n is number => n !== null && n !== undefined;
 
-/** The eight Action needed categories visible to this person, in display order. */
+/** The Action needed categories visible to this person, in display order. */
 export function actionCategories(a: AttentionSummary): ActionCategory[] {
   const list: ActionCategory[] = [
     { key: "missingClockOut", label: "Missing Clock-Out", count: a.missingTimeOut, to: EXCEPTIONS_ROUTE, hint: "Still open past the shift end, or 12 h without a schedule" },
-    { key: "awaitingConfirmation", label: "Awaiting Confirmation", count: a.notConfirmed, to: EXCEPTIONS_ROUTE, hint: "Ended over 60 min ago, no client confirmation yet" },
+    { key: "awaitingConfirmation", label: "Awaiting Confirmation", count: a.notConfirmed, to: EXCEPTIONS_ROUTE, hint: "Ended over 48 hours ago, no client confirmation yet" },
     { key: "visitsToReview", label: "Visits to Review", count: a.needsReview, to: EXCEPTIONS_ROUTE, hint: "Unconfirmed, unscheduled, over the schedule rule or over the authorization; open each visit to review it" },
   ];
   if (seen(a.lateResponsesToReview)) {
@@ -39,17 +40,28 @@ export function actionCategories(a: AttentionSummary): ActionCategory[] {
   if (seen(a.uncoveredShifts)) {
     list.push({ key: "unfilledShifts", label: "Unfilled Shifts", count: a.uncoveredShifts, to: "/schedule", hint: "Upcoming shifts that are open or called out and not replaced" });
   }
+  if (a.complianceHolds !== null && a.complianceHolds !== undefined) {
+    // Shifts to cover plus visits in progress. The hold never ends a visit: the office arranges safe coverage.
+    const c = a.complianceHolds;
+    list.push({
+      key: "caregiverHolds",
+      label: "Caregiver Holds",
+      count: c.affectedShifts + c.inProgressVisits,
+      to: COMPLIANCE_ROUTE,
+      hint: `${c.holds} caregiver${c.holds === 1 ? "" : "s"} on a compliance hold. Cover their shifts${c.inProgressVisits > 0 ? " and the visit in progress" : ""}; nothing is cancelled for you`,
+    });
+  }
   if (seen(a.documentsBlocking)) {
     list.push({ key: "overdueDocuments", label: "Overdue Documents", count: a.documentsBlocking, to: "/documents", hint: "Staff credentials past their expiry or due date" });
     list.push({ key: "documentsToReview", label: "Documents to Review", count: a.documentsToReview ?? 0, to: "/documents", hint: "Uploaded, not yet verified" });
   }
   if (seen(a.billingReadyUnapproved)) {
-    list.push({ key: "readyForApproval", label: "Ready for Approval", count: a.billingReadyUnapproved, to: "/billing-review", hint: "Billing Ready visits waiting for a person to approve them; approval is not submission" });
+    list.push({ key: "readyForApproval", label: "Ready for Approval", count: a.billingReadyUnapproved, to: "/billing-review", hint: "Visits that are Ready for Review and waiting for a person to approve them; approval is not submission or payment" });
   }
   return list;
 }
 
-/** missingClockOut + awaitingConfirmation + visitsToReview + signaturesToReview + unfilledShifts + overdueDocuments + documentsToReview + readyForApproval */
+/** missingClockOut + awaitingConfirmation + visitsToReview + signaturesToReview + unfilledShifts + caregiverHolds + overdueDocuments + documentsToReview + readyForApproval */
 export function actionNeededTotal(a: AttentionSummary): number {
   return actionCategories(a).reduce((sum, c) => sum + c.count, 0);
 }

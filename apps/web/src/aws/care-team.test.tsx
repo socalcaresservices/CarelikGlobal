@@ -1,7 +1,7 @@
 // Care Team and Services screens (0023) against an in-memory fake of the AWS
 // API, through the real API client and routes. SYNTHETIC data only.
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { CognitoAuthProvider, type CognitoAuthClient } from "@carelik/auth";
 import { MemoryRouter } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -35,6 +35,9 @@ function fakeApi(role: Role) {
         return json(200, { branding: { organizationId: ORG, displayName: "Synthetic Care Co", accentColor: null, logoSha256: null } });
       case "GET /v1/attention":
         return json(200, { summary: null });
+      case `GET /v1/caregivers/${CG}/onboarding`:
+      case `GET /v1/caregivers/${NEW}/onboarding`:
+        return json(200, { onboarding: { caregiverRecordId: CG, status: "active", onboardingRequired: false, done: 0, total: 0, complete: true, items: [] } });
       case "GET /v1/caregivers":
         return json(200, { caregivers: [{ caregiverRecordId: NEW, caregiverCode: "CG-NEW00001", firstName: "Synthetic", lastName: "Newcomer", preferredName: null, status: "ready", hasSignIn: !!invited, signInStatus: invited ? "active" : null, activeAssignments: 1, plannedAssignments: invited ? 0 : 1, openVisits: 0, invitationEmail: invited?.email ?? null, invitedAt: invited?.at ?? null, invitationLastSentAt: invited?.at ?? null, invitationSendCount: invited?.count ?? null, firstSignedInAt: null }, { caregiverRecordId: CG, caregiverCode: "CG-1A2B3C4D", firstName: "Synthetic", lastName: "Caregiver One", preferredName: null, status, hasSignIn: true, signInStatus: status === "inactive" ? "suspended" : "active", activeAssignments: status === "inactive" ? 0 : 2, openVisits: 0 }] });
       case "POST /v1/caregivers":
@@ -103,6 +106,18 @@ describe("Care Team", () => {
     expect(Object.keys(post.headers).map((h) => h.toLowerCase())).toContain("idempotency-key");
   });
 
+  it("the caregiver page opens with the overall outcome and lists what to fix", async () => {
+    renderAt(`/care-team/${CG}`, "manager");
+    expect(await screen.findByRole("heading", { name: "Synthetic Caregiver One" })).toBeInTheDocument();
+    const first = await screen.findByTestId("caregiver-outcome");
+    await waitFor(() => expect(first.textContent).toMatch(/Ready to schedule|Not ready|On hold|could not be checked/));
+    cleanup();
+    renderAt("/care-team/abababab-0000-4000-8000-000000000009", "manager");
+    const outcome = await screen.findByTestId("caregiver-outcome");
+    await waitFor(() => expect(outcome).toHaveTextContent("Not ready: 1 item to fix"));
+    expect(within(outcome).getByRole("link", { name: "Send invitation" })).toHaveAttribute("href", "#sign-in");
+  });
+
   it("making a caregiver inactive needs a reason and reports ended assignments and the suspended sign-in", async () => {
     renderAt(`/care-team/${CG}`, "manager");
     expect(await screen.findByRole("heading", { name: "Synthetic Caregiver One" })).toBeInTheDocument();
@@ -125,14 +140,14 @@ describe("Care Team", () => {
 describe("Invitations (0025)", () => {
   it("manager invites by email, sees Invited / not signed in yet, and can resend; no password appears anywhere", async () => {
     const api = renderAt("/care-team/abababab-0000-4000-8000-000000000009", "manager");
-    expect(await screen.findByText("No sign-in yet.")).toBeInTheDocument();
+    expect(await screen.findByText("No sign-in yet")).toBeInTheDocument();
     expect(screen.getByText(/1 planned, no access yet/)).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Send invitation" }));
     expect(await screen.findByRole("alert")).toHaveTextContent("own email");
     fireEvent.change(screen.getByLabelText("Caregiver's email"), { target: { value: "newcomer@example.test" } });
     fireEvent.click(screen.getByRole("button", { name: "Send invitation" }));
     expect(await screen.findByText(/Invitation sent\. The caregiver gets an email with a temporary password/)).toBeInTheDocument();
-    expect(await screen.findByText("Invited — has not signed in yet.")).toBeInTheDocument();
+    expect(await screen.findByText("Invited — has not signed in yet")).toBeInTheDocument();
     expect(screen.getByText("Has not signed in yet")).toBeInTheDocument();
     expect(api.calls.find((c) => c.path.endsWith("/invitation"))!.body).toEqual({ organizationId: ORG, email: "newcomer@example.test" });
     fireEvent.click(screen.getByRole("button", { name: "Resend invitation" }));
@@ -143,7 +158,7 @@ describe("Invitations (0025)", () => {
 
   it("a caregiver signed in through other means shows no invite form", async () => {
     renderAt(`/care-team/${CG}`, "manager");
-    expect(await screen.findByText("Sign-in active.")).toBeInTheDocument();
+    expect(await screen.findByText("Sign-in active")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Send invitation" })).not.toBeInTheDocument();
   });
 });

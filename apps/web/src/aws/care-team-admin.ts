@@ -4,7 +4,11 @@ import { useQuery } from "@tanstack/react-query";
 import { useOrganization } from "@/providers/organization-provider";
 import { useAwsApi } from "./aws-workspace";
 
-export type CaregiverStatus = "onboarding" | "ready" | "active" | "inactive";
+/** Stages in order (0054). "ready" is shown as "Approved"; only Approved and Active can be scheduled. */
+export type CaregiverStatus = "applicant" | "interview" | "offer" | "onboarding" | "pending_documents" | "ready" | "active" | "inactive";
+export const CAREGIVER_STAGES: readonly CaregiverStatus[] = ["applicant", "interview", "offer", "onboarding", "pending_documents", "ready", "active", "inactive"];
+/** The stages before Approved: the recruiting pipeline. */
+export const PIPELINE_STAGES = ["applicant", "interview", "offer", "onboarding", "pending_documents"] as const;
 
 export interface Caregiver {
   caregiverRecordId: string;
@@ -17,6 +21,8 @@ export interface Caregiver {
   signInStatus: string | null;
   activeAssignments: number;
   openVisits: number;
+  /** Server flag: another caregiver in this agency has the same name. */
+  duplicateName?: boolean;
   /** Invitation (0025); null when never invited through Ogevia. */
   invitationEmail?: string | null;
   invitedAt?: string | null;
@@ -27,17 +33,29 @@ export interface Caregiver {
   /** 0030: separate facts. null hire type = not recorded (never guessed). */
   hireType?: "direct_hire" | "eor" | null;
   schedulingMode?: "fixed" | "flexible";
+  /** 0054: needs the onboarding checklist, and how far along it is. */
+  onboardingRequired?: boolean;
+  onboardingDone?: number;
+  onboardingTotal?: number;
 }
 
 export const CAREGIVER_STATUS_LABEL: Record<CaregiverStatus, string> = {
+  applicant: "Applicant",
+  interview: "Interview",
+  offer: "Offer",
   onboarding: "Onboarding",
-  ready: "Ready to work",
+  pending_documents: "Pending documents",
+  ready: "Approved",
   active: "Active",
   inactive: "Inactive",
 };
 
 export const CAREGIVER_STATUS_BADGE: Record<CaregiverStatus, string> = {
+  applicant: "bg-slate-100 text-slate-800",
+  interview: "bg-violet-100 text-violet-900",
+  offer: "bg-fuchsia-100 text-fuchsia-900",
   onboarding: "bg-sky-100 text-sky-900",
+  pending_documents: "bg-amber-100 text-amber-900",
   ready: "bg-indigo-100 text-indigo-900",
   active: "bg-emerald-100 text-emerald-900",
   inactive: "bg-slate-200 text-slate-800",

@@ -1,4 +1,4 @@
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@carelik/auth";
 import { permissionSchema, type Organization, type Permission, type SystemRole } from "@carelik/shared";
 import { useEffect, useMemo, useState, type PropsWithChildren } from "react";
@@ -6,6 +6,7 @@ import type { AwsApiClient } from "@/lib/aws-api";
 import { fetchMe, type AwsMembership } from "@/lib/sv-backend-aws";
 import { setAgencyTimeZone } from "@/lib/service-verification";
 import { AwsApiContext, meQueryKey } from "./aws-workspace";
+import { withRefresh } from "./tracked-api";
 import { OrganizationContextProvider, type OrganizationContextValue } from "@/providers/organization-provider";
 
 const KNOWN_PERMISSIONS = new Set<string>(permissionSchema.options);
@@ -32,6 +33,8 @@ const selectionKey = (userId: string) => `ogevia.aws.activeOrganization.${userId
  */
 export function AwsOrganizationProvider({ api, children }: PropsWithChildren<{ api: AwsApiClient }>) {
   const { user } = useAuth();
+  const queryClient = useQueryClient();
+  const trackedApi = useMemo(() => withRefresh(api, queryClient), [api, queryClient]);
   const membershipsQuery = useQuery({
     queryKey: meQueryKey(user?.id),
     queryFn: () => fetchMe(api),
@@ -91,7 +94,7 @@ export function AwsOrganizationProvider({ api, children }: PropsWithChildren<{ a
     );
   }
   return (
-    <AwsApiContext.Provider value={api}>
+    <AwsApiContext.Provider value={trackedApi}>
       <OrganizationContextProvider value={value}>{children}</OrganizationContextProvider>
     </AwsApiContext.Provider>
   );

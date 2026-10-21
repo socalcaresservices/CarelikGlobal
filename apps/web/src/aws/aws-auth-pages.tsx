@@ -27,19 +27,19 @@ export function AwsLoginPage() {
     try {
       await signIn(fromPath(location.state));
     } catch (cause) {
-      setFailure(cause instanceof Error ? cause.message : "Sign-in could not start. Try again.");
+      setFailure(cause instanceof Error ? cause.message : "Sign-in did not start. Check your connection and try again.");
       setRedirecting(false);
     }
   }
 
-  const notice = failure ?? error?.message ?? (sessionExpired ? "Your session expired. Sign in again to continue." : null);
+  const notice = failure ?? error?.message ?? (sessionExpired ? "Your session expired. Sign in again." : null);
   return (
     <Centered>
       <Card className="w-full max-w-sm">
         <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Care operations</p>
         <h1 className="mt-1 text-2xl font-semibold text-slate-950">Ogevia</h1>
         <p className="mt-2 text-sm text-slate-600">
-          Access is by invitation only. Sign in with the account your organization administrator created for you.
+          Sign in with the account your administrator created for you.
         </p>
         {notice ? <p role="alert" className="mt-4 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{notice}</p> : null}
         <Button type="button" className="mt-6 w-full" loading={redirecting} disabled={loading || redirecting} onClick={() => void start()}>
@@ -65,7 +65,7 @@ export function AuthCallbackPage() {
     window.history.replaceState(null, "", window.location.pathname);
     completeSignIn(url)
       .then((returnTo) => navigate(returnTo, { replace: true }))
-      .catch((cause: unknown) => setFailure(cause instanceof Error ? cause.message : "Sign-in failed."));
+      .catch((cause: unknown) => setFailure(cause instanceof Error ? cause.message : "Sign-in did not complete. Go back to sign in and try again."));
   }, [completeSignIn, navigate]);
 
   return (

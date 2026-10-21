@@ -1,13 +1,17 @@
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQueryClient } from "@tanstack/react-query";
+import { nameWithCode } from "./name-label";
 import { useRef, useState } from "react";
 import { Link } from "react-router-dom";
-import { Button, Card } from "@carelik/ui";
+import { Button } from "@carelik/ui";
 import { newIdempotencyKey } from "@/lib/sv-backend";
 import { useOrganization } from "@/providers/organization-provider";
 import { useAwsApi } from "./aws-workspace";
+import { useAssignments } from "./assignments-data";
 import { caregiverName, useCaregivers } from "./care-team-admin";
 import { clientName, useClients, useServices } from "./client-admin";
 import { formatDateOnly } from "@/lib/service-verification";
+import { SummarySection } from "./ui/summary-section";
+import { InfoTip } from "./ui/info-tip";
 
 /**
  * Assignments (0024): which caregiver may serve which client for which
@@ -22,6 +26,8 @@ export interface Assignment {
   clientId: string;
   clientCode: string;
   clientName: string | null;
+  duplicateName?: boolean;
+  caregiverDuplicateName?: boolean;
   serviceId: string;
   serviceCode: string;
   serviceName: string;
@@ -70,7 +76,7 @@ function RelationshipField({ a, canManage }: { a: Assignment; canManage: boolean
 }
 
 const message = (cause: unknown, fallback: string) => (cause instanceof Error ? cause.message : fallback);
-const inputClass = "mt-1 block w-full rounded-lg border border-slate-200 px-3 py-2 text-base";
+const inputClass = "mt-1 block w-full rounded-lg border border-slate-200 px-2.5 py-1.5 text-sm";
 const fmtDate = (d: string) => formatDateOnly(d);
 const STATE_LABEL = { current: "Current", upcoming: "Starts later", ended: "Ended" } as const;
 const STATE_BADGE = { current: "bg-emerald-100 text-emerald-900", upcoming: "bg-sky-100 text-sky-900", ended: "bg-slate-200 text-slate-800" } as const;
@@ -79,21 +85,6 @@ function useAgencyToday() {
   const { activeOrganization } = useOrganization();
   const tz = (activeOrganization as { timezone?: string } | null)?.timezone || "America/Los_Angeles";
   return new Intl.DateTimeFormat("en-CA", { timeZone: tz }).format(new Date());
-}
-
-function useAssignments(filter: { clientId?: string | undefined; caregiverRecordId?: string | undefined }) {
-  const api = useAwsApi();
-  const { activeOrganizationId, hasPermission } = useOrganization();
-  return useQuery({
-    queryKey: ["aws-assignments", activeOrganizationId, filter.clientId ?? null, filter.caregiverRecordId ?? null],
-    queryFn: async () =>
-      (await api.get<{ assignments: Assignment[] }>("/v1/assignments", {
-        organizationId: activeOrganizationId,
-        ...(filter.clientId ? { clientId: filter.clientId } : {}),
-        ...(filter.caregiverRecordId ? { caregiverRecordId: filter.caregiverRecordId } : {}),
-      })).assignments,
-    enabled: !!activeOrganizationId && hasPermission("visits.read"),
-  });
 }
 
 function useRefreshAssignments() {
@@ -144,15 +135,15 @@ function AddAssignmentForm({ clientId, caregiverRecordId, onDone }: { clientId?:
     }
   }
   return (
-    <form onSubmit={(e) => { e.preventDefault(); void submit(); }} className="mt-3 grid gap-3 rounded-xl border border-slate-200 bg-slate-50 p-3 sm:grid-cols-2">
+    <form onSubmit={(e) => { e.preventDefault(); void submit(); }} className="mt-2 grid gap-2 rounded-xl border border-slate-200 bg-slate-50 p-3 sm:grid-cols-2">
       {pickingCaregiver ? (
         <div className="sm:col-span-2">
           <label htmlFor="asg-caregiver" className="block text-sm font-medium text-slate-700">Caregiver</label>
-          <select id="asg-caregiver" value={pick} onChange={(e) => { setPick(e.target.value); touch(); }} className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-base">
+          <select id="asg-caregiver" value={pick} onChange={(e) => { setPick(e.target.value); touch(); }} className="mt-1 w-full rounded-lg border border-slate-200 px-2.5 py-1.5 text-sm">
             <option value="">Choose a caregiver</option>
             {eligibleCaregivers.map((c) => (
               <option key={c.caregiverRecordId} value={c.caregiverRecordId}>
-                {caregiverName(c)} ({c.caregiverCode}){!c.hasSignIn ? " — planned: no sign-in yet" : c.status === "onboarding" ? " — planned: still onboarding" : ""}
+                {nameWithCode(caregiverName(c), c.caregiverCode, c.duplicateName)}{!c.hasSignIn ? " — planned: no sign-in yet" : c.status === "onboarding" ? " — planned: still onboarding" : ""}
               </option>
             ))}
           </select>
@@ -160,17 +151,17 @@ function AddAssignmentForm({ clientId, caregiverRecordId, onDone }: { clientId?:
       ) : (
         <div className="sm:col-span-2">
           <label htmlFor="asg-client" className="block text-sm font-medium text-slate-700">Client</label>
-          <select id="asg-client" value={pick} onChange={(e) => { setPick(e.target.value); touch(); }} className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-base">
+          <select id="asg-client" value={pick} onChange={(e) => { setPick(e.target.value); touch(); }} className="mt-1 w-full rounded-lg border border-slate-200 px-2.5 py-1.5 text-sm">
             <option value="">Choose a client</option>
             {(clients.data ?? []).filter((c) => c.status === "active").map((c) => (
-              <option key={c.clientId} value={c.clientId}>{clientName(c) ?? "Name not set"} ({c.clientCode})</option>
+              <option key={c.clientId} value={c.clientId}>{nameWithCode(clientName(c), c.clientCode, c.duplicateName)}</option>
             ))}
           </select>
         </div>
       )}
       <div className="sm:col-span-2">
         <label htmlFor="asg-service" className="block text-sm font-medium text-slate-700">Service</label>
-        <select id="asg-service" value={service} onChange={(e) => { setService(e.target.value); touch(); }} className="mt-1 rounded-lg border border-slate-200 px-3 py-2 text-base">
+        <select id="asg-service" value={service} onChange={(e) => { setService(e.target.value); touch(); }} className="mt-1 rounded-lg border border-slate-200 px-2.5 py-1.5 text-sm">
           <option value="">Choose a service</option>
           {(services.data ?? []).filter((s) => s.isActive).map((s) => <option key={s.serviceId} value={s.serviceId}>{s.name} ({s.code})</option>)}
         </select>
@@ -223,26 +214,32 @@ function EndForm({ a, onDone }: { a: Assignment; onDone: (text: string) => void 
 function AssignmentRow({ a, side, canManage, onDone }: { a: Assignment; side: "client" | "caregiver"; canManage: boolean; onDone?: (text: string) => void }) {
   const [ending, setEnding] = useState(false);
   const who = side === "client"
-    ? (a.caregiverRecordId ? <Link className="underline" to={`/care-team/${a.caregiverRecordId}`}>{a.caregiverName} ({a.caregiverCode})</Link> : "Caregiver record not found")
-    : <Link className="underline" to={`/clients/${a.clientId}`}>{a.clientName ?? "Name not set"} ({a.clientCode})</Link>;
+    ? (a.caregiverRecordId ? <Link className="underline" to={`/care-team/${a.caregiverRecordId}`}>{nameWithCode(a.caregiverName, a.caregiverCode, a.caregiverDuplicateName)}</Link> : "Caregiver record not found")
+    : <Link className="underline" to={`/clients/${a.clientId}`}>{nameWithCode(a.clientName, a.clientCode, a.duplicateName)}</Link>;
+  const noAuth = a.state !== "ended" && !a.hasAuthorization;
+  const planned = a.state !== "ended" && a.grantsAccess === false;
+  const noAuthText = "No current authorization covers this client and service. Add one or visits are refused.";
+  const plannedText = "Planned: no access yet. It starts once the caregiver has signed in and is Approved or Active.";
   return (
-    <li className="rounded-xl border border-slate-200 bg-white p-3">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <p className="font-semibold text-slate-950">{who}</p>
-        <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${STATE_BADGE[a.state]}`}>{STATE_LABEL[a.state]}</span>
+    <li className="px-2 py-1">
+      {/* One line: who, service and dates, state, exception chips, and the relationship/end control at the right. The full sentences stay in the page (screen readers, hover title). */}
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5">
+        <p className="max-w-[16rem] truncate font-semibold text-slate-950">{who}</p>
+        <span className="whitespace-nowrap text-sm text-slate-800">{a.serviceName} ({a.serviceCode}) · from {fmtDate(a.effectiveStart)}{a.effectiveEnd ? ` to ${fmtDate(a.effectiveEnd)}` : ""}</span>
+        <span className={`whitespace-nowrap rounded-full px-2 py-0.5 text-xs font-semibold ${STATE_BADGE[a.state]}`}>{STATE_LABEL[a.state]}</span>
+        {planned ? <span title={plannedText} className="whitespace-nowrap rounded-full bg-amber-100 px-2 py-0.5 text-xs font-semibold text-amber-900"><span aria-hidden="true">⚠ </span>No access yet<span className="sr-only">. {plannedText}</span></span> : null}
+        {noAuth ? <span title={noAuthText} className="whitespace-nowrap rounded-full bg-red-100 px-2 py-0.5 text-xs font-semibold text-red-800"><span aria-hidden="true">⚠ </span>No authorization<span className="sr-only">. {noAuthText}</span></span> : null}
+        {a.state !== "ended" ? (
+          <details className="ml-auto text-sm open:basis-full">
+            <summary className="inline-flex min-h-[28px] cursor-pointer items-center whitespace-nowrap text-xs font-medium text-slate-800 underline [@media(pointer:coarse)]:min-h-[44px]">{canManage ? "Relationship and end" : "Relationship"}</summary>
+            <RelationshipField a={a} canManage={canManage} />
+            {canManage && !ending ? (
+              <button type="button" className="mt-2 inline-flex min-h-[32px] items-center text-sm font-medium text-slate-800 underline [@media(pointer:coarse)]:min-h-[44px]" onClick={() => setEnding(true)}>{a.state === "upcoming" ? "Cancel" : "End"}</button>
+            ) : null}
+            {ending ? <EndForm a={a} onDone={(t) => { setEnding(false); onDone?.(t); }} /> : null}
+          </details>
+        ) : null}
       </div>
-      <p className="mt-1 text-sm text-slate-800">{a.serviceName} ({a.serviceCode}) · from {fmtDate(a.effectiveStart)}{a.effectiveEnd ? ` to ${fmtDate(a.effectiveEnd)}` : ", no end date"}</p>
-      {a.state !== "ended" && a.grantsAccess === false ? (
-        <p className="mt-1 text-sm font-semibold text-amber-900">Planned — no access yet. It starts by itself once the caregiver has signed in and is Ready to work or Active.</p>
-      ) : null}
-      {a.state !== "ended" && !a.hasAuthorization ? (
-        <p className="mt-1 text-sm font-semibold text-red-700">No current authorization covers this client and service. Visits will be refused until one is added.</p>
-      ) : null}
-      {a.state !== "ended" ? <RelationshipField a={a} canManage={canManage} /> : null}
-      {canManage && a.state !== "ended" && !ending ? (
-        <button type="button" className="mt-2 text-sm font-medium text-slate-800 underline" onClick={() => setEnding(true)}>{a.state === "upcoming" ? "Cancel" : "End"}</button>
-      ) : null}
-      {ending ? <EndForm a={a} onDone={(t) => { setEnding(false); onDone?.(t); }} /> : null}
     </li>
   );
 }
@@ -259,33 +256,43 @@ export function AssignmentsCard({ clientId, caregiverRecordId }: { clientId?: st
   const all = assignments.data ?? [];
   const open = all.filter((a) => a.state !== "ended");
   const ended = all.filter((a) => a.state === "ended");
-  return (
-    <Card className="p-4">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <h2 className="text-base font-semibold text-slate-950">{side === "client" ? "Caregivers assigned" : "Clients assigned"}</h2>
-        {canManage ? <Button type="button" variant="secondary" onClick={() => { setAdding((x) => !x); setAdded(null); setEndedText(null); }} aria-expanded={adding}>{adding ? "Close" : "Assign"}</Button> : null}
+  const title = side === "client" ? "Caregivers assigned" : "Clients assigned";
+  const unfunded = open.filter((a) => !a.hasAuthorization).length;
+  const body = (
+    <>
+      <div className="flex flex-wrap items-center gap-1.5">
+          {side === "client" ? <h3 className="text-sm font-semibold text-slate-950">{title}</h3> : null}
+          <InfoTip label="About assignments">An assignment lets the caregiver see {side === "client" ? "this client" : "this person's clients"} and verify visits for that service between the first and last day. Assignments let the caregiver verify visits for that service. You can plan an assignment before the caregiver has a sign-in; it gives no access until they have signed in and are Approved or Active.</InfoTip>
+        {canManage ? <Button type="button" variant="secondary" className="ml-auto min-h-[28px] px-3 py-0.5 text-sm [@media(pointer:coarse)]:min-h-[44px]" onClick={() => { setAdding((x) => !x); setAdded(null); setEndedText(null); }} aria-expanded={adding}>{adding ? "Close" : "Assign"}</Button> : null}
       </div>
-      <p className="mt-1 text-xs text-slate-600">An assignment lets the caregiver see this {side === "client" ? "client" : "person's clients"} and verify visits for that service between the first and last day. You can plan one before the caregiver has a sign-in; it gives no access until they have signed in and are Ready to work or Active.</p>
       {adding ? <AddAssignmentForm clientId={clientId} caregiverRecordId={caregiverRecordId} onDone={(result) => { setAdding(false); setAdded(result); }} /> : null}
       {added !== null ? (
         <p role="status" className={`mt-2 text-sm ${added.covered ? "text-emerald-800" : "font-semibold text-red-700"}`}>
-          {added.grantsAccess ? "Assigned." : "Planned. Access starts once the caregiver has signed in and is Ready to work or Active."}
+          {added.grantsAccess ? "Assigned." : "Planned. Access starts once the caregiver has signed in and is Approved or Active."}
           {added.covered ? "" : " No current authorization covers it; visits will be refused until one is added."}
         </p>
       ) : null}
       {endedText ? <p role="status" className="mt-2 text-sm text-emerald-800">{endedText}</p> : null}
       {assignments.isLoading ? <p className="mt-2 text-sm text-slate-500">Loading…</p> : null}
       {assignments.isError ? <p role="alert" className="mt-2 text-sm text-red-700">{(assignments.error as Error).message}</p> : null}
-      {assignments.data && open.length === 0 ? <p className="mt-2 text-sm text-slate-600">No current or upcoming assignments.</p> : null}
-      <ul className="mt-3 space-y-2">{open.map((a) => <AssignmentRow key={a.assignmentId} a={a} side={side} canManage={canManage} onDone={(t) => { setEndedText(t); setAdded(null); }} />)}</ul>
+      {assignments.data && open.length === 0 ? <p className="mt-1 text-sm text-slate-600">No current or upcoming assignments.</p> : null}
+      <ul className="mt-2 divide-y divide-slate-200 rounded-md border border-slate-200 bg-og-card">{open.map((a) => <AssignmentRow key={a.assignmentId} a={a} side={side} canManage={canManage} onDone={(t) => { setEndedText(t); setAdded(null); }} />)}</ul>
       {ended.length > 0 ? (
-        <div className="mt-3">
-          <button type="button" className="text-sm text-slate-700 underline" aria-expanded={showEnded} onClick={() => setShowEnded((x) => !x)}>
+        <div className="mt-2">
+          <button type="button" className="min-h-[28px] text-sm text-slate-700 underline [@media(pointer:coarse)]:min-h-[44px]" aria-expanded={showEnded} onClick={() => setShowEnded((x) => !x)}>
             {showEnded ? "Hide" : "Show"} ended assignments ({ended.length})
           </button>
-          {showEnded ? <ul className="mt-2 space-y-2">{ended.map((a) => <AssignmentRow key={a.assignmentId} a={a} side={side} canManage={false} />)}</ul> : null}
+          {showEnded ? <ul className="mt-2 divide-y divide-slate-200 rounded-md border border-slate-200 bg-og-card">{ended.map((a) => <AssignmentRow key={a.assignmentId} a={a} side={side} canManage={false} />)}</ul> : null}
         </div>
       ) : null}
-    </Card>
+    </>
+  );
+  if (side === "client") return <div>{body}</div>;
+  return (
+    <SummarySection title={title} defaultOpen={unfunded > 0}
+      status={unfunded > 0 ? <span className="rounded-full bg-red-100 px-2 py-0.5 text-xs font-semibold text-red-800">{unfunded} without authorization</span> : undefined}
+      summary={assignments.data ? `${open.length} current or upcoming` : undefined}>
+      {body}
+    </SummarySection>
   );
 }

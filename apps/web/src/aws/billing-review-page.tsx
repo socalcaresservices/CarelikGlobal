@@ -1,10 +1,14 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { nameWithCode } from "./name-label";
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import { RoundingSection } from "./billing-rounding";
-import { APPROVAL_STATUS_CLASS, APPROVAL_STATUS_LABEL, approvableMinutes, formatClock, formatDuration, formatUsDate, visitScheduleLabel, type ApprovalStatus } from "./billing-format";
+import { APPROVAL_STATUS_CLASS, APPROVAL_STATUS_LABEL, APPROVAL_STATUS_NOTE, approvableMinutes, billingStateOf, formatClock, formatDuration, formatUsDate, visitScheduleLabel, type ApprovalStatus } from "./billing-format";
 import { activeFilterCount, applyBillingFilters, filterOptions, NO_FILTERS, type BillingFilters } from "./billing-filters";
 import { Button, Card } from "@carelik/ui";
+import { ShortHelp } from "./help-text";
+import { InfoTip } from "./ui/info-tip";
+import { CompactAlert } from "./ui/compact-alert";
 import { confirmationMethodLabel, formatHours } from "@/lib/service-verification";
 import { useIsNarrow } from "@/lib/use-is-narrow";
 import { newIdempotencyKey, type BillingApprovalRow, type BillingReviewRow } from "@/lib/sv-backend";
@@ -28,7 +32,7 @@ type Pending =
   | { kind: "void"; approval: BillingApprovalRow; reason: string; key: string; busy: boolean; error: string | null };
 
 /**
- * Billing review and human billing approval. Billing Ready means the automatic
+ * Billing review and human billing approval. Ready for Review means the automatic
  * checks passed; a person with billing.approve then approves the billable
  * minutes. Approval is not payer submission. Dollar amounts appear only for
  * holders of billing.read (owner); the server returns null to everyone else.
@@ -73,7 +77,7 @@ export function BillingReviewPage() {
       setPending({ ...pending, busy: true, error: null });
       try {
         await backend.approveVisitForBilling!({ visitId: pending.row.visitId, approvedMinutes: minutes, notes: pending.notes.trim() || null, idempotencyKey: pending.key });
-        setNotice(`Visit ${pending.row.visitNumber ?? ""} approved for billing (${formatHours(minutes)} h). It has not been submitted.`);
+        setNotice(`Visit ${pending.row.visitNumber ?? ""} is Approved for Billing (${formatHours(minutes)} h). It has not been submitted or paid.`);
         setPending(null);
       } catch (cause) {
         setPending({ ...pending, busy: false, error: cause instanceof Error ? cause.message : "Approval failed. Nothing was approved; try again." });
@@ -87,7 +91,7 @@ export function BillingReviewPage() {
       setPending({ ...pending, busy: true, error: null });
       try {
         await backend.voidBillingApproval!({ billingApprovalId: pending.approval.billingApprovalId, reason: pending.reason.trim(), idempotencyKey: pending.key });
-        setNotice(`Approval for visit ${pending.approval.visitNumber ?? ""} voided. The visit is Billing ready again.`);
+        setNotice(`Approval for visit ${pending.approval.visitNumber ?? ""} voided. The visit shows as Voided and can be approved again.`);
         setPending(null);
       } catch (cause) {
         setPending({ ...pending, busy: false, error: cause instanceof Error ? cause.message : "Void failed. The approval still stands; try again." });
@@ -109,7 +113,7 @@ export function BillingReviewPage() {
 
   function evidenceCell(r: BillingReviewRow) {
     return <>{r.hasSignatureEvidence ? (
-                      <Button type="button" variant="secondary" onClick={() => void showSignature(r.visitId)}>View signature</Button>
+                      <Button type="button" variant="secondary" className="min-h-[28px] whitespace-nowrap px-2 py-0.5 text-xs [@media(pointer:coarse)]:min-h-[44px]" onClick={() => void showSignature(r.visitId)}>View signature</Button>
                     ) : (
                       confirmationMethodLabel(r.confirmationMethod)
                     )}</>;
@@ -119,9 +123,8 @@ export function BillingReviewPage() {
                       const a = activeApproval.get(r.visitId);
                       if (a) {
                         return (
-                          <div className="space-y-1">
-                            <p className="font-medium text-emerald-800">Approved {formatHours(a.approvedMinutes)} h</p>
-                            <p className="text-xs text-slate-500">by {a.approvedByName} · not submitted</p>
+                          <div className="flex items-center gap-2 whitespace-nowrap">
+                            <p className="font-medium text-emerald-800">Approved {formatHours(a.approvedMinutes)} h <span className="text-xs font-normal text-slate-500">by {a.approvedByName} · not submitted or paid</span></p>
                             {canApprove ? (
                               <button type="button" className="text-xs text-slate-600 underline" onClick={() => { setNotice(null); setPending({ kind: "void", approval: a, reason: "", key: newIdempotencyKey(), busy: false, error: null }); }}>
                                 Void approval
@@ -130,21 +133,34 @@ export function BillingReviewPage() {
                           </div>
                         );
                       }
-                      if (r.reviewState === "reviewed_not_billable") {
+                      const state = approvalStatus(r);
+                      if (state === "reviewed_not_billable") {
                         return <span className="text-slate-600">Reviewed — not billable</span>;
                       }
-                      if (r.reviewState !== "ready" && r.reviewState !== "reviewed_eligible") {
+                      if (state !== "ready_for_review" && state !== "voided") {
                         return (
-                          <Link to={`/visits/${r.visitId}`} className="inline-flex min-h-[40px] items-center rounded-lg border border-amber-600 px-3 text-sm font-medium text-amber-900 hover:bg-amber-50">
-                            Review visit
-                          </Link>
+                          <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                            {(r.reviewReasons ?? []).includes("authorization_decreased") ? (
+                              <CompactAlert testId="authorization-decreased" summary="Authorization lowered after confirmation">The authorization was lowered after this visit was confirmed. The visit and its minutes are unchanged; confirm it is still billable, or correct it.</CompactAlert>
+                            ) : null}
+                            <Link to={`/visits/${r.visitId}`} className="inline-flex min-h-[28px] items-center whitespace-nowrap rounded-md border border-amber-600 px-2 text-xs font-medium [@media(pointer:coarse)]:min-h-[44px] text-amber-900 hover:bg-amber-50">
+                              {state === "needs_correction" ? "Correct or resolve" : "Review"}
+                            </Link>
+                          </div>
                         );
                       }
                       if (!canApprove) return <span className="text-slate-500">Not approved</span>;
                       return (
-                        <Button type="button" onClick={() => { setNotice(null); setPending({ kind: "approve", row: r, minutes: String(approvableMinutes(r)), notes: "", key: newIdempotencyKey(), busy: false, error: null }); }}>
+                        <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                          {state === "voided" ? (
+                            <p data-testid="void-history" className="text-xs text-rose-800">
+                              Approval voided{r.lastVoidAt ? ` ${formatUsDate(r.lastVoidAt)}` : ""}{r.lastVoidedByName ? ` by ${r.lastVoidedByName}` : ""}{r.lastVoidReason ? `: ${r.lastVoidReason}` : ""}
+                            </p>
+                          ) : null}
+                        <Button type="button" className="min-h-[28px] whitespace-nowrap px-3 py-0.5 text-xs [@media(pointer:coarse)]:min-h-[44px]" onClick={() => { setNotice(null); setPending({ kind: "approve", row: r, minutes: String(approvableMinutes(r)), notes: "", key: newIdempotencyKey(), busy: false, error: null }); }}>
                           Approve
                         </Button>
+                        </div>
                       );
                     })()}</>;
   }
@@ -157,35 +173,41 @@ export function BillingReviewPage() {
   }
 
   function approvalStatus(r: BillingReviewRow): ApprovalStatus {
-    if (activeApproval.get(r.visitId)) return "approved";
-    if (r.reviewState === "ready" || r.reviewState === "reviewed_eligible") return "awaiting";
-    if (r.reviewState === "awaiting_signature") return "awaiting_signature";
-    if (r.reviewState === "late_response_to_review") return "late_response";
-    return r.reviewState === "reviewed_not_billable" ? "not_billable" : "review";
+    return billingStateOf(r, !!activeApproval.get(r.visitId));
   }
-  function statusPill(r: BillingReviewRow) {
+  /** One word with a symbol-free chip. In the table (compact) the note is not a second line: it stays in the page for screen readers and as a hover title. */
+  function statusPill(r: BillingReviewRow, compact = false) {
     const st = approvalStatus(r);
-    return <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${APPROVAL_STATUS_CLASS[st]}`}>{APPROVAL_STATUS_LABEL[st]}</span>;
+    const note = APPROVAL_STATUS_NOTE[st] && st !== "ready_for_review" && st !== "approved_for_billing" ? APPROVAL_STATUS_NOTE[st] : null;
+    return (
+      <span className={compact ? "inline-flex items-center gap-1 whitespace-nowrap" : "inline-flex flex-col items-start gap-0.5"} title={compact && note ? note : undefined}>
+        <span className={`whitespace-nowrap rounded-full px-2 py-0.5 text-xs font-medium ${APPROVAL_STATUS_CLASS[st]}`}>{APPROVAL_STATUS_LABEL[st]}</span>
+        {note ? <span className={compact ? "sr-only" : "text-[11px] text-slate-600"}>{note}</span> : null}
+      </span>
+    );
   }
   function clientCell(r: BillingReviewRow) {
     const code = r.clientCode ?? null;
     return (
       <div>
-        <p className="font-semibold text-slate-950">{r.clientName ?? code ?? "Client"}</p>
-        {r.clientName && code ? <p className="text-xs text-slate-500">{code}</p> : null}
+        <p className="max-w-[14rem] truncate font-semibold text-slate-950" title={r.clientName ?? undefined}>{r.clientName ? nameWithCode(r.clientName, code, r.clientNameDuplicate) : code ?? "Client"}</p>
       </div>
     );
   }
   const serviceText = (r: BillingReviewRow) => (r.serviceName ? `${r.serviceName} (${r.serviceCode})` : r.serviceCode);
   const timesText = (r: BillingReviewRow) => (r.timeIn ? `${formatClock(r.timeIn, tz)} – ${formatClock(r.timeOut, tz)}` : "");
   const whenText = (r: BillingReviewRow) => `${formatUsDate(r.serviceDate)}${r.timeIn ? `, ${timesText(r)}` : ""}`;
-  function detailsCell(r: BillingReviewRow) {
+  const minutesText = (r: BillingReviewRow) =>
+    r.billableMinutes === r.workedMinutes ? `${formatDuration(r.workedMinutes)} worked and billable` : `${formatDuration(r.workedMinutes)} worked, ${formatDuration(r.billableMinutes)} billable`;
+  function detailsCell(r: BillingReviewRow, compact = false) {
     return (
-      <details className="mt-2 text-xs text-slate-600">
-        <summary className="cursor-pointer select-none text-slate-700 underline">Visit details</summary>
-        <p className="mt-1 font-mono break-all">Visit {r.visitNumber ?? "—"}{r.isCorrection ? " (corrected)" : ""}</p>
-        <p>{visitScheduleLabel(r.caregiverSchedulingMode, r.scheduledShiftId)}</p>
-        {r.authorizationVersion ? <p>Authorization version {r.authorizationVersion}</p> : null}
+      <details className={compact ? "text-xs text-slate-600 open:basis-full" : "text-xs text-slate-600"}>
+        <summary className="inline-flex min-h-5 cursor-pointer items-center whitespace-nowrap select-none text-slate-700 underline [@media(pointer:coarse)]:min-h-[44px]">Visit details</summary>
+        <div className="mt-1 whitespace-normal">
+          <p className="font-mono break-all">Visit {r.visitNumber ?? "—"}{r.isCorrection ? " (corrected)" : ""}</p>
+          <p>{visitScheduleLabel(r.caregiverSchedulingMode, r.scheduledShiftId)}</p>
+          {r.authorizationVersion ? <p>Authorization version {r.authorizationVersion}</p> : null}
+        </div>
       </details>
     );
   }
@@ -205,28 +227,23 @@ export function BillingReviewPage() {
     { key: "approval", label: "Approval status", all: "All approval statuses", opts: options.approvals },
   ];
   return (
-    <div className="space-y-4">
-      <div>
-        <h1 className="text-xl font-semibold text-slate-950">Billing review</h1>
-        <p className="mt-1 text-sm text-slate-600">
-          Billing ready means the visit passed the automatic checks. Approving it is a separate human step, and
-          approval is not submission: nothing is sent to a payer from this screen.
-        </p>
-      </div>
-      <div className="flex flex-wrap items-end gap-3">
-        <label className="text-xs font-medium text-slate-600">
-          From
-          <input type="date" value={from} onChange={(e) => setRange((r) => ({ ...r, from: e.target.value }))} className="mt-1 block rounded-lg border border-slate-200 px-3 py-2 text-sm" />
+    <div className="space-y-2">
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
+       <div className="flex items-center gap-1.5">
+        <h1 className="text-xl font-bold text-slate-950">Billing review</h1>
+        <InfoTip label="About billing review">Approve each Ready for Review visit; approval is not submission or payment. Ready for Review means the visit passed the automatic checks. Approved for Billing is a separate human step. Nothing is sent to a payer from this screen.</InfoTip>
+       </div>
+        <label className="flex items-center gap-1.5 text-xs font-medium text-slate-600">From
+          <input type="date" value={from} onChange={(e) => setRange((r) => ({ ...r, from: e.target.value }))} className="block min-h-[32px] rounded-md border border-slate-200 px-2 py-1 text-sm [@media(pointer:coarse)]:min-h-[44px]" />
         </label>
-        <label className="text-xs font-medium text-slate-600">
-          To
-          <input type="date" value={to} onChange={(e) => setRange((r) => ({ ...r, to: e.target.value }))} className="mt-1 block rounded-lg border border-slate-200 px-3 py-2 text-sm" />
+        <label className="flex items-center gap-1.5 text-xs font-medium text-slate-600">To
+          <input type="date" value={to} onChange={(e) => setRange((r) => ({ ...r, to: e.target.value }))} className="block min-h-[32px] rounded-md border border-slate-200 px-2 py-1 text-sm [@media(pointer:coarse)]:min-h-[44px]" />
         </label>
       </div>
       {loaded.length > 0 ? (
         // Filter records = which visits are listed. (Visit records also has Show/hide columns, which only changes what is displayed.)
-        <details open={!narrow} className="rounded-xl border border-slate-200 bg-white p-3">
-          <summary className="cursor-pointer select-none text-sm font-medium text-slate-800">
+        <details open={nFilters > 0} className="rounded-lg border border-slate-200 bg-og-card px-3 py-1.5">
+          <summary className="flex min-h-[28px] cursor-pointer select-none items-center text-sm font-medium text-slate-800 [@media(pointer:coarse)]:min-h-[44px]">
             Filters{nFilters > 0 ? ` (${nFilters} active)` : ""}
           </summary>
           <div className="mt-2 grid grid-cols-2 gap-2 md:grid-cols-5">
@@ -236,7 +253,7 @@ export function BillingReviewPage() {
                 <select
                   value={filters[x.key]}
                   onChange={setFilter(x.key)}
-                  className={`mt-1 block w-full min-w-0 rounded-lg border px-2 py-2 text-sm ${filters[x.key] ? "border-sky-600 bg-sky-50" : "border-slate-200"}`}
+                  className={`mt-0.5 block min-h-[32px] w-full min-w-0 rounded-md border px-2 py-1 text-sm [@media(pointer:coarse)]:min-h-[44px] ${filters[x.key] ? "border-sky-600 bg-sky-50" : "border-slate-200"}`}
                 >
                   <option value="">{x.all}</option>
                   {x.opts.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
@@ -261,19 +278,22 @@ export function BillingReviewPage() {
       {rows.length > 0 && narrow ? (
         <ul aria-label="Billing review visits" className="space-y-3">
           {rows.map((r) => (
-            <li key={r.visitId} className="rounded-xl border border-slate-200 bg-white p-3">
+            <li key={r.visitId} className="rounded-xl border border-slate-200 bg-og-card p-3">
               <div className="flex flex-wrap items-start justify-between gap-2">
                 {clientCell(r)}
                 {statusPill(r)}
               </div>
-              <p className="mt-2 text-sm text-slate-800"><span className="text-slate-500">Caregiver:</span> {r.caregiverName ?? "—"}</p>
-              <p className="text-sm text-slate-800"><span className="text-slate-500">Service:</span> {serviceText(r)}</p>
-              <p className="text-sm text-slate-800"><span className="text-slate-500">Visit:</span> {whenText(r)}</p>
-              <p className="text-sm text-slate-800"><span className="text-slate-500">Worked:</span> {formatDuration(r.workedMinutes)} · <span className="text-slate-500">Billable:</span> {formatDuration(r.billableMinutes)}</p>
-              <div className="mt-2 text-sm">{evidenceCell(r)}</div>
+              <p className="mt-1 text-sm text-slate-800">{r.caregiverName ?? "—"} · {serviceText(r)}</p>
+              <p className="text-sm text-slate-800">{whenText(r)} · {minutesText(r)}</p>
               <div className="mt-2 text-sm">{approvalCell(r)}</div>
-              {canSeeMoney ? <p className="mt-1 text-sm text-slate-700">Amount: {amountCell(r)}</p> : null}
-              {detailsCell(r)}
+              <details className="mt-2 text-sm">
+                <summary className="inline-flex min-h-[44px] cursor-pointer items-center text-og-accent underline">More</summary>
+                <div className="space-y-2">
+                  <div>{evidenceCell(r)}</div>
+                  {canSeeMoney ? <p className="text-slate-700">Amount: {amountCell(r)}</p> : null}
+                  {detailsCell(r)}
+                </div>
+              </details>
             </li>
           ))}
         </ul>
@@ -281,33 +301,27 @@ export function BillingReviewPage() {
       {rows.length > 0 && !narrow ? (
         <Card className="overflow-x-auto p-0">
           <table className="w-full text-left text-sm">
-            <thead className="bg-slate-50 text-xs uppercase text-slate-500">
+            <thead className="bg-slate-50 text-[11px] font-semibold uppercase tracking-wide text-slate-500">
               <tr>
-                <th scope="col" className="px-3 py-2">Client</th>
-                <th scope="col" className="px-3 py-2">Caregiver</th>
-                <th scope="col" className="px-3 py-2">Service</th>
-                <th scope="col" className="px-3 py-2">Date and time</th>
-                <th scope="col" className="px-3 py-2">Worked</th>
-                <th scope="col" className="px-3 py-2">Billable</th>
-                <th scope="col" className="px-3 py-2">Evidence</th>
-                <th scope="col" className="px-3 py-2">Approval</th>
-                {canSeeMoney ? <th scope="col" className="px-3 py-2">Amount</th> : null}
-                <th scope="col" className="px-3 py-2">Details</th>
+                <th scope="col" className="px-2 py-1">Client</th>
+                <th scope="col" className="px-2 py-1">Caregiver · service</th>
+                <th scope="col" className="px-2 py-1">Date and time</th>
+                <th scope="col" className="px-2 py-1">Worked / billable</th>
+                <th scope="col" className="px-2 py-1">Evidence</th>
+                <th scope="col" className="px-2 py-1">Approval</th>
+                {canSeeMoney ? <th scope="col" className="px-2 py-1">Amount</th> : null}
               </tr>
             </thead>
             <tbody>
               {rows.map((r) => (
-                <tr key={r.visitId} className="border-t border-slate-100 align-top">
-                  <td className="px-3 py-2">{clientCell(r)}<div className="mt-1">{statusPill(r)}</div></td>
-                  <td className="px-3 py-2">{r.caregiverName ?? "—"}</td>
-                  <td className="px-3 py-2">{serviceText(r)}</td>
-                  <td className="px-3 py-2 whitespace-nowrap">{formatUsDate(r.serviceDate)}<br /><span className="text-slate-600">{timesText(r)}</span></td>
-                  <td className="px-3 py-2 whitespace-nowrap">{formatDuration(r.workedMinutes)}</td>
-                  <td className="px-3 py-2 whitespace-nowrap">{formatDuration(r.billableMinutes)}</td>
-                  <td className="px-3 py-2">{evidenceCell(r)}</td>
-                  <td className="px-3 py-2">{approvalCell(r)}</td>
-                  {canSeeMoney ? <td className="px-3 py-2">{amountCell(r)}</td> : null}
-                  <td className="px-3 py-2">{detailsCell(r)}</td>
+                <tr key={r.visitId} className="border-t border-slate-100 align-middle">
+                  <td className="px-2 py-0.5"><div className="flex flex-wrap items-center gap-x-2"><span className="max-w-[11rem] truncate">{clientCell(r)}</span><span className="whitespace-nowrap">{statusPill(r, true)}</span></div></td>
+                  <td className="max-w-[11rem] px-2 py-0.5" title={`${r.caregiverName ?? "—"} · ${serviceText(r)}`}>{r.caregiverName ?? "—"} <span className="text-slate-600">· {serviceText(r)}</span></td>
+                  <td className="px-2 py-0.5" title={`${formatUsDate(r.serviceDate)} ${timesText(r)}`}>{formatUsDate(r.serviceDate)} <span className="text-slate-600">{timesText(r)}</span></td>
+                  <td className="px-2 py-0.5" title={`${formatDuration(r.workedMinutes)}${r.billableMinutes !== r.workedMinutes ? ` · billable ${formatDuration(r.billableMinutes)}` : ""}`}>{formatDuration(r.workedMinutes)}{r.billableMinutes !== r.workedMinutes ? <span className="text-slate-600"> · billable {formatDuration(r.billableMinutes)}</span> : null}</td>
+                  <td className="px-2 py-0.5"><div className="flex items-center gap-x-2 whitespace-nowrap">{evidenceCell(r)}{detailsCell(r, true)}</div></td>
+                  <td className="px-2 py-0.5">{approvalCell(r)}</td>
+                  {canSeeMoney ? <td className="px-2 py-0.5">{amountCell(r)}</td> : null}
                 </tr>
               ))}
             </tbody>
@@ -320,10 +334,12 @@ export function BillingReviewPage() {
             {pending.kind === "approve" ? (
               <>
                 <p className="text-sm font-medium text-slate-900">Approve visit {pending.row.visitNumber ?? ""} for billing</p>
-                <p className="text-xs text-slate-600">
+                <ShortHelp
+                  className="text-xs text-slate-600"
+                  details="Approval records your name and the time. It does not submit anything to a payer and does not mean it was paid."
+                >
                   {pending.row.reviewDecision === "accept_late_confirmation" ? "Accepted from a late confirmation" : "Billable"}: {approvableMinutes(pending.row)} min ({formatHours(approvableMinutes(pending.row))} h). You can approve less, never more.
-                  Approval records your name and the time. It does not submit anything to a payer.
-                </p>
+                </ShortHelp>
                 <label className="block text-xs font-medium text-slate-600">
                   Approved minutes
                   <input inputMode="numeric" value={pending.minutes} onChange={(e) => setPending({ ...pending, minutes: e.target.value, error: null })} className="mt-1 block w-32 rounded-lg border border-slate-200 px-3 py-2 text-sm" />
@@ -336,7 +352,7 @@ export function BillingReviewPage() {
             ) : (
               <>
                 <p className="text-sm font-medium text-slate-900">Void the billing approval for visit {pending.approval.visitNumber ?? ""}</p>
-                <p className="text-xs text-slate-600">The approval stays in the record as voided, with your reason. The visit returns to Billing ready.</p>
+                <p className="text-xs text-slate-600">The approval stays in the record as voided, with your reason. The visit shows as Voided and can be approved again.</p>
                 <label className="block text-xs font-medium text-slate-600">
                   Reason (required)
                   <input value={pending.reason} maxLength={1000} onChange={(e) => setPending({ ...pending, reason: e.target.value, error: null })} className="mt-1 block w-full rounded-lg border border-slate-200 px-3 py-2 text-sm" />
@@ -361,7 +377,7 @@ export function BillingReviewPage() {
             <button type="button" className="text-xs text-slate-500 underline" onClick={() => setSignature(null)}>Close</button>
           </div>
           {signature.error ? <p role="alert" className="mt-2 text-sm text-red-700">{signature.error}</p> : null}
-          {signature.url ? <img src={signature.url} alt="Client signature for the selected visit" className="mt-3 max-h-48 rounded border border-slate-200 bg-white" /> : null}
+          {signature.url ? <img src={signature.url} alt="Client signature for the selected visit" className="mt-3 max-h-48 rounded border border-slate-200 bg-og-card" /> : null}
           {!signature.url && !signature.error ? <p className="mt-2 text-sm text-slate-500">Loading…</p> : null}
         </Card>
       ) : null}

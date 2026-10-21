@@ -171,8 +171,8 @@ describe("administrator: reviewing availability", () => {
     expect(screen.getByText(/Reason: Second job/)).toBeInTheDocument();
     expect(screen.getByRole("region", { name: "Affected shifts" })).toHaveTextContent("1 booked shift would fall outside the proposed hours. They stay booked and are flagged for review.");
     expect(screen.getByText("Approving availability does not assign work or change booked shifts.")).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Decline" }));
-    const decline = screen.getAllByRole("button", { name: "Decline" }).at(-1)!;
+    fireEvent.click(screen.getByRole("radio", { name: "Decline" }));
+    const decline = screen.getByRole("button", { name: "Save: decline" });
     expect(decline).toBeDisabled(); // a note is required
     fireEvent.change(screen.getByLabelText("Note to the caregiver (required)"), { target: { value: "Hours do not fit the client" } });
     expect(decline).toBeEnabled();
@@ -185,13 +185,13 @@ describe("administrator: reviewing availability", () => {
     renderAt("/care-team", { role: "manager", availability: { pending } });
     fireEvent.click(await screen.findByRole("button", { name: "Review" }));
     expect(await screen.findByText("Only an administrator can approve or decline.")).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "Approve" })).toBeNull();
+    expect(screen.queryByRole("radio", { name: "Approve" })).toBeNull();
   });
 
   it("an administrator approves with one click and the call is idempotent", async () => {
     const { calls } = renderAt("/care-team", { role: "organization_owner", availability: { pending } });
     fireEvent.click(await screen.findByRole("button", { name: "Review" }));
-    const approve = await screen.findByRole("button", { name: "Approve" });
+    const approve = await screen.findByRole("button", { name: "Save: approve" });
     fireEvent.click(approve);
     await waitFor(() => expect(posts(calls, "/v1/availability/requests/r1/review")).toHaveLength(1));
     expect(posts(calls, "/v1/availability/requests/r1/review")[0]!).toMatchObject({ body: { decision: "approve" } });
@@ -305,7 +305,7 @@ describe("Service checks and readiness on the Care Team page", () => {
     fireEvent.click(activate);
     await waitFor(() => expect(posts(calls, "/v1/readiness/activate")).toHaveLength(1));
     expect(posts(calls, "/v1/readiness/activate")[0]!.body).toMatchObject({ expectedAffectedShifts: 3, reason: "Reviewed the report" });
-    expect(await screen.findByText("Readiness checks are active")).toBeInTheDocument();
+    expect(await screen.findByText("Checks active")).toBeInTheDocument();
   });
 
   it("with setup incomplete, activation stays disabled and says why", async () => {
@@ -364,10 +364,10 @@ describe("Readiness table: issue, affected count, status, next action", () => {
     expect(within(setup).getByText("Ask an administrator")).toBeInTheDocument(); // a manager cannot set it up
   });
 
-  it("active: the same rows say Active / Needs attention and the banner says the checks are active", async () => {
+  it("active: the same rows say Active / Needs attention and the header says Checks active", async () => {
     renderAt("/care-team", { role: "organization_owner", readiness: { enforcementActive: true, setupComplete: true, setupGaps: [] } });
     const table = await screen.findByRole("table", { name: /Readiness by issue/ });
-    expect(screen.getByText("Readiness checks are active")).toBeInTheDocument();
+    expect(screen.getByText("Checks active")).toBeInTheDocument();
     expect(within(rowOf(/CPR or TB missing or expired/)).getByText("Active")).toBeInTheDocument();
     expect(within(rowOf(/Booked shifts/)).getByText("Needs attention")).toBeInTheDocument();
     expect(within(table).queryByText("Report only")).toBeNull();
@@ -389,7 +389,7 @@ describe("Readiness table: issue, affected count, status, next action", () => {
 describe("Assignment checks on the schedule", () => {
   async function chooseAll() {
     fireEvent.click(await screen.findByRole("button", { name: /Add shift|Schedule a shift|New shift/ }));
-    await screen.findByRole("option", { name: /C-104/ }); // the client list has loaded, so choosing it really sets the client
+    await screen.findByRole("option", { name: /Synthetic Client/ }); // the client list has loaded, so choosing it really sets the client
     fireEvent.change(await screen.findByLabelText("Client"), { target: { value: "cccccccc-0000-4000-8000-000000000001" } });
     fireEvent.change(screen.getByLabelText("Service"), { target: { value: SVC } });
     fireEvent.change(screen.getByLabelText(/Caregiver/), { target: { value: CG } });
@@ -399,14 +399,14 @@ describe("Assignment checks on the schedule", () => {
     const checks = okChecks().map((c) => (c.check === "availability" ? { ...c, status: "blocked", code: "availability_outside", message: "Outside approved hours.", blocking: true }
       : c.check === "cpr" ? { ...c, status: "blocked", code: "expired", message: "CPR expired.", blocking: true }
       : c.check === "tb" ? { ...c, status: "blocked", code: "awaiting_review", message: "TB needs review.", blocking: true } : c));
-    renderAt("/schedule", { role: "manager", evaluation: { ready: false, checks } });
+    renderAt("/schedule", { role: "manager", evaluation: { ready: false, outcome: "blocked", summary: "Blocked: Outside approved hours.", checks } });
     await chooseAll();
     const panel = await screen.findByRole("region", { name: "Assignment checks" });
     expect(within(panel).getByText(/Availability:/).parentElement).toHaveTextContent("Outside approved hours.");
     expect(within(panel).getByText(/Documents:/).parentElement).toHaveTextContent("CPR expired. TB needs review.");
     expect(within(panel).getByText(/Approved services:/).parentElement).toHaveTextContent("OK");
     expect(within(panel).getByText(/Conflicts:/).parentElement).toHaveTextContent("OK");
-    expect(within(panel).getByText("Cannot be assigned yet")).toBeInTheDocument();
+    expect(within(panel).getByText("Blocked: Outside approved hours.")).toBeInTheDocument();
     expect(within(panel).queryByText("Ready to assign")).toBeNull();
     expect(screen.getByRole("button", { name: "Schedule shift" })).toBeDisabled();
     // A manager has no override.
@@ -414,29 +414,46 @@ describe("Assignment checks on the schedule", () => {
   });
 
   it("'Ready to assign' appears only when the required checks pass; a not-yet-required failure is shown as such and does not block", async () => {
-    const checks = okChecks().map((c) => (c.check === "service" ? { ...c, status: "blocked", code: "service_not_approved", message: "Not approved for this service.", enforced: false, blocking: false } : c));
-    renderAt("/schedule", { role: "manager", evaluation: { ready: true, wouldBlockAfterActivation: true, checks } });
+    const checks = okChecks().map((c) => (c.check === "service" ? { ...c, status: "blocked", code: "service_not_approved", message: "Service not approved", enforced: false, blocking: false } : c));
+    renderAt("/schedule", { role: "manager", evaluation: { ready: true, wouldBlockAfterActivation: true, outcome: "warning", summary: "Warning: Service not approved", checks } });
     await chooseAll();
     const panel = await screen.findByRole("region", { name: "Assignment checks" });
-    expect(within(panel).getByText("Assignment allowed with unenforced checks. Review the warnings above.")).toBeInTheDocument();
+    expect(within(panel).getByText("Warning: Service not approved")).toBeInTheDocument();
+    expect(within(panel).queryByText(/Assignment allowed/)).toBeNull();
     expect(within(panel).queryByText("Ready to assign")).toBeNull();
-    expect(within(panel).getByText(/Approved services:/).parentElement).toHaveTextContent("Not approved for this service.");
-    expect(within(panel).getByText(/Not blocking yet\. This will be required after readiness checks are activated and Service checks are On\./)).toBeInTheDocument();
+    expect(within(panel).getByText(/Approved services:/).parentElement).toHaveTextContent("Service not approved");
+    expect(within(panel).getByText("Not blocking yet.")).toBeInTheDocument(); // only a Warning carries the note
+    expect(within(panel).getByText(/will block assignment and new visits once readiness checks are activated and Service checks are On/)).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Schedule shift" })).toBeEnabled();
+  });
+
+  it("Service checks On: a missing approval is Blocked with the server's words, the outcome comes first, there is no 'Not blocking yet' note and never 'Assignment allowed'", async () => {
+    const checks = okChecks().map((c) => (c.check === "service" ? { ...c, status: "blocked", code: "service_not_approved", message: "Service not approved", enforced: true, blocking: true } : c));
+    renderAt("/schedule", { role: "manager", evaluation: { ready: false, wouldBlockAfterActivation: false, outcome: "blocked", summary: "Blocked: Service not approved", checks } });
+    await chooseAll();
+    const panel = await screen.findByRole("region", { name: "Assignment checks" });
+    const outcome = within(panel).getByTestId("assignment-outcome");
+    expect(outcome).toHaveTextContent("Blocked: Service not approved");
+    expect(panel.firstElementChild).toBe(outcome); // the overall outcome is the first thing in the panel
+    expect(within(panel).queryByText(/Assignment allowed/)).toBeNull();
+    expect(within(panel).queryByText("Not blocking yet.")).toBeNull();
+    expect(within(panel).queryByText(/Caregiver checks passed/)).toBeNull();
+    expect(screen.getByRole("button", { name: "Schedule shift" })).toBeDisabled();
   });
 
   it("report-only with missing CPR says it does NOT meet the CPR/TB requirement and is never 'Ready to assign'", async () => {
     const checks = okChecks().map((c) => (c.check === "cpr" ? { ...c, status: "blocked", code: "missing", message: "CPR missing.", enforced: false, blocking: false } : c));
-    renderAt("/schedule", { role: "manager", evaluation: { ready: true, wouldBlockAfterActivation: true, checks } });
+    renderAt("/schedule", { role: "manager", evaluation: { ready: true, wouldBlockAfterActivation: true, outcome: "warning", summary: "Warning: CPR missing.", checks } });
     await chooseAll();
     const panel = await screen.findByRole("region", { name: "Assignment checks" });
+    expect(within(panel).getByText("Warning: CPR missing.")).toBeInTheDocument();
     expect(within(panel).getByText(/does NOT meet the requirement for current, verified CPR and TB/)).toBeInTheDocument();
     expect(within(panel).queryByText("Ready to assign")).toBeNull();
   });
 
   it("an administrator can override the availability check only, with a reason", async () => {
     const checks = okChecks().map((c) => (c.check === "availability" ? { ...c, status: "blocked", code: "availability_not_provided", message: "Availability not provided.", blocking: true } : c));
-    const { calls } = renderAt("/schedule", { role: "organization_owner", evaluation: { ready: false, checks } });
+    const { calls } = renderAt("/schedule", { role: "organization_owner", evaluation: { ready: false, outcome: "blocked", summary: "Blocked: Availability not provided.", checks } });
     await chooseAll();
     fireEvent.click(await screen.findByRole("button", { name: "Override availability…" }));
     const form = await screen.findByRole("group", { name: "Override availability" });
@@ -449,13 +466,13 @@ describe("Assignment checks on the schedule", () => {
     fireEvent.click(go);
     await waitFor(() => expect(posts(calls, "/v1/availability/overrides")).toHaveLength(1));
     expect(posts(calls, "/v1/availability/overrides")[0]!.body).toMatchObject({ caregiverRecordId: CG, clientId: expect.any(String), reason: "Caregiver agreed by phone", rangeStart: "2026-10-14T16:00:00+00:00" });
-    expect(await screen.findByText("Ready to assign")).toBeInTheDocument();
+    expect(await screen.findByText("Allowed")).toBeInTheDocument();
     expect(screen.getByText(/Availability overridden by an administrator\./)).toBeInTheDocument();
   });
 
   it("without a client there is no override button (an override is for one client)", async () => {
     const checks = okChecks().map((c) => (c.check === "availability" ? { ...c, status: "blocked", code: "availability_not_provided", message: "Availability not provided.", blocking: true } : c));
-    renderAt("/schedule", { role: "organization_owner", evaluation: { ready: false, checks } });
+    renderAt("/schedule", { role: "organization_owner", evaluation: { ready: false, outcome: "blocked", summary: "Blocked: Availability not provided.", checks } });
     // The schedule form only evaluates once a client is chosen, so no checks panel (and no override) exists before that.
     expect(screen.queryByRole("button", { name: "Override availability…" })).toBeNull();
   });
