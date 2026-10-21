@@ -156,14 +156,12 @@ echo done; wc -l ~/counts_*.txt ~/h_*.txt
 echo "prd subs:   $(wc -l < ~/h_ogevia_prd.txt)"
 echo "pilot subs: $(wc -l < ~/h_ogevia_sv_test.txt)"
 echo "in BOTH databases:            $(comm -12 ~/h_ogevia_prd.txt ~/h_ogevia_sv_test.txt | wc -l)"
-echo "prd subs missing from Cognito: $(comm -23 ~/h_ogevia_prd.txt ~/h_cognito.txt | wc -l)"
-echo "cognito users in neither DB:   $(cat ~/h_ogevia_prd.txt ~/h_ogevia_sv_test.txt | sort -u | comm -13 - ~/h_cognito.txt | wc -l)"
 rm -f ~/h_*.txt        # hashes are no longer needed
 ```
 
 ## 5. What to send back (and what not to)
 
-Send: the Step 1 output file and the Step 2 counts. (After approval of Steps 3-4 only: the two count files and the five overlap numbers. Hash files are never sent.)
+Send: the Step 1 output file and the Step 2 counts. (After approval of Steps 3-4 only: the two count files and the three overlap numbers. Hash files are never sent.)
 **Do not send** emails, names, sign-in ids or their hashes, tokens, passwords, secrets, or screenshots of client records. The count files contain none by construction; read them once before sending. They do contain agency names and slugs (business names).
 
 ### How I will interpret the results (and what counts cannot prove)
