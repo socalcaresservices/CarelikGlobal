@@ -42,6 +42,8 @@ case "$svc $verb" in
       t="$D/web/${prefix:+$prefix/}$f"; mkdir -p "$(dirname "$t")"; cp "$src/$f" "$t"; done ;;
   "s3api list-objects-v2") log; (cd "$D/web" && find . -type f | sed 's|^\./||' | while read -r f; do printf '%s\t%s\n' "$f" "$(stat -c %s "$f")"; done) | jq -Rn '{IsTruncated:false, Contents:[inputs | split("\t") | {Key:.[0], Size:(.[1]|tonumber)}]}' ;;
   "s3api head-object") shift 2; k=$(arg --key "$@"); log; [[ -f "$D/web/$k" ]] && echo '{"ContentLength":1}' || { echo "Not Found" >&2; exit 254; } ;;
+  "cloudfront get-distribution-config") log; echo "POLMOCK" ;;
+  "cloudfront get-response-headers-policy") log; [[ -f "$S/cloudfront/csp.txt" ]] && cat "$S/cloudfront/csp.txt" || { echo "NoSuchResponseHeadersPolicy" >&2; exit 254; } ;;
   "cloudfront create-invalidation") log; echo "cloudfront create-invalidation" >> "$D/writes.log"; echo '{"Invalidation":{"Id":"IMOCK"}}' ;;
   "secretsmanager get-secret-value") log; echo "secret read" >> "$D/writes.log"; u="${MOCK_PG_USER:-postgres}"; jq -nc --arg u "$u" '{SecretString: ({username:$u, password:"localtest"} | tostring)}' ;;
   "sts get-caller-identity") log; echo '{"Account":"300094796789","Arn":"arn:aws:sts::300094796789:assumed-role/mock/operator"}' ;;

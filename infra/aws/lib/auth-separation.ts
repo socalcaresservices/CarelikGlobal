@@ -1,4 +1,4 @@
-import type { OgeviaEnvironmentConfig } from "./config.js";
+import { webAuthDomain, type OgeviaEnvironmentConfig } from "./config.js";
 
 /**
  * Which authentication identifiers two environments share. Pure data from the committed configuration; no AWS call.
@@ -26,12 +26,12 @@ const identifiers = (c: OgeviaEnvironmentConfig): Record<SharedAuthKind, string>
   c.auth.dedicatedUserPool
     ? {
         userPool: `dedicated:${c.envName}`,
-        cognitoDomain: `https://${c.auth.dedicatedUserPool.domainPrefix}.auth.${c.region}.amazoncognito.com`,
+        cognitoDomain: webAuthDomain(c),
         legacyClient: `none:${c.envName}`,
       }
     : {
         userPool: c.existing.cognitoUserPoolId,
-        cognitoDomain: c.testSlice.cognitoDomain,
+        cognitoDomain: webAuthDomain(c),
         legacyClient: c.auth.appClientId,
       };
 

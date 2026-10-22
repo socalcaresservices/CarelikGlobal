@@ -9,4 +9,8 @@ if [[ "$url" == https://*execute-api* ]]; then
   for ((i=0;i<${#args[@]};i++)); do [[ "${args[$i]}" == -w ]] && printf '%s' "$code"; done
   exit 0
 fi
+# response headers of the served site (-D -): the Content-Security-Policy the test wants the "CDN" to serve; none when MOCK_CSP is empty
+for a in "${args[@]}"; do
+  if [[ "$a" == -D ]]; then [[ -n "${MOCK_CSP:-}" ]] && printf 'HTTP/2 200\r\ncontent-security-policy: %s\r\n\r\n' "$MOCK_CSP"; exit 0; fi
+done
 exec "$REAL_CURL" "$@"

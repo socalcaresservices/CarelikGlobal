@@ -4,7 +4,7 @@ import * as origins from "aws-cdk-lib/aws-cloudfront-origins";
 import * as cognito from "aws-cdk-lib/aws-cognito";
 import * as s3 from "aws-cdk-lib/aws-s3";
 import { Construct } from "constructs";
-import type { OgeviaEnvironmentConfig } from "./config.js";
+import { webAuthDomain, type OgeviaEnvironmentConfig } from "./config.js";
 
 export interface WebHostingStackProps extends StackProps {
   readonly config: OgeviaEnvironmentConfig;
@@ -91,7 +91,7 @@ export class WebHostingStack extends Stack {
     const headers = new cloudfront.ResponseHeadersPolicy(this, "SecurityHeaders", {
       comment: "Ogevia web security headers",
       securityHeadersBehavior: {
-        contentSecurityPolicy: { contentSecurityPolicy: contentSecurityPolicy(config.testSlice.cognitoDomain, config.region), override: true },
+        contentSecurityPolicy: { contentSecurityPolicy: contentSecurityPolicy(webAuthDomain(config), config.region), override: true },
         strictTransportSecurity: { accessControlMaxAge: Duration.days(365), includeSubdomains: true, override: true },
         contentTypeOptions: { override: true },
         frameOptions: { frameOption: cloudfront.HeadersFrameOption.DENY, override: true },

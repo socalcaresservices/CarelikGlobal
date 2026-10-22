@@ -3,6 +3,7 @@
 # the release helper scripts the scripts reuse (vendor/) and the SQL (sql/), plus BUILD_INFO.json and a MANIFEST.sha256. Built from COMMITS (git archive), never from the
 # working tree, so the package is exactly what was reviewed. The branch does not need to be pushed: upload the tarball to CloudShell.
 #   bash build-package.sh <output dir> <previous commit>        (candidate = HEAD)
+# OGEVIA_FOLLOWUP=1 builds a FOLLOW-UP package (previous = the already deployed commit, which has the pool).
 # Refuses if the previous commit already contains the dedicated pool (it must be the code BEFORE this change) or if the candidate does not.
 set -euo pipefail
 OUT="${1:-}"; PREV="${2:-}"
@@ -12,7 +13,7 @@ CAND=$(git rev-parse --verify HEAD^{commit}); PREV=$(git rev-parse --verify "$PR
 [[ "$CAND" != "$PREV" ]] || { echo "STOP: the previous commit equals the candidate" >&2; exit 1; }
 CAND_CFG=$(git show "$CAND:infra/aws/lib/config.ts"); PREV_CFG=$(git show "$PREV:infra/aws/lib/config.ts")   # captured first: "git show | grep -q" can fail under pipefail (SIGPIPE) on a large file
 grep -q dedicatedUserPool <<<"$CAND_CFG" || { echo "STOP: the candidate does not define the dedicated production pool" >&2; exit 1; }
-if grep -q dedicatedUserPool <<<"$PREV_CFG"; then echo "STOP: the previous commit already defines the dedicated pool (it must be the code BEFORE this change)" >&2; exit 1; fi
+if [[ -z "${OGEVIA_FOLLOWUP:-}" ]] && grep -q dedicatedUserPool <<<"$PREV_CFG"; then echo "STOP: the previous commit already defines the dedicated pool (it must be the code BEFORE this change)" >&2; exit 1; fi
 PATHS=(infra/aws apps packages package.json pnpm-lock.yaml pnpm-workspace.yaml turbo.json tsconfig.base.json)
 REL=docs/releases/2026-10-21-auth-separation; VEND=docs/releases/2026-10-19-prd-readiness/release/scripts
 STAGE=$(mktemp -d); trap 'rm -rf "$STAGE"' EXIT

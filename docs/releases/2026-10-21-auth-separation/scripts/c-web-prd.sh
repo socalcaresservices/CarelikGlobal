@@ -86,6 +86,14 @@ verify)
     [[ "$(sha256sum "$AB/served-index.html" | cut -d' ' -f1)" == "$(sha256sum "$WEBOUT/index.html" | cut -d' ' -f1)" ]] && ok "the served index.html is byte-identical to the build" || nope "the served index.html differs from the build (CloudFront can lag about a minute after an invalidation)"
   fi
   carries_only_new "$AB/served-main.js"
+  # The browser POSTs the sign-in code to $DOMAIN/oauth2/token: the page's own Content-Security-Policy must allow that origin, or the sign-in fails with
+  # "Could not reach the sign-in service" (found after the first publish, 2026-10-22).
+  HDR=$(G -D - -o /dev/null "$SITE/" 2>/dev/null | tr -d '\r' | grep -i '^content-security-policy:' | head -1 | cut -d: -f2-)
+  SHARED_DOMAIN="https://$(tr -d '_' <<<"$SHARED_POOL" | tr 'A-Z' 'a-z').auth.us-west-2.amazoncognito.com"
+  CONNECT=$(tr ';' '\n' <<<"$HDR" | grep -E '^ *connect-src' | head -1)
+  if [[ -z "$HDR" ]]; then nope "the served page has no Content-Security-Policy header"
+  elif [[ "$CONNECT" == *"$DOMAIN"* && "$CONNECT" != *"$SHARED_DOMAIN"* ]]; then ok "the served Content-Security-Policy allows the production sign-in domain (and not the shared pilot domain)"
+  else nope "the served Content-Security-Policy does NOT allow the production sign-in domain $DOMAIN (the browser would block the sign-in). Run g-web-headers-prd.sh."; fi
   [[ $bad == 0 ]] && say "VERIFY PASSED: the production site signs in with the production pool only." || { say "VERIFY FAILED."; exit 1; } ;;
 rollback)
   [[ "${OGEVIA_DEPLOY_APPROVAL:-}" =~ $APPROVAL_RE ]] || stop "set OGEVIA_DEPLOY_APPROVAL to the approval reference"

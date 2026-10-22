@@ -176,3 +176,38 @@ describe("production's other stacks do not change", () => {
     web.resourceCountIs("AWS::Cognito::UserPoolClient", 1);
   });
 });
+
+describe("the website's security header allows the sign-in domain the site actually uses (post-deployment finding 2026-10-22)", () => {
+  // The browser exchanges the sign-in code with a POST to <domain>/oauth2/token. If the Content-Security-Policy `connect-src` does not list that
+  // domain, the browser blocks it and the app shows "Could not reach the sign-in service". A template-only review of the API/Auth stacks cannot see this.
+  const policyOf = (t: Template) => {
+    const [headers] = only(t, "AWS::CloudFront::ResponseHeadersPolicy");
+    return (headers!.Properties as any).ResponseHeadersPolicyConfig.SecurityHeadersConfig.ContentSecurityPolicy.ContentSecurityPolicy as string;
+  };
+  const directive = (csp: string, name: string) => csp.split("; ").find((d) => d.startsWith(`${name} `)) ?? "";
+  const sharedDomain = ENVIRONMENTS.prod.testSlice.cognitoDomain;
+
+  it("production: connect-src and form-action name the DEDICATED domain, exactly the one the Auth stack outputs, and not the shared pilot domain", () => {
+    const csp = policyOf(by(prd, "-WebHosting"));
+    const outputDomain = (by(prd, "-Auth").toJSON() as any).Outputs.ManagedLoginDomain.Value as string;
+    expect(outputDomain).toBe(`https://${ENVIRONMENTS.prd.auth.dedicatedUserPool!.domainPrefix}.auth.us-west-2.amazoncognito.com`);
+    for (const d of ["connect-src", "form-action"]) {
+      expect(directive(csp, d)).toContain(outputDomain);
+      expect(directive(csp, d)).not.toContain(sharedDomain);
+    }
+    expect(csp).not.toContain("us-west-2849ayz5j7");
+  });
+
+  it("production: the rest of the policy is unchanged (no widening: no wildcard cognito host, no http, same other directives)", () => {
+    const csp = policyOf(by(prd, "-WebHosting"));
+    expect(directive(csp, "connect-src")).toBe(`connect-src 'self' https://*.execute-api.us-west-2.amazonaws.com ${ENVIRONMENTS.prd.auth.dedicatedUserPool ? `https://${ENVIRONMENTS.prd.auth.dedicatedUserPool.domainPrefix}.auth.us-west-2.amazoncognito.com` : ""}`);
+    expect(csp).not.toMatch(/amazoncognito\.com\s*\*|\*\.auth\.|\*\.amazoncognito/);
+    for (const d of ["default-src 'self'", "script-src 'self'", "frame-ancestors 'none'", "object-src 'none'", "upgrade-insecure-requests"]) expect(csp.split("; ")).toContain(d);
+  });
+
+  it("pilot/test: still allows its own shared domain (unchanged)", () => {
+    const csp = policyOf(by(prod, "-WebHosting"));
+    expect(directive(csp, "connect-src")).toContain(sharedDomain);
+    expect(directive(csp, "form-action")).toContain(sharedDomain);
+  });
+});

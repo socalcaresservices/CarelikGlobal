@@ -132,7 +132,21 @@ describe("expected-only gate for the authentication separation", () => {
     const before = web(BEFORE), after = web(NEW);
     expect(Object.keys(before.Outputs).filter((k) => !(k in after.Outputs))).toEqual(["ExportsOutputRefTestSliceAppClient5EA2F71F"]);
     expect(Object.keys(after.Outputs).filter((k) => !(k in before.Outputs))).toEqual([]);
-    expect(before.Resources).toEqual(after.Resources);
+    // The ONLY resource difference is the website's Content-Security-Policy: the shared pilot sign-in domain replaced by production's dedicated one.
+    const policy = (t: any) => Object.values<any>(t.Resources).find((r) => r.Type === "AWS::CloudFront::ResponseHeadersPolicy")!.Properties.ResponseHeadersPolicyConfig.SecurityHeadersConfig.ContentSecurityPolicy;
+    const strip = (t: any) => { const c = JSON.parse(JSON.stringify(t.Resources)); for (const r of Object.values<any>(c)) if (r.Type === "AWS::CloudFront::ResponseHeadersPolicy") delete r.Properties.ResponseHeadersPolicyConfig.SecurityHeadersConfig.ContentSecurityPolicy.ContentSecurityPolicy; return c; };
+    expect(strip(before)).toEqual(strip(after));
+    expect(policy(before).ContentSecurityPolicy).toContain("us-west-2849ayz5j7.auth.us-west-2.amazoncognito.com");
+    expect(policy(after).ContentSecurityPolicy).toContain("ogevia-prd-300094796789.auth.us-west-2.amazoncognito.com");
+    expect(policy(after).ContentSecurityPolicy).not.toContain("us-west-2849ayz5j7");
+  });
+
+  it("REFUSES any other change to the website's security header (a widened policy, a different domain, an http origin)", () => {
+    const cspRes = (t: any) => Object.values<any>(t.Resources).find((r) => r.Type === "AWS::CloudFront::ResponseHeadersPolicy")!.Properties.ResponseHeadersPolicyConfig.SecurityHeadersConfig.ContentSecurityPolicy;
+    const edit = (name: string, fn: (v: string) => string) => mutated(name, ({ next }) => { const t = read(next, "Ogevia-prd-WebHosting"); const c = cspRes(t); c.ContentSecurityPolicy = fn(c.ContentSecurityPolicy); write(next, "Ogevia-prd-WebHosting", t); });
+    for (const [n, f] of [["wide", (v: string) => v.replace("connect-src 'self'", "connect-src 'self' https://*.amazoncognito.com")], ["other", (v: string) => v.replace("ogevia-prd-300094796789", "ogevia-prd-999999999999")], ["both", (v: string) => v.replace("form-action 'self'", "form-action 'self' https://us-west-2849ayz5j7.auth.us-west-2.amazoncognito.com")], ["script", (v: string) => v.replace("script-src 'self'", "script-src 'self' 'unsafe-inline'")]] as const) {
+      const r = edit(n, f); expect(r.code, n).toBe(1); expect(r.out, n).toContain("Ogevia-prd-WebHosting: differs from live");
+    }
   });
 
   it("REFUSES when the Auth stack already exists live, when the pool is not retained, and when MFA or deletion protection is weakened", () => {

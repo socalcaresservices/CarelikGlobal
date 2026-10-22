@@ -19,6 +19,7 @@ vi.setConfig({ testTimeout: 300000, hookTimeout: 300000 });
 const REPO = fileURLToPath(new URL("../../../../", import.meta.url));
 const SCRIPTS = join(REPO, "docs/releases/2026-10-21-auth-separation/scripts");
 const FIXTURE_BEFORE = join(REPO, "infra/aws/test/fixtures/auth-separation/before");
+const FIXTURE_DEPLOYED = join(REPO, "infra/aws/test/fixtures/auth-separation/deployed");   // what is live after the authentication release (candidate 9e8582b)
 const MOCK_AWS = fileURLToPath(new URL("./auth-cutover-aws-mock.sh", import.meta.url));
 const MOCK_BASE = fileURLToPath(new URL("./prd-release-exec-aws-mock.sh", import.meta.url));
 const MOCK_CURL = fileURLToPath(new URL("./auth-cutover-curl-mock.sh", import.meta.url));
@@ -35,6 +36,9 @@ const SITE = `file://${SITEDIR}`;
 const OLD_SUB = "bbbbbbbb-1111-4111-8111-bbbbbbbbbbbb", NEW_SUB = "aaaaaaaa-2222-4222-8222-aaaaaaaaaaaa", MGR_SUB = "cccccccc-3333-4333-8333-cccccccccccc";
 const EMAIL = "admin@example.org", REF = "owner-go-auth-20261021", HOSTIP = "10.20.132.179";
 const shared = `https://cognito-idp.us-west-2.amazonaws.com/${SHARED}`, prdIssuer = `https://cognito-idp.us-west-2.amazonaws.com/${NEWPOOL}`;
+const DOMAIN_NEW = "https://ogevia-prd-mock.auth.us-west-2.amazoncognito.com", DOMAIN_SHARED = "https://us-west-2849ayz5j7.auth.us-west-2.amazoncognito.com";
+const cspWith = (d: string) => `default-src 'self'; script-src 'self'; connect-src 'self' https://*.execute-api.us-west-2.amazonaws.com ${d}; form-action 'self' ${d}; frame-ancestors 'none'`;
+const GOOD_CSP = cspWith(DOMAIN_NEW), OLD_CSP = cspWith(DOMAIN_SHARED);
 let counter = 0;
 
 const j = (p: string, v: unknown) => { mkdirSync(join(p, ".."), { recursive: true }); writeFileSync(p, JSON.stringify(v)); };
@@ -96,7 +100,7 @@ async function run(script: string, args: string[] = [], env: Record<string, stri
   const e = {
     ...process.env, PATH: `${BIN}:${process.env.PATH}`, MOCK_DIR: MOCK, HOME: work, OGEVIA_PRD_BEFORE: OUT, OGEVIA_MIGRATE_PORT: String(port), OGEVIA_SG_RETRY_SLEEP: "0",
     OGEVIA_TUNNEL_WAIT: "10", OGEVIA_CDN_WAIT: "0", REAL_CURL: spawnSync("bash", ["-c", "command -v curl"], { encoding: "utf8" }).stdout.trim(), MOCK_PG_USER: new URL(ADMIN_URL).username || "postgres",
-    OGEVIA_CURL: join(BIN, "curl"), OGEVIA_CDK_DIR: work, OGEVIA_CDK_BIN: join(BIN, "cdk"), OGEVIA_VITE_BIN: join(BIN, "vite"), OGEVIA_WEB_SRC: work, ...env,
+    MOCK_CSP: GOOD_CSP, OGEVIA_CURL: join(BIN, "curl"), OGEVIA_CDK_DIR: work, OGEVIA_CDK_BIN: join(BIN, "cdk"), OGEVIA_VITE_BIN: join(BIN, "vite"), OGEVIA_WEB_SRC: work, ...env,
   };
   return new Promise((resolve) => {
     const p = spawn("bash", [join(SCRIPTS, script), ...args], { env: e, stdio: ["pipe", "pipe", "pipe"], detached: true });
@@ -537,5 +541,81 @@ describe("E rollback", () => {
   it("post: passes once production trusts the shared pool and the old production client again, fails otherwise", async () => {
     setAccount(false); let r = await run("e-rollback-prd.sh", ["post"]); expect(r.code, r.out).toBe(0); expect(r.out).toContain("production trusts the shared pool again");
     setAccount(true); r = await run("e-rollback-prd.sh", ["post"]); expect(r.code).toBe(1); expect(r.out).toContain("not the shared pool");
+  });
+});
+
+describe("G web headers: the follow-up fix for the browser blocking the sign-in code exchange", () => {
+  const base = (extra: Record<string, string> = {}) => ({ OGEVIA_AUTH_NEW_TEMPLATES: NEWT, OGEVIA_DEPLOY_APPROVAL: "owner-go-webhdr-20261022", OGEVIA_PREDEPLOY_SNAPSHOT_ID: "ogevia-prod-postgres-pre-auth-202610211500", OGEVIA_HEADER_WAIT_TRIES: "1", OGEVIA_HEADER_WAIT: "0", ...extra });
+  const PHRASE = "DEPLOY-Ogevia-prd-WebHosting-Headers\n";
+  const argv = () => (existsSync(join(MOCK, "cdk-argv.log")) ? readFileSync(join(MOCK, "cdk-argv.log"), "utf8") : "");
+  const setCsp = (csp: string) => { mkdirSync(S("cloudfront"), { recursive: true }); writeFileSync(S("cloudfront/csp.txt"), csp + "\n"); };
+  const marker = () => join(OUT, "auth/web-headers-gate.ok");
+  beforeEach(() => {
+    setAccount(true); rmSync(join(MOCK, "live"), { recursive: true, force: true }); cpSync(FIXTURE_DEPLOYED, join(MOCK, "live"), { recursive: true });   // live = the deployed authentication release
+    rmSync(marker(), { force: true }); setCsp(OLD_CSP); clearLogs();
+  });
+
+  it("check PASSES on the deployed state: the only difference is the website's security header; it changes nothing and writes a marker", async () => {
+    const r = await run("g-web-headers-prd.sh", ["check"], base());
+    expect(r.code, r.out).toBe(0); expect(r.out).toContain("CHECK PASSED"); expect(r.out).toContain("only Ogevia-prd-WebHosting changes"); expect(existsSync(marker())).toBe(true);
+    expect(writes()).toBe("");
+  });
+
+  it("check REFUSES when the header is already the new one (nothing to deploy), when another stack drifted, or when the API/Auth stack differs", async () => {
+    cpSync(NEWT, join(MOCK, "live"), { recursive: true });
+    let r = await run("g-web-headers-prd.sh", ["check"], base()); expect(r.code).toBe(1); expect(r.out).toContain("exactly ONE security-header change"); expect(existsSync(marker())).toBe(false);
+    rmSync(join(MOCK, "live"), { recursive: true, force: true }); cpSync(FIXTURE_DEPLOYED, join(MOCK, "live"), { recursive: true });
+    const t = JSON.parse(readFileSync(join(MOCK, "live/Ogevia-prd-EvidenceStorage.json"), "utf8")); t.Description = "someone changed this"; writeFileSync(join(MOCK, "live/Ogevia-prd-EvidenceStorage.json"), JSON.stringify(t));
+    r = await run("g-web-headers-prd.sh", ["check"], base()); expect(r.code).toBe(1); expect(r.out).toContain("Ogevia-prd-EvidenceStorage: differs from live"); expect(existsSync(marker())).toBe(false);
+    cpSync(FIXTURE_DEPLOYED, join(MOCK, "live"), { recursive: true });
+    const a = JSON.parse(readFileSync(join(MOCK, "live/Ogevia-prd-ServiceVerificationApi.json"), "utf8")); a.Description = "drift"; writeFileSync(join(MOCK, "live/Ogevia-prd-ServiceVerificationApi.json"), JSON.stringify(a));
+    r = await run("g-web-headers-prd.sh", ["check"], base()); expect(r.code).toBe(1); expect(r.out).toContain("Ogevia-prd-ServiceVerificationApi: differs from live");
+  });
+
+  it("deploy refuses without the marker, the approval reference or a snapshot, and with a stale marker; a wrong phrase changes nothing", async () => {
+    expect((await run("g-web-headers-prd.sh", ["deploy"], base(), PHRASE)).out).toContain("run 'bash g-web-headers-prd.sh check' first");
+    await run("g-web-headers-prd.sh", ["check"], base());
+    expect((await run("g-web-headers-prd.sh", ["deploy"], base({ OGEVIA_DEPLOY_APPROVAL: "x" }), PHRASE)).out).toContain("approval reference");
+    expect((await run("g-web-headers-prd.sh", ["deploy"], base({ OGEVIA_PREDEPLOY_SNAPSHOT_ID: "" }), PHRASE)).out).toContain("OGEVIA_PREDEPLOY_SNAPSHOT_ID");
+    writeFileSync(marker(), `x ${Math.floor(Date.now() / 1000) - 7200}\n`);
+    expect((await run("g-web-headers-prd.sh", ["deploy"], base(), PHRASE)).out).toContain("old (limit 3600)");
+    await run("g-web-headers-prd.sh", ["check"], base());
+    const r = await run("g-web-headers-prd.sh", ["deploy"], base(), "yes\n"); expect(r.code).toBe(0); expect(r.out).toContain("Declined");
+    expect(argv()).toBe("");
+  });
+
+  it("with the phrase it runs EXACTLY a one-stack cdk deploy of the web stack, and a failed deploy is not reported as success", async () => {
+    await run("g-web-headers-prd.sh", ["check"], base());
+    let r = await run("g-web-headers-prd.sh", ["deploy"], base(), PHRASE); expect(r.code, r.out).toBe(0);
+    const [line, approval] = argv().trim().split("\n");
+    expect(line).toBe("deploy -c env=prd -c mode=deploy --exclusively Ogevia-prd-WebHosting --require-approval broadening --no-notices");
+    expect(approval).toBe("approval=owner-go-webhdr-20261022");
+    for (const forbidden of ["--all", "--force", "--hotswap", "--no-rollback", "Auth", "ServiceVerificationApi", "Ogevia-prod", "*"]) expect(line).not.toContain(forbidden);
+    clearLogs(); await run("g-web-headers-prd.sh", ["check"], base());
+    r = await run("g-web-headers-prd.sh", ["deploy"], base({ FAKE_CDK_EXIT: "1" }), PHRASE); expect(r.code).toBe(1); expect(r.out).toContain("cdk deploy failed"); expect(r.out).not.toContain("DEPLOYED.");
+  });
+
+  it("post PASSES when the live policy and the SERVED page allow the dedicated domain and not the shared one", async () => {
+    setCsp(GOOD_CSP);
+    const r = await run("g-web-headers-prd.sh", ["post"], base()); expect(r.code, r.out).toBe(0); expect(r.out).toContain("POST-CHECKS PASSED");
+  });
+
+  it("post FAILS when the live policy still has the old header, when the served page has no header or the old one, or when both domains are allowed", async () => {
+    setCsp(OLD_CSP);
+    let r = await run("g-web-headers-prd.sh", ["post"], base()); expect(r.code).toBe(1); expect(r.out).toContain("does not allow");
+    setCsp(GOOD_CSP);
+    r = await run("g-web-headers-prd.sh", ["post"], base({ MOCK_CSP: OLD_CSP })); expect(r.code).toBe(1); expect(r.out).toContain("served Content-Security-Policy does not");
+    r = await run("g-web-headers-prd.sh", ["post"], base({ MOCK_CSP: "" })); expect(r.code).toBe(1); expect(r.out).toContain("served Content-Security-Policy does not");
+    setCsp(cspWith(`${DOMAIN_NEW} ${DOMAIN_SHARED}`));
+    r = await run("g-web-headers-prd.sh", ["post"], base({ MOCK_CSP: cspWith(`${DOMAIN_NEW} ${DOMAIN_SHARED}`) })); expect(r.code).toBe(1);
+  });
+
+  it("c-web verify now ALSO fails when the served page's Content-Security-Policy would block the sign-in (the check that was missing)", async () => {
+    setSite(OLD_BUNDLE);
+    const build = await run("c-web-prd.sh", ["build"], { OGEVIA_PRD_WEB_OUT: join(work, "web-out") }); expect(build.code, build.out).toBe(0);
+    await run("c-web-prd.sh", ["publish"], { OGEVIA_DEPLOY_APPROVAL: REF, OGEVIA_PRD_WEB_OUT: join(work, "web-out") }, "PUBLISH-WEB-Ogevia-prd-AUTH\n");
+    let r = await run("c-web-prd.sh", ["verify"], { OGEVIA_PRD_WEB_OUT: join(work, "web-out") }); expect(r.code, r.out).toBe(0); expect(r.out).toContain("allows the production sign-in domain");
+    r = await run("c-web-prd.sh", ["verify"], { OGEVIA_PRD_WEB_OUT: join(work, "web-out"), MOCK_CSP: OLD_CSP }); expect(r.code).toBe(1); expect(r.out).toContain("does NOT allow the production sign-in domain");
+    r = await run("c-web-prd.sh", ["verify"], { OGEVIA_PRD_WEB_OUT: join(work, "web-out"), MOCK_CSP: "" }); expect(r.code).toBe(1); expect(r.out).toContain("no Content-Security-Policy header");
   });
 });

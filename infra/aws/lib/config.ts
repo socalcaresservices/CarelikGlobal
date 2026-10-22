@@ -341,6 +341,15 @@ export function assertAuthConfig(config: OgeviaEnvironmentConfig): void {
   }
 }
 
+/**
+ * The managed-login (token endpoint) origin this environment's website talks to: its own dedicated pool's domain, else the shared pilot pool's.
+ * The website's Content-Security-Policy `connect-src` must allow exactly this origin, or the browser blocks the sign-in code exchange.
+ */
+export function webAuthDomain(config: OgeviaEnvironmentConfig): string {
+  const dedicated = config.auth.dedicatedUserPool;
+  return dedicated ? `https://${dedicated.domainPrefix}.auth.${config.region}.amazoncognito.com` : config.testSlice.cognitoDomain;
+}
+
 /** The shared (pilot/test) pool id: production's API and Lambda must refuse it. */
 export function forbiddenUserPoolIdsFor(config: OgeviaEnvironmentConfig): readonly string[] {
   return config.auth.dedicatedUserPool ? [PROD.existing.cognitoUserPoolId] : [];

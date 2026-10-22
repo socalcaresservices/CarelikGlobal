@@ -80,6 +80,17 @@ def diff(a, b, path=""):
         return out
     return [] if a == b else [(path, a, b)]
 
+CSP_PATH = "/SecurityHeadersConfig/ContentSecurityPolicy/ContentSecurityPolicy"
+DEDICATED_DOMAIN = re.compile(r"https://ogevia-prd-[0-9]+\.auth\.us-west-2\.amazoncognito\.com")
+
+def csp_change_ok(old, new, shared_pool, expected_domain):
+    """The website's Content-Security-Policy may change in exactly one way: the SHARED pilot sign-in domain is replaced by production's dedicated one
+    (every other character equal) and the dedicated domain is exactly the one the Auth stack outputs. The browser blocks the sign-in code exchange when connect-src does not list the domain the site uses."""
+    if not (isinstance(old, str) and isinstance(new, str)): return False
+    shared_domain = "https://" + shared_pool.replace("_", "").lower() + ".auth.us-west-2.amazoncognito.com"
+    found = set(DEDICATED_DOMAIN.findall(new))
+    return found == {expected_domain} and shared_domain in old and old.replace(shared_domain, next(iter(found))) == new and shared_domain not in new
+
 def bad(msg): violations.append(msg)
 def imports(x):
     """every Fn::ImportValue name inside x"""
@@ -163,6 +174,9 @@ def main():
             # does NOT deploy the web stack (the deploy guard allows only Auth + API), so live stays as it is; the only template difference
             # permitted is that one export being dropped.
             ds = [d for d in ds if not (d[0] == "/Outputs/" + OLD_CLIENT_EXPORT and d[2] is None)]
+            # ... and the website's security header follows the dedicated sign-in domain (the browser would otherwise block the token exchange).
+            auth_t = load(a.new_dir, AUTH); auth_domain = ((auth_t or {}).get("Outputs", {}).get("ManagedLoginDomain", {}) or {}).get("Value")
+            ds = [d for d in ds if not (d[0].endswith(CSP_PATH) and isinstance(auth_domain, str) and csp_change_ok(d[1], d[2], a.shared_pool, auth_domain))]
         if ds: bad(f"{s}: differs from live, but this change must not touch it ({len(ds)} difference(s), first at {ds[0][0]})")
     if load(a.live_dir, AUTH) is not None: bad(f"{AUTH}: already exists live; this gate is for the first creation")
     new_auth = load(a.new_dir, AUTH)
