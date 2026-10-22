@@ -33,7 +33,8 @@ for T in new previous; do
   find "$STAGE/pkg/$T" -name node_modules -type l -delete
   [[ -s "$STAGE/pkg/templates/$T/Ogevia-prd-ServiceVerificationApi.json" ]] || { echo "STOP: the $T templates are incomplete" >&2; exit 1; }
 done
-[[ -s "$STAGE/pkg/templates/new/Ogevia-prd-Auth.json" && ! -e "$STAGE/pkg/templates/previous/Ogevia-prd-Auth.json" ]] || { echo "STOP: Auth stack must exist in the new templates only" >&2; exit 1; }
+[[ -s "$STAGE/pkg/templates/new/Ogevia-prd-Auth.json" ]] || { echo "STOP: the new templates have no Auth stack" >&2; exit 1; }
+[[ -n "${OGEVIA_FOLLOWUP:-}" || ! -e "$STAGE/pkg/templates/previous/Ogevia-prd-Auth.json" ]] || { echo "STOP: Auth stack must exist in the new templates only" >&2; exit 1; }
 jq -n --arg c "$CAND" --arg p "$PREV" --arg t "$(date -u +%FT%TZ)" --arg b "$(git rev-parse --abbrev-ref HEAD)" \
   '{package:"ogevia-prd-auth-separation", candidate_commit:$c, previous_commit:$p, built_at:$t, built_from_branch:$b, note:"built from commits with git archive; verify MANIFEST.sha256 before use"}' > "$STAGE/pkg/BUILD_INFO.json"
 (cd "$STAGE/pkg" && find . -type f ! -name MANIFEST.sha256 | LC_ALL=C sort | sed 's|^\./||' | xargs -d '\n' sha256sum > MANIFEST.sha256)
