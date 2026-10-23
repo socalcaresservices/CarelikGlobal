@@ -266,6 +266,12 @@ const PRD: OgeviaEnvironmentConfig = {
     appSecretName: "ogevia/prd/database/app",
   },
   egress: { ...PROD.egress, sharedWith: "prod" },
+  testSlice: {
+    ...PROD.testSlice,
+    // Production signs in through its own Cognito domain (live CSP and built app, VERIFIED 2026-10-23 from the deployed
+    // headers policy and bundle). The pilot's domain is NOT valid here and would block production sign-in.
+    cognitoDomain: "https://ogevia-prd-300094796789.auth.us-west-2.amazoncognito.com",
+  },
 };
 
 export const ENVIRONMENTS: Record<OgeviaEnvName, OgeviaEnvironmentConfig> = {
