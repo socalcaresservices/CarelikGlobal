@@ -28,8 +28,7 @@ The CloudFront URLs above still work as web addresses, but signing in from them 
 Applied (see `docs/aws/CUSTOM_DOMAINS_RUNBOOK.md`): ACM certificate in us-east-1 (`app`, `admin`, `demo`; ARN in the runbook); both web stacks deployed from `infra/aws` with `OGEVIA_WEB_CERT_ARN`; Netlify DNS CNAMEs `app`/`admin` to `d3l4psdkokkvnb.cloudfront.net` and `demo` to `d2xumch5w0izfg.cloudfront.net`; `config.json` redirect keys; API CORS origins added directly on both HTTP APIs (outside CDK).
 
 Open follow-ups from this change:
-- The deployed `ServiceVerificationApi` stacks (prod and prd) were built from code that is not in this repository (about 40 routes, a compliance sweep and a client-documents permission are missing from the repo). They were NOT redeployed. The CORS origins on both APIs were added with the CLI and a future deploy of the true source must carry them.
-- Production signs in through its own Cognito pool `us-west-2_FHJoX71ca` (domain `ogevia-prd-300094796789`, client `4rnh9e5d02pkupirvfqdbngmv5`), which the repo config does not describe. Its callback/logout lists were extended with `app`/`admin` by CLI. The repo's `Ogevia-prd-WebHosting` also creates an unused client in the pilot pool.
+- The live `ServiceVerificationApi` stacks come from commits that are on branches other than `main` (pilot `e80b770`, VERIFIED by asset hash; production most likely tip `4f4488c`, one read-only check outstanding). See `docs/aws/API_SOURCE_BASELINE_2026-10-23.md`. They were NOT redeployed. The CORS origins added by CLI, and production's Cognito callbacks (the production pool and client ARE CDK-managed by `Ogevia-prd-Auth`), are preserved only by the patches stored under `docs/aws/patches/`; a deploy from those baselines without them would remove the origins.
 - `*.ogevia.com` wildcard CNAME to the Netlify site was removed from Netlify DNS during this work and not restored.
 
 ## 2. Evidence recorded (2026-10-10)

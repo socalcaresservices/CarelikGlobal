@@ -1,0 +1,233 @@
+diff --git a/infra/aws/lib/app.ts b/infra/aws/lib/app.ts
+index 0a9c85e..8dc39ee 100644
+--- a/infra/aws/lib/app.ts
++++ b/infra/aws/lib/app.ts
+@@ -1,5 +1,5 @@
+ import { Tags, type App, type Stack } from "aws-cdk-lib";
+-import { assertDatabaseConfig, ENVIRONMENTS, type OgeviaEnvironmentConfig } from "./config.js";
++import { assertCustomDomains, assertDatabaseConfig, ENVIRONMENTS, type OgeviaEnvironmentConfig } from "./config.js";
+ import { DatabaseSecretStack } from "./database-secret-stack.js";
+ import { EvidenceStorageStack } from "./evidence-storage-stack.js";
+ import { NetworkEgressStack } from "./network-egress-stack.js";
+@@ -55,6 +55,7 @@ export function buildOgeviaApp(
+   approvalRef?: string,
+ ): PlannedStack[] {
+   assertDatabaseConfig(config);
++  assertCustomDomains(config);
+   const env = { account: config.account, region: config.region };
+   const production = config.database.purpose === "production";
+   const name = (suffix: string) => `Ogevia-${config.envName}-${suffix}`;
+@@ -96,7 +97,7 @@ export function buildOgeviaApp(
+       config,
+       env,
+       evidenceKey: evidence.dataKey,
+-      extraAllowedOrigins: [web.webOrigin],
++      extraAllowedOrigins: [...new Set([web.webOrigin, ...web.customOrigins])],
+       extraAppClientIds: [web.testAppClient.ref],
+       appDatabaseSecret: databaseSecret?.appSecret,
+       description: `Ogevia ${config.envName} - Service Verification API Gateway + Lambda tier (FUTURE, Phase 4; not deployed)`,
+diff --git a/infra/aws/lib/config.ts b/infra/aws/lib/config.ts
+index 911236b..3c2dfbf 100644
+--- a/infra/aws/lib/config.ts
++++ b/infra/aws/lib/config.ts
+@@ -104,6 +104,15 @@ export interface OgeviaEnvironmentConfig {
+     /** Browser origins allowed by API CORS. */
+     readonly allowedOrigins: readonly string[];
+   };
++  /**
++   * Permanent hostnames (applied live 2026-10-23, Netlify DNS CNAMEs to the distribution). The CloudFront URL keeps working as a fallback.
++   * Hostnames become CloudFront alternate domain names, Cognito callback/logout URLs and API CORS origins.
++   */
++  readonly customDomains?: {
++    readonly hostnames: readonly string[];
++    /** us-east-1 ACM certificate covering every hostname (DNS-validated). An identifier, not a secret. */
++    readonly certificateArn: string;
++  };
+   readonly existing: ExistingFoundationIds;
+   /**
+    * The application database this environment's Lambda connects to. The ONLY
+@@ -148,8 +157,12 @@ export interface OgeviaEnvironmentConfig {
+   };
+ }
+ 
++/** ACM certificate (us-east-1) for app/admin/demo.ogevia.com, issued 2026-10-23. */
++const WEB_CERTIFICATE_ARN = "arn:aws:acm:us-east-1:300094796789:certificate/bfc4e928-f387-4804-a8d6-6eb351cfb526";
++
+ const PROD: OgeviaEnvironmentConfig = {
+     envName: "prod",
++    customDomains: { hostnames: ["demo.ogevia.com"], certificateArn: WEB_CERTIFICATE_ARN },
+     account: OGEVIA_ACCOUNT,
+     region: OGEVIA_REGION,
+     terminationProtection: true,
+@@ -251,6 +264,7 @@ const PROD: OgeviaEnvironmentConfig = {
+ const PRD: OgeviaEnvironmentConfig = {
+   ...PROD,
+   envName: "prd",
++  customDomains: { hostnames: ["app.ogevia.com", "admin.ogevia.com"], certificateArn: WEB_CERTIFICATE_ARN },
+   database: {
+     purpose: "production",
+     name: PRODUCTION_DATABASE_NAME,
+@@ -362,3 +376,21 @@ export function assertVerified(value: unknown, label: string): void {
+     throw new Error(`${label} not verified yet: ${placeholders.join(", ")}`);
+   }
+ }
++
++/** https origins of the environment's permanent hostnames. */
++export function customOriginsFor(config: OgeviaEnvironmentConfig): readonly string[] {
++  return (config.customDomains?.hostnames ?? []).map((h) => `https://${h}`);
++}
++
++/** Fails closed on a malformed hostname or a certificate that CloudFront cannot use (it must be in us-east-1). */
++export function assertCustomDomains(config: OgeviaEnvironmentConfig): void {
++  const domains = config.customDomains;
++  if (!domains) return;
++  if (domains.hostnames.length === 0) throw new Error(`env "${config.envName}": customDomains needs at least one hostname`);
++  for (const h of domains.hostnames) {
++    if (!/^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+$/.test(h)) throw new Error(`env "${config.envName}": invalid hostname "${h}"`);
++  }
++  if (!/^arn:aws:acm:us-east-1:\d{12}:certificate\/[0-9a-f-]{36}$/.test(domains.certificateArn)) {
++    throw new Error(`env "${config.envName}": the certificate must be an ACM certificate ARN in us-east-1`);
++  }
++}
+diff --git a/infra/aws/lib/web-hosting-stack.ts b/infra/aws/lib/web-hosting-stack.ts
+index 36d74b1..553a376 100644
+--- a/infra/aws/lib/web-hosting-stack.ts
++++ b/infra/aws/lib/web-hosting-stack.ts
+@@ -1,10 +1,11 @@
+ import { CfnOutput, Duration, RemovalPolicy, Stack, Validations, type StackProps } from "aws-cdk-lib";
++import * as acm from "aws-cdk-lib/aws-certificatemanager";
+ import * as cloudfront from "aws-cdk-lib/aws-cloudfront";
+ import * as origins from "aws-cdk-lib/aws-cloudfront-origins";
+ import * as cognito from "aws-cdk-lib/aws-cognito";
+ import * as s3 from "aws-cdk-lib/aws-s3";
+ import { Construct } from "constructs";
+-import type { OgeviaEnvironmentConfig } from "./config.js";
++import { customOriginsFor, type OgeviaEnvironmentConfig } from "./config.js";
+ 
+ export interface WebHostingStackProps extends StackProps {
+   readonly config: OgeviaEnvironmentConfig;
+@@ -58,10 +59,14 @@ export class WebHostingStack extends Stack {
+   public readonly siteBucket: s3.Bucket;
+   public readonly testAppClient: cognito.CfnUserPoolClient;
+   public readonly webOrigin: string;
++  /** https origins of config.customDomains (callbacks and CORS). */
++  public readonly customOrigins: readonly string[];
+ 
+   constructor(scope: Construct, id: string, props: WebHostingStackProps) {
+     super(scope, id, { ...props, terminationProtection: props.config.terminationProtection });
+     const { config } = props;
++    const custom = config.customDomains;
++    this.customOrigins = customOriginsFor(config);
+ 
+     const logBucket = new s3.Bucket(this, "WebLogBucket", {
+       encryption: s3.BucketEncryption.S3_MANAGED,
+@@ -106,6 +111,13 @@ export class WebHostingStack extends Stack {
+       comment: config.database.purpose === "production" ? `Ogevia ${config.envName} web` : `Ogevia ${config.envName} web (test slice)`,
+       defaultRootObject: "index.html",
+       priceClass: cloudfront.PriceClass.PRICE_CLASS_100,
++      ...(custom
++        ? {
++            domainNames: [...custom.hostnames],
++            certificate: acm.Certificate.fromCertificateArn(this, "WebCertificate", custom.certificateArn),
++            minimumProtocolVersion: cloudfront.SecurityPolicyProtocol.TLS_V1_2_2021,
++          }
++        : {}),
+       httpVersion: cloudfront.HttpVersion.HTTP2_AND_3,
+       enableLogging: true,
+       logBucket,
+@@ -138,8 +150,8 @@ export class WebHostingStack extends Stack {
+       allowedOAuthFlows: ["code"],
+       allowedOAuthScopes: ["openid", "email"],
+       supportedIdentityProviders: ["COGNITO"],
+-      callbackUrLs: [`${this.webOrigin}/auth/callback`, ...config.testSlice.localDevOrigins.map((o) => `${o}/auth/callback`)],
+-      logoutUrLs: [`${this.webOrigin}/`, ...config.testSlice.localDevOrigins.map((o) => `${o}/`)],
++      callbackUrLs: [`${this.webOrigin}/auth/callback`, ...this.customOrigins.map((o) => `${o}/auth/callback`), ...config.testSlice.localDevOrigins.map((o) => `${o}/auth/callback`)],
++      logoutUrLs: [`${this.webOrigin}/`, ...this.customOrigins.map((o) => `${o}/`), ...config.testSlice.localDevOrigins.map((o) => `${o}/`)],
+       explicitAuthFlows: ["ALLOW_REFRESH_TOKEN_AUTH", "ALLOW_USER_SRP_AUTH"],
+       preventUserExistenceErrors: "ENABLED",
+       enableTokenRevocation: true,
+diff --git a/infra/aws/test/custom-domains.test.ts b/infra/aws/test/custom-domains.test.ts
+new file mode 100644
+index 0000000..0b562e2
+--- /dev/null
++++ b/infra/aws/test/custom-domains.test.ts
+@@ -0,0 +1,57 @@
++// Permanent hostnames are part of the code: aliases + certificate, Cognito callback/logout URLs and API CORS origins, with the CloudFront fallback kept.
++import { Template } from "aws-cdk-lib/assertions";
++import { describe, expect, it } from "vitest";
++import { buildOgeviaApp } from "../lib/app.js";
++import { assertCustomDomains, customOriginsFor, ENVIRONMENTS, type OgeviaEnvironmentConfig } from "../lib/config.js";
++import { newApp } from "./helpers.js";
++
++const HOSTS = { prd: ["app.ogevia.com", "admin.ogevia.com"], prod: ["demo.ogevia.com"] } as const;
++const synth = (env: "prod" | "prd", suffix: string) => {
++  const found = buildOgeviaApp(newApp(), ENVIRONMENTS[env], "plan").find((p) => p.stack.stackName.endsWith(suffix));
++  return found ? Template.fromStack(found.stack) : undefined;
++};
++const clients = (t: Template) => Object.values(t.findResources("AWS::Cognito::UserPoolClient")).map((r) => r.Properties);
++
++describe.each(["prd", "prod"] as const)("permanent hostnames (%s)", (env) => {
++  const cfg = ENVIRONMENTS[env];
++  it("CloudFront serves the hostnames over SNI with TLS 1.2 and the committed us-east-1 certificate", () => {
++    const dist = Object.values(synth(env, "-WebHosting")!.findResources("AWS::CloudFront::Distribution"))[0]!.Properties.DistributionConfig;
++    expect(dist.Aliases).toEqual(HOSTS[env]);
++    expect(dist.ViewerCertificate).toMatchObject({ AcmCertificateArn: cfg.customDomains!.certificateArn, SslSupportMethod: "sni-only", MinimumProtocolVersion: "TLSv1.2_2021" });
++  });
++
++  it("every browser client returns to the hostnames and keeps the CloudFront fallback", () => {
++    const web = synth(env, "-WebHosting")!, auth = synth(env, "-Auth");
++    const all = [...clients(web), ...(auth ? clients(auth) : [])];
++    expect(all.length).toBeGreaterThan(0);
++    for (const c of all) {
++      expect(JSON.stringify(c.CallbackURLs)).toContain("/auth/callback");
++      for (const h of HOSTS[env]) {
++        expect(c.CallbackURLs).toContain(`https://${h}/auth/callback`);
++        expect(c.LogoutURLs).toContain(`https://${h}/`);
++      }
++      expect(JSON.stringify([c.CallbackURLs, c.LogoutURLs])).not.toMatch(/http:|localhost/);
++    }
++  });
++
++  it("API CORS allows the hostnames and the CloudFront fallback", () => {
++    const api = Object.values(synth(env, "-ServiceVerificationApi")!.findResources("AWS::ApiGatewayV2::Api"))[0]!;
++    const origins = JSON.stringify(api.Properties.CorsConfiguration.AllowOrigins);
++    for (const o of customOriginsFor(cfg)) expect(origins).toContain(o);
++    expect(origins).toContain("WebDistribution");
++  });
++});
++
++describe("assertCustomDomains", () => {
++  const withDomains = (d: OgeviaEnvironmentConfig["customDomains"]): OgeviaEnvironmentConfig => ({ ...ENVIRONMENTS.prd, customDomains: d });
++  const ARN = ENVIRONMENTS.prd.customDomains!.certificateArn;
++  it("accepts the committed configuration and no configuration", () => {
++    expect(() => assertCustomDomains(ENVIRONMENTS.prd)).not.toThrow();
++    expect(() => assertCustomDomains(withDomains(undefined))).not.toThrow();
++  });
++  it("rejects a certificate outside us-east-1, an empty list and a malformed hostname", () => {
++    expect(() => assertCustomDomains(withDomains({ hostnames: ["app.ogevia.com"], certificateArn: ARN.replace("us-east-1", "us-west-2") }))).toThrow(/us-east-1/);
++    expect(() => assertCustomDomains(withDomains({ hostnames: [], certificateArn: ARN }))).toThrow(/at least one/);
++    expect(() => assertCustomDomains(withDomains({ hostnames: ["https://app.ogevia.com/"], certificateArn: ARN }))).toThrow(/invalid hostname/);
++  });
++});
+diff --git a/infra/aws/test/service-verification-api-stack.test.ts b/infra/aws/test/service-verification-api-stack.test.ts
+index e2ca9ee..3d66824 100644
+--- a/infra/aws/test/service-verification-api-stack.test.ts
++++ b/infra/aws/test/service-verification-api-stack.test.ts
+@@ -2,7 +2,7 @@ import { Match, Template } from "aws-cdk-lib/assertions";
+ import { describe, expect, it } from "vitest";
+ import { buildOgeviaApp } from "../lib/app.js";
+ import { cognitoIssuer } from "../lib/auth-contract.js";
+-import { ENVIRONMENTS, OGEVIA_ACCOUNT } from "../lib/config.js";
++import { customOriginsFor, ENVIRONMENTS, OGEVIA_ACCOUNT } from "../lib/config.js";
+ import {
+   LAMBDA_ENVIRONMENT_KEYS,
+   SERVICE_VERIFICATION_ROUTES,
+@@ -26,7 +26,7 @@ describe("ServiceVerificationApiStack (FUTURE, Phase 4)", () => {
+     template.hasResourceProperties("AWS::ApiGatewayV2::Api", {
+       ProtocolType: "HTTP",
+       CorsConfiguration: Match.objectLike({
+-        AllowOrigins: [...prod.auth.allowedOrigins, Match.anyValue()],
++        AllowOrigins: [...prod.auth.allowedOrigins, Match.anyValue(), ...customOriginsFor(prod).filter((o) => !prod.auth.allowedOrigins.includes(o))],
+       }),
+     });
+     template.hasResourceProperties("AWS::ApiGatewayV2::Authorizer", {
