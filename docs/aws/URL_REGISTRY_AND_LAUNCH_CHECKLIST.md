@@ -20,7 +20,7 @@ Evidence classes used below. Nothing here is a deployment instruction.
 | Permanent URL | Serves | Evidence |
 |---|---|---|
 | `https://app.ogevia.com` | production candidate (`d3l4psdkokkvnb`) | Owner reported a successful sign-in on 2026-10-23. Aliases + TLSv1.2_2021 confirmed in CloudShell output. |
-| `https://admin.ogevia.com` | the same production distribution (shares `config.json`, so sign-in returns to `app.ogevia.com`) | Alias confirmed in CloudShell; HTTPS and sign-in on this name **not re-tested after the DNS change**. |
+| `https://admin.ogevia.com` | the same production distribution (shares `config.json`, so sign-in returns to `app.ogevia.com`) | Alias confirmed in CloudShell; owner reported the final DNS/HTTPS check clean for all three names (2026-10-23, output not saved). Sign-in on this name specifically not tested. |
 | `https://demo.ogevia.com` | pilot/test (`d2xumch5w0izfg`) | Owner screenshot: signed in, "TEST - synthetic data only" banner, API data loaded. |
 
 The CloudFront URLs above still work as web addresses, but signing in from them returns to the permanent host (the redirect comes from each site's runtime `config.json`).
