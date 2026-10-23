@@ -2,7 +2,7 @@ import { Match, Template } from "aws-cdk-lib/assertions";
 import { describe, expect, it } from "vitest";
 import { buildOgeviaApp } from "../lib/app.js";
 import { cognitoIssuer } from "../lib/auth-contract.js";
-import { ENVIRONMENTS, OGEVIA_ACCOUNT } from "../lib/config.js";
+import { customOriginsFor, ENVIRONMENTS, OGEVIA_ACCOUNT } from "../lib/config.js";
 import {
   LAMBDA_ENVIRONMENT_KEYS,
   SERVICE_VERIFICATION_ROUTES,
@@ -26,7 +26,7 @@ describe("ServiceVerificationApiStack (FUTURE, Phase 4)", () => {
     template.hasResourceProperties("AWS::ApiGatewayV2::Api", {
       ProtocolType: "HTTP",
       CorsConfiguration: Match.objectLike({
-        AllowOrigins: [...prod.auth.allowedOrigins, Match.anyValue()],
+        AllowOrigins: [...prod.auth.allowedOrigins, Match.anyValue(), ...customOriginsFor(prod).filter((o) => !prod.auth.allowedOrigins.includes(o))],
       }),
     });
     template.hasResourceProperties("AWS::ApiGatewayV2::Authorizer", {

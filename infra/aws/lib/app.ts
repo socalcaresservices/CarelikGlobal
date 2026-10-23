@@ -1,5 +1,5 @@
 import { Tags, type App, type Stack } from "aws-cdk-lib";
-import { assertDatabaseConfig, ENVIRONMENTS, type OgeviaEnvironmentConfig } from "./config.js";
+import { assertCustomDomains, assertDatabaseConfig, ENVIRONMENTS, type OgeviaEnvironmentConfig } from "./config.js";
 import { DatabaseSecretStack } from "./database-secret-stack.js";
 import { EvidenceStorageStack } from "./evidence-storage-stack.js";
 import { NetworkEgressStack } from "./network-egress-stack.js";
@@ -55,6 +55,7 @@ export function buildOgeviaApp(
   approvalRef?: string,
 ): PlannedStack[] {
   assertDatabaseConfig(config);
+  assertCustomDomains(config);
   const env = { account: config.account, region: config.region };
   const production = config.database.purpose === "production";
   const name = (suffix: string) => `Ogevia-${config.envName}-${suffix}`;
@@ -96,7 +97,7 @@ export function buildOgeviaApp(
       config,
       env,
       evidenceKey: evidence.dataKey,
-      extraAllowedOrigins: [web.webOrigin],
+      extraAllowedOrigins: [...new Set([web.webOrigin, ...web.customOrigins])],
       extraAppClientIds: [web.testAppClient.ref],
       appDatabaseSecret: databaseSecret?.appSecret,
       description: `Ogevia ${config.envName} - Service Verification API Gateway + Lambda tier (FUTURE, Phase 4; not deployed)`,
