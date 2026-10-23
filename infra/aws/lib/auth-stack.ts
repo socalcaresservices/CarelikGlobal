@@ -1,7 +1,7 @@
 import { CfnOutput, RemovalPolicy, Stack, Token, Validations, type StackProps } from "aws-cdk-lib";
 import * as cognito from "aws-cdk-lib/aws-cognito";
 import type { Construct } from "constructs";
-import { assertAuthConfig, type OgeviaEnvironmentConfig } from "./config.js";
+import { assertAuthConfig, type OgeviaEnvironmentConfig, customOriginsFor } from "./config.js";
 
 export interface ProductionAuthStackProps extends StackProps {
   readonly config: OgeviaEnvironmentConfig;
@@ -83,8 +83,8 @@ export class ProductionAuthStack extends Stack {
       allowedOAuthFlows: ["code"],
       allowedOAuthScopes: ["openid", "email"],
       supportedIdentityProviders: ["COGNITO"],
-      callbackUrLs: [`${webOrigin}/auth/callback`],
-      logoutUrLs: [`${webOrigin}/`],
+      callbackUrLs: [`${webOrigin}/auth/callback`, ...customOriginsFor(config).map((o) => `${o}/auth/callback`)],
+      logoutUrLs: [`${webOrigin}/`, ...customOriginsFor(config).map((o) => `${o}/`)],
       explicitAuthFlows: ["ALLOW_REFRESH_TOKEN_AUTH", "ALLOW_USER_SRP_AUTH"],
       preventUserExistenceErrors: "ENABLED",
       enableTokenRevocation: true,

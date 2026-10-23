@@ -1,10 +1,11 @@
 import { CfnOutput, Duration, RemovalPolicy, Stack, Validations, type StackProps } from "aws-cdk-lib";
+import * as acm from "aws-cdk-lib/aws-certificatemanager";
 import * as cloudfront from "aws-cdk-lib/aws-cloudfront";
 import * as origins from "aws-cdk-lib/aws-cloudfront-origins";
 import * as cognito from "aws-cdk-lib/aws-cognito";
 import * as s3 from "aws-cdk-lib/aws-s3";
 import { Construct } from "constructs";
-import { webAuthDomain, type OgeviaEnvironmentConfig } from "./config.js";
+import { webAuthDomain, type OgeviaEnvironmentConfig, customOriginsFor } from "./config.js";
 
 export interface WebHostingStackProps extends StackProps {
   readonly config: OgeviaEnvironmentConfig;
@@ -58,10 +59,14 @@ export class WebHostingStack extends Stack {
   public readonly siteBucket: s3.Bucket;
   public readonly testAppClient: cognito.CfnUserPoolClient;
   public readonly webOrigin: string;
+  /** https origins of config.customDomains (callbacks and CORS). */
+  public readonly customOrigins: readonly string[];
 
   constructor(scope: Construct, id: string, props: WebHostingStackProps) {
     super(scope, id, { ...props, terminationProtection: props.config.terminationProtection });
     const { config } = props;
+    const custom = config.customDomains;
+    this.customOrigins = customOriginsFor(config);
 
     const logBucket = new s3.Bucket(this, "WebLogBucket", {
       encryption: s3.BucketEncryption.S3_MANAGED,
@@ -106,6 +111,13 @@ export class WebHostingStack extends Stack {
       comment: config.database.purpose === "production" ? `Ogevia ${config.envName} web` : `Ogevia ${config.envName} web (test slice)`,
       defaultRootObject: "index.html",
       priceClass: cloudfront.PriceClass.PRICE_CLASS_100,
+      ...(custom
+        ? {
+            domainNames: [...custom.hostnames],
+            certificate: acm.Certificate.fromCertificateArn(this, "WebCertificate", custom.certificateArn),
+            minimumProtocolVersion: cloudfront.SecurityPolicyProtocol.TLS_V1_2_2021,
+          }
+        : {}),
       httpVersion: cloudfront.HttpVersion.HTTP2_AND_3,
       enableLogging: true,
       logBucket,
@@ -138,8 +150,8 @@ export class WebHostingStack extends Stack {
       allowedOAuthFlows: ["code"],
       allowedOAuthScopes: ["openid", "email"],
       supportedIdentityProviders: ["COGNITO"],
-      callbackUrLs: [`${this.webOrigin}/auth/callback`, ...config.testSlice.localDevOrigins.map((o) => `${o}/auth/callback`)],
-      logoutUrLs: [`${this.webOrigin}/`, ...config.testSlice.localDevOrigins.map((o) => `${o}/`)],
+      callbackUrLs: [`${this.webOrigin}/auth/callback`, ...this.customOrigins.map((o) => `${o}/auth/callback`), ...config.testSlice.localDevOrigins.map((o) => `${o}/auth/callback`)],
+      logoutUrLs: [`${this.webOrigin}/`, ...this.customOrigins.map((o) => `${o}/`), ...config.testSlice.localDevOrigins.map((o) => `${o}/`)],
       explicitAuthFlows: ["ALLOW_REFRESH_TOKEN_AUTH", "ALLOW_USER_SRP_AUTH"],
       preventUserExistenceErrors: "ENABLED",
       enableTokenRevocation: true,
