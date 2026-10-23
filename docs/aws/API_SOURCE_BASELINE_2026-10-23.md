@@ -22,16 +22,12 @@ Status words: VERIFIED = observed output or exact reproduction; INFERRED = follo
 | Synthesized tip templates equal the `deployed` fixtures except the callback/logout lists, API CORS and the web headers policy (the later web-headers release) | VERIFIED |
 | Live production sign-in uses pool `us-west-2_FHJoX71ca`, domain `ogevia-prd-300094796789`, client `4rnh9e5d02pkupirvfqdbngmv5` (CloudShell output); the tip's `Ogevia-prd-Auth` stack (`lib/auth-stack.ts`) defines exactly that dedicated pool/client | VERIFIED (live) + VERIFIED (code) |
 | Live production web headers policy before 2026-10-23 allowed `ogevia-prd-300094796789` (CloudShell diff), which the tip's `webAuthDomain()` produces | VERIFIED |
-| Live production Handler asset key | UNKNOWN (not yet read) |
-| Which commit in `a03f43e..4f4488c` was deployed (the bundle hash is identical across that range) | UNKNOWN; the tip is the latest, `a03f43e` the first |
+| Live production Handler asset key (owner CloudShell `get-template`, 2026-10-23): `debd1d4305fc1e230fbc7c7a67ffded67d059f8b61cc3ccc3e238d64e74a3235.zip`, identical to the tip rebuild; live IdentityHandler `7c5f8eb6...` also identical | VERIFIED |
+| Live `Ogevia-prd-Auth` Cognito client physical id: `4rnh9e5d02pkupirvfqdbngmv5` (the client the website uses) | VERIFIED |
+| Which commit in `a03f43e..4f4488c` was deployed: the Lambda hash is identical across that range, but the tip is the only one consistent with the live web headers policy (efcacd0, inside the range) and its synthesized templates match the deployed fixtures | VERIFIED for the Lambda, INFERRED for the exact commit (tip) |
 | Deployment-reference tags: web `approved-CR-2026-10-21-WEB-HEADERS` (live); not found in any commit | UNKNOWN (reference is supplied at deploy time) |
 
-Conclusion: production is INFERRED to be the tip `4f4488c` (Handler `debd1d43...`). One read-only command closes it:
-
-```bash
-for S in Ogevia-prd-ServiceVerificationApi Ogevia-prod-ServiceVerificationApi; do echo "== $S"; aws cloudformation get-template --stack-name $S --query "TemplateBody.Resources.*|[?Type=='AWS::Lambda::Function'].Properties.Code.S3Key" --output text; done; aws cloudformation describe-stack-resources --stack-name Ogevia-prd-Auth --query "StackResources[?ResourceType=='AWS::Cognito::UserPoolClient'].PhysicalResourceId" --output text
-```
-Expected: prd `debd1d4305fc1e23...` and `7c5f8eb676c93261...` (identity); prod `eab95a809b3b95b7...` and `7c5f8eb6...`; then `4rnh9e5d02pkupirvfqdbngmv5`.
+Conclusion: production is the tip `4f4488c` (Lambda hash VERIFIED against live; the exact commit within `a03f43e..4f4488c` is INFERRED from the live web headers policy). The pilot is `e80b770` (VERIFIED). No unresolved gap remains for the Lambda code.
 
 ## Live settings preserved in infrastructure code (not deployed; nothing live was changed)
 Patches (code and tests only; the stale deployed-state fixtures also need the same three properties, regenerated from synth):
@@ -40,8 +36,7 @@ Patches (code and tests only; the stale deployed-state fixtures also need the sa
 
 They add `customDomains` (hostnames + the us-east-1 certificate ARN) to `config.ts`, and make the hostnames CloudFront aliases, Cognito callback/logout URLs
 (web client; production Auth client) and API CORS origins. Synthesized templates differ from each untouched baseline ONLY in those properties; Lambda assets,
-routes, permissions and alarms are unchanged. Local branches `claude/custom-domains-prd-4f4488c` (db67c95) and `claude/custom-domains-pilot-e80b770` (8e139f4)
-exist only in the session that made them until pushed.
+routes, permissions and alarms are unchanged. Branches pushed to origin on 2026-10-23 (owner approved): `claude/custom-domains-prd-4f4488c` (db67c95) and `claude/custom-domains-pilot-e80b770` (8e139f4).
 
 Correction to earlier notes: the production Cognito pool and client ARE managed by CDK (`Ogevia-prd-Auth`), and the live callback edit made by CLI on 2026-10-23 would be
 reverted by the next deploy of that stack unless the patch above is carried. The earlier statement that the API source was outside this repository was wrong.
