@@ -11,6 +11,8 @@
 #   bash db-window-run.sh prd clear-dry-run <expected-clients>            the cleanup logic, ALWAYS rolled back: shows what would be removed and kept
 #   bash db-window-run.sh prd clear-apply <expected-clients> <snapshot-id>   verifies the snapshot, repeats the dry run, then asks for CLEAR-<agency>-<N>
 #   bash db-window-run.sh test verify-new-agencies                        TEST only: two new agencies are empty and isolated (rolled back)
+#   bash db-window-run.sh test isolation-seed                             TEST only: COMMITS two new synthetic agencies for the HTTP isolation test (isolation_http.py)
+#   bash db-window-run.sh test isolation-retire                           TEST only: suspends those two synthetic agencies afterwards (deletes nothing)
 #
 # Never prints credentials. Every database script is read-only or ends in ROLLBACK unless clear-apply is confirmed by typing the exact phrase.
 # OGEVIA_DBRUN_LOCAL_URL exists only to rehearse this script against a local PostgreSQL; never set it in AWS.
@@ -35,6 +37,8 @@ usage: bash db-window-run.sh <prd|test> <action> [arguments]
   clear-dry-run <expected-clients>         the cleanup logic, ALWAYS rolled back (prd)
   clear-apply <expected-clients> <snapshot-id>   verifies the snapshot, dry-runs, then asks for CLEAR-<agency>-<N> (prd)
   verify-new-agencies                      TEST only: two new agencies are empty and isolated (rolled back)
+  isolation-seed                           TEST only: commits two new synthetic agencies for isolation_http.py
+  isolation-retire                         TEST only: suspends those synthetic agencies afterwards
 USAGE
   exit 2
 }
@@ -109,10 +113,10 @@ fi
 
 # --- database actions --------------------------------------------------------------------------------------------------------------------------------------
 case "$ACTION" in
-  preview|dashboard|clear-dry-run|clear-apply|verify-new-agencies) ;;
+  preview|dashboard|clear-dry-run|clear-apply|verify-new-agencies|isolation-seed|isolation-retire) ;;
   *) usage ;;
 esac
-[[ "$ACTION" == verify-new-agencies && "$ENVN" != test ]] && stop "verify-new-agencies runs against TEST only"
+[[ ( "$ACTION" == verify-new-agencies || "$ACTION" == isolation-seed || "$ACTION" == isolation-retire ) && "$ENVN" != test ]] && stop "$ACTION runs against TEST only"
 EXPECTED="${1:-}"; SNAP="${2:-}"
 if [[ "$ACTION" == clear-dry-run || "$ACTION" == clear-apply ]]; then
   [[ "$EXPECTED" =~ ^[0-9]+$ ]] || stop "give the expected client count from the preview, for example: clear-dry-run 4"
@@ -182,6 +186,18 @@ case "$ACTION" in
     db -v "org_slug=$SLUG" -v "expected_clients=$EXPECTED" -v mode=apply -v "snapshot_id=$SNAP" -v "confirm=$ans" -f "$(sqlfile test_data_clear_linked.sql)" | tee "$R" | tee -a "$LOG"
     [[ ${PIPESTATUS[0]} == 0 ]] || stop "the apply failed; the transaction was rolled back and nothing changed"
     say "Applied. Saved: $R. Now run: bash db-window-run.sh $ENVN preview   and   bash db-window-run.sh $ENVN dashboard   and compare with the earlier outputs." ;;
+  isolation-seed)
+    R="$OUT/isolation-seed-$STAMP.json"
+    ROW=$(db -t -f "$(sqlfile test_http_isolation_seed.sql)" 2>&1 | tee -a "$LOG" | grep -E '^[0-9a-f-]{36}\|[0-9a-f-]{36}\|[0-9a-f-]{36}\|[0-9a-f-]{36}$' | head -1)
+    [[ -n "$ROW" ]] || stop "the seed did not return the two agencies; nothing was committed or it failed: see above"
+    IFS='|' read -r OA SA OB SB <<<"$ROW"
+    ( umask 077; jq -n --arg oa "$OA" --arg sa "$SA" --arg ob "$OB" --arg sb "$SB" '{a:{org:$oa,sub:$sa},b:{org:$ob,sub:$sb}}' > "$R" )
+    say "Two new synthetic agencies committed in TEST. Seed file (random ids only): $R"
+    say "Next: python3 isolation_http.py --seed $R   then: bash db-window-run.sh test isolation-retire" ;;
+  isolation-retire)
+    db -f "$(sqlfile test_http_isolation_retire.sql)" 2>&1 | tee -a "$LOG"
+    [[ ${PIPESTATUS[0]} == 0 ]] || stop "the retire step failed: see above"
+    say "The synthetic isolation agencies are suspended and their owners disabled. Nothing was deleted." ;;
   verify-new-agencies)
     R="$OUT/verify-new-agencies-$STAMP.txt"
     db -f "$(sqlfile test_new_agency_isolation_check.sql)" 2>&1 | tee "$R" | tee -a "$LOG"

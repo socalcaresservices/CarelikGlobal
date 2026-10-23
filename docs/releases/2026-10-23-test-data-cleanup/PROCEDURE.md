@@ -32,3 +32,11 @@ shows a name: they expose field names only. Removing the names from audit would 
 1. `dashboard` and `preview` (read-only): the "before". 2. `snapshot-create` (typed SNAPSHOT-NOW; manual, encrypted, under 6 hours old; covers both databases on the instance).
 3. `clear-dry-run 4`. 4. `clear-apply 4 <snapshot-id>` (dry run again, then typed CLEAR-socal-care-services-4). 5. `dashboard` and `preview` again: the "after".
 Recovery: restore the snapshot to a NEW instance, never over the live one, and copy back only what is needed.
+
+## TEST two-agency isolation over the API (`slice/isolation_http.py`)
+
+`db-window-run.sh test isolation-seed` commits two NEW synthetic agencies (one owner each, nothing else) in `ogevia_sv_test` only and writes their random ids to a 600-mode JSON file.
+`isolation_http.py --seed <file>` then checks, through the deployed TEST API handler (IAM-gated invoke carrying each owner's sub, as `smoke.py` does) and over HTTPS to the API Gateway URL:
+anonymous/forged/malformed tokens get 401; each owner has one membership and empty client, caregiver, shift, open-shift and directory lists; A and B each create a client; neither can list, read, change or create inside the other's agency (by organization id or client id), and forged role/agency claims grant nothing.
+`db-window-run.sh test isolation-retire` then suspends the two agencies and disables their owners (nothing is deleted).
+Not covered: a browser sign-in with a real Cognito token (MFA is ON and needs an authenticator-app code), so the API Gateway JWT authorizer is exercised only for refusals (401), not for an accepted real token.
