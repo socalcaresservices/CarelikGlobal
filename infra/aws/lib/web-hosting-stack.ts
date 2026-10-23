@@ -1,4 +1,5 @@
 import { CfnOutput, Duration, RemovalPolicy, Stack, Validations, type StackProps } from "aws-cdk-lib";
+import * as acm from "aws-cdk-lib/aws-certificatemanager";
 import * as cloudfront from "aws-cdk-lib/aws-cloudfront";
 import * as origins from "aws-cdk-lib/aws-cloudfront-origins";
 import * as cognito from "aws-cdk-lib/aws-cognito";
@@ -8,6 +9,10 @@ import type { OgeviaEnvironmentConfig } from "./config.js";
 
 export interface WebHostingStackProps extends StackProps {
   readonly config: OgeviaEnvironmentConfig;
+  /** Permanent hostnames to serve (first = primary). Requires `certificateArn`. */
+  readonly customDomains?: readonly string[];
+  /** us-east-1 ACM certificate covering `customDomains`. */
+  readonly certificateArn?: string;
 }
 
 /** Rewrites client-side routes (no file extension) to the SPA entry point. */
@@ -58,10 +63,15 @@ export class WebHostingStack extends Stack {
   public readonly siteBucket: s3.Bucket;
   public readonly testAppClient: cognito.CfnUserPoolClient;
   public readonly webOrigin: string;
+  /** https origins of the permanent hostnames (empty when none are configured). */
+  public readonly customOrigins: readonly string[];
 
   constructor(scope: Construct, id: string, props: WebHostingStackProps) {
     super(scope, id, { ...props, terminationProtection: props.config.terminationProtection });
     const { config } = props;
+    const domains = props.customDomains ?? [];
+    if (domains.length > 0 && !props.certificateArn) throw new Error("customDomains requires certificateArn");
+    this.customOrigins = domains.map((d) => `https://${d}`);
 
     const logBucket = new s3.Bucket(this, "WebLogBucket", {
       encryption: s3.BucketEncryption.S3_MANAGED,
@@ -106,6 +116,13 @@ export class WebHostingStack extends Stack {
       comment: config.database.purpose === "production" ? `Ogevia ${config.envName} web` : `Ogevia ${config.envName} web (test slice)`,
       defaultRootObject: "index.html",
       priceClass: cloudfront.PriceClass.PRICE_CLASS_100,
+      ...(domains.length > 0 && props.certificateArn
+        ? {
+            domainNames: [...domains],
+            certificate: acm.Certificate.fromCertificateArn(this, "WebCertificate", props.certificateArn),
+            minimumProtocolVersion: cloudfront.SecurityPolicyProtocol.TLS_V1_2_2021,
+          }
+        : {}),
       httpVersion: cloudfront.HttpVersion.HTTP2_AND_3,
       enableLogging: true,
       logBucket,
@@ -138,8 +155,8 @@ export class WebHostingStack extends Stack {
       allowedOAuthFlows: ["code"],
       allowedOAuthScopes: ["openid", "email"],
       supportedIdentityProviders: ["COGNITO"],
-      callbackUrLs: [`${this.webOrigin}/auth/callback`, ...config.testSlice.localDevOrigins.map((o) => `${o}/auth/callback`)],
-      logoutUrLs: [`${this.webOrigin}/`, ...config.testSlice.localDevOrigins.map((o) => `${o}/`)],
+      callbackUrLs: [`${this.webOrigin}/auth/callback`, ...this.customOrigins.map((o) => `${o}/auth/callback`), ...config.testSlice.localDevOrigins.map((o) => `${o}/auth/callback`)],
+      logoutUrLs: [`${this.webOrigin}/`, ...this.customOrigins.map((o) => `${o}/`), ...config.testSlice.localDevOrigins.map((o) => `${o}/`)],
       explicitAuthFlows: ["ALLOW_REFRESH_TOKEN_AUTH", "ALLOW_USER_SRP_AUTH"],
       preventUserExistenceErrors: "ENABLED",
       enableTokenRevocation: true,

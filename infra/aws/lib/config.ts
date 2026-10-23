@@ -104,6 +104,12 @@ export interface OgeviaEnvironmentConfig {
     /** Browser origins allowed by API CORS. */
     readonly allowedOrigins: readonly string[];
   };
+  /**
+   * Permanent hostnames served by this environment's CloudFront distribution (the CloudFront URL keeps working as a
+   * fallback). They are added as alternate domain names, Cognito callback/logout URLs and API CORS origins. Applied
+   * only with a us-east-1 ACM certificate (OGEVIA_WEB_CERT_ARN); a deploy without it is refused (lib/app.ts).
+   */
+  readonly customDomains?: readonly string[];
   readonly existing: ExistingFoundationIds;
   /**
    * The application database this environment's Lambda connects to. The ONLY
@@ -150,6 +156,7 @@ export interface OgeviaEnvironmentConfig {
 
 const PROD: OgeviaEnvironmentConfig = {
     envName: "prod",
+    customDomains: ["demo.ogevia.com"],
     account: OGEVIA_ACCOUNT,
     region: OGEVIA_REGION,
     terminationProtection: true,
@@ -251,6 +258,7 @@ const PROD: OgeviaEnvironmentConfig = {
 const PRD: OgeviaEnvironmentConfig = {
   ...PROD,
   envName: "prd",
+  customDomains: ["app.ogevia.com", "admin.ogevia.com"],
   database: {
     purpose: "production",
     name: PRODUCTION_DATABASE_NAME,
