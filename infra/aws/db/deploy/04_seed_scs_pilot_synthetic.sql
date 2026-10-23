@@ -23,6 +23,12 @@
 -- them in the app through Care Requests (assign_care_request), the only path
 -- that reserves authorization time.
 \set ON_ERROR_STOP on
+-- Synthetic seed data is loaded ONLY into the TEST database. A production or any other database refuses before anything is written.
+select current_database() = 'ogevia_sv_test' as in_test \gset
+\if :in_test
+\else
+  do $$ begin raise exception 'Refusing: synthetic seed data is loaded only into ogevia_sv_test (this is a different database).'; end $$;
+\endif
 begin;
 
 insert into ogevia.organizations (id, slug, display_name, timezone)
