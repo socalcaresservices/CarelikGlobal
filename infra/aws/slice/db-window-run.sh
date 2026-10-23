@@ -24,7 +24,18 @@ STAMP=$(date -u +%Y%m%dT%H%M%SZ)
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 ENVN="${1:-}"; ACTION="${2:-}"
-usage() { sed -n '9,16p' "${BASH_SOURCE[0]}" >&2; exit 2; }
+usage() {
+  cat >&2 <<'USAGE'
+usage: bash db-window-run.sh <prd|test> <action> [arguments]
+  preview                                  read-only count preview (no change)
+  snapshot-create                          typed SNAPSHOT-NOW; creates and verifies an RDS snapshot (prd)
+  snapshot-verify <snapshot-id>            read-only check of an existing snapshot (prd)
+  purge-dry-run <expected-clients>         the cleanup logic, ALWAYS rolled back (prd)
+  purge-apply <expected-clients> <snapshot-id>   verifies the snapshot, dry-runs, then asks for PURGE-<agency>-<N> (prd)
+  verify-new-agencies                      TEST only: two new agencies are empty and isolated (rolled back)
+USAGE
+  exit 2
+}
 case "$ENVN" in
   prd)  DB=ogevia_prd;     SLUG=${OGEVIA_ORG_SLUG:-socal-care-services} ;;
   test) DB=ogevia_sv_test; SLUG=${OGEVIA_ORG_SLUG:-scs-pilot-synthetic} ;;
