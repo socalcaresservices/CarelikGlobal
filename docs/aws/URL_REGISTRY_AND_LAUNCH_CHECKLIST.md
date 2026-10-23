@@ -15,7 +15,22 @@ Evidence classes used below. Nothing here is a deployment instruction.
 | Pilot / test (`env=prod`, stacks `Ogevia-prod-*`) | `https://d2xumch5w0izfg.cloudfront.net` | `https://s0epy5rgzb.execute-api.us-west-2.amazonaws.com` | `ogevia_sv_test` (repository records; live not re-checked) | **Synthetic data only.** `docs/aws/PRODUCTION_DEPLOYMENT.md` says not to use it as production. |
 | Production candidate (`env=prd`, stacks `Ogevia-prd-*`) | `https://d3l4psdkokkvnb.cloudfront.net` | `https://zk527zk4ua.execute-api.us-west-2.amazonaws.com` | `ogevia_prd` (Lambda configured for it; connectivity unverified) | Intended for real client use, **after the open items in section 3 are closed.** Not yet cleared for real client data. |
 
-`app.ogevia.com` DNS is not repointed to either link. That is a separate owner decision.
+### Permanent URLs (changed 2026-10-23, owner-applied in CloudShell and Netlify; owner stated no active users)
+
+| Permanent URL | Serves | Evidence |
+|---|---|---|
+| `https://app.ogevia.com` | production candidate (`d3l4psdkokkvnb`) | Owner reported a successful sign-in on 2026-10-23. Aliases + TLSv1.2_2021 confirmed in CloudShell output. |
+| `https://admin.ogevia.com` | the same production distribution (shares `config.json`, so sign-in returns to `app.ogevia.com`) | Alias confirmed in CloudShell; HTTPS and sign-in on this name **not re-tested after the DNS change**. |
+| `https://demo.ogevia.com` | pilot/test (`d2xumch5w0izfg`) | Owner screenshot: signed in, "TEST - synthetic data only" banner, API data loaded. |
+
+The CloudFront URLs above still work as web addresses, but signing in from them returns to the permanent host (the redirect comes from each site's runtime `config.json`).
+
+Applied (see `docs/aws/CUSTOM_DOMAINS_RUNBOOK.md`): ACM certificate in us-east-1 (`app`, `admin`, `demo`; ARN in the runbook); both web stacks deployed from `infra/aws` with `OGEVIA_WEB_CERT_ARN`; Netlify DNS CNAMEs `app`/`admin` to `d3l4psdkokkvnb.cloudfront.net` and `demo` to `d2xumch5w0izfg.cloudfront.net`; `config.json` redirect keys; API CORS origins added directly on both HTTP APIs (outside CDK).
+
+Open follow-ups from this change:
+- The deployed `ServiceVerificationApi` stacks (prod and prd) were built from code that is not in this repository (about 40 routes, a compliance sweep and a client-documents permission are missing from the repo). They were NOT redeployed. The CORS origins on both APIs were added with the CLI and a future deploy of the true source must carry them.
+- Production signs in through its own Cognito pool `us-west-2_FHJoX71ca` (domain `ogevia-prd-300094796789`, client `4rnh9e5d02pkupirvfqdbngmv5`), which the repo config does not describe. Its callback/logout lists were extended with `app`/`admin` by CLI. The repo's `Ogevia-prd-WebHosting` also creates an unused client in the pilot pool.
+- `*.ogevia.com` wildcard CNAME to the Netlify site was removed from Netlify DNS during this work and not restored.
 
 ## 2. Evidence recorded (2026-10-10)
 
@@ -53,7 +68,7 @@ Corrections to earlier records:
 | 12 | Caregiver-role user cannot see agency data | OPEN | Browser test |
 | 13 | Cross-tenant and unauthorized-access negative checks on prd | OPEN | Existing automated tests ran locally; not run against prd |
 | 14 | Backups, snapshot and restore procedure on RDS | UNVERIFIED | `deploy-production.sh check` output |
-| 15 | `app.ogevia.com` DNS decision | OPEN (owner decision) | Not part of this work |
+| 15 | `app.ogevia.com` DNS decision | DONE 2026-10-23 (owner decision; see section 1) | Owner-reported sign-in |
 
 No item above moves to PASS on the strength of this document alone.
 
