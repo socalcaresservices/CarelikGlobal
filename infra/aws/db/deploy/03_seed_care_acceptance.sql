@@ -3,6 +3,12 @@
 -- reach it through caregiver links) with explicit weekly availability, so the
 -- call-out -> replacement path can be accepted in the browser. Idempotent.
 \set ON_ERROR_STOP on
+-- Synthetic seed data is loaded ONLY into the TEST database. A production or any other database refuses before anything is written.
+select current_database() = 'ogevia_sv_test' as in_test \gset
+\if :in_test
+\else
+  do $$ begin raise exception 'Refusing: synthetic seed data is loaded only into ogevia_sv_test (this is a different database).'; end $$;
+\endif
 begin;
 insert into ogevia.caregiver_records (id, organization_id, linked_user_id, caregiver_code, first_name, last_name, status)
 values ('7e570000-0000-4000-8000-0000000000b2', '7e570000-0000-4000-8000-000000000001', null, 'TEST-CG-02', 'Replacement', 'Caregiver', 'active')
