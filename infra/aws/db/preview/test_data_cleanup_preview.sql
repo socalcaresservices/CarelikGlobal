@@ -82,4 +82,30 @@ select (select count(*) from ogevia.billing_approvals b join ogevia.organization
        (select count(*) from ogevia.report_exports e join ogevia.organizations o on o.id = e.organization_id where o.slug = :'org_slug') as report_exports,
        (select count(*) from ogevia.continuity_exports e join ogevia.organizations o on o.id = e.organization_id where o.slug = :'org_slug') as continuity_exports;
 
+\echo '== E. Clients that hold PROTECTED records (delete-protected tables; these clients cannot be removed), counted per table =='
+with pairs as materialized (
+  select distinct c2.relname as table_name, k.via, k.cond
+    from pg_trigger g
+    join pg_proc p on p.oid = g.tgfoid
+    join pg_class c2 on c2.oid = g.tgrelid and c2.relnamespace = 'ogevia'::regnamespace
+    join (values ('client_id', 'client', 'where x.client_id ='),
+                 ('shift_id',  'a shift', 'join ogevia.shifts s on s.id = x.shift_id where s.client_id ='),
+                 ('visit_id',  'a visit', 'join ogevia.service_visits v on v.id = x.visit_id where v.client_id =')) as k(col, via, cond)
+      on exists (select 1 from information_schema.columns ic where ic.table_schema = 'ogevia' and ic.table_name = c2.relname and ic.column_name = k.col)
+   where p.proname = 'forbid_delete' and not g.tgisinternal
+), counted as materialized (
+  select pr.table_name, pr.via,
+         (xpath('/row/n/text()', query_to_xml(format('select count(distinct c.id) as n from ogevia.clients c where c.organization_id = %L and exists (select 1 from ogevia.%I x %s c.id)', o.id, pr.table_name, pr.cond), false, true, '')))[1]::text::bigint as clients_affected
+    from ogevia.organizations o cross join pairs pr where o.slug = :'org_slug'
+)
+select table_name as protected_table, via as linked_through, clients_affected from counted where clients_affected > 0 order by clients_affected desc, table_name;
+
+\echo '== E2. Clients with NO protected record (removable) versus with at least one (kept), by the tables above =='
+select count(*) as clients_in_agency,
+       count(*) filter (where not exists (select 1 from ogevia.client_authorizations x where x.client_id = c.id)
+                          and not exists (select 1 from ogevia.client_documents x where x.client_id = c.id)
+                          and not exists (select 1 from ogevia.client_service_holds x where x.client_id = c.id)
+                          and not exists (select 1 from ogevia.service_visits x where x.client_id = c.id)) as no_authorization_document_hold_or_visit
+from ogevia.clients c join ogevia.organizations o on o.id = c.organization_id where o.slug = :'org_slug';
+
 rollback;

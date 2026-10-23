@@ -36,8 +36,9 @@ describe("test-data cleanup preview", () => {
     const before = await totals();
     const r = run(await slugOf(w.orgA));
     expect(r.status, r.stderr).toBe(0);
-    for (const h of ["== A.", "== B1.", "== B2.", "== C1.", "== C2.", "== C3.", "== C4.", "== C5.", "== D1.", "== D2."]) expect(r.stdout, h).toContain(h);
+    for (const h of ["== A.", "== B1.", "== B2.", "== C1.", "== C2.", "== C3.", "== C4.", "== C5.", "== D1.", "== D2.", "== E.", "== E2."]) expect(r.stdout, h).toContain(h);
     expect(r.stdout).toMatch(/\bclients\s*\|\s*[2-9]/); // org A has at least its two synthetic clients
+    expect(r.stdout).toMatch(/client_authorizations\s*\|\s*client\s*\|\s*[1-9]/); // section E names the protected table and how many clients hold it
     expect(await totals()).toEqual(before);
   });
 
