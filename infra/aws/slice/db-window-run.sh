@@ -5,13 +5,14 @@
 # RDS-managed master credential in shell memory only, and ALWAYS restore the admin host's original security groups afterwards (verified).
 #
 #   bash db-window-run.sh <prd|test> preview                              read-only count preview (no change)
+#   bash db-window-run.sh <prd|test> dashboard                            read-only: the Home dashboard figures as the application computes them
 #   bash db-window-run.sh prd snapshot-create                             typed SNAPSHOT-NOW; creates and verifies an RDS snapshot (no database window)
 #   bash db-window-run.sh prd snapshot-verify <snapshot-id>               read-only check of an existing snapshot (no database window)
-#   bash db-window-run.sh prd purge-dry-run <expected-clients>            the cleanup logic, ALWAYS rolled back: shows what would be removed and kept
-#   bash db-window-run.sh prd purge-apply <expected-clients> <snapshot-id>   verifies the snapshot, repeats the dry run, then asks for PURGE-<agency>-<N>
+#   bash db-window-run.sh prd clear-dry-run <expected-clients>            the cleanup logic, ALWAYS rolled back: shows what would be removed and kept
+#   bash db-window-run.sh prd clear-apply <expected-clients> <snapshot-id>   verifies the snapshot, repeats the dry run, then asks for CLEAR-<agency>-<N>
 #   bash db-window-run.sh test verify-new-agencies                        TEST only: two new agencies are empty and isolated (rolled back)
 #
-# Never prints credentials. Every database script is read-only or ends in ROLLBACK unless purge-apply is confirmed by typing the exact phrase.
+# Never prints credentials. Every database script is read-only or ends in ROLLBACK unless clear-apply is confirmed by typing the exact phrase.
 # OGEVIA_DBRUN_LOCAL_URL exists only to rehearse this script against a local PostgreSQL; never set it in AWS.
 # =============================================================================
 set -uo pipefail
@@ -28,10 +29,11 @@ usage() {
   cat >&2 <<'USAGE'
 usage: bash db-window-run.sh <prd|test> <action> [arguments]
   preview                                  read-only count preview (no change)
+  dashboard                                read-only: the Home dashboard figures as the application computes them (no change)
   snapshot-create                          typed SNAPSHOT-NOW; creates and verifies an RDS snapshot (prd)
   snapshot-verify <snapshot-id>            read-only check of an existing snapshot (prd)
-  purge-dry-run <expected-clients>         the cleanup logic, ALWAYS rolled back (prd)
-  purge-apply <expected-clients> <snapshot-id>   verifies the snapshot, dry-runs, then asks for PURGE-<agency>-<N> (prd)
+  clear-dry-run <expected-clients>         the cleanup logic, ALWAYS rolled back (prd)
+  clear-apply <expected-clients> <snapshot-id>   verifies the snapshot, dry-runs, then asks for CLEAR-<agency>-<N> (prd)
   verify-new-agencies                      TEST only: two new agencies are empty and isolated (rolled back)
 USAGE
   exit 2
@@ -107,22 +109,22 @@ fi
 
 # --- database actions --------------------------------------------------------------------------------------------------------------------------------------
 case "$ACTION" in
-  preview|purge-dry-run|purge-apply|verify-new-agencies) ;;
+  preview|dashboard|clear-dry-run|clear-apply|verify-new-agencies) ;;
   *) usage ;;
 esac
 [[ "$ACTION" == verify-new-agencies && "$ENVN" != test ]] && stop "verify-new-agencies runs against TEST only"
 EXPECTED="${1:-}"; SNAP="${2:-}"
-if [[ "$ACTION" == purge-dry-run || "$ACTION" == purge-apply ]]; then
-  [[ "$EXPECTED" =~ ^[0-9]+$ ]] || stop "give the expected client count from the preview, for example: purge-dry-run 7"
+if [[ "$ACTION" == clear-dry-run || "$ACTION" == clear-apply ]]; then
+  [[ "$EXPECTED" =~ ^[0-9]+$ ]] || stop "give the expected client count from the preview, for example: clear-dry-run 4"
   [[ "$ENVN" == prd || "${OGEVIA_ALLOW_TEST_PURGE:-}" == yes ]] || stop "the cleanup targets production; for TEST set OGEVIA_ALLOW_TEST_PURGE=yes deliberately"
 fi
-[[ "$ACTION" == purge-apply ]] && { [[ -n "$SNAP" ]] || stop "purge-apply needs the snapshot id: purge-apply <N> <snapshot-id>"; }
+[[ "$ACTION" == clear-apply ]] && { [[ -n "$SNAP" ]] || stop "clear-apply needs the snapshot id: clear-apply <N> <snapshot-id>"; }
 need psql; need jq
 if [[ -z "$LOCAL_URL" ]]; then
   need aws; need session-manager-plugin
   [[ "$(aws sts get-caller-identity --query Account --output text 2>/dev/null)" == "$ACCOUNT" ]] || stop "not signed in to account $ACCOUNT"
 fi
-[[ "$ACTION" == purge-apply ]] && verify_snapshot "$SNAP"
+[[ "$ACTION" == clear-apply ]] && verify_snapshot "$SNAP"
 
 db() { if [[ -n "$LOCAL_URL" ]]; then psql "$LOCAL_URL" -X -A -F'|' -v ON_ERROR_STOP=1 "$@"; else psql -X -A -F'|' -v ON_ERROR_STOP=1 -d "$DB" "$@"; fi; }
 
@@ -159,22 +161,27 @@ case "$ACTION" in
     db -v "org_slug=$SLUG" -f "$(sqlfile test_data_cleanup_preview.sql)" | tee "$R" | tee -a "$LOG"
     [[ ${PIPESTATUS[0]} == 0 ]] || stop "the preview failed"
     say "Preview saved: $R  (counts only; send it to the engineer, not to chat or tickets)" ;;
-  purge-dry-run)
-    R="$OUT/purge-dry-run-$ENVN-$STAMP.txt"
-    db -v "org_slug=$SLUG" -v "expected_clients=$EXPECTED" -v mode=dry-run -f "$(sqlfile test_data_purge.sql)" | tee "$R" | tee -a "$LOG"
+  dashboard)
+    R="$OUT/dashboard-$ENVN-$STAMP.txt"
+    db -v "org_slug=$SLUG" -f "$(sqlfile dashboard_totals.sql)" 2>&1 | tee "$R" | tee -a "$LOG"
+    [[ ${PIPESTATUS[0]} == 0 ]] || stop "the dashboard read failed or did not run: see above (nothing changed)"
+    say "Dashboard figures saved: $R  (counts and minutes only)" ;;
+  clear-dry-run)
+    R="$OUT/clear-dry-run-$ENVN-$STAMP.txt"
+    db -v "org_slug=$SLUG" -v "expected_clients=$EXPECTED" -v mode=dry-run -f "$(sqlfile test_data_clear_linked.sql)" | tee "$R" | tee -a "$LOG"
     [[ ${PIPESTATUS[0]} == 0 ]] || stop "the dry run was refused or failed (nothing changed)"
     say "Dry run saved: $R" ;;
-  purge-apply)
+  clear-apply)
     say "== Step 1 of 2: dry run (rolled back) =="
-    db -v "org_slug=$SLUG" -v "expected_clients=$EXPECTED" -v mode=dry-run -f "$(sqlfile test_data_purge.sql)" | tee -a "$LOG"
+    db -v "org_slug=$SLUG" -v "expected_clients=$EXPECTED" -v mode=dry-run -f "$(sqlfile test_data_clear_linked.sql)" | tee -a "$LOG"
     [[ ${PIPESTATUS[0]} == 0 ]] || stop "the dry run was refused or failed (nothing changed)"
-    say "Snapshot $SNAP is verified. Clients marked kept stay exactly as they are; only the removable ones above will be deleted. This cannot be undone except from the snapshot."
-    read -r -p "Type PURGE-$SLUG-$EXPECTED to apply (anything else changes nothing): " ans || ans=""
-    [[ "$ans" == "PURGE-$SLUG-$EXPECTED" ]] || { say "Declined. Nothing was changed."; DONE=1; exit 0; }
-    R="$OUT/purge-apply-$ENVN-$STAMP.txt"
-    db -v "org_slug=$SLUG" -v "expected_clients=$EXPECTED" -v mode=apply -v "snapshot_id=$SNAP" -v "confirm=$ans" -f "$(sqlfile test_data_purge.sql)" | tee "$R" | tee -a "$LOG"
+    say "Snapshot $SNAP is verified. The client rows and their authorizations STAY. Only the linked test records above are deleted. This cannot be undone except from the snapshot."
+    read -r -p "Type CLEAR-$SLUG-$EXPECTED to apply (anything else changes nothing): " ans || ans=""
+    [[ "$ans" == "CLEAR-$SLUG-$EXPECTED" ]] || { say "Declined. Nothing was changed."; DONE=1; exit 0; }
+    R="$OUT/clear-apply-$ENVN-$STAMP.txt"
+    db -v "org_slug=$SLUG" -v "expected_clients=$EXPECTED" -v mode=apply -v "snapshot_id=$SNAP" -v "confirm=$ans" -f "$(sqlfile test_data_clear_linked.sql)" | tee "$R" | tee -a "$LOG"
     [[ ${PIPESTATUS[0]} == 0 ]] || stop "the apply failed; the transaction was rolled back and nothing changed"
-    say "Applied. Saved: $R. Now run: bash db-window-run.sh $ENVN preview   (and compare with the earlier preview)" ;;
+    say "Applied. Saved: $R. Now run: bash db-window-run.sh $ENVN preview   and   bash db-window-run.sh $ENVN dashboard   and compare with the earlier outputs." ;;
   verify-new-agencies)
     R="$OUT/verify-new-agencies-$STAMP.txt"
     db -f "$(sqlfile test_new_agency_isolation_check.sql)" 2>&1 | tee "$R" | tee -a "$LOG"

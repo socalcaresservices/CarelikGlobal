@@ -31,6 +31,7 @@ describe("db-window-run.sh against a local PostgreSQL (local rehearsal mode)", (
     db = await createTestDb();
     w = await seedWorld(db, 600);
     slug = (await db.admin.query("select slug from ogevia.organizations where id = $1", [w.orgA])).rows[0].slug;
+    await db.admin.query("update ogevia.clients set status = 'inactive' where organization_id = $1", [w.orgA]); // the cleanup only clears inactive clients
     out = mkdtempSync(join(tmpdir(), "dbrun-"));
   });
   afterAll(async () => db?.drop());
@@ -50,33 +51,40 @@ describe("db-window-run.sh against a local PostgreSQL (local rehearsal mode)", (
     expect(await count()).toBe(before);
   });
 
-  it("purge-dry-run: needs a numeric expected count; a wrong count is refused; the right one reports and rolls back", async () => {
+  it("dashboard: prints the Home figures read-only as the owner, and saves them", () => {
+    const r = sh(["prd", "dashboard"], env());
+    expect(r.status, r.stdout + r.stderr).toBe(0);
+    expect(r.stdout).toContain("== Home tiles: the numbers on the dashboard cards ==");
+    expect(r.stdout).toContain("== Home: Hours this month");
+    expect(r.stdout).toContain("Dashboard figures saved:");
+  });
+
+  it("clear-dry-run: needs a numeric expected count; a wrong count is refused; the right one reports and rolls back", async () => {
     const before = await count();
-    expect(sh(["prd", "purge-dry-run"], env()).status).not.toBe(0);
-    expect(sh(["prd", "purge-dry-run", "abc"], env()).status).not.toBe(0);
-    const wrong = sh(["prd", "purge-dry-run", String(before + 1)], env());
+    expect(sh(["prd", "clear-dry-run"], env()).status).not.toBe(0);
+    expect(sh(["prd", "clear-dry-run", "abc"], env()).status).not.toBe(0);
+    const wrong = sh(["prd", "clear-dry-run", String(before + 1)], env());
     expect(wrong.status).not.toBe(0);
-    const ok = sh(["prd", "purge-dry-run", String(before)], env());
+    const ok = sh(["prd", "clear-dry-run", String(before)], env());
     expect(ok.status, ok.stdout + ok.stderr).toBe(0);
     expect(ok.stdout).toContain("DRY RUN");
     expect(await count()).toBe(before);
   });
 
-  it("purge-apply: refuses a malformed snapshot id and a wrong typed phrase; applies only with the exact phrase", async () => {
+  it("clear-apply: refuses a malformed snapshot id and a wrong typed phrase; applies only with the exact phrase", async () => {
     const before = await count();
-    const bad = sh(["prd", "purge-apply", String(before), "not-a-snapshot"], env(), `PURGE-${slug}-${before}\n`);
+    const bad = sh(["prd", "clear-apply", String(before), "not-a-snapshot"], env(), `CLEAR-${slug}-${before}\n`);
     expect(bad.status).not.toBe(0);
     expect(bad.stdout).toMatch(/must look like ogevia-prod-postgres-pre-testdata/);
     expect(await count()).toBe(before);
-    const declined = sh(["prd", "purge-apply", String(before), SNAP], env(), "yes\n");
+    const declined = sh(["prd", "clear-apply", String(before), SNAP], env(), "yes\n");
     expect(declined.status).toBe(0);
     expect(declined.stdout).toContain("Declined. Nothing was changed.");
     expect(await count()).toBe(before);
-    const applied = sh(["prd", "purge-apply", String(before), SNAP], env(), `PURGE-${slug}-${before}\n`);
+    const applied = sh(["prd", "clear-apply", String(before), SNAP], env(), `CLEAR-${slug}-${before}\n`);
     expect(applied.status, applied.stdout + applied.stderr).toBe(0);
     expect(applied.stdout).toContain("APPLIED");
-    expect(await count()).toBeLessThan(before);
-    expect(await count()).toBeGreaterThan(0); // the clients that hold protected records are still there
+    expect(await count()).toBe(before); // option 1: the client rows stay (the cleanup removes their linked test records, not the clients)
   });
 });
 
