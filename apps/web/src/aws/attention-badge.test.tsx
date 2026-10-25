@@ -97,7 +97,7 @@ describe("Needs attention now badge", () => {
 
   it("confirmed zero: calm text with a check, no alarm colour", async () => {
     renderAt("/profile", "manager", () => json(200, overview()));
-    const badge = await screen.findByRole("link", { name: "Nothing needs attention now" });
+    const badge = await screen.findByRole("link", { name: "No urgent items" });
     expect(badge).toHaveTextContent("✓");
     expect(badge.className).not.toMatch(/red|amber|emerald/);
   });
@@ -112,7 +112,7 @@ describe("Needs attention now badge", () => {
     renderAt("/profile", "manager", () => json(500, { error: { code: "internal", message: "Synthetic failure" } }));
     const badge = await screen.findByRole("link", { name: "Unable to check what needs attention now" });
     expect(badge).toHaveTextContent("Unable to check");
-    await waitFor(() => expect(screen.queryByText("Nothing urgent")).toBeNull());
+    await waitFor(() => expect(screen.queryByText("No urgent items")).toBeNull());
   });
 });
 
@@ -124,7 +124,7 @@ describe("navigation highlight", () => {
 
   it("a nested route highlights its own section only, not its parent", async () => {
     renderAt("/service-verification/reports", "manager", () => json(200, overview()));
-    await waitFor(async () => expect(await currentItems()).toEqual(["Visits"]));
+    await waitFor(async () => expect(await currentItems()).toEqual(["Reports"]));
   });
 });
 

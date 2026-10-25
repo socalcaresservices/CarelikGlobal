@@ -73,42 +73,61 @@ afterEach(() => { cleanup(); vi.clearAllMocks(); });
 /** The badge on the sidebar link with this accessible name (links read "Label5"), or null. */
 async function badgeOn(label: RegExp) {
   const nav = await screen.findByRole("navigation", { name: "Main" });
-  for (const b of Array.from(nav.querySelectorAll<HTMLElement>('[data-nav-level="section"][aria-expanded="false"]'))) fireEvent.click(b);   // only the current section is open at first
+  for (const b of Array.from(nav.querySelectorAll<HTMLElement>('[data-nav-level="section"][aria-expanded="false"]'))) fireEvent.click(b);   // a group is closed until the page moves into it
   const link = within(nav).getAllByRole("link").find((a) => label.test((a.textContent ?? "").replace(/\d+$/, "")));
   if (!link) throw new Error(`no sidebar link ${label}`);
   const b = within(link).queryByTestId("nav-badge");
   return b ? { n: Number(b.textContent), red: b.className.includes("bg-red-100") } : null;
 }
+/** The badge on a tab above the page (a related page that is not a sidebar item), or null. */
+async function tabBadgeOn(label: RegExp) {
+  const strip = await screen.findByRole("navigation", { name: "Section tabs" });
+  const link = within(strip).getAllByRole("link").find((a) => label.test((a.textContent ?? "").replace(/\d+$/, "")));
+  if (!link) throw new Error(`no tab ${label}`);
+  const b = within(link).queryByTestId("tab-badge");
+  return b ? { n: Number(b.textContent), red: b.className.includes("bg-red-100") } : null;
+}
 
 describe("sidebar badges are the server's counts", () => {
-  it("someone who may bill: Caregivers 2, Scheduling 3 (red: the server says 1 is Critical), Approvals shows Ready for Approval 4, Visits to review shows exception review 5; none is a sum", async () => {
-    renderAt("/schedule", BILL, COUNTS);
-    await waitFor(async () => expect(await badgeOn(/^Shifts$/)).toEqual({ n: 3, red: true }));
+  it("someone who may bill: Caregivers 2, Schedule 3 (red: the server says 1 is Critical), Billing shows Ready for Approval 4, the Visits to review tab shows exception review 5; none is a sum", async () => {
+    renderAt("/billing-review", BILL, COUNTS);
+    await waitFor(async () => expect(await badgeOn(/^Schedule$/)).toEqual({ n: 3, red: true }));
     expect(await badgeOn(/^Caregivers$/)).toEqual({ n: 2, red: false }); // amber: nothing Critical, even though documents are shown as overdue elsewhere
-    expect(await badgeOn(/^Approvals$/)).toEqual({ n: 4, red: false }); // billing approval only; not 4 + 5
-    expect(await badgeOn(/^Visits to review$/)).toEqual({ n: 5, red: false }); // exception review only
+    expect(await badgeOn(/^Billing$/)).toEqual({ n: 4, red: false }); // billing approval only; not 4 + 5
+    expect(await tabBadgeOn(/^Billing$/)).toEqual({ n: 4, red: false });
+    expect(await tabBadgeOn(/^Visits to review$/)).toEqual({ n: 5, red: false }); // exception review only
   });
 
-  it("someone who may not bill: the Approvals link opens exception review, so its badge is exception review (5) and Ready for Approval appears nowhere", async () => {
-    renderAt("/schedule", NO_BILL, { ...COUNTS, approvals: { exceptions: { count: 5, critical: 0 }, readyForApproval: null } });
-    await waitFor(async () => expect(await badgeOn(/^Approvals$/)).toEqual({ n: 5, red: false }));
+  it("a closed group with work waiting in two places shows a dot, never a sum of unlike counts", async () => {
+    renderAt("/schedule", BILL, COUNTS);
+    const nav = await screen.findByRole("navigation", { name: "Main" });
+    const operations = await waitFor(() => { const s = within(nav).getAllByTestId("nav-section").find((e) => e.querySelector("button")?.textContent?.startsWith("Operations")); if (!s || !s.querySelector('[data-testid="nav-badge"]')) throw new Error("no badge yet"); return s; });
+    const badge = operations.querySelector('[data-testid="nav-badge"]')!;
+    expect(badge.textContent).toBe("•");
+    expect(badge).toHaveAttribute("aria-label", "Items waiting");
+  });
+
+  it("someone who may not bill: Visits to review is exception review (5), there is no Billing, and Ready for Approval appears nowhere", async () => {
+    renderAt("/service-verification/reports?view=exceptions", NO_BILL, { ...COUNTS, approvals: { exceptions: { count: 5, critical: 0 }, readyForApproval: null } });
+    await waitFor(async () => expect(await tabBadgeOn(/^Visits to review$/)).toEqual({ n: 5, red: false }));
     const nav = screen.getByRole("navigation", { name: "Main" });
-    expect(within(nav).queryByRole("link", { name: /Visits to review/ })).toBeNull();
+    expect(within(nav).queryByRole("link", { name: /Billing/ })).toBeNull();
+    expect(within(screen.getByRole("navigation", { name: "Section tabs" })).queryByRole("link", { name: /^Billing/ })).toBeNull();
   });
 
   it("a count the person may not see is null: no badge, never a zero; a zero count shows no badge either", async () => {
-    renderAt("/schedule", BILL, { ...COUNTS, caregivers: null, scheduling: { count: 0, critical: 0 }, approvals: { exceptions: null, readyForApproval: 0 } });
+    renderAt("/billing-review", BILL, { ...COUNTS, caregivers: null, scheduling: { count: 0, critical: 0 }, approvals: { exceptions: null, readyForApproval: 0 } });
     await waitFor(() => expect(screen.getByRole("navigation", { name: "Main" })).toBeInTheDocument());
     await waitFor(async () => expect(await badgeOn(/^Caregivers$/)).toBeNull());
-    expect(await badgeOn(/^Shifts$/)).toBeNull();
-    expect(await badgeOn(/^Approvals$/)).toBeNull();
-    expect(await badgeOn(/^Visits to review$/)).toBeNull();
+    expect(await badgeOn(/^Schedule$/)).toBeNull();
+    expect(await badgeOn(/^Billing$/)).toBeNull();
+    expect(await tabBadgeOn(/^Visits to review$/)).toBeNull();
   });
 
   it("an older server with no counts shows no badge at all (the web does not derive one from other fields)", async () => {
     renderAt("/schedule", BILL, null);
     await waitFor(() => expect(screen.getByRole("navigation", { name: "Main" })).toBeInTheDocument());
-    expect(await badgeOn(/^Shifts$/)).toBeNull();
+    expect(await badgeOn(/^Schedule$/)).toBeNull();
     expect(await badgeOn(/^Caregivers$/)).toBeNull();
   });
 });
@@ -127,7 +146,7 @@ describe("Scheduling: the badge, the overview figure and the lists agree; past s
     renderAt("/schedule", BILL, { ...COUNTS, scheduling: { count: 2, critical: 1 } }, SHIFTS);
     const overview = await screen.findByTestId("scheduling-now");
     expect(overview).toHaveTextContent("2");
-    await waitFor(async () => expect((await badgeOn(/^Shifts$/))?.n).toBe(2));
+    await waitFor(async () => expect((await badgeOn(/^Schedule$/))?.n).toBe(2));
     expect(await screen.findByRole("heading", { name: "Unfilled (3)" })).toBeInTheDocument();
     const section = screen.getByRole("heading", { name: "Unfilled (3)" }).closest("section")!;
     expect(within(section).getAllByTestId("shift-state").map((e) => e.textContent)).toEqual(["Unfilled", "Unfilled", "Unfilled"]);

@@ -1,4 +1,5 @@
 import { useQueryClient } from "@tanstack/react-query";
+import { InfoTip } from "./ui/info-tip";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { useAuth } from "@carelik/auth";
@@ -153,7 +154,7 @@ export function ClientsPage() {
   return (
     <div className="max-w-5xl space-y-4">
       <div className="flex flex-wrap items-start justify-between gap-3">
-        <h1 className="text-xl font-semibold text-slate-950">Clients</h1>
+        <div className="flex items-center gap-1.5"><h1 className="text-xl font-bold tracking-tight text-og-ink">Clients</h1><InfoTip label="About Clients" title="Clients">Manage client profiles and care information.</InfoTip></div>
         {canManage ? <Button type="button" onClick={() => setAdding((a) => !a)} aria-expanded={adding}>{adding ? "Close" : "Add client"}</Button> : null}
       </div>
       {adding ? <AddClientForm onDone={(id) => { setAdding(false); setAdded(id); }} /> : null}

@@ -445,7 +445,7 @@ export function SchedulePage() {
   return (
     <div className="max-w-5xl space-y-3">
       <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
-        <h1 className="text-xl font-semibold text-slate-950">Scheduling</h1>
+        <div className="flex items-center gap-1.5"><h1 className="text-xl font-bold tracking-tight text-og-ink">Schedule</h1><InfoTip label="About Schedule" title="Schedule">View and manage caregiver assignments.</InfoTip></div>
         {canManage ? (
           <div className="flex flex-wrap items-center gap-x-3">
             <Button type="button" className="min-h-11" onClick={() => { setAdding((x) => !x); setRepeating(false); setNotice(null); }} aria-expanded={adding}>{adding ? "Close" : "Add shift"}</Button>
@@ -617,7 +617,7 @@ export function MyShiftsPage() {
   }
   return (
     <div className="max-w-xl space-y-3">
-      <h1 className="text-xl font-semibold text-slate-950">My shifts</h1>
+      <h1 className="text-xl font-bold tracking-tight text-og-ink">My Schedule</h1>
       {state.done ? <p role="status" className="text-sm text-emerald-800">{state.done}</p> : null}
       <OpenShiftsSection onPicked={(text) => setState({ busy: false, error: null, done: text })} />
       {shifts.isLoading ? <p className="text-sm text-slate-500">Loading…</p> : null}

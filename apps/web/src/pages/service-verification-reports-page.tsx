@@ -1,7 +1,8 @@
 import { HoursBreakdown } from "@/components/hours-breakdown";
 import { ShortHelp } from "@/aws/help-text";
 import { hoursLeftText } from "@/lib/hours-accounting";
-import { Fragment, useContext, useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useIsNarrow } from "@/lib/use-is-narrow";
@@ -428,6 +429,9 @@ export function ServiceVerificationReportsPage() {
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
   const [datePreset, setDatePreset] = useState<DatePreset>("all");
+  // The Export CSV buttons are written next to the data they export; they are shown in the page's action row (next to Print / PDF) through this slot.
+  const [exportSlot, setExportSlot] = useState<HTMLElement | null>(null);
+  const inActions = (node: ReactNode) => (exportSlot ? createPortal(node, exportSlot) : node);
   const [chartType, setChartType] = useState<ChartType>("bar");
   const [chartGroup, setChartGroup] = useState<ChartGroup>("caregiver");
   const location = useLocation();
@@ -1093,6 +1097,15 @@ export function ServiceVerificationReportsPage() {
   const activeFilterCount = [clientFilter, caregiverFilter, serviceFilter, statusFilter, correctedByFilter, locationFilter]
     .filter(Boolean).length;
 
+  // Monthly reports are chosen by month; of the filters only the ones their data honours are shown.
+  const monthlyView = reportView === "calendar" || reportView === "reconciliation";
+  const rangeView = !monthlyView && reportView !== "staff-access";
+  const filterApplies = (key: "client" | "location" | "caregiver" | "service" | "status") => reportView !== "reconciliation" || key === "client" || key === "service";
+  function clearAllFilters() {
+    resetFilters();
+    if (!monthlyView) applyDatePreset("all");
+  }
+
   function resetFilters() {
     setClientFilter("");
     setServiceFilter("");
@@ -1261,13 +1274,14 @@ export function ServiceVerificationReportsPage() {
     <section className="mx-auto max-w-6xl space-y-3 pb-6 print:max-w-none print:space-y-2 print:pb-0">
       <div className="print:hidden">
         <PageHeader
-          title={reportView === "visits" ? "Visit records" : reportView === "exceptions" ? "Action needed" : "Reports"}
+          title={reportView === "visits" ? "Visit records" : reportView === "exceptions" ? "Visits to review" : "Reports"}
           {...(reportView === "calendar" ? { lead: "The calendar always covers the chosen client's whole month." } : {})}
           action={
             <div className="flex flex-wrap items-center gap-2">
-              <Button type="button" variant="secondary" icon={<Printer className="h-4 w-4" />} onClick={handlePrint}>
-                Print / Save as PDF
+              <Button type="button" variant="secondary" icon={<Printer className="h-4 w-4" />} disabled={reportView === "calendar" && !clientFilter} onClick={handlePrint}>
+                Print / PDF
               </Button>
+              <span ref={setExportSlot} className="inline-flex items-center gap-2" />
             <details className="relative">
               <summary className="cursor-pointer list-none rounded-lg border border-slate-300 bg-og-card px-2 py-1.5 text-sm font-medium text-slate-700">
                 More actions
@@ -1296,39 +1310,6 @@ export function ServiceVerificationReportsPage() {
         />
       </div>
 
-      <div className="flex flex-wrap items-center gap-2 print:hidden">
-        <div className="flex min-w-64 max-w-md flex-1 items-center gap-2">
-            <label htmlFor="report-view" className="shrink-0 text-xs font-bold uppercase tracking-wide text-slate-500">
-              Report
-            </label>
-            <select
-              id="report-view"
-              value={reportView}
-              onChange={(event) => {
-                const next = event.target.value as ReportView;
-                setReportView(next);
-                // Keep the address (and so the sidebar highlight) in step with the selection.
-                const params = new URLSearchParams(location.search);
-                if (next === defaultView) params.delete("view");
-                else params.set("view", next);
-                const search = params.toString();
-                navigate({ pathname: location.pathname, search: search ? `?${search}` : "" }, { replace: true });
-                closeExpanded();
-              }}
-              className="min-h-[32px] w-full rounded-md border border-slate-300 bg-og-card px-2 py-1 text-sm font-semibold text-slate-950 [@media(pointer:coarse)]:min-h-[44px]"
-            >
-              <option value="visits">Visit records</option>
-              <option value="exceptions">Action needed</option>
-              <option value="overview">Visits overview</option>
-              <option value="caregiver">Caregiver hours</option>
-              <option value="calendar">Client monthly calendar</option>
-              {viewAvailable("reconciliation") ? <option value="reconciliation">Monthly hours & billing</option> : null}
-              {viewAvailable("corrections") ? <option value="corrections">Correction history</option> : null}
-              {canManage ? <option value="staff-access">Staff access</option> : null}
-            </select>
-        </div>
-      </div>
-
       {canManage && reportView === "staff-access" ? (
         <Card className="border-emerald-200 bg-gradient-to-r from-emerald-50 via-white to-sky-50 print:hidden">
           <div className="flex items-start gap-3">
@@ -1341,10 +1322,9 @@ export function ServiceVerificationReportsPage() {
               </h3>
               <InfoTip label="Help">
                 Send the same link to every caregiver. Each person signs in with
-                their own account and can only see clients and services assigned
-                to them. For an extra shift, a manager assigns that client and
-                service first; managers can correct a submitted visit when a
-                mistake is made.
+                their own account and sees only their assigned clients and
+                services. For an extra shift, assign the client and service
+                first; managers can correct a submitted visit.
               </InfoTip>
               <a
                 href="/clients"
@@ -1403,63 +1383,106 @@ export function ServiceVerificationReportsPage() {
       ) : null}
 
       <style>{`@media print { @page { ${reportView === "visits" ? "size: letter landscape; " : ""}margin: 0.5in; @top-left { content: "${printRunningHeaderCss}"; font: 8pt sans-serif; color: #334155; } @bottom-right { content: "Page " counter(page) " of " counter(pages); font: 8pt sans-serif; color: #334155; } } }`}</style>
-      {/* The date range and filters do not apply to the client calendar (it is always one client, one full month), so they are not shown there. */}
-      {reportView !== "staff-access" && reportView !== "calendar" ? (
-        <Card className="print:hidden">
+      {/* One filter bar: the report, then only the filters that apply to it. A monthly report is chosen by month; the others by start and end date. */}
+      {(
+        <div role="search" aria-label="Report filters" className="space-y-2 border-y border-slate-200 py-2 print:hidden">
           <div className="flex flex-wrap items-end gap-3">
-            <div>
-              <label htmlFor="report-date-range" className="block text-xs font-medium text-slate-600">
-                Date range
+            <div className="flex min-w-64 max-w-md flex-1 items-center gap-2">
+            <label htmlFor="report-view" className="shrink-0 text-xs font-bold uppercase tracking-wide text-slate-500">
+              Report
+            </label>
+            <select
+              id="report-view"
+              value={reportView}
+              onChange={(event) => {
+                const next = event.target.value as ReportView;
+                setReportView(next);
+                // Keep the address (and so the sidebar highlight) in step with the selection.
+                const params = new URLSearchParams(location.search);
+                if (next === defaultView) params.delete("view");
+                else params.set("view", next);
+                const search = params.toString();
+                navigate({ pathname: location.pathname, search: search ? `?${search}` : "" }, { replace: true });
+                closeExpanded();
+              }}
+              className="min-h-[32px] w-full rounded-md border border-slate-300 bg-og-card px-2 py-1 text-sm font-semibold text-slate-950 [@media(pointer:coarse)]:min-h-[44px]"
+            >
+              <option value="visits">Visit records</option>
+              <option value="exceptions">Visits to review</option>
+              <option value="overview">Visits overview</option>
+              <option value="caregiver">Caregiver hours</option>
+              <option value="calendar">Client monthly calendar</option>
+              {viewAvailable("reconciliation") ? <option value="reconciliation">Monthly hours & billing</option> : null}
+              {viewAvailable("corrections") ? <option value="corrections">Correction history</option> : null}
+              {canManage ? <option value="staff-access">Staff access</option> : null}
+            </select>
+        </div>
+            {reportView === "calendar" ? (
+              <label className="text-xs font-medium text-slate-600">
+                Calendar client
+                <select
+                  value={clientFilter}
+                  onChange={(event) => setClientFilter(event.target.value)}
+                  className="mt-0.5 block max-w-56 min-h-[32px] rounded-md border border-slate-300 bg-og-card px-2 py-1 text-sm text-slate-900 [@media(pointer:coarse)]:min-h-[44px]"
+                >
+                  <option value="">Choose a client…</option>
+                  {clientOptions.map(([id, label]) => (
+                    <option key={id} value={id}>{label}</option>
+                  ))}
+                </select>
               </label>
-              <select
-                id="report-date-range"
-                value={datePreset}
-                onChange={(event) => applyDatePreset(event.target.value as DatePreset)}
-                className="mt-0.5 min-h-[32px] rounded-md border border-slate-200 bg-og-card px-2 py-1 text-sm text-slate-900 [@media(pointer:coarse)]:min-h-[44px]"
-              >
-                {DATE_PRESETS.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
-              </select>
-            </div>
-            {datePreset === "custom" ? (
+            ) : null}
+            {monthlyView ? (
+              <label className="text-xs font-medium text-slate-600">
+                {reportView === "calendar" ? "Calendar month" : "Month"}
+                <input
+                  type="month"
+                  {...(reportView === "calendar" ? { "aria-label": "Calendar month" } : {})}
+                  value={reportMonth}
+                  onChange={(event) => setReportMonth(event.target.value)}
+                  className="mt-0.5 block min-h-[32px] rounded-md border border-slate-300 px-2 py-1 text-sm text-slate-900 [@media(pointer:coarse)]:min-h-[44px]"
+                />
+              </label>
+            ) : rangeView ? (
               <>
                 <div>
-                  <label htmlFor="report-from" className="block text-xs font-medium text-slate-600">From</label>
-                  <input
-                    id="report-from"
-                    type="date"
-                    value={dateFrom}
-                    max={dateTo || undefined}
-                    onChange={(event) => setDateFrom(event.target.value)}
-                    className="mt-0.5 min-h-[32px] rounded-md border border-slate-200 px-2 py-1 text-sm text-slate-900 [@media(pointer:coarse)]:min-h-[44px]"
-                  />
+                  <label htmlFor="report-date-range" className="block text-xs font-medium text-slate-600">Date range</label>
+                  <select
+                    id="report-date-range"
+                    value={datePreset}
+                    onChange={(event) => applyDatePreset(event.target.value as DatePreset)}
+                    className="mt-0.5 min-h-[32px] rounded-md border border-slate-300 bg-og-card px-2 py-1 text-sm text-slate-900 [@media(pointer:coarse)]:min-h-[44px]"
+                  >
+                    {DATE_PRESETS.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+                  </select>
                 </div>
                 <div>
-                  <label htmlFor="report-to" className="block text-xs font-medium text-slate-600">To</label>
-                  <input
-                    id="report-to"
-                    type="date"
-                    value={dateTo}
-                    min={dateFrom || undefined}
-                    onChange={(event) => setDateTo(event.target.value)}
-                    className="mt-0.5 min-h-[32px] rounded-md border border-slate-200 px-2 py-1 text-sm text-slate-900 [@media(pointer:coarse)]:min-h-[44px]"
-                  />
+                  <label htmlFor="report-from" className="block text-xs font-medium text-slate-600">Start date</label>
+                  <input id="report-from" type="date" value={dateFrom} max={dateTo || undefined} onChange={(event) => { setDatePreset("custom"); setDateFrom(event.target.value); }} className="mt-0.5 min-h-[32px] rounded-md border border-slate-300 px-2 py-1 text-sm text-slate-900 [@media(pointer:coarse)]:min-h-[44px]" />
+                </div>
+                <div>
+                  <label htmlFor="report-to" className="block text-xs font-medium text-slate-600">End date</label>
+                  <input id="report-to" type="date" value={dateTo} min={dateFrom || undefined} onChange={(event) => { setDatePreset("custom"); setDateTo(event.target.value); }} className="mt-0.5 min-h-[32px] rounded-md border border-slate-300 px-2 py-1 text-sm text-slate-900 [@media(pointer:coarse)]:min-h-[44px]" />
                 </div>
               </>
             ) : null}
-          </div>
-          {datePreset === "custom" && dateFrom && dateTo && dateFrom > dateTo ? (
-            <p role="alert" className="mt-2 text-sm text-red-700">From must be on or before To.</p>
-          ) : null}
-          <details className="mt-1" open={activeFilterCount > 0}>
-            <summary className="flex min-h-[28px] cursor-pointer items-center text-sm font-medium text-slate-800 [@media(pointer:coarse)]:min-h-[44px]">
-              Filters{activeFilterCount > 0 ? ` (${activeFilterCount} active)` : ""}
-            </summary>
-            {activeFilterCount > 0 ? (
-              <button type="button" onClick={resetFilters} className="mt-2 text-xs font-medium text-sky-700 underline">
-                Clear filters
+            {activeFilterCount > 0 || (rangeView && datePreset !== "all") ? (
+              <button type="button" onClick={clearAllFilters} className="min-h-[32px] text-sm font-medium text-og-link underline [@media(pointer:coarse)]:min-h-[44px]">
+                Clear Filters
               </button>
             ) : null}
-          <div className="mt-2 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            {rangeView ? <InfoTip label="Help">Use a custom start and end date for a pay period or any other range. These reports use actual signed visit time, not the schedule.</InfoTip> : null}
+          </div>
+          {rangeView && dateFrom && dateTo && dateFrom > dateTo ? (
+            <p role="alert" className="text-sm text-red-700">Start date must be on or before the end date.</p>
+          ) : null}
+          {reportView !== "calendar" && reportView !== "staff-access" ? (
+            <details open={activeFilterCount > 0 || reportView === "reconciliation"}>
+              <summary className="flex min-h-[28px] cursor-pointer items-center text-sm font-medium text-slate-800 [@media(pointer:coarse)]:min-h-[44px]">
+                Filters{activeFilterCount > 0 ? ` (${activeFilterCount} active)` : ""}
+              </summary>
+          <div className="mt-1 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            {filterApplies("client") ? (
             <div>
               <label
                 htmlFor="report-client"
@@ -1481,6 +1504,8 @@ export function ServiceVerificationReportsPage() {
                 ))}
               </select>
             </div>
+            ) : null}
+            {filterApplies("location") ? (
             <div>
               <label
                 htmlFor="report-location"
@@ -1502,6 +1527,8 @@ export function ServiceVerificationReportsPage() {
                 ))}
               </select>
             </div>
+            ) : null}
+            {filterApplies("caregiver") ? (
             <div>
               <label
                 htmlFor="report-caregiver"
@@ -1523,6 +1550,8 @@ export function ServiceVerificationReportsPage() {
                 ))}
               </select>
             </div>
+            ) : null}
+            {filterApplies("service") ? (
             <div>
               <label
                 htmlFor="report-service"
@@ -1544,6 +1573,8 @@ export function ServiceVerificationReportsPage() {
                 ))}
               </select>
             </div>
+            ) : null}
+            {filterApplies("status") ? (
             <div>
               <label
                 htmlFor="report-status"
@@ -1565,6 +1596,7 @@ export function ServiceVerificationReportsPage() {
                 ))}
               </select>
             </div>
+            ) : null}
             {reportView === "corrections" ? (
               <div>
                 <label
@@ -1589,13 +1621,10 @@ export function ServiceVerificationReportsPage() {
               </div>
             ) : null}
           </div>
-          </details>
-          <details className="mt-2 text-xs text-slate-500">
-            <summary className="inline-flex min-h-[32px] cursor-pointer items-center text-og-accent underline">Details</summary>
-            <InfoTip label="Help">Use Custom for a pay period or any other range. These reports use actual signed visit time, not the schedule.</InfoTip>
-          </details>
-        </Card>
-      ) : null}
+            </details>
+          ) : null}
+        </div>
+      )}
 
       {reportView === "overview" ? (
         <>
@@ -1871,40 +1900,16 @@ export function ServiceVerificationReportsPage() {
                   Different services are never combined.
                 </InfoTip>
                 <InfoTip label="Help">
-                  Includes confirmed visits and visits in review (shaded amber). Replaced
-                  originals and voided visits are left out, so corrections are not counted
-                  twice. Visits not yet complete are listed separately and not counted.
-                  <span className="print:hidden"> Always the full month for this client: the caregiver, service,
-                  status and date filters do not apply here.</span>
+                  Counts confirmed visits and visits in review (amber). Replaced and voided
+                  visits are left out; visits not yet complete are listed apart.
+                  <span className="print:hidden"> Always the client's full month: caregiver, service,
+                  status and date filters do not apply.</span>
                 </InfoTip>
                 <p className="hidden print:block print:text-[9px] print:text-slate-700">Amber = in review. Replaced and voided visits are excluded.</p>
               </div>
             </div>
             <div className="flex flex-wrap items-end gap-2 print:hidden">
               <style>{"@media print { @page { size: letter landscape; margin: 0.4in; } }"}</style>
-              <label className="text-xs font-medium text-slate-600">
-                Calendar client
-                <select
-                  value={clientFilter}
-                  onChange={(event) => setClientFilter(event.target.value)}
-                  className="mt-1 block max-w-56 rounded-lg border border-slate-200 bg-og-card px-2 py-1.5 text-sm text-slate-900"
-                >
-                  <option value="">Choose a client…</option>
-                  {clientOptions.map(([id, label]) => (
-                    <option key={id} value={id}>{label}</option>
-                  ))}
-                </select>
-              </label>
-              <label className="text-xs font-medium text-slate-600">
-                Calendar month
-                <input
-                  type="month"
-                  aria-label="Calendar month"
-                  value={reportMonth}
-                  onChange={(event) => setReportMonth(event.target.value)}
-                  className="mt-1 block rounded-lg border border-slate-200 px-2 py-1.5 text-sm text-slate-900"
-                />
-              </label>
               <label className="flex items-center gap-2 self-center text-xs font-medium text-slate-600">
                 <input
                   type="checkbox"
@@ -1913,16 +1918,8 @@ export function ServiceVerificationReportsPage() {
                 />
                 Add a visit detail page
               </label>
-              <Button
-                type="button"
-                icon={<Printer className="h-4 w-4" />}
-                disabled={!clientFilter}
-                onClick={handlePrint}
-              >
-                Print calendar / Save as PDF
-              </Button>
               {canExport && clientFilter && monthlyServiceRows.length > 0 ? (
-                <Button
+                inActions(<Button
                   type="button"
                   variant="secondary"
                   icon={<Download className="h-4 w-4" />}
@@ -1962,8 +1959,8 @@ export function ServiceVerificationReportsPage() {
                     )
                   }
                 >
-                  CSV
-                </Button>
+                  Export CSV
+                </Button>)
               ) : null}
             </div>
           </div>
@@ -2115,17 +2112,8 @@ export function ServiceVerificationReportsPage() {
               ) : null}
             </div>
             <div className="flex items-end gap-2 print:hidden">
-              <label className="text-xs font-medium text-slate-600">
-                Month
-                <input
-                  type="month"
-                  value={reportMonth}
-                  onChange={(event) => setReportMonth(event.target.value)}
-                  className="mt-1 block rounded-lg border border-slate-200 px-2 py-1.5 text-sm text-slate-900"
-                />
-              </label>
               {canExport && monthlyServiceRows.length > 0 ? (
-                <Button
+                inActions(<Button
                   type="button"
                   variant="secondary"
                   icon={<Download className="h-4 w-4" />}
@@ -2176,8 +2164,8 @@ export function ServiceVerificationReportsPage() {
                     )
                   }
                 >
-                  CSV
-                </Button>
+                  Export CSV
+                </Button>)
               ) : null}
             </div>
           </div>
@@ -2295,7 +2283,7 @@ export function ServiceVerificationReportsPage() {
               </InfoTip>
             </div>
             {canExport && correctionRows.length > 0 ? (
-              <Button
+              inActions(<Button
                 type="button"
                 variant="secondary"
                 className="print:hidden"
@@ -2336,8 +2324,8 @@ export function ServiceVerificationReportsPage() {
                   )
                 }
               >
-                CSV
-              </Button>
+                Export CSV
+              </Button>)
             ) : null}
           </div>
           {!correctionHistoryReportQuery.isLoading && !correctionHistoryReportQuery.isError ? (
@@ -2786,10 +2774,9 @@ export function ServiceVerificationReportsPage() {
           <details className="mt-1 text-xs text-slate-500">
           <summary className="inline-flex min-h-[32px] cursor-pointer items-center text-og-accent underline">What these mean</summary>
           <InfoTip label="Help">
-            Missing Time Out: still open past the scheduled shift end (or open{" "}
-            {UNSCHEDULED_OPEN_VISIT_ALERT_HOURS}+ hours with no scheduled shift). Not confirmed: signed out over an
-            hour ago without a client confirmation or a no-signer reason. Ask
-            the caregiver to finish the visit on their phone.
+            Missing Time Out: still open past the shift end (or {UNSCHEDULED_OPEN_VISIT_ALERT_HOURS}+ hours
+            with no shift). Not confirmed: signed out over an hour ago with no client confirmation or no-signer reason.
+            Ask the caregiver to finish the visit.
           </InfoTip>
           </details>
           <ul className="mt-2 divide-y divide-slate-100">

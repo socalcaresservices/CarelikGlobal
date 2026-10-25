@@ -1,11 +1,10 @@
-import { useState, type FormEvent } from "react";
+import { Fragment, useState, type FormEvent } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button, Card } from "@carelik/ui";
 import { Link } from "react-router-dom";
 import { useOrganization } from "@/providers/organization-provider";
 import { useAwsApi } from "./aws-workspace";
 import { PageHeader } from "./ui/page-header";
-import { InfoTip } from "./ui/info-tip";
 
 // People > Staff, Settings > Staff Types, Settings > Roles & Permissions (migration 0086).
 // A staff TYPE is a label (job title). A system ROLE is what a person may do; only it grants access, and only an administrator changes it.
@@ -33,11 +32,14 @@ interface AuditEvent { occurredAt: string; action: string; actorName: string; re
 /** The system roles an administrator can assign (never the Owner, a caregiver or a client-side role). */
 const ASSIGNABLE_ROLES = ["organization_admin", "manager", "scheduler", "coordinator", "staff", "read_only"] as const;
 const ROLE_NAME: Record<string, string> = {
-  organization_owner: "Administrator (Owner)", organization_admin: "Admin", manager: "Manager", scheduler: "Scheduler", coordinator: "Coordinator",
-  staff: "Staff", read_only: "Read only", caregiver: "Caregiver",
+  organization_owner: "Owner", organization_admin: "Administrator", manager: "Manager", scheduler: "Scheduler", coordinator: "Coordinator",
+  staff: "Staff", read_only: "Read-only", caregiver: "Caregiver",
 };
 const roleName = (role: string | null) => (role ? ROLE_NAME[role] ?? role : "No access");
 const ACCESS_LABEL: Record<StaffRow["accessStatus"], string> = { none: "No sign-in", invitation_pending: "Invited", active: "Active", disabled: "Disabled" };
+/** What the Status column and its filter show: an inactive profile first, otherwise the state of the person's sign-in. */
+const statusOf = (r: StaffRow) => (r.status === "inactive" ? "Inactive" : ACCESS_LABEL[r.accessStatus]);
+const STATUS_CHOICES = ["Active", "Invited", "Disabled", "No sign-in", "Inactive"] as const;
 const ACCESS_BADGE: Record<StaffRow["accessStatus"], string> = {
   none: "bg-slate-100 text-slate-800", invitation_pending: "bg-amber-100 text-amber-900", active: "bg-emerald-100 text-emerald-900", disabled: "bg-slate-200 text-slate-800",
 };
@@ -72,6 +74,9 @@ function useStaffTypes(enabled: boolean) {
 // ---------------------------------------------------------------------------------------------------------------------------------------------------------
 type Panel = { kind: "add" } | { kind: "edit" | "invite" | "role" | "access" | "history" | "member"; row: StaffRow };
 
+const ALL = "all";
+const filterClass = "min-h-[36px] rounded-md border border-slate-300 bg-og-card px-2 text-sm";
+
 export function StaffPage() {
   const api = useAwsApi();
   const qc = useQueryClient();
@@ -81,6 +86,10 @@ export function StaffPage() {
   const canAccounts = hasPermission("accounts.manage");
   const [panel, setPanel] = useState<Panel | null>(null);
   const [done, setDone] = useState<string | null>(null);
+  const [search, setSearch] = useState("");
+  const [typeFilter, setTypeFilter] = useState(ALL);
+  const [roleFilter, setRoleFilter] = useState(ALL);
+  const [statusFilter, setStatusFilter] = useState(ALL);
   const staff = useQuery({
     queryKey: staffKey(activeOrganizationId),
     queryFn: () => api.get<{ staff: StaffRow[] }>("/v1/staff", { organizationId: activeOrganizationId }),
@@ -95,35 +104,75 @@ export function StaffPage() {
     await qc.invalidateQueries({ queryKey: staffKey(activeOrganizationId) });
     await qc.invalidateQueries({ queryKey: typeKey(activeOrganizationId) });
   };
-  const rows = staff.data?.staff ?? [];
+  const all = staff.data?.staff ?? [];
   const activeTypes = (types.data?.staffTypes ?? []).filter((t) => t.isActive);
+  const needle = search.trim().toLowerCase();
+  const rows = all.filter((r) =>
+    (!needle || [r.displayName, r.staffTypeName, r.contactEmail, r.phone].some((v) => v?.toLowerCase().includes(needle)))
+    && (typeFilter === ALL || (typeFilter === "none" ? r.staffTypeId === null : r.staffTypeId === typeFilter))
+    && (roleFilter === ALL || (r.systemRole ?? "none") === roleFilter)
+    && (statusFilter === ALL || statusOf(r) === statusFilter));
+  const filtered = needle !== "" || typeFilter !== ALL || roleFilter !== ALL || statusFilter !== ALL;
+  const clear = () => { setSearch(""); setTypeFilter(ALL); setRoleFilter(ALL); setStatusFilter(ALL); };
+  const rolesPresent = [...new Set(all.map((r) => r.systemRole ?? "none"))].sort((x, y) => roleName(x === "none" ? null : x).localeCompare(roleName(y === "none" ? null : y)));
 
   return (
     <div className="space-y-3">
       <PageHeader
         title="Staff"
-        lead="Everyone who works for the agency. A staff type is only a title. What a person can do depends on their role, which only an administrator changes."
+        lead="Everyone who works for the agency. A staff type is only a label; a person's role decides what they can do."
         action={canManage ? <Button type="button" onClick={() => { setPanel({ kind: "add" }); setDone(null); }}>Add staff</Button> : undefined}
       />
       {done ? <p role="status" className="rounded-md bg-emerald-50 px-3 py-1.5 text-sm text-emerald-900">{done}</p> : null}
       {panel?.kind === "add" ? <ProfileForm title="Add staff" types={activeTypes} onDone={finish} onCancel={() => setPanel(null)} /> : null}
+      {all.length > 0 ? (
+        <div role="search" aria-label="Find staff" className="flex flex-wrap items-end gap-2 border-b border-slate-200 pb-2">
+          <label className="min-w-[12rem] flex-1 text-xs font-medium text-slate-700">Search
+            <input type="search" value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Name, email or phone" className={`${filterClass} mt-0.5 block w-full`} autoComplete="off" />
+          </label>
+          <label className="text-xs font-medium text-slate-700">Staff type
+            <select value={typeFilter} onChange={(e) => setTypeFilter(e.target.value)} className={`${filterClass} mt-0.5 block`}>
+              <option value={ALL}>All types</option>
+              {(types.data?.staffTypes ?? []).map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
+              {all.some((r) => r.staffTypeId === null) ? <option value="none">No type</option> : null}
+            </select>
+          </label>
+          <label className="text-xs font-medium text-slate-700">Role
+            <select value={roleFilter} onChange={(e) => setRoleFilter(e.target.value)} className={`${filterClass} mt-0.5 block`}>
+              <option value={ALL}>All roles</option>
+              {rolesPresent.map((r) => <option key={r} value={r}>{roleName(r === "none" ? null : r)}</option>)}
+            </select>
+          </label>
+          <label className="text-xs font-medium text-slate-700">Status
+            <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className={`${filterClass} mt-0.5 block`}>
+              <option value={ALL}>All statuses</option>
+              {STATUS_CHOICES.map((s) => <option key={s} value={s}>{s}</option>)}
+            </select>
+          </label>
+          {filtered ? <Button type="button" variant="secondary" className="min-h-[36px]" onClick={clear}>Clear Filters</Button> : null}
+        </div>
+      ) : null}
       {staff.isLoading ? <p className="text-sm text-slate-500" role="status">Loading…</p> : null}
       {staff.isError ? <p role="alert" className="text-sm text-red-700">{message(staff.error, "The staff list could not be loaded.")}</p> : null}
-      {staff.data && rows.length === 0 ? <p className="text-sm text-slate-600">No staff yet.</p> : null}
+      {staff.data && all.length === 0 ? <p className="text-sm text-slate-600">No staff yet.</p> : null}
+      {all.length > 0 && rows.length === 0 ? <p className="text-sm text-slate-600" role="status">No staff match. <button type="button" className="underline" onClick={clear}>Clear Filters</button></p> : null}
       {rows.length > 0 ? (
-        <div className="overflow-x-auto rounded-xl border border-slate-200 bg-og-card">
-          <table className="w-full text-left text-sm" aria-label="Staff">
-            <thead>
+        <div className="relative overflow-x-auto md:rounded-lg md:border md:border-slate-200 md:bg-og-card">
+          {filtered ? <p className="px-1 pb-1 text-xs text-slate-600 md:px-3 md:pt-1" role="status">{rows.length} of {all.length}</p> : null}
+          <table className="block w-full text-left text-sm md:table" aria-label="Staff">
+            <thead className="hidden md:table-header-group">
               <tr className="border-b border-slate-200 text-xs uppercase tracking-wide text-slate-600">
                 <th scope="col" className="w-10 px-3 py-1.5 text-right font-semibold">No.</th>
                 <th scope="col" className="px-3 py-1.5 font-semibold">Name</th>
-                <th scope="col" className="px-3 py-1.5 font-semibold">Type</th>
+                <th scope="col" className="px-3 py-1.5 font-semibold">Staff Type</th>
                 <th scope="col" className="px-3 py-1.5 font-semibold">Role</th>
-                <th scope="col" className="px-3 py-1.5 font-semibold">Access</th>
+                <th scope="col" className="px-3 py-1.5 font-semibold">Status</th>
+                <th scope="col" className="px-3 py-1.5 font-semibold">Email</th>
+                <th scope="col" className="px-3 py-1.5 font-semibold">Phone</th>
                 <th scope="col" className="px-3 py-1.5 font-semibold"><span className="sr-only">Actions</span></th>
               </tr>
             </thead>
-            <tbody>
+            <tbody className="block md:table-row-group">
               {rows.map((r, i) => {
                 const open = panel && panel.kind !== "add" && panel.row.staffKey === r.staffKey ? panel : null;
                 return (
@@ -139,43 +188,58 @@ export function StaffPage() {
   );
 }
 
+type PanelKind = "edit" | "invite" | "role" | "access" | "history" | "member";
+// Cells are table cells from 768px up and labelled lines on a phone (the label comes from data-label).
+const cell = "block px-3 py-0.5 md:table-cell md:py-1 before:mr-2 before:text-xs before:text-slate-500 before:content-[attr(data-label)] md:before:hidden";
+
 function RowWithPanel({ index, row, open, canManage, canAccounts, types, onOpen, onClose, onDone }: {
   index: number; row: StaffRow; open: Exclude<Panel, { kind: "add" }> | null; canManage: boolean; canAccounts: boolean; types: StaffType[];
-  onOpen: (kind: "edit" | "invite" | "role" | "access" | "history" | "member") => void; onClose: () => void; onDone: (text: string) => Promise<void>;
+  onOpen: (kind: PanelKind) => void; onClose: () => void; onDone: (text: string) => Promise<void>;
 }) {
   const isProfile = row.profileId !== null, isMember = row.staffKey.startsWith("member:"), isCaregiver = row.caregiverRecordId !== null;
   const changeableRole = !row.isSelf && row.systemRole !== null && (ASSIGNABLE_ROLES as readonly string[]).includes(row.systemRole);
-  const btn = (label: string, kind: "edit" | "invite" | "role" | "access" | "history" | "member") => (
-    <Button type="button" variant="secondary" className="min-h-[36px] px-2 py-1 text-xs" aria-label={`${label}: ${row.displayName}`} onClick={() => onOpen(kind)}>{label}</Button>
+  const hasAccount = row.accessStatus === "active" || row.accessStatus === "invitation_pending" || row.accessStatus === "disabled";
+  const btn = (label: string, kind: PanelKind, shown = label) => (
+    <Button type="button" variant="secondary" className="min-h-[36px] px-2 py-1 text-xs" aria-label={`${label}: ${row.displayName}`} onClick={() => onOpen(kind)}>{shown}</Button>
   );
+  const status = statusOf(row);
+  const more = [
+    canManage && isMember && types.length > 0 ? btn("Add profile", "member") : null,
+    canManage && changeableRole ? btn("Change role", "role") : null,
+    isProfile ? btn("History", "history") : null,
+  ].filter(Boolean);
   return (
     <>
-      <tr className="border-b border-slate-100 last:border-0 align-top">
-        <td className="w-10 px-3 py-1 text-right tabular-nums text-slate-600" data-testid="row-no">{index}</td>
-        <th scope="row" className="px-3 py-1 font-medium text-slate-950">
+      <tr className="block border-b border-slate-100 py-1.5 last:border-0 md:table-row md:py-0 md:align-top">
+        <td className="hidden w-10 px-3 py-1 text-right tabular-nums text-slate-600 md:table-cell" data-testid="row-no">{index}</td>
+        <th scope="row" className="block px-3 py-0.5 font-medium text-slate-950 md:table-cell md:py-1">
           {row.displayName}{row.isSelf ? <span className="ml-1 text-xs font-normal text-slate-600">· you</span> : null}
-          {row.status === "inactive" ? <span className="ml-2 rounded-full bg-slate-200 px-2 py-0.5 text-xs font-medium text-slate-800">Inactive</span> : null}
         </th>
-        <td className="px-3 py-1">{row.staffTypeName ?? <span className="text-slate-500">—</span>}</td>
-        <td className="px-3 py-1">{roleName(row.systemRole)}</td>
-        <td className="px-3 py-1"><span className={`inline-block whitespace-nowrap rounded-full px-2 py-0.5 text-xs font-semibold ${ACCESS_BADGE[row.accessStatus]}`}>{ACCESS_LABEL[row.accessStatus]}</span></td>
-        <td className="px-3 py-1">
-          <div className="flex flex-wrap gap-1">
-            {isCaregiver ? <Link className="inline-flex min-h-[36px] items-center text-sm font-medium text-og-link underline" to={`/care-team/${row.caregiverRecordId}`}>Open in Caregivers</Link> : null}
+        <td className={cell} data-label="Staff Type">{row.staffTypeName ?? <span className="text-slate-500">—</span>}</td>
+        <td className={cell} data-label="Role">{roleName(row.systemRole)}</td>
+        <td className={cell} data-label="Status"><span className={`inline-block whitespace-nowrap rounded-full px-2 py-0.5 text-xs font-semibold ${row.status === "inactive" ? "bg-slate-200 text-slate-800" : ACCESS_BADGE[row.accessStatus]}`}>{status}</span></td>
+        <td className={`${cell} break-all`} data-label="Email">{row.contactEmail ?? <span className="text-slate-500">—</span>}</td>
+        <td className={`${cell} whitespace-nowrap`} data-label="Phone">{row.phone ?? <span className="text-slate-500">—</span>}</td>
+        <td className="block px-3 py-1 md:table-cell">
+          <div className="flex flex-wrap items-center gap-1">
             {canManage && isProfile ? btn("Edit", "edit") : null}
-            {canManage && isMember && types.length > 0 ? btn("Add profile", "member") : null}
             {canManage && isProfile && row.accessStatus === "none" && row.status === "active" ? btn("Invite", "invite") : null}
-            {canManage && isProfile && row.accessStatus === "invitation_pending" ? btn("Resend invite", "invite") : null}
-            {canManage && changeableRole ? btn("Change role", "role") : null}
-            {canAccounts && row.userId && !row.isSelf && (row.accessStatus === "active" || row.accessStatus === "invitation_pending" || row.accessStatus === "disabled") && !isCaregiver
-              ? btn(row.accessStatus === "disabled" ? "Enable access" : "Disable access", "access") : null}
-            {isProfile ? btn("History", "history") : null}
+            {canManage && isProfile && row.accessStatus === "invitation_pending" ? btn("Resend invite", "invite", "Invite again") : null}
+            {canAccounts && row.userId && !row.isSelf && hasAccount && !isCaregiver
+              ? btn(row.accessStatus === "disabled" ? "Enable access" : "Disable access", "access", row.accessStatus === "disabled" ? "Enable" : "Disable") : null}
+            {isCaregiver ? <Link className="inline-flex min-h-[36px] items-center text-xs font-medium text-og-link underline" to={`/care-team/${row.caregiverRecordId}`}>Open caregiver</Link> : null}
+            {more.length > 0 ? (
+              <details className="relative">
+                <summary className="inline-flex min-h-[36px] cursor-pointer list-none items-center rounded-md border border-slate-300 bg-og-card px-2 text-xs font-medium" aria-label={`More actions: ${row.displayName}`}>More</summary>
+                <div className="absolute right-0 z-20 mt-1 flex min-w-[9rem] flex-col gap-1 rounded-lg border border-og-line bg-og-card p-1.5 shadow-md">{more}</div>
+              </details>
+            ) : null}
           </div>
         </td>
       </tr>
       {open ? (
-        <tr className="border-b border-slate-100 bg-og-page">
-          <td colSpan={6} className="px-3 py-2">
+        <tr className="block border-b border-slate-100 bg-og-page md:table-row">
+          <td colSpan={8} className="block px-3 py-2 md:table-cell">
             {open.kind === "edit" ? <ProfileForm title="Edit staff" row={row} types={types} onDone={onDone} onCancel={onClose} /> : null}
             {open.kind === "member" ? <MemberForm row={row} types={types} onDone={onDone} onCancel={onClose} /> : null}
             {open.kind === "invite" ? <InviteForm row={row} onDone={onDone} onCancel={onClose} /> : null}
@@ -393,7 +457,7 @@ export function StaffTypesPage() {
   const list = types.data?.staffTypes ?? [];
   return (
     <div className="mx-auto max-w-3xl space-y-3">
-      <PageHeader title="Staff Types" lead="Titles your agency uses, such as Manager or Office Assistant. A staff type never gives anyone access; the role does." />
+      <PageHeader title="Staff Types" lead="Labels used for organizing staff. A staff type never gives access; the role does." />
       {done ? <p role="status" className="rounded-md bg-emerald-50 px-3 py-1.5 text-sm text-emerald-900">{done}</p> : null}
       {canManage ? (
         <form onSubmit={(e) => { e.preventDefault(); add.mutate(); }} className="flex flex-wrap items-end gap-2" aria-label="Add staff type">
@@ -408,9 +472,9 @@ export function StaffTypesPage() {
       {toggle.isError ? <p role="alert" className="text-sm text-red-700">{message(toggle.error, "The change could not be made.")}</p> : null}
       {types.isLoading ? <p className="text-sm text-slate-500" role="status">Loading…</p> : null}
       {types.isError ? <p role="alert" className="text-sm text-red-700">{message(types.error, "The staff types could not be loaded.")}</p> : null}
-      <ul className="space-y-1" aria-label="Staff types">
+      <ul className="divide-y divide-slate-100 rounded-lg border border-slate-200 bg-og-card" aria-label="Staff types">
         {list.map((t) => (
-          <li key={t.id} className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-slate-200 bg-og-card px-3 py-1.5">
+          <li key={t.id} className="flex flex-wrap items-center justify-between gap-2 px-3 py-1">
             {editing?.id === t.id ? (
               <form onSubmit={(e) => { e.preventDefault(); rename.mutate(editing); }} className="flex flex-1 flex-wrap items-center gap-2" aria-label={`Rename ${t.name}`}>
                 <input aria-label="Staff type name" value={editing.name} onChange={(e) => setEditing({ id: t.id, name: e.target.value })} maxLength={60} className={inputClass} />
@@ -441,8 +505,27 @@ export function StaffTypesPage() {
 }
 
 // ---------------------------------------------------------------------------------------------------------------------------------------------------------
-// Settings > Roles & Permissions (read only: the permissions of each role are set in the database)
+// Settings > Roles & Permissions (read only: the permissions of each role are set in the database and enforced there)
 // ---------------------------------------------------------------------------------------------------------------------------------------------------------
+/** What each role is for, in a few words. A role with no permissions says so (taken from the data, not from this list). */
+const ROLE_DESCRIPTION: Record<string, string> = {
+  organization_owner: "Full system administration",
+  organization_admin: "Manages care requests and coverage",
+  manager: "Clients, caregivers, scheduling, visits and billing approval",
+  scheduler: "Schedules shifts and assignments",
+  coordinator: "Manages care requests and coverage",
+  staff: "No permissions granted",
+  read_only: "No permissions granted",
+  caregiver: "Field staff: own availability and documents",
+};
+/** The area a permission belongs to (the part of its key before the dot), in plain words. Only used to group the rows. */
+const AREA: Record<string, string> = {
+  accounts: "Accounts", assignments: "Assignments", authorizations: "Authorizations", availability: "Availability", billing: "Billing", care_requests: "Care requests",
+  caregiver_services: "Caregivers", caregivers: "Caregivers", clients: "Clients", continuity: "Continuity", documents: "Documents", experience: "Matching", matching: "Matching",
+  organization: "Agency settings", readiness: "Readiness", reports: "Reports", services: "Services", shifts: "Scheduling", staff: "Staff", visits: "Visits",
+};
+const areaOf = (key: string) => AREA[key.split(".")[0] ?? ""] ?? "Other";
+
 export function RolesPermissionsPage() {
   const api = useAwsApi();
   const { activeOrganizationId, hasPermission } = useOrganization();
@@ -453,31 +536,71 @@ export function RolesPermissionsPage() {
     enabled: !!activeOrganizationId && canRead,
   });
   if (!canRead) return <NotAllowed />;
+  const list = roles.data?.roles ?? [];
+  // Every permission any role has, grouped by area and sorted by its description; a role has it or it does not.
+  const known = new Map<string, string>();
+  for (const r of list) for (const p of r.permissions) known.set(p.key, p.description);
+  const rows = [...known.entries()].map(([key, description]) => ({ key, description, area: areaOf(key) })).sort((x, y) => x.area.localeCompare(y.area) || x.description.localeCompare(y.description));
   return (
-    <div className="mx-auto max-w-3xl space-y-3">
-      <PageHeader title="Roles & Permissions" lead="What each role can do. Roles are assigned to people on the Staff page; the Owner role is protected and cannot be changed." action={hasPermission("accounts.manage") ? <Link className="text-sm font-medium text-og-link underline" to="/accounts">Accounts</Link> : undefined} />
+    <div className="space-y-3">
+      <PageHeader title="Roles & Permissions" lead="Controls system access by role." />
       {roles.isLoading ? <p className="text-sm text-slate-500" role="status">Loading…</p> : null}
       {roles.isError ? <p role="alert" className="text-sm text-red-700">{message(roles.error, "The roles could not be loaded.")}</p> : null}
-      <ul className="space-y-1" aria-label="Roles">
-        {(roles.data?.roles ?? []).map((r) => (
-          <li key={r.role} className="rounded-lg border border-slate-200 bg-og-card px-3 py-1.5">
-            <details>
-              <summary className="flex min-h-[36px] cursor-pointer flex-wrap items-center justify-between gap-2">
-                <span className="font-medium text-slate-950">{roleName(r.role)}</span>
-                <span className="text-xs text-slate-600">
-                  {Number(r.memberCount)} {Number(r.memberCount) === 1 ? "person" : "people"}{r.assignable ? "" : " · protected"}
-                  <InfoTip label={`About ${roleName(r.role)}`}>{r.assignable ? "Can be assigned on the Staff page." : "Not assigned on the Staff page."}</InfoTip>
-                </span>
-              </summary>
-              {r.permissions.length === 0 ? <p className="py-1 text-sm text-slate-600">No permissions.</p> : (
-                <ul className="py-1 text-sm text-slate-800" aria-label={`${roleName(r.role)} permissions`}>
-                  {r.permissions.map((p) => <li key={p.key} className="flex flex-wrap gap-x-2 border-b border-slate-100 py-0.5"><span className="font-og-mono text-xs text-slate-600">{p.key}</span><span>{p.description}</span></li>)}
-                </ul>
-              )}
-            </details>
-          </li>
-        ))}
-      </ul>
+      {list.length > 0 ? (
+        <>
+          <div className="relative overflow-x-auto rounded-lg border border-slate-200 bg-og-card">
+            <table className="w-full text-left text-sm" aria-label="Roles">
+              <thead>
+                <tr className="border-b border-slate-200 text-xs uppercase tracking-wide text-slate-600">
+                  <th scope="col" className="px-3 py-1.5 font-semibold">Role</th>
+                  <th scope="col" className="px-3 py-1.5 font-semibold">Description</th>
+                  <th scope="col" className="px-3 py-1.5 text-right font-semibold">Users Assigned</th>
+                </tr>
+              </thead>
+              <tbody>
+                {list.map((r) => (
+                  <tr key={r.role} className="border-b border-slate-100 last:border-0">
+                    <th scope="row" className="whitespace-nowrap px-3 py-1 font-medium text-slate-950">{roleName(r.role)}</th>
+                    <td className="px-3 py-1">{r.permissions.length === 0 ? "No permissions granted" : ROLE_DESCRIPTION[r.role] ?? ""}</td>
+                    <td className="px-3 py-1 text-right tabular-nums">{Number(r.memberCount)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <div className="relative overflow-x-auto rounded-lg border border-slate-200 bg-og-card">
+            <p className="px-3 pt-1.5 text-xs text-slate-600"><span aria-hidden="true">✓</span> Granted · <span aria-hidden="true">–</span> Not granted</p>
+            <table className="w-full text-left text-sm" aria-label="Permissions by role">
+              <thead>
+                <tr className="border-b border-slate-200 text-xs uppercase tracking-wide text-slate-600">
+                  <th scope="col" className="sticky left-0 bg-og-card px-3 py-1.5 font-semibold">Permission</th>
+                  {list.map((r) => <th key={r.role} scope="col" className="px-2 py-1.5 text-center font-semibold">{roleName(r.role)}</th>)}
+                </tr>
+              </thead>
+              <tbody>
+                {rows.map((p, i) => (
+                  <Fragment key={p.key}>
+                    {i === 0 || rows[i - 1]!.area !== p.area ? (
+                      <tr className="bg-og-page"><th scope="colgroup" colSpan={list.length + 1} className="sticky left-0 px-3 py-1 text-xs font-bold uppercase tracking-wide text-slate-700">{p.area}</th></tr>
+                    ) : null}
+                    <tr className="border-b border-slate-100 last:border-0">
+                      <th scope="row" className="sticky left-0 min-w-[14rem] bg-og-card px-3 py-1 text-left font-normal text-slate-900">{p.description}</th>
+                      {list.map((r) => {
+                        const granted = r.permissions.some((x) => x.key === p.key);
+                        return (
+                          <td key={r.role} className={`px-2 py-1 text-center ${granted ? "font-bold text-emerald-800" : "text-slate-400"}`}>
+                            <span aria-hidden="true">{granted ? "✓" : "–"}</span><span className="sr-only">{granted ? "Granted" : "Not granted"}</span>
+                          </td>
+                        );
+                      })}
+                    </tr>
+                  </Fragment>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </>
+      ) : null}
     </div>
   );
 }

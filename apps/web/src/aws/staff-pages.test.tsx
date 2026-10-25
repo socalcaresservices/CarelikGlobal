@@ -13,6 +13,7 @@ const MGR = "bbbbbbbb-0000-4000-8000-000000000002";
 const PROFILE_NEW = "cccccccc-0000-4000-8000-000000000001";
 const PROFILE_ACTIVE = "cccccccc-0000-4000-8000-000000000002";
 const PROFILE_PENDING = "cccccccc-0000-4000-8000-000000000003";
+const PROFILE_DISABLED = "cccccccc-0000-4000-8000-000000000004";
 const T_MANAGER = "dddddddd-0000-4000-8000-000000000001";
 const T_OFFICE = "dddddddd-0000-4000-8000-000000000002";
 const T_OLD = "dddddddd-0000-4000-8000-000000000003";
@@ -35,6 +36,7 @@ function fakeApi(role: Role) {
     { staffKey: `profile:${PROFILE_NEW}`, profileId: PROFILE_NEW, caregiverRecordId: null, userId: null, displayName: "Nia NoAccess", staffTypeId: T_OFFICE, staffTypeName: "Office Assistant", contactEmail: "nia.contact@example.test", phone: "555 0101", status: "active", systemRole: null, accessStatus: "none", isSelf: false },
     { staffKey: `profile:${PROFILE_ACTIVE}`, profileId: PROFILE_ACTIVE, caregiverRecordId: null, userId: "bbbbbbbb-0000-4000-8000-000000000003", displayName: "Abe Active", staffTypeId: T_MANAGER, staffTypeName: "Manager", contactEmail: null, phone: null, status: "active", systemRole: "scheduler", accessStatus: "active", isSelf: false },
     { staffKey: `profile:${PROFILE_PENDING}`, profileId: PROFILE_PENDING, caregiverRecordId: null, userId: "bbbbbbbb-0000-4000-8000-000000000004", displayName: "Pia Pending", staffTypeId: T_OFFICE, staffTypeName: "Office Assistant", contactEmail: null, phone: null, status: "active", systemRole: "staff", accessStatus: "invitation_pending", isSelf: false },
+    { staffKey: `profile:${PROFILE_DISABLED}`, profileId: PROFILE_DISABLED, caregiverRecordId: null, userId: "bbbbbbbb-0000-4000-8000-000000000005", displayName: "Dee Disabled", staffTypeId: T_OFFICE, staffTypeName: "Office Assistant", contactEmail: "dee.contact@example.test", phone: "555 0105", status: "active", systemRole: "staff", accessStatus: "disabled", isSelf: false },
     { staffKey: "caregiver:eeeeeeee-0000-4000-8000-000000000001", profileId: null, caregiverRecordId: "eeeeeeee-0000-4000-8000-000000000001", userId: null, displayName: "Cara Caregiver", staffTypeId: null, staffTypeName: "Caregiver", contactEmail: null, phone: null, status: "active", systemRole: null, accessStatus: "none", isSelf: false },
   ];
   const roles = [
@@ -115,17 +117,20 @@ describe("Staff", () => {
   it("lists every kind of staff once, numbered 1..n in list order, with type, role and access in plain words", async () => {
     renderAt("/staff", "organization_owner");
     const table = await screen.findByRole("table", { name: "Staff" });
-    expect(within(table).getAllByRole("columnheader").map((c) => c.textContent)).toEqual(["No.", "Name", "Type", "Role", "Access", "Actions"]);
-    expect(within(table).getAllByTestId("row-no").map((c) => c.textContent)).toEqual(["1", "2", "3", "4", "5", "6"]);
+    expect(within(table).getAllByRole("columnheader").map((c) => c.textContent)).toEqual(["No.", "Name", "Staff Type", "Role", "Status", "Email", "Phone", "Actions"]);
+    expect(within(table).getAllByTestId("row-no").map((c) => c.textContent)).toEqual(["1", "2", "3", "4", "5", "6", "7"]);
     expect(await rowOf("Nia NoAccess")).toHaveTextContent("Office Assistant");
     expect(await rowOf("Nia NoAccess")).toHaveTextContent("No sign-in");
     expect(await rowOf("Abe Active")).toHaveTextContent("Scheduler");
     expect(await rowOf("Pia Pending")).toHaveTextContent("Invited");
-    expect(await rowOf("Synthetic Admin")).toHaveTextContent("Administrator (Owner)");
+    expect(await rowOf("Synthetic Admin")).toHaveTextContent("Owner");
+    expect(await rowOf("Nia NoAccess")).toHaveTextContent("nia.contact@example.test");   // the contact email, never the sign-in email
+    expect(await rowOf("Nia NoAccess")).toHaveTextContent("555 0101");
+    expect(await rowOf("Dee Disabled")).toHaveTextContent("Disabled");
     expect(await rowOf("Synthetic Admin")).toHaveTextContent("you");
     // a caregiver is read from the Care Team: a link there, no second profile to edit
     const cara = await rowOf("Cara Caregiver");
-    expect(within(cara).getByRole("link", { name: "Open in Caregivers" }).getAttribute("href")).toBe("/care-team/eeeeeeee-0000-4000-8000-000000000001");
+    expect(within(cara).getByRole("link", { name: "Open caregiver" }).getAttribute("href")).toBe("/care-team/eeeeeeee-0000-4000-8000-000000000001");
     expect(within(cara).queryByRole("button", { name: /^Edit/ })).toBeNull();
     expect(document.body.textContent).not.toMatch(/cognito|password/i);
   });
@@ -155,7 +160,7 @@ describe("Staff", () => {
 
     fireEvent.click(within(await rowOf("Nia NoAccess")).getByRole("button", { name: "Invite: Nia NoAccess" }));
     const invite = await screen.findByRole("form", { name: "Invite to sign in" });
-    expect(within(invite).getAllByRole("option").map((o) => o.textContent)).toEqual(["Admin", "Manager", "Scheduler", "Coordinator", "Staff", "Read only"]);   // never Owner or Caregiver
+    expect(within(invite).getAllByRole("option").map((o) => o.textContent)).toEqual(["Administrator", "Manager", "Scheduler", "Coordinator", "Staff", "Read-only"]);   // never Owner or Caregiver
     fireEvent.change(within(invite).getByLabelText("Sign-in email"), { target: { value: "nia.signin@example.test" } });
     fireEvent.change(within(invite).getByLabelText("Role"), { target: { value: "scheduler" } });
     fireEvent.click(within(invite).getByRole("button", { name: "Send invitation" }));
@@ -212,18 +217,60 @@ describe("Staff", () => {
     expect(await screen.findByText("Only an administrator can manage staff.")).toBeInTheDocument();
     expect(api.calls.some((c) => c.path === "/v1/staff")).toBe(false);   // nothing is even requested
     const nav = screen.getByRole("navigation", { name: "Main" });
-    fireEvent.click(within(nav).getByRole("button", { name: /^People/ }));
+    fireEvent.click(within(nav).getByRole("button", { name: /^Staff/ }));
+    expect(within(nav).getByRole("link", { name: "Caregivers" })).toBeInTheDocument();
     expect(within(nav).queryByRole("link", { name: "Staff" })).toBeNull();
+    expect(within(nav).queryByRole("link", { name: "Staff Types" })).toBeNull();
   });
 
-  it("the owner's menu has Staff under People and Staff Types and Roles & Permissions under Settings", async () => {
+  it("the owner's menu has Staff and Staff Types beside Caregivers, Roles & Permissions and Agency Settings under Settings, and Accounts as a tab of Roles & Permissions", async () => {
     renderAt("/staff", "organization_owner");
     const nav = await screen.findByRole("navigation", { name: "Main" });
     expect(within(nav).getByRole("link", { name: "Staff" })).toHaveAttribute("aria-current", "page");
-    fireEvent.click(within(nav).getByRole("button", { name: /^Settings/ }));
     expect(within(nav).getByRole("link", { name: "Staff Types" }).getAttribute("href")).toBe("/settings/staff-types");
+    fireEvent.click(within(nav).getByRole("button", { name: /^Settings/ }));
     expect(within(nav).getByRole("link", { name: "Roles & Permissions" }).getAttribute("href")).toBe("/settings/roles");
-    expect(within(nav).getByRole("link", { name: "Accounts" }).getAttribute("href")).toBe("/accounts");
+    expect(within(nav).getByRole("link", { name: "Agency Settings" }).getAttribute("href")).toBe("/settings/branding");
+    cleanup();
+    renderAt("/settings/roles", "organization_owner");
+    const strip = await screen.findByRole("navigation", { name: "Section tabs" });
+    expect(within(strip).getByRole("link", { name: "Accounts" }).getAttribute("href")).toBe("/accounts");
+  });
+
+  it("search and the Staff Type, Role and Status filters narrow the list; the numbers follow the filter; Clear Filters brings everyone back", async () => {
+    renderAt("/staff", "organization_owner");
+    await screen.findByRole("table", { name: "Staff" });
+    const names = () => within(screen.getByRole("table", { name: "Staff" })).getAllByRole("rowheader").map((c) => c.textContent?.replace(/· you/, "").trim());
+    const numbers = () => within(screen.getByRole("table", { name: "Staff" })).getAllByTestId("row-no").map((c) => c.textContent);
+    expect(names()).toHaveLength(7);
+    fireEvent.change(screen.getByLabelText("Search"), { target: { value: "nia.contact" } });   // the contact email is searchable
+    expect(names()).toEqual(["Nia NoAccess"]);
+    expect(numbers()).toEqual(["1"]);
+    fireEvent.click(screen.getByRole("button", { name: "Clear Filters" }));
+    expect(names()).toHaveLength(7);
+    fireEvent.change(screen.getByLabelText("Staff type"), { target: { value: T_OFFICE } });
+    expect(names()).toEqual(["Nia NoAccess", "Pia Pending", "Dee Disabled"]);
+    expect(numbers()).toEqual(["1", "2", "3"]);
+    fireEvent.change(screen.getByLabelText("Status"), { target: { value: "Invited" } });
+    expect(names()).toEqual(["Pia Pending"]);
+    fireEvent.click(screen.getByRole("button", { name: "Clear Filters" }));
+    fireEvent.change(screen.getByLabelText("Role"), { target: { value: "manager" } });
+    expect(names()).toEqual(["Synthetic Manager"]);
+    fireEvent.change(screen.getByLabelText("Search"), { target: { value: "zzz" } });
+    expect(await screen.findByText(/No staff match/)).toBeInTheDocument();
+  });
+
+  it("each row offers only the actions that are true for it: Invite, Invite again, Disable or Enable, never both Disable and Enable", async () => {
+    renderAt("/staff", "organization_owner");
+    const has = async (who: string, name: RegExp) => within(await rowOf(who)).queryByRole("button", { name }) !== null;
+    expect(await has("Nia NoAccess", /^Invite:/)).toBe(true);
+    expect(await has("Nia NoAccess", /^Disable|^Enable/)).toBe(false);      // no account yet
+    expect(await has("Pia Pending", /^Invite again|^Resend invite/)).toBe(true);
+    expect(await has("Abe Active", /^Disable access/)).toBe(true);
+    expect(await has("Abe Active", /^Enable access/)).toBe(false);
+    expect(await has("Dee Disabled", /^Enable access/)).toBe(true);
+    expect(await has("Dee Disabled", /^Disable access/)).toBe(false);
+    expect(await has("Synthetic Admin", /Disable|Enable|Invite/)).toBe(false);   // yourself
   });
 });
 
@@ -247,7 +294,7 @@ describe("Staff Types", () => {
 
   it("states that a type grants nothing, and is refused to someone without staff.read", async () => {
     renderAt("/settings/staff-types", "organization_owner");
-    expect(await screen.findByRole("button", { name: "About Staff Types" })).toHaveAccessibleDescription(/never gives anyone access/);
+    expect(await screen.findByRole("button", { name: "About Staff Types" })).toHaveAccessibleDescription(/never gives access/);
     cleanup();
     renderAt("/settings/staff-types", "manager");
     expect(await screen.findByText("Only an administrator can manage staff.")).toBeInTheDocument();
@@ -255,15 +302,22 @@ describe("Staff Types", () => {
 });
 
 describe("Roles & Permissions", () => {
-  it("shows each role with its member count and permissions, read only", async () => {
+  it("shows each role with its description and users assigned, then a read-only permission matrix: granted and not granted, no permission keys", async () => {
     renderAt("/settings/roles", "organization_owner");
-    const list = await screen.findByRole("list", { name: "Roles" });
-    const owner = (await within(list).findByText("Administrator (Owner)")).closest("li")!;
-    expect(owner).toHaveTextContent("1 person");
-    expect(owner).toHaveTextContent("protected");
-    expect(within(owner).getByText("staff.manage")).toBeInTheDocument();
-    expect(within(list).getByText("Manager").closest("li")).toHaveTextContent("visits.manage");
-    expect(within(list).getByText("Caregiver").closest("li")).toHaveTextContent("3 people");
-    expect(within(list).queryAllByRole("button", { name: /save|change|edit|delete/i })).toHaveLength(0);
+    const roles = await screen.findByRole("table", { name: "Roles" });
+    expect(within(roles).getAllByRole("columnheader").map((c) => c.textContent)).toEqual(["Role", "Description", "Users Assigned"]);
+    const row = (name: string) => within(roles).getByText(name).closest("tr")!;
+    expect(row("Owner")).toHaveTextContent("Full system administration");
+    expect(within(row("Owner")).getAllByRole("cell").at(-1)).toHaveTextContent("1");
+    expect(row("Manager")).toHaveTextContent("Clients, caregivers, scheduling, visits and billing approval");
+    expect(row("Caregiver")).toHaveTextContent("No permissions granted");   // from the data: a role with no permissions says so
+    expect(within(row("Caregiver")).getAllByRole("cell").at(-1)).toHaveTextContent("3");
+    const matrix = screen.getByRole("table", { name: "Permissions by role" });
+    expect(within(matrix.querySelector("thead")!).getAllByRole("columnheader").map((c) => c.textContent)).toEqual(["Permission", "Owner", "Manager", "Caregiver"]);
+    const perm = (text: string) => within(matrix).getByText(text).closest("tr")!;
+    expect(within(perm("Add and edit staff")).getAllByRole("cell").map((c) => c.textContent)).toEqual(["✓Granted", "–Not granted", "–Not granted"]);
+    expect(within(perm("Manage visits")).getAllByRole("cell").map((c) => c.textContent)).toEqual(["–Not granted", "✓Granted", "–Not granted"]);
+    expect(document.body.textContent).not.toMatch(/staff\.manage|accounts\.manage|visits\.manage/);   // no permission keys
+    expect(screen.queryAllByRole("button", { name: /save|change|edit|delete/i })).toHaveLength(0);   // read only
   });
 });

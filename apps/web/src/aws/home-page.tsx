@@ -95,7 +95,7 @@ export function AwsHomePage() {
   return (
     <div className="space-y-3">
       <PageHeader
-        title="Home"
+        title="Dashboard"
         action={
           <label className="flex items-center gap-2 text-xs font-semibold text-og-sub">
             Month

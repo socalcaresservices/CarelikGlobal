@@ -1,7 +1,7 @@
 // Main menu: exactly one item is current (highlighted, aria-current="page") on
 // its own page and its child pages. SYNTHETIC data only.
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { CognitoAuthProvider, type CognitoAuthClient } from "@carelik/auth";
 import { MemoryRouter } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -48,37 +48,44 @@ async function currentItems() {
   const nav = await screen.findByRole("navigation", { name: "Main" });
   return within(nav).queryAllByRole("link").filter((a) => a.getAttribute("aria-current") === "page").map((a) => a.textContent);
 }
+const stripCurrent = async () => {
+  const strip = await screen.findByRole("navigation", { name: "Section tabs" });
+  return within(strip).getAllByRole("link").filter((a) => a.getAttribute("aria-current") === "page").map((a) => a.textContent);
+};
+const hrefsIn = (el: HTMLElement) => Array.from(el.querySelectorAll("a")).map((a) => a.getAttribute("href"));
 
-afterEach(() => vi.clearAllMocks());
+afterEach(() => { cleanup(); vi.clearAllMocks(); });
 
 describe("main menu: one current item", () => {
+  // [path, the sidebar item that is current, the tab that is current in the strip above the page (null: no strip for this page)]
   it.each([
-    ["/", "Dashboard"],
-    ["/service-verification", "Verify visit"],
-    ["/service-verification/reports", "Visits"],
-    ["/service-verification/reports?view=exceptions", "Visits to review"],
-    ["/billing-review", "Approvals"],
-    ["/schedule", "Shifts"],
-    ["/schedule/shift-requests", "Requests"],
-    ["/care-requests", "Requests"],
-    ["/service-verification/reports?view=calendar", "Calendar"],
-    ["/action-needed", "Action Needed"],
-    ["/care-team/recruiting", "Recruiting"],
-    ["/documents", "Documents"],
-    ["/authorization-impacts", "Authorization changes"],
-    ["/services", "Services"],
-    ["/settings/services", "Services"],
-    ["/settings/appearance", "Appearance"],
-    ["/clients", "Clients"],
-    ["/clients/cccccccc-0000-4000-8000-000000000001", "Clients"],
-    ["/care-team/abababab-0000-4000-8000-000000000001", "Caregivers"],
-    ["/continuity", "Continuity"],
-    ["/outage-visits", "Outage records"],
-  ])("manager on %s: only %s is current", async (path, label) => {
+    ["/", "Dashboard", "Dashboard"],
+    ["/action-needed", "Dashboard", "Action Needed"],
+    ["/clients", "Clients", "Clients"],
+    ["/clients/cccccccc-0000-4000-8000-000000000001", "Clients", "Clients"],
+    ["/authorization-impacts", "Authorization changes", "Authorization changes"],
+    ["/care-team", "Caregivers", "Caregivers"],
+    ["/care-team/abababab-0000-4000-8000-000000000001", "Caregivers", "Caregivers"],
+    ["/care-team/recruiting", "Caregivers", "Recruiting"],
+    ["/documents", "Caregivers", "Documents"],
+    ["/schedule", "Schedule", "Schedule"],
+    ["/schedule/shift-requests", "Schedule", "Requests"],
+    ["/care-requests", "Schedule", "Requests"],
+    ["/service-verification/reports?view=calendar", "Schedule", "Calendar"],
+    ["/service-verification/reports?view=overview", "Reports", "Reports"],
+    ["/billing-review", "Billing", "Billing"],
+    ["/service-verification/reports", "Reports", "Visits"],
+    ["/service-verification/reports?view=exceptions", "Reports", "Visits to review"],
+    ["/service-verification", "Reports", "Verify visit"],
+    ["/outage-visits", "Reports", "Outage records"],
+    ["/services", "Agency Settings", "Agency Settings"],
+    ["/settings/services", "Agency Settings", "Agency Settings"],
+    ["/continuity", "Agency Settings", "Continuity"],
+    ["/settings/appearance", "Agency Settings", "Appearance"],
+  ])("manager on %s: %s is the current menu item and %s the current tab", async (path, item, tab) => {
     renderAt(path, "manager");
-    await waitFor(async () => expect(await currentItems()).toEqual([label]));
-    const nav = screen.getByRole("navigation", { name: "Main" });
-    expect(within(nav).getByRole("link", { name: label })).toHaveStyle({ backgroundColor: expect.anything() });
+    await waitFor(async () => expect(await currentItems()).toEqual([item]));
+    expect(await stripCurrent()).toEqual([tab]);
   });
 
   it("a page outside the menu (Profile) marks nothing current", async () => {
@@ -87,63 +94,94 @@ describe("main menu: one current item", () => {
     expect(await currentItems()).toEqual([]);
   });
 
-  it("moving between Verify visit and Visits keeps exactly one current item", async () => {
+  it("moving between Verify visit and Visits keeps exactly one current tab", async () => {
     renderAt("/service-verification/reports", "manager");
-    await waitFor(async () => expect(await currentItems()).toEqual(["Visits"]));
-    fireEvent.click(within(screen.getByRole("navigation", { name: "Main" })).getByRole("link", { name: "Verify visit" }));
-    await waitFor(async () => expect(await currentItems()).toEqual(["Verify visit"]));
-    fireEvent.click(within(screen.getByRole("navigation", { name: "Main" })).getByRole("link", { name: "Visits" }));
-    await waitFor(async () => expect(await currentItems()).toEqual(["Visits"]));
+    await waitFor(async () => expect(await stripCurrent()).toEqual(["Visits"]));
+    fireEvent.click(within(await screen.findByRole("navigation", { name: "Section tabs" })).getByRole("link", { name: "Verify visit" }));
+    await waitFor(async () => expect(await stripCurrent()).toEqual(["Verify visit"]));
+    fireEvent.click(within(screen.getByRole("navigation", { name: "Section tabs" })).getByRole("link", { name: "Visits" }));
+    await waitFor(async () => expect(await stripCurrent()).toEqual(["Visits"]));
   });
 
-  it("the caregiver menu is unchanged: Verify visit is current on its page", async () => {
+  it("the caregiver menu is the caregiver's own day: My Schedule and Verify Visit, with Availability and My documents as tabs", async () => {
     renderAt("/service-verification", "caregiver");
-    await waitFor(async () => expect(await currentItems()).toEqual(["Verify visit"]));
+    await waitFor(async () => expect(await currentItems()).toEqual(["Verify Visit"]));
     const nav = screen.getByRole("navigation", { name: "Main" });
-    expect(within(nav).queryByRole("link", { name: "Visits" })).toBeNull();
-    expect(within(nav).getByRole("link", { name: "My shifts" })).toBeInTheDocument();
+    expect(within(nav).queryByRole("link", { name: "Reports" })).toBeNull();
+    expect(within(nav).getByRole("link", { name: "My Schedule" })).toBeInTheDocument();
+    const strip = await screen.findByRole("navigation", { name: "Section tabs" });
+    expect(within(strip).getAllByRole("link").map((a) => a.textContent)).toEqual(["My Schedule", "Verify Visit", "Availability", "My documents"]);
   });
 });
 
-describe("main menu hierarchy", () => {
-  it("five sections, collapsible; tabs sit 32px in and smaller links 48px in, regular weight, one row each; every earlier destination is still reachable", async () => {
+describe("main menu structure", () => {
+  it("groups in the agreed order, each collapsible; the Dashboard is a plain link; children are indented alike and carry no icons", async () => {
     renderAt("/", "manager");
     const nav = await screen.findByRole("navigation", { name: "Main" });
     const sections = Array.from(nav.querySelectorAll<HTMLElement>('[data-nav-level="section"]'));
-    expect(sections.map((s) => s.textContent?.replace(/\d+$/, "").trim())).toEqual(["Home", "Schedule", "People", "Operations", "Settings"]);
-    for (const s of sections) { expect(s.className).toMatch(/font-semibold/); expect(s.className).not.toMatch(/\bml-\d/); expect(s).toHaveAttribute("aria-expanded"); }
-    // only the current section is open until the person opens another
-    expect(sections.map((s) => s.getAttribute("aria-expanded"))).toEqual(["true", "false", "false", "false", "false"]);
-    for (const s of sections.filter((x) => x.getAttribute("aria-expanded") === "false")) fireEvent.click(s);
+    expect(sections.map((s) => s.textContent?.replace(/\d+$/, "").trim())).toEqual(["Clients", "Staff", "Scheduling", "Operations", "Settings"]);
+    expect(within(nav).getByRole("link", { name: "Dashboard" })).toBeInTheDocument();
+    for (const s of sections) { expect(s).toHaveAttribute("aria-expanded"); expect(s).toHaveAttribute("aria-controls"); }
+    // nothing is open on the Dashboard until the person opens a group
+    expect(sections.map((s) => s.getAttribute("aria-expanded"))).toEqual(["false", "false", "false", "false", "false"]);
+    for (const s of sections) fireEvent.click(s);
     expect(Array.from(nav.querySelectorAll('[data-nav-level="section"]')).every((s) => s.getAttribute("aria-expanded") === "true")).toBe(true);
-    const tabs = Array.from(nav.querySelectorAll<HTMLElement>('[data-nav-level="tab"]'));
     const children = Array.from(nav.querySelectorAll<HTMLElement>('[data-nav-level="child"]'));
-    expect(tabs.length).toBeGreaterThan(8);
-    expect(children.length).toBeGreaterThan(2);
-    for (const tab of tabs) { expect(tab.className).toMatch(/ml-8/); if (tab.getAttribute("aria-current") !== "page") expect(tab.className).toMatch(/font-normal/); }
-    for (const c of children) { expect(c.className).toMatch(/ml-12/); expect(c.className).toMatch(/font-normal/); expect(c.className).not.toMatch(/font-medium/); expect(c.closest("li")?.querySelectorAll("a").length).toBe(1); }
-    const hrefs = Array.from(nav.querySelectorAll("a")).map((a) => a.getAttribute("href"));
-    for (const h of ["/", "/action-needed", "/schedule", "/schedule/shift-requests", "/service-verification/reports?view=calendar", "/service-verification/reports?view=exceptions", "/documents", "/clients", "/authorization-impacts", "/care-team", "/care-team/recruiting", "/billing-review", "/outage-visits", "/service-verification", "/settings/services", "/settings/appearance", "/continuity"]) expect(hrefs, h).toContain(h);
+    expect(children.map((c) => c.textContent?.replace(/\d+$/, "").trim())).toEqual(["Clients", "Authorization changes", "Caregivers", "Schedule", "Reports", "Billing", "Agency Settings"]);
+    for (const c of children) { expect(c.querySelector("svg")).toBeNull(); expect(c.closest("li")?.querySelectorAll("a").length).toBe(1); }
+    expect(new Set(children.map((c) => c.className.match(/min-h-\[30px\]/)?.[0])).size).toBe(1);
   });
 
-  it("the current section's tabs are also a horizontal strip above the page, with the current tab marked", async () => {
+  it("every destination the menu had stays reachable: from the sidebar, or as a tab beside the page it belongs with", async () => {
+    const seen = new Set<string | null>();
+    for (const start of ["/", "/clients", "/care-team", "/schedule", "/service-verification/reports?view=overview", "/settings/services"]) {
+      renderAt(start, "manager");
+      const nav = await screen.findByRole("navigation", { name: "Main" });
+      for (const s of nav.querySelectorAll<HTMLElement>('[data-nav-level="section"][aria-expanded="false"]')) fireEvent.click(s);
+      hrefsIn(nav).forEach((h) => seen.add(h));
+      const strip = screen.queryByRole("navigation", { name: "Section tabs" });
+      if (strip) hrefsIn(strip).forEach((h) => seen.add(h));
+      cleanup();
+    }
+    for (const h of ["/", "/action-needed", "/clients", "/authorization-impacts", "/care-team", "/care-team/recruiting", "/documents", "/schedule", "/schedule/shift-requests",
+      "/service-verification/reports?view=calendar", "/service-verification/reports?view=overview", "/billing-review", "/service-verification/reports", "/service-verification/reports?view=exceptions",
+      "/service-verification", "/outage-visits", "/settings/services", "/continuity", "/settings/appearance"]) expect(seen, h).toContain(h);
+  });
+
+  it("the current group opens by itself, a group the person opened stays open as they move, and a group closed by hand stays closed until the page moves into it again", async () => {
+    renderAt("/clients", "manager");
+    const nav = await screen.findByRole("navigation", { name: "Main" });
+    const section = (name: string) => within(nav).getByRole("button", { name });
+    expect(section("Clients")).toHaveAttribute("aria-expanded", "true");
+    expect(section("Scheduling")).toHaveAttribute("aria-expanded", "false");
+    fireEvent.click(section("Scheduling"));
+    fireEvent.click(within(nav).getByRole("link", { name: "Authorization changes" }));
+    await waitFor(async () => expect(await currentItems()).toEqual(["Authorization changes"]));
+    expect(section("Scheduling")).toHaveAttribute("aria-expanded", "true");
+    expect(section("Clients")).toHaveAttribute("aria-expanded", "true");
+    fireEvent.click(section("Clients"));
+    expect(section("Clients")).toHaveAttribute("aria-expanded", "false");
+    fireEvent.click(within(nav).getByRole("link", { name: "Schedule" }));
+    await waitFor(async () => expect(await currentItems()).toEqual(["Schedule"]));
+    fireEvent.click(section("Clients"));
+    fireEvent.click(within(nav).getByRole("link", { name: "Clients" }));
+    await waitFor(async () => expect(await currentItems()).toEqual(["Clients"]));
+    expect(section("Clients")).toHaveAttribute("aria-expanded", "true");
+  });
+
+  it("the current group's tabs are a strip above the page, with the current tab marked", async () => {
     renderAt("/schedule/shift-requests", "manager");
     const strip = await screen.findByRole("navigation", { name: "Section tabs" });
-    expect(within(strip).getAllByRole("link").map((a) => a.textContent)).toEqual(["Calendar", "Shifts", "Requests"]);
+    expect(within(strip).getAllByRole("link").map((a) => a.textContent)).toEqual(["Schedule", "Calendar", "Requests"]);
     expect(within(strip).getByRole("link", { name: "Requests" })).toHaveAttribute("aria-current", "page");
-    expect(within(strip).getByRole("link", { name: "Shifts" })).not.toHaveAttribute("aria-current");
+    expect(within(strip).getByRole("link", { name: "Schedule" })).not.toHaveAttribute("aria-current");
   });
 
-  it("a smaller link keeps its tab highlighted in the strip (Verify visit under Visits)", async () => {
-    renderAt("/service-verification", "manager");
+  it("Staff and Staff Types, Roles & Permissions and Agency Settings appear for the people allowed to use them, and Agency Settings keeps Services, Continuity and Appearance as tabs", async () => {
+    renderAt("/settings/services", "manager");
     const strip = await screen.findByRole("navigation", { name: "Section tabs" });
-    expect(within(strip).getByRole("link", { name: "Visits" })).toHaveAttribute("aria-current", "page");
-    expect(within(strip).queryByRole("link", { name: "Verify visit" })).toBeNull();
-  });
-
-  it("the caregiver has no tab strip", async () => {
-    renderAt("/service-verification", "caregiver");
-    await screen.findByRole("navigation", { name: "Main" });
-    expect(screen.queryByRole("navigation", { name: "Section tabs" })).toBeNull();
+    expect(within(strip).getAllByRole("link").map((a) => a.textContent)).toEqual(["Agency Settings", "Continuity", "Appearance"]);
+    const nav = screen.getByRole("navigation", { name: "Main" });
+    for (const name of ["Staff", "Staff Types", "Roles & Permissions"]) expect(within(nav).queryByRole("link", { name })).toBeNull();
   });
 });

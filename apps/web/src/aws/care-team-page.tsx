@@ -106,7 +106,7 @@ export function CareTeamPage() {
   return (
     <div className="max-w-4xl space-y-3">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <h1 className="text-xl font-bold tracking-tight text-slate-950">Care Team</h1>
+        <div className="flex items-center gap-1.5"><h1 className="text-xl font-bold tracking-tight text-og-ink">Caregivers</h1><InfoTip label="About Caregivers" title="Caregivers">Manage caregiver profiles, services and onboarding.</InfoTip></div>
         {canManage ? <Button type="button" onClick={() => setAdding((a) => !a)} aria-expanded={adding}>{adding ? "Close" : "Add caregiver"}</Button> : null}
       </div>
       {adding ? <AddCaregiverForm onDone={(id) => { setAdding(false); setAdded(id); }} /> : null}
