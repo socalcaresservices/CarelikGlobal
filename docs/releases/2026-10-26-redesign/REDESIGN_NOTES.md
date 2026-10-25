@@ -77,7 +77,7 @@ Route ownership is unchanged (`apps/web/src/aws/aws-root.tsx`); no route, page, 
 ## 5. Findings to decide on (not changed)
 
 1. **The Administrator role has almost no permissions in the database** (`organization_admin`: only care-request management). The requested description "Operational management" would not be true, so the page describes what is enforced. Likewise Staff and Read-only have none. Changing role permissions is a database change and needs your decision.
-2. The Owner's footer still reads "ADMINISTRATOR VIEW" (a view label, not the role name); the role is shown as "Owner" on Staff and Roles & Permissions.
+2. ~~The Owner's footer reads "ADMINISTRATOR VIEW".~~ Fixed in the follow-up below.
 3. Staff screens and role assignment still allow one role per person.
 
 ## 6. Verification performed (local, synthetic data, local PostgreSQL; nothing deployed)
@@ -86,7 +86,7 @@ Real browser (`verify-redesign.mjs`, Chromium; desktop 1360 and EMULATED 390 pho
 
 Appearance matrix (`local-harness/appearance-matrix.mjs`: Large text and Compact density, Light/White/Soft gray/Dark, Standard/Minimal, desktop and phone):
 - First run, 4 screens, 128 runs: 16 runs with sideways page scroll, all on the phone Roles & Permissions page (screen-reader-only text inside the scrolling table escaped its box). **Fixed**; re-run of Roles & Permissions and Staff, 64 runs: 0 overflow, 0 low-contrast, 0 hidden alerts, 0 undersized controls.
-- Still open on Reports (Visits overview), in every combination: low text contrast on the coloured summary tiles ("Worked hours", "Billable hours") and one undersized link ("Reporting & billing", 18px high). Those lines were not changed by this branch (diff-checked, not re-measured on the starting commit). **Not fixed.**
+- Reports (Visits overview) had low text contrast in every combination and one undersized link. **Both fixed in the follow-up below.** Correction to an earlier statement: the contrast failure was the **chart legend** ("Worked hours", "Billable hours" drawn in the series colour, 3.8:1 or worse on white and dark), not the summary tiles; the tiles measure 7.1 to 8.9:1.
 - The script applied the requested appearance in 94 of 128 first-run combinations (64 of 64 in the re-run); the other first-run combinations were measured in the previous setting.
 
 ## 7. Automated tests (actual results)
@@ -99,9 +99,16 @@ Appearance matrix (`local-harness/appearance-matrix.mjs`: Large text and Compact
 
 - Real phone, real keyboard-only walkthrough, screen reader, print / Save as PDF of the changed Reports layout, the CSV file contents of the three exports (export logic and server call untouched; button is shown through a portal and its click is tested), TEST, Demo and Production.
 - Scheduler (holds `authorizations.read`) sees Agency Settings, which opens Services for them, because that is the only agency page their permissions allow; the old menu showed them Services too.
-- "ADMINISTRATOR VIEW" footer label for the Owner (section 5.2).
 - The Administrator role finding (section 5.1) is a data/permission decision, not changed here.
 
-## 9. Evidence
+## 9. Follow-up before TEST: three UI fixes (requested after review)
+
+1. **Owner label.** The footer now reads **OWNER VIEW** for the Owner. The role the app used to call "Administrator" in this label is the Owner; the Administrator role (`organization_admin`) previously showed as MANAGER VIEW and now shows **ADMINISTRATOR VIEW**, so the footer uses the same names as Staff and Roles & Permissions. Presentation only: `viewKind()` feeds nothing but this label. Test: `view-kind.test.ts`.
+2. **Reports contrast.** Chart legend text (all three chart types) is drawn in the page's ink colour with the series colour kept on the swatch. Measured with the appearance matrix on Reports and Dashboard, 64 runs (Large text and Compact, four backgrounds, Standard and Minimal, desktop and emulated phone): 0 low-contrast screens (was 32 of 32 on Reports).
+3. **Reporting & billing link.** Target is now 32px high with a mouse and 44px on touch (measured 124x32 and 124x44; was 124x18). Same matrix: 0 undersized controls (was 32).
+
+Re-run after the fixes: `@carelik/web` 129 files, **1263 tests passed**; repo typecheck and lint pass; web build passes; the real-browser check script is ALL PASS.
+
+## 10. Evidence
 
 `screenshots/before` (starting commit) and `screenshots/after` (this branch): desktop navigation (all groups open), Dashboard, Reports, Staff, Roles & Permissions; phone drawer, Reports, Staff, Roles & Permissions. Captured by `shots2.mjs` on the local harness as the synthetic Owner. Tool scripts: `shots2.mjs`, `verify-redesign.mjs`.

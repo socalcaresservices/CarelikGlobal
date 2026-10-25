@@ -107,16 +107,17 @@ export interface UtilisationRow extends HoursFields {
   unusedValueCents: number | null;
 }
 
-export type ViewKind = "ADMINISTRATOR" | "MANAGER" | "SCHEDULER" | "CAREGIVER" | "STAFF";
+export type ViewKind = "OWNER" | "ADMINISTRATOR" | "MANAGER" | "SCHEDULER" | "CAREGIVER" | "STAFF";
 
 /** The view label comes from the server-provided role, never from the email. */
 export function viewKind(role: string | null): ViewKind {
   switch (role) {
-    // Internal role organization_owner is shown to people as Administrator.
+    // The view label uses the same names as Staff and Roles & Permissions: Owner, Administrator, Manager, ...
     case "organization_owner":
+      return "OWNER";
+    case "organization_admin":
       return "ADMINISTRATOR";
     case "manager":
-    case "organization_admin":
       return "MANAGER";
     case "scheduler":
     case "coordinator":
@@ -129,6 +130,7 @@ export function viewKind(role: string | null): ViewKind {
 }
 
 export const VIEW_TITLE: Record<ViewKind, string> = {
+  OWNER: "Owner",
   ADMINISTRATOR: "Administrator",
   MANAGER: "Manager",
   SCHEDULER: "Scheduler",

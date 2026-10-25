@@ -187,6 +187,9 @@ function sumMinutes(
   return rows.reduce((total, row) => total + (row[key] ?? 0), 0);
 }
 
+/** Chart legend text in the page's own ink colour: the series colour is shown by the swatch, and coloured text on white or dark backgrounds does not reach the contrast a reader needs. */
+const legendText = (value: string) => <span className="text-og-ink">{value}</span>;
+
 function csvQuote(value: unknown) {
   return `"${String(value ?? "").replace(/"/g, '""')}"`;
 }
@@ -1628,7 +1631,7 @@ export function ServiceVerificationReportsPage() {
 
       {reportView === "overview" ? (
         <>
-          {awsApi ? <p className="text-sm text-slate-700" data-testid="reporting-hub-link">More reports: <Link className="font-semibold underline" to="/reporting">Reporting &amp; billing</Link>.</p> : null}
+          {awsApi ? <p className="text-sm text-slate-700" data-testid="reporting-hub-link">More reports: <Link className="inline-flex min-h-[32px] items-center font-semibold underline [@media(pointer:coarse)]:min-h-[44px]" to="/reporting">Reporting &amp; billing</Link>.</p> : null}
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
             {[
               {
@@ -1734,7 +1737,7 @@ export function ServiceVerificationReportsPage() {
                         ))}
                       </Pie>
                       <Tooltip formatter={(value) => formatDuration(Number(value))} />
-                      <Legend />
+                      <Legend formatter={legendText} />
                     </PieChart>
                   ) : chartType === "line" ? (
                     <LineChart data={trendData}>
@@ -1742,7 +1745,7 @@ export function ServiceVerificationReportsPage() {
                       <XAxis dataKey="name" tick={{ fontSize: 11 }} />
                       <YAxis tickFormatter={(value) => formatDuration(Number(value))} />
                       <Tooltip formatter={(value) => formatDuration(Number(value))} />
-                      <Legend />
+                      <Legend formatter={legendText} />
                       <Line
                         type="monotone"
                         dataKey="workedMinutes"
@@ -1764,7 +1767,7 @@ export function ServiceVerificationReportsPage() {
                       <XAxis dataKey="name" tick={{ fontSize: 11 }} />
                       <YAxis tickFormatter={(value) => formatDuration(Number(value))} />
                       <Tooltip formatter={(value) => formatDuration(Number(value))} />
-                      <Legend />
+                      <Legend formatter={legendText} />
                       <Bar
                         dataKey="workedMinutes"
                         name="Worked hours"

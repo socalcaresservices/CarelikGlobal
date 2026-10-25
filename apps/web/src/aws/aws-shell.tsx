@@ -81,7 +81,7 @@ function initialsOf(name: string): string {
 
 /**
  * Shell for the AWS build: agency identity, the signed-in person and their view
- * (ADMINISTRATOR / MANAGER / CAREGIVER VIEW), ACTION NEEDED, and role-appropriate
+ * (OWNER / ADMINISTRATOR / MANAGER / CAREGIVER VIEW), ACTION NEEDED, and role-appropriate
  * navigation in a collapsible left-hand sidebar (a drawer below 768px). Navigation only decides what is
  * shown; every screen's data is authorized again in PostgreSQL.
  */

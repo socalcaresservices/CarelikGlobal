@@ -140,7 +140,7 @@ describe("sidebar: expanded", () => {
     const nav = await screen.findByRole("navigation", { name: "Main" });
     openAll(nav);
     expect(within(nav).getByRole("link", { name: "Agency Settings" }).getAttribute("href")).toBe("/settings/branding");
-    expect(await screen.findByText("ADMINISTRATOR VIEW")).toBeInTheDocument();
+    expect(await screen.findByText("OWNER VIEW")).toBeInTheDocument();
     expect(screen.getByText("Synthetic Person")).toBeInTheDocument();
     expect(screen.getByText("person@example.test")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Profile" }).getAttribute("href")).toBe("/profile");

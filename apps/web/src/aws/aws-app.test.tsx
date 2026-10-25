@@ -241,10 +241,10 @@ describe("AWS build: manager review and billing-review data", () => {
     expect(api.calls.some((c) => c.path.startsWith("/v1/attention/overview?organizationId="))).toBe(true);
   });
 
-  it("organization_owner sees ADMINISTRATOR VIEW, the compact financial section without cost/margin, and Settings", async () => {
+  it("organization_owner sees OWNER VIEW, the compact financial section without cost/margin, and Settings", async () => {
     renderAws("/", "organization_owner");
-    expect(await screen.findByText("ADMINISTRATOR VIEW")).toBeInTheDocument();
-    expect(screen.queryByText("OWNER VIEW")).not.toBeInTheDocument();
+    expect(await screen.findByText("OWNER VIEW")).toBeInTheDocument();
+    expect(screen.queryByText("ADMINISTRATOR VIEW")).not.toBeInTheDocument();   // the Owner is not labelled Administrator
     expect(await screen.findByText("Financial impact")).toBeInTheDocument();
     expect(screen.getByText("$735")).toBeInTheDocument();
     // Caregiver cost and margin are not displayed as a value or as an "Unavailable" card; the reason sits in the definitions.
