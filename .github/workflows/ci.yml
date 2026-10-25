@@ -53,20 +53,23 @@ jobs:
       postgres:
         image: postgres:18
         env:
-          POSTGRES_USER: ogevia_admin
+          POSTGRES_USER: postgres
           POSTGRES_DB: postgres
           POSTGRES_HOST_AUTH_METHOD: trust
         ports:
           - 5432:5432
         options: >-
-          --health-cmd "pg_isready -U ogevia_admin"
+          --health-cmd "pg_isready -U postgres"
           --health-interval 5s
           --health-timeout 5s
           --health-retries 20
     env:
-      OGEVIA_TEST_DATABASE_URL: postgres://ogevia_admin@127.0.0.1:5432/postgres
+      OGEVIA_TEST_DATABASE_URL: postgres://postgres@127.0.0.1:5432/postgres
     steps:
+      # Full history: the release-package suites build packages from pinned commits (for example fa3ca07) that a depth-1 checkout lacks.
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - uses: pnpm/action-setup@v4
         with:
           version: 9.15.4
@@ -75,6 +78,29 @@ jobs:
           node-version: 22
           cache: pnpm
       - run: pnpm install --frozen-lockfile
+      # The release-package suites run the production scripts against this disposable database, and those scripts require TLS
+      # (PGSSLMODE=require), as RDS does. The stock postgres image has TLS off. This step turns it on with a throwaway self-signed
+      # certificate generated here (valid one day, never stored); nothing is disabled or weakened, and the scripts still verify
+      # that TLS is in use. Test database only.
+      - name: Enable TLS on the test database
+        run: |
+          set -euo pipefail
+          cid=$(docker ps --filter "ancestor=postgres:18" --format '{{.ID}}' | head -n1)
+          test -n "$cid"
+          d=$(mktemp -d)
+          openssl req -new -x509 -days 1 -nodes -subj "/CN=localhost" -out "$d/server.crt" -keyout "$d/server.key"
+          docker cp "$d/server.crt" "$cid:/tmp/server.crt"
+          docker cp "$d/server.key" "$cid:/tmp/server.key"
+          docker exec -u root "$cid" chown postgres:postgres /tmp/server.crt /tmp/server.key
+          docker exec -u root "$cid" chmod 600 /tmp/server.key
+          psql "$OGEVIA_TEST_DATABASE_URL" -v ON_ERROR_STOP=1 -qAt \
+            -c "alter system set ssl_cert_file = '/tmp/server.crt'" \
+            -c "alter system set ssl_key_file = '/tmp/server.key'" \
+            -c "alter system set ssl = on" \
+            -c "select pg_reload_conf()"
+          sleep 2
+          test "$(psql "$OGEVIA_TEST_DATABASE_URL?sslmode=require" -tAc 'show ssl')" = "on"
+          echo "TLS is on: a connection with sslmode=require succeeds"
       - run: pnpm test:all
 
   # Local harness smoke check (docs/TESTING_AND_RELEASE_PROCESS.md, Phase B tooling): builds the harness database (all
