@@ -8,7 +8,7 @@ Status words: **prepared** = in this folder; **tested** = said where; **executed
 |---|---|---|
 | `sql/prd-synthetic-cleanup.sql` | One transaction: identity guard, count guard, lifts the 32 delete guards, deletes 64 tables children-first, removes caregiver memberships and unreferenced people, writes one audit event, verifies, restores and proves the guards, then COMMIT only with `-v do_commit=1` (default ROLLBACK) | **Tested locally** on PostgreSQL 16 with all 85 migrations: wrong database aborts; wrong count aborts; dry run changes nothing; commit empties and keeps config and audit; a failure injected after the deletes rolls everything back and leaves every guard enabled |
 | `sql/prd-cleanup-readonly-counts.sql` | Read-only: every table count, the three reported totals, record dates, roles, audit actions, sign-in identities, object-store references | Tested locally (runs, read-only) |
-| `scripts/f-cleanup-prd.sh` | Wrapper: runs the SQL through the EXISTING temporary database window (`window.sh`, unchanged) with typed phrases; snapshot check for commit | **Syntax-checked only. NOT mock-tested.** Must be reviewed and mock-tested before gate G1 |
+| `scripts/f-cleanup-prd.sh` | Wrapper: runs the SQL through the EXISTING temporary database window (`window.sh`, unchanged) with typed phrases; snapshot check for commit | **Mock-tested (G0)**: `infra/aws/db/test/prd-cleanup-script.db.test.ts`, 12 tests against a mocked aws and a real local `ogevia_prd`; two deliberate breakages (counts via the read-write helper; window never closed) make it fail. Never run against AWS |
 
 ## Verified facts (local schema built from migrations 0001-0085)
 - 92 tables in `ogevia`: 64 emptied, 28 retained. Every `delete from` equals the computed set. No FK points from a retained table to an emptied one. No FK order violation (child deleted after parent). All 287 foreign keys are NO ACTION.
@@ -23,7 +23,7 @@ Each gate needs the owner's explicit approval at run time. A gate that fails sto
 
 | Gate | Action | Changes | Approval phrase |
 |---|---|---|---|
-| G0 | Review this branch; mock-test `f-cleanup-prd.sh` (pattern: `infra/aws/db/test/auth-cutover-scripts.db.test.ts`) | none | - |
+| G0 | Review this branch; mock-test `f-cleanup-prd.sh` (DONE: `infra/aws/db/test/prd-cleanup-script.db.test.ts`) | none | - |
 | G1a | AWS read-only evidence: snapshot, Cognito users, S3 inventory (commands below) | none | none (read-only) |
 | G1b | `f-cleanup-prd.sh counts` | temporary /32 rule on the shared RDS group, removed and verified | `OPEN-5432-WINDOW-CLEANUP-COUNTS` |
 | G2 | Fresh pre-cleanup snapshot (commands below) | billable snapshot | owner GO |
@@ -97,4 +97,4 @@ bash f-cleanup-prd.sh --restore-only      # only after an interrupted run
 Run `f-cleanup-prd.sh counts` again. Expect: only these tables non-empty: `organizations`, `app_users`, `organization_memberships` (non-caregiver), `permissions`, `role_permissions`, `services`, the agency/organization settings and policy tables, reference data, and `audit_events` (= before + 1, including `platform.synthetic_data_cleanup`); zero guards not enabled; the organization logo reference still present. S3 objects are untouched and now unreferenced: decide separately (the bucket is versioned; deleting is irreversible without versions).
 
 ## Remaining risks (not closed)
-- Wrapper untested (G0). Lifting the 32 guards overrides immutability controls by design, once, inside a verified transaction. Rows in most tables were not exercised locally. Counts may differ from 4/5/36. The compliance sweep (15-minute rule) could add rows during a run; verification would fail and roll back. S3 evidence stays orphaned until separately approved. Cognito caregiver sign-ins stay until separately approved. Whether a former caregiver's sign-in behaves as expected after cleanup is UNVERIFIED live.
+- Lifting the 32 guards overrides immutability controls by design, once, inside a verified transaction. Rows in most tables were not exercised locally. Counts may differ from 4/5/36. The compliance sweep (15-minute rule) could add rows during a run; verification would fail and roll back. S3 evidence stays orphaned until separately approved. Cognito caregiver sign-ins stay until separately approved. Whether a former caregiver's sign-in behaves as expected after cleanup is UNVERIFIED live.

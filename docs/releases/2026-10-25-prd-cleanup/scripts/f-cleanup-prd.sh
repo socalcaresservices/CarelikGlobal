@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # F: PRODUCTION SYNTHETIC-DATA CLEANUP of ogevia_prd (owner decision: clean slate, caregivers included). YELLOW/RED when it runs in dryrun or commit mode.
-# DRAFT FOR REVIEW. NOT RUN against AWS. NOT mock-tested (the SQL it runs IS tested on a local PostgreSQL; this wrapper is not). Do not run it until it has been reviewed and mock-tested like the
-# auth-separation scripts (infra/aws/db/test/auth-cutover-scripts.db.test.ts is the pattern). It reuses common.sh -> lib.sh + window.sh UNCHANGED; it adds no new access mechanism.
+# FOR OWNER REVIEW. NOT run against AWS. Mock-tested: infra/aws/db/test/prd-cleanup-script.db.test.ts (mocked aws, real local PostgreSQL named ogevia_prd; 12 tests, mutation-checked). The SQL it runs is tested separately.
+# It reuses common.sh -> lib.sh + window.sh UNCHANGED; it adds no new access mechanism.
 #
 #   OGEVIA_DEPLOY_APPROVAL=<ref> bash f-cleanup-prd.sh counts              YELLOW, READ ONLY. Opens the temporary database window; prints the pre-cleanup counts, record-level evidence,
 #                                                                          sign-in identities and object-store references (section A-F of sql/prd-cleanup-readonly-counts.sql). Writes nothing to the database.
