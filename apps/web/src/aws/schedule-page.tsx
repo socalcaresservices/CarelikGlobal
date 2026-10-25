@@ -24,6 +24,7 @@ import { useClientAuthorizations } from "./client-admin";
 import { useAssignments } from "./assignments-data";
 import { applyFilters, DISPLAY_BADGE, DISPLAY_LABEL, NO_FILTERS, stateOfShift, stepAnchor, viewRange, type CalendarView, type ShiftFilters } from "./schedule-model";
 import { FilterBar, MonthGrid, ReplacementSuggestions, SchedulingOverview, ViewTabs } from "./schedule-views";
+import { InfoTip } from "./ui/info-tip";
 
 /**
  * Schedule (0026): staff-scheduled shifts, call-outs, replacements and
@@ -329,7 +330,7 @@ function ShiftRow({ s, canManage, onDone, highlight = false, autoAssign = false,
       {calledOut && s.lastCalloutReason ? <p className="text-red-800">Reason: {s.lastCalloutReason}</p> : null}
       {s.availabilityOverride ? <p className="font-medium text-amber-900">Assigned with Admin override (availability was No Match){s.availabilityOverrideReason ? `: ${s.availabilityOverrideReason}` : ""}</p> : null}
       {s.makeupForShiftId ? <p className="font-medium text-violet-900">Make-up visit for missed time</p> : null}
-      {s.seriesId ? <p className="text-slate-600">Repeats on a schedule. Changes here affect this date only; change the series under Manage repeating shifts.</p> : null}
+      {s.seriesId ? <InfoTip label="Help">Repeats on a schedule. Changes here affect this date only; change the series under Manage repeating shifts.</InfoTip> : null}
       {s.fromCareRequest ? <p className="text-slate-600">From a Care Request; manage it on the <Link className="underline" to="/schedule/shift-requests">Care Requests</Link> page.</p> : null}
     </>
   );

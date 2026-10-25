@@ -106,6 +106,15 @@ describe("Care Team", () => {
     expect(Object.keys(post.headers).map((h) => h.toLowerCase())).toContain("idempotency-key");
   });
 
+  it("the caregiver list has a No. column numbered 1..n in the order shown", async () => {
+    renderAt("/care-team", "manager");
+    const table = await screen.findByRole("table", { name: "Caregivers" });
+    expect(within(table).getAllByRole("columnheader")[0]).toHaveTextContent("No.");
+    const numbers = within(table).getAllByTestId("row-no").map((c) => Number(c.textContent));
+    expect(numbers.length).toBeGreaterThan(0);
+    expect(numbers).toEqual(numbers.map((_, i) => i + 1));
+  });
+
   it("the caregiver page opens with the overall outcome and lists what to fix", async () => {
     renderAt(`/care-team/${CG}`, "manager");
     expect(await screen.findByRole("heading", { name: "Synthetic Caregiver One" })).toBeInTheDocument();

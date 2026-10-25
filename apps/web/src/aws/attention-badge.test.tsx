@@ -119,12 +119,12 @@ describe("Needs attention now badge", () => {
 describe("navigation highlight", () => {
   it("marks only the current section with aria-current=page, including nested routes", async () => {
     renderAt("/", "manager", () => json(200, overview()));
-    expect(await currentItems()).toEqual(["Home"]);
+    expect(await currentItems()).toEqual(["Dashboard"]);
   });
 
   it("a nested route highlights its own section only, not its parent", async () => {
     renderAt("/service-verification/reports", "manager", () => json(200, overview()));
-    await waitFor(async () => expect(await currentItems()).toEqual(["Visit records"]));
+    await waitFor(async () => expect(await currentItems()).toEqual(["Visits"]));
   });
 });
 

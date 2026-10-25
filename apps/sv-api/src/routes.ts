@@ -1063,6 +1063,168 @@ export const ROUTES: Record<string, Route> = {
     },
   },
 
+  // Staff management (0086). The database decides first: staff.read / staff.manage are held by the organization owner only, and only for the caller's own
+  // agency. A staff TYPE is a label that carries no authority; the system role is a separate, audited change. Invitations use the same identity function as
+  // caregivers (create the sign-in, then the database links it). No password, email or Cognito identifier is returned.
+  "GET /v1/staff-types": {
+    mutating: false,
+    handle: async ({ event, tx }) => {
+      const org = orgParam(event);
+      return { staffTypes: await tx((db) => rows(db, "select * from ogevia_api.list_staff_types($1)", [org])) };
+    },
+  },
+
+  "POST /v1/staff-types": {
+    status: 201,
+    mutating: true,
+    handle: async ({ event, tx }) => {
+      const body = parseBody(event.body, event.isBase64Encoded);
+      const org = uuid(body.organizationId, "organizationId");
+      const name = text(body.name, "name", 60, { required: true })!;
+      const id = await tx(async (db) => ((await db.query("select ogevia_api.create_staff_type($1, $2) as id", [org, name])).rows[0] as { id: string }).id);
+      return { staffType: { id } };
+    },
+  },
+
+  "POST /v1/staff-types/{staffTypeId}/rename": {
+    mutating: true,
+    handle: async ({ event, tx }) => {
+      const id = uuid(p(event).staffTypeId, "staffTypeId");
+      const body = parseBody(event.body, event.isBase64Encoded);
+      const org = uuid(body.organizationId, "organizationId");
+      const name = text(body.name, "name", 60, { required: true })!;
+      await tx((db) => db.query("select ogevia_api.rename_staff_type($1, $2, $3)", [org, id, name]));
+      return { staffType: { id } };
+    },
+  },
+
+  "POST /v1/staff-types/{staffTypeId}/active": {
+    mutating: true,
+    handle: async ({ event, tx }) => {
+      const id = uuid(p(event).staffTypeId, "staffTypeId");
+      const body = parseBody(event.body, event.isBase64Encoded);
+      const org = uuid(body.organizationId, "organizationId");
+      const active = booleanValue(body.active, "active");
+      await tx((db) => db.query("select ogevia_api.set_staff_type_active($1, $2, $3)", [org, id, active]));
+      return { staffType: { id, isActive: active } };
+    },
+  },
+
+  "GET /v1/staff": {
+    mutating: false,
+    handle: async ({ event, tx }) => {
+      const org = orgParam(event);
+      return { staff: await tx((db) => rows(db, "select * from ogevia_api.list_staff($1)", [org])) };
+    },
+  },
+
+  "POST /v1/staff": {
+    status: 201,
+    mutating: true,
+    handle: async ({ event, tx }) => {
+      const body = parseBody(event.body, event.isBase64Encoded);
+      const org = uuid(body.organizationId, "organizationId");
+      const name = text(body.displayName, "displayName", 120, { required: true })!;
+      const type = uuid(body.staffTypeId, "staffTypeId");
+      const email = text(body.contactEmail, "contactEmail", 254);
+      const phone = text(body.phone, "phone", 40);
+      const id = await tx(async (db) => ((await db.query("select ogevia_api.create_staff($1, $2, $3, $4, $5) as id", [org, name, type, email, phone])).rows[0] as { id: string }).id);
+      return { staff: { id } };
+    },
+  },
+
+  "POST /v1/staff/{profileId}": {
+    mutating: true,
+    handle: async ({ event, tx }) => {
+      const id = uuid(p(event).profileId, "profileId");
+      const body = parseBody(event.body, event.isBase64Encoded);
+      const org = uuid(body.organizationId, "organizationId");
+      const name = text(body.displayName, "displayName", 120, { required: true })!;
+      const type = uuid(body.staffTypeId, "staffTypeId");
+      const email = text(body.contactEmail, "contactEmail", 254);
+      const phone = text(body.phone, "phone", 40);
+      const status = oneOf(body.status, "status", ["active", "inactive"] as const);
+      await tx((db) => db.query("select ogevia_api.update_staff($1, $2, $3, $4, $5, $6, $7)", [org, id, name, type, email, phone, status]));
+      return { staff: { id } };
+    },
+  },
+
+  "POST /v1/staff-members/{userId}/profile": {
+    status: 201,
+    mutating: true,
+    handle: async ({ event, tx }) => {
+      const userId = uuid(p(event).userId, "userId");
+      const body = parseBody(event.body, event.isBase64Encoded);
+      const org = uuid(body.organizationId, "organizationId");
+      const type = uuid(body.staffTypeId, "staffTypeId");
+      const id = await tx(async (db) => ((await db.query("select ogevia_api.add_member_to_staff($1, $2, $3) as id", [org, userId, type])).rows[0] as { id: string }).id);
+      return { staff: { id } };
+    },
+  },
+
+  "POST /v1/staff/{profileId}/invitation": {
+    status: 201,
+    mutating: true,
+    handle: async ({ event, tx, identity }) => {
+      const id = uuid(p(event).profileId, "profileId");
+      const body = parseBody(event.body, event.isBase64Encoded);
+      const org = uuid(body.organizationId, "organizationId");
+      const email = text(body.email, "email", 254, { required: true })!;
+      const role = text(body.role, "role", 40, { required: true })!;
+      const normalized = await tx(async (db) =>
+        ((await db.query("select ogevia_api.begin_staff_invitation($1, $2, $3, $4) as email", [org, id, email, role])).rows[0] as { email: string }).email);
+      const signIn = await identity.invite(normalized);
+      const [invitation] = await tx((db) =>
+        rows(db, "select * from ogevia_api.complete_staff_invitation($1, $2, $3, $4, $5, $6)", [org, id, normalized, signIn.sub, signIn.existingAccount, role]));
+      return { invitation };
+    },
+  },
+
+  "POST /v1/staff/{profileId}/invitation/resend": {
+    mutating: true,
+    handle: async ({ event, tx, identity }) => {
+      const id = uuid(p(event).profileId, "profileId");
+      const body = parseBody(event.body, event.isBase64Encoded);
+      const org = uuid(body.organizationId, "organizationId");
+      const email = await tx(async (db) =>
+        ((await db.query("select ogevia_api.begin_staff_invitation_resend($1, $2) as email", [org, id])).rows[0] as { email: string }).email);
+      await identity.resend(email);
+      const sendCount = await tx(async (db) =>
+        ((await db.query("select ogevia_api.record_staff_invitation_resent($1, $2) as n", [org, id])).rows[0] as { n: number }).n);
+      return { invitation: { sendCount } };
+    },
+  },
+
+  "POST /v1/staff-roles/{userId}": {
+    mutating: true,
+    handle: async ({ event, tx }) => {
+      const userId = uuid(p(event).userId, "userId");
+      const body = parseBody(event.body, event.isBase64Encoded);
+      const org = uuid(body.organizationId, "organizationId");
+      const role = text(body.role, "role", 40, { required: true })!;
+      const reason = text(body.reason, "reason", 500, { required: true })!;
+      const [result] = await tx((db) => rows(db, "select ogevia_api.set_staff_role($1, $2, $3, $4) as role", [org, userId, role, reason]));
+      return { staff: { userId, role: result?.role } };
+    },
+  },
+
+  "GET /v1/role-permissions": {
+    mutating: false,
+    handle: async ({ event, tx }) => {
+      const org = orgParam(event);
+      return { roles: await tx((db) => rows(db, "select * from ogevia_api.list_role_permissions($1)", [org])) };
+    },
+  },
+
+  "GET /v1/staff-audit": {
+    mutating: false,
+    handle: async ({ event, tx }) => {
+      const org = orgParam(event);
+      const profile = optionalUuid(q(event).profileId, "profileId");
+      return { events: await tx((db) => rows(db, "select * from ogevia_api.list_staff_audit($1, $2)", [org, profile])) };
+    },
+  },
+
   "POST /v1/services": {
     status: 201,
     mutating: true,

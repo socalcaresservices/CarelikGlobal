@@ -79,7 +79,7 @@ export function AppearancePage() {
           <Card className="space-y-1.5">
             <div className="flex flex-wrap items-baseline gap-x-2">
               <h2 className="text-sm font-semibold text-og-ink">My view</h2>
-              <p className="text-xs text-og-sub">Only you see these. “Agency default” follows your agency&apos;s setting.</p>
+              <InfoTip label="Help">Only you see these. “Agency default” follows your agency&apos;s setting.</InfoTip>
             </div>
             <ChoiceForm key={JSON.stringify(q.data.mine)} level="me" current={q.data.mine} defaultLabel="Agency default" />
           </Card>

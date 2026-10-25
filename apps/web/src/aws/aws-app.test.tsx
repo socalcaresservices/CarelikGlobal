@@ -235,8 +235,10 @@ describe("AWS build: manager review and billing-review data", () => {
     // 1590 of 6000 minutes worked = 26.5 h of 100 h; the table sits behind the details control.
     expect((await screen.findAllByText("26.5 h")).length).toBeGreaterThan(0);
     expect(screen.queryByText("Financial impact")).not.toBeInTheDocument();
-    expect(screen.queryByRole("link", { name: "Settings" })).not.toBeInTheDocument();
-    expect(screen.getByRole("link", { name: /^Approvals/  })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /^Settings/ }));
+    expect(screen.queryByRole("link", { name: "Branding" })).not.toBeInTheDocument();   // agency settings are for the Administrator
+    fireEvent.click(screen.getByRole("button", { name: /^Operations/ }));
+    expect(screen.getByRole("link", { name: /^Approvals/ })).toBeInTheDocument();
     expect(api.calls.some((c) => c.path.startsWith("/v1/attention/overview?organizationId="))).toBe(true);
   });
 
@@ -249,7 +251,8 @@ describe("AWS build: manager review and billing-review data", () => {
     // Caregiver cost and margin are not displayed as a value or as an "Unavailable" card; the reason sits in the definitions.
     expect(screen.queryByText("Unavailable")).not.toBeInTheDocument();
     expect(screen.queryByText(/Caregiver cost and margin$/)).not.toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "Settings" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /^Settings/ }));
+    expect(screen.getByRole("link", { name: "Branding" })).toBeInTheDocument();
   });
 
   it("a missing name is shown explicitly with a way to add it, never replaced by the email", async () => {
@@ -342,7 +345,8 @@ describe("AWS build: manager review and billing-review data", () => {
   it("manager: Documents lists people's requests; rejecting needs a reason; Home shows document counts", async () => {
     const { api } = renderAws("/", "manager");
     expect(await screen.findByTestId("stream-documents")).toHaveTextContent("1 overdue");
-    fireEvent.click(screen.getByRole("link", { name: "Documents" }));
+    fireEvent.click(screen.getByRole("button", { name: /^Operations/ }));
+    fireEvent.click(within(screen.getByRole("navigation", { name: "Main" })).getByRole("link", { name: "Documents" }));
     expect(await screen.findByRole("heading", { name: "Documents & compliance" })).toBeInTheDocument();
     const card = (await screen.findByText("TB test", { selector: "p" })).closest("tbody")!;
     expect(within(card).getByText("Pilot Caregiver A")).toBeInTheDocument();
@@ -391,10 +395,10 @@ describe("AWS build: manager review and billing-review data", () => {
     expect(api.calls.some((c) => c.method === "POST" && c.path.endsWith("/review"))).toBe(false);
   });
 
-  it("NEEDS ATTENTION opens the exceptions view; the Visit records menu item returns to the visit list", async () => {
+  it("NEEDS ATTENTION opens the exceptions view; the Visits menu item returns to the visit list", async () => {
     renderAws("/service-verification/reports?view=exceptions", "manager");
     expect(await screen.findByRole("heading", { name: "Action needed" })).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("link", { name: "Visit records" }));
+    fireEvent.click(within(screen.getByRole("navigation", { name: "Main" })).getByRole("link", { name: "Visits" }));
     expect(await screen.findByRole("heading", { name: "Visit records" })).toBeInTheDocument();
   });
 
@@ -412,7 +416,7 @@ describe("AWS build: manager review and billing-review data", () => {
     expect(screen.getByText("CAREGIVER VIEW")).toBeInTheDocument();
     expect(screen.queryByRole("link", { name: /Action needed/i })).not.toBeInTheDocument();
     expect(screen.queryByRole("link", { name: "Approvals" })).not.toBeInTheDocument();
-    expect(screen.queryByRole("link", { name: "Visit records" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "Visits" })).not.toBeInTheDocument();
   });
 });
 

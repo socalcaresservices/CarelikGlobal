@@ -54,6 +54,7 @@ import { useServiceVerificationBackend } from "@/lib/sv-backend-supabase";
 import { buildClientMonthSummary } from "@/lib/client-month-summary";
 import { CalendarAuthorizedHours, CalendarSummary } from "@/components/calendar-summary";
 import { PageHeader } from "@/aws/ui/page-header";
+import { InfoTip } from "@/aws/ui/info-tip";
 import { useEnvironmentMarker } from "@/aws/environment";
 import { AwsApiContext } from "@/aws/aws-workspace";
 import { MonthlyChainReport } from "@/aws/monthly-chain-report";
@@ -1338,13 +1339,13 @@ export function ServiceVerificationReportsPage() {
               <h3 className="font-bold text-emerald-950">
                 One secure staff link
               </h3>
-              <p className="mt-1 text-sm text-emerald-900">
+              <InfoTip label="Help">
                 Send the same link to every caregiver. Each person signs in with
                 their own account and can only see clients and services assigned
                 to them. For an extra shift, a manager assigns that client and
                 service first; managers can correct a submitted visit when a
                 mistake is made.
-              </p>
+              </InfoTip>
               <a
                 href="/clients"
                 className="mt-2 inline-flex rounded-lg bg-emerald-700 px-2 py-1.5 text-sm font-bold text-white hover:bg-emerald-800"
@@ -1363,10 +1364,10 @@ export function ServiceVerificationReportsPage() {
               <h3 className="font-semibold text-slate-950">
                 Caregiver folders
               </h3>
-              <p className="mt-1 text-sm text-slate-500">
+              <InfoTip label="Help">
                 Open a caregiver folder to view, print, or bookmark only that
                 caregiver&apos;s sheets.
-              </p>
+              </InfoTip>
             </div>
             {caregiverFilter ? (
               <button
@@ -1591,7 +1592,7 @@ export function ServiceVerificationReportsPage() {
           </details>
           <details className="mt-2 text-xs text-slate-500">
             <summary className="inline-flex min-h-[32px] cursor-pointer items-center text-og-accent underline">Details</summary>
-            <p>Use Custom for a pay period or any other range. These reports use actual signed visit time, not the schedule.</p>
+            <InfoTip label="Help">Use Custom for a pay period or any other range. These reports use actual signed visit time, not the schedule.</InfoTip>
           </details>
         </Card>
       ) : null}
@@ -1777,6 +1778,7 @@ export function ServiceVerificationReportsPage() {
               >
                 <thead>
                   <tr className="border-b border-slate-200 text-xs uppercase tracking-wide text-slate-500">
+                    <th className="w-10 pb-2 pr-3 text-right font-medium">No.</th>
                     <th className="pb-2 font-medium">Caregiver</th>
                     <th className="pb-2 font-medium">Worked</th>
                     <th className="pb-2 font-medium">Billable</th>
@@ -1784,8 +1786,9 @@ export function ServiceVerificationReportsPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {caregiverSubtotals.map((entry) => (
+                  {caregiverSubtotals.map((entry, index) => (
                     <tr key={entry.name} className="border-b border-slate-100">
+                      <td className="w-10 py-1 pr-3 text-right tabular-nums text-slate-600" data-testid="row-no">{index + 1}</td>
                       <td className="py-1 font-semibold text-slate-900">
                         {entry.name}
                       </td>
@@ -1863,17 +1866,18 @@ export function ServiceVerificationReportsPage() {
                 <h3 className="font-semibold text-slate-950 print:hidden">
                   Client monthly service calendar
                 </h3>
-                <p className="mt-1 text-sm text-slate-500 print:hidden">
+                <InfoTip label="Help">
                   Each date shows worked time per service, added up across caregivers.
                   Different services are never combined.
-                </p>
-                <p className="mt-1 text-xs text-slate-500 print:mt-0 print:text-[9px] print:text-slate-700">
+                </InfoTip>
+                <InfoTip label="Help">
                   Includes confirmed visits and visits in review (shaded amber). Replaced
                   originals and voided visits are left out, so corrections are not counted
                   twice. Visits not yet complete are listed separately and not counted.
                   <span className="print:hidden"> Always the full month for this client: the caregiver, service,
                   status and date filters do not apply here.</span>
-                </p>
+                </InfoTip>
+                <p className="hidden print:block print:text-[9px] print:text-slate-700">Amber = in review. Replaced and voided visits are excluded.</p>
               </div>
             </div>
             <div className="flex flex-wrap items-end gap-2 print:hidden">
@@ -2087,12 +2091,12 @@ export function ServiceVerificationReportsPage() {
               <h3 className="font-semibold text-slate-950">
                 Monthly hours & billing
               </h3>
-              <p className="mt-1 max-w-3xl text-sm text-slate-500">
+              <InfoTip label="Help">
                 Each row is one client + service + authorization lineage.
                 Services are never combined. Worked and billable time remain
                 separate so documentation or authorization differences cannot
                 be hidden by a client-level total.
-              </p>
+              </InfoTip>
               <p className="mt-1 max-w-3xl text-xs text-slate-500">
                 <strong>Billable (eligible)</strong> is confirmed time within the
                 authorization; <strong>Approved</strong> is what a person approved
@@ -2193,6 +2197,7 @@ export function ServiceVerificationReportsPage() {
               <table className="w-full text-left text-sm" aria-label="Monthly hours and billing reconciliation">
                 <thead>
                   <tr className="border-b border-slate-200 text-xs uppercase tracking-wide text-slate-500">
+                    <th className="w-10 pb-2 pr-3 text-right font-medium">No.</th>
                     <th className="pb-2 pr-3 font-medium">Client</th>
                     <th className="pb-2 pr-3 font-medium">Service</th>
                     <th className="pb-2 pr-3 font-medium">Authorized</th>
@@ -2211,10 +2216,11 @@ export function ServiceVerificationReportsPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {monthlyServiceRows.map((row) => {
+                  {monthlyServiceRows.map((row, index) => {
                     const difference = Math.max(0, row.workedMinutes - row.billableMinutes);
                     return (
                       <tr key={row.authorizationLineageId} className="border-b border-slate-100">
+                        <td className="w-10 py-1 pr-3 text-right tabular-nums text-slate-600" data-testid="row-no">{index + 1}</td>
                         <td className="py-1 pr-3"><ClientCell name={row.clientName} code={row.clientCode} duplicate={row.clientNameDuplicate} /></td>
                         <td className="py-1 pr-3">
                           <p className="font-medium text-slate-800">{row.serviceCode} · {row.serviceName}</p>
@@ -2268,11 +2274,11 @@ export function ServiceVerificationReportsPage() {
               </table>
             </div>
           )}
-          <p className="mt-2 text-xs text-slate-500">
+          <InfoTip label="Help">
             “Billable” means eligible to bill after visit verification and
             authorization controls. Actual submitted/billed totals will remain a
             separate ledger value; they must never be inferred from billable time.
-          </p>
+          </InfoTip>
         </Card>
       ) : null}
 
@@ -2283,10 +2289,10 @@ export function ServiceVerificationReportsPage() {
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
               <h3 className="font-semibold text-slate-950">Correction history</h3>
-              <p className="mt-1 max-w-3xl text-sm text-slate-500">
+              <InfoTip label="Help">
                 Agency audit report of visit revisions. Original records remain
                 immutable; this report shows who changed what, why, and when.
-              </p>
+              </InfoTip>
             </div>
             {canExport && correctionRows.length > 0 ? (
               <Button
@@ -2748,9 +2754,9 @@ export function ServiceVerificationReportsPage() {
               <h3 className="font-semibold text-slate-950">
                 By client and service
               </h3>
-              <p className="mt-1 text-xs text-slate-500">
+              <InfoTip label="Help">
                 Service totals remain separate even when one client has multiple services.
-              </p>
+              </InfoTip>
               <ul className="mt-2 divide-y divide-slate-100">
                 {clientServiceSubtotals.map((entry) => (
                   <li
@@ -2779,12 +2785,12 @@ export function ServiceVerificationReportsPage() {
           </h3>
           <details className="mt-1 text-xs text-slate-500">
           <summary className="inline-flex min-h-[32px] cursor-pointer items-center text-og-accent underline">What these mean</summary>
-          <p>
+          <InfoTip label="Help">
             Missing Time Out: still open past the scheduled shift end (or open{" "}
             {UNSCHEDULED_OPEN_VISIT_ALERT_HOURS}+ hours with no scheduled shift). Not confirmed: signed out over an
             hour ago without a client confirmation or a no-signer reason. Ask
             the caregiver to finish the visit on their phone.
-          </p>
+          </InfoTip>
           </details>
           <ul className="mt-2 divide-y divide-slate-100">
             {incompleteVisits.map(({ row, issue }) => (
@@ -2832,10 +2838,10 @@ export function ServiceVerificationReportsPage() {
                       </p>
                     ) : (
                       <>
-                        <p className="text-xs text-slate-600">
+                        <InfoTip label="Help">
                           Enter when the visit actually ended. The caregiver&apos;s app then
                           asks for the client&apos;s confirmation, marked as entered by the agency.
-                        </p>
+                        </InfoTip>
                         {row.scheduled_ends_at ? (
                           <p className="text-xs text-slate-500">
                             Scheduled end: {formatVisitDate(row.scheduled_ends_at)}, {formatClockTime(row.scheduled_ends_at)}
@@ -2886,7 +2892,7 @@ export function ServiceVerificationReportsPage() {
           <h3 className="font-semibold text-slate-950">Exception visits</h3>
           <details className="mt-1 text-xs text-slate-500">
             <summary className="inline-flex min-h-[32px] cursor-pointer items-center text-og-accent underline">What counts as an exception</summary>
-            <p>Visits that needed a human to look at them: flagged for administrator review, an authorization status other than within-authorization, or already corrected.</p>
+            <InfoTip label="Help">Visits that needed a human to look at them: flagged for administrator review, an authorization status other than within-authorization, or already corrected.</InfoTip>
           </details>
           <ul className="mt-2 divide-y divide-slate-100">
             {exceptionVisits.map((row) => (

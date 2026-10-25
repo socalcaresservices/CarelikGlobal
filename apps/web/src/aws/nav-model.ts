@@ -7,14 +7,12 @@
 
 import type { LucideIcon } from "lucide-react";
 
-// Organised by workflow. HOME is a single link shown without a heading.
-//   MY WORK  the caregiver's own day: verify a visit, my shifts, availability, my documents.
-//   WORK     in this order: Schedule, Visits, Approvals, Clients, Caregivers, Documents, Reports. Related pages
-//            (shift requests, visit records ...) sit under their area as smaller links.
-//   SETUP    Settings and what belongs to it, always last (pinned to the bottom of the menu).
-// Visits = records of care delivered and the caregiver-side verification entry points. Approvals = decisions a
-// person must make. No queue appears under both (docs/releases/2026-10-19-review-updates/ROUTE_MAP.md).
-export const NAV_GROUPS = ["HOME", "MY WORK", "WORK", "SETUP"] as const;
+// Five primary sections for agency staff (Home, Schedule, People, Operations, Settings); a caregiver sees only their own day
+// ("My work"). Each section lists its tabs (links without `parent`); a tab may keep smaller links under it (`parent` = the tab's label),
+// so no existing page loses its place. The same tabs are shown as a horizontal tab strip above the page (see aws-shell.tsx).
+// Visits = records of care delivered and the caregiver-side verification entry points. Approvals = decisions a person must make.
+// No queue appears under both (docs/releases/2026-10-19-review-updates/ROUTE_MAP.md).
+export const NAV_GROUPS = ["My work", "Home", "Schedule", "People", "Operations", "Settings"] as const;
 export type NavGroup = (typeof NAV_GROUPS)[number];
 
 export const REPORTS_PATH = "/service-verification/reports";
@@ -35,9 +33,9 @@ export interface NavLinkDef {
   group: NavGroup;
   show: boolean;
   icon: LucideIcon;
-  /** A smaller link shown under its area (the label of the primary row it belongs to). */
+  /** A smaller link shown under its tab (the label of the tab it belongs to, in the same section). */
   parent?: string;
-  /** A section label with no page of its own (for example Visits): drawn as text, never a link, never current. Its children stay reachable when the menu is collapsed. */
+  /** A label with no page of its own: drawn as text, never a link, never current. */
   heading?: boolean;
   /** Workflow colour of the area: Clients blue, Caregivers teal, Scheduling violet, Approvals amber, Reports slate. */
   accent?: string;
@@ -50,14 +48,22 @@ export const isCalendarView = (view: string | null) => view === "calendar";
 export const isExceptionsView = (view: string | null) => view === "exceptions";
 export const isVisitListView = (view: string | null) => !isReportView(view) && !isCalendarView(view) && !isExceptionsView(view);
 
-/** Collapsed menu: the smaller links are hidden, except under a section label (it has no page of its own, so they would be unreachable). */
-export function shownWhenCollapsed(l: NavLinkDef, links: NavLinkDef[]): boolean {
-  return !l.parent || links.some((p) => p.show && p.heading && p.label === l.parent);
-}
-
 export function visibleGroups(links: NavLinkDef[]): { group: NavGroup; links: NavLinkDef[] }[] {
   const shown = links.filter((l) => l.show);
   return NAV_GROUPS.map((group) => ({ group, links: shown.filter((l) => l.group === group) })).filter((g) => g.links.length > 0);
+}
+
+/** The tabs of a section: its visible links that are not smaller links under another tab. */
+export const tabsOf = (links: NavLinkDef[], group: NavGroup): NavLinkDef[] => links.filter((l) => l.show && l.group === group && !l.parent && !l.heading);
+
+/** Where a section opens: its first tab. */
+export const landingOf = (links: NavLinkDef[], group: NavGroup): NavLinkDef | null => tabsOf(links, group)[0] ?? null;
+
+/** The tab the current page belongs to: the current link itself, or the tab it sits under. */
+export function activeTab(links: NavLinkDef[], current: NavLinkDef | null): NavLinkDef | null {
+  if (!current) return null;
+  if (!current.parent) return current;
+  return links.find((l) => l.show && l.group === current.group && !l.parent && l.label === current.parent) ?? current;
 }
 
 /**

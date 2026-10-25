@@ -107,6 +107,18 @@ describe("Clients page views", () => {
     expect(within(table).getByRole("row", { name: /Bravo/ })).toHaveTextContent("2 current authorizations");
   });
 
+  it("the list has a No. column numbered 1..n in the order shown, renumbered when the filter changes", async () => {
+    renderAt("manager");
+    const table = await screen.findByRole("table", { name: "Clients as a list" }, { timeout: COLD });
+    expect(within(table).getAllByRole("columnheader")[0]).toHaveTextContent("No.");
+    expect(within(table).getAllByTestId("row-no").map((c) => c.textContent)).toEqual(["1", "2", "3"]);
+    fireEvent.change(screen.getByLabelText("Status"), { target: { value: "all" } });
+    fireEvent.change(screen.getByLabelText("Authorization"), { target: { value: "none" } });
+    const filtered = screen.getByRole("table", { name: "Clients as a list" });
+    expect(within(filtered).getAllByTestId("row-no").map((c) => c.textContent)).toEqual(["1", "2"]);   // Alpha, Delta: numbered from 1 again
+    expect(within(filtered).getAllByRole("row").slice(1).map((r) => r.querySelector("td")?.textContent)).toEqual(["1", "2"]);
+  });
+
   it("phone width with no saved choice opens as Cards", async () => {
     wide(false);
     renderAt("manager");

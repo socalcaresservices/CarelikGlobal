@@ -23,6 +23,7 @@ import { useOrganization } from "@/providers/organization-provider";
 import { useAwsApi } from "./aws-workspace";
 import { AuthorizationReviewCard } from "./authorization-review-card";
 import { SignatureRecoveryCard } from "./signature-recovery";
+import { InfoTip } from "./ui/info-tip";
 
 interface VisitReview {
   visitId: string;
@@ -252,7 +253,7 @@ export function VisitReviewPage() {
           {v.reviewReasons.includes("no_client_signature") && !v.decision ? (
             <details className="text-xs text-slate-600">
               <summary className="inline-flex min-h-[32px] cursor-pointer items-center text-og-accent underline">About the missing signature</summary>
-              <p>The original visit record and its confirmation are never changed. A signature obtained later is kept as a separate record and reviewed by a person (see “Get the missing signature” below).</p>
+              <InfoTip label="Help">The original visit record and its confirmation are never changed. A signature obtained later is kept as a separate record and reviewed by a person (see “Get the missing signature” below).</InfoTip>
             </details>
           ) : null}
 
@@ -334,7 +335,7 @@ export function VisitReviewPage() {
       </p>
       <details className="text-xs text-slate-600">
         <summary className="inline-flex min-h-[32px] cursor-pointer items-center text-og-accent underline">What these links do</summary>
-        <p>Correct creates a corrected record and keeps the original; it is separate from review. Billing review is where billable minutes are approved.</p>
+        <InfoTip label="Help">Correct creates a corrected record and keeps the original; it is separate from review. Billing review is where billable minutes are approved.</InfoTip>
       </details>
     </div>
   );

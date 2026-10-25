@@ -94,15 +94,17 @@ afterEach(() => {
   vi.clearAllMocks();
 });
 
+/** Opens every collapsed section (only the current one is open by default). */
+const openAll = (nav: HTMLElement) => { for (const b of Array.from(nav.querySelectorAll<HTMLElement>('[data-nav-level="section"][aria-expanded="false"]'))) fireEvent.click(b); };
 const hrefs = (nav: HTMLElement) => Object.fromEntries(within(nav).getAllByRole("link").map((a) => [(a.textContent ?? "").replace(/\d+$/, ""), a.getAttribute("href")]));
 
 describe("navigation model", () => {
   const icon = (() => null) as never;
-  const link = (over: Partial<NavLinkDef>): NavLinkDef => ({ to: "/x", label: "X", group: "HOME", show: true, icon, ...over });
+  const link = (over: Partial<NavLinkDef>): NavLinkDef => ({ to: "/x", label: "X", group: "Home", show: true, icon, ...over });
 
   it("keeps the group order and drops groups with nothing visible", () => {
-    const groups = visibleGroups([link({ label: "A", group: "SETUP" }), link({ label: "B", group: "HOME" }), link({ label: "C", group: "WORK", show: false })]);
-    expect(groups.map((g) => g.group)).toEqual(["HOME", "SETUP"]);
+    const groups = visibleGroups([link({ label: "A", group: "Settings" }), link({ label: "B", group: "Home" }), link({ label: "C", group: "Schedule", show: false })]);
+    expect(groups.map((g) => g.group)).toEqual(["Home", "Settings"]);
   });
 
   it("one current link per address: Visit records, Reports and Client monthly calendar share a route but not a view", () => {
@@ -120,31 +122,31 @@ describe("navigation model", () => {
 });
 
 describe("sidebar: expanded", () => {
-  it("manager: grouped links, every earlier destination kept, Reports and Client monthly calendar added on the existing reports route", async () => {
+  it("manager: five sections, every earlier destination kept (Reports and the calendar stay on the existing reports route)", async () => {
     renderAt("/", "manager");
     const nav = await screen.findByRole("navigation", { name: "Main" });
-    expect(within(nav).getAllByText(/^(HOME|MY WORK|WORK|SETUP)$/).map((e) => e.textContent)).toEqual(["WORK", "SETUP"]);
-    // Main order: Home, Schedule, Visits, Approvals, Clients, Caregivers, Documents, Reports, Settings; related pages beneath their parent.
+    expect(within(nav).getAllByTestId("nav-section").map((e) => e.querySelector("button")?.textContent?.replace(/\d+$/, ""))).toEqual(["Home", "Schedule", "People", "Operations", "Settings"]);
+    // Only the current section is open at first.
+    expect(within(nav).getAllByRole("link").map((a) => a.textContent)).toEqual(["Dashboard", "Action Needed"]);
+    openAll(nav);
     expect(within(nav).getAllByRole("link").map((a) => a.textContent?.replace(/\d+$/, ""))).toEqual([
-      "Home", "Schedule", "Shift requests", "Monthly calendar", "Visit records", "Verify visit", "Approvals", "Visits to review", "Clients", "Authorization changes",
-      "Caregivers", "Recruiting", "Documents", "Reports", "Services", "Continuity pack", "Outage records", "Appearance",
+      "Dashboard", "Action Needed", "Calendar", "Shifts", "Requests", "Clients", "Authorization changes", "Caregivers", "Recruiting",
+      "Visits", "Verify visit", "Outage records", "Approvals", "Visits to review", "Documents", "Reports", "Services", "Appearance", "Continuity",
     ]);
     expect(hrefs(nav)).toEqual({
-      "Home": "/", "Verify visit": "/service-verification", "Schedule": "/schedule", "Shift requests": "/schedule/shift-requests", "Authorization changes": "/authorization-impacts",
-      "Visit records": "/service-verification/reports", "Reports": "/service-verification/reports?view=overview",
-      "Visits to review": "/service-verification/reports?view=exceptions", "Monthly calendar": "/service-verification/reports?view=calendar",
-      "Approvals": "/billing-review", "Clients": "/clients", "Caregivers": "/care-team", "Recruiting": "/care-team/recruiting", "Documents": "/documents", "Services": "/settings/services",
-      "Continuity pack": "/continuity", "Outage records": "/outage-visits", "Appearance": "/settings/appearance",
+      "Dashboard": "/", "Action Needed": "/action-needed", "Calendar": "/service-verification/reports?view=calendar", "Shifts": "/schedule", "Requests": "/schedule/shift-requests",
+      "Clients": "/clients", "Authorization changes": "/authorization-impacts", "Caregivers": "/care-team", "Recruiting": "/care-team/recruiting",
+      "Visits": "/service-verification/reports", "Verify visit": "/service-verification", "Outage records": "/outage-visits", "Approvals": "/billing-review",
+      "Visits to review": "/service-verification/reports?view=exceptions", "Documents": "/documents", "Reports": "/service-verification/reports?view=overview",
+      "Services": "/settings/services", "Appearance": "/settings/appearance", "Continuity": "/continuity",
     });
-    // Settings is a link only for someone with organization.update (unchanged); for everyone else it is a section label over Services, Appearance ...
-    expect(within(nav).queryByRole("link", { name: "Settings" })).toBeNull();
-    expect(within(nav).getAllByTestId("nav-section").map((e) => e.textContent)).toEqual(["Visits", "Settings"]);
   });
 
-  it("owner also sees Settings; the footer shows the view, name, email, Profile and Sign out", async () => {
+  it("owner also sees Branding under Appearance; the footer shows the view, name, email, Profile and Sign out", async () => {
     renderAt("/", "organization_owner");
     const nav = await screen.findByRole("navigation", { name: "Main" });
-    expect(within(nav).getByRole("link", { name: "Settings" }).getAttribute("href")).toBe("/settings/branding");
+    openAll(nav);
+    expect(within(nav).getByRole("link", { name: "Branding" }).getAttribute("href")).toBe("/settings/branding");
     expect(await screen.findByText("ADMINISTRATOR VIEW")).toBeInTheDocument();
     expect(screen.getByText("Synthetic Person")).toBeInTheDocument();
     expect(screen.getByText("person@example.test")).toBeInTheDocument();
@@ -158,11 +160,12 @@ describe("sidebar: expanded", () => {
     expect(screen.queryByText(/synthetic data|test environment/i)).toBeNull();
   });
 
-  it("caregiver: only the caregiver links under MY WORK (and Appearance, which every person may set for themselves)", async () => {
+  it("caregiver: only the caregiver links under My work (and Appearance, which every person may set for themselves)", async () => {
     renderAt("/service-verification", "caregiver");
     const nav = await screen.findByRole("navigation", { name: "Main" });
+    openAll(nav);
     expect(Object.keys(hrefs(nav)).sort()).toEqual(["Appearance", "Availability", "My documents", "My shifts", "Verify visit"]);
-    expect(within(nav).getAllByText(/^(MY WORK|WORK|SETUP)$/).map((e) => e.textContent)).toEqual(["MY WORK", "SETUP"]);
+    expect(within(nav).getAllByTestId("nav-section").map((e) => e.querySelector("button")?.textContent)).toEqual(["My work", "Settings"]);
   });
 
   it("hides the sidebar and gives the page the full width when printing", async () => {
@@ -210,22 +213,20 @@ describe("sidebar: Option B styling contract", () => {
     expect(aside.className).toContain("border-r");
     expect(aside.className).toContain("left-0");
     expect(aside.className).toContain("border-og-line");
-    const heading = within(nav).getAllByTestId("nav-group-heading")[0]!;
-    expect(heading.textContent).toBe("WORK");
-    for (const c of ["text-[11px]", "font-semibold", "leading-[18px]", "tracking-[0.08em]", "text-og-sub"]) {
-      expect(heading.className).toContain(c);
-    }
-    const current = within(nav).getByRole("link", { name: "Schedule" });
+    const heading = within(nav).getAllByTestId("nav-section").find((e) => e.querySelector("button")?.textContent === "Schedule")!.querySelector("button")!;
+    expect(heading).toHaveAttribute("aria-expanded", "true");
+    for (const c of ["font-semibold", "w-full", "text-left"]) expect(heading.className).toContain(c);
+    const current = within(nav).getByRole("link", { name: "Shifts" });
     expect(current).toHaveAttribute("aria-current", "page");
-    for (const c of ["bg-og-active", "text-og-accent", "font-semibold", "rounded-md", "min-h-[36px]", "text-[14px]", "gap-2", "[@media(pointer:coarse)]:min-h-[44px]", "focus-visible:outline-og-accent"]) {
+    for (const c of ["bg-og-active", "text-og-accent", "font-semibold", "rounded-md", "ml-8", "min-h-[34px]", "text-[14px]", "gap-2", "[@media(pointer:coarse)]:min-h-[44px]", "focus-visible:outline-og-accent"]) {
       expect(current.className).toContain(c);
     }
     expect(current.className).not.toMatch(/border-l|before:|shadow-\[inset/); // no vertical accent bar
-    const other = within(nav).getByRole("link", { name: "Caregivers" });
-    for (const c of ["text-og-ink", "font-semibold", "hover:bg-og-ink/5"]) expect(other.className).toContain(c);
+    const other = within(nav).getByRole("link", { name: "Requests" });
+    for (const c of ["text-og-ink", "font-normal", "hover:bg-og-ink/5", "ml-8"]) expect(other.className).toContain(c);
     expect(other).not.toHaveAttribute("aria-current");
-    // Icons are 18px; long labels wrap rather than clip.
-    expect(other.querySelector("svg")!.getAttribute("class")).toContain("h-[18px]");
+    // Icons are 16px in tabs; long labels wrap rather than clip.
+    expect(other.querySelector("svg")!.getAttribute("class")).toContain("h-4");
     expect(other.querySelector("span")!.className).toContain("break-words");
   });
 
@@ -235,11 +236,9 @@ describe("sidebar: Option B styling contract", () => {
     const nav = await screen.findByRole("navigation", { name: "Main" });
     expect(within(nav).queryAllByTestId("nav-group-heading")).toHaveLength(0);
     expect(nav.querySelector(".border-t")).toBeNull();
-    expect(within(nav).getByRole("link", { name: "Caregivers" })).toBeInTheDocument();
-    // Collapsed: the areas and Home only; the smaller related links appear when expanded, except under a section label (Visits, Settings), whose children stay reachable.
-    expect(within(nav).getAllByRole("link").map((a) => a.textContent?.replace(/\d+$/, ""))).toEqual([
-      "Home", "Schedule", "Visit records", "Verify visit", "Approvals", "Clients", "Caregivers", "Documents", "Reports", "Services", "Continuity pack", "Outage records", "Appearance",
-    ]);
+    // Collapsed: one icon per section, each opening its first tab; the tabs appear when the menu is expanded.
+    expect(within(nav).getAllByRole("link").map((a) => a.textContent?.replace(/\d+$/, ""))).toEqual(["Home", "Schedule", "People", "Operations", "Settings"]);
+    expect(within(nav).getByRole("link", { name: "Schedule" }).getAttribute("href")).toBe("/service-verification/reports?view=calendar");
   });
 
   it("keyboard: every link is reachable by Tab order (real anchors) and the collapse control is a labelled button", async () => {
@@ -255,7 +254,7 @@ describe("sidebar: mobile drawer", () => {
     mockMobile(true);
     renderAt("/", "manager");
     const menu = await screen.findByRole("button", { name: /^Menu/ });
-    expect(menu).toHaveTextContent("Home");
+    expect(menu).toHaveTextContent("Dashboard");
     expect(menu).toHaveAttribute("aria-expanded", "false");
     // Closed: the sidebar is removed from the accessibility tree.
     expect(screen.queryByRole("navigation", { name: "Main" })).toBeNull();
@@ -267,7 +266,8 @@ describe("sidebar: mobile drawer", () => {
     await waitFor(() => expect(screen.queryByRole("navigation", { name: "Main" })).toBeNull());
     expect(menu).toHaveFocus();
     fireEvent.click(menu);
-    fireEvent.click(await screen.findByRole("link", { name: "Schedule" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Schedule" }));
+    fireEvent.click(await screen.findByRole("link", { name: "Shifts" }));
     await waitFor(() => expect(screen.queryByRole("navigation", { name: "Main" })).toBeNull());
   });
 
@@ -275,14 +275,14 @@ describe("sidebar: mobile drawer", () => {
     mockMobile(true);
     renderAt("/schedule", "manager");
     const menu = await screen.findByRole("button", { name: /^Menu/ });
-    expect(menu).toHaveTextContent("Schedule");
+    expect(menu).toHaveTextContent("Shifts");
     fireEvent.click(menu);
     await screen.findByRole("navigation", { name: "Main" });
     const scrim = document.querySelector('div[aria-hidden="true"].fixed.inset-0')!;
     expect(scrim).not.toBeNull();
     fireEvent.click(scrim);
     await waitFor(() => expect(screen.queryByRole("navigation", { name: "Main" })).toBeNull());
-    expect(menu).toHaveTextContent("Schedule");
+    expect(menu).toHaveTextContent("Shifts");
     expect(menu).toHaveFocus();
   });
 });

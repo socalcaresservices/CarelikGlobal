@@ -225,6 +225,7 @@ function ClientList({ clients }: { clients: AdminClient[] }) {
       <table className="w-full text-left text-sm" aria-label="Clients as a list">
         <thead>
           <tr className="border-b border-slate-200 text-xs uppercase tracking-wide text-slate-600">
+            <th scope="col" className="w-10 px-3 py-1.5 text-right font-semibold">No.</th>
             <th scope="col" className="px-3 py-1.5 font-semibold">Client</th>
             <th scope="col" className="px-3 py-1.5 font-semibold">Status</th>
             <th scope="col" className="px-3 py-1.5 font-semibold">Authorization</th>
@@ -232,8 +233,9 @@ function ClientList({ clients }: { clients: AdminClient[] }) {
           </tr>
         </thead>
         <tbody>
-          {clients.map((c) => (
+          {clients.map((c, i) => (
             <tr key={c.clientId} className="border-b border-slate-100 last:border-0">
+              <td className="w-10 px-3 py-1 text-right tabular-nums text-slate-600" data-testid="row-no">{i + 1}</td>
               <th scope="row" className="px-3 py-1 font-medium text-slate-950">
                 {nameWithCode(clientName(c), c.clientCode, c.duplicateName)}
                 {c.openVisits > 0 ? <span className="ml-2 text-xs font-normal text-slate-600">visit in progress</span> : null}

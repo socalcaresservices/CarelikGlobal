@@ -5,6 +5,7 @@ import { newIdempotencyKey } from "@/lib/sv-backend";
 import { formatDateTime, formatDuration } from "@/lib/service-verification";
 import { useOrganization } from "@/providers/organization-provider";
 import { useAwsApi } from "./aws-workspace";
+import { InfoTip } from "./ui/info-tip";
 
 interface AuthReview {
   reviewId: string; reason: "authorization_over_cap" | "authorization_outside_period"; billableMinutes: number; excessMinutes: number; newMonthlyMinutes: number;
@@ -67,9 +68,9 @@ export function AuthorizationReviewCard({ visitId }: { visitId: string }) {
             <textarea value={note} rows={2} maxLength={1000} onChange={(e) => setNote(e.target.value)} className="mt-1 block w-full rounded-lg border border-slate-200 px-3 py-2 text-base" />
           </label>
           <Button type="button" className="min-h-11" loading={state.busy} disabled={state.busy} onClick={() => void resolve()}>Confirm it is still billable</Button>
-          <p className="text-xs text-slate-600">If the minutes are wrong, use Correct visit instead. Billing approval is a separate step.</p>
+          <InfoTip label="Help">If the minutes are wrong, use Correct visit instead. Billing approval is a separate step.</InfoTip>
         </div>
-      ) : open ? <p className="text-sm text-slate-600">A person who manages visits has to review this before it can be approved.</p> : null}
+      ) : open ? <InfoTip label="Help">A person who manages visits has to review this before it can be approved.</InfoTip> : null}
       {state.error ? <p role="alert" className="text-sm text-red-700">{state.error}</p> : null}
     </Card>
   );

@@ -3,7 +3,7 @@
 // billing approval (Ready for Approval) apart; red follows the server's Critical number, not the colour of an item; the Scheduling page agrees with its badge and
 // puts a running unfilled shift in "Unfilled" but never an ended one.
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { cleanup, render, screen, waitFor, within } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { CognitoAuthProvider, type CognitoAuthClient } from "@carelik/auth";
 import { MemoryRouter } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -73,6 +73,7 @@ afterEach(() => { cleanup(); vi.clearAllMocks(); });
 /** The badge on the sidebar link with this accessible name (links read "Label5"), or null. */
 async function badgeOn(label: RegExp) {
   const nav = await screen.findByRole("navigation", { name: "Main" });
+  for (const b of Array.from(nav.querySelectorAll<HTMLElement>('[data-nav-level="section"][aria-expanded="false"]'))) fireEvent.click(b);   // only the current section is open at first
   const link = within(nav).getAllByRole("link").find((a) => label.test((a.textContent ?? "").replace(/\d+$/, "")));
   if (!link) throw new Error(`no sidebar link ${label}`);
   const b = within(link).queryByTestId("nav-badge");
@@ -82,7 +83,7 @@ async function badgeOn(label: RegExp) {
 describe("sidebar badges are the server's counts", () => {
   it("someone who may bill: Caregivers 2, Scheduling 3 (red: the server says 1 is Critical), Approvals shows Ready for Approval 4, Visits to review shows exception review 5; none is a sum", async () => {
     renderAt("/schedule", BILL, COUNTS);
-    await waitFor(async () => expect(await badgeOn(/^Schedule$/)).toEqual({ n: 3, red: true }));
+    await waitFor(async () => expect(await badgeOn(/^Shifts$/)).toEqual({ n: 3, red: true }));
     expect(await badgeOn(/^Caregivers$/)).toEqual({ n: 2, red: false }); // amber: nothing Critical, even though documents are shown as overdue elsewhere
     expect(await badgeOn(/^Approvals$/)).toEqual({ n: 4, red: false }); // billing approval only; not 4 + 5
     expect(await badgeOn(/^Visits to review$/)).toEqual({ n: 5, red: false }); // exception review only
@@ -99,7 +100,7 @@ describe("sidebar badges are the server's counts", () => {
     renderAt("/schedule", BILL, { ...COUNTS, caregivers: null, scheduling: { count: 0, critical: 0 }, approvals: { exceptions: null, readyForApproval: 0 } });
     await waitFor(() => expect(screen.getByRole("navigation", { name: "Main" })).toBeInTheDocument());
     await waitFor(async () => expect(await badgeOn(/^Caregivers$/)).toBeNull());
-    expect(await badgeOn(/^Schedule$/)).toBeNull();
+    expect(await badgeOn(/^Shifts$/)).toBeNull();
     expect(await badgeOn(/^Approvals$/)).toBeNull();
     expect(await badgeOn(/^Visits to review$/)).toBeNull();
   });
@@ -107,7 +108,7 @@ describe("sidebar badges are the server's counts", () => {
   it("an older server with no counts shows no badge at all (the web does not derive one from other fields)", async () => {
     renderAt("/schedule", BILL, null);
     await waitFor(() => expect(screen.getByRole("navigation", { name: "Main" })).toBeInTheDocument());
-    expect(await badgeOn(/^Schedule$/)).toBeNull();
+    expect(await badgeOn(/^Shifts$/)).toBeNull();
     expect(await badgeOn(/^Caregivers$/)).toBeNull();
   });
 });
@@ -126,7 +127,7 @@ describe("Scheduling: the badge, the overview figure and the lists agree; past s
     renderAt("/schedule", BILL, { ...COUNTS, scheduling: { count: 2, critical: 1 } }, SHIFTS);
     const overview = await screen.findByTestId("scheduling-now");
     expect(overview).toHaveTextContent("2");
-    await waitFor(async () => expect((await badgeOn(/^Schedule$/))?.n).toBe(2));
+    await waitFor(async () => expect((await badgeOn(/^Shifts$/))?.n).toBe(2));
     expect(await screen.findByRole("heading", { name: "Unfilled (3)" })).toBeInTheDocument();
     const section = screen.getByRole("heading", { name: "Unfilled (3)" }).closest("section")!;
     expect(within(section).getAllByTestId("shift-state").map((e) => e.textContent)).toEqual(["Unfilled", "Unfilled", "Unfilled"]);

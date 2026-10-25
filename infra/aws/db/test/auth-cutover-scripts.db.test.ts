@@ -137,7 +137,13 @@ echo "<!doctype html><script type=\\"module\\" src=\\"/assets/$name\\"></script>
   // the NEW templates this code synthesizes
   for (const env of ["prd", "prod"] as const) for (const p of buildOgeviaApp(newApp(), ENVIRONMENTS[env], "plan")) {
     if (env === "prod" && p.stack.stackName !== "Ogevia-prod-NetworkEgress") continue;
-    writeFileSync(join(NEWT, `${p.stack.stackName}.json`), JSON.stringify(Template.fromStack(p.stack).toJSON()));
+    const tpl = Template.fromStack(p.stack).toJSON();
+    // This release did not change the API's code; the API code has changed since (staff routes), so its Lambda asset references are pinned to the deployed ones.
+    if (p.stack.stackName === "Ogevia-prd-ServiceVerificationApi") {
+      const live = JSON.parse(readFileSync(fileURLToPath(new URL("../../test/fixtures/auth-separation/deployed/Ogevia-prd-ServiceVerificationApi.json", import.meta.url)), "utf8"));
+      for (const [id, r] of Object.entries<any>(tpl.Resources)) if (r.Type === "AWS::Lambda::Function" && live.Resources[id]?.Properties?.Code) r.Properties.Code = live.Resources[id].Properties.Code;
+    }
+    writeFileSync(join(NEWT, `${p.stack.stackName}.json`), JSON.stringify(tpl));
   }
   // ogevia_prd: all migrations, a synthetic agency, its owner (OLD sign-in), a manager, a caregiver record
   const root = new pg.Client({ connectionString: ADMIN_URL }); await root.connect();
