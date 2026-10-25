@@ -113,7 +113,8 @@ const snapshot = (o: Record<string, unknown> = {}) => j(S("snapshot.json"), { St
 const opened = () => /^authorize /m.test(writes());
 const SNAPID = "ogevia-prod-postgres-pre-cleanup-202610251200";
 const countsSql = () => join(work, "pkg", CLEAN_REL, "sql/prd-cleanup-readonly-counts.sql");
-let countsSqlOriginal = "";
+const cleanupSql = () => join(work, "pkg", CLEAN_REL, "sql/prd-synthetic-cleanup.sql");
+let countsSqlOriginal = "", cleanupSqlOriginal = "";
 
 function psqlSeed(file: string, vars: Record<string, string>) {
   const args = [dbUrl("ogevia_prd"), "-q", "-v", "ON_ERROR_STOP=1", ...Object.entries(vars).flatMap(([k, v]) => ["-v", `${k}=${v}`]), "-f", "-"];
@@ -134,9 +135,11 @@ beforeAll(async () => {
   writeFileSync(join(MOCK, "snaps.txt"), "");
   // the package under test, copied with its relative layout (common.sh finds window.sh/lib.sh relative to itself)
   for (const rel of REL) cpSync(join(REPO, rel), join(work, "pkg", rel), { recursive: true });
-  SCRIPTS = join(work, "pkg", CLEAN_REL, "scripts"); countsSqlOriginal = readFileSync(countsSql(), "utf8");
+  SCRIPTS = join(work, "pkg", CLEAN_REL, "scripts"); countsSqlOriginal = readFileSync(countsSql(), "utf8"); cleanupSqlOriginal = readFileSync(cleanupSql(), "utf8");
   const root = new pg.Client({ connectionString: ADMIN_URL }); await root.connect();
-  await root.query("drop database if exists ogevia_prd with (force)"); await root.query("create database ogevia_prd"); await root.end();
+  await root.query("drop database if exists ogevia_prd with (force)"); await root.query("create database ogevia_prd");
+  // production hardening: nobody but the master user may create temporary tables in ogevia_prd (ogevia_owner could not; the cleanup must not need one)
+  await root.query("revoke temporary on database ogevia_prd from public"); await root.end();
   const c = new pg.Client({ connectionString: dbUrl("ogevia_prd") }); await c.connect();
   try { await migrate(c as never); } finally { await c.end(); }
   // synthetic rows: the repo's own synthetic seeds (an organization, 2 clients, 2 authorizations, 2 caregivers, a caregiver and a manager membership), plus a shift, a visit (guarded table) and an audit event
@@ -157,7 +160,7 @@ afterAll(async () => {
   const root = new pg.Client({ connectionString: ADMIN_URL }); await root.connect(); await root.query("drop database if exists ogevia_prd with (force)"); await root.end();
   rmSync(work, { recursive: true, force: true });
 });
-beforeEach(() => { setAccount(true); snapshot(); resetSecurityGroup(); clearLogs(); rmSync(join(OUT, "window"), { recursive: true, force: true }); writeFileSync(countsSql(), countsSqlOriginal); });
+beforeEach(() => { setAccount(true); snapshot(); resetSecurityGroup(); clearLogs(); rmSync(join(OUT, "window"), { recursive: true, force: true }); writeFileSync(countsSql(), countsSqlOriginal); writeFileSync(cleanupSql(), cleanupSqlOriginal); });
 
 describe("F cleanup wrapper (mocked AWS, real local ogevia_prd): counts", () => {
   it("counts: read-only. Opens and closes the window, restores the security group, changes no row, and never names ogevia_sv_test", async () => {
@@ -212,6 +215,7 @@ describe("F cleanup wrapper: dryrun and commit guards", () => {
     const before = await fingerprint(), sg0 = sgFile();
     const r = await run("f-cleanup-prd.sh", ["dryrun"], env(EXP), PH.dryrun);
     expect(r.code, r.out).toBe(0);
+    expect(r.out).toMatch(/clients\s+2\b/);   // the before-counts table is printed
     expect(r.out).toContain("DRY RUN: this transaction will be rolled back"); expect(r.out).toContain("dryrun completed"); expect(r.out).toContain("0 guards not enabled");
     expect(await fingerprint()).toBe(before); expect(await guardsNotEnabled()).toBe(0); expect(sgFile()).toBe(sg0); expect(existsSync(join(OUT, "window/OPEN"))).toBe(false);
   });
@@ -247,6 +251,23 @@ describe("F cleanup wrapper: dryrun and commit guards", () => {
     const before = await fingerprint();
     const r = await run("f-cleanup-prd.sh", ["commit"], env({ ...EXP, OGEVIA_CLEANUP_SNAPSHOT_ID: SNAPID }), "OPEN-5432-WINDOW-CLEANUP-COMMIT\nno\n");
     expect(r.out).toContain("Declined. Nothing was changed."); expect(opened()).toBe(false); expect(await fingerprint()).toBe(before);
+  });
+});
+
+describe("F cleanup wrapper: privileges and failure handling", () => {
+  it("the cleanup SQL needs no temporary table (ogevia_owner has no TEMPORARY privilege in production; the harness revokes it from PUBLIC, as production does)", async () => {
+    expect(cleanupSqlOriginal.toLowerCase()).not.toMatch(/create\s+(global\s+|local\s+)?temp/);
+    expect(await n("select count(*)::int n from pg_database where datname = 'ogevia_prd' and has_database_privilege('ogevia_owner', datname, 'TEMPORARY')")).toBe(0);
+  });
+  it("an error AFTER the deletes (guards lifted, rows deleted) rolls everything back: rows, guards and audit are intact and the window is closed", async () => {
+    const before = await fingerprint(), sg0 = sgFile();
+    writeFileSync(cleanupSql(), cleanupSqlOriginal.replace("-- 7. Audit the cleanup itself", "select 1/0;\n-- 7. Audit the cleanup itself"));
+    expect(readFileSync(cleanupSql(), "utf8")).toContain("select 1/0;");
+    const r = await run("f-cleanup-prd.sh", ["commit"], env({ ...EXP, OGEVIA_CLEANUP_SNAPSHOT_ID: SNAPID }), PH.commit);
+    expect(r.code, r.out).toBe(1); expect(r.out).toContain("division by zero"); expect(r.out).toContain("the transaction was rolled back");
+    expect(await fingerprint()).toBe(before); expect(await guardsNotEnabled()).toBe(0);
+    expect(await n("select count(*)::int n from ogevia.audit_events where action = 'platform.synthetic_data_cleanup'")).toBe(0);
+    expect(sgFile()).toBe(sg0); expect(existsSync(join(OUT, "window/OPEN"))).toBe(false);
   });
 });
 

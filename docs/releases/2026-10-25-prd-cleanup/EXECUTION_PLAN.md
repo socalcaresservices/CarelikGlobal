@@ -98,3 +98,6 @@ Run `f-cleanup-prd.sh counts` again. Expect: only these tables non-empty: `organ
 
 ## Remaining risks (not closed)
 - Lifting the 32 guards overrides immutability controls by design, once, inside a verified transaction. Rows in most tables were not exercised locally. Counts may differ from 4/5/36. The compliance sweep (15-minute rule) could add rows during a run; verification would fail and roll back. S3 evidence stays orphaned until separately approved. Cognito caregiver sign-ins stay until separately approved. Whether a former caregiver's sign-in behaves as expected after cleanup is UNVERIFIED live.
+
+## G3 finding and fix (2026-10-25)
+The first production dry run failed at step 3: `permission denied to create temporary tables in database "ogevia_prd"`. The script runs as `ogevia_owner` (`set local role`), which has no TEMPORARY privilege in production (it had one locally only through PUBLIC). The identity guard and the count guard (steps 1-2) had already passed. Fix: the before-counts are kept in a transaction-local setting (`ogevia.before_counts`, jsonb) instead of a temporary table; no privilege is added to anything. The test harness now revokes TEMPORARY from PUBLIC on the local `ogevia_prd` (as production is), and the fixed SQL was also run as a non-superuser login that is only a member of `ogevia_owner`.

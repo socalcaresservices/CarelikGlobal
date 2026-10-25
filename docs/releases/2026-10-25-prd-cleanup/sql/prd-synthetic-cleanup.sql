@@ -26,15 +26,10 @@ do $$ declare c bigint; a bigint; s bigint; begin
   end if;
 end $$;
 
--- 3. Before counts for every table.
-create temp table cleanup_counts(phase text, tab text, n bigint) on commit drop;
-do $$ declare t text; n bigint; begin
-  for t in select c.relname from pg_class c join pg_namespace s on s.oid=c.relnamespace where s.nspname='ogevia' and c.relkind='r' order by 1 loop
-    execute format('select count(*) from ogevia.%I', t) into n;
-    insert into cleanup_counts values ('before', t, n);
-  end loop;
-end $$;
-select tab, n as rows_before from cleanup_counts where phase='before' and n>0 order by tab;
+-- 3. Before counts for every table, held in a transaction-local setting (no temporary table: ogevia_owner has no TEMPORARY privilege in production, and none is granted for this).
+select set_config('ogevia.before_counts', (select jsonb_object_agg(c.relname, (xpath('/row/n/text()', query_to_xml(format('select count(*) as n from ogevia.%I', c.relname), false, true, '')))[1]::text::bigint)
+  from pg_class c join pg_namespace s on s.oid = c.relnamespace where s.nspname = 'ogevia' and c.relkind = 'r')::text, true) \gset
+select key as tab, value::bigint as rows_before from jsonb_each_text(current_setting('ogevia.before_counts')::jsonb) where value::bigint > 0 order by key;
 
 -- 4. Lift ONLY the delete guards on tables being emptied (never audit_events). Restored and verified in step 8, in this same transaction.
 alter table ogevia.client_authorizations disable trigger client_authorizations_no_delete;
@@ -161,10 +156,10 @@ do $$ declare t text; n bigint; b bigint; begin
     execute format('select count(*) from ogevia.%I', t) into n;
     if n <> 0 then raise exception 'VERIFY FAILED: ogevia.% still has % rows', t, n; end if;
   end loop;
-  select c.n into b from cleanup_counts c where c.phase='before' and c.tab='audit_events';
+  b := (current_setting('ogevia.before_counts')::jsonb ->> 'audit_events')::bigint;
   select count(*) into n from ogevia.audit_events;
   if n < b then raise exception 'VERIFY FAILED: audit_events lost rows (% -> %)', b, n; end if;
-  if (select count(*) from ogevia.organizations) <> (select c.n from cleanup_counts c where c.phase='before' and c.tab='organizations') then raise exception 'VERIFY FAILED: organizations changed'; end if;
+  if (select count(*) from ogevia.organizations) <> (current_setting('ogevia.before_counts')::jsonb ->> 'organizations')::bigint then raise exception 'VERIFY FAILED: organizations changed'; end if;
   if exists (select 1 from ogevia.organization_memberships where role = 'caregiver') then raise exception 'VERIFY FAILED: caregiver memberships remain'; end if;
 end $$;
 
