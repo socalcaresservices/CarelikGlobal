@@ -33,3 +33,10 @@ Consequence: nothing here deploys. Development has no AWS target, and Test/Demo 
 
 ## 5. Not verified
 - Anything on Test, Demo or Production. Real phone, keyboard traversal, screen reader, and printing/PDF of the changed report tables. The Large-text / Compact / Dark appearance matrix on the new layout.
+
+## 6. Test results (local only, synthetic data, local throwaway PostgreSQL 16)
+- Unit/static (all workspaces): web 1239, infra-aws 555, sv-api 96, auth 150, shared 118, ui 73: all passed.
+- Database suite (infra-aws `test:db`): all passed except `dst-local-times` "flags the repeated-hour Sunday" (1 test). That test and the migrations it exercises are unchanged by this branch (`git diff 466f8ac` is empty for both); it computes dates from today's clock (2026-10-25) and fails the same way independent of this work. NOT fixed here. One earlier failure of the "advisory lock held" executor test under load passed on re-run.
+- sv-api database suite: 152/152 after the tenant-isolation sweep was given real staff rows (staff routes are now swept for cross-tenant access).
+- Not run as a single `pnpm test:all` end to end: the first full run lost its local PostgreSQL mid-way; the database phases were re-run separately as above.
+- Screenshots (`screenshots/before`, `screenshots/after`): local harness, desktop 1360 and EMULATED phone 390 (not a real device), synthetic data.
