@@ -1,6 +1,6 @@
 import { Tags, type App, type Stack } from "aws-cdk-lib";
 import { ProductionAuthStack } from "./auth-stack.js";
-import { assertAuthConfig, assertDatabaseConfig, ENVIRONMENTS, forbiddenUserPoolIdsFor, type OgeviaEnvironmentConfig } from "./config.js";
+import { assertAuthConfig, assertDatabaseConfig, ENVIRONMENTS, forbiddenUserPoolIdsFor, type OgeviaEnvironmentConfig, assertCustomDomains } from "./config.js";
 import { DatabaseSecretStack } from "./database-secret-stack.js";
 import { EvidenceStorageStack } from "./evidence-storage-stack.js";
 import { NetworkEgressStack } from "./network-egress-stack.js";
@@ -57,6 +57,7 @@ export function buildOgeviaApp(
   options: { readonly alarmEmail?: string | undefined } = {},
 ): PlannedStack[] {
   assertDatabaseConfig(config);
+  assertCustomDomains(config);
   assertAuthConfig(config);
   const env = { account: config.account, region: config.region };
   const production = config.database.purpose === "production";
@@ -108,7 +109,7 @@ export function buildOgeviaApp(
       config,
       env,
       evidenceKey: evidence.dataKey,
-      extraAllowedOrigins: [web.webOrigin],
+      extraAllowedOrigins: [...new Set([web.webOrigin, ...web.customOrigins])],
       ...(auth
         ? {
             authority: {

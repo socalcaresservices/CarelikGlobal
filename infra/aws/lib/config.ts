@@ -113,6 +113,15 @@ export interface OgeviaEnvironmentConfig {
       readonly domainPrefix: string;
     };
   };
+  /**
+   * Permanent hostnames (applied live 2026-10-23, Netlify DNS CNAMEs to the distribution). The CloudFront URL keeps working as a fallback.
+   * Hostnames become CloudFront alternate domain names, Cognito callback/logout URLs and API CORS origins.
+   */
+  readonly customDomains?: {
+    readonly hostnames: readonly string[];
+    /** us-east-1 ACM certificate covering every hostname (DNS-validated). An identifier, not a secret. */
+    readonly certificateArn: string;
+  };
   readonly existing: ExistingFoundationIds;
   /**
    * The application database this environment's Lambda connects to. The ONLY
@@ -157,8 +166,12 @@ export interface OgeviaEnvironmentConfig {
   };
 }
 
+/** ACM certificate (us-east-1) for app/admin/demo.ogevia.com, issued 2026-10-23. */
+const WEB_CERTIFICATE_ARN = "arn:aws:acm:us-east-1:300094796789:certificate/bfc4e928-f387-4804-a8d6-6eb351cfb526";
+
 const PROD: OgeviaEnvironmentConfig = {
     envName: "prod",
+    customDomains: { hostnames: ["demo.ogevia.com"], certificateArn: WEB_CERTIFICATE_ARN },
     account: OGEVIA_ACCOUNT,
     region: OGEVIA_REGION,
     terminationProtection: true,
@@ -260,6 +273,7 @@ const PROD: OgeviaEnvironmentConfig = {
 const PRD: OgeviaEnvironmentConfig = {
   ...PROD,
   envName: "prd",
+  customDomains: { hostnames: ["app.ogevia.com", "admin.ogevia.com"], certificateArn: WEB_CERTIFICATE_ARN },
   // Separate sign-in from the pilot: a dedicated user pool and client (lib/auth-stack.ts). `existing.cognitoUserPoolId` and
   // `auth.appClientId` are inherited from PROD only so they can be NAMED as forbidden for production; its API never accepts them.
   auth: { ...PROD.auth, dedicatedUserPool: { domainPrefix: `ogevia-prd-${OGEVIA_ACCOUNT}` } },
@@ -407,5 +421,23 @@ export function assertVerified(value: unknown, label: string): void {
   const placeholders = findPlaceholders(value);
   if (placeholders.length > 0) {
     throw new Error(`${label} not verified yet: ${placeholders.join(", ")}`);
+  }
+}
+
+/** https origins of the environment's permanent hostnames. */
+export function customOriginsFor(config: OgeviaEnvironmentConfig): readonly string[] {
+  return (config.customDomains?.hostnames ?? []).map((h) => `https://${h}`);
+}
+
+/** Fails closed on a malformed hostname or a certificate that CloudFront cannot use (it must be in us-east-1). */
+export function assertCustomDomains(config: OgeviaEnvironmentConfig): void {
+  const domains = config.customDomains;
+  if (!domains) return;
+  if (domains.hostnames.length === 0) throw new Error(`env "${config.envName}": customDomains needs at least one hostname`);
+  for (const h of domains.hostnames) {
+    if (!/^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+$/.test(h)) throw new Error(`env "${config.envName}": invalid hostname "${h}"`);
+  }
+  if (!/^arn:aws:acm:us-east-1:\d{12}:certificate\/[0-9a-f-]{36}$/.test(domains.certificateArn)) {
+    throw new Error(`env "${config.envName}": the certificate must be an ACM certificate ARN in us-east-1`);
   }
 }

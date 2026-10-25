@@ -1,7 +1,7 @@
 import { Template } from "aws-cdk-lib/assertions";
 import { describe, expect, it } from "vitest";
 import { buildOgeviaApp, type PlannedStack } from "../lib/app.js";
-import { ENVIRONMENTS } from "../lib/config.js";
+import { customOriginsFor, ENVIRONMENTS } from "../lib/config.js";
 import { newApp } from "./helpers.js";
 
 // Production's OWN sign-in. Everything here is CloudFormation-template evidence from the code that `cdk synth` emits; nothing contacts AWS.
@@ -75,9 +75,17 @@ describe("production's dedicated Cognito pool (Ogevia-prd-Auth)", () => {
     });
     const [client] = only(auth, "AWS::Cognito::UserPoolClient");
     const p = client!.Properties as { CallbackURLs: unknown[]; LogoutURLs: unknown[] };
-    expect(p.CallbackURLs).toHaveLength(1);
-    expect(p.LogoutURLs).toHaveLength(1);
-    expect(JSON.stringify(p)).not.toMatch(/http:|localhost|app\.ogevia\.com/);
+    // The CloudFront origin plus exactly the configured permanent hostnames (live 2026-10-23); nothing else, https only.
+    const custom = customOriginsFor(ENVIRONMENTS.prd);
+    expect(custom.length).toBeGreaterThan(0);
+    expect(p.CallbackURLs).toHaveLength(1 + custom.length);
+    expect(p.LogoutURLs).toHaveLength(1 + custom.length);
+    for (const o of custom) {
+      expect(p.CallbackURLs).toContain(`${o}/auth/callback`);
+      expect(p.LogoutURLs).toContain(`${o}/`);
+    }
+    expect(JSON.stringify(p)).not.toMatch(/http:|localhost/);
+    expect((JSON.stringify(p).match(/ogevia\.com/g) ?? []).length).toBe(custom.length * 2);
   });
 
   it("exports the pool id, ARN, client id and sign-in domain for the operator", () => {
