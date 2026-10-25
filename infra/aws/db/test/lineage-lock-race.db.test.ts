@@ -438,7 +438,10 @@ describe("the writers keep their existing errors and idempotency", () => {
     expect(r2[0].id).toBe(r1[0].id);
     await expectPgError(q(w.managerA, "select ogevia_api.revoke_visit_review_decision($1,'Synthetic: reopened for another look',null)", [one[0].id]), "OGC09", /already revoked/);
     await q(w.managerA, SQL.void, [v]);
-    await expectPgError(q(w.managerA, SQL.void, [v]), "OGC09", /signed visit cannot be voided/);
+    // 0085 (D10): repeating the void of an already voided visit is a no-op (a lost response may be retried). The refusal of a signed visit is asserted in caregiver-gate-no-service.db.test.ts.
+    await q(w.managerA, SQL.void, [v]);
+    expect((await db.admin.query("select status from ogevia.service_visits where id = $1", [v])).rows[0].status).toBe("voided");
+    expect(Number((await db.admin.query("select count(*) n from ogevia.audit_events where entity_id = $1 and action = 'service_visit.voided'", [v])).rows[0].n)).toBe(1);
     await expectPgError(q(f.cg, SQL.void, [v2]), "OGA03");
   });
 });
