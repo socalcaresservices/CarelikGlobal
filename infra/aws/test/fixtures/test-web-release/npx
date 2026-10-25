@@ -1,0 +1,15 @@
+#!/usr/bin/env bash
+# TEST DOUBLE for infra/aws/test/test-web-release.test.ts. Simulates a TEST and a PROD site bucket on local disk. Never talks to AWS.
+echo "npx $*" >> "$MOCK_T/calls.log"
+if [[ "$*" == *"pnpm@"* ]]; then exit 0; fi
+if [[ "$1" == vite ]]; then
+  out=""; while (( $# )); do [[ "$1" == --outDir ]] && out=$2; shift; done
+  mkdir -p "$out/assets"; label="${VITE_APP_ENV:-}"; [[ "${MOCK_MODE:-}" == build_prod_label ]] && label=production
+  printf '<html><script type="module" src="/assets/index-NEW.js"></script></html>' > "$out/index.html"
+  printf 'const T="TEST \xe2\x80\x94 synthetic data only";const e={VITE_APP_ENV:"%s",VITE_AUTH_PROVIDER:"cognito"};' "$label" > "$out/assets/index-NEW.js"
+  [[ "${MOCK_MODE:-}" == build_no_label ]] && printf 'const T="TEST \xe2\x80\x94 synthetic data only";const e={VITE_AUTH_PROVIDER:"cognito"};' > "$out/assets/index-NEW.js"
+  [[ "${MOCK_MODE:-}" == build_with_config ]] && echo '{}' > "$out/config.json"
+  [[ "${MOCK_MODE:-}" == build_fails ]] && exit 1
+  exit 0
+fi
+exit 0

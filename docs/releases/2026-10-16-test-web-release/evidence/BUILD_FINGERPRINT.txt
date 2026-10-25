@@ -1,0 +1,15 @@
+Build fingerprint of the approved baseline, measured 2026-10-16 in an isolated export (not on AWS)
+baseline commit : d82fefcd37407d837e7c94f6ac57a907ea286ed1
+build command   : cd apps/web && VITE_APP_ENV=test VITE_AUTH_PROVIDER=cognito npx vite build --outDir <dir> --emptyOutDir
+toolchain       : Node 22.22.0, pnpm 9.15.4, frozen lockfile
+repeatable      : two independent builds were byte-identical (44 files, names and bytes)
+entry script    : assets/index-DqZf2Qg2.js        entry style: assets/index-S7Lqg3WZ.css
+index.html      : sha256 cdfaa3105f9f09689ce837476a0040e678c7c7f5e603f93b0b34ebfd7cb51e60
+size            : 44 files, about 2.4 MB; no config.json in the output
+label check     : files containing VITE_APP_ENV:"test" = 2; files containing VITE_APP_ENV:"production" = 0
+note            : a CloudShell build with a different Node version may produce different file names. The release script reports this
+                  as a note (not a stop) and `verify` compares the live index.html with the operator's own build.
+control         : the same commit built with VITE_APP_ENV=production contains VITE_APP_ENV:"production" and, with a config.json that has
+                  no VITE_APP_ENV key (TEST's live file), shows NO banner (evidence/no-banner-production-build-1280.png).
+browser proof   : repository local harness, Chromium, sign-in as a synthetic administrator, config.json served WITHOUT VITE_APP_ENV:
+                  test build -> banner "TEST — synthetic data only" with data-environment="test" at 1280 px and 390 px, no console errors.

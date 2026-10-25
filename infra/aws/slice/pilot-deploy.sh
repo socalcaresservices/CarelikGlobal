@@ -147,8 +147,9 @@ fi
 # so tags stay identical and the strict scope gate sees only the approved change.
 export OGEVIA_DEPLOY_APPROVAL="${OGEVIA_PILOT_TAG_REF:-pilot-test-$COMMIT}"
 (cd "$HERE" && npx cdk synth --quiet --no-notices -c env=prod -c mode=deploy >/dev/null) || die "cdk synth (deploy mode) failed"
-(cd "$REPO/apps/web" && VITE_APP_ENV=production VITE_AUTH_PROVIDER=cognito npx vite build --outDir "$RUN/web-build" --emptyOutDir >/dev/null) \
+(cd "$REPO/apps/web" && VITE_APP_ENV=test VITE_AUTH_PROVIDER=cognito npx vite build --outDir "$RUN/web-build" --emptyOutDir >/dev/null) \
   || die "web build failed"
+assert_test_web_label "$RUN/web-build"
 echo "Build, tests, synth: OK"
 
 # ----------------------------------------------------------------------------

@@ -51,7 +51,8 @@ psql "$OGEVIA_DATABASE_URL" -Atc "select version from ogevia_meta.schema_migrati
 ```
 | Result | Meaning | Action |
 |---|---|---|
-| `46|0046` | Expected starting point for this release | Continue. |
+| `36|0036` | **TEST's actual starting point (operator read, before the 2026-10-14 window; corrected 2026-10-16).** The runner then applies 0037 to 0052 together. | Continue only for TEST, with the owner's written approval. |
+| `46|0046` | The draft's assumed starting point; never verified for TEST. It is the owner-reported (unverified) ledger of PRODUCTION | For TEST: record and ask the owner. Never apply this procedure to PRODUCTION. |
 | `49|0049` or `48|0048` or `47|0047` | A partial release is live | Record; the plan below applies only the missing migrations. Owner confirms. |
 | `52|0052` | Wave 1 database is already live | Skip section 5.1; go to section 6 checks. |
 | anything lower than 46 | 0039 to 0046 (caregiver readiness) is **not** live; deploying 0047 or later would deploy it too | **STOP.** That release has its own approval (`docs/releases/caregiver-readiness/RELEASE_HANDOFF.md`). |
