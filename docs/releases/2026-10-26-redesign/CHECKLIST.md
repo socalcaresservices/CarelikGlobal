@@ -37,24 +37,24 @@ Run on a clean checkout of the commit above. Paste the summary line of each. `OG
 
 | # | Gate | Command | Result | Evidence |
 |---|---|---|---|---|
-| A1 | Install | `pnpm install --frozen-lockfile` | ☐ ok | |
-| A2 | **Lint (G1)** | `pnpm lint` | ☐ exit 0 | |
-| A3 | **Typecheck (G2)** | `pnpm typecheck` | ☐ exit 0 | |
-| A4 | **Unit and static tests (G3a)** | `pnpm test` | ☐ exit 0. Counts: | |
-| A5 | Build | `pnpm build` | ☐ exit 0 | |
-| A6 | **Database tests (G3b)** | `OGEVIA_TEST_DATABASE_URL=... pnpm --filter @carelik/infra-aws test:db` | ☐ all passed, **0 skipped**. Counts: | |
-| A7 | **API tests (G3c)** | `OGEVIA_TEST_DATABASE_URL=... pnpm --filter @carelik/sv-api test:db` | ☐ all passed, **0 skipped**. Counts: | |
-| A8 | CI run on the pull request | link | ☐ green (informational; does not replace A1 to A7) | |
-| A9 | Test counts did not drop versus the baseline (process section 3.1) | | ☐ yes ☐ no, explained: | |
+| A1 | Install | `pnpm install --frozen-lockfile` | ☑ ok | Worktree installed with the frozen lockfile; a second frozen install from the operator tarball also succeeded (`PINS HOLD`). 2026-10-26 |
+| A2 | **Lint (G1)** | `pnpm lint` | ☑ exit 0 | SHA `bfb851c`: `Tasks: 6 successful, 6 total` (5 from the turbo cache, same inputs). Lint in this repo is `tsc --noEmit` |
+| A3 | **Typecheck (G2)** | `pnpm typecheck` | ☑ exit 0 | SHA `bfb851c`: `Tasks: 7 successful, 7 total` (6 cached) |
+| A4 | **Unit and static tests (G3a)** | `pnpm test` | ☑ exit 0. Counts: 2,456 tests, 0 failed (shared 118, auth 150, sv-api 96, ui 73, web 1,263 in 129 files, infra-aws 756 in 35 files) | Run as part of `pnpm test:all` on SHA `bfb851c`, clean tree: `PASS all suites ran, none skipped, all passed.` |
+| A5 | Build | `pnpm build` | ☑ exit 0 | SHA `bfb851c`: `Tasks: 6 successful, 6 total`, 0 cached. turbo warns that five packages declare no output files (a configuration warning, not a failure) |
+| A6 | **Database tests (G3b)** | `OGEVIA_TEST_DATABASE_URL=... pnpm --filter @carelik/infra-aws test:db` | ☑ all passed, **0 skipped**. Counts: 1,218 tests in 103 files | Local PostgreSQL 16; part of `pnpm test:all` on `bfb851c`. Includes `operator-0086-sql.db.test.ts` (real PostgreSQL, real 0001-0085 migrations) |
+| A7 | **API tests (G3c)** | `OGEVIA_TEST_DATABASE_URL=... pnpm --filter @carelik/sv-api test:db` | ☑ all passed, **0 skipped**. Counts: 152 tests in 22 files | Same run; includes `tenant-isolation-sweep.db.test.ts` |
+| A8 | CI run on the pull request | link | N/A: no pull request is open (none was requested) | |
+| A9 | Test counts did not drop versus the baseline (process section 3.1) | | NOT VERIFIED: no baseline count was recorded for the pre-redesign commit in this session, so a comparison would be invented. Tests were added (the redesign, staff management and the operator package); none was deleted or skipped on purpose. One test (`dst-local-times`) was edited to be date-independent (`bfb851c`); no product code changed in that commit | |
 
 Change-specific:
 - ☐ Bug fix: the reproducing test **failed before** the fix (failure text recorded) and **passes after**: ____________
 - ☐ Every changed rule has a test that fails without the change, and a control test: ____________
-- ☐ Failure-first cases covered (invalid input, stale data, concurrency, retry, wrong role, other tenant, network failure, old data): ____________
-- ☐ Migration: new file only; applied files unedited; `.down.sql` present and classified; rollback test run; `01_schema_version.sql` and ledger-tail tests updated
-- ☐ Migration touches `SECURITY DEFINER`, grants or tenant access: `docs/security-review-checklist.md` completed
-- ☐ API: permission, other-tenant, unauthenticated, bad-input and (if it creates records) idempotency tests exist; `slice-contract.test.ts` passes
-- ☐ UI: loading, empty, error, success states; 390 px and 1280 px checked; no horizontal page scroll; contrast tests pass
+- ☐ Failure-first cases covered: PARTIAL, evidenced for the operator package (15 SQL sabotage cases, snapshot/pin/ledger/people-count/interruption/failed-revoke cases) and the staff-management and tenant-isolation DB tests; not yet itemised per case ID. Left open for the Phase D reviewer
+- ☑ Migration: one new file (`db/pending/migrations/0086_staff_management.sql`); applied files unedited (set hash of 0001-0085 `de0c8abb…` equals the one applied to TEST on 2026-10-19); `.down.sql` present, classified BACKUP REQUIRED; rollback and round-trip run on a real PostgreSQL (`operator-0086-sql.db.test.ts`). `01_schema_version.sql` and the ledger-tail tests are unchanged by design: 0086 writes no ledger row (decision D1 b), so the ledger tail stays 0085
+- ☐ Migration touches `SECURITY DEFINER`, grants or tenant access: `docs/security-review-checklist.md` completed: OPEN. `verify-0086.sql` checks the grants mechanically (fixed `search_path`, no PUBLIC, `ogevia_app` execute only, RLS on), but the checklist document itself has not been completed in this session
+- ☐ API (OPEN, not itemised): permission, other-tenant, unauthenticated, bad-input and (if it creates records) idempotency tests exist; `slice-contract.test.ts` passes
+- ☐ UI (OPEN here; screenshots and checks are in `REDESIGN_NOTES.md`): loading, empty, error, success states; 390 px and 1280 px checked; no horizontal page scroll; contrast tests pass
 - ☐ No instructional paragraph where a label or tooltip works
 
 **Phase A signed:** name ____________ date ____________
