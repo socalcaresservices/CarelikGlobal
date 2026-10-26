@@ -9,6 +9,10 @@ import { buildOgeviaApp } from "../lib/app.js";
 import { ENVIRONMENTS } from "../lib/config.js";
 import { newApp } from "./helpers.js";
 
+// These gates test the authentication separation / web header releases against snapshots taken before the staff routes existed. The staff-routes switch is held OFF for
+// production here so the tests keep proving exactly what they were written to prove; the staff routes are covered by staff-routes-switch.test.ts and the production gate for this release.
+const withoutStaffRoutes = (env: "prod" | "prd") => (env === "prd" ? { ...ENVIRONMENTS.prd, features: { staffManagement: false } } : ENVIRONMENTS[env]);
+
 // The expected-only gate (docs/releases/2026-10-21-auth-separation/scripts/auth_cutover_gate.py), run on:
 //   LIVE proxy = templates synthesized from the UNMODIFIED release-branch code (fa3ca07), committed as fixtures/auth-separation/before;
 //   NEW        = the templates this code synthesizes now.
@@ -39,7 +43,7 @@ const resource = (t: any, type: string, pick?: (r: any) => boolean) => Object.va
 beforeAll(() => {
   mkdirSync(NEW, { recursive: true });
   for (const env of ["prd", "prod"] as const) {
-    for (const p of buildOgeviaApp(newApp(), ENVIRONMENTS[env], "plan")) {
+    for (const p of buildOgeviaApp(newApp(), withoutStaffRoutes(env), "plan")) {
       if (env === "prod" && p.stack.stackName !== "Ogevia-prod-NetworkEgress") continue;
       write(NEW, p.stack.stackName, Template.fromStack(p.stack).toJSON());
     }
@@ -58,7 +62,7 @@ describe("expected-only gate for the authentication separation", () => {
   it("PASSES on templates synthesized in DEPLOY mode (the real run): only the approval-reference tag values differ from live, and they are ignored", () => {
     const deploy = join(work, "deploy-mode"); mkdirSync(deploy, { recursive: true });
     for (const env of ["prd", "prod"] as const) {
-      for (const p of buildOgeviaApp(newApp(), ENVIRONMENTS[env], "deploy", "owner-go-auth-20261021")) {
+      for (const p of buildOgeviaApp(newApp(), withoutStaffRoutes(env), "deploy", "owner-go-auth-20261021")) {
         if (env === "prod" && p.stack.stackName !== "Ogevia-prod-NetworkEgress") continue;
         write(deploy, p.stack.stackName, Template.fromStack(p.stack).toJSON());
       }

@@ -1,5 +1,5 @@
 // The staff-management routes (pending migration 0086) are added to an environment's API only when its `features.staffManagement` switch is on:
-// the test slice has them, production does NOT, so the production route table (and its approved gates) are unchanged until the owner approves the release.
+// the test slice has them and, since the owner's approval of 2026-10-25 (Pacific), so does production (with migration 0086 applied first). A third environment would have them off by default.
 import { Template } from "aws-cdk-lib/assertions";
 import { describe, expect, it } from "vitest";
 import { buildOgeviaApp } from "../lib/app.js";
@@ -24,10 +24,11 @@ describe("staffManagement route switch", () => {
     const have = routeKeys("prod");
     for (const k of STAFF) expect(have.find((r) => r.key === k), k).toMatchObject({ auth: "JWT" });
   });
-  it("is OFF for production (prd): none of the staff routes is in the production API", () => {
-    expect(ENVIRONMENTS.prd.features.staffManagement).toBe(false);
-    const have = routeKeys("prd").map((r) => r.key);
-    for (const k of STAFF) expect(have, k).not.toContain(k);
-    expect(have.length).toBe(routeKeys("prod").length - STAFF.length);
+  it("is ON for production (prd), by the owner's approval: every staff route exists, requires a JWT, and the production route table equals the test slice's", () => {
+    expect(ENVIRONMENTS.prd.features.staffManagement).toBe(true);
+    const have = routeKeys("prd");
+    for (const k of STAFF) expect(have.find((r) => r.key === k), k).toMatchObject({ auth: "JWT" });
+    expect(have.length).toBe(routeKeys("prod").length);
+    expect(have.map((r) => r.key).sort()).toEqual(routeKeys("prod").map((r) => r.key).sort());
   });
 });
