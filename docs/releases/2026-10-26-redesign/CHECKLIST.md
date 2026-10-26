@@ -1,6 +1,6 @@
 # Release checklist: 2026-10-26-redesign (TEST)
 
-Prepared 2026-10-26. Status of this release: **implemented; tested (development, local harness); NOT deployed anywhere; NOT accepted.** Boxes are ticked only where this container produced the evidence; everything that needs AWS or a person is left open.
+Prepared 2026-10-26. Status of this release: **deployed to TEST; accepted on TEST by the Owner; TEST release closed with Owner exceptions on 2026-10-25 23:10 PDT (2026-10-26 06:10 UTC) (`RELEASE_COMPLETION_TEST.md` section 8). Not deployed to production; production not requested.** Boxes are ticked only where this container produced the evidence; everything that needs AWS or a person is left open.
 
 Copy this file to `docs/releases/<release-id>/CHECKLIST.md` and complete it. **Every box must be ticked or marked N/A with a reason.** A blank line is a failed line. Process: `docs/TESTING_AND_RELEASE_PROCESS.md`. Status words: proposed, implemented, tested, deployed, accepted (never interchangeable).
 
@@ -57,7 +57,7 @@ Change-specific:
 - ☐ UI (OPEN here; screenshots and checks are in `REDESIGN_NOTES.md`): loading, empty, error, success states; 390 px and 1280 px checked; no horizontal page scroll; contrast tests pass
 - ☐ No instructional paragraph where a label or tooltip works
 
-**Phase A signed:** name ____________ date ____________
+**Phase A signed:** signed by Stella Okereke (Owner) by recorded statement in the session, 2026-10-25 23:10 PDT (2026-10-26 06:10 UTC), with the Owner exceptions in `RELEASE_COMPLETION_TEST.md` section 8
 
 ## B. Local harness (Phase B), gate G4
 | # | Step | Result | Evidence |
@@ -77,7 +77,7 @@ Catalog results (copy rows as needed):
 | Catalog ID | Persona | PASS / FAIL | Notes |
 |---|---|---|---|
 
-**Phase B signed:** name ____________ date ____________
+**Phase B signed:** signed by Stella Okereke (Owner) by recorded statement in the session, 2026-10-25 23:10 PDT (2026-10-26 06:10 UTC), with the Owner exceptions in `RELEASE_COMPLETION_TEST.md` section 8 (B4, B7, B9 open)
 
 ## C. Pilot/test environment (Phase C), gate G5
 Owner has stated in writing: commit SHA ______, target **pilot/test only**, who runs it ______, window ______. ☐ recorded (link).
@@ -104,7 +104,7 @@ Catalog results on the pilot (copy rows as needed):
 
 Any FAIL: stop. Fix forward with a new commit and **restart at Phase A**.
 
-**Phase C signed (Operator + validator):** names ____________ date ____________
+**Phase C signed (Operator + validator):** Stella Okereke as Operator and Owner; no separate validator. 2026-10-25 23:10 PDT (2026-10-26 06:10 UTC). C5 to C9 partial or open; covered by the Owner exceptions
 
 ## D. User acceptance (Phase D)
 Run on the pilot/test environment with synthetic data, from scripts built from the Feature Test Plan.
@@ -112,15 +112,15 @@ Run on the pilot/test environment with synthetic data, from scripts built from t
 | Validator | Name | Scripts run (catalog IDs) | Result | Open defects | Signature / date |
 |---|---|---|---|---|---|
 | Owner | Stella Okereke | Step 13 checks (Staff Types, a report, a staff member reported created) | ☑ accepted ("Testing is complete and accepted.", stated in the session, 2026-10-25 22:56 PDT); no defects raised | none | statement recorded in `RELEASE_COMPLETION_TEST.md`; no signature yet |
-| Scheduler | | | ☐ accepted ☐ rejected | | |
-| Caregiver (phone) | | | ☐ accepted ☐ rejected | | |
-| Authorization (three balances recalculated by hand: low use, near limit, amended; match to the minute) | | | ☐ accepted ☐ rejected | | |
+| Scheduler | none | none run | ☐ EXCEPTED by the Owner (`RELEASE_COMPLETION_TEST.md` V6, 2026-10-25 23:10 PDT (2026-10-26 06:10 UTC)) | none logged | |
+| Caregiver (phone) | none | none run | ☐ EXCEPTED by the Owner (V6) | none logged | |
+| Authorization (three balances recalculated by hand: low use, near limit, amended; match to the minute) | none | none run | ☐ EXCEPTED by the Owner (V6) | none logged | |
 
 Defect log:
 | # | Class (Blocker / Major / Minor) | Description (steps, screen) | Status | Owner exception (Major only) |
 |---|---|---|---|---|
 
-☐ No open Blocker. ☐ No open Major, or each has a written owner exception.
+☐ No open Blocker: none reported or logged; not independently tested. ☐ No open Major: none reported or logged. Owner exceptions for the validations not run are in `RELEASE_COMPLETION_TEST.md` section 8.
 
 ## E. Production approval (Phase E), gate G6
 | # | Item | Done | Link |

@@ -1,6 +1,6 @@
 # Release completion record: 2026-10-26-redesign on TEST (code commit 7870a04)
 
-**Status: DEPLOYED to TEST. ACCEPTED on TEST by the Owner (statement below). TEST release NOT CLOSED: Phase C and Phase D items in section 4 are open until they are run, or the Owner records a written exception for each.** Production is not requested, not approved and was never touched. Words used exactly: *implemented*, *tested (where)*, *deployed (where)*, *accepted (by whom)*.
+**Status: TEST RELEASE CLOSED WITH OWNER EXCEPTIONS, 2026-10-25 23:10 PDT (2026-10-26 06:10 UTC). DEPLOYED to TEST; ACCEPTED on TEST by the Owner. CLOSED means the Owner has accepted the risk of the validations in section 4 that were NOT run (section 8); it does not mean they passed.** Production is not requested, not approved and was never touched. Words used exactly: *implemented*, *tested (where)*, *deployed (where)*, *accepted (by whom)*.
 
 ## 1. Owner acceptance, as stated
 | Field | Value |
@@ -79,7 +79,27 @@ Expected: nothing, or only messages the Owner recognises. **This filter has not 
 2. For any item the Owner chooses not to run, write one sentence per item: "I, Stella Okereke (Owner), accept the risk of not running <item> before closing the TEST release, because <reason>." The development session records it here word for word.
 3. Record the Scheduler, Caregiver and Authorization validators as accepted, rejected or excepted (V6).
 4. Sign Phases A to D in `CHECKLIST.md` (V8).
-Then this record's status becomes **TEST release closed** and the development session commits it. Until then the accurate words are: *deployed to TEST; accepted by the Owner on TEST; closure open*.
+Then this record's status becomes **TEST release closed** and the development session commits it. **Executed on 2026-10-25 23:10 PDT (2026-10-26 06:10 UTC) through the Owner's written exceptions and signature in section 8.** The accurate words now are: *deployed to TEST; accepted by the Owner on TEST; closed with Owner exceptions (V1 to V7 not run)*.
 
 ## 7. Not requested: production
 Production needs, in addition: 0086 promoted into `migrations/` and the production release re-pinned, a second TEST run of that exact set, the Administrator-role decision (`REDESIGN_NOTES.md` 5.1), and the Phase E package and Owner GO (`CHECKLIST.md` section E). None of that is started or approved.
+
+## 8. Closure (the Owner's written exceptions and signature)
+Recorded 2026-10-25 23:10 PDT (2026-10-26 06:10 UTC) at the Owner's explicit instruction in the development session: "Record Owner exceptions for V1, V2, V3, V4, V5, V6, and V7. Record my Phase A-D signature for V8. ... Mark the TEST release CLOSED and update the completion record accordingly." The statement applies to each item listed, word for word:
+
+> I, Stella Okereke (Owner), accept the risk of not running the remaining validations before closing the TEST release because the release was successfully deployed to TEST, technically validated, and accepted in TEST.
+
+| # | Item | Disposition | Meaning in plain words |
+|---|---|---|---|
+| V1 | Regression set R and smoke set S (`pilot_regression.py`) | **EXCEPTED by the Owner** (not run) | The automated scheduling-rule check on TEST has not been run and has no result |
+| V2 | Pilot checks (`pilot_smoke.py`) | **EXCEPTED** (not run) | Same |
+| V3 | Every role walks every menu item; API log searched for errors | **EXCEPTED** (not run; only the Owner role was exercised; the log filter was never run) | Other roles' screens and the error log for the window are unchecked |
+| V4 | Other-tenant and Caregiver negative checks | **EXCEPTED** (not run; unauthenticated and forged-token 401 on the 13 routes were run) | Tenant isolation and caregiver access were not re-tested on the deployed TEST |
+| V5 | Staff invitation through Cognito and e-mail | **EXCEPTED** (not run) | No invitation has been sent or received on TEST for this release |
+| V6 | Scheduler, Caregiver (phone) and Authorization validators | **EXCEPTED** (not run; no validator other than the Owner was involved) | Nobody has recalculated the authorization balances by hand for this release |
+| V7 | Reviewer signature on `SECURITY_REVIEW_0086.md` | **EXCEPTED** (the review is prepared by the author, not signed by a reviewer) | No second person has read the 0086 SQL against the checklist |
+| V8 | Phase A to D signatures | **SIGNED by the Owner** (by this recorded statement, no handwritten signature) | Phases A to D are signed with the exceptions above; B4, B7, B9 and C5 to C9 remain open in `CHECKLIST.md` and are covered by those exceptions |
+
+**What closing does not change.** Nothing listed as NOT VERIFIED in `DEPLOYED_RECORD_TEST.md` becomes verified: the report's figures, a phone, the other roles, the seeded type count across the four agencies, and the staff member creation (reported, not seen). No defect was reported by the Owner and none is logged; no one else tested. The exceptions are not evidence that those checks would pass. Production is not requested, and none of these exceptions carries over to a production decision (`CHECKLIST.md` section E would need its own evidence).
+
+**What is not part of closing, and stays as stated:** `~/ogevia-before/` on CloudShell (keep it for rollback until the Owner decides otherwise); the pre-deployment snapshot (deleting it is a RED action and needs a separate explicit instruction); the synthetic test data on TEST; the next-package corrections listed in `DEPLOYED_RECORD_TEST.md` sections 5 and 7.

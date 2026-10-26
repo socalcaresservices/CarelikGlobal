@@ -1,6 +1,6 @@
 # Deployed record: release 2026-10-26-redesign on TEST (code commit 7870a04)
 
-**Status: DEPLOYED TO TEST by the Owner/Operator on 2026-10-25 (Pacific) / 2026-10-26 (UTC). NOT ACCEPTED.** Acceptance is the Phase D sign-offs by the people who use the release (`DEPLOY_PLAN_TEST.md` section 9); it has not happened. Production (`Ogevia-prd-*`, `ogevia_prd`, API `zk527zk4ua`) was not touched and was never a target.
+**Status: DEPLOYED TO TEST by the Owner/Operator on 2026-10-25 (Pacific) / 2026-10-26 (UTC). ACCEPTED on TEST by the Owner. TEST release CLOSED WITH OWNER EXCEPTIONS on 2026-10-25 23:10 PDT (2026-10-26 06:10 UTC) (see `RELEASE_COMPLETION_TEST.md` section 8): closing records the Owner's acceptance of the risk of validations not run, not that they passed.** Production (`Ogevia-prd-*`, `ogevia_prd`, API `zk527zk4ua`) was not touched and was never a target.
 
 Sources: output the Operator pasted into the development session from AWS CloudShell, read by the development session. The development container has no AWS access; nothing here was observed directly. Where output was not pasted or was cut off, the line says **NOT VERIFIED** and says what is missing. Words used exactly: *implemented*, *tested (where)*, *deployed (where)*, *accepted (by whom)*.
 

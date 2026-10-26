@@ -35,3 +35,5 @@ Reviewed file: `infra/aws/db/pending/migrations/0086_staff_management.sql` (sha2
 
 ## 6. Sign-off (a person)
 Reviewer name ____________ date ____________ ☐ every box in sections 1 and 2 checked against the SQL ☐ residual notes R-1 to R-4 accepted (or a written justification)
+
+**Owner exception recorded 2026-10-25 23:10 PDT (2026-10-26 06:10 UTC):** no reviewer has signed this review. The Owner excepted the reviewer signature (V7) in `RELEASE_COMPLETION_TEST.md` section 8 when closing the TEST release. The review stays as prepared (author only, not independent); the exception does not make it a signed review.
