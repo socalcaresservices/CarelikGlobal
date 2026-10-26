@@ -1,6 +1,6 @@
 # Production release preparation: 2026-10-26-redesign (staff management and the redesigned navigation)
 
-**Status: PACKAGE PREPARED AND TESTED LOCALLY; AWAITING THE OWNER'S REVIEW AND FINAL GO. Nothing is deployed to production. No GO has been given.** Opened 2026-10-26 on the Owner's instruction ("I want this update deployed to PRODUCTION. Begin production release preparation now."). Owner and AWS Operator: Stella Okereke. TEST exceptions do not carry over to production (the Owner's words); section 4 shows what that means item by item.
+**Status: PACKAGE PREPARED; CI ON POSTGRESQL 18 GREEN (PR #106, head `6030924`); AWAITING THE OWNER'S DECISIONS AND FINAL GO. Nothing is deployed to production. No GO has been given.** Opened 2026-10-26 on the Owner's instruction ("I want this update deployed to PRODUCTION. Begin production release preparation now."). Owner and AWS Operator: Stella Okereke. TEST exceptions do not carry over to production (the Owner's words); section 4 shows what that means item by item.
 
 Labels: VERIFIED (read from the repository, a recorded run or the read-only production capture of 2026-10-26), INFERRED, UNKNOWN. Words: *implemented*, *tested (where)*, *deployed (where)*, *accepted (by whom)*.
 
@@ -81,7 +81,7 @@ The "P" checks in the procedure: **P1** unauthenticated route smoke; **P2** data
 | Alternative (if the GO is given today) | Mon 2026-10-26 20:00 → Tue 2026-10-27 04:00 PDT | `2026-10-27T03:00:00Z` → `2026-10-27T11:00:00Z` | possible only if D-P4 is decided today |
 Expected operator time: about 90 to 120 minutes (snapshot 5 to 15 minutes, apply a few minutes, two stack deployments, web publish, checks). Start the clock at Step 7: the snapshot must be taken inside the window. If a stop condition fires the procedure ends and waits; nothing is retried with changed values.
 
-## 9. Test evidence (development container, committed state `37250c9`; PostgreSQL 16 locally, RDS runs 18.3)
+## 9. Test evidence (local run: committed state `37250c9`, PostgreSQL 16; CI run: PR #106, head `6030924`, PostgreSQL 18; RDS runs 18.3)
 | Check | Result |
 |---|---|
 | `pnpm lint`, `pnpm typecheck`, `pnpm build` | exit 0 each (6 of 6 tasks) |
@@ -89,7 +89,8 @@ Expected operator time: about 90 to 120 minutes (snapshot 5 to 15 minutes, apply
 | New production package tests (`test/operator-prd-*.test.ts`) | gate and assembly (64), deploy guard (35), apply (55), ledger recheck (18), snapshot and smoke (16), web guard, baseline and record (9), tarball and pin check (11), procedure (12): all passed |
 | `pnpm test:db` in `apps/sv-api` | exit 0; 22 files, 152 tests passed |
 | `pnpm test:db` in `infra/aws` | **1,216 passed, 27 failed** in three older files: `auth-cutover-scripts.db.test.ts` (6), `prd-rehearsal.db.test.ts` (8), `prd-release-exec.db.test.ts` (13). The new `operator-prd-sql.db.test.ts` (24 of 24, real PostgreSQL) passed |
-| The 27 failures | **Identical (same 27) at `7870a04`, `a9d1ae6` and `f8cd7df`, run alone on a quiet cluster**, so they are not caused by this package or by the production flag. Probable cause (INFERRED, NOT VERIFIED): this container has PostgreSQL 16 where the earlier green runs of these files used PostgreSQL 18 (one failure compares a runner-built schema with a `psql`-built one). I could not start a PostgreSQL 18 here. They test the earlier TEST rehearsal and the older production release package, none of which is used by this release. Must be rerun on PostgreSQL 18 (CI) before the GO if the Owner wants the full database gate |
+| The 27 local failures | Identical (the same 27) at `7870a04`, `a9d1ae6` and `f8cd7df` in this container (PostgreSQL 16), so not caused by this package or the production flag. **Resolved by CI on PostgreSQL 18: those three files pass there** (see the next row). Cause: this container's PostgreSQL version (VERIFIED by the CI result, not by reproducing on 18 locally) |
+| **CI on PostgreSQL 18 (GitHub Actions, `postgres:18`), PR #106, head `6030924`** | `postgres` job (`pnpm test:all`: unit, infra database and API tests, 0 skipped allowed): **success**, 30 min 37 s. `validate` (typecheck, lint, build, `pnpm test`, deployment bundle): **success**, 23 min 47 s. `harness`: **success**, 1 min. The PR is mergeable (clean), draft, with no review threads. History of the run: run 1 (`22435a6`) `postgres` success, `validate` cancelled at its 15-minute limit; run 2 (`fb200e8`, `validate` 30 minutes) `validate` success, `postgres` cancelled at its 30-minute limit with no failed test seen; run 3 (`6030924`, `postgres` 60 minutes) all three jobs green. The only changes between runs are the two timeout lines in `.github/workflows/ci.yml` (no test skipped or removed, none of the package changed, the tarball is unaffected) |
 
 ## 10. Decision gates for the Owner
 | Id | Decision | State / recommendation |
@@ -97,7 +98,7 @@ Expected operator time: about 90 to 120 minutes (snapshot 5 to 15 minutes, apply
 | D-P1 | Enable the 13 staff routes in production (`staffManagement: true`) | **Approved by the Owner on 2026-10-26** (in scope of the instruction) |
 | D-P2 | Apply 0086 to production outside the ledger, the same tested path as TEST (the ledger stays 85 / 0085; the reason, the tracking and the repeat-run protection were explained in the session) | **Needs the Owner's explicit approval**; recommended yes |
 | D-P3 | Whether production data is synthetic or real | Not decided by the package; the Owner's 2026-10-20 statement is recorded; nothing is inferred from counts |
-| D-P4 | V3/V4/V5/V6/V7 for production: run each, or record a written Owner exception per item | Recommended: run V7 (second reader of the 0086 SQL) and the authenticated V4 negatives on TEST before the GO; accept V5/V6 exceptions in writing if they are not wanted |
+| D-P4 | V3/V4/V5/V6/V7 for production: run each, or record a written Owner exception per item. (The earlier open item "the 27 database failures on PostgreSQL 18" is closed: CI is green.) | Recommended: run V7 (second reader of the 0086 SQL) and the authenticated V4 negatives on TEST before the GO; accept V5/V6 exceptions in writing if they are not wanted |
 | D-P5 | The window (section 8) | Recommended: Tue 2026-10-27 20:00 PDT → Wed 04:00 PDT |
 | GO | Final GO message naming the Operator, window, approval reference, tarball sha256 and admin host IP | After the package is accepted |
 
