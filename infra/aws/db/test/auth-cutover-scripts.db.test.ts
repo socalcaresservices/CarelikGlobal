@@ -15,6 +15,10 @@ import { newApp } from "../../test/helpers.js";
 import { migrate } from "../scripts/migrations.js";
 import { ADMIN_URL } from "./harness.js";
 
+// This file tests the authentication-separation scripts against snapshots taken before the staff routes existed. The staff-routes switch is held OFF for production here so
+// the tests keep proving what they were written to prove; the staff routes are covered by staff-routes-switch.test.ts and the production gate for the staff-management release.
+const withoutStaffRoutes = (env: "prod" | "prd") => (env === "prd" ? { ...ENVIRONMENTS.prd, features: { staffManagement: false } } : ENVIRONMENTS[env]);
+
 vi.setConfig({ testTimeout: 300000, hookTimeout: 300000 });
 const REPO = fileURLToPath(new URL("../../../../", import.meta.url));
 const SCRIPTS = join(REPO, "docs/releases/2026-10-21-auth-separation/scripts");
@@ -113,7 +117,7 @@ async function db<T>(fn: (c: pg.Client) => Promise<T>): Promise<T> { const c = n
 const q = <T = any>(sql: string, p: unknown[] = []) => db(async (c) => (await c.query(sql, p)).rows as T[]);
 const counts = async () => JSON.stringify((await q(`select (select count(*) from ogevia.organizations) o, (select count(*) from ogevia.app_users) u, (select count(*) from ogevia.organization_memberships) m, (select count(*) from ogevia.caregiver_records) c`))[0]);
 
-const stackTemplates = (name: string) => Template.fromStack(buildOgeviaApp(newApp(), ENVIRONMENTS[name === "prod" ? "prod" : "prd"], "plan").find(() => true)!.stack);
+const stackTemplates = (name: string) => Template.fromStack(buildOgeviaApp(newApp(), withoutStaffRoutes(name === "prod" ? "prod" : "prd"), "plan").find(() => true)!.stack);
 void stackTemplates;
 
 beforeAll(async () => {
@@ -135,7 +139,7 @@ echo "<!doctype html><script type=\\"module\\" src=\\"/assets/$name\\"></script>
   writeFileSync(join(MOCK, "nic-by-ip.json"), JSON.stringify({ NetworkInterfaces: [{ NetworkInterfaceId: "eni-0aaa", Attachment: { InstanceId: "i-0ce8db2d7e5839dd5" } }] }));
   writeFileSync(join(MOCK, "snaps.txt"), ""); writeFileSync(join(MOCK, "templates-unused"), "");
   // the NEW templates this code synthesizes
-  for (const env of ["prd", "prod"] as const) for (const p of buildOgeviaApp(newApp(), ENVIRONMENTS[env], "plan")) {
+  for (const env of ["prd", "prod"] as const) for (const p of buildOgeviaApp(newApp(), withoutStaffRoutes(env), "plan")) {
     if (env === "prod" && p.stack.stackName !== "Ogevia-prod-NetworkEgress") continue;
     const tpl = Template.fromStack(p.stack).toJSON();
     // This release did not change the API's code; the API code has changed since (staff routes), so its Lambda asset references are pinned to the deployed ones.
