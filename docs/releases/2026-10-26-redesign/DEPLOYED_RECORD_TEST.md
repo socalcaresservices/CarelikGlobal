@@ -41,7 +41,7 @@ Sources: output the Operator pasted into the development session from AWS CloudS
 | 10 | PASS | see section 2 |
 | 11–12 | PASS, out of order | see section 5. After the API deploy: `ROUTE SMOKE PASSED: 13 routes x 2 calls, all 401; CORS preflight ok`. `web-verify` and `deploy-test-slice.sh smoke` ran in the same `&&` chain before it; their output was not pasted |
 | 13 | PARTIAL | reported by the Operator: "all pages load". **NOT VERIFIED:** the six menu groups, creating a synthetic staff member, running a report |
-| 14 | **NOT VERIFIED** | the log group `/aws/lambda/<function>` does not exist (the stack names its log group differently); the corrected command was given but its output was not pasted. ComplianceSweep was `ENABLED` in the post-check |
+| 14 | PASS | the procedure's log group `/aws/lambda/<function>` does not exist; the Lambda's own `LoggingConfig.LogGroup` is `Ogevia-prod-ServiceVerificationApi-HandlerLogGroup881018CA-MkXDAX4WQkVB`. Its latest sweep entry, 2026-10-26T05:23:31Z (after the deploy at 05:15:53Z): `{"task":"compliance-sweep","organizations":0,"evaluated":0,"holdsOpened":0,"holdsReleased":0,"failedOrganizations":0}`. The rule is `ENABLED` (post-check) |
 | 15 | PASS | run folder `~/ogevia-ledger-window-test-20261026T052001Z` (the same stamp as the prompt seen): `staff-management objects (staff_types|staff_profiles|functions of 21): 1|1|21`, `0086 is PRESENT as expected (2 tables, 21 functions).`, `85 migrations applied, latest 0085`, no row above 0085, enforcement `0 of 0 agencies`, `SECURITY GROUP: restored and verified identical to the original` |
 | 16 | PASS | `RECORDED: every deployed artifact maps to 7870a04c43545bacc378ad93ffc6a09d63345b5a`. The head of the record (the tarball hash line) was cut off in the paste; `~/ogevia-before/DEPLOYED_RECORD.txt` on CloudShell has it |
 
@@ -62,7 +62,7 @@ No rollback was performed or needed. Rollback inputs are retained in `~/ogevia-b
 
 ## 7. Not verified, and next
 - **Phase D acceptance** (Owner, Scheduler, Caregiver on a phone, Authorization recalculation): not done.
-- Steps 13 (staff member creation, report) and 14 (sweep log): paste the missing output or rerun and record. (Step 15 is verified.)
+- Step 13 (staff member creation, report): paste the result or rerun and record. (Steps 14 and 15 are verified.)
 - The `deployment-status` tag on the four undeployed stacks still carries earlier approval values (cosmetic; the gate ignores that tag).
 - Corrections for the next package: Step 14 log group from `LoggingConfig.LogGroup`; state Node 22 install on CloudShell in Step 0; make the web step refuse to run before the API post-check has passed; show the approval reference once in the hash-replacement step.
 - Production is not requested. It needs 0086 promoted into `migrations/`, the production release re-pinned and a second TEST run, plus the Administrator-role decision (`REDESIGN_NOTES.md` 5.1).
