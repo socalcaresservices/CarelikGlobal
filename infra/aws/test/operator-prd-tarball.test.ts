@@ -104,7 +104,7 @@ describe("tarball-pin-check.sh", () => {
     reset();
   });
   run("stops on the wrong toolchain (Node, pnpm, CDK) and on dependencies that are not installed", () => {
-    for (const env of [{ FAKE_NODE: "v20.1.0" }, { FAKE_PNPM: "10.0.0" }, { FAKE_CDK: "2.1000.0 (build x)" }]) { const r = pin(env); expect(r.code, r.out).toBe(1); expect(r.out).toContain("FAIL"); }
+    for (const env of [{ FAKE_NODE: "v20.1.0" }, { FAKE_PNPM: "10.0.0" }, { FAKE_CDK: "2.1000.0 (build x)" }] as Array<Record<string, string>>) { const r = pin(env); expect(r.code, r.out).toBe(1); expect(r.out).toContain("FAIL"); }
     rmSync(join(root, "node_modules"), { recursive: true }); const r = pin(); expect(r.code, r.out).toBe(1); expect(r.out).toContain("dependencies are not installed");
     reset();
   });
