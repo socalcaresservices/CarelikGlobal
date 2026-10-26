@@ -1,57 +1,105 @@
 # Production release preparation: 2026-10-26-redesign (staff management and the redesigned navigation)
 
-**Status: PREPARATION, stage 1 of 3. Nothing is deployed to production. No GO has been requested. Production's live state is UNKNOWN until Stella runs the read-only discovery package (section 6).** Opened 2026-10-26 on the Owner's instruction ("I want this update deployed to PRODUCTION. Begin production release preparation now."). Owner and AWS Operator: Stella Okereke. TEST exceptions do not carry over to production (the Owner's words); section 3 shows what that means item by item.
+**Status: PACKAGE PREPARED AND TESTED LOCALLY; AWAITING THE OWNER'S REVIEW AND FINAL GO. Nothing is deployed to production. No GO has been given.** Opened 2026-10-26 on the Owner's instruction ("I want this update deployed to PRODUCTION. Begin production release preparation now."). Owner and AWS Operator: Stella Okereke. TEST exceptions do not carry over to production (the Owner's words); section 4 shows what that means item by item.
 
-Labels: VERIFIED (read from the repository or a recorded run), INFERRED, UNKNOWN.
+Labels: VERIFIED (read from the repository, a recorded run or the read-only production capture of 2026-10-26), INFERRED, UNKNOWN. Words: *implemented*, *tested (where)*, *deployed (where)*, *accepted (by whom)*.
 
-## 1. What exactly was tested on TEST, and how production code relates to it
+## 1. What was tested on TEST, and how the production code relates to it
 | Item | Value | Label |
 |---|---|---|
 | Code deployed to TEST | commit `7870a04c43545bacc378ad93ffc6a09d63345b5a` (Handler asset `94b73574c5a681d5a8c22b4264742f64e5a6d40aa1ace783be12e7383b9d8a9e.zip`, Identity asset `7c5f8eb676c93261fd7a80f34d40ba70379c040d94bb2e9bd80f2d007ebc9759.zip`, 241 routes = 228 + 13 staff routes) | VERIFIED (`DEPLOYED_RECORD_TEST.md`) |
-| Migration deployed to TEST | `0086_staff_management.sql` from `infra/aws/db/pending/` (sha256 `8eb7b4a3…a16a4f`), applied outside the ledger; ledger stayed 85 / 0085; `verify-0086.sql` 110 of 110 | VERIFIED |
-| Web deployed to TEST | the build at `7870a04` (redesigned navigation, Staff page) | VERIFIED |
-| Production-bound difference | **one config line**: `ENVIRONMENTS.prd.features.staffManagement` set `true` (commit `515c49a`), plus tests that hold the flag off where they compare against pre-staff snapshots (`515c49a`, `f8cd7df`). The Handler and Identity code assets are byte-identical to TEST's (VERIFIED by the synthesis in `infra/aws/test/prd-discovery-package.test.ts`) | VERIFIED |
-| Later branch commits NOT in this release | everything else after `7870a04`: documentation, operator-package scripts and tests only. The only changed source file outside docs and tests is `infra/aws/lib/config.ts` (the flag) | VERIFIED by `git diff --name-only 7870a04 HEAD` |
+| Migration deployed to TEST | `0086_staff_management.sql` from `infra/aws/db/pending/` (sha256 `8eb7b4a3…a16a4f`), applied outside the ledger; TEST ledger stayed 85 / 0085; `verify-0086.sql` 110 of 110 | VERIFIED |
+| Production code commit | `f8cd7dff2d4cf871b6e5ff6b62c7ec679a317f45` = the TEST-tested code plus **one configuration line** (`ENVIRONMENTS.prd.features.staffManagement: true`, commit `515c49a`, which the Owner approved) plus tests. A synthesis of this commit gives the same Handler and Identity builds as TEST (VERIFIED by the package build, which refuses otherwise) | VERIFIED |
+| Not in this release | everything else after `7870a04`: documentation, operator-package scripts and tests only. The only changed source file outside docs and tests is `infra/aws/lib/config.ts` | VERIFIED by `git diff --name-only 7870a04 HEAD` |
 
-Why the flag is part of "deploy this update": without it production would serve the 228 earlier routes and the redesigned web would call 13 staff routes that do not exist. It is a decision for the Owner (D-P1, section 7), recommended YES.
-
-## 2. Production target (to be confirmed by the discovery capture)
-Account `300094796789`, region `us-west-2`. Stacks `Ogevia-prd-Auth`, `-DatabaseSecret`, `-EvidenceStorage`, `-Observability`, `-ServiceVerificationApi`, `-WebHosting`; database `ogevia_prd` on the RDS instance `ogevia-prod-postgres` that TEST also uses (database `ogevia_sv_test`); API id `zk527zk4ua`; Cognito pool `us-west-2_FHJoX71ca`; hostnames `app.ogevia.com`, `admin.ogevia.com`. VERIFIED from the repository's configuration; whether each exists and what it runs now is UNKNOWN.
-
-## 3. V1–V8: what passed, what was waived on TEST, what production needs
-| # | TEST result | Carries to production? | Production disposition |
-|---|---|---|---|
-| V1 regression set R | EXCEPTED, not run | **No** | **OPEN.** Run on TEST (already at the same code) before GO; it writes synthetic rows, so it must not be pointed at production if production holds real data. A production-side smoke set (read-only) replaces it |
-| V2 pilot smoke | EXCEPTED, not run | **No** | **OPEN.** Run (read-mostly) after the production deploy as the post-deploy check |
-| V3 every role walks every menu item; log search | EXCEPTED (Owner role only) | **No** | **OPEN.** Run on TEST now; on production after deploy: sign-in per existing production role, log search for 5xx |
-| V4 tenant and Caregiver negatives | EXCEPTED (401 and forged token on 13 routes passed) | **No** | **OPEN, required.** Cross-tenant and Caregiver-cannot-reach-Administrator checks are part of the production gate; the SQL-level negatives (110 checks, tenant-isolation sweep) passed in the development run |
-| V5 staff invitation by e-mail | EXCEPTED | **No** | **OPEN.** Needs the production Cognito pool and the production e-mail path (UNKNOWN whether sending is configured); verify on TEST first |
-| V6 Scheduler, Caregiver (phone), Authorization validators | EXCEPTED | **No** | **OPEN.** Needs the people. Not required by the redesign's database change, but required by the process for the caregiver and authorization screens |
-| V7 reviewer signature, `SECURITY_REVIEW_0086.md` | EXCEPTED (author-prepared only) | **No** | **OPEN.** A second person must read the SQL against the checklist, or the Owner records a production exception in writing |
-| V8 signatures | SIGNED for TEST | **No** | **OPEN.** Production Phase E signature and the explicit GO |
-
-Passed on TEST and relevant evidence for production (not a substitute for production checks): Step 5/6/7/9/10/12/14/15/16 checks, route smoke 26 of 26, gate DELTA/NONE, 110 SQL checks, 0086 apply and rollback tested against real PostgreSQL.
-
-## 4. Unresolved at this point
-1. Live production state: stack versions, Lambda code, web version, whether the earlier production release (`2026-10-19-prd-readiness`, pinned to `e80b770`) was ever executed, whether `Ogevia-prd-Auth` exists. UNKNOWN.
-2. Migration ledger of `ogevia_prd` (last documented 46 / 0046 on 2026-10-20/21). The release needs 0047–0085 (if still behind) and then 0086 outside the ledger. UNKNOWN.
-3. Data in production (legitimate versus synthetic). The Owner stated on 2026-10-20 that production holds synthetic data only; that must be re-confirmed now and checked by row counts. UNKNOWN.
-4. The existing production tooling is pinned to a different release and must not be reused for the deployment stages; only the read-only discovery pieces are version-neutral. VERIFIED.
-
-## 5. Safety design for the production package (built after the capture)
-Same pattern as TEST: one tarball built from the production-bound commit with manifest and hash; a temporary single /32 rule on the shared RDS group (typed phrase, rule set verified identical before and after); an RDS snapshot inside a 12-hour UTC window before any change; an expected-only diff gate (live templates against release templates, any unexpected change stops); migrations from the actual ledger; 0086 applied as on TEST with `verify-0086.sql`; one stack deployed per typed phrase (API before web); web published after the API; rollback R1–R7 analog (code rollback by previous asset; 0086 rollback is **BACKUP REQUIRED** because it drops the staff tables with rows; snapshot restore as the last resort). The shared RDS instance means production work must not touch `ogevia_sv_test` and vice versa; the package pins the database name `ogevia_prd`.
-
-## 6. Step now: read-only discovery (Stella, CloudShell, us-west-2)
-Package: `ogevia-prd-discovery.tar.gz` built by `docs/releases/2026-10-26-redesign-production/build-discovery-package.sh`; its README has the commands. Summary: verify the manifest; run `scripts/p0-baseline-capture.sh` and `scripts/p1-diff-report.sh` (AWS reads and local files only); optionally (YELLOW, typed phrase, adds and removes one /32 rule) `OGEVIA_PRD_READ_COUNTS=1 OGEVIA_EXPECT_HOST_IP=10.20.132.179 bash scripts/ledger-prd-read.sh prd --host-ip` for the ledger and row counts only. Paste the output back; do not paste secrets or names.
-
-## 7. Decision gates for the Owner
-| Id | Decision | Recommendation |
+## 2. Production as it is today (read-only capture of 2026-10-26, run by the Owner in CloudShell; nothing was changed)
+| Fact | Value | Label |
 |---|---|---|
-| D-P1 | Enable the 13 staff routes in production (`staffManagement: true`) | YES: required for the redesigned web |
-| D-P2 | 0086 path on production | Same tested path as TEST (apply from `db/pending` outside the ledger). Promoting it into `migrations/` would need re-pinning and adoption on TEST |
-| D-P3 | Re-confirm production data is synthetic only (after the counts are read) | Decide after the capture |
-| D-P4 | V1–V7 for production: run, or written Owner exception per item | Run V4 and a review of 0086 at minimum |
-| D-P5 | Execution window (≤ 12 h UTC, snapshot inside it) | Proposed after the capture, off-hours Pacific |
+| Account, region | `300094796789`, `us-west-2` | VERIFIED |
+| Stacks | `Ogevia-prd-DatabaseSecret`, `-EvidenceStorage`, `-WebHosting` (updated 2026-10-23), `-ServiceVerificationApi` (updated 2026-10-21), `-Observability`, `-Auth` (created 2026-10-21) and the shared `Ogevia-prod-NetworkEgress`: all settled, termination protection on | VERIFIED |
+| API / Lambda | API `zk527zk4ua`, 228 routes; the Lambda serves `ogevia_prd` with `OGEVIA_ENV=prd`; code asset `debd1d43…` (last modified 2026-10-21); the previous asset exists in the CDK bucket (260,561 bytes) and the live code zip was downloaded as a recovery copy | VERIFIED |
+| Web | served bundle version string `e80b770210c54e423d28ecf48e00f1dda9506cec`, environment `production`, calls only the production API host; 83 files captured | VERIFIED |
+| Database | `ogevia_prd` ledger **85 migrations applied, latest 0085** (applied 2026-10-20); no staff objects expected (the apply script checks); enforcement reported "0 of 0 agencies" (the settings table has no rows: that says nothing about whether any organization exists) | VERIFIED (ledger, enforcement), UNKNOWN (contents of the tables) |
+| RDS | `ogevia-prod-postgres` (shared with TEST): available, private, encrypted, backups 7 days, deletion protection on; 20 manual snapshots | VERIFIED |
+| Cognito | both pools MFA on; production pool `us-west-2_FHJoX71ca` | VERIFIED |
+| Real or synthetic data | the Owner stated on 2026-10-20 that production holds synthetic data only. The row counts were **not** collected and are **not** used to decide; the package neither classifies nor deletes any record. D-P3 below stays open | UNKNOWN |
+| Hostnames `app.ogevia.com`, `admin.ogevia.com` | the WebHosting stack equals the release (so any aliases it holds are in place); whether DNS points at it is not part of this release | UNKNOWN (DNS) |
 
-## 8. Next
-After the capture: write the production gate and pins, migration plan from the real ledger, deploy guard, web guard, snapshot step, rollback and deployed-record scripts; test with mocked AWS and real PostgreSQL; present the exact target, changes, risks and window; ask for the final GO. Nothing is pushed, merged or deployed without the Owner's explicit instruction.
+## 3. What the release changes in production (difference of the capture against the release templates)
+| Stack | Live → release | Gate result |
+|---|---|---|
+| `Ogevia-prd-ServiceVerificationApi` | 244 → 257 resources: **13 staff routes added** (JWT-authorized like the others); Handler code `debd1d43…` → `94b73574…`; CORS origins `https://app.ogevia.com` and `https://admin.ogevia.com` appended. Nothing else (no IAM, role, policy, environment, permission, stage, authorizer, rule, log or secret change) | DELTA, deploy |
+| `Ogevia-prd-Auth` | web client sign-in callbacks and sign-out URLs gain the `app.` and `admin.` URLs (4 properties); nothing removed | DELTA, deploy |
+| `Ogevia-prd-WebHosting` | no resource difference; the template still carries the export `ExportsOutputRefTestSliceAppClient5EA2F71F`, which the release no longer has. **No stack imports it** (CloudFormation `list-imports` answered "not imported by any stack") | EXPORT-ONLY, **not deployed** |
+| `-DatabaseSecret`, `-EvidenceStorage`, `-Observability`, `Ogevia-prod-NetworkEgress` | identical | NONE, not deployed |
+| `ogevia_prd` | + staff types and profiles (2 tables), 21 functions, 1 trigger, 2 permissions; `note_my_sign_in` replaced; 7 default staff types seeded per existing agency; **ledger stays 85 / 0085**; nothing existing is dropped, deleted or updated | applied by `apply-0086-prd.sh` |
+| Web files | version `e80b770…` → `f8cd7df…` with production's own embedded values | published by `web-prd.sh` |
+
+## 4. V1–V8: passed, waived on TEST, and the production disposition
+| # | TEST result | Carries over? | Production disposition in this package |
+|---|---|---|---|
+| V1 regression set R (`pilot_regression.py`) | EXCEPTED, not run | **No** | The runner writes synthetic rows and uses the TEST pilot accounts: it **must not** be pointed at production. Production disposition: **not applicable to production; run on TEST (same code) before the GO if the Owner wants the evidence**, or the Owner records an exception. Production gets the checks in "P" below |
+| V2 pilot checks (`pilot_smoke.py`) | EXCEPTED, not run | **No** | Same: TEST-only (hard-coded synthetic pilot identities). Optional on TEST; production gets P1–P7 |
+| V3 every role walks every menu; API log searched | EXCEPTED (Owner role only) | **No** | Production: **P3** (Owner walk; a non-Owner account if one exists) and **P4** (log search for ERROR events, read-only, counts only) are steps of the procedure |
+| V4 other-tenant and Caregiver negatives | EXCEPTED (401 / forged token on 13 routes passed) | **No** | Production: **P1** (13 routes × 2 unauthenticated calls, 26 results, run by the package) and the SQL-level negatives (110 checks in `verify-0086.sql` plus the tenant-isolation sweep, run in the full test gate). The authenticated cross-tenant check needs a second organization and a caregiver sign-in: **OPEN** (see D-P4) |
+| V5 staff invitation by e-mail | EXCEPTED | **No** | Not run in production: it would create a real Cognito user and send real e-mail. **OPEN**; recommended: run once on TEST with an inbox the Owner controls, or accept an exception for production |
+| V6 Scheduler, Caregiver (phone), Authorization validators | EXCEPTED | **No** | **OPEN.** These cover the caregiver and authorization screens, which this release does not change in the database or API beyond the staff additions; the Owner decides whether to require them |
+| V7 reviewer signature, `SECURITY_REVIEW_0086.md` | EXCEPTED (author-prepared only) | **No** | **OPEN.** A second person reads the 0086 SQL against the checklist, or the Owner records a production exception in writing. Residual notes R-1 to R-4 in that file remain |
+| V8 signatures | SIGNED for TEST | **No** | Production Phase E signature and the explicit GO are the Owner's |
+
+The "P" checks in the procedure: **P1** unauthenticated route smoke; **P2** database markers and the 110 SQL checks; **P3** Owner walk (and one non-Owner account if present); **P4** ERROR log count and ComplianceSweep; **P5** ledger 85 / 0085 and 0086 present afterwards; **P6** people-and-access counts equal before and after; **P7** deployed record mapping every artifact to the commit.
+
+## 5. Records, accounts, permissions and audit history
+- The release deletes and updates nothing. The apply is one transaction that creates new objects; `note_my_sign_in` is replaced (restored by the rollback). The script compares the row counts of `app_users`, `organization_memberships`, `audit_events`, `caregiver_records` and `organizations` before and after and stops if any differs.
+- Audit events, memberships and roles are never touched. The new permissions `staff.read` and `staff.manage` are held by the Owner role only.
+- No TEST data is copied into production; the package contains no production data and reads none beyond ledger and counts.
+- The procedure never creates staff, users, invitations or clients in production.
+
+## 6. Backup and rollback
+| Layer | Before | Rollback |
+|---|---|---|
+| Database | a manual, encrypted RDS snapshot `ogevia-prod-postgres-pre-0086-prd-YYYYMMDDHHMM` taken **inside the window** and verified before any change (Step 7); it also contains `ogevia_sv_test`, so it is never restored in place | R3: the pinned down script drops the two staff tables **with their rows** (BACKUP REQUIRED) and restores `note_my_sign_in`; rehearsed on a real PostgreSQL. Last resort R4 (isolated restore), not rehearsed on AWS |
+| API | previous code asset `debd1d43…` verified present; live zip downloaded | R2: `update-function-code` from the verified asset (code only; CloudFormation then needs a reconcile step chosen by the Owner) |
+| Auth | client URLs captured | R2b: the change only adds URLs; leaving them breaks nothing |
+| Web | the whole bucket (83 files) downloaded with a hash manifest | R1: `web-prd.sh rollback` (restores captured files, puts back the captured `index.html`, verifies; deletes nothing) |
+
+## 7. Remaining risks (each stated, none hidden)
+1. **The package has never run against AWS.** It was tested with fake `aws`/`psql`/`curl`/`npx`, real synthesized templates and a real PostgreSQL. Its TEST twin ran in CloudShell on 2026-10-25/26 and passed its steps. (NOT VERIFIED on production)
+2. **The Handler asset key may differ in production's CloudShell** (the key depends on the build environment). TEST's CloudShell reproduced it; Step 4 checks it and stops otherwise. (INFERRED safe)
+3. **Rollbacks R1, R2, R2b, R4, R5 are documented, not rehearsed on AWS.** R3 is rehearsed on a real PostgreSQL.
+4. **The shared RDS instance and VPC:** a temporary single `/32` rule is added to the shared RDS security group three times (Steps 6, 9, 16) and verified removed each time; a failure to remove it is exit 3 with prepared commands (R5).
+5. **Data classification is not verified.** The Owner's statement of 2026-10-20 (synthetic only) is recorded; nothing in this package depends on it or changes it. If production now holds real client data, 0086's seeding and the staff pages operate on it as designed; the rollback (R3) drops only the staff tables.
+6. **V4 (authenticated cross-tenant and Caregiver negatives), V5, V6 and V7 remain open** unless the Owner runs or excepts them in writing (D-P4).
+7. **Hostnames:** `app.ogevia.com`/`admin.ogevia.com` DNS is outside this release; the added Cognito URLs and CORS origins are harmless if DNS does not point at the distribution.
+8. **Users signed in during the web publish** see the new menu after a refresh; the release window is outside business hours for that reason.
+9. **Stella is both Owner and Operator;** the procedure is written so that the Operator pastes back evidence and the development session reads it, which gives a second look.
+
+## 8. Proposed execution window (Pacific time, with UTC; DST is in force until Sunday 2026-11-01, so Pacific = UTC − 7)
+| | Pacific | UTC | Note |
+|---|---|---|---|
+| **Recommended window** | Tue 2026-10-27 20:00 → Wed 2026-10-28 04:00 PDT | `2026-10-28T03:00:00Z` → `2026-10-28T11:00:00Z` | 8 hours (limit 12); leaves a full day to review the package and decide V4–V7; evening/overnight, outside business hours |
+| Alternative (if the GO is given today) | Mon 2026-10-26 20:00 → Tue 2026-10-27 04:00 PDT | `2026-10-27T03:00:00Z` → `2026-10-27T11:00:00Z` | possible only if D-P4 is decided today |
+Expected operator time: about 90 to 120 minutes (snapshot 5 to 15 minutes, apply a few minutes, two stack deployments, web publish, checks). Start the clock at Step 7: the snapshot must be taken inside the window. If a stop condition fires the procedure ends and waits; nothing is retried with changed values.
+
+## 9. Test evidence (development container, committed state `37250c9`; PostgreSQL 16 locally, RDS runs 18.3)
+| Check | Result |
+|---|---|
+| `pnpm lint`, `pnpm typecheck`, `pnpm build` | exit 0 each (6 of 6 tasks) |
+| `pnpm test` | exit 0; infra: 44 files, 997 tests passed, none skipped |
+| New production package tests (`test/operator-prd-*.test.ts`) | gate and assembly (64), deploy guard (35), apply (55), ledger recheck (18), snapshot and smoke (16), web guard, baseline and record (9), tarball and pin check (11), procedure (12): all passed |
+| `pnpm test:db` in `apps/sv-api` | exit 0; 22 files, 152 tests passed |
+| `pnpm test:db` in `infra/aws` | **1,216 passed, 27 failed** in three older files: `auth-cutover-scripts.db.test.ts` (6), `prd-rehearsal.db.test.ts` (8), `prd-release-exec.db.test.ts` (13). The new `operator-prd-sql.db.test.ts` (24 of 24, real PostgreSQL) passed |
+| The 27 failures | **Identical (same 27) at `7870a04`, `a9d1ae6` and `f8cd7df`, run alone on a quiet cluster**, so they are not caused by this package or by the production flag. Probable cause (INFERRED, NOT VERIFIED): this container has PostgreSQL 16 where the earlier green runs of these files used PostgreSQL 18 (one failure compares a runner-built schema with a `psql`-built one). I could not start a PostgreSQL 18 here. They test the earlier TEST rehearsal and the older production release package, none of which is used by this release. Must be rerun on PostgreSQL 18 (CI) before the GO if the Owner wants the full database gate |
+
+## 10. Decision gates for the Owner
+| Id | Decision | State / recommendation |
+|---|---|---|
+| D-P1 | Enable the 13 staff routes in production (`staffManagement: true`) | **Approved by the Owner on 2026-10-26** (in scope of the instruction) |
+| D-P2 | Apply 0086 to production outside the ledger, the same tested path as TEST (the ledger stays 85 / 0085; the reason, the tracking and the repeat-run protection were explained in the session) | **Needs the Owner's explicit approval**; recommended yes |
+| D-P3 | Whether production data is synthetic or real | Not decided by the package; the Owner's 2026-10-20 statement is recorded; nothing is inferred from counts |
+| D-P4 | V3/V4/V5/V6/V7 for production: run each, or record a written Owner exception per item | Recommended: run V7 (second reader of the 0086 SQL) and the authenticated V4 negatives on TEST before the GO; accept V5/V6 exceptions in writing if they are not wanted |
+| D-P5 | The window (section 8) | Recommended: Tue 2026-10-27 20:00 PDT → Wed 04:00 PDT |
+| GO | Final GO message naming the Operator, window, approval reference, tarball sha256 and admin host IP | After the package is accepted |
+
+## 11. Next
+The Owner reviews this record and the operator procedure, answers D-P2, D-P4 and D-P5, and gives the GO message (template in the session). After the GO the development session guides the Operator step by step and verifies the live production application from the pasted evidence; the deployed record is written only from that evidence. Nothing is pushed, merged or deployed without the Owner's explicit instruction.
