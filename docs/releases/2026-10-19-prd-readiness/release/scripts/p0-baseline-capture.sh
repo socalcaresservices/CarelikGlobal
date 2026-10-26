@@ -10,12 +10,12 @@
 source "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
 need aws jq curl python3 sha256sum openssl base64 timeout
 say "== P0 production baseline $(date -u +%FT%TZ) =="; check_account
-STACKS=(Ogevia-prd-DatabaseSecret Ogevia-prd-EvidenceStorage Ogevia-prd-WebHosting Ogevia-prd-ServiceVerificationApi Ogevia-prd-Observability Ogevia-prod-NetworkEgress)
+STACKS=(Ogevia-prd-DatabaseSecret Ogevia-prd-EvidenceStorage Ogevia-prd-WebHosting Ogevia-prd-ServiceVerificationApi Ogevia-prd-Observability Ogevia-prod-NetworkEgress Ogevia-prd-Auth)
 API=Ogevia-prd-ServiceVerificationApi; WEB=Ogevia-prd-WebHosting; NET=Ogevia-prod-NetworkEgress
 mkdir -p "$B/live"; cd "$B" || stop "cannot enter $B"
 : > stacks.txt
 for S in "${STACKS[@]}"; do
-  D=$(A cloudformation describe-stacks --stack-name "$S" --output json 2>/dev/null) || { nope "stack $S cannot be read"; continue; }
+  D=$(A cloudformation describe-stacks --stack-name "$S" --output json 2>/dev/null) || { if [[ "$S" == Ogevia-prd-Auth ]]; then info "stack $S is not deployed (or cannot be read): the production sign-in separation may not have been released; the release would CREATE it"; else nope "stack $S cannot be read"; fi; continue; }
   ST=$(jq -r '.Stacks[0].StackStatus' <<<"$D"); TP=$(jq -r '.Stacks[0].EnableTerminationProtection' <<<"$D"); LU=$(jq -r '.Stacks[0].LastUpdatedTime // .Stacks[0].CreationTime' <<<"$D")
   echo "$S status=$ST termination_protection=$TP last_updated=$LU" | tee -a stacks.txt
   [[ "$ST" == CREATE_COMPLETE || "$ST" == UPDATE_COMPLETE ]] || nope "$S is $ST, not a settled status"
@@ -57,7 +57,7 @@ if [[ -n "$IDFN" ]]; then A lambda get-function-configuration --function-name "$
 say "-- API routes and schedule"
 APIID=$(jq -r '[.StackResourceSummaries[] | select(.ResourceType=="AWS::ApiGatewayV2::Api")][0].PhysicalResourceId // empty' "resources-$API.json" 2>/dev/null)
 if [[ -n "$APIID" ]]; then
-  NR=$(A apigatewayv2 get-routes --api-id "$APIID" --output json 2>/dev/null | jq '.Items | length') && info "routes on the production API: $NR (the release has 228)" || nope "cannot count the routes"
+  NR=$(A apigatewayv2 get-routes --api-id "$APIID" --output json 2>/dev/null | jq '.Items | length') && info "routes on the production API: $NR (the release 7870a04 has 241)" || nope "cannot count the routes"
 fi
 A events list-rules --output json 2>/dev/null | jq -r '.Rules[]? | select(.Name | test("ComplianceSweep")) | .Name + " " + .State' | tee sweep-before.txt >/dev/null
 [[ -s sweep-before.txt ]] && info "ComplianceSweep rule(s): $(tr '\n' ';' < sweep-before.txt)" || nope "no ComplianceSweep rule found"
