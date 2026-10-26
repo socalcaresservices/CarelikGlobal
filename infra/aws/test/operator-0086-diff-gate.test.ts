@@ -31,7 +31,7 @@ const stop = (r: { code: number | null; out: string }, text: string) => { expect
 const liveApiHostnamesApplied = () => { const t = load("live", API); const k = apiResourceKey(t); t.Resources[k] = clone(load("release", API).Resources[k]); return t; };
 const liveHostnamesApplied: Record<string, T> = { [WEB]: load("release", WEB), [API]: liveApiHostnamesApplied() };
 
-describe("the real release difference is exactly what the gate allows (decision D2 = hostnames already live)", () => {
+describe("the real release difference is exactly what the gate allows (the live API template already has the demo origin)", () => {
   it("ServiceVerificationApi: the 13 staff routes and the Handler code asset only → DELTA", () => {
     const live = liveHostnamesApplied[API], next = load("release", API);
     const r = gate(API, live, next);
@@ -53,13 +53,36 @@ describe("the real release difference is exactly what the gate allows (decision 
   });
 });
 
-describe("decision D2 is enforced: the hostnames are NOT yet live → the gate STOPS", () => {
+describe("decision D2: the live hostnames are checked, never assumed", () => {
   it("WebHosting on the e80b770 state differs (CloudFront distribution and Cognito client): STOP", () => {
     const r = gate(WEB, load("live", WEB), load("release", WEB));
     stop(r, "resource CHANGED outside the allow-list: WebDistribution"); expect(r.out).toContain("TestSliceAppClient");
   });
-  it("the API stack on the e80b770 state differs in the HTTP API (CORS origin): STOP, never silently deployed", () => {
-    stop(gate(API, load("live", API), load("release", API)), "resource CHANGED outside the allow-list: Api");
+  it("the real TEST finding of 2026-10-26: the live API TEMPLATE lacks only the demo CORS origin (applied by hand on the API itself) → DELTA with an explicit note", () => {
+    const r = gate(API, load("live", API), load("release", API));
+    ok(r, "DELTA");
+    expect(r.out).toContain("CORS origin https://demo.ogevia.com added to the template only"); expect(r.out).toContain("13 staff API routes added");
+  });
+});
+
+describe("the CORS catch-up allowance is exactly one origin and nothing else", () => {
+  const pair = () => ({ live: clone(load("live", API)), next: clone(load("release", API)) });
+  const cors = (t: T) => t.Resources[apiResourceKey(t)].Properties.CorsConfiguration;
+  const bad = (label: string, mutate: (live: T, next: T) => void) => it(`stops: ${label}`, () => { const { live, next } = pair(); mutate(live, next); stop(gate(API, live, next), "resource CHANGED outside the allow-list: Api"); });
+  bad("another origin added in the same change", (_l, n) => { cors(n).AllowOrigins.push("https://other.example"); });
+  bad("a different origin instead of demo", (_l, n) => { cors(n).AllowOrigins[cors(n).AllowOrigins.indexOf("https://demo.ogevia.com")] = "https://evil.example"; });
+  bad("the wildcard origin", (_l, n) => { cors(n).AllowOrigins.push("*"); cors(n).AllowOrigins.splice(cors(n).AllowOrigins.indexOf("https://demo.ogevia.com"), 1); });
+  bad("an existing origin removed together with the demo addition", (l, _n) => { cors(l).AllowOrigins.push("https://old.example"); });
+  bad("demo listed twice", (_l, n) => { cors(n).AllowOrigins.push("https://demo.ogevia.com"); });
+  bad("a method added", (_l, n) => { cors(n).AllowMethods.push("DELETE"); });
+  bad("a header added", (_l, n) => { cors(n).AllowHeaders.push("x-extra"); });
+  bad("MaxAge changed", (_l, n) => { cors(n).MaxAge = 86400; });
+  bad("credentials allowed", (_l, n) => { cors(n).AllowCredentials = true; });
+  bad("another property of the API resource changes", (_l, n) => { n.Resources[apiResourceKey(n)].Properties.Name = "renamed"; });
+  bad("CORS removed from the template", (_l, n) => { delete n.Resources[apiResourceKey(n)].Properties.CorsConfiguration; });
+  it("the allowance applies only to the API stack's HTTP API: a CORS-only change with no routes and no code change is not the release", () => {
+    const live = clone(load("live", API)), next = clone(load("live", API)); cors(next).AllowOrigins.push("https://demo.ogevia.com");
+    stop(gate(API, live, next), "not the release's expected change");
   });
 });
 

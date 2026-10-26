@@ -92,6 +92,13 @@ describe("structure and safety of the procedure", () => {
     expect(doc).toContain("D1 option (b)"); expect(doc).toMatch(/85 \/ 0085/); expect(doc).toContain("without a ledger row");
     expect(doc).toContain("TEST only"); expect(doc).toContain("never named as a target");
   });
+  it("the CORS catch-up the gate allows is described in the procedure and is exactly one origin in the gate", () => {
+    const gate = read(`${PKG_REL}/scripts/diff_gate.py`);
+    expect(gate).toContain('DEMO_ORIGIN = "https://demo.ogevia.com"');
+    expect(doc).toContain("CORS origin https://demo.ogevia.com added to the template only");
+    expect(doc).toContain("Confirmed by the Step 5 capture");
+    expect([...gate.matchAll(/https:\/\/[a-z.]+/g)].map((m) => m[0]).filter((h) => h.endsWith("ogevia.com"))).toEqual(expect.arrayContaining(["https://demo.ogevia.com"]));
+  });
   it("the README lists every script in the package", () => { for (const f of SCRIPTS) expect(readme, f).toContain(f.replace(/\.(sh|py|sql|json)$/, "")); });
   it("contains no secret, no email address and no database password pattern", () => {
     expect(doc + readme).not.toMatch(/AKIA[0-9A-Z]{16}|-----BEGIN|password\s*[:=]\s*\S|@(gmail|outlook|yahoo)\./i);

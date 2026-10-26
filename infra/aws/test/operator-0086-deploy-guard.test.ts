@@ -85,11 +85,14 @@ describe("check: read-only, passes only for the expected difference", () => {
     const t = fx("release", API); Object.values<any>(t.Resources).find((x) => x.Type === "AWS::Events::Rule").Properties.State = "DISABLED"; writeFileSync(join(f.asm, `${API}.template.json`), JSON.stringify(t));
     r = guard(["check", API]); expect(r.code, r.out).toBe(1); expect(r.out).toContain("not the approved release");
   });
-  it("decision D2: if the hostnames are NOT live, the WebHosting and API checks refuse (the live stack is the e80b770 state)", () => {
+  it("decision D2: if the web hostnames are NOT live the WebHosting check refuses; the API check on the raw e80b770 template passes as DELTA (only the demo CORS origin catch-up is extra)", () => {
     writeFileSync(join(f.dir, `live-${WEB}.json`), JSON.stringify(fx("live", WEB)));
     let r = guard(["check", WEB]); expect(r.code, r.out).toBe(1); expect(r.out).toContain("NOT the release's expected change");
     writeFileSync(join(f.dir, `live-${API}.json`), JSON.stringify(fx("live", API)));
-    r = guard(["check", API]); expect(r.code, r.out).toBe(1); expect(r.out).toContain("NOT the release's expected change");
+    r = guard(["check", API]); expect(r.code, r.out).toBe(0); expect(r.out).toContain("CORS origin https://demo.ogevia.com added to the template only"); expect(r.out).toContain("(DELTA)");
+    const live = fx("live", API); const k = Object.keys(live.Resources).find((x) => live.Resources[x].Type === "AWS::ApiGatewayV2::Api")!; live.Resources[k].Properties.CorsConfiguration.AllowOrigins.push("https://rogue.example");
+    writeFileSync(join(f.dir, `live-${API}.json`), JSON.stringify(live));
+    r = guard(["check", API]); expect(r.code, r.out).toBe(1);
   });
   it("any extra live drift (a changed live IAM policy) stops the check", () => {
     const live = JSON.parse(readFileSync(join(f.dir, `live-${API}.json`), "utf8")); const k = Object.keys(live.Resources).find((x) => live.Resources[x].Type === "AWS::IAM::ManagedPolicy")!; live.Resources[k].Properties.Zz = "drift";

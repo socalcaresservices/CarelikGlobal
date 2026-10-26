@@ -11,7 +11,9 @@ ALLOW-LIST (everything else is a violation)
   Ogevia-prod-EvidenceStorage, -NetworkEgress, -WebHosting, -Observability: NO difference at all. (This is also how decision D2 is enforced: if the live CloudFront
   aliases, certificate, Cognito callback URLs or API CORS origins differ from the code, the difference shows here and stops the release.)
   Ogevia-prod-ServiceVerificationApi: exactly (1) the 13 staff API routes ADDED (RouteKeys fixed below; each JWT-authorized by the same authorizer and wired to the same
-  integration as the existing routes) and (2) the API Handler's Code S3Key (and the asset path in its Metadata). Nothing else: no IAM, role, policy, environment, permission,
+  integration as the existing routes), (2) the API Handler's Code S3Key (and the asset path in its Metadata) and (3) ONE catch-up in the HTTP API resource: the CORS
+  AllowOrigins list gains exactly "https://demo.ogevia.com" (the origin is already live on the API itself, applied by hand on 2026-10-23; the stack's template was behind;
+  the deploy plan lists it as expected). Every other property of that resource must be identical. Nothing else: no IAM, role, policy, environment, permission,
   stage, authorizer, integration, CORS, rule, alarm, log or secret change; no route removed or altered.
 Result words: DELTA (the release's difference, deploy it), NONE (identical: nothing to deploy), VIOLATION (stop).
 Exit: 0 = DELTA or NONE with no violation; 1 = a violation; 2 = unreadable input (treated as a failure).
@@ -23,6 +25,7 @@ STACKS = ["Ogevia-prod-EvidenceStorage", "Ogevia-prod-NetworkEgress", "Ogevia-pr
 API = "Ogevia-prod-ServiceVerificationApi"
 SECTIONS = ["Description", "Parameters", "Outputs", "Conditions", "Mappings", "Rules", "Transform", "AWSTemplateFormatVersion"]
 HEX64 = set("0123456789abcdef")
+DEMO_ORIGIN = "https://demo.ogevia.com"
 NEW_ROUTE_KEYS = {
     "GET /v1/staff-types", "POST /v1/staff-types", "POST /v1/staff-types/{staffTypeId}/rename", "POST /v1/staff-types/{staffTypeId}/active",
     "GET /v1/staff", "POST /v1/staff", "POST /v1/staff/{profileId}", "POST /v1/staff-members/{userId}/profile",
@@ -109,6 +112,18 @@ def gate_template(stack, live, new):
                 changed_handler = True
                 notes.append("Lambda %s code asset %s... -> %s..." % (k, old[:12], nk[:12]))
             continue
+        if stack == API and a.get("Type") == "AWS::ApiGatewayV2::Api":
+            a2, b2 = copy.deepcopy(a), copy.deepcopy(b)
+            try:
+                ao_a = a2["Properties"]["CorsConfiguration"]["AllowOrigins"]
+                ao_b = b2["Properties"]["CorsConfiguration"]["AllowOrigins"]
+            except (KeyError, TypeError):
+                ao_a = ao_b = None
+            if isinstance(ao_a, list) and isinstance(ao_b, list) and ao_b.count(DEMO_ORIGIN) == 1 and DEMO_ORIGIN not in ao_a and len(ao_b) == len(ao_a) + 1:
+                b2["Properties"]["CorsConfiguration"]["AllowOrigins"] = [o for o in ao_b if o != DEMO_ORIGIN]
+                if a2 == b2:
+                    notes.append("HTTP API %s: CORS origin %s added to the template only (already live on the API itself); every other property identical" % (k, DEMO_ORIGIN))
+                    continue
         v.append("resource CHANGED outside the allow-list: %s (%s)" % (k, a.get("Type")))
     new_routes = []
     for k in added:
