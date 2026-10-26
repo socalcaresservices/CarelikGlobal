@@ -199,3 +199,37 @@ describe("print letterhead settings", () => {
 });
 
 // The caregiver availability editor moved to request-and-approve (0039); its tests are in readiness/availability.test.tsx.
+
+describe("environment band on the sign-in screens", () => {
+  const login = (env?: string) => {
+    const auth = { subscribe: vi.fn(() => () => {}), getSession: vi.fn(async () => null), getAccessToken: vi.fn(async () => null), signIn: vi.fn(), handleCallback: vi.fn(), startPasswordReset: vi.fn(), signOut: vi.fn() };
+    const client = createAwsApiClient({ baseUrl: "https://api.example.test", getAccessToken: async () => "t", fetch: (async () => new Response("{}", { status: 200 })) as never });
+    const tree = (
+      <MemoryRouter initialEntries={["/login"]}>
+        <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+          <CognitoAuthProvider client={auth as unknown as CognitoAuthClient}>
+            <AwsRoutes api={client} publicApi={client} />
+          </CognitoAuthProvider>
+        </QueryClientProvider>
+      </MemoryRouter>
+    );
+    render(<EnvironmentProvider marker={resolveEnvironmentMarker(env)}>{tree}</EnvironmentProvider>);
+  };
+  it("test shows the TEST band above the Sign in card", async () => {
+    login("test");
+    const banner = await screen.findByTestId("environment-banner");
+    expect(banner).toHaveTextContent("TEST — synthetic data only");
+    expect(banner).toHaveAttribute("data-environment", "test");
+    expect(screen.getByRole("button", { name: /sign in/i })).toBeInTheDocument();
+    expect(screen.queryByText("OWNER VIEW")).toBeNull();
+  });
+  it("a missing environment shows 'Environment not verified', never TEST", async () => {
+    login(undefined);
+    expect(await screen.findByTestId("environment-banner")).toHaveTextContent("Environment not verified");
+  });
+  it("production shows no band on the sign-in screen", async () => {
+    login("production");
+    await screen.findByRole("button", { name: /sign in/i });
+    expect(screen.queryByTestId("environment-banner")).toBeNull();
+  });
+});

@@ -2,9 +2,16 @@ import { useEffect, useRef, useState, type PropsWithChildren } from "react";
 import { Navigate, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "@carelik/auth";
 import { Button, Card } from "@carelik/ui";
+import { EnvironmentBanner } from "./environment-marker";
 
+/** The environment band sits above the card on every sign-in screen (TEST and not-verified builds; production shows none). */
 function Centered({ children }: PropsWithChildren) {
-  return <div className="flex min-h-screen items-center justify-center bg-slate-50 px-4">{children}</div>;
+  return (
+    <div className="flex min-h-screen flex-col bg-slate-50">
+      <EnvironmentBanner />
+      <div className="flex flex-1 items-center justify-center px-4">{children}</div>
+    </div>
+  );
 }
 
 function fromPath(state: unknown): string {

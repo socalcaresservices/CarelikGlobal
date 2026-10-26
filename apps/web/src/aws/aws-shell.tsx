@@ -128,7 +128,7 @@ export function AwsShell({ children }: PropsWithChildren) {
   }, [drawerShown]);
 
   if (loading) {
-    return <div className="flex min-h-screen items-center justify-center"><p className="text-sm text-slate-500">Loading…</p></div>;
+    return <div className="flex min-h-screen flex-col"><EnvironmentBanner /><div className="flex flex-1 items-center justify-center"><p className="text-sm text-slate-500">Loading…</p></div></div>;
   }
   if (!activeOrganizationId) {
     return (

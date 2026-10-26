@@ -5,7 +5,7 @@ export function EnvironmentProvider({ marker, children }: PropsWithChildren<{ ma
   return <EnvironmentContext.Provider value={marker}>{children}</EnvironmentContext.Provider>;
 }
 
-/** Visible on every page (and in the phone drawer's page), hidden when printing because reports carry the same text in their own header. */
+/** Visible on every page and on the sign-in screens (and in the phone drawer's page), hidden when printing because reports carry the same text in their own header. Its own band: never part of the "OWNER VIEW" footer. */
 export function EnvironmentBanner() {
   const marker = useEnvironmentMarker();
   if (!marker?.label) return null;
@@ -17,8 +17,8 @@ export function EnvironmentBanner() {
       data-testid="environment-banner"
       data-environment={marker.kind}
       className={
-        "flex min-h-[36px] items-center justify-center gap-2 px-4 py-1.5 text-center text-sm font-bold tracking-wide print:hidden " +
-        (unverified ? "bg-[#1e293b] text-white" : "bg-amber-300 text-amber-950")
+        "flex min-h-[48px] items-center justify-center gap-2 border-b-4 px-4 py-2 text-center text-base font-extrabold uppercase tracking-wide print:hidden sm:text-lg " +
+        (unverified ? "border-slate-950 bg-[#1e293b] text-white" : "border-amber-600 bg-amber-300 text-amber-950")
       }
     >
       <span aria-hidden="true">{unverified ? "?" : "⚠"}</span>
