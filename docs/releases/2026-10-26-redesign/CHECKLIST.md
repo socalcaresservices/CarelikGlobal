@@ -84,19 +84,19 @@ Owner has stated in writing: commit SHA ______, target **pilot/test only**, who 
 
 | # | Step | Result | Evidence |
 |---|---|---|---|
-| C0 | Target confirmed as pilot/test: stacks `Ogevia-prod-*`, database `ogevia_sv_test`, banner "TEST — synthetic data only" visible. **Not** `Ogevia-prd-*` | ☐ | |
-| C1 | Pre-flight (read-only): migration ledger **before**: `count=__ max=____` (expected: ____) | ☐ | |
-| C2 | Previous web bundle and previous API template captured (rollback inputs) | ☐ | |
-| C3 | Manual RDS snapshot taken. Identifier: ____________ status `available` | ☐ | |
-| C4 | Deployed in order: database, API, web, using the reviewed script/commands: ____________ | ☐ | |
-| C4a | `cdk diff` shows only the expected resources (anything else: STOP) | ☐ | |
-| C4b | Ledger **after**: `count=__ max=____` (expected: ____); verification SQL `db:verify` all PASS | ☐ | |
-| C5 | Smoke: standard suites (`smoke.py`, `pilot_smoke.py`, release live checks) and catalog set S | ☐ | |
-| C6 | Changed workflows verified on the pilot, **including the items listed in B10** | ☐ | |
-| C7 | Regression set R: all PASS. Automated part: `pilot_regression.py` exit code 0, report attached (`docs/release-process/PILOT_REGRESSION_RUNNER.md`); remaining cases by hand | ☐ | |
-| C8 | Every role opened every menu item: no error screens; API logs searched for 5xx and error codes for the window (read-only) | ☐ | |
-| C9 | Negative checks: unauthenticated 401, forged token 401, other tenant sees nothing, Caregiver cannot reach Administrator data | ☐ | |
-| C10 | Rollback readiness: previous bundle and template available; down script rehearsed (tests; on the pilot if the owner approved) | ☐ | |
+| C0 | Target confirmed as pilot/test: stacks `Ogevia-prod-*`, database `ogevia_sv_test`, banner "TEST — synthetic data only" visible. **Not** `Ogevia-prd-*` | ☑ | Step 5 baseline (`PASS the Lambda serves ogevia_sv_test`); banner in both Step 13 screenshots. `DEPLOYED_RECORD_TEST.md` |
+| C1 | Pre-flight (read-only): migration ledger **before**: `count=__ max=____` (expected: ____) | ☑ `count=85 max=0085` (expected 85 / 0085) | Steps 6 and 9 output; `DEPLOYED_RECORD_TEST.md` |
+| C2 | Previous web bundle and previous API template captured (rollback inputs) | ☑ | Step 5: 145 web files, live templates, previous API asset `eab95a80…` present; on the Operator's CloudShell `~/ogevia-before/` |
+| C3 | Manual RDS snapshot taken. Identifier: ____________ status `available` | ☑ `ogevia-prod-postgres-pre-0086-202610260451`, `available`, manual, encrypted | Step 7 output |
+| C4 | Deployed in order: database, API, web, using the reviewed script/commands: ____________ | ☐ **deviation:** the web was published before the API (inferred; the Operator ran Block A early); API then deployed; both complete. Commands: `OPERATOR_PROCEDURE_7870a04.md` Steps 9 to 11 | `DEPLOYED_RECORD_TEST.md` section 5 |
+| C4a | `cdk diff` shows only the expected resources (anything else: STOP) | ☑ after one stop: the live API template lacked the demo CORS origin; the gate was extended for exactly that origin; then `YES (DELTA)` for the API and `YES (NONE)` for the other four | `DEPLOYED_RECORD_TEST.md` section 4 |
+| C4b | Ledger **after**: `count=__ max=____` (expected: ____); verification SQL `db:verify` all PASS | ☑ `count=85 max=0085` (expected 85 / 0085); `verify-0086.sql` 110 PASS; runner verification 375 PASS, 0 FAIL | Steps 9 and 15 |
+| C5 | Smoke: standard suites (`smoke.py`, `pilot_smoke.py`, release live checks) and catalog set S | ☐ PARTIAL: `deploy-test-slice.sh smoke` and `route-smoke.sh` (13 routes x 2, all 401, CORS) done; `pilot_smoke.py` and set S **not run** (V2 in `RELEASE_COMPLETION_TEST.md`) | |
+| C6 | Changed workflows verified on the pilot, **including the items listed in B10** | ☐ PARTIAL: Staff Types, a report, authorizer on the 13 routes (401), CORS from `demo.ogevia.com`, CloudFront bundle version. Staff invitation through Cognito and email **not done** (V5) | |
+| C7 | Regression set R: all PASS. Automated part: `pilot_regression.py` exit code 0, report attached (`docs/release-process/PILOT_REGRESSION_RUNNER.md`); remaining cases by hand | ☐ **not run** (V1) | |
+| C8 | Every role opened every menu item: no error screens; API logs searched for 5xx and error codes for the window (read-only) | ☐ not done beyond the Owner role (V3) | |
+| C9 | Negative checks: unauthenticated 401, forged token 401, other tenant sees nothing, Caregiver cannot reach Administrator data | ☐ PARTIAL: unauthenticated and forged token 401 done on the 13 new routes; other tenant and Caregiver not run on TEST (V4) | |
+| C10 | Rollback readiness: previous bundle and template available; down script rehearsed (tests; on the pilot if the owner approved) | ☑ inputs retained (C2, snapshot); the 0086 down script rehearsed against a real PostgreSQL in tests, **not** rehearsed on AWS | `operator-0086-sql.db.test.ts` |
 
 Catalog results on the pilot (copy rows as needed):
 | Catalog ID | Tester | PASS / FAIL | Notes |
@@ -111,7 +111,7 @@ Run on the pilot/test environment with synthetic data, from scripts built from t
 
 | Validator | Name | Scripts run (catalog IDs) | Result | Open defects | Signature / date |
 |---|---|---|---|---|---|
-| Owner | | | ☐ accepted ☐ rejected | | |
+| Owner | Stella Okereke | Step 13 checks (Staff Types, a report, a staff member reported created) | ☑ accepted ("Testing is complete and accepted.", stated in the session, 2026-10-25 22:56 PDT); no defects raised | none | statement recorded in `RELEASE_COMPLETION_TEST.md`; no signature yet |
 | Scheduler | | | ☐ accepted ☐ rejected | | |
 | Caregiver (phone) | | | ☐ accepted ☐ rejected | | |
 | Authorization (three balances recalculated by hand: low use, near limit, amended; match to the minute) | | | ☐ accepted ☐ rejected | | |
