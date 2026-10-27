@@ -7,7 +7,7 @@ import { beforeAll, describe, expect, it, vi } from "vitest";
 import { PKG_REL, REPO_ROOT, SCRIPTS_SRC, sh, sha256 } from "./operator-prd-fixtures.js";
 
 vi.setConfig({ testTimeout: 600000, hookTimeout: 900000 });
-const CODE_COMMIT = "f8cd7dff2d4cf871b6e5ff6b62c7ec679a317f45";
+const CODE_COMMIT = "24fd8b17795dd7e0ba6f36eec1791918feefb216";
 const PINS = {
   OGEVIA_EXPECT_COMMIT: CODE_COMMIT,
   OGEVIA_EXPECT_MIGRATIONS_SHA: "de0c8abbe12023ba6b7291661f592c7636ef0912827fb5ca57ccf12dac5608ef",
@@ -27,8 +27,8 @@ beforeAll(() => {
   b1 = build(out1, ["--code-commit", CODE_COMMIT]); b2 = build(out2, ["--code-commit", CODE_COMMIT]);
   if (b1.code === 0) {
     const ex = mkdtempSync(join(tmpdir(), "prdtar-ex-"));
-    expect(sh("tar", ["-xzf", join(out1, "ogevia-prd-operator-f8cd7df.tar.gz"), "-C", ex]).code).toBe(0);
-    root = join(ex, "ogevia-prd-0086-f8cd7df");
+    expect(sh("tar", ["-xzf", join(out1, "ogevia-prd-operator-24fd8b1.tar.gz"), "-C", ex]).code).toBe(0);
+    root = join(ex, "ogevia-prd-0086-24fd8b1");
     mkdirSync(join(root, "node_modules"), { recursive: true }); mkdirSync(join(root, "infra/aws/node_modules"), { recursive: true });
     bin = join(ex, "bin"); mkdirSync(bin);
     const fake = (n: string, body: string) => { writeFileSync(join(bin, n), `#!/usr/bin/env bash\n${body}\n`); chmodSync(join(bin, n), 0o755); };
@@ -37,7 +37,7 @@ beforeAll(() => {
 });
 const run = it.skipIf(!hasCommit);   // the code commit must be in the clone (a shallow clone cannot build the package)
 const pin = (env: Record<string, string> = {}) => sh("bash", [join(root, PKG_REL, "scripts/tarball-pin-check.sh")], { cwd: root, env: { PATH: `${bin}:${process.env.PATH}`, ...PINS, ...env } });
-const reset = () => { const t = join(out1, "ogevia-prd-operator-f8cd7df.tar.gz"); rmSync(root, { recursive: true, force: true }); const ex = join(root, ".."); sh("tar", ["-xzf", t, "-C", ex]); mkdirSync(join(root, "node_modules"), { recursive: true }); mkdirSync(join(root, "infra/aws/node_modules"), { recursive: true }); };
+const reset = () => { const t = join(out1, "ogevia-prd-operator-24fd8b1.tar.gz"); rmSync(root, { recursive: true, force: true }); const ex = join(root, ".."); sh("tar", ["-xzf", t, "-C", ex]); mkdirSync(join(root, "node_modules"), { recursive: true }); mkdirSync(join(root, "infra/aws/node_modules"), { recursive: true }); };
 
 describe("the builder", () => {
   run("builds from the production-bound code commit, self-verifies, and states every pin", () => {
@@ -47,7 +47,7 @@ describe("the builder", () => {
   });
   run("two builds of the same inputs are byte-identical", () => {
     expect(b2.code, b2.out).toBe(0);
-    expect(sha256(readFileSync(join(out1, "ogevia-prd-operator-f8cd7df.tar.gz")))).toBe(sha256(readFileSync(join(out2, "ogevia-prd-operator-f8cd7df.tar.gz"))));
+    expect(sha256(readFileSync(join(out1, "ogevia-prd-operator-24fd8b1.tar.gz")))).toBe(sha256(readFileSync(join(out2, "ogevia-prd-operator-24fd8b1.tar.gz"))));
   });
   run("BUILD_INFO names the production release: commit, environment, the pinned Handler and Identity builds, 241 routes, the approval reference", () => {
     const bi = JSON.parse(readFileSync(join(root, "BUILD_INFO.json"), "utf8"));

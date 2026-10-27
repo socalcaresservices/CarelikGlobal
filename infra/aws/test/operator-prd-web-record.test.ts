@@ -10,7 +10,7 @@ import { API, AUTH, NET, PKG_REL, PRD_STACKS, SCRIPTS_SRC, liveOf, release, sha2
 
 vi.setConfig({ testTimeout: 180000, hookTimeout: 300000 });
 const MOCKSRC = fileURLToPath(new URL("./operator-prd-aws-mock.sh", import.meta.url));
-const CODE = "f8cd7dff2d4cf871b6e5ff6b62c7ec679a317f45", PREV = "e80b770210c54e423d28ecf48e00f1dda9506cec", PRD_API = "zk527zk4ua", REF = "owner-go-prd-20261027-01";
+const CODE = "24fd8b17795dd7e0ba6f36eec1791918feefb216", PREV = "e80b770210c54e423d28ecf48e00f1dda9506cec", PRD_API = "zk527zk4ua", REF = "owner-go-prd-20261027-01";
 const work = mkdtempSync(join(tmpdir(), "prdweb-"));
 const BIN = join(work, "bin"), MOCK = join(work, "mock"), OUT = join(work, "before"), TB = join(work, "pkg"), SCRIPTS = join(TB, PKG_REL, "scripts"), WEBOUT = join(work, "web-out");
 const ALL = [...PRD_STACKS, NET];

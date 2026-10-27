@@ -9,7 +9,7 @@ Labels: VERIFIED (read from the repository, a recorded run or the read-only prod
 |---|---|---|
 | Code deployed to TEST | commit `7870a04c43545bacc378ad93ffc6a09d63345b5a` (Handler asset `94b73574c5a681d5a8c22b4264742f64e5a6d40aa1ace783be12e7383b9d8a9e.zip`, Identity asset `7c5f8eb676c93261fd7a80f34d40ba70379c040d94bb2e9bd80f2d007ebc9759.zip`, 241 routes = 228 + 13 staff routes) | VERIFIED (`DEPLOYED_RECORD_TEST.md`) |
 | Migration deployed to TEST | `0086_staff_management.sql` from `infra/aws/db/pending/` (sha256 `8eb7b4a3…a16a4f`), applied outside the ledger; TEST ledger stayed 85 / 0085; `verify-0086.sql` 110 of 110 | VERIFIED |
-| Production code commit | `f8cd7dff2d4cf871b6e5ff6b62c7ec679a317f45` = the TEST-tested code plus **one configuration line** (`ENVIRONMENTS.prd.features.staffManagement: true`, commit `515c49a`, which the Owner approved) plus tests. A synthesis of this commit gives the same Handler and Identity builds as TEST (VERIFIED by the package build, which refuses otherwise) | VERIFIED |
+| Production code commit | `24fd8b17795dd7e0ba6f36eec1791918feefb216` (supersedes `f8cd7df` of the first package; see section 13) = the TEST-tested code plus **one configuration line** (`ENVIRONMENTS.prd.features.staffManagement: true`, commit `515c49a`, which the Owner approved) plus tests. A synthesis of this commit gives the same Handler and Identity builds as TEST (VERIFIED by the package build, which refuses otherwise) | VERIFIED |
 | Not in this release | everything else after `7870a04`: documentation, operator-package scripts and tests only. The only changed source file outside docs and tests is `infra/aws/lib/config.ts` | VERIFIED by `git diff --name-only 7870a04 HEAD` |
 
 ## 2. Production as it is today (read-only capture of 2026-10-26, run by the Owner in CloudShell; nothing was changed)
@@ -111,9 +111,9 @@ Written on the Owner's instruction of 2026-10-27. Nothing here approves, waives 
 ### 12.1 What the release is (the candidate)
 | Item | Value | Label |
 |---|---|---|
-| Code commit the package deploys | `f8cd7dff2d4cf871b6e5ff6b62c7ec679a317f45` (unchanged) | VERIFIED |
+| Code commit the package deployed in the first draft | `f8cd7dff2d4cf871b6e5ff6b62c7ec679a317f45` (**superseded by section 13**) | VERIFIED |
 | Operator tarball | `ogevia-prd-operator-f8cd7df.tar.gz`, sha256 `80f2d3eaded34520846ec0b7df5b0c1124ab1be1003110ebe657d4f9209a6bbd`, approval reference baked in: `owner-go-prd-20261027-01` (1068 manifest files; manifest sha256 `0579c46f998e704284121790e1352f63a31ece7316e49948a008bd91aee1e9e9`). It replaces the earlier tarball because the package scripts and procedure changed (12.4). Pins unchanged: migrations 0001-0085 `de0c8abb…608ef`, 0086 up `8eb7b4a3…a16a4f`, down `d2773fdf…c2942`, lockfile `7f596402…cae` | VERIFIED (build output) |
-| Environment-label fix (sign-in screens and larger band) | commit `5de9ee2`, on the local branch `claude/env-label-signin-fix`. **Not in the release, not pushed, not run on CI or TEST.** Including it means a new pinned code commit, a new tarball, a TEST re-publish and a re-test. Production shows no band either way | VERIFIED (git) |
+| Environment-label fix (sign-in screens and larger band) | **Included on the Owner's instruction of 2026-10-27**, as commit `d788c1f` (cherry-picked from `5de9ee2`), plus a comment-only correction in `config.ts` (`24fd8b1`, review note I-3). Web only: the API code and the synthesized API/Auth/WebHosting templates are unchanged. Production still shows no band. See section 13 | VERIFIED (git) |
 | API version stamp | **Not in this release.** Planned for the next one. Verification of this release does not need it: the Handler asset hash and the web version string identify the build | decision recorded |
 
 ### 12.2 Comparison with what production runs (all production facts from `docs/aws/PRODUCTION_AS_FOUND_2026-10-26.md`)
@@ -162,3 +162,40 @@ Production runs a web bundle labelled `e80b770`, a Lambda asset `debd1d43…` (c
 - A release is closed only when `DEPLOYED_RECORD_PRD.md` is committed (release-process section 8.1, checklist E8, F8, F9).
 - Tests added for each refusal; all 223 `operator-prd-*` tests pass locally.
 - Drift monitoring: `docs/aws/DRIFT_MONITORING_PROPOSAL.md` (proposal only; cost and permissions; not deployed).
+
+## 13. Update 2026-10-27 (later): the candidate now includes the label fix; D-P2 explained; V7 evidence
+Nothing here approves, waives or accepts anything.
+
+### 13.1 The candidate
+| Item | Value |
+|---|---|
+| Code commit the package deploys | `24fd8b17795dd7e0ba6f36eec1791918feefb216` (`24fd8b1`). It supersedes `f8cd7df` and the tarball with sha256 `80f2d3ea…a6bbd`, which must not be used |
+| Difference from `f8cd7df` | web files (the band on the sign-in, callback and loading screens; a larger band), their tests, one comment in `config.ts`, CI timeouts, documentation, and tests for the package. **Identical:** migration 0086 and its down file, `apps/sv-api/src`, every CDK stack file (VERIFIED with `git diff f8cd7df 24fd8b1`) |
+| Effect on production | the web bundle carries the new screens; production still shows no band (`VITE_APP_ENV=production`); the API, Auth and WebHosting differences listed in section 3 are unchanged |
+| What must be repeated | the tarball (rebuilt), CI on the new head, and the candidate's web build verified on TEST (`TEST_CANDIDATE_VERIFICATION.md`; NOT RUN) |
+| Environment-specific configuration | `ENVIRONMENT_DIFFERENCES.md` |
+
+### 13.2 D-P2: why 0086 is applied outside the ledger, where completion is recorded, and what stops a repeat
+**The documented technical reason** (`DEPLOY_PLAN_TEST.md` row D1, decided by the Owner for TEST on 2026-10-26; `infra/aws/db/pending/README.md`):
+1. The migration runner reads only `infra/aws/db/migrations` and refuses a database that has a migration "not in the repository" (`infra/aws/db/scripts/migrations.ts:86`) and any numbering gap or duplicate (`:39`).
+2. The production release package is pinned to exactly migrations 0001-0085 by count and hash (the set `de0c8abb…608ef`), and production's ledger is exactly 85 / 0085 (capture, VERIFIED).
+3. So there were two ways to ship 0086: (a) **promote** it into `migrations/`, which re-pins the production release package, the verification files, the tarball and the tests, and then needs a TEST run of that exact set; (b) **apply from `db/pending`** in one transaction as `ogevia_owner` with no ledger row, leaving the pins and the ledger untouched. The Owner chose (b) for TEST; D-P2 asks for the same path for production.
+4. **The documented departure:** `DEPLOY_PLAN_TEST.md` section 11 says production needs "promotion of 0086 (D1a) with the production release re-pinned, a second TEST run of that exact set" and the Administrator-role decision. Option (b) for production does not do that. Choosing it knowingly accepts a production schema that is one object set ahead of its ledger until promotion.
+
+**Where completion is recorded.** Not in the database ledger (it stays 85 / 0085 by design). It is recorded by: the database objects themselves (2 tables, 21 functions; the script reads `1|1|21`); the marker `~/ogevia-prd-before/db-0086.ok` containing `85|0085|0086` and `db-0086.snapshot` (written only after a verified apply); `RESULT.txt` of the apply run; the 110 passing checks of `verify-0086.sql`; the deployed record; and, after this release, `DEPLOYED_RECORD_PRD.md` in the repository. **Cost, stated plainly:** the database itself carries no row saying 0086 was applied; anyone asking "was 0086 applied?" must look at those records or at the objects.
+
+**What stops a repeat run from applying it twice or incorrectly**
+- The apply script requires the 0086 objects to be **absent** (`0|0|0`) before it runs, and stops otherwise (`apply-0086-prd.sh:317`: "production already has part or all of this migration. Nothing was changed"); it requires all of them present (`1|1|21`) after (`:382`).
+- The SQL is a single transaction: plain `create table ogevia.staff_types` / `staff_profiles` (0086 lines 33 and 47, no `if not exists`) and inserts of the two new permission keys, so running the file again fails and rolls back whole (the apply uses `psql -1`).
+- The file hash is pinned (`8eb7b4a3…a16a4f`; the pin check fails on any change) and the script refuses a package that is not exactly the approved one.
+- New in this package: once `release-record.state` exists (complete or incomplete), the apply, the deploy and the web publish refuse to run again (tests added 2026-10-27).
+- **Future migration runs do not apply it:** `db:migrate` and the release packages read only `db/migrations`, where 0086 does not exist, so they cannot attempt it. The ledger matches the repository's 85 files.
+- **A future 0087 in `db/migrations`** would be refused by the runner's numbering rule (gap at 0086) until 0086 is deliberately promoted. That fails closed, but it forces the promotion decision, and promotion on a database that already holds the objects needs a deliberate adoption step or the down script first (`DEPLOY_PLAN_TEST.md` D1). No adoption script exists yet.
+
+**Recommendation (not a decision):** approve D-P2 only if the Owner accepts the departure in item 4 and the missing database-side record; the controls above make an accidental repeat fail closed. The alternative is to postpone, promote 0086, re-pin and run the exact set on TEST first. Either way it is the Owner's decision; the GO draft leaves it unticked.
+
+### 13.3 V7
+See `SECURITY_REVIEW_0086_AI_SECOND_READ.md`: an AI second read of commit `f8cd7df` (the reviewed files are identical in `24fd8b1`), no blocking finding, one Medium (M-1) that needs the Owner's decision, no human review, no signature.
+
+### 13.4 Checks still to run on TEST (NOT RUN)
+Candidate web publish and verification (T0-T5), V4 caregiver checks, V5, V6: steps in `TEST_CANDIDATE_VERIFICATION.md`. Results are recorded only from the Owner's pasted output.

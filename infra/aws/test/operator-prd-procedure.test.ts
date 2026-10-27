@@ -8,8 +8,8 @@ import { PKG_REL, REPO_ROOT } from "./operator-prd-fixtures.js";
 
 const read = (p: string) => readFileSync(join(REPO_ROOT, p), "utf8");
 const sha = (p: string) => createHash("sha256").update(readFileSync(join(REPO_ROOT, p))).digest("hex");
-const CODE = "f8cd7dff2d4cf871b6e5ff6b62c7ec679a317f45";
-const doc = read(`${PKG_REL}/OPERATOR_PROCEDURE_PRD_f8cd7df.md`);
+const CODE = "24fd8b17795dd7e0ba6f36eec1791918feefb216";
+const doc = read(`${PKG_REL}/OPERATOR_PROCEDURE_PRD_24fd8b1.md`);
 const readme = read(`${PKG_REL}/README.md`);
 const SCRIPTS = readdirSync(join(REPO_ROOT, PKG_REL, "scripts"));
 const blocks = [...doc.matchAll(/```\n([\s\S]*?)```/g)].map((m) => m[1]!);
