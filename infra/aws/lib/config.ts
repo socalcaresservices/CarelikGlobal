@@ -97,7 +97,7 @@ export interface OgeviaEnvironmentConfig {
   readonly logRetention: RetentionDays;
   /**
    * Release switches: a feature whose API routes are added to this environment's API Gateway only when the owner has approved its release there.
-   * staffManagement (pending migration 0086, infra/aws/db/pending): off in production, so the production API route table does not change.
+   * staffManagement (pending migration 0086, infra/aws/db/pending): on for the pilot/test slice and, since the owner's approval of 2026-10-26, on for production (PRD below). An environment that has not applied 0086 must keep it false.
    */
   readonly features: { readonly staffManagement: boolean };
   readonly auth: {
