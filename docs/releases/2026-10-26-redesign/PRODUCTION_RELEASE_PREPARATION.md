@@ -1,6 +1,6 @@
 # Production release preparation: 2026-10-26-redesign (staff management and the redesigned navigation)
 
-**Status: PACKAGE PREPARED; CI ON POSTGRESQL 18 GREEN (PR #106, head `6030924`); AWAITING THE OWNER'S DECISIONS AND FINAL GO. Nothing is deployed to production. No GO has been given.** Opened 2026-10-26 on the Owner's instruction ("I want this update deployed to PRODUCTION. Begin production release preparation now."). Owner and AWS Operator: Stella Okereke. TEST exceptions do not carry over to production (the Owner's words); section 4 shows what that means item by item.
+**Status: PACKAGE PREPARED (re-built 2026-10-27, see section 12); CI ON POSTGRESQL 18 GREEN ON `6030924` AND `ea7281d`, CI ON THE LATEST HEAD PENDING; AWAITING THE OWNER'S DECISIONS AND FINAL GO. Nothing is deployed to production. No GO has been given.** Opened 2026-10-26 on the Owner's instruction ("I want this update deployed to PRODUCTION. Begin production release preparation now."). Owner and AWS Operator: Stella Okereke. TEST exceptions do not carry over to production (the Owner's words); section 4 shows what that means item by item.
 
 Labels: VERIFIED (read from the repository, a recorded run or the read-only production capture of 2026-10-26), INFERRED, UNKNOWN. Words: *implemented*, *tested (where)*, *deployed (where)*, *accepted (by whom)*.
 
@@ -104,3 +104,61 @@ Expected operator time: about 90 to 120 minutes (snapshot 5 to 15 minutes, apply
 
 ## 11. Next
 The Owner reviews this record and the operator procedure, answers D-P2, D-P4 and D-P5, and gives the GO message (template in the session). After the GO the development session guides the Operator step by step and verifies the live production application from the pasted evidence; the deployed record is written only from that evidence. Nothing is pushed, merged or deployed without the Owner's explicit instruction.
+
+## 12. Update 2026-10-27: release comparison, remaining checks, record controls
+Written on the Owner's instruction of 2026-10-27. Nothing here approves, waives or accepts anything.
+
+### 12.1 What the release is (the candidate)
+| Item | Value | Label |
+|---|---|---|
+| Code commit the package deploys | `f8cd7dff2d4cf871b6e5ff6b62c7ec679a317f45` (unchanged) | VERIFIED |
+| Operator tarball | `ogevia-prd-operator-f8cd7df.tar.gz`, sha256 `80f2d3eaded34520846ec0b7df5b0c1124ab1be1003110ebe657d4f9209a6bbd`, approval reference baked in: `owner-go-prd-20261027-01` (1068 manifest files; manifest sha256 `0579c46f998e704284121790e1352f63a31ece7316e49948a008bd91aee1e9e9`). It replaces the earlier tarball because the package scripts and procedure changed (12.4). Pins unchanged: migrations 0001-0085 `de0c8abb…608ef`, 0086 up `8eb7b4a3…a16a4f`, down `d2773fdf…c2942`, lockfile `7f596402…cae` | VERIFIED (build output) |
+| Environment-label fix (sign-in screens and larger band) | commit `5de9ee2`, on the local branch `claude/env-label-signin-fix`. **Not in the release, not pushed, not run on CI or TEST.** Including it means a new pinned code commit, a new tarball, a TEST re-publish and a re-test. Production shows no band either way | VERIFIED (git) |
+| API version stamp | **Not in this release.** Planned for the next one. Verification of this release does not need it: the Handler asset hash and the web version string identify the build | decision recorded |
+
+### 12.2 Comparison with what production runs (all production facts from `docs/aws/PRODUCTION_AS_FOUND_2026-10-26.md`)
+Production runs a web bundle labelled `e80b770`, a Lambda asset `debd1d43…` (commit mapping NOT VERIFIED), ledger 85 / 0085. The release is `f8cd7df`. In plain English:
+
+**Features and appearance** (all: not deployed to production; included; tested = automated tests and CI, plus TEST deployment of `7870a04`)
+- Staff directory with staff types, invite, resend, disable and role change (Owner only). V5 invitation by e-mail not run.
+- New five-section menu, Help control, Roles & Permissions page, "OWNER VIEW" label.
+- Reports filter bar, legend contrast, larger "Reporting & billing" target; smaller tidy-ups (help lines, tips, headers).
+
+**Permissions and security**
+- Two new permissions `staff.read` and `staff.manage`, Owner only (not deployed; included; tested on TEST, 110 checks; second review is an AI read only, no human signature).
+- 13 new JWT-authorized API routes (not deployed; included; TEST authenticated negatives 36 of 36 passed, same-agency Caregiver not run).
+- Production sign-in return URLs and CORS gain `app.` and `admin.` (not deployed; included; checked by the gate on real synthesized templates only).
+- Already in production and not part of this release: the dedicated production sign-in pool and the API refusing the shared pool (2026-10-21, mapping NOT VERIFIED); the website header fix for production's sign-in domain (WebHosting equals the release template).
+
+**Database changes**
+- Migration 0086 (2 tables, 21 functions, 1 trigger, 2 permissions, `note_my_sign_in` replaced, 7 default staff types per agency; ledger stays 85 / 0085): not applied to production; included; applied on TEST (110 of 110), 24 of 24 on real PostgreSQL, CI green; D-P2 undecided.
+- Migrations 0047-0085: already applied in production (ledger), not part of this release.
+
+**Infrastructure and configuration**
+- `staffManagement: true` for production (`515c49a`); API stack 244 to 257 resources with the new Handler asset and two CORS origins; Auth stack URL properties; web files `e80b770` to `f8cd7df`. WebHosting: an export-only difference, not deployed. All included, none deployed.
+
+**Tests and documentation**
+- The production operator package (scripts, procedure, 223 mocked tests in 8 files plus 24 on real PostgreSQL), release records, the 0086 security review (AI read), this record, the as-found baseline, the drift proposal, release-process section 8.1.
+
+**Production changes made outside GitHub:** see section 4 of the as-found baseline. They are largely unrecorded; each stays NOT VERIFIED.
+
+### 12.3 Remaining checks (state at the time of writing; nothing here is passed on the Owner's behalf)
+| Check | State |
+|---|---|
+| V1 regression set R | Not run on TEST. Not applicable to production (it writes synthetic rows) |
+| V2 pilot checks | Not run |
+| V3 every role walks every menu | Not run; production P3/P4 are steps of the procedure |
+| V4 authenticated cross-tenant and Caregiver negatives | **PARTIAL on TEST (2026-10-26, run by the Owner in CloudShell, read-only):** 36 of 36 checks that ran passed: Owner 200 on 4 staff GET routes; same-agency non-Owner Manager 403 on 4; the test-slice Manager and Caregiver refused (404, no data) on the pilot agency's 4 routes and the Owner refused (404) on the test-slice agency's; an unknown agency 404; no organization id 400. **Not run: a same-agency Caregiver (the pilot agency has none).** The checks call the Lambda directly; they are not a browser sign-in. Not accepted as a V4 pass or exception by the Owner |
+| V5 staff invitation by e-mail | **Not run.** TEST site configuration confirmed first (pool `849AYz5J7`, client `ogevia-web-prod-test-slice`, API `s0epy5rgzb`, bundle environment `test`); the Owner's browser sign-in is the next step |
+| V6 role validators | **Not run** (people-run) |
+| V7 human review of `SECURITY_REVIEW_0086.md` | AI second read done; **no human signature**; finding M-1 needs an Owner decision |
+| V8 | Production Phase E signature is the Owner's |
+| D-P2, D-P3, D-P4, D-P5, GO | Undecided / unsigned |
+| CI | Green on PostgreSQL 18 for `ea7281d`; CI on the head carrying section 12 is pending |
+
+### 12.4 New record controls in this package (documentation and scripts; no production resource touched)
+- `record-deployed-prd.sh` now ends in one of three statuses: **DEPLOYED - RECORD COMPLETE** (exit 0), **DEPLOYED - RECORD INCOMPLETE** (exit 3: the pinned Handler build is live but a record check failed), **NOT DEPLOYED OR NOT PROVABLE** (exit 1). It writes `release-record.state`.
+- Once that state exists, `deploy-guard-prd.sh deploy`, `apply-0086-prd.sh apply` and `web-prd.sh publish` refuse to run: nothing is redeployed automatically. Recording is read-only and is repeated. A deliberate second deployment needs the Owner's new written instruction.
+- A release is closed only when `DEPLOYED_RECORD_PRD.md` is committed (release-process section 8.1, checklist E8, F8, F9).
+- Tests added for each refusal; all 223 `operator-prd-*` tests pass locally.
+- Drift monitoring: `docs/aws/DRIFT_MONITORING_PROPOSAL.md` (proposal only; cost and permissions; not deployed).
