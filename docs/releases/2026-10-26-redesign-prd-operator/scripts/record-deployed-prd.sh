@@ -2,7 +2,9 @@
 # READ-ONLY verification and DEPLOYED RECORD for the production release 2026-10-26-redesign. Run after apply-0086-prd.sh, deploy-guard-prd.sh deploy+post (Auth, then API) and web-prd.sh publish (web).
 #   OGEVIA_DEPLOY_APPROVAL=<ref> OGEVIA_EXPECT_COMMIT=<40 hex code commit> OGEVIA_TARBALL_SHA256=<64 hex of the operator tarball> bash record-deployed-prd.sh
 # Checks: the 85|0085|0086 marker and the API post-check marker exist; the live Handler asset is the release's pinned build and the Lambda code changed; all six stacks settled; the ComplianceSweep rule is ENABLED
-# and the Handler's log group (read from the function's LoggingConfig.LogGroup) holds no ERROR event in the last 30 minutes; the served web is the release build (web-prd.sh verify). Writes $B/DEPLOYED_RECORD.txt.
+# and the Handler's log group (read from the function's LoggingConfig.LogGroup) holds no ERROR event in the last 30 minutes; the served web is the release build (web-prd.sh verify). Writes $B/DEPLOYED_RECORD.txt and $B/release-record.state.
+# STATUS WORDS (never interchangeable): DEPLOYED - RECORD COMPLETE (exit 0: every artifact maps to the commit); DEPLOYED - RECORD INCOMPLETE (exit 3: the pinned Handler build is live but a record check failed; nothing is redeployed,
+# the script is read-only and is simply re-run once the cause is understood); NOT DEPLOYED OR NOT PROVABLE (exit 1: the pinned build is not live). Once the state is written, deploy-guard-prd.sh deploy, apply-0086-prd.sh apply and web-prd.sh publish refuse to run.
 # AWS verbs: sts, cloudformation describe-stacks/get-template/list-stack-resources, lambda get-function-configuration, events describe-rule, logs filter-log-events. Exit 0 = every artifact maps to the commit.
 source "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
 need aws jq curl sha256sum timeout; check_account
@@ -30,12 +32,23 @@ if [[ -n "$LG" ]]; then
   [[ "$NERR" == 0 ]] && ok "no ERROR event in the last $(( ${OGEVIA_SWEEP_LOOKBACK:-1800} / 60 )) minutes in $LG (the sweep runs every 15 minutes)" || nope "ERROR events in $LG: '${NERR:-unreadable}' (message text not printed here: read the log group)"
 else nope "the Lambda has no LoggingConfig.LogGroup"; fi
 WV=$(bash "$PKG_ROOT/scripts/web-prd.sh" verify 2>&1); [[ $? == 0 ]] && ok "the served web is the release build (web-prd.sh verify)" || { nope "web verification failed"; echo "$WV" | tail -5; }
+if [[ $bad == 0 ]]; then STATUS="DEPLOYED - RECORD COMPLETE"; RC=0
+elif [[ "$KEY" == "$RELEASE_KEY" ]]; then STATUS="DEPLOYED - RECORD INCOMPLETE"; RC=3
+else STATUS="NOT DEPLOYED OR NOT PROVABLE"; RC=1; fi
 {
+  echo "STATUS                : $STATUS"
   echo "DEPLOYED SHA          : $OGEVIA_EXPECT_COMMIT"; echo "approval reference    : $OGEVIA_DEPLOY_APPROVAL"; echo "recorded (UTC)        : $(date -u +%Y-%m-%dT%H:%M:%SZ)"
   echo "package tarball sha256: $OGEVIA_TARBALL_SHA256"; echo "package BUILD_INFO    : $(jq -c . "$TB_ROOT/BUILD_INFO.json")"
   echo "pre-release snapshot  : $(cat "$B/db-0086.snapshot" 2>/dev/null)"; echo "migration marker      : $(cat "$B/db-0086.ok" 2>/dev/null) (0086 applied outside the ledger; the ledger reads 85 / 0085)"
   echo "production web URL    : $SITE"; echo "production API URL    : $API_URL"; echo "Lambda function       : $FN"
   echo "Lambda CodeSha256 (b64): $B64"; echo "Lambda CodeSha256 (hex): $HEX"; echo "Lambda LastModified   : $(jq -r .LastModified <<<"$CFG")"; echo "Handler asset in stack: $KEY"
   echo "stacks:"; printf '%s' "$ST" | sed 's/^/  /'
+  echo "unchanged and not re-verified here: any production part this release did not touch keeps the commit mapping given in the production as-found baseline (unknown mappings stay NOT VERIFIED)"
 } > "$B/DEPLOYED_RECORD.txt"; cat "$B/DEPLOYED_RECORD.txt" | tee -a "$LOG" >/dev/null; cat "$B/DEPLOYED_RECORD.txt"
-[[ $bad == 0 ]] && { say "RECORDED: every deployed artifact maps to $OGEVIA_EXPECT_COMMIT ($B/DEPLOYED_RECORD.txt)"; exit 0; } || { say "STOP: an artifact does not map to the approved commit."; exit 1; }
+case "$RC" in
+  0) printf 'DEPLOYED-RECORD-COMPLETE %s %s\n' "$OGEVIA_EXPECT_COMMIT" "$(date -u +%FT%TZ)" > "$B/release-record.state"
+     say "DEPLOYED - RECORD COMPLETE: every deployed artifact maps to $OGEVIA_EXPECT_COMMIT ($B/DEPLOYED_RECORD.txt). Next: the development session commits the record to the repository; until then the release is not closed."; exit 0 ;;
+  3) printf 'DEPLOYED-RECORD-INCOMPLETE %s %s\n' "$OGEVIA_EXPECT_COMMIT" "$(date -u +%FT%TZ)" > "$B/release-record.state"
+     say "DEPLOYED - RECORD INCOMPLETE: the release build is live but a record check failed (see FAIL lines). Do NOT run any deploy, apply or publish step again: they now refuse. Fix the cause, re-run this read-only script, and report the status as incomplete until it exits 0."; exit 3 ;;
+  *) say "STOP: NOT DEPLOYED OR NOT PROVABLE: the pinned Handler build is not what the stack holds, so no deployed state was recorded."; exit 1 ;;
+esac

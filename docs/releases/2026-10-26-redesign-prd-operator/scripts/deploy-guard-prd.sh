@@ -72,6 +72,7 @@ gate() {
 case "$MODE" in
   check) gate; say "CHECK PASSED for $STACK ($GATE_RESULT): the difference is exactly the expected change. Nothing was deployed." ;;
   deploy)
+    [[ "$(cut -d' ' -f1 "$B/release-record.state" 2>/dev/null)" != DEPLOYED-RECORD-* ]] || refuse "$B/release-record.state says the release has already taken effect ($(cut -d' ' -f1 "$B/release-record.state")): nothing is deployed twice automatically. Re-run record-deployed-prd.sh (read-only) to finish the record; a deliberate second deployment needs the Owner's new written instruction"
     [[ "${OGEVIA_DEPLOY_APPROVAL:-}" =~ ^[A-Za-z0-9._-]{6,64}$ ]] || refuse "set OGEVIA_DEPLOY_APPROVAL to the owner's approval reference"
     [[ "${OGEVIA_DEPLOY_APPROVAL}" != APPROVAL-REF-PENDING-OWNER ]] || refuse "the approval reference is still the placeholder"
     [[ -d "$ASSEMBLY" ]] || refuse "no assembly at $ASSEMBLY"

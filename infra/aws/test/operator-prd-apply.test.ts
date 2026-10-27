@@ -229,6 +229,15 @@ describe("pins and preconditions change nothing", () => {
     const r = await run(["apply"]);
     expect(r.code, r.out).toBe(1); expect(r.out).toMatch(/not the approved 0001-0085 set|does not hold exactly the 85/); noWindow();
   });
+  it("apply is refused once the record state says the release took effect; rollback and --restore-only are not blocked by it", async () => {
+    mkdirSync(join(f.dir, "prd-before"), { recursive: true });
+    for (const st of ["DEPLOYED-RECORD-COMPLETE", "DEPLOYED-RECORD-INCOMPLETE"]) {
+      writeFileSync(join(f.dir, "prd-before", "release-record.state"), `${st} ${f.sha} 2026-10-27T05:00:00Z\n`);
+      const r = await run(["apply"]); expect(r.code, r.out).toBe(1); expect(r.out).toContain("already taken effect"); noWindow();
+    }
+    writeFileSync(join(f.dir, "prd-before", "release-record.state"), `DEPLOYED-RECORD-INCOMPLETE ${f.sha} 2026-10-27T05:00:00Z\n`);
+    const r2 = await run(["--restore-only"]); expect(r2.out).not.toContain("already taken effect");
+  });
   it("usage: unknown arguments exit 2", async () => {
     for (const a of [[], ["migrate"], ["apply", "--force"], ["--restore-only", "x"], ["rollback", "--resume"]]) expect((await run(a as string[])).code).toBe(2);
   });

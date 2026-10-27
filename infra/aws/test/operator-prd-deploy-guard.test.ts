@@ -129,6 +129,14 @@ describe("deploy: only after every prerequisite, one stack, typed phrase, exact 
     markDb(); r = guard(["deploy", AUTH], { env: { ASSEMBLY: join(f.dir, "nowhere") }, input: phrase(AUTH) }); expect(r.code, r.out).toBe(1);
     expect(deploys()).toEqual([]);
   });
+  it("refuses to deploy again once the record state says the release took effect (complete or incomplete)", () => {
+    ready();
+    for (const st of ["DEPLOYED-RECORD-COMPLETE", "DEPLOYED-RECORD-INCOMPLETE"]) {
+      w(join(f.before, "release-record.state"), `${st} ${"a".repeat(40)} 2026-10-27T05:00:00Z\n`);
+      const r = guard(["deploy", AUTH], { input: phrase(AUTH) }); expect(r.code, r.out).toBe(1); expect(r.out).toContain("already taken effect"); expect(deploys()).toEqual([]);
+    }
+    rmSync(join(f.before, "release-record.state"));
+  });
   it("refuses a missing, mis-named, unavailable, automated, unencrypted, foreign or stale snapshot", () => {
     ready();
     const snap = (patch: Record<string, unknown>) => w(join(f.dir, "snapshot.json"), { DBSnapshots: [{ Status: "available", DBInstanceIdentifier: "ogevia-prod-postgres", SnapshotType: "manual", Encrypted: true, SnapshotCreateTime: iso(600), ...patch }] });

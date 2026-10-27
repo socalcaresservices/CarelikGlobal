@@ -62,6 +62,7 @@ case "$ARG" in
   *) echo "usage: bash apply-0086-prd.sh apply | rollback | --restore-only" >&2; exit 2 ;;
 esac
 mkdir -p "$STATE_DIR"; chmod 700 "$STATE_DIR"
+if [[ "$ARG" == apply && "$(cut -d' ' -f1 "${OGEVIA_PRD_BEFORE:-$HOME/ogevia-prd-before}/release-record.state" 2>/dev/null)" == DEPLOYED-RECORD-* ]]; then echo "release-record.state says the release has already taken effect: 0086 is not applied twice automatically (re-run record-deployed-prd.sh, which is read-only). A deliberate second run needs the Owner's new written instruction." >&2; exit 1; fi
 STAMP=$(date -u +%Y%m%dT%H%M%SZ)
 MB="${OGEVIA_PRD_BEFORE:-$HOME/ogevia-prd-before}"   # where the release markers live (db-0086.ok is read by deploy-guard-prd.sh)
 OUT="${OGEVIA_MIGRATE_DIR:-$HOME/ogevia-apply-0086-${ARG#--}-$STAMP}"; mkdir -p "$OUT"; chmod 700 "$OUT"
