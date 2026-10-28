@@ -300,8 +300,29 @@ describe("invitation acceptance (0087: M-1, L-1, L-2)", () => {
     expect(Object.keys(r[0]!)).toEqual(["profile_id"]);
     expect(await status(gone)).toEqual({ s: "invited", r: "staff" });
     await expect(accept({ userId: await userOf(gone), sub: gone })).rejects.toThrow();
+    // nor do the two lists the Owner reads show it as Disabled: a pending invitation reads Invited whatever the account's state
+    expect((await staff(w.ownerA)).find((r) => r.profile_id === id)).toMatchObject({ access_status: "invitation_pending" });
+    const goneUser = await userOf(gone);
+    expect((await call(w.ownerA, "select * from ogevia_api.list_accounts($1)", [w.orgA])).find((r) => r.user_id === goneUser)).toMatchObject({ membership_status: "invited", account_status: "invitation_pending" });
     const id2 = await createStaff(w.ownerA, "Nat New", await typeId("Manager"));
     expect(Object.keys((await complete(id2, "nat.new@example.test", randomUUID(), false, "staff"))[0]!)).toEqual(["profile_id"]);   // the same shape for a new sign-in
+  });
+
+  it("M-1: Accounts > Disable refuses a pending invitation, so Disable then Enable can never turn it into access the person did not accept", async () => {
+    const id = await createStaff(w.ownerA, "Bea Bypass", await typeId("Manager"));
+    const sub = randomUUID();
+    await db.admin.query("insert into ogevia.app_users (cognito_sub) values ($1)", [sub]);
+    await db.admin.query("insert into ogevia.organization_memberships (organization_id, user_id, role, status) select $1, id, 'caregiver', 'active' from ogevia.app_users where cognito_sub = $2", [w.orgB, sub]);
+    await complete(id, "bea.bypass@example.test", sub, true, "manager");
+    const user = await userOf(sub);
+    expect(await status(sub)).toEqual({ s: "invited", r: "manager" });
+    await expectPgError(call(w.ownerA, "select * from ogevia_api.disable_account($1,$2,'Trying to disable a pending invitation')", [w.orgA, user]), "OGC09", /not accepted the invitation/);
+    expect(await status(sub)).toEqual({ s: "invited", r: "manager" });                                   // still invited, not suspended
+    await call(w.ownerA, "select ogevia_api.enable_account($1,$2,'Trying to enable it')", [w.orgA, user]);
+    expect(await status(sub)).toEqual({ s: "invited", r: "manager" });                                   // enabling a never-accepted invitation changes nothing
+    expect(await can(sub, "visits.read")).toBe(false);
+    expect((await accept({ userId: user, sub }))[0]!.r).toBe("manager");                                  // only the person's own acceptance activates it
+    expect(await status(sub)).toEqual({ s: "active", r: "manager" });
   });
 
   it("L-2: an invitation never overwrites a membership of any status, a pending invitation included, and writes nothing", async () => {
