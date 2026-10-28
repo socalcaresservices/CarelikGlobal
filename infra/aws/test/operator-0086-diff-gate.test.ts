@@ -1,5 +1,5 @@
-// diff_gate.py and assembly_check.py (TEST UPGRADE 7870a04 -> 730b601) against REAL synthesized templates: test/fixtures/operator-0086/release = the five Ogevia-prod-* stacks synthesized from
-// the candidate code 730b601 in deploy mode; .../live = the same five stacks as synthesized from 7870a04 (the release the owner deployed to TEST on 2026-10-25/26, i.e. what TEST runs now).
+// diff_gate.py and assembly_check.py (TEST UPGRADE 7870a04 -> fb491a5) against REAL synthesized templates: test/fixtures/operator-0086/release = the five Ogevia-prod-* stacks synthesized from
+// the candidate code fb491a5 in deploy mode; .../live = the same five stacks as synthesized from 7870a04 (the release the owner deployed to TEST on 2026-10-25/26, i.e. what TEST runs now).
 // The gate must pass ONLY the upgrade's expected change (ONE JWT-authorized staff route, POST /v1/me/staff-invitations/{organizationId}/accept, + the Handler code asset) and fail on
 // anything extra, removed or altered. Every CORS, hostname and callback difference is a violation (they are live on TEST since the 7870a04 release; the old catch-up allowance is gone).
 import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";

@@ -43,7 +43,7 @@ if [[ "$*" == *" -f "* ]]; then
   fi
   # verify-0087.sql / verify-0086.sql (read-only)
   if [[ "$*" == *verify-0087.sql* ]]; then
-    n=\${MOCK_VERIFY87_COUNT:-22}; f=\${MOCK_VERIFY87_FAILING:-0}
+    n=\${MOCK_VERIFY87_COUNT:-24}; f=\${MOCK_VERIFY87_FAILING:-0}
     for i in $(seq 1 "$n"); do if (( i <= f )); then echo "check87_$i|f|detail"; else echo "check87_$i|t|"; fi; done
     exit 0
   fi
@@ -259,7 +259,7 @@ describe("apply", () => {
   it("applies 0086 in ONE transaction as ogevia_owner: ledger stays 85 / 0085, people unchanged, 110 checks pass, window closed, group identical, no ledger row", async () => {
     const r = await run(["apply"]);
     expect(r.code, r.out).toBe(0);
-    expect(r.out).toContain("RESULT: 0086 and 0087 applied (2 tables, 23 functions); ledger 85 / 0085 unchanged; people and access unchanged; verify-0086.sql 110 PASS, verify-0087.sql 22 PASS");
+    expect(r.out).toContain("RESULT: 0086 and 0087 applied (2 tables, 23 functions); ledger 85 / 0085 unchanged; people and access unchanged; verify-0086.sql 110 PASS, verify-0087.sql 24 PASS");
     expect(r.out).toContain("RESTORED (verified)");
     expect(read("ledger")).toBe("85|0085"); expect(read("s86")).toBe("1|1|21"); expect(read("s87")).toBe("2");
     expect(writes()).toEqual(["up"]);   // ONE write session for both files
@@ -329,9 +329,9 @@ describe("apply", () => {
     const r = await run(["apply"], { env });
     expect(r.code, r.out).toBe(1); expect(r.out).toContain("verify-0086.sql did not report 110 passing checks"); expect(r.out).toContain("0086 and 0087 ARE applied"); expect(r.out).not.toContain("RESULT: 0086 and 0087 applied"); restored();
   });
-  it.each([["one failing check", { MOCK_VERIFY87_FAILING: "1" }], ["21 checks instead of 22", { MOCK_VERIFY87_COUNT: "21" }], ["23 checks instead of 22", { MOCK_VERIFY87_COUNT: "23" }]])("verify-0087.sql with %s: stops, says 0086 and 0087 ARE applied and not to deploy, window closed", async (_n, env) => {
+  it.each([["one failing check", { MOCK_VERIFY87_FAILING: "1" }], ["23 checks instead of 24", { MOCK_VERIFY87_COUNT: "23" }], ["25 checks instead of 24", { MOCK_VERIFY87_COUNT: "25" }]])("verify-0087.sql with %s: stops, says 0086 and 0087 ARE applied and not to deploy, window closed", async (_n, env) => {
     const r = await run(["apply"], { env });
-    expect(r.code, r.out).toBe(1); expect(r.out).toContain("verify-0087.sql did not report 22 passing checks"); expect(r.out).toContain("0086 and 0087 ARE applied"); expect(r.out).not.toContain("RESULT: 0086 and 0087 applied"); restored();
+    expect(r.code, r.out).toBe(1); expect(r.out).toContain("verify-0087.sql did not report 24 passing checks"); expect(r.out).toContain("0086 and 0087 ARE applied"); expect(r.out).not.toContain("RESULT: 0086 and 0087 applied"); restored();
   });
   it("a runner verification set that fails stops with 0086 and 0087 ARE applied", async () => {
     const r = await run(["apply"], { env: { MOCK_RUNNER_VERIFY_FAIL: "1" } });

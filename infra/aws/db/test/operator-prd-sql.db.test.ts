@@ -50,7 +50,7 @@ describe("before: production as it is (0001-0085, no 0086)", () => {
     expect(scalar(db.name, S87_Q)).toBe("0");
     expect(scalar(db.name, LEDGER_Q)).toBe("85|0085");
     const rows87 = await verify87(db);
-    expect(rows87).toHaveLength(22);
+    expect(rows87).toHaveLength(24);
     expect(rows87.every((r) => r.ok === false)).toBe(true);                                   // none of the 0087 checks passes by default either
     const rows = await verify(db);
     expect(rows).toHaveLength(110);
@@ -74,12 +74,12 @@ describe("apply: the exact command line", () => {
     expect(scalar(db.name, LEDGER_Q)).toBe("85|0085");
     expect(scalar(db.name, PEOPLE_Q)).toBe(before);
   });
-  it("verify-0087.sql: 22 checks, every one passes, through the same psql form the wrapper uses", async () => {
+  it("verify-0087.sql: 24 checks, every one passes, through the same psql form the wrapper uses", async () => {
     expect(failing(await verify87(db))).toEqual([]);
     const r = ro(db.name, ["-F", "|", "-f", `${PKG}verify-0087.sql`]);
     expect(r.status, r.stderr).toBe(0);
     const lines = r.stdout.trim().split("\n");
-    expect(lines).toHaveLength(22);
+    expect(lines).toHaveLength(24);
     expect(lines.every((l) => /\|t\|/.test(l))).toBe(true);
   });
   it("verify-0086.sql: 110 checks, every one passes, through the same psql form the wrapper uses (no 'f' line)", async () => {
@@ -144,6 +144,14 @@ describe("verify-0086.sql catches each way the result can be wrong (every sabota
   });
 });
 
+/** the 0048 definition of list_accounts, exactly as released (disabled is tested before invited) */
+const LIST_ACCOUNTS_0048 = (() => {
+  const src = readFileSync(`${ROOT}infra/aws/db/migrations/0048_account_status_enable_disable.sql`, "utf8");
+  const m = /create function ogevia_api\.list_accounts\(.*?\n\$\$;\n/s.exec(src);
+  if (!m) throw new Error("list_accounts not found in 0048");
+  return m[0].replace("create function", "create or replace function");
+})();
+
 describe("verify-0087.sql catches each way the 0087 result can be wrong (every sabotage runs in a rolled-back transaction)", () => {
   const sabotages: [string, string, string[]][] = [
     ["accept function missing", "drop function ogevia_api.accept_staff_invitation(uuid)", ["function_exists_ogevia_api.accept_staff_invitation", "function_fixed_search_path_ogevia_api.accept_staff_invitation", "function_security_definer_ogevia_api.accept_staff_invitation", "function_no_public_execute_ogevia_api.accept_staff_invitation", "function_app_execute_ogevia_api.accept_staff_invitation", "accept_staff_invitation_acts_on_own_row_only", "api_function_count_unchanged_plus_two"]],
@@ -157,6 +165,8 @@ describe("verify-0087.sql catches each way the 0087 result can be wrong (every s
     ["list_staff without the invited state", "create or replace function ogevia_api.list_staff(p_organization_id uuid) returns table (staff_key text, profile_id uuid, caregiver_record_id uuid, user_id uuid, display_name text, staff_type_id uuid, staff_type_name text, contact_email text, phone text, status text, system_role text, access_status text, invited_at timestamptz, first_signed_in_at timestamptz, is_self boolean) language sql stable security definer set search_path = ogevia, pg_temp as $$ select null::text, null::uuid, null::uuid, null::uuid, null::text, null::uuid, null::text, null::text, null::text, null::text, null::text, null::text, null::timestamptz, null::timestamptz, null::boolean where false $$", ["list_staff_shows_invited_as_invitation_pending"]],
     ["update_staff without the access suspension", "create or replace function ogevia_api.update_staff(p_organization_id uuid, p_profile_id uuid, p_display_name text, p_staff_type_id uuid, p_contact_email text, p_phone text, p_status text) returns void language sql volatile security definer set search_path = ogevia, pg_temp as $$ select 1 $$", ["update_staff_suspends_inactive_access"]],
     ["update_staff executable by PUBLIC", "grant execute on function ogevia_api.update_staff(uuid, uuid, text, uuid, text, text, text) to public", ["update_staff_keeps_0086_hardening"]],
+    ["disable_account back to the 0048 behaviour (no refusal of a pending invitation)", "create or replace function ogevia_api.disable_account(p_organization_id uuid, p_user_id uuid, p_reason text) returns table (cognito_sub text, disable_sign_in boolean) language sql security definer set search_path = ogevia, pg_temp as $$ select null::text, false $$", ["disable_account_refuses_pending_invitation"]],
+    ["list_accounts back to the 0048 body (disabled tested before invited)", LIST_ACCOUNTS_0048, ["list_accounts_shows_invited_before_disabled"]],
     ["a new table created", "create table ogevia.staff_invitation_acceptances (x int)", ["no_new_tables"]],
     ["a permission missing", "delete from ogevia.role_permissions where permission_key = 'staff.read'; delete from ogevia.permissions where key = 'staff.read'", ["staff_permissions_unchanged"]],
     ["direct table access for the application role", "grant select on ogevia.staff_profiles to ogevia_app", ["no_application_role_table_privilege_on_staff_tables"]],
@@ -167,7 +177,7 @@ describe("verify-0087.sql catches each way the 0087 result can be wrong (every s
       await c.query("begin");
       await c.query(sql);
       const rows = (await c.query(VERIFY87)).rows as Check[];
-      expect(rows).toHaveLength(22);
+      expect(rows).toHaveLength(24);
       const failed = failing(rows);
       for (const e of expected) expect(failed, `${e} must fail`).toContain(e);
       expect(failed.every((f) => expected.includes(f)), `only the expected checks fail, got ${failed.join(", ")}`).toBe(true);

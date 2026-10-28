@@ -1,4 +1,4 @@
-// apply-0087-test.sh (TEST UPGRADE 7870a04 to 730b601: migration 0087 applied on top of 0086, decision D1 option b) against a FAKE aws, psql and npx and a package built from the REAL migrations, pending files and scripts (BUILD_INFO.json +
+// apply-0087-test.sh (TEST UPGRADE 7870a04 to fb491a5: migration 0087 applied on top of 0086, decision D1 option b) against a FAKE aws, psql and npx and a package built from the REAL migrations, pending files and scripts (BUILD_INFO.json +
 // PACKAGE_MANIFEST.sha256, no git): no AWS, no network, synthetic. The SQL itself is proven against real PostgreSQL in db/test/operator-0086-sql.db.test.ts; this file proves the CONTROL FLOW the
 // owner is asked to approve: pins and the snapshot are checked before any change; the single /32 rule is added and removed on success and on every failure; the TEST ledger must be exactly
 // 85 / 0085 before AND after (no ledger row is ever written); 0086 must be present and 0087 absent (apply), both present (rollback); people-and-access counts must be identical; ogevia_prd is never named.
@@ -43,7 +43,7 @@ if [[ "$*" == *" -f "* ]]; then
   fi
   # verify-0087.sql / verify-0086.sql (read-only)
   if [[ "$*" == *verify-0087.sql* ]]; then
-    n=\${MOCK_VERIFY87_COUNT:-22}; f=\${MOCK_VERIFY87_FAILING:-0}
+    n=\${MOCK_VERIFY87_COUNT:-24}; f=\${MOCK_VERIFY87_FAILING:-0}
     for i in $(seq 1 "$n"); do if (( i <= f )); then echo "check87_$i|f|detail"; else echo "check87_$i|t|"; fi; done
     exit 0
   fi
@@ -253,7 +253,7 @@ describe("apply", () => {
   it("applies 0087 in ONE transaction as ogevia_owner on top of 0086: ledger stays 85 / 0085, people unchanged, 110 checks pass, window closed, group identical, no ledger row", async () => {
     const r = await run(["apply"]);
     expect(r.code, r.out).toBe(0);
-    expect(r.out).toContain("RESULT: 0087 applied on top of 0086 (2 new functions, 5 replaced); ledger 85 / 0085 unchanged; people and access unchanged; verify-0086.sql 110 PASS, verify-0087.sql 22 PASS");
+    expect(r.out).toContain("RESULT: 0087 applied on top of 0086 (2 new functions, 5 replaced); ledger 85 / 0085 unchanged; people and access unchanged; verify-0086.sql 110 PASS, verify-0087.sql 24 PASS");
     expect(r.out).toContain("RESTORED (verified)");
     expect(read("ledger")).toBe("85|0085"); expect(read("s86")).toBe("1|1|21"); expect(read("s87")).toBe("2");
     expect(writes()).toEqual(["up"]);
@@ -322,9 +322,9 @@ describe("apply", () => {
     const r = await run(["apply"], { env });
     expect(r.code, r.out).toBe(1); expect(r.out).toContain("verify-0086.sql did not report 110 passing checks"); expect(r.out).toContain("0087 IS applied"); expect(r.out).not.toContain("RESULT: 0087 applied"); restored();
   });
-  it.each([["one failing check", { MOCK_VERIFY87_FAILING: "1" }], ["21 checks instead of 22", { MOCK_VERIFY87_COUNT: "21" }], ["23 checks instead of 22", { MOCK_VERIFY87_COUNT: "23" }]])("verify-0087.sql with %s: stops, says 0087 IS applied and not to deploy, window closed", async (_n, env) => {
+  it.each([["one failing check", { MOCK_VERIFY87_FAILING: "1" }], ["23 checks instead of 24", { MOCK_VERIFY87_COUNT: "23" }], ["25 checks instead of 24", { MOCK_VERIFY87_COUNT: "25" }]])("verify-0087.sql with %s: stops, says 0087 IS applied and not to deploy, window closed", async (_n, env) => {
     const r = await run(["apply"], { env });
-    expect(r.code, r.out).toBe(1); expect(r.out).toContain("verify-0087.sql did not report 22 passing checks"); expect(r.out).toContain("0087 IS applied"); expect(r.out).not.toContain("RESULT: 0087 applied"); restored();
+    expect(r.code, r.out).toBe(1); expect(r.out).toContain("verify-0087.sql did not report 24 passing checks"); expect(r.out).toContain("0087 IS applied"); expect(r.out).not.toContain("RESULT: 0087 applied"); restored();
   });
   it("a runner verification set that fails stops with 0087 IS applied", async () => {
     const r = await run(["apply"], { env: { MOCK_RUNNER_VERIFY_FAIL: "1" } });

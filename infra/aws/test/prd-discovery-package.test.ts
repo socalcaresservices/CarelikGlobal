@@ -10,7 +10,7 @@ import { beforeAll, describe, expect, it, vi } from "vitest";
 vi.setConfig({ testTimeout: 300000, hookTimeout: 300000 });
 const REPO = fileURLToPath(new URL("../../../", import.meta.url));
 const BUILDER = join(REPO, "docs/releases/2026-10-26-redesign-production/build-discovery-package.sh");
-const HANDLER = "2871b03d6be42b0b8c85bac6feea12de75b3d05ca4636610259b6a18e1d00ed7.zip";   // the build of the 730b601 candidate
+const HANDLER = "2871b03d6be42b0b8c85bac6feea12de75b3d05ca4636610259b6a18e1d00ed7.zip";   // the build of the fb491a5 candidate
 const IDENTITY = "7c5f8eb676c93261fd7a80f34d40ba70379c040d94bb2e9bd80f2d007ebc9759.zip";
 const out = mkdtempSync(join(tmpdir(), "prd-disc-"));
 let build: { status: number | null; text: string };

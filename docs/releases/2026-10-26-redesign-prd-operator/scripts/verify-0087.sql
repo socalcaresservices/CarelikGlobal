@@ -9,7 +9,9 @@ defs as (
   union all select 'note', to_regprocedure('ogevia_api.note_my_sign_in()')
   union all select 'list_staff', to_regprocedure('ogevia_api.list_staff(uuid)')
   union all select 'update_staff', to_regprocedure('ogevia_api.update_staff(uuid, uuid, text, uuid, text, text, text)')
-  union all select 'accept', to_regprocedure('ogevia_api.accept_staff_invitation(uuid)')),
+  union all select 'accept', to_regprocedure('ogevia_api.accept_staff_invitation(uuid)')
+  union all select 'disable', to_regprocedure('ogevia_api.disable_account(uuid, uuid, text)')
+  union all select 'accounts', to_regprocedure('ogevia_api.list_accounts(uuid)')),
 def_text as (select k, oid, case when oid is null then '' else pg_get_functiondef(oid) end as txt from defs)
 select 'function_exists_ogevia_api.' || f as check_name, oid is not null as ok, null::text as detail from fns
 union all
@@ -51,6 +53,10 @@ select 'update_staff_keeps_0086_hardening',
        coalesce((select exists (select 1 from unnest(coalesce(p.proconfig, '{}')) c where c like 'search_path=%') and p.prosecdef and has_function_privilege('ogevia_app', p.oid, 'execute')
                    and not exists (select 1 from aclexplode(coalesce(p.proacl, acldefault('f', p.proowner))) a where a.grantee = 0 and a.privilege_type = 'EXECUTE')
                  from pg_proc p where p.oid = to_regprocedure('ogevia_api.update_staff(uuid, uuid, text, uuid, text, text, text)')), false), 'unchanged hardening'
+union all
+select 'disable_account_refuses_pending_invitation', coalesce((select txt like '%has not accepted the invitation yet%' from def_text where k = 'disable') and has_function_privilege('ogevia_app', (select oid from def_text where k = 'disable'), 'execute'), false), 'M-1: Disable then Enable cannot turn a pending invitation into access'
+union all
+select 'list_accounts_shows_invited_before_disabled', coalesce((select strpos(txt, 'm.status = ''invited'' then ''invitation_pending''') > 0 and strpos(txt, 'm.status = ''invited'' then ''invitation_pending''') < strpos(txt, 'u.status = ''disabled''') from def_text where k = 'accounts'), false), 'L-1: a pending invitation reads Invited whatever the sign-in state'
 union all
 select 'accept_staff_invitation_acts_on_own_row_only', coalesce((select txt like '%ogevia.require_actor()%' and txt like '%Invitation not found%' and txt not like '%staff_guard%' from def_text where k = 'accept'), false), 'uses the signed-in person only; one generic refusal'
 union all

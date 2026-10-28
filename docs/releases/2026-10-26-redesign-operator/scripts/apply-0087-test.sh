@@ -1,13 +1,13 @@
 #!/usr/bin/env bash
 # =============================================================================
-# Ogevia TEST upgrade 7870a04 -> 730b601: APPLY THE PENDING MIGRATION 0087 (staff invitation acceptance: M-1, L-1, L-2, L-3) TO THE TEST DATABASE, or ROLL IT BACK, through a temporary,
+# Ogevia TEST upgrade 7870a04 -> fb491a5: APPLY THE PENDING MIGRATION 0087 (staff invitation acceptance: M-1, L-1, L-2, L-3) TO THE TEST DATABASE, or ROLL IT BACK, through a temporary,
 # narrow database-access window. TEST ONLY (database ogevia_sv_test). YELLOW: run only after the owner's explicit GO. Not run against AWS by anyone yet.
 # Decision D1 option (b), as for 0086: 0087 is applied FROM db/pending, in ONE transaction as ogevia_owner, with NO ledger row, ON TOP OF 0086 (already applied to TEST on 2026-10-25/26, byte-identical file). The TEST ledger stays exactly 85 / 0085; the production release
 # package (pinned to 0001-0085) is not touched. Adapted from the reviewed apply-0087-test.sh of 2026-10-19; everything about the window (the /32 rule, timeouts, cleanup with
 # a rule-set hash, marker file, typed phrase, wrong-database refusals, snapshot checks) is unchanged. DIFFERENCES: (1) the statement run is
 #   psql -1 -v ON_ERROR_STOP=1 -d ogevia_sv_test -c "set local role ogevia_owner" -f <the pinned 0087 file> -c "reset role"
 # instead of the runner (the runner only reads db/migrations and would refuse a ledger it does not know); (2) preconditions: the ledger is exactly 85 / 0085 AND the staff objects
-# are present for 0086 and absent for 0087 (apply) or present for both (rollback); (3) the snapshot is named ogevia-prod-postgres-pre-0087-YYYYMMDDHHMM; (4) afterwards the read-only verify-0086.sql (110 checks), verify-0087.sql (22 checks) and the
+# are present for 0086 and absent for 0087 (apply) or present for both (rollback); (3) the snapshot is named ogevia-prod-postgres-pre-0087-YYYYMMDDHHMM; (4) afterwards the read-only verify-0086.sql (110 checks), verify-0087.sql (24 checks) and the
 # runner's own verification set run, the ledger must still be 85 / 0085, and the people-and-access row counts must be identical before and after.
 #
 #   OGEVIA_EXPECT_COMMIT=<40-hex code SHA> OGEVIA_EXPECT_HOST_IP=<admin host private IP> OGEVIA_EXPECT_MIGRATIONS_SHA=<64-hex 0001-0085 set> OGEVIA_EXPECT_0086_SHA=<64-hex> OGEVIA_EXPECT_0087_SHA=<64-hex> \
@@ -402,13 +402,13 @@ VR7=$(RO -d "$DB_EXPECT" -F '|' -f "$HERE_S/verify-0087.sql") ; VRC7=$?
 printf '%s\n' "$VR7" > "$OUT/verify-0087.txt"
 VT7=$(grep -c '|' "$OUT/verify-0087.txt"); VF7=$(grep -c '|f|' "$OUT/verify-0087.txt")
 say "verify-0087.sql: $VT7 checks, $VF7 failing (exit $VRC7$(tm $VRC7)); full output: $OUT/verify-0087.txt"
-[[ "$VRC7" == 0 && "$VT7" == 22 && "$VF7" == 0 ]] || { grep '|f|' "$OUT/verify-0087.txt" | head -5 | while read -r l; do say "FAIL $l"; done; stop "verify-0087.sql did not report 22 passing checks. 0087 IS applied; do not deploy the API or web; see the procedure."; }
+[[ "$VRC7" == 0 && "$VT7" == 24 && "$VF7" == 0 ]] || { grep '|f|' "$OUT/verify-0087.txt" | head -5 | while read -r l; do say "FAIL $l"; done; stop "verify-0087.sql did not report 24 passing checks. 0087 IS applied; do not deploy the API or web; see the procedure."; }
 run_runner_verify || stop "the verification set did not pass (or does not report the schema at 0085). 0087 IS applied; do not deploy; see the procedure."
 act_unchanged && say "enforcement state unchanged: ${ACT_BEFORE%%|*} of ${ACT_BEFORE##*|} agencies activated" || stop "the enforcement activation state changed during the apply (or could not be read). 0087 IS applied; do not deploy; see the procedure."
 MIGRATING=0
 close_window
 say ""; say "================ SUMMARY ================"
 say "Environment : TEST ($DB_EXPECT)   package commit $HEAD_SHA"
-say "RESULT: 0087 applied on top of 0086 (2 new functions, 5 replaced); ledger $LEDGER_COUNT / $LEDGER_LATEST unchanged; people and access unchanged; verify-0086.sql 110 PASS, verify-0087.sql 22 PASS; runner verification $P PASS, 0 FAIL."
+say "RESULT: 0087 applied on top of 0086 (2 new functions, 5 replaced); ledger $LEDGER_COUNT / $LEDGER_LATEST unchanged; people and access unchanged; verify-0086.sql 110 PASS, verify-0087.sql 24 PASS; runner verification $P PASS, 0 FAIL."
 [[ -f "$OPEN" ]] && say "SECURITY GROUP: NOT RESTORED, see the instructions above" || say "SECURITY GROUP: restored and verified identical to the original"
 exit "$RC"

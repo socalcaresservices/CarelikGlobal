@@ -1,6 +1,6 @@
 // The statements the TEST UPGRADE package runs for migration 0087 (docs/releases/2026-10-26-redesign-operator), on a REAL PostgreSQL in the state TEST is in today: 0001-0085 in the ledger
 // and 0086 applied outside it (with staff data present). The exact psql command line of apply-0087-test.sh (0087 ALONE, on top of 0086), verify-0086.sql (still 110 passing checks) and
-// verify-0087.sql (22 checks), the state queries shared with ledger-recheck.sh and the apply script, the rollback command line (0087 alone; 0086 and its data stay), and the invariants
+// verify-0087.sql (24 checks), the state queries shared with ledger-recheck.sh and the apply script, the rollback command line (0087 alone; 0086 and its data stay), and the invariants
 // the wrapper enforces (ledger untouched, people and access rows untouched). SYNTHETIC data only.
 import { spawnSync } from "node:child_process";
 import { randomUUID } from "node:crypto";
@@ -66,7 +66,7 @@ describe("before: TEST as it is today (0001-0085 in the ledger, 0086 present, no
     expect(scalar(db.name, LEDGER_Q)).toBe("85|0085");
     expect(failing(await v86(db))).toEqual([]);
     const rows = await v87(db);
-    expect(rows).toHaveLength(22);
+    expect(rows).toHaveLength(24);
     // checks that describe the UNCHANGED 0086 hardening may already pass; every check about 0087's own objects and bodies must fail
     for (const own of ["function_exists_ogevia_api.accept_staff_invitation", "function_exists_ogevia_api.list_my_staff_invitations", "complete_staff_invitation_hardened", "complete_staff_invitation_reply_is_profile_id_only", "note_my_sign_in_marks_only_active_staff_membership", "list_staff_shows_invited_as_invitation_pending", "update_staff_suspends_inactive_access", "api_function_count_unchanged_plus_two"]) {
       expect(rows.find((r) => r.check_name === own)?.ok, own).toBe(false);
@@ -86,10 +86,10 @@ describe("apply: the exact command line (0087 alone, on top of 0086)", () => {
     expect(scalar(db.name, LEDGER_Q)).toBe("85|0085");
     expect(scalar(db.name, PEOPLE_Q)).toBe(before);
   });
-  it("verify-0086.sql still reports 110 passing checks and verify-0087.sql 22, through the same psql form the wrapper uses", async () => {
+  it("verify-0086.sql still reports 110 passing checks and verify-0087.sql 24, through the same psql form the wrapper uses", async () => {
     expect(failing(await v86(db))).toEqual([]);
     expect(failing(await v87(db))).toEqual([]);
-    for (const [f, n] of [["verify-0086.sql", 110], ["verify-0087.sql", 22]] as const) {
+    for (const [f, n] of [["verify-0086.sql", 110], ["verify-0087.sql", 24]] as const) {
       const r = ro(db.name, ["-F", "|", "-f", `${PKG}${f}`]);
       expect(r.status, r.stderr).toBe(0);
       const lines = r.stdout.trim().split("\n");
@@ -136,7 +136,7 @@ describe("rollback: the exact command line (0087 alone), with invited and active
     expect(scalar(db.name, `select m.status::text from ogevia.organization_memberships m join ogevia.app_users u on u.id = m.user_id where m.organization_id = '${w.orgA}' and u.cognito_sub = '${w.managerB.sub}'`)).toBe("invited");   // left as it is
     expect(scalar(db.name, `select m.status::text || '|' || m.role::text from ogevia.organization_memberships m join ogevia.app_users u on u.id = m.user_id where u.cognito_sub = '${sub}'`)).toBe("active|scheduler");
     expect(failing(await v86(db))).toEqual([]);                                  // 0086 is complete and healthy
-    expect((await v87(db)).filter((x) => x.ok === true).length).toBeLessThan(22);   // and 0087's own checks no longer pass
+    expect((await v87(db)).filter((x) => x.ok === true).length).toBeLessThan(24);   // and 0087's own checks no longer pass
   });
   it("the round trip works: applying 0087 again restores the fix and every check passes", async () => {
     const r = applyCmd(db.name, UP87);

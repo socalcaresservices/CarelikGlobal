@@ -8,7 +8,7 @@ import { PKG_REL, REPO_ROOT } from "./operator-0086-fixtures.js";
 
 const read = (p: string) => readFileSync(join(REPO_ROOT, p), "utf8");
 const sha = (p: string) => createHash("sha256").update(readFileSync(join(REPO_ROOT, p))).digest("hex");
-const doc = read(`${PKG_REL}/OPERATOR_PROCEDURE_730b601.md`);
+const doc = read(`${PKG_REL}/OPERATOR_PROCEDURE_fb491a5.md`);
 const readme = read(`${PKG_REL}/README.md`);
 const SCRIPTS = readdirSync(join(REPO_ROOT, PKG_REL, "scripts"));
 const blocks = [...doc.matchAll(/```\n([\s\S]*?)```/g)].map((m) => m[1]!);
@@ -33,8 +33,8 @@ describe("the pins in the procedure are the real values", () => {
   });
   it("code commit, Handler keys, route count and fingerprint prefixes agree with assembly_check.py", () => {
     const asm = read(`${PKG_REL}/scripts/assembly_check.py`);
-    expect(doc).toContain("730b60166409cef217be15e7d20618538a1e131f");
-    expect(asm).toContain("730b60166409cef217be15e7d20618538a1e131f");
+    expect(doc).toContain("fb491a554c0fdc484102025179c9c993f694b4e0");
+    expect(asm).toContain("fb491a554c0fdc484102025179c9c993f694b4e0");
     for (const key of asm.match(/[0-9a-f]{64}\.zip/g)!) expect(doc).toContain(key);
     expect(asm).toMatch(/ROUTES = 242/); expect(doc).toContain("242");
     for (const m of asm.matchAll(/"Ogevia-prod-[A-Za-z]+": "([0-9a-f]{64})"/g)) expect(doc).toContain(m[1]!.slice(0, 8));

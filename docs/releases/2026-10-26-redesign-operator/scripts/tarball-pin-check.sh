@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # =============================================================================
-# Ogevia TEST release 2026-10-26-redesign (upgrade 7870a04 to code 730b601): READ-ONLY pin check for the uploaded operator tarball (no git, no AWS, writes nothing). Run it from the extracted package:
+# Ogevia TEST release 2026-10-26-redesign (upgrade 7870a04 to code fb491a5): READ-ONLY pin check for the uploaded operator tarball (no git, no AWS, writes nothing). Run it from the extracted package:
 #   OGEVIA_EXPECT_COMMIT=<40-hex> OGEVIA_EXPECT_MIGRATIONS_SHA=<64-hex> OGEVIA_EXPECT_0086_SHA=<64-hex> OGEVIA_EXPECT_0086_DOWN_SHA=<64-hex> OGEVIA_EXPECT_LOCKFILE_SHA=<64-hex> bash tarball-pin-check.sh
 # Checks (every failure exits non-zero; a check that cannot run is a failure, never a pass):
 #   * BUILD_INFO.json names exactly the approved code commit;

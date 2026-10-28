@@ -11,8 +11,8 @@ vi.setConfig({ testTimeout: 120000 });
 const REAL_MIGRATION_SET = "de0c8abbe12023ba6b7291661f592c7636ef0912827fb5ca57ccf12dac5608ef";
 const UP_0086 = "8eb7b4a353300ba78156bd58a0df6cbc9857b677cec0e8ec51233fcda5a16a4f";
 const DOWN_0086 = "d2773fdfdf502bb2b337b6e8fb888b72f9b9da660bc944f60a7ff60bec8d2942";
-const UP_0087 = "d21d2387b14996234748fceb3a9ad10772ea7885f8d3cf7dfc1cbfaebb2c4c93";
-const DOWN_0087 = "9647be30236aff010b575252ace3cd5d75b011bad9b5485b5b2f2fcb3c5c203d";
+const UP_0087 = "f9d75d8c776005873b6019ca2d76353d182772144b9946cadd3291cdbad4cf88";
+const DOWN_0087 = "1789131e12e54317eda1690d8f34f4a396f4d46fa234ba157c1e62caf3c10354";
 let r: SynthRepo;
 beforeAll(() => { r = makeRepo(); });
 

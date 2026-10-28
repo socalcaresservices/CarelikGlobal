@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Read-only check that a synthesized CDK assembly IS the approved TEST release (code commit 730b60166409cef217be15e7d20618538a1e131f).
+"""Read-only check that a synthesized CDK assembly IS the approved TEST release (code commit fb491a554c0fdc484102025179c9c993f694b4e0).
 
   python3 assembly_check.py --assembly DIR           # the assembly the operator is about to deploy from (cdk synth -c env=prod -c mode=deploy -o DIR)
   python3 assembly_check.py --print-fingerprints DIR # maintenance: print the fingerprints of an assembly (used to refresh the pins below)
@@ -15,7 +15,7 @@ import argparse, hashlib, json, os, sys
 
 STACKS = ["Ogevia-prod-EvidenceStorage", "Ogevia-prod-NetworkEgress", "Ogevia-prod-WebHosting", "Ogevia-prod-ServiceVerificationApi", "Ogevia-prod-Observability"]
 API = "Ogevia-prod-ServiceVerificationApi"
-RELEASE_COMMIT = "730b601"
+RELEASE_COMMIT = "fb491a5"
 RELEASE_HANDLER_KEY = "2871b03d6be42b0b8c85bac6feea12de75b3d05ca4636610259b6a18e1d00ed7.zip"
 IDENTITY_HANDLER_KEY = "7c5f8eb676c93261fd7a80f34d40ba70379c040d94bb2e9bd80f2d007ebc9759.zip"
 ROUTES = 242  # 228 earlier routes + the 14 staff routes

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""EXPECTED-ONLY gate for the TEST deployment of release 2026-10-26-redesign (upgrade 7870a04 to code commit 730b601). Read-only: it compares a LIVE CloudFormation template with the
+"""EXPECTED-ONLY gate for the TEST deployment of release 2026-10-26-redesign (upgrade 7870a04 to code commit fb491a5). Read-only: it compares a LIVE CloudFormation template with the
 SYNTHESIZED one, as JSON files, prints every difference, and exits 0 only if EVERY difference is on the allow-list below. Anything else exits 1 and the operator STOPS.
 
   python3 diff_gate.py template --stack <one of the five Ogevia-prod-* stacks> --live LIVE.json --new NEW.json

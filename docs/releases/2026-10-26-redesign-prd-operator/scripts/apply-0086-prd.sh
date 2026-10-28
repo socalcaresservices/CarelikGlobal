@@ -408,7 +408,7 @@ VR7=$(RO -d "$DB_EXPECT" -F '|' -f "$HERE_S/verify-0087.sql") ; VRC7=$?
 printf '%s\n' "$VR7" > "$OUT/verify-0087.txt"
 VT7=$(grep -c '|' "$OUT/verify-0087.txt"); VF7=$(grep -c '|f|' "$OUT/verify-0087.txt")
 say "verify-0087.sql: $VT7 checks, $VF7 failing (exit $VRC7$(tm $VRC7)); full output: $OUT/verify-0087.txt"
-[[ "$VRC7" == 0 && "$VT7" == 22 && "$VF7" == 0 ]] || { grep '|f|' "$OUT/verify-0087.txt" | head -5 | while read -r l; do say "FAIL $l"; done; stop "verify-0087.sql did not report 22 passing checks. 0086 and 0087 ARE applied; do not deploy the API or web; see the procedure."; }
+[[ "$VRC7" == 0 && "$VT7" == 24 && "$VF7" == 0 ]] || { grep '|f|' "$OUT/verify-0087.txt" | head -5 | while read -r l; do say "FAIL $l"; done; stop "verify-0087.sql did not report 24 passing checks. 0086 and 0087 ARE applied; do not deploy the API or web; see the procedure."; }
 run_runner_verify || stop "the verification set did not pass (or does not report the schema at 0085). 0086 and 0087 ARE applied; do not deploy; see the procedure."
 act_unchanged && say "enforcement state unchanged: ${ACT_BEFORE%%|*} of ${ACT_BEFORE##*|} agencies activated" || stop "the enforcement activation state changed during the apply (or could not be read). 0086 and 0087 ARE applied; do not deploy; see the procedure."
 MIGRATING=0
@@ -416,6 +416,6 @@ close_window
 if [[ "$RC" == 0 && ! -f "$OPEN" ]]; then mkdir -p "$MB" && printf '85|0085|0086|0087\n' > "$MB/db-0086.ok" && printf '%s\n' "$SNAP_ID" > "$MB/db-0086.snapshot" && say "marker written: $MB/db-0086.ok (85|0085|0086|0087; the stack deployments require it)"; fi
 say ""; say "================ SUMMARY ================"
 say "Environment : PRODUCTION ($DB_EXPECT)   package commit $HEAD_SHA"
-say "RESULT: 0086 and 0087 applied (2 tables, 23 functions); ledger $LEDGER_COUNT / $LEDGER_LATEST unchanged; people and access unchanged; verify-0086.sql 110 PASS, verify-0087.sql 22 PASS; runner verification $P PASS, 0 FAIL."
+say "RESULT: 0086 and 0087 applied (2 tables, 23 functions); ledger $LEDGER_COUNT / $LEDGER_LATEST unchanged; people and access unchanged; verify-0086.sql 110 PASS, verify-0087.sql 24 PASS; runner verification $P PASS, 0 FAIL."
 [[ -f "$OPEN" ]] && say "SECURITY GROUP: NOT RESTORED, see the instructions above" || say "SECURITY GROUP: restored and verified identical to the original"
 exit "$RC"

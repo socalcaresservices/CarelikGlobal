@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Shared, read-only helpers for the tarball-based operator package of upgrade to 730b601 (sourced by tarball-pin-check.sh, apply-0087-test.sh and record-deployed.sh).
+# Shared, read-only helpers for the tarball-based operator package of upgrade to fb491a5 (sourced by tarball-pin-check.sh, apply-0087-test.sh and record-deployed.sh).
 # The package root is the directory that holds BUILD_INFO.json and PACKAGE_MANIFEST.sha256; these scripts live at
 # <root>/docs/releases/2026-10-26-redesign-operator/scripts. There is no git in CloudShell: identity comes from BUILD_INFO.json and the manifest.
 # Every function FAILS CLOSED: a command that cannot run, prints nothing or exits non-zero is a failure, never a pass.
