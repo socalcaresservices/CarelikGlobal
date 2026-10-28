@@ -25,7 +25,7 @@
      },
      {
       "Key": "ogevia:deployment-status",
-      "Value": "approved-TEST-REF-000001"
+      "Value": "approved-synthetic-pin-ref-1"
      },
      {
       "Key": "ogevia:ownership",
@@ -113,7 +113,7 @@
      },
      {
       "Key": "ogevia:deployment-status",
-      "Value": "approved-TEST-REF-000001"
+      "Value": "approved-synthetic-pin-ref-1"
      },
      {
       "Key": "ogevia:ownership",
@@ -196,7 +196,7 @@
      },
      {
       "Key": "ogevia:deployment-status",
-      "Value": "approved-TEST-REF-000001"
+      "Value": "approved-synthetic-pin-ref-1"
      },
      {
       "Key": "ogevia:ownership",
@@ -266,7 +266,7 @@
      },
      {
       "Key": "ogevia:deployment-status",
-      "Value": "approved-TEST-REF-000001"
+      "Value": "approved-synthetic-pin-ref-1"
      },
      {
       "Key": "ogevia:ownership",

@@ -11,10 +11,12 @@ vi.setConfig({ testTimeout: 120000 });
 const REAL_MIGRATION_SET = "de0c8abbe12023ba6b7291661f592c7636ef0912827fb5ca57ccf12dac5608ef";
 const UP_0086 = "8eb7b4a353300ba78156bd58a0df6cbc9857b677cec0e8ec51233fcda5a16a4f";
 const DOWN_0086 = "d2773fdfdf502bb2b337b6e8fb888b72f9b9da660bc944f60a7ff60bec8d2942";
+const UP_0087 = "d21d2387b14996234748fceb3a9ad10772ea7885f8d3cf7dfc1cbfaebb2c4c93";
+const DOWN_0087 = "9647be30236aff010b575252ace3cd5d75b011bad9b5485b5b2f2fcb3c5c203d";
 let r: SynthRepo;
 beforeAll(() => { r = makeRepo(); });
 
-const pinEnv = (extra: Record<string, string> = {}) => ({ OGEVIA_EXPECT_COMMIT: r.sha, OGEVIA_EXPECT_MIGRATIONS_SHA: REAL_MIGRATION_SET, OGEVIA_EXPECT_0086_SHA: UP_0086, OGEVIA_EXPECT_0086_DOWN_SHA: DOWN_0086, OGEVIA_EXPECT_LOCKFILE_SHA: r.lock, ...extra });
+const pinEnv = (extra: Record<string, string> = {}) => ({ OGEVIA_EXPECT_COMMIT: r.sha, OGEVIA_EXPECT_MIGRATIONS_SHA: REAL_MIGRATION_SET, OGEVIA_EXPECT_0086_SHA: UP_0086, OGEVIA_EXPECT_0086_DOWN_SHA: DOWN_0086, OGEVIA_EXPECT_0087_SHA: UP_0087, OGEVIA_EXPECT_0087_DOWN_SHA: DOWN_0087, OGEVIA_EXPECT_LOCKFILE_SHA: r.lock, ...extra });
 const pin = (e: ReturnType<typeof buildAndExtract>, env: Record<string, string> = {}) =>
   sh("bash", [join(e.scripts, "tarball-pin-check.sh")], { env: { PATH: `${e.bin}:${process.env.PATH}`, ...pinEnv(env) } });
 
@@ -28,6 +30,8 @@ describe("build-operator-tarball.sh", () => {
     expect(b.out).toContain(`migration set 0001-0085 sha256 : ${REAL_MIGRATION_SET}`);
     expect(b.out).toContain(`0086 up file sha256            : ${UP_0086}`);
     expect(b.out).toContain(`0086 down file sha256          : ${DOWN_0086}`);
+    expect(b.out).toContain(`0087 up file sha256            : ${UP_0087}`);
+    expect(b.out).toContain(`0087 down file sha256          : ${DOWN_0087}`);
     const tar = join(out, `ogevia-operator-${r.short}.tar.gz`);
     expect(readFileSync(tar + ".sha256", "utf8")).toBe(`${sha256(readFileSync(tar))}  ogevia-operator-${r.short}.tar.gz\n`);
     expect(b.out).toContain(`tarball sha256     : ${sha256(readFileSync(tar))}`);
@@ -106,7 +110,7 @@ describe("tarball-pin-check.sh (no git): PINS HOLD only for the approved package
     const e = buildAndExtract(r);
     const p = pin(e);
     expect(p.code, p.out).toBe(0);
-    for (const line of [`PASS BUILD_INFO code commit ${r.sha}`, "PASS PACKAGE_MANIFEST verifies", "PASS no file outside the manifest", `PASS migration set (0001-0085) sha256 ${REAL_MIGRATION_SET.slice(0, 16)}`, `PASS migrations 0001-0085 equal the set applied to TEST on 2026-10-19 (${REAL_MIGRATION_SET.slice(0, 16)}`, "PASS db/migrations holds exactly the 85 released files and no 0086", `PASS 0086 up file sha256 ${UP_0086.slice(0, 16)}`, `PASS 0086 down file sha256 ${DOWN_0086.slice(0, 16)}`, "PASS db/pending holds only the two 0086 files", "PASS pnpm-lock.yaml", "PASS node v22.22.0", "PASS pnpm 9.15.4", "PASS dependencies installed", "PASS cdk 2.1143.0", "PINS HOLD"]) expect(p.out).toContain(line);
+    for (const line of [`PASS BUILD_INFO code commit ${r.sha}`, "PASS PACKAGE_MANIFEST verifies", "PASS no file outside the manifest", `PASS migration set (0001-0085) sha256 ${REAL_MIGRATION_SET.slice(0, 16)}`, `PASS migrations 0001-0085 equal the set applied to TEST on 2026-10-19 (${REAL_MIGRATION_SET.slice(0, 16)}`, "PASS db/migrations holds exactly the 85 released files and no 0086", `PASS 0086 up file sha256 ${UP_0086.slice(0, 16)}`, `PASS 0086 down file sha256 ${DOWN_0086.slice(0, 16)}`, "PASS db/pending holds only the four 0086 and 0087 files", "PASS pnpm-lock.yaml", "PASS node v22.22.0", "PASS pnpm 9.15.4", "PASS dependencies installed", "PASS cdk 2.1143.0", "PINS HOLD"]) expect(p.out).toContain(line);
     expect(p.out).toContain("NOTE BUILD_INFO approval_ref is the placeholder");
   });
   it.each([
@@ -154,7 +158,7 @@ describe("tarball-pin-check.sh (no git): PINS HOLD only for the approved package
     const bin = join(ex, "bin"); mkdirSync(bin);
     for (const [n, body] of [["node", "echo v22.22.0"], ["pnpm", "echo 9.15.4"], ["npx", "echo 2.1143.0"]]) { writeFileSync(join(bin, n!), `#!/usr/bin/env bash\n${body}\n`); chmodSync(join(bin, n!), 0o755); }
     const migSet = sh("bash", ["-c", `cd ${root}/infra/aws/db/migrations && LC_ALL=C sha256sum -- *.sql | sha256sum | cut -d' ' -f1`]).stdout.trim();
-    const p = sh("bash", [join(root, PKG_REL, "scripts/tarball-pin-check.sh")], { env: { PATH: `${bin}:${process.env.PATH}`, OGEVIA_EXPECT_COMMIT: sha, OGEVIA_EXPECT_MIGRATIONS_SHA: migSet, OGEVIA_EXPECT_0086_SHA: UP_0086, OGEVIA_EXPECT_0086_DOWN_SHA: DOWN_0086, OGEVIA_EXPECT_LOCKFILE_SHA: x.lock } });
+    const p = sh("bash", [join(root, PKG_REL, "scripts/tarball-pin-check.sh")], { env: { PATH: `${bin}:${process.env.PATH}`, OGEVIA_EXPECT_COMMIT: sha, OGEVIA_EXPECT_MIGRATIONS_SHA: migSet, OGEVIA_EXPECT_0086_SHA: UP_0086, OGEVIA_EXPECT_0086_DOWN_SHA: DOWN_0086, OGEVIA_EXPECT_0087_SHA: UP_0087, OGEVIA_EXPECT_0087_DOWN_SHA: DOWN_0087, OGEVIA_EXPECT_LOCKFILE_SHA: x.lock } });
     expect(p.code, p.out).toBe(1);
     expect(p.out).toContain("an applied migration was edited");
   });
@@ -183,7 +187,7 @@ describe("tarball-pin-check.sh (no git): PINS HOLD only for the approved package
     const root = join(ex, `ogevia-test-0086-${x.short}`); mkdirSync(join(root, "node_modules")); mkdirSync(join(root, "infra/aws/node_modules"));
     const bin = join(ex, "bin"); mkdirSync(bin);
     for (const [n, body] of [["node", "echo v22.22.0"], ["pnpm", "echo 9.15.4"], ["npx", "echo 2.1143.0"]]) { writeFileSync(join(bin, n!), `#!/usr/bin/env bash\nexec_=1\n${body}\n`); chmodSync(join(bin, n!), 0o755); }
-    const run = (ref: string) => sh("bash", [join(root, PKG_REL, "scripts/tarball-pin-check.sh")], { env: { PATH: `${bin}:${process.env.PATH}`, OGEVIA_EXPECT_COMMIT: x.sha, OGEVIA_EXPECT_MIGRATIONS_SHA: REAL_MIGRATION_SET, OGEVIA_EXPECT_0086_SHA: UP_0086, OGEVIA_EXPECT_0086_DOWN_SHA: DOWN_0086, OGEVIA_EXPECT_LOCKFILE_SHA: x.lock, OGEVIA_DEPLOY_APPROVAL: ref } });
+    const run = (ref: string) => sh("bash", [join(root, PKG_REL, "scripts/tarball-pin-check.sh")], { env: { PATH: `${bin}:${process.env.PATH}`, OGEVIA_EXPECT_COMMIT: x.sha, OGEVIA_EXPECT_MIGRATIONS_SHA: REAL_MIGRATION_SET, OGEVIA_EXPECT_0086_SHA: UP_0086, OGEVIA_EXPECT_0086_DOWN_SHA: DOWN_0086, OGEVIA_EXPECT_0087_SHA: UP_0087, OGEVIA_EXPECT_0087_DOWN_SHA: DOWN_0087, OGEVIA_EXPECT_LOCKFILE_SHA: x.lock, OGEVIA_DEPLOY_APPROVAL: ref } });
     expect(run("REF-GOOD-0001").code).toBe(0);
     const bad = run("REF-OTHER-9999"); expect(bad.code, bad.out).toBe(1); expect(bad.out).toContain("differs from OGEVIA_DEPLOY_APPROVAL");
   });
@@ -215,13 +219,15 @@ describe("0086-specific pins and refusals (decision D1 b: 0086 travels in db/pen
     expect(b.out).toContain("0086 is in db/migrations");
   });
   it("the pin check stops on a wrong 0086 up or down pin, a changed pending file, a stray pending file, and a 0086 smuggled into db/migrations", () => {
-    for (const env of [{ OGEVIA_EXPECT_0086_SHA: "4".repeat(64) }, { OGEVIA_EXPECT_0086_DOWN_SHA: "5".repeat(64) }] as Array<Record<string, string>>) {
+    for (const env of [{ OGEVIA_EXPECT_0086_SHA: "4".repeat(64) }, { OGEVIA_EXPECT_0086_DOWN_SHA: "5".repeat(64) }, { OGEVIA_EXPECT_0087_SHA: "6".repeat(64) }, { OGEVIA_EXPECT_0087_DOWN_SHA: "7".repeat(64) }] as Array<Record<string, string>>) {
       const p = pin(buildAndExtract(r), env); expect(p.code, p.out).toBe(1); expect(p.out).toContain("not the approved value"); expect(p.out).not.toContain("PINS HOLD");
     }
     let e = buildAndExtract(r); writeFileSync(join(e.root, "infra/aws/db/pending/migrations/0086_staff_management.sql"), "-- edited\n");
     let p = pin(e); expect(p.code, p.out).toBe(1); expect(p.out).toContain("package manifest:"); expect(p.out).toContain("0086_staff_management.sql hashes to");
-    e = buildAndExtract(r); writeFileSync(join(e.root, "infra/aws/db/pending/migrations/0087_extra.sql"), "x");
+    e = buildAndExtract(r); writeFileSync(join(e.root, "infra/aws/db/pending/migrations/0088_extra.sql"), "x");
     p = pin(e); expect(p.code, p.out).toBe(1); expect(p.out).toContain("not in the manifest"); expect(p.out).toContain("db/pending holds other files");
+    e = buildAndExtract(r); writeFileSync(join(e.root, "infra/aws/db/pending/migrations/0087_staff_invitation_acceptance.sql"), "-- edited\n");
+    p = pin(e); expect(p.code, p.out).toBe(1); expect(p.out).toContain("0087_staff_invitation_acceptance.sql hashes to");
     e = buildAndExtract(r); writeFileSync(join(e.root, "infra/aws/db/migrations/0086_staff_management.sql"), "x");
     p = pin(e); expect(p.code, p.out).toBe(1); expect(p.out).toContain("0086");
   });

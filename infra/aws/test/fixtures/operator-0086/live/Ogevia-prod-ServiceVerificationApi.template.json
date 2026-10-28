@@ -16,7 +16,7 @@
      },
      {
       "Key": "ogevia:deployment-status",
-      "Value": "approved-TEST-REF-000001"
+      "Value": "approved-synthetic-pin-ref-1"
      },
      {
       "Key": "ogevia:ownership",
@@ -53,7 +53,7 @@
      },
      {
       "Key": "ogevia:deployment-status",
-      "Value": "approved-TEST-REF-000001"
+      "Value": "approved-synthetic-pin-ref-1"
      },
      {
       "Key": "ogevia:ownership",
@@ -102,7 +102,7 @@
      },
      {
       "Key": "ogevia:deployment-status",
-      "Value": "approved-TEST-REF-000001"
+      "Value": "approved-synthetic-pin-ref-1"
      },
      {
       "Key": "ogevia:ownership",
@@ -256,7 +256,7 @@
      },
      {
       "Key": "ogevia:deployment-status",
-      "Value": "approved-TEST-REF-000001"
+      "Value": "approved-synthetic-pin-ref-1"
      },
      {
       "Key": "ogevia:ownership",
@@ -305,7 +305,7 @@
      },
      {
       "Key": "ogevia:deployment-status",
-      "Value": "approved-TEST-REF-000001"
+      "Value": "approved-synthetic-pin-ref-1"
      },
      {
       "Key": "ogevia:ownership",
@@ -419,7 +419,7 @@
      },
      {
       "Key": "ogevia:deployment-status",
-      "Value": "approved-TEST-REF-000001"
+      "Value": "approved-synthetic-pin-ref-1"
      },
      {
       "Key": "ogevia:ownership",
@@ -455,7 +455,7 @@
     ],
     "Code": {
      "S3Bucket": "cdk-hnb659fds-assets-300094796789-us-west-2",
-     "S3Key": "eab95a809b3b95b7479cfe6a572e1be0ea068ef6f12751419669443397fe7eda.zip"
+     "S3Key": "94b73574c5a681d5a8c22b4264742f64e5a6d40aa1ace783be12e7383b9d8a9e.zip"
     },
     "Description": "Ogevia Service Verification API",
     "Environment": {
@@ -512,7 +512,7 @@
      },
      {
       "Key": "ogevia:deployment-status",
-      "Value": "approved-TEST-REF-000001"
+      "Value": "approved-synthetic-pin-ref-1"
      },
      {
       "Key": "ogevia:ownership",
@@ -544,7 +544,7 @@
    ],
    "Metadata": {
     "aws:cdk:path": "Ogevia-prod-ServiceVerificationApi/Handler/Resource",
-    "aws:asset:path": "asset.eab95a809b3b95b7479cfe6a572e1be0ea068ef6f12751419669443397fe7eda",
+    "aws:asset:path": "asset.94b73574c5a681d5a8c22b4264742f64e5a6d40aa1ace783be12e7383b9d8a9e",
     "aws:asset:is-bundled": true,
     "aws:asset:property": "Code"
    }
@@ -575,7 +575,8 @@
          }
         ]
        ]
-      }
+      },
+      "https://demo.ogevia.com"
      ],
      "MaxAge": 3600
     },
@@ -585,7 +586,7 @@
     "Tags": {
      "environment": "prod",
      "managed-by": "cdk",
-     "ogevia:deployment-status": "approved-TEST-REF-000001",
+     "ogevia:deployment-status": "approved-synthetic-pin-ref-1",
      "ogevia:ownership": "cdk-future",
      "ogevia:planned-phase": "4",
      "project": "ogevia"
@@ -2100,6 +2101,357 @@
    },
    "Metadata": {
     "aws:cdk:path": "Ogevia-prod-ServiceVerificationApi/Api/POST--v1--accounts--{userId}--enable/Resource"
+   }
+  },
+  "ApiGETv1stafftypes28C33B49": {
+   "Type": "AWS::ApiGatewayV2::Route",
+   "Properties": {
+    "ApiId": {
+     "Ref": "ApiF70053CD"
+    },
+    "AuthorizationType": "JWT",
+    "AuthorizerId": {
+     "Ref": "ApiCognitoJwt1870F097"
+    },
+    "RouteKey": "GET /v1/staff-types",
+    "Target": {
+     "Fn::Join": [
+      "",
+      [
+       "integrations/",
+       {
+        "Ref": "ApiGETv1meHandlerCDA9441F"
+       }
+      ]
+     ]
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "Ogevia-prod-ServiceVerificationApi/Api/GET--v1--staff-types/Resource"
+   }
+  },
+  "ApiPOSTv1stafftypes3CBCAF41": {
+   "Type": "AWS::ApiGatewayV2::Route",
+   "Properties": {
+    "ApiId": {
+     "Ref": "ApiF70053CD"
+    },
+    "AuthorizationType": "JWT",
+    "AuthorizerId": {
+     "Ref": "ApiCognitoJwt1870F097"
+    },
+    "RouteKey": "POST /v1/staff-types",
+    "Target": {
+     "Fn::Join": [
+      "",
+      [
+       "integrations/",
+       {
+        "Ref": "ApiGETv1meHandlerCDA9441F"
+       }
+      ]
+     ]
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "Ogevia-prod-ServiceVerificationApi/Api/POST--v1--staff-types/Resource"
+   }
+  },
+  "ApiPOSTv1stafftypesstaffTypeIdrename5CBC7ECB": {
+   "Type": "AWS::ApiGatewayV2::Route",
+   "Properties": {
+    "ApiId": {
+     "Ref": "ApiF70053CD"
+    },
+    "AuthorizationType": "JWT",
+    "AuthorizerId": {
+     "Ref": "ApiCognitoJwt1870F097"
+    },
+    "RouteKey": "POST /v1/staff-types/{staffTypeId}/rename",
+    "Target": {
+     "Fn::Join": [
+      "",
+      [
+       "integrations/",
+       {
+        "Ref": "ApiGETv1meHandlerCDA9441F"
+       }
+      ]
+     ]
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "Ogevia-prod-ServiceVerificationApi/Api/POST--v1--staff-types--{staffTypeId}--rename/Resource"
+   }
+  },
+  "ApiPOSTv1stafftypesstaffTypeIdactive37043BAE": {
+   "Type": "AWS::ApiGatewayV2::Route",
+   "Properties": {
+    "ApiId": {
+     "Ref": "ApiF70053CD"
+    },
+    "AuthorizationType": "JWT",
+    "AuthorizerId": {
+     "Ref": "ApiCognitoJwt1870F097"
+    },
+    "RouteKey": "POST /v1/staff-types/{staffTypeId}/active",
+    "Target": {
+     "Fn::Join": [
+      "",
+      [
+       "integrations/",
+       {
+        "Ref": "ApiGETv1meHandlerCDA9441F"
+       }
+      ]
+     ]
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "Ogevia-prod-ServiceVerificationApi/Api/POST--v1--staff-types--{staffTypeId}--active/Resource"
+   }
+  },
+  "ApiGETv1staff276C6750": {
+   "Type": "AWS::ApiGatewayV2::Route",
+   "Properties": {
+    "ApiId": {
+     "Ref": "ApiF70053CD"
+    },
+    "AuthorizationType": "JWT",
+    "AuthorizerId": {
+     "Ref": "ApiCognitoJwt1870F097"
+    },
+    "RouteKey": "GET /v1/staff",
+    "Target": {
+     "Fn::Join": [
+      "",
+      [
+       "integrations/",
+       {
+        "Ref": "ApiGETv1meHandlerCDA9441F"
+       }
+      ]
+     ]
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "Ogevia-prod-ServiceVerificationApi/Api/GET--v1--staff/Resource"
+   }
+  },
+  "ApiPOSTv1staff02953B63": {
+   "Type": "AWS::ApiGatewayV2::Route",
+   "Properties": {
+    "ApiId": {
+     "Ref": "ApiF70053CD"
+    },
+    "AuthorizationType": "JWT",
+    "AuthorizerId": {
+     "Ref": "ApiCognitoJwt1870F097"
+    },
+    "RouteKey": "POST /v1/staff",
+    "Target": {
+     "Fn::Join": [
+      "",
+      [
+       "integrations/",
+       {
+        "Ref": "ApiGETv1meHandlerCDA9441F"
+       }
+      ]
+     ]
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "Ogevia-prod-ServiceVerificationApi/Api/POST--v1--staff/Resource"
+   }
+  },
+  "ApiPOSTv1staffprofileIdEC229906": {
+   "Type": "AWS::ApiGatewayV2::Route",
+   "Properties": {
+    "ApiId": {
+     "Ref": "ApiF70053CD"
+    },
+    "AuthorizationType": "JWT",
+    "AuthorizerId": {
+     "Ref": "ApiCognitoJwt1870F097"
+    },
+    "RouteKey": "POST /v1/staff/{profileId}",
+    "Target": {
+     "Fn::Join": [
+      "",
+      [
+       "integrations/",
+       {
+        "Ref": "ApiGETv1meHandlerCDA9441F"
+       }
+      ]
+     ]
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "Ogevia-prod-ServiceVerificationApi/Api/POST--v1--staff--{profileId}/Resource"
+   }
+  },
+  "ApiPOSTv1staffmembersuserIdprofileD59456BD": {
+   "Type": "AWS::ApiGatewayV2::Route",
+   "Properties": {
+    "ApiId": {
+     "Ref": "ApiF70053CD"
+    },
+    "AuthorizationType": "JWT",
+    "AuthorizerId": {
+     "Ref": "ApiCognitoJwt1870F097"
+    },
+    "RouteKey": "POST /v1/staff-members/{userId}/profile",
+    "Target": {
+     "Fn::Join": [
+      "",
+      [
+       "integrations/",
+       {
+        "Ref": "ApiGETv1meHandlerCDA9441F"
+       }
+      ]
+     ]
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "Ogevia-prod-ServiceVerificationApi/Api/POST--v1--staff-members--{userId}--profile/Resource"
+   }
+  },
+  "ApiPOSTv1staffprofileIdinvitation588DD771": {
+   "Type": "AWS::ApiGatewayV2::Route",
+   "Properties": {
+    "ApiId": {
+     "Ref": "ApiF70053CD"
+    },
+    "AuthorizationType": "JWT",
+    "AuthorizerId": {
+     "Ref": "ApiCognitoJwt1870F097"
+    },
+    "RouteKey": "POST /v1/staff/{profileId}/invitation",
+    "Target": {
+     "Fn::Join": [
+      "",
+      [
+       "integrations/",
+       {
+        "Ref": "ApiGETv1meHandlerCDA9441F"
+       }
+      ]
+     ]
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "Ogevia-prod-ServiceVerificationApi/Api/POST--v1--staff--{profileId}--invitation/Resource"
+   }
+  },
+  "ApiPOSTv1staffprofileIdinvitationresend02015350": {
+   "Type": "AWS::ApiGatewayV2::Route",
+   "Properties": {
+    "ApiId": {
+     "Ref": "ApiF70053CD"
+    },
+    "AuthorizationType": "JWT",
+    "AuthorizerId": {
+     "Ref": "ApiCognitoJwt1870F097"
+    },
+    "RouteKey": "POST /v1/staff/{profileId}/invitation/resend",
+    "Target": {
+     "Fn::Join": [
+      "",
+      [
+       "integrations/",
+       {
+        "Ref": "ApiGETv1meHandlerCDA9441F"
+       }
+      ]
+     ]
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "Ogevia-prod-ServiceVerificationApi/Api/POST--v1--staff--{profileId}--invitation--resend/Resource"
+   }
+  },
+  "ApiPOSTv1staffrolesuserId24F6F3D4": {
+   "Type": "AWS::ApiGatewayV2::Route",
+   "Properties": {
+    "ApiId": {
+     "Ref": "ApiF70053CD"
+    },
+    "AuthorizationType": "JWT",
+    "AuthorizerId": {
+     "Ref": "ApiCognitoJwt1870F097"
+    },
+    "RouteKey": "POST /v1/staff-roles/{userId}",
+    "Target": {
+     "Fn::Join": [
+      "",
+      [
+       "integrations/",
+       {
+        "Ref": "ApiGETv1meHandlerCDA9441F"
+       }
+      ]
+     ]
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "Ogevia-prod-ServiceVerificationApi/Api/POST--v1--staff-roles--{userId}/Resource"
+   }
+  },
+  "ApiGETv1rolepermissionsCD299742": {
+   "Type": "AWS::ApiGatewayV2::Route",
+   "Properties": {
+    "ApiId": {
+     "Ref": "ApiF70053CD"
+    },
+    "AuthorizationType": "JWT",
+    "AuthorizerId": {
+     "Ref": "ApiCognitoJwt1870F097"
+    },
+    "RouteKey": "GET /v1/role-permissions",
+    "Target": {
+     "Fn::Join": [
+      "",
+      [
+       "integrations/",
+       {
+        "Ref": "ApiGETv1meHandlerCDA9441F"
+       }
+      ]
+     ]
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "Ogevia-prod-ServiceVerificationApi/Api/GET--v1--role-permissions/Resource"
+   }
+  },
+  "ApiGETv1staffauditC28D33E6": {
+   "Type": "AWS::ApiGatewayV2::Route",
+   "Properties": {
+    "ApiId": {
+     "Ref": "ApiF70053CD"
+    },
+    "AuthorizationType": "JWT",
+    "AuthorizerId": {
+     "Ref": "ApiCognitoJwt1870F097"
+    },
+    "RouteKey": "GET /v1/staff-audit",
+    "Target": {
+     "Fn::Join": [
+      "",
+      [
+       "integrations/",
+       {
+        "Ref": "ApiGETv1meHandlerCDA9441F"
+       }
+      ]
+     ]
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "Ogevia-prod-ServiceVerificationApi/Api/GET--v1--staff-audit/Resource"
    }
   },
   "ApiGETv1shiftsF96D995E": {
@@ -6821,7 +7173,7 @@
     "Tags": {
      "environment": "prod",
      "managed-by": "cdk",
-     "ogevia:deployment-status": "approved-TEST-REF-000001",
+     "ogevia:deployment-status": "approved-synthetic-pin-ref-1",
      "ogevia:ownership": "cdk-future",
      "ogevia:planned-phase": "4",
      "project": "ogevia"
@@ -6848,7 +7200,7 @@
      },
      {
       "Key": "ogevia:deployment-status",
-      "Value": "approved-TEST-REF-000001"
+      "Value": "approved-synthetic-pin-ref-1"
      },
      {
       "Key": "ogevia:ownership",

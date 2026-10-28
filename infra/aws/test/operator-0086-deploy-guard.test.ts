@@ -46,10 +46,8 @@ function fixture(): Fix {
   writeFileSync(join(bin, "aws"), AWS); writeFileSync(join(bin, "npx"), NPX); chmodSync(join(bin, "aws"), 0o755); chmodSync(join(bin, "npx"), 0o755);
   const asm = join(dir, "cdk.out"); mkdirSync(asm);
   for (const s of STACKS) writeFileSync(join(asm, `Ogevia-prod-${s}.template.json`), JSON.stringify(fx("release", `Ogevia-prod-${s}`)));
-  // live: the four unchanged stacks equal the release; the API is the e80b770 state with the hand-applied HTTP API (CORS) resource (decision D2 = yes)
-  for (const s of STACKS) writeFileSync(join(dir, `live-Ogevia-prod-${s}.json`), JSON.stringify(fx("release", `Ogevia-prod-${s}`)));
-  const live = fx("live", API); const k = Object.keys(live.Resources).find((x) => live.Resources[x].Type === "AWS::ApiGatewayV2::Api")!; live.Resources[k] = fx("release", API).Resources[k];
-  writeFileSync(join(dir, `live-${API}.json`), JSON.stringify(live));
+  // live: what TEST runs now (the five stacks as synthesized from 7870a04); the four unchanged stacks equal the release, the API differs by the accept route and the Handler code
+  for (const s of STACKS) writeFileSync(join(dir, `live-Ogevia-prod-${s}.json`), JSON.stringify(fx("live", `Ogevia-prod-${s}`)));
   const before = join(dir, "before"); mkdirSync(before);
   const env = { Variables: { OGEVIA_ENV: "prod", DB_NAME: "ogevia_sv_test" } };
   writeFileSync(join(before, "handler-function-name.txt"), "fn-handler\n"); writeFileSync(join(before, "api-id.txt"), "s0epy5rgzb\n");
@@ -67,9 +65,9 @@ const deploys = () => log("npx-calls.log").filter((c) => c.includes("cdk deploy"
 const writes = () => log("aws-calls.log").filter((c) => /^(cloudformation (create|update|delete|execute)|lambda (update|publish|delete)|iam |ec2 (authorize|revoke)|s3 )/.test(c));
 
 describe("check: read-only, passes only for the expected difference", () => {
-  it("the API stack shows DELTA (13 routes + Handler) and passes; the four others show NONE; nothing is deployed or written", () => {
+  it("the API stack shows DELTA (the accept route + Handler) and passes; the four others show NONE; nothing is deployed or written", () => {
     let r = guard(["check", API]);
-    expect(r.code, r.out).toBe(0); expect(r.out).toContain("CHECK PASSED for Ogevia-prod-ServiceVerificationApi (DELTA)"); expect(r.out).toContain("13 staff API routes added");
+    expect(r.code, r.out).toBe(0); expect(r.out).toContain("CHECK PASSED for Ogevia-prod-ServiceVerificationApi (DELTA)"); expect(r.out).toContain("1 staff API route(s) added");
     for (const s of ["EvidenceStorage", "NetworkEgress", "WebHosting", "Observability"]) { r = guard(["check", `Ogevia-prod-${s}`]); expect(r.code, r.out).toBe(0); expect(r.out).toContain(`(NONE)`); }
     expect(deploys()).toEqual([]); expect(writes()).toEqual([]);
   });
@@ -85,11 +83,10 @@ describe("check: read-only, passes only for the expected difference", () => {
     const t = fx("release", API); Object.values<any>(t.Resources).find((x) => x.Type === "AWS::Events::Rule").Properties.State = "DISABLED"; writeFileSync(join(f.asm, `${API}.template.json`), JSON.stringify(t));
     r = guard(["check", API]); expect(r.code, r.out).toBe(1); expect(r.out).toContain("not the approved release");
   });
-  it("decision D2: if the web hostnames are NOT live the WebHosting check refuses; the API check on the raw e80b770 template passes as DELTA (only the demo CORS origin catch-up is extra)", () => {
-    writeFileSync(join(f.dir, `live-${WEB}.json`), JSON.stringify(fx("live", WEB)));
+  it("drift: if the live WebHosting or the live API CORS differs from the release the check refuses (no catch-up is allowed any more)", () => {
+    const web = fx("live", WEB); const ck = Object.keys(web.Resources).find((x) => web.Resources[x].Type === "AWS::Cognito::UserPoolClient")!; web.Resources[ck].Properties.CallbackURLs = ["https://old.example/cb"];
+    writeFileSync(join(f.dir, `live-${WEB}.json`), JSON.stringify(web));
     let r = guard(["check", WEB]); expect(r.code, r.out).toBe(1); expect(r.out).toContain("NOT the release's expected change");
-    writeFileSync(join(f.dir, `live-${API}.json`), JSON.stringify(fx("live", API)));
-    r = guard(["check", API]); expect(r.code, r.out).toBe(0); expect(r.out).toContain("CORS origin https://demo.ogevia.com added to the template only"); expect(r.out).toContain("(DELTA)");
     const live = fx("live", API); const k = Object.keys(live.Resources).find((x) => live.Resources[x].Type === "AWS::ApiGatewayV2::Api")!; live.Resources[k].Properties.CorsConfiguration.AllowOrigins.push("https://rogue.example");
     writeFileSync(join(f.dir, `live-${API}.json`), JSON.stringify(live));
     r = guard(["check", API]); expect(r.code, r.out).toBe(1);
@@ -126,7 +123,7 @@ describe("deploy: one stack, the gate first, a typed phrase, the exact command",
 
 describe("post: read-only checks after the deployment", () => {
   it("passes for a good deployment", () => {
-    const r = guard(["post", API]); expect(r.code, r.out).toBe(0); expect(r.out).toContain("POST-CHECK PASSED"); expect(r.out).toContain("the API gained exactly 13 routes"); expect(r.out).toContain("all 13 staff routes exist");
+    const r = guard(["post", API]); expect(r.code, r.out).toBe(0); expect(r.out).toContain("POST-CHECK PASSED"); expect(r.out).toContain("the API gained exactly 1 route"); expect(r.out).toContain("the added staff route exists");
     expect(writes()).toEqual([]);
   });
   it("only the API stack can be post-checked", () => { const r = guard(["post", "Ogevia-prod-Observability"]); expect(r.code, r.out).toBe(1); expect(r.out).toContain("can only be checked"); });

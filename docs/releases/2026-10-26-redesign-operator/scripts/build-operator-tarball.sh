@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # =============================================================================
-# Build the operator TARBALL for the TEST release 2026-10-26-redesign (code commit 7870a04: staff management, navigation, Reports, migration 0086 applied from db/pending) (runs HERE, in the development container, never in CloudShell; no network, no AWS).
+# Build the operator TARBALL for the TEST release 2026-10-26-redesign (UPGRADE 7870a04 to code commit 730b601: staff invitation fixes M-1, L-1, L-2, L-3, migration 0087 applied from db/pending on top of 0086) (runs HERE, in the development container, never in CloudShell; no network, no AWS).
 #   bash build-operator-tarball.sh --out-dir DIR [--code-commit REF]      (REF default: HEAD; resolved to the full 40-hex SHA)
 #   OGEVIA_APPROVAL_REF=<owner reference>   optional; default APPROVAL-REF-PENDING-OWNER (a placeholder the pin check reports)
 #   OGEVIA_BUILD_TIME=<UTC ISO time>        optional; default now. Fixing it makes two builds of the same inputs byte-identical.

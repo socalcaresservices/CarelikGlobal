@@ -11,7 +11,7 @@ defs as (
   union all select 'update_staff', to_regprocedure('ogevia_api.update_staff(uuid, uuid, text, uuid, text, text, text)')
   union all select 'accept', to_regprocedure('ogevia_api.accept_staff_invitation(uuid)')),
 def_text as (select k, oid, case when oid is null then '' else pg_get_functiondef(oid) end as txt from defs)
-select 'function_exists_ogevia_api.' || f, oid is not null, null from fns
+select 'function_exists_ogevia_api.' || f as check_name, oid is not null as ok, null::text as detail from fns
 union all
 select 'function_fixed_search_path_ogevia_api.' || f,
        coalesce(oid is not null and (select exists (select 1 from unnest(coalesce(p.proconfig, '{}')) c where c like 'search_path=%') from pg_proc p where p.oid = fns.oid), false),
@@ -43,7 +43,7 @@ union all
 select 'note_my_sign_in_marks_only_active_staff_membership', coalesce((select txt like '%m.status = ''active''%' and txt like '%staff_profiles%' and txt like '%caregiver_invitations%' from def_text where k = 'note'), false) and coalesce(has_function_privilege('ogevia_app', to_regprocedure('ogevia_api.note_my_sign_in()'), 'execute'), false),
        'a pending invitation is not marked as signed in; the caregiver marker is unchanged'
 union all
-select 'list_staff_shows_invited_as_invitation_pending', coalesce((select txt like '%m.status = ''invited'' then ''invitation_pending''%' from def_text where k = 'list_staff'), false), 'an invited membership shows as Invited'
+select 'list_staff_shows_invited_as_invitation_pending', coalesce((select (length(txt) - length(replace(txt, 'm.status = ''invited'' then ''invitation_pending''', ''))) / length('m.status = ''invited'' then ''invitation_pending''') >= 2 from def_text where k = 'list_staff'), false), 'an invited membership shows as Invited (in the staff-profile branch as well as the member branch)'
 union all
 select 'update_staff_suspends_inactive_access', coalesce((select txt like '%staff.access_suspended%' and txt like '%''suspended''%' from def_text where k = 'update_staff'), false), 'L-3: inactive profile suspends the agency membership'
 union all

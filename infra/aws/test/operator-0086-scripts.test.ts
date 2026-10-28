@@ -13,7 +13,7 @@ const FIX = fileURLToPath(new URL("./fixtures/operator-0086/", import.meta.url))
 const SCRIPTS_SRC = join(REPO_ROOT, PKG_REL, "scripts");
 const SHA = "7870a04c43545bacc378ad93ffc6a09d63345b5a";
 const TARSHA = "a".repeat(64);
-const RELEASE_KEY = "94b73574c5a681d5a8c22b4264742f64e5a6d40aa1ace783be12e7383b9d8a9e.zip";
+const RELEASE_KEY = "2871b03d6be42b0b8c85bac6feea12de75b3d05ca4636610259b6a18e1d00ed7.zip";
 const STACKS = ["EvidenceStorage", "NetworkEgress", "WebHosting", "ServiceVerificationApi", "Observability"];
 const NEW_KEYS: string[] = JSON.parse(readFileSync(join(SCRIPTS_SRC, "new-route-keys.json"), "utf8"));
 const OLD_KEYS = ["GET /v1/me", "POST /v1/visits", "GET /v1/clients", "POST /v1/shifts"];
@@ -103,11 +103,9 @@ function fixture(): Fix {
   mkdirSync(join(root, "apps/web/dist-aws/assets"), { recursive: true }); writeFileSync(join(root, "apps/web/dist-aws/index.html"), INDEX);
   const bin = join(dir, "bin"); mkdirSync(bin);
   for (const [n, body] of [["aws", AWS], ["curl", CURL]] as const) { writeFileSync(join(bin, n), body); chmodSync(join(bin, n), 0o755); }
-  // live stacks: the e80b770 state with the hand-applied HTTP API (decision D2 = yes); an assembly of the release templates
+  // live stacks: the 7870a04 state that TEST runs now; an assembly of the release templates
   mkdirSync(join(dir, "live")); const asm = join(dir, "cdk.out"); mkdirSync(asm);
-  for (const s of STACKS) { writeFileSync(join(dir, "live", `Ogevia-prod-${s}.json`), JSON.stringify(fx(s === "WebHosting" ? "release" : "live", `Ogevia-prod-${s}`))); writeFileSync(join(asm, `Ogevia-prod-${s}.template.json`), JSON.stringify(fx("release", `Ogevia-prod-${s}`))); }
-  const liveApi = fx("live", "Ogevia-prod-ServiceVerificationApi"); const apiKey = Object.keys(liveApi.Resources).find((x) => liveApi.Resources[x].Type === "AWS::ApiGatewayV2::Api")!;
-  liveApi.Resources[apiKey] = fx("release", "Ogevia-prod-ServiceVerificationApi").Resources[apiKey]; writeFileSync(join(dir, "live/Ogevia-prod-ServiceVerificationApi.json"), JSON.stringify(liveApi)); // decision D2 = yes
+  for (const s of STACKS) { writeFileSync(join(dir, "live", `Ogevia-prod-${s}.json`), JSON.stringify(fx("live", `Ogevia-prod-${s}`))); writeFileSync(join(asm, `Ogevia-prod-${s}.template.json`), JSON.stringify(fx("release", `Ogevia-prod-${s}`))); }
   const env = { Variables: { OGEVIA_ENV: "prod", DB_NAME: "ogevia_sv_test" } };
   writeFileSync(join(dir, "lambda-config.json"), JSON.stringify({ CodeSha256: ZIP_B64, LastUpdateStatus: "Successful", Environment: env }));
   writeFileSync(join(dir, "routes.json"), JSON.stringify(OLD_KEYS)); writeFileSync(join(dir, "cors.json"), JSON.stringify({ AllowOrigins: ["https://demo.ogevia.com"] }));
@@ -133,11 +131,11 @@ describe("baseline-capture.sh: read-only; captures what recovery and the post-ch
     expect(readFileSync(join(f.before, "api-id.txt"), "utf8").trim()).toBe("s0epy5rgzb");
     expect(JSON.parse(readFileSync(join(f.before, "routes-before.json"), "utf8"))).toEqual(OLD_KEYS);
     expect(r.out).toContain("Ogevia-prod-ServiceVerificationApi: EXPECTED-ONLY: YES (DELTA)");
-    expect(r.out).toContain("no staff route exists yet");
+    expect(r.out).toContain("the accept route does not exist yet");
     for (const v of new Set(verbs())) expect(readVerbs).toContain(v);
   });
   it("warns (does not fail) when a live stack is not 'this release minus its allowed difference'; the authoritative gate is Step 8", () => {
-    writeFileSync(join(f.dir, "live/Ogevia-prod-WebHosting.json"), JSON.stringify(fx("live", "Ogevia-prod-WebHosting")));
+    { const w = fx("live", "Ogevia-prod-WebHosting"); w.Description = "drifted"; writeFileSync(join(f.dir, "live/Ogevia-prod-WebHosting.json"), JSON.stringify(w)); }
     const r = run("baseline-capture.sh");
     expect(r.code, r.out).toBe(0); expect(r.out).toContain("WARN the live Ogevia-prod-WebHosting is not"); expect(r.out).toContain("Step 8 will stop on it");
   });
@@ -160,19 +158,19 @@ describe("baseline-capture.sh: read-only; captures what recovery and the post-ch
     const r = run("baseline-capture.sh"); expect(r.code, r.out).toBe(1); expect(r.out).toContain("not TEST");
   });
   it("a staff route already present is a NOTE, never silently ignored", () => {
-    writeFileSync(join(f.dir, "routes.json"), JSON.stringify([...OLD_KEYS, "GET /v1/staff"]));
-    const r = run("baseline-capture.sh"); expect(r.out).toContain("NOTE some s");
+    writeFileSync(join(f.dir, "routes.json"), JSON.stringify([...OLD_KEYS, "POST /v1/me/staff-invitations/{organizationId}/accept"]));
+    const r = run("baseline-capture.sh"); expect(r.out).toContain("NOTE the accept route already exists");
   });
 });
 
 describe("snapshot-verify.sh: a snapshot that is not verified stops the release", () => {
   const win = (s = -60, e = 180) => ({ OGEVIA_RELEASE_WINDOW_START: iso(minutes(s)), OGEVIA_RELEASE_WINDOW_END: iso(minutes(e)) });
-  const name = (ago = 10) => `ogevia-prod-postgres-pre-0086-${stamp(minutes(-ago))}`;
+  const name = (ago = 10) => `ogevia-prod-postgres-pre-0087-${stamp(minutes(-ago))}`;
   it("create: takes ONE snapshot with the named pattern, waits, verifies, records the id", () => {
     const r = run("snapshot-verify.sh", ["create"], { ...win() });
     expect(r.code, r.out).toBe(0); expect(r.out).toContain("SNAPSHOT VERIFIED");
     expect(verbs().filter((v) => v === "rds create-db-snapshot")).toHaveLength(1);
-    expect(readFileSync(join(f.before, "snapshot-id.txt"), "utf8").trim()).toMatch(/^ogevia-prod-postgres-pre-0086-\d{12}$/);
+    expect(readFileSync(join(f.before, "snapshot-id.txt"), "utf8").trim()).toMatch(/^ogevia-prod-postgres-pre-0087-\d{12}$/);
   });
   it("create refuses outside the window and creates nothing; a snapshot that never becomes available stops", () => {
     let r = run("snapshot-verify.sh", ["create"], { ...win(30, 240) }); expect(r.code, r.out).toBe(1); expect(r.out).toContain("outside the release window"); expect(verbs()).not.toContain("rds create-db-snapshot");
@@ -240,7 +238,7 @@ describe("record-deployed.sh: every deployed artifact must map to the commit", (
   });
   it.each([
     ["an unchanged Lambda (CodeSha256 equals the one before)", () => writeFileSync(join(f.before, "lambda-config-before.json"), JSON.stringify({ CodeSha256: ZIP_B64 })), "equals the one before"],
-    ["a wrong asset key in the deployed stack", () => { const t = fx("release", "Ogevia-prod-ServiceVerificationApi"); Object.entries<any>(t.Resources).find(([k, r]) => r.Type === "AWS::Lambda::Function" && k.startsWith("Handler") && !k.startsWith("Identity"))![1].Properties.Code.S3Key = "0".repeat(64) + ".zip"; writeFileSync(join(f.dir, "live/Ogevia-prod-ServiceVerificationApi.json"), JSON.stringify(t)); }, "not 94b73574"],
+    ["a wrong asset key in the deployed stack", () => { const t = fx("release", "Ogevia-prod-ServiceVerificationApi"); Object.entries<any>(t.Resources).find(([k, r]) => r.Type === "AWS::Lambda::Function" && k.startsWith("Handler") && !k.startsWith("Identity"))![1].Properties.Code.S3Key = "0".repeat(64) + ".zip"; writeFileSync(join(f.dir, "live/Ogevia-prod-ServiceVerificationApi.json"), JSON.stringify(t)); }, "not 2871b03d"],
     ["a Lambda update that did not succeed", () => writeFileSync(join(f.dir, "lambda-after.json"), JSON.stringify({ CodeSha256: ZIP_B64, LastUpdateStatus: "Failed" })), "LastUpdateStatus is not Successful"],
     ["a web that is not the release", () => writeFileSync(join(f.dir, "site/assets/index-AbC123.js"), bundle("2".repeat(40))), "web verification failed"],
   ])("fails on %s", (_n, mutate, text) => { setup(); mutate(); const r = rec(); expect(r.code, r.out).toBe(1); expect(r.out).toContain(text); expect(r.out).toContain("STOP: an artifact does not map"); });
@@ -250,18 +248,18 @@ describe("record-deployed.sh: every deployed artifact must map to the commit", (
   });
 });
 
-describe("route-smoke.sh: the 13 staff routes refuse every call without a valid token", () => {
+describe("route-smoke.sh: the staff route this upgrade adds refuses every call without a valid token", () => {
   const API = "https://s0epy5rgzb.execute-api.us-west-2.amazonaws.com";
-  it("passes: 13 routes x 2 calls (no token, forged token), all 401, plus the CORS preflight; no credential is sent", () => {
+  it("passes: 1 route x 2 calls (no token, forged token), all 401, plus the CORS preflight; no credential is sent", () => {
     const r = run("route-smoke.sh", [API]);
-    expect(r.code, r.out).toBe(0); expect(r.out).toContain("ROUTE SMOKE PASSED: 13 routes x 2 calls, all 401; CORS preflight ok");
-    const calls = lines("curl-calls.log"); expect(calls.length).toBe(27);
+    expect(r.code, r.out).toBe(0); expect(r.out).toContain("ROUTE SMOKE PASSED: 1 route x 2 calls, all 401; CORS preflight ok");
+    const calls = lines("curl-calls.log"); expect(calls.length).toBe(3);
     for (const c of calls) expect(c).not.toMatch(/-X (PUT|DELETE|PATCH)/);
     for (const k of NEW_KEYS) expect(r.out).toContain(`PASS ${k} (none token): 401`);
     expect(calls.join("\n")).not.toContain("00000000-0000-4000-8000-00000000000G");
   });
   it("a route that answers anything but 401, a curl failure and a bad CORS preflight each fail", () => {
-    let r = run("route-smoke.sh", [API], { MOCK_BAD_PATH: "/v1/staff-audit" }); expect(r.code, r.out).toBe(1); expect(r.out).toContain("FAIL GET /v1/staff-audit"); expect(r.out).toContain("HTTP 200, expected 401");
+    let r = run("route-smoke.sh", [API], { MOCK_BAD_PATH: "/v1/me/staff-invitations" }); expect(r.code, r.out).toBe(1); expect(r.out).toContain("FAIL POST /v1/me/staff-invitations/{organizationId}/accept"); expect(r.out).toContain("HTTP 200, expected 401");
     r = run("route-smoke.sh", [API], { MOCK_CURL_FAIL: "1" }); expect(r.code, r.out).toBe(1); expect(r.out).toContain("curl-failed");
     r = run("route-smoke.sh", [API], { MOCK_CORS_BAD: "1" }); expect(r.code, r.out).toBe(1); expect(r.out).toContain("FAIL CORS preflight");
   });

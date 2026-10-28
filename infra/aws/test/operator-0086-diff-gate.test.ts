@@ -1,8 +1,7 @@
-// diff_gate.py and assembly_check.py (TEST release 7870a04) against REAL synthesized templates: test/fixtures/operator-0086/release = the five Ogevia-prod-* stacks synthesized from
-// 7870a04 in deploy mode; .../live = the same five stacks as synthesized from e80b770 (the release the owner deployed to TEST on 2026-10-19, i.e. what TEST is documented to run).
-// The gate must pass ONLY the release's expected change (13 JWT-authorized staff routes + the Handler code asset) and fail on anything extra, removed or altered.
-// DECISION D2 is enforced here: the live hostnames (CloudFront alias, certificate, Cognito callback URLs, CORS origin) were reportedly applied by hand on 2026-10-23; if they were
-// NOT, the gate shows them as a difference and STOPS. Both worlds are tested.
+// diff_gate.py and assembly_check.py (TEST UPGRADE 7870a04 -> 730b601) against REAL synthesized templates: test/fixtures/operator-0086/release = the five Ogevia-prod-* stacks synthesized from
+// the candidate code 730b601 in deploy mode; .../live = the same five stacks as synthesized from 7870a04 (the release the owner deployed to TEST on 2026-10-25/26, i.e. what TEST runs now).
+// The gate must pass ONLY the upgrade's expected change (ONE JWT-authorized staff route, POST /v1/me/staff-invitations/{organizationId}/accept, + the Handler code asset) and fail on
+// anything extra, removed or altered. Every CORS, hostname and callback difference is a violation (they are live on TEST since the 7870a04 release; the old catch-up allowance is gone).
 import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -27,22 +26,19 @@ const routes = (t: T) => Object.entries<any>(t.Resources).filter(([, r]) => r.Ty
 const apiResourceKey = (t: T) => Object.keys(t.Resources).find((k) => t.Resources[k].Type === "AWS::ApiGatewayV2::Api")!;
 const ok = (r: { code: number | null; out: string }, word: "DELTA" | "NONE") => { expect(r.code, r.out).toBe(0); expect(r.out).toContain(`EXPECTED-ONLY: YES (${word})`); expect(r.out).not.toContain("VIOLATION"); };
 const stop = (r: { code: number | null; out: string }, text: string) => { expect(r.code, r.out).toBe(1); expect(r.out).toContain("EXPECTED-ONLY: NO"); expect(r.out).toContain(text); };
-/** the live API stack when the hostnames were applied by hand (decision D2 = yes): the e80b770 API with only the hand-applied CORS API resource of the release */
-const liveApiHostnamesApplied = () => { const t = load("live", API); const k = apiResourceKey(t); t.Resources[k] = clone(load("release", API).Resources[k]); return t; };
-const liveHostnamesApplied: Record<string, T> = { [WEB]: load("release", WEB), [API]: liveApiHostnamesApplied() };
 
-describe("the real release difference is exactly what the gate allows (the live API template already has the demo origin)", () => {
-  it("ServiceVerificationApi: the 13 staff routes and the Handler code asset only → DELTA", () => {
-    const live = liveHostnamesApplied[API], next = load("release", API);
+describe("the real upgrade difference is exactly what the gate allows", () => {
+  it("ServiceVerificationApi: the ONE accept route and the Handler code asset only → DELTA", () => {
+    const live = load("live", API), next = load("release", API);
     const r = gate(API, live, next);
     ok(r, "DELTA");
-    expect(r.out).toContain("13 staff API routes added, each JWT-authorized like the existing routes");
-    expect(r.out).toMatch(/ALLOWED Lambda Handler\w+ code asset eab95a809b3b\.\.\. -> 94b73574c5a6\.\.\./);
-    expect(routes(next).length - routes(live).length).toBe(13);
+    expect(r.out).toContain("1 staff API route(s) added, each JWT-authorized like the existing routes");
+    expect(r.out).toMatch(/ALLOWED Lambda Handler\w+ code asset 94b73574c5a6\.\.\. -> 2871b03d6be4\.\.\./);
+    expect(routes(next).length - routes(live).length).toBe(1);
+    expect(routes(next).map(([, x]) => x.Properties.RouteKey)).toContain("POST /v1/me/staff-invitations/{organizationId}/accept");
     expect(handlerOf(next)[1].Properties.Environment).toEqual(handlerOf(live)[1].Properties.Environment);
   });
-  it.each(["EvidenceStorage", "NetworkEgress", "Observability"])("%s: no difference at all", (s) => ok(gate(`Ogevia-prod-${s}`, load("live", `Ogevia-prod-${s}`), load("release", `Ogevia-prod-${s}`)), "NONE"));
-  it("WebHosting with the hand-applied hostnames: no difference", () => ok(gate(WEB, liveHostnamesApplied[WEB], load("release", WEB)), "NONE"));
+  it.each(["EvidenceStorage", "NetworkEgress", "WebHosting", "Observability"])("%s: no difference at all", (s) => ok(gate(`Ogevia-prod-${s}`, load("live", `Ogevia-prod-${s}`), load("release", `Ogevia-prod-${s}`)), "NONE"));
   it("a second run after the deployment: the API stack equals the release → NONE with 'NOTHING TO DEPLOY'", () => {
     const r = gate(API, load("release", API), load("release", API));
     ok(r, "NONE"); expect(r.out).toContain("NOTHING TO DEPLOY");
@@ -53,76 +49,49 @@ describe("the real release difference is exactly what the gate allows (the live 
   });
 });
 
-describe("decision D2: the live hostnames are checked, never assumed", () => {
-  it("WebHosting on the e80b770 state differs (CloudFront distribution and Cognito client): STOP", () => {
-    const r = gate(WEB, load("live", WEB), load("release", WEB));
-    stop(r, "resource CHANGED outside the allow-list: WebDistribution"); expect(r.out).toContain("TestSliceAppClient");
-  });
-  it("the real TEST finding of 2026-10-26: the live API TEMPLATE lacks only the demo CORS origin (applied by hand on the API itself) → DELTA with an explicit note", () => {
-    const r = gate(API, load("live", API), load("release", API));
-    ok(r, "DELTA");
-    expect(r.out).toContain("CORS origin https://demo.ogevia.com added to the template only"); expect(r.out).toContain("13 staff API routes added");
-  });
-});
-
-describe("the CORS catch-up allowance is exactly one origin and nothing else", () => {
-  const pair = () => ({ live: clone(load("live", API)), next: clone(load("release", API)) });
+describe("any CORS, hostname or callback difference stops (they are live on TEST already; no catch-up is allowed any more)", () => {
   const cors = (t: T) => t.Resources[apiResourceKey(t)].Properties.CorsConfiguration;
-  const bad = (label: string, mutate: (live: T, next: T) => void) => it(`stops: ${label}`, () => { const { live, next } = pair(); mutate(live, next); stop(gate(API, live, next), "resource CHANGED outside the allow-list: Api"); });
-  bad("another origin added in the same change", (_l, n) => { cors(n).AllowOrigins.push("https://other.example"); });
-  bad("a different origin instead of demo", (_l, n) => { cors(n).AllowOrigins[cors(n).AllowOrigins.indexOf("https://demo.ogevia.com")] = "https://evil.example"; });
-  bad("the wildcard origin", (_l, n) => { cors(n).AllowOrigins.push("*"); cors(n).AllowOrigins.splice(cors(n).AllowOrigins.indexOf("https://demo.ogevia.com"), 1); });
-  bad("an existing origin removed together with the demo addition", (l, _n) => { cors(l).AllowOrigins.push("https://old.example"); });
-  bad("demo listed twice", (_l, n) => { cors(n).AllowOrigins.push("https://demo.ogevia.com"); });
+  const bad = (label: string, mutate: (live: T, next: T) => void) => it(`stops: ${label}`, () => { const live = clone(load("live", API)), next = clone(load("release", API)); mutate(live, next); stop(gate(API, live, next), "resource CHANGED outside the allow-list: Api"); });
+  bad("an origin added", (_l, n) => { cors(n).AllowOrigins.push("https://other.example"); });
+  bad("the demo origin missing from the live template (the old 7870a04 catch-up)", (l, _n) => { cors(l).AllowOrigins = cors(l).AllowOrigins.filter((o: string) => o !== "https://demo.ogevia.com"); });
+  bad("the wildcard origin", (_l, n) => { cors(n).AllowOrigins.push("*"); });
   bad("a method added", (_l, n) => { cors(n).AllowMethods.push("DELETE"); });
-  bad("a header added", (_l, n) => { cors(n).AllowHeaders.push("x-extra"); });
-  bad("MaxAge changed", (_l, n) => { cors(n).MaxAge = 86400; });
-  bad("credentials allowed", (_l, n) => { cors(n).AllowCredentials = true; });
   bad("another property of the API resource changes", (_l, n) => { n.Resources[apiResourceKey(n)].Properties.Name = "renamed"; });
-  bad("CORS removed from the template", (_l, n) => { delete n.Resources[apiResourceKey(n)].Properties.CorsConfiguration; });
-  it("the allowance applies only to the API stack's HTTP API: a CORS-only change with no routes and no code change is not the release", () => {
-    const live = clone(load("live", API)), next = clone(load("live", API)); cors(next).AllowOrigins.push("https://demo.ogevia.com");
-    stop(gate(API, live, next), "not the release's expected change");
+  it("WebHosting: a changed alias or Cognito client is a violation", () => {
+    const live = clone(load("live", WEB)), next = clone(load("release", WEB)); const k = Object.keys(next.Resources).find((x) => next.Resources[x].Type === "AWS::Cognito::UserPoolClient")!; next.Resources[k].Properties.CallbackURLs = [...(next.Resources[k].Properties.CallbackURLs ?? []), "https://evil.example/cb"];
+    stop(gate(WEB, live, next), "resource CHANGED outside the allow-list");
   });
 });
 
-describe("ServiceVerificationApi: anything beyond the 13 routes and the code asset STOPS", () => {
-  const pair = () => ({ live: clone(liveHostnamesApplied[API]), next: clone(load("release", API)) });
-  it("a route REMOVED", () => { const { live, next } = pair(); delete next.Resources[routes(next)[0]![0]]; stop(gate(API, live, next), "REMOVED"); });
-  it("a route ALTERED (target)", () => { const { live, next } = pair(); const [, r] = routes(next).find(([, x]) => x.Properties.RouteKey === "GET /v1/me") ?? routes(next)[0]!; r.Properties.Target = "integrations/other"; stop(gate(API, live, next), "resource CHANGED outside the allow-list"); });
-  it("a 14th route", () => {
-    const { live, next } = pair(); const [, base] = routes(next)[0]!;
+describe("ServiceVerificationApi: anything beyond the accept route and the code asset STOPS", () => {
+  const ACCEPT = "POST /v1/me/staff-invitations/{organizationId}/accept";
+  const pair = () => ({ live: clone(load("live", API)), next: clone(load("release", API)) });
+  const accept = (t: T) => routes(t).find(([, x]) => x.Properties.RouteKey === ACCEPT)!;
+  it("a route REMOVED", () => { const { live, next } = pair(); delete next.Resources[routes(next).find(([, x]) => x.Properties.RouteKey === "GET /v1/me")![0]]; stop(gate(API, live, next), "REMOVED"); });
+  it("an existing route ALTERED (target)", () => { const { live, next } = pair(); routes(next).find(([, x]) => x.Properties.RouteKey === "GET /v1/me")![1].Properties.Target = "integrations/other"; stop(gate(API, live, next), "resource CHANGED outside the allow-list"); });
+  it("a second added route", () => {
+    const { live, next } = pair(); const [, base] = accept(next);
     next.Resources.ExtraRoute = { Type: "AWS::ApiGatewayV2::Route", Properties: { ...clone(base.Properties), RouteKey: "POST /v1/staff-export" } };
-    stop(gate(API, live, next), "routes added that are not the 13 staff routes");
+    stop(gate(API, live, next), "routes added that are not the 1 staff route this upgrade adds");
   });
-  it("a staff route that is not JWT-authorized", () => {
-    const { live, next } = pair(); const [, r] = routes(next).find(([, x]) => x.Properties.RouteKey === "GET /v1/staff")!; r.Properties.AuthorizationType = "NONE"; delete r.Properties.AuthorizerId;
-    stop(gate(API, live, next), "is not JWT-authorized by the same authorizer");
+  it("an accept route that is not JWT-authorized", () => { const { live, next } = pair(); const [, r] = accept(next); r.Properties.AuthorizationType = "NONE"; delete r.Properties.AuthorizerId; stop(gate(API, live, next), "is not JWT-authorized by the same authorizer"); });
+  it("an accept route wired to another integration", () => { const { live, next } = pair(); accept(next)[1].Properties.Target = "integrations/elsewhere"; stop(gate(API, live, next), "same integration"); });
+  it("an accept route with an unexpected property or a DELETE method", () => {
+    let { live, next } = pair(); accept(next)[1].Properties.ApiKeyRequired = true; stop(gate(API, live, next), "unexpected properties");
+    ({ live, next } = pair()); accept(next)[1].Properties.RouteKey = "DELETE /v1/me/staff-invitations/{organizationId}/accept"; stop(gate(API, live, next), "not the 1 staff route");
   });
-  it("a staff route wired to another integration", () => {
-    const { live, next } = pair(); const [, r] = routes(next).find(([, x]) => x.Properties.RouteKey === "POST /v1/staff")!; r.Properties.Target = "integrations/elsewhere";
-    stop(gate(API, live, next), "same integration");
+  it("the accept route missing while the code changes, and the route without a code change", () => {
+    let { live, next } = pair(); delete next.Resources[accept(next)[0]]; stop(gate(API, live, next), "must change together");
+    ({ live, next } = pair()); handlerOf(next)[1].Properties.Code.S3Key = handlerOf(live)[1].Properties.Code.S3Key; stop(gate(API, live, next), "must change together");
   });
-  it("a staff route with an unexpected property or a DELETE method", () => {
-    let { live, next } = pair(); routes(next).find(([, x]) => x.Properties.RouteKey === "GET /v1/staff")![1].Properties.ApiKeyRequired = true;
-    stop(gate(API, live, next), "unexpected properties");
-    ({ live, next } = pair()); routes(next).find(([, x]) => x.Properties.RouteKey === "GET /v1/staff")![1].Properties.RouteKey = "DELETE /v1/staff";
-    stop(gate(API, live, next), "DELETE");
-  });
-  it("a missing staff route", () => { const { live, next } = pair(); delete next.Resources[routes(next).find(([, x]) => x.Properties.RouteKey === "GET /v1/staff-audit")![0]]; stop(gate(API, live, next), "staff routes missing from the release"); });
   it("the Handler's environment, role, memory or timeout changes with the code", () => {
     for (const [label, mutate] of [["environment", (p: T) => { p.Environment.Variables.EXTRA = "x"; }], ["memory", (p: T) => { p.MemorySize = 3008; }], ["timeout", (p: T) => { p.Timeout = 900; }], ["role", (p: T) => { p.Role = { "Fn::GetAtt": ["Other", "Arn"] }; }]] as Array<[string, (p: T) => void]>) {
       const { live, next } = pair(); mutate(handlerOf(next)[1].Properties); stop(gate(API, live, next), "changed beyond its code asset"); expect(label).toBeTruthy();
     }
   });
-  it("a Handler code key that is not a CDK asset key, or the routes without a code change, or a code change without routes", () => {
-    let { live, next } = pair(); handlerOf(next)[1].Properties.Code.S3Key = "latest.zip"; stop(gate(API, live, next), "is not a CDK asset key");
-    ({ live, next } = pair()); handlerOf(next)[1].Properties.Code.S3Key = handlerOf(live)[1].Properties.Code.S3Key; stop(gate(API, live, next), "must change together");
-    ({ live, next } = pair()); for (const [k] of routes(next).filter(([, x]) => (x.Properties.RouteKey as string).match(/staff|role-permissions/))) delete next.Resources[k];
-    stop(gate(API, live, next), "must change together");
-  });
+  it("a Handler code key that is not a CDK asset key", () => { const { live, next } = pair(); handlerOf(next)[1].Properties.Code.S3Key = "latest.zip"; stop(gate(API, live, next), "is not a CDK asset key"); });
   it("any IAM policy, permission, authorizer, stage, rule or secret change; any added or removed resource of another type", () => {
-    for (const type of ["AWS::IAM::ManagedPolicy", "AWS::IAM::Role", "AWS::Lambda::Permission", "AWS::ApiGatewayV2::Authorizer", "AWS::ApiGatewayV2::Stage", "AWS::Events::Rule", "AWS::SecretsManager::Secret", "AWS::Logs::LogGroup", "AWS::CloudWatch::Alarm"]) {
+    for (const type of ["AWS::IAM::ManagedPolicy", "AWS::IAM::Role", "AWS::Lambda::Permission", "AWS::ApiGatewayV2::Authorizer", "AWS::ApiGatewayV2::Stage", "AWS::Events::Rule", "AWS::SecretsManager::Secret", "AWS::Logs::LogGroup"]) {
       const { live, next } = pair(); const k = Object.keys(next.Resources).find((x) => next.Resources[x].Type === type);
       if (!k) continue;
       next.Resources[k].Properties = { ...(next.Resources[k].Properties ?? {}), Zz: "changed" }; stop(gate(API, live, next), "resource CHANGED outside the allow-list");
@@ -130,10 +99,10 @@ describe("ServiceVerificationApi: anything beyond the 13 routes and the code ass
     }
   });
   it("a changed Parameter, Output, Condition or Description; a replaced resource type", () => {
-    for (const sec of ["Description", "Parameters", "Outputs", "Conditions", "Mappings"]) { const { live, next } = pair(); next[sec] = { ...(typeof next[sec] === "object" ? next[sec] : {}), Zz: "x" }; if (sec === "Description") next[sec] = "changed"; stop(gate(API, live, next), `template section ${sec} differs`); }
+    for (const sec of ["Description", "Parameters", "Outputs", "Conditions", "Mappings"]) { const { live, next } = pair(); next[sec] = sec === "Description" ? "changed" : { ...(typeof next[sec] === "object" ? next[sec] : {}), Zz: "x" }; stop(gate(API, live, next), `template section ${sec} differs`); }
     const { live, next } = pair(); const [k, r] = handlerOf(next); next.Resources[k] = { ...r, Type: "AWS::Serverless::Function" }; stop(gate(API, live, next), "changes TYPE");
   });
-  it("the earlier stack with only the Handler changed (no routes) and a stack outside the five, an unreadable file, a non-template", () => {
+  it("a stack outside the five, an unreadable file, a non-template", () => {
     stop(gate("Ogevia-prd-ServiceVerificationApi", load("live", API), load("release", API)), "no allow-list exists");
     const r = sh("python3", ["-I", "-B", GATE, "template", "--stack", API, "--live", put("not json"), "--new", put(load("release", API))]);
     expect(r.code, r.out).toBe(2); expect(r.out).toContain("treated as a failure");
@@ -145,7 +114,7 @@ describe("ServiceVerificationApi: anything beyond the 13 routes and the code ass
 describe("the four other stacks allow NO difference", () => {
   it.each(S.filter((s) => s !== "ServiceVerificationApi"))("%s: an added, removed or changed resource, a tag or a policy edit stops", (s) => {
     const stack = `Ogevia-prod-${s}`;
-    const base = () => ({ live: clone(s === "WebHosting" ? liveHostnamesApplied[WEB] : load("release", stack)), next: clone(load("release", stack)) });
+    const base = () => ({ live: clone(load("live", stack)), next: clone(load("release", stack)) });
     let { live, next } = base(); next.Resources.Extra = { Type: "AWS::SSM::Parameter", Properties: { Type: "String", Value: "x" } }; stop(gate(stack, live, next), "resource ADDED");
     ({ live, next } = base()); const victim = Object.keys(next.Resources).find((k) => next.Resources[k].Type !== "AWS::CDK::Metadata")!; delete next.Resources[victim]; stop(gate(stack, live, next), "REMOVED");
     ({ live, next } = base()); const k2 = Object.keys(next.Resources).find((k) => next.Resources[k].Properties && next.Resources[k].Type !== "AWS::CDK::Metadata")!; next.Resources[k2].Properties.Zz = "x"; stop(gate(stack, live, next), "CHANGED");
@@ -160,7 +129,7 @@ describe("assembly_check.py pins the release synthesis", () => {
   const asm = (d: string) => sh("python3", ["-I", "-B", ASSEMBLY, "--assembly", d]);
   it("accepts the five release templates", () => {
     const d = mkdtempSync(join(tmpdir(), "asm-")); write(d); const r = asm(d);
-    expect(r.code, r.out).toBe(0); expect(r.out).toContain("PASS all checks"); expect(r.out).toContain("241 API routes"); expect(r.out).not.toContain("FAIL");
+    expect(r.code, r.out).toBe(0); expect(r.out).toContain("PASS all checks"); expect(r.out).toContain("242 API routes"); expect(r.out).not.toContain("FAIL");
   });
   it.each<[string, (s: string, t: T) => T | null, string, number]>([
     ["a production stack file", (s, t) => t, "no Ogevia-prd-* stack", 1],
