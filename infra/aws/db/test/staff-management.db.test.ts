@@ -1,5 +1,6 @@
 // 0086 and 0087 (PENDING: infra/aws/db/pending): staff management and its invitation-acceptance fixes (M-1, L-1, L-2, L-3). Staff types (labels, no authority), staff profiles, supported system roles, staff invitations, history. SYNTHETIC data only.
 import { randomUUID } from "node:crypto";
+import { readFileSync } from "node:fs";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { asActor, expectPgError, seedWorld, type Actor, type TestDb, type World } from "./harness.js";
 import { applyPendingMigrations, createTestDbWithPending, rollBackPendingMigrations } from "./pending.js";
@@ -475,6 +476,37 @@ describe("the pending migration rolls back and re-applies cleanly", () => {
         await applyPendingMigrations(client);
       } finally { client.release(); }
       expect((await c("select count(*)::int n from ogevia_api.list_staff_types($1)", [world.orgA]))[0].n).toBe(7);
+    } finally { await own.drop(); }
+  });
+});
+
+describe("0087 rolls back on its own to the 0086 behaviour and applies again", () => {
+  it("rolling back only 0087 restores the 0086 functions (existing sign-in active at once, reply with existing_account); 0086 data stays; applying 0087 again restores the fix", async () => {
+    const own = await createTestDbWithPending();
+    try {
+      const world = await seedWorld(own);
+      const c = (sql: string, params: unknown[] = []) => asActor(own, world.ownerA.sub, async (x) => (await x.query(sql, params)).rows as any[]);
+      const type = (await own.admin.query("select id from ogevia.staff_types where organization_id = $1 and name = 'Manager'", [world.orgA])).rows[0].id as string;
+      const mk = async (n: string) => (await c("select ogevia_api.create_staff($1,$2,$3,null,null) as id", [world.orgA, n, type]))[0].id as string;
+      const hasFn = async (name: string) => (await own.admin.query("select count(*)::int n from pg_proc p join pg_namespace s on s.oid = p.pronamespace where s.nspname = 'ogevia_api' and p.proname = $1", [name])).rows[0].n as number;
+      const client = await own.admin.connect();
+      try {
+        const pending = await mk("Pending Pat");
+        await c("select * from ogevia_api.complete_staff_invitation($1,$2,'pat.pending@example.test',$3,true,'staff')", [world.orgA, pending, world.managerB.sub]);
+        expect((await own.admin.query("select m.status::text s from ogevia.organization_memberships m join ogevia.app_users u on u.id = m.user_id where m.organization_id = $1 and u.cognito_sub = $2", [world.orgA, world.managerB.sub])).rows[0].s).toBe("invited");
+        const down = readFileSync(new URL("../pending/rollback/0087_staff_invitation_acceptance.down.sql", import.meta.url), "utf8");
+        await client.query("begin"); await client.query("set local role ogevia_owner"); await client.query(down); await client.query("reset role"); await client.query("commit");
+        expect(await hasFn("accept_staff_invitation")).toBe(0);
+        expect(await hasFn("list_my_staff_invitations")).toBe(0);
+        expect(await hasFn("complete_staff_invitation")).toBe(1);                                   // the 0086 function is back
+        expect((await own.admin.query("select count(*)::int n from ogevia.staff_types")).rows[0].n).toBeGreaterThan(0);   // 0086 data untouched
+        const second = await mk("Old Behaviour");
+        const r = await c("select * from ogevia_api.complete_staff_invitation($1,$2,'old.behaviour@example.test',$3,true,'staff')", [world.orgA, second, randomUUID()]);
+        expect(Object.keys(r[0]!).sort()).toEqual(["existing_account", "profile_id"]);               // the 0086 reply shape is back
+        const up = readFileSync(new URL("../pending/migrations/0087_staff_invitation_acceptance.sql", import.meta.url), "utf8");
+        await client.query("begin"); await client.query("set local role ogevia_owner"); await client.query(up); await client.query("reset role"); await client.query("commit");
+        expect(await hasFn("accept_staff_invitation")).toBe(1);
+      } finally { client.release(); }
     } finally { await own.drop(); }
   });
 });
