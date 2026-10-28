@@ -24,6 +24,7 @@ import { useOrganization } from "@/providers/organization-provider";
 import { EXCEPTIONS_ROUTE } from "./action-needed";
 import { urgentBadge, useAttentionOverview } from "./attention";
 import { NotificationsBell } from "./notifications-bell";
+import { PendingInvitations } from "./pending-invitations";
 import { AppearanceApplier } from "./appearance/use-appearance";
 import { useAttentionCounts, useBranding, useLogo, useMyDisplayName, viewKind } from "./aws-workspace";
 import { EnvironmentBanner } from "./environment-marker";
@@ -133,7 +134,8 @@ export function AwsShell({ children }: PropsWithChildren) {
   if (!activeOrganizationId) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-slate-50 px-4">
-        <div className="max-w-sm text-center">
+        <div className="max-w-sm space-y-3 text-center">
+          <PendingInvitations />
           <p className="text-sm font-medium text-slate-900">Your account is not active in any organization.</p>
           <p className="mt-1 text-sm text-slate-600">Ask your organization administrator to grant access.</p>
           <button type="button" className="mt-4 rounded-lg border border-slate-300 px-3 py-2 text-sm" onClick={() => void signOut()}>Sign out</button>
@@ -548,6 +550,7 @@ export function AwsShell({ children }: PropsWithChildren) {
               })}
             </nav>
           ) : null}
+          <PendingInvitations />
           {children}
         </main>
       </div>

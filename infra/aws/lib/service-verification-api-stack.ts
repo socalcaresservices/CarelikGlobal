@@ -155,6 +155,7 @@ export const SERVICE_VERIFICATION_ROUTES: ReadonlyArray<{
   { method: apigw.HttpMethod.POST, path: "/v1/staff-roles/{userId}", feature: "staffManagement" },
   { method: apigw.HttpMethod.GET, path: "/v1/role-permissions", feature: "staffManagement" },
   { method: apigw.HttpMethod.GET, path: "/v1/staff-audit", feature: "staffManagement" },
+  { method: apigw.HttpMethod.POST, path: "/v1/me/staff-invitations/{organizationId}/accept", feature: "staffManagement" },   // 0087: the invited person accepts
   { method: apigw.HttpMethod.GET, path: "/v1/shifts" },
   { method: apigw.HttpMethod.POST, path: "/v1/shifts" },
   { method: apigw.HttpMethod.GET, path: "/v1/shift-series/preview" },

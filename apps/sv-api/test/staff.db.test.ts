@@ -57,7 +57,7 @@ describe("staff API: the owner's workflow", () => {
     const before = await people();
     const inv = await post("POST /v1/staff/{profileId}/invitation", w.ownerA, { email: "bea.signin@example.test", role: "scheduler" }, { profileId: id });
     expect(inv.status, JSON.stringify(inv.body)).toBe(201);
-    expect(inv.body.invitation).toMatchObject({ profileId: id, existingAccount: false });
+    expect(inv.body.invitation).toEqual({ profileId: id });   // 0087 (L-1): the reply says nothing about the account
     expect(identity.calls.at(-1)).toEqual({ action: "invite", email: "bea.signin@example.test" });   // the SIGN-IN email, not the contact email
     const after = await people();
     expect(after).toEqual({ u: before.u + 1, m: before.m + 1, c: before.c });   // one new person and membership, no caregiver record, no duplicate
@@ -130,6 +130,35 @@ describe("staff API: who may, and what is refused before anything is sent", () =
     expect(await people()).toEqual(before);   // nothing was linked; the invitation can simply be sent again
     expect((await db.admin.query("select user_id from ogevia.staff_profiles where id = $1", [id])).rows[0].user_id).toBeNull();
     expect((await post("POST /v1/staff/{profileId}/invitation", w.ownerA, { email: "gil@example.test", role: "staff" }, { profileId: id })).status).toBe(201);
+  });
+
+  it("M-1: inviting an e-mail that already signs in elsewhere grants nothing until that person accepts it (end to end through the handler)", async () => {
+    identity.users.set("mia.elsewhere@example.test", { sub: w.managerB.sub, confirmed: true });
+    const type = await typeId("Coordinator");
+    const created = await post("POST /v1/staff", w.ownerA, { displayName: "Mia Elsewhere", staffTypeId: type });
+    const id = created.body.staff.id as string;
+    const inv = await post("POST /v1/staff/{profileId}/invitation", w.ownerA, { email: "mia.elsewhere@example.test", role: "manager" }, { profileId: id });
+    expect(inv.status, JSON.stringify(inv.body)).toBe(201);
+    expect(inv.body.invitation).toEqual({ profileId: id });
+    // nothing yet: the person still sees only their own agency, plus the invitation; agency A refuses them
+    const me = await call("GET /v1/me", w.managerB);
+    expect(me.status).toBe(200);
+    expect(me.body.memberships.map((m: any) => m.organizationId)).toEqual([w.orgB]);
+    expect(me.body.pendingInvitations).toEqual([expect.objectContaining({ organizationId: w.orgA, role: "manager" })]);
+    expect(JSON.stringify(me.body.pendingInvitations)).not.toMatch(/mia|example/i);
+    expect((await call("GET /v1/staff", w.managerB, { query: { organizationId: w.orgA } })).status).toBe(404);
+    // somebody else cannot accept it for them
+    expect((await call("POST /v1/me/staff-invitations/{organizationId}/accept", w.caregiverA1, { path: { organizationId: w.orgA }, body: {} })).status).toBe(404);
+    expect((await call("GET /v1/me", w.managerB)).body.pendingInvitations).toHaveLength(1);
+    // their own acceptance
+    const ok = await call("POST /v1/me/staff-invitations/{organizationId}/accept", w.managerB, { path: { organizationId: w.orgA }, body: {} });
+    expect(ok.status, JSON.stringify(ok.body)).toBe(200);
+    expect(ok.body.accepted).toEqual({ organizationId: w.orgA, role: "manager" });
+    const after = await call("GET /v1/me", w.managerB);
+    expect(after.body.memberships.map((m: any) => m.organizationId).sort()).toEqual([w.orgA, w.orgB].sort());
+    expect(after.body.pendingInvitations).toEqual([]);
+    expect((await call("POST /v1/me/staff-invitations/{organizationId}/accept", w.managerB, { path: { organizationId: w.orgA }, body: {} })).status).toBe(200);   // a repeated accept changes nothing
+    expect((await call("POST /v1/me/staff-invitations/{organizationId}/accept", w.managerB, { path: { organizationId: "not-a-uuid" }, body: {} })).status).toBe(400);
   });
 
   it("the Owner role cannot be assigned or changed through the API, and nobody changes their own role", async () => {

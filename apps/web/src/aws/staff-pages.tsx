@@ -295,6 +295,9 @@ function ProfileForm({ title, row, types, onDone, onCancel }: { title: string; r
             <select value={status} onChange={(e) => setStatus(e.target.value as "active" | "inactive")} className={inputClass}><option value="active">Active</option><option value="inactive">Inactive</option></select>
           </label>
         ) : null}
+        {row?.userId && status === "inactive" && row.status !== "inactive" ? (
+          <p className="text-sm text-amber-900 sm:col-span-2">Setting this person inactive also stops their access to this organization. Making them active again does not give the access back; use Accounts &gt; Enable.</p>
+        ) : null}
       </div>
       {save.isError ? <p role="alert" className="text-sm text-red-700">{message(save.error, "The change could not be saved.")}</p> : null}
       <FormActions pending={save.isPending} label={row ? "Save" : "Add staff"} onCancel={onCancel} disabled={!name.trim() || !typeId} />
@@ -332,7 +335,7 @@ function InviteForm({ row, onDone, onCancel }: { row: StaffRow; onDone: (t: stri
     mutationFn: () => resend
       ? api.post(`/v1/staff/${row.profileId}/invitation/resend`, { organizationId: activeOrganizationId })
       : api.post(`/v1/staff/${row.profileId}/invitation`, { organizationId: activeOrganizationId, email: email.trim(), role }),
-    onSuccess: () => onDone(resend ? "Invitation sent again." : "Invitation sent."),
+    onSuccess: () => onDone(resend ? "Invitation sent again." : "Invitation recorded. If this email already has an Ogevia sign-in, the person is asked to accept when they next sign in; until then they have no access."),
   });
   return (
     <form onSubmit={(e) => { e.preventDefault(); send.mutate(); }} className="space-y-2" aria-label={resend ? "Resend invitation" : "Invite to sign in"}>

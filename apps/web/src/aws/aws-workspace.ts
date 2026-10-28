@@ -7,7 +7,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@carelik/auth";
 import { createContext, useContext } from "react";
 import type { AwsApiClient } from "@/lib/aws-api";
-import { fetchMe } from "@/lib/sv-backend-aws";
+import { fetchMe, type AwsPendingInvitation } from "@/lib/sv-backend-aws";
 import { useOrganization } from "@/providers/organization-provider";
 
 export const AwsApiContext = createContext<AwsApiClient | null>(null);
@@ -144,6 +144,13 @@ export function useMyDisplayName(): { displayName: string | null; loading: boole
   const api = useAwsApi();
   const me = useQuery({ queryKey: meQueryKey(user?.id), queryFn: () => fetchMe(api), enabled: !!user, staleTime: 60_000 });
   return { displayName: me.data?.displayName ?? null, loading: me.isLoading };
+}
+
+export function useMyPendingInvitations(): AwsPendingInvitation[] {
+  const { user } = useAuth();
+  const api = useAwsApi();
+  const me = useQuery({ queryKey: meQueryKey(user?.id), queryFn: () => fetchMe(api), enabled: !!user, staleTime: 60_000 });
+  return me.data?.pendingInvitations ?? [];
 }
 
 export function useSetMyDisplayName() {
