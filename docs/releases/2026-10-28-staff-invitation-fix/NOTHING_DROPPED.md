@@ -49,7 +49,7 @@ Tests: no test was skipped, deleted or weakened in product suites (the CI rule `
 
 ## 5. Test counts (before and after)
 
-| Suite | Baseline `644d6e2` (PR 106 head) | Candidate `fb491a5` (docs head 215b7c6) |
+| Suite | Baseline `644d6e2` (PR 106 head) | Deployment SHA `fb491a5` (measured in local runs at documentation head `215b7c6`; code and tests are the same at `cea8b47` except the DST test fix) |
 |---|---|---|
 | shared / auth / ui | not re-run (no change) | 118 / 150 / 73 passed |
 | sv-api unit | 96 passed | 96 passed |
@@ -58,4 +58,4 @@ Tests: no test was skipped, deleted or weakened in product suites (the CI rule `
 | sv-api DB (PG16 local) | not run at baseline | 22 files, 153 passed |
 | infra-aws DB (PG16 local) | 4 files, 28 failed / 86 passed (same four files) | 28 failed in the same 4 files (1226 passed of 1254) |
 
-The 28 infra DB failures are **identical in files and counts on the baseline** (`auth-cutover-scripts` 6, `prd-release-exec` 13, `prd-rehearsal` 8, `dst-local-times` 1): VERIFIED pre-existing in this sandbox (private PostgreSQL crashes, one date-dependent test). They are not caused by this work, but they are **not proven to pass** here; CI on PostgreSQL 18 is the arbiter and has not run (see the manifest).
+The 28 infra DB failures are **identical in files and counts on the baseline** (`auth-cutover-scripts` 6, `prd-release-exec` 13, `prd-rehearsal` 8, `dst-local-times` 1): VERIFIED pre-existing in this sandbox (private PostgreSQL crashes, one date-dependent test, since fixed in `cd57ffb`; see `RELEASE_MANIFEST.md` section 4). They are not caused by this work, but they are **not proven to pass** here; CI on PostgreSQL 18 is the arbiter and has not run (see the manifest).

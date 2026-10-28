@@ -4,10 +4,13 @@
 
 | | |
 |---|---|
-| Candidate code commit | `fb491a554c0fdc484102025179c9c993f694b4e0` (`fb491a5`), parent `773b762`; branch `claude/magical-lovelace-9y5ras`; lineage and nothing-dropped proof: `NOTHING_DROPPED.md` |
-| Documents head at the time of writing | 215b7c6 plus the commit that adds these documents (the package folders are taken from the working tree when a tarball is built, so the tarball hash depends on this head as well as on the code commit) |
+| **Deployment SHA** (the code that would be deployed) | `fb491a554c0fdc484102025179c9c993f694b4e0` (`fb491a5`), parent `773b762`; branch `claude/magical-lovelace-9y5ras`. Lineage and nothing-dropped proof: `NOTHING_DROPPED.md` |
+| **CI-tested SHAs** | `cd57ffb`: all three jobs success. `cea8b47`: `validate` and `harness` success, `postgres` failure (cause not identified). Section 11 has the run links. The pull request's checks show any later head. Both tested heads differ from `fb491a5` only in test files, `infra/aws/db/pending/README.md` and documentation (section 4). CI proves the tests passed or failed on those heads; it does not prove anything about AWS |
+| **Documentation head** | the branch head (`git rev-parse HEAD`), whatever it is when you read this. Documents are not part of what is deployed, except the operator-package folders |
+| **Operator package** | the two package folders under `docs/releases/` are read from the working tree when a tarball is built; the last commit that changed them is `215b7c6`. A tarball is identified by its sha256, not by a branch head. It changes only if the package files, the code commit, the approval reference or the build time change |
 | Environments touched by the development session | **none.** Not TEST, not production, not `main`, not `ogevia_prd`, not any production stack or database, not AWS. Only this branch of the GitHub repository was written. |
 | Migration status, order, ledger, rollback sequence | `MIGRATION_STATUS_MATRIX.md` |
+| Release checklist (approvals UNSIGNED) and TEST approval request | `CHECKLIST.md`, `TEST_APPROVAL_REQUEST.md` |
 | V4 / V5-V7 | `V4_READINESS.md`, `V5_V7_PREPARATION.md` (prepared, not run); `SECURITY_REVIEW_0087.md` (author-prepared, unsigned) |
 | Open risks and assumptions | `OPEN_RISKS_AND_ASSUMPTIONS.md` |
 
@@ -56,7 +59,9 @@ Against `24fd8b1` (code) and `644d6e2` (everything), from `git diff --stat`:
 - **Operator packages:** production (`docs/releases/2026-10-26-redesign-prd-operator/`, 15 files) and TEST upgrade (`docs/releases/2026-10-26-redesign-operator/`, 16 files); verification SQL `verify-0087.sql`; test fixtures.
 - **Tests in `infra/aws`:** 27 files in `infra/aws/test` and 6 in `infra/aws/db`.
 - **New release folder:** this folder (`docs/releases/2026-10-28-staff-invitation-fix/`) with the checker script and its test.
-- Total vs PR 106's head: 76 files changed, 2651 insertions(+), 782 deletions(-) against 644d6e2; 82 files, 3004 insertions, 786 deletions against 24fd8b1 (before these documents).
+- **Counts at the deployment SHA `fb491a5`** (`git diff --shortstat`): against `24fd8b1` 80 files changed, 2761 insertions, 786 deletions (43 outside `docs/`: 24 test files, 19 other; 37 under `docs/`). Against `644d6e2` (PR 106's head) 74 files, 2408 insertions, 782 deletions (43 outside `docs/`, 31 under `docs/`).
+- **After `fb491a5`, on this branch** (up to `cea8b47`; documentation-only commits since then add no code): 36 files: 12 test files (re-pinned package tests, the new V4 checker test and the DST test fix below), `infra/aws/db/pending/README.md` (one row for 0087) and 23 files under `docs/`. **No application, API, infrastructure, migration or script file under `apps/`, `packages/` or `infra/aws/lib` changed after `fb491a5`.** Recompute at any time: `git diff --stat fb491a5 <head> -- . ':!docs'`.
+- **DST test fix, described exactly:** `infra/aws/db/test/dst-local-times.db.test.ts` (commit `cd57ffb`), one line. The test derives its series start from the next clock-change Sunday; on 27-30 October 2026 that start was already past and the server correctly refused it ("The first date cannot be in the past"). The start is now the later of the old date and tomorrow. No assertion changed. It is unrelated to this work: the same test fails the same way on `644d6e2` on those dates.
 
 ## 5. Database changes
 0087 only, on top of 0086, outside the ledger, one transaction, **no table, trigger, policy, permission or row change**: 2 functions added (`list_my_staff_invitations`, `accept_staff_invitation`); 6 replaced (`complete_staff_invitation`, `note_my_sign_in`, `list_staff`, `update_staff`, `disable_account`, `list_accounts`). Rollback restores the earlier text of all six (0086's four, 0048's two) and drops the two new functions; it removes no data. Class: **ADDITIVE**. Verification: `verify-0086.sql` (110, still all pass) and `verify-0087.sql` (24; each broken on purpose and caught).
@@ -76,7 +81,7 @@ Production 228 → **242** (13 staff + 1 accept). TEST 241 → **242**. Counts a
 ## 10. Packages and artifacts (rebuilt; deterministic)
 Both packages were rebuilt from the pinned candidate and self-verified; two builds of the same inputs are byte-identical (tested). These are **candidate builds** with a placeholder approval reference and a fixed build time; the shippable tarballs are built after the Owner's GO and **will have different hashes**.
 
-| Package | Builder | Candidate-build tarball (placeholder reference, `OGEVIA_BUILD_TIME=2026-10-28T00:00:00Z`, package at documents head 215b7c6 plus the commit that adds these documents) |
+| Package | Builder | Candidate-build tarball sha256 prefix (placeholder reference, `OGEVIA_BUILD_TIME=2026-10-28T00:00:00Z`; rebuilt from the branch on 2026-10-28 and reproduced byte-identically, twice for production) |
 |---|---|---|
 | Production | `build-prd-tarball.sh --code-commit fb491a554c0fdc484102025179c9c993f694b4e0` | `ce25f891…` (placeholder build; the shippable tarball is built only after the Owner supplies an approval reference, and its hash will differ) |
 | TEST upgrade | `build-operator-tarball.sh --code-commit fb491a554c0fdc484102025179c9c993f694b4e0` | `8488a95c…` (placeholder build; same rule) |
@@ -84,18 +89,26 @@ Both packages were rebuilt from the pinned candidate and self-verified; two buil
 Recomputed Handler asset `2871b03d6be42b0b8c85bac6feea12de75b3d05ca4636610259b6a18e1d00ed7.zip` (IdentityHandler `7c5f8eb6…` unchanged), 242 routes; TEST API-stack fingerprint `c2c489ae…` (the other four stack fingerprints unchanged).
 
 ## 11. Evidence: what was run
-- **Local (PostgreSQL 16, development container):** `pnpm lint`, `typecheck`, `build` rc=0. Unit: shared 118, auth 150, sv-api 96, ui 73, web 1270, infra-aws static 1025, all passed. sv-api DB suite 153/153. infra-aws DB suite 1226 passed, 28 failed in 4 files that fail identically on baseline `644d6e2` (see `NOTHING_DROPPED.md` section 5). **So `pnpm test:all` exits 1 locally; the gate is NOT PASSED locally** and is not claimed.
-- **CI (PostgreSQL 18), draft CI-only PR https://github.com/socalcaresservices/CarelikGlobal/pull/107, run 40766462415, head `cd57ffb`: ALL THREE JOBS SUCCESS** (`validate` 23 min, `harness` 1 min, `postgres` = `pnpm test:all` 33 min; all suites ran, none skipped).
-  - History, for the record: run 385 failed in 3 seconds with no steps (runner problem, no test ran). On `2c289ed` and `da818f7`, `validate` and `harness` passed and `postgres` failed twice; the failing test names were not readable from the sandbox. One cause was identified and fixed: `dst-local-times.db.test.ts` started its series on a hard-coded lead-in date that was already past on 27-30 Oct 2026 ("The first date cannot be in the past"); it fails identically on the PR 106 head. `cd57ffb` is a one-line, test-only fix (start on the later of the lead-in date and tomorrow), no assertion changed. The `postgres` job then passed, so no other failure remained.
-  - The only code difference between the green head `cd57ffb` and the documents is this file; the next CI run on the documents-only commit is expected to be identical, and is not claimed until it finishes.
-  - The 28 failures in four infra database files seen in my sandbox are local artefacts (private PostgreSQL instances drop connections there; same on baseline `644d6e2`); on CI's PostgreSQL 18 those suites passed.
-- **Not touched:** TEST, production, `main`, `ogevia_prd`, any stack. 0086/0087 applied nowhere.
+**Local (PostgreSQL 16, development container).** `pnpm lint`, `typecheck`, `build` rc=0. Unit: shared 118, auth 150, sv-api 96, ui 73, web 1270, infra-aws static 1025, all passed. sv-api database suite 153/153. infra-aws database suite 1226 passed, 28 failed in four files that fail the same way on the baseline `644d6e2` here (private PostgreSQL instances drop connections in this sandbox). **`pnpm test:all` exits 1 locally; the local gate is NOT PASSED and is not claimed.**
+
+**CI (PostgreSQL 18)**, draft CI-only pull request https://github.com/socalcaresservices/CarelikGlobal/pull/107 (CI runs only on pull requests and pushes to `main`; it exists only to run CI and must not be merged). Runs are listed by the SHA they tested:
+
+| Tested SHA | validate | harness | postgres (`pnpm test:all`) | Run |
+|---|---|---|---|---|
+| `215b7c6` | runner failure after 3 s, no steps, no test ran (re-run: same) | same | same | https://github.com/socalcaresservices/CarelikGlobal/actions/runs/40690997508 |
+| `2c289ed`, `da818f7` | success | success | **failure** (the DST test fixed in `cd57ffb` was one cause; the failing test names were not readable from the sandbox, so other causes are not excluded) | run 40692398663 (re-run), run 40754892319 |
+| `cd57ffb` | success | success | **success** | https://github.com/socalcaresservices/CarelikGlobal/actions/runs/40766462415 |
+| `cea8b47` | success | success | **failure**, cause not identified (log unreadable from the sandbox) | https://github.com/socalcaresservices/CarelikGlobal/actions/runs/40771238644 |
+
+**Reading.** `cea8b47` differs from the green `cd57ffb` by one documentation file that no test reads, so the `postgres` job gives different results on identical code: it is nondeterministic or time-dependent, and the failing test is unknown. **The CI gate is therefore NOT established for any head until a `postgres` run is green on the final head and the `cea8b47` failure is explained.** This section lists the SHAs tested; it is not edited each time a run finishes, so later results are in the pull request's checks.
+
+**Not touched:** TEST, production, `main`, `ogevia_prd`, any stack, any AWS resource. 0086 and 0087 are applied nowhere.
 
 ## 12. Nothing-dropped verification
 `NOTHING_DROPPED.md`: the candidate contains every earlier reference (`7870a04`, `f8cd7df`, `24fd8b1`, `644d6e2` are ancestors); against `24fd8b1` the product code differs by exactly this work; no product file and no migration was deleted; the removed/renamed items are packaging and test files and are listed and explained.
 
 ## 13. Open risks and assumptions
-`OPEN_RISKS_AND_ASSUMPTIONS.md`. The ones that decide the GO: nothing runs on AWS yet; no human has reviewed the SQL; the same-agency Caregiver check (V4) and the live invitation flow (V5) are not run; production's absence of 0086 is inferred, to be read at Step 6.
+`OPEN_RISKS_AND_ASSUMPTIONS.md`. The ones that decide the GO: nothing runs on AWS yet; no human has reviewed the SQL; the same-agency Caregiver check (V4) and the live invitation flow (V5) are not run; production's absence of 0086 is inferred, to be read at Step 6; and the CI `postgres` job is nondeterministic on identical code with its failing test unidentified (`OPEN_RISKS_AND_ASSUMPTIONS.md` U6).
 
 ## 14. What happens next (nothing happens until the Owner reviews)
 1. Owner reviews this manifest. 2. If satisfied, the Owner gives a GO for **TEST only** (operator, window, approval reference); the shippable TEST tarball is built. 3. TEST upgrade, V4, V5, V6, V7 with the Owner. 4. Only then a production package, window and a separate signed GO.
