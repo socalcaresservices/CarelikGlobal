@@ -253,7 +253,7 @@ describe("apply", () => {
   it("applies 0087 in ONE transaction as ogevia_owner on top of 0086: ledger stays 85 / 0085, people unchanged, 110 checks pass, window closed, group identical, no ledger row", async () => {
     const r = await run(["apply"]);
     expect(r.code, r.out).toBe(0);
-    expect(r.out).toContain("RESULT: 0087 applied on top of 0086 (2 new functions, 5 replaced); ledger 85 / 0085 unchanged; people and access unchanged; verify-0086.sql 110 PASS, verify-0087.sql 24 PASS");
+    expect(r.out).toContain("RESULT: 0087 applied on top of 0086 (2 new functions, 6 replaced); ledger 85 / 0085 unchanged; people and access unchanged; verify-0086.sql 110 PASS, verify-0087.sql 24 PASS");
     expect(r.out).toContain("RESTORED (verified)");
     expect(read("ledger")).toBe("85|0085"); expect(read("s86")).toBe("1|1|21"); expect(read("s87")).toBe("2");
     expect(writes()).toEqual(["up"]);

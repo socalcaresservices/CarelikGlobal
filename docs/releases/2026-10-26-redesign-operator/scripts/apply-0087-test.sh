@@ -268,10 +268,10 @@ say ""; say "== 3. PROPOSED CHANGES"
 say "  1. ADD to $EXPECT_RDS_SG :  inbound tcp 5432 from $HOST_CIDR  (the admin host's own IP only; description 'TEMP-migrate-$STAMP')"
 if [[ "$ARG" == rollback ]]; then
   say "  2. Through that window, against $DB_EXPECT ONLY: check the ledger is exactly 85 / 0085, the 0086 objects PRESENT and the 0087 objects PRESENT, record the people-and-access row counts and the staff row counts, run the pinned 0087 ROLLBACK file in ONE transaction as ogevia_owner, then check the 0087 objects are gone (0086 stays), the ledger is unchanged and the people-and-access counts are identical."
-  say "     NOTE: the 0087 rollback drops only the two acceptance functions and restores the 0086 versions of five functions; no table or row is touched, and a membership left in status invited stays as it is. The pre-deployment snapshot is $SNAP_ID (restoring it is NOT a prepared procedure)."
+  say "     NOTE: the 0087 rollback drops only the two acceptance functions and restores the earlier versions of six functions; no table or row is touched, and a membership left in status invited stays as it is. The pre-deployment snapshot is $SNAP_ID (restoring it is NOT a prepared procedure)."
 else
   say "  2. Through that window, against $DB_EXPECT ONLY: check the ledger is exactly 85 / 0085, the 0086 objects are PRESENT and the 0087 objects ABSENT, record the people-and-access row counts, run the pinned 0087 file in ONE transaction as ogevia_owner (no ledger row is written), then re-read the ledger (still 85 / 0085) and the counts (identical), run verify-0086.sql and verify-0087.sql (every row must pass) and the runner's own verification set."
-  say "     NOTE: 0087 creates 2 API functions and replaces 5 (complete_staff_invitation, note_my_sign_in, list_staff, update_staff); it creates no table, and drops, deletes and updates no row."
+  say "     NOTE: 0087 creates 2 API functions and replaces 6 (complete_staff_invitation, note_my_sign_in, list_staff, update_staff, disable_account, list_accounts); it creates no table, and drops, deletes and updates no row."
 fi
 say "  3. REMOVE the rule again, then verify the complete rule set equals the original hash above."
 say "  Reaches: RDS instance $RDS_ID on 5432 from the admin host only. That instance ALSO holds ogevia_prd: this script never names, connects to or queries it."
@@ -409,6 +409,6 @@ MIGRATING=0
 close_window
 say ""; say "================ SUMMARY ================"
 say "Environment : TEST ($DB_EXPECT)   package commit $HEAD_SHA"
-say "RESULT: 0087 applied on top of 0086 (2 new functions, 5 replaced); ledger $LEDGER_COUNT / $LEDGER_LATEST unchanged; people and access unchanged; verify-0086.sql 110 PASS, verify-0087.sql 24 PASS; runner verification $P PASS, 0 FAIL."
+say "RESULT: 0087 applied on top of 0086 (2 new functions, 6 replaced); ledger $LEDGER_COUNT / $LEDGER_LATEST unchanged; people and access unchanged; verify-0086.sql 110 PASS, verify-0087.sql 24 PASS; runner verification $P PASS, 0 FAIL."
 [[ -f "$OPEN" ]] && say "SECURITY GROUP: NOT RESTORED, see the instructions above" || say "SECURITY GROUP: restored and verified identical to the original"
 exit "$RC"
