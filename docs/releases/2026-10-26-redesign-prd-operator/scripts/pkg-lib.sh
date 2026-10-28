@@ -12,6 +12,9 @@ PKG_APPLIED_0085_SHA=de0c8abbe12023ba6b7291661f592c7636ef0912827fb5ca57ccf12dac5
 # the pending migration (not part of db/migrations, not in the ledger): the two files this package applies to production and rolls back
 PKG_PENDING_UP="$TB_INFRA/db/pending/migrations/0086_staff_management.sql"
 PKG_PENDING_DOWN="$TB_INFRA/db/pending/rollback/0086_staff_management.down.sql"
+# 0087 (staff invitation acceptance: M-1, L-1, L-2, L-3) is applied in the SAME transaction, straight after 0086, and rolled back first
+PKG_PENDING_UP87="$TB_INFRA/db/pending/migrations/0087_staff_invitation_acceptance.sql"
+PKG_PENDING_DOWN87="$TB_INFRA/db/pending/rollback/0087_staff_invitation_acceptance.down.sql"
 
 # prints the code commit recorded in BUILD_INFO.json (40 hex) or nothing
 pkg_code_commit() { jq -er '.code_commit' "$TB_ROOT/BUILD_INFO.json" 2>/dev/null | grep -E '^[0-9a-f]{40}$'; }
@@ -43,5 +46,7 @@ pkg_migration_set_sha() { (cd "$TB_INFRA/db/migrations" && LC_ALL=C sha256sum --
 pkg_migration_count() { (cd "$TB_INFRA/db/migrations" && ls -- *.sql | wc -l); }
 pkg_pending_up_sha() { sha256sum "$PKG_PENDING_UP" 2>/dev/null | cut -d' ' -f1; }
 pkg_pending_down_sha() { sha256sum "$PKG_PENDING_DOWN" 2>/dev/null | cut -d' ' -f1; }
-# the only files allowed in db/pending (besides its README): exactly the two 0086 files. Prints stray names, empty = none.
-pkg_pending_strays() { (cd "$TB_INFRA/db/pending" && find . -type f ! -name README.md ! -path './migrations/0086_staff_management.sql' ! -path './rollback/0086_staff_management.down.sql' -print | sort); }
+pkg_pending_up87_sha() { sha256sum "$PKG_PENDING_UP87" 2>/dev/null | cut -d' ' -f1; }
+pkg_pending_down87_sha() { sha256sum "$PKG_PENDING_DOWN87" 2>/dev/null | cut -d' ' -f1; }
+# the only files allowed in db/pending (besides its README): exactly the four 0086 and 0087 files. Prints stray names, empty = none.
+pkg_pending_strays() { (cd "$TB_INFRA/db/pending" && find . -type f ! -name README.md ! -path './migrations/0086_staff_management.sql' ! -path './rollback/0086_staff_management.down.sql' ! -path './migrations/0087_staff_invitation_acceptance.sql' ! -path './rollback/0087_staff_invitation_acceptance.down.sql' -print | sort); }

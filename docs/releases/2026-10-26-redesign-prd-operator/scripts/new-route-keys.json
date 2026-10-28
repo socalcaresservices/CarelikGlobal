@@ -11,5 +11,6 @@
  "POST /v1/staff/{profileId}/invitation/resend",
  "POST /v1/staff-roles/{userId}",
  "GET /v1/role-permissions",
- "GET /v1/staff-audit"
+ "GET /v1/staff-audit",
+ "POST /v1/me/staff-invitations/{organizationId}/accept"
 ]

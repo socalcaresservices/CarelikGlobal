@@ -15,9 +15,9 @@ const routeKeys = (env: "prod" | "prd") => {
 const STAFF = SERVICE_VERIFICATION_ROUTES.filter((r) => r.feature === "staffManagement").map((r) => `${r.method} ${r.path}`).sort();
 
 describe("staffManagement route switch", () => {
-  it("marks exactly the 13 staff routes", () => {
-    expect(STAFF).toHaveLength(13);
-    expect(STAFF.every((k) => /\/v1\/(staff|staff-[a-z]+|role-permissions)(\/|$)/.test(k))).toBe(true);
+  it("marks exactly the 14 staff routes (13 for the Owner and the staff list, plus the invited person's accept route from 0087)", () => {
+    expect(STAFF).toHaveLength(14);
+    expect(STAFF.every((k) => /\/v1\/(staff|staff-[a-z]+|role-permissions)(\/|$)/.test(k) || k === "POST /v1/me/staff-invitations/{organizationId}/accept")).toBe(true);
   });
   it("is on for the test slice (prod): every staff route exists and requires a JWT", () => {
     expect(ENVIRONMENTS.prod.features.staffManagement).toBe(true);

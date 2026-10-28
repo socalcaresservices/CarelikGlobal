@@ -7,7 +7,7 @@
 
 PASS requires: exactly the six Ogevia-prd-* templates (no Ogevia-prod-* and no other stack); each equal to the bundled release template after ignoring CDK metadata,
 resource metadata, the BootstrapVersion parameter and the VALUE of the `ogevia:deployment-status` tag; the Handler code asset is the release's build and the Identity
-asset is unchanged; 241 API routes of which the 13 staff routes each exactly once; exactly one ENABLED EventBridge rule and two Lambda invoke permissions; with --approval,
+asset is unchanged; 242 API routes of which the 14 staff routes each exactly once; exactly one ENABLED EventBridge rule and two Lambda invoke permissions; with --approval,
 every `ogevia:deployment-status` tag carries approved-<ref>; both Lambda asset directories and manifest.json exist.
 Exit 0 = all checks passed; 1 = a check failed; 2 = unreadable input.
 """
@@ -17,12 +17,12 @@ STACKS = ["Ogevia-prd-Auth", "Ogevia-prd-DatabaseSecret", "Ogevia-prd-EvidenceSt
 API = "Ogevia-prd-ServiceVerificationApi"
 RELEASE_HANDLER_KEY = "94b73574c5a681d5a8c22b4264742f64e5a6d40aa1ace783be12e7383b9d8a9e.zip"
 IDENTITY_HANDLER_KEY = "7c5f8eb676c93261fd7a80f34d40ba70379c040d94bb2e9bd80f2d007ebc9759.zip"
-ROUTES = 241  # 228 earlier routes + the 13 staff routes
+ROUTES = 242  # 228 earlier routes + the 14 staff routes
 NEW_ROUTE_KEYS = [
     "GET /v1/staff-types", "POST /v1/staff-types", "POST /v1/staff-types/{staffTypeId}/rename", "POST /v1/staff-types/{staffTypeId}/active",
     "GET /v1/staff", "POST /v1/staff", "POST /v1/staff/{profileId}", "POST /v1/staff-members/{userId}/profile",
     "POST /v1/staff/{profileId}/invitation", "POST /v1/staff/{profileId}/invitation/resend", "POST /v1/staff-roles/{userId}",
-    "GET /v1/role-permissions", "GET /v1/staff-audit",
+    "GET /v1/role-permissions", "GET /v1/staff-audit", "POST /v1/me/staff-invitations/{organizationId}/accept",
 ]
 SECTIONS = ["Description", "Outputs", "Conditions", "Mappings", "Transform", "AWSTemplateFormatVersion"]
 
@@ -95,7 +95,7 @@ def main(argv=None):
     routes = [v for v in api["Resources"].values() if v["Type"] == "AWS::ApiGatewayV2::Route"]
     need(len(routes) == ROUTES, "%d API routes (found %d)" % (ROUTES, len(routes)))
     route_keys = [r["Properties"].get("RouteKey") for r in routes]
-    need(all(route_keys.count(k) == 1 for k in NEW_ROUTE_KEYS), "each of the 13 staff routes is present exactly once")
+    need(all(route_keys.count(k) == 1 for k in NEW_ROUTE_KEYS), "each of the 14 staff routes is present exactly once")
     types = [v["Type"] for v in api["Resources"].values()]
     rules = [v for v in api["Resources"].values() if v["Type"] == "AWS::Events::Rule"]
     need(len(rules) == 1 and rules[0]["Properties"].get("State") == "ENABLED", "exactly one EventBridge rule (ComplianceSweep), State ENABLED (found %s)" % [r["Properties"].get("State") for r in rules])
