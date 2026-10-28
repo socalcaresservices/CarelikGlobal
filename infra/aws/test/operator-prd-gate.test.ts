@@ -22,7 +22,7 @@ describe("the release's difference passes", () => {
   it("API: 13 routes + Handler build + two CORS origins = DELTA", () => {
     const r = gate(API, liveOf(API), release(API));
     expect(r.code, r.out).toBe(0); expect(r.out).toContain("EXPECTED-ONLY: YES (DELTA)");
-    expect(r.out).toContain("13 staff API routes added"); expect(r.out).toContain("https://app.ogevia.com"); expect(r.out).toContain("https://admin.ogevia.com"); expect(r.out).toContain(PREVIOUS_HANDLER_KEY.slice(0, 12));
+    expect(r.out).toContain("14 staff API routes added"); expect(r.out).toContain("https://app.ogevia.com"); expect(r.out).toContain("https://admin.ogevia.com"); expect(r.out).toContain(PREVIOUS_HANDLER_KEY.slice(0, 12));
   });
   it("Auth: the app client gains the four app./admin. URLs = DELTA", () => {
     const r = gate(AUTH, liveOf(AUTH), release(AUTH));
@@ -55,11 +55,11 @@ describe("API stack: anything beyond the release's difference stops", () => {
   const routeKeyOf = (t: T, key: string) => Object.keys(t.Resources).find((k) => t.Resources[k].Type === "AWS::ApiGatewayV2::Route" && t.Resources[k].Properties.RouteKey === key)!;
   const handlerKey = (t: T) => apiResource(t, "AWS::Lambda::Function", (k) => k.startsWith("Handler") && !k.startsWith("IdentityHandler"));
   const cases: Array<[string, (t: T) => void, RegExp | string]> = [
-    ["a 14th route", (t) => { const c = clone(t.Resources[routeKeyOf(t, NEW_KEYS[0]!)]); c.Properties.RouteKey = "POST /v1/staff-extra"; t.Resources.ExtraRoute = c; }, "not the 13 staff routes"],
+    ["a 15th route", (t) => { const c = clone(t.Resources[routeKeyOf(t, NEW_KEYS[0]!)]); c.Properties.RouteKey = "POST /v1/staff-extra"; t.Resources.ExtraRoute = c; }, "not the 14 staff routes"],
     ["a staff route missing from the release", (t) => { delete t.Resources[routeKeyOf(t, NEW_KEYS[0]!)]; }, "staff routes missing"],
     ["a new route that is not JWT-authorized", (t) => { t.Resources[routeKeyOf(t, NEW_KEYS[1]!)].Properties.AuthorizationType = "NONE"; }, "not JWT-authorized"],
     ["a new route wired to another integration", (t) => { t.Resources[routeKeyOf(t, NEW_KEYS[2]!)].Properties.Target = "integrations/other"; }, "not JWT-authorized"],
-    ["a new route with a DELETE method", (t) => { const k = routeKeyOf(t, NEW_KEYS[3]!); t.Resources[k].Properties.RouteKey = "DELETE /v1/staff-types"; }, /not the 13 staff routes|method other than GET or POST/],
+    ["a new route with a DELETE method", (t) => { const k = routeKeyOf(t, NEW_KEYS[3]!); t.Resources[k].Properties.RouteKey = "DELETE /v1/staff-types"; }, /not the 14 staff routes|method other than GET or POST/],
     ["a new route with an extra property", (t) => { t.Resources[routeKeyOf(t, NEW_KEYS[4]!)].Properties.ApiKeyRequired = false; }, "unexpected properties"],
     ["an earlier route removed", (t) => { const k = Object.keys(t.Resources).find((x) => t.Resources[x].Type === "AWS::ApiGatewayV2::Route" && !NEW_KEYS.includes(t.Resources[x].Properties.RouteKey))!; delete t.Resources[k]; }, "resource REMOVED"],
     ["an earlier route altered", (t) => { const k = Object.keys(t.Resources).find((x) => t.Resources[x].Type === "AWS::ApiGatewayV2::Route" && !NEW_KEYS.includes(t.Resources[x].Properties.RouteKey))!; t.Resources[k].Properties.AuthorizationType = "NONE"; }, "resource CHANGED outside the allow-list"],
@@ -152,9 +152,9 @@ describe("WebHosting and the stacks that must not change", () => {
 describe("assembly_check_prd.py: the deploy-mode synthesis IS the approved release", () => {
   const check = (asm: string, rel: string, approval: string | null = APPROVAL) => sh("python3", ["-I", "-B", join(SCRIPTS_SRC, "assembly_check_prd.py"), "--assembly", asm, "--release-templates", rel, ...(approval ? ["--approval", approval] : [])]);
   const copy = (src: string) => { const d = mkdtempSync(join(tmpdir(), "prd-asm-")); cpSync(src, d, { recursive: true }); return d; };
-  it("passes on the real assembly: six production stacks, the pinned Handler and Identity builds, 241 routes, every approval tag", () => {
+  it("passes on the real assembly: six production stacks, the pinned Handler and Identity builds, 242 routes, every approval tag", () => {
     const r = check(synth().deploy, synth().rel);
-    expect(r.code, r.out).toBe(0); expect(r.out).toContain("PASS all checks"); expect(r.out).toContain("94b73574c5a6"); expect(r.out).toContain("241 API routes"); expect(r.out).toContain(`approved-${APPROVAL}`);
+    expect(r.code, r.out).toBe(0); expect(r.out).toContain("PASS all checks"); expect(r.out).toContain("2871b03d6be4"); expect(r.out).toContain("242 API routes"); expect(r.out).toContain(`approved-${APPROVAL}`);
   });
   it("fails on a different approval reference", () => { const r = check(synth().deploy, synth().rel, "OTHER-REF-000000"); expect(r.code, r.out).toBe(1); expect(r.out).toContain("ogevia:deployment-status"); });
   it("fails when the assembly holds a TEST stack, lacks a production stack, or has a tampered template", () => {
@@ -169,8 +169,8 @@ describe("assembly_check_prd.py: the deploy-mode synthesis IS the approved relea
     let r = check(a, synth().rel); expect(r.code, r.out).toBe(1); expect(r.out).toContain("FAIL Handler code asset is the release's build");
     a = copy(synth().deploy); p = join(a, `${API}.template.json`); t = readJson(p);
     delete t.Resources[Object.keys(t.Resources).find((k) => t.Resources[k].Properties?.RouteKey === NEW_KEYS[0])!]; writeFileSync(p, JSON.stringify(t));
-    r = check(a, synth().rel); expect(r.code, r.out).toBe(1); expect(r.out).toMatch(/FAIL 240 API routes|FAIL each of the 13 staff routes/);
-    a = copy(synth().deploy); rmSync(join(a, `asset.94b73574c5a681d5a8c22b4264742f64e5a6d40aa1ace783be12e7383b9d8a9e`), { recursive: true, force: true }); r = check(a, synth().rel); expect(r.code, r.out).toBe(1); expect(r.out).toContain("asset directory asset.94b73574c5a6");
+    r = check(a, synth().rel); expect(r.code, r.out).toBe(1); expect(r.out).toMatch(/FAIL 241 API routes|FAIL each of the 14 staff routes/);
+    a = copy(synth().deploy); rmSync(join(a, `asset.2871b03d6be42b0b8c85bac6feea12de75b3d05ca4636610259b6a18e1d00ed7`), { recursive: true, force: true }); r = check(a, synth().rel); expect(r.code, r.out).toBe(1); expect(r.out).toContain("asset directory asset.2871b03d6be4");
     a = copy(synth().deploy); rmSync(join(a, "manifest.json")); r = check(a, synth().rel); expect(r.code, r.out).toBe(1); expect(r.out).toContain("manifest.json");
   });
   it("fails when the bundled release templates differ from the assembly (a stale package)", () => {

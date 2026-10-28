@@ -403,14 +403,14 @@ VR=$(RO -d "$DB_EXPECT" -F '|' -f "$HERE_S/verify-0086.sql") ; VRC=$?
 printf '%s\n' "$VR" > "$OUT/verify-0086.txt"
 VT=$(grep -c '|' "$OUT/verify-0086.txt"); VF=$(grep -c '|f|' "$OUT/verify-0086.txt")
 say "verify-0086.sql: $VT checks, $VF failing (exit $VRC$(tm $VRC)); full output: $OUT/verify-0086.txt"
-[[ "$VRC" == 0 && "$VT" == 110 && "$VF" == 0 ]] || { grep '|f|' "$OUT/verify-0086.txt" | head -5 | while read -r l; do say "FAIL $l"; done; stop "verify-0086.sql did not report 110 passing checks. 0086 IS applied; do not deploy the API or web; see the procedure."; }
+[[ "$VRC" == 0 && "$VT" == 110 && "$VF" == 0 ]] || { grep '|f|' "$OUT/verify-0086.txt" | head -5 | while read -r l; do say "FAIL $l"; done; stop "verify-0086.sql did not report 110 passing checks. 0086 and 0087 ARE applied; do not deploy the API or web; see the procedure."; }
 VR7=$(RO -d "$DB_EXPECT" -F '|' -f "$HERE_S/verify-0087.sql") ; VRC7=$?
 printf '%s\n' "$VR7" > "$OUT/verify-0087.txt"
 VT7=$(grep -c '|' "$OUT/verify-0087.txt"); VF7=$(grep -c '|f|' "$OUT/verify-0087.txt")
 say "verify-0087.sql: $VT7 checks, $VF7 failing (exit $VRC7$(tm $VRC7)); full output: $OUT/verify-0087.txt"
 [[ "$VRC7" == 0 && "$VT7" == 22 && "$VF7" == 0 ]] || { grep '|f|' "$OUT/verify-0087.txt" | head -5 | while read -r l; do say "FAIL $l"; done; stop "verify-0087.sql did not report 22 passing checks. 0086 and 0087 ARE applied; do not deploy the API or web; see the procedure."; }
 run_runner_verify || stop "the verification set did not pass (or does not report the schema at 0085). 0086 and 0087 ARE applied; do not deploy; see the procedure."
-act_unchanged && say "enforcement state unchanged: ${ACT_BEFORE%%|*} of ${ACT_BEFORE##*|} agencies activated" || stop "the enforcement activation state changed during the apply (or could not be read). 0086 IS applied; do not deploy; see the procedure."
+act_unchanged && say "enforcement state unchanged: ${ACT_BEFORE%%|*} of ${ACT_BEFORE##*|} agencies activated" || stop "the enforcement activation state changed during the apply (or could not be read). 0086 and 0087 ARE applied; do not deploy; see the procedure."
 MIGRATING=0
 close_window
 if [[ "$RC" == 0 && ! -f "$OPEN" ]]; then mkdir -p "$MB" && printf '85|0085|0086|0087\n' > "$MB/db-0086.ok" && printf '%s\n' "$SNAP_ID" > "$MB/db-0086.snapshot" && say "marker written: $MB/db-0086.ok (85|0085|0086|0087; the stack deployments require it)"; fi

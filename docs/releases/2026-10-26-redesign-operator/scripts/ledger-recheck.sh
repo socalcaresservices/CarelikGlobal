@@ -73,8 +73,9 @@ LOCAL_PORT=${OGEVIA_LEDGER_PORT:-15439}
 AWS_TMO="${OGEVIA_AWS_TIMEOUT:-30}"; PSQL_TMO="${OGEVIA_PSQL_TIMEOUT:-45}"; CLEAN_TMO="${OGEVIA_CLEANUP_AWS_TIMEOUT:-20}"
 KILL_AFTER=5
 export AWS_REGION=$REGION AWS_DEFAULT_REGION=$REGION AWS_PAGER=""
-EXP_COUNT="${OGEVIA_EXPECT_LEDGER_COUNT:-}"; EXP_LATEST="${OGEVIA_EXPECT_LEDGER_LATEST:-}"; EXP_ACT="${OGEVIA_EXPECT_ENFORCEMENT_ACTIVE:-0}"; EXP_0086="${OGEVIA_EXPECT_0086:-}"
+EXP_COUNT="${OGEVIA_EXPECT_LEDGER_COUNT:-}"; EXP_LATEST="${OGEVIA_EXPECT_LEDGER_LATEST:-}"; EXP_ACT="${OGEVIA_EXPECT_ENFORCEMENT_ACTIVE:-0}"; EXP_0086="${OGEVIA_EXPECT_0086:-}"; EXP_0087="${OGEVIA_EXPECT_0087:-}"
 [[ -z "$EXP_0086" || "$EXP_0086" == absent || "$EXP_0086" == present ]] || { echo "OGEVIA_EXPECT_0086 must be absent or present. Nothing was changed." >&2; exit 2; }
+[[ -z "$EXP_0087" || "$EXP_0087" == absent || "$EXP_0087" == present ]] || { echo "OGEVIA_EXPECT_0087 must be absent or present. Nothing was changed." >&2; exit 2; }
 if [[ "${1:-}" != "--restore-only" ]]; then
   [[ "$EXP_COUNT" =~ ^[0-9]{2}$ && "$EXP_LATEST" =~ ^00[0-9]{2}$ && "$EXP_COUNT" == "$((10#$EXP_LATEST))" && "$EXP_ACT" =~ ^[0-9]+$ ]] || { echo "set OGEVIA_EXPECT_LEDGER_COUNT (e.g. 77) and OGEVIA_EXPECT_LEDGER_LATEST (e.g. 0077; the count must equal the number). Nothing was changed." >&2; exit 2; }
 fi
@@ -324,8 +325,16 @@ else
     elif [[ "$EXP_0086" == present && "$S86" == "1|1|21" ]]; then say "0086 is PRESENT as expected (2 tables, 21 functions)."; S86_OK=1
     else S86_OK=0; fi
   fi
+  S87=""
+  if [[ -n "$EXP_0087" ]]; then
+    S87=$(RO -d "$DB_EXPECT" -c "select count(*) from pg_proc p join pg_namespace n on n.oid = p.pronamespace where n.nspname = 'ogevia_api' and p.proname in ('list_my_staff_invitations','accept_staff_invitation')") || { rc=$?; stop "the 0087 objects cannot be read$(tm $rc)"; }
+    say "0087 objects (functions of 2): $S87"
+    if [[ "$EXP_0087" == absent && "$S87" == 0 ]]; then say "0087 is ABSENT as expected."
+    elif [[ "$EXP_0087" == present && "$S87" == 2 ]]; then say "0087 is PRESENT as expected (2 functions)."
+    else S86_OK=0; fi
+  fi
   if [[ -z "$ROWS" && "$SUMMARY" == "$EXP_COUNT migrations applied, latest $EXP_LATEST" && "${ACT%%|*}" == "$EXP_ACT" && "$S86_OK" == 0 ]]; then
-    LEDGER_BAD=1; LEDGER_TEXT="RESULT for $ARG ($DB_EXPECT): ledger $SUMMARY is as expected, BUT the staff-management objects are '$S86' while the plan requires them $EXP_0086 (absent = 0|0|0, present = 1|1|21). A partial state is impossible after a single-transaction apply: STOP and send this output to Claude."
+    LEDGER_BAD=1; LEDGER_TEXT="RESULT for $ARG ($DB_EXPECT): ledger $SUMMARY is as expected, BUT the staff-management objects are '$S86' while the plan requires them $EXP_0086 (and the 0087 objects are '${S87:-not read}' while it requires $EXP_0087: absent = 0, present = 2) (absent = 0|0|0, present = 1|1|21). A partial state is impossible after a single-transaction apply: STOP and send this output to Claude."
   elif [[ -z "$ROWS" && "$SUMMARY" == "$EXP_COUNT migrations applied, latest $EXP_LATEST" && "${ACT%%|*}" == "$EXP_ACT" ]]; then
     LEDGER_TEXT="RESULT for $ARG ($DB_EXPECT): ledger summary: $SUMMARY. NO ROW is above $EXP_LATEST: the TEST ledger is exactly the expected $EXP_COUNT / $EXP_LATEST, and enforcement is activated for ${ACT%%|*} of ${ACT##*|} agencies as expected."
   elif [[ -z "$ROWS" ]]; then

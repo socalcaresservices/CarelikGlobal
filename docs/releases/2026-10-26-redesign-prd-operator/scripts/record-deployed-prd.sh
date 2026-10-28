@@ -9,7 +9,7 @@
 source "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
 need aws jq curl sha256sum timeout; check_account
 SITE=$(cat "$B/web-url-before.txt" 2>/dev/null); API_URL=$(cat "$B/api-url-before.txt" 2>/dev/null)
-CODE_COMMIT="${OGEVIA_EXPECT_COMMIT:-}"; API=Ogevia-prd-ServiceVerificationApi; RELEASE_KEY=94b73574c5a681d5a8c22b4264742f64e5a6d40aa1ace783be12e7383b9d8a9e.zip
+CODE_COMMIT="${OGEVIA_EXPECT_COMMIT:-}"; API=Ogevia-prd-ServiceVerificationApi; RELEASE_KEY=2871b03d6be42b0b8c85bac6feea12de75b3d05ca4636610259b6a18e1d00ed7.zip
 [[ "$CODE_COMMIT" =~ ^[0-9a-f]{40}$ && "$(jq -r .code_commit "$TB_ROOT/BUILD_INFO.json" 2>/dev/null)" == "$CODE_COMMIT" && "${OGEVIA_TARBALL_SHA256:-}" =~ ^[0-9a-f]{64}$ && "${OGEVIA_DEPLOY_APPROVAL:-}" =~ ^[A-Za-z0-9._-]{6,64}$ ]] || { echo "usage: set OGEVIA_EXPECT_COMMIT (the 40-hex code commit named in BUILD_INFO.json), OGEVIA_TARBALL_SHA256 (64 hex) and OGEVIA_DEPLOY_APPROVAL" >&2; exit 2; }
 [[ "$(cat "$B/db-0086.ok" 2>/dev/null)" == "85|0085|0086|0087" ]] && ok "the migration marker says 85|0085|0086|0087 (snapshot $(cat "$B/db-0086.snapshot" 2>/dev/null))" || nope "no 85|0085|0086|0087 marker"
 [[ -s "$B/api-at-release.ok" ]] && ok "the API post-check marker exists" || nope "no API post-check marker"

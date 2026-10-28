@@ -15,7 +15,7 @@ import argparse, json, os, sys
 
 STACKS = ["Ogevia-prd-Auth", "Ogevia-prd-DatabaseSecret", "Ogevia-prd-EvidenceStorage", "Ogevia-prd-Observability", "Ogevia-prd-ServiceVerificationApi", "Ogevia-prd-WebHosting"]
 API = "Ogevia-prd-ServiceVerificationApi"
-RELEASE_HANDLER_KEY = "94b73574c5a681d5a8c22b4264742f64e5a6d40aa1ace783be12e7383b9d8a9e.zip"
+RELEASE_HANDLER_KEY = "2871b03d6be42b0b8c85bac6feea12de75b3d05ca4636610259b6a18e1d00ed7.zip"
 IDENTITY_HANDLER_KEY = "7c5f8eb676c93261fd7a80f34d40ba70379c040d94bb2e9bd80f2d007ebc9759.zip"
 ROUTES = 242  # 228 earlier routes + the 14 staff routes
 NEW_ROUTE_KEYS = [

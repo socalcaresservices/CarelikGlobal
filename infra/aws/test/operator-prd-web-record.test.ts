@@ -92,10 +92,10 @@ describe("web-prd.sh publish / verify / rollback", () => {
     rmSync(join(OUT, "db-0086.ok"), { force: true }); rmSync(join(OUT, "api-at-release.ok"), { force: true });
     const P = "PUBLISH-WEB-Ogevia-prd\n";
     let r = await run("web-prd.sh", ["publish"], env(), P); expect(r.code).toBe(1); expect(r.out).toContain("db-0086.ok");
-    w(join(OUT, "db-0086.ok"), "85|0085|0086\n");
+    w(join(OUT, "db-0086.ok"), "85|0085|0086|0087\n");
     r = await run("web-prd.sh", ["publish"], env(), P); expect(r.code).toBe(1); expect(r.out).toContain("api-at-release.ok");
     w(join(OUT, "api-at-release.ok"), "newsha\n");
-    w(join(OUT, "db-0086.ok"), "85|0085\n"); r = await run("web-prd.sh", ["publish"], env(), P); expect(r.code).toBe(1); expect(r.out).toContain("0086 is not applied"); w(join(OUT, "db-0086.ok"), "85|0085|0086\n");
+    w(join(OUT, "db-0086.ok"), "85|0085\n"); r = await run("web-prd.sh", ["publish"], env(), P); expect(r.code).toBe(1); expect(r.out).toContain("0086 is not applied"); w(join(OUT, "db-0086.ok"), "85|0085|0086|0087\n");
     r = await run("web-prd.sh", ["publish"], env({ OGEVIA_DEPLOY_APPROVAL: "x" }), P); expect(r.code).toBe(1); expect(r.out).toContain("approval reference");
     w(join(OUT, "web-before/index.html"), "damaged"); r = await run("web-prd.sh", ["publish"], env(), P); expect(r.code).toBe(1); expect(r.out).toContain("recovery capture"); copyFileSync(join(MOCK, "web/index.html"), join(OUT, "web-before/index.html"));
     w(join(WEBOUT, "assets/style-NEW.css"), "tampered"); r = await run("web-prd.sh", ["publish"], env(), P); expect(r.code).toBe(1); expect(r.out).toContain("does not match its manifest"); w(join(WEBOUT, "assets/style-NEW.css"), "body{}\n");
@@ -133,10 +133,10 @@ describe("web-prd.sh publish / verify / rollback", () => {
 describe("record-deployed-prd.sh: every deployed artifact must map to the commit", () => {
   const rec = (extra: Record<string, string> = {}) => ({ OGEVIA_EXPECT_COMMIT: CODE, OGEVIA_TARBALL_SHA256: "a".repeat(64), OGEVIA_DEPLOY_APPROVAL: REF, OGEVIA_PRD_WEB_OUT: WEBOUT, ...extra });
   it("records only when every artifact maps to the release; fails on an unchanged Lambda, a wrong asset, an ERROR event, a disabled sweep rule, a missing marker, an unsettled Auth stack or a web that is not the release", async () => {
-    setLive("after"); w(join(MOCK, "code.zip"), "PK new lambda zip bytes"); w(join(OUT, "api-at-release.ok"), "newsha\n"); w(join(OUT, "db-0086.ok"), "85|0085|0086\n"); w(join(OUT, "db-0086.snapshot"), "ogevia-prod-postgres-pre-0086-prd-202610270410\n");
+    setLive("after"); w(join(MOCK, "code.zip"), "PK new lambda zip bytes"); w(join(OUT, "api-at-release.ok"), "newsha\n"); w(join(OUT, "db-0086.ok"), "85|0085|0086|0087\n"); w(join(OUT, "db-0086.snapshot"), "ogevia-prod-postgres-pre-0086-prd-202610270410\n");
     const pub = await run("web-prd.sh", ["publish"], env(), "PUBLISH-WEB-Ogevia-prd\n"); expect(pub.code, pub.out).toBe(0);
     clearLogs(); const ok = await run("record-deployed-prd.sh", [], rec()); expect(ok.code, ok.out).toBe(0);
-    for (const t of ["the migration marker says 85|0085|0086", "the DEPLOYED stack's Handler asset is the release's pinned build", "ComplianceSweep rule", "no ERROR event", "the served web is the release build", `DEPLOYED SHA          : ${CODE}`, "Ogevia-prd-Auth UPDATE_COMPLETE", "DEPLOYED - RECORD COMPLETE", "STATUS                : DEPLOYED - RECORD COMPLETE"]) expect(ok.out, t).toContain(t);
+    for (const t of ["the migration marker says 85|0085|0086|0087", "the DEPLOYED stack's Handler asset is the release's pinned build", "ComplianceSweep rule", "no ERROR event", "the served web is the release build", `DEPLOYED SHA          : ${CODE}`, "Ogevia-prd-Auth UPDATE_COMPLETE", "DEPLOYED - RECORD COMPLETE", "STATUS                : DEPLOYED - RECORD COMPLETE"]) expect(ok.out, t).toContain(t);
     expect(readFileSync(join(OUT, "release-record.state"), "utf8")).toMatch(new RegExp(`^DEPLOYED-RECORD-COMPLETE ${CODE} `));
     expect(readFileSync(join(OUT, "DEPLOYED_RECORD.txt"), "utf8")).toContain("pre-release snapshot  : ogevia-prod-postgres-pre-0086-prd-202610270410");
     // the pinned build is live but a record check fails: DEPLOYED - RECORD INCOMPLETE, exit 3 (never an automatic redeployment); the pinned build is not live: exit 1, no deployed state
@@ -144,7 +144,7 @@ describe("record-deployed-prd.sh: every deployed artifact must map to the commit
     await t({ MOCK_LOG_ERRORS: "2" }, "ERROR events in"); await t({ MOCK_RULE_STATE: "DISABLED" }, "no ENABLED ComplianceSweep rule"); await t({ MOCK_STACK_STATUS: "UPDATE_ROLLBACK_COMPLETE" }, "is UPDATE_ROLLBACK_COMPLETE");
     w(join(MOCK, "code.zip"), "PK mock lambda zip bytes"); await t({}, "equals the one before"); w(join(MOCK, "code.zip"), "PK new lambda zip bytes");
     setLive("before"); await t({}, "the deployed Handler asset is", 1); setLive("after");
-    rmSync(join(OUT, "db-0086.ok")); await t({}, "no 85|0085|0086 marker"); w(join(OUT, "db-0086.ok"), "85|0085|0086\n");
+    rmSync(join(OUT, "db-0086.ok")); await t({}, "no 85|0085|0086|0087 marker"); w(join(OUT, "db-0086.ok"), "85|0085|0086|0087\n");
     const idx = readFileSync(join(MOCK, "web/index.html"), "utf8"); w(join(MOCK, "web/index.html"), idx + "x"); await t({}, "web verification failed"); w(join(MOCK, "web/index.html"), idx);
     expect((await run("record-deployed-prd.sh", [], { OGEVIA_EXPECT_COMMIT: "bad" })).code).toBe(2);
     expect((await run("record-deployed-prd.sh", [], rec({ OGEVIA_EXPECT_COMMIT: "0".repeat(40) }))).code).toBe(2);
