@@ -1,6 +1,6 @@
 # Release Manifest: staff management release with the invitation fixes (candidate `fb491a5`)
 
-**Status: FOR THE OWNER'S REVIEW. NOT APPROVED. NOT DEPLOYED. No GO has been requested.** Written 2026-10-28. Words used exactly: *implemented*, *tested (where)*, *deployed (where)*, *accepted (by whom)*. Nothing in this manifest was observed on AWS by the development session.
+**Status: TEST-ONLY GO RECORDED (2026-10-29 about 05:45Z): "APPROVED FOR TEST DEPLOYMENT ONLY". NOT DEPLOYED (as far as this session knows). NO production approval, no merge approval.** Written 2026-10-28. Words used exactly: *implemented*, *tested (where)*, *deployed (where)*, *accepted (by whom)*. Nothing in this manifest was observed on AWS by the development session.
 
 | | |
 |---|---|
@@ -110,5 +110,5 @@ Recomputed Handler asset `2871b03d6be42b0b8c85bac6feea12de75b3d05ca4636610259b6a
 ## 13. Open risks and assumptions
 `OPEN_RISKS_AND_ASSUMPTIONS.md`. The ones that decide the GO: nothing runs on AWS yet; no human has reviewed the SQL; the same-agency Caregiver check (V4) and the live invitation flow (V5) are not run; production's absence of 0086 is inferred, to be read at Step 6; and the CI `postgres` job is nondeterministic on identical code with its failing test unidentified (`OPEN_RISKS_AND_ASSUMPTIONS.md` U6).
 
-## 14. What happens next (nothing happens until the Owner reviews)
-1. Owner reviews this manifest. 2. If satisfied, the Owner gives a GO for **TEST only** (operator, window, approval reference); the shippable TEST tarball is built. 3. TEST upgrade, V4, V5, V6, V7 with the Owner. 4. Only then a production package, window and a separate signed GO.
+## 14. What happens next
+1. **Done:** the Owner gave a GO for **TEST only** (reference `OGEVIA-TEST-GO-20261028`, Operator Stella Okereke, window 2026-10-29T05:00Z-09:00Z, admin host 10.20.132.179); the TEST tarball is prepared (section 10). 2. The Operator runs `OPERATOR_PROCEDURE_fb491a5.md` Steps 0-16 inside the window; every unexpected output is a stop. 3. V4, V5, V6 with the Owner after the upgrade; V7 is excepted for TEST (option B). 4. Only then a production package, window and a **separate signed production GO**; an independent SQL review is required before that request.

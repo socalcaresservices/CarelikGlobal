@@ -100,3 +100,24 @@ aws ec2 describe-instances --region us-west-2 --filters "Name=tag:Name,Values=og
 Expected: one line `i-...  10.x.x.x  1  1` (instance id, private IP, one interface, one address). Stop if there is no line (host not running: do not start it, tell the Owner), more than one line, or the last two numbers are not `1  1`. The Operator sets `HOSTIP=<that private IP>` in Step 0 and pastes the line back. Read-only; changes nothing. The script's own live check then confirms it, so a mistyped IP is refused, not trusted.
 
 **Still needed before the Operator starts (the admin host IP is now supplied: `10.20.132.179`, exported as `HOSTIP` in Step 0):** the GO signed by the approver (name, date, time), the tarball uploaded as `~/ogevia-operator-fb491a5.tar.gz` with sha256 `c61e2a73df6c9c57e14cf9f443f21b324e6d993a311444046dec023757bed6b8`, and the TEST freeze with Demo users warned. The Owner's manifest review and the Operator readiness list (section 1) are still not recorded.
+
+## 8. TEST GO recorded (2026-10-29 about 05:45Z, from the Owner's message)
+| Field | Value |
+|---|---|
+| Approver | Socal Care Services (as stated; an organization name - see note) |
+| Approval reference | OGEVIA-TEST-GO-20261028 |
+| GO decision | **APPROVED FOR TEST DEPLOYMENT ONLY** |
+| Operator | Stella Okereke |
+| Window | 2026-10-29T05:00:00Z through 2026-10-29T09:00:00Z |
+| Admin host IP | 10.20.132.179 |
+| Deployment SHA / tarball | `fb491a554c0fdc484102025179c9c993f694b4e0` / sha256 `c61e2a73df6c9c57e14cf9f443f21b324e6d993a311444046dec023757bed6b8` |
+| Stated limit | "This does not authorize production deployment." |
+
+**What this GO is not.** It is not production approval (Phase E stays not requested), not a merge approval, and not a Phase A-D sign-off: those stay UNSIGNED until their evidence exists. It does not waive any stop rule of the procedure.
+
+**Open items this GO does not close** (all still recorded where they were): the individual who signed for the approver is not named; the Owner's manifest review log (section 3) is blank; the Operator readiness list (section 1) is not ticked; the TEST freeze and Demo-user warning (section 2) are not confirmed; U6 is open; V4 and V5's M-1 step are BLOCKED or NOT VERIFIED; the Handler key in CloudShell is NOT VERIFIED. **The window is running** (opened 05:00Z; this was recorded about 05:45Z), so about 3 h 15 min remained.
+
+**Values for Step 0 of the procedure** (from this record):
+```
+TARBALL_SHA=c61e2a73df6c9c57e14cf9f443f21b324e6d993a311444046dec023757bed6b8; REF=OGEVIA-TEST-GO-20261028; WSTART=2026-10-29T05:00:00Z; WEND=2026-10-29T09:00:00Z; HOSTIP=10.20.132.179
+```

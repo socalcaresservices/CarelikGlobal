@@ -1,6 +1,6 @@
 # TEST deployment: approval request (UNSIGNED)
 
-**This is a request, not an approval.** Every field marked `OWNER TO FILL` is blank on purpose; nothing here was filled, signed or inferred on the Owner's behalf. It requests permission for **TEST only**. It does not request, imply or prepare a production approval. Until the Owner returns it filled and signed, nothing is built for shipping, deployed, applied or changed.
+**STATUS: APPROVED FOR TEST DEPLOYMENT ONLY - recorded 2026-10-29 about 05:45Z from the Owner's own message. This approval does NOT authorize production, a merge to `main`, or any change outside TEST.** The request below is kept as written; its fields now carry the values the Owner supplied. The approval covers deployment SHA `fb491a554c0fdc484102025179c9c993f694b4e0`, the tarball with sha256 `c61e2a73df6c9c57e14cf9f443f21b324e6d993a311444046dec023757bed6b8`, and the window below, and nothing else.
 
 ## 1. What is requested
 Permission to run the TEST upgrade procedure `docs/releases/2026-10-26-redesign-operator/OPERATOR_PROCEDURE_fb491a5.md` (Steps 0-16) on the TEST environment: apply migration **0087** (on top of the 0086 already on TEST), deploy the TEST API stack (Handler and one route), publish the TEST web build, then run the V4, V5 and V6 verifications with the Owner.
@@ -23,11 +23,11 @@ Permission to run the TEST upgrade procedure `docs/releases/2026-10-26-redesign-
 | Release window, UTC start and end (at most 12 hours; the window bounds the snapshot and the 0087 apply) | **2026-10-29 05:00Z to 2026-10-29 09:00Z** (4 hours) (supplied by the Owner on 2026-10-29 (05:09Z)). Pacific: 22:00 on 28 Oct to 02:00 on 29 Oct (PDT, UTC-7; DST ends 1 Nov). **This window was already open (05:09Z) when it was recorded; opening it authorizes nothing, and nothing may start without the signed GO** |
 | Admin host private IP (the host tagged `ogevia-db-admin-temp`) | **`10.20.132.179`** (instance `i-0ce8db2d7e5839dd5`), pasted by the Owner on 2026-10-29 at about 05:15Z from the read-only lookup: `i-0ce8db2d7e5839dd5  10.20.132.179  1  1` (one instance, one interface, one private address). Not independently re-read by the development session; the TEST script re-reads it live and refuses a mismatch |
 | Tarball sha256 | `c61e2a73df6c9c57e14cf9f443f21b324e6d993a311444046dec023757bed6b8` (prepared; the Owner copies it into the GO message) |
-| Decision | ☐ GO for TEST ☐ NO-GO - `OWNER TO CHOOSE` |
-| Approver (name; different from the Operator), date and time | `OWNER TO FILL` (name not yet given) |
-| Conditions or exceptions (written) | `OWNER TO FILL`, or "none" |
+| Decision | ☑ **GO for TEST - "APPROVED FOR TEST DEPLOYMENT ONLY"** ☐ NO-GO (the Owner's words; production is not authorized) |
+| Approver (as given by the Owner), date and time | **Socal Care Services** (recorded exactly as stated), 2026-10-29 about 05:45Z. The Owner has said the Operator and the approver are different people. *Note:* the value given is an organization name, not an individual's name, so the individual who signed for it is not named in this record; the Owner may add the name |
+| Conditions or exceptions (written) | Those the Owner has already stated, and nothing more: P1 CI evidence accepted on `1b27f82` with U6 (flaky `postgres` job) open; V7 option B, a TEST-only exception, with an independent SQL review required before any production request; V4 and V5's M-1 step stay BLOCKED or NOT VERIFIED until their accounts exist; no exception to the TEST freeze, the snapshot, the pin and gate checks or the stop rules of the procedure |
 
-A GO would cover this SHA, this package and this window only.
+The GO covers this SHA, this package and this window only. If the window ends before Step 9 (apply) completes, the approval does not extend: stop and ask for a new window.
 
 ## 3. Rollback plan (TEST)
 Reverse order of deployment: web, then API, then database. AWS recovery commands are YELLOW and **not rehearsed on AWS**; the database rollbacks were rehearsed on a real PostgreSQL only (`MIGRATION_STATUS_MATRIX.md` section 6, procedure section 8).

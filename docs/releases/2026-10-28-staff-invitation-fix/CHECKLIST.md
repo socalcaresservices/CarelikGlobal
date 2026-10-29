@@ -2,7 +2,7 @@
 
 Prepared 2026-10-28 from `docs/release-process/RELEASE_CHECKLIST_TEMPLATE.md`. Process: `docs/TESTING_AND_RELEASE_PROCESS.md`. Status words: proposed, implemented, tested, deployed, accepted (never interchangeable).
 
-**Status of this candidate: IMPLEMENTED and TESTED (locally and in CI, see section A). NOT DEPLOYED anywhere. NOT ACCEPTED by anyone. EVERY APPROVAL LINE BELOW IS UNSIGNED.** Nothing in this file is a signature, an exception or a GO. Where a line needs a person or AWS it says so and stays open.
+**Status of this candidate: IMPLEMENTED and TESTED (locally and in CI, see section A). NOT DEPLOYED anywhere. NOT ACCEPTED by anyone. The Owner's TEST-only GO is recorded in section C (2026-10-29 about 05:45Z); every Phase A, B, C, D and E sign-off line below is UNSIGNED, and production is not authorized.** Nothing in this file is a signature, an exception or a GO. Where a line needs a person or AWS it says so and stays open.
 
 Evidence rules: real output only; never passwords, tokens, secret values, real client or caregiver data.
 
@@ -25,7 +25,7 @@ These are copied by reference, not re-signed, and are not edited. They concern a
 | **CI-tested SHAs** | `cd57ffb3a7638238cf31e2ad4733ee0a5f4dd1e1`: validate, harness and postgres all success (run 40766462415). `cea8b47eaed56764f10b1ea07325ebe22f0e869e`: validate and harness success, **postgres FAILURE** (run 40771238644), cause not identified. Both differ from `fb491a5` only in tests, the pending-migrations README and documentation (`RELEASE_MANIFEST.md` section 0). Later heads: see the PR's checks; not claimed here |
 | Operator-package files | taken from the working tree when a tarball is built; last commit touching them: `215b7c6`. TEST tarball prepared 2026-10-29: `ogevia-operator-fb491a5.tar.gz`, sha256 `c61e2a73df6c9c57e14cf9f443f21b324e6d993a311444046dec023757bed6b8` (placeholder approval reference in `BUILD_INFO.json`; the real one is exported at run time). Not uploaded or deployed |
 | Branch / pull request | `claude/magical-lovelace-9y5ras`; draft CI-only pull request https://github.com/socalcaresservices/CarelikGlobal/pull/107 (base `claude/redesign-review-nav-ui`; **do not merge**) |
-| Prepared by (name, date) | Claude Code session, 2026-10-28. Owner approval for this deployment: **NONE YET** |
+| Prepared by (name, date) | Claude Code session, 2026-10-28. Owner approval for this deployment: **TEST-only GO recorded 2026-10-29 about 05:45Z** (section C); none for production |
 | Change classification | ☑ migration (pending, outside the ledger) ☑ API (one route) ☑ user admin ☑ web ☐ scheduling ☐ authorization ☐ visits/verification ☐ billing ☐ reports |
 | Feature Test Plan | V4/V5/V6/V7 steps: `V4_READINESS.md`, `V5_V7_PREPARATION.md`; the 2026-10-26 plan still applies to the unchanged parts |
 | Catalog areas required | USR (staff and invitations), isolation cases, migration rollback cases, API route area |
@@ -76,7 +76,7 @@ Change-specific:
 **Phase B signed:** ☐ UNSIGNED.
 
 ## C. Pilot/test environment (Phase C) - NOT STARTED
-Owner has stated in writing: commit SHA ______, target pilot/test only, who runs it ______, window ______. ☐ **NOT RECORDED. Request: `TEST_APPROVAL_REQUEST.md`.**
+Owner has stated in writing: commit SHA `fb491a554c0fdc484102025179c9c993f694b4e0`, target **pilot/test only** ("APPROVED FOR TEST DEPLOYMENT ONLY"), who runs it **Stella Okereke**, window **2026-10-29T05:00:00Z through 2026-10-29T09:00:00Z**, approval reference `OGEVIA-TEST-GO-20261028`, approver recorded as "Socal Care Services", admin host `10.20.132.179`. ☑ **RECORDED 2026-10-29 about 05:45Z** (`TEST_APPROVAL_REQUEST.md` section 2, `OWNER_DECISIONS_FOR_TEST.md` section 8). This statement is the start of Phase C; it is not a Phase C sign-off, and it does not authorize production.
 
 | # | Step | Result |
 |---|---|---|
