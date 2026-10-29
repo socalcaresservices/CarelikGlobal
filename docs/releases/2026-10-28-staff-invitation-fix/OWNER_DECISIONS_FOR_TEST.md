@@ -82,3 +82,21 @@ Exception: the Owner's own words are "Proceed with option B for V7"; the conditi
 | Checks run on 2026-10-29, locally, on a fresh extraction | repeat build byte-identical; `sha256sum -c PACKAGE_MANIFEST.sha256` OK; `pnpm install --frozen-lockfile` OK; `tarball-pin-check.sh` all PASS, `PINS HOLD`; offline `cdk synth` and `assembly_check.py`: five TEST stacks only, Handler asset `2871b03d6be4…`, IdentityHandler unchanged, 242 routes, 14 staff routes, all five stack fingerprints equal the release (`c2c489ae…` for the API) |
 | What this does not prove | The Handler key reproducing **in the Operator's CloudShell** (Step 4 decides there), anything on AWS, and nothing about TEST's live state. The local synth used a clearly fake non-approval value for the reference, discarded |
 | Delivery | the file and its `.sha256` are handed to you for upload to CloudShell (Actions, Upload files) as `~/ogevia-operator-fb491a5.tar.gz`. The tarball is not committed to the repository |
+
+## 7. Inputs supplied on 2026-10-29 (05:09Z) and the admin host IP procedure
+| Input | Value | Note |
+|---|---|---|
+| Approval reference | `OGEVIA-TEST-GO-20261028` | matches `^[A-Za-z0-9._-]{6,64}$`; exported by the Operator as `REF` in Step 0. **It is not a GO** |
+| Operator | Stella Okereke | The Owner states the Operator and the approver are **different people**. The approver's name was not given and is needed for the decision record. (The 2026-10-26 checklist named Stella Okereke as both Owner and Operator; that record is history and unchanged.) |
+| Window | 2026-10-29 05:00Z to 09:00Z | Within the 12-hour maximum. **It was already open when recorded (05:09Z), so about 3 h 50 min remained.** Procedure Steps 7 and 9 require the snapshot and the apply to fall inside it; a late start may not leave time for V4-V6, which run after the upgrade |
+| Admin host private IP | not obtained | **I could not run the lookup**: the development container has no AWS CLI, no `boto3` and, by design (procedure status line), no AWS access |
+| GO decision, approver name | blank | nothing is signed |
+
+**How the admin host IP is obtained (documented parts, and one adapted command).** The repository documents (a) finding the host by its tag and running state: `docs/aws/CLOUDSHELL_PHASE0_COUNTS.md` section 3.3 (`describe-instances` with `Name=tag:Name,Values=ogevia-db-admin-temp` and `Name=instance-state-name,Values=running`; if no `i-` id comes back it says STOP, **do not start the host**, tell Claude), and (b) that the TEST script itself reads the IP live and requires: host running, exactly one network interface with exactly one private IPv4, an RFC 1918 address, equal to `OGEVIA_EXPECT_HOST_IP` if set, mapping to exactly one interface in the VPC that belongs to the host (`ledger-recheck.sh`, "--host-ip MODE"). **The repository has no verbatim command that prints the private IP**; the one below is my adaptation of (a), **NOT RUN**:
+
+```
+aws ec2 describe-instances --region us-west-2 --filters "Name=tag:Name,Values=ogevia-db-admin-temp" "Name=instance-state-name,Values=running" --query 'Reservations[].Instances[].[InstanceId,PrivateIpAddress,length(NetworkInterfaces),length(NetworkInterfaces[0].PrivateIpAddresses)]' --output text
+```
+Expected: one line `i-...  10.x.x.x  1  1` (instance id, private IP, one interface, one address). Stop if there is no line (host not running: do not start it, tell the Owner), more than one line, or the last two numbers are not `1  1`. The Operator sets `HOSTIP=<that private IP>` in Step 0 and pastes the line back. Read-only; changes nothing. The script's own live check then confirms it, so a mistyped IP is refused, not trusted.
+
+**Still needed before the Operator starts:** the GO signed by the approver (name, date, time), the tarball uploaded as `~/ogevia-operator-fb491a5.tar.gz` with sha256 `c61e2a73df6c9c57e14cf9f443f21b324e6d993a311444046dec023757bed6b8`, the admin host IP, and the TEST freeze with Demo users warned. The Owner's manifest review and the Operator readiness list (section 1) are still not recorded.

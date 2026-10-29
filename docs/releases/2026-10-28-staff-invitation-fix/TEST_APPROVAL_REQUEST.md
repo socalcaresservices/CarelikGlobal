@@ -18,13 +18,13 @@ Permission to run the TEST upgrade procedure `docs/releases/2026-10-26-redesign-
 ## 2. Fields the Owner fills (nothing is pre-approved)
 | Field | Value |
 |---|---|
-| Approval reference (6-64 characters of `A-Za-z0-9._-`; the scripts refuse anything else) | `OWNER TO FILL` |
-| Operator (who runs the commands in CloudShell) | `OWNER TO FILL`. *Proposed for confirmation only:* Stella Okereke, who ran the 2026-10-26 TEST deployment (`DEPLOYED_RECORD_TEST.md`) |
-| Release window, UTC start and end (at most 12 hours; the window bounds the snapshot and the 0087 apply) | `OWNER TO FILL`. *Guidance, an estimate not measured on AWS:* leave 3 to 4 hours for Steps 0-12; V4-V6 with the Owner follow |
-| Admin host private IP (the host tagged `ogevia-db-admin-temp`) | `OWNER/OPERATOR TO FILL` |
+| Approval reference (6-64 characters of `A-Za-z0-9._-`; the scripts refuse anything else) | `OGEVIA-TEST-GO-20261028` (supplied by the Owner on 2026-10-29 (05:09Z); 23 characters, matches the required pattern). **A reference is not a GO**: the decision row below stays blank |
+| Operator (who runs the commands in CloudShell) | **Stella Okereke** (supplied by the Owner on 2026-10-29 (05:09Z)). The Owner states that the Operator and the approver are different people; the approver's name is still to be filled below |
+| Release window, UTC start and end (at most 12 hours; the window bounds the snapshot and the 0087 apply) | **2026-10-29 05:00Z to 2026-10-29 09:00Z** (4 hours) (supplied by the Owner on 2026-10-29 (05:09Z)). Pacific: 22:00 on 28 Oct to 02:00 on 29 Oct (PDT, UTC-7; DST ends 1 Nov). **This window was already open (05:09Z) when it was recorded; opening it authorizes nothing, and nothing may start without the signed GO** |
+| Admin host private IP (the host tagged `ogevia-db-admin-temp`) | **NOT OBTAINED.** Not run from the development container (no AWS CLI, no credentials, by design). The Operator reads it in CloudShell with the command in `OWNER_DECISIONS_FOR_TEST.md` section 7 |
 | Tarball sha256 | `c61e2a73df6c9c57e14cf9f443f21b324e6d993a311444046dec023757bed6b8` (prepared; the Owner copies it into the GO message) |
 | Decision | ☐ GO for TEST ☐ NO-GO - `OWNER TO CHOOSE` |
-| Owner name, date and time | `OWNER TO FILL` |
+| Approver (name; different from the Operator), date and time | `OWNER TO FILL` (name not yet given) |
 | Conditions or exceptions (written) | `OWNER TO FILL`, or "none" |
 
 A GO would cover this SHA, this package and this window only.
