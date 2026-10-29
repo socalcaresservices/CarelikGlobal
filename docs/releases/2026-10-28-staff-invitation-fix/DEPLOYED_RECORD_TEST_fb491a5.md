@@ -43,7 +43,7 @@
 6. The procedure's Step 8 gate for the other four stacks was inferred from the loop reaching the API stack rather than from the printed lines.
 
 ## 4. NOT done, NOT verified
-- **Step 13 walkthrough: reported PASS** (see section 4a). **V4** (same-agency Caregiver, whose sign-in does not exist yet), **V5** (needs an existing sign-in outside the demo.ogevia.com (TEST) agency; browser sign-in of accounts D and E NOT VERIFIED) and **V6**: not run. **V7**: Owner option B (TEST-only exception); independent review still required before any production request.
+- **Step 13 walkthrough: reported PASS** (see section 4a). **V4 role and tenant negatives: PASS (section 4c)**; the invitation checks of V4 (C4) are not run. **V5** (needs an existing sign-in outside the demo.ogevia.com (TEST) agency; browser sign-in of accounts D and E NOT VERIFIED) and **V6**: not run. **V7**: Owner option B (TEST-only exception); independent review still required before any production request.
 - **Step 14: reported PASS** (section 4b).
 - The JWT authorizer with a real Cognito token on the accept route: NOT VERIFIED (only refusals, 401, were exercised).
 - **Phase C and Phase D sign-offs: UNSIGNED.** No production approval exists or is implied.
@@ -63,6 +63,12 @@ Read-only, pasted by the Owner from CloudShell. Function `Ogevia-prod-ServiceVer
 - Four sweep log lines in the last hour (15:23 to 16:23Z): 15:38:30, 15:53:30, 16:08:30 and 16:23:31, every 15 minutes, each `{"task":"compliance-sweep","organizations":0,"evaluated":0,"holdsOpened":0,"holdsReleased":0,"failedOrganizations":0}`. They ran after the deployment, so they are from the `fb491a5` Handler.
 - The EventBridge listing shows two rules, both `ENABLED`: `Ogevia-prod-ServiceVerifica-ComplianceSweep51D1109D-oAlBozy5Hiaa` (this TEST slice) and `Ogevia-prd-ServiceVerificat-ComplianceSweep51D1109D-j1dUZnc9UTOj` (production). The listing is account-wide and read-only; only the TEST function's log group was read, and nothing on production was touched or checked.
 - Result: matches the expected values. Still not verified by this: that the sweep does nothing once an agency has enforcement activated (it evaluates 0 organizations today).
+
+## 4c. V4 role and tenant negatives on demo.ogevia.com (TEST), reported 2026-10-29
+Read-only direct Lambda calls with each account's sub (IAM-gated), run from CloudShell with the re-extracted package (`staff_negative_checks_v3.py`); output saved on CloudShell at `~/ogevia-before/v4-run.txt`, pasted by the Owner. Accounts: Owner `685183b0...`; same-agency Manager `d86123c0...`; **same-agency Caregiver `b84183a0...` (admin.ogevia+v4cg, created 2026-10-29T15:16Z, CONFIRMED)**; other-agency `58d173c0...` and `8861c310...` (agency `ogevia-test-slice`).
+- **41 checks, 0 failed, `STAFF CHECKS PASSED`**, 41 PASS lines, no FAIL line. The 36 of 26 October plus 5: the Caregiver `setup` check (member of the Owner's agency, role caregiver) and **403 on all four staff routes** (staff-types, staff, role-permissions, staff-audit). `Caregiver not named: not checked` no longer appears.
+- Other-agency accounts get 404 with no data on the Owner's agency and the Owner gets 404 on theirs, on all four routes; no organizationId gives 400.
+- **Limits:** this is a Lambda-level check with the account's sub, not a browser sign-in with a real token; the API Gateway JWT authorizer is not exercised (T8 stays NOT VERIFIED). Only two other agencies were tested. The 0087 invitation checks (`invitation_checks_v4.py`, C4) and V5, V6 are NOT RUN. The Caregiver sign-in was created in the Owner's browser session; no password was shared.
 
 ## 5. Rollback inputs and clean-up (for the Owner)
 Kept until acceptance: `~/ogevia-before/` on CloudShell (previous Lambda code, web files, templates, route list, CORS), the run folders under `~/ogevia-apply-0087-*` and `~/ogevia-ledger-window-test-*`, and the snapshot `ogevia-prod-postgres-pre-0087-202610290719` (taken before the first apply; it bills until deleted; deleting it is the Owner's decision). Database rollback if ever needed: `apply-0087-test.sh rollback` (0087 only; 0086 stays).
