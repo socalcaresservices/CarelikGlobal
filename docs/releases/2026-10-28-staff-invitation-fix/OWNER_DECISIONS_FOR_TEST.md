@@ -101,10 +101,10 @@ Expected: one line `i-...  10.x.x.x  1  1` (instance id, private IP, one interfa
 
 **Still needed before the Operator starts (the admin host IP is now supplied: `10.20.132.179`, exported as `HOSTIP` in Step 0):** the GO signed by the approver (name, date, time), the tarball uploaded as `~/ogevia-operator-fb491a5.tar.gz` with sha256 `c61e2a73df6c9c57e14cf9f443f21b324e6d993a311444046dec023757bed6b8`, and the TEST freeze with Demo users warned. The Owner's manifest review and the Operator readiness list (section 1) are still not recorded.
 
-## 8. TEST GO recorded (2026-10-29 about 05:45Z, from the Owner's message)
+## 8. TEST GO recorded and restated (first recorded 2026-10-29 about 05:45Z, from the Owner's message)
 | Field | Value |
 |---|---|
-| Approver | Socal Care Services (as stated; an organization name - see note) |
+| Approver | **Socal Care Services**; restated 2026-10-29 about 05:51Z as **"You (Socal Care Services)"**, i.e. the person who issued the instruction, acting for Socal Care Services (no individual's name given; none inferred) |
 | Approval reference | OGEVIA-TEST-GO-20261028 |
 | GO decision | **APPROVED FOR TEST DEPLOYMENT ONLY** |
 | Operator | Stella Okereke |
@@ -121,3 +121,5 @@ Expected: one line `i-...  10.x.x.x  1  1` (instance id, private IP, one interfa
 ```
 TARBALL_SHA=c61e2a73df6c9c57e14cf9f443f21b324e6d993a311444046dec023757bed6b8; REF=OGEVIA-TEST-GO-20261028; WSTART=2026-10-29T05:00:00Z; WEND=2026-10-29T09:00:00Z; HOSTIP=10.20.132.179
 ```
+
+**Restatement, 2026-10-29 about 05:51Z.** The Owner restated the same GO with identical values (reference `OGEVIA-TEST-GO-20261028`, GO "APPROVED FOR TEST DEPLOYMENT ONLY", Operator Stella Okereke, window 2026-10-29T05:00:00Z to 09:00:00Z, host IP 10.20.132.179) and clarified the approver as "You (Socal Care Services)". Nothing about scope changed: TEST only, no production authorization, no Phase A-E sign-off, no waiver of any stop rule.
