@@ -37,14 +37,14 @@
 ## 3. Deviations from the procedure (all disclosed)
 1. Node 20 on CloudShell: Node 22.22.0 installed manually (same as 2026-10-26); a PATH line was appended to `session-env.sh`.
 2. Step 9 and Step 10 were each invoked twice; the second invocation was refused by the script's own precondition in both cases, with nothing changed.
-3. Step 14's default log group does not exist (as on 2026-10-26); a corrected command (the Lambda's own `LoggingConfig.LogGroup`, last-modified time printed, one-hour look-back) was supplied. **Its result had not been reported when this record was written.**
+3. Step 14's default log group does not exist (as on 2026-10-26); a corrected command (the Lambda's own `LoggingConfig.LogGroup`, last-modified time printed, one-hour look-back) was supplied. Its result was later reported PASS (section 4b).
 4. Step 15 needed one retry after a tunnel timeout (cleanup verified both times), with two documented timing variables raised.
 5. Steps ran in the order 9, 10 (after a first-run), 11, 12, 15, 16 with 13 and 14 still to report; the procedure puts 13 and 14 before 15 and 16. Neither 15 nor 16 depends on them.
 6. The procedure's Step 8 gate for the other four stacks was inferred from the loop reaching the API stack rather than from the printed lines.
 
 ## 4. NOT done, NOT verified
 - **Step 13 walkthrough: reported PASS** (see section 4a). **V4** (same-agency Caregiver, whose sign-in does not exist yet), **V5** (needs an existing sign-in outside the demo.ogevia.com (TEST) agency; browser sign-in of accounts D and E NOT VERIFIED) and **V6**: not run. **V7**: Owner option B (TEST-only exception); independent review still required before any production request.
-- **Step 14** result not reported.
+- **Step 14: reported PASS** (section 4b).
 - The JWT authorizer with a real Cognito token on the accept route: NOT VERIFIED (only refusals, 401, were exercised).
 - **Phase C and Phase D sign-offs: UNSIGNED.** No production approval exists or is implied.
 - Not rehearsed on AWS: rollbacks R1 to R3. They were not needed.
@@ -57,6 +57,12 @@ Reported by the Owner in the session (not independently observed by the developm
 - One synthetic staff member created and saved; one report generated.
 
 What this is and is not: a smoke walkthrough of the navigation and the Staff area, recorded as the Step 13 result. It is **not** the Phase D sign-off (still UNSIGNED, the Owner's to give), and it does not cover V4, V5 or V6, the invitation flow (M-1, L-1, L-2, L-3) in a browser, or the JWT authorizer with a real token. "Add one synthetic staff member" does not by itself exercise the 0087 invitation-acceptance path.
+
+## 4b. Step 14 (ComplianceSweep still runs and still does nothing), reported 2026-10-29
+Read-only, pasted by the Owner from CloudShell. Function `Ogevia-prod-ServiceVerificationApi-Handler886CB40B-2ZkW4XDDj5vu`, log group `Ogevia-prod-ServiceVerificationApi-HandlerLogGroup881018CA-MkXDAX4WQkVB` (read from `LoggingConfig.LogGroup`), `LastModified` 2026-10-29T08:00:38Z (the Step 10 deployment).
+- Four sweep log lines in the last hour (15:23 to 16:23Z): 15:38:30, 15:53:30, 16:08:30 and 16:23:31, every 15 minutes, each `{"task":"compliance-sweep","organizations":0,"evaluated":0,"holdsOpened":0,"holdsReleased":0,"failedOrganizations":0}`. They ran after the deployment, so they are from the `fb491a5` Handler.
+- The EventBridge listing shows two rules, both `ENABLED`: `Ogevia-prod-ServiceVerifica-ComplianceSweep51D1109D-oAlBozy5Hiaa` (this TEST slice) and `Ogevia-prd-ServiceVerificat-ComplianceSweep51D1109D-j1dUZnc9UTOj` (production). The listing is account-wide and read-only; only the TEST function's log group was read, and nothing on production was touched or checked.
+- Result: matches the expected values. Still not verified by this: that the sweep does nothing once an agency has enforcement activated (it evaluates 0 organizations today).
 
 ## 5. Rollback inputs and clean-up (for the Owner)
 Kept until acceptance: `~/ogevia-before/` on CloudShell (previous Lambda code, web files, templates, route list, CORS), the run folders under `~/ogevia-apply-0087-*` and `~/ogevia-ledger-window-test-*`, and the snapshot `ogevia-prod-postgres-pre-0087-202610290719` (taken before the first apply; it bills until deleted; deleting it is the Owner's decision). Database rollback if ever needed: `apply-0087-test.sh rollback` (0087 only; 0086 stays).
