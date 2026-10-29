@@ -51,7 +51,15 @@ describe("staff-scheduled shifts", () => {
 
   it("an overnight shift ends the next day; a repeated request with the same key creates one shift", async () => {
     const key = crypto.randomUUID();
-    const d = slotDay();
+    // 22:00 to 02:00 is four hours unless that night holds a clock change (five or three hours, or a time the product refuses).
+    // Use the first coming day whose following night has none, so the 240 below holds on every date.
+    let d = slotDay();
+    for (let i = 0; i < 4; i++) {
+      const { rows: [t] } = await db.admin.query(
+        "select ogevia.local_time_issue(o.timezone, $2::date + 1, '01:30') as a, ogevia.local_time_issue(o.timezone, $2::date + 1, '02:30') as b from ogevia.organizations o where o.id = $1", [w.orgA, d]);
+      if (!t.a && !t.b) break;
+      d = slotDay();
+    }
     const a = await create(w.managerA, d, "22:00", "02:00", null, key);
     const b = await create(w.managerA, d, "22:00", "02:00", null, key);
     expect(b.shift_id).toBe(a.shift_id);
