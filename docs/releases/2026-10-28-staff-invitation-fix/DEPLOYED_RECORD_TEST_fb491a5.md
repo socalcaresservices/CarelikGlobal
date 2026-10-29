@@ -1,6 +1,6 @@
 # Deployed record: demo.ogevia.com (TEST), code `fb491a554c0fdc484102025179c9c993f694b4e0` (`fb491a5`), 2026-10-29
 
-**Status: DEPLOYED to demo.ogevia.com (TEST). NOT ACCEPTED.** "Deployed" here means the record below exists and the Owner has the TEST link (procedure Step 16). "Accepted" means the Phase D sign-offs, which have not been given. Step 13 (acceptance), Step 14 (ComplianceSweep check) and V4 to V6 had not been reported when this was written. Nothing here touches production (`app.` / `admin.ogevia.com`, stacks `Ogevia-prd-*`, `ogevia_prd`), `main`, or any production resource.
+**Status: DEPLOYED to demo.ogevia.com (TEST). NOT ACCEPTED.** "Deployed" here means the record below exists and the Owner has the TEST link (procedure Step 16). "Accepted" means the Phase D sign-offs, which have not been given. Step 13 was later reported PASS (section 4a; not a Phase D sign-off). Step 14 and V4 to V6 had not been reported when this was written. Nothing here touches production (`app.` / `admin.ogevia.com`, stacks `Ogevia-prd-*`, `ogevia_prd`), `main`, or any production resource.
 
 **Names.** Per the Owner's instruction of 2026-10-29, this environment is called **demo.ogevia.com (TEST)**. Exact internal identifiers, quoted only where needed: CloudFront domain `d2xumch5w0izfg.cloudfront.net` (alias `demo.ogevia.com`), stacks `Ogevia-prod-*` (the pilot/TEST slice; see `docs/aws/INVENTORY_RECONCILIATION_2026-10-21.md` section 4), database `ogevia_sv_test`, API `s0epy5rgzb`. No resource was renamed.
 
@@ -43,11 +43,20 @@
 6. The procedure's Step 8 gate for the other four stacks was inferred from the loop reaching the API stack rather than from the printed lines.
 
 ## 4. NOT done, NOT verified
-- **Step 13 acceptance** with the Owner on demo.ogevia.com (TEST): not reported. **V4** (same-agency Caregiver, whose sign-in does not exist yet), **V5** (needs an existing sign-in outside the demo.ogevia.com (TEST) agency; browser sign-in of accounts D and E NOT VERIFIED) and **V6**: not run. **V7**: Owner option B (TEST-only exception); independent review still required before any production request.
+- **Step 13 walkthrough: reported PASS** (see section 4a). **V4** (same-agency Caregiver, whose sign-in does not exist yet), **V5** (needs an existing sign-in outside the demo.ogevia.com (TEST) agency; browser sign-in of accounts D and E NOT VERIFIED) and **V6**: not run. **V7**: Owner option B (TEST-only exception); independent review still required before any production request.
 - **Step 14** result not reported.
 - The JWT authorizer with a real Cognito token on the accept route: NOT VERIFIED (only refusals, 401, were exercised).
 - **Phase C and Phase D sign-offs: UNSIGNED.** No production approval exists or is implied.
 - Not rehearsed on AWS: rollbacks R1 to R3. They were not needed.
+
+## 4a. Step 13 walkthrough on demo.ogevia.com (TEST), reported 2026-10-29
+Reported by the Owner in the session (not independently observed by the development session). **Performed by: Stella Okereke.** Result reported: **PASS, no blockers.**
+- TEST banner visible ("TEST - SYNTHETIC DATA ONLY").
+- Dashboard, Clients, Staff, Scheduling, Operations and Settings accessible; Agency Settings pages load; Continuity page loads and the continuity pack is available.
+- Roles & Permissions and Staff Types load.
+- One synthetic staff member created and saved; one report generated.
+
+What this is and is not: a smoke walkthrough of the navigation and the Staff area, recorded as the Step 13 result. It is **not** the Phase D sign-off (still UNSIGNED, the Owner's to give), and it does not cover V4, V5 or V6, the invitation flow (M-1, L-1, L-2, L-3) in a browser, or the JWT authorizer with a real token. "Add one synthetic staff member" does not by itself exercise the 0087 invitation-acceptance path.
 
 ## 5. Rollback inputs and clean-up (for the Owner)
 Kept until acceptance: `~/ogevia-before/` on CloudShell (previous Lambda code, web files, templates, route list, CORS), the run folders under `~/ogevia-apply-0087-*` and `~/ogevia-ledger-window-test-*`, and the snapshot `ogevia-prod-postgres-pre-0087-202610290719` (taken before the first apply; it bills until deleted; deleting it is the Owner's decision). Database rollback if ever needed: `apply-0087-test.sh rollback` (0087 only; 0086 stays).
