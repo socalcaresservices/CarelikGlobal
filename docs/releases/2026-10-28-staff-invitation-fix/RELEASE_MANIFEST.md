@@ -1,6 +1,6 @@
 # Release Manifest: staff management release with the invitation fixes (candidate `fb491a5`)
 
-**Status: TEST-ONLY GO RECORDED (2026-10-29 about 05:45Z): "APPROVED FOR TEST DEPLOYMENT ONLY". NOT DEPLOYED (as far as this session knows). NO production approval, no merge approval.** Written 2026-10-28. Words used exactly: *implemented*, *tested (where)*, *deployed (where)*, *accepted (by whom)*. Nothing in this manifest was observed on AWS by the development session.
+**DEPLOYED to demo.ogevia.com (TEST) on 2026-10-29, NOT ACCEPTED: `DEPLOYED_RECORD_TEST_fb491a5.md`.** **Status (earlier): TEST-ONLY GO RECORDED (2026-10-29 about 05:45Z): "APPROVED FOR TEST DEPLOYMENT ONLY". NOT DEPLOYED (as far as this session knows). NO production approval, no merge approval.** Written 2026-10-28. Words used exactly: *implemented*, *tested (where)*, *deployed (where)*, *accepted (by whom)*. Nothing in this manifest was observed on AWS by the development session.
 
 | | |
 |---|---|
