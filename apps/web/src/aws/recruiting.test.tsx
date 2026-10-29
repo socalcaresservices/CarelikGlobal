@@ -32,6 +32,10 @@ function fakeApi(role: "manager" | "caregiver" = "manager") {
         return json(200, { branding: { organizationId: ORG, displayName: "Synthetic Care Co", accentColor: null, logoSha256: null } });
       case "GET /v1/attention":
         return json(200, { summary: null });
+      case "GET /v1/document-requirements":
+        return json(200, { setup: { requirements: [
+          { requirement: "cpr", documentTypeId: "t1", documentTypeName: "CPR card", validityBasis: "document_expiry", validityDays: null, complete: true, gap: null },
+          { requirement: "tb", documentTypeId: null, documentTypeName: null, validityBasis: null, validityDays: null, complete: false, gap: "type_not_set" }] } });
       case "GET /v1/onboarding/overview":
         return json(200, { caregivers: [
           { caregiverRecordId: AP, caregiverCode: "CG-AP", caregiverName: "Synthetic Applicant", status: "applicant", hireType: null, onboardingRequired: true, done: 0, total: 5, nextExpiry: null,
@@ -130,6 +134,11 @@ describe("Checklist on the caregiver page", () => {
     expect(cpr).toHaveTextContent("No document uploaded");
     expect(within(cpr).queryByRole("button", { name: "Mark done" })).toBeNull();
     expect(within(cpr).getByRole("link", { name: "Open Documents" })).toBeInTheDocument();
+    // why an uploaded document may still not count: names the type the agency chose, and links to where that is set
+    expect(await within(cpr).findByTestId("rule-hint-cpr")).toHaveTextContent(/Only documents of the type “CPR card” count for CPR\. One uploaded under another type does not/);
+    expect(within(cpr).getByRole("link", { name: /Set up required documents/ })).toHaveAttribute("href", "/care-team");
+    const tb = within(list).getByText("TB clearance current").closest("li")!;
+    expect(await within(tb).findByTestId("rule-hint-tb")).toHaveTextContent(/No document type is set as the agency's TB record/);
     const training = within(list).getByText("Required training completed").closest("li")!;
     fireEvent.click(within(training).getByRole("button", { name: "Mark done" }));
     fireEvent.change(within(training).getByLabelText("Expires on (optional)"), { target: { value: "2027-10-15" } });

@@ -12,6 +12,7 @@ import { useAwsApi } from "./aws-workspace";
 import { CAREGIVER_STATUS_LABEL, PIPELINE_STAGES, type CaregiverStatus } from "./care-team-admin";
 import { SummarySection } from "./ui/summary-section";
 import { InfoTip } from "./ui/info-tip";
+import { DocumentRuleHint } from "./readiness/document-rule-hint";
 import { actionBtn } from "./ui-classes";
 
 const inputClass = "mt-0.5 block w-full rounded-lg border border-slate-200 px-2.5 py-1.5 text-sm";
@@ -96,6 +97,7 @@ function ItemRow({ caregiverRecordId, item, canManage }: { caregiverRecordId: st
           {item.expiresOn ? ` · ${item.state === "expired" ? "expired" : "expires"} ${formatDateOnly(item.expiresOn)}${item.expiringSoon ? " — soon" : ""}` : ""}
           {item.note ? ` · ${item.note}` : ""}
           {item.category === "document" ? <> · Checked from approved documents. <Link className="inline-flex min-h-[44px] items-center underline md:min-h-[28px]" to="/documents">Open Documents</Link></> : null}
+          {item.category === "document" && !satisfied && (item.key === "cpr" || item.key === "tb") ? <DocumentRuleHint requirement={item.key} /> : null}
         </p>
         {item.category !== "document" && canManage ? (
           <div className="flex flex-wrap gap-1.5">
