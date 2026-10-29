@@ -10,7 +10,7 @@
 | **Operator package** | the two package folders under `docs/releases/` are read from the working tree when a tarball is built; the last commit that changed them is `215b7c6`. A tarball is identified by its sha256, not by a branch head. It changes only if the package files, the code commit, the approval reference or the build time change |
 | Environments touched by the development session | **none.** Not TEST, not production, not `main`, not `ogevia_prd`, not any production stack or database, not AWS. Only this branch of the GitHub repository was written. |
 | Migration status, order, ledger, rollback sequence | `MIGRATION_STATUS_MATRIX.md` |
-| Release checklist (approvals UNSIGNED) and TEST approval request | `CHECKLIST.md`, `TEST_APPROVAL_REQUEST.md` |
+| Release checklist (approvals UNSIGNED), TEST approval request, Owner decisions | `CHECKLIST.md`, `TEST_APPROVAL_REQUEST.md`, `OWNER_DECISIONS_FOR_TEST.md` |
 | V4 / V5-V7 | `V4_READINESS.md`, `V5_V7_PREPARATION.md` (prepared, not run); `SECURITY_REVIEW_0087.md` (author-prepared, unsigned) |
 | Open risks and assumptions | `OPEN_RISKS_AND_ASSUMPTIONS.md` |
 
@@ -100,7 +100,7 @@ Recomputed Handler asset `2871b03d6be42b0b8c85bac6feea12de75b3d05ca4636610259b6a
 | `cd57ffb` | success | success | **success** | https://github.com/socalcaresservices/CarelikGlobal/actions/runs/40766462415 |
 | `cea8b47` | success | success | **failure**, cause not identified (log unreadable from the sandbox) | https://github.com/socalcaresservices/CarelikGlobal/actions/runs/40771238644 |
 
-**Reading.** `cea8b47` differs from the green `cd57ffb` by one documentation file that no test reads, so the `postgres` job gives different results on identical code: it is nondeterministic or time-dependent, and the failing test is unknown. **The CI gate is therefore NOT established for any head until a `postgres` run is green on the final head and the `cea8b47` failure is explained.** This section lists the SHAs tested; it is not edited each time a run finishes, so later results are in the pull request's checks.
+**Reading.** `cea8b47` differs from the green `cd57ffb` by one documentation file that no test reads, so the `postgres` job gives different results on identical code: it is nondeterministic or time-dependent, and the failing test is unknown. So one green `postgres` run does not prove the job is reliable. The Owner accepted the green run on `1b27f82` for the TEST request and keeps the flakiness open as risk U6 (`OWNER_DECISIONS_FOR_TEST.md` section 0). This section lists the SHAs tested up to `cea8b47`; it is not edited each time a run finishes, so later results (including `1b27f82`) are in the pull request's checks.
 
 **Not touched:** TEST, production, `main`, `ogevia_prd`, any stack, any AWS resource. 0086 and 0087 are applied nowhere.
 

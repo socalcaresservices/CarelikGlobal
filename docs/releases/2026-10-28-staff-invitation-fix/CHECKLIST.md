@@ -49,7 +49,7 @@ These are copied by reference, not re-signed, and are not edited. They concern a
 | A3 | Typecheck | ☑ same | same |
 | A4 | Unit and static tests | ☑ local: shared 118, auth 150, sv-api 96, ui 73, web 1270, infra-aws 1025, 0 failed. ☑ CI `validate` success (`pnpm test`) | `NOTHING_DROPPED.md` section 5 |
 | A5 | Build | ☑ local exit 0; ☑ CI `validate` | |
-| A6 | Database tests (infra) | ☐ **local: NOT PASSED** (28 failures in 4 files that also fail on the baseline `644d6e2` in this sandbox; local artefact). ☐ **CI `postgres` (`pnpm test:all` on PostgreSQL 18): PASSED on `cd57ffb`, FAILED on `cea8b47`**, cause not identified (log unreadable from the sandbox). The gate is **not passed** until a green `postgres` run on the final head and the failure is explained | https://github.com/socalcaresservices/CarelikGlobal/actions/runs/40766462415 (green), https://github.com/socalcaresservices/CarelikGlobal/actions/runs/40771238644 (red) |
+| A6 | Database tests (infra) | ☐ **local: NOT PASSED** (28 failures in 4 files that also fail on the baseline `644d6e2` in this sandbox; local artefact). ☐ **CI `postgres` (`pnpm test:all` on PostgreSQL 18): PASSED on `cd57ffb`, FAILED on `cea8b47`**, cause not identified (log unreadable from the sandbox). Owner accepted this evidence for the TEST request on 2026-10-28 on the green `1b27f82` run (run 40778866660), with U6 kept open as a known flaky-test risk; the `cea8b47` failure is **not explained** | https://github.com/socalcaresservices/CarelikGlobal/actions/runs/40766462415 (green), https://github.com/socalcaresservices/CarelikGlobal/actions/runs/40771238644 (red) |
 | A7 | API database tests | ☑ local 153/153; part of the CI `postgres` job (see A6) | |
 | A8 | CI run on the pull request | ☐ see A6; run links above | |
 | A9 | Test counts did not drop versus the baseline | ☑ no product test deleted or skipped; one test file replaced by a TEST-state equivalent (`operator-0086-sql.db.test.ts` → `operator-0087-sql.db.test.ts`), disclosed in `NOTHING_DROPPED.md` section 4. Baseline infra-aws static count NOT MEASURED | |
@@ -61,7 +61,7 @@ Change-specific:
 - ☑ API: permission, other-agency, unauthenticated and bad-input tests exist (`staff.db.test.ts`, `tenant-isolation-sweep.db.test.ts`).
 - ☑ UI states covered by `pending-invitations.test.tsx` (3 tests); ☐ 390 px and 1280 px browser check NOT RUN.
 
-**Phase A signed:** ☐ UNSIGNED. (Open: A6.)
+**Phase A signed:** ☐ UNSIGNED. (A6 evidence accepted for the TEST request only; accepting it is not a Phase A signature.)
 
 ## B. Local harness (Phase B)
 | # | Step | Result |
@@ -101,7 +101,7 @@ Owner has stated in writing: commit SHA ______, target pilot/test only, who runs
 |---|---|---|---|
 | Owner | V4, V5, V6 per `V4_READINESS.md`, `V5_V7_PREPARATION.md` | ☐ NOT RUN | UNSIGNED |
 | Invitee account for M-1 (an existing sign-in outside the TEST agency, reachable by e-mail) | V5 | ☐ **BLOCKED / NOT VERIFIED**: accounts D and E are enabled through the API but browser sign-in is NOT VERIFIED; if neither works the M-1 live check is BLOCKED and the Owner decides (never decided by this file) | UNSIGNED |
-| Second person for the 0087 SQL (V7) | `SECURITY_REVIEW_0087.md` section 6 | ☐ NOT DONE | UNSIGNED |
+| Second person for the 0087 SQL (V7) | `SECURITY_REVIEW_0087.md` section 6 | ☐ NOT DONE; Owner's decision (reviewer, written exception, or independent AI read) is prepared in `OWNER_DECISIONS_FOR_TEST.md` section 4 and not yet made | UNSIGNED |
 
 No defect log: nothing has been run on TEST.
 

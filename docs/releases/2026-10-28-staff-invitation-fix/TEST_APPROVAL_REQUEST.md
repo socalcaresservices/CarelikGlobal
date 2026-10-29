@@ -47,12 +47,12 @@ A named restore-point snapshot `ogevia-prod-postgres-pre-0087-<stamp>` is taken 
 ### 4.1 Must pass BEFORE the TEST deployment (no AWS needed)
 | # | Check | Status today |
 |---|---|---|
-| P1 | CI on the final PR head: `validate`, `harness` and `postgres` all success. The `postgres` job is currently **nondeterministic on identical code** (green on `cd57ffb`, red on `cea8b47`) and its failing test is **not identified** | **BLOCKED** until a green `postgres` run on the final head, and ideally an explanation of the `cea8b47` failure (needs the `FAIL` lines from https://github.com/socalcaresservices/CarelikGlobal/actions/runs/40771238644/job/123108684073) |
+| P1 | CI on the final PR head: `validate`, `harness`, `postgres` success. Green on `1b27f82` (https://github.com/socalcaresservices/CarelikGlobal/actions/runs/40778866660). The `postgres` job was nondeterministic on identical code (red on `cea8b47`, failing test never identified) | **ACCEPTED by the Owner on 2026-10-28** on the green `1b27f82` run, with U6 kept open as a known flaky-test risk (`OWNER_DECISIONS_FOR_TEST.md` section 0) |
 | P2 | Local gates: lint, typecheck, build, unit suites; sv-api database suite | PASSED locally. The local infra database suite does not pass in the development sandbox (28 failures, same four files as the baseline); CI on PostgreSQL 18 is the arbiter (see P1) |
 | P3 | Package checks: pin check, assembly check, expected-only diff gate, deploy guard, apply script, route smoke, deployed-record script, tarball determinism | Static package tests PASSED (CI `validate` success on `cd57ffb` and `cea8b47`); the database-backed package tests run in the `postgres` job (see P1); both placeholder tarballs rebuilt byte-identically on 2026-10-28 |
-| P4 | Owner has reviewed `RELEASE_MANIFEST.md` | **OPEN** |
-| P5 | Second-person review of the 0087 SQL (V7), or a written Owner exception | **OPEN**; not required by the scripts, recorded as a risk in `OPEN_RISKS_AND_ASSUMPTIONS.md` U3 |
-| P6 | Approval reference, Operator, window and admin host IP supplied (section 2) | **OPEN** |
+| P4 | Owner has reviewed `RELEASE_MANIFEST.md` | **OPEN** (review log: `OWNER_DECISIONS_FOR_TEST.md` section 3) |
+| P5 | Second-person review of the 0087 SQL (V7), or a written Owner exception | **OPEN, decision prepared** (`OWNER_DECISIONS_FOR_TEST.md` section 4: options A/B/C; recommendation B for TEST, A before production); not required by the scripts; risk U3 |
+| P6 | Approval reference, Operator, window and admin host IP supplied (section 2) | **OPEN** (guidance and operator confirmation list: `OWNER_DECISIONS_FOR_TEST.md` sections 1-2; the records name the operator differently, so it needs the Owner's confirmation) |
 | P7 | Shippable tarball built with the real reference; its sha256 given to the Operator | **OPEN** (after P6) |
 | P8 | Operator ready: CloudShell in us-west-2 with the prerequisites in procedure section 4, and a second CloudShell session ready for recovery | **NOT VERIFIED** |
 | P9 | TEST freeze and Demo users warned (procedure D5); nobody schedules, edits or invites staff on TEST during Steps 9-11 | **OPEN** |
