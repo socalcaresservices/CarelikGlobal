@@ -10,7 +10,7 @@ Permission to run the TEST upgrade procedure `docs/releases/2026-10-26-redesign-
 | Environment | **TEST only**: stacks `Ogevia-prod-*`, database `ogevia_sv_test`, API `s0epy5rgzb`, web `demo.ogevia.com`, account `300094796789`, region `us-west-2`. **Not** `Ogevia-prd-*`, not `ogevia_prd`, not `main`, not Netlify, not Supabase |
 | **Candidate (deployment) SHA** | `fb491a554c0fdc484102025179c9c993f694b4e0` (`fb491a5`) |
 | CI-tested SHAs, and their results | `cd57ffb3a7638238cf31e2ad4733ee0a5f4dd1e1`: validate, harness, postgres all success (https://github.com/socalcaresservices/CarelikGlobal/actions/runs/40766462415). `cea8b47eaed56764f10b1ea07325ebe22f0e869e`: validate and harness success, **postgres failure, cause not identified** (https://github.com/socalcaresservices/CarelikGlobal/actions/runs/40771238644). The result for the final documentation head is in the PR's checks; **see pre-condition P1** |
-| Package | built only after this request is returned, with the approval reference below; its sha256 is then given to the Owner and the Operator |
+| Package | **prepared 2026-10-29**: `ogevia-operator-fb491a5.tar.gz`, sha256 `c61e2a73df6c9c57e14cf9f443f21b324e6d993a311444046dec023757bed6b8`; `BUILD_INFO.json` carries the placeholder reference and the Operator exports the real one at run time (details: `OWNER_DECISIONS_FOR_TEST.md` section 6) |
 | Migration | 0087 only (functions; ledger unchanged at 85 / `0085`); 0086 untouched; files `f9d75d8c…` (up) and `1789131e…` (down) |
 | Expected TEST change | web `7870a04` → `fb491a5`; Handler `94b73574c5a6…` → `2871b03d6be4…`; routes 241 → 242; 0087 absent → present |
 | Reads | `RELEASE_MANIFEST.md`, `MIGRATION_STATUS_MATRIX.md`, `CHECKLIST.md`, `OPEN_RISKS_AND_ASSUMPTIONS.md` in this folder |
@@ -22,7 +22,7 @@ Permission to run the TEST upgrade procedure `docs/releases/2026-10-26-redesign-
 | Operator (who runs the commands in CloudShell) | `OWNER TO FILL`. *Proposed for confirmation only:* Stella Okereke, who ran the 2026-10-26 TEST deployment (`DEPLOYED_RECORD_TEST.md`) |
 | Release window, UTC start and end (at most 12 hours; the window bounds the snapshot and the 0087 apply) | `OWNER TO FILL`. *Guidance, an estimate not measured on AWS:* leave 3 to 4 hours for Steps 0-12; V4-V6 with the Owner follow |
 | Admin host private IP (the host tagged `ogevia-db-admin-temp`) | `OWNER/OPERATOR TO FILL` |
-| Tarball sha256 | filled by me after the build; the Owner copies it into the GO message |
+| Tarball sha256 | `c61e2a73df6c9c57e14cf9f443f21b324e6d993a311444046dec023757bed6b8` (prepared; the Owner copies it into the GO message) |
 | Decision | ☐ GO for TEST ☐ NO-GO - `OWNER TO CHOOSE` |
 | Owner name, date and time | `OWNER TO FILL` |
 | Conditions or exceptions (written) | `OWNER TO FILL`, or "none" |
@@ -51,9 +51,9 @@ A named restore-point snapshot `ogevia-prod-postgres-pre-0087-<stamp>` is taken 
 | P2 | Local gates: lint, typecheck, build, unit suites; sv-api database suite | PASSED locally. The local infra database suite does not pass in the development sandbox (28 failures, same four files as the baseline); CI on PostgreSQL 18 is the arbiter (see P1) |
 | P3 | Package checks: pin check, assembly check, expected-only diff gate, deploy guard, apply script, route smoke, deployed-record script, tarball determinism | Static package tests PASSED (CI `validate` success on `cd57ffb` and `cea8b47`); the database-backed package tests run in the `postgres` job (see P1); both placeholder tarballs rebuilt byte-identically on 2026-10-28 |
 | P4 | Owner has reviewed `RELEASE_MANIFEST.md` | **OPEN** (review log: `OWNER_DECISIONS_FOR_TEST.md` section 3) |
-| P5 | Second-person review of the 0087 SQL (V7), or a written Owner exception | **OPEN, decision prepared** (`OWNER_DECISIONS_FOR_TEST.md` section 4: options A/B/C; recommendation B for TEST, A before production); not required by the scripts; risk U3 |
+| P5 | Second-person review of the 0087 SQL (V7), or a written Owner exception | **DECIDED 2026-10-29: option B, a written Owner exception for TEST only** (`OWNER_DECISIONS_FOR_TEST.md` section 4). `SECURITY_REVIEW_0087.md` stays unsigned; option A is required before any production request |
 | P6 | Approval reference, Operator, window and admin host IP supplied (section 2) | **OPEN** (guidance and operator confirmation list: `OWNER_DECISIONS_FOR_TEST.md` sections 1-2; the records name the operator differently, so it needs the Owner's confirmation) |
-| P7 | Shippable tarball built with the real reference; its sha256 given to the Operator | **OPEN** (after P6) |
+| P7 | Shippable tarball built; its sha256 given to the Operator | **PREPARED** (sha256 `c61e2a73df6c9c57e14cf9f443f21b324e6d993a311444046dec023757bed6b8`, placeholder reference, runtime reference); delivery to you and upload by the Operator are OPEN |
 | P8 | Operator ready: CloudShell in us-west-2 with the prerequisites in procedure section 4, and a second CloudShell session ready for recovery | **NOT VERIFIED** |
 | P9 | TEST freeze and Demo users warned (procedure D5); nobody schedules, edits or invites staff on TEST during Steps 9-11 | **OPEN** |
 

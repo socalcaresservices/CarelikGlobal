@@ -43,4 +43,4 @@ Not applicable: 0087 creates no table and no policy. The application role still 
 ## 6. Sign-off (a person)
 Reviewer name ____________ date ____________ ☐ every box in sections 1 and 2 checked against the SQL ☐ residual notes N-1 to N-7 accepted (or a written justification)
 
-**No reviewer has signed this review. Nothing has been excepted.**
+**No reviewer has signed this review.** On 2026-10-29 the Owner chose option B in `OWNER_DECISIONS_FOR_TEST.md` section 4: a written exception for the TEST deployment only. That exception is not a review and does not sign this section; a named reviewer is still required before any production request.

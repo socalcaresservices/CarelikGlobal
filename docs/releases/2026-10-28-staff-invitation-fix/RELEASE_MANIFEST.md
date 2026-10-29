@@ -10,7 +10,7 @@
 | **Operator package** | the two package folders under `docs/releases/` are read from the working tree when a tarball is built; the last commit that changed them is `215b7c6`. A tarball is identified by its sha256, not by a branch head. It changes only if the package files, the code commit, the approval reference or the build time change |
 | Environments touched by the development session | **none.** Not TEST, not production, not `main`, not `ogevia_prd`, not any production stack or database, not AWS. Only this branch of the GitHub repository was written. |
 | Migration status, order, ledger, rollback sequence | `MIGRATION_STATUS_MATRIX.md` |
-| Release checklist (approvals UNSIGNED), TEST approval request, Owner decisions | `CHECKLIST.md`, `TEST_APPROVAL_REQUEST.md`, `OWNER_DECISIONS_FOR_TEST.md` |
+| Release checklist (approvals UNSIGNED), TEST approval request, Owner decisions (P1 accepted, V7 option B for TEST, U6 open) | `CHECKLIST.md`, `TEST_APPROVAL_REQUEST.md`, `OWNER_DECISIONS_FOR_TEST.md` |
 | V4 / V5-V7 | `V4_READINESS.md`, `V5_V7_PREPARATION.md` (prepared, not run); `SECURITY_REVIEW_0087.md` (author-prepared, unsigned) |
 | Open risks and assumptions | `OPEN_RISKS_AND_ASSUMPTIONS.md` |
 
@@ -79,7 +79,7 @@ Production 228 → **242** (13 staff + 1 accept). TEST 241 → **242**. Counts a
 `MIGRATION_STATUS_MATRIX.md` sections 3 and 6.
 
 ## 10. Packages and artifacts (rebuilt; deterministic)
-Both packages were rebuilt from the pinned candidate and self-verified; two builds of the same inputs are byte-identical (tested). These are **candidate builds** with a placeholder approval reference and a fixed build time; the shippable tarballs are built after the Owner's GO and **will have different hashes**.
+Both packages were rebuilt from the pinned candidate and self-verified; two builds of the same inputs are byte-identical (tested). The **TEST upgrade tarball is prepared** (2026-10-29): sha256 `c61e2a73df6c9c57e14cf9f443f21b324e6d993a311444046dec023757bed6b8`, built 2026-10-29T00:56:11Z, placeholder approval reference in `BUILD_INFO.json` (the real reference is exported by the Operator at run time), verified on a fresh extraction (`OWNER_DECISIONS_FOR_TEST.md` section 6). It is not uploaded or deployed. The production figures below are **candidate builds** with a placeholder reference and fixed build time; the production tarball is built only after a separate production GO and will have a different hash.
 
 | Package | Builder | Candidate-build tarball sha256 prefix (placeholder reference, `OGEVIA_BUILD_TIME=2026-10-28T00:00:00Z`; rebuilt from the branch on 2026-10-28 and reproduced byte-identically, twice for production) |
 |---|---|---|

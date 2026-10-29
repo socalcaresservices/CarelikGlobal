@@ -23,7 +23,7 @@ These are copied by reference, not re-signed, and are not edited. They concern a
 | Release ID | `2026-10-28-staff-invitation-fix` |
 | **Deployment SHA** (code that would be deployed, full 40 characters) | `fb491a554c0fdc484102025179c9c993f694b4e0` |
 | **CI-tested SHAs** | `cd57ffb3a7638238cf31e2ad4733ee0a5f4dd1e1`: validate, harness and postgres all success (run 40766462415). `cea8b47eaed56764f10b1ea07325ebe22f0e869e`: validate and harness success, **postgres FAILURE** (run 40771238644), cause not identified. Both differ from `fb491a5` only in tests, the pending-migrations README and documentation (`RELEASE_MANIFEST.md` section 0). Later heads: see the PR's checks; not claimed here |
-| Operator-package files | taken from the working tree when a tarball is built; last commit touching them: `215b7c6`. The shippable tarball's sha256 is the identity of the package (it is built only after the Owner's GO) |
+| Operator-package files | taken from the working tree when a tarball is built; last commit touching them: `215b7c6`. TEST tarball prepared 2026-10-29: `ogevia-operator-fb491a5.tar.gz`, sha256 `c61e2a73df6c9c57e14cf9f443f21b324e6d993a311444046dec023757bed6b8` (placeholder approval reference in `BUILD_INFO.json`; the real one is exported at run time). Not uploaded or deployed |
 | Branch / pull request | `claude/magical-lovelace-9y5ras`; draft CI-only pull request https://github.com/socalcaresservices/CarelikGlobal/pull/107 (base `claude/redesign-review-nav-ui`; **do not merge**) |
 | Prepared by (name, date) | Claude Code session, 2026-10-28. Owner approval for this deployment: **NONE YET** |
 | Change classification | ☑ migration (pending, outside the ledger) ☑ API (one route) ☑ user admin ☑ web ☐ scheduling ☐ authorization ☐ visits/verification ☐ billing ☐ reports |
@@ -101,7 +101,7 @@ Owner has stated in writing: commit SHA ______, target pilot/test only, who runs
 |---|---|---|---|
 | Owner | V4, V5, V6 per `V4_READINESS.md`, `V5_V7_PREPARATION.md` | ☐ NOT RUN | UNSIGNED |
 | Invitee account for M-1 (an existing sign-in outside the TEST agency, reachable by e-mail) | V5 | ☐ **BLOCKED / NOT VERIFIED**: accounts D and E are enabled through the API but browser sign-in is NOT VERIFIED; if neither works the M-1 live check is BLOCKED and the Owner decides (never decided by this file) | UNSIGNED |
-| Second person for the 0087 SQL (V7) | `SECURITY_REVIEW_0087.md` section 6 | ☐ NOT DONE; Owner's decision (reviewer, written exception, or independent AI read) is prepared in `OWNER_DECISIONS_FOR_TEST.md` section 4 and not yet made | UNSIGNED |
+| Second person for the 0087 SQL (V7) | `SECURITY_REVIEW_0087.md` section 6 | ☐ NOT DONE (no reviewer has read the SQL). **Owner chose option B on 2026-10-29: a written exception for TEST only** (`OWNER_DECISIONS_FOR_TEST.md` section 4); a named reviewer remains required before any production request | UNSIGNED (reviewer); exception recorded from the Owner's message |
 
 No defect log: nothing has been run on TEST.
 

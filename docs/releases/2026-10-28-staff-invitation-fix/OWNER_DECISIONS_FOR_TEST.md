@@ -7,6 +7,7 @@
 |---|---|---|---|
 | P1 | CI evidence accepted for the TEST request | "P1 is accepted based on the green 1b27f82 run." Run: https://github.com/socalcaresservices/CarelikGlobal/actions/runs/40778866660 (`validate`, `harness`, `postgres` all success) | 2026-10-28 |
 | U6 | The CI `postgres` job's nondeterminism stays open as a **known flaky-test risk** | "Keep U6 open as a known flaky-test risk." It was red on `cea8b47` and green on `cd57ffb` and `1b27f82` (documentation-only differences); the failing test was never identified | 2026-10-28 |
+| V7 | **Option B chosen for TEST**: a written Owner exception for TEST only; the independent SQL review is still required before any production request | "Proceed with option B for V7 and prepare the TEST tarball" (conditions as in section 4 option B: synthetic TEST data, verified snapshot first, additive and reversible 0087 with `apply-0087-test.sh rollback`, no production approval without V7 option A) | 2026-10-29 |
 | Scope | No deployment actions; only preparation; no change to `main`, TEST, production or `ogevia_prd` without an explicit GO | Owner's message | 2026-10-28 |
 
 Accepting P1 does **not** sign Phase A, does not accept the manifest, and does not decide V7.
@@ -30,7 +31,7 @@ Accepting P1 does **not** sign Phase A, does not accept the manifest, and does n
 | Approval reference | 6-64 characters from `A-Za-z0-9._-` (the scripts refuse anything else). Choose your own, for example `owner-go-test-fb491a5-YYYYMMDD-01`; I do not invent one | ______________ |
 | Window start / end, **UTC**, at most 12 hours | Pick a time when you can sit with the Operator. **Clock change:** US daylight saving time ends on **Sunday 1 November 2026**. Before it, Pacific = UTC-7; from 02:00 on 1 November, Pacific = UTC-8. Example: a window starting 9:00 Pacific on 31 October is 16:00Z; starting 9:00 Pacific on 2 November is 17:00Z. Estimate, not measured: allow 3-4 hours for procedure Steps 0-12; V4-V6 follow | start ______________Z  end ______________Z |
 | Admin host private IP (host tagged `ogevia-db-admin-temp`) | Not in the repository. The Operator can read it with this **read-only** command, which has NOT been run: `aws ec2 describe-instances --region us-west-2 --filters Name=tag:Name,Values=ogevia-db-admin-temp --query 'Reservations[].Instances[].[InstanceId,State.Name,PrivateIpAddress]' --output text`. Whether the host must be started first is NOT VERIFIED; the procedure's Step 5/6 outputs decide | ______________ |
-| Tarball sha256 | produced by me when the Owner returns the approval reference (the reference is inside `BUILD_INFO.json`, so the hash cannot be known earlier) | filled after the build |
+| Tarball sha256 | **Prepared 2026-10-29** (see section 6): `c61e2a73df6c9c57e14cf9f443f21b324e6d993a311444046dec023757bed6b8`. The package accepts the placeholder approval reference in `BUILD_INFO.json` and uses the reference exported from the GO message at run time (`tarball-pin-check.sh`: "the approval reference exported from the GO message is used"), so the hash does not depend on your reference. I earlier wrote that the hash could not be known before the reference; that was stricter than the package requires | `c61e2a73df6c9c57e14cf9f443f21b324e6d993a311444046dec023757bed6b8` |
 | TEST freeze and Demo-user warning (procedure D5) | Who warns Demo users, and when: ______________ | ______________ |
 | Inboxes for V4/V5 e-mails | the Owner controls `admin.ogevia+v4cg@gmail.com` (V4 step C1). For V5's M-1 step an existing sign-in outside the TEST agency, reachable by e-mail, is needed: accounts D or E if they can sign in (NOT VERIFIED); else BLOCKED | ______________ |
 
@@ -59,12 +60,25 @@ Owner's review of the manifest: ☐ reviewed, accepted for a TEST-only GO ☐ re
 
 **Recommendation: B for TEST, with A required before any production request** (optionally C first, because it is quick and found M-1 last time). Reason: TEST is synthetic, reversible and snapshot-protected, while production holds real agency data. This is a recommendation; the choice is the Owner's.
 
-**Owner's decision:** ☐ A (reviewer name ______________, to be completed before the GO) ☐ B (written exception, wording below) ☐ C ☐ other ______________
-Exception wording, if B (Owner writes it; not pre-written for signature): ____________________________________________
+**Owner's decision (recorded 2026-10-29 from the Owner's message):** ☐ A ☑ **B, for TEST only** ☐ C ☐ other.
+Exception: the Owner's own words are "Proceed with option B for V7"; the conditions are those listed for option B above and nothing more. I have not drafted additional exception wording for signature. **Not changed by this decision:** `SECURITY_REVIEW_0087.md` section 6 stays UNSIGNED (no reviewer has read the SQL), and **option A (a named second reviewer) remains required before any production request.**
 
 **Reviewer packet for A or C** (what to read): `infra/aws/db/pending/migrations/0087_staff_invitation_acceptance.sql` (sha256 `f9d75d8c…`), its rollback (`1789131e…`), the 24 checks in `docs/releases/2026-10-26-redesign-operator/scripts/verify-0087.sql`, `SECURITY_REVIEW_0087.md` sections 1, 3 and 5, and the 0086 file for context. Questions the reviewer should answer: can any caller activate someone else's membership; can acceptance be replayed or raced; can the invitation response or the lists reveal that an e-mail has an account or is disabled; can Disable/Enable or inactive/active bypass acceptance; do all eight `SECURITY DEFINER` functions pin `search_path` and revoke PUBLIC.
 
 ## 5. After these are answered
 1. Owner returns this file's blanks and `TEST_APPROVAL_REQUEST.md` section 2 (or tells me the values).
-2. I build the shippable TEST tarball with the approval reference and give its sha256. **No build happens before that.**
+2. The TEST tarball is already prepared (section 6). If you prefer your reference embedded in `BUILD_INFO.json`, tell me and I rebuild; the sha256 then changes and the old tarball is not used.
 3. The Owner decides GO or NO-GO in `TEST_APPROVAL_REQUEST.md`. Only an explicit GO starts anything; the Operator then runs the procedure.
+
+## 6. TEST tarball (prepared 2026-10-29; NOT uploaded, NOT deployed)
+| Item | Value |
+|---|---|
+| File | `ogevia-operator-fb491a5.tar.gz`, 2,883,470 bytes |
+| sha256 | `c61e2a73df6c9c57e14cf9f443f21b324e6d993a311444046dec023757bed6b8` (the value for `OGEVIA_EXPECT_TARBALL_SHA` / `TARBALL_SHA` in the GO message) |
+| Code commit | `fb491a554c0fdc484102025179c9c993f694b4e0`, code tree `9c33b7b4e3d9d33c240c45385f2cad2ad40d1e8a` |
+| `BUILD_INFO.json` | built 2026-10-29T00:56:11Z; `approval_ref` = the placeholder `APPROVAL-REF-PENDING-OWNER` (the Operator exports your real reference as `REF` in Step 0) |
+| Manifest | `PACKAGE_MANIFEST.sha256`: 1075 files; sha256 `3262c3950cefd7b3569ac721bc2aeeaae663a52c69b96d485283f2654d853f4d` |
+| Rebuild | `OGEVIA_BUILD_TIME=2026-10-29T00:56:11Z bash docs/releases/2026-10-26-redesign-operator/scripts/build-operator-tarball.sh --out-dir <DIR> --code-commit fb491a554c0fdc484102025179c9c993f694b4e0` (byte-identical while the package folder is unchanged; its last change is `215b7c6`) |
+| Checks run on 2026-10-29, locally, on a fresh extraction | repeat build byte-identical; `sha256sum -c PACKAGE_MANIFEST.sha256` OK; `pnpm install --frozen-lockfile` OK; `tarball-pin-check.sh` all PASS, `PINS HOLD`; offline `cdk synth` and `assembly_check.py`: five TEST stacks only, Handler asset `2871b03d6be4…`, IdentityHandler unchanged, 242 routes, 14 staff routes, all five stack fingerprints equal the release (`c2c489ae…` for the API) |
+| What this does not prove | The Handler key reproducing **in the Operator's CloudShell** (Step 4 decides there), anything on AWS, and nothing about TEST's live state. The local synth used a clearly fake non-approval value for the reference, discarded |
+| Delivery | the file and its `.sha256` are handed to you for upload to CloudShell (Actions, Upload files) as `~/ogevia-operator-fb491a5.tar.gz`. The tarball is not committed to the repository |
