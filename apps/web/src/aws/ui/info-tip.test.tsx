@@ -43,6 +43,24 @@ describe("InfoTip", () => {
     expect(button).toHaveAttribute("aria-expanded", "false");
   });
 
+  it("stays closed after its close button is used and the pointer moves away (the icon keeps focus, which must not reopen it)", () => {
+    render(<div><InfoTip label="About Documents">Set expiry only where the document has one.</InfoTip><button type="button">Elsewhere</button></div>);
+    const button = screen.getByRole("button", { name: "About Documents" });
+    fireEvent.mouseEnter(button);
+    fireEvent.click(button);
+    fireEvent.click(screen.getByRole("button", { name: "Close help", hidden: true }));
+    expect(button).toHaveFocus();
+    fireEvent.mouseLeave(button.parentElement!);
+    expect(visible()).toBe(false);
+    expect(tip().className).not.toContain("group-focus-within:block");   // jsdom has no CSS: the class is what would reopen it in a browser
+    // focus leaving ends the dismissal, so hover or focus can show it again later
+    button.blur();
+    fireEvent.blur(button, { relatedTarget: screen.getByRole("button", { name: "Elsewhere" }) });
+    fireEvent.mouseLeave(button.parentElement!);
+    fireEvent.click(button);
+    expect(visible()).toBe(true);
+  });
+
   it("is a real button (Tab reaches it, Enter and Space activate it) and floats, so it never moves or blocks the page", () => {
     render(<InfoTip label="About Reports">Reports use signed visit time.</InfoTip>);
     const button = screen.getByRole("button", { name: "About Reports" });

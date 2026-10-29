@@ -14,7 +14,7 @@ export const INFO_TIP_MAX_CHARS = 250;
 export function InfoTip({ children, label = "More information", title, more, className }: { children: ReactNode; label?: string; title?: string; more?: { to: string; label?: string }; className?: string }) {
   const id = useId();
   const [open, setOpen] = useState(false);
-  // Dismissed on purpose (close button, Escape): stays hidden even while the pointer rests on the icon or it keeps focus, until the person leaves and comes back or taps the icon.
+  // Dismissed on purpose (close button, Escape): stays hidden even while the pointer rests on the icon or it keeps focus, until the person leaves and comes back or taps the icon. Closing returns focus to the icon, so moving the pointer away must not reopen it through focus-within: the dismissal ends only when focus has also left.
   const [dismissed, setDismissed] = useState(false);
   const root = useRef<HTMLSpanElement>(null);
   const button = useRef<HTMLButtonElement>(null);
@@ -28,7 +28,7 @@ export function InfoTip({ children, label = "More information", title, more, cla
     <span
       ref={root}
       className={cn("group relative inline-flex align-middle", className)}
-      onMouseLeave={() => setDismissed(false)}
+      onMouseLeave={(e) => { if (!e.currentTarget.contains(document.activeElement)) setDismissed(false); }}
       onBlur={(e) => { if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setDismissed(false); }}
       onKeyDown={(e) => { if (e.key === "Escape") { e.stopPropagation(); setOpen(false); setDismissed(true); button.current?.focus(); } }}
     >
