@@ -1,0 +1,37 @@
+# Target verification status and open items (2026-10-30, 0086)
+
+**0086 remains NOT RELEASABLE.** Owner instruction 2026-10-30: no merge, deploy, migration, enforcement change or environment change. Release readiness is evaluated only after UAT execution and sign-off.
+
+## 1. Read-only target verification (runbook section B)
+| Item | Status | Evidence |
+|---|---|---|
+| Verification from Claude's container | **NOT POSSIBLE, not attempted against any environment** | `aws` CLI and AWS SDK are not installed here. The target database is on private RDS (no public endpoint, `CLAUDE.md` section 8), so no query can reach it from this container. Environment variables with AWS keys exist, but their account and scope are unknown, and I did not install tooling or probe with them. |
+| Verification by the Operator | **PENDING (Stella Okereke)** | Run runbook B on database `ogevia_sv_test` only, after the `current_database()` guard (the same instance also holds `ogevia_prd`), as the read-only role in `begin read only;`. Record: migration ledger max and count, Ready/Active count, `to_regclass('ogevia.caregiver_work_approvals')` (null expected), and the value in section 2 below. |
+
+## 2. Is enforcement reversible? **No, not through the product.** (VERIFIED from code)
+- `ogevia_api.activate_readiness_enforcement` (0042) sets `enforcement_active_from = now()` and refuses a second call ("Readiness checks are already active."). It needs a reason (3+ characters), a finished CPR/TB setup, and the expected affected-shift count to match.
+- No function, route or screen sets `enforcement_active_from` back to null (searched all 86 migrations and `routes.ts`). The only way back is a manual database edit, which is outside the release process and would need its own approval and backup.
+- `set_service_checks` (On/Off) is a **different** switch: it turns the service checks off, does not undo activation, and cannot be turned On until activation has happened.
+- Consequence: **enforcement must not be switched on in TEST for UAT unless the owner accepts that it stays on.** UAT steps O13 and S4 are optional and stay un-run. Under that rule, UAT proves the report-only ("Flagged only") behaviour; the blocking behaviour is covered by the automated tests.
+- **Operator to read, read-only:** `select enforcement_active_from from ogevia.organization_readiness_settings` for the SoCal organization on `ogevia_sv_test`. If it is already non-null, TEST is already enforcing and the CPR/TB rule will block new shifts for overdue people from the moment 0086 is applied. Record the value before Phase C. UNKNOWN today.
+
+## 3. CPR/TB due-days setting: API only, or a screen?
+- **Current state (VERIFIED):** `GET/POST /v1/compliance/settings` and `ogevia_api.set_cpr_tb_due_days` exist (reason required, audited, idempotent). No web screen reads or writes it.
+- **The owner's brief** asks for an agency setting with default 30 and does not ask for a screen. **No owner decision on a screen exists.** This is OPEN, not decided.
+- **Recommendation:** keep it API-only for this release. It changes rarely, there is one agency, and a screen means a new commit, a new SHA (A3 is pinned), repeated B9/Phase C checks and a new GO. Revisit after UAT if the Owner role needs to change it without help. Until decided, UAT step O14 has the Operator read the value through the API.
+- **Owner to record one of:** `API-only accepted for 0086` / `screen required before release`.
+
+## 4. Cross-agency isolation (tracking)
+- **Covered by automated tests (VERIFIED earlier):** DB tests for the new readiness functions and the sv-api HTTP tests include a second organization and expect refusal of cross-organization reads and writes.
+- **Not yet proven on TEST (OPEN):** whether `ogevia_sv_test` contains a second synthetic agency. If it has none, the UAT sign-off must say cross-agency isolation rests on the automated tests, and the Security reviewer decides whether that is enough. Operator to count organizations on TEST (read-only).
+- **Reviewer item:** `SECURITY_REVIEW.md` still has to be completed and signed.
+
+## 5. Remaining Phase C blockers (unchanged)
+1. Owner signs `DECISION_RECORD.md` (D1-D8, A1, A3); Stella acknowledges.
+2. Operator confirms TEST identifiers read-only (section 1), including the enforcement value (section 2) and the organization count (section 4).
+3. Owner states the window and gives a written GO (covers SHA `54894411f0e69ac29bec762006e47f7d943b94f2` only).
+4. Operator runs the real `cdk diff` (expect 8 routes plus a Lambda asset per API stack).
+5. A human accepts B9 (G4).
+6. Reviewer completes and signs `SECURITY_REVIEW.md`.
+7. Owner records the due-days screen decision (section 3) and the enforcement rule for UAT (section 2).
+8. Phase C, then Phase D UAT with all four validators, then the release record update (D7).

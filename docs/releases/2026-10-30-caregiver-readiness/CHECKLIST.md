@@ -75,6 +75,8 @@ Database check after the browser run: one `caregiver_work_approvals` row and one
 **Phase B signed:** NOT SIGNED (no human tester; B9 was automated).
 
 ## C. Pilot/test environment (Phase C), gate G5 — NOT RUN
+Open items and read-only verification status: `TARGET_VERIFICATION_AND_OPEN_ITEMS.md` (Claude cannot reach the private TEST database; the Operator must run runbook B; enforcement is not reversible in the product; due-days screen decision open).
+
 **C0 Target environment (designated 2026-10-30 by the owner in conversation; recorded in `DECISION_RECORD.md` amendment A1, unsigned):** the existing **TEST/pilot** slice: stacks `Ogevia-prod-*` (CDK `-c env=prod`), database **`ogevia_sv_test`** on RDS `ogevia-prod-postgres` (account 300094796789, `us-west-2`), banner "TEST — synthetic data only". **Not** `Ogevia-prd-*` and **never** `ogevia_prd`, which lives on the same RDS instance. Identifiers come from repository documents and are **NOT VERIFIED LIVE** (Claude has no AWS access): the Operator confirms them read-only first (`RUNBOOK.md` section B). Last recorded state: commit `e80b770`, ledger 85 / 0085 (2026-10-19); the current live ledger is UNKNOWN until the probe is run.
 
 Operator: **Stella Okereke**. **Commit SHA recorded: `54894411f0e69ac29bec762006e47f7d943b94f2` (A3; supersedes A2's `44dbd2ec…`). Window: NOT SET; to be recorded after B9 is PASS and the Operator confirms her availability. GO to run Phase C: NOT given.** Until the window and the GO are stated in writing, nothing is run against the TEST slice; Claude runs nothing against any shared environment in any case. The real `cdk diff` (C4a) is the Operator's first Phase C step once the owner states the SHA and window. Steps C0 to C10 are in `RUNBOOK.md`; nothing was run.
