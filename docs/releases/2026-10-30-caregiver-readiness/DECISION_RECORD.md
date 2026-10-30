@@ -27,14 +27,14 @@ Wording follows what the owner wrote in the conversation on 2026-10-30; the righ
 |---|---|
 | Code | `claude/practical-tesla-r07odb`; no pull request opened; nothing merged to main |
 | Gates | G1 lint pass; G2 typecheck pass; G3 tests pass and validated; G4 open (B9 regression spot-check outstanding); G5 pilot not run; G6 owner GO **not given** |
-| Target environment | **NOT DESIGNATED** |
+| Target environment | **DESIGNATED 2026-10-30 (unsigned): existing TEST/pilot, see section 5 amendment A1.** No deployment authorized |
 | Operator | Stella Okereke |
 | Deployed anywhere | **No** |
 | **0086 releasable / deployment-ready / production-approved** | **NO** (D7 conditions not met: B9, target, Phases C, D, E, security review confirmation outstanding) |
 
 ## 3. What this record does NOT do
 - It is not a GO or NO-GO (G6). That is a separate decision record in `CHECKLIST.md` section E and names a commit SHA and window.
-- It does not designate the target environment. When the owner designates one, add it in section 5 and in `CHECKLIST.md` C0.
+- It does not itself designate the target environment; the designation is recorded as amendment A1 in section 5 and in `CHECKLIST.md` C0.
 - It does not approve re-pinning, deployment, schedule, scripts, or any action against a shared environment.
 
 ## 4. Signature
@@ -56,6 +56,18 @@ Operator acknowledgement (D1: Operator is Stella Okereke; she runs nothing again
 | Date | ______________________________ |
 
 ## 5. Amendments (append only; date and sign each)
-| Date | Change | Owner signature |
-|---|---|---|
-| | e.g. "Target environment designated: …" | |
+| # | Date | Change | Owner signature |
+|---|---|---|---|
+| A1 | 2026-10-30 | **Target environment designated** (owner's choice in conversation: existing TEST/pilot). Details below. Does **not** authorize any deployment, and sets no commit SHA or window. | ____________ |
+
+| Field | Value |
+|---|---|
+| Designated by | The owner, in the conversation with Claude Code, 2026-10-30 (choice: "Existing TEST/pilot"). **Not yet signed.** |
+| Environment | **The existing TEST/pilot slice** (synthetic data only) |
+| CDK / stacks | `-c env=prod`, stacks `Ogevia-prod-*` (e.g. `Ogevia-prod-ServiceVerificationApi`). **Naming trap:** `Ogevia-prod-*` is the TEST/pilot slice; `Ogevia-prd-*` is PRODUCTION and is **out of scope** |
+| Database | `ogevia_sv_test` on RDS instance `ogevia-prod-postgres` (account 300094796789, `us-west-2`). That instance also holds `ogevia_prd` (production): **never** run anything against `ogevia_prd` |
+| API / web (as last recorded) | API `s0epy5rgzb`; web `d2xumch5w0izfg.cloudfront.net`; Cognito client `ogevia-web-prod-test-slice`; banner "TEST — synthetic data only" |
+| Last recorded state | Commit `e80b770`, ledger 85 / `0085` on 2026-10-19 (`docs/releases/2026-10-19-test-rehearsal/DEPLOYED_RECORD_e80b770_TEST.md`) |
+| Source of these identifiers | Repository documents and CDK config (`docs/aws/INVENTORY_RECONCILIATION_2026-10-21.md`, the deployed record above, `infra/aws/lib/config.ts`). **NOT VERIFIED LIVE**: Claude has no AWS access. The Operator confirms every identifier read-only before any step (runbook section B) |
+| Operator | Stella Okereke |
+| NOT designated / NOT authorized by this entry | commit SHA, deployment window, a GO for Phase C, any migration, any deploy. Those are separate owner statements (checklist C, runbook C) |

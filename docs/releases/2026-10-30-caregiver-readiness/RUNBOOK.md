@@ -2,9 +2,9 @@
 
 **Status: PROPOSED. NOTHING HERE HAS BEEN RUN AGAINST ANY SHARED ENVIRONMENT.**
 
-**Owner decision 2026-10-30:** this is a **TEST/PILOT package only** until a deployment target is formally designated. **Designated Operator: Stella Okereke.** Nothing in this runbook may be scheduled or scripted against any shared environment until the target environment is explicitly identified and documented in the checklist (C0). **Target environment: NOT DESIGNATED.** The real `cdk diff` is run by the Operator in the target once it is designated (checklist C4a); the local synthesized comparison below is not a substitute. 0086 is **not releasable** while any release gate in `CHECKLIST.md` is open.
+**Owner decision 2026-10-30:** this is a **TEST/PILOT package only** until a deployment target is formally designated. **Designated Operator: Stella Okereke.** Nothing in this runbook may be scheduled or scripted against any shared environment until the target environment is explicitly identified and documented in the checklist (C0). **Target environment: DESIGNATED 2026-10-30 (owner's choice in conversation, unsigned; `DECISION_RECORD.md` A1): the existing TEST/pilot slice** (stacks `Ogevia-prod-*`, database `ogevia_sv_test` on `ogevia-prod-postgres`, account 300094796789, `us-west-2`). The designation does **not** authorize any step: the owner must still state the commit SHA, the window and a GO for Phase C. Identifiers are from repository documents and are **NOT VERIFIED LIVE**. The real `cdk diff` is run by the Operator in the target once it is designated (checklist C4a); the local synthesized comparison below is not a substitute. 0086 is **not releasable** while any release gate in `CHECKLIST.md` is open.
 
-The target (pilot/test, demo or production) is **UNKNOWN**; the owner must name it in writing before section C (checklist C0). Every YELLOW action below needs the owner's explicit GO for that environment (`CLAUDE.md` section 13). Claude Code has no AWS access and cannot run this.
+ Every YELLOW action below needs the owner's explicit GO for that environment (`CLAUDE.md` section 13). Claude Code has no AWS access and cannot run this.
 
 Why this is not a copy of the 2026-10-19 operator package: that package (`docs/releases/2026-10-19-test-rehearsal/`) is built around one named TEST database whose ledger was `52|0052`, and its pin tests fix the repository at 85 migrations. A target that is not yet identified cannot be scripted safely. This runbook therefore starts with a read-only probe that tells the operator which migrations the target is missing.
 
@@ -22,8 +22,10 @@ Why this is not a copy of the 2026-10-19 operator package: that package (`docs/r
 
 Recompute any pin with: `cd infra/aws/db/migrations && LC_ALL=C sha256sum -- *.sql | sha256sum` (all files), the same command over `$(ls *.sql | LC_ALL=C sort | head -85)` (0001 to 0085), and `sha256sum <file>` for one file.
 
-## B. Identify the target (read-only; no approval needed beyond access)
-Run on the target database, as the read-only role, inside `begin read only;`:
+## B. Confirm the target (read-only; no approval needed beyond access)
+**Guard, first:** the RDS instance `ogevia-prod-postgres` also holds `ogevia_prd` (PRODUCTION). Every command below, and every later step, must be pointed at database `ogevia_sv_test` only. Before anything else run `select current_database();` and **stop unless it returns `ogevia_sv_test`**; confirm the stack names are `Ogevia-prod-*` (not `Ogevia-prd-*`) and the banner reads "TEST — synthetic data only".
+
+Run on `ogevia_sv_test`, as the read-only role, inside `begin read only;`:
 ```sql
 select count(*) as n, max(version) as latest from ogevia_meta.schema_migrations;                 -- expect latest 0085 for a database that has had every earlier release
 select version from ogevia_meta.schema_migrations order by version desc limit 5;

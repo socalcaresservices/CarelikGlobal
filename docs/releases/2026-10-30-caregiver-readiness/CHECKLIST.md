@@ -1,6 +1,6 @@
 # Release checklist: 2026-10-30-caregiver-readiness
 
-**Status (updated 2026-10-30, after the owner's decisions of the same day): TEST/PILOT package only. Operator: Stella Okereke. Target environment: NOT DESIGNATED. Phase A: G1 and G2 pass; G3 RESOLVED and validated (date-dependent tests made calendar-independent: see `TEST_REMEDIATION_DATE_DEPENDENT.md`). Phase B: PARTIAL (B9 open, no human tester). Phases C, D, E NOT RUN. Not deployed anywhere. 0086 is NOT RELEASABLE. GO / NO-GO not given.**
+**Status (updated 2026-10-30, after the owner's decisions of the same day): TEST/PILOT package only. Operator: Stella Okereke. Target environment: DESIGNATED 2026-10-30 (existing TEST/pilot; see C and `DECISION_RECORD.md` A1; unsigned; identifiers not verified live). Phase A: G1 and G2 pass; G3 RESOLVED and validated (date-dependent tests made calendar-independent: see `TEST_REMEDIATION_DATE_DEPENDENT.md`). Phase B: PARTIAL (B9 open, no human tester). Phases C, D, E NOT RUN. Not deployed anywhere. 0086 is NOT RELEASABLE (open: B9, Phases C, D, E, security review, live verification of the target). GO / NO-GO not given.**
 Status words: implemented and tested on a disposable local database only. "Demo" environment: UNKNOWN.
 Template: `docs/release-process/RELEASE_CHECKLIST_TEMPLATE.md`. Evidence below is real command output from this session (2026-10-30), local PostgreSQL 16, synthetic data.
 
@@ -73,7 +73,9 @@ Database check after the browser run: one `caregiver_work_approvals` row and one
 **Phase B signed:** NOT SIGNED (B9 open; no human tester).
 
 ## C. Pilot/test environment (Phase C), gate G5 — NOT RUN
-Owner statement (2026-10-30, in the conversation, not yet filed as a document): **TEST/PILOT only until a deployment target is formally designated. Operator: Stella Okereke.** Target environment, commit SHA and window: **not designated**. Do not schedule or script deployment to any shared environment until the target is explicitly identified and documented here. The real `cdk diff` (C4a) is run by the Operator in the target once it is designated; the local synthesized comparison (section 1) is not a substitute. Steps C0 to C10 are in `RUNBOOK.md`; nothing was run.
+**C0 Target environment (designated 2026-10-30 by the owner in conversation; recorded in `DECISION_RECORD.md` amendment A1, unsigned):** the existing **TEST/pilot** slice: stacks `Ogevia-prod-*` (CDK `-c env=prod`), database **`ogevia_sv_test`** on RDS `ogevia-prod-postgres` (account 300094796789, `us-west-2`), banner "TEST — synthetic data only". **Not** `Ogevia-prd-*` and **never** `ogevia_prd`, which lives on the same RDS instance. Identifiers come from repository documents and are **NOT VERIFIED LIVE** (Claude has no AWS access): the Operator confirms them read-only first (`RUNBOOK.md` section B). Last recorded state: commit `e80b770`, ledger 85 / 0085 (2026-10-19); the current live ledger is UNKNOWN until the probe is run.
+
+Operator: **Stella Okereke**. **Still NOT stated by the owner: the commit SHA, the window, and a GO to run Phase C.** Until those are stated in writing, nothing is run against the TEST slice; Claude runs nothing against any shared environment in any case. The real `cdk diff` (C4a) is the Operator's first Phase C step once the owner states the SHA and window. Steps C0 to C10 are in `RUNBOOK.md`; nothing was run.
 
 ## D. User acceptance (Phase D) — NOT RUN
 No validator has run any script. Owner, Scheduler, Caregiver (phone) and the Authorization validator rows are blank. Scripts to use: RDY-01 to RDY-16 in the plan.
@@ -108,15 +110,15 @@ Owner decisions recorded 2026-10-30 (given in the conversation with Claude Code)
 |---|---|
 | Failed gate resolved (G3) | ☑ **RESOLVED 2026-10-30 and validated** (real date: 99/99 files, 1,084/1,084 tests; fixed tests 34/34 on 18 frozen dates incl. after 2026-11-02) |
 | Outstanding validations complete (B9 regression spot-check, Phase C, Phase D, security review) | ☐ **NOT COMPLETE** |
-| Deployment target documented | ☐ **NOT DESIGNATED** |
+| Deployment target documented | ☑ **DESIGNATED 2026-10-30** (existing TEST/pilot; identifiers from repo docs, **not verified live**; unsigned) |
 | Release record updated after the above | ☐ not applicable until the three rows above are done |
 | **0086 releasable / deployment-ready / production-approved** | **NO** |
 
 GO / NO-GO decision (G6): ☐ GO ☐ NO-GO — **not given**. Owner / date / SHA / reference / window / conditions: blank.
 
 ## Open items (nothing below is done unless ticked)
-1. ☐ **Designate the target environment** and record it in C0 (owner). Operator is Stella Okereke. Until then: no scheduling, no scripts run against a shared environment.
-2. ☐ **Real `cdk diff`** in the target, by the Operator, once designated (C4a). Expected: only the 8 routes and one Lambda code asset per API stack (`RUNBOOK.md` D).
+1. ☑ **Target designated** (existing TEST/pilot, C0). ☐ Owner signs `DECISION_RECORD.md` A1. ☐ Operator confirms the identifiers read-only (runbook B). ☐ Owner states the commit SHA, the window and a GO for Phase C in writing.
+2. ☐ **Real `cdk diff`** in the TEST slice, by the Operator, after the owner states the SHA and window (C4a). Expected: only the 8 routes and one Lambda code asset per API stack (`RUNBOOK.md` D).
 3. ☑ **G3 clean:** the date-dependent tests are calendar-independent and validated (see above).
 4. ☐ **B9:** a person spot-checks the regression set R (harness or pilot).
 5. ☐ **Phase C, D, E** in full (pilot validation, user acceptance by Owner, Scheduler, Caregiver and the authorization validator, owner GO).
@@ -125,4 +127,4 @@ GO / NO-GO decision (G6): ☐ GO ☐ NO-GO — **not given**. Owner / date / SHA
 8. ☑ Release-pin tests of the 2026-10-19 and 2026-10-21 packages retired (moved, not deleted, not re-pinned).
 9. ☑ The 41 database failures categorized: 37 obsolete (retired), 4 date-dependent, 0 defects.
 
-**0086 is NOT RELEASABLE, deployment-ready or production-approved.** Remaining blockers: items 1, 2 (target and real `cdk diff`), 4 (B9 regression spot-check), 5 (Phases C, D, E) and 7 (security review confirmation).
+**0086 is NOT RELEASABLE, deployment-ready or production-approved.** Remaining blockers: items 1, 2 (signing, live verification, the owner's SHA/window/GO, and the real `cdk diff`), 4 (B9 regression spot-check), 5 (Phases C, D, E) and 7 (security review confirmation).
