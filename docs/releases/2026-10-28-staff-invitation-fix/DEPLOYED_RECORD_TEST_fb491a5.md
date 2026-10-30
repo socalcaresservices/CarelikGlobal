@@ -43,7 +43,7 @@
 6. The procedure's Step 8 gate for the other four stacks was inferred from the loop reaching the API stack rather than from the printed lines.
 
 ## 4. NOT done, NOT verified
-- **Step 13 walkthrough: reported PASS** (see section 4a). **V4 role and tenant negatives: PASS (section 4c)**; the invitation checks of V4 (C4) are not run. **V5** (needs an existing sign-in outside the demo.ogevia.com (TEST) agency; browser sign-in of accounts D and E NOT VERIFIED) and **V6**: not run. **V7**: Owner option B (TEST-only exception); independent review still required before any production request.
+- **Step 13 walkthrough: reported PASS** (see section 4a). **V4 role and tenant negatives: PASS (section 4c)**; the invitation checks of V4 (C4) are not run. **V5: BLOCKED at 5.4 (section 4d)**; **V6**: not run. **V7**: Owner option B (TEST-only exception); independent review still required before any production request.
 - **Step 14: reported PASS** (section 4b).
 - The JWT authorizer with a real Cognito token on the accept route: NOT VERIFIED (only refusals, 401, were exercised).
 - **Phase C and Phase D sign-offs: UNSIGNED.** No production approval exists or is implied.
@@ -69,6 +69,28 @@ Read-only direct Lambda calls with each account's sub (IAM-gated), run from Clou
 - **41 checks, 0 failed, `STAFF CHECKS PASSED`**, 41 PASS lines, no FAIL line. The 36 of 26 October plus 5: the Caregiver `setup` check (member of the Owner's agency, role caregiver) and **403 on all four staff routes** (staff-types, staff, role-permissions, staff-audit). `Caregiver not named: not checked` no longer appears.
 - Other-agency accounts get 404 with no data on the Owner's agency and the Owner gets 404 on theirs, on all four routes; no organizationId gives 400.
 - **Limits:** this is a Lambda-level check with the account's sub, not a browser sign-in with a real token; the API Gateway JWT authorizer is not exercised (T8 stays NOT VERIFIED). Only two other agencies were tested. The 0087 invitation checks (`invitation_checks_v4.py`, C4) and V5, V6 are NOT RUN. The Caregiver sign-in was created in the Owner's browser session; no password was shared.
+
+## 4d. V5 staff invitations on demo.ogevia.com (TEST): **BLOCKED** at 5.4, recorded 2026-10-30 on the Owner's instruction
+Invitee: the existing sign-in `ogemails+ogevia-manager@gmail.com` (sub `58d173c0-e0d1-709f-4288-116f2ed5dbfc`, `manager` in the other agency `ogevia-test-slice`), approved by the Owner as the V5 invitee. All results below are from the Owner's pasted output or words; the checker is `invitation_checks_v4.py` (sha256 `614a583c2dccf710aaca3fb4ed189747e91907c3380650f5daa60d4e292e942b`), read-only.
+
+| Step | Result |
+|---|---|
+| 5.0 before any invitation | **PASS as a negative control**: 9 of 11 checks pass (setup; `pendingInvitations` present, so the 0087 API is deployed; no membership in the Owner's agency; the four staff routes 404 with no data); the two invitation checks fail because nothing was invited yet |
+| 5.1 add staff, 5.2 invite | Done by the Owner in the browser. **Deviation:** the invitation role is **Scheduler**, not Read-only (the Role dropdown of the invite form was set to Scheduler; the steps said Read-only). Staff list shows the person as Invited |
+| 5.3 check | With `--expect-role read_only`: 10 of 11 pass, 1 fails only on the role label (`pending: [(agency, scheduler)]`). **Verified live: M-1** (the invited existing sign-in has NO membership in the Owner's agency and is refused with 404 on all four staff routes), **L-1** (the pending invitation carries only agency id, name, role and date), the Owner's staff list shows Invited, the invitation is pending. The re-run with `--expect-role scheduler` was not pasted, so that single check is not recorded as passed |
+| 5.4 invitee signs in | **BLOCKED**: the managed login asks the invitee for an authenticator code that the Owner cannot find, and offers no way to enrol a new one |
+| 5.5 accept, 5.6 after, 5.7 L-2 duplicate invite, 5.8 L-3 set Inactive, 5.9 inactive check, 5.10 Enable, 5.11, 5.12, 5.13 | **NOT RUN** (they need the invitee's sign-in, except 5.7, which the Owner did not run) |
+
+**Cause (not fully established).** Live read on 2026-10-30: pool `us-west-2_849AYz5J7` has MFA `ON`, authenticator app (TOTP) enabled, tier ESSENTIALS. The account shows `UserMFASettingList` null and no preferred MFA. A likely explanation, NOT verified, is that Cognito holds a previously registered authenticator token for the account. Cognito has no admin call to remove such a token; the options are deleting and recreating the account (it would get a new sub and lose the existing membership, destructive) or weakening the pool's MFA. **Neither was approved or done, and neither is recommended for a test step.**
+
+**AWS changes made for this (TEST pool only, all with the Owner's approval of 2026-10-30):** exactly one `aws cognito-idp admin-set-user-mfa-preference ... --software-token-mfa-settings Enabled=false,PreferredMfa=false` on `58d173c0-e0d1-709f-4288-116f2ed5dbfc`. **No state change**: the account's MFA settings read null before and after. It was run as one block after the before-read showed no MFA, which was a condition to stop on; it did no harm. No pool setting, other account or production resource was touched.
+
+**State left on TEST:** one pending invitation (Scheduler) for the invitee, one staff profile "V5 Existing Person" with Invited status, and nothing else. Both are harmless and need no cleanup; nothing was accepted, so the invitee has no access to the Owner's agency.
+
+**What is and is not evidenced for the invitation fix on TEST**
+- Verified live (above): M-1 as far as the invitation stage, L-1, the Invited state.
+- NOT verified live: acceptance and role assignment, L-2, L-3, Enable, a browser sign-in with a real token (T8, the JWT authorizer on the accept route). These are covered by the database and API tests in CI (`staff-management.db.test.ts`, `staff.db.test.ts`), which ran green on the PostgreSQL job for the tested commits (see `RELEASE_MANIFEST.md`); CI has been unreliable since 2026-10-29 (runners not allocated; one unexplained `postgres` failure on `c3a23af`; U6 open), so this is weaker than a live run.
+- Whether that is enough for TEST is the Owner's decision; it is not made here. **It does not affect production, which needs its own package, the independent SQL review (V7 option A) and a separate GO.**
 
 ## 5. Rollback inputs and clean-up (for the Owner)
 Kept until acceptance: `~/ogevia-before/` on CloudShell (previous Lambda code, web files, templates, route list, CORS), the run folders under `~/ogevia-apply-0087-*` and `~/ogevia-ledger-window-test-*`, and the snapshot `ogevia-prod-postgres-pre-0087-202610290719` (taken before the first apply; it bills until deleted; deleting it is the Owner's decision). Database rollback if ever needed: `apply-0087-test.sh rollback` (0087 only; 0086 stays).
