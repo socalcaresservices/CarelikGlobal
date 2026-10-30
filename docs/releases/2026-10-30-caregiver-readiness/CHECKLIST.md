@@ -1,6 +1,6 @@
 # Release checklist: 2026-10-30-caregiver-readiness
 
-**Status: Phase A PARTIAL (one gate FAILED, see A4 and A6). Phase B PARTIAL. Phases C, D and E NOT RUN. Not deployed anywhere. Owner decision: GO / NO-GO NOT GIVEN.**
+**Status (updated 2026-10-30, after the owner's decisions of the same day): TEST/PILOT package only. Operator: Stella Okereke. Target environment: NOT DESIGNATED. Phase A: G1 and G2 pass; G3 OPEN (4 date-dependent database tests, no defect: see `TEST_FAILURE_CATEGORIZATION.md`). Phase B: PARTIAL (B9 open, no human tester). Phases C, D, E NOT RUN. Not deployed anywhere. 0086 is NOT RELEASABLE. GO / NO-GO not given.**
 Status words: implemented and tested on a disposable local database only. "Demo" environment: UNKNOWN.
 Template: `docs/release-process/RELEASE_CHECKLIST_TEMPLATE.md`. Evidence below is real command output from this session (2026-10-30), local PostgreSQL 16, synthetic data.
 
@@ -32,12 +32,12 @@ Template: `docs/release-process/RELEASE_CHECKLIST_TEMPLATE.md`. Evidence below i
 | A1 | Install | `pnpm install --frozen-lockfile` | ☑ ok | completed in the session |
 | A2 | Lint (G1) | `pnpm lint` | ☑ exit 0 | `Tasks: 6 successful, 6 total` |
 | A3 | Typecheck (G2) | `pnpm typecheck` | ☑ exit 0 | `Tasks: 7 successful, 7 total` |
-| A4 | Unit and static tests (G3a) | `pnpm test` (run per package) | ☒ **FAILED, 10 tests** | web 1215/1215 pass; sv-api 96/96 pass; **infra/aws 542 pass, 10 fail of 552**. The 10 are `operator-tarball.test.ts` (5), `rehearsal-operator-scripts.test.ts` (1), `auth-cutover-gate.test.ts` (3), `web-headers-gate.test.ts` (1). Cause: they pin the 2026-10-19/21 release packages to the repository at 85 migrations and to the pre-0086 route set and "before" templates; any new migration or route fails them. They pass on the unmodified code. **Not weakened or edited.** Owner decision needed (see Open items). |
+| A4 | Unit and static tests (G3a) | `pnpm test` (run per package) | ☑ pass | web 1215/1215; sv-api 96/96; **infra/aws 458/458 in 23 files**. The 10 failing release-pin tests of the earlier run belonged to the superseded 2026-10-19 and 2026-10-21 packages and were **retired on the owner's instruction** (moved to `infra/aws/retired-tests/`, not deleted, not re-pinned; see its README). |
 | A5 | Build | `pnpm build` | ☑ exit 0 | `Tasks: 6 successful, 6 total` (turbo output warnings only) |
-| A6 | Database tests (G3b) | `OGEVIA_TEST_DATABASE_URL=… pnpm --filter @carelik/infra-aws test:db` | ☒ **not clean** | 1151 pass, 41 fail of 1192 (96 of 102 files). The 41 failures are in `auth-cutover-scripts` (16), `prd-release-exec` (13), `prd-rehearsal` (8), `authorization-tiers` (1), `authorization-single-bucket` (1), `dst-local-times` (2): **the same 6 files and 41 tests fail on the unmodified code in this environment** (checked by running them with 0086 removed). Cause not investigated; looks environmental (operator-script suites, a DST and two authorization date tests). |
+| A6 | Database tests (G3b) | `OGEVIA_TEST_DATABASE_URL=… pnpm --filter @carelik/infra-aws test:db` | ☒ **OPEN: 4 failures** | Real clock (2026-10-30), 99 files: **1080 pass, 4 fail**. The 4 are date-dependent tests (`authorization-tiers` 1, `authorization-single-bucket` 1, `dst-local-times` 2): today is 2 days before a month end and the DST fall-back. They pass with the clock frozen at 2026-10-10. The earlier 41 failures: 37 were tests of superseded packages (retired), 4 are these. **No defect found.** Frozen-date evidence: the 5 date-sensitive files pass 61 of 61 with the clock frozen at 2026-10-10; a frozen-clock run of the whole suite stalled and is not counted. Full detail: `TEST_FAILURE_CATEGORIZATION.md`. G3 stays open until the suite is clean on a real date (after 2026-11-02) or the four tests are made calendar-independent (owner decision). |
 | A7 | API tests (G3c) | `… pnpm --filter @carelik/sv-api test:db` | ☑ all passed | 152/152 in 22 files; skipped not counted by this session |
 | A8 | CI on the pull request | | ☐ N/A: no pull request opened | |
-| A9 | Counts did not drop (3.1) | | ☑ with explanation | Infra unit total unchanged (552). Web: removed the Compliance card tests (9 of `compliance.test.tsx`) and the Onboarding-card test (1) because those components were deleted by the brief; added readiness, approve, extend, sign-in link, accounts and mobile tests. DB: +22 new, existing tests changed only where the 2026-10-30 rules reverse earlier ones (list below). |
+| A9 | Counts did not drop (3.1) | | ☑ with explanation | Infra unit suite: 552 before; 458 now after the owner-approved retirement of 4 package test files (94 tests of the superseded packages; none of the 458 fails). Web: removed the Compliance card tests (9 of `compliance.test.tsx`) and the Onboarding-card test (1) because those components were deleted by the brief; added readiness, approve, extend, sign-in link, accounts and mobile tests. DB: 3 retired package files (62+32+14 tests); +22 new, existing tests changed only where the 2026-10-30 rules reverse earlier ones (list below). |
 
 Existing tests changed (rule changes, not weakened controls): `compliance-hold` and `apps/sv-api/test/compliance.db` (14 becomes the agency setting, set to 14 in those suites; "inside the period" now allowed again), `cpr-tb-verified-required` (documents past the due date; new inside-period test), `onboarding` and `scheduling-onboarding.db` (one onboarding item left; approval through Approve for work), `caregiver-gate-no-service`, `caregiver-service-admin`, `invitations-planned`, `workflow.db` (status picker refuses Approved/Active; resend rate limit), plus count/list updates in `schema`, `verification`, `rollback-range`, `readiness-*`, `upgrade-*`, `merged-gate`; verification SQL `01` and `08` updated to 0086.
 
@@ -63,17 +63,17 @@ Security notes (for the reviewer): all new functions are `SECURITY DEFINER` with
 | B4 | Catalog IDs performed as named personas | ☑ by script, ☐ by a person | `readiness-scenario.mjs` as Olivia (administrator), Morgan (manager), Alex (caregiver): **22 of 22 checks pass at 1280 px and 22 of 22 at 390 px**, on the real production bundle, real API handler and real PostgreSQL. Covers RDY-04, 05, 07, 09, 12, 14 (access), 15, 16. |
 | B5 | Screenshots | ☑ | `evidence/desktop-*.png` (8), `evidence/phone-*.png` (8) |
 | B6 | Before/after of the same record | ☑ | `desktop-03-reese-before-approve.png` and `desktop-04-reese-approved.png` |
-| B7 | Browser console and network: no unexpected errors or 4xx/5xx | ☐ **NOT DONE** | not recorded by the scenario |
+| B7 | Browser console and network: no unexpected errors or 4xx/5xx | ☑ | `readiness-scenario.mjs` now records console errors, page errors and every 4xx/5xx for the administrator and manager sessions (desktop): none, apart from the deliberate resend refusal (409). Phone session not recorded. |
 | B8 | Negative checks | ☑ partly | manager has no Extend (checked); caregiver refused (checked); resend refused inside a minute (checked); other-tenant and wrong-role refusals are covered by the DB/API tests, not the browser |
-| B9 | Regression set R spot-checked | ☐ **NOT DONE** | |
+| B9 | Regression set R spot-checked | ☒ **OPEN** | The two legacy browser scripts cannot serve: `browser-scenario.mjs` fails at the schedule page's request panel **identically on the code before 0086** (pre-existing, probably date-dependent); `workflows.mjs` is stale and stops in W1 (client intake), before anything 0086 touches. R is covered here only by the automated suites (DB 1080, API 152, web 1215). A person must spot-check R on the harness or pilot. |
 | B10 | What the harness cannot prove | ☑ listed | Cognito invitation and expiry, email content, authorizer/IAM, CloudFront, RDS TLS, real data volumes: carried to `RUNBOOK.md` F |
 
 Database check after the browser run: one `caregiver_work_approvals` row and one `caregiver.approved_for_work` audit row for the caregiver the script double-clicked; the contact audit row holds `{"email_set": true, "phone_set": false}` only.
 
-**Phase B signed:** NOT SIGNED (B7, B9 open; no human tester).
+**Phase B signed:** NOT SIGNED (B9 open; no human tester).
 
 ## C. Pilot/test environment (Phase C), gate G5 — NOT RUN
-Owner has stated in writing: **NO**. Target, commit SHA, who runs it and the window are all unset; the environment is UNKNOWN. Steps C0 to C10 are in `RUNBOOK.md` (sections B, C, E, F, G). Nothing was run.
+Owner statement (2026-10-30, in the conversation, not yet filed as a document): **TEST/PILOT only until a deployment target is formally designated. Operator: Stella Okereke.** Target environment, commit SHA and window: **not designated**. Do not schedule or script deployment to any shared environment until the target is explicitly identified and documented here. The real `cdk diff` (C4a) is run by the Operator in the target once it is designated; the local synthesized comparison (section 1) is not a substitute. Steps C0 to C10 are in `RUNBOOK.md`; nothing was run.
 
 ## D. User acceptance (Phase D) — NOT RUN
 No validator has run any script. Owner, Scheduler, Caregiver (phone) and the Authorization validator rows are blank. Scripts to use: RDY-01 to RDY-16 in the plan.
@@ -86,10 +86,10 @@ No validator has run any script. Owner, Scheduler, Caregiver (phone) and the Aut
 | E3 | Rollback plan | ☑ draft | `RUNBOOK.md` G |
 | E4 | Backup confirmation | ☐ | needs the real snapshot id |
 | E5 | Evidence index | ☑ partial | this file, `evidence/` |
-| E6 | All six gates | ☐ G1 ☑, G2 ☑, G3 ☒, G4 ☐, G5 ☐, G6 ☐ | |
+| E6 | All six gates | ☐ G1 ☑, G2 ☑, G3 ☐ (4 date-dependent DB tests open), G4 ☐ (B9 open), G5 ☐, G6 ☐ | |
 | E7 | Window and Operator | ☐ | |
 
-Risk assessment (draft). (1) The migration backfills approvals and retires three onboarding requirement categories: if the target holds caregivers whose stored status is Ready/Active, they remain schedulable, but the **page will show them as Approved/Active with missing items** until Task 8 is reviewed: nothing is blocked, because enforcement is unchanged. Likelihood low, effect on access none, detected by the section F count. (2) Reversal of the 0081 rule widens what can be scheduled before enforcement is on, by owner decision. (3) A new table holds email addresses and phone numbers (restricted, encrypted at rest with the rest of RDS). (4) The rollback drops four tables: BACKUP REQUIRED. (5) Release-pin tests of earlier packages are red until rebased.
+Risk assessment (draft). (1) The migration backfills approvals and retires three onboarding requirement categories: if the target holds caregivers whose stored status is Ready/Active, they remain schedulable, but the **page will show them as Approved/Active with missing items** until Task 8 is reviewed: nothing is blocked, because enforcement is unchanged. Likelihood low, effect on access none, detected by the section F count. (2) Reversal of the 0081 rule widens what can be scheduled before enforcement is on, by owner decision. (3) A new table holds email addresses and phone numbers (restricted, encrypted at rest with the rest of RDS). (4) The rollback drops four tables: BACKUP REQUIRED. (5) The release-pin tests of the superseded packages are retired, not re-pinned: a new release-pin baseline is created only after the target and release candidate are final.
 
 ### Decision record
 | Field | Value |
@@ -97,9 +97,15 @@ Risk assessment (draft). (1) The migration backfills approvals and retires three
 | Decision | ☐ GO ☐ NO-GO — **not given** |
 | Owner / date / SHA / reference / window / Operator / conditions | blank |
 
-## Open items for the owner
-1. **Name the target** (demo is UNKNOWN) and say whether it is pilot/test, and who is the Operator. Nothing can be scheduled before that.
-2. **The 10 red release-pin tests (A4):** recommended: retire the 2026-10-19 and 2026-10-21 package tests when that cutover is complete (their package is superseded), or authorise re-pinning them to a new package built for the named target. I did not touch them.
-3. **The 41 environmental DB failures (A6):** pre-existing in this container; need a look by someone with the CloudShell/operator context if they should pass elsewhere.
-4. B7 and B9 and all of Phase D need a person.
-5. Confirm the decisions in `README.md` ("Decisions taken without asking").
+## Open items (nothing below is done unless ticked)
+1. ☐ **Designate the target environment** and record it in C0 (owner). Operator is Stella Okereke. Until then: no scheduling, no scripts run against a shared environment.
+2. ☐ **Real `cdk diff`** in the target, by the Operator, once designated (C4a). Expected: only the 8 routes and one Lambda code asset per API stack (`RUNBOOK.md` D).
+3. ☐ **G3 clean:** re-run the DB suite on a real date after 2026-11-02, or make the 4 date-dependent tests calendar-independent (owner choice; not done).
+4. ☐ **B9:** a person spot-checks the regression set R (harness or pilot).
+5. ☐ **Phase C, D, E** in full (pilot validation, user acceptance by Owner, Scheduler, Caregiver and the authorization validator, owner GO).
+6. ☐ Confirm the decisions listed in `README.md` ("Decisions taken without asking").
+7. ☐ Security review checklist (`docs/security-review-checklist.md`) confirmed by a reviewer.
+8. ☑ Release-pin tests of the 2026-10-19 and 2026-10-21 packages retired (moved, not deleted, not re-pinned).
+9. ☑ The 41 database failures categorized: 37 obsolete (retired), 4 date-dependent, 0 defects.
+
+**0086 is not releasable** until items 1 to 5 are resolved.
