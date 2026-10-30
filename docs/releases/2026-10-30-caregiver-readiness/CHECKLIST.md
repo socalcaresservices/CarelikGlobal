@@ -80,6 +80,8 @@ Database check after the browser run: one `caregiver_work_approvals` row and one
 Operator: **Stella Okereke**. **Commit SHA recorded: `54894411f0e69ac29bec762006e47f7d943b94f2` (A3; supersedes A2's `44dbd2ec…`). Window: NOT SET; to be recorded after B9 is PASS and the Operator confirms her availability. GO to run Phase C: NOT given.** Until the window and the GO are stated in writing, nothing is run against the TEST slice; Claude runs nothing against any shared environment in any case. The real `cdk diff` (C4a) is the Operator's first Phase C step once the owner states the SHA and window. Steps C0 to C10 are in `RUNBOOK.md`; nothing was run.
 
 ## D. User acceptance (Phase D) — NOT RUN
+Scripts drafted (not run, not authorized to run before the owner's GO and Phase C): `PHASE_D_UAT_SCRIPTS.md` (Owner O1-O20, Scheduler S1-S7, Caregiver C1-C8, Authorization A1-A4, defect log, sign-off).
+
 No validator has run any script. Owner, Scheduler, Caregiver (phone) and the Authorization validator rows are blank. Scripts to use: RDY-01 to RDY-16 in the plan.
 
 ## E. Production approval (Phase E), gate G6 — NOT PREPARED FOR PRODUCTION
