@@ -1,5 +1,7 @@
 # Target verification status and open items (2026-10-30, 0086)
 
+**Owner decisions D9-D12 (DECISION_RECORD A4) close sections 2 and 3 and set the rule in section 4: due-days is API-only; enforcement stays OFF in UAT (O13/S4 not executed); cross-agency is manual if TEST has a second organization, otherwise the reviewer must accept reliance on the automated tests.**
+
 **0086 remains NOT RELEASABLE.** Owner instruction 2026-10-30: no merge, deploy, migration, enforcement change or environment change. Release readiness is evaluated only after UAT execution and sign-off.
 
 ## 1. Read-only target verification (runbook section B)
@@ -33,5 +35,5 @@
 4. Operator runs the real `cdk diff` (expect 8 routes plus a Lambda asset per API stack).
 5. A human accepts B9 (G4).
 6. Reviewer completes and signs `SECURITY_REVIEW.md`.
-7. Owner records the due-days screen decision (section 3) and the enforcement rule for UAT (section 2).
+7. ~~Owner records the due-days and enforcement decisions~~ DONE (D9, D10).
 8. Phase C, then Phase D UAT with all four validators, then the release record update (D7).

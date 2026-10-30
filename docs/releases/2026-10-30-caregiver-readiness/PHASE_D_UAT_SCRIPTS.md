@@ -94,6 +94,14 @@ Formula (as the product states it): **Hours left = Authorized − Billable (used
 | A3 | On the amended client: open Authorization changes | The page lists the amendment with date and who; **no crash** | | |
 | A4 | Confirm that a Not ready caregiver's attempt to be scheduled (S3) did **not** reserve any minutes | Reserved unchanged | | |
 
+## 5a. Cross-agency isolation (decision D11; conditional)
+Operator first counts organizations on TEST read-only and records the number: ____ . If it is 1, mark X1 to X3 **NOT RUN (single organization)** and the reviewer's written acceptance of the limitation is required.
+| Step | Action | Expected | Result | Notes |
+|---|---|---|---|---|
+| X1 | Signed in to organization A as the Owner, open Care Team and Accounts | No person from organization B appears | | |
+| X2 | As the Owner of A, open a caregiver page of B by its address (Operator supplies the ID) | Refused or "not found"; no data shown | | |
+| X3 | As a user of B, repeat X1/X2 against A | Same | | |
+
 ## 6. Defect log (all validators)
 | # | Step | Class (Blocker / Major / Minor) | What happened (steps, screen) | Status | Owner exception (Major only) |
 |---|---|---|---|---|---|
@@ -112,8 +120,8 @@ Formula (as the product states it): **Hours left = Authorized − Billable (used
 When all four are accepted and the defect log is clear, the Owner copies the outcome into `CHECKLIST.md` section D. Until then Phase D is **NOT RUN** and the release stays **NOT RELEASABLE**.
 
 ## 8. Known gaps in what these scripts can test (author's notes)
-- **RDY-08 has no screen** (O14): the agency CPR/TB due-days setting can be read and changed only through the API.
+- **RDY-08 has no screen by decision D9**: the agency CPR/TB due-days setting is API-only for 0086.
 - **RDY-13 (contacts unreadable by any role) and the SECURITY DEFINER checks** are database facts, not screens: they are in `SECURITY_REVIEW.md`, not here.
-- **RDY-14 across agencies** needs a second synthetic agency on TEST. If none exists, step S2/C4 cover roles only and the cross-agency proof rests on the automated tests; say so in the sign-off.
+- **RDY-14 across agencies (decision D11):** step X1 below runs only if TEST has a second organization. If it has none, UAT relies on the automated tests and the reviewer must accept that limitation in `SECURITY_REVIEW.md` before sign-off.
 - **A "Request" button for CPR/TB** was not built (no channel to message a caregiver); Upload is on the Documents page.
-- **Enforcement (O13, S4)** is a real state change on TEST; the owner decides whether to switch it on for the run.
+- **Enforcement stays OFF by decision D10**: O13 is not executed; S4 is replaced by a report-only check. The blocking behaviour (RDY-06 with enforcement ON) is covered only by the automated tests and is NOT shown in UAT.

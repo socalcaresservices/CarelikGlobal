@@ -93,6 +93,9 @@ Cognito configuration and invitation email content, the API authorizer and IAM p
 |---|---|---|---|---|
 | | | | | |
 
+## 6a. Cross-agency limitation (owner decision D11)
+If TEST has only one organization, UAT cannot show cross-agency isolation by hand and relies on the automated tests (DB and sv-api HTTP suites with a second organization). The reviewer records here whether that is accepted: ☐ accepted ☐ not accepted (manual check needed). Organizations on TEST (Operator count): ____ . Reviewer initials/date: ________
+
 ## 7. Sign-off
 | Field | Entry |
 |---|---|

@@ -75,6 +75,7 @@ Database check after the browser run: one `caregiver_work_approvals` row and one
 **Phase B signed:** NOT SIGNED (no human tester; B9 was automated).
 
 ## C. Pilot/test environment (Phase C), gate G5 — NOT RUN
+**Owner decisions 2026-10-30 (DECISION_RECORD A4, unsigned):** D9 due-days API-only, no UI work; D10 enforcement OFF during UAT, O13 and S4 not executed; D11 cross-agency manual only if TEST has a second organization, else the reviewer accepts reliance on automated tests; D12 NOT RELEASABLE, nothing authorized, awaiting Stella's TEST verification.
 Open items and read-only verification status: `TARGET_VERIFICATION_AND_OPEN_ITEMS.md` (Claude cannot reach the private TEST database; the Operator must run runbook B; enforcement is not reversible in the product; due-days screen decision open).
 
 **C0 Target environment (designated 2026-10-30 by the owner in conversation; recorded in `DECISION_RECORD.md` amendment A1, unsigned):** the existing **TEST/pilot** slice: stacks `Ogevia-prod-*` (CDK `-c env=prod`), database **`ogevia_sv_test`** on RDS `ogevia-prod-postgres` (account 300094796789, `us-west-2`), banner "TEST — synthetic data only". **Not** `Ogevia-prd-*` and **never** `ogevia_prd`, which lives on the same RDS instance. Identifiers come from repository documents and are **NOT VERIFIED LIVE** (Claude has no AWS access): the Operator confirms them read-only first (`RUNBOOK.md` section B). Last recorded state: commit `e80b770`, ledger 85 / 0085 (2026-10-19); the current live ledger is UNKNOWN until the probe is run.
