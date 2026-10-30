@@ -92,10 +92,27 @@ No validator has run any script. Owner, Scheduler, Caregiver (phone) and the Aut
 Risk assessment (draft). (1) The migration backfills approvals and retires three onboarding requirement categories: if the target holds caregivers whose stored status is Ready/Active, they remain schedulable, but the **page will show them as Approved/Active with missing items** until Task 8 is reviewed: nothing is blocked, because enforcement is unchanged. Likelihood low, effect on access none, detected by the section F count. (2) Reversal of the 0081 rule widens what can be scheduled before enforcement is on, by owner decision. (3) A new table holds email addresses and phone numbers (restricted, encrypted at rest with the rest of RDS). (4) The rollback drops four tables: BACKUP REQUIRED. (5) The release-pin tests of the superseded packages are retired, not re-pinned: a new release-pin baseline is created only after the target and release candidate are final.
 
 ### Decision record
-| Field | Value |
+Owner decisions recorded 2026-10-30 (given in the conversation with Claude Code; **not yet filed as a signed document**: ☐ owner to file):
+| # | Decision | Effect in this package |
+|---|---|---|
+| D1 | Treat 0086 as a **TEST/PILOT package only** until a deployment target is formally designated. **Operator: Stella Okereke.** Do not schedule, script or execute deployment against any shared environment until the target is explicitly identified and documented. | `RUNBOOK.md` header; C section above. Target: **NOT DESIGNATED** |
+| D2 | **Retire** the release-pin tests tied exclusively to the superseded 2026-10-19 and 2026-10-21 packages. **Do not re-pin.** Create a new release-pin baseline only after the target is identified and the release candidate is finalized. | 7 files moved to `infra/aws/retired-tests/` (not deleted) |
+| D3 | Categorize the 41 database failures as pre-existing environment issue, obsolete test, harness/container issue or product defect. | `TEST_FAILURE_CATEGORIZATION.md` |
+| D4 | Run the real `cdk diff` once the target is identified. | **Blocked: no target** |
+| D5 | Complete Phase B (console, network, regression) and all gates and activities of Phases C, D, E. | B7 done; **B9 open**; C, D, E **not run** |
+| D6 | Keep the failed gate marked failed until resolved. | **G3 is marked OPEN/FAILED** (A6) |
+| D7 | Do **not** mark 0086 releasable, deployment-ready or production-approved until: the failed gate is resolved, outstanding validations are complete, the deployment target is documented, and the release record is updated. | See the status table below |
+
+**Release status table (the only status that counts):**
+| Condition for "releasable" (D7) | State |
 |---|---|
-| Decision | ☐ GO ☐ NO-GO — **not given** |
-| Owner / date / SHA / reference / window / Operator / conditions | blank |
+| Failed gate resolved (G3: 4 date-dependent DB tests) | ☐ **NOT RESOLVED** |
+| Outstanding validations complete (B9, Phase C, Phase D, security review) | ☐ **NOT COMPLETE** |
+| Deployment target documented | ☐ **NOT DESIGNATED** |
+| Release record updated after the above | ☐ not applicable until the three rows above are done |
+| **0086 releasable / deployment-ready / production-approved** | **NO** |
+
+GO / NO-GO decision (G6): ☐ GO ☐ NO-GO — **not given**. Owner / date / SHA / reference / window / conditions: blank.
 
 ## Open items (nothing below is done unless ticked)
 1. ☐ **Designate the target environment** and record it in C0 (owner). Operator is Stella Okereke. Until then: no scheduling, no scripts run against a shared environment.
