@@ -25,8 +25,8 @@ Wording follows what the owner wrote in the conversation on 2026-10-30; the righ
 ## 2. State of the release at the time of filing (facts, not decisions)
 | Item | State |
 |---|---|
-| Code | `claude/practical-tesla-r07odb`; no pull request opened; nothing merged to main. Commit recorded for Phase C: `44dbd2ec8a8b6c87562d30245e80e66a6441dfdb` (amendment A2) |
-| Gates | G1 lint pass; G2 typecheck pass; G3 tests pass and validated; G4 open (B9 was run and FAILED on pre-existing defect D1: owner decision pending); G5 pilot not run; G6 owner GO **not given** |
+| Code | `claude/practical-tesla-r07odb`; no pull request opened; nothing merged to main. Commit recorded for Phase C: `54894411f0e69ac29bec762006e47f7d943b94f2` (amendment A3, which supersedes A2's `44dbd2ec8a8b6c87562d30245e80e66a6441dfdb`) |
+| Gates | G1 lint pass; G2 typecheck pass; G3 tests pass and validated; G4 open (B9 automated run PASSED 30/30 after defect D1 was fixed; a human reviewer has not accepted it); G5 pilot not run; G6 owner GO **not given** |
 | Target environment | **DESIGNATED 2026-10-30 (unsigned): existing TEST/pilot, see section 5 amendment A1.** No deployment authorized |
 | Operator | Stella Okereke |
 | Deployed anywhere | **No** |
@@ -60,6 +60,7 @@ Operator acknowledgement (D1: Operator is Stella Okereke; she runs nothing again
 |---|---|---|---|
 | A1 | 2026-10-30 | **Target environment designated** (owner's choice in conversation: existing TEST/pilot). Details below. Does **not** authorize any deployment, and sets no commit SHA or window. | ____________ |
 | A2 | 2026-10-30 | **Commit SHA recorded for Phase C** and window deferred (owner's choice in conversation): SHA `44dbd2ec8a8b6c87562d30245e80e66a6441dfdb`; **window: NOT SET, to be recorded after B9 is PASS and the Operator confirms her availability**. Does **not** give a GO. | ____________ |
+| A3 | 2026-10-30 | **Commit SHA re-recorded for Phase C** after the owner chose to fix defect D1 (`withClientNames` dropped `Date` values; found by the B9 regression run). The fix changed deployable code (`apps/sv-api/src/routes.ts`, +3/-1), so the A2 SHA no longer covers every deployable change. **New SHA `54894411f0e69ac29bec762006e47f7d943b94f2`**; A2's `44dbd2ec8a8b6c87562d30245e80e66a6441dfdb` is **superseded**. The window is still **NOT SET** and no GO has been given. | ____________ |
 
 | Field | Value |
 |---|---|
