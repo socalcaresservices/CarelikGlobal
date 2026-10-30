@@ -1722,6 +1722,107 @@ export const ROUTES: Record<string, Route> = {
     }),
   },
 
+  // Caregiver readiness (0086): ONE server-side source for the page, both lists and the assignment gates. Approval, extensions and the
+  // due-days setting are decided in the database; nothing here trusts the browser for eligibility.
+  "GET /v1/caregivers/{caregiverRecordId}/readiness": {
+    mutating: false,
+    handle: async ({ event, tx }) => ({
+      readiness: await tx(async (db) => (await first(db, "select ogevia_api.get_caregiver_readiness($1,$2) as r", [orgParam(event), uuid(p(event).caregiverRecordId, "caregiverRecordId")])).r),
+    }),
+  },
+
+  "POST /v1/caregivers/{caregiverRecordId}/approve": {
+    mutating: true,
+    handle: async ({ event, tx }) => {
+      const body = parseBody(event.body, event.isBase64Encoded);
+      const key = idempotencyKey(event.headers);
+      return {
+        readiness: await tx(async (db) => (await first(db, "select ogevia_api.approve_caregiver_for_work($1,$2,$3) as r", [
+          uuid(body.organizationId, "organizationId"), uuid(p(event).caregiverRecordId, "caregiverRecordId"), key])).r),
+      };
+    },
+  },
+
+  "POST /v1/caregivers/{caregiverRecordId}/cpr-tb/extend": {
+    mutating: true,
+    handle: async ({ event, tx }) => {
+      const body = parseBody(event.body, event.isBase64Encoded);
+      const key = idempotencyKey(event.headers);
+      return {
+        readiness: await tx(async (db) => (await first(db, "select ogevia_api.extend_cpr_tb_due_date($1,$2,$3,$4::date,$5,$6) as r", [
+          uuid(body.organizationId, "organizationId"), uuid(p(event).caregiverRecordId, "caregiverRecordId"),
+          oneOf(body.requirement, "requirement", ["cpr", "tb"] as const), date(body.newDueDate, "newDueDate"),
+          text(body.reason, "reason", 500, { required: true }), key])).r),
+      };
+    },
+  },
+
+  "GET /v1/caregivers/{caregiverRecordId}/cpr-tb/extensions": {
+    mutating: false,
+    handle: async ({ event, tx }) => ({
+      extensions: await tx((db) => rows(db, "select * from ogevia_api.list_cpr_tb_extensions($1,$2)", [orgParam(event), uuid(p(event).caregiverRecordId, "caregiverRecordId")])),
+    }),
+  },
+
+  "GET /v1/compliance/settings": {
+    mutating: false,
+    handle: async ({ event, tx }) => ({
+      settings: await tx(async (db) => (await first(db, "select ogevia_api.get_compliance_settings($1) as s", [orgParam(event)])).s),
+    }),
+  },
+
+  "POST /v1/compliance/settings": {
+    mutating: true,
+    handle: async ({ event, tx }) => {
+      const body = parseBody(event.body, event.isBase64Encoded);
+      const key = idempotencyKey(event.headers);
+      const days = Number(body.cprTbDueDays);
+      if (!Number.isInteger(days)) throw new ApiError(400, "validation", "Enter a whole number of days");
+      return {
+        settings: await tx(async (db) => (await first(db, "select ogevia_api.set_cpr_tb_due_days($1,$2,$3,$4) as s", [
+          uuid(body.organizationId, "organizationId"), days, text(body.reason, "reason", 500, { required: true }), key])).s),
+      };
+    },
+  },
+
+  // Contact details are written here and read only by the server when it sends a sign-in link; no list returns them.
+  "POST /v1/caregivers/{caregiverRecordId}/contact": {
+    mutating: true,
+    handle: async ({ event, tx }) => {
+      const body = parseBody(event.body, event.isBase64Encoded);
+      const key = idempotencyKey(event.headers);
+      return {
+        contact: await tx(async (db) => (await first(db, "select ogevia_api.set_caregiver_contact($1,$2,$3,$4,$5) as c", [
+          uuid(body.organizationId, "organizationId"), uuid(p(event).caregiverRecordId, "caregiverRecordId"),
+          text(body.email, "email", 254), text(body.phone, "phone", 30), key])).c),
+      };
+    },
+  },
+
+  // One "Send sign-in link" for the page and both lists: first invite when no invitation exists, otherwise a resend (rate-limited in the
+  // database). Email only, through the Cognito invitation; the temporary password is generated and mailed by Cognito and never passes here.
+  "POST /v1/caregivers/{caregiverRecordId}/signin-link": {
+    mutating: true,
+    handle: async ({ event, tx, identity }) => {
+      const record = uuid(p(event).caregiverRecordId, "caregiverRecordId");
+      const body = parseBody(event.body, event.isBase64Encoded);
+      const org = uuid(body.organizationId, "organizationId");
+      const { email, invited } = await tx(async (db) => (await db.query("select * from ogevia_api.get_signin_contact($1, $2)", [org, record])).rows[0] as { email: string; invited: boolean });
+      if (!invited) {
+        const normalized = await tx(async (db) =>
+          ((await db.query("select ogevia_api.begin_caregiver_invitation($1, $2, $3) as email", [org, record, email])).rows[0] as { email: string }).email);
+        const signIn = await identity.invite(normalized);
+        const [invitation] = await tx((db) =>
+          rows(db, "select * from ogevia_api.complete_caregiver_invitation($1, $2, $3, $4, $5)", [org, record, normalized, signIn.sub, signIn.existingAccount]));
+        return { invitation };
+      }
+      const resendTo = await tx(async (db) => ((await db.query("select ogevia_api.begin_invitation_resend($1, $2) as email", [org, record])).rows[0] as { email: string }).email);
+      await identity.resend(resendTo);
+      const sendCount = await tx(async (db) => ((await db.query("select ogevia_api.record_invitation_resent($1, $2) as n", [org, record])).rows[0] as { n: number }).n);
+      return { invitation: { sendCount } };
+    },
+  },
+
   "POST /v1/caregivers/{caregiverRecordId}/hire-date": {
     mutating: true,
     handle: async ({ event, tx }) => {

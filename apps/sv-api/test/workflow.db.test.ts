@@ -862,6 +862,8 @@ describe("caregiver invitations and planned assignments (0025) through the API",
     const assignments = await call("GET /v1/assignments", w.managerA, { query: { organizationId: w.orgA, caregiverRecordId: record } });
     expect(assignments.body.assignments[0]).toMatchObject({ grantsAccess: true });
 
+    expect((await call("POST /v1/caregivers/{caregiverRecordId}/invitation/resend", w.managerA, { path, body: { organizationId: w.orgA } })).status).toBe(409); // 0086: a minute between sends
+    await db.admin.query("update ogevia.caregiver_invitations set last_sent_at = now() - interval '2 minutes' where caregiver_record_id = $1", [record]);
     const resent = await call("POST /v1/caregivers/{caregiverRecordId}/invitation/resend", w.managerA, { path, body: { organizationId: w.orgA } });
     expect(resent.status, JSON.stringify(resent.body)).toBe(200);
     expect(resent.body).toEqual({ invitation: { sendCount: 2 } });

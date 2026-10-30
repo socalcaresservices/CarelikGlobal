@@ -87,17 +87,6 @@ export interface ComplianceHolds {
 
 export const COMPLIANCE_KEYS = ["caregiver-compliance", "compliance-holds", "aws-attention", "readiness", "document-readiness"] as const;
 
-export function useCaregiverCompliance(caregiverRecordId: string, enabled = true) {
-  const api = useAwsApi();
-  const { activeOrganizationId } = useOrganization();
-  return useQuery({
-    queryKey: ["caregiver-compliance", activeOrganizationId, caregiverRecordId],
-    queryFn: async () =>
-      (await api.get<{ compliance: CaregiverComplianceState }>(`/v1/caregivers/${encodeURIComponent(caregiverRecordId)}/compliance`, { organizationId: activeOrganizationId })).compliance,
-    enabled: !!activeOrganizationId && enabled,
-  });
-}
-
 export function useComplianceHolds() {
   const api = useAwsApi();
   const { activeOrganizationId, hasPermission } = useOrganization();

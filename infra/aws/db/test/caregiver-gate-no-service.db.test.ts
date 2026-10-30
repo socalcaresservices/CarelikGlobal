@@ -23,7 +23,7 @@ describe("C08 direct creation cannot bypass the required-onboarding gate", () =>
   it("'ready' and 'active' are refused with the outstanding items named, and nothing is created", async () => {
     for (const status of ["ready", "active"]) {
       const last = `Direct ${status} ${randomUUID().slice(0, 4)}`;
-      await expectPgError(create(status, last), "OGC09", /Onboarding is not complete: .*Background check cleared/);
+      await expectPgError(create(status, last), "OGC09", /Onboarding is not complete: Required training completed/);
       expect(await countByLast(last)).toBe(0);
     }
   });
@@ -33,7 +33,9 @@ describe("C08 direct creation cannot bypass the required-onboarding gate", () =>
     const o = (await create("onboarding", `Onb ${randomUUID().slice(0, 4)}`))[0];
     expect(a.caregiver_record_id).toBeTruthy();
     expect(o.caregiver_record_id).toBeTruthy();
-    await expectPgError(q(w.managerA, "select * from ogevia_api.set_caregiver_status($1,$2,'ready','Synthetic approval',null)", [w.orgA, a.caregiver_record_id]), "OGC09", /Onboarding is not complete/);
+    await expectPgError(q(w.managerA, "select * from ogevia_api.set_caregiver_status($1,$2,'ready','Synthetic approval',null)", [w.orgA, a.caregiver_record_id]), "OGC09", /Use Approve for work/);
+    // 0086: the one approval step names exactly what is still missing
+    await expectPgError(q(w.managerA, "select ogevia_api.approve_caregiver_for_work($1,$2,null)", [w.orgA, a.caregiver_record_id]), "OGC09", /Cannot approve yet\. Waiting on: Background check, Required training, App sign-in/);
   });
 
   it("an agency with no required item outstanding can still create an Approved caregiver in one step (the gate follows the agency's own requirements)", async () => {
@@ -44,7 +46,7 @@ describe("C08 direct creation cannot bypass the required-onboarding gate", () =>
       expect(row.caregiver_record_id).toBeTruthy();
       expect(await countByLast(last)).toBe(1);
     } finally {
-      await db.admin.query("update ogevia.onboarding_requirements set is_active = true where organization_id = $1", [w.orgA]);
+      await db.admin.query("update ogevia.onboarding_requirements set is_active = true where organization_id = $1 and category = 'training'", [w.orgA]);
     }
   });
 
@@ -53,7 +55,7 @@ describe("C08 direct creation cannot bypass the required-onboarding gate", () =>
     try {
       await expectPgError(create("active", `Tenant ${randomUUID().slice(0, 4)}`), "OGC09", /Onboarding is not complete/);
     } finally {
-      await db.admin.query("update ogevia.onboarding_requirements set is_active = true where organization_id = $1", [w.orgB]);
+      await db.admin.query("update ogevia.onboarding_requirements set is_active = true where organization_id = $1 and category = 'training'", [w.orgB]);
     }
   });
 
@@ -63,7 +65,8 @@ describe("C08 direct creation cannot bypass the required-onboarding gate", () =>
     const listed = await q(w.managerA, "select * from ogevia_api.list_caregivers($1)", [w.orgA]);
     expect(listed.find((r) => r.caregiver_record_id === id)).toMatchObject({ status: "active" });
     await q(w.managerA, "select * from ogevia_api.set_caregiver_status($1,$2,'inactive','Synthetic pause',null)", [w.orgA, id]);
-    await q(w.managerA, "select * from ogevia_api.set_caregiver_status($1,$2,'active','Synthetic return',null)", [w.orgA, id]);
+    // 0086: coming back is "Approve for work" (every hard requirement must be met again); the manual picker no longer sets Approved or Active
+    await expectPgError(q(w.managerA, "select * from ogevia_api.set_caregiver_status($1,$2,'active','Synthetic return',null)", [w.orgA, id]), "OGC09", /Use Approve for work/);
   });
 });
 

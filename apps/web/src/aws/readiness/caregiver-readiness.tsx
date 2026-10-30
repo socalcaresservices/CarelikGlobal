@@ -5,7 +5,6 @@ import { actionError } from "./format";
 import { AvailabilityRequestForm, CurrentAvailability, RequestHistory } from "./availability-section";
 import { useAvailability } from "./queries";
 import { AvailabilityReview } from "./availability-review";
-import { CaregiverCompliance } from "../compliance/compliance-card";
 import { CaregiverDocuments } from "./documents-readiness";
 import { CaregiverServices } from "./service-approvals";
 import { CaregiverExperience, MatchingLocation } from "./matching-inputs";
@@ -24,7 +23,6 @@ export function CaregiverReadiness({ caregiverRecordId }: { caregiverRecordId: s
   const canSee = hasPermission("availability.read");
   return (
     <>
-      <CaregiverCompliance caregiverRecordId={caregiverRecordId} />
       {canSee ? (
         <SummarySection title="Availability" defaultOpen={(q.data?.pending.length ?? 0) > 0}
           status={q.data && q.data.pending.length > 0 ? <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-semibold text-amber-950">{q.data.pending.length} pending</span> : undefined}>
@@ -42,7 +40,6 @@ export function CaregiverReadiness({ caregiverRecordId }: { caregiverRecordId: s
       ) : null}
       <AvailabilityReview caregiverRecordId={caregiverRecordId} />
       {hasPermission("caregiver_services.read") ? <CaregiverServices caregiverRecordId={caregiverRecordId} /> : null}
-      {hasPermission("documents.read") ? <CaregiverDocuments caregiverRecordId={caregiverRecordId} /> : null}
       {hasPermission("matching.read") ? <CaregiverExperience caregiverRecordId={caregiverRecordId} /> : null}
       {hasPermission("matching.manage") ? <MatchingLocation caregiverRecordId={caregiverRecordId} /> : null}
     </>

@@ -5,6 +5,8 @@ import { Link } from "react-router-dom";
 import { useOrganization } from "@/providers/organization-provider";
 import { useAwsApi } from "./aws-workspace";
 import { ACCOUNT_STATUS_BADGE, ACCOUNT_STATUS_HELP, ACCOUNT_STATUS_LABEL, isAccountStatus, roleLabel } from "./account-status";
+import { WORK_STATUS_BADGE, WORK_STATUS_LABEL, type WorkStatus } from "./care-team-admin";
+import { SendSignInLink } from "./readiness/send-signin-link";
 import { HelpLine } from "./ui/help-line";
 
 
@@ -16,6 +18,11 @@ interface Account {
   caregiverRecordId: string | null;
   caregiverCode: string | null;
   isSelf: boolean;
+  /** 0086: the calculated caregiver status, identical to the Caregivers list and the caregiver page (null for staff who are not caregivers). */
+  workStatus?: WorkStatus | null;
+  readinessMet?: number | null;
+  readinessTotal?: number | null;
+  hasContact?: boolean | null;
 }
 
 const message = (cause: unknown, fallback: string) => (cause instanceof Error ? cause.message : fallback);
@@ -66,9 +73,15 @@ export function AccountsPage() {
                 <p className="min-w-0 break-words font-semibold text-slate-950">
                   {a.displayName ?? "Name not set"}{a.caregiverCode ? ` (${a.caregiverCode})` : ""}{a.isSelf ? " — you" : ""}
                 </p>
-                <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${status ? ACCOUNT_STATUS_BADGE[status] : "bg-slate-100 text-slate-800"}`}>{status ? ACCOUNT_STATUS_LABEL[status] : a.accountStatus}</span>
+                {a.workStatus
+                  ? <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${WORK_STATUS_BADGE[a.workStatus]}`}>{WORK_STATUS_LABEL[a.workStatus]}</span>
+                  : <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${status ? ACCOUNT_STATUS_BADGE[status] : "bg-slate-100 text-slate-800"}`}>{status ? ACCOUNT_STATUS_LABEL[status] : a.accountStatus}</span>}
               </div>
-              <p className="text-xs text-slate-700">{roleLabel(a.role)}{status && ACCOUNT_STATUS_HELP[status] ? ` · ${ACCOUNT_STATUS_HELP[status]}` : ""}</p>
+              <p className="text-xs text-slate-700">{roleLabel(a.role)}{status && ACCOUNT_STATUS_HELP[status] ? ` · ${ACCOUNT_STATUS_HELP[status]}` : ""}{a.workStatus === "not_ready" && a.readinessTotal ? ` · ${a.readinessMet ?? 0} of ${a.readinessTotal} done` : ""}</p>
+              {a.workStatus ? <p className="text-xs text-slate-600">Sign-in account: <span>{status ? ACCOUNT_STATUS_LABEL[status] : a.accountStatus}</span></p> : null}
+              {a.caregiverRecordId && (status === "invitation_pending" || status === "setup_required") ? (
+                <SendSignInLink caregiverRecordId={a.caregiverRecordId} hasContact={!!a.hasContact} canManage={hasPermission("caregivers.manage")} lastSentAt={null} />
+              ) : null}
               {status === "setup_required" && a.caregiverRecordId ? <Link className="mt-1 inline-block text-sm font-medium underline" to={`/care-team/${a.caregiverRecordId}`}>Open in Care Team</Link> : null}
               {a.userId && !a.isSelf && (status === "active" || status === "invitation_pending") && !open ? (
                 <Button type="button" variant="secondary" className="mt-1" onClick={() => { setActing({ userId: a.userId!, kind: "disable" }); setDone(null); change.reset(); }}>Disable account…</Button>

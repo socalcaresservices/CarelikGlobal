@@ -42,10 +42,10 @@ function fakeApi(role: "organization_owner" | "manager") {
       case "GET /v1/accounts":
         return json(200, { accounts: [
           { userId: ME, displayName: "Synthetic Admin", role: "organization_owner", accountStatus: "active", caregiverRecordId: null, caregiverCode: null, isSelf: true },
-          { userId: CG, displayName: "Synthetic Caregiver", role: "caregiver", accountStatus: status[CG], caregiverRecordId: "r1", caregiverCode: "CG-1", isSelf: false },
-          { userId: INV, displayName: "Synthetic Invitee", role: "caregiver", accountStatus: status[INV], caregiverRecordId: "r2", caregiverCode: "CG-2", isSelf: false },
+          { userId: CG, displayName: "Synthetic Caregiver", role: "caregiver", accountStatus: status[CG], caregiverRecordId: "r1", caregiverCode: "CG-1", isSelf: false, workStatus: "active", readinessMet: 5, readinessTotal: 5, hasContact: true },
+          { userId: INV, displayName: "Synthetic Invitee", role: "caregiver", accountStatus: status[INV], caregiverRecordId: "r2", caregiverCode: "CG-2", isSelf: false, workStatus: "not_ready", readinessMet: 2, readinessTotal: 5, hasContact: true },
           { userId: OFF, displayName: "Synthetic Former", role: "caregiver", accountStatus: status[OFF], caregiverRecordId: "r3", caregiverCode: "CG-3", isSelf: false },
-          { userId: null, displayName: "Synthetic Newcomer", role: "caregiver", accountStatus: "setup_required", caregiverRecordId: REC, caregiverCode: "CG-4", isSelf: false },
+          { userId: null, displayName: "Synthetic Newcomer", role: "caregiver", accountStatus: "setup_required", caregiverRecordId: REC, caregiverCode: "CG-4", isSelf: false, workStatus: "not_ready", readinessMet: 0, readinessTotal: 5, hasContact: false },
         ] });
       default:
         return json(404, { error: { code: "not_found", message: "No such endpoint." } });
@@ -131,5 +131,21 @@ describe("Accounts", () => {
     expect(await screen.findByText(/Only an administrator can manage sign-in accounts/)).toBeInTheDocument();
     expect(screen.queryByRole("link", { name: "Accounts" })).toBeNull();
     expect(api.calls.some((c) => c.path === "/v1/accounts")).toBe(false); // the page does not even ask
+  });
+
+  it("0086: a caregiver's status is the calculated one (same words as the Caregivers list); the sign-in account state is secondary, and Send sign-in link / Add email appear only for people who have not signed in", async () => {
+    renderAt("/accounts", "organization_owner");
+    const invitee = (await screen.findByText(/Synthetic Invitee/)).closest("li")!;
+    expect(within(invitee).getByText("Not ready")).toBeInTheDocument();
+    expect(within(invitee).getByText(/2 of 5 done/)).toBeInTheDocument();
+    expect(within(invitee).getByText("Invitation Pending")).toBeInTheDocument();
+    expect(within(invitee).getByRole("button", { name: "Send sign-in link" })).toBeInTheDocument();
+    const newcomer = screen.getByText(/Synthetic Newcomer/).closest("li")!;
+    expect(within(newcomer).getByRole("link", { name: "Add email" })).toHaveAttribute("href", expect.stringMatching(/^\/care-team\//));
+    const active = screen.getByText(/Synthetic Caregiver \(CG-1\)/).closest("li")!;
+    expect(within(active).getAllByText("Active")).toHaveLength(2); // the calculated status, then the sign-in account state
+    expect(within(active).queryByText(/sign-in link|Add email/i)).not.toBeInTheDocument();
+    // a staff member who is not a caregiver keeps the account status
+    expect(within(screen.getByText(/Synthetic Admin — you/).closest("li")!).getByText("Active")).toBeInTheDocument();
   });
 });

@@ -690,3 +690,21 @@ export async function asReplica(db: TestDb, sql: string, params: unknown[] = [])
     c.release();
   }
 }
+
+/**
+ * Test fixture (0086): satisfies the hard requirements the way the screens would (a verified approved background check and the required
+ * training), written directly so a test can exercise "Approve for work" itself. App sign-in is NOT touched: a fixture caregiver with a
+ * linked account and no invitation counts as signed in.
+ */
+export async function satisfyHardRequirements(db: TestDb, organizationId: string, caregiverRecordId: string, verifierUserId: string): Promise<void> {
+  await db.admin.query(
+    `insert into ogevia.caregiver_background_checks (caregiver_record_id, organization_id, status, result, evidence_note, verified_by, verified_at, updated_by)
+     values ($1, $2, 'completed', 'approved', 'Synthetic clearance', $3, now(), $3)
+     on conflict (caregiver_record_id) do update set status = 'completed', result = 'approved', evidence_note = 'Synthetic clearance', verified_by = $3, verified_at = now()`,
+    [caregiverRecordId, organizationId, verifierUserId]);
+  await db.admin.query(
+    `insert into ogevia.caregiver_onboarding_items (organization_id, caregiver_record_id, requirement_id, status, completed_on, recorded_by)
+     select $1, $2, r.id, 'completed', current_date, $3 from ogevia.onboarding_requirements r
+      where r.organization_id = $1 and r.requirement_key = 'training' and r.is_active on conflict do nothing`,
+    [organizationId, caregiverRecordId, verifierUserId]);
+}

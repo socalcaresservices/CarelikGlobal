@@ -50,7 +50,8 @@ describe("planned assignments", () => {
     expect((await q(w.managerA, "select * from ogevia_api.list_assignments($1, null, $2)", [w.orgA, record]))[0].grants_access).toBe(false);
 
     // Ready: access starts automatically; a visit can start.
-    await q(w.managerA, "select * from ogevia_api.set_caregiver_status($1, $2, 'ready', 'Onboarding complete (synthetic)')", [w.orgA, record]);
+    // 0086: Approved/Active are no longer set by the picker (Approve for work needs the hard requirements); the fixture sets the stored stage directly
+    await db.admin.query("update ogevia.caregiver_records set status = 'ready' where id = $1", [record]);
     expect(await myClients(sub)).toContain(w.clientA1);
     const userId = (await db.admin.query("select id from ogevia.app_users where cognito_sub = $1", [sub])).rows[0].id;
     expect(await api.start(db, { sub, userId }, w.orgA, w.clientA1, w.serviceA)).toBeTruthy();
@@ -65,7 +66,7 @@ describe("planned assignments", () => {
     expect(await myClients(sub)).toContain(w.clientA1);
     await q(w.managerA, "select * from ogevia_api.set_caregiver_status($1, $2, 'onboarding', 'Paperwork lapsed (synthetic)')", [w.orgA, record]);
     expect(await myClients(sub)).not.toContain(w.clientA1);
-    await q(w.managerA, "select * from ogevia_api.set_caregiver_status($1, $2, 'active', 'Paperwork renewed (synthetic)')", [w.orgA, record]);
+    await db.admin.query("update ogevia.caregiver_records set status = 'active' where id = $1", [record]);
     expect(await myClients(sub)).toContain(w.clientA1);
   });
 
@@ -109,6 +110,8 @@ describe("caregiver invitations", () => {
     expect(audit[0].after).not.toContain("@");
 
     // Resend before first sign-in: allowed, counted, audited.
+    await expectPgError(q(w.managerA, "select ogevia_api.begin_invitation_resend($1, $2) as email", [w.orgA, record]), "OGC09", /just sent/); // 0086: a minute between sends
+    await db.admin.query("update ogevia.caregiver_invitations set last_sent_at = now() - interval '2 minutes' where caregiver_record_id = $1", [record]);
     expect((await q(w.managerA, "select ogevia_api.begin_invitation_resend($1, $2) as email", [w.orgA, record]))[0].email).toBe("invitee.one@example.test");
     expect((await q(w.managerA, "select ogevia_api.record_invitation_resent($1, $2) as n", [w.orgA, record]))[0].n).toBe(2);
     expect((await db.admin.query("select count(*)::int as n from ogevia.audit_events where entity_id = $1 and action = 'caregiver.invitation_resent'", [record])).rows[0].n).toBe(1);

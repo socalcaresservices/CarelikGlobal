@@ -124,7 +124,7 @@ describe("pending CPR/TB over HTTP", () => {
       const version = randomUUID();
       await as(w.managerA, "select * from ogevia_api.register_document_version($1,$2,$3,'v1','application/pdf',1234,$4,$5::date,$6::date,null)", [doc, version, `${w.orgA}/documents/${doc}/${version}`, "f".repeat(64), today, expires]);
     }
-    await db.admin.query("update ogevia.caregiver_records set hire_date = $2::date - 3 where id = $1", [rec, today]); // a new hire inside the 14 days
+    await db.admin.query("update ogevia.caregiver_records set hire_date = $2::date - 60 where id = $1", [rec, today]); // 0086: past the CPR/TB due date (30 days), so an upload that is not verified blocks
     for (const d of [0, 1, 2, 3, 4, 5, 6]) await db.admin.query("insert into ogevia.caregiver_availability_windows(organization_id, caregiver_record_id, weekday, start_local, end_local) values ($1,$2,$3,'00:00','23:59')", [w.orgA, rec, d]);
     const f = await freshClient(db, w, cg, 100000, w.orgA, { before: 5, after: 120 });
     const st = (await as(w.ownerA, "select ogevia_api.get_readiness_status($1) as s", [w.orgA]))[0].s;

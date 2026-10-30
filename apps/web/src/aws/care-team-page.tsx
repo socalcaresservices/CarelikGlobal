@@ -1,4 +1,4 @@
-import { useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { nameWithCode } from "./name-label";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useParams } from "react-router-dom";
@@ -8,22 +8,23 @@ import { useOrganization } from "@/providers/organization-provider";
 import { AssignmentsCard } from "./assignments-card";
 import { useAwsApi } from "./aws-workspace";
 import {
-  CAREGIVER_STAGES, CAREGIVER_STATUS_BADGE, CAREGIVER_STATUS_LABEL, caregiverName, signInLabel, useCaregivers,
-  type Caregiver, type CaregiverStatus,
+  CAREGIVER_STATUS_LABEL, WORK_STATUS_BADGE, WORK_STATUS_LABEL, caregiverName, signInLabel, useCaregivers,
+  type Caregiver, type CaregiverStatus, type WorkStatus,
 } from "./care-team-admin";
 import { formatDateTime } from "@/lib/service-verification";
+import type { StaffDocument } from "./document-status";
 import { CaregiverReadiness } from "./readiness/caregiver-readiness";
-import { OnboardingCard } from "./recruiting";
 import { ReadinessCard } from "./readiness/readiness-card";
 import { AvailabilityReview } from "./readiness/availability-review";
-import { useCaregiverCompliance } from "./compliance/queries";
+import { ReadinessChecklist } from "./readiness/readiness-checklist";
+import { useCaregiverReadiness } from "./readiness/readiness-data";
+import { SendSignInLink } from "./readiness/send-signin-link";
 import { SummarySection } from "./ui/summary-section";
 import { InfoTip } from "./ui/info-tip";
-import { CompactAlert } from "./ui/compact-alert";
 
 const message = (cause: unknown, fallback: string) => (cause instanceof Error ? cause.message : fallback);
 const inputClass = "mt-0.5 block w-full rounded-lg border border-slate-200 px-2.5 py-1.5 text-sm";
-const STATUSES = CAREGIVER_STAGES;
+const WORK_STATUSES: readonly WorkStatus[] = ["not_ready", "approved", "active", "inactive"];
 
 function useRefreshCareTeam() {
   const queryClient = useQueryClient();
@@ -70,14 +71,14 @@ function AddCaregiverForm({ onDone }: { onDone: (id: string) => void }) {
     <Card>
       <div className="flex items-center gap-1.5">
         <h2 className="text-sm font-semibold text-slate-950">Add a caregiver</h2>
-        <InfoTip>Approved and Active need the onboarding checklist complete. Start a new person as an Applicant or Onboarding, then approve them when the checklist is done.</InfoTip>
+        <InfoTip>A new person starts as an Applicant or Onboarding. Open their record to see what is left; Approve for work is enabled once background check, training and app sign-in are done.</InfoTip>
       </div>
       <form onSubmit={(e) => { e.preventDefault(); void submit(); }} className="mt-2 grid gap-2 sm:grid-cols-2">
         <NameFields v={v} set={set} idPrefix="new-cg" />
         <div>
           <label htmlFor="new-cg-status" className="block text-xs font-medium text-slate-700">Starting status</label>
           <select id="new-cg-status" value={status} onChange={(e) => { setStatus(e.target.value as typeof status); key.current = newIdempotencyKey(); }} className="mt-1 rounded-lg border border-slate-200 px-2.5 py-1.5 text-sm">
-            {(["applicant", "onboarding", "ready", "active"] as const).map((s) => <option key={s} value={s}>{CAREGIVER_STATUS_LABEL[s]}</option>)}
+            {(["applicant", "onboarding"] as const).map((s) => <option key={s} value={s}>{CAREGIVER_STATUS_LABEL[s]}</option>)}
           </select>
         </div>
         {state.error ? <p role="alert" className="text-sm text-red-700 sm:col-span-2">{state.error}</p> : null}
@@ -93,16 +94,16 @@ export function CareTeamPage() {
   const canManage = hasPermission("caregivers.manage");
   const caregivers = useCaregivers();
   const [search, setSearch] = useState("");
-  const [status, setStatus] = useState<CaregiverStatus | "current" | "all">("current");
+  const [status, setStatus] = useState<WorkStatus | "current" | "all">("current");
   const [adding, setAdding] = useState(false);
   const [added, setAdded] = useState<string | null>(null);
   const shown = useMemo(() => {
     const s = search.trim().toLowerCase();
-    return (caregivers.data ?? []).filter((c) => (status === "all" || (status === "current" ? c.status !== "inactive" : c.status === status))
+    return (caregivers.data ?? []).filter((c) => (status === "all" || (status === "current" ? c.workStatus !== "inactive" : c.workStatus === status))
       && (!s || [caregiverName(c), c.caregiverCode].some((x) => x.toLowerCase().includes(s))));
   }, [caregivers.data, search, status]);
   if (!hasPermission("caregivers.manage") && !hasPermission("visits.manage")) return <p className="text-sm text-slate-600">You do not have access to the Care Team.</p>;
-  const counts = (caregivers.data ?? []).reduce<Record<string, number>>((acc, c) => ({ ...acc, [c.status]: (acc[c.status] ?? 0) + 1 }), {});
+  const counts = (caregivers.data ?? []).reduce<Record<string, number>>((acc, c) => ({ ...acc, [c.workStatus]: (acc[c.workStatus] ?? 0) + 1 }), {});
   return (
     <div className="max-w-4xl space-y-3">
       <div className="flex flex-wrap items-center justify-between gap-2">
@@ -119,8 +120,8 @@ export function CareTeamPage() {
         <div className="flex items-center gap-1.5">
           <label htmlFor="cg-status" className="text-xs font-medium text-slate-700">Status</label>
           <select id="cg-status" value={status} onChange={(e) => setStatus(e.target.value as typeof status)} className="rounded-lg border border-slate-200 px-2 py-1 text-sm md:min-h-8">
-            <option value="current">Current ({(caregivers.data ?? []).filter((c) => c.status !== "inactive").length})</option>
-            {STATUSES.map((s) => <option key={s} value={s}>{CAREGIVER_STATUS_LABEL[s]} ({counts[s] ?? 0})</option>)}
+            <option value="current">Current ({(caregivers.data ?? []).filter((c) => c.workStatus !== "inactive").length})</option>
+            {WORK_STATUSES.map((s) => <option key={s} value={s}>{WORK_STATUS_LABEL[s]} ({counts[s] ?? 0})</option>)}
             <option value="all">All ({caregivers.data?.length ?? 0})</option>
           </select>
         </div>
@@ -148,7 +149,11 @@ export function CareTeamPage() {
                       </span>
                     </Link>
                   </th>
-                  <td className="px-3 py-1 align-middle"><span className={`inline-block whitespace-nowrap rounded-full px-2 py-0.5 text-xs font-semibold ${CAREGIVER_STATUS_BADGE[c.status]}`}>{CAREGIVER_STATUS_LABEL[c.status]}</span></td>
+                  <td className="px-3 py-1 align-middle">
+                    <span className={`inline-block whitespace-nowrap rounded-full px-2 py-0.5 text-xs font-semibold ${WORK_STATUS_BADGE[c.workStatus]}`}>{WORK_STATUS_LABEL[c.workStatus]}</span>
+                    {c.workStatus === "not_ready" && c.readinessTotal ? <span className="ml-2 text-xs text-slate-700">{c.readinessMet ?? 0} of {c.readinessTotal} done</span> : null}
+                    {!c.signedIn && c.workStatus !== "inactive" ? <SendSignInLink caregiverRecordId={c.caregiverRecordId} hasContact={!!c.hasContact} canManage={canManage} lastSentAt={c.invitationLastSentAt ?? null} /> : null}
+                  </td>
                 </tr>
               ))}
             </tbody>
@@ -193,135 +198,6 @@ function CaregiverDetails({ c }: { c: Caregiver }) {
         {state.done ? <p role="status" className="text-sm text-emerald-800 sm:col-span-2">Saved. The change is in the record's history.</p> : null}
         <div className="flex items-center gap-2 sm:col-span-2"><Button type="submit" disabled={state.busy}>{state.busy ? "Saving…" : "Save name"}</Button><InfoTip>Past visits keep the name they were recorded with.</InfoTip></div>
       </form>
-    </SummarySection>
-  );
-}
-
-function CaregiverStatusCard({ c }: { c: Caregiver }) {
-  const api = useAwsApi();
-  const refresh = useRefreshCareTeam();
-  const { activeOrganizationId } = useOrganization();
-  const options = STATUSES.filter((s) => s !== c.status);
-  const [status, setStatus] = useState<CaregiverStatus>(options[0]!);
-  const [reason, setReason] = useState("");
-  const [state, setState] = useState<{ busy: boolean; error: string | null; done: string | null }>({ busy: false, error: null, done: null });
-  const key = useRef(newIdempotencyKey());
-  useEffect(() => setStatus(STATUSES.filter((s) => s !== c.status)[0]!), [c.status]);
-  async function save() {
-    if (reason.trim().length < 3) return setState({ busy: false, error: "Give a reason for the change.", done: null });
-    setState({ busy: true, error: null, done: null });
-    try {
-      const r = await api.post<{ result: { endedAssignments: number; signInStatus: string | null } }>(`/v1/caregivers/${encodeURIComponent(c.caregiverRecordId)}/status`,
-        { organizationId: activeOrganizationId, status, reason: reason.trim() }, { idempotencyKey: key.current });
-      key.current = newIdempotencyKey();
-      setReason("");
-      await refresh();
-      const parts = [`Status changed to ${CAREGIVER_STATUS_LABEL[status]}.`];
-      if (r.result.endedAssignments > 0) parts.push(`${r.result.endedAssignments} assignment${r.result.endedAssignments === 1 ? "" : "s"} ended.`);
-      if (r.result.signInStatus === "suspended") parts.push("Their sign-in is suspended for this agency.");
-      if (status !== "inactive" && c.status === "inactive" && r.result.signInStatus === "active") parts.push("Their sign-in works again. Re-add assignments as needed.");
-      setState({ busy: false, error: null, done: parts.join(" ") });
-    } catch (cause) {
-      setState({ busy: false, error: message(cause, "Status not changed."), done: null });
-    }
-  }
-  return (
-    <SummarySection title="Status" id="status" status={<span className={`inline-block whitespace-nowrap rounded-full px-2 py-0.5 text-xs font-semibold ${CAREGIVER_STATUS_BADGE[c.status]}`}>{CAREGIVER_STATUS_LABEL[c.status]}</span>}>
-      <CompactAlert summary="Inactive ends assignments and suspends sign-in">Making a caregiver inactive ends their assignments and suspends their sign-in at once. It is refused during a visit.</CompactAlert>
-      <form onSubmit={(e) => { e.preventDefault(); void save(); }} className="mt-2 flex flex-wrap items-end gap-2">
-        <div>
-          <label htmlFor="cg-status-new" className="block text-xs font-medium text-slate-700">Change to</label>
-          <select id="cg-status-new" value={status} onChange={(e) => { setStatus(e.target.value as CaregiverStatus); key.current = newIdempotencyKey(); }} className="mt-1 rounded-lg border border-slate-200 px-2.5 py-1.5 text-sm">
-            {options.map((s) => <option key={s} value={s}>{CAREGIVER_STATUS_LABEL[s]}</option>)}
-          </select>
-        </div>
-        <div className="min-w-[220px] flex-1">
-          <label htmlFor="cg-status-reason" className="block text-xs font-medium text-slate-700">Reason</label>
-          <input id="cg-status-reason" value={reason} maxLength={500} onChange={(e) => { setReason(e.target.value); key.current = newIdempotencyKey(); }} className={inputClass} />
-        </div>
-        <Button type="submit" variant="secondary" disabled={state.busy}>{state.busy ? "Saving…" : "Change status"}</Button>
-      </form>
-      {state.error ? <p role="alert" className="mt-2 text-sm text-red-700">{state.error}</p> : null}
-      {state.done ? <p role="status" className="mt-2 text-sm text-emerald-800">{state.done}</p> : null}
-    </SummarySection>
-  );
-}
-
-
-const fmtWhen = (iso: string) => formatDateTime(iso);
-
-/**
- * Sign-in and invitation (0025). The server checks caregivers.manage, the
- * agency and that only a caregiver sign-in is created; Cognito emails the
- * temporary password, which Ogevia never sees, shows or stores.
- */
-function SignInCard({ c, canManage }: { c: Caregiver; canManage: boolean }) {
-  const api = useAwsApi();
-  const queryClient = useQueryClient();
-  const { activeOrganizationId } = useOrganization();
-  const [email, setEmail] = useState("");
-  const [state, setState] = useState<{ busy: boolean; error: string | null; done: string | null }>({ busy: false, error: null, done: null });
-  const refresh = () => queryClient.invalidateQueries({ queryKey: ["aws-caregivers"] }).then(() => queryClient.invalidateQueries({ queryKey: ["aws-assignments"] }));
-  async function invite() {
-    const value = email.trim();
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)) return setState({ busy: false, error: "Enter the caregiver's own email address.", done: null });
-    setState({ busy: true, error: null, done: null });
-    try {
-      const r = await api.post<{ invitation: { existingAccount: boolean } }>(`/v1/caregivers/${encodeURIComponent(c.caregiverRecordId)}/invitation`,
-        { organizationId: activeOrganizationId, email: value });
-      await refresh();
-      setEmail("");
-      setState({ busy: false, error: null, done: r.invitation.existingAccount
-        ? "This email already had an Ogevia sign-in. It is now linked to this caregiver; they sign in with their existing password."
-        : "Invitation sent. The caregiver gets an email with a temporary password and sets their own on first sign-in." });
-    } catch (cause) {
-      setState({ busy: false, error: cause instanceof Error ? cause.message : "The invitation was not sent.", done: null });
-    }
-  }
-  async function resend() {
-    setState({ busy: true, error: null, done: null });
-    try {
-      await api.post(`/v1/caregivers/${encodeURIComponent(c.caregiverRecordId)}/invitation/resend`, { organizationId: activeOrganizationId });
-      await refresh();
-      setState({ busy: false, error: null, done: "Invitation sent again with a new temporary password." });
-    } catch (cause) {
-      setState({ busy: false, error: cause instanceof Error ? cause.message : "The invitation was not sent.", done: null });
-    }
-  }
-  const pending = !!c.invitedAt && !c.firstSignedInAt;
-  return (
-    <SummarySection title="Sign-in" id="sign-in" defaultOpen={!c.hasSignIn || pending}
-      summary={`${c.activeAssignments} active assignment${c.activeAssignments === 1 ? "" : "s"}${c.openVisits > 0 ? ` · ${c.openVisits} visit in progress` : ""}`}
-      status={<span className={`inline-block whitespace-nowrap rounded-full px-2 py-0.5 text-xs font-semibold ${c.hasSignIn && !pending ? "bg-emerald-100 text-emerald-900" : "bg-amber-100 text-amber-900"}`}>{signInLabel(c)}</span>}>
-      <div className="text-sm text-slate-800">
-      {c.invitedAt ? (
-        <ul className="mt-1 space-y-0.5 text-slate-700">
-          <li>Invited {fmtWhen(c.invitedAt)} to <span className="break-all">{c.invitationEmail}</span></li>
-          {c.invitationSendCount && c.invitationSendCount > 1 && c.invitationLastSentAt ? <li>Sent {c.invitationSendCount} times, last {fmtWhen(c.invitationLastSentAt)}</li> : null}
-          <li>{c.firstSignedInAt ? `First signed in ${fmtWhen(c.firstSignedInAt)}` : "Has not signed in yet"}</li>
-        </ul>
-      ) : null}
-      {c.plannedAssignments ? <p className="mt-1">{c.plannedAssignments} planned, no access yet</p> : null}
-      {c.hasSignIn && (c.status === "onboarding") ? <CompactAlert className="mt-1" summary="Onboarding: no clients visible yet">Still onboarding: they can sign in but see no clients until they are Approved or Active.</CompactAlert> : null}
-      {canManage && !c.hasSignIn && c.status !== "inactive" ? (
-        <form onSubmit={(e) => { e.preventDefault(); void invite(); }} className="mt-2 grid gap-2 sm:grid-cols-[1fr_auto] sm:items-end">
-          <div>
-            <label htmlFor="invite-email" className="block text-xs font-medium text-slate-700">Caregiver's email</label>
-            <input id="invite-email" type="email" autoComplete="off" inputMode="email" value={email} maxLength={254} onChange={(e) => setEmail(e.target.value)} className="mt-0.5 block w-full rounded-lg border border-slate-200 px-2.5 py-1.5 text-sm" />
-          </div>
-          <Button type="submit" disabled={state.busy}>{state.busy ? "Sending…" : "Send invitation"}</Button>
-          <p className="flex items-center gap-1.5 text-xs text-slate-600 sm:col-span-2">Use the caregiver&apos;s own email.<InfoTip>They get a caregiver sign-in for this agency only. Ogevia never shows or stores the temporary password.</InfoTip></p>
-        </form>
-      ) : null}
-      {canManage && pending ? (
-        <div className="mt-2 flex items-center gap-2">
-          <Button type="button" variant="secondary" disabled={state.busy} onClick={() => void resend()}>{state.busy ? "Sending…" : "Resend invitation"}</Button>
-          <InfoTip>Temporary passwords expire. Resend if the caregiver cannot find the email.</InfoTip>
-        </div>
-      ) : null}
-      {state.error ? <p role="alert" className="mt-2 text-red-700">{state.error}</p> : null}
-      {state.done ? <p role="status" className="mt-2 text-emerald-800">{state.done}</p> : null}
-      </div>
     </SummarySection>
   );
 }
@@ -373,40 +249,101 @@ function EmploymentCard({ c, canManage }: { c: Caregiver; canManage: boolean }) 
   );
 }
 
-/** The overall outcome first, then each item to fix with its action. Everything shown here comes from data the sections below already load. */
-function CaregiverOutcome({ c, canManage }: { c: Caregiver; canManage: boolean }) {
-  const { hasPermission } = useOrganization();
-  const canRead = hasPermission("readiness.read") || hasPermission("caregivers.manage") || hasPermission("caregivers.compliance.manage");
-  const comp = useCaregiverCompliance(c.caregiverRecordId, canRead);
-  const pending = !!c.invitedAt && !c.firstSignedInAt;
-  const items: Array<{ text: string; to: string; label: string }> = [];
-  if (c.status === "inactive") items.push({ text: "Inactive: cannot be scheduled", to: "#status", label: "Change status" });
-  else if (c.status !== "ready" && c.status !== "active") items.push({ text: `Status is ${CAREGIVER_STATUS_LABEL[c.status]}; it must be Approved or Active`, to: "#status", label: "Change status" });
-  if (c.status !== "inactive" && (!c.hasSignIn || pending)) items.push({ text: pending ? "Invited, but has not signed in" : "Cannot sign in until invited", to: "#sign-in", label: canManage ? (pending ? "Resend invitation" : "Send invitation") : "See sign-in" });
-  const hold = comp.data?.hold ?? null;
-  if (hold) items.push({ text: `On compliance hold: ${hold.reasons.map((r) => r.message).join("; ")}`, to: "#compliance", label: "Fix" });
-  else if (comp.data && !comp.data.eligible && comp.data.enforcementActive) items.push({ text: "Not eligible for new work", to: "#compliance", label: "Fix" });
-  const unknown = canRead && comp.isError;
-  const ready = items.length === 0 && !unknown && (comp.data !== undefined || !canRead);
-  const headline = ready ? "Ready to schedule" : hold ? `On hold: ${hold.reasons[0]?.message ?? "compliance"}` : items.length > 0 ? `Not ready: ${items.length} item${items.length === 1 ? "" : "s"} to fix` : unknown ? "Compliance could not be checked, so readiness is unknown. Reload the page." : "Checking…";
+/** Hire date (0055): the office may enter one that is not recorded; changing a recorded one is an administrator action, audited with a reason. */
+function HireDateForm({ c }: { c: Caregiver }) {
+  const readiness = useCaregiverReadiness(c.caregiverRecordId);
+  const hireDate = readiness.data?.hireDate ?? null;
+  const api = useAwsApi();
+  const refresh = useRefreshCareTeam();
+  const qc = useQueryClient();
+  const { activeOrganizationId } = useOrganization();
+  const [v, setV] = useState({ date: "", reason: "" });
+  useEffect(() => setV((o) => ({ ...o, date: hireDate ?? "" })), [hireDate]);
+  const [state, setState] = useState<{ busy: boolean; error: string | null; done: boolean }>({ busy: false, error: null, done: false });
+  const key = useRef(newIdempotencyKey());
+  async function save() {
+    if (!v.date) return setState({ busy: false, error: "Choose the hire date.", done: false });
+    if (v.reason.trim().length < 3) return setState({ busy: false, error: "Give a reason for the hire date.", done: false });
+    setState({ busy: true, error: null, done: false });
+    try {
+      await api.post(`/v1/caregivers/${encodeURIComponent(c.caregiverRecordId)}/hire-date`, { organizationId: activeOrganizationId, hireDate: v.date, reason: v.reason.trim() }, { idempotencyKey: key.current });
+      key.current = newIdempotencyKey();
+      await refresh();
+      await qc.invalidateQueries({ queryKey: ["caregiver-readiness"] });
+      setState({ busy: false, error: null, done: true });
+    } catch (cause) {
+      setState({ busy: false, error: message(cause, "Not saved."), done: false });
+    }
+  }
   return (
-    <section aria-label="Caregiver outcome" data-testid="caregiver-outcome" className="space-y-1">
-      <p className="flex flex-wrap items-center gap-2">
-        <span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-sm font-semibold ${ready ? "bg-emerald-100 text-emerald-900" : hold ? "bg-red-100 text-red-800" : "bg-amber-100 text-amber-900"}`}>
-          <span aria-hidden="true">{ready ? "✓" : "⚠"}</span><span>{headline}</span>
-        </span>
-      </p>
-      {items.length > 0 ? (
-        <ul className="divide-y divide-slate-200 rounded-md border border-slate-200 bg-og-card">
-          {items.map((i) => (
-            <li key={i.text} className="flex flex-wrap items-center gap-x-3 gap-y-0 px-2 py-1 text-sm">
-              <span className="min-w-0 flex-1 text-slate-900">{i.text}</span>
-              <a className="inline-flex min-h-[44px] items-center font-semibold text-slate-900 underline md:min-h-[32px]" href={i.to}>{i.label}</a>
-            </li>
-          ))}
-        </ul>
-      ) : null}
-    </section>
+    <form onSubmit={(e) => { e.preventDefault(); void save(); }} className="grid gap-2 sm:grid-cols-[auto_1fr_auto] sm:items-end" aria-label="Hire date">
+      <div><label htmlFor="hire-date" className="block text-xs font-medium text-slate-700">Hire date</label><input id="hire-date" type="date" value={v.date} onChange={(e) => { setV((o) => ({ ...o, date: e.target.value })); key.current = newIdempotencyKey(); }} className={inputClass} /></div>
+      <div><label htmlFor="hire-reason" className="block text-xs font-medium text-slate-700">Reason</label><input id="hire-reason" value={v.reason} maxLength={500} onChange={(e) => { setV((o) => ({ ...o, reason: e.target.value })); key.current = newIdempotencyKey(); }} className={inputClass} /></div>
+      <Button type="submit" variant="secondary" disabled={state.busy}>{state.busy ? "Saving…" : "Save hire date"}</Button>
+      {state.error ? <p role="alert" className="text-sm text-red-700 sm:col-span-3">{state.error}</p> : null}
+      {state.done ? <p role="status" className="text-sm text-emerald-800 sm:col-span-3">Saved. The change is in the audit history.</p> : null}
+    </form>
+  );
+}
+
+/** Deactivate is the one manual status. Re-approval (Approve for work) reactivates. Ends assignments and suspends sign-in; refused during a visit. */
+function DeactivateForm({ c }: { c: Caregiver }) {
+  const api = useAwsApi();
+  const refresh = useRefreshCareTeam();
+  const qc = useQueryClient();
+  const { activeOrganizationId } = useOrganization();
+  const [reason, setReason] = useState("");
+  const [state, setState] = useState<{ busy: boolean; error: string | null; done: string | null }>({ busy: false, error: null, done: null });
+  const key = useRef(newIdempotencyKey());
+  async function save() {
+    if (reason.trim().length < 3) return setState({ busy: false, error: "Give a reason.", done: null });
+    setState({ busy: true, error: null, done: null });
+    try {
+      const r = await api.post<{ result: { endedAssignments: number } }>(`/v1/caregivers/${encodeURIComponent(c.caregiverRecordId)}/status`,
+        { organizationId: activeOrganizationId, status: "inactive", reason: reason.trim() }, { idempotencyKey: key.current });
+      key.current = newIdempotencyKey();
+      setReason("");
+      await refresh();
+      await qc.invalidateQueries({ queryKey: ["caregiver-readiness"] });
+      setState({ busy: false, error: null, done: `Deactivated.${r.result.endedAssignments > 0 ? ` ${r.result.endedAssignments} assignment${r.result.endedAssignments === 1 ? "" : "s"} ended.` : ""} Their sign-in is suspended for this agency.` });
+    } catch (cause) {
+      setState({ busy: false, error: message(cause, "Not deactivated."), done: null });
+    }
+  }
+  // Stays mounted after a successful deactivation so the result (assignments ended, sign-in suspended) is still shown.
+  if (c.workStatus === "inactive" && !state.done) return null;
+  return (
+    <form onSubmit={(e) => { e.preventDefault(); void save(); }} className="grid gap-2 sm:grid-cols-[1fr_auto] sm:items-end" aria-label="Deactivate caregiver">
+      <div><label htmlFor="deactivate-reason" className="block text-xs font-medium text-slate-700">Deactivate: ends assignments and suspends sign-in. Reason</label>
+        <input id="deactivate-reason" value={reason} maxLength={500} onChange={(e) => { setReason(e.target.value); key.current = newIdempotencyKey(); }} className={inputClass} /></div>
+      <Button type="submit" variant="secondary" disabled={state.busy}>{state.busy ? "Saving…" : "Deactivate"}</Button>
+      {state.error ? <p role="alert" className="text-sm text-red-700 sm:col-span-2">{state.error}</p> : null}
+      {state.done ? <p role="status" className="text-sm text-emerald-800 sm:col-span-2">{state.done}</p> : null}
+    </form>
+  );
+}
+
+/** Documents are uploaded and reviewed on the Documents page. This is a plain file list: no review or status labels. */
+function CaregiverFiles({ caregiverRecordId }: { caregiverRecordId: string }) {
+  const api = useAwsApi();
+  const { activeOrganizationId, hasPermission } = useOrganization();
+  const docs = useQuery({
+    queryKey: ["aws-documents", activeOrganizationId],
+    queryFn: async () => (await api.get<{ documents: StaffDocument[] }>("/v1/documents", { organizationId: activeOrganizationId })).documents,
+    enabled: !!activeOrganizationId && hasPermission("documents.read"),
+  });
+  if (!hasPermission("documents.read")) return null;
+  const mine = (docs.data ?? []).filter((d) => d.caregiverRecordId === caregiverRecordId && d.latestVersionId);
+  return (
+    <SummarySection title="Documents" summary={docs.data ? `${mine.length} file${mine.length === 1 ? "" : "s"}` : undefined}>
+      {docs.isLoading ? <p className="text-sm text-slate-500">Loading…</p> : null}
+      {docs.isError ? <p role="alert" className="text-sm text-red-700">{message(docs.error, "Documents could not be loaded.")}</p> : null}
+      {docs.data && mine.length === 0 ? <p className="text-sm text-slate-700">No files uploaded.</p> : null}
+      <ul className="divide-y divide-slate-100">
+        {mine.map((d) => <li key={d.documentId} className="py-1 text-sm text-slate-900">{d.documentTypeName}<span className="text-slate-600"> · version {d.latestVersionNumber}{d.latestUploadedAt ? `, uploaded ${formatDateTime(d.latestUploadedAt)}` : ""}</span></li>)}
+      </ul>
+      <p className="mt-1 text-sm"><Link to="/documents" className="inline-flex min-h-[44px] items-center font-semibold text-slate-900 underline md:min-h-[28px]">Open the Documents page</Link></p>
+    </SummarySection>
   );
 }
 
@@ -423,19 +360,24 @@ export function CaregiverDetailPage() {
   return (
     <div className="max-w-3xl space-y-3">
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-        <Link to="/care-team" className="text-sm text-slate-700 underline">← Care Team</Link>
+        <Link to="/care-team" className="inline-flex min-h-[44px] items-center text-sm text-slate-700 underline md:min-h-0">← Care Team</Link>
         <h1 className="text-xl font-bold tracking-tight text-slate-950">{caregiverName(c)}</h1>
-        <span className={`inline-block whitespace-nowrap rounded-full px-2 py-0.5 text-xs font-semibold ${CAREGIVER_STATUS_BADGE[c.status]}`}>{CAREGIVER_STATUS_LABEL[c.status]}</span>
         <span className="text-xs text-slate-500">{c.caregiverCode}</span>
       </div>
-      <CaregiverOutcome c={c} canManage={canManage} />
-      {canManage ? <OnboardingCard caregiverRecordId={c.caregiverRecordId} status={c.status} canManage={canManage} /> : null}
-      <SignInCard c={c} canManage={canManage} />
+      <ReadinessChecklist caregiverRecordId={c.caregiverRecordId} canManage={canManage} hasContact={!!c.hasContact} />
       <AssignmentsCard caregiverRecordId={c.caregiverRecordId} />
       <CaregiverReadiness caregiverRecordId={c.caregiverRecordId} />
-      <EmploymentCard c={c} canManage={canManage} />
-      {canManage ? <CaregiverDetails c={c} /> : null}
-      {canManage ? <CaregiverStatusCard c={c} /> : null}
+      <CaregiverFiles caregiverRecordId={c.caregiverRecordId} />
+      {canManage ? (
+        <SummarySection title="Details" summary={`${caregiverName(c)} · ${c.hireType ? HIRE_LABEL[c.hireType] : "Hire type not recorded"}`}>
+          <div className="space-y-3">
+            <CaregiverDetails c={c} />
+            <HireDateForm c={c} />
+            <EmploymentCard c={c} canManage={canManage} />
+            <DeactivateForm c={c} />
+          </div>
+        </SummarySection>
+      ) : null}
     </div>
   );
 }

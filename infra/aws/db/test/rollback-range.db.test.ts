@@ -1,4 +1,4 @@
-// Range rollback runner (0085 down to 0047) and the behavior of the 0047-0085 down scripts on populated (synthetic) data.
+// Range rollback runner (0086 down to 0047) and the behavior of the 0047-0086 down scripts on populated (synthetic) data.
 // Local PostgreSQL only (OGEVIA_TEST_DATABASE_URL); creates and drops its own databases. Nothing here touches AWS.
 import { randomUUID } from "node:crypto";
 import pg from "pg";
@@ -55,7 +55,7 @@ async function dbUpTo(upTo: string): Promise<{ pool: pg.Pool; drop: () => Promis
 async function fullDb(): Promise<TestDb> { const d = await createTestDb(); created.push(() => d.drop()); return d; }
 
 describe("the range rollback runner", () => {
-  it("rolls 0085 down to 0047 and the schema equals a database that was only ever migrated to 0046 (functions, constraints, triggers, policies, privileges, table row counts)", async () => {
+  it("rolls 0086 down to 0047 and the schema equals a database that was only ever migrated to 0046 (functions, constraints, triggers, policies, privileges, table row counts)", async () => {
     const up46 = await dbUpTo("0046");
     const c46 = await up46.pool.connect();
     const f46 = await fingerprint(c46, { data: "counts" });
@@ -63,11 +63,11 @@ describe("the range rollback runner", () => {
     const full = await fullDb();
     const c = await connect(full);
     try {
-      expect(await ledger(c)).toEqual({ n: "85", l: "0085" });
+      expect(await ledger(c)).toEqual({ n: "86", l: "0086" });
       const r = await rollbackRange(c, { target: "0047" });
-      expect(r.rolledBack).toHaveLength(39);
-      expect(r.rolledBack[0]).toBe("0085");
-      expect(r.rolledBack[38]).toBe("0047");
+      expect(r.rolledBack).toHaveLength(40);
+      expect(r.rolledBack[0]).toBe("0086");
+      expect(r.rolledBack[39]).toBe("0047");
       expect(await ledger(c)).toEqual({ n: "46", l: "0046" });
       const back = await fingerprint(c, { data: "counts" });
       const diff = diffFingerprints(f46, back);
@@ -77,15 +77,15 @@ describe("the range rollback runner", () => {
     } finally { c.release(); }
   });
 
-  it("a second migrate after the rollback reproduces the 0085 schema (checksums and ledger agree)", async () => {
+  it("a second migrate after the rollback reproduces the 0086 schema (checksums and ledger agree)", async () => {
     const full = await fullDb();
     const c = await connect(full);
     try {
       const f85 = await fingerprint(c, { data: false });
       await rollbackRange(c, { target: "0047" });
       const res = await migrate(c);
-      expect(res.applied).toHaveLength(39);
-      expect(await ledger(c)).toEqual({ n: "85", l: "0085" });
+      expect(res.applied).toHaveLength(40);
+      expect(await ledger(c)).toEqual({ n: "86", l: "0086" });
       const again = await fingerprint(c, { data: false });
       const diff = diffFingerprints(f85, again);
       expect(diff, `differences after re-migrate:\n${diff.join("\n")}`).toEqual([]);
@@ -97,7 +97,7 @@ describe("the range rollback runner", () => {
     const c = await connect(full);
     try {
       const r = await rollbackRange(c, { target: "0080" });
-      expect(r.rolledBack).toEqual(["0085", "0084", "0083", "0082", "0081", "0080"]);
+      expect(r.rolledBack).toEqual(["0086", "0085", "0084", "0083", "0082", "0081", "0080"]);
       expect(await ledger(c)).toEqual({ n: "79", l: "0079" });
     } finally { c.release(); }
   });
@@ -110,10 +110,10 @@ describe("the range rollback runner", () => {
       await expect(rollbackRange(c, { target: "0099" })).rejects.toThrow(/no applied migration at or above 0099/);
       await expect(rollbackRange(c, { target: "0047", expectSetSha: "abc" })).rejects.toThrow(/64 hex/);
       await expect(rollbackRange(c, { target: "0047", expectSetSha: "0".repeat(64) })).rejects.toThrow(/not the approved/);
-      expect(await ledger(c)).toEqual({ n: "85", l: "0085" });
+      expect(await ledger(c)).toEqual({ n: "86", l: "0086" });
       await c.query("delete from ogevia_meta.schema_migrations where version = '0060'");
       await expect(rollbackRange(c, { target: "0047" })).rejects.toThrow(/not a contiguous run/);
-      expect((await ledger(c)).l).toBe("0085");
+      expect((await ledger(c)).l).toBe("0086");
       await c.query("insert into ogevia_meta.schema_migrations (version, name, checksum) select '0060', name, checksum from ogevia_meta.schema_migrations where version = '0059'");
     } finally { c.release(); }
   });
@@ -122,7 +122,7 @@ describe("the range rollback runner", () => {
     const full = await fullDb();
     const c = await connect(full);
     try {
-      const sha = rollbackSetSha("0083", "0085");
+      const sha = rollbackSetSha("0083", "0086");
       expect(sha).toMatch(/^[0-9a-f]{64}$/);
       const r = await rollbackRange(c, { target: "0083", expectSetSha: sha });
       expect(r.setSha).toBe(sha);
