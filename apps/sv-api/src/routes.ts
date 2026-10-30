@@ -206,9 +206,11 @@ function withNames<T extends Record<string, unknown>>(list: T[], dir: Awaited<Re
 }
 
 /** Walks a response and adds clientName / duplicateName beside every object that carries a clientCode (or clientId), for administrator lists; the codes stay. */
-function withClientNames<T>(value: T, dir: Awaited<ReturnType<typeof nameDirectory>>): T {
+export function withClientNames<T>(value: T, dir: Pick<Awaited<ReturnType<typeof nameDirectory>>, "client">): T {
   const walk = (v: unknown): unknown => {
     if (Array.isArray(v)) return v.map(walk);
+    // A Date is an object but not a record: rebuilding it turned every timestamptz column into `{}`. It is returned as it is and serializes as an ISO string.
+    if (v instanceof Date) return v;
     if (v && typeof v === "object") {
       const o = v as Record<string, unknown>;
       const out: Record<string, unknown> = {};
