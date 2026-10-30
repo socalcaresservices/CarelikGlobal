@@ -27,7 +27,7 @@ afterAll(async () => db?.drop());
 
 type Fx = { client: string; service: string; auth: string };
 /** A shift held by an assigned Care Request reservation (as 0011 creates it), `minutes` long. */
-async function reserve(f: Fx, minutes: number, offsetHours = 30) {
+async function reserve(f: Fx, minutes: number, offsetHours = 30, serviceDate: string = today) {
   const shift = (await q(
     `insert into ogevia.shifts (organization_id, client_id, service_id, caregiver_user_id, caregiver_record_id, starts_at, ends_at)
      values ($1,$2,$3,$4,$5, now() + make_interval(hours => $6), now() + make_interval(hours => $6, mins => $7)) returning id`,
@@ -41,7 +41,7 @@ async function reserve(f: Fx, minutes: number, offsetHours = 30) {
   await q(
     `insert into ogevia.authorization_reservations (organization_id, authorization_lineage_id, care_request_id, shift_id, service_date, reserved_minutes)
      select $1, a.lineage_id, $2, $3, $4::date, $5 from ogevia.client_authorizations a where a.id = $6`,
-    [w.orgA, request, shift, today, minutes, f.auth]);
+    [w.orgA, request, shift, serviceDate, minutes, f.auth]);
 }
 
 describe("the tier function: exact boundaries on integer arithmetic", () => {
@@ -222,17 +222,20 @@ describe("what a visit records and what a shift refuses", () => {
   });
 
   it("a shift that does not fit still refuses (OGC09); the wording says how far over the limit the authorization already is", async () => {
-    const f = await freshClient(db, w, w.caregiverA1, 200);
-    await reserve(f, 180, 30);
-    await reserve(f, 180, 54);
-    const d = day(1);
+    // Calendar-independent (was reservations in the current month and a shift on "tomorrow", which is next month, outside the authorization, on the last day of a
+    // month): the two reservations and the new shift are all in the same fixed future month, under an authorization that covers it. Same arithmetic, same wording.
+    const d = await midMonthAhead(db);
+    const f = await freshClient(db, w, w.caregiverA1, 200, w.orgA, { before: 5, after: 100 });
+    await reserve(f, 180, 30, d);
+    await reserve(f, 180, 54, d);
     await expectPgError(as(w.managerA, "select * from ogevia_api.create_shift($1,$2,$3,$4::date,'09:00','10:00',$5,null)", [w.orgA, f.client, f.service, d, recA1]), "OGC09", /already 2 hr 40 min over its limit this month, and this shift needs 1 hr/);
   });
 
   it("when time remains but not enough, the wording is the same as before: what is available and what the shift needs", async () => {
-    const f = await freshClient(db, w, w.caregiverA1, 300);
-    await reserve(f, 180, 30);
-    await expectPgError(as(w.managerA, "select * from ogevia_api.create_shift($1,$2,$3,$4::date,'09:00','12:00',$5,null)", [w.orgA, f.client, f.service, day(1), recA1]), "OGC09", /2 hr available, this shift needs 3 hr/);
+    const d = await midMonthAhead(db); // calendar-independent, as in the test above
+    const f = await freshClient(db, w, w.caregiverA1, 300, w.orgA, { before: 5, after: 100 });
+    await reserve(f, 180, 30, d);
+    await expectPgError(as(w.managerA, "select * from ogevia_api.create_shift($1,$2,$3,$4::date,'09:00','12:00',$5,null)", [w.orgA, f.client, f.service, d, recA1]), "OGC09", /2 hr available, this shift needs 3 hr/);
   });
 });
 
