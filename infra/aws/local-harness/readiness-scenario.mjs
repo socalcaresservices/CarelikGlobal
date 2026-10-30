@@ -8,9 +8,15 @@ const vp = label === "phone" ? { width: 390, height: 844 } : { width: 1280, heig
 const browser = await chromium.launch({ executablePath: "/opt/pw-browsers/chromium-1194/chrome-linux/chrome", args: ["--no-sandbox"] }).catch(() => chromium.launch({ args: ["--no-sandbox"] }));
 let fail = 0;
 const rec = (name, ok, d = "") => { if (!ok) fail++; console.log(ok ? "ok  " : "FAIL", `[${label}]`, name, ok ? "" : d); };
+// B7: console errors and 4xx/5xx responses are recorded for every office session. The only expected one is the deliberate resend refusal (409 on signin-link).
+const problems = [];
 async function login(persona) {
   const ctx = await browser.newContext({ viewport: vp, ignoreHTTPSErrors: true });
   const page = await ctx.newPage();
+  const office = persona !== "Alex Caregiver";
+  page.on("response", (r) => { if (office && r.status() >= 400 && !(r.status() === 409 && /\/signin-link$/.test(new URL(r.url()).pathname))) problems.push(`${persona}: ${r.status()} ${new URL(r.url()).pathname}`); });
+  page.on("console", (m) => { if (office && m.type() === "error" && !/status of 409/.test(m.text())) problems.push(`${persona}: console error ${m.text().slice(0, 160)}`); });
+  page.on("pageerror", (e) => { if (office) problems.push(`${persona}: page error ${String(e).slice(0, 160)}`); });
   await page.goto("https://localhost/");
   await page.getByRole("link", { name: /sign in/i }).or(page.getByRole("button", { name: /sign in/i })).first().click();
   await page.getByText(persona, { exact: false }).first().click();
@@ -106,6 +112,7 @@ await cp.goto("https://localhost/care-team"); await settle(cp, 400);
 rec("Caregiver: refused (no Care Team access)", /do not have access/i.test(await cp.evaluate(() => document.body.innerText)));
 await cctx.close();
 
+rec("B7: no unexpected console errors, page errors or 4xx/5xx responses in the administrator and manager sessions", problems.length === 0, problems.join(" | "));
 await browser.close();
 console.log(fail === 0 ? `ALL PASS [${label}]` : `${fail} FAILED [${label}]`);
 process.exit(fail === 0 ? 0 : 1);

@@ -1,6 +1,10 @@
 # Operator runbook: 2026-10-30-caregiver-readiness (migration 0086)
 
-**Status: PROPOSED. NOTHING HERE HAS BEEN RUN AGAINST ANY SHARED ENVIRONMENT.** The target (pilot/test, demo or production) is **UNKNOWN**; the owner must name it in writing before section C (checklist C0). Every YELLOW action below needs the owner's explicit GO for that environment (`CLAUDE.md` section 13). Claude Code has no AWS access and cannot run this.
+**Status: PROPOSED. NOTHING HERE HAS BEEN RUN AGAINST ANY SHARED ENVIRONMENT.**
+
+**Owner decision 2026-10-30:** this is a **TEST/PILOT package only** until a deployment target is formally designated. **Designated Operator: Stella Okereke.** Nothing in this runbook may be scheduled or scripted against any shared environment until the target environment is explicitly identified and documented in the checklist (C0). **Target environment: NOT DESIGNATED.** The real `cdk diff` is run by the Operator in the target once it is designated (checklist C4a); the local synthesized comparison below is not a substitute. 0086 is **not releasable** while any release gate in `CHECKLIST.md` is open.
+
+The target (pilot/test, demo or production) is **UNKNOWN**; the owner must name it in writing before section C (checklist C0). Every YELLOW action below needs the owner's explicit GO for that environment (`CLAUDE.md` section 13). Claude Code has no AWS access and cannot run this.
 
 Why this is not a copy of the 2026-10-19 operator package: that package (`docs/releases/2026-10-19-test-rehearsal/`) is built around one named TEST database whose ledger was `52|0052`, and its pin tests fix the repository at 85 migrations. A target that is not yet identified cannot be scripted safely. This runbook therefore starts with a read-only probe that tells the operator which migrations the target is missing.
 
