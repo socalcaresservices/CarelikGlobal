@@ -3,6 +3,9 @@
 **Status: IMPLEMENTED AND TESTED LOCALLY. NOT DEPLOYED. NOT APPLIED TO ANY SHARED DATABASE.** Owner-defined rules, not verified legal requirements.
 Discovery: `DISCOVERY.md`. Which environment is "demo" is **UNKNOWN**; everything here was built and run on a disposable local PostgreSQL only.
 
+## Release package
+Start at `CHECKLIST.md` (gate status), `FEATURE_TEST_PLAN.md` (RDY-01 to RDY-17), `RUNBOOK.md` (target probe, apply, checks, rollback; target UNKNOWN, nothing run) and `evidence/` (16 screenshots of the real local stack). Catalog rows: `docs/release-process/ACCEPTANCE_TEST_CATALOG.md`, area RDY.
+
 ## What changed
 | Area | Change |
 |---|---|

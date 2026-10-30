@@ -288,6 +288,23 @@ Migration 0056; release folder `docs/releases/2026-10-18-interface-simplificatio
 | CHN-01 | R | Full-chain monthly report and server-generated CSV | AUTO `monthly-chain-report.db.test.ts`, sv-api, web; browser | Every stage reported; three computed checks pass or show the difference; billing-state columns blank without billing.visits.read; another agency sees nothing; formula-looking cells neutralised; submitted / billed absent | Fix before release |
 | MAT-01 | | Five-board matrix | DOC `FIVE_BOARD_MATRIX_88.md` | 88 rows, each with status, evidence and remaining gap | Update on every batch |
 
+## RDY: Caregiver readiness and Approve for work (release 2026-10-30; owner rules of that date, not verified legal requirements)
+
+| ID | R | What | How | Expected | If it fails |
+|---|---|---|---|---|---|
+| RDY-01 | R | Approve blocked without a verified background check (also for an administrator, also by direct API call) | AUTO `db/test/caregiver-readiness.db.test.ts`; `apps/sv-api/test/caregiver-readiness-http.db.test.ts`. PILOT: call approve for a synthetic caregiver with sign-in and training but no clearance | 409 "Cannot approve yet. Waiting on: Background check"; no approval row | Stop; highest severity |
+| RDY-02 | R | Approve blocked until the caregiver has signed in | AUTO same DB file. PILOT: invite a synthetic caregiver, do not sign in, try Approve | "Waiting on: App sign-in"; after first sign-in it works | Stop |
+| RDY-04 | R | One approval record, approver and time recorded, audited; double-click makes one | AUTO same DB file; HARNESS `local-harness/readiness-scenario.mjs` | Exactly one approval row and one audit entry | Stop |
+| RDY-05 | R | CPR/TB inside the due date (hire date + agency days, default 30) is a warning, not a block | AUTO DB "the default is 30 days ...". PILOT: caregiver hired 3 days ago, nothing uploaded | Approve enabled; row "Not uploaded · due <date>"; shifts allowed | Stop |
+| RDY-06 | R | CPR/TB overdue: enforcement ON blocks new shifts server-side; OFF flags only | AUTO DB "enforcement: ...". PILOT: only after the owner activates enforcement | ON: shift refused "CPR missing. TB missing."; OFF: allowed and shown overdue | Stop |
+| RDY-07 | R | Extension: one caregiver, one requirement, reason required, audited, history kept; administrator only | AUTO DB "extensions: ..."; API "extend: ..." | New due date; row in `caregiver_cpr_tb_extensions`; manager 403; other agency 404 | Stop |
+| RDY-08 | R | Agency CPR/TB due-days setting (default 30), administrator only, audited | AUTO DB "the agency setting ..."; API "settings: ..." | Value changes for that agency only | Stop |
+| RDY-09 | R | One status on the caregiver page, the Caregivers list and the Staff list | AUTO DB agreement test; web tests; HARNESS Staff list check | Same word for the same person everywhere | Stop |
+| RDY-10 | R | Caregivers Ready/Active before 0086 are approved (legacy) and keep scheduling; nobody deactivated | AUTO DB legacy test. PILOT: runbook section F step 6 | Counts before and after agree | Stop; roll back |
+| RDY-12 | R | Sign-in link: no email, add email, send, resend limit (1 a minute, 5 a day), none after sign-in; email never shown or logged | AUTO DB "contact and the sign-in link"; API full path; HARNESS Quinn. PILOT: runbook section F steps 1 to 3 | As described; Cognito sends exactly one message per send | Stop |
+| RDY-14 | R | Tenant isolation and permissions of every new route | AUTO DB and API tenant tests | Other agency 404; caregiver 403; no token 401 | Stop; highest severity |
+| RDY-15 | S | Caregiver page on a phone: one column, no sideways scroll, controls 44 px | AUTO web test; BROWSER `apps/web/e2e/readiness-mobile.mjs`; HARNESS phone scenario | All checks pass | Fix forward |
+
 ## Adding to this catalog
 Every new feature adds its rows in the same change, with all of: ID, What, How, Expected (exact), If it fails. A defect found in production or UAT adds a **permanent** regression row. When a defect marked `OPEN DEFECT` is fixed, remove `.fails` from its test, remove the tag here, and add the row's `R` mark if the area is high-risk.
 
