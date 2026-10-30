@@ -26,7 +26,7 @@ Wording follows what the owner wrote in the conversation on 2026-10-30; the righ
 | Item | State |
 |---|---|
 | Code | `claude/practical-tesla-r07odb`; no pull request opened; nothing merged to main. Commit recorded for Phase C: `44dbd2ec8a8b6c87562d30245e80e66a6441dfdb` (amendment A2) |
-| Gates | G1 lint pass; G2 typecheck pass; G3 tests pass and validated; G4 open (B9 regression spot-check outstanding); G5 pilot not run; G6 owner GO **not given** |
+| Gates | G1 lint pass; G2 typecheck pass; G3 tests pass and validated; G4 open (B9 was run and FAILED on pre-existing defect D1: owner decision pending); G5 pilot not run; G6 owner GO **not given** |
 | Target environment | **DESIGNATED 2026-10-30 (unsigned): existing TEST/pilot, see section 5 amendment A1.** No deployment authorized |
 | Operator | Stella Okereke |
 | Deployed anywhere | **No** |
