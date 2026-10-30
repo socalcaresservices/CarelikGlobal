@@ -8,7 +8,7 @@ Template: `docs/release-process/RELEASE_CHECKLIST_TEMPLATE.md`. Evidence below i
 | Field | Value |
 |---|---|
 | Release ID | `2026-10-30-caregiver-readiness` |
-| Commit SHA to deploy | **Not set.** Code is `dd59c8b3d56e190ef1f47316c19b4fa287f57d77`; documentation-only commits follow. The owner's GO must name the final SHA. |
+| Commit SHA to deploy | **`44dbd2ec8a8b6c87562d30245e80e66a6441dfdb`** (recorded 2026-10-30 at the owner's request, `DECISION_RECORD.md` A2; the pushed head of `claude/practical-tesla-r07odb` at that time). The deployable code last changed in `dd59c8b`; **no deployable file changed between `dd59c8b` and this SHA** (checked with git). Later commits are documentation/tests only; before Phase C the Operator re-runs `git diff --stat 44dbd2ec8a8b6c87562d30245e80e66a6441dfdb HEAD -- apps/sv-api/src apps/web/src infra/aws/lib infra/aws/bin infra/aws/db/migrations infra/aws/db/rollback infra/aws/db/verification pnpm-lock.yaml` and expects no output. **A GO covers this SHA only; it has not been given.** |
 | Branch / pull request | `claude/practical-tesla-r07odb` / no pull request opened |
 | Prepared by | Claude Code (cloud session), 2026-10-30, for the owner |
 | Change classification | ☑ feature ☑ migration ☑ API ☑ scheduling ☑ user admin ☑ infrastructure (8 routes, same stacks) ☐ others |
@@ -75,7 +75,7 @@ Database check after the browser run: one `caregiver_work_approvals` row and one
 ## C. Pilot/test environment (Phase C), gate G5 — NOT RUN
 **C0 Target environment (designated 2026-10-30 by the owner in conversation; recorded in `DECISION_RECORD.md` amendment A1, unsigned):** the existing **TEST/pilot** slice: stacks `Ogevia-prod-*` (CDK `-c env=prod`), database **`ogevia_sv_test`** on RDS `ogevia-prod-postgres` (account 300094796789, `us-west-2`), banner "TEST — synthetic data only". **Not** `Ogevia-prd-*` and **never** `ogevia_prd`, which lives on the same RDS instance. Identifiers come from repository documents and are **NOT VERIFIED LIVE** (Claude has no AWS access): the Operator confirms them read-only first (`RUNBOOK.md` section B). Last recorded state: commit `e80b770`, ledger 85 / 0085 (2026-10-19); the current live ledger is UNKNOWN until the probe is run.
 
-Operator: **Stella Okereke**. **Still NOT stated by the owner: the commit SHA, the window, and a GO to run Phase C.** Until those are stated in writing, nothing is run against the TEST slice; Claude runs nothing against any shared environment in any case. The real `cdk diff` (C4a) is the Operator's first Phase C step once the owner states the SHA and window. Steps C0 to C10 are in `RUNBOOK.md`; nothing was run.
+Operator: **Stella Okereke**. **Commit SHA recorded: `44dbd2ec8a8b6c87562d30245e80e66a6441dfdb` (A2). Window: NOT SET; to be recorded after B9 is PASS and the Operator confirms her availability. GO to run Phase C: NOT given.** Until the window and the GO are stated in writing, nothing is run against the TEST slice; Claude runs nothing against any shared environment in any case. The real `cdk diff` (C4a) is the Operator's first Phase C step once the owner states the SHA and window. Steps C0 to C10 are in `RUNBOOK.md`; nothing was run.
 
 ## D. User acceptance (Phase D) — NOT RUN
 No validator has run any script. Owner, Scheduler, Caregiver (phone) and the Authorization validator rows are blank. Scripts to use: RDY-01 to RDY-16 in the plan.
@@ -117,8 +117,8 @@ Owner decisions recorded 2026-10-30 (given in the conversation with Claude Code)
 GO / NO-GO decision (G6): ☐ GO ☐ NO-GO — **not given**. Owner / date / SHA / reference / window / conditions: blank.
 
 ## Open items (nothing below is done unless ticked)
-1. ☑ **Target designated** (existing TEST/pilot, C0). ☐ Owner signs `DECISION_RECORD.md` A1. ☐ Operator confirms the identifiers read-only (runbook B). ☐ Owner states the commit SHA, the window and a GO for Phase C in writing.
-2. ☐ **Real `cdk diff`** in the TEST slice, by the Operator, after the owner states the SHA and window (C4a). Expected: only the 8 routes and one Lambda code asset per API stack (`RUNBOOK.md` D).
+1. ☑ **Target designated** (existing TEST/pilot, C0). ☐ Owner signs `DECISION_RECORD.md` A1. ☐ Operator confirms the identifiers read-only (runbook B). ☑ Commit SHA recorded (A2). ☐ Owner states the window (after B9 PASS) and gives a GO for Phase C in writing.
+2. ☐ **Real `cdk diff`** in the TEST slice, by the Operator, after the owner states the window and gives the GO (C4a). Expected: only the 8 routes and one Lambda code asset per API stack (`RUNBOOK.md` D).
 3. ☑ **G3 clean:** the date-dependent tests are calendar-independent and validated (see above).
 4. ☐ **B9:** a person spot-checks the regression set R (harness or pilot).
 5. ☐ **Phase C, D, E** in full (pilot validation, user acceptance by Owner, Scheduler, Caregiver and the authorization validator, owner GO).
@@ -127,4 +127,4 @@ GO / NO-GO decision (G6): ☐ GO ☐ NO-GO — **not given**. Owner / date / SHA
 8. ☑ Release-pin tests of the 2026-10-19 and 2026-10-21 packages retired (moved, not deleted, not re-pinned).
 9. ☑ The 41 database failures categorized: 37 obsolete (retired), 4 date-dependent, 0 defects.
 
-**0086 is NOT RELEASABLE, deployment-ready or production-approved.** Remaining blockers: items 1, 2 (signing, live verification, the owner's SHA/window/GO, and the real `cdk diff`), 4 (B9 regression spot-check), 5 (Phases C, D, E) and 7 (security review confirmation).
+**0086 is NOT RELEASABLE, deployment-ready or production-approved.** Remaining blockers: items 1, 2 (signing, live verification, the owner's window and GO, and the real `cdk diff`), 4 (B9 regression spot-check), 5 (Phases C, D, E) and 7 (security review confirmation).

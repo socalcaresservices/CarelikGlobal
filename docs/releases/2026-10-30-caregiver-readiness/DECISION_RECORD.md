@@ -25,7 +25,7 @@ Wording follows what the owner wrote in the conversation on 2026-10-30; the righ
 ## 2. State of the release at the time of filing (facts, not decisions)
 | Item | State |
 |---|---|
-| Code | `claude/practical-tesla-r07odb`; no pull request opened; nothing merged to main |
+| Code | `claude/practical-tesla-r07odb`; no pull request opened; nothing merged to main. Commit recorded for Phase C: `44dbd2ec8a8b6c87562d30245e80e66a6441dfdb` (amendment A2) |
 | Gates | G1 lint pass; G2 typecheck pass; G3 tests pass and validated; G4 open (B9 regression spot-check outstanding); G5 pilot not run; G6 owner GO **not given** |
 | Target environment | **DESIGNATED 2026-10-30 (unsigned): existing TEST/pilot, see section 5 amendment A1.** No deployment authorized |
 | Operator | Stella Okereke |
@@ -59,6 +59,7 @@ Operator acknowledgement (D1: Operator is Stella Okereke; she runs nothing again
 | # | Date | Change | Owner signature |
 |---|---|---|---|
 | A1 | 2026-10-30 | **Target environment designated** (owner's choice in conversation: existing TEST/pilot). Details below. Does **not** authorize any deployment, and sets no commit SHA or window. | ____________ |
+| A2 | 2026-10-30 | **Commit SHA recorded for Phase C** and window deferred (owner's choice in conversation): SHA `44dbd2ec8a8b6c87562d30245e80e66a6441dfdb`; **window: NOT SET, to be recorded after B9 is PASS and the Operator confirms her availability**. Does **not** give a GO. | ____________ |
 
 | Field | Value |
 |---|---|
@@ -70,4 +71,4 @@ Operator acknowledgement (D1: Operator is Stella Okereke; she runs nothing again
 | Last recorded state | Commit `e80b770`, ledger 85 / `0085` on 2026-10-19 (`docs/releases/2026-10-19-test-rehearsal/DEPLOYED_RECORD_e80b770_TEST.md`) |
 | Source of these identifiers | Repository documents and CDK config (`docs/aws/INVENTORY_RECONCILIATION_2026-10-21.md`, the deployed record above, `infra/aws/lib/config.ts`). **NOT VERIFIED LIVE**: Claude has no AWS access. The Operator confirms every identifier read-only before any step (runbook section B) |
 | Operator | Stella Okereke |
-| NOT designated / NOT authorized by this entry | commit SHA, deployment window, a GO for Phase C, any migration, any deploy. Those are separate owner statements (checklist C, runbook C) |
+| NOT designated / NOT authorized by this entry | deployment window, a GO for Phase C, any migration, any deploy (the SHA is recorded by amendment A2; the window and the GO remain separate owner statements: checklist C, runbook C) |
