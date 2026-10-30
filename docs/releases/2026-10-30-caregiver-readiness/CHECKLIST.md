@@ -39,6 +39,8 @@ Template: `docs/release-process/RELEASE_CHECKLIST_TEMPLATE.md`. Evidence below i
 | A8 | CI on the pull request | | ☐ N/A: no pull request opened | |
 | A9 | Counts did not drop (3.1) | | ☑ with explanation | Infra unit suite: 552 before; 458 now after the owner-approved retirement of 4 package test files (94 tests of the superseded packages; none of the 458 fails). Web: removed the Compliance card tests (9 of `compliance.test.tsx`) and the Onboarding-card test (1) because those components were deleted by the brief; added readiness, approve, extend, sign-in link, accounts and mobile tests. DB: 3 retired package files (62+32+14 tests); +22 new, existing tests changed only where the 2026-10-30 rules reverse earlier ones (list below). |
 
+**Re-run on the D1 fix commit `54894411f0e69ac29bec762006e47f7d943b94f2` (2026-10-30):** lint 6/6, typecheck 7/7, build 6/6; infra unit 458/458; sv-api unit 100/100 (96 + 4 new); sv-api DB 152/152; **full infra DB suite 99/99 files, 1,084/1,084 tests**. G3 stays validated at the new SHA.
+
 Existing tests changed (rule changes, not weakened controls): `compliance-hold` and `apps/sv-api/test/compliance.db` (14 becomes the agency setting, set to 14 in those suites; "inside the period" now allowed again), `cpr-tb-verified-required` (documents past the due date; new inside-period test), `onboarding` and `scheduling-onboarding.db` (one onboarding item left; approval through Approve for work), `caregiver-gate-no-service`, `caregiver-service-admin`, `invitations-planned`, `workflow.db` (status picker refuses Approved/Active; resend rate limit), plus count/list updates in `schema`, `verification`, `rollback-range`, `readiness-*`, `upgrade-*`, `merged-gate`; verification SQL `01` and `08` updated to 0086.
 
 Change-specific:
