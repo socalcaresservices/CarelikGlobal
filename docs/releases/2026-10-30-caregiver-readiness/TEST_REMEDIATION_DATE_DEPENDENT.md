@@ -55,4 +55,4 @@ Method: Postgres and Node both run under `libfaketime` with the **same frozen ab
 
 The 18 dates include: the real date (2026-10-30), the last day of a 31-day, 30-day and 28-day month, year end, both daylight-saving days (2026-11-01, 2027-03-14) and the days before and after them, a late-evening local time that is already the next UTC day (2026-11-01 06:30 UTC = 2026-10-31 23:30 local), 2026-11-02 and later dates (after the 2026-11-02 mark the owner named), and a year ahead.
 
-Real clock, full suite after the change: FULL_SUITE_LINE
+Real clock, full suite after the change: **99 of 99 files and 1,084 of 1,084 tests pass** (2026-10-30, the day the 4 original failures occurred), with no test skipped by configuration. Lint, typecheck and the other suites are unchanged and green.

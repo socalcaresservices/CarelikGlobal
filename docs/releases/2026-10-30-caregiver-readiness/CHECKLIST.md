@@ -1,6 +1,6 @@
 # Release checklist: 2026-10-30-caregiver-readiness
 
-**Status (updated 2026-10-30, after the owner's decisions of the same day): TEST/PILOT package only. Operator: Stella Okereke. Target environment: NOT DESIGNATED. Phase A: G1 and G2 pass; G3 OPEN (4 date-dependent database tests, no defect: see `TEST_FAILURE_CATEGORIZATION.md`). Phase B: PARTIAL (B9 open, no human tester). Phases C, D, E NOT RUN. Not deployed anywhere. 0086 is NOT RELEASABLE. GO / NO-GO not given.**
+**Status (updated 2026-10-30, after the owner's decisions of the same day): TEST/PILOT package only. Operator: Stella Okereke. Target environment: NOT DESIGNATED. Phase A: G1 and G2 pass; G3 RESOLVED and validated (date-dependent tests made calendar-independent: see `TEST_REMEDIATION_DATE_DEPENDENT.md`). Phase B: PARTIAL (B9 open, no human tester). Phases C, D, E NOT RUN. Not deployed anywhere. 0086 is NOT RELEASABLE. GO / NO-GO not given.**
 Status words: implemented and tested on a disposable local database only. "Demo" environment: UNKNOWN.
 Template: `docs/release-process/RELEASE_CHECKLIST_TEMPLATE.md`. Evidence below is real command output from this session (2026-10-30), local PostgreSQL 16, synthetic data.
 
@@ -34,7 +34,7 @@ Template: `docs/release-process/RELEASE_CHECKLIST_TEMPLATE.md`. Evidence below i
 | A3 | Typecheck (G2) | `pnpm typecheck` | ☑ exit 0 | `Tasks: 7 successful, 7 total` |
 | A4 | Unit and static tests (G3a) | `pnpm test` (run per package) | ☑ pass | web 1215/1215; sv-api 96/96; **infra/aws 458/458 in 23 files**. The 10 failing release-pin tests of the earlier run belonged to the superseded 2026-10-19 and 2026-10-21 packages and were **retired on the owner's instruction** (moved to `infra/aws/retired-tests/`, not deleted, not re-pinned; see its README). |
 | A5 | Build | `pnpm build` | ☑ exit 0 | `Tasks: 6 successful, 6 total` (turbo output warnings only) |
-| A6 | Database tests (G3b) | `OGEVIA_TEST_DATABASE_URL=… pnpm --filter @carelik/infra-aws test:db` | ☒ **OPEN: 4 failures** | Real clock (2026-10-30), 99 files: **1080 pass, 4 fail**. The 4 are date-dependent tests (`authorization-tiers` 1, `authorization-single-bucket` 1, `dst-local-times` 2): today is 2 days before a month end and the DST fall-back. They pass with the clock frozen at 2026-10-10. The earlier 41 failures: 37 were tests of superseded packages (retired), 4 are these. **No defect found.** Frozen-date evidence: the 5 date-sensitive files pass 61 of 61 with the clock frozen at 2026-10-10; a frozen-clock run of the whole suite stalled and is not counted. Full detail: `TEST_FAILURE_CATEGORIZATION.md`. G3 stays open until the suite is clean on a real date (after 2026-11-02) or the four tests are made calendar-independent (owner decision). |
+| A6 | Database tests (G3b) | `OGEVIA_TEST_DATABASE_URL=… pnpm --filter @carelik/infra-aws test:db` | ☑ **pass (resolved 2026-10-30, validated)** | Real date, full suite after the remediation: **99 of 99 files, 1,084 of 1,084 tests pass**. The earlier 41 failures were: 37 obsolete/harness tests of superseded packages (retired) and 4 date-dependent tests. Those 4 (plus 2 more of the same family found by the sweep) are now calendar-independent: exact root cause, code changes and the before/after results over 18 dates are in `TEST_REMEDIATION_DATE_DEPENDENT.md`. **Fixed tests: 34/34 on all 18 frozen dates (month ends, year end, both DST days, 2026-11-02 and later); the original files fail on 10 of those 18 dates.** No production code, migration or API changed. |
 | A7 | API tests (G3c) | `… pnpm --filter @carelik/sv-api test:db` | ☑ all passed | 152/152 in 22 files; skipped not counted by this session |
 | A8 | CI on the pull request | | ☐ N/A: no pull request opened | |
 | A9 | Counts did not drop (3.1) | | ☑ with explanation | Infra unit suite: 552 before; 458 now after the owner-approved retirement of 4 package test files (94 tests of the superseded packages; none of the 458 fails). Web: removed the Compliance card tests (9 of `compliance.test.tsx`) and the Onboarding-card test (1) because those components were deleted by the brief; added readiness, approve, extend, sign-in link, accounts and mobile tests. DB: 3 retired package files (62+32+14 tests); +22 new, existing tests changed only where the 2026-10-30 rules reverse earlier ones (list below). |
@@ -86,7 +86,7 @@ No validator has run any script. Owner, Scheduler, Caregiver (phone) and the Aut
 | E3 | Rollback plan | ☑ draft | `RUNBOOK.md` G |
 | E4 | Backup confirmation | ☐ | needs the real snapshot id |
 | E5 | Evidence index | ☑ partial | this file, `evidence/` |
-| E6 | All six gates | ☐ G1 ☑, G2 ☑, G3 ☐ (4 date-dependent DB tests open), G4 ☐ (B9 open), G5 ☐, G6 ☐ | |
+| E6 | All six gates | ☐ G1 ☑, G2 ☑, G3 ☑ (validated), G4 ☐ (B9 open), G5 ☐, G6 ☐ | |
 | E7 | Window and Operator | ☐ | |
 
 Risk assessment (draft). (1) The migration backfills approvals and retires three onboarding requirement categories: if the target holds caregivers whose stored status is Ready/Active, they remain schedulable, but the **page will show them as Approved/Active with missing items** until Task 8 is reviewed: nothing is blocked, because enforcement is unchanged. Likelihood low, effect on access none, detected by the section F count. (2) Reversal of the 0081 rule widens what can be scheduled before enforcement is on, by owner decision. (3) A new table holds email addresses and phone numbers (restricted, encrypted at rest with the rest of RDS). (4) The rollback drops four tables: BACKUP REQUIRED. (5) The release-pin tests of the superseded packages are retired, not re-pinned: a new release-pin baseline is created only after the target and release candidate are final.
@@ -100,14 +100,14 @@ Owner decisions recorded 2026-10-30 (given in the conversation with Claude Code;
 | D3 | Categorize the 41 database failures as pre-existing environment issue, obsolete test, harness/container issue or product defect. | `TEST_FAILURE_CATEGORIZATION.md` |
 | D4 | Run the real `cdk diff` once the target is identified. | **Blocked: no target** |
 | D5 | Complete Phase B (console, network, regression) and all gates and activities of Phases C, D, E. | B7 done; **B9 open**; C, D, E **not run** |
-| D6 | Keep the failed gate marked failed until resolved. | **G3 is marked OPEN/FAILED** (A6) |
+| D6 | Keep the failed gate marked failed until resolved. | G3 was marked OPEN/FAILED until validated; **now resolved** (A6, `TEST_REMEDIATION_DATE_DEPENDENT.md`) |
 | D7 | Do **not** mark 0086 releasable, deployment-ready or production-approved until: the failed gate is resolved, outstanding validations are complete, the deployment target is documented, and the release record is updated. | See the status table below |
 
 **Release status table (the only status that counts):**
 | Condition for "releasable" (D7) | State |
 |---|---|
-| Failed gate resolved (G3: 4 date-dependent DB tests) | ☐ **NOT RESOLVED** |
-| Outstanding validations complete (B9, Phase C, Phase D, security review) | ☐ **NOT COMPLETE** |
+| Failed gate resolved (G3) | ☑ **RESOLVED 2026-10-30 and validated** (real date: 99/99 files, 1,084/1,084 tests; fixed tests 34/34 on 18 frozen dates incl. after 2026-11-02) |
+| Outstanding validations complete (B9 regression spot-check, Phase C, Phase D, security review) | ☐ **NOT COMPLETE** |
 | Deployment target documented | ☐ **NOT DESIGNATED** |
 | Release record updated after the above | ☐ not applicable until the three rows above are done |
 | **0086 releasable / deployment-ready / production-approved** | **NO** |
@@ -117,7 +117,7 @@ GO / NO-GO decision (G6): ☐ GO ☐ NO-GO — **not given**. Owner / date / SHA
 ## Open items (nothing below is done unless ticked)
 1. ☐ **Designate the target environment** and record it in C0 (owner). Operator is Stella Okereke. Until then: no scheduling, no scripts run against a shared environment.
 2. ☐ **Real `cdk diff`** in the target, by the Operator, once designated (C4a). Expected: only the 8 routes and one Lambda code asset per API stack (`RUNBOOK.md` D).
-3. ☐ **G3 clean:** re-run the DB suite on a real date after 2026-11-02, or make the 4 date-dependent tests calendar-independent (owner choice; not done).
+3. ☑ **G3 clean:** the date-dependent tests are calendar-independent and validated (see above).
 4. ☐ **B9:** a person spot-checks the regression set R (harness or pilot).
 5. ☐ **Phase C, D, E** in full (pilot validation, user acceptance by Owner, Scheduler, Caregiver and the authorization validator, owner GO).
 6. ☐ Confirm the decisions listed in `README.md` ("Decisions taken without asking").
@@ -125,4 +125,4 @@ GO / NO-GO decision (G6): ☐ GO ☐ NO-GO — **not given**. Owner / date / SHA
 8. ☑ Release-pin tests of the 2026-10-19 and 2026-10-21 packages retired (moved, not deleted, not re-pinned).
 9. ☑ The 41 database failures categorized: 37 obsolete (retired), 4 date-dependent, 0 defects.
 
-**0086 is not releasable** until items 1 to 5 are resolved.
+**0086 is NOT RELEASABLE, deployment-ready or production-approved.** Remaining blockers: items 1, 2 (target and real `cdk diff`), 4 (B9 regression spot-check), 5 (Phases C, D, E) and 7 (security review confirmation).
