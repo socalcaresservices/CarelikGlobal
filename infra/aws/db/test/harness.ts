@@ -175,6 +175,21 @@ export async function orgToday(db: TestDb): Promise<string> {
   return rows[0]!.d;
 }
 
+/**
+ * A calendar-independent future day for tests that need several shifts in ONE month, ahead of today.
+ * It is the 15th of the month that contains (agency today + 40 days): always a future month's middle (at least about two weeks ahead and at most about
+ * two months ahead), so neither a month end nor the next day boundary can split a test's dates across two monthly authorization buckets.
+ * Use it with an authorization period that covers it (`freshClient(..., { before: 5, after: 100 })`).
+ */
+export async function midMonthAhead(db: TestDb): Promise<string> {
+  return (
+    await db.admin.query<{ d: string }>(
+      "select to_char((date_trunc('month', $1::date + 40) + interval '14 days')::date, 'YYYY-MM-DD') d",
+      [await orgToday(db)],
+    )
+  ).rows[0]!.d;
+}
+
 export async function seedWorld(
   db: TestDb,
   monthlyMinutes = 600,

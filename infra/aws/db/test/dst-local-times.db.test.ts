@@ -1,7 +1,9 @@
 // 0035 Daylight-saving local times: a time that does not exist (spring
 // forward) or happens twice (fall back) is refused or flagged, never resolved
 // silently (owner direction 2026-10-05). Agency time zone America/Los_Angeles.
-// The next real transitions are found from today, so the tests stay valid.
+// The next real transitions are found from today + 9 days, so every test has at least a week of FUTURE lead before the transition (the weekly-series and
+// 'change this date only' tests start 7 and 2 days before it, and a shift or series cannot start in the past). Starting at today + 2 made them fail whenever a
+// transition fell within the following week (for example on 2026-10-30, with the fall-back on 2026-11-01).
 // SYNTHETIC data only.
 import { readFileSync } from "node:fs";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
@@ -20,7 +22,7 @@ beforeAll(async () => {
   db = await createTestDb();
   w = await seedWorld(db, 600);
   const find = async (time: string, issue: string) => (await db.admin.query(
-    `select min(d)::date::text d from generate_series(current_date + 2, current_date + 400, interval '1 day') d
+    `select min(d)::date::text d from generate_series(current_date + 9, current_date + 400, interval '1 day') d
      where ogevia.local_time_issue($1, d::date, $2::time) = $3`, [TZ, time, issue])).rows[0].d as string;
   fallBack = await find("01:30", "ambiguous");
   springForward = await find("02:30", "nonexistent");

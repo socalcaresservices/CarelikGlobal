@@ -1,7 +1,7 @@
 // 0057 Authorization tiers (Healthy below 80%, Near Limit 80% to below 95%, Critical 95% and above), the 30-day expiry warning, the approved
 // committed-utilization definition, and balances that tell the truth (no silent floor at zero). SYNTHETIC data only.
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { api, asActor, createTestDb, expectPgError, freshClient, orgToday, seedWorld, signedVisit, type Actor, type TestDb, type World } from "./harness.js";
+import { api, asActor, createTestDb, expectPgError, freshClient, midMonthAhead, orgToday, seedWorld, signedVisit, type Actor, type TestDb, type World } from "./harness.js";
 
 let db: TestDb;
 let w: World;
@@ -251,9 +251,13 @@ describe("permissions and tenant isolation are unchanged", () => {
     expect(r).toEqual({ a: false, b: false });
   });
   it("concurrency: two managers filling the last hour of an authorization cannot both succeed (the lineage lock is untouched)", async () => {
-    const f = await freshClient(db, w, w.caregiverA1, 60);
+    // Calendar-independent (was today+1 and today+2, which land in two different monthly buckets, or outside the fixture's authorization, near a month end):
+    // both attempts are on consecutive days of ONE fixed future month, under an authorization that covers it, so they always compete for the same last hour.
+    const first = await midMonthAhead(db);
+    const second = new Date(Date.parse(`${first}T12:00:00Z`) + 864e5).toISOString().slice(0, 10);
+    const f = await freshClient(db, w, w.caregiverA1, 60, w.orgA, { before: 5, after: 100 });
     const attempt = (d: string, key: string) => as(w.managerA, "select * from ogevia_api.create_shift($1,$2,$3,$4::date,'09:00','10:00',null,$5)", [w.orgA, f.client, f.service, d, key]).then(() => "ok", (e) => String(e.code ?? e.message));
-    const results = await Promise.all([attempt(day(1), crypto.randomUUID()), attempt(day(2), crypto.randomUUID())]);
+    const results = await Promise.all([attempt(first, crypto.randomUUID()), attempt(second, crypto.randomUUID())]);
     expect(results.filter((r) => r === "ok")).toHaveLength(1);
     expect(results.filter((r) => r === "OGC09")).toHaveLength(1);
   });
