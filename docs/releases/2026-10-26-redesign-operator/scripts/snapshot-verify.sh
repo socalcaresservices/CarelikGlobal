@@ -3,7 +3,7 @@
 # TEST release 2026-10-26-redesign, STEP 7: create the named pre-deployment snapshot of ogevia-prod-postgres [YELLOW: one create-db-snapshot call; the snapshot costs storage] and VERIFY it.
 #   bash snapshot-verify.sh create    # takes the snapshot inside the release window, waits for it, verifies it
 #   bash snapshot-verify.sh verify    # verifies an existing snapshot only (read-only); reads the id from OGEVIA_PREDEPLOY_SNAPSHOT_ID or $OGEVIA_BEFORE/snapshot-id.txt
-# Verified: the id matches ogevia-prod-postgres-pre-0086-YYYYMMDDHHMM; the snapshot exists, status available, belongs to ogevia-prod-postgres, type manual, StorageEncrypted true,
+# Verified: the id matches ogevia-prod-postgres-pre-0087-YYYYMMDDHHMM; the snapshot exists, status available, belongs to ogevia-prod-postgres, type manual, StorageEncrypted true,
 # created inside OGEVIA_RELEASE_WINDOW_START..END and not in the future. Anything else exits 1 and the operator STOPS. The snapshot is a recovery PREREQUISITE, not a restore procedure.
 # AWS verbs: rds create-db-snapshot (create mode only), rds wait db-snapshot-available, rds describe-db-snapshots.
 # =============================================================================
@@ -20,7 +20,7 @@ W_START=$(date -u -d "$OGEVIA_RELEASE_WINDOW_START" +%s 2>/dev/null) && W_END=$(
 NOW=$(date -u +%s)
 if [[ "$MODE" == create ]]; then
   (( NOW >= W_START && NOW <= W_END )) || stop "now ($(date -u +%FT%TZ)) is outside the release window; a snapshot taken outside it is refused"
-  SNAP="ogevia-prod-postgres-pre-0086-$(date -u +%Y%m%d%H%M)"
+  SNAP="ogevia-prod-postgres-pre-0087-$(date -u +%Y%m%d%H%M)"
   mkdir -p "$B" && echo "$SNAP" > "$B/snapshot-id.txt" || stop "cannot write $B/snapshot-id.txt"
   echo "creating $SNAP"
   A rds create-db-snapshot --db-instance-identifier "$RDS_ID" --db-snapshot-identifier "$SNAP" --query 'DBSnapshot.Status' --output text || stop "create-db-snapshot failed"
@@ -28,7 +28,7 @@ if [[ "$MODE" == create ]]; then
 else
   SNAP="${OGEVIA_PREDEPLOY_SNAPSHOT_ID:-$(cat "$B/snapshot-id.txt" 2>/dev/null)}"
 fi
-[[ "$SNAP" =~ ^ogevia-prod-postgres-pre-0086-[0-9]{12}$ ]] || stop "the snapshot id '$SNAP' does not match ogevia-prod-postgres-pre-0086-YYYYMMDDHHMM"
+[[ "$SNAP" =~ ^ogevia-prod-postgres-pre-0087-[0-9]{12}$ ]] || stop "the snapshot id '$SNAP' does not match ogevia-prod-postgres-pre-0087-YYYYMMDDHHMM"
 ROW=$(A rds describe-db-snapshots --db-snapshot-identifier "$SNAP" --query 'DBSnapshots[0].[Status,DBInstanceIdentifier,SnapshotType,SnapshotCreateTime,Encrypted]' --output text 2>/dev/null) || stop "cannot read snapshot $SNAP (it does not exist, or access failed)"
 IFS=$'\t' read -r ST INST TYPE CREATED ENC <<<"$ROW"
 echo "snapshot $SNAP: status=$ST instance=$INST type=$TYPE created=$CREATED encrypted=$ENC"

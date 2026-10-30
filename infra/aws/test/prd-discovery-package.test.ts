@@ -10,7 +10,7 @@ import { beforeAll, describe, expect, it, vi } from "vitest";
 vi.setConfig({ testTimeout: 300000, hookTimeout: 300000 });
 const REPO = fileURLToPath(new URL("../../../", import.meta.url));
 const BUILDER = join(REPO, "docs/releases/2026-10-26-redesign-production/build-discovery-package.sh");
-const HANDLER = "94b73574c5a681d5a8c22b4264742f64e5a6d40aa1ace783be12e7383b9d8a9e.zip";   // the build TEST runs (release 7870a04)
+const HANDLER = "2871b03d6be42b0b8c85bac6feea12de75b3d05ca4636610259b6a18e1d00ed7.zip";   // the build of the fb491a5 candidate
 const IDENTITY = "7c5f8eb676c93261fd7a80f34d40ba70379c040d94bb2e9bd80f2d007ebc9759.zip";
 const out = mkdtempSync(join(tmpdir(), "prd-disc-"));
 let build: { status: number | null; text: string };
@@ -39,13 +39,13 @@ describe("production discovery package", () => {
       expect(text, f).not.toMatch(/e80b770|eab95a809b3b|4832b6ba|"228"|has 228/);
     }
   });
-  it("describes this release: the Handler and Identity assets TEST runs, 241 routes (228 + the 13 staff routes), a source commit", () => {
+  it("describes this release: the Handler and Identity assets of the candidate, 242 routes (228 + the 14 staff routes), a source commit", () => {
     const info = JSON.parse(readFileSync(join(root, "BUILD_INFO.json"), "utf8"));
-    expect(info).toMatchObject({ package: "ogevia-prd-discovery", handler_asset: HANDLER, identity_asset: IDENTITY, api_routes_in_release: 241 });
+    expect(info).toMatchObject({ package: "ogevia-prd-discovery", handler_asset: HANDLER, identity_asset: IDENTITY, api_routes_in_release: 242 });
     expect(info.source_commit).toMatch(/^[0-9a-f]{40}$/);
     const api = JSON.parse(readFileSync(join(root, "release-templates/Ogevia-prd-ServiceVerificationApi.json"), "utf8"));
     const routes = Object.values<any>(api.Resources).filter((r) => r.Type === "AWS::ApiGatewayV2::Route").map((r) => r.Properties.RouteKey as string);
-    expect(routes).toHaveLength(241);
+    expect(routes).toHaveLength(242);
     for (const k of ["GET /v1/staff", "POST /v1/staff", "GET /v1/role-permissions", "GET /v1/staff-audit"]) expect(routes, k).toContain(k);
     const readme = readFileSync(join(root, "README.md"), "utf8");
     expect(readme).toContain(HANDLER); expect(readme).toContain("OGEVIA_PRD_READ_COUNTS=1"); expect(readme).not.toMatch(/@[A-Z_]+@/);

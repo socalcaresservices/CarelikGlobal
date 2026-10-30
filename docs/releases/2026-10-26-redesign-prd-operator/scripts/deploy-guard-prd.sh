@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # =============================================================================
 # PRODUCTION release 2026-10-26-redesign: the ONLY way this procedure deploys a stack. `check` (read-only) accepts the six Ogevia-prd-* stacks and the shared Ogevia-prod-NetworkEgress;
-# `deploy` and `post` accept exactly one of TWO stacks per call: Ogevia-prd-Auth (the web app client gains the app./admin. sign-in URLs) or Ogevia-prd-ServiceVerificationApi (13 staff routes,
+# `deploy` and `post` accept exactly one of TWO stacks per call: Ogevia-prd-Auth (the web app client gains the app./admin. sign-in URLs) or Ogevia-prd-ServiceVerificationApi (14 staff routes,
 # the Handler code, two CORS origins). Every other stack can only be `check`ed and must show no difference (WebHosting: only its one removed export; it is never deployed).
 #   bash deploy-guard-prd.sh check  <stack>   READ-ONLY. Fetches the LIVE template of the stack, runs the assembly check and the EXPECTED-ONLY diff gate (diff_gate_prd.py) and shows the read-only
 #                                             `cdk diff`. Exit 0 only if the difference is exactly the release's allowed change (Auth and API: DELTA; WebHosting: EXPORT-ONLY; the rest: NONE).
@@ -76,7 +76,7 @@ case "$MODE" in
     [[ "${OGEVIA_DEPLOY_APPROVAL:-}" =~ ^[A-Za-z0-9._-]{6,64}$ ]] || refuse "set OGEVIA_DEPLOY_APPROVAL to the owner's approval reference"
     [[ "${OGEVIA_DEPLOY_APPROVAL}" != APPROVAL-REF-PENDING-OWNER ]] || refuse "the approval reference is still the placeholder"
     [[ -d "$ASSEMBLY" ]] || refuse "no assembly at $ASSEMBLY"
-    [[ "$(cat "$B/db-0086.ok" 2>/dev/null)" == "85|0085|0086" ]] || refuse "no $B/db-0086.ok containing 85|0085|0086: migration 0086 must be applied and verified BEFORE any stack is deployed"
+    [[ "$(cat "$B/db-0086.ok" 2>/dev/null)" == "85|0085|0086|0087" ]] || refuse "no $B/db-0086.ok containing 85|0085|0086|0087: migration 0086 must be applied and verified BEFORE any stack is deployed"
     [[ "$STACK" != "$API" || -s "$B/auth-at-release.ok" ]] || refuse "no $B/auth-at-release.ok: deploy $AUTH and run its post check first"
     SNAP="${OGEVIA_PREDEPLOY_SNAPSHOT_ID:-}"; [[ "$SNAP" =~ ^ogevia-prod-postgres-pre-0086-prd-[0-9]{12}$ ]] || refuse "set OGEVIA_PREDEPLOY_SNAPSHOT_ID to a snapshot named ogevia-prod-postgres-pre-0086-prd-YYYYMMDDHHMM"
     S=$(A rds describe-db-snapshots --db-snapshot-identifier "$SNAP" --output json 2>/dev/null | jq -c '.DBSnapshots[0]') && [[ -n "$S" && "$S" != null ]] || refuse "cannot read snapshot $SNAP"
@@ -116,9 +116,9 @@ case "$MODE" in
     ROUTES_AFTER=$(A apigatewayv2 get-routes --api-id "$API_ID" --max-items 1000 --output json 2>/dev/null | jq -c '[.Items[].RouteKey]') || ROUTES_AFTER='[]'
     NB=$(jq 'length' "$B/routes-before.json" 2>/dev/null || echo -1); NA=$(jq 'length' <<<"$ROUTES_AFTER" 2>/dev/null || echo 0)
     say "API routes: before $NB  after $NA"
-    [[ "$NB" -ge 0 && "$NA" == "$((NB + 13))" ]] && ok "the API gained exactly 13 routes" || nope "the route count is $NA, not $NB + 13"
+    [[ "$NB" -ge 0 && "$NA" == "$((NB + 14))" ]] && ok "the API gained exactly 14 routes" || nope "the route count is $NA, not $NB + 14"
     MISSING=$(jq -r --slurpfile k "$HERE/new-route-keys.json" '$k[0] - . | .[]' <<<"$ROUTES_AFTER" 2>/dev/null)
-    [[ -z "$MISSING" && "$NA" -gt 0 ]] && ok "all 13 staff routes exist" || nope "staff routes missing: $(tr '\n' ';' <<<"$MISSING")"
+    [[ -z "$MISSING" && "$NA" -gt 0 ]] && ok "all 14 staff routes exist" || nope "staff routes missing: $(tr '\n' ';' <<<"$MISSING")"
     LOST=$(jq -r --argjson after "$ROUTES_AFTER" '. - $after | .[]' "$B/routes-before.json" 2>/dev/null)
     [[ -z "$LOST" ]] && ok "no earlier route was lost" || nope "routes lost: $(tr '\n' ';' <<<"$LOST")"
     A apigatewayv2 get-api --api-id "$API_ID" --output json 2>/dev/null | jq '.CorsConfiguration' > "$B/cors-after.json"

@@ -1,14 +1,14 @@
 #!/usr/bin/env bash
 # =============================================================================
 # TEST release 2026-10-26-redesign: the ONLY way this procedure deploys a stack. `check` (read-only) accepts any of the five Ogevia-prod-* stacks and requires NO difference
-# for four of them; `deploy` and `post` accept exactly one stack, Ogevia-prod-ServiceVerificationApi, whose only allowed difference is the 13 staff routes and the Handler code.
+# for four of them; `deploy` and `post` accept exactly one stack, Ogevia-prod-ServiceVerificationApi, whose only allowed difference is the one added staff route and the Handler code.
 #   bash deploy-guard.sh check  <stack>    READ-ONLY. Fetches the LIVE template of the stack, runs the synthesized assembly check and the EXPECTED-ONLY diff gate
 #                                          (diff_gate.py) and shows the read-only `cdk diff`. Exit 0 only if the difference is exactly the release's allowed change
 #                                          (API: DELTA; the other four: NONE).
 #   bash deploy-guard.sh deploy <stack>    [YELLOW] API stack only. Repeats `check` (it must say DELTA: nothing to deploy is a refusal), asks you to type DEPLOY-<stack>, runs exactly
 #                                          npx cdk deploy --app $ASSEMBLY --exclusively <stack> --require-approval broadening --no-notices
-#   bash deploy-guard.sh post   <stack>    READ-ONLY checks after the deployment (API stack only: status, Lambda environment unchanged, new CodeSha256, the 13 routes present and
-#                                          the route count = before + 13, CORS unchanged, ComplianceSweep still ENABLED).
+#   bash deploy-guard.sh post   <stack>    READ-ONLY checks after the deployment (API stack only: status, Lambda environment unchanged, new CodeSha256, the added route present and
+#                                          the route count = before + 1, CORS unchanged, ComplianceSweep still ENABLED).
 # Environment: ASSEMBLY (the verified synth output, default /tmp/ogevia-cdk.out), OGEVIA_BEFORE (default ~/ogevia-before), OGEVIA_DEPLOY_APPROVAL (deploy only).
 # It never deploys an Ogevia-prd-* stack, never more than one stack, never a glob, never without the gate. Exit: 0 ok; 1 refused/failed; 2 usage.
 # =============================================================================
@@ -88,9 +88,9 @@ case "$MODE" in
     ROUTES_AFTER=$(A apigatewayv2 get-routes --api-id "$API_ID" --max-items 1000 --query 'Items[].RouteKey' --output json 2>/dev/null) || ROUTES_AFTER='[]'
     NB=$(jq 'length' "$B/routes-before.json" 2>/dev/null || echo -1); NA=$(jq 'length' <<<"$ROUTES_AFTER")
     echo "API routes: before $NB  after $NA"
-    [[ "$NB" -ge 0 && "$NA" == "$((NB + 13))" ]] && okk "the API gained exactly 13 routes" || nope "the route count is $NA, not $NB + 13"
+    [[ "$NB" -ge 0 && "$NA" == "$((NB + 1))" ]] && okk "the API gained exactly 1 route" || nope "the route count is $NA, not $NB + 1"
     MISSING=$(jq -r --slurpfile k "$HERE/new-route-keys.json" '$k[0] - . | .[]' <<<"$ROUTES_AFTER" 2>/dev/null)
-    [[ -z "$MISSING" && "$NA" -gt 0 ]] && okk "all 13 staff routes exist" || nope "staff routes missing: $(tr '\n' ';' <<<"$MISSING")"
+    [[ -z "$MISSING" && "$NA" -gt 0 ]] && okk "the added staff route exists" || nope "staff routes missing: $(tr '\n' ';' <<<"$MISSING")"
     LOST=$(jq -r --argjson after "$ROUTES_AFTER" '. - $after | .[]' "$B/routes-before.json" 2>/dev/null)
     [[ -z "$LOST" ]] && okk "no earlier route was lost" || nope "routes lost: $(tr '\n' ';' <<<"$LOST")"
     A apigatewayv2 get-api --api-id "$API_ID" --query CorsConfiguration --output json > "$B/cors-after.json" 2>/dev/null

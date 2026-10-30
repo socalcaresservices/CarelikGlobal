@@ -88,12 +88,12 @@ describe("snapshot-verify-prd.sh: a snapshot that is not verified stops the rele
   });
 });
 
-describe("route-smoke-prd.sh: the 13 staff routes refuse every call without a valid token (production API only)", () => {
-  it("passes: 13 routes x 2 calls (no token, forged token), all 401, plus the CORS preflight from app. and admin.; no credential is sent", () => {
+describe("route-smoke-prd.sh: the 14 staff routes refuse every call without a valid token (production API only)", () => {
+  it("passes: 14 routes x 2 calls (no token, forged token), all 401, plus the CORS preflight from app. and admin.; no credential is sent", () => {
     const r = run("route-smoke-prd.sh", [PRD_API]);
-    expect(r.code, r.out).toBe(0); expect(r.out).toContain("ROUTE SMOKE PASSED: 13 routes x 2 calls, all 401; CORS preflight ok for app. and admin.");
+    expect(r.code, r.out).toBe(0); expect(r.out).toContain("ROUTE SMOKE PASSED: 14 routes x 2 calls, all 401; CORS preflight ok for app. and admin.");
     expect(r.out).toContain("PASS CORS preflight from https://app.ogevia.com"); expect(r.out).toContain("PASS CORS preflight from https://admin.ogevia.com");
-    const calls = lines("curl-calls.log"); expect(calls.length).toBe(28);
+    const calls = lines("curl-calls.log"); expect(calls.length).toBe(30);
     for (const c of calls) expect(c).not.toMatch(/-X (PUT|DELETE|PATCH)/);
     for (const k of NEW_KEYS) expect(r.out).toContain(`PASS ${k} (none token): 401`);
   });

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # =============================================================================
-# Ogevia TEST release 2026-10-26-redesign (code 7870a04): READ-ONLY pin check for the uploaded operator tarball (no git, no AWS, writes nothing). Run it from the extracted package:
+# Ogevia TEST release 2026-10-26-redesign (upgrade 7870a04 to code fb491a5): READ-ONLY pin check for the uploaded operator tarball (no git, no AWS, writes nothing). Run it from the extracted package:
 #   OGEVIA_EXPECT_COMMIT=<40-hex> OGEVIA_EXPECT_MIGRATIONS_SHA=<64-hex> OGEVIA_EXPECT_0086_SHA=<64-hex> OGEVIA_EXPECT_0086_DOWN_SHA=<64-hex> OGEVIA_EXPECT_LOCKFILE_SHA=<64-hex> bash tarball-pin-check.sh
 # Checks (every failure exits non-zero; a check that cannot run is a failure, never a pass):
 #   * BUILD_INFO.json names exactly the approved code commit;
@@ -17,8 +17,8 @@ set -uo pipefail
 bad=0
 ok()   { echo "PASS $*"; }
 nope() { echo "FAIL $*"; bad=1; }
-[[ "${OGEVIA_EXPECT_COMMIT:-}" =~ ^[0-9a-f]{40}$ && "${OGEVIA_EXPECT_MIGRATIONS_SHA:-}" =~ ^[0-9a-f]{64}$ && "${OGEVIA_EXPECT_0086_SHA:-}" =~ ^[0-9a-f]{64}$ && "${OGEVIA_EXPECT_0086_DOWN_SHA:-}" =~ ^[0-9a-f]{64}$ && "${OGEVIA_EXPECT_LOCKFILE_SHA:-}" =~ ^[0-9a-f]{64}$ ]] \
-  || { echo "usage: set OGEVIA_EXPECT_COMMIT (40 hex), OGEVIA_EXPECT_MIGRATIONS_SHA, OGEVIA_EXPECT_0086_SHA, OGEVIA_EXPECT_0086_DOWN_SHA and OGEVIA_EXPECT_LOCKFILE_SHA (64 hex) from the procedure" >&2; exit 2; }
+[[ "${OGEVIA_EXPECT_COMMIT:-}" =~ ^[0-9a-f]{40}$ && "${OGEVIA_EXPECT_MIGRATIONS_SHA:-}" =~ ^[0-9a-f]{64}$ && "${OGEVIA_EXPECT_0086_SHA:-}" =~ ^[0-9a-f]{64}$ && "${OGEVIA_EXPECT_0086_DOWN_SHA:-}" =~ ^[0-9a-f]{64}$ && "${OGEVIA_EXPECT_0087_SHA:-}" =~ ^[0-9a-f]{64}$ && "${OGEVIA_EXPECT_0087_DOWN_SHA:-}" =~ ^[0-9a-f]{64}$ && "${OGEVIA_EXPECT_LOCKFILE_SHA:-}" =~ ^[0-9a-f]{64}$ ]] \
+  || { echo "usage: set OGEVIA_EXPECT_COMMIT (40 hex), OGEVIA_EXPECT_MIGRATIONS_SHA, OGEVIA_EXPECT_0086_SHA, OGEVIA_EXPECT_0086_DOWN_SHA, OGEVIA_EXPECT_0087_SHA, OGEVIA_EXPECT_0087_DOWN_SHA and OGEVIA_EXPECT_LOCKFILE_SHA (64 hex) from the procedure" >&2; exit 2; }
 BI=$(pkg_code_commit) || BI=""
 [[ -n "$BI" && "$BI" == "$OGEVIA_EXPECT_COMMIT" ]] && ok "BUILD_INFO code commit $BI" || nope "BUILD_INFO.json code commit is '${BI:-unreadable}', not the approved $OGEVIA_EXPECT_COMMIT"
 REF=$(jq -r '.approval_ref // empty' "$PKG_ROOT/BUILD_INFO.json" 2>/dev/null)
@@ -36,7 +36,10 @@ CNT=$(pkg_migration_count 2>/dev/null) || CNT=""
 UP=$(pkg_pending_up_sha); DOWN=$(pkg_pending_down_sha)
 [[ -n "$UP" && "$UP" == "$OGEVIA_EXPECT_0086_SHA" ]] && ok "0086 up file sha256 ${UP:0:16}..." || nope "db/pending/migrations/0086_staff_management.sql hashes to '${UP:-nothing}', not the approved value"
 [[ -n "$DOWN" && "$DOWN" == "$OGEVIA_EXPECT_0086_DOWN_SHA" ]] && ok "0086 down file sha256 ${DOWN:0:16}..." || nope "db/pending/rollback/0086_staff_management.down.sql hashes to '${DOWN:-nothing}', not the approved value"
-if PS=$(pkg_pending_strays); then [[ -z "$PS" ]] && ok "db/pending holds only the two 0086 files" || nope "db/pending holds other files: $(head -3 <<<"$PS" | tr '\n' ';')"; else nope "cannot list db/pending"; fi
+UP7=$(pkg_pending_up87_sha); DOWN7=$(pkg_pending_down87_sha)
+[[ -n "$UP7" && "$UP7" == "$OGEVIA_EXPECT_0087_SHA" ]] && ok "0087 up file sha256 ${UP7:0:16}..." || nope "db/pending/migrations/0087_staff_invitation_acceptance.sql hashes to '${UP7:-nothing}', not the approved value"
+[[ -n "$DOWN7" && "$DOWN7" == "$OGEVIA_EXPECT_0087_DOWN_SHA" ]] && ok "0087 down file sha256 ${DOWN7:0:16}..." || nope "db/pending/rollback/0087_staff_invitation_acceptance.down.sql hashes to '${DOWN7:-nothing}', not the approved value"
+if PS=$(pkg_pending_strays); then [[ -z "$PS" ]] && ok "db/pending holds only the four 0086 and 0087 files" || nope "db/pending holds other files: $(head -3 <<<"$PS" | tr '\n' ';')"; else nope "cannot list db/pending"; fi
 LOCK=$(sha256sum "$PKG_ROOT/pnpm-lock.yaml" 2>/dev/null | cut -d' ' -f1) || LOCK=""
 [[ -n "$LOCK" && "$LOCK" == "$OGEVIA_EXPECT_LOCKFILE_SHA" ]] && ok "pnpm-lock.yaml sha256 ${LOCK:0:16}..." || nope "pnpm-lock.yaml hashes to '${LOCK:-nothing}', not the approved value"
 NODE_V=$(node --version 2>/dev/null || echo none)

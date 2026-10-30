@@ -22,6 +22,7 @@ echo "$*" >> "$D/psql-calls.log"
 case "$*" in
   *pg_database*) echo "\${MOCK_DBS-ogevia_prd}" ;;
   *current_database*) echo "\${MOCK_CURRENT_DB:-ogevia_prd} | read_only=on" ;;
+  *list_my_staff_invitations*) echo "\${MOCK_S87:-\${MOCK_S87_DEFAULT:-0}}" ;;
   *staff_types*) echo "\${MOCK_S86:-0|0|0}" ;;
   *enforcement_active_from*) echo "\${MOCK_ACT:-0}|2" ;;
   *"migrations applied, latest"*) echo "\${MOCK_SUMMARY:-85 migrations applied, latest 0085}" ;;
@@ -77,11 +78,11 @@ describe("the ledger verdict (85 / 0085 before AND after: 0086 is applied outsid
   });
   it("OGEVIA_EXPECT_0086=absent: passes while the staff objects are 0|0|0 (before the apply)", async () => {
     const r = await run(["prd", "--host-ip"], { OGEVIA_EXPECT_0086: "absent", MOCK_S86: "0|0|0" });
-    expect(r.code, r.out).toBe(0); expect(r.out).toContain("staff-management objects (staff_types|staff_profiles|functions of 21): 0|0|0"); expect(r.out).toContain("0086 is ABSENT as expected.");
+    expect(r.code, r.out).toBe(0); expect(r.out).toContain("staff-management objects (staff_types|staff_profiles|functions of 21): 0|0|0"); expect(r.out).toContain("0086 and 0087 are ABSENT as expected.");
   });
   it("OGEVIA_EXPECT_0086=present: passes while the staff objects are 1|1|21 (after the apply) with the ledger still 85 / 0085", async () => {
-    const r = await run(["prd", "--host-ip"], { OGEVIA_EXPECT_0086: "present", MOCK_S86: "1|1|21" });
-    expect(r.code, r.out).toBe(0); expect(r.out).toContain("0086 is PRESENT as expected (2 tables, 21 functions)."); expect(r.out).toContain("exactly the expected 85 / 0085");
+    const r = await run(["prd", "--host-ip"], { OGEVIA_EXPECT_0086: "present", MOCK_S86: "1|1|21", MOCK_S87: "2" });
+    expect(r.code, r.out).toBe(0); expect(r.out).toContain("0086 and 0087 are PRESENT as expected (2 tables, 23 functions)."); expect(r.out).toContain("exactly the expected 85 / 0085");
   });
   it.each([
     ["absent expected, all present", "absent", "1|1|21"],
@@ -89,8 +90,11 @@ describe("the ledger verdict (85 / 0085 before AND after: 0086 is applied outsid
     ["present expected, all absent", "present", "0|0|0"],
     ["present expected, 20 of 21 functions", "present", "1|1|20"],
     ["present expected, one table", "present", "1|0|21"],
-  ])("a 0086 state that is not what the plan expects stops (exit 1, rule restored): %s", async (_n, expect0086, s86) => {
-    const r = await run(["prd", "--host-ip"], { OGEVIA_EXPECT_0086: expect0086, MOCK_S86: s86 });
+    ["present expected, 0086 complete but 0087 absent", "present", "1|1|21", "0"],
+    ["absent expected, 0086 absent but 0087 present", "absent", "0|0|0", "2"],
+    ["present expected, 0087 half there", "present", "1|1|21", "1"],
+  ])("a 0086/0087 state that is not what the plan expects stops (exit 1, rule restored): %s", async (_n, expect0086, s86, s87 = expect0086 === "present" ? "2" : "0") => {
+    const r = await run(["prd", "--host-ip"], { OGEVIA_EXPECT_0086: expect0086, MOCK_S86: s86, MOCK_S87: s87 });
     expect(r.code, r.out).toBe(1); expect(r.out).toContain("BUT the staff-management objects are"); expect(r.out).toContain("STOP"); expect(r.out).toContain("RESTORED (verified)"); expect(sg()).toEqual(INITIAL_SG);
   });
   it("an invalid OGEVIA_EXPECT_0086 is a usage error before anything is opened; the 0086 check is skipped when the variable is unset", async () => {

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # =============================================================================
-# Build the operator TARBALL for the TEST release 2026-10-26-redesign (code commit 7870a04: staff management, navigation, Reports, migration 0086 applied from db/pending) (runs HERE, in the development container, never in CloudShell; no network, no AWS).
+# Build the operator TARBALL for the TEST release 2026-10-26-redesign (UPGRADE 7870a04 to code commit fb491a5: staff invitation fixes M-1, L-1, L-2, L-3, migration 0087 applied from db/pending on top of 0086) (runs HERE, in the development container, never in CloudShell; no network, no AWS).
 #   bash build-operator-tarball.sh --out-dir DIR [--code-commit REF]      (REF default: HEAD; resolved to the full 40-hex SHA)
 #   OGEVIA_APPROVAL_REF=<owner reference>   optional; default APPROVAL-REF-PENDING-OWNER (a placeholder the pin check reports)
 #   OGEVIA_BUILD_TIME=<UTC ISO time>        optional; default now. Fixing it makes two builds of the same inputs byte-identical.
@@ -61,7 +61,7 @@ for bad in .git _backup node_modules infra/aws/cdk.out; do [[ ! -e "$STAGE/$bad"
 [[ -z "$(find "$STAGE" -type l | head -1)" ]] || die "the staging tree contains a symbolic link: $(find "$STAGE" -type l | head -1)"
 [[ -z "$(find "$STAGE" -type f -regextype posix-extended -iregex '.*\.(png|jpe?g|gif|webp|mp4|mov|pdf)$' | grep -v '/node_modules/' | head -1)" ]] || die "an image, video or PDF is in the staging tree (screenshots are excluded): $(find "$STAGE" -type f -regextype posix-extended -iregex '.*\.(png|jpe?g|gif|webp|mp4|mov|pdf)$' | head -1)"
 [[ -z "$(cd "$STAGE" && find . -type f | grep -E '[[:space:]]' | head -1)" ]] || die "a file name contains whitespace"
-for need in infra/aws/db/migrations/0085_create_caregiver_gate_no_service_void.sql infra/aws/db/rollback/0085_create_caregiver_gate_no_service_void.down.sql infra/aws/db/pending/migrations/0086_staff_management.sql infra/aws/db/pending/rollback/0086_staff_management.down.sql infra/aws/bin/ogevia.ts apps/sv-api apps/web pnpm-lock.yaml; do [[ -e "$STAGE/$need" ]] || die "$need is missing from the package"; done
+for need in infra/aws/db/migrations/0085_create_caregiver_gate_no_service_void.sql infra/aws/db/rollback/0085_create_caregiver_gate_no_service_void.down.sql infra/aws/db/pending/migrations/0086_staff_management.sql infra/aws/db/pending/rollback/0086_staff_management.down.sql infra/aws/db/pending/migrations/0087_staff_invitation_acceptance.sql infra/aws/db/pending/rollback/0087_staff_invitation_acceptance.down.sql infra/aws/bin/ogevia.ts apps/sv-api apps/web pnpm-lock.yaml; do [[ -e "$STAGE/$need" ]] || die "$need is missing from the package"; done
 # 4. BUILD_INFO.json then the manifest of every file (the manifest does not list itself)
 FILES=$(cd "$STAGE" && find . -type f ! -name BUILD_INFO.json | wc -l)
 jq -n --arg commit "$SHA" --arg tree "$TREE" --arg time "$BUILD_TIME" --arg ref "$APPROVAL_REF" --arg pkg "$PKG_REL" --argjson files "$((FILES + 1))" \
@@ -92,5 +92,7 @@ echo "manifest sha256    : $(sha256sum "$STAGE/PACKAGE_MANIFEST.sha256" | cut -d
 echo "migration set 0001-0085 sha256 : $(cd "$STAGE/infra/aws/db/migrations" && LC_ALL=C sha256sum -- *.sql | sha256sum | cut -d' ' -f1)"
 echo "0086 up file sha256            : $(sha256sum "$STAGE/infra/aws/db/pending/migrations/0086_staff_management.sql" | cut -d' ' -f1)"
 echo "0086 down file sha256          : $(sha256sum "$STAGE/infra/aws/db/pending/rollback/0086_staff_management.down.sql" | cut -d' ' -f1)"
+echo "0087 up file sha256            : $(sha256sum "$STAGE/infra/aws/db/pending/migrations/0087_staff_invitation_acceptance.sql" | cut -d' ' -f1)"
+echo "0087 down file sha256          : $(sha256sum "$STAGE/infra/aws/db/pending/rollback/0087_staff_invitation_acceptance.down.sql" | cut -d' ' -f1)"
 echo "pnpm-lock.yaml sha256          : $(sha256sum "$STAGE/pnpm-lock.yaml" | cut -d' ' -f1)"
 echo "BUILT AND SELF-VERIFIED"

@@ -341,9 +341,22 @@ export const ROUTES: Record<string, Route> = {
         await db.query("select ogevia_api.note_my_sign_in()");
         const memberships = await rows(db, "select * from ogevia_api.get_my_context()", []);
         const [profile] = await rows(db, "select display_name from ogevia_api.get_my_profile()", []);
+        // Staff invitations waiting for this person's acceptance (0087). Read only when the function exists, so this route keeps working on a database that has not applied 0087.
+        const hasInvitations = ((await db.query("select to_regprocedure('ogevia_api.list_my_staff_invitations()') is not null as ok")).rows[0] as { ok: boolean }).ok;
+        const pendingInvitations = hasInvitations ? await rows(db, "select * from ogevia_api.list_my_staff_invitations()", []) : [];
         // displayName is null when the person has not set one; the UI says so instead of inventing a name.
-        return { memberships, profile: { displayName: (profile?.displayName as string | null | undefined) ?? null } };
+        return { memberships, pendingInvitations, profile: { displayName: (profile?.displayName as string | null | undefined) ?? null } };
       }),
+  },
+
+  // The invited person accepts a staff invitation to an agency they were invited to (0087). Acts only on the signed-in person's own invitation.
+  "POST /v1/me/staff-invitations/{organizationId}/accept": {
+    mutating: true,
+    handle: async ({ event, tx }) => {
+      const org = uuid(p(event).organizationId, "organizationId");
+      const role = await tx(async (db) => ((await db.query("select ogevia_api.accept_staff_invitation($1) as role", [org])).rows[0] as { role: string }).role);
+      return { accepted: { organizationId: org, role } };
+    },
   },
 
   "POST /v1/me/display-name": {
@@ -1174,6 +1187,7 @@ export const ROUTES: Record<string, Route> = {
       const normalized = await tx(async (db) =>
         ((await db.query("select ogevia_api.begin_staff_invitation($1, $2, $3, $4) as email", [org, id, email, role])).rows[0] as { email: string }).email);
       const signIn = await identity.invite(normalized);
+      // The reply names only the profile: it never says whether the e-mail already had a sign-in or whether it was disabled (0087, L-1).
       const [invitation] = await tx((db) =>
         rows(db, "select * from ogevia_api.complete_staff_invitation($1, $2, $3, $4, $5, $6)", [org, id, normalized, signIn.sub, signIn.existingAccount, role]));
       return { invitation };

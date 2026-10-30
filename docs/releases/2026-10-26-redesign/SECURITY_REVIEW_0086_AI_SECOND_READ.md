@@ -43,3 +43,6 @@ Whether any production or migrated membership has status `invited`; how the app 
 - **B. Fix before the release:** change 0086 and the invitation function so the membership is created as invited and activated on acceptance; this changes the pinned 0086 hash, the candidate commit, the tarball, and requires a TEST re-run of the whole set.
 - **C. Hold the release.**
 Recommendation: A, recorded as a dated, written Owner decision, with B scheduled as the next change. This is a recommendation, not a decision.
+
+## Disposition added 2026-10-28
+M-1, L-1, L-2 and L-3 are addressed by pending migration 0087 (0086 unchanged). Implemented and locally tested only; **not deployed, not verified on TEST**. See `docs/releases/2026-10-28-staff-invitation-fix/` (`SECURITY_REVIEW_0087.md`).

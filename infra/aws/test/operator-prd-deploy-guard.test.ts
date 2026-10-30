@@ -73,7 +73,7 @@ const guard = (args: string[], opts: { env?: Record<string, string>; input?: str
 const log = (n: string) => (existsSync(join(f.dir, n)) ? readFileSync(join(f.dir, n), "utf8").split("\n").filter(Boolean) : []);
 const deploys = () => log("npx-calls.log").filter((c) => c.includes("cdk deploy"));
 const writes = () => log("aws-calls.log").filter((c) => /^(cloudformation (create|update|delete|execute)|lambda (update|publish|delete)|iam |ec2 (authorize|revoke)|s3 |apigatewayv2 (create|update|delete)|cognito-idp (update|create|delete|admin))/.test(c));
-const markDb = () => w(join(f.before, "db-0086.ok"), "85|0085|0086\n");
+const markDb = () => w(join(f.before, "db-0086.ok"), "85|0085|0086|0087\n");
 const markAuth = () => w(join(f.before, "auth-at-release.ok"), "2026-10-27T04:30:00Z\n");
 const ready = () => { markDb(); };
 
@@ -87,7 +87,7 @@ describe("check: read-only, passes only for the expected difference", () => {
   });
   it("runs the assembly check and shows the read-only cdk diff for a stack of the assembly", () => {
     const r = guard(["check", API]);
-    expect(r.out).toContain("PASS all checks"); expect(r.out).toContain("cdk diff"); expect(r.out).toContain("13 staff API routes added");
+    expect(r.out).toContain("PASS all checks"); expect(r.out).toContain("cdk diff"); expect(r.out).toContain("14 staff API routes added");
     expect(log("npx-calls.log").every((c) => !c.includes("cdk deploy"))).toBe(true);
   });
   it("refuses a TEST stack, a pattern, a list, an unknown stack, a missing argument and an unknown mode", () => {
@@ -204,7 +204,7 @@ describe("post: read-only checks after each deployment", () => {
     afterState();
     const r = guard(["post", API]);
     expect(r.code, r.out).toBe(0);
-    for (const t of ["PASS Ogevia-prd-ServiceVerificationApi is UPDATE_COMPLETE", "the live template now equals the release template", "the Lambda code changed", "still serves ogevia_prd with OGEVIA_ENV=prd", "environment variable names are unchanged", "the API gained exactly 13 routes", "all 13 staff routes exist", "no earlier route was lost", "only the app. and admin. origins were added", "ComplianceSweep rule ComplianceSweepAB12 is ENABLED", "POST-CHECK PASSED"]) expect(r.out, t).toContain(t);
+    for (const t of ["PASS Ogevia-prd-ServiceVerificationApi is UPDATE_COMPLETE", "the live template now equals the release template", "the Lambda code changed", "still serves ogevia_prd with OGEVIA_ENV=prd", "environment variable names are unchanged", "the API gained exactly 14 routes", "all 14 staff routes exist", "no earlier route was lost", "only the app. and admin. origins were added", "ComplianceSweep rule ComplianceSweepAB12 is ENABLED", "POST-CHECK PASSED"]) expect(r.out, t).toContain(t);
     expect(readFileSync(join(f.before, "api-at-release.ok"), "utf8").trim()).toBe("NEWSHA="); expect(writes()).toEqual([]);
   });
   it("API: the CORS origins already being on the live API (applied by hand) still pass; any other CORS change fails", () => {

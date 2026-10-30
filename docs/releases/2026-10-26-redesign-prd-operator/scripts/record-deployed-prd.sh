@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # READ-ONLY verification and DEPLOYED RECORD for the production release 2026-10-26-redesign. Run after apply-0086-prd.sh, deploy-guard-prd.sh deploy+post (Auth, then API) and web-prd.sh publish (web).
 #   OGEVIA_DEPLOY_APPROVAL=<ref> OGEVIA_EXPECT_COMMIT=<40 hex code commit> OGEVIA_TARBALL_SHA256=<64 hex of the operator tarball> bash record-deployed-prd.sh
-# Checks: the 85|0085|0086 marker and the API post-check marker exist; the live Handler asset is the release's pinned build and the Lambda code changed; all six stacks settled; the ComplianceSweep rule is ENABLED
+# Checks: the 85|0085|0086|0087 marker and the API post-check marker exist; the live Handler asset is the release's pinned build and the Lambda code changed; all six stacks settled; the ComplianceSweep rule is ENABLED
 # and the Handler's log group (read from the function's LoggingConfig.LogGroup) holds no ERROR event in the last 30 minutes; the served web is the release build (web-prd.sh verify). Writes $B/DEPLOYED_RECORD.txt and $B/release-record.state.
 # STATUS WORDS (never interchangeable): DEPLOYED - RECORD COMPLETE (exit 0: every artifact maps to the commit); DEPLOYED - RECORD INCOMPLETE (exit 3: the pinned Handler build is live but a record check failed; nothing is redeployed,
 # the script is read-only and is simply re-run once the cause is understood); NOT DEPLOYED OR NOT PROVABLE (exit 1: the pinned build is not live). Once the state is written, deploy-guard-prd.sh deploy, apply-0086-prd.sh apply and web-prd.sh publish refuse to run.
@@ -9,9 +9,9 @@
 source "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
 need aws jq curl sha256sum timeout; check_account
 SITE=$(cat "$B/web-url-before.txt" 2>/dev/null); API_URL=$(cat "$B/api-url-before.txt" 2>/dev/null)
-CODE_COMMIT="${OGEVIA_EXPECT_COMMIT:-}"; API=Ogevia-prd-ServiceVerificationApi; RELEASE_KEY=94b73574c5a681d5a8c22b4264742f64e5a6d40aa1ace783be12e7383b9d8a9e.zip
+CODE_COMMIT="${OGEVIA_EXPECT_COMMIT:-}"; API=Ogevia-prd-ServiceVerificationApi; RELEASE_KEY=2871b03d6be42b0b8c85bac6feea12de75b3d05ca4636610259b6a18e1d00ed7.zip
 [[ "$CODE_COMMIT" =~ ^[0-9a-f]{40}$ && "$(jq -r .code_commit "$TB_ROOT/BUILD_INFO.json" 2>/dev/null)" == "$CODE_COMMIT" && "${OGEVIA_TARBALL_SHA256:-}" =~ ^[0-9a-f]{64}$ && "${OGEVIA_DEPLOY_APPROVAL:-}" =~ ^[A-Za-z0-9._-]{6,64}$ ]] || { echo "usage: set OGEVIA_EXPECT_COMMIT (the 40-hex code commit named in BUILD_INFO.json), OGEVIA_TARBALL_SHA256 (64 hex) and OGEVIA_DEPLOY_APPROVAL" >&2; exit 2; }
-[[ "$(cat "$B/db-0086.ok" 2>/dev/null)" == "85|0085|0086" ]] && ok "the migration marker says 85|0085|0086 (snapshot $(cat "$B/db-0086.snapshot" 2>/dev/null))" || nope "no 85|0085|0086 marker"
+[[ "$(cat "$B/db-0086.ok" 2>/dev/null)" == "85|0085|0086|0087" ]] && ok "the migration marker says 85|0085|0086|0087 (snapshot $(cat "$B/db-0086.snapshot" 2>/dev/null))" || nope "no 85|0085|0086|0087 marker"
 [[ -s "$B/api-at-release.ok" ]] && ok "the API post-check marker exists" || nope "no API post-check marker"
 FN=$(cat "$B/handler-function-name.txt" 2>/dev/null); CFG=$(A lambda get-function-configuration --function-name "$FN" --output json 2>/dev/null) || { nope "cannot read the Lambda configuration"; CFG='{}'; }
 B64=$(jq -r '.CodeSha256 // empty' <<<"$CFG"); OLD=$(jq -r '.CodeSha256 // empty' "$B/lambda-config-before.json" 2>/dev/null); HEX=$(printf '%s' "$B64" | base64 -d 2>/dev/null | od -An -tx1 | tr -d ' \n')

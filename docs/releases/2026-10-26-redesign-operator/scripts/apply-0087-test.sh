@@ -1,19 +1,19 @@
 #!/usr/bin/env bash
 # =============================================================================
-# Ogevia TEST release 2026-10-26-redesign (code commit 7870a04): APPLY THE PENDING MIGRATION 0086 (staff management) TO THE TEST DATABASE, or ROLL IT BACK, through a temporary,
+# Ogevia TEST upgrade 7870a04 -> fb491a5: APPLY THE PENDING MIGRATION 0087 (staff invitation acceptance: M-1, L-1, L-2, L-3) TO THE TEST DATABASE, or ROLL IT BACK, through a temporary,
 # narrow database-access window. TEST ONLY (database ogevia_sv_test). YELLOW: run only after the owner's explicit GO. Not run against AWS by anyone yet.
-# Decision D1 option (b): 0086 is applied FROM db/pending, in ONE transaction as ogevia_owner, with NO ledger row. The TEST ledger stays exactly 85 / 0085; the production release
-# package (pinned to 0001-0085) is not touched. Adapted from the reviewed apply-0086-test.sh of 2026-10-19; everything about the window (the /32 rule, timeouts, cleanup with
+# Decision D1 option (b), as for 0086: 0087 is applied FROM db/pending, in ONE transaction as ogevia_owner, with NO ledger row, ON TOP OF 0086 (already applied to TEST on 2026-10-25/26, byte-identical file). The TEST ledger stays exactly 85 / 0085; the production release
+# package (pinned to 0001-0085) is not touched. Adapted from the reviewed apply-0087-test.sh of 2026-10-19; everything about the window (the /32 rule, timeouts, cleanup with
 # a rule-set hash, marker file, typed phrase, wrong-database refusals, snapshot checks) is unchanged. DIFFERENCES: (1) the statement run is
-#   psql -1 -v ON_ERROR_STOP=1 -d ogevia_sv_test -c "set local role ogevia_owner" -f <the pinned 0086 file> -c "reset role"
+#   psql -1 -v ON_ERROR_STOP=1 -d ogevia_sv_test -c "set local role ogevia_owner" -f <the pinned 0087 file> -c "reset role"
 # instead of the runner (the runner only reads db/migrations and would refuse a ledger it does not know); (2) preconditions: the ledger is exactly 85 / 0085 AND the staff objects
-# are absent (apply) or present (rollback); (3) the snapshot is named ogevia-prod-postgres-pre-0086-YYYYMMDDHHMM; (4) afterwards the read-only verify-0086.sql (110 checks) and the
+# are present for 0086 and absent for 0087 (apply) or present for both (rollback); (3) the snapshot is named ogevia-prod-postgres-pre-0087-YYYYMMDDHHMM; (4) afterwards the read-only verify-0086.sql (110 checks), verify-0087.sql (24 checks) and the
 # runner's own verification set run, the ledger must still be 85 / 0085, and the people-and-access row counts must be identical before and after.
 #
-#   OGEVIA_EXPECT_COMMIT=<40-hex code SHA> OGEVIA_EXPECT_HOST_IP=<admin host private IP> OGEVIA_EXPECT_MIGRATIONS_SHA=<64-hex 0001-0085 set> OGEVIA_EXPECT_0086_SHA=<64-hex> \
-#   OGEVIA_PREDEPLOY_SNAPSHOT_ID=... OGEVIA_RELEASE_WINDOW_START=... OGEVIA_RELEASE_WINDOW_END=...                               bash apply-0086-test.sh apply
-#   (same variables plus OGEVIA_EXPECT_0086_DOWN_SHA=<64-hex>)                                                                      bash apply-0086-test.sh rollback
-#   bash apply-0086-test.sh --restore-only        after an interrupted run: remove the temporary rule and verify (idempotent)
+#   OGEVIA_EXPECT_COMMIT=<40-hex code SHA> OGEVIA_EXPECT_HOST_IP=<admin host private IP> OGEVIA_EXPECT_MIGRATIONS_SHA=<64-hex 0001-0085 set> OGEVIA_EXPECT_0086_SHA=<64-hex> OGEVIA_EXPECT_0087_SHA=<64-hex> \
+#   OGEVIA_PREDEPLOY_SNAPSHOT_ID=... OGEVIA_RELEASE_WINDOW_START=... OGEVIA_RELEASE_WINDOW_END=...                               bash apply-0087-test.sh apply
+#   (same variables plus OGEVIA_EXPECT_0087_DOWN_SHA=<64-hex>)                                                                      bash apply-0087-test.sh rollback
+#   bash apply-0087-test.sh --restore-only        after an interrupted run: remove the temporary rule and verify (idempotent)
 #
 # Window: one inbound rule on the RDS security group, tcp 5432, source = the admin host's own private IP as /32 (never a group, never a range). Inside it the script
 # (1) proves the connection is to ogevia_sv_test and read-only, (2) proves the ledger is exactly 85 / 0085 and the 0086 objects are absent (apply) or present (rollback),
@@ -21,7 +21,7 @@
 # ogevia_prd is never named, connected to or queried. The RDS master credential is held in shell memory only and never printed.
 #
 # SNAPSHOT (required in both modes, checked BEFORE the access window is proposed or opened; every failure refuses and changes nothing):
-#   OGEVIA_PREDEPLOY_SNAPSHOT_ID         a manual snapshot named ogevia-prod-postgres-pre-0086-YYYYMMDDHHMM (UTC minute it was taken)
+#   OGEVIA_PREDEPLOY_SNAPSHOT_ID         a manual snapshot named ogevia-prod-postgres-pre-0087-YYYYMMDDHHMM (UTC minute it was taken)
 #   OGEVIA_RELEASE_WINDOW_START / _END   the owner-approved release window, UTC, format 2026-10-27T03:00:00Z (END after START, at most 12 hours)
 #   It must exist, be `available`, belong to ogevia-prod-postgres, be `manual`, have been CREATED inside the window and not in the future, and carry a name stamp inside
 #   the window. `apply` also requires NOW inside the window; `rollback` only that the window has started. A snapshot is a recovery PREREQUISITE; this script never restores one.
@@ -42,8 +42,8 @@ ADMIN_SG=sg-00e01e2ca80442c1f           # ogevia-db-admin-sg
 API_STACK=Ogevia-prod-ServiceVerificationApi
 DB_EXPECT=ogevia_sv_test
 LEDGER_COUNT=85; LEDGER_LATEST=0085
-PHRASE=OPEN-5432-WINDOW-APPLY-0086-TEST
-[[ "$ARG" == rollback ]] && PHRASE=OPEN-5432-WINDOW-ROLLBACK-0086-TEST
+PHRASE=OPEN-5432-WINDOW-APPLY-0087-TEST
+[[ "$ARG" == rollback ]] && PHRASE=OPEN-5432-WINDOW-ROLLBACK-0087-TEST
 APPLY_TMO="${OGEVIA_APPLY_TIMEOUT:-120}"
 MAX_SECONDS="${OGEVIA_WINDOW_MAX_SECONDS:-900}"
 STATE_DIR="${OGEVIA_MIGRATE_STATE_DIR:-$HOME/.ogevia-migrate-window}"
@@ -58,12 +58,12 @@ HERE_S="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 INFRA="$PKG_INFRA"
 export AWS_REGION=$REGION AWS_DEFAULT_REGION=$REGION AWS_PAGER=""
 case "$ARG" in
-  apply|rollback|--restore-only) [[ -z "$MODE2" ]] || { echo "usage: bash apply-0086-test.sh apply | rollback | --restore-only" >&2; exit 2; } ;;
-  *) echo "usage: bash apply-0086-test.sh apply | rollback | --restore-only" >&2; exit 2 ;;
+  apply|rollback|--restore-only) [[ -z "$MODE2" ]] || { echo "usage: bash apply-0087-test.sh apply | rollback | --restore-only" >&2; exit 2; } ;;
+  *) echo "usage: bash apply-0087-test.sh apply | rollback | --restore-only" >&2; exit 2 ;;
 esac
 mkdir -p "$STATE_DIR"; chmod 700 "$STATE_DIR"
 STAMP=$(date -u +%Y%m%dT%H%M%SZ)
-OUT="${OGEVIA_MIGRATE_DIR:-$HOME/ogevia-apply-0086-${ARG#--}-$STAMP}"; mkdir -p "$OUT"; chmod 700 "$OUT"
+OUT="${OGEVIA_MIGRATE_DIR:-$HOME/ogevia-apply-0087-${ARG#--}-$STAMP}"; mkdir -p "$OUT"; chmod 700 "$OUT"
 RESULT="$OUT/RESULT.txt"; : > "$RESULT"
 TUN=""; IID=""; CLOSED=0; OWNS=0; RC=0; MIGRATING=0; START_EPOCH=$(date +%s); HOST_CIDR=""
 say() { printf '%s\n' "$*" | tee -a "$RESULT"; }
@@ -133,7 +133,7 @@ close_window() {
     say "  aws ec2 describe-security-group-rules --region $REGION --filters Name=group-id,Values=$rds_sg --query 'SecurityGroupRules[?IsEgress==\`false\`].{rule:SecurityGroupRuleId,proto:IpProtocol,from:FromPort,to:ToPort,cidr:CidrIpv4,sourceSg:ReferencedGroupInfo.GroupId,desc:Description}' --output table"
     say "Then remove ONLY that rule by id (never the row whose sourceSg is the application group sg-064ffce3bcbe8eb3b):"
     say "  aws ec2 revoke-security-group-ingress --region $REGION --group-id $rds_sg --security-group-rule-ids sgr-<id of that one row>"
-    say "Then re-run: bash apply-0086-test.sh --restore-only   (verifies against the recorded original)"
+    say "Then re-run: bash apply-0087-test.sh --restore-only   (verifies against the recorded original)"
     say "  The marker $OPEN stays in place until restoration is verified."
   fi
 }
@@ -163,7 +163,7 @@ if [[ "$ARG" == "--restore-only" ]]; then
   if [[ -f "$OPEN" ]]; then CLOSED=0; say "An open-window marker exists ($(jq -r .stamp "$OPEN")). Restoring."; OWNS=1; close_window; else say "No open-window marker: nothing to restore. (Nothing was changed.)"; fi
   exit "$RC"
 fi
-[[ ! -f "$OPEN" ]] || stop "an earlier migration window is marked OPEN ($OPEN, started $(jq -r .stamp "$OPEN")). Run: bash apply-0086-test.sh --restore-only"
+[[ ! -f "$OPEN" ]] || stop "an earlier migration window is marked OPEN ($OPEN, started $(jq -r .stamp "$OPEN")). Run: bash apply-0087-test.sh --restore-only"
 [[ ! -f "$LEDGER_STATE_DIR/OPEN" ]] || stop "an earlier ledger-check window is marked OPEN ($LEDGER_STATE_DIR/OPEN). Run: bash ledger-recheck.sh --restore-only first"
 
 
@@ -171,6 +171,7 @@ say ""; say "== 0. The package is exactly the approved release (read-only)"
 [[ "${OGEVIA_EXPECT_COMMIT:-}" =~ ^[0-9a-f]{40}$ ]] || stop "set OGEVIA_EXPECT_COMMIT to the full 40-character approved code commit SHA"
 [[ "${OGEVIA_EXPECT_MIGRATIONS_SHA:-}" =~ ^[0-9a-f]{64}$ ]] || stop "set OGEVIA_EXPECT_MIGRATIONS_SHA to the 64-character checksum of the 0001-0085 migration set given in the procedure"
 [[ "${OGEVIA_EXPECT_0086_SHA:-}" =~ ^[0-9a-f]{64}$ ]] || stop "set OGEVIA_EXPECT_0086_SHA to the 64-character checksum of the 0086 file given in the procedure"
+[[ "${OGEVIA_EXPECT_0087_SHA:-}" =~ ^[0-9a-f]{64}$ ]] || stop "set OGEVIA_EXPECT_0087_SHA to the 64-character checksum of the 0087 file given in the procedure"
 [[ "${OGEVIA_EXPECT_HOST_IP:-}" != "" ]] && valid_private_ipv4 "$OGEVIA_EXPECT_HOST_IP" || stop "set OGEVIA_EXPECT_HOST_IP to the admin host's private IPv4 address (the reviewed /32 mode requires it)"
 HEAD_SHA=$(pkg_code_commit) || stop "BUILD_INFO.json is missing or has no valid code commit: this script must run inside the extracted operator package"
 [[ "$HEAD_SHA" == "$OGEVIA_EXPECT_COMMIT" ]] || stop "the package is built from $HEAD_SHA, not the approved $OGEVIA_EXPECT_COMMIT"
@@ -181,18 +182,20 @@ MIG_SHA=$(pkg_migration_set_sha) && [[ -n "$MIG_SHA" ]] || stop "cannot hash db/
 [[ "$MIG_SHA" == "$OGEVIA_EXPECT_MIGRATIONS_SHA" && "$MIG_SHA" == "$PKG_APPLIED_0085_SHA" ]] || stop "db/migrations hashes to $MIG_SHA, not the approved 0001-0085 set $OGEVIA_EXPECT_MIGRATIONS_SHA (the set applied to TEST on 2026-10-19)"
 [[ "$(pkg_migration_count)" == 85 && ! -e "$INFRA/db/migrations/0086_staff_management.sql" ]] || stop "db/migrations does not hold exactly the 85 released files, or already holds 0086 (this release applies 0086 from db/pending)"
 UP_SHA=$(pkg_pending_up_sha); [[ -n "$UP_SHA" && "$UP_SHA" == "$OGEVIA_EXPECT_0086_SHA" ]] || stop "the 0086 file hashes to '${UP_SHA:-nothing}', not the approved $OGEVIA_EXPECT_0086_SHA"
-PS=$(pkg_pending_strays) || stop "cannot list db/pending"; [[ -z "$PS" ]] || stop "db/pending holds files other than the two 0086 files: $(head -3 <<<"$PS" | tr '\n' ';')"
+UP87_SHA=$(pkg_pending_up87_sha); [[ -n "$UP87_SHA" && "$UP87_SHA" == "$OGEVIA_EXPECT_0087_SHA" ]] || stop "the 0087 file hashes to '${UP87_SHA:-nothing}', not the approved $OGEVIA_EXPECT_0087_SHA"
+PS=$(pkg_pending_strays) || stop "cannot list db/pending"; [[ -z "$PS" ]] || stop "db/pending holds files other than the four 0086 and 0087 files: $(head -3 <<<"$PS" | tr '\n' ';')"
 [[ -f "$HERE_S/verify-0086.sql" ]] || stop "verify-0086.sql is missing from the package"
+[[ -f "$HERE_S/verify-0087.sql" ]] || stop "verify-0087.sql is missing from the package"
 [[ -d "$INFRA/node_modules" ]] || stop "dependencies are not installed: run 'pnpm install --frozen-lockfile' in the checkout first"
 if [[ "$ARG" == rollback ]]; then
-  [[ "${OGEVIA_EXPECT_0086_DOWN_SHA:-}" =~ ^[0-9a-f]{64}$ ]] || stop "set OGEVIA_EXPECT_0086_DOWN_SHA to the 64-character checksum of the 0086 rollback file given in the procedure"
-  DOWN_SHA=$(pkg_pending_down_sha)
-  [[ -n "$DOWN_SHA" && "$DOWN_SHA" == "$OGEVIA_EXPECT_0086_DOWN_SHA" ]] || stop "the 0086 rollback file hashes to '${DOWN_SHA:-nothing}', not the approved $OGEVIA_EXPECT_0086_DOWN_SHA"
+  [[ "${OGEVIA_EXPECT_0087_DOWN_SHA:-}" =~ ^[0-9a-f]{64}$ ]] || stop "set OGEVIA_EXPECT_0087_DOWN_SHA to the 64-character checksum of the 0087 rollback file given in the procedure"
+  DOWN_SHA=$(pkg_pending_down87_sha)
+  [[ -n "$DOWN_SHA" && "$DOWN_SHA" == "$OGEVIA_EXPECT_0087_DOWN_SHA" ]] || stop "the 0087 rollback file hashes to '${DOWN_SHA:-nothing}', not the approved $OGEVIA_EXPECT_0087_DOWN_SHA"
   say "rollback file sha256 ${DOWN_SHA:0:16}...: OK"
 fi
 # ---- the named, available pre-deployment snapshot (both modes), validated before access is proposed -------------------------------------------------------------
 SNAP_ID="${OGEVIA_PREDEPLOY_SNAPSHOT_ID:-}"
-[[ "$SNAP_ID" =~ ^ogevia-prod-postgres-pre-0086-[0-9]{12}$ ]] || stop "set OGEVIA_PREDEPLOY_SNAPSHOT_ID to the named pre-deployment snapshot (pattern ogevia-prod-postgres-pre-0086-YYYYMMDDHHMM, UTC)"
+[[ "$SNAP_ID" =~ ^ogevia-prod-postgres-pre-0087-[0-9]{12}$ ]] || stop "set OGEVIA_PREDEPLOY_SNAPSHOT_ID to the named pre-deployment snapshot (pattern ogevia-prod-postgres-pre-0087-YYYYMMDDHHMM, UTC)"
 TS_RE='^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$'
 [[ "${OGEVIA_RELEASE_WINDOW_START:-}" =~ $TS_RE && "${OGEVIA_RELEASE_WINDOW_END:-}" =~ $TS_RE ]] || stop "set OGEVIA_RELEASE_WINDOW_START and OGEVIA_RELEASE_WINDOW_END to the owner-approved window in UTC, format 2026-10-27T03:00:00Z"
 W_START=$(date -u -d "$OGEVIA_RELEASE_WINDOW_START" +%s 2>/dev/null) && W_END=$(date -u -d "$OGEVIA_RELEASE_WINDOW_END" +%s 2>/dev/null) || stop "the release window is not a valid date and time"
@@ -264,15 +267,15 @@ esac
 say ""; say "== 3. PROPOSED CHANGES"
 say "  1. ADD to $EXPECT_RDS_SG :  inbound tcp 5432 from $HOST_CIDR  (the admin host's own IP only; description 'TEMP-migrate-$STAMP')"
 if [[ "$ARG" == rollback ]]; then
-  say "  2. Through that window, against $DB_EXPECT ONLY: check the ledger is exactly 85 / 0085 and the 0086 objects are PRESENT, record the people-and-access row counts and the staff row counts, run the pinned 0086 ROLLBACK file in ONE transaction as ogevia_owner, then check the objects are gone, the ledger is unchanged and the people-and-access counts are identical."
-  say "     NOTE: the rollback is BACKUP REQUIRED: it drops staff_types and staff_profiles WITH their rows (the counts are printed first). Sign-ins, memberships, roles and audit events stay. The pre-deployment snapshot is $SNAP_ID (restoring it is NOT a prepared procedure)."
+  say "  2. Through that window, against $DB_EXPECT ONLY: check the ledger is exactly 85 / 0085, the 0086 objects PRESENT and the 0087 objects PRESENT, record the people-and-access row counts and the staff row counts, run the pinned 0087 ROLLBACK file in ONE transaction as ogevia_owner, then check the 0087 objects are gone (0086 stays), the ledger is unchanged and the people-and-access counts are identical."
+  say "     NOTE: the 0087 rollback drops only the two acceptance functions and restores the earlier versions of six functions; no table or row is touched, and a membership left in status invited stays as it is. The pre-deployment snapshot is $SNAP_ID (restoring it is NOT a prepared procedure)."
 else
-  say "  2. Through that window, against $DB_EXPECT ONLY: check the ledger is exactly 85 / 0085 and the 0086 objects are ABSENT, record the people-and-access row counts, run the pinned 0086 file in ONE transaction as ogevia_owner (no ledger row is written), then re-read the ledger (still 85 / 0085) and the counts (identical), run verify-0086.sql (every row must pass) and the runner's own verification set."
-  say "     NOTE: 0086 creates 2 tables, 6 internal and 15 API functions, 1 trigger and 2 permissions, and replaces one function (note_my_sign_in); it drops, deletes and updates nothing that exists. It seeds 7 default staff types per existing agency."
+  say "  2. Through that window, against $DB_EXPECT ONLY: check the ledger is exactly 85 / 0085, the 0086 objects are PRESENT and the 0087 objects ABSENT, record the people-and-access row counts, run the pinned 0087 file in ONE transaction as ogevia_owner (no ledger row is written), then re-read the ledger (still 85 / 0085) and the counts (identical), run verify-0086.sql and verify-0087.sql (every row must pass) and the runner's own verification set."
+  say "     NOTE: 0087 creates 2 API functions and replaces 6 (complete_staff_invitation, note_my_sign_in, list_staff, update_staff, disable_account, list_accounts); it creates no table, and drops, deletes and updates no row."
 fi
 say "  3. REMOVE the rule again, then verify the complete rule set equals the original hash above."
 say "  Reaches: RDS instance $RDS_ID on 5432 from the admin host only. That instance ALSO holds ogevia_prd: this script never names, connects to or queries it."
-read -r -p "Type $PHRASE to open the window and $([[ "$ARG" == rollback ]] && echo "ROLL BACK 0086 on" || echo "apply 0086 to") $DB_EXPECT (anything else stops, nothing changed). Keep a SEPARATE recovery session ready: if this session is lost the rule is NOT removed automatically: " ans
+read -r -p "Type $PHRASE to open the window and $([[ "$ARG" == rollback ]] && echo "ROLL BACK 0087 on" || echo "apply 0087 to") $DB_EXPECT (anything else stops, nothing changed). Keep a SEPARATE recovery session ready: if this session is lost the rule is NOT removed automatically: " ans
 [[ "$ans" == "$PHRASE" ]] || { say "Declined. Nothing was changed."; exit 0; }
 say ""; say "== 4. Window"
 START_EPOCH=$(date +%s)
@@ -298,7 +301,7 @@ DBURL="postgres://$(jq -rn --arg u "$PGUSER" '$u|@uri'):$(jq -rn --arg p "$PGPAS
 unset SEC
 RO() { over_time && return 99; PGOPTIONS="-c default_transaction_read_only=on -c statement_timeout=20000" timeout --foreground -k "$KILL_AFTER" "$PSQL_TMO" psql -X -q -At -F $'\t' -v ON_ERROR_STOP=1 "$@"; }
 
-say ""; say "== 5. Database, ledger and 0086 precondition (read-only)"
+say ""; say "== 5. Database, ledger, 0086 and 0087 precondition (read-only)"
 WHO=$(RO -d "$DB_EXPECT" -c "select current_database() || ' | read_only=' || current_setting('transaction_read_only')") || { rc=$?; stop "cannot connect to $DB_EXPECT$(tm $rc)"; }
 say "connected: $WHO"
 [[ "${WHO%% |*}" == "$DB_EXPECT" ]] || stop "connected to '${WHO%% |*}', not '$DB_EXPECT'"
@@ -311,10 +314,14 @@ say "ledger before: $L_COUNT migrations applied, latest $L_LATEST"
 S86_Q="select (to_regclass('ogevia.staff_types') is not null)::int || '|' || (to_regclass('ogevia.staff_profiles') is not null)::int || '|' || (select count(*) from pg_proc p join pg_namespace n on n.oid = p.pronamespace where (n.nspname = 'ogevia' and p.proname in ('seed_default_staff_types','organizations_seed_staff_types','staff_guard','assignable_staff_role','staff_role_change_allowed','staff_validate_contact')) or (n.nspname = 'ogevia_api' and p.proname in ('list_staff_types','create_staff_type','rename_staff_type','set_staff_type_active','list_staff','create_staff','add_member_to_staff','update_staff','begin_staff_invitation','complete_staff_invitation','begin_staff_invitation_resend','record_staff_invitation_resent','set_staff_role','list_role_permissions','list_staff_audit')))"
 S86=$(RO -d "$DB_EXPECT" -c "$S86_Q") || { rc=$?; stop "the staff-management objects cannot be read$(tm $rc)"; }
 say "staff-management objects (staff_types|staff_profiles|functions of 21): $S86"
+S87_Q="select count(*) from pg_proc p join pg_namespace n on n.oid = p.pronamespace where n.nspname = 'ogevia_api' and p.proname in ('list_my_staff_invitations','accept_staff_invitation')"
+S87=$(RO -d "$DB_EXPECT" -c "$S87_Q") || { rc=$?; stop "the 0087 objects cannot be read$(tm $rc)"; }
+say "0087 objects (functions of 2): $S87"
 if [[ "$ARG" == apply ]]; then
-  [[ "$S86" == "0|0|0" ]] || stop "the 0086 objects are not absent ($S86): TEST already has part or all of this migration. Nothing was changed."
+  [[ "$S86" == "1|1|21" ]] || stop "0087 is applied on top of 0086, which must be completely present (1|1|21); found $S86. Nothing was changed."
+  [[ "$S87" == 0 ]] || stop "the 0087 objects are not absent ($S87): TEST already has part or all of this migration. Nothing was changed."
 else
-  [[ "$S86" == "1|1|21" ]] || stop "rollback needs all 0086 objects present (1|1|21); found $S86. Nothing was changed."
+  [[ "$S86" == "1|1|21" && "$S87" == 2 ]] || stop "rollback needs all 0086 and 0087 objects present (1|1|21 and 2); found $S86 and $S87. Nothing was changed."
 fi
 # people and access: these tables must hold exactly the same rows after this run (0086 adds structure beside them; its rollback must not remove anyone)
 PEOPLE_Q="select (select count(*) from ogevia.app_users) || '|' || (select count(*) from ogevia.organization_memberships) || '|' || (select count(*) from ogevia.audit_events) || '|' || (select count(*) from ogevia.caregiver_records) || '|' || (select count(*) from ogevia.organizations)"
@@ -336,21 +343,23 @@ run_runner_verify() {
 }
 
 if [[ "$ARG" == rollback ]]; then
-  say ""; say "== 6. Rollback of 0086 (the pinned rollback file, ONE transaction as ogevia_owner, against $DB_EXPECT only)"
-  STAFF_ROWS=$(RO -d "$DB_EXPECT" -c "select (select count(*) from ogevia.staff_types) || ' staff types and ' || (select count(*) from ogevia.staff_profiles) || ' staff profiles'")
-  say "rows that this rollback DROPS WITH THEIR TABLES: $STAFF_ROWS"
+  say ""; say "== 6. Rollback of 0087 (the pinned rollback file, ONE transaction as ogevia_owner, against $DB_EXPECT only)"
+  STAFF_ROWS=$(RO -d "$DB_EXPECT" -c "select (select count(*) from ogevia.staff_types) || ' staff types and ' || (select count(*) from ogevia.staff_profiles) || ' staff profiles and ' || (select count(*) from ogevia.organization_memberships where status = 'invited') || ' invited memberships'")
+  say "rows that this rollback KEEPS (it drops no table or row): $STAFF_ROWS"
   over_time && stop "time limit ($MAX_SECONDS s) reached before the rollback"
   MIGRATING=1
-  timeout --foreground -k "$KILL_AFTER" "$APPLY_TMO" psql -X -q -v ON_ERROR_STOP=1 -1 -d "$DB_EXPECT" -c "set local role ogevia_owner" -f "$PKG_PENDING_DOWN" -c "reset role" >>"$OUT/rollback.txt" 2>&1
+  timeout --foreground -k "$KILL_AFTER" "$APPLY_TMO" psql -X -q -v ON_ERROR_STOP=1 -1 -d "$DB_EXPECT" -c "set local role ogevia_owner" -f "$PKG_PENDING_DOWN87" -c "reset role" >>"$OUT/rollback.txt" 2>&1
   DRC=$?
   if [[ "$DRC" != 0 ]]; then
-    say "ROLLBACK FAILED (psql exit $DRC$(tm $DRC)). The transaction was rolled back: 0086 is still present. Last lines: $(tail -2 "$OUT/rollback.txt" | tr '\n' ' ')"
+    say "ROLLBACK FAILED (psql exit $DRC$(tm $DRC)). The transaction was rolled back: 0087 is still present. Last lines: $(tail -2 "$OUT/rollback.txt" | tr '\n' ' ')"
     stop "the rollback did not complete. Follow section 'Recovery' of the procedure."
   fi
   S86=$(RO -d "$DB_EXPECT" -c "$S86_Q") || { rc=$?; stop "the staff-management objects cannot be re-read$(tm $rc)"; }
   say "staff-management objects after: $S86"
-  [[ "$S86" == "0|0|0" ]] || stop "the 0086 objects are not all gone after the rollback ($S86)"
-  [[ "$(RO -d "$DB_EXPECT" -c "select (pg_get_functiondef(to_regprocedure('ogevia_api.note_my_sign_in()')) not like '%staff_profiles%')::int || '|' || (select count(*) from ogevia.permissions where key like 'staff.%')")" == "1|0" ]] || stop "note_my_sign_in was not restored to its earlier definition, or a staff permission remains"
+  [[ "$S86" == "1|1|21" ]] || stop "the 0086 objects are no longer complete after the 0087 rollback ($S86)"
+  S87=$(RO -d "$DB_EXPECT" -c "$S87_Q") || { rc=$?; stop "the 0087 objects cannot be re-read$(tm $rc)"; }
+  [[ "$S87" == 0 ]] || stop "the 0087 objects are not all gone after the rollback ($S87)"
+  [[ "$(RO -d "$DB_EXPECT" -c "select (pg_get_functiondef(to_regprocedure('ogevia_api.note_my_sign_in()')) like '%staff_profiles%' and pg_get_functiondef(to_regprocedure('ogevia_api.note_my_sign_in()')) not like '%m.status = ''active''%')::int || '|' || (select count(*) from ogevia.permissions where key like 'staff.%')")" == "1|2" ]] || stop "note_my_sign_in was not restored to its 0086 definition, or the staff permissions changed"
   ledger_unchanged && say "ledger after: $LEDGER_COUNT migrations applied, latest $LEDGER_LATEST (unchanged)" || stop "the ledger changed during the rollback (or could not be read)"
   people_unchanged && say "people and access counts unchanged: $PEOPLE_BEFORE" || stop "the people-and-access counts changed during the rollback (or could not be read)"
   act_unchanged && say "enforcement state unchanged: ${ACT_BEFORE%%|*} of ${ACT_BEFORE##*|} agencies activated" || stop "the enforcement activation state changed during the rollback (or could not be read)"
@@ -359,25 +368,28 @@ if [[ "$ARG" == rollback ]]; then
   close_window
   say ""; say "================ SUMMARY ================"
   say "Environment : TEST ($DB_EXPECT)   package commit $HEAD_SHA"
-  say "RESULT: 0086 rolled back; ledger $LEDGER_COUNT / $LEDGER_LATEST; people and access unchanged; verification $P PASS, 0 FAIL. The API routes and web must be rolled back too (procedure, Recovery)."
+  say "RESULT: 0087 rolled back (0086 stays); ledger $LEDGER_COUNT / $LEDGER_LATEST; people and access unchanged; verification $P PASS, 0 FAIL. The API routes and web must be rolled back too (procedure, Recovery)."
   [[ -f "$OPEN" ]] && say "SECURITY GROUP: NOT RESTORED, see the instructions above" || say "SECURITY GROUP: restored and verified identical to the original"
   exit "$RC"
 fi
 
-say ""; say "== 6. Apply 0086 (the pinned file, ONE transaction as ogevia_owner, against $DB_EXPECT only; no ledger row)"
+say ""; say "== 6. Apply 0087 (the pinned file, ONE transaction as ogevia_owner, against $DB_EXPECT only; no ledger row)"
 over_time && stop "time limit ($MAX_SECONDS s) reached before applying"
 MIGRATING=1
-timeout --foreground -k "$KILL_AFTER" "$APPLY_TMO" psql -X -q -v ON_ERROR_STOP=1 -1 -d "$DB_EXPECT" -c "set local role ogevia_owner" -f "$PKG_PENDING_UP" -c "reset role" >>"$OUT/apply.txt" 2>&1
+timeout --foreground -k "$KILL_AFTER" "$APPLY_TMO" psql -X -q -v ON_ERROR_STOP=1 -1 -d "$DB_EXPECT" -c "set local role ogevia_owner" -f "$PKG_PENDING_UP87" -c "reset role" >>"$OUT/apply.txt" 2>&1
 ARC=$?
 if [[ "$ARC" != 0 ]]; then
-  say "APPLY FAILED (psql exit $ARC$(tm $ARC)). It is one transaction: nothing of 0086 was kept. Last lines: $(tail -2 "$OUT/apply.txt" | tr '\n' ' ')"
+  say "APPLY FAILED (psql exit $ARC$(tm $ARC)). It is one transaction: nothing of 0087 was kept. Last lines: $(tail -2 "$OUT/apply.txt" | tr '\n' ' ')"
   say "staff-management objects now: $(RO -d "$DB_EXPECT" -c "$S86_Q" 2>/dev/null || echo unknown)"
   stop "the apply did not complete. Follow section 'Recovery' of the procedure (stop; do not deploy the API or web)."
 fi
 S86=$(RO -d "$DB_EXPECT" -c "$S86_Q") || { rc=$?; stop "the staff-management objects cannot be re-read$(tm $rc)"; }
 say "staff-management objects after: $S86"
 [[ "$S86" == "1|1|21" ]] || stop "the 0086 objects are not all present after the apply ($S86). Do not deploy; see the procedure."
-ledger_unchanged && say "ledger after: $LEDGER_COUNT migrations applied, latest $LEDGER_LATEST (unchanged: 0086 is applied outside the ledger by design)" || stop "the ledger changed during the apply (or could not be read). Do not deploy; see the procedure."
+S87=$(RO -d "$DB_EXPECT" -c "$S87_Q") || { rc=$?; stop "the 0087 objects cannot be re-read$(tm $rc)"; }
+say "0087 objects after: $S87"
+[[ "$S87" == 2 ]] || stop "the 0087 objects are not all present after the apply ($S87). Do not deploy; see the procedure."
+ledger_unchanged && say "ledger after: $LEDGER_COUNT migrations applied, latest $LEDGER_LATEST (unchanged: 0086 and 0087 are applied outside the ledger by design)" || stop "the ledger changed during the apply (or could not be read). Do not deploy; see the procedure."
 people_unchanged && say "people and access counts unchanged: $PEOPLE_BEFORE" || stop "the people-and-access counts changed during the apply (or could not be read). Do not deploy; see the procedure."
 
 say ""; say "== 7. Verification (read-only): verify-0086.sql, then the runner's own verification set"
@@ -385,13 +397,18 @@ VR=$(RO -d "$DB_EXPECT" -F '|' -f "$HERE_S/verify-0086.sql") ; VRC=$?
 printf '%s\n' "$VR" > "$OUT/verify-0086.txt"
 VT=$(grep -c '|' "$OUT/verify-0086.txt"); VF=$(grep -c '|f|' "$OUT/verify-0086.txt")
 say "verify-0086.sql: $VT checks, $VF failing (exit $VRC$(tm $VRC)); full output: $OUT/verify-0086.txt"
-[[ "$VRC" == 0 && "$VT" == 110 && "$VF" == 0 ]] || { grep '|f|' "$OUT/verify-0086.txt" | head -5 | while read -r l; do say "FAIL $l"; done; stop "verify-0086.sql did not report 110 passing checks. 0086 IS applied; do not deploy the API or web; see the procedure."; }
-run_runner_verify || stop "the verification set did not pass (or does not report the schema at 0085). 0086 IS applied; do not deploy; see the procedure."
-act_unchanged && say "enforcement state unchanged: ${ACT_BEFORE%%|*} of ${ACT_BEFORE##*|} agencies activated" || stop "the enforcement activation state changed during the apply (or could not be read). 0086 IS applied; do not deploy; see the procedure."
+[[ "$VRC" == 0 && "$VT" == 110 && "$VF" == 0 ]] || { grep '|f|' "$OUT/verify-0086.txt" | head -5 | while read -r l; do say "FAIL $l"; done; stop "verify-0086.sql did not report 110 passing checks. 0087 IS applied; do not deploy the API or web; see the procedure."; }
+VR7=$(RO -d "$DB_EXPECT" -F '|' -f "$HERE_S/verify-0087.sql") ; VRC7=$?
+printf '%s\n' "$VR7" > "$OUT/verify-0087.txt"
+VT7=$(grep -c '|' "$OUT/verify-0087.txt"); VF7=$(grep -c '|f|' "$OUT/verify-0087.txt")
+say "verify-0087.sql: $VT7 checks, $VF7 failing (exit $VRC7$(tm $VRC7)); full output: $OUT/verify-0087.txt"
+[[ "$VRC7" == 0 && "$VT7" == 24 && "$VF7" == 0 ]] || { grep '|f|' "$OUT/verify-0087.txt" | head -5 | while read -r l; do say "FAIL $l"; done; stop "verify-0087.sql did not report 24 passing checks. 0087 IS applied; do not deploy the API or web; see the procedure."; }
+run_runner_verify || stop "the verification set did not pass (or does not report the schema at 0085). 0087 IS applied; do not deploy; see the procedure."
+act_unchanged && say "enforcement state unchanged: ${ACT_BEFORE%%|*} of ${ACT_BEFORE##*|} agencies activated" || stop "the enforcement activation state changed during the apply (or could not be read). 0087 IS applied; do not deploy; see the procedure."
 MIGRATING=0
 close_window
 say ""; say "================ SUMMARY ================"
 say "Environment : TEST ($DB_EXPECT)   package commit $HEAD_SHA"
-say "RESULT: 0086 applied (2 tables, 21 functions); ledger $LEDGER_COUNT / $LEDGER_LATEST unchanged; people and access unchanged; verify-0086.sql 110 PASS; runner verification $P PASS, 0 FAIL."
+say "RESULT: 0087 applied on top of 0086 (2 new functions, 6 replaced); ledger $LEDGER_COUNT / $LEDGER_LATEST unchanged; people and access unchanged; verify-0086.sql 110 PASS, verify-0087.sql 24 PASS; runner verification $P PASS, 0 FAIL."
 [[ -f "$OPEN" ]] && say "SECURITY GROUP: NOT RESTORED, see the instructions above" || say "SECURITY GROUP: restored and verified identical to the original"
 exit "$RC"

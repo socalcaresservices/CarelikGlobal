@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # =============================================================================
-# PRODUCTION release 2026-10-26-redesign (read-only): the 13 new staff API routes refuse every call that carries no valid token. Only curl calls to the PRODUCTION API URL.
+# PRODUCTION release 2026-10-26-redesign (read-only): the 14 new staff API routes refuse every call that carries no valid token. Only curl calls to the PRODUCTION API URL.
 #   bash route-smoke.sh [API_URL]        (default: the captured $B/api-url-before.txt, which must name the production API zk527zk4ua)
-# For each of the 13 route keys in new-route-keys.json (the same list the diff gate and the assembly check pin):
+# For each of the 14 route keys in new-route-keys.json (the same list the diff gate and the assembly check pin):
 #   * no Authorization header                         -> HTTP 401
 #   * a well-formed but forged JWT (random signature)  -> HTTP 401
 # plus a CORS preflight (OPTIONS /v1/staff) from each of https://app.ogevia.com and https://admin.ogevia.com, which must answer 204 (or 200) with that origin allowed.
@@ -24,7 +24,7 @@ ZERO=00000000-0000-4000-8000-000000000000
 bad=0; n=0
 while IFS= read -r key; do
   method="${key%% *}"; path="${key#* }"
-  path="${path//\{staffTypeId\}/$ZERO}"; path="${path//\{profileId\}/$ZERO}"; path="${path//\{userId\}/$ZERO}"
+  path="${path//\{staffTypeId\}/$ZERO}"; path="${path//\{profileId\}/$ZERO}"; path="${path//\{userId\}/$ZERO}"; path="${path//\{organizationId\}/$ZERO}"
   [[ "$path" != *"{"* ]] || { echo "FAIL unresolved placeholder in $key"; bad=1; continue; }
   for mode in none forged; do
     args=(-sS -o /dev/null -w '%{http_code}' --max-time 30 -X "$method" "$API$path?organizationId=$ZERO")
@@ -40,5 +40,5 @@ for ORIGIN in https://app.ogevia.com https://admin.ogevia.com; do
   CODE=$(head -1 <<<"$HDR" | grep -o ' [0-9]\{3\}' | tr -d ' ')
   if [[ "$CODE" == 204 || "$CODE" == 200 ]] && grep -qi "^access-control-allow-origin: $ORIGIN" <<<"$HDR"; then echo "PASS CORS preflight from $ORIGIN: $CODE and the origin is allowed"; else echo "FAIL CORS preflight from $ORIGIN: HTTP ${CODE:-none}, origin not allowed"; bad=1; fi
 done
-if [[ $bad == 0 && $n == 26 ]]; then echo "ROUTE SMOKE PASSED: 13 routes x 2 calls, all 401; CORS preflight ok for app. and admin."; exit 0; fi
-echo "STOP: a route check failed (calls made: $n of 26). See Recovery."; exit 1
+if [[ $bad == 0 && $n == 28 ]]; then echo "ROUTE SMOKE PASSED: 14 routes x 2 calls, all 401; CORS preflight ok for app. and admin."; exit 0; fi
+echo "STOP: a route check failed (calls made: $n of 28). See Recovery."; exit 1

@@ -4,6 +4,7 @@ import { Button } from "@carelik/ui";
 import { newIdempotencyKey } from "@/lib/sv-backend";
 import { useOrganization } from "@/providers/organization-provider";
 import { useAwsApi } from "../aws-workspace";
+import { DocumentRuleHint } from "./document-rule-hint";
 import { CHECK_GROUPS, actionError, groupOutcome, type CheckRow } from "./format";
 import { InfoTip } from "../ui/info-tip";
 
@@ -83,6 +84,7 @@ export function AssignmentChecks({ input, onReady, outcome, note }: { input: Ass
         {o.state === "ok" || o.state === "not_checked" ? <span className={tone}>{STATE_TEXT[o.state]}</span> : (
           <span className={tone}>
             {o.messages.join(" ")}
+            {g.key === "documents" ? ev.checks.filter((c) => (c.check === "cpr" || c.check === "tb") && c.status === "blocked" && (c.code === "missing" || c.code === "type_not_set" || c.code === "policy_not_set")).map((c) => <DocumentRuleHint key={c.check} requirement={c.check as "cpr" | "tb"} />) : null}
             {o.state === "would_block" && ev.outcome === "warning" ? <span className="block text-xs text-slate-600">{g.key === "documents" ? "Report-only: this does NOT meet the requirement for current, verified CPR and TB." : "Not blocking yet."}</span> : null}
             {o.state === "overridden" ? <span className="block text-xs text-slate-600">Approved by an administrator for this assignment only.</span> : null}
           </span>

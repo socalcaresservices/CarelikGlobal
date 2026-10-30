@@ -1,5 +1,6 @@
-// 0086 (PENDING: infra/aws/db/pending): staff management. Staff types (labels, no authority), staff profiles, supported system roles, staff invitations, history. SYNTHETIC data only.
+// 0086 and 0087 (PENDING: infra/aws/db/pending): staff management and its invitation-acceptance fixes (M-1, L-1, L-2, L-3). Staff types (labels, no authority), staff profiles, supported system roles, staff invitations, history. SYNTHETIC data only.
 import { randomUUID } from "node:crypto";
+import { readFileSync } from "node:fs";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { asActor, expectPgError, seedWorld, type Actor, type TestDb, type World } from "./harness.js";
 import { applyPendingMigrations, createTestDbWithPending, rollBackPendingMigrations } from "./pending.js";
@@ -176,7 +177,7 @@ describe("invitations (the same two steps as caregivers)", () => {
     expect(await can(sub, "staff.manage")).toBe(false);
   });
 
-  it("refuses: a second invitation, an inactive person, an email already used, a sign-in that already has access, a caregiver's sign-in, and a disabled sign-in", async () => {
+  it("refuses: a second invitation, an inactive person, an email already used, a sign-in that already has access, and a caregiver's sign-in", async () => {
     const type = await typeId("Coordinator");
     const a = await createStaff(w.ownerA, "Pat Pending", type);
     await invite(w.ownerA, a, "pat@example.test", "coordinator");
@@ -191,9 +192,7 @@ describe("invitations (the same two steps as caregivers)", () => {
     await expectPgError(call(w.ownerA, "select * from ogevia_api.complete_staff_invitation($1,$2,'ben@example.test',$3,true,'staff')", [w.orgA, b, w.managerA.sub]), "OGC09", /already has access/);
     await expectPgError(call(w.ownerA, "select * from ogevia_api.complete_staff_invitation($1,$2,'ben@example.test',$3,true,'staff')", [w.orgA, b, w.caregiverA1.sub]), "OGC09");
     expect((await db.admin.query("select role::text r from ogevia.organization_memberships where user_id = $1 and organization_id = $2", [w.managerA.userId, w.orgA])).rows[0].r).toBe("manager");
-    const gone = randomUUID();
-    await db.admin.query("insert into ogevia.app_users (cognito_sub, status) values ($1, 'disabled')", [gone]);
-    await expectPgError(call(w.ownerA, "select * from ogevia_api.complete_staff_invitation($1,$2,'ben@example.test',$3,true,'staff')", [w.orgA, b, gone]), "OGC09", /disabled/);
+    // L-1 (0087): a disabled sign-in is not reported to the inviter; it is recorded like any other existing account (see "invitation acceptance")
     await expectPgError(call(w.ownerA, "select * from ogevia_api.complete_staff_invitation($1,$2,'ben@example.test','not-a-uuid',false,'staff')", [w.orgA, b]), "OGV22");
   });
 
@@ -229,6 +228,165 @@ describe("invitations (the same two steps as caregivers)", () => {
     await db.admin.query("insert into ogevia.caregiver_invitations (organization_id, caregiver_record_id, user_id, email, existing_account, invited_by) values ($1,$2,$3,'cg0086@example.test',false,$4)", [w.orgA, rec, user, w.ownerA.userId]);
     await call({ userId: user, sub }, "select ogevia_api.note_my_sign_in()");
     expect((await db.admin.query("select first_signed_in_at from ogevia.caregiver_invitations where caregiver_record_id = $1", [rec])).rows[0].first_signed_in_at).not.toBeNull();
+  });
+});
+
+describe("invitation acceptance (0087: M-1, L-1, L-2)", () => {
+  const status = async (sub: string, org = w.orgA) => (await db.admin.query("select m.status::text s, m.role::text r from ogevia.organization_memberships m join ogevia.app_users u on u.id = m.user_id where m.organization_id = $1 and u.cognito_sub = $2", [org, sub])).rows[0] as { s: string; r: string } | undefined;
+  const complete = (profile: string, email: string, sub: string, existing: boolean, role = "manager") =>
+    call(w.ownerA, "select * from ogevia_api.complete_staff_invitation($1,$2,$3,$4,$5,$6)", [w.orgA, profile, email, sub, existing, role]);
+  const mine = (a: Actor) => call(a, "select * from ogevia_api.list_my_staff_invitations()");
+  const accept = (a: Actor, org = w.orgA) => call<{ r: string }>(a, "select ogevia_api.accept_staff_invitation($1) as r", [org]);
+
+  it("M-1: inviting a sign-in that already belongs to another agency grants NOTHING until that person accepts", async () => {
+    const id = await createStaff(w.ownerA, "Mia Multi", await typeId("Manager"));
+    const email = await call<{ e: string }>(w.ownerA, "select ogevia_api.begin_staff_invitation($1,$2,'mia.multi@example.test','manager') as e", [w.orgA, id]);
+    await complete(id, email[0]!.e, w.managerB.sub, true);
+    expect(await status(w.managerB.sub)).toEqual({ s: "invited", r: "manager" });
+    expect(await can(w.managerB.sub, "staff.read")).toBe(false);                                   // nothing in agency A yet
+    await expectPgError(call(w.managerB, "select * from ogevia_api.list_staff($1)", [w.orgA]), "OGN04");
+    expect((await call(w.managerB, "select * from ogevia_api.get_my_context()")).map((r) => r.organization_id)).toEqual([w.orgB]);
+    expect((await staff(w.ownerA)).find((r) => r.profile_id === id)).toMatchObject({ access_status: "invitation_pending" });
+    expect((await audit("staff.invited")).at(-1)).toMatchObject({ entity_id: id, after_state: { role: "manager", access: "pending_acceptance" } });
+    // signing in does not accept it
+    await call(w.managerB, "select ogevia_api.note_my_sign_in()");
+    expect((await db.admin.query("select first_signed_in_at from ogevia.staff_profiles where id = $1", [id])).rows[0].first_signed_in_at).toBeNull();
+    expect((await staff(w.ownerA)).find((r) => r.profile_id === id)).toMatchObject({ access_status: "invitation_pending" });
+    // the person sees only their own pending invitation, and accepts it
+    expect(await mine(w.managerB)).toEqual([expect.objectContaining({ organization_id: w.orgA, role: "manager" })]);
+    expect(await mine(w.ownerA)).toEqual([]);
+    expect((await accept(w.managerB))[0]!.r).toBe("manager");
+    expect(await status(w.managerB.sub)).toEqual({ s: "active", r: "manager" });
+    expect((await call(w.managerB, "select * from ogevia_api.get_my_context()")).map((r) => r.organization_id).sort()).toEqual([w.orgA, w.orgB].sort());
+    expect((await staff(w.ownerA)).find((r) => r.profile_id === id)).toMatchObject({ access_status: "active" });
+    expect(await mine(w.managerB)).toEqual([]);
+    expect((await accept(w.managerB))[0]!.r).toBe("manager");                                      // a repeated accept (lost response) changes nothing
+    expect(await audit("staff.invitation_accepted")).toHaveLength(1);
+    expect((await audit("staff.invitation_accepted"))[0]).toMatchObject({ entity_id: id, before_state: { membership_status: "invited" }, after_state: { membership_status: "active" } });
+  });
+
+  it("M-1: nobody else can accept it, and an invitation to one agency cannot be used for another", async () => {
+    const id = await createStaff(w.ownerA, "Ned Nobody", await typeId("Manager"));
+    await complete(id, "ned.nobody@example.test", w.outsider.sub, true, "staff");
+    await expectPgError(accept(w.caregiverA1), "OGN04");               // someone else has no invitation here
+    await expectPgError(accept(w.caregiverB1), "OGN04");
+    await expectPgError(accept(w.outsider, w.orgB), "OGN04");          // the right person, the wrong agency
+    await expectPgError(accept(w.outsider, randomUUID()), "OGN04");
+    expect(await status(w.outsider.sub)).toEqual({ s: "invited", r: "staff" });
+    expect((await accept(w.outsider))[0]!.r).toBe("staff");
+  });
+
+  it("M-1: an inactive profile cannot be accepted; a brand-new sign-in (which is e-mailed) is active at once; a role never rises at acceptance", async () => {
+    const type = await typeId("Manager");
+    const a = await createStaff(w.ownerA, "Ina Inactive", type);
+    const sub = randomUUID();
+    await db.admin.query("insert into ogevia.app_users (cognito_sub) values ($1)", [sub]);
+    await db.admin.query("insert into ogevia.organization_memberships (organization_id, user_id, role, status) select $1, id, 'caregiver', 'active' from ogevia.app_users where cognito_sub = $2", [w.orgB, sub]);
+    await complete(a, "ina@example.test", sub, false, "scheduler");        // it already belongs to an agency, so acceptance is required even though the caller said "not existing"
+    expect(await status(sub)).toEqual({ s: "invited", r: "scheduler" });
+    await call(w.ownerA, "select ogevia_api.update_staff($1,$2,'Ina Inactive',$3,null,null,'inactive')", [w.orgA, a, type]);
+    await expectPgError(accept({ userId: await userOf(sub), sub }), "OGN04");
+    expect(await status(sub)).toEqual({ s: "invited", r: "scheduler" });
+    const b = await createStaff(w.ownerA, "Nia New", type);
+    const fresh = await invite(w.ownerA, b, "nia.new@example.test", "read_only");
+    expect(await status(fresh)).toEqual({ s: "active", r: "read_only" });
+  });
+
+  it("L-1: the reply says nothing about the account (no existing_account, no disabled refusal); a disabled sign-in is recorded and cannot accept", async () => {
+    const id = await createStaff(w.ownerA, "Dan Disabled", await typeId("Manager"));
+    const gone = randomUUID();
+    await db.admin.query("insert into ogevia.app_users (cognito_sub, status) values ($1, 'disabled')", [gone]);
+    const r = await complete(id, "dan.disabled@example.test", gone, true, "staff");
+    expect(Object.keys(r[0]!)).toEqual(["profile_id"]);
+    expect(await status(gone)).toEqual({ s: "invited", r: "staff" });
+    await expect(accept({ userId: await userOf(gone), sub: gone })).rejects.toThrow();
+    // nor do the two lists the Owner reads show it as Disabled: a pending invitation reads Invited whatever the account's state
+    expect((await staff(w.ownerA)).find((r) => r.profile_id === id)).toMatchObject({ access_status: "invitation_pending" });
+    const goneUser = await userOf(gone);
+    expect((await call(w.ownerA, "select * from ogevia_api.list_accounts($1)", [w.orgA])).find((r) => r.user_id === goneUser)).toMatchObject({ membership_status: "invited", account_status: "invitation_pending" });
+    const id2 = await createStaff(w.ownerA, "Nat New", await typeId("Manager"));
+    expect(Object.keys((await complete(id2, "nat.new@example.test", randomUUID(), false, "staff"))[0]!)).toEqual(["profile_id"]);   // the same shape for a new sign-in
+  });
+
+  it("M-1: Accounts > Disable refuses a pending invitation, so Disable then Enable can never turn it into access the person did not accept", async () => {
+    const id = await createStaff(w.ownerA, "Bea Bypass", await typeId("Manager"));
+    const sub = randomUUID();
+    await db.admin.query("insert into ogevia.app_users (cognito_sub) values ($1)", [sub]);
+    await db.admin.query("insert into ogevia.organization_memberships (organization_id, user_id, role, status) select $1, id, 'caregiver', 'active' from ogevia.app_users where cognito_sub = $2", [w.orgB, sub]);
+    await complete(id, "bea.bypass@example.test", sub, true, "manager");
+    const user = await userOf(sub);
+    expect(await status(sub)).toEqual({ s: "invited", r: "manager" });
+    await expectPgError(call(w.ownerA, "select * from ogevia_api.disable_account($1,$2,'Trying to disable a pending invitation')", [w.orgA, user]), "OGC09", /not accepted the invitation/);
+    expect(await status(sub)).toEqual({ s: "invited", r: "manager" });                                   // still invited, not suspended
+    await call(w.ownerA, "select ogevia_api.enable_account($1,$2,'Trying to enable it')", [w.orgA, user]);
+    expect(await status(sub)).toEqual({ s: "invited", r: "manager" });                                   // enabling a never-accepted invitation changes nothing
+    expect(await can(sub, "visits.read")).toBe(false);
+    expect((await accept({ userId: user, sub }))[0]!.r).toBe("manager");                                  // only the person's own acceptance activates it
+    expect(await status(sub)).toEqual({ s: "active", r: "manager" });
+  });
+
+  it("L-2: an invitation never overwrites a membership of any status, a pending invitation included, and writes nothing", async () => {
+    const type = await typeId("Manager");
+    for (const st of ["invited", "suspended", "revoked", "active"]) {
+      const id = await createStaff(w.ownerA, `Lee ${st}`, type);
+      const sub = randomUUID();
+      const u = (await db.admin.query("insert into ogevia.app_users (cognito_sub) values ($1) returning id", [sub])).rows[0].id as string;
+      await db.admin.query("insert into ogevia.organization_memberships (organization_id, user_id, role, status) values ($1,$2,'read_only',$3)", [w.orgA, u, st]);
+      const before = (await db.admin.query("select count(*)::int n from ogevia.audit_events where organization_id = $1", [w.orgA])).rows[0].n;
+      await expectPgError(complete(id, `lee.${st}@example.test`, sub, true, "organization_admin"), "OGC09");
+      expect(await status(sub)).toEqual({ s: st, r: "read_only" });                                // role and status untouched
+      expect((await db.admin.query("select user_id from ogevia.staff_profiles where id = $1", [id])).rows[0].user_id).toBeNull();
+      expect((await db.admin.query("select count(*)::int n from ogevia.audit_events where organization_id = $1", [w.orgA])).rows[0].n).toBe(before);
+    }
+  });
+});
+
+describe("inactive staff lose access to the agency (0087: L-3)", () => {
+  const mstatus = async (sub: string) => (await db.admin.query("select m.status::text s from ogevia.organization_memberships m join ogevia.app_users u on u.id = m.user_id where m.organization_id = $1 and u.cognito_sub = $2", [w.orgA, sub])).rows[0].s as string;
+  const setStatus = (a: Actor, id: string, typeIdValue: string, st: string) => call(a, "select ogevia_api.update_staff($1,$2,'Person',$3,null,null,$4)", [w.orgA, id, typeIdValue, st]);
+
+  it("setting a staff profile inactive suspends the membership at once; reactivating does not restore it; Accounts > Enable does", async () => {
+    const type = await typeId("Scheduler");
+    const id = await createStaff(w.ownerA, "Person", type);
+    const sub = await invite(w.ownerA, id, "gone.soon@example.test", "scheduler");
+    expect(await can(sub, "shifts.manage")).toBe(true);
+    await setStatus(w.ownerA, id, type, "inactive");
+    expect(await mstatus(sub)).toBe("suspended");
+    expect(await can(sub, "shifts.manage")).toBe(false);
+    await expectPgError(call({ userId: await userOf(sub), sub }, "select * from ogevia_api.list_staff($1)", [w.orgA]), "OGN04");
+    expect((await audit("staff.access_suspended")).at(-1)).toMatchObject({ before_state: { membership_status: "active" }, after_state: { membership_status: "suspended" } });
+    expect((await staff(w.ownerA)).find((r) => r.profile_id === id)).toMatchObject({ status: "inactive", access_status: "disabled" });
+    await setStatus(w.ownerA, id, type, "active");
+    expect(await mstatus(sub)).toBe("suspended");                      // access is not silently re-granted
+    await call(w.ownerA, "select ogevia_api.enable_account($1,$2,'Returned')", [w.orgA, await userOf(sub)]);
+    expect(await mstatus(sub)).toBe("active");
+    expect(await can(sub, "shifts.manage")).toBe(true);
+  });
+
+  it("does not touch the Owner roles, the person making the change, or a pending invitation, and an unlinked profile just becomes inactive", async () => {
+    const type = await typeId("Manager");
+    const own = await createStaff(w.ownerA, "Person", type);
+    await db.admin.query("update ogevia.staff_profiles set user_id = $2 where id = $1", [own, w.ownerA.userId]);
+    await setStatus(w.ownerA, own, type, "inactive");                   // the Owner inactivating their own profile never locks them out
+    expect(await mstatus(w.ownerA.sub)).toBe("active");
+    const o2sub = randomUUID();
+    const o2 = (await db.admin.query("insert into ogevia.app_users (cognito_sub) values ($1) returning id", [o2sub])).rows[0].id as string;
+    await db.admin.query("insert into ogevia.organization_memberships (organization_id, user_id, role, status) values ($1,$2,'organization_owner','active')", [w.orgA, o2]);
+    const second = await createStaff(w.ownerA, "Person", type);
+    await db.admin.query("update ogevia.staff_profiles set user_id = $2 where id = $1", [second, o2]);
+    await setStatus(w.ownerA, second, type, "inactive");               // a second Owner stays active: the Owner role is protected
+    expect(await mstatus(o2sub)).toBe("active");
+    const loose = await createStaff(w.ownerA, "Person", type);
+    await setStatus(w.ownerA, loose, type, "inactive");
+    expect((await staff(w.ownerA)).find((r) => r.profile_id === loose)).toMatchObject({ status: "inactive", access_status: "none" });
+    const pend = await createStaff(w.ownerA, "Person", type);
+    const psub = randomUUID();
+    const pu = (await db.admin.query("insert into ogevia.app_users (cognito_sub) values ($1) returning id", [psub])).rows[0].id as string;
+    await db.admin.query("insert into ogevia.organization_memberships (organization_id, user_id, role, status) values ($1,$2,'caregiver','active')", [w.orgB, pu]);
+    await call(w.ownerA, "select * from ogevia_api.complete_staff_invitation($1,$2,'pend.ing@example.test',$3,true,'staff')", [w.orgA, pend, psub]);
+    await setStatus(w.ownerA, pend, type, "inactive");
+    expect(await mstatus(psub)).toBe("invited");                        // a pending invitation grants nothing, so it is left as it is ...
+    await expectPgError(call({ userId: pu, sub: psub }, "select ogevia_api.accept_staff_invitation($1)", [w.orgA]), "OGN04");   // ... and cannot be accepted while the profile is inactive
   });
 });
 
@@ -339,6 +497,37 @@ describe("the pending migration rolls back and re-applies cleanly", () => {
         await applyPendingMigrations(client);
       } finally { client.release(); }
       expect((await c("select count(*)::int n from ogevia_api.list_staff_types($1)", [world.orgA]))[0].n).toBe(7);
+    } finally { await own.drop(); }
+  });
+});
+
+describe("0087 rolls back on its own to the 0086 behaviour and applies again", () => {
+  it("rolling back only 0087 restores the 0086 functions (existing sign-in active at once, reply with existing_account); 0086 data stays; applying 0087 again restores the fix", async () => {
+    const own = await createTestDbWithPending();
+    try {
+      const world = await seedWorld(own);
+      const c = (sql: string, params: unknown[] = []) => asActor(own, world.ownerA.sub, async (x) => (await x.query(sql, params)).rows as any[]);
+      const type = (await own.admin.query("select id from ogevia.staff_types where organization_id = $1 and name = 'Manager'", [world.orgA])).rows[0].id as string;
+      const mk = async (n: string) => (await c("select ogevia_api.create_staff($1,$2,$3,null,null) as id", [world.orgA, n, type]))[0].id as string;
+      const hasFn = async (name: string) => (await own.admin.query("select count(*)::int n from pg_proc p join pg_namespace s on s.oid = p.pronamespace where s.nspname = 'ogevia_api' and p.proname = $1", [name])).rows[0].n as number;
+      const client = await own.admin.connect();
+      try {
+        const pending = await mk("Pending Pat");
+        await c("select * from ogevia_api.complete_staff_invitation($1,$2,'pat.pending@example.test',$3,true,'staff')", [world.orgA, pending, world.managerB.sub]);
+        expect((await own.admin.query("select m.status::text s from ogevia.organization_memberships m join ogevia.app_users u on u.id = m.user_id where m.organization_id = $1 and u.cognito_sub = $2", [world.orgA, world.managerB.sub])).rows[0].s).toBe("invited");
+        const down = readFileSync(new URL("../pending/rollback/0087_staff_invitation_acceptance.down.sql", import.meta.url), "utf8");
+        await client.query("begin"); await client.query("set local role ogevia_owner"); await client.query(down); await client.query("reset role"); await client.query("commit");
+        expect(await hasFn("accept_staff_invitation")).toBe(0);
+        expect(await hasFn("list_my_staff_invitations")).toBe(0);
+        expect(await hasFn("complete_staff_invitation")).toBe(1);                                   // the 0086 function is back
+        expect((await own.admin.query("select count(*)::int n from ogevia.staff_types")).rows[0].n).toBeGreaterThan(0);   // 0086 data untouched
+        const second = await mk("Old Behaviour");
+        const r = await c("select * from ogevia_api.complete_staff_invitation($1,$2,'old.behaviour@example.test',$3,true,'staff')", [world.orgA, second, randomUUID()]);
+        expect(Object.keys(r[0]!).sort()).toEqual(["existing_account", "profile_id"]);               // the 0086 reply shape is back
+        const up = readFileSync(new URL("../pending/migrations/0087_staff_invitation_acceptance.sql", import.meta.url), "utf8");
+        await client.query("begin"); await client.query("set local role ogevia_owner"); await client.query(up); await client.query("reset role"); await client.query("commit");
+        expect(await hasFn("accept_staff_invitation")).toBe(1);
+      } finally { client.release(); }
     } finally { await own.drop(); }
   });
 });

@@ -75,7 +75,7 @@ API_ID=$(A cloudformation list-stack-resources --stack-name "$API" --query "Stac
 [[ "$API_ID" =~ ^[a-z0-9]{6,12}$ ]] && echo "$API_ID" > api-id.txt && ok "API id $API_ID" || { nope "the HTTP API was not found in $API"; API_ID=""; }
 if [[ -n "$API_ID" ]]; then
   A apigatewayv2 get-routes --api-id "$API_ID" --max-items 1000 --query 'Items[].RouteKey' --output json > routes-before.json 2>/dev/null && jq -e 'type=="array" and length>0' routes-before.json >/dev/null && ok "$(jq 'length' routes-before.json) API routes captured" || nope "cannot capture the API routes"
-  [[ "$(jq '[.[] | select(startswith("GET /v1/staff") or startswith("POST /v1/staff") or contains("role-permissions"))] | length' routes-before.json 2>/dev/null)" == 0 ]] && ok "no staff route exists yet (this release adds them)" || echo "NOTE some staff routes already exist on TEST: the gate in Step 8 decides whether that is acceptable"
+  [[ "$(jq '[.[] | select(. == "POST /v1/me/staff-invitations/{organizationId}/accept")] | length' routes-before.json 2>/dev/null)" == 0 ]] && ok "the accept route does not exist yet (this upgrade adds it)" || echo "NOTE the accept route already exists on TEST: the gate in Step 8 decides whether that is acceptable"
   A apigatewayv2 get-api --api-id "$API_ID" --query CorsConfiguration --output json > cors-before.json 2>/dev/null && jq -e . cors-before.json >/dev/null && ok "CORS origins: $(jq -r '.AllowOrigins | join(", ")' cors-before.json)" || nope "cannot capture the CORS configuration"
 fi
 echo "-- hostnames (decision D2: the code expects them to be live already; recorded, not changed)"

@@ -22,6 +22,7 @@ echo "$*" >> "$D/psql-calls.log"
 case "$*" in
   *pg_database*) echo "\${MOCK_DBS-ogevia_sv_test}" ;;
   *current_database*) echo "\${MOCK_CURRENT_DB:-ogevia_sv_test} | read_only=on" ;;
+  *list_my_staff_invitations*) echo "\${MOCK_S87:-0}" ;;
   *staff_types*) echo "\${MOCK_S86:-0|0|0}" ;;
   *enforcement_active_from*) echo "\${MOCK_ACT:-0}|2" ;;
   *"migrations applied, latest"*) echo "\${MOCK_SUMMARY:-85 migrations applied, latest 0085}" ;;
@@ -92,6 +93,24 @@ describe("the ledger verdict (85 / 0085 before AND after: 0086 is applied outsid
   ])("a 0086 state that is not what the plan expects stops (exit 1, rule restored): %s", async (_n, expect0086, s86) => {
     const r = await run(["test", "--host-ip"], { OGEVIA_EXPECT_0086: expect0086, MOCK_S86: s86 });
     expect(r.code, r.out).toBe(1); expect(r.out).toContain("BUT the staff-management objects are"); expect(r.out).toContain("STOP"); expect(r.out).toContain("RESTORED (verified)"); expect(sg()).toEqual(INITIAL_SG);
+  });
+  it("OGEVIA_EXPECT_0087=absent with 0086 present: the TEST state before the upgrade; OGEVIA_EXPECT_0087=present: the state after it", async () => {
+    let r = await run(["test", "--host-ip"], { OGEVIA_EXPECT_0086: "present", MOCK_S86: "1|1|21", OGEVIA_EXPECT_0087: "absent", MOCK_S87: "0" });
+    expect(r.code, r.out).toBe(0); expect(r.out).toContain("0086 is PRESENT as expected"); expect(r.out).toContain("0087 objects (functions of 2): 0"); expect(r.out).toContain("0087 is ABSENT as expected.");
+    r = await run(["test", "--host-ip"], { OGEVIA_EXPECT_0086: "present", MOCK_S86: "1|1|21", OGEVIA_EXPECT_0087: "present", MOCK_S87: "2" });
+    expect(r.code, r.out).toBe(0); expect(r.out).toContain("0087 is PRESENT as expected (2 functions)."); expect(r.out).toContain("exactly the expected 85 / 0085");
+  });
+  it.each([
+    ["0087 expected absent but present", "absent", "2"],
+    ["0087 expected present but absent", "present", "0"],
+    ["0087 expected present, only one of its two functions", "present", "1"],
+  ])("a 0087 state that is not what the plan expects stops (exit 1, rule restored): %s", async (_n, expect0087, s87) => {
+    const r = await run(["test", "--host-ip"], { OGEVIA_EXPECT_0086: "present", MOCK_S86: "1|1|21", OGEVIA_EXPECT_0087: expect0087, MOCK_S87: s87 });
+    expect(r.code, r.out).toBe(1); expect(r.out).toContain("BUT the staff-management objects are"); expect(r.out).toContain("STOP"); expect(r.out).toContain("RESTORED (verified)"); expect(sg()).toEqual(INITIAL_SG);
+  });
+  it("an invalid OGEVIA_EXPECT_0087 is a usage error before anything is opened", async () => {
+    const r = await run(["test", "--host-ip"], { OGEVIA_EXPECT_0087: "maybe" });
+    expect(r.code, r.out).toBe(2); expect(calls()).not.toContain("authorize");
   });
   it("an invalid OGEVIA_EXPECT_0086 is a usage error before anything is opened; the 0086 check is skipped when the variable is unset", async () => {
     const r = await run(["test", "--host-ip"], { OGEVIA_EXPECT_0086: "maybe" });

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""EXPECTED-ONLY gate for the TEST deployment of release 2026-10-26-redesign (code commit 7870a04). Read-only: it compares a LIVE CloudFormation template with the
+"""EXPECTED-ONLY gate for the TEST deployment of release 2026-10-26-redesign (upgrade 7870a04 to code commit fb491a5). Read-only: it compares a LIVE CloudFormation template with the
 SYNTHESIZED one, as JSON files, prints every difference, and exits 0 only if EVERY difference is on the allow-list below. Anything else exits 1 and the operator STOPS.
 
   python3 diff_gate.py template --stack <one of the five Ogevia-prod-* stacks> --live LIVE.json --new NEW.json
@@ -10,11 +10,10 @@ ALLOW-LIST (everything else is a violation)
   `ogevia:deployment-status` tag ignored (it carries the approval reference).
   Ogevia-prod-EvidenceStorage, -NetworkEgress, -WebHosting, -Observability: NO difference at all. (This is also how decision D2 is enforced: if the live CloudFront
   aliases, certificate, Cognito callback URLs or API CORS origins differ from the code, the difference shows here and stops the release.)
-  Ogevia-prod-ServiceVerificationApi: exactly (1) the 13 staff API routes ADDED (RouteKeys fixed below; each JWT-authorized by the same authorizer and wired to the same
-  integration as the existing routes), (2) the API Handler's Code S3Key (and the asset path in its Metadata) and (3) ONE catch-up in the HTTP API resource: the CORS
-  AllowOrigins list gains exactly "https://demo.ogevia.com" (the origin is already live on the API itself, applied by hand on 2026-10-23; the stack's template was behind;
-  the deploy plan lists it as expected). Every other property of that resource must be identical. Nothing else: no IAM, role, policy, environment, permission,
-  stage, authorizer, integration, CORS, rule, alarm, log or secret change; no route removed or altered.
+  Ogevia-prod-ServiceVerificationApi: exactly (1) the ONE staff API route ADDED by this upgrade, POST /v1/me/staff-invitations/{organizationId}/accept (JWT-authorized by the
+  same authorizer and wired to the same integration as the existing routes; the other 13 staff routes are already live on TEST since the 7870a04 release) and (2) the API
+  Handler's Code S3Key (and the asset path in its Metadata). Every other property must be identical. Nothing else: no IAM, role, policy, environment, permission, stage,
+  authorizer, integration, CORS, rule, alarm, log or secret change; no route removed or altered.
 Result words: DELTA (the release's difference, deploy it), NONE (identical: nothing to deploy), VIOLATION (stop).
 Exit: 0 = DELTA or NONE with no violation; 1 = a violation; 2 = unreadable input (treated as a failure).
 """
@@ -25,13 +24,7 @@ STACKS = ["Ogevia-prod-EvidenceStorage", "Ogevia-prod-NetworkEgress", "Ogevia-pr
 API = "Ogevia-prod-ServiceVerificationApi"
 SECTIONS = ["Description", "Parameters", "Outputs", "Conditions", "Mappings", "Rules", "Transform", "AWSTemplateFormatVersion"]
 HEX64 = set("0123456789abcdef")
-DEMO_ORIGIN = "https://demo.ogevia.com"
-NEW_ROUTE_KEYS = {
-    "GET /v1/staff-types", "POST /v1/staff-types", "POST /v1/staff-types/{staffTypeId}/rename", "POST /v1/staff-types/{staffTypeId}/active",
-    "GET /v1/staff", "POST /v1/staff", "POST /v1/staff/{profileId}", "POST /v1/staff-members/{userId}/profile",
-    "POST /v1/staff/{profileId}/invitation", "POST /v1/staff/{profileId}/invitation/resend", "POST /v1/staff-roles/{userId}",
-    "GET /v1/role-permissions", "GET /v1/staff-audit",
-}
+NEW_ROUTE_KEYS = {"POST /v1/me/staff-invitations/{organizationId}/accept"}
 
 
 def norm_tags(x):
@@ -112,18 +105,6 @@ def gate_template(stack, live, new):
                 changed_handler = True
                 notes.append("Lambda %s code asset %s... -> %s..." % (k, old[:12], nk[:12]))
             continue
-        if stack == API and a.get("Type") == "AWS::ApiGatewayV2::Api":
-            a2, b2 = copy.deepcopy(a), copy.deepcopy(b)
-            try:
-                ao_a = a2["Properties"]["CorsConfiguration"]["AllowOrigins"]
-                ao_b = b2["Properties"]["CorsConfiguration"]["AllowOrigins"]
-            except (KeyError, TypeError):
-                ao_a = ao_b = None
-            if isinstance(ao_a, list) and isinstance(ao_b, list) and ao_b.count(DEMO_ORIGIN) == 1 and DEMO_ORIGIN not in ao_a and len(ao_b) == len(ao_a) + 1:
-                b2["Properties"]["CorsConfiguration"]["AllowOrigins"] = [o for o in ao_b if o != DEMO_ORIGIN]
-                if a2 == b2:
-                    notes.append("HTTP API %s: CORS origin %s added to the template only (already live on the API itself); every other property identical" % (k, DEMO_ORIGIN))
-                    continue
         v.append("resource CHANGED outside the allow-list: %s (%s)" % (k, a.get("Type")))
     new_routes = []
     for k in added:
@@ -137,9 +118,9 @@ def gate_template(stack, live, new):
         extra = sorted(set(keys) - NEW_ROUTE_KEYS)
         missing = sorted(NEW_ROUTE_KEYS - set(keys))
         if extra:
-            v.append("routes added that are not the 13 staff routes: %s" % extra)
+            v.append("routes added that are not the 1 staff route this upgrade adds: %s" % extra)
         if missing:
-            v.append("staff routes missing from the release: %s" % missing)
+            v.append("the staff route this upgrade adds is missing from the release: %s" % missing)
         if len(keys) != len(set(keys)):
             v.append("a route key is added twice")
         live_routes = [x["Properties"] for x in lr.values() if x.get("Type") == "AWS::ApiGatewayV2::Route"]
@@ -158,9 +139,9 @@ def gate_template(stack, live, new):
                 if p.get("RouteKey", "").split(" ")[0] not in ("GET", "POST"):
                     v.append("new route %s uses a method other than GET or POST" % k)
         if not v:
-            notes.append("%d staff API routes added, each JWT-authorized like the existing routes" % len(new_routes))
+            notes.append("%d staff API route(s) added, each JWT-authorized like the existing routes" % len(new_routes))
     if stack == API and (changed_handler != bool(new_routes)):
-        v.append("the Handler code asset and the 13 routes must change together (code changed: %s, routes added: %d)" % (changed_handler, len(new_routes)))
+        v.append("the Handler code asset and the staff route must change together (code changed: %s, routes added: %d)" % (changed_handler, len(new_routes)))
     if v:
         return v, notes, None
     if stack == API and changed_handler and len(new_routes) == len(NEW_ROUTE_KEYS):

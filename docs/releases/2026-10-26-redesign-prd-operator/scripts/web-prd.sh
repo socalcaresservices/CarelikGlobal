@@ -90,7 +90,7 @@ publish|rollback)
   if [[ "$MODE" == publish ]]; then
     [[ "$(cut -d' ' -f1 "$B/release-record.state" 2>/dev/null)" != DEPLOYED-RECORD-* ]] || stop "$B/release-record.state says the release has already taken effect: the web is not published twice automatically. Re-run record-deployed-prd.sh (read-only); a deliberate second publish needs the Owner's new written instruction"
     G "$SITE/index.html" -o "$B/served-pre-publish.html" 2>/dev/null && [[ "$(sha256sum "$B/served-pre-publish.html" | cut -d' ' -f1)" == "$(sha256sum "$B/web-before/index.html" | cut -d' ' -f1)" ]] || stop "the served index.html is not the one captured in web-before: the site changed since the capture (or cannot be read). Run p0-baseline-capture.sh again before publishing, so the recovery copy is the site you are replacing."
-    [[ "$(cat "$B/db-0086.ok" 2>/dev/null)" == "85|0085|0086" ]] || stop "no $B/db-0086.ok: migration 0086 is not applied"
+    [[ "$(cat "$B/db-0086.ok" 2>/dev/null)" == "85|0085|0086|0087" ]] || stop "no $B/db-0086.ok: migration 0086 is not applied"
     [[ -s "$B/api-at-release.ok" ]] || stop "no $B/api-at-release.ok: run 'deploy-guard-prd.sh post Ogevia-prd-ServiceVerificationApi' successfully first (the web calls the new API)"
     [[ -s "$B/web-build.sha256" && "$(cat "$B/web-build.commit" 2>/dev/null)" =~ ^[0-9a-f]{40}$ ]] || stop "no build manifest: run the build first"
     (cd "$WEBOUT" && sha256sum -c --quiet "$B/web-build.sha256") >/dev/null 2>&1 || stop "the local build does not match its manifest"

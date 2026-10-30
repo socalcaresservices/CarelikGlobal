@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # =============================================================================
-# Build the operator TARBALL for the PRODUCTION release 2026-10-26-redesign (staff management, navigation, Reports, migration 0086 applied from db/pending; production enables the 13 staff routes) (runs HERE, in the development container, never in CloudShell; no network, no AWS).
+# Build the operator TARBALL for the PRODUCTION release 2026-10-26-redesign (staff management, navigation, Reports, migrations 0086 and 0087 applied from db/pending; production enables the 14 staff routes) (runs HERE, in the development container, never in CloudShell; no network, no AWS).
 #   bash build-prd-tarball.sh --out-dir DIR [--code-commit REF]      (REF default: HEAD; resolved to the full 40-hex SHA)
 #   OGEVIA_APPROVAL_REF=<owner reference>   optional; default APPROVAL-REF-PENDING-OWNER (a placeholder the pin check reports)
 #   OGEVIA_BUILD_TIME=<UTC ISO time>        optional; default now. Fixing it makes two builds of the same inputs byte-identical.
@@ -64,7 +64,7 @@ cp "$WORK/synth-prod/Ogevia-prod-NetworkEgress.template.json" "$STAGE/$PKG_REL/r
 HK=$(jq -r '[.Resources | to_entries[] | select(.value.Type=="AWS::Lambda::Function" and (.key|startswith("Handler"))) | .value.Properties.Code.S3Key][0]' "$STAGE/$PKG_REL/release-templates/Ogevia-prd-ServiceVerificationApi.json")
 IK=$(jq -r '[.Resources | to_entries[] | select(.value.Type=="AWS::Lambda::Function" and (.key|startswith("IdentityHandler"))) | .value.Properties.Code.S3Key][0]' "$STAGE/$PKG_REL/release-templates/Ogevia-prd-ServiceVerificationApi.json")
 NR=$(jq '[.Resources[] | select(.Type=="AWS::ApiGatewayV2::Route")] | length' "$STAGE/$PKG_REL/release-templates/Ogevia-prd-ServiceVerificationApi.json")
-[[ "$HK" == 94b73574c5a681d5a8c22b4264742f64e5a6d40aa1ace783be12e7383b9d8a9e.zip && "$IK" == 7c5f8eb676c93261fd7a80f34d40ba70379c040d94bb2e9bd80f2d007ebc9759.zip && "$NR" == 241 ]] || die "the archived code does not synthesize the release (Handler $HK, Identity $IK, $NR routes): it is not the approved production-bound code"
+[[ "$HK" == 2871b03d6be42b0b8c85bac6feea12de75b3d05ca4636610259b6a18e1d00ed7.zip && "$IK" == 7c5f8eb676c93261fd7a80f34d40ba70379c040d94bb2e9bd80f2d007ebc9759.zip && "$NR" == 242 ]] || die "the archived code does not synthesize the release (Handler $HK, Identity $IK, $NR routes): it is not the approved production-bound code"
 # 3. nothing that must not travel
 for bad in .git _backup node_modules infra/aws/cdk.out; do [[ ! -e "$STAGE/$bad" ]] || die "$bad is in the staging tree"; done
 [[ ! -e "$STAGE/infra/aws/db/migrations/0086_staff_management.sql" ]] || die "0086 is in db/migrations: this package applies it from db/pending (decision D1 b); the production release pins 0001-0085"
@@ -73,7 +73,7 @@ for bad in .git _backup node_modules infra/aws/cdk.out; do [[ ! -e "$STAGE/$bad"
 [[ -z "$(find "$STAGE" -type l | head -1)" ]] || die "the staging tree contains a symbolic link: $(find "$STAGE" -type l | head -1)"
 [[ -z "$(find "$STAGE" -type f -regextype posix-extended -iregex '.*\.(png|jpe?g|gif|webp|mp4|mov|pdf)$' | grep -v '/node_modules/' | head -1)" ]] || die "an image, video or PDF is in the staging tree (screenshots are excluded): $(find "$STAGE" -type f -regextype posix-extended -iregex '.*\.(png|jpe?g|gif|webp|mp4|mov|pdf)$' | head -1)"
 [[ -z "$(cd "$STAGE" && find . -type f | grep -E '[[:space:]]' | head -1)" ]] || die "a file name contains whitespace"
-for need in infra/aws/db/migrations/0085_create_caregiver_gate_no_service_void.sql infra/aws/db/rollback/0085_create_caregiver_gate_no_service_void.down.sql infra/aws/db/pending/migrations/0086_staff_management.sql infra/aws/db/pending/rollback/0086_staff_management.down.sql infra/aws/bin/ogevia.ts apps/sv-api apps/web pnpm-lock.yaml; do [[ -e "$STAGE/$need" ]] || die "$need is missing from the package"; done
+for need in infra/aws/db/migrations/0085_create_caregiver_gate_no_service_void.sql infra/aws/db/rollback/0085_create_caregiver_gate_no_service_void.down.sql infra/aws/db/pending/migrations/0086_staff_management.sql infra/aws/db/pending/rollback/0086_staff_management.down.sql infra/aws/db/pending/migrations/0087_staff_invitation_acceptance.sql infra/aws/db/pending/rollback/0087_staff_invitation_acceptance.down.sql infra/aws/bin/ogevia.ts apps/sv-api apps/web pnpm-lock.yaml; do [[ -e "$STAGE/$need" ]] || die "$need is missing from the package"; done
 # 4. BUILD_INFO.json then the manifest of every file (the manifest does not list itself)
 FILES=$(cd "$STAGE" && find . -type f ! -name BUILD_INFO.json | wc -l)
 jq -n --arg commit "$SHA" --arg tree "$TREE" --arg time "$BUILD_TIME" --arg ref "$APPROVAL_REF" --arg pkg "$PKG_REL" --arg hk "$HK" --arg ik "$IK" --argjson nr "$NR" --argjson files "$((FILES + 1))" \
@@ -104,5 +104,7 @@ echo "manifest sha256    : $(sha256sum "$STAGE/PACKAGE_MANIFEST.sha256" | cut -d
 echo "migration set 0001-0085 sha256 : $(cd "$STAGE/infra/aws/db/migrations" && LC_ALL=C sha256sum -- *.sql | sha256sum | cut -d' ' -f1)"
 echo "0086 up file sha256            : $(sha256sum "$STAGE/infra/aws/db/pending/migrations/0086_staff_management.sql" | cut -d' ' -f1)"
 echo "0086 down file sha256          : $(sha256sum "$STAGE/infra/aws/db/pending/rollback/0086_staff_management.down.sql" | cut -d' ' -f1)"
+echo "0087 up file sha256            : $(sha256sum "$STAGE/infra/aws/db/pending/migrations/0087_staff_invitation_acceptance.sql" | cut -d' ' -f1)"
+echo "0087 down file sha256          : $(sha256sum "$STAGE/infra/aws/db/pending/rollback/0087_staff_invitation_acceptance.down.sql" | cut -d' ' -f1)"
 echo "pnpm-lock.yaml sha256          : $(sha256sum "$STAGE/pnpm-lock.yaml" | cut -d' ' -f1)"
 echo "BUILT AND SELF-VERIFIED"

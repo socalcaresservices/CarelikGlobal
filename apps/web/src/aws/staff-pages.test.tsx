@@ -73,7 +73,7 @@ function fakeApi(role: Role) {
       case "POST /v1/staff-types/dddddddd-0000-4000-8000-000000000001/active":
         return json(200, { staffType: { id: T_MANAGER } });
       case `POST /v1/staff/${PROFILE_NEW}/invitation`:
-        return json(201, { invitation: { profileId: PROFILE_NEW, existingAccount: false } });
+        return json(201, { invitation: { profileId: PROFILE_NEW } });
       case `POST /v1/staff/${PROFILE_PENDING}/invitation/resend`:
         return json(200, { invitation: { sendCount: 2 } });
       case `POST /v1/staff-roles/${MGR}`:
@@ -149,6 +149,20 @@ describe("Staff", () => {
     expect(lastPost(api, "/v1/staff")?.body).toEqual({ organizationId: ORG, displayName: "Quinn Newhire", staffTypeId: T_OFFICE, contactEmail: "quinn.contact@example.test", phone: "555 0102" });
   });
 
+  it("setting a person who has a sign-in inactive warns that it also ends their access (0087); a person without a sign-in gets no such warning", async () => {
+    renderAt("/staff", "organization_owner");
+    fireEvent.click(within(await rowOf("Abe Active")).getByRole("button", { name: "Edit: Abe Active" }));
+    let edit = await screen.findByRole("form", { name: "Edit staff" });
+    expect(within(edit).queryByText(/also stops their access/)).toBeNull();
+    fireEvent.change(within(edit).getByLabelText("Status"), { target: { value: "inactive" } });
+    expect(within(edit).getByText(/also stops their access to this organization.*Accounts > Enable/)).toBeInTheDocument();
+    fireEvent.click(within(edit).getByRole("button", { name: "Cancel" }));
+    fireEvent.click(within(await rowOf("Nia NoAccess")).getByRole("button", { name: "Edit: Nia NoAccess" }));
+    edit = await screen.findByRole("form", { name: "Edit staff" });
+    fireEvent.change(within(edit).getByLabelText("Status"), { target: { value: "inactive" } });
+    expect(within(edit).queryByText(/also stops their access/)).toBeNull();
+  });
+
   it("edit keeps an inactive current type selectable and posts the change; invite offers only the supported roles", async () => {
     const api = renderAt("/staff", "organization_owner");
     fireEvent.click(within(await rowOf("Nia NoAccess")).getByRole("button", { name: "Edit: Nia NoAccess" }));
@@ -164,7 +178,7 @@ describe("Staff", () => {
     fireEvent.change(within(invite).getByLabelText("Sign-in email"), { target: { value: "nia.signin@example.test" } });
     fireEvent.change(within(invite).getByLabelText("Role"), { target: { value: "scheduler" } });
     fireEvent.click(within(invite).getByRole("button", { name: "Send invitation" }));
-    expect(await screen.findByRole("status")).toHaveTextContent("Invitation sent.");
+    expect(await screen.findByRole("status")).toHaveTextContent(/Invitation recorded\. If this email already has an Ogevia sign-in, the person is asked to accept/);
     expect(lastPost(api, `/v1/staff/${PROFILE_NEW}/invitation`)?.body).toEqual({ organizationId: ORG, email: "nia.signin@example.test", role: "scheduler" });
   });
 

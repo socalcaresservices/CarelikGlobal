@@ -320,12 +320,14 @@ else
   if [[ -n "$EXP_0086" ]]; then
     S86=$(RO -d "$DB_EXPECT" -c "select (to_regclass('ogevia.staff_types') is not null)::int || '|' || (to_regclass('ogevia.staff_profiles') is not null)::int || '|' || (select count(*) from pg_proc p join pg_namespace n on n.oid = p.pronamespace where (n.nspname = 'ogevia' and p.proname in ('seed_default_staff_types','organizations_seed_staff_types','staff_guard','assignable_staff_role','staff_role_change_allowed','staff_validate_contact')) or (n.nspname = 'ogevia_api' and p.proname in ('list_staff_types','create_staff_type','rename_staff_type','set_staff_type_active','list_staff','create_staff','add_member_to_staff','update_staff','begin_staff_invitation','complete_staff_invitation','begin_staff_invitation_resend','record_staff_invitation_resent','set_staff_role','list_role_permissions','list_staff_audit')))") || { rc=$?; stop "the staff-management objects cannot be read$(tm $rc)"; }
     say "staff-management objects (staff_types|staff_profiles|functions of 21): $S86"
-    if [[ "$EXP_0086" == absent && "$S86" == "0|0|0" ]]; then say "0086 is ABSENT as expected."; S86_OK=1
-    elif [[ "$EXP_0086" == present && "$S86" == "1|1|21" ]]; then say "0086 is PRESENT as expected (2 tables, 21 functions)."; S86_OK=1
+    S87=$(RO -d "$DB_EXPECT" -c "select count(*) from pg_proc p join pg_namespace n on n.oid = p.pronamespace where n.nspname = 'ogevia_api' and p.proname in ('list_my_staff_invitations','accept_staff_invitation')") || { rc=$?; stop "the 0087 objects cannot be read$(tm $rc)"; }
+    say "0087 objects (functions of 2): $S87"
+    if [[ "$EXP_0086" == absent && "$S86" == "0|0|0" && "$S87" == 0 ]]; then say "0086 and 0087 are ABSENT as expected."; S86_OK=1
+    elif [[ "$EXP_0086" == present && "$S86" == "1|1|21" && "$S87" == 2 ]]; then say "0086 and 0087 are PRESENT as expected (2 tables, 23 functions)."; S86_OK=1
     else S86_OK=0; fi
   fi
   if [[ -z "$ROWS" && "$SUMMARY" == "$EXP_COUNT migrations applied, latest $EXP_LATEST" && "${ACT%%|*}" == "$EXP_ACT" && "$S86_OK" == 0 ]]; then
-    LEDGER_BAD=1; LEDGER_TEXT="RESULT for $ARG ($DB_EXPECT): ledger $SUMMARY is as expected, BUT the staff-management objects are '$S86' while the plan requires them $EXP_0086 (absent = 0|0|0, present = 1|1|21). A partial state is impossible after a single-transaction apply: STOP and send this output to Claude."
+    LEDGER_BAD=1; LEDGER_TEXT="RESULT for $ARG ($DB_EXPECT): ledger $SUMMARY is as expected, BUT the staff-management objects are '$S86' and the 0087 objects '$S87' while the plan requires them $EXP_0086 (absent = 0|0|0 and 0, present = 1|1|21 and 2). A partial state is impossible after a single-transaction apply: STOP and send this output to Claude."
   elif [[ -z "$ROWS" && "$SUMMARY" == "$EXP_COUNT migrations applied, latest $EXP_LATEST" && "${ACT%%|*}" == "$EXP_ACT" ]]; then
     LEDGER_TEXT="RESULT for $ARG ($DB_EXPECT): ledger summary: $SUMMARY. NO ROW is above $EXP_LATEST: the production ledger is exactly the expected $EXP_COUNT / $EXP_LATEST, and enforcement is activated for ${ACT%%|*} of ${ACT##*|} agencies as expected."
   elif [[ -z "$ROWS" ]]; then

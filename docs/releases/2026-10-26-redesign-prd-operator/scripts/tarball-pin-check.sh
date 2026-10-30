@@ -6,7 +6,7 @@
 #   * BUILD_INFO.json names exactly the approved code commit;
 #   * PACKAGE_MANIFEST.sha256 verifies for EVERY file and no file outside the manifest sits in the tree (dependencies and build output excepted);
 #   * infra/aws/db/migrations holds exactly 85 files and hashes to the approved migration-set value, which is the set production (ledger 85 / 0085) and TEST already hold (so no applied
-#     migration was edited) and has no 0086 in it; infra/aws/db/pending holds exactly the two 0086 files, whose hashes equal the approved values;
+#     migration was edited) and has no 0086 in it; infra/aws/db/pending holds exactly the four 0086 and 0087 files, whose hashes equal the approved values;
 #   * pnpm-lock.yaml hashes to the approved value;
 #   * Node 22.x, pnpm 9.15.4, CDK CLI 2.1143.0 (from the package's own node_modules), dependencies installed.
 # The tarball's OWN sha256 cannot be checked here (it is a hash of the file this script came in): the procedure checks it with sha256sum -c BEFORE extracting.
@@ -17,8 +17,8 @@ set -uo pipefail
 bad=0
 ok()   { echo "PASS $*"; }
 nope() { echo "FAIL $*"; bad=1; }
-[[ "${OGEVIA_EXPECT_COMMIT:-}" =~ ^[0-9a-f]{40}$ && "${OGEVIA_EXPECT_MIGRATIONS_SHA:-}" =~ ^[0-9a-f]{64}$ && "${OGEVIA_EXPECT_0086_SHA:-}" =~ ^[0-9a-f]{64}$ && "${OGEVIA_EXPECT_0086_DOWN_SHA:-}" =~ ^[0-9a-f]{64}$ && "${OGEVIA_EXPECT_LOCKFILE_SHA:-}" =~ ^[0-9a-f]{64}$ ]] \
-  || { echo "usage: set OGEVIA_EXPECT_COMMIT (40 hex), OGEVIA_EXPECT_MIGRATIONS_SHA, OGEVIA_EXPECT_0086_SHA, OGEVIA_EXPECT_0086_DOWN_SHA and OGEVIA_EXPECT_LOCKFILE_SHA (64 hex) from the procedure" >&2; exit 2; }
+[[ "${OGEVIA_EXPECT_COMMIT:-}" =~ ^[0-9a-f]{40}$ && "${OGEVIA_EXPECT_MIGRATIONS_SHA:-}" =~ ^[0-9a-f]{64}$ && "${OGEVIA_EXPECT_0086_SHA:-}" =~ ^[0-9a-f]{64}$ && "${OGEVIA_EXPECT_0086_DOWN_SHA:-}" =~ ^[0-9a-f]{64}$ && "${OGEVIA_EXPECT_0087_SHA:-}" =~ ^[0-9a-f]{64}$ && "${OGEVIA_EXPECT_0087_DOWN_SHA:-}" =~ ^[0-9a-f]{64}$ && "${OGEVIA_EXPECT_LOCKFILE_SHA:-}" =~ ^[0-9a-f]{64}$ ]] \
+  || { echo "usage: set OGEVIA_EXPECT_COMMIT (40 hex), OGEVIA_EXPECT_MIGRATIONS_SHA, OGEVIA_EXPECT_0086_SHA, OGEVIA_EXPECT_0086_DOWN_SHA, OGEVIA_EXPECT_0087_SHA, OGEVIA_EXPECT_0087_DOWN_SHA and OGEVIA_EXPECT_LOCKFILE_SHA (64 hex) from the procedure" >&2; exit 2; }
 BI=$(pkg_code_commit) || BI=""
 [[ -n "$BI" && "$BI" == "$OGEVIA_EXPECT_COMMIT" ]] && ok "BUILD_INFO code commit $BI" || nope "BUILD_INFO.json code commit is '${BI:-unreadable}', not the approved $OGEVIA_EXPECT_COMMIT"
 REF=$(jq -r '.approval_ref // empty' "$TB_ROOT/BUILD_INFO.json" 2>/dev/null)
@@ -36,7 +36,10 @@ CNT=$(pkg_migration_count 2>/dev/null) || CNT=""
 UP=$(pkg_pending_up_sha); DOWN=$(pkg_pending_down_sha)
 [[ -n "$UP" && "$UP" == "$OGEVIA_EXPECT_0086_SHA" ]] && ok "0086 up file sha256 ${UP:0:16}..." || nope "db/pending/migrations/0086_staff_management.sql hashes to '${UP:-nothing}', not the approved value"
 [[ -n "$DOWN" && "$DOWN" == "$OGEVIA_EXPECT_0086_DOWN_SHA" ]] && ok "0086 down file sha256 ${DOWN:0:16}..." || nope "db/pending/rollback/0086_staff_management.down.sql hashes to '${DOWN:-nothing}', not the approved value"
-if PS=$(pkg_pending_strays); then [[ -z "$PS" ]] && ok "db/pending holds only the two 0086 files" || nope "db/pending holds other files: $(head -3 <<<"$PS" | tr '\n' ';')"; else nope "cannot list db/pending"; fi
+UP7=$(pkg_pending_up87_sha); DOWN7=$(pkg_pending_down87_sha)
+[[ -n "$UP7" && "$UP7" == "$OGEVIA_EXPECT_0087_SHA" ]] && ok "0087 up file sha256 ${UP7:0:16}..." || nope "db/pending/migrations/0087_staff_invitation_acceptance.sql hashes to '${UP7:-nothing}', not the approved value"
+[[ -n "$DOWN7" && "$DOWN7" == "$OGEVIA_EXPECT_0087_DOWN_SHA" ]] && ok "0087 down file sha256 ${DOWN7:0:16}..." || nope "db/pending/rollback/0087_staff_invitation_acceptance.down.sql hashes to '${DOWN7:-nothing}', not the approved value"
+if PS=$(pkg_pending_strays); then [[ -z "$PS" ]] && ok "db/pending holds only the four 0086 and 0087 files" || nope "db/pending holds other files: $(head -3 <<<"$PS" | tr '\n' ';')"; else nope "cannot list db/pending"; fi
 LOCK=$(sha256sum "$TB_ROOT/pnpm-lock.yaml" 2>/dev/null | cut -d' ' -f1) || LOCK=""
 [[ -n "$LOCK" && "$LOCK" == "$OGEVIA_EXPECT_LOCKFILE_SHA" ]] && ok "pnpm-lock.yaml sha256 ${LOCK:0:16}..." || nope "pnpm-lock.yaml hashes to '${LOCK:-nothing}', not the approved value"
 NODE_V=$(node --version 2>/dev/null || echo none)

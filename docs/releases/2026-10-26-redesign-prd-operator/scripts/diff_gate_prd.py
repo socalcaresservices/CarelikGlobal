@@ -12,7 +12,7 @@ ALLOW-LIST (everything else is a violation)
   Ogevia-prd-DatabaseSecret, -EvidenceStorage, -Observability and the shared Ogevia-prod-NetworkEgress: NO difference at all.
   Ogevia-prd-Auth: exactly the web app client's sign-in callback list gains "https://app.ogevia.com/auth/callback" and "https://admin.ogevia.com/auth/callback" and its
       sign-out list gains "https://app.ogevia.com/" and "https://admin.ogevia.com/" (appended in that order, nothing removed or reordered); every other property identical.   -> DELTA
-  Ogevia-prd-ServiceVerificationApi: exactly (1) the 13 staff API routes ADDED (each JWT-authorized by the same authorizer and wired to the same integration as the existing
+  Ogevia-prd-ServiceVerificationApi: exactly (1) the 14 staff API routes ADDED (each JWT-authorized by the same authorizer and wired to the same integration as the existing
       routes), (2) the API Handler's Code S3Key (and the asset path in its Metadata), and (3) in the HTTP API resource the CORS AllowOrigins list gains exactly
       "https://app.ogevia.com" then "https://admin.ogevia.com" appended (every other property of that resource identical). Nothing else: no IAM, role, policy, environment,
       permission, stage, authorizer, integration, rule, alarm, log or secret change; no route removed or altered.                                                -> DELTA
@@ -40,7 +40,7 @@ NEW_ROUTE_KEYS = {
     "GET /v1/staff-types", "POST /v1/staff-types", "POST /v1/staff-types/{staffTypeId}/rename", "POST /v1/staff-types/{staffTypeId}/active",
     "GET /v1/staff", "POST /v1/staff", "POST /v1/staff/{profileId}", "POST /v1/staff-members/{userId}/profile",
     "POST /v1/staff/{profileId}/invitation", "POST /v1/staff/{profileId}/invitation/resend", "POST /v1/staff-roles/{userId}",
-    "GET /v1/role-permissions", "GET /v1/staff-audit",
+    "GET /v1/role-permissions", "GET /v1/staff-audit", "POST /v1/me/staff-invitations/{organizationId}/accept",
 }
 
 
@@ -181,7 +181,7 @@ def gate_template(stack, live, new):
         extra = sorted(set(keys) - NEW_ROUTE_KEYS)
         missing = sorted(NEW_ROUTE_KEYS - set(keys))
         if extra:
-            v.append("routes added that are not the 13 staff routes: %s" % extra)
+            v.append("routes added that are not the 14 staff routes: %s" % extra)
         if missing:
             v.append("staff routes missing from the release: %s" % missing)
         if len(keys) != len(set(keys)):
@@ -204,7 +204,7 @@ def gate_template(stack, live, new):
         if not v:
             notes.append("%d staff API routes added, each JWT-authorized like the existing routes" % len(new_routes))
     if stack == API and (changed_handler != bool(new_routes)):
-        v.append("the Handler code asset and the 13 routes must change together (code changed: %s, routes added: %d)" % (changed_handler, len(new_routes)))
+        v.append("the Handler code asset and the 14 routes must change together (code changed: %s, routes added: %d)" % (changed_handler, len(new_routes)))
     if stack == API and new_routes and not cors_changed:
         v.append("the HTTP API's CORS origins did not gain exactly %s and %s together with the routes" % (APP_ORIGIN, ADMIN_ORIGIN))
     if v:

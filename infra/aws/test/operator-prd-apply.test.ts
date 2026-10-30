@@ -36,17 +36,23 @@ if [[ "$*" == *" -f "* ]]; then
     echo "$kind" >> "$D/write-calls.log"
     [[ -n "\${MOCK_WRITE_SLEEP:-}" ]] && { touch "$D/write-sleeping"; exec sleep 60; }
     [[ -n "\${MOCK_WRITE_FAIL:-}" ]] && { echo "ERROR: relation ogevia.staff_types already exists" >&2; exit 3; }
-    if [[ $kind == up ]]; then echo "1|1|21" > "$D/s86"; else echo "0|0|0" > "$D/s86"; fi
+    if [[ $kind == up ]]; then echo "1|1|21" > "$D/s86"; echo 2 > "$D/s87"; else echo "0|0|0" > "$D/s86"; echo 0 > "$D/s87"; fi
     [[ -n "\${MOCK_WRITE_TOUCHES_LEDGER:-}" ]] && echo "86|0086" > "$D/ledger"
     [[ -n "\${MOCK_WRITE_TOUCHES_PEOPLE:-}" ]] && echo "3|3|10|2|1" > "$D/people"
     exit 0
   fi
-  # verify-0086.sql (read-only)
+  # verify-0087.sql / verify-0086.sql (read-only)
+  if [[ "$*" == *verify-0087.sql* ]]; then
+    n=\${MOCK_VERIFY87_COUNT:-24}; f=\${MOCK_VERIFY87_FAILING:-0}
+    for i in $(seq 1 "$n"); do if (( i <= f )); then echo "check87_$i|f|detail"; else echo "check87_$i|t|"; fi; done
+    exit 0
+  fi
   n=\${MOCK_VERIFY_COUNT:-110}; f=\${MOCK_VERIFY_FAILING:-0}
   for i in $(seq 1 "$n"); do if (( i <= f )); then echo "check_$i|f|detail"; else echo "check_$i|t|"; fi; done
   exit 0
 fi
 case "$*" in
+  *list_my_staff_invitations*) cat "$D/s87" ;;
   *pg_get_functiondef*) echo "\${MOCK_RESTORED_FN:-1|0}" ;;
   *current_database*) echo "\${MOCK_CURRENT_DB:-ogevia_prd} | read_only=\${MOCK_READ_ONLY:-on}" ;;
   *staff_types*) cat "$D/s86" ;;
@@ -67,7 +73,7 @@ case "$*" in
 esac
 `;
 
-interface Fix { dir: string; bin: string; repo: string; script: string; sha: string; up: string; down: string; infra: string }
+interface Fix { dir: string; bin: string; repo: string; script: string; sha: string; up: string; down: string; up87: string; down87: string; infra: string }
 function listFiles(root: string, rel = ""): string[] {
   const out: string[] = [];
   for (const e of readdirSync(join(root, rel), { withFileTypes: true })) {
@@ -87,7 +93,7 @@ function fixture(): Fix {
   const bin = installMocks(dir);
   writeFileSync(join(bin, "psql"), PSQL); writeFileSync(join(bin, "npx"), NPX);
   for (const f of ["psql", "npx"]) chmodSync(join(bin, f), 0o755);
-  writeFileSync(join(dir, "ledger"), "85|0085\n"); writeFileSync(join(dir, "s86"), "0|0|0\n"); writeFileSync(join(dir, "people"), "3|4|10|2|1\n"); writeFileSync(join(dir, "act"), "0|2\n");
+  writeFileSync(join(dir, "ledger"), "85|0085\n"); writeFileSync(join(dir, "s86"), "0|0|0\n"); writeFileSync(join(dir, "s87"), "0\n"); writeFileSync(join(dir, "people"), "3|4|10|2|1\n"); writeFileSync(join(dir, "act"), "0|2\n");
   copyFileSync(join(bin, "aws"), join(bin, "aws-base"));
   writeFileSync(join(bin, "aws"), `#!/usr/bin/env bash
 if [[ "$1 $2" == "rds describe-db-snapshots" ]]; then
@@ -107,10 +113,10 @@ exec "$(dirname "$0")/aws-base" "$@"
   mkdirSync(scriptsDir, { recursive: true }); mkdirSync(join(infra, "node_modules"), { recursive: true }); mkdirSync(join(repo, "node_modules"), { recursive: true });
   cpSync(join(REPO_ROOT, "infra/aws/db/migrations"), join(infra, "db/migrations"), { recursive: true });
   cpSync(join(REPO_ROOT, "infra/aws/db/pending"), join(infra, "db/pending"), { recursive: true });
-  for (const f of ["apply-0086-prd.sh", "pkg-lib.sh", "verify-0086.sql"]) copyFileSync(join(SCRIPTS_DIR, f), join(scriptsDir, f));
+  for (const f of ["apply-0086-prd.sh", "pkg-lib.sh", "verify-0086.sql", "verify-0087.sql"]) copyFileSync(join(SCRIPTS_DIR, f), join(scriptsDir, f));
   const sha = createHash("sha1").update(dir).digest("hex");
   sealPackage(repo, sha);
-  return { dir, bin, repo, infra, script: join(scriptsDir, "apply-0086-prd.sh"), sha, up: sha256(readFileSync(join(infra, "db/pending/migrations/0086_staff_management.sql"))), down: sha256(readFileSync(join(infra, "db/pending/rollback/0086_staff_management.down.sql"))) };
+  return { dir, bin, repo, infra, script: join(scriptsDir, "apply-0086-prd.sh"), sha, up: sha256(readFileSync(join(infra, "db/pending/migrations/0086_staff_management.sql"))), down: sha256(readFileSync(join(infra, "db/pending/rollback/0086_staff_management.down.sql"))), up87: sha256(readFileSync(join(infra, "db/pending/migrations/0087_staff_invitation_acceptance.sql"))), down87: sha256(readFileSync(join(infra, "db/pending/rollback/0087_staff_invitation_acceptance.down.sql"))) };
 }
 function freePort(): Promise<number> {
   return new Promise((resolve, reject) => { const s = createServer(); s.once("error", reject); s.listen(0, "127.0.0.1", () => { const { port } = s.address() as { port: number }; s.close(() => resolve(port)); }); });
@@ -133,7 +139,7 @@ async function run(args: string[], opts: { env?: Record<string, string>; input?:
     const env = {
       ...process.env, PATH: `${f.bin}:${process.env.PATH}`, MOCK_DIR: f.dir, HOME: f.dir,
       OGEVIA_MIGRATE_STATE_DIR: join(f.dir, "state"), OGEVIA_LEDGER_STATE_DIR: join(f.dir, "ledger-state"), OGEVIA_MIGRATE_DIR: outDir, OGEVIA_MIGRATE_PORT: String(port),
-      OGEVIA_EXPECT_COMMIT: f.sha, OGEVIA_EXPECT_MIGRATIONS_SHA: MIG_SET, OGEVIA_EXPECT_0086_SHA: f.up, OGEVIA_EXPECT_0086_DOWN_SHA: f.down, OGEVIA_EXPECT_HOST_IP: HOST_IP,
+      OGEVIA_EXPECT_COMMIT: f.sha, OGEVIA_EXPECT_MIGRATIONS_SHA: MIG_SET, OGEVIA_EXPECT_0086_SHA: f.up, OGEVIA_EXPECT_0086_DOWN_SHA: f.down, OGEVIA_EXPECT_0087_SHA: f.up87, OGEVIA_EXPECT_0087_DOWN_SHA: f.down87, OGEVIA_EXPECT_HOST_IP: HOST_IP,
       OGEVIA_TUNNEL_WAIT: "10", OGEVIA_PRD_BEFORE: join(f.dir, "prd-before"), MOCK_LAMBDA_DB: "ogevia_prd", MOCK_LAMBDA_ENV: "prd", ...releaseWindow(), ...(opts.env ?? {}),
     };
     const p = spawn("bash", [f.script, ...args], { env, stdio: ["pipe", "pipe", "pipe"], detached: true });
@@ -158,7 +164,7 @@ const noWindow = () => { expect(verbs()).not.toContain("ec2 authorize-security-g
 const restored = () => { expect(sg()).toEqual(INITIAL_SG); expect(marker()).toBe(false); expect(lines("psql-violations.log")).toEqual([]); };
 
 describe("static scope of the script", () => {
-  it("uses only the reviewed AWS verbs, never names the TEST database, never prints the credential, writes only through the two pinned files, has no ledger write", () => {
+  it("uses only the reviewed AWS verbs, never names the TEST database, never prints the credential, writes only through the four pinned files (0086 then 0087 / 0087 then 0086), has no ledger write", () => {
     const used = new Set([...code.matchAll(/(?:^|[\s(;|&$])aws\s+(sts|cloudformation|lambda|rds|ec2|ssm|secretsmanager|s3|iam|events|cdk)\s+([a-z0-9-]+)/gm)].map((m) => `${m[1]} ${m[2]}`));
     for (const v of used) expect(["sts get-caller-identity", "cloudformation describe-stacks", "cloudformation list-stack-resources", "lambda get-function-configuration", "rds describe-db-instances", "rds describe-db-snapshots", "ec2 describe-instances", "ec2 describe-network-interfaces", "ec2 describe-security-groups", "ec2 describe-security-group-rules", "ec2 authorize-security-group-ingress", "ec2 revoke-security-group-ingress", "ssm start-session", "secretsmanager get-secret-value"]).toContain(v);
     expect(code).not.toMatch(/DB_EXPECT=ogevia_sv_test|Ogevia-prod-/);
@@ -166,8 +172,8 @@ describe("static scope of the script", () => {
     // the SQL the script itself issues is read-only; the only writes are the two pinned files run in one transaction as ogevia_owner
     for (const q of [...code.matchAll(/-c "([^"]*)"/g)].map((m) => m[1]!)) if (!/^(set local role ogevia_owner|reset role)$/.test(q)) expect(q).not.toMatch(/\b(drop|truncate|alter|insert|update|delete|create|grant|revoke)\b/i);
     expect(code).not.toMatch(/schema_migrations\s*\(|insert into ogevia_meta|delete from ogevia_meta/i); // no ledger row is ever written
-    expect(code).toContain('-1 -d "$DB_EXPECT" -c "set local role ogevia_owner" -f "$PKG_PENDING_UP" -c "reset role"');
-    expect(code).toContain('-1 -d "$DB_EXPECT" -c "set local role ogevia_owner" -f "$PKG_PENDING_DOWN" -c "reset role"');
+    expect(code).toContain('-1 -d "$DB_EXPECT" -c "set local role ogevia_owner" -f "$PKG_PENDING_UP" -f "$PKG_PENDING_UP87" -c "reset role"');
+    expect(code).toContain('-1 -d "$DB_EXPECT" -c "set local role ogevia_owner" -f "$PKG_PENDING_DOWN87" -f "$PKG_PENDING_DOWN" -c "reset role"');
     expect(code).not.toMatch(/--delete|rm -rf/);
     expect(code).not.toMatch(/(^|[^A-Za-z_-])git([^A-Za-z_-]|$)/m);
     expect(code).not.toMatch(/echo[^\n]*PGPASSWORD|echo[^\n]*DBURL|say[^\n]*\$DBURL|say[^\n]*\$PGPASSWORD/);
@@ -253,14 +259,15 @@ describe("apply", () => {
   it("applies 0086 in ONE transaction as ogevia_owner: ledger stays 85 / 0085, people unchanged, 110 checks pass, window closed, group identical, no ledger row", async () => {
     const r = await run(["apply"]);
     expect(r.code, r.out).toBe(0);
-    expect(r.out).toContain("RESULT: 0086 applied (2 tables, 21 functions); ledger 85 / 0085 unchanged; people and access unchanged; verify-0086.sql 110 PASS");
+    expect(r.out).toContain("RESULT: 0086 and 0087 applied (2 tables, 23 functions); ledger 85 / 0085 unchanged; people and access unchanged; verify-0086.sql 110 PASS, verify-0087.sql 24 PASS");
     expect(r.out).toContain("RESTORED (verified)");
-    expect(read("ledger")).toBe("85|0085"); expect(read("s86")).toBe("1|1|21");
-    expect(writes()).toEqual(["up"]);
+    expect(read("ledger")).toBe("85|0085"); expect(read("s86")).toBe("1|1|21"); expect(read("s87")).toBe("2");
+    expect(writes()).toEqual(["up"]);   // ONE write session for both files
     const writeCall = lines("psql-calls.log").filter((l) => l.includes(" -1 "));
     expect(writeCall).toHaveLength(1);
     expect(writeCall[0]).toContain("-v ON_ERROR_STOP=1 -1 -d ogevia_prd -c set local role ogevia_owner -f ");
-    expect(writeCall[0]).toContain("db/pending/migrations/0086_staff_management.sql -c reset role");
+    expect(writeCall[0]).toContain("db/pending/migrations/0086_staff_management.sql -f ");
+    expect(writeCall[0]).toContain("db/pending/migrations/0087_staff_invitation_acceptance.sql -c reset role");   // 0086 then 0087, one transaction
     expect(lines("npx-calls.log")).toEqual(["tsx db/scripts/verify.ts"]);
     restored();
     expect(verbs().filter((v) => v === "ec2 authorize-security-group-ingress")).toHaveLength(1);
@@ -283,6 +290,11 @@ describe("apply", () => {
     const r = await run(["apply"]);
     expect(r.code, r.out).toBe(1); expect(r.out).toContain(text); expect(r.out).toContain("RESTORED (verified)"); expect(writes()).toEqual([]); restored();
   });
+  it("0087 functions already present (0086 absent) stops: apply needs both absent; nothing is written", async () => {
+    writeFileSync(join(f.dir, "s87"), "2\n");
+    const r = await run(["apply"]);
+    expect(r.code, r.out).toBe(1); expect(r.out).toContain("not absent"); expect(writes()).toEqual([]); expect(read("s87")).toBe("2"); restored();
+  });
   it.each([["0086 fully present", "1|1|21"], ["a partial 0086 (tables only)", "1|1|0"], ["one table only", "1|0|0"]])("%s stops: apply needs the objects absent; nothing is written", async (_n, s86) => {
     writeFileSync(join(f.dir, "s86"), s86 + "\n");
     const r = await run(["apply"]);
@@ -298,28 +310,32 @@ describe("apply", () => {
   it("a failing transaction keeps nothing, says so, restores the group and exits 1; the objects remain absent", async () => {
     const r = await run(["apply"], { env: { MOCK_WRITE_FAIL: "1" } });
     expect(r.code, r.out).toBe(1);
-    expect(r.out).toContain("APPLY FAILED"); expect(r.out).toContain("nothing of 0086 was kept"); expect(r.out).toContain("RESTORED (verified)");
+    expect(r.out).toContain("APPLY FAILED"); expect(r.out).toContain("nothing of 0086 was kept"); expect(read("s87")).toBe("0"); expect(r.out).toContain("RESTORED (verified)");
     expect(read("s86")).toBe("0|0|0"); expect(read("ledger")).toBe("85|0085"); expect(lines("npx-calls.log")).toEqual([]); restored();
   });
   it("a run that touches the ledger is a failure even though the SQL succeeded", async () => {
     const r = await run(["apply"], { env: { MOCK_WRITE_TOUCHES_LEDGER: "1" } });
-    expect(r.code, r.out).toBe(1); expect(r.out).toMatch(/ledger/i); expect(r.out).not.toContain("RESULT: 0086 applied"); restored();
+    expect(r.code, r.out).toBe(1); expect(r.out).toMatch(/ledger/i); expect(r.out).not.toContain("RESULT: 0086 and 0087 applied"); restored();
   });
   it("a change to people and access counts is a failure", async () => {
     const r = await run(["apply"], { env: { MOCK_WRITE_TOUCHES_PEOPLE: "1" } });
-    expect(r.code, r.out).toBe(1); expect(r.out).toMatch(/people|access/i); expect(r.out).not.toContain("RESULT: 0086 applied"); restored();
+    expect(r.code, r.out).toBe(1); expect(r.out).toMatch(/people|access/i); expect(r.out).not.toContain("RESULT: 0086 and 0087 applied"); restored();
   });
   it.each([
     ["one failing check", { MOCK_VERIFY_FAILING: "1" }],
     ["109 checks instead of 110", { MOCK_VERIFY_COUNT: "109" }],
     ["111 checks instead of 110", { MOCK_VERIFY_COUNT: "111" }],
-  ])("verify-0086.sql with %s: stops, says 0086 IS applied and not to deploy, window closed", async (_n, env) => {
+  ])("verify-0086.sql with %s: stops, says 0086 and 0087 ARE applied and not to deploy, window closed", async (_n, env) => {
     const r = await run(["apply"], { env });
-    expect(r.code, r.out).toBe(1); expect(r.out).toContain("verify-0086.sql did not report 110 passing checks"); expect(r.out).toContain("0086 IS applied"); expect(r.out).not.toContain("RESULT: 0086 applied"); restored();
+    expect(r.code, r.out).toBe(1); expect(r.out).toContain("verify-0086.sql did not report 110 passing checks"); expect(r.out).toContain("0086 and 0087 ARE applied"); expect(r.out).not.toContain("RESULT: 0086 and 0087 applied"); restored();
   });
-  it("a runner verification set that fails stops with 0086 IS applied", async () => {
+  it.each([["one failing check", { MOCK_VERIFY87_FAILING: "1" }], ["23 checks instead of 24", { MOCK_VERIFY87_COUNT: "23" }], ["25 checks instead of 24", { MOCK_VERIFY87_COUNT: "25" }]])("verify-0087.sql with %s: stops, says 0086 and 0087 ARE applied and not to deploy, window closed", async (_n, env) => {
+    const r = await run(["apply"], { env });
+    expect(r.code, r.out).toBe(1); expect(r.out).toContain("verify-0087.sql did not report 24 passing checks"); expect(r.out).toContain("0086 and 0087 ARE applied"); expect(r.out).not.toContain("RESULT: 0086 and 0087 applied"); restored();
+  });
+  it("a runner verification set that fails stops with 0086 and 0087 ARE applied", async () => {
     const r = await run(["apply"], { env: { MOCK_RUNNER_VERIFY_FAIL: "1" } });
-    expect(r.code, r.out).toBe(1); expect(r.out).toContain("verification set did not pass"); expect(r.out).toContain("0086 IS applied"); restored();
+    expect(r.code, r.out).toBe(1); expect(r.out).toContain("verification set did not pass"); expect(r.out).toContain("0086 and 0087 ARE applied"); restored();
   });
   it("an interrupted transaction (SIGTERM mid-apply) restores the group and exits 130", async () => {
     const r = await run(["apply"], { env: { MOCK_WRITE_SLEEP: "1" }, killWhen: () => existsSync(join(f.dir, "write-sleeping")) });
@@ -328,13 +344,15 @@ describe("apply", () => {
 });
 
 describe("rollback (BACKUP REQUIRED)", () => {
-  beforeEach(() => { writeFileSync(join(f.dir, "s86"), "1|1|21\n"); });
+  beforeEach(() => { writeFileSync(join(f.dir, "s86"), "1|1|21\n"); writeFileSync(join(f.dir, "s87"), "2\n"); });
   it("needs the objects present, runs the pinned down file once as ogevia_owner, ledger unchanged, people unchanged, window closed", async () => {
     const r = await run(["rollback"], { input: ROLLBACK_PHRASE });
     expect(r.code, r.out).toBe(0);
     expect(r.out).toContain("BACKUP REQUIRED");
     expect(read("s86")).toBe("0|0|0"); expect(read("ledger")).toBe("85|0085"); expect(writes()).toEqual(["down"]);
-    expect(lines("psql-calls.log").filter((l) => l.includes(" -1 "))[0]).toContain("db/pending/rollback/0086_staff_management.down.sql");
+    expect(lines("psql-calls.log").filter((l) => l.includes(" -1 "))[0]).toContain("db/pending/rollback/0087_staff_invitation_acceptance.down.sql -f ");   // 0087 first ...
+    expect(lines("psql-calls.log").filter((l) => l.includes(" -1 "))[0]).toContain("db/pending/rollback/0086_staff_management.down.sql -c reset role");   // ... then 0086, one transaction
+    expect(read("s87")).toBe("0");
     restored();
   });
   it("the APPLY phrase does not authorise a rollback, and a rollback of an absent 0086 stops", async () => {
@@ -342,7 +360,7 @@ describe("rollback (BACKUP REQUIRED)", () => {
     expect(r.code, r.out).toBe(0); expect(r.out).toContain("Declined. Nothing was changed."); noWindow(); expect(read("s86")).toBe("1|1|21");
     f = fixture();
     r = await run(["rollback"], { input: ROLLBACK_PHRASE });
-    expect(r.code, r.out).toBe(1); expect(r.out).toContain("rollback needs all 0086 objects present"); expect(writes()).toEqual([]); restored();
+    expect(r.code, r.out).toBe(1); expect(r.out).toContain("rollback needs all 0086 and 0087 objects present"); expect(writes()).toEqual([]); restored();
   });
   it("a failing rollback transaction leaves 0086 present, restores the group and exits 1", async () => {
     const r = await run(["rollback"], { input: ROLLBACK_PHRASE, env: { MOCK_WRITE_FAIL: "1" } });
@@ -382,7 +400,7 @@ describe("the window itself", () => {
 
 describe("rollback post-check", () => {
   it("a rollback that leaves note_my_sign_in on the staff version (or a staff permission) is a failure", async () => {
-    writeFileSync(join(f.dir, "s86"), "1|1|21\n");
+    writeFileSync(join(f.dir, "s86"), "1|1|21\n"); writeFileSync(join(f.dir, "s87"), "2\n");
     const r = await run(["rollback"], { input: ROLLBACK_PHRASE, env: { MOCK_RESTORED_FN: "0|2" } });
     expect(r.code, r.out).toBe(1); expect(r.out).toContain("note_my_sign_in was not restored"); restored();
   });
@@ -390,10 +408,10 @@ describe("rollback post-check", () => {
 
 describe("the release marker that gates the stack deployments", () => {
   const mk = () => join(f.dir, "prd-before", "db-0086.ok");
-  it("a successful apply writes db-0086.ok (85|0085|0086) and the snapshot id; a failed or unverified apply writes nothing", async () => {
+  it("a successful apply writes db-0086.ok (85|0085|0086|0087) and the snapshot id; a failed or unverified apply writes nothing", async () => {
     let r = await run(["apply"]);
     expect(r.code, r.out).toBe(0);
-    expect(readFileSync(mk(), "utf8")).toBe("85|0085|0086\n");
+    expect(readFileSync(mk(), "utf8")).toBe("85|0085|0086|0087\n");
     expect(readFileSync(join(f.dir, "prd-before", "db-0086.snapshot"), "utf8").trim()).toMatch(/^ogevia-prod-postgres-pre-0086-prd-\d{12}$/);
     for (const env of [{ MOCK_WRITE_FAIL: "1" }, { MOCK_VERIFY_FAILING: "1" }, { MOCK_RUNNER_VERIFY_FAIL: "1" }, { MOCK_WRITE_TOUCHES_LEDGER: "1" }] as Array<Record<string, string>>) {
       f = fixture();
@@ -401,7 +419,7 @@ describe("the release marker that gates the stack deployments", () => {
     }
   });
   it("a rollback removes the marker; the TEST phrase does not authorise anything", async () => {
-    writeFileSync(join(f.dir, "s86"), "1|1|21\n"); mkdirSync(join(f.dir, "prd-before"), { recursive: true }); writeFileSync(mk(), "85|0085|0086\n");
+    writeFileSync(join(f.dir, "s86"), "1|1|21\n"); writeFileSync(join(f.dir, "s87"), "2\n"); mkdirSync(join(f.dir, "prd-before"), { recursive: true }); writeFileSync(mk(), "85|0085|0086|0087\n");
     let r = await run(["rollback"], { input: "OPEN-5432-WINDOW-ROLLBACK-0086-TEST\n" });
     expect(r.code, r.out).toBe(0); expect(r.out).toContain("Declined. Nothing was changed."); expect(existsSync(mk())).toBe(true);
     r = await run(["rollback"], { input: ROLLBACK_PHRASE });

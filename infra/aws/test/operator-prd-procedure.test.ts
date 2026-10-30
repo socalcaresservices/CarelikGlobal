@@ -1,4 +1,4 @@
-// The operator procedure for the PRODUCTION release cannot drift from the code: every pin in it equals the real value, every script it names exists, the 13 routes are the routes the code
+// The operator procedure for the PRODUCTION release cannot drift from the code: every pin in it equals the real value, every script it names exists, the 14 routes are the routes the code
 // registers, deployment goes only through the guard, and no command in it names TEST, git or a raw deploy.
 import { createHash } from "node:crypto";
 import { existsSync, readFileSync, readdirSync } from "node:fs";
@@ -8,8 +8,8 @@ import { PKG_REL, REPO_ROOT } from "./operator-prd-fixtures.js";
 
 const read = (p: string) => readFileSync(join(REPO_ROOT, p), "utf8");
 const sha = (p: string) => createHash("sha256").update(readFileSync(join(REPO_ROOT, p))).digest("hex");
-const CODE = "24fd8b17795dd7e0ba6f36eec1791918feefb216";
-const doc = read(`${PKG_REL}/OPERATOR_PROCEDURE_PRD_24fd8b1.md`);
+const CODE = "fb491a554c0fdc484102025179c9c993f694b4e0";
+const doc = read(`${PKG_REL}/OPERATOR_PROCEDURE_PRD_fb491a5.md`);
 const readme = read(`${PKG_REL}/README.md`);
 const SCRIPTS = readdirSync(join(REPO_ROOT, PKG_REL, "scripts"));
 const blocks = [...doc.matchAll(/```\n([\s\S]*?)```/g)].map((m) => m[1]!);
@@ -26,6 +26,9 @@ describe("the pins in the procedure are the real values", () => {
     expect(doc).toContain(migSet());
     expect(doc).toContain(sha("infra/aws/db/pending/migrations/0086_staff_management.sql"));
     expect(doc).toContain(sha("infra/aws/db/pending/rollback/0086_staff_management.down.sql"));
+    expect(doc).toContain(sha("infra/aws/db/pending/migrations/0087_staff_invitation_acceptance.sql"));
+    expect(doc).toContain(sha("infra/aws/db/pending/rollback/0087_staff_invitation_acceptance.down.sql"));
+    expect(existsSync(join(REPO_ROOT, "infra/aws/db/migrations/0087_staff_invitation_acceptance.sql"))).toBe(false);
     expect(doc).toContain(sha("pnpm-lock.yaml"));
     expect(read(`${PKG_REL}/scripts/pkg-lib.sh`)).toContain(migSet());
   });
@@ -33,9 +36,9 @@ describe("the pins in the procedure are the real values", () => {
     const asm = read(`${PKG_REL}/scripts/assembly_check_prd.py`);
     expect(doc).toContain(CODE);
     for (const key of asm.match(/[0-9a-f]{64}\.zip/g)!) expect(doc).toContain(key);
-    expect(asm).toMatch(/ROUTES = 241/); expect(doc).toContain("241");
-    expect(read(`${PKG_REL}/scripts/record-deployed-prd.sh`)).toContain("94b73574c5a681d5a8c22b4264742f64e5a6d40aa1ace783be12e7383b9d8a9e.zip");
-    expect(read(`${PKG_REL}/scripts/build-prd-tarball.sh`)).toContain("94b73574c5a681d5a8c22b4264742f64e5a6d40aa1ace783be12e7383b9d8a9e.zip");
+    expect(asm).toMatch(/ROUTES = 242/); expect(doc).toContain("242");
+    expect(read(`${PKG_REL}/scripts/record-deployed-prd.sh`)).toContain("2871b03d6be42b0b8c85bac6feea12de75b3d05ca4636610259b6a18e1d00ed7.zip");
+    expect(read(`${PKG_REL}/scripts/build-prd-tarball.sh`)).toContain("2871b03d6be42b0b8c85bac6feea12de75b3d05ca4636610259b6a18e1d00ed7.zip");
     expect(read(`${PKG_REL}/scripts/web-prd.sh`)).toContain("e80b770210c54e423d28ecf48e00f1dda9506cec");   // the version string the captured production bundle carries
     expect(doc).toContain("e80b770210c54e423d28ecf48e00f1dda9506cec");
   });
@@ -50,15 +53,15 @@ describe("the pins in the procedure are the real values", () => {
   });
 });
 
-describe("the 13 routes and the gate's allow-list", () => {
+describe("the 14 routes and the gate's allow-list", () => {
   const keys: string[] = JSON.parse(read(`${PKG_REL}/scripts/new-route-keys.json`));
-  it("are 13 distinct GET/POST keys, equal in the JSON, the gate and the assembly check, and each is registered by the API behind the staffManagement switch", () => {
-    expect(new Set(keys).size).toBe(13);
+  it("are 14 distinct GET/POST keys, equal in the JSON, the gate and the assembly check, and each is registered by the API behind the staffManagement switch", () => {
+    expect(new Set(keys).size).toBe(14);
     const gate = read(`${PKG_REL}/scripts/diff_gate_prd.py`), asm = read(`${PKG_REL}/scripts/assembly_check_prd.py`);
     for (const k of keys) { expect(gate).toContain(`"${k}"`); expect(asm).toContain(`"${k}"`); expect(k).toMatch(/^(GET|POST) \/v1\//); }
     const stack = read("infra/aws/lib/service-verification-api-stack.ts");
     for (const k of keys) { const [m, p] = k.split(" "); expect(stack, k).toContain(`apigw.HttpMethod.${m}, path: "${p}", feature: "staffManagement"`); }
-    expect([...stack.matchAll(/feature: "staffManagement"/g)]).toHaveLength(13);
+    expect([...stack.matchAll(/feature: "staffManagement"/g)]).toHaveLength(14);
   });
   it("the origins and URLs the gate allows are exactly the ones the procedure and the code name", () => {
     const gate = read(`${PKG_REL}/scripts/diff_gate_prd.py`);

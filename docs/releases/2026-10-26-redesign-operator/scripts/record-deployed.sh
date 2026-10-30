@@ -11,7 +11,7 @@ HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"; ROOT="$(cd "$HERE/../../..
 . "$HERE/pkg-lib.sh"
 export AWS_REGION=us-west-2 AWS_DEFAULT_REGION=us-west-2 AWS_PAGER=""
 B="${OGEVIA_BEFORE:-$HOME/ogevia-before}"
-RELEASE_KEY=94b73574c5a681d5a8c22b4264742f64e5a6d40aa1ace783be12e7383b9d8a9e.zip
+RELEASE_KEY=2871b03d6be42b0b8c85bac6feea12de75b3d05ca4636610259b6a18e1d00ed7.zip
 A() { timeout --foreground -k 5 "${OGEVIA_AWS_TIMEOUT:-60}" aws "$@"; }
 [[ "${OGEVIA_EXPECT_COMMIT:-}" =~ ^[0-9a-f]{40}$ && "${OGEVIA_TARBALL_SHA256:-}" =~ ^[0-9a-f]{64}$ ]] || { echo "usage: set OGEVIA_EXPECT_COMMIT (40 hex) and OGEVIA_TARBALL_SHA256 (64 hex)" >&2; exit 2; }
 bad=0; ok() { echo "PASS $*"; }; nope() { echo "FAIL $*"; bad=1; }

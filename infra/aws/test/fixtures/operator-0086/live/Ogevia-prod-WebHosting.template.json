@@ -49,7 +49,7 @@
      },
      {
       "Key": "ogevia:deployment-status",
-      "Value": "approved-TEST-REF-000001"
+      "Value": "approved-synthetic-pin-ref-1"
      },
      {
       "Key": "ogevia:ownership",
@@ -245,7 +245,7 @@
      },
      {
       "Key": "ogevia:deployment-status",
-      "Value": "approved-TEST-REF-000001"
+      "Value": "approved-synthetic-pin-ref-1"
      },
      {
       "Key": "ogevia:ownership",
@@ -462,7 +462,7 @@
      },
      {
       "Key": "ogevia:deployment-status",
-      "Value": "approved-TEST-REF-000001"
+      "Value": "approved-synthetic-pin-ref-1"
      },
      {
       "Key": "ogevia:ownership",
@@ -500,6 +500,9 @@
    "Type": "AWS::CloudFront::Distribution",
    "Properties": {
     "DistributionConfig": {
+     "Aliases": [
+      "demo.ogevia.com"
+     ],
      "Comment": "Ogevia prod web (test slice)",
      "DefaultCacheBehavior": {
       "CachePolicyId": "658327ea-f89d-4fab-a63d-7e88639e58f6",
@@ -554,7 +557,12 @@
        }
       }
      ],
-     "PriceClass": "PriceClass_100"
+     "PriceClass": "PriceClass_100",
+     "ViewerCertificate": {
+      "AcmCertificateArn": "arn:aws:acm:us-east-1:300094796789:certificate/bfc4e928-f387-4804-a8d6-6eb351cfb526",
+      "MinimumProtocolVersion": "TLSv1.2_2021",
+      "SslSupportMethod": "sni-only"
+     }
     },
     "Tags": [
      {
@@ -567,7 +575,7 @@
      },
      {
       "Key": "ogevia:deployment-status",
-      "Value": "approved-TEST-REF-000001"
+      "Value": "approved-synthetic-pin-ref-1"
      },
      {
       "Key": "ogevia:ownership",
@@ -615,7 +623,8 @@
         "/auth/callback"
        ]
       ]
-     }
+     },
+     "https://demo.ogevia.com/auth/callback"
     ],
     "ClientName": "ogevia-web-prod-test-slice",
     "EnableTokenRevocation": true,
@@ -640,7 +649,8 @@
         "/"
        ]
       ]
-     }
+     },
+     "https://demo.ogevia.com/"
     ],
     "PreventUserExistenceErrors": "ENABLED",
     "RefreshTokenValidity": 12,
@@ -674,7 +684,7 @@
   "CDKMetadata": {
    "Type": "AWS::CDK::Metadata",
    "Properties": {
-    "Analytics": "v2:deflate64:H4sIAAAAAAAA/3VQPU8DMQz9Ley5gNKhMz2EGEBUrZhRmvgi94JdxUkrFOW/o7tDlAGm9+H3LNlGm7XRdzf2Ip3zYxfxoOs+Wzcqe5H3KitdN8WNkFU/0DdbYMsR3efVXnRTLnLxQ2LKuu5ATkwCT2A9JLlW/h48FnIZmabED39AyQkPZRb71WvCgHTvHIj0TDlxnOL/2L/LTTkOhJl17Qd6E0hb5thHBJqve7FkA/hnDkibZMkjhdbm5SWfSm6K2IM+yu3ZGG2mtx0FsUuFMn6A3i34BZM5bwJTAQAA"
+    "Analytics": "v2:deflate64:H4sIAAAAAAAA/3VQTU/DMAz9LdzTgLIDZ1aEOICYOnFGWeJGXoM9xQkTivLfUVvEOMDpffg9WbbR5tbomyt7ls75qYt40HWfrZuUPctblY2u2+ImyKof6ZutsOOI7vNir7opF7n4MTFlXQeQE5PAI1gPSS6VvwcPhVxGpjnxw+9RcsJDWcR+85IwIN05ByI9U04c5/g/9u9yU44DYWZd+5FeBdKOOfYRgZbrni3ZAP6JA9I2WfJIoTU1gHBJDpYtJZ9KborYgz7K9Ycx2sz/OwpilwplfAc9rPgFRE56hlwBAAA="
    },
    "Metadata": {
     "aws:cdk:path": "Ogevia-prod-WebHosting/CDKMetadata/Default"

@@ -1,15 +1,3 @@
 [
- "GET /v1/staff-types",
- "POST /v1/staff-types",
- "POST /v1/staff-types/{staffTypeId}/rename",
- "POST /v1/staff-types/{staffTypeId}/active",
- "GET /v1/staff",
- "POST /v1/staff",
- "POST /v1/staff/{profileId}",
- "POST /v1/staff-members/{userId}/profile",
- "POST /v1/staff/{profileId}/invitation",
- "POST /v1/staff/{profileId}/invitation/resend",
- "POST /v1/staff-roles/{userId}",
- "GET /v1/role-permissions",
- "GET /v1/staff-audit"
+ "POST /v1/me/staff-invitations/{organizationId}/accept"
 ]
