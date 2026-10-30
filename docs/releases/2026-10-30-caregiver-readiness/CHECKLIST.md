@@ -92,7 +92,7 @@ No validator has run any script. Owner, Scheduler, Caregiver (phone) and the Aut
 Risk assessment (draft). (1) The migration backfills approvals and retires three onboarding requirement categories: if the target holds caregivers whose stored status is Ready/Active, they remain schedulable, but the **page will show them as Approved/Active with missing items** until Task 8 is reviewed: nothing is blocked, because enforcement is unchanged. Likelihood low, effect on access none, detected by the section F count. (2) Reversal of the 0081 rule widens what can be scheduled before enforcement is on, by owner decision. (3) A new table holds email addresses and phone numbers (restricted, encrypted at rest with the rest of RDS). (4) The rollback drops four tables: BACKUP REQUIRED. (5) The release-pin tests of the superseded packages are retired, not re-pinned: a new release-pin baseline is created only after the target and release candidate are final.
 
 ### Decision record
-Owner decisions recorded 2026-10-30 (given in the conversation with Claude Code; **not yet filed as a signed document**: ☐ owner to file):
+Owner decisions recorded 2026-10-30 (given in the conversation with Claude Code). **Filed as `DECISION_RECORD.md`, prepared for signature but NOT YET SIGNED**: ☐ owner signs; ☐ Operator acknowledges.
 | # | Decision | Effect in this package |
 |---|---|---|
 | D1 | Treat 0086 as a **TEST/PILOT package only** until a deployment target is formally designated. **Operator: Stella Okereke.** Do not schedule, script or execute deployment against any shared environment until the target is explicitly identified and documented. | `RUNBOOK.md` header; C section above. Target: **NOT DESIGNATED** |
@@ -120,7 +120,7 @@ GO / NO-GO decision (G6): ☐ GO ☐ NO-GO — **not given**. Owner / date / SHA
 3. ☑ **G3 clean:** the date-dependent tests are calendar-independent and validated (see above).
 4. ☐ **B9:** a person spot-checks the regression set R (harness or pilot).
 5. ☐ **Phase C, D, E** in full (pilot validation, user acceptance by Owner, Scheduler, Caregiver and the authorization validator, owner GO).
-6. ☐ Confirm the decisions listed in `README.md` ("Decisions taken without asking").
+6. ☐ Confirm the decisions listed in `README.md` ("Decisions taken without asking"). ☐ **Owner signs `DECISION_RECORD.md`** (filed, unsigned).
 7. ☐ Security review checklist (`docs/security-review-checklist.md`) confirmed by a reviewer.
 8. ☑ Release-pin tests of the 2026-10-19 and 2026-10-21 packages retired (moved, not deleted, not re-pinned).
 9. ☑ The 41 database failures categorized: 37 obsolete (retired), 4 date-dependent, 0 defects.
