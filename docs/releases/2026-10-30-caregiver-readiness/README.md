@@ -4,7 +4,7 @@
 Discovery: `DISCOVERY.md`. Which environment is "demo" is **UNKNOWN**; everything here was built and run on a disposable local PostgreSQL only.
 
 ## Release package
-Start at `DECISION_RECORD.md` (owner decisions D1-D8, filed unsigned, for the owner's signature), `CHECKLIST.md` (gate status), `FEATURE_TEST_PLAN.md` (RDY-01 to RDY-17), `B9_REGRESSION_WORKSHEET.md` (regression spot-check: RUN, FAIL on one pre-existing defect), `RUNBOOK.md` (target probe, apply, checks, rollback; target UNKNOWN, nothing run) and `evidence/` (16 screenshots of the real local stack). Catalog rows: `docs/release-process/ACCEPTANCE_TEST_CATALOG.md`, area RDY.
+Start at `DECISION_RECORD.md` (owner decisions D1-D8, filed unsigned, for the owner's signature), `CHECKLIST.md` (gate status), `FEATURE_TEST_PLAN.md` (RDY-01 to RDY-17), `SECURITY_REVIEW.md` (security review filed for the reviewer, unreviewed), `B9_REGRESSION_WORKSHEET.md` (regression spot-check: RUN, FAIL on one pre-existing defect), `RUNBOOK.md` (target probe, apply, checks, rollback; target UNKNOWN, nothing run) and `evidence/` (16 screenshots of the real local stack). Catalog rows: `docs/release-process/ACCEPTANCE_TEST_CATALOG.md`, area RDY.
 
 ## What changed
 | Area | Change |

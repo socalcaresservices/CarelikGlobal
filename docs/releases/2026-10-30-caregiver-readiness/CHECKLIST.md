@@ -47,7 +47,7 @@ Change-specific:
 - ☑ Every changed rule has a test that fails without it, and a control: RDY-01 to RDY-17 in the plan.
 - ☑ Failure-first cases covered (plan section 3).
 - ☑ Migration: new file only; applied files unedited (0001 to 0085 set hash unchanged); `.down.sql` present and classified; rollback tests run; `01_schema_version.sql` and ledger-tail tests updated.
-- ☑ Security review (SECURITY DEFINER, grants, tenant access) — see "Security notes" below; `docs/security-review-checklist.md` not separately filled by Claude: ☐ owner/reviewer to confirm.
+- ☐ Security review (SECURITY DEFINER, grants, tenant access): **filed for the reviewer as `SECURITY_REVIEW.md`** (author evidence measured from a fresh database; every reviewer box blank; NOT reviewed). The "Security notes" below are the author's summary only.
 - ☑ API: permission, other-tenant, unauthenticated, bad-input, idempotency tests exist; `slice-contract` passes (route list updated in the CDK stack).
 - ☑ UI: loading, empty, error, success states; 390 px (and 320 px) and 1280 px checked in a real browser; no horizontal scroll; contrast tests pass.
 - ☑ No instructional paragraph where a label works (one short note under the checklist about the due-date rule).
@@ -125,7 +125,7 @@ GO / NO-GO decision (G6): ☐ GO ☐ NO-GO — **not given**. Owner / date / SHA
 4. ☑ **B9 run:** run 1 FAIL (pre-existing defect D1) → D1 **fixed** (owner decision) → run 2 PASS 30/30 on `54894411f0e69ac29bec762006e47f7d943b94f2`. ☐ A human reviewer accepts B9 (and may spot-check). ☐ Owner re-confirms the Phase C SHA (A3) when signing.
 5. ☐ **Phase C, D, E** in full (pilot validation, user acceptance by Owner, Scheduler, Caregiver and the authorization validator, owner GO).
 6. ☐ Confirm the decisions listed in `README.md` ("Decisions taken without asking"). ☐ **Owner signs `DECISION_RECORD.md`** (filed, unsigned).
-7. ☐ Security review checklist (`docs/security-review-checklist.md`) confirmed by a reviewer.
+7. ☐ Security review: filed as `SECURITY_REVIEW.md` for the reviewer (not reviewed); a reviewer completes and signs it.
 8. ☑ Release-pin tests of the 2026-10-19 and 2026-10-21 packages retired (moved, not deleted, not re-pinned).
 9. ☑ The 41 database failures categorized: 37 obsolete (retired), 4 date-dependent, 0 defects.
 
