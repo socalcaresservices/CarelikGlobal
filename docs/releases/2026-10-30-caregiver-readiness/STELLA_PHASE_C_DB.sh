@@ -41,7 +41,8 @@ cleanup() {                      # one time, on every exit: success, error, INT,
   [[ "$CLEANED" == 1 ]] && exit "$rc"; CLEANED=1
   trap '' INT TERM HUP
   if [[ -n "$TUNNEL" ]]; then pkill -P "$TUNNEL" 2>/dev/null; kill "$TUNNEL" 2>/dev/null; wait "$TUNNEL" 2>/dev/null; fi
-  unset PGPASSWORD PGUSER PGHOST PGPORT PGSSLMODE PGOPTIONS OGEVIA_DATABASE_URL OGEVIA_ALLOW_REMOTE_MIGRATION MASTER U P
+  unset PGPASSWORD PGUSER PGHOST PGHOSTADDR PGPORT PGSSLMODE PGSSLROOTCERT PGOPTIONS OGEVIA_DATABASE_URL OGEVIA_ALLOW_REMOTE_MIGRATION MASTER U P
+  [[ -n "$TLSDIR" ]] && rm -rf "$TLSDIR"
   local bad=0
   if [[ "$ATTACHED" == 1 ]]; then
     echo "RESTORE: setting admin host groups back to $ADMIN_SG"
@@ -53,6 +54,7 @@ cleanup() {                      # one time, on every exit: success, error, INT,
     [[ -z "$RDS_SRC_BEFORE" || "$s" == "$RDS_SRC_BEFORE" ]] || { echo "!!! RDS SG SOURCES DIFFER FROM BEFORE. Change nothing; tell the owner."; bad=1; }
     [[ "$bad" == 0 ]] && echo "RESTORE VERIFIED: admin host back to baseline, RDS SG unchanged." || { echo "RESTORE NOT VERIFIED (see !!! lines)"; [[ "$rc" == 0 ]] && rc=1; }
   fi
+  if [[ "$MODE" =~ ^(probe|snapshot|migrate)$ ]] && ! in_window; then echo "NOTE: this step finished after the window end (12:00 PDT). It was allowed to complete (A12 forbids BEGINNING new activity). Start NO further step; report. Rollback to known-good only."; fi
   echo "END (UTC): $(date -u +%FT%TZ)  mode=$MODE  exit=$rc  log=$LOG"
   exit "$rc"
 }
@@ -123,6 +125,22 @@ MASTER_ARN=$(aws rds describe-db-instances --db-instance-identifier "$RDS_ID" --
 [[ -n "$RDS_HOST" && "$RDS_HOST" != None && "$MASTER_ARN" == arn:* ]] || stop "could not resolve RDS endpoint or secret ARN"
 [[ "$(aws rds describe-db-instances --db-instance-identifier "$RDS_ID" --query 'DBInstances[0].PubliclyAccessible' --output text)" == False ]] || stop "RDS is publicly accessible: unexpected"
 
+# ---- full TLS verification through the tunnel (verify-full): the certificate is checked against the RDS host NAME, the bytes go to 127.0.0.1 ----
+TLSDIR=""
+tls_setup() {
+  TLSDIR="$(mktemp -d)"; chmod 700 "$TLSDIR"
+  curl -fsS --max-time 60 -o "$TLSDIR/rds-global-bundle.pem" https://truststore.pki.rds.amazonaws.com/global/global-bundle.pem || stop "cannot download the RDS CA bundle (no fallback to unverified TLS; report to the owner)"
+  [[ "$(grep -c 'BEGIN CERTIFICATE' "$TLSDIR/rds-global-bundle.pem")" -ge 20 ]] || stop "the RDS CA bundle looks wrong"
+  echo "RDS CA bundle sha256: $(sha256sum "$TLSDIR/rds-global-bundle.pem" | cut -c1-64) (author's download 2026-10-31 had 174560 bytes; a later AWS update may differ: record it)"
+  cat > "$TLSDIR/resolve-rds.cjs" <<'JS'
+// Node preload: resolve ONLY the RDS host name to 127.0.0.1 (the SSM tunnel end); every other name resolves normally.
+const dns = require("node:dns"); const HOST = process.env.OGEVIA_TUNNEL_HOST, orig = dns.lookup;
+if (HOST) dns.lookup = function (h, o, cb) { if (typeof o === "function") { cb = o; o = {}; }
+  if (h === HOST) { return (o && o.all) ? process.nextTick(cb, null, [{ address: "127.0.0.1", family: 4 }]) : process.nextTick(cb, null, "127.0.0.1", 4); }
+  return orig.call(dns, h, o, cb); };
+JS
+}
+tls_setup   # before any change: a failed download stops here with nothing attached
 ATTACHED=1
 aws ec2 modify-instance-attribute --instance-id "$IID" --groups "$ADMIN_SG" "$APP_SG" || stop "attach failed"
 sleep 5
@@ -130,11 +148,11 @@ aws ssm start-session --target "$IID" --document-name AWS-StartPortForwardingSes
 TUNNEL=$!; UP=0
 for _ in $(seq 1 30); do kill -0 "$TUNNEL" 2>/dev/null || stop "tunnel process exited"; if (exec 3<>"/dev/tcp/127.0.0.1/$LOCAL_PORT") 2>/dev/null; then UP=1; break; fi; sleep 1; done
 [[ "$UP" == 1 ]] || stop "tunnel did not accept connections within 30 seconds"
-unset PGSERVICE PGSERVICEFILE PGDATABASE PGPASSFILE PGUSER PGPASSWORD
+unset PGSERVICE PGSERVICEFILE PGDATABASE PGPASSFILE PGUSER PGPASSWORD PGHOSTADDR PGSSLROOTCERT
 MASTER=$(aws secretsmanager get-secret-value --secret-id "$MASTER_ARN" --query SecretString --output text 2>/dev/null) || stop "could not read the secret"
 U="$(printf '%s' "$MASTER" | jq -r .username)"; P="$(printf '%s' "$MASTER" | jq -r .password)"; unset MASTER
 [[ -n "$U" && "$U" != null && -n "$P" && "$P" != null ]] || stop "secret lacks username/password"
-export PGHOST=127.0.0.1 PGPORT="$LOCAL_PORT" PGSSLMODE=require PGUSER="$U" PGPASSWORD="$P" PGOPTIONS="-c statement_timeout=120000"
+export PGHOST="$RDS_HOST" PGHOSTADDR=127.0.0.1 PGPORT="$LOCAL_PORT" PGSSLMODE=verify-full PGSSLROOTCERT="$TLSDIR/rds-global-bundle.pem" PGUSER="$U" PGPASSWORD="$P" PGOPTIONS="-c statement_timeout=120000"
 echo "LOGIN ROLE USED (name only): $U"
 GOT=$(psql -X -At -d "$DB" -c "select current_database()") || stop "connection to $DB failed"; [[ "$GOT" == "$DB" ]] || stop "connected database is '$GOT', not $DB"
 echo "guard ok: $GOT"
@@ -154,7 +172,8 @@ assert_after() {
   echo "POST-STATE MATCHES"
 }
 run_sql_record() { echo "--- STELLA_READONLY_VERIFICATION.sql output"; PGOPTIONS="-c default_transaction_read_only=on -c statement_timeout=30000" psql -X -v ON_ERROR_STOP=1 -d "$DB" -f "$SQL"; }
-dburl() { printf 'postgres://%s:%s@127.0.0.1:%s/%s?sslmode=no-verify' "$(uri "$U")" "$(uri "$P")" "$LOCAL_PORT" "$DB"; }   # tunnel to RDS: TLS on, certificate name check off (host is 127.0.0.1)
+dburl() { printf 'postgres://%s:%s@%s:%s/%s?sslmode=verify-full&sslrootcert=%s' "$(uri "$U")" "$(uri "$P")" "$RDS_HOST" "$LOCAL_PORT" "$DB" "$TLSDIR/rds-global-bundle.pem"; }   # full verification: the RDS name is in the URL; the preload maps that one name to the tunnel
+nodeenv() { env -u PGOPTIONS -u PGHOST -u PGHOSTADDR -u PGPORT -u PGUSER -u PGPASSWORD -u PGSSLMODE -u PGSSLROOTCERT OGEVIA_TUNNEL_HOST="$RDS_HOST" NODE_OPTIONS="--require $TLSDIR/resolve-rds.cjs" "$@"; }
 
 case "$MODE" in
   probe)   assert_before && run_sql_record ;;
@@ -163,10 +182,10 @@ case "$MODE" in
     assert_before || exit 2
     confirm "MIGRATE 0086" "About to apply migration 0086 (only) to $DB. Snapshot $SNAPSHOT_ID is verified. Window ends 12:00 PDT."
     OUTF="$(mktemp)"
-    ( cd "$REPO" && env -u PGOPTIONS -u PGHOST -u PGPORT -u PGUSER -u PGPASSWORD -u PGSSLMODE OGEVIA_DATABASE_URL="$(dburl)" OGEVIA_ALLOW_REMOTE_MIGRATION=approved-by-owner pnpm --filter @carelik/infra-aws db:migrate ) > "$OUTF" 2>&1; RC=$?
+    ( cd "$REPO" && nodeenv OGEVIA_DATABASE_URL="$(dburl)" OGEVIA_ALLOW_REMOTE_MIGRATION=approved-by-owner pnpm --filter @carelik/infra-aws db:migrate ) > "$OUTF" 2>&1; RC=$?
     sed -E 's#postgres://[^ ]*#postgres://<redacted>#g' "$OUTF"
     [[ "$RC" == 0 ]] && grep -q "applied 1, already applied 85" "$OUTF" || { rm -f "$OUTF"; stop "migrate exit=$RC or output is not 'applied 1, already applied 85'. Check the log; roll back only on a stop condition."; }
-    ( cd "$REPO" && env -u PGOPTIONS -u PGHOST -u PGPORT -u PGUSER -u PGPASSWORD -u PGSSLMODE OGEVIA_DATABASE_URL="$(dburl)" pnpm --filter @carelik/infra-aws db:verify ) > "$OUTF" 2>&1; RC=$?
+    ( cd "$REPO" && nodeenv OGEVIA_DATABASE_URL="$(dburl)" pnpm --filter @carelik/infra-aws db:verify ) > "$OUTF" 2>&1; RC=$?
     sed -E 's#postgres://[^ ]*#postgres://<redacted>#g' "$OUTF"; rm -f "$OUTF"
     [[ "$RC" == 0 ]] || stop "db:verify failed (exit $RC)"
     assert_after || exit 3
@@ -175,7 +194,7 @@ case "$MODE" in
     echo "ROLLBACK drops caregiver_work_approvals, caregiver_cpr_tb_extensions, caregiver_contacts, organization_compliance_settings WITH their rows. Snapshot $SNAPSHOT_ID exists. Allowed after the window only to restore known-good (A12). Restoring the snapshot itself is NOT authorized."
     confirm "ROLLBACK 0086" "Only after a stop condition, and web and API have been rolled back first (run sheet)."
     OUTF="$(mktemp)"
-    ( cd "$REPO" && env -u PGOPTIONS -u PGHOST -u PGPORT -u PGUSER -u PGPASSWORD -u PGSSLMODE OGEVIA_DATABASE_URL="$(dburl)" OGEVIA_ALLOW_REMOTE_MIGRATION=approved-by-owner pnpm --filter @carelik/infra-aws db:rollback-to 0086 --expect-set-sha "$ROLLSET_SHA" ) > "$OUTF" 2>&1; RC=$?
+    ( cd "$REPO" && nodeenv OGEVIA_DATABASE_URL="$(dburl)" OGEVIA_ALLOW_REMOTE_MIGRATION=approved-by-owner pnpm --filter @carelik/infra-aws db:rollback-to 0086 --expect-set-sha "$ROLLSET_SHA" ) > "$OUTF" 2>&1; RC=$?
     sed -E 's#postgres://[^ ]*#postgres://<redacted>#g' "$OUTF"; rm -f "$OUTF"
     [[ "$RC" == 0 ]] || stop "rollback exit=$RC; do not retry; report"
     assert_before ;;
