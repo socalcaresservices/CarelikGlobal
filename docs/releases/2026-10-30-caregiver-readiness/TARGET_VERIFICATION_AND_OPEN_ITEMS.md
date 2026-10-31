@@ -59,3 +59,16 @@ If the host is stopped, starting it is a separate written step (not covered by A
 
 ## 8. Update 2026-10-31: Option A approved (D14, A7)
 Part 2 is authorized for verification only: Stella, one window, procedure in `STELLA_READONLY_VERIFICATION.md` Part 2b. Not yet run; V1-V6 unknown. Passing Part 2 clears only the target-verification blocker. After her report, Claude records results and the SG restore confirmation here and in `CHECKLIST.md` C0. A non-null V5 is reported to the owner first.
+
+## 9. Part 2b step 1 pre-check, partial (pasted CloudShell output, 2026-10-31; read-only describe calls only)
+| Check | Result | Status |
+|---|---|---|
+| `i-0ce8db2d7e5839dd5` state | `running` | PASS (host not started or stopped by anyone for this check) |
+| Instance security groups | `sg-00e01e2ca80442c1f` only (checked twice) | PASS: unchanged, AppSG not attached |
+| Network interfaces | one: `eni-099616641dd91bcaf` | recorded |
+| Instance tag = `ogevia-db-admin-temp` | not shown in the output | OPEN |
+| AppSG `sg-064ffce3bcbe8eb3b` identity; RDS SG `sg-00530a1f4f7648e65` admits 5432 from AppSG only | not shown | OPEN |
+| Window start time | not recorded | OPEN |
+Notes: (1) the stray line `sg-00e01e2ca80442c1f` ran as a shell command and failed (`command not found`); harmless, no effect. (2) **No change has been made** in the output shown. (3) Part 2 (V1-V6) still NOT RUN.
+
+**Existing CloudShell scripts (not reviewed by Claude; names only):** `window.sh` under the `2026-10-19-prd-readiness` package sets `DB_EXPECT=ogevia_prd` and targets the production stack, so it **must not be used** for this window. `db-window-run.sh` and `ledger-check-temp-access.sh` may attach AppSG and may do more than read-only. None of the three is authorized for Part 2 unless reviewed and shown to (a) touch only `ogevia_sv_test`, (b) run only the verification SQL, (c) restore the group on exit. Safest: use the Part 2b steps by hand, or paste a script here (secret-free) for review before use.
