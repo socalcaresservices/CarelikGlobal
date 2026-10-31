@@ -150,3 +150,11 @@ Reviewer **Stella Okereke**: **APPROVED**; findings: **none**; 6a: **not applica
 - **D11:** consistent. Four organizations means 6a is not applicable and manual X1-X3 are required; **X1-X3 have not been run** and the two organizations have not been named.
 - **Conflicting sign-offs:** none found. `DECISION_RECORD.md` is unsigned by the owner, so no owner sign-off exists to conflict with or support the review.
 - **Technical evidence:** the author's re-run (`SECURITY_REVIEW.md` section 8) reproduced the measured facts. It is the author's, not the reviewer's.
+
+## 22. Pre-window setup, Operator-reported (2026-10-31, about 03:20 UTC = 20:20 PDT on 2026-10-30; local only, no AWS change)
+- Tools: Node `v22.22.0` (from `~/node22`; the shell default was v20.20.2), pnpm `9.15.4`, Python 3.13.16, jq 1.8.1, psql 16.15, session-manager-plugin present.
+- Disk: `/tmp` 9.7 GB free before and 8.7 GB after the install; home 317 MB free. Web bucket (read-only listing): 165 objects, 27,422,669 bytes.
+- Docs/script checkout `/tmp/ogevia-phasec/docs-checkout` at `52a9110ea1c0c07e51c33bff60c626c7dc5dbbbd`; script hashes match (`STELLA_PHASE_C_DB.sh` 2ec5b842…, `STELLA_PHASE_C_DEPLOY.sh` 4023b034…, `diff_gate_0086.py` 4e86f8d5…).
+- Application checkout `/tmp/ogevia-phasec/app-5489` at exactly `54894411f0e69ac29bec762006e47f7d943b94f2`, 0 local changes. `pnpm install --frozen-lockfile --store-dir /tmp/pnpm-store`: Done in 22 s.
+- `STELLA_PHASE_C_DB.sh selftest`: window math, URI encoding and pin checks passed (commit, migration, rollback and set hashes). `STELLA_PHASE_C_DEPLOY.sh selftest`: passed (no assembly yet, as expected before `synth`).
+- Not done yet: `synth` (local build), anything in AWS, anything in the database. **G1 not approved.** 0086 stays NOT RELEASABLE.
