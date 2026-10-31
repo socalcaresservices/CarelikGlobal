@@ -102,3 +102,10 @@ Version run: commit `2d9960e722e2ec4e01cadea904e92cc41295e53b`; hashes match (`S
 | V5 | `enforcement_active_from` empty for all four organizations | PASS: enforcement OFF (D10 holds) |
 | V6 | 4 organizations, 4 active | D11: manual cross-agency X1-X3 applies |
 **D14 required report items still outstanding:** (a) the login role name (the `LOGIN ROLE USED` line; `role_in_use` above is the role after `SET ROLE`, not the login role), (b) the Operator's written confirmation that no other change was made. Restore was verified by the script (host `sg-00e01e2ca80442c1f` only, RDS SG sources unchanged). **Target verification will be marked complete when (a) and (b) are received.** This clears the target-verification blocker only; no other gate advances. 0086 stays NOT RELEASABLE.
+
+## 14. Owner instruction 2026-10-31: adopt recorded Part 2 facts; collect remaining items
+- **Adopted:** the Part 2 values in section 13 (V1-V6) are the current verification results **unless Stella identifies an error** in them.
+- **Window start/end (recorded):** 2026-10-31T00:42:39Z to 2026-10-31T00:43:01Z (printed by the script; from the Operator's output). Operator's earlier manual pre-checks and the window opening are not separately timed.
+- **Still to obtain from Stella (not yet received; Claude has no channel to her, so the owner relays the request):** (a) login role name, name only; (b) written confirmation that no other change was made; (c) confirmation that the section 13 values contain no error.
+- **Security review:** reviewer **not yet named** (no name in the records). Packet ready: `REVIEWER_PACKET.md` + `SECURITY_REVIEW.md`. The owner names the reviewer and sends the packet; the outcome is recorded here after it returns. Claude does not assign, contact or substitute for the reviewer.
+- **0086 stays NOT RELEASABLE** until the security review outcome is recorded and accepted, the remaining open items are closed, and the required approvals and gates are satisfied.
