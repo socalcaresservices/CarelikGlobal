@@ -112,3 +112,6 @@ Version run: commit `2d9960e722e2ec4e01cadea904e92cc41295e53b`; hashes match (`S
 
 ## 15. Reviewer designated (2026-10-31, D15 / A8)
 Security reviewer: **Stella Okereke**. Outstanding reviewer actions: review `REVIEWER_PACKET.md`; complete `SECURITY_REVIEW.md`; record outcome; record all findings including any objection to manager-approve; sign and date. Outstanding Part 2 items from Stella: login role name (name only); written confirmation "No other changes were made beyond the authorized Part 2 verification procedure." Role overlap (Operator and reviewer) noted in A8; S12 is optional. 0086 stays NOT RELEASABLE.
+
+## 16. S12 decision (2026-10-31, D16 / A9)
+S12 may remain optional and unreviewed; no second reviewer. Required review scope and the four outstanding items are in `DECISION_RECORD.md` A9. 0086 stays NOT RELEASABLE.
