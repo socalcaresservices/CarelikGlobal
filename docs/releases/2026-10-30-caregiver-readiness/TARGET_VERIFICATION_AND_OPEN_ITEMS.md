@@ -161,3 +161,6 @@ Reviewer **Stella Okereke**: **APPROVED**; findings: **none**; 6a: **not applica
 
 ## 23. `synth` run in the Operator's environment (2026-10-31 03:23 UTC; local build, no AWS change; Operator-reported output)
 `STELLA_PHASE_C_DEPLOY.sh synth` (Node 22.22.0, CDK 2.1143.0 as pinned; CDK printed a "newer version available" notice, ignored: no upgrade) wrote `/tmp/ogevia-cdk-0086.out` and passed every assembly check: exactly the five `Ogevia-prod-*` stacks and no `Ogevia-prd-*`; **Handler code asset `c3f09ddf4d995244…` (reproduced exactly in the Operator's environment)**; IdentityHandler asset `7c5f8eb676c93261…`; 236 API routes; `PASS all checks`. The deploy selftest then passed with the assembly (gate self-compare `EXPECTED-ONLY: YES`, repo at the approved SHA). Not yet done: anything in AWS or the database. **G1 not approved.** 0086 stays NOT RELEASABLE.
+
+## 24. Updated DB script verified by the Operator (2026-10-31 03:28 UTC; local only)
+Docs checkout `docs-checkout2` at `cca4bcba5e2cff79825f3e1c950af9649830383a`; hashes `STELLA_PHASE_C_DB.sh` `0d247068…`, `STELLA_PHASE_C_DEPLOY.sh` `4023b034…`, `diff_gate_0086.py` `4e86f8d5…` all match; DB selftest passed (window math, URI encoding, pins). G1 extended to DB rollback by A14. Use `docs-checkout2` for the window. Not done: anything in AWS or the database. 0086 stays NOT RELEASABLE.

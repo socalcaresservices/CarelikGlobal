@@ -51,7 +51,7 @@ Every command below runs from `$D` after `export D=... R=...` (section 0) and `e
 | S11 | `REPO=$R bash STELLA_PHASE_C_DB.sh final` | ledger 86, counts as post-state; `RESTORE VERIFIED` | any difference |
 Timing: a step that has STARTED before 12:00 PDT is allowed to finish; none may BEGIN after (A12). Start the snapshot early, because it can take many minutes.
 
-## 2. Rollback (only after a stop condition; allowed after 12:00 PDT solely to restore known-good)
+## 2. Rollback (only after a stop condition; allowed after 12:00 PDT solely to restore known-good; DB rollback access authorized by A14)
 Order: web, API, database. Each asks for a typed confirmation.
 ```bash
 cd "$D"
@@ -59,7 +59,7 @@ REPO=$R bash STELLA_PHASE_C_DEPLOY.sh rollback-web
 REPO=$R bash STELLA_PHASE_C_DEPLOY.sh rollback-api      # code only; tell the owner CloudFormation is then out of step
 REPO=$R SNAPSHOT_ID=<id> bash STELLA_PHASE_C_DB.sh rollback     # drops the four new tables WITH their rows (BACKUP REQUIRED); expects 85/0085 afterwards
 ```
-Restoring the RDS snapshot creates a new instance and is **not** authorized: stop and ask the owner.
+The DB rollback asks you to type `OWNER AUTHORIZED DB ROLLBACK ACCESS`: the owner has authorized it for restoring known-good (A14). Restoring the RDS snapshot creates a new instance and is **not** authorized: stop and ask the owner.
 
 ## 3. TLS to the database: full certificate verification IS preserved (tested locally)
 The DB script uses `sslmode=verify-full` against the RDS CA bundle (downloaded from `truststore.pki.rds.amazonaws.com`), checking the certificate against the real RDS **host name** while the bytes go through the tunnel to 127.0.0.1: `psql` via `PGHOST=<rds name>` + `PGHOSTADDR=127.0.0.1`; the Node migration runner via the RDS name in the URL plus a tiny preload (`NODE_OPTIONS=--require`) that maps only that one name to 127.0.0.1. Tested on a local PostgreSQL with a throwaway CA: verified connection OK; wrong CA fails; plain `127.0.0.1` with verify-full fails (the problem the preload solves); the **real** `db:migrate` and `db:verify` ran through it (86 applied, all PASS). **No fallback to unverified TLS exists in the script.** Trade-offs: (1) the CA bundle is a public download at run time (a failed download stops the run; its hash is printed for the record; the author's copy was 174,560 bytes, sha256 `90a6f1a7978a1b1b096dca6c57511ca48d3b8cf052f8e704baf358f34ea2f21b`, which AWS may legitimately update); (2) the preload is a small monkeypatch of Node's DNS lookup, tested on Node 22.22 only; (3) **not tested against the real RDS endpoint**: if the real certificate does not verify, the script stops and nothing is changed; accepting unverified TLS would be a separate owner decision.
