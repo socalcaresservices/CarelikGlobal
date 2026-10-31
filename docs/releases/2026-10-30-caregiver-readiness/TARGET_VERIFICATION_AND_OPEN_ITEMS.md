@@ -42,3 +42,17 @@
 Reported PASS (as reported by Stella Okereke; not independently verified): AWS account 300094796789, region us-west-2, `Ogevia-prod-*` stacks present, `ogevia-prod-postgres` available, publicly accessible = false, CloudFront banner confirmed. Package seen in Git at `015c6a2…`. **Part 2 (V1-V6) is blocked on the database access path** (`STELLA_READONLY_VERIFICATION.md` Part 2a: the earlier route needs a security-group change and the master credential; both need an owner decision). Enforcement value, organization count and ledger are still UNKNOWN. Parts 1 items 5-6 (API id, Cognito client, backup) and Part 3 not yet reported.
 
 **D13 (2026-10-31):** Part 2 proceeds by an existing lower-privilege login role that can `SET ROLE ogevia_readonly` only. Master secret, host start/stop, security-group or network changes are not authorized; Stella stops and reports the exact requirement. No gate advances on Part 1; Part 2 results (V1-V6) are required.
+
+## 7. Part 2 BLOCKED (Operator report 2026-10-31)
+**Status: BLOCKED.** No database connection attempted; no infrastructure change; no secret accessed (as reported by the Operator). V1-V6 unknown. No gate advances.
+
+**Cause (VERIFIED from the documents, not live):** the only documented route to the private database is SSM port forwarding through `ogevia-db-admin-temp` with the app security group attached to it only for the window (`docs/aws/TEST_PILOT_DEPLOYMENT_PLAN.md`), and a login that in earlier rehearsals came from the master secret. There is no standing network path from anywhere else, and no document names a lower-privilege login role. Whether such a role exists in the database is UNKNOWN (only a database query can show it, which needs the blocked path).
+
+**Exact additional authorization that would unblock it (the owner picks one; none is granted):**
+| Option | What it authorizes | Changes | Notes |
+|---|---|---|---|
+| A (recommended; matches the rehearsal route) | Stella may, for one named window: (1) attach the app security group to `ogevia-db-admin-temp` and restore and re-check it afterwards; (2) read the master secret into a shell variable (never printed or stored) to log in, then `SET ROLE ogevia_readonly` and run only `STELLA_READONLY_VERIFICATION.sql` inside `begin read only` | one temporary security-group change (reversible, must be re-checked), one secret read; the admin host stays in its present state unless the owner also says to start it | It is a changed environment for the window even though no data is written |
+| B | As A, but Stella first creates a dedicated read-only login role for later checks | adds a database write (a role) and still needs A's access to do it | More durable, but a write to TEST: needs its own approval and rollback. Not recommended for this check |
+| C | Owner provides an existing approved path I do not know of (a standing read-only access route that avoids SG, host and secret) | none | If one exists, name it and Stella uses it |
+| D | Do not verify now | none | 0086 stays blocked; Phase C cannot start |
+If the host is stopped, starting it is a separate written step (not covered by A unless stated). Whatever the owner chooses, it should name the window, the single person, the exact steps, who re-checks the restore, and that nothing else changes.
