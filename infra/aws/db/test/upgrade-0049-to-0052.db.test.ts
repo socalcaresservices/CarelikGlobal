@@ -88,7 +88,7 @@ describe("upgrade from 0049 to 0052 on a populated database", () => {
     const client = await db.admin.connect();
     let applied: string[];
     try { applied = (await migrate(client)).applied.map((x) => x.slice(0, 4)); } finally { client.release(); }
-    expect(applied).toEqual(["0050", "0051", "0052", "0053", "0054", "0055", "0056", "0057", "0058", "0059", "0060", "0061", "0062", "0063", "0064", "0065", "0066", "0067", "0068", "0069", "0070", "0071", "0072", "0073", "0074", "0075", "0076", "0077", "0078", "0079", "0080", "0081", "0082", "0083", "0084", "0085", "0086"]);
+    expect(applied).toEqual(["0050", "0051", "0052", "0053", "0054", "0055", "0056", "0057", "0058", "0059", "0060", "0061", "0062", "0063", "0064", "0065", "0066", "0067", "0068", "0069", "0070", "0071", "0072", "0073", "0074", "0075", "0076", "0077", "0078", "0079", "0080", "0081", "0082", "0083", "0084", "0085", "0086", "0087", "0088"]);
 
     // No stored row changed or disappeared, in any table that holds visit or authorization data.
     expect(await fingerprints()).toEqual(before);

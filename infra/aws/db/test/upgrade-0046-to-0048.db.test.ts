@@ -39,7 +39,7 @@ const EXPECTED_NEW_ROWS = "permission_key = 'accounts.manage'";
 async function fingerprints() {
   const out: Record<string, { rows: number; hash: string }> = {};
   for (const [table, cols] of Object.entries(TABLES)) {
-    const filter = table === "permissions" ? "where key not in ('accounts.manage', 'caregivers.compliance.manage', 'reports.export')" : table === "role_permissions" ? "where permission_key not in ('accounts.manage', 'caregivers.compliance.manage', 'reports.export')" : "";
+    const filter = table === "permissions" ? "where key not in ('accounts.manage', 'caregivers.compliance.manage', 'reports.export', 'staff.read', 'staff.manage')" : table === "role_permissions" ? "where permission_key not in ('accounts.manage', 'caregivers.compliance.manage', 'reports.export', 'staff.read', 'staff.manage')" : "";
     const r = await db.admin.query(
       `select count(*)::int n, md5(coalesce(string_agg(x::text, '|' order by x::text), '')) h from (select ${cols} from ogevia.${table} ${filter}) x`);
     out[table] = { rows: r.rows[0].n, hash: r.rows[0].h };
@@ -117,7 +117,7 @@ describe("upgrade from 0046 to 0048 on a populated database", () => {
     const client = await db.admin.connect();
     let applied: string[];
     try { applied = (await migrate(client)).applied.map((x) => x.slice(0, 4)); } finally { client.release(); }
-    expect(applied).toEqual(["0047", "0048", "0049", "0050", "0051", "0052", "0053", "0054", "0055", "0056", "0057", "0058", "0059", "0060", "0061", "0062", "0063", "0064", "0065", "0066", "0067", "0068", "0069", "0070", "0071", "0072", "0073", "0074", "0075", "0076", "0077", "0078", "0079", "0080", "0081", "0082", "0083", "0084", "0085", "0086"]); // 0049-0076 add functions, tables and nullable columns only; they change no row
+    expect(applied).toEqual(["0047", "0048", "0049", "0050", "0051", "0052", "0053", "0054", "0055", "0056", "0057", "0058", "0059", "0060", "0061", "0062", "0063", "0064", "0065", "0066", "0067", "0068", "0069", "0070", "0071", "0072", "0073", "0074", "0075", "0076", "0077", "0078", "0079", "0080", "0081", "0082", "0083", "0084", "0085", "0086", "0087", "0088"]); // 0049-0076 add functions, tables and nullable columns only; they change no row
 
     const after = await fingerprints();
     expect(after).toEqual(before); // NO existing row, in any table, changed or disappeared

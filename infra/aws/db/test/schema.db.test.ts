@@ -153,6 +153,8 @@ describe("SCHEMA: migration chain", () => {
       "shift_series_skipped_dates",
       "shifts",
       "staff_documents",
+      "staff_profiles",
+      "staff_types",
       "user_appearance",
       "visit_authorization_reviews",
       "visit_confirmation_requests",
