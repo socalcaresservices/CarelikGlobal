@@ -75,6 +75,7 @@ Checklist B questions for the three tables with a policy: ☐ **Does the policy 
 | S8 | No new unauthenticated surface | All 8 routes are behind the existing authorizer; none is added to the public route set (`slice-contract` test); no `anon` role exists | ☐ |
 | S9 | Backfill and data changes | One `legacy_status` approval per existing Ready/Active caregiver (no approver); three onboarding requirement categories set inactive; nothing deleted; rollback documented (BACKUP REQUIRED) | ☐ |
 | S10 | Logs | No new logging of request bodies; the handler's log records carry no email or name (test asserts the invited address is absent from the log) | ☐ |
+| S12 | (Optional; does not gate 0086) Part 2 window script `STELLA_PART2_WINDOW.sh` | Handled the master secret in memory only (builtin printf and pipe, never printed or on a command line); session read-only by default plus a read-only SQL transaction and a pre-run scan of the SQL; connected to `ogevia_sv_test` only (stops otherwise); attached the app security group once and restored it, with an EXIT trap and a verified re-check; ran as D14 authorizes. Residual: a kill -9 cannot run the trap | ☐ |
 | S11 | The D1 fix | `withClientNames` returns `Date` values unchanged; it adds names only where a `clientCode`/`clientId` is present, exactly as before; unit tests cover Dates, nesting, names and non-mutation | ☐ |
 
 ## 4. Points the author asks the reviewer to look at hardest
@@ -93,7 +94,8 @@ Cognito configuration and invitation email content, the API authorizer and IAM p
 |---|---|---|---|---|
 | | | | | |
 
-## 6a. Cross-agency limitation (owner decision D11)
+## 6a. Cross-agency limitation (owner decision D11) — NOT TRIGGERED (updated 2026-10-31)
+Part 2 V6 found **four** organizations on TEST, so manual cross-agency UAT (X1 to X3) will run and the single-organization limitation does not apply; the reviewer may record "not applicable". The text below is kept for the record.
 If TEST has only one organization, UAT cannot show cross-agency isolation by hand and relies on the automated tests (DB and sv-api HTTP suites with a second organization). The reviewer records here whether that is accepted: ☐ accepted ☐ not accepted (manual check needed). Organizations on TEST (Operator count): ____ . Reviewer initials/date: ________
 
 ## 7. Sign-off
