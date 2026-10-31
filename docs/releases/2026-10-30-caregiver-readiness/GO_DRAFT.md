@@ -1,5 +1,7 @@
 # GO for Phase C: release 2026-10-30-caregiver-readiness (migration 0086), TEST slice only
 
+> **SUPERSEDED WINDOW (2026-10-31).** The first window (09:00-12:00 PDT) lapsed with no step run. **Current window: 2026-10-31 14:00-18:00 PDT (21:00 UTC to 01:00 UTC on 2026-11-01), GO `GO-0086-TEST-20261031-B`, `DECISION_RECORD.md` A19.** Everything below applies with that window and reference; scope unchanged.
+
 **Status: GIVEN AS RELAYED 2026-10-31 (owner's statement in the conversation, `DECISION_RECORD.md` A11): "APPROVED FOR TEST EXECUTION ONLY, subject to all stop conditions in GO_DRAFT.md". Window 2026-10-31 09:00 to 12:00 PDT. Operator Stella Okereke acknowledged. NOT RUN YET.** The signature cells in section 8 are not filled by hand; the statement above is the record. Claude drafted this text; the owner decided it. Production is out of scope. 0086 stays NOT RELEASABLE until the checklist says otherwise (decision D7).
 
 ## 1. Blanks only the owner can fill
